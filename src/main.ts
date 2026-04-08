@@ -8,13 +8,21 @@ import type { HvySection, JsonObject } from './hvy/types';
 
 type Align = 'left' | 'center' | 'right';
 type Slot = 'left' | 'center' | 'right';
+type GridColumn = 'left' | 'right' | 'full';
 
 interface TableRow {
   cells: string[];
-  details: string;
   expanded: boolean;
   clickable: boolean;
-  revealComponent: string;
+  detailsTitle: string;
+  detailsContent: string;
+}
+
+interface GridItem {
+  id: string;
+  component: string;
+  content: string;
+  column: GridColumn;
 }
 
 interface BlockSchema {
@@ -23,11 +31,8 @@ interface BlockSchema {
   slot: Slot;
   codeLanguage: string;
   containerTitle: string;
-  gridTemplateColumns: string;
-  gridTemplateAreas: string;
-  gridKeys: string;
-  gridValues: Record<string, string>;
-  gridStyles: Record<string, 'normal' | 'bold' | 'italic'>;
+  gridColumns: number;
+  gridItems: GridItem[];
   tags: string;
   description: string;
   metaOpen: boolean;
@@ -80,6 +85,9 @@ interface AppState {
   future: string[];
   isRestoring: boolean;
   componentMetaModal: { sectionKey: string; blockId: string } | null;
+  lastHistoryGroup: string | null;
+  lastHistoryAt: number;
+  pendingEditorCenterSectionKey: string | null;
 }
 
 marked.setOptions({ gfm: true, breaks: false });
@@ -108,8 +116,12 @@ const state: AppState = {
   future: [],
   isRestoring: false,
   componentMetaModal: null,
+  lastHistoryGroup: null,
+  lastHistoryAt: 0,
+  pendingEditorCenterSectionKey: null,
 };
 let shortcutsBound = false;
+const HISTORY_GROUP_WINDOW_MS = 1200;
 
 renderApp();
 
@@ -160,6 +172,32 @@ function renderApp(): void {
 
   commitHistorySnapshot();
   bindUi();
+  centerPendingEditorSection();
+}
+
+function renderAppPreserveEditorScroll(): void {
+  const editorPane = app.querySelector<HTMLDivElement>('.editor-pane');
+  const scrollTop = editorPane?.scrollTop ?? 0;
+  renderApp();
+  const nextEditorPane = app.querySelector<HTMLDivElement>('.editor-pane');
+  if (nextEditorPane) {
+    nextEditorPane.scrollTop = scrollTop;
+  }
+}
+
+function centerPendingEditorSection(): void {
+  const sectionKey = state.pendingEditorCenterSectionKey;
+  if (!sectionKey) {
+    return;
+  }
+  state.pendingEditorCenterSectionKey = null;
+  window.requestAnimationFrame(() => {
+    const sectionEl = app.querySelector<HTMLElement>(`[data-editor-section="${sectionKey}"]`);
+    if (!sectionEl) {
+      return;
+    }
+    sectionEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  });
 }
 
 function bindUi(): void {
@@ -212,24 +250,24 @@ function bindUi(): void {
     }
 
     if (field === 'template-value' && target instanceof HTMLInputElement) {
-      recordHistory();
       const key = target.dataset.templateField;
       if (!key) {
         return;
       }
+      recordHistory(`template:${key}`);
       state.templateValues[key] = target.value;
       refreshReaderPanels();
       return;
     }
 
     if (field === 'meta-title' && target instanceof HTMLInputElement) {
-      recordHistory();
+      recordHistory('meta:title');
       state.document.meta.title = target.value;
       return;
     }
 
     if (field.startsWith('theme-')) {
-      recordHistory();
+      recordHistory(`meta:${field}`);
       const theme = getThemeConfig();
       if (field === 'theme-mode' && target instanceof HTMLSelectElement) {
         theme.mode = target.value === 'dark' ? 'dark' : 'light';
@@ -252,10 +290,10 @@ function bindUi(): void {
     }
 
     if (field === 'def-name' && target instanceof HTMLInputElement) {
-      recordHistory();
       const idx = Number.parseInt(target.dataset.defIndex ?? '', 10);
       const defs = getComponentDefs();
       if (!Number.isNaN(idx) && defs[idx]) {
+        recordHistory(`def:${idx}:name`);
         defs[idx].name = target.value;
         state.document.meta.component_defs = defs;
       }
@@ -263,10 +301,10 @@ function bindUi(): void {
     }
 
     if (field === 'def-base' && target instanceof HTMLSelectElement) {
-      recordHistory();
       const idx = Number.parseInt(target.dataset.defIndex ?? '', 10);
       const defs = getComponentDefs();
       if (!Number.isNaN(idx) && defs[idx]) {
+        recordHistory(`def:${idx}:base`);
         defs[idx].baseType = target.value;
         state.document.meta.component_defs = defs;
       }
@@ -274,10 +312,10 @@ function bindUi(): void {
     }
 
     if (field === 'def-tags' && target instanceof HTMLInputElement) {
-      recordHistory();
       const idx = Number.parseInt(target.dataset.defIndex ?? '', 10);
       const defs = getComponentDefs();
       if (!Number.isNaN(idx) && defs[idx]) {
+        recordHistory(`def:${idx}:tags`);
         defs[idx].tags = target.value;
         state.document.meta.component_defs = defs;
       }
@@ -285,10 +323,10 @@ function bindUi(): void {
     }
 
     if (field === 'def-description' && target instanceof HTMLInputElement) {
-      recordHistory();
       const idx = Number.parseInt(target.dataset.defIndex ?? '', 10);
       const defs = getComponentDefs();
       if (!Number.isNaN(idx) && defs[idx]) {
+        recordHistory(`def:${idx}:description`);
         defs[idx].description = target.value;
         state.document.meta.component_defs = defs;
       }
@@ -393,10 +431,16 @@ function bindUi(): void {
       const sectionKey = richButton.dataset.sectionKey;
       const blockId = richButton.dataset.blockId;
       const action = richButton.dataset.richAction;
+      const richField = richButton.dataset.richField ?? 'block-rich';
+      const gridItemId = richButton.dataset.gridItemId;
+      const rowIndex = richButton.dataset.rowIndex;
       if (sectionKey && blockId && action) {
-        const editable = editorTree.querySelector<HTMLElement>(
-          `[data-section-key="${sectionKey}"][data-block-id="${blockId}"][data-field="block-rich"]`
-        );
+        const selectorBase = `[data-section-key="${sectionKey}"][data-block-id="${blockId}"][data-field="${richField}"]`;
+        const editable = rowIndex
+          ? editorTree.querySelector<HTMLElement>(`${selectorBase}[data-row-index="${rowIndex}"]`)
+          : gridItemId
+          ? editorTree.querySelector<HTMLElement>(`${selectorBase}[data-grid-item-id="${gridItemId}"]`)
+          : editorTree.querySelector<HTMLElement>(selectorBase);
         if (editable) {
           editable.focus();
           applyRichAction(action, editable);
@@ -421,7 +465,9 @@ function bindUi(): void {
     if (action === 'spawn-root-ghost') {
       recordHistory();
       const component = state.addComponentBySection.__root__ ?? 'text';
-      state.document.sections.push(createEmptySection(1, component, false));
+      const section = createEmptySection(1, component, false);
+      state.document.sections.push(section);
+      state.pendingEditorCenterSectionKey = section.key;
       renderApp();
       return;
     }
@@ -438,7 +484,9 @@ function bindUi(): void {
     if (action === 'spawn-child-ghost') {
       recordHistory();
       const component = state.addComponentBySection[section.key] ?? 'text';
-      section.children.push(createEmptySection(Math.min(section.level + 1, 6), component, false));
+      const child = createEmptySection(Math.min(section.level + 1, 6), component, false);
+      section.children.push(child);
+      state.pendingEditorCenterSectionKey = child.key;
       renderApp();
       return;
     }
@@ -446,7 +494,9 @@ function bindUi(): void {
     if (action === 'spawn-block-ghost') {
       recordHistory();
       const component = state.addComponentBySection[section.key] ?? 'text';
-      section.children.push(createEmptySection(Math.min(section.level + 1, 6), component, false));
+      const child = createEmptySection(Math.min(section.level + 1, 6), component, false);
+      section.children.push(child);
+      state.pendingEditorCenterSectionKey = child.key;
       renderApp();
       return;
     }
@@ -502,7 +552,14 @@ function bindUi(): void {
       if (!block) {
         return;
       }
-      block.schema.tableRows.push({ cells: ['', ''], details: '', expanded: false, clickable: true, revealComponent: 'text' });
+      const columnCount = Math.max(splitColumns(block.schema.tableColumns).length, 1);
+      block.schema.tableRows.push({
+        cells: new Array(columnCount).fill(''),
+        expanded: false,
+        clickable: true,
+        detailsTitle: 'Details',
+        detailsContent: '',
+      });
       renderApp();
       return;
     }
@@ -531,26 +588,27 @@ function bindUi(): void {
       return;
     }
 
-    if (action === 'set-expandable-stub-component' && blockId) {
+    if (action === 'add-grid-item' && blockId) {
+      recordHistory();
       const block = section.blocks.find((candidate) => candidate.id === blockId);
-      const component = actionButton.dataset.componentName;
-      if (!block || !component) {
+      if (!block) {
         return;
       }
-      block.schema.expandableStubComponent = component;
-      refreshReaderPanels();
+      ensureGridItems(block.schema);
+      block.schema.gridItems.push(createGridItem(block.schema.gridItems.length, block.schema.gridColumns));
       renderApp();
       return;
     }
 
-    if (action === 'set-expandable-content-component' && blockId) {
+    if (action === 'remove-grid-item' && blockId) {
+      recordHistory();
       const block = section.blocks.find((candidate) => candidate.id === blockId);
-      const component = actionButton.dataset.componentName;
-      if (!block || !component) {
+      const gridItemId = actionButton.dataset.gridItemId;
+      if (!block || !gridItemId) {
         return;
       }
-      block.schema.expandableContentComponent = component;
-      refreshReaderPanels();
+      block.schema.gridItems = block.schema.gridItems.filter((item) => item.id !== gridItemId);
+      ensureGridItems(block.schema);
       renderApp();
       return;
     }
@@ -582,7 +640,11 @@ function bindUi(): void {
 
   editorTree.addEventListener('keydown', (event) => {
     const target = event.target as HTMLElement;
-    if (target.dataset.field !== 'block-rich') {
+    if (
+      target.dataset.field !== 'block-rich' &&
+      target.dataset.field !== 'block-grid-rich' &&
+      target.dataset.field !== 'table-details-rich'
+    ) {
       return;
     }
 
@@ -628,8 +690,9 @@ function bindUi(): void {
       return;
     }
 
+    const blockIdForHistory = target.dataset.blockId ?? '';
     if (field && field !== 'new-component-type') {
-      recordHistory();
+      recordHistory(`input:${sectionKey}:${blockIdForHistory}:${field}`);
     }
 
     if (field === 'section-title' && target instanceof HTMLInputElement) {
@@ -716,39 +779,53 @@ function bindUi(): void {
     }
 
     if (field === 'block-grid-columns' && target instanceof HTMLInputElement) {
-      block.schema.gridTemplateColumns = target.value;
+      block.schema.gridColumns = coerceGridColumns(target.value);
+      ensureGridItems(block.schema);
       refreshReaderPanels();
       return;
     }
 
-    if (field === 'block-grid-areas' && target instanceof HTMLTextAreaElement) {
-      block.schema.gridTemplateAreas = target.value;
-      refreshReaderPanels();
-      return;
-    }
-
-    if (field === 'block-grid-keys' && target instanceof HTMLInputElement) {
-      block.schema.gridKeys = target.value;
-      refreshReaderPanels();
-      return;
-    }
-
-    if (field === 'block-grid-value' && target instanceof HTMLInputElement) {
-      const key = target.dataset.gridKey;
-      if (!key) {
+    if (field === 'block-grid-item-component' && target instanceof HTMLSelectElement) {
+      const gridItemId = target.dataset.gridItemId;
+      if (!gridItemId) {
         return;
       }
-      block.schema.gridValues[key] = target.value;
+      ensureGridItems(block.schema);
+      const item = block.schema.gridItems.find((candidate) => candidate.id === gridItemId);
+      if (!item) {
+        return;
+      }
+      item.component = target.value;
       refreshReaderPanels();
       return;
     }
 
-    if (field === 'block-grid-style' && target instanceof HTMLSelectElement) {
-      const key = target.dataset.gridKey;
-      if (!key) {
+    if (field === 'block-grid-item-column' && target instanceof HTMLSelectElement) {
+      const gridItemId = target.dataset.gridItemId;
+      if (!gridItemId) {
         return;
       }
-      block.schema.gridStyles[key] = target.value as 'normal' | 'bold' | 'italic';
+      ensureGridItems(block.schema);
+      const item = block.schema.gridItems.find((candidate) => candidate.id === gridItemId);
+      if (!item) {
+        return;
+      }
+      item.column = coerceGridColumn(target.value, block.schema.gridColumns);
+      refreshReaderPanels();
+      return;
+    }
+
+    if (field === 'block-grid-rich') {
+      const gridItemId = target.dataset.gridItemId;
+      if (!gridItemId) {
+        return;
+      }
+      ensureGridItems(block.schema);
+      const item = block.schema.gridItems.find((candidate) => candidate.id === gridItemId);
+      if (!item) {
+        return;
+      }
+      item.content = normalizeMarkdownLists(turndown.turndown((target as HTMLElement).innerHTML));
       refreshReaderPanels();
       return;
     }
@@ -807,13 +884,24 @@ function bindUi(): void {
       return;
     }
 
-    if (field === 'table-details' && target instanceof HTMLInputElement) {
+    if (field === 'table-details-title' && target instanceof HTMLInputElement) {
       const rowIndex = Number.parseInt(target.dataset.rowIndex ?? '', 10);
       const row = block.schema.tableRows[rowIndex];
       if (!row) {
         return;
       }
-      row.details = target.value;
+      row.detailsTitle = target.value;
+      refreshReaderPanels();
+      return;
+    }
+
+    if (field === 'table-details-rich') {
+      const rowIndex = Number.parseInt(target.dataset.rowIndex ?? '', 10);
+      const row = block.schema.tableRows[rowIndex];
+      if (!row) {
+        return;
+      }
+      row.detailsContent = normalizeMarkdownLists(turndown.turndown((target as HTMLElement).innerHTML));
       refreshReaderPanels();
       return;
     }
@@ -829,17 +917,6 @@ function bindUi(): void {
       return;
     }
 
-    if (field === 'table-reveal-component' && target instanceof HTMLSelectElement) {
-      const rowIndex = Number.parseInt(target.dataset.rowIndex ?? '', 10);
-      const row = block.schema.tableRows[rowIndex];
-      if (!row) {
-        return;
-      }
-      row.revealComponent = target.value;
-      refreshReaderPanels();
-      return;
-    }
-
     if (field === 'block-align' && target instanceof HTMLSelectElement) {
       block.schema.align = coerceAlign(target.value);
       refreshReaderPanels();
@@ -850,6 +927,17 @@ function bindUi(): void {
       block.schema.slot = coerceSlot(target.value);
       refreshReaderPanels();
     }
+  });
+
+  editorTree.addEventListener('change', (event) => {
+    const target = event.target as HTMLElement;
+    if (!(target instanceof HTMLInputElement)) {
+      return;
+    }
+    if (target.dataset.field !== 'table-columns') {
+      return;
+    }
+    renderAppPreserveEditorScroll();
   });
 
   readerDocument.addEventListener('click', (event) => {
@@ -1328,64 +1416,71 @@ function renderBlockContentEditor(sectionKey: string, block: VisualBlock): strin
   }
 
   if (component === 'grid') {
-    const keys = block.schema.gridKeys
-      .split(',')
-      .map((k) => k.trim())
-      .filter((k) => k.length > 0);
+    ensureGridItems(block.schema);
 
     return `
       <div class="editor-grid schema-grid">
         <label>
           <span>Grid Columns</span>
-          <input data-section-key="${escapeAttr(sectionKey)}" data-block-id="${escapeAttr(
+          <input type="number" min="1" max="6" data-section-key="${escapeAttr(sectionKey)}" data-block-id="${escapeAttr(
       block.id
-    )}" data-field="block-grid-columns" value="${escapeAttr(block.schema.gridTemplateColumns)}" />
-        </label>
-        <label>
-          <span>Grid Areas</span>
-          <textarea data-section-key="${escapeAttr(sectionKey)}" data-block-id="${escapeAttr(
-      block.id
-    )}" data-field="block-grid-areas">${escapeHtml(block.schema.gridTemplateAreas)}</textarea>
+    )}" data-field="block-grid-columns" value="${escapeAttr(String(block.schema.gridColumns))}" />
         </label>
       </div>
-      <label>
-        <span>Field Keys (comma-separated)</span>
-        <input data-section-key="${escapeAttr(sectionKey)}" data-block-id="${escapeAttr(
-      block.id
-    )}" data-field="block-grid-keys" value="${escapeAttr(block.schema.gridKeys)}" />
-      </label>
       <div class="grid-fields">
-        ${keys
+        ${block.schema.gridItems
           .map(
-            (key) => `<div class="grid-field-row">
-              <strong>${escapeHtml(key)}</strong>
-              <input data-section-key="${escapeAttr(sectionKey)}" data-block-id="${escapeAttr(
-              block.id
-            )}" data-field="block-grid-value" data-grid-key="${escapeAttr(key)}" value="${escapeAttr(
-              block.schema.gridValues[key] ?? ''
-            )}" placeholder="Text for ${escapeAttr(key)}" />
+            (item, index) => `<div class="grid-field-row">
+              <div class="grid-field-head">
+                <strong>Grid Component ${index + 1}</strong>
+                <button type="button" class="danger remove-x" data-action="remove-grid-item" data-section-key="${escapeAttr(
+                  sectionKey
+                )}" data-block-id="${escapeAttr(block.id)}" data-grid-item-id="${escapeAttr(item.id)}">×</button>
+              </div>
               <select data-section-key="${escapeAttr(sectionKey)}" data-block-id="${escapeAttr(
               block.id
-            )}" data-field="block-grid-style" data-grid-key="${escapeAttr(key)}">
-                ${renderOption('normal', block.schema.gridStyles[key] ?? 'normal')}
-                ${renderOption('bold', block.schema.gridStyles[key] ?? 'normal')}
-                ${renderOption('italic', block.schema.gridStyles[key] ?? 'normal')}
+            )}" data-field="block-grid-item-component" data-grid-item-id="${escapeAttr(item.id)}">
+                ${renderComponentOptions(item.component)}
               </select>
+              <select data-section-key="${escapeAttr(sectionKey)}" data-block-id="${escapeAttr(
+                block.id
+              )}" data-field="block-grid-item-column" data-grid-item-id="${escapeAttr(item.id)}">
+                ${renderOption('left', item.column)}
+                ${renderOption('right', item.column)}
+                ${renderOption('full', item.column)}
+              </select>
+              <div class="rich-toolbar">
+                <button type="button" data-rich-action="bold" data-rich-field="block-grid-rich" data-grid-item-id="${escapeAttr(
+                  item.id
+                )}" data-section-key="${escapeAttr(sectionKey)}" data-block-id="${escapeAttr(
+                  block.id
+                )}" title="Bold (Ctrl/Cmd+B)"><strong>B</strong></button>
+                <button type="button" data-rich-action="italic" data-rich-field="block-grid-rich" data-grid-item-id="${escapeAttr(
+                  item.id
+                )}" data-section-key="${escapeAttr(sectionKey)}" data-block-id="${escapeAttr(
+                  block.id
+                )}" title="Italic (Ctrl/Cmd+I)"><em>I</em></button>
+                <button type="button" data-rich-action="list" data-rich-field="block-grid-rich" data-grid-item-id="${escapeAttr(
+                  item.id
+                )}" data-section-key="${escapeAttr(sectionKey)}" data-block-id="${escapeAttr(
+                  block.id
+                )}" title="Bullet List">List</button>
+                <button type="button" data-rich-action="link" data-rich-field="block-grid-rich" data-grid-item-id="${escapeAttr(
+                  item.id
+                )}" data-section-key="${escapeAttr(sectionKey)}" data-block-id="${escapeAttr(
+                  block.id
+                )}" title="Link (Ctrl/Cmd+K)">Link</button>
+              </div>
+              <div class="rich-editor" contenteditable="true" data-section-key="${escapeAttr(
+                sectionKey
+              )}" data-block-id="${escapeAttr(block.id)}" data-grid-item-id="${escapeAttr(item.id)}" data-field="block-grid-rich">${markdownToEditorHtml(item.content)}</div>
             </div>`
           )
           .join('')}
       </div>
-      <div class="rich-toolbar">
-        <button type="button" data-rich-action="bold" data-section-key="${escapeAttr(sectionKey)}" data-block-id="${escapeAttr(
-      block.id
-    )}" title="Bold (Ctrl/Cmd+B)"><strong>B</strong></button>
-        <button type="button" data-rich-action="italic" data-section-key="${escapeAttr(sectionKey)}" data-block-id="${escapeAttr(
-      block.id
-    )}" title="Italic (Ctrl/Cmd+I)"><em>I</em></button>
-      </div>
-      <div class="rich-editor" contenteditable="true" data-section-key="${escapeAttr(sectionKey)}" data-block-id="${escapeAttr(
-      block.id
-    )}" data-field="block-rich">${markdownToEditorHtml(block.text)}</div>
+      <button type="button" class="ghost" data-action="add-grid-item" data-section-key="${escapeAttr(
+        sectionKey
+      )}" data-block-id="${escapeAttr(block.id)}">Add Grid Component</button>
     `;
   }
 
@@ -1439,33 +1534,29 @@ function renderBlockContentEditor(sectionKey: string, block: VisualBlock): strin
     )}" data-field="block-expandable-stub" value="${escapeAttr(block.schema.expandableStub)}" />
       </label>
       <div class="expand-chooser-grid">
-        <article class="ghost-section-card chooser-card">
+        <article class="ghost-section-card add-ghost">
           <div class="ghost-plus-big"><span>+</span></div>
           <div class="ghost-label">Stub: ${escapeHtml(block.schema.expandableStubComponent)}</div>
-          <div class="chooser-options">
-            ${getComponentOptions()
-              .map(
-                (name) =>
-                  `<button type="button" class="${name === block.schema.expandableStubComponent ? 'secondary' : 'ghost'}" data-action="set-expandable-stub-component" data-section-key="${escapeAttr(
-                    sectionKey
-                  )}" data-block-id="${escapeAttr(block.id)}" data-component-name="${escapeAttr(name)}">${escapeHtml(name)}</button>`
-              )
-              .join('')}
-          </div>
+          <label class="ghost-component-picker">
+            <span>Component</span>
+            <select data-section-key="${escapeAttr(sectionKey)}" data-block-id="${escapeAttr(
+      block.id
+    )}" data-field="block-expandable-stub-component">
+              ${renderComponentOptions(block.schema.expandableStubComponent)}
+            </select>
+          </label>
         </article>
-        <article class="ghost-section-card chooser-card">
+        <article class="ghost-section-card add-ghost">
           <div class="ghost-plus-big"><span>+</span></div>
           <div class="ghost-label">Expanded: ${escapeHtml(block.schema.expandableContentComponent)}</div>
-          <div class="chooser-options">
-            ${getComponentOptions()
-              .map(
-                (name) =>
-                  `<button type="button" class="${name === block.schema.expandableContentComponent ? 'secondary' : 'ghost'}" data-action="set-expandable-content-component" data-section-key="${escapeAttr(
-                    sectionKey
-                  )}" data-block-id="${escapeAttr(block.id)}" data-component-name="${escapeAttr(name)}">${escapeHtml(name)}</button>`
-              )
-              .join('')}
-          </div>
+          <label class="ghost-component-picker">
+            <span>Component</span>
+            <select data-section-key="${escapeAttr(sectionKey)}" data-block-id="${escapeAttr(
+      block.id
+    )}" data-field="block-expandable-content-component">
+              ${renderComponentOptions(block.schema.expandableContentComponent)}
+            </select>
+          </label>
         </article>
       </div>
       <label><input type="checkbox" data-section-key="${escapeAttr(sectionKey)}" data-block-id="${escapeAttr(
@@ -1532,25 +1623,40 @@ function renderTableRowEditor(
           )
           .join('')}
       </div>
-      <label>
-        <span>Expandable Details</span>
-        <input data-section-key="${escapeAttr(sectionKey)}" data-block-id="${escapeAttr(
+      <label><input type="checkbox" data-section-key="${escapeAttr(sectionKey)}" data-block-id="${escapeAttr(
     blockId
-  )}" data-row-index="${rowIndex}" data-field="table-details" value="${escapeAttr(row.details)}" />
-      </label>
-      <div class="editor-grid">
-        <label><input type="checkbox" data-section-key="${escapeAttr(sectionKey)}" data-block-id="${escapeAttr(
-    blockId
-  )}" data-row-index="${rowIndex}" data-field="table-clickable" ${row.clickable ? 'checked' : ''} /> Click to reveal</label>
-        <label>
-          <span>Reveal Component</span>
-          <select data-section-key="${escapeAttr(sectionKey)}" data-block-id="${escapeAttr(
-    blockId
-  )}" data-row-index="${rowIndex}" data-field="table-reveal-component">
-            ${renderComponentOptions(row.revealComponent || 'text')}
-          </select>
-        </label>
-      </div>
+  )}" data-row-index="${rowIndex}" data-field="table-clickable" ${row.clickable ? 'checked' : ''} /> Click to reveal details</label>
+      ${
+        row.clickable
+          ? `<div class="table-details-editor">
+              <label>
+                <span>Details Container Title</span>
+                <input data-section-key="${escapeAttr(sectionKey)}" data-block-id="${escapeAttr(
+              blockId
+            )}" data-row-index="${rowIndex}" data-field="table-details-title" value="${escapeAttr(row.detailsTitle || 'Details')}" />
+              </label>
+              <div class="rich-toolbar">
+                <button type="button" data-rich-action="bold" data-rich-field="table-details-rich" data-row-index="${rowIndex}" data-section-key="${escapeAttr(
+              sectionKey
+            )}" data-block-id="${escapeAttr(blockId)}" title="Bold (Ctrl/Cmd+B)"><strong>B</strong></button>
+                <button type="button" data-rich-action="italic" data-rich-field="table-details-rich" data-row-index="${rowIndex}" data-section-key="${escapeAttr(
+              sectionKey
+            )}" data-block-id="${escapeAttr(blockId)}" title="Italic (Ctrl/Cmd+I)"><em>I</em></button>
+                <button type="button" data-rich-action="list" data-rich-field="table-details-rich" data-row-index="${rowIndex}" data-section-key="${escapeAttr(
+              sectionKey
+            )}" data-block-id="${escapeAttr(blockId)}" title="Bullet List">List</button>
+                <button type="button" data-rich-action="link" data-rich-field="table-details-rich" data-row-index="${rowIndex}" data-section-key="${escapeAttr(
+              sectionKey
+            )}" data-block-id="${escapeAttr(blockId)}" title="Link (Ctrl/Cmd+K)">Link</button>
+              </div>
+              <div class="rich-editor" contenteditable="true" data-section-key="${escapeAttr(
+                sectionKey
+              )}" data-block-id="${escapeAttr(blockId)}" data-row-index="${rowIndex}" data-field="table-details-rich">${markdownToEditorHtml(
+                row.detailsContent || ''
+              )}</div>
+            </div>`
+          : ''
+      }
       <button type="button" class="danger" data-action="remove-table-row" data-section-key="${escapeAttr(
         sectionKey
       )}" data-block-id="${escapeAttr(blockId)}" data-row-index="${rowIndex}">Remove Row</button>
@@ -1665,11 +1771,16 @@ function renderReaderBlock(section: VisualSection, block: VisualBlock): string {
                 </tr>
                 ${
                   row.expanded
-                    ? `<tr class="table-details-row"><td colspan="${Math.max(columns.length, 1)}">${renderComponentFragment(
-                        row.revealComponent || 'text',
-                        applyTemplateValues(row.details || ''),
+                    ? `<tr class="table-details-row"><td colspan="${Math.max(
+                        columns.length,
+                        1
+                      )}"><div class="reader-table-details-container"><div class="reader-container-title">${escapeHtml(
+                        row.detailsTitle || 'Details'
+                      )}</div><div class="reader-container-body">${renderComponentFragment(
+                        'text',
+                        applyTemplateValues(row.detailsContent || ''),
                         block
-                      )}</td></tr>`
+                      )}</div></div></td></tr>`
                     : ''
                 }
               `
@@ -1690,29 +1801,22 @@ function renderReaderBlock(section: VisualSection, block: VisualBlock): string {
   }
 
   if (base === 'grid') {
-    const keys = block.schema.gridKeys
-      .split(',')
-      .map((key) => key.trim())
-      .filter((key) => key.length > 0);
-    const hasAreas = block.schema.gridTemplateAreas.trim().length > 0;
-    const gridStyle = [
-      `grid-template-columns: ${block.schema.gridTemplateColumns || '1fr 1fr'};`,
-      hasAreas ? `grid-template-areas: ${block.schema.gridTemplateAreas};` : '',
-    ]
-      .filter(Boolean)
-      .join(' ');
-    const cells = keys
-      .map((key) => {
-        const styleType = block.schema.gridStyles[key] ?? 'normal';
-        return `<div class="reader-grid-cell is-${escapeAttr(styleType)}" style="grid-area: ${escapeAttr(
-          key
-        )};">${escapeHtml(block.schema.gridValues[key] ?? '')}</div>`;
+    ensureGridItems(block.schema);
+    const columns = coerceGridColumns(block.schema.gridColumns);
+    const gridStyle = `grid-template-columns: repeat(${columns}, minmax(0, 1fr));`;
+    const cells = block.schema.gridItems
+      .map((item) => {
+        const gridColumn =
+          item.column === 'full' ? '1 / -1' : item.column === 'right' && columns > 1 ? `${Math.min(columns, 2)} / span 1` : '1 / span 1';
+        return `<div class="reader-grid-cell" style="grid-column: ${escapeAttr(gridColumn)};">${renderComponentFragment(
+          item.component,
+          applyTemplateValues(item.content),
+          block
+        )}</div>`;
       })
       .join('');
-    const body = block.text.trim().length > 0 ? renderComponentFragment('text', applyTemplateValues(block.text), block) : '';
     return `<div ${blockAttrs}>
       <div class="reader-grid-layout" style="${escapeAttr(gridStyle)}">${cells}</div>
-      ${body ? `<div class="reader-grid-body">${body}</div>` : ''}
     </div>`;
   }
 
@@ -1922,11 +2026,8 @@ function serializeSection(section: VisualSection, level: number): string {
     slot: block.schema.slot,
     codeLanguage: block.schema.codeLanguage,
     containerTitle: block.schema.containerTitle,
-    gridTemplateColumns: block.schema.gridTemplateColumns,
-    gridTemplateAreas: block.schema.gridTemplateAreas,
-    gridKeys: block.schema.gridKeys,
-    gridValues: block.schema.gridValues,
-    gridStyles: block.schema.gridStyles,
+    gridColumns: block.schema.gridColumns,
+    gridItems: block.schema.gridItems,
     tags: block.schema.tags,
     description: block.schema.description,
     pluginUrl: block.schema.pluginUrl,
@@ -2084,11 +2185,8 @@ function defaultBlockSchema(component = 'text'): BlockSchema {
     slot: 'center',
     codeLanguage: 'ts',
     containerTitle: 'Container',
-    gridTemplateColumns: '1fr 1fr',
-    gridTemplateAreas: '"a b"\n"c ."',
-    gridKeys: 'a,b,c',
-    gridValues: {},
-    gridStyles: {},
+    gridColumns: 2,
+    gridItems: [createGridItem(0, 2), createGridItem(1, 2)],
     tags: '',
     description: '',
     metaOpen: false,
@@ -2109,20 +2207,16 @@ function schemaFromUnknown(value: unknown): BlockSchema {
   }
   const candidate = value as JsonObject;
   const rows = Array.isArray(candidate.tableRows) ? candidate.tableRows : [];
+  const gridColumns = coerceGridColumns(candidate.gridColumns ?? candidate.gridTemplateColumns);
+  const parsedGridItems = parseGridItems(candidate, gridColumns);
   return {
     component: typeof candidate.component === 'string' ? candidate.component : 'text',
     align: coerceAlign(typeof candidate.align === 'string' ? candidate.align : 'left'),
     slot: coerceSlot(typeof candidate.slot === 'string' ? candidate.slot : 'center'),
     codeLanguage: typeof candidate.codeLanguage === 'string' ? candidate.codeLanguage : 'ts',
     containerTitle: typeof candidate.containerTitle === 'string' ? candidate.containerTitle : 'Container',
-    gridTemplateColumns: typeof candidate.gridTemplateColumns === 'string' ? candidate.gridTemplateColumns : '1fr 1fr',
-    gridTemplateAreas: typeof candidate.gridTemplateAreas === 'string' ? candidate.gridTemplateAreas : '"a b"\n"c ."',
-    gridKeys: typeof candidate.gridKeys === 'string' ? candidate.gridKeys : 'a,b,c',
-    gridValues: typeof candidate.gridValues === 'object' && candidate.gridValues ? (candidate.gridValues as Record<string, string>) : {},
-    gridStyles:
-      typeof candidate.gridStyles === 'object' && candidate.gridStyles
-        ? (candidate.gridStyles as Record<string, 'normal' | 'bold' | 'italic'>)
-        : {},
+    gridColumns,
+    gridItems: parsedGridItems,
     tags: typeof candidate.tags === 'string' ? candidate.tags : '',
     description: typeof candidate.description === 'string' ? candidate.description : '',
     metaOpen: candidate.metaOpen === true,
@@ -2138,10 +2232,11 @@ function schemaFromUnknown(value: unknown): BlockSchema {
       const mapped = row as JsonObject;
       return {
         cells: Array.isArray(mapped.cells) ? mapped.cells.map((cell) => String(cell ?? '')) : ['', ''],
-        details: typeof mapped.details === 'string' ? mapped.details : '',
         expanded: mapped.expanded === true,
         clickable: mapped.clickable !== false,
-        revealComponent: typeof mapped.revealComponent === 'string' ? mapped.revealComponent : 'text',
+        detailsTitle: typeof mapped.detailsTitle === 'string' ? mapped.detailsTitle : 'Details',
+        detailsContent:
+          typeof mapped.detailsContent === 'string' ? mapped.detailsContent : typeof mapped.details === 'string' ? mapped.details : '',
       };
     }),
   };
@@ -2271,6 +2366,123 @@ function splitColumns(value: string): string[] {
   return columns.length > 0 ? columns : ['Column 1', 'Column 2'];
 }
 
+function createGridItem(index: number, columns: number): GridItem {
+  const column = columns <= 1 ? 'full' : index % 2 === 0 ? 'left' : 'right';
+  return { id: makeId('griditem'), component: 'text', content: '', column };
+}
+
+function coerceGridColumns(value: unknown): number {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return Math.max(1, Math.min(6, Math.round(value)));
+  }
+  if (typeof value === 'string') {
+    const parsedInt = Number.parseInt(value, 10);
+    if (!Number.isNaN(parsedInt)) {
+      return Math.max(1, Math.min(6, parsedInt));
+    }
+    const tokens = value
+      .split(/\s+/)
+      .map((token) => token.trim())
+      .filter((token) => token.length > 0);
+    if (tokens.length > 0) {
+      return Math.max(1, Math.min(6, tokens.length));
+    }
+  }
+  return 2;
+}
+
+function coerceGridColumn(value: unknown, columns: number): GridColumn {
+  if (columns <= 1) {
+    return 'full';
+  }
+  if (value === 'right') {
+    return 'right';
+  }
+  if (value === 'full') {
+    return 'full';
+  }
+  return 'left';
+}
+
+function parseGridItems(candidate: JsonObject, columns: number): GridItem[] {
+  const items: GridItem[] = [];
+  if (Array.isArray(candidate.gridItems)) {
+    (candidate.gridItems as unknown[]).forEach((raw) => {
+      if (!raw || typeof raw !== 'object') {
+        return;
+      }
+      const item = raw as JsonObject;
+      items.push({
+        id: typeof item.id === 'string' ? item.id : makeId('griditem'),
+        component: typeof item.component === 'string' ? item.component : 'text',
+        content: typeof item.content === 'string' ? item.content : '',
+        column: coerceGridColumn(item.column, columns),
+      });
+    });
+    if (items.length > 0) {
+      return items;
+    }
+  }
+
+  // Backward compatibility with prior object-key grid model.
+  if (candidate.gridItems && typeof candidate.gridItems === 'object') {
+    const keyedItems = candidate.gridItems as Record<string, unknown>;
+    Object.values(keyedItems).forEach((raw, index) => {
+      if (!raw || typeof raw !== 'object') {
+        return;
+      }
+      const item = raw as JsonObject;
+      items.push({
+        id: makeId('griditem'),
+        component: typeof item.component === 'string' ? item.component : 'text',
+        content: typeof item.content === 'string' ? item.content : '',
+        column: coerceGridColumn(index % 2 === 0 ? 'left' : 'right', columns),
+      });
+    });
+    if (items.length > 0) {
+      return items;
+    }
+  }
+
+  // Backward compatibility with old keys/values model.
+  const legacyKeysRaw = typeof candidate.gridKeys === 'string' ? candidate.gridKeys : '';
+  const legacyKeys = legacyKeysRaw
+    .split(',')
+    .map((key) => key.trim())
+    .filter((key) => key.length > 0);
+  const legacyValues =
+    typeof candidate.gridValues === 'object' && candidate.gridValues ? (candidate.gridValues as Record<string, unknown>) : {};
+  legacyKeys.forEach((key, index) => {
+    items.push({
+      id: makeId('griditem'),
+      component: 'text',
+      content: typeof legacyValues[key] === 'string' ? (legacyValues[key] as string) : '',
+      column: coerceGridColumn(index % 2 === 0 ? 'left' : 'right', columns),
+    });
+  });
+
+  if (items.length === 0) {
+    return [createGridItem(0, columns), createGridItem(1, columns)];
+  }
+  return items;
+}
+
+function ensureGridItems(schema: BlockSchema): void {
+  if (!Array.isArray(schema.gridItems)) {
+    schema.gridItems = [createGridItem(0, schema.gridColumns), createGridItem(1, schema.gridColumns)];
+    return;
+  }
+  if (schema.gridItems.length === 0) {
+    schema.gridItems.push(createGridItem(0, schema.gridColumns));
+  }
+  schema.gridItems = schema.gridItems.map((item) => ({
+    id: item.id || makeId('griditem'),
+    component: item.component || 'text',
+    content: item.content ?? '',
+    column: coerceGridColumn(item.column, schema.gridColumns),
+  }));
+}
+
 interface ComponentDefinition {
   name: string;
   baseType: string;
@@ -2310,10 +2522,19 @@ function applyComponentDefaults(schema: BlockSchema, componentName: string): voi
   const def = getComponentDefs().find((item) => item.name === componentName);
   const base = resolveBaseComponent(componentName);
   if (base === 'table' && schema.tableRows.length === 0) {
-    schema.tableRows.push({ cells: ['', ''], details: '', expanded: false, clickable: true, revealComponent: 'text' });
+    schema.tableRows.push({
+      cells: ['', ''],
+      expanded: false,
+      clickable: true,
+      detailsTitle: 'Details',
+      detailsContent: '',
+    });
   }
   if (base === 'expandable' && !schema.expandableStub) {
     schema.expandableStub = 'Read more';
+  }
+  if (base === 'grid') {
+    ensureGridItems(schema);
   }
   if (!def) {
     return;
@@ -2447,12 +2668,23 @@ function ensureHistoryInitialized(): void {
   }
 }
 
-function recordHistory(): void {
+function recordHistory(group?: string): void {
   if (state.isRestoring) {
     return;
   }
   ensureHistoryInitialized();
   const snap = snapshotState();
+  if (group) {
+    const now = Date.now();
+    if (state.lastHistoryGroup === group && now - state.lastHistoryAt < HISTORY_GROUP_WINDOW_MS) {
+      return;
+    }
+    state.lastHistoryGroup = group;
+    state.lastHistoryAt = now;
+  } else {
+    state.lastHistoryGroup = null;
+    state.lastHistoryAt = 0;
+  }
   if (state.history[state.history.length - 1] !== snap) {
     state.history.push(snap);
     if (state.history.length > 200) {
@@ -2481,6 +2713,8 @@ function undoState(): void {
   if (prev) {
     restoreFromSnapshot(prev);
   }
+  state.lastHistoryGroup = null;
+  state.lastHistoryAt = 0;
   state.isRestoring = false;
   renderApp();
 }
@@ -2494,6 +2728,8 @@ function redoState(): void {
   state.isRestoring = true;
   state.history.push(next);
   restoreFromSnapshot(next);
+  state.lastHistoryGroup = null;
+  state.lastHistoryAt = 0;
   state.isRestoring = false;
   renderApp();
 }
@@ -2516,7 +2752,10 @@ function restoreFromSnapshot(snapshot: string): void {
 function renderStateTracker(): string {
   ensureHistoryInitialized();
   const current = snapshotState();
-  const previous = state.history[state.history.length - 1] ?? current;
+  const previous =
+    [...state.history]
+      .reverse()
+      .find((snapshot) => snapshot !== current) ?? current;
   const diff = computeSimpleDiff(previous, current);
   return `
     <section class="state-tracker">

@@ -452,6 +452,21 @@ button.tiny {
   gap: 0.3rem;
 }
 
+.grid-field-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.table-details-editor {
+  border: 1px dashed #c8d5df;
+  border-radius: 8px;
+  padding: 0.45rem;
+  display: grid;
+  gap: 0.35rem;
+}
+
 .editor-children {
   margin-top: 0.6rem;
   padding-left: 0.85rem;
@@ -628,6 +643,11 @@ button.tiny {
 
 .table-details-row td {
   background: #f7fbff;
+}
+
+.reader-table-details-container {
+  display: grid;
+  gap: 0.3rem;
 }
 
 .reader-container-title {

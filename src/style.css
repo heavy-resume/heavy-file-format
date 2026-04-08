@@ -1,0 +1,415 @@
+:root {
+  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+  color: #1a2530;
+  background: radial-gradient(circle at 10% 20%, #f5f9ff, #f2f7f3 48%, #edf2f8);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+.layout {
+  min-height: 100vh;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 0.9rem;
+  padding: 1rem;
+}
+
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  padding: 0.9rem;
+  border: 1px solid #ced9e2;
+  border-radius: 12px;
+  background: #ffffffcf;
+}
+
+.title-block h1 {
+  margin: 0;
+  font-size: 1.3rem;
+}
+
+.title-block p {
+  margin: 0.35rem 0 0;
+  color: #4b5c67;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+}
+
+.file-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.72rem;
+  border-radius: 8px;
+  background: #2c5e78;
+  color: #fff;
+  cursor: pointer;
+}
+
+.file-picker input {
+  display: none;
+}
+
+.toolbar input[type='text'],
+.toolbar button,
+button {
+  border: 1px solid #b8c8d3;
+  border-radius: 8px;
+  padding: 0.38rem 0.58rem;
+  background: #fff;
+}
+
+.toolbar button,
+button.secondary {
+  background: #325f6e;
+  border-color: #325f6e;
+  color: #fff;
+}
+
+button.ghost {
+  background: transparent;
+}
+
+button.danger {
+  background: #a64040;
+  border-color: #a64040;
+  color: #fff;
+}
+
+button.tiny {
+  font-size: 0.78rem;
+  padding: 0.2rem 0.42rem;
+}
+
+.panes {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  gap: 0.9rem;
+  min-height: 0;
+}
+
+.pane {
+  border: 1px solid #ced9e2;
+  border-radius: 12px;
+  background: #ffffffdd;
+  padding: 0.8rem;
+  overflow: auto;
+}
+
+.pane-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.6rem;
+}
+
+.pane h2 {
+  margin: 0;
+}
+
+.editor-tree,
+.reader-document {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.editor-section-card {
+  border: 1px solid #d6e0e8;
+  border-radius: 10px;
+  background: #f9fcff;
+  padding: 0.65rem;
+}
+
+.editor-section-head,
+.editor-block-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.55rem;
+}
+
+.editor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.editor-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
+.editor-grid label,
+.editor-row label,
+.modal-panel label {
+  display: grid;
+  gap: 0.24rem;
+  font-size: 0.9rem;
+}
+
+.editor-grid input,
+.editor-grid select,
+.editor-block textarea,
+.modal-panel textarea {
+  width: 100%;
+  border: 1px solid #c8d4dd;
+  border-radius: 7px;
+  padding: 0.44rem;
+}
+
+.id-pill {
+  border: 1px solid #c8d4dd;
+  border-radius: 7px;
+  background: #fff;
+  padding: 0.44rem;
+  min-height: 2.05rem;
+  display: flex;
+  align-items: center;
+}
+
+.id-override {
+  display: grid;
+  gap: 0.24rem;
+  margin-bottom: 0.55rem;
+}
+
+.editor-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem;
+  margin: 0.6rem 0;
+}
+
+.editor-block {
+  border: 1px dashed #c9d4de;
+  border-radius: 8px;
+  padding: 0.55rem;
+  background: #fff;
+}
+
+.rich-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-bottom: 0.4rem;
+}
+
+.rich-toolbar button {
+  min-width: 2rem;
+  padding: 0.25rem 0.45rem;
+  background: #f8fbfe;
+}
+
+.rich-editor {
+  min-height: 96px;
+  border: 1px solid #c8d4dd;
+  border-radius: 7px;
+  background: #fff;
+  padding: 0.48rem;
+  margin-bottom: 0.45rem;
+  line-height: 1.4;
+}
+
+.rich-editor:focus {
+  outline: 2px solid #8cb0c4;
+  outline-offset: 1px;
+}
+
+.rich-editor p {
+  margin: 0 0 0.45rem;
+}
+
+.rich-editor p:last-child {
+  margin-bottom: 0;
+}
+
+.editor-children {
+  margin-top: 0.6rem;
+  padding-left: 0.65rem;
+  border-left: 2px solid #d5e1eb;
+}
+
+.reader-warnings,
+.reader-nav {
+  margin-bottom: 0.7rem;
+}
+
+.ok,
+.warn {
+  border-radius: 8px;
+  padding: 0.4rem 0.5rem;
+}
+
+.ok {
+  background: #e7f9ee;
+  border: 1px solid #95d8a9;
+  color: #1c6231;
+}
+
+.warn {
+  background: #fff3de;
+  border: 1px solid #ebca8d;
+  color: #724c00;
+}
+
+.nav-title {
+  font-weight: 700;
+  margin-bottom: 0.35rem;
+}
+
+.nav-list {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.nav-item {
+  text-align: left;
+  border: 1px solid #cfdae3;
+  border-radius: 8px;
+  background: #f9fcff;
+  padding: 0.4rem 0.52rem;
+  cursor: pointer;
+}
+
+.reader-section {
+  border: 1px solid #d2dde6;
+  border-radius: 10px;
+  background: #fff;
+  padding: 0.55rem;
+}
+
+.reader-section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 0.5rem;
+}
+
+.reader-section-head h1,
+.reader-section-head h2,
+.reader-section-head h3,
+.reader-section-head h4,
+.reader-section-head h5,
+.reader-section-head h6 {
+  margin: 0;
+}
+
+.reader-head-actions {
+  display: flex;
+  gap: 0.3rem;
+}
+
+.reader-section-content {
+  margin-top: 0.5rem;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.reader-block {
+  border-left: 3px solid #adc0ce;
+  padding-left: 0.55rem;
+}
+
+.reader-block.align-left {
+  text-align: left;
+}
+
+.reader-block.align-center {
+  text-align: center;
+}
+
+.reader-block.align-right {
+  text-align: right;
+}
+
+.reader-section.is-highlighted {
+  box-shadow: inset 0 0 0 2px #f5d45f;
+  background: #fffbed;
+}
+
+.reader-section.is-temp-highlighted {
+  animation: flash 1.2s ease;
+}
+
+@keyframes flash {
+  0% {
+    background: #fff2bf;
+  }
+  100% {
+    background: #fff;
+  }
+}
+
+.modal-root {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+}
+
+.modal-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 22, 30, 0.58);
+}
+
+.modal-panel {
+  position: relative;
+  z-index: 1;
+  width: min(920px, 96vw);
+  max-height: 88vh;
+  overflow: auto;
+  margin: 5vh auto;
+  border-radius: 12px;
+  border: 1px solid #cad7e0;
+  background: #fff;
+  padding: 0.85rem;
+}
+
+.modal-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.modal-head h3 {
+  margin: 0;
+}
+
+.modal-preview {
+  margin-top: 0.75rem;
+  border-top: 1px solid #d3dce5;
+  padding-top: 0.65rem;
+}
+
+.muted {
+  color: #5e6d78;
+}
+
+@media (max-width: 980px) {
+  .panes {
+    grid-template-columns: 1fr;
+  }
+
+  .editor-grid {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,0 +1,48 @@
+---
+hvy_version: 0.1
+title: Product Launch Brief
+audience: mixed
+plugins:
+  - id: com.example.timeline
+    source: https://plugins.example.com/timeline.hvyplugin
+    version: 1.2.0
+    integrity: sha256-BASE64_DIGEST
+---
+
+<!--hvy:doc {"tags":["launch","brief"],"lang":"en"}-->
+
+# Launch Summary
+<!--hvy: {"id":"launch-summary","tags":["overview"],"style":"hero"}-->
+
+We are launching **Heavy (.hvy)** for structured, interactive knowledge capture.
+
+## Goals
+<!--hvy: {"id":"goals","tags":["planning"]}-->
+
+- Keep Markdown-first authoring.
+- Add atomic thought metadata.
+- Stay offline-safe by default.
+
+### Milestones
+<!--hvy: {"id":"milestones","plugin":"com.example.timeline","plugin_config":{"start":"2026-01-01"}}-->
+
+- Alpha spec
+- Parser prototype
+- Editor integration
+
+<!--hvy:css {"id":"theme-base","scope":"document"}-->
+```css
+:root {
+  --ink: #1d2733;
+  --accent: #1f7a8c;
+}
+
+body {
+  color: var(--ink);
+  line-height: 1.5;
+}
+
+h1, h2, h3 {
+  color: var(--accent);
+}
+```

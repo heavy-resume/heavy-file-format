@@ -1,0 +1,23 @@
+{
+  "name": "heavy-file-format-ref-impl",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "install:deps": "bash ./scripts/install-deps.sh",
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "dompurify": "^3.2.6",
+    "marked": "^15.0.12",
+    "turndown": "^7.2.0",
+    "yaml": "^2.8.1"
+  },
+  "devDependencies": {
+    "@types/turndown": "^5.0.6",
+    "typescript": "^5.8.3",
+    "vite": "^6.3.3"
+  }
+}

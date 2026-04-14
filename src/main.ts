@@ -7,24 +7,18 @@ import { stringify as stringifyYaml } from 'yaml';
 import type { HvySection, JsonObject } from './hvy/types';
 import type { Align, BlockSchema, GridColumn, GridItem, Slot, TableRow, VisualBlock, VisualSection } from './editor/types';
 import type { ComponentRenderHelpers } from './editor/component-helpers';
-import { renderTextEditor, renderTextReader } from './editor/components/text';
-import { renderCodeEditor, renderCodeReader } from './editor/components/code';
-import { renderPluginEditor, renderPluginReader } from './editor/components/plugin';
-import { renderContainerEditor, renderContainerReader } from './editor/components/container';
-import { renderGridEditor, renderGridReader } from './editor/components/grid';
-import { renderExpandableEditor, renderExpandableReader } from './editor/components/expandable';
-import { renderTableEditor, renderTableReader } from './editor/components/table';
 import {
   commitTagEditorDraft,
   handleRemoveTag,
   handleTagEditorInput,
   handleTagEditorKeydown,
   parseTags,
-  renderTagEditor,
   serializeTags,
   type TagRenderOptions,
 } from './editor/tag-editor';
-import { getTemplateFields, renderTemplateGhosts, renderTemplatePanel } from './editor/template';
+import { getTemplateFields, renderTemplatePanel } from './editor/template';
+import { createEditorRenderer, type EditorRenderer } from './editor/render';
+import { createReaderRenderer, type ReaderRenderer } from './reader/render';
 
 interface VisualDocument {
   meta: JsonObject;
@@ -92,6 +86,81 @@ const tagStateHelpers = {
   setTagState,
   getRenderOptions: getTagRenderOptions,
 };
+let editorRenderer: EditorRenderer;
+let readerRenderer: ReaderRenderer;
+
+editorRenderer = createEditorRenderer(
+  {
+    get documentMeta() {
+      return state.document.meta as Record<string, unknown>;
+    },
+    get showAdvancedEditor() {
+      return state.showAdvancedEditor;
+    },
+    get addComponentBySection() {
+      return state.addComponentBySection;
+    },
+    get activeEditorBlock() {
+      return state.activeEditorBlock;
+    },
+    get schemaDefDraftByBlock() {
+      return state.schemaDefDraftByBlock;
+    },
+  },
+  {
+    escapeAttr,
+    escapeHtml,
+    flattenSections,
+    renderReaderBlock: (section, block) => readerRenderer.renderReaderBlock(section, block),
+    renderComponentOptions,
+    renderOption,
+    resolveBaseComponent,
+    ensureContainerBlocks,
+    ensureExpandableBlocks,
+    ensureGridItems,
+    isActiveEditorSectionTitle,
+    isActiveEditorBlock,
+    isDefaultUntitledSectionTitle,
+    formatSectionTitle,
+    findSectionByKey,
+    getComponentDefs,
+    getThemeConfig,
+    getComponentRenderHelpers,
+    isBuiltinComponent,
+  }
+);
+
+readerRenderer = createReaderRenderer(
+  {
+    get documentSections() {
+      return state.document.sections;
+    },
+    get tempHighlights() {
+      return state.tempHighlights;
+    },
+    get modalSectionKey() {
+      return state.modalSectionKey;
+    },
+    get componentMetaModal() {
+      return state.componentMetaModal;
+    },
+  },
+  {
+    escapeAttr,
+    escapeHtml,
+    flattenSections,
+    findDuplicateSectionIds,
+    findSectionByKey,
+    findBlockByIds,
+    getSectionId,
+    formatSectionTitle,
+    resolveBaseComponent,
+    ensureExpandableBlocks,
+    ensureGridItems,
+    getComponentRenderHelpers,
+    renderBlockMetaFields: (sectionKey, block) => editorRenderer.renderBlockMetaFields(sectionKey, block),
+  }
+);
 
 try {
   renderApp();
@@ -185,18 +254,18 @@ function renderApp(): void {
                   </div>
                 </div>
                 ${isAdvancedEditor ? renderTemplatePanel(templateFields, state.templateValues, { escapeAttr, escapeHtml }) : ''}
-                ${isAdvancedEditor && state.metaPanelOpen ? renderMetaPanel() : ''}
+                ${isAdvancedEditor && state.metaPanelOpen ? editorRenderer.renderMetaPanel() : ''}
                 ${isAdvancedEditor ? renderStateTracker() : ''}
-                <div id="editorTree" class="editor-tree">${renderSectionEditorTree(state.document.sections)}</div>`
-              : `<div id="readerWarnings" class="reader-warnings">${renderWarnings()}</div>
-                <div id="readerNav" class="reader-nav">${renderNavigation(state.document.sections)}</div>
-                <div id="readerDocument" class="reader-document">${renderReaderSections(state.document.sections)}</div>`
+                <div id="editorTree" class="editor-tree">${editorRenderer.renderSectionEditorTree(state.document.sections)}</div>`
+              : `<div id="readerWarnings" class="reader-warnings">${readerRenderer.renderWarnings()}</div>
+                <div id="readerNav" class="reader-nav">${readerRenderer.renderNavigation(state.document.sections)}</div>
+                <div id="readerDocument" class="reader-document">${readerRenderer.renderReaderSections(state.document.sections)}</div>`
           }
         </div>
       </section>
 
-      ${renderModal()}
-      ${renderLinkInlineModal()}
+      ${readerRenderer.renderModal()}
+      ${readerRenderer.renderLinkInlineModal()}
     </main>
   `;
 
@@ -1439,13 +1508,13 @@ function refreshReaderPanels(): void {
   const reader = app.querySelector<HTMLDivElement>('#readerDocument');
 
   if (warnings) {
-    warnings.innerHTML = renderWarnings();
+    warnings.innerHTML = readerRenderer.renderWarnings();
   }
   if (nav) {
-    nav.innerHTML = renderNavigation(state.document.sections);
+    nav.innerHTML = readerRenderer.renderNavigation(state.document.sections);
   }
   if (reader) {
-    reader.innerHTML = renderReaderSections(state.document.sections);
+    reader.innerHTML = readerRenderer.renderReaderSections(state.document.sections);
   }
 
   refreshModalPreview();
@@ -1793,225 +1862,16 @@ function getComponentRenderHelpers(): ComponentRenderHelpers {
     escapeAttr,
     escapeHtml,
     markdownToEditorHtml,
-    renderRichToolbar,
-    renderEditorBlock,
-    renderReaderBlock,
-    renderComponentFragment,
+    renderRichToolbar: editorRenderer.renderRichToolbar,
+    renderEditorBlock: editorRenderer.renderEditorBlock,
+    renderReaderBlock: readerRenderer.renderReaderBlock,
+    renderComponentFragment: editorRenderer.renderComponentFragment,
     renderComponentOptions,
     renderOption,
     getTableColumns,
     ensureContainerBlocks,
     getSelectedAddComponent: (key: string, fallback: string) => state.addComponentBySection[key] ?? fallback,
   };
-}
-
-function renderSectionEditorTree(sections: VisualSection[]): string {
-  const sectionCards = sections.map((section) => renderEditorSection(section)).join('');
-  const flatSections = flattenSections(sections);
-  return `
-    ${
-      state.showAdvancedEditor
-        ? renderTemplateGhosts(getTemplateFields(state.document.meta), flatSections, { escapeAttr, escapeHtml })
-        : ''
-    }
-    ${sectionCards}
-    <article class="ghost-section-card add-ghost" data-action="add-top-level-section" data-section-key="__top_level__">
-      <div class="ghost-plus-big"><span>+</span></div>
-      <div class="ghost-label">Add Section</div>
-      <label class="ghost-component-picker">
-        <span>Starting Component</span>
-        <select data-field="new-component-type" data-section-key="__top_level__">
-          ${renderComponentOptions(state.addComponentBySection.__top_level__ ?? 'container')}
-        </select>
-      </label>
-    </article>
-  `;
-}
-
-function renderEditorSection(section: VisualSection): string {
-  const visibleTitle = formatSectionTitle(section.title);
-  const isUntitled = isDefaultUntitledSectionTitle(section.title);
-  const titleEditor = isActiveEditorSectionTitle(section.key)
-    ? `<input autofocus class="section-title-input" data-section-key="${escapeAttr(section.key)}" data-field="section-title" value="${escapeAttr(
-        isDefaultUntitledSectionTitle(section.title) ? '' : section.title
-      )}" />`
-    : `<button type="button" class="section-title-passive${isUntitled ? ' section-title-placeholder' : ''}" data-action="activate-section-title" data-section-key="${escapeAttr(
-        section.key
-      )}">${escapeHtml(visibleTitle)}</button>`;
-  return `
-    <article class="editor-section-card" data-editor-section="${escapeAttr(section.key)}">
-      <div class="editor-section-head">
-        <div class="section-drag-title" title="Drag to reorder section">
-          <button type="button" class="section-drag-handle" draggable="true" data-drag-handle="section" data-section-key="${escapeAttr(
-            section.key
-          )}" aria-label="Drag to reorder section">::</button>
-          ${titleEditor}
-        </div>
-        <div class="editor-actions">
-          <button type="button" class="ghost" data-action="jump-to-reader" data-section-key="${escapeAttr(section.key)}">Jump</button>
-          ${
-            state.showAdvancedEditor
-              ? `<button type="button" class="ghost" data-action="focus-modal" data-section-key="${escapeAttr(section.key)}">Meta</button>`
-              : ''
-          }
-          <button type="button" class="danger" data-action="remove-section" data-section-key="${escapeAttr(section.key)}">Remove</button>
-        </div>
-      </div>
-
-      ${
-        state.showAdvancedEditor
-          ? `<div class="editor-row">
-              <label class="checkbox-label"><input type="checkbox" data-section-key="${escapeAttr(section.key)}" data-field="section-highlight" ${
-                section.highlight ? 'checked' : ''
-              } /> Highlight</label>
-            </div>`
-          : ''
-      }
-
-      <div class="editor-blocks">
-        ${section.blocks.map((block) => renderEditorBlock(section.key, block)).join('')}
-        <article class="ghost-section-card add-ghost" data-action="add-block" data-section-key="${escapeAttr(section.key)}">
-          <div class="ghost-plus-big"><span>+</span></div>
-          <div class="ghost-label">Add Component</div>
-          <label class="ghost-component-picker">
-            <span>Component</span>
-            <select data-field="new-component-type" data-section-key="${escapeAttr(section.key)}">
-              ${renderComponentOptions(state.addComponentBySection[section.key] ?? 'container')}
-            </select>
-          </label>
-        </article>
-      </div>
-
-      <div class="editor-children">
-        ${section.children.map((child) => renderEditorSection(child)).join('')}
-        <button type="button" class="ghost subsection-add-button" data-action="add-subsection" data-section-key="${escapeAttr(section.key)}">+ Add Subsection</button>
-      </div>
-    </article>
-  `;
-}
-
-function isDescendantActive(block: VisualBlock, targetBlockId: string): boolean {
-  if (!block.schema) return false;
-  if (Array.isArray(block.schema.containerBlocks)) {
-    for (const child of block.schema.containerBlocks) {
-      if (child.id === targetBlockId || isDescendantActive(child, targetBlockId)) return true;
-    }
-  }
-  if (Array.isArray(block.schema.expandableStubBlocks)) {
-    for (const child of block.schema.expandableStubBlocks) {
-      if (child.id === targetBlockId || isDescendantActive(child, targetBlockId)) return true;
-    }
-  }
-  if (Array.isArray(block.schema.expandableContentBlocks)) {
-    for (const child of block.schema.expandableContentBlocks) {
-      if (child.id === targetBlockId || isDescendantActive(child, targetBlockId)) return true;
-    }
-  }
-  if (Array.isArray(block.schema.tableRows)) {
-    for (const row of block.schema.tableRows) {
-      if (Array.isArray(row.detailsBlocks)) {
-        for (const child of row.detailsBlocks) {
-          if (child.id === targetBlockId || isDescendantActive(child, targetBlockId)) return true;
-        }
-      }
-    }
-  }
-  return false;
-}
-
-function renderEditorBlock(sectionKey: string, block: VisualBlock): string {
-  const component = block.schema.component || 'text';
-  const contentEditor = renderBlockContentEditor(sectionKey, block);
-  const schemaEditor = renderBlockSchemaEditor(sectionKey, block);
-  const showSchema = state.showAdvancedEditor && block.schemaMode;
-  
-  const isActiveSelf = isActiveEditorBlock(sectionKey, block.id);
-  const isActiveDescendant = state.activeEditorBlock?.sectionKey === sectionKey && isDescendantActive(block, state.activeEditorBlock.blockId);
-  const isActive = isActiveSelf || isActiveDescendant;
-
-  if (!isActive) {
-    return renderPassiveEditorBlock(sectionKey, block);
-  }
-
-  return `
-    <div class="editor-block">
-      <div class="editor-block-head">
-        <strong class="editor-block-title">${escapeHtml(component)}</strong>
-        <div class="editor-actions">
-          <button type="button" class="ghost" data-action="deactivate-block" data-section-key="${escapeAttr(
-            sectionKey
-          )}" data-block-id="${escapeAttr(block.id)}">Done</button>
-          ${
-            state.showAdvancedEditor
-              ? `<button type="button" class="ghost" data-action="open-component-meta" data-section-key="${escapeAttr(
-                  sectionKey
-                )}" data-block-id="${escapeAttr(block.id)}">Meta</button>
-                 <button type="button" class="ghost" data-action="toggle-schema" data-section-key="${escapeAttr(
-                   sectionKey
-                 )}" data-block-id="${escapeAttr(block.id)}">${block.schemaMode ? 'Content Mode' : 'Schema Mode'}</button>`
-              : ''
-          }
-          <button type="button" class="danger remove-x" data-action="remove-block" data-section-key="${escapeAttr(
-            sectionKey
-          )}" data-block-id="${escapeAttr(block.id)}">×</button>
-        </div>
-      </div>
-
-      ${showSchema ? schemaEditor : contentEditor}
-    </div>
-  `;
-}
-
-function renderPassiveEditorBlock(sectionKey: string, block: VisualBlock): string {
-  const section = findSectionByKey(state.document.sections, sectionKey);
-  if (!section) {
-    return '';
-  }
-  return `
-    <div class="editor-block-passive" data-action="activate-block" data-section-key="${escapeAttr(sectionKey)}" data-block-id="${escapeAttr(
-      block.id
-    )}">
-      ${renderPassiveEditorBlockContent(sectionKey, section, block)}
-    </div>
-  `;
-}
-
-function renderPassiveEditorBlockContent(sectionKey: string, section: VisualSection, block: VisualBlock): string {
-  const base = resolveBaseComponent(block.schema.component);
-
-  if (base === 'container') {
-    ensureContainerBlocks(block);
-    const title = block.schema.containerTitle || 'Container';
-    const body = block.schema.containerBlocks.map((innerBlock) => renderPassiveEditorBlock(sectionKey, innerBlock)).join('');
-    return `<div class="reader-container-title">${escapeHtml(title)}</div>${body ? `<div class="reader-container-body">${body}</div>` : ''}`;
-  }
-
-  if (base === 'expandable') {
-    ensureExpandableBlocks(block);
-    const expanded = block.schema.expandableExpanded;
-    const alwaysShowStub = block.schema.expandableAlwaysShowStub;
-    const stubHtml = (block.schema.expandableStubBlocks ?? []).map((innerBlock) => renderPassiveEditorBlock(sectionKey, innerBlock)).join('');
-    const contentHtml = (block.schema.expandableContentBlocks ?? [])
-      .map((innerBlock) => renderPassiveEditorBlock(sectionKey, innerBlock))
-      .join('');
-    const body = expanded
-      ? alwaysShowStub
-        ? `<div class="expand-stub-toggle" data-action="toggle-editor-expandable" data-section-key="${escapeAttr(
-            sectionKey
-          )}" data-block-id="${escapeAttr(block.id)}" aria-expanded="true"><div class="expand-stub">${stubHtml}</div></div><div class="expand-content">${contentHtml}</div>`
-        : `<div class="expand-content">${contentHtml}</div><div class="expand-collapse-strip" data-action="toggle-editor-expandable" data-section-key="${escapeAttr(
-            sectionKey
-          )}" data-block-id="${escapeAttr(block.id)}" aria-expanded="true">Collapse</div>`
-      : `<div class="expand-stub-toggle" data-action="toggle-editor-expandable" data-section-key="${escapeAttr(
-          sectionKey
-        )}" data-block-id="${escapeAttr(block.id)}" aria-expanded="false"><div class="expand-stub">${stubHtml}</div></div>`;
-
-    return `<div class="expandable-reader">
-      <div class="expandable-reader-body">${body}</div>
-    </div>`;
-  }
-
-  return renderReaderBlock(section, block);
 }
 
 function applyRichAction(action: string, editable: HTMLElement, value?: string): void {
@@ -2036,446 +1896,6 @@ function applyRichAction(action: string, editable: HTMLElement, value?: string):
 
   const inputEvent = new InputEvent('input', { bubbles: true });
   editable.dispatchEvent(inputEvent);
-}
-
-function renderRichToolbar(
-  sectionKey: string,
-  blockId: string,
-  options?: {
-    field?: string;
-    gridItemId?: string;
-    rowIndex?: number;
-    includeAlign?: boolean;
-    align?: Align;
-  }
-): string {
-  const fieldAttr = options?.field ? ` data-rich-field="${escapeAttr(options.field)}"` : '';
-  const gridAttr = options?.gridItemId ? ` data-grid-item-id="${escapeAttr(options.gridItemId)}"` : '';
-  const rowAttr = typeof options?.rowIndex === 'number' ? ` data-row-index="${options.rowIndex}"` : '';
-  const alignControls =
-    options?.includeAlign && options.align
-      ? `<div class="toolbar-segment align-buttons" role="group" aria-label="Text alignment">
-          <button type="button" class="${options.align === 'left' ? 'secondary' : 'ghost'}" data-action="set-block-align" data-align-value="left" data-section-key="${escapeAttr(
-            sectionKey
-          )}" data-block-id="${escapeAttr(blockId)}">Left</button>
-          <button type="button" class="${options.align === 'center' ? 'secondary' : 'ghost'}" data-action="set-block-align" data-align-value="center" data-section-key="${escapeAttr(
-            sectionKey
-          )}" data-block-id="${escapeAttr(blockId)}">Center</button>
-          <button type="button" class="${options.align === 'right' ? 'secondary' : 'ghost'}" data-action="set-block-align" data-align-value="right" data-section-key="${escapeAttr(
-            sectionKey
-          )}" data-block-id="${escapeAttr(blockId)}">Right</button>
-        </div>`
-      : '';
-  return `
-    <div class="rich-toolbar">
-      ${alignControls}
-      <div class="toolbar-segment format-buttons" role="group" aria-label="Text formatting">
-        <button type="button" data-rich-action="paragraph"${fieldAttr}${gridAttr}${rowAttr} data-section-key="${escapeAttr(sectionKey)}" data-block-id="${escapeAttr(blockId)}" title="Normal text">Text</button>
-        <button type="button" data-rich-action="heading-1"${fieldAttr}${gridAttr}${rowAttr} data-section-key="${escapeAttr(sectionKey)}" data-block-id="${escapeAttr(blockId)}" title="Heading 1">H1</button>
-        <button type="button" data-rich-action="heading-2"${fieldAttr}${gridAttr}${rowAttr} data-section-key="${escapeAttr(sectionKey)}" data-block-id="${escapeAttr(blockId)}" title="Heading 2">H2</button>
-        <button type="button" data-rich-action="heading-3"${fieldAttr}${gridAttr}${rowAttr} data-section-key="${escapeAttr(sectionKey)}" data-block-id="${escapeAttr(blockId)}" title="Heading 3">H3</button>
-        <button type="button" data-rich-action="heading-4"${fieldAttr}${gridAttr}${rowAttr} data-section-key="${escapeAttr(sectionKey)}" data-block-id="${escapeAttr(blockId)}" title="Heading 4">H4</button>
-        <button type="button" data-rich-action="bold"${fieldAttr}${gridAttr}${rowAttr} data-section-key="${escapeAttr(sectionKey)}" data-block-id="${escapeAttr(blockId)}" title="Bold (Ctrl/Cmd+B)"><strong>B</strong></button>
-        <button type="button" data-rich-action="italic"${fieldAttr}${gridAttr}${rowAttr} data-section-key="${escapeAttr(sectionKey)}" data-block-id="${escapeAttr(blockId)}" title="Italic (Ctrl/Cmd+I)">Italic</button>
-        <button type="button" data-rich-action="list"${fieldAttr}${gridAttr}${rowAttr} data-section-key="${escapeAttr(sectionKey)}" data-block-id="${escapeAttr(blockId)}" title="Bullet List">List</button>
-        <button type="button" data-rich-action="link"${fieldAttr}${gridAttr}${rowAttr} data-section-key="${escapeAttr(sectionKey)}" data-block-id="${escapeAttr(blockId)}" title="Link (Ctrl/Cmd+K)">Link</button>
-      </div>
-    </div>
-  `;
-}
-
-function renderMetaPanel(): string {
-  const defs = getComponentDefs();
-  const theme = getThemeConfig();
-  return `
-    <section class="meta-panel">
-      <div class="meta-panel-head">
-        <strong>Document Meta</strong>
-      </div>
-      <label>
-        <span>Title</span>
-        <input data-field="meta-title" value="${escapeAttr(String(state.document.meta.title ?? ''))}" />
-      </label>
-      <div class="editor-grid">
-        <label>
-          <span>Theme Mode</span>
-          <select data-field="theme-mode">
-            ${renderOption('light', theme.mode)}
-            ${renderOption('dark', theme.mode)}
-          </select>
-        </label>
-        <label>
-          <span>Theme Accent</span>
-          <input data-field="theme-accent" value="${escapeAttr(theme.accent)}" />
-        </label>
-      </div>
-      <div class="editor-grid">
-        <label>
-          <span>Theme Background</span>
-          <input data-field="theme-background" value="${escapeAttr(theme.background)}" />
-        </label>
-        <label>
-          <span>Theme Surface</span>
-          <input data-field="theme-surface" value="${escapeAttr(theme.surface)}" />
-        </label>
-      </div>
-      <label>
-        <span>Theme Text</span>
-        <input data-field="theme-text" value="${escapeAttr(theme.text)}" />
-      </label>
-      <div class="meta-panel-head">
-        <strong>Component Definitions</strong>
-        <button type="button" class="ghost" data-action="add-component-def">Add Component</button>
-      </div>
-      <div class="component-defs">
-        ${defs
-          .map(
-            (def, index) => `<article class="component-def">
-              <label>
-                <span>Name</span>
-                <input data-field="def-name" data-def-index="${index}" value="${escapeAttr(def.name)}" />
-              </label>
-              <label>
-                <span>Base Type</span>
-                <select data-field="def-base" data-def-index="${index}">
-                  ${renderOption('text', def.baseType)}
-                  ${renderOption('quote', def.baseType)}
-                  ${renderOption('code', def.baseType)}
-                  ${renderOption('expandable', def.baseType)}
-                  ${renderOption('table', def.baseType)}
-                  ${renderOption('container', def.baseType)}
-                  ${renderOption('grid', def.baseType)}
-                  ${renderOption('plugin', def.baseType)}
-                </select>
-              </label>
-              <label>
-                <span>Default Tags</span>
-                ${renderTagEditor(
-                  'def-tags',
-                  def.tags ?? '',
-                  {
-                    defIndex: index,
-                    placeholder: 'Add a default tag',
-                  },
-                  { escapeAttr, escapeHtml }
-                )}
-              </label>
-              <label>
-                <span>Description</span>
-                <textarea rows="3" data-field="def-description" data-def-index="${index}">${escapeHtml(def.description ?? '')}</textarea>
-              </label>
-              <button type="button" class="danger" data-action="remove-component-def" data-def-index="${index}">Remove</button>
-            </article>`
-          )
-          .join('')}
-      </div>
-    </section>
-  `;
-}
-
-function renderBlockContentEditor(sectionKey: string, block: VisualBlock): string {
-  const component = resolveBaseComponent(block.schema.component);
-  const helpers = getComponentRenderHelpers();
-
-  if (component === 'code') {
-    return renderCodeEditor(sectionKey, block, helpers);
-  }
-  if (component === 'plugin') {
-    return renderPluginEditor(sectionKey, block, helpers);
-  }
-  if (component === 'container') {
-    return renderContainerEditor(sectionKey, block, helpers);
-  }
-  if (component === 'grid') {
-    ensureGridItems(block.schema);
-    return renderGridEditor(sectionKey, block, helpers);
-  }
-  if (component === 'expandable') {
-    ensureExpandableBlocks(block);
-    return renderExpandableEditor(sectionKey, block, helpers);
-  }
-  if (component === 'table') {
-    return renderTableEditor(sectionKey, block, helpers);
-  }
-  return renderTextEditor(sectionKey, block, helpers);
-}
-
-function renderBlockSchemaEditor(sectionKey: string, block: VisualBlock): string {
-  const draftName =
-    state.schemaDefDraftByBlock[block.id] ??
-    (isBuiltinComponent(block.schema.component) ? '' : block.schema.component);
-  return `
-    <div class="schema-editor">
-      <section class="schema-save-card">
-        <strong>Reusable Component</strong>
-        <label>
-          <span>Name</span>
-          <input
-            data-field="schema-def-name"
-            data-block-id="${escapeAttr(block.id)}"
-            value="${escapeAttr(draftName)}"
-            placeholder="Callout, Hero, Spec Table..."
-          />
-        </label>
-        <button
-          type="button"
-          class="secondary"
-          data-action="save-component-def"
-          data-section-key="${escapeAttr(sectionKey)}"
-          data-block-id="${escapeAttr(block.id)}"
-        >Save To Dropdown</button>
-        <div class="muted">Saves this base type with its default tags and description as a reusable component.</div>
-      </section>
-      <div class="editor-grid schema-grid">
-        <article class="ghost-section-card add-ghost" data-action="focus-schema-component" data-section-key="${escapeAttr(
-          sectionKey
-        )}" data-block-id="${escapeAttr(block.id)}">
-          <div class="ghost-plus-big"><span>+</span></div>
-          <div class="ghost-label">Component: ${escapeHtml(block.schema.component)}</div>
-          <label class="ghost-component-picker">
-            <span>Component</span>
-            <select data-section-key="${escapeAttr(sectionKey)}" data-block-id="${escapeAttr(block.id)}" data-field="block-component">
-              ${renderComponentOptions(block.schema.component)}
-            </select>
-          </label>
-        </article>
-      </div>
-      ${renderBlockMetaFields(sectionKey, block)}
-      <div class="schema-content-shell">
-        ${renderBlockContentEditor(sectionKey, block)}
-      </div>
-    </div>
-  `;
-}
-
-function renderBlockMetaFields(sectionKey: string, block: VisualBlock): string {
-  return `
-    <div class="schema-meta-stack">
-      <label>
-        <span>Custom CSS</span>
-        <textarea
-          rows="2"
-          data-section-key="${escapeAttr(sectionKey)}"
-          data-block-id="${escapeAttr(block.id)}"
-          data-field="block-custom-css"
-          placeholder="margin-top:-1px;"
-        >${escapeHtml(block.schema.customCss)}</textarea>
-      </label>
-      <label>
-        <span>Tags</span>
-        ${renderTagEditor(
-          'block-tags',
-          block.schema.tags,
-          {
-            sectionKey,
-            blockId: block.id,
-            placeholder: 'Add a tag',
-          },
-          { escapeAttr, escapeHtml }
-        )}
-      </label>
-      <label>
-        <span>Description</span>
-        <textarea
-          rows="3"
-          data-section-key="${escapeAttr(sectionKey)}"
-          data-block-id="${escapeAttr(block.id)}"
-          data-field="block-description"
-        >${escapeHtml(block.schema.description)}</textarea>
-      </label>
-    </div>
-  `;
-}
-
-function renderNavigation(sections: VisualSection[]): string {
-  const items = flattenSections(sections).filter((section) => !section.isGhost);
-  if (items.length === 0) {
-    return '<div class="muted">Navigation will appear when sections exist.</div>';
-  }
-
-  return `
-    <div class="nav-title">Navigation</div>
-    <div class="nav-list">
-      ${items
-        .map(
-          (section) =>
-            `<button type="button" class="nav-item" data-nav-id="${escapeAttr(getSectionId(section))}">${escapeHtml(
-              section.title
-            )} <code>#${escapeHtml(getSectionId(section))}</code></button>`
-        )
-        .join('')}
-    </div>
-  `;
-}
-
-function renderReaderSections(sections: VisualSection[]): string {
-  const realSections = sections.filter((section) => !section.isGhost);
-  if (realSections.length === 0) {
-    return '<div class="muted">No content to display yet.</div>';
-  }
-  return realSections.map((section) => renderReaderSection(section)).join('');
-}
-
-function renderReaderSection(section: VisualSection): string {
-  const effectiveId = getSectionId(section);
-  const temp = state.tempHighlights.has(effectiveId);
-  const classList = ['reader-section', section.highlight ? 'is-highlighted' : '', temp ? 'is-temp-highlighted' : '']
-    .filter(Boolean)
-    .join(' ');
-
-  const content = section.expanded
-    ? `<div class="reader-section-content">${section.blocks
-        .map((block) => renderReaderBlock(section, block))
-        .join('')}${section.children.filter((child) => !child.isGhost).map((child) => renderReaderSection(child)).join('')}</div>`
-    : '';
-
-  return `
-    <section id="${escapeAttr(effectiveId)}" class="${classList}" style="${escapeAttr(section.customCss)}">
-      <header class="reader-section-head">
-        <h${Math.min(Math.max(section.level, 1), 6)}>${escapeHtml(section.title)}</h${Math.min(Math.max(section.level, 1), 6)}>
-        <div class="reader-head-actions">
-          <button type="button" class="tiny" data-reader-action="toggle-expand" data-section-key="${escapeAttr(section.key)}">${
-    section.expanded ? '−' : '+'
-  }</button>
-        </div>
-      </header>
-      ${content}
-    </section>
-  `;
-}
-
-function renderReaderBlock(section: VisualSection, block: VisualBlock): string {
-  const base = resolveBaseComponent(block.schema.component);
-  const blockAttrs = `class="reader-block reader-block-${escapeAttr(base)} align-${escapeAttr(block.schema.align)} slot-${escapeAttr(
-    block.schema.slot
-  )}" data-component="${escapeAttr(block.schema.component)}" style="${escapeAttr(block.schema.customCss)}"`;
-  const helpers = getComponentRenderHelpers();
-
-  if (base === 'code') {
-    return `<div ${blockAttrs}>${renderCodeReader(section, block, helpers)}</div>`;
-  }
-  if (base === 'plugin') {
-    return `<div ${blockAttrs}>${renderPluginReader(section, block, helpers)}</div>`;
-  }
-  if (base === 'container') {
-    return `<div ${blockAttrs}>${renderContainerReader(section, block, helpers)}</div>`;
-  }
-  if (base === 'grid') {
-    ensureGridItems(block.schema);
-    return `<div ${blockAttrs}>${renderGridReader(section, block, helpers)}</div>`;
-  }
-  if (base === 'expandable') {
-    ensureExpandableBlocks(block);
-    return `<div ${blockAttrs}>${renderExpandableReader(section, block, helpers)}</div>`;
-  }
-  if (base === 'table') {
-    return `<div ${blockAttrs}>${renderTableReader(section, block, helpers)}</div>`;
-  }
-  return `<div ${blockAttrs}>${renderTextReader(section, block, helpers)}</div>`;
-}
-
-function renderComponentFragment(componentName: string, content: string, block: VisualBlock): string {
-  const base = resolveBaseComponent(componentName);
-  const normalized = normalizeMarkdownLists(content);
-  if (base === 'quote') {
-    return `<blockquote>${DOMPurify.sanitize(marked.parse(normalized) as string)}</blockquote>`;
-  }
-  if (base === 'code') {
-    return `<pre><code class="language-${escapeAttr(block.schema.codeLanguage || 'txt')}">${escapeHtml(content)}</code></pre>`;
-  }
-  return DOMPurify.sanitize(marked.parse(normalized) as string);
-}
-
-function renderModal(): string {
-  if (state.componentMetaModal) {
-    const block = findBlockByIds(state.componentMetaModal.sectionKey, state.componentMetaModal.blockId);
-    if (!block) {
-      return '';
-    }
-    return `
-      <div id="modalRoot" class="modal-root">
-        <div class="modal-overlay" data-modal-action="close-overlay"></div>
-        <section class="modal-panel component-meta-modal">
-          <div class="modal-head">
-            <h3>Component Meta</h3>
-            <button type="button" data-modal-action="close">Close</button>
-          </div>
-          <p class="muted">Meta is optional and can be used by readers, indexing, and plugins.</p>
-          ${renderBlockMetaFields(state.componentMetaModal.sectionKey, block)}
-        </section>
-      </div>
-    `;
-  }
-
-  if (!state.modalSectionKey) {
-    return '';
-  }
-
-  const section = findSectionByKey(state.document.sections, state.modalSectionKey);
-  if (!section) {
-    return '';
-  }
-
-  return `
-    <div id="modalRoot" class="modal-root">
-      <div class="modal-overlay" data-modal-action="close-overlay"></div>
-      <section class="modal-panel">
-        <div class="modal-head">
-          <h3 id="modalTitle">Meta: ${escapeHtml(formatSectionTitle(section.title))} <code>#${escapeHtml(getSectionId(section))}</code></h3>
-          <button type="button" data-modal-action="close">Close</button>
-        </div>
-        <p>Edit section-level metadata and reader styling.</p>
-        <label>
-          <span>Custom ID (optional)</span>
-          <input
-            data-section-key="${escapeAttr(section.key)}"
-            data-field="section-custom-id"
-            value="${escapeAttr(section.customId)}"
-            placeholder="Blank keeps generated ID"
-          />
-        </label>
-        <label>
-          <span>Custom CSS (inline style value)</span>
-          <textarea id="modalCssInput">${escapeHtml(section.customCss)}</textarea>
-        </label>
-      </section>
-    </div>
-  `;
-}
-
-function renderLinkInlineModal(): string {
-  const ids = flattenSections(state.document.sections)
-    .filter((section) => !section.isGhost)
-    .map((section) => `#${getSectionId(section)}`);
-  return `
-    <div id="linkInlineModal" class="link-inline-modal" aria-hidden="true">
-      <div class="link-inline-overlay" data-link-modal-action="cancel"></div>
-      <section class="link-inline-panel">
-        <h4>Insert Link</h4>
-        <label>
-          <span>URL or #ID</span>
-          <input id="linkInlineInput" list="linkInlineIds" placeholder="https://... or #section-id" />
-          <datalist id="linkInlineIds">
-            ${ids.map((id) => `<option value="${escapeAttr(id)}"></option>`).join('')}
-          </datalist>
-        </label>
-        <div class="link-inline-actions">
-          <button type="button" class="ghost" data-link-modal-action="cancel">Cancel</button>
-          <button type="button" class="secondary" data-link-modal-action="apply">Apply</button>
-        </div>
-      </section>
-    </div>
-  `;
-}
-
-function renderWarnings(): string {
-  const duplicateIds = findDuplicateSectionIds(state.document.sections);
-  if (duplicateIds.length === 0) {
-    return '<div class="ok">No warnings. IDs are unique.</div>';
-  }
-  return duplicateIds
-    .map((id) => `<div class="warn">Duplicate section id detected: <code>${escapeHtml(id)}</code></div>`)
-    .join('');
 }
 
 function deserializeDocument(text: string, extension: VisualDocument['extension']): VisualDocument {

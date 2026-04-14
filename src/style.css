@@ -995,22 +995,30 @@ button.tiny {
   border-radius: 10px;
   background: #fff;
   padding: 0.55rem;
+  position: relative;
 }
 
 .reader-section-head {
   display: flex;
-  justify-content: space-between;
-  align-items: start;
-  gap: 0.5rem;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 1.4rem;
+  margin-bottom: 0.15rem;
 }
 
-.reader-section-head h1,
-.reader-section-head h2,
-.reader-section-head h3,
-.reader-section-head h4,
-.reader-section-head h5,
-.reader-section-head h6 {
-  margin: 0;
+.reader-section:has(.reader-section-content) .reader-section-head {
+  position: absolute;
+  top: 0.35rem;
+  right: 0.35rem;
+  margin-bottom: 0;
+  z-index: 3;
+}
+
+.reader-section-title {
+  margin-right: auto;
+  font-weight: 600;
+  color: #4c5f6b;
 }
 
 .reader-head-actions {
@@ -1019,7 +1027,7 @@ button.tiny {
 }
 
 .reader-section-content {
-  margin-top: 0.5rem;
+  margin-top: 0;
   display: grid;
   gap: 0;
 }
@@ -1044,6 +1052,49 @@ button.tiny {
   background: color-mix(in srgb, var(--hvy-surface) 88%, #c7d7e2 12%);
   padding: 0.6rem;
   border-radius: 8px;
+}
+
+.reader-block h1,
+.reader-block h2,
+.reader-block h3,
+.reader-block h4,
+.reader-block h5,
+.reader-block h6 {
+  margin: 0.2rem 0 0.15rem;
+  line-height: 1.15;
+}
+
+.reader-block p + h1,
+.reader-block p + h2,
+.reader-block p + h3,
+.reader-block p + h4,
+.reader-block p + h5,
+.reader-block p + h6,
+.reader-block ul + h1,
+.reader-block ul + h2,
+.reader-block ul + h3,
+.reader-block ul + h4,
+.reader-block ul + h5,
+.reader-block ul + h6,
+.reader-block ol + h1,
+.reader-block ol + h2,
+.reader-block ol + h3,
+.reader-block ol + h4,
+.reader-block ol + h5,
+.reader-block ol + h6,
+.reader-block blockquote + h1,
+.reader-block blockquote + h2,
+.reader-block blockquote + h3,
+.reader-block blockquote + h4,
+.reader-block blockquote + h5,
+.reader-block blockquote + h6,
+.reader-block pre + h1,
+.reader-block pre + h2,
+.reader-block pre + h3,
+.reader-block pre + h4,
+.reader-block pre + h5,
+.reader-block pre + h6 {
+  margin-top: 0.4rem;
 }
 
 .reader-block.align-left {

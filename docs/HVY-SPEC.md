@@ -53,6 +53,11 @@ Each section contains:
 - `meta` (object)
 - `children[]` (nested sections)
 
+Notes:
+- `title` is a structural section label derived from the heading syntax.
+- Rich clients MAY use `title` for navigation, editing, outline views, or linking without rendering it as visible document content.
+- If visible heading text is desired in the rendered document body, clients MAY represent that with an explicit content block instead.
+
 ## 5. Syntax
 
 HVY defines metadata channels that remain Markdown-safe.

@@ -77,6 +77,19 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     const classList = ['reader-section', section.highlight ? 'is-highlighted' : '', temp ? 'is-temp-highlighted' : '']
       .filter(Boolean)
       .join(' ');
+    const collapsedTitle = !section.expanded
+      ? `<div class="reader-section-title">${deps.escapeHtml(deps.formatSectionTitle(section.title))}</div>`
+      : '';
+    const toggleControl = `
+      <header class="reader-section-head" aria-label="Section controls">
+        ${collapsedTitle}
+        <div class="reader-head-actions">
+          <button type="button" class="tiny" data-reader-action="toggle-expand" data-section-key="${deps.escapeAttr(section.key)}" aria-label="${
+      section.expanded ? 'Collapse section' : 'Expand section'
+    }">${section.expanded ? '−' : '+'}</button>
+        </div>
+      </header>
+    `;
 
     const content = section.expanded
       ? `<div class="reader-section-content">${section.blocks
@@ -86,17 +99,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
 
     return `
       <section id="${deps.escapeAttr(effectiveId)}" class="${classList}" style="${deps.escapeAttr(section.customCss)}">
-        <header class="reader-section-head">
-          <h${Math.min(Math.max(section.level, 1), 6)}>${deps.escapeHtml(deps.formatSectionTitle(section.title))}</h${Math.min(
-            Math.max(section.level, 1),
-            6
-          )}>
-          <div class="reader-head-actions">
-            <button type="button" class="tiny" data-reader-action="toggle-expand" data-section-key="${deps.escapeAttr(section.key)}">${
-      section.expanded ? '−' : '+'
-    }</button>
-          </div>
-        </header>
+        ${toggleControl}
         ${content}
       </section>
     `;

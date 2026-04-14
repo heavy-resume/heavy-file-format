@@ -36,6 +36,7 @@ interface AppState {
   document: VisualDocument;
   filename: string;
   currentView: 'editor' | 'viewer';
+  paneScroll: PaneScrollState;
   showAdvancedEditor: boolean;
   activeEditorBlock: { sectionKey: string; blockId: string } | null;
   activeEditorSectionTitleKey: string | null;
@@ -112,6 +113,11 @@ function createInitialState(): AppState {
     document: createDefaultDocument(),
     filename: 'document.hvy',
     currentView: 'editor',
+    paneScroll: {
+      editorTop: 0,
+      readerTop: 0,
+      windowTop: 0,
+    },
     showAdvancedEditor: false,
     activeEditorBlock: null,
     activeEditorSectionTitleKey: null,
@@ -133,7 +139,7 @@ function createInitialState(): AppState {
 }
 
 function renderApp(): void {
-  const paneScroll = capturePaneScroll();
+  state.paneScroll = capturePaneScroll(state.paneScroll);
   applyTheme();
   const isEditorView = state.currentView === 'editor';
   const isAdvancedEditor = state.showAdvancedEditor;
@@ -164,7 +170,6 @@ function renderApp(): void {
           ${
             isEditorView
               ? `<div class="pane-title-row">
-                  <h2>Visual Editor</h2>
                   <div class="pane-controls">
                     <button type="button" class="${!isAdvancedEditor ? 'secondary' : 'ghost'}" data-action="set-editor-mode" data-editor-mode="basic">Basic</button>
                     <button type="button" class="${isAdvancedEditor ? 'secondary' : 'ghost'}" data-action="set-editor-mode" data-editor-mode="advanced">Advanced</button>
@@ -181,10 +186,7 @@ function renderApp(): void {
                 ${isAdvancedEditor && state.metaPanelOpen ? renderMetaPanel() : ''}
                 ${isAdvancedEditor ? renderStateTracker() : ''}
                 <div id="editorTree" class="editor-tree">${renderSectionEditorTree(state.document.sections)}</div>`
-              : `<div class="pane-title-row">
-                  <h2>Viewer</h2>
-                </div>
-                <div id="readerWarnings" class="reader-warnings">${renderWarnings()}</div>
+              : `<div id="readerWarnings" class="reader-warnings">${renderWarnings()}</div>
                 <div id="readerNav" class="reader-nav">${renderNavigation(state.document.sections)}</div>
                 <div id="readerDocument" class="reader-document">${renderReaderSections(state.document.sections)}</div>`
           }
@@ -197,20 +199,17 @@ function renderApp(): void {
   `;
 
   bindUi();
-  restorePaneScroll(paneScroll);
+  restorePaneScroll(state.paneScroll);
   commitHistorySnapshot();
   centerPendingEditorSection();
 }
 
-function capturePaneScroll(): PaneScrollState | null {
+function capturePaneScroll(previous: PaneScrollState): PaneScrollState {
   const editorPane = app.querySelector<HTMLDivElement>('.editor-pane');
   const readerPane = app.querySelector<HTMLDivElement>('.reader-pane');
-  if (!editorPane && !readerPane) {
-    return null;
-  }
   return {
-    editorTop: editorPane?.scrollTop ?? 0,
-    readerTop: readerPane?.scrollTop ?? 0,
+    editorTop: editorPane?.scrollTop ?? previous.editorTop,
+    readerTop: readerPane?.scrollTop ?? previous.readerTop,
     windowTop: window.scrollY,
   };
 }

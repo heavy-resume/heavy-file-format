@@ -126,6 +126,16 @@ button.tiny {
 .view-tabs {
   display: flex;
   gap: 0.45rem;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  width: fit-content;
+  padding: 0.35rem 0.45rem;
+  border: 1px solid rgba(206, 217, 226, 0.92);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--hvy-surface) 90%, transparent);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 10px 24px rgba(39, 70, 91, 0.08);
 }
 
 .full-pane {
@@ -156,15 +166,32 @@ button.tiny {
   align-items: center;
   gap: 0.5rem;
   margin-bottom: 0.6rem;
+  position: sticky;
+  top: -0.1rem;
+  z-index: 12;
+  padding: 0.35rem 0;
+  background: color-mix(in srgb, var(--hvy-surface) 94%, transparent);
+  backdrop-filter: blur(10px);
 }
 
 .pane-controls {
   display: flex;
   gap: 0.4rem;
+  align-items: center;
+  flex-wrap: wrap;
 }
 
 .pane h2 {
   margin: 0;
+}
+
+.editor-pane .pane-title-row {
+  width: fit-content;
+  margin-left: auto;
+  padding: 0.35rem 0.45rem;
+  border: 1px solid rgba(206, 217, 226, 0.92);
+  border-radius: 999px;
+  box-shadow: 0 10px 24px rgba(39, 70, 91, 0.08);
 }
 
 .editor-tree,

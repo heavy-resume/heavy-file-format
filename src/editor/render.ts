@@ -77,6 +77,7 @@ export interface EditorRenderer {
   renderMetaPanel: () => string;
   renderComponentFragment: (componentName: string, content: string, block: VisualBlock) => string;
   renderBlockMetaFields: (sectionKey: string, block: VisualBlock) => string;
+  renderReusableComponentFields: (sectionKey: string, block: VisualBlock) => string;
 }
 
 export function createEditorRenderer(state: EditorRenderState, deps: EditorRenderDeps): EditorRenderer {
@@ -469,6 +470,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
   function renderBlockSchemaEditor(sectionKey: string, block: VisualBlock): string {
     return `
       <div class="schema-editor">
+        ${renderReusableComponentFields(sectionKey, block)}
         <div class="editor-grid schema-grid">
           <article class="ghost-section-card add-ghost" data-action="focus-schema-component" data-section-key="${deps.escapeAttr(
             sectionKey
@@ -483,7 +485,6 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
             </label>
           </article>
         </div>
-        ${renderBlockMetaFields(sectionKey, block)}
         <div class="schema-content-shell">
           ${renderBlockContentEditor(sectionKey, block)}
         </div>
@@ -491,32 +492,37 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     `;
   }
 
-  function renderBlockMetaFields(sectionKey: string, block: VisualBlock): string {
+  function renderReusableComponentFields(sectionKey: string, block: VisualBlock): string {
     const draftName =
       state.schemaDefDraftByBlock[block.id] ??
       (deps.isBuiltinComponent(block.schema.component) ? '' : block.schema.component);
     return `
-      <div class="schema-meta-stack">
-        <section class="schema-save-card">
-          <strong>Reusable Component</strong>
-          <label>
-            <span>Name</span>
-            <input
-              data-field="schema-def-name"
-              data-block-id="${deps.escapeAttr(block.id)}"
-              value="${deps.escapeAttr(draftName)}"
-              placeholder="Callout, Hero, Spec Table..."
-            />
-          </label>
-          <button
-            type="button"
-            class="secondary"
-            data-action="save-component-def"
-            data-section-key="${deps.escapeAttr(sectionKey)}"
+      <section class="schema-save-card">
+        <strong>Reusable Component</strong>
+        <label>
+          <span>Name</span>
+          <input
+            data-field="schema-def-name"
             data-block-id="${deps.escapeAttr(block.id)}"
-          >Save Reusable</button>
-          <div class="muted">Saves this block's schema, tags, and description into the component dropdown.</div>
-        </section>
+            value="${deps.escapeAttr(draftName)}"
+            placeholder="Callout, Hero, Spec Table..."
+          />
+        </label>
+        <button
+          type="button"
+          class="secondary"
+          data-action="save-component-def"
+          data-section-key="${deps.escapeAttr(sectionKey)}"
+          data-block-id="${deps.escapeAttr(block.id)}"
+        >Save Reusable</button>
+        <div class="muted">Saves this block's schema, tags, and description into the component dropdown.</div>
+      </section>
+    `;
+  }
+
+  function renderBlockMetaFields(sectionKey: string, block: VisualBlock): string {
+    return `
+      <div class="schema-meta-stack">
         <label>
           <span>Custom CSS</span>
           <textarea
@@ -572,6 +578,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     renderMetaPanel,
     renderComponentFragment,
     renderBlockMetaFields,
+    renderReusableComponentFields,
   };
 }
 

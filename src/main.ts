@@ -14,6 +14,17 @@ import { renderContainerEditor, renderContainerReader } from './editor/component
 import { renderGridEditor, renderGridReader } from './editor/components/grid';
 import { renderExpandableEditor, renderExpandableReader } from './editor/components/expandable';
 import { renderTableDetailsEditor, renderTableEditor, renderTableReader } from './editor/components/table';
+import {
+  commitTagEditorDraft,
+  handleRemoveTag,
+  handleTagEditorInput,
+  handleTagEditorKeydown,
+  parseTags,
+  renderTagEditor,
+  serializeTags,
+  type TagRenderOptions,
+} from './editor/tag-editor';
+import { getTemplateFields, renderTemplateGhosts, renderTemplatePanel } from './editor/template';
 
 interface VisualDocument {
   meta: JsonObject;
@@ -72,6 +83,11 @@ let pendingLinkRange: Range | null = null;
 let pendingLinkEditable: HTMLElement | null = null;
 let draggedSectionKey: string | null = null;
 let draggedTableItem: { kind: 'row' | 'column'; sectionKey: string; blockId: string; index: number } | null = null;
+const tagStateHelpers = {
+  getTagState,
+  setTagState,
+  getRenderOptions: getTagRenderOptions,
+};
 
 try {
   renderApp();
@@ -116,6 +132,7 @@ function renderApp(): void {
   const paneScroll = capturePaneScroll();
   applyTheme();
   const isEditorView = state.currentView === 'editor';
+  const templateFields = getTemplateFields(state.document.meta);
   app.innerHTML = `
     <main class="layout">
       <header class="topbar">
@@ -147,7 +164,7 @@ function renderApp(): void {
                     <button id="toggleMetaBtn" type="button" class="ghost">${state.metaPanelOpen ? 'Hide Meta' : 'Show Meta'}</button>
                   </div>
                 </div>
-                ${renderTemplatePanel()}
+                ${renderTemplatePanel(templateFields, state.templateValues, { escapeAttr, escapeHtml })}
                 ${state.metaPanelOpen ? renderMetaPanel() : ''}
                 ${renderStateTracker()}
                 <div id="editorTree" class="editor-tree">${renderSectionEditorTree(state.document.sections)}</div>`
@@ -497,7 +514,7 @@ function bindUi(): void {
     }
 
     if (action === 'remove-tag') {
-      handleRemoveTag(actionButton);
+      handleRemoveTag(actionButton, tagStateHelpers);
       return;
     }
 
@@ -867,7 +884,7 @@ function bindUi(): void {
 
   app.addEventListener('keydown', (event) => {
     const target = event.target as HTMLElement;
-    if (target instanceof HTMLInputElement && handleTagEditorKeydown(event, target)) {
+    if (target instanceof HTMLInputElement && handleTagEditorKeydown(event, target, tagStateHelpers)) {
       return;
     }
     if (target.dataset.inlineText === 'true' && event.key === 'Enter') {
@@ -909,7 +926,7 @@ function bindUi(): void {
 
   app.addEventListener('input', (event) => {
     const target = event.target as HTMLElement;
-    if (handleTagEditorInput(target)) {
+    if (handleTagEditorInput(target, tagStateHelpers)) {
       return;
     }
     const sectionKey = target.dataset.sectionKey;
@@ -1010,7 +1027,7 @@ function bindUi(): void {
   app.addEventListener('focusout', (event) => {
     const target = event.target as HTMLElement;
     if (target instanceof HTMLInputElement) {
-      commitTagEditorDraft(target);
+      commitTagEditorDraft(target, tagStateHelpers);
     }
   });
 
@@ -1649,96 +1666,6 @@ function handleBlockFieldInput(target: HTMLElement): boolean {
   return false;
 }
 
-function handleTagEditorInput(target: HTMLElement): boolean {
-  if (!(target instanceof HTMLInputElement)) {
-    return false;
-  }
-  const field = target.dataset.field;
-  if (field !== 'block-tags-input' && field !== 'def-tags-input') {
-    return false;
-  }
-
-  if (!target.value.includes(',')) {
-    return false;
-  }
-
-  const parts = target.value.split(',');
-  const draft = parts.pop() ?? '';
-  const pendingTags = parts.map((part) => part.trim()).filter(Boolean);
-  if (pendingTags.length === 0) {
-    target.value = draft;
-    return true;
-  }
-  appendTagsFromInput(target, pendingTags, draft);
-  return true;
-}
-
-function handleTagEditorKeydown(event: KeyboardEvent, target: HTMLInputElement): boolean {
-  const field = target.dataset.field;
-  if (field !== 'block-tags-input' && field !== 'def-tags-input') {
-    return false;
-  }
-
-  if (event.key === 'Enter') {
-    event.preventDefault();
-    commitTagEditorDraft(target);
-    return true;
-  }
-
-  if (event.key === 'Backspace' && target.value.trim().length === 0) {
-    const currentTags = getTagState(target);
-    if (currentTags.length === 0) {
-      return false;
-    }
-    currentTags.pop();
-    setTagState(target, currentTags);
-    syncTagEditorUi(target, currentTags, '');
-    event.preventDefault();
-    return true;
-  }
-
-  return false;
-}
-
-function commitTagEditorDraft(target: HTMLInputElement): void {
-  const field = target.dataset.field;
-  if (field !== 'block-tags-input' && field !== 'def-tags-input') {
-    return;
-  }
-  const draft = target.value.trim();
-  if (!draft) {
-    return;
-  }
-  appendTagsFromInput(target, [draft], '');
-}
-
-function appendTagsFromInput(target: HTMLInputElement, nextTags: string[], nextDraft: string): void {
-  const currentTags = getTagState(target);
-  const merged = serializeTags([...currentTags, ...nextTags]);
-  const parsed = parseTags(merged);
-  setTagState(target, parsed);
-  syncTagEditorUi(target, parsed, nextDraft);
-}
-
-function handleRemoveTag(actionButton: HTMLElement): void {
-  const field = actionButton.dataset.tagField;
-  const tagIndex = Number.parseInt(actionButton.dataset.tagIndex ?? '', 10);
-  if ((field !== 'block-tags' && field !== 'def-tags') || Number.isNaN(tagIndex)) {
-    return;
-  }
-  const currentTags = getTagState(actionButton);
-  if (!currentTags[tagIndex]) {
-    return;
-  }
-  currentTags.splice(tagIndex, 1);
-  setTagState(actionButton, currentTags);
-  const editor = actionButton.closest<HTMLElement>('[data-tag-editor]');
-  const input = editor?.querySelector<HTMLInputElement>('.tag-editor-input');
-  if (input) {
-    syncTagEditorUi(input, currentTags, input.value);
-  }
-}
-
 function getTagState(target: HTMLElement): string[] {
   const field = target.dataset.field === 'block-tags-input' || target.dataset.tagField === 'block-tags' ? 'block-tags' : 'def-tags';
   if (field === 'block-tags') {
@@ -1776,19 +1703,12 @@ function setTagState(target: HTMLElement, tags: string[]): void {
   state.document.meta.component_defs = defs;
 }
 
-function syncTagEditorUi(target: HTMLInputElement, tags: string[], draft: string): void {
-  target.value = draft;
-  const editor = target.closest<HTMLElement>('[data-tag-editor]');
-  const pillList = editor?.querySelector<HTMLElement>('.tag-pill-list');
-  if (!editor || !pillList) {
-    return;
-  }
-  const field = target.dataset.field === 'block-tags-input' ? 'block-tags' : 'def-tags';
-  pillList.innerHTML = renderTagPills(tags, field, {
+function getTagRenderOptions(target: HTMLElement): Omit<TagRenderOptions, 'placeholder'> {
+  return {
     sectionKey: target.dataset.sectionKey,
     blockId: target.dataset.blockId,
     defIndex: target.dataset.defIndex ? Number.parseInt(target.dataset.defIndex, 10) : undefined,
-  });
+  };
 }
 
 function ensureContainerBlocks(block: VisualBlock): void {
@@ -1843,8 +1763,9 @@ function getComponentRenderHelpers(): ComponentRenderHelpers {
 
 function renderSectionEditorTree(sections: VisualSection[]): string {
   const sectionCards = sections.map((section) => renderEditorSection(section)).join('');
+  const flatSections = flattenSections(sections);
   return `
-    ${renderTemplateGhosts()}
+    ${renderTemplateGhosts(getTemplateFields(state.document.meta), flatSections, { escapeAttr, escapeHtml })}
     ${sectionCards}
     <article class="ghost-section-card add-ghost" data-action="add-top-level-section" data-section-key="__top_level__">
       <div class="ghost-plus-big"><span>+</span></div>
@@ -1857,27 +1778,6 @@ function renderSectionEditorTree(sections: VisualSection[]): string {
       </label>
     </article>
   `;
-}
-
-function renderTemplateGhosts(): string {
-  const fields = getTemplateFields();
-  if (fields.length === 0) {
-    return '';
-  }
-
-  const cards = fields
-    .filter((field) => !hasTemplateFieldBlock(field))
-    .map(
-      (field) => `
-      <article class="ghost-section-card template-ghost" data-action="add-template-field" data-template-field="${escapeAttr(field)}">
-        <div class="ghost-plus-big"><span>+</span></div>
-        <div class="ghost-label">Add Template Field: ${escapeHtml(field)}</div>
-      </article>
-    `
-    )
-    .join('');
-
-  return cards;
 }
 
 function renderEditorSection(section: VisualSection): string {
@@ -2047,33 +1947,6 @@ function renderRichToolbar(
   `;
 }
 
-function renderTemplatePanel(): string {
-  const fields = getTemplateFields();
-  if (fields.length === 0) {
-    return '';
-  }
-
-  return `
-    <section class="template-panel">
-      <div class="template-title">Template Fields</div>
-      <div class="template-grid">
-        ${fields
-          .map(
-            (field) => `<div class="template-item">
-              <label>
-                <span>${escapeHtml(field)}</span>
-                <input data-field="template-value" data-template-field="${escapeAttr(field)}" value="${escapeAttr(
-                  state.templateValues[field] ?? ''
-                )}" placeholder="Fill value or leave blank" />
-              </label>
-            </div>`
-          )
-          .join('')}
-      </div>
-    </section>
-  `;
-}
-
 function renderMetaPanel(): string {
   const defs = getComponentDefs();
   const theme = getThemeConfig();
@@ -2140,10 +2013,15 @@ function renderMetaPanel(): string {
               </label>
               <label>
                 <span>Default Tags</span>
-                ${renderTagEditor('def-tags', def.tags ?? '', {
-                  defIndex: index,
-                  placeholder: 'Add a default tag',
-                })}
+                ${renderTagEditor(
+                  'def-tags',
+                  def.tags ?? '',
+                  {
+                    defIndex: index,
+                    placeholder: 'Add a default tag',
+                  },
+                  { escapeAttr, escapeHtml }
+                )}
               </label>
               <label>
                 <span>Description</span>
@@ -2238,11 +2116,16 @@ function renderBlockMetaFields(sectionKey: string, block: VisualBlock): string {
     <div class="schema-meta-stack">
       <label>
         <span>Tags</span>
-        ${renderTagEditor('block-tags', block.schema.tags, {
-          sectionKey,
-          blockId: block.id,
-          placeholder: 'Add a tag',
-        })}
+        ${renderTagEditor(
+          'block-tags',
+          block.schema.tags,
+          {
+            sectionKey,
+            blockId: block.id,
+            placeholder: 'Add a tag',
+          },
+          { escapeAttr, escapeHtml }
+        )}
       </label>
       <label>
         <span>Description</span>
@@ -3278,74 +3161,6 @@ function ensureGridItems(schema: BlockSchema): void {
   }));
 }
 
-function renderTagEditor(
-  field: 'block-tags' | 'def-tags',
-  value: string,
-  options: { sectionKey?: string; blockId?: string; defIndex?: number; placeholder?: string }
-): string {
-  const tags = parseTags(value);
-  const contextAttrs = [
-    options.sectionKey ? `data-section-key="${escapeAttr(options.sectionKey)}"` : '',
-    options.blockId ? `data-block-id="${escapeAttr(options.blockId)}"` : '',
-    typeof options.defIndex === 'number' ? `data-def-index="${String(options.defIndex)}"` : '',
-  ]
-    .filter(Boolean)
-    .join(' ');
-  return `
-    <div class="tag-editor" data-tag-editor>
-      <div class="tag-pill-list">${renderTagPills(tags, field, options)}</div>
-      <input
-        class="tag-editor-input"
-        ${contextAttrs}
-        data-field="${escapeAttr(`${field}-input`)}"
-        placeholder="${escapeAttr(options.placeholder ?? 'Add a tag')}"
-      />
-    </div>
-  `;
-}
-
-function renderTagPills(
-  tags: string[],
-  field: 'block-tags' | 'def-tags',
-  options: { sectionKey?: string; blockId?: string; defIndex?: number }
-): string {
-  return tags
-    .map((tag, index) => {
-      const contextAttrs = [
-        options.sectionKey ? `data-section-key="${escapeAttr(options.sectionKey)}"` : '',
-        options.blockId ? `data-block-id="${escapeAttr(options.blockId)}"` : '',
-        typeof options.defIndex === 'number' ? `data-def-index="${String(options.defIndex)}"` : '',
-      ]
-        .filter(Boolean)
-        .join(' ');
-      return `<span class="tag-pill">
-        <span>${escapeHtml(tag)}</span>
-        <button type="button" class="tag-pill-remove" data-action="remove-tag" data-tag-field="${escapeAttr(field)}" data-tag-index="${String(
-          index
-        )}" ${contextAttrs} aria-label="Remove ${escapeAttr(tag)}">×</button>
-      </span>`;
-    })
-    .join('');
-}
-
-function parseTags(value: string): string[] {
-  const seen = new Set<string>();
-  return value
-    .split(',')
-    .map((tag) => tag.trim())
-    .filter((tag) => {
-      if (!tag || seen.has(tag.toLowerCase())) {
-        return false;
-      }
-      seen.add(tag.toLowerCase());
-      return true;
-    });
-}
-
-function serializeTags(tags: string[]): string {
-  return parseTags(tags.join(', ')).join(', ');
-}
-
 interface ComponentDefinition {
   name: string;
   baseType: string;
@@ -3403,27 +3218,6 @@ function applyComponentDefaults(schema: BlockSchema, componentName: string): voi
   if (!schema.description) {
     schema.description = def.description ?? '';
   }
-}
-
-function getTemplateFields(): string[] {
-  if (state.document.meta.template !== true) {
-    return [];
-  }
-  const schema = state.document.meta.schema;
-  if (!schema || typeof schema !== 'object') {
-    return [];
-  }
-  const properties = (schema as JsonObject).properties;
-  if (!properties || typeof properties !== 'object') {
-    return [];
-  }
-  return Object.keys(properties as JsonObject);
-}
-
-function hasTemplateFieldBlock(field: string): boolean {
-  const token = `{{${field}}}`;
-  const sections = flattenSections(state.document.sections);
-  return sections.some((section) => section.blocks.some((block) => block.text.includes(token)));
 }
 
 function renderOption(value: string, selected: string): string {

@@ -65,6 +65,7 @@ app.innerHTML = '<main class="layout"><section class="pane full-pane"><p>Loading
 
 const state: AppState = createInitialState();
 let shortcutsBound = false;
+let appEventsBound = false;
 const HISTORY_GROUP_WINDOW_MS = 1200;
 let pendingLinkRange: Range | null = null;
 let pendingLinkEditable: HTMLElement | null = null;
@@ -262,7 +263,8 @@ function bindUi(): void {
     renderApp();
   });
 
-  app.addEventListener('input', (event) => {
+  if (!appEventsBound) {
+    app.addEventListener('input', (event) => {
     const target = event.target as HTMLElement;
     const field = target.dataset.field;
     if (!field) {
@@ -468,7 +470,7 @@ function bindUi(): void {
     shortcutsBound = true;
   }
 
-  editorTree?.addEventListener('click', (event) => {
+  app.addEventListener('click', (event) => {
     const target = event.target as HTMLElement;
 
     if (target.closest('select') || target.closest('input')) {
@@ -487,10 +489,10 @@ function bindUi(): void {
       if (sectionKey && blockId && action) {
         const selectorBase = `[data-section-key="${sectionKey}"][data-block-id="${blockId}"][data-field="${richField}"]`;
         const editable = rowIndex
-          ? editorTree.querySelector<HTMLElement>(`${selectorBase}[data-row-index="${rowIndex}"]`)
+          ? app.querySelector<HTMLElement>(`${selectorBase}[data-row-index="${rowIndex}"]`)
           : gridItemId
-          ? editorTree.querySelector<HTMLElement>(`${selectorBase}[data-grid-item-id="${gridItemId}"]`)
-          : editorTree.querySelector<HTMLElement>(selectorBase);
+          ? app.querySelector<HTMLElement>(`${selectorBase}[data-grid-item-id="${gridItemId}"]`)
+          : app.querySelector<HTMLElement>(selectorBase);
         if (editable) {
           if (action === 'link') {
             openLinkInlineModal(editable);
@@ -774,7 +776,7 @@ function bindUi(): void {
     }
   });
 
-  editorTree?.addEventListener('keydown', (event) => {
+  app.addEventListener('keydown', (event) => {
     const target = event.target as HTMLElement;
     if (target.dataset.inlineText === 'true' && event.key === 'Enter') {
       event.preventDefault();
@@ -814,7 +816,7 @@ function bindUi(): void {
     }
   });
 
-  editorTree?.addEventListener('input', (event) => {
+  app.addEventListener('input', (event) => {
     const target = event.target as HTMLElement;
     const sectionKey = target.dataset.sectionKey;
     if (!sectionKey) {
@@ -911,7 +913,7 @@ function bindUi(): void {
     }
   });
 
-  editorTree?.addEventListener('dragstart', (event) => {
+  app.addEventListener('dragstart', (event) => {
     const target = event.target as HTMLElement;
     const sectionHandle = target.closest<HTMLElement>('[data-drag-handle="section"]');
     if (sectionHandle) {
@@ -955,7 +957,7 @@ function bindUi(): void {
     }
   });
 
-  editorTree?.addEventListener('dragover', (event) => {
+  app.addEventListener('dragover', (event) => {
     const target = event.target as HTMLElement;
     if (draggedSectionKey && target.closest<HTMLElement>('[data-editor-section]')) {
       event.preventDefault();
@@ -981,7 +983,7 @@ function bindUi(): void {
     }
   });
 
-  editorTree?.addEventListener('drop', (event) => {
+  app.addEventListener('drop', (event) => {
     const target = event.target as HTMLElement;
 
     if (draggedSectionKey) {
@@ -1038,10 +1040,12 @@ function bindUi(): void {
     draggedTableItem = null;
   });
 
-  editorTree?.addEventListener('dragend', () => {
+  app.addEventListener('dragend', () => {
     draggedSectionKey = null;
     draggedTableItem = null;
   });
+  appEventsBound = true;
+  }
 
   readerDocument?.addEventListener('click', (event) => {
     const target = event.target as HTMLElement;
@@ -1149,56 +1153,6 @@ function bindModal(): void {
 
   const cssInput = modalRoot.querySelector<HTMLTextAreaElement>('#modalCssInput');
   if (!cssInput || !state.modalSectionKey) {
-    modalRoot.addEventListener('click', (event) => {
-      const target = event.target as HTMLElement;
-      const richButton = target.closest<HTMLElement>('[data-rich-action]');
-      if (!richButton) {
-        return;
-      }
-      event.preventDefault();
-      const sectionKey = richButton.dataset.sectionKey;
-      const blockId = richButton.dataset.blockId;
-      const action = richButton.dataset.richAction;
-      const richField = richButton.dataset.richField ?? 'block-rich';
-      if (!sectionKey || !blockId || !action) {
-        return;
-      }
-      const editable = modalRoot.querySelector<HTMLElement>(
-        `[data-section-key="${sectionKey}"][data-block-id="${blockId}"][data-field="${richField}"]`
-      );
-      if (!editable) {
-        return;
-      }
-      if (action === 'link') {
-        openLinkInlineModal(editable);
-        return;
-      }
-      editable.focus();
-      applyRichAction(action, editable);
-    });
-
-    modalRoot.addEventListener('input', (event) => {
-      const target = event.target as HTMLElement;
-      const field = target.dataset.field;
-      if (!field) {
-        return;
-      }
-      if (field === 'table-details-title' && target instanceof HTMLInputElement) {
-        handleBlockFieldInput(target);
-        return;
-      }
-      if (field === 'row-details-new-component-type') {
-        return;
-      }
-      handleBlockFieldInput(target);
-    });
-
-    modalRoot.addEventListener('keydown', (event) => {
-      const target = event.target as HTMLElement;
-      if (target.dataset.inlineText === 'true' && event.key === 'Enter') {
-        event.preventDefault();
-      }
-    });
     return;
   }
 
@@ -2436,7 +2390,6 @@ function createDefaultDocument(): VisualDocument {
         (() => {
           const block = createEmptyBlock('container', true);
           block.schema.containerTitle = 'Details Container';
-          block.text = 'This is a nested container area for row details.';
           return block;
         })(),
       ],

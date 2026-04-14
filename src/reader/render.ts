@@ -183,7 +183,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
             />
           </label>
           <label>
-            <span>Custom CSS (inline style value)</span>
+            <span>Style via CSS</span>
             <textarea id="modalCssInput">${deps.escapeHtml(section.customCss)}</textarea>
           </label>
         </section>

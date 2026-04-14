@@ -512,7 +512,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
             data-section-key="${deps.escapeAttr(sectionKey)}"
             data-block-id="${deps.escapeAttr(block.id)}"
             data-field="block-custom-css"
-            placeholder="margin-top:-1px;"
+            placeholder="margin: 0.5rem 0;"
           >${deps.escapeHtml(block.schema.customCss)}</textarea>
         </label>
         <label>

@@ -2141,6 +2141,7 @@ function createDefaultDocument(): VisualDocument {
   pluginBlock.schema.pluginUrl = 'https://example.com/plugin';
 
   const expandableTableHeaderBlock = createDemoTableBlock(['Area', 'Owner', 'Status'], [], true);
+  expandableTableHeaderBlock.schema.customCss = 'margin: 0;';
   const expandableTableGroupA = createDemoExpandableTableBlock(
     ['Area', 'Owner', 'Status'],
     [
@@ -2198,7 +2199,7 @@ function createDefaultDocument(): VisualDocument {
             level: 2,
             expanded: true,
             highlight: true,
-            customCss: '',
+            customCss: 'margin: 0.5rem 0;',
             blocks: [
               (() => {
                 const subsectionBlock = createEmptyBlock('container', true);
@@ -2277,13 +2278,17 @@ function createDemoTableBlock(columns: string[], rows: string[][], showHeader = 
 
 function createDemoExpandableTableBlock(columns: string[], rows: string[][], title: string, body: string): VisualBlock {
   const block = createEmptyBlock('expandable', true);
-  block.schema.customCss = 'margin-top:-1px;';
+  block.schema.customCss = 'margin: 0;';
   block.schema.expandableAlwaysShowStub = true;
   block.schema.expandableExpanded = false;
-  block.schema.expandableStubBlocks = [createDemoTableBlock(columns, rows, false)];
+  const stubTableBlock = createDemoTableBlock(columns, rows, false);
+  stubTableBlock.schema.customCss = 'margin: 0;';
+  block.schema.expandableStubBlocks = [stubTableBlock];
   const contentBlock = createEmptyBlock('container', true);
+  contentBlock.schema.customCss = 'margin: 0;';
   contentBlock.schema.containerTitle = title;
   const textBlock = createEmptyBlock('text', true);
+  textBlock.schema.customCss = 'margin: 0;';
   textBlock.text = body;
   contentBlock.schema.containerBlocks = [textBlock];
   block.schema.expandableContentBlocks = [contentBlock];
@@ -2295,7 +2300,7 @@ function defaultBlockSchema(component = 'text'): BlockSchema {
     component,
     align: 'left',
     slot: 'center',
-    customCss: '',
+    customCss: 'margin: 0.5rem 0;',
     codeLanguage: 'ts',
     containerTitle: 'Container',
     containerBlocks: [],

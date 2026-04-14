@@ -36,6 +36,7 @@ interface AppState {
   document: VisualDocument;
   filename: string;
   currentView: 'editor' | 'viewer';
+  showAdvancedEditor: boolean;
   modalSectionKey: string | null;
   tempHighlights: Set<string>;
   addComponentBySection: Record<string, string>;
@@ -110,6 +111,7 @@ function createInitialState(): AppState {
     document: createDefaultDocument(),
     filename: 'document.hvy',
     currentView: 'editor',
+    showAdvancedEditor: false,
     modalSectionKey: null,
     tempHighlights: new Set<string>(),
     addComponentBySection: {},
@@ -132,6 +134,7 @@ function renderApp(): void {
   const paneScroll = capturePaneScroll();
   applyTheme();
   const isEditorView = state.currentView === 'editor';
+  const isAdvancedEditor = state.showAdvancedEditor;
   const templateFields = getTemplateFields(state.document.meta);
   app.innerHTML = `
     <main class="layout">
@@ -161,12 +164,20 @@ function renderApp(): void {
               ? `<div class="pane-title-row">
                   <h2>Visual Editor</h2>
                   <div class="pane-controls">
-                    <button id="toggleMetaBtn" type="button" class="ghost">${state.metaPanelOpen ? 'Hide Meta' : 'Show Meta'}</button>
+                    <button type="button" class="${!isAdvancedEditor ? 'secondary' : 'ghost'}" data-action="set-editor-mode" data-editor-mode="basic">Basic</button>
+                    <button type="button" class="${isAdvancedEditor ? 'secondary' : 'ghost'}" data-action="set-editor-mode" data-editor-mode="advanced">Advanced</button>
+                    ${
+                      isAdvancedEditor
+                        ? `<button id="toggleMetaBtn" type="button" class="ghost">${
+                            state.metaPanelOpen ? 'Hide Meta' : 'Show Meta'
+                          }</button>`
+                        : ''
+                    }
                   </div>
                 </div>
-                ${renderTemplatePanel(templateFields, state.templateValues, { escapeAttr, escapeHtml })}
-                ${state.metaPanelOpen ? renderMetaPanel() : ''}
-                ${renderStateTracker()}
+                ${isAdvancedEditor ? renderTemplatePanel(templateFields, state.templateValues, { escapeAttr, escapeHtml }) : ''}
+                ${isAdvancedEditor && state.metaPanelOpen ? renderMetaPanel() : ''}
+                ${isAdvancedEditor ? renderStateTracker() : ''}
                 <div id="editorTree" class="editor-tree">${renderSectionEditorTree(state.document.sections)}</div>`
               : `<div class="pane-title-row">
                   <h2>Viewer</h2>
@@ -429,6 +440,15 @@ function bindUi(): void {
     if (action === 'switch-view') {
       const view = actionButton.dataset.view === 'viewer' ? 'viewer' : 'editor';
       state.currentView = view;
+      renderApp();
+      return;
+    }
+
+    if (action === 'set-editor-mode') {
+      state.showAdvancedEditor = actionButton.dataset.editorMode === 'advanced';
+      if (!state.showAdvancedEditor) {
+        state.metaPanelOpen = false;
+      }
       renderApp();
       return;
     }
@@ -860,15 +880,6 @@ function bindUi(): void {
       return;
     }
 
-    if (action === 'toggle-id-editor') {
-      recordHistory();
-      section.idEditorOpen = !section.idEditorOpen;
-      if (!section.idEditorOpen) {
-        section.customId = '';
-      }
-      renderApp();
-      return;
-    }
 
     if (action === 'realize-ghost') {
       recordHistory();
@@ -984,6 +995,15 @@ function bindUi(): void {
     if (field === 'section-expanded' && target instanceof HTMLInputElement) {
       section.expanded = target.checked;
       refreshReaderPanels();
+      return;
+    }
+
+    if (field === 'section-id-editor-open' && target instanceof HTMLInputElement) {
+      section.idEditorOpen = target.checked;
+      if (!section.idEditorOpen) {
+        section.customId = '';
+      }
+      renderApp();
       return;
     }
 
@@ -1765,7 +1785,11 @@ function renderSectionEditorTree(sections: VisualSection[]): string {
   const sectionCards = sections.map((section) => renderEditorSection(section)).join('');
   const flatSections = flattenSections(sections);
   return `
-    ${renderTemplateGhosts(getTemplateFields(state.document.meta), flatSections, { escapeAttr, escapeHtml })}
+    ${
+      state.showAdvancedEditor
+        ? renderTemplateGhosts(getTemplateFields(state.document.meta), flatSections, { escapeAttr, escapeHtml })
+        : ''
+    }
     ${sectionCards}
     <article class="ghost-section-card add-ghost" data-action="add-top-level-section" data-section-key="__top_level__">
       <div class="ghost-plus-big"><span>+</span></div>
@@ -1786,11 +1810,14 @@ function renderEditorSection(section: VisualSection): string {
       <div class="editor-section-head">
         <div class="section-drag-title" draggable="true" data-drag-handle="section" data-section-key="${escapeAttr(section.key)}" title="Drag to reorder section">
           <strong>${escapeHtml(section.title || `Section L${section.level}`)}</strong>
-          <span>Section L${section.level}</span>
         </div>
         <div class="editor-actions">
           <button type="button" class="ghost" data-action="jump-to-reader" data-section-key="${escapeAttr(section.key)}">Jump</button>
-          <button type="button" class="ghost" data-action="focus-modal" data-section-key="${escapeAttr(section.key)}">Modal Context</button>
+          ${
+            state.showAdvancedEditor
+              ? `<button type="button" class="ghost" data-action="focus-modal" data-section-key="${escapeAttr(section.key)}">Modal Context</button>`
+              : ''
+          }
           <button type="button" class="danger" data-action="remove-section" data-section-key="${escapeAttr(section.key)}">Remove</button>
         </div>
       </div>
@@ -1800,25 +1827,33 @@ function renderEditorSection(section: VisualSection): string {
           <span>Title</span>
           <input data-section-key="${escapeAttr(section.key)}" data-field="section-title" value="${escapeAttr(section.title)}" />
         </label>
-        <label>
-          <span>Custom ID</span>
-          <label><input type="checkbox" data-action="toggle-id-editor" data-section-key="${escapeAttr(section.key)}" ${
-    section.idEditorOpen ? 'checked' : ''
-  } /> Enable custom ID</label>
-        </label>
+        ${
+          state.showAdvancedEditor
+            ? `<div class="editor-field">
+                <span>Custom ID</span>
+                <label class="checkbox-label"><input type="checkbox" data-field="section-id-editor-open" data-section-key="${escapeAttr(section.key)}" ${
+                section.idEditorOpen ? 'checked' : ''
+              } /> Enable custom ID</label>
+              </div>`
+            : ''
+        }
       </div>
 
       <div class="editor-row">
-        <label><input type="checkbox" data-section-key="${escapeAttr(section.key)}" data-field="section-expanded" ${
+        <label class="checkbox-label"><input type="checkbox" data-section-key="${escapeAttr(section.key)}" data-field="section-expanded" ${
     section.expanded ? 'checked' : ''
   } /> Expanded</label>
-        <label><input type="checkbox" data-section-key="${escapeAttr(section.key)}" data-field="section-highlight" ${
-    section.highlight ? 'checked' : ''
-  } /> Highlight</label>
+        ${
+          state.showAdvancedEditor
+            ? `<label class="checkbox-label"><input type="checkbox" data-section-key="${escapeAttr(section.key)}" data-field="section-highlight" ${
+                section.highlight ? 'checked' : ''
+              } /> Highlight</label>`
+            : ''
+        }
       </div>
 
       ${
-        section.idEditorOpen
+        state.showAdvancedEditor && section.idEditorOpen
           ? `<label class="id-override">
               <span>ID Override (optional, blank keeps random ID)</span>
               <input data-section-key="${escapeAttr(section.key)}" data-field="section-custom-id" value="${escapeAttr(
@@ -1854,25 +1889,30 @@ function renderEditorBlock(sectionKey: string, block: VisualBlock): string {
   const component = block.schema.component || 'text';
   const contentEditor = renderBlockContentEditor(sectionKey, block);
   const schemaEditor = renderBlockSchemaEditor(sectionKey, block);
+  const showSchema = state.showAdvancedEditor && block.schemaMode;
 
   return `
     <div class="editor-block">
       <div class="editor-block-head">
         <strong class="editor-block-title">${escapeHtml(component)}</strong>
         <div class="editor-actions">
-          <button type="button" class="ghost" data-action="open-component-meta" data-section-key="${escapeAttr(
-            sectionKey
-          )}" data-block-id="${escapeAttr(block.id)}">Meta</button>
-          <button type="button" class="ghost" data-action="toggle-schema" data-section-key="${escapeAttr(
-            sectionKey
-          )}" data-block-id="${escapeAttr(block.id)}">${block.schemaMode ? 'Content Mode' : 'Schema Mode'}</button>
+          ${
+            state.showAdvancedEditor
+              ? `<button type="button" class="ghost" data-action="open-component-meta" data-section-key="${escapeAttr(
+                  sectionKey
+                )}" data-block-id="${escapeAttr(block.id)}">Meta</button>
+                 <button type="button" class="ghost" data-action="toggle-schema" data-section-key="${escapeAttr(
+                   sectionKey
+                 )}" data-block-id="${escapeAttr(block.id)}">${block.schemaMode ? 'Content Mode' : 'Schema Mode'}</button>`
+              : ''
+          }
           <button type="button" class="danger remove-x" data-action="remove-block" data-section-key="${escapeAttr(
             sectionKey
           )}" data-block-id="${escapeAttr(block.id)}">×</button>
         </div>
       </div>
 
-      ${block.schemaMode ? schemaEditor : contentEditor}
+      ${showSchema ? schemaEditor : contentEditor}
     </div>
   `;
 }

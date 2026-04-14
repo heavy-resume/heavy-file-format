@@ -68,7 +68,8 @@ export const renderGridReader: ComponentReaderRenderer = (_section, block, helpe
     .map((item) => {
       const gridColumn =
         item.column === 'full' ? '1 / -1' : item.column === 'right' && columns > 1 ? `${Math.min(columns, 2)} / span 1` : '1 / span 1';
-      return `<div class="reader-grid-cell" style="grid-column: ${helpers.escapeAttr(gridColumn)};">${helpers.renderComponentFragment(
+      const alignClass = item.column === 'right' ? ' align-right' : item.column === 'full' ? ' align-full' : ' align-left';
+      return `<div class="reader-grid-cell${alignClass}" style="grid-column: ${helpers.escapeAttr(gridColumn)};">${helpers.renderComponentFragment(
         item.component,
         item.content,
         block

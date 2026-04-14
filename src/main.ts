@@ -1,4 +1,5 @@
 import './style.css';
+import bundledExampleHvy from '../examples/example.hvy?raw';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import TurndownService from 'turndown';
@@ -181,7 +182,7 @@ try {
 function createInitialState(): AppState {
   return {
     document: createDefaultDocument(),
-    filename: 'document.hvy',
+    filename: 'example.hvy',
     currentView: 'editor',
     paneScroll: {
       editorTop: 0,
@@ -2092,128 +2093,7 @@ function closeModalIfTarget(sectionKey: string): void {
 }
 
 function createDefaultDocument(): VisualDocument {
-  const textBlock = createEmptyBlock('text', true);
-  textBlock.text = 'This is a **visual HVY editor**. What you see in the editor is the primary authoring experience.';
-
-  const quoteBlock = createEmptyBlock('quote', true);
-  quoteBlock.text = 'Design the format like a document, not a form.';
-
-  const codeBlock = createEmptyBlock('code', true);
-  codeBlock.schema.codeLanguage = 'ts';
-  codeBlock.text = "export const demo = 'HVY';";
-
-  const expandableBlock = createEmptyBlock('expandable', true);
-  expandableBlock.schema.expandableStubBlocks = [createEmptyBlock('table', true)];
-  expandableBlock.schema.expandableContentBlocks = [createEmptyBlock('container', true)];
-  expandableBlock.schema.expandableContentBlocks[0]!.schema.containerTitle = 'Expanded Container';
-
-  const tableBlock = createEmptyBlock('table', true);
-  tableBlock.schema.tableColumns = 'Feature, Status';
-  tableBlock.schema.tableRows = [
-    {
-      cells: ['Inline editing', 'Ready'],
-      expanded: false,
-      clickable: true,
-      detailsTitle: 'Inline editing details',
-      detailsContent: 'Headers, cells, and row details are all editable directly in the proof of concept.',
-      detailsComponent: 'container',
-      detailsBlocks: [
-        (() => {
-          const block = createEmptyBlock('container', true);
-          block.schema.containerTitle = 'Details Container';
-          return block;
-        })(),
-      ],
-    },
-  ];
-
-  const containerBlock = createEmptyBlock('container', true);
-  containerBlock.schema.containerTitle = 'Container';
-  containerBlock.text = 'Containers are good defaults for subsections and grouped notes.';
-
-  const gridBlock = createEmptyBlock('grid', true);
-  gridBlock.schema.gridItems = [
-    { id: makeId('griditem'), component: 'text', content: 'Grid item A', column: 'left' },
-    { id: makeId('griditem'), component: 'text', content: 'Grid item B', column: 'right' },
-  ];
-
-  const pluginBlock = createEmptyBlock('plugin', true);
-  pluginBlock.schema.pluginUrl = 'https://example.com/plugin';
-
-  const expandableTableHeaderBlock = createDemoTableBlock(['Area', 'Owner', 'Status'], [], true);
-  expandableTableHeaderBlock.schema.customCss = 'margin: 0;';
-  const expandableTableGroupA = createDemoExpandableTableBlock(
-    ['Area', 'Owner', 'Status'],
-    [
-      ['Parser migration', 'Avery', 'In progress'],
-      ['Schema cleanup', 'Drew', 'Ready'],
-      ['Grid polish', 'Nina', 'Queued'],
-    ],
-    'Delivery Notes',
-    'These rows belong to the first workstream. Expand it to capture rollout notes, risks, and the next checkpoint.'
-  );
-  const expandableTableGroupB = createDemoExpandableTableBlock(
-    ['Area', 'Owner', 'Status'],
-    [['Release cut', 'Mika', 'Blocked']],
-    'Blocker Context',
-    'This final row group shows how a single summary row can expand into the full explanation, decision history, or unblock plan.'
-  );
-
-  return {
-    extension: '.hvy',
-    meta: {
-      hvy_version: 0.1,
-      title: 'Reference Implementation Demo',
-    },
-    sections: [
-      {
-        key: makeId('section'),
-        customId: 'welcome',
-        idEditorOpen: false,
-        isGhost: false,
-        title: 'Welcome',
-        level: 1,
-        expanded: true,
-        highlight: false,
-        customCss: '',
-        blocks: [
-          textBlock,
-          quoteBlock,
-          codeBlock,
-          expandableBlock,
-          tableBlock,
-          containerBlock,
-          gridBlock,
-          pluginBlock,
-          expandableTableHeaderBlock,
-          expandableTableGroupA,
-          expandableTableGroupB,
-        ],
-        children: [
-          {
-            key: makeId('section'),
-            customId: 'try-it',
-            idEditorOpen: false,
-            isGhost: false,
-            title: 'Container Subsection',
-            level: 2,
-            expanded: true,
-            highlight: true,
-            customCss: 'margin: 0.5rem 0;',
-            blocks: [
-              (() => {
-                const subsectionBlock = createEmptyBlock('container', true);
-                subsectionBlock.schema.containerTitle = 'Nested Container';
-                subsectionBlock.text = 'Subsections now start as plain container sections.';
-                return subsectionBlock;
-              })(),
-            ],
-            children: [],
-          },
-        ],
-      },
-    ],
-  };
+  return deserializeDocument(bundledExampleHvy, '.hvy');
 }
 
 function createEmptySection(level: number, component = 'container', isGhost = false): VisualSection {
@@ -2263,36 +2143,6 @@ function createDefaultTableRow(columnCount: number): TableRow {
     detailsComponent: 'container',
     detailsBlocks: [createEmptyBlock('container', true)],
   };
-}
-
-function createDemoTableBlock(columns: string[], rows: string[][], showHeader = true): VisualBlock {
-  const block = createEmptyBlock('table', true);
-  block.schema.tableColumns = columns.join(', ');
-  block.schema.tableShowHeader = showHeader;
-  block.schema.tableRows = rows.map((cells) => ({
-    ...createDefaultTableRow(columns.length),
-    cells: columns.map((_, index) => cells[index] ?? ''),
-  }));
-  return block;
-}
-
-function createDemoExpandableTableBlock(columns: string[], rows: string[][], title: string, body: string): VisualBlock {
-  const block = createEmptyBlock('expandable', true);
-  block.schema.customCss = 'margin: 0;';
-  block.schema.expandableAlwaysShowStub = true;
-  block.schema.expandableExpanded = false;
-  const stubTableBlock = createDemoTableBlock(columns, rows, false);
-  stubTableBlock.schema.customCss = 'margin: 0;';
-  block.schema.expandableStubBlocks = [stubTableBlock];
-  const contentBlock = createEmptyBlock('container', true);
-  contentBlock.schema.customCss = 'margin: 0;';
-  contentBlock.schema.containerTitle = title;
-  const textBlock = createEmptyBlock('text', true);
-  textBlock.schema.customCss = 'margin: 0;';
-  textBlock.text = body;
-  contentBlock.schema.containerBlocks = [textBlock];
-  block.schema.expandableContentBlocks = [contentBlock];
-  return block;
 }
 
 function defaultBlockSchema(component = 'text'): BlockSchema {
@@ -2416,11 +2266,13 @@ function schemaFromUnknown(value: unknown): BlockSchema {
     return defaultBlockSchema('text');
   }
   const candidate = value as JsonObject;
+  const component = typeof candidate.component === 'string' ? candidate.component : 'text';
+  const defaults = defaultBlockSchema(component);
   const rows = Array.isArray(candidate.tableRows) ? candidate.tableRows : [];
   const gridColumns = coerceGridColumns(candidate.gridColumns ?? candidate.gridTemplateColumns);
   const parsedGridItems = parseGridItems(candidate, gridColumns);
   return {
-    component: typeof candidate.component === 'string' ? candidate.component : 'text',
+    component,
     align: coerceAlign(typeof candidate.align === 'string' ? candidate.align : 'left'),
     slot: coerceSlot(typeof candidate.slot === 'string' ? candidate.slot : 'center'),
     customCss:
@@ -2428,23 +2280,23 @@ function schemaFromUnknown(value: unknown): BlockSchema {
         ? candidate.customCss
         : typeof candidate.custom_css === 'string'
         ? candidate.custom_css
-        : '',
-    codeLanguage: typeof candidate.codeLanguage === 'string' ? candidate.codeLanguage : 'ts',
-    containerTitle: typeof candidate.containerTitle === 'string' ? candidate.containerTitle : 'Container',
+        : defaults.customCss,
+    codeLanguage: typeof candidate.codeLanguage === 'string' ? candidate.codeLanguage : defaults.codeLanguage,
+    containerTitle: typeof candidate.containerTitle === 'string' ? candidate.containerTitle : defaults.containerTitle,
     containerBlocks: Array.isArray(candidate.containerBlocks)
       ? candidate.containerBlocks.map((block) => parseVisualBlock(block))
       : [],
     gridColumns,
     gridItems: parsedGridItems,
-    tags: typeof candidate.tags === 'string' ? candidate.tags : '',
-    description: typeof candidate.description === 'string' ? candidate.description : '',
+    tags: typeof candidate.tags === 'string' ? candidate.tags : defaults.tags,
+    description: typeof candidate.description === 'string' ? candidate.description : defaults.description,
     metaOpen: candidate.metaOpen === true,
-    pluginUrl: typeof candidate.pluginUrl === 'string' ? candidate.pluginUrl : '',
+    pluginUrl: typeof candidate.pluginUrl === 'string' ? candidate.pluginUrl : defaults.pluginUrl,
     expandableStubComponent:
-      typeof candidate.expandableStubComponent === 'string' ? candidate.expandableStubComponent : 'container',
+      typeof candidate.expandableStubComponent === 'string' ? candidate.expandableStubComponent : defaults.expandableStubComponent,
     expandableContentComponent:
-      typeof candidate.expandableContentComponent === 'string' ? candidate.expandableContentComponent : 'container',
-    expandableStub: typeof candidate.expandableStub === 'string' ? candidate.expandableStub : '',
+      typeof candidate.expandableContentComponent === 'string' ? candidate.expandableContentComponent : defaults.expandableContentComponent,
+    expandableStub: typeof candidate.expandableStub === 'string' ? candidate.expandableStub : defaults.expandableStub,
     expandableStubBlocks: Array.isArray(candidate.expandableStubBlocks)
       ? candidate.expandableStubBlocks.map((block) => parseVisualBlock(block))
       : [],
@@ -2453,7 +2305,7 @@ function schemaFromUnknown(value: unknown): BlockSchema {
     expandableContentBlocks: Array.isArray(candidate.expandableContentBlocks)
       ? candidate.expandableContentBlocks.map((block) => parseVisualBlock(block))
       : [],
-    tableColumns: typeof candidate.tableColumns === 'string' ? candidate.tableColumns : 'Column 1, Column 2',
+    tableColumns: typeof candidate.tableColumns === 'string' ? candidate.tableColumns : defaults.tableColumns,
     tableShowHeader: candidate.tableShowHeader !== false,
     tableRows: rows.map((row) => {
       const mapped = row as JsonObject;

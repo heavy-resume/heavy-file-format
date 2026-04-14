@@ -133,6 +133,60 @@ Common block metadata fields include:
 
 `customCss` is an optional inline CSS style string applied to that block's rendered wrapper. Authoring tools MAY expose this for layout and presentation adjustments such as collapsing spacing between adjacent blocks.
 
+Section metadata MAY also include rich-client presentation keys such as:
+- `expanded`
+- `highlight`
+- `custom_css`
+
+`custom_css` is an optional inline CSS style string applied to the rendered section wrapper.
+
+### 5.7 Block directives
+
+Authoring tools MAY emit block-scoped metadata comments directly in section content:
+
+```markdown
+<!--hvy:block {"component":"quote","customCss":"margin: 0.5rem 0;"}-->
+Design the format like a document, not a form.
+```
+
+Rules:
+- The directive MUST be on a single line.
+- The payload MUST be valid JSON object.
+- The directive applies to the immediately following content block.
+- If both `meta.blocks[n]` and `hvy:block` describe the same logical block, `meta.blocks[n]` wins.
+
+### 5.8 Recursive block shape for rich clients
+
+For rich/editor-oriented documents, block metadata MAY include component-specific fields. Common examples include:
+- `codeLanguage`
+- `containerTitle`
+- `containerBlocks`
+- `gridColumns`
+- `gridItems`
+- `pluginUrl`
+- `expandableStubBlocks`
+- `expandableContentBlocks`
+- `expandableAlwaysShowStub`
+- `expandableExpanded`
+- `tableColumns`
+- `tableShowHeader`
+- `tableRows`
+
+Nested block arrays such as `containerBlocks`, `expandableStubBlocks`, and `expandableContentBlocks` use a recursive block object shape:
+
+```json
+{
+  "text": "Nested block text",
+  "schema": {
+    "component": "text",
+    "customCss": "margin: 0.5rem 0;"
+  },
+  "schemaMode": false
+}
+```
+
+Rich clients MAY preserve and round-trip these fields even if a plain Markdown renderer ignores them.
+
 ## 6. Template & Schema (`.thvy`)
 
 A `.thvy` file is a `.hvy` file with required schema metadata.
@@ -232,7 +286,7 @@ Normative behavior:
 1. Read file as UTF-8 text.
 2. Parse YAML front matter if present at file start.
 3. Parse Markdown into block structure using headings as section anchors.
-4. Attach `<!--hvy: ...-->` directives to target heading/doc/css per placement rules.
+4. Attach `<!--hvy: ...-->`, `<!--hvy:doc ...-->`, `<!--hvy:css ...-->`, and `<!--hvy:block ...-->` directives per placement rules.
 5. Extract CSS fenced blocks (language `css`) and optional preceding `hvy:css` metadata.
 6. Build section tree from heading depth.
 7. Validate template/schema rules when extension is `.thvy`.

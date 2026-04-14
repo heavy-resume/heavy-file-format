@@ -1051,6 +1051,19 @@ button.tiny {
   font-weight: 600;
 }
 
+.expandable-reader {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.expand-toggle {
+  justify-self: start;
+}
+
+.expandable-reader-body {
+  min-width: 0;
+}
+
 .expand-content {
   margin-top: 0.3rem;
 }

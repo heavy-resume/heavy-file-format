@@ -58,7 +58,15 @@ export const renderExpandableReader: ComponentReaderRenderer = (section, block, 
       ? `<div class="expand-stub">${stubHtml}</div><div class="expand-content">${contentHtml}</div>`
       : `<div class="expand-content">${contentHtml}</div>`
     : `<div class="expand-stub">${stubHtml}</div>`;
-  return `<div data-reader-action="toggle-expandable" data-section-key="${helpers.escapeAttr(section.key)}" data-block-id="${helpers.escapeAttr(
-    block.id
-  )}">${body}</div>`;
+  return `<div class="expandable-reader">
+    <button
+      type="button"
+      class="expand-toggle"
+      data-reader-action="toggle-expandable"
+      data-section-key="${helpers.escapeAttr(section.key)}"
+      data-block-id="${helpers.escapeAttr(block.id)}"
+      aria-expanded="${expanded ? 'true' : 'false'}"
+    >${expanded ? 'Collapse' : 'Expand'}</button>
+    <div class="expandable-reader-body">${body}</div>
+  </div>`;
 };

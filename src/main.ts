@@ -461,18 +461,22 @@ function bindUi(): void {
     }
 
     if (action === 'activate-block' && blockId) {
+      event.stopPropagation();
       setActiveEditorBlock(sectionKey, blockId);
       renderApp();
       return;
     }
 
+
     if (action === 'activate-section-title' && sectionKey) {
+      event.stopPropagation();
       state.activeEditorSectionTitleKey = sectionKey;
       renderApp();
       return;
     }
 
     if (action === 'deactivate-block' && blockId) {
+      event.stopPropagation();
       clearActiveEditorBlock(blockId);
       renderApp();
       return;
@@ -832,7 +836,7 @@ function bindUi(): void {
 
     if (action === 'add-table-row' && blockId) {
       recordHistory();
-      const block = section.blocks.find((candidate) => candidate.id === blockId);
+      const block = findBlockByIds(sectionKey, blockId);
       if (!block) {
         return;
       }
@@ -844,7 +848,7 @@ function bindUi(): void {
 
     if (action === 'add-table-column' && blockId) {
       recordHistory();
-      const block = section.blocks.find((candidate) => candidate.id === blockId);
+      const block = findBlockByIds(sectionKey, blockId);
       if (!block) {
         return;
       }
@@ -856,7 +860,7 @@ function bindUi(): void {
     if (action === 'remove-table-column' && blockId) {
       recordHistory();
       const columnIndex = Number.parseInt(actionButton.dataset.columnIndex ?? '', 10);
-      const block = section.blocks.find((candidate) => candidate.id === blockId);
+      const block = findBlockByIds(sectionKey, blockId);
       if (!block || Number.isNaN(columnIndex)) {
         return;
       }
@@ -868,7 +872,7 @@ function bindUi(): void {
     if (action === 'remove-table-row' && blockId) {
       recordHistory();
       const rowIndex = Number.parseInt(actionButton.dataset.rowIndex ?? '', 10);
-      const block = section.blocks.find((candidate) => candidate.id === blockId);
+      const block = findBlockByIds(sectionKey, blockId);
       if (!block || Number.isNaN(rowIndex)) {
         return;
       }
@@ -882,7 +886,7 @@ function bindUi(): void {
       if (Number.isNaN(rowIndex)) {
         return;
       }
-      const block = section.blocks.find((candidate) => candidate.id === blockId);
+      const block = findBlockByIds(sectionKey, blockId);
       const row = block?.schema.tableRows[rowIndex];
       if (!row) {
         return;
@@ -1269,25 +1273,9 @@ function bindUi(): void {
       return;
     }
 
-    const expandable = target.closest<HTMLElement>('[data-reader-action="toggle-expandable"]');
-    if (expandable) {
-      const sectionKey = expandable.dataset.sectionKey;
-      const blockId = expandable.dataset.blockId;
-      if (!sectionKey || !blockId) {
-        return;
-      }
-      const section = findSectionByKey(state.document.sections, sectionKey);
-      const block = section?.blocks.find((candidate) => candidate.id === blockId);
-      if (!block) {
-        return;
-      }
-      block.schema.expandableExpanded = !block.schema.expandableExpanded;
-      refreshReaderPanels();
-      return;
-    }
-
     const rowToggle = target.closest<HTMLElement>('[data-reader-action="toggle-table-row"]');
     if (rowToggle) {
+      event.stopPropagation();
       const sectionKey = rowToggle.dataset.sectionKey;
       const blockId = rowToggle.dataset.blockId;
       const rowIndex = Number.parseInt(rowToggle.dataset.rowIndex ?? '', 10);
@@ -1304,6 +1292,24 @@ function bindUi(): void {
         return;
       }
       row.expanded = !row.expanded;
+      refreshReaderPanels();
+      return;
+    }
+
+    const expandable = target.closest<HTMLElement>('[data-reader-action="toggle-expandable"]');
+    if (expandable) {
+      event.stopPropagation();
+      const sectionKey = expandable.dataset.sectionKey;
+      const blockId = expandable.dataset.blockId;
+      if (!sectionKey || !blockId) {
+        return;
+      }
+      const section = findSectionByKey(state.document.sections, sectionKey);
+      const block = section?.blocks.find((candidate) => candidate.id === blockId);
+      if (!block) {
+        return;
+      }
+      block.schema.expandableExpanded = !block.schema.expandableExpanded;
       refreshReaderPanels();
     }
   });
@@ -1962,25 +1968,47 @@ function renderEditorSection(section: VisualSection): string {
   `;
 }
 
+function isDescendantActive(block: VisualBlock, targetBlockId: string): boolean {
+  if (!block.schema) return false;
+  if (Array.isArray(block.schema.containerBlocks)) {
+    for (const child of block.schema.containerBlocks) {
+      if (child.id === targetBlockId || isDescendantActive(child, targetBlockId)) return true;
+    }
+  }
+  if (Array.isArray(block.schema.expandableStubBlocks)) {
+    for (const child of block.schema.expandableStubBlocks) {
+      if (child.id === targetBlockId || isDescendantActive(child, targetBlockId)) return true;
+    }
+  }
+  if (Array.isArray(block.schema.expandableContentBlocks)) {
+    for (const child of block.schema.expandableContentBlocks) {
+      if (child.id === targetBlockId || isDescendantActive(child, targetBlockId)) return true;
+    }
+  }
+  if (Array.isArray(block.schema.tableRows)) {
+    for (const row of block.schema.tableRows) {
+      if (Array.isArray(row.detailsBlocks)) {
+        for (const child of row.detailsBlocks) {
+          if (child.id === targetBlockId || isDescendantActive(child, targetBlockId)) return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
 function renderEditorBlock(sectionKey: string, block: VisualBlock): string {
   const component = block.schema.component || 'text';
   const contentEditor = renderBlockContentEditor(sectionKey, block);
   const schemaEditor = renderBlockSchemaEditor(sectionKey, block);
   const showSchema = state.showAdvancedEditor && block.schemaMode;
-  const isActive = isActiveEditorBlock(sectionKey, block.id);
+  
+  const isActiveSelf = isActiveEditorBlock(sectionKey, block.id);
+  const isActiveDescendant = state.activeEditorBlock?.sectionKey === sectionKey && isDescendantActive(block, state.activeEditorBlock.blockId);
+  const isActive = isActiveSelf || isActiveDescendant;
 
   if (!isActive) {
-    const section = findSectionByKey(state.document.sections, sectionKey);
-    if (!section) {
-      return '';
-    }
-    return `
-      <div class="editor-block-passive" data-action="activate-block" data-section-key="${escapeAttr(sectionKey)}" data-block-id="${escapeAttr(
-        block.id
-      )}">
-        ${renderReaderBlock(section, block)}
-      </div>
-    `;
+    return renderPassiveEditorBlock(sectionKey, block);
   }
 
   return `
@@ -2010,6 +2038,57 @@ function renderEditorBlock(sectionKey: string, block: VisualBlock): string {
       ${showSchema ? schemaEditor : contentEditor}
     </div>
   `;
+}
+
+function renderPassiveEditorBlock(sectionKey: string, block: VisualBlock): string {
+  const section = findSectionByKey(state.document.sections, sectionKey);
+  if (!section) {
+    return '';
+  }
+  return `
+    <div class="editor-block-passive" data-action="activate-block" data-section-key="${escapeAttr(sectionKey)}" data-block-id="${escapeAttr(
+      block.id
+    )}">
+      ${renderPassiveEditorBlockContent(sectionKey, section, block)}
+    </div>
+  `;
+}
+
+function renderPassiveEditorBlockContent(sectionKey: string, section: VisualSection, block: VisualBlock): string {
+  const base = resolveBaseComponent(block.schema.component);
+
+  if (base === 'container') {
+    ensureContainerBlocks(block);
+    const title = block.schema.containerTitle || 'Container';
+    const body = block.schema.containerBlocks.map((innerBlock) => renderPassiveEditorBlock(sectionKey, innerBlock)).join('');
+    return `<div class="reader-container-title">${escapeHtml(title)}</div>${body ? `<div class="reader-container-body">${body}</div>` : ''}`;
+  }
+
+  if (base === 'expandable') {
+    ensureExpandableBlocks(block);
+    const expanded = block.schema.expandableExpanded;
+    const alwaysShowStub = block.schema.expandableAlwaysShowStub;
+    const stubHtml = (block.schema.expandableStubBlocks ?? []).map((innerBlock) => renderPassiveEditorBlock(sectionKey, innerBlock)).join('');
+    const contentHtml = (block.schema.expandableContentBlocks ?? [])
+      .map((innerBlock) => renderPassiveEditorBlock(sectionKey, innerBlock))
+      .join('');
+    const body = expanded
+      ? alwaysShowStub
+        ? `<div class="expand-stub">${stubHtml}</div><div class="expand-content">${contentHtml}</div>`
+        : `<div class="expand-content">${contentHtml}</div>`
+      : `<div class="expand-stub">${stubHtml}</div>`;
+
+    return `<div class="expandable-reader">
+      <button
+        type="button"
+        class="expand-toggle"
+        aria-expanded="${expanded ? 'true' : 'false'}"
+      >${expanded ? 'Collapse' : 'Expand'}</button>
+      <div class="expandable-reader-body">${body}</div>
+    </div>`;
+  }
+
+  return renderReaderBlock(section, block);
 }
 
 function applyRichAction(action: string, editable: HTMLElement, value?: string): void {

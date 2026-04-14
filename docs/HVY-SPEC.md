@@ -119,6 +119,20 @@ Optional CSS metadata directive (must appear immediately above CSS fence):
 - `document` (default)
 - `section:<section-id>`
 
+### 5.6 Block metadata in `meta.blocks`
+
+Section metadata MAY include a `blocks` array describing per-block rendering metadata for authoring tools and rich clients.
+
+Common block metadata fields include:
+- `component`
+- `align`
+- `slot`
+- `tags`
+- `description`
+- `customCss`
+
+`customCss` is an optional inline CSS style string applied to that block's rendered wrapper. Authoring tools MAY expose this for layout and presentation adjustments such as collapsing spacing between adjacent blocks.
+
 ## 6. Template & Schema (`.thvy`)
 
 A `.thvy` file is a `.hvy` file with required schema metadata.

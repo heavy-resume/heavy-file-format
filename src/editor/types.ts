@@ -23,6 +23,7 @@ export interface BlockSchema {
   component: string;
   align: Align;
   slot: Slot;
+  customCss: string;
   codeLanguage: string;
   containerTitle: string;
   containerBlocks: VisualBlock[];

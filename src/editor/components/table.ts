@@ -1,5 +1,5 @@
-import type { ComponentEditorRenderer, ComponentReaderRenderer, TableDetailsRenderer } from '../component-helpers';
-import type { TableRow, VisualSection } from '../types';
+import type { ComponentEditorRenderer, ComponentReaderRenderer } from '../component-helpers';
+import type { TableRow } from '../types';
 
 function renderTableRowEditor(
   sectionKey: string,
@@ -12,7 +12,7 @@ function renderTableRowEditor(
   const safeColumns = columns.length > 0 ? columns : ['Column 1', 'Column 2'];
   return `
     <tr class="table-row-editor table-row-editor-main" data-table-row-drop="true" data-row-index="${rowIndex}">
-      <td class="table-row-utility" rowspan="2">
+      <td class="table-row-utility">
         <button
           type="button"
           class="table-drag-handle"
@@ -42,17 +42,10 @@ function renderTableRowEditor(
           </td>`
         )
         .join('')}
-      <td class="table-row-utility table-row-remove-cell" rowspan="2">
+      <td class="table-row-utility table-row-remove-cell">
         <button type="button" class="danger remove-x" data-action="remove-table-row" data-section-key="${helpers.escapeAttr(
           sectionKey
         )}" data-block-id="${helpers.escapeAttr(blockId)}" data-row-index="${rowIndex}" title="Remove row">×</button>
-      </td>
-    </tr>
-    <tr class="table-row-editor table-row-editor-details">
-      <td class="table-row-details-cell" colspan="${safeColumns.length}">
-        <button type="button" class="ghost more-details-button" data-action="open-table-details" data-section-key="${helpers.escapeAttr(
-          sectionKey
-        )}" data-block-id="${helpers.escapeAttr(blockId)}" data-row-index="${rowIndex}">More details</button>
       </td>
     </tr>
   `;
@@ -136,45 +129,13 @@ export const renderTableEditor: ComponentEditorRenderer = (sectionKey, block, he
   `;
 };
 
-export const renderTableDetailsEditor: TableDetailsRenderer = (sectionKey, row, helpers) => {
-  row.detailsComponent = 'container';
-  return `
-    <div class="table-details-modal-body">
-      <div class="expandable-label">Details Container</div>
-      ${(row.detailsBlocks ?? []).map((block) => helpers.renderEditorBlock(sectionKey, block)).join('')}
-    </div>
-  `;
-};
-
-function renderTableDetailsContent(row: TableRow, helpers: Parameters<ComponentReaderRenderer>[2]): string {
-  const title = row.detailsTitle.trim();
-  const fauxSection: VisualSection = {
-    key: 'table-details',
-    customId: '',
-    idEditorOpen: false,
-    isGhost: false,
-    title: '',
-    level: 1,
-    expanded: true,
-    highlight: false,
-    customCss: '',
-    blocks: [],
-    children: [],
-  };
-  const body = (row.detailsBlocks ?? []).map((innerBlock) => helpers.renderReaderBlock(fauxSection, innerBlock)).join('');
-  return `<div class="reader-table-details-container reader-block reader-block-container">
-    <div class="reader-container-title">${helpers.escapeHtml(title || 'Details')}</div>
-    <div class="reader-container-body">${body}</div>
-  </div>`;
-}
-
-export const renderTableReader: ComponentReaderRenderer = (section, block, helpers) => {
+export const renderTableReader: ComponentReaderRenderer = (_section, block, helpers) => {
   const columns = helpers.getTableColumns(block.schema);
   return `<table class="reader-table">
     ${
       block.schema.tableShowHeader
         ? `<thead>
-      <tr>${columns.map((column) => `<th>${helpers.escapeHtml(column)}</th>`).join('')}<th>More details</th></tr>
+      <tr>${columns.map((column) => `<th>${helpers.escapeHtml(column)}</th>`).join('')}</tr>
     </thead>`
         : ''
     }
@@ -182,17 +143,10 @@ export const renderTableReader: ComponentReaderRenderer = (section, block, helpe
       ${block.schema.tableRows
         .map(
           (row, rowIndex) => `
-            <tr class="table-main-row table-main-row-${rowIndex % 2 === 0 ? 'even' : 'odd'} ${row.clickable ? 'is-clickable' : 'is-static'}">
+            <tr class="table-main-row table-main-row-${rowIndex % 2 === 0 ? 'even' : 'odd'}">
               ${columns.map((_, cellIndex) => `<td>${helpers.escapeHtml(row.cells[cellIndex] ?? '')}</td>`).join('')}
-              <td><button type="button" class="ghost more-details-button" ${
-                row.clickable
-                  ? `data-reader-action="toggle-table-row" data-section-key="${helpers.escapeAttr(section.key)}" data-block-id="${helpers.escapeAttr(
-                      block.id
-                    )}" data-row-index="${rowIndex}"`
-                  : 'disabled'
-              }>${row.expanded ? 'Hide' : 'More details'}</button></td>
             </tr>
-            ${row.expanded ? `<tr class="table-details-row"><td colspan="${Math.max(columns.length, 1) + 1}">${renderTableDetailsContent(row, helpers)}</td></tr>` : ''}`
+            `
         )
         .join('')}
     </tbody>

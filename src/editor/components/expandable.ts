@@ -53,20 +53,19 @@ export const renderExpandableReader: ComponentReaderRenderer = (section, block, 
   const contentHtml = (block.schema.expandableContentBlocks ?? []).map((innerBlock) => helpers.renderReaderBlock(section, innerBlock)).join('');
   const expanded = block.schema.expandableExpanded;
   const alwaysShowStub = block.schema.expandableAlwaysShowStub;
+  const toggleAttrs = `data-reader-action="toggle-expandable" data-section-key="${helpers.escapeAttr(section.key)}" data-block-id="${helpers.escapeAttr(
+    block.id
+  )}" aria-expanded="${expanded ? 'true' : 'false'}"`;
+  const stubToggle = `<div class="expand-stub-toggle" ${toggleAttrs}>
+    <div class="expand-stub">${stubHtml}</div>
+  </div>`;
+  const collapseStrip = `<div class="expand-collapse-strip" ${toggleAttrs}>Collapse</div>`;
   const body = expanded
     ? alwaysShowStub
-      ? `<div class="expand-stub">${stubHtml}</div><div class="expand-content">${contentHtml}</div>`
-      : `<div class="expand-content">${contentHtml}</div>`
-    : `<div class="expand-stub">${stubHtml}</div>`;
+      ? `${stubToggle}<div class="expand-content">${contentHtml}</div>`
+      : `<div class="expand-content">${contentHtml}</div>${collapseStrip}`
+    : stubToggle;
   return `<div class="expandable-reader">
-    <button
-      type="button"
-      class="expand-toggle"
-      data-reader-action="toggle-expandable"
-      data-section-key="${helpers.escapeAttr(section.key)}"
-      data-block-id="${helpers.escapeAttr(block.id)}"
-      aria-expanded="${expanded ? 'true' : 'false'}"
-    >${expanded ? 'Collapse' : 'Expand'}</button>
     <div class="expandable-reader-body">${body}</div>
   </div>`;
 };

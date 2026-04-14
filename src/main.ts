@@ -13,7 +13,7 @@ import { renderPluginEditor, renderPluginReader } from './editor/components/plug
 import { renderContainerEditor, renderContainerReader } from './editor/components/container';
 import { renderGridEditor, renderGridReader } from './editor/components/grid';
 import { renderExpandableEditor, renderExpandableReader } from './editor/components/expandable';
-import { renderTableDetailsEditor, renderTableEditor, renderTableReader } from './editor/components/table';
+import { renderTableEditor, renderTableReader } from './editor/components/table';
 import {
   commitTagEditorDraft,
   handleRemoveTag,
@@ -52,7 +52,6 @@ interface AppState {
   lastHistoryGroup: string | null;
   lastHistoryAt: number;
   pendingEditorCenterSectionKey: string | null;
-  tableDetailsModal: { sectionKey: string; blockId: string; rowIndex: number } | null;
   schemaDefDraftByBlock: Record<string, string>;
 }
 
@@ -129,7 +128,6 @@ function createInitialState(): AppState {
     lastHistoryGroup: null,
     lastHistoryAt: 0,
     pendingEditorCenterSectionKey: null,
-    tableDetailsModal: null,
     schemaDefDraftByBlock: {},
   };
 }
@@ -744,20 +742,6 @@ function bindUi(): void {
       return;
     }
 
-    if (action === 'add-row-details-block' && blockId) {
-      recordHistory();
-      const rowIndex = Number.parseInt(actionButton.dataset.rowIndex ?? '', 10);
-      const row = findTableRow(sectionKey, blockId, rowIndex);
-      if (!row) {
-        return;
-      }
-      const newBlock = createEmptyBlock('container');
-      row.detailsBlocks.push(newBlock);
-      setActiveEditorBlock(sectionKey, newBlock.id);
-      renderApp();
-      return;
-    }
-
     if (action === 'add-container-block' && blockId) {
       recordHistory();
       const block = findBlockByIds(sectionKey, blockId);
@@ -877,23 +861,6 @@ function bindUi(): void {
         return;
       }
       block.schema.tableRows.splice(rowIndex, 1);
-      renderApp();
-      return;
-    }
-
-    if (action === 'open-table-details' && blockId) {
-      const rowIndex = Number.parseInt(actionButton.dataset.rowIndex ?? '', 10);
-      if (Number.isNaN(rowIndex)) {
-        return;
-      }
-      const block = findBlockByIds(sectionKey, blockId);
-      const row = block?.schema.tableRows[rowIndex];
-      if (!row) {
-        return;
-      }
-      row.clickable = true;
-      row.detailsComponent = 'container';
-      state.tableDetailsModal = { sectionKey, blockId, rowIndex };
       renderApp();
       return;
     }
@@ -1086,6 +1053,16 @@ function bindUi(): void {
       return;
     }
 
+    if (field === 'block-custom-css' && (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) {
+      const context = resolveBlockContext(target);
+      if (!context) {
+        return;
+      }
+      context.block.schema.customCss = target.value;
+      refreshReaderPanels();
+      return;
+    }
+
     if (field === 'block-meta-open' && target instanceof HTMLInputElement) {
       const context = resolveBlockContext(target);
       if (!context) {
@@ -1269,29 +1246,6 @@ function bindUi(): void {
         return;
       }
       section.expanded = !section.expanded;
-      refreshReaderPanels();
-      return;
-    }
-
-    const rowToggle = target.closest<HTMLElement>('[data-reader-action="toggle-table-row"]');
-    if (rowToggle) {
-      event.stopPropagation();
-      const sectionKey = rowToggle.dataset.sectionKey;
-      const blockId = rowToggle.dataset.blockId;
-      const rowIndex = Number.parseInt(rowToggle.dataset.rowIndex ?? '', 10);
-      if (!sectionKey || !blockId || Number.isNaN(rowIndex)) {
-        return;
-      }
-      const section = findSectionByKey(state.document.sections, sectionKey);
-      const block = section?.blocks.find((candidate) => candidate.id === blockId);
-      const row = block?.schema.tableRows[rowIndex];
-      if (!row) {
-        return;
-      }
-      if (!row.clickable) {
-        return;
-      }
-      row.expanded = !row.expanded;
       refreshReaderPanels();
       return;
     }
@@ -1553,20 +1507,6 @@ function removeBlockFromList(blocks: VisualBlock[], blockId: string): boolean {
   return false;
 }
 
-function findTableRow(sectionKey: string, parentBlockId: string, rowIndex: number): TableRow | null {
-  const section = findSectionByKey(state.document.sections, sectionKey);
-  const block = section?.blocks.find((candidate) => candidate.id === parentBlockId);
-  const row = block?.schema.tableRows[rowIndex];
-  if (!row) {
-    return null;
-  }
-  if (!Array.isArray(row.detailsBlocks) || row.detailsBlocks.length === 0) {
-    row.detailsBlocks = [createEmptyBlock('container')];
-  }
-  row.detailsComponent = 'container';
-  return row;
-}
-
 function resolveBlockContext(target: HTMLElement): { block: VisualBlock; row: TableRow | null } | null {
   const blockId = target.dataset.blockId;
   const sectionKey = target.dataset.sectionKey;
@@ -1709,26 +1649,6 @@ function handleBlockFieldInput(target: HTMLElement): boolean {
     const row = block.schema.tableRows[rowIndex];
     if (row && !Number.isNaN(cellIndex)) {
       row.cells[cellIndex] = getInlineEditableText(target);
-      refreshReaderPanels();
-    }
-    return true;
-  }
-
-  if (field === 'table-details-title') {
-    const rowIndex = Number.parseInt(target.dataset.rowIndex ?? '', 10);
-    const row = block.schema.tableRows[rowIndex];
-    if (row) {
-      row.detailsTitle = target instanceof HTMLInputElement ? target.value : getInlineEditableText(target);
-      refreshReaderPanels();
-    }
-    return true;
-  }
-
-  if (field === 'table-clickable' && target instanceof HTMLInputElement) {
-    const rowIndex = Number.parseInt(target.dataset.rowIndex ?? '', 10);
-    const row = block.schema.tableRows[rowIndex];
-    if (row) {
-      row.clickable = target.checked;
       refreshReaderPanels();
     }
     return true;
@@ -2074,16 +1994,17 @@ function renderPassiveEditorBlockContent(sectionKey: string, section: VisualSect
       .join('');
     const body = expanded
       ? alwaysShowStub
-        ? `<div class="expand-stub">${stubHtml}</div><div class="expand-content">${contentHtml}</div>`
-        : `<div class="expand-content">${contentHtml}</div>`
-      : `<div class="expand-stub">${stubHtml}</div>`;
+        ? `<div class="expand-stub-toggle" data-action="toggle-editor-expandable" data-section-key="${escapeAttr(
+            sectionKey
+          )}" data-block-id="${escapeAttr(block.id)}" aria-expanded="true"><div class="expand-stub">${stubHtml}</div></div><div class="expand-content">${contentHtml}</div>`
+        : `<div class="expand-content">${contentHtml}</div><div class="expand-collapse-strip" data-action="toggle-editor-expandable" data-section-key="${escapeAttr(
+            sectionKey
+          )}" data-block-id="${escapeAttr(block.id)}" aria-expanded="true">Collapse</div>`
+      : `<div class="expand-stub-toggle" data-action="toggle-editor-expandable" data-section-key="${escapeAttr(
+          sectionKey
+        )}" data-block-id="${escapeAttr(block.id)}" aria-expanded="false"><div class="expand-stub">${stubHtml}</div></div>`;
 
     return `<div class="expandable-reader">
-      <button
-        type="button"
-        class="expand-toggle"
-        aria-expanded="${expanded ? 'true' : 'false'}"
-      >${expanded ? 'Collapse' : 'Expand'}</button>
       <div class="expandable-reader-body">${body}</div>
     </div>`;
   }
@@ -2329,6 +2250,16 @@ function renderBlockMetaFields(sectionKey: string, block: VisualBlock): string {
   return `
     <div class="schema-meta-stack">
       <label>
+        <span>Custom CSS</span>
+        <textarea
+          rows="2"
+          data-section-key="${escapeAttr(sectionKey)}"
+          data-block-id="${escapeAttr(block.id)}"
+          data-field="block-custom-css"
+          placeholder="margin-top:-0.45rem;"
+        >${escapeHtml(block.schema.customCss)}</textarea>
+      </label>
+      <label>
         <span>Tags</span>
         ${renderTagEditor(
           'block-tags',
@@ -2352,10 +2283,6 @@ function renderBlockMetaFields(sectionKey: string, block: VisualBlock): string {
       </label>
     </div>
   `;
-}
-
-function renderTableDetailsBlocksEditor(sectionKey: string, _parentBlockId: string, _rowIndex: number, row: TableRow): string {
-  return renderTableDetailsEditor(sectionKey, row, getComponentRenderHelpers());
 }
 
 function renderNavigation(sections: VisualSection[]): string {
@@ -2419,7 +2346,7 @@ function renderReaderBlock(section: VisualSection, block: VisualBlock): string {
   const base = resolveBaseComponent(block.schema.component);
   const blockAttrs = `class="reader-block reader-block-${escapeAttr(base)} align-${escapeAttr(block.schema.align)} slot-${escapeAttr(
     block.schema.slot
-  )}" data-component="${escapeAttr(block.schema.component)}"`;
+  )}" data-component="${escapeAttr(block.schema.component)}" style="${escapeAttr(block.schema.customCss)}"`;
   const helpers = getComponentRenderHelpers();
 
   if (base === 'code') {
@@ -2473,38 +2400,6 @@ function renderModal(): string {
           </div>
           <p class="muted">Meta is optional and can be used by readers, indexing, and plugins.</p>
           ${renderBlockMetaFields(state.componentMetaModal.sectionKey, block)}
-        </section>
-      </div>
-    `;
-  }
-
-  if (state.tableDetailsModal) {
-    const block = findBlockByIds(state.tableDetailsModal.sectionKey, state.tableDetailsModal.blockId);
-    const row = block?.schema.tableRows[state.tableDetailsModal.rowIndex];
-    if (!block || !row) {
-      return '';
-    }
-    return `
-      <div id="modalRoot" class="modal-root">
-        <div class="modal-overlay" data-modal-action="close-overlay"></div>
-        <section class="modal-panel">
-          <div class="modal-head">
-            <h3>Row Details Container</h3>
-            <button type="button" data-modal-action="close">Close</button>
-          </div>
-          <p class="muted">This row opens a standard container. Edit the title and body inline here.</p>
-          <label>
-            <span>Container Title</span>
-            <input data-section-key="${escapeAttr(state.tableDetailsModal.sectionKey)}" data-block-id="${escapeAttr(
-      state.tableDetailsModal.blockId
-    )}" data-row-index="${state.tableDetailsModal.rowIndex}" data-field="table-details-title" value="${escapeAttr(row.detailsTitle)}" />
-          </label>
-          ${renderTableDetailsBlocksEditor(
-            state.tableDetailsModal.sectionKey,
-            state.tableDetailsModal.blockId,
-            state.tableDetailsModal.rowIndex,
-            row
-          )}
         </section>
       </div>
     `;
@@ -2689,6 +2584,7 @@ function serializeSection(section: VisualSection, level: number): string {
     component: block.schema.component,
     align: block.schema.align,
     slot: block.schema.slot,
+    customCss: block.schema.customCss,
     codeLanguage: block.schema.codeLanguage,
     containerTitle: block.schema.containerTitle,
     containerBlocks: block.schema.containerBlocks,
@@ -2756,7 +2652,6 @@ function setTemporaryHighlight(sectionId: string): void {
 function closeModal(): void {
   state.modalSectionKey = null;
   state.componentMetaModal = null;
-  state.tableDetailsModal = null;
 }
 
 function closeModalIfTarget(sectionKey: string): void {
@@ -2765,9 +2660,6 @@ function closeModalIfTarget(sectionKey: string): void {
   }
   if (state.componentMetaModal?.sectionKey === sectionKey) {
     state.componentMetaModal = null;
-  }
-  if (state.tableDetailsModal?.sectionKey === sectionKey) {
-    state.tableDetailsModal = null;
   }
 }
 
@@ -2820,6 +2712,24 @@ function createDefaultDocument(): VisualDocument {
   const pluginBlock = createEmptyBlock('plugin', true);
   pluginBlock.schema.pluginUrl = 'https://example.com/plugin';
 
+  const expandableTableHeaderBlock = createDemoTableBlock(['Area', 'Owner', 'Status'], [], true);
+  const expandableTableGroupA = createDemoExpandableTableBlock(
+    ['Area', 'Owner', 'Status'],
+    [
+      ['Parser migration', 'Avery', 'In progress'],
+      ['Schema cleanup', 'Drew', 'Ready'],
+      ['Grid polish', 'Nina', 'Queued'],
+    ],
+    'Delivery Notes',
+    'These rows belong to the first workstream. Expand it to capture rollout notes, risks, and the next checkpoint.'
+  );
+  const expandableTableGroupB = createDemoExpandableTableBlock(
+    ['Area', 'Owner', 'Status'],
+    [['Release cut', 'Mika', 'Blocked']],
+    'Blocker Context',
+    'This final row group shows how a single summary row can expand into the full explanation, decision history, or unblock plan.'
+  );
+
   return {
     extension: '.hvy',
     meta: {
@@ -2837,7 +2747,19 @@ function createDefaultDocument(): VisualDocument {
         expanded: true,
         highlight: false,
         customCss: '',
-        blocks: [textBlock, quoteBlock, codeBlock, expandableBlock, tableBlock, containerBlock, gridBlock, pluginBlock],
+        blocks: [
+          textBlock,
+          quoteBlock,
+          codeBlock,
+          expandableBlock,
+          tableBlock,
+          containerBlock,
+          gridBlock,
+          pluginBlock,
+          expandableTableHeaderBlock,
+          expandableTableGroupA,
+          expandableTableGroupB,
+        ],
         children: [
           {
             key: makeId('section'),
@@ -2906,11 +2828,38 @@ function createDefaultTableRow(columnCount: number): TableRow {
   };
 }
 
+function createDemoTableBlock(columns: string[], rows: string[][], showHeader = true): VisualBlock {
+  const block = createEmptyBlock('table', true);
+  block.schema.tableColumns = columns.join(', ');
+  block.schema.tableShowHeader = showHeader;
+  block.schema.tableRows = rows.map((cells) => ({
+    ...createDefaultTableRow(columns.length),
+    cells: columns.map((_, index) => cells[index] ?? ''),
+  }));
+  return block;
+}
+
+function createDemoExpandableTableBlock(columns: string[], rows: string[][], title: string, body: string): VisualBlock {
+  const block = createEmptyBlock('expandable', true);
+  block.schema.customCss = 'margin-top:-0.45rem;';
+  block.schema.expandableAlwaysShowStub = true;
+  block.schema.expandableExpanded = false;
+  block.schema.expandableStubBlocks = [createDemoTableBlock(columns, rows, false)];
+  const contentBlock = createEmptyBlock('container', true);
+  contentBlock.schema.containerTitle = title;
+  const textBlock = createEmptyBlock('text', true);
+  textBlock.text = body;
+  contentBlock.schema.containerBlocks = [textBlock];
+  block.schema.expandableContentBlocks = [contentBlock];
+  return block;
+}
+
 function defaultBlockSchema(component = 'text'): BlockSchema {
   return {
     component,
     align: 'left',
     slot: 'center',
+    customCss: '',
     codeLanguage: 'ts',
     containerTitle: 'Container',
     containerBlocks: [],
@@ -3033,6 +2982,12 @@ function schemaFromUnknown(value: unknown): BlockSchema {
     component: typeof candidate.component === 'string' ? candidate.component : 'text',
     align: coerceAlign(typeof candidate.align === 'string' ? candidate.align : 'left'),
     slot: coerceSlot(typeof candidate.slot === 'string' ? candidate.slot : 'center'),
+    customCss:
+      typeof candidate.customCss === 'string'
+        ? candidate.customCss
+        : typeof candidate.custom_css === 'string'
+        ? candidate.custom_css
+        : '',
     codeLanguage: typeof candidate.codeLanguage === 'string' ? candidate.codeLanguage : 'ts',
     containerTitle: typeof candidate.containerTitle === 'string' ? candidate.containerTitle : 'Container',
     containerBlocks: Array.isArray(candidate.containerBlocks)

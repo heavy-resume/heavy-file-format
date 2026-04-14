@@ -39,6 +39,7 @@ interface AppState {
   lastHistoryAt: number;
   pendingEditorCenterSectionKey: string | null;
   tableDetailsModal: { sectionKey: string; blockId: string; rowIndex: number } | null;
+  schemaDefDraftByBlock: Record<string, string>;
 }
 
 interface PaneScrollState {
@@ -107,6 +108,7 @@ function createInitialState(): AppState {
     lastHistoryAt: 0,
     pendingEditorCenterSectionKey: null,
     tableDetailsModal: null,
+    schemaDefDraftByBlock: {},
   };
 }
 
@@ -142,7 +144,6 @@ function renderApp(): void {
               ? `<div class="pane-title-row">
                   <h2>Visual Editor</h2>
                   <div class="pane-controls">
-                    <button type="button" class="ghost" data-action="add-root-section">Add Section</button>
                     <button id="toggleMetaBtn" type="button" class="ghost">${state.metaPanelOpen ? 'Hide Meta' : 'Show Meta'}</button>
                   </div>
                 </div>
@@ -226,7 +227,6 @@ function bindUi(): void {
   const downloadBtn = app.querySelector<HTMLButtonElement>('#downloadBtn');
   const downloadName = app.querySelector<HTMLInputElement>('#downloadName');
   const toggleMetaBtn = app.querySelector<HTMLButtonElement>('#toggleMetaBtn');
-  const editorTree = app.querySelector<HTMLDivElement>('#editorTree');
   const readerDocument = app.querySelector<HTMLDivElement>('#readerDocument');
   const readerNav = app.querySelector<HTMLDivElement>('#readerNav');
 
@@ -344,7 +344,7 @@ function bindUi(): void {
       return;
     }
 
-    if (field === 'def-description' && target instanceof HTMLInputElement) {
+    if (field === 'def-description' && (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) {
       const idx = Number.parseInt(target.dataset.defIndex ?? '', 10);
       const defs = getComponentDefs();
       if (!Number.isNaN(idx) && defs[idx]) {
@@ -355,12 +355,36 @@ function bindUi(): void {
       return;
     }
 
+    if (field === 'schema-def-name' && target instanceof HTMLInputElement) {
+      const blockId = target.dataset.blockId;
+      if (blockId) {
+        state.schemaDefDraftByBlock[blockId] = target.value;
+      }
+      return;
+    }
+
     if (field === 'row-details-new-component-type' && target instanceof HTMLSelectElement) {
       return;
     }
 
     if (field === 'container-new-component-type' && target instanceof HTMLSelectElement) {
       const key = target.dataset.containerKey;
+      if (key) {
+        state.addComponentBySection[key] = target.value;
+      }
+      return;
+    }
+
+    if (field === 'expandable-stub-new-component-type' && target instanceof HTMLSelectElement) {
+      const key = target.dataset.expandableKey;
+      if (key) {
+        state.addComponentBySection[key] = target.value;
+      }
+      return;
+    }
+
+    if (field === 'expandable-content-new-component-type' && target instanceof HTMLSelectElement) {
+      const key = target.dataset.expandableKey;
       if (key) {
         state.addComponentBySection[key] = target.value;
       }
@@ -424,6 +448,59 @@ function bindUi(): void {
       return;
     }
 
+    if (action === 'save-component-def') {
+      const sectionKey = actionButton.dataset.sectionKey;
+      const blockId = actionButton.dataset.blockId;
+      if (!sectionKey || !blockId) {
+        return;
+      }
+      const block = findBlockByIds(sectionKey, blockId);
+      if (!block) {
+        return;
+      }
+      const draftName = (state.schemaDefDraftByBlock[blockId] ?? block.schema.component).trim();
+      if (!draftName) {
+        return;
+      }
+      recordHistory(`save-def:${blockId}`);
+      const defs = getComponentDefs();
+      const existing = defs.find((def) => def.name === draftName);
+      const nextDef = {
+        name: draftName,
+        baseType: resolveBaseComponent(block.schema.component),
+        tags: block.schema.tags,
+        description: block.schema.description,
+      };
+      if (existing) {
+        existing.baseType = nextDef.baseType;
+        existing.tags = nextDef.tags;
+        existing.description = nextDef.description;
+      } else {
+        defs.push(nextDef);
+      }
+      state.document.meta.component_defs = defs;
+      state.schemaDefDraftByBlock[blockId] = draftName;
+      block.schema.component = draftName;
+      renderApp();
+      refreshReaderPanels();
+      return;
+    }
+
+    if (action === 'focus-schema-component') {
+      if (target.closest('select, input, button, textarea, label')) {
+        return;
+      }
+      const select = actionButton.querySelector<HTMLSelectElement>('[data-field="block-component"]');
+      select?.focus();
+      select?.click();
+      return;
+    }
+
+    if (action === 'remove-tag') {
+      handleRemoveTag(actionButton);
+      return;
+    }
+
     if (action === 'add-template-field') {
       recordHistory();
       const field = actionButton.dataset.templateField;
@@ -440,14 +517,6 @@ function bindUi(): void {
       return;
     }
 
-    if (action === 'add-root-section') {
-      recordHistory();
-      const section = createEmptySection(1, 'container', false);
-      state.document.sections.push(section);
-      state.pendingEditorCenterSectionKey = section.key;
-      renderApp();
-      return;
-    }
   });
 
   if (!shortcutsBound) {
@@ -518,9 +587,9 @@ function bindUi(): void {
       return;
     }
 
-    if (action === 'spawn-root-ghost') {
+    if (action === 'add-top-level-section') {
       recordHistory();
-      const component = state.addComponentBySection.__root__ ?? 'text';
+      const component = state.addComponentBySection.__top_level__ ?? 'container';
       const section = createEmptySection(1, component, false);
       state.document.sections.push(section);
       state.pendingEditorCenterSectionKey = section.key;
@@ -584,7 +653,7 @@ function bindUi(): void {
 
     if (action === 'add-block') {
       recordHistory();
-      const component = state.addComponentBySection[section.key] ?? 'text';
+      const component = state.addComponentBySection[section.key] ?? 'container';
       section.blocks.push(createEmptyBlock(component));
       renderApp();
       return;
@@ -615,6 +684,32 @@ function bindUi(): void {
       return;
     }
 
+    if (action === 'add-expandable-stub-block' && blockId) {
+      recordHistory();
+      const block = findBlockByIds(sectionKey, blockId);
+      if (!block) {
+        return;
+      }
+      ensureExpandableBlocks(block);
+      const addKey = `expandable-stub:${sectionKey}:${blockId}`;
+      block.schema.expandableStubBlocks.push(createEmptyBlock(state.addComponentBySection[addKey] ?? 'container'));
+      renderApp();
+      return;
+    }
+
+    if (action === 'add-expandable-content-block' && blockId) {
+      recordHistory();
+      const block = findBlockByIds(sectionKey, blockId);
+      if (!block) {
+        return;
+      }
+      ensureExpandableBlocks(block);
+      const addKey = `expandable-content:${sectionKey}:${blockId}`;
+      block.schema.expandableContentBlocks.push(createEmptyBlock(state.addComponentBySection[addKey] ?? 'container'));
+      renderApp();
+      return;
+    }
+
     if (action === 'toggle-schema' && blockId) {
       recordHistory();
       const block = resolveBlockContext(actionButton)?.block ?? null;
@@ -641,9 +736,6 @@ function bindUi(): void {
     if (action === 'remove-block' && blockId) {
       recordHistory();
       removeBlockFromList(section.blocks, blockId);
-      if (section.blocks.length === 0) {
-        section.blocks.push(createEmptyBlock());
-      }
       renderApp();
       return;
     }
@@ -764,9 +856,6 @@ function bindUi(): void {
     if (action === 'realize-ghost') {
       recordHistory();
       section.isGhost = false;
-      if (section.blocks.length === 0) {
-        section.blocks.push(createEmptyBlock());
-      }
       renderApp();
       return;
     }
@@ -778,6 +867,9 @@ function bindUi(): void {
 
   app.addEventListener('keydown', (event) => {
     const target = event.target as HTMLElement;
+    if (target instanceof HTMLInputElement && handleTagEditorKeydown(event, target)) {
+      return;
+    }
     if (target.dataset.inlineText === 'true' && event.key === 'Enter') {
       event.preventDefault();
       return;
@@ -785,7 +877,6 @@ function bindUi(): void {
 
     if (
       target.dataset.field !== 'block-rich' &&
-      target.dataset.field !== 'block-expandable-stub-rich' &&
       target.dataset.field !== 'block-grid-rich' &&
       target.dataset.field !== 'table-details-rich'
     ) {
@@ -818,6 +909,9 @@ function bindUi(): void {
 
   app.addEventListener('input', (event) => {
     const target = event.target as HTMLElement;
+    if (handleTagEditorInput(target)) {
+      return;
+    }
     const sectionKey = target.dataset.sectionKey;
     if (!sectionKey) {
       return;
@@ -887,7 +981,7 @@ function bindUi(): void {
       return;
     }
 
-    if (field === 'block-description' && target instanceof HTMLInputElement) {
+    if (field === 'block-description' && (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) {
       const context = resolveBlockContext(target);
       if (!context) {
         return;
@@ -910,6 +1004,13 @@ function bindUi(): void {
     }
     if (handleBlockFieldInput(target)) {
       return;
+    }
+  });
+
+  app.addEventListener('focusout', (event) => {
+    const target = event.target as HTMLElement;
+    if (target instanceof HTMLInputElement) {
+      commitTagEditorDraft(target);
     }
   });
 
@@ -1309,6 +1410,14 @@ function findBlockInList(blocks: VisualBlock[], blockId: string): VisualBlock | 
     if (nestedContainer) {
       return nestedContainer;
     }
+    const nestedExpandableStub = findBlockInList(block.schema.expandableStubBlocks ?? [], blockId);
+    if (nestedExpandableStub) {
+      return nestedExpandableStub;
+    }
+    const nestedExpandableContent = findBlockInList(block.schema.expandableContentBlocks ?? [], blockId);
+    if (nestedExpandableContent) {
+      return nestedExpandableContent;
+    }
     for (const row of block.schema.tableRows ?? []) {
       const nestedDetails = findBlockInList(row.detailsBlocks ?? [], blockId);
       if (nestedDetails) {
@@ -1327,6 +1436,12 @@ function removeBlockFromList(blocks: VisualBlock[], blockId: string): boolean {
   }
   for (const block of blocks) {
     if (removeBlockFromList(block.schema.containerBlocks ?? [], blockId)) {
+      return true;
+    }
+    if (removeBlockFromList(block.schema.expandableStubBlocks ?? [], blockId)) {
+      return true;
+    }
+    if (removeBlockFromList(block.schema.expandableContentBlocks ?? [], blockId)) {
       return true;
     }
     for (const row of block.schema.tableRows ?? []) {
@@ -1465,20 +1580,14 @@ function handleBlockFieldInput(target: HTMLElement): boolean {
     return true;
   }
 
-  if (field === 'block-expandable-stub' && target instanceof HTMLInputElement) {
-    block.schema.expandableStub = target.value;
-    refreshReaderPanels();
-    return true;
-  }
-
-  if (field === 'block-expandable-stub-rich') {
-    block.schema.expandableStub = normalizeMarkdownLists(turndown.turndown(target.innerHTML));
-    refreshReaderPanels();
-    return true;
-  }
-
   if (field === 'block-expandable-always' && target instanceof HTMLInputElement) {
     block.schema.expandableAlwaysShowStub = target.checked;
+    refreshReaderPanels();
+    return true;
+  }
+
+  if (field === 'table-show-header' && target instanceof HTMLInputElement) {
+    block.schema.tableShowHeader = target.checked;
     refreshReaderPanels();
     return true;
   }
@@ -1540,6 +1649,148 @@ function handleBlockFieldInput(target: HTMLElement): boolean {
   return false;
 }
 
+function handleTagEditorInput(target: HTMLElement): boolean {
+  if (!(target instanceof HTMLInputElement)) {
+    return false;
+  }
+  const field = target.dataset.field;
+  if (field !== 'block-tags-input' && field !== 'def-tags-input') {
+    return false;
+  }
+
+  if (!target.value.includes(',')) {
+    return false;
+  }
+
+  const parts = target.value.split(',');
+  const draft = parts.pop() ?? '';
+  const pendingTags = parts.map((part) => part.trim()).filter(Boolean);
+  if (pendingTags.length === 0) {
+    target.value = draft;
+    return true;
+  }
+  appendTagsFromInput(target, pendingTags, draft);
+  return true;
+}
+
+function handleTagEditorKeydown(event: KeyboardEvent, target: HTMLInputElement): boolean {
+  const field = target.dataset.field;
+  if (field !== 'block-tags-input' && field !== 'def-tags-input') {
+    return false;
+  }
+
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    commitTagEditorDraft(target);
+    return true;
+  }
+
+  if (event.key === 'Backspace' && target.value.trim().length === 0) {
+    const currentTags = getTagState(target);
+    if (currentTags.length === 0) {
+      return false;
+    }
+    currentTags.pop();
+    setTagState(target, currentTags);
+    syncTagEditorUi(target, currentTags, '');
+    event.preventDefault();
+    return true;
+  }
+
+  return false;
+}
+
+function commitTagEditorDraft(target: HTMLInputElement): void {
+  const field = target.dataset.field;
+  if (field !== 'block-tags-input' && field !== 'def-tags-input') {
+    return;
+  }
+  const draft = target.value.trim();
+  if (!draft) {
+    return;
+  }
+  appendTagsFromInput(target, [draft], '');
+}
+
+function appendTagsFromInput(target: HTMLInputElement, nextTags: string[], nextDraft: string): void {
+  const currentTags = getTagState(target);
+  const merged = serializeTags([...currentTags, ...nextTags]);
+  const parsed = parseTags(merged);
+  setTagState(target, parsed);
+  syncTagEditorUi(target, parsed, nextDraft);
+}
+
+function handleRemoveTag(actionButton: HTMLElement): void {
+  const field = actionButton.dataset.tagField;
+  const tagIndex = Number.parseInt(actionButton.dataset.tagIndex ?? '', 10);
+  if ((field !== 'block-tags' && field !== 'def-tags') || Number.isNaN(tagIndex)) {
+    return;
+  }
+  const currentTags = getTagState(actionButton);
+  if (!currentTags[tagIndex]) {
+    return;
+  }
+  currentTags.splice(tagIndex, 1);
+  setTagState(actionButton, currentTags);
+  const editor = actionButton.closest<HTMLElement>('[data-tag-editor]');
+  const input = editor?.querySelector<HTMLInputElement>('.tag-editor-input');
+  if (input) {
+    syncTagEditorUi(input, currentTags, input.value);
+  }
+}
+
+function getTagState(target: HTMLElement): string[] {
+  const field = target.dataset.field === 'block-tags-input' || target.dataset.tagField === 'block-tags' ? 'block-tags' : 'def-tags';
+  if (field === 'block-tags') {
+    const context = resolveBlockContext(target);
+    return context ? parseTags(context.block.schema.tags) : [];
+  }
+  const defIndex = Number.parseInt(target.dataset.defIndex ?? '', 10);
+  const defs = getComponentDefs();
+  if (Number.isNaN(defIndex) || !defs[defIndex]) {
+    return [];
+  }
+  return parseTags(defs[defIndex].tags ?? '');
+}
+
+function setTagState(target: HTMLElement, tags: string[]): void {
+  const value = serializeTags(tags);
+  const field = target.dataset.field === 'block-tags-input' || target.dataset.tagField === 'block-tags' ? 'block-tags' : 'def-tags';
+  if (field === 'block-tags') {
+    const context = resolveBlockContext(target);
+    if (!context) {
+      return;
+    }
+    recordHistory(`tags:${context.block.id}`);
+    context.block.schema.tags = value;
+    refreshReaderPanels();
+    return;
+  }
+  const defIndex = Number.parseInt(target.dataset.defIndex ?? '', 10);
+  const defs = getComponentDefs();
+  if (Number.isNaN(defIndex) || !defs[defIndex]) {
+    return;
+  }
+  recordHistory(`def:${defIndex}:tags`);
+  defs[defIndex].tags = value;
+  state.document.meta.component_defs = defs;
+}
+
+function syncTagEditorUi(target: HTMLInputElement, tags: string[], draft: string): void {
+  target.value = draft;
+  const editor = target.closest<HTMLElement>('[data-tag-editor]');
+  const pillList = editor?.querySelector<HTMLElement>('.tag-pill-list');
+  if (!editor || !pillList) {
+    return;
+  }
+  const field = target.dataset.field === 'block-tags-input' ? 'block-tags' : 'def-tags';
+  pillList.innerHTML = renderTagPills(tags, field, {
+    sectionKey: target.dataset.sectionKey,
+    blockId: target.dataset.blockId,
+    defIndex: target.dataset.defIndex ? Number.parseInt(target.dataset.defIndex, 10) : undefined,
+  });
+}
+
 function ensureContainerBlocks(block: VisualBlock): void {
   if (!Array.isArray(block.schema.containerBlocks)) {
     block.schema.containerBlocks = [];
@@ -1548,6 +1799,27 @@ function ensureContainerBlocks(block: VisualBlock): void {
     const migrated = createEmptyBlock('text', true);
     migrated.text = block.text;
     block.schema.containerBlocks.push(migrated);
+    block.text = '';
+  }
+}
+
+function ensureExpandableBlocks(block: VisualBlock): void {
+  if (!Array.isArray(block.schema.expandableStubBlocks)) {
+    block.schema.expandableStubBlocks = [];
+  }
+  if (!Array.isArray(block.schema.expandableContentBlocks)) {
+    block.schema.expandableContentBlocks = [];
+  }
+  if (block.schema.expandableStubBlocks.length === 0 && block.schema.expandableStub.trim().length > 0) {
+    const migrated = createEmptyBlock(resolveBaseComponent(block.schema.expandableStubComponent || 'text'), true);
+    migrated.text = block.schema.expandableStub;
+    block.schema.expandableStubBlocks.push(migrated);
+    block.schema.expandableStub = '';
+  }
+  if (block.schema.expandableContentBlocks.length === 0 && block.text.trim().length > 0) {
+    const migrated = createEmptyBlock(resolveBaseComponent(block.schema.expandableContentComponent || 'text'), true);
+    migrated.text = block.text;
+    block.schema.expandableContentBlocks.push(migrated);
     block.text = '';
   }
 }
@@ -1573,17 +1845,17 @@ function renderSectionEditorTree(sections: VisualSection[]): string {
   const sectionCards = sections.map((section) => renderEditorSection(section)).join('');
   return `
     ${renderTemplateGhosts()}
-    <article class="ghost-section-card add-ghost" data-action="spawn-root-ghost" data-section-key="__root__">
+    ${sectionCards}
+    <article class="ghost-section-card add-ghost" data-action="add-top-level-section" data-section-key="__top_level__">
       <div class="ghost-plus-big"><span>+</span></div>
-      <div class="ghost-label">Add Root Section</div>
+      <div class="ghost-label">Add Section</div>
       <label class="ghost-component-picker">
         <span>Starting Component</span>
-        <select data-field="new-component-type" data-section-key="__root__">
-          ${renderComponentOptions(state.addComponentBySection.__root__ ?? 'container')}
+        <select data-field="new-component-type" data-section-key="__top_level__">
+          ${renderComponentOptions(state.addComponentBySection.__top_level__ ?? 'container')}
         </select>
       </label>
     </article>
-    ${sectionCards}
   `;
 }
 
@@ -1664,7 +1936,7 @@ function renderEditorSection(section: VisualSection): string {
           <label class="ghost-component-picker">
             <span>Component</span>
             <select data-field="new-component-type" data-section-key="${escapeAttr(section.key)}">
-              ${renderComponentOptions(state.addComponentBySection[section.key] ?? 'text')}
+              ${renderComponentOptions(state.addComponentBySection[section.key] ?? 'container')}
             </select>
           </label>
         </article>
@@ -1686,7 +1958,7 @@ function renderEditorBlock(sectionKey: string, block: VisualBlock): string {
   return `
     <div class="editor-block">
       <div class="editor-block-head">
-        <strong>${escapeHtml(component)} component</strong>
+        <strong class="editor-block-title">${escapeHtml(component)}</strong>
         <div class="editor-actions">
           <button type="button" class="ghost" data-action="open-component-meta" data-section-key="${escapeAttr(
             sectionKey
@@ -1767,7 +2039,7 @@ function renderRichToolbar(
         <button type="button" data-rich-action="heading-3"${fieldAttr}${gridAttr}${rowAttr} data-section-key="${escapeAttr(sectionKey)}" data-block-id="${escapeAttr(blockId)}" title="Heading 3">H3</button>
         <button type="button" data-rich-action="heading-4"${fieldAttr}${gridAttr}${rowAttr} data-section-key="${escapeAttr(sectionKey)}" data-block-id="${escapeAttr(blockId)}" title="Heading 4">H4</button>
         <button type="button" data-rich-action="bold"${fieldAttr}${gridAttr}${rowAttr} data-section-key="${escapeAttr(sectionKey)}" data-block-id="${escapeAttr(blockId)}" title="Bold (Ctrl/Cmd+B)"><strong>B</strong></button>
-        <button type="button" data-rich-action="italic"${fieldAttr}${gridAttr}${rowAttr} data-section-key="${escapeAttr(sectionKey)}" data-block-id="${escapeAttr(blockId)}" title="Italic (Ctrl/Cmd+I)"><em>I</em></button>
+        <button type="button" data-rich-action="italic"${fieldAttr}${gridAttr}${rowAttr} data-section-key="${escapeAttr(sectionKey)}" data-block-id="${escapeAttr(blockId)}" title="Italic (Ctrl/Cmd+I)">Italic</button>
         <button type="button" data-rich-action="list"${fieldAttr}${gridAttr}${rowAttr} data-section-key="${escapeAttr(sectionKey)}" data-block-id="${escapeAttr(blockId)}" title="Bullet List">List</button>
         <button type="button" data-rich-action="link"${fieldAttr}${gridAttr}${rowAttr} data-section-key="${escapeAttr(sectionKey)}" data-block-id="${escapeAttr(blockId)}" title="Link (Ctrl/Cmd+K)">Link</button>
       </div>
@@ -1868,11 +2140,14 @@ function renderMetaPanel(): string {
               </label>
               <label>
                 <span>Default Tags</span>
-                <input data-field="def-tags" data-def-index="${index}" value="${escapeAttr(def.tags ?? '')}" />
+                ${renderTagEditor('def-tags', def.tags ?? '', {
+                  defIndex: index,
+                  placeholder: 'Add a default tag',
+                })}
               </label>
               <label>
                 <span>Description</span>
-                <input data-field="def-description" data-def-index="${index}" value="${escapeAttr(def.description ?? '')}" />
+                <textarea rows="3" data-field="def-description" data-def-index="${index}">${escapeHtml(def.description ?? '')}</textarea>
               </label>
               <button type="button" class="danger" data-action="remove-component-def" data-def-index="${index}">Remove</button>
             </article>`
@@ -1901,6 +2176,7 @@ function renderBlockContentEditor(sectionKey: string, block: VisualBlock): strin
     return renderGridEditor(sectionKey, block, helpers);
   }
   if (component === 'expandable') {
+    ensureExpandableBlocks(block);
     return renderExpandableEditor(sectionKey, block, helpers);
   }
   if (component === 'table') {
@@ -1910,28 +2186,74 @@ function renderBlockContentEditor(sectionKey: string, block: VisualBlock): strin
 }
 
 function renderBlockSchemaEditor(sectionKey: string, block: VisualBlock): string {
+  const draftName =
+    state.schemaDefDraftByBlock[block.id] ??
+    (isBuiltinComponent(block.schema.component) ? '' : block.schema.component);
   return `
-    <div class="editor-grid schema-grid">
-      <article class="ghost-section-card add-ghost">
-        <div class="ghost-plus-big"><span>+</span></div>
-        <div class="ghost-label">Component: ${escapeHtml(block.schema.component)}</div>
-        <label class="ghost-component-picker">
-          <span>Component</span>
-          <select data-section-key="${escapeAttr(sectionKey)}" data-block-id="${escapeAttr(block.id)}" data-field="block-component">
-            ${renderComponentOptions(block.schema.component)}
-          </select>
+    <div class="schema-editor">
+      <section class="schema-save-card">
+        <strong>Reusable Component</strong>
+        <label>
+          <span>Name</span>
+          <input
+            data-field="schema-def-name"
+            data-block-id="${escapeAttr(block.id)}"
+            value="${escapeAttr(draftName)}"
+            placeholder="Callout, Hero, Spec Table..."
+          />
         </label>
-      </article>
+        <button
+          type="button"
+          class="secondary"
+          data-action="save-component-def"
+          data-section-key="${escapeAttr(sectionKey)}"
+          data-block-id="${escapeAttr(block.id)}"
+        >Save To Dropdown</button>
+        <div class="muted">Saves this base type with its default tags and description as a reusable component.</div>
+      </section>
+      <div class="editor-grid schema-grid">
+        <article class="ghost-section-card add-ghost" data-action="focus-schema-component" data-section-key="${escapeAttr(
+          sectionKey
+        )}" data-block-id="${escapeAttr(block.id)}">
+          <div class="ghost-plus-big"><span>+</span></div>
+          <div class="ghost-label">Component: ${escapeHtml(block.schema.component)}</div>
+          <label class="ghost-component-picker">
+            <span>Component</span>
+            <select data-section-key="${escapeAttr(sectionKey)}" data-block-id="${escapeAttr(block.id)}" data-field="block-component">
+              ${renderComponentOptions(block.schema.component)}
+            </select>
+          </label>
+        </article>
+      </div>
+      ${renderBlockMetaFields(sectionKey, block)}
+      <div class="schema-content-shell">
+        ${renderBlockContentEditor(sectionKey, block)}
+      </div>
+    </div>
+  `;
+}
+
+function renderBlockMetaFields(sectionKey: string, block: VisualBlock): string {
+  return `
+    <div class="schema-meta-stack">
       <label>
-        <span>Placement Slot</span>
-        <select data-section-key="${escapeAttr(sectionKey)}" data-block-id="${escapeAttr(block.id)}" data-field="block-slot">
-          ${renderOption('left', block.schema.slot)}
-          ${renderOption('center', block.schema.slot)}
-          ${renderOption('right', block.schema.slot)}
-        </select>
+        <span>Tags</span>
+        ${renderTagEditor('block-tags', block.schema.tags, {
+          sectionKey,
+          blockId: block.id,
+          placeholder: 'Add a tag',
+        })}
+      </label>
+      <label>
+        <span>Description</span>
+        <textarea
+          rows="3"
+          data-section-key="${escapeAttr(sectionKey)}"
+          data-block-id="${escapeAttr(block.id)}"
+          data-field="block-description"
+        >${escapeHtml(block.schema.description)}</textarea>
       </label>
     </div>
-    <div class="muted">Use the Meta button to edit tags and description.</div>
   `;
 }
 
@@ -2017,6 +2339,7 @@ function renderReaderBlock(section: VisualSection, block: VisualBlock): string {
     return `<div ${blockAttrs}>${renderGridReader(section, block, helpers)}</div>`;
   }
   if (base === 'expandable') {
+    ensureExpandableBlocks(block);
     return `<div ${blockAttrs}>${renderExpandableReader(section, block, helpers)}</div>`;
   }
   if (base === 'table') {
@@ -2052,20 +2375,7 @@ function renderModal(): string {
             <button type="button" data-modal-action="close">Close</button>
           </div>
           <p class="muted">Meta is optional and can be used by readers, indexing, and plugins.</p>
-          <div class="editor-grid">
-            <label>
-              <span>Tags (comma-separated)</span>
-              <input data-section-key="${escapeAttr(state.componentMetaModal.sectionKey)}" data-block-id="${escapeAttr(
-      state.componentMetaModal.blockId
-    )}" data-field="block-tags" value="${escapeAttr(block.schema.tags)}" />
-            </label>
-            <label>
-              <span>Description</span>
-              <input data-section-key="${escapeAttr(state.componentMetaModal.sectionKey)}" data-block-id="${escapeAttr(
-      state.componentMetaModal.blockId
-    )}" data-field="block-description" value="${escapeAttr(block.schema.description)}" />
-            </label>
-          </div>
+          ${renderBlockMetaFields(state.componentMetaModal.sectionKey, block)}
         </section>
       </div>
     `;
@@ -2244,7 +2554,7 @@ function parseBlocks(contentMarkdown: string, sectionMeta: JsonObject): VisualBl
   flush();
 
   if (blocks.length === 0) {
-    return [createEmptyBlock()];
+    return [];
   }
 
   return blocks.map((block, index) => ({
@@ -2293,9 +2603,12 @@ function serializeSection(section: VisualSection, level: number): string {
     expandableStubComponent: block.schema.expandableStubComponent,
     expandableContentComponent: block.schema.expandableContentComponent,
     expandableStub: block.schema.expandableStub,
+    expandableStubBlocks: block.schema.expandableStubBlocks,
     expandableAlwaysShowStub: block.schema.expandableAlwaysShowStub,
     expandableExpanded: block.schema.expandableExpanded,
+    expandableContentBlocks: block.schema.expandableContentBlocks,
     tableColumns: block.schema.tableColumns,
+    tableShowHeader: block.schema.tableShowHeader,
     tableRows: block.schema.tableRows,
   }));
 
@@ -2373,8 +2686,9 @@ function createDefaultDocument(): VisualDocument {
   codeBlock.text = "export const demo = 'HVY';";
 
   const expandableBlock = createEmptyBlock('expandable', true);
-  expandableBlock.schema.expandableStub = 'Stub component preview content';
-  expandableBlock.text = 'Expanded component content';
+  expandableBlock.schema.expandableStubBlocks = [createEmptyBlock('table', true)];
+  expandableBlock.schema.expandableContentBlocks = [createEmptyBlock('container', true)];
+  expandableBlock.schema.expandableContentBlocks[0]!.schema.containerTitle = 'Expanded Container';
 
   const tableBlock = createEmptyBlock('table', true);
   tableBlock.schema.tableColumns = 'Feature, Status';
@@ -2454,7 +2768,7 @@ function createDefaultDocument(): VisualDocument {
   };
 }
 
-function createEmptySection(level: number, component = 'text', isGhost = false): VisualSection {
+function createEmptySection(level: number, component = 'container', isGhost = false): VisualSection {
   return {
     key: makeId('section'),
     customId: '',
@@ -2465,7 +2779,7 @@ function createEmptySection(level: number, component = 'text', isGhost = false):
     expanded: true,
     highlight: false,
     customCss: '',
-    blocks: [createEmptyBlock(component)],
+    blocks: component ? [createEmptyBlock(component)] : [],
     children: [],
   };
 }
@@ -2511,10 +2825,13 @@ function defaultBlockSchema(component = 'text'): BlockSchema {
     pluginUrl: '',
     expandableStubComponent: 'container',
     expandableContentComponent: 'container',
-    expandableStub: 'Read more',
+    expandableStub: '',
+    expandableStubBlocks: [],
     expandableAlwaysShowStub: true,
     expandableExpanded: false,
+    expandableContentBlocks: [],
     tableColumns: 'Column 1, Column 2',
+    tableShowHeader: true,
     tableRows: [],
   };
 }
@@ -2630,12 +2947,21 @@ function schemaFromUnknown(value: unknown): BlockSchema {
     description: typeof candidate.description === 'string' ? candidate.description : '',
     metaOpen: candidate.metaOpen === true,
     pluginUrl: typeof candidate.pluginUrl === 'string' ? candidate.pluginUrl : '',
-    expandableStubComponent: 'container',
-    expandableContentComponent: 'container',
-    expandableStub: typeof candidate.expandableStub === 'string' ? candidate.expandableStub : 'Read more',
+    expandableStubComponent:
+      typeof candidate.expandableStubComponent === 'string' ? candidate.expandableStubComponent : 'container',
+    expandableContentComponent:
+      typeof candidate.expandableContentComponent === 'string' ? candidate.expandableContentComponent : 'container',
+    expandableStub: typeof candidate.expandableStub === 'string' ? candidate.expandableStub : '',
+    expandableStubBlocks: Array.isArray(candidate.expandableStubBlocks)
+      ? candidate.expandableStubBlocks.map((block) => parseVisualBlock(block))
+      : [],
     expandableAlwaysShowStub: candidate.expandableAlwaysShowStub !== false,
     expandableExpanded: candidate.expandableExpanded === true,
+    expandableContentBlocks: Array.isArray(candidate.expandableContentBlocks)
+      ? candidate.expandableContentBlocks.map((block) => parseVisualBlock(block))
+      : [],
     tableColumns: typeof candidate.tableColumns === 'string' ? candidate.tableColumns : 'Column 1, Column 2',
+    tableShowHeader: candidate.tableShowHeader !== false,
     tableRows: rows.map((row) => {
       const mapped = row as JsonObject;
       return {
@@ -2952,6 +3278,74 @@ function ensureGridItems(schema: BlockSchema): void {
   }));
 }
 
+function renderTagEditor(
+  field: 'block-tags' | 'def-tags',
+  value: string,
+  options: { sectionKey?: string; blockId?: string; defIndex?: number; placeholder?: string }
+): string {
+  const tags = parseTags(value);
+  const contextAttrs = [
+    options.sectionKey ? `data-section-key="${escapeAttr(options.sectionKey)}"` : '',
+    options.blockId ? `data-block-id="${escapeAttr(options.blockId)}"` : '',
+    typeof options.defIndex === 'number' ? `data-def-index="${String(options.defIndex)}"` : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+  return `
+    <div class="tag-editor" data-tag-editor>
+      <div class="tag-pill-list">${renderTagPills(tags, field, options)}</div>
+      <input
+        class="tag-editor-input"
+        ${contextAttrs}
+        data-field="${escapeAttr(`${field}-input`)}"
+        placeholder="${escapeAttr(options.placeholder ?? 'Add a tag')}"
+      />
+    </div>
+  `;
+}
+
+function renderTagPills(
+  tags: string[],
+  field: 'block-tags' | 'def-tags',
+  options: { sectionKey?: string; blockId?: string; defIndex?: number }
+): string {
+  return tags
+    .map((tag, index) => {
+      const contextAttrs = [
+        options.sectionKey ? `data-section-key="${escapeAttr(options.sectionKey)}"` : '',
+        options.blockId ? `data-block-id="${escapeAttr(options.blockId)}"` : '',
+        typeof options.defIndex === 'number' ? `data-def-index="${String(options.defIndex)}"` : '',
+      ]
+        .filter(Boolean)
+        .join(' ');
+      return `<span class="tag-pill">
+        <span>${escapeHtml(tag)}</span>
+        <button type="button" class="tag-pill-remove" data-action="remove-tag" data-tag-field="${escapeAttr(field)}" data-tag-index="${String(
+          index
+        )}" ${contextAttrs} aria-label="Remove ${escapeAttr(tag)}">×</button>
+      </span>`;
+    })
+    .join('');
+}
+
+function parseTags(value: string): string[] {
+  const seen = new Set<string>();
+  return value
+    .split(',')
+    .map((tag) => tag.trim())
+    .filter((tag) => {
+      if (!tag || seen.has(tag.toLowerCase())) {
+        return false;
+      }
+      seen.add(tag.toLowerCase());
+      return true;
+    });
+}
+
+function serializeTags(tags: string[]): string {
+  return parseTags(tags.join(', ')).join(', ');
+}
+
 interface ComponentDefinition {
   name: string;
   baseType: string;
@@ -2975,6 +3369,10 @@ function getComponentOptions(): string[] {
   return [...new Set([...builtins, ...custom])];
 }
 
+function isBuiltinComponent(componentName: string): boolean {
+  return ['text', 'quote', 'code', 'expandable', 'table', 'container', 'grid', 'plugin'].includes(componentName);
+}
+
 function renderComponentOptions(selected: string): string {
   return getComponentOptions().map((option) => renderOption(option, selected)).join('');
 }
@@ -2992,9 +3390,6 @@ function applyComponentDefaults(schema: BlockSchema, componentName: string): voi
   const base = resolveBaseComponent(componentName);
   if (base === 'table' && schema.tableRows.length === 0) {
     schema.tableRows.push(createDefaultTableRow(getTableColumns(schema).length));
-  }
-  if (base === 'expandable' && !schema.expandableStub) {
-    schema.expandableStub = 'Read more';
   }
   if (base === 'grid') {
     ensureGridItems(schema);

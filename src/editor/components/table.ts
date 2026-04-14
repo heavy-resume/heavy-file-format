@@ -11,8 +11,8 @@ function renderTableRowEditor(
 ): string {
   const safeColumns = columns.length > 0 ? columns : ['Column 1', 'Column 2'];
   return `
-    <tr class="table-row-editor" data-table-row-drop="true" data-row-index="${rowIndex}">
-      <td class="table-row-utility">
+    <tr class="table-row-editor table-row-editor-main" data-table-row-drop="true" data-row-index="${rowIndex}">
+      <td class="table-row-utility" rowspan="2">
         <button
           type="button"
           class="table-drag-handle"
@@ -42,15 +42,17 @@ function renderTableRowEditor(
           </td>`
         )
         .join('')}
-      <td class="table-more-cell">
-        <button type="button" class="ghost more-details-button" data-action="open-table-details" data-section-key="${helpers.escapeAttr(
-          sectionKey
-        )}" data-block-id="${helpers.escapeAttr(blockId)}" data-row-index="${rowIndex}">More details</button>
-      </td>
-      <td class="table-row-utility table-row-remove-cell">
+      <td class="table-row-utility table-row-remove-cell" rowspan="2">
         <button type="button" class="danger remove-x" data-action="remove-table-row" data-section-key="${helpers.escapeAttr(
           sectionKey
         )}" data-block-id="${helpers.escapeAttr(blockId)}" data-row-index="${rowIndex}" title="Remove row">×</button>
+      </td>
+    </tr>
+    <tr class="table-row-editor table-row-editor-details">
+      <td class="table-row-details-cell" colspan="${safeColumns.length}">
+        <button type="button" class="ghost more-details-button" data-action="open-table-details" data-section-key="${helpers.escapeAttr(
+          sectionKey
+        )}" data-block-id="${helpers.escapeAttr(blockId)}" data-row-index="${rowIndex}">More details</button>
       </td>
     </tr>
   `;
@@ -64,6 +66,16 @@ export const renderTableEditor: ComponentEditorRenderer = (sectionKey, block, he
         <strong>Inline Table Editor</strong>
         <span>Rename headers, edit cells in place, and drag handles to reorder.</span>
       </div>
+      <label class="table-header-toggle">
+        <input
+          type="checkbox"
+          data-section-key="${helpers.escapeAttr(sectionKey)}"
+          data-block-id="${helpers.escapeAttr(block.id)}"
+          data-field="table-show-header"
+          ${block.schema.tableShowHeader ? 'checked' : ''}
+        />
+        Show header row
+      </label>
       <div class="table-editor-frame">
         <table class="table-editor-grid">
           <thead>
@@ -101,7 +113,6 @@ export const renderTableEditor: ComponentEditorRenderer = (sectionKey, block, he
                     </th>`
                 )
                 .join('')}
-              <th class="table-more-column">More details</th>
               <th class="table-add-column-cell">
                 <button type="button" class="ghost table-add-button" data-action="add-table-column" data-section-key="${helpers.escapeAttr(
                   sectionKey
@@ -112,7 +123,7 @@ export const renderTableEditor: ComponentEditorRenderer = (sectionKey, block, he
           <tbody>
             ${block.schema.tableRows.map((row, rowIndex) => renderTableRowEditor(sectionKey, block.id, columns, row, rowIndex, helpers)).join('')}
             <tr class="table-add-row-line">
-              <td colspan="${columns.length + 3}">
+              <td colspan="${columns.length + 2}">
                 <button type="button" class="ghost" data-action="add-table-row" data-section-key="${helpers.escapeAttr(
                   sectionKey
                 )}" data-block-id="${helpers.escapeAttr(block.id)}">+ Add Row</button>
@@ -160,9 +171,13 @@ function renderTableDetailsContent(row: TableRow, helpers: Parameters<ComponentR
 export const renderTableReader: ComponentReaderRenderer = (section, block, helpers) => {
   const columns = helpers.getTableColumns(block.schema);
   return `<table class="reader-table">
-    <thead>
+    ${
+      block.schema.tableShowHeader
+        ? `<thead>
       <tr>${columns.map((column) => `<th>${helpers.escapeHtml(column)}</th>`).join('')}<th>More details</th></tr>
-    </thead>
+    </thead>`
+        : ''
+    }
     <tbody>
       ${block.schema.tableRows
         .map(

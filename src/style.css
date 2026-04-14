@@ -1065,6 +1065,8 @@ button.tiny {
 .expand-stub-toggle,
 .expand-collapse-strip {
   transition: box-shadow 120ms ease, background 120ms ease;
+  position: relative;
+  z-index: 0;
 }
 
 .expand-stub-toggle {
@@ -1079,6 +1081,7 @@ button.tiny {
 .expand-collapse-strip:hover {
   box-shadow: 0 0 0 1px rgba(157, 182, 199, 0.9), 0 0 14px rgba(198, 215, 226, 0.35);
   background: color-mix(in srgb, var(--hvy-surface) 92%, #eef5fa 8%);
+  z-index: 2;
 }
 
 .expand-stub-toggle .expand-stub {

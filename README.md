@@ -16,7 +16,7 @@ Heavy "HVY" (`.hvy`) is a Markdown-compatible file format for structured, intera
 A browser-based reference app is included with:
 - `Visual Editor`: click to add sections, nested sections, and text blocks.
 - `Schema Mode`: per-block advanced settings (component, alignment, left/center/right slot).
-- `Reader`: expandable sections, navigation by section ID, and modal context styling.
+- `Reader`: expandable sections, navigation by section ID, and section meta styling.
 - `Download`: save the current editor buffer as a local file.
 - `Select File`: pick a local file and display it immediately.
 
@@ -57,5 +57,5 @@ npm run preview
 - Markdown is treated as valid HVY.
 - Section IDs are configurable and navigable via `#id` links.
 - Expand/collapse is implemented in the client (plus/minus control in reader).
-- Modal context supports section-level CSS editing with outside click to close.
+- Section meta supports section-level CSS editing with outside click to close.
 - Sections support persistent highlight and temporary highlight on navigation.

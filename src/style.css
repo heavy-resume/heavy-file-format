@@ -236,6 +236,11 @@ button.tiny {
   text-align: left;
 }
 
+.section-title-placeholder {
+  color: #5d6e79;
+  font-style: italic;
+}
+
 .section-title-input {
   width: min(100%, 24rem);
   border: 1px solid #c8d4dd;

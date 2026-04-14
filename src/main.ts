@@ -40,6 +40,7 @@ interface AppState {
   showAdvancedEditor: boolean;
   activeEditorBlock: { sectionKey: string; blockId: string } | null;
   activeEditorSectionTitleKey: string | null;
+  clearSectionTitleOnFocusKey: string | null;
   modalSectionKey: string | null;
   tempHighlights: Set<string>;
   addComponentBySection: Record<string, string>;
@@ -121,6 +122,7 @@ function createInitialState(): AppState {
     showAdvancedEditor: false,
     activeEditorBlock: null,
     activeEditorSectionTitleKey: null,
+    clearSectionTitleOnFocusKey: null,
     modalSectionKey: null,
     tempHighlights: new Set<string>(),
     addComponentBySection: {},
@@ -201,6 +203,7 @@ function renderApp(): void {
   bindUi();
   restorePaneScroll(state.paneScroll);
   commitHistorySnapshot();
+  focusPendingSectionTitleEditor();
   centerPendingEditorSection();
 }
 
@@ -248,6 +251,29 @@ function centerPendingEditorSection(): void {
       return;
     }
     sectionEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  });
+}
+
+function focusPendingSectionTitleEditor(): void {
+  const sectionKey = state.activeEditorSectionTitleKey;
+  if (!sectionKey) {
+    return;
+  }
+  window.requestAnimationFrame(() => {
+    const input = app.querySelector<HTMLInputElement>(
+      `.section-title-input[data-section-key="${CSS.escape(sectionKey)}"]`
+    );
+    if (!input) {
+      return;
+    }
+    input.focus();
+    if (state.clearSectionTitleOnFocusKey === sectionKey) {
+      input.select();
+      state.clearSectionTitleOnFocusKey = null;
+      return;
+    }
+    const valueLength = input.value.length;
+    input.setSelectionRange(valueLength, valueLength);
   });
 }
 
@@ -468,6 +494,8 @@ function bindUi(): void {
     if (action === 'activate-section-title' && sectionKey) {
       event.stopPropagation();
       state.activeEditorSectionTitleKey = sectionKey;
+      const section = findSectionByKey(state.document.sections, sectionKey);
+      state.clearSectionTitleOnFocusKey = section && isDefaultUntitledSectionTitle(section.title) ? sectionKey : null;
       renderApp();
       return;
     }
@@ -1021,15 +1049,6 @@ function bindUi(): void {
       return;
     }
 
-    if (field === 'section-id-editor-open' && target instanceof HTMLInputElement) {
-      section.idEditorOpen = target.checked;
-      if (!section.idEditorOpen) {
-        section.customId = '';
-      }
-      renderApp();
-      return;
-    }
-
     if (field === 'block-tags' && target instanceof HTMLInputElement) {
       const context = resolveBlockContext(target);
       if (!context) {
@@ -1082,7 +1101,13 @@ function bindUi(): void {
     if (target instanceof HTMLInputElement) {
       commitTagEditorDraft(target, tagStateHelpers);
       if (target.dataset.field === 'section-title') {
+        const sectionKey = target.dataset.sectionKey;
+        const section = sectionKey ? findSectionByKey(state.document.sections, sectionKey) : null;
+        if (section && target.value.trim().length === 0) {
+          section.title = 'Unnamed Section';
+        }
         state.activeEditorSectionTitleKey = null;
+        state.clearSectionTitleOnFocusKey = null;
         renderApp();
       }
     }
@@ -1437,12 +1462,8 @@ function refreshModalPreview(): void {
   }
 
   const modalTitle = app.querySelector<HTMLHeadingElement>('#modalTitle');
-  const modalPreview = app.querySelector<HTMLDivElement>('#modalPreview');
   if (modalTitle) {
-    modalTitle.innerHTML = `Modal Context: ${escapeHtml(section.title)} <code>#${escapeHtml(getSectionId(section))}</code>`;
-  }
-  if (modalPreview) {
-    modalPreview.innerHTML = renderReaderSection(section);
+    modalTitle.innerHTML = `Meta: ${escapeHtml(formatSectionTitle(section.title))} <code>#${escapeHtml(getSectionId(section))}</code>`;
   }
 }
 
@@ -1808,13 +1829,15 @@ function renderSectionEditorTree(sections: VisualSection[]): string {
 }
 
 function renderEditorSection(section: VisualSection): string {
+  const visibleTitle = formatSectionTitle(section.title);
+  const isUntitled = isDefaultUntitledSectionTitle(section.title);
   const titleEditor = isActiveEditorSectionTitle(section.key)
     ? `<input autofocus class="section-title-input" data-section-key="${escapeAttr(section.key)}" data-field="section-title" value="${escapeAttr(
-        section.title
+        isDefaultUntitledSectionTitle(section.title) ? '' : section.title
       )}" />`
-    : `<button type="button" class="section-title-passive" data-action="activate-section-title" data-section-key="${escapeAttr(
+    : `<button type="button" class="section-title-passive${isUntitled ? ' section-title-placeholder' : ''}" data-action="activate-section-title" data-section-key="${escapeAttr(
         section.key
-      )}">${escapeHtml(section.title || `Section L${section.level}`)}</button>`;
+      )}">${escapeHtml(visibleTitle)}</button>`;
   return `
     <article class="editor-section-card" data-editor-section="${escapeAttr(section.key)}">
       <div class="editor-section-head">
@@ -1828,7 +1851,7 @@ function renderEditorSection(section: VisualSection): string {
           <button type="button" class="ghost" data-action="jump-to-reader" data-section-key="${escapeAttr(section.key)}">Jump</button>
           ${
             state.showAdvancedEditor
-              ? `<button type="button" class="ghost" data-action="focus-modal" data-section-key="${escapeAttr(section.key)}">Modal Context</button>`
+              ? `<button type="button" class="ghost" data-action="focus-modal" data-section-key="${escapeAttr(section.key)}">Meta</button>`
               : ''
           }
           <button type="button" class="danger" data-action="remove-section" data-section-key="${escapeAttr(section.key)}">Remove</button>
@@ -1837,31 +1860,11 @@ function renderEditorSection(section: VisualSection): string {
 
       ${
         state.showAdvancedEditor
-          ? `<div class="editor-grid">
-              <div class="editor-field">
-                <span>Custom ID</span>
-                <label class="checkbox-label"><input type="checkbox" data-field="section-id-editor-open" data-section-key="${escapeAttr(section.key)}" ${
-                section.idEditorOpen ? 'checked' : ''
-              } /> Enable custom ID</label>
-              </div>
-            </div>
-
-            <div class="editor-row">
+          ? `<div class="editor-row">
               <label class="checkbox-label"><input type="checkbox" data-section-key="${escapeAttr(section.key)}" data-field="section-highlight" ${
                 section.highlight ? 'checked' : ''
               } /> Highlight</label>
             </div>`
-          : ''
-      }
-
-      ${
-        state.showAdvancedEditor && section.idEditorOpen
-          ? `<label class="id-override">
-              <span>ID Override (optional, blank keeps random ID)</span>
-              <input data-section-key="${escapeAttr(section.key)}" data-field="section-custom-id" value="${escapeAttr(
-              section.customId
-            )}" placeholder="" />
-            </label>`
           : ''
       }
 
@@ -2418,17 +2421,23 @@ function renderModal(): string {
       <div class="modal-overlay" data-modal-action="close-overlay"></div>
       <section class="modal-panel">
         <div class="modal-head">
-          <h3 id="modalTitle">Modal Context: ${escapeHtml(section.title)} <code>#${escapeHtml(getSectionId(section))}</code></h3>
+          <h3 id="modalTitle">Meta: ${escapeHtml(formatSectionTitle(section.title))} <code>#${escapeHtml(getSectionId(section))}</code></h3>
           <button type="button" data-modal-action="close">Close</button>
         </div>
-        <p>Edit section-level CSS and review the section in focus.</p>
+        <p>Edit section-level metadata and reader styling.</p>
+        <label>
+          <span>Custom ID (optional)</span>
+          <input
+            data-section-key="${escapeAttr(section.key)}"
+            data-field="section-custom-id"
+            value="${escapeAttr(section.customId)}"
+            placeholder="Blank keeps generated ID"
+          />
+        </label>
         <label>
           <span>Custom CSS (inline style value)</span>
           <textarea id="modalCssInput">${escapeHtml(section.customCss)}</textarea>
         </label>
-        <div id="modalPreview" class="modal-preview">
-          ${renderReaderSection(section)}
-        </div>
       </section>
     </div>
   `;
@@ -2792,7 +2801,7 @@ function createEmptySection(level: number, component = 'container', isGhost = fa
     customId: '',
     idEditorOpen: false,
     isGhost,
-    title: isGhost ? 'New Component' : 'New Section',
+    title: isGhost ? 'New Component' : 'Unnamed Section',
     level,
     expanded: true,
     highlight: false,
@@ -2800,6 +2809,14 @@ function createEmptySection(level: number, component = 'container', isGhost = fa
     blocks: component ? [createEmptyBlock(component)] : [],
     children: [],
   };
+}
+
+function isDefaultUntitledSectionTitle(title: string): boolean {
+  return title.trim() === '' || title.trim() === 'Unnamed Section';
+}
+
+function formatSectionTitle(title: string): string {
+  return isDefaultUntitledSectionTitle(title) ? 'Unnamed Section' : title;
 }
 
 function createEmptyBlock(component = 'text', skipComponentDefaults = false): VisualBlock {

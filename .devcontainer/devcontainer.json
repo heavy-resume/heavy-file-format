@@ -1,0 +1,33 @@
+{
+  "name": "heavy-file-format",
+  "image": "mcr.microsoft.com/devcontainers/base:bookworm",
+  "remoteUser": "vscode",
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "none"
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-vscode.vscode-typescript-next",
+        "dbaeumer.vscode-eslint",
+        "ms-playwright.playwright"
+      ],
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash"
+      }
+    }
+  },
+  "forwardPorts": [
+    5173
+  ],
+  "postCreateCommand": ". ${NVM_DIR}/nvm.sh && nvm install && nvm alias default \"$(cat .nvmrc)\" && nvm use default && npm run install:devcontainer'",
+  "postStartCommand": ". ${NVM_DIR}/nvm.sh && nvm use default >/dev/null",
+  "portsAttributes": {
+    "5173": {
+      "label": "Vite dev server",
+      "onAutoForward": "notify"
+    }
+  }
+}

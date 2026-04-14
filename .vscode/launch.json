@@ -5,7 +5,7 @@
       "name": "HVY: Start Dev Server",
       "type": "node-terminal",
       "request": "launch",
-      "command": "npm run dev"
+      "command": "nvm use && npm run dev"
     },
     {
       "name": "HVY: Open In Chrome",
@@ -13,6 +13,12 @@
       "request": "launch",
       "url": "http://localhost:5173",
       "webRoot": "${workspaceFolder}"
+    },
+    {
+      "name": "HVY: Run E2E Tests",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "nvm use && npm run test:e2e"
     }
   ],
   "compounds": [

@@ -2256,7 +2256,7 @@ function renderBlockMetaFields(sectionKey: string, block: VisualBlock): string {
           data-section-key="${escapeAttr(sectionKey)}"
           data-block-id="${escapeAttr(block.id)}"
           data-field="block-custom-css"
-          placeholder="margin-top:-0.45rem;"
+          placeholder="margin-top:-1px;"
         >${escapeHtml(block.schema.customCss)}</textarea>
       </label>
       <label>
@@ -2841,7 +2841,7 @@ function createDemoTableBlock(columns: string[], rows: string[][], showHeader = 
 
 function createDemoExpandableTableBlock(columns: string[], rows: string[][], title: string, body: string): VisualBlock {
   const block = createEmptyBlock('expandable', true);
-  block.schema.customCss = 'margin-top:-0.45rem;';
+  block.schema.customCss = 'margin-top:-1px;';
   block.schema.expandableAlwaysShowStub = true;
   block.schema.expandableExpanded = false;
   block.schema.expandableStubBlocks = [createDemoTableBlock(columns, rows, false)];

@@ -32,6 +32,7 @@ interface ComponentDef {
 interface EditorRenderState {
   documentMeta: Record<string, unknown>;
   showAdvancedEditor: boolean;
+  editorCanvasMode: 'content' | 'schema' | 'reusable';
   addComponentBySection: Record<string, string>;
   activeEditorBlock: { sectionKey: string; blockId: string } | null;
   schemaDefDraftByBlock: Record<string, string>;
@@ -203,10 +204,11 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const component = block.schema.component || 'text';
     const contentEditor = renderBlockContentEditor(sectionKey, block);
     const schemaEditor = renderBlockSchemaEditor(sectionKey, block);
-    const showSchema = state.showAdvancedEditor && block.schemaMode;
+    const isGlobalSchema = state.showAdvancedEditor && (state.editorCanvasMode === 'schema' || state.editorCanvasMode === 'reusable');
+    const showSchema = isGlobalSchema || (state.showAdvancedEditor && block.schemaMode);
     const isActiveSelf = deps.isActiveEditorBlock(sectionKey, block.id);
     const isActiveDescendant = state.activeEditorBlock?.sectionKey === sectionKey && isDescendantActive(block, state.activeEditorBlock.blockId);
-    const isActive = isActiveSelf || isActiveDescendant;
+    const isActive = isGlobalSchema || isActiveSelf || isActiveDescendant;
 
     if (!isActive) {
       return renderPassiveEditorBlock(sectionKey, block, rootSections ?? []);
@@ -217,17 +219,18 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         <div class="editor-block-head">
           <strong class="editor-block-title">${deps.escapeHtml(component)}</strong>
           <div class="editor-actions">
-            <button type="button" class="ghost" data-action="deactivate-block" data-section-key="${deps.escapeAttr(
-              sectionKey
-            )}" data-block-id="${deps.escapeAttr(block.id)}">Done</button>
             ${
-              state.showAdvancedEditor
+              isGlobalSchema
+                ? ''
+                : `<button type="button" class="ghost" data-action="deactivate-block" data-section-key="${deps.escapeAttr(
+                    sectionKey
+                  )}" data-block-id="${deps.escapeAttr(block.id)}">Done</button>`
+            }
+            ${
+              state.showAdvancedEditor && !isGlobalSchema
                 ? `<button type="button" class="ghost" data-action="open-component-meta" data-section-key="${deps.escapeAttr(
                     sectionKey
-                  )}" data-block-id="${deps.escapeAttr(block.id)}">Meta</button>
-                   <button type="button" class="ghost" data-action="toggle-schema" data-section-key="${deps.escapeAttr(
-                     sectionKey
-                   )}" data-block-id="${deps.escapeAttr(block.id)}">${block.schemaMode ? 'Content Mode' : 'Schema Mode'}</button>`
+                  )}" data-block-id="${deps.escapeAttr(block.id)}">Meta</button>`
                 : ''
             }
             <button type="button" class="danger remove-x" data-action="remove-block" data-section-key="${deps.escapeAttr(

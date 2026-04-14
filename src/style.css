@@ -123,6 +123,14 @@ button.tiny {
   height: 100%;
 }
 
+.workspace-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
 .view-tabs {
   display: flex;
   gap: 0.45rem;
@@ -136,6 +144,13 @@ button.tiny {
   background: color-mix(in srgb, var(--hvy-surface) 90%, transparent);
   backdrop-filter: blur(10px);
   box-shadow: 0 10px 24px rgba(39, 70, 91, 0.08);
+}
+
+.editor-top-controls {
+  display: flex;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  align-items: center;
 }
 
 .full-pane {
@@ -198,6 +213,49 @@ button.tiny {
 .reader-document {
   display: grid;
   gap: 0.95rem;
+}
+
+.reusable-components-view {
+  display: grid;
+  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+  gap: 0.8rem;
+}
+
+.reusable-components-list {
+  display: grid;
+  gap: 0.45rem;
+  align-content: start;
+}
+
+.reusable-component-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.4rem;
+  padding: 0.45rem;
+  border: 1px solid #d6e0e8;
+  background: #f9fcff;
+}
+
+.reusable-component-card.is-selected {
+  border-color: #87a7bc;
+  box-shadow: 0 0 0 1px rgba(135, 167, 188, 0.35);
+}
+
+.reusable-component-select {
+  display: grid;
+  gap: 0.12rem;
+  text-align: left;
+  justify-items: start;
+  width: 100%;
+}
+
+.reusable-component-select span {
+  color: #5d6e79;
+  font-size: 0.84rem;
+}
+
+.reusable-components-editor {
+  min-width: 0;
 }
 
 .editor-section-card {
@@ -1448,6 +1506,14 @@ button.tiny {
 }
 
 @media (max-width: 980px) {
+  .workspace-head {
+    align-items: stretch;
+  }
+
+  .editor-top-controls {
+    width: 100%;
+  }
+
   .panes {
     grid-template-columns: 1fr;
   }
@@ -1457,6 +1523,10 @@ button.tiny {
   }
 
   .expand-chooser-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .reusable-components-view {
     grid-template-columns: 1fr;
   }
 }

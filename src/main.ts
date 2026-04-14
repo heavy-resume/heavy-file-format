@@ -37,6 +37,8 @@ interface AppState {
   filename: string;
   currentView: 'editor' | 'viewer';
   showAdvancedEditor: boolean;
+  activeEditorBlock: { sectionKey: string; blockId: string } | null;
+  activeEditorSectionTitleKey: string | null;
   modalSectionKey: string | null;
   tempHighlights: Set<string>;
   addComponentBySection: Record<string, string>;
@@ -112,6 +114,8 @@ function createInitialState(): AppState {
     filename: 'document.hvy',
     currentView: 'editor',
     showAdvancedEditor: false,
+    activeEditorBlock: null,
+    activeEditorSectionTitleKey: null,
     modalSectionKey: null,
     tempHighlights: new Set<string>(),
     addComponentBySection: {},
@@ -431,6 +435,8 @@ function bindUi(): void {
     if (!action) {
       return;
     }
+    const sectionKey = actionButton.dataset.sectionKey ?? '';
+    const blockId = actionButton.dataset.blockId ?? '';
 
     if (action === 'undo') {
       undoState();
@@ -449,6 +455,25 @@ function bindUi(): void {
       if (!state.showAdvancedEditor) {
         state.metaPanelOpen = false;
       }
+      state.activeEditorSectionTitleKey = null;
+      renderApp();
+      return;
+    }
+
+    if (action === 'activate-block' && blockId) {
+      setActiveEditorBlock(sectionKey, blockId);
+      renderApp();
+      return;
+    }
+
+    if (action === 'activate-section-title' && sectionKey) {
+      state.activeEditorSectionTitleKey = sectionKey;
+      renderApp();
+      return;
+    }
+
+    if (action === 'deactivate-block' && blockId) {
+      clearActiveEditorBlock(blockId);
       renderApp();
       return;
     }
@@ -548,6 +573,7 @@ function bindUi(): void {
       newSection.title = field;
       if (newSection.blocks[0]) {
         newSection.blocks[0].text = `{{${field}}}`;
+        setActiveEditorBlock(newSection.key, newSection.blocks[0].id);
       }
       state.document.sections.push(newSection);
       renderApp();
@@ -629,6 +655,9 @@ function bindUi(): void {
       const component = state.addComponentBySection.__top_level__ ?? 'container';
       const section = createEmptySection(1, component, false);
       state.document.sections.push(section);
+      if (section.blocks[0]) {
+        setActiveEditorBlock(section.key, section.blocks[0].id);
+      }
       state.pendingEditorCenterSectionKey = section.key;
       renderApp();
       return;
@@ -667,6 +696,9 @@ function bindUi(): void {
       recordHistory();
       const child = createEmptySection(Math.min(section.level + 1, 6), 'container', false);
       section.children.push(child);
+      if (child.blocks[0]) {
+        setActiveEditorBlock(child.key, child.blocks[0].id);
+      }
       state.pendingEditorCenterSectionKey = child.key;
       renderApp();
       return;
@@ -676,6 +708,12 @@ function bindUi(): void {
       recordHistory();
       removeSectionByKey(state.document.sections, sectionKey);
       closeModalIfTarget(sectionKey);
+      if (state.activeEditorSectionTitleKey === sectionKey) {
+        state.activeEditorSectionTitleKey = null;
+      }
+      if (state.activeEditorBlock?.sectionKey === sectionKey) {
+        state.activeEditorBlock = null;
+      }
       renderApp();
       return;
     }
@@ -683,7 +721,11 @@ function bindUi(): void {
     if (action === 'add-child') {
       recordHistory();
       const component = state.addComponentBySection[section.key] ?? 'container';
-      section.children.push(createEmptySection(Math.min(section.level + 1, 6), component, true));
+      const child = createEmptySection(Math.min(section.level + 1, 6), component, true);
+      section.children.push(child);
+      if (child.blocks[0]) {
+        setActiveEditorBlock(child.key, child.blocks[0].id);
+      }
       renderApp();
       return;
     }
@@ -691,7 +733,9 @@ function bindUi(): void {
     if (action === 'add-block') {
       recordHistory();
       const component = state.addComponentBySection[section.key] ?? 'container';
-      section.blocks.push(createEmptyBlock(component));
+      const newBlock = createEmptyBlock(component);
+      section.blocks.push(newBlock);
+      setActiveEditorBlock(section.key, newBlock.id);
       renderApp();
       return;
     }
@@ -703,7 +747,9 @@ function bindUi(): void {
       if (!row) {
         return;
       }
-      row.detailsBlocks.push(createEmptyBlock('container'));
+      const newBlock = createEmptyBlock('container');
+      row.detailsBlocks.push(newBlock);
+      setActiveEditorBlock(sectionKey, newBlock.id);
       renderApp();
       return;
     }
@@ -716,7 +762,9 @@ function bindUi(): void {
       }
       ensureContainerBlocks(block);
       const addKey = `container:${sectionKey}:${blockId}`;
-      block.schema.containerBlocks.push(createEmptyBlock(state.addComponentBySection[addKey] ?? 'text'));
+      const newBlock = createEmptyBlock(state.addComponentBySection[addKey] ?? 'text');
+      block.schema.containerBlocks.push(newBlock);
+      setActiveEditorBlock(sectionKey, newBlock.id);
       renderApp();
       return;
     }
@@ -729,7 +777,9 @@ function bindUi(): void {
       }
       ensureExpandableBlocks(block);
       const addKey = `expandable-stub:${sectionKey}:${blockId}`;
-      block.schema.expandableStubBlocks.push(createEmptyBlock(state.addComponentBySection[addKey] ?? 'container'));
+      const newBlock = createEmptyBlock(state.addComponentBySection[addKey] ?? 'container');
+      block.schema.expandableStubBlocks.push(newBlock);
+      setActiveEditorBlock(sectionKey, newBlock.id);
       renderApp();
       return;
     }
@@ -742,7 +792,9 @@ function bindUi(): void {
       }
       ensureExpandableBlocks(block);
       const addKey = `expandable-content:${sectionKey}:${blockId}`;
-      block.schema.expandableContentBlocks.push(createEmptyBlock(state.addComponentBySection[addKey] ?? 'container'));
+      const newBlock = createEmptyBlock(state.addComponentBySection[addKey] ?? 'container');
+      block.schema.expandableContentBlocks.push(newBlock);
+      setActiveEditorBlock(sectionKey, newBlock.id);
       renderApp();
       return;
     }
@@ -773,6 +825,7 @@ function bindUi(): void {
     if (action === 'remove-block' && blockId) {
       recordHistory();
       removeBlockFromList(section.blocks, blockId);
+      clearActiveEditorBlock(blockId);
       renderApp();
       return;
     }
@@ -1048,6 +1101,10 @@ function bindUi(): void {
     const target = event.target as HTMLElement;
     if (target instanceof HTMLInputElement) {
       commitTagEditorDraft(target, tagStateHelpers);
+      if (target.dataset.field === 'section-title') {
+        state.activeEditorSectionTitleKey = null;
+        renderApp();
+      }
     }
   });
 
@@ -1731,6 +1788,27 @@ function getTagRenderOptions(target: HTMLElement): Omit<TagRenderOptions, 'place
   };
 }
 
+function isActiveEditorBlock(sectionKey: string, blockId: string): boolean {
+  return state.activeEditorBlock?.sectionKey === sectionKey && state.activeEditorBlock.blockId === blockId;
+}
+
+function setActiveEditorBlock(sectionKey: string, blockId: string): void {
+  state.activeEditorBlock = { sectionKey, blockId };
+}
+
+function clearActiveEditorBlock(blockId?: string): void {
+  if (!state.activeEditorBlock) {
+    return;
+  }
+  if (!blockId || state.activeEditorBlock.blockId === blockId) {
+    state.activeEditorBlock = null;
+  }
+}
+
+function isActiveEditorSectionTitle(sectionKey: string): boolean {
+  return state.activeEditorSectionTitleKey === sectionKey;
+}
+
 function ensureContainerBlocks(block: VisualBlock): void {
   if (!Array.isArray(block.schema.containerBlocks)) {
     block.schema.containerBlocks = [];
@@ -1805,11 +1883,21 @@ function renderSectionEditorTree(sections: VisualSection[]): string {
 }
 
 function renderEditorSection(section: VisualSection): string {
+  const titleEditor = isActiveEditorSectionTitle(section.key)
+    ? `<input autofocus class="section-title-input" data-section-key="${escapeAttr(section.key)}" data-field="section-title" value="${escapeAttr(
+        section.title
+      )}" />`
+    : `<button type="button" class="section-title-passive" data-action="activate-section-title" data-section-key="${escapeAttr(
+        section.key
+      )}">${escapeHtml(section.title || `Section L${section.level}`)}</button>`;
   return `
     <article class="editor-section-card" data-editor-section="${escapeAttr(section.key)}">
       <div class="editor-section-head">
-        <div class="section-drag-title" draggable="true" data-drag-handle="section" data-section-key="${escapeAttr(section.key)}" title="Drag to reorder section">
-          <strong>${escapeHtml(section.title || `Section L${section.level}`)}</strong>
+        <div class="section-drag-title" title="Drag to reorder section">
+          <button type="button" class="section-drag-handle" draggable="true" data-drag-handle="section" data-section-key="${escapeAttr(
+            section.key
+          )}" aria-label="Drag to reorder section">::</button>
+          ${titleEditor}
         </div>
         <div class="editor-actions">
           <button type="button" class="ghost" data-action="jump-to-reader" data-section-key="${escapeAttr(section.key)}">Jump</button>
@@ -1822,35 +1910,24 @@ function renderEditorSection(section: VisualSection): string {
         </div>
       </div>
 
-      <div class="editor-grid">
-        <label>
-          <span>Title</span>
-          <input data-section-key="${escapeAttr(section.key)}" data-field="section-title" value="${escapeAttr(section.title)}" />
-        </label>
-        ${
-          state.showAdvancedEditor
-            ? `<div class="editor-field">
+      ${
+        state.showAdvancedEditor
+          ? `<div class="editor-grid">
+              <div class="editor-field">
                 <span>Custom ID</span>
                 <label class="checkbox-label"><input type="checkbox" data-field="section-id-editor-open" data-section-key="${escapeAttr(section.key)}" ${
                 section.idEditorOpen ? 'checked' : ''
               } /> Enable custom ID</label>
-              </div>`
-            : ''
-        }
-      </div>
+              </div>
+            </div>
 
-      <div class="editor-row">
-        <label class="checkbox-label"><input type="checkbox" data-section-key="${escapeAttr(section.key)}" data-field="section-expanded" ${
-    section.expanded ? 'checked' : ''
-  } /> Expanded</label>
-        ${
-          state.showAdvancedEditor
-            ? `<label class="checkbox-label"><input type="checkbox" data-section-key="${escapeAttr(section.key)}" data-field="section-highlight" ${
+            <div class="editor-row">
+              <label class="checkbox-label"><input type="checkbox" data-section-key="${escapeAttr(section.key)}" data-field="section-highlight" ${
                 section.highlight ? 'checked' : ''
-              } /> Highlight</label>`
-            : ''
-        }
-      </div>
+              } /> Highlight</label>
+            </div>`
+          : ''
+      }
 
       ${
         state.showAdvancedEditor && section.idEditorOpen
@@ -1890,12 +1967,30 @@ function renderEditorBlock(sectionKey: string, block: VisualBlock): string {
   const contentEditor = renderBlockContentEditor(sectionKey, block);
   const schemaEditor = renderBlockSchemaEditor(sectionKey, block);
   const showSchema = state.showAdvancedEditor && block.schemaMode;
+  const isActive = isActiveEditorBlock(sectionKey, block.id);
+
+  if (!isActive) {
+    const section = findSectionByKey(state.document.sections, sectionKey);
+    if (!section) {
+      return '';
+    }
+    return `
+      <div class="editor-block-passive" data-action="activate-block" data-section-key="${escapeAttr(sectionKey)}" data-block-id="${escapeAttr(
+        block.id
+      )}">
+        ${renderReaderBlock(section, block)}
+      </div>
+    `;
+  }
 
   return `
     <div class="editor-block">
       <div class="editor-block-head">
         <strong class="editor-block-title">${escapeHtml(component)}</strong>
         <div class="editor-actions">
+          <button type="button" class="ghost" data-action="deactivate-block" data-section-key="${escapeAttr(
+            sectionKey
+          )}" data-block-id="${escapeAttr(block.id)}">Done</button>
           ${
             state.showAdvancedEditor
               ? `<button type="button" class="ghost" data-action="open-component-meta" data-section-key="${escapeAttr(

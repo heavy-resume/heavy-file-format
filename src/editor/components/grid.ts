@@ -51,8 +51,7 @@ export const renderGridEditor: ComponentEditorRenderer = (sectionKey, block, hel
     <div class="ghost-plus-big"><span>+</span></div>
     <div class="ghost-label">Add Grid Component</div>
     <label class="ghost-component-picker">
-      <span>Component</span>
-      <select data-field="new-grid-component-type" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(
+      <select aria-label="Grid component type" data-field="new-grid-component-type" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(
     block.id
   )}">
         ${helpers.renderComponentOptions(helpers.getSelectedAddComponent(block.id, 'text'))}

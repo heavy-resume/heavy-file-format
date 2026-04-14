@@ -19,8 +19,7 @@ export const renderContainerEditor: ComponentEditorRenderer = (sectionKey, block
       <div class="ghost-plus-big"><span>+</span></div>
       <div class="ghost-label">Add Component</div>
       <label class="ghost-component-picker">
-        <span>Component</span>
-        <select data-field="container-new-component-type" data-container-key="${helpers.escapeAttr(addKey)}">
+        <select aria-label="Container component type" data-field="container-new-component-type" data-container-key="${helpers.escapeAttr(addKey)}">
           ${helpers.renderComponentOptions(helpers.getSelectedAddComponent(addKey, 'text'))}
         </select>
       </label>

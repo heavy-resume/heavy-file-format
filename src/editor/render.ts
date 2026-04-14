@@ -2,6 +2,7 @@ import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import type { ComponentRenderHelpers } from './component-helpers';
 import { renderCodeEditor } from './components/code';
+import { renderComponentListEditor } from './components/component-list';
 import { renderContainerEditor } from './components/container';
 import { renderExpandableEditor } from './components/expandable';
 import { renderGridEditor } from './components/grid';
@@ -25,6 +26,7 @@ interface ComponentDef {
   baseType: string;
   tags?: string;
   description?: string;
+  schema?: BlockSchema;
 }
 
 interface EditorRenderState {
@@ -44,6 +46,7 @@ interface EditorRenderDeps {
   renderOption: (value: string, selected: string) => string;
   resolveBaseComponent: (componentName: string) => string;
   ensureContainerBlocks: (block: VisualBlock) => void;
+  ensureComponentListBlocks: (block: VisualBlock) => void;
   ensureExpandableBlocks: (block: VisualBlock) => void;
   ensureGridItems: (schema: BlockSchema) => void;
   isActiveEditorSectionTitle: (sectionKey: string) => boolean;
@@ -87,7 +90,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           : ''
       }
       ${sectionCards}
-      <article class="ghost-section-card add-ghost" data-action="add-top-level-section" data-section-key="__top_level__">
+        <article class="ghost-section-card add-ghost" data-action="add-top-level-section" data-section-key="__top_level__">
         <div class="ghost-plus-big"><span>+</span></div>
         <div class="ghost-label">Add Section</div>
         <label class="ghost-component-picker">
@@ -146,8 +149,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
             <div class="ghost-plus-big"><span>+</span></div>
             <div class="ghost-label">Add Component</div>
             <label class="ghost-component-picker">
-              <span>Component</span>
-              <select data-field="new-component-type" data-section-key="${deps.escapeAttr(section.key)}">
+              <select aria-label="Section component type" data-field="new-component-type" data-section-key="${deps.escapeAttr(section.key)}">
                 ${deps.renderComponentOptions(state.addComponentBySection[section.key] ?? 'container')}
               </select>
             </label>
@@ -166,6 +168,11 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     if (!block.schema) return false;
     if (Array.isArray(block.schema.containerBlocks)) {
       for (const child of block.schema.containerBlocks) {
+        if (child.id === targetBlockId || isDescendantActive(child, targetBlockId)) return true;
+      }
+    }
+    if (Array.isArray(block.schema.componentListBlocks)) {
+      for (const child of block.schema.componentListBlocks) {
         if (child.id === targetBlockId || isDescendantActive(child, targetBlockId)) return true;
       }
     }
@@ -398,6 +405,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
                     ${deps.renderOption('expandable', def.baseType)}
                     ${deps.renderOption('table', def.baseType)}
                     ${deps.renderOption('container', def.baseType)}
+                    ${deps.renderOption('component-list', def.baseType)}
                     ${deps.renderOption('grid', def.baseType)}
                     ${deps.renderOption('plugin', def.baseType)}
                   </select>
@@ -440,6 +448,10 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     if (component === 'container') {
       return renderContainerEditor(sectionKey, block, helpers);
     }
+    if (component === 'component-list') {
+      deps.ensureComponentListBlocks(block);
+      return renderComponentListEditor(sectionKey, block, helpers);
+    }
     if (component === 'grid') {
       deps.ensureGridItems(block.schema);
       return renderGridEditor(sectionKey, block, helpers);
@@ -455,31 +467,8 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
   }
 
   function renderBlockSchemaEditor(sectionKey: string, block: VisualBlock): string {
-    const draftName =
-      state.schemaDefDraftByBlock[block.id] ??
-      (deps.isBuiltinComponent(block.schema.component) ? '' : block.schema.component);
     return `
       <div class="schema-editor">
-        <section class="schema-save-card">
-          <strong>Reusable Component</strong>
-          <label>
-            <span>Name</span>
-            <input
-              data-field="schema-def-name"
-              data-block-id="${deps.escapeAttr(block.id)}"
-              value="${deps.escapeAttr(draftName)}"
-              placeholder="Callout, Hero, Spec Table..."
-            />
-          </label>
-          <button
-            type="button"
-            class="secondary"
-            data-action="save-component-def"
-            data-section-key="${deps.escapeAttr(sectionKey)}"
-            data-block-id="${deps.escapeAttr(block.id)}"
-          >Save To Dropdown</button>
-          <div class="muted">Saves this base type with its default tags and description as a reusable component.</div>
-        </section>
         <div class="editor-grid schema-grid">
           <article class="ghost-section-card add-ghost" data-action="focus-schema-component" data-section-key="${deps.escapeAttr(
             sectionKey
@@ -503,8 +492,31 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
   }
 
   function renderBlockMetaFields(sectionKey: string, block: VisualBlock): string {
+    const draftName =
+      state.schemaDefDraftByBlock[block.id] ??
+      (deps.isBuiltinComponent(block.schema.component) ? '' : block.schema.component);
     return `
       <div class="schema-meta-stack">
+        <section class="schema-save-card">
+          <strong>Reusable Component</strong>
+          <label>
+            <span>Name</span>
+            <input
+              data-field="schema-def-name"
+              data-block-id="${deps.escapeAttr(block.id)}"
+              value="${deps.escapeAttr(draftName)}"
+              placeholder="Callout, Hero, Spec Table..."
+            />
+          </label>
+          <button
+            type="button"
+            class="secondary"
+            data-action="save-component-def"
+            data-section-key="${deps.escapeAttr(sectionKey)}"
+            data-block-id="${deps.escapeAttr(block.id)}"
+          >Save Reusable</button>
+          <div class="muted">Saves this block's schema, tags, and description into the component dropdown.</div>
+        </section>
         <label>
           <span>Custom CSS</span>
           <textarea

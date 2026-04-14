@@ -117,6 +117,7 @@ editorRenderer = createEditorRenderer(
     renderOption,
     resolveBaseComponent,
     ensureContainerBlocks,
+    ensureComponentListBlocks,
     ensureExpandableBlocks,
     ensureGridItems,
     isActiveEditorSectionTitle,
@@ -631,11 +632,13 @@ function bindUi(): void {
         baseType: resolveBaseComponent(block.schema.component),
         tags: block.schema.tags,
         description: block.schema.description,
+        schema: cloneReusableSchema(block.schema, draftName),
       };
       if (existing) {
         existing.baseType = nextDef.baseType;
         existing.tags = nextDef.tags;
         existing.description = nextDef.description;
+        existing.schema = nextDef.schema;
       } else {
         defs.push(nextDef);
       }
@@ -757,7 +760,6 @@ function bindUi(): void {
       if (section.blocks[0]) {
         setActiveEditorBlock(section.key, section.blocks[0].id);
       }
-      state.pendingEditorCenterSectionKey = section.key;
       renderApp();
       return;
     }
@@ -793,12 +795,10 @@ function bindUi(): void {
 
     if (action === 'add-subsection') {
       recordHistory();
-      const child = createEmptySection(Math.min(section.level + 1, 6), 'container', false);
+      const child = createEmptySection(Math.min(section.level + 1, 6), '', false);
       section.children.push(child);
-      if (child.blocks[0]) {
-        setActiveEditorBlock(child.key, child.blocks[0].id);
-      }
-      state.pendingEditorCenterSectionKey = child.key;
+      state.activeEditorSectionTitleKey = child.key;
+      state.clearSectionTitleOnFocusKey = child.key;
       renderApp();
       return;
     }
@@ -835,6 +835,20 @@ function bindUi(): void {
       const newBlock = createEmptyBlock(component);
       section.blocks.push(newBlock);
       setActiveEditorBlock(section.key, newBlock.id);
+      renderApp();
+      return;
+    }
+
+    if (action === 'add-component-list-item' && blockId) {
+      recordHistory();
+      const block = findBlockByIds(sectionKey, blockId);
+      if (!block) {
+        return;
+      }
+      ensureComponentListBlocks(block);
+      const newBlock = createEmptyBlock(block.schema.componentListComponent || 'text');
+      block.schema.componentListBlocks.push(newBlock);
+      setActiveEditorBlock(sectionKey, newBlock.id);
       renderApp();
       return;
     }
@@ -1554,6 +1568,10 @@ function findBlockInList(blocks: VisualBlock[], blockId: string): VisualBlock | 
     if (nestedContainer) {
       return nestedContainer;
     }
+    const nestedComponentList = findBlockInList(block.schema.componentListBlocks ?? [], blockId);
+    if (nestedComponentList) {
+      return nestedComponentList;
+    }
     const nestedExpandableStub = findBlockInList(block.schema.expandableStubBlocks ?? [], blockId);
     if (nestedExpandableStub) {
       return nestedExpandableStub;
@@ -1580,6 +1598,9 @@ function removeBlockFromList(blocks: VisualBlock[], blockId: string): boolean {
   }
   for (const block of blocks) {
     if (removeBlockFromList(block.schema.containerBlocks ?? [], blockId)) {
+      return true;
+    }
+    if (removeBlockFromList(block.schema.componentListBlocks ?? [], blockId)) {
       return true;
     }
     if (removeBlockFromList(block.schema.expandableStubBlocks ?? [], blockId)) {
@@ -1643,6 +1664,18 @@ function handleBlockFieldInput(target: HTMLElement): boolean {
   if (field === 'block-container-title' && target instanceof HTMLInputElement) {
     block.schema.containerTitle = target.value;
     refreshReaderPanels();
+    return true;
+  }
+
+  if (field === 'block-component-list-component' && target instanceof HTMLSelectElement) {
+    block.schema.componentListComponent = target.value;
+    ensureComponentListBlocks(block);
+    block.schema.componentListBlocks.forEach((itemBlock) => {
+      itemBlock.schema.component = target.value;
+      applyComponentDefaults(itemBlock.schema, target.value);
+    });
+    refreshReaderPanels();
+    renderApp();
     return true;
   }
 
@@ -1837,6 +1870,19 @@ function ensureContainerBlocks(block: VisualBlock): void {
   }
 }
 
+function ensureComponentListBlocks(block: VisualBlock): void {
+  if (!Array.isArray(block.schema.componentListBlocks)) {
+    block.schema.componentListBlocks = [];
+  }
+  if (!block.schema.componentListComponent) {
+    block.schema.componentListComponent = 'text';
+  }
+  block.schema.componentListBlocks = block.schema.componentListBlocks.map((itemBlock) => {
+    itemBlock.schema.component = block.schema.componentListComponent;
+    return itemBlock;
+  });
+}
+
 function ensureExpandableBlocks(block: VisualBlock): void {
   if (!Array.isArray(block.schema.expandableStubBlocks)) {
     block.schema.expandableStubBlocks = [];
@@ -1871,6 +1917,7 @@ function getComponentRenderHelpers(): ComponentRenderHelpers {
     renderOption,
     getTableColumns,
     ensureContainerBlocks,
+    ensureComponentListBlocks,
     getSelectedAddComponent: (key: string, fallback: string) => state.addComponentBySection[key] ?? fallback,
   };
 }
@@ -2017,6 +2064,8 @@ function serializeSection(section: VisualSection, level: number): string {
     codeLanguage: block.schema.codeLanguage,
     containerTitle: block.schema.containerTitle,
     containerBlocks: block.schema.containerBlocks,
+    componentListComponent: block.schema.componentListComponent,
+    componentListBlocks: block.schema.componentListBlocks,
     gridColumns: block.schema.gridColumns,
     gridItems: block.schema.gridItems,
     tags: block.schema.tags,
@@ -2154,6 +2203,8 @@ function defaultBlockSchema(component = 'text'): BlockSchema {
     codeLanguage: 'ts',
     containerTitle: 'Container',
     containerBlocks: [],
+    componentListComponent: 'text',
+    componentListBlocks: [],
     gridColumns: 2,
     gridItems: [createGridItem(0, 2), createGridItem(1, 2)],
     tags: '',
@@ -2286,6 +2337,11 @@ function schemaFromUnknown(value: unknown): BlockSchema {
     containerBlocks: Array.isArray(candidate.containerBlocks)
       ? candidate.containerBlocks.map((block) => parseVisualBlock(block))
       : [],
+    componentListComponent:
+      typeof candidate.componentListComponent === 'string' ? candidate.componentListComponent : defaults.componentListComponent,
+    componentListBlocks: Array.isArray(candidate.componentListBlocks)
+      ? candidate.componentListBlocks.map((block) => parseVisualBlock(block))
+      : [],
     gridColumns,
     gridItems: parsedGridItems,
     tags: typeof candidate.tags === 'string' ? candidate.tags : defaults.tags,
@@ -2322,6 +2378,29 @@ function schemaFromUnknown(value: unknown): BlockSchema {
           : createDefaultTableRow(2).detailsBlocks,
       };
     }),
+  };
+}
+
+function cloneReusableSchema(schema: BlockSchema, componentName = schema.component): BlockSchema {
+  const cloned = schemaFromUnknown(JSON.parse(JSON.stringify(schema)) as JsonObject);
+  cloned.component = componentName;
+  cloned.containerBlocks = cloned.containerBlocks.map((block) => cloneReusableBlock(block));
+  cloned.componentListBlocks = cloned.componentListBlocks.map((block) => cloneReusableBlock(block));
+  cloned.expandableStubBlocks = cloned.expandableStubBlocks.map((block) => cloneReusableBlock(block));
+  cloned.expandableContentBlocks = cloned.expandableContentBlocks.map((block) => cloneReusableBlock(block));
+  cloned.tableRows = cloned.tableRows.map((row) => ({
+    ...row,
+    detailsBlocks: (row.detailsBlocks ?? []).map((block) => cloneReusableBlock(block)),
+  }));
+  return cloned;
+}
+
+function cloneReusableBlock(block: VisualBlock): VisualBlock {
+  return {
+    id: makeId('block'),
+    text: block.text,
+    schema: cloneReusableSchema(block.schema, block.schema.component),
+    schemaMode: false,
   };
 }
 
@@ -2628,6 +2707,7 @@ interface ComponentDefinition {
   baseType: string;
   tags?: string;
   description?: string;
+  schema?: BlockSchema;
 }
 
 function getComponentDefs(): ComponentDefinition[] {
@@ -2639,7 +2719,7 @@ function getComponentDefs(): ComponentDefinition[] {
 }
 
 function getComponentOptions(): string[] {
-  const builtins = ['text', 'quote', 'code', 'expandable', 'table', 'container', 'grid', 'plugin'];
+  const builtins = ['text', 'quote', 'code', 'expandable', 'table', 'container', 'component-list', 'grid', 'plugin'];
   const custom = getComponentDefs()
     .map((def) => def.name.trim())
     .filter((name) => name.length > 0);
@@ -2647,7 +2727,7 @@ function getComponentOptions(): string[] {
 }
 
 function isBuiltinComponent(componentName: string): boolean {
-  return ['text', 'quote', 'code', 'expandable', 'table', 'container', 'grid', 'plugin'].includes(componentName);
+  return ['text', 'quote', 'code', 'expandable', 'table', 'container', 'component-list', 'grid', 'plugin'].includes(componentName);
 }
 
 function renderComponentOptions(selected: string): string {
@@ -2655,7 +2735,7 @@ function renderComponentOptions(selected: string): string {
 }
 
 function resolveBaseComponent(componentName: string): string {
-  if (['text', 'quote', 'code', 'expandable', 'table', 'container', 'grid', 'plugin'].includes(componentName)) {
+  if (['text', 'quote', 'code', 'expandable', 'table', 'container', 'component-list', 'grid', 'plugin'].includes(componentName)) {
     return componentName;
   }
   const def = getComponentDefs().find((item) => item.name === componentName);
@@ -2665,11 +2745,19 @@ function resolveBaseComponent(componentName: string): string {
 function applyComponentDefaults(schema: BlockSchema, componentName: string): void {
   const def = getComponentDefs().find((item) => item.name === componentName);
   const base = resolveBaseComponent(componentName);
+  if (def?.schema) {
+    Object.assign(schema, cloneReusableSchema(def.schema, componentName));
+    return;
+  }
   if (base === 'table' && schema.tableRows.length === 0) {
     schema.tableRows.push(createDefaultTableRow(getTableColumns(schema).length));
   }
   if (base === 'grid') {
     ensureGridItems(schema);
+  }
+  if (base === 'component-list') {
+    schema.componentListComponent = 'text';
+    ensureComponentListBlocks({ id: '', text: '', schema, schemaMode: false });
   }
   if (!def) {
     return;

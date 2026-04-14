@@ -1231,6 +1231,11 @@ button.tiny {
   margin-top: 0.2rem;
 }
 
+.reader-component-list {
+  display: grid;
+  gap: 0.2rem;
+}
+
 .reader-grid-layout {
   display: grid;
   gap: 0.2rem 0.9rem;

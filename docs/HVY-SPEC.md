@@ -166,6 +166,8 @@ For rich/editor-oriented documents, block metadata MAY include component-specifi
 - `codeLanguage`
 - `containerTitle`
 - `containerBlocks`
+- `componentListComponent`
+- `componentListBlocks`
 - `gridColumns`
 - `gridItems`
 - `pluginUrl`
@@ -191,6 +193,30 @@ Nested block arrays such as `containerBlocks`, `expandableStubBlocks`, and `expa
 ```
 
 Rich clients MAY preserve and round-trip these fields even if a plain Markdown renderer ignores them.
+
+### 5.9 Reusable component definitions
+
+Document metadata MAY include `component_defs`, an array of reusable component definitions for rich authoring tools.
+
+Example:
+
+```yaml
+component_defs:
+  - name: callout
+    baseType: container
+    tags: ui, emphasis
+    description: Framed callout container
+    schema:
+      component: callout
+      customCss: "margin: 0.5rem 0;"
+      containerTitle: Callout
+      containerBlocks: []
+```
+
+Notes:
+- `schema` is optional.
+- When present, rich clients MAY use it as the default schema/template when creating a block with that reusable component.
+- Plain Markdown renderers MAY ignore `component_defs`.
 
 ## 6. Template & Schema (`.thvy`)
 

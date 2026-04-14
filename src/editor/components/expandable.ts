@@ -16,8 +16,7 @@ export const renderExpandableEditor: ComponentEditorRenderer = (sectionKey, bloc
           <div class="ghost-plus-big"><span>+</span></div>
           <div class="ghost-label">Add Stub Component</div>
           <label class="ghost-component-picker">
-            <span>Component</span>
-            <select data-field="expandable-stub-new-component-type" data-expandable-key="${helpers.escapeAttr(stubAddKey)}">
+            <select aria-label="Expandable stub component type" data-field="expandable-stub-new-component-type" data-expandable-key="${helpers.escapeAttr(stubAddKey)}">
               ${helpers.renderComponentOptions(helpers.getSelectedAddComponent(stubAddKey, 'container'))}
             </select>
           </label>
@@ -34,8 +33,7 @@ export const renderExpandableEditor: ComponentEditorRenderer = (sectionKey, bloc
           <div class="ghost-plus-big"><span>+</span></div>
           <div class="ghost-label">Add Expanded Component</div>
           <label class="ghost-component-picker">
-            <span>Component</span>
-            <select data-field="expandable-content-new-component-type" data-expandable-key="${helpers.escapeAttr(contentAddKey)}">
+            <select aria-label="Expandable content component type" data-field="expandable-content-new-component-type" data-expandable-key="${helpers.escapeAttr(contentAddKey)}">
               ${helpers.renderComponentOptions(helpers.getSelectedAddComponent(contentAddKey, 'container'))}
             </select>
           </label>

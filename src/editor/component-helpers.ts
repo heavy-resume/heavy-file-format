@@ -20,6 +20,7 @@ export interface ComponentRenderHelpers {
   renderOption: (value: string, selected: string) => string;
   getTableColumns: (schema: BlockSchema) => string[];
   ensureContainerBlocks: (block: VisualBlock) => void;
+  ensureComponentListBlocks: (block: VisualBlock) => void;
   getSelectedAddComponent: (key: string, fallback: string) => string;
 }
 

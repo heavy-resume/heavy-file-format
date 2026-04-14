@@ -1,4 +1,5 @@
 import { renderCodeReader } from '../editor/components/code';
+import { renderComponentListReader } from '../editor/components/component-list';
 import { renderContainerReader } from '../editor/components/container';
 import { renderExpandableReader } from '../editor/components/expandable';
 import { renderGridReader } from '../editor/components/grid';
@@ -120,6 +121,9 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     }
     if (base === 'container') {
       return `<div ${blockAttrs}>${renderContainerReader(section, block, helpers)}</div>`;
+    }
+    if (base === 'component-list') {
+      return `<div ${blockAttrs}>${renderComponentListReader(section, block, helpers)}</div>`;
     }
     if (base === 'grid') {
       deps.ensureGridItems(block.schema);

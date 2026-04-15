@@ -92,6 +92,7 @@ const REUSABLE_SECTION_PREFIX = '__reusable__:';
 const REUSABLE_SECTION_DEF_PREFIX = 'section-def:';
 let pendingLinkRange: Range | null = null;
 let pendingLinkEditable: HTMLElement | null = null;
+let pendingLinkAnchor: HTMLAnchorElement | null = null;
 let draggedSectionKey: string | null = null;
 let draggedTableItem: { kind: 'row' | 'column'; sectionKey: string; blockId: string; index: number } | null = null;
 const tagStateHelpers = {
@@ -691,7 +692,7 @@ function bindUi(): void {
 
     if (action === 'deactivate-block' && blockId) {
       event.stopPropagation();
-      clearActiveEditorBlock(blockId);
+      deactivateEditorBlock(sectionKey, blockId);
       renderApp();
       return;
     }
@@ -1328,6 +1329,22 @@ function bindUi(): void {
     }
   });
 
+  app.addEventListener('contextmenu', (event) => {
+    const target = event.target as HTMLElement;
+    const anchor = target.closest<HTMLAnchorElement>('.rich-editor a[href]');
+    if (!anchor) {
+      return;
+    }
+    const editable = anchor.closest<HTMLElement>('.rich-editor');
+    if (!editable) {
+      return;
+    }
+    event.preventDefault();
+    const range = document.createRange();
+    range.selectNodeContents(anchor);
+    openLinkInlineModal(editable, anchor.getAttribute('href') ?? '', range, anchor);
+  });
+
   app.addEventListener('input', (event) => {
     const target = event.target as HTMLElement;
     if (handleTagEditorInput(target, tagStateHelpers)) {
@@ -1827,7 +1844,7 @@ function bindLinkInlineModal(): void {
   });
 }
 
-function openLinkInlineModal(editable: HTMLElement): void {
+function openLinkInlineModal(editable: HTMLElement, initialValue = '', range?: Range | null, anchor?: HTMLAnchorElement | null): void {
   const modal = app.querySelector<HTMLDivElement>('#linkInlineModal');
   const input = app.querySelector<HTMLInputElement>('#linkInlineInput');
   if (!modal || !input) {
@@ -1835,17 +1852,25 @@ function openLinkInlineModal(editable: HTMLElement): void {
   }
 
   pendingLinkEditable = editable;
-  const selection = window.getSelection();
-  if (selection && selection.rangeCount > 0) {
-    pendingLinkRange = selection.getRangeAt(0).cloneRange();
+  pendingLinkAnchor = anchor ?? null;
+  if (range) {
+    pendingLinkRange = range.cloneRange();
   } else {
-    pendingLinkRange = null;
+    const selection = window.getSelection();
+    if (selection && selection.rangeCount > 0) {
+      pendingLinkRange = selection.getRangeAt(0).cloneRange();
+    } else {
+      pendingLinkRange = null;
+    }
   }
 
   modal.classList.add('is-open');
   modal.setAttribute('aria-hidden', 'false');
-  input.value = '';
-  window.setTimeout(() => input.focus(), 0);
+  input.value = initialValue;
+  window.setTimeout(() => {
+    input.focus();
+    input.select();
+  }, 0);
 }
 
 function closeLinkInlineModal(): void {
@@ -1856,6 +1881,7 @@ function closeLinkInlineModal(): void {
   }
   pendingLinkRange = null;
   pendingLinkEditable = null;
+  pendingLinkAnchor = null;
 }
 
 function applyInlineLinkFromModal(): void {
@@ -1871,6 +1897,13 @@ function applyInlineLinkFromModal(): void {
   }
   const link = value.startsWith('#') ? value : value;
   pendingLinkEditable.focus();
+  if (pendingLinkAnchor && pendingLinkEditable.contains(pendingLinkAnchor)) {
+    pendingLinkAnchor.setAttribute('href', link);
+    const inputEvent = new InputEvent('input', { bubbles: true });
+    pendingLinkEditable.dispatchEvent(inputEvent);
+    closeLinkInlineModal();
+    return;
+  }
   if (pendingLinkRange) {
     const selection = window.getSelection();
     if (selection) {
@@ -2087,6 +2120,27 @@ function handleBlockFieldInput(target: HTMLElement): boolean {
 
   if (field === 'block-plugin-url' && target instanceof HTMLInputElement) {
     block.schema.pluginUrl = target.value;
+    syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
+    refreshReaderPanels();
+    return true;
+  }
+
+  if (field === 'block-xref-title' && target instanceof HTMLInputElement) {
+    block.schema.xrefTitle = target.value;
+    syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
+    refreshReaderPanels();
+    return true;
+  }
+
+  if (field === 'block-xref-detail' && target instanceof HTMLInputElement) {
+    block.schema.xrefDetail = target.value;
+    syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
+    refreshReaderPanels();
+    return true;
+  }
+
+  if (field === 'block-xref-target' && target instanceof HTMLInputElement) {
+    block.schema.xrefTarget = target.value;
     syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
     refreshReaderPanels();
     return true;
@@ -2342,6 +2396,32 @@ function clearActiveEditorBlock(blockId?: string): void {
   }
 }
 
+function deactivateEditorBlock(sectionKey: string, blockId: string): void {
+  const activeBlockId = state.activeEditorBlock?.blockId ?? null;
+  if (!activeBlockId) {
+    return;
+  }
+  const clickedBlock = findBlockByIds(sectionKey, blockId);
+  const shouldDeactivate =
+    activeBlockId === blockId || (clickedBlock ? blockContainsBlockId(clickedBlock, activeBlockId) : false);
+  if (!shouldDeactivate) {
+    return;
+  }
+  const parentId = findBlockContainerById(state.document.sections, sectionKey, blockId)?.ownerBlockId ?? null;
+  state.activeEditorBlock = parentId ? { sectionKey, blockId: parentId } : null;
+}
+
+function blockContainsBlockId(block: VisualBlock, blockId: string): boolean {
+  return Boolean(
+    findBlockInList(block.schema.containerBlocks ?? [], blockId)
+      || findBlockInList(block.schema.componentListBlocks ?? [], blockId)
+      || findBlockInList((block.schema.gridItems ?? []).map((item) => item.block), blockId)
+      || findBlockInList(block.schema.expandableStubBlocks ?? [], blockId)
+      || findBlockInList(block.schema.expandableContentBlocks ?? [], blockId)
+      || (block.schema.tableRows ?? []).some((row) => findBlockInList(row.detailsBlocks ?? [], blockId))
+  );
+}
+
 function isActiveEditorSectionTitle(sectionKey: string): boolean {
   return state.activeEditorSectionTitleKey === sectionKey;
 }
@@ -2365,10 +2445,6 @@ function ensureComponentListBlocks(block: VisualBlock): void {
   if (!block.schema.componentListComponent) {
     block.schema.componentListComponent = 'text';
   }
-  block.schema.componentListBlocks = block.schema.componentListBlocks.map((itemBlock) => {
-    itemBlock.schema.component = block.schema.componentListComponent;
-    return itemBlock;
-  });
 }
 
 function ensureExpandableBlocks(block: VisualBlock): void {
@@ -2494,7 +2570,7 @@ function parseBlocks(contentMarkdown: string, sectionMeta: JsonObject, documentM
   let currentHasDirective = false;
 
   const resolveParsedBase = (componentName: string): string => {
-    if (['text', 'quote', 'code', 'expandable', 'table', 'container', 'component-list', 'grid', 'plugin'].includes(componentName)) {
+    if (isBuiltinComponentName(componentName)) {
       return componentName;
     }
     const defs = Array.isArray(documentMeta.component_defs) ? (documentMeta.component_defs as JsonObject[]) : [];
@@ -2792,6 +2868,11 @@ function serializeBlockSchema(
   addIfChanged(payload, 'tags', schema.tags, defaults.tags);
   addIfChanged(payload, 'description', schema.description, defaults.description);
 
+  if (component === 'xref-card') {
+    addIfChanged(payload, 'xrefTitle', schema.xrefTitle, defaults.xrefTitle);
+    addIfChanged(payload, 'xrefDetail', schema.xrefDetail, defaults.xrefDetail);
+    addIfChanged(payload, 'xrefTarget', schema.xrefTarget, defaults.xrefTarget);
+  }
   if (component === 'code') {
     addIfChanged(payload, 'codeLanguage', schema.codeLanguage, defaults.codeLanguage);
   }
@@ -3283,6 +3364,9 @@ function defaultBlockSchema(component = 'text'): BlockSchema {
     tags: '',
     description: '',
     metaOpen: false,
+    xrefTitle: '',
+    xrefDetail: '',
+    xrefTarget: '',
     pluginUrl: '',
     expandableStubComponent: 'container',
     expandableContentComponent: 'container',
@@ -3424,6 +3508,9 @@ function schemaFromUnknown(value: unknown): BlockSchema {
     tags: typeof candidate.tags === 'string' ? candidate.tags : defaults.tags,
     description: typeof candidate.description === 'string' ? candidate.description : defaults.description,
     metaOpen: candidate.metaOpen === true,
+    xrefTitle: typeof candidate.xrefTitle === 'string' ? candidate.xrefTitle : defaults.xrefTitle,
+    xrefDetail: typeof candidate.xrefDetail === 'string' ? candidate.xrefDetail : defaults.xrefDetail,
+    xrefTarget: typeof candidate.xrefTarget === 'string' ? candidate.xrefTarget : defaults.xrefTarget,
     pluginUrl: typeof candidate.pluginUrl === 'string' ? candidate.pluginUrl : defaults.pluginUrl,
     expandableStubComponent:
       typeof candidate.expandableStubComponent === 'string' ? candidate.expandableStubComponent : defaults.expandableStubComponent,
@@ -3871,7 +3958,24 @@ function getSectionId(section: VisualSection): string {
 }
 
 function markdownToEditorHtml(markdown: string): string {
-  return DOMPurify.sanitize(marked.parse(markdown || '') as string);
+  return addExternalLinkTargets(DOMPurify.sanitize(marked.parse(escapeRawHtml(markdown || '')) as string));
+}
+
+function addExternalLinkTargets(html: string): string {
+  const template = document.createElement('template');
+  template.innerHTML = html;
+  template.content.querySelectorAll<HTMLAnchorElement>('a[href]').forEach((anchor) => {
+    const href = anchor.getAttribute('href') ?? '';
+    if (/^https?:\/\//i.test(href)) {
+      anchor.setAttribute('target', '_blank');
+      anchor.setAttribute('rel', 'noopener noreferrer');
+    }
+  });
+  return template.innerHTML;
+}
+
+function escapeRawHtml(markdown: string): string {
+  return markdown.replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 function normalizeMarkdownLists(markdown: string): string {
@@ -4117,7 +4221,7 @@ function instantiateReusableSection(name: string, level: number): VisualSection 
 }
 
 function getComponentOptions(): string[] {
-  const builtins = ['text', 'quote', 'code', 'expandable', 'table', 'container', 'component-list', 'grid', 'plugin'];
+  const builtins = ['text', 'quote', 'code', 'expandable', 'table', 'container', 'component-list', 'grid', 'plugin', 'xref-card'];
   const custom = getComponentDefs()
     .map((def) => def.name.trim())
     .filter((name) => name.length > 0);
@@ -4125,7 +4229,7 @@ function getComponentOptions(): string[] {
 }
 
 function isBuiltinComponent(componentName: string): boolean {
-  return ['text', 'quote', 'code', 'expandable', 'table', 'container', 'component-list', 'grid', 'plugin'].includes(componentName);
+  return isBuiltinComponentName(componentName);
 }
 
 function renderComponentOptions(selected: string): string {
@@ -4133,11 +4237,15 @@ function renderComponentOptions(selected: string): string {
 }
 
 function resolveBaseComponent(componentName: string): string {
-  if (['text', 'quote', 'code', 'expandable', 'table', 'container', 'component-list', 'grid', 'plugin'].includes(componentName)) {
+  if (isBuiltinComponentName(componentName)) {
     return componentName;
   }
   const def = getComponentDefs().find((item) => item.name === componentName);
   return def?.baseType || 'text';
+}
+
+function isBuiltinComponentName(componentName: string): boolean {
+  return ['text', 'quote', 'code', 'expandable', 'table', 'container', 'component-list', 'grid', 'plugin', 'xref-card'].includes(componentName);
 }
 
 function applyComponentDefaults(schema: BlockSchema, componentName: string): void {

@@ -201,6 +201,12 @@ Grid blocks MAY be emitted with specialized directives so grid item content rema
 <!--hvy:grid:1 {"id":"tools-technologies","column":"right","component":"component-list","componentListComponent":"text"}-->
 ```
 
+Cross-reference cards MAY be emitted as a block directive with all card data in metadata and no raw HTML body:
+
+```markdown
+<!--hvy:xref-card {"xrefTitle":"Heavy Stack","xrefDetail":"05/2024 - present","xrefTarget":"#project-heavy-stack"}-->
+```
+
 Rules:
 - The directive MUST be on a single line.
 - The payload MUST be valid JSON object.
@@ -224,6 +230,9 @@ For rich/editor-oriented documents, block metadata MAY include component-specifi
 - `gridColumns`
 - `gridItems`
 - `pluginUrl`
+- `xrefTitle`
+- `xrefDetail`
+- `xrefTarget`
 - `expandableAlwaysShowStub`
 - `expandableExpanded`
 - `tableColumns`
@@ -402,6 +411,7 @@ Client assumptions from product requirements:
 
 Normative behavior:
 - Renderers MUST NOT execute JavaScript from document content.
+- Renderers MUST escape raw HTML in Markdown content. Rich visual structures SHOULD be represented with HVY components and metadata rather than inline HTML.
 - Remote resource fetches MUST be gated behind user network permission.
 - Plugin installation MUST show `id` and `source` before trust is granted.
 

@@ -6,6 +6,7 @@ import { renderGridReader } from '../editor/components/grid';
 import { renderPluginReader } from '../editor/components/plugin';
 import { renderTableReader } from '../editor/components/table';
 import { renderTextReader } from '../editor/components/text';
+import { renderXrefCardReader } from '../editor/components/xref-card';
 import type { ComponentRenderHelpers } from '../editor/component-helpers';
 import type { BlockSchema, VisualBlock, VisualSection } from '../editor/types';
 
@@ -160,6 +161,9 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     }
     if (base === 'table') {
       return `<div ${blockAttrs}>${renderTableReader(section, block, helpers)}</div>`;
+    }
+    if (base === 'xref-card') {
+      return `<div ${blockAttrs}>${renderXrefCardReader(section, block, helpers)}</div>`;
     }
     return `<div ${blockAttrs}>${renderTextReader(section, block, helpers)}</div>`;
   }

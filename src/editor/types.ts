@@ -35,6 +35,9 @@ export interface BlockSchema {
   tags: string;
   description: string;
   metaOpen: boolean;
+  xrefTitle: string;
+  xrefDetail: string;
+  xrefTarget: string;
   pluginUrl: string;
   expandableStubComponent: string;
   expandableContentComponent: string;

@@ -539,10 +539,9 @@ Software Engineering
 <!--hvy:expandable:1 {"component":"text","css":"margin: 0.4rem 0 0.1rem;"}-->
 #### Projects
 
-<!--hvy:expandable:1 {"component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->
+<!--hvy:expandable:1 {"component":"component-list","componentListComponent":"xref-card","css":"margin: 0;"}-->
 
-<!--hvy:component-list:0 {"component":"text","css":"margin: 0.25rem 0;"}-->
-[Heavy Stack, 05/2024 - present](#project-heavy-stack)
+<!--hvy:component-list:0 {"component":"xref-card","css":"margin: 0.25rem 0;","xrefTitle":"Heavy Stack","xrefDetail":"05/2024 - present","xrefTarget":"#project-heavy-stack"}-->
 
 <!--hvy:expandable {"id":"skill-reverse-engineering","css":"margin: 0.35rem 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
@@ -552,10 +551,9 @@ Reverse Engineering
 <!--hvy:expandable:1 {"component":"text","css":"margin: 0.4rem 0 0.1rem;"}-->
 #### Projects
 
-<!--hvy:expandable:1 {"component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->
+<!--hvy:expandable:1 {"component":"component-list","componentListComponent":"xref-card","css":"margin: 0;"}-->
 
-<!--hvy:component-list:0 {"component":"text","css":"margin: 0.25rem 0;"}-->
-[Heavy Stack, 05/2024 - present](#project-heavy-stack)
+<!--hvy:component-list:0 {"component":"xref-card","css":"margin: 0.25rem 0;","xrefTitle":"Heavy Stack","xrefDetail":"05/2024 - present","xrefTarget":"#project-heavy-stack"}-->
 
 <!--hvy:expandable {"id":"skill-library-development","css":"margin: 0.35rem 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
@@ -565,10 +563,9 @@ Library Development
 <!--hvy:expandable:1 {"component":"text","css":"margin: 0.4rem 0 0.1rem;"}-->
 #### Projects
 
-<!--hvy:expandable:1 {"component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->
+<!--hvy:expandable:1 {"component":"component-list","componentListComponent":"xref-card","css":"margin: 0;"}-->
 
-<!--hvy:component-list:0 {"component":"text","css":"margin: 0.25rem 0;"}-->
-[Heavy Stack, 05/2024 - present](#project-heavy-stack)
+<!--hvy:component-list:0 {"component":"xref-card","css":"margin: 0.25rem 0;","xrefTitle":"Heavy Stack","xrefDetail":"05/2024 - present","xrefTarget":"#project-heavy-stack"}-->
 
 <!--hvy:expandable {"id":"skill-llm-prompt-engineering","css":"margin: 0.35rem 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
@@ -578,10 +575,9 @@ LLM Prompt Engineering
 <!--hvy:expandable:1 {"component":"text","css":"margin: 0.4rem 0 0.1rem;"}-->
 #### Projects
 
-<!--hvy:expandable:1 {"component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->
+<!--hvy:expandable:1 {"component":"component-list","componentListComponent":"xref-card","css":"margin: 0;"}-->
 
-<!--hvy:component-list:0 {"component":"text","css":"margin: 0.25rem 0;"}-->
-[Autonomous Agent Hackathon, 08/2023 - 08/2023](#project-autonomous-agent-hackathon)
+<!--hvy:component-list:0 {"component":"xref-card","css":"margin: 0.25rem 0;","xrefTitle":"Autonomous Agent Hackathon","xrefDetail":"08/2023 - 08/2023","xrefTarget":"#project-autonomous-agent-hackathon"}-->
 
 <!--hvy:expandable {"id":"skill-project-management","css":"margin: 0.35rem 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
@@ -591,10 +587,9 @@ Project Management
 <!--hvy:expandable:1 {"component":"text","css":"margin: 0.4rem 0 0.1rem;"}-->
 #### Projects
 
-<!--hvy:expandable:1 {"component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->
+<!--hvy:expandable:1 {"component":"component-list","componentListComponent":"xref-card","css":"margin: 0;"}-->
 
-<!--hvy:component-list:0 {"component":"text","css":"margin: 0.25rem 0;"}-->
-[Autonomous Agent Hackathon, 08/2023 - 08/2023](#project-autonomous-agent-hackathon)
+<!--hvy:component-list:0 {"component":"xref-card","css":"margin: 0.25rem 0;","xrefTitle":"Autonomous Agent Hackathon","xrefDetail":"08/2023 - 08/2023","xrefTarget":"#project-autonomous-agent-hackathon"}-->
 
 <!--hvy: {"id":"tools-technologies","lock":true,"expanded":false}-->
 #! Tools & Technologies
@@ -610,10 +605,9 @@ TypeScript
 <!--hvy:expandable:1 {"component":"text","css":"margin: 0.4rem 0 0.1rem;"}-->
 #### Projects
 
-<!--hvy:expandable:1 {"component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->
+<!--hvy:expandable:1 {"component":"component-list","componentListComponent":"xref-card","css":"margin: 0;"}-->
 
-<!--hvy:component-list:0 {"component":"text","css":"margin: 0.25rem 0;"}-->
-[Heavy Stack, 05/2024 - present](#project-heavy-stack)
+<!--hvy:component-list:0 {"component":"xref-card","css":"margin: 0.25rem 0;","xrefTitle":"Heavy Stack","xrefDetail":"05/2024 - present","xrefTarget":"#project-heavy-stack"}-->
 
 <!--hvy:expandable {"id":"tool-python","css":"margin: 0.35rem 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
@@ -623,13 +617,11 @@ Python
 <!--hvy:expandable:1 {"component":"text","css":"margin: 0.4rem 0 0.1rem;"}-->
 #### Projects
 
-<!--hvy:expandable:1 {"component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->
+<!--hvy:expandable:1 {"component":"component-list","componentListComponent":"xref-card","css":"margin: 0;"}-->
 
-<!--hvy:component-list:0 {"component":"text","css":"margin: 0.25rem 0;"}-->
-[Heavy Stack, 05/2024 - present](#project-heavy-stack)
+<!--hvy:component-list:0 {"component":"xref-card","css":"margin: 0.25rem 0;","xrefTitle":"Heavy Stack","xrefDetail":"05/2024 - present","xrefTarget":"#project-heavy-stack"}-->
 
-<!--hvy:component-list:1 {"component":"text","css":"margin: 0.25rem 0;"}-->
-[Autonomous Agent Hackathon, 08/2023 - 08/2023](#project-autonomous-agent-hackathon)
+<!--hvy:component-list:1 {"component":"xref-card","css":"margin: 0.25rem 0;","xrefTitle":"Autonomous Agent Hackathon","xrefDetail":"08/2023 - 08/2023","xrefTarget":"#project-autonomous-agent-hackathon"}-->
 
 <!--hvy:expandable:1 {"component":"text","css":"margin: 0.4rem 0 0.1rem;"}-->
 #### Education
@@ -660,13 +652,11 @@ Developer Containers
 <!--hvy:expandable:1 {"component":"text","css":"margin: 0.4rem 0 0.1rem;"}-->
 #### Projects
 
-<!--hvy:expandable:1 {"component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->
+<!--hvy:expandable:1 {"component":"component-list","componentListComponent":"xref-card","css":"margin: 0;"}-->
 
-<!--hvy:component-list:0 {"component":"text","css":"margin: 0.25rem 0;"}-->
-[Heavy Stack, 05/2024 - present](#project-heavy-stack)
+<!--hvy:component-list:0 {"component":"xref-card","css":"margin: 0.25rem 0;","xrefTitle":"Heavy Stack","xrefDetail":"05/2024 - present","xrefTarget":"#project-heavy-stack"}-->
 
-<!--hvy:component-list:1 {"component":"text","css":"margin: 0.25rem 0;"}-->
-[Autonomous Agent Hackathon, 08/2023 - 08/2023](#project-autonomous-agent-hackathon)
+<!--hvy:component-list:1 {"component":"xref-card","css":"margin: 0.25rem 0;","xrefTitle":"Autonomous Agent Hackathon","xrefDetail":"08/2023 - 08/2023","xrefTarget":"#project-autonomous-agent-hackathon"}-->
 
 <!--hvy:expandable {"id":"tool-openai-api","css":"margin: 0.35rem 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
@@ -676,10 +666,9 @@ OpenAI API
 <!--hvy:expandable:1 {"component":"text","css":"margin: 0.4rem 0 0.1rem;"}-->
 #### Projects
 
-<!--hvy:expandable:1 {"component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->
+<!--hvy:expandable:1 {"component":"component-list","componentListComponent":"xref-card","css":"margin: 0;"}-->
 
-<!--hvy:component-list:0 {"component":"text","css":"margin: 0.25rem 0;"}-->
-[Autonomous Agent Hackathon, 08/2023 - 08/2023](#project-autonomous-agent-hackathon)
+<!--hvy:component-list:0 {"component":"xref-card","css":"margin: 0.25rem 0;","xrefTitle":"Autonomous Agent Hackathon","xrefDetail":"08/2023 - 08/2023","xrefTarget":"#project-autonomous-agent-hackathon"}-->
 
 <!--hvy:expandable {"id":"tool-github-codespaces","css":"margin: 0.35rem 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
@@ -689,10 +678,9 @@ GitHub Codespaces
 <!--hvy:expandable:1 {"component":"text","css":"margin: 0.4rem 0 0.1rem;"}-->
 #### Projects
 
-<!--hvy:expandable:1 {"component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->
+<!--hvy:expandable:1 {"component":"component-list","componentListComponent":"xref-card","css":"margin: 0;"}-->
 
-<!--hvy:component-list:0 {"component":"text","css":"margin: 0.25rem 0;"}-->
-[Autonomous Agent Hackathon, 08/2023 - 08/2023](#project-autonomous-agent-hackathon)
+<!--hvy:component-list:0 {"component":"xref-card","css":"margin: 0.25rem 0;","xrefTitle":"Autonomous Agent Hackathon","xrefDetail":"08/2023 - 08/2023","xrefTarget":"#project-autonomous-agent-hackathon"}-->
 
 <!--hvy:expandable {"id":"tool-superagi","css":"margin: 0.35rem 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
@@ -702,10 +690,9 @@ SuperAGI
 <!--hvy:expandable:1 {"component":"text","css":"margin: 0.4rem 0 0.1rem;"}-->
 #### Projects
 
-<!--hvy:expandable:1 {"component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->
+<!--hvy:expandable:1 {"component":"component-list","componentListComponent":"xref-card","css":"margin: 0;"}-->
 
-<!--hvy:component-list:0 {"component":"text","css":"margin: 0.25rem 0;"}-->
-[Autonomous Agent Hackathon, 08/2023 - 08/2023](#project-autonomous-agent-hackathon)
+<!--hvy:component-list:0 {"component":"xref-card","css":"margin: 0.25rem 0;","xrefTitle":"Autonomous Agent Hackathon","xrefDetail":"08/2023 - 08/2023","xrefTarget":"#project-autonomous-agent-hackathon"}-->
 
 <!--hvy: {"id":"history","lock":true}-->
 #! History

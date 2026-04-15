@@ -10,6 +10,7 @@ import { renderGridEditor } from './components/grid';
 import { renderPluginEditor } from './components/plugin';
 import { renderTableEditor } from './components/table';
 import { renderTextEditor } from './components/text';
+import { renderXrefCardEditor } from './components/xref-card';
 import { renderTagEditor } from './tag-editor';
 import { getTemplateFields, renderTemplateGhosts } from './template';
 import type { Align, BlockSchema, VisualBlock, VisualSection } from './types';
@@ -483,6 +484,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
                     ${deps.renderOption('component-list', def.baseType)}
                     ${deps.renderOption('grid', def.baseType)}
                     ${deps.renderOption('plugin', def.baseType)}
+                    ${deps.renderOption('xref-card', def.baseType)}
                   </select>
                 </label>
                 <label>
@@ -558,6 +560,9 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     if (component === 'table') {
       return renderTableEditor(sectionKey, block, helpers);
     }
+    if (component === 'xref-card') {
+      return renderXrefCardEditor(sectionKey, block, helpers);
+    }
     return renderTextEditor(sectionKey, block, helpers);
   }
 
@@ -612,12 +617,12 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
 
   function renderComponentFragment(componentName: string, content: string, block: VisualBlock): string {
     const base = deps.resolveBaseComponent(componentName);
-    const normalized = normalizeMarkdownLists(content);
+    const normalized = escapeRawHtml(normalizeMarkdownLists(content));
     if (base === 'quote') {
       if (content.trim().length === 0) {
         return '';
       }
-      return `<blockquote>${unwrapSingleParagraph(DOMPurify.sanitize(marked.parse(normalized) as string))}</blockquote>`;
+      return `<blockquote>${unwrapSingleParagraph(addExternalLinkTargets(DOMPurify.sanitize(marked.parse(normalized) as string)))}</blockquote>`;
     }
     if (base === 'code') {
       const language = (block.schema.codeLanguage || 'text').trim() || 'text';
@@ -629,7 +634,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         <pre><code class="hljs language-${deps.escapeAttr(language)}">${highlighted}</code></pre>
       </div>`;
     }
-    return unwrapSingleParagraph(DOMPurify.sanitize(marked.parse(normalized) as string));
+    return unwrapSingleParagraph(addExternalLinkTargets(DOMPurify.sanitize(marked.parse(normalized) as string)));
   }
 
   return {
@@ -650,6 +655,10 @@ function normalizeMarkdownLists(markdown: string): string {
       .join('\n');
     return `${prefix}${normalized}`;
   });
+}
+
+function escapeRawHtml(markdown: string): string {
+  return markdown.replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 function highlightCode(code: string, language: string, escapeHtml: (value: string) => string): string {
@@ -678,4 +687,17 @@ function unwrapSingleParagraph(html: string): string {
     return html;
   }
   return inner;
+}
+
+function addExternalLinkTargets(html: string): string {
+  const template = document.createElement('template');
+  template.innerHTML = html;
+  template.content.querySelectorAll<HTMLAnchorElement>('a[href]').forEach((anchor) => {
+    const href = anchor.getAttribute('href') ?? '';
+    if (/^https?:\/\//i.test(href)) {
+      anchor.setAttribute('target', '_blank');
+      anchor.setAttribute('rel', 'noopener noreferrer');
+    }
+  });
+  return template.innerHTML;
 }

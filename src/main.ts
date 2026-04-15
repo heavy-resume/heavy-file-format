@@ -1,4 +1,5 @@
 import './style.css';
+import 'highlight.js/styles/github.css';
 import bundledExampleHvy from '../examples/example.hvy?raw';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';

@@ -1,5 +1,6 @@
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
+import hljs from 'highlight.js/lib/core';
 import type { ComponentRenderHelpers } from './component-helpers';
 import { renderCodeEditor } from './components/code';
 import { renderComponentListEditor } from './components/component-list';
@@ -12,6 +13,34 @@ import { renderTextEditor } from './components/text';
 import { renderTagEditor } from './tag-editor';
 import { getTemplateFields, renderTemplateGhosts } from './template';
 import type { Align, BlockSchema, VisualBlock, VisualSection } from './types';
+import bash from 'highlight.js/lib/languages/bash';
+import css from 'highlight.js/lib/languages/css';
+import javascript from 'highlight.js/lib/languages/javascript';
+import json from 'highlight.js/lib/languages/json';
+import markdown from 'highlight.js/lib/languages/markdown';
+import plaintext from 'highlight.js/lib/languages/plaintext';
+import python from 'highlight.js/lib/languages/python';
+import typescript from 'highlight.js/lib/languages/typescript';
+import xml from 'highlight.js/lib/languages/xml';
+
+hljs.registerLanguage('bash', bash);
+hljs.registerLanguage('sh', bash);
+hljs.registerLanguage('shell', bash);
+hljs.registerLanguage('css', css);
+hljs.registerLanguage('html', xml);
+hljs.registerLanguage('xml', xml);
+hljs.registerLanguage('javascript', javascript);
+hljs.registerLanguage('js', javascript);
+hljs.registerLanguage('json', json);
+hljs.registerLanguage('markdown', markdown);
+hljs.registerLanguage('md', markdown);
+hljs.registerLanguage('plaintext', plaintext);
+hljs.registerLanguage('text', plaintext);
+hljs.registerLanguage('txt', plaintext);
+hljs.registerLanguage('python', python);
+hljs.registerLanguage('py', python);
+hljs.registerLanguage('typescript', typescript);
+hljs.registerLanguage('ts', typescript);
 
 interface ThemeConfig {
   mode: 'light' | 'dark';
@@ -575,7 +604,14 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       return `<blockquote>${DOMPurify.sanitize(marked.parse(normalized) as string)}</blockquote>`;
     }
     if (base === 'code') {
-      return `<pre><code class="language-${deps.escapeAttr(block.schema.codeLanguage || 'txt')}">${deps.escapeHtml(content)}</code></pre>`;
+      const language = (block.schema.codeLanguage || 'text').trim() || 'text';
+      const highlighted = highlightCode(content, language, deps.escapeHtml);
+      return `<div class="reader-code-block">
+        <div class="reader-code-head">
+          <span class="reader-code-language">${deps.escapeHtml(language)}</span>
+        </div>
+        <pre><code class="hljs language-${deps.escapeAttr(language)}">${highlighted}</code></pre>
+      </div>`;
     }
     return DOMPurify.sanitize(marked.parse(normalized) as string);
   }
@@ -598,4 +634,19 @@ function normalizeMarkdownLists(markdown: string): string {
       .join('\n');
     return `${prefix}${normalized}`;
   });
+}
+
+function highlightCode(code: string, language: string, escapeHtml: (value: string) => string): string {
+  if (code.trim().length === 0) {
+    return '';
+  }
+  const normalizedLanguage = language.trim().toLowerCase();
+  try {
+    if (normalizedLanguage && hljs.getLanguage(normalizedLanguage)) {
+      return DOMPurify.sanitize(hljs.highlight(code, { language: normalizedLanguage }).value);
+    }
+    return DOMPurify.sanitize(hljs.highlightAuto(code).value);
+  } catch {
+    return escapeHtml(code);
+  }
 }

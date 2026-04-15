@@ -93,7 +93,7 @@ component_defs:
                     componentListComponent: text
                     css: "margin: 0;"
                     componentListBlocks:
-                      - text: "#### Skills"
+                      - text: "#### Relevant Skills"
                         schema:
                           component: text
                           css: "margin: 0 0 0.25rem;"
@@ -118,7 +118,7 @@ component_defs:
                     componentListComponent: text
                     css: "margin: 0;"
                     componentListBlocks:
-                      - text: "#### Tools & Technologies"
+                      - text: "#### Tools and Technologies"
                         schema:
                           component: text
                           css: "margin: 0 0 0.25rem;"
@@ -142,7 +142,7 @@ component_defs:
       css: "margin: 0.6rem 0 0;"
       gridColumns: 2
       gridItems:
-        - id: history-skills
+        - id: relevant-skills
           column: left
           block:
             text: ""
@@ -151,23 +151,23 @@ component_defs:
               componentListComponent: text
               css: "margin: 0;"
               componentListBlocks:
-                - text: "#### Skills"
+                - text: "#### Relevant Skills"
                   schema:
                     component: text
                     css: "margin: 0 0 0.25rem;"
-                - text: "{{history_skills.0}}"
+                - text: "{{relevant_skills.0}}"
                   schema:
                     component: text
                     css: "margin: 0.25rem 0;"
-                - text: "{{history_skills.1}}"
+                - text: "{{relevant_skills.1}}"
                   schema:
                     component: text
                     css: "margin: 0.25rem 0;"
-                - text: "{{history_skills.2}}"
+                - text: "{{relevant_skills.2}}"
                   schema:
                     component: text
                     css: "margin: 0.25rem 0;"
-        - id: history-tools-technologies
+        - id: tools-technologies
           column: right
           block:
             text: ""
@@ -176,19 +176,19 @@ component_defs:
               componentListComponent: text
               css: "margin: 0;"
               componentListBlocks:
-                - text: "#### Tools & Technologies"
+                - text: "#### Tools and Technologies"
                   schema:
                     component: text
                     css: "margin: 0 0 0.25rem;"
-                - text: "{{history_tools_technologies.0}}"
+                - text: "{{tools_technologies.0}}"
                   schema:
                     component: text
                     css: "margin: 0.25rem 0;"
-                - text: "{{history_tools_technologies.1}}"
+                - text: "{{tools_technologies.1}}"
                   schema:
                     component: text
                     css: "margin: 0.25rem 0;"
-                - text: "{{history_tools_technologies.2}}"
+                - text: "{{tools_technologies.2}}"
                   schema:
                     component: text
                     css: "margin: 0.25rem 0;"
@@ -255,38 +255,50 @@ component_defs:
           schema:
             component: text
             css: "margin: 0.5rem 0;"
-        - text: "#### Relevant Skills"
-          schema:
-            component: text
-            css: "margin: 0.6rem 0 0.25rem;"
         - text: ""
           schema:
-            component: component-list
-            componentListComponent: text
-            css: "margin: 0;"
-            componentListBlocks:
-              - text: "{{education_relevant_skills.0}}"
-                schema:
-                  component: text
-                  css: "margin: 0.25rem 0;"
-        - text: "#### Tools and Technologies"
-          schema:
-            component: text
-            css: "margin: 0.6rem 0 0.25rem;"
-        - text: ""
-          schema:
-            component: component-list
-            componentListComponent: text
-            css: "margin: 0;"
-            componentListBlocks:
-              - text: "{{education_tools_technologies.0}}"
-                schema:
-                  component: text
-                  css: "margin: 0.25rem 0;"
-              - text: "{{education_tools_technologies.1}}"
-                schema:
-                  component: text
-                  css: "margin: 0.25rem 0;"
+            component: skills-and-tools-tech-list
+            css: "margin: 0.6rem 0 0;"
+            gridColumns: 2
+            gridItems:
+              - id: education-relevant-skills
+                column: left
+                block:
+                  text: ""
+                  schema:
+                    component: component-list
+                    componentListComponent: text
+                    css: "margin: 0;"
+                    componentListBlocks:
+                      - text: "#### Relevant Skills"
+                        schema:
+                          component: text
+                          css: "margin: 0 0 0.25rem;"
+                      - text: "{{education_relevant_skills.0}}"
+                        schema:
+                          component: text
+                          css: "margin: 0.25rem 0;"
+              - id: education-tools-technologies
+                column: right
+                block:
+                  text: ""
+                  schema:
+                    component: component-list
+                    componentListComponent: text
+                    css: "margin: 0;"
+                    componentListBlocks:
+                      - text: "#### Tools and Technologies"
+                        schema:
+                          component: text
+                          css: "margin: 0 0 0.25rem;"
+                      - text: "{{education_tools_technologies.0}}"
+                        schema:
+                          component: text
+                          css: "margin: 0.25rem 0;"
+                      - text: "{{education_tools_technologies.1}}"
+                        schema:
+                          component: text
+                          css: "margin: 0.25rem 0;"
         - text: "#### Classes"
           schema:
             component: text
@@ -321,6 +333,110 @@ component_defs:
                 schema:
                   component: text
                   css: "margin: 0.25rem 0;"
+  - name: project-record
+    baseType: expandable
+    description: Expandable project record
+    schema:
+      component: project-record
+      css: "margin: 0.35rem 0;"
+      expandableAlwaysShowStub: true
+      expandableExpanded: false
+      expandableStubBlocks:
+        - text: ""
+          schema:
+            component: table
+            css: "margin: 0;"
+            tableColumns: "PROJECT, DATE"
+            tableShowHeader: false
+            tableRows:
+              - cells:
+                  - "{{project_name}}"
+                  - "{{project_date_range}}"
+      expandableContentBlocks:
+        - text: ""
+          schema:
+            component: grid
+            css: "margin: 0 0 0.35rem;"
+            gridColumns: 2
+            gridItems:
+              - id: project-title
+                column: left
+                block:
+                  text: "### {{project_name}}"
+                  schema:
+                    component: text
+                    css: "margin: 0;"
+              - id: project-date-range
+                column: right
+                block:
+                  text: "{{project_date_range}}"
+                  schema:
+                    component: text
+                    css: "margin: 0; text-align: right;"
+        - text: "{{project_description}}"
+          schema:
+            component: text
+            css: "margin: 0.5rem 0;"
+        - text: "[Visit webpage]({{project_url}}) ({{project_url_label}})"
+          schema:
+            component: text
+            css: "margin: 0.35rem 0;"
+        - text: ""
+          schema:
+            component: skills-and-tools-tech-list
+            css: "margin: 0.6rem 0 0;"
+            gridColumns: 2
+            gridItems:
+              - id: project-relevant-skills
+                column: left
+                block:
+                  text: ""
+                  schema:
+                    component: component-list
+                    componentListComponent: text
+                    css: "margin: 0;"
+                    componentListBlocks:
+                      - text: "#### Relevant Skills"
+                        schema:
+                          component: text
+                          css: "margin: 0 0 0.25rem;"
+                      - text: "{{project_relevant_skills.0}}"
+                        schema:
+                          component: text
+                          css: "margin: 0.25rem 0;"
+                      - text: "{{project_relevant_skills.1}}"
+                        schema:
+                          component: text
+                          css: "margin: 0.25rem 0;"
+              - id: project-tools-technologies
+                column: right
+                block:
+                  text: ""
+                  schema:
+                    component: component-list
+                    componentListComponent: text
+                    css: "margin: 0;"
+                    componentListBlocks:
+                      - text: "#### Tools and Technologies"
+                        schema:
+                          component: text
+                          css: "margin: 0 0 0.25rem;"
+                      - text: "{{project_tools_technologies.0}}"
+                        schema:
+                          component: text
+                          css: "margin: 0.25rem 0;"
+                      - text: "{{project_tools_technologies.1}}"
+                        schema:
+                          component: text
+                          css: "margin: 0.25rem 0;"
+                      - text: "{{project_tools_technologies.2}}"
+                        schema:
+                          component: text
+                          css: "margin: 0.25rem 0;"
+                      - text: "{{project_tools_technologies.3}}"
+                        schema:
+                          component: text
+                          css: "margin: 0.25rem 0;"
 ---
 
 <!--hvy: {"id":"header","lock":true}-->
@@ -468,6 +584,64 @@ Title
 <!--hvy:component-list:3 {"component":"text","css":"margin: 0.25rem 0;"}-->
 {{history_tools_technologies.2}}
 
+<!--hvy: {"id":"projects","lock":true}-->
+#! Projects
+
+<!--hvy:text {"css":"margin: 0.5rem 0;"}-->
+# Projects
+
+<!--hvy:table {"css":"margin: 0.5rem 0 0;","tableColumns":"PROJECT, DATE","tableShowHeader":true,"tableRows":[],"lock":true}-->
+
+<!--hvy:component-list {"css":"margin: 0;","componentListComponent":"project-record"}-->
+
+<!--hvy:component-list:0 {"component":"project-record","css":"margin: 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+
+<!--hvy:expandable:0 {"component":"table","css":"margin: 0;","tableColumns":"PROJECT, DATE","tableShowHeader":false,"tableRows":[{"cells":["{{project_name}}","{{project_date_range}}"]}]}-->
+
+<!--hvy:expandable:1 {"component":"grid","css":"margin: 0 0 0.35rem;","gridColumns":2}-->
+
+<!--hvy:grid:0 {"id":"project-title","column":"left","component":"text","css":"margin: 0;"}-->
+### {{project_name}}
+
+<!--hvy:grid:1 {"id":"project-date-range","column":"right","component":"text","css":"margin: 0; text-align: right;"}-->
+{{project_date_range}}
+
+<!--hvy:expandable:1 {"component":"text","css":"margin: 0.5rem 0;"}-->
+{{project_description}}
+
+<!--hvy:expandable:1 {"component":"text","css":"margin: 0.35rem 0;"}-->
+[Visit webpage]({{project_url}}) ({{project_url_label}})
+
+<!--hvy:expandable:1 {"component":"skills-and-tools-tech-list","css":"margin: 0.6rem 0 0;","gridColumns":2}-->
+
+<!--hvy:grid:0 {"id":"project-relevant-skills","column":"left","component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->
+
+<!--hvy:component-list:0 {"component":"text","css":"margin: 0 0 0.25rem;"}-->
+#### Relevant Skills
+
+<!--hvy:component-list:1 {"component":"text","css":"margin: 0.25rem 0;"}-->
+{{project_relevant_skills.0}}
+
+<!--hvy:component-list:2 {"component":"text","css":"margin: 0.25rem 0;"}-->
+{{project_relevant_skills.1}}
+
+<!--hvy:grid:1 {"id":"project-tools-technologies","column":"right","component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->
+
+<!--hvy:component-list:0 {"component":"text","css":"margin: 0 0 0.25rem;"}-->
+#### Tools and Technologies
+
+<!--hvy:component-list:1 {"component":"text","css":"margin: 0.25rem 0;"}-->
+{{project_tools_technologies.0}}
+
+<!--hvy:component-list:2 {"component":"text","css":"margin: 0.25rem 0;"}-->
+{{project_tools_technologies.1}}
+
+<!--hvy:component-list:3 {"component":"text","css":"margin: 0.25rem 0;"}-->
+{{project_tools_technologies.2}}
+
+<!--hvy:component-list:4 {"component":"text","css":"margin: 0.25rem 0;"}-->
+{{project_tools_technologies.3}}
+
 <!--hvy: {"id":"education","lock":true}-->
 #! Education
 
@@ -504,23 +678,25 @@ Title
 <!--hvy:expandable:1 {"component":"text","css":"margin: 0.5rem 0;"}-->
 {{education_description}}
 
-<!--hvy:expandable:1 {"component":"text","css":"margin: 0.6rem 0 0.25rem;"}-->
+<!--hvy:expandable:1 {"component":"skills-and-tools-tech-list","css":"margin: 0.6rem 0 0;","gridColumns":2}-->
+
+<!--hvy:grid:0 {"id":"education-relevant-skills","column":"left","component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->
+
+<!--hvy:component-list:0 {"component":"text","css":"margin: 0 0 0.25rem;"}-->
 #### Relevant Skills
 
-<!--hvy:expandable:1 {"component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->
-
-<!--hvy:component-list:0 {"component":"text","css":"margin: 0.25rem 0;"}-->
+<!--hvy:component-list:1 {"component":"text","css":"margin: 0.25rem 0;"}-->
 {{education_relevant_skills.0}}
 
-<!--hvy:expandable:1 {"component":"text","css":"margin: 0.6rem 0 0.25rem;"}-->
+<!--hvy:grid:1 {"id":"education-tools-technologies","column":"right","component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->
+
+<!--hvy:component-list:0 {"component":"text","css":"margin: 0 0 0.25rem;"}-->
 #### Tools and Technologies
 
-<!--hvy:expandable:1 {"component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->
-
-<!--hvy:component-list:0 {"component":"text","css":"margin: 0.25rem 0;"}-->
+<!--hvy:component-list:1 {"component":"text","css":"margin: 0.25rem 0;"}-->
 {{education_tools_technologies.0}}
 
-<!--hvy:component-list:1 {"component":"text","css":"margin: 0.25rem 0;"}-->
+<!--hvy:component-list:2 {"component":"text","css":"margin: 0.25rem 0;"}-->
 {{education_tools_technologies.1}}
 
 <!--hvy:expandable:1 {"component":"text","css":"margin: 0.6rem 0 0.25rem;"}-->

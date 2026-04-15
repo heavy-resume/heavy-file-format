@@ -4,25 +4,25 @@ template: true
 title: Resume Template
 ---
 
-# Info
-<!--hvy: {"id":"header"}-->
+<!--hvy: {"id":"header","lock":true}-->
+#! Info
 
-<!--hvy:block {"component":"text","customCss":"margin-bottom: 0;"}-->
-# James Hutchison
+<!--hvy:block {"component":"text","customCss":"margin-bottom: 0;","align":"center"}-->
+# Name
 
-<!--hvy:block {"component":"text","customCss":"margin-top: 0;"}-->
-[JAYMZ HUTCH-ih-sun]
+<!--hvy:block {"component":"text","customCss":"margin-top: 0;","align":"center"}-->
+[pronunciation]
 
-<!--hvy:block {"component":"text","customCss":"margin: 0.5rem 0;"}-->
-{{title}}
+<!--hvy:block {"component":"text","customCss":"margin: 0.5rem 0; margin-top: 1rem;","align":"center"}-->
+Title
 
-## Summary
 <!--hvy: {"id":"summary"}-->
+##! Summary
 
 <!--hvy:block {"component":"expandable","customCss":"margin: 0.5rem 0;","expandableAlwaysShowStub":true,"expandableExpanded":false,"expandableStubBlocks":[{"text":"## Summary","schema":{"component":"text","customCss":"margin-bottom: 0;"},"schemaMode":false},{"text":"{{summary}}","schema":{"component":"text","customCss":"margin-top: 0;"},"schemaMode":false}],"expandableContentBlocks":[{"text":"- {{summary_highlights.0}}\n- {{summary_highlights.1}}\n- {{summary_highlights.2}}","schema":{"component":"text","customCss":"margin: 0;"},"schemaMode":false}]}-->
 
-## Locations
 <!--hvy: {"id":"locations"}-->
+##! Locations
 
 <!--hvy:block {"component":"text","customCss":"margin: 0.5rem 0;"}-->
 **Location:** {{location}}

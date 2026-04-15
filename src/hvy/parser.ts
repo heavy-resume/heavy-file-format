@@ -7,6 +7,7 @@ interface ParseState {
   cssBlocks: HvyCssBlock[];
   errors: string[];
   docMetaDirectives: JsonObject[];
+  pendingSection: HvySection | undefined;
 }
 
 export function parseHvy(sourceText: string, extension: HvyDocument['extension']): HvyDocument {
@@ -18,6 +19,7 @@ export function parseHvy(sourceText: string, extension: HvyDocument['extension']
     cssBlocks: [],
     errors: [...frontMatterErrors],
     docMetaDirectives: [],
+    pendingSection: undefined,
   };
 
   state.stack = [state.root];
@@ -48,44 +50,44 @@ export function parseHvy(sourceText: string, extension: HvyDocument['extension']
       continue;
     }
 
-    const headingMatch = line.match(/^(#{1,6})\s+(.*)$/);
-    if (headingMatch) {
-      const level = headingMatch[1].length;
-      const title = (headingMatch[2] ?? '').trim();
-      const newSection = createSection('', title, level);
-
+    const sectionTitleMatch = line.match(/^(#{1,6})!\s+(.*)$/);
+    if (sectionTitleMatch) {
+      const level = sectionTitleMatch[1].length;
+      const title = (sectionTitleMatch[2] ?? '').trim();
+      const section = state.pendingSection ?? createSection('', '', level);
+      state.pendingSection = undefined;
+      section.title = title;
+      section.level = level;
       while ((state.stack.at(-1)?.level ?? 0) >= level) {
         state.stack.pop();
       }
-
       const parent = state.stack.at(-1);
       if (parent) {
-        parent.children.push(newSection);
+        parent.children.push(section);
       }
-      state.stack.push(newSection);
+      state.stack.push(section);
       continue;
     }
 
     const sectionDirective = parsePrefixedDirective(line, 'hvy:');
     if (sectionDirective) {
-      const current = state.stack.at(-1);
-      if (!current || current.id === '__root__') {
-        state.errors.push(`Line ${index + 1}: section directive without a section heading.`);
-        continue;
-      }
+      flushPendingSection(state);
       if (!sectionDirective.ok) {
         state.errors.push(`Line ${index + 1}: invalid section hvy directive JSON.`);
         continue;
       }
-      Object.assign(current.meta, sectionDirective.value);
-      if (typeof current.meta.id === 'string' && current.meta.id.trim().length > 0) {
-        current.id = current.meta.id.trim();
+      const newSection = createSection('', '', 0);
+      Object.assign(newSection.meta, sectionDirective.value);
+      if (typeof newSection.meta.id === 'string' && newSection.meta.id.trim().length > 0) {
+        newSection.id = newSection.meta.id.trim();
       }
+      state.pendingSection = newSection;
       continue;
     }
 
     const cssFence = parseCssFenceStart(line);
     if (cssFence) {
+      flushPendingSection(state);
       const cssLines: string[] = [];
       let closed = false;
       for (index = index + 1; index < lines.length; index += 1) {
@@ -109,14 +111,18 @@ export function parseHvy(sourceText: string, extension: HvyDocument['extension']
 
     if (line.trim().length > 0) {
       pendingCssMeta = undefined;
+      flushPendingSection(state);
     }
 
     const currentSection = state.stack.at(-1);
     if (currentSection && currentSection.id !== '__root__') {
-      currentSection.contentMarkdown += `${line}\n`;
+      if (line.trim().length > 0 || currentSection.contentMarkdown.length > 0) {
+        currentSection.contentMarkdown += `${line}\n`;
+      }
     }
   }
 
+  flushPendingSection(state);
   assignGeneratedIds(state.root.children);
 
   const meta = mergeObjects(frontMatter ?? {}, ...state.docMetaDirectives);
@@ -201,6 +207,25 @@ function createSection(id: string, title: string, level: number): HvySection {
     meta: {},
     children: [],
   };
+}
+
+function flushPendingSection(state: ParseState): void {
+  if (!state.pendingSection) return;
+  const section = state.pendingSection;
+  state.pendingSection = undefined;
+  if (!section.title) {
+    section.title = section.id || 'untitled';
+  }
+  const level = section.level || 1;
+  section.level = level;
+  while ((state.stack.at(-1)?.level ?? 0) >= level) {
+    state.stack.pop();
+  }
+  const parent = state.stack.at(-1);
+  if (parent) {
+    parent.children.push(section);
+  }
+  state.stack.push(section);
 }
 
 function assignGeneratedIds(sections: HvySection[], prefix = 'sec'): void {

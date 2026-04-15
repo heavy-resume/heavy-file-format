@@ -2297,7 +2297,7 @@ function parseBlocks(contentMarkdown: string, sectionMeta: JsonObject): VisualBl
   let currentSchema: BlockSchema = schemaFromUnknown(schemas[0]);
 
   const flush = (): void => {
-    if (currentText.length === 0 && blocks.length > 0) {
+    if (currentText.length === 0) {
       return;
     }
     blocks.push({

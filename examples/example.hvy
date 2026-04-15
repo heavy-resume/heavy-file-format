@@ -4,7 +4,7 @@ title: Reference Implementation Demo
 ---
 
 <!--hvy: {"id":"welcome"}-->
-# Welcome
+#! Welcome
 
 <!--hvy:block {"component":"text","customCss":"margin: 0.5rem 0;"}-->
 This is a **visual HVY editor**. What you see in the editor is the primary authoring experience.
@@ -32,8 +32,8 @@ Containers are good defaults for subsections and grouped notes.
 
 <!--hvy:block {"component":"expandable","customCss":"margin: 0;","expandableAlwaysShowStub":true,"expandableExpanded":false,"expandableStubBlocks":[{"text":"","schema":{"component":"table","customCss":"margin: 0;","tableColumns":"Area, Owner, Status","tableShowHeader":false,"tableRows":[{"cells":["Release cut","Mika","Blocked"],"expanded":false,"clickable":true,"detailsTitle":"","detailsContent":"","detailsBlocks":[]}]},"schemaMode":false}],"expandableContentBlocks":[{"text":"","schema":{"component":"container","customCss":"margin: 0;","containerTitle":"Blocker Context","containerBlocks":[{"text":"This final row group shows how a single summary row can expand into the full explanation, decision history, or unblock plan.","schema":{"component":"text","customCss":"margin: 0;"},"schemaMode":false}]},"schemaMode":false}]}-->
 
-## Container Subsection
 <!--hvy: {"id":"try-it","highlight":true,"custom_css":"margin: 0.5rem 0;"}-->
+##! Container Subsection
 
 <!--hvy:block {"component":"container","customCss":"margin: 0.5rem 0;","containerTitle":"Nested Container"}-->
 Subsections now start as plain container sections.

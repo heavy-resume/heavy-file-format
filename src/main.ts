@@ -87,7 +87,6 @@ let shortcutsBound = false;
 let appEventsBound = false;
 const HISTORY_GROUP_WINDOW_MS = 1200;
 const REUSABLE_SECTION_PREFIX = '__reusable__:';
-const EMPTY_SECTION_STARTER = '__empty_section__';
 const REUSABLE_SECTION_DEF_PREFIX = 'section-def:';
 let pendingLinkRange: Range | null = null;
 let pendingLinkEditable: HTMLElement | null = null;
@@ -122,7 +121,7 @@ editorRenderer = createEditorRenderer(
     flattenSections,
     renderReaderBlock: (section, block) => readerRenderer.renderReaderBlock(section, block),
     renderComponentOptions,
-    renderSectionStarterOptions,
+    renderReusableSectionOptions,
     renderOption,
     resolveBaseComponent,
     ensureContainerBlocks,
@@ -529,6 +528,14 @@ function bindUi(): void {
       }
       return;
     }
+
+    if (field === 'reusable-section-type' && target instanceof HTMLSelectElement) {
+      const key = target.dataset.sectionKey;
+      if (key) {
+        state.addComponentBySection[key] = target.value;
+      }
+      return;
+    }
   });
 
   app.addEventListener('click', (event) => {
@@ -793,8 +800,11 @@ function bindUi(): void {
 
     if (action === 'add-top-level-section') {
       recordHistory();
-      const starter = state.addComponentBySection.__top_level__ ?? 'container';
-      const section = createSectionFromStarter(1, starter, false);
+      const starter = state.addComponentBySection.__top_level__ ?? 'blank';
+      const section = starter === 'blank' ? createEmptySection(1, '', false) : instantiateReusableSection(starter, 1);
+      if (!section) {
+        return;
+      }
       state.document.sections.push(section);
       if (section.blocks[0]) {
         setActiveEditorBlock(section.key, section.blocks[0].id);
@@ -817,7 +827,7 @@ function bindUi(): void {
     }
 
     if (action === 'spawn-child-ghost') {
-      if (!section) {
+      if (!section || section.lock) {
         return;
       }
       recordHistory();
@@ -830,7 +840,7 @@ function bindUi(): void {
     }
 
     if (action === 'spawn-block-ghost') {
-      if (!section) {
+      if (!section || section.lock) {
         return;
       }
       recordHistory();
@@ -843,13 +853,16 @@ function bindUi(): void {
     }
 
     if (action === 'add-subsection') {
-      if (!section) {
+      if (!section || section.lock) {
         return;
       }
       recordHistory();
-      const starterKey = `subsection:${section.key}`;
-      const starter = state.addComponentBySection[starterKey] ?? '__empty_section__';
-      const child = createSectionFromStarter(Math.min(section.level + 1, 6), starter, false);
+      const starter = state.addComponentBySection[`subsection:${section.key}`] ?? 'blank';
+      const child =
+        starter === 'blank' ? createEmptySection(Math.min(section.level + 1, 6), '', false) : instantiateReusableSection(starter, Math.min(section.level + 1, 6));
+      if (!child) {
+        return;
+      }
       section.children.push(child);
       if (child.blocks[0]) {
         setActiveEditorBlock(child.key, child.blocks[0].id);
@@ -879,7 +892,7 @@ function bindUi(): void {
     }
 
     if (action === 'add-child') {
-      if (!section) {
+      if (!section || section.lock) {
         return;
       }
       recordHistory();
@@ -894,11 +907,14 @@ function bindUi(): void {
     }
 
     if (action === 'add-block') {
-      if (!section) {
+      if (!section || section.lock) {
         return;
       }
       recordHistory();
-      const component = state.addComponentBySection[section.key] ?? 'container';
+      const component = (state.addComponentBySection[section.key] ?? '').trim();
+      if (!component) {
+        return;
+      }
       const newBlock = createEmptyBlock(component);
       section.blocks.push(newBlock);
       setActiveEditorBlock(section.key, newBlock.id);
@@ -909,7 +925,7 @@ function bindUi(): void {
     if (action === 'add-component-list-item' && blockId) {
       recordHistory();
       const block = findBlockByIds(sectionKey, blockId);
-      if (!block) {
+      if (!block || block.schema.lock) {
         return;
       }
       ensureComponentListBlocks(block);
@@ -924,7 +940,7 @@ function bindUi(): void {
     if (action === 'add-container-block' && blockId) {
       recordHistory();
       const block = findBlockByIds(sectionKey, blockId);
-      if (!block) {
+      if (!block || block.schema.lock) {
         return;
       }
       ensureContainerBlocks(block);
@@ -940,7 +956,7 @@ function bindUi(): void {
     if (action === 'add-expandable-stub-block' && blockId) {
       recordHistory();
       const block = findBlockByIds(sectionKey, blockId);
-      if (!block) {
+      if (!block || block.schema.lock) {
         return;
       }
       ensureExpandableBlocks(block);
@@ -956,7 +972,7 @@ function bindUi(): void {
     if (action === 'add-expandable-content-block' && blockId) {
       recordHistory();
       const block = findBlockByIds(sectionKey, blockId);
-      if (!block) {
+      if (!block || block.schema.lock) {
         return;
       }
       ensureExpandableBlocks(block);
@@ -1026,7 +1042,7 @@ function bindUi(): void {
     if (action === 'add-table-column' && blockId) {
       recordHistory();
       const block = findBlockByIds(sectionKey, blockId);
-      if (!block) {
+      if (!block || block.schema.lock) {
         return;
       }
       addTableColumn(block.schema);
@@ -1039,7 +1055,7 @@ function bindUi(): void {
       recordHistory();
       const columnIndex = Number.parseInt(actionButton.dataset.columnIndex ?? '', 10);
       const block = findBlockByIds(sectionKey, blockId);
-      if (!block || Number.isNaN(columnIndex)) {
+      if (!block || block.schema.lock || Number.isNaN(columnIndex)) {
         return;
       }
       removeTableColumn(block.schema, columnIndex);
@@ -1076,7 +1092,7 @@ function bindUi(): void {
     if (action === 'add-grid-item' && blockId) {
       recordHistory();
       const block = resolveBlockContext(actionButton)?.block ?? null;
-      if (!block) {
+      if (!block || block.schema.lock) {
         return;
       }
       ensureGridItems(block.schema);
@@ -1216,6 +1232,16 @@ function bindUi(): void {
       return;
     }
 
+    if (field === 'section-lock' && target instanceof HTMLInputElement) {
+      if (!section) {
+        return;
+      }
+      section.lock = target.checked;
+      refreshReaderPanels();
+      renderApp();
+      return;
+    }
+
     if (field === 'new-component-type' && target instanceof HTMLSelectElement) {
       if (!section) {
         return;
@@ -1284,6 +1310,18 @@ function bindUi(): void {
       }
       const block = context.block;
       block.schema.metaOpen = target.checked;
+      renderApp();
+      return;
+    }
+
+    if (field === 'block-lock' && target instanceof HTMLInputElement) {
+      const context = resolveBlockContext(target);
+      if (!context) {
+        return;
+      }
+      context.block.schema.lock = target.checked;
+      syncReusableTemplateForBlock(sectionKey, context.block.id);
+      refreshReaderPanels();
       renderApp();
       return;
     }
@@ -1529,6 +1567,19 @@ function bindModal(): void {
     const saveBtn = target.closest<HTMLElement>('[data-modal-action="save-reusable"]');
     if (saveBtn) {
       saveReusableFromModal();
+      return;
+    }
+
+    const toggleSectionLockBtn = target.closest<HTMLElement>('[data-modal-action="toggle-section-lock"]');
+    if (toggleSectionLockBtn) {
+      const sectionKey = toggleSectionLockBtn.dataset.sectionKey;
+      const section = sectionKey ? findSectionByKey(state.document.sections, sectionKey) : null;
+      if (!section) {
+        return;
+      }
+      section.lock = !section.lock;
+      refreshReaderPanels();
+      renderApp();
       return;
     }
   });
@@ -2130,6 +2181,7 @@ function mapParsedSection(section: HvySection): VisualSection {
   return {
     key: makeId('section'),
     customId,
+    lock: sectionMeta.lock === true,
     idEditorOpen: false,
     isGhost: false,
     title: section.title || 'Untitled Section',
@@ -2211,6 +2263,7 @@ function serializeSection(section: VisualSection, level: number): string {
   const heading = `${'#'.repeat(Math.max(1, Math.min(level, 6)))} ${section.title}`;
   const meta: JsonObject = {
     id: getSectionId(section),
+    lock: section.lock,
     expanded: section.expanded,
     highlight: section.highlight,
   };
@@ -2220,6 +2273,7 @@ function serializeSection(section: VisualSection, level: number): string {
 
   meta.blocks = section.blocks.map((block) => ({
     component: block.schema.component,
+    lock: block.schema.lock,
     align: block.schema.align,
     slot: block.schema.slot,
     customCss: block.schema.customCss,
@@ -2390,6 +2444,7 @@ function createEmptySection(level: number, component = 'container', isGhost = fa
   return {
     key: makeId('section'),
     customId: '',
+    lock: false,
     idEditorOpen: false,
     isGhost,
     title: isGhost ? 'New Component' : 'Unnamed Section',
@@ -2400,17 +2455,6 @@ function createEmptySection(level: number, component = 'container', isGhost = fa
     blocks: component ? [createEmptyBlock(component)] : [],
     children: [],
   };
-}
-
-function createSectionFromStarter(level: number, starter = 'container', isGhost = false): VisualSection {
-  if (starter.startsWith(REUSABLE_SECTION_DEF_PREFIX)) {
-    const reusableName = starter.slice(REUSABLE_SECTION_DEF_PREFIX.length);
-    const reusableSection = instantiateReusableSection(reusableName, level);
-    if (reusableSection) {
-      return reusableSection;
-    }
-  }
-  return createEmptySection(level, starter === EMPTY_SECTION_STARTER ? '' : starter, isGhost);
 }
 
 function isDefaultUntitledSectionTitle(title: string): boolean {
@@ -2453,6 +2497,7 @@ function createDefaultTableRow(columnCount: number): TableRow {
 function defaultBlockSchema(component = 'text'): BlockSchema {
   return {
     component,
+    lock: false,
     align: 'left',
     slot: 'center',
     customCss: 'margin: 0.5rem 0;',
@@ -2580,6 +2625,7 @@ function schemaFromUnknown(value: unknown): BlockSchema {
   const parsedGridItems = parseGridItems(candidate, gridColumns);
   return {
     component,
+    lock: candidate.lock === true,
     align: coerceAlign(typeof candidate.align === 'string' ? candidate.align : 'left'),
     slot: coerceSlot(typeof candidate.slot === 'string' ? candidate.slot : 'center'),
     customCss:
@@ -2673,6 +2719,7 @@ function cloneReusableSectionWithDelta(section: VisualSection, levelDelta: numbe
     isGhost: false,
     title: section.title,
     level: Math.max(1, Math.min(6, section.level + levelDelta)),
+    lock: section.lock,
     expanded: section.expanded,
     highlight: section.highlight,
     customCss: section.customCss,
@@ -3131,30 +3178,15 @@ function getReusableNameFromSectionKey(sectionKey: string): string | null {
   return sectionKey.startsWith(REUSABLE_SECTION_PREFIX) ? sectionKey.slice(REUSABLE_SECTION_PREFIX.length) : null;
 }
 
-function renderSectionStarterOptions(selected: string): string {
-  const builtinOptions = [
-    { value: EMPTY_SECTION_STARTER, label: 'Empty Section' },
-    { value: 'text', label: 'Section With Text' },
-    { value: 'quote', label: 'Section With Quote' },
-    { value: 'code', label: 'Section With Code' },
-    { value: 'expandable', label: 'Section With Expandable' },
-    { value: 'table', label: 'Section With Table' },
-    { value: 'container', label: 'Section With Container' },
-    { value: 'component-list', label: 'Section With Component List' },
-    { value: 'grid', label: 'Section With Grid' },
-    { value: 'plugin', label: 'Section With Plugin' },
-  ]
-    .map((option) => `<option value="${escapeAttr(option.value)}"${option.value === selected ? ' selected' : ''}>${escapeHtml(option.label)}</option>`)
-    .join('');
-  const reusableOptions = getSectionDefs()
-    .map((def) => {
+function renderReusableSectionOptions(selected: string): string {
+  const options = [
+    `<option value="blank"${selected === 'blank' ? ' selected' : ''}>Blank</option>`,
+    ...getSectionDefs().map((def) => {
       const value = `${REUSABLE_SECTION_DEF_PREFIX}${def.name}`;
       return `<option value="${escapeAttr(value)}"${value === selected ? ' selected' : ''}>${escapeHtml(def.name)}</option>`;
-    })
-    .join('');
-  return reusableOptions.length > 0
-    ? `${builtinOptions}<optgroup label="Reusable Sections">${reusableOptions}</optgroup>`
-    : builtinOptions;
+    }),
+  ];
+  return options.join('');
 }
 
 function getReusableTemplate(def: ComponentDefinition): VisualBlock {
@@ -3177,7 +3209,8 @@ function getReusableTemplateByName(name: string): VisualBlock | null {
 }
 
 function instantiateReusableSection(name: string, level: number): VisualSection | null {
-  const def = getSectionDefs().find((item) => item.name === name);
+  const normalizedName = name.startsWith(REUSABLE_SECTION_DEF_PREFIX) ? name.slice(REUSABLE_SECTION_DEF_PREFIX.length) : name;
+  const def = getSectionDefs().find((item) => item.name === normalizedName);
   if (!def) {
     return null;
   }

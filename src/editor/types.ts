@@ -21,6 +21,7 @@ export interface GridItem {
 
 export interface BlockSchema {
   component: string;
+  lock: boolean;
   align: Align;
   slot: Slot;
   customCss: string;
@@ -57,6 +58,7 @@ export interface VisualBlock {
 export interface VisualSection {
   key: string;
   customId: string;
+  lock: boolean;
   idEditorOpen: boolean;
   isGhost: boolean;
   title: string;

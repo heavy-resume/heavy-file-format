@@ -130,6 +130,7 @@ Section metadata MAY include a `blocks` array describing per-block rendering met
 
 Common block metadata fields include:
 - `component`
+- `lock`
 - `align`
 - `slot`
 - `tags`
@@ -137,13 +138,16 @@ Common block metadata fields include:
 - `customCss`
 
 `customCss` is an optional inline CSS style string applied to that block's rendered wrapper. Authoring tools MAY expose this for layout and presentation adjustments such as collapsing spacing between adjacent blocks.
+`lock` is an optional boolean. Rich clients MAY use it to prevent structural additions inside that block, such as nested child blocks or table-column changes.
 
 Section metadata MAY also include rich-client presentation keys such as:
 - `expanded`
 - `highlight`
+- `lock`
 - `custom_css`
 
 `custom_css` is an optional inline CSS style string applied to the rendered section wrapper.
+`lock` is an optional boolean. Rich clients MAY use it to prevent adding new blocks or child sections inside that section.
 
 ### 5.7 Block directives
 

@@ -114,6 +114,9 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
 
   function renderReaderBlock(section: VisualSection, block: VisualBlock): string {
     const base = deps.resolveBaseComponent(block.schema.component);
+    if (base === 'quote' && block.text.trim().length === 0) {
+      return '';
+    }
     const blockAttrs = `class="reader-block reader-block-${deps.escapeAttr(base)} align-${deps.escapeAttr(block.schema.align)} slot-${deps.escapeAttr(
       block.schema.slot
     )}" data-component="${deps.escapeAttr(block.schema.component)}" style="${deps.escapeAttr(block.schema.customCss)}"`;
@@ -211,7 +214,18 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
             <h3 id="modalTitle">Meta: ${deps.escapeHtml(deps.formatSectionTitle(section.title))} <code>#${deps.escapeHtml(
               deps.getSectionId(section)
             )}</code></h3>
-            <button type="button" data-modal-action="close">Close</button>
+            <div class="modal-head-actions">
+              <button
+                type="button"
+                class="ghost lock-toggle-button"
+                data-modal-action="toggle-section-lock"
+                data-section-key="${deps.escapeAttr(section.key)}"
+                aria-pressed="${section.lock ? 'true' : 'false'}"
+                title="${section.lock ? 'Unlock schema' : 'Lock schema'}"
+                aria-label="${section.lock ? 'Unlock schema' : 'Lock schema'}"
+              >${section.lock ? '🔒 Unlock Schema' : '🔓 Lock Schema'}</button>
+              <button type="button" data-modal-action="close">Close</button>
+            </div>
           </div>
           <p>Edit section-level metadata and reader styling.</p>
           <label>

@@ -10,34 +10,42 @@ export const renderExpandableEditor: ComponentEditorRenderer = (sectionKey, bloc
         <div class="container-inner-blocks">
           ${(block.schema.expandableStubBlocks ?? []).map((innerBlock) => helpers.renderEditorBlock(sectionKey, innerBlock)).join('')}
         </div>
-        <article class="ghost-section-card add-ghost container-add-ghost" data-action="add-expandable-stub-block" data-section-key="${helpers.escapeAttr(
-          sectionKey
-        )}" data-block-id="${helpers.escapeAttr(block.id)}">
-          <div class="ghost-plus-big"><span>+</span></div>
-          <div class="ghost-label">Add Stub Component</div>
-          <label class="ghost-component-picker">
-            <select aria-label="Expandable stub component type" data-field="expandable-stub-new-component-type" data-expandable-key="${helpers.escapeAttr(stubAddKey)}">
-              ${helpers.renderComponentOptions(helpers.getSelectedAddComponent(stubAddKey, 'container'))}
-            </select>
-          </label>
-        </article>
+        ${
+          block.schema.lock
+            ? ''
+            : `<article class="ghost-section-card add-ghost container-add-ghost" data-action="add-expandable-stub-block" data-section-key="${helpers.escapeAttr(
+                sectionKey
+              )}" data-block-id="${helpers.escapeAttr(block.id)}">
+                <div class="ghost-plus-big"><span>+</span></div>
+                <div class="ghost-label">Add Stub Component</div>
+                <label class="ghost-component-picker">
+                  <select aria-label="Expandable stub component type" data-field="expandable-stub-new-component-type" data-expandable-key="${helpers.escapeAttr(stubAddKey)}">
+                    ${helpers.renderComponentOptions(helpers.getSelectedAddComponent(stubAddKey, 'container'))}
+                  </select>
+                </label>
+              </article>`
+        }
       </div>
       <div class="expandable-part">
         <div class="expandable-label">Expanded</div>
         <div class="container-inner-blocks">
           ${(block.schema.expandableContentBlocks ?? []).map((innerBlock) => helpers.renderEditorBlock(sectionKey, innerBlock)).join('')}
         </div>
-        <article class="ghost-section-card add-ghost container-add-ghost" data-action="add-expandable-content-block" data-section-key="${helpers.escapeAttr(
-          sectionKey
-        )}" data-block-id="${helpers.escapeAttr(block.id)}">
-          <div class="ghost-plus-big"><span>+</span></div>
-          <div class="ghost-label">Add Expanded Component</div>
-          <label class="ghost-component-picker">
-            <select aria-label="Expandable content component type" data-field="expandable-content-new-component-type" data-expandable-key="${helpers.escapeAttr(contentAddKey)}">
-              ${helpers.renderComponentOptions(helpers.getSelectedAddComponent(contentAddKey, 'container'))}
-            </select>
-          </label>
-        </article>
+        ${
+          block.schema.lock
+            ? ''
+            : `<article class="ghost-section-card add-ghost container-add-ghost" data-action="add-expandable-content-block" data-section-key="${helpers.escapeAttr(
+                sectionKey
+              )}" data-block-id="${helpers.escapeAttr(block.id)}">
+                <div class="ghost-plus-big"><span>+</span></div>
+                <div class="ghost-label">Add Expanded Component</div>
+                <label class="ghost-component-picker">
+                  <select aria-label="Expandable content component type" data-field="expandable-content-new-component-type" data-expandable-key="${helpers.escapeAttr(contentAddKey)}">
+                    ${helpers.renderComponentOptions(helpers.getSelectedAddComponent(contentAddKey, 'container'))}
+                  </select>
+                </label>
+              </article>`
+        }
       </div>
     </div>
     <label><input type="checkbox" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(

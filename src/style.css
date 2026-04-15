@@ -407,6 +407,10 @@ button.tiny {
   min-width: 14rem;
 }
 
+.reusable-section-ghost {
+  width: 100%;
+}
+
 .subsection-add-button {
   justify-self: start;
   margin-top: 0.25rem;
@@ -530,6 +534,11 @@ button.tiny {
 .editor-block-passive:hover {
   background: color-mix(in srgb, var(--hvy-surface) 76%, #e6f0f6 24%);
   box-shadow: inset 0 0 0 1px #d8e4ec;
+}
+
+.editor-passive-empty-text {
+  color: #81919b;
+  font-style: italic;
 }
 
 .editor-block-title {
@@ -1505,6 +1514,19 @@ button.tiny {
   justify-content: space-between;
   align-items: center;
   gap: 0.5rem;
+}
+
+.modal-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.lock-toggle-button {
+  min-width: 8.6rem;
+  padding-inline: 0.65rem;
+  font-size: 0.92rem;
+  line-height: 1;
 }
 
 .modal-head h3 {

@@ -83,6 +83,7 @@ export const renderTableEditor: ComponentEditorRenderer = (sectionKey, block, he
                           type="button"
                           class="table-drag-handle"
                           draggable="true"
+                          ${block.schema.lock ? 'disabled' : ''}
                           data-drag-handle="table-column"
                           data-section-key="${helpers.escapeAttr(sectionKey)}"
                           data-block-id="${helpers.escapeAttr(block.id)}"
@@ -91,7 +92,7 @@ export const renderTableEditor: ComponentEditorRenderer = (sectionKey, block, he
                         >::</button>
                         <div
                           class="inline-editable table-inline-text table-column-name"
-                          contenteditable="true"
+                          contenteditable="${block.schema.lock ? 'false' : 'true'}"
                           spellcheck="false"
                           data-inline-text="true"
                           data-section-key="${helpers.escapeAttr(sectionKey)}"
@@ -99,17 +100,25 @@ export const renderTableEditor: ComponentEditorRenderer = (sectionKey, block, he
                           data-column-index="${columnIndex}"
                           data-field="table-column"
                         >${helpers.escapeHtml(column)}</div>
-                        <button type="button" class="danger remove-x" data-action="remove-table-column" data-section-key="${helpers.escapeAttr(
-                          sectionKey
-                        )}" data-block-id="${helpers.escapeAttr(block.id)}" data-column-index="${columnIndex}" title="Remove column">×</button>
+                        ${
+                          block.schema.lock
+                            ? ''
+                            : `<button type="button" class="danger remove-x" data-action="remove-table-column" data-section-key="${helpers.escapeAttr(
+                                sectionKey
+                              )}" data-block-id="${helpers.escapeAttr(block.id)}" data-column-index="${columnIndex}" title="Remove column">×</button>`
+                        }
                       </div>
                     </th>`
                 )
                 .join('')}
               <th class="table-add-column-cell">
-                <button type="button" class="ghost table-add-button" data-action="add-table-column" data-section-key="${helpers.escapeAttr(
-                  sectionKey
-                )}" data-block-id="${helpers.escapeAttr(block.id)}" title="Add column">+</button>
+                ${
+                  block.schema.lock
+                    ? ''
+                    : `<button type="button" class="ghost table-add-button" data-action="add-table-column" data-section-key="${helpers.escapeAttr(
+                        sectionKey
+                      )}" data-block-id="${helpers.escapeAttr(block.id)}" title="Add column">+</button>`
+                }
               </th>
             </tr>
           </thead>

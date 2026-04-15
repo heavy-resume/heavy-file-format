@@ -46,7 +46,7 @@ interface EditorRenderDeps {
   flattenSections: (sections: VisualSection[]) => VisualSection[];
   renderReaderBlock: (section: VisualSection, block: VisualBlock) => string;
   renderComponentOptions: (selected: string) => string;
-  renderSectionStarterOptions: (selected: string) => string;
+  renderReusableSectionOptions: (selected: string) => string;
   renderOption: (value: string, selected: string) => string;
   resolveBaseComponent: (componentName: string) => string;
   ensureContainerBlocks: (block: VisualBlock) => void;
@@ -95,13 +95,13 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           : ''
       }
       ${sectionCards}
-          <article class="ghost-section-card add-ghost" data-action="add-top-level-section" data-section-key="__top_level__">
+      <article class="ghost-section-card add-ghost reusable-section-ghost" data-action="add-top-level-section" data-section-key="__top_level__">
         <div class="ghost-plus-big"><span>+</span></div>
         <div class="ghost-label">Add Section</div>
         <label class="ghost-component-picker">
-          <span>Starting From</span>
-          <select data-field="new-component-type" data-section-key="__top_level__">
-            ${deps.renderSectionStarterOptions(state.addComponentBySection.__top_level__ ?? 'container')}
+          <span>Section Type</span>
+          <select data-field="reusable-section-type" data-section-key="__top_level__" aria-label="Section type">
+            ${deps.renderReusableSectionOptions(state.addComponentBySection.__top_level__ ?? 'blank')}
           </select>
         </label>
       </article>
@@ -128,7 +128,6 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
             ${titleEditor}
           </div>
           <div class="editor-actions">
-            <button type="button" class="ghost" data-action="jump-to-reader" data-section-key="${deps.escapeAttr(section.key)}">Jump</button>
             ${
               state.showAdvancedEditor
                 ? `<button type="button" class="ghost" data-action="open-save-section-def" data-section-key="${deps.escapeAttr(section.key)}">Reusable</button>
@@ -151,25 +150,38 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
 
         <div class="editor-blocks">
           ${section.blocks.map((block) => renderEditorBlock(section.key, block, rootSections)).join('')}
-          <article class="ghost-section-card add-ghost" data-action="add-block" data-section-key="${deps.escapeAttr(section.key)}">
-            <div class="ghost-plus-big"><span>+</span></div>
-            <div class="ghost-label">Add Component</div>
-            <label class="ghost-component-picker">
-              <select aria-label="Section component type" data-field="new-component-type" data-section-key="${deps.escapeAttr(section.key)}">
-                ${deps.renderComponentOptions(state.addComponentBySection[section.key] ?? 'container')}
-              </select>
-            </label>
-          </article>
+          ${
+            section.lock
+              ? ''
+              : `<article class="ghost-section-card add-ghost" data-action="add-block" data-section-key="${deps.escapeAttr(section.key)}">
+                  <div class="ghost-plus-big"><span>+</span></div>
+                  <div class="ghost-label">Add Component</div>
+                  <label class="ghost-component-picker">
+                    <select aria-label="Section component type" data-field="new-component-type" data-section-key="${deps.escapeAttr(section.key)}">
+                      <option value=""${!(state.addComponentBySection[section.key] ?? '').trim() ? ' selected' : ''}>Select component</option>
+                      ${deps.renderComponentOptions(state.addComponentBySection[section.key] ?? '')}
+                    </select>
+                  </label>
+                </article>`
+          }
         </div>
 
         <div class="editor-children">
           ${section.children.map((child) => renderEditorSection(child, rootSections)).join('')}
-          <div class="subsection-add-row">
-            <select data-field="new-component-type" data-section-key="${deps.escapeAttr(`subsection:${section.key}`)}" aria-label="Subsection starter">
-              ${deps.renderSectionStarterOptions(state.addComponentBySection[`subsection:${section.key}`] ?? '__empty_section__')}
-            </select>
-            <button type="button" class="ghost subsection-add-button" data-action="add-subsection" data-section-key="${deps.escapeAttr(section.key)}">+ Add Subsection</button>
-          </div>
+          ${
+            section.lock
+              ? ''
+              : `<article class="ghost-section-card add-ghost reusable-section-ghost subsection-add-button" data-action="add-subsection" data-section-key="${deps.escapeAttr(section.key)}">
+                  <div class="ghost-plus-big"><span>+</span></div>
+                  <div class="ghost-label">Add Section</div>
+                  <label class="ghost-component-picker">
+                    <span>Section Type</span>
+                    <select data-field="reusable-section-type" data-section-key="${deps.escapeAttr(`subsection:${section.key}`)}" aria-label="Subsection type">
+                      ${deps.renderReusableSectionOptions(state.addComponentBySection[`subsection:${section.key}`] ?? 'blank')}
+                    </select>
+                  </label>
+                </article>`
+          }
         </div>
       </article>
     `;
@@ -303,6 +315,14 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       return `<div class="expandable-reader">
         <div class="expandable-reader-body">${body}</div>
       </div>`;
+    }
+
+    if (base === 'text' && block.text.trim().length === 0) {
+      return '<div class="editor-passive-empty-text">Empty text...</div>';
+    }
+
+    if (base === 'quote' && block.text.trim().length === 0) {
+      return '<div class="editor-passive-empty-text">Empty quote...</div>';
     }
 
     return deps.renderReaderBlock(section, block);
@@ -531,6 +551,16 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
             data-field="block-description"
           >${deps.escapeHtml(block.schema.description)}</textarea>
         </label>
+        <label class="checkbox-label">
+          <input
+            type="checkbox"
+            data-section-key="${deps.escapeAttr(sectionKey)}"
+            data-block-id="${deps.escapeAttr(block.id)}"
+            data-field="block-lock"
+            ${block.schema.lock ? 'checked' : ''}
+          />
+          Lock structure
+        </label>
       </div>
     `;
   }
@@ -539,6 +569,9 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const base = deps.resolveBaseComponent(componentName);
     const normalized = normalizeMarkdownLists(content);
     if (base === 'quote') {
+      if (content.trim().length === 0) {
+        return '';
+      }
       return `<blockquote>${DOMPurify.sanitize(marked.parse(normalized) as string)}</blockquote>`;
     }
     if (base === 'code') {

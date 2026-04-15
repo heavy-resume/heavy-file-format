@@ -23,13 +23,11 @@ component_defs:
                   - "{{history_year}}"
                   - "{{history_organization}}"
                   - "{{history_title}}"
-          schemaMode: false
       expandableContentBlocks:
         - text: "### {{history_title}}"
           schema:
             component: text
             css: "margin: 0 0 0.35rem;"
-          schemaMode: false
         - text: ""
           schema:
             component: grid
@@ -43,7 +41,6 @@ component_defs:
                   schema:
                     component: text
                     css: "margin: 0;"
-                  schemaMode: false
               - id: history-date-range
                 column: right
                 block:
@@ -51,23 +48,18 @@ component_defs:
                   schema:
                     component: text
                     css: "margin: 0; text-align: right;"
-                  schemaMode: false
-          schemaMode: false
         - text: "{{history_role_title}}"
           schema:
             component: text
             css: "margin: 0.35rem 0; font-weight: 700;"
-          schemaMode: false
         - text: "{{history_description}}"
           schema:
             component: text
             css: "margin: 0.35rem 0;"
-          schemaMode: false
         - text: "#### Accomplishments"
           schema:
             component: text
             css: "margin: 0.6rem 0 0.25rem;"
-          schemaMode: false
         - text: ""
           schema:
             component: component-list
@@ -78,18 +70,128 @@ component_defs:
                 schema:
                   component: text
                   css: "margin: 0.25rem 0;"
-                schemaMode: false
               - text: "{{history_accomplishments.1}}"
                 schema:
                   component: text
                   css: "margin: 0.25rem 0;"
-                schemaMode: false
               - text: "{{history_accomplishments.2}}"
                 schema:
                   component: text
                   css: "margin: 0.25rem 0;"
-                schemaMode: false
-          schemaMode: false
+        - text: ""
+          schema:
+            component: skills-and-tools-tech-list
+            css: "margin: 0.6rem 0 0;"
+            gridColumns: 2
+            gridItems:
+              - id: history-skills
+                column: left
+                block:
+                  text: ""
+                  schema:
+                    component: component-list
+                    componentListComponent: text
+                    css: "margin: 0;"
+                    componentListBlocks:
+                      - text: "#### Skills"
+                        schema:
+                          component: text
+                          css: "margin: 0 0 0.25rem;"
+                      - text: "{{history_skills.0}}"
+                        schema:
+                          component: text
+                          css: "margin: 0.25rem 0;"
+                      - text: "{{history_skills.1}}"
+                        schema:
+                          component: text
+                          css: "margin: 0.25rem 0;"
+                      - text: "{{history_skills.2}}"
+                        schema:
+                          component: text
+                          css: "margin: 0.25rem 0;"
+              - id: history-tools-technologies
+                column: right
+                block:
+                  text: ""
+                  schema:
+                    component: component-list
+                    componentListComponent: text
+                    css: "margin: 0;"
+                    componentListBlocks:
+                      - text: "#### Tools & Technologies"
+                        schema:
+                          component: text
+                          css: "margin: 0 0 0.25rem;"
+                      - text: "{{history_tools_technologies.0}}"
+                        schema:
+                          component: text
+                          css: "margin: 0.25rem 0;"
+                      - text: "{{history_tools_technologies.1}}"
+                        schema:
+                          component: text
+                          css: "margin: 0.25rem 0;"
+                      - text: "{{history_tools_technologies.2}}"
+                        schema:
+                          component: text
+                          css: "margin: 0.25rem 0;"
+  - name: skills-and-tools-tech-list
+    baseType: grid
+    description: Two-column skills and tools list
+    schema:
+      component: skills-and-tools-tech-list
+      css: "margin: 0.6rem 0 0;"
+      gridColumns: 2
+      gridItems:
+        - id: history-skills
+          column: left
+          block:
+            text: ""
+            schema:
+              component: component-list
+              componentListComponent: text
+              css: "margin: 0;"
+              componentListBlocks:
+                - text: "#### Skills"
+                  schema:
+                    component: text
+                    css: "margin: 0 0 0.25rem;"
+                - text: "{{history_skills.0}}"
+                  schema:
+                    component: text
+                    css: "margin: 0.25rem 0;"
+                - text: "{{history_skills.1}}"
+                  schema:
+                    component: text
+                    css: "margin: 0.25rem 0;"
+                - text: "{{history_skills.2}}"
+                  schema:
+                    component: text
+                    css: "margin: 0.25rem 0;"
+        - id: history-tools-technologies
+          column: right
+          block:
+            text: ""
+            schema:
+              component: component-list
+              componentListComponent: text
+              css: "margin: 0;"
+              componentListBlocks:
+                - text: "#### Tools & Technologies"
+                  schema:
+                    component: text
+                    css: "margin: 0 0 0.25rem;"
+                - text: "{{history_tools_technologies.0}}"
+                  schema:
+                    component: text
+                    css: "margin: 0.25rem 0;"
+                - text: "{{history_tools_technologies.1}}"
+                  schema:
+                    component: text
+                    css: "margin: 0.25rem 0;"
+                - text: "{{history_tools_technologies.2}}"
+                  schema:
+                    component: text
+                    css: "margin: 0.25rem 0;"
 ---
 
 <!--hvy: {"id":"header","lock":true}-->
@@ -134,9 +236,33 @@ Title
 
 <!--hvy:grid {"css":"margin: 0.5rem 0; gap: 0.75rem;","gridColumns":2,"lock":true}-->
 
-<!--hvy:grid:0 {"id":"top-skills","column":"left","component":"component-list","componentListComponent":"text","css":"margin: 0;","componentListBlocks":[{"text":"## Skills","schema":{"component":"text","css":"margin: 0 0 0.35rem;"},"schemaMode":false},{"text":"{{top_skills.0}}","schema":{"component":"text","css":"margin: 0.35rem 0; padding: 0.55rem 0.65rem; border: 1px solid #d7e0e8; border-radius: 8px; box-shadow: 0 2px 8px rgba(41, 67, 82, 0.12); background: #fff;"},"schemaMode":false},{"text":"{{top_skills.1}}","schema":{"component":"text","css":"margin: 0.35rem 0; padding: 0.55rem 0.65rem; border: 1px solid #d7e0e8; border-radius: 8px; box-shadow: 0 2px 8px rgba(41, 67, 82, 0.12); background: #fff;"},"schemaMode":false},{"text":"{{top_skills.2}}","schema":{"component":"text","css":"margin: 0.35rem 0; padding: 0.55rem 0.65rem; border: 1px solid #d7e0e8; border-radius: 8px; box-shadow: 0 2px 8px rgba(41, 67, 82, 0.12); background: #fff;"},"schemaMode":false}]}-->
+<!--hvy:grid:0 {"id":"top-skills","column":"left","component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->
 
-<!--hvy:grid:1 {"id":"top-tools-technologies","column":"right","component":"component-list","componentListComponent":"text","css":"margin: 0;","componentListBlocks":[{"text":"## Tools & Technologies","schema":{"component":"text","css":"margin: 0 0 0.35rem;"},"schemaMode":false},{"text":"{{top_tools_technologies.0}}","schema":{"component":"text","css":"margin: 0.35rem 0; padding: 0.55rem 0.65rem; border: 1px solid #d7e0e8; border-radius: 8px; box-shadow: 0 2px 8px rgba(41, 67, 82, 0.12); background: #fff;"},"schemaMode":false},{"text":"{{top_tools_technologies.1}}","schema":{"component":"text","css":"margin: 0.35rem 0; padding: 0.55rem 0.65rem; border: 1px solid #d7e0e8; border-radius: 8px; box-shadow: 0 2px 8px rgba(41, 67, 82, 0.12); background: #fff;"},"schemaMode":false},{"text":"{{top_tools_technologies.2}}","schema":{"component":"text","css":"margin: 0.35rem 0; padding: 0.55rem 0.65rem; border: 1px solid #d7e0e8; border-radius: 8px; box-shadow: 0 2px 8px rgba(41, 67, 82, 0.12); background: #fff;"},"schemaMode":false}]}-->
+<!--hvy:component-list:0 {"component":"text","css":"margin: 0 0 0.35rem;"}-->
+## Skills
+
+<!--hvy:component-list:1 {"component":"text","css":"margin: 0.35rem 0; padding: 0.55rem 0.65rem; border: 1px solid #d7e0e8; border-radius: 8px; box-shadow: 0 2px 8px rgba(41, 67, 82, 0.12); background: #fff;"}-->
+{{top_skills.0}}
+
+<!--hvy:component-list:2 {"component":"text","css":"margin: 0.35rem 0; padding: 0.55rem 0.65rem; border: 1px solid #d7e0e8; border-radius: 8px; box-shadow: 0 2px 8px rgba(41, 67, 82, 0.12); background: #fff;"}-->
+{{top_skills.1}}
+
+<!--hvy:component-list:3 {"component":"text","css":"margin: 0.35rem 0; padding: 0.55rem 0.65rem; border: 1px solid #d7e0e8; border-radius: 8px; box-shadow: 0 2px 8px rgba(41, 67, 82, 0.12); background: #fff;"}-->
+{{top_skills.2}}
+
+<!--hvy:grid:1 {"id":"top-tools-technologies","column":"right","component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->
+
+<!--hvy:component-list:0 {"component":"text","css":"margin: 0 0 0.35rem;"}-->
+## Tools & Technologies
+
+<!--hvy:component-list:1 {"component":"text","css":"margin: 0.35rem 0; padding: 0.55rem 0.65rem; border: 1px solid #d7e0e8; border-radius: 8px; box-shadow: 0 2px 8px rgba(41, 67, 82, 0.12); background: #fff;"}-->
+{{top_tools_technologies.0}}
+
+<!--hvy:component-list:2 {"component":"text","css":"margin: 0.35rem 0; padding: 0.55rem 0.65rem; border: 1px solid #d7e0e8; border-radius: 8px; box-shadow: 0 2px 8px rgba(41, 67, 82, 0.12); background: #fff;"}-->
+{{top_tools_technologies.1}}
+
+<!--hvy:component-list:3 {"component":"text","css":"margin: 0.35rem 0; padding: 0.55rem 0.65rem; border: 1px solid #d7e0e8; border-radius: 8px; box-shadow: 0 2px 8px rgba(41, 67, 82, 0.12); background: #fff;"}-->
+{{top_tools_technologies.2}}
 
 <!--hvy: {"id":"history","lock":true}-->
 #! History
@@ -146,4 +272,69 @@ Title
 
 <!--hvy:table {"css":"margin: 0.5rem 0 0;","tableColumns":"YEAR, ORGANIZATION, TITLE","tableShowHeader":true,"tableRows":[],"lock":true}-->
 
-<!--hvy:component-list {"css":"margin: 0;","componentListComponent":"history-record","componentListBlocks":[{"text":"","schema":{"component":"history-record","css":"margin: 0;","expandableAlwaysShowStub":true,"expandableExpanded":false,"expandableStubBlocks":[{"text":"","schema":{"component":"table","css":"margin: 0;","tableColumns":"YEAR, ORGANIZATION, TITLE","tableShowHeader":false,"tableRows":[{"cells":["{{history_year}}","{{history_organization}}","{{history_title}}"]}]},"schemaMode":false}],"expandableContentBlocks":[{"text":"### {{history_title}}","schema":{"component":"text","css":"margin: 0 0 0.35rem;"},"schemaMode":false},{"text":"","schema":{"component":"grid","css":"margin: 0.35rem 0;","gridColumns":2,"gridItems":[{"id":"history-location","column":"left","block":{"text":"{{history_location}}","schema":{"component":"text","css":"margin: 0;"},"schemaMode":false}},{"id":"history-date-range","column":"right","block":{"text":"{{history_date_range}}","schema":{"component":"text","css":"margin: 0; text-align: right;"},"schemaMode":false}}]},"schemaMode":false},{"text":"{{history_role_title}}","schema":{"component":"text","css":"margin: 0.35rem 0; font-weight: 700;"},"schemaMode":false},{"text":"{{history_description}}","schema":{"component":"text","css":"margin: 0.35rem 0;"},"schemaMode":false},{"text":"#### Accomplishments","schema":{"component":"text","css":"margin: 0.6rem 0 0.25rem;"},"schemaMode":false},{"text":"","schema":{"component":"component-list","componentListComponent":"text","css":"margin: 0;","componentListBlocks":[{"text":"{{history_accomplishments.0}}","schema":{"component":"text","css":"margin: 0.25rem 0;"},"schemaMode":false},{"text":"{{history_accomplishments.1}}","schema":{"component":"text","css":"margin: 0.25rem 0;"},"schemaMode":false},{"text":"{{history_accomplishments.2}}","schema":{"component":"text","css":"margin: 0.25rem 0;"},"schemaMode":false}]},"schemaMode":false}]},"schemaMode":false}]}-->
+<!--hvy:component-list {"css":"margin: 0;","componentListComponent":"history-record"}-->
+
+<!--hvy:component-list:0 {"component":"history-record","css":"margin: 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+
+<!--hvy:expandable:0 {"component":"table","css":"margin: 0;","tableColumns":"YEAR, ORGANIZATION, TITLE","tableShowHeader":false,"tableRows":[{"cells":["{{history_year}}","{{history_organization}}","{{history_title}}"]}]}-->
+
+<!--hvy:expandable:1 {"component":"text","css":"margin: 0 0 0.35rem;"}-->
+### {{history_title}}
+
+<!--hvy:expandable:1 {"component":"grid","css":"margin: 0.35rem 0;","gridColumns":2}-->
+
+<!--hvy:grid:0 {"id":"history-location","column":"left","component":"text","css":"margin: 0;"}-->
+{{history_location}}
+
+<!--hvy:grid:1 {"id":"history-date-range","column":"right","component":"text","css":"margin: 0; text-align: right;"}-->
+{{history_date_range}}
+
+<!--hvy:expandable:1 {"component":"text","css":"margin: 0.35rem 0; font-weight: 700;"}-->
+{{history_role_title}}
+
+<!--hvy:expandable:1 {"component":"text","css":"margin: 0.35rem 0;"}-->
+{{history_description}}
+
+<!--hvy:expandable:1 {"component":"text","css":"margin: 0.6rem 0 0.25rem;"}-->
+#### Accomplishments
+
+<!--hvy:expandable:1 {"component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->
+
+<!--hvy:component-list:0 {"component":"text","css":"margin: 0.25rem 0;"}-->
+{{history_accomplishments.0}}
+
+<!--hvy:component-list:1 {"component":"text","css":"margin: 0.25rem 0;"}-->
+{{history_accomplishments.1}}
+
+<!--hvy:component-list:2 {"component":"text","css":"margin: 0.25rem 0;"}-->
+{{history_accomplishments.2}}
+
+<!--hvy:expandable:1 {"component":"skills-and-tools-tech-list","css":"margin: 0.6rem 0 0;","gridColumns":2}-->
+
+<!--hvy:grid:0 {"id":"history-skills","column":"left","component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->
+
+<!--hvy:component-list:0 {"component":"text","css":"margin: 0 0 0.25rem;"}-->
+#### Skills
+
+<!--hvy:component-list:1 {"component":"text","css":"margin: 0.25rem 0;"}-->
+{{history_skills.0}}
+
+<!--hvy:component-list:2 {"component":"text","css":"margin: 0.25rem 0;"}-->
+{{history_skills.1}}
+
+<!--hvy:component-list:3 {"component":"text","css":"margin: 0.25rem 0;"}-->
+{{history_skills.2}}
+
+<!--hvy:grid:1 {"id":"history-tools-technologies","column":"right","component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->
+
+<!--hvy:component-list:0 {"component":"text","css":"margin: 0 0 0.25rem;"}-->
+#### Tools & Technologies
+
+<!--hvy:component-list:1 {"component":"text","css":"margin: 0.25rem 0;"}-->
+{{history_tools_technologies.0}}
+
+<!--hvy:component-list:2 {"component":"text","css":"margin: 0.25rem 0;"}-->
+{{history_tools_technologies.1}}
+
+<!--hvy:component-list:3 {"component":"text","css":"margin: 0.25rem 0;"}-->
+{{history_tools_technologies.2}}

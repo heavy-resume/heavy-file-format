@@ -238,10 +238,11 @@ Nested block arrays such as `containerBlocks` use a recursive block object shape
   "schema": {
     "component": "text",
     "css": "margin: 0.5rem 0;"
-  },
-  "schemaMode": false
+  }
 }
 ```
+
+Serialized block objects SHOULD contain document data only. Editor-only UI state, such as whether a schema editor is open for a block, MUST NOT be emitted.
 
 Rich clients MAY preserve and round-trip these fields even if a plain Markdown renderer ignores them. For compatibility with older documents, rich clients MAY also read legacy `expandableStubBlocks` and `expandableContentBlocks` arrays from an expandable block schema, but SHOULD emit `hvy:expandable:0` and `hvy:expandable:1` directives for new documents.
 
@@ -291,7 +292,6 @@ section_defs:
           schema:
             component: text
             css: "margin: 0.5rem 0;"
-          schemaMode: false
       children: []
 ```
 

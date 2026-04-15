@@ -76,7 +76,11 @@ tags: [guide, onboarding]
 
 ### 5.2 Section boundaries
 
-A section boundary is defined by an `<!--hvy: {...}-->` directive, optionally followed by a section title line using `#!` syntax (`#!` through `######!`). The `!` suffix distinguishes section titles from standard ATX headings; they are consumed by the parser and not rendered as Markdown content. The number of `#` characters determines nesting depth.
+Top-level sections are defined by `<!--hvy: {...}-->` directives.
+
+Subsections (children of the current section) are defined by `<!--hvy:subsection {...}-->` directives.
+
+Either directive may be followed by a `#!` title line. The `!` suffix distinguishes section titles from standard ATX headings; `#!` lines are consumed by the parser and not rendered as Markdown content. Nesting is determined by the directive type, not the number of `#` characters.
 
 If no `#!` line follows the directive, the section title defaults to the `id` value from the directive.
 
@@ -84,12 +88,16 @@ Standard ATX headings (`#` through `######`) are plain Markdown content and do n
 
 ### 5.3 Section metadata directives
 
-A section begins with an `<!--hvy: {...}-->` directive. An optional `#!` line immediately following sets the section title; its depth (`#!` through `######!`) determines nesting.
-
-With explicit title:
+Top-level section with title:
 ```markdown
 <!--hvy: {"id":"topic-1","tags":["intro"],"style":"card"}-->
-##! Topic Title
+#! Topic Title
+```
+
+Subsection:
+```markdown
+<!--hvy:subsection {"id":"details"}-->
+#! Details
 ```
 
 Without title (id is used as the section name):
@@ -351,8 +359,8 @@ Recommended fields:
 Sections can request plugin behavior with metadata:
 
 ```markdown
-### Launch Timeline
 <!--hvy: {"plugin":"com.example.timeline","plugin_config":{"start":"2026-01-01"}}-->
+#! Launch Timeline
 ```
 
 ## 8. Security & Runtime Constraints
@@ -371,10 +379,10 @@ Normative behavior:
 
 1. Read file as UTF-8 text.
 2. Parse YAML front matter if present at file start.
-3. Parse Markdown into block structure. `<!--hvy: {...}-->` directives define section boundaries. An optional `#!` line immediately following sets the section title and nesting depth; it is consumed and not rendered. Standard ATX headings are plain content.
-4. Attach `<!--hvy: ...-->`, `<!--hvy:doc ...-->`, `<!--hvy:css ...-->`, and `<!--hvy:block ...-->` directives per placement rules.
+3. Parse Markdown into block structure. `<!--hvy: {...}-->` directives define top-level sections; `<!--hvy:subsection {...}-->` directives define subsections. An optional `#!` line immediately following sets the section title; it is consumed and not rendered. Standard ATX headings are plain content.
+4. Attach `<!--hvy:doc ...-->`, `<!--hvy:css ...-->`, and `<!--hvy:block ...-->` directives per placement rules.
 5. Extract CSS fenced blocks (language `css`) and optional preceding `hvy:css` metadata.
-6. Build section tree from heading depth.
+6. Build section tree from directive types (`hvy:` = top-level, `hvy:subsection` = child).
 7. Validate template rules when extension is `.thvy`: require `hvy_version` and `template: true`.
 
 ## 10. Validation

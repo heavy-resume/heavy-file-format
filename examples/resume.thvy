@@ -17,12 +17,12 @@ title: Resume Template
 Title
 
 <!--hvy: {"id":"summary"}-->
-##! Summary
+#! Summary
 
 <!--hvy:block {"component":"expandable","customCss":"margin: 0.5rem 0;","expandableAlwaysShowStub":true,"expandableExpanded":false,"expandableStubBlocks":[{"text":"## Summary","schema":{"component":"text","customCss":"margin-bottom: 0;"},"schemaMode":false},{"text":"{{summary}}","schema":{"component":"text","customCss":"margin-top: 0;"},"schemaMode":false}],"expandableContentBlocks":[{"text":"- {{summary_highlights.0}}\n- {{summary_highlights.1}}\n- {{summary_highlights.2}}","schema":{"component":"text","customCss":"margin: 0;"},"schemaMode":false}]}-->
 
 <!--hvy: {"id":"locations"}-->
-##! Locations
+#! Locations
 
 <!--hvy:block {"component":"text","customCss":"margin: 0.5rem 0;"}-->
 **Location:** {{location}}

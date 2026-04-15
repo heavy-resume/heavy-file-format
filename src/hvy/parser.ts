@@ -54,11 +54,14 @@ export function parseHvy(sourceText: string, extension: HvyDocument['extension']
     if (sectionTitleMatch) {
       const level = sectionTitleMatch[1].length;
       const title = (sectionTitleMatch[2] ?? '').trim();
-      const section = state.pendingSection ?? createSection('', '', level);
+      const hasPending = state.pendingSection !== undefined;
+      const section = state.pendingSection ?? createSection('', title, level);
       state.pendingSection = undefined;
       section.title = title;
-      section.level = level;
-      while ((state.stack.at(-1)?.level ?? 0) >= level) {
+      if (!hasPending) {
+        section.level = level;
+      }
+      while ((state.stack.at(-1)?.level ?? 0) >= section.level) {
         state.stack.pop();
       }
       const parent = state.stack.at(-1);
@@ -69,6 +72,22 @@ export function parseHvy(sourceText: string, extension: HvyDocument['extension']
       continue;
     }
 
+    const subsectionDirective = parsePrefixedDirective(line, 'hvy:subsection');
+    if (subsectionDirective) {
+      flushPendingSection(state);
+      if (!subsectionDirective.ok) {
+        state.errors.push(`Line ${index + 1}: invalid hvy:subsection directive JSON.`);
+        continue;
+      }
+      const newSection = createSection('', '', 2);
+      Object.assign(newSection.meta, subsectionDirective.value);
+      if (typeof newSection.meta.id === 'string' && newSection.meta.id.trim().length > 0) {
+        newSection.id = newSection.meta.id.trim();
+      }
+      state.pendingSection = newSection;
+      continue;
+    }
+
     const sectionDirective = parsePrefixedDirective(line, 'hvy:');
     if (sectionDirective) {
       flushPendingSection(state);
@@ -76,7 +95,7 @@ export function parseHvy(sourceText: string, extension: HvyDocument['extension']
         state.errors.push(`Line ${index + 1}: invalid section hvy directive JSON.`);
         continue;
       }
-      const newSection = createSection('', '', 0);
+      const newSection = createSection('', '', 1);
       Object.assign(newSection.meta, sectionDirective.value);
       if (typeof newSection.meta.id === 'string' && newSection.meta.id.trim().length > 0) {
         newSection.id = newSection.meta.id.trim();
@@ -167,7 +186,7 @@ function extractFrontMatter(source: string): {
 
 function parsePrefixedDirective(
   line: string,
-  prefix: 'hvy:doc' | 'hvy:css' | 'hvy:'
+  prefix: 'hvy:doc' | 'hvy:css' | 'hvy:subsection' | 'hvy:'
 ): { ok: boolean; value: JsonObject } | null {
   const safePrefix = prefix.replace(':', '\\:');
   const pattern = new RegExp(`^<!--${safePrefix}\\s*(\\{.*\\})\\s*-->$`);

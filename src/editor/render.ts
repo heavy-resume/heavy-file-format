@@ -151,9 +151,13 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       <article class="editor-section-card" data-editor-section="${deps.escapeAttr(section.key)}">
         <div class="editor-section-head">
           <div class="section-drag-title" title="Drag to reorder section">
-            <button type="button" class="section-drag-handle" draggable="true" data-drag-handle="section" data-section-key="${deps.escapeAttr(
-              section.key
-            )}" aria-label="Drag to reorder section">::</button>
+            <div class="editor-order-controls">
+              <button type="button" class="order-arrow-button" data-action="move-section-up" data-section-key="${deps.escapeAttr(section.key)}" aria-label="Move section up">▲</button>
+              <button type="button" class="order-arrow-button" data-action="move-section-down" data-section-key="${deps.escapeAttr(section.key)}" aria-label="Move section down">▼</button>
+              <button type="button" class="section-drag-handle" draggable="true" data-drag-handle="section" data-section-key="${deps.escapeAttr(
+                section.key
+              )}" aria-label="Drag to reorder section">⋮⋮</button>
+            </div>
             ${titleEditor}
           </div>
           <div class="editor-actions">
@@ -264,7 +268,13 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     return `
       <div class="editor-block">
         <div class="editor-block-head">
-          <strong class="editor-block-title">${deps.escapeHtml(component)}</strong>
+          <div class="section-drag-title">
+            <div class="editor-order-controls">
+              <button type="button" class="order-arrow-button" data-action="move-block-up" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}" aria-label="Move block up">▲</button>
+              <button type="button" class="order-arrow-button" data-action="move-block-down" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}" aria-label="Move block down">▼</button>
+            </div>
+            <strong class="editor-block-title">${deps.escapeHtml(component)}</strong>
+          </div>
           <div class="editor-actions">
             <button type="button" class="ghost" data-action="deactivate-block" data-section-key="${deps.escapeAttr(
               sectionKey

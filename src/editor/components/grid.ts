@@ -16,7 +16,17 @@ export const renderGridEditor: ComponentEditorRenderer = (sectionKey, block, hel
       .map(
         (item, index) => `<div class="grid-field-row">
           <div class="grid-field-head">
-            <strong>Grid Item ${index + 1}</strong>
+            <div class="section-drag-title">
+              <div class="editor-order-controls">
+                <button type="button" class="order-arrow-button" data-action="move-grid-item-up" data-section-key="${helpers.escapeAttr(
+                  sectionKey
+                )}" data-block-id="${helpers.escapeAttr(block.id)}" data-grid-item-id="${helpers.escapeAttr(item.id)}" aria-label="Move grid item up">▲</button>
+                <button type="button" class="order-arrow-button" data-action="move-grid-item-down" data-section-key="${helpers.escapeAttr(
+                  sectionKey
+                )}" data-block-id="${helpers.escapeAttr(block.id)}" data-grid-item-id="${helpers.escapeAttr(item.id)}" aria-label="Move grid item down">▼</button>
+              </div>
+              <strong>Grid Item ${index + 1}</strong>
+            </div>
             <button type="button" class="danger remove-x" data-action="remove-grid-item" data-section-key="${helpers.escapeAttr(
               sectionKey
             )}" data-block-id="${helpers.escapeAttr(block.id)}" data-grid-item-id="${helpers.escapeAttr(item.id)}">×</button>

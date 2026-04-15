@@ -899,6 +899,28 @@ function bindUi(): void {
       return;
     }
 
+    if (action === 'move-section-up') {
+      if (!section) {
+        return;
+      }
+      recordHistory();
+      if (moveSectionByOffset(state.document.sections, sectionKey, -1)) {
+        renderApp();
+      }
+      return;
+    }
+
+    if (action === 'move-section-down') {
+      if (!section) {
+        return;
+      }
+      recordHistory();
+      if (moveSectionByOffset(state.document.sections, sectionKey, 1)) {
+        renderApp();
+      }
+      return;
+    }
+
     if (action === 'add-child') {
       if (!section || section.lock) {
         return;
@@ -1034,6 +1056,22 @@ function bindUi(): void {
       return;
     }
 
+    if (action === 'move-block-up' && blockId) {
+      recordHistory();
+      if (moveBlockByOffset(sectionKey, blockId, -1)) {
+        renderApp();
+      }
+      return;
+    }
+
+    if (action === 'move-block-down' && blockId) {
+      recordHistory();
+      if (moveBlockByOffset(sectionKey, blockId, 1)) {
+        renderApp();
+      }
+      return;
+    }
+
     if (action === 'add-table-row' && blockId) {
       recordHistory();
       const block = findBlockByIds(sectionKey, blockId);
@@ -1122,6 +1160,27 @@ function bindUi(): void {
       block.schema.gridItems = block.schema.gridItems.filter((item) => item.id !== gridItemId);
       syncReusableTemplateForBlock(sectionKey, block.id);
       ensureGridItems(block.schema);
+      renderApp();
+      return;
+    }
+
+    if ((action === 'move-grid-item-up' || action === 'move-grid-item-down') && blockId) {
+      recordHistory();
+      const block = resolveBlockContext(actionButton)?.block ?? null;
+      const gridItemId = actionButton.dataset.gridItemId;
+      if (!block || !gridItemId) {
+        return;
+      }
+      const currentIndex = block.schema.gridItems.findIndex((item) => item.id === gridItemId);
+      if (currentIndex < 0) {
+        return;
+      }
+      const nextIndex = action === 'move-grid-item-up' ? currentIndex - 1 : currentIndex + 1;
+      if (nextIndex < 0 || nextIndex >= block.schema.gridItems.length) {
+        return;
+      }
+      block.schema.gridItems = moveItem(block.schema.gridItems, currentIndex, nextIndex);
+      syncReusableTemplateForBlock(sectionKey, block.id);
       renderApp();
       return;
     }
@@ -2994,6 +3053,81 @@ function moveSectionRelative(
   const insertIndex = position === 'before' ? nextTargetLocation.index : nextTargetLocation.index + 1;
   nextTargetLocation.container.splice(insertIndex, 0, draggedSection);
   return true;
+}
+
+function moveSectionByOffset(sections: VisualSection[], sectionKey: string, offset: -1 | 1): boolean {
+  const location = findSectionContainer(sections, sectionKey);
+  if (!location) {
+    return false;
+  }
+  const targetIndex = location.index + offset;
+  if (targetIndex < 0 || targetIndex >= location.container.length) {
+    return false;
+  }
+  const [movedSection] = location.container.splice(location.index, 1);
+  if (!movedSection) {
+    return false;
+  }
+  location.container.splice(targetIndex, 0, movedSection);
+  return true;
+}
+
+function moveBlockByOffset(sectionKey: string, blockId: string, offset: -1 | 1): boolean {
+  const location = findBlockContainerById(state.document.sections, sectionKey, blockId);
+  if (!location) {
+    return false;
+  }
+  const targetIndex = location.index + offset;
+  if (targetIndex < 0 || targetIndex >= location.container.length) {
+    return false;
+  }
+  const [block] = location.container.splice(location.index, 1);
+  if (!block) {
+    return false;
+  }
+  location.container.splice(targetIndex, 0, block);
+  syncReusableTemplateForBlock(sectionKey, location.ownerBlockId ?? blockId);
+  return true;
+}
+
+function findBlockContainerById(
+  sections: VisualSection[],
+  sectionKey: string,
+  blockId: string
+): { container: VisualBlock[]; index: number; ownerBlockId: string | null } | null {
+  const section = findSectionByKey(sections, sectionKey);
+  if (!section) {
+    return null;
+  }
+  return findBlockContainerInList(section.blocks, blockId, null);
+}
+
+function findBlockContainerInList(
+  blocks: VisualBlock[],
+  blockId: string,
+  ownerBlockId: string | null
+): { container: VisualBlock[]; index: number; ownerBlockId: string | null } | null {
+  const index = blocks.findIndex((block) => block.id === blockId);
+  if (index >= 0) {
+    return { container: blocks, index, ownerBlockId };
+  }
+  for (const block of blocks) {
+    const nested =
+      findBlockContainerInList(block.schema.containerBlocks ?? [], blockId, block.id) ??
+      findBlockContainerInList(block.schema.componentListBlocks ?? [], blockId, block.id) ??
+      findBlockContainerInList(block.schema.expandableStubBlocks ?? [], blockId, block.id) ??
+      findBlockContainerInList(block.schema.expandableContentBlocks ?? [], blockId, block.id);
+    if (nested) {
+      return nested;
+    }
+    for (const row of block.schema.tableRows ?? []) {
+      const details = findBlockContainerInList(row.detailsBlocks ?? [], blockId, block.id);
+      if (details) {
+        return details;
+      }
+    }
+  }
+  return null;
 }
 
 function removeSectionByKey(sections: VisualSection[], sectionKey: string): boolean {

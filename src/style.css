@@ -287,13 +287,38 @@ button.tiny {
   gap: 0.35rem;
 }
 
+.editor-order-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.12rem;
+}
+
+.order-arrow-button {
+  border: 0;
+  background: transparent;
+  color: #60727e;
+  cursor: pointer;
+  padding: 0.2rem 0.22rem;
+  line-height: 1;
+  font-size: 0.78rem;
+  display: grid;
+  place-items: center;
+  min-width: 1.2rem;
+  min-height: 1.6rem;
+}
+
 .section-drag-handle {
   border: 0;
   background: transparent;
   color: #60727e;
   cursor: grab;
-  padding: 0.1rem 0.2rem;
+  padding: 0.18rem 0.24rem;
   line-height: 1;
+  font-size: 1rem;
+  min-width: 1.4rem;
+  min-height: 1.8rem;
+  display: grid;
+  place-items: center;
 }
 
 .section-title-passive {
@@ -401,6 +426,10 @@ button.tiny {
   gap: 0.5rem;
   margin-bottom: 0.4rem;
   padding: 0 0.2rem;
+}
+
+.editor-block-head {
+  position: relative;
 }
 
 .editor-actions {
@@ -555,8 +584,9 @@ button.tiny {
 }
 
 .editor-block-title {
-  display: inline-block;
-  margin-top: -4rem;
+  position: absolute;
+  left: 0;
+  top: -1.5em;
   padding: 0 0.45rem;
   border-radius: 999px;
   background: #fff;

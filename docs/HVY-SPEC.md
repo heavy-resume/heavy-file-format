@@ -191,6 +191,16 @@ Expandable blocks MAY be emitted with specialized directives so their stub and e
 - Expanded detail
 ```
 
+Grid blocks MAY be emitted with specialized directives so grid item content remains normal block content:
+
+```markdown
+<!--hvy:grid {"css":"margin: 0.5rem 0; gap: 0.75rem;","gridColumns":2}-->
+
+<!--hvy:grid:0 {"id":"skills","column":"left","component":"component-list","componentListComponent":"text"}-->
+
+<!--hvy:grid:1 {"id":"tools-technologies","column":"right","component":"component-list","componentListComponent":"text"}-->
+```
+
 Rules:
 - The directive MUST be on a single line.
 - The payload MUST be valid JSON object.
@@ -199,6 +209,8 @@ Rules:
 - `hvy:expandable:0` appends the immediately following content block to the expandable stub.
 - `hvy:expandable:1` appends the immediately following content block to the expanded content.
 - Multiple `hvy:expandable:0` or `hvy:expandable:1` directives MAY be used for a single expandable block.
+- `hvy:grid` starts a grid block. Its payload is the grid block schema, with `component:"grid"` implied.
+- `hvy:grid:N` appends the immediately following content block to the grid at item index `N`. Its payload MAY include grid item metadata such as `id` and `column`; `component` describes the item block component.
 - If both `meta.blocks[n]` and a block directive describe the same logical block, `meta.blocks[n]` wins.
 
 ### 5.8 Recursive block shape for rich clients

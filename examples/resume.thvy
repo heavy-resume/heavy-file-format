@@ -32,6 +32,15 @@ Title
 - {{summary_highlights.1}}
 - {{summary_highlights.2}}
 
+<!--hvy: {"id":"top-skills-tools-technologies","lock":true}-->
+#! Top Skills, Tools, and Technologies
+
+<!--hvy:grid {"css":"margin: 0.5rem 0; gap: 0.75rem;","gridColumns":2}-->
+
+<!--hvy:grid:0 {"id":"top-skills","column":"left","component":"component-list","componentListComponent":"text","css":"margin: 0;","componentListBlocks":[{"text":"## Skills","schema":{"component":"text","css":"margin: 0 0 0.35rem;"},"schemaMode":false},{"text":"{{top_skills.0}}","schema":{"component":"text","css":"margin: 0.35rem 0; padding: 0.55rem 0.65rem; border: 1px solid #d7e0e8; border-radius: 8px; box-shadow: 0 2px 8px rgba(41, 67, 82, 0.12); background: #fff;"},"schemaMode":false},{"text":"{{top_skills.1}}","schema":{"component":"text","css":"margin: 0.35rem 0; padding: 0.55rem 0.65rem; border: 1px solid #d7e0e8; border-radius: 8px; box-shadow: 0 2px 8px rgba(41, 67, 82, 0.12); background: #fff;"},"schemaMode":false},{"text":"{{top_skills.2}}","schema":{"component":"text","css":"margin: 0.35rem 0; padding: 0.55rem 0.65rem; border: 1px solid #d7e0e8; border-radius: 8px; box-shadow: 0 2px 8px rgba(41, 67, 82, 0.12); background: #fff;"},"schemaMode":false}]}-->
+
+<!--hvy:grid:1 {"id":"top-tools-technologies","column":"right","component":"component-list","componentListComponent":"text","css":"margin: 0;","componentListBlocks":[{"text":"## Tools & Technologies","schema":{"component":"text","css":"margin: 0 0 0.35rem;"},"schemaMode":false},{"text":"{{top_tools_technologies.0}}","schema":{"component":"text","css":"margin: 0.35rem 0; padding: 0.55rem 0.65rem; border: 1px solid #d7e0e8; border-radius: 8px; box-shadow: 0 2px 8px rgba(41, 67, 82, 0.12); background: #fff;"},"schemaMode":false},{"text":"{{top_tools_technologies.1}}","schema":{"component":"text","css":"margin: 0.35rem 0; padding: 0.55rem 0.65rem; border: 1px solid #d7e0e8; border-radius: 8px; box-shadow: 0 2px 8px rgba(41, 67, 82, 0.12); background: #fff;"},"schemaMode":false},{"text":"{{top_tools_technologies.2}}","schema":{"component":"text","css":"margin: 0.35rem 0; padding: 0.55rem 0.65rem; border: 1px solid #d7e0e8; border-radius: 8px; box-shadow: 0 2px 8px rgba(41, 67, 82, 0.12); background: #fff;"},"schemaMode":false}]}-->
+
 <!--hvy: {"id":"locations","lock":true}-->
 #! Locations
 

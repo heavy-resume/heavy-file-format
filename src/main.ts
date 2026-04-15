@@ -2290,19 +2290,21 @@ function mapParsedSection(section: HvySection): VisualSection {
 function parseBlocks(contentMarkdown: string, sectionMeta: JsonObject): VisualBlock[] {
   const schemas = Array.isArray(sectionMeta.blocks) ? (sectionMeta.blocks as JsonObject[]) : [];
   const lines = contentMarkdown.split(/\r?\n/);
-  const directivePattern = /^<!--hvy:([a-z][a-z0-9-]*(?::[01])?)\s*(\{.*\})\s*-->$/i;
+  const directivePattern = /^<!--hvy:([a-z][a-z0-9-]*(?::\d+)?)\s*(\{.*\})\s*-->$/i;
 
   const blocks: VisualBlock[] = [];
   let currentText: string[] = [];
   let currentSchema: BlockSchema = schemaFromUnknown(schemas[0]);
-  let currentTarget: 'top' | 'expandableStub' | 'expandableContent' = 'top';
+  let currentTarget: 'top' | 'expandableStub' | 'expandableContent' | 'gridItem' = 'top';
   let pendingExpandable: VisualBlock | undefined;
+  let pendingGrid: VisualBlock | undefined;
+  let currentGridItemMeta: JsonObject | undefined;
 
   const flush = (): void => {
     if (currentText.length === 0) {
       return;
     }
-    if (pendingExpandable && currentTarget === 'top' && currentText.join('\n').trim().length === 0) {
+    if ((pendingExpandable || pendingGrid) && currentTarget === 'top' && currentText.join('\n').trim().length === 0) {
       currentText = [];
       return;
     }
@@ -2316,6 +2318,14 @@ function parseBlocks(contentMarkdown: string, sectionMeta: JsonObject): VisualBl
       pendingExpandable.schema.expandableStubBlocks.push(block);
     } else if (currentTarget === 'expandableContent' && pendingExpandable) {
       pendingExpandable.schema.expandableContentBlocks.push(block);
+    } else if (currentTarget === 'gridItem' && pendingGrid) {
+      const index = pendingGrid.schema.gridItems.length;
+      pendingGrid.schema.gridItems.push({
+        id: typeof currentGridItemMeta?.id === 'string' ? currentGridItemMeta.id : makeId('griditem'),
+        column: coerceGridColumn(currentGridItemMeta?.column ?? index, pendingGrid.schema.gridColumns),
+        block,
+      });
+      currentGridItemMeta = undefined;
     } else {
       blocks.push(block);
     }
@@ -2323,15 +2333,18 @@ function parseBlocks(contentMarkdown: string, sectionMeta: JsonObject): VisualBl
     currentSchema = defaultBlockSchema();
   };
 
-  const finishExpandable = (): void => {
+  const finishPendingStructuredBlock = (): void => {
     flush();
-    if (!pendingExpandable) {
-      currentTarget = 'top';
-      return;
+    if (pendingExpandable) {
+      blocks.push(pendingExpandable);
+      pendingExpandable = undefined;
     }
-    blocks.push(pendingExpandable);
-    pendingExpandable = undefined;
+    if (pendingGrid) {
+      blocks.push(pendingGrid);
+      pendingGrid = undefined;
+    }
     currentTarget = 'top';
+    currentGridItemMeta = undefined;
     currentSchema = defaultBlockSchema();
   };
 
@@ -2343,8 +2356,8 @@ function parseBlocks(contentMarkdown: string, sectionMeta: JsonObject): VisualBl
     }
 
     const directive = (match[1] ?? 'block').toLowerCase();
-    if (directive === 'block' || directive === 'expandable' || !directive.startsWith('expandable:')) {
-      finishExpandable();
+    if (directive === 'block' || directive === 'expandable' || directive === 'grid' || (!directive.startsWith('expandable:') && !directive.startsWith('grid:'))) {
+      finishPendingStructuredBlock();
     } else {
       flush();
     }
@@ -2362,6 +2375,17 @@ function parseBlocks(contentMarkdown: string, sectionMeta: JsonObject): VisualBl
         pendingExpandable.schema.expandableContentBlocks = [];
         currentTarget = 'top';
         currentSchema = defaultBlockSchema();
+      } else if (directive === 'grid') {
+        pendingGrid = {
+          id: makeId('block'),
+          text: '',
+          schema: schemaFromUnknown({ ...parsed, component: 'grid', gridItems: [] }),
+          schemaMode: false,
+        };
+        pendingGrid.schema.gridItems = [];
+        currentTarget = 'top';
+        currentGridItemMeta = undefined;
+        currentSchema = defaultBlockSchema();
       } else if (directive === 'expandable:0') {
         if (!pendingExpandable) {
           pendingExpandable = createEmptyBlock('expandable', true);
@@ -2374,6 +2398,17 @@ function parseBlocks(contentMarkdown: string, sectionMeta: JsonObject): VisualBl
         }
         currentTarget = 'expandableContent';
         currentSchema = schemaFromUnknown(parsed);
+      } else if (directive.startsWith('grid:')) {
+        if (!pendingGrid) {
+          pendingGrid = createEmptyBlock('grid', true);
+          pendingGrid.schema.gridItems = [];
+        }
+        currentTarget = 'gridItem';
+        currentGridItemMeta = parsed;
+        currentSchema = schemaFromUnknown({
+          ...parsed,
+          component: typeof parsed.component === 'string' ? parsed.component : typeof parsed.type === 'string' ? parsed.type : 'text',
+        });
       } else if (directive === 'block') {
         currentTarget = 'top';
         currentSchema = schemaFromUnknown(parsed);
@@ -2386,7 +2421,7 @@ function parseBlocks(contentMarkdown: string, sectionMeta: JsonObject): VisualBl
     }
   });
 
-  finishExpandable();
+  finishPendingStructuredBlock();
 
   if (blocks.length === 0) {
     return [];
@@ -2438,6 +2473,11 @@ function serializeSection(section: VisualSection, level: number): string {
           .join('\n\n');
         return [schemaDirective, stubText, contentText].filter((part) => part.length > 0).join('\n\n');
       }
+      if (resolveBaseComponent(block.schema.component) === 'grid') {
+        const schemaDirective = `<!--hvy:grid ${JSON.stringify(serializeBlockSchema(block.schema, { omitComponent: true, omitGridItems: true }))}-->`;
+        const itemText = block.schema.gridItems.map((item, index) => serializeGridItemBlock(item, index)).join('\n\n');
+        return [schemaDirective, itemText].filter((part) => part.length > 0).join('\n\n');
+      }
       const blockDirective = serializeBlockDirective(block.schema);
       const schemaDirective = `<!--hvy:${blockDirective.name} ${JSON.stringify(blockDirective.schema)}-->`;
       return `${schemaDirective}\n${block.text.trim()}`;
@@ -2454,7 +2494,7 @@ function serializeSection(section: VisualSection, level: number): string {
 
 function serializeBlockSchema(
   schema: BlockSchema,
-  options: { omitComponent?: boolean; omitExpandableBlocks?: boolean } = {}
+  options: { omitComponent?: boolean; omitExpandableBlocks?: boolean; omitGridItems?: boolean } = {}
 ): JsonObject {
   const component = resolveBaseComponent(schema.component);
   const defaults = defaultBlockSchema(component);
@@ -2483,7 +2523,7 @@ function serializeBlockSchema(
   }
   if (component === 'grid') {
     addIfChanged(payload, 'gridColumns', schema.gridColumns, defaults.gridColumns);
-    if (schema.gridItems.length > 0) {
+    if (!options.omitGridItems && schema.gridItems.length > 0) {
       payload.gridItems = schema.gridItems.map((item) => ({
         id: item.id,
         column: item.column,
@@ -2530,6 +2570,14 @@ function serializeBlockDirective(schema: BlockSchema): { name: string; schema: J
 function serializeExpandablePartBlock(block: VisualBlock, part: 0 | 1): string {
   const schemaDirective = `<!--hvy:expandable:${part} ${JSON.stringify(serializeBlockSchema(block.schema))}-->`;
   return `${schemaDirective}\n${block.text.trim()}`;
+}
+
+function serializeGridItemBlock(item: GridItem, index: number): string {
+  const schema = serializeBlockSchema(item.block.schema);
+  schema.id = item.id;
+  schema.column = item.column;
+  const schemaDirective = `<!--hvy:grid:${index} ${JSON.stringify(schema)}-->`;
+  return `${schemaDirective}\n${item.block.text.trim()}`;
 }
 
 function serializeVisualBlock(block: VisualBlock): JsonObject {

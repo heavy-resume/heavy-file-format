@@ -1,6 +1,7 @@
 import './style.css';
 import 'highlight.js/styles/github.css';
 import bundledExampleHvy from '../examples/example.hvy?raw';
+import bundledResumeThvy from '../examples/resume.thvy?raw';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import TurndownService from 'turndown';
@@ -240,6 +241,7 @@ function renderApp(): void {
         </div>
         <div class="toolbar">
           <button id="newBtn" type="button" class="toolbar-primary-button">New</button>
+          <button id="resumeTemplateBtn" type="button">Resume Template</button>
           <label class="file-picker">
             Select File
             <input id="fileInput" type="file" accept=".hvy,.thvy,.md,text/markdown,text/plain" />
@@ -379,6 +381,16 @@ function bindUi(): void {
 
   newBtn.addEventListener('click', () => {
     resetToBlankDocument();
+  });
+
+  const resumeTemplateBtn = app.querySelector<HTMLButtonElement>('#resumeTemplateBtn');
+  resumeTemplateBtn?.addEventListener('click', () => {
+    state.document = deserializeDocument(bundledResumeThvy, '.thvy');
+    state.filename = 'resume.thvy';
+    state.history = [];
+    state.future = [];
+    resetTransientUiState();
+    renderApp();
   });
 
   fileInput.addEventListener('change', async () => {

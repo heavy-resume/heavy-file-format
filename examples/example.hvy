@@ -3,8 +3,8 @@ hvy_version: 0.1
 title: Reference Implementation Demo
 ---
 
-# Welcome
 <!--hvy: {"id":"welcome"}-->
+# Welcome
 
 <!--hvy:block {"component":"text","customCss":"margin: 0.5rem 0;"}-->
 This is a **visual HVY editor**. What you see in the editor is the primary authoring experience.

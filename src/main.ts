@@ -27,17 +27,24 @@ interface VisualDocument {
   sections: VisualSection[];
 }
 
+interface ReusableSaveModalState {
+  kind: 'component' | 'section';
+  sectionKey: string;
+  blockId?: string;
+  draftName: string;
+}
+
 interface AppState {
   document: VisualDocument;
   filename: string;
   currentView: 'editor' | 'viewer';
   paneScroll: PaneScrollState;
   showAdvancedEditor: boolean;
-  editorCanvasMode: 'content' | 'schema' | 'reusable';
   activeEditorBlock: { sectionKey: string; blockId: string } | null;
   activeEditorSectionTitleKey: string | null;
   clearSectionTitleOnFocusKey: string | null;
   modalSectionKey: string | null;
+  reusableSaveModal: ReusableSaveModalState | null;
   tempHighlights: Set<string>;
   addComponentBySection: Record<string, string>;
   metaPanelOpen: boolean;
@@ -51,7 +58,6 @@ interface AppState {
   lastHistoryGroup: string | null;
   lastHistoryAt: number;
   pendingEditorCenterSectionKey: string | null;
-  schemaDefDraftByBlock: Record<string, string>;
 }
 
 interface PaneScrollState {
@@ -81,6 +87,8 @@ let shortcutsBound = false;
 let appEventsBound = false;
 const HISTORY_GROUP_WINDOW_MS = 1200;
 const REUSABLE_SECTION_PREFIX = '__reusable__:';
+const EMPTY_SECTION_STARTER = '__empty_section__';
+const REUSABLE_SECTION_DEF_PREFIX = 'section-def:';
 let pendingLinkRange: Range | null = null;
 let pendingLinkEditable: HTMLElement | null = null;
 let draggedSectionKey: string | null = null;
@@ -101,17 +109,11 @@ editorRenderer = createEditorRenderer(
     get showAdvancedEditor() {
       return state.showAdvancedEditor;
     },
-    get editorCanvasMode() {
-      return state.editorCanvasMode;
-    },
     get addComponentBySection() {
       return state.addComponentBySection;
     },
     get activeEditorBlock() {
       return state.activeEditorBlock;
-    },
-    get schemaDefDraftByBlock() {
-      return state.schemaDefDraftByBlock;
     },
   },
   {
@@ -120,6 +122,7 @@ editorRenderer = createEditorRenderer(
     flattenSections,
     renderReaderBlock: (section, block) => readerRenderer.renderReaderBlock(section, block),
     renderComponentOptions,
+    renderSectionStarterOptions,
     renderOption,
     resolveBaseComponent,
     ensureContainerBlocks,
@@ -132,6 +135,7 @@ editorRenderer = createEditorRenderer(
     formatSectionTitle,
     findSectionByKey,
     getComponentDefs,
+    getSectionDefs,
     getThemeConfig,
     getComponentRenderHelpers,
     isBuiltinComponent,
@@ -148,6 +152,9 @@ readerRenderer = createReaderRenderer(
     },
     get modalSectionKey() {
       return state.modalSectionKey;
+    },
+    get reusableSaveModal() {
+      return state.reusableSaveModal;
     },
     get componentMetaModal() {
       return state.componentMetaModal;
@@ -197,11 +204,11 @@ function createInitialState(): AppState {
       windowTop: 0,
     },
     showAdvancedEditor: false,
-    editorCanvasMode: 'content',
     activeEditorBlock: null,
     activeEditorSectionTitleKey: null,
     clearSectionTitleOnFocusKey: null,
     modalSectionKey: null,
+    reusableSaveModal: null,
     tempHighlights: new Set<string>(),
     addComponentBySection: {},
     metaPanelOpen: false,
@@ -215,7 +222,6 @@ function createInitialState(): AppState {
     lastHistoryGroup: null,
     lastHistoryAt: 0,
     pendingEditorCenterSectionKey: null,
-    schemaDefDraftByBlock: {},
   };
 }
 
@@ -224,8 +230,6 @@ function renderApp(): void {
   applyTheme();
   const isEditorView = state.currentView === 'editor';
   const isAdvancedEditor = state.showAdvancedEditor;
-  const isSchemaCanvas = isAdvancedEditor && state.editorCanvasMode === 'schema';
-  const isReusableCanvas = isAdvancedEditor && state.editorCanvasMode === 'reusable';
   const templateFields = getTemplateFields(state.document.meta);
   app.innerHTML = `
     <main class="layout">
@@ -257,10 +261,7 @@ function renderApp(): void {
                   <button type="button" class="${isAdvancedEditor ? 'secondary' : 'ghost'}" data-action="set-editor-mode" data-editor-mode="advanced">Advanced</button>
                   ${
                     isAdvancedEditor
-                      ? `<button type="button" class="${state.editorCanvasMode === 'content' ? 'secondary' : 'ghost'}" data-action="set-editor-canvas" data-editor-canvas="content">Content</button>
-                         <button type="button" class="${isSchemaCanvas ? 'secondary' : 'ghost'}" data-action="set-editor-canvas" data-editor-canvas="schema">Schema</button>
-                         <button type="button" class="${isReusableCanvas ? 'secondary' : 'ghost'}" data-action="set-editor-canvas" data-editor-canvas="reusable">Reusable Components</button>
-                         <button type="button" class="${state.metaPanelOpen ? 'secondary' : 'ghost'}" data-action="toggle-document-meta">Document Meta</button>`
+                      ? `<button type="button" class="${state.metaPanelOpen ? 'secondary' : 'ghost'}" data-action="toggle-document-meta">Document Meta</button>`
                       : ''
                   }
                 </div>`
@@ -273,11 +274,7 @@ function renderApp(): void {
               ? `${isAdvancedEditor ? renderTemplatePanel(templateFields, state.templateValues, { escapeAttr, escapeHtml }) : ''}
                 ${isAdvancedEditor && state.metaPanelOpen ? editorRenderer.renderMetaPanel() : ''}
                 ${isAdvancedEditor ? renderStateTracker() : ''}
-                ${
-                  isReusableCanvas
-                    ? renderReusableComponentsEditor()
-                    : `<div id="editorTree" class="editor-tree">${editorRenderer.renderSectionEditorTree(state.document.sections)}</div>`
-                }`
+                <div id="editorTree" class="editor-tree">${editorRenderer.renderSectionEditorTree(state.document.sections)}</div>`
               : `<div id="readerWarnings" class="reader-warnings">${readerRenderer.renderWarnings()}</div>
                 <div id="readerNav" class="reader-nav">${readerRenderer.renderNavigation(state.document.sections)}</div>
                 <div id="readerDocument" class="reader-document">${readerRenderer.renderReaderSections(state.document.sections)}</div>`
@@ -342,39 +339,6 @@ function centerPendingEditorSection(): void {
     }
     sectionEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
   });
-}
-
-function renderReusableComponentsEditor(): string {
-  const defs = getComponentDefs();
-  if (defs.length === 0) {
-    return '<section class="meta-panel"><div class="muted">No reusable components yet. Save one from schema mode to start a library.</div></section>';
-  }
-  const selectedName = state.selectedReusableComponentName && defs.some((def) => def.name === state.selectedReusableComponentName)
-    ? state.selectedReusableComponentName
-    : defs[0]!.name;
-  state.selectedReusableComponentName = selectedName;
-  const selectedDef = defs.find((def) => def.name === selectedName)!;
-  const templateBlock = getReusableTemplate(selectedDef);
-  return `
-    <section class="reusable-components-view">
-      <aside class="reusable-components-list">
-        ${defs
-          .map(
-            (def) => `<article class="reusable-component-card${def.name === selectedName ? ' is-selected' : ''}">
-              <button type="button" class="ghost reusable-component-select" data-action="select-reusable-def" data-def-name="${escapeAttr(def.name)}">
-                <strong>${escapeHtml(def.name)}</strong>
-                <span>${escapeHtml(def.baseType)}</span>
-              </button>
-              <button type="button" class="danger tiny" data-action="delete-reusable-def" data-def-name="${escapeAttr(def.name)}">Delete</button>
-            </article>`
-          )
-          .join('')}
-      </aside>
-      <div class="reusable-components-editor">
-        ${editorRenderer.renderEditorBlock(makeReusableSectionKey(selectedDef.name), templateBlock)}
-      </div>
-    </section>
-  `;
 }
 
 function focusPendingSectionTitleEditor(): void {
@@ -527,10 +491,13 @@ function bindUi(): void {
       return;
     }
 
-    if (field === 'schema-def-name' && target instanceof HTMLInputElement) {
-      const blockId = target.dataset.blockId;
-      if (blockId) {
-        state.schemaDefDraftByBlock[blockId] = target.value;
+    if (field === 'section-def-name' && target instanceof HTMLInputElement) {
+      const idx = Number.parseInt(target.dataset.sectionDefIndex ?? '', 10);
+      const defs = getSectionDefs();
+      if (!Number.isNaN(idx) && defs[idx]) {
+        recordHistory(`section-def:${idx}:name`);
+        defs[idx].name = target.value;
+        state.document.meta.section_defs = defs;
       }
       return;
     }
@@ -594,22 +561,9 @@ function bindUi(): void {
       state.showAdvancedEditor = actionButton.dataset.editorMode === 'advanced';
       if (!state.showAdvancedEditor) {
         state.metaPanelOpen = false;
-        state.editorCanvasMode = 'content';
       }
       state.activeEditorSectionTitleKey = null;
       renderApp();
-      return;
-    }
-
-    if (action === 'set-editor-canvas') {
-      const nextMode = actionButton.dataset.editorCanvas;
-      if (nextMode === 'schema' || nextMode === 'reusable' || nextMode === 'content') {
-        state.editorCanvasMode = nextMode;
-        if (nextMode === 'reusable' && !state.selectedReusableComponentName) {
-          state.selectedReusableComponentName = getComponentDefs()[0]?.name ?? null;
-        }
-        renderApp();
-      }
       return;
     }
 
@@ -681,40 +635,23 @@ function bindUi(): void {
       return;
     }
 
-    if (action === 'select-reusable-def') {
-      const name = actionButton.dataset.defName?.trim();
-      if (name) {
-        state.selectedReusableComponentName = name;
-        renderApp();
-      }
-      return;
-    }
-
-    if (action === 'delete-reusable-def') {
-      const name = actionButton.dataset.defName?.trim();
-      if (!name) {
+    if (action === 'remove-section-def') {
+      recordHistory();
+      const defIndex = Number.parseInt(actionButton.dataset.sectionDefIndex ?? '', 10);
+      if (Number.isNaN(defIndex)) {
         return;
       }
-      recordHistory(`delete-def:${name}`);
-      const defs = getComponentDefs();
-      const index = defs.findIndex((def) => def.name === name);
-      if (index < 0) {
+      const defs = getSectionDefs();
+      if (!defs[defIndex]) {
         return;
       }
-      const [removed] = defs.splice(index, 1);
-      if (removed) {
-        revertReusableComponent(removed);
-      }
-      state.document.meta.component_defs = defs;
-      if (state.selectedReusableComponentName === name) {
-        state.selectedReusableComponentName = defs[0]?.name ?? null;
-      }
+      defs.splice(defIndex, 1);
+      state.document.meta.section_defs = defs;
       renderApp();
-      refreshReaderPanels();
       return;
     }
 
-    if (action === 'save-component-def') {
+    if (action === 'open-save-component-def') {
       const sectionKey = actionButton.dataset.sectionKey;
       const blockId = actionButton.dataset.blockId;
       if (!sectionKey || !blockId) {
@@ -724,38 +661,31 @@ function bindUi(): void {
       if (!block) {
         return;
       }
-      const draftName = (state.schemaDefDraftByBlock[blockId] ?? block.schema.component).trim();
-      if (!draftName) {
+      state.reusableSaveModal = {
+        kind: 'component',
+        sectionKey,
+        blockId,
+        draftName: isBuiltinComponent(block.schema.component) ? '' : block.schema.component,
+      };
+      renderApp();
+      return;
+    }
+
+    if (action === 'open-save-section-def') {
+      const sectionKey = actionButton.dataset.sectionKey;
+      if (!sectionKey) {
         return;
       }
-      recordHistory(`save-def:${blockId}`);
-      const defs = getComponentDefs();
-      const existing = defs.find((def) => def.name === draftName);
-      const nextDef = {
-        name: draftName,
-        baseType: resolveBaseComponent(block.schema.component),
-        tags: block.schema.tags,
-        description: block.schema.description,
-        schema: cloneReusableSchema(block.schema, draftName),
-        template: cloneReusableBlock({
-          ...block,
-          schema: cloneReusableSchema(block.schema, draftName),
-        }),
-      };
-      if (existing) {
-        existing.baseType = nextDef.baseType;
-        existing.tags = nextDef.tags;
-        existing.description = nextDef.description;
-        existing.schema = nextDef.schema;
-      } else {
-        defs.push(nextDef);
+      const section = findSectionByKey(state.document.sections, sectionKey);
+      if (!section) {
+        return;
       }
-      state.document.meta.component_defs = defs;
-      state.schemaDefDraftByBlock[blockId] = draftName;
-      state.selectedReusableComponentName = draftName;
-      block.schema.component = draftName;
+      state.reusableSaveModal = {
+        kind: 'section',
+        sectionKey,
+        draftName: isDefaultUntitledSectionTitle(section.title) ? '' : section.title.trim(),
+      };
       renderApp();
-      refreshReaderPanels();
       return;
     }
 
@@ -863,11 +793,14 @@ function bindUi(): void {
 
     if (action === 'add-top-level-section') {
       recordHistory();
-      const component = state.addComponentBySection.__top_level__ ?? 'container';
-      const section = createEmptySection(1, component, false);
+      const starter = state.addComponentBySection.__top_level__ ?? 'container';
+      const section = createSectionFromStarter(1, starter, false);
       state.document.sections.push(section);
       if (section.blocks[0]) {
         setActiveEditorBlock(section.key, section.blocks[0].id);
+      } else {
+        state.activeEditorSectionTitleKey = section.key;
+        state.clearSectionTitleOnFocusKey = isDefaultUntitledSectionTitle(section.title) ? section.key : null;
       }
       renderApp();
       return;
@@ -914,10 +847,16 @@ function bindUi(): void {
         return;
       }
       recordHistory();
-      const child = createEmptySection(Math.min(section.level + 1, 6), '', false);
+      const starterKey = `subsection:${section.key}`;
+      const starter = state.addComponentBySection[starterKey] ?? '__empty_section__';
+      const child = createSectionFromStarter(Math.min(section.level + 1, 6), starter, false);
       section.children.push(child);
-      state.activeEditorSectionTitleKey = child.key;
-      state.clearSectionTitleOnFocusKey = child.key;
+      if (child.blocks[0]) {
+        setActiveEditorBlock(child.key, child.blocks[0].id);
+      } else {
+        state.activeEditorSectionTitleKey = child.key;
+        state.clearSectionTitleOnFocusKey = isDefaultUntitledSectionTitle(child.title) ? child.key : null;
+      }
       renderApp();
       return;
     }
@@ -1584,8 +1523,31 @@ function bindModal(): void {
     if (closeBtn) {
       closeModal();
       renderApp();
+      return;
+    }
+
+    const saveBtn = target.closest<HTMLElement>('[data-modal-action="save-reusable"]');
+    if (saveBtn) {
+      saveReusableFromModal();
+      return;
     }
   });
+
+  const reusableNameInput = modalRoot.querySelector<HTMLInputElement>('#reusableNameInput');
+  if (reusableNameInput && state.reusableSaveModal) {
+    reusableNameInput.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        saveReusableFromModal();
+        return;
+      }
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeModal();
+        renderApp();
+      }
+    });
+  }
 
   const cssInput = modalRoot.querySelector<HTMLTextAreaElement>('#modalCssInput');
   if (!cssInput || !state.modalSectionKey) {
@@ -2330,6 +2292,7 @@ function setTemporaryHighlight(sectionId: string): void {
 function closeModal(): void {
   state.modalSectionKey = null;
   state.componentMetaModal = null;
+  state.reusableSaveModal = null;
 }
 
 function closeModalIfTarget(sectionKey: string): void {
@@ -2339,6 +2302,84 @@ function closeModalIfTarget(sectionKey: string): void {
   if (state.componentMetaModal?.sectionKey === sectionKey) {
     state.componentMetaModal = null;
   }
+  if (state.reusableSaveModal?.sectionKey === sectionKey) {
+    state.reusableSaveModal = null;
+  }
+}
+
+function saveReusableFromModal(): void {
+  const modal = state.reusableSaveModal;
+  if (!modal) {
+    return;
+  }
+  const input = app.querySelector<HTMLInputElement>('#reusableNameInput');
+  const draftName = (input?.value ?? modal.draftName).trim();
+  if (!draftName) {
+    input?.focus();
+    return;
+  }
+
+  if (modal.kind === 'component' && modal.blockId) {
+    saveReusableComponent(modal.sectionKey, modal.blockId, draftName);
+    return;
+  }
+
+  saveReusableSection(modal.sectionKey, draftName);
+}
+
+function saveReusableComponent(sectionKey: string, blockId: string, name: string): void {
+  const block = findBlockByIds(sectionKey, blockId);
+  if (!block) {
+    return;
+  }
+  recordHistory(`save-def:${blockId}`);
+  const defs = getComponentDefs();
+  const existing = defs.find((def) => def.name === name);
+  const nextDef = {
+    name,
+    baseType: resolveBaseComponent(block.schema.component),
+    tags: block.schema.tags,
+    description: block.schema.description,
+    schema: cloneReusableSchema(block.schema, name),
+    template: cloneReusableBlock({
+      ...block,
+      schema: cloneReusableSchema(block.schema, name),
+    }),
+  };
+  if (existing) {
+    existing.baseType = nextDef.baseType;
+    existing.tags = nextDef.tags;
+    existing.description = nextDef.description;
+    existing.schema = nextDef.schema;
+    existing.template = nextDef.template;
+  } else {
+    defs.push(nextDef);
+  }
+  state.document.meta.component_defs = defs;
+  state.selectedReusableComponentName = name;
+  block.schema.component = name;
+  closeModal();
+  renderApp();
+  refreshReaderPanels();
+}
+
+function saveReusableSection(sectionKey: string, name: string): void {
+  const section = findSectionByKey(state.document.sections, sectionKey);
+  if (!section) {
+    return;
+  }
+  recordHistory(`save-section:${sectionKey}`);
+  const defs = getSectionDefs();
+  const existing = defs.find((def) => def.name === name);
+  const template = cloneReusableSection(section);
+  if (existing) {
+    existing.template = template;
+  } else {
+    defs.push({ name, template });
+  }
+  state.document.meta.section_defs = defs;
+  closeModal();
+  renderApp();
 }
 
 function createDefaultDocument(): VisualDocument {
@@ -2359,6 +2400,17 @@ function createEmptySection(level: number, component = 'container', isGhost = fa
     blocks: component ? [createEmptyBlock(component)] : [],
     children: [],
   };
+}
+
+function createSectionFromStarter(level: number, starter = 'container', isGhost = false): VisualSection {
+  if (starter.startsWith(REUSABLE_SECTION_DEF_PREFIX)) {
+    const reusableName = starter.slice(REUSABLE_SECTION_DEF_PREFIX.length);
+    const reusableSection = instantiateReusableSection(reusableName, level);
+    if (reusableSection) {
+      return reusableSection;
+    }
+  }
+  return createEmptySection(level, starter === EMPTY_SECTION_STARTER ? '' : starter, isGhost);
 }
 
 function isDefaultUntitledSectionTitle(title: string): boolean {
@@ -2608,6 +2660,27 @@ function cloneReusableBlock(block: VisualBlock): VisualBlock {
   };
 }
 
+function cloneReusableSection(section: VisualSection, targetLevel = section.level): VisualSection {
+  const levelDelta = targetLevel - section.level;
+  return cloneReusableSectionWithDelta(section, levelDelta);
+}
+
+function cloneReusableSectionWithDelta(section: VisualSection, levelDelta: number): VisualSection {
+  return {
+    key: makeId('section'),
+    customId: '',
+    idEditorOpen: false,
+    isGhost: false,
+    title: section.title,
+    level: Math.max(1, Math.min(6, section.level + levelDelta)),
+    expanded: section.expanded,
+    highlight: section.highlight,
+    customCss: section.customCss,
+    blocks: section.blocks.map((block) => cloneReusableBlock(block)),
+    children: section.children.map((child) => cloneReusableSectionWithDelta(child, levelDelta)),
+  };
+}
+
 function instantiateReusableBlock(componentName: string): VisualBlock | null {
   const def = getComponentDefs().find((item) => item.name === componentName);
   if (!def) {
@@ -2660,7 +2733,7 @@ function findReusableOwnerInList(blocks: VisualBlock[], blockId: string, current
 }
 
 function syncReusableTemplateForBlock(sectionKey: string, blockId: string): void {
-  if (!(state.showAdvancedEditor && (state.editorCanvasMode === 'schema' || state.editorCanvasMode === 'reusable'))) {
+  if (!state.showAdvancedEditor) {
     return;
   }
   const owner = findReusableOwner(sectionKey, blockId);
@@ -3033,6 +3106,11 @@ interface ComponentDefinition {
   template?: VisualBlock;
 }
 
+interface SectionDefinition {
+  name: string;
+  template: VisualSection;
+}
+
 function getComponentDefs(): ComponentDefinition[] {
   const defs = state.document.meta.component_defs;
   if (!Array.isArray(defs)) {
@@ -3041,12 +3119,42 @@ function getComponentDefs(): ComponentDefinition[] {
   return defs.filter((item): item is ComponentDefinition => !!item && typeof item === 'object' && 'name' in item);
 }
 
-function makeReusableSectionKey(name: string): string {
-  return `${REUSABLE_SECTION_PREFIX}${name}`;
+function getSectionDefs(): SectionDefinition[] {
+  const defs = state.document.meta.section_defs;
+  if (!Array.isArray(defs)) {
+    return [];
+  }
+  return defs.filter((item): item is SectionDefinition => !!item && typeof item === 'object' && 'name' in item && 'template' in item);
 }
 
 function getReusableNameFromSectionKey(sectionKey: string): string | null {
   return sectionKey.startsWith(REUSABLE_SECTION_PREFIX) ? sectionKey.slice(REUSABLE_SECTION_PREFIX.length) : null;
+}
+
+function renderSectionStarterOptions(selected: string): string {
+  const builtinOptions = [
+    { value: EMPTY_SECTION_STARTER, label: 'Empty Section' },
+    { value: 'text', label: 'Section With Text' },
+    { value: 'quote', label: 'Section With Quote' },
+    { value: 'code', label: 'Section With Code' },
+    { value: 'expandable', label: 'Section With Expandable' },
+    { value: 'table', label: 'Section With Table' },
+    { value: 'container', label: 'Section With Container' },
+    { value: 'component-list', label: 'Section With Component List' },
+    { value: 'grid', label: 'Section With Grid' },
+    { value: 'plugin', label: 'Section With Plugin' },
+  ]
+    .map((option) => `<option value="${escapeAttr(option.value)}"${option.value === selected ? ' selected' : ''}>${escapeHtml(option.label)}</option>`)
+    .join('');
+  const reusableOptions = getSectionDefs()
+    .map((def) => {
+      const value = `${REUSABLE_SECTION_DEF_PREFIX}${def.name}`;
+      return `<option value="${escapeAttr(value)}"${value === selected ? ' selected' : ''}>${escapeHtml(def.name)}</option>`;
+    })
+    .join('');
+  return reusableOptions.length > 0
+    ? `${builtinOptions}<optgroup label="Reusable Sections">${reusableOptions}</optgroup>`
+    : builtinOptions;
 }
 
 function getReusableTemplate(def: ComponentDefinition): VisualBlock {
@@ -3066,6 +3174,14 @@ function getReusableTemplate(def: ComponentDefinition): VisualBlock {
 function getReusableTemplateByName(name: string): VisualBlock | null {
   const def = getComponentDefs().find((item) => item.name === name);
   return def ? getReusableTemplate(def) : null;
+}
+
+function instantiateReusableSection(name: string, level: number): VisualSection | null {
+  const def = getSectionDefs().find((item) => item.name === name);
+  if (!def) {
+    return null;
+  }
+  return cloneReusableSection(def.template, level);
 }
 
 function getComponentOptions(): string[] {

@@ -218,6 +218,36 @@ Notes:
 - When present, rich clients MAY use it as the default schema/template when creating a block with that reusable component.
 - Plain Markdown renderers MAY ignore `component_defs`.
 
+### 5.10 Reusable section definitions
+
+Document metadata MAY include `section_defs`, an array of reusable section definitions for rich authoring tools.
+
+Example:
+
+```yaml
+section_defs:
+  - name: faq-section
+    template:
+      title: FAQ
+      level: 2
+      expanded: true
+      highlight: false
+      customCss: ""
+      blocks:
+        - text: "## Frequently Asked Questions"
+          schema:
+            component: text
+            customCss: "margin: 0.5rem 0;"
+          schemaMode: false
+      children: []
+```
+
+Notes:
+- `template` stores a full section subtree, including blocks and nested child sections.
+- Rich clients MAY clone a `section_defs[*].template` when inserting a new section or subsection.
+- Rich clients SHOULD assign fresh section keys, block IDs, and custom IDs when instantiating a reusable section.
+- Plain Markdown renderers MAY ignore `section_defs`.
+
 ## 6. Template & Schema (`.thvy`)
 
 A `.thvy` file is a `.hvy` file with required schema metadata.

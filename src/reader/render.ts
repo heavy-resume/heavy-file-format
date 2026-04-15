@@ -13,6 +13,12 @@ interface ReaderRenderState {
   documentSections: VisualSection[];
   tempHighlights: Set<string>;
   modalSectionKey: string | null;
+  reusableSaveModal: {
+    kind: 'component' | 'section';
+    sectionKey: string;
+    blockId?: string;
+    draftName: string;
+  } | null;
   componentMetaModal: { sectionKey: string; blockId: string } | null;
 }
 
@@ -140,6 +146,34 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
   }
 
   function renderModal(): string {
+    if (state.reusableSaveModal) {
+      const title = state.reusableSaveModal.kind === 'section' ? 'Save As Reusable Section' : 'Save As Reusable Component';
+      const help =
+        state.reusableSaveModal.kind === 'section'
+          ? 'This saves a cloned section template, including its current blocks and nested subsections.'
+          : 'This saves a cloned component template, including pre-filled values and nested children.';
+      return `
+        <div id="modalRoot" class="modal-root">
+          <div class="modal-overlay" data-modal-action="close-overlay"></div>
+          <section class="modal-panel component-meta-modal">
+            <div class="modal-head">
+              <h3>${title}</h3>
+              <button type="button" data-modal-action="close">Close</button>
+            </div>
+            <p class="muted">${help}</p>
+            <label>
+              <span>Name</span>
+              <input id="reusableNameInput" value="${deps.escapeAttr(state.reusableSaveModal.draftName)}" placeholder="Callout, Pricing Table, FAQ Section..." autofocus />
+            </label>
+            <div class="link-inline-actions reusable-save-actions">
+              <button type="button" class="ghost" data-modal-action="close">Cancel</button>
+              <button type="button" class="secondary" data-modal-action="save-reusable">Save Reusable</button>
+            </div>
+          </section>
+        </div>
+      `;
+    }
+
     if (state.componentMetaModal) {
       const block = deps.findBlockByIds(state.componentMetaModal.sectionKey, state.componentMetaModal.blockId);
       if (!block) {

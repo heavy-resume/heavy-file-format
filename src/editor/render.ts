@@ -29,13 +29,15 @@ interface ComponentDef {
   schema?: BlockSchema;
 }
 
+interface SectionDef {
+  name: string;
+}
+
 interface EditorRenderState {
   documentMeta: Record<string, unknown>;
   showAdvancedEditor: boolean;
-  editorCanvasMode: 'content' | 'schema' | 'reusable';
   addComponentBySection: Record<string, string>;
   activeEditorBlock: { sectionKey: string; blockId: string } | null;
-  schemaDefDraftByBlock: Record<string, string>;
 }
 
 interface EditorRenderDeps {
@@ -44,6 +46,7 @@ interface EditorRenderDeps {
   flattenSections: (sections: VisualSection[]) => VisualSection[];
   renderReaderBlock: (section: VisualSection, block: VisualBlock) => string;
   renderComponentOptions: (selected: string) => string;
+  renderSectionStarterOptions: (selected: string) => string;
   renderOption: (value: string, selected: string) => string;
   resolveBaseComponent: (componentName: string) => string;
   ensureContainerBlocks: (block: VisualBlock) => void;
@@ -56,6 +59,7 @@ interface EditorRenderDeps {
   formatSectionTitle: (title: string) => string;
   findSectionByKey: (sections: VisualSection[], key: string) => VisualSection | null;
   getComponentDefs: () => ComponentDef[];
+  getSectionDefs: () => SectionDef[];
   getThemeConfig: () => ThemeConfig;
   getComponentRenderHelpers: () => ComponentRenderHelpers;
   isBuiltinComponent: (componentName: string) => boolean;
@@ -78,7 +82,6 @@ export interface EditorRenderer {
   renderMetaPanel: () => string;
   renderComponentFragment: (componentName: string, content: string, block: VisualBlock) => string;
   renderBlockMetaFields: (sectionKey: string, block: VisualBlock) => string;
-  renderReusableComponentFields: (sectionKey: string, block: VisualBlock) => string;
 }
 
 export function createEditorRenderer(state: EditorRenderState, deps: EditorRenderDeps): EditorRenderer {
@@ -92,13 +95,13 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           : ''
       }
       ${sectionCards}
-        <article class="ghost-section-card add-ghost" data-action="add-top-level-section" data-section-key="__top_level__">
+          <article class="ghost-section-card add-ghost" data-action="add-top-level-section" data-section-key="__top_level__">
         <div class="ghost-plus-big"><span>+</span></div>
         <div class="ghost-label">Add Section</div>
         <label class="ghost-component-picker">
-          <span>Starting Component</span>
+          <span>Starting From</span>
           <select data-field="new-component-type" data-section-key="__top_level__">
-            ${deps.renderComponentOptions(state.addComponentBySection.__top_level__ ?? 'container')}
+            ${deps.renderSectionStarterOptions(state.addComponentBySection.__top_level__ ?? 'container')}
           </select>
         </label>
       </article>
@@ -128,7 +131,8 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
             <button type="button" class="ghost" data-action="jump-to-reader" data-section-key="${deps.escapeAttr(section.key)}">Jump</button>
             ${
               state.showAdvancedEditor
-                ? `<button type="button" class="ghost" data-action="focus-modal" data-section-key="${deps.escapeAttr(section.key)}">Meta</button>`
+                ? `<button type="button" class="ghost" data-action="open-save-section-def" data-section-key="${deps.escapeAttr(section.key)}">Reusable</button>
+                   <button type="button" class="ghost" data-action="focus-modal" data-section-key="${deps.escapeAttr(section.key)}">Meta</button>`
                 : ''
             }
             <button type="button" class="danger" data-action="remove-section" data-section-key="${deps.escapeAttr(section.key)}">Remove</button>
@@ -160,7 +164,12 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
 
         <div class="editor-children">
           ${section.children.map((child) => renderEditorSection(child, rootSections)).join('')}
-          <button type="button" class="ghost subsection-add-button" data-action="add-subsection" data-section-key="${deps.escapeAttr(section.key)}">+ Add Subsection</button>
+          <div class="subsection-add-row">
+            <select data-field="new-component-type" data-section-key="${deps.escapeAttr(`subsection:${section.key}`)}" aria-label="Subsection starter">
+              ${deps.renderSectionStarterOptions(state.addComponentBySection[`subsection:${section.key}`] ?? '__empty_section__')}
+            </select>
+            <button type="button" class="ghost subsection-add-button" data-action="add-subsection" data-section-key="${deps.escapeAttr(section.key)}">+ Add Subsection</button>
+          </div>
         </div>
       </article>
     `;
@@ -203,12 +212,9 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
   function renderEditorBlock(sectionKey: string, block: VisualBlock, rootSections?: VisualSection[]): string {
     const component = block.schema.component || 'text';
     const contentEditor = renderBlockContentEditor(sectionKey, block);
-    const schemaEditor = renderBlockSchemaEditor(sectionKey, block);
-    const isGlobalSchema = state.showAdvancedEditor && (state.editorCanvasMode === 'schema' || state.editorCanvasMode === 'reusable');
-    const showSchema = isGlobalSchema || (state.showAdvancedEditor && block.schemaMode);
     const isActiveSelf = deps.isActiveEditorBlock(sectionKey, block.id);
     const isActiveDescendant = state.activeEditorBlock?.sectionKey === sectionKey && isDescendantActive(block, state.activeEditorBlock.blockId);
-    const isActive = isGlobalSchema || isActiveSelf || isActiveDescendant;
+    const isActive = isActiveSelf || isActiveDescendant;
 
     if (!isActive) {
       return renderPassiveEditorBlock(sectionKey, block, rootSections ?? []);
@@ -219,16 +225,15 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         <div class="editor-block-head">
           <strong class="editor-block-title">${deps.escapeHtml(component)}</strong>
           <div class="editor-actions">
+            <button type="button" class="ghost" data-action="deactivate-block" data-section-key="${deps.escapeAttr(
+              sectionKey
+            )}" data-block-id="${deps.escapeAttr(block.id)}">Done</button>
             ${
-              isGlobalSchema
-                ? ''
-                : `<button type="button" class="ghost" data-action="deactivate-block" data-section-key="${deps.escapeAttr(
+              state.showAdvancedEditor
+                ? `<button type="button" class="ghost" data-action="open-save-component-def" data-section-key="${deps.escapeAttr(
                     sectionKey
-                  )}" data-block-id="${deps.escapeAttr(block.id)}">Done</button>`
-            }
-            ${
-              state.showAdvancedEditor && !isGlobalSchema
-                ? `<button type="button" class="ghost" data-action="open-component-meta" data-section-key="${deps.escapeAttr(
+                  )}" data-block-id="${deps.escapeAttr(block.id)}">Reusable</button>
+                   <button type="button" class="ghost" data-action="open-component-meta" data-section-key="${deps.escapeAttr(
                     sectionKey
                   )}" data-block-id="${deps.escapeAttr(block.id)}">Meta</button>`
                 : ''
@@ -239,7 +244,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           </div>
         </div>
 
-        ${showSchema ? schemaEditor : contentEditor}
+        ${contentEditor}
       </div>
     `;
   }
@@ -351,6 +356,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
 
   function renderMetaPanel(): string {
     const defs = deps.getComponentDefs();
+    const sectionDefs = deps.getSectionDefs();
     const theme = deps.getThemeConfig();
     return `
       <section class="meta-panel">
@@ -435,6 +441,26 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
             )
             .join('')}
         </div>
+        <div class="meta-panel-head">
+          <strong>Reusable Sections</strong>
+        </div>
+        <div class="component-defs">
+          ${
+            sectionDefs.length === 0
+              ? '<div class="muted">Save a section as reusable from its header to make it available here and in the add-section controls.</div>'
+              : sectionDefs
+                  .map(
+                    (def, index) => `<article class="component-def">
+                      <label>
+                        <span>Name</span>
+                        <input data-field="section-def-name" data-section-def-index="${index}" value="${deps.escapeAttr(def.name)}" />
+                      </label>
+                      <button type="button" class="danger" data-action="remove-section-def" data-section-def-index="${index}">Remove</button>
+                    </article>`
+                  )
+                  .join('')
+          }
+        </div>
       </section>
     `;
   }
@@ -468,59 +494,6 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       return renderTableEditor(sectionKey, block, helpers);
     }
     return renderTextEditor(sectionKey, block, helpers);
-  }
-
-  function renderBlockSchemaEditor(sectionKey: string, block: VisualBlock): string {
-    return `
-      <div class="schema-editor">
-        ${renderReusableComponentFields(sectionKey, block)}
-        <div class="editor-grid schema-grid">
-          <article class="ghost-section-card add-ghost" data-action="focus-schema-component" data-section-key="${deps.escapeAttr(
-            sectionKey
-          )}" data-block-id="${deps.escapeAttr(block.id)}">
-            <div class="ghost-plus-big"><span>+</span></div>
-            <div class="ghost-label">Component: ${deps.escapeHtml(block.schema.component)}</div>
-            <label class="ghost-component-picker">
-              <span>Component</span>
-              <select data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}" data-field="block-component">
-                ${deps.renderComponentOptions(block.schema.component)}
-              </select>
-            </label>
-          </article>
-        </div>
-        <div class="schema-content-shell">
-          ${renderBlockContentEditor(sectionKey, block)}
-        </div>
-      </div>
-    `;
-  }
-
-  function renderReusableComponentFields(sectionKey: string, block: VisualBlock): string {
-    const draftName =
-      state.schemaDefDraftByBlock[block.id] ??
-      (deps.isBuiltinComponent(block.schema.component) ? '' : block.schema.component);
-    return `
-      <section class="schema-save-card">
-        <strong>Reusable Component</strong>
-        <label>
-          <span>Name</span>
-          <input
-            data-field="schema-def-name"
-            data-block-id="${deps.escapeAttr(block.id)}"
-            value="${deps.escapeAttr(draftName)}"
-            placeholder="Callout, Hero, Spec Table..."
-          />
-        </label>
-        <button
-          type="button"
-          class="secondary"
-          data-action="save-component-def"
-          data-section-key="${deps.escapeAttr(sectionKey)}"
-          data-block-id="${deps.escapeAttr(block.id)}"
-        >Save Reusable</button>
-        <div class="muted">Saves this block's schema, tags, and description into the component dropdown.</div>
-      </section>
-    `;
   }
 
   function renderBlockMetaFields(sectionKey: string, block: VisualBlock): string {
@@ -581,7 +554,6 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     renderMetaPanel,
     renderComponentFragment,
     renderBlockMetaFields,
-    renderReusableComponentFields,
   };
 }
 

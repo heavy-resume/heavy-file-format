@@ -35,7 +35,7 @@ export const renderGridEditor: ComponentEditorRenderer = (sectionKey, block, hel
             <select class="compact-select" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(
               block.id
             )}" data-field="block-grid-item-component" data-grid-item-id="${helpers.escapeAttr(item.id)}">
-              ${helpers.renderComponentOptions(item.component)}
+              ${helpers.renderComponentOptions(item.block.schema.component)}
             </select>
             <select class="compact-select" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(
               block.id
@@ -45,12 +45,9 @@ export const renderGridEditor: ComponentEditorRenderer = (sectionKey, block, hel
               ${helpers.renderOption('full', item.column)}
             </select>
           </div>
-          ${helpers.renderRichToolbar(sectionKey, block.id, { field: 'block-grid-rich', gridItemId: item.id })}
-          <div class="rich-editor" contenteditable="true" data-section-key="${helpers.escapeAttr(
-            sectionKey
-          )}" data-block-id="${helpers.escapeAttr(block.id)}" data-grid-item-id="${helpers.escapeAttr(item.id)}" data-field="block-grid-rich">${helpers.markdownToEditorHtml(
-            item.content
-          )}</div>
+          <div class="grid-item-editor-shell">
+            ${helpers.renderEditorBlock(sectionKey, item.block)}
+          </div>
         </div>`
       )
       .join('')}
@@ -82,10 +79,9 @@ export const renderGridReader: ComponentReaderRenderer = (_section, block, helpe
       const gridColumn =
         item.column === 'full' ? '1 / -1' : item.column === 'right' && columns > 1 ? `${Math.min(columns, 2)} / span 1` : '1 / span 1';
       const alignClass = item.column === 'right' ? ' align-right' : item.column === 'full' ? ' align-full' : ' align-left';
-      return `<div class="reader-grid-cell${alignClass}" style="grid-column: ${helpers.escapeAttr(gridColumn)};">${helpers.renderComponentFragment(
-        item.component,
-        item.content,
-        block
+      return `<div class="reader-grid-cell${alignClass}" style="grid-column: ${helpers.escapeAttr(gridColumn)};">${helpers.renderReaderBlock(
+        _section,
+        item.block
       )}</div>`;
     })
     .join('');

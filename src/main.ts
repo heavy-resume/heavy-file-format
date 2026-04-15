@@ -1143,7 +1143,7 @@ function bindUi(): void {
       }
       ensureGridItems(block.schema);
       const item = createGridItem(block.schema.gridItems.length, block.schema.gridColumns);
-      item.component = state.gridAddComponentByBlock[blockId] ?? 'text';
+      item.block = createEmptyBlock(state.gridAddComponentByBlock[blockId] ?? 'text');
       block.schema.gridItems.push(item);
       syncReusableTemplateForBlock(sectionKey, block.id);
       renderApp();
@@ -1838,6 +1838,12 @@ function findBlockInList(blocks: VisualBlock[], blockId: string): VisualBlock | 
     if (nestedExpandableContent) {
       return nestedExpandableContent;
     }
+    for (const item of block.schema.gridItems ?? []) {
+      const nestedGridBlock = findBlockInList([item.block], blockId);
+      if (nestedGridBlock) {
+        return nestedGridBlock;
+      }
+    }
     for (const row of block.schema.tableRows ?? []) {
       const nestedDetails = findBlockInList(row.detailsBlocks ?? [], blockId);
       if (nestedDetails) {
@@ -1967,9 +1973,17 @@ function handleBlockFieldInput(target: HTMLElement): boolean {
     if (!item) {
       return true;
     }
-    item.component = target.value;
+    const reusableInstance = instantiateReusableBlock(target.value);
+    if (reusableInstance) {
+      item.block = reusableInstance;
+      item.block.schema.component = target.value;
+    } else {
+      item.block.schema.component = target.value;
+      applyComponentDefaults(item.block.schema, target.value);
+    }
     syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
     refreshReaderPanels();
+    renderApp();
     return true;
   }
 
@@ -1999,7 +2013,7 @@ function handleBlockFieldInput(target: HTMLElement): boolean {
     if (!item) {
       return true;
     }
-    item.content = normalizeMarkdownLists(turndown.turndown(target.innerHTML));
+    item.block.text = normalizeMarkdownLists(turndown.turndown(target.innerHTML));
     syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
     refreshReaderPanels();
     return true;
@@ -2350,7 +2364,11 @@ function serializeSection(section: VisualSection, level: number): string {
     componentListComponent: block.schema.componentListComponent,
     componentListBlocks: block.schema.componentListBlocks,
     gridColumns: block.schema.gridColumns,
-    gridItems: block.schema.gridItems,
+    gridItems: block.schema.gridItems.map((item) => ({
+      id: item.id,
+      column: item.column,
+      block: item.block,
+    })),
     tags: block.schema.tags,
     description: block.schema.description,
     pluginUrl: block.schema.pluginUrl,
@@ -2616,7 +2634,7 @@ function defaultBlockSchema(component = 'text'): BlockSchema {
     componentListComponent: 'text',
     componentListBlocks: [],
     gridColumns: 2,
-    gridItems: [createGridItem(0, 2), createGridItem(1, 2)],
+    gridItems: [],
     tags: '',
     description: '',
     metaOpen: false,
@@ -2797,6 +2815,10 @@ function cloneReusableSchema(schema: BlockSchema, componentName = schema.compone
   cloned.component = componentName;
   cloned.containerBlocks = cloned.containerBlocks.map((block) => cloneReusableBlock(block));
   cloned.componentListBlocks = cloned.componentListBlocks.map((block) => cloneReusableBlock(block));
+  cloned.gridItems = cloned.gridItems.map((item) => ({
+    ...item,
+    block: cloneReusableBlock(item.block),
+  }));
   cloned.expandableStubBlocks = cloned.expandableStubBlocks.map((block) => cloneReusableBlock(block));
   cloned.expandableContentBlocks = cloned.expandableContentBlocks.map((block) => cloneReusableBlock(block));
   cloned.tableRows = cloned.tableRows.map((row) => ({
@@ -2873,6 +2895,7 @@ function findReusableOwnerInList(blocks: VisualBlock[], blockId: string, current
     }
     const nested = findReusableOwnerInList(block.schema.containerBlocks ?? [], blockId, nextOwner)
       ?? findReusableOwnerInList(block.schema.componentListBlocks ?? [], blockId, nextOwner)
+      ?? findReusableOwnerInList((block.schema.gridItems ?? []).map((item) => item.block), blockId, nextOwner)
       ?? findReusableOwnerInList(block.schema.expandableStubBlocks ?? [], blockId, nextOwner)
       ?? findReusableOwnerInList(block.schema.expandableContentBlocks ?? [], blockId, nextOwner);
     if (nested) {
@@ -2949,6 +2972,7 @@ function visitBlocksInList(blocks: VisualBlock[], visitor: (block: VisualBlock) 
     visitor(block);
     visitBlocksInList(block.schema.containerBlocks ?? [], visitor);
     visitBlocksInList(block.schema.componentListBlocks ?? [], visitor);
+    visitBlocksInList((block.schema.gridItems ?? []).map((item) => item.block), visitor);
     visitBlocksInList(block.schema.expandableStubBlocks ?? [], visitor);
     visitBlocksInList(block.schema.expandableContentBlocks ?? [], visitor);
     (block.schema.tableRows ?? []).forEach((row) => visitBlocksInList(row.detailsBlocks ?? [], visitor));
@@ -3115,6 +3139,7 @@ function findBlockContainerInList(
     const nested =
       findBlockContainerInList(block.schema.containerBlocks ?? [], blockId, block.id) ??
       findBlockContainerInList(block.schema.componentListBlocks ?? [], blockId, block.id) ??
+      findBlockContainerInList((block.schema.gridItems ?? []).map((item) => item.block), blockId, block.id) ??
       findBlockContainerInList(block.schema.expandableStubBlocks ?? [], blockId, block.id) ??
       findBlockContainerInList(block.schema.expandableContentBlocks ?? [], blockId, block.id);
     if (nested) {
@@ -3213,7 +3238,7 @@ function splitColumns(value: string): string[] {
 
 function createGridItem(index: number, columns: number): GridItem {
   const column = columns <= 1 ? 'full' : index % 2 === 0 ? 'left' : 'right';
-  return { id: makeId('griditem'), component: 'text', content: '', column };
+  return { id: makeId('griditem'), column, block: { id: makeId('block'), text: '', schema: defaultBlockSchema('text'), schemaMode: false } };
 }
 
 function coerceGridColumns(value: unknown): number {
@@ -3259,9 +3284,12 @@ function parseGridItems(candidate: JsonObject, columns: number): GridItem[] {
       const item = raw as JsonObject;
       items.push({
         id: typeof item.id === 'string' ? item.id : makeId('griditem'),
-        component: typeof item.component === 'string' ? item.component : 'text',
-        content: typeof item.content === 'string' ? item.content : '',
         column: coerceGridColumn(item.column, columns),
+        block: item.block ? parseVisualBlock(item.block) : (() => {
+          const block = createEmptyBlock(typeof item.component === 'string' ? item.component : 'text', true);
+          block.text = typeof item.content === 'string' ? item.content : '';
+          return block;
+        })(),
       });
     });
     if (items.length > 0) {
@@ -3279,9 +3307,12 @@ function parseGridItems(candidate: JsonObject, columns: number): GridItem[] {
       const item = raw as JsonObject;
       items.push({
         id: makeId('griditem'),
-        component: typeof item.component === 'string' ? item.component : 'text',
-        content: typeof item.content === 'string' ? item.content : '',
         column: coerceGridColumn(index % 2 === 0 ? 'left' : 'right', columns),
+        block: (() => {
+          const block = createEmptyBlock(typeof item.component === 'string' ? item.component : 'text', true);
+          block.text = typeof item.content === 'string' ? item.content : '';
+          return block;
+        })(),
       });
     });
     if (items.length > 0) {
@@ -3300,9 +3331,12 @@ function parseGridItems(candidate: JsonObject, columns: number): GridItem[] {
   legacyKeys.forEach((key, index) => {
     items.push({
       id: makeId('griditem'),
-      component: 'text',
-      content: typeof legacyValues[key] === 'string' ? (legacyValues[key] as string) : '',
       column: coerceGridColumn(index % 2 === 0 ? 'left' : 'right', columns),
+      block: (() => {
+        const block = createEmptyBlock('text', true);
+        block.text = typeof legacyValues[key] === 'string' ? (legacyValues[key] as string) : '';
+        return block;
+      })(),
     });
   });
 
@@ -3322,9 +3356,8 @@ function ensureGridItems(schema: BlockSchema): void {
   }
   schema.gridItems = schema.gridItems.map((item) => ({
     id: item.id || makeId('griditem'),
-    component: item.component || 'text',
-    content: item.content ?? '',
     column: coerceGridColumn(item.column, schema.gridColumns),
+    block: item.block ? parseVisualBlock(item.block) : createEmptyBlock('text', true),
   }));
 }
 

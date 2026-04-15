@@ -14,9 +14,8 @@ export interface TableRow {
 
 export interface GridItem {
   id: string;
-  component: string;
-  content: string;
   column: GridColumn;
+  block: VisualBlock;
 }
 
 export interface BlockSchema {

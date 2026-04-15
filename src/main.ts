@@ -2426,7 +2426,7 @@ function serializeSection(section: VisualSection, level: number): string {
   const blockText = section.blocks
     .map((block) => {
       if (resolveBaseComponent(block.schema.component) === 'expandable') {
-        const schemaDirective = `<!--hvy:expandable ${JSON.stringify(serializeExpandableShellSchema(block.schema))}-->`;
+        const schemaDirective = `<!--hvy:expandable ${JSON.stringify(serializeBlockSchema(block.schema, { omitComponent: true, omitExpandableBlocks: true }))}-->`;
         const stubText = block.schema.expandableStubBlocks
           .map((innerBlock) => serializeExpandablePartBlock(innerBlock, 0))
           .join('\n\n');
@@ -2435,7 +2435,7 @@ function serializeSection(section: VisualSection, level: number): string {
           .join('\n\n');
         return [schemaDirective, stubText, contentText].filter((part) => part.length > 0).join('\n\n');
       }
-      const schemaDirective = `<!--hvy:block ${JSON.stringify(block.schema)}-->`;
+      const schemaDirective = `<!--hvy:block ${JSON.stringify(serializeBlockSchema(block.schema))}-->`;
       return `${schemaDirective}\n${block.text.trim()}`;
     })
     .join('\n\n');
@@ -2448,20 +2448,105 @@ function serializeSection(section: VisualSection, level: number): string {
   return `${heading}\n${directive}\n\n${blockText}${children ? `\n\n${children}` : ''}`;
 }
 
-function serializeExpandableShellSchema(schema: BlockSchema): JsonObject {
-  const shellSchema = { ...schema } as JsonObject;
-  delete shellSchema.component;
-  delete shellSchema.expandableStubBlocks;
-  delete shellSchema.expandableContentBlocks;
-  delete shellSchema.expandableStub;
-  delete shellSchema.expandableStubComponent;
-  delete shellSchema.expandableContentComponent;
-  return shellSchema;
+function serializeBlockSchema(
+  schema: BlockSchema,
+  options: { omitComponent?: boolean; omitExpandableBlocks?: boolean } = {}
+): JsonObject {
+  const component = resolveBaseComponent(schema.component);
+  const defaults = defaultBlockSchema(component);
+  const payload: JsonObject = {};
+
+  if (!options.omitComponent) {
+    payload.component = schema.component;
+  }
+  addIfChanged(payload, 'lock', schema.lock, defaults.lock);
+  addIfChanged(payload, 'align', schema.align, defaults.align);
+  addIfChanged(payload, 'slot', schema.slot, defaults.slot);
+  addIfChanged(payload, 'customCss', schema.customCss, defaults.customCss);
+  addIfChanged(payload, 'tags', schema.tags, defaults.tags);
+  addIfChanged(payload, 'description', schema.description, defaults.description);
+
+  if (component === 'code') {
+    addIfChanged(payload, 'codeLanguage', schema.codeLanguage, defaults.codeLanguage);
+  }
+  if (component === 'container') {
+    addIfChanged(payload, 'containerTitle', schema.containerTitle, defaults.containerTitle);
+    addBlockArrayIfPresent(payload, 'containerBlocks', schema.containerBlocks);
+  }
+  if (component === 'component-list') {
+    addIfChanged(payload, 'componentListComponent', schema.componentListComponent, defaults.componentListComponent);
+    addBlockArrayIfPresent(payload, 'componentListBlocks', schema.componentListBlocks);
+  }
+  if (component === 'grid') {
+    addIfChanged(payload, 'gridColumns', schema.gridColumns, defaults.gridColumns);
+    if (schema.gridItems.length > 0) {
+      payload.gridItems = schema.gridItems.map((item) => ({
+        id: item.id,
+        column: item.column,
+        block: serializeVisualBlock(item.block),
+      }));
+    }
+  }
+  if (component === 'plugin') {
+    addIfChanged(payload, 'pluginUrl', schema.pluginUrl, defaults.pluginUrl);
+  }
+  if (component === 'expandable') {
+    addIfChanged(payload, 'expandableAlwaysShowStub', schema.expandableAlwaysShowStub, defaults.expandableAlwaysShowStub);
+    addIfChanged(payload, 'expandableExpanded', schema.expandableExpanded, defaults.expandableExpanded);
+    if (!options.omitExpandableBlocks) {
+      addBlockArrayIfPresent(payload, 'expandableStubBlocks', schema.expandableStubBlocks);
+      addBlockArrayIfPresent(payload, 'expandableContentBlocks', schema.expandableContentBlocks);
+    }
+  }
+  if (component === 'table') {
+    addIfChanged(payload, 'tableColumns', schema.tableColumns, defaults.tableColumns);
+    addIfChanged(payload, 'tableShowHeader', schema.tableShowHeader, defaults.tableShowHeader);
+    if (schema.tableRows.length > 0) {
+      payload.tableRows = schema.tableRows.map((row) => serializeTableRow(row));
+    }
+  }
+
+  return payload;
 }
 
 function serializeExpandablePartBlock(block: VisualBlock, part: 0 | 1): string {
-  const schemaDirective = `<!--hvy:expandable:${part} ${JSON.stringify(block.schema)}-->`;
+  const schemaDirective = `<!--hvy:expandable:${part} ${JSON.stringify(serializeBlockSchema(block.schema))}-->`;
   return `${schemaDirective}\n${block.text.trim()}`;
+}
+
+function serializeVisualBlock(block: VisualBlock): JsonObject {
+  return {
+    text: block.text,
+    schema: serializeBlockSchema(block.schema),
+    schemaMode: block.schemaMode,
+  };
+}
+
+function serializeTableRow(row: TableRow): JsonObject {
+  const serialized: JsonObject = { cells: row.cells };
+  addIfChanged(serialized, 'expanded', row.expanded, false);
+  addIfChanged(serialized, 'clickable', row.clickable, true);
+  addIfChanged(serialized, 'detailsTitle', row.detailsTitle, '');
+  addIfChanged(serialized, 'detailsContent', row.detailsContent, '');
+  addBlockArrayIfPresent(serialized, 'detailsBlocks', row.detailsBlocks);
+  return serialized;
+}
+
+function addBlockArrayIfPresent(payload: JsonObject, key: string, blocks: VisualBlock[]): void {
+  if (blocks.length === 0) {
+    return;
+  }
+  payload[key] = blocks.map((block) => serializeVisualBlock(block));
+}
+
+function addIfChanged(payload: JsonObject, key: string, value: unknown, defaultValue: unknown): void {
+  if (value === defaultValue) {
+    return;
+  }
+  if (typeof value === 'string' && value.length === 0) {
+    return;
+  }
+  payload[key] = value as JsonObject[keyof JsonObject];
 }
 
 function navigateToSection(sectionId: string): void {

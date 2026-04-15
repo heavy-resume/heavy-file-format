@@ -4,6 +4,9 @@ export const renderExpandableEditor: ComponentEditorRenderer = (sectionKey, bloc
   const stubAddKey = `expandable-stub:${sectionKey}:${block.id}`;
   const contentAddKey = `expandable-content:${sectionKey}:${block.id}`;
   return `
+    <label class="expandable-option"><input type="checkbox" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(
+      block.id
+    )}" data-field="block-expandable-always" ${block.schema.expandableAlwaysShowStub ? 'checked' : ''} /> Always show stub</label>
     <div class="expand-chooser-grid">
       <div class="expandable-part">
         <div class="expandable-label">Stub</div>
@@ -48,9 +51,6 @@ export const renderExpandableEditor: ComponentEditorRenderer = (sectionKey, bloc
         }
       </div>
     </div>
-    <label><input type="checkbox" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(
-      block.id
-    )}" data-field="block-expandable-always" ${block.schema.expandableAlwaysShowStub ? 'checked' : ''} /> Always show stub</label>
   `;
 };
 

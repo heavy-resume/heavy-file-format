@@ -21,10 +21,10 @@ Title
 
 <!--hvy:expandable {"customCss":"margin: 0.5rem 0;","expandableAlwaysShowStub":true,"expandableExpanded":false,"lock":true}-->
 
-<!--hvy:expandable:0 {"component":"text","customCss":"margin-bottom: 0;"}-->
+<!--hvy:expandable:0 {"component":"text","customCss":"margin-bottom: 0;","lock":true}-->
 ## Summary
 
-<!--hvy:expandable:0 {"component":"text","customCss":"margin-top: 0;"}-->
+<!--hvy:expandable:0 {"component":"text","customCss":"margin-top: 0;","lock":true}-->
 {{summary}}
 
 <!--hvy:expandable:1 {"component":"text","customCss":"margin: 0;","lock":true}-->
@@ -32,11 +32,11 @@ Title
 - {{summary_highlights.1}}
 - {{summary_highlights.2}}
 
-<!--hvy: {"id":"locations"}-->
+<!--hvy: {"id":"locations","lock":true}-->
 #! Locations
 
-<!--hvy:block {"component":"text","customCss":"margin: 0.5rem 0;"}-->
+<!--hvy:text {"customCss":"margin: 0.5rem 0;"}-->
 **Location:** {{location}}
 
-<!--hvy:block {"component":"text","customCss":"margin: 0.5rem 0;"}-->
+<!--hvy:text {"customCss":"margin: 0.5rem 0;"}-->
 **Target Location(s):** {{target_locations}}

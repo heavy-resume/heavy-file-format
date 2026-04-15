@@ -939,6 +939,15 @@ button.tiny {
   margin: 0.45rem 0;
 }
 
+.expandable-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: max-content;
+  color: #355566;
+  font-weight: 650;
+}
+
 .chooser-card {
   min-height: 150px;
   align-content: start;

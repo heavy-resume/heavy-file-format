@@ -96,7 +96,7 @@ interface EditorRenderDeps {
 
 export interface EditorRenderer {
   renderSectionEditorTree: (sections: VisualSection[]) => string;
-  renderEditorBlock: (sectionKey: string, block: VisualBlock) => string;
+  renderEditorBlock: (sectionKey: string, block: VisualBlock, rootSections?: VisualSection[]) => string;
   renderRichToolbar: (
     sectionKey: string,
     blockId: string,
@@ -618,7 +618,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
 
   return {
     renderSectionEditorTree,
-    renderEditorBlock: (sectionKey, block) => renderEditorBlock(sectionKey, block),
+    renderEditorBlock: (sectionKey, block, rootSections) => renderEditorBlock(sectionKey, block, rootSections),
     renderRichToolbar,
     renderMetaPanel,
     renderComponentFragment,

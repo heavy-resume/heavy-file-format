@@ -2131,7 +2131,7 @@ function getComponentRenderHelpers(): ComponentRenderHelpers {
     escapeHtml,
     markdownToEditorHtml,
     renderRichToolbar: editorRenderer.renderRichToolbar,
-    renderEditorBlock: editorRenderer.renderEditorBlock,
+    renderEditorBlock: (sectionKey, block) => editorRenderer.renderEditorBlock(sectionKey, block, state.document.sections),
     renderReaderBlock: readerRenderer.renderReaderBlock,
     renderComponentFragment: editorRenderer.renderComponentFragment,
     renderComponentOptions,

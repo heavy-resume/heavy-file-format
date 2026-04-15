@@ -267,6 +267,8 @@ component_defs:
 Notes:
 - `schema` is optional.
 - When present, rich clients MAY use it as the default schema/template when creating a block with that reusable component.
+- A component definition name MAY be used anywhere a block `component` value is accepted, including block directives, nested block schemas, and `componentListComponent`.
+- Rich clients SHOULD render custom components according to `baseType` and preserve the custom component name for editing and round-tripping.
 - Plain Markdown renderers MAY ignore `component_defs`.
 
 ### 5.10 Reusable section definitions

@@ -101,6 +101,22 @@ const tagStateHelpers = {
 };
 let editorRenderer: EditorRenderer;
 let readerRenderer: ReaderRenderer;
+  let renderCount = 0;
+let inputEventCount = 0;
+let refreshReaderCount = 0;
+let syncReusableCount = 0;
+let historySnapshotCount = 0;
+let recordHistoryCount = 0;
+
+function debugMeasure<T>(label: string, details: Record<string, unknown>, callback: () => T): T {
+  const startedAt = performance.now();
+  try {
+    return callback();
+  } finally {
+    const elapsed = performance.now() - startedAt;
+    console.debug(`[hvy:perf] ${label}`, { elapsedMs: Number(elapsed.toFixed(2)), ...details });
+  }
+}
 
 editorRenderer = createEditorRenderer(
   {
@@ -227,12 +243,35 @@ function createInitialState(): AppState {
 }
 
 function renderApp(): void {
+  const renderId = ++renderCount;
+  const startedAt = performance.now();
+  let captureMs = 0;
+  let themeMs = 0;
+  let templateFieldsMs = 0;
+  let markupMs = 0;
+  let domMs = 0;
+  let bindMs = 0;
+  let restoreMs = 0;
+  let historyMs = 0;
+  let focusMs = 0;
+
+  let stepStartedAt = performance.now();
   state.paneScroll = capturePaneScroll(state.paneScroll);
+  captureMs = performance.now() - stepStartedAt;
+
+  stepStartedAt = performance.now();
   applyTheme();
+  themeMs = performance.now() - stepStartedAt;
+
   const isEditorView = state.currentView === 'editor';
   const isAdvancedEditor = state.showAdvancedEditor;
+
+  stepStartedAt = performance.now();
   const templateFields = getTemplateFields(state.document.meta);
-  app.innerHTML = `
+  templateFieldsMs = performance.now() - stepStartedAt;
+
+  stepStartedAt = performance.now();
+  const markup = `
     <main class="layout">
       <header class="topbar">
         <div class="title-block">
@@ -289,12 +328,45 @@ function renderApp(): void {
       ${readerRenderer.renderLinkInlineModal()}
     </main>
   `;
+  markupMs = performance.now() - stepStartedAt;
 
+  stepStartedAt = performance.now();
+  app.innerHTML = markup;
+  domMs = performance.now() - stepStartedAt;
+
+  stepStartedAt = performance.now();
   bindUi();
+  bindMs = performance.now() - stepStartedAt;
+
+  stepStartedAt = performance.now();
   restorePaneScroll(state.paneScroll);
+  restoreMs = performance.now() - stepStartedAt;
+
+  stepStartedAt = performance.now();
   commitHistorySnapshot();
+  historyMs = performance.now() - stepStartedAt;
+
+  stepStartedAt = performance.now();
   focusPendingSectionTitleEditor();
   centerPendingEditorSection();
+  focusMs = performance.now() - stepStartedAt;
+
+  console.debug('[hvy:perf] renderApp', {
+    renderId,
+    elapsedMs: Number((performance.now() - startedAt).toFixed(2)),
+    captureMs: Number(captureMs.toFixed(2)),
+    themeMs: Number(themeMs.toFixed(2)),
+    templateFieldsMs: Number(templateFieldsMs.toFixed(2)),
+    markupMs: Number(markupMs.toFixed(2)),
+    domMs: Number(domMs.toFixed(2)),
+    bindMs: Number(bindMs.toFixed(2)),
+    restoreMs: Number(restoreMs.toFixed(2)),
+    historyMs: Number(historyMs.toFixed(2)),
+    focusMs: Number(focusMs.toFixed(2)),
+    view: state.currentView,
+    advanced: state.showAdvancedEditor,
+    historyLength: state.history.length,
+  });
 }
 
 function capturePaneScroll(previous: PaneScrollState): PaneScrollState {
@@ -953,10 +1025,7 @@ function bindUi(): void {
         return;
       }
       recordHistory();
-      const component = (state.addComponentBySection[section.key] ?? '').trim();
-      if (!component) {
-        return;
-      }
+      const component = (state.addComponentBySection[section.key] ?? 'text').trim() || 'text';
       const newBlock = createEmptyBlock(component);
       section.blocks.push(newBlock);
       setActiveEditorBlock(section.key, newBlock.id);
@@ -1086,13 +1155,14 @@ function bindUi(): void {
 
     if (action === 'add-table-row' && blockId) {
       recordHistory();
-      const block = findBlockByIds(sectionKey, blockId);
+      const block = resolveBlockContext(actionButton)?.block ?? findBlockByIds(sectionKey, blockId);
       if (!block) {
         return;
       }
       const columnCount = getTableColumns(block.schema).length;
       block.schema.tableRows.push(createDefaultTableRow(columnCount));
       syncReusableTemplateForBlock(sectionKey, block.id);
+      setActiveEditorBlock(sectionKey, block.id);
       renderApp();
       return;
     }
@@ -1267,19 +1337,32 @@ function bindUi(): void {
     if (!sectionKey) {
       return;
     }
+    const eventId = ++inputEventCount;
+    const startedAt = performance.now();
     const reusableName = getReusableNameFromSectionKey(sectionKey);
 
     const field = target.dataset.field;
+    console.debug('[hvy:perf] input:start', {
+      eventId,
+      field,
+      sectionKey,
+      blockId: target.dataset.blockId ?? null,
+      targetType: target.tagName.toLowerCase(),
+      advanced: state.showAdvancedEditor,
+    });
     if (field === 'new-component-type' && target instanceof HTMLSelectElement) {
       state.addComponentBySection[sectionKey] = target.value;
+      console.debug('[hvy:perf] input:end', { eventId, field, elapsedMs: Number((performance.now() - startedAt).toFixed(2)) });
       return;
     }
     if (field === 'new-grid-component-type' && target instanceof HTMLSelectElement) {
       const blockId = target.dataset.blockId;
       if (!blockId) {
+        console.debug('[hvy:perf] input:end', { eventId, field, elapsedMs: Number((performance.now() - startedAt).toFixed(2)), skipped: 'missing-block-id' });
         return;
       }
       state.gridAddComponentByBlock[blockId] = target.value;
+      console.debug('[hvy:perf] input:end', { eventId, field, elapsedMs: Number((performance.now() - startedAt).toFixed(2)) });
       return;
     }
 
@@ -1289,7 +1372,7 @@ function bindUi(): void {
     }
 
     const blockIdForHistory = target.dataset.blockId ?? '';
-    if (field && field !== 'new-component-type') {
+    if (field && field !== 'new-component-type' && field !== 'table-cell' && field !== 'table-column') {
       recordHistory(`input:${sectionKey}:${blockIdForHistory}:${field}`);
     }
 
@@ -1405,12 +1488,30 @@ function bindUi(): void {
       return;
     }
     if (handleBlockFieldInput(target)) {
+      console.debug('[hvy:perf] input:end', { eventId, field, elapsedMs: Number((performance.now() - startedAt).toFixed(2)), handledBy: 'block-field' });
       return;
     }
+    console.debug('[hvy:perf] input:end', { eventId, field, elapsedMs: Number((performance.now() - startedAt).toFixed(2)), handledBy: 'none' });
+  });
+
+  app.addEventListener('focusin', (event) => {
+    const target = event.target as HTMLElement;
+    if (target.dataset.field !== 'table-cell' && target.dataset.field !== 'table-column') {
+      return;
+    }
+    const sectionKey = target.dataset.sectionKey ?? '';
+    const blockId = target.dataset.blockId ?? '';
+    const rowIndex = target.dataset.rowIndex ?? '';
+    const cellIndex = target.dataset.cellIndex ?? '';
+    const columnIndex = target.dataset.columnIndex ?? '';
+    recordHistory(`table-edit:${sectionKey}:${blockId}:${rowIndex}:${cellIndex}:${columnIndex}`);
   });
 
   app.addEventListener('focusout', (event) => {
     const target = event.target as HTMLElement;
+    if (target.dataset.field === 'table-cell' || target.dataset.field === 'table-column') {
+      commitInlineTableEdit(target);
+    }
     if (target instanceof HTMLInputElement) {
       commitTagEditorDraft(target, tagStateHelpers);
       if (target.dataset.field === 'section-title') {
@@ -1783,21 +1884,43 @@ function applyInlineLinkFromModal(): void {
 }
 
 function refreshReaderPanels(): void {
+  const refreshId = ++refreshReaderCount;
+  const startedAt = performance.now();
+  let warningsMs = 0;
+  let navMs = 0;
+  let readerMs = 0;
+  let modalMs = 0;
   const warnings = app.querySelector<HTMLDivElement>('#readerWarnings');
   const nav = app.querySelector<HTMLDivElement>('#readerNav');
   const reader = app.querySelector<HTMLDivElement>('#readerDocument');
 
   if (warnings) {
+    const stepStartedAt = performance.now();
     warnings.innerHTML = readerRenderer.renderWarnings();
+    warningsMs = performance.now() - stepStartedAt;
   }
   if (nav) {
+    const stepStartedAt = performance.now();
     nav.innerHTML = readerRenderer.renderNavigation(state.document.sections);
+    navMs = performance.now() - stepStartedAt;
   }
   if (reader) {
+    const stepStartedAt = performance.now();
     reader.innerHTML = readerRenderer.renderReaderSections(state.document.sections);
+    readerMs = performance.now() - stepStartedAt;
   }
 
+  const modalStartedAt = performance.now();
   refreshModalPreview();
+  modalMs = performance.now() - modalStartedAt;
+  console.debug('[hvy:perf] refreshReaderPanels', {
+    refreshId,
+    elapsedMs: Number((performance.now() - startedAt).toFixed(2)),
+    warningsMs: Number(warningsMs.toFixed(2)),
+    navMs: Number(navMs.toFixed(2)),
+    readerMs: Number(readerMs.toFixed(2)),
+    modalMs: Number(modalMs.toFixed(2)),
+  });
 }
 
 function refreshModalPreview(): void {
@@ -1909,18 +2032,41 @@ function handleBlockFieldInput(target: HTMLElement): boolean {
   if (!field) {
     return false;
   }
+  const startedAt = performance.now();
 
   const context = resolveBlockContext(target);
   const blockId = target.dataset.blockId;
   if (!context || !blockId) {
+    console.debug('[hvy:perf] handleBlockFieldInput', {
+      field,
+      elapsedMs: Number((performance.now() - startedAt).toFixed(2)),
+      skipped: context ? 'missing-block-id' : 'missing-context',
+    });
     return false;
   }
   const block = context.block;
 
   if (field === 'block-rich') {
+    let turndownMs = 0;
+    let syncMs = 0;
+    let refreshMs = 0;
+    let stepStartedAt = performance.now();
     block.text = normalizeMarkdownLists(turndown.turndown(target.innerHTML));
+    turndownMs = performance.now() - stepStartedAt;
+    stepStartedAt = performance.now();
     syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
+    syncMs = performance.now() - stepStartedAt;
+    stepStartedAt = performance.now();
     refreshReaderPanels();
+    refreshMs = performance.now() - stepStartedAt;
+    console.debug('[hvy:perf] handleBlockFieldInput', {
+      field,
+      elapsedMs: Number((performance.now() - startedAt).toFixed(2)),
+      turndownMs: Number(turndownMs.toFixed(2)),
+      syncMs: Number(syncMs.toFixed(2)),
+      refreshMs: Number(refreshMs.toFixed(2)),
+      textLength: block.text.length,
+    });
     return true;
   }
 
@@ -2016,6 +2162,9 @@ function handleBlockFieldInput(target: HTMLElement): boolean {
   }
 
   if (field === 'block-grid-rich') {
+    let turndownMs = 0;
+    let syncMs = 0;
+    let refreshMs = 0;
     const gridItemId = target.dataset.gridItemId;
     if (!gridItemId) {
       return true;
@@ -2025,9 +2174,23 @@ function handleBlockFieldInput(target: HTMLElement): boolean {
     if (!item) {
       return true;
     }
+    let stepStartedAt = performance.now();
     item.block.text = normalizeMarkdownLists(turndown.turndown(target.innerHTML));
+    turndownMs = performance.now() - stepStartedAt;
+    stepStartedAt = performance.now();
     syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
+    syncMs = performance.now() - stepStartedAt;
+    stepStartedAt = performance.now();
     refreshReaderPanels();
+    refreshMs = performance.now() - stepStartedAt;
+    console.debug('[hvy:perf] handleBlockFieldInput', {
+      field,
+      elapsedMs: Number((performance.now() - startedAt).toFixed(2)),
+      turndownMs: Number(turndownMs.toFixed(2)),
+      syncMs: Number(syncMs.toFixed(2)),
+      refreshMs: Number(refreshMs.toFixed(2)),
+      textLength: item.block.text.length,
+    });
     return true;
   }
 
@@ -2063,9 +2226,12 @@ function handleBlockFieldInput(target: HTMLElement): boolean {
       const columns = getTableColumns(block.schema);
       columns[columnIndex] = getInlineEditableText(target);
       setTableColumns(block.schema, columns);
-      syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
-      refreshReaderPanels();
     }
+    console.debug('[hvy:perf] handleBlockFieldInput', {
+      field,
+      elapsedMs: Number((performance.now() - startedAt).toFixed(2)),
+      columnIndex,
+    });
     return true;
   }
 
@@ -2075,9 +2241,13 @@ function handleBlockFieldInput(target: HTMLElement): boolean {
     const row = block.schema.tableRows[rowIndex];
     if (row && !Number.isNaN(cellIndex)) {
       row.cells[cellIndex] = getInlineEditableText(target);
-      syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
-      refreshReaderPanels();
     }
+    console.debug('[hvy:perf] handleBlockFieldInput', {
+      field,
+      elapsedMs: Number((performance.now() - startedAt).toFixed(2)),
+      rowIndex,
+      cellIndex,
+    });
     return true;
   }
 
@@ -2096,6 +2266,19 @@ function handleBlockFieldInput(target: HTMLElement): boolean {
   }
 
   return false;
+}
+
+function commitInlineTableEdit(target: HTMLElement): void {
+  const field = target.dataset.field;
+  if (field !== 'table-cell' && field !== 'table-column') {
+    return;
+  }
+  const context = resolveBlockContext(target);
+  if (!context) {
+    return;
+  }
+  syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', context.block.id);
+  refreshReaderPanels();
 }
 
 function getTagState(target: HTMLElement): string[] {
@@ -2963,7 +3146,7 @@ function schemaFromUnknown(value: unknown): BlockSchema {
   const defaults = defaultBlockSchema(component);
   const rows = Array.isArray(candidate.tableRows) ? candidate.tableRows : [];
   const gridColumns = coerceGridColumns(candidate.gridColumns ?? candidate.gridTemplateColumns);
-  const parsedGridItems = parseGridItems(candidate, gridColumns);
+  const parsedGridItems = parseGridItems(candidate, gridColumns, component);
   return {
     component,
     lock: candidate.lock === true,
@@ -3128,19 +3311,47 @@ function findReusableOwnerInList(blocks: VisualBlock[], blockId: string, current
 }
 
 function syncReusableTemplateForBlock(sectionKey: string, blockId: string): void {
+  const syncId = ++syncReusableCount;
+  const startedAt = performance.now();
+  let ownerMs = 0;
+  let cloneMs = 0;
+  let applyMs = 0;
+  let skipped: string | null = null;
+  const log = (): void => {
+    console.debug('[hvy:perf] syncReusableTemplateForBlock', {
+      syncId,
+      elapsedMs: Number((performance.now() - startedAt).toFixed(2)),
+      ownerMs: Number(ownerMs.toFixed(2)),
+      cloneMs: Number(cloneMs.toFixed(2)),
+      applyMs: Number(applyMs.toFixed(2)),
+      sectionKey,
+      blockId,
+      skipped,
+      advanced: state.showAdvancedEditor,
+    });
+  };
   if (!state.showAdvancedEditor) {
+    skipped = 'basic-editor';
+    log();
     return;
   }
+  let stepStartedAt = performance.now();
   const owner = findReusableOwner(sectionKey, blockId);
+  ownerMs = performance.now() - stepStartedAt;
   if (!owner || isBuiltinComponent(owner.schema.component)) {
+    skipped = owner ? 'builtin-component' : 'no-owner';
+    log();
     return;
   }
   const defs = getComponentDefs();
   const def = defs.find((item) => item.name === owner.schema.component);
   if (!def) {
+    skipped = 'missing-def';
+    log();
     return;
   }
   const reusableName = getReusableNameFromSectionKey(sectionKey);
+  stepStartedAt = performance.now();
   if (reusableName === def.name) {
     def.template = owner;
   } else {
@@ -3151,7 +3362,11 @@ function syncReusableTemplateForBlock(sectionKey: string, blockId: string): void
   def.description = owner.schema.description;
   def.schema = cloneReusableSchema(def.template.schema, def.name);
   state.document.meta.component_defs = defs;
+  cloneMs = performance.now() - stepStartedAt;
+  stepStartedAt = performance.now();
   applyReusableTemplateToDocument(def.name, def.template, reusableName === def.name ? null : owner.id);
+  applyMs = performance.now() - stepStartedAt;
+  log();
 }
 
 function applyReusableTemplateToDocument(name: string, template: VisualBlock, excludeBlockId: string | null): void {
@@ -3490,7 +3705,7 @@ function coerceGridColumn(value: unknown, columns: number): GridColumn {
   return 'left';
 }
 
-function parseGridItems(candidate: JsonObject, columns: number): GridItem[] {
+function parseGridItems(candidate: JsonObject, columns: number, component = 'grid'): GridItem[] {
   const items: GridItem[] = [];
   if (Array.isArray(candidate.gridItems)) {
     (candidate.gridItems as unknown[]).forEach((raw) => {
@@ -3508,9 +3723,7 @@ function parseGridItems(candidate: JsonObject, columns: number): GridItem[] {
         })(),
       });
     });
-    if (items.length > 0) {
-      return items;
-    }
+    return items;
   }
 
   // Backward compatibility with prior object-key grid model.
@@ -3556,7 +3769,7 @@ function parseGridItems(candidate: JsonObject, columns: number): GridItem[] {
     });
   });
 
-  if (items.length === 0) {
+  if (items.length === 0 && component === 'grid') {
     return [createGridItem(0, columns), createGridItem(1, columns)];
   }
   return items;
@@ -3573,8 +3786,12 @@ function ensureGridItems(schema: BlockSchema): void {
   schema.gridItems = schema.gridItems.map((item) => ({
     id: item.id || makeId('griditem'),
     column: coerceGridColumn(item.column, schema.gridColumns),
-    block: item.block ? parseVisualBlock(item.block) : createEmptyBlock('text', true),
+    block: isVisualBlock(item.block) ? item.block : item.block ? parseVisualBlock(item.block) : createEmptyBlock('text', true),
   }));
+}
+
+function isVisualBlock(value: unknown): value is VisualBlock {
+  return !!value && typeof value === 'object' && typeof (value as VisualBlock).id === 'string' && !!(value as VisualBlock).schema;
 }
 
 interface ComponentDefinition {
@@ -3790,7 +4007,8 @@ function commitHistorySnapshot(): void {
   if (state.isRestoring) {
     return;
   }
-  const snap = snapshotState();
+  const snapshotId = ++historySnapshotCount;
+  const snap = debugMeasure('snapshotState:commit', { snapshotId, historyLength: state.history.length }, snapshotState);
   const last = state.history[state.history.length - 1];
   if (last !== snap) {
     state.history.push(snap);
@@ -3811,11 +4029,29 @@ function recordHistory(group?: string): void {
   if (state.isRestoring) {
     return;
   }
+  const recordId = ++recordHistoryCount;
+  const startedAt = performance.now();
+  let ensureMs = 0;
+  let snapshotMs = 0;
+  let skipped: string | null = null;
+  let pushed = false;
+  let stepStartedAt = performance.now();
   ensureHistoryInitialized();
-  const snap = snapshotState();
+  ensureMs = performance.now() - stepStartedAt;
   if (group) {
     const now = Date.now();
     if (state.lastHistoryGroup === group && now - state.lastHistoryAt < HISTORY_GROUP_WINDOW_MS) {
+      skipped = 'group-window';
+      console.debug('[hvy:perf] recordHistory', {
+        recordId,
+        group,
+        elapsedMs: Number((performance.now() - startedAt).toFixed(2)),
+        ensureMs: Number(ensureMs.toFixed(2)),
+        snapshotMs: Number(snapshotMs.toFixed(2)),
+        historyLength: state.history.length,
+        pushed,
+        skipped,
+      });
       return;
     }
     state.lastHistoryGroup = group;
@@ -3824,13 +4060,27 @@ function recordHistory(group?: string): void {
     state.lastHistoryGroup = null;
     state.lastHistoryAt = 0;
   }
+  stepStartedAt = performance.now();
+  const snap = snapshotState();
+  snapshotMs = performance.now() - stepStartedAt;
   if (state.history[state.history.length - 1] !== snap) {
     state.history.push(snap);
     if (state.history.length > 200) {
       state.history.shift();
     }
     state.future = [];
+    pushed = true;
   }
+  console.debug('[hvy:perf] recordHistory', {
+    recordId,
+    group,
+    elapsedMs: Number((performance.now() - startedAt).toFixed(2)),
+    ensureMs: Number(ensureMs.toFixed(2)),
+    snapshotMs: Number(snapshotMs.toFixed(2)),
+    historyLength: state.history.length,
+    pushed,
+    skipped,
+  });
 }
 
 function undoState(): void {
@@ -3916,8 +4166,10 @@ function computeSimpleDiff(previous: string, current: string): string {
   }
   const prevLines = previous.split('\n');
   const currLines = current.split('\n');
-  const removed = prevLines.filter((line) => !currLines.includes(line)).slice(0, 30).map((line) => `- ${line}`);
-  const added = currLines.filter((line) => !prevLines.includes(line)).slice(0, 30).map((line) => `+ ${line}`);
+  const prevLineSet = new Set(prevLines);
+  const currLineSet = new Set(currLines);
+  const removed = prevLines.filter((line) => !currLineSet.has(line)).slice(0, 30).map((line) => `- ${line}`);
+  const added = currLines.filter((line) => !prevLineSet.has(line)).slice(0, 30).map((line) => `+ ${line}`);
   return [...removed, ...added].join('\n');
 }
 

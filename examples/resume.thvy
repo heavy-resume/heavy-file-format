@@ -2,6 +2,94 @@
 hvy_version: 0.1
 template: true
 title: Resume Template
+component_defs:
+  - name: history-record
+    baseType: expandable
+    description: Expandable resume history record
+    schema:
+      component: history-record
+      css: "margin: 0.35rem 0;"
+      expandableAlwaysShowStub: true
+      expandableExpanded: false
+      expandableStubBlocks:
+        - text: ""
+          schema:
+            component: table
+            css: "margin: 0;"
+            tableColumns: "YEAR, ORGANIZATION, TITLE"
+            tableShowHeader: false
+            tableRows:
+              - cells:
+                  - "{{history_year}}"
+                  - "{{history_organization}}"
+                  - "{{history_title}}"
+          schemaMode: false
+      expandableContentBlocks:
+        - text: "### {{history_title}}"
+          schema:
+            component: text
+            css: "margin: 0 0 0.35rem;"
+          schemaMode: false
+        - text: ""
+          schema:
+            component: grid
+            css: "margin: 0.35rem 0;"
+            gridColumns: 2
+            gridItems:
+              - id: history-location
+                column: left
+                block:
+                  text: "{{history_location}}"
+                  schema:
+                    component: text
+                    css: "margin: 0;"
+                  schemaMode: false
+              - id: history-date-range
+                column: right
+                block:
+                  text: "{{history_date_range}}"
+                  schema:
+                    component: text
+                    css: "margin: 0; text-align: right;"
+                  schemaMode: false
+          schemaMode: false
+        - text: "{{history_role_title}}"
+          schema:
+            component: text
+            css: "margin: 0.35rem 0; font-weight: 700;"
+          schemaMode: false
+        - text: "{{history_description}}"
+          schema:
+            component: text
+            css: "margin: 0.35rem 0;"
+          schemaMode: false
+        - text: "#### Accomplishments"
+          schema:
+            component: text
+            css: "margin: 0.6rem 0 0.25rem;"
+          schemaMode: false
+        - text: ""
+          schema:
+            component: component-list
+            componentListComponent: text
+            css: "margin: 0;"
+            componentListBlocks:
+              - text: "{{history_accomplishments.0}}"
+                schema:
+                  component: text
+                  css: "margin: 0.25rem 0;"
+                schemaMode: false
+              - text: "{{history_accomplishments.1}}"
+                schema:
+                  component: text
+                  css: "margin: 0.25rem 0;"
+                schemaMode: false
+              - text: "{{history_accomplishments.2}}"
+                schema:
+                  component: text
+                  css: "margin: 0.25rem 0;"
+                schemaMode: false
+          schemaMode: false
 ---
 
 <!--hvy: {"id":"header","lock":true}-->
@@ -32,6 +120,15 @@ Title
 - {{summary_highlights.1}}
 - {{summary_highlights.2}}
 
+<!--hvy: {"id":"locations","lock":true}-->
+#! Locations
+
+<!--hvy:text {"css":"margin: 0.5rem 0;","lock":true}-->
+**Location:** {{location}}
+
+<!--hvy:text {"css":"margin: 0.5rem 0;","lock":true}-->
+**Target Location(s):** {{target_locations}}
+
 <!--hvy: {"id":"top-skills-tools-technologies","lock":true}-->
 #! Top Skills, Tools, and Technologies
 
@@ -41,11 +138,12 @@ Title
 
 <!--hvy:grid:1 {"id":"top-tools-technologies","column":"right","component":"component-list","componentListComponent":"text","css":"margin: 0;","componentListBlocks":[{"text":"## Tools & Technologies","schema":{"component":"text","css":"margin: 0 0 0.35rem;"},"schemaMode":false},{"text":"{{top_tools_technologies.0}}","schema":{"component":"text","css":"margin: 0.35rem 0; padding: 0.55rem 0.65rem; border: 1px solid #d7e0e8; border-radius: 8px; box-shadow: 0 2px 8px rgba(41, 67, 82, 0.12); background: #fff;"},"schemaMode":false},{"text":"{{top_tools_technologies.1}}","schema":{"component":"text","css":"margin: 0.35rem 0; padding: 0.55rem 0.65rem; border: 1px solid #d7e0e8; border-radius: 8px; box-shadow: 0 2px 8px rgba(41, 67, 82, 0.12); background: #fff;"},"schemaMode":false},{"text":"{{top_tools_technologies.2}}","schema":{"component":"text","css":"margin: 0.35rem 0; padding: 0.55rem 0.65rem; border: 1px solid #d7e0e8; border-radius: 8px; box-shadow: 0 2px 8px rgba(41, 67, 82, 0.12); background: #fff;"},"schemaMode":false}]}-->
 
-<!--hvy: {"id":"locations","lock":true}-->
-#! Locations
+<!--hvy: {"id":"history","lock":true}-->
+#! History
 
 <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
-**Location:** {{location}}
+# History
 
-<!--hvy:text {"css":"margin: 0.5rem 0;"}-->
-**Target Location(s):** {{target_locations}}
+<!--hvy:table {"css":"margin: 0.5rem 0 0;","tableColumns":"YEAR, ORGANIZATION, TITLE","tableShowHeader":true,"tableRows":[],"lock":true}-->
+
+<!--hvy:component-list {"css":"margin: 0;","componentListComponent":"history-record","componentListBlocks":[{"text":"","schema":{"component":"history-record","css":"margin: 0;","expandableAlwaysShowStub":true,"expandableExpanded":false,"expandableStubBlocks":[{"text":"","schema":{"component":"table","css":"margin: 0;","tableColumns":"YEAR, ORGANIZATION, TITLE","tableShowHeader":false,"tableRows":[{"cells":["{{history_year}}","{{history_organization}}","{{history_title}}"]}]},"schemaMode":false}],"expandableContentBlocks":[{"text":"### {{history_title}}","schema":{"component":"text","css":"margin: 0 0 0.35rem;"},"schemaMode":false},{"text":"","schema":{"component":"grid","css":"margin: 0.35rem 0;","gridColumns":2,"gridItems":[{"id":"history-location","column":"left","block":{"text":"{{history_location}}","schema":{"component":"text","css":"margin: 0;"},"schemaMode":false}},{"id":"history-date-range","column":"right","block":{"text":"{{history_date_range}}","schema":{"component":"text","css":"margin: 0; text-align: right;"},"schemaMode":false}}]},"schemaMode":false},{"text":"{{history_role_title}}","schema":{"component":"text","css":"margin: 0.35rem 0; font-weight: 700;"},"schemaMode":false},{"text":"{{history_description}}","schema":{"component":"text","css":"margin: 0.35rem 0;"},"schemaMode":false},{"text":"#### Accomplishments","schema":{"component":"text","css":"margin: 0.6rem 0 0.25rem;"},"schemaMode":false},{"text":"","schema":{"component":"component-list","componentListComponent":"text","css":"margin: 0;","componentListBlocks":[{"text":"{{history_accomplishments.0}}","schema":{"component":"text","css":"margin: 0.25rem 0;"},"schemaMode":false},{"text":"{{history_accomplishments.1}}","schema":{"component":"text","css":"margin: 0.25rem 0;"},"schemaMode":false},{"text":"{{history_accomplishments.2}}","schema":{"component":"text","css":"margin: 0.25rem 0;"},"schemaMode":false}]},"schemaMode":false}]},"schemaMode":false}]}-->

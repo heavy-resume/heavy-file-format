@@ -261,7 +261,6 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
 
   function renderEditorBlock(sectionKey: string, block: VisualBlock, rootSections?: VisualSection[]): string {
     const component = block.schema.component || 'text';
-    const contentEditor = renderBlockContentEditor(sectionKey, block);
     const isActiveSelf = deps.isActiveEditorBlock(sectionKey, block.id);
     const isActiveDescendant = state.activeEditorBlock?.sectionKey === sectionKey && isDescendantActive(block, state.activeEditorBlock.blockId);
     const isActive = isActiveSelf || isActiveDescendant;
@@ -269,6 +268,8 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     if (!isActive) {
       return renderPassiveEditorBlock(sectionKey, block, rootSections ?? []);
     }
+
+    const contentEditor = renderBlockContentEditor(sectionKey, block);
 
     return `
       <div class="editor-block">

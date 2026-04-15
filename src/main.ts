@@ -2781,6 +2781,7 @@ function serializeBlockSchema(
   const defaults = defaultBlockSchema(component);
   const payload: JsonObject = {};
 
+  addIfChanged(payload, 'id', schema.id, defaults.id);
   if (!options.omitComponent) {
     payload.component = schema.component;
   }
@@ -2986,25 +2987,78 @@ function navigateToSection(sectionId: string): void {
   }
 
   closeModal();
+  expandSectionPathById(state.document.sections, sectionId);
+  expandBlockPathBySchemaId(state.document.sections, sectionId);
+  state.tempHighlights.add(sectionId);
   renderApp();
 
-  const target = document.getElementById(sectionId);
-  if (!target) {
-    return;
-  }
+  window.requestAnimationFrame(() => {
+    const target = document.getElementById(sectionId);
+    if (!target) {
+      return;
+    }
 
-  target.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  setTemporaryHighlight(sectionId);
-}
-
-function setTemporaryHighlight(sectionId: string): void {
-  state.tempHighlights.add(sectionId);
-  refreshReaderPanels();
-
+    target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  });
   window.setTimeout(() => {
     state.tempHighlights.delete(sectionId);
     refreshReaderPanels();
   }, 1400);
+}
+
+function expandSectionPathById(sections: VisualSection[], sectionId: string): boolean {
+  for (const section of sections) {
+    if (getSectionId(section) === sectionId) {
+      section.expanded = true;
+      return true;
+    }
+    if (expandSectionPathById(section.children, sectionId)) {
+      section.expanded = true;
+      return true;
+    }
+  }
+  return false;
+}
+
+function expandBlockPathBySchemaId(sections: VisualSection[], schemaId: string): boolean {
+  for (const section of sections) {
+    if (expandBlockPathInList(section.blocks, schemaId)) {
+      section.expanded = true;
+      return true;
+    }
+    if (expandBlockPathBySchemaId(section.children, schemaId)) {
+      section.expanded = true;
+      return true;
+    }
+  }
+  return false;
+}
+
+function expandBlockPathInList(blocks: VisualBlock[], schemaId: string): boolean {
+  for (const block of blocks) {
+    const isTarget = block.schema.id === schemaId;
+    if (isTarget && resolveBaseComponent(block.schema.component) === 'expandable') {
+      block.schema.expandableExpanded = true;
+      return true;
+    }
+    const nestedFound =
+      expandBlockPathInList(block.schema.containerBlocks ?? [], schemaId)
+      || expandBlockPathInList(block.schema.componentListBlocks ?? [], schemaId)
+      || expandBlockPathInList((block.schema.gridItems ?? []).map((item) => item.block), schemaId)
+      || expandBlockPathInList(block.schema.expandableStubBlocks ?? [], schemaId)
+      || expandBlockPathInList(block.schema.expandableContentBlocks ?? [], schemaId)
+      || (block.schema.tableRows ?? []).some((row) => expandBlockPathInList(row.detailsBlocks ?? [], schemaId));
+    if (nestedFound) {
+      if (resolveBaseComponent(block.schema.component) === 'expandable') {
+        block.schema.expandableExpanded = true;
+      }
+      return true;
+    }
+    if (isTarget) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function closeModal(): void {
@@ -3202,6 +3256,7 @@ function createDefaultTableRow(columnCount: number): TableRow {
 
 function defaultBlockSchema(component = 'text'): BlockSchema {
   return {
+    id: '',
     component,
     lock: false,
     align: 'left',
@@ -3331,6 +3386,7 @@ function schemaFromUnknown(value: unknown): BlockSchema {
   const parsedGridItems = parseGridItems(candidate, gridColumns, component);
   return {
     component,
+    id: typeof candidate.id === 'string' ? candidate.id : defaults.id,
     lock: candidate.lock === true,
     align: coerceAlign(typeof candidate.align === 'string' ? candidate.align : 'left'),
     slot: coerceSlot(typeof candidate.slot === 'string' ? candidate.slot : 'center'),

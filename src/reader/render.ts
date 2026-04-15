@@ -81,31 +81,37 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
   function renderReaderSection(section: VisualSection): string {
     const effectiveId = deps.getSectionId(section);
     const temp = state.tempHighlights.has(effectiveId);
-    const classList = ['reader-section', section.highlight ? 'is-highlighted' : '', temp ? 'is-temp-highlighted' : '']
+    const classList = [
+      'reader-section',
+      section.expanded ? '' : 'is-collapsed-preview',
+      section.highlight ? 'is-highlighted' : '',
+      temp ? 'is-temp-highlighted' : '',
+    ]
       .filter(Boolean)
       .join(' ');
-    const collapsedTitle = !section.expanded
-      ? `<div class="reader-section-title">${deps.escapeHtml(deps.formatSectionTitle(section.title))}</div>`
-      : '';
-    const toggleControl = `
+    const toggleControl = section.expanded
+      ? `
       <header class="reader-section-head" aria-label="Section controls">
-        ${collapsedTitle}
         <div class="reader-head-actions">
           <button type="button" class="tiny" data-reader-action="toggle-expand" data-section-key="${deps.escapeAttr(section.key)}" aria-label="${
-      section.expanded ? 'Collapse section' : 'Expand section'
-    }">${section.expanded ? '−' : '+'}</button>
+        section.expanded ? 'Collapse section' : 'Expand section'
+      }">${section.expanded ? '−' : '+'}</button>
         </div>
       </header>
-    `;
-
-    const content = section.expanded
-      ? `<div class="reader-section-content">${section.blocks
-          .map((block) => renderReaderBlock(section, block))
-          .join('')}${section.children.filter((child) => !child.isGhost).map((child) => renderReaderSection(child)).join('')}</div>`
+    `
       : '';
 
+    const contentClass = section.expanded ? 'reader-section-content' : 'reader-section-content reader-section-preview';
+    const content = `<div class="${contentClass}">${section.blocks
+      .map((block) => renderReaderBlock(section, block))
+      .join('')}${section.children.filter((child) => !child.isGhost).map((child) => renderReaderSection(child)).join('')}</div>`;
+
+    const toggleAttrs = section.expanded
+      ? ''
+      : ` data-reader-action="toggle-expand" data-section-key="${deps.escapeAttr(section.key)}"`;
+
     return `
-      <section id="${deps.escapeAttr(effectiveId)}" class="${classList}" style="${deps.escapeAttr(section.customCss)}">
+      <section id="${deps.escapeAttr(effectiveId)}" class="${classList}" style="${deps.escapeAttr(section.customCss)}"${toggleAttrs}>
         ${toggleControl}
         ${content}
       </section>
@@ -117,9 +123,19 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     if (base === 'quote' && block.text.trim().length === 0) {
       return '';
     }
-    const blockAttrs = `class="reader-block reader-block-${deps.escapeAttr(base)} align-${deps.escapeAttr(block.schema.align)} slot-${deps.escapeAttr(
-      block.schema.slot
-    )}" data-component="${deps.escapeAttr(block.schema.component)}" style="${deps.escapeAttr(block.schema.customCss)}"`;
+    const blockDomId = getBlockDomId(block);
+    const idAttr = blockDomId ? ` id="${deps.escapeAttr(blockDomId)}"` : '';
+    const blockClass = [
+      'reader-block',
+      `reader-block-${base}`,
+      `align-${block.schema.align}`,
+      `slot-${block.schema.slot}`,
+      blockDomId && state.tempHighlights.has(blockDomId) ? 'is-temp-highlighted' : '',
+    ]
+      .filter(Boolean)
+      .map((part) => deps.escapeAttr(part))
+      .join(' ');
+    const blockAttrs = `${idAttr} class="${blockClass}" data-component="${deps.escapeAttr(block.schema.component)}" style="${deps.escapeAttr(block.schema.customCss)}"`;
     const helpers = deps.getComponentRenderHelpers();
 
     if (base === 'code') {
@@ -146,6 +162,10 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       return `<div ${blockAttrs}>${renderTableReader(section, block, helpers)}</div>`;
     }
     return `<div ${blockAttrs}>${renderTextReader(section, block, helpers)}</div>`;
+  }
+
+  function getBlockDomId(block: VisualBlock): string {
+    return block.schema.id.trim();
   }
 
   function renderModal(): string {

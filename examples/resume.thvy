@@ -487,13 +487,13 @@ Title
 ## Skills
 
 <!--hvy:component-list:1 {"component":"text","css":"margin: 0.35rem 0; padding: 0.55rem 0.65rem; border: 1px solid #d7e0e8; border-radius: 8px; box-shadow: 0 2px 8px rgba(41, 67, 82, 0.12); background: #fff;"}-->
-{{top_skills.0}}
+[{{top_skills.0}}](#skill-software-engineering)
 
 <!--hvy:component-list:2 {"component":"text","css":"margin: 0.35rem 0; padding: 0.55rem 0.65rem; border: 1px solid #d7e0e8; border-radius: 8px; box-shadow: 0 2px 8px rgba(41, 67, 82, 0.12); background: #fff;"}-->
-{{top_skills.1}}
+[{{top_skills.1}}](#skill-library-development)
 
 <!--hvy:component-list:3 {"component":"text","css":"margin: 0.35rem 0; padding: 0.55rem 0.65rem; border: 1px solid #d7e0e8; border-radius: 8px; box-shadow: 0 2px 8px rgba(41, 67, 82, 0.12); background: #fff;"}-->
-{{top_skills.2}}
+[{{top_skills.2}}](#skill-llm-prompt-engineering)
 
 <!--hvy:grid:1 {"id":"top-tools-technologies","column":"right","component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->
 
@@ -501,13 +501,211 @@ Title
 ## Tools & Technologies
 
 <!--hvy:component-list:1 {"component":"text","css":"margin: 0.35rem 0; padding: 0.55rem 0.65rem; border: 1px solid #d7e0e8; border-radius: 8px; box-shadow: 0 2px 8px rgba(41, 67, 82, 0.12); background: #fff;"}-->
-{{top_tools_technologies.0}}
+[{{top_tools_technologies.0}}](#tool-typescript)
 
 <!--hvy:component-list:2 {"component":"text","css":"margin: 0.35rem 0; padding: 0.55rem 0.65rem; border: 1px solid #d7e0e8; border-radius: 8px; box-shadow: 0 2px 8px rgba(41, 67, 82, 0.12); background: #fff;"}-->
-{{top_tools_technologies.1}}
+[{{top_tools_technologies.1}}](#tool-python)
 
 <!--hvy:component-list:3 {"component":"text","css":"margin: 0.35rem 0; padding: 0.55rem 0.65rem; border: 1px solid #d7e0e8; border-radius: 8px; box-shadow: 0 2px 8px rgba(41, 67, 82, 0.12); background: #fff;"}-->
-{{top_tools_technologies.2}}
+[{{top_tools_technologies.2}}](#tool-developer-containers)
+
+<!--hvy: {"id":"skills","lock":true,"expanded":false}-->
+#! Skills
+
+<!--hvy:text {"css":"margin: 0.5rem 0;"}-->
+# Skills
+
+<!--hvy:expandable {"id":"skill-software-engineering","css":"margin: 0.35rem 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+
+<!--hvy:expandable:0 {"component":"text","css":"margin: 0;"}-->
+Software Engineering
+
+<!--hvy:expandable:1 {"component":"text","css":"margin: 0.4rem 0 0.1rem;"}-->
+#### Experience
+
+<!--hvy:expandable:1 {"component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->
+
+<!--hvy:component-list:0 {"component":"text","css":"margin: 0.25rem 0;"}-->
+[History](#history)
+
+<!--hvy:expandable:1 {"component":"text","css":"margin: 0.4rem 0 0.1rem;"}-->
+#### Education
+
+<!--hvy:expandable:1 {"component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->
+
+<!--hvy:component-list:0 {"component":"text","css":"margin: 0.25rem 0;"}-->
+[Education](#education)
+
+<!--hvy:expandable:1 {"component":"text","css":"margin: 0.4rem 0 0.1rem;"}-->
+#### Projects
+
+<!--hvy:expandable:1 {"component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->
+
+<!--hvy:component-list:0 {"component":"text","css":"margin: 0.25rem 0;"}-->
+[Heavy Stack, 05/2024 - present](#project-heavy-stack)
+
+<!--hvy:expandable {"id":"skill-reverse-engineering","css":"margin: 0.35rem 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+
+<!--hvy:expandable:0 {"component":"text","css":"margin: 0;"}-->
+Reverse Engineering
+
+<!--hvy:expandable:1 {"component":"text","css":"margin: 0.4rem 0 0.1rem;"}-->
+#### Projects
+
+<!--hvy:expandable:1 {"component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->
+
+<!--hvy:component-list:0 {"component":"text","css":"margin: 0.25rem 0;"}-->
+[Heavy Stack, 05/2024 - present](#project-heavy-stack)
+
+<!--hvy:expandable {"id":"skill-library-development","css":"margin: 0.35rem 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+
+<!--hvy:expandable:0 {"component":"text","css":"margin: 0;"}-->
+Library Development
+
+<!--hvy:expandable:1 {"component":"text","css":"margin: 0.4rem 0 0.1rem;"}-->
+#### Projects
+
+<!--hvy:expandable:1 {"component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->
+
+<!--hvy:component-list:0 {"component":"text","css":"margin: 0.25rem 0;"}-->
+[Heavy Stack, 05/2024 - present](#project-heavy-stack)
+
+<!--hvy:expandable {"id":"skill-llm-prompt-engineering","css":"margin: 0.35rem 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+
+<!--hvy:expandable:0 {"component":"text","css":"margin: 0;"}-->
+LLM Prompt Engineering
+
+<!--hvy:expandable:1 {"component":"text","css":"margin: 0.4rem 0 0.1rem;"}-->
+#### Projects
+
+<!--hvy:expandable:1 {"component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->
+
+<!--hvy:component-list:0 {"component":"text","css":"margin: 0.25rem 0;"}-->
+[Autonomous Agent Hackathon, 08/2023 - 08/2023](#project-autonomous-agent-hackathon)
+
+<!--hvy:expandable {"id":"skill-project-management","css":"margin: 0.35rem 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+
+<!--hvy:expandable:0 {"component":"text","css":"margin: 0;"}-->
+Project Management
+
+<!--hvy:expandable:1 {"component":"text","css":"margin: 0.4rem 0 0.1rem;"}-->
+#### Projects
+
+<!--hvy:expandable:1 {"component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->
+
+<!--hvy:component-list:0 {"component":"text","css":"margin: 0.25rem 0;"}-->
+[Autonomous Agent Hackathon, 08/2023 - 08/2023](#project-autonomous-agent-hackathon)
+
+<!--hvy: {"id":"tools-technologies","lock":true,"expanded":false}-->
+#! Tools & Technologies
+
+<!--hvy:text {"css":"margin: 0.5rem 0;"}-->
+# Tools & Technologies
+
+<!--hvy:expandable {"id":"tool-typescript","css":"margin: 0.35rem 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+
+<!--hvy:expandable:0 {"component":"text","css":"margin: 0;"}-->
+TypeScript
+
+<!--hvy:expandable:1 {"component":"text","css":"margin: 0.4rem 0 0.1rem;"}-->
+#### Projects
+
+<!--hvy:expandable:1 {"component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->
+
+<!--hvy:component-list:0 {"component":"text","css":"margin: 0.25rem 0;"}-->
+[Heavy Stack, 05/2024 - present](#project-heavy-stack)
+
+<!--hvy:expandable {"id":"tool-python","css":"margin: 0.35rem 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+
+<!--hvy:expandable:0 {"component":"text","css":"margin: 0;"}-->
+Python
+
+<!--hvy:expandable:1 {"component":"text","css":"margin: 0.4rem 0 0.1rem;"}-->
+#### Projects
+
+<!--hvy:expandable:1 {"component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->
+
+<!--hvy:component-list:0 {"component":"text","css":"margin: 0.25rem 0;"}-->
+[Heavy Stack, 05/2024 - present](#project-heavy-stack)
+
+<!--hvy:component-list:1 {"component":"text","css":"margin: 0.25rem 0;"}-->
+[Autonomous Agent Hackathon, 08/2023 - 08/2023](#project-autonomous-agent-hackathon)
+
+<!--hvy:expandable:1 {"component":"text","css":"margin: 0.4rem 0 0.1rem;"}-->
+#### Education
+
+<!--hvy:expandable:1 {"component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->
+
+<!--hvy:component-list:0 {"component":"text","css":"margin: 0.25rem 0;"}-->
+[Education](#education)
+
+<!--hvy:expandable {"id":"tool-c-cpp","css":"margin: 0.35rem 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+
+<!--hvy:expandable:0 {"component":"text","css":"margin: 0;"}-->
+C/C++
+
+<!--hvy:expandable:1 {"component":"text","css":"margin: 0.4rem 0 0.1rem;"}-->
+#### Education
+
+<!--hvy:expandable:1 {"component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->
+
+<!--hvy:component-list:0 {"component":"text","css":"margin: 0.25rem 0;"}-->
+[Education](#education)
+
+<!--hvy:expandable {"id":"tool-developer-containers","css":"margin: 0.35rem 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+
+<!--hvy:expandable:0 {"component":"text","css":"margin: 0;"}-->
+Developer Containers
+
+<!--hvy:expandable:1 {"component":"text","css":"margin: 0.4rem 0 0.1rem;"}-->
+#### Projects
+
+<!--hvy:expandable:1 {"component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->
+
+<!--hvy:component-list:0 {"component":"text","css":"margin: 0.25rem 0;"}-->
+[Heavy Stack, 05/2024 - present](#project-heavy-stack)
+
+<!--hvy:component-list:1 {"component":"text","css":"margin: 0.25rem 0;"}-->
+[Autonomous Agent Hackathon, 08/2023 - 08/2023](#project-autonomous-agent-hackathon)
+
+<!--hvy:expandable {"id":"tool-openai-api","css":"margin: 0.35rem 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+
+<!--hvy:expandable:0 {"component":"text","css":"margin: 0;"}-->
+OpenAI API
+
+<!--hvy:expandable:1 {"component":"text","css":"margin: 0.4rem 0 0.1rem;"}-->
+#### Projects
+
+<!--hvy:expandable:1 {"component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->
+
+<!--hvy:component-list:0 {"component":"text","css":"margin: 0.25rem 0;"}-->
+[Autonomous Agent Hackathon, 08/2023 - 08/2023](#project-autonomous-agent-hackathon)
+
+<!--hvy:expandable {"id":"tool-github-codespaces","css":"margin: 0.35rem 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+
+<!--hvy:expandable:0 {"component":"text","css":"margin: 0;"}-->
+GitHub Codespaces
+
+<!--hvy:expandable:1 {"component":"text","css":"margin: 0.4rem 0 0.1rem;"}-->
+#### Projects
+
+<!--hvy:expandable:1 {"component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->
+
+<!--hvy:component-list:0 {"component":"text","css":"margin: 0.25rem 0;"}-->
+[Autonomous Agent Hackathon, 08/2023 - 08/2023](#project-autonomous-agent-hackathon)
+
+<!--hvy:expandable {"id":"tool-superagi","css":"margin: 0.35rem 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+
+<!--hvy:expandable:0 {"component":"text","css":"margin: 0;"}-->
+SuperAGI
+
+<!--hvy:expandable:1 {"component":"text","css":"margin: 0.4rem 0 0.1rem;"}-->
+#### Projects
+
+<!--hvy:expandable:1 {"component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->
+
+<!--hvy:component-list:0 {"component":"text","css":"margin: 0.25rem 0;"}-->
+[Autonomous Agent Hackathon, 08/2023 - 08/2023](#project-autonomous-agent-hackathon)
 
 <!--hvy: {"id":"history","lock":true}-->
 #! History
@@ -562,13 +760,13 @@ Title
 #### Skills
 
 <!--hvy:component-list:1 {"component":"text","css":"margin: 0.25rem 0;"}-->
-{{history_skills.0}}
+[{{history_skills.0}}](#skill-software-engineering)
 
 <!--hvy:component-list:2 {"component":"text","css":"margin: 0.25rem 0;"}-->
-{{history_skills.1}}
+[{{history_skills.1}}](#skill-library-development)
 
 <!--hvy:component-list:3 {"component":"text","css":"margin: 0.25rem 0;"}-->
-{{history_skills.2}}
+[{{history_skills.2}}](#skill-project-management)
 
 <!--hvy:grid:1 {"id":"history-tools-technologies","column":"right","component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->
 
@@ -576,13 +774,13 @@ Title
 #### Tools & Technologies
 
 <!--hvy:component-list:1 {"component":"text","css":"margin: 0.25rem 0;"}-->
-{{history_tools_technologies.0}}
+[{{history_tools_technologies.0}}](#tool-typescript)
 
 <!--hvy:component-list:2 {"component":"text","css":"margin: 0.25rem 0;"}-->
-{{history_tools_technologies.1}}
+[{{history_tools_technologies.1}}](#tool-python)
 
 <!--hvy:component-list:3 {"component":"text","css":"margin: 0.25rem 0;"}-->
-{{history_tools_technologies.2}}
+[{{history_tools_technologies.2}}](#tool-developer-containers)
 
 <!--hvy: {"id":"projects","lock":true}-->
 #! Projects
@@ -592,25 +790,23 @@ Title
 
 <!--hvy:table {"css":"margin: 0.5rem 0 0;","tableColumns":"PROJECT, DATE","tableShowHeader":true,"tableRows":[],"lock":true}-->
 
-<!--hvy:component-list {"css":"margin: 0;","componentListComponent":"project-record"}-->
+<!--hvy:project-record {"id":"project-heavy-stack","css":"margin: 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
-<!--hvy:component-list:0 {"component":"project-record","css":"margin: 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
-
-<!--hvy:expandable:0 {"component":"table","css":"margin: 0;","tableColumns":"PROJECT, DATE","tableShowHeader":false,"tableRows":[{"cells":["{{project_name}}","{{project_date_range}}"]}]}-->
+<!--hvy:expandable:0 {"component":"table","css":"margin: 0;","tableColumns":"PROJECT, DATE","tableShowHeader":false,"tableRows":[{"cells":["Heavy Stack","05/2024 - present"]}]}-->
 
 <!--hvy:expandable:1 {"component":"grid","css":"margin: 0 0 0.35rem;","gridColumns":2}-->
 
 <!--hvy:grid:0 {"id":"project-title","column":"left","component":"text","css":"margin: 0;"}-->
-### {{project_name}}
+### Heavy Stack
 
 <!--hvy:grid:1 {"id":"project-date-range","column":"right","component":"text","css":"margin: 0; text-align: right;"}-->
-{{project_date_range}}
+05/2024 - present
 
 <!--hvy:expandable:1 {"component":"text","css":"margin: 0.5rem 0;"}-->
-{{project_description}}
+The Heavy Stack is the production version of the developer container used for Heavy Resume. It has various features such as hot reloading for both the application and testing, the ability to record user actions for playback later, as well as a functioning dev container with databases and everything set up and ready to go.
 
 <!--hvy:expandable:1 {"component":"text","css":"margin: 0.35rem 0;"}-->
-[Visit webpage]({{project_url}}) ({{project_url_label}})
+[Visit webpage](https://github.com) (github.com)
 
 <!--hvy:expandable:1 {"component":"skills-and-tools-tech-list","css":"margin: 0.6rem 0 0;","gridColumns":2}-->
 
@@ -620,10 +816,10 @@ Title
 #### Relevant Skills
 
 <!--hvy:component-list:1 {"component":"text","css":"margin: 0.25rem 0;"}-->
-{{project_relevant_skills.0}}
+[Reverse Engineering](#skill-reverse-engineering)
 
 <!--hvy:component-list:2 {"component":"text","css":"margin: 0.25rem 0;"}-->
-{{project_relevant_skills.1}}
+[Library Development](#skill-library-development)
 
 <!--hvy:grid:1 {"id":"project-tools-technologies","column":"right","component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->
 
@@ -631,16 +827,64 @@ Title
 #### Tools and Technologies
 
 <!--hvy:component-list:1 {"component":"text","css":"margin: 0.25rem 0;"}-->
-{{project_tools_technologies.0}}
+[TypeScript](#tool-typescript)
 
 <!--hvy:component-list:2 {"component":"text","css":"margin: 0.25rem 0;"}-->
-{{project_tools_technologies.1}}
+[Python](#tool-python)
 
 <!--hvy:component-list:3 {"component":"text","css":"margin: 0.25rem 0;"}-->
-{{project_tools_technologies.2}}
+[Developer Containers](#tool-developer-containers)
+
+<!--hvy:project-record {"id":"project-autonomous-agent-hackathon","css":"margin: 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+
+<!--hvy:expandable:0 {"component":"table","css":"margin: 0;","tableColumns":"PROJECT, DATE","tableShowHeader":false,"tableRows":[{"cells":["Autonomous Agent Hackathon","08/2023 - 08/2023"]}]}-->
+
+<!--hvy:expandable:1 {"component":"grid","css":"margin: 0 0 0.35rem;","gridColumns":2}-->
+
+<!--hvy:grid:0 {"id":"project-title-hackathon","column":"left","component":"text","css":"margin: 0;"}-->
+### Autonomous Agent Hackathon
+
+<!--hvy:grid:1 {"id":"project-date-range-hackathon","column":"right","component":"text","css":"margin: 0; text-align: right;"}-->
+08/2023 - 08/2023
+
+<!--hvy:expandable:1 {"component":"text","css":"margin: 0.5rem 0;"}-->
+Hackathon project that involved using SuperAGI to do deep research. I had the idea, wrote all of the code, and did a substantial portion of the video presentation.
+
+<!--hvy:expandable:1 {"component":"text","css":"margin: 0.35rem 0;"}-->
+[Visit webpage](https://lablab.ai) (lablab.ai)
+
+<!--hvy:expandable:1 {"component":"skills-and-tools-tech-list","css":"margin: 0.6rem 0 0;","gridColumns":2}-->
+
+<!--hvy:grid:0 {"id":"project-relevant-skills-hackathon","column":"left","component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->
+
+<!--hvy:component-list:0 {"component":"text","css":"margin: 0 0 0.25rem;"}-->
+#### Relevant Skills
+
+<!--hvy:component-list:1 {"component":"text","css":"margin: 0.25rem 0;"}-->
+[LLM Prompt Engineering](#skill-llm-prompt-engineering)
+
+<!--hvy:component-list:2 {"component":"text","css":"margin: 0.25rem 0;"}-->
+[Project Management](#skill-project-management)
+
+<!--hvy:grid:1 {"id":"project-tools-technologies-hackathon","column":"right","component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->
+
+<!--hvy:component-list:0 {"component":"text","css":"margin: 0 0 0.25rem;"}-->
+#### Tools and Technologies
+
+<!--hvy:component-list:1 {"component":"text","css":"margin: 0.25rem 0;"}-->
+[Developer Containers](#tool-developer-containers)
+
+<!--hvy:component-list:2 {"component":"text","css":"margin: 0.25rem 0;"}-->
+[OpenAI API](#tool-openai-api)
+
+<!--hvy:component-list:3 {"component":"text","css":"margin: 0.25rem 0;"}-->
+[Python](#tool-python)
 
 <!--hvy:component-list:4 {"component":"text","css":"margin: 0.25rem 0;"}-->
-{{project_tools_technologies.3}}
+[GitHub Codespaces](#tool-github-codespaces)
+
+<!--hvy:component-list:5 {"component":"text","css":"margin: 0.25rem 0;"}-->
+[SuperAGI](#tool-superagi)
 
 <!--hvy: {"id":"education","lock":true}-->
 #! Education
@@ -686,7 +930,7 @@ Title
 #### Relevant Skills
 
 <!--hvy:component-list:1 {"component":"text","css":"margin: 0.25rem 0;"}-->
-{{education_relevant_skills.0}}
+[{{education_relevant_skills.0}}](#skill-software-engineering)
 
 <!--hvy:grid:1 {"id":"education-tools-technologies","column":"right","component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->
 
@@ -694,10 +938,10 @@ Title
 #### Tools and Technologies
 
 <!--hvy:component-list:1 {"component":"text","css":"margin: 0.25rem 0;"}-->
-{{education_tools_technologies.0}}
+[{{education_tools_technologies.0}}](#tool-python)
 
 <!--hvy:component-list:2 {"component":"text","css":"margin: 0.25rem 0;"}-->
-{{education_tools_technologies.1}}
+[{{education_tools_technologies.1}}](#tool-c-cpp)
 
 <!--hvy:expandable:1 {"component":"text","css":"margin: 0.6rem 0 0.25rem;"}-->
 #### Classes

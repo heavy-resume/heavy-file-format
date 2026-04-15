@@ -19,6 +19,7 @@ export interface GridItem {
 }
 
 export interface BlockSchema {
+  id: string;
   component: string;
   lock: boolean;
   align: Align;

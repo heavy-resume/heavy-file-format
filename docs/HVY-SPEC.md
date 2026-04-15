@@ -177,10 +177,26 @@ Authoring tools MAY emit block-scoped metadata comments directly in section cont
 Design the format like a document, not a form.
 ```
 
+Expandable blocks MAY be emitted with specialized directives so their stub and expanded content remain normal Markdown blocks:
+
+```markdown
+<!--hvy:expandable {"customCss":"margin: 0.5rem 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+
+<!--hvy:expandable:0 {"component":"text","customCss":"margin-bottom: 0;"}-->
+## Summary
+
+<!--hvy:expandable:1 {"component":"text","customCss":"margin: 0;"}-->
+- Expanded detail
+```
+
 Rules:
 - The directive MUST be on a single line.
 - The payload MUST be valid JSON object.
 - The directive applies to the immediately following content block.
+- `hvy:expandable` starts an expandable block. Its payload is the expandable block schema, with `component:"expandable"` implied.
+- `hvy:expandable:0` appends the immediately following content block to the expandable stub.
+- `hvy:expandable:1` appends the immediately following content block to the expanded content.
+- Multiple `hvy:expandable:0` or `hvy:expandable:1` directives MAY be used for a single expandable block.
 - If both `meta.blocks[n]` and `hvy:block` describe the same logical block, `meta.blocks[n]` wins.
 
 ### 5.8 Recursive block shape for rich clients
@@ -194,15 +210,13 @@ For rich/editor-oriented documents, block metadata MAY include component-specifi
 - `gridColumns`
 - `gridItems`
 - `pluginUrl`
-- `expandableStubBlocks`
-- `expandableContentBlocks`
 - `expandableAlwaysShowStub`
 - `expandableExpanded`
 - `tableColumns`
 - `tableShowHeader`
 - `tableRows`
 
-Nested block arrays such as `containerBlocks`, `expandableStubBlocks`, and `expandableContentBlocks` use a recursive block object shape:
+Nested block arrays such as `containerBlocks` use a recursive block object shape:
 
 ```json
 {
@@ -215,7 +229,7 @@ Nested block arrays such as `containerBlocks`, `expandableStubBlocks`, and `expa
 }
 ```
 
-Rich clients MAY preserve and round-trip these fields even if a plain Markdown renderer ignores them.
+Rich clients MAY preserve and round-trip these fields even if a plain Markdown renderer ignores them. For compatibility with older documents, rich clients MAY also read legacy `expandableStubBlocks` and `expandableContentBlocks` arrays from an expandable block schema, but SHOULD emit `hvy:expandable:0` and `hvy:expandable:1` directives for new documents.
 
 ### 5.9 Reusable component definitions
 
@@ -380,7 +394,7 @@ Normative behavior:
 1. Read file as UTF-8 text.
 2. Parse YAML front matter if present at file start.
 3. Parse Markdown into block structure. `<!--hvy: {...}-->` directives define top-level sections; `<!--hvy:subsection {...}-->` directives define subsections. An optional `#!` line immediately following sets the section title; it is consumed and not rendered. Standard ATX headings are plain content.
-4. Attach `<!--hvy:doc ...-->`, `<!--hvy:css ...-->`, and `<!--hvy:block ...-->` directives per placement rules.
+4. Attach `<!--hvy:doc ...-->`, `<!--hvy:css ...-->`, `<!--hvy:block ...-->`, and `<!--hvy:expandable...-->` directives per placement rules.
 5. Extract CSS fenced blocks (language `css`) and optional preceding `hvy:css` metadata.
 6. Build section tree from directive types (`hvy:` = top-level, `hvy:subsection` = child).
 7. Validate template rules when extension is `.thvy`: require `hvy_version` and `template: true`.

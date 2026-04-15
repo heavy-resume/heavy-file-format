@@ -2290,43 +2290,100 @@ function mapParsedSection(section: HvySection): VisualSection {
 function parseBlocks(contentMarkdown: string, sectionMeta: JsonObject): VisualBlock[] {
   const schemas = Array.isArray(sectionMeta.blocks) ? (sectionMeta.blocks as JsonObject[]) : [];
   const lines = contentMarkdown.split(/\r?\n/);
-  const blockDirective = /^<!--hvy:block\s*(\{.*\})\s*-->$/;
+  const directivePattern = /^<!--hvy:(block|expandable(?::[01])?)\s*(\{.*\})\s*-->$/;
 
   const blocks: VisualBlock[] = [];
   let currentText: string[] = [];
   let currentSchema: BlockSchema = schemaFromUnknown(schemas[0]);
+  let currentTarget: 'top' | 'expandableStub' | 'expandableContent' = 'top';
+  let pendingExpandable: VisualBlock | undefined;
 
   const flush = (): void => {
     if (currentText.length === 0) {
       return;
     }
-    blocks.push({
+    if (pendingExpandable && currentTarget === 'top' && currentText.join('\n').trim().length === 0) {
+      currentText = [];
+      return;
+    }
+    const block: VisualBlock = {
       id: makeId('block'),
       text: currentText.join('\n').trim(),
       schema: currentSchema,
       schemaMode: false,
-    });
+    };
+    if (currentTarget === 'expandableStub' && pendingExpandable) {
+      pendingExpandable.schema.expandableStubBlocks.push(block);
+    } else if (currentTarget === 'expandableContent' && pendingExpandable) {
+      pendingExpandable.schema.expandableContentBlocks.push(block);
+    } else {
+      blocks.push(block);
+    }
     currentText = [];
     currentSchema = defaultBlockSchema();
   };
 
+  const finishExpandable = (): void => {
+    flush();
+    if (!pendingExpandable) {
+      currentTarget = 'top';
+      return;
+    }
+    blocks.push(pendingExpandable);
+    pendingExpandable = undefined;
+    currentTarget = 'top';
+    currentSchema = defaultBlockSchema();
+  };
+
   lines.forEach((line) => {
-    const match = line.trim().match(blockDirective);
+    const match = line.trim().match(directivePattern);
     if (!match) {
       currentText.push(line);
       return;
     }
 
-    flush();
+    const directive = match[1] ?? 'block';
+    if (directive === 'block' || directive === 'expandable') {
+      finishExpandable();
+    } else {
+      flush();
+    }
+
     try {
-      const parsed = JSON.parse(match[1] ?? '{}') as JsonObject;
-      currentSchema = schemaFromUnknown(parsed);
+      const parsed = JSON.parse(match[2] ?? '{}') as JsonObject;
+      if (directive === 'expandable') {
+        pendingExpandable = {
+          id: makeId('block'),
+          text: '',
+          schema: schemaFromUnknown({ ...parsed, component: 'expandable' }),
+          schemaMode: false,
+        };
+        pendingExpandable.schema.expandableStubBlocks = [];
+        pendingExpandable.schema.expandableContentBlocks = [];
+        currentTarget = 'top';
+        currentSchema = defaultBlockSchema();
+      } else if (directive === 'expandable:0') {
+        if (!pendingExpandable) {
+          pendingExpandable = createEmptyBlock('expandable', true);
+        }
+        currentTarget = 'expandableStub';
+        currentSchema = schemaFromUnknown(parsed);
+      } else if (directive === 'expandable:1') {
+        if (!pendingExpandable) {
+          pendingExpandable = createEmptyBlock('expandable', true);
+        }
+        currentTarget = 'expandableContent';
+        currentSchema = schemaFromUnknown(parsed);
+      } else {
+        currentTarget = 'top';
+        currentSchema = schemaFromUnknown(parsed);
+      }
     } catch {
       currentSchema = defaultBlockSchema();
     }
   });
 
-  flush();
+  finishExpandable();
 
   if (blocks.length === 0) {
     return [];
@@ -2364,42 +2421,20 @@ function serializeSection(section: VisualSection, level: number): string {
     meta.custom_css = section.customCss;
   }
 
-  meta.blocks = section.blocks.map((block) => ({
-    component: block.schema.component,
-    lock: block.schema.lock,
-    align: block.schema.align,
-    slot: block.schema.slot,
-    customCss: block.schema.customCss,
-    codeLanguage: block.schema.codeLanguage,
-    containerTitle: block.schema.containerTitle,
-    containerBlocks: block.schema.containerBlocks,
-    componentListComponent: block.schema.componentListComponent,
-    componentListBlocks: block.schema.componentListBlocks,
-    gridColumns: block.schema.gridColumns,
-    gridItems: block.schema.gridItems.map((item) => ({
-      id: item.id,
-      column: item.column,
-      block: item.block,
-    })),
-    tags: block.schema.tags,
-    description: block.schema.description,
-    pluginUrl: block.schema.pluginUrl,
-    expandableStubComponent: block.schema.expandableStubComponent,
-    expandableContentComponent: block.schema.expandableContentComponent,
-    expandableStub: block.schema.expandableStub,
-    expandableStubBlocks: block.schema.expandableStubBlocks,
-    expandableAlwaysShowStub: block.schema.expandableAlwaysShowStub,
-    expandableExpanded: block.schema.expandableExpanded,
-    expandableContentBlocks: block.schema.expandableContentBlocks,
-    tableColumns: block.schema.tableColumns,
-    tableShowHeader: block.schema.tableShowHeader,
-    tableRows: block.schema.tableRows,
-  }));
-
   const directive = `<!--hvy: ${JSON.stringify(meta)}-->`;
 
   const blockText = section.blocks
     .map((block) => {
+      if (resolveBaseComponent(block.schema.component) === 'expandable') {
+        const schemaDirective = `<!--hvy:expandable ${JSON.stringify(serializeExpandableShellSchema(block.schema))}-->`;
+        const stubText = block.schema.expandableStubBlocks
+          .map((innerBlock) => serializeExpandablePartBlock(innerBlock, 0))
+          .join('\n\n');
+        const contentText = block.schema.expandableContentBlocks
+          .map((innerBlock) => serializeExpandablePartBlock(innerBlock, 1))
+          .join('\n\n');
+        return [schemaDirective, stubText, contentText].filter((part) => part.length > 0).join('\n\n');
+      }
       const schemaDirective = `<!--hvy:block ${JSON.stringify(block.schema)}-->`;
       return `${schemaDirective}\n${block.text.trim()}`;
     })
@@ -2411,6 +2446,22 @@ function serializeSection(section: VisualSection, level: number): string {
     .join('\n\n');
 
   return `${heading}\n${directive}\n\n${blockText}${children ? `\n\n${children}` : ''}`;
+}
+
+function serializeExpandableShellSchema(schema: BlockSchema): JsonObject {
+  const shellSchema = { ...schema } as JsonObject;
+  delete shellSchema.component;
+  delete shellSchema.expandableStubBlocks;
+  delete shellSchema.expandableContentBlocks;
+  delete shellSchema.expandableStub;
+  delete shellSchema.expandableStubComponent;
+  delete shellSchema.expandableContentComponent;
+  return shellSchema;
+}
+
+function serializeExpandablePartBlock(block: VisualBlock, part: 0 | 1): string {
+  const schemaDirective = `<!--hvy:expandable:${part} ${JSON.stringify(block.schema)}-->`;
+  return `${schemaDirective}\n${block.text.trim()}`;
 }
 
 function navigateToSection(sectionId: string): void {

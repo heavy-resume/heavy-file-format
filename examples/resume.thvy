@@ -16,10 +16,21 @@ title: Resume Template
 <!--hvy:block {"component":"text","customCss":"margin: 0.5rem 0; margin-top: 1rem;","align":"center"}-->
 Title
 
-<!--hvy: {"id":"summary"}-->
+<!--hvy: {"id":"summary","lock":true}-->
 #! Summary
 
-<!--hvy:block {"component":"expandable","customCss":"margin: 0.5rem 0;","expandableAlwaysShowStub":true,"expandableExpanded":false,"expandableStubBlocks":[{"text":"## Summary","schema":{"component":"text","customCss":"margin-bottom: 0;"},"schemaMode":false},{"text":"{{summary}}","schema":{"component":"text","customCss":"margin-top: 0;"},"schemaMode":false}],"expandableContentBlocks":[{"text":"- {{summary_highlights.0}}\n- {{summary_highlights.1}}\n- {{summary_highlights.2}}","schema":{"component":"text","customCss":"margin: 0;"},"schemaMode":false}]}-->
+<!--hvy:expandable {"customCss":"margin: 0.5rem 0;","expandableAlwaysShowStub":true,"expandableExpanded":false,"lock":true}-->
+
+<!--hvy:expandable:0 {"component":"text","customCss":"margin-bottom: 0;"}-->
+## Summary
+
+<!--hvy:expandable:0 {"component":"text","customCss":"margin-top: 0;"}-->
+{{summary}}
+
+<!--hvy:expandable:1 {"component":"text","customCss":"margin: 0;","lock":true}-->
+- {{summary_highlights.0}}
+- {{summary_highlights.1}}
+- {{summary_highlights.2}}
 
 <!--hvy: {"id":"locations"}-->
 #! Locations

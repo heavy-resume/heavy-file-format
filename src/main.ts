@@ -239,6 +239,7 @@ function renderApp(): void {
           <p>Visual editor + reader for <code>.hvy</code> and <code>.thvy</code>.</p>
         </div>
         <div class="toolbar">
+          <button id="newBtn" type="button" class="toolbar-primary-button">New</button>
           <label class="file-picker">
             Select File
             <input id="fileInput" type="file" accept=".hvy,.thvy,.md,text/markdown,text/plain" />
@@ -365,15 +366,20 @@ function focusPendingSectionTitleEditor(): void {
 }
 
 function bindUi(): void {
+  const newBtn = app.querySelector<HTMLButtonElement>('#newBtn');
   const fileInput = app.querySelector<HTMLInputElement>('#fileInput');
   const downloadBtn = app.querySelector<HTMLButtonElement>('#downloadBtn');
   const downloadName = app.querySelector<HTMLInputElement>('#downloadName');
   const readerDocument = app.querySelector<HTMLDivElement>('#readerDocument');
   const readerNav = app.querySelector<HTMLDivElement>('#readerNav');
 
-  if (!fileInput || !downloadBtn || !downloadName) {
+  if (!newBtn || !fileInput || !downloadBtn || !downloadName) {
     throw new Error('Missing UI elements for binding.');
   }
+
+  newBtn.addEventListener('click', () => {
+    resetToBlankDocument();
+  });
 
   fileInput.addEventListener('change', async () => {
     const file = fileInput.files?.[0];
@@ -384,6 +390,7 @@ function bindUi(): void {
     state.filename = file.name;
     state.document = deserializeDocument(text, detectExtension(file.name, text));
     closeModal();
+    resetTransientUiState();
     renderApp();
   });
 
@@ -2362,6 +2369,38 @@ function closeModalIfTarget(sectionKey: string): void {
   }
 }
 
+function resetTransientUiState(): void {
+  state.activeEditorBlock = null;
+  state.activeEditorSectionTitleKey = null;
+  state.clearSectionTitleOnFocusKey = null;
+  state.modalSectionKey = null;
+  state.reusableSaveModal = null;
+  state.componentMetaModal = null;
+  state.tempHighlights = new Set<string>();
+  state.addComponentBySection = {};
+  state.metaPanelOpen = false;
+  state.selectedReusableComponentName = null;
+  state.templateValues = {};
+  state.gridAddComponentByBlock = {};
+  state.lastHistoryGroup = null;
+  state.lastHistoryAt = 0;
+  state.pendingEditorCenterSectionKey = null;
+  state.paneScroll = {
+    editorTop: 0,
+    readerTop: 0,
+    windowTop: 0,
+  };
+}
+
+function resetToBlankDocument(): void {
+  state.document = createBlankDocument();
+  state.filename = 'untitled.hvy';
+  state.history = [];
+  state.future = [];
+  resetTransientUiState();
+  renderApp();
+}
+
 function saveReusableFromModal(): void {
   const modal = state.reusableSaveModal;
   if (!modal) {
@@ -2439,6 +2478,16 @@ function saveReusableSection(sectionKey: string, name: string): void {
 
 function createDefaultDocument(): VisualDocument {
   return deserializeDocument(bundledExampleHvy, '.hvy');
+}
+
+function createBlankDocument(): VisualDocument {
+  return {
+    meta: {
+      hvy_version: 0.1,
+    },
+    extension: '.hvy',
+    sections: [],
+  };
 }
 
 function createEmptySection(level: number, component = 'container', isGhost = false): VisualSection {

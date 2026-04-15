@@ -73,11 +73,24 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  padding: 0.5rem 0.72rem;
+  min-height: 2.15rem;
+  padding: 0.38rem 0.72rem;
   border-radius: 8px;
   background: #2c5e78;
   color: #fff;
   cursor: pointer;
+}
+
+.toolbar-primary-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 2.15rem;
+  padding: 0.38rem 0.72rem;
+  border: 0;
+  border-radius: 8px;
+  background: #2c5e78;
+  color: #fff;
 }
 
 .file-picker input {

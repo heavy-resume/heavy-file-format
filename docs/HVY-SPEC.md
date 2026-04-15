@@ -204,7 +204,7 @@ Grid blocks MAY be emitted with specialized directives so grid item content rema
 Cross-reference cards MAY be emitted as a block directive with all card data in metadata and no raw HTML body:
 
 ```markdown
-<!--hvy:xref-card {"xrefTitle":"Heavy Stack","xrefDetail":"05/2024 - present","xrefTarget":"#project-heavy-stack"}-->
+<!--hvy:xref-card {"xrefTitle":"Heavy Stack","xrefDetail":"05/2024 - present","xrefTarget":"project-heavy-stack"}-->
 ```
 
 Rules:

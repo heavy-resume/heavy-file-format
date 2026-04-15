@@ -671,6 +671,66 @@ button.tiny {
   box-shadow: 0 1px 2px rgba(34, 53, 67, 0.06);
 }
 
+.xref-card-editor {
+  gap: 0.34rem;
+}
+
+.editor-xref-card [contenteditable="true"] {
+  border-radius: 5px;
+  padding: 0.08rem 0.12rem;
+  cursor: text;
+}
+
+.editor-xref-card [contenteditable="true"]:focus {
+  outline: 2px solid #8cb0c4;
+  outline-offset: 1px;
+  background: #fff;
+}
+
+.xref-target-picker {
+  display: grid;
+  gap: 0.18rem;
+  margin-top: 0.16rem;
+}
+
+.xref-target-picker span {
+  color: #5a6d78;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.xref-target-picker input {
+  width: 100%;
+  min-height: 2rem;
+  border: 1px solid #c7d5df;
+  border-radius: 6px;
+  background: #fff;
+  color: #243744;
+  padding: 0.34rem 0.45rem;
+}
+
+.editor-xref-card.is-invalid-target,
+.editor-block-passive .reader-xref-card.is-invalid-target,
+.reader-block .reader-xref-card.is-invalid-target {
+  border-color: #c4cbd1;
+  background: #f1f4f6;
+  color: #6b7882;
+  box-shadow: none;
+}
+
+.editor-xref-card.is-invalid-target span,
+.editor-block-passive .reader-xref-card.is-invalid-target span,
+.reader-block .reader-xref-card.is-invalid-target span {
+  color: #7b8790;
+}
+
+.editor-xref-card.is-invalid-target .xref-target-picker input {
+  border-color: #aeb8c0;
+  background: #f8fafb;
+}
+
 .editor-xref-card:hover,
 .editor-xref-card:focus-visible,
 .editor-block-passive .reader-xref-card:hover,

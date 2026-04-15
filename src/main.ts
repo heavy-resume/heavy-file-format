@@ -2125,22 +2125,22 @@ function handleBlockFieldInput(target: HTMLElement): boolean {
     return true;
   }
 
-  if (field === 'block-xref-title' && target instanceof HTMLInputElement) {
-    block.schema.xrefTitle = target.value;
+  if (field === 'block-xref-title') {
+    block.schema.xrefTitle = target instanceof HTMLInputElement ? target.value : getInlineEditableText(target);
     syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
     refreshReaderPanels();
     return true;
   }
 
-  if (field === 'block-xref-detail' && target instanceof HTMLInputElement) {
-    block.schema.xrefDetail = target.value;
+  if (field === 'block-xref-detail') {
+    block.schema.xrefDetail = target instanceof HTMLInputElement ? target.value : getInlineEditableText(target);
     syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
     refreshReaderPanels();
     return true;
   }
 
-  if (field === 'block-xref-target' && target instanceof HTMLInputElement) {
-    block.schema.xrefTarget = target.value;
+  if (field === 'block-xref-target' && (target instanceof HTMLInputElement || target instanceof HTMLSelectElement)) {
+    block.schema.xrefTarget = normalizeXrefTarget(target.value);
     syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
     refreshReaderPanels();
     return true;
@@ -2479,6 +2479,8 @@ function getComponentRenderHelpers(): ComponentRenderHelpers {
     renderComponentFragment: editorRenderer.renderComponentFragment,
     renderComponentOptions,
     renderOption,
+    getXrefTargetOptions,
+    isXrefTargetValid,
     getTableColumns,
     ensureContainerBlocks,
     ensureComponentListBlocks,
@@ -3955,6 +3957,63 @@ function findDuplicateSectionIds(sections: VisualSection[]): string[] {
 
 function getSectionId(section: VisualSection): string {
   return section.customId.trim().length > 0 ? section.customId.trim() : section.key;
+}
+
+function normalizeXrefTarget(target: string): string {
+  const trimmed = target.trim();
+  return trimmed.startsWith('#') ? trimmed.slice(1) : trimmed;
+}
+
+function getXrefTargetOptions(): Array<{ value: string; label: string }> {
+  const seen = new Set<string>();
+  const options: Array<{ value: string; label: string }> = [];
+  const add = (value: string, label: string): void => {
+    const normalized = normalizeXrefTarget(value);
+    if (!normalized || seen.has(normalized)) {
+      return;
+    }
+    seen.add(normalized);
+    options.push({ value: normalized, label });
+  };
+
+  flattenSections(state.document.sections)
+    .filter((section) => !section.isGhost)
+    .forEach((section) => {
+      add(getSectionId(section), `${formatSectionTitle(section.title)} (${getSectionId(section)})`);
+    });
+
+  visitBlocks(state.document.sections, (block) => {
+    const id = block.schema.id.trim();
+    if (id.length === 0) {
+      return;
+    }
+    add(id, `${describeBlockTarget(block)} (${id})`);
+  });
+
+  return options;
+}
+
+function isXrefTargetValid(target: string): boolean {
+  const normalized = normalizeXrefTarget(target);
+  if (normalized.length === 0 || /^[a-z][a-z0-9+.-]*:/i.test(normalized)) {
+    return true;
+  }
+  return getXrefTargetOptions().some((option) => option.value === normalized);
+}
+
+function describeBlockTarget(block: VisualBlock): string {
+  const component = block.schema.component;
+  if (block.schema.xrefTitle.trim().length > 0) {
+    return block.schema.xrefTitle.trim();
+  }
+  const firstTableCell = block.schema.expandableStubBlocks
+    .flatMap((stubBlock) => stubBlock.schema.tableRows)
+    .flatMap((row) => row.cells)
+    .find((cell) => cell.trim().length > 0);
+  if (firstTableCell) {
+    return firstTableCell.trim();
+  }
+  return component;
 }
 
 function markdownToEditorHtml(markdown: string): string {

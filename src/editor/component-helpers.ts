@@ -8,6 +8,11 @@ export interface RichToolbarOptions {
   align?: Align;
 }
 
+export interface XrefTargetOption {
+  value: string;
+  label: string;
+}
+
 export interface ComponentRenderHelpers {
   escapeAttr: (value: string) => string;
   escapeHtml: (value: string) => string;
@@ -18,6 +23,8 @@ export interface ComponentRenderHelpers {
   renderComponentFragment: (componentName: string, content: string, block: VisualBlock) => string;
   renderComponentOptions: (selected: string) => string;
   renderOption: (value: string, selected: string) => string;
+  getXrefTargetOptions: () => XrefTargetOption[];
+  isXrefTargetValid: (target: string) => boolean;
   getTableColumns: (schema: BlockSchema) => string[];
   ensureContainerBlocks: (block: VisualBlock) => void;
   ensureComponentListBlocks: (block: VisualBlock) => void;

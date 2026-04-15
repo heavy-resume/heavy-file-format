@@ -1696,8 +1696,7 @@ function bindUi(): void {
       if (!sectionKey || !blockId) {
         return;
       }
-      const section = findSectionByKey(state.document.sections, sectionKey);
-      const block = section?.blocks.find((candidate) => candidate.id === blockId);
+      const block = findBlockByIds(sectionKey, blockId);
       if (!block) {
         return;
       }

@@ -192,6 +192,135 @@ component_defs:
                   schema:
                     component: text
                     css: "margin: 0.25rem 0;"
+  - name: education-record
+    baseType: expandable
+    description: Expandable education record
+    schema:
+      component: education-record
+      css: "margin: 0.35rem 0;"
+      expandableAlwaysShowStub: true
+      expandableExpanded: false
+      expandableStubBlocks:
+        - text: ""
+          schema:
+            component: table
+            css: "margin: 0;"
+            tableColumns: "DEGREE, INSTITUTION, LOCATION"
+            tableShowHeader: false
+            tableRows:
+              - cells:
+                  - "{{education_degree}}"
+                  - "{{education_institution}}"
+                  - "{{education_location}}"
+      expandableContentBlocks:
+        - text: "### {{education_degree}}"
+          schema:
+            component: text
+            css: "margin: 0 0 0.35rem;"
+        - text: ""
+          schema:
+            component: grid
+            css: "margin: 0.35rem 0;"
+            gridColumns: 2
+            gridItems:
+              - id: education-institution-details
+                column: left
+                block:
+                  text: ""
+                  schema:
+                    component: component-list
+                    componentListComponent: text
+                    css: "margin: 0;"
+                    componentListBlocks:
+                      - text: "{{education_institution}}"
+                        schema:
+                          component: text
+                          css: "margin: 0;"
+                      - text: "{{education_location}}"
+                        schema:
+                          component: text
+                          css: "margin: 0.15rem 0 0;"
+                      - text: "{{education_gpa}}"
+                        schema:
+                          component: text
+                          css: "margin: 0.15rem 0 0;"
+              - id: education-date-range
+                column: right
+                block:
+                  text: "{{education_date_range}}"
+                  schema:
+                    component: text
+                    css: "margin: 0; text-align: right;"
+        - text: "{{education_description}}"
+          schema:
+            component: text
+            css: "margin: 0.5rem 0;"
+        - text: "#### Relevant Skills"
+          schema:
+            component: text
+            css: "margin: 0.6rem 0 0.25rem;"
+        - text: ""
+          schema:
+            component: component-list
+            componentListComponent: text
+            css: "margin: 0;"
+            componentListBlocks:
+              - text: "{{education_relevant_skills.0}}"
+                schema:
+                  component: text
+                  css: "margin: 0.25rem 0;"
+        - text: "#### Tools and Technologies"
+          schema:
+            component: text
+            css: "margin: 0.6rem 0 0.25rem;"
+        - text: ""
+          schema:
+            component: component-list
+            componentListComponent: text
+            css: "margin: 0;"
+            componentListBlocks:
+              - text: "{{education_tools_technologies.0}}"
+                schema:
+                  component: text
+                  css: "margin: 0.25rem 0;"
+              - text: "{{education_tools_technologies.1}}"
+                schema:
+                  component: text
+                  css: "margin: 0.25rem 0;"
+        - text: "#### Classes"
+          schema:
+            component: text
+            css: "margin: 0.6rem 0 0.25rem;"
+        - text: ""
+          schema:
+            component: component-list
+            componentListComponent: text
+            css: "margin: 0;"
+            componentListBlocks:
+              - text: "{{education_classes.0}}"
+                schema:
+                  component: text
+                  css: "margin: 0.25rem 0;"
+              - text: "{{education_classes.1}}"
+                schema:
+                  component: text
+                  css: "margin: 0.25rem 0;"
+              - text: "{{education_classes.2}}"
+                schema:
+                  component: text
+                  css: "margin: 0.25rem 0;"
+              - text: "{{education_classes.3}}"
+                schema:
+                  component: text
+                  css: "margin: 0.25rem 0;"
+              - text: "{{education_classes.4}}"
+                schema:
+                  component: text
+                  css: "margin: 0.25rem 0;"
+              - text: "{{education_classes.5}}"
+                schema:
+                  component: text
+                  css: "margin: 0.25rem 0;"
 ---
 
 <!--hvy: {"id":"header","lock":true}-->
@@ -338,3 +467,81 @@ Title
 
 <!--hvy:component-list:3 {"component":"text","css":"margin: 0.25rem 0;"}-->
 {{history_tools_technologies.2}}
+
+<!--hvy: {"id":"education","lock":true}-->
+#! Education
+
+<!--hvy:text {"css":"margin: 0.5rem 0;"}-->
+# Education
+
+<!--hvy:table {"css":"margin: 0.5rem 0 0;","tableColumns":"DEGREE, INSTITUTION, LOCATION","tableShowHeader":true,"tableRows":[],"lock":true}-->
+
+<!--hvy:component-list {"css":"margin: 0;","componentListComponent":"education-record"}-->
+
+<!--hvy:component-list:0 {"component":"education-record","css":"margin: 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+
+<!--hvy:expandable:0 {"component":"table","css":"margin: 0;","tableColumns":"DEGREE, INSTITUTION, LOCATION","tableShowHeader":false,"tableRows":[{"cells":["{{education_degree}}","{{education_institution}}","{{education_location}}"]}]}-->
+
+<!--hvy:expandable:1 {"component":"text","css":"margin: 0 0 0.35rem;"}-->
+### {{education_degree}}
+
+<!--hvy:expandable:1 {"component":"grid","css":"margin: 0.35rem 0;","gridColumns":2}-->
+
+<!--hvy:grid:0 {"id":"education-institution-details","column":"left","component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->
+
+<!--hvy:component-list:0 {"component":"text","css":"margin: 0;"}-->
+{{education_institution}}
+
+<!--hvy:component-list:1 {"component":"text","css":"margin: 0.15rem 0 0;"}-->
+{{education_location}}
+
+<!--hvy:component-list:2 {"component":"text","css":"margin: 0.15rem 0 0;"}-->
+{{education_gpa}}
+
+<!--hvy:grid:1 {"id":"education-date-range","column":"right","component":"text","css":"margin: 0; text-align: right;"}-->
+{{education_date_range}}
+
+<!--hvy:expandable:1 {"component":"text","css":"margin: 0.5rem 0;"}-->
+{{education_description}}
+
+<!--hvy:expandable:1 {"component":"text","css":"margin: 0.6rem 0 0.25rem;"}-->
+#### Relevant Skills
+
+<!--hvy:expandable:1 {"component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->
+
+<!--hvy:component-list:0 {"component":"text","css":"margin: 0.25rem 0;"}-->
+{{education_relevant_skills.0}}
+
+<!--hvy:expandable:1 {"component":"text","css":"margin: 0.6rem 0 0.25rem;"}-->
+#### Tools and Technologies
+
+<!--hvy:expandable:1 {"component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->
+
+<!--hvy:component-list:0 {"component":"text","css":"margin: 0.25rem 0;"}-->
+{{education_tools_technologies.0}}
+
+<!--hvy:component-list:1 {"component":"text","css":"margin: 0.25rem 0;"}-->
+{{education_tools_technologies.1}}
+
+<!--hvy:expandable:1 {"component":"text","css":"margin: 0.6rem 0 0.25rem;"}-->
+#### Classes
+
+<!--hvy:expandable:1 {"component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->
+
+<!--hvy:component-list:0 {"component":"text","css":"margin: 0.25rem 0;"}-->
+{{education_classes.0}}
+
+<!--hvy:component-list:1 {"component":"text","css":"margin: 0.25rem 0;"}-->
+{{education_classes.1}}
+
+<!--hvy:component-list:2 {"component":"text","css":"margin: 0.25rem 0;"}-->
+{{education_classes.2}}
+
+<!--hvy:component-list:3 {"component":"text","css":"margin: 0.25rem 0;"}-->
+{{education_classes.3}}
+
+<!--hvy:component-list:4 {"component":"text","css":"margin: 0.25rem 0;"}-->
+{{education_classes.4}}
+
+<!--hvy:component-list:5 {"component":"text","css":"margin: 0.25rem 0;"}-->
+{{education_classes.5}}

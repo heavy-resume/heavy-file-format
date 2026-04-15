@@ -72,7 +72,7 @@ marked.setOptions({ gfm: true, breaks: false });
 const turndown = new TurndownService({
   headingStyle: 'atx',
   bulletListMarker: '-',
-  emDelimiter: '*',
+  emDelimiter: '_',
 });
 
 const appRoot = document.querySelector<HTMLDivElement>('#app');

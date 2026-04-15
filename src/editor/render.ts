@@ -601,7 +601,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       if (content.trim().length === 0) {
         return '';
       }
-      return `<blockquote>${DOMPurify.sanitize(marked.parse(normalized) as string)}</blockquote>`;
+      return `<blockquote>${unwrapSingleParagraph(DOMPurify.sanitize(marked.parse(normalized) as string))}</blockquote>`;
     }
     if (base === 'code') {
       const language = (block.schema.codeLanguage || 'text').trim() || 'text';
@@ -613,7 +613,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         <pre><code class="hljs language-${deps.escapeAttr(language)}">${highlighted}</code></pre>
       </div>`;
     }
-    return DOMPurify.sanitize(marked.parse(normalized) as string);
+    return unwrapSingleParagraph(DOMPurify.sanitize(marked.parse(normalized) as string));
   }
 
   return {
@@ -649,4 +649,17 @@ function highlightCode(code: string, language: string, escapeHtml: (value: strin
   } catch {
     return escapeHtml(code);
   }
+}
+
+function unwrapSingleParagraph(html: string): string {
+  const trimmed = html.trim();
+  const match = trimmed.match(/^<p>([\s\S]*)<\/p>$/);
+  if (!match) {
+    return html;
+  }
+  const inner = match[1] ?? '';
+  if (/<\/?(p|div|blockquote|pre|ul|ol|li|table|h[1-6])\b/i.test(inner)) {
+    return html;
+  }
+  return inner;
 }

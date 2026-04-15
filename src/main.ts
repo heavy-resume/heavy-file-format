@@ -2987,14 +2987,21 @@ function navigateToSection(sectionId: string): void {
   }
 
   closeModal();
-  expandSectionPathById(state.document.sections, sectionId);
-  expandBlockPathBySchemaId(state.document.sections, sectionId);
+  const sectionFound = expandSectionPathById(state.document.sections, sectionId);
+  const blockFound = expandBlockPathBySchemaId(state.document.sections, sectionId);
   state.tempHighlights.add(sectionId);
-  renderApp();
+  refreshReaderPanels();
 
   window.requestAnimationFrame(() => {
-    const target = document.getElementById(sectionId);
+    const reader = app.querySelector<HTMLElement>('#readerDocument');
+    const target = reader?.querySelector<HTMLElement>(`#${CSS.escape(sectionId)}`);
     if (!target) {
+      console.error('[hvy:navigation] Unable to find reader target for internal link.', {
+        targetId: sectionId,
+        sectionFound,
+        blockFound,
+        availableReaderIds: getReaderTargetIds(),
+      });
       return;
     }
 
@@ -3004,6 +3011,10 @@ function navigateToSection(sectionId: string): void {
     state.tempHighlights.delete(sectionId);
     refreshReaderPanels();
   }, 1400);
+}
+
+function getReaderTargetIds(): string[] {
+  return [...app.querySelectorAll<HTMLElement>('#readerDocument [id]')].map((element) => element.id);
 }
 
 function expandSectionPathById(sections: VisualSection[], sectionId: string): boolean {

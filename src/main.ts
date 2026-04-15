@@ -2290,7 +2290,7 @@ function mapParsedSection(section: HvySection): VisualSection {
 function parseBlocks(contentMarkdown: string, sectionMeta: JsonObject): VisualBlock[] {
   const schemas = Array.isArray(sectionMeta.blocks) ? (sectionMeta.blocks as JsonObject[]) : [];
   const lines = contentMarkdown.split(/\r?\n/);
-  const directivePattern = /^<!--hvy:(block|expandable(?::[01])?)\s*(\{.*\})\s*-->$/;
+  const directivePattern = /^<!--hvy:([a-z][a-z0-9-]*(?::[01])?)\s*(\{.*\})\s*-->$/i;
 
   const blocks: VisualBlock[] = [];
   let currentText: string[] = [];
@@ -2342,8 +2342,8 @@ function parseBlocks(contentMarkdown: string, sectionMeta: JsonObject): VisualBl
       return;
     }
 
-    const directive = match[1] ?? 'block';
-    if (directive === 'block' || directive === 'expandable') {
+    const directive = (match[1] ?? 'block').toLowerCase();
+    if (directive === 'block' || directive === 'expandable' || !directive.startsWith('expandable:')) {
       finishExpandable();
     } else {
       flush();
@@ -2374,9 +2374,12 @@ function parseBlocks(contentMarkdown: string, sectionMeta: JsonObject): VisualBl
         }
         currentTarget = 'expandableContent';
         currentSchema = schemaFromUnknown(parsed);
-      } else {
+      } else if (directive === 'block') {
         currentTarget = 'top';
         currentSchema = schemaFromUnknown(parsed);
+      } else {
+        currentTarget = 'top';
+        currentSchema = schemaFromUnknown({ ...parsed, component: directive });
       }
     } catch {
       currentSchema = defaultBlockSchema();
@@ -2435,7 +2438,8 @@ function serializeSection(section: VisualSection, level: number): string {
           .join('\n\n');
         return [schemaDirective, stubText, contentText].filter((part) => part.length > 0).join('\n\n');
       }
-      const schemaDirective = `<!--hvy:block ${JSON.stringify(serializeBlockSchema(block.schema))}-->`;
+      const blockDirective = serializeBlockDirective(block.schema);
+      const schemaDirective = `<!--hvy:${blockDirective.name} ${JSON.stringify(blockDirective.schema)}-->`;
       return `${schemaDirective}\n${block.text.trim()}`;
     })
     .join('\n\n');
@@ -2462,7 +2466,7 @@ function serializeBlockSchema(
   addIfChanged(payload, 'lock', schema.lock, defaults.lock);
   addIfChanged(payload, 'align', schema.align, defaults.align);
   addIfChanged(payload, 'slot', schema.slot, defaults.slot);
-  addIfChanged(payload, 'customCss', schema.customCss, defaults.customCss);
+  addIfChanged(payload, 'css', schema.customCss, defaults.customCss);
   addIfChanged(payload, 'tags', schema.tags, defaults.tags);
   addIfChanged(payload, 'description', schema.description, defaults.description);
 
@@ -2507,6 +2511,20 @@ function serializeBlockSchema(
   }
 
   return payload;
+}
+
+function serializeBlockDirective(schema: BlockSchema): { name: string; schema: JsonObject } {
+  const component = schema.component.trim();
+  if (/^[a-z][a-z0-9-]*$/i.test(component) && !['block', 'doc', 'css', 'subsection'].includes(component)) {
+    return {
+      name: component,
+      schema: serializeBlockSchema(schema, { omitComponent: true }),
+    };
+  }
+  return {
+    name: 'block',
+    schema: serializeBlockSchema(schema),
+  };
 }
 
 function serializeExpandablePartBlock(block: VisualBlock, part: 0 | 1): string {
@@ -2904,7 +2922,9 @@ function schemaFromUnknown(value: unknown): BlockSchema {
     align: coerceAlign(typeof candidate.align === 'string' ? candidate.align : 'left'),
     slot: coerceSlot(typeof candidate.slot === 'string' ? candidate.slot : 'center'),
     customCss:
-      typeof candidate.customCss === 'string'
+      typeof candidate.css === 'string'
+        ? candidate.css
+        : typeof candidate.customCss === 'string'
         ? candidate.customCss
         : typeof candidate.custom_css === 'string'
         ? candidate.custom_css

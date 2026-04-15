@@ -6,46 +6,46 @@ title: Reference Implementation Demo
 <!--hvy: {"id":"welcome"}-->
 #! Welcome
 
-<!--hvy:block {"component":"text","customCss":"margin: 0.5rem 0;"}-->
+<!--hvy:text {"css":"margin: 0.5rem 0;"}-->
 This is a **visual HVY editor**. What you see in the editor is the primary authoring experience.
 
-<!--hvy:block {"component":"quote","customCss":"margin: 0.5rem 0;"}-->
+<!--hvy:quote {"css":"margin: 0.5rem 0;"}-->
 Design the format like a document, not a form.
 
-<!--hvy:block {"component":"code","codeLanguage":"ts","customCss":"margin: 0.5rem 0;"}-->
+<!--hvy:code {"codeLanguage":"ts","css":"margin: 0.5rem 0;"}-->
 export const demo = 'HVY';
 
-<!--hvy:expandable {"customCss":"margin: 0.5rem 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+<!--hvy:expandable {"css":"margin: 0.5rem 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
-<!--hvy:expandable:0 {"component":"table","customCss":"margin: 0.5rem 0;","tableColumns":"Column 1, Column 2","tableShowHeader":true,"tableRows":[]}-->
+<!--hvy:expandable:0 {"component":"table","css":"margin: 0.5rem 0;","tableColumns":"Column 1, Column 2","tableShowHeader":true,"tableRows":[]}-->
 
-<!--hvy:expandable:1 {"component":"container","customCss":"margin: 0.5rem 0;","containerTitle":"Expanded Container"}-->
+<!--hvy:expandable:1 {"component":"container","css":"margin: 0.5rem 0;","containerTitle":"Expanded Container"}-->
 
-<!--hvy:block {"component":"table","customCss":"margin: 0.5rem 0;","tableColumns":"Feature, Status","tableShowHeader":true,"tableRows":[{"cells":["Inline editing","Ready"],"expanded":false,"clickable":true,"detailsTitle":"Inline editing details","detailsContent":"Headers, cells, and row details are all editable directly in the proof of concept.","detailsBlocks":[{"text":"","schema":{"component":"container","customCss":"margin: 0.5rem 0;","containerTitle":"Details Container"},"schemaMode":false}]}]}-->
+<!--hvy:table {"css":"margin: 0.5rem 0;","tableColumns":"Feature, Status","tableShowHeader":true,"tableRows":[{"cells":["Inline editing","Ready"],"expanded":false,"clickable":true,"detailsTitle":"Inline editing details","detailsContent":"Headers, cells, and row details are all editable directly in the proof of concept.","detailsBlocks":[{"text":"","schema":{"component":"container","css":"margin: 0.5rem 0;","containerTitle":"Details Container"},"schemaMode":false}]}]}-->
 
-<!--hvy:block {"component":"container","customCss":"margin: 0.5rem 0;","containerTitle":"Container"}-->
+<!--hvy:container {"css":"margin: 0.5rem 0;","containerTitle":"Container"}-->
 Containers are good defaults for subsections and grouped notes.
 
-<!--hvy:block {"component":"grid","customCss":"margin: 0.5rem 0;","gridColumns":2,"gridItems":[{"id":"griditem-demo-a","component":"text","content":"Grid item A","column":"left"},{"id":"griditem-demo-b","component":"text","content":"Grid item B","column":"right"}]}-->
+<!--hvy:grid {"css":"margin: 0.5rem 0;","gridColumns":2,"gridItems":[{"id":"griditem-demo-a","component":"text","content":"Grid item A","column":"left"},{"id":"griditem-demo-b","component":"text","content":"Grid item B","column":"right"}]}-->
 
-<!--hvy:block {"component":"plugin","customCss":"margin: 0.5rem 0;","pluginUrl":"https://example.com/plugin"}-->
+<!--hvy:plugin {"css":"margin: 0.5rem 0;","pluginUrl":"https://example.com/plugin"}-->
 
-<!--hvy:block {"component":"table","customCss":"margin: 0;","tableColumns":"Area, Owner, Status","tableShowHeader":true,"tableRows":[]}-->
+<!--hvy:table {"css":"margin: 0;","tableColumns":"Area, Owner, Status","tableShowHeader":true,"tableRows":[]}-->
 
-<!--hvy:expandable {"customCss":"margin: 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+<!--hvy:expandable {"css":"margin: 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
-<!--hvy:expandable:0 {"component":"table","customCss":"margin: 0;","tableColumns":"Area, Owner, Status","tableShowHeader":false,"tableRows":[{"cells":["Parser migration","Avery","In progress"],"expanded":false,"clickable":true,"detailsTitle":"","detailsContent":"","detailsBlocks":[]},{"cells":["Schema cleanup","Drew","Ready"],"expanded":false,"clickable":true,"detailsTitle":"","detailsContent":"","detailsBlocks":[]},{"cells":["Grid polish","Nina","Queued"],"expanded":false,"clickable":true,"detailsTitle":"","detailsContent":"","detailsBlocks":[]}]}-->
+<!--hvy:expandable:0 {"component":"table","css":"margin: 0;","tableColumns":"Area, Owner, Status","tableShowHeader":false,"tableRows":[{"cells":["Parser migration","Avery","In progress"],"expanded":false,"clickable":true,"detailsTitle":"","detailsContent":"","detailsBlocks":[]},{"cells":["Schema cleanup","Drew","Ready"],"expanded":false,"clickable":true,"detailsTitle":"","detailsContent":"","detailsBlocks":[]},{"cells":["Grid polish","Nina","Queued"],"expanded":false,"clickable":true,"detailsTitle":"","detailsContent":"","detailsBlocks":[]}]}-->
 
-<!--hvy:expandable:1 {"component":"container","customCss":"margin: 0;","containerTitle":"Delivery Notes","containerBlocks":[{"text":"These rows belong to the first workstream. Expand it to capture rollout notes, risks, and the next checkpoint.","schema":{"component":"text","customCss":"margin: 0;"},"schemaMode":false}]}-->
+<!--hvy:expandable:1 {"component":"container","css":"margin: 0;","containerTitle":"Delivery Notes","containerBlocks":[{"text":"These rows belong to the first workstream. Expand it to capture rollout notes, risks, and the next checkpoint.","schema":{"component":"text","css":"margin: 0;"},"schemaMode":false}]}-->
 
-<!--hvy:expandable {"customCss":"margin: 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+<!--hvy:expandable {"css":"margin: 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
-<!--hvy:expandable:0 {"component":"table","customCss":"margin: 0;","tableColumns":"Area, Owner, Status","tableShowHeader":false,"tableRows":[{"cells":["Release cut","Mika","Blocked"],"expanded":false,"clickable":true,"detailsTitle":"","detailsContent":"","detailsBlocks":[]}]}-->
+<!--hvy:expandable:0 {"component":"table","css":"margin: 0;","tableColumns":"Area, Owner, Status","tableShowHeader":false,"tableRows":[{"cells":["Release cut","Mika","Blocked"],"expanded":false,"clickable":true,"detailsTitle":"","detailsContent":"","detailsBlocks":[]}]}-->
 
-<!--hvy:expandable:1 {"component":"container","customCss":"margin: 0;","containerTitle":"Blocker Context","containerBlocks":[{"text":"This final row group shows how a single summary row can expand into the full explanation, decision history, or unblock plan.","schema":{"component":"text","customCss":"margin: 0;"},"schemaMode":false}]}-->
+<!--hvy:expandable:1 {"component":"container","css":"margin: 0;","containerTitle":"Blocker Context","containerBlocks":[{"text":"This final row group shows how a single summary row can expand into the full explanation, decision history, or unblock plan.","schema":{"component":"text","css":"margin: 0;"},"schemaMode":false}]}-->
 
 <!--hvy:subsection {"id":"try-it","highlight":true,"custom_css":"margin: 0.5rem 0;"}-->
 #! Container Subsection
 
-<!--hvy:block {"component":"container","customCss":"margin: 0.5rem 0;","containerTitle":"Nested Container"}-->
+<!--hvy:container {"css":"margin: 0.5rem 0;","containerTitle":"Nested Container"}-->
 Subsections now start as plain container sections.

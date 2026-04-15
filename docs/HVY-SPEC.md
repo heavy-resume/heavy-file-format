@@ -154,9 +154,9 @@ Common block metadata fields include:
 - `slot`
 - `tags`
 - `description`
-- `customCss`
+- `css`
 
-`customCss` is an optional inline CSS style string applied to that block's rendered wrapper. Authoring tools MAY expose this for layout and presentation adjustments such as collapsing spacing between adjacent blocks.
+`css` is an optional inline CSS style string applied to that block's rendered wrapper. Authoring tools MAY expose this for layout and presentation adjustments such as collapsing spacing between adjacent blocks.
 `lock` is an optional boolean. Rich clients MAY use it to prevent structural additions inside that block, such as nested child blocks or table-column changes.
 
 Section metadata MAY also include rich-client presentation keys such as:
@@ -173,19 +173,21 @@ Section metadata MAY also include rich-client presentation keys such as:
 Authoring tools MAY emit block-scoped metadata comments directly in section content:
 
 ```markdown
-<!--hvy:block {"component":"quote","customCss":"margin: 0.5rem 0;"}-->
+<!--hvy:quote {"css":"margin: 0.5rem 0;"}-->
 Design the format like a document, not a form.
 ```
+
+The directive name after `hvy:` MAY be a component name. In that form, `component` is implied by the directive name. For compatibility, tools MAY also read the legacy `hvy:block` directive with an explicit `component` field.
 
 Expandable blocks MAY be emitted with specialized directives so their stub and expanded content remain normal Markdown blocks:
 
 ```markdown
-<!--hvy:expandable {"customCss":"margin: 0.5rem 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+<!--hvy:expandable {"css":"margin: 0.5rem 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
-<!--hvy:expandable:0 {"component":"text","customCss":"margin-bottom: 0;"}-->
+<!--hvy:expandable:0 {"component":"text","css":"margin-bottom: 0;"}-->
 ## Summary
 
-<!--hvy:expandable:1 {"component":"text","customCss":"margin: 0;"}-->
+<!--hvy:expandable:1 {"component":"text","css":"margin: 0;"}-->
 - Expanded detail
 ```
 
@@ -197,7 +199,7 @@ Rules:
 - `hvy:expandable:0` appends the immediately following content block to the expandable stub.
 - `hvy:expandable:1` appends the immediately following content block to the expanded content.
 - Multiple `hvy:expandable:0` or `hvy:expandable:1` directives MAY be used for a single expandable block.
-- If both `meta.blocks[n]` and `hvy:block` describe the same logical block, `meta.blocks[n]` wins.
+- If both `meta.blocks[n]` and a block directive describe the same logical block, `meta.blocks[n]` wins.
 
 ### 5.8 Recursive block shape for rich clients
 
@@ -223,7 +225,7 @@ Nested block arrays such as `containerBlocks` use a recursive block object shape
   "text": "Nested block text",
   "schema": {
     "component": "text",
-    "customCss": "margin: 0.5rem 0;"
+    "css": "margin: 0.5rem 0;"
   },
   "schemaMode": false
 }
@@ -245,7 +247,7 @@ component_defs:
     description: Framed callout container
     schema:
       component: callout
-      customCss: "margin: 0.5rem 0;"
+      css: "margin: 0.5rem 0;"
       containerTitle: Callout
       containerBlocks: []
 ```
@@ -269,12 +271,12 @@ section_defs:
       level: 2
       expanded: true
       highlight: false
-      customCss: ""
+      css: ""
       blocks:
         - text: "## Frequently Asked Questions"
           schema:
             component: text
-            customCss: "margin: 0.5rem 0;"
+            css: "margin: 0.5rem 0;"
           schemaMode: false
       children: []
 ```
@@ -394,7 +396,7 @@ Normative behavior:
 1. Read file as UTF-8 text.
 2. Parse YAML front matter if present at file start.
 3. Parse Markdown into block structure. `<!--hvy: {...}-->` directives define top-level sections; `<!--hvy:subsection {...}-->` directives define subsections. An optional `#!` line immediately following sets the section title; it is consumed and not rendered. Standard ATX headings are plain content.
-4. Attach `<!--hvy:doc ...-->`, `<!--hvy:css ...-->`, `<!--hvy:block ...-->`, and `<!--hvy:expandable...-->` directives per placement rules.
+4. Attach `<!--hvy:doc ...-->`, `<!--hvy:css ...-->`, block component directives such as `<!--hvy:text ...-->`, legacy `<!--hvy:block ...-->`, and `<!--hvy:expandable...-->` directives per placement rules.
 5. Extract CSS fenced blocks (language `css`) and optional preceding `hvy:css` metadata.
 6. Build section tree from directive types (`hvy:` = top-level, `hvy:subsection` = child).
 7. Validate template rules when extension is `.thvy`: require `hvy_version` and `template: true`.

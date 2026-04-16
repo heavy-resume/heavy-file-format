@@ -60,7 +60,7 @@ function createInitialState(): AppState {
     componentMetaModal: null,
     gridAddComponentByBlock: {},
     expandableEditorPanels: {},
-    viewerSidebarOpen: true,
+    viewerSidebarOpen: false,
     lastHistoryGroup: null,
     lastHistoryAt: 0,
     pendingEditorCenterSectionKey: null,

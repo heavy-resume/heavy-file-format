@@ -660,8 +660,10 @@ button.tiny {
 .editor-block-passive .reader-xref-card {
   display: grid;
   gap: 0.12rem;
-  width: fit-content;
+  width: min(100%, 20rem);
+  max-width: 20rem;
   min-width: min(18rem, 100%);
+  justify-self: start;
   padding: 0.48rem 0.58rem;
   border: 1px solid #cfdbe3;
   border-radius: 8px;
@@ -1445,6 +1447,9 @@ button.tiny {
 .reader-block .reader-xref-card {
   display: grid;
   gap: 0.12rem;
+  width: min(100%, 20rem);
+  max-width: 20rem;
+  justify-self: start;
   padding: 0.48rem 0.58rem;
   border: 1px solid #cfdbe3;
   border-radius: 8px;
@@ -1728,6 +1733,11 @@ button.tiny {
 
 .reader-grid-cell.align-right {
   text-align: right;
+}
+
+.reader-grid-cell.align-right .reader-xref-card {
+  justify-self: end;
+  text-align: left;
 }
 
 .reader-grid-cell.align-right ul,

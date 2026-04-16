@@ -1352,6 +1352,10 @@ export function bindUi(app: HTMLElement): void {
 
     const expandable = target.closest<HTMLElement>('[data-reader-action="toggle-expandable"]');
     if (expandable) {
+      // When clicking inside the content area, guard against interactive descendants
+      if (expandable.dataset.expandableContent === 'true' && target.closest('a, button, input, select, textarea')) {
+        return;
+      }
       event.stopPropagation();
       const sectionKey = expandable.dataset.sectionKey;
       const blockId = expandable.dataset.blockId;
@@ -1362,8 +1366,19 @@ export function bindUi(app: HTMLElement): void {
       if (!block) {
         return;
       }
-      block.schema.expandableExpanded = !block.schema.expandableExpanded;
-      getRefreshReaderPanels()();
+      const willCollapse = block.schema.expandableExpanded;
+      if (willCollapse) {
+        // Animate collapse before re-rendering
+        const readerEl = app.querySelector<HTMLElement>(`[data-expandable-id="${CSS.escape(blockId)}"]`);
+        readerEl?.classList.add('is-collapsing');
+        window.setTimeout(() => {
+          block.schema.expandableExpanded = false;
+          getRefreshReaderPanels()();
+        }, 160);
+      } else {
+        block.schema.expandableExpanded = true;
+        getRefreshReaderPanels()();
+      }
     }
   });
 

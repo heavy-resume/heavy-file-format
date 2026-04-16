@@ -124,13 +124,13 @@ export const renderExpandableReader: ComponentReaderRenderer = (section, block, 
   const stubToggle = `<div class="expand-stub-toggle" ${toggleAttrs}>
     <div class="expand-stub">${stubHtml}</div>
   </div>`;
-  const collapseStrip = `<div class="expand-collapse-strip" ${toggleAttrs}>Collapse</div>`;
+  const contentToggleAttrs = `data-reader-action="toggle-expandable" data-expandable-content="true" data-section-key="${helpers.escapeAttr(section.key)}" data-block-id="${helpers.escapeAttr(block.id)}" aria-expanded="true"`;
   const body = expanded
     ? alwaysShowStub
-      ? `${stubToggle}<div class="expand-content">${contentHtml}</div>`
-      : `<div class="expand-content">${contentHtml}</div>${collapseStrip}`
+      ? `${stubToggle}<div class="expand-content" ${contentToggleAttrs}>${contentHtml}</div>`
+      : `<div class="expand-content" ${contentToggleAttrs}>${contentHtml}</div>`
     : stubToggle;
-  return `<div class="expandable-reader">
+  return `<div class="expandable-reader" data-expandable-id="${helpers.escapeAttr(block.id)}">
     <div class="expandable-reader-body">${body}</div>
   </div>`;
 };

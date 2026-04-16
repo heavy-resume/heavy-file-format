@@ -238,6 +238,7 @@ button.tiny {
   height: 100%;
   overflow: auto;
   padding-left: 3.25rem;
+  scrollbar-gutter: stable;
 }
 
 .viewer-sidebar {
@@ -1743,6 +1744,23 @@ button.tiny {
 
 .expand-content {
   margin-top: 0.3rem;
+  cursor: pointer;
+  animation: expandContentIn 180ms ease both;
+}
+
+.expandable-reader.is-collapsing .expand-content {
+  animation: expandContentOut 160ms ease both;
+  pointer-events: none;
+}
+
+@keyframes expandContentIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes expandContentOut {
+  from { opacity: 1; transform: translateY(0); }
+  to   { opacity: 0; transform: translateY(-6px); }
 }
 
 .reader-table {
@@ -1800,14 +1818,12 @@ button.tiny {
 }
 
 .reader-block.align-center .reader-component-list {
-  justify-items: stretch;
+  grid-template-columns: min(100%, 20rem);
   justify-content: space-around;
 }
 
 .reader-block.align-center .reader-xref-card {
-  justify-self: stretch;
   width: 100%;
-  max-width: 20rem;
   text-align: left;
 }
 

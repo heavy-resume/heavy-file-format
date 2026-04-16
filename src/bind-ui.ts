@@ -302,6 +302,31 @@ export function bindUi(app: HTMLElement): void {
       return;
     }
 
+    if (action === 'toggle-editor-expandable' && sectionKey && blockId) {
+      event.stopPropagation();
+      const block = findBlockByIds(sectionKey, blockId);
+      if (!block) {
+        return;
+      }
+      block.schema.expandableExpanded = !block.schema.expandableExpanded;
+      getRefreshReaderPanels()();
+      getRenderApp()();
+      return;
+    }
+
+    if (action === 'toggle-expandable-editor-panel' && sectionKey && blockId) {
+      event.stopPropagation();
+      const panel = actionButton.dataset.expandablePanel === 'stub' ? 'stub' : 'expanded';
+      const key = `${sectionKey}:${blockId}`;
+      const current = state.expandableEditorPanels[key] ?? { stubOpen: false, expandedOpen: false };
+      state.expandableEditorPanels[key] = {
+        ...current,
+        [panel === 'stub' ? 'stubOpen' : 'expandedOpen']: !current[panel === 'stub' ? 'stubOpen' : 'expandedOpen'],
+      };
+      getRenderApp()();
+      return;
+    }
+
     if (action === 'redo') {
       redoState();
       return;

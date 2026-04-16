@@ -470,13 +470,19 @@ export function isActiveEditorSectionTitle(sectionKey: string): boolean {
   return state.activeEditorSectionTitleKey === sectionKey;
 }
 
-export function getComponentRenderHelpers(editorRenderer: { renderRichToolbar: ComponentRenderHelpers['renderRichToolbar']; renderEditorBlock: (sectionKey: string, block: VisualBlock, sections: import('./editor/types').VisualSection[]) => string; renderComponentFragment: ComponentRenderHelpers['renderComponentFragment'] }, readerRenderer: { renderReaderBlock: ComponentRenderHelpers['renderReaderBlock'] }): ComponentRenderHelpers {
+export function getComponentRenderHelpers(editorRenderer: {
+  renderRichToolbar: ComponentRenderHelpers['renderRichToolbar'];
+  renderEditorBlock: (sectionKey: string, block: VisualBlock, sections: import('./editor/types').VisualSection[]) => string;
+  renderPassiveEditorBlock: (sectionKey: string, block: VisualBlock, sections: import('./editor/types').VisualSection[]) => string;
+  renderComponentFragment: ComponentRenderHelpers['renderComponentFragment'];
+}, readerRenderer: { renderReaderBlock: ComponentRenderHelpers['renderReaderBlock'] }): ComponentRenderHelpers {
   return {
     escapeAttr,
     escapeHtml,
     markdownToEditorHtml,
     renderRichToolbar: editorRenderer.renderRichToolbar,
     renderEditorBlock: (sectionKey, block) => editorRenderer.renderEditorBlock(sectionKey, block, state.document.sections),
+    renderPassiveEditorBlock: (sectionKey, block) => editorRenderer.renderPassiveEditorBlock(sectionKey, block, state.document.sections),
     renderReaderBlock: readerRenderer.renderReaderBlock,
     renderComponentFragment: editorRenderer.renderComponentFragment,
     renderComponentOptions,
@@ -487,6 +493,8 @@ export function getComponentRenderHelpers(editorRenderer: { renderRichToolbar: C
     ensureContainerBlocks,
     ensureComponentListBlocks,
     getSelectedAddComponent: (key: string, fallback: string) => state.addComponentBySection[key] ?? fallback,
+    isExpandableEditorPanelOpen: (sectionKey, blockId, panel, fallback) =>
+      state.expandableEditorPanels[`${sectionKey}:${blockId}`]?.[panel === 'stub' ? 'stubOpen' : 'expandedOpen'] ?? fallback,
   };
 }
 

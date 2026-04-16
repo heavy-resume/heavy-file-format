@@ -19,6 +19,7 @@ export interface ComponentRenderHelpers {
   markdownToEditorHtml: (markdown: string) => string;
   renderRichToolbar: (sectionKey: string, blockId: string, options?: RichToolbarOptions) => string;
   renderEditorBlock: (sectionKey: string, block: VisualBlock) => string;
+  renderPassiveEditorBlock: (sectionKey: string, block: VisualBlock) => string;
   renderReaderBlock: (section: VisualSection, block: VisualBlock) => string;
   renderComponentFragment: (componentName: string, content: string, block: VisualBlock) => string;
   renderComponentOptions: (selected: string) => string;
@@ -29,6 +30,7 @@ export interface ComponentRenderHelpers {
   ensureContainerBlocks: (block: VisualBlock) => void;
   ensureComponentListBlocks: (block: VisualBlock) => void;
   getSelectedAddComponent: (key: string, fallback: string) => string;
+  isExpandableEditorPanelOpen: (sectionKey: string, blockId: string, panel: 'stub' | 'expanded', fallback: boolean) => boolean;
 }
 
 export interface ComponentEditorRenderer {

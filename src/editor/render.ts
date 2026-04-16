@@ -68,6 +68,7 @@ interface EditorRenderState {
   showAdvancedEditor: boolean;
   addComponentBySection: Record<string, string>;
   activeEditorBlock: { sectionKey: string; blockId: string } | null;
+  expandableEditorPanels: Record<string, { stubOpen: boolean; expandedOpen: boolean }>;
 }
 
 interface EditorRenderDeps {
@@ -98,6 +99,7 @@ interface EditorRenderDeps {
 export interface EditorRenderer {
   renderSectionEditorTree: (sections: VisualSection[]) => string;
   renderEditorBlock: (sectionKey: string, block: VisualBlock, rootSections?: VisualSection[]) => string;
+  renderPassiveEditorBlock: (sectionKey: string, block: VisualBlock, rootSections?: VisualSection[]) => string;
   renderRichToolbar: (
     sectionKey: string,
     blockId: string,
@@ -346,17 +348,17 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       const contentHtml = (block.schema.expandableContentBlocks ?? [])
         .map((innerBlock) => renderPassiveEditorBlock(sectionKey, innerBlock, rootSections))
         .join('');
+      const stubToggle = `<div class="expandable-pane expandable-pane-stub"><div class="expand-stub-toggle" data-action="toggle-editor-expandable" data-section-key="${deps.escapeAttr(
+        sectionKey
+      )}" data-block-id="${deps.escapeAttr(block.id)}" aria-expanded="${expanded ? 'true' : 'false'}"><div class="expand-stub">${stubHtml}</div></div></div>`;
+      const expandedPanel = `<div class="expandable-pane expandable-pane-expanded"><div class="expand-content">${contentHtml}</div></div>`;
       const body = expanded
         ? alwaysShowStub
-          ? `<div class="expand-stub-toggle" data-action="toggle-editor-expandable" data-section-key="${deps.escapeAttr(
-              sectionKey
-            )}" data-block-id="${deps.escapeAttr(block.id)}" aria-expanded="true"><div class="expand-stub">${stubHtml}</div></div><div class="expand-content">${contentHtml}</div>`
-          : `<div class="expand-content">${contentHtml}</div><div class="expand-collapse-strip" data-action="toggle-editor-expandable" data-section-key="${deps.escapeAttr(
+          ? `${stubToggle}${expandedPanel}`
+          : `${expandedPanel}<div class="expand-collapse-strip" data-action="toggle-editor-expandable" data-section-key="${deps.escapeAttr(
               sectionKey
             )}" data-block-id="${deps.escapeAttr(block.id)}" aria-expanded="true">Collapse</div>`
-        : `<div class="expand-stub-toggle" data-action="toggle-editor-expandable" data-section-key="${deps.escapeAttr(
-            sectionKey
-          )}" data-block-id="${deps.escapeAttr(block.id)}" aria-expanded="false"><div class="expand-stub">${stubHtml}</div></div>`;
+        : stubToggle;
 
       return `<div class="expandable-reader">
         <div class="expandable-reader-body">${body}</div>
@@ -640,6 +642,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
   return {
     renderSectionEditorTree,
     renderEditorBlock: (sectionKey, block, rootSections) => renderEditorBlock(sectionKey, block, rootSections),
+    renderPassiveEditorBlock: (sectionKey, block, rootSections) => renderPassiveEditorBlock(sectionKey, block, rootSections ?? []),
     renderRichToolbar,
     renderMetaPanel,
     renderComponentFragment,

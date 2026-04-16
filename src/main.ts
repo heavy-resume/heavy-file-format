@@ -59,6 +59,7 @@ function createInitialState(): AppState {
     isRestoring: false,
     componentMetaModal: null,
     gridAddComponentByBlock: {},
+    expandableEditorPanels: {},
     lastHistoryGroup: null,
     lastHistoryAt: 0,
     pendingEditorCenterSectionKey: null,
@@ -87,6 +88,9 @@ editorRenderer = createEditorRenderer(
     },
     get activeEditorBlock() {
       return state.activeEditorBlock;
+    },
+    get expandableEditorPanels() {
+      return state.expandableEditorPanels;
     },
   },
   {

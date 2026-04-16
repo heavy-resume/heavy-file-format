@@ -1137,16 +1137,153 @@ button.tiny {
 .expandable-part {
   display: grid;
   gap: 0.45rem;
-  border: 1px dashed #c8d5df;
+  border: 1px solid #c8d5df;
   border-radius: 10px;
-  padding: 0.55rem;
+  padding: 0;
   background: #fbfdff;
+  border-left-width: 5px;
+  overflow: hidden;
 }
 
 .expandable-label {
   font-size: 0.86rem;
   font-weight: 700;
   color: #355566;
+}
+
+.expandable-part-stub {
+  border-left-color: #e2b100;
+}
+
+.expandable-part-expanded {
+  border-left-color: #2878d8;
+}
+
+.expandable-header {
+  display: flex;
+  align-items: stretch;
+  gap: 0.55rem;
+  padding: 0.45rem 0.55rem 0 0.55rem;
+}
+
+.expandable-summary {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  padding: 0.7rem 0.8rem;
+  min-height: 3rem;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  border-radius: 8px;
+}
+
+.expandable-summary-label {
+  flex: 0 0 auto;
+}
+
+.expandable-summary-meta-button {
+  flex: 1 1 auto;
+  justify-content: flex-end;
+  margin-left: auto;
+}
+
+.expandable-summary-meta-button::before {
+  content: none;
+}
+
+.expandable-summary::before {
+  content: "▸";
+  color: #5a6d78;
+  font-size: 0.8rem;
+}
+
+.expandable-part.is-open > .expandable-header > .expandable-summary::before {
+  content: "▾";
+}
+
+.expandable-summary-meta {
+  font-size: 0.76rem;
+  color: #6e838f;
+}
+
+.expandable-inline-toggle {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  align-self: center;
+  min-height: 3rem;
+  padding: 0.55rem 0.8rem;
+  border: 1px solid #d9c36a;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #fff7d8 0%, #fff0b8 100%);
+  color: #6f5600;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(161, 128, 6, 0.12);
+}
+
+.expandable-inline-toggle input {
+  margin: 0;
+  accent-color: #c79200;
+}
+
+.expandable-inline-toggle:hover {
+  background: linear-gradient(180deg, #fff9e1 0%, #ffe89a 100%);
+  border-color: #caa11c;
+}
+
+.expandable-part-body {
+  display: grid;
+  gap: 0.45rem;
+  padding: 0 0.55rem 0.55rem;
+}
+
+.expandable-collapsed-preview {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0 0.55rem 0.55rem;
+  max-height: 12rem;
+  overflow: hidden;
+  position: relative;
+  pointer-events: none;
+}
+
+.expandable-collapsed-preview-button {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.expandable-collapsed-preview-button:hover {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0) 0%, rgba(232, 240, 247, 0.45) 100%);
+}
+
+.expandable-collapsed-preview-button .editor-block-passive,
+.expandable-collapsed-preview-button .reader-block,
+.expandable-collapsed-preview-button a,
+.expandable-collapsed-preview-button button {
+  pointer-events: none;
+}
+
+.expandable-collapsed-preview::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0;
+  height: 2rem;
+  background: linear-gradient(to bottom, rgba(251, 253, 255, 0), #fbfdff);
+}
+
+.expandable-collapsed-empty {
+  color: #70838f;
+  font-size: 0.84rem;
+  padding: 0.15rem 0;
 }
 
 .wysiwyg-preview {
@@ -1464,6 +1601,19 @@ button.tiny {
   min-width: 0;
   display: grid;
   gap: 0.45rem;
+}
+
+.expandable-pane {
+  padding-left: 0.7rem;
+  border-left: 4px solid transparent;
+}
+
+.expandable-pane-stub {
+  border-left-color: #e2b100;
+}
+
+.expandable-pane-expanded {
+  border-left-color: #2878d8;
 }
 
 .expand-stub-toggle,

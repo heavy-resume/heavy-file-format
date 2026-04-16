@@ -63,6 +63,7 @@ export interface AppState {
   isRestoring: boolean;
   componentMetaModal: { sectionKey: string; blockId: string } | null;
   gridAddComponentByBlock: Record<string, string>;
+  expandableEditorPanels: Record<string, { stubOpen: boolean; expandedOpen: boolean }>;
   lastHistoryGroup: string | null;
   lastHistoryAt: number;
   pendingEditorCenterSectionKey: string | null;

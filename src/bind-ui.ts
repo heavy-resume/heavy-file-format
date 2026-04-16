@@ -1,4 +1,5 @@
 import bundledResumeThvy from '../examples/resume.thvy?raw';
+import bundledResumeHvy from '../examples/resume.hvy?raw';
 import {
   state, appEventsBound, shortcutsBound,
   setAppEventsBound, setShortcutsBound,
@@ -66,6 +67,16 @@ export function bindUi(app: HTMLElement): void {
   resumeTemplateBtn?.addEventListener('click', () => {
     state.document = deserializeDocument(bundledResumeThvy, '.thvy');
     state.filename = 'resume.thvy';
+    state.history = [];
+    state.future = [];
+    resetTransientUiState();
+    getRenderApp()();
+  });
+
+  const resumeExampleBtn = app.querySelector<HTMLButtonElement>('#resumeExampleBtn');
+  resumeExampleBtn?.addEventListener('click', () => {
+    state.document = deserializeDocument(bundledResumeHvy, '.hvy');
+    state.filename = 'resume.hvy';
     state.history = [];
     state.future = [];
     resetTransientUiState();

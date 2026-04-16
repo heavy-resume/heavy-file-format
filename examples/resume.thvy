@@ -19,12 +19,9 @@ component_defs:
             tableColumns: "YEAR, ORGANIZATION, TITLE"
             tableShowHeader: false
             tableRows:
-              - cells:
-                  - "{{history_year}}"
-                  - "{{history_organization}}"
-                  - "{{history_title}}"
+              - cells: ["", "", ""]
       expandableContentBlocks:
-        - text: "### {{history_title}}"
+        - text: ""
           schema:
             component: text
             css: "margin: 0 0 0.35rem;"
@@ -37,22 +34,22 @@ component_defs:
               - id: history-location
                 column: left
                 block:
-                  text: "{{history_location}}"
+                  text: ""
                   schema:
                     component: text
                     css: "margin: 0;"
               - id: history-date-range
                 column: right
                 block:
-                  text: "{{history_date_range}}"
+                  text: ""
                   schema:
                     component: text
                     css: "margin: 0; text-align: right;"
-        - text: "{{history_role_title}}"
+        - text: ""
           schema:
             component: text
             css: "margin: 0.35rem 0; font-weight: 700;"
-        - text: "{{history_description}}"
+        - text: ""
           schema:
             component: text
             css: "margin: 0.35rem 0;"
@@ -65,75 +62,12 @@ component_defs:
             component: component-list
             componentListComponent: text
             css: "margin: 0;"
-            componentListBlocks:
-              - text: "{{history_accomplishments.0}}"
-                schema:
-                  component: text
-                  css: "margin: 0.25rem 0;"
-              - text: "{{history_accomplishments.1}}"
-                schema:
-                  component: text
-                  css: "margin: 0.25rem 0;"
-              - text: "{{history_accomplishments.2}}"
-                schema:
-                  component: text
-                  css: "margin: 0.25rem 0;"
+            componentListBlocks: []
         - text: ""
           schema:
             component: skills-and-tools-tech-list
             css: "margin: 0.6rem 0 0;"
             gridColumns: 2
-            gridItems:
-              - id: history-skills
-                column: left
-                block:
-                  text: ""
-                  schema:
-                    component: component-list
-                    componentListComponent: text
-                    css: "margin: 0;"
-                    componentListBlocks:
-                      - text: "#### Relevant Skills"
-                        schema:
-                          component: text
-                          css: "margin: 0 0 0.25rem;"
-                      - text: "{{history_skills.0}}"
-                        schema:
-                          component: text
-                          css: "margin: 0.25rem 0;"
-                      - text: "{{history_skills.1}}"
-                        schema:
-                          component: text
-                          css: "margin: 0.25rem 0;"
-                      - text: "{{history_skills.2}}"
-                        schema:
-                          component: text
-                          css: "margin: 0.25rem 0;"
-              - id: history-tools-technologies
-                column: right
-                block:
-                  text: ""
-                  schema:
-                    component: component-list
-                    componentListComponent: text
-                    css: "margin: 0;"
-                    componentListBlocks:
-                      - text: "#### Tools and Technologies"
-                        schema:
-                          component: text
-                          css: "margin: 0 0 0.25rem;"
-                      - text: "{{history_tools_technologies.0}}"
-                        schema:
-                          component: text
-                          css: "margin: 0.25rem 0;"
-                      - text: "{{history_tools_technologies.1}}"
-                        schema:
-                          component: text
-                          css: "margin: 0.25rem 0;"
-                      - text: "{{history_tools_technologies.2}}"
-                        schema:
-                          component: text
-                          css: "margin: 0.25rem 0;"
   - name: skills-and-tools-tech-list
     baseType: grid
     description: Two-column skills and tools list
@@ -155,18 +89,6 @@ component_defs:
                   schema:
                     component: text
                     css: "margin: 0 0 0.25rem;"
-                - text: "{{relevant_skills.0}}"
-                  schema:
-                    component: text
-                    css: "margin: 0.25rem 0;"
-                - text: "{{relevant_skills.1}}"
-                  schema:
-                    component: text
-                    css: "margin: 0.25rem 0;"
-                - text: "{{relevant_skills.2}}"
-                  schema:
-                    component: text
-                    css: "margin: 0.25rem 0;"
         - id: tools-technologies
           column: right
           block:
@@ -180,18 +102,6 @@ component_defs:
                   schema:
                     component: text
                     css: "margin: 0 0 0.25rem;"
-                - text: "{{tools_technologies.0}}"
-                  schema:
-                    component: text
-                    css: "margin: 0.25rem 0;"
-                - text: "{{tools_technologies.1}}"
-                  schema:
-                    component: text
-                    css: "margin: 0.25rem 0;"
-                - text: "{{tools_technologies.2}}"
-                  schema:
-                    component: text
-                    css: "margin: 0.25rem 0;"
   - name: education-record
     baseType: expandable
     description: Expandable education record
@@ -208,12 +118,9 @@ component_defs:
             tableColumns: "DEGREE, INSTITUTION, LOCATION"
             tableShowHeader: false
             tableRows:
-              - cells:
-                  - "{{education_degree}}"
-                  - "{{education_institution}}"
-                  - "{{education_location}}"
+              - cells: ["", "", ""]
       expandableContentBlocks:
-        - text: "### {{education_degree}}"
+        - text: ""
           schema:
             component: text
             css: "margin: 0 0 0.35rem;"
@@ -231,27 +138,15 @@ component_defs:
                     component: component-list
                     componentListComponent: text
                     css: "margin: 0;"
-                    componentListBlocks:
-                      - text: "{{education_institution}}"
-                        schema:
-                          component: text
-                          css: "margin: 0;"
-                      - text: "{{education_location}}"
-                        schema:
-                          component: text
-                          css: "margin: 0.15rem 0 0;"
-                      - text: "{{education_gpa}}"
-                        schema:
-                          component: text
-                          css: "margin: 0.15rem 0 0;"
+                    componentListBlocks: []
               - id: education-date-range
                 column: right
                 block:
-                  text: "{{education_date_range}}"
+                  text: ""
                   schema:
                     component: text
                     css: "margin: 0; text-align: right;"
-        - text: "{{education_description}}"
+        - text: ""
           schema:
             component: text
             css: "margin: 0.5rem 0;"
@@ -260,45 +155,6 @@ component_defs:
             component: skills-and-tools-tech-list
             css: "margin: 0.6rem 0 0;"
             gridColumns: 2
-            gridItems:
-              - id: education-relevant-skills
-                column: left
-                block:
-                  text: ""
-                  schema:
-                    component: component-list
-                    componentListComponent: text
-                    css: "margin: 0;"
-                    componentListBlocks:
-                      - text: "#### Relevant Skills"
-                        schema:
-                          component: text
-                          css: "margin: 0 0 0.25rem;"
-                      - text: "{{education_relevant_skills.0}}"
-                        schema:
-                          component: text
-                          css: "margin: 0.25rem 0;"
-              - id: education-tools-technologies
-                column: right
-                block:
-                  text: ""
-                  schema:
-                    component: component-list
-                    componentListComponent: text
-                    css: "margin: 0;"
-                    componentListBlocks:
-                      - text: "#### Tools and Technologies"
-                        schema:
-                          component: text
-                          css: "margin: 0 0 0.25rem;"
-                      - text: "{{education_tools_technologies.0}}"
-                        schema:
-                          component: text
-                          css: "margin: 0.25rem 0;"
-                      - text: "{{education_tools_technologies.1}}"
-                        schema:
-                          component: text
-                          css: "margin: 0.25rem 0;"
         - text: "#### Classes"
           schema:
             component: text
@@ -308,31 +164,7 @@ component_defs:
             component: component-list
             componentListComponent: text
             css: "margin: 0;"
-            componentListBlocks:
-              - text: "{{education_classes.0}}"
-                schema:
-                  component: text
-                  css: "margin: 0.25rem 0;"
-              - text: "{{education_classes.1}}"
-                schema:
-                  component: text
-                  css: "margin: 0.25rem 0;"
-              - text: "{{education_classes.2}}"
-                schema:
-                  component: text
-                  css: "margin: 0.25rem 0;"
-              - text: "{{education_classes.3}}"
-                schema:
-                  component: text
-                  css: "margin: 0.25rem 0;"
-              - text: "{{education_classes.4}}"
-                schema:
-                  component: text
-                  css: "margin: 0.25rem 0;"
-              - text: "{{education_classes.5}}"
-                schema:
-                  component: text
-                  css: "margin: 0.25rem 0;"
+            componentListBlocks: []
   - name: project-record
     baseType: expandable
     description: Expandable project record
@@ -349,9 +181,7 @@ component_defs:
             tableColumns: "PROJECT, DATE"
             tableShowHeader: false
             tableRows:
-              - cells:
-                  - "{{project_name}}"
-                  - "{{project_date_range}}"
+              - cells: ["", ""]
       expandableContentBlocks:
         - text: ""
           schema:
@@ -362,22 +192,22 @@ component_defs:
               - id: project-title
                 column: left
                 block:
-                  text: "### {{project_name}}"
+                  text: ""
                   schema:
                     component: text
                     css: "margin: 0;"
               - id: project-date-range
                 column: right
                 block:
-                  text: "{{project_date_range}}"
+                  text: ""
                   schema:
                     component: text
                     css: "margin: 0; text-align: right;"
-        - text: "{{project_description}}"
+        - text: ""
           schema:
             component: text
             css: "margin: 0.5rem 0;"
-        - text: "[Visit webpage]({{project_url}}) ({{project_url_label}})"
+        - text: ""
           schema:
             component: text
             css: "margin: 0.35rem 0;"
@@ -386,57 +216,6 @@ component_defs:
             component: skills-and-tools-tech-list
             css: "margin: 0.6rem 0 0;"
             gridColumns: 2
-            gridItems:
-              - id: project-relevant-skills
-                column: left
-                block:
-                  text: ""
-                  schema:
-                    component: component-list
-                    componentListComponent: text
-                    css: "margin: 0;"
-                    componentListBlocks:
-                      - text: "#### Relevant Skills"
-                        schema:
-                          component: text
-                          css: "margin: 0 0 0.25rem;"
-                      - text: "{{project_relevant_skills.0}}"
-                        schema:
-                          component: text
-                          css: "margin: 0.25rem 0;"
-                      - text: "{{project_relevant_skills.1}}"
-                        schema:
-                          component: text
-                          css: "margin: 0.25rem 0;"
-              - id: project-tools-technologies
-                column: right
-                block:
-                  text: ""
-                  schema:
-                    component: component-list
-                    componentListComponent: text
-                    css: "margin: 0;"
-                    componentListBlocks:
-                      - text: "#### Tools and Technologies"
-                        schema:
-                          component: text
-                          css: "margin: 0 0 0.25rem;"
-                      - text: "{{project_tools_technologies.0}}"
-                        schema:
-                          component: text
-                          css: "margin: 0.25rem 0;"
-                      - text: "{{project_tools_technologies.1}}"
-                        schema:
-                          component: text
-                          css: "margin: 0.25rem 0;"
-                      - text: "{{project_tools_technologies.2}}"
-                        schema:
-                          component: text
-                          css: "margin: 0.25rem 0;"
-                      - text: "{{project_tools_technologies.3}}"
-                        schema:
-                          component: text
-                          css: "margin: 0.25rem 0;"
 ---
 
 <!--hvy: {"id":"header","lock":true}-->
@@ -460,21 +239,17 @@ Title
 ## Summary
 
 <!--hvy:expandable:0 {"component":"text","css":"margin-top: 0;","lock":true}-->
-{{summary}}
 
-<!--hvy:expandable:1 {"component":"text","css":"margin: 0;","lock":true}-->
-- {{summary_highlights.0}}
-- {{summary_highlights.1}}
-- {{summary_highlights.2}}
+<!--hvy:expandable:1 {"component":"component-list","componentListComponent":"text","css":"margin: 0;","lock":true}-->
 
 <!--hvy: {"id":"locations","lock":true}-->
 #! Locations
 
 <!--hvy:text {"css":"margin: 0.5rem 0;","lock":true}-->
-**Location:** {{location}}
+**Location:**
 
 <!--hvy:text {"css":"margin: 0.5rem 0;","lock":true}-->
-**Target Location(s):** {{target_locations}}
+**Target Location(s):**
 
 <!--hvy: {"id":"top-skills-tools-technologies","lock":true}-->
 #! Top Skills, Tools, and Technologies
@@ -486,28 +261,10 @@ Title
 <!--hvy:component-list:0 {"component":"text","css":"margin: 0 0 0.35rem;"}-->
 ## Skills
 
-<!--hvy:component-list:1 {"component":"text","css":"margin: 0.35rem 0; padding: 0.55rem 0.65rem; border: 1px solid #d7e0e8; border-radius: 8px; box-shadow: 0 2px 8px rgba(41, 67, 82, 0.12); background: #fff;"}-->
-[{{top_skills.0}}](#skill-software-engineering)
-
-<!--hvy:component-list:2 {"component":"text","css":"margin: 0.35rem 0; padding: 0.55rem 0.65rem; border: 1px solid #d7e0e8; border-radius: 8px; box-shadow: 0 2px 8px rgba(41, 67, 82, 0.12); background: #fff;"}-->
-[{{top_skills.1}}](#skill-library-development)
-
-<!--hvy:component-list:3 {"component":"text","css":"margin: 0.35rem 0; padding: 0.55rem 0.65rem; border: 1px solid #d7e0e8; border-radius: 8px; box-shadow: 0 2px 8px rgba(41, 67, 82, 0.12); background: #fff;"}-->
-[{{top_skills.2}}](#skill-llm-prompt-engineering)
-
 <!--hvy:grid:1 {"id":"top-tools-technologies","column":"right","component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->
 
 <!--hvy:component-list:0 {"component":"text","css":"margin: 0 0 0.35rem;"}-->
 ## Tools & Technologies
-
-<!--hvy:component-list:1 {"component":"text","css":"margin: 0.35rem 0; padding: 0.55rem 0.65rem; border: 1px solid #d7e0e8; border-radius: 8px; box-shadow: 0 2px 8px rgba(41, 67, 82, 0.12); background: #fff;"}-->
-[{{top_tools_technologies.0}}](#tool-typescript)
-
-<!--hvy:component-list:2 {"component":"text","css":"margin: 0.35rem 0; padding: 0.55rem 0.65rem; border: 1px solid #d7e0e8; border-radius: 8px; box-shadow: 0 2px 8px rgba(41, 67, 82, 0.12); background: #fff;"}-->
-[{{top_tools_technologies.1}}](#tool-python)
-
-<!--hvy:component-list:3 {"component":"text","css":"margin: 0.35rem 0; padding: 0.55rem 0.65rem; border: 1px solid #d7e0e8; border-radius: 8px; box-shadow: 0 2px 8px rgba(41, 67, 82, 0.12); background: #fff;"}-->
-[{{top_tools_technologies.2}}](#tool-developer-containers)
 
 <!--hvy: {"id":"skills","lock":true,"expanded":false}-->
 #! Skills
@@ -515,184 +272,11 @@ Title
 <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
 # Skills
 
-<!--hvy:expandable {"id":"skill-software-engineering","css":"margin: 0.35rem 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
-
-<!--hvy:expandable:0 {"component":"text","css":"margin: 0;"}-->
-Software Engineering
-
-<!--hvy:expandable:1 {"component":"text","css":"margin: 0.4rem 0 0.1rem;"}-->
-#### Experience
-
-<!--hvy:expandable:1 {"component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->
-
-<!--hvy:component-list:0 {"component":"text","css":"margin: 0.25rem 0;"}-->
-[History](#history)
-
-<!--hvy:expandable:1 {"component":"text","css":"margin: 0.4rem 0 0.1rem;"}-->
-#### Education
-
-<!--hvy:expandable:1 {"component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->
-
-<!--hvy:component-list:0 {"component":"text","css":"margin: 0.25rem 0;"}-->
-[Education](#education)
-
-<!--hvy:expandable:1 {"component":"text","css":"margin: 0.4rem 0 0.1rem;"}-->
-#### Projects
-
-<!--hvy:expandable:1 {"component":"component-list","componentListComponent":"xref-card","css":"margin: 0;"}-->
-
-<!--hvy:component-list:0 {"component":"xref-card","css":"margin: 0.25rem 0;","xrefTitle":"Heavy Stack","xrefDetail":"05/2024 - present","xrefTarget":"project-heavy-stack"}-->
-
-<!--hvy:expandable {"id":"skill-reverse-engineering","css":"margin: 0.35rem 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
-
-<!--hvy:expandable:0 {"component":"text","css":"margin: 0;"}-->
-Reverse Engineering
-
-<!--hvy:expandable:1 {"component":"text","css":"margin: 0.4rem 0 0.1rem;"}-->
-#### Projects
-
-<!--hvy:expandable:1 {"component":"component-list","componentListComponent":"xref-card","css":"margin: 0;"}-->
-
-<!--hvy:component-list:0 {"component":"xref-card","css":"margin: 0.25rem 0;","xrefTitle":"Heavy Stack","xrefDetail":"05/2024 - present","xrefTarget":"project-heavy-stack"}-->
-
-<!--hvy:expandable {"id":"skill-library-development","css":"margin: 0.35rem 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
-
-<!--hvy:expandable:0 {"component":"text","css":"margin: 0;"}-->
-Library Development
-
-<!--hvy:expandable:1 {"component":"text","css":"margin: 0.4rem 0 0.1rem;"}-->
-#### Projects
-
-<!--hvy:expandable:1 {"component":"component-list","componentListComponent":"xref-card","css":"margin: 0;"}-->
-
-<!--hvy:component-list:0 {"component":"xref-card","css":"margin: 0.25rem 0;","xrefTitle":"Heavy Stack","xrefDetail":"05/2024 - present","xrefTarget":"project-heavy-stack"}-->
-
-<!--hvy:expandable {"id":"skill-llm-prompt-engineering","css":"margin: 0.35rem 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
-
-<!--hvy:expandable:0 {"component":"text","css":"margin: 0;"}-->
-LLM Prompt Engineering
-
-<!--hvy:expandable:1 {"component":"text","css":"margin: 0.4rem 0 0.1rem;"}-->
-#### Projects
-
-<!--hvy:expandable:1 {"component":"component-list","componentListComponent":"xref-card","css":"margin: 0;"}-->
-
-<!--hvy:component-list:0 {"component":"xref-card","css":"margin: 0.25rem 0;","xrefTitle":"Autonomous Agent Hackathon","xrefDetail":"08/2023 - 08/2023","xrefTarget":"project-autonomous-agent-hackathon"}-->
-
-<!--hvy:expandable {"id":"skill-project-management","css":"margin: 0.35rem 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
-
-<!--hvy:expandable:0 {"component":"text","css":"margin: 0;"}-->
-Project Management
-
-<!--hvy:expandable:1 {"component":"text","css":"margin: 0.4rem 0 0.1rem;"}-->
-#### Projects
-
-<!--hvy:expandable:1 {"component":"component-list","componentListComponent":"xref-card","css":"margin: 0;"}-->
-
-<!--hvy:component-list:0 {"component":"xref-card","css":"margin: 0.25rem 0;","xrefTitle":"Autonomous Agent Hackathon","xrefDetail":"08/2023 - 08/2023","xrefTarget":"project-autonomous-agent-hackathon"}-->
-
 <!--hvy: {"id":"tools-technologies","lock":true,"expanded":false}-->
 #! Tools & Technologies
 
 <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
 # Tools & Technologies
-
-<!--hvy:expandable {"id":"tool-typescript","css":"margin: 0.35rem 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
-
-<!--hvy:expandable:0 {"component":"text","css":"margin: 0;"}-->
-TypeScript
-
-<!--hvy:expandable:1 {"component":"text","css":"margin: 0.4rem 0 0.1rem;"}-->
-#### Projects
-
-<!--hvy:expandable:1 {"component":"component-list","componentListComponent":"xref-card","css":"margin: 0;"}-->
-
-<!--hvy:component-list:0 {"component":"xref-card","css":"margin: 0.25rem 0;","xrefTitle":"Heavy Stack","xrefDetail":"05/2024 - present","xrefTarget":"project-heavy-stack"}-->
-
-<!--hvy:expandable {"id":"tool-python","css":"margin: 0.35rem 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
-
-<!--hvy:expandable:0 {"component":"text","css":"margin: 0;"}-->
-Python
-
-<!--hvy:expandable:1 {"component":"text","css":"margin: 0.4rem 0 0.1rem;"}-->
-#### Projects
-
-<!--hvy:expandable:1 {"component":"component-list","componentListComponent":"xref-card","css":"margin: 0;"}-->
-
-<!--hvy:component-list:0 {"component":"xref-card","css":"margin: 0.25rem 0;","xrefTitle":"Heavy Stack","xrefDetail":"05/2024 - present","xrefTarget":"project-heavy-stack"}-->
-
-<!--hvy:component-list:1 {"component":"xref-card","css":"margin: 0.25rem 0;","xrefTitle":"Autonomous Agent Hackathon","xrefDetail":"08/2023 - 08/2023","xrefTarget":"project-autonomous-agent-hackathon"}-->
-
-<!--hvy:expandable:1 {"component":"text","css":"margin: 0.4rem 0 0.1rem;"}-->
-#### Education
-
-<!--hvy:expandable:1 {"component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->
-
-<!--hvy:component-list:0 {"component":"text","css":"margin: 0.25rem 0;"}-->
-[Education](#education)
-
-<!--hvy:expandable {"id":"tool-c-cpp","css":"margin: 0.35rem 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
-
-<!--hvy:expandable:0 {"component":"text","css":"margin: 0;"}-->
-C/C++
-
-<!--hvy:expandable:1 {"component":"text","css":"margin: 0.4rem 0 0.1rem;"}-->
-#### Education
-
-<!--hvy:expandable:1 {"component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->
-
-<!--hvy:component-list:0 {"component":"text","css":"margin: 0.25rem 0;"}-->
-[Education](#education)
-
-<!--hvy:expandable {"id":"tool-developer-containers","css":"margin: 0.35rem 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
-
-<!--hvy:expandable:0 {"component":"text","css":"margin: 0;"}-->
-Developer Containers
-
-<!--hvy:expandable:1 {"component":"text","css":"margin: 0.4rem 0 0.1rem;"}-->
-#### Projects
-
-<!--hvy:expandable:1 {"component":"component-list","componentListComponent":"xref-card","css":"margin: 0;"}-->
-
-<!--hvy:component-list:0 {"component":"xref-card","css":"margin: 0.25rem 0;","xrefTitle":"Heavy Stack","xrefDetail":"05/2024 - present","xrefTarget":"project-heavy-stack"}-->
-
-<!--hvy:component-list:1 {"component":"xref-card","css":"margin: 0.25rem 0;","xrefTitle":"Autonomous Agent Hackathon","xrefDetail":"08/2023 - 08/2023","xrefTarget":"project-autonomous-agent-hackathon"}-->
-
-<!--hvy:expandable {"id":"tool-openai-api","css":"margin: 0.35rem 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
-
-<!--hvy:expandable:0 {"component":"text","css":"margin: 0;"}-->
-OpenAI API
-
-<!--hvy:expandable:1 {"component":"text","css":"margin: 0.4rem 0 0.1rem;"}-->
-#### Projects
-
-<!--hvy:expandable:1 {"component":"component-list","componentListComponent":"xref-card","css":"margin: 0;"}-->
-
-<!--hvy:component-list:0 {"component":"xref-card","css":"margin: 0.25rem 0;","xrefTitle":"Autonomous Agent Hackathon","xrefDetail":"08/2023 - 08/2023","xrefTarget":"project-autonomous-agent-hackathon"}-->
-
-<!--hvy:expandable {"id":"tool-github-codespaces","css":"margin: 0.35rem 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
-
-<!--hvy:expandable:0 {"component":"text","css":"margin: 0;"}-->
-GitHub Codespaces
-
-<!--hvy:expandable:1 {"component":"text","css":"margin: 0.4rem 0 0.1rem;"}-->
-#### Projects
-
-<!--hvy:expandable:1 {"component":"component-list","componentListComponent":"xref-card","css":"margin: 0;"}-->
-
-<!--hvy:component-list:0 {"component":"xref-card","css":"margin: 0.25rem 0;","xrefTitle":"Autonomous Agent Hackathon","xrefDetail":"08/2023 - 08/2023","xrefTarget":"project-autonomous-agent-hackathon"}-->
-
-<!--hvy:expandable {"id":"tool-superagi","css":"margin: 0.35rem 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
-
-<!--hvy:expandable:0 {"component":"text","css":"margin: 0;"}-->
-SuperAGI
-
-<!--hvy:expandable:1 {"component":"text","css":"margin: 0.4rem 0 0.1rem;"}-->
-#### Projects
-
-<!--hvy:expandable:1 {"component":"component-list","componentListComponent":"xref-card","css":"margin: 0;"}-->
-
-<!--hvy:component-list:0 {"component":"xref-card","css":"margin: 0.25rem 0;","xrefTitle":"Autonomous Agent Hackathon","xrefDetail":"08/2023 - 08/2023","xrefTarget":"project-autonomous-agent-hackathon"}-->
 
 <!--hvy: {"id":"history","lock":true}-->
 #! History
@@ -704,71 +288,6 @@ SuperAGI
 
 <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"history-record"}-->
 
-<!--hvy:component-list:0 {"component":"history-record","css":"margin: 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
-
-<!--hvy:expandable:0 {"component":"table","css":"margin: 0;","tableColumns":"YEAR, ORGANIZATION, TITLE","tableShowHeader":false,"tableRows":[{"cells":["{{history_year}}","{{history_organization}}","{{history_title}}"]}]}-->
-
-<!--hvy:expandable:1 {"component":"text","css":"margin: 0 0 0.35rem;"}-->
-### {{history_title}}
-
-<!--hvy:expandable:1 {"component":"grid","css":"margin: 0.35rem 0;","gridColumns":2}-->
-
-<!--hvy:grid:0 {"id":"history-location","column":"left","component":"text","css":"margin: 0;"}-->
-{{history_location}}
-
-<!--hvy:grid:1 {"id":"history-date-range","column":"right","component":"text","css":"margin: 0; text-align: right;"}-->
-{{history_date_range}}
-
-<!--hvy:expandable:1 {"component":"text","css":"margin: 0.35rem 0; font-weight: 700;"}-->
-{{history_role_title}}
-
-<!--hvy:expandable:1 {"component":"text","css":"margin: 0.35rem 0;"}-->
-{{history_description}}
-
-<!--hvy:expandable:1 {"component":"text","css":"margin: 0.6rem 0 0.25rem;"}-->
-#### Accomplishments
-
-<!--hvy:expandable:1 {"component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->
-
-<!--hvy:component-list:0 {"component":"text","css":"margin: 0.25rem 0;"}-->
-{{history_accomplishments.0}}
-
-<!--hvy:component-list:1 {"component":"text","css":"margin: 0.25rem 0;"}-->
-{{history_accomplishments.1}}
-
-<!--hvy:component-list:2 {"component":"text","css":"margin: 0.25rem 0;"}-->
-{{history_accomplishments.2}}
-
-<!--hvy:expandable:1 {"component":"skills-and-tools-tech-list","css":"margin: 0.6rem 0 0;","gridColumns":2}-->
-
-<!--hvy:grid:0 {"id":"history-skills","column":"left","component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->
-
-<!--hvy:component-list:0 {"component":"text","css":"margin: 0 0 0.25rem;"}-->
-#### Skills
-
-<!--hvy:component-list:1 {"component":"text","css":"margin: 0.25rem 0;"}-->
-[{{history_skills.0}}](#skill-software-engineering)
-
-<!--hvy:component-list:2 {"component":"text","css":"margin: 0.25rem 0;"}-->
-[{{history_skills.1}}](#skill-library-development)
-
-<!--hvy:component-list:3 {"component":"text","css":"margin: 0.25rem 0;"}-->
-[{{history_skills.2}}](#skill-project-management)
-
-<!--hvy:grid:1 {"id":"history-tools-technologies","column":"right","component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->
-
-<!--hvy:component-list:0 {"component":"text","css":"margin: 0 0 0.25rem;"}-->
-#### Tools & Technologies
-
-<!--hvy:component-list:1 {"component":"text","css":"margin: 0.25rem 0;"}-->
-[{{history_tools_technologies.0}}](#tool-typescript)
-
-<!--hvy:component-list:2 {"component":"text","css":"margin: 0.25rem 0;"}-->
-[{{history_tools_technologies.1}}](#tool-python)
-
-<!--hvy:component-list:3 {"component":"text","css":"margin: 0.25rem 0;"}-->
-[{{history_tools_technologies.2}}](#tool-developer-containers)
-
 <!--hvy: {"id":"projects","lock":true}-->
 #! Projects
 
@@ -776,102 +295,6 @@ SuperAGI
 # Projects
 
 <!--hvy:table {"css":"margin: 0.5rem 0 0;","tableColumns":"PROJECT, DATE","tableShowHeader":true,"tableRows":[],"lock":true}-->
-
-<!--hvy:project-record {"id":"project-heavy-stack","css":"margin: 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
-
-<!--hvy:expandable:0 {"component":"table","css":"margin: 0;","tableColumns":"PROJECT, DATE","tableShowHeader":false,"tableRows":[{"cells":["Heavy Stack","05/2024 - present"]}]}-->
-
-<!--hvy:expandable:1 {"component":"grid","css":"margin: 0 0 0.35rem;","gridColumns":2}-->
-
-<!--hvy:grid:0 {"id":"project-title","column":"left","component":"text","css":"margin: 0;"}-->
-### Heavy Stack
-
-<!--hvy:grid:1 {"id":"project-date-range","column":"right","component":"text","css":"margin: 0; text-align: right;"}-->
-05/2024 - present
-
-<!--hvy:expandable:1 {"component":"text","css":"margin: 0.5rem 0;"}-->
-The Heavy Stack is the production version of the developer container used for Heavy Resume. It has various features such as hot reloading for both the application and testing, the ability to record user actions for playback later, as well as a functioning dev container with databases and everything set up and ready to go.
-
-<!--hvy:expandable:1 {"component":"text","css":"margin: 0.35rem 0;"}-->
-[Visit webpage](https://github.com) (github.com)
-
-<!--hvy:expandable:1 {"component":"skills-and-tools-tech-list","css":"margin: 0.6rem 0 0;","gridColumns":2}-->
-
-<!--hvy:grid:0 {"id":"project-relevant-skills","column":"left","component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->
-
-<!--hvy:component-list:0 {"component":"text","css":"margin: 0 0 0.25rem;"}-->
-#### Relevant Skills
-
-<!--hvy:component-list:1 {"component":"text","css":"margin: 0.25rem 0;"}-->
-[Reverse Engineering](#skill-reverse-engineering)
-
-<!--hvy:component-list:2 {"component":"text","css":"margin: 0.25rem 0;"}-->
-[Library Development](#skill-library-development)
-
-<!--hvy:grid:1 {"id":"project-tools-technologies","column":"right","component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->
-
-<!--hvy:component-list:0 {"component":"text","css":"margin: 0 0 0.25rem;"}-->
-#### Tools and Technologies
-
-<!--hvy:component-list:1 {"component":"text","css":"margin: 0.25rem 0;"}-->
-[TypeScript](#tool-typescript)
-
-<!--hvy:component-list:2 {"component":"text","css":"margin: 0.25rem 0;"}-->
-[Python](#tool-python)
-
-<!--hvy:component-list:3 {"component":"text","css":"margin: 0.25rem 0;"}-->
-[Developer Containers](#tool-developer-containers)
-
-<!--hvy:project-record {"id":"project-autonomous-agent-hackathon","css":"margin: 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
-
-<!--hvy:expandable:0 {"component":"table","css":"margin: 0;","tableColumns":"PROJECT, DATE","tableShowHeader":false,"tableRows":[{"cells":["Autonomous Agent Hackathon","08/2023 - 08/2023"]}]}-->
-
-<!--hvy:expandable:1 {"component":"grid","css":"margin: 0 0 0.35rem;","gridColumns":2}-->
-
-<!--hvy:grid:0 {"id":"project-title-hackathon","column":"left","component":"text","css":"margin: 0;"}-->
-### Autonomous Agent Hackathon
-
-<!--hvy:grid:1 {"id":"project-date-range-hackathon","column":"right","component":"text","css":"margin: 0; text-align: right;"}-->
-08/2023 - 08/2023
-
-<!--hvy:expandable:1 {"component":"text","css":"margin: 0.5rem 0;"}-->
-Hackathon project that involved using SuperAGI to do deep research. I had the idea, wrote all of the code, and did a substantial portion of the video presentation.
-
-<!--hvy:expandable:1 {"component":"text","css":"margin: 0.35rem 0;"}-->
-[Visit webpage](https://lablab.ai) (lablab.ai)
-
-<!--hvy:expandable:1 {"component":"skills-and-tools-tech-list","css":"margin: 0.6rem 0 0;","gridColumns":2}-->
-
-<!--hvy:grid:0 {"id":"project-relevant-skills-hackathon","column":"left","component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->
-
-<!--hvy:component-list:0 {"component":"text","css":"margin: 0 0 0.25rem;"}-->
-#### Relevant Skills
-
-<!--hvy:component-list:1 {"component":"text","css":"margin: 0.25rem 0;"}-->
-[LLM Prompt Engineering](#skill-llm-prompt-engineering)
-
-<!--hvy:component-list:2 {"component":"text","css":"margin: 0.25rem 0;"}-->
-[Project Management](#skill-project-management)
-
-<!--hvy:grid:1 {"id":"project-tools-technologies-hackathon","column":"right","component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->
-
-<!--hvy:component-list:0 {"component":"text","css":"margin: 0 0 0.25rem;"}-->
-#### Tools and Technologies
-
-<!--hvy:component-list:1 {"component":"text","css":"margin: 0.25rem 0;"}-->
-[Developer Containers](#tool-developer-containers)
-
-<!--hvy:component-list:2 {"component":"text","css":"margin: 0.25rem 0;"}-->
-[OpenAI API](#tool-openai-api)
-
-<!--hvy:component-list:3 {"component":"text","css":"margin: 0.25rem 0;"}-->
-[Python](#tool-python)
-
-<!--hvy:component-list:4 {"component":"text","css":"margin: 0.25rem 0;"}-->
-[GitHub Codespaces](#tool-github-codespaces)
-
-<!--hvy:component-list:5 {"component":"text","css":"margin: 0.25rem 0;"}-->
-[SuperAGI](#tool-superagi)
 
 <!--hvy: {"id":"education","lock":true}-->
 #! Education
@@ -882,73 +305,3 @@ Hackathon project that involved using SuperAGI to do deep research. I had the id
 <!--hvy:table {"css":"margin: 0.5rem 0 0;","tableColumns":"DEGREE, INSTITUTION, LOCATION","tableShowHeader":true,"tableRows":[],"lock":true}-->
 
 <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"education-record"}-->
-
-<!--hvy:component-list:0 {"component":"education-record","css":"margin: 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
-
-<!--hvy:expandable:0 {"component":"table","css":"margin: 0;","tableColumns":"DEGREE, INSTITUTION, LOCATION","tableShowHeader":false,"tableRows":[{"cells":["{{education_degree}}","{{education_institution}}","{{education_location}}"]}]}-->
-
-<!--hvy:expandable:1 {"component":"text","css":"margin: 0 0 0.35rem;"}-->
-### {{education_degree}}
-
-<!--hvy:expandable:1 {"component":"grid","css":"margin: 0.35rem 0;","gridColumns":2}-->
-
-<!--hvy:grid:0 {"id":"education-institution-details","column":"left","component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->
-
-<!--hvy:component-list:0 {"component":"text","css":"margin: 0;"}-->
-{{education_institution}}
-
-<!--hvy:component-list:1 {"component":"text","css":"margin: 0.15rem 0 0;"}-->
-{{education_location}}
-
-<!--hvy:component-list:2 {"component":"text","css":"margin: 0.15rem 0 0;"}-->
-{{education_gpa}}
-
-<!--hvy:grid:1 {"id":"education-date-range","column":"right","component":"text","css":"margin: 0; text-align: right;"}-->
-{{education_date_range}}
-
-<!--hvy:expandable:1 {"component":"text","css":"margin: 0.5rem 0;"}-->
-{{education_description}}
-
-<!--hvy:expandable:1 {"component":"skills-and-tools-tech-list","css":"margin: 0.6rem 0 0;","gridColumns":2}-->
-
-<!--hvy:grid:0 {"id":"education-relevant-skills","column":"left","component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->
-
-<!--hvy:component-list:0 {"component":"text","css":"margin: 0 0 0.25rem;"}-->
-#### Relevant Skills
-
-<!--hvy:component-list:1 {"component":"text","css":"margin: 0.25rem 0;"}-->
-[{{education_relevant_skills.0}}](#skill-software-engineering)
-
-<!--hvy:grid:1 {"id":"education-tools-technologies","column":"right","component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->
-
-<!--hvy:component-list:0 {"component":"text","css":"margin: 0 0 0.25rem;"}-->
-#### Tools and Technologies
-
-<!--hvy:component-list:1 {"component":"text","css":"margin: 0.25rem 0;"}-->
-[{{education_tools_technologies.0}}](#tool-python)
-
-<!--hvy:component-list:2 {"component":"text","css":"margin: 0.25rem 0;"}-->
-[{{education_tools_technologies.1}}](#tool-c-cpp)
-
-<!--hvy:expandable:1 {"component":"text","css":"margin: 0.6rem 0 0.25rem;"}-->
-#### Classes
-
-<!--hvy:expandable:1 {"component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->
-
-<!--hvy:component-list:0 {"component":"text","css":"margin: 0.25rem 0;"}-->
-{{education_classes.0}}
-
-<!--hvy:component-list:1 {"component":"text","css":"margin: 0.25rem 0;"}-->
-{{education_classes.1}}
-
-<!--hvy:component-list:2 {"component":"text","css":"margin: 0.25rem 0;"}-->
-{{education_classes.2}}
-
-<!--hvy:component-list:3 {"component":"text","css":"margin: 0.25rem 0;"}-->
-{{education_classes.3}}
-
-<!--hvy:component-list:4 {"component":"text","css":"margin: 0.25rem 0;"}-->
-{{education_classes.4}}
-
-<!--hvy:component-list:5 {"component":"text","css":"margin: 0.25rem 0;"}-->
-{{education_classes.5}}

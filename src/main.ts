@@ -193,6 +193,7 @@ function renderApp(): void {
         <div class="toolbar">
           <button id="newBtn" type="button" class="toolbar-primary-button">New</button>
           <button id="resumeTemplateBtn" type="button">Resume Template</button>
+          <button id="resumeExampleBtn" type="button">Resume Example</button>
           <label class="file-picker">
             Select File
             <input id="fileInput" type="file" accept=".hvy,.thvy,.md,text/markdown,text/plain" />

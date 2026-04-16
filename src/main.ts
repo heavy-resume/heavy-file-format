@@ -60,6 +60,7 @@ function createInitialState(): AppState {
     componentMetaModal: null,
     gridAddComponentByBlock: {},
     expandableEditorPanels: {},
+    viewerSidebarOpen: true,
     lastHistoryGroup: null,
     lastHistoryAt: 0,
     pendingEditorCenterSectionKey: null,
@@ -230,9 +231,16 @@ function renderApp(): void {
                 ${isAdvancedEditor && state.metaPanelOpen ? editorRenderer.renderMetaPanel() : ''}
                 ${isAdvancedEditor ? renderStateTracker() : ''}
                 <div id="editorTree" class="editor-tree">${editorRenderer.renderSectionEditorTree(state.document.sections)}</div>`
-              : `<div id="readerWarnings" class="reader-warnings">${readerRenderer.renderWarnings()}</div>
-                <div id="readerNav" class="reader-nav">${readerRenderer.renderNavigation(state.document.sections)}</div>
-                <div id="readerDocument" class="reader-document">${readerRenderer.renderReaderSections(state.document.sections)}</div>`
+              : `<div class="viewer-shell ${state.viewerSidebarOpen ? 'is-sidebar-open' : 'is-sidebar-closed'}">
+                   <aside class="viewer-sidebar">
+                     <button type="button" class="viewer-sidebar-tab" data-action="toggle-viewer-sidebar" aria-expanded="${state.viewerSidebarOpen ? 'true' : 'false'}">Navigation</button>
+                     <div class="viewer-sidebar-panel">
+                       <div id="readerWarnings" class="reader-warnings">${readerRenderer.renderWarnings()}</div>
+                       <div id="readerNav" class="reader-nav">${readerRenderer.renderNavigation(state.document.sections)}</div>
+                     </div>
+                   </aside>
+                   <div id="readerDocument" class="reader-document">${readerRenderer.renderReaderSections(state.document.sections)}</div>
+                 </div>`
           }
         </div>
       </section>

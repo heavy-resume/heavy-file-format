@@ -480,33 +480,27 @@ Product-minded software engineer focused on developer tooling, AI workflows, and
 
 <!--hvy:grid {"css":"margin: 0.5rem 0; gap: 0.75rem;","gridColumns":2,"lock":true}-->
 
-<!--hvy:grid:0 {"id":"top-skills","column":"left","component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->
+<!--hvy:grid:0 {"id":"top-skills","column":"left","component":"component-list","componentListComponent":"xref-card","css":"margin: 0;"}-->
 
 <!--hvy:component-list:0 {"component":"text","css":"margin: 0 0 0.35rem;"}-->
 ## Skills
 
-<!--hvy:component-list:1 {"component":"text","css":"margin: 0.35rem 0; padding: 0.55rem 0.65rem; border: 1px solid #d7e0e8; border-radius: 8px; box-shadow: 0 2px 8px rgba(41, 67, 82, 0.12); background: #fff;"}-->
-[Software Engineering](#skill-software-engineering)
+<!--hvy:component-list:1 {"component":"xref-card","css":"margin: 0.35rem 0;","xrefTitle":"Software Engineering","xrefDetail":"Core strength","xrefTarget":"skill-software-engineering"}-->
 
-<!--hvy:component-list:2 {"component":"text","css":"margin: 0.35rem 0; padding: 0.55rem 0.65rem; border: 1px solid #d7e0e8; border-radius: 8px; box-shadow: 0 2px 8px rgba(41, 67, 82, 0.12); background: #fff;"}-->
-[Library Development](#skill-library-development)
+<!--hvy:component-list:2 {"component":"xref-card","css":"margin: 0.35rem 0;","xrefTitle":"Library Development","xrefDetail":"Reusable systems","xrefTarget":"skill-library-development"}-->
 
-<!--hvy:component-list:3 {"component":"text","css":"margin: 0.35rem 0; padding: 0.55rem 0.65rem; border: 1px solid #d7e0e8; border-radius: 8px; box-shadow: 0 2px 8px rgba(41, 67, 82, 0.12); background: #fff;"}-->
-[LLM Prompt Engineering](#skill-llm-prompt-engineering)
+<!--hvy:component-list:3 {"component":"xref-card","css":"margin: 0.35rem 0;","xrefTitle":"LLM Prompt Engineering","xrefDetail":"Product workflow design","xrefTarget":"skill-llm-prompt-engineering"}-->
 
-<!--hvy:grid:1 {"id":"top-tools-technologies","column":"right","component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->
+<!--hvy:grid:1 {"id":"top-tools-technologies","column":"right","component":"component-list","componentListComponent":"xref-card","css":"margin: 0;"}-->
 
 <!--hvy:component-list:0 {"component":"text","css":"margin: 0 0 0.35rem;"}-->
 ## Tools & Technologies
 
-<!--hvy:component-list:1 {"component":"text","css":"margin: 0.35rem 0; padding: 0.55rem 0.65rem; border: 1px solid #d7e0e8; border-radius: 8px; box-shadow: 0 2px 8px rgba(41, 67, 82, 0.12); background: #fff;"}-->
-[TypeScript](#tool-typescript)
+<!--hvy:component-list:1 {"component":"xref-card","css":"margin: 0.35rem 0;","xrefTitle":"TypeScript","xrefDetail":"Primary application language","xrefTarget":"tool-typescript"}-->
 
-<!--hvy:component-list:2 {"component":"text","css":"margin: 0.35rem 0; padding: 0.55rem 0.65rem; border: 1px solid #d7e0e8; border-radius: 8px; box-shadow: 0 2px 8px rgba(41, 67, 82, 0.12); background: #fff;"}-->
-[Python](#tool-python)
+<!--hvy:component-list:2 {"component":"xref-card","css":"margin: 0.35rem 0;","xrefTitle":"Python","xrefDetail":"Automation and prototyping","xrefTarget":"tool-python"}-->
 
-<!--hvy:component-list:3 {"component":"text","css":"margin: 0.35rem 0; padding: 0.55rem 0.65rem; border: 1px solid #d7e0e8; border-radius: 8px; box-shadow: 0 2px 8px rgba(41, 67, 82, 0.12); background: #fff;"}-->
-[Developer Containers](#tool-developer-containers)
+<!--hvy:component-list:3 {"component":"xref-card","css":"margin: 0.35rem 0;","xrefTitle":"Developer Containers","xrefDetail":"Reproducible local environments","xrefTarget":"tool-developer-containers"}-->
 
 <!--hvy: {"id":"skills","lock":true,"expanded":false}-->
 #! Skills
@@ -524,8 +518,7 @@ Software Engineering
 
 <!--hvy:expandable:1 {"component":"component-list","componentListComponent":"xref-card","css":"margin: 0;"}-->
 
-<!--hvy:component-list:0 {"component":"text","css":"margin: 0.25rem 0;"}-->
-[History](#history)
+<!--hvy:component-list:0 {"component":"xref-card","css":"margin: 0.25rem 0;","xrefTitle":"Senior Software Engineer","xrefDetail":"Northwind Labs","xrefTarget":"history-northwind-labs-senior-software-engineer"}-->
 
 <!--hvy:expandable:1 {"component":"text","css":"margin: 0.4rem 0 0.1rem;"}-->
 #### Education
@@ -636,7 +629,7 @@ C/C++
 <!--hvy:expandable:1 {"component":"text","css":"margin: 0.4rem 0 0.1rem;"}-->
 #### Education
 
-<!--hvy:expandable:1 {"component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->
+<!--hvy:expandable:1 {"component":"component-list","componentListComponent":"xref-card","css":"margin: 0;"}-->
 
 <!--hvy:component-list:0 {"component":"xref-card","css":"margin: 0.25rem 0;","xrefTitle":"B.S. Computer Science","xrefDetail":"University of Washington","xrefTarget":"education-bs-computer-science"}-->
 
@@ -700,7 +693,7 @@ SuperAGI
 
 <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"history-record"}-->
 
-<!--hvy:component-list:0 {"component":"history-record","css":"margin: 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+<!--hvy:component-list:0 {"id":"history-northwind-labs-senior-software-engineer","component":"history-record","css":"margin: 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
 <!--hvy:expandable:0 {"component":"table","css":"margin: 0;","tableColumns":"YEAR, ORGANIZATION, TITLE","tableShowHeader":false,"tableRows":[{"cells":["2024","Northwind Labs","Senior Software Engineer"]}]}-->
 

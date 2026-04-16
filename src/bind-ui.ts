@@ -290,6 +290,12 @@ export function bindUi(app: HTMLElement): void {
       return;
     }
 
+    if (action === 'toggle-viewer-sidebar') {
+      state.viewerSidebarOpen = !state.viewerSidebarOpen;
+      getRenderApp()();
+      return;
+    }
+
     if (action === 'activate-block' && blockId) {
       event.stopPropagation();
       setActiveEditorBlock(sectionKey, blockId);

@@ -64,7 +64,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
             (section) =>
               `<button type="button" class="nav-item" data-nav-id="${deps.escapeAttr(deps.getSectionId(section))}">${deps.escapeHtml(
                 deps.formatSectionTitle(section.title)
-              )} <code>#${deps.escapeHtml(deps.getSectionId(section))}</code></button>`
+              )}</button>`
           )
           .join('')}
       </div>
@@ -299,7 +299,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
   function renderWarnings(): string {
     const duplicateIds = deps.findDuplicateSectionIds(state.documentSections);
     if (duplicateIds.length === 0) {
-      return '<div class="ok">No warnings. IDs are unique.</div>';
+      return '';
     }
     return duplicateIds
       .map((id) => `<div class="warn">Duplicate section id detected: <code>${deps.escapeHtml(id)}</code></div>`)

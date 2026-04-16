@@ -234,7 +234,7 @@ function renderApp(): void {
               : `<div class="viewer-shell ${state.viewerSidebarOpen ? 'is-sidebar-open' : 'is-sidebar-closed'}">
                    <div class="viewer-sidebar-backdrop" data-action="toggle-viewer-sidebar"></div>
                    <aside class="viewer-sidebar">
-                     <button type="button" class="viewer-sidebar-tab" data-action="toggle-viewer-sidebar" aria-expanded="${state.viewerSidebarOpen ? 'true' : 'false'}">Navigation</button>
+                     <button type="button" class="viewer-sidebar-tab" data-action="toggle-viewer-sidebar" aria-expanded="${state.viewerSidebarOpen ? 'true' : 'false'}" aria-label="Toggle navigation">☰</button>
                      <div class="viewer-sidebar-panel">
                        <div id="readerWarnings" class="reader-warnings">${readerRenderer.renderWarnings()}</div>
                        <div id="readerNav" class="reader-nav">${readerRenderer.renderNavigation(state.document.sections)}</div>

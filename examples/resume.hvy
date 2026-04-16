@@ -480,7 +480,7 @@ Product-minded software engineer focused on developer tooling, AI workflows, and
 
 <!--hvy:grid {"css":"margin: 0.5rem 0; gap: 0.75rem;","gridColumns":2,"lock":true}-->
 
-<!--hvy:grid:0 {"id":"top-skills","column":"left","component":"component-list","componentListComponent":"xref-card","css":"margin: 0;"}-->
+<!--hvy:grid:0 {"id":"top-skills","column":"left","component":"component-list","componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
 
 <!--hvy:component-list:0 {"component":"text","css":"margin: 0 0 0.35rem;"}-->
 ## Skills
@@ -491,7 +491,7 @@ Product-minded software engineer focused on developer tooling, AI workflows, and
 
 <!--hvy:component-list:3 {"component":"xref-card","css":"margin: 0.35rem 0;","xrefTitle":"LLM Prompt Engineering","xrefDetail":"Product workflow design","xrefTarget":"skill-llm-prompt-engineering"}-->
 
-<!--hvy:grid:1 {"id":"top-tools-technologies","column":"right","component":"component-list","componentListComponent":"xref-card","css":"margin: 0;"}-->
+<!--hvy:grid:1 {"id":"top-tools-technologies","column":"right","component":"component-list","componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
 
 <!--hvy:component-list:0 {"component":"text","css":"margin: 0 0 0.35rem;"}-->
 ## Tools & Technologies

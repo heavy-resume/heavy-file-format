@@ -62,7 +62,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
         ${items
           .map(
             (section) =>
-              `<button type="button" class="nav-item" data-nav-id="${deps.escapeAttr(deps.getSectionId(section))}">${deps.escapeHtml(
+              `<button type="button" class="nav-item" data-nav-id="${deps.escapeAttr(deps.getSectionId(section))}" data-level="${section.level}">${deps.escapeHtml(
                 deps.formatSectionTitle(section.title)
               )}</button>`
           )

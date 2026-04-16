@@ -237,6 +237,7 @@ button.tiny {
 .viewer-shell .reader-document {
   height: 100%;
   overflow: auto;
+  padding-left: 3.25rem;
 }
 
 .viewer-sidebar {
@@ -274,16 +275,18 @@ button.tiny {
   left: 100%;
   top: 1rem;
   width: 2.9rem;
-  min-height: 8rem;
-  padding: 0.8rem 0.45rem;
-  border-radius: 0 12px 12px 0;
+  height: 2.9rem;
+  padding: 0;
+  border-radius: 0 10px 10px 0;
   border: 1px solid #b8c8d3;
   border-left: 0;
   background: color-mix(in srgb, var(--hvy-surface) 94%, #d9eaf4 6%);
   color: #244355;
-  writing-mode: vertical-rl;
-  text-orientation: mixed;
-  letter-spacing: 0.04em;
+  font-size: 1.25rem;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   box-shadow: 0 10px 24px rgba(39, 70, 91, 0.12);
   pointer-events: auto;
 }
@@ -1431,8 +1434,16 @@ button.tiny {
   border-radius: 8px;
   background: #f9fcff;
   padding: 0.4rem 0.52rem;
+  padding-left: calc(0.52rem + (var(--nav-level, 1) - 1) * 1rem);
   cursor: pointer;
 }
+
+.nav-item[data-level="1"] { --nav-level: 1; }
+.nav-item[data-level="2"] { --nav-level: 2; }
+.nav-item[data-level="3"] { --nav-level: 3; }
+.nav-item[data-level="4"] { --nav-level: 4; }
+.nav-item[data-level="5"] { --nav-level: 5; }
+.nav-item[data-level="6"] { --nav-level: 6; }
 
 .reader-section {
   border: 1px solid #d2dde6;
@@ -1786,6 +1797,18 @@ button.tiny {
 .reader-component-list {
   display: grid;
   gap: 0.2rem;
+}
+
+.reader-block.align-center .reader-component-list {
+  justify-items: stretch;
+  justify-content: space-around;
+}
+
+.reader-block.align-center .reader-xref-card {
+  justify-self: stretch;
+  width: 100%;
+  max-width: 20rem;
+  text-align: left;
 }
 
 .reader-grid-layout {

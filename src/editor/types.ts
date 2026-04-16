@@ -58,6 +58,8 @@ export interface VisualBlock {
   schemaMode: boolean;
 }
 
+export type SectionLocation = 'main' | 'sidebar';
+
 export interface VisualSection {
   key: string;
   customId: string;
@@ -69,6 +71,7 @@ export interface VisualSection {
   expanded: boolean;
   highlight: boolean;
   customCss: string;
+  location: SectionLocation;
   blocks: VisualBlock[];
   children: VisualSection[];
 }

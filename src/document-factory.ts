@@ -186,6 +186,7 @@ export function createEmptySection(level: number, component = 'container', isGho
     expanded: true,
     highlight: false,
     customCss: '',
+    location: 'main',
     blocks: component ? [createEmptyBlock(component)] : [],
     children: [],
   };
@@ -259,6 +260,7 @@ function cloneReusableSectionWithDelta(section: VisualSection, levelDelta: numbe
     expanded: section.expanded,
     highlight: section.highlight,
     customCss: section.customCss,
+    location: section.location ?? 'main',
     blocks: section.blocks.map((block) => cloneReusableBlock(block)),
     children: section.children.map((child) => cloneReusableSectionWithDelta(child, levelDelta)),
   };

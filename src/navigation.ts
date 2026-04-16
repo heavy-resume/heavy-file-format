@@ -1,9 +1,27 @@
 import type { VisualBlock, VisualSection } from './editor/types';
 import { state, getRefreshReaderPanels } from './state';
-import { getSectionId } from './section-ops';
+import { getSectionId, flattenSections } from './section-ops';
 import { resolveBaseComponent } from './component-defs';
 import { createBlankDocument } from './document-factory';
 import { getRenderApp } from './state';
+
+/**
+ * Directly update the sidebar open/closed state on the DOM without a full re-render,
+ * so CSS transitions play. Also keeps `state.viewerSidebarOpen` in sync.
+ */
+export function setSidebarOpen(app: HTMLElement, open: boolean): void {
+  state.viewerSidebarOpen = open;
+  const shell = app.querySelector<HTMLElement>('.viewer-shell');
+  if (!shell) {
+    return;
+  }
+  shell.classList.toggle('is-sidebar-open', open);
+  shell.classList.toggle('is-sidebar-closed', !open);
+  const tab = shell.querySelector<HTMLButtonElement>('.viewer-sidebar-tab');
+  if (tab) {
+    tab.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+}
 
 export function navigateToSection(sectionId: string, app: HTMLElement): void {
   if (!sectionId) {
@@ -12,6 +30,18 @@ export function navigateToSection(sectionId: string, app: HTMLElement): void {
   closeModal();
   const sectionFound = expandSectionPathById(state.document.sections, sectionId);
   const blockFound = expandBlockPathBySchemaId(state.document.sections, sectionId);
+
+  // Auto-open or close the sidebar based on where the target section lives.
+  const targetSection = flattenSections(state.document.sections).find(
+    (s) => !s.isGhost && getSectionId(s) === sectionId
+  );
+  if (targetSection) {
+    const shouldOpen = targetSection.location === 'sidebar';
+    if (state.viewerSidebarOpen !== shouldOpen) {
+      setSidebarOpen(app, shouldOpen);
+    }
+  }
+
   state.tempHighlights.add(sectionId);
   getRefreshReaderPanels()();
 

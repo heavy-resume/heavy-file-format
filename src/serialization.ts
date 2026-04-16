@@ -46,6 +46,7 @@ function mapParsedSection(section: HvySection, documentMeta: JsonObject): Visual
     expanded: sectionMeta.expanded === false ? false : true,
     highlight: sectionMeta.highlight === true,
     customCss: typeof sectionMeta.custom_css === 'string' ? sectionMeta.custom_css : '',
+    location: sectionMeta.location === 'sidebar' ? 'sidebar' : 'main',
     blocks,
     children: section.children.map((child) => mapParsedSection(child, documentMeta)),
   };
@@ -332,6 +333,9 @@ function serializeSection(section: VisualSection, level: number): string {
   };
   if (section.customCss.trim().length > 0) {
     meta.custom_css = section.customCss;
+  }
+  if (section.location === 'sidebar') {
+    meta.location = 'sidebar';
   }
 
   const directive = `<!--hvy: ${JSON.stringify(meta)}-->`;

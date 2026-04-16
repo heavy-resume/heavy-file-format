@@ -1,0 +1,146 @@
+import type { VisualBlock, VisualSection } from './editor/types';
+import { state, getRefreshReaderPanels } from './state';
+import { getSectionId } from './section-ops';
+import { resolveBaseComponent } from './component-defs';
+import { createBlankDocument } from './document-factory';
+import { getRenderApp } from './state';
+
+export function navigateToSection(sectionId: string, app: HTMLElement): void {
+  if (!sectionId) {
+    return;
+  }
+  closeModal();
+  const sectionFound = expandSectionPathById(state.document.sections, sectionId);
+  const blockFound = expandBlockPathBySchemaId(state.document.sections, sectionId);
+  state.tempHighlights.add(sectionId);
+  getRefreshReaderPanels()();
+
+  window.requestAnimationFrame(() => {
+    const reader = app.querySelector<HTMLElement>('#readerDocument');
+    const target = reader?.querySelector<HTMLElement>(`#${CSS.escape(sectionId)}`);
+    if (!target) {
+      console.error('[hvy:navigation] Unable to find reader target for internal link.', {
+        targetId: sectionId,
+        sectionFound,
+        blockFound,
+        availableReaderIds: getReaderTargetIds(app),
+      });
+      return;
+    }
+
+    target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  });
+  window.setTimeout(() => {
+    state.tempHighlights.delete(sectionId);
+    getRefreshReaderPanels()();
+  }, 1400);
+}
+
+export function getReaderTargetIds(app: HTMLElement): string[] {
+  return [...app.querySelectorAll<HTMLElement>('#readerDocument [id]')].map((element) => element.id);
+}
+
+export function expandSectionPathById(sections: VisualSection[], sectionId: string): boolean {
+  for (const section of sections) {
+    if (getSectionId(section) === sectionId) {
+      section.expanded = true;
+      return true;
+    }
+    if (expandSectionPathById(section.children, sectionId)) {
+      section.expanded = true;
+      return true;
+    }
+  }
+  return false;
+}
+
+export function expandBlockPathBySchemaId(sections: VisualSection[], schemaId: string): boolean {
+  for (const section of sections) {
+    if (expandBlockPathInList(section.blocks, schemaId)) {
+      section.expanded = true;
+      return true;
+    }
+    if (expandBlockPathBySchemaId(section.children, schemaId)) {
+      section.expanded = true;
+      return true;
+    }
+  }
+  return false;
+}
+
+function expandBlockPathInList(blocks: VisualBlock[], schemaId: string): boolean {
+  for (const block of blocks) {
+    const isTarget = block.schema.id === schemaId;
+    if (isTarget && resolveBaseComponent(block.schema.component) === 'expandable') {
+      block.schema.expandableExpanded = true;
+      return true;
+    }
+    const nestedFound =
+      expandBlockPathInList(block.schema.containerBlocks ?? [], schemaId)
+      || expandBlockPathInList(block.schema.componentListBlocks ?? [], schemaId)
+      || expandBlockPathInList((block.schema.gridItems ?? []).map((item) => item.block), schemaId)
+      || expandBlockPathInList(block.schema.expandableStubBlocks ?? [], schemaId)
+      || expandBlockPathInList(block.schema.expandableContentBlocks ?? [], schemaId)
+      || (block.schema.tableRows ?? []).some((row) => expandBlockPathInList(row.detailsBlocks ?? [], schemaId));
+    if (nestedFound) {
+      if (resolveBaseComponent(block.schema.component) === 'expandable') {
+        block.schema.expandableExpanded = true;
+      }
+      return true;
+    }
+    if (isTarget) {
+      return true;
+    }
+  }
+  return false;
+}
+
+export function closeModal(): void {
+  state.modalSectionKey = null;
+  state.componentMetaModal = null;
+  state.reusableSaveModal = null;
+}
+
+export function closeModalIfTarget(sectionKey: string): void {
+  if (state.modalSectionKey === sectionKey) {
+    closeModal();
+  }
+  if (state.componentMetaModal?.sectionKey === sectionKey) {
+    state.componentMetaModal = null;
+  }
+  if (state.reusableSaveModal?.sectionKey === sectionKey) {
+    state.reusableSaveModal = null;
+  }
+}
+
+export function resetTransientUiState(): void {
+  state.activeEditorBlock = null;
+  state.activeEditorSectionTitleKey = null;
+  state.clearSectionTitleOnFocusKey = null;
+  state.modalSectionKey = null;
+  state.reusableSaveModal = null;
+  state.componentMetaModal = null;
+  state.tempHighlights = new Set<string>();
+  state.addComponentBySection = {};
+  state.metaPanelOpen = false;
+  state.selectedReusableComponentName = null;
+  state.templateValues = {};
+  state.gridAddComponentByBlock = {};
+  state.lastHistoryGroup = null;
+  state.lastHistoryAt = 0;
+  state.pendingEditorCenterSectionKey = null;
+  state.paneScroll = {
+    editorTop: 0,
+    readerTop: 0,
+    windowTop: 0,
+  };
+}
+
+export function resetToBlankDocument(): void {
+  state.document = createBlankDocument();
+  state.filename = 'untitled.hvy';
+  state.history = [];
+  state.future = [];
+  resetTransientUiState();
+  getRenderApp()();
+}

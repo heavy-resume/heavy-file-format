@@ -1400,6 +1400,10 @@ button.tiny {
   margin-bottom: 0.7rem;
 }
 
+.reader-sidebar-sections .reader-section {
+  margin-bottom: 0.7rem;
+}
+
 .ok,
 .warn {
   border-radius: 8px;

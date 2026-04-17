@@ -133,6 +133,16 @@ export function bindUi(app: HTMLElement): void {
       return;
     }
 
+    if (field === 'meta-sidebar-label' && target instanceof HTMLInputElement) {
+      recordHistory('meta:sidebar-label');
+      if (target.value.trim().length > 0) {
+        state.document.meta.sidebar_label = target.value;
+      } else {
+        delete state.document.meta.sidebar_label;
+      }
+      return;
+    }
+
     if (field.startsWith('theme-')) {
       recordHistory(`meta:${field}`);
       const theme = getThemeConfig();
@@ -609,6 +619,16 @@ export function bindUi(app: HTMLElement): void {
         state.activeEditorSectionTitleKey = child.key;
         state.clearSectionTitleOnFocusKey = isDefaultUntitledSectionTitle(child.title) ? child.key : null;
       }
+      getRenderApp()();
+      return;
+    }
+
+    if (action === 'toggle-section-location') {
+      if (!section) {
+        return;
+      }
+      recordHistory();
+      section.location = section.location === 'sidebar' ? 'main' : 'sidebar';
       getRenderApp()();
       return;
     }

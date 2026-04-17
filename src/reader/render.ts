@@ -42,6 +42,7 @@ interface ReaderRenderDeps {
 export interface ReaderRenderer {
   renderNavigation: (sections: VisualSection[]) => string;
   renderReaderSections: (sections: VisualSection[]) => string;
+  renderSidebarSections: (sections: VisualSection[]) => string;
   renderReaderSection: (section: VisualSection) => string;
   renderReaderBlock: (section: VisualSection, block: VisualBlock) => string;
   renderModal: () => string;
@@ -72,11 +73,16 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
   }
 
   function renderReaderSections(sections: VisualSection[]): string {
-    const realSections = sections.filter((section) => !section.isGhost);
+    const realSections = sections.filter((section) => !section.isGhost && section.location !== 'sidebar');
     if (realSections.length === 0) {
       return '<div class="muted">No content to display yet.</div>';
     }
     return realSections.map((section) => renderReaderSection(section)).join('');
+  }
+
+  function renderSidebarSections(sections: VisualSection[]): string {
+    const sidebarSections = sections.filter((section) => !section.isGhost && section.location === 'sidebar');
+    return sidebarSections.map((section) => renderReaderSection(section)).join('');
   }
 
   function renderReaderSection(section: VisualSection): string {
@@ -309,6 +315,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
   return {
     renderNavigation,
     renderReaderSections,
+    renderSidebarSections,
     renderReaderSection,
     renderReaderBlock,
     renderModal,

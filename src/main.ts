@@ -234,10 +234,11 @@ function renderApp(): void {
               : `<div class="viewer-shell ${state.viewerSidebarOpen ? 'is-sidebar-open' : 'is-sidebar-closed'}">
                    <div class="viewer-sidebar-backdrop" data-action="toggle-viewer-sidebar"></div>
                    <aside class="viewer-sidebar">
-                     <button type="button" class="viewer-sidebar-tab" data-action="toggle-viewer-sidebar" aria-expanded="${state.viewerSidebarOpen ? 'true' : 'false'}" aria-label="Toggle navigation">☰</button>
+                     <button type="button" class="viewer-sidebar-tab" data-action="toggle-viewer-sidebar" aria-expanded="${state.viewerSidebarOpen ? 'true' : 'false'}" aria-label="Toggle navigation">${escapeHtml(String(state.document.meta.sidebar_label || '☰'))}</button>
                      <div class="viewer-sidebar-panel">
                        <div id="readerWarnings" class="reader-warnings">${readerRenderer.renderWarnings()}</div>
                        <div id="readerNav" class="reader-nav">${readerRenderer.renderNavigation(state.document.sections)}</div>
+                       <div id="readerSidebarSections" class="reader-sidebar-sections">${readerRenderer.renderSidebarSections(state.document.sections)}</div>
                      </div>
                    </aside>
                    <div id="readerDocument" class="reader-document">${readerRenderer.renderReaderSections(state.document.sections)}</div>
@@ -300,6 +301,7 @@ function refreshReaderPanels(): void {
   let modalMs = 0;
   const warnings = app.querySelector<HTMLDivElement>('#readerWarnings');
   const nav = app.querySelector<HTMLDivElement>('#readerNav');
+  const sidebarSections = app.querySelector<HTMLDivElement>('#readerSidebarSections');
   const reader = app.querySelector<HTMLDivElement>('#readerDocument');
 
   if (warnings) {
@@ -311,6 +313,9 @@ function refreshReaderPanels(): void {
     const stepStartedAt = performance.now();
     nav.innerHTML = readerRenderer.renderNavigation(state.document.sections);
     navMs = performance.now() - stepStartedAt;
+  }
+  if (sidebarSections) {
+    sidebarSections.innerHTML = readerRenderer.renderSidebarSections(state.document.sections);
   }
   if (reader) {
     const stepStartedAt = performance.now();

@@ -74,6 +74,9 @@ tags: [guide, onboarding]
 ---
 ```
 
+Rich-client presentation keys in document metadata include:
+- `sidebar_label`: optional string. Rich clients MAY use it as the label for the sidebar toggle control. Defaults to a client-defined fallback (e.g. `☰`) if absent.
+
 ### 5.2 Section boundaries
 
 Top-level sections are defined by `<!--hvy: {...}-->` directives.
@@ -164,9 +167,11 @@ Section metadata MAY also include rich-client presentation keys such as:
 - `highlight`
 - `lock`
 - `custom_css`
+- `location`
 
 `custom_css` is an optional inline CSS style string applied to the rendered section wrapper.
 `lock` is an optional boolean. Rich clients MAY use it to prevent adding new blocks or child sections inside that section.
+`location` is an optional string. Rich clients MAY use it to route a section to a named layout zone in the viewer. Defined values are `"main"` (default) and `"sidebar"`. Unknown values SHOULD be treated as `"main"`.
 
 ### 5.7 Block directives
 

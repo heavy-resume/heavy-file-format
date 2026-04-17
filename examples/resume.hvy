@@ -552,7 +552,7 @@ Product-minded software engineer focused on developer tooling, AI workflows, and
 
 <!--hvy:component-list:3 {"component":"xref-card","css":"margin: 0.35rem 0;","xrefTitle":"Developer Containers","xrefDetail":"Reproducible local environments","xrefTarget":"tool-developer-containers"}-->
 
-<!--hvy: {"id":"skills","lock":true,"expanded":false}-->
+<!--hvy: {"id":"skills","lock":true,"expanded":false,"location":"sidebar"}-->
 #! Skills
 
 <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
@@ -632,7 +632,7 @@ Project Management
 
 <!--hvy:component-list:0 {"component":"xref-card","css":"margin: 0.25rem 0;","xrefTitle":"Autonomous Agent Hackathon","xrefDetail":"08/2023 - 08/2023","xrefTarget":"project-autonomous-agent-hackathon"}-->
 
-<!--hvy: {"id":"tools-technologies","lock":true,"expanded":false}-->
+<!--hvy: {"id":"tools-technologies","lock":true,"expanded":false,"location":"sidebar"}-->
 #! Tools & Technologies
 
 <!--hvy:text {"css":"margin: 0.5rem 0;"}-->

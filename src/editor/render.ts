@@ -170,6 +170,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
                    <button type="button" class="ghost" data-action="focus-modal" data-section-key="${deps.escapeAttr(section.key)}">Meta</button>`
                 : ''
             }
+            <button type="button" class="${section.location === 'sidebar' ? 'secondary' : 'ghost'}" data-action="toggle-section-location" data-section-key="${deps.escapeAttr(section.key)}" title="${section.location === 'sidebar' ? 'Move to main' : 'Move to sidebar'}">Sidebar</button>
             <button type="button" class="danger" data-action="remove-section" data-section-key="${deps.escapeAttr(section.key)}">Remove</button>
           </div>
         </div>
@@ -434,6 +435,10 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         <label>
           <span>Title</span>
           <input data-field="meta-title" value="${deps.escapeAttr(String(state.documentMeta.title ?? ''))}" />
+        </label>
+        <label>
+          <span>Sidebar Label</span>
+          <input data-field="meta-sidebar-label" placeholder="☰" value="${deps.escapeAttr(String(state.documentMeta.sidebar_label ?? ''))}" />
         </label>
         <div class="editor-grid">
           <label>

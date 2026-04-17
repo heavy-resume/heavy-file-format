@@ -122,10 +122,9 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const sectionCards = sections.map((section) => renderEditorSection(section, sections)).join('');
     const flatSections = deps.flattenSections(sections);
     return `
-      ${
-        state.showAdvancedEditor
-          ? renderTemplateGhosts(getTemplateFields(state.documentMeta), flatSections, { escapeAttr: deps.escapeAttr, escapeHtml: deps.escapeHtml })
-          : ''
+      ${state.showAdvancedEditor
+        ? renderTemplateGhosts(getTemplateFields(state.documentMeta), flatSections, { escapeAttr: deps.escapeAttr, escapeHtml: deps.escapeHtml })
+        : ''
       }
       ${sectionCards}
       <article class="ghost-section-card add-ghost reusable-section-ghost" data-action="add-top-level-section" data-section-key="__top_level__">
@@ -146,11 +145,11 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const isUntitled = deps.isDefaultUntitledSectionTitle(section.title);
     const titleEditor = deps.isActiveEditorSectionTitle(section.key)
       ? `<input autofocus class="section-title-input" data-section-key="${deps.escapeAttr(section.key)}" data-field="section-title" value="${deps.escapeAttr(
-          deps.isDefaultUntitledSectionTitle(section.title) ? '' : section.title
-        )}" />`
+        deps.isDefaultUntitledSectionTitle(section.title) ? '' : section.title
+      )}" />`
       : `<button type="button" class="section-title-passive${isUntitled ? ' section-title-placeholder' : ''}" data-action="activate-section-title" data-section-key="${deps.escapeAttr(
-          section.key
-        )}">${deps.escapeHtml(visibleTitle)}</button>`;
+        section.key
+      )}">${deps.escapeHtml(visibleTitle)}</button>`;
     return `
       <article class="editor-section-card" data-editor-section="${deps.escapeAttr(section.key)}">
         <div class="editor-section-head">
@@ -159,39 +158,35 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
               <button type="button" class="order-arrow-button" data-action="move-section-up" data-section-key="${deps.escapeAttr(section.key)}" aria-label="Move section up">▲</button>
               <button type="button" class="order-arrow-button" data-action="move-section-down" data-section-key="${deps.escapeAttr(section.key)}" aria-label="Move section down">▼</button>
               <button type="button" class="section-drag-handle" draggable="true" data-drag-handle="section" data-section-key="${deps.escapeAttr(
-                section.key
-              )}" aria-label="Drag to reorder section">⋮⋮</button>
+      section.key
+    )}" aria-label="Drag to reorder section">⋮⋮</button>
             </div>
             ${titleEditor}
           </div>
           <div class="editor-actions">
-            ${
-              state.showAdvancedEditor
-                ? `<button type="button" class="ghost" data-action="open-save-section-def" data-section-key="${deps.escapeAttr(section.key)}">Reusable</button>
+            ${state.showAdvancedEditor
+        ? `<button type="button" class="ghost" data-action="open-save-section-def" data-section-key="${deps.escapeAttr(section.key)}">Reusable</button>
                    <button type="button" class="ghost" data-action="focus-modal" data-section-key="${deps.escapeAttr(section.key)}">Meta</button>`
-                : ''
-            }
+        : ''
+      }
             <button type="button" class="${section.location === 'sidebar' ? 'secondary' : 'ghost'}" data-action="toggle-section-location" data-section-key="${deps.escapeAttr(section.key)}" title="${section.location === 'sidebar' ? 'Move to main' : 'Move to sidebar'}">Sidebar</button>
             <button type="button" class="danger" data-action="remove-section" data-section-key="${deps.escapeAttr(section.key)}">Remove</button>
           </div>
         </div>
 
-        ${
-          state.showAdvancedEditor
-            ? `<div class="editor-row">
-                <label class="checkbox-label"><input type="checkbox" data-section-key="${deps.escapeAttr(section.key)}" data-field="section-highlight" ${
-                section.highlight ? 'checked' : ''
-              } /> Highlight</label>
+        ${state.showAdvancedEditor
+        ? `<div class="editor-row">
+                <label class="checkbox-label"><input type="checkbox" data-section-key="${deps.escapeAttr(section.key)}" data-field="section-highlight" ${section.highlight ? 'checked' : ''
+        } /> Highlight</label>
               </div>`
-            : ''
-        }
+        : ''
+      }
 
         <div class="editor-blocks">
           ${section.blocks.map((block) => renderEditorBlock(section.key, block, rootSections)).join('')}
-          ${
-            section.lock
-              ? ''
-              : `<article class="ghost-section-card add-ghost" data-action="add-block" data-section-key="${deps.escapeAttr(section.key)}">
+          ${section.lock
+        ? ''
+        : `<article class="ghost-section-card add-ghost" data-action="add-block" data-section-key="${deps.escapeAttr(section.key)}">
                   <div class="ghost-plus-big"><span>+</span></div>
                   <div class="ghost-label">Add Component</div>
                   <label class="ghost-component-picker">
@@ -201,15 +196,14 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
                     </select>
                   </label>
                 </article>`
-          }
+      }
         </div>
 
         <div class="editor-children">
           ${section.children.map((child) => renderEditorSection(child, rootSections)).join('')}
-          ${
-            section.lock
-              ? ''
-              : `<article class="ghost-section-card add-ghost reusable-section-ghost subsection-add-button" data-action="add-subsection" data-section-key="${deps.escapeAttr(section.key)}">
+          ${section.lock
+        ? ''
+        : `<article class="ghost-section-card add-ghost reusable-section-ghost subsection-add-button" data-action="add-subsection" data-section-key="${deps.escapeAttr(section.key)}">
                   <div class="ghost-plus-big"><span>+</span></div>
                   <div class="ghost-label">Add Section</div>
                   <label class="ghost-component-picker">
@@ -219,7 +213,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
                     </select>
                   </label>
                 </article>`
-          }
+      }
         </div>
       </article>
     `;
@@ -288,21 +282,20 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           </div>
           <div class="editor-actions">
             <button type="button" class="ghost" data-action="deactivate-block" data-section-key="${deps.escapeAttr(
-              sectionKey
-            )}" data-block-id="${deps.escapeAttr(block.id)}">Done</button>
-            ${
-              state.showAdvancedEditor
-                ? `<button type="button" class="ghost" data-action="open-save-component-def" data-section-key="${deps.escapeAttr(
-                    sectionKey
-                  )}" data-block-id="${deps.escapeAttr(block.id)}">Reusable</button>
+      sectionKey
+    )}" data-block-id="${deps.escapeAttr(block.id)}">Done</button>
+            ${state.showAdvancedEditor
+        ? `<button type="button" class="ghost" data-action="open-save-component-def" data-section-key="${deps.escapeAttr(
+          sectionKey
+        )}" data-block-id="${deps.escapeAttr(block.id)}">Reusable</button>
                    <button type="button" class="ghost" data-action="open-component-meta" data-section-key="${deps.escapeAttr(
-                    sectionKey
-                  )}" data-block-id="${deps.escapeAttr(block.id)}">Meta</button>`
-                : ''
-            }
+          sectionKey
+        )}" data-block-id="${deps.escapeAttr(block.id)}">Meta</button>`
+        : ''
+      }
             <button type="button" class="danger remove-x" data-action="remove-block" data-section-key="${deps.escapeAttr(
-              sectionKey
-            )}" data-block-id="${deps.escapeAttr(block.id)}">×</button>
+        sectionKey
+      )}" data-block-id="${deps.escapeAttr(block.id)}">×</button>
           </div>
         </div>
 
@@ -318,8 +311,8 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     }
     return `
       <div class="editor-block-passive" data-action="activate-block" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(
-        block.id
-      )}">
+      block.id
+    )}">
         ${renderPassiveEditorBlockContent(sectionKey, section, block, rootSections)}
       </div>
     `;
@@ -358,8 +351,8 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         ? alwaysShowStub
           ? `${stubToggle}${expandedPanel}`
           : `${expandedPanel}<div class="expand-collapse-strip" data-action="toggle-editor-expandable" data-section-key="${deps.escapeAttr(
-              sectionKey
-            )}" data-block-id="${deps.escapeAttr(block.id)}" aria-expanded="true">Collapse</div>`
+            sectionKey
+          )}" data-block-id="${deps.escapeAttr(block.id)}" aria-expanded="true">Collapse</div>`
         : stubToggle;
 
       return `<div class="expandable-reader">
@@ -375,6 +368,9 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           <div class="ghost-label">Add first ${deps.escapeHtml(block.schema.componentListComponent || 'item')}</div>
         </div>`;
       }
+      // return `<div class="reader-component-list">${block.schema.componentListBlocks
+      //   .map((innerBlock) => renderPassiveEditorBlock(sectionKey, innerBlock, rootSections))
+      //   .join('')}</div>`;
     }
 
     if ((base === 'text' || base === 'quote') && block.text.trim().length === 0) {
@@ -403,14 +399,14 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       options?.includeAlign && options.align
         ? `<div class="toolbar-segment align-buttons" role="group" aria-label="Text alignment">
             <button type="button" class="${options.align === 'left' ? 'secondary' : 'ghost'}" data-action="set-block-align" data-align-value="left" data-section-key="${deps.escapeAttr(
-              sectionKey
-            )}" data-block-id="${deps.escapeAttr(blockId)}">Left</button>
+          sectionKey
+        )}" data-block-id="${deps.escapeAttr(blockId)}">Left</button>
             <button type="button" class="${options.align === 'center' ? 'secondary' : 'ghost'}" data-action="set-block-align" data-align-value="center" data-section-key="${deps.escapeAttr(
-              sectionKey
-            )}" data-block-id="${deps.escapeAttr(blockId)}">Center</button>
+          sectionKey
+        )}" data-block-id="${deps.escapeAttr(blockId)}">Center</button>
             <button type="button" class="${options.align === 'right' ? 'secondary' : 'ghost'}" data-action="set-block-align" data-align-value="right" data-section-key="${deps.escapeAttr(
-              sectionKey
-            )}" data-block-id="${deps.escapeAttr(blockId)}">Right</button>
+          sectionKey
+        )}" data-block-id="${deps.escapeAttr(blockId)}">Right</button>
           </div>`
         : '';
     return `
@@ -481,8 +477,8 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         </div>
         <div class="component-defs">
           ${defs
-            .map(
-              (def, index) => `<article class="component-def">
+        .map(
+          (def, index) => `<article class="component-def">
                 <label>
                   <span>Name</span>
                   <input data-field="def-name" data-def-index="${index}" value="${deps.escapeAttr(def.name)}" />
@@ -505,14 +501,14 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
                 <label>
                   <span>Default Tags</span>
                   ${renderTagEditor(
-                    'def-tags',
-                    def.tags ?? '',
-                    {
-                      defIndex: index,
-                      placeholder: 'Add a default tag',
-                    },
-                    { escapeAttr: deps.escapeAttr, escapeHtml: deps.escapeHtml }
-                  )}
+            'def-tags',
+            def.tags ?? '',
+            {
+              defIndex: index,
+              placeholder: 'Add a default tag',
+            },
+            { escapeAttr: deps.escapeAttr, escapeHtml: deps.escapeHtml }
+          )}
                 </label>
                 <label>
                   <span>Description</span>
@@ -520,28 +516,27 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
                 </label>
                 <button type="button" class="danger" data-action="remove-component-def" data-def-index="${index}">Remove</button>
               </article>`
-            )
-            .join('')}
+        )
+        .join('')}
         </div>
         <div class="meta-panel-head">
           <strong>Reusable Sections</strong>
         </div>
         <div class="component-defs">
-          ${
-            sectionDefs.length === 0
-              ? '<div class="muted">Save a section as reusable from its header to make it available here and in the add-section controls.</div>'
-              : sectionDefs
-                  .map(
-                    (def, index) => `<article class="component-def">
+          ${sectionDefs.length === 0
+        ? '<div class="muted">Save a section as reusable from its header to make it available here and in the add-section controls.</div>'
+        : sectionDefs
+          .map(
+            (def, index) => `<article class="component-def">
                       <label>
                         <span>Name</span>
                         <input data-field="section-def-name" data-section-def-index="${index}" value="${deps.escapeAttr(def.name)}" />
                       </label>
                       <button type="button" class="danger" data-action="remove-section-def" data-section-def-index="${index}">Remove</button>
                     </article>`
-                  )
-                  .join('')
-          }
+          )
+          .join('')
+      }
         </div>
       </section>
     `;
@@ -597,15 +592,15 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         <label>
           <span>Tags</span>
           ${renderTagEditor(
-            'block-tags',
-            block.schema.tags,
-            {
-              sectionKey,
-              blockId: block.id,
-              placeholder: 'Add a tag',
-            },
-            { escapeAttr: deps.escapeAttr, escapeHtml: deps.escapeHtml }
-          )}
+      'block-tags',
+      block.schema.tags,
+      {
+        sectionKey,
+        blockId: block.id,
+        placeholder: 'Add a tag',
+      },
+      { escapeAttr: deps.escapeAttr, escapeHtml: deps.escapeHtml }
+    )}
         </label>
         <label>
           <span>Placeholder</span>

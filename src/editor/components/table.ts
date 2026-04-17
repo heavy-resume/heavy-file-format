@@ -37,7 +37,7 @@ function renderTableRowEditor(
               data-row-index="${rowIndex}"
               data-cell-index="${cellIndex}"
               data-field="table-cell"
-              data-placeholder="Cell value"
+              data-placeholder="${helpers.escapeAttr(safeColumns[cellIndex] || 'Cell value')}"
             >${helpers.escapeHtml(row.cells[cellIndex] ?? '')}</div>
           </td>`
         )

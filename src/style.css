@@ -669,7 +669,10 @@ button.tiny {
   letter-spacing: 0.01em;
 }
 
-.rich-editor[data-placeholder]:empty::before {
+.rich-editor[data-placeholder]:empty::before,
+.rich-editor[data-placeholder]:has(> br:only-child)::before,
+.rich-editor[data-placeholder]:has(> p:only-child:empty)::before,
+.rich-editor[data-placeholder]:has(> p:only-child > br:only-child)::before {
   content: attr(data-placeholder);
   color: #9aabb5;
   pointer-events: none;
@@ -1072,7 +1075,8 @@ button.tiny {
   outline: none;
 }
 
-.inline-editable:empty::before {
+.inline-editable:empty::before,
+.inline-editable:has(> br:only-child)::before {
   content: attr(data-placeholder);
   color: #81919b;
 }
@@ -1298,7 +1302,7 @@ button.tiny {
   font-size: 0.8rem;
 }
 
-.expandable-part.is-open > .expandable-header > .expandable-summary::before {
+.expandable-part.is-open>.expandable-header>.expandable-summary::before {
   content: "▾";
 }
 
@@ -1464,12 +1468,29 @@ button.tiny {
   cursor: pointer;
 }
 
-.nav-item[data-level="1"] { --nav-level: 1; }
-.nav-item[data-level="2"] { --nav-level: 2; }
-.nav-item[data-level="3"] { --nav-level: 3; }
-.nav-item[data-level="4"] { --nav-level: 4; }
-.nav-item[data-level="5"] { --nav-level: 5; }
-.nav-item[data-level="6"] { --nav-level: 6; }
+.nav-item[data-level="1"] {
+  --nav-level: 1;
+}
+
+.nav-item[data-level="2"] {
+  --nav-level: 2;
+}
+
+.nav-item[data-level="3"] {
+  --nav-level: 3;
+}
+
+.nav-item[data-level="4"] {
+  --nav-level: 4;
+}
+
+.nav-item[data-level="5"] {
+  --nav-level: 5;
+}
+
+.nav-item[data-level="6"] {
+  --nav-level: 6;
+}
 
 .reader-section {
   border: 1px solid #d2dde6;
@@ -1640,36 +1661,36 @@ button.tiny {
   line-height: 1.15;
 }
 
-.reader-block p + h1,
-.reader-block p + h2,
-.reader-block p + h3,
-.reader-block p + h4,
-.reader-block p + h5,
-.reader-block p + h6,
-.reader-block ul + h1,
-.reader-block ul + h2,
-.reader-block ul + h3,
-.reader-block ul + h4,
-.reader-block ul + h5,
-.reader-block ul + h6,
-.reader-block ol + h1,
-.reader-block ol + h2,
-.reader-block ol + h3,
-.reader-block ol + h4,
-.reader-block ol + h5,
-.reader-block ol + h6,
-.reader-block blockquote + h1,
-.reader-block blockquote + h2,
-.reader-block blockquote + h3,
-.reader-block blockquote + h4,
-.reader-block blockquote + h5,
-.reader-block blockquote + h6,
-.reader-block pre + h1,
-.reader-block pre + h2,
-.reader-block pre + h3,
-.reader-block pre + h4,
-.reader-block pre + h5,
-.reader-block pre + h6 {
+.reader-block p+h1,
+.reader-block p+h2,
+.reader-block p+h3,
+.reader-block p+h4,
+.reader-block p+h5,
+.reader-block p+h6,
+.reader-block ul+h1,
+.reader-block ul+h2,
+.reader-block ul+h3,
+.reader-block ul+h4,
+.reader-block ul+h5,
+.reader-block ul+h6,
+.reader-block ol+h1,
+.reader-block ol+h2,
+.reader-block ol+h3,
+.reader-block ol+h4,
+.reader-block ol+h5,
+.reader-block ol+h6,
+.reader-block blockquote+h1,
+.reader-block blockquote+h2,
+.reader-block blockquote+h3,
+.reader-block blockquote+h4,
+.reader-block blockquote+h5,
+.reader-block blockquote+h6,
+.reader-block pre+h1,
+.reader-block pre+h2,
+.reader-block pre+h3,
+.reader-block pre+h4,
+.reader-block pre+h5,
+.reader-block pre+h6 {
   margin-top: 0.4rem;
 }
 
@@ -1779,19 +1800,34 @@ button.tiny {
 }
 
 @keyframes expandContentIn {
-  from { opacity: 0; transform: translateY(-6px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes expandContentOut {
-  from { opacity: 1; transform: translateY(0); }
-  to   { opacity: 0; transform: translateY(-6px); }
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
 }
 
 .reader-table {
   width: 100%;
   border-collapse: collapse;
   table-layout: fixed;
+  min-height: 1ch;
 }
 
 .reader-table th,
@@ -1801,6 +1837,11 @@ button.tiny {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  min-height: 1ch;
+}
+
+.table-main-row {
+  height: 3ch;
 }
 
 .table-main-row.is-clickable {
@@ -1918,6 +1959,7 @@ button.tiny {
   0% {
     background: #fff2bf;
   }
+
   100% {
     background: #fff;
   }

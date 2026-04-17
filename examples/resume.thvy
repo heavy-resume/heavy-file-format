@@ -277,11 +277,15 @@ Title
 <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
 # Skills
 
+<!--hvy:component-list {"css":"margin: 0;","componentListComponent":"xref-card"}-->
+
 <!--hvy: {"id":"tools-technologies","lock":true,"expanded":false,"location":"sidebar"}-->
 #! Tools & Technologies
 
 <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
 # Tools & Technologies
+
+<!--hvy:component-list {"css":"margin: 0;","componentListComponent":"xref-card"}-->
 
 <!--hvy: {"id":"history","lock":true}-->
 #! History

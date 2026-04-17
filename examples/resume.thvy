@@ -7,7 +7,6 @@ component_defs:
     baseType: expandable
     description: Expandable resume history record
     schema:
-      component: history-record
       css: "margin: 0.35rem 0;"
       expandableAlwaysShowStub: true
       expandableExpanded: false
@@ -63,16 +62,11 @@ component_defs:
             componentListComponent: text
             css: "margin: 0;"
             componentListBlocks: []
-        - text: ""
-          schema:
-            component: skills-and-tools-tech-list
-            css: "margin: 0.6rem 0 0;"
-            gridColumns: 2
+        - component: skills-and-tools-tech-list
   - name: skills-and-tools-tech-list
     baseType: grid
     description: Two-column skills and tools list
     schema:
-      component: skills-and-tools-tech-list
       css: "margin: 0.6rem 0 0;"
       gridColumns: 2
       gridItems:
@@ -108,7 +102,6 @@ component_defs:
     baseType: expandable
     description: Expandable education record
     schema:
-      component: education-record
       css: "margin: 0.35rem 0;"
       expandableAlwaysShowStub: true
       expandableExpanded: false
@@ -155,11 +148,7 @@ component_defs:
             component: text
             css: "margin: 0.5rem 0;"
             placeholder: "Description"
-        - text: ""
-          schema:
-            component: skills-and-tools-tech-list
-            css: "margin: 0.6rem 0 0;"
-            gridColumns: 2
+        - component: skills-and-tools-tech-list
         - text: "#### Classes"
           schema:
             component: text
@@ -174,7 +163,6 @@ component_defs:
     baseType: expandable
     description: Expandable project record
     schema:
-      component: project-record
       css: "margin: 0.35rem 0;"
       expandableAlwaysShowStub: true
       expandableExpanded: false
@@ -216,40 +204,11 @@ component_defs:
           schema:
             component: text
             css: "margin: 0.35rem 0;"
-        - text: ""
-          schema:
-            component: skills-and-tools-tech-list
-            css: "margin: 0.6rem 0 0;"
-            gridColumns: 2
-  - name: skill-record-entry
-    baseType: component-list
-    description: Reusable 2-column skill record entry
-    schema:
-      component: component-list
-      css: "margin: 0 0 0.35rem;"
-      gridColumns: 2
-      gridItems:
-        - id: title
-          column: left
-          block:
-            text: ""
-            schema:
-              component: text
-              css: "margin: 0;"
-              placeholder: "Title"
-        - id: date-range
-          column: right
-          block:
-            text: ""
-            schema:
-              component: text
-              css: "margin: 0; text-align: right;"
-              placeholder: "Date range"
+        - component: skills-and-tools-tech-list
   - name: skill-record-experience-section
     baseType: container
     description: Skill record experience section
     schema:
-      component: container
       css: "margin: 0;"
       containerTitle: Experience
       containerBlocks:
@@ -261,13 +220,12 @@ component_defs:
           schema:
             component: component-list
             css: "margin: 0;"
-            componentListComponent: skill-record-entry
+            componentListComponent: xref-card
             componentListBlocks: []
   - name: skill-record-education-section
     baseType: container
     description: Skill record education section
     schema:
-      component: container
       css: "margin: 0;"
       containerTitle: Education
       containerBlocks:
@@ -279,14 +237,14 @@ component_defs:
           schema:
             component: component-list
             css: "margin: 0;"
-            componentListComponent: skill-record-entry
+            componentListComponent: xref-card
             componentListBlocks: []
   - name: skill-record-projects-section
     baseType: container
     description: Skill record projects section
     schema:
-      component: container
       css: "margin: 0;"
+      containerTitle: Projects
       containerBlocks:
         - text: "#### Projects"
           schema:
@@ -296,13 +254,12 @@ component_defs:
           schema:
             component: component-list
             css: "margin: 0;"
-            componentListComponent: skill-record-entry
+            componentListComponent: xref-card
             componentListBlocks: []
   - name: skill-record-section
     baseType: container
     description: Reusable skill record section with heading and repeatable entries
     schema:
-      component: container
       css: "margin: 0;"
       containerBlocks:
         - text: ""
@@ -320,10 +277,7 @@ component_defs:
     baseType: expandable
     description: Skill record
     schema:
-      component: expandable
       css: "margin: 0.35rem 0;"
-      expandableAlwaysShowStub: true
-      expandableExpanded: false
       expandableStubBlocks:
         - text: ""
           schema:
@@ -331,18 +285,9 @@ component_defs:
             css: "margin: 0;"
             placeholder: "Skill name"
       expandableContentBlocks:
-        - text: ""
-          schema:
-            component: skill-record-experience-section
-            containerTitle: Experience FIXME THIS ONE IS USED
-        - text: ""
-          schema:
-            component: skill-record-education-section
-            containerTitle: Education FIXME THIS ONE IS USED
-        - text: ""
-          schema:
-            component: skill-record-projects-section
-            containerTitle: Projects FIXME THIS ONE IS USED
+        - component: skill-record-experience-section
+        - component: skill-record-education-section
+        - component: skill-record-projects-section
 ---
 
 <!--hvy: {"id":"header","lock":true}-->

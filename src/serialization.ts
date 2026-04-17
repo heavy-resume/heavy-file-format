@@ -291,8 +291,80 @@ function parseBlocks(contentMarkdown: string, sectionMeta: JsonObject, documentM
   }));
 }
 
+const BLOCK_ARRAY_KEYS = ['expandableContentBlocks', 'expandableStubBlocks', 'containerBlocks', 'componentListBlocks'];
+
+// Serialize a component def to clean YAML format:
+// - strips `component` from schema (redundant with `baseType`)
+// - strips `template` (runtime-only)
+// - uses { component: name } shorthand for custom component blocks in nested lists
+function serializeComponentDef(raw: JsonObject): JsonObject {
+  const result: JsonObject = {};
+  for (const [key, value] of Object.entries(raw)) {
+    if (key === 'template') continue; // runtime-only; derived from schema
+    if (key === 'schema') {
+      if (value && typeof value === 'object') {
+        result.schema = cleanComponentDefSchema(value as JsonObject);
+      }
+    } else {
+      result[key] = value;
+    }
+  }
+  return result;
+}
+
+function cleanComponentDefSchema(schema: JsonObject): JsonObject {
+  const result: JsonObject = {};
+  for (const [key, value] of Object.entries(schema)) {
+    if (key === 'component') continue; // redundant with baseType
+    if (key === 'schemaMode') continue; // editor state
+    if (key === 'id' && (value === '' || value === null || value === undefined)) continue;
+    if (BLOCK_ARRAY_KEYS.includes(key) && Array.isArray(value)) {
+      result[key] = value.map((block) => cleanComponentDefBlock(block as JsonObject));
+    } else if (key === 'gridItems' && Array.isArray(value)) {
+      result[key] = value.map((item) => {
+        const obj = item as JsonObject;
+        return obj.block ? { ...obj, block: cleanComponentDefBlock(obj.block as JsonObject) } : obj;
+      });
+    } else {
+      result[key] = value;
+    }
+  }
+  return result;
+}
+
+function cleanComponentDefBlock(block: JsonObject): JsonObject {
+  // Determine component from either the shorthand { component } or { schema: { component } } format
+  const component = (() => {
+    if (block.schema && typeof block.schema === 'object') {
+      const s = block.schema as JsonObject;
+      if (typeof s.component === 'string') return s.component;
+    }
+    if (typeof block.component === 'string') return block.component;
+    return undefined;
+  })();
+
+  if (component && !isBuiltinComponentName(component)) {
+    // Custom component: use shorthand — the template defines everything else
+    return { component };
+  }
+
+  // Builtin component: keep text + recursively clean schema
+  const result: JsonObject = {};
+  if (typeof block.text === 'string') result.text = block.text;
+  if (block.schema && typeof block.schema === 'object') {
+    result.schema = cleanComponentDefSchema(block.schema as JsonObject);
+  }
+  return result;
+}
+
 export function serializeDocument(document: VisualDocument): string {
-  const serializedMeta = stripEditorStateFromSerializedValue(document.meta) as JsonObject;
+  const rawMeta = stripEditorStateFromSerializedValue(document.meta) as JsonObject;
+  const serializedMeta: JsonObject = { ...rawMeta };
+  if (Array.isArray(serializedMeta.component_defs)) {
+    serializedMeta.component_defs = (serializedMeta.component_defs as unknown[])
+      .filter((def): def is JsonObject => !!def && typeof def === 'object')
+      .map((def) => serializeComponentDef(def));
+  }
   const headerMeta = {
     ...serializedMeta,
     hvy_version: document.meta.hvy_version ?? 0.1,

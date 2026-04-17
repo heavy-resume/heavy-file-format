@@ -62,6 +62,11 @@ export function parseVisualBlock(candidate: unknown): VisualBlock {
     return createEmptyBlock('container', true);
   }
   const raw = candidate as JsonObject;
+  // Shorthand: { component: 'name' } without a 'schema' wrapper.
+  // Instantiate from the component def template so all nested content (titles, blocks, etc.) is populated.
+  if (!raw.schema && typeof raw.component === 'string') {
+    return createEmptyBlock(raw.component);
+  }
   const schema = schemaFromUnknown(raw.schema);
   return {
     id: typeof raw.id === 'string' ? raw.id : makeId('block'),

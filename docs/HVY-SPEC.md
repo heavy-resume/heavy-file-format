@@ -258,6 +258,14 @@ Nested block arrays such as `containerBlocks` use a recursive block object shape
 }
 ```
 
+When a nested block places a custom (non-builtin) component, a shorthand form MAY be used instead:
+
+```yaml
+- component: my-custom-component
+```
+
+This is equivalent to `{ schema: { component: "my-custom-component" } }`. The full template for the component is defined in `component_defs` and applied at instantiation time; no other fields need to appear at the usage site.
+
 Serialized block objects SHOULD contain document data only. Editor-only UI state, such as whether a schema editor is open for a block, MUST NOT be emitted.
 
 Rich clients MAY preserve and round-trip these fields even if a plain Markdown renderer ignores them. For compatibility with older documents, rich clients MAY also read legacy `expandableStubBlocks` and `expandableContentBlocks` arrays from an expandable block schema, but SHOULD emit `hvy:expandable:0` and `hvy:expandable:1` directives for new documents.
@@ -275,7 +283,6 @@ component_defs:
     tags: ui, emphasis
     description: Framed callout container
     schema:
-      component: callout
       css: "margin: 0.5rem 0;"
       containerTitle: Callout
       containerBlocks: []
@@ -284,7 +291,9 @@ component_defs:
 Notes:
 - `schema` is optional.
 - When present, rich clients MAY use it as the default schema/template when creating a block with that reusable component.
+- The `component` field MUST NOT appear inside `schema`; the component type is already captured by `baseType`.
 - A component definition name MAY be used anywhere a block `component` value is accepted, including block directives, nested block schemas, and `componentListComponent`.
+- When a nested block array (e.g. `containerBlocks`, `expandableContentBlocks`) places a custom component, the shorthand form `{ component: name }` SHOULD be used instead of the full `{ schema: { component: name, ... } }` form. The component's template provides all other properties at instantiation time.
 - Rich clients SHOULD render custom components according to `baseType` and preserve the custom component name for editing and round-tripping.
 - Plain Markdown renderers MAY ignore `component_defs`.
 

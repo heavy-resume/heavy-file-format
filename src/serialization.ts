@@ -95,13 +95,25 @@ function parseBlocks(contentMarkdown: string, sectionMeta: JsonObject, documentM
       currentText = [];
       return;
     }
+    // When plain text appears inside an open container frame (no explicit directive
+    // set the attach), implicitly route it into that container rather than top level.
+    let effectiveAttach = currentAttach;
+    if (!currentHasDirective && effectiveAttach.kind === 'top' && frames.length > 0) {
+      const topFrame = frames[frames.length - 1];
+      const base = resolveParsedBase(topFrame.block.schema.component);
+      if (base === 'component-list') {
+        effectiveAttach = { kind: 'component-list', parent: topFrame.block };
+      } else if (base === 'container') {
+        effectiveAttach = { kind: 'container', parent: topFrame.block };
+      }
+    }
     const block: VisualBlock = {
       id: makeId('block'),
       text: currentText.join('\n').trim(),
       schema: currentSchema,
       schemaMode: false,
     };
-    attachBlock(block, currentAttach);
+    attachBlock(block, effectiveAttach);
     currentText = [];
     currentSchema = defaultBlockSchema();
     currentAttach = { kind: 'top' };

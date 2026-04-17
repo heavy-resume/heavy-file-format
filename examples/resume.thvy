@@ -293,89 +293,84 @@ component_defs:
 <!--hvy: {"id":"header","lock":true}-->
 #! Info
 
-<!--hvy:text {"css":"margin-bottom: 0;","align":"center","placeholder":"# Name"}-->
+ <!--hvy:text {"css":"margin-bottom: 0;","align":"center","placeholder":"# Name"}-->
 
+ <!--hvy:text {"css":"margin-top: 0;","align":"center","placeholder":"[pronunciation]"}-->
 
-<!--hvy:text {"css":"margin-top: 0;","align":"center","placeholder":"[pronunciation]"}-->
-
-<!--hvy:text {"css":"margin: 0.5rem 0; margin-top: 1rem;","align":"center","placeholder":"title"}-->
+ <!--hvy:text {"css":"margin: 0.5rem 0; margin-top: 1rem;","align":"center","placeholder":"title"}-->
 
 <!--hvy: {"id":"summary","lock":true}-->
 #! Summary
 
-<!--hvy:expandable {"css":"margin: 0.5rem 0;","expandableAlwaysShowStub":true,"expandableExpanded":false,"lock":true}-->
+ <!--hvy:expandable {"css":"margin: 0.5rem 0;","expandableAlwaysShowStub":true,"expandableExpanded":false,"lock":true}-->
 
-<!--hvy:expandable:0 {"component":"text","css":"margin-bottom: 0;","lock":true}-->
-## Summary
+  <!--hvy:expandable:0 {"component":"text","css":"margin-bottom: 0;","lock":true}-->
+    ## Summary
 
-<!--hvy:expandable:0 {"component":"text","css":"margin-top: 0;","lock":true}-->
+  <!--hvy:expandable:0 {"component":"text","css":"margin-top: 0;","lock":true}-->
 
-<!--hvy:expandable:1 {"component":"component-list","componentListComponent":"text","css":"margin: 0;","lock":true}-->
+  <!--hvy:expandable:1 {"component":"component-list","componentListComponent":"text","css":"margin: 0;","lock":true}-->
 
 <!--hvy: {"id":"locations","lock":true}-->
 #! Locations
 
-<!--hvy:text {"css":"margin: 0.5rem 0;","lock":true}-->
-**Location:**
+ <!--hvy:text {"css":"margin: 0.5rem 0;","lock":true}-->
+  **Location:**
 
-<!--hvy:text {"css":"margin: 0.5rem 0;","lock":true}-->
-**Target Location(s):**
+ <!--hvy:text {"css":"margin: 0.5rem 0;","lock":true}-->
+  **Target Location(s):**
 
 <!--hvy: {"id":"top-skills-tools-technologies","lock":true}-->
 #! Top Skills, Tools, and Technologies
 
-<!--hvy:grid {"css":"margin: 0.5rem 0; gap: 0.75rem;","gridColumns":2,"lock":true}-->
-
-<!--hvy:grid:0 {"id":"top-skills","column":"left","component":"component-list","componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
-
-<!--hvy:component-list:0 {"component":"text","css":"margin: 0 0 0.35rem;"}-->
-## Skills
-
-<!--hvy:grid:1 {"id":"top-tools-technologies","column":"right","component":"component-list","componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
-
-<!--hvy:component-list:0 {"component":"text","css":"margin: 0 0 0.35rem;"}-->
-## Tools & Technologies
+ <!--hvy:grid {"css":"margin: 0.5rem 0; gap: 0.75rem;","gridColumns":2,"lock":true}-->
+  <!--hvy:grid:0 {"id":"top-skills","column":"left","component":"component-list","componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
+   ## Skills
+   <!--hvy:component-list:0 {"component":"text","css":"margin: 0 0 0.35rem;"}-->
+  <!--hvy:grid:1 {"id":"top-tools-technologies","column":"right","component":"component-list","componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
+   ## Tools & Technologies
+   <!--hvy:component-list:0 {"component":"text","css":"margin: 0 0 0.35rem;"}-->
 
 <!--hvy: {"id":"skills","lock":true,"expanded":false,"location":"sidebar"}-->
 #! Skills
 
-<!--hvy:text {"css":"margin: 0.5rem 0;"}-->
-# Skills
+ <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
+  # Skills
 
-<!--hvy:component-list {"css":"margin: 0;","componentListComponent":"skill-record"}-->
+ <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"skill-record"}-->
 
 <!--hvy: {"id":"tools-technologies","lock":true,"expanded":false,"location":"sidebar"}-->
 #! Tools & Technologies
 
-<!--hvy:text {"css":"margin: 0.5rem 0;"}-->
-# Tools & Technologies
+ <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
+  # Tools & Technologies
 
-<!--hvy:component-list {"css":"margin: 0;","componentListComponent":"skill-record"}-->
+ <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"skill-record"}-->
 
 <!--hvy: {"id":"history","lock":true}-->
 #! History
 
-<!--hvy:text {"css":"margin: 0.5rem 0;"}-->
-# History
+ <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
+  # History
 
-<!--hvy:table {"css":"margin: 0.5rem 0 0;","tableColumns":"YEAR, ORGANIZATION, TITLE","tableShowHeader":true,"tableRows":[],"lock":true}-->
+ <!--hvy:table {"css":"margin: 0.5rem 0 0;","tableColumns":"YEAR, ORGANIZATION, TITLE","tableShowHeader":true,"tableRows":[],"lock":true}-->
 
-<!--hvy:component-list {"css":"margin: 0;","componentListComponent":"history-record"}-->
+ <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"history-record"}-->
 
 <!--hvy: {"id":"projects","lock":true}-->
 #! Projects
 
-<!--hvy:text {"css":"margin: 0.5rem 0;"}-->
-# Projects
+ <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
+  # Projects
 
-<!--hvy:table {"css":"margin: 0.5rem 0 0;","tableColumns":"PROJECT, DATE","tableShowHeader":true,"tableRows":[],"lock":true}-->
+ <!--hvy:table {"css":"margin: 0.5rem 0 0;","tableColumns":"PROJECT, DATE","tableShowHeader":true,"tableRows":[],"lock":true}-->
 
 <!--hvy: {"id":"education","lock":true}-->
 #! Education
 
-<!--hvy:text {"css":"margin: 0.5rem 0;"}-->
-# Education
+ <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
+  # Education
 
-<!--hvy:table {"css":"margin: 0.5rem 0 0;","tableColumns":"DEGREE, INSTITUTION, LOCATION","tableShowHeader":true,"tableRows":[],"lock":true}-->
+ <!--hvy:table {"css":"margin: 0.5rem 0 0;","tableColumns":"DEGREE, INSTITUTION, LOCATION","tableShowHeader":true,"tableRows":[],"lock":true}-->
 
-<!--hvy:component-list {"css":"margin: 0;","componentListComponent":"education-record"}-->
+ <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"education-record"}-->

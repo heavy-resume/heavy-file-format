@@ -50,22 +50,26 @@ Document metadata as yaml
 ---
 <!--hvy {"id":"identifier"}-->
 #! Section name
- <!--hvy:container {"css":"... styling css ...","lock":true}-->
- # A Title
- ## A Subtitle
-  <!--hvy:container {...}-->
-  ### Smaller text (still markdown here)
-  Heres some text just like in markdown
-  <!--hvy:component-list {"componentListType":"xref-card"}>
-   <!--hvy:xref-card>
-   Label
-   Sublabel
-   destination-id
-   <!--hvy:xref-card>
-   Another Label
-   Another Sublabel
-   a-different-destination-id
-  # Implied switch to text due to drop in indentation
+  # Section wording
+  Blah blah blah
+  - a list
+  - another list
+  <!--hvy:container {"css":"... styling css ...","lock":true}-->
+  # A Title
+  ## A Subtitle
+    <!--hvy:container {...}-->
+      ### Smaller text (still markdown here)
+      Heres some text just like in markdown
+    <!--hvy:component-list {"componentListType":"xref-card"}>
+    <!--hvy:xref-card>
+      Label
+      Sublabel
+      destination-id
+    <!--hvy:xref-card>
+      Another Label
+      Another Sublabel
+      a-different-destination-id
+    # Implied switch to text due to drop in indentation
 ```
 
 ## 4. Document Structure

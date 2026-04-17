@@ -1,8 +1,8 @@
 import type { VisualBlock } from './editor/types';
 import { state, incrementSyncReusableCount, getRenderApp, getRefreshReaderPanels } from './state';
-import { getComponentDefs, getReusableNameFromSectionKey, isBuiltinComponent, resolveBaseComponent } from './component-defs';
+import { getComponentDefs, getReusableNameFromSectionKey, isBuiltinComponent, resolveBaseComponent, getSectionDefs } from './component-defs';
 import { findSectionByKey, visitBlocks } from './section-ops';
-import { cloneReusableBlock, cloneReusableSchema, getReusableTemplate, getReusableTemplateByName } from './document-factory';
+import { cloneReusableBlock, cloneReusableSchema, getReusableTemplate, getReusableTemplateByName, cloneReusableSection } from './document-factory';
 import type { ComponentDefinition } from './types';
 
 export function findReusableOwner(sectionKey: string, blockId: string): VisualBlock | null {

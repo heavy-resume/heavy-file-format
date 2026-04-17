@@ -621,17 +621,6 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
             data-field="block-description"
           >${deps.escapeHtml(block.schema.description)}</textarea>
         </label>
-        <div><label class="checkbox-label">
-          <input
-            type="checkbox"
-            data-section-key="${deps.escapeAttr(sectionKey)}"
-            data-block-id="${deps.escapeAttr(block.id)}"
-            data-field="block-lock"
-            ${block.schema.lock ? 'checked' : ''}
-          />
-          Lock structure
-        </label>
-        </div>
       </div>
     `;
   }

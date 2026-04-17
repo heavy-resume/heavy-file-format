@@ -379,10 +379,16 @@ export function commitInlineTableEdit(target: HTMLElement): void {
 }
 
 export function getTagState(target: HTMLElement): string[] {
-  const field = target.dataset.field === 'block-tags-input' || target.dataset.tagField === 'block-tags' ? 'block-tags' : 'def-tags';
+  const rawField = target.dataset.field ?? target.dataset.tagField;
+  const field = rawField === 'block-tags-input' || rawField === 'block-tags' ? 'block-tags' : rawField === 'section-tags-input' || rawField === 'section-tags' ? 'section-tags' : 'def-tags';
   if (field === 'block-tags') {
     const context = resolveBlockContext(target);
     return context ? parseTags(context.block.schema.tags) : [];
+  }
+  if (field === 'section-tags') {
+    const sectionKey = target.dataset.sectionKey;
+    const section = sectionKey ? findSectionByKey(state.document.sections, sectionKey) : null;
+    return section ? parseTags(section.tags) : [];
   }
   const defIndex = Number.parseInt(target.dataset.defIndex ?? '', 10);
   const defs = getComponentDefs();
@@ -394,7 +400,8 @@ export function getTagState(target: HTMLElement): string[] {
 
 export function setTagState(target: HTMLElement, tags: string[]): void {
   const value = serializeTags(tags);
-  const field = target.dataset.field === 'block-tags-input' || target.dataset.tagField === 'block-tags' ? 'block-tags' : 'def-tags';
+  const rawField = target.dataset.field ?? target.dataset.tagField;
+  const field = rawField === 'block-tags-input' || rawField === 'block-tags' ? 'block-tags' : rawField === 'section-tags-input' || rawField === 'section-tags' ? 'section-tags' : 'def-tags';
   if (field === 'block-tags') {
     const context = resolveBlockContext(target);
     if (!context) {
@@ -402,6 +409,17 @@ export function setTagState(target: HTMLElement, tags: string[]): void {
     }
     recordHistory(`tags:${context.block.id}`);
     context.block.schema.tags = value;
+    getRefreshReaderPanels()();
+    return;
+  }
+  if (field === 'section-tags') {
+    const sectionKey = target.dataset.sectionKey;
+    const section = sectionKey ? findSectionByKey(state.document.sections, sectionKey) : null;
+    if (!section) {
+      return;
+    }
+    recordHistory(`tags:${sectionKey}`);
+    section.tags = value;
     getRefreshReaderPanels()();
     return;
   }

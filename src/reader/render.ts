@@ -9,6 +9,7 @@ import { renderTextReader } from '../editor/components/text';
 import { renderXrefCardReader } from '../editor/components/xref-card';
 import type { ComponentRenderHelpers } from '../editor/component-helpers';
 import type { BlockSchema, VisualBlock, VisualSection } from '../editor/types';
+import { renderTagEditor } from '../editor/tag-editor';
 
 interface ReaderRenderState {
   documentSections: VisualSection[];
@@ -217,8 +218,20 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
           <div class="modal-overlay" data-modal-action="close-overlay"></div>
           <section class="modal-panel component-meta-modal">
             <div class="modal-head">
-              <h3>Component Meta</h3>
-              <button type="button" data-modal-action="close">Close</button>
+              <h3>Component Meta: ${deps.escapeHtml(block.schema.component)}</h3>
+              <div class="modal-head-actions">
+                <button
+                  type="button"
+                  class="ghost lock-toggle-button"
+                  data-modal-action="toggle-component-lock"
+                  data-section-key="${deps.escapeAttr(state.componentMetaModal.sectionKey)}"
+                  data-block-id="${deps.escapeAttr(state.componentMetaModal.blockId)}"
+                  aria-pressed="${block.schema.lock ? 'true' : 'false'}"
+                  title="${block.schema.lock ? 'Unlock structure' : 'Lock structure'}"
+                  aria-label="${block.schema.lock ? 'Unlock structure' : 'Lock structure'}"
+                >${block.schema.lock ? '🔒 Unlock Structure' : '🔓 Lock Structure'}</button>
+                <button type="button" data-modal-action="close">Close</button>
+              </div>
             </div>
             <p class="muted">Meta is optional and can be used by readers, indexing, and plugins.</p>
             ${deps.renderBlockMetaFields(state.componentMetaModal.sectionKey, block)}
@@ -239,9 +252,9 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     return `
       <div id="modalRoot" class="modal-root">
         <div class="modal-overlay" data-modal-action="close-overlay"></div>
-        <section class="modal-panel">
+        <section class="modal-panel section-meta-modal">
           <div class="modal-head">
-            <h3 id="modalTitle">Meta: ${deps.escapeHtml(deps.formatSectionTitle(section.title))} <code>#${deps.escapeHtml(
+            <h3 id="modalTitle">Section Meta: ${deps.escapeHtml(deps.formatSectionTitle(section.title))} <code>#${deps.escapeHtml(
               deps.getSectionId(section)
             )}</code></h3>
             <div class="modal-head-actions">
@@ -257,8 +270,8 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
               <button type="button" data-modal-action="close">Close</button>
             </div>
           </div>
-          <p>Edit section-level metadata and reader styling.</p>
-          <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+          <p class="muted">Edit section-level metadata and reader styling.</p>
+          <div class="modal-field-stack">
             <label>
               <span>Custom ID (optional)</span>
               <input
@@ -271,6 +284,23 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
             <label>
               <span>Style via CSS</span>
               <textarea id="modalCssInput">${deps.escapeHtml(section.customCss)}</textarea>
+            </label>
+            <label>
+              <span>Tags</span>
+              ${renderTagEditor(
+                'section-tags',
+                section.tags,
+                { sectionKey: section.key, placeholder: 'Add a tag' },
+                { escapeAttr: deps.escapeAttr, escapeHtml: deps.escapeHtml }
+              )}
+            </label>
+            <label>
+              <span>Description</span>
+              <textarea
+                rows="3"
+                data-section-key="${deps.escapeAttr(section.key)}"
+                data-field="section-description"
+              >${deps.escapeHtml(section.description)}</textarea>
             </label>
           </div>
         </section>

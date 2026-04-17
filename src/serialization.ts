@@ -46,6 +46,8 @@ function mapParsedSection(section: HvySection, documentMeta: JsonObject): Visual
     expanded: sectionMeta.expanded === false ? false : true,
     highlight: sectionMeta.highlight === true,
     customCss: typeof sectionMeta.custom_css === 'string' ? sectionMeta.custom_css : '',
+    tags: typeof sectionMeta.tags === 'string' ? sectionMeta.tags : '',
+    description: typeof sectionMeta.description === 'string' ? sectionMeta.description : '',
     location: sectionMeta.location === 'sidebar' ? 'sidebar' : 'main',
     blocks,
     children: section.children.map((child) => mapParsedSection(child, documentMeta)),
@@ -405,6 +407,12 @@ function serializeSection(section: VisualSection, level: number): string {
   };
   if (section.customCss.trim().length > 0) {
     meta.custom_css = section.customCss;
+  }
+  if (section.tags.trim().length > 0) {
+    meta.tags = section.tags;
+  }
+  if (section.description.trim().length > 0) {
+    meta.description = section.description;
   }
   if (section.location === 'sidebar') {
     meta.location = 'sidebar';

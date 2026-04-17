@@ -1077,6 +1077,15 @@ export function bindUi(app: HTMLElement): void {
       return;
     }
 
+    if (field === 'section-description' && (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) {
+      if (!section) {
+        return;
+      }
+      section.description = target.value;
+      getRefreshReaderPanels()();
+      return;
+    }
+
     if (field === 'section-lock' && target instanceof HTMLInputElement) {
       if (!section) {
         return;
@@ -1170,17 +1179,6 @@ export function bindUi(app: HTMLElement): void {
       return;
     }
 
-    if (field === 'block-lock' && target instanceof HTMLInputElement) {
-      const context = resolveBlockContext(target);
-      if (!context) {
-        return;
-      }
-      context.block.schema.lock = target.checked;
-      syncReusableTemplateForBlock(sectionKey, context.block.id);
-      getRefreshReaderPanels()();
-      getRenderApp()();
-      return;
-    }
     if (handleBlockFieldInput(target)) {
       console.debug('[hvy:perf] input:end', { eventId, field, elapsedMs: Number((performance.now() - startedAt).toFixed(2)), handledBy: 'block-field' });
       return;

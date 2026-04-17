@@ -72,6 +72,8 @@ export interface VisualSection {
   expanded: boolean;
   highlight: boolean;
   customCss: string;
+  tags: string;
+  description: string;
   location: SectionLocation;
   blocks: VisualBlock[];
   children: VisualSection[];

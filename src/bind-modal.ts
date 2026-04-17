@@ -48,6 +48,20 @@ export function bindModal(app: HTMLElement): void {
       getRenderApp()();
       return;
     }
+
+    const toggleComponentLockBtn = target.closest<HTMLElement>('[data-modal-action="toggle-component-lock"]');
+    if (toggleComponentLockBtn) {
+      const sectionKey = toggleComponentLockBtn.dataset.sectionKey;
+      const blockId = toggleComponentLockBtn.dataset.blockId;
+      const block = sectionKey && blockId ? findBlockByIds(sectionKey, blockId) : null;
+      if (!block) {
+        return;
+      }
+      block.schema.lock = !block.schema.lock;
+      getRefreshReaderPanels()();
+      getRenderApp()();
+      return;
+    }
   });
 
   const reusableNameInput = modalRoot.querySelector<HTMLInputElement>('#reusableNameInput');

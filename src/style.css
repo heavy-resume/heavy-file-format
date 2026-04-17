@@ -1987,8 +1987,15 @@ button.tiny {
   padding: 0.85rem;
 }
 
-.component-meta-modal {
+.component-meta-modal,
+.section-meta-modal {
   width: min(640px, 94vw);
+}
+
+.modal-field-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
 }
 
 .link-inline-modal {

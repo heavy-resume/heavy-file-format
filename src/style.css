@@ -994,7 +994,7 @@ button.tiny {
   width: 100%;
   border-collapse: collapse;
   min-width: 540px;
-  table-layout: auto;
+  table-layout: fixed;
 }
 
 .table-editor-grid th,
@@ -1002,6 +1002,7 @@ button.tiny {
   border: 1px solid #d7e1e9;
   vertical-align: top;
   background: #fff;
+  overflow: hidden;
 }
 
 .table-editor-grid th {
@@ -1066,6 +1067,9 @@ button.tiny {
   width: 100%;
   padding: 0.42rem 0.5rem;
   border-radius: 8px;
+  overflow: hidden;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
 }
 
 .table-inline-text:focus {

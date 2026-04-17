@@ -84,6 +84,11 @@ export function removeBlockFromList(blocks: VisualBlock[], blockId: string): boo
     if (removeBlockFromList(block.schema.expandableContentBlocks ?? [], blockId)) {
       return true;
     }
+    for (const item of block.schema.gridItems ?? []) {
+      if (removeBlockFromList([item.block], blockId)) {
+        return true;
+      }
+    }
     for (const row of block.schema.tableRows ?? []) {
       if (removeBlockFromList(row.detailsBlocks ?? [], blockId)) {
         return true;

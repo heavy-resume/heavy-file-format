@@ -35,7 +35,7 @@ import { syncReusableTemplateForBlock, revertReusableComponent, findReusableOwne
 import { addTableColumn, removeTableColumn, getTableColumns, moveTableColumn, moveTableRow } from './table-ops';
 import { coerceGridColumns, coerceGridColumn, createGridItem } from './grid-ops';
 import { detectExtension, normalizeFilename, downloadTextFile, sanitizeOptionalId, moveItem } from './utils';
-import { moveSectionRelative, moveSectionByOffset, removeSectionByKey } from './section-ops';
+import { moveSectionRelative, moveSectionByOffset, removeSectionByKey, findBlockContainerById } from './section-ops';
 import { bindModal } from './bind-modal';
 import { bindLinkInlineModal, openLinkInlineModal } from './bind-link-modal';
 import { removeBlockFromList } from './block-ops';
@@ -791,6 +791,11 @@ export function bindUi(app: HTMLElement): void {
     if (action === 'remove-block' && blockId) {
       recordHistory();
       const reusableOwnerId = findReusableOwner(sectionKey, blockId)?.id ?? null;
+      // Find parent before removal so we can restore edit mode to it if the deleted
+      // block was the active one (otherwise deletion would exit edit mode entirely).
+      const parentId = state.activeEditorBlock?.blockId === blockId
+        ? findBlockContainerById(state.document.sections, sectionKey, blockId)?.ownerBlockId ?? null
+        : null;
       if (section) {
         removeBlockFromList(section.blocks, blockId);
       } else {
@@ -801,6 +806,9 @@ export function bindUi(app: HTMLElement): void {
       }
       syncReusableTemplateForBlock(sectionKey, reusableOwnerId ?? blockId);
       clearActiveEditorBlock(blockId);
+      if (parentId) {
+        setActiveEditorBlock(sectionKey, parentId);
+      }
       getRenderApp()();
       return;
     }

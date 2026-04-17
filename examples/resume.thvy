@@ -326,10 +326,8 @@ component_defs:
  <!--hvy:grid {"css":"margin: 0.5rem 0; gap: 0.75rem;","gridColumns":2,"lock":true}-->
   <!--hvy:grid:0 {"id":"top-skills","column":"left","component":"component-list","componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
    ## Skills
-   <!--hvy:component-list:0 {"component":"text","css":"margin: 0 0 0.35rem;"}-->
   <!--hvy:grid:1 {"id":"top-tools-technologies","column":"right","component":"component-list","componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
    ## Tools & Technologies
-   <!--hvy:component-list:0 {"component":"text","css":"margin: 0 0 0.35rem;"}-->
 
 <!--hvy: {"id":"skills","lock":true,"expanded":false,"location":"sidebar"}-->
 #! Skills

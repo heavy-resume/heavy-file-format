@@ -245,6 +245,16 @@ Grid blocks can be emitted with specialized directives so grid item content rema
 <!--hvy:grid:1 {"id":"tools-technologies","column":"right","component":"component-list","componentListComponent":"text"}-->
 ```
 
+When a `component-list` (or `container`) grid item has plain Markdown content before its first `hvy:component-list:N` (or `hvy:container:N`) directive, that content is implicitly treated as the first block in the list. This allows a text header to appear above list items without a wrapping directive:
+
+```markdown
+<!--hvy:grid:0 {"id":"skills","column":"left","component":"component-list","componentListComponent":"xref-card"}-->
+## Skills
+<!--hvy:component-list:0 {"component":"text","css":"margin: 0 0 0.35rem;"}-->
+```
+
+Here `## Skills` becomes `componentListBlocks[0]` (an implicit text block) and the `component-list:0` item becomes `componentListBlocks[1]`.
+
 Cross-reference cards can be emitted as a block directive with all card data in metadata and no raw HTML body:
 
 ```markdown
@@ -261,6 +271,7 @@ Rules:
 - Multiple `hvy:expandable:0` or `hvy:expandable:1` directives can be used for a single expandable block.
 - `hvy:grid` starts a grid block. Its payload is the grid block schema, with `component:"grid"` implied.
 - `hvy:grid:N` appends the immediately following content block to the grid at item index `N`. Its payload optionally includes grid item metadata such as `id` and `column`; `component` describes the item block component.
+- Plain Markdown content that appears after a `hvy:grid:N` (or standalone `hvy:component-list` / `hvy:container`) directive and before the first indexed sub-directive (`hvy:component-list:N`, `hvy:container:N`) is implicitly treated as the first block in that list or container.
 - If both `meta.blocks[n]` and a block directive describe the same logical block, `meta.blocks[n]` wins.
 
 ### 5.8 Recursive block shape

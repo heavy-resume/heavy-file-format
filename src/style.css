@@ -924,10 +924,6 @@ button.tiny {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 0.4rem;
-  border: 1px solid #c8d4dd;
-  border-radius: 10px;
-  padding: 0.4rem;
   background: #fff;
   min-height: 2.7rem;
 }
@@ -1317,7 +1313,7 @@ button.tiny {
   align-items: center;
   gap: 0.45rem;
   align-self: center;
-  min-height: 3rem;
+  min-height: 2rem;
   padding: 0.55rem 0.8rem;
   border: 1px solid #d9c36a;
   border-radius: 999px;

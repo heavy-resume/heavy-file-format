@@ -258,19 +258,21 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
             </div>
           </div>
           <p>Edit section-level metadata and reader styling.</p>
-          <label>
-            <span>Custom ID (optional)</span>
-            <input
-              data-section-key="${deps.escapeAttr(section.key)}"
-              data-field="section-custom-id"
-              value="${deps.escapeAttr(section.customId)}"
-              placeholder="Blank keeps generated ID"
-            />
-          </label>
-          <label>
-            <span>Style via CSS</span>
-            <textarea id="modalCssInput">${deps.escapeHtml(section.customCss)}</textarea>
-          </label>
+          <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+            <label>
+              <span>Custom ID (optional)</span>
+              <input
+                data-section-key="${deps.escapeAttr(section.key)}"
+                data-field="section-custom-id"
+                value="${deps.escapeAttr(section.customId)}"
+                placeholder="Blank keeps generated ID"
+              />
+            </label>
+            <label>
+              <span>Style via CSS</span>
+              <textarea id="modalCssInput">${deps.escapeHtml(section.customCss)}</textarea>
+            </label>
+          </div>
         </section>
       </div>
     `;

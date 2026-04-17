@@ -221,19 +221,139 @@ component_defs:
             component: skills-and-tools-tech-list
             css: "margin: 0.6rem 0 0;"
             gridColumns: 2
+  - name: skill-record-entry
+    baseType: component-list
+    description: Reusable 2-column skill record entry
+    schema:
+      component: component-list
+      css: "margin: 0 0 0.35rem;"
+      gridColumns: 2
+      gridItems:
+        - id: title
+          column: left
+          block:
+            text: ""
+            schema:
+              component: text
+              css: "margin: 0;"
+              placeholder: "Title"
+        - id: date-range
+          column: right
+          block:
+            text: ""
+            schema:
+              component: text
+              css: "margin: 0; text-align: right;"
+              placeholder: "Date range"
+  - name: skill-record-experience-section
+    baseType: container
+    description: Skill record experience section
+    schema:
+      component: container
+      css: "margin: 0;"
+      containerTitle: Experience
+      containerBlocks:
+        - text: "#### Experience"
+          schema:
+            component: text
+            css: "margin: 0.4rem 0 0.1rem;"
+        - text: ""
+          schema:
+            component: component-list
+            css: "margin: 0;"
+            componentListComponent: skill-record-entry
+            componentListBlocks: []
+  - name: skill-record-education-section
+    baseType: container
+    description: Skill record education section
+    schema:
+      component: container
+      css: "margin: 0;"
+      containerTitle: Education
+      containerBlocks:
+        - text: "#### Education"
+          schema:
+            component: text
+            css: "margin: 0.4rem 0 0.1rem;"
+        - text: ""
+          schema:
+            component: component-list
+            css: "margin: 0;"
+            componentListComponent: skill-record-entry
+            componentListBlocks: []
+  - name: skill-record-projects-section
+    baseType: container
+    description: Skill record projects section
+    schema:
+      component: container
+      css: "margin: 0;"
+      containerBlocks:
+        - text: "#### Projects"
+          schema:
+            component: text
+            css: "margin: 0.4rem 0 0.1rem;"
+        - text: ""
+          schema:
+            component: component-list
+            css: "margin: 0;"
+            componentListComponent: skill-record-entry
+            componentListBlocks: []
+  - name: skill-record-section
+    baseType: container
+    description: Reusable skill record section with heading and repeatable entries
+    schema:
+      component: container
+      css: "margin: 0;"
+      containerBlocks:
+        - text: ""
+          schema:
+            component: text
+            css: "margin: 0.4rem 0 0.1rem;"
+            placeholder: "#### Section title"
+        - text: ""
+          schema:
+            component: component-list
+            css: "margin: 0;"
+            componentListComponent: skill-record-entry
+            componentListBlocks: []
+  - name: skill-record
+    baseType: expandable
+    description: Skill record
+    schema:
+      component: expandable
+      css: "margin: 0.35rem 0;"
+      expandableAlwaysShowStub: true
+      expandableExpanded: false
+      expandableStubBlocks:
+        - text: ""
+          schema:
+            component: text
+            css: "margin: 0;"
+            placeholder: "Skill name"
+      expandableContentBlocks:
+        - text: ""
+          schema:
+            component: skill-record-experience-section
+            containerTitle: Experience FIXME THIS ONE IS USED
+        - text: ""
+          schema:
+            component: skill-record-education-section
+            containerTitle: Education FIXME THIS ONE IS USED
+        - text: ""
+          schema:
+            component: skill-record-projects-section
+            containerTitle: Projects FIXME THIS ONE IS USED
 ---
 
 <!--hvy: {"id":"header","lock":true}-->
 #! Info
 
-<!--hvy:text {"css":"margin-bottom: 0;","align":"center"}-->
-# Name
+<!--hvy:text {"css":"margin-bottom: 0;","align":"center","placeholder":"# Name"}-->
 
-<!--hvy:text {"css":"margin-top: 0;","align":"center"}-->
-[pronunciation]
 
-<!--hvy:text {"css":"margin: 0.5rem 0; margin-top: 1rem;","align":"center"}-->
-Title
+<!--hvy:text {"css":"margin-top: 0;","align":"center","placeholder":"[pronunciation]"}-->
+
+<!--hvy:text {"css":"margin: 0.5rem 0; margin-top: 1rem;","align":"center","placeholder":"title"}-->
 
 <!--hvy: {"id":"summary","lock":true}-->
 #! Summary
@@ -277,7 +397,7 @@ Title
 <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
 # Skills
 
-<!--hvy:component-list {"css":"margin: 0;","componentListComponent":"xref-card"}-->
+<!--hvy:component-list {"css":"margin: 0;","componentListComponent":"skill-record"}-->
 
 <!--hvy: {"id":"tools-technologies","lock":true,"expanded":false,"location":"sidebar"}-->
 #! Tools & Technologies
@@ -285,7 +405,7 @@ Title
 <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
 # Tools & Technologies
 
-<!--hvy:component-list {"css":"margin: 0;","componentListComponent":"xref-card"}-->
+<!--hvy:component-list {"css":"margin: 0;","componentListComponent":"skill-record"}-->
 
 <!--hvy: {"id":"history","lock":true}-->
 #! History

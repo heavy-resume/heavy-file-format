@@ -1402,6 +1402,9 @@ button.tiny {
 
 .reader-sidebar-sections .reader-section {
   margin-bottom: 0.7rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid #ced9e2;
+  border-radius: 8px;
 }
 
 .ok,

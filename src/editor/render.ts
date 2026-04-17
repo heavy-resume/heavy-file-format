@@ -366,6 +366,16 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       </div>`;
     }
 
+    if (base === 'component-list') {
+      deps.ensureComponentListBlocks(block);
+      if (block.schema.componentListBlocks.length === 0) {
+        return `<div class="ghost-section-card add-ghost passive-empty-list-ghost">
+          <div class="ghost-plus-big"><span>+</span></div>
+          <div class="ghost-label">Add first ${deps.escapeHtml(block.schema.componentListComponent || 'item')}</div>
+        </div>`;
+      }
+    }
+
     if (base === 'text' && block.text.trim().length === 0) {
       return '<div class="editor-passive-empty-text">Empty text...</div>';
     }

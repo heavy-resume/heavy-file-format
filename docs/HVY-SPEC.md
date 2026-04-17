@@ -25,7 +25,7 @@ Rule: Any valid `.md` file is valid `.hvy`.
 
 ### 3.1 Markdown compatibility
 
-If HVY-specific directives are absent, parse as Markdown only. `_I'm in italics_` is used for italics rather than `*`
+If HVY-specific directives are absent, parse as Markdown only. `_I'm in italics_` is used for italics rather than `*`. Conversion from markdown is HVY is client implementation dependent, but typically sections would be coerced into individual components, possibly using AI to do this best.
 
 ### 3.2 Unusual Markdown
 

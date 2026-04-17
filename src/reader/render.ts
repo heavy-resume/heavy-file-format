@@ -52,7 +52,7 @@ export interface ReaderRenderer {
 
 export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRenderDeps): ReaderRenderer {
   function renderNavigation(sections: VisualSection[]): string {
-    const items = deps.flattenSections(sections).filter((section) => !section.isGhost);
+    const items = deps.flattenSections(sections).filter((section) => !section.isGhost && section.location !== 'sidebar');
     if (items.length === 0) {
       return '<div class="muted">Navigation will appear when sections exist.</div>';
     }

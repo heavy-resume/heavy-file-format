@@ -47,6 +47,7 @@ export function bindUi(app: HTMLElement): void {
   const downloadBtn = app.querySelector<HTMLButtonElement>('#downloadBtn');
   const downloadName = app.querySelector<HTMLInputElement>('#downloadName');
   const readerDocument = app.querySelector<HTMLDivElement>('#readerDocument');
+  const readerSidebarSections = app.querySelector<HTMLDivElement>('#readerSidebarSections');
   const readerNav = app.querySelector<HTMLDivElement>('#readerNav');
 
   if (!newBtn || !fileInput || !downloadBtn || !downloadName) {
@@ -1343,7 +1344,7 @@ export function bindUi(app: HTMLElement): void {
   setAppEventsBound(true);
   }
 
-  readerDocument?.addEventListener('click', (event) => {
+  const handleReaderAreaClick = (event: Event) => {
     const target = event.target as HTMLElement;
 
     const anchor = target.closest<HTMLAnchorElement>('a[href^="#"]');
@@ -1400,7 +1401,10 @@ export function bindUi(app: HTMLElement): void {
         getRefreshReaderPanels()();
       }
     }
-  });
+  };
+
+  readerDocument?.addEventListener('click', handleReaderAreaClick);
+  readerSidebarSections?.addEventListener('click', handleReaderAreaClick);
 
   readerNav?.addEventListener('click', (event) => {
     const target = event.target as HTMLElement;

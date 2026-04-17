@@ -31,23 +31,24 @@ export function navigateToSection(sectionId: string, app: HTMLElement): void {
   const sectionFound = expandSectionPathById(state.document.sections, sectionId);
   const blockFound = expandBlockPathBySchemaId(state.document.sections, sectionId);
 
-  // Auto-open or close the sidebar based on where the target section lives.
+  // Auto-open the sidebar when the target lives there. Never auto-close —
+  // the sidebar is closed only via the toggle button or backdrop.
   const targetSection = flattenSections(state.document.sections).find(
     (s) => !s.isGhost && getSectionId(s) === sectionId
   );
-  if (targetSection) {
-    const shouldOpen = targetSection.location === 'sidebar';
-    if (state.viewerSidebarOpen !== shouldOpen) {
-      setSidebarOpen(app, shouldOpen);
-    }
+  if (targetSection?.location === 'sidebar' && !state.viewerSidebarOpen) {
+    setSidebarOpen(app, true);
   }
 
-  state.tempHighlights.add(sectionId);
-  getRefreshReaderPanels()();
+  // Only re-render when expand state actually changed to avoid rebuilding
+  // the sidebar DOM mid-animation.
+  if (sectionFound || blockFound) {
+    getRefreshReaderPanels()();
+  }
 
+  // Apply and remove the highlight directly on the DOM element — no re-render needed.
   window.requestAnimationFrame(() => {
-    const reader = app.querySelector<HTMLElement>('#readerDocument');
-    const target = reader?.querySelector<HTMLElement>(`#${CSS.escape(sectionId)}`);
+    const target = app.querySelector<HTMLElement>(`#${CSS.escape(sectionId)}`);
     if (!target) {
       console.error('[hvy:navigation] Unable to find reader target for internal link.', {
         targetId: sectionId,
@@ -58,16 +59,16 @@ export function navigateToSection(sectionId: string, app: HTMLElement): void {
       return;
     }
 
+    target.classList.add('is-temp-highlighted');
     target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    window.setTimeout(() => {
+      target.classList.remove('is-temp-highlighted');
+    }, 1400);
   });
-  window.setTimeout(() => {
-    state.tempHighlights.delete(sectionId);
-    getRefreshReaderPanels()();
-  }, 1400);
 }
 
 export function getReaderTargetIds(app: HTMLElement): string[] {
-  return [...app.querySelectorAll<HTMLElement>('#readerDocument [id]')].map((element) => element.id);
+  return [...app.querySelectorAll<HTMLElement>('#readerDocument [id], #readerSidebarSections [id]')].map((element) => element.id);
 }
 
 export function expandSectionPathById(sections: VisualSection[], sectionId: string): boolean {

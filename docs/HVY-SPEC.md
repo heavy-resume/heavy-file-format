@@ -29,7 +29,7 @@ If HVY-specific directives are absent, parse as Markdown only. `_I'm in italics_
 
 ### 3.2 Unusual Markdown
 
-Implementations MAY ignore edge-case or nonstandard Markdown rendering behavior. Compatibility target is practical Markdown authoring, not strict renderer parity.
+Nonstandard Markdown rendering behavior is ignored.
 
 ### 3.3 Unknown HVY directives
 
@@ -88,7 +88,7 @@ Each section contains:
 
 Notes:
 - `title` is derived from the `#!` section title line, if present, otherwise defaults to the `id` value.
-- Rich clients MAY use `title` for navigation, editing, outline views, or linking.
+- Use `title` for navigation, editing, outline views, or linking.
 - `#!` lines are never rendered as Markdown content.
 
 ## 5. Syntax
@@ -107,8 +107,8 @@ tags: [guide, onboarding]
 ---
 ```
 
-Rich-client presentation keys in document metadata include:
-- `sidebar_label`: optional string. Rich clients MAY use it as the label for the sidebar toggle control. Defaults to a client-defined fallback (e.g. `☰`) if absent.
+Presentation keys in document metadata include:
+- `sidebar_label`: optional string. Use it as the label for the sidebar toggle control. Defaults to a client-defined fallback (e.g. `☰`) if absent.
 
 ### 5.2 Section boundaries
 
@@ -181,7 +181,7 @@ Optional CSS metadata directive (must appear immediately above CSS fence):
 
 ### 5.6 Block metadata in `meta.blocks`
 
-Section metadata MAY include a `blocks` array describing per-block rendering metadata for authoring tools and rich clients.
+Section metadata optionally includes a `blocks` array describing per-block rendering metadata for authoring tools and implementations.
 
 Common block metadata fields include:
 - `component`
@@ -193,11 +193,11 @@ Common block metadata fields include:
 - `placeholder`
 - `css`
 
-`css` is an optional inline CSS style string applied to that block's rendered wrapper. Authoring tools MAY expose this for layout and presentation adjustments such as collapsing spacing between adjacent blocks.
-`lock` is an optional boolean. Rich clients MAY use it to prevent structural additions inside that block, such as nested child blocks or table-column changes.
-`placeholder` is an optional string. Rich clients MAY display it as hint text when the block's content is empty, helping template authors communicate intent to document authors. It applies to text-based blocks and grid item blocks.
+`css` is an optional inline CSS style string applied to that block's rendered wrapper. Authoring tools expose this for layout and presentation adjustments such as collapsing spacing between adjacent blocks.
+`lock` is an optional boolean. Use it to prevent structural additions inside that block, such as nested child blocks or table-column changes.
+`placeholder` is an optional string. Display it as hint text when the block's content is empty, helping template authors communicate intent to document authors. It applies to text-based blocks and grid item blocks.
 
-Section metadata MAY also include rich-client presentation keys such as:
+Section metadata also includes optional presentation keys such as:
 - `expanded`
 - `highlight`
 - `lock`
@@ -205,21 +205,21 @@ Section metadata MAY also include rich-client presentation keys such as:
 - `location`
 
 `custom_css` is an optional inline CSS style string applied to the rendered section wrapper.
-`lock` is an optional boolean. Rich clients MAY use it to prevent adding new blocks or child sections inside that section.
-`location` is an optional string. Rich clients MAY use it to route a section to a named layout zone in the viewer. Defined values are `"main"` (default) and `"sidebar"`. Unknown values SHOULD be treated as `"main"`.
+`lock` is an optional boolean. Use it to prevent adding new blocks or child sections inside that section.
+`location` is an optional string. Use it to route a section to a named layout zone in the viewer. Defined values are `"main"` (default) and `"sidebar"`. Unknown values SHOULD be treated as `"main"`.
 
 ### 5.7 Block directives
 
-Authoring tools MAY emit block-scoped metadata comments directly in section content:
+Authoring tools emit block-scoped metadata comments directly in section content:
 
 ```markdown
 <!--hvy:quote {"css":"margin: 0.5rem 0;"}-->
 Design the format like a document, not a form.
 ```
 
-The directive name after `hvy:` MAY be a component name. In that form, `component` is implied by the directive name. For compatibility, tools MAY also read the legacy `hvy:block` directive with an explicit `component` field.
+The directive name after `hvy:` can be a component name. In that form, `component` is implied by the directive name. For compatibility, tools also support the legacy `hvy:block` directive with an explicit `component` field.
 
-Expandable blocks MAY be emitted with specialized directives so their stub and expanded content remain normal Markdown blocks:
+Expandable blocks can be emitted with specialized directives so their stub and expanded content remain normal Markdown blocks:
 
 ```markdown
 <!--hvy:expandable {"css":"margin: 0.5rem 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
@@ -231,7 +231,7 @@ Expandable blocks MAY be emitted with specialized directives so their stub and e
 - Expanded detail
 ```
 
-Grid blocks MAY be emitted with specialized directives so grid item content remains normal block content:
+Grid blocks can be emitted with specialized directives so grid item content remains normal block content:
 
 ```markdown
 <!--hvy:grid {"css":"margin: 0.5rem 0; gap: 0.75rem;","gridColumns":2}-->
@@ -241,7 +241,7 @@ Grid blocks MAY be emitted with specialized directives so grid item content rema
 <!--hvy:grid:1 {"id":"tools-technologies","column":"right","component":"component-list","componentListComponent":"text"}-->
 ```
 
-Cross-reference cards MAY be emitted as a block directive with all card data in metadata and no raw HTML body:
+Cross-reference cards can be emitted as a block directive with all card data in metadata and no raw HTML body:
 
 ```markdown
 <!--hvy:xref-card {"xrefTitle":"Heavy Stack","xrefDetail":"05/2024 - present","xrefTarget":"project-heavy-stack"}-->
@@ -254,14 +254,14 @@ Rules:
 - `hvy:expandable` starts an expandable block. Its payload is the expandable block schema, with `component:"expandable"` implied.
 - `hvy:expandable:0` appends the immediately following content block to the expandable stub.
 - `hvy:expandable:1` appends the immediately following content block to the expanded content.
-- Multiple `hvy:expandable:0` or `hvy:expandable:1` directives MAY be used for a single expandable block.
+- Multiple `hvy:expandable:0` or `hvy:expandable:1` directives can be used for a single expandable block.
 - `hvy:grid` starts a grid block. Its payload is the grid block schema, with `component:"grid"` implied.
-- `hvy:grid:N` appends the immediately following content block to the grid at item index `N`. Its payload MAY include grid item metadata such as `id` and `column`; `component` describes the item block component.
+- `hvy:grid:N` appends the immediately following content block to the grid at item index `N`. Its payload optionally includes grid item metadata such as `id` and `column`; `component` describes the item block component.
 - If both `meta.blocks[n]` and a block directive describe the same logical block, `meta.blocks[n]` wins.
 
-### 5.8 Recursive block shape for rich clients
+### 5.8 Recursive block shape
 
-For rich/editor-oriented documents, block metadata MAY include component-specific fields. Common examples include:
+Block metadata optionally includes component-specific fields. Common examples include:
 - `codeLanguage`
 - `containerTitle`
 - `containerBlocks`
@@ -291,7 +291,7 @@ Nested block arrays such as `containerBlocks` use a recursive block object shape
 }
 ```
 
-When a nested block places a custom (non-builtin) component, a shorthand form MAY be used instead:
+When a nested block places a custom (non-builtin) component, a shorthand form can be used instead:
 
 ```yaml
 - component: my-custom-component
@@ -301,11 +301,11 @@ This is equivalent to `{ schema: { component: "my-custom-component" } }`. The fu
 
 Serialized block objects SHOULD contain document data only. Editor-only UI state, such as whether a schema editor is open for a block, MUST NOT be emitted.
 
-Rich clients MAY preserve and round-trip these fields even if a plain Markdown renderer ignores them. For compatibility with older documents, rich clients MAY also read legacy `expandableStubBlocks` and `expandableContentBlocks` arrays from an expandable block schema, but SHOULD emit `hvy:expandable:0` and `hvy:expandable:1` directives for new documents.
+Preserve and round-trip these fields even if a plain Markdown renderer ignores them. For compatibility with older documents, also support legacy `expandableStubBlocks` and `expandableContentBlocks` arrays from an expandable block schema, but SHOULD emit `hvy:expandable:0` and `hvy:expandable:1` directives for new documents.
 
 ### 5.9 Reusable component definitions
 
-Document metadata MAY include `component_defs`, an array of reusable component definitions for rich authoring tools.
+Document metadata optionally includes `component_defs`, an array of reusable component definitions for authoring tools.
 
 Example:
 
@@ -323,16 +323,16 @@ component_defs:
 
 Notes:
 - `schema` is optional.
-- When present, rich clients MAY use it as the default schema/template when creating a block with that reusable component.
+- When present, use it as the default schema/template when creating a block with that reusable component.
 - The `component` field MUST NOT appear inside `schema`; the component type is already captured by `baseType`.
-- A component definition name MAY be used anywhere a block `component` value is accepted, including block directives, nested block schemas, and `componentListComponent`.
+- A component definition name can be used anywhere a block `component` value is accepted, including block directives, nested block schemas, and `componentListComponent`.
 - When a nested block array (e.g. `containerBlocks`, `expandableContentBlocks`) places a custom component, the shorthand form `{ component: name }` SHOULD be used instead of the full `{ schema: { component: name, ... } }` form. The component's template provides all other properties at instantiation time.
-- Rich clients SHOULD render custom components according to `baseType` and preserve the custom component name for editing and round-tripping.
-- Plain Markdown renderers MAY ignore `component_defs`.
+- Implementations SHOULD render custom components according to `baseType` and preserve the custom component name for editing and round-tripping.
+- Plain Markdown renderers ignore `component_defs`.
 
 ### 5.10 Reusable section definitions
 
-Document metadata MAY include `section_defs`, an array of reusable section definitions for rich authoring tools.
+Document metadata optionally includes `section_defs`, an array of reusable section definitions for authoring tools.
 
 Example:
 
@@ -355,9 +355,9 @@ section_defs:
 
 Notes:
 - `template` stores a full section subtree, including blocks and nested child sections.
-- Rich clients MAY clone a `section_defs[*].template` when inserting a new section or subsection.
-- Rich clients SHOULD assign fresh section keys, block IDs, and custom IDs when instantiating a reusable section.
-- Plain Markdown renderers MAY ignore `section_defs`.
+- Clone a `section_defs[*].template` when inserting a new section or subsection.
+- Implementations SHOULD assign fresh section keys, block IDs, and custom IDs when instantiating a reusable section.
+- Plain Markdown renderers ignore `section_defs`.
 
 ## 6. Template & Schema (`.thvy`)
 

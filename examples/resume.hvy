@@ -89,53 +89,67 @@ component_defs:
                   text: ""
                   schema:
                     component: component-list
-                    componentListComponent: text
+                    componentListComponent: xref-card
                     css: "margin: 0;"
+                    align: center
                     componentListBlocks:
                       - text: "#### Relevant Skills"
                         schema:
                           component: text
                           css: "margin: 0 0 0.25rem;"
-                      - text: "Software Engineering"
+                      - text: ""
                         schema:
-                          component: text
+                          component: xref-card
                           css: "margin: 0.25rem 0;"
-                      - text: "Library Development"
+                          xrefTitle: "Software Engineering"
+                          xrefTarget: "skill-software-engineering"
+                      - text: ""
                         schema:
-                          component: text
+                          component: xref-card
                           css: "margin: 0.25rem 0;"
-                      - text: "Project Management"
+                          xrefTitle: "Library Development"
+                          xrefTarget: "skill-library-development"
+                      - text: ""
                         schema:
-                          component: text
+                          component: xref-card
                           css: "margin: 0.25rem 0;"
+                          xrefTitle: "Project Management"
+                          xrefTarget: "skill-project-management"
               - id: history-tools-technologies
                 column: right
                 block:
                   text: ""
                   schema:
                     component: component-list
-                    componentListComponent: text
+                    componentListComponent: xref-card
                     css: "margin: 0;"
+                    align: center
                     componentListBlocks:
                       - text: "#### Tools and Technologies"
                         schema:
                           component: text
                           css: "margin: 0 0 0.25rem;"
-                      - text: "TypeScript"
+                      - text: ""
                         schema:
-                          component: text
+                          component: xref-card
                           css: "margin: 0.25rem 0;"
-                      - text: "Python"
+                          xrefTitle: "TypeScript"
+                          xrefTarget: "tool-typescript"
+                      - text: ""
                         schema:
-                          component: text
+                          component: xref-card
                           css: "margin: 0.25rem 0;"
-                      - text: "Developer Containers"
+                          xrefTitle: "Python"
+                          xrefTarget: "tool-python"
+                      - text: ""
                         schema:
-                          component: text
+                          component: xref-card
                           css: "margin: 0.25rem 0;"
+                          xrefTitle: "Developer Containers"
+                          xrefTarget: "tool-developer-containers"
   - name: skills-and-tools-tech-list
     baseType: grid
-    description: Two-column skills and tools list
+    description: Two-column skills and tools list using xref-cards
     schema:
       component: skills-and-tools-tech-list
       css: "margin: 0.6rem 0 0;"
@@ -147,50 +161,64 @@ component_defs:
             text: ""
             schema:
               component: component-list
-              componentListComponent: text
+              componentListComponent: xref-card
               css: "margin: 0;"
+              align: center
               componentListBlocks:
                 - text: "#### Relevant Skills"
                   schema:
                     component: text
                     css: "margin: 0 0 0.25rem;"
-                - text: "Software Engineering"
+                - text: ""
                   schema:
-                    component: text
+                    component: xref-card
                     css: "margin: 0.25rem 0;"
-                - text: "Library Development"
+                    xrefTitle: "Software Engineering"
+                    xrefTarget: "skill-software-engineering"
+                - text: ""
                   schema:
-                    component: text
+                    component: xref-card
                     css: "margin: 0.25rem 0;"
-                - text: "LLM Prompt Engineering"
+                    xrefTitle: "Library Development"
+                    xrefTarget: "skill-library-development"
+                - text: ""
                   schema:
-                    component: text
+                    component: xref-card
                     css: "margin: 0.25rem 0;"
+                    xrefTitle: "LLM Prompt Engineering"
+                    xrefTarget: "skill-llm-prompt-engineering"
         - id: tools-technologies
           column: right
           block:
             text: ""
             schema:
               component: component-list
-              componentListComponent: text
+              componentListComponent: xref-card
               css: "margin: 0;"
+              align: center
               componentListBlocks:
                 - text: "#### Tools and Technologies"
                   schema:
                     component: text
                     css: "margin: 0 0 0.25rem;"
-                - text: "TypeScript"
+                - text: ""
                   schema:
-                    component: text
+                    component: xref-card
                     css: "margin: 0.25rem 0;"
-                - text: "Python"
+                    xrefTitle: "TypeScript"
+                    xrefTarget: "tool-typescript"
+                - text: ""
                   schema:
-                    component: text
+                    component: xref-card
                     css: "margin: 0.25rem 0;"
-                - text: "Developer Containers"
+                    xrefTitle: "Python"
+                    xrefTarget: "tool-python"
+                - text: ""
                   schema:
-                    component: text
+                    component: xref-card
                     css: "margin: 0.25rem 0;"
+                    xrefTitle: "Developer Containers"
+                    xrefTarget: "tool-developer-containers"
   - name: education-record
     baseType: expandable
     description: Expandable education record
@@ -266,38 +294,46 @@ component_defs:
                   text: ""
                   schema:
                     component: component-list
-                    componentListComponent: text
+                    componentListComponent: xref-card
                     css: "margin: 0;"
+                    align: center
                     componentListBlocks:
                       - text: "#### Relevant Skills"
                         schema:
                           component: text
                           css: "margin: 0 0 0.25rem;"
-                      - text: "Software Engineering"
+                      - text: ""
                         schema:
-                          component: text
+                          component: xref-card
                           css: "margin: 0.25rem 0;"
+                          xrefTitle: "Software Engineering"
+                          xrefTarget: "skill-software-engineering"
               - id: education-tools-technologies
                 column: right
                 block:
                   text: ""
                   schema:
                     component: component-list
-                    componentListComponent: text
+                    componentListComponent: xref-card
                     css: "margin: 0;"
+                    align: center
                     componentListBlocks:
                       - text: "#### Tools and Technologies"
                         schema:
                           component: text
                           css: "margin: 0 0 0.25rem;"
-                      - text: "Python"
+                      - text: ""
                         schema:
-                          component: text
+                          component: xref-card
                           css: "margin: 0.25rem 0;"
-                      - text: "C/C++"
+                          xrefTitle: "Python"
+                          xrefTarget: "tool-python"
+                      - text: ""
                         schema:
-                          component: text
+                          component: xref-card
                           css: "margin: 0.25rem 0;"
+                          xrefTitle: "C/C++"
+                          xrefTarget: "tool-c-cpp"
         - text: "#### Classes"
           schema:
             component: text
@@ -392,50 +428,64 @@ component_defs:
                   text: ""
                   schema:
                     component: component-list
-                    componentListComponent: text
+                    componentListComponent: xref-card
                     css: "margin: 0;"
+                    align: center
                     componentListBlocks:
                       - text: "#### Relevant Skills"
                         schema:
                           component: text
                           css: "margin: 0 0 0.25rem;"
-                      - text: "Software Engineering"
+                      - text: ""
                         schema:
-                          component: text
+                          component: xref-card
                           css: "margin: 0.25rem 0;"
-                      - text: "LLM Prompt Engineering"
+                          xrefTitle: "Software Engineering"
+                          xrefTarget: "skill-software-engineering"
+                      - text: ""
                         schema:
-                          component: text
+                          component: xref-card
                           css: "margin: 0.25rem 0;"
+                          xrefTitle: "LLM Prompt Engineering"
+                          xrefTarget: "skill-llm-prompt-engineering"
               - id: project-tools-technologies
                 column: right
                 block:
                   text: ""
                   schema:
                     component: component-list
-                    componentListComponent: text
+                    componentListComponent: xref-card
                     css: "margin: 0;"
+                    align: center
                     componentListBlocks:
                       - text: "#### Tools and Technologies"
                         schema:
                           component: text
                           css: "margin: 0 0 0.25rem;"
-                      - text: "TypeScript"
+                      - text: ""
                         schema:
-                          component: text
+                          component: xref-card
                           css: "margin: 0.25rem 0;"
-                      - text: "Python"
+                          xrefTitle: "TypeScript"
+                          xrefTarget: "tool-typescript"
+                      - text: ""
                         schema:
-                          component: text
+                          component: xref-card
                           css: "margin: 0.25rem 0;"
-                      - text: "OpenAI API"
+                          xrefTitle: "Python"
+                          xrefTarget: "tool-python"
+                      - text: ""
                         schema:
-                          component: text
+                          component: xref-card
                           css: "margin: 0.25rem 0;"
-                      - text: "Developer Containers"
+                          xrefTitle: "OpenAI API"
+                          xrefTarget: "tool-openai-api"
+                      - text: ""
                         schema:
-                          component: text
+                          component: xref-card
                           css: "margin: 0.25rem 0;"
+                          xrefTitle: "Developer Containers"
+                          xrefTarget: "tool-developer-containers"
 ---
 
 <!--hvy: {"id":"header","lock":true}-->
@@ -730,33 +780,27 @@ Partnered with design and product to ship AI-assisted editor workflows with meas
 
 <!--hvy:expandable:1 {"component":"skills-and-tools-tech-list","css":"margin: 0.6rem 0 0;","gridColumns":2}-->
 
-<!--hvy:grid:0 {"id":"history-skills","column":"left","component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->
+<!--hvy:grid:0 {"id":"history-skills","column":"left","component":"component-list","componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
 
 <!--hvy:component-list:0 {"component":"text","css":"margin: 0 0 0.25rem;"}-->
 #### Skills
 
-<!--hvy:component-list:1 {"component":"text","css":"margin: 0.25rem 0;"}-->
-[Software Engineering](#skill-software-engineering)
+<!--hvy:component-list:1 {"component":"xref-card","css":"margin: 0.25rem 0;","xrefTitle":"Software Engineering","xrefTarget":"skill-software-engineering"}-->
 
-<!--hvy:component-list:2 {"component":"text","css":"margin: 0.25rem 0;"}-->
-[Library Development](#skill-library-development)
+<!--hvy:component-list:2 {"component":"xref-card","css":"margin: 0.25rem 0;","xrefTitle":"Library Development","xrefTarget":"skill-library-development"}-->
 
-<!--hvy:component-list:3 {"component":"text","css":"margin: 0.25rem 0;"}-->
-[Project Management](#skill-project-management)
+<!--hvy:component-list:3 {"component":"xref-card","css":"margin: 0.25rem 0;","xrefTitle":"Project Management","xrefTarget":"skill-project-management"}-->
 
-<!--hvy:grid:1 {"id":"history-tools-technologies","column":"right","component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->
+<!--hvy:grid:1 {"id":"history-tools-technologies","column":"right","component":"component-list","componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
 
 <!--hvy:component-list:0 {"component":"text","css":"margin: 0 0 0.25rem;"}-->
 #### Tools & Technologies
 
-<!--hvy:component-list:1 {"component":"text","css":"margin: 0.25rem 0;"}-->
-[TypeScript](#tool-typescript)
+<!--hvy:component-list:1 {"component":"xref-card","css":"margin: 0.25rem 0;","xrefTitle":"TypeScript","xrefTarget":"tool-typescript"}-->
 
-<!--hvy:component-list:2 {"component":"text","css":"margin: 0.25rem 0;"}-->
-[Python](#tool-python)
+<!--hvy:component-list:2 {"component":"xref-card","css":"margin: 0.25rem 0;","xrefTitle":"Python","xrefTarget":"tool-python"}-->
 
-<!--hvy:component-list:3 {"component":"text","css":"margin: 0.25rem 0;"}-->
-[Developer Containers](#tool-developer-containers)
+<!--hvy:component-list:3 {"component":"xref-card","css":"margin: 0.25rem 0;","xrefTitle":"Developer Containers","xrefTarget":"tool-developer-containers"}-->
 
 <!--hvy: {"id":"projects","lock":true}-->
 #! Projects
@@ -786,30 +830,25 @@ The Heavy Stack is the production version of the developer container used for He
 
 <!--hvy:expandable:1 {"component":"skills-and-tools-tech-list","css":"margin: 0.6rem 0 0;","gridColumns":2}-->
 
-<!--hvy:grid:0 {"id":"project-relevant-skills","column":"left","component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->
+<!--hvy:grid:0 {"id":"project-relevant-skills","column":"left","component":"component-list","componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
 
 <!--hvy:component-list:0 {"component":"text","css":"margin: 0 0 0.25rem;"}-->
 #### Relevant Skills
 
-<!--hvy:component-list:1 {"component":"text","css":"margin: 0.25rem 0;"}-->
-[Reverse Engineering](#skill-reverse-engineering)
+<!--hvy:component-list:1 {"component":"xref-card","css":"margin: 0.25rem 0;","xrefTitle":"Reverse Engineering","xrefTarget":"skill-reverse-engineering"}-->
 
-<!--hvy:component-list:2 {"component":"text","css":"margin: 0.25rem 0;"}-->
-[Library Development](#skill-library-development)
+<!--hvy:component-list:2 {"component":"xref-card","css":"margin: 0.25rem 0;","xrefTitle":"Library Development","xrefTarget":"skill-library-development"}-->
 
-<!--hvy:grid:1 {"id":"project-tools-technologies","column":"right","component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->
+<!--hvy:grid:1 {"id":"project-tools-technologies","column":"right","component":"component-list","componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
 
 <!--hvy:component-list:0 {"component":"text","css":"margin: 0 0 0.25rem;"}-->
 #### Tools and Technologies
 
-<!--hvy:component-list:1 {"component":"text","css":"margin: 0.25rem 0;"}-->
-[TypeScript](#tool-typescript)
+<!--hvy:component-list:1 {"component":"xref-card","css":"margin: 0.25rem 0;","xrefTitle":"TypeScript","xrefTarget":"tool-typescript"}-->
 
-<!--hvy:component-list:2 {"component":"text","css":"margin: 0.25rem 0;"}-->
-[Python](#tool-python)
+<!--hvy:component-list:2 {"component":"xref-card","css":"margin: 0.25rem 0;","xrefTitle":"Python","xrefTarget":"tool-python"}-->
 
-<!--hvy:component-list:3 {"component":"text","css":"margin: 0.25rem 0;"}-->
-[Developer Containers](#tool-developer-containers)
+<!--hvy:component-list:3 {"component":"xref-card","css":"margin: 0.25rem 0;","xrefTitle":"Developer Containers","xrefTarget":"tool-developer-containers"}-->
 
 <!--hvy:project-record {"id":"project-autonomous-agent-hackathon","css":"margin: 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
@@ -831,36 +870,29 @@ Hackathon project that involved using SuperAGI to do deep research. I had the id
 
 <!--hvy:expandable:1 {"component":"skills-and-tools-tech-list","css":"margin: 0.6rem 0 0;","gridColumns":2}-->
 
-<!--hvy:grid:0 {"id":"project-relevant-skills-hackathon","column":"left","component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->
+<!--hvy:grid:0 {"id":"project-relevant-skills-hackathon","column":"left","component":"component-list","componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
 
 <!--hvy:component-list:0 {"component":"text","css":"margin: 0 0 0.25rem;"}-->
 #### Relevant Skills
 
-<!--hvy:component-list:1 {"component":"text","css":"margin: 0.25rem 0;"}-->
-[LLM Prompt Engineering](#skill-llm-prompt-engineering)
+<!--hvy:component-list:1 {"component":"xref-card","css":"margin: 0.25rem 0;","xrefTitle":"LLM Prompt Engineering","xrefTarget":"skill-llm-prompt-engineering"}-->
 
-<!--hvy:component-list:2 {"component":"text","css":"margin: 0.25rem 0;"}-->
-[Project Management](#skill-project-management)
+<!--hvy:component-list:2 {"component":"xref-card","css":"margin: 0.25rem 0;","xrefTitle":"Project Management","xrefTarget":"skill-project-management"}-->
 
-<!--hvy:grid:1 {"id":"project-tools-technologies-hackathon","column":"right","component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->
+<!--hvy:grid:1 {"id":"project-tools-technologies-hackathon","column":"right","component":"component-list","componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
 
 <!--hvy:component-list:0 {"component":"text","css":"margin: 0 0 0.25rem;"}-->
 #### Tools and Technologies
 
-<!--hvy:component-list:1 {"component":"text","css":"margin: 0.25rem 0;"}-->
-[Developer Containers](#tool-developer-containers)
+<!--hvy:component-list:1 {"component":"xref-card","css":"margin: 0.25rem 0;","xrefTitle":"Developer Containers","xrefTarget":"tool-developer-containers"}-->
 
-<!--hvy:component-list:2 {"component":"text","css":"margin: 0.25rem 0;"}-->
-[OpenAI API](#tool-openai-api)
+<!--hvy:component-list:2 {"component":"xref-card","css":"margin: 0.25rem 0;","xrefTitle":"OpenAI API","xrefTarget":"tool-openai-api"}-->
 
-<!--hvy:component-list:3 {"component":"text","css":"margin: 0.25rem 0;"}-->
-[Python](#tool-python)
+<!--hvy:component-list:3 {"component":"xref-card","css":"margin: 0.25rem 0;","xrefTitle":"Python","xrefTarget":"tool-python"}-->
 
-<!--hvy:component-list:4 {"component":"text","css":"margin: 0.25rem 0;"}-->
-[GitHub Codespaces](#tool-github-codespaces)
+<!--hvy:component-list:4 {"component":"xref-card","css":"margin: 0.25rem 0;","xrefTitle":"GitHub Codespaces","xrefTarget":"tool-github-codespaces"}-->
 
-<!--hvy:component-list:5 {"component":"text","css":"margin: 0.25rem 0;"}-->
-[SuperAGI](#tool-superagi)
+<!--hvy:component-list:5 {"component":"xref-card","css":"margin: 0.25rem 0;","xrefTitle":"SuperAGI","xrefTarget":"tool-superagi"}-->
 
 <!--hvy: {"id":"education","lock":true}-->
 #! Education
@@ -900,24 +932,21 @@ Focused on systems programming, developer tooling, and human-computer interactio
 
 <!--hvy:expandable:1 {"component":"skills-and-tools-tech-list","css":"margin: 0.6rem 0 0;","gridColumns":2}-->
 
-<!--hvy:grid:0 {"id":"education-relevant-skills","column":"left","component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->
+<!--hvy:grid:0 {"id":"education-relevant-skills","column":"left","component":"component-list","componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
 
 <!--hvy:component-list:0 {"component":"text","css":"margin: 0 0 0.25rem;"}-->
 #### Relevant Skills
 
-<!--hvy:component-list:1 {"component":"text","css":"margin: 0.25rem 0;"}-->
-[Software Engineering](#skill-software-engineering)
+<!--hvy:component-list:1 {"component":"xref-card","css":"margin: 0.25rem 0;","xrefTitle":"Software Engineering","xrefTarget":"skill-software-engineering"}-->
 
-<!--hvy:grid:1 {"id":"education-tools-technologies","column":"right","component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->
+<!--hvy:grid:1 {"id":"education-tools-technologies","column":"right","component":"component-list","componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
 
 <!--hvy:component-list:0 {"component":"text","css":"margin: 0 0 0.25rem;"}-->
 #### Tools and Technologies
 
-<!--hvy:component-list:1 {"component":"text","css":"margin: 0.25rem 0;"}-->
-[Python](#tool-python)
+<!--hvy:component-list:1 {"component":"xref-card","css":"margin: 0.25rem 0;","xrefTitle":"Python","xrefTarget":"tool-python"}-->
 
-<!--hvy:component-list:2 {"component":"text","css":"margin: 0.25rem 0;"}-->
-[C/C++](#tool-c-cpp)
+<!--hvy:component-list:2 {"component":"xref-card","css":"margin: 0.25rem 0;","xrefTitle":"C/C++","xrefTarget":"tool-c-cpp"}-->
 
 <!--hvy:expandable:1 {"component":"text","css":"margin: 0.6rem 0 0.25rem;"}-->
 #### Classes

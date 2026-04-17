@@ -78,11 +78,12 @@ component_defs:
       gridItems:
         - id: relevant-skills
           column: left
+          align: center
           block:
             text: ""
             schema:
               component: component-list
-              componentListComponent: text
+              componentListComponent: xref-card
               css: "margin: 0;"
               componentListBlocks:
                 - text: "#### Relevant Skills"
@@ -91,11 +92,12 @@ component_defs:
                     css: "margin: 0 0 0.25rem;"
         - id: tools-technologies
           column: right
+          align: center
           block:
             text: ""
             schema:
               component: component-list
-              componentListComponent: text
+              componentListComponent: xref-card
               css: "margin: 0;"
               componentListBlocks:
                 - text: "#### Tools and Technologies"

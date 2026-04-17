@@ -240,10 +240,6 @@ component_defs:
                   - "University of Washington"
                   - "Seattle, WA"
       expandableContentBlocks:
-        - text: "### B.S. Computer Science"
-          schema:
-            component: text
-            css: "margin: 0 0 0.35rem;"
         - text: ""
           schema:
             component: grid
@@ -259,6 +255,10 @@ component_defs:
                     componentListComponent: text
                     css: "margin: 0;"
                     componentListBlocks:
+                      - text: "### B.S. Computer Science"
+                        schema:
+                          component: text
+                          css: "margin: 0 0 0.25rem;"
                       - text: "University of Washington"
                         schema:
                           component: text
@@ -908,20 +908,20 @@ Hackathon project that involved using SuperAGI to do deep research. I had the id
 
 <!--hvy:expandable:0 {"component":"table","css":"margin: 0;","tableColumns":"DEGREE, INSTITUTION, LOCATION","tableShowHeader":false,"tableRows":[{"cells":["B.S. Computer Science","University of Washington","Seattle, WA"]}]}-->
 
-<!--hvy:expandable:1 {"component":"text","css":"margin: 0 0 0.35rem;"}-->
-### B.S. Computer Science
-
 <!--hvy:expandable:1 {"component":"grid","css":"margin: 0.35rem 0;","gridColumns":2}-->
 
 <!--hvy:grid:0 {"id":"education-institution-details","column":"left","component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->
 
-<!--hvy:component-list:0 {"component":"text","css":"margin: 0;"}-->
+<!--hvy:component-list:0 {"component":"text","css":"margin: 0 0 0.25rem;"}-->
+### B.S. Computer Science
+
+<!--hvy:component-list:1 {"component":"text","css":"margin: 0;"}-->
 University of Washington
 
-<!--hvy:component-list:1 {"component":"text","css":"margin: 0.15rem 0 0;"}-->
+<!--hvy:component-list:2 {"component":"text","css":"margin: 0.15rem 0 0;"}-->
 Seattle, WA
 
-<!--hvy:component-list:2 {"component":"text","css":"margin: 0.15rem 0 0;"}-->
+<!--hvy:component-list:3 {"component":"text","css":"margin: 0.15rem 0 0;"}-->
 GPA: 3.8 / 4.0
 
 <!--hvy:grid:1 {"id":"education-date-range","column":"right","component":"text","css":"margin: 0; text-align: right;"}-->

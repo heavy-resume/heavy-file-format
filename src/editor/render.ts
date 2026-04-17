@@ -14,6 +14,7 @@ import { renderXrefCardEditor } from './components/xref-card';
 import { renderTagEditor } from './tag-editor';
 import { getTemplateFields, renderTemplateGhosts } from './template';
 import type { Align, BlockSchema, VisualBlock, VisualSection } from './types';
+import { getTableColumns } from '../table-ops';
 import bash from 'highlight.js/lib/languages/bash';
 import css from 'highlight.js/lib/languages/css';
 import javascript from 'highlight.js/lib/languages/javascript';
@@ -376,12 +377,9 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       }
     }
 
-    if (base === 'text' && block.text.trim().length === 0) {
-      return '<div class="editor-passive-empty-text">Empty text...</div>';
-    }
-
-    if (base === 'quote' && block.text.trim().length === 0) {
-      return '<div class="editor-passive-empty-text">Empty quote...</div>';
+    if ((base === 'text' || base === 'quote') && block.text.trim().length === 0) {
+      const hint = block.schema.placeholder || (base === 'quote' ? 'Empty quote...' : 'Empty text...');
+      return `<div class="editor-passive-empty-text${block.schema.placeholder ? ' has-placeholder' : ''}">${deps.escapeHtml(hint)}</div>`;
     }
 
     return deps.renderReaderBlock(section, block);
@@ -608,6 +606,16 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
             },
             { escapeAttr: deps.escapeAttr, escapeHtml: deps.escapeHtml }
           )}
+        </label>
+        <label>
+          <span>Placeholder</span>
+          <input
+            data-section-key="${deps.escapeAttr(sectionKey)}"
+            data-block-id="${deps.escapeAttr(block.id)}"
+            data-field="block-placeholder"
+            placeholder="Shown when block is empty"
+            value="${deps.escapeAttr(block.schema.placeholder)}"
+          />
         </label>
         <label>
           <span>Description</span>

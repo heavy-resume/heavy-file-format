@@ -1125,6 +1125,17 @@ export function bindUi(app: HTMLElement): void {
       return;
     }
 
+    if (field === 'block-placeholder' && target instanceof HTMLInputElement) {
+      const context = resolveBlockContext(target);
+      if (!context) {
+        return;
+      }
+      context.block.schema.placeholder = target.value;
+      syncReusableTemplateForBlock(sectionKey, context.block.id);
+      getRenderApp()();
+      return;
+    }
+
     if (field === 'block-description' && (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) {
       const context = resolveBlockContext(target);
       if (!context) {

@@ -8,6 +8,7 @@ export const renderTextEditor: ComponentEditorRenderer = (sectionKey, block, hel
     data-section-key="${helpers.escapeAttr(sectionKey)}"
     data-block-id="${helpers.escapeAttr(block.id)}"
     data-field="block-rich"
+    ${block.schema.placeholder ? `data-placeholder="${helpers.escapeAttr(block.schema.placeholder)}"` : ''}
   >${helpers.markdownToEditorHtml(block.text)}</div>
 `;
 

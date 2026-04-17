@@ -124,10 +124,6 @@ component_defs:
       expandableContentBlocks:
         - text: ""
           schema:
-            component: text
-            css: "margin: 0 0 0.35rem;"
-        - text: ""
-          schema:
             component: grid
             css: "margin: 0.35rem 0;"
             gridColumns: 2
@@ -140,7 +136,12 @@ component_defs:
                     component: component-list
                     componentListComponent: text
                     css: "margin: 0;"
-                    componentListBlocks: []
+                    componentListBlocks:
+                      - text: ""
+                        schema:
+                          component: text
+                          css: "margin: 0 0 0.25rem;"
+                          placeholder: "Degree Title"
               - id: education-date-range
                 column: right
                 block:
@@ -148,10 +149,12 @@ component_defs:
                   schema:
                     component: text
                     css: "margin: 0; text-align: right;"
+                    placeholder: "Start Year – End Year"
         - text: ""
           schema:
             component: text
             css: "margin: 0.5rem 0;"
+            placeholder: "Description"
         - text: ""
           schema:
             component: skills-and-tools-tech-list

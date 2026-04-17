@@ -34,6 +34,7 @@ export interface BlockSchema {
   gridItems: GridItem[];
   tags: string;
   description: string;
+  placeholder: string;
   metaOpen: boolean;
   xrefTitle: string;
   xrefDetail: string;

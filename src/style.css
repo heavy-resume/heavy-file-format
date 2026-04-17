@@ -662,6 +662,20 @@ button.tiny {
   font-style: italic;
 }
 
+.editor-passive-empty-text.has-placeholder {
+  color: #6b8fa0;
+  font-style: normal;
+  font-size: 0.88rem;
+  letter-spacing: 0.01em;
+}
+
+.rich-editor[data-placeholder]:empty::before {
+  content: attr(data-placeholder);
+  color: #9aabb5;
+  pointer-events: none;
+  display: block;
+}
+
 .editor-block-title {
   position: absolute;
   left: 0;

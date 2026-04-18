@@ -239,13 +239,13 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         if (child.id === targetBlockId || isDescendantActive(child, targetBlockId)) return true;
       }
     }
-    if (Array.isArray(block.schema.expandableStubBlocks)) {
-      for (const child of block.schema.expandableStubBlocks) {
+    if (Array.isArray(block.schema.expandableStubBlocks?.children)) {
+      for (const child of block.schema.expandableStubBlocks.children) {
         if (child.id === targetBlockId || isDescendantActive(child, targetBlockId)) return true;
       }
     }
-    if (Array.isArray(block.schema.expandableContentBlocks)) {
-      for (const child of block.schema.expandableContentBlocks) {
+    if (Array.isArray(block.schema.expandableContentBlocks?.children)) {
+      for (const child of block.schema.expandableContentBlocks.children) {
         if (child.id === targetBlockId || isDescendantActive(child, targetBlockId)) return true;
       }
     }

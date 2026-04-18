@@ -153,7 +153,13 @@ export const renderTableReader: ComponentReaderRenderer = (_section, block, help
         .map(
           (row, rowIndex) => `
             <tr class="table-main-row table-main-row-${rowIndex % 2 === 0 ? 'even' : 'odd'}">
-              ${columns.map((_, cellIndex) => `<td>${helpers.escapeHtml(row.cells[cellIndex] ?? '')}</td>`).join('')}
+              ${columns.map((column, cellIndex) => {
+                const value = helpers.escapeHtml(row.cells[cellIndex] ?? '');
+                const placeholder = helpers.escapeAttr(column || 'Cell value');
+                return value
+                  ? `<td>${value}</td>`
+                  : `<td data-placeholder="${placeholder}"></td>`;
+              }).join('')}
             </tr>
             `
         )

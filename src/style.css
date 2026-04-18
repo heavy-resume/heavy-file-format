@@ -1836,6 +1836,12 @@ button.tiny {
   min-height: 1ch;
 }
 
+.editor-block-passive .reader-table td[data-placeholder]:empty::before {
+  content: attr(data-placeholder);
+  color: #81919b;
+  pointer-events: none;
+}
+
 .table-main-row {
   height: 3ch;
 }

@@ -363,6 +363,8 @@ component_defs:
 
  <!--hvy:table {"css":"margin: 0.5rem 0 0;","tableColumns":"PROJECT, DATE","tableShowHeader":true,"tableRows":[],"lock":true}-->
 
+ <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"project-record"}-->
+
 <!--hvy: {"id":"education","lock":true}-->
 #! Education
 

@@ -28,7 +28,7 @@ import {
   coerceAlign,
 } from './document-factory';
 import { recordHistory, undoState, redoState } from './history';
-import { navigateToSection, setSidebarOpen, closeModal, closeModalIfTarget, resetTransientUiState, resetToBlankDocument } from './navigation';
+import { navigateToSection, setSidebarOpen, setEditorSidebarOpen, closeModal, closeModalIfTarget, resetTransientUiState, resetToBlankDocument } from './navigation';
 import { deserializeDocument } from './serialization';
 import { serializeDocument } from './serialization';
 import { syncReusableTemplateForBlock, revertReusableComponent, findReusableOwner } from './reusable';
@@ -303,6 +303,11 @@ export function bindUi(app: HTMLElement): void {
 
     if (action === 'toggle-viewer-sidebar') {
       setSidebarOpen(app, !state.viewerSidebarOpen);
+      return;
+    }
+
+    if (action === 'toggle-editor-sidebar') {
+      setEditorSidebarOpen(app, !state.editorSidebarOpen);
       return;
     }
 

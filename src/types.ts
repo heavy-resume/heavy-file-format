@@ -65,6 +65,7 @@ export interface AppState {
   gridAddComponentByBlock: Record<string, string>;
   expandableEditorPanels: Record<string, { stubOpen: boolean; expandedOpen: boolean }>;
   viewerSidebarOpen: boolean;
+  editorSidebarOpen: boolean;
   lastHistoryGroup: string | null;
   lastHistoryAt: number;
   pendingEditorCenterSectionKey: string | null;

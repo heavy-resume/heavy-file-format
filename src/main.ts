@@ -61,6 +61,7 @@ function createInitialState(): AppState {
     gridAddComponentByBlock: {},
     expandableEditorPanels: {},
     viewerSidebarOpen: false,
+    editorSidebarOpen: false,
     lastHistoryGroup: null,
     lastHistoryAt: 0,
     pendingEditorCenterSectionKey: null,
@@ -230,14 +231,24 @@ function renderApp(): void {
               ? `${isAdvancedEditor ? renderTemplatePanel(templateFields, state.templateValues, { escapeAttr, escapeHtml }) : ''}
                 ${isAdvancedEditor && state.metaPanelOpen ? editorRenderer.renderMetaPanel() : ''}
                 ${isAdvancedEditor ? renderStateTracker() : ''}
-                <div id="editorTree" class="editor-tree">${editorRenderer.renderSectionEditorTree(state.document.sections)}</div>`
+                <div class="editor-shell ${state.editorSidebarOpen ? 'is-sidebar-open' : 'is-sidebar-closed'}">
+                  <div class="editor-sidebar-backdrop" data-action="toggle-editor-sidebar"></div>
+                  <aside class="editor-sidebar">
+                    <button type="button" class="editor-sidebar-tab" data-action="toggle-editor-sidebar" aria-expanded="${state.editorSidebarOpen ? 'true' : 'false'}" aria-label="Toggle sidebar">☰</button>
+                    <div class="editor-sidebar-panel">
+                      ${editorRenderer.renderSidebarEditorSections(state.document.sections)}
+                    </div>
+                  </aside>
+                  <div id="editorTree" class="editor-tree">${editorRenderer.renderSectionEditorTree(state.document.sections)}</div>
+                </div>`
               : `<div class="viewer-shell ${state.viewerSidebarOpen ? 'is-sidebar-open' : 'is-sidebar-closed'}">
                    <div class="viewer-sidebar-backdrop" data-action="toggle-viewer-sidebar"></div>
                    <aside class="viewer-sidebar">
                      <button type="button" class="viewer-sidebar-tab" data-action="toggle-viewer-sidebar" aria-expanded="${state.viewerSidebarOpen ? 'true' : 'false'}" aria-label="Toggle navigation">${escapeHtml(String(state.document.meta.sidebar_label || '☰'))}</button>
                      <div class="viewer-sidebar-panel">
                        <div id="readerWarnings" class="reader-warnings">${readerRenderer.renderWarnings()}</div>
-                       <div id="readerNav" class="reader-nav">${readerRenderer.renderNavigation(state.document.sections)}</div>
+                       <!-- TODO: Need to figure out what to do with navigation in the sidebar -->
+                       <!-- <div id="readerNav" class="reader-nav">${readerRenderer.renderNavigation(state.document.sections)}</div> -->
                        <div id="readerSidebarSections" class="reader-sidebar-sections">${readerRenderer.renderSidebarSections(state.document.sections)}</div>
                      </div>
                    </aside>

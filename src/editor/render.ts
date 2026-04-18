@@ -99,6 +99,7 @@ interface EditorRenderDeps {
 
 export interface EditorRenderer {
   renderSectionEditorTree: (sections: VisualSection[]) => string;
+  renderSidebarEditorSections: (sections: VisualSection[]) => string;
   renderEditorBlock: (sectionKey: string, block: VisualBlock, rootSections?: VisualSection[]) => string;
   renderPassiveEditorBlock: (sectionKey: string, block: VisualBlock, rootSections?: VisualSection[]) => string;
   renderRichToolbar: (
@@ -118,8 +119,17 @@ export interface EditorRenderer {
 }
 
 export function createEditorRenderer(state: EditorRenderState, deps: EditorRenderDeps): EditorRenderer {
+  function renderSidebarEditorSections(sections: VisualSection[]): string {
+    const sidebarSections = sections.filter((s) => !s.isGhost && s.location === 'sidebar');
+    if (sidebarSections.length === 0) {
+      return '<div class="muted editor-sidebar-empty">Move sections here using the sidebar button.</div>';
+    }
+    return sidebarSections.map((section) => renderEditorSection(section, sections)).join('');
+  }
+
   function renderSectionEditorTree(sections: VisualSection[]): string {
-    const sectionCards = sections.map((section) => renderEditorSection(section, sections)).join('');
+    const mainSections = sections.filter((s) => s.location !== 'sidebar');
+    const sectionCards = mainSections.map((section) => renderEditorSection(section, sections)).join('');
     const flatSections = deps.flattenSections(sections);
     return `
       ${state.showAdvancedEditor
@@ -169,7 +179,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
                    <button type="button" class="ghost" data-action="focus-modal" data-section-key="${deps.escapeAttr(section.key)}">Meta</button>`
         : ''
       }
-            <button type="button" class="${section.location === 'sidebar' ? 'secondary' : 'ghost'}" data-action="toggle-section-location" data-section-key="${deps.escapeAttr(section.key)}" title="${section.location === 'sidebar' ? 'Move to main' : 'Move to sidebar'}">Sidebar</button>
+            <button type="button" class="${section.location === 'sidebar' ? 'secondary' : 'ghost'}" data-action="toggle-section-location" data-section-key="${deps.escapeAttr(section.key)}">${section.location === 'sidebar' ? 'main \u2192' : '\u2190 sidebar'}</button>
             <button type="button" class="danger" data-action="remove-section" data-section-key="${deps.escapeAttr(section.key)}">Remove</button>
           </div>
         </div>
@@ -653,6 +663,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
 
   return {
     renderSectionEditorTree,
+    renderSidebarEditorSections,
     renderEditorBlock: (sectionKey, block, rootSections) => renderEditorBlock(sectionKey, block, rootSections),
     renderPassiveEditorBlock: (sectionKey, block, rootSections) => renderPassiveEditorBlock(sectionKey, block, rootSections ?? []),
     renderRichToolbar,

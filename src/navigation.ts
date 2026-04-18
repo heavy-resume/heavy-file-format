@@ -23,6 +23,20 @@ export function setSidebarOpen(app: HTMLElement, open: boolean): void {
   }
 }
 
+export function setEditorSidebarOpen(app: HTMLElement, open: boolean): void {
+  state.editorSidebarOpen = open;
+  const shell = app.querySelector<HTMLElement>('.editor-shell');
+  if (!shell) {
+    return;
+  }
+  shell.classList.toggle('is-sidebar-open', open);
+  shell.classList.toggle('is-sidebar-closed', !open);
+  const tab = shell.querySelector<HTMLButtonElement>('.editor-sidebar-tab');
+  if (tab) {
+    tab.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+}
+
 export function navigateToSection(sectionId: string, app: HTMLElement): void {
   if (!sectionId) {
     return;

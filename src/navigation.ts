@@ -210,6 +210,7 @@ export function resetTransientUiState(): void {
   state.pendingEditorCenterSectionKey = null;
   state.paneScroll = {
     editorTop: 0,
+    editorSidebarTop: 0,
     readerTop: 0,
     windowTop: 0,
   };

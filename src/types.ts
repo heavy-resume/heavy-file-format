@@ -9,6 +9,7 @@ export interface VisualDocument {
 
 export interface PaneScrollState {
   editorTop: number;
+  editorSidebarTop: number;
   readerTop: number;
   windowTop: number;
 }

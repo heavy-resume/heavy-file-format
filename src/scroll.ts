@@ -2,10 +2,12 @@ import { state } from './state';
 import type { PaneScrollState } from './types';
 
 export function capturePaneScroll(previous: PaneScrollState, app: HTMLElement): PaneScrollState {
-  const editorPane = app.querySelector<HTMLDivElement>('.editor-pane');
+  const editorTree = app.querySelector<HTMLDivElement>('.editor-shell .editor-tree');
+  const editorSidebarPanel = app.querySelector<HTMLDivElement>('.editor-sidebar-panel');
   const readerPane = app.querySelector<HTMLDivElement>('.reader-pane');
   return {
-    editorTop: editorPane?.scrollTop ?? previous.editorTop,
+    editorTop: editorTree?.scrollTop ?? previous.editorTop,
+    editorSidebarTop: editorSidebarPanel?.scrollTop ?? previous.editorSidebarTop,
     readerTop: readerPane?.scrollTop ?? previous.readerTop,
     windowTop: window.scrollY,
   };
@@ -16,10 +18,14 @@ export function restorePaneScroll(scroll: PaneScrollState | null, app: HTMLEleme
     return;
   }
   const restore = (): void => {
-    const editorPane = app.querySelector<HTMLDivElement>('.editor-pane');
+    const editorTree = app.querySelector<HTMLDivElement>('.editor-shell .editor-tree');
+    const editorSidebarPanel = app.querySelector<HTMLDivElement>('.editor-sidebar-panel');
     const readerPane = app.querySelector<HTMLDivElement>('.reader-pane');
-    if (editorPane) {
-      editorPane.scrollTop = scroll.editorTop;
+    if (editorTree) {
+      editorTree.scrollTop = scroll.editorTop;
+    }
+    if (editorSidebarPanel) {
+      editorSidebarPanel.scrollTop = scroll.editorSidebarTop;
     }
     if (readerPane) {
       readerPane.scrollTop = scroll.readerTop;

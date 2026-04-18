@@ -40,6 +40,7 @@ function createInitialState(): AppState {
     currentView: 'editor',
     paneScroll: {
       editorTop: 0,
+      editorSidebarTop: 0,
       readerTop: 0,
       windowTop: 0,
     },

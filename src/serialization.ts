@@ -498,7 +498,6 @@ function serializeBlockSchema(
     addIfChanged(payload, 'codeLanguage', schema.codeLanguage, defaults.codeLanguage);
   }
   if (component === 'container') {
-    addIfChanged(payload, 'containerTitle', schema.containerTitle, defaults.containerTitle);
     if (!options.omitContainerBlocks) {
       addBlockArrayIfPresent(payload, 'containerBlocks', schema.containerBlocks);
     }

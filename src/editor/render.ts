@@ -337,9 +337,8 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
 
     if (base === 'container') {
       deps.ensureContainerBlocks(block);
-      const title = block.schema.containerTitle || 'Container';
       const body = block.schema.containerBlocks.map((innerBlock) => renderPassiveEditorBlock(sectionKey, innerBlock, rootSections)).join('');
-      return `<div class="reader-container-title">${deps.escapeHtml(title)}</div>${body ? `<div class="reader-container-body">${body}</div>` : ''}`;
+      return body ? `<div class="reader-container-body">${body}</div>` : '';
     }
 
     if (base === 'expandable') {

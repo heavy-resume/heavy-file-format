@@ -31,7 +31,6 @@ export interface BlockSchema {
   slot: Slot;
   customCss: string;
   codeLanguage: string;
-  containerTitle: string;
   containerBlocks: VisualBlock[];
   componentListComponent: string;
   componentListBlocks: VisualBlock[];

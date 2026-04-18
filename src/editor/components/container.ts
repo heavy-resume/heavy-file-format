@@ -4,12 +4,6 @@ export const renderContainerEditor: ComponentEditorRenderer = (sectionKey, block
   helpers.ensureContainerBlocks(block);
   const addKey = `container:${sectionKey}:${block.id}`;
   return `
-    <label>
-      <span>Container Title</span>
-      <input data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(
-        block.id
-      )}" data-field="block-container-title" value="${helpers.escapeAttr(block.schema.containerTitle)}" />
-    </label>
     <div class="container-inner-blocks">
       ${block.schema.containerBlocks.map((innerBlock) => helpers.renderEditorBlock(sectionKey, innerBlock, block.schema.lock)).join('')}
     </div>
@@ -33,7 +27,6 @@ export const renderContainerEditor: ComponentEditorRenderer = (sectionKey, block
 
 export const renderContainerReader: ComponentReaderRenderer = (section, block, helpers) => {
   helpers.ensureContainerBlocks(block);
-  const title = block.schema.containerTitle || 'Container';
   const body = block.schema.containerBlocks.map((innerBlock) => helpers.renderReaderBlock(section, innerBlock)).join('');
-  return `<div class="reader-container-title">${helpers.escapeHtml(title)}</div>${body ? `<div class="reader-container-body">${body}</div>` : ''}`;
+  return body ? `<div class="reader-container-body">${body}</div>` : '';
 };

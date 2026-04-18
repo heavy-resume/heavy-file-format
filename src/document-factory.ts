@@ -16,7 +16,6 @@ export function defaultBlockSchema(component = 'text'): BlockSchema {
     slot: 'center',
     customCss: 'margin: 0.5rem 0;',
     codeLanguage: 'ts',
-    containerTitle: 'Container',
     containerBlocks: [],
     componentListComponent: 'text',
     componentListBlocks: [],
@@ -117,7 +116,6 @@ export function schemaFromUnknown(value: unknown): BlockSchema {
         ? candidate.custom_css
         : defaults.customCss,
     codeLanguage: typeof candidate.codeLanguage === 'string' ? candidate.codeLanguage : defaults.codeLanguage,
-    containerTitle: typeof candidate.containerTitle === 'string' ? candidate.containerTitle : defaults.containerTitle,
     containerBlocks: Array.isArray(candidate.containerBlocks)
       ? candidate.containerBlocks.map((block) => parseVisualBlock(block))
       : [],

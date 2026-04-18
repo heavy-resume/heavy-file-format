@@ -222,7 +222,7 @@ component_defs:
     description: Skill record experience section
     schema:
       css: "margin: 0;"
-      containerTitle: Experience
+
       containerBlocks:
         - text: "#### Experience"
           schema:
@@ -239,7 +239,7 @@ component_defs:
     description: Skill record education section
     schema:
       css: "margin: 0;"
-      containerTitle: Education
+
       containerBlocks:
         - text: "#### Education"
           schema:
@@ -256,7 +256,7 @@ component_defs:
     description: Skill record projects section
     schema:
       css: "margin: 0;"
-      containerTitle: Projects
+
       containerBlocks:
         - text: "#### Projects"
           schema:

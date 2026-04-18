@@ -195,12 +195,7 @@ export function handleBlockFieldInput(target: HTMLElement): boolean {
     return true;
   }
 
-  if (field === 'block-container-title' && target instanceof HTMLInputElement) {
-    block.schema.containerTitle = target.value;
-    syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
-    getRefreshReaderPanels()();
-    return true;
-  }
+
 
   if (field === 'block-component-list-component' && target instanceof HTMLSelectElement) {
     block.schema.componentListComponent = target.value;

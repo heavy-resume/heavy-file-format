@@ -1957,11 +1957,6 @@ button.tiny {
   gap: 0.3rem;
 }
 
-.reader-container-title {
-  font-weight: 500;
-  margin-bottom: 0.25rem;
-  font-style: italic;
-}
 
 .reader-container-body {
   margin-top: 0.2rem;

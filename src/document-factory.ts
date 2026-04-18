@@ -1,4 +1,4 @@
-import type { Align, BlockSchema, GridColumn, GridItem, Slot, TableRow, VisualBlock, VisualSection } from './editor/types';
+import type { Align, BlockSchema, ExpandablePart, GridColumn, GridItem, Slot, TableRow, VisualBlock, VisualSection } from './editor/types';
 import type { JsonObject } from './hvy/types';
 import type { ComponentDefinition, VisualDocument } from './types';
 import { makeId } from './utils';
@@ -33,14 +33,30 @@ export function defaultBlockSchema(component = 'text'): BlockSchema {
     expandableStubComponent: 'container',
     expandableContentComponent: 'container',
     expandableStub: '',
-    expandableStubBlocks: [],
+    expandableStubBlocks: { lock: false, children: [] },
     expandableAlwaysShowStub: true,
     expandableExpanded: false,
-    expandableContentBlocks: [],
+    expandableContentBlocks: { lock: false, children: [] },
     tableColumns: 'Column 1, Column 2',
     tableShowHeader: true,
     tableRows: [],
   };
+}
+
+export function parseExpandablePart(raw: unknown): ExpandablePart {
+  // New format: { lock: boolean, children: VisualBlock[] }
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    const obj = raw as JsonObject;
+    return {
+      lock: obj.lock === true,
+      children: Array.isArray(obj.children) ? obj.children.map((b) => parseVisualBlock(b)) : [],
+    };
+  }
+  // Backward compat: old flat array format
+  if (Array.isArray(raw)) {
+    return { lock: false, children: raw.map((b) => parseVisualBlock(b)) };
+  }
+  return { lock: false, children: [] };
 }
 
 export function coerceAlign(value: string): Align {
@@ -125,14 +141,10 @@ export function schemaFromUnknown(value: unknown): BlockSchema {
     expandableContentComponent:
       typeof candidate.expandableContentComponent === 'string' ? candidate.expandableContentComponent : defaults.expandableContentComponent,
     expandableStub: typeof candidate.expandableStub === 'string' ? candidate.expandableStub : defaults.expandableStub,
-    expandableStubBlocks: Array.isArray(candidate.expandableStubBlocks)
-      ? candidate.expandableStubBlocks.map((block) => parseVisualBlock(block))
-      : [],
+    expandableStubBlocks: parseExpandablePart(candidate.expandableStubBlocks),
     expandableAlwaysShowStub: candidate.expandableAlwaysShowStub !== false,
     expandableExpanded: candidate.expandableExpanded === true,
-    expandableContentBlocks: Array.isArray(candidate.expandableContentBlocks)
-      ? candidate.expandableContentBlocks.map((block) => parseVisualBlock(block))
-      : [],
+    expandableContentBlocks: parseExpandablePart(candidate.expandableContentBlocks),
     tableColumns: typeof candidate.tableColumns === 'string' ? candidate.tableColumns : defaults.tableColumns,
     tableShowHeader: candidate.tableShowHeader !== false,
     tableRows: rows.map((row) => {
@@ -234,8 +246,8 @@ export function cloneReusableSchema(schema: BlockSchema, componentName = schema.
     ...item,
     block: cloneReusableBlock(item.block),
   }));
-  cloned.expandableStubBlocks = cloned.expandableStubBlocks.map((block) => cloneReusableBlock(block));
-  cloned.expandableContentBlocks = cloned.expandableContentBlocks.map((block) => cloneReusableBlock(block));
+  cloned.expandableStubBlocks.children = cloned.expandableStubBlocks.children.map((block) => cloneReusableBlock(block));
+  cloned.expandableContentBlocks.children = cloned.expandableContentBlocks.children.map((block) => cloneReusableBlock(block));
   cloned.tableRows = cloned.tableRows.map((row) => ({
     ...row,
     detailsBlocks: (row.detailsBlocks ?? []).map((block) => cloneReusableBlock(block)),
@@ -374,22 +386,30 @@ export function ensureComponentListBlocks(block: VisualBlock): void {
 }
 
 export function ensureExpandableBlocks(block: VisualBlock): void {
-  if (!Array.isArray(block.schema.expandableStubBlocks)) {
-    block.schema.expandableStubBlocks = [];
+  // Migrate old flat-array format or missing values
+  if (!block.schema.expandableStubBlocks || Array.isArray(block.schema.expandableStubBlocks)) {
+    block.schema.expandableStubBlocks = {
+      lock: false,
+      children: Array.isArray(block.schema.expandableStubBlocks) ? block.schema.expandableStubBlocks : [],
+    };
   }
-  if (!Array.isArray(block.schema.expandableContentBlocks)) {
-    block.schema.expandableContentBlocks = [];
+  if (!block.schema.expandableContentBlocks || Array.isArray(block.schema.expandableContentBlocks)) {
+    block.schema.expandableContentBlocks = {
+      lock: false,
+      children: Array.isArray(block.schema.expandableContentBlocks) ? block.schema.expandableContentBlocks : [],
+    };
   }
-  if (block.schema.expandableStubBlocks.length === 0 && block.schema.expandableStub.trim().length > 0) {
+  // Migrate legacy expandableStub text field
+  if (block.schema.expandableStubBlocks.children.length === 0 && block.schema.expandableStub.trim().length > 0) {
     const migrated = createEmptyBlock(resolveBaseComponent(block.schema.expandableStubComponent || 'text'), true);
     migrated.text = block.schema.expandableStub;
-    block.schema.expandableStubBlocks.push(migrated);
+    block.schema.expandableStubBlocks.children.push(migrated);
     block.schema.expandableStub = '';
   }
-  if (block.schema.expandableContentBlocks.length === 0 && block.text.trim().length > 0) {
+  if (block.schema.expandableContentBlocks.children.length === 0 && block.text.trim().length > 0) {
     const migrated = createEmptyBlock(resolveBaseComponent(block.schema.expandableContentComponent || 'text'), true);
     migrated.text = block.text;
-    block.schema.expandableContentBlocks.push(migrated);
+    block.schema.expandableContentBlocks.children.push(migrated);
     block.text = '';
   }
 }

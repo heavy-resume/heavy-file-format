@@ -49,7 +49,7 @@ export function describeBlockTarget(block: VisualBlock): string {
   if (block.schema.xrefTitle.trim().length > 0) {
     return block.schema.xrefTitle.trim();
   }
-  const firstTableCell = block.schema.expandableStubBlocks
+  const firstTableCell = block.schema.expandableStubBlocks.children
     .flatMap((stubBlock) => stubBlock.schema.tableRows)
     .flatMap((row) => row.cells)
     .find((cell) => cell.trim().length > 0);

@@ -30,8 +30,8 @@ export function findReusableOwnerInList(blocks: VisualBlock[], blockId: string, 
     const nested = findReusableOwnerInList(block.schema.containerBlocks ?? [], blockId, nextOwner)
       ?? findReusableOwnerInList(block.schema.componentListBlocks ?? [], blockId, nextOwner)
       ?? findReusableOwnerInList((block.schema.gridItems ?? []).map((item) => item.block), blockId, nextOwner)
-      ?? findReusableOwnerInList(block.schema.expandableStubBlocks ?? [], blockId, nextOwner)
-      ?? findReusableOwnerInList(block.schema.expandableContentBlocks ?? [], blockId, nextOwner);
+      ?? findReusableOwnerInList(block.schema.expandableStubBlocks?.children ?? [], blockId, nextOwner)
+      ?? findReusableOwnerInList(block.schema.expandableContentBlocks?.children ?? [], blockId, nextOwner);
     if (nested) {
       return nested;
     }

@@ -18,6 +18,11 @@ export interface GridItem {
   block: VisualBlock;
 }
 
+export interface ExpandablePart {
+  lock: boolean;
+  children: VisualBlock[];
+}
+
 export interface BlockSchema {
   id: string;
   component: string;
@@ -43,10 +48,10 @@ export interface BlockSchema {
   expandableStubComponent: string;
   expandableContentComponent: string;
   expandableStub: string;
-  expandableStubBlocks: VisualBlock[];
+  expandableStubBlocks: ExpandablePart;
   expandableAlwaysShowStub: boolean;
   expandableExpanded: boolean;
-  expandableContentBlocks: VisualBlock[];
+  expandableContentBlocks: ExpandablePart;
   tableColumns: string;
   tableShowHeader: boolean;
   tableRows: TableRow[];

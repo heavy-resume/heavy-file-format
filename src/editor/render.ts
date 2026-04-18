@@ -141,7 +141,6 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         <div class="ghost-plus-big"><span>+</span></div>
         <div class="ghost-label">Add Section</div>
         <label class="ghost-component-picker">
-          <span>Section Type</span>
           <select data-field="reusable-section-type" data-section-key="__top_level__" aria-label="Section type">
             ${deps.renderReusableSectionOptions(state.addComponentBySection.__top_level__ ?? 'blank')}
           </select>
@@ -217,7 +216,6 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
                   <div class="ghost-plus-big"><span>+</span></div>
                   <div class="ghost-label">Add Section</div>
                   <label class="ghost-component-picker">
-                    <span>Section Type</span>
                     <select data-field="reusable-section-type" data-section-key="${deps.escapeAttr(`subsection:${section.key}`)}" aria-label="Subsection type">
                       ${deps.renderReusableSectionOptions(state.addComponentBySection[`subsection:${section.key}`] ?? 'blank')}
                     </select>
@@ -347,10 +345,10 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       deps.ensureExpandableBlocks(block);
       const expanded = block.schema.expandableExpanded;
       const alwaysShowStub = block.schema.expandableAlwaysShowStub;
-      const stubHtml = (block.schema.expandableStubBlocks ?? [])
+      const stubHtml = block.schema.expandableStubBlocks.children
         .map((innerBlock) => renderPassiveEditorBlock(sectionKey, innerBlock, rootSections))
         .join('');
-      const contentHtml = (block.schema.expandableContentBlocks ?? [])
+      const contentHtml = block.schema.expandableContentBlocks.children
         .map((innerBlock) => renderPassiveEditorBlock(sectionKey, innerBlock, rootSections))
         .join('');
       const stubToggle = `<div class="expandable-pane expandable-pane-stub"><div class="expand-stub-toggle" data-action="toggle-editor-expandable" data-section-key="${deps.escapeAttr(

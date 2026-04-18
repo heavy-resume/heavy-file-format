@@ -3,8 +3,10 @@ import type { ComponentEditorRenderer, ComponentReaderRenderer } from '../compon
 export const renderExpandableEditor: ComponentEditorRenderer = (sectionKey, block, helpers) => {
   const stubAddKey = `expandable-stub:${sectionKey}:${block.id}`;
   const contentAddKey = `expandable-content:${sectionKey}:${block.id}`;
-  const stubBlocks = block.schema.expandableStubBlocks ?? [];
-  const contentBlocks = block.schema.expandableContentBlocks ?? [];
+  const stub = block.schema.expandableStubBlocks;
+  const content = block.schema.expandableContentBlocks;
+  const stubBlocks = stub.children;
+  const contentBlocks = content.children;
   const stubCount = stubBlocks.length;
   const contentCount = contentBlocks.length;
   const stubOpen = helpers.isExpandableEditorPanelOpen(sectionKey, block.id, 'stub', false);
@@ -32,6 +34,12 @@ export const renderExpandableEditor: ComponentEditorRenderer = (sectionKey, bloc
             )}" data-field="block-expandable-always" ${block.schema.expandableAlwaysShowStub ? 'checked' : ''} />
             <span>Always show</span>
           </label>
+          <label class="expandable-inline-toggle">
+            <input type="checkbox" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(
+              block.id
+            )}" data-field="block-expandable-stub-lock" ${stub.lock ? 'checked' : ''} />
+            <span>Lock</span>
+          </label>
           <button type="button" class="expandable-summary expandable-summary-meta-button" data-action="toggle-expandable-editor-panel" data-section-key="${helpers.escapeAttr(
             sectionKey
           )}" data-block-id="${helpers.escapeAttr(block.id)}" data-expandable-panel="stub" aria-expanded="${stubOpen ? 'true' : 'false'}">
@@ -45,7 +53,7 @@ export const renderExpandableEditor: ComponentEditorRenderer = (sectionKey, bloc
             ${stubBlocks.map((innerBlock) => helpers.renderEditorBlock(sectionKey, innerBlock)).join('')}
           </div>
           ${
-            block.schema.lock
+            stub.lock
               ? ''
               : `<article class="ghost-section-card add-ghost container-add-ghost" data-action="add-expandable-stub-block" data-section-key="${helpers.escapeAttr(
                   sectionKey
@@ -74,6 +82,12 @@ export const renderExpandableEditor: ComponentEditorRenderer = (sectionKey, bloc
           )}" data-block-id="${helpers.escapeAttr(block.id)}" data-expandable-panel="expanded" aria-expanded="${expandedOpen ? 'true' : 'false'}">
             <span class="expandable-label">Expanded</span>
           </button>
+          <label class="expandable-inline-toggle">
+            <input type="checkbox" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(
+              block.id
+            )}" data-field="block-expandable-content-lock" ${content.lock ? 'checked' : ''} />
+            <span>Lock</span>
+          </label>
           <button type="button" class="expandable-summary expandable-summary-meta-button" data-action="toggle-expandable-editor-panel" data-section-key="${helpers.escapeAttr(
             sectionKey
           )}" data-block-id="${helpers.escapeAttr(block.id)}" data-expandable-panel="expanded" aria-expanded="${expandedOpen ? 'true' : 'false'}">
@@ -87,7 +101,7 @@ export const renderExpandableEditor: ComponentEditorRenderer = (sectionKey, bloc
             ${contentBlocks.map((innerBlock) => helpers.renderEditorBlock(sectionKey, innerBlock)).join('')}
           </div>
           ${
-            block.schema.lock
+            content.lock
               ? ''
               : `<article class="ghost-section-card add-ghost container-add-ghost" data-action="add-expandable-content-block" data-section-key="${helpers.escapeAttr(
                   sectionKey
@@ -114,8 +128,8 @@ export const renderExpandableEditor: ComponentEditorRenderer = (sectionKey, bloc
 };
 
 export const renderExpandableReader: ComponentReaderRenderer = (section, block, helpers) => {
-  const stubHtml = (block.schema.expandableStubBlocks ?? []).map((innerBlock) => helpers.renderReaderBlock(section, innerBlock)).join('');
-  const contentHtml = (block.schema.expandableContentBlocks ?? []).map((innerBlock) => helpers.renderReaderBlock(section, innerBlock)).join('');
+  const stubHtml = block.schema.expandableStubBlocks.children.map((innerBlock) => helpers.renderReaderBlock(section, innerBlock)).join('');
+  const contentHtml = block.schema.expandableContentBlocks.children.map((innerBlock) => helpers.renderReaderBlock(section, innerBlock)).join('');
   const expanded = block.schema.expandableExpanded;
   const alwaysShowStub = block.schema.expandableAlwaysShowStub;
   const toggleAttrs = `data-reader-action="toggle-expandable" data-section-key="${helpers.escapeAttr(section.key)}" data-block-id="${helpers.escapeAttr(

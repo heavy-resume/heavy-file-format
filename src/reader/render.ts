@@ -227,9 +227,9 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
                   data-section-key="${deps.escapeAttr(state.componentMetaModal.sectionKey)}"
                   data-block-id="${deps.escapeAttr(state.componentMetaModal.blockId)}"
                   aria-pressed="${block.schema.lock ? 'true' : 'false'}"
-                  title="${block.schema.lock ? 'Unlock structure' : 'Lock structure'}"
-                  aria-label="${block.schema.lock ? 'Unlock structure' : 'Lock structure'}"
-                >${block.schema.lock ? '🔒 Unlock Structure' : '🔓 Lock Structure'}</button>
+                  title="${block.schema.lock ? 'Locked' : 'Unlocked'}"
+                  aria-label="${block.schema.lock ? 'Locked' : 'Unlock'}"
+                >${block.schema.lock ? '🔒 Locked' : '🔓 Unlock'}</button>
                 <button type="button" data-modal-action="close">Close</button>
               </div>
             </div>

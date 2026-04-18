@@ -129,8 +129,8 @@ export function findBlockContainerInList(
       findBlockContainerInList(block.schema.containerBlocks ?? [], blockId, block.id) ??
       findBlockContainerInList(block.schema.componentListBlocks ?? [], blockId, block.id) ??
       findBlockContainerInList((block.schema.gridItems ?? []).map((item) => item.block), blockId, block.id) ??
-      findBlockContainerInList(block.schema.expandableStubBlocks ?? [], blockId, block.id) ??
-      findBlockContainerInList(block.schema.expandableContentBlocks ?? [], blockId, block.id);
+      findBlockContainerInList(block.schema.expandableStubBlocks?.children ?? [], blockId, block.id) ??
+      findBlockContainerInList(block.schema.expandableContentBlocks?.children ?? [], blockId, block.id);
     if (nested) {
       return nested;
     }
@@ -197,8 +197,8 @@ export function visitBlocksInList(blocks: VisualBlock[], visitor: (block: Visual
     visitBlocksInList(block.schema.containerBlocks ?? [], visitor);
     visitBlocksInList(block.schema.componentListBlocks ?? [], visitor);
     visitBlocksInList((block.schema.gridItems ?? []).map((item) => item.block), visitor);
-    visitBlocksInList(block.schema.expandableStubBlocks ?? [], visitor);
-    visitBlocksInList(block.schema.expandableContentBlocks ?? [], visitor);
+    visitBlocksInList(block.schema.expandableStubBlocks?.children ?? [], visitor);
+    visitBlocksInList(block.schema.expandableContentBlocks?.children ?? [], visitor);
     (block.schema.tableRows ?? []).forEach((row) => visitBlocksInList(row.detailsBlocks ?? [], visitor));
   });
 }

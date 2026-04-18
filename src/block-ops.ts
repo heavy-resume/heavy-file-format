@@ -41,11 +41,11 @@ export function findBlockInList(blocks: VisualBlock[], blockId: string): VisualB
     if (nestedComponentList) {
       return nestedComponentList;
     }
-    const nestedExpandableStub = findBlockInList(block.schema.expandableStubBlocks ?? [], blockId);
+    const nestedExpandableStub = findBlockInList(block.schema.expandableStubBlocks?.children ?? [], blockId);
     if (nestedExpandableStub) {
       return nestedExpandableStub;
     }
-    const nestedExpandableContent = findBlockInList(block.schema.expandableContentBlocks ?? [], blockId);
+    const nestedExpandableContent = findBlockInList(block.schema.expandableContentBlocks?.children ?? [], blockId);
     if (nestedExpandableContent) {
       return nestedExpandableContent;
     }
@@ -78,10 +78,10 @@ export function removeBlockFromList(blocks: VisualBlock[], blockId: string): boo
     if (removeBlockFromList(block.schema.componentListBlocks ?? [], blockId)) {
       return true;
     }
-    if (removeBlockFromList(block.schema.expandableStubBlocks ?? [], blockId)) {
+    if (removeBlockFromList(block.schema.expandableStubBlocks?.children ?? [], blockId)) {
       return true;
     }
-    if (removeBlockFromList(block.schema.expandableContentBlocks ?? [], blockId)) {
+    if (removeBlockFromList(block.schema.expandableContentBlocks?.children ?? [], blockId)) {
       return true;
     }
     for (const item of block.schema.gridItems ?? []) {
@@ -316,6 +316,18 @@ export function handleBlockFieldInput(target: HTMLElement): boolean {
     return true;
   }
 
+  if (field === 'block-expandable-stub-lock' && target instanceof HTMLInputElement) {
+    block.schema.expandableStubBlocks.lock = target.checked;
+    syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
+    return true;
+  }
+
+  if (field === 'block-expandable-content-lock' && target instanceof HTMLInputElement) {
+    block.schema.expandableContentBlocks.lock = target.checked;
+    syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
+    return true;
+  }
+
   if (field === 'table-show-header' && target instanceof HTMLInputElement) {
     block.schema.tableShowHeader = target.checked;
     getRefreshReaderPanels()();
@@ -483,8 +495,8 @@ export function blockContainsBlockId(block: VisualBlock, blockId: string): boole
     findBlockInList(block.schema.containerBlocks ?? [], blockId)
       || findBlockInList(block.schema.componentListBlocks ?? [], blockId)
       || findBlockInList((block.schema.gridItems ?? []).map((item) => item.block), blockId)
-      || findBlockInList(block.schema.expandableStubBlocks ?? [], blockId)
-      || findBlockInList(block.schema.expandableContentBlocks ?? [], blockId)
+      || findBlockInList(block.schema.expandableStubBlocks?.children ?? [], blockId)
+      || findBlockInList(block.schema.expandableContentBlocks?.children ?? [], blockId)
       || (block.schema.tableRows ?? []).some((row) => findBlockInList(row.detailsBlocks ?? [], blockId))
   );
 }

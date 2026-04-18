@@ -147,8 +147,8 @@ function expandBlockPathInList(blocks: VisualBlock[], schemaId: string): { found
     if (!nestedRes.found && block.schema.gridItems) {
       nestedRes = expandBlockPathInList(block.schema.gridItems.map((item) => item.block), schemaId);
     }
-    if (!nestedRes.found) nestedRes = expandBlockPathInList(block.schema.expandableStubBlocks ?? [], schemaId);
-    if (!nestedRes.found) nestedRes = expandBlockPathInList(block.schema.expandableContentBlocks ?? [], schemaId);
+    if (!nestedRes.found) nestedRes = expandBlockPathInList(block.schema.expandableStubBlocks?.children ?? [], schemaId);
+    if (!nestedRes.found) nestedRes = expandBlockPathInList(block.schema.expandableContentBlocks?.children ?? [], schemaId);
     if (!nestedRes.found && block.schema.tableRows) {
       for (const row of block.schema.tableRows) {
         nestedRes = expandBlockPathInList(row.detailsBlocks ?? [], schemaId);

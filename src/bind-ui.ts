@@ -740,13 +740,13 @@ export function bindUi(app: HTMLElement): void {
     if (action === 'add-expandable-stub-block' && blockId) {
       recordHistory();
       const block = findBlockByIds(sectionKey, blockId);
-      if (!block || block.schema.lock) {
+      if (!block || block.schema.expandableStubBlocks.lock) {
         return;
       }
       ensureExpandableBlocks(block);
       const addKey = `expandable-stub:${sectionKey}:${blockId}`;
       const newBlock = createEmptyBlock(state.addComponentBySection[addKey] ?? 'container');
-      block.schema.expandableStubBlocks.push(newBlock);
+      block.schema.expandableStubBlocks.children.push(newBlock);
       syncReusableTemplateForBlock(sectionKey, block.id);
       setActiveEditorBlock(sectionKey, newBlock.id);
       getRenderApp()();
@@ -756,13 +756,13 @@ export function bindUi(app: HTMLElement): void {
     if (action === 'add-expandable-content-block' && blockId) {
       recordHistory();
       const block = findBlockByIds(sectionKey, blockId);
-      if (!block || block.schema.lock) {
+      if (!block || block.schema.expandableContentBlocks.lock) {
         return;
       }
       ensureExpandableBlocks(block);
       const addKey = `expandable-content:${sectionKey}:${blockId}`;
       const newBlock = createEmptyBlock(state.addComponentBySection[addKey] ?? 'container');
-      block.schema.expandableContentBlocks.push(newBlock);
+      block.schema.expandableContentBlocks.children.push(newBlock);
       syncReusableTemplateForBlock(sectionKey, block.id);
       setActiveEditorBlock(sectionKey, newBlock.id);
       getRenderApp()();

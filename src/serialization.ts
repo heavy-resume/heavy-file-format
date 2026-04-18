@@ -9,12 +9,9 @@ import { resolveBaseComponent, isBuiltinComponentName } from './component-defs';
 import {
   defaultBlockSchema,
   schemaFromUnknown,
-  parseVisualBlock,
   createEmptyBlock,
-  coerceAlign,
-  coerceSlot,
 } from './document-factory';
-import { coerceGridColumn, coerceGridColumns } from './grid-ops';
+import { coerceGridColumn } from './grid-ops';
 
 export function deserializeDocument(text: string, extension: VisualDocument['extension']): VisualDocument {
   const parsed = parseHvy(text, extension);
@@ -57,7 +54,7 @@ function mapParsedSection(section: HvySection, documentMeta: JsonObject): Visual
 function parseBlocks(contentMarkdown: string, sectionMeta: JsonObject, documentMeta: JsonObject): VisualBlock[] {
   const schemas = Array.isArray(sectionMeta.blocks) ? (sectionMeta.blocks as JsonObject[]) : [];
   const lines = contentMarkdown.split(/\r?\n/);
-  const directivePattern = /^<!--hvy:([a-z][a-z0-9-]*(?::\d+)*)\s*(\{.*\})\s*-->$/i;
+  const directivePattern = /^<!--hvy:([a-z][a-z0-9-]*(?::[a-z0-9-]+)*)\s*(\{.*\})\s*-->$/i;
 
   type BlockAttach =
     | { kind: 'top' }
@@ -158,9 +155,9 @@ function parseBlocks(contentMarkdown: string, sectionMeta: JsonObject, documentM
   const attachBlock = (block: VisualBlock, attach: BlockAttach): void => {
     if (attach.kind === 'expandable') {
       if (attach.part === 0) {
-        attach.parent.schema.expandableStubBlocks.push(block);
+        attach.parent.schema.expandableStubBlocks.children.push(block);
       } else {
-        attach.parent.schema.expandableContentBlocks.push(block);
+        attach.parent.schema.expandableContentBlocks.children.push(block);
       }
       return;
     }
@@ -194,8 +191,8 @@ function parseBlocks(contentMarkdown: string, sectionMeta: JsonObject, documentM
   const openOrQueueBlock = (schema: BlockSchema, attach: BlockAttach): void => {
     const base = resolveParsedBase(schema.component);
     if (base === 'expandable') {
-      schema.expandableStubBlocks = [];
-      schema.expandableContentBlocks = [];
+      schema.expandableStubBlocks = { lock: false, children: [] };
+      schema.expandableContentBlocks = { lock: false, children: [] };
     } else if (base === 'grid') {
       schema.gridItems = [];
     } else if (base === 'component-list') {
@@ -238,6 +235,20 @@ function parseBlocks(contentMarkdown: string, sectionMeta: JsonObject, documentM
 
     try {
       const parsed = JSON.parse(match[2] ?? '{}') as JsonObject;
+
+      // expandable:stub and expandable:content are part-header markers that carry
+      // metadata (lock) for each part. They do not create a block frame themselves.
+      if (name === 'expandable' && rawParts.length === 1 && (rawParts[0] === 'stub' || rawParts[0] === 'content')) {
+        const parent = findOrCreateParentFrame('expandable');
+        const partLock = parsed.lock === true;
+        if (rawParts[0] === 'stub') {
+          parent.schema.expandableStubBlocks = { lock: partLock, children: [] };
+        } else {
+          parent.schema.expandableContentBlocks = { lock: partLock, children: [] };
+        }
+        return;
+      }
+
       if (rawParts.length > 0 && !allIndexesValid) {
         return;
       }
@@ -305,7 +316,8 @@ function parseBlocks(contentMarkdown: string, sectionMeta: JsonObject, documentM
   }));
 }
 
-const BLOCK_ARRAY_KEYS = ['expandableContentBlocks', 'expandableStubBlocks', 'containerBlocks', 'componentListBlocks'];
+const BLOCK_ARRAY_KEYS = ['containerBlocks', 'componentListBlocks'];
+const EXPANDABLE_PART_KEYS = ['expandableStubBlocks', 'expandableContentBlocks'];
 
 // Serialize a component def to clean YAML format:
 // - strips `component` from schema (redundant with `baseType`)
@@ -334,6 +346,12 @@ function cleanComponentDefSchema(schema: JsonObject): JsonObject {
     if (key === 'id' && (value === '' || value === null || value === undefined)) continue;
     if (BLOCK_ARRAY_KEYS.includes(key) && Array.isArray(value)) {
       result[key] = value.map((block) => cleanComponentDefBlock(block as JsonObject));
+    } else if (EXPANDABLE_PART_KEYS.includes(key) && value && typeof value === 'object' && !Array.isArray(value)) {
+      const part = value as { lock?: boolean; children?: JsonObject[] };
+      result[key] = {
+        lock: part.lock ?? false,
+        children: Array.isArray(part.children) ? part.children.map((block) => cleanComponentDefBlock(block)) : [],
+      };
     } else if (key === 'gridItems' && Array.isArray(value)) {
       result[key] = value.map((item) => {
         const obj = item as JsonObject;
@@ -507,10 +525,7 @@ function serializeBlockSchema(
   if (component === 'expandable') {
     addIfChanged(payload, 'expandableAlwaysShowStub', schema.expandableAlwaysShowStub, defaults.expandableAlwaysShowStub);
     addIfChanged(payload, 'expandableExpanded', schema.expandableExpanded, defaults.expandableExpanded);
-    if (!options.omitExpandableBlocks) {
-      addBlockArrayIfPresent(payload, 'expandableStubBlocks', schema.expandableStubBlocks);
-      addBlockArrayIfPresent(payload, 'expandableContentBlocks', schema.expandableContentBlocks);
-    }
+    // Stub/content blocks are serialized as nested block directives, not inline in schema JSON.
   }
   if (component === 'table') {
     addIfChanged(payload, 'tableColumns', schema.tableColumns, defaults.tableColumns);
@@ -589,13 +604,15 @@ function serializeTableDetailBlock(block: VisualBlock, rowIndex: number, detailI
 function serializeNestedBlocks(block: VisualBlock): string {
   const component = resolveBaseComponent(block.schema.component);
   if (component === 'expandable') {
-    const stubText = block.schema.expandableStubBlocks
-      .map((innerBlock) => serializeExpandablePartBlock(innerBlock, 0))
-      .join('\n\n');
-    const contentText = block.schema.expandableContentBlocks
-      .map((innerBlock) => serializeExpandablePartBlock(innerBlock, 1))
-      .join('\n\n');
-    return [stubText, contentText].filter((part) => part.length > 0).join('\n\n');
+    const stub = block.schema.expandableStubBlocks;
+    const content = block.schema.expandableContentBlocks;
+    const stubHeader = stub.lock ? `<!--hvy:expandable:stub ${JSON.stringify({ lock: true })}-->` : '';
+    const stubBlocks = stub.children.map((innerBlock) => serializeExpandablePartBlock(innerBlock, 0)).join('\n\n');
+    const contentHeader = content.lock ? `<!--hvy:expandable:content ${JSON.stringify({ lock: true })}-->` : '';
+    const contentBlocks = content.children.map((innerBlock) => serializeExpandablePartBlock(innerBlock, 1)).join('\n\n');
+    const stubPart = [stubHeader, stubBlocks].filter(Boolean).join('\n');
+    const contentPart = [contentHeader, contentBlocks].filter(Boolean).join('\n');
+    return [stubPart, contentPart].filter((part) => part.length > 0).join('\n\n');
   }
   if (component === 'grid') {
     return block.schema.gridItems.map((item, index) => serializeGridItemBlock(item, index)).join('\n\n');

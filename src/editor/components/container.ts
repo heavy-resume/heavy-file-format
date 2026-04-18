@@ -11,7 +11,7 @@ export const renderContainerEditor: ComponentEditorRenderer = (sectionKey, block
       )}" data-field="block-container-title" value="${helpers.escapeAttr(block.schema.containerTitle)}" />
     </label>
     <div class="container-inner-blocks">
-      ${block.schema.containerBlocks.map((innerBlock) => helpers.renderEditorBlock(sectionKey, innerBlock)).join('')}
+      ${block.schema.containerBlocks.map((innerBlock) => helpers.renderEditorBlock(sectionKey, innerBlock, block.schema.lock)).join('')}
     </div>
     ${
       block.schema.lock

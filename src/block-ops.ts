@@ -507,7 +507,7 @@ export function isActiveEditorSectionTitle(sectionKey: string): boolean {
 
 export function getComponentRenderHelpers(editorRenderer: {
   renderRichToolbar: ComponentRenderHelpers['renderRichToolbar'];
-  renderEditorBlock: (sectionKey: string, block: VisualBlock, sections: import('./editor/types').VisualSection[]) => string;
+  renderEditorBlock: (sectionKey: string, block: VisualBlock, sections: import('./editor/types').VisualSection[], parentLocked?: boolean) => string;
   renderPassiveEditorBlock: (sectionKey: string, block: VisualBlock, sections: import('./editor/types').VisualSection[]) => string;
   renderComponentFragment: ComponentRenderHelpers['renderComponentFragment'];
 }, readerRenderer: { renderReaderBlock: ComponentRenderHelpers['renderReaderBlock'] }): ComponentRenderHelpers {
@@ -516,7 +516,7 @@ export function getComponentRenderHelpers(editorRenderer: {
     escapeHtml,
     markdownToEditorHtml,
     renderRichToolbar: editorRenderer.renderRichToolbar,
-    renderEditorBlock: (sectionKey, block) => editorRenderer.renderEditorBlock(sectionKey, block, state.document.sections),
+    renderEditorBlock: (sectionKey, block, parentLocked) => editorRenderer.renderEditorBlock(sectionKey, block, state.document.sections, parentLocked),
     renderPassiveEditorBlock: (sectionKey, block) => editorRenderer.renderPassiveEditorBlock(sectionKey, block, state.document.sections),
     renderReaderBlock: readerRenderer.renderReaderBlock,
     renderComponentFragment: editorRenderer.renderComponentFragment,

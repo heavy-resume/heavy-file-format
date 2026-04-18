@@ -46,7 +46,7 @@ export const renderGridEditor: ComponentEditorRenderer = (sectionKey, block, hel
             </select>
           </div>
           <div class="grid-item-editor-shell">
-            ${helpers.renderEditorBlock(sectionKey, item.block)}
+            ${helpers.renderEditorBlock(sectionKey, item.block, block.schema.lock)}
           </div>
         </div>`
       )

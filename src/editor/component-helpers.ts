@@ -18,7 +18,7 @@ export interface ComponentRenderHelpers {
   escapeHtml: (value: string) => string;
   markdownToEditorHtml: (markdown: string) => string;
   renderRichToolbar: (sectionKey: string, blockId: string, options?: RichToolbarOptions) => string;
-  renderEditorBlock: (sectionKey: string, block: VisualBlock) => string;
+  renderEditorBlock: (sectionKey: string, block: VisualBlock, parentLocked?: boolean) => string;
   renderPassiveEditorBlock: (sectionKey: string, block: VisualBlock) => string;
   renderReaderBlock: (section: VisualSection, block: VisualBlock) => string;
   renderComponentFragment: (componentName: string, content: string, block: VisualBlock) => string;

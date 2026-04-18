@@ -50,7 +50,7 @@ export const renderExpandableEditor: ComponentEditorRenderer = (sectionKey, bloc
           stubOpen
             ? `<div class="expandable-part-body">
           <div class="container-inner-blocks">
-            ${stubBlocks.map((innerBlock) => helpers.renderEditorBlock(sectionKey, innerBlock)).join('')}
+            ${stubBlocks.map((innerBlock) => helpers.renderEditorBlock(sectionKey, innerBlock, stub.lock)).join('')}
           </div>
           ${
             stub.lock
@@ -98,7 +98,7 @@ export const renderExpandableEditor: ComponentEditorRenderer = (sectionKey, bloc
           expandedOpen
             ? `<div class="expandable-part-body">
           <div class="container-inner-blocks">
-            ${contentBlocks.map((innerBlock) => helpers.renderEditorBlock(sectionKey, innerBlock)).join('')}
+            ${contentBlocks.map((innerBlock) => helpers.renderEditorBlock(sectionKey, innerBlock, content.lock)).join('')}
           </div>
           ${
             content.lock

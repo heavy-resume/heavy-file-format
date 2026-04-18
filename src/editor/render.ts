@@ -100,7 +100,7 @@ interface EditorRenderDeps {
 export interface EditorRenderer {
   renderSectionEditorTree: (sections: VisualSection[]) => string;
   renderSidebarEditorSections: (sections: VisualSection[]) => string;
-  renderEditorBlock: (sectionKey: string, block: VisualBlock, rootSections?: VisualSection[]) => string;
+  renderEditorBlock: (sectionKey: string, block: VisualBlock, rootSections?: VisualSection[], parentLocked?: boolean) => string;
   renderPassiveEditorBlock: (sectionKey: string, block: VisualBlock, rootSections?: VisualSection[]) => string;
   renderRichToolbar: (
     sectionKey: string,
@@ -266,7 +266,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     return false;
   }
 
-  function renderEditorBlock(sectionKey: string, block: VisualBlock, rootSections?: VisualSection[]): string {
+  function renderEditorBlock(sectionKey: string, block: VisualBlock, rootSections?: VisualSection[], parentLocked = false): string {
     const component = block.schema.component || 'text';
     const isActiveSelf = deps.isActiveEditorBlock(sectionKey, block.id);
     const isActiveDescendant = state.activeEditorBlock?.sectionKey === sectionKey && isDescendantActive(block, state.activeEditorBlock.blockId);
@@ -277,6 +277,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     }
 
     const contentEditor = renderBlockContentEditor(sectionKey, block);
+    const canRemove = !parentLocked && !block.schema.lock;
 
     return `
       <div class="editor-block">
@@ -301,9 +302,9 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         )}" data-block-id="${deps.escapeAttr(block.id)}">Meta</button>`
         : ''
       }
-            <button type="button" class="danger remove-x" data-action="remove-block" data-section-key="${deps.escapeAttr(
+            ${canRemove ? `<button type="button" class="danger remove-x" data-action="remove-block" data-section-key="${deps.escapeAttr(
         sectionKey
-      )}" data-block-id="${deps.escapeAttr(block.id)}">×</button>
+      )}" data-block-id="${deps.escapeAttr(block.id)}">×</button>` : ''}
           </div>
         </div>
 
@@ -662,7 +663,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
   return {
     renderSectionEditorTree,
     renderSidebarEditorSections,
-    renderEditorBlock: (sectionKey, block, rootSections) => renderEditorBlock(sectionKey, block, rootSections),
+    renderEditorBlock: (sectionKey, block, rootSections, parentLocked) => renderEditorBlock(sectionKey, block, rootSections, parentLocked),
     renderPassiveEditorBlock: (sectionKey, block, rootSections) => renderPassiveEditorBlock(sectionKey, block, rootSections ?? []),
     renderRichToolbar,
     renderMetaPanel,

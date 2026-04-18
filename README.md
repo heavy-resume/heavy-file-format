@@ -4,7 +4,7 @@ Heavy "HVY" (`.hvy`) is a Markdown-compatible file format for structured, intera
 
 ## Draft Spec
 
-- [HVY Specification v0.1 Draft](docs/HVY-SPEC.md)
+- [HVY Specification v0.1 Draft](HVY-SPEC.md)
 
 ## Examples
 

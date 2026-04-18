@@ -1,4 +1,4 @@
-# heavy-file-format
+# The HVY File Format
 
 Heavy "HVY" (`.hvy`) is a Markdown-compatible file format for structured, interactive content ingestion by humans and AI.
 

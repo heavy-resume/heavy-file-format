@@ -375,7 +375,11 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
 
     if ((base === 'text' || base === 'quote') && block.text.trim().length === 0) {
       const hint = block.schema.placeholder || (base === 'quote' ? 'Empty quote...' : 'Empty text...');
-      return `<div class="editor-passive-empty-text${block.schema.placeholder ? ' has-placeholder' : ''}">${deps.escapeHtml(hint)}</div>`;
+      const content = block.schema.placeholder
+        ? renderComponentFragment('text', hint, block)
+        : deps.escapeHtml(hint);
+      const alignStyle = block.schema.align ? ` style="text-align: ${deps.escapeAttr(block.schema.align)};"` : '';
+      return `<div class="editor-passive-empty-text${block.schema.placeholder ? ' has-placeholder' : ''}"${alignStyle}>${content}</div>`;
     }
 
     return deps.renderReaderBlock(section, block);

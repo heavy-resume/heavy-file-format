@@ -38,7 +38,7 @@ import { detectExtension, normalizeFilename, downloadTextFile, sanitizeOptionalI
 import { moveSectionRelative, moveSectionByOffset, removeSectionByKey, findBlockContainerById } from './section-ops';
 import { bindModal } from './bind-modal';
 import { bindLinkInlineModal, openLinkInlineModal } from './bind-link-modal';
-import { removeBlockFromList } from './block-ops';
+import { removeBlockFromList, findBlockInList } from './block-ops';
 import { getReusableTemplateByName } from './document-factory';
 
 export function bindUi(app: HTMLElement): void {
@@ -796,9 +796,18 @@ export function bindUi(app: HTMLElement): void {
     if (action === 'remove-block' && blockId) {
       recordHistory();
       const reusableOwnerId = findReusableOwner(sectionKey, blockId)?.id ?? null;
-      // Find parent before removal so we can restore edit mode to it if the deleted
-      // block was the active one (otherwise deletion would exit edit mode entirely).
-      const parentId = state.activeEditorBlock?.blockId === blockId
+      // Find parent before removal so we can restore edit mode if the deleted block
+      // was the active one OR contained the active one (otherwise deletion would
+      // exit edit mode entirely when removing a parent while a child is active).
+      const activeBlockId = state.activeEditorBlock?.sectionKey === sectionKey
+        ? (state.activeEditorBlock?.blockId ?? null)
+        : null;
+      const removedBlock = activeBlockId ? findBlockByIds(sectionKey, blockId) : null;
+      const activeIsAffected = activeBlockId !== null && (
+        activeBlockId === blockId ||
+        (removedBlock !== null && findBlockInList([removedBlock], activeBlockId) !== null)
+      );
+      const parentId = activeIsAffected
         ? findBlockContainerById(state.document.sections, sectionKey, blockId)?.ownerBlockId ?? null
         : null;
       if (section) {
@@ -810,7 +819,9 @@ export function bindUi(app: HTMLElement): void {
         }
       }
       syncReusableTemplateForBlock(sectionKey, reusableOwnerId ?? blockId);
-      clearActiveEditorBlock(blockId);
+      if (activeIsAffected && activeBlockId) {
+        clearActiveEditorBlock(activeBlockId);
+      }
       if (parentId) {
         setActiveEditorBlock(sectionKey, parentId);
       }

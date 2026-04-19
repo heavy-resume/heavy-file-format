@@ -1964,7 +1964,6 @@ button.tiny {
 
 .reader-component-list {
   display: grid;
-  gap: 0.2rem;
 }
 
 .reader-block.align-center .reader-component-list {

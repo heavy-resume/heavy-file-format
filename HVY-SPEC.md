@@ -290,6 +290,8 @@ Block metadata optionally includes component-specific fields. Common examples in
 - `xrefTarget`
 - `expandableAlwaysShowStub`
 - `expandableExpanded`
+- `expandableStubBlocks`
+- `expandableContentBlocks`
 - `tableColumns`
 - `tableShowHeader`
 - `tableRows`
@@ -314,9 +316,23 @@ When a nested block places a custom (non-builtin) component, a shorthand form ca
 
 This is equivalent to `{ schema: { component: "my-custom-component" } }`. The full template for the component is defined in `component_defs` and applied at instantiation time; no other fields need to appear at the usage site.
 
+`expandableStubBlocks` and `expandableContentBlocks` are container objects, not flat arrays. Each has the shape:
+
+```yaml
+expandableStubBlocks:
+  lock: true       # optional boolean; prevents structural edits to this slot
+  children:        # array of recursive block objects
+    - text: ""
+      schema:
+        component: text
+        css: "margin: 0;"
+```
+
+The `children` array uses the same recursive block object shape as other nested block arrays.
+
 Serialized block objects SHOULD contain document data only. Editor-only UI state, such as whether a schema editor is open for a block, MUST NOT be emitted.
 
-Preserve and round-trip these fields even if a plain Markdown renderer ignores them. For compatibility with older documents, also support legacy `expandableStubBlocks` and `expandableContentBlocks` arrays from an expandable block schema, but SHOULD emit `hvy:expandable:0` and `hvy:expandable:1` directives for new documents.
+Preserve and round-trip these fields even if a plain Markdown renderer ignores them. When emitting new documents, prefer `hvy:expandable:0` and `hvy:expandable:1` inline directives over `expandableStubBlocks`/`expandableContentBlocks`; the container object form is used in `component_defs` schemas where inline directives are not applicable.
 
 ### 5.9 Reusable component definitions
 

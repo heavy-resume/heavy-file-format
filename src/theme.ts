@@ -5,90 +5,64 @@ import type { JsonObject } from './hvy/types';
 export type { ThemeConfig, ThemeMode };
 
 export const THEME_COLOR_NAMES: readonly string[] = [
-  'background',
-  'background-alt',
-  'surface',
-  'surface-alt',
-  'text',
-  'text-alt',
-  'accent-1',
-  'accent-1-alt',
-  'accent-2',
-  'accent-2-alt',
-  'highlight-1',
-  'highlight-2',
-  'border',
-  'border-alt',
-  'xref-card-bg',
-  'table-header',
-  'table-row-bg-1',
-  'table-row-bg-2',
+  '--hvy-background',
+  '--hvy-background-alt',
+  '--hvy-surface',
+  '--hvy-surface-alt',
+  '--hvy-surface-tint',
+  '--hvy-text',
+  '--hvy-text-alt',
+  '--hvy-text-muted',
+  '--hvy-accent-1',
+  '--hvy-accent-1-alt',
+  '--hvy-accent-1-text',
+  '--hvy-accent-2',
+  '--hvy-accent-2-alt',
+  '--hvy-highlight-1',
+  '--hvy-highlight-2',
+  '--hvy-border',
+  '--hvy-border-alt',
+  '--hvy-border-input',
+  '--hvy-border-translucent',
+  '--hvy-xref-card-bg',
+  '--hvy-xref-card-hover-bg',
+  '--hvy-table-header',
+  '--hvy-table-row-bg-1',
+  '--hvy-table-row-bg-2',
+  '--hvy-icon-muted',
+  '--hvy-shadow',
+  '--hvy-shadow-md',
+  '--hvy-shadow-lg',
+  '--hvy-overlay',
+  '--hvy-danger',
+  '--hvy-warning',
+  '--hvy-warning-bg',
+  '--hvy-warning-border',
+  '--hvy-warning-accent',
+  '--hvy-success',
+  '--hvy-success-bg',
+  '--hvy-success-border',
 ];
-
-const LIGHT_DEFAULTS: Record<string, string> = {
-  'background': '#f5f9ff',
-  'background-alt': '#eef3fa',
-  'surface': '#ffffff',
-  'surface-alt': '#f3f5f8',
-  'text': '#1a2530',
-  'text-alt': '#4b5563',
-  'accent-1': '#325f6e',
-  'accent-1-alt': '#7aa4b0',
-  'accent-2': '#1f7a8c',
-  'accent-2-alt': '#a7d3db',
-  'highlight-1': 'rgba(31, 122, 140, 0.15)',
-  'highlight-2': 'rgba(255, 214, 102, 0.35)',
-  'border': '#d2dde6',
-  'border-alt': '#e5e7eb',
-  'xref-card-bg': '#f3f5f8',
-  'table-header': '#e5e7eb',
-  'table-row-bg-1': '#ffffff',
-  'table-row-bg-2': '#f9fafb',
-};
-
-const DARK_DEFAULTS: Record<string, string> = {
-  'background': '#0f1720',
-  'background-alt': '#161b22',
-  'surface': '#17222d',
-  'surface-alt': '#1f2630',
-  'text': '#e7eef5',
-  'text-alt': '#a3adbf',
-  'accent-1': '#7db3d0',
-  'accent-1-alt': '#335b78',
-  'accent-2': '#6fb3c1',
-  'accent-2-alt': '#2d5d68',
-  'highlight-1': 'rgba(125, 179, 208, 0.20)',
-  'highlight-2': 'rgba(255, 214, 102, 0.25)',
-  'border': '#2a3340',
-  'border-alt': '#3d4756',
-  'xref-card-bg': 'rgba(255, 255, 255, 0.04)',
-  'table-header': '#1f2a37',
-  'table-row-bg-1': '#17222d',
-  'table-row-bg-2': '#1b2632',
-};
-
-export function getBuiltinDefaults(mode: ThemeMode): Record<string, string> {
-  return { ...(mode === 'dark' ? DARK_DEFAULTS : LIGHT_DEFAULTS) };
-}
 
 export function applyTheme(): void {
   const theme = getThemeConfig();
   const root = document.documentElement;
-  const merged = { ...getBuiltinDefaults(theme.mode), ...theme.colors };
 
-  // Remove stale --hvy-* custom properties that aren't in the current set.
+  // Remove all previously applied user override inline properties.
   const stale: string[] = [];
   for (let i = 0; i < root.style.length; i++) {
     const prop = root.style.item(i);
-    if (prop.startsWith('--hvy-') && !(prop.slice('--hvy-'.length) in merged)) {
+    if (prop.startsWith('--hvy-')) {
       stale.push(prop);
     }
   }
   stale.forEach((prop) => root.style.removeProperty(prop));
 
-  for (const [name, value] of Object.entries(merged)) {
-    root.style.setProperty(`--hvy-${name}`, value);
+  // Apply only user-specified overrides verbatim (key IS the CSS property name).
+  for (const [key, value] of Object.entries(theme.colors)) {
+    root.style.setProperty(key, value);
   }
+
   root.classList.toggle('theme-dark', theme.mode === 'dark');
 }
 

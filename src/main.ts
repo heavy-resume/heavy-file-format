@@ -1,3 +1,4 @@
+import './default-theme.css';
 import './style.css';
 import 'highlight.js/styles/github.css';
 

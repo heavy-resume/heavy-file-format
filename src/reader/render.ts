@@ -10,7 +10,7 @@ import { renderXrefCardReader } from '../editor/components/xref-card';
 import type { ComponentRenderHelpers } from '../editor/component-helpers';
 import type { BlockSchema, VisualBlock, VisualSection } from '../editor/types';
 import { renderTagEditor } from '../editor/tag-editor';
-import { THEME_COLOR_NAMES, getBuiltinDefaults } from '../theme';
+import { THEME_COLOR_NAMES } from '../theme';
 import type { ThemeConfig } from '../theme';
 
 interface ReaderRenderState {
@@ -180,12 +180,11 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
 
   function renderThemeModal(): string {
     const theme = state.theme;
-    const defaults = getBuiltinDefaults(theme.mode);
     const overrideNames = new Set(Object.keys(theme.colors));
     const allNames = Array.from(new Set([...THEME_COLOR_NAMES, ...overrideNames]));
     const rows = allNames.map((name) => {
       const isOverridden = overrideNames.has(name);
-      const value = isOverridden ? theme.colors[name] : (defaults[name] ?? '');
+      const value = isOverridden ? theme.colors[name] : '';
       const isConventional = (THEME_COLOR_NAMES as readonly string[]).includes(name);
       return `
         <div class="theme-color-row${isOverridden ? ' theme-color-row--override' : ''}">
@@ -197,16 +196,15 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
             ${isConventional ? 'readonly' : ''}
             aria-label="Color name"
           />
-          <code class="theme-color-var">--hvy-${deps.escapeHtml(name)}</code>
           <input
             class="theme-color-value"
             data-field="theme-color-value"
             data-color-name="${deps.escapeAttr(name)}"
             value="${deps.escapeAttr(value)}"
-            placeholder="${deps.escapeAttr(defaults[name] ?? '')}"
+            placeholder="${isOverridden ? '' : 'viewer default'}"
             aria-label="Color value"
           />
-          <span class="theme-color-swatch" style="background: ${deps.escapeAttr(value)};" aria-hidden="true"></span>
+          <span class="theme-color-swatch" style="${value ? `background: ${deps.escapeAttr(value)};` : ''}" aria-hidden="true"></span>
           ${isOverridden
             ? (isConventional
               ? `<button type="button" class="ghost" data-action="theme-reset-color" data-color-name="${deps.escapeAttr(name)}" title="Reset to default">Reset</button>`
@@ -224,8 +222,8 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
             <button type="button" data-modal-action="close">Close</button>
           </div>
           <p class="muted">
-            Edit named colors that map 1:1 to <code>--hvy-&lt;name&gt;</code> CSS variables.
-            Built-in defaults for <strong>${deps.escapeHtml(theme.mode)}</strong> mode are used when a color is not overridden.
+            Each key is the exact CSS variable name set on the document root.
+            Built-in defaults for <strong>${deps.escapeHtml(theme.mode)}</strong> mode apply when a color is not overridden.
             Overrides are saved with the document.
           </p>
           <label class="theme-mode-row">

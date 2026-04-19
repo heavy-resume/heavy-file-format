@@ -1,0 +1,133 @@
+/* Light mode defaults */
+:root {
+  --hvy-background: #f5f9ff;
+  --hvy-background-alt: #eef3fa;
+  --hvy-surface: #ffffff;
+  --hvy-surface-alt: #f9fcff;
+  --hvy-surface-tint: #d9eaf4;
+
+  --hvy-text: #1a2530;
+  --hvy-text-alt: #4b5c67;
+  --hvy-text-muted: #6b8fa0;
+
+  --hvy-accent-1: #2c5e78;
+  --hvy-accent-1-alt: #1f4f63;
+  --hvy-accent-1-text: #000000;
+  --hvy-accent-2: #325f6e;
+  --hvy-accent-2-alt: #244355;
+
+  --hvy-highlight-1: rgba(31, 122, 140, 0.15);
+  --hvy-highlight-2: rgba(255, 214, 102, 0.35);
+
+  --hvy-border: #ced9e2;
+  --hvy-border-alt: #b8c8d3;
+  --hvy-border-input: #c8d4dd;
+  --hvy-border-translucent: rgba(206, 217, 226, 0.92);
+
+  --hvy-xref-card-bg: #f3f5f8;
+  --hvy-xref-card-hover-bg: #eef8fb;
+
+  --hvy-table-header: #e5e7eb;
+  --hvy-table-row-bg-1: #ffffff;
+  --hvy-table-row-bg-2: #f9fafb;
+
+  --hvy-shadow: rgba(39, 70, 91, 0.08);
+  --hvy-shadow-md: rgba(39, 70, 91, 0.12);
+  --hvy-shadow-lg: rgba(39, 70, 91, 0.14);
+  --hvy-overlay: rgba(15, 23, 32, 0.4);
+
+  --hvy-danger: #a64040;
+  --hvy-warning: #c79200;
+  --hvy-warning-bg: #fff3de;
+  --hvy-warning-border: #ebca8d;
+  --hvy-warning-accent: #e2b100;
+  --hvy-success: #1c6231;
+  --hvy-success-bg: #e7f9ee;
+  --hvy-success-border: #95d8a9;
+
+  /* Expandable toggle state indicators */
+  --hvy-expandable-stub: #e2b100;
+  --hvy-expandable-stub-border: #d9c36a;
+  --hvy-expandable-expanded: #2878d8;
+
+  /* Highlighted section */
+  --hvy-highlight-bg: #fffbed;
+  --hvy-highlight-glow: rgba(245, 212, 95, 0.8);
+
+  /* Muted icon / decorative foreground */
+  --hvy-icon-muted: rgba(26, 37, 48, 0.33);
+
+  /* Focus ring */
+  --hvy-focus: #8cb0c4;
+  --hvy-focus-ring: rgba(157, 182, 199, 0.9);
+  --hvy-focus-glow: rgba(135, 167, 188, 0.35);
+
+  /* Code block */
+  --hvy-code-bg: #f6f8fa;
+  --hvy-code-text: #1f2328;
+}
+
+/* Dark mode overrides */
+:root.theme-dark {
+  --hvy-background: #0f1720;
+  --hvy-background-alt: #161b22;
+  --hvy-surface: #17222d;
+  --hvy-surface-alt: #1c2733;
+  --hvy-surface-tint: #1f3448;
+
+  --hvy-text: #e7eef5;
+  --hvy-text-alt: #a3adbf;
+  --hvy-text-muted: #6b8fa0;
+
+  --hvy-accent-1: #7db3d0;
+  --hvy-accent-1-alt: #5a8da8;
+  --hvy-accent-1-text: #fcfcfc;
+  --hvy-accent-2: #6fb3c1;
+  --hvy-accent-2-alt: #2d5d68;
+
+  --hvy-highlight-1: rgba(125, 179, 208, 0.20);
+  --hvy-highlight-2: rgba(255, 214, 102, 0.25);
+
+  --hvy-border: #2a3340;
+  --hvy-border-alt: #3d4756;
+  --hvy-border-input: #334152;
+  --hvy-border-translucent: rgba(42, 51, 64, 0.92);
+
+  --hvy-xref-card-bg: rgba(255, 255, 255, 0.04);
+  --hvy-xref-card-hover-bg: rgba(255, 255, 255, 0.08);
+
+  --hvy-table-header: #1f2a37;
+  --hvy-table-row-bg-1: #17222d;
+  --hvy-table-row-bg-2: #1b2632;
+
+  --hvy-shadow: rgba(0, 0, 0, 0.20);
+  --hvy-shadow-md: rgba(0, 0, 0, 0.30);
+  --hvy-shadow-lg: rgba(0, 0, 0, 0.40);
+  --hvy-overlay: rgba(0, 0, 0, 0.60);
+
+  --hvy-danger: #c05050;
+  --hvy-warning: #d4a017;
+  --hvy-warning-bg: #2a2310;
+  --hvy-warning-border: #6b5200;
+  --hvy-warning-accent: #c79200;
+  --hvy-success: #4cae68;
+  --hvy-success-bg: #152b1e;
+  --hvy-success-border: #2e7a46;
+
+  --hvy-expandable-stub: #c79200;
+  --hvy-expandable-stub-border: #6b5200;
+  --hvy-expandable-expanded: #5b9bd5;
+
+  --hvy-highlight-bg: #1e1c10;
+  --hvy-highlight-glow: rgba(199, 146, 0, 0.50);
+
+  /* Muted icon / decorative foreground */
+  --hvy-icon-muted: rgba(231, 238, 245, 0.33);
+
+  --hvy-focus: #5a8da8;
+  --hvy-focus-ring: rgba(90, 141, 168, 0.9);
+  --hvy-focus-glow: rgba(90, 141, 168, 0.35);
+
+  --hvy-code-bg: #161b22;
+  --hvy-code-text: #c9d1d9;
+}

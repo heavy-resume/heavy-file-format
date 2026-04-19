@@ -435,31 +435,35 @@ A theme exposes CSS custom properties that document and component CSS refer to w
 
 #### Naming
 
-Each entry under `theme.colors` maps **1:1** to a CSS custom property. The color name is used verbatim, prefixed with `--hvy-`:
+Each entry under `theme.colors` is a CSS custom property name mapped directly to a value. The key **is** the CSS variable name — no transformation is applied:
 
-| YAML key        | CSS variable           |
-|-----------------|------------------------|
-| `background`    | `--hvy-background`     |
-| `text-alt`      | `--hvy-text-alt`       |
-| `accent-1`      | `--hvy-accent-1`       |
-| `my-custom-c`   | `--hvy-my-custom-c`    |
+| YAML key              | CSS variable           |
+|-----------------------|------------------------|
+| `--hvy-background`    | `--hvy-background`     |
+| `--hvy-text-alt`      | `--hvy-text-alt`       |
+| `--hvy-accent-1`      | `--hvy-accent-1`       |
+| `--hvy-my-custom`     | `--hvy-my-custom`      |
 
-No implicit renaming, alt-suffix handling, or role inference is performed. Authors may use any keys they wish; unknown keys are still exposed as CSS variables for use in CSS blocks and inline `css` fields.
+The viewer sets each key verbatim on the document root (`root.style.setProperty(key, value)`). Authors may use any CSS custom property name; the `--hvy-` prefix is conventional but not enforced.
 
 #### Conventional palette
 
 Viewers SHOULD ship built-in defaults for the following conventional names so documents that omit them still render correctly, and should provide both a light and a dark default set:
 
-- `background`, `background-alt`
-- `surface`, `surface-alt`
-- `text`, `text-alt`
-- `accent-1`, `accent-1-alt`
-- `accent-2`, `accent-2-alt`
-- `highlight-1`, `highlight-2`
-- `border`, `border-alt`
-- `xref-card-bg`
-- `table-header`
-- `table-row-bg-1`, `table-row-bg-2`
+- `--hvy-background`, `--hvy-background-alt`
+- `--hvy-surface`, `--hvy-surface-alt`, `--hvy-surface-tint`
+- `--hvy-text`, `--hvy-text-alt`, `--hvy-text-muted`
+- `--hvy-accent-1`, `--hvy-accent-1-alt`, `--hvy-accent-1-text`
+- `--hvy-accent-2`, `--hvy-accent-2-alt`
+- `--hvy-highlight-1`, `--hvy-highlight-2`
+- `--hvy-border`, `--hvy-border-alt`, `--hvy-border-input`, `--hvy-border-translucent`
+- `--hvy-xref-card-bg`, `--hvy-xref-card-hover-bg`
+- `--hvy-table-header`, `--hvy-table-row-bg-1`, `--hvy-table-row-bg-2`
+- `--hvy-shadow`, `--hvy-shadow-md`, `--hvy-shadow-lg`
+- `--hvy-overlay`
+- `--hvy-danger`
+- `--hvy-warning`, `--hvy-warning-bg`, `--hvy-warning-border`, `--hvy-warning-accent`
+- `--hvy-success`, `--hvy-success-bg`, `--hvy-success-border`
 
 Alternates (`*-alt`) are intended as fallbacks for cases where the base color would clash with its surroundings.
 
@@ -469,24 +473,24 @@ Alternates (`*-alt`) are intended as fallbacks for cases where the base color wo
 theme:
   mode: light
   colors:
-    background: "#ffffff"
-    text: "#1f2a37"
-    text-alt: "#4b5563"
-    accent-1: "#1f7a8c"
-    accent-1-alt: "#a7d3db"
-    border: "#d2dde6"
-    xref-card-bg: "#f3f5f8"
-    table-header: "#e5e7eb"
-    table-row-bg-1: "#ffffff"
-    table-row-bg-2: "#f9fafb"
-    my-overlay: "rgba(0, 0, 0, 0.04)"
+    --hvy-background: "#ffffff"
+    --hvy-text: "#1f2a37"
+    --hvy-text-alt: "#4b5563"
+    --hvy-accent-1: "#1f7a8c"
+    --hvy-accent-1-alt: "#a7d3db"
+    --hvy-border: "#d2dde6"
+    --hvy-xref-card-bg: "#f3f5f8"
+    --hvy-table-header: "#e5e7eb"
+    --hvy-table-row-bg-1: "#ffffff"
+    --hvy-table-row-bg-2: "#f9fafb"
+    --hvy-my-overlay: "rgba(0, 0, 0, 0.04)"
 ```
 
 Rules:
 - `mode` is optional (`light` or `dark`); it selects which built-in default set the viewer merges user-supplied colors over. Defaults to `light` when absent.
 - All keys under `colors` are optional. Missing keys fall back to the viewer's defaults for the selected mode.
 - Values MUST be valid CSS color expressions (`#rrggbb`, `#rrggbbaa`, `rgb(...)`, `rgba(...)`, `hsl(...)`, named colors, etc.). Semi-transparent values are permitted.
-- The viewer applies these variables to the document root (typically `:root` or the document container) before any CSS blocks or inline component CSS is evaluated, so `var(--hvy-<name>)` resolves everywhere.
+- The viewer applies these variables to the document root (typically `:root` or the document container) before any CSS blocks or inline component CSS is evaluated, so `var(--hvy-background)` and similar expressions resolve everywhere.
 - When the viewer exposes a UI for editing theme colors, edits MUST be persisted back into `document.meta.theme.colors` so they round-trip through save.
 - Plain Markdown renderers ignore `theme`.
 

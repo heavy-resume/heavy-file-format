@@ -97,17 +97,6 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     ]
       .filter(Boolean)
       .join(' ');
-    const toggleControl = section.expanded
-      ? `
-      <header class="reader-section-head" aria-label="Section controls">
-        <div class="reader-head-actions">
-          <button type="button" class="tiny" data-reader-action="toggle-expand" data-section-key="${deps.escapeAttr(section.key)}" aria-label="${
-        section.expanded ? 'Collapse section' : 'Expand section'
-      }">${section.expanded ? '−' : '+'}</button>
-        </div>
-      </header>
-    `
-      : '';
 
     const contentClass = section.expanded ? 'reader-section-content' : 'reader-section-content reader-section-preview';
     const content = `<div class="${contentClass}">${section.blocks
@@ -120,7 +109,13 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
 
     return `
       <section id="${deps.escapeAttr(effectiveId)}" class="${classList}" style="${deps.escapeAttr(section.customCss)}"${toggleAttrs}>
-        ${toggleControl}
+        <header class="reader-section-head" aria-label="Section controls">
+          <div class="reader-head-actions">
+            <button type="button" class="tiny toggle-expand-button" data-reader-action="toggle-expand" data-section-key="${deps.escapeAttr(section.key)}" aria-label="${
+          section.expanded ? 'Collapse section' : 'Expand section'
+        }">${section.expanded ? '+' : '-'}</button>
+          </div>
+        </header>
         ${content}
       </section>
     `;

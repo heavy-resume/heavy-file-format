@@ -58,7 +58,7 @@ component_defs:
           - text: "#### Accomplishments"
             schema:
               component: text
-              css: "margin: 0.6rem 0 0.25rem;"
+              css: "margin: 0.5rem 0 0.25rem;"
           - text: ""
             schema:
               component: component-list
@@ -70,7 +70,7 @@ component_defs:
     baseType: grid
     description: Two-column skills and tools list
     schema:
-      css: "margin: 0.6rem 0 0;"
+      css: "margin: 0.5rem 0 0;"
       gridColumns: 2
       gridItems:
         - id: relevant-skills
@@ -159,7 +159,7 @@ component_defs:
           - text: "#### Classes"
             schema:
               component: text
-              css: "margin: 0.6rem 0 0.25rem;"
+              css: "margin: 0.5rem 0 0.25rem;"
           - text: ""
             schema:
               component: component-list
@@ -754,7 +754,7 @@ component_defs:
    <!--hvy:expandable:1 {"component":"text","css":"margin: 0.35rem 0;"}-->
     Led the developer platform for an AI-enabled product line, improving local setup, internal tooling, and release confidence across a fast-moving engineering team.
 
-   <!--hvy:expandable:1 {"component":"text","css":"margin: 0.6rem 0 0.25rem;"}-->
+   <!--hvy:expandable:1 {"component":"text","css":"margin: 0.5rem 0 0.25rem;"}-->
     #### Accomplishments
 
    <!--hvy:expandable:1 {"component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->
@@ -768,7 +768,7 @@ component_defs:
     <!--hvy:component-list:2 {"component":"text","css":"margin: 0.25rem 0;"}-->
      Partnered with design and product to ship AI-assisted editor workflows with measurable adoption.
 
-   <!--hvy:expandable:1 {"component":"skills-and-tools-tech-list","css":"margin: 0.6rem 0 0;","gridColumns":2}-->
+   <!--hvy:expandable:1 {"component":"skills-and-tools-tech-list","css":"margin: 0.5rem 0 0;","gridColumns":2}-->
 
     <!--hvy:grid:0 {"id":"history-skills","column":"left","component":"component-list","componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
 
@@ -820,7 +820,7 @@ component_defs:
    <!--hvy:expandable:1 {"component":"text","css":"margin: 0.35rem 0;"}-->
     [Visit webpage](https://github.com) (github.com)
 
-   <!--hvy:expandable:1 {"component":"skills-and-tools-tech-list","css":"margin: 0.6rem 0 0;","gridColumns":2}-->
+   <!--hvy:expandable:1 {"component":"skills-and-tools-tech-list","css":"margin: 0.5rem 0 0;","gridColumns":2}-->
 
     <!--hvy:grid:0 {"id":"project-relevant-skills","column":"left","component":"component-list","componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
 
@@ -860,7 +860,7 @@ component_defs:
    <!--hvy:expandable:1 {"component":"text","css":"margin: 0.35rem 0;"}-->
     [Visit webpage](https://lablab.ai) (lablab.ai)
 
-   <!--hvy:expandable:1 {"component":"skills-and-tools-tech-list","css":"margin: 0.6rem 0 0;","gridColumns":2}-->
+   <!--hvy:expandable:1 {"component":"skills-and-tools-tech-list","css":"margin: 0.5rem 0 0;","gridColumns":2}-->
 
     <!--hvy:grid:0 {"id":"project-relevant-skills-hackathon","column":"left","component":"component-list","componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
 
@@ -922,7 +922,7 @@ component_defs:
    <!--hvy:expandable:1 {"component":"text","css":"margin: 0.5rem 0;"}-->
     Focused on systems programming, developer tooling, and human-computer interaction while building software for research and product-oriented team projects.
 
-   <!--hvy:expandable:1 {"component":"skills-and-tools-tech-list","css":"margin: 0.6rem 0 0;","gridColumns":2}-->
+   <!--hvy:expandable:1 {"component":"skills-and-tools-tech-list","css":"margin: 0.5rem 0 0;","gridColumns":2}-->
 
     <!--hvy:grid:0 {"id":"education-relevant-skills","column":"left","component":"component-list","componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
 
@@ -940,7 +940,7 @@ component_defs:
 
      <!--hvy:component-list:2 {"component":"xref-card","css":"margin: 0.25rem 0;","xrefTitle":"C/C++","xrefTarget":"tool-c-cpp"}-->
 
-   <!--hvy:expandable:1 {"component":"text","css":"margin: 0.6rem 0 0.25rem;"}-->
+   <!--hvy:expandable:1 {"component":"text","css":"margin: 0.5rem 0 0.25rem;"}-->
     #### Classes
 
    <!--hvy:expandable:1 {"component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->

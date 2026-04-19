@@ -59,7 +59,7 @@ component_defs:
           - text: "#### Accomplishments"
             schema:
               component: text
-              css: "margin: 0.6rem 0 0.25rem;"
+              css: "margin: 0.5rem 0 0.25rem;"
           - text: ""
             schema:
               component: component-list
@@ -71,7 +71,7 @@ component_defs:
     baseType: grid
     description: Two-column skills and tools list
     schema:
-      css: "margin: 0.6rem 0 0;"
+      css: "margin: 0.5rem 0 0;"
       gridColumns: 2
       gridItems:
         - id: relevant-skills
@@ -160,7 +160,7 @@ component_defs:
           - text: "#### Classes"
             schema:
               component: text
-              css: "margin: 0.6rem 0 0.25rem;"
+              css: "margin: 0.5rem 0 0.25rem;"
           - text: ""
             schema:
               component: component-list

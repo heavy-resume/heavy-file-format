@@ -226,6 +226,7 @@ button.tiny {
 .reader-document {
   display: grid;
   gap: 0.95rem;
+  scrollbar-gutter: 0.5rem;
 }
 
 .viewer-shell {
@@ -1610,6 +1611,21 @@ button.tiny {
   gap: 0.3rem;
 }
 
+.toggle-expand-button {
+  color: #00000055;
+  z-index: 5;
+  border: 1px solid #FFFFFF00;
+  width: 1.5rem;
+  height: 1.5rem;
+  display: block;
+}
+
+
+.toggle-expand-button:hover {
+  z-index: 5;
+  border: 1px solid #b8c8d3;
+}
+
 .reader-section-content {
   margin-top: 0;
   display: grid;
@@ -1856,7 +1872,21 @@ button.tiny {
 .expand-collapse-strip:hover {
   box-shadow: 0 0 0 1px rgba(157, 182, 199, 0.9), 0 0 14px rgba(198, 215, 226, 0.35);
   background: color-mix(in srgb, var(--hvy-surface) 92%, #eef5fa 8%);
-  z-index: 2;
+  position: relative;
+  z-index: 3;
+}
+
+.expand-stub-toggle:hover::after,
+.expand-collapse-strip:hover::after {
+  content: '';
+  box-shadow: 0 0 1px 2px rgba(157, 182, 199, 0.9), 0 0 14px rgba(198, 215, 226, 0.35);
+  background: transparent;
+  position: absolute;
+  z-index: 3;
+  top:0;
+  width: 100%;
+  height: 100%;
+  display: block;
 }
 
 .expand-stub-toggle .expand-stub {
@@ -1872,6 +1902,7 @@ button.tiny {
 
 .expand-content {
   margin-top: 0.3rem;
+  margin-bottom: 0.3rem;
   cursor: pointer;
   animation: expandContentIn 180ms ease both;
 }

@@ -6,7 +6,7 @@ component_defs:
     baseType: expandable
     description: Expandable resume history record
     schema:
-      css: "margin: 0.35rem 0;"
+      css: "margin: 0;"
       expandableAlwaysShowStub: true
       expandableExpanded: false
       expandableStubBlocks:
@@ -105,7 +105,7 @@ component_defs:
     baseType: expandable
     description: Expandable education record
     schema:
-      css: "margin: 0.35rem 0;"
+      css: "margin: 0;"
       expandableAlwaysShowStub: true
       expandableExpanded: false
       expandableStubBlocks:
@@ -170,7 +170,7 @@ component_defs:
     baseType: expandable
     description: Expandable project record
     schema:
-      css: "margin: 0.35rem 0;"
+      css: "margin: 0;"
       expandableAlwaysShowStub: true
       expandableExpanded: false
       expandableStubBlocks:
@@ -658,7 +658,7 @@ Partnered with design and product to ship AI-assisted editor workflows with meas
 
 <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"project-record"}-->
 
-<!--hvy:component-list:0 {"id":"project-heavy-stack","component":"project-record","css":"margin: 0.35rem 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+<!--hvy:component-list:0 {"id":"project-heavy-stack","component":"project-record","css":"margin: 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
 <!--hvy:expandable:0 {"component":"table","css":"margin: 0;","tableColumns":"PROJECT, DATE","tableShowHeader":false,"tableRows":[{"cells":["Heavy Stack","05/2024 - present"]}]}-->
 

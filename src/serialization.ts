@@ -66,6 +66,7 @@ function parseBlocks(contentMarkdown: string, sectionMeta: JsonObject, documentM
   type StructuredFrame = {
     block: VisualBlock;
     attach: BlockAttach;
+    indent: number;
   };
 
   const blocks: VisualBlock[] = [];
@@ -74,6 +75,7 @@ function parseBlocks(contentMarkdown: string, sectionMeta: JsonObject, documentM
   let currentSchema: BlockSchema = defaultBlockSchema();
   let currentAttach: BlockAttach = { kind: 'top' };
   let currentHasDirective = false;
+  let currentIndent = 0;
 
   const resolveParsedBase = (componentName: string): string => {
     if (isBuiltinComponentName(componentName)) {
@@ -139,6 +141,13 @@ function parseBlocks(contentMarkdown: string, sectionMeta: JsonObject, documentM
     return frames[frames.length - 1]?.block;
   };
 
+  const closeFramesAtOrAboveIndent = (indent: number): void => {
+    flush();
+    while (frames.length > 0 && frames[frames.length - 1].indent >= indent) {
+      closeFrame();
+    }
+  };
+
   const findOrCreateParentFrame = (parentBase: 'expandable' | 'grid' | 'component-list' | 'container' | 'table'): VisualBlock => {
     const parent = closeFramesUntil(parentBase);
     if (parent) {
@@ -148,6 +157,7 @@ function parseBlocks(contentMarkdown: string, sectionMeta: JsonObject, documentM
     frames.push({
       block: fallback,
       attach: { kind: 'top' },
+      indent: currentIndent,
     });
     return fallback;
   };
@@ -218,6 +228,7 @@ function parseBlocks(contentMarkdown: string, sectionMeta: JsonObject, documentM
         schemaMode: false,
       },
       attach,
+      indent: currentIndent,
     });
   };
 
@@ -226,6 +237,11 @@ function parseBlocks(contentMarkdown: string, sectionMeta: JsonObject, documentM
     if (!match) {
       currentText.push(line);
       return;
+    }
+
+    currentIndent = (line.match(/^( *)/) ?? ['', ''])[1].length;
+    if (currentIndent > 0) {
+      closeFramesAtOrAboveIndent(currentIndent);
     }
 
     const directive = (match[1] ?? 'block').toLowerCase();

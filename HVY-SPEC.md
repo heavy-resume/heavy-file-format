@@ -42,7 +42,7 @@ is document metadata surrounded with `---`
 Comments are denoted with `<!--  -->`
 Directives are comments that lead with `hvy` and followed with a JSON payload.
 
-Leading whitespace sets nesting
+Leading whitespace sets nesting (see §5.11)
 
 ```
 ---
@@ -389,6 +389,43 @@ Notes:
 - Clone a `section_defs[*].template` when inserting a new section or subsection.
 - Implementations SHOULD assign fresh section keys, block IDs, and custom IDs when instantiating a reusable section.
 - Plain Markdown renderers ignore `section_defs`.
+
+### 5.11 Indentation
+
+Leading whitespace determines nesting depth. Each level of nesting adds one space. This is semantic: a directive or content line at indent level N is a child of the nearest enclosing directive at indent level N-1. A decrease in indentation closes open blocks, exactly as Python uses indentation to delimit scopes.
+
+Parsers MUST use the leading whitespace count of a directive line to determine which open frames to close before processing that directive. When a directive at indent N is encountered, all open frames at indent >= N are closed first. Content lines (non-directive) inherit the indent of their enclosing block.
+
+| Element | Indent |
+|---|---|
+| Top-level section directive (`<!--hvy: ...-->`) and `#!` title | 0 spaces |
+| Direct block directives inside a section | 1 space |
+| Content text of direct blocks | 2 spaces |
+| Sub-directives (`expandable:N`, `grid:N`, `component-list:N`) inside a direct block | 2 spaces |
+| Content text / nested directives inside a sub-directive | 3 spaces |
+| Each additional level of nesting | +1 space per level |
+
+Example:
+
+```
+<!--hvy: {"id":"example","lock":true}-->
+#! Example
+
+ <!--hvy:expandable {"expandableAlwaysShowStub":true}-->
+
+  <!--hvy:expandable:0 {"component":"text"}-->
+   ## Stub heading
+
+  <!--hvy:expandable:1 {"component":"component-list","componentListComponent":"text"}-->
+
+   <!--hvy:component-list:0 {"component":"text"}-->
+    First item
+
+   <!--hvy:component-list:1 {"component":"text"}-->
+    Second item
+```
+
+Plain Markdown renderers ignore leading whitespace on comment lines.
 
 ## 6. Template & Schema (`.thvy`)
 

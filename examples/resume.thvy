@@ -2,6 +2,27 @@
 hvy_version: 0.1
 template: true
 title: Resume Template
+theme:
+  mode: light
+  colors:
+    background: "#f5f9ff"
+    background-alt: "#f9fafb"
+    surface: "#ffffff"
+    surface-alt: "#f3f5f8"
+    text: "#1f2a37"
+    text-alt: "#4b5563"
+    accent-1: "#1f7a8c"
+    accent-1-alt: "#a7d3db"
+    accent-2: "#325f6e"
+    accent-2-alt: "#7aa4b0"
+    highlight-1: "rgba(31, 122, 140, 0.15)"
+    highlight-2: "rgba(255, 214, 102, 0.35)"
+    border: "#d2dde6"
+    border-alt: "#e5e7eb"
+    xref-card-bg: "#f3f5f8"
+    table-header: "#e5e7eb"
+    table-row-bg-1: "#ffffff"
+    table-row-bg-2: "#f9fafb"
 component_defs:
   - name: history-record
     baseType: expandable
@@ -289,7 +310,7 @@ component_defs:
     baseType: expandable
     description: Skill record
     schema:
-      css: "margin: 0.35rem 0; border: 1px solid #d2dde6; border-radius: 4px; padding: 0.35rem 0.5rem;"
+      css: "margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);"
       expandableStubBlocks:
         lock: true
         children:

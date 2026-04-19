@@ -21,12 +21,11 @@ export interface ReusableSaveModalState {
   draftName: string;
 }
 
+export type ThemeMode = 'light' | 'dark';
+
 export interface ThemeConfig {
-  mode: 'light' | 'dark';
-  background: string;
-  surface: string;
-  text: string;
-  accent: string;
+  mode: ThemeMode;
+  colors: Record<string, string>;
 }
 
 export interface ComponentDefinition {
@@ -63,6 +62,7 @@ export interface AppState {
   future: string[];
   isRestoring: boolean;
   componentMetaModal: { sectionKey: string; blockId: string } | null;
+  themeModalOpen: boolean;
   gridAddComponentByBlock: Record<string, string>;
   expandableEditorPanels: Record<string, { stubOpen: boolean; expandedOpen: boolean }>;
   viewerSidebarOpen: boolean;

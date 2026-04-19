@@ -46,10 +46,7 @@ hljs.registerLanguage('ts', typescript);
 
 interface ThemeConfig {
   mode: 'light' | 'dark';
-  accent: string;
-  background: string;
-  surface: string;
-  text: string;
+  colors: Record<string, string>;
 }
 
 interface ComponentDef {
@@ -443,6 +440,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const defs = deps.getComponentDefs();
     const sectionDefs = deps.getSectionDefs();
     const theme = deps.getThemeConfig();
+    const colorCount = Object.keys(theme.colors).length;
     return `
       <section class="meta-panel">
         <div class="meta-panel-head">
@@ -465,24 +463,12 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
             </select>
           </label>
           <label>
-            <span>Theme Accent</span>
-            <input data-field="theme-accent" value="${deps.escapeAttr(theme.accent)}" />
+            <span>Theme Colors</span>
+            <button type="button" class="ghost" data-action="open-theme-modal">
+              Edit Colors${colorCount > 0 ? ` (${colorCount} override${colorCount === 1 ? '' : 's'})` : ''}
+            </button>
           </label>
         </div>
-        <div class="editor-grid">
-          <label>
-            <span>Theme Background</span>
-            <input data-field="theme-background" value="${deps.escapeAttr(theme.background)}" />
-          </label>
-          <label>
-            <span>Theme Surface</span>
-            <input data-field="theme-surface" value="${deps.escapeAttr(theme.surface)}" />
-          </label>
-        </div>
-        <label>
-          <span>Theme Text</span>
-          <input data-field="theme-text" value="${deps.escapeAttr(theme.text)}" />
-        </label>
         <div class="meta-panel-head">
           <strong>Component Definitions</strong>
           <button type="button" class="ghost" data-action="add-component-def">Add Component</button>

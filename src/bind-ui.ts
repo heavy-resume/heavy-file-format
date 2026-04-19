@@ -13,7 +13,7 @@ import {
   handleTagEditorInput,
   handleTagEditorKeydown,
 } from './editor/tag-editor';
-import { getThemeConfig, applyTheme } from './theme';
+import { getThemeConfig, applyTheme, writeThemeConfig } from './theme';
 import { findSectionByKey, getSectionId, isDefaultUntitledSectionTitle } from './section-ops';
 import { getComponentDefs, getSectionDefs, getReusableNameFromSectionKey, isBuiltinComponent, resolveBaseComponent } from './component-defs';
 import {
@@ -144,25 +144,37 @@ export function bindUi(app: HTMLElement): void {
       return;
     }
 
-    if (field.startsWith('theme-')) {
-      recordHistory(`meta:${field}`);
+    if (field === 'theme-mode' && target instanceof HTMLSelectElement) {
+      recordHistory('meta:theme-mode');
       const theme = getThemeConfig();
-      if (field === 'theme-mode' && target instanceof HTMLSelectElement) {
-        theme.mode = target.value === 'dark' ? 'dark' : 'light';
-      }
-      if (field === 'theme-accent' && target instanceof HTMLInputElement) {
-        theme.accent = target.value;
-      }
-      if (field === 'theme-background' && target instanceof HTMLInputElement) {
-        theme.background = target.value;
-      }
-      if (field === 'theme-surface' && target instanceof HTMLInputElement) {
-        theme.surface = target.value;
-      }
-      if (field === 'theme-text' && target instanceof HTMLInputElement) {
-        theme.text = target.value;
-      }
-      state.document.meta.theme = theme;
+      theme.mode = target.value === 'dark' ? 'dark' : 'light';
+      writeThemeConfig(theme);
+      applyTheme();
+      return;
+    }
+
+    if (field === 'theme-color-value' && target instanceof HTMLInputElement) {
+      const name = target.dataset.colorName ?? '';
+      if (!name) return;
+      recordHistory(`meta:theme-color:${name}`);
+      const theme = getThemeConfig();
+      theme.colors[name] = target.value;
+      writeThemeConfig(theme);
+      applyTheme();
+      return;
+    }
+
+    if (field === 'theme-color-name' && target instanceof HTMLInputElement) {
+      const oldName = target.dataset.colorName ?? '';
+      const newName = target.value.trim();
+      if (!oldName || !newName || oldName === newName) return;
+      recordHistory(`meta:theme-color-rename:${oldName}`);
+      const theme = getThemeConfig();
+      if (newName in theme.colors) return;
+      theme.colors[newName] = theme.colors[oldName];
+      delete theme.colors[oldName];
+      target.dataset.colorName = newName;
+      writeThemeConfig(theme);
       applyTheme();
       return;
     }
@@ -297,6 +309,52 @@ export function bindUi(app: HTMLElement): void {
 
     if (action === 'toggle-document-meta') {
       state.metaPanelOpen = !state.metaPanelOpen;
+      getRenderApp()();
+      return;
+    }
+
+    if (action === 'open-theme-modal') {
+      state.themeModalOpen = true;
+      getRenderApp()();
+      return;
+    }
+
+    if (action === 'theme-add-color') {
+      recordHistory('meta:theme-color-add');
+      const theme = getThemeConfig();
+      let i = 1;
+      let name = `color-${i}`;
+      while (name in theme.colors) {
+        i += 1;
+        name = `color-${i}`;
+      }
+      theme.colors[name] = '#000000';
+      writeThemeConfig(theme);
+      applyTheme();
+      getRenderApp()();
+      return;
+    }
+
+    if (action === 'theme-remove-color') {
+      const name = actionButton.dataset.colorName ?? '';
+      if (!name) return;
+      recordHistory(`meta:theme-color-remove:${name}`);
+      const theme = getThemeConfig();
+      delete theme.colors[name];
+      writeThemeConfig(theme);
+      applyTheme();
+      getRenderApp()();
+      return;
+    }
+
+    if (action === 'theme-reset-color') {
+      const name = actionButton.dataset.colorName ?? '';
+      if (!name) return;
+      recordHistory(`meta:theme-color-reset:${name}`);
+      const theme = getThemeConfig();
+      delete theme.colors[name];
+      writeThemeConfig(theme);
+      applyTheme();
       getRenderApp()();
       return;
     }

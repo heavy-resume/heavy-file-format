@@ -59,6 +59,7 @@ function createInitialState(): AppState {
     future: [],
     isRestoring: false,
     componentMetaModal: null,
+    themeModalOpen: false,
     gridAddComponentByBlock: {},
     expandableEditorPanels: {},
     viewerSidebarOpen: false,
@@ -138,6 +139,12 @@ readerRenderer = createReaderRenderer(
     },
     get componentMetaModal() {
       return state.componentMetaModal;
+    },
+    get themeModalOpen() {
+      return state.themeModalOpen;
+    },
+    get theme() {
+      return getThemeConfig();
     },
   },
   {

@@ -178,6 +178,7 @@ export function closeModal(): void {
   state.modalSectionKey = null;
   state.componentMetaModal = null;
   state.reusableSaveModal = null;
+  state.themeModalOpen = false;
 }
 
 export function closeModalIfTarget(sectionKey: string): void {
@@ -199,6 +200,7 @@ export function resetTransientUiState(): void {
   state.modalSectionKey = null;
   state.reusableSaveModal = null;
   state.componentMetaModal = null;
+  state.themeModalOpen = false;
   state.tempHighlights = new Set<string>();
   state.addComponentBySection = {};
   state.metaPanelOpen = false;

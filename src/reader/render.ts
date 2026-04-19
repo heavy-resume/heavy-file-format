@@ -10,6 +10,8 @@ import { renderXrefCardReader } from '../editor/components/xref-card';
 import type { ComponentRenderHelpers } from '../editor/component-helpers';
 import type { BlockSchema, VisualBlock, VisualSection } from '../editor/types';
 import { renderTagEditor } from '../editor/tag-editor';
+import { THEME_COLOR_NAMES, getBuiltinDefaults } from '../theme';
+import type { ThemeConfig } from '../theme';
 
 interface ReaderRenderState {
   documentSections: VisualSection[];
@@ -22,6 +24,8 @@ interface ReaderRenderState {
     draftName: string;
   } | null;
   componentMetaModal: { sectionKey: string; blockId: string } | null;
+  themeModalOpen: boolean;
+  theme: ThemeConfig;
 }
 
 interface ReaderRenderDeps {
@@ -174,7 +178,79 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     return block.schema.id.trim();
   }
 
+  function renderThemeModal(): string {
+    const theme = state.theme;
+    const defaults = getBuiltinDefaults(theme.mode);
+    const overrideNames = new Set(Object.keys(theme.colors));
+    const allNames = Array.from(new Set([...THEME_COLOR_NAMES, ...overrideNames]));
+    const rows = allNames.map((name) => {
+      const isOverridden = overrideNames.has(name);
+      const value = isOverridden ? theme.colors[name] : (defaults[name] ?? '');
+      const isConventional = (THEME_COLOR_NAMES as readonly string[]).includes(name);
+      return `
+        <div class="theme-color-row${isOverridden ? ' theme-color-row--override' : ''}">
+          <input
+            class="theme-color-name"
+            data-field="theme-color-name"
+            data-color-name="${deps.escapeAttr(name)}"
+            value="${deps.escapeAttr(name)}"
+            ${isConventional ? 'readonly' : ''}
+            aria-label="Color name"
+          />
+          <code class="theme-color-var">--hvy-${deps.escapeHtml(name)}</code>
+          <input
+            class="theme-color-value"
+            data-field="theme-color-value"
+            data-color-name="${deps.escapeAttr(name)}"
+            value="${deps.escapeAttr(value)}"
+            placeholder="${deps.escapeAttr(defaults[name] ?? '')}"
+            aria-label="Color value"
+          />
+          <span class="theme-color-swatch" style="background: ${deps.escapeAttr(value)};" aria-hidden="true"></span>
+          ${isOverridden
+            ? (isConventional
+              ? `<button type="button" class="ghost" data-action="theme-reset-color" data-color-name="${deps.escapeAttr(name)}" title="Reset to default">Reset</button>`
+              : `<button type="button" class="ghost" data-action="theme-remove-color" data-color-name="${deps.escapeAttr(name)}" title="Remove">Remove</button>`)
+            : '<span class="theme-color-default muted">default</span>'}
+        </div>
+      `;
+    }).join('');
+    return `
+      <div id="modalRoot" class="modal-root">
+        <div class="modal-overlay" data-modal-action="close-overlay"></div>
+        <section class="modal-panel theme-modal">
+          <div class="modal-head">
+            <h3>Theme Colors</h3>
+            <button type="button" data-modal-action="close">Close</button>
+          </div>
+          <p class="muted">
+            Edit named colors that map 1:1 to <code>--hvy-&lt;name&gt;</code> CSS variables.
+            Built-in defaults for <strong>${deps.escapeHtml(theme.mode)}</strong> mode are used when a color is not overridden.
+            Overrides are saved with the document.
+          </p>
+          <label class="theme-mode-row">
+            <span>Mode</span>
+            <select data-field="theme-mode">
+              <option value="light"${theme.mode === 'light' ? ' selected' : ''}>light</option>
+              <option value="dark"${theme.mode === 'dark' ? ' selected' : ''}>dark</option>
+            </select>
+          </label>
+          <div class="theme-color-list">
+            ${rows}
+          </div>
+          <div class="link-inline-actions">
+            <button type="button" class="ghost" data-action="theme-add-color">Add Color</button>
+            <button type="button" class="secondary" data-modal-action="close">Done</button>
+          </div>
+        </section>
+      </div>
+    `;
+  }
+
   function renderModal(): string {
+    if (state.themeModalOpen) {
+      return renderThemeModal();
+    }
     if (state.reusableSaveModal) {
       const title = state.reusableSaveModal.kind === 'section' ? 'Save As Reusable Section' : 'Save As Reusable Component';
       const help =

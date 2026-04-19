@@ -427,6 +427,69 @@ Example:
 
 Plain Markdown renderers ignore leading whitespace on comment lines.
 
+### 5.12 Color theme
+
+Color themes are implemented intrinsically by the viewer application. A `.hvy` or `.thvy` file MAY declare theme colors in document front matter under the `theme` key. When absent, the viewer supplies its own light- and dark-mode defaults.
+
+A theme exposes CSS custom properties that document and component CSS refer to with `var(...)`. This keeps color choices centralized and makes light/dark variants a data change rather than a content change.
+
+#### Naming
+
+Each entry under `theme.colors` maps **1:1** to a CSS custom property. The color name is used verbatim, prefixed with `--hvy-`:
+
+| YAML key        | CSS variable           |
+|-----------------|------------------------|
+| `background`    | `--hvy-background`     |
+| `text-alt`      | `--hvy-text-alt`       |
+| `accent-1`      | `--hvy-accent-1`       |
+| `my-custom-c`   | `--hvy-my-custom-c`    |
+
+No implicit renaming, alt-suffix handling, or role inference is performed. Authors may use any keys they wish; unknown keys are still exposed as CSS variables for use in CSS blocks and inline `css` fields.
+
+#### Conventional palette
+
+Viewers SHOULD ship built-in defaults for the following conventional names so documents that omit them still render correctly, and should provide both a light and a dark default set:
+
+- `background`, `background-alt`
+- `surface`, `surface-alt`
+- `text`, `text-alt`
+- `accent-1`, `accent-1-alt`
+- `accent-2`, `accent-2-alt`
+- `highlight-1`, `highlight-2`
+- `border`, `border-alt`
+- `xref-card-bg`
+- `table-header`
+- `table-row-bg-1`, `table-row-bg-2`
+
+Alternates (`*-alt`) are intended as fallbacks for cases where the base color would clash with its surroundings.
+
+#### Front matter shape
+
+```yaml
+theme:
+  mode: light
+  colors:
+    background: "#ffffff"
+    text: "#1f2a37"
+    text-alt: "#4b5563"
+    accent-1: "#1f7a8c"
+    accent-1-alt: "#a7d3db"
+    border: "#d2dde6"
+    xref-card-bg: "#f3f5f8"
+    table-header: "#e5e7eb"
+    table-row-bg-1: "#ffffff"
+    table-row-bg-2: "#f9fafb"
+    my-overlay: "rgba(0, 0, 0, 0.04)"
+```
+
+Rules:
+- `mode` is optional (`light` or `dark`); it selects which built-in default set the viewer merges user-supplied colors over. Defaults to `light` when absent.
+- All keys under `colors` are optional. Missing keys fall back to the viewer's defaults for the selected mode.
+- Values MUST be valid CSS color expressions (`#rrggbb`, `#rrggbbaa`, `rgb(...)`, `rgba(...)`, `hsl(...)`, named colors, etc.). Semi-transparent values are permitted.
+- The viewer applies these variables to the document root (typically `:root` or the document container) before any CSS blocks or inline component CSS is evaluated, so `var(--hvy-<name>)` resolves everywhere.
+- When the viewer exposes a UI for editing theme colors, edits MUST be persisted back into `document.meta.theme.colors` so they round-trip through save.
+- Plain Markdown renderers ignore `theme`.
+
 ## 6. Template & Schema (`.thvy`)
 
 A `.thvy` file is a `.hvy` file. The only distinction is `template: true` in front matter.

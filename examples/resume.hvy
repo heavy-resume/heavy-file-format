@@ -163,6 +163,7 @@ component_defs:
                 - cells: ["", "", ""]
       expandableContentBlocks:
         lock: true
+        css: "padding: 0.5rem;"
         children:
           - text: ""
             schema:
@@ -228,6 +229,7 @@ component_defs:
                 - cells: ["", ""]
       expandableContentBlocks:
         lock: true
+        css: "padding: 0.5rem;"
         children:
           - text: ""
             schema:
@@ -341,6 +343,7 @@ component_defs:
               placeholder: "Skill name"
       expandableContentBlocks:
         lock: false
+        css: "padding: 0.5rem;"
         children:
           - text: "#### Description"
             schema:
@@ -1051,7 +1054,7 @@ component_defs:
 
      <!--hvy:table {"css":"margin: 0;  margin-top: -1px;","tableColumns":"YEAR, ORGANIZATION, TITLE","tableShowHeader":false,"tableRows":[{"cells":["2024","Northwind Labs","Senior Software Engineer"]}]}-->
 
-    <!--hvy:expandable:content {}-->
+    <!--hvy:expandable:content {"css":"padding: 0.5rem;"}-->
 
      <!--hvy:text {"css":"margin: 0 0 0.35rem;"}-->
       ### Senior Software Engineer
@@ -1068,22 +1071,14 @@ component_defs:
          <!--hvy:text {"css":"margin: 0; text-align: right;"}-->
          05/2024 - present
 
-    <!--hvy:expandable:content {}-->
-
      <!--hvy:text {"css":"margin: 0.35rem 0; font-weight: 700;"}-->
       Platform and AI Infrastructure Lead
-
-    <!--hvy:expandable:content {}-->
 
      <!--hvy:text {"css":"margin: 0.35rem 0;"}-->
       Led the developer platform for an AI-enabled product line, improving local setup, internal tooling, and release confidence across a fast-moving engineering team.
 
-    <!--hvy:expandable:content {}-->
-
      <!--hvy:text {"css":"margin: 0.5rem 0 0.25rem;"}-->
       #### Accomplishments
-
-    <!--hvy:expandable:content {}-->
 
      <!--hvy:component-list {"componentListComponent":"text","css":"margin: 0;"}-->
 
@@ -1101,8 +1096,6 @@ component_defs:
 
        <!--hvy:text {"css":"margin: 0.25rem 0;"}-->
         Partnered with design and product to ship AI-assisted editor workflows with measurable adoption.
-
-    <!--hvy:expandable:content {}-->
 
      <!--hvy:skills-and-tools-tech-list {}-->
 
@@ -1180,17 +1173,11 @@ component_defs:
        <!--hvy:text {"css":"margin: 0; text-align: right;"}-->
         05/2024 - present
 
-    <!--hvy:expandable:content {}-->
-
      <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
       The Heavy Stack is the production version of the developer container used for Heavy Resume. It has various features such as hot reloading for both the application and testing, the ability to record user actions for playback later, as well as a functioning dev container with databases and everything set up and ready to go.
 
-    <!--hvy:expandable:content {}-->
-
      <!--hvy:text {"css":"margin: 0.35rem 0;"}-->
       [Visit webpage](https://github.com) (github.com)
-
-    <!--hvy:expandable:content {}-->
 
      <!--hvy:skills-and-tools-tech-list {"css":"margin: 0.5rem 0 0;","gridColumns":2}-->
 
@@ -1240,7 +1227,7 @@ component_defs:
 
      <!--hvy:table {"css":"margin: 0; margin-top: -1px;","tableColumns":"PROJECT, DATE","tableShowHeader":false,"tableRows":[{"cells":["Autonomous Agent Hackathon","08/2023 - 08/2023"]}]}-->
 
-    <!--hvy:expandable:content {}-->
+    <!--hvy:expandable:content {"css": "padding: 0.5rem"}-->
 
      <!--hvy:grid {"css":"margin: 0 0 0.35rem;","gridColumns":2}-->
 
@@ -1254,17 +1241,11 @@ component_defs:
        <!--hvy:text {"css":"margin: 0; text-align: right;"}-->
         08/2023 - 08/2023
 
-    <!--hvy:expandable:content {}-->
-
      <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
       Hackathon project that involved using SuperAGI to do deep research. I had the idea, wrote all of the code, and did a substantial portion of the video presentation.
 
-    <!--hvy:expandable:content {}-->
-
      <!--hvy:text {"css":"margin: 0.35rem 0;"}-->
       [Visit webpage](https://lablab.ai) (lablab.ai)
-
-    <!--hvy:expandable:content {}-->
 
      <!--hvy:skills-and-tools-tech-list {"css":"margin: 0.5rem 0 0;","gridColumns":2}-->
 
@@ -1365,12 +1346,8 @@ component_defs:
        <!--hvy:text {"css":"margin: 0; text-align: right;"}-->
         09/2019 - 06/2023
 
-    <!--hvy:expandable:content {}-->
-
      <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
       Focused on systems programming, developer tooling, and human-computer interaction while building software for research and product-oriented team projects.
-
-    <!--hvy:expandable:content {}-->
 
      <!--hvy:skills-and-tools-tech-list {"css":"margin: 0.5rem 0 0;","gridColumns":2}-->
 
@@ -1408,8 +1385,6 @@ component_defs:
 
      <!--hvy:text {"css":"margin: 0.5rem 0 0.25rem;"}-->
       #### Classes
-
-    <!--hvy:expandable:content {}-->
 
      <!--hvy:component-list {"componentListComponent":"text","css":"margin: 0;"}-->
 

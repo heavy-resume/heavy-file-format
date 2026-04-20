@@ -348,10 +348,10 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       const contentHtml = block.schema.expandableContentBlocks.children
         .map((innerBlock) => renderPassiveEditorBlock(sectionKey, innerBlock, rootSections))
         .join('');
-      const stubToggle = `<div class="expandable-pane expandable-pane-stub" style="${stubPaneStyle}"><div class="expand-stub-toggle" data-action="toggle-editor-expandable" data-section-key="${deps.escapeAttr(
+      const stubToggle = `<div class="expandable-pane expandable-pane-stub"><div class="expand-stub-toggle" style="${stubPaneStyle}" data-action="toggle-editor-expandable" data-section-key="${deps.escapeAttr(
         sectionKey
       )}" data-block-id="${deps.escapeAttr(block.id)}" aria-expanded="${expanded ? 'true' : 'false'}"><div class="expand-stub">${stubHtml}</div></div></div>`;
-      const expandedPanel = `<div class="expandable-pane expandable-pane-expanded" style="${contentPaneStyle}"><div class="expand-content">${contentHtml}</div></div>`;
+      const expandedPanel = `<div class="expandable-pane expandable-pane-expanded"><div class="expand-content" style="${contentPaneStyle}">${contentHtml}</div></div>`;
       const body = expanded
         ? alwaysShowStub
           ? `${stubToggle}${expandedPanel}`

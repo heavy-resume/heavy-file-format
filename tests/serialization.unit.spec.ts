@@ -266,3 +266,34 @@ test('round-trips migrated example files without reintroducing slot-level compon
     expect(output, path).not.toMatch(/<!--hvy:skills-and-tools-tech-list \{[^]*?<!--hvy:grid \{\}-->/);
   }
 });
+
+test('resume education record keeps C/C++ inside the education tools list', async () => {
+  const fs = await import('node:fs/promises');
+  const input = await fs.readFile('examples/resume.hvy', 'utf8');
+  const document = deserializeDocument(input, '.hvy');
+  const educationSection = document.sections.find((section) => section.customId === 'education');
+
+  expect(educationSection).toBeTruthy();
+  const educationList = educationSection!.blocks.find((block) => block.schema.component === 'component-list');
+  expect(educationList).toBeTruthy();
+  expect(educationList.schema.component).toBe('component-list');
+
+  const educationRecord = educationList.schema.componentListBlocks[0];
+  expect(educationRecord.schema.component).toBe('education-record');
+
+  const skillsToolsBlock = educationRecord.schema.expandableContentBlocks.children.find(
+    (block) => block.schema.component === 'skills-and-tools-tech-list'
+  );
+  expect(skillsToolsBlock).toBeTruthy();
+  expect(skillsToolsBlock!.schema.gridItems).toHaveLength(2);
+
+  const toolsList = skillsToolsBlock!.schema.gridItems[1]?.block;
+  expect(toolsList?.schema.component).toBe('component-list');
+
+  const toolTitles = toolsList!.schema.componentListBlocks
+    .filter((block) => block.schema.component === 'xref-card')
+    .map((block) => block.schema.xrefTitle);
+
+  expect(toolTitles).toContain('Python');
+  expect(toolTitles).toContain('C/C++');
+});

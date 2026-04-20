@@ -446,6 +446,8 @@ component_defs:
 
   <!--hvy:component-list:0 {"id":"skill-software-engineering","component":"skill-record","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
+  <!--hvy:expandable {}-->
+
    <!--hvy:expandable:0 {"component":"text","css":"margin: 0;"}-->
     Software Engineering
 
@@ -484,6 +486,8 @@ component_defs:
 
   <!--hvy:component-list:1 {"id":"skill-reverse-engineering","component":"skill-record","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
+  <!--hvy:expandable {}-->
+
    <!--hvy:expandable:0 {"component":"text","css":"margin: 0;"}-->
     Reverse Engineering
 
@@ -507,6 +511,8 @@ component_defs:
     <!--hvy:component-list:0 {"component":"xref-card","css":"margin: 0.25rem 0;","xrefTitle":"Heavy Stack","xrefDetail":"05/2024 - present","xrefTarget":"project-heavy-stack"}-->
 
   <!--hvy:component-list:2 {"id":"skill-library-development","component":"skill-record","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+
+  <!--hvy:expandable {}-->
 
    <!--hvy:expandable:0 {"component":"text","css":"margin: 0;"}-->
     Library Development
@@ -532,6 +538,8 @@ component_defs:
 
   <!--hvy:component-list:3 {"id":"skill-llm-prompt-engineering","component":"skill-record","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
+  <!--hvy:expandable {}-->
+
    <!--hvy:expandable:0 {"component":"text","css":"margin: 0;"}-->
     LLM Prompt Engineering
 
@@ -555,6 +563,8 @@ component_defs:
     <!--hvy:component-list:0 {"component":"xref-card","css":"margin: 0.25rem 0;","xrefTitle":"Autonomous Agent Hackathon","xrefDetail":"08/2023 - 08/2023","xrefTarget":"project-autonomous-agent-hackathon"}-->
 
   <!--hvy:component-list:4 {"id":"skill-project-management","component":"skill-record","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+
+  <!--hvy:expandable {}-->
 
    <!--hvy:expandable:0 {"component":"text","css":"margin: 0;"}-->
     Project Management
@@ -588,6 +598,8 @@ component_defs:
 
   <!--hvy:component-list:0 {"id":"tool-typescript","component":"skill-record","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
+  <!--hvy:expandable {}-->
+
    <!--hvy:expandable:0 {"component":"text","css":"margin: 0;"}-->
     TypeScript
 
@@ -611,6 +623,8 @@ component_defs:
     <!--hvy:component-list:0 {"component":"xref-card","css":"margin: 0.25rem 0;","xrefTitle":"Heavy Stack","xrefDetail":"05/2024 - present","xrefTarget":"project-heavy-stack"}-->
 
   <!--hvy:component-list:1 {"id":"tool-python","component":"skill-record","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+
+  <!--hvy:expandable {}-->
 
    <!--hvy:expandable:0 {"component":"text","css":"margin: 0;"}-->
     Python
@@ -645,6 +659,8 @@ component_defs:
 
   <!--hvy:component-list:2 {"id":"tool-c-cpp","component":"skill-record","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
+  <!--hvy:expandable {}-->
+
    <!--hvy:expandable:0 {"component":"text","css":"margin: 0;"}-->
     C/C++
 
@@ -668,6 +684,8 @@ component_defs:
     <!--hvy:component-list:0 {"component":"xref-card","css":"margin: 0.25rem 0;","xrefTitle":"B.S. Computer Science","xrefDetail":"University of Washington","xrefTarget":"education-bs-computer-science"}-->
 
   <!--hvy:component-list:3 {"id":"tool-developer-containers","component":"skill-record","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+
+  <!--hvy:expandable {}-->
 
    <!--hvy:expandable:0 {"component":"text","css":"margin: 0;"}-->
     Developer Containers
@@ -695,6 +713,8 @@ component_defs:
 
   <!--hvy:component-list:4 {"id":"tool-openai-api","component":"skill-record","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
+  <!--hvy:expandable {}-->
+
    <!--hvy:expandable:0 {"component":"text","css":"margin: 0;"}-->
     OpenAI API
 
@@ -719,6 +739,8 @@ component_defs:
 
   <!--hvy:component-list:5 {"id":"tool-github-codespaces","component":"skill-record","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
+  <!--hvy:expandable {}-->
+
    <!--hvy:expandable:0 {"component":"text","css":"margin: 0;"}-->
     GitHub Codespaces
 
@@ -742,6 +764,8 @@ component_defs:
     <!--hvy:component-list:0 {"component":"xref-card","css":"margin: 0.25rem 0;","xrefTitle":"Autonomous Agent Hackathon","xrefDetail":"08/2023 - 08/2023","xrefTarget":"project-autonomous-agent-hackathon"}-->
 
   <!--hvy:component-list:6 {"id":"tool-superagi","component":"skill-record","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+
+  <!--hvy:expandable {}-->
 
    <!--hvy:expandable:0 {"component":"text","css":"margin: 0;"}-->
     SuperAGI
@@ -777,18 +801,20 @@ component_defs:
 
   <!--hvy:component-list:0 {"id":"history-northwind-labs-senior-software-engineer","component":"history-record","css":"margin: 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
+  <!--hvy:expandable {}-->
+
    <!--hvy:expandable:0 {"component":"table","css":"margin: 0;  margin-top: -1px;","tableColumns":"YEAR, ORGANIZATION, TITLE","tableShowHeader":false,"tableRows":[{"cells":["2024","Northwind Labs","Senior Software Engineer"]}]}-->
 
    <!--hvy:expandable:1 {"component":"text","css":"margin: 0 0 0.35rem;"}-->
     ### Senior Software Engineer
 
-   <!--hvy:expandable:1 {"component":"grid","css":"margin: 0.35rem 0;","gridColumns":2}-->
+    <!--hvy:grid {"component":"grid","css":"margin: 0.35rem 0;","gridColumns":2}-->
 
-    <!--hvy:grid:0 {"id":"history-location","column":"left","component":"text","css":"margin: 0;"}-->
-     Seattle, WA
+      <!--hvy:grid:0 {"id":"history-location","column":"left","component":"text","css":"margin: 0;"}-->
+      Seattle, WA
 
-    <!--hvy:grid:1 {"id":"history-date-range","column":"right","component":"text","css":"margin: 0; text-align: right;"}-->
-     05/2024 - present
+      <!--hvy:grid:1 {"id":"history-date-range","column":"right","component":"text","css":"margin: 0; text-align: right;"}-->
+      05/2024 - present
 
    <!--hvy:expandable:1 {"component":"text","css":"margin: 0.35rem 0; font-weight: 700;"}-->
     Platform and AI Infrastructure Lead
@@ -810,29 +836,31 @@ component_defs:
     <!--hvy:component-list:2 {"component":"text","css":"margin: 0.25rem 0;"}-->
      Partnered with design and product to ship AI-assisted editor workflows with measurable adoption.
 
-   <!--hvy:expandable:1 {"component":"skills-and-tools-tech-list","css":"margin: 0.5rem 0 0;","gridColumns":2}-->
+   <!--hvy:expandable:1 {"component":"skills-and-tools-tech-list"}-->
 
-    <!--hvy:grid:0 {"id":"history-skills","column":"left","component":"component-list","componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
+    <!--hvy:grid {"css":"margin: 0.5rem 0 0;","gridColumns":2}-->
 
-     <!--hvy:component-list:0 {"component":"text","css":"margin: 0 0 0.25rem;"}-->
-      #### Skills
+      <!--hvy:grid:0 {"id":"history-skills","column":"left","component":"component-list","componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
 
-     <!--hvy:component-list:1 {"component":"xref-card","css":"margin: 0.25rem 0;","xrefTitle":"Software Engineering","xrefTarget":"skill-software-engineering"}-->
+      <!--hvy:component-list:0 {"component":"text","css":"margin: 0 0 0.25rem;"}-->
+        #### Skills
 
-     <!--hvy:component-list:2 {"component":"xref-card","css":"margin: 0.25rem 0;","xrefTitle":"Library Development","xrefTarget":"skill-library-development"}-->
+      <!--hvy:component-list:1 {"component":"xref-card","css":"margin: 0.25rem 0;","xrefTitle":"Software Engineering","xrefTarget":"skill-software-engineering"}-->
 
-     <!--hvy:component-list:3 {"component":"xref-card","css":"margin: 0.25rem 0;","xrefTitle":"Project Management","xrefTarget":"skill-project-management"}-->
+      <!--hvy:component-list:2 {"component":"xref-card","css":"margin: 0.25rem 0;","xrefTitle":"Library Development","xrefTarget":"skill-library-development"}-->
 
-    <!--hvy:grid:1 {"id":"history-tools-technologies","column":"right","component":"component-list","componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
+      <!--hvy:component-list:3 {"component":"xref-card","css":"margin: 0.25rem 0;","xrefTitle":"Project Management","xrefTarget":"skill-project-management"}-->
 
-     <!--hvy:component-list:0 {"component":"text","css":"margin: 0 0 0.25rem;"}-->
-      #### Tools & Technologies
+      <!--hvy:grid:1 {"id":"history-tools-technologies","column":"right","component":"component-list","componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
 
-     <!--hvy:component-list:1 {"component":"xref-card","css":"margin: 0.25rem 0;","xrefTitle":"TypeScript","xrefTarget":"tool-typescript"}-->
+      <!--hvy:component-list:0 {"component":"text","css":"margin: 0 0 0.25rem;"}-->
+        #### Tools & Technologies
 
-     <!--hvy:component-list:2 {"component":"xref-card","css":"margin: 0.25rem 0;","xrefTitle":"Python","xrefTarget":"tool-python"}-->
+      <!--hvy:component-list:1 {"component":"xref-card","css":"margin: 0.25rem 0;","xrefTitle":"TypeScript","xrefTarget":"tool-typescript"}-->
 
-     <!--hvy:component-list:3 {"component":"xref-card","css":"margin: 0.25rem 0;","xrefTitle":"Developer Containers","xrefTarget":"tool-developer-containers"}-->
+      <!--hvy:component-list:2 {"component":"xref-card","css":"margin: 0.25rem 0;","xrefTitle":"Python","xrefTarget":"tool-python"}-->
+
+      <!--hvy:component-list:3 {"component":"xref-card","css":"margin: 0.25rem 0;","xrefTitle":"Developer Containers","xrefTarget":"tool-developer-containers"}-->
 
 <!--hvy: {"id":"projects","lock":true}-->
 #! Projects
@@ -846,9 +874,13 @@ component_defs:
 
   <!--hvy:component-list:0 {"id":"project-heavy-stack","component":"project-record","css":"margin: 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
+  <!--hvy:expandable {}-->
+
    <!--hvy:expandable:0 {"component":"table","css":"margin: 0;  margin-top: -1px;","tableColumns":"PROJECT, DATE","tableShowHeader":false,"tableRows":[{"cells":["Heavy Stack","05/2024 - present"]}]}-->
 
    <!--hvy:expandable:1 {"component":"grid","css":"margin: 0 0 0.35rem;","gridColumns":2}-->
+
+   <!--hvy:grid {}-->
 
     <!--hvy:grid:0 {"id":"project-title","column":"left","component":"text","css":"margin: 0;"}-->
      ### Heavy Stack
@@ -863,6 +895,8 @@ component_defs:
     [Visit webpage](https://github.com) (github.com)
 
    <!--hvy:expandable:1 {"component":"skills-and-tools-tech-list","css":"margin: 0.5rem 0 0;","gridColumns":2}-->
+
+   <!--hvy:grid {}-->
 
     <!--hvy:grid:0 {"id":"project-relevant-skills","column":"left","component":"component-list","componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
 
@@ -886,9 +920,13 @@ component_defs:
 
   <!--hvy:component-list:1 {"id":"project-autonomous-agent-hackathon","component":"project-record","css":"margin: 0; gap: 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
+  <!--hvy:expandable {}-->
+
    <!--hvy:expandable:0 {"component":"table","css":"margin: 0; margin-top: -1px;","tableColumns":"PROJECT, DATE","tableShowHeader":false,"tableRows":[{"cells":["Autonomous Agent Hackathon","08/2023 - 08/2023"]}]}-->
 
    <!--hvy:expandable:1 {"component":"grid","css":"margin: 0 0 0.35rem;","gridColumns":2}-->
+
+   <!--hvy:grid {}-->
 
     <!--hvy:grid:0 {"id":"project-title-hackathon","column":"left","component":"text","css":"margin: 0;"}-->
      ### Autonomous Agent Hackathon
@@ -903,6 +941,8 @@ component_defs:
     [Visit webpage](https://lablab.ai) (lablab.ai)
 
    <!--hvy:expandable:1 {"component":"skills-and-tools-tech-list","css":"margin: 0.5rem 0 0;","gridColumns":2}-->
+
+   <!--hvy:grid {}-->
 
     <!--hvy:grid:0 {"id":"project-relevant-skills-hackathon","column":"left","component":"component-list","componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
 
@@ -940,9 +980,13 @@ component_defs:
 
   <!--hvy:component-list:0 {"id":"education-bs-computer-science","component":"education-record","css":"margin: 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
+  <!--hvy:expandable {}-->
+
    <!--hvy:expandable:0 {"component":"table","css":"margin: 0; margin-top: -1px;","tableColumns":"DEGREE, INSTITUTION, LOCATION","tableShowHeader":false,"tableRows":[{"cells":["B.S. Computer Science","University of Washington","Seattle, WA"]}]}-->
 
    <!--hvy:expandable:1 {"component":"grid","css":"margin: 0.35rem 0;","gridColumns":2}-->
+
+   <!--hvy:grid {}-->
 
     <!--hvy:grid:0 {"id":"education-institution-details","column":"left","component":"component-list","componentListComponent":"text","css":"margin: 0;"}-->
 
@@ -965,6 +1009,8 @@ component_defs:
     Focused on systems programming, developer tooling, and human-computer interaction while building software for research and product-oriented team projects.
 
    <!--hvy:expandable:1 {"component":"skills-and-tools-tech-list","css":"margin: 0.5rem 0 0;","gridColumns":2}-->
+
+   <!--hvy:grid {}-->
 
     <!--hvy:grid:0 {"id":"education-relevant-skills","column":"left","component":"component-list","componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
 

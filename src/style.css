@@ -735,11 +735,11 @@ button.tiny {
   padding: 0.2rem 0.35rem;
   border-radius: 0;
   cursor: pointer;
-  transition: background 120ms ease, box-shadow 120ms ease;
+  transition: background-color 120ms ease, box-shadow 120ms ease;
 }
 
 .editor-block-passive:hover {
-  background: color-mix(in srgb, var(--hvy-surface) 76%, var(--hvy-surface-tint) 24%);
+  background-color: color-mix(in srgb, var(--hvy-surface) 76%, var(--hvy-surface-tint) 24%);
   box-shadow: inset 0 0 0 1px var(--hvy-border-input);
 }
 
@@ -1441,7 +1441,7 @@ button.tiny {
 }
 
 .expandable-collapsed-preview-button:hover {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0) 0%, var(--hvy-highlight-1) 100%);
+  background: linear-gradient(180deg, transparent 0%, var(--hvy-highlight-1) 100%);
 }
 
 .expandable-collapsed-preview-button .editor-block-passive,
@@ -1456,7 +1456,7 @@ button.tiny {
   position: absolute;
   inset: auto 0 0;
   height: 2rem;
-  background: linear-gradient(to bottom, rgba(251, 253, 255, 0), var(--hvy-surface-alt));
+  background: linear-gradient(to bottom, transparent, var(--hvy-surface-alt));
 }
 
 .expandable-collapsed-empty {
@@ -1846,7 +1846,7 @@ button.tiny {
 
 .expand-stub-toggle,
 .expand-collapse-strip {
-  transition: box-shadow 120ms ease, background 120ms ease;
+  transition: box-shadow 120ms ease, background-color 120ms ease;
   position: relative;
   z-index: 0;
 }
@@ -1862,7 +1862,7 @@ button.tiny {
 .expand-stub-toggle:hover,
 .expand-collapse-strip:hover {
   box-shadow: 0 0 0 1px var(--hvy-focus-ring), 0 0 14px var(--hvy-focus-glow);
-  background: color-mix(in srgb, var(--hvy-surface) 92%, var(--hvy-surface-tint) 8%);
+  background-color: color-mix(in srgb, var(--hvy-surface) 92%, var(--hvy-surface-tint) 8%);
   position: relative;
   z-index: 3;
 }

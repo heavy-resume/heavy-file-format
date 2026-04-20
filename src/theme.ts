@@ -3,6 +3,7 @@ import type { ThemeConfig } from './types';
 import type { JsonObject } from './hvy/types';
 
 export type { ThemeConfig };
+export type ColorMode = 'light' | 'dark';
 
 export const THEME_COLOR_NAMES: readonly string[] = [
   '--hvy-bg',
@@ -47,9 +48,40 @@ export const THEME_COLOR_NAMES: readonly string[] = [
   '--hvy-success-border',
 ];
 
+let colorModeMediaQuery: MediaQueryList | null = null;
+let colorModeListener: ((event: MediaQueryListEvent) => void) | null = null;
+
+export function getPreferredColorMode(): ColorMode {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+    return 'light';
+  }
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
+
+export function applyColorMode(mode: ColorMode = getPreferredColorMode()): void {
+  document.documentElement.classList.toggle('theme-dark', mode === 'dark');
+}
+
+export function initColorModeSync(): void {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+    return;
+  }
+  if (colorModeMediaQuery && colorModeListener) {
+    return;
+  }
+
+  colorModeMediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+  colorModeListener = (event: MediaQueryListEvent) => {
+    applyColorMode(event.matches ? 'dark' : 'light');
+  };
+  colorModeMediaQuery.addEventListener('change', colorModeListener);
+}
+
 export function applyTheme(): void {
   const theme = getThemeConfig();
   const root = document.documentElement;
+
+  applyColorMode();
 
   // Remove all previously applied user override inline properties.
   const stale: string[] = [];

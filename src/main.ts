@@ -9,7 +9,7 @@ import { getTemplateFields, renderTemplatePanel } from './editor/template';
 import { state, initState, initCallbacks, incrementRenderCount, incrementRefreshReaderCount } from './state';
 import type { AppState } from './types';
 import { escapeAttr, escapeHtml } from './utils';
-import { applyTheme, getThemeConfig } from './theme';
+import { applyTheme, getThemeConfig, initColorModeSync } from './theme';
 import { flattenSections, findSectionByKey, findDuplicateSectionIds, getSectionId, formatSectionTitle, isDefaultUntitledSectionTitle } from './section-ops';
 import { renderComponentOptions, renderReusableSectionOptions, getComponentDefs, getSectionDefs, isBuiltinComponent } from './component-defs';
 import { renderOption } from './utils';
@@ -380,6 +380,7 @@ initCallbacks({
 });
 
 try {
+  initColorModeSync();
   renderApp();
 } catch (error) {
   const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error);

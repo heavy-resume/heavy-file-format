@@ -1,0 +1,87 @@
+---
+hvy_version: 0.1
+title: Reference Implementation Demo
+---
+
+<!--hvy: {"id":"welcome"}-->
+#! Welcome
+
+<!--hvy:text {"css":"margin: 0.5rem 0;"}-->
+This is a **visual HVY editor**. What you see in the editor is the primary authoring experience.
+
+<!--hvy:quote {"css":"margin: 0.5rem 0;"}-->
+Design the format like a document, not a form.
+
+<!--hvy:code {"codeLanguage":"ts","css":"margin: 0.5rem 0;"}-->
+export const demo = 'HVY';
+
+<!--hvy:expandable {"css":"margin: 0.5rem 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+
+ <!--hvy:expandable:stub {}-->
+
+  <!--hvy:table {"css":"margin: 0.5rem 0;","tableColumns":"Column 1, Column 2","tableShowHeader":true,"tableRows":[]}-->
+
+ <!--hvy:expandable:content {}-->
+
+  <!--hvy:container {"css":"margin: 0.5rem 0;"}-->
+
+ <!--hvy:table {"css":"margin: 0.5rem 0;","tableColumns":"Feature, Status","tableShowHeader":true,"tableRows":[{"cells":["Inline editing","Ready"],"expanded":false,"clickable":true,"detailsTitle":"Inline editing details","detailsContent":"Headers, cells, and row details are all editable directly in the proof of concept."}]}-->
+
+  <!--hvy:table:0:0 {}-->
+
+   <!--hvy:container {"css":"margin: 0.5rem 0;"}-->
+
+<!--hvy:container {"css":"margin: 0.5rem 0;"}-->
+Containers are good defaults for subsections and grouped notes.
+
+<!--hvy:grid {"css":"margin: 0.5rem 0;","gridColumns":2}-->
+
+ <!--hvy:grid:0 {"id":"griditem-demo-a","column":"left"}-->
+
+  <!--hvy:text {}-->
+   Grid item A
+
+ <!--hvy:grid:1 {"id":"griditem-demo-b","column":"right"}-->
+
+  <!--hvy:text {}-->
+   Grid item B
+
+<!--hvy:plugin {"css":"margin: 0.5rem 0;","pluginUrl":"https://example.com/plugin"}-->
+
+<!--hvy:table {"css":"margin: 0;","tableColumns":"Area, Owner, Status","tableShowHeader":true,"tableRows":[]}-->
+
+<!--hvy:expandable {"css":"margin: 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+
+ <!--hvy:expandable:stub {}-->
+
+  <!--hvy:table {"css":"margin: 0;","tableColumns":"Area, Owner, Status","tableShowHeader":false,"tableRows":[{"cells":["Parser migration","Avery","In progress"],"expanded":false,"clickable":true,"detailsTitle":"","detailsContent":""},{"cells":["Schema cleanup","Drew","Ready"],"expanded":false,"clickable":true,"detailsTitle":"","detailsContent":""},{"cells":["Grid polish","Nina","Queued"],"expanded":false,"clickable":true,"detailsTitle":"","detailsContent":""}]}-->
+
+ <!--hvy:expandable:content {}-->
+
+  <!--hvy:container {"css":"margin: 0;"}-->
+
+   <!--hvy:container:0 {}-->
+
+    <!--hvy:text {"css":"margin: 0;"}-->
+     These rows belong to the first workstream. Expand it to capture rollout notes, risks, and the next checkpoint.
+
+<!--hvy:expandable {"css":"margin: 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+
+ <!--hvy:expandable:stub {}-->
+
+  <!--hvy:table {"css":"margin: 0;","tableColumns":"Area, Owner, Status","tableShowHeader":false,"tableRows":[{"cells":["Release cut","Mika","Blocked"],"expanded":false,"clickable":true,"detailsTitle":"","detailsContent":""}]}-->
+
+ <!--hvy:expandable:content {}-->
+
+  <!--hvy:container {"css":"margin: 0;"}-->
+
+   <!--hvy:container:0 {}-->
+
+    <!--hvy:text {"css":"margin: 0;"}-->
+     This final row group shows how a single summary row can expand into the full explanation, decision history, or unblock plan.
+
+<!--hvy:subsection {"id":"try-it","highlight":true,"custom_css":"margin: 0.5rem 0;"}-->
+#! Container Subsection
+
+<!--hvy:container {"css":"margin: 0.5rem 0;"}-->
+Subsections now start as plain container sections.

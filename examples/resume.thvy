@@ -1,0 +1,466 @@
+---
+hvy_version: 0.1
+template: true
+title: Resume Template
+theme:
+  colors:
+    --hvy-bg: "#f5f9ff"
+    --hvy-bg-alt: "#eef3fa"
+    --hvy-surface: "#ffffff"
+    --hvy-surface-alt: "#f9fcff"
+    --hvy-surface-tint: "#d9eaf4"
+    --hvy-text: "#1a2530"
+    --hvy-text-alt: "#4b5c67"
+    --hvy-text-muted: "#6b8fa0"
+    --hvy-accent-1: "#2c5e78"
+    --hvy-accent-1-alt: "#1f4f63"
+    --hvy-accent-1-text: "#000000"
+    --hvy-accent-2: "#325f6e"
+    --hvy-accent-2-alt: "#244355"
+    --hvy-button-bg: "#4a8fab"
+    --hvy-button-text: "#000000"
+    --hvy-link-color: "#162f3d"
+    --hvy-highlight-1: "rgba(31, 122, 140, 0.15)"
+    --hvy-highlight-2: "rgba(255, 214, 102, 0.35)"
+    --hvy-border: "#ced9e2"
+    --hvy-border-alt: "#b8c8d3"
+    --hvy-border-input: "#c8d4dd"
+    --hvy-border-translucent: "rgba(206, 217, 226, 0.92)"
+    --hvy-xref-card-bg: "#f3f5f8"
+    --hvy-xref-card-hover-bg: "#eef8fb"
+    --hvy-table-header: "#e5e7eb"
+    --hvy-table-row-bg-1: "#ffffff"
+    --hvy-table-row-bg-2: "#f9fafb"
+    --hvy-icon-muted: "rgba(26, 37, 48, 0.33)"
+    --hvy-shadow: "rgba(39, 70, 91, 0.08)"
+    --hvy-shadow-md: "rgba(39, 70, 91, 0.12)"
+    --hvy-shadow-lg: "rgba(39, 70, 91, 0.14)"
+    --hvy-overlay: "rgba(15, 23, 32, 0.4)"
+    --hvy-danger: "#a64040"
+    --hvy-warning: "#c79200"
+    --hvy-warning-bg: "#fff3de"
+    --hvy-warning-border: "#ebca8d"
+    --hvy-warning-accent: "#e2b100"
+    --hvy-success: "#1c6231"
+    --hvy-success-bg: "#e7f9ee"
+    --hvy-success-border: "#95d8a9"
+component_defs:
+  - name: history-record
+    baseType: expandable
+    description: Expandable resume history record
+    schema:
+      css: "margin: 0;"
+      expandableAlwaysShowStub: true
+      expandableExpanded: false
+      expandableStubBlocks:
+        lock: true
+        children:
+          - text: ""
+            schema:
+              component: table
+              css: "margin: 0;"
+              tableColumns: "YEAR, ORGANIZATION, TITLE"
+              tableShowHeader: false
+              tableRows:
+                - cells: ["", "", ""]
+      expandableContentBlocks:
+        lock: true
+        css: "padding: 0.5rem;"
+        children:
+          - text: ""
+            schema:
+              component: text
+              css: "margin: 0 0 0.35rem;"
+          - text: ""
+            schema:
+              component: grid
+              css: "margin: 0.35rem 0;"
+              gridColumns: 2
+              gridItems:
+                - id: history-location
+                  column: left
+                  block:
+                    text: ""
+                    schema:
+                      component: text
+                      css: "margin: 0;"
+                - id: history-date-range
+                  column: right
+                  block:
+                    text: ""
+                    schema:
+                      component: text
+                      css: "margin: 0; text-align: right;"
+          - text: ""
+            schema:
+              component: text
+              css: "margin: 0.35rem 0; font-weight: 700;"
+          - text: ""
+            schema:
+              component: text
+              css: "margin: 0.35rem 0;"
+          - text: "#### Accomplishments"
+            schema:
+              component: text
+              css: "margin: 0.5rem 0 0.25rem;"
+          - text: ""
+            schema:
+              component: component-list
+              componentListComponent: text
+              css: "margin: 0;"
+              componentListBlocks: []
+          - component: skills-and-tools-tech-list
+  - name: skills-and-tools-tech-list
+    baseType: grid
+    description: Two-column skills and tools list
+    schema:
+      css: "margin: 0.5rem 0 0;"
+      gridColumns: 2
+      gridItems:
+        - id: relevant-skills
+          column: left
+          align: center
+          block:
+            text: ""
+            schema:
+              component: component-list
+              componentListComponent: xref-card
+              css: "margin: 0;"
+              componentListBlocks:
+                - text: "#### Relevant Skills"
+                  schema:
+                    component: text
+                    css: "margin: 0 0 0.25rem;"
+        - id: tools-technologies
+          column: right
+          align: center
+          block:
+            text: ""
+            schema:
+              component: component-list
+              componentListComponent: xref-card
+              css: "margin: 0;"
+              componentListBlocks:
+                - text: "#### Tools and Technologies"
+                  schema:
+                    component: text
+                    css: "margin: 0 0 0.25rem;"
+  - name: education-record
+    baseType: expandable
+    description: Expandable education record
+    schema:
+      css: "margin: 0;"
+      expandableAlwaysShowStub: true
+      expandableExpanded: false
+      expandableStubBlocks:
+        lock: true
+        children:
+          - text: ""
+            schema:
+              component: table
+              css: "margin: 0;"
+              tableColumns: "DEGREE, INSTITUTION, LOCATION"
+              tableShowHeader: false
+              tableRows:
+                - cells: ["", "", ""]
+      expandableContentBlocks:
+        lock: true
+        css: "padding: 0.5rem;"
+        children:
+          - text: ""
+            schema:
+              component: grid
+              css: "margin: 0.35rem 0;"
+              gridColumns: 2
+              gridItems:
+                - id: education-institution-details
+                  column: left
+                  block:
+                    text: ""
+                    schema:
+                      component: component-list
+                      componentListComponent: text
+                      css: "margin: 0;"
+                      componentListBlocks:
+                        - text: ""
+                          schema:
+                            component: text
+                            css: "margin: 0 0 0.25rem;"
+                            placeholder: "Degree Title"
+                - id: education-date-range
+                  column: right
+                  block:
+                    text: ""
+                    schema:
+                      component: text
+                      css: "margin: 0; text-align: right;"
+                      placeholder: "Start Year – End Year"
+          - text: ""
+            schema:
+              component: text
+              css: "margin: 0.5rem 0;"
+              placeholder: "Description"
+          - component: skills-and-tools-tech-list
+          - text: "#### Classes"
+            schema:
+              component: text
+              css: "margin: 0.5rem 0 0.25rem;"
+          - text: ""
+            schema:
+              component: component-list
+              componentListComponent: text
+              css: "margin: 0;"
+              componentListBlocks: []
+  - name: project-record
+    baseType: expandable
+    description: Expandable project record
+    schema:
+      css: "margin: 0;"
+      expandableAlwaysShowStub: true
+      expandableExpanded: false
+      expandableStubBlocks:
+        lock: true
+        css: "padding: 0.5rem;"
+        children:
+          - text: ""
+            schema:
+              component: table
+              css: "margin: 0;"
+              tableColumns: "PROJECT, DATE"
+              tableShowHeader: false
+              tableRows:
+                - cells: ["", ""]
+      expandableContentBlocks:
+        lock: true
+        children:
+          - text: ""
+            schema:
+              component: grid
+              css: "margin: 0 0 0.35rem;"
+              gridColumns: 2
+              gridItems:
+                - id: project-title
+                  column: left
+                  block:
+                    text: ""
+                    schema:
+                      component: text
+                      css: "margin: 0;"
+                - id: project-date-range
+                  column: right
+                  block:
+                    text: ""
+                    schema:
+                      component: text
+                      css: "margin: 0; text-align: right;"
+          - text: ""
+            schema:
+              component: text
+              css: "margin: 0.5rem 0;"
+          - text: ""
+            schema:
+              component: text
+              css: "margin: 0.35rem 0;"
+          - component: skills-and-tools-tech-list
+  - name: skill-record-experience-section
+    baseType: container
+    description: Skill record experience section
+    schema:
+      css: "margin: 0;"
+
+      containerBlocks:
+        - text: "#### Experience"
+          schema:
+            component: text
+            css: "margin: 0.4rem 0 0.1rem;"
+        - text: ""
+          schema:
+            component: component-list
+            css: "margin: 0;"
+            componentListComponent: xref-card
+            componentListBlocks: []
+  - name: skill-record-education-section
+    baseType: container
+    description: Skill record education section
+    schema:
+      css: "margin: 0;"
+
+      containerBlocks:
+        - text: "#### Education"
+          schema:
+            component: text
+            css: "margin: 0.4rem 0 0.1rem;"
+        - text: ""
+          schema:
+            component: component-list
+            css: "margin: 0;"
+            componentListComponent: xref-card
+            componentListBlocks: []
+  - name: skill-record-projects-section
+    baseType: container
+    description: Skill record projects section
+    schema:
+      css: "margin: 0;"
+
+      containerBlocks:
+        - text: "#### Projects"
+          schema:
+            component: text
+            css: "margin: 0.4rem 0 0.1rem;"
+        - text: ""
+          schema:
+            component: component-list
+            css: "margin: 0;"
+            componentListComponent: xref-card
+            componentListBlocks: []
+  - name: skill-record-section
+    baseType: container
+    description: Reusable skill record section with heading and repeatable entries
+    schema:
+      css: "margin: 0;"
+      containerBlocks:
+        - text: ""
+          schema:
+            component: text
+            css: "margin: 0.4rem 0 0.1rem;"
+            placeholder: "#### Section title"
+        - text: ""
+          schema:
+            component: component-list
+            css: "margin: 0;"
+            componentListComponent: skill-record-entry
+            componentListBlocks: []
+  - name: skill-record
+    baseType: expandable
+    description: Skill record
+    schema:
+      css: "margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);"
+      expandableStubBlocks:
+        lock: true
+        children:
+          - text: ""
+            schema:
+              component: text
+              css: "margin: 0;"
+              placeholder: "Skill name"
+      expandableContentBlocks:
+        lock: false
+        children:
+          - text: "#### Description"
+            schema:
+              component: text
+              css: "margin: 0.4rem 0 0.1rem;"
+          - text: ""
+            css: "margin-left: 0.5rem;"
+            schema:
+              component: text
+              css: "margin: 0 0 0.35rem; margin-left: 0.5rem;"
+              placeholder: "What is it?"
+          - text: "#### Notes"
+            schema:
+              component: text
+              css: "margin: 0.4rem 0 0.1rem;"
+          - text: ""
+            schema:
+              component: text
+              css: "margin: 0 0 0.35rem; margin-left: 0.5rem;"
+              placeholder: "Notes"
+          - component: skill-record-experience-section
+          - component: skill-record-education-section
+          - component: skill-record-projects-section
+---
+
+<!--hvy: {"id":"header","lock":true,"contained":false}-->
+#! Info
+
+ <!--hvy:text {"css":"margin-bottom: 0;","align":"center","placeholder":"# Name"}-->
+
+ <!--hvy:text {"css":"margin-top: 0;","align":"center","placeholder":"[pronunciation]"}-->
+
+ <!--hvy:text {"css":"margin: 0.5rem 0; margin-top: 1rem;","align":"center","placeholder":"title"}-->
+
+<!--hvy: {"id":"summary","lock":true,"contained":false,"custom_css":"padding: 0 0.35rem;"}-->
+#! Summary
+
+ <!--hvy:expandable {"css":"margin: 0.5rem 0;","expandableAlwaysShowStub":true,"expandableExpanded":false,"lock":true}-->
+
+  <!--hvy:expandable:stub {"lock":true}-->
+
+   <!--hvy:text {"css":"margin-bottom: 0;"}-->
+     ## Summary
+
+  <!--hvy:expandable:stub {"lock":true}-->
+
+   <!--hvy:text {"css":"margin-top: 0;"}-->
+
+  <!--hvy:expandable:content {"lock":true}-->
+
+   <!--hvy:component-list {"componentListComponent":"text","css":"margin: 0;"}-->
+
+<!--hvy: {"id":"locations","lock":true}-->
+#! Locations
+
+ <!--hvy:text {"css":"margin: 0.5rem 0;","lock":true}-->
+  **Location:**
+
+ <!--hvy:text {"css":"margin: 0.5rem 0;","lock":true}-->
+  **Target Location(s):**
+
+<!--hvy: {"id":"top-skills-tools-technologies","lock":true}-->
+#! Top Skills, Tools, and Technologies
+
+ <!--hvy:grid {"css":"margin: 0.5rem 0; gap: 0.75rem;","gridColumns":2,"lock":true}-->
+  <!--hvy:grid:0 {"id":"top-skills","column":"left"}-->
+
+   <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
+    ## Skills
+  <!--hvy:grid:1 {"id":"top-tools-technologies","column":"right"}-->
+
+   <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
+    ## Tools & Technologies
+
+<!--hvy: {"id":"skills","lock":true,"expanded":false,"location":"sidebar"}-->
+#! Skills
+
+ <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
+  # Skills
+
+ <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"skill-record"}-->
+
+<!--hvy: {"id":"tools-technologies","lock":true,"expanded":false,"location":"sidebar"}-->
+#! Tools & Technologies
+
+ <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
+  # Tools & Technologies
+
+ <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"skill-record"}-->
+
+<!--hvy: {"id":"history","lock":true}-->
+#! History
+
+ <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
+  # History
+
+ <!--hvy:table {"css":"margin: 0.5rem 0 0;","tableColumns":"YEAR, ORGANIZATION, TITLE","tableShowHeader":true,"tableRows":[],"lock":true}-->
+
+ <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"history-record"}-->
+
+<!--hvy: {"id":"projects","lock":true}-->
+#! Projects
+
+ <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
+  # Projects
+
+ <!--hvy:table {"css":"margin: 0.5rem 0 0;","tableColumns":"PROJECT, DATE","tableShowHeader":true,"tableRows":[],"lock":true}-->
+
+ <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"project-record"}-->
+
+<!--hvy: {"id":"education","lock":true}-->
+#! Education
+
+ <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
+  # Education
+
+ <!--hvy:table {"css":"margin: 0.5rem 0 0;","tableColumns":"DEGREE, INSTITUTION, LOCATION","tableShowHeader":true,"tableRows":[],"lock":true}-->
+
+ <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"education-record"}-->

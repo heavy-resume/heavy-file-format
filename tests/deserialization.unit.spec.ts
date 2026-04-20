@@ -46,14 +46,14 @@ hvy_version: 0.1
 <!--hvy: {"id":"summary"}-->
 #! Summary
 
- <!--hvy:expandable {"expandableAlwaysShowStub":true,"expandableExpanded":false,"expandableStubCss":"padding: 0.25rem 0;","expandableContentCss":"margin-top: 0.5rem;"}-->
+ <!--hvy:expandable {"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
-  <!--hvy:expandable:stub {}-->
+  <!--hvy:expandable:stub {"css":"padding: 0.25rem 0;"}-->
 
    <!--hvy:text {}-->
     Stub
 
-  <!--hvy:expandable:content {}-->
+  <!--hvy:expandable:content {"css":"margin-top: 0.5rem;"}-->
 
    <!--hvy:text {}-->
     Content

@@ -381,14 +381,12 @@ component_defs:
 <!--hvy: {"id":"summary","lock":true,"contained":false,"custom_css":"padding: 0 0.35rem;"}-->
 #! Summary
 
- <!--hvy:expandable {"css":"margin: 0.5rem 0;","expandableAlwaysShowStub":true,"expandableExpanded":false,"lock":true}-->
+ <!--hvy:expandable {"css":"margin: 0.5rem 0;padding:0.5rem;","expandableAlwaysShowStub":true,"expandableExpanded":false,"lock":true}-->
 
   <!--hvy:expandable:stub {"lock":true}-->
 
    <!--hvy:text {"css":"margin-bottom: 0;"}-->
     ## Summary
-
-  <!--hvy:expandable:stub {"lock":true}-->
 
    <!--hvy:text {"css":"margin-top: 0;"}-->
     Product-minded software engineer focused on developer tooling, AI workflows, and reusable systems that make complex products easier to ship and maintain.
@@ -412,7 +410,7 @@ component_defs:
      <!--hvy:text {"css":"margin: 0;"}-->
       Enjoys turning messy, high-context problems into repeatable systems and clear documentation.
 
-<!--hvy: {"id":"locations","lock":true}-->
+<!--hvy: {"id":"locations","lock":true,"contained":false,}-->
 #! Locations
 
  <!--hvy:text {"css":"margin: 0.5rem 0;","lock":true}-->

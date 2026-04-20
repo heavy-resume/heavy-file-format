@@ -280,7 +280,7 @@ Rules:
 - The payload MUST be valid JSON object.
 - The directive applies to the immediately following content block.
 - `hvy:expandable` starts an expandable block. Its payload is the expandable block schema, with `component:"expandable"` implied.
-- `hvy:expandable:stub` and `hvy:expandable:content` are slot markers. Their payload may be empty or include only slot metadata such as `lock`.
+- `hvy:expandable:stub` and `hvy:expandable:content` are slot markers. Their payload may be empty or include only slot metadata such as `lock` and `css`.
 - The child block for an expandable slot is declared one indentation level deeper as its own directive.
 - Multiple `hvy:expandable:stub` or `hvy:expandable:content` directives can be used for a single expandable block.
 - `hvy:grid` starts a grid block. Its payload is the grid block schema, with `component:"grid"` implied.
@@ -348,7 +348,23 @@ expandableStubBlocks:
 
 The `children` array uses the same recursive block object shape as other nested block arrays.
 
-`expandableStubCss` and `expandableContentCss` are optional inline CSS style strings applied to the rendered stub pane wrapper and expanded-content pane wrapper, respectively. This is in addition to the expandable block's own `css`, which applies to the outer expandable component wrapper.
+For inline HVY serialization, stub-pane and content-pane CSS belong on the slot markers themselves:
+
+```markdown
+<!--hvy:expandable {"css":"margin: 0.5rem 0;"}-->
+
+ <!--hvy:expandable:stub {"css":"padding: 0.5rem;"}-->
+
+  <!--hvy:text {}-->
+   Stub content
+
+ <!--hvy:expandable:content {"css":"padding: 0.5rem;"}-->
+
+  <!--hvy:text {}-->
+   Expanded content
+```
+
+In the in-memory/schema form used by `component_defs`, these pane-level styles are stored as `expandableStubCss` and `expandableContentCss`. The expandable block's own `css` still applies to the outer expandable component wrapper.
 
 Serialized block objects SHOULD contain document data only. Editor-only UI state, such as whether a schema editor is open for a block, MUST NOT be emitted.
 

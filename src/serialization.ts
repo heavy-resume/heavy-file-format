@@ -312,8 +312,8 @@ function parseBlocks(contentMarkdown: string, sectionMeta: JsonObject, documentM
         const parent = findOrCreateParentFrame('expandable');
         const part: 0 | 1 = rawParts[0] === 'stub' ? 0 : 1;
         const keys = Object.keys(parsed);
-        const lockOnly = keys.every((key) => key === 'lock');
-        if (!lockOnly) {
+        const slotMetadataOnly = keys.every((key) => key === 'lock' || key === 'css' || key === 'customCss' || key === 'custom_css');
+        if (!slotMetadataOnly) {
           return;
         }
         if (parsed.lock === true) {
@@ -322,6 +322,19 @@ function parseBlocks(contentMarkdown: string, sectionMeta: JsonObject, documentM
           } else {
             parent.schema.expandableContentBlocks.lock = true;
           }
+        }
+        const slotCss =
+          typeof parsed.css === 'string'
+            ? parsed.css
+            : typeof parsed.customCss === 'string'
+            ? parsed.customCss
+            : typeof parsed.custom_css === 'string'
+            ? parsed.custom_css
+            : '';
+        if (part === 0) {
+          parent.schema.expandableStubCss = slotCss;
+        } else {
+          parent.schema.expandableContentCss = slotCss;
         }
         frames.push({
           kind: 'slot-expandable',
@@ -619,8 +632,6 @@ function serializeBlockSchema(
   if (component === 'expandable') {
     addIfChanged(payload, 'expandableAlwaysShowStub', schema.expandableAlwaysShowStub, defaults.expandableAlwaysShowStub);
     addIfChanged(payload, 'expandableExpanded', schema.expandableExpanded, defaults.expandableExpanded);
-    addIfChanged(payload, 'expandableStubCss', schema.expandableStubCss, defaults.expandableStubCss);
-    addIfChanged(payload, 'expandableContentCss', schema.expandableContentCss, defaults.expandableContentCss);
     // Stub/content blocks are serialized as nested block directives, not inline in schema JSON.
   }
   if (component === 'table') {
@@ -679,11 +690,23 @@ function serializeSlotWithChild(name: string, schema: JsonObject, child: VisualB
   return [serializeSlotDirective(name, schema, indent), serializeBlock(child, indent + 1)].join('\n\n');
 }
 
-function serializeExpandablePartBlock(block: VisualBlock, part: 0 | 1, lock: boolean, indent: number): string {
+function buildExpandablePartPayload(expandableBlock: VisualBlock, part: 0 | 1, lock: boolean): JsonObject {
+  const payload: JsonObject = {};
+  const css = part === 0 ? expandableBlock.schema.expandableStubCss : expandableBlock.schema.expandableContentCss;
+  if (lock) {
+    payload.lock = true;
+  }
+  if (css.trim().length > 0) {
+    payload.css = css;
+  }
+  return payload;
+}
+
+function serializeExpandablePartBlock(expandableBlock: VisualBlock, child: VisualBlock, part: 0 | 1, lock: boolean, indent: number): string {
   return serializeSlotWithChild(
     `expandable:${part === 0 ? 'stub' : 'content'}`,
-    lock ? { lock: true } : {},
-    block,
+    buildExpandablePartPayload(expandableBlock, part, lock),
+    child,
     indent
   );
 }
@@ -717,11 +740,13 @@ function serializeNestedBlocks(block: VisualBlock, indent: number): string {
   if (component === 'expandable') {
     const stub = block.schema.expandableStubBlocks;
     const content = block.schema.expandableContentBlocks;
-    const stubBlocks = stub.children.map((innerBlock) => serializeExpandablePartBlock(innerBlock, 0, stub.lock, indent));
-    const contentBlocks = content.children.map((innerBlock) => serializeExpandablePartBlock(innerBlock, 1, content.lock, indent));
-    const stubPart = stub.children.length === 0 && stub.lock ? [serializeSlotDirective('expandable:stub', { lock: true }, indent)] : stubBlocks;
+    const stubBlocks = stub.children.map((innerBlock) => serializeExpandablePartBlock(block, innerBlock, 0, stub.lock, indent));
+    const contentBlocks = content.children.map((innerBlock) => serializeExpandablePartBlock(block, innerBlock, 1, content.lock, indent));
+    const stubPayload = buildExpandablePartPayload(block, 0, stub.lock);
+    const contentPayload = buildExpandablePartPayload(block, 1, content.lock);
+    const stubPart = stub.children.length === 0 && Object.keys(stubPayload).length > 0 ? [serializeSlotDirective('expandable:stub', stubPayload, indent)] : stubBlocks;
     const contentPart =
-      content.children.length === 0 && content.lock ? [serializeSlotDirective('expandable:content', { lock: true }, indent)] : contentBlocks;
+      content.children.length === 0 && Object.keys(contentPayload).length > 0 ? [serializeSlotDirective('expandable:content', contentPayload, indent)] : contentBlocks;
     return [...stubPart, ...contentPart].join('\n\n');
   }
   if (component === 'grid') {

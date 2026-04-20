@@ -137,7 +137,7 @@ export const renderExpandableReader: ComponentReaderRenderer = (section, block, 
   const toggleAttrs = `data-reader-action="toggle-expandable" data-section-key="${helpers.escapeAttr(section.key)}" data-block-id="${helpers.escapeAttr(
     block.id
   )}" aria-expanded="${expanded ? 'true' : 'false'}"`;
-  const stubToggle = `<div class="expandable-pane expandable-pane-stub" style="${stubPaneStyle}">
+  const stubToggle = `<div class="expandable-reader-pane expandable-reader-pane-stub" style="${stubPaneStyle}">
     <div class="expand-stub-toggle" ${toggleAttrs}>
       <div class="expand-stub">${stubHtml}</div>
     </div>
@@ -145,8 +145,8 @@ export const renderExpandableReader: ComponentReaderRenderer = (section, block, 
   const contentToggleAttrs = `data-reader-action="toggle-expandable" data-expandable-content="true" data-section-key="${helpers.escapeAttr(section.key)}" data-block-id="${helpers.escapeAttr(block.id)}" aria-expanded="true"`;
   const body = expanded
     ? alwaysShowStub
-      ? `${stubToggle}<div class="expandable-pane expandable-pane-expanded" style="${contentPaneStyle}"><div class="expand-content" ${contentToggleAttrs}>${contentHtml}</div></div>`
-      : `<div class="expandable-pane expandable-pane-expanded" style="${contentPaneStyle}"><div class="expand-content" ${contentToggleAttrs}>${contentHtml}</div></div>`
+      ? `${stubToggle}<div class="expandable-reader-pane expandable-reader-pane-expanded" style="${contentPaneStyle}"><div class="expand-content" ${contentToggleAttrs}>${contentHtml}</div></div>`
+      : `<div class="expandable-reader-pane expandable-reader-pane-expanded" style="${contentPaneStyle}"><div class="expand-content" ${contentToggleAttrs}>${contentHtml}</div></div>`
     : stubToggle;
   return `<div class="expandable-reader is-interactive" data-expandable-id="${helpers.escapeAttr(block.id)}">
     <div class="expandable-reader-body">${body}</div>

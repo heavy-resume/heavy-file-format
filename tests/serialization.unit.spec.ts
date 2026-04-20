@@ -45,7 +45,7 @@ hvy_version: 0.1
   expect(output).not.toMatch(/<!--hvy:component-list:\d+\s+\{[^\n>]*"component"/);
 });
 
-test('serializes expandable stub and content css fields on the parent expandable block', () => {
+test('serializes expandable stub and content css fields on the expandable slot markers', () => {
   const input = `---
 hvy_version: 0.1
 ---
@@ -53,14 +53,14 @@ hvy_version: 0.1
 <!--hvy: {"id":"summary"}-->
 #! Summary
 
- <!--hvy:expandable {"expandableAlwaysShowStub":true,"expandableExpanded":false,"expandableStubCss":"padding: 0.25rem 0;","expandableContentCss":"margin-top: 0.5rem;"}-->
+ <!--hvy:expandable {"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
-  <!--hvy:expandable:stub {}-->
+  <!--hvy:expandable:stub {"css":"padding: 0.25rem 0;"}-->
 
    <!--hvy:text {}-->
     Stub
 
-  <!--hvy:expandable:content {}-->
+  <!--hvy:expandable:content {"css":"margin-top: 0.5rem;"}-->
 
    <!--hvy:text {}-->
     Content
@@ -69,8 +69,10 @@ hvy_version: 0.1
   const document = deserializeDocument(input, '.hvy');
   const output = serializeWithState(document);
 
-  expect(output).toContain('"expandableStubCss":"padding: 0.25rem 0;"');
-  expect(output).toContain('"expandableContentCss":"margin-top: 0.5rem;"');
+  expect(output).toContain('<!--hvy:expandable:stub {"css":"padding: 0.25rem 0;"}-->');
+  expect(output).toContain('<!--hvy:expandable:content {"css":"margin-top: 0.5rem;"}-->');
+  expect(output).not.toContain('"expandableStubCss"');
+  expect(output).not.toContain('"expandableContentCss"');
 });
 
 test('custom grid components use direct grid slots without an extra grid wrapper', () => {

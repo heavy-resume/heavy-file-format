@@ -1889,6 +1889,10 @@ button.tiny {
   border-left-color: var(--hvy-expandable-expanded);
 }
 
+.expandable-reader-pane {
+  min-width: 0;
+}
+
 .expand-stub-toggle,
 .expand-collapse-strip {
   transition: box-shadow 120ms ease, background-color 120ms ease;

@@ -35,6 +35,7 @@ function mapParsedSection(section: HvySection, documentMeta: JsonObject): Visual
   return {
     key: makeId('section'),
     customId,
+    contained: sectionMeta.contained !== false,
     lock: sectionMeta.lock === true,
     idEditorOpen: false,
     isGhost: false,
@@ -526,6 +527,9 @@ function serializeSection(section: VisualSection, level: number): string {
     expanded: section.expanded,
     highlight: section.highlight,
   };
+  if (!section.contained) {
+    meta.contained = false;
+  }
   if (section.customCss.trim().length > 0) {
     meta.custom_css = section.customCss;
   }

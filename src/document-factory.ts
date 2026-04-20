@@ -195,6 +195,7 @@ export function createEmptySection(level: number, component = 'container', isGho
   return {
     key: makeId('section'),
     customId: '',
+    contained: true,
     lock: false,
     idEditorOpen: false,
     isGhost,
@@ -271,6 +272,7 @@ function cloneReusableSectionWithDelta(section: VisualSection, levelDelta: numbe
   return {
     key: makeId('section'),
     customId: '',
+    contained: section.contained !== false,
     idEditorOpen: false,
     isGhost: false,
     title: section.title,

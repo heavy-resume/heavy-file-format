@@ -205,11 +205,13 @@ Section metadata also includes optional presentation keys such as:
 - `expanded`
 - `highlight`
 - `lock`
+- `contained`
 - `custom_css`
 - `location`
 
 `custom_css` is an optional inline CSS style string applied to the rendered section wrapper.
 `lock` is an optional boolean. Use it to prevent adding new blocks or child sections inside that section.
+`contained` is an optional boolean. When `true` (default), render the section as the normal bordered card/container and allow collapse/expand UI. When `false`, render the section edge-to-edge without the section border/background wrapper and without the section expander/collapser.
 `location` is an optional string. Use it to route a section to a named layout zone in the viewer. Defined values are `"main"` (default) and `"sidebar"`. Unknown values SHOULD be treated as `"main"`.
 
 ### 5.7 Block directives
@@ -387,6 +389,7 @@ section_defs:
     template:
       title: FAQ
       level: 2
+      contained: true
       expanded: true
       highlight: false
       css: ""
@@ -401,6 +404,7 @@ section_defs:
 Notes:
 - `template` stores a full section subtree, including blocks and nested child sections.
 - Clone a `section_defs[*].template` when inserting a new section or subsection.
+- Reusable section templates preserve section-level presentation fields such as `contained`, `expanded`, `highlight`, `custom_css`, and `location`.
 - Implementations SHOULD assign fresh section keys, block IDs, and custom IDs when instantiating a reusable section.
 - Plain Markdown renderers ignore `section_defs`.
 

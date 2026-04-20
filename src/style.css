@@ -1576,6 +1576,13 @@ button.tiny {
   position: relative;
 }
 
+.reader-section.is-uncontained {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
+}
+
 .reader-section-head {
   display: flex;
   justify-content: flex-end;
@@ -1653,6 +1660,15 @@ button.tiny {
 .reader-section.is-collapsed-preview:hover {
   border-color: var(--hvy-text-muted);
   box-shadow: 0 0 0 3px var(--hvy-shadow);
+}
+
+.reader-section.is-uncontained.is-collapsed-preview {
+  cursor: default;
+}
+
+.reader-section.is-uncontained.is-collapsed-preview:hover {
+  border-color: transparent;
+  box-shadow: none;
 }
 
 .reader-block {

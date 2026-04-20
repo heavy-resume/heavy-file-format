@@ -68,6 +68,7 @@ export type SectionLocation = 'main' | 'sidebar';
 export interface VisualSection {
   key: string;
   customId: string;
+  contained: boolean;
   lock: boolean;
   idEditorOpen: boolean;
   isGhost: boolean;

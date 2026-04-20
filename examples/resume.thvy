@@ -367,7 +367,7 @@ component_defs:
           - component: skill-record-projects-section
 ---
 
-<!--hvy: {"id":"header","lock":true}-->
+<!--hvy: {"id":"header","lock":true,"contained":false}-->
 #! Info
 
  <!--hvy:text {"css":"margin-bottom: 0;","align":"center","placeholder":"# Name"}-->
@@ -376,7 +376,7 @@ component_defs:
 
  <!--hvy:text {"css":"margin: 0.5rem 0; margin-top: 1rem;","align":"center","placeholder":"title"}-->
 
-<!--hvy: {"id":"summary","lock":true}-->
+<!--hvy: {"id":"summary","lock":true,"contained":false,"custom_css":"padding: 0 0.35rem;"}-->
 #! Summary
 
  <!--hvy:expandable {"css":"margin: 0.5rem 0;","expandableAlwaysShowStub":true,"expandableExpanded":false,"lock":true}-->

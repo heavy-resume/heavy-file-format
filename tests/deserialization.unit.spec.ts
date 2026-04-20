@@ -38,6 +38,25 @@ hvy_version: 0.1
   expect(block.schema.expandableContentBlocks.children[0]?.text).toBe('Expanded detail');
 });
 
+test('deserializes uncontained section metadata', () => {
+  const input = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary","contained":false,"custom_css":"padding: 0 0.35rem;"}-->
+#! Summary
+
+ <!--hvy:text {}-->
+  Summary body
+`;
+
+  const document = deserializeDocument(input, '.hvy');
+  const section = document.sections[0];
+
+  expect(section?.contained).toBe(false);
+  expect(section?.customCss).toBe('padding: 0 0.35rem;');
+});
+
 test('deserializes custom expandable components nested under component-list slots', () => {
   const input = `---
 hvy_version: 0.1

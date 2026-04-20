@@ -143,6 +143,27 @@ hvy_version: 0.1
   ]);
 });
 
+test('serializes uncontained section metadata without changing section shape on round-trip', () => {
+  const input = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary","contained":false,"custom_css":"padding: 0 0.35rem;"}-->
+#! Summary
+
+ <!--hvy:text {}-->
+  Summary body
+`;
+
+  const document = deserializeDocument(input, '.hvy');
+  const output = serializeWithState(document);
+  const roundTripped = deserializeDocument(output, '.hvy');
+
+  expect(output).toContain('<!--hvy: {"id":"summary","lock":false,"expanded":true,"highlight":false,"contained":false,"custom_css":"padding: 0 0.35rem;"}-->');
+  expect(roundTripped.sections[0]?.contained).toBe(false);
+  expect(roundTripped.sections[0]?.customCss).toBe('padding: 0 0.35rem;');
+});
+
 test('round-trips migrated example files without reintroducing slot-level component fields', async () => {
   const fs = await import('node:fs/promises');
   const files: Array<[string, '.hvy' | '.thvy']> = [

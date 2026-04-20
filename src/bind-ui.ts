@@ -1186,6 +1186,15 @@ export function bindUi(app: HTMLElement): void {
       return;
     }
 
+    if (field === 'section-contained' && target instanceof HTMLInputElement) {
+      if (!section) {
+        return;
+      }
+      section.contained = target.checked;
+      getRefreshReaderPanels()();
+      return;
+    }
+
     if (field === 'section-expanded' && target instanceof HTMLInputElement) {
       if (!section) {
         return;

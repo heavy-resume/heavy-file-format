@@ -95,24 +95,27 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     const temp = state.tempHighlights.has(effectiveId);
     const classList = [
       'reader-section',
-      section.expanded ? '' : 'is-collapsed-preview',
+      section.contained ? '' : 'is-uncontained',
+      !section.contained || section.expanded ? '' : 'is-collapsed-preview',
       section.highlight ? 'is-highlighted' : '',
       temp ? 'is-temp-highlighted' : '',
     ]
       .filter(Boolean)
       .join(' ');
 
-    const contentClass = section.expanded ? 'reader-section-content' : 'reader-section-content reader-section-preview';
+    const contentClass = !section.contained || section.expanded ? 'reader-section-content' : 'reader-section-content reader-section-preview';
     const content = `<div class="${contentClass}">${section.blocks
       .map((block) => renderReaderBlock(section, block))
       .join('')}${section.children.filter((child) => !child.isGhost).map((child) => renderReaderSection(child)).join('')}</div>`;
 
-    const toggleAttrs = section.expanded
+    const toggleAttrs = section.contained && section.expanded
       ? ''
-      : ` data-reader-action="toggle-expand" data-section-key="${deps.escapeAttr(section.key)}"`;
+      : section.contained
+      ? ` data-reader-action="toggle-expand" data-section-key="${deps.escapeAttr(section.key)}"`
+      : '';
 
-    return `
-      <section id="${deps.escapeAttr(effectiveId)}" class="${classList}" style="${deps.escapeAttr(section.customCss)}"${toggleAttrs}>
+    const header = section.contained
+      ? `
         <header class="reader-section-head" aria-label="Section controls">
           <div class="reader-head-actions">
             <button type="button" class="tiny toggle-expand-button" data-reader-action="toggle-expand" data-section-key="${deps.escapeAttr(section.key)}" aria-label="${
@@ -120,6 +123,12 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
         }">${section.expanded ? '+' : '-'}</button>
           </div>
         </header>
+      `
+      : '';
+
+    return `
+      <section id="${deps.escapeAttr(effectiveId)}" class="${classList}" style="${deps.escapeAttr(section.customCss)}"${toggleAttrs}>
+        ${header}
         ${content}
       </section>
     `;
@@ -363,6 +372,17 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
                 data-field="section-description"
               >${deps.escapeHtml(section.description)}</textarea>
             </label>
+            <div style="display: flex;">
+              <label class="checkbox-label">
+                <input
+                  type="checkbox"
+                  data-section-key="${deps.escapeAttr(section.key)}"
+                  data-field="section-contained"
+                  ${section.contained ? 'checked' : ''}
+                />
+                Contained
+              </label>
+            </div>
           </div>
         </section>
       </div>

@@ -260,14 +260,15 @@ function parseBlocks(contentMarkdown: string, sectionMeta: JsonObject, documentM
         const part: 0 | 1 = rawParts[0] === 'stub' ? 0 : 1;
         const keys = Object.keys(parsed);
         const lockOnly = keys.length === 0 || (keys.length === 1 && keys[0] === 'lock');
-        if (parsed.lock === true) {
-          if (part === 0) {
-            parent.schema.expandableStubBlocks.lock = true;
-          } else {
-            parent.schema.expandableContentBlocks.lock = true;
-          }
-        }
         if (lockOnly) {
+          // Part-header directive: sets lock on the part itself. No block opened.
+          if (parsed.lock === true) {
+            if (part === 0) {
+              parent.schema.expandableStubBlocks.lock = true;
+            } else {
+              parent.schema.expandableContentBlocks.lock = true;
+            }
+          }
           return;
         }
         const schema = schemaFromUnknown(parsed);

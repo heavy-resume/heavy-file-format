@@ -1,7 +1,6 @@
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import TurndownService from 'turndown';
-import { escapeHtml } from './utils';
 
 marked.setOptions({ gfm: true, breaks: false });
 

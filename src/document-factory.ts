@@ -1,10 +1,10 @@
-import type { Align, BlockSchema, ExpandablePart, GridColumn, GridItem, Slot, TableRow, VisualBlock, VisualSection } from './editor/types';
+import type { Align, BlockSchema, ExpandablePart, Slot, TableRow, VisualBlock, VisualSection } from './editor/types';
 import type { JsonObject } from './hvy/types';
 import type { ComponentDefinition, VisualDocument } from './types';
 import { makeId } from './utils';
-import { getComponentDefs, getSectionDefs, isBuiltinComponentName, resolveBaseComponent } from './component-defs';
+import { getComponentDefs, getSectionDefs, resolveBaseComponent } from './component-defs';
 import { coerceGridColumn, coerceGridColumns, createGridItem as _createGridItem, parseGridItems as _parseGridItems } from './grid-ops';
-import { getTableColumns, splitColumns } from './table-ops';
+import { getTableColumns } from './table-ops';
 import { REUSABLE_SECTION_DEF_PREFIX } from './state';
 
 export function defaultBlockSchema(component = 'text'): BlockSchema {

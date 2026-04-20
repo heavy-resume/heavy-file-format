@@ -1,6 +1,6 @@
 import type { VisualBlock, VisualSection } from './editor/types';
 import { state, getRefreshReaderPanels } from './state';
-import { getSectionId, flattenSections } from './section-ops';
+import { getSectionId } from './section-ops';
 import { resolveBaseComponent } from './component-defs';
 import { createBlankDocument } from './document-factory';
 import { getRenderApp } from './state';

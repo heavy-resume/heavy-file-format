@@ -381,12 +381,18 @@ component_defs:
 
  <!--hvy:expandable {"css":"margin: 0.5rem 0;","expandableAlwaysShowStub":true,"expandableExpanded":false,"lock":true}-->
 
-  <!--hvy:expandable:stub {"component":"text","css":"margin-bottom: 0;","lock":true}-->
-    ## Summary
+  <!--hvy:expandable:stub {"lock":true}-->
 
-  <!--hvy:expandable:stub {"component":"text","css":"margin-top: 0;","lock":true}-->
+   <!--hvy:text {"css":"margin-bottom: 0;"}-->
+     ## Summary
 
-  <!--hvy:expandable:content {"component":"component-list","componentListComponent":"text","css":"margin: 0;","lock":true}-->
+  <!--hvy:expandable:stub {"lock":true}-->
+
+   <!--hvy:text {"css":"margin-top: 0;"}-->
+
+  <!--hvy:expandable:content {"lock":true}-->
+
+   <!--hvy:component-list {"componentListComponent":"text","css":"margin: 0;"}-->
 
 <!--hvy: {"id":"locations","lock":true}-->
 #! Locations
@@ -401,10 +407,14 @@ component_defs:
 #! Top Skills, Tools, and Technologies
 
  <!--hvy:grid {"css":"margin: 0.5rem 0; gap: 0.75rem;","gridColumns":2,"lock":true}-->
-  <!--hvy:grid:0 {"id":"top-skills","column":"left","component":"component-list","componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
-   ## Skills
-  <!--hvy:grid:1 {"id":"top-tools-technologies","column":"right","component":"component-list","componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
-   ## Tools & Technologies
+  <!--hvy:grid:0 {"id":"top-skills","column":"left"}-->
+
+   <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
+    ## Skills
+  <!--hvy:grid:1 {"id":"top-tools-technologies","column":"right"}-->
+
+   <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
+    ## Tools & Technologies
 
 <!--hvy: {"id":"skills","lock":true,"expanded":false,"location":"sidebar"}-->
 #! Skills

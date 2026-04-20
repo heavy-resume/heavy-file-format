@@ -3,9 +3,9 @@ import type { ComponentRenderHelpers } from './editor/component-helpers';
 import type { TagRenderOptions } from './editor/tag-editor';
 import { parseTags, serializeTags } from './editor/tag-editor';
 import { state, getRefreshReaderPanels, getRenderApp } from './state';
-import { getReusableNameFromSectionKey, getComponentDefs, isBuiltinComponent, renderComponentOptions, resolveBaseComponent } from './component-defs';
+import { getReusableNameFromSectionKey, getComponentDefs, renderComponentOptions } from './component-defs';
 import { findSectionByKey, findBlockContainerById } from './section-ops';
-import { getReusableTemplateByName, ensureContainerBlocks, ensureComponentListBlocks, ensureExpandableBlocks, ensureGridItems, applyComponentDefaults, createEmptyBlock, instantiateReusableBlock, coerceAlign, coerceSlot } from './document-factory';
+import { getReusableTemplateByName, ensureContainerBlocks, ensureComponentListBlocks, ensureGridItems, applyComponentDefaults, instantiateReusableBlock, coerceAlign, coerceSlot } from './document-factory';
 import { syncReusableTemplateForBlock } from './reusable';
 import { normalizeXrefTarget, getXrefTargetOptions, isXrefTargetValid } from './xref-ops';
 import { getTableColumns, setTableColumns } from './table-ops';
@@ -13,7 +13,6 @@ import { coerceGridColumns, coerceGridColumn } from './grid-ops';
 import { normalizeMarkdownLists, markdownToEditorHtml, turndown } from './markdown';
 import { escapeAttr, escapeHtml, getInlineEditableText, renderOption } from './utils';
 import { recordHistory } from './history';
-import type { Align } from './editor/types';
 
 export function findBlockByIds(sectionKey: string, blockId: string): VisualBlock | null {
   const reusableName = getReusableNameFromSectionKey(sectionKey);

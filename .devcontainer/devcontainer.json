@@ -12,7 +12,8 @@
       "extensions": [
         "ms-vscode.vscode-typescript-next",
         "dbaeumer.vscode-eslint",
-        "ms-playwright.playwright"
+        "ms-playwright.playwright",
+        "vitest.explorer"
       ],
       "settings": {
         "terminal.integrated.defaultProfile.linux": "bash"

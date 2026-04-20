@@ -228,11 +228,15 @@ Expandable blocks can be emitted with specialized directives so their stub and e
 ```markdown
 <!--hvy:expandable {"css":"margin: 0.5rem 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
-<!--hvy:expandable:stub {"component":"text","css":"margin-bottom: 0;"}-->
-## Summary
+ <!--hvy:expandable:stub {}-->
 
-<!--hvy:expandable:content {"component":"text","css":"margin: 0;"}-->
-- Expanded detail
+  <!--hvy:text {"css":"margin-bottom: 0;"}-->
+   ## Summary
+
+ <!--hvy:expandable:content {}-->
+
+  <!--hvy:text {"css":"margin: 0;"}-->
+   - Expanded detail
 ```
 
 Grid blocks can be emitted with specialized directives so grid item content remains normal block content:
@@ -240,17 +244,23 @@ Grid blocks can be emitted with specialized directives so grid item content rema
 ```markdown
 <!--hvy:grid {"css":"margin: 0.5rem 0; gap: 0.75rem;","gridColumns":2}-->
 
-<!--hvy:grid:0 {"id":"skills","column":"left","component":"component-list","componentListComponent":"text"}-->
+ <!--hvy:grid:0 {"id":"skills","column":"left"}-->
 
-<!--hvy:grid:1 {"id":"tools-technologies","column":"right","component":"component-list","componentListComponent":"text"}-->
+  <!--hvy:component-list {"componentListComponent":"text"}-->
+
+ <!--hvy:grid:1 {"id":"tools-technologies","column":"right"}-->
+
+  <!--hvy:component-list {"componentListComponent":"text"}-->
 ```
 
 When a `component-list` (or `container`) grid item has plain Markdown content before its first `hvy:component-list:N` (or `hvy:container:N`) directive, that content is implicitly treated as the first block in the list. This allows a text header to appear above list items without a wrapping directive:
 
 ```markdown
-<!--hvy:grid:0 {"id":"skills","column":"left","component":"component-list","componentListComponent":"xref-card"}-->
-## Skills
-<!--hvy:component-list:0 {"component":"text","css":"margin: 0 0 0.35rem;"}-->
+<!--hvy:grid:0 {"id":"skills","column":"left"}-->
+ <!--hvy:component-list {"componentListComponent":"xref-card"}-->
+  ## Skills
+  <!--hvy:component-list:0 {}-->
+   <!--hvy:text {"css":"margin: 0 0 0.35rem;"}-->
 ```
 
 Here `## Skills` becomes `componentListBlocks[0]` (an implicit text block) and the `component-list:0` item becomes `componentListBlocks[1]`.
@@ -266,11 +276,12 @@ Rules:
 - The payload MUST be valid JSON object.
 - The directive applies to the immediately following content block.
 - `hvy:expandable` starts an expandable block. Its payload is the expandable block schema, with `component:"expandable"` implied.
-- `hvy:expandable:stub` appends the immediately following content block to the expandable stub.
-- `hvy:expandable:content` appends the immediately following content block to the expanded content.
+- `hvy:expandable:stub` and `hvy:expandable:content` are slot markers. Their payload may be empty or include only slot metadata such as `lock`.
+- The child block for an expandable slot is declared one indentation level deeper as its own directive.
 - Multiple `hvy:expandable:stub` or `hvy:expandable:content` directives can be used for a single expandable block.
 - `hvy:grid` starts a grid block. Its payload is the grid block schema, with `component:"grid"` implied.
-- `hvy:grid:N` appends the immediately following content block to the grid at item index `N`. Its payload optionally includes grid item metadata such as `id` and `column`; `component` describes the item block component.
+- `hvy:grid:N`, `hvy:component-list:N`, `hvy:container:N`, and `hvy:table:R:D` are slot markers. Their payload contains slot metadata only; the actual child block is declared one indentation level deeper as its own directive.
+- Slot markers MUST NOT carry `component` or `type`. Documents that use the old slot-carried child-component form are malformed.
 - Plain Markdown content that appears after a `hvy:grid:N` (or standalone `hvy:component-list` / `hvy:container`) directive and before the first indexed sub-directive (`hvy:component-list:N`, `hvy:container:N`) is implicitly treated as the first block in that list or container.
 - If both `meta.blocks[n]` and a block directive describe the same logical block, `meta.blocks[n]` wins.
 
@@ -401,7 +412,7 @@ Parsers MUST use the leading whitespace count of a directive line to determine w
 | Top-level section directive (`<!--hvy: ...-->`) and `#!` title | 0 spaces |
 | Direct block directives inside a section | 1 space |
 | Content text of direct blocks | 2 spaces |
-| Sub-directives (`expandable:N`, `grid:N`, `component-list:N`) inside a direct block | 2 spaces |
+| Sub-directives (`expandable:stub`, `expandable:content`, `grid:N`, `component-list:N`) inside a direct block | 2 spaces |
 | Content text / nested directives inside a sub-directive | 3 spaces |
 | Each additional level of nesting | +1 space per level |
 
@@ -413,16 +424,24 @@ Example:
 
  <!--hvy:expandable {"expandableAlwaysShowStub":true}-->
 
-  <!--hvy:expandable:stub {"component":"text"}-->
-   ## Stub heading
+  <!--hvy:expandable:stub {}-->
 
-  <!--hvy:expandable:content {"component":"component-list","componentListComponent":"text"}-->
+   <!--hvy:text {}-->
+    ## Stub heading
 
-   <!--hvy:component-list:0 {"component":"text"}-->
-    First item
+  <!--hvy:expandable:content {}-->
 
-   <!--hvy:component-list:1 {"component":"text"}-->
-    Second item
+   <!--hvy:component-list {"componentListComponent":"text"}-->
+
+    <!--hvy:component-list:0 {}-->
+
+     <!--hvy:text {}-->
+      First item
+
+    <!--hvy:component-list:1 {}-->
+
+     <!--hvy:text {}-->
+      Second item
 ```
 
 Plain Markdown renderers ignore leading whitespace on comment lines.

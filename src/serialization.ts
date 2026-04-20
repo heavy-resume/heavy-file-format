@@ -63,11 +63,13 @@ function parseBlocks(contentMarkdown: string, sectionMeta: JsonObject, documentM
     | { kind: 'component-list'; parent: VisualBlock }
     | { kind: 'container'; parent: VisualBlock }
     | { kind: 'table-details'; parent: VisualBlock; rowIndex: number };
-  type StructuredFrame = {
-    block: VisualBlock;
-    attach: BlockAttach;
-    indent: number;
-  };
+  type StructuredFrame =
+    | { kind: 'component'; block: VisualBlock; attach: BlockAttach; indent: number }
+    | { kind: 'slot-expandable'; parent: VisualBlock; part: 0 | 1; indent: number }
+    | { kind: 'slot-grid'; parent: VisualBlock; meta: JsonObject; indent: number }
+    | { kind: 'slot-component-list'; parent: VisualBlock; indent: number }
+    | { kind: 'slot-container'; parent: VisualBlock; indent: number }
+    | { kind: 'slot-table-details'; parent: VisualBlock; rowIndex: number; indent: number };
 
   const blocks: VisualBlock[] = [];
   const frames: StructuredFrame[] = [];
@@ -97,14 +99,8 @@ function parseBlocks(contentMarkdown: string, sectionMeta: JsonObject, documentM
     // When plain text appears inside an open container frame (no explicit directive
     // set the attach), implicitly route it into that container rather than top level.
     let effectiveAttach = currentAttach;
-    if (!currentHasDirective && effectiveAttach.kind === 'top' && frames.length > 0) {
-      const topFrame = frames[frames.length - 1];
-      const base = resolveParsedBase(topFrame.block.schema.component);
-      if (base === 'component-list') {
-        effectiveAttach = { kind: 'component-list', parent: topFrame.block };
-      } else if (base === 'container') {
-        effectiveAttach = { kind: 'container', parent: topFrame.block };
-      }
+    if (!currentHasDirective && effectiveAttach.kind === 'top') {
+      effectiveAttach = getCurrentAttach();
     }
     const block: VisualBlock = {
       id: makeId('block'),
@@ -122,23 +118,28 @@ function parseBlocks(contentMarkdown: string, sectionMeta: JsonObject, documentM
   const closeFrame = (): void => {
     flush();
     const frame = frames.pop();
-    if (frame) {
+    if (frame?.kind === 'component') {
       attachBlock(frame.block, frame.attach);
     }
   };
 
   const closeFramesUntil = (parentBase: string | null): VisualBlock | undefined => {
     flush();
-    if (!parentBase) {
+    if (parentBase === null) {
       while (frames.length > 0) {
         closeFrame();
       }
       return undefined;
     }
-    while (frames.length > 0 && resolveParsedBase(frames[frames.length - 1].block.schema.component) !== parentBase) {
+    while (frames.length > 0) {
+      const frame = frames[frames.length - 1];
+      if (frame.kind === 'component' && resolveParsedBase(frame.block.schema.component) === parentBase) {
+        break;
+      }
       closeFrame();
     }
-    return frames[frames.length - 1]?.block;
+    const frame = frames[frames.length - 1];
+    return frame?.kind === 'component' ? frame.block : undefined;
   };
 
   const closeFramesAtOrAboveIndent = (indent: number): void => {
@@ -148,6 +149,36 @@ function parseBlocks(contentMarkdown: string, sectionMeta: JsonObject, documentM
     }
   };
 
+  const getCurrentAttach = (): BlockAttach => {
+    const frame = frames[frames.length - 1];
+    if (!frame) {
+      return { kind: 'top' };
+    }
+    if (frame.kind === 'slot-expandable') {
+      return { kind: 'expandable', parent: frame.parent, part: frame.part };
+    }
+    if (frame.kind === 'slot-grid') {
+      return { kind: 'grid', parent: frame.parent, meta: frame.meta };
+    }
+    if (frame.kind === 'slot-component-list') {
+      return { kind: 'component-list', parent: frame.parent };
+    }
+    if (frame.kind === 'slot-container') {
+      return { kind: 'container', parent: frame.parent };
+    }
+    if (frame.kind === 'slot-table-details') {
+      return { kind: 'table-details', parent: frame.parent, rowIndex: frame.rowIndex };
+    }
+    const base = resolveParsedBase(frame.block.schema.component);
+    if (base === 'component-list') {
+      return { kind: 'component-list', parent: frame.block };
+    }
+    if (base === 'container') {
+      return { kind: 'container', parent: frame.block };
+    }
+    return { kind: 'top' };
+  };
+
   const findOrCreateParentFrame = (parentBase: 'expandable' | 'grid' | 'component-list' | 'container' | 'table'): VisualBlock => {
     const parent = closeFramesUntil(parentBase);
     if (parent) {
@@ -155,9 +186,10 @@ function parseBlocks(contentMarkdown: string, sectionMeta: JsonObject, documentM
     }
     const fallback = createEmptyBlock(parentBase, true);
     frames.push({
+      kind: 'component',
       block: fallback,
       attach: { kind: 'top' },
-      indent: currentIndent,
+      indent: Math.max(0, currentIndent - 1),
     });
     return fallback;
   };
@@ -221,6 +253,7 @@ function parseBlocks(contentMarkdown: string, sectionMeta: JsonObject, documentM
     }
 
     frames.push({
+      kind: 'component',
       block: {
         id: makeId('block'),
         text: '',
@@ -240,9 +273,7 @@ function parseBlocks(contentMarkdown: string, sectionMeta: JsonObject, documentM
     }
 
     currentIndent = (line.match(/^( *)/) ?? ['', ''])[1].length;
-    if (currentIndent > 0) {
-      closeFramesAtOrAboveIndent(currentIndent);
-    }
+    closeFramesAtOrAboveIndent(currentIndent);
 
     const directive = (match[1] ?? 'block').toLowerCase();
     const [name, ...rawParts] = directive.split(':');
@@ -252,27 +283,27 @@ function parseBlocks(contentMarkdown: string, sectionMeta: JsonObject, documentM
     try {
       const parsed = JSON.parse(match[2] ?? '{}') as JsonObject;
 
-      // expandable:stub and expandable:content act as both slot markers (opening
-      // a child block) and — when the directive carries only { lock } — as
-      // part-header markers that set lock for that part without opening a block.
       if (name === 'expandable' && rawParts.length === 1 && (rawParts[0] === 'stub' || rawParts[0] === 'content')) {
         const parent = findOrCreateParentFrame('expandable');
         const part: 0 | 1 = rawParts[0] === 'stub' ? 0 : 1;
         const keys = Object.keys(parsed);
-        const lockOnly = keys.length === 0 || (keys.length === 1 && keys[0] === 'lock');
-        if (lockOnly) {
-          // Part-header directive: sets lock on the part itself. No block opened.
-          if (parsed.lock === true) {
-            if (part === 0) {
-              parent.schema.expandableStubBlocks.lock = true;
-            } else {
-              parent.schema.expandableContentBlocks.lock = true;
-            }
-          }
+        const lockOnly = keys.every((key) => key === 'lock');
+        if (!lockOnly) {
           return;
         }
-        const schema = schemaFromUnknown(parsed);
-        openOrQueueBlock(schema, { kind: 'expandable', parent, part });
+        if (parsed.lock === true) {
+          if (part === 0) {
+            parent.schema.expandableStubBlocks.lock = true;
+          } else {
+            parent.schema.expandableContentBlocks.lock = true;
+          }
+        }
+        frames.push({
+          kind: 'slot-expandable',
+          parent,
+          part,
+          indent: currentIndent,
+        });
         return;
       }
 
@@ -281,39 +312,52 @@ function parseBlocks(contentMarkdown: string, sectionMeta: JsonObject, documentM
       }
 
       if (name === 'grid' && indexes.length === 1) {
+        if (typeof parsed.component === 'string' || typeof parsed.type === 'string') {
+          return;
+        }
         const parent = findOrCreateParentFrame('grid');
-        const schema = schemaFromUnknown({
-          ...parsed,
-          component: typeof parsed.component === 'string' ? parsed.component : typeof parsed.type === 'string' ? parsed.type : 'text',
+        frames.push({
+          kind: 'slot-grid',
+          parent,
+          meta: parsed,
+          indent: currentIndent,
         });
-        openOrQueueBlock(schema, { kind: 'grid', parent, meta: parsed });
       } else if (name === 'component-list' && indexes.length === 1) {
+        if (typeof parsed.component === 'string' || typeof parsed.type === 'string') {
+          return;
+        }
         const parent = findOrCreateParentFrame('component-list');
-        const schema = schemaFromUnknown({
-          ...parsed,
-          component: typeof parsed.component === 'string' ? parsed.component : typeof parsed.type === 'string' ? parsed.type : parent.schema.componentListComponent,
+        frames.push({
+          kind: 'slot-component-list',
+          parent,
+          indent: currentIndent,
         });
-        openOrQueueBlock(schema, { kind: 'component-list', parent });
       } else if (name === 'container' && indexes.length === 1) {
+        if (typeof parsed.component === 'string' || typeof parsed.type === 'string') {
+          return;
+        }
         const parent = findOrCreateParentFrame('container');
-        const schema = schemaFromUnknown({
-          ...parsed,
-          component: typeof parsed.component === 'string' ? parsed.component : typeof parsed.type === 'string' ? parsed.type : 'text',
+        frames.push({
+          kind: 'slot-container',
+          parent,
+          indent: currentIndent,
         });
-        openOrQueueBlock(schema, { kind: 'container', parent });
       } else if (name === 'table' && indexes.length === 2) {
+        if (typeof parsed.component === 'string' || typeof parsed.type === 'string') {
+          return;
+        }
         const parent = findOrCreateParentFrame('table');
-        const schema = schemaFromUnknown({
-          ...parsed,
-          component: typeof parsed.component === 'string' ? parsed.component : typeof parsed.type === 'string' ? parsed.type : 'container',
+        frames.push({
+          kind: 'slot-table-details',
+          parent,
+          rowIndex: indexes[0],
+          indent: currentIndent,
         });
-        openOrQueueBlock(schema, { kind: 'table-details', parent, rowIndex: indexes[0] });
       } else {
-        closeFramesUntil(null);
         if (directive === 'block') {
-          openOrQueueBlock(schemaFromUnknown(parsed), { kind: 'top' });
+          openOrQueueBlock(schemaFromUnknown(parsed), getCurrentAttach());
         } else {
-          openOrQueueBlock(schemaFromUnknown({ ...parsed, component: directive }), { kind: 'top' });
+          openOrQueueBlock(schemaFromUnknown({ ...parsed, component: directive }), getCurrentAttach());
         }
       }
     } catch {
@@ -473,7 +517,7 @@ function serializeSection(section: VisualSection, level: number): string {
   const directive = `<!--hvy: ${JSON.stringify(meta)}-->`;
 
   const blockText = section.blocks
-    .map((block) => serializeBlock(block))
+    .map((block) => serializeBlock(block, 1))
     .join('\n\n');
 
   const children = section.children
@@ -561,12 +605,13 @@ function serializeBlockSchema(
 
 function serializeBlock(
   block: VisualBlock,
+  indent: number,
   override?: { name: string; schema?: JsonObject }
 ): string {
   const blockDirective = override ?? serializeBlockDirective(block.schema);
-  const schemaDirective = `<!--hvy:${blockDirective.name} ${JSON.stringify(blockDirective.schema)}-->`;
-  const nested = serializeNestedBlocks(block);
-  const text = block.text.trim();
+  const schemaDirective = `${' '.repeat(indent)}<!--hvy:${blockDirective.name} ${JSON.stringify(blockDirective.schema)}-->`;
+  const nested = serializeNestedBlocks(block, indent + 1);
+  const text = indentMultiline(block.text.trim(), indent + 1);
   return [schemaDirective, text, nested].filter((part) => part.length > 0).join('\n');
 }
 
@@ -584,72 +629,85 @@ function serializeBlockDirective(schema: BlockSchema): { name: string; schema: J
   };
 }
 
-function serializeExpandablePartBlock(block: VisualBlock, part: 0 | 1): string {
-  return serializeBlock(block, {
-    name: `expandable:${part === 0 ? 'stub' : 'content'}`,
-    schema: serializeBlockSchema(block.schema, nestedBlockOmitOptions(block.schema)),
-  });
+function indentMultiline(text: string, indent: number): string {
+  if (text.length === 0) {
+    return '';
+  }
+  const prefix = ' '.repeat(indent);
+  return text
+    .split('\n')
+    .map((line) => `${prefix}${line}`)
+    .join('\n');
 }
 
-function serializeGridItemBlock(item: GridItem, index: number): string {
-  const schema = serializeBlockSchema(item.block.schema, nestedBlockOmitOptions(item.block.schema));
-  schema.id = item.id;
-  schema.column = item.column;
-  return serializeBlock(item.block, {
-    name: `grid:${index}`,
-    schema,
-  });
+function serializeSlotDirective(name: string, schema: JsonObject, indent: number): string {
+  return `${' '.repeat(indent)}<!--hvy:${name} ${JSON.stringify(schema)}-->`;
 }
 
-function serializeComponentListItemBlock(block: VisualBlock, index: number): string {
-  return serializeBlock(block, {
-    name: `component-list:${index}`,
-    schema: serializeBlockSchema(block.schema, nestedBlockOmitOptions(block.schema)),
-  });
+function serializeSlotWithChild(name: string, schema: JsonObject, child: VisualBlock, indent: number): string {
+  return [serializeSlotDirective(name, schema, indent), serializeBlock(child, indent + 1)].join('\n\n');
 }
 
-function serializeContainerItemBlock(block: VisualBlock, index: number): string {
-  return serializeBlock(block, {
-    name: `container:${index}`,
-    schema: serializeBlockSchema(block.schema, nestedBlockOmitOptions(block.schema)),
-  });
+function serializeExpandablePartBlock(block: VisualBlock, part: 0 | 1, lock: boolean, indent: number): string {
+  return serializeSlotWithChild(
+    `expandable:${part === 0 ? 'stub' : 'content'}`,
+    lock ? { lock: true } : {},
+    block,
+    indent
+  );
 }
 
-function serializeTableDetailBlock(block: VisualBlock, rowIndex: number, detailIndex: number): string {
-  return serializeBlock(block, {
-    name: `table:${rowIndex}:${detailIndex}`,
-    schema: serializeBlockSchema(block.schema, nestedBlockOmitOptions(block.schema)),
-  });
+function serializeGridItemBlock(item: GridItem, index: number, indent: number): string {
+  return serializeSlotWithChild(
+    `grid:${index}`,
+    {
+      id: item.id,
+      column: item.column,
+    },
+    item.block,
+    indent
+  );
 }
 
-function serializeNestedBlocks(block: VisualBlock): string {
+function serializeComponentListItemBlock(block: VisualBlock, index: number, indent: number): string {
+  return serializeSlotWithChild(`component-list:${index}`, {}, block, indent);
+}
+
+function serializeContainerItemBlock(block: VisualBlock, index: number, indent: number): string {
+  return serializeSlotWithChild(`container:${index}`, {}, block, indent);
+}
+
+function serializeTableDetailBlock(block: VisualBlock, rowIndex: number, detailIndex: number, indent: number): string {
+  return serializeSlotWithChild(`table:${rowIndex}:${detailIndex}`, {}, block, indent);
+}
+
+function serializeNestedBlocks(block: VisualBlock, indent: number): string {
   const component = resolveBaseComponent(block.schema.component);
   if (component === 'expandable') {
     const stub = block.schema.expandableStubBlocks;
     const content = block.schema.expandableContentBlocks;
-    const stubHeader = stub.lock ? `<!--hvy:expandable:stub ${JSON.stringify({ lock: true })}-->` : '';
-    const stubBlocks = stub.children.map((innerBlock) => serializeExpandablePartBlock(innerBlock, 0)).join('\n\n');
-    const contentHeader = content.lock ? `<!--hvy:expandable:content ${JSON.stringify({ lock: true })}-->` : '';
-    const contentBlocks = content.children.map((innerBlock) => serializeExpandablePartBlock(innerBlock, 1)).join('\n\n');
-    const stubPart = [stubHeader, stubBlocks].filter(Boolean).join('\n');
-    const contentPart = [contentHeader, contentBlocks].filter(Boolean).join('\n');
-    return [stubPart, contentPart].filter((part) => part.length > 0).join('\n\n');
+    const stubBlocks = stub.children.map((innerBlock) => serializeExpandablePartBlock(innerBlock, 0, stub.lock, indent));
+    const contentBlocks = content.children.map((innerBlock) => serializeExpandablePartBlock(innerBlock, 1, content.lock, indent));
+    const stubPart = stub.children.length === 0 && stub.lock ? [serializeSlotDirective('expandable:stub', { lock: true }, indent)] : stubBlocks;
+    const contentPart =
+      content.children.length === 0 && content.lock ? [serializeSlotDirective('expandable:content', { lock: true }, indent)] : contentBlocks;
+    return [...stubPart, ...contentPart].join('\n\n');
   }
   if (component === 'grid') {
-    return block.schema.gridItems.map((item, index) => serializeGridItemBlock(item, index)).join('\n\n');
+    return block.schema.gridItems.map((item, index) => serializeGridItemBlock(item, index, indent)).join('\n\n');
   }
   if (component === 'component-list') {
     return block.schema.componentListBlocks
-      .map((innerBlock, index) => serializeComponentListItemBlock(innerBlock, index))
+      .map((innerBlock, index) => serializeComponentListItemBlock(innerBlock, index, indent))
       .join('\n\n');
   }
   if (component === 'container') {
-    return block.schema.containerBlocks.map((innerBlock, index) => serializeContainerItemBlock(innerBlock, index)).join('\n\n');
+    return block.schema.containerBlocks.map((innerBlock, index) => serializeContainerItemBlock(innerBlock, index, indent)).join('\n\n');
   }
   if (component === 'table') {
     return block.schema.tableRows
       .flatMap((row, rowIndex) =>
-        (row.detailsBlocks ?? []).map((innerBlock, detailIndex) => serializeTableDetailBlock(innerBlock, rowIndex, detailIndex))
+        (row.detailsBlocks ?? []).map((innerBlock, detailIndex) => serializeTableDetailBlock(innerBlock, rowIndex, detailIndex, indent))
       )
       .join('\n\n');
   }

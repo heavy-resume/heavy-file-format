@@ -15,7 +15,7 @@ import {
 } from './editor/tag-editor';
 import { getThemeConfig, applyTheme, writeThemeConfig } from './theme';
 import { findSectionByKey, getSectionId, isDefaultUntitledSectionTitle } from './section-ops';
-import { getComponentDefs, getSectionDefs, getReusableNameFromSectionKey, isBuiltinComponent, resolveBaseComponent } from './component-defs';
+import { getComponentDefs, getSectionDefs, getReusableNameFromSectionKey, isBuiltinComponent } from './component-defs';
 import {
   findBlockByIds, resolveBlockContext, handleBlockFieldInput, commitInlineTableEdit,
   setActiveEditorBlock, clearActiveEditorBlock, deactivateEditorBlock,
@@ -33,7 +33,7 @@ import { deserializeDocument } from './serialization';
 import { serializeDocument } from './serialization';
 import { syncReusableTemplateForBlock, revertReusableComponent, findReusableOwner } from './reusable';
 import { addTableColumn, removeTableColumn, getTableColumns, moveTableColumn, moveTableRow } from './table-ops';
-import { coerceGridColumns, coerceGridColumn, createGridItem } from './grid-ops';
+import { createGridItem } from './grid-ops';
 import { detectExtension, normalizeFilename, downloadTextFile, sanitizeOptionalId, moveItem } from './utils';
 import { moveSectionRelative, moveSectionByOffset, removeSectionByKey, findBlockContainerById } from './section-ops';
 import { bindModal } from './bind-modal';

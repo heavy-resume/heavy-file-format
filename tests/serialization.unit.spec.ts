@@ -247,6 +247,43 @@ component_defs:
   expect(output).not.toMatch(/<!--hvy:skills-and-tools-tech-list \{[^]*?<!--hvy:grid \{\}-->/);
 });
 
+test('component-list numeric slot indexes control display order with file order breaking ties', () => {
+  const input = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"ordered-list"}-->
+#! Ordered List
+
+ <!--hvy:component-list {"componentListComponent":"text"}-->
+
+  <!--hvy:component-list:2 {}-->
+
+   <!--hvy:text {}-->
+    Third in file, index 2
+
+  <!--hvy:component-list:1 {}-->
+
+   <!--hvy:text {}-->
+    First by index
+
+  <!--hvy:component-list:1 {}-->
+
+   <!--hvy:text {}-->
+    Second by tie-break
+`;
+
+  const document = deserializeDocument(input, '.hvy');
+  const listBlock = document.sections[0]?.blocks[0];
+  const items = listBlock.schema.componentListBlocks.map((block) => block.text);
+
+  expect(items).toEqual([
+    'First by index',
+    'Second by tie-break',
+    'Third in file, index 2',
+  ]);
+});
+
 test('round-trips migrated example files without reintroducing slot-level component fields', async () => {
   const fs = await import('node:fs/promises');
   const files: Array<[string, '.hvy' | '.thvy']> = [

@@ -265,6 +265,8 @@ When a `component-list` (or `container`) grid item has plain Markdown content be
 
 Here `## Skills` becomes `componentListBlocks[0]` (an implicit text block) and the `component-list:0` item becomes `componentListBlocks[1]`.
 
+For numbered component-list slots, the numeric suffix controls display order. Readers and editors MUST sort `hvy:component-list:N` children by `N` ascending, using file order only to break ties when multiple items use the same `N`.
+
 Cross-reference cards can be emitted as a block directive with all card data in metadata and no raw HTML body:
 
 ```markdown
@@ -281,6 +283,7 @@ Rules:
 - Multiple `hvy:expandable:stub` or `hvy:expandable:content` directives can be used for a single expandable block.
 - `hvy:grid` starts a grid block. Its payload is the grid block schema, with `component:"grid"` implied.
 - `hvy:grid:N`, `hvy:component-list:N`, `hvy:container:N`, and `hvy:table:R:D` are slot markers. Their payload contains slot metadata only; the actual child block is declared one indentation level deeper as its own directive.
+- For `hvy:component-list:N`, `N` is an ordering key rather than just an identifier. Lower numbers render first; file order breaks ties.
 - Slot markers MUST NOT carry `component` or `type`. Documents that use the old slot-carried child-component form are malformed.
 - Plain Markdown content that appears after a `hvy:grid:N` (or standalone `hvy:component-list` / `hvy:container`) directive and before the first indexed sub-directive (`hvy:component-list:N`, `hvy:container:N`) is implicitly treated as the first block in that list or container.
 - If both `meta.blocks[n]` and a block directive describe the same logical block, `meta.blocks[n]` wins.

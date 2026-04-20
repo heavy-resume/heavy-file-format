@@ -60,24 +60,26 @@ function parseBlocks(contentMarkdown: string, sectionMeta: JsonObject, documentM
     | { kind: 'top' }
     | { kind: 'expandable'; parent: VisualBlock; part: 0 | 1 }
     | { kind: 'grid'; parent: VisualBlock; meta: JsonObject }
-    | { kind: 'component-list'; parent: VisualBlock }
+    | { kind: 'component-list'; parent: VisualBlock; slotIndex?: number }
     | { kind: 'container'; parent: VisualBlock }
     | { kind: 'table-details'; parent: VisualBlock; rowIndex: number };
   type StructuredFrame =
     | { kind: 'component'; block: VisualBlock; attach: BlockAttach; indent: number }
     | { kind: 'slot-expandable'; parent: VisualBlock; part: 0 | 1; indent: number }
     | { kind: 'slot-grid'; parent: VisualBlock; meta: JsonObject; indent: number }
-    | { kind: 'slot-component-list'; parent: VisualBlock; indent: number }
+    | { kind: 'slot-component-list'; parent: VisualBlock; slotIndex: number; indent: number }
     | { kind: 'slot-container'; parent: VisualBlock; indent: number }
     | { kind: 'slot-table-details'; parent: VisualBlock; rowIndex: number; indent: number };
 
   const blocks: VisualBlock[] = [];
   const frames: StructuredFrame[] = [];
+  const componentListOrder = new WeakMap<VisualBlock, Array<{ block: VisualBlock; slotIndex: number | null; sequence: number }>>();
   let currentText: string[] = [];
   let currentSchema: BlockSchema = defaultBlockSchema();
   let currentAttach: BlockAttach = { kind: 'top' };
   let currentHasDirective = false;
   let currentIndent = 0;
+  let sequenceCounter = 0;
 
   const resolveParsedBase = (componentName: string): string => {
     if (isBuiltinComponentName(componentName)) {
@@ -161,7 +163,7 @@ function parseBlocks(contentMarkdown: string, sectionMeta: JsonObject, documentM
       return { kind: 'grid', parent: frame.parent, meta: frame.meta };
     }
     if (frame.kind === 'slot-component-list') {
-      return { kind: 'component-list', parent: frame.parent };
+      return { kind: 'component-list', parent: frame.parent, slotIndex: frame.slotIndex };
     }
     if (frame.kind === 'slot-container') {
       return { kind: 'container', parent: frame.parent };
@@ -213,7 +215,29 @@ function parseBlocks(contentMarkdown: string, sectionMeta: JsonObject, documentM
       return;
     }
     if (attach.kind === 'component-list') {
-      attach.parent.schema.componentListBlocks.push(block);
+      const items = componentListOrder.get(attach.parent) ?? [];
+      items.push({
+        block,
+        slotIndex: typeof attach.slotIndex === 'number' ? attach.slotIndex : null,
+        sequence: sequenceCounter++,
+      });
+      items.sort((left, right) => {
+        if (left.slotIndex === null && right.slotIndex === null) {
+          return left.sequence - right.sequence;
+        }
+        if (left.slotIndex === null) {
+          return -1;
+        }
+        if (right.slotIndex === null) {
+          return 1;
+        }
+        if (left.slotIndex !== right.slotIndex) {
+          return left.slotIndex - right.slotIndex;
+        }
+        return left.sequence - right.sequence;
+      });
+      componentListOrder.set(attach.parent, items);
+      attach.parent.schema.componentListBlocks = items.map((item) => item.block);
       return;
     }
     if (attach.kind === 'container') {
@@ -330,6 +354,7 @@ function parseBlocks(contentMarkdown: string, sectionMeta: JsonObject, documentM
         frames.push({
           kind: 'slot-component-list',
           parent,
+          slotIndex: indexes[0],
           indent: currentIndent,
         });
       } else if (name === 'container' && indexes.length === 1) {

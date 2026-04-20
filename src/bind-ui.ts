@@ -1250,6 +1250,28 @@ export function bindUi(app: HTMLElement): void {
       return;
     }
 
+    if (field === 'block-expandable-stub-css' && (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) {
+      const context = resolveBlockContext(target);
+      if (!context) {
+        return;
+      }
+      context.block.schema.expandableStubCss = target.value;
+      syncReusableTemplateForBlock(sectionKey, context.block.id);
+      getRefreshReaderPanels()();
+      return;
+    }
+
+    if (field === 'block-expandable-content-css' && (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) {
+      const context = resolveBlockContext(target);
+      if (!context) {
+        return;
+      }
+      context.block.schema.expandableContentCss = target.value;
+      syncReusableTemplateForBlock(sectionKey, context.block.id);
+      getRefreshReaderPanels()();
+      return;
+    }
+
     if (field === 'block-meta-open' && target instanceof HTMLInputElement) {
       const context = resolveBlockContext(target);
       if (!context) {

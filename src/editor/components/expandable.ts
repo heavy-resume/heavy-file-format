@@ -132,19 +132,23 @@ export const renderExpandableReader: ComponentReaderRenderer = (section, block, 
   const contentHtml = block.schema.expandableContentBlocks.children.map((innerBlock) => helpers.renderReaderBlock(section, innerBlock)).join('');
   const expanded = block.schema.expandableExpanded;
   const alwaysShowStub = block.schema.expandableAlwaysShowStub;
+  const stubPaneStyle = helpers.escapeAttr(block.schema.expandableStubCss);
+  const contentPaneStyle = helpers.escapeAttr(block.schema.expandableContentCss);
   const toggleAttrs = `data-reader-action="toggle-expandable" data-section-key="${helpers.escapeAttr(section.key)}" data-block-id="${helpers.escapeAttr(
     block.id
   )}" aria-expanded="${expanded ? 'true' : 'false'}"`;
-  const stubToggle = `<div class="expand-stub-toggle" ${toggleAttrs}>
-    <div class="expand-stub">${stubHtml}</div>
+  const stubToggle = `<div class="expandable-pane expandable-pane-stub" style="${stubPaneStyle}">
+    <div class="expand-stub-toggle" ${toggleAttrs}>
+      <div class="expand-stub">${stubHtml}</div>
+    </div>
   </div>`;
   const contentToggleAttrs = `data-reader-action="toggle-expandable" data-expandable-content="true" data-section-key="${helpers.escapeAttr(section.key)}" data-block-id="${helpers.escapeAttr(block.id)}" aria-expanded="true"`;
   const body = expanded
     ? alwaysShowStub
-      ? `${stubToggle}<div class="expand-content" ${contentToggleAttrs}>${contentHtml}</div>`
-      : `<div class="expand-content" ${contentToggleAttrs}>${contentHtml}</div>`
+      ? `${stubToggle}<div class="expandable-pane expandable-pane-expanded" style="${contentPaneStyle}"><div class="expand-content" ${contentToggleAttrs}>${contentHtml}</div></div>`
+      : `<div class="expandable-pane expandable-pane-expanded" style="${contentPaneStyle}"><div class="expand-content" ${contentToggleAttrs}>${contentHtml}</div></div>`
     : stubToggle;
-  return `<div class="expandable-reader" data-expandable-id="${helpers.escapeAttr(block.id)}">
+  return `<div class="expandable-reader is-interactive" data-expandable-id="${helpers.escapeAttr(block.id)}">
     <div class="expandable-reader-body">${body}</div>
   </div>`;
 };

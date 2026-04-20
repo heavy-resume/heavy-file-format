@@ -619,6 +619,8 @@ function serializeBlockSchema(
   if (component === 'expandable') {
     addIfChanged(payload, 'expandableAlwaysShowStub', schema.expandableAlwaysShowStub, defaults.expandableAlwaysShowStub);
     addIfChanged(payload, 'expandableExpanded', schema.expandableExpanded, defaults.expandableExpanded);
+    addIfChanged(payload, 'expandableStubCss', schema.expandableStubCss, defaults.expandableStubCss);
+    addIfChanged(payload, 'expandableContentCss', schema.expandableContentCss, defaults.expandableContentCss);
     // Stub/content blocks are serialized as nested block directives, not inline in schema JSON.
   }
   if (component === 'table') {

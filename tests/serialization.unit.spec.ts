@@ -45,6 +45,34 @@ hvy_version: 0.1
   expect(output).not.toMatch(/<!--hvy:component-list:\d+\s+\{[^\n>]*"component"/);
 });
 
+test('serializes expandable stub and content css fields on the parent expandable block', () => {
+  const input = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ <!--hvy:expandable {"expandableAlwaysShowStub":true,"expandableExpanded":false,"expandableStubCss":"padding: 0.25rem 0;","expandableContentCss":"margin-top: 0.5rem;"}-->
+
+  <!--hvy:expandable:stub {}-->
+
+   <!--hvy:text {}-->
+    Stub
+
+  <!--hvy:expandable:content {}-->
+
+   <!--hvy:text {}-->
+    Content
+`;
+
+  const document = deserializeDocument(input, '.hvy');
+  const output = serializeWithState(document);
+
+  expect(output).toContain('"expandableStubCss":"padding: 0.25rem 0;"');
+  expect(output).toContain('"expandableContentCss":"margin-top: 0.5rem;"');
+});
+
 test('custom grid components use direct grid slots without an extra grid wrapper', () => {
   const input = `---
 hvy_version: 0.1

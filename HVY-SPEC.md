@@ -306,7 +306,9 @@ Block metadata optionally includes component-specific fields. Common examples in
 - `xrefTarget`
 - `expandableAlwaysShowStub`
 - `expandableExpanded`
+- `expandableStubCss`
 - `expandableStubBlocks`
+- `expandableContentCss`
 - `expandableContentBlocks`
 - `tableColumns`
 - `tableShowHeader`
@@ -345,6 +347,8 @@ expandableStubBlocks:
 ```
 
 The `children` array uses the same recursive block object shape as other nested block arrays.
+
+`expandableStubCss` and `expandableContentCss` are optional inline CSS style strings applied to the rendered stub pane wrapper and expanded-content pane wrapper, respectively. This is in addition to the expandable block's own `css`, which applies to the outer expandable component wrapper.
 
 Serialized block objects SHOULD contain document data only. Editor-only UI state, such as whether a schema editor is open for a block, MUST NOT be emitted.
 

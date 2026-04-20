@@ -340,16 +340,18 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       deps.ensureExpandableBlocks(block);
       const expanded = block.schema.expandableExpanded;
       const alwaysShowStub = block.schema.expandableAlwaysShowStub;
+      const stubPaneStyle = deps.escapeAttr(block.schema.expandableStubCss);
+      const contentPaneStyle = deps.escapeAttr(block.schema.expandableContentCss);
       const stubHtml = block.schema.expandableStubBlocks.children
         .map((innerBlock) => renderPassiveEditorBlock(sectionKey, innerBlock, rootSections))
         .join('');
       const contentHtml = block.schema.expandableContentBlocks.children
         .map((innerBlock) => renderPassiveEditorBlock(sectionKey, innerBlock, rootSections))
         .join('');
-      const stubToggle = `<div class="expandable-pane expandable-pane-stub"><div class="expand-stub-toggle" data-action="toggle-editor-expandable" data-section-key="${deps.escapeAttr(
+      const stubToggle = `<div class="expandable-pane expandable-pane-stub" style="${stubPaneStyle}"><div class="expand-stub-toggle" data-action="toggle-editor-expandable" data-section-key="${deps.escapeAttr(
         sectionKey
       )}" data-block-id="${deps.escapeAttr(block.id)}" aria-expanded="${expanded ? 'true' : 'false'}"><div class="expand-stub">${stubHtml}</div></div></div>`;
-      const expandedPanel = `<div class="expandable-pane expandable-pane-expanded"><div class="expand-content">${contentHtml}</div></div>`;
+      const expandedPanel = `<div class="expandable-pane expandable-pane-expanded" style="${contentPaneStyle}"><div class="expand-content">${contentHtml}</div></div>`;
       const body = expanded
         ? alwaysShowStub
           ? `${stubToggle}${expandedPanel}`
@@ -358,7 +360,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           )}" data-block-id="${deps.escapeAttr(block.id)}" aria-expanded="true">Collapse</div>`
         : stubToggle;
 
-      return `<div class="expandable-reader">
+      return `<div class="expandable-reader is-interactive">
         <div class="expandable-reader-body">${body}</div>
       </div>`;
     }
@@ -566,6 +568,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
   }
 
   function renderBlockMetaFields(sectionKey: string, block: VisualBlock): string {
+    const component = deps.resolveBaseComponent(block.schema.component);
     return `
       <div class="schema-meta-stack">
         <label>
@@ -578,6 +581,30 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
             placeholder="margin: 0.5rem 0;"
           >${deps.escapeHtml(block.schema.customCss)}</textarea>
         </label>
+        ${
+          component === 'expandable'
+            ? `<label>
+          <span>Expandable Stub CSS</span>
+          <textarea
+            rows="2"
+            data-section-key="${deps.escapeAttr(sectionKey)}"
+            data-block-id="${deps.escapeAttr(block.id)}"
+            data-field="block-expandable-stub-css"
+            placeholder="padding: 0.35rem 0;"
+          >${deps.escapeHtml(block.schema.expandableStubCss)}</textarea>
+        </label>
+        <label>
+          <span>Expandable Content CSS</span>
+          <textarea
+            rows="2"
+            data-section-key="${deps.escapeAttr(sectionKey)}"
+            data-block-id="${deps.escapeAttr(block.id)}"
+            data-field="block-expandable-content-css"
+            placeholder="padding-top: 0.35rem;"
+          >${deps.escapeHtml(block.schema.expandableContentCss)}</textarea>
+        </label>`
+            : ''
+        }
         <label>
           <span>Tags</span>
           ${renderTagEditor(

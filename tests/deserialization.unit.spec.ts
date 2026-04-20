@@ -38,6 +38,34 @@ hvy_version: 0.1
   expect(block.schema.expandableContentBlocks.children[0]?.text).toBe('Expanded detail');
 });
 
+test('deserializes expandable stub and content css fields', () => {
+  const input = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ <!--hvy:expandable {"expandableAlwaysShowStub":true,"expandableExpanded":false,"expandableStubCss":"padding: 0.25rem 0;","expandableContentCss":"margin-top: 0.5rem;"}-->
+
+  <!--hvy:expandable:stub {}-->
+
+   <!--hvy:text {}-->
+    Stub
+
+  <!--hvy:expandable:content {}-->
+
+   <!--hvy:text {}-->
+    Content
+`;
+
+  const document = deserializeDocument(input, '.hvy');
+  const block = document.sections[0]?.blocks[0];
+
+  expect(block.schema.expandableStubCss).toBe('padding: 0.25rem 0;');
+  expect(block.schema.expandableContentCss).toBe('margin-top: 0.5rem;');
+});
+
 test('deserializes uncontained section metadata', () => {
   const input = `---
 hvy_version: 0.1

@@ -144,15 +144,6 @@ export function bindUi(app: HTMLElement): void {
       return;
     }
 
-    if (field === 'theme-mode' && target instanceof HTMLSelectElement) {
-      recordHistory('meta:theme-mode');
-      const theme = getThemeConfig();
-      theme.mode = target.value === 'dark' ? 'dark' : 'light';
-      writeThemeConfig(theme);
-      applyTheme();
-      return;
-    }
-
     if (field === 'theme-color-value' && target instanceof HTMLInputElement) {
       const name = target.dataset.colorName ?? '';
       if (!name) return;

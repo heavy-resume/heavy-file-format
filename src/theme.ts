@@ -1,12 +1,12 @@
 import { state } from './state';
-import type { ThemeConfig, ThemeMode } from './types';
+import type { ThemeConfig } from './types';
 import type { JsonObject } from './hvy/types';
 
-export type { ThemeConfig, ThemeMode };
+export type { ThemeConfig };
 
 export const THEME_COLOR_NAMES: readonly string[] = [
-  '--hvy-background',
-  '--hvy-background-alt',
+  '--hvy-bg',
+  '--hvy-bg-alt',
   '--hvy-surface',
   '--hvy-surface-alt',
   '--hvy-surface-tint',
@@ -18,6 +18,8 @@ export const THEME_COLOR_NAMES: readonly string[] = [
   '--hvy-accent-1-text',
   '--hvy-accent-2',
   '--hvy-accent-2-alt',
+  '--hvy-button-bg',
+  '--hvy-button-text',
   '--hvy-highlight-1',
   '--hvy-highlight-2',
   '--hvy-border',
@@ -58,23 +60,24 @@ export function applyTheme(): void {
   }
   stale.forEach((prop) => root.style.removeProperty(prop));
 
+  root.classList.add('no-transitions');
   // Apply only user-specified overrides verbatim (key IS the CSS property name).
   for (const [key, value] of Object.entries(theme.colors)) {
     root.style.setProperty(key, value);
   }
-
-  root.classList.toggle('theme-dark', theme.mode === 'dark');
+  // Force a reflow so changes take effect before re-enabling transitions.
+  void root.offsetHeight;
+  root.classList.remove('no-transitions');
 }
 
 export function getThemeConfig(): ThemeConfig {
   const themeRaw = state.document.meta.theme;
   if (!themeRaw || typeof themeRaw !== 'object') {
-    const fresh: ThemeConfig = { mode: 'light', colors: {} };
+    const fresh: ThemeConfig = { colors: {} };
     state.document.meta.theme = fresh;
     return fresh;
   }
   const theme = themeRaw as JsonObject;
-  const mode: ThemeMode = theme.mode === 'dark' ? 'dark' : 'light';
   const colorsRaw = theme.colors;
   const colors: Record<string, string> = {};
   if (colorsRaw && typeof colorsRaw === 'object' && !Array.isArray(colorsRaw)) {
@@ -84,12 +87,11 @@ export function getThemeConfig(): ThemeConfig {
       }
     }
   }
-  return { mode, colors };
+  return { colors };
 }
 
 export function writeThemeConfig(next: ThemeConfig): void {
   state.document.meta.theme = {
-    mode: next.mode,
     colors: { ...next.colors },
   };
 }

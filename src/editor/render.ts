@@ -45,7 +45,6 @@ hljs.registerLanguage('typescript', typescript);
 hljs.registerLanguage('ts', typescript);
 
 interface ThemeConfig {
-  mode: 'light' | 'dark';
   colors: Record<string, string>;
 }
 
@@ -455,13 +454,6 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           <input data-field="meta-sidebar-label" placeholder="☰" value="${deps.escapeAttr(String(state.documentMeta.sidebar_label ?? ''))}" />
         </label>
         <div class="editor-grid">
-          <label>
-            <span>Theme Mode</span>
-            <select data-field="theme-mode">
-              ${deps.renderOption('light', theme.mode)}
-              ${deps.renderOption('dark', theme.mode)}
-            </select>
-          </label>
           <label>
             <span>Theme Colors</span>
             <button type="button" class="ghost" data-action="open-theme-modal">

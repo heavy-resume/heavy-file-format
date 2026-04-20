@@ -1,11 +1,15 @@
 :root {
   font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
   color: var(--hvy-text);
-  background: radial-gradient(circle at 10% 20%, var(--hvy-background), var(--hvy-background-alt) 48%, var(--hvy-background-alt));
+  background: radial-gradient(circle at 10% 20%, var(--hvy-bg), var(--hvy-bg-alt) 48%, var(--hvy-bg-alt));
 }
 
 * {
   box-sizing: border-box;
+}
+
+.no-transitions * {
+  transition: none !important;
 }
 
 html,
@@ -21,6 +25,13 @@ body {
 
 a {
   color: var(--hvy-accent-1-text);
+}
+
+button,
+input,
+select,
+textarea {
+  color: var(--hvy-button-text);
 }
 
 .layout {
@@ -70,8 +81,8 @@ a {
   min-height: 2.15rem;
   padding: 0.38rem 0.72rem;
   border-radius: 8px;
-  background: var(--hvy-accent-1);
-  color: var(--hvy-accent-1-text);
+  background: var(--hvy-button-bg);
+  color: var(--hvy-button-text);
   cursor: pointer;
 }
 
@@ -83,8 +94,8 @@ a {
   padding: 0.38rem 0.72rem;
   border: 0;
   border-radius: 8px;
-  background: var(--hvy-accent-1);
-  color: var(--hvy-accent-1-text);
+  background: var(--hvy-button-bg);
+  color: var(--hvy-button-text);
 }
 
 .file-picker input {
@@ -100,11 +111,10 @@ button {
   background: var(--hvy-surface);
 }
 
-.toolbar button,
 button.secondary {
-  background: var(--hvy-accent-1-alt);
-  border-color: var(--hvy-accent-1-alt);
-  color: var(--hvy-accent-1-text);
+  background: var(--hvy-button-bg);
+  border-color: var(--hvy-button-bg);
+  color: var(--hvy-button-text);
 }
 
 button.ghost {
@@ -793,9 +803,9 @@ button.tiny {
 
 .rich-toolbar button.secondary,
 .align-buttons button.secondary {
-  background: var(--hvy-accent-1-alt);
-  border-color: var(--hvy-accent-1-alt);
-  color: var(--hvy-accent-1-text);
+  background: var(--hvy-button-bg);
+  border-color: var(--hvy-button-bg);
+  color: var(--hvy-button-text);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
 }
 
@@ -2311,12 +2321,6 @@ button.tiny {
   .reusable-components-view {
     grid-template-columns: 1fr;
   }
-}
-.theme-modal .theme-mode-row {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin: 0.5rem 0;
 }
 
 .theme-modal .theme-color-list {

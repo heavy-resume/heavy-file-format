@@ -439,7 +439,7 @@ Each entry under `theme.colors` is a CSS custom property name mapped directly to
 
 | YAML key              | CSS variable           |
 |-----------------------|------------------------|
-| `--hvy-background`    | `--hvy-background`     |
+| `--hvy-bg`    | `--hvy-bg`     |
 | `--hvy-text-alt`      | `--hvy-text-alt`       |
 | `--hvy-accent-1`      | `--hvy-accent-1`       |
 | `--hvy-my-custom`     | `--hvy-my-custom`      |
@@ -450,7 +450,7 @@ The viewer sets each key verbatim on the document root (`root.style.setProperty(
 
 Viewers SHOULD ship built-in defaults for the following conventional names so documents that omit them still render correctly, and should provide both a light and a dark default set:
 
-- `--hvy-background`, `--hvy-background-alt`
+- `--hvy-bg`, `--hvy-bg-alt`
 - `--hvy-surface`, `--hvy-surface-alt`, `--hvy-surface-tint`
 - `--hvy-text`, `--hvy-text-alt`, `--hvy-text-muted`
 - `--hvy-accent-1`, `--hvy-accent-1-alt`, `--hvy-accent-1-text`
@@ -471,9 +471,8 @@ Alternates (`*-alt`) are intended as fallbacks for cases where the base color wo
 
 ```yaml
 theme:
-  mode: light
   colors:
-    --hvy-background: "#ffffff"
+    --hvy-bg: "#ffffff"
     --hvy-text: "#1f2a37"
     --hvy-text-alt: "#4b5563"
     --hvy-accent-1: "#1f7a8c"
@@ -487,10 +486,9 @@ theme:
 ```
 
 Rules:
-- `mode` is optional (`light` or `dark`); it selects which built-in default set the viewer merges user-supplied colors over. Defaults to `light` when absent.
-- All keys under `colors` are optional. Missing keys fall back to the viewer's defaults for the selected mode.
+- All keys under `colors` are optional. Missing keys fall back to the viewer's built-in defaults.
 - Values MUST be valid CSS color expressions (`#rrggbb`, `#rrggbbaa`, `rgb(...)`, `rgba(...)`, `hsl(...)`, named colors, etc.). Semi-transparent values are permitted.
-- The viewer applies these variables to the document root (typically `:root` or the document container) before any CSS blocks or inline component CSS is evaluated, so `var(--hvy-background)` and similar expressions resolve everywhere.
+- The viewer applies these variables to the document root (typically `:root` or the document container) before any CSS blocks or inline component CSS is evaluated, so `var(--hvy-bg)` and similar expressions resolve everywhere.
 - When the viewer exposes a UI for editing theme colors, edits MUST be persisted back into `document.meta.theme.colors` so they round-trip through save.
 - Plain Markdown renderers ignore `theme`.
 

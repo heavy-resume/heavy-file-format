@@ -1,7 +1,7 @@
 /* Light mode defaults */
 :root {
-  --hvy-background: #f5f9ff;
-  --hvy-background-alt: #eef3fa;
+  --hvy-bg: #f5f9ff;
+  --hvy-bg-alt: #eef3fa;
   --hvy-surface: #ffffff;
   --hvy-surface-alt: #f9fcff;
   --hvy-surface-tint: #d9eaf4;
@@ -15,6 +15,9 @@
   --hvy-accent-1-text: #000000;
   --hvy-accent-2: #325f6e;
   --hvy-accent-2-alt: #244355;
+
+  --hvy-button-bg: #4a8fab;
+  --hvy-button-text: #000000;
 
   --hvy-highlight-1: rgba(31, 122, 140, 0.15);
   --hvy-highlight-2: rgba(255, 214, 102, 0.35);
@@ -69,8 +72,8 @@
 
 /* Dark mode overrides */
 :root.theme-dark {
-  --hvy-background: #0f1720;
-  --hvy-background-alt: #161b22;
+  --hvy-bg: #0f1720;
+  --hvy-bg-alt: #161b22;
   --hvy-surface: #17222d;
   --hvy-surface-alt: #1c2733;
   --hvy-surface-tint: #1f3448;
@@ -84,6 +87,9 @@
   --hvy-accent-1-text: #fcfcfc;
   --hvy-accent-2: #6fb3c1;
   --hvy-accent-2-alt: #2d5d68;
+
+  --hvy-button-bg: #2d6a8a;
+  --hvy-button-text: #ffffff;
 
   --hvy-highlight-1: rgba(125, 179, 208, 0.20);
   --hvy-highlight-2: rgba(255, 214, 102, 0.25);

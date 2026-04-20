@@ -2,28 +2,46 @@
 hvy_version: 0.1
 title: Resume Example
 theme:
-  mode: dark
   colors:
-    --hvy-background: "#0f1720"
-    --hvy-background-alt: "#161b22"
+    --hvy-bg: "#0f1720"
+    --hvy-bg-alt: "#161b22"
     --hvy-surface: "#17222d"
     --hvy-surface-alt: "#1c2733"
+    --hvy-surface-tint: "#1f3448"
     --hvy-text: "#e7eef5"
     --hvy-text-alt: "#a3adbf"
+    --hvy-text-muted: "#6b8fa0"
     --hvy-accent-1: "#7db3d0"
-    --hvy-accent-1-text: #fcfcfc;
     --hvy-accent-1-alt: "#5a8da8"
+    --hvy-accent-1-text: "#fcfcfc"
     --hvy-accent-2: "#6fb3c1"
     --hvy-accent-2-alt: "#2d5d68"
+    --hvy-button-bg: "#2d6a8a"
+    --hvy-button-text: "#ffffff"
     --hvy-highlight-1: "rgba(125, 179, 208, 0.20)"
     --hvy-highlight-2: "rgba(255, 214, 102, 0.25)"
     --hvy-border: "#2a3340"
     --hvy-border-alt: "#3d4756"
+    --hvy-border-input: "#334152"
+    --hvy-border-translucent: "rgba(42, 51, 64, 0.92)"
     --hvy-xref-card-bg: "rgba(255, 255, 255, 0.04)"
     --hvy-xref-card-hover-bg: "rgba(255, 255, 255, 0.08)"
     --hvy-table-header: "#1f2a37"
     --hvy-table-row-bg-1: "#17222d"
     --hvy-table-row-bg-2: "#1b2632"
+    --hvy-icon-muted: "rgba(231, 238, 245, 0.33)"
+    --hvy-shadow: "rgba(0, 0, 0, 0.20)"
+    --hvy-shadow-md: "rgba(0, 0, 0, 0.30)"
+    --hvy-shadow-lg: "rgba(0, 0, 0, 0.40)"
+    --hvy-overlay: "rgba(0, 0, 0, 0.60)"
+    --hvy-danger: "#c05050"
+    --hvy-warning: "#d4a017"
+    --hvy-warning-bg: "#2a2310"
+    --hvy-warning-border: "#6b5200"
+    --hvy-warning-accent: "#c79200"
+    --hvy-success: "#4cae68"
+    --hvy-success-bg: "#152b1e"
+    --hvy-success-border: "#2e7a46"
 component_defs:
   - name: history-record
     baseType: expandable

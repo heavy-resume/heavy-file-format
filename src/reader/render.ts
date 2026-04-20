@@ -223,16 +223,8 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
           </div>
           <p class="muted">
             Each key is the exact CSS variable name set on the document root.
-            Built-in defaults for <strong>${deps.escapeHtml(theme.mode)}</strong> mode apply when a color is not overridden.
             Overrides are saved with the document.
           </p>
-          <label class="theme-mode-row">
-            <span>Mode</span>
-            <select data-field="theme-mode">
-              <option value="light"${theme.mode === 'light' ? ' selected' : ''}>light</option>
-              <option value="dark"${theme.mode === 'dark' ? ' selected' : ''}>dark</option>
-            </select>
-          </label>
           <div class="theme-color-list">
             ${rows}
           </div>

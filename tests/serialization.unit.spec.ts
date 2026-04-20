@@ -180,6 +180,73 @@ hvy_version: 0.1
   expect(output).not.toMatch(/<!--hvy:component-list:\d+\s+\{[^\n>]*"component"/);
 });
 
+test('custom grid components use direct grid slots without an extra grid wrapper', () => {
+  const input = `---
+hvy_version: 0.1
+component_defs:
+  - name: skills-and-tools-tech-list
+    baseType: grid
+    schema:
+      css: "margin: 0.5rem 0 0;"
+      gridColumns: 2
+      gridItems:
+        - id: relevant-skills
+          column: left
+          block:
+            text: ""
+            schema:
+              component: component-list
+              componentListComponent: xref-card
+              css: "margin: 0;"
+        - id: tools-technologies
+          column: right
+          block:
+            text: ""
+            schema:
+              component: component-list
+              componentListComponent: xref-card
+              css: "margin: 0;"
+---
+
+<!--hvy: {"id":"layout"}-->
+#! Layout
+
+ <!--hvy:skills-and-tools-tech-list {}-->
+
+  <!--hvy:grid:0 {"id":"history-skills","column":"left"}-->
+
+   <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;"}-->
+
+    <!--hvy:component-list:0 {}-->
+
+     <!--hvy:text {}-->
+      #### Skills
+
+  <!--hvy:grid:1 {"id":"history-tools-technologies","column":"right"}-->
+
+   <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;"}-->
+
+    <!--hvy:component-list:0 {}-->
+
+     <!--hvy:text {}-->
+      #### Tools
+`;
+
+  const document = deserializeDocument(input, '.hvy');
+  const block = document.sections[0]?.blocks[0];
+
+  expect(block.schema.component).toBe('skills-and-tools-tech-list');
+  expect(block.schema.gridItems).toHaveLength(2);
+  expect(block.schema.gridItems[0]?.block.schema.component).toBe('component-list');
+  expect(block.schema.gridItems[1]?.block.schema.component).toBe('component-list');
+
+  const output = serializeWithState(document);
+  expect(output).toContain('<!--hvy:skills-and-tools-tech-list {}-->');
+  expect(output).toMatch(/<!--hvy:grid:0 {"id":"history-skills","column":"left"}-->/);
+  expect(output).toMatch(/<!--hvy:grid:1 {"id":"history-tools-technologies","column":"right"}-->/);
+  expect(output).not.toMatch(/<!--hvy:skills-and-tools-tech-list \{[^]*?<!--hvy:grid \{\}-->/);
+});
+
 test('round-trips migrated example files without reintroducing slot-level component fields', async () => {
   const fs = await import('node:fs/promises');
   const files: Array<[string, '.hvy' | '.thvy']> = [
@@ -196,5 +263,6 @@ test('round-trips migrated example files without reintroducing slot-level compon
     expect(output, path).not.toMatch(
       /<!--hvy:(?:expandable:(?:stub|content)|grid:\d+|component-list:\d+|container:\d+|table:\d+:\d+)\s+\{[^\n>]*"component"/
     );
+    expect(output, path).not.toMatch(/<!--hvy:skills-and-tools-tech-list \{[^]*?<!--hvy:grid \{\}-->/);
   }
 });

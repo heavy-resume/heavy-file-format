@@ -519,7 +519,7 @@ function stripEditorStateFromSerializedValue(value: unknown): unknown {
 }
 
 function serializeSection(section: VisualSection, level: number): string {
-  const heading = `${'#'.repeat(Math.max(1, Math.min(level, 6)))} ${section.title}`;
+  const heading = `#! ${section.title}`;
   const meta: JsonObject = {
     id: getSectionId(section),
     lock: section.lock,
@@ -550,7 +550,7 @@ function serializeSection(section: VisualSection, level: number): string {
     .map((child) => serializeSection(child, level + 1))
     .join('\n\n');
 
-  return `${heading}\n${directive}\n\n${blockText}${children ? `\n\n${children}` : ''}`;
+  return `${directive}\n${heading}\n\n${blockText}${children ? `\n\n${children}` : ''}`;
 }
 
 function serializeBlockSchema(

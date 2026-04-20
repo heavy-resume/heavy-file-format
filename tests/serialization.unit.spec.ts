@@ -1,148 +1,13 @@
-import { beforeAll, expect, test } from 'vitest';
+import { expect, test } from 'vitest';
 
-import { deserializeDocument, serializeDocument } from '../src/serialization';
-import { initCallbacks, initState, state } from '../src/state';
-import type { AppState, VisualDocument } from '../src/types';
+import { deserializeDocument } from '../src/serialization';
+import {
+  normalizeSerialized,
+  registerSerializationTestState,
+  serializeWithState,
+} from './serialization-test-helpers';
 
-function createTestState(document: VisualDocument): AppState {
-  return {
-    document,
-    filename: 'test.hvy',
-    currentView: 'editor',
-    paneScroll: {
-      editorTop: 0,
-      editorSidebarTop: 0,
-      readerTop: 0,
-      windowTop: 0,
-    },
-    showAdvancedEditor: false,
-    activeEditorBlock: null,
-    activeEditorSectionTitleKey: null,
-    clearSectionTitleOnFocusKey: null,
-    modalSectionKey: null,
-    reusableSaveModal: null,
-    tempHighlights: new Set<string>(),
-    addComponentBySection: {},
-    metaPanelOpen: false,
-    selectedReusableComponentName: null,
-    templateValues: {},
-    history: [],
-    future: [],
-    isRestoring: false,
-    componentMetaModal: null,
-    themeModalOpen: false,
-    gridAddComponentByBlock: {},
-    expandableEditorPanels: {},
-    viewerSidebarOpen: false,
-    editorSidebarOpen: false,
-    lastHistoryGroup: null,
-    lastHistoryAt: 0,
-    pendingEditorCenterSectionKey: null,
-  };
-}
-
-function serializeWithState(document: VisualDocument): string {
-  state.document = document;
-  return serializeDocument(document);
-}
-
-beforeAll(() => {
-  initCallbacks({
-    renderApp: () => {},
-    refreshReaderPanels: () => {},
-    refreshModalPreview: () => {},
-  });
-  initState(
-    createTestState({
-      meta: { hvy_version: 0.1 },
-      extension: '.hvy',
-      sections: [],
-    })
-  );
-});
-
-test('deserializes nested expandable slot children and part locks', () => {
-  const input = `---
-hvy_version: 0.1
----
-
-<!--hvy: {"id":"summary"}-->
-#! Summary
-
- <!--hvy:expandable {"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
-
-  <!--hvy:expandable:stub {"lock":true}-->
-
-   <!--hvy:text {"css":"margin-bottom: 0;"}-->
-    ## Summary
-
-  <!--hvy:expandable:content {}-->
-
-   <!--hvy:text {"css":"margin: 0;"}-->
-    Expanded detail
-`;
-
-  const document = deserializeDocument(input, '.hvy');
-  const block = document.sections[0]?.blocks[0];
-
-  expect(block.schema.component).toBe('expandable');
-  expect(block.schema.expandableStubBlocks.lock).toBe(true);
-  expect(block.schema.expandableStubBlocks.children).toHaveLength(1);
-  expect(block.schema.expandableStubBlocks.children[0]?.schema.component).toBe('text');
-  expect(block.schema.expandableStubBlocks.children[0]?.text).toBe('## Summary');
-  expect(block.schema.expandableContentBlocks.children).toHaveLength(1);
-  expect(block.schema.expandableContentBlocks.children[0]?.text).toBe('Expanded detail');
-});
-
-test('deserializes custom expandable components nested under component-list slots', () => {
-  const input = `---
-hvy_version: 0.1
-component_defs:
-  - name: skill-record
-    baseType: expandable
-    schema:
-      css: "margin: 0;"
-      expandableAlwaysShowStub: true
-      expandableExpanded: false
-      expandableStubBlocks:
-        lock: false
-        children: []
-      expandableContentBlocks:
-        lock: false
-        children: []
----
-
-<!--hvy: {"id":"skills"}-->
-#! Skills
-
- <!--hvy:component-list {"componentListComponent":"skill-record"}-->
-
-  <!--hvy:component-list:0 {}-->
-
-   <!--hvy:skill-record {"id":"skill-se"}-->
-
-    <!--hvy:expandable:stub {}-->
-
-     <!--hvy:text {}-->
-      Software Engineering
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {}-->
-      Description body
-`;
-
-  const document = deserializeDocument(input, '.hvy');
-  const listBlock = document.sections[0]?.blocks[0];
-  const record = listBlock.schema.componentListBlocks[0];
-
-  expect(listBlock.schema.component).toBe('component-list');
-  expect(record.schema.component).toBe('skill-record');
-  expect(record.schema.expandableStubBlocks.children).toHaveLength(1);
-  expect(record.schema.expandableStubBlocks.children[0]?.text).toBe('Software Engineering');
-  expect(record.schema.expandableContentBlocks.children).toHaveLength(1);
-  expect(record.schema.expandableContentBlocks.children[0]?.text).toBe('Description body');
-});
+registerSerializationTestState();
 
 test('serializes slot markers without child component payloads', () => {
   const input = `---
@@ -233,14 +98,8 @@ component_defs:
 `;
 
   const document = deserializeDocument(input, '.hvy');
-  const block = document.sections[0]?.blocks[0];
-
-  expect(block.schema.component).toBe('skills-and-tools-tech-list');
-  expect(block.schema.gridItems).toHaveLength(2);
-  expect(block.schema.gridItems[0]?.block.schema.component).toBe('component-list');
-  expect(block.schema.gridItems[1]?.block.schema.component).toBe('component-list');
-
   const output = serializeWithState(document);
+
   expect(output).toContain('<!--hvy:skills-and-tools-tech-list {}-->');
   expect(output).toMatch(/<!--hvy:grid:0 {"id":"history-skills","column":"left"}-->/);
   expect(output).toMatch(/<!--hvy:grid:1 {"id":"history-tools-technologies","column":"right"}-->/);
@@ -304,33 +163,23 @@ test('round-trips migrated example files without reintroducing slot-level compon
   }
 });
 
-test('resume education record keeps C/C++ inside the education tools list', async () => {
+test('serialize -> deserialize -> serialize stays stable for migrated examples', async () => {
   const fs = await import('node:fs/promises');
-  const input = await fs.readFile('examples/resume.hvy', 'utf8');
-  const document = deserializeDocument(input, '.hvy');
-  const educationSection = document.sections.find((section) => section.customId === 'education');
+  const files: Array<[string, '.hvy' | '.thvy']> = [
+    ['examples/resume.hvy', '.hvy'],
+    ['examples/resume.thvy', '.thvy'],
+    ['examples/example.hvy', '.hvy'],
+  ];
 
-  expect(educationSection).toBeTruthy();
-  const educationList = educationSection!.blocks.find((block) => block.schema.component === 'component-list');
-  expect(educationList).toBeTruthy();
-  expect(educationList.schema.component).toBe('component-list');
+  for (const [path, extension] of files) {
+    const input = await fs.readFile(path, 'utf8');
+    const firstDocument = deserializeDocument(input, extension);
+    const firstSerialized = serializeWithState(firstDocument);
+    const secondDocument = deserializeDocument(firstSerialized, extension);
+    const secondSerialized = serializeWithState(secondDocument);
 
-  const educationRecord = educationList.schema.componentListBlocks[0];
-  expect(educationRecord.schema.component).toBe('education-record');
-
-  const skillsToolsBlock = educationRecord.schema.expandableContentBlocks.children.find(
-    (block) => block.schema.component === 'skills-and-tools-tech-list'
-  );
-  expect(skillsToolsBlock).toBeTruthy();
-  expect(skillsToolsBlock!.schema.gridItems).toHaveLength(2);
-
-  const toolsList = skillsToolsBlock!.schema.gridItems[1]?.block;
-  expect(toolsList?.schema.component).toBe('component-list');
-
-  const toolTitles = toolsList!.schema.componentListBlocks
-    .filter((block) => block.schema.component === 'xref-card')
-    .map((block) => block.schema.xrefTitle);
-
-  expect(toolTitles).toContain('Python');
-  expect(toolTitles).toContain('C/C++');
+    expect(normalizeSerialized(secondSerialized), `${path} should be stable after one round-trip`).toBe(
+      normalizeSerialized(firstSerialized)
+    );
+  }
 });

@@ -716,7 +716,6 @@ function serializeGridItemBlock(item: GridItem, index: number, indent: number): 
     `grid:${index}`,
     {
       id: item.id,
-      column: item.column,
     },
     item.block,
     indent

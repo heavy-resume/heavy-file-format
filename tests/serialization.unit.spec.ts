@@ -19,12 +19,12 @@ hvy_version: 0.1
 
  <!--hvy:grid {"gridColumns":2}-->
 
-  <!--hvy:grid:0 {"id":"skills","column":"left"}-->
+  <!--hvy:grid:0 {"id":"skills"}-->
 
    <!--hvy:component-list {"componentListComponent":"text"}-->
     ## Skills
 
-  <!--hvy:grid:1 {"id":"details","column":"right"}-->
+  <!--hvy:grid:1 {"id":"details"}-->
 
    <!--hvy:container {}-->
 
@@ -37,10 +37,11 @@ hvy_version: 0.1
   const document = deserializeDocument(input, '.hvy');
   const output = serializeWithState(document);
 
-  expect(output).toMatch(/<!--hvy:grid:0 {"id":"skills","column":"left"}-->/);
+  expect(output).toMatch(/<!--hvy:grid:0 {"id":"skills"}-->/);
   expect(output).toMatch(/\n\s*<!--hvy:component-list \{\}-->/);
   expect(output).toMatch(/\n\s*<!--hvy:container \{\}-->/);
   expect(output).not.toMatch(/<!--hvy:grid:\d+\s+\{[^\n>]*"component"/);
+  expect(output).not.toMatch(/<!--hvy:grid:\d+\s+\{[^\n>]*"column"/);
   expect(output).not.toMatch(/<!--hvy:container:\d+\s+\{[^\n>]*"component"/);
   expect(output).not.toMatch(/<!--hvy:component-list:\d+\s+\{[^\n>]*"component"/);
 });
@@ -86,7 +87,6 @@ component_defs:
       gridColumns: 2
       gridItems:
         - id: relevant-skills
-          column: left
           block:
             text: ""
             schema:
@@ -94,7 +94,6 @@ component_defs:
               componentListComponent: xref-card
               css: "margin: 0;"
         - id: tools-technologies
-          column: right
           block:
             text: ""
             schema:
@@ -108,7 +107,7 @@ component_defs:
 
  <!--hvy:skills-and-tools-tech-list {}-->
 
-  <!--hvy:grid:0 {"id":"history-skills","column":"left"}-->
+  <!--hvy:grid:0 {"id":"history-skills"}-->
 
    <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;"}-->
 
@@ -117,7 +116,7 @@ component_defs:
      <!--hvy:text {}-->
       #### Skills
 
-  <!--hvy:grid:1 {"id":"history-tools-technologies","column":"right"}-->
+  <!--hvy:grid:1 {"id":"history-tools-technologies"}-->
 
    <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;"}-->
 
@@ -131,8 +130,9 @@ component_defs:
   const output = serializeWithState(document);
 
   expect(output).toContain('<!--hvy:skills-and-tools-tech-list {}-->');
-  expect(output).toMatch(/<!--hvy:grid:0 {"id":"history-skills","column":"left"}-->/);
-  expect(output).toMatch(/<!--hvy:grid:1 {"id":"history-tools-technologies","column":"right"}-->/);
+  expect(output).toMatch(/<!--hvy:grid:0 {"id":"history-skills"}-->/);
+  expect(output).toMatch(/<!--hvy:grid:1 {"id":"history-tools-technologies"}-->/);
+  expect(output).not.toMatch(/<!--hvy:grid:\d+\s+\{[^\n>]*"column"/);
   expect(output).not.toMatch(/<!--hvy:skills-and-tools-tech-list \{[^]*?<!--hvy:grid \{\}-->/);
 });
 

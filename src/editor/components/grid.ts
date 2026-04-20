@@ -75,10 +75,10 @@ export const renderGridReader: ComponentReaderRenderer = (_section, block, helpe
   const columns = Math.max(1, Math.min(6, block.schema.gridColumns));
   const gridStyle = `grid-template-columns: repeat(${columns}, minmax(0, 1fr));`;
   const cells = block.schema.gridItems
-    .map((item) => {
-      const gridColumn =
-        item.column === 'full' ? '1 / -1' : item.column === 'right' && columns > 1 ? `${Math.min(columns, 2)} / span 1` : '1 / span 1';
-      const alignClass = item.column === 'right' ? ' align-right' : item.column === 'full' ? ' align-full' : ' align-left';
+    .map((item, index) => {
+      const columnIndex = columns <= 1 ? 1 : (index % columns) + 1;
+      const gridColumn = columns <= 1 ? '1 / -1' : `${columnIndex} / span 1`;
+      const alignClass = columns <= 1 ? ' align-full' : columnIndex === columns ? ' align-right' : ' align-left';
       return `<div class="reader-grid-cell${alignClass}" style="grid-column: ${helpers.escapeAttr(gridColumn)};">${helpers.renderReaderBlock(
         _section,
         item.block

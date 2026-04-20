@@ -246,11 +246,11 @@ Grid blocks can be emitted with specialized directives so grid item content rema
 ```markdown
 <!--hvy:grid {"css":"margin: 0.5rem 0; gap: 0.75rem;","gridColumns":2}-->
 
- <!--hvy:grid:0 {"id":"skills","column":"left"}-->
+ <!--hvy:grid:0 {"id":"skills"}-->
 
   <!--hvy:component-list {"componentListComponent":"text"}-->
 
- <!--hvy:grid:1 {"id":"tools-technologies","column":"right"}-->
+ <!--hvy:grid:1 {"id":"tools-technologies"}-->
 
   <!--hvy:component-list {"componentListComponent":"text"}-->
 ```
@@ -258,7 +258,7 @@ Grid blocks can be emitted with specialized directives so grid item content rema
 When a `component-list` (or `container`) grid item has plain Markdown content before its first `hvy:component-list:N` (or `hvy:container:N`) directive, that content is implicitly treated as the first block in the list. This allows a text header to appear above list items without a wrapping directive:
 
 ```markdown
-<!--hvy:grid:0 {"id":"skills","column":"left"}-->
+<!--hvy:grid:0 {"id":"skills"}-->
  <!--hvy:component-list {"componentListComponent":"xref-card"}-->
   ## Skills
   <!--hvy:component-list:0 {}-->
@@ -285,8 +285,10 @@ Rules:
 - Multiple `hvy:expandable:stub` or `hvy:expandable:content` directives can be used for a single expandable block.
 - `hvy:grid` starts a grid block. Its payload is the grid block schema, with `component:"grid"` implied.
 - `hvy:grid:N`, `hvy:component-list:N`, `hvy:container:N`, and `hvy:table:R:D` are slot markers. Their payload contains slot metadata only; the actual child block is declared one indentation level deeper as its own directive.
+- For `hvy:grid:N`, `N` determines the item's placement order. Readers and editors SHOULD tile items across `gridColumns` in slot order, wrapping to the next row as needed.
 - For `hvy:component-list:N`, `N` is an ordering key rather than just an identifier. Lower numbers render first; file order breaks ties.
 - Slot markers MUST NOT carry `component` or `type`. Documents that use the old slot-carried child-component form are malformed.
+- Legacy grid slot payloads may include `column`, but new serializers SHOULD omit it and readers SHOULD ignore it for placement.
 - Plain Markdown content that appears after a `hvy:grid:N` (or standalone `hvy:component-list` / `hvy:container`) directive and before the first indexed sub-directive (`hvy:component-list:N`, `hvy:container:N`) is implicitly treated as the first block in that list or container.
 - If both `meta.blocks[n]` and a block directive describe the same logical block, `meta.blocks[n]` wins.
 

@@ -381,7 +381,7 @@ component_defs:
 <!--hvy: {"id":"summary","lock":true,"contained":false,"custom_css":"padding: 0 0.35rem;"}-->
 #! Summary
 
- <!--hvy:expandable {"css":"margin: 0.5rem 0;padding:0.5rem;","expandableAlwaysShowStub":true,"expandableExpanded":false,"lock":true}-->
+ <!--hvy:expandable {"css":"margin: 0.5rem 0; padding:0.25rem;","expandableAlwaysShowStub":true,"expandableExpanded":false,"lock":true}-->
 
   <!--hvy:expandable:stub {"lock":true}-->
 
@@ -424,7 +424,7 @@ component_defs:
 
  <!--hvy:grid {"css":"margin: 0.5rem 0; gap: 0.75rem;","gridColumns":2,"lock":true}-->
 
-  <!--hvy:grid:0 {"id":"top-skills","column":"left"}-->
+  <!--hvy:grid:0 {"id":"top-skills"}-->
 
    <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
 
@@ -445,7 +445,7 @@ component_defs:
 
      <!--hvy:xref-card {"css":"margin: 0.35rem 0;","xrefTitle":"LLM Prompt Engineering","xrefDetail":"Product workflow design","xrefTarget":"skill-llm-prompt-engineering"}-->
 
-  <!--hvy:grid:1 {"id":"top-tools-technologies","column":"right"}-->
+  <!--hvy:grid:1 {"id":"top-tools-technologies"}-->
 
    <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
 
@@ -1058,12 +1058,12 @@ component_defs:
 
       <!--hvy:grid {"css":"margin: 0.35rem 0;","gridColumns":2}-->
 
-        <!--hvy:grid:0 {"id":"history-location","column":"left"}-->
+        <!--hvy:grid:0 {"id":"history-location"}-->
 
          <!--hvy:text {"css":"margin: 0;"}-->
          Seattle, WA
 
-        <!--hvy:grid:1 {"id":"history-date-range","column":"right"}-->
+        <!--hvy:grid:1 {"id":"history-date-range"}-->
 
          <!--hvy:text {"css":"margin: 0; text-align: right;"}-->
          05/2024 - present
@@ -1106,7 +1106,7 @@ component_defs:
 
      <!--hvy:skills-and-tools-tech-list {}-->
 
-      <!--hvy:grid:0 {"id":"history-skills","column":"left"}-->
+      <!--hvy:grid:0 {"id":"history-skills"}-->
 
        <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
 
@@ -1127,7 +1127,7 @@ component_defs:
 
          <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Project Management","xrefTarget":"skill-project-management"}-->
 
-      <!--hvy:grid:1 {"id":"history-tools-technologies","column":"right"}-->
+      <!--hvy:grid:1 {"id":"history-tools-technologies"}-->
 
        <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
 
@@ -1166,16 +1166,16 @@ component_defs:
 
      <!--hvy:table {"css":"margin: 0;  margin-top: -1px;","tableColumns":"PROJECT, DATE","tableShowHeader":false,"tableRows":[{"cells":["Heavy Stack","05/2024 - present"]}]}-->
 
-    <!--hvy:expandable:content {}-->
+    <!--hvy:expandable:content {"css":"padding:0.5rem"}-->
 
      <!--hvy:grid {"css":"margin: 0 0 0.35rem;","gridColumns":2}-->
 
-      <!--hvy:grid:0 {"id":"project-title","column":"left"}-->
+      <!--hvy:grid:0 {"id":"project-title"}-->
 
        <!--hvy:text {"css":"margin: 0;"}-->
         ### Heavy Stack
 
-      <!--hvy:grid:1 {"id":"project-date-range","column":"right"}-->
+      <!--hvy:grid:1 {"id":"project-date-range"}-->
 
        <!--hvy:text {"css":"margin: 0; text-align: right;"}-->
         05/2024 - present
@@ -1194,7 +1194,7 @@ component_defs:
 
      <!--hvy:skills-and-tools-tech-list {"css":"margin: 0.5rem 0 0;","gridColumns":2}-->
 
-      <!--hvy:grid:0 {"id":"project-relevant-skills","column":"left"}-->
+      <!--hvy:grid:0 {"id":"project-relevant-skills"}-->
 
        <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
 
@@ -1211,7 +1211,7 @@ component_defs:
 
          <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Library Development","xrefTarget":"skill-library-development"}-->
 
-      <!--hvy:grid:1 {"id":"project-tools-technologies","column":"right"}-->
+      <!--hvy:grid:1 {"id":"project-tools-technologies"}-->
 
        <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
 
@@ -1244,12 +1244,12 @@ component_defs:
 
      <!--hvy:grid {"css":"margin: 0 0 0.35rem;","gridColumns":2}-->
 
-      <!--hvy:grid:0 {"id":"project-title-hackathon","column":"left"}-->
+      <!--hvy:grid:0 {"id":"project-title-hackathon"}-->
 
        <!--hvy:text {"css":"margin: 0;"}-->
         ### Autonomous Agent Hackathon
 
-      <!--hvy:grid:1 {"id":"project-date-range-hackathon","column":"right"}-->
+      <!--hvy:grid:1 {"id":"project-date-range-hackathon"}-->
 
        <!--hvy:text {"css":"margin: 0; text-align: right;"}-->
         08/2023 - 08/2023
@@ -1268,7 +1268,7 @@ component_defs:
 
      <!--hvy:skills-and-tools-tech-list {"css":"margin: 0.5rem 0 0;","gridColumns":2}-->
 
-      <!--hvy:grid:0 {"id":"project-relevant-skills-hackathon","column":"left"}-->
+      <!--hvy:grid:0 {"id":"project-relevant-skills-hackathon"}-->
 
        <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
 
@@ -1285,7 +1285,7 @@ component_defs:
 
          <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Project Management","xrefTarget":"skill-project-management"}-->
 
-      <!--hvy:grid:1 {"id":"project-tools-technologies-hackathon","column":"right"}-->
+      <!--hvy:grid:1 {"id":"project-tools-technologies-hackathon"}-->
 
        <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
 
@@ -1336,7 +1336,7 @@ component_defs:
 
      <!--hvy:grid {"css":"margin: 0.35rem 0;","gridColumns":2}-->
 
-      <!--hvy:grid:0 {"id":"education-institution-details","column":"left"}-->
+      <!--hvy:grid:0 {"id":"education-institution-details"}-->
 
        <!--hvy:component-list {"componentListComponent":"text","css":"margin: 0;"}-->
 
@@ -1360,7 +1360,7 @@ component_defs:
          <!--hvy:text {"css":"margin: 0.15rem 0 0;"}-->
           GPA: 3.8 / 4.0
 
-      <!--hvy:grid:1 {"id":"education-date-range","column":"right"}-->
+      <!--hvy:grid:1 {"id":"education-date-range"}-->
 
        <!--hvy:text {"css":"margin: 0; text-align: right;"}-->
         09/2019 - 06/2023
@@ -1374,7 +1374,7 @@ component_defs:
 
      <!--hvy:skills-and-tools-tech-list {"css":"margin: 0.5rem 0 0;","gridColumns":2}-->
 
-      <!--hvy:grid:0 {"id":"education-relevant-skills","column":"left"}-->
+      <!--hvy:grid:0 {"id":"education-relevant-skills"}-->
 
        <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
 
@@ -1387,7 +1387,7 @@ component_defs:
 
          <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Software Engineering","xrefTarget":"skill-software-engineering"}-->
 
-      <!--hvy:grid:1 {"id":"education-tools-technologies","column":"right"}-->
+      <!--hvy:grid:1 {"id":"education-tools-technologies"}-->
 
        <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
 

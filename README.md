@@ -1,6 +1,46 @@
 # The HVY File Format
 
-Heavy "HVY" (`.hvy`) is a Markdown-compatible file format for structured, interactive content ingestion by humans and AI.
+Heavy "HVY" (`.hvy`) is a file format for structured, interactive content designed for information ingestion across different audiences.
+
+## Why
+
+The purpose of the HVY file format is to create a document that isn't tied to being printable. It is handling a use case exposed in Heavy Resume that isn't confined to resumes. Essentially:
+- You want to provide more information if the audience calls for it
+- You want to be able to reorganize or rephrase things depending on the audience
+- The client (application that displays it) can be configured to customize and reorganize what the document displays.
+- You want an LLM to be able to ingest it without having to ingest the whole thing or likewise have to reinvent a strategy for ingesting the data. Everything has defined, atomic thoughts through explicit sections and components.
+- Expandable through plugins.
+
+## Other Benefits
+
+It's not a stretch to take this kind of format and use it for other purposes besides conveying informaton to others. For example, it could double as a personal note taking document or workspace. Extensinsibility with editors, clients, and plugins could easily bridge functionality gaps.
+
+## Standardized Vision
+
+Users are able to add sections and components using a visual editor, through LLM instruction (essentially coding the document), and through a data import.
+
+Expandability and crosslinking make it easy to chase down items of interest.
+
+Users can ask questions to AI and get back answers based on the contents.
+
+Additional data can be recorded off of the display area.
+
+An attached database allows for complex interactions.
+
+Intrinsically offline - capabilities similar to a web page without the need for hosting and with sandbox and security.
+
+Use of JSON and Markdown make it easy for LLMs to parse.
+
+## Reference Implementation Progress
+
+- [X] Create blank documents, with placeholders and templates
+- [X] Read from and write HYV / THVY files
+- [X] Color scheme and override support
+- [ ] Color scheme editor and cleanup
+- [ ] AI-based answering questions
+- [ ] AI-based editing
+- [ ] Embedded and attached database support
+- [ ] Plugin support
 
 ## Draft Spec
 
@@ -9,7 +49,8 @@ Heavy "HVY" (`.hvy`) is a Markdown-compatible file format for structured, intera
 ## Examples
 
 - [Example HVY Document](examples/example.hvy)
-- [Example Template (THVY)](examples/template.thvy)
+- [Example Resume Template (THVY)](examples/resume.thvy)
+- [Example Resume (HVY)](examples/resume.hvy)
 
 ## TypeScript Reference Implementation
 
@@ -59,3 +100,6 @@ npm run preview
 - Expand/collapse is implemented in the client (plus/minus control in reader).
 - Section meta supports section-level CSS editing with outside click to close.
 - Sections support persistent highlight and temporary highlight on navigation.
+
+# Plugin / Callback Support
+TBD

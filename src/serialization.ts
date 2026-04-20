@@ -252,16 +252,26 @@ function parseBlocks(contentMarkdown: string, sectionMeta: JsonObject, documentM
     try {
       const parsed = JSON.parse(match[2] ?? '{}') as JsonObject;
 
-      // expandable:stub and expandable:content are part-header markers that carry
-      // metadata (lock) for each part. They do not create a block frame themselves.
+      // expandable:stub and expandable:content act as both slot markers (opening
+      // a child block) and — when the directive carries only { lock } — as
+      // part-header markers that set lock for that part without opening a block.
       if (name === 'expandable' && rawParts.length === 1 && (rawParts[0] === 'stub' || rawParts[0] === 'content')) {
         const parent = findOrCreateParentFrame('expandable');
-        const partLock = parsed.lock === true;
-        if (rawParts[0] === 'stub') {
-          parent.schema.expandableStubBlocks = { lock: partLock, children: [] };
-        } else {
-          parent.schema.expandableContentBlocks = { lock: partLock, children: [] };
+        const part: 0 | 1 = rawParts[0] === 'stub' ? 0 : 1;
+        const keys = Object.keys(parsed);
+        const lockOnly = keys.length === 0 || (keys.length === 1 && keys[0] === 'lock');
+        if (parsed.lock === true) {
+          if (part === 0) {
+            parent.schema.expandableStubBlocks.lock = true;
+          } else {
+            parent.schema.expandableContentBlocks.lock = true;
+          }
         }
+        if (lockOnly) {
+          return;
+        }
+        const schema = schemaFromUnknown(parsed);
+        openOrQueueBlock(schema, { kind: 'expandable', parent, part });
         return;
       }
 
@@ -269,12 +279,7 @@ function parseBlocks(contentMarkdown: string, sectionMeta: JsonObject, documentM
         return;
       }
 
-      if (name === 'expandable' && indexes.length === 1) {
-        const parent = findOrCreateParentFrame('expandable');
-        const part = indexes[0] === 0 ? 0 : 1;
-        const schema = schemaFromUnknown(parsed);
-        openOrQueueBlock(schema, { kind: 'expandable', parent, part });
-      } else if (name === 'grid' && indexes.length === 1) {
+      if (name === 'grid' && indexes.length === 1) {
         const parent = findOrCreateParentFrame('grid');
         const schema = schemaFromUnknown({
           ...parsed,
@@ -580,7 +585,7 @@ function serializeBlockDirective(schema: BlockSchema): { name: string; schema: J
 
 function serializeExpandablePartBlock(block: VisualBlock, part: 0 | 1): string {
   return serializeBlock(block, {
-    name: `expandable:${part}`,
+    name: `expandable:${part === 0 ? 'stub' : 'content'}`,
     schema: serializeBlockSchema(block.schema, nestedBlockOmitOptions(block.schema)),
   });
 }

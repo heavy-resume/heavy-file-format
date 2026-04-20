@@ -126,3 +126,7 @@ Serializer mirrors: for each block with nested children (expandable stub+content
 - `component_defs` in YAML front matter uses the internal schema shape (`expandableStubBlocks.children: [...]`) — that is an **in-memory schema format**, not wire format, and should NOT change. Only inline document markdown markers change.
 - Editor renderers for expandable/grid don't read from wire format directly — they read from `block.schema`. Should keep working.
 - Template Mode (thvy) behavior unchanged beyond the marker rewrite.
+
+## DONE
+
+- Rename `hvy:expandable:0` / `hvy:expandable:1` → `hvy:expandable:stub` / `hvy:expandable:content` in parser, serializer, and all example + spec files. `tsc` passes. Old numeric-indexed form removed from parser (no backwards compat). Slot markers can still carry the old `{component, ...}` payload at this stage — the empty-slot + nested-child restructuring is still pending.

@@ -381,12 +381,12 @@ component_defs:
 
  <!--hvy:expandable {"css":"margin: 0.5rem 0;","expandableAlwaysShowStub":true,"expandableExpanded":false,"lock":true}-->
 
-  <!--hvy:expandable:0 {"component":"text","css":"margin-bottom: 0;","lock":true}-->
+  <!--hvy:expandable:stub {"component":"text","css":"margin-bottom: 0;","lock":true}-->
     ## Summary
 
-  <!--hvy:expandable:0 {"component":"text","css":"margin-top: 0;","lock":true}-->
+  <!--hvy:expandable:stub {"component":"text","css":"margin-top: 0;","lock":true}-->
 
-  <!--hvy:expandable:1 {"component":"component-list","componentListComponent":"text","css":"margin: 0;","lock":true}-->
+  <!--hvy:expandable:content {"component":"component-list","componentListComponent":"text","css":"margin: 0;","lock":true}-->
 
 <!--hvy: {"id":"locations","lock":true}-->
 #! Locations

@@ -24,7 +24,7 @@ body {
 }
 
 a {
-  color: var(--hvy-accent-1-text);
+  color: var(--hvy-link-color);
 }
 
 button,
@@ -124,7 +124,6 @@ button.ghost {
 button.danger {
   background: var(--hvy-danger);
   border-color: var(--hvy-danger);
-  color: var(--hvy-accent-1-text);
 }
 
 button.tiny {
@@ -287,7 +286,6 @@ button.tiny {
   border: 1px solid var(--hvy-border-alt);
   border-left: 0;
   background: color-mix(in srgb, var(--hvy-surface) 94%, var(--hvy-surface-tint) 6%);
-  color: var(--hvy-accent-2-alt);
   font-size: 1.25rem;
   line-height: 1;
   display: flex;
@@ -369,7 +367,6 @@ button.tiny {
   border: 1px solid var(--hvy-border-alt);
   border-left: 0;
   background: color-mix(in srgb, var(--hvy-surface) 94%, var(--hvy-surface-tint) 6%);
-  color: var(--hvy-accent-2-alt);
   font-size: 1.25rem;
   line-height: 1;
   display: flex;
@@ -543,7 +540,6 @@ button.tiny {
   align-items: center;
   justify-content: center;
   font-weight: 300;
-  color: var(--hvy-accent-2);
   background: var(--hvy-surface);
 }
 
@@ -688,7 +684,6 @@ button.tiny {
   border-radius: 999px;
   background: linear-gradient(180deg, var(--hvy-surface), var(--hvy-surface-alt));
   padding: 0.42rem 0.85rem;
-  color: var(--hvy-accent-2-alt);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
 }
 
@@ -855,7 +850,6 @@ button.tiny {
   border: 1px solid var(--hvy-border);
   border-radius: 8px;
   background: var(--hvy-surface-alt);
-  color: var(--hvy-accent-2-alt);
   text-decoration: none;
   box-shadow: 0 1px 2px var(--hvy-shadow);
 }
@@ -896,7 +890,6 @@ button.tiny {
   border: 1px solid var(--hvy-border-input);
   border-radius: 6px;
   background: var(--hvy-surface);
-  color: var(--hvy-accent-2-alt);
   padding: 0.34rem 0.45rem;
 }
 
@@ -926,7 +919,6 @@ button.tiny {
 .editor-block-passive .reader-xref-card:focus-visible {
   border-color: var(--hvy-focus);
   background: var(--hvy-xref-card-hover-bg);
-  color: var(--hvy-accent-2-alt);
   text-decoration: none;
 }
 
@@ -1031,7 +1023,6 @@ button.tiny {
   gap: 0.28rem;
   border-radius: 999px;
   background: var(--hvy-xref-card-hover-bg);
-  color: var(--hvy-accent-2-alt);
   padding: 0.24rem 0.34rem 0.24rem 0.62rem;
   font-size: 0.86rem;
 }
@@ -1232,7 +1223,6 @@ button.tiny {
   align-items: center;
   gap: 0.4rem;
   width: max-content;
-  color: var(--hvy-accent-2-alt);
   font-weight: 650;
 }
 
@@ -1338,7 +1328,6 @@ button.tiny {
 .expandable-label {
   font-size: 0.86rem;
   font-weight: 700;
-  color: var(--hvy-accent-2-alt);
 }
 
 .expandable-part-stub {
@@ -1690,7 +1679,6 @@ button.tiny {
   border: 1px solid var(--hvy-border);
   border-radius: 8px;
   background: var(--hvy-surface-alt);
-  color: var(--hvy-accent-2-alt);
   text-decoration: none;
   box-shadow: 0 1px 2px var(--hvy-shadow);
   transition: background-color 140ms ease, border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
@@ -1700,7 +1688,6 @@ button.tiny {
 .reader-block .reader-xref-card:focus-visible {
   border-color: var(--hvy-focus);
   background: var(--hvy-xref-card-hover-bg);
-  color: var(--hvy-accent-2-alt);
   text-decoration: none;
   box-shadow: 0 3px 10px var(--hvy-shadow-md);
   transform: translateY(-1px);

@@ -13,6 +13,7 @@ export const THEME_COLOR_NAMES: readonly string[] = [
   '--hvy-text',
   '--hvy-text-alt',
   '--hvy-text-muted',
+  '--hvy-link-color',
   '--hvy-accent-1',
   '--hvy-accent-1-alt',
   '--hvy-accent-1-text',

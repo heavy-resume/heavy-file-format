@@ -18,6 +18,7 @@ theme:
     --hvy-accent-2-alt: "#2d5d68"
     --hvy-button-bg: "#2d6a8a"
     --hvy-button-text: "#ffffff"
+    --hvy-link-color: "#7bc0e8";
     --hvy-highlight-1: "rgba(125, 179, 208, 0.20)"
     --hvy-highlight-2: "rgba(255, 214, 102, 0.25)"
     --hvy-border: "#2a3340"

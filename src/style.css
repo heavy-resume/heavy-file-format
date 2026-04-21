@@ -915,6 +915,28 @@ button.tiny {
   margin-bottom: 0;
 }
 
+.rich-editor ul.contains-task-list,
+.rich-editor ol.contains-task-list {
+  list-style: none;
+  padding-left: 0;
+}
+
+.rich-editor .task-list-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+  margin: 0 0 0.35rem;
+}
+
+.rich-editor .task-list-item:last-child {
+  margin-bottom: 0;
+}
+
+.rich-editor .task-list-item > input[type='checkbox'] {
+  flex: 0 0 auto;
+  margin: 0.15rem 0.22rem 0 0;
+}
+
 .editor-xref-card,
 .editor-block-passive .reader-xref-card {
   display: grid;

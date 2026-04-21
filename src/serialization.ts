@@ -79,6 +79,7 @@ function parseBlocks(contentMarkdown: string, sectionMeta: JsonObject, documentM
   let currentAttach: BlockAttach = { kind: 'top' };
   let currentHasDirective = false;
   let currentIndent = 0;
+  let currentTextIndent = 0;
   let sequenceCounter = 0;
 
   const resolveParsedBase = (componentName: string): string => {
@@ -94,7 +95,8 @@ function parseBlocks(contentMarkdown: string, sectionMeta: JsonObject, documentM
     if (!currentHasDirective && currentText.length === 0) {
       return;
     }
-    if (!currentHasDirective && currentText.join('\n').trim().length === 0) {
+    const normalizedText = normalizeParsedBlockText(currentText, currentTextIndent);
+    if (!currentHasDirective && normalizedText.trim().length === 0) {
       currentText = [];
       return;
     }
@@ -106,7 +108,7 @@ function parseBlocks(contentMarkdown: string, sectionMeta: JsonObject, documentM
     }
     const block: VisualBlock = {
       id: makeId('block'),
-      text: currentText.join('\n').trim(),
+      text: normalizedText,
       schema: currentSchema,
       schemaMode: false,
     };
@@ -115,6 +117,7 @@ function parseBlocks(contentMarkdown: string, sectionMeta: JsonObject, documentM
     currentSchema = defaultBlockSchema();
     currentAttach = { kind: 'top' };
     currentHasDirective = false;
+    currentTextIndent = 0;
   };
 
   const closeFrame = (): void => {
@@ -271,6 +274,7 @@ function parseBlocks(contentMarkdown: string, sectionMeta: JsonObject, documentM
       currentSchema = schema;
       currentAttach = attach;
       currentHasDirective = true;
+      currentTextIndent = currentIndent + 1;
       return;
     }
 
@@ -416,6 +420,26 @@ function parseBlocks(contentMarkdown: string, sectionMeta: JsonObject, documentM
     ...block,
     schema: schemaFromUnknown(schemas[index] ?? block.schema),
   }));
+}
+
+function normalizeParsedBlockText(lines: string[], indent: number): string {
+  if (lines.length === 0) {
+    return '';
+  }
+
+  const prefix = ' '.repeat(indent);
+  const stripped = lines.map((line) => (indent > 0 && line.startsWith(prefix) ? line.slice(indent) : line));
+  let start = 0;
+  let end = stripped.length;
+
+  while (start < end && stripped[start]?.trim().length === 0) {
+    start += 1;
+  }
+  while (end > start && stripped[end - 1]?.trim().length === 0) {
+    end -= 1;
+  }
+
+  return stripped.slice(start, end).join('\n');
 }
 
 const BLOCK_ARRAY_KEYS = ['containerBlocks', 'componentListBlocks'];

@@ -133,6 +133,7 @@ export function handleBlockFieldInput(target: HTMLElement): boolean {
     let stepStartedAt = performance.now();
     block.text = normalizeMarkdownLists(turndown.turndown(target.innerHTML));
     turndownMs = performance.now() - stepStartedAt;
+    syncEditableTaskListMarkup(target, block.text);
     stepStartedAt = performance.now();
     syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
     syncMs = performance.now() - stepStartedAt;
@@ -257,6 +258,7 @@ export function handleBlockFieldInput(target: HTMLElement): boolean {
     let stepStartedAt = performance.now();
     item.block.text = normalizeMarkdownLists(turndown.turndown(target.innerHTML));
     turndownMs = performance.now() - stepStartedAt;
+    syncEditableTaskListMarkup(target, item.block.text);
     stepStartedAt = performance.now();
     syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
     syncMs = performance.now() - stepStartedAt;
@@ -523,6 +525,8 @@ export function applyRichAction(action: string, editable: HTMLElement, value?: s
     document.execCommand('formatBlock', false, `h${level}`);
   } else if (action === 'list') {
     document.execCommand('insertUnorderedList');
+  } else if (action === 'checklist') {
+    insertInlineCheckboxAtSelection(editable);
   } else if (action === 'link') {
     const url = (value ?? '').trim();
     if (!url) {
@@ -533,6 +537,76 @@ export function applyRichAction(action: string, editable: HTMLElement, value?: s
 
   const inputEvent = new InputEvent('input', { bubbles: true });
   editable.dispatchEvent(inputEvent);
+}
+
+function insertInlineCheckboxAtSelection(editable: HTMLElement): void {
+  const selection = window.getSelection();
+  if (!selection?.rangeCount) {
+    return;
+  }
+
+  const range = selection.getRangeAt(0);
+  const normalizedRange = range.cloneRange();
+  normalizedRange.deleteContents();
+  const checkbox = document.createElement('input');
+  checkbox.type = 'checkbox';
+  checkbox.setAttribute('contenteditable', 'false');
+  const spacer = document.createTextNode(' ');
+  const fragment = document.createDocumentFragment();
+  fragment.appendChild(checkbox);
+  fragment.appendChild(spacer);
+  normalizedRange.insertNode(fragment);
+  placeCaretAfterInlineCheckbox(spacer, editable);
+}
+
+export function syncEditableTaskListMarkup(editable: HTMLElement, markdown: string): void {
+  if (!/(^|[^\\])\[( |x|X)\]/.test(markdown)) {
+    return;
+  }
+
+  if (!hasRawCheckboxMarkerText(editable)) {
+    return;
+  }
+
+  editable.innerHTML = markdownToEditorHtml(markdown);
+  placeCaretAtEnd(editable);
+}
+
+function hasRawCheckboxMarkerText(editable: HTMLElement): boolean {
+  const text = editable.textContent ?? '';
+  return /(^|[^\\])\[( |x|X)\]/.test(text);
+}
+
+function placeCaretAfterInlineCheckbox(spacer: Text, editable: HTMLElement): void {
+  const selection = window.getSelection();
+  if (!selection) {
+    return;
+  }
+  editable.focus();
+  const range = document.createRange();
+  const nextNode = spacer.nextSibling;
+  if (nextNode instanceof Text) {
+    range.setStart(nextNode, 0);
+  } else if (nextNode) {
+    range.setStartBefore(nextNode);
+  } else {
+    range.setStart(spacer, spacer.data.length);
+  }
+  range.collapse(true);
+  selection.removeAllRanges();
+  selection.addRange(range);
+}
+
+function placeCaretAtEnd(editable: HTMLElement): void {
+  const selection = window.getSelection();
+  if (!selection) {
+    return;
+  }
+  const range = document.createRange();
+  range.selectNodeContents(editable);
+  range.collapse(false);
+  selection.removeAllRanges();
+  selection.addRange(range);
 }
 
 export function moveBlockByOffset(sectionKey: string, blockId: string, offset: -1 | 1): boolean {

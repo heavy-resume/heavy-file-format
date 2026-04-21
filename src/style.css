@@ -649,6 +649,78 @@ button.tiny {
   margin-top: 0.2rem;
 }
 
+.checkbox-label input[type='checkbox'],
+.table-header-toggle input[type='checkbox'],
+.expandable-inline-toggle input[type='checkbox'] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 1.05rem;
+  height: 1.05rem;
+  margin: 0;
+  flex: 0 0 auto;
+  border: 1px solid var(--hvy-border-input);
+  border-radius: 0.3rem;
+  background: linear-gradient(180deg, var(--hvy-surface) 0%, var(--hvy-surface-alt) 100%);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--hvy-surface-alt) 78%, white 22%);
+  display: grid;
+  place-content: center;
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease, box-shadow 120ms ease, transform 120ms ease;
+}
+
+.checkbox-label input[type='checkbox']::before,
+.table-header-toggle input[type='checkbox']::before,
+.expandable-inline-toggle input[type='checkbox']::before {
+  content: '';
+  width: 0.26rem;
+  height: 0.5rem;
+  border-right: 0.13rem solid var(--hvy-accent-1-text);
+  border-bottom: 0.13rem solid var(--hvy-accent-1-text);
+  margin-top: -0.08rem;
+  transform: rotate(45deg) scale(0);
+  transform-origin: center;
+  transition: transform 120ms ease;
+}
+
+.checkbox-label input[type='checkbox']:hover,
+.table-header-toggle input[type='checkbox']:hover,
+.expandable-inline-toggle input[type='checkbox']:hover {
+  border-color: var(--hvy-focus);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--hvy-surface-alt) 78%, white 22%), 0 0 0 1px var(--hvy-focus-glow);
+}
+
+.checkbox-label input[type='checkbox']:checked,
+.table-header-toggle input[type='checkbox']:checked,
+.expandable-inline-toggle input[type='checkbox']:checked {
+  border-color: var(--hvy-accent-1-alt);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--hvy-accent-1) 18%, var(--hvy-surface) 82%) 0%,
+    color-mix(in srgb, var(--hvy-accent-1-alt) 22%, var(--hvy-surface-alt) 78%) 100%
+  );
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--hvy-surface) 88%, white 12%);
+}
+
+.checkbox-label input[type='checkbox']:checked::before,
+.table-header-toggle input[type='checkbox']:checked::before,
+.expandable-inline-toggle input[type='checkbox']:checked::before {
+  transform: rotate(45deg) scale(1);
+}
+
+.checkbox-label input[type='checkbox']:focus-visible,
+.table-header-toggle input[type='checkbox']:focus-visible,
+.expandable-inline-toggle input[type='checkbox']:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--hvy-focus-ring), 0 0 0 4px var(--hvy-focus-glow);
+}
+
+.checkbox-label input[type='checkbox']:disabled,
+.table-header-toggle input[type='checkbox']:disabled,
+.expandable-inline-toggle input[type='checkbox']:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .editor-grid input,
 .editor-grid select,
 .modal-panel input,
@@ -662,6 +734,9 @@ button.tiny {
   border: 1px solid var(--hvy-border-input);
   border-radius: 7px;
   padding: 0.44rem;
+  background: var(--hvy-surface);
+  color: var(--hvy-text);
+  font: inherit;
 }
 
 .editor-grid textarea,
@@ -671,9 +746,11 @@ button.tiny {
   border: 1px solid var(--hvy-border-input);
   border-radius: 7px;
   padding: 0.52rem 0.6rem;
+  background: var(--hvy-surface);
+  color: var(--hvy-text);
+  font: inherit;
   resize: vertical;
   min-height: 5.5rem;
-  font: inherit;
 }
 
 .editor-block select,
@@ -1408,11 +1485,6 @@ button.tiny {
   font-weight: 700;
   cursor: pointer;
   box-shadow: 0 1px 4px var(--hvy-shadow);
-}
-
-.expandable-inline-toggle input {
-  margin: 0;
-  accent-color: var(--hvy-warning);
 }
 
 .expandable-inline-toggle:hover {

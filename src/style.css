@@ -926,7 +926,7 @@ button.tiny {
   padding: 0.48rem 0.58rem;
   border: 1px solid var(--hvy-border);
   border-radius: 8px;
-  background: var(--hvy-surface-alt);
+  background: var(--hvy-xref-card-bg);
   text-decoration: none;
   box-shadow: 0 1px 2px var(--hvy-shadow);
 }
@@ -974,7 +974,7 @@ button.tiny {
 .editor-block-passive .reader-xref-card.is-invalid-target,
 .reader-block .reader-xref-card.is-invalid-target {
   border-color: var(--hvy-border-alt);
-  background: var(--hvy-surface-alt);
+  background: var(--hvy-xref-card-bg);
   color: var(--hvy-text-muted);
   box-shadow: none;
 }
@@ -1173,12 +1173,16 @@ button.tiny {
 .table-editor-grid td {
   border: 1px solid var(--hvy-border-input);
   vertical-align: top;
-  background: var(--hvy-surface);
+  background: var(--hvy-table-row-bg-1);
   overflow: hidden;
 }
 
 .table-editor-grid th {
-  background: var(--hvy-surface-alt);
+  background: var(--hvy-table-header);
+}
+
+.table-editor-grid tbody tr:nth-child(even) td {
+  background: var(--hvy-table-row-bg-2);
 }
 
 .table-utility-cell,
@@ -1771,7 +1775,7 @@ button.tiny {
   padding: 0.48rem 0.58rem;
   border: 1px solid var(--hvy-border);
   border-radius: 8px;
-  background: var(--hvy-surface-alt);
+  background: var(--hvy-xref-card-bg);
   text-decoration: none;
   box-shadow: 0 1px 2px var(--hvy-shadow);
   transition: background-color 140ms ease, border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
@@ -2067,6 +2071,10 @@ button.tiny {
   min-height: 1ch;
 }
 
+.reader-table th {
+  background: var(--hvy-table-header);
+}
+
 .editor-block-passive .reader-table td[data-placeholder]:empty::before {
   content: attr(data-placeholder);
   color: var(--hvy-text-muted);
@@ -2086,11 +2094,11 @@ button.tiny {
 }
 
 .table-main-row-even td {
-  background: color-mix(in srgb, var(--hvy-surface) 94%, var(--hvy-surface-tint) 6%);
+  background: var(--hvy-table-row-bg-1);
 }
 
 .table-main-row-odd td {
-  background: color-mix(in srgb, var(--hvy-surface) 88%, var(--hvy-surface-tint) 12%);
+  background: var(--hvy-table-row-bg-2);
 }
 
 .table-details-row td {

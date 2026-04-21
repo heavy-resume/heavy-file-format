@@ -4,7 +4,7 @@ import { renderContainerReader } from '../editor/components/container';
 import { renderExpandableReader } from '../editor/components/expandable';
 import { renderGridReader } from '../editor/components/grid';
 import { renderPluginReader } from '../editor/components/plugin';
-import { renderTableReader } from '../editor/components/table';
+import { renderTableReader, resetReaderTableStripeSequence } from '../editor/components/table';
 import { renderTextReader } from '../editor/components/text';
 import { renderXrefCardReader } from '../editor/components/xref-card';
 import type { ComponentRenderHelpers } from '../editor/component-helpers';
@@ -78,6 +78,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
   }
 
   function renderReaderSections(sections: VisualSection[]): string {
+    resetReaderTableStripeSequence();
     const realSections = sections.filter((section) => !section.isGhost && section.location !== 'sidebar');
     if (realSections.length === 0) {
       return '<div class="muted">No content to display yet.</div>';
@@ -86,6 +87,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
   }
 
   function renderSidebarSections(sections: VisualSection[]): string {
+    resetReaderTableStripeSequence();
     const sidebarSections = sections.filter((section) => !section.isGhost && section.location === 'sidebar');
     return sidebarSections.map((section) => renderReaderSection(section)).join('');
   }

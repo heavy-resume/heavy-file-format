@@ -29,7 +29,7 @@ theme:
     --hvy-xref-card-hover-bg: "rgba(255, 255, 255, 0.08)"
     --hvy-table-header: "#1f2a37"
     --hvy-table-row-bg-1: "#17222d"
-    --hvy-table-row-bg-2: "#1b2632"
+    --hvy-table-row-bg-2: "#1c2835"
     --hvy-icon-muted: "rgba(231, 238, 245, 0.33)"
     --hvy-shadow: "rgba(0, 0, 0, 0.20)"
     --hvy-shadow-md: "rgba(0, 0, 0, 0.30)"
@@ -1311,7 +1311,7 @@ component_defs:
 
   <!--hvy:component-list:0 {}-->
 
-   <!--hvy:education-record {"id":"education-bs-computer-science","css":"margin: 0; padding: 0.25rem;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+   <!--hvy:education-record {"id":"education-bs-computer-science","css":"margin: 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
     <!--hvy:expandable:stub {}-->
 

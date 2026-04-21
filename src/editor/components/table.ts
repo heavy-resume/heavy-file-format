@@ -1,6 +1,18 @@
 import type { ComponentEditorRenderer, ComponentReaderRenderer } from '../component-helpers';
 import type { TableRow } from '../types';
 
+let readerTableStripeIndex = 0;
+
+export function resetReaderTableStripeSequence(): void {
+  readerTableStripeIndex = 0;
+}
+
+function getNextReaderTableStripeClass(): 'even' | 'odd' {
+  const stripe = readerTableStripeIndex % 2 === 0 ? 'even' : 'odd';
+  readerTableStripeIndex += 1;
+  return stripe;
+}
+
 function renderTableRowEditor(
   sectionKey: string,
   blockId: string,
@@ -139,6 +151,9 @@ export const renderTableEditor: ComponentEditorRenderer = (sectionKey, block, he
 };
 
 export const renderTableReader: ComponentReaderRenderer = (_section, block, helpers) => {
+  if (block.schema.tableShowHeader) {
+    resetReaderTableStripeSequence();
+  }
   const columns = helpers.getTableColumns(block.schema);
   return `<table class="reader-table">
     ${
@@ -151,8 +166,8 @@ export const renderTableReader: ComponentReaderRenderer = (_section, block, help
     <tbody>
       ${block.schema.tableRows
         .map(
-          (row, rowIndex) => `
-            <tr class="table-main-row table-main-row-${rowIndex % 2 === 0 ? 'even' : 'odd'}">
+          (row) => `
+            <tr class="table-main-row table-main-row-${getNextReaderTableStripeClass()}">
               ${columns.map((column, cellIndex) => {
                 const value = helpers.escapeHtml(row.cells[cellIndex] ?? '');
                 const placeholder = helpers.escapeAttr(column || 'Cell value');

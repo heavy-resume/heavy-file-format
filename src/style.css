@@ -2055,6 +2055,14 @@ button.tiny {
   align-items: start;
 }
 
+.editor-grid-passive-preview {
+  min-height: 3rem;
+}
+
+.is-passive-grid-cell .editor-block-passive {
+  min-height: 2.2rem;
+}
+
 .reader-grid-cell {
   min-width: 0;
   padding: 0;

@@ -1061,7 +1061,7 @@ component_defs:
     <!--hvy:expandable:content {"css":"padding: 0.5rem;"}-->
 
      <!--hvy:text {"css":"margin: 0 0 0.35rem;"}-->
-      ### Senior Software Engineer
+      ### Northwind Labs
 
       <!--hvy:grid {"css":"margin: 0.35rem 0;","gridColumns":2}-->
 
@@ -1076,7 +1076,7 @@ component_defs:
          05/2024 - present
 
      <!--hvy:text {"css":"margin: 0.35rem 0; font-weight: 700;"}-->
-      Platform and AI Infrastructure Lead
+      Senior Software Engineer
 
      <!--hvy:text {"css":"margin: 0.35rem 0;"}-->
       Led the developer platform for an AI-enabled product line, improving local setup, internal tooling, and release confidence across a fast-moving engineering team.
@@ -1311,7 +1311,7 @@ component_defs:
 
   <!--hvy:component-list:0 {}-->
 
-   <!--hvy:education-record {"id":"education-bs-computer-science","css":"margin: 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+   <!--hvy:education-record {"id":"education-bs-computer-science","css":"margin: 0; padding: 0.25rem;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
     <!--hvy:expandable:stub {}-->
 

@@ -378,6 +378,23 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       //   .join('')}</div>`;
     }
 
+    if (base === 'grid') {
+      deps.ensureGridItems(block.schema);
+      const columns = Math.max(1, Math.min(6, block.schema.gridColumns));
+      const cells = block.schema.gridItems
+        .map((item, index) => {
+          const columnIndex = columns <= 1 ? 1 : (index % columns) + 1;
+          const gridColumn = columns <= 1 ? '1 / -1' : `${columnIndex} / span 1`;
+          return `<div class="reader-grid-cell is-passive-grid-cell" style="grid-column: ${deps.escapeAttr(gridColumn)};">${renderPassiveEditorBlock(
+            sectionKey,
+            item.block,
+            rootSections
+          )}</div>`;
+        })
+        .join('');
+      return `<div class="reader-grid-layout editor-grid-passive-preview" style="grid-template-columns: repeat(${columns}, minmax(0, 1fr));">${cells}</div>`;
+    }
+
     if ((base === 'text' || base === 'quote') && block.text.trim().length === 0) {
       const hint = block.schema.placeholder || (base === 'quote' ? 'Empty quote...' : 'Empty text...');
       const content = block.schema.placeholder

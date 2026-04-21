@@ -9,6 +9,10 @@ title: Reference Implementation Demo
 <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
 This is a **visual HVY editor**. What you see in the editor is the primary authoring experience.
 
+<!--hvy:text {"css":"margin: 0.5rem 0;"}-->
+- [ ] Draft a new section
+- [x] Verify checkbox rendering
+
 <!--hvy:quote {"css":"margin: 0.5rem 0;"}-->
 Design the format like a document, not a form.
 

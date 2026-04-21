@@ -10,8 +10,24 @@ export const turndown = new TurndownService({
   emDelimiter: '_',
 });
 
+turndown.addRule('task-list-checkbox', {
+  filter: (node) => node.nodeName === 'INPUT' && (node as HTMLInputElement).getAttribute('type') === 'checkbox',
+  replacement: (_content, node) => {
+    const input = node as HTMLInputElement;
+    return input.checked ? '[x] ' : '[ ] ';
+  },
+});
+
 export function markdownToEditorHtml(markdown: string): string {
-  return addExternalLinkTargets(DOMPurify.sanitize(marked.parse(escapeRawHtml(markdown || '')) as string));
+  const html = addExternalLinkTargets(DOMPurify.sanitize(marked.parse(escapeRawHtml(markdown || '')) as string));
+  const template = document.createElement('template');
+  template.innerHTML = html;
+  renderInlineCheckboxes(template.content);
+  template.content.querySelectorAll<HTMLInputElement>('input[type="checkbox"]').forEach((checkbox) => {
+    checkbox.removeAttribute('disabled');
+    checkbox.setAttribute('contenteditable', 'false');
+  });
+  return template.innerHTML;
 }
 
 export function addExternalLinkTargets(html: string): string {
@@ -62,5 +78,67 @@ export function normalizeMarkdownLists(markdown: string): string {
     out.push(line);
   }
 
-  return out.join('\n').replace(/\n{3,}/g, '\n\n');
+  return normalizeEscapedCheckboxMarkers(out.join('\n').replace(/\n{3,}/g, '\n\n'));
+}
+
+function normalizeEscapedCheckboxMarkers(markdown: string): string {
+  return markdown.replace(/\\\[( |x|X)\\\]/g, (_match, state) => `[${state.toLowerCase() === 'x' ? 'x' : ' '}]`);
+}
+
+function renderInlineCheckboxes(root: ParentNode): void {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+    acceptNode: (node) => {
+      const parent = node.parentElement;
+      if (!parent) {
+        return NodeFilter.FILTER_REJECT;
+      }
+      if (parent.closest('code, pre, script, style, textarea')) {
+        return NodeFilter.FILTER_REJECT;
+      }
+      return /\[( |x|X)\]/.test(node.textContent ?? '') ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+    },
+  });
+
+  const textNodes: Text[] = [];
+  let current = walker.nextNode();
+  while (current) {
+    if (current instanceof Text) {
+      textNodes.push(current);
+    }
+    current = walker.nextNode();
+  }
+
+  textNodes.forEach((textNode) => {
+    const text = textNode.textContent ?? '';
+    const regex = /\[( |x|X)\]/g;
+    let lastIndex = 0;
+    let match: RegExpExecArray | null = regex.exec(text);
+    if (!match) {
+      return;
+    }
+
+    const fragment = document.createDocumentFragment();
+    do {
+      if (match.index > lastIndex) {
+        fragment.appendChild(document.createTextNode(text.slice(lastIndex, match.index)));
+      }
+
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      const isChecked = (match[1] ?? ' ').toLowerCase() === 'x';
+      checkbox.checked = isChecked;
+      if (isChecked) {
+        checkbox.setAttribute('checked', '');
+      }
+      checkbox.setAttribute('contenteditable', 'false');
+      fragment.appendChild(checkbox);
+      lastIndex = regex.lastIndex;
+      match = regex.exec(text);
+    } while (match);
+
+    if (lastIndex < text.length) {
+      fragment.appendChild(document.createTextNode(text.slice(lastIndex)));
+    }
+    textNode.replaceWith(fragment);
+  });
 }

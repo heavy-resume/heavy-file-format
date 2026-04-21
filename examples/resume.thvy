@@ -70,6 +70,7 @@ component_defs:
           - text: ""
             schema:
               component: text
+              placeholder: Organization
               css: "margin: 0 0 0.35rem;"
           - text: ""
             schema:
@@ -78,26 +79,28 @@ component_defs:
               gridColumns: 2
               gridItems:
                 - id: history-location
-                  column: left
                   block:
                     text: ""
                     schema:
                       component: text
+                      placeholder: location
                       css: "margin: 0;"
                 - id: history-date-range
-                  column: right
                   block:
                     text: ""
                     schema:
                       component: text
+                      placeholder: date range
                       css: "margin: 0; text-align: right;"
           - text: ""
             schema:
               component: text
+              placeholder: job title
               css: "margin: 0.35rem 0; font-weight: 700;"
           - text: ""
             schema:
               component: text
+              placeholder: description
               css: "margin: 0.35rem 0;"
           - text: "#### Accomplishments"
             schema:
@@ -118,7 +121,6 @@ component_defs:
       gridColumns: 2
       gridItems:
         - id: relevant-skills
-          column: left
           align: center
           block:
             text: ""
@@ -132,7 +134,6 @@ component_defs:
                     component: text
                     css: "margin: 0 0 0.25rem;"
         - id: tools-technologies
-          column: right
           align: center
           block:
             text: ""
@@ -149,7 +150,7 @@ component_defs:
     baseType: expandable
     description: Expandable education record
     schema:
-      css: "margin: 0;"
+      css: "margin: 0; padding: 0.25rem;"
       expandableAlwaysShowStub: true
       expandableExpanded: false
       expandableStubBlocks:
@@ -174,21 +175,28 @@ component_defs:
               gridColumns: 2
               gridItems:
                 - id: education-institution-details
-                  column: left
                   block:
                     text: ""
                     schema:
-                      component: component-list
-                      componentListComponent: text
+                      component: container
                       css: "margin: 0;"
-                      componentListBlocks:
+                      containerBlocks:
                         - text: ""
                           schema:
                             component: text
                             css: "margin: 0 0 0.25rem;"
-                            placeholder: "Degree Title"
+                            placeholder: "School / University"
+                        - text: ""
+                          schema:
+                            component: text
+                            css: "margin: 0 0 0.25rem;"
+                            placeholder: "Location"
+                        - text: ""
+                          schema:
+                            component: text
+                            css: "margin: 0;"
+                            placeholder: "GPA"
                 - id: education-date-range
-                  column: right
                   block:
                     text: ""
                     schema:
@@ -240,14 +248,12 @@ component_defs:
               gridColumns: 2
               gridItems:
                 - id: project-title
-                  column: left
                   block:
                     text: ""
                     schema:
                       component: text
                       css: "margin: 0;"
                 - id: project-date-range
-                  column: right
                   block:
                     text: ""
                     schema:
@@ -410,11 +416,11 @@ component_defs:
 #! Top Skills, Tools, and Technologies
 
  <!--hvy:grid {"css":"margin: 0.5rem 0; gap: 0.75rem;","gridColumns":2,"lock":true}-->
-  <!--hvy:grid:0 {"id":"top-skills","column":"left"}-->
+  <!--hvy:grid:0 {"id":"top-skills"}-->
 
    <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
     ## Skills
-  <!--hvy:grid:1 {"id":"top-tools-technologies","column":"right"}-->
+  <!--hvy:grid:1 {"id":"top-tools-technologies"}-->
 
    <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
     ## Tools & Technologies

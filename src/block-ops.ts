@@ -9,7 +9,7 @@ import { getReusableTemplateByName, ensureContainerBlocks, ensureComponentListBl
 import { syncReusableTemplateForBlock } from './reusable';
 import { normalizeXrefTarget, getXrefTargetOptions, isXrefTargetValid } from './xref-ops';
 import { getTableColumns, setTableColumns } from './table-ops';
-import { coerceGridColumns, coerceGridColumn } from './grid-ops';
+import { coerceGridColumns } from './grid-ops';
 import { normalizeMarkdownLists, markdownToEditorHtml, turndown } from './markdown';
 import { escapeAttr, escapeHtml, getInlineEditableText, renderOption } from './utils';
 import { recordHistory } from './history';
@@ -238,22 +238,6 @@ export function handleBlockFieldInput(target: HTMLElement): boolean {
     syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
     getRefreshReaderPanels()();
     getRenderApp()();
-    return true;
-  }
-
-  if (field === 'block-grid-item-column' && target instanceof HTMLSelectElement) {
-    const gridItemId = target.dataset.gridItemId;
-    if (!gridItemId) {
-      return true;
-    }
-    ensureGridItems(block.schema);
-    const item = block.schema.gridItems.find((candidate) => candidate.id === gridItemId);
-    if (!item) {
-      return true;
-    }
-    item.column = coerceGridColumn(target.value, block.schema.gridColumns);
-    syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
-    getRefreshReaderPanels()();
     return true;
   }
 

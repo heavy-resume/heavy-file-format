@@ -11,7 +11,6 @@ import {
   schemaFromUnknown,
   createEmptyBlock,
 } from './document-factory';
-import { coerceGridColumn } from './grid-ops';
 
 export function deserializeDocument(text: string, extension: VisualDocument['extension']): VisualDocument {
   const parsed = parseHvy(text, extension);
@@ -207,10 +206,8 @@ function parseBlocks(contentMarkdown: string, sectionMeta: JsonObject, documentM
       return;
     }
     if (attach.kind === 'grid') {
-      const index = attach.parent.schema.gridItems.length;
       attach.parent.schema.gridItems.push({
         id: typeof attach.meta.id === 'string' ? attach.meta.id : makeId('griditem'),
-        column: coerceGridColumn(attach.meta.column ?? index, attach.parent.schema.gridColumns),
         block,
       });
       return;
@@ -621,7 +618,6 @@ function serializeBlockSchema(
     if (!options.omitGridItems && schema.gridItems.length > 0) {
       payload.gridItems = schema.gridItems.map((item) => ({
         id: item.id,
-        column: item.column,
         block: serializeVisualBlock(item.block),
       }));
     }

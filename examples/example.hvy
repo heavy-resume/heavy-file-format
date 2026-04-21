@@ -36,12 +36,12 @@ Containers are good defaults for subsections and grouped notes.
 
 <!--hvy:grid {"css":"margin: 0.5rem 0;","gridColumns":2}-->
 
- <!--hvy:grid:0 {"id":"griditem-demo-a","column":"left"}-->
+ <!--hvy:grid:0 {"id":"griditem-demo-a"}-->
 
   <!--hvy:text {}-->
    Grid item A
 
- <!--hvy:grid:1 {"id":"griditem-demo-b","column":"right"}-->
+ <!--hvy:grid:1 {"id":"griditem-demo-b"}-->
 
   <!--hvy:text {}-->
    Grid item B

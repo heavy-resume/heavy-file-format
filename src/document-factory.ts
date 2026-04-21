@@ -3,7 +3,7 @@ import type { JsonObject } from './hvy/types';
 import type { ComponentDefinition, VisualDocument } from './types';
 import { makeId } from './utils';
 import { getComponentDefs, getSectionDefs, resolveBaseComponent } from './component-defs';
-import { coerceGridColumn, coerceGridColumns, createGridItem as _createGridItem, parseGridItems as _parseGridItems } from './grid-ops';
+import { coerceGridColumns, createGridItem as _createGridItem, parseGridItems as _parseGridItems } from './grid-ops';
 import { getTableColumns } from './table-ops';
 import { REUSABLE_SECTION_DEF_PREFIX } from './state';
 
@@ -431,7 +431,6 @@ export function ensureGridItems(schema: BlockSchema): void {
   }
   schema.gridItems = schema.gridItems.map((item) => ({
     id: item.id || makeId('griditem'),
-    column: coerceGridColumn(item.column, schema.gridColumns),
     block: item.block && typeof item.block === 'object' && 'id' in item.block && 'schema' in item.block
       ? item.block
       : item.block ? _parseBlock(item.block) : _createBlock('text', true),

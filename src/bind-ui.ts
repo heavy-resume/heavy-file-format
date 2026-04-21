@@ -13,7 +13,7 @@ import {
   handleTagEditorInput,
   handleTagEditorKeydown,
 } from './editor/tag-editor';
-import { getThemeConfig, applyTheme, writeThemeConfig } from './theme';
+import { getThemeConfig, applyTheme, writeThemeConfig, colorValueToPickerHex } from './theme';
 import { findSectionByKey, getSectionId, isDefaultUntitledSectionTitle } from './section-ops';
 import { getComponentDefs, getSectionDefs, getReusableNameFromSectionKey, isBuiltinComponent } from './component-defs';
 import {
@@ -144,6 +144,26 @@ export function bindUi(app: HTMLElement): void {
       return;
     }
 
+    if (field === 'theme-color-picker' && target instanceof HTMLInputElement) {
+      const name = target.dataset.colorName ?? '';
+      if (!name) return;
+      recordHistory(`meta:theme-color:${name}`);
+      const theme = getThemeConfig();
+      theme.colors[name] = target.value;
+      writeThemeConfig(theme);
+      applyTheme();
+      const row = target.closest<HTMLElement>('.theme-color-row');
+      const valueInput = row?.querySelector<HTMLInputElement>('.theme-color-value');
+      const swatch = row?.querySelector<HTMLElement>('.theme-color-swatch');
+      if (valueInput) {
+        valueInput.value = target.value;
+      }
+      if (swatch) {
+        swatch.style.background = target.value;
+      }
+      return;
+    }
+
     if (field === 'theme-color-value' && target instanceof HTMLInputElement) {
       const name = target.dataset.colorName ?? '';
       if (!name) return;
@@ -152,6 +172,15 @@ export function bindUi(app: HTMLElement): void {
       theme.colors[name] = target.value;
       writeThemeConfig(theme);
       applyTheme();
+      const row = target.closest<HTMLElement>('.theme-color-row');
+      const pickerInput = row?.querySelector<HTMLInputElement>('.theme-color-picker');
+      const swatch = row?.querySelector<HTMLElement>('.theme-color-swatch');
+      if (pickerInput) {
+        pickerInput.value = colorValueToPickerHex(target.value);
+      }
+      if (swatch) {
+        swatch.style.background = target.value;
+      }
       return;
     }
 

@@ -48,6 +48,49 @@ export const THEME_COLOR_NAMES: readonly string[] = [
   '--hvy-success-border',
 ];
 
+const THEME_COLOR_LABELS: Record<string, string> = {
+  '--hvy-bg': 'Background',
+  '--hvy-bg-alt': 'Background Alt',
+  '--hvy-surface': 'Surface',
+  '--hvy-surface-alt': 'Surface Alt',
+  '--hvy-surface-tint': 'Surface Tint',
+  '--hvy-text': 'Text',
+  '--hvy-text-alt': 'Text Alt',
+  '--hvy-text-muted': 'Text Muted',
+  '--hvy-link-color': 'Link Color',
+  '--hvy-accent-1': 'Accent 1',
+  '--hvy-accent-1-alt': 'Accent 1 Alt',
+  '--hvy-accent-1-text': 'Accent 1 Text',
+  '--hvy-accent-2': 'Accent 2',
+  '--hvy-accent-2-alt': 'Accent 2 Alt',
+  '--hvy-button-bg': 'Button Background',
+  '--hvy-button-text': 'Button Text',
+  '--hvy-highlight-1': 'Highlight 1',
+  '--hvy-highlight-2': 'Highlight 2',
+  '--hvy-border': 'Border',
+  '--hvy-border-alt': 'Border Alt',
+  '--hvy-border-input': 'Input Border',
+  '--hvy-border-translucent': 'Translucent Border',
+  '--hvy-xref-card-bg': 'Xref Card Background',
+  '--hvy-xref-card-hover-bg': 'Xref Card Hover Background',
+  '--hvy-table-header': 'Table Header',
+  '--hvy-table-row-bg-1': 'Table Row Background 1',
+  '--hvy-table-row-bg-2': 'Table Row Background 2',
+  '--hvy-icon-muted': 'Muted Icon',
+  '--hvy-shadow': 'Shadow',
+  '--hvy-shadow-md': 'Shadow Medium',
+  '--hvy-shadow-lg': 'Shadow Large',
+  '--hvy-overlay': 'Overlay',
+  '--hvy-danger': 'Danger',
+  '--hvy-warning': 'Warning',
+  '--hvy-warning-bg': 'Warning Background',
+  '--hvy-warning-border': 'Warning Border',
+  '--hvy-warning-accent': 'Warning Accent',
+  '--hvy-success': 'Success',
+  '--hvy-success-bg': 'Success Background',
+  '--hvy-success-border': 'Success Border',
+};
+
 let colorModeMediaQuery: MediaQueryList | null = null;
 let colorModeListener: ((event: MediaQueryListEvent) => void) | null = null;
 
@@ -127,4 +170,40 @@ export function writeThemeConfig(next: ThemeConfig): void {
   state.document.meta.theme = {
     colors: { ...next.colors },
   };
+}
+
+export function getThemeColorLabel(name: string): string {
+  return THEME_COLOR_LABELS[name] ?? name.replace(/^--hvy-/, '').split('-').map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(' ');
+}
+
+export function getResolvedThemeColor(name: string): string {
+  if (typeof window === 'undefined') {
+    return getThemeConfig().colors[name] ?? '';
+  }
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || getThemeConfig().colors[name] || '';
+}
+
+export function colorValueToPickerHex(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return '#000000';
+  }
+  const hexMatch = trimmed.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+  if (hexMatch) {
+    const hex = hexMatch[1];
+    if (hex.length === 3) {
+      return `#${hex
+        .split('')
+        .map((part) => `${part}${part}`)
+        .join('')
+        .toLowerCase()}`;
+    }
+    return `#${hex.toLowerCase()}`;
+  }
+  const rgbMatch = trimmed.match(/^rgba?\(\s*(\d{1,3})\s*[,\s]\s*(\d{1,3})\s*[,\s]\s*(\d{1,3})(?:\s*[,/]\s*[\d.]+\s*)?\)$/i);
+  if (rgbMatch) {
+    const [r, g, b] = rgbMatch.slice(1, 4).map((part) => Math.max(0, Math.min(255, Number.parseInt(part, 10))));
+    return `#${[r, g, b].map((part) => part.toString(16).padStart(2, '0')).join('')}`;
+  }
+  return '#000000';
 }

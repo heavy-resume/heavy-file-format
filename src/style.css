@@ -1279,6 +1279,11 @@ button.tiny {
 .grid-columns-input {
   width: 5rem;
   max-width: 5rem;
+  border: 1px solid var(--hvy-border-input);
+  border-radius: 8px;
+  padding: 0.35rem 0.5rem;
+  background: var(--hvy-surface);
+  color: var(--hvy-text);
 }
 
 .table-details-editor {
@@ -2058,22 +2063,22 @@ button.tiny {
   border-radius: 0;
 }
 
-.reader-grid-cell.align-left,
-.reader-grid-cell.align-full {
+.reader-grid-cell.is-flow-track,
+.reader-grid-cell.is-single-track {
   text-align: left;
 }
 
-.reader-grid-cell.align-right {
+.reader-grid-cell.is-terminal-track {
   text-align: right;
 }
 
-.reader-grid-cell.align-right .reader-xref-card {
+.reader-grid-cell.is-terminal-track .reader-xref-card {
   justify-self: end;
   text-align: left;
 }
 
-.reader-grid-cell.align-right ul,
-.reader-grid-cell.align-right ol {
+.reader-grid-cell.is-terminal-track ul,
+.reader-grid-cell.is-terminal-track ol {
   display: inline-block;
   margin-left: auto;
   margin-right: 0;

@@ -1,4 +1,4 @@
-import type { GridColumn, GridItem, VisualBlock } from './editor/types';
+import type { GridItem, VisualBlock } from './editor/types';
 import type { JsonObject } from './hvy/types';
 import { makeId } from './utils';
 
@@ -22,26 +22,12 @@ export function coerceGridColumns(value: unknown): number {
   return 2;
 }
 
-export function coerceGridColumn(value: unknown, columns: number): GridColumn {
-  if (columns <= 1) {
-    return 'full';
-  }
-  if (value === 'right') {
-    return 'right';
-  }
-  if (value === 'full') {
-    return 'full';
-  }
-  return 'left';
-}
-
 export function createGridItem(
-  index: number,
-  columns: number,
+  _index: number,
+  _columns: number,
   createBlock: (component: string, skip: boolean) => VisualBlock
 ): GridItem {
-  const column = columns <= 1 ? 'full' : index % 2 === 0 ? 'left' : 'right';
-  return { id: makeId('griditem'), column, block: createBlock('text', true) };
+  return { id: makeId('griditem'), block: createBlock('text', true) };
 }
 
 export function parseGridItems(
@@ -60,7 +46,6 @@ export function parseGridItems(
       const item = raw as JsonObject;
       items.push({
         id: typeof item.id === 'string' ? item.id : makeId('griditem'),
-        column: coerceGridColumn(item.column, columns),
         block: item.block ? parseBlock(item.block) : (() => {
           const block = createBlock(typeof item.component === 'string' ? item.component : 'text', true);
           block.text = typeof item.content === 'string' ? item.content : '';
@@ -73,14 +58,13 @@ export function parseGridItems(
 
   if (candidate.gridItems && typeof candidate.gridItems === 'object') {
     const keyedItems = candidate.gridItems as Record<string, unknown>;
-    Object.values(keyedItems).forEach((raw, index) => {
+    Object.values(keyedItems).forEach((raw) => {
       if (!raw || typeof raw !== 'object') {
         return;
       }
       const item = raw as JsonObject;
       items.push({
         id: makeId('griditem'),
-        column: coerceGridColumn(index % 2 === 0 ? 'left' : 'right', columns),
         block: (() => {
           const block = createBlock(typeof item.component === 'string' ? item.component : 'text', true);
           block.text = typeof item.content === 'string' ? item.content : '';
@@ -100,10 +84,9 @@ export function parseGridItems(
     .filter((key) => key.length > 0);
   const legacyValues =
     typeof candidate.gridValues === 'object' && candidate.gridValues ? (candidate.gridValues as Record<string, unknown>) : {};
-  legacyKeys.forEach((key, index) => {
+  legacyKeys.forEach((key) => {
     items.push({
       id: makeId('griditem'),
-      column: coerceGridColumn(index % 2 === 0 ? 'left' : 'right', columns),
       block: (() => {
         const block = createBlock('text', true);
         block.text = typeof legacyValues[key] === 'string' ? (legacyValues[key] as string) : '';

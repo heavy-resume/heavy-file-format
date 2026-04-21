@@ -288,7 +288,6 @@ Rules:
 - For `hvy:grid:N`, `N` determines the item's placement order. Readers and editors SHOULD tile items across `gridColumns` in slot order, wrapping to the next row as needed.
 - For `hvy:component-list:N`, `N` is an ordering key rather than just an identifier. Lower numbers render first; file order breaks ties.
 - Slot markers MUST NOT carry `component` or `type`. Documents that use the old slot-carried child-component form are malformed.
-- Legacy grid slot payloads may include `column`, but new serializers SHOULD omit it and readers SHOULD ignore it for placement.
 - Plain Markdown content that appears after a `hvy:grid:N` (or standalone `hvy:component-list` / `hvy:container`) directive and before the first indexed sub-directive (`hvy:component-list:N`, `hvy:container:N`) is implicitly treated as the first block in that list or container.
 - If both `meta.blocks[n]` and a block directive describe the same logical block, `meta.blocks[n]` wins.
 

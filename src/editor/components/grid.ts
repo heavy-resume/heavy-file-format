@@ -37,13 +37,6 @@ export const renderGridEditor: ComponentEditorRenderer = (sectionKey, block, hel
             )}" data-field="block-grid-item-component" data-grid-item-id="${helpers.escapeAttr(item.id)}">
               ${helpers.renderComponentOptions(item.block.schema.component)}
             </select>
-            <select class="compact-select" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(
-              block.id
-            )}" data-field="block-grid-item-column" data-grid-item-id="${helpers.escapeAttr(item.id)}">
-              ${helpers.renderOption('left', item.column)}
-              ${helpers.renderOption('right', item.column)}
-              ${helpers.renderOption('full', item.column)}
-            </select>
           </div>
           <div class="grid-item-editor-shell">
             ${helpers.renderEditorBlock(sectionKey, item.block, block.schema.lock)}
@@ -78,8 +71,8 @@ export const renderGridReader: ComponentReaderRenderer = (_section, block, helpe
     .map((item, index) => {
       const columnIndex = columns <= 1 ? 1 : (index % columns) + 1;
       const gridColumn = columns <= 1 ? '1 / -1' : `${columnIndex} / span 1`;
-      const alignClass = columns <= 1 ? ' align-full' : columnIndex === columns ? ' align-right' : ' align-left';
-      return `<div class="reader-grid-cell${alignClass}" style="grid-column: ${helpers.escapeAttr(gridColumn)};">${helpers.renderReaderBlock(
+      const placementClass = columns <= 1 ? ' is-single-track' : columnIndex === columns ? ' is-terminal-track' : ' is-flow-track';
+      return `<div class="reader-grid-cell${placementClass}" style="grid-column: ${helpers.escapeAttr(gridColumn)};">${helpers.renderReaderBlock(
         _section,
         item.block
       )}</div>`;

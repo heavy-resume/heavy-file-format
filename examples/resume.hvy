@@ -68,6 +68,7 @@ component_defs:
           - text: ""
             schema:
               component: text
+              placeholder: Organization
               css: "margin: 0 0 0.35rem;"
           - text: ""
             schema:
@@ -76,18 +77,18 @@ component_defs:
               gridColumns: 2
               gridItems:
                 - id: history-location
-                  column: left
                   block:
                     text: ""
                     schema:
                       component: text
+                      placholder: location
                       css: "margin: 0;"
                 - id: history-date-range
-                  column: right
                   block:
                     text: ""
                     schema:
                       component: text
+                      placeholder: date range
                       css: "margin: 0; text-align: right;"
           - text: ""
             schema:
@@ -116,7 +117,6 @@ component_defs:
       gridColumns: 2
       gridItems:
         - id: relevant-skills
-          column: left
           align: center
           block:
             text: ""
@@ -130,7 +130,6 @@ component_defs:
                     component: text
                     css: "margin: 0 0 0.25rem;"
         - id: tools-technologies
-          column: right
           align: center
           block:
             text: ""
@@ -172,7 +171,6 @@ component_defs:
               gridColumns: 2
               gridItems:
                 - id: education-institution-details
-                  column: left
                   block:
                     text: ""
                     schema:
@@ -186,7 +184,6 @@ component_defs:
                             css: "margin: 0 0 0.25rem;"
                             placeholder: "Degree Title"
                 - id: education-date-range
-                  column: right
                   block:
                     text: ""
                     schema:
@@ -238,14 +235,12 @@ component_defs:
               gridColumns: 2
               gridItems:
                 - id: project-title
-                  column: left
                   block:
                     text: ""
                     schema:
                       component: text
                       css: "margin: 0;"
                 - id: project-date-range
-                  column: right
                   block:
                     text: ""
                     schema:
@@ -413,7 +408,7 @@ component_defs:
      <!--hvy:text {"css":"margin: 0;"}-->
       Enjoys turning messy, high-context problems into repeatable systems and clear documentation.
 
-<!--hvy: {"id":"locations","lock":true,"contained":false,}-->
+<!--hvy: {"id":"locations","lock":true,"contained":false}-->
 #! Locations
 
  <!--hvy:text {"css":"margin: 0.5rem 0;","lock":true}-->

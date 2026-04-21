@@ -1,6 +1,5 @@
 export type Align = 'left' | 'center' | 'right';
 export type Slot = 'left' | 'center' | 'right';
-export type GridColumn = 'left' | 'right' | 'full';
 
 export interface TableRow {
   cells: string[];
@@ -14,7 +13,6 @@ export interface TableRow {
 
 export interface GridItem {
   id: string;
-  column: GridColumn;
   block: VisualBlock;
 }
 

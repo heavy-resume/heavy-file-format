@@ -178,15 +178,24 @@ component_defs:
                   block:
                     text: ""
                     schema:
-                      component: component-list
-                      componentListComponent: text
+                      component: container
                       css: "margin: 0;"
-                      componentListBlocks:
+                      containerBlocks:
                         - text: ""
                           schema:
                             component: text
                             css: "margin: 0 0 0.25rem;"
-                            placeholder: "Degree Title"
+                            placeholder: "School / University"
+                        - text: ""
+                          schema:
+                            component: text
+                            css: "margin: 0 0 0.25rem;"
+                            placeholder: "Location"
+                        - text: ""
+                          schema:
+                            component: text
+                            css: "margin: 0;"
+                            placeholder: "GPA"
                 - id: education-date-range
                   block:
                     text: ""

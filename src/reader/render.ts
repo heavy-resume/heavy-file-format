@@ -4,13 +4,13 @@ import { renderContainerReader } from '../editor/components/container';
 import { renderExpandableReader } from '../editor/components/expandable';
 import { renderGridReader } from '../editor/components/grid';
 import { renderPluginReader } from '../editor/components/plugin';
-import { renderTableReader } from '../editor/components/table';
+import { renderTableReader, resetReaderTableStripeSequence } from '../editor/components/table';
 import { renderTextReader } from '../editor/components/text';
 import { renderXrefCardReader } from '../editor/components/xref-card';
 import type { ComponentRenderHelpers } from '../editor/component-helpers';
 import type { BlockSchema, VisualBlock, VisualSection } from '../editor/types';
 import { renderTagEditor } from '../editor/tag-editor';
-import { THEME_COLOR_NAMES } from '../theme';
+import { colorValueToPickerHex, getResolvedThemeColor, getThemeColorLabel, THEME_COLOR_NAMES } from '../theme';
 import type { ThemeConfig } from '../theme';
 
 interface ReaderRenderState {
@@ -78,6 +78,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
   }
 
   function renderReaderSections(sections: VisualSection[]): string {
+    resetReaderTableStripeSequence();
     const realSections = sections.filter((section) => !section.isGhost && section.location !== 'sidebar');
     if (realSections.length === 0) {
       return '<div class="muted">No content to display yet.</div>';
@@ -86,6 +87,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
   }
 
   function renderSidebarSections(sections: VisualSection[]): string {
+    resetReaderTableStripeSequence();
     const sidebarSections = sections.filter((section) => !section.isGhost && section.location === 'sidebar');
     return sidebarSections.map((section) => renderReaderSection(section)).join('');
   }
@@ -190,35 +192,61 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
   function renderThemeModal(): string {
     const theme = state.theme;
     const overrideNames = new Set(Object.keys(theme.colors));
-    const allNames = Array.from(new Set([...THEME_COLOR_NAMES, ...overrideNames]));
-    const rows = allNames.map((name) => {
+    const rows = THEME_COLOR_NAMES.map((name) => {
       const isOverridden = overrideNames.has(name);
-      const value = isOverridden ? theme.colors[name] : '';
-      const isConventional = (THEME_COLOR_NAMES as readonly string[]).includes(name);
+      const value = isOverridden ? theme.colors[name] : getResolvedThemeColor(name);
+      const pickerValue = colorValueToPickerHex(value);
       return `
         <div class="theme-color-row${isOverridden ? ' theme-color-row--override' : ''}">
+          <div class="theme-color-meta">
+            <strong>${deps.escapeHtml(getThemeColorLabel(name))}</strong>
+            <span class="theme-color-var">${deps.escapeHtml(name)}</span>
+          </div>
           <input
-            class="theme-color-name"
-            data-field="theme-color-name"
+            class="theme-color-picker"
+            type="color"
+            data-field="theme-color-picker"
             data-color-name="${deps.escapeAttr(name)}"
-            value="${deps.escapeAttr(name)}"
-            ${isConventional ? 'readonly' : ''}
-            aria-label="Color name"
+            value="${deps.escapeAttr(pickerValue)}"
+            aria-label="${deps.escapeAttr(getThemeColorLabel(name))} color picker"
           />
           <input
             class="theme-color-value"
             data-field="theme-color-value"
             data-color-name="${deps.escapeAttr(name)}"
             value="${deps.escapeAttr(value)}"
-            placeholder="${isOverridden ? '' : 'viewer default'}"
-            aria-label="Color value"
+            placeholder="CSS color"
+            aria-label="${deps.escapeAttr(getThemeColorLabel(name))} color value"
           />
           <span class="theme-color-swatch" style="${value ? `background: ${deps.escapeAttr(value)};` : ''}" aria-hidden="true"></span>
           ${isOverridden
-            ? (isConventional
-              ? `<button type="button" class="ghost" data-action="theme-reset-color" data-color-name="${deps.escapeAttr(name)}" title="Reset to default">Reset</button>`
-              : `<button type="button" class="ghost" data-action="theme-remove-color" data-color-name="${deps.escapeAttr(name)}" title="Remove">Remove</button>`)
+            ? `<button type="button" class="ghost" data-action="theme-reset-color" data-color-name="${deps.escapeAttr(name)}" title="Reset to default">Reset</button>`
             : '<span class="theme-color-default muted">default</span>'}
+        </div>
+      `;
+    }).join('');
+    const customNames = Object.keys(theme.colors).filter((name) => !(THEME_COLOR_NAMES as readonly string[]).includes(name));
+    const customRows = customNames.map((name) => {
+      const value = theme.colors[name] ?? '';
+      return `
+        <div class="theme-color-row theme-color-row--override">
+          <input
+            class="theme-color-name"
+            data-field="theme-color-name"
+            data-color-name="${deps.escapeAttr(name)}"
+            value="${deps.escapeAttr(name)}"
+            aria-label="Custom color variable name"
+          />
+          <input
+            class="theme-color-value"
+            data-field="theme-color-value"
+            data-color-name="${deps.escapeAttr(name)}"
+            value="${deps.escapeAttr(value)}"
+            placeholder="CSS color"
+            aria-label="Custom color value"
+          />
+          <span class="theme-color-swatch" style="${value ? `background: ${deps.escapeAttr(value)};` : ''}" aria-hidden="true"></span>
+          <button type="button" class="ghost" data-action="theme-remove-color" data-color-name="${deps.escapeAttr(name)}" title="Remove">Remove</button>
         </div>
       `;
     }).join('');
@@ -231,12 +259,23 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
             <button type="button" data-modal-action="close">Close</button>
           </div>
           <p class="muted">
-            Each key is the exact CSS variable name set on the document root.
+            Adjust the document theme with a color picker or by typing any valid CSS color value.
             Overrides are saved with the document.
           </p>
           <div class="theme-color-list">
             ${rows}
           </div>
+          ${customRows
+            ? `<div class="theme-custom-section">
+                <div class="theme-custom-head">
+                  <h4>Custom Variables</h4>
+                  <p class="muted">Use raw CSS variable names for custom theme entries.</p>
+                </div>
+                <div class="theme-color-list theme-color-list--custom">
+                  ${customRows}
+                </div>
+              </div>`
+            : ''}
           <div class="link-inline-actions">
             <button type="button" class="ghost" data-action="theme-add-color">Add Color</button>
             <button type="button" class="secondary" data-modal-action="close">Done</button>

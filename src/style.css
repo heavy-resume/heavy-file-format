@@ -649,6 +649,78 @@ button.tiny {
   margin-top: 0.2rem;
 }
 
+.checkbox-label input[type='checkbox'],
+.table-header-toggle input[type='checkbox'],
+.expandable-inline-toggle input[type='checkbox'] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 1.05rem;
+  height: 1.05rem;
+  margin: 0;
+  flex: 0 0 auto;
+  border: 1px solid var(--hvy-border-input);
+  border-radius: 0.3rem;
+  background: linear-gradient(180deg, var(--hvy-surface) 0%, var(--hvy-surface-alt) 100%);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--hvy-surface-alt) 78%, white 22%);
+  display: grid;
+  place-content: center;
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease, box-shadow 120ms ease, transform 120ms ease;
+}
+
+.checkbox-label input[type='checkbox']::before,
+.table-header-toggle input[type='checkbox']::before,
+.expandable-inline-toggle input[type='checkbox']::before {
+  content: '';
+  width: 0.26rem;
+  height: 0.5rem;
+  border-right: 0.13rem solid var(--hvy-accent-1-text);
+  border-bottom: 0.13rem solid var(--hvy-accent-1-text);
+  margin-top: -0.08rem;
+  transform: rotate(45deg) scale(0);
+  transform-origin: center;
+  transition: transform 120ms ease;
+}
+
+.checkbox-label input[type='checkbox']:hover,
+.table-header-toggle input[type='checkbox']:hover,
+.expandable-inline-toggle input[type='checkbox']:hover {
+  border-color: var(--hvy-focus);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--hvy-surface-alt) 78%, white 22%), 0 0 0 1px var(--hvy-focus-glow);
+}
+
+.checkbox-label input[type='checkbox']:checked,
+.table-header-toggle input[type='checkbox']:checked,
+.expandable-inline-toggle input[type='checkbox']:checked {
+  border-color: var(--hvy-accent-1-alt);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--hvy-accent-1) 18%, var(--hvy-surface) 82%) 0%,
+    color-mix(in srgb, var(--hvy-accent-1-alt) 22%, var(--hvy-surface-alt) 78%) 100%
+  );
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--hvy-surface) 88%, white 12%);
+}
+
+.checkbox-label input[type='checkbox']:checked::before,
+.table-header-toggle input[type='checkbox']:checked::before,
+.expandable-inline-toggle input[type='checkbox']:checked::before {
+  transform: rotate(45deg) scale(1);
+}
+
+.checkbox-label input[type='checkbox']:focus-visible,
+.table-header-toggle input[type='checkbox']:focus-visible,
+.expandable-inline-toggle input[type='checkbox']:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--hvy-focus-ring), 0 0 0 4px var(--hvy-focus-glow);
+}
+
+.checkbox-label input[type='checkbox']:disabled,
+.table-header-toggle input[type='checkbox']:disabled,
+.expandable-inline-toggle input[type='checkbox']:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .editor-grid input,
 .editor-grid select,
 .modal-panel input,
@@ -662,6 +734,9 @@ button.tiny {
   border: 1px solid var(--hvy-border-input);
   border-radius: 7px;
   padding: 0.44rem;
+  background: var(--hvy-surface);
+  color: var(--hvy-text);
+  font: inherit;
 }
 
 .editor-grid textarea,
@@ -671,9 +746,11 @@ button.tiny {
   border: 1px solid var(--hvy-border-input);
   border-radius: 7px;
   padding: 0.52rem 0.6rem;
+  background: var(--hvy-surface);
+  color: var(--hvy-text);
+  font: inherit;
   resize: vertical;
   min-height: 5.5rem;
-  font: inherit;
 }
 
 .editor-block select,
@@ -849,7 +926,7 @@ button.tiny {
   padding: 0.48rem 0.58rem;
   border: 1px solid var(--hvy-border);
   border-radius: 8px;
-  background: var(--hvy-surface-alt);
+  background: var(--hvy-xref-card-bg);
   text-decoration: none;
   box-shadow: 0 1px 2px var(--hvy-shadow);
 }
@@ -897,7 +974,7 @@ button.tiny {
 .editor-block-passive .reader-xref-card.is-invalid-target,
 .reader-block .reader-xref-card.is-invalid-target {
   border-color: var(--hvy-border-alt);
-  background: var(--hvy-surface-alt);
+  background: var(--hvy-xref-card-bg);
   color: var(--hvy-text-muted);
   box-shadow: none;
 }
@@ -1096,12 +1173,16 @@ button.tiny {
 .table-editor-grid td {
   border: 1px solid var(--hvy-border-input);
   vertical-align: top;
-  background: var(--hvy-surface);
+  background: var(--hvy-table-row-bg-1);
   overflow: hidden;
 }
 
 .table-editor-grid th {
-  background: var(--hvy-surface-alt);
+  background: var(--hvy-table-header);
+}
+
+.table-editor-grid tbody tr:nth-child(even) td {
+  background: var(--hvy-table-row-bg-2);
 }
 
 .table-utility-cell,
@@ -1410,11 +1491,6 @@ button.tiny {
   box-shadow: 0 1px 4px var(--hvy-shadow);
 }
 
-.expandable-inline-toggle input {
-  margin: 0;
-  accent-color: var(--hvy-warning);
-}
-
 .expandable-inline-toggle:hover {
   background: linear-gradient(180deg, var(--hvy-warning-bg) 0%, var(--hvy-warning-bg) 100%);
   border-color: var(--hvy-warning);
@@ -1699,7 +1775,7 @@ button.tiny {
   padding: 0.48rem 0.58rem;
   border: 1px solid var(--hvy-border);
   border-radius: 8px;
-  background: var(--hvy-surface-alt);
+  background: var(--hvy-xref-card-bg);
   text-decoration: none;
   box-shadow: 0 1px 2px var(--hvy-shadow);
   transition: background-color 140ms ease, border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
@@ -1995,6 +2071,10 @@ button.tiny {
   min-height: 1ch;
 }
 
+.reader-table th {
+  background: var(--hvy-table-header);
+}
+
 .editor-block-passive .reader-table td[data-placeholder]:empty::before {
   content: attr(data-placeholder);
   color: var(--hvy-text-muted);
@@ -2014,11 +2094,11 @@ button.tiny {
 }
 
 .table-main-row-even td {
-  background: color-mix(in srgb, var(--hvy-surface) 94%, var(--hvy-surface-tint) 6%);
+  background: var(--hvy-table-row-bg-1);
 }
 
 .table-main-row-odd td {
-  background: color-mix(in srgb, var(--hvy-surface) 88%, var(--hvy-surface-tint) 12%);
+  background: var(--hvy-table-row-bg-2);
 }
 
 .table-details-row td {
@@ -2380,20 +2460,45 @@ button.tiny {
 
 .theme-modal .theme-color-row {
   display: grid;
-  grid-template-columns: 10rem auto 1fr auto auto;
+  grid-template-columns: minmax(12rem, 1.2fr) auto minmax(12rem, 1fr) auto auto;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.25rem 0.35rem;
-  border-radius: 4px;
+  padding: 0.45rem 0.55rem;
+  border-radius: 8px;
+  border: 1px solid var(--hvy-border);
+  background: color-mix(in srgb, var(--hvy-surface) 88%, var(--hvy-surface-alt) 12%);
 }
 
 .theme-modal .theme-color-row--override {
   background: color-mix(in srgb, var(--hvy-surface) 80%, var(--hvy-accent-1-alt) 20%);
 }
 
+.theme-modal .theme-color-meta {
+  display: grid;
+  gap: 0.14rem;
+  min-width: 0;
+}
+
+.theme-modal .theme-color-meta strong {
+  font-size: 0.92rem;
+}
+
 .theme-modal .theme-color-var {
   font-size: 0.75rem;
   opacity: 0.7;
+}
+
+.theme-modal .theme-color-picker {
+  width: 2.4rem;
+  min-width: 2.4rem;
+  height: 2.1rem;
+  padding: 0.18rem;
+  border-radius: 8px;
+}
+
+.theme-modal .theme-color-name {
+  font-family: "JetBrains Mono", "Fira Code", monospace;
+  font-size: 0.82rem;
 }
 
 .theme-modal .theme-color-swatch {
@@ -2406,4 +2511,38 @@ button.tiny {
 
 .theme-modal .theme-color-default {
   font-size: 0.75rem;
+}
+
+.theme-modal .theme-custom-section {
+  margin-top: 0.9rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--hvy-border);
+}
+
+.theme-modal .theme-custom-head {
+  margin-bottom: 0.45rem;
+}
+
+.theme-modal .theme-custom-head h4,
+.theme-modal .theme-custom-head p {
+  margin: 0;
+}
+
+.theme-modal .theme-custom-head p {
+  margin-top: 0.18rem;
+}
+
+@media (max-width: 760px) {
+  .theme-modal .theme-color-row {
+    grid-template-columns: 1fr auto auto;
+  }
+
+  .theme-modal .theme-color-value,
+  .theme-modal .theme-color-name {
+    grid-column: 1 / -1;
+  }
+
+  .theme-modal .theme-color-default {
+    grid-column: 1 / -1;
+  }
 }

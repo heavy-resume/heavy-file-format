@@ -29,7 +29,7 @@ import {
 } from './document-factory';
 import { recordHistory, undoState, redoState } from './history';
 import { navigateToSection, setSidebarOpen, setEditorSidebarOpen, closeModal, closeModalIfTarget, resetTransientUiState, resetToBlankDocument } from './navigation';
-import { deserializeDocument } from './serialization';
+import { deserializeDocument, deserializeDocumentWithDiagnostics, getHvyDiagnosticUsageHint } from './serialization';
 import { serializeDocument } from './serialization';
 import { syncReusableTemplateForBlock, revertReusableComponent, findReusableOwner } from './reusable';
 import { addTableColumn, removeTableColumn, getTableColumns, moveTableColumn, moveTableRow } from './table-ops';
@@ -41,6 +41,7 @@ import { bindLinkInlineModal, openLinkInlineModal } from './bind-link-modal';
 import { removeBlockFromList, findBlockInList } from './block-ops';
 import { getReusableTemplateByName } from './document-factory';
 import { clearChatConversation, persistChatSettings, requestChatCompletion } from './chat';
+import type { RawEditorDiagnostic } from './types';
 
 let lastBoundChatMessageCount = -1;
 
@@ -77,6 +78,7 @@ export function bindUi(app: HTMLElement): void {
     state.document = deserializeDocument(bundledResumeThvy, '.thvy');
     state.rawEditorText = serializeDocument(state.document);
     state.rawEditorError = null;
+    state.rawEditorDiagnostics = [];
     state.filename = 'resume.thvy';
     state.history = [];
     state.future = [];
@@ -90,6 +92,7 @@ export function bindUi(app: HTMLElement): void {
     state.document = deserializeDocument(bundledResumeHvy, '.hvy');
     state.rawEditorText = serializeDocument(state.document);
     state.rawEditorError = null;
+    state.rawEditorDiagnostics = [];
     state.filename = 'resume.hvy';
     state.history = [];
     state.future = [];
@@ -108,6 +111,7 @@ export function bindUi(app: HTMLElement): void {
     state.document = deserializeDocument(text, detectExtension(file.name, text));
     state.rawEditorText = serializeDocument(state.document);
     state.rawEditorError = null;
+    state.rawEditorDiagnostics = [];
     clearChatConversation(state.chat);
     closeModal();
     resetTransientUiState();
@@ -321,8 +325,10 @@ export function bindUi(app: HTMLElement): void {
     }
 
     if (field === 'raw-editor-text' && target instanceof HTMLTextAreaElement) {
+      recordHistory('raw-editor:text');
       state.rawEditorText = target.value;
       state.rawEditorError = null;
+      state.rawEditorDiagnostics = getRawEditorDiagnostics(target.value, state.filename);
       return;
     }
   });
@@ -364,6 +370,7 @@ export function bindUi(app: HTMLElement): void {
       if (editorMode === 'raw') {
         state.rawEditorText = serializeDocument(state.document);
         state.rawEditorError = null;
+        state.rawEditorDiagnostics = [];
       }
       if (!state.showAdvancedEditor) {
         state.metaPanelOpen = false;
@@ -376,11 +383,19 @@ export function bindUi(app: HTMLElement): void {
     if (action === 'reset-raw-editor') {
       state.rawEditorText = serializeDocument(state.document);
       state.rawEditorError = null;
+      state.rawEditorDiagnostics = [];
       getRenderApp()();
       return;
     }
 
     if (action === 'apply-raw-editor') {
+      const diagnostics = getRawEditorDiagnostics(state.rawEditorText, state.filename);
+      state.rawEditorDiagnostics = diagnostics;
+      if (diagnostics.length > 0) {
+        state.rawEditorError = 'Resolve the raw HVY issues before applying.';
+        getRenderApp()();
+        return;
+      }
       try {
         recordHistory('raw-editor:apply');
         state.document = deserializeDocument(
@@ -389,6 +404,7 @@ export function bindUi(app: HTMLElement): void {
         );
         state.rawEditorText = serializeDocument(state.document);
         state.rawEditorError = null;
+        state.rawEditorDiagnostics = [];
         clearChatConversation(state.chat);
         closeModal();
         resetTransientUiState();
@@ -1875,6 +1891,16 @@ function bindChatThreadUi(
     updateScrollButton();
     lastBoundChatMessageCount = state.chat.messages.length;
   });
+}
+
+function getRawEditorDiagnostics(source: string, filename: string): RawEditorDiagnostic[] {
+  const extension = detectExtension(filename, source);
+  const { diagnostics } = deserializeDocumentWithDiagnostics(source, extension);
+  return diagnostics.map((diagnostic) => ({
+    severity: diagnostic.severity,
+    message: diagnostic.message,
+    hint: getHvyDiagnosticUsageHint(diagnostic),
+  }));
 }
 
 function handleInlineCheckboxBackspace(editable: HTMLElement): boolean {

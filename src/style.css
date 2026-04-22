@@ -721,6 +721,41 @@ button.tiny {
   background: color-mix(in srgb, var(--hvy-danger) 12%, var(--hvy-surface));
 }
 
+.raw-editor-diagnostics {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.raw-editor-diagnostic {
+  padding: 0.7rem 0.85rem;
+  border-radius: 12px;
+  border: 1px solid var(--hvy-border);
+  background: color-mix(in srgb, var(--hvy-surface) 96%, transparent);
+}
+
+.raw-editor-diagnostic strong,
+.raw-editor-diagnostic p {
+  margin: 0;
+}
+
+.raw-editor-diagnostic p + p {
+  margin-top: 0.28rem;
+}
+
+.raw-editor-diagnostic-error {
+  border-color: color-mix(in srgb, var(--hvy-danger) 65%, var(--hvy-border));
+  background: color-mix(in srgb, var(--hvy-danger) 10%, var(--hvy-surface));
+}
+
+.raw-editor-diagnostic-warning {
+  border-color: var(--hvy-warning-border);
+  background: color-mix(in srgb, var(--hvy-warning-bg) 72%, var(--hvy-surface));
+}
+
+.raw-editor-diagnostic-hint {
+  color: var(--hvy-text-alt);
+}
+
 .raw-editor-textarea {
   width: 100%;
   height: 100%;

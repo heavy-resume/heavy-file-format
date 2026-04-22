@@ -3,6 +3,7 @@ import { expect, test } from 'vitest';
 import {
   buildAnthropicProxyRequest,
   buildOpenAiProxyRequest,
+  buildRepairPrompt,
   extractAnthropicText,
   extractOpenAiText,
 } from '../proxy/chat-proxy';
@@ -97,4 +98,30 @@ test('proxy response extractors collect text from provider payloads', () => {
       ],
     })
   ).toBe('Anthropic answer');
+});
+
+test('buildRepairPrompt turns diagnostics into concise repair guidance', () => {
+  expect(
+    buildRepairPrompt([
+      {
+        severity: 'error',
+        code: 'invalid_block_directive_json',
+        message: 'Section "Response", line 3: Directive "expandable" has invalid JSON.',
+      },
+      {
+        severity: 'warning',
+        code: 'expandable_slot_without_parent',
+        message: 'Section "Response", line 6: Expandable stub/content was provided without an enclosing expandable block.',
+      },
+    ])
+  ).toContain('Hint: Component directives must use JSON objects like `<!--hvy:text {}-->`.');
+  expect(
+    buildRepairPrompt([
+      {
+        severity: 'warning',
+        code: 'expandable_slot_without_parent',
+        message: 'Section "Response", line 6: Expandable stub/content was provided without an enclosing expandable block.',
+      },
+    ])
+  ).toContain('Return the full corrected HVY response body only.');
 });

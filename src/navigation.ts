@@ -224,6 +224,7 @@ export function resetToBlankDocument(): void {
   state.document = createBlankDocument();
   state.rawEditorText = serializeDocument(state.document);
   state.rawEditorError = null;
+  state.rawEditorDiagnostics = [];
   state.filename = 'untitled.hvy';
   state.history = [];
   state.future = [];

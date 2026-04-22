@@ -52,6 +52,7 @@ function createInitialState(): AppState {
     showAdvancedEditor: false,
     rawEditorText: serializeDocument(document),
     rawEditorError: null,
+    rawEditorDiagnostics: [],
     activeEditorBlock: null,
     activeEditorSectionTitleKey: null,
     clearSectionTitleOnFocusKey: null,
@@ -258,6 +259,21 @@ function renderApp(): void {
                          </div>
                        </div>
                        ${state.rawEditorError ? `<div class="raw-editor-error" role="alert">${escapeHtml(state.rawEditorError)}</div>` : ''}
+                       ${
+                         state.rawEditorDiagnostics.length > 0
+                           ? `<div class="raw-editor-diagnostics" role="status">
+                                ${state.rawEditorDiagnostics
+                                  .map(
+                                    (diagnostic) => `<article class="raw-editor-diagnostic raw-editor-diagnostic-${escapeAttr(diagnostic.severity)}">
+                                        <strong>${escapeHtml(diagnostic.severity === 'error' ? 'Error' : 'Warning')}</strong>
+                                        <p>${escapeHtml(diagnostic.message)}</p>
+                                        <p class="raw-editor-diagnostic-hint">${escapeHtml(diagnostic.hint)}</p>
+                                      </article>`
+                                  )
+                                  .join('')}
+                              </div>`
+                           : ''
+                       }
                        <textarea id="rawEditor" class="raw-editor-textarea" data-field="raw-editor-text" spellcheck="false">${escapeHtml(state.rawEditorText)}</textarea>
                      </div>`
                   : `${isAdvancedEditor ? renderTemplatePanel(templateFields, state.templateValues, { escapeAttr, escapeHtml }) : ''}

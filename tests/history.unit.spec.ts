@@ -1,16 +1,20 @@
-import { beforeAll } from 'vitest';
+import { expect, test } from 'vitest';
 
-import { serializeDocument } from '../src/serialization';
 import { initCallbacks, initState, state } from '../src/state';
-import type { AppState, VisualDocument } from '../src/types';
 import { createDefaultChatState } from '../src/chat';
+import { undoState, redoState } from '../src/history';
+import type { AppState } from '../src/types';
 
-export function createTestState(document: VisualDocument): AppState {
+function createHistoryTestState(): AppState {
   return {
-    document,
+    document: {
+      meta: { hvy_version: 0.1 },
+      extension: '.hvy',
+      sections: [],
+    },
     filename: 'test.hvy',
     currentView: 'editor',
-    editorMode: 'basic',
+    editorMode: 'raw',
     chat: createDefaultChatState(),
     paneScroll: {
       editorTop: 0,
@@ -19,7 +23,7 @@ export function createTestState(document: VisualDocument): AppState {
       windowTop: 0,
     },
     showAdvancedEditor: false,
-    rawEditorText: serializeDocument(document),
+    rawEditorText: '#! First',
     rawEditorError: null,
     rawEditorDiagnostics: [],
     activeEditorBlock: null,
@@ -47,32 +51,32 @@ export function createTestState(document: VisualDocument): AppState {
   };
 }
 
-export function serializeWithState(document: VisualDocument): string {
-  state.document = document;
-  return serializeDocument(document);
-}
-
-export function normalizeSerialized(text: string): string {
-  return text
-    .trim()
-    .replace(/\r\n/g, '\n')
-    .replace(/\n[ \t]*\n+/g, '\n\n')
-    .replace(/\n\n(<!--hvy: \{)/g, '\n$1');
-}
-
-export function registerSerializationTestState(): void {
-  beforeAll(() => {
-    initCallbacks({
-      renderApp: () => {},
-      refreshReaderPanels: () => {},
-      refreshModalPreview: () => {},
-    });
-    initState(
-      createTestState({
-        meta: { hvy_version: 0.1 },
-        extension: '.hvy',
-        sections: [],
-      })
-    );
+test('undo and redo restore grouped raw editor text snapshots', () => {
+  initCallbacks({
+    renderApp: () => {},
+    refreshReaderPanels: () => {},
+    refreshModalPreview: () => {},
   });
-}
+  initState(createHistoryTestState());
+
+  state.history.push(
+    JSON.stringify({
+      document: state.document,
+      templateValues: state.templateValues,
+      filename: state.filename,
+      editorMode: 'raw',
+      showAdvancedEditor: false,
+      rawEditorText: '#! First',
+      rawEditorError: null,
+      rawEditorDiagnostics: [],
+    })
+  );
+
+  state.rawEditorText = '#! Third';
+
+  undoState();
+  expect(state.rawEditorText).toBe('#! First');
+
+  redoState();
+  expect(state.rawEditorText).toBe('#! Third');
+});

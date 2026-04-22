@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
 
-import { deserializeDocument } from '../src/serialization';
+import { deserializeDocument, deserializeDocumentWithDiagnostics, getHvyDiagnosticUsageHint, getHvyResponseDiagnostics } from '../src/serialization';
 import { registerSerializationTestState } from './serialization-test-helpers';
 
 registerSerializationTestState();
@@ -225,4 +225,47 @@ test('resume education record keeps C/C++ inside the education tools list', asyn
 
   expect(toolTitles).toContain('Python');
   expect(toolTitles).toContain('C/C++');
+});
+
+test('deserialization reports invalid block directive json as diagnostics with concise hints', () => {
+ const result = deserializeDocumentWithDiagnostics(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ <!--hvy:text {"css":"margin: 0",}-->
+  Broken
+`, '.hvy');
+
+  expect(result.document.sections[0]?.title).toBe('Summary');
+  expect(result.diagnostics).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        severity: 'error',
+        code: 'invalid_block_directive_json',
+      }),
+    ])
+  );
+  expect(getHvyDiagnosticUsageHint(result.diagnostics[0]!)).toBe('Component directives must use JSON objects like `<!--hvy:text {}-->`.');
+});
+
+test('response diagnostics report orphaned expandable slots with minimal usage hints', () => {
+  const diagnostics = getHvyResponseDiagnostics(`<!--hvy:expandable:stub {}-->
+
+<!--hvy:text {}-->
+Stub only`);
+
+  expect(diagnostics).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        severity: 'warning',
+        code: 'expandable_slot_without_parent',
+      }),
+    ])
+  );
+  expect(getHvyDiagnosticUsageHint(diagnostics[0]!)).toBe(
+    'Put expandable slots under `<!--hvy:expandable {}-->`, then add `stub` or `content`.'
+  );
 });

@@ -12,24 +12,99 @@ import {
   createEmptyBlock,
 } from './document-factory';
 
+export interface HvyDiagnostic {
+  severity: 'warning' | 'error';
+  code: string;
+  message: string;
+}
+
+export interface DeserializeDocumentResult {
+  document: VisualDocument;
+  diagnostics: HvyDiagnostic[];
+}
+
 export function deserializeDocument(text: string, extension: VisualDocument['extension']): VisualDocument {
+  return deserializeDocumentWithDiagnostics(text, extension).document;
+}
+
+export function deserializeDocumentWithDiagnostics(
+  text: string,
+  extension: VisualDocument['extension']
+): DeserializeDocumentResult {
   const parsed = parseHvy(text, extension);
   const meta = { ...parsed.meta };
   if (typeof meta.hvy_version === 'undefined') {
     meta.hvy_version = 0.1;
   }
 
-  return {
+  const diagnostics = parsed.errors.map((message) => mapParserErrorToDiagnostic(message));
+  const document = {
     extension,
     meta,
-    sections: parsed.sections.map((section) => mapParsedSection(section, meta)),
+    sections: parsed.sections.map((section) => mapParsedSection(section, meta, diagnostics)),
+  };
+
+  return {
+    document,
+    diagnostics,
   };
 }
 
-function mapParsedSection(section: HvySection, documentMeta: JsonObject): VisualSection {
+export function wrapHvyFragmentAsDocument(source: string, options?: { sectionId?: string; title?: string }): string {
+  const sectionId = options?.sectionId?.trim() || 'rsp';
+  const title = options?.title?.trim() || 'Response';
+  return `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"${escapeHvyJsonString(sectionId)}"}-->
+#! ${title}
+
+${source.trim()}
+`;
+}
+
+export function getHvyResponseDiagnostics(source: string): HvyDiagnostic[] {
+  return deserializeDocumentWithDiagnostics(wrapHvyFragmentAsDocument(source), '.hvy').diagnostics;
+}
+
+export function getHvyDiagnosticUsageHint(diagnostic: HvyDiagnostic): string {
+  switch (diagnostic.code) {
+    case 'invalid_front_matter':
+      return 'Use valid YAML between `---` lines, or omit front matter.';
+    case 'invalid_doc_directive_json':
+      return 'Document directives must be JSON objects like `<!--hvy:doc {}-->`.';
+    case 'invalid_css_directive_json':
+      return 'CSS directives must be JSON objects like `<!--hvy:css {}-->`.';
+    case 'invalid_subsection_directive_json':
+      return 'Subsection directives must be JSON objects like `<!--hvy:subsection {"id":"child"}-->`.';
+    case 'invalid_section_directive_json':
+      return 'Section directives must be JSON objects like `<!--hvy: {"id":"section-id"}-->`.';
+    case 'unclosed_css_fence':
+      return 'Close CSS blocks with the same fence, for example ```css ... ```.';
+    case 'invalid_block_directive_json':
+      return 'Component directives must use JSON objects like `<!--hvy:text {}-->`.';
+    case 'invalid_slot_index':
+      return 'Indexed slots use numeric indexes like `<!--hvy:component-list:0 {}-->`.';
+    case 'expandable_slot_without_parent':
+      return 'Put expandable slots under `<!--hvy:expandable {}-->`, then add `stub` or `content`.';
+    case 'grid_slot_without_parent':
+      return 'Put grid slots under `<!--hvy:grid {"gridColumns":2}-->`, then add `<!--hvy:grid:0 {}-->`.';
+    case 'component_list_slot_without_parent':
+      return 'Put list slots under `<!--hvy:component-list {"componentListComponent":"text"}-->`.';
+    case 'container_slot_without_parent':
+      return 'Put container slots under `<!--hvy:container {}-->`, then add `<!--hvy:container:0 {}-->`.';
+    case 'table_details_slot_without_parent':
+      return 'Put table detail slots under `<!--hvy:table {...}-->`, then add `<!--hvy:table:0:0 {}-->`.';
+    default:
+      return 'Return valid HVY with proper section and component directives.';
+  }
+}
+
+function mapParsedSection(section: HvySection, documentMeta: JsonObject, diagnostics: HvyDiagnostic[]): VisualSection {
   const sectionMeta = section.meta as JsonObject;
   const customId = sanitizeOptionalId(typeof sectionMeta.id === 'string' ? sectionMeta.id : section.id);
-  const blocks = parseBlocks(section.contentMarkdown, sectionMeta, documentMeta);
+  const blocks = parseBlocks(section.contentMarkdown, sectionMeta, documentMeta, diagnostics, section.title || section.id || 'Untitled Section');
 
   return {
     key: makeId('section'),
@@ -47,11 +122,17 @@ function mapParsedSection(section: HvySection, documentMeta: JsonObject): Visual
     description: typeof sectionMeta.description === 'string' ? sectionMeta.description : '',
     location: sectionMeta.location === 'sidebar' ? 'sidebar' : 'main',
     blocks,
-    children: section.children.map((child) => mapParsedSection(child, documentMeta)),
+    children: section.children.map((child) => mapParsedSection(child, documentMeta, diagnostics)),
   };
 }
 
-function parseBlocks(contentMarkdown: string, sectionMeta: JsonObject, documentMeta: JsonObject): VisualBlock[] {
+function parseBlocks(
+  contentMarkdown: string,
+  sectionMeta: JsonObject,
+  documentMeta: JsonObject,
+  diagnostics: HvyDiagnostic[],
+  sectionLabel: string
+): VisualBlock[] {
   const schemas = Array.isArray(sectionMeta.blocks) ? (sectionMeta.blocks as JsonObject[]) : [];
   const lines = contentMarkdown.split(/\r?\n/);
   const directivePattern = /^<!--hvy:([a-z][a-z0-9-]*(?::[a-z0-9-]+)*)\s*(\{.*\})\s*-->$/i;
@@ -149,7 +230,7 @@ function parseBlocks(contentMarkdown: string, sectionMeta: JsonObject, documentM
 
   const closeFramesAtOrAboveIndent = (indent: number): void => {
     flush();
-    while (frames.length > 0 && frames[frames.length - 1].indent >= indent) {
+    while (frames.length > 0 && shouldCloseFrameForIndent(frames[frames.length - 1], indent)) {
       closeFrame();
     }
   };
@@ -184,11 +265,21 @@ function parseBlocks(contentMarkdown: string, sectionMeta: JsonObject, documentM
     return { kind: 'top' };
   };
 
-  const findOrCreateParentFrame = (parentBase: 'expandable' | 'grid' | 'component-list' | 'container' | 'table'): VisualBlock => {
+  const findOrCreateParentFrame = (
+    parentBase: 'expandable' | 'grid' | 'component-list' | 'container' | 'table',
+    lineNumber: number,
+    code: HvyDiagnostic['code'],
+    message: string
+  ): VisualBlock => {
     const parent = closeFramesUntil(parentBase);
     if (parent) {
       return parent;
     }
+    diagnostics.push({
+      severity: 'warning',
+      code,
+      message: formatSectionDiagnostic(sectionLabel, lineNumber, message),
+    });
     const fallback = createEmptyBlock(parentBase, true);
     frames.push({
       kind: 'component',
@@ -291,7 +382,7 @@ function parseBlocks(contentMarkdown: string, sectionMeta: JsonObject, documentM
     });
   };
 
-  lines.forEach((line) => {
+  lines.forEach((line, lineIndex) => {
     const match = line.trim().match(directivePattern);
     if (!match) {
       currentText.push(line);
@@ -310,7 +401,12 @@ function parseBlocks(contentMarkdown: string, sectionMeta: JsonObject, documentM
       const parsed = JSON.parse(match[2] ?? '{}') as JsonObject;
 
       if (name === 'expandable' && rawParts.length === 1 && (rawParts[0] === 'stub' || rawParts[0] === 'content')) {
-        const parent = findOrCreateParentFrame('expandable');
+        const parent = findOrCreateParentFrame(
+          'expandable',
+          lineIndex + 1,
+          'expandable_slot_without_parent',
+          'Expandable stub/content was provided without an enclosing expandable block.'
+        );
         const part: 0 | 1 = rawParts[0] === 'stub' ? 0 : 1;
         const keys = Object.keys(parsed);
         const slotMetadataOnly = keys.every((key) => key === 'lock' || key === 'css' || key === 'customCss' || key === 'custom_css');
@@ -347,6 +443,11 @@ function parseBlocks(contentMarkdown: string, sectionMeta: JsonObject, documentM
       }
 
       if (rawParts.length > 0 && !allIndexesValid) {
+        diagnostics.push({
+          severity: 'error',
+          code: 'invalid_slot_index',
+          message: formatSectionDiagnostic(sectionLabel, lineIndex + 1, `Directive "${directive}" uses a non-numeric slot index.`),
+        });
         return;
       }
 
@@ -354,7 +455,12 @@ function parseBlocks(contentMarkdown: string, sectionMeta: JsonObject, documentM
         if (typeof parsed.component === 'string' || typeof parsed.type === 'string') {
           return;
         }
-        const parent = findOrCreateParentFrame('grid');
+        const parent = findOrCreateParentFrame(
+          'grid',
+          lineIndex + 1,
+          'grid_slot_without_parent',
+          'Grid slot was provided without an enclosing grid block.'
+        );
         frames.push({
           kind: 'slot-grid',
           parent,
@@ -365,7 +471,12 @@ function parseBlocks(contentMarkdown: string, sectionMeta: JsonObject, documentM
         if (typeof parsed.component === 'string' || typeof parsed.type === 'string') {
           return;
         }
-        const parent = findOrCreateParentFrame('component-list');
+        const parent = findOrCreateParentFrame(
+          'component-list',
+          lineIndex + 1,
+          'component_list_slot_without_parent',
+          'Component-list slot was provided without an enclosing component-list block.'
+        );
         frames.push({
           kind: 'slot-component-list',
           parent,
@@ -376,7 +487,12 @@ function parseBlocks(contentMarkdown: string, sectionMeta: JsonObject, documentM
         if (typeof parsed.component === 'string' || typeof parsed.type === 'string') {
           return;
         }
-        const parent = findOrCreateParentFrame('container');
+        const parent = findOrCreateParentFrame(
+          'container',
+          lineIndex + 1,
+          'container_slot_without_parent',
+          'Container slot was provided without an enclosing container block.'
+        );
         frames.push({
           kind: 'slot-container',
           parent,
@@ -386,7 +502,12 @@ function parseBlocks(contentMarkdown: string, sectionMeta: JsonObject, documentM
         if (typeof parsed.component === 'string' || typeof parsed.type === 'string') {
           return;
         }
-        const parent = findOrCreateParentFrame('table');
+        const parent = findOrCreateParentFrame(
+          'table',
+          lineIndex + 1,
+          'table_details_slot_without_parent',
+          'Table detail slot was provided without an enclosing table block.'
+        );
         frames.push({
           kind: 'slot-table-details',
           parent,
@@ -401,6 +522,11 @@ function parseBlocks(contentMarkdown: string, sectionMeta: JsonObject, documentM
         }
       }
     } catch {
+      diagnostics.push({
+        severity: 'error',
+        code: 'invalid_block_directive_json',
+        message: formatSectionDiagnostic(sectionLabel, lineIndex + 1, `Directive "${directive}" has invalid JSON.`),
+      });
       currentSchema = defaultBlockSchema();
       currentAttach = { kind: 'top' };
       currentHasDirective = false;
@@ -422,6 +548,40 @@ function parseBlocks(contentMarkdown: string, sectionMeta: JsonObject, documentM
   }));
 }
 
+function mapParserErrorToDiagnostic(message: string): HvyDiagnostic {
+  const lineMatch = message.match(/^Line (\d+):\s*(.*)$/);
+  const linePrefix = lineMatch ? `Line ${lineMatch[1]}: ` : '';
+  const detail = lineMatch ? lineMatch[2] : message;
+
+  if (detail === 'invalid hvy:doc directive JSON.') {
+    return { severity: 'error', code: 'invalid_doc_directive_json', message: `${linePrefix}Document directive has invalid JSON.` };
+  }
+  if (detail === 'invalid hvy:css directive JSON.') {
+    return { severity: 'error', code: 'invalid_css_directive_json', message: `${linePrefix}CSS directive has invalid JSON.` };
+  }
+  if (detail === 'invalid hvy:subsection directive JSON.') {
+    return { severity: 'error', code: 'invalid_subsection_directive_json', message: `${linePrefix}Subsection directive has invalid JSON.` };
+  }
+  if (detail === 'invalid section hvy directive JSON.') {
+    return { severity: 'error', code: 'invalid_section_directive_json', message: `${linePrefix}Section directive has invalid JSON.` };
+  }
+  if (detail === 'unclosed CSS fence.') {
+    return { severity: 'error', code: 'unclosed_css_fence', message: `${linePrefix}CSS fence is not closed.` };
+  }
+  if (message === 'Invalid YAML front matter.') {
+    return { severity: 'error', code: 'invalid_front_matter', message };
+  }
+  return { severity: 'warning', code: 'parse_warning', message };
+}
+
+function formatSectionDiagnostic(sectionLabel: string, lineNumber: number, detail: string): string {
+  return `Section "${sectionLabel}", line ${lineNumber}: ${detail}`;
+}
+
+function escapeHvyJsonString(value: string): string {
+  return value.replaceAll('\\', '\\\\').replaceAll('"', '\\"');
+}
+
 function normalizeParsedBlockText(lines: string[], indent: number): string {
   if (lines.length === 0) {
     return '';
@@ -440,6 +600,22 @@ function normalizeParsedBlockText(lines: string[], indent: number): string {
   }
 
   return stripped.slice(start, end).join('\n');
+}
+
+function shouldCloseFrameForIndent(
+  frame:
+    | { kind: 'component'; indent: number }
+    | { kind: 'slot-expandable'; indent: number }
+    | { kind: 'slot-grid'; indent: number }
+    | { kind: 'slot-component-list'; indent: number }
+    | { kind: 'slot-container'; indent: number }
+    | { kind: 'slot-table-details'; indent: number },
+  indent: number
+): boolean {
+  if (frame.kind === 'component') {
+    return frame.indent >= indent;
+  }
+  return frame.indent > indent;
 }
 
 const BLOCK_ARRAY_KEYS = ['containerBlocks', 'componentListBlocks'];
@@ -722,13 +898,22 @@ function buildExpandablePartPayload(expandableBlock: VisualBlock, part: 0 | 1, l
   return payload;
 }
 
-function serializeExpandablePartBlock(expandableBlock: VisualBlock, child: VisualBlock, part: 0 | 1, lock: boolean, indent: number): string {
-  return serializeSlotWithChild(
-    `expandable:${part === 0 ? 'stub' : 'content'}`,
-    buildExpandablePartPayload(expandableBlock, part, lock),
-    child,
-    indent
-  );
+function serializeExpandablePart(
+  expandableBlock: VisualBlock,
+  children: VisualBlock[],
+  part: 0 | 1,
+  lock: boolean,
+  indent: number
+): string {
+  const name = `expandable:${part === 0 ? 'stub' : 'content'}`;
+  const payload = buildExpandablePartPayload(expandableBlock, part, lock);
+  if (children.length === 0) {
+    return Object.keys(payload).length > 0 ? serializeSlotDirective(name, payload, indent) : '';
+  }
+  return [
+    serializeSlotDirective(name, payload, indent),
+    children.map((child) => serializeBlock(child, indent + 1)).join('\n\n'),
+  ].join('\n\n');
 }
 
 function serializeGridItemBlock(item: GridItem, index: number, indent: number): string {
@@ -759,14 +944,9 @@ function serializeNestedBlocks(block: VisualBlock, indent: number): string {
   if (component === 'expandable') {
     const stub = block.schema.expandableStubBlocks;
     const content = block.schema.expandableContentBlocks;
-    const stubBlocks = stub.children.map((innerBlock) => serializeExpandablePartBlock(block, innerBlock, 0, stub.lock, indent));
-    const contentBlocks = content.children.map((innerBlock) => serializeExpandablePartBlock(block, innerBlock, 1, content.lock, indent));
-    const stubPayload = buildExpandablePartPayload(block, 0, stub.lock);
-    const contentPayload = buildExpandablePartPayload(block, 1, content.lock);
-    const stubPart = stub.children.length === 0 && Object.keys(stubPayload).length > 0 ? [serializeSlotDirective('expandable:stub', stubPayload, indent)] : stubBlocks;
-    const contentPart =
-      content.children.length === 0 && Object.keys(contentPayload).length > 0 ? [serializeSlotDirective('expandable:content', contentPayload, indent)] : contentBlocks;
-    return [...stubPart, ...contentPart].join('\n\n');
+    const stubPart = serializeExpandablePart(block, stub.children, 0, stub.lock, indent);
+    const contentPart = serializeExpandablePart(block, content.children, 1, content.lock, indent);
+    return [stubPart, contentPart].filter((part) => part.length > 0).join('\n\n');
   }
   if (component === 'grid') {
     return block.schema.gridItems.map((item, index) => serializeGridItemBlock(item, index, indent)).join('\n\n');

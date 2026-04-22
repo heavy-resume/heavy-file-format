@@ -76,6 +76,30 @@ hvy_version: 0.1
   expect(output).not.toContain('"expandableContentCss"');
 });
 
+test('keeps sibling blocks under a single expandable stub slot on round-trip', () => {
+  const input = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ <!--hvy:expandable {"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+
+  <!--hvy:expandable:stub {}-->
+
+   <!--hvy:table {}-->
+
+   <!--hvy:container {}-->
+`;
+
+  const document = deserializeDocument(input, '.hvy');
+  const output = serializeWithState(document);
+
+  expect((output.match(/<!--hvy:expandable:stub \{\}-->/g) ?? []).length).toBe(1);
+  expect(output).toMatch(/<!--hvy:expandable:stub \{\}-->[\s\S]*<!--hvy:table \{\}-->[\s\S]*<!--hvy:container \{\}-->/);
+});
+
 test('custom grid components use direct grid slots without an extra grid wrapper', () => {
   const input = `---
 hvy_version: 0.1

@@ -45,6 +45,12 @@ export interface ReusableSaveModalState {
   draftName: string;
 }
 
+export interface RawEditorDiagnostic {
+  severity: 'warning' | 'error';
+  message: string;
+  hint: string;
+}
+
 export interface ThemeConfig {
   colors: Record<string, string>;
 }
@@ -73,6 +79,7 @@ export interface AppState {
   showAdvancedEditor: boolean;
   rawEditorText: string;
   rawEditorError: string | null;
+  rawEditorDiagnostics: RawEditorDiagnostic[];
   activeEditorBlock: { sectionKey: string; blockId: string } | null;
   activeEditorSectionTitleKey: string | null;
   clearSectionTitleOnFocusKey: string | null;

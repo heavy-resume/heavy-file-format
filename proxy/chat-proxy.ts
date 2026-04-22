@@ -1,4 +1,5 @@
 import type { Plugin } from 'vite';
+import { getHvyDiagnosticUsageHint, getHvyResponseDiagnostics, type HvyDiagnostic } from '../src/serialization';
 
 const OPENAI_API_URL = 'https://api.openai.com/v1/responses';
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
@@ -50,7 +51,7 @@ export function buildChatProxyMiddleware(env: Record<string, string | undefined>
         contextLength: body.context.length,
         formatInstructionsLength: body.formatInstructions.length,
       });
-      const output = await requestProvider(body, env);
+      const output = await requestProviderWithRepair(body, env);
       sendJson(res, 200, { output });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Proxy chat request failed.';
@@ -137,11 +138,68 @@ export function extractAnthropicText(payload: unknown): string {
     .trim();
 }
 
-async function requestProvider(body: ProxyChatRequest, env: Record<string, string | undefined>): Promise<string> {
+async function requestProviderWithRepair(body: ProxyChatRequest, env: Record<string, string | undefined>): Promise<string> {
+  const initialOutput = await requestProviderOnce(body, env);
+  const diagnostics = getHvyResponseDiagnostics(initialOutput);
+  if (diagnostics.length === 0) {
+    return initialOutput;
+  }
+
+  console.debug('[hvy:chat-proxy] response diagnostics', diagnostics);
+
+  const repairRequest: ProxyChatRequest = {
+    ...body,
+    messages: [
+      ...body.messages,
+      {
+        role: 'assistant',
+        content: initialOutput,
+      },
+      {
+        role: 'user',
+        content: buildRepairPrompt(diagnostics),
+      },
+    ],
+  };
+
+  const repairedOutput = await requestProviderOnce(repairRequest, env);
+  const repairedDiagnostics = getHvyResponseDiagnostics(repairedOutput);
+  console.debug('[hvy:chat-proxy] repaired response diagnostics', repairedDiagnostics);
+  return repairedOutput;
+}
+
+async function requestProviderOnce(body: ProxyChatRequest, env: Record<string, string | undefined>): Promise<string> {
   if (body.provider === 'openai') {
     return requestOpenAi(body, env);
   }
   return requestAnthropic(body, env);
+}
+
+export function buildRepairPrompt(diagnostics: HvyDiagnostic[]): string {
+  const uniqueDiagnostics = diagnostics
+    .map((diagnostic) => ({
+      message: diagnostic.message,
+      hint: getHvyDiagnosticUsageHint(diagnostic),
+    }))
+    .filter(
+      (entry, index, all) =>
+        all.findIndex((candidate) => candidate.message === entry.message && candidate.hint === entry.hint) === index
+    )
+    .slice(0, 6);
+
+  const issues = uniqueDiagnostics
+    .map(
+      (entry) => `- ${entry.message}
+  Hint: ${entry.hint}`
+    )
+    .join('\n');
+
+  return `Revise your previous HVY response so it is valid HVY.
+
+Issues:
+${issues}
+
+Return the full corrected HVY response body only. Do not add commentary outside the HVY response.`;
 }
 
 async function requestOpenAi(body: ProxyChatRequest, env: Record<string, string | undefined>): Promise<string> {

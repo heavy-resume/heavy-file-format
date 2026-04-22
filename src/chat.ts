@@ -1,5 +1,5 @@
 import type { ChatMessage, ChatSettings, ChatState, VisualDocument } from './types';
-import { deserializeDocument, serializeDocument } from './serialization';
+import { deserializeDocument, serializeDocument, wrapHvyFragmentAsDocument } from './serialization';
 import { markdownToEditorHtml, normalizeMarkdownLists } from './markdown';
 import aiResponseFormatInstructions from '../AI-RESPONSE-FORMAT.md?raw';
 import type { VisualBlock, VisualSection } from './editor/types';
@@ -374,15 +374,7 @@ function renderAssistantHvyHtml(source: string): string | null {
   }
 
   try {
-    const syntheticDocument = `---
-hvy_version: 0.1
----
-
-<!--hvy: {"id":"rsp"}-->
-#! Response
-
-${source.trim()}
-`;
+    const syntheticDocument = wrapHvyFragmentAsDocument(source, { sectionId: 'rsp', title: 'Response' });
     const document = deserializeDocument(syntheticDocument, '.hvy');
     const [wrapperSection] = document.sections;
     if (!wrapperSection) {

@@ -11,6 +11,7 @@ const request = {
   provider: 'openai' as const,
   model: 'gpt-5-mini',
   context: 'Context body',
+  formatInstructions: 'Format as HVY.',
   messages: [
     { role: 'user' as const, content: 'What is this?' },
     { role: 'assistant' as const, content: 'A summary.' },
@@ -20,7 +21,7 @@ const request = {
 test('buildOpenAiProxyRequest includes developer context and conversation turns', () => {
   expect(buildOpenAiProxyRequest(request)).toEqual({
     model: 'gpt-5-mini',
-    instructions: expect.stringMatching(/Answer questions about the provided HVY document context/),
+    instructions: expect.stringMatching(/Response formatting instructions:\nFormat as HVY\./),
     input: [
       {
         role: 'developer',
@@ -68,7 +69,7 @@ test('buildAnthropicProxyRequest places context in system prompt and messages in
   ).toEqual({
     model: 'claude-sonnet-4-6',
     max_tokens: 1024,
-    system: expect.stringMatching(/Document context:\n\nContext body/),
+    system: expect.stringMatching(/Response formatting instructions:\nFormat as HVY\./),
     messages: [
       { role: 'user', content: 'What is this?' },
       { role: 'assistant', content: 'A summary.' },

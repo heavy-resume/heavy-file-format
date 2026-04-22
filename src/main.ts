@@ -252,26 +252,24 @@ function renderApp(): void {
                   </aside>
                   <div id="editorTree" class="editor-tree">${editorRenderer.renderSectionEditorTree(state.document.sections)}</div>
                 </div>`
-              : `<div class="viewer-layout">
-                   <div class="viewer-shell ${state.viewerSidebarOpen ? 'is-sidebar-open' : 'is-sidebar-closed'}">
-                     <div class="viewer-sidebar-backdrop" data-action="toggle-viewer-sidebar"></div>
-                     <aside class="viewer-sidebar">
-                       <button type="button" class="viewer-sidebar-tab" data-action="toggle-viewer-sidebar" aria-expanded="${state.viewerSidebarOpen ? 'true' : 'false'}" aria-label="Toggle navigation">${escapeHtml(String(state.document.meta.sidebar_label || '☰'))}</button>
-                       <div class="viewer-sidebar-panel">
-                         <div id="readerWarnings" class="reader-warnings">${readerRenderer.renderWarnings()}</div>
-                         <!-- TODO: Need to figure out what to do with navigation in the sidebar -->
-                         <!-- <div id="readerNav" class="reader-nav">${readerRenderer.renderNavigation(state.document.sections)}</div> -->
-                         <div id="readerSidebarSections" class="reader-sidebar-sections">${readerRenderer.renderSidebarSections(state.document.sections)}</div>
-                       </div>
-                     </aside>
-                     <div id="readerDocument" class="reader-document">${readerRenderer.renderReaderSections(state.document.sections)}</div>
-                   </div>
-                   ${renderChatPanel(state.chat, state.document, { escapeAttr, escapeHtml })}
+              : `<div class="viewer-shell ${state.viewerSidebarOpen ? 'is-sidebar-open' : 'is-sidebar-closed'}">
+                   <div class="viewer-sidebar-backdrop" data-action="toggle-viewer-sidebar"></div>
+                   <aside class="viewer-sidebar">
+                     <button type="button" class="viewer-sidebar-tab" data-action="toggle-viewer-sidebar" aria-expanded="${state.viewerSidebarOpen ? 'true' : 'false'}" aria-label="Toggle navigation">${escapeHtml(String(state.document.meta.sidebar_label || '☰'))}</button>
+                     <div class="viewer-sidebar-panel">
+                       <div id="readerWarnings" class="reader-warnings">${readerRenderer.renderWarnings()}</div>
+                       <!-- TODO: Need to figure out what to do with navigation in the sidebar -->
+                       <!-- <div id="readerNav" class="reader-nav">${readerRenderer.renderNavigation(state.document.sections)}</div> -->
+                       <div id="readerSidebarSections" class="reader-sidebar-sections">${readerRenderer.renderSidebarSections(state.document.sections)}</div>
+                     </div>
+                   </aside>
+                   <div id="readerDocument" class="reader-document">${readerRenderer.renderReaderSections(state.document.sections)}</div>
                  </div>`
           }
         </div>
       </section>
 
+      ${renderChatPanel(state.chat, state.document, { escapeAttr, escapeHtml })}
       ${readerRenderer.renderModal()}
       ${readerRenderer.renderLinkInlineModal()}
     </main>

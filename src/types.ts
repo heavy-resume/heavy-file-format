@@ -27,6 +27,8 @@ export interface ChatState {
   messages: ChatMessage[];
   isSending: boolean;
   error: string | null;
+  panelOpen: boolean;
+  requestNonce: number;
 }
 
 export interface PaneScrollState {

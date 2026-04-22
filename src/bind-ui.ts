@@ -50,6 +50,7 @@ export function bindUi(app: HTMLElement): void {
   const readerDocument = app.querySelector<HTMLDivElement>('#readerDocument');
   const readerSidebarSections = app.querySelector<HTMLDivElement>('#readerSidebarSections');
   const readerNav = app.querySelector<HTMLDivElement>('#readerNav');
+  const chatThread = app.querySelector<HTMLDivElement>('.chat-thread');
 
   if (!newBtn || !fileInput || !downloadBtn || !downloadName) {
     throw new Error('Missing UI elements for binding.');
@@ -407,6 +408,12 @@ export function bindUi(app: HTMLElement): void {
       return;
     }
 
+    if (action === 'toggle-chat-panel') {
+      state.chat.panelOpen = !state.chat.panelOpen;
+      getRenderApp()();
+      return;
+    }
+
     if (action === 'toggle-editor-sidebar') {
       setEditorSidebarOpen(app, !state.editorSidebarOpen);
       return;
@@ -589,6 +596,9 @@ export function bindUi(app: HTMLElement): void {
   app.addEventListener('change', (event) => {
     const target = event.target as HTMLElement | null;
     if (target instanceof HTMLSelectElement && target.dataset.field === 'chat-provider') {
+      if (state.chat.isSending) {
+        return;
+      }
       const previousProvider = state.chat.settings.provider;
       const previousModel = state.chat.settings.model.trim();
       state.chat.settings.provider = target.value === 'anthropic' ? 'anthropic' : 'openai';
@@ -659,6 +669,8 @@ export function bindUi(app: HTMLElement): void {
     state.chat.draft = '';
     state.chat.error = null;
     state.chat.isSending = true;
+    state.chat.requestNonce += 1;
+    const requestNonce = state.chat.requestNonce;
     getRenderApp()();
 
     try {
@@ -667,6 +679,9 @@ export function bindUi(app: HTMLElement): void {
         document: state.document,
         messages: nextMessages,
       });
+      if (requestNonce !== state.chat.requestNonce) {
+        return;
+      }
       state.chat.messages = [
         ...nextMessages,
         {
@@ -676,6 +691,9 @@ export function bindUi(app: HTMLElement): void {
         },
       ];
     } catch (error) {
+      if (requestNonce !== state.chat.requestNonce) {
+        return;
+      }
       const message = error instanceof Error ? error.message : 'Chat request failed.';
       state.chat.error = message;
       state.chat.messages = [
@@ -688,6 +706,9 @@ export function bindUi(app: HTMLElement): void {
         },
       ];
     } finally {
+      if (requestNonce !== state.chat.requestNonce) {
+        return;
+      }
       state.chat.isSending = false;
       getRenderApp()();
     }
@@ -1705,6 +1726,52 @@ export function bindUi(app: HTMLElement): void {
 
   readerDocument?.addEventListener('click', handleReaderAreaClick);
   readerSidebarSections?.addEventListener('click', handleReaderAreaClick);
+
+  chatThread?.addEventListener('click', (event) => {
+    const target = event.target as HTMLElement;
+
+    const anchor = target.closest<HTMLAnchorElement>('a[href^="#"]');
+    if (anchor) {
+      const id = anchor.getAttribute('href')?.slice(1) ?? '';
+      if (id) {
+        event.preventDefault();
+        navigateToSection(id, app);
+        return;
+      }
+    }
+
+    const expandable = target.closest<HTMLElement>('[data-reader-action="toggle-expandable"]');
+    if (!expandable) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const readerEl = expandable.closest<HTMLElement>('[data-expandable-id]');
+    if (!readerEl) {
+      return;
+    }
+
+    const currentlyExpanded = expandable.getAttribute('aria-expanded') === 'true';
+    const nextExpanded = !currentlyExpanded;
+
+    readerEl.querySelectorAll<HTMLElement>('[data-reader-action="toggle-expandable"]').forEach((element) => {
+      element.setAttribute('aria-expanded', nextExpanded ? 'true' : 'false');
+    });
+
+    const expandedPane = readerEl.querySelector<HTMLElement>('.expandable-reader-pane-expanded');
+    if (nextExpanded) {
+      if (expandedPane) {
+        expandedPane.style.display = '';
+      }
+      return;
+    }
+
+    if (expandedPane) {
+      expandedPane.style.display = 'none';
+    }
+  });
 
   readerNav?.addEventListener('click', (event) => {
     const target = event.target as HTMLElement;

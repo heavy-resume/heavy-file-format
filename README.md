@@ -37,7 +37,7 @@ Use of JSON and Markdown make it easy for LLMs to parse.
 - [X] Read from and write HYV / THVY files
 - [X] Color scheme and override support
 - [X] Color scheme editor and cleanup
-- [ ] AI-based answering questions
+- [X] AI-based answering questions
 - [ ] AI-based editing
 - [ ] Embedded and attached database support
 - [ ] Plugin support

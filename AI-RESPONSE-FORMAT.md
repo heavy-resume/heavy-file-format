@@ -6,6 +6,21 @@ Directive payloads must be strict JSON.
 - Use double-quoted keys and string values.
 - Do not use JavaScript object literal syntax.
 
+Do not rely on GitHub-flavored Markdown table syntax.
+- `|` is just a literal character inside text unless you are intentionally emitting a real HVY table component.
+- Do not emit pipe-delimited pseudo-tables as a shortcut for structured layout.
+- If you need reveal/hide behavior around tabular information, use `expandable` components and plain text stubs instead of Markdown tables.
+
+Common clickable/expandable row structure:
+  table - header only
+  expandable
+    stub: table - header copied (hidden) + row 1
+    content: the inner content
+  expandable
+    stub:
+      table - header copied (hidden) + row 2 + row 3
+    content: inner content when you click either row 2 or 3
+
 Use the `xref-card` component when:
 - Use xref cards instead of links. For example, if someone asks what Foo has bar, when linking to foo, use the xref-card instead of #foo-with-bar
 - Prefer xref cards to regurgitating the information that's already there.

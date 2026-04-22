@@ -15,7 +15,7 @@ import {
 } from './editor/tag-editor';
 import { getThemeConfig, applyTheme, writeThemeConfig, colorValueToPickerHex } from './theme';
 import { findSectionByKey, getSectionId, isDefaultUntitledSectionTitle } from './section-ops';
-import { getComponentDefs, getSectionDefs, getReusableNameFromSectionKey, isBuiltinComponent, resolveBaseComponent } from './component-defs';
+import { getComponentDefs, getSectionDefs, getReusableNameFromSectionKey, isBuiltinComponent } from './component-defs';
 import {
   findBlockByIds, resolveBlockContext, handleBlockFieldInput, commitInlineTableEdit,
   setActiveEditorBlock, clearActiveEditorBlock, deactivateEditorBlock,
@@ -33,9 +33,7 @@ import {
   deserializeDocument,
   deserializeDocumentWithDiagnostics,
   getHvyDiagnosticUsageHint,
-  serializeBlockFragment,
   serializeDocument,
-  wrapHvyFragmentAsDocument,
 } from './serialization';
 import { syncReusableTemplateForBlock, revertReusableComponent, findReusableOwner } from './reusable';
 import { addTableColumn, removeTableColumn, getTableColumns, moveTableColumn, moveTableRow } from './table-ops';
@@ -46,16 +44,9 @@ import { bindModal } from './bind-modal';
 import { bindLinkInlineModal, openLinkInlineModal } from './bind-link-modal';
 import { removeBlockFromList, findBlockInList } from './block-ops';
 import { getReusableTemplateByName } from './document-factory';
-import {
-  buildChatDocumentContext,
-  clearChatConversation,
-  getDefaultModelForProvider,
-  HVY_AI_RESPONSE_FORMAT_INSTRUCTIONS,
-  persistChatSettings,
-  requestChatCompletion,
-  requestProxyCompletion,
-} from './chat';
-import type { ChatMessage, RawEditorDiagnostic } from './types';
+import { clearChatConversation, getDefaultModelForProvider, persistChatSettings, requestChatCompletion } from './chat';
+import type { RawEditorDiagnostic } from './types';
+import { requestAiComponentEdit } from './ai-edit';
 
 let lastBoundChatMessageCount = -1;
 
@@ -2022,16 +2013,6 @@ async function submitAiEditRequest(): Promise<void> {
     return;
   }
 
-  const originalFragment = serializeBlockFragment(block);
-  const context = buildAiEditContext(section.title, block, originalFragment);
-  const conversation: ChatMessage[] = [
-    {
-      id: crypto.randomUUID(),
-      role: 'user',
-      content: buildAiEditPrompt(request),
-    },
-  ];
-
   state.aiEdit.isSending = true;
   state.aiEdit.error = null;
   state.aiEdit.requestNonce += 1;
@@ -2039,73 +2020,22 @@ async function submitAiEditRequest(): Promise<void> {
   getRenderApp()();
 
   try {
-    let response = await requestProxyCompletion({
+    const result = await requestAiComponentEdit({
       settings: state.chat.settings,
-      messages: conversation,
-      context,
-      formatInstructions: buildAiEditFormatInstructions(),
-      mode: 'component-edit',
-      debugLabel: 'ai-edit',
+      document: state.document,
+      sectionTitle: section.title,
+      block,
+      request,
     });
     if (requestNonce !== state.aiEdit.requestNonce) {
       return;
     }
 
-    let parsed = parseAiBlockEditResponse(response);
-    if (!parsed.hasErrors && parsed.canonicalFragment.trim() === originalFragment.trim()) {
-      parsed.issues.push({
-        severity: 'error',
-        message: 'The response parsed back to the same HVY component, so the requested change was not applied.',
-        hint: 'Keep the same HVY schema keys from the original component and modify the actual fields that should change.',
-      });
-      parsed.needsRepair = true;
-      parsed.hasErrors = true;
-    }
-    if (parsed.needsRepair) {
-      const repairConversation: ChatMessage[] = [
-        ...conversation,
-        {
-          id: crypto.randomUUID(),
-          role: 'assistant',
-          content: response,
-        },
-        {
-          id: crypto.randomUUID(),
-          role: 'user',
-          content: buildAiEditRepairPrompt(parsed.issues),
-        },
-      ];
-      response = await requestProxyCompletion({
-        settings: state.chat.settings,
-        messages: repairConversation,
-        context,
-        formatInstructions: buildAiEditFormatInstructions(),
-        mode: 'component-edit',
-        debugLabel: 'ai-edit-repair',
-      });
-      if (requestNonce !== state.aiEdit.requestNonce) {
-        return;
-      }
-      parsed = parseAiBlockEditResponse(response);
-      if (!parsed.hasErrors && parsed.canonicalFragment.trim() === originalFragment.trim()) {
-        parsed.issues.push({
-          severity: 'error',
-          message: 'The repaired response still parsed back to the same HVY component.',
-          hint: 'Use the exact HVY schema from the original component and change the specific values requested.',
-        });
-        parsed.hasErrors = true;
-      }
-    }
-
-    if (!parsed.block || parsed.hasErrors) {
-      throw new Error(formatAiEditIssueSummary(parsed.issues) || 'The AI returned an invalid component update.');
-    }
-
     recordHistory('ai-edit:block');
     const originalSchemaId = block.schema.id;
-    block.text = parsed.block.text;
-    block.schema = parsed.block.schema;
-    block.schemaMode = parsed.block.schemaMode;
+    block.text = result.block.text;
+    block.schema = result.block.schema;
+    block.schemaMode = result.block.schemaMode;
     if (originalSchemaId.trim().length > 0 && block.schema.id.trim().length === 0) {
       block.schema.id = originalSchemaId;
     }
@@ -2128,174 +2058,6 @@ async function submitAiEditRequest(): Promise<void> {
     state.aiEdit.isSending = false;
     getRenderApp()();
   }
-}
-
-function buildAiEditContext(sectionTitle: string, block: NonNullable<ReturnType<typeof findBlockByIds>>, fragment: string): string {
-  const componentGuidance = getAiEditComponentGuidance(block);
-  return [
-    'Current HVY document context:',
-    buildChatDocumentContext(state.document),
-    '',
-    'Selected component details:',
-    `Section: ${sectionTitle}`,
-    `Component: ${block.schema.component}`,
-    `Base component: ${resolveBaseComponent(block.schema.component)}`,
-    `Schema ID: ${block.schema.id || '(none)'}`,
-    '',
-    'Preserve the selected component shape and property names unless the request explicitly changes them.',
-    componentGuidance ? `Component-specific guidance:\n${componentGuidance}` : '',
-    '',
-    'Selected component HVY:',
-    fragment,
-  ].filter((part) => part.length > 0).join('\n');
-}
-
-function buildAiEditPrompt(request: string): string {
-  return [
-    'Update the selected HVY component to satisfy this request:',
-    request,
-    '',
-    'Start from the selected component HVY and make the smallest valid change that satisfies the request.',
-    'Preserve the meaning and types of existing HVY fields.',
-    'If the request does not fit the selected component naturally, replace it with a more appropriate HVY component instead of inventing unsupported fields or overloading existing ones.',
-    'Return only the updated HVY for that single component.',
-    'Do not return front matter, section directives, headings, code fences, or explanations.',
-    'Preserve existing IDs and unchanged fields unless the request explicitly changes them.',
-  ].join('\n');
-}
-
-function buildAiEditFormatInstructions(): string {
-  return [
-    HVY_AI_RESPONSE_FORMAT_INSTRUCTIONS,
-    '',
-    'You are revising a single HVY component, not a whole document.',
-    'Return exactly one HVY component fragment.',
-    'Do not include YAML front matter, section comments, section headings, code fences, or prose outside the component.',
-    'Every HVY directive payload must be strict JSON with double-quoted keys and strings.',
-    'Keep HVY field value types correct. Booleans must stay booleans, strings must stay strings, and arrays/objects must keep the documented shape.',
-    'If the request implies a different interaction or structure than the selected component supports, return a replacement component that fits the request cleanly.',
-    'Keep the output valid HVY.',
-  ].join('\n\n');
-}
-
-function sanitizeAiEditOutput(source: string): string {
-  const trimmed = source.trim();
-  const fencedMatch = trimmed.match(/^```(?:hvy|markdown)?\s*\n([\s\S]*?)\n```$/i);
-  return fencedMatch ? fencedMatch[1].trim() : trimmed;
-}
-
-function parseAiBlockEditResponse(source: string): {
-  block: ReturnType<typeof findBlockByIds>;
-  issues: RawEditorDiagnostic[];
-  needsRepair: boolean;
-  hasErrors: boolean;
-  canonicalFragment: string;
-} {
-  const cleaned = sanitizeAiEditOutput(source);
-  const { document, diagnostics } = deserializeDocumentWithDiagnostics(
-    wrapHvyFragmentAsDocument(cleaned, { sectionId: 'ai-response', title: 'AI Response' }),
-    '.hvy'
-  );
-  const [section] = document.sections;
-  const issues = diagnostics.map((diagnostic) => ({
-    severity: diagnostic.severity,
-    message: diagnostic.message,
-    hint: getHvyDiagnosticUsageHint(diagnostic),
-  }));
-
-  if (!section) {
-    issues.push({
-      severity: 'error',
-      message: 'No component was returned.',
-      hint: 'Return exactly one HVY component directive and its content.',
-    });
-    return {
-      block: null,
-      issues,
-      needsRepair: true,
-      hasErrors: true,
-      canonicalFragment: '',
-    };
-  }
-
-  if (document.sections.length !== 1 || section.children.length > 0 || section.blocks.length !== 1) {
-    issues.push({
-      severity: 'error',
-      message: 'The response must contain exactly one top-level component.',
-      hint: 'Return one component only, without subsection directives or sibling components.',
-    });
-  }
-
-  const candidateBlock = section.blocks[0] ?? null;
-  const canonicalFragment = candidateBlock ? serializeBlockFragment(candidateBlock) : '';
-  return {
-    block: candidateBlock,
-    issues,
-    needsRepair: issues.length > 0,
-    hasErrors: issues.some((issue) => issue.severity === 'error'),
-    canonicalFragment,
-  };
-}
-
-function buildAiEditRepairPrompt(issues: RawEditorDiagnostic[]): string {
-  const uniqueIssues = issues
-    .filter(
-      (issue, index, all) =>
-        all.findIndex((candidate) => candidate.message === issue.message && candidate.hint === issue.hint) === index
-    )
-    .slice(0, 6);
-
-  return [
-    'Revise your previous HVY component so it is valid and contains exactly one component.',
-    '',
-    'Issues:',
-    ...uniqueIssues.map((issue) => `- ${issue.message}\n  Hint: ${issue.hint}`),
-    '',
-    'Return only the corrected single-component HVY fragment.',
-  ].join('\n');
-}
-
-function formatAiEditIssueSummary(issues: RawEditorDiagnostic[]): string {
-  if (issues.length === 0) {
-    return '';
-  }
-  return issues
-    .slice(0, 3)
-    .map((issue) => `${issue.message} ${issue.hint}`.trim())
-    .join(' ');
-}
-
-function getAiEditComponentGuidance(block: NonNullable<ReturnType<typeof findBlockByIds>>): string {
-  const base = resolveBaseComponent(block.schema.component);
-  if (base === 'table') {
-    return [
-      '- Use `tableColumns` as a comma-separated string, for example `"Foo, Bar"`.',
-      '- Use `tableRows` as an array of rows with `cells` arrays.',
-      '- Each table row only contains `cells`, which is an array of strings.',
-      '- Do not invent row-level interaction or detail fields for tables.',
-      '- Do not invent `columns` or `rows` keys.',
-      '- Tables are non-interactive. If the user asks for reveal/hide behavior, extra narrative detail, or expandable content, replace the table with an `expandable` that contains a table rather than forcing the table schema.',
-    ].join('\n');
-  }
-  if (base === 'xref-card') {
-    return [
-      '- Use `xrefTitle`, optional `xrefDetail`, and `xrefTarget`.',
-      '- Do not replace an xref-card with a plain markdown link.',
-    ].join('\n');
-  }
-  if (base === 'expandable') {
-    return [
-      '- Keep one `expandable:stub` slot and one `expandable:content` slot.',
-      '- Put nested components under those slots rather than inline in schema JSON.',
-    ].join('\n');
-  }
-  if (base === 'grid') {
-    return [
-      '- Keep `gridColumns` as a number.',
-      '- Keep items as nested `<!--hvy:grid:N {...}-->` slots, not schema inline arrays.',
-    ].join('\n');
-  }
-  return '';
 }
 
 function bindChatThreadUi(

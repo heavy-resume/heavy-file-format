@@ -524,7 +524,7 @@ Viewers SHOULD ship built-in defaults for the following conventional names so do
 - `--hvy-shadow`, `--hvy-shadow-md`, `--hvy-shadow-lg`
 - `--hvy-overlay`
 - `--hvy-danger`
-- `--hvy-warning`, `--hvy-warning-bg`, `--hvy-warning-border`, `--hvy-warning-accent`
+- `--hvy-warning`, `--hvy-warning-bg`, `--hvy-warning-border`, `--hvy-warning-text`
 - `--hvy-success`, `--hvy-success-bg`, `--hvy-success-border`
 
 Alternates (`*-alt`) are intended as fallbacks for cases where the base color would clash with its surroundings.

@@ -16,7 +16,7 @@ import { renderOption } from './utils';
 import { resolveBaseComponent } from './component-defs';
 import { ensureContainerBlocks, ensureComponentListBlocks, ensureExpandableBlocks, ensureGridItems } from './document-factory';
 import { isActiveEditorSectionTitle, isActiveEditorBlock, getComponentRenderHelpers, findBlockByIds } from './block-ops';
-import { commitHistorySnapshot, renderStateTracker } from './history';
+import { commitHistorySnapshot } from './history';
 import { capturePaneScroll, restorePaneScroll, centerPendingEditorSection, focusPendingSectionTitleEditor } from './scroll';
 import { bindUi } from './bind-ui';
 import { deserializeDocument, serializeDocument } from './serialization';
@@ -362,7 +362,6 @@ function renderApp(): void {
                      </div>`
                   : `${isAdvancedEditor ? renderTemplatePanel(templateFields, state.templateValues, { escapeAttr, escapeHtml }) : ''}
                 ${isAdvancedEditor && state.metaPanelOpen ? editorRenderer.renderMetaPanel() : ''}
-                ${isAdvancedEditor ? renderStateTracker() : ''}
                 <div class="editor-shell ${state.editorSidebarOpen ? 'is-sidebar-open' : 'is-sidebar-closed'}">
                   <div class="editor-sidebar-backdrop" data-action="toggle-editor-sidebar"></div>
                   <aside class="editor-sidebar">

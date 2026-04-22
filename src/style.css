@@ -2020,8 +2020,8 @@ button.tiny {
   padding: 0.55rem 0.8rem;
   border: 1px solid var(--hvy-expandable-stub-border);
   border-radius: 999px;
-  background: linear-gradient(180deg, var(--hvy-warning-bg) 0%, var(--hvy-warning-bg) 100%);
-  color: var(--hvy-warning-border);
+  background: linear-gradient(180deg, var(--hvy-surface) 0%, var(--hvy-surface-alt) 100%);
+  color: var(--hvy-text);
   font-size: 0.8rem;
   font-weight: 700;
   cursor: pointer;
@@ -2029,8 +2029,8 @@ button.tiny {
 }
 
 .expandable-inline-toggle:hover {
-  background: linear-gradient(180deg, var(--hvy-warning-bg) 0%, var(--hvy-warning-bg) 100%);
-  border-color: var(--hvy-warning);
+  background: linear-gradient(180deg, var(--hvy-surface-alt) 0%, var(--hvy-surface-tint) 100%);
+  border-color: var(--hvy-border-input);
 }
 
 .expandable-part-body {
@@ -2138,7 +2138,7 @@ button.tiny {
 .warn {
   background: var(--hvy-warning-bg);
   border: 1px solid var(--hvy-warning-border);
-  color: var(--hvy-warning-border);
+  color: var(--hvy-warning-text);
 }
 
 .nav-title {

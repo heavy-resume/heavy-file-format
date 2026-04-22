@@ -45,7 +45,7 @@
   --hvy-warning: #c79200;
   --hvy-warning-bg: #fff3de;
   --hvy-warning-border: #ebca8d;
-  --hvy-warning-accent: #e2b100;
+  --hvy-warning-text: #e2b100;
   --hvy-success: #1c6231;
   --hvy-success-bg: #e7f9ee;
   --hvy-success-border: #95d8a9;
@@ -119,7 +119,7 @@
   --hvy-warning: #d4a017;
   --hvy-warning-bg: #2a2310;
   --hvy-warning-border: #6b5200;
-  --hvy-warning-accent: #c79200;
+  --hvy-warning-text: #c79200;
   --hvy-success: #4cae68;
   --hvy-success-bg: #152b1e;
   --hvy-success-border: #2e7a46;

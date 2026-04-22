@@ -42,7 +42,7 @@ theme:
     --hvy-warning: "#d4a017"
     --hvy-warning-bg: "#2a2310"
     --hvy-warning-border: "#6b5200"
-    --hvy-warning-accent: "#c79200"
+    --hvy-warning-text: "#c79200"
     --hvy-success: "#4cae68"
     --hvy-success-bg: "#152b1e"
     --hvy-success-border: "#2e7a46"

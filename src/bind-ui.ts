@@ -40,6 +40,7 @@ import { bindModal } from './bind-modal';
 import { bindLinkInlineModal, openLinkInlineModal } from './bind-link-modal';
 import { removeBlockFromList, findBlockInList } from './block-ops';
 import { getReusableTemplateByName } from './document-factory';
+import { clearChatConversation, persistChatSettings, requestChatCompletion } from './chat';
 
 export function bindUi(app: HTMLElement): void {
   const newBtn = app.querySelector<HTMLButtonElement>('#newBtn');
@@ -70,6 +71,7 @@ export function bindUi(app: HTMLElement): void {
     state.filename = 'resume.thvy';
     state.history = [];
     state.future = [];
+    clearChatConversation(state.chat);
     resetTransientUiState();
     getRenderApp()();
   });
@@ -80,6 +82,7 @@ export function bindUi(app: HTMLElement): void {
     state.filename = 'resume.hvy';
     state.history = [];
     state.future = [];
+    clearChatConversation(state.chat);
     resetTransientUiState();
     getRenderApp()();
   });
@@ -92,6 +95,7 @@ export function bindUi(app: HTMLElement): void {
     const text = await file.text();
     state.filename = file.name;
     state.document = deserializeDocument(text, detectExtension(file.name, text));
+    clearChatConversation(state.chat);
     closeModal();
     resetTransientUiState();
     getRenderApp()();
@@ -131,6 +135,19 @@ export function bindUi(app: HTMLElement): void {
     if (field === 'meta-title' && target instanceof HTMLInputElement) {
       recordHistory('meta:title');
       state.document.meta.title = target.value;
+      return;
+    }
+
+    if (field === 'chat-model' && target instanceof HTMLInputElement) {
+      state.chat.settings.model = target.value;
+      persistChatSettings(state.chat.settings);
+      state.chat.error = null;
+      return;
+    }
+
+    if (field === 'chat-input' && target instanceof HTMLTextAreaElement) {
+      state.chat.draft = target.value;
+      state.chat.error = null;
       return;
     }
 
@@ -384,6 +401,12 @@ export function bindUi(app: HTMLElement): void {
       return;
     }
 
+    if (action === 'clear-chat-history') {
+      clearChatConversation(state.chat);
+      getRenderApp()();
+      return;
+    }
+
     if (action === 'toggle-editor-sidebar') {
       setEditorSidebarOpen(app, !state.editorSidebarOpen);
       return;
@@ -564,20 +587,110 @@ export function bindUi(app: HTMLElement): void {
   });
 
   app.addEventListener('change', (event) => {
-    const target = event.target;
-    if (!(target instanceof HTMLInputElement) || target.type !== 'checkbox') {
+    const target = event.target as HTMLElement | null;
+    if (target instanceof HTMLSelectElement && target.dataset.field === 'chat-provider') {
+      const previousProvider = state.chat.settings.provider;
+      const previousModel = state.chat.settings.model.trim();
+      state.chat.settings.provider = target.value === 'anthropic' ? 'anthropic' : 'openai';
+      if (
+        state.chat.settings.provider === 'openai' &&
+        (previousModel.length === 0 || (previousProvider === 'anthropic' && previousModel === 'claude-sonnet-4-6'))
+      ) {
+        state.chat.settings.model = 'gpt-5-mini';
+      }
+      if (
+        state.chat.settings.provider === 'anthropic' &&
+        (previousModel.length === 0 || (previousProvider === 'openai' && previousModel === 'gpt-5-mini'))
+      ) {
+        state.chat.settings.model = 'claude-sonnet-4-6';
+      }
+      persistChatSettings(state.chat.settings);
+      state.chat.error = null;
+      getRenderApp()();
       return;
     }
-    if (!target.closest('.rich-editor')) {
+    const checkboxTarget = event.target;
+    if (!(checkboxTarget instanceof HTMLInputElement) || checkboxTarget.type !== 'checkbox') {
       return;
     }
-    if (target.checked) {
-      target.setAttribute('checked', '');
+    if (!checkboxTarget.closest('.rich-editor')) {
+      return;
+    }
+    if (checkboxTarget.checked) {
+      checkboxTarget.setAttribute('checked', '');
     } else {
-      target.removeAttribute('checked');
+      checkboxTarget.removeAttribute('checked');
     }
-    const editable = target.closest<HTMLElement>('.rich-editor');
+    const editable = checkboxTarget.closest<HTMLElement>('.rich-editor');
     editable?.dispatchEvent(new InputEvent('input', { bubbles: true }));
+  });
+
+  app.addEventListener('submit', async (event) => {
+    const form = event.target as HTMLElement | null;
+    if (form?.id !== 'chatComposer') {
+      return;
+    }
+    event.preventDefault();
+    if (state.chat.isSending) {
+      return;
+    }
+
+    const question = state.chat.draft.trim();
+    if (question.length === 0) {
+      return;
+    }
+
+    if (state.chat.settings.model.trim().length === 0) {
+      state.chat.error = 'Choose a model before sending.';
+      getRenderApp()();
+      return;
+    }
+
+    const nextMessages = [
+      ...state.chat.messages,
+      {
+        id: crypto.randomUUID(),
+        role: 'user' as const,
+        content: question,
+      },
+    ];
+
+    state.chat.messages = nextMessages;
+    state.chat.draft = '';
+    state.chat.error = null;
+    state.chat.isSending = true;
+    getRenderApp()();
+
+    try {
+      const answer = await requestChatCompletion({
+        settings: state.chat.settings,
+        document: state.document,
+        messages: nextMessages,
+      });
+      state.chat.messages = [
+        ...nextMessages,
+        {
+          id: crypto.randomUUID(),
+          role: 'assistant',
+          content: answer,
+        },
+      ];
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Chat request failed.';
+      state.chat.error = message;
+      state.chat.messages = [
+        ...nextMessages,
+        {
+          id: crypto.randomUUID(),
+          role: 'assistant',
+          content: message,
+          error: true,
+        },
+      ];
+    } finally {
+      state.chat.isSending = false;
+      getRenderApp()();
+    }
   });
 
   if (!shortcutsBound) {

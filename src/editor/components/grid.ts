@@ -14,7 +14,7 @@ export const renderGridEditor: ComponentEditorRenderer = (sectionKey, block, hel
   <div class="grid-fields" style="--grid-columns: ${helpers.escapeAttr(String(block.schema.gridColumns))};">
     ${block.schema.gridItems
       .map(
-        (item, index) => `<div class="grid-field-row">
+        (item) => `<div class="grid-field-row">
           <div class="grid-field-head">
             <div class="section-drag-title">
               <div class="editor-order-controls">

@@ -3,12 +3,14 @@ import { beforeAll } from 'vitest';
 import { serializeDocument } from '../src/serialization';
 import { initCallbacks, initState, state } from '../src/state';
 import type { AppState, VisualDocument } from '../src/types';
+import { createDefaultChatState } from '../src/chat';
 
 export function createTestState(document: VisualDocument): AppState {
   return {
     document,
     filename: 'test.hvy',
     currentView: 'editor',
+    chat: createDefaultChatState(),
     paneScroll: {
       editorTop: 0,
       editorSidebarTop: 0,

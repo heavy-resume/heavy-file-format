@@ -7,6 +7,28 @@ export interface VisualDocument {
   sections: VisualSection[];
 }
 
+export type ChatProvider = 'openai' | 'anthropic';
+
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  error?: boolean;
+}
+
+export interface ChatSettings {
+  provider: ChatProvider;
+  model: string;
+}
+
+export interface ChatState {
+  settings: ChatSettings;
+  draft: string;
+  messages: ChatMessage[];
+  isSending: boolean;
+  error: string | null;
+}
+
 export interface PaneScrollState {
   editorTop: number;
   editorSidebarTop: number;
@@ -43,6 +65,7 @@ export interface AppState {
   document: VisualDocument;
   filename: string;
   currentView: 'editor' | 'viewer';
+  chat: ChatState;
   paneScroll: PaneScrollState;
   showAdvancedEditor: boolean;
   activeEditorBlock: { sectionKey: string; blockId: string } | null;

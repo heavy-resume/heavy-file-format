@@ -4,6 +4,7 @@ import { getSectionId } from './section-ops';
 import { resolveBaseComponent } from './component-defs';
 import { createBlankDocument } from './document-factory';
 import { getRenderApp } from './state';
+import { clearChatConversation } from './chat';
 
 /**
  * Directly update the sidebar open/closed state on the DOM without a full re-render,
@@ -223,6 +224,7 @@ export function resetToBlankDocument(): void {
   state.filename = 'untitled.hvy';
   state.history = [];
   state.future = [];
+  clearChatConversation(state.chat);
   resetTransientUiState();
   getRenderApp()();
 }

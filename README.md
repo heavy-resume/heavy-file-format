@@ -36,8 +36,8 @@ Use of JSON and Markdown make it easy for LLMs to parse.
 - [X] Create blank documents, with placeholders and templates
 - [X] Read from and write HYV / THVY files
 - [X] Color scheme and override support
-- [ ] Color scheme editor and cleanup
-- [ ] AI-based answering questions
+- [X] Color scheme editor and cleanup
+- [X] AI-based answering questions
 - [ ] AI-based editing
 - [ ] Embedded and attached database support
 - [ ] Plugin support
@@ -69,6 +69,21 @@ npm run dev
 ```
 
 Open the local Vite URL shown in terminal.
+
+For AI document chat in local development, configure provider credentials in `.env` for the local proxy:
+
+```bash
+OPENAI_API_KEY=...
+ANTHROPIC_API_KEY=...
+
+VITE_HVY_CHAT_PROVIDER=openai
+VITE_HVY_CHAT_MODEL=gpt-5-mini
+```
+
+Notes:
+- The browser only sees provider/model defaults.
+- API keys are consumed by the isolated local proxy in [`proxy/chat-proxy.ts`](proxy/chat-proxy.ts).
+- `VITE_OPENAI_API_KEY` / `VITE_ANTHROPIC_API_KEY` are still accepted as a dev fallback, but `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` are preferred so keys are not exposed to the client bundle.
 
 ### Run In VS Code
 

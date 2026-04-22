@@ -29,7 +29,7 @@ import {
 } from './document-factory';
 import { recordHistory, undoState, redoState } from './history';
 import { navigateToSection, setSidebarOpen, setEditorSidebarOpen, closeModal, closeModalIfTarget, resetTransientUiState, resetToBlankDocument } from './navigation';
-import { deserializeDocument } from './serialization';
+import { deserializeDocument, deserializeDocumentWithDiagnostics, getHvyDiagnosticUsageHint } from './serialization';
 import { serializeDocument } from './serialization';
 import { syncReusableTemplateForBlock, revertReusableComponent, findReusableOwner } from './reusable';
 import { addTableColumn, removeTableColumn, getTableColumns, moveTableColumn, moveTableRow } from './table-ops';
@@ -40,6 +40,10 @@ import { bindModal } from './bind-modal';
 import { bindLinkInlineModal, openLinkInlineModal } from './bind-link-modal';
 import { removeBlockFromList, findBlockInList } from './block-ops';
 import { getReusableTemplateByName } from './document-factory';
+import { clearChatConversation, persistChatSettings, requestChatCompletion } from './chat';
+import type { RawEditorDiagnostic } from './types';
+
+let lastBoundChatMessageCount = -1;
 
 export function bindUi(app: HTMLElement): void {
   const newBtn = app.querySelector<HTMLButtonElement>('#newBtn');
@@ -49,10 +53,15 @@ export function bindUi(app: HTMLElement): void {
   const readerDocument = app.querySelector<HTMLDivElement>('#readerDocument');
   const readerSidebarSections = app.querySelector<HTMLDivElement>('#readerSidebarSections');
   const readerNav = app.querySelector<HTMLDivElement>('#readerNav');
+  const chatThread = app.querySelector<HTMLDivElement>('.chat-thread');
+  const chatScrollContainer = app.querySelector<HTMLDivElement>('[data-chat-scroll-container]');
+  const chatScrollBottomButton = app.querySelector<HTMLButtonElement>('[data-action="chat-scroll-bottom"]');
 
   if (!newBtn || !fileInput || !downloadBtn || !downloadName) {
     throw new Error('Missing UI elements for binding.');
   }
+
+  bindChatThreadUi(chatThread, chatScrollContainer, chatScrollBottomButton);
 
   const tagStateHelpers = {
     getTagState,
@@ -67,9 +76,13 @@ export function bindUi(app: HTMLElement): void {
   const resumeTemplateBtn = app.querySelector<HTMLButtonElement>('#resumeTemplateBtn');
   resumeTemplateBtn?.addEventListener('click', () => {
     state.document = deserializeDocument(bundledResumeThvy, '.thvy');
+    state.rawEditorText = serializeDocument(state.document);
+    state.rawEditorError = null;
+    state.rawEditorDiagnostics = [];
     state.filename = 'resume.thvy';
     state.history = [];
     state.future = [];
+    clearChatConversation(state.chat);
     resetTransientUiState();
     getRenderApp()();
   });
@@ -77,9 +90,13 @@ export function bindUi(app: HTMLElement): void {
   const resumeExampleBtn = app.querySelector<HTMLButtonElement>('#resumeExampleBtn');
   resumeExampleBtn?.addEventListener('click', () => {
     state.document = deserializeDocument(bundledResumeHvy, '.hvy');
+    state.rawEditorText = serializeDocument(state.document);
+    state.rawEditorError = null;
+    state.rawEditorDiagnostics = [];
     state.filename = 'resume.hvy';
     state.history = [];
     state.future = [];
+    clearChatConversation(state.chat);
     resetTransientUiState();
     getRenderApp()();
   });
@@ -92,6 +109,10 @@ export function bindUi(app: HTMLElement): void {
     const text = await file.text();
     state.filename = file.name;
     state.document = deserializeDocument(text, detectExtension(file.name, text));
+    state.rawEditorText = serializeDocument(state.document);
+    state.rawEditorError = null;
+    state.rawEditorDiagnostics = [];
+    clearChatConversation(state.chat);
     closeModal();
     resetTransientUiState();
     getRenderApp()();
@@ -131,6 +152,19 @@ export function bindUi(app: HTMLElement): void {
     if (field === 'meta-title' && target instanceof HTMLInputElement) {
       recordHistory('meta:title');
       state.document.meta.title = target.value;
+      return;
+    }
+
+    if (field === 'chat-model' && target instanceof HTMLInputElement) {
+      state.chat.settings.model = target.value;
+      persistChatSettings(state.chat.settings);
+      state.chat.error = null;
+      return;
+    }
+
+    if (field === 'chat-input' && target instanceof HTMLTextAreaElement) {
+      state.chat.draft = target.value;
+      state.chat.error = null;
       return;
     }
 
@@ -289,6 +323,14 @@ export function bindUi(app: HTMLElement): void {
       }
       return;
     }
+
+    if (field === 'raw-editor-text' && target instanceof HTMLTextAreaElement) {
+      recordHistory('raw-editor:text');
+      state.rawEditorText = target.value;
+      state.rawEditorError = null;
+      state.rawEditorDiagnostics = getRawEditorDiagnostics(target.value, state.filename);
+      return;
+    }
   });
 
   app.addEventListener('click', (event) => {
@@ -318,11 +360,57 @@ export function bindUi(app: HTMLElement): void {
     }
 
     if (action === 'set-editor-mode') {
-      state.showAdvancedEditor = actionButton.dataset.editorMode === 'advanced';
+      const editorMode = actionButton.dataset.editorMode === 'raw'
+        ? 'raw'
+        : actionButton.dataset.editorMode === 'advanced'
+        ? 'advanced'
+        : 'basic';
+      state.editorMode = editorMode;
+      state.showAdvancedEditor = editorMode === 'advanced';
+      if (editorMode === 'raw') {
+        state.rawEditorText = serializeDocument(state.document);
+        state.rawEditorError = null;
+        state.rawEditorDiagnostics = [];
+      }
       if (!state.showAdvancedEditor) {
         state.metaPanelOpen = false;
       }
       state.activeEditorSectionTitleKey = null;
+      getRenderApp()();
+      return;
+    }
+
+    if (action === 'reset-raw-editor') {
+      state.rawEditorText = serializeDocument(state.document);
+      state.rawEditorError = null;
+      state.rawEditorDiagnostics = [];
+      getRenderApp()();
+      return;
+    }
+
+    if (action === 'apply-raw-editor') {
+      const diagnostics = getRawEditorDiagnostics(state.rawEditorText, state.filename);
+      state.rawEditorDiagnostics = diagnostics;
+      if (diagnostics.length > 0) {
+        state.rawEditorError = 'Resolve the raw HVY issues before applying.';
+        getRenderApp()();
+        return;
+      }
+      try {
+        recordHistory('raw-editor:apply');
+        state.document = deserializeDocument(
+          state.rawEditorText,
+          detectExtension(state.filename, state.rawEditorText)
+        );
+        state.rawEditorText = serializeDocument(state.document);
+        state.rawEditorError = null;
+        state.rawEditorDiagnostics = [];
+        clearChatConversation(state.chat);
+        closeModal();
+        resetTransientUiState();
+      } catch (error) {
+        state.rawEditorError = error instanceof Error ? error.message : 'Failed to parse raw document.';
+      }
       getRenderApp()();
       return;
     }
@@ -381,6 +469,18 @@ export function bindUi(app: HTMLElement): void {
 
     if (action === 'toggle-viewer-sidebar') {
       setSidebarOpen(app, !state.viewerSidebarOpen);
+      return;
+    }
+
+    if (action === 'clear-chat-history') {
+      clearChatConversation(state.chat);
+      getRenderApp()();
+      return;
+    }
+
+    if (action === 'toggle-chat-panel') {
+      state.chat.panelOpen = !state.chat.panelOpen;
+      getRenderApp()();
       return;
     }
 
@@ -564,20 +664,124 @@ export function bindUi(app: HTMLElement): void {
   });
 
   app.addEventListener('change', (event) => {
-    const target = event.target;
-    if (!(target instanceof HTMLInputElement) || target.type !== 'checkbox') {
+    const target = event.target as HTMLElement | null;
+    if (target instanceof HTMLSelectElement && target.dataset.field === 'chat-provider') {
+      if (state.chat.isSending) {
+        return;
+      }
+      const previousProvider = state.chat.settings.provider;
+      const previousModel = state.chat.settings.model.trim();
+      state.chat.settings.provider = target.value === 'anthropic' ? 'anthropic' : 'openai';
+      if (
+        state.chat.settings.provider === 'openai' &&
+        (previousModel.length === 0 || (previousProvider === 'anthropic' && previousModel === 'claude-sonnet-4-6'))
+      ) {
+        state.chat.settings.model = 'gpt-5-mini';
+      }
+      if (
+        state.chat.settings.provider === 'anthropic' &&
+        (previousModel.length === 0 || (previousProvider === 'openai' && previousModel === 'gpt-5-mini'))
+      ) {
+        state.chat.settings.model = 'claude-sonnet-4-6';
+      }
+      persistChatSettings(state.chat.settings);
+      state.chat.error = null;
+      getRenderApp()();
       return;
     }
-    if (!target.closest('.rich-editor')) {
+    const checkboxTarget = event.target;
+    if (!(checkboxTarget instanceof HTMLInputElement) || checkboxTarget.type !== 'checkbox') {
       return;
     }
-    if (target.checked) {
-      target.setAttribute('checked', '');
+    if (!checkboxTarget.closest('.rich-editor')) {
+      return;
+    }
+    if (checkboxTarget.checked) {
+      checkboxTarget.setAttribute('checked', '');
     } else {
-      target.removeAttribute('checked');
+      checkboxTarget.removeAttribute('checked');
     }
-    const editable = target.closest<HTMLElement>('.rich-editor');
+    const editable = checkboxTarget.closest<HTMLElement>('.rich-editor');
     editable?.dispatchEvent(new InputEvent('input', { bubbles: true }));
+  });
+
+  app.addEventListener('submit', async (event) => {
+    const form = event.target as HTMLElement | null;
+    if (form?.id !== 'chatComposer') {
+      return;
+    }
+    event.preventDefault();
+    if (state.chat.isSending) {
+      return;
+    }
+
+    const question = state.chat.draft.trim();
+    if (question.length === 0) {
+      return;
+    }
+
+    if (state.chat.settings.model.trim().length === 0) {
+      state.chat.error = 'Choose a model before sending.';
+      getRenderApp()();
+      return;
+    }
+
+    const nextMessages = [
+      ...state.chat.messages,
+      {
+        id: crypto.randomUUID(),
+        role: 'user' as const,
+        content: question,
+      },
+    ];
+
+    state.chat.messages = nextMessages;
+    state.chat.draft = '';
+    state.chat.error = null;
+    state.chat.isSending = true;
+    state.chat.requestNonce += 1;
+    const requestNonce = state.chat.requestNonce;
+    getRenderApp()();
+
+    try {
+      const answer = await requestChatCompletion({
+        settings: state.chat.settings,
+        document: state.document,
+        messages: nextMessages,
+      });
+      if (requestNonce !== state.chat.requestNonce) {
+        return;
+      }
+      state.chat.messages = [
+        ...nextMessages,
+        {
+          id: crypto.randomUUID(),
+          role: 'assistant',
+          content: answer,
+        },
+      ];
+    } catch (error) {
+      if (requestNonce !== state.chat.requestNonce) {
+        return;
+      }
+      const message = error instanceof Error ? error.message : 'Chat request failed.';
+      state.chat.error = message;
+      state.chat.messages = [
+        ...nextMessages,
+        {
+          id: crypto.randomUUID(),
+          role: 'assistant',
+          content: message,
+          error: true,
+        },
+      ];
+    } finally {
+      if (requestNonce !== state.chat.requestNonce) {
+        return;
+      }
+      state.chat.isSending = false;
+      getRenderApp()();
+    }
   });
 
   if (!shortcutsBound) {
@@ -1593,6 +1797,52 @@ export function bindUi(app: HTMLElement): void {
   readerDocument?.addEventListener('click', handleReaderAreaClick);
   readerSidebarSections?.addEventListener('click', handleReaderAreaClick);
 
+  chatThread?.addEventListener('click', (event) => {
+    const target = event.target as HTMLElement;
+
+    const anchor = target.closest<HTMLAnchorElement>('a[href^="#"]');
+    if (anchor) {
+      const id = anchor.getAttribute('href')?.slice(1) ?? '';
+      if (id) {
+        event.preventDefault();
+        navigateToSection(id, app);
+        return;
+      }
+    }
+
+    const expandable = target.closest<HTMLElement>('[data-chat-action="toggle-expandable"]');
+    if (!expandable) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const readerEl = expandable.closest<HTMLElement>('[data-expandable-id]');
+    if (!readerEl) {
+      return;
+    }
+
+    const currentlyExpanded = expandable.getAttribute('aria-expanded') === 'true';
+    const nextExpanded = !currentlyExpanded;
+
+    readerEl.querySelectorAll<HTMLElement>('[data-chat-action="toggle-expandable"]').forEach((element) => {
+      element.setAttribute('aria-expanded', nextExpanded ? 'true' : 'false');
+    });
+
+    const expandedPane = readerEl.querySelector<HTMLElement>('.expandable-reader-pane-expanded');
+    if (nextExpanded) {
+      if (expandedPane) {
+        expandedPane.style.display = '';
+      }
+      return;
+    }
+
+    if (expandedPane) {
+      expandedPane.style.display = 'none';
+    }
+  });
+
   readerNav?.addEventListener('click', (event) => {
     const target = event.target as HTMLElement;
     const nav = target.closest<HTMLElement>('[data-nav-id]');
@@ -1608,6 +1858,49 @@ export function bindUi(app: HTMLElement): void {
 
   bindModal(app);
   bindLinkInlineModal(app);
+}
+
+function bindChatThreadUi(
+  chatThread: HTMLDivElement | null,
+  chatScrollContainer: HTMLDivElement | null,
+  chatScrollBottomButton: HTMLButtonElement | null
+): void {
+  if (!chatThread || !chatScrollContainer || !chatScrollBottomButton) {
+    lastBoundChatMessageCount = state.chat.messages.length;
+    return;
+  }
+
+  const updateScrollButton = (): void => {
+    const distanceFromBottom = chatScrollContainer.scrollHeight - chatScrollContainer.scrollTop - chatScrollContainer.clientHeight;
+    chatScrollBottomButton.hidden = distanceFromBottom <= 32;
+  };
+
+  chatScrollContainer.addEventListener('scroll', updateScrollButton);
+
+  chatScrollBottomButton.addEventListener('click', () => {
+    chatScrollContainer.scrollTo({
+      top: chatScrollContainer.scrollHeight,
+      behavior: 'smooth',
+    });
+  });
+
+  window.requestAnimationFrame(() => {
+    if (state.chat.messages.length !== lastBoundChatMessageCount) {
+      chatScrollContainer.scrollTop = chatScrollContainer.scrollHeight;
+    }
+    updateScrollButton();
+    lastBoundChatMessageCount = state.chat.messages.length;
+  });
+}
+
+function getRawEditorDiagnostics(source: string, filename: string): RawEditorDiagnostic[] {
+  const extension = detectExtension(filename, source);
+  const { diagnostics } = deserializeDocumentWithDiagnostics(source, extension);
+  return diagnostics.map((diagnostic) => ({
+    severity: diagnostic.severity,
+    message: diagnostic.message,
+    hint: getHvyDiagnosticUsageHint(diagnostic),
+  }));
 }
 
 function handleInlineCheckboxBackspace(editable: HTMLElement): boolean {

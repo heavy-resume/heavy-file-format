@@ -7,6 +7,30 @@ export interface VisualDocument {
   sections: VisualSection[];
 }
 
+export type ChatProvider = 'openai' | 'anthropic';
+
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  error?: boolean;
+}
+
+export interface ChatSettings {
+  provider: ChatProvider;
+  model: string;
+}
+
+export interface ChatState {
+  settings: ChatSettings;
+  draft: string;
+  messages: ChatMessage[];
+  isSending: boolean;
+  error: string | null;
+  panelOpen: boolean;
+  requestNonce: number;
+}
+
 export interface PaneScrollState {
   editorTop: number;
   editorSidebarTop: number;
@@ -19,6 +43,12 @@ export interface ReusableSaveModalState {
   sectionKey: string;
   blockId?: string;
   draftName: string;
+}
+
+export interface RawEditorDiagnostic {
+  severity: 'warning' | 'error';
+  message: string;
+  hint: string;
 }
 
 export interface ThemeConfig {
@@ -43,8 +73,13 @@ export interface AppState {
   document: VisualDocument;
   filename: string;
   currentView: 'editor' | 'viewer';
+  editorMode: 'basic' | 'advanced' | 'raw';
+  chat: ChatState;
   paneScroll: PaneScrollState;
   showAdvancedEditor: boolean;
+  rawEditorText: string;
+  rawEditorError: string | null;
+  rawEditorDiagnostics: RawEditorDiagnostic[];
   activeEditorBlock: { sectionKey: string; blockId: string } | null;
   activeEditorSectionTitleKey: string | null;
   clearSectionTitleOnFocusKey: string | null;

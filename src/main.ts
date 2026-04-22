@@ -19,7 +19,8 @@ import { isActiveEditorSectionTitle, isActiveEditorBlock, getComponentRenderHelp
 import { commitHistorySnapshot, renderStateTracker } from './history';
 import { capturePaneScroll, restorePaneScroll, centerPendingEditorSection, focusPendingSectionTitleEditor } from './scroll';
 import { bindUi } from './bind-ui';
-import { deserializeDocument } from './serialization';
+import { deserializeDocument, serializeDocument } from './serialization';
+import { createDefaultChatState, renderChatPanel } from './chat';
 import bundledExampleHvy from '../examples/example.hvy?raw';
 
 const appRoot = document.querySelector<HTMLDivElement>('#app');
@@ -35,10 +36,13 @@ function createDefaultDocument() {
 }
 
 function createInitialState(): AppState {
+  const document = createDefaultDocument();
   return {
-    document: createDefaultDocument(),
+    document,
     filename: 'example.hvy',
     currentView: 'editor',
+    editorMode: 'basic',
+    chat: createDefaultChatState(),
     paneScroll: {
       editorTop: 0,
       editorSidebarTop: 0,
@@ -46,6 +50,9 @@ function createInitialState(): AppState {
       windowTop: 0,
     },
     showAdvancedEditor: false,
+    rawEditorText: serializeDocument(document),
+    rawEditorError: null,
+    rawEditorDiagnostics: [],
     activeEditorBlock: null,
     activeEditorSectionTitleKey: null,
     clearSectionTitleOnFocusKey: null,
@@ -187,7 +194,8 @@ function renderApp(): void {
   themeMs = performance.now() - stepStartedAt;
 
   const isEditorView = state.currentView === 'editor';
-  const isAdvancedEditor = state.showAdvancedEditor;
+  const isAdvancedEditor = state.editorMode === 'advanced';
+  const isRawEditor = state.editorMode === 'raw';
 
   stepStartedAt = performance.now();
   const templateFields = getTemplateFields(state.document.meta);
@@ -223,8 +231,9 @@ function renderApp(): void {
           ${
             isEditorView
               ? `<div class="editor-top-controls">
-                  <button type="button" class="${!isAdvancedEditor ? 'secondary' : 'ghost'}" data-action="set-editor-mode" data-editor-mode="basic">Basic</button>
+                  <button type="button" class="${state.editorMode === 'basic' ? 'secondary' : 'ghost'}" data-action="set-editor-mode" data-editor-mode="basic">Basic</button>
                   <button type="button" class="${isAdvancedEditor ? 'secondary' : 'ghost'}" data-action="set-editor-mode" data-editor-mode="advanced">Advanced</button>
+                  <button type="button" class="${isRawEditor ? 'secondary' : 'ghost'}" data-action="set-editor-mode" data-editor-mode="raw">Raw</button>
                   ${
                     isAdvancedEditor
                       ? `<button type="button" class="${state.metaPanelOpen ? 'secondary' : 'ghost'}" data-action="toggle-document-meta">Document Meta</button>`
@@ -237,7 +246,37 @@ function renderApp(): void {
         <div class="pane ${isEditorView ? 'editor-pane' : 'reader-pane'} full-pane">
           ${
             isEditorView
-              ? `${isAdvancedEditor ? renderTemplatePanel(templateFields, state.templateValues, { escapeAttr, escapeHtml }) : ''}
+              ? `${isRawEditor
+                  ? `<div class="raw-editor-shell">
+                       <div class="raw-editor-head">
+                         <div>
+                           <h3>Raw HVY</h3>
+                           <p>Edit serialized document text directly, then apply it back into the visual editor.</p>
+                         </div>
+                         <div class="raw-editor-actions">
+                           <button type="button" class="ghost" data-action="reset-raw-editor">Reset</button>
+                           <button type="button" class="secondary" data-action="apply-raw-editor">Apply</button>
+                         </div>
+                       </div>
+                       ${state.rawEditorError ? `<div class="raw-editor-error" role="alert">${escapeHtml(state.rawEditorError)}</div>` : ''}
+                       ${
+                         state.rawEditorDiagnostics.length > 0
+                           ? `<div class="raw-editor-diagnostics" role="status">
+                                ${state.rawEditorDiagnostics
+                                  .map(
+                                    (diagnostic) => `<article class="raw-editor-diagnostic raw-editor-diagnostic-${escapeAttr(diagnostic.severity)}">
+                                        <strong>${escapeHtml(diagnostic.severity === 'error' ? 'Error' : 'Warning')}</strong>
+                                        <p>${escapeHtml(diagnostic.message)}</p>
+                                        <p class="raw-editor-diagnostic-hint">${escapeHtml(diagnostic.hint)}</p>
+                                      </article>`
+                                  )
+                                  .join('')}
+                              </div>`
+                           : ''
+                       }
+                       <textarea id="rawEditor" class="raw-editor-textarea" data-field="raw-editor-text" spellcheck="false">${escapeHtml(state.rawEditorText)}</textarea>
+                     </div>`
+                  : `${isAdvancedEditor ? renderTemplatePanel(templateFields, state.templateValues, { escapeAttr, escapeHtml }) : ''}
                 ${isAdvancedEditor && state.metaPanelOpen ? editorRenderer.renderMetaPanel() : ''}
                 ${isAdvancedEditor ? renderStateTracker() : ''}
                 <div class="editor-shell ${state.editorSidebarOpen ? 'is-sidebar-open' : 'is-sidebar-closed'}">
@@ -249,7 +288,7 @@ function renderApp(): void {
                     </div>
                   </aside>
                   <div id="editorTree" class="editor-tree">${editorRenderer.renderSectionEditorTree(state.document.sections)}</div>
-                </div>`
+                </div>`}`
               : `<div class="viewer-shell ${state.viewerSidebarOpen ? 'is-sidebar-open' : 'is-sidebar-closed'}">
                    <div class="viewer-sidebar-backdrop" data-action="toggle-viewer-sidebar"></div>
                    <aside class="viewer-sidebar">
@@ -267,6 +306,7 @@ function renderApp(): void {
         </div>
       </section>
 
+      ${renderChatPanel(state.chat, state.document, { escapeAttr, escapeHtml })}
       ${readerRenderer.renderModal()}
       ${readerRenderer.renderLinkInlineModal()}
     </main>
@@ -308,6 +348,7 @@ function renderApp(): void {
     focusMs: Number(focusMs.toFixed(2)),
     view: state.currentView,
     advanced: state.showAdvancedEditor,
+    editorMode: state.editorMode,
     historyLength: state.history.length,
   });
 }

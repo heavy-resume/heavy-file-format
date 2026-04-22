@@ -8,6 +8,11 @@ export function snapshotState(): string {
       document: state.document,
       templateValues: state.templateValues,
       filename: state.filename,
+      editorMode: state.editorMode,
+      showAdvancedEditor: state.showAdvancedEditor,
+      rawEditorText: state.rawEditorText,
+      rawEditorError: state.rawEditorError,
+      rawEditorDiagnostics: state.rawEditorDiagnostics,
     },
     null,
     2
@@ -140,10 +145,20 @@ function restoreFromSnapshot(snapshot: string): void {
       document: VisualDocument;
       templateValues: Record<string, string>;
       filename: string;
+      editorMode?: 'basic' | 'advanced' | 'raw';
+      showAdvancedEditor?: boolean;
+      rawEditorText?: string;
+      rawEditorError?: string | null;
+      rawEditorDiagnostics?: typeof state.rawEditorDiagnostics;
     };
     state.document = parsed.document;
     state.templateValues = parsed.templateValues ?? {};
     state.filename = parsed.filename ?? 'document.hvy';
+    state.editorMode = parsed.editorMode ?? 'basic';
+    state.showAdvancedEditor = parsed.showAdvancedEditor ?? state.editorMode === 'advanced';
+    state.rawEditorText = parsed.rawEditorText ?? '';
+    state.rawEditorError = parsed.rawEditorError ?? null;
+    state.rawEditorDiagnostics = parsed.rawEditorDiagnostics ?? [];
   } catch {
     // no-op
   }

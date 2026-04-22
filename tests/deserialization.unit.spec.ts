@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
 
-import { deserializeDocument } from '../src/serialization';
+import { deserializeDocument, deserializeDocumentWithDiagnostics, getHvyDiagnosticUsageHint, getHvyResponseDiagnostics } from '../src/serialization';
 import { registerSerializationTestState } from './serialization-test-helpers';
 
 registerSerializationTestState();
@@ -225,4 +225,111 @@ test('resume education record keeps C/C++ inside the education tools list', asyn
 
   expect(toolTitles).toContain('Python');
   expect(toolTitles).toContain('C/C++');
+});
+
+test('deserialization reports invalid block directive json as diagnostics with concise hints', () => {
+ const result = deserializeDocumentWithDiagnostics(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ <!--hvy:text {"css":"margin: 0",}-->
+  Broken
+`, '.hvy');
+
+  expect(result.document.sections[0]?.title).toBe('Summary');
+  expect(result.diagnostics).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        severity: 'error',
+        code: 'invalid_block_directive_json',
+      }),
+    ])
+  );
+  expect(getHvyDiagnosticUsageHint(result.diagnostics[0]!)).toBe('Component directives must use JSON objects like `<!--hvy:text {}-->`.');
+});
+
+test('response diagnostics report orphaned expandable slots with minimal usage hints', () => {
+  const diagnostics = getHvyResponseDiagnostics(`<!--hvy:expandable:stub {}-->
+
+<!--hvy:text {}-->
+Stub only`);
+
+  expect(diagnostics).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        severity: 'warning',
+        code: 'expandable_slot_without_parent',
+      }),
+    ])
+  );
+  expect(getHvyDiagnosticUsageHint(diagnostics[0]!)).toBe(
+    'Put expandable slots under `<!--hvy:expandable {}-->`, then add `stub` or `content`.'
+  );
+});
+
+test('expandable missing stub or content reports errors with concise hints', () => {
+  const result = deserializeDocumentWithDiagnostics(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ <!--hvy:expandable {"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+
+  <!--hvy:expandable:stub {}-->
+
+   <!--hvy:text {}-->
+    Stub only
+`, '.hvy');
+
+  expect(result.diagnostics).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        severity: 'error',
+        code: 'expandable_missing_content',
+      }),
+    ])
+  );
+  const diagnostic = result.diagnostics.find((entry) => entry.code === 'expandable_missing_content');
+  expect(getHvyDiagnosticUsageHint(diagnostic!)).toBe(
+    'An expandable needs a content slot like `<!--hvy:expandable:content {}-->`.'
+  );
+});
+
+test('xref-card missing title is an error and missing target is a warning', () => {
+  const result = deserializeDocumentWithDiagnostics(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"links"}-->
+#! Links
+
+ <!--hvy:xref-card {"xrefDetail":"Detail only"}-->
+`, '.hvy');
+
+  expect(result.diagnostics).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        severity: 'error',
+        code: 'xref_card_missing_title',
+      }),
+      expect.objectContaining({
+        severity: 'warning',
+        code: 'xref_card_missing_target',
+      }),
+    ])
+  );
+
+  const titleDiagnostic = result.diagnostics.find((entry) => entry.code === 'xref_card_missing_title');
+  const targetDiagnostic = result.diagnostics.find((entry) => entry.code === 'xref_card_missing_target');
+  expect(getHvyDiagnosticUsageHint(titleDiagnostic!)).toBe(
+    'An xref-card needs `xrefTitle`, for example `<!--hvy:xref-card {"xrefTitle":"Label"}-->`.'
+  );
+  expect(getHvyDiagnosticUsageHint(targetDiagnostic!)).toBe(
+    'Add `xrefTarget`, for example `<!--hvy:xref-card {"xrefTarget":"section-id"}-->`.'
+  );
 });

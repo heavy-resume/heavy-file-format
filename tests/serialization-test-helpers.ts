@@ -10,6 +10,7 @@ export function createTestState(document: VisualDocument): AppState {
     document,
     filename: 'test.hvy',
     currentView: 'editor',
+    editorMode: 'basic',
     chat: createDefaultChatState(),
     paneScroll: {
       editorTop: 0,
@@ -18,6 +19,8 @@ export function createTestState(document: VisualDocument): AppState {
       windowTop: 0,
     },
     showAdvancedEditor: false,
+    rawEditorText: serializeDocument(document),
+    rawEditorError: null,
     activeEditorBlock: null,
     activeEditorSectionTitleKey: null,
     clearSectionTitleOnFocusKey: null,

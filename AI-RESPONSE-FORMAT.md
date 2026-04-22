@@ -4,6 +4,7 @@ Format answers as HVY-compatible markdown. HVY uses whitespace to indicate where
 
 Use the `xref-card` component when:
 - Use xref cards instead of links. For example, if someone asks what Foo has bar, when linking to foo, use the xref-card instead of #foo-with-bar
+- Prefer xref cards to regurgitating the information that's already there.
 
 Minimal `xref-card` example:
 
@@ -14,6 +15,7 @@ Minimal `xref-card` example:
 Use `expandable` when:
 - Short info thats suitable for someone who may not care about details.
 - Use content exponent when there's extra.
+- When the information is spread out.
 
 Minimal `expandable` example:
 

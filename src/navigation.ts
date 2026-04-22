@@ -5,6 +5,7 @@ import { resolveBaseComponent } from './component-defs';
 import { createBlankDocument } from './document-factory';
 import { getRenderApp } from './state';
 import { clearChatConversation } from './chat';
+import { serializeDocument } from './serialization';
 
 /**
  * Directly update the sidebar open/closed state on the DOM without a full re-render,
@@ -221,6 +222,8 @@ export function resetTransientUiState(): void {
 
 export function resetToBlankDocument(): void {
   state.document = createBlankDocument();
+  state.rawEditorText = serializeDocument(state.document);
+  state.rawEditorError = null;
   state.filename = 'untitled.hvy';
   state.history = [];
   state.future = [];

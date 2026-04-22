@@ -114,88 +114,92 @@ export function renderChatPanel(chat: ChatState, document: VisualDocument, deps:
                    <button type="button" class="ghost" data-action="toggle-chat-panel" aria-label="Close chat">Close</button>
                  </div>
                </div>
+               <div class="chat-panel-body" data-chat-scroll-container>
+                 <div class="chat-settings">
+                   <label class="chat-setting">
+                     <span>Provider</span>
+                     <select data-field="chat-provider" aria-label="Chat provider" ${chat.isSending ? 'disabled' : ''}>
+                       <option value="openai"${chat.settings.provider === 'openai' ? ' selected' : ''}>OpenAI</option>
+                       <option value="anthropic"${chat.settings.provider === 'anthropic' ? ' selected' : ''}>Anthropic</option>
+                     </select>
+                   </label>
 
-               <div class="chat-settings">
-                 <label class="chat-setting">
-                   <span>Provider</span>
-                   <select data-field="chat-provider" aria-label="Chat provider" ${chat.isSending ? 'disabled' : ''}>
-                     <option value="openai"${chat.settings.provider === 'openai' ? ' selected' : ''}>OpenAI</option>
-                     <option value="anthropic"${chat.settings.provider === 'anthropic' ? ' selected' : ''}>Anthropic</option>
-                   </select>
-                 </label>
+                   <label class="chat-setting">
+                     <span>Model</span>
+                     <input
+                       type="text"
+                       data-field="chat-model"
+                       value="${deps.escapeAttr(chat.settings.model)}"
+                       placeholder="${deps.escapeAttr(currentProviderLabel === 'OpenAI' ? DEFAULT_OPENAI_MODEL : DEFAULT_ANTHROPIC_MODEL)}"
+                       autocapitalize="off"
+                       autocomplete="off"
+                       spellcheck="false"
+                       aria-label="Chat model"
+                       ${chat.isSending ? 'disabled' : ''}
+                     />
+                   </label>
+                 </div>
 
-                 <label class="chat-setting">
-                   <span>Model</span>
-                   <input
-                     type="text"
-                     data-field="chat-model"
-                     value="${deps.escapeAttr(chat.settings.model)}"
-                     placeholder="${deps.escapeAttr(currentProviderLabel === 'OpenAI' ? DEFAULT_OPENAI_MODEL : DEFAULT_ANTHROPIC_MODEL)}"
-                     autocapitalize="off"
-                     autocomplete="off"
-                     spellcheck="false"
-                     aria-label="Chat model"
-                     ${chat.isSending ? 'disabled' : ''}
-                   />
-                 </label>
-               </div>
+                 <div class="chat-context-card">
+                   <strong>Context source</strong>
+                   <p>Current HVY body with YAML front matter removed and only structural HVY comments preserved for chat context.</p>
+                   <div class="chat-context-meta">
+                     <span>${context.length.toLocaleString()} chars</span>
+                     <span>${chat.messages.length} messages</span>
+                     <span>${deps.escapeHtml(currentProviderLabel)}</span>
+                   </div>
+                 </div>
 
-               <div class="chat-context-card">
-                 <strong>Context source</strong>
-                 <p>Current HVY body with YAML front matter removed and only structural HVY comments preserved for chat context.</p>
-                 <div class="chat-context-meta">
-                   <span>${context.length.toLocaleString()} chars</span>
-                   <span>${chat.messages.length} messages</span>
-                   <span>${deps.escapeHtml(currentProviderLabel)}</span>
+                 ${chat.error ? `<div class="chat-error" role="alert">${deps.escapeHtml(chat.error)}</div>` : ''}
+
+                 <div class="chat-thread" aria-live="polite" role="log">
+                   ${
+                     chat.messages.length === 0
+                       ? `<div class="chat-empty">
+                            <strong>Start by asking a question about the visible HVY document.</strong>
+                            <p>The browser sends your prompt to a same-origin proxy, and that proxy talks to the model provider.</p>
+                          </div>`
+                       : chat.messages
+                           .map(
+                             (message) => `
+                               <article class="chat-bubble chat-bubble-${message.role}${message.error ? ' chat-bubble-error' : ''}" data-chat-role="${deps.escapeAttr(message.role)}">
+                                 <div class="chat-bubble-role">${deps.escapeHtml(message.role === 'user' ? 'You' : 'Assistant')}</div>
+                                 <div class="chat-bubble-body">${
+                                   message.role === 'assistant'
+                                     ? renderAssistantMessageHtml(message.content)
+                                     : deps.escapeHtml(message.content).replace(/\n/g, '<br />')
+                                 }</div>
+                               </article>
+                             `
+                           )
+                           .join('')
+                   }
+                 </div>
+
+                 <div class="chat-footer">
+                   <button type="button" class="chat-scroll-bottom" data-action="chat-scroll-bottom" hidden>Latest ↓</button>
+                   <form id="chatComposer" class="chat-composer">
+                     <label class="chat-composer-field">
+                       <span>Question</span>
+                       <textarea data-field="chat-input" rows="5" placeholder="Ask about the current HVY document..." ${chat.isSending ? 'disabled' : ''}>${deps.escapeHtml(chat.draft)}</textarea>
+                     </label>
+                     <div class="chat-composer-actions">
+                       <span class="chat-composer-status">
+                         ${
+                           chat.isSending
+                             ? 'Waiting for model response...'
+                             : missingModel
+                             ? 'Choose a model before sending.'
+                             : !hasDraft
+                             ? 'Type a question to send.'
+                             : 'Ready'
+                         }
+                       </span>
+                       <button type="submit" class="secondary"${canSend ? '' : ' disabled'}>${chat.isSending ? 'Sending...' : 'Send'}</button>
+                     </div>
+                   </form>
                  </div>
                </div>
-
-               ${chat.error ? `<div class="chat-error" role="alert">${deps.escapeHtml(chat.error)}</div>` : ''}
-
-               <div class="chat-thread" aria-live="polite">
-                 ${
-                   chat.messages.length === 0
-                     ? `<div class="chat-empty">
-                          <strong>Start by asking a question about the visible HVY document.</strong>
-                          <p>The browser sends your prompt to a same-origin proxy, and that proxy talks to the model provider.</p>
-                        </div>`
-                     : chat.messages
-                         .map(
-                           (message) => `
-                             <article class="chat-bubble chat-bubble-${message.role}${message.error ? ' chat-bubble-error' : ''}">
-                               <div class="chat-bubble-role">${deps.escapeHtml(message.role === 'user' ? 'You' : 'Assistant')}</div>
-                               <div class="chat-bubble-body">${
-                                 message.role === 'assistant'
-                                   ? renderAssistantMessageHtml(message.content)
-                                   : deps.escapeHtml(message.content).replace(/\n/g, '<br />')
-                               }</div>
-                             </article>
-                           `
-                         )
-                         .join('')
-                 }
-               </div>
-
-               <form id="chatComposer" class="chat-composer">
-                 <label class="chat-composer-field">
-                   <span>Question</span>
-                   <textarea data-field="chat-input" rows="5" placeholder="Ask about the current HVY document..." ${chat.isSending ? 'disabled' : ''}>${deps.escapeHtml(chat.draft)}</textarea>
-                 </label>
-                 <div class="chat-composer-actions">
-                   <span class="chat-composer-status">
-                     ${
-                       chat.isSending
-                         ? 'Waiting for model response...'
-                         : missingModel
-                         ? 'Choose a model before sending.'
-                         : !hasDraft
-                         ? 'Type a question to send.'
-                         : 'Ready'
-                     }
-                   </span>
-                   <button type="submit" class="secondary"${canSend ? '' : ' disabled'}>${chat.isSending ? 'Sending...' : 'Send'}</button>
-                 </div>
-               </form>
              </aside>`
           : ''
       }
@@ -252,7 +256,9 @@ export async function requestChatCompletion(params: {
     throw new Error('Proxy returned no assistant text.');
   }
 
-  return (payload as ProxyChatResponse).output.trim();
+  const output = (payload as ProxyChatResponse).output.trim();
+  console.debug('[hvy:chat] client extracted output', output);
+  return output;
 }
 
 export function buildProxyChatRequest(request: ProxyChatRequest): ProxyChatRequest {
@@ -368,7 +374,11 @@ function renderAssistantHvyHtml(source: string): string | null {
   }
 
   try {
-    const syntheticDocument = `<!--hvy: {"id":"chat-response"}-->
+    const syntheticDocument = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"rsp"}-->
 #! Response
 
 ${source.trim()}
@@ -414,8 +424,8 @@ function renderChatHvyBlock(block: VisualBlock): string {
     const expanded = block.schema.expandableExpanded;
     const stubPaneStyle = block.schema.expandableStubCss ? ` style="${escapeChatAttr(block.schema.expandableStubCss)}"` : '';
     const contentPaneStyle = block.schema.expandableContentCss ? ` style="${escapeChatAttr(block.schema.expandableContentCss)}"` : '';
-    const toggleAttrs = `data-reader-action="toggle-expandable" aria-expanded="${expanded ? 'true' : 'false'}"`;
-    return `<div class="expandable-reader is-interactive chat-expandable-reader" data-expandable-id="${escapeChatAttr(block.id)}">
+    const toggleAttrs = `data-chat-action="toggle-expandable" aria-expanded="${expanded ? 'true' : 'false'}"`;
+    return `<div class="expandable-reader is-interactive chat-expandable-reader${expanded ? ' is-expanded' : ' is-collapsed'}" data-expandable-id="${escapeChatAttr(block.id)}">
       <div class="expandable-reader-body">
         <div class="expandable-reader-pane expandable-reader-pane-stub">
           <div class="expand-stub-toggle"${stubPaneStyle} ${toggleAttrs}>

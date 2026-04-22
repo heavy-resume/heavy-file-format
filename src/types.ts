@@ -67,9 +67,12 @@ export interface AppState {
   document: VisualDocument;
   filename: string;
   currentView: 'editor' | 'viewer';
+  editorMode: 'basic' | 'advanced' | 'raw';
   chat: ChatState;
   paneScroll: PaneScrollState;
   showAdvancedEditor: boolean;
+  rawEditorText: string;
+  rawEditorError: string | null;
   activeEditorBlock: { sectionKey: string; blockId: string } | null;
   activeEditorSectionTitleKey: string | null;
   clearSectionTitleOnFocusKey: string | null;

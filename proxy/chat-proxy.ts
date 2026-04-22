@@ -166,6 +166,7 @@ async function requestOpenAi(body: ProxyChatRequest, env: Record<string, string 
     throw new Error(`Provider request failed: ${extractProviderError(payload, 'OpenAI request failed.')}`);
   }
   const output = extractOpenAiText(payload);
+  console.debug('[hvy:chat-proxy] upstream openai extracted output', output);
   if (output.length === 0) {
     throw new Error('Provider request failed: OpenAI returned no assistant text.');
   }
@@ -195,6 +196,7 @@ async function requestAnthropic(body: ProxyChatRequest, env: Record<string, stri
     throw new Error(`Provider request failed: ${extractProviderError(payload, 'Anthropic request failed.')}`);
   }
   const output = extractAnthropicText(payload);
+  console.debug('[hvy:chat-proxy] upstream anthropic extracted output', output);
   if (output.length === 0) {
     throw new Error('Provider request failed: Anthropic returned no assistant text.');
   }

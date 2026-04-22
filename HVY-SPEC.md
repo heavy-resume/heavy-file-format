@@ -275,6 +275,10 @@ Cross-reference cards can be emitted as a block directive with all card data in 
 <!--hvy:xref-card {"xrefTitle":"Heavy Stack","xrefDetail":"05/2024 - present","xrefTarget":"project-heavy-stack"}-->
 ```
 
+Cross-reference card requirements:
+- `xrefTitle` is REQUIRED.
+- `xrefTarget` is RECOMMENDED. If omitted, implementations SHOULD preserve the card, treat it as disabled/non-navigable, and surface a warning to authors.
+
 Rules:
 - The directive MUST be on a single line.
 - The payload MUST be valid JSON object.
@@ -283,6 +287,7 @@ Rules:
 - `hvy:expandable:stub` and `hvy:expandable:content` are slot markers. Their payload may be empty or include only slot metadata such as `lock` and `css`.
 - The child block for an expandable slot is declared one indentation level deeper as its own directive.
 - Multiple `hvy:expandable:stub` or `hvy:expandable:content` directives can be used for a single expandable block.
+- Each `expandable` block MUST include at least one stub child and at least one content child. Missing either side is malformed.
 - `hvy:grid` starts a grid block. Its payload is the grid block schema, with `component:"grid"` implied.
 - `hvy:grid:N`, `hvy:component-list:N`, `hvy:container:N`, and `hvy:table:R:D` are slot markers. Their payload contains slot metadata only; the actual child block is declared one indentation level deeper as its own directive.
 - For `hvy:grid:N`, `N` determines the item's placement order. Readers and editors SHOULD tile items across `gridColumns` in slot order, wrapping to the next row as needed.

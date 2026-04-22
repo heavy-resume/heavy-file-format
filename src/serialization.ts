@@ -44,6 +44,8 @@ export function deserializeDocumentWithDiagnostics(
     sections: parsed.sections.map((section) => mapParsedSection(section, meta, diagnostics)),
   };
 
+  validateDocumentSemantics(document, diagnostics);
+
   return {
     document,
     diagnostics,
@@ -96,6 +98,14 @@ export function getHvyDiagnosticUsageHint(diagnostic: HvyDiagnostic): string {
       return 'Put container slots under `<!--hvy:container {}-->`, then add `<!--hvy:container:0 {}-->`.';
     case 'table_details_slot_without_parent':
       return 'Put table detail slots under `<!--hvy:table {...}-->`, then add `<!--hvy:table:0:0 {}-->`.';
+    case 'expandable_missing_stub':
+      return 'An expandable needs a stub slot like `<!--hvy:expandable:stub {}-->`.';
+    case 'expandable_missing_content':
+      return 'An expandable needs a content slot like `<!--hvy:expandable:content {}-->`.';
+    case 'xref_card_missing_title':
+      return 'An xref-card needs `xrefTitle`, for example `<!--hvy:xref-card {"xrefTitle":"Label"}-->`.';
+    case 'xref_card_missing_target':
+      return 'Add `xrefTarget`, for example `<!--hvy:xref-card {"xrefTarget":"section-id"}-->`.';
     default:
       return 'Return valid HVY with proper section and component directives.';
   }
@@ -580,6 +590,80 @@ function formatSectionDiagnostic(sectionLabel: string, lineNumber: number, detai
 
 function escapeHvyJsonString(value: string): string {
   return value.replaceAll('\\', '\\\\').replaceAll('"', '\\"');
+}
+
+function validateDocumentSemantics(document: VisualDocument, diagnostics: HvyDiagnostic[]): void {
+  for (const section of document.sections) {
+    validateSectionSemantics(section, diagnostics);
+  }
+}
+
+function validateSectionSemantics(section: VisualSection, diagnostics: HvyDiagnostic[]): void {
+  for (const block of section.blocks) {
+    validateBlockSemantics(block, section.title || section.customId || 'Untitled Section', diagnostics);
+  }
+  for (const child of section.children) {
+    validateSectionSemantics(child, diagnostics);
+  }
+}
+
+function validateBlockSemantics(block: VisualBlock, sectionLabel: string, diagnostics: HvyDiagnostic[]): void {
+  const baseComponent = resolveBaseComponent(block.schema.component);
+
+  if (baseComponent === 'expandable') {
+    if ((block.schema.expandableStubBlocks.children ?? []).length === 0) {
+      diagnostics.push({
+        severity: 'error',
+        code: 'expandable_missing_stub',
+        message: `Section "${sectionLabel}": expandable block is missing stub content.`,
+      });
+    }
+    if ((block.schema.expandableContentBlocks.children ?? []).length === 0) {
+      diagnostics.push({
+        severity: 'error',
+        code: 'expandable_missing_content',
+        message: `Section "${sectionLabel}": expandable block is missing expanded content.`,
+      });
+    }
+  }
+
+  if (baseComponent === 'xref-card') {
+    if (block.schema.xrefTitle.trim().length === 0) {
+      diagnostics.push({
+        severity: 'error',
+        code: 'xref_card_missing_title',
+        message: `Section "${sectionLabel}": xref-card is missing xrefTitle.`,
+      });
+    }
+    if (block.schema.xrefTarget.trim().length === 0) {
+      diagnostics.push({
+        severity: 'warning',
+        code: 'xref_card_missing_target',
+        message: `Section "${sectionLabel}": xref-card is missing xrefTarget and will be disabled.`,
+      });
+    }
+  }
+
+  for (const child of block.schema.containerBlocks ?? []) {
+    validateBlockSemantics(child, sectionLabel, diagnostics);
+  }
+  for (const child of block.schema.componentListBlocks ?? []) {
+    validateBlockSemantics(child, sectionLabel, diagnostics);
+  }
+  for (const child of block.schema.expandableStubBlocks?.children ?? []) {
+    validateBlockSemantics(child, sectionLabel, diagnostics);
+  }
+  for (const child of block.schema.expandableContentBlocks?.children ?? []) {
+    validateBlockSemantics(child, sectionLabel, diagnostics);
+  }
+  for (const item of block.schema.gridItems ?? []) {
+    validateBlockSemantics(item.block, sectionLabel, diagnostics);
+  }
+  for (const row of block.schema.tableRows ?? []) {
+    for (const child of row.detailsBlocks ?? []) {
+      validateBlockSemantics(child, sectionLabel, diagnostics);
+    }
+  }
 }
 
 function normalizeParsedBlockText(lines: string[], indent: number): string {

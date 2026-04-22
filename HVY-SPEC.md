@@ -553,6 +553,27 @@ Rules:
 - When the viewer exposes a UI for editing theme colors, edits MUST be persisted back into `document.meta.theme.colors` so they round-trip through save.
 - Plain Markdown renderers ignore `theme`.
 
+### 5.13 Document-level component defaults
+
+A `.hvy` or `.thvy` file MAY declare default presentation values for named components in front matter under `component_defaults`.
+
+This is intended for document-wide presentation adjustments that should apply consistently without repeating the same inline `css` on every block instance.
+
+#### Front matter shape
+
+```yaml
+component_defaults:
+  xref-card:
+    css: "padding: 0.5rem;"
+```
+
+Rules:
+- Each key under `component_defaults` is a component name such as `xref-card`.
+- `css` is an optional inline CSS style string applied to the rendered root element of that component type.
+- Explicit block-level `css` remains valid and MAY be combined with or override document-level defaults in a viewer-specific way.
+- Unknown component names or unsupported default fields MUST be ignored.
+- Plain Markdown renderers ignore `component_defaults`.
+
 ## 6. Template & Schema (`.thvy`)
 
 A `.thvy` file is a `.hvy` file. The only distinction is `template: true` in front matter.

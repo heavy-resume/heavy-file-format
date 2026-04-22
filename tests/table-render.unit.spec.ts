@@ -60,6 +60,7 @@ function createHelpers(): ComponentRenderHelpers {
     renderComponentFragment: (_componentName, content) => content,
     renderComponentOptions: () => '',
     renderOption: (value) => value,
+    getDocumentComponentCss: () => '',
     getXrefTargetOptions: () => [],
     isXrefTargetValid: () => true,
     getTableColumns: () => ['Role', 'Scope'],

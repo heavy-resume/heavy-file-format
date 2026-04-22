@@ -1,5 +1,5 @@
 import type { VisualBlock, VisualSection } from './editor/types';
-import { state, getRefreshReaderPanels } from './state';
+import { state } from './state';
 import { getSectionId } from './section-ops';
 import { resolveBaseComponent } from './component-defs';
 import { createBlankDocument } from './document-factory';
@@ -45,8 +45,20 @@ export function navigateToSection(sectionId: string, app: HTMLElement): void {
   }
   closeModal();
 
+  let requiresFullRender = false;
+
+  if (state.currentView === 'editor') {
+    state.currentView = 'viewer';
+    requiresFullRender = true;
+  }
+
   if (sectionId === 'readerNav' || sectionId === 'navigation') {
-    setSidebarOpen(app, true);
+    if (requiresFullRender) {
+      state.viewerSidebarOpen = true;
+      getRenderApp()();
+    } else {
+      setSidebarOpen(app, true);
+    }
     return;
   }
 
@@ -57,25 +69,53 @@ export function navigateToSection(sectionId: string, app: HTMLElement): void {
   const expandChanged = sectionRes.changed || blockRes.changed;
 
   if (loc === 'sidebar' && !state.viewerSidebarOpen) {
-    setSidebarOpen(app, true);
+    if (requiresFullRender) {
+      state.viewerSidebarOpen = true;
+    } else {
+      setSidebarOpen(app, true);
+    }
   } else if (loc === 'main' && state.viewerSidebarOpen) {
-    setSidebarOpen(app, false);
+    if (requiresFullRender) {
+      state.viewerSidebarOpen = false;
+    } else {
+      setSidebarOpen(app, false);
+    }
   }
 
   // Only re-render when expand state actually changed to avoid rebuilding
-  // the sidebar DOM mid-animation.
-  if (expandChanged) {
-    getRefreshReaderPanels()();
+  // the sidebar DOM mid-animation. For link navigation, prefer a full render so
+  // the scroll target is resolved against the latest expanded layout.
+  if (expandChanged || requiresFullRender) {
+    getRenderApp()();
   }
 
-  // Apply and remove the highlight directly on the DOM element — no re-render needed.
+  requestTargetHighlight(app, sectionId, {
+    sectionFound: sectionRes.found,
+    blockFound: blockRes.found,
+  });
+}
+
+export function getReaderTargetIds(app: HTMLElement): string[] {
+  return [...app.querySelectorAll<HTMLElement>('#readerDocument [id], #readerSidebarSections [id]')].map((element) => element.id);
+}
+
+function requestTargetHighlight(
+  app: HTMLElement,
+  sectionId: string,
+  context: { sectionFound: boolean; blockFound: boolean },
+  attempt = 0
+): void {
   window.requestAnimationFrame(() => {
     const target = app.querySelector<HTMLElement>(`#${CSS.escape(sectionId)}`);
     if (!target) {
+      if (attempt < 3) {
+        requestTargetHighlight(app, sectionId, context, attempt + 1);
+        return;
+      }
       console.error('[hvy:navigation] Unable to find reader target for internal link.', {
         targetId: sectionId,
-        sectionFound: sectionRes.found,
-        blockFound: blockRes.found,
+        sectionFound: context.sectionFound,
+        blockFound: context.blockFound,
         availableReaderIds: getReaderTargetIds(app),
       });
       return;
@@ -87,10 +127,6 @@ export function navigateToSection(sectionId: string, app: HTMLElement): void {
       target.classList.remove('is-temp-highlighted');
     }, 1400);
   });
-}
-
-export function getReaderTargetIds(app: HTMLElement): string[] {
-  return [...app.querySelectorAll<HTMLElement>('#readerDocument [id], #readerSidebarSections [id]')].map((element) => element.id);
 }
 
 interface ExpandResult {

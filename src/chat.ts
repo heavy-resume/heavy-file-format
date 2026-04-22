@@ -1,5 +1,5 @@
 import type { ChatMessage, ChatSettings, ChatState, VisualDocument } from './types';
-import { deserializeDocument, serializeDocument, wrapHvyFragmentAsDocument } from './serialization';
+import { deserializeDocument, serializeDocument } from './serialization';
 import { markdownToEditorHtml, normalizeMarkdownLists } from './markdown';
 import aiResponseFormatInstructions from '../AI-RESPONSE-FORMAT.md?raw';
 import type { VisualBlock, VisualSection } from './editor/types';
@@ -10,6 +10,8 @@ import { renderContainerReader } from './editor/components/container';
 import { renderGridReader } from './editor/components/grid';
 import { ensureComponentListBlocks, ensureExpandableBlocks, ensureGridItems } from './document-factory';
 import { isXrefTargetValid } from './xref-ops';
+import { getDocumentComponentDefaultCss } from './document-component-defaults';
+import { wrapChatResponseAsDocument } from './chat-response-document';
 
 const CHAT_STORAGE_KEY = 'hvy-chat-settings';
 const DEFAULT_OPENAI_MODEL = 'gpt-5-mini';
@@ -403,7 +405,7 @@ function renderAssistantHvyHtml(source: string): string | null {
   }
 
   try {
-    const syntheticDocument = wrapHvyFragmentAsDocument(source, { sectionId: 'rsp', title: 'Response' });
+    const syntheticDocument = wrapChatResponseAsDocument(source);
     const document = deserializeDocument(syntheticDocument, '.hvy');
     const [wrapperSection] = document.sections;
     if (!wrapperSection) {
@@ -411,9 +413,9 @@ function renderAssistantHvyHtml(source: string): string | null {
     }
 
     const content = [
-      ...wrapperSection.blocks.map((block) => renderChatHvyBlock(block)),
-      ...wrapperSection.children.map((section) => renderChatHvySection(section)),
-      ...document.sections.slice(1).map((section) => renderChatHvySection(section)),
+      ...wrapperSection.blocks.map((block) => renderChatHvyBlock(block, document.meta)),
+      ...wrapperSection.children.map((section) => renderChatHvySection(section, document.meta)),
+      ...document.sections.slice(1).map((section) => renderChatHvySection(section, document.meta)),
     ].join('');
 
     return `<div class="chat-hvy-response">${content}</div>`;
@@ -422,26 +424,26 @@ function renderAssistantHvyHtml(source: string): string | null {
   }
 }
 
-function renderChatHvySection(section: VisualSection): string {
+function renderChatHvySection(section: VisualSection, documentMeta: VisualDocument['meta']): string {
   return `
     <section class="chat-hvy-section">
       <div class="chat-hvy-section-title">${escapeChatHtml(section.title)}</div>
       <div class="chat-hvy-section-body">
-        ${section.blocks.map((block) => renderChatHvyBlock(block)).join('')}
-        ${section.children.map((child) => renderChatHvySection(child)).join('')}
+        ${section.blocks.map((block) => renderChatHvyBlock(block, documentMeta)).join('')}
+        ${section.children.map((child) => renderChatHvySection(child, documentMeta)).join('')}
       </div>
     </section>
   `;
 }
 
-function renderChatHvyBlock(block: VisualBlock): string {
+function renderChatHvyBlock(block: VisualBlock, documentMeta: VisualDocument['meta']): string {
   const component = block.schema.component.trim();
-  const helpers = getChatReaderHelpers();
+  const helpers = getChatReaderHelpers(documentMeta);
 
   if (component === 'expandable') {
     ensureExpandableBlocks(block);
-    const stubHtml = block.schema.expandableStubBlocks.children.map((child) => renderChatHvyBlock(child)).join('');
-    const contentHtml = block.schema.expandableContentBlocks.children.map((child) => renderChatHvyBlock(child)).join('');
+    const stubHtml = block.schema.expandableStubBlocks.children.map((child) => renderChatHvyBlock(child, documentMeta)).join('');
+    const contentHtml = block.schema.expandableContentBlocks.children.map((child) => renderChatHvyBlock(child, documentMeta)).join('');
     const expanded = block.schema.expandableExpanded;
     const stubPaneStyle = block.schema.expandableStubCss ? ` style="${escapeChatAttr(block.schema.expandableStubCss)}"` : '';
     const contentPaneStyle = block.schema.expandableContentCss ? ` style="${escapeChatAttr(block.schema.expandableContentCss)}"` : '';
@@ -506,7 +508,7 @@ function getChatReaderSection(): VisualSection {
   };
 }
 
-function getChatReaderHelpers(): ComponentRenderHelpers {
+function getChatReaderHelpers(documentMeta: VisualDocument['meta']): ComponentRenderHelpers {
   return {
     escapeAttr: escapeChatAttr,
     escapeHtml: escapeChatHtml,
@@ -514,10 +516,11 @@ function getChatReaderHelpers(): ComponentRenderHelpers {
     renderRichToolbar: () => '',
     renderEditorBlock: () => '',
     renderPassiveEditorBlock: () => '',
-    renderReaderBlock: (_section: VisualSection, block: VisualBlock) => renderChatHvyBlock(block),
+    renderReaderBlock: (_section: VisualSection, block: VisualBlock) => renderChatHvyBlock(block, documentMeta),
     renderComponentFragment: (_componentName: string, content: string) => markdownToEditorHtml(normalizeMarkdownLists(content)),
     renderComponentOptions: () => '',
     renderOption: () => '',
+    getDocumentComponentCss: (componentName: string) => getDocumentComponentDefaultCss(documentMeta, componentName),
     getXrefTargetOptions: () => [],
     isXrefTargetValid,
     getTableColumns: (schema) =>

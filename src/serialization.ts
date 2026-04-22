@@ -52,11 +52,19 @@ export function deserializeDocumentWithDiagnostics(
   };
 }
 
-export function wrapHvyFragmentAsDocument(source: string, options?: { sectionId?: string; title?: string }): string {
+export function wrapHvyFragmentAsDocument(
+  source: string,
+  options?: { sectionId?: string; title?: string; meta?: JsonObject }
+): string {
   const sectionId = options?.sectionId?.trim() || 'rsp';
   const title = options?.title?.trim() || 'Response';
+  const meta: JsonObject = {
+    hvy_version: 0.1,
+    ...(options?.meta ?? {}),
+  };
+  const frontMatter = stringifyYaml(meta).trimEnd();
   return `---
-hvy_version: 0.1
+${frontMatter}
 ---
 
 <!--hvy: {"id":"${escapeHvyJsonString(sectionId)}"}-->

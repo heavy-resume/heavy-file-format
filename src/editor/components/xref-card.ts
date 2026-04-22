@@ -46,12 +46,14 @@ function renderXrefCardPreview(
   title: string,
   detail: string,
   target: string,
-  helpers: Pick<ComponentRenderHelpers, 'escapeAttr' | 'escapeHtml'>,
+  helpers: Pick<ComponentRenderHelpers, 'escapeAttr' | 'escapeHtml' | 'getDocumentComponentCss'>,
   className: string
 ): string {
   const href = targetToHref(target);
   const externalAttrs = /^https?:\/\//i.test(href) ? ' target="_blank" rel="noopener noreferrer"' : '';
-  return `<a class="${helpers.escapeAttr(className)}" href="${helpers.escapeAttr(href)}"${externalAttrs}>
+  const defaultCss = helpers.getDocumentComponentCss('xref-card').trim();
+  const styleAttr = defaultCss ? ` style="${helpers.escapeAttr(defaultCss)}"` : '';
+  return `<a class="${helpers.escapeAttr(className)}" href="${helpers.escapeAttr(href)}"${styleAttr}${externalAttrs}>
     <strong>${helpers.escapeHtml(title || 'Untitled')}</strong>
     ${detail.trim().length > 0 ? `<span>${helpers.escapeHtml(detail)}</span>` : ''}
   </a>`;

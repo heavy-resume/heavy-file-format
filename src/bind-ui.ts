@@ -1296,6 +1296,16 @@ export function bindUi(app: HTMLElement): void {
     }
     if (
       target instanceof HTMLTextAreaElement &&
+      target.dataset.field === 'chat-input' &&
+      event.key === 'Enter' &&
+      !event.shiftKey
+    ) {
+      event.preventDefault();
+      target.closest('form')?.requestSubmit();
+      return;
+    }
+    if (
+      target instanceof HTMLTextAreaElement &&
       target.dataset.field === 'ai-edit-input' &&
       event.key === 'Enter' &&
       !event.shiftKey

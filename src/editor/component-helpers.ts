@@ -24,6 +24,7 @@ export interface ComponentRenderHelpers {
   renderComponentFragment: (componentName: string, content: string, block: VisualBlock) => string;
   renderComponentOptions: (selected: string) => string;
   renderOption: (value: string, selected: string) => string;
+  getDocumentComponentCss: (componentName: string) => string;
   getXrefTargetOptions: () => XrefTargetOption[];
   isXrefTargetValid: (target: string) => boolean;
   getTableColumns: (schema: BlockSchema) => string[];

@@ -7,6 +7,8 @@ import {
   mergeChatSettings,
   stripDocumentHeaderAndComments,
 } from '../src/chat';
+import { wrapChatResponseAsDocument } from '../src/chat-response-document';
+import { getDocumentComponentDefaultCss } from '../src/document-component-defaults';
 import { deserializeDocument } from '../src/serialization';
 
 test('stripDocumentHeaderAndComments removes front matter and preserves structural hvy comments', () => {
@@ -167,4 +169,13 @@ test('mergeChatSettings keeps env defaults when localStorage values are empty st
     provider: 'openai',
     model: 'gpt-5-mini',
   });
+});
+
+test('wrapChatResponseAsDocument injects chat response component defaults into front matter', () => {
+  const wrapped = wrapChatResponseAsDocument(
+    '<!--hvy:xref-card {"xrefTitle":"Heavy Stack","xrefDetail":"Project","xrefTarget":"heavy-stack"}-->'
+  );
+  const document = deserializeDocument(wrapped, '.hvy');
+
+  expect(getDocumentComponentDefaultCss(document.meta, 'xref-card')).toBe('margin-top: 0.25rem; margin-bottom: 0.25rem;');
 });

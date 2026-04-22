@@ -102,7 +102,6 @@ function renderAiEditPopover(): string {
       <div class="ai-edit-popover-head">
         <div>
           <h3>Request changes</h3>
-          <p>Update just the highlighted component in HVY format.</p>
         </div>
         <button type="button" class="ghost" data-action="close-ai-edit" aria-label="Close request changes">Close</button>
       </div>

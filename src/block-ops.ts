@@ -13,6 +13,7 @@ import { coerceGridColumns } from './grid-ops';
 import { normalizeMarkdownLists, markdownToEditorHtml, turndown } from './markdown';
 import { escapeAttr, escapeHtml, getInlineEditableText, renderOption } from './utils';
 import { recordHistory } from './history';
+import { getDocumentComponentDefaultCss } from './document-component-defaults';
 
 export function findBlockByIds(sectionKey: string, blockId: string): VisualBlock | null {
   const reusableName = getReusableNameFromSectionKey(sectionKey);
@@ -490,6 +491,7 @@ export function getComponentRenderHelpers(editorRenderer: {
     renderComponentFragment: editorRenderer.renderComponentFragment,
     renderComponentOptions,
     renderOption,
+    getDocumentComponentCss: (componentName: string) => getDocumentComponentDefaultCss(state.document.meta, componentName),
     getXrefTargetOptions,
     isXrefTargetValid,
     getTableColumns,

@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
 
-import { deserializeDocument, serializeBlockFragment } from '../src/serialization';
+import { deserializeDocument, serializeBlockFragment, wrapHvyFragmentAsDocument } from '../src/serialization';
 import {
   normalizeSerialized,
   registerSerializationTestState,
@@ -105,6 +105,23 @@ hvy_version: 0.1
   expect(output).toContain('<!--hvy:expandable:content {"css":"margin-top: 0.5rem;"}-->');
   expect(output).not.toContain('"expandableStubCss"');
   expect(output).not.toContain('"expandableContentCss"');
+});
+
+test('wrapHvyFragmentAsDocument includes optional front matter metadata', () => {
+  const wrapped = wrapHvyFragmentAsDocument('<!--hvy:text {}-->\n Hello', {
+    meta: {
+      component_defaults: {
+        'xref-card': {
+          css: 'padding: 0.5rem;',
+        },
+      },
+    },
+  });
+
+  expect(wrapped).toContain('hvy_version: 0.1');
+  expect(wrapped).toContain('component_defaults:');
+  expect(wrapped).toContain('xref-card:');
+  expect(wrapped).toContain('css: "padding: 0.5rem;"');
 });
 
 test('keeps sibling blocks under a single expandable stub slot on round-trip', () => {

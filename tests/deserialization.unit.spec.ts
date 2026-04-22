@@ -167,35 +167,6 @@ hvy_version: 0.1
   expect(listBlock.schema.componentListBlocks.map((block) => block.text)).toEqual(['Zero', 'Two', 'Three']);
 });
 
-test('deserializes table detail slots into the matching row details list', () => {
-  const input = `---
-hvy_version: 0.1
----
-
-<!--hvy: {"id":"details-table"}-->
-#! Details Table
-
- <!--hvy:table {"tableColumns":"A, B","tableRows":[{"cells":["r1a","r1b"]},{"cells":["r2a","r2b"]}]}-->
-
-  <!--hvy:table:1:0 {}-->
-
-   <!--hvy:container {}-->
-
-    <!--hvy:container:0 {}-->
-
-     <!--hvy:text {}-->
-      Row two details
-`;
-
-  const document = deserializeDocument(input, '.hvy');
-  const tableBlock = document.sections[0]?.blocks[0];
-
-  expect(tableBlock.schema.component).toBe('table');
-  expect(tableBlock.schema.tableRows[0]?.detailsBlocks ?? []).toHaveLength(0);
-  expect(tableBlock.schema.tableRows[1]?.detailsBlocks ?? []).toHaveLength(1);
-  expect(tableBlock.schema.tableRows[1]?.detailsBlocks[0]?.schema.component).toBe('container');
-});
-
 test('resume education record keeps C/C++ inside the education tools list', async () => {
   const fs = await import('node:fs/promises');
   const input = await fs.readFile('examples/resume.hvy', 'utf8');

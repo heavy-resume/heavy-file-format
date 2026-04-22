@@ -249,15 +249,6 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         if (item.block.id === targetBlockId || isDescendantActive(item.block, targetBlockId)) return true;
       }
     }
-    if (Array.isArray(block.schema.tableRows)) {
-      for (const row of block.schema.tableRows) {
-        if (Array.isArray(row.detailsBlocks)) {
-          for (const child of row.detailsBlocks) {
-            if (child.id === targetBlockId || isDescendantActive(child, targetBlockId)) return true;
-          }
-        }
-      }
-    }
     return false;
   }
 

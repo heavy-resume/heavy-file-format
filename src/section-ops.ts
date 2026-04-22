@@ -134,12 +134,6 @@ export function findBlockContainerInList(
     if (nested) {
       return nested;
     }
-    for (const row of block.schema.tableRows ?? []) {
-      const details = findBlockContainerInList(row.detailsBlocks ?? [], blockId, block.id);
-      if (details) {
-        return details;
-      }
-    }
   }
   return null;
 }
@@ -199,6 +193,5 @@ export function visitBlocksInList(blocks: VisualBlock[], visitor: (block: Visual
     visitBlocksInList((block.schema.gridItems ?? []).map((item) => item.block), visitor);
     visitBlocksInList(block.schema.expandableStubBlocks?.children ?? [], visitor);
     visitBlocksInList(block.schema.expandableContentBlocks?.children ?? [], visitor);
-    (block.schema.tableRows ?? []).forEach((row) => visitBlocksInList(row.detailsBlocks ?? [], visitor));
   });
 }

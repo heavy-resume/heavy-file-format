@@ -96,8 +96,8 @@ export function getHvyDiagnosticUsageHint(diagnostic: HvyDiagnostic): string {
       return 'Put list slots under `<!--hvy:component-list {"componentListComponent":"text"}-->`.';
     case 'container_slot_without_parent':
       return 'Put container slots under `<!--hvy:container {}-->`, then add `<!--hvy:container:0 {}-->`.';
-    case 'table_details_slot_without_parent':
-      return 'Put table detail slots under `<!--hvy:table {...}-->`, then add `<!--hvy:table:0:0 {}-->`.';
+    case 'table_detail_slots_not_supported':
+      return 'Tables are non-interactive in HVY. Wrap the table in `<!--hvy:expandable {}-->` for reveal/hide behavior.';
     case 'expandable_missing_stub':
       return 'An expandable needs a stub slot like `<!--hvy:expandable:stub {}-->`.';
     case 'expandable_missing_content':
@@ -152,15 +152,13 @@ function parseBlocks(
     | { kind: 'expandable'; parent: VisualBlock; part: 0 | 1 }
     | { kind: 'grid'; parent: VisualBlock; meta: JsonObject }
     | { kind: 'component-list'; parent: VisualBlock; slotIndex?: number }
-    | { kind: 'container'; parent: VisualBlock }
-    | { kind: 'table-details'; parent: VisualBlock; rowIndex: number };
+    | { kind: 'container'; parent: VisualBlock };
   type StructuredFrame =
     | { kind: 'component'; block: VisualBlock; attach: BlockAttach; indent: number }
     | { kind: 'slot-expandable'; parent: VisualBlock; part: 0 | 1; indent: number }
     | { kind: 'slot-grid'; parent: VisualBlock; meta: JsonObject; indent: number }
     | { kind: 'slot-component-list'; parent: VisualBlock; slotIndex: number; indent: number }
-    | { kind: 'slot-container'; parent: VisualBlock; indent: number }
-    | { kind: 'slot-table-details'; parent: VisualBlock; rowIndex: number; indent: number };
+    | { kind: 'slot-container'; parent: VisualBlock; indent: number };
 
   const blocks: VisualBlock[] = [];
   const frames: StructuredFrame[] = [];
@@ -262,9 +260,6 @@ function parseBlocks(
     if (frame.kind === 'slot-container') {
       return { kind: 'container', parent: frame.parent };
     }
-    if (frame.kind === 'slot-table-details') {
-      return { kind: 'table-details', parent: frame.parent, rowIndex: frame.rowIndex };
-    }
     const base = resolveParsedBase(frame.block.schema.component);
     if (base === 'component-list') {
       return { kind: 'component-list', parent: frame.block };
@@ -276,7 +271,7 @@ function parseBlocks(
   };
 
   const findOrCreateParentFrame = (
-    parentBase: 'expandable' | 'grid' | 'component-list' | 'container' | 'table',
+    parentBase: 'expandable' | 'grid' | 'component-list' | 'container',
     lineNumber: number,
     code: HvyDiagnostic['code'],
     message: string
@@ -346,13 +341,6 @@ function parseBlocks(
       attach.parent.schema.containerBlocks.push(block);
       return;
     }
-    if (attach.kind === 'table-details') {
-      const row = attach.parent.schema.tableRows[attach.rowIndex];
-      if (row) {
-        row.detailsBlocks.push(block);
-      }
-      return;
-    }
     blocks.push(block);
   };
 
@@ -367,10 +355,6 @@ function parseBlocks(
       schema.componentListBlocks = [];
     } else if (base === 'container') {
       schema.containerBlocks = [];
-    } else if (base === 'table') {
-      schema.tableRows.forEach((row) => {
-        row.detailsBlocks = [];
-      });
     } else {
       currentSchema = schema;
       currentAttach = attach;
@@ -509,20 +493,14 @@ function parseBlocks(
           indent: currentIndent,
         });
       } else if (name === 'table' && indexes.length === 2) {
-        if (typeof parsed.component === 'string' || typeof parsed.type === 'string') {
-          return;
-        }
-        const parent = findOrCreateParentFrame(
-          'table',
-          lineIndex + 1,
-          'table_details_slot_without_parent',
-          'Table detail slot was provided without an enclosing table block.'
-        );
-        frames.push({
-          kind: 'slot-table-details',
-          parent,
-          rowIndex: indexes[0],
-          indent: currentIndent,
+        diagnostics.push({
+          severity: 'error',
+          code: 'table_detail_slots_not_supported',
+          message: formatSectionDiagnostic(
+            sectionLabel,
+            lineIndex + 1,
+            'Table detail slots are not supported. Wrap the table in an expandable for reveal/hide behavior.'
+          ),
         });
       } else {
         if (directive === 'block') {
@@ -658,11 +636,6 @@ function validateBlockSemantics(block: VisualBlock, sectionLabel: string, diagno
   }
   for (const item of block.schema.gridItems ?? []) {
     validateBlockSemantics(item.block, sectionLabel, diagnostics);
-  }
-  for (const row of block.schema.tableRows ?? []) {
-    for (const child of row.detailsBlocks ?? []) {
-      validateBlockSemantics(child, sectionLabel, diagnostics);
-    }
   }
 }
 
@@ -863,7 +836,6 @@ function serializeBlockSchema(
     omitComponentListBlocks?: boolean;
     omitExpandableBlocks?: boolean;
     omitGridItems?: boolean;
-    omitTableDetailsBlocks?: boolean;
   } = {}
 ): JsonObject {
   const component = resolveBaseComponent(schema.component);
@@ -922,7 +894,7 @@ function serializeBlockSchema(
     addIfChanged(payload, 'tableColumns', schema.tableColumns, defaults.tableColumns);
     addIfChanged(payload, 'tableShowHeader', schema.tableShowHeader, defaults.tableShowHeader);
     if (schema.tableRows.length > 0) {
-      payload.tableRows = schema.tableRows.map((row) => serializeTableRow(row, options));
+      payload.tableRows = schema.tableRows.map((row) => serializeTableRow(row));
     }
   }
 
@@ -1023,10 +995,6 @@ function serializeContainerItemBlock(block: VisualBlock, index: number, indent: 
   return serializeSlotWithChild(`container:${index}`, {}, block, indent);
 }
 
-function serializeTableDetailBlock(block: VisualBlock, rowIndex: number, detailIndex: number, indent: number): string {
-  return serializeSlotWithChild(`table:${rowIndex}:${detailIndex}`, {}, block, indent);
-}
-
 function serializeNestedBlocks(block: VisualBlock, indent: number): string {
   const component = resolveBaseComponent(block.schema.component);
   if (component === 'expandable') {
@@ -1047,13 +1015,6 @@ function serializeNestedBlocks(block: VisualBlock, indent: number): string {
   if (component === 'container') {
     return block.schema.containerBlocks.map((innerBlock, index) => serializeContainerItemBlock(innerBlock, index, indent)).join('\n\n');
   }
-  if (component === 'table') {
-    return block.schema.tableRows
-      .flatMap((row, rowIndex) =>
-        (row.detailsBlocks ?? []).map((innerBlock, detailIndex) => serializeTableDetailBlock(innerBlock, rowIndex, detailIndex, indent))
-      )
-      .join('\n\n');
-  }
   return '';
 }
 
@@ -1064,7 +1025,6 @@ function nestedBlockOmitOptions(schema: BlockSchema): Parameters<typeof serializ
     omitComponentListBlocks: component === 'component-list',
     omitExpandableBlocks: component === 'expandable',
     omitGridItems: component === 'grid',
-    omitTableDetailsBlocks: component === 'table',
   };
 }
 
@@ -1075,15 +1035,8 @@ function serializeVisualBlock(block: VisualBlock): JsonObject {
   };
 }
 
-function serializeTableRow(row: TableRow, options: { omitTableDetailsBlocks?: boolean } = {}): JsonObject {
+function serializeTableRow(row: TableRow): JsonObject {
   const serialized: JsonObject = { cells: row.cells };
-  addIfChanged(serialized, 'expanded', row.expanded, false);
-  addIfChanged(serialized, 'clickable', row.clickable, true);
-  addIfChanged(serialized, 'detailsTitle', row.detailsTitle, '');
-  addIfChanged(serialized, 'detailsContent', row.detailsContent, '');
-  if (!options.omitTableDetailsBlocks) {
-    addBlockArrayIfPresent(serialized, 'detailsBlocks', row.detailsBlocks);
-  }
   return serialized;
 }
 

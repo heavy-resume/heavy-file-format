@@ -3,12 +3,6 @@ export type Slot = 'left' | 'center' | 'right';
 
 export interface TableRow {
   cells: string[];
-  expanded: boolean;
-  clickable: boolean;
-  detailsTitle: string;
-  detailsContent: string;
-  detailsComponent: string;
-  detailsBlocks: VisualBlock[];
 }
 
 export interface GridItem {

@@ -2271,10 +2271,10 @@ function getAiEditComponentGuidance(block: NonNullable<ReturnType<typeof findBlo
     return [
       '- Use `tableColumns` as a comma-separated string, for example `"Foo, Bar"`.',
       '- Use `tableRows` as an array of rows with `cells` arrays.',
-      '- Table row fields have fixed meanings and types: `cells` is an array of strings; `expanded` and `clickable` are booleans; `detailsTitle` and `detailsContent` are strings; `detailsBlocks` is an array of nested blocks.',
-      '- Do not put user-facing text into `expanded` or `clickable`.',
+      '- Each table row only contains `cells`, which is an array of strings.',
+      '- Do not invent row-level interaction or detail fields for tables.',
       '- Do not invent `columns` or `rows` keys.',
-      '- If the user asks for collapsible narrative detail, rich explanation, or show/hide behavior that a table does not express naturally, replace the table with an `expandable` or another better-fitting component instead of forcing the table schema.',
+      '- Tables are non-interactive. If the user asks for reveal/hide behavior, extra narrative detail, or expandable content, replace the table with an `expandable` that contains a table rather than forcing the table schema.',
     ].join('\n');
   }
   if (base === 'xref-card') {

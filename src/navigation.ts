@@ -151,13 +151,6 @@ function expandBlockPathInList(blocks: VisualBlock[], schemaId: string): { found
     }
     if (!nestedRes.found) nestedRes = expandBlockPathInList(block.schema.expandableStubBlocks?.children ?? [], schemaId);
     if (!nestedRes.found) nestedRes = expandBlockPathInList(block.schema.expandableContentBlocks?.children ?? [], schemaId);
-    if (!nestedRes.found && block.schema.tableRows) {
-      for (const row of block.schema.tableRows) {
-        nestedRes = expandBlockPathInList(row.detailsBlocks ?? [], schemaId);
-        if (nestedRes.found) break;
-      }
-    }
-
     if (nestedRes.found) {
       let changed = nestedRes.changed;
       if (resolveBaseComponent(block.schema.component) === 'expandable') {

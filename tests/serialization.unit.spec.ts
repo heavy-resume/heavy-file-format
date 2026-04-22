@@ -263,7 +263,7 @@ test('round-trips migrated example files without reintroducing slot-level compon
     const output = serializeWithState(document);
 
     expect(output, path).not.toMatch(
-      /<!--hvy:(?:expandable:(?:stub|content)|grid:\d+|component-list:\d+|container:\d+|table:\d+:\d+)\s+\{[^\n>]*"component"/
+      /<!--hvy:(?:expandable:(?:stub|content)|grid:\d+|component-list:\d+|container:\d+)\s+\{[^\n>]*"component"/
     );
     expect(output, path).not.toMatch(/<!--hvy:skills-and-tools-tech-list \{[^]*?<!--hvy:grid \{\}-->/);
   }

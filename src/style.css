@@ -2579,14 +2579,6 @@ button.tiny {
   height: 3ch;
 }
 
-.table-main-row.is-clickable {
-  cursor: pointer;
-}
-
-.table-main-row.is-static {
-  cursor: default;
-}
-
 .table-main-row-even td {
   background: var(--hvy-table-row-bg-1);
 }

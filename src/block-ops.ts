@@ -54,12 +54,6 @@ export function findBlockInList(blocks: VisualBlock[], blockId: string): VisualB
         return nestedGridBlock;
       }
     }
-    for (const row of block.schema.tableRows ?? []) {
-      const nestedDetails = findBlockInList(row.detailsBlocks ?? [], blockId);
-      if (nestedDetails) {
-        return nestedDetails;
-      }
-    }
   }
   return null;
 }
@@ -85,11 +79,6 @@ export function removeBlockFromList(blocks: VisualBlock[], blockId: string): boo
     }
     for (const item of block.schema.gridItems ?? []) {
       if (removeBlockFromList([item.block], blockId)) {
-        return true;
-      }
-    }
-    for (const row of block.schema.tableRows ?? []) {
-      if (removeBlockFromList(row.detailsBlocks ?? [], blockId)) {
         return true;
       }
     }
@@ -477,7 +466,6 @@ export function blockContainsBlockId(block: VisualBlock, blockId: string): boole
       || findBlockInList((block.schema.gridItems ?? []).map((item) => item.block), blockId)
       || findBlockInList(block.schema.expandableStubBlocks?.children ?? [], blockId)
       || findBlockInList(block.schema.expandableContentBlocks?.children ?? [], blockId)
-      || (block.schema.tableRows ?? []).some((row) => findBlockInList(row.detailsBlocks ?? [], blockId))
   );
 }
 

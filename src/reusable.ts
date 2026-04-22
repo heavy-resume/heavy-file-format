@@ -35,12 +35,6 @@ export function findReusableOwnerInList(blocks: VisualBlock[], blockId: string, 
     if (nested) {
       return nested;
     }
-    for (const row of block.schema.tableRows ?? []) {
-      const nestedDetails = findReusableOwnerInList(row.detailsBlocks ?? [], blockId, nextOwner);
-      if (nestedDetails) {
-        return nestedDetails;
-      }
-    }
   }
   return null;
 }

@@ -124,8 +124,8 @@ export function renderChatPanel(chat: ChatState, document: VisualDocument, deps:
                  </div>
                  <div class="chat-panel-head-actions">
                    <button type="button" class="ghost" data-action="clear-chat-history"${chat.messages.length === 0 ? ' disabled' : ''}>Clear</button>
-                   <button type="button" class="ghost" data-action="toggle-chat-panel" aria-label="Close chat">Close</button>
                  </div>
+                 <button type="button" class="danger chat-panel-close" data-action="toggle-chat-panel" aria-label="Close chat">×</button>
                </div>
                <div class="chat-panel-body" data-chat-scroll-container>
                  <div class="chat-settings">

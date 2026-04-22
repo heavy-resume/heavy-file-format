@@ -44,7 +44,8 @@ import { bindModal } from './bind-modal';
 import { bindLinkInlineModal, openLinkInlineModal } from './bind-link-modal';
 import { removeBlockFromList, findBlockInList } from './block-ops';
 import { getReusableTemplateByName } from './document-factory';
-import { clearChatConversation, getDefaultModelForProvider, persistChatSettings, requestChatCompletion } from './chat';
+import { clearChatConversation, getDefaultModelForProvider, persistChatSettings } from './chat';
+import { appendUserChatMessage, requestChatTurn } from './chat-session';
 import type { RawEditorDiagnostic } from './types';
 import { requestAiComponentEdit } from './ai-edit';
 
@@ -755,14 +756,8 @@ export function bindUi(app: HTMLElement): void {
         return;
       }
 
-      const nextMessages = [
-        ...state.chat.messages,
-        {
-          id: crypto.randomUUID(),
-          role: 'user' as const,
-          content: question,
-        },
-      ];
+      const previousMessages = state.chat.messages;
+      const nextMessages = appendUserChatMessage(previousMessages, question);
 
       state.chat.messages = nextMessages;
       state.chat.draft = '';
@@ -773,37 +768,17 @@ export function bindUi(app: HTMLElement): void {
       getRenderApp()();
 
       try {
-        const answer = await requestChatCompletion({
+        const result = await requestChatTurn({
           settings: state.chat.settings,
           document: state.document,
-          messages: nextMessages,
+          messages: previousMessages,
+          question,
         });
         if (requestNonce !== state.chat.requestNonce) {
           return;
         }
-        state.chat.messages = [
-          ...nextMessages,
-          {
-            id: crypto.randomUUID(),
-            role: 'assistant',
-            content: answer,
-          },
-        ];
-      } catch (error) {
-        if (requestNonce !== state.chat.requestNonce) {
-          return;
-        }
-        const message = error instanceof Error ? error.message : 'Chat request failed.';
-        state.chat.error = message;
-        state.chat.messages = [
-          ...nextMessages,
-          {
-            id: crypto.randomUUID(),
-            role: 'assistant',
-            content: message,
-            error: true,
-          },
-        ];
+        state.chat.messages = result.messages;
+        state.chat.error = result.error;
       } finally {
         if (requestNonce !== state.chat.requestNonce) {
           return;

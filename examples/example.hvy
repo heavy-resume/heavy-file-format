@@ -1,6 +1,7 @@
 ---
 hvy_version: 0.1
 title: Reference Implementation Demo
+reader_max_width: 60rem
 ---
 
 <!--hvy: {"id":"welcome"}-->

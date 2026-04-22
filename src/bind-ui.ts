@@ -199,6 +199,17 @@ export function bindUi(app: HTMLElement): void {
       return;
     }
 
+    if (field === 'meta-reader-max-width' && target instanceof HTMLInputElement) {
+      recordHistory('meta:reader-max-width');
+      if (target.value.trim().length > 0) {
+        state.document.meta.reader_max_width = target.value;
+      } else {
+        delete state.document.meta.reader_max_width;
+      }
+      getRenderApp()();
+      return;
+    }
+
     if (field === 'theme-color-picker' && target instanceof HTMLInputElement) {
       const name = target.dataset.colorName ?? '';
       if (!name) return;

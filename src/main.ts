@@ -205,6 +205,9 @@ editorRenderer = createEditorRenderer(
 
 readerRenderer = createReaderRenderer(
   {
+    get documentMeta() {
+      return state.document.meta;
+    },
     get documentSections() {
       return state.document.sections;
     },

@@ -107,6 +107,24 @@ hvy_version: 0.1
   expect(output).not.toContain('"expandableContentCss"');
 });
 
+test('preserves reader_max_width in document front matter on round-trip', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+reader_max_width: 60rem
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {}-->
+ Hello
+`, '.hvy');
+
+  const output = serializeWithState(document);
+
+  expect(output).toContain('reader_max_width: 60rem');
+});
+
 test('wrapHvyFragmentAsDocument includes optional front matter metadata', () => {
   const wrapped = wrapHvyFragmentAsDocument('<!--hvy:text {}-->\n Hello', {
     meta: {

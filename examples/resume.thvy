@@ -2,6 +2,7 @@
 hvy_version: 0.1
 template: true
 title: Resume Template
+reader_max_width: 60rem
 theme:
   colors:
     --hvy-bg: "#f5f9ff"

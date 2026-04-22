@@ -113,6 +113,7 @@ tags: [guide, onboarding]
 
 Presentation keys in document metadata include:
 - `sidebar_label`: optional string. Use it as the label for the sidebar toggle control. Defaults to a client-defined fallback (e.g. `☰`) if absent.
+- `reader_max_width`: optional CSS width value applied to the main reader document column, for example `60rem` or `72ch`.
 
 ### 5.2 Section boundaries
 

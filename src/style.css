@@ -249,6 +249,11 @@ button.tiny {
   scrollbar-gutter: stable;
 }
 
+.reader-document-body {
+  width: 100%;
+  margin-inline: auto;
+}
+
 .ai-view-hint {
   position: absolute;
   right: 1rem;
@@ -722,6 +727,11 @@ button.tiny {
   overflow: auto;
   padding-left: 3.25rem;
   scrollbar-gutter: stable;
+}
+
+.editor-tree-body {
+  width: 100%;
+  margin-inline: auto;
 }
 
 .editor-sidebar {

@@ -12,8 +12,10 @@ import type { BlockSchema, VisualBlock, VisualSection } from '../editor/types';
 import { renderTagEditor } from '../editor/tag-editor';
 import { colorValueToPickerHex, getResolvedThemeColor, getThemeColorLabel, THEME_COLOR_NAMES } from '../theme';
 import type { ThemeConfig } from '../theme';
+import type { VisualDocument } from '../types';
 
 interface ReaderRenderState {
+  documentMeta: VisualDocument['meta'];
   documentSections: VisualSection[];
   tempHighlights: Set<string>;
   aiEditTarget: { sectionKey: string | null; blockId: string | null };
@@ -84,7 +86,9 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     if (realSections.length === 0) {
       return '<div class="muted">No content to display yet.</div>';
     }
-    return realSections.map((section) => renderReaderSection(section)).join('');
+    const maxWidth = typeof state.documentMeta.reader_max_width === 'string' ? state.documentMeta.reader_max_width.trim() : '';
+    const bodyStyle = maxWidth.length > 0 ? ` style="max-width: ${deps.escapeAttr(maxWidth)};"` : '';
+    return `<div class="reader-document-body"${bodyStyle}>${realSections.map((section) => renderReaderSection(section)).join('')}</div>`;
   }
 
   function renderSidebarSections(sections: VisualSection[]): string {

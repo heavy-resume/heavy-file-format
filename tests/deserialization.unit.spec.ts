@@ -38,6 +38,22 @@ hvy_version: 0.1
   expect(block.schema.expandableContentBlocks.children[0]?.text).toBe('Expanded detail');
 });
 
+test('deserializes reader_max_width from document front matter', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+reader_max_width: 60rem
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {}-->
+ Hello
+`, '.hvy');
+
+  expect(document.meta.reader_max_width).toBe('60rem');
+});
+
 test('deserializes expandable stub and content css fields', () => {
   const input = `---
 hvy_version: 0.1

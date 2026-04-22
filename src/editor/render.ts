@@ -126,21 +126,25 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const mainSections = sections.filter((s) => s.location !== 'sidebar');
     const sectionCards = mainSections.map((section) => renderEditorSection(section, sections)).join('');
     const flatSections = deps.flattenSections(sections);
+    const maxWidth = typeof state.documentMeta.reader_max_width === 'string' ? state.documentMeta.reader_max_width.trim() : '';
+    const bodyStyle = maxWidth.length > 0 ? ` style="max-width: ${deps.escapeAttr(maxWidth)};"` : '';
     return `
-      ${state.showAdvancedEditor
-        ? renderTemplateGhosts(getTemplateFields(state.documentMeta), flatSections, { escapeAttr: deps.escapeAttr, escapeHtml: deps.escapeHtml })
-        : ''
-      }
-      ${sectionCards}
-      <article class="ghost-section-card add-ghost reusable-section-ghost" data-action="add-top-level-section" data-section-key="__top_level__">
-        <div class="ghost-plus-big"><span>+</span></div>
-        <div class="ghost-label">Add Section</div>
-        <label class="ghost-component-picker">
-          <select data-field="reusable-section-type" data-section-key="__top_level__" aria-label="Section type">
-            ${deps.renderReusableSectionOptions(state.addComponentBySection.__top_level__ ?? 'blank')}
-          </select>
-        </label>
-      </article>
+      <div class="editor-tree-body"${bodyStyle}>
+        ${state.showAdvancedEditor
+          ? renderTemplateGhosts(getTemplateFields(state.documentMeta), flatSections, { escapeAttr: deps.escapeAttr, escapeHtml: deps.escapeHtml })
+          : ''
+        }
+        ${sectionCards}
+        <article class="ghost-section-card add-ghost reusable-section-ghost" data-action="add-top-level-section" data-section-key="__top_level__">
+          <div class="ghost-plus-big"><span>+</span></div>
+          <div class="ghost-label">Add Section</div>
+          <label class="ghost-component-picker">
+            <select data-field="reusable-section-type" data-section-key="__top_level__" aria-label="Section type">
+              ${deps.renderReusableSectionOptions(state.addComponentBySection.__top_level__ ?? 'blank')}
+            </select>
+          </label>
+        </article>
+      </div>
     `;
   }
 
@@ -462,6 +466,10 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         <label>
           <span>Sidebar Label</span>
           <input data-field="meta-sidebar-label" placeholder="☰" value="${deps.escapeAttr(String(state.documentMeta.sidebar_label ?? ''))}" />
+        </label>
+        <label>
+          <span>Reader Max Width</span>
+          <input data-field="meta-reader-max-width" placeholder="60rem" value="${deps.escapeAttr(String(state.documentMeta.reader_max_width ?? ''))}" />
         </label>
         <div class="editor-grid">
           <label>

@@ -1,6 +1,7 @@
 ---
 hvy_version: 0.1
 title: Resume Example
+reader_max_width: 60rem
 theme:
   colors:
     --hvy-bg: "#0f1720"

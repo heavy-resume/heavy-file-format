@@ -2156,6 +2156,8 @@ function buildAiEditPrompt(request: string): string {
     request,
     '',
     'Start from the selected component HVY and make the smallest valid change that satisfies the request.',
+    'Preserve the meaning and types of existing HVY fields.',
+    'If the request does not fit the selected component naturally, replace it with a more appropriate HVY component instead of inventing unsupported fields or overloading existing ones.',
     'Return only the updated HVY for that single component.',
     'Do not return front matter, section directives, headings, code fences, or explanations.',
     'Preserve existing IDs and unchanged fields unless the request explicitly changes them.',
@@ -2169,6 +2171,9 @@ function buildAiEditFormatInstructions(): string {
     'You are revising a single HVY component, not a whole document.',
     'Return exactly one HVY component fragment.',
     'Do not include YAML front matter, section comments, section headings, code fences, or prose outside the component.',
+    'Every HVY directive payload must be strict JSON with double-quoted keys and strings.',
+    'Keep HVY field value types correct. Booleans must stay booleans, strings must stay strings, and arrays/objects must keep the documented shape.',
+    'If the request implies a different interaction or structure than the selected component supports, return a replacement component that fits the request cleanly.',
     'Keep the output valid HVY.',
   ].join('\n\n');
 }
@@ -2266,7 +2271,10 @@ function getAiEditComponentGuidance(block: NonNullable<ReturnType<typeof findBlo
     return [
       '- Use `tableColumns` as a comma-separated string, for example `"Foo, Bar"`.',
       '- Use `tableRows` as an array of rows with `cells` arrays.',
+      '- Table row fields have fixed meanings and types: `cells` is an array of strings; `expanded` and `clickable` are booleans; `detailsTitle` and `detailsContent` are strings; `detailsBlocks` is an array of nested blocks.',
+      '- Do not put user-facing text into `expanded` or `clickable`.',
       '- Do not invent `columns` or `rows` keys.',
+      '- If the user asks for collapsible narrative detail, rich explanation, or show/hide behavior that a table does not express naturally, replace the table with an `expandable` or another better-fitting component instead of forcing the table schema.',
     ].join('\n');
   }
   if (base === 'xref-card') {

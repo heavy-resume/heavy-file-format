@@ -47,7 +47,7 @@ test('buildOpenAiProxyRequest includes developer context and conversation turns'
         role: 'assistant',
         content: [
           {
-            type: 'input_text',
+            type: 'output_text',
             text: 'A summary.',
           },
         ],
@@ -95,6 +95,14 @@ test('component edit requests use edit-specific system instructions', () => {
       instructions: expect.stringMatching(/Answer questions about the provided HVY document context\./),
     })
   );
+});
+
+test('assistant turns use output_text in OpenAI response inputs', () => {
+  const openAiRequest = buildOpenAiProxyRequest(request) as {
+    input: Array<{ role: string; content: Array<{ type: string; text: string }> }>;
+  };
+  const assistantTurn = openAiRequest.input.find((item) => item.role === 'assistant');
+  expect(assistantTurn?.content[0]?.type).toBe('output_text');
 });
 
 test('proxy response extractors collect text from provider payloads', () => {

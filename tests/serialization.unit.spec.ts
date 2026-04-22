@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
 
-import { deserializeDocument } from '../src/serialization';
+import { deserializeDocument, serializeBlockFragment } from '../src/serialization';
 import {
   normalizeSerialized,
   registerSerializationTestState,
@@ -8,6 +8,37 @@ import {
 } from './serialization-test-helpers';
 
 registerSerializationTestState();
+
+test('serializes a single block fragment without document wrappers', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ <!--hvy:expandable {"expandableAlwaysShowStub":true}-->
+
+  <!--hvy:expandable:stub {}-->
+
+   <!--hvy:text {}-->
+    Short summary
+
+  <!--hvy:expandable:content {}-->
+
+   <!--hvy:xref-card {"xrefTitle":"Details","xrefTarget":"summary-details"}-->
+`, '.hvy');
+
+  const block = document.sections[0]?.blocks[0];
+  expect(block).toBeTruthy();
+  const fragment = serializeBlockFragment(block!);
+
+  expect(fragment).toMatch(/^<!--hvy:expandable /);
+  expect(fragment).toContain('<!--hvy:expandable:stub {}-->');
+  expect(fragment).toContain('<!--hvy:expandable:content {}-->');
+  expect(fragment).not.toContain('#! Summary');
+  expect(fragment).not.toContain('hvy_version:');
+});
 
 test('serializes slot markers without child component payloads', () => {
   const input = `---

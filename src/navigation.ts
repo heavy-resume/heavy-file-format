@@ -212,6 +212,16 @@ export function resetTransientUiState(): void {
   state.lastHistoryGroup = null;
   state.lastHistoryAt = 0;
   state.pendingEditorCenterSectionKey = null;
+  state.aiEdit = {
+    sectionKey: null,
+    blockId: null,
+    draft: '',
+    isSending: false,
+    error: null,
+    popupX: 0,
+    popupY: 0,
+    requestNonce: state.aiEdit.requestNonce + 1,
+  };
   state.paneScroll = {
     editorTop: 0,
     editorSidebarTop: 0,

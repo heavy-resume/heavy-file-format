@@ -15,7 +15,7 @@ import {
 } from './editor/tag-editor';
 import { getThemeConfig, applyTheme, writeThemeConfig, colorValueToPickerHex } from './theme';
 import { findSectionByKey, getSectionId, isDefaultUntitledSectionTitle } from './section-ops';
-import { getComponentDefs, getSectionDefs, getReusableNameFromSectionKey, isBuiltinComponent } from './component-defs';
+import { getComponentDefs, getSectionDefs, getReusableNameFromSectionKey, isBuiltinComponent, resolveBaseComponent } from './component-defs';
 import {
   findBlockByIds, resolveBlockContext, handleBlockFieldInput, commitInlineTableEdit,
   setActiveEditorBlock, clearActiveEditorBlock, deactivateEditorBlock,
@@ -29,8 +29,14 @@ import {
 } from './document-factory';
 import { recordHistory, undoState, redoState } from './history';
 import { navigateToSection, setSidebarOpen, setEditorSidebarOpen, closeModal, closeModalIfTarget, resetTransientUiState, resetToBlankDocument } from './navigation';
-import { deserializeDocument, deserializeDocumentWithDiagnostics, getHvyDiagnosticUsageHint } from './serialization';
-import { serializeDocument } from './serialization';
+import {
+  deserializeDocument,
+  deserializeDocumentWithDiagnostics,
+  getHvyDiagnosticUsageHint,
+  serializeBlockFragment,
+  serializeDocument,
+  wrapHvyFragmentAsDocument,
+} from './serialization';
 import { syncReusableTemplateForBlock, revertReusableComponent, findReusableOwner } from './reusable';
 import { addTableColumn, removeTableColumn, getTableColumns, moveTableColumn, moveTableRow } from './table-ops';
 import { createGridItem } from './grid-ops';
@@ -40,8 +46,16 @@ import { bindModal } from './bind-modal';
 import { bindLinkInlineModal, openLinkInlineModal } from './bind-link-modal';
 import { removeBlockFromList, findBlockInList } from './block-ops';
 import { getReusableTemplateByName } from './document-factory';
-import { clearChatConversation, persistChatSettings, requestChatCompletion } from './chat';
-import type { RawEditorDiagnostic } from './types';
+import {
+  buildChatDocumentContext,
+  clearChatConversation,
+  getDefaultModelForProvider,
+  HVY_AI_RESPONSE_FORMAT_INSTRUCTIONS,
+  persistChatSettings,
+  requestChatCompletion,
+  requestProxyCompletion,
+} from './chat';
+import type { ChatMessage, RawEditorDiagnostic } from './types';
 
 let lastBoundChatMessageCount = -1;
 
@@ -52,6 +66,8 @@ export function bindUi(app: HTMLElement): void {
   const downloadName = app.querySelector<HTMLInputElement>('#downloadName');
   const readerDocument = app.querySelector<HTMLDivElement>('#readerDocument');
   const readerSidebarSections = app.querySelector<HTMLDivElement>('#readerSidebarSections');
+  const aiReaderDocument = app.querySelector<HTMLDivElement>('#aiReaderDocument');
+  const aiSidebarSections = app.querySelector<HTMLDivElement>('#aiSidebarSections');
   const readerNav = app.querySelector<HTMLDivElement>('#readerNav');
   const chatThread = app.querySelector<HTMLDivElement>('.chat-thread');
   const chatScrollContainer = app.querySelector<HTMLDivElement>('[data-chat-scroll-container]');
@@ -162,9 +178,22 @@ export function bindUi(app: HTMLElement): void {
       return;
     }
 
+    if (field === 'ai-model' && target instanceof HTMLInputElement) {
+      state.chat.settings.model = target.value;
+      persistChatSettings(state.chat.settings);
+      state.aiEdit.error = null;
+      return;
+    }
+
     if (field === 'chat-input' && target instanceof HTMLTextAreaElement) {
       state.chat.draft = target.value;
       state.chat.error = null;
+      return;
+    }
+
+    if (field === 'ai-edit-input' && target instanceof HTMLTextAreaElement) {
+      state.aiEdit.draft = target.value;
+      state.aiEdit.error = null;
       return;
     }
 
@@ -353,8 +382,18 @@ export function bindUi(app: HTMLElement): void {
     }
 
     if (action === 'switch-view') {
-      const view = actionButton.dataset.view === 'viewer' ? 'viewer' : 'editor';
+      const requestedView = actionButton.dataset.view;
+      const view = requestedView === 'viewer' ? 'viewer' : requestedView === 'ai' ? 'ai' : 'editor';
       state.currentView = view;
+      if (view !== 'ai') {
+        closeAiEditPopover();
+      }
+      getRenderApp()();
+      return;
+    }
+
+    if (action === 'close-ai-edit') {
+      closeAiEditPopover();
       getRenderApp()();
       return;
     }
@@ -665,8 +704,8 @@ export function bindUi(app: HTMLElement): void {
 
   app.addEventListener('change', (event) => {
     const target = event.target as HTMLElement | null;
-    if (target instanceof HTMLSelectElement && target.dataset.field === 'chat-provider') {
-      if (state.chat.isSending) {
+    if (target instanceof HTMLSelectElement && (target.dataset.field === 'chat-provider' || target.dataset.field === 'ai-provider')) {
+      if (state.chat.isSending || state.aiEdit.isSending) {
         return;
       }
       const previousProvider = state.chat.settings.provider;
@@ -674,18 +713,19 @@ export function bindUi(app: HTMLElement): void {
       state.chat.settings.provider = target.value === 'anthropic' ? 'anthropic' : 'openai';
       if (
         state.chat.settings.provider === 'openai' &&
-        (previousModel.length === 0 || (previousProvider === 'anthropic' && previousModel === 'claude-sonnet-4-6'))
+        (previousModel.length === 0 || (previousProvider === 'anthropic' && previousModel === getDefaultModelForProvider('anthropic')))
       ) {
-        state.chat.settings.model = 'gpt-5-mini';
+        state.chat.settings.model = getDefaultModelForProvider('openai');
       }
       if (
         state.chat.settings.provider === 'anthropic' &&
-        (previousModel.length === 0 || (previousProvider === 'openai' && previousModel === 'gpt-5-mini'))
+        (previousModel.length === 0 || (previousProvider === 'openai' && previousModel === getDefaultModelForProvider('openai')))
       ) {
-        state.chat.settings.model = 'claude-sonnet-4-6';
+        state.chat.settings.model = getDefaultModelForProvider('anthropic');
       }
       persistChatSettings(state.chat.settings);
       state.chat.error = null;
+      state.aiEdit.error = null;
       getRenderApp()();
       return;
     }
@@ -707,80 +747,85 @@ export function bindUi(app: HTMLElement): void {
 
   app.addEventListener('submit', async (event) => {
     const form = event.target as HTMLElement | null;
-    if (form?.id !== 'chatComposer') {
-      return;
-    }
-    event.preventDefault();
-    if (state.chat.isSending) {
-      return;
-    }
-
-    const question = state.chat.draft.trim();
-    if (question.length === 0) {
-      return;
-    }
-
-    if (state.chat.settings.model.trim().length === 0) {
-      state.chat.error = 'Choose a model before sending.';
-      getRenderApp()();
-      return;
-    }
-
-    const nextMessages = [
-      ...state.chat.messages,
-      {
-        id: crypto.randomUUID(),
-        role: 'user' as const,
-        content: question,
-      },
-    ];
-
-    state.chat.messages = nextMessages;
-    state.chat.draft = '';
-    state.chat.error = null;
-    state.chat.isSending = true;
-    state.chat.requestNonce += 1;
-    const requestNonce = state.chat.requestNonce;
-    getRenderApp()();
-
-    try {
-      const answer = await requestChatCompletion({
-        settings: state.chat.settings,
-        document: state.document,
-        messages: nextMessages,
-      });
-      if (requestNonce !== state.chat.requestNonce) {
+    if (form?.id === 'chatComposer') {
+      event.preventDefault();
+      if (state.chat.isSending) {
         return;
       }
-      state.chat.messages = [
-        ...nextMessages,
+
+      const question = state.chat.draft.trim();
+      if (question.length === 0) {
+        return;
+      }
+
+      if (state.chat.settings.model.trim().length === 0) {
+        state.chat.error = 'Choose a model before sending.';
+        getRenderApp()();
+        return;
+      }
+
+      const nextMessages = [
+        ...state.chat.messages,
         {
           id: crypto.randomUUID(),
-          role: 'assistant',
-          content: answer,
+          role: 'user' as const,
+          content: question,
         },
       ];
-    } catch (error) {
-      if (requestNonce !== state.chat.requestNonce) {
-        return;
-      }
-      const message = error instanceof Error ? error.message : 'Chat request failed.';
-      state.chat.error = message;
-      state.chat.messages = [
-        ...nextMessages,
-        {
-          id: crypto.randomUUID(),
-          role: 'assistant',
-          content: message,
-          error: true,
-        },
-      ];
-    } finally {
-      if (requestNonce !== state.chat.requestNonce) {
-        return;
-      }
-      state.chat.isSending = false;
+
+      state.chat.messages = nextMessages;
+      state.chat.draft = '';
+      state.chat.error = null;
+      state.chat.isSending = true;
+      state.chat.requestNonce += 1;
+      const requestNonce = state.chat.requestNonce;
       getRenderApp()();
+
+      try {
+        const answer = await requestChatCompletion({
+          settings: state.chat.settings,
+          document: state.document,
+          messages: nextMessages,
+        });
+        if (requestNonce !== state.chat.requestNonce) {
+          return;
+        }
+        state.chat.messages = [
+          ...nextMessages,
+          {
+            id: crypto.randomUUID(),
+            role: 'assistant',
+            content: answer,
+          },
+        ];
+      } catch (error) {
+        if (requestNonce !== state.chat.requestNonce) {
+          return;
+        }
+        const message = error instanceof Error ? error.message : 'Chat request failed.';
+        state.chat.error = message;
+        state.chat.messages = [
+          ...nextMessages,
+          {
+            id: crypto.randomUUID(),
+            role: 'assistant',
+            content: message,
+            error: true,
+          },
+        ];
+      } finally {
+        if (requestNonce !== state.chat.requestNonce) {
+          return;
+        }
+        state.chat.isSending = false;
+        getRenderApp()();
+      }
+      return;
+    }
+
+    if (form?.id === 'aiEditComposer') {
+      event.preventDefault();
+      await submitAiEditRequest();
     }
   });
 
@@ -1278,6 +1323,21 @@ export function bindUi(app: HTMLElement): void {
 
   app.addEventListener('keydown', (event) => {
     const target = event.target as HTMLElement;
+    if (event.key === 'Escape' && state.aiEdit.sectionKey && state.aiEdit.blockId && !state.aiEdit.isSending) {
+      closeAiEditPopover();
+      getRenderApp()();
+      return;
+    }
+    if (
+      target instanceof HTMLTextAreaElement &&
+      target.dataset.field === 'ai-edit-input' &&
+      event.key === 'Enter' &&
+      !event.shiftKey
+    ) {
+      event.preventDefault();
+      void submitAiEditRequest();
+      return;
+    }
     if (target instanceof HTMLInputElement && handleTagEditorKeydown(event, target, tagStateHelpers)) {
       return;
     }
@@ -1349,17 +1409,36 @@ export function bindUi(app: HTMLElement): void {
   app.addEventListener('contextmenu', (event) => {
     const target = event.target as HTMLElement;
     const anchor = target.closest<HTMLAnchorElement>('.rich-editor a[href]');
-    if (!anchor) {
+    if (anchor) {
+      const editable = anchor.closest<HTMLElement>('.rich-editor');
+      if (!editable) {
+        return;
+      }
+      event.preventDefault();
+      const range = document.createRange();
+      range.selectNodeContents(anchor);
+      openLinkInlineModal(app, editable, anchor.getAttribute('href') ?? '', range, anchor);
       return;
     }
-    const editable = anchor.closest<HTMLElement>('.rich-editor');
-    if (!editable) {
+
+    if (state.currentView !== 'ai') {
       return;
     }
+
+    const blockElement = target.closest<HTMLElement>('.reader-block[data-section-key][data-block-id]');
+    if (!blockElement) {
+      return;
+    }
+
+    const sectionKey = blockElement.dataset.sectionKey ?? '';
+    const blockId = blockElement.dataset.blockId ?? '';
+    if (!sectionKey || !blockId) {
+      return;
+    }
+
     event.preventDefault();
-    const range = document.createRange();
-    range.selectNodeContents(anchor);
-    openLinkInlineModal(app, editable, anchor.getAttribute('href') ?? '', range, anchor);
+    openAiEditPopover(sectionKey, blockId, event.clientX, event.clientY);
+    getRenderApp()();
   });
 
   app.addEventListener('input', (event) => {
@@ -1732,6 +1811,18 @@ export function bindUi(app: HTMLElement): void {
     setDraggedSectionKey(null);
     setDraggedTableItem(null);
   });
+
+  app.addEventListener('click', (event) => {
+    if (!state.aiEdit.sectionKey || !state.aiEdit.blockId) {
+      return;
+    }
+    const target = event.target as HTMLElement;
+    if (target.closest('.ai-edit-popover')) {
+      return;
+    }
+    closeAiEditPopover();
+    getRenderApp()();
+  });
   setAppEventsBound(true);
   }
 
@@ -1796,6 +1887,8 @@ export function bindUi(app: HTMLElement): void {
 
   readerDocument?.addEventListener('click', handleReaderAreaClick);
   readerSidebarSections?.addEventListener('click', handleReaderAreaClick);
+  aiReaderDocument?.addEventListener('click', handleReaderAreaClick);
+  aiSidebarSections?.addEventListener('click', handleReaderAreaClick);
 
   chatThread?.addEventListener('click', (event) => {
     const target = event.target as HTMLElement;
@@ -1858,6 +1951,343 @@ export function bindUi(app: HTMLElement): void {
 
   bindModal(app);
   bindLinkInlineModal(app);
+}
+
+function openAiEditPopover(sectionKey: string, blockId: string, clientX: number, clientY: number): void {
+  const { x, y } = clampAiEditPopoverPosition(clientX, clientY);
+  state.aiEdit = {
+    sectionKey,
+    blockId,
+    draft: '',
+    isSending: false,
+    error: null,
+    popupX: x,
+    popupY: y,
+    requestNonce: state.aiEdit.requestNonce + 1,
+  };
+}
+
+function closeAiEditPopover(): void {
+  state.aiEdit = {
+    sectionKey: null,
+    blockId: null,
+    draft: '',
+    isSending: false,
+    error: null,
+    popupX: 0,
+    popupY: 0,
+    requestNonce: state.aiEdit.requestNonce + 1,
+  };
+}
+
+function clampAiEditPopoverPosition(clientX: number, clientY: number): { x: number; y: number } {
+  const width = 420;
+  const height = 420;
+  const margin = 16;
+  const maxX = Math.max(margin, window.innerWidth - width - margin);
+  const maxY = Math.max(margin, window.innerHeight - height - margin);
+  return {
+    x: Math.min(Math.max(clientX, margin), maxX),
+    y: Math.min(Math.max(clientY, margin), maxY),
+  };
+}
+
+async function submitAiEditRequest(): Promise<void> {
+  if (state.aiEdit.isSending) {
+    return;
+  }
+
+  const sectionKey = state.aiEdit.sectionKey;
+  const blockId = state.aiEdit.blockId;
+  if (!sectionKey || !blockId) {
+    return;
+  }
+
+  const request = state.aiEdit.draft.trim();
+  if (request.length === 0) {
+    return;
+  }
+
+  if (state.chat.settings.model.trim().length === 0) {
+    state.aiEdit.error = 'Choose a model before sending.';
+    getRenderApp()();
+    return;
+  }
+
+  const block = findBlockByIds(sectionKey, blockId);
+  const section = findSectionByKey(state.document.sections, sectionKey);
+  if (!block || !section) {
+    state.aiEdit.error = 'The selected component could not be found.';
+    getRenderApp()();
+    return;
+  }
+
+  const originalFragment = serializeBlockFragment(block);
+  const context = buildAiEditContext(section.title, block, originalFragment);
+  const conversation: ChatMessage[] = [
+    {
+      id: crypto.randomUUID(),
+      role: 'user',
+      content: buildAiEditPrompt(request),
+    },
+  ];
+
+  state.aiEdit.isSending = true;
+  state.aiEdit.error = null;
+  state.aiEdit.requestNonce += 1;
+  const requestNonce = state.aiEdit.requestNonce;
+  getRenderApp()();
+
+  try {
+    let response = await requestProxyCompletion({
+      settings: state.chat.settings,
+      messages: conversation,
+      context,
+      formatInstructions: buildAiEditFormatInstructions(),
+      mode: 'component-edit',
+      debugLabel: 'ai-edit',
+    });
+    if (requestNonce !== state.aiEdit.requestNonce) {
+      return;
+    }
+
+    let parsed = parseAiBlockEditResponse(response);
+    if (!parsed.hasErrors && parsed.canonicalFragment.trim() === originalFragment.trim()) {
+      parsed.issues.push({
+        severity: 'error',
+        message: 'The response parsed back to the same HVY component, so the requested change was not applied.',
+        hint: 'Keep the same HVY schema keys from the original component and modify the actual fields that should change.',
+      });
+      parsed.needsRepair = true;
+      parsed.hasErrors = true;
+    }
+    if (parsed.needsRepair) {
+      const repairConversation: ChatMessage[] = [
+        ...conversation,
+        {
+          id: crypto.randomUUID(),
+          role: 'assistant',
+          content: response,
+        },
+        {
+          id: crypto.randomUUID(),
+          role: 'user',
+          content: buildAiEditRepairPrompt(parsed.issues),
+        },
+      ];
+      response = await requestProxyCompletion({
+        settings: state.chat.settings,
+        messages: repairConversation,
+        context,
+        formatInstructions: buildAiEditFormatInstructions(),
+        mode: 'component-edit',
+        debugLabel: 'ai-edit-repair',
+      });
+      if (requestNonce !== state.aiEdit.requestNonce) {
+        return;
+      }
+      parsed = parseAiBlockEditResponse(response);
+      if (!parsed.hasErrors && parsed.canonicalFragment.trim() === originalFragment.trim()) {
+        parsed.issues.push({
+          severity: 'error',
+          message: 'The repaired response still parsed back to the same HVY component.',
+          hint: 'Use the exact HVY schema from the original component and change the specific values requested.',
+        });
+        parsed.hasErrors = true;
+      }
+    }
+
+    if (!parsed.block || parsed.hasErrors) {
+      throw new Error(formatAiEditIssueSummary(parsed.issues) || 'The AI returned an invalid component update.');
+    }
+
+    recordHistory('ai-edit:block');
+    const originalSchemaId = block.schema.id;
+    block.text = parsed.block.text;
+    block.schema = parsed.block.schema;
+    block.schemaMode = parsed.block.schemaMode;
+    if (originalSchemaId.trim().length > 0 && block.schema.id.trim().length === 0) {
+      block.schema.id = originalSchemaId;
+    }
+    state.rawEditorText = serializeDocument(state.document);
+    state.rawEditorError = null;
+    state.rawEditorDiagnostics = [];
+    closeAiEditPopover();
+    getRefreshReaderPanels()();
+    getRenderApp()();
+  } catch (error) {
+    if (requestNonce !== state.aiEdit.requestNonce) {
+      return;
+    }
+    state.aiEdit.error = error instanceof Error ? error.message : 'AI component update failed.';
+    getRenderApp()();
+  } finally {
+    if (requestNonce !== state.aiEdit.requestNonce) {
+      return;
+    }
+    state.aiEdit.isSending = false;
+    getRenderApp()();
+  }
+}
+
+function buildAiEditContext(sectionTitle: string, block: NonNullable<ReturnType<typeof findBlockByIds>>, fragment: string): string {
+  const componentGuidance = getAiEditComponentGuidance(block);
+  return [
+    'Current HVY document context:',
+    buildChatDocumentContext(state.document),
+    '',
+    'Selected component details:',
+    `Section: ${sectionTitle}`,
+    `Component: ${block.schema.component}`,
+    `Base component: ${resolveBaseComponent(block.schema.component)}`,
+    `Schema ID: ${block.schema.id || '(none)'}`,
+    '',
+    'Preserve the selected component shape and property names unless the request explicitly changes them.',
+    componentGuidance ? `Component-specific guidance:\n${componentGuidance}` : '',
+    '',
+    'Selected component HVY:',
+    fragment,
+  ].filter((part) => part.length > 0).join('\n');
+}
+
+function buildAiEditPrompt(request: string): string {
+  return [
+    'Update the selected HVY component to satisfy this request:',
+    request,
+    '',
+    'Start from the selected component HVY and make the smallest valid change that satisfies the request.',
+    'Return only the updated HVY for that single component.',
+    'Do not return front matter, section directives, headings, code fences, or explanations.',
+    'Preserve existing IDs and unchanged fields unless the request explicitly changes them.',
+  ].join('\n');
+}
+
+function buildAiEditFormatInstructions(): string {
+  return [
+    HVY_AI_RESPONSE_FORMAT_INSTRUCTIONS,
+    '',
+    'You are revising a single HVY component, not a whole document.',
+    'Return exactly one HVY component fragment.',
+    'Do not include YAML front matter, section comments, section headings, code fences, or prose outside the component.',
+    'Keep the output valid HVY.',
+  ].join('\n\n');
+}
+
+function sanitizeAiEditOutput(source: string): string {
+  const trimmed = source.trim();
+  const fencedMatch = trimmed.match(/^```(?:hvy|markdown)?\s*\n([\s\S]*?)\n```$/i);
+  return fencedMatch ? fencedMatch[1].trim() : trimmed;
+}
+
+function parseAiBlockEditResponse(source: string): {
+  block: ReturnType<typeof findBlockByIds>;
+  issues: RawEditorDiagnostic[];
+  needsRepair: boolean;
+  hasErrors: boolean;
+  canonicalFragment: string;
+} {
+  const cleaned = sanitizeAiEditOutput(source);
+  const { document, diagnostics } = deserializeDocumentWithDiagnostics(
+    wrapHvyFragmentAsDocument(cleaned, { sectionId: 'ai-response', title: 'AI Response' }),
+    '.hvy'
+  );
+  const [section] = document.sections;
+  const issues = diagnostics.map((diagnostic) => ({
+    severity: diagnostic.severity,
+    message: diagnostic.message,
+    hint: getHvyDiagnosticUsageHint(diagnostic),
+  }));
+
+  if (!section) {
+    issues.push({
+      severity: 'error',
+      message: 'No component was returned.',
+      hint: 'Return exactly one HVY component directive and its content.',
+    });
+    return {
+      block: null,
+      issues,
+      needsRepair: true,
+      hasErrors: true,
+      canonicalFragment: '',
+    };
+  }
+
+  if (document.sections.length !== 1 || section.children.length > 0 || section.blocks.length !== 1) {
+    issues.push({
+      severity: 'error',
+      message: 'The response must contain exactly one top-level component.',
+      hint: 'Return one component only, without subsection directives or sibling components.',
+    });
+  }
+
+  const candidateBlock = section.blocks[0] ?? null;
+  const canonicalFragment = candidateBlock ? serializeBlockFragment(candidateBlock) : '';
+  return {
+    block: candidateBlock,
+    issues,
+    needsRepair: issues.length > 0,
+    hasErrors: issues.some((issue) => issue.severity === 'error'),
+    canonicalFragment,
+  };
+}
+
+function buildAiEditRepairPrompt(issues: RawEditorDiagnostic[]): string {
+  const uniqueIssues = issues
+    .filter(
+      (issue, index, all) =>
+        all.findIndex((candidate) => candidate.message === issue.message && candidate.hint === issue.hint) === index
+    )
+    .slice(0, 6);
+
+  return [
+    'Revise your previous HVY component so it is valid and contains exactly one component.',
+    '',
+    'Issues:',
+    ...uniqueIssues.map((issue) => `- ${issue.message}\n  Hint: ${issue.hint}`),
+    '',
+    'Return only the corrected single-component HVY fragment.',
+  ].join('\n');
+}
+
+function formatAiEditIssueSummary(issues: RawEditorDiagnostic[]): string {
+  if (issues.length === 0) {
+    return '';
+  }
+  return issues
+    .slice(0, 3)
+    .map((issue) => `${issue.message} ${issue.hint}`.trim())
+    .join(' ');
+}
+
+function getAiEditComponentGuidance(block: NonNullable<ReturnType<typeof findBlockByIds>>): string {
+  const base = resolveBaseComponent(block.schema.component);
+  if (base === 'table') {
+    return [
+      '- Use `tableColumns` as a comma-separated string, for example `"Foo, Bar"`.',
+      '- Use `tableRows` as an array of rows with `cells` arrays.',
+      '- Do not invent `columns` or `rows` keys.',
+    ].join('\n');
+  }
+  if (base === 'xref-card') {
+    return [
+      '- Use `xrefTitle`, optional `xrefDetail`, and `xrefTarget`.',
+      '- Do not replace an xref-card with a plain markdown link.',
+    ].join('\n');
+  }
+  if (base === 'expandable') {
+    return [
+      '- Keep one `expandable:stub` slot and one `expandable:content` slot.',
+      '- Put nested components under those slots rather than inline in schema JSON.',
+    ].join('\n');
+  }
+  if (base === 'grid') {
+    return [
+      '- Keep `gridColumns` as a number.',
+      '- Keep items as nested `<!--hvy:grid:N {...}-->` slots, not schema inline arrays.',
+    ].join('\n');
+  }
+  return '';
 }
 
 function bindChatThreadUi(

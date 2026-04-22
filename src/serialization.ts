@@ -796,6 +796,10 @@ export function serializeDocument(document: VisualDocument): string {
   return `${frontMatter}\n${body}\n`;
 }
 
+export function serializeBlockFragment(block: VisualBlock): string {
+  return serializeBlock(block, 0).trim();
+}
+
 function stripEditorStateFromSerializedValue(value: unknown): unknown {
   if (Array.isArray(value)) {
     return value.map((item) => stripEditorStateFromSerializedValue(item));

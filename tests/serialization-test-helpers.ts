@@ -12,6 +12,16 @@ export function createTestState(document: VisualDocument): AppState {
     currentView: 'editor',
     editorMode: 'basic',
     chat: createDefaultChatState(),
+    aiEdit: {
+      sectionKey: null,
+      blockId: null,
+      draft: '',
+      isSending: false,
+      error: null,
+      popupX: 0,
+      popupY: 0,
+      requestNonce: 0,
+    },
     paneScroll: {
       editorTop: 0,
       editorSidebarTop: 0,

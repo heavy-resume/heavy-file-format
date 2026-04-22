@@ -99,6 +99,7 @@ test('buildProxyChatRequest preserves provider, model, messages, and context', (
       model: 'gpt-5-mini',
       context: 'Context body',
       formatInstructions: 'Format as HVY.',
+      mode: 'qa',
       messages: [
         { id: '1', role: 'user', content: 'What is this?' },
         { id: '2', role: 'assistant', content: 'A summary.' },
@@ -109,6 +110,7 @@ test('buildProxyChatRequest preserves provider, model, messages, and context', (
     model: 'gpt-5-mini',
     context: 'Context body',
     formatInstructions: 'Format as HVY.',
+    mode: 'qa',
     messages: [
       { id: '1', role: 'user', content: 'What is this?', error: undefined },
       { id: '2', role: 'assistant', content: 'A summary.', error: undefined },

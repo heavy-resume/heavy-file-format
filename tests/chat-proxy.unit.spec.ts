@@ -11,6 +11,7 @@ import {
 const request = {
   provider: 'openai' as const,
   model: 'gpt-5-mini',
+  mode: 'qa' as const,
   context: 'Context body',
   formatInstructions: 'Format as HVY.',
   messages: [
@@ -76,6 +77,24 @@ test('buildAnthropicProxyRequest places context in system prompt and messages in
       { role: 'assistant', content: 'A summary.' },
     ],
   });
+});
+
+test('component edit requests use edit-specific system instructions', () => {
+  const openAiRequest = buildOpenAiProxyRequest({
+    ...request,
+    mode: 'component-edit',
+  });
+
+  expect(openAiRequest).toEqual(
+    expect.objectContaining({
+      instructions: expect.stringMatching(/This is a component editing task, not a question answering task\./),
+    })
+  );
+  expect(openAiRequest).toEqual(
+    expect.not.objectContaining({
+      instructions: expect.stringMatching(/Answer questions about the provided HVY document context\./),
+    })
+  );
 });
 
 test('proxy response extractors collect text from provider payloads', () => {

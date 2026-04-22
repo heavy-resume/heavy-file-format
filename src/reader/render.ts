@@ -16,6 +16,7 @@ import type { ThemeConfig } from '../theme';
 interface ReaderRenderState {
   documentSections: VisualSection[];
   tempHighlights: Set<string>;
+  aiEditTarget: { sectionKey: string | null; blockId: string | null };
   modalSectionKey: string | null;
   reusableSaveModal: {
     kind: 'component' | 'section';
@@ -148,12 +149,13 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       `reader-block-${base}`,
       `align-${block.schema.align}`,
       `slot-${block.schema.slot}`,
+      state.aiEditTarget.sectionKey === section.key && state.aiEditTarget.blockId === block.id ? 'is-ai-target' : '',
       blockDomId && state.tempHighlights.has(blockDomId) ? 'is-temp-highlighted' : '',
     ]
       .filter(Boolean)
       .map((part) => deps.escapeAttr(part))
       .join(' ');
-    const blockAttrs = `${idAttr} class="${blockClass}" data-component="${deps.escapeAttr(block.schema.component)}" style="${deps.escapeAttr(block.schema.customCss)}"`;
+    const blockAttrs = `${idAttr} class="${blockClass}" data-component="${deps.escapeAttr(block.schema.component)}" data-section-key="${deps.escapeAttr(section.key)}" data-block-id="${deps.escapeAttr(block.id)}" style="${deps.escapeAttr(block.schema.customCss)}"`;
     const helpers = deps.getComponentRenderHelpers();
 
     if (base === 'code') {

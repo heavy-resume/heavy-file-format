@@ -14,6 +14,7 @@ import { isXrefTargetValid } from './xref-ops';
 const CHAT_STORAGE_KEY = 'hvy-chat-settings';
 const DEFAULT_OPENAI_MODEL = 'gpt-5-mini';
 const DEFAULT_ANTHROPIC_MODEL = 'claude-sonnet-4-6';
+export const HVY_AI_RESPONSE_FORMAT_INSTRUCTIONS = aiResponseFormatInstructions;
 
 interface RenderChatPanelDeps {
   escapeAttr: (value: string) => string;
@@ -26,10 +27,20 @@ interface ProxyChatRequest {
   messages: ChatMessage[];
   context: string;
   formatInstructions: string;
+  mode: 'qa' | 'component-edit';
 }
 
 interface ProxyChatResponse {
   output: string;
+}
+
+export interface ProxyCompletionParams {
+  settings: ChatSettings;
+  messages: ChatMessage[];
+  context: string;
+  formatInstructions: string;
+  mode: 'qa' | 'component-edit';
+  debugLabel?: string;
 }
 
 export function createDefaultChatState(): ChatState {
@@ -218,15 +229,28 @@ export async function requestChatCompletion(params: {
     throw new Error('The document body is empty after removing front matter and comments.');
   }
 
+  return requestProxyCompletion({
+    settings: params.settings,
+    messages: params.messages,
+    context,
+    formatInstructions: HVY_AI_RESPONSE_FORMAT_INSTRUCTIONS,
+    mode: 'qa',
+    debugLabel: 'chat',
+  });
+}
+
+export async function requestProxyCompletion(params: ProxyCompletionParams): Promise<string> {
   const requestPayload = buildProxyChatRequest({
     provider: params.settings.provider,
     model: params.settings.model,
     messages: params.messages,
-    context,
-    formatInstructions: aiResponseFormatInstructions,
+    context: params.context,
+    formatInstructions: params.formatInstructions,
+    mode: params.mode,
   });
+  const debugLabel = params.debugLabel?.trim() || 'chat';
 
-  console.debug('[hvy:chat] client request', {
+  console.debug(`[hvy:${debugLabel}] client request`, {
     provider: requestPayload.provider,
     model: requestPayload.model,
     messages: requestPayload.messages,
@@ -243,7 +267,7 @@ export async function requestChatCompletion(params: {
   });
 
   const payload = await readJsonResponse(response);
-  console.debug('[hvy:chat] client response', {
+  console.debug(`[hvy:${debugLabel}] client response`, {
     ok: response.ok,
     status: response.status,
     payload,
@@ -257,7 +281,7 @@ export async function requestChatCompletion(params: {
   }
 
   const output = (payload as ProxyChatResponse).output.trim();
-  console.debug('[hvy:chat] client extracted output', output);
+  console.debug(`[hvy:${debugLabel}] client extracted output`, output);
   return output;
 }
 
@@ -273,6 +297,7 @@ export function buildProxyChatRequest(request: ProxyChatRequest): ProxyChatReque
     })),
     context: request.context,
     formatInstructions: request.formatInstructions,
+    mode: request.mode,
   };
 }
 
@@ -286,6 +311,10 @@ export function getEnvChatSettings(env: ImportMetaEnv = import.meta.env): ChatSe
     provider,
     model,
   };
+}
+
+export function getDefaultModelForProvider(provider: ChatSettings['provider']): string {
+  return provider === 'anthropic' ? DEFAULT_ANTHROPIC_MODEL : DEFAULT_OPENAI_MODEL;
 }
 
 function getDefaultChatSettings(): ChatSettings {

@@ -347,6 +347,8 @@ button.tiny {
   font-size: 1.35rem;
   font-weight: 700;
   box-shadow: 0 18px 40px var(--hvy-shadow-lg);
+  margin-bottom: 1rem;
+  margin-right: 1rem;
 }
 
 .chat-dock.is-closed .chat-panel {

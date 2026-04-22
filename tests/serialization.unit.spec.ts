@@ -125,6 +125,26 @@ reader_max_width: 60rem
   expect(output).toContain('reader_max_width: 60rem');
 });
 
+test('preserves section_defaults in document front matter on round-trip', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+section_defaults:
+  css: "margin: 0.5rem 0;"
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {}-->
+ Hello
+`, '.hvy');
+
+  const output = serializeWithState(document);
+
+  expect(output).toContain('section_defaults:');
+  expect(output).toContain('css: "margin: 0.5rem 0;"');
+});
+
 test('wrapHvyFragmentAsDocument includes optional front matter metadata', () => {
   const wrapped = wrapHvyFragmentAsDocument('<!--hvy:text {}-->\n Hello', {
     meta: {

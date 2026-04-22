@@ -13,6 +13,7 @@ import { renderTagEditor } from '../editor/tag-editor';
 import { colorValueToPickerHex, getResolvedThemeColor, getThemeColorLabel, THEME_COLOR_NAMES } from '../theme';
 import type { ThemeConfig } from '../theme';
 import type { VisualDocument } from '../types';
+import { getDocumentSectionDefaultCss, mergeDocumentCss } from '../document-section-defaults';
 
 interface ReaderRenderState {
   documentMeta: VisualDocument['meta'];
@@ -132,9 +133,10 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
         </header>
       `
       : '';
+    const sectionStyle = mergeDocumentCss(getDocumentSectionDefaultCss(state.documentMeta), section.customCss);
 
     return `
-      <section id="${deps.escapeAttr(effectiveId)}" class="${classList}" style="${deps.escapeAttr(section.customCss)}"${toggleAttrs}>
+      <section id="${deps.escapeAttr(effectiveId)}" class="${classList}" style="${deps.escapeAttr(sectionStyle)}"${toggleAttrs}>
         ${header}
         ${content}
       </section>

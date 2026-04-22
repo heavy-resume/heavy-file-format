@@ -575,6 +575,25 @@ Rules:
 - Unknown component names or unsupported default fields MUST be ignored.
 - Plain Markdown renderers ignore `component_defaults`.
 
+### 5.14 Document-level section defaults
+
+A `.hvy` or `.thvy` file MAY declare default presentation values for sections in front matter under `section_defaults`.
+
+This is intended for document-wide section wrapper styling without repeating the same `custom_css` on every section.
+
+#### Front matter shape
+
+```yaml
+section_defaults:
+  css: "margin: 0.5rem 0;"
+```
+
+Rules:
+- `css` is an optional inline CSS style string applied to each rendered section wrapper.
+- Explicit section-level `custom_css` remains valid and MAY be combined with or override document-level defaults in a viewer-specific way.
+- Unknown fields under `section_defaults` MUST be ignored.
+- Plain Markdown renderers ignore `section_defaults`.
+
 ## 6. Template & Schema (`.thvy`)
 
 A `.thvy` file is a `.hvy` file. The only distinction is `template: true` in front matter.

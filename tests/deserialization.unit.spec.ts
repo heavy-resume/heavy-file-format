@@ -54,6 +54,25 @@ reader_max_width: 60rem
   expect(document.meta.reader_max_width).toBe('60rem');
 });
 
+test('deserializes section_defaults from document front matter', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+section_defaults:
+  css: "margin: 0.5rem 0;"
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {}-->
+ Hello
+`, '.hvy');
+
+  expect(document.meta.section_defaults).toEqual({
+    css: 'margin: 0.5rem 0;',
+  });
+});
+
 test('deserializes expandable stub and content css fields', () => {
   const input = `---
 hvy_version: 0.1

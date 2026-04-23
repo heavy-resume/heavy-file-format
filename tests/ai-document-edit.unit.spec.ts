@@ -131,7 +131,7 @@ test('summarizeDocumentStructure shows the exact reduced structure the AI sees',
 test('buildDocumentEditFormatInstructions documents the tool protocol', () => {
   const instructions = buildDocumentEditFormatInstructions();
   expect(instructions).toContain(
-    'Valid tools are: `grep`, `view_component`, `edit_component`, `patch_component`, `create_component`, `remove_component`, `create_section`, `remove_section`, `reorder_section`, `request_structure`, `done`.'
+    'Valid tools are: `grep`, `get_css`, `get_properties`, `set_properties`, `view_component`, `edit_component`, `patch_component`, `create_component`, `remove_component`, `create_section`, `remove_section`, `reorder_section`, `request_structure`, `done`.'
   );
   expect(instructions).toContain('It may revise that component in place or fully replace it');
   expect(instructions).toContain('Use real section ids when a section has an id.');
@@ -142,6 +142,9 @@ test('buildDocumentEditFormatInstructions documents the tool protocol', () => {
   expect(instructions).toContain('new_position_index_from_0');
   expect(instructions).toContain('{"tool":"grep","query":"Python|TypeScript","flags":"i","before":2,"after":2,"max_count":3,"reason":"optional"}');
   expect(instructions).toContain('{"tool":"grep","query":"/Python|TypeScript/i","before":2,"after":2,"max_count":3,"reason":"optional"}');
+  expect(instructions).toContain('{"tool":"get_css","ids":["summary","C3"],"regex":"margin|padding","flags":"i","reason":"optional"}');
+  expect(instructions).toContain('{"tool":"get_properties","ids":["summary","skill-python-card"],"properties":["margin","padding"],"reason":"optional"}');
+  expect(instructions).toContain('{"tool":"set_properties","ids":["summary","C3"],"properties":{"margin":"0.5rem 0","padding":"0.25rem","background":null},"reason":"optional"}');
   expect(instructions).toContain('{"tool":"patch_component","component_ref":"C3","edits":[{"op":"replace","start_line":2,"end_line":2,"text":" New content"}],"reason":"optional"}');
   expect(instructions).toContain('{"tool":"create_component","position":"append-to-section","section_ref":"skills","hvy":"<!--hvy:text {}-->\\n New content","reason":"optional"}');
   expect(instructions).toContain('{"tool":"create_section","position":"append-root","hvy":"<!--hvy: {\\"id\\":\\"new-section\\"}-->\\n#! New section');
@@ -223,6 +226,75 @@ hvy_version: 0.1
   expect(grepResult).toContain('Match 1 of 1 (component_id="long-text")');
   expect(grepResult).toContain(`   9 | ${' '.repeat(2)}${'a'.repeat(398)}`);
   expect(grepResult).toContain(`  10 | ${'a'.repeat(12)}wrapped-needle`);
+});
+
+test('requestAiDocumentEditTurn can get css and css properties for ids', async () => {
+  queueAiToolResponses(
+    '{"tool":"get_css","ids":["summary","skill-python-card"],"regex":"margin|padding","flags":"i"}',
+    '{"tool":"get_properties","ids":["summary","skill-python-card"],"properties":["margin","padding"]}',
+    '{"tool":"done","summary":"Read CSS."}'
+  );
+
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary","custom_css":"padding: 0.5rem; border: 1px solid red;"}-->
+#! Summary
+
+<!--hvy:xref-card {"id":"skill-python-card","css":"margin: 0.35rem 0; padding: 0.25rem; color: blue;","xrefTitle":"Python","xrefTarget":"tool-python"}-->
+`, '.hvy');
+  seedStateForDocument(document);
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+
+  const result = await requestAiDocumentEditTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Inspect CSS for summary and the Python card.',
+  });
+
+  expect(result.error).toBeNull();
+  const cssResult = lastToolResultBeforeCall(1);
+  expect(cssResult).toContain('section Summary (summary)');
+  expect(cssResult).toContain('padding: 0.5rem; border: 1px solid red;');
+  expect(cssResult).toContain('component xref-card (skill-python-card)');
+  expect(cssResult).toContain('margin: 0.35rem 0; padding: 0.25rem; color: blue;');
+  const propertiesResult = lastToolResultBeforeCall(2);
+  expect(propertiesResult).toContain('padding: 0.5rem');
+  expect(propertiesResult).toContain('margin: 0.35rem 0');
+  expect(propertiesResult).toContain('padding: 0.25rem');
+  expect(propertiesResult).not.toContain('color: blue');
+});
+
+test('requestAiDocumentEditTurn can set css properties for multiple ids', async () => {
+  queueAiToolResponses(
+    '{"tool":"set_properties","ids":["summary","skill-python-card"],"properties":{"margin":"0","padding":"1rem","color":null}}',
+    '{"tool":"done","summary":"Updated CSS."}'
+  );
+
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary","custom_css":"padding: 0.5rem; color: red;"}-->
+#! Summary
+
+<!--hvy:xref-card {"id":"skill-python-card","css":"margin: 0.35rem 0; color: blue;","xrefTitle":"Python","xrefTarget":"tool-python"}-->
+`, '.hvy');
+  seedStateForDocument(document);
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+
+  const result = await requestAiDocumentEditTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Normalize spacing CSS.',
+  });
+
+  expect(result.error).toBeNull();
+  expect(document.sections[0]?.customCss).toBe('padding: 1rem; margin: 0;');
+  expect(document.sections[0]?.blocks[0]?.schema.customCss).toBe('margin: 0; padding: 1rem;');
 });
 
 test('requestAiDocumentEditTurn can patch a component after viewing numbered lines', async () => {

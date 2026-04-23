@@ -64,11 +64,16 @@ type ComponentPatchEdit =
   | { op: 'insert_before'; line: number; text: string }
   | { op: 'insert_after'; line: number; text: string };
 
+type CssPropertyMap = Record<string, string | null>;
+
 type DocumentEditToolRequest =
   | { tool: 'done'; summary?: string }
   | { tool: 'request_structure'; reason?: string }
   | { tool: 'view_component'; component_ref: string; start_line?: number; end_line?: number; reason?: string }
   | { tool: 'grep'; query: string; flags?: string; before?: number; after?: number; max_count?: number; reason?: string }
+  | { tool: 'get_css'; ids: string[]; regex?: string; flags?: string; reason?: string }
+  | { tool: 'get_properties'; ids: string[]; properties?: string[]; regex?: string; flags?: string; reason?: string }
+  | { tool: 'set_properties'; ids: string[]; properties: CssPropertyMap; reason?: string }
   | { tool: 'edit_component'; component_ref: string; request: string; reason?: string }
   | { tool: 'patch_component'; component_ref: string; edits: ComponentPatchEdit[]; reason?: string }
   | { tool: 'remove_section'; section_ref: string; reason?: string }
@@ -218,6 +223,16 @@ async function runDocumentEditLoop(params: {
       contextSummary = SENT_STRUCTURE_CONTEXT;
     } else if (parsed.value.tool === 'grep') {
       toolResult = buildToolResult('grep', executeGrepTool(parsed.value, params.document));
+      contextSummary = SENT_STRUCTURE_CONTEXT;
+    } else if (parsed.value.tool === 'get_css') {
+      toolResult = buildToolResult('get_css', executeGetCssTool(parsed.value, snapshot, params.document));
+      contextSummary = SENT_STRUCTURE_CONTEXT;
+    } else if (parsed.value.tool === 'get_properties') {
+      toolResult = buildToolResult('get_properties', executeGetPropertiesTool(parsed.value, snapshot, params.document));
+      contextSummary = SENT_STRUCTURE_CONTEXT;
+    } else if (parsed.value.tool === 'set_properties') {
+      toolResult = buildToolResult('set_properties', executeSetPropertiesTool(parsed.value, snapshot, params.document, params.onMutation));
+      snapshot = summarizeDocumentStructure(params.document);
       contextSummary = SENT_STRUCTURE_CONTEXT;
     } else if (parsed.value.tool === 'view_component') {
       toolResult = buildToolResult('view_component', executeViewComponentTool(parsed.value, snapshot, params.document));
@@ -429,6 +444,74 @@ function executeGrepTool(
       ].join('\n');
     })
     .join('\n\n');
+}
+
+type CssTarget =
+  | { kind: 'section'; ref: string; label: string; section: VisualSection }
+  | { kind: 'component'; ref: string; label: string; block: VisualBlock };
+
+function executeGetCssTool(
+  request: Extract<DocumentEditToolRequest, { tool: 'get_css' }>,
+  snapshot: DocumentStructureSnapshot,
+  document: VisualDocument
+): string {
+  const matcher = request.regex ? buildToolRegex(request.regex, request.flags, 'get_css.regex') : null;
+  const targets = resolveCssTargets(request.ids, snapshot, document);
+  const lines = targets.flatMap((target) => {
+    const css = getTargetCss(target);
+    if (matcher && !matcher.test(css)) {
+      return [];
+    }
+    return [`${target.kind} ${target.label} (${target.ref})`, css.trim().length > 0 ? css : '(empty)'];
+  });
+  return lines.length > 0 ? lines.join('\n') : 'No CSS matched.';
+}
+
+function executeGetPropertiesTool(
+  request: Extract<DocumentEditToolRequest, { tool: 'get_properties' }>,
+  snapshot: DocumentStructureSnapshot,
+  document: VisualDocument
+): string {
+  const propertyFilter = new Set((request.properties ?? []).map((property) => property.trim().toLowerCase()).filter(Boolean));
+  const matcher = request.regex ? buildToolRegex(request.regex, request.flags, 'get_properties.regex') : null;
+  const targets = resolveCssTargets(request.ids, snapshot, document);
+  const lines: string[] = [];
+  for (const target of targets) {
+    const declarations = parseCssDeclarations(getTargetCss(target)).filter((declaration) => {
+      if (propertyFilter.size > 0 && !propertyFilter.has(declaration.property.toLowerCase())) {
+        return false;
+      }
+      return !matcher || matcher.test(declaration.property) || matcher.test(declaration.value) || matcher.test(`${declaration.property}: ${declaration.value}`);
+    });
+    lines.push(`${target.kind} ${target.label} (${target.ref})`);
+    lines.push(declarations.length > 0 ? declarations.map((declaration) => `${declaration.property}: ${declaration.value}`).join('\n') : '(empty)');
+  }
+  return lines.join('\n');
+}
+
+function executeSetPropertiesTool(
+  request: Extract<DocumentEditToolRequest, { tool: 'set_properties' }>,
+  snapshot: DocumentStructureSnapshot,
+  document: VisualDocument,
+  onMutation?: (group?: string) => void
+): string {
+  const targets = resolveCssTargets(request.ids, snapshot, document);
+  const properties = Object.entries(request.properties)
+    .map(([property, value]) => ({ property: property.trim(), value }))
+    .filter((entry) => entry.property.length > 0);
+  if (properties.length === 0) {
+    throw new Error('set_properties.properties must include at least one property name.');
+  }
+
+  for (const target of targets) {
+    const declarations = parseCssDeclarations(getTargetCss(target));
+    for (const { property, value } of properties) {
+      setCssDeclaration(declarations, property, value);
+    }
+    setTargetCss(target, serializeCssDeclarations(declarations));
+  }
+  onMutation?.('ai-edit:css');
+  return `Updated ${properties.length} CSS propert${properties.length === 1 ? 'y' : 'ies'} on ${targets.length} target${targets.length === 1 ? '' : 's'}.`;
 }
 
 async function executeEditComponentTool(
@@ -792,8 +875,8 @@ function parseDocumentEditToolRequest(source: string): { ok: true; value: Docume
         },
       };
     }
-    if (tool === 'view_component' && typeof parsed.component_ref === 'string') {
-      return {
+	    if (tool === 'view_component' && typeof parsed.component_ref === 'string') {
+	      return {
         ok: true,
         value: {
           tool,
@@ -801,10 +884,59 @@ function parseDocumentEditToolRequest(source: string): { ok: true; value: Docume
           start_line: Number.isInteger(parsed.start_line) ? Number(parsed.start_line) : undefined,
           end_line: Number.isInteger(parsed.end_line) ? Number(parsed.end_line) : undefined,
           reason: typeof parsed.reason === 'string' ? parsed.reason : undefined,
+	        },
+	      };
+	    }
+    if ((tool === 'get_css' || tool === 'get_properties') && Array.isArray(parsed.ids) && parsed.ids.every((id) => typeof id === 'string')) {
+      const regex = typeof parsed.regex === 'string' ? parsed.regex : undefined;
+      const flags = typeof parsed.flags === 'string' ? parsed.flags : undefined;
+      if (regex) {
+        try {
+          buildToolRegex(regex, flags, `${tool}.regex`);
+        } catch (error) {
+          return { ok: false, message: error instanceof Error ? error.message : `${tool}.regex must be valid.` };
+        }
+      }
+      return {
+        ok: true,
+        value:
+          tool === 'get_css'
+            ? {
+                tool,
+                ids: parsed.ids,
+                regex,
+                flags,
+                reason: typeof parsed.reason === 'string' ? parsed.reason : undefined,
+              }
+            : {
+                tool,
+                ids: parsed.ids,
+                properties: Array.isArray(parsed.properties) && parsed.properties.every((property) => typeof property === 'string') ? parsed.properties : undefined,
+                regex,
+                flags,
+                reason: typeof parsed.reason === 'string' ? parsed.reason : undefined,
+              },
+      };
+    }
+    if (tool === 'set_properties' && Array.isArray(parsed.ids) && parsed.ids.every((id) => typeof id === 'string') && parsed.properties && typeof parsed.properties === 'object' && !Array.isArray(parsed.properties)) {
+      const properties: CssPropertyMap = {};
+      for (const [property, value] of Object.entries(parsed.properties as Record<string, unknown>)) {
+        if (typeof value !== 'string' && value !== null) {
+          return { ok: false, message: 'set_properties.properties values must be strings or null.' };
+        }
+        properties[property] = value === null ? null : (value as string);
+      }
+      return {
+        ok: true,
+        value: {
+          tool,
+          ids: parsed.ids,
+          properties,
+          reason: typeof parsed.reason === 'string' ? parsed.reason : undefined,
         },
       };
     }
-    if (tool === 'edit_component' && typeof parsed.component_ref === 'string' && typeof parsed.request === 'string' && parsed.request.trim().length > 0) {
+	    if (tool === 'edit_component' && typeof parsed.component_ref === 'string' && typeof parsed.request === 'string' && parsed.request.trim().length > 0) {
       return {
         ok: true,
         value: { tool, component_ref: parsed.component_ref, request: parsed.request, reason: typeof parsed.reason === 'string' ? parsed.reason : undefined },
@@ -1130,4 +1262,94 @@ function buildGrepRegex(query: string, explicitFlags?: string): RegExp {
     const details = error instanceof Error ? error.message : 'Unknown regex error.';
     throw new Error(`grep query must be a valid regex. ${details}`);
   }
+}
+
+function buildToolRegex(query: string, explicitFlags: string | undefined, label: string): RegExp {
+  try {
+    return buildGrepRegex(query, explicitFlags);
+  } catch (error) {
+    const details = error instanceof Error ? error.message : 'Unknown regex error.';
+    throw new Error(`${label} must be a valid regex. ${details}`);
+  }
+}
+
+function resolveCssTargets(ids: string[], snapshot: DocumentStructureSnapshot, document: VisualDocument): CssTarget[] {
+  const targets: CssTarget[] = [];
+  const seen = new Set<string>();
+  for (const id of ids.map((item) => item.trim()).filter(Boolean)) {
+    const sectionEntry = snapshot.sectionRefs.get(id);
+    if (sectionEntry) {
+      const section = findSectionByKey(document.sections, sectionEntry.key);
+      const key = `section:${sectionEntry.key}`;
+      if (section && !seen.has(key)) {
+        seen.add(key);
+        targets.push({ kind: 'section', ref: id, label: section.title, section });
+      }
+      continue;
+    }
+    const componentEntry = snapshot.componentRefs.get(id);
+    if (componentEntry) {
+      const block = findBlockByInternalId(document.sections, componentEntry.blockId);
+      const key = `component:${componentEntry.blockId}`;
+      if (block && !seen.has(key)) {
+        seen.add(key);
+        targets.push({ kind: 'component', ref: id, label: componentEntry.component, block });
+      }
+      continue;
+    }
+    throw new Error(`Unknown CSS target id "${id}". Use section ids, component ids, or fallback component refs like C3.`);
+  }
+  if (targets.length === 0) {
+    throw new Error('CSS tools require at least one id.');
+  }
+  return targets;
+}
+
+function getTargetCss(target: CssTarget): string {
+  return target.kind === 'section' ? target.section.customCss : target.block.schema.customCss;
+}
+
+function setTargetCss(target: CssTarget, css: string): void {
+  if (target.kind === 'section') {
+    target.section.customCss = css;
+    return;
+  }
+  target.block.schema.customCss = css;
+}
+
+function parseCssDeclarations(css: string): Array<{ property: string; value: string }> {
+  return css
+    .split(';')
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((part) => {
+      const separator = part.indexOf(':');
+      if (separator < 0) {
+        return { property: part, value: '' };
+      }
+      return {
+        property: part.slice(0, separator).trim(),
+        value: part.slice(separator + 1).trim(),
+      };
+    })
+    .filter((declaration) => declaration.property.length > 0);
+}
+
+function setCssDeclaration(declarations: Array<{ property: string; value: string }>, property: string, value: string | null): void {
+  const index = declarations.findIndex((declaration) => declaration.property.toLowerCase() === property.toLowerCase());
+  if (value === null) {
+    if (index >= 0) {
+      declarations.splice(index, 1);
+    }
+    return;
+  }
+  if (index >= 0) {
+    declarations[index] = { property, value };
+    return;
+  }
+  declarations.push({ property, value });
+}
+
+function serializeCssDeclarations(declarations: Array<{ property: string; value: string }>): string {
+  return declarations.map((declaration) => `${declaration.property}: ${declaration.value};`).join(' ');
 }

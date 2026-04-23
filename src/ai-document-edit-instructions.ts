@@ -1,5 +1,25 @@
 export const DOCUMENT_EDIT_MAX_TOOL_STEPS = 6;
 
+export function buildEditPathSelectionInstructions(): string {
+  return [
+    'Reply with exactly one word: `document` or `header`.',
+    'Choose whether this request should edit the HVY header or the document body.',
+    'Use `document` for visible content: sections, subsections, text, cards, tables, grids, layout CSS on existing sections/components, ordering, additions, and deletions.',
+    'Use `header` for front matter metadata: document title, reader settings, theme, component defaults, section defaults, reusable component definitions in `component_defs`, reusable section definitions in `section_defs`, template schema, and plugin metadata.',
+    'If the request touches both header and document, choose the path needed for the primary requested change.',
+  ].join('\n');
+}
+
+export function buildEditPathSelectionPrompt(request: string): string {
+  return [
+    'Decide which HVY edit path should handle this request:',
+    request,
+    '',
+    'Choose `document` for visible section/component content.',
+    'Choose `header` for document metadata and reusable definitions.',
+  ].join('\n');
+}
+
 export function buildDocumentEditFormatInstructions(): string {
   return [
     'Reply with exactly one JSON object and nothing else.',
@@ -59,8 +79,51 @@ export function buildInitialDocumentEditPrompt(request: string): string {
     'Edit the HVY document to satisfy this request:',
     request,
     '',
-    'Step 1: examine the reduced document structure provided in context.',
+    'This request has been routed to the document body edit path.',
+    'Use this path for visible content: sections, subsections, text, cards, tables, grids, component/section CSS, ordering, additions, and deletions.',
+    'Step 1: examine the reduced document outline provided in context.',
     'Step 2: request the single best next tool.',
+    'After each tool result, decide the next step or finish.',
+    `You have at most ${DOCUMENT_EDIT_MAX_TOOL_STEPS} tool steps.`,
+  ].join('\n');
+}
+
+export function buildHeaderEditFormatInstructions(): string {
+  return [
+    'Reply with exactly one JSON object and nothing else.',
+    'Choose one header tool at a time.',
+    'Valid header tools are: `grep_header`, `view_header`, `patch_header`, `request_header`, `done`.',
+    'The header is YAML front matter only. It contains document metadata and reusable definitions such as `component_defs` and `section_defs`.',
+    'Use the header path for document-level metadata, theme colors, component defaults, section defaults, template schema, plugins, and reusable component/section definitions.',
+    'When changing a theme palette, consider all known `theme.colors` variables listed in the header outline, including table colors: `--hvy-table-header`, `--hvy-table-row-bg-1`, and `--hvy-table-row-bg-2`.',
+    'Do not use this path for visible document body content; that belongs to the document path.',
+    'Use `request_header` when you need a refreshed header outline and properties.',
+    'Use `grep_header` to search the YAML header with a regex pattern before viewing or patching a specific reusable definition.',
+    'Use `view_header` before patching when you need exact YAML line numbers. It returns 1-based YAML header line numbers and defaults to lines 1-200.',
+    'Use `patch_header` to edit metadata or reusable definitions after you have enough numbered header context. Patch the YAML header content without `---` delimiters.',
+    'After `patch_header`, the full YAML header must parse to an object. Preserve unrelated metadata.',
+    'When the request is fully satisfied, return `{"tool":"done","summary":"..."}`.',
+    'JSON must use double-quoted keys and string values.',
+    '',
+    'Tool shapes:',
+    '{"tool":"request_header","reason":"optional"}',
+    '{"tool":"grep_header","query":"component_defs|skill-card","flags":"i","before":2,"after":8,"max_count":3,"reason":"optional"}',
+    '{"tool":"view_header","start_line":1,"end_line":120,"reason":"optional"}',
+    '{"tool":"patch_header","edits":[{"op":"replace","start_line":2,"end_line":2,"text":"title: New title"}],"reason":"optional"}',
+    '{"tool":"patch_header","edits":[{"op":"insert_after","line":10,"text":"component_defs:\\n  - name: card-list\\n    baseType: component-list\\n    description: Reusable card list"}],"reason":"optional"}',
+    '{"tool":"done","summary":"Short summary of what changed."}',
+  ].join('\n');
+}
+
+export function buildInitialHeaderEditPrompt(request: string): string {
+  return [
+    'Edit the HVY header to satisfy this request:',
+    request,
+    '',
+    'This request has been routed to the header edit path.',
+    'Use this path for document metadata and reusable definitions: title, reader settings, theme, defaults, template schema, plugins, `component_defs`, and `section_defs`.',
+    'Step 1: examine the reduced header outline and properties provided in context.',
+    'Step 2: request the single best next header tool.',
     'After each tool result, decide the next step or finish.',
     `You have at most ${DOCUMENT_EDIT_MAX_TOOL_STEPS} tool steps.`,
   ].join('\n');

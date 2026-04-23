@@ -38,7 +38,7 @@ Use of JSON and Markdown make it easy for LLMs to parse.
 - [X] Color scheme and override support
 - [X] Color scheme editor and cleanup
 - [X] AI-based answering questions
-- [ ] AI-based editing
+- [X] AI-based editing
 - [ ] Embedded and attached database support
 - [ ] Plugin support
 

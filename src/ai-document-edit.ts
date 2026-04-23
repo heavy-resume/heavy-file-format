@@ -1,7 +1,8 @@
+import { parse as parseYaml } from 'yaml';
 import { requestProxyCompletion } from './chat';
 import { parseAiBlockEditResponse, requestAiComponentEdit } from './ai-edit';
 import { createEmptySection } from './document-factory';
-import { deserializeDocumentWithDiagnostics, serializeBlockFragment, serializeDocument } from './serialization';
+import { deserializeDocumentWithDiagnostics, serializeBlockFragment, serializeDocument, serializeDocumentHeaderYaml } from './serialization';
 import {
   findBlockContainerById,
   findSectionByKey,
@@ -14,11 +15,17 @@ import {
 import type { VisualBlock, VisualSection } from './editor/types';
 import type { ChatMessage, ChatSettings, VisualDocument } from './types';
 import {
+  buildEditPathSelectionInstructions,
+  buildEditPathSelectionPrompt,
   buildDocumentEditFormatInstructions,
+  buildHeaderEditFormatInstructions,
   buildInitialDocumentEditPrompt,
+  buildInitialHeaderEditPrompt,
   buildToolResult,
   DOCUMENT_EDIT_MAX_TOOL_STEPS,
 } from './ai-document-edit-instructions';
+import type { JsonObject } from './hvy/types';
+import { getThemeColorLabel, THEME_COLOR_NAMES } from './theme';
 
 const MAX_SECTION_PREVIEW_LINES = 10;
 const MAX_TEXT_PREVIEW_LENGTH = 72;
@@ -26,7 +33,7 @@ const MAX_TEXT_PREVIEW_LENGTH = 72;
 // section -> child -> grandchild. Anything deeper is collapsed.
 const MAX_SUMMARY_NESTING = 2;
 const HIDDEN_CONTENTS_MARKER = '... contents hidden ...';
-const SENT_STRUCTURE_CONTEXT = 'Reduced document structure was already provided earlier in this edit session. Request `request_structure` if you need a fresh copy.';
+const SENT_STRUCTURE_CONTEXT = 'Reduced outline context was already provided earlier in this edit session. Request the relevant outline tool if you need a fresh copy.';
 const DEFAULT_VIEW_START_LINE = 1;
 const DEFAULT_VIEW_END_LINE = 200;
 const MAX_GREP_LINE_WIDTH = 400;
@@ -56,6 +63,10 @@ interface DocumentStructureSnapshot {
   summary: string;
   sectionRefs: Map<string, SectionRefEntry>;
   componentRefs: Map<string, ComponentRefEntry>;
+}
+
+interface HeaderStructureSnapshot {
+  summary: string;
 }
 
 type ComponentPatchEdit =
@@ -104,6 +115,15 @@ type DocumentEditToolRequest =
       new_position_index_from_0?: number;
       reason?: string;
     };
+
+type EditPathSelection = 'document' | 'header';
+
+type HeaderEditToolRequest =
+  | { tool: 'done'; summary?: string }
+  | { tool: 'request_header'; reason?: string }
+  | { tool: 'grep_header'; query: string; flags?: string; before?: number; after?: number; max_count?: number; reason?: string }
+  | { tool: 'view_header'; start_line?: number; end_line?: number; reason?: string }
+  | { tool: 'patch_header'; edits: ComponentPatchEdit[]; reason?: string };
 
 interface ChatTurnResult {
   messages: ChatMessage[];
@@ -171,6 +191,46 @@ function appendChatMessage(messages: ChatMessage[], content: string): ChatMessag
 }
 
 async function runDocumentEditLoop(params: {
+  settings: ChatSettings;
+  document: VisualDocument;
+  request: string;
+  onMutation?: (group?: string) => void;
+}): Promise<{ summary: string }> {
+  const path = await selectEditPath(params);
+  if (path === 'header') {
+    return runHeaderEditToolLoop(params);
+  }
+  return runDocumentEditToolLoop(params);
+}
+
+async function selectEditPath(params: {
+  settings: ChatSettings;
+  document: VisualDocument;
+  request: string;
+}): Promise<EditPathSelection> {
+  const response = await requestProxyCompletion({
+    settings: params.settings,
+    messages: [
+      {
+        id: crypto.randomUUID(),
+        role: 'user',
+        content: buildEditPathSelectionPrompt(params.request),
+      },
+    ],
+    context: buildEditPathSelectionContext(params.document),
+    formatInstructions: buildEditPathSelectionInstructions(),
+    mode: 'document-edit',
+    debugLabel: 'ai-document-edit:path',
+  });
+  const parsed = parseEditPathSelection(response);
+  if (parsed.ok === true) {
+    return parsed.value;
+  }
+
+  return inferEditPathFromRequest(params.request);
+}
+
+async function runDocumentEditToolLoop(params: {
   settings: ChatSettings;
   document: VisualDocument;
   request: string;
@@ -291,6 +351,231 @@ async function runDocumentEditLoop(params: {
   return {
     summary: `Stopped after ${DOCUMENT_EDIT_MAX_TOOL_STEPS} steps. The AI can continue if you send another request.`,
   };
+}
+
+async function runHeaderEditToolLoop(params: {
+  settings: ChatSettings;
+  document: VisualDocument;
+  request: string;
+  onMutation?: (group?: string) => void;
+}): Promise<{ summary: string }> {
+  let snapshot = summarizeHeaderStructure(params.document);
+  let contextSummary = snapshot.summary;
+  let conversation: ChatMessage[] = [
+    {
+      id: crypto.randomUUID(),
+      role: 'user',
+      content: buildInitialHeaderEditPrompt(params.request),
+    },
+  ];
+
+  for (let iteration = 0; iteration < DOCUMENT_EDIT_MAX_TOOL_STEPS; iteration += 1) {
+    const response = await requestProxyCompletion({
+      settings: params.settings,
+      messages: conversation,
+      context: contextSummary,
+      formatInstructions: buildHeaderEditFormatInstructions(),
+      mode: 'document-edit',
+      debugLabel: `ai-header-edit:${iteration + 1}`,
+    });
+
+    const parsed = parseHeaderEditToolRequest(response);
+    if (parsed.ok === false) {
+      conversation = [
+        ...conversation.filter((message) => message.role !== 'assistant' || !message.content.includes('The result of this action was:')),
+        {
+          id: crypto.randomUUID(),
+          role: 'user',
+          content: `The previous response was invalid and no tools were executed. Ignore any tool results or summaries it claimed. ${parsed.message}`,
+        },
+      ];
+      continue;
+    }
+
+    if (parsed.value.tool === 'done') {
+      return {
+        summary: parsed.value.summary?.trim() || `Finished header edit after ${iteration + 1} step${iteration === 0 ? '' : 's'}.`,
+      };
+    }
+
+    let toolResult = '';
+    if (parsed.value.tool === 'request_header') {
+      snapshot = summarizeHeaderStructure(params.document);
+      toolResult = buildToolResult('request_header', snapshot.summary);
+      contextSummary = SENT_STRUCTURE_CONTEXT;
+    } else if (parsed.value.tool === 'grep_header') {
+      toolResult = buildToolResult('grep_header', executeGrepHeaderTool(parsed.value, params.document));
+      contextSummary = SENT_STRUCTURE_CONTEXT;
+    } else if (parsed.value.tool === 'view_header') {
+      toolResult = buildToolResult('view_header', executeViewHeaderTool(parsed.value, params.document));
+      contextSummary = SENT_STRUCTURE_CONTEXT;
+    } else if (parsed.value.tool === 'patch_header') {
+      toolResult = buildToolResult('patch_header', executePatchHeaderTool(parsed.value, params.document, params.onMutation));
+      snapshot = summarizeHeaderStructure(params.document);
+      contextSummary = SENT_STRUCTURE_CONTEXT;
+    }
+
+    conversation = [
+      ...conversation,
+      {
+        id: crypto.randomUUID(),
+        role: 'assistant',
+        content: response,
+      },
+      {
+        id: crypto.randomUUID(),
+        role: 'user',
+        content: toolResult,
+      },
+    ];
+  }
+
+  return {
+    summary: `Stopped after ${DOCUMENT_EDIT_MAX_TOOL_STEPS} header steps. The AI can continue if you send another request.`,
+  };
+}
+
+function buildEditPathSelectionContext(document: VisualDocument): string {
+  const visibleSections = document.sections.filter((section) => !section.isGhost);
+  const componentDefs = Array.isArray(document.meta.component_defs) ? document.meta.component_defs.length : 0;
+  const sectionDefs = Array.isArray(document.meta.section_defs) ? document.meta.section_defs.length : 0;
+  const metaKeys = Object.keys(document.meta).filter((key) => !key.startsWith('_')).sort();
+  return [
+    'HVY edit paths:',
+    '- document: visible body content, sections, components, component/section CSS, ordering, additions, deletions.',
+    '- header: YAML front matter metadata and reusable definitions (`component_defs`, `section_defs`, defaults, theme, schema, plugins).',
+    '',
+    'Current document at a glance:',
+    `- visible sections: ${visibleSections.length}`,
+    `- header properties: ${metaKeys.length > 0 ? metaKeys.join(', ') : '(none)'}`,
+    `- component_defs: ${componentDefs}`,
+    `- section_defs: ${sectionDefs}`,
+  ].join('\n');
+}
+
+export function summarizeHeaderStructure(document: VisualDocument): HeaderStructureSnapshot {
+  const lines: string[] = [];
+  const meta = document.meta;
+  const visibleKeys = Object.keys(meta).filter((key) => !key.startsWith('_')).sort();
+  lines.push('Header outline and properties');
+  lines.push(`properties: ${visibleKeys.length > 0 ? visibleKeys.join(', ') : '(none)'}`);
+  lines.push(`title: ${stringifyHeaderPreview(meta.title)}`);
+  lines.push(`hvy_version: ${stringifyHeaderPreview(meta.hvy_version ?? 0.1)}`);
+  lines.push(`reader_max_width: ${stringifyHeaderPreview(meta.reader_max_width)}`);
+  lines.push(`sidebar_label: ${stringifyHeaderPreview(meta.sidebar_label)}`);
+  lines.push(`template: ${stringifyHeaderPreview(meta.template)}`);
+  lines.push(`theme.colors set: ${describeHeaderObjectKeys((meta.theme as JsonObject | undefined)?.colors)}`);
+  lines.push(`component_defaults: ${describeHeaderObjectKeys(meta.component_defaults as JsonObject | undefined)}`);
+  lines.push(`section_defaults: ${describeHeaderObjectKeys(meta.section_defaults as JsonObject | undefined)}`);
+  lines.push(`plugins: ${Array.isArray(meta.plugins) ? meta.plugins.length : 0}`);
+  lines.push(`schema: ${meta.schema && typeof meta.schema === 'object' ? 'present' : '(none)'}`);
+  lines.push('');
+  lines.push('known theme color variables:');
+  lines.push(...describeKnownThemeColors(meta));
+  lines.push('');
+  lines.push('component_defs:');
+  const componentDefs = Array.isArray(meta.component_defs) ? meta.component_defs : [];
+  if (componentDefs.length === 0) {
+    lines.push('- (none)');
+  } else {
+    componentDefs.forEach((def, index) => {
+      const entry = def && typeof def === 'object' ? (def as JsonObject) : {};
+      const keys = Object.keys(entry).sort().join(', ');
+      lines.push(
+        `- [${index}] name="${stringifyHeaderPreview(entry.name)}" baseType="${stringifyHeaderPreview(entry.baseType)}" description="${stringifyHeaderPreview(entry.description)}" properties="${keys || '(none)'}"`
+      );
+    });
+  }
+  lines.push('');
+  lines.push('section_defs:');
+  const sectionDefs = Array.isArray(meta.section_defs) ? meta.section_defs : [];
+  if (sectionDefs.length === 0) {
+    lines.push('- (none)');
+  } else {
+    sectionDefs.forEach((def, index) => {
+      const entry = def && typeof def === 'object' ? (def as JsonObject) : {};
+      lines.push(`- [${index}] name="${stringifyHeaderPreview(entry.name)}" title="${stringifyHeaderPreview(entry.title)}"`);
+    });
+  }
+  lines.push('');
+  lines.push('Reusable definition outlines show first-level metadata only. Use `grep_header` or `view_header` for exact YAML before patching definitions.');
+  return {
+    summary: lines.join('\n'),
+  };
+}
+
+function executeGrepHeaderTool(
+  request: Extract<HeaderEditToolRequest, { tool: 'grep_header' }>,
+  document: VisualDocument
+): string {
+  const query = request.query.trim();
+  if (query.length === 0) {
+    throw new Error('grep_header.query must be a non-empty string.');
+  }
+
+  const before = Math.max(0, request.before ?? 0);
+  const after = Math.max(0, request.after ?? 0);
+  const maxCount = Math.max(1, request.max_count ?? 5);
+  const matcher = buildGrepRegex(query, request.flags);
+  const lines = serializeDocumentHeaderYaml(document).split('\n');
+  const matchIndexes = lines
+    .map((line, index) => ({ index, matches: matcher.test(line) }))
+    .filter((entry) => entry.matches)
+    .slice(0, maxCount)
+    .map((entry) => entry.index);
+
+  if (matchIndexes.length === 0) {
+    return `No header matches for "${query}".`;
+  }
+
+  return matchIndexes
+    .map((matchIndex, idx) => {
+      const start = Math.max(0, matchIndex - before);
+      const end = Math.min(lines.length - 1, matchIndex + after);
+      return [
+        `Header match ${idx + 1} of ${matchIndexes.length}`,
+        ...lines.slice(start, end + 1).map((line, index) => `${String(start + index + 1).padStart(4, ' ')} | ${line}`),
+      ].join('\n');
+    })
+    .join('\n\n');
+}
+
+function executeViewHeaderTool(
+  request: Extract<HeaderEditToolRequest, { tool: 'view_header' }>,
+  document: VisualDocument
+): string {
+  const yaml = serializeDocumentHeaderYaml(document);
+  const clampRange = clampLineRange(yaml.split('\n').length, request.start_line, request.end_line);
+  return [
+    `Showing YAML header lines ${clampRange.startLine}-${clampRange.endLine} (without --- delimiters; default range is ${DEFAULT_VIEW_START_LINE}-${DEFAULT_VIEW_END_LINE})`,
+    '',
+    'Header YAML with 1-based line numbers:',
+    formatNumberedFragment(yaml, clampRange.startLine, clampRange.endLine),
+  ].join('\n');
+}
+
+function executePatchHeaderTool(
+  request: Extract<HeaderEditToolRequest, { tool: 'patch_header' }>,
+  document: VisualDocument,
+  onMutation?: (group?: string) => void
+): string {
+  const originalYaml = serializeDocumentHeaderYaml(document);
+  const patchedYaml = applyComponentPatchEdits(originalYaml, request.edits);
+  const parsed = parseYaml(patchedYaml) as unknown;
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('patch_header produced invalid YAML. Header YAML must parse to an object.');
+  }
+
+  onMutation?.('ai-edit:header');
+  Object.keys(document.meta).forEach((key) => {
+    delete document.meta[key];
+  });
+  Object.assign(document.meta, parsed as JsonObject);
+  if (typeof document.meta.hvy_version === 'undefined') {
+    document.meta.hvy_version = 0.1;
+  }
+
+  return `Patched header with ${request.edits.length} edit${request.edits.length === 1 ? '' : 's'}.`;
 }
 
 export function summarizeDocumentStructure(document: VisualDocument): DocumentStructureSnapshot {
@@ -1052,6 +1337,118 @@ function parseDocumentEditToolRequest(source: string): { ok: true; value: Docume
   }
 }
 
+function parseEditPathSelection(source: string): { ok: true; value: EditPathSelection } | { ok: false; message: string } {
+  const cleaned = source.trim().replace(/^`+|`+$/g, '').trim().toLowerCase();
+  if (cleaned === 'document' || cleaned === 'header') {
+    return { ok: true, value: cleaned };
+  }
+  return { ok: false, message: 'Path selection must be exactly "document" or "header".' };
+}
+
+function parseHeaderEditToolRequest(source: string): { ok: true; value: HeaderEditToolRequest } | { ok: false; message: string } {
+  const cleaned = source.trim().replace(/^```json\s*|\s*```$/g, '').trim();
+  try {
+    const parsed = JSON.parse(cleaned) as Record<string, unknown>;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return { ok: false, message: 'Return a single JSON object.' };
+    }
+    const tool = parsed.tool;
+    if (tool === 'done') {
+      return { ok: true, value: { tool, summary: typeof parsed.summary === 'string' ? parsed.summary : undefined } };
+    }
+    if (tool === 'request_header') {
+      return { ok: true, value: { tool, reason: typeof parsed.reason === 'string' ? parsed.reason : undefined } };
+    }
+    if (tool === 'grep_header' && typeof parsed.query === 'string' && parsed.query.trim().length > 0) {
+      const flags = typeof parsed.flags === 'string' ? parsed.flags : undefined;
+      try {
+        buildGrepRegex(parsed.query, flags);
+      } catch (error) {
+        return {
+          ok: false,
+          message: error instanceof Error ? error.message : 'grep_header query must be a valid regex pattern.',
+        };
+      }
+      return {
+        ok: true,
+        value: {
+          tool,
+          query: parsed.query,
+          flags,
+          before: Number.isInteger(parsed.before) ? Number(parsed.before) : undefined,
+          after: Number.isInteger(parsed.after) ? Number(parsed.after) : undefined,
+          max_count: Number.isInteger(parsed.max_count) ? Number(parsed.max_count) : undefined,
+          reason: typeof parsed.reason === 'string' ? parsed.reason : undefined,
+        },
+      };
+    }
+    if (tool === 'view_header') {
+      return {
+        ok: true,
+        value: {
+          tool,
+          start_line: Number.isInteger(parsed.start_line) ? Number(parsed.start_line) : undefined,
+          end_line: Number.isInteger(parsed.end_line) ? Number(parsed.end_line) : undefined,
+          reason: typeof parsed.reason === 'string' ? parsed.reason : undefined,
+        },
+      };
+    }
+    if (tool === 'patch_header' && Array.isArray(parsed.edits) && parsed.edits.length > 0) {
+      const edits = parsePatchEdits(parsed.edits);
+      if (edits.ok === false) {
+        return { ok: false, message: edits.message };
+      }
+      return {
+        ok: true,
+        value: {
+          tool,
+          edits: edits.value,
+          reason: typeof parsed.reason === 'string' ? parsed.reason : undefined,
+        },
+      };
+    }
+    return { ok: false, message: 'Return one valid header tool JSON object using the documented shapes.' };
+  } catch {
+    return { ok: false, message: 'Return valid JSON only, with no surrounding prose.' };
+  }
+}
+
+function parsePatchEdits(source: unknown[]): { ok: true; value: ComponentPatchEdit[] } | { ok: false; message: string } {
+  const edits: ComponentPatchEdit[] = [];
+  for (const candidate of source) {
+    if (!candidate || typeof candidate !== 'object') {
+      return { ok: false, message: 'patch edits must be an array of patch operations.' };
+    }
+    const edit = candidate as Record<string, unknown>;
+    if (edit.op === 'replace' && Number.isInteger(edit.start_line) && Number.isInteger(edit.end_line) && typeof edit.text === 'string') {
+      edits.push({ op: 'replace', start_line: Number(edit.start_line), end_line: Number(edit.end_line), text: edit.text });
+      continue;
+    }
+    if (edit.op === 'delete' && Number.isInteger(edit.start_line) && Number.isInteger(edit.end_line)) {
+      edits.push({ op: 'delete', start_line: Number(edit.start_line), end_line: Number(edit.end_line) });
+      continue;
+    }
+    if (edit.op === 'insert_before' && Number.isInteger(edit.line) && typeof edit.text === 'string') {
+      edits.push({ op: 'insert_before', line: Number(edit.line), text: edit.text });
+      continue;
+    }
+    if (edit.op === 'insert_after' && Number.isInteger(edit.line) && typeof edit.text === 'string') {
+      edits.push({ op: 'insert_after', line: Number(edit.line), text: edit.text });
+      continue;
+    }
+    return { ok: false, message: 'patch edits must use replace, delete, insert_before, or insert_after with valid line numbers.' };
+  }
+  return { ok: true, value: edits };
+}
+
+function inferEditPathFromRequest(request: string): EditPathSelection {
+  return /\b(header|front matter|frontmatter|metadata|meta|component_defs|component defs|section_defs|section defs|reusable|theme|reader_max_width|sidebar_label|template|schema|plugin)\b/i.test(
+    request
+  )
+    ? 'header'
+    : 'document';
+}
+
 function describeStructureLine(block: VisualBlock, target: string, fallbackRef: string): string {
   const preview = getBlockPreview(block);
   const label = block.schema.id.trim().length > 0 ? block.schema.id.trim() : fallbackRef;
@@ -1176,6 +1573,33 @@ function findBlockByInternalId(sections: VisualSection[], blockId: string): Visu
 
 function escapeInline(value: string): string {
   return value.replace(/\s+/g, ' ').trim().slice(0, 120);
+}
+
+function stringifyHeaderPreview(value: unknown): string {
+  if (value === undefined || value === null || value === '') {
+    return '(none)';
+  }
+  if (typeof value === 'string') {
+    return escapeInline(value);
+  }
+  return escapeInline(JSON.stringify(value));
+}
+
+function describeHeaderObjectKeys(value: unknown): string {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return '(none)';
+  }
+  const keys = Object.keys(value as JsonObject).sort();
+  return keys.length > 0 ? keys.join(', ') : '(empty)';
+}
+
+function describeKnownThemeColors(meta: JsonObject): string[] {
+  const theme = meta.theme && typeof meta.theme === 'object' && !Array.isArray(meta.theme) ? (meta.theme as JsonObject) : {};
+  const colors = theme.colors && typeof theme.colors === 'object' && !Array.isArray(theme.colors) ? (theme.colors as JsonObject) : {};
+  return THEME_COLOR_NAMES.map((name) => {
+    const value = typeof colors[name] === 'string' && colors[name].trim().length > 0 ? colors[name] : '(not set; viewer default applies)';
+    return `- ${name} (${getThemeColorLabel(name)}): ${value}`;
+  });
 }
 
 function truncatePreview(value: string): string {

@@ -514,20 +514,48 @@ The viewer sets each key verbatim on the document root (`root.style.setProperty(
 
 Viewers SHOULD ship built-in defaults for the following conventional names so documents that omit them still render correctly, and should provide both a light and a dark default set:
 
-- `--hvy-bg`, `--hvy-bg-alt`
-- `--hvy-surface`, `--hvy-surface-alt`, `--hvy-surface-tint`
-- `--hvy-text`, `--hvy-text-alt`, `--hvy-text-muted`
-- `--hvy-accent-1`, `--hvy-accent-1-alt`, `--hvy-accent-1-text`
-- `--hvy-accent-2`, `--hvy-accent-2-alt`
-- `--hvy-highlight-1`, `--hvy-highlight-2`
-- `--hvy-border`, `--hvy-border-alt`, `--hvy-border-input`, `--hvy-border-translucent`
-- `--hvy-xref-card-bg`, `--hvy-xref-card-hover-bg`
-- `--hvy-table-header`, `--hvy-table-row-bg-1`, `--hvy-table-row-bg-2`
-- `--hvy-shadow`, `--hvy-shadow-md`, `--hvy-shadow-lg`
-- `--hvy-overlay`
-- `--hvy-danger`
-- `--hvy-warning`, `--hvy-warning-bg`, `--hvy-warning-border`, `--hvy-warning-text`
-- `--hvy-success`, `--hvy-success-bg`, `--hvy-success-border`
+| Variable | Affects |
+| --- | --- |
+| `--hvy-bg` | Page background |
+| `--hvy-bg-alt` | Page background gradient end |
+| `--hvy-surface` | Panel and card backgrounds |
+| `--hvy-surface-alt` | Inset and secondary panel backgrounds |
+| `--hvy-surface-tint` | Subtle panel tinting |
+| `--hvy-text` | Primary text |
+| `--hvy-text-alt` | Secondary text |
+| `--hvy-text-muted` | Muted helper text |
+| `--hvy-link-color` | Inline link text |
+| `--hvy-accent-1` | Primary accent fill |
+| `--hvy-accent-1-alt` | Primary accent border |
+| `--hvy-accent-1-text` | Text on primary accent |
+| `--hvy-accent-2` | Secondary accent fill |
+| `--hvy-accent-2-alt` | Secondary accent border |
+| `--hvy-button-bg` | Primary button background |
+| `--hvy-button-text` | Primary button text |
+| `--hvy-highlight-1` | Soft content highlight |
+| `--hvy-highlight-2` | Strong content highlight |
+| `--hvy-border` | Default panel border |
+| `--hvy-border-alt` | Emphasized border |
+| `--hvy-border-input` | Form field and table border |
+| `--hvy-border-translucent` | Floating toolbar border |
+| `--hvy-xref-card-bg` | Cross-reference card background |
+| `--hvy-xref-card-hover-bg` | Cross-reference card hover background |
+| `--hvy-table-header` | Table header background |
+| `--hvy-table-row-bg-1` | Odd table row background |
+| `--hvy-table-row-bg-2` | Even table row background |
+| `--hvy-icon-muted` | Muted icon color |
+| `--hvy-shadow` | Small shadow color |
+| `--hvy-shadow-md` | Medium shadow color |
+| `--hvy-shadow-lg` | Large shadow color |
+| `--hvy-overlay` | Modal and sidebar backdrop |
+| `--hvy-danger` | Danger action and error text |
+| `--hvy-warning` | Warning accent |
+| `--hvy-warning-bg` | Warning background |
+| `--hvy-warning-border` | Warning border |
+| `--hvy-warning-text` | Warning text |
+| `--hvy-success` | Success text |
+| `--hvy-success-bg` | Success background |
+| `--hvy-success-border` | Success border |
 
 Alternates (`*-alt`) are intended as fallbacks for cases where the base color would clash with its surroundings.
 

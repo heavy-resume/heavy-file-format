@@ -18,8 +18,12 @@ vi.mock('../src/ai-edit', async (importOriginal) => {
   };
 });
 
-import { requestAiDocumentEditTurn, summarizeDocumentStructure } from '../src/ai-document-edit';
-import { buildDocumentEditFormatInstructions } from '../src/ai-document-edit-instructions';
+import { requestAiDocumentEditTurn, summarizeDocumentStructure, summarizeHeaderStructure } from '../src/ai-document-edit';
+import {
+  buildDocumentEditFormatInstructions,
+  buildEditPathSelectionInstructions,
+  buildHeaderEditFormatInstructions,
+} from '../src/ai-document-edit-instructions';
 import { deserializeDocument, serializeDocument } from '../src/serialization';
 import { initState } from '../src/state';
 import type { ChatMessage, ChatSettings } from '../src/types';
@@ -48,13 +52,14 @@ function seedStateForParsing(): void {
 }
 
 function queueAiToolResponses(...responses: string[]): void {
+  requestProxyCompletionMock.mockResolvedValueOnce('document');
   for (const response of responses) {
     requestProxyCompletionMock.mockResolvedValueOnce(response);
   }
 }
 
 function lastToolResultBeforeCall(callIndex: number): string {
-  return requestProxyCompletionMock.mock.calls[callIndex]?.[0]?.messages.at(-1)?.content ?? '';
+  return requestProxyCompletionMock.mock.calls[callIndex + 1]?.[0]?.messages.at(-1)?.content ?? '';
 }
 
 test('summarizeDocumentStructure produces section and component refs with visible ids and text', () => {
@@ -129,6 +134,12 @@ test('summarizeDocumentStructure shows the exact reduced structure the AI sees',
 });
 
 test('buildDocumentEditFormatInstructions documents the tool protocol', () => {
+  const pathInstructions = buildEditPathSelectionInstructions();
+  expect(pathInstructions).toContain('Choose whether this request should edit the HVY header or the document body.');
+  expect(pathInstructions).toContain('Reply with exactly one word: `document` or `header`.');
+  expect(pathInstructions).toContain('Use `document` for visible content');
+  expect(pathInstructions).toContain('Use `header` for front matter metadata');
+
   const instructions = buildDocumentEditFormatInstructions();
   expect(instructions).toContain(
     'Valid tools are: `grep`, `get_css`, `get_properties`, `set_properties`, `view_component`, `edit_component`, `patch_component`, `create_component`, `remove_component`, `create_section`, `remove_section`, `reorder_section`, `request_structure`, `done`.'
@@ -152,6 +163,57 @@ test('buildDocumentEditFormatInstructions documents the tool protocol', () => {
   expect(instructions).toContain('{"tool":"remove_component","component_ref":"C3","reason":"optional"}');
   expect(instructions).toContain('{"tool":"remove_section","section_ref":"skills","reason":"optional"}');
   expect(instructions).toContain('{"tool":"done","summary":"Short summary of what changed."}');
+
+  const headerInstructions = buildHeaderEditFormatInstructions();
+  expect(headerInstructions).toContain('Valid header tools are: `grep_header`, `view_header`, `patch_header`, `request_header`, `done`.');
+  expect(headerInstructions).toContain('The header is YAML front matter only.');
+  expect(headerInstructions).toContain('component_defs');
+  expect(headerInstructions).toContain('including table colors: `--hvy-table-header`, `--hvy-table-row-bg-1`, and `--hvy-table-row-bg-2`');
+  expect(headerInstructions).toContain('Use `grep_header` to search the YAML header with a regex pattern before viewing or patching a specific reusable definition.');
+  expect(headerInstructions).toContain('{"tool":"grep_header","query":"component_defs|skill-card","flags":"i","before":2,"after":8,"max_count":3,"reason":"optional"}');
+  expect(headerInstructions).toContain('{"tool":"patch_header","edits":[{"op":"replace","start_line":2,"end_line":2,"text":"title: New title"}],"reason":"optional"}');
+});
+
+test('summarizeHeaderStructure shows metadata and reusable definitions', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+title: Resume Example
+reader_max_width: 60rem
+theme:
+  colors:
+    --hvy-bg: "#ffffff"
+component_defs:
+  - name: skill-card
+    baseType: xref-card
+    description: Skill card
+    schema:
+      xrefTitle: Skill
+      xrefTarget: skill-target
+section_defs:
+  - name: profile
+    title: Profile
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+`, '.hvy');
+
+  const summary = summarizeHeaderStructure(document).summary;
+
+  expect(summary).toContain('Header outline and properties');
+  expect(summary).toContain('title: Resume Example');
+  expect(summary).toContain('reader_max_width: 60rem');
+  expect(summary).toContain('theme.colors set: --hvy-bg');
+  expect(summary).toContain('known theme color variables:');
+  expect(summary).toContain('- --hvy-bg (Page Background): #ffffff');
+  expect(summary).toContain('- --hvy-table-header (Table Header Background): (not set; viewer default applies)');
+  expect(summary).toContain('- --hvy-table-row-bg-1 (Odd Table Row Background): (not set; viewer default applies)');
+  expect(summary).toContain('- --hvy-table-row-bg-2 (Even Table Row Background): (not set; viewer default applies)');
+  expect(summary).toContain('name="skill-card" baseType="xref-card" description="Skill card" properties="baseType, description, name, schema"');
+  expect(summary).not.toContain('xrefTitle');
+  expect(summary).not.toContain('skill-target');
+  expect(summary).toContain('name="profile" title="Profile"');
+  expect(summary).toContain('Reusable definition outlines show first-level metadata only.');
 });
 
 test('requestAiDocumentEditTurn can grep the serialized document with context and component ids', async () => {
@@ -297,6 +359,65 @@ hvy_version: 0.1
   expect(document.sections[0]?.blocks[0]?.schema.customCss).toBe('margin: 0; padding: 1rem;');
 });
 
+test('requestAiDocumentEditTurn routes header requests to header tools', async () => {
+  requestProxyCompletionMock
+    .mockResolvedValueOnce('header')
+    .mockResolvedValueOnce('{"tool":"grep_header","query":"skill-card","before":2,"after":4,"max_count":1}')
+    .mockResolvedValueOnce('{"tool":"view_header","start_line":1,"end_line":20}')
+    .mockResolvedValueOnce('{"tool":"patch_header","edits":[{"op":"replace","start_line":2,"end_line":2,"text":"title: New Resume"}]}')
+    .mockResolvedValueOnce('{"tool":"done","summary":"Updated the document title."}');
+
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+title: Old Resume
+component_defs:
+  - name: skill-card
+    baseType: xref-card
+    description: Skill card
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {}-->
+ Existing content
+`, '.hvy');
+  seedStateForDocument(document);
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+
+  const result = await requestAiDocumentEditTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Change the document metadata title to New Resume.',
+  });
+
+  expect(result.error).toBeNull();
+  expect(document.meta.title).toBe('New Resume');
+  expect(document.meta.component_defs).toEqual([
+    {
+      name: 'skill-card',
+      baseType: 'xref-card',
+      description: 'Skill card',
+    },
+  ]);
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('Header outline and properties');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('component_defs:');
+  const headerGrep = requestProxyCompletionMock.mock.calls[2]?.[0]?.messages.at(-1)?.content ?? '';
+  expect(headerGrep).toContain('Tool result for grep_header:');
+  expect(headerGrep).toContain('Header match 1 of 1');
+  expect(headerGrep).toContain('name: skill-card');
+  const headerView = requestProxyCompletionMock.mock.calls[3]?.[0]?.messages.at(-1)?.content ?? '';
+  expect(headerView).toContain('Header YAML with 1-based line numbers:');
+  expect(headerView).toContain('  2 | title: Old Resume');
+  expect(result.messages.at(-1)).toEqual(
+    expect.objectContaining({
+      role: 'assistant',
+      content: 'Updated the document title.',
+    })
+  );
+});
+
 test('requestAiDocumentEditTurn can patch a component after viewing numbered lines', async () => {
   const beforeHvy = `---
 hvy_version: 0.1
@@ -344,6 +465,7 @@ hvy_version: 0.1
 
 test('requestAiDocumentEditTurn can create a component in a section', async () => {
   requestProxyCompletionMock
+    .mockResolvedValueOnce('document')
     .mockResolvedValueOnce('{"tool":"create_component","position":"append-to-section","section_ref":"summary","hvy":"<!--hvy:text {}-->\\n Added content"}')
     .mockResolvedValueOnce('{"tool":"done","summary":"Added a new text component."}');
 
@@ -371,8 +493,8 @@ hvy_version: 0.1
   expect(document.sections[0]?.blocks).toHaveLength(2);
   expect(document.sections[0]?.blocks[1]?.schema.component).toBe('text');
   expect(document.sections[0]?.blocks[1]?.text).toBe('Added content');
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('<!-- section id="summary" title="Summary" location="main" -->');
-  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('Reduced document structure was already provided earlier');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('<!-- section id="summary" title="Summary" location="main" -->');
+  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.context).toContain('Reduced outline context was already provided earlier');
   expect(result.messages.at(-1)).toEqual(
     expect.objectContaining({
       role: 'assistant',
@@ -505,6 +627,7 @@ hvy_version: 0.1
 
 test('requestAiDocumentEditTurn retries invalid multi-tool transcripts without treating them as executed work', async () => {
   requestProxyCompletionMock
+    .mockResolvedValueOnce('document')
     .mockResolvedValueOnce(
       '{"tool":"create_section","position":"append-root","hvy":"<!--hvy: {\\"id\\":\\"imagined\\"}-->\\n#! Imagined"}\n\nThe result of this action was:\nNew section ref: imagined\n\n{"tool":"done","summary":"Imagined work."}'
     )
@@ -533,13 +656,14 @@ hvy_version: 0.1
 
   expect(result.error).toBeNull();
   expect(document.sections.map((section) => section.customId)).toEqual(['summary', 'actual']);
-  const retryMessages = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.map((message: ChatMessage) => message.content).join('\n') ?? '';
+  const retryMessages = requestProxyCompletionMock.mock.calls[2]?.[0]?.messages.map((message: ChatMessage) => message.content).join('\n') ?? '';
   expect(retryMessages).toContain('no tools were executed');
   expect(retryMessages).not.toContain('New section ref: imagined');
 });
 
 test('requestAiDocumentEditTurn can remove a section', async () => {
   requestProxyCompletionMock
+    .mockResolvedValueOnce('document')
     .mockResolvedValueOnce('{"tool":"remove_section","section_ref":"details"}')
     .mockResolvedValueOnce('{"tool":"done","summary":"Removed the extra section."}');
 

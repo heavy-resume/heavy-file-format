@@ -771,6 +771,16 @@ function cleanComponentDefBlock(block: JsonObject): JsonObject {
 }
 
 export function serializeDocument(document: VisualDocument): string {
+  const frontMatter = `---\n${serializeDocumentHeaderYaml(document)}\n---\n`;
+  const body = document.sections
+    .filter((section) => !section.isGhost)
+    .map((section) => serializeSection(section, 1))
+    .join('\n')
+    .trim();
+  return `${frontMatter}\n${body}\n`;
+}
+
+export function serializeDocumentHeaderYaml(document: VisualDocument): string {
   const rawMeta = stripEditorStateFromSerializedValue(document.meta) as JsonObject;
   const serializedMeta: JsonObject = { ...rawMeta };
   if (Array.isArray(serializedMeta.component_defs)) {
@@ -782,13 +792,7 @@ export function serializeDocument(document: VisualDocument): string {
     ...serializedMeta,
     hvy_version: document.meta.hvy_version ?? 0.1,
   };
-  const frontMatter = `---\n${stringifyYaml(headerMeta).trim()}\n---\n`;
-  const body = document.sections
-    .filter((section) => !section.isGhost)
-    .map((section) => serializeSection(section, 1))
-    .join('\n')
-    .trim();
-  return `${frontMatter}\n${body}\n`;
+  return stringifyYaml(headerMeta).trim();
 }
 
 export function serializeBlockFragment(block: VisualBlock): string {

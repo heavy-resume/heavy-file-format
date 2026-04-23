@@ -63,6 +63,16 @@ export interface ReusableSaveModalState {
   draftName: string;
 }
 
+export interface SqliteRowComponentModalState {
+  sectionKey: string;
+  blockId: string;
+  tableName: string;
+  rowId: number;
+  draft: string;
+  error: string | null;
+  readOnly: boolean;
+}
+
 export interface RawEditorDiagnostic {
   severity: 'warning' | 'error';
   message: string;
@@ -113,6 +123,7 @@ export interface AppState {
   future: string[];
   isRestoring: boolean;
   componentMetaModal: { sectionKey: string; blockId: string } | null;
+  sqliteRowComponentModal: SqliteRowComponentModalState | null;
   themeModalOpen: boolean;
   gridAddComponentByBlock: Record<string, string>;
   expandableEditorPanels: Record<string, { stubOpen: boolean; expandedOpen: boolean }>;

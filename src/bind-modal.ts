@@ -4,6 +4,7 @@ import { closeModal } from './navigation';
 import { saveReusableFromModal } from './reusable';
 import { findBlockByIds } from './block-ops';
 import { recordHistory } from './history';
+import { setSqliteRowComponent } from './plugin-sqlite';
 
 export function bindModal(app: HTMLElement): void {
   const modalRoot = app.querySelector<HTMLDivElement>('#modalRoot');
@@ -33,6 +34,44 @@ export function bindModal(app: HTMLElement): void {
         recordHistory,
         closeModal,
       });
+      return;
+    }
+
+    const saveSqliteRowComponentBtn = target.closest<HTMLElement>('[data-modal-action="sqlite-row-component-save"]');
+    if (saveSqliteRowComponentBtn && state.sqliteRowComponentModal) {
+      const modal = state.sqliteRowComponentModal;
+      recordHistory(`sqlite-row-component:${modal.tableName}:${modal.rowId}`);
+      void setSqliteRowComponent(modal.tableName, modal.rowId, modal.draft)
+        .then(() => {
+          closeModal();
+          getRenderApp()();
+        })
+        .catch((error) => {
+          state.sqliteRowComponentModal = {
+            ...modal,
+            error: error instanceof Error ? error.message : 'Failed to save attached component.',
+          };
+          getRenderApp()();
+        });
+      return;
+    }
+
+    const clearSqliteRowComponentBtn = target.closest<HTMLElement>('[data-modal-action="sqlite-row-component-clear"]');
+    if (clearSqliteRowComponentBtn && state.sqliteRowComponentModal) {
+      const modal = state.sqliteRowComponentModal;
+      recordHistory(`sqlite-row-component-clear:${modal.tableName}:${modal.rowId}`);
+      void setSqliteRowComponent(modal.tableName, modal.rowId, '')
+        .then(() => {
+          closeModal();
+          getRenderApp()();
+        })
+        .catch((error) => {
+          state.sqliteRowComponentModal = {
+            ...modal,
+            error: error instanceof Error ? error.message : 'Failed to remove attached component.',
+          };
+          getRenderApp()();
+        });
       return;
     }
 
@@ -85,6 +124,20 @@ export function bindModal(app: HTMLElement): void {
   }
 
   const cssInput = modalRoot.querySelector<HTMLTextAreaElement>('#modalCssInput');
+  const sqliteRowComponentInput = modalRoot.querySelector<HTMLTextAreaElement>('#sqliteRowComponentInput');
+  if (sqliteRowComponentInput && state.sqliteRowComponentModal) {
+    sqliteRowComponentInput.addEventListener('input', () => {
+      if (!state.sqliteRowComponentModal) {
+        return;
+      }
+      state.sqliteRowComponentModal = {
+        ...state.sqliteRowComponentModal,
+        draft: sqliteRowComponentInput.value,
+        error: null,
+      };
+    });
+  }
+
   if (!cssInput || !state.modalSectionKey) {
     return;
   }

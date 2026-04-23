@@ -51,6 +51,7 @@ function createHistoryTestState(): AppState {
     future: [],
     isRestoring: false,
     componentMetaModal: null,
+    sqliteRowComponentModal: null,
     themeModalOpen: false,
     gridAddComponentByBlock: {},
     expandableEditorPanels: {},

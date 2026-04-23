@@ -12,9 +12,10 @@ import type { BlockSchema, VisualBlock, VisualSection } from '../editor/types';
 import { renderTagEditor } from '../editor/tag-editor';
 import { colorValueToPickerHex, getResolvedThemeColor, getThemeColorLabel, THEME_COLOR_NAMES } from '../theme';
 import type { ThemeConfig } from '../theme';
-import type { VisualDocument } from '../types';
+import type { SqliteRowComponentModalState, VisualDocument } from '../types';
 import { getDocumentSectionDefaultCss, mergeDocumentCss } from '../document-section-defaults';
 import { areTablesEnabled } from '../reference-config';
+import { parseAttachedComponentBlock } from '../plugin-sqlite';
 
 interface ReaderRenderState {
   documentMeta: VisualDocument['meta'];
@@ -22,6 +23,7 @@ interface ReaderRenderState {
   tempHighlights: Set<string>;
   aiEditTarget: { sectionKey: string | null; blockId: string | null };
   modalSectionKey: string | null;
+  sqliteRowComponentModal: SqliteRowComponentModalState | null;
   reusableSaveModal: {
     kind: 'component' | 'section';
     sectionKey: string;
@@ -356,6 +358,60 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
             </div>
             <p class="muted">Meta is optional and can be used by readers, indexing, and plugins.</p>
             ${deps.renderBlockMetaFields(state.componentMetaModal.sectionKey, block)}
+          </section>
+        </div>
+      `;
+    }
+
+    if (state.sqliteRowComponentModal) {
+      let attachedBlock = null;
+      try {
+        attachedBlock = parseAttachedComponentBlock(state.sqliteRowComponentModal.draft);
+      } catch {
+        attachedBlock = null;
+      }
+      const section = deps.findSectionByKey(state.documentSections, state.sqliteRowComponentModal.sectionKey);
+      if (!section) {
+        return '';
+      }
+      return `
+        <div id="modalRoot" class="modal-root">
+          <div class="modal-overlay" data-modal-action="close-overlay"></div>
+          <section class="modal-panel component-meta-modal">
+            <div class="modal-head">
+              <h3>Row Component: ${deps.escapeHtml(state.sqliteRowComponentModal.tableName)} / ${deps.escapeHtml(String(state.sqliteRowComponentModal.rowId))}</h3>
+              <div class="modal-head-actions">
+                <button type="button" data-modal-action="close">Close</button>
+              </div>
+            </div>
+            <p class="muted">
+              ${state.sqliteRowComponentModal.readOnly
+                ? 'This component is attached to the selected SQLite row.'
+                : 'Edit one complete HVY component fragment attached to this SQLite row.'}
+            </p>
+            ${state.sqliteRowComponentModal.error ? `<div class="raw-editor-error" role="alert">${deps.escapeHtml(state.sqliteRowComponentModal.error)}</div>` : ''}
+            ${
+              state.sqliteRowComponentModal.readOnly
+                ? ''
+                : `<label>
+                    <span>Attached HVY</span>
+                    <textarea id="sqliteRowComponentInput" class="raw-editor-textarea" spellcheck="false">${deps.escapeHtml(state.sqliteRowComponentModal.draft)}</textarea>
+                  </label>
+                  <div class="link-inline-actions reusable-save-actions">
+                    <button type="button" class="ghost" data-modal-action="close">Cancel</button>
+                    <button type="button" class="ghost" data-modal-action="sqlite-row-component-clear">Remove</button>
+                    <button type="button" class="secondary" data-modal-action="sqlite-row-component-save">Save</button>
+                  </div>`
+            }
+            ${
+              attachedBlock
+                ? `<div class="reader-block slot-center" style="${deps.escapeAttr(attachedBlock.schema.customCss)}">
+                    ${renderReaderBlock(section, attachedBlock)}
+                  </div>`
+                : state.sqliteRowComponentModal.readOnly
+                ? '<div class="plugin-placeholder">No attached component found for this row.</div>'
+                : '<div class="plugin-placeholder">Enter one valid HVY component fragment to preview it here.</div>'
+            }
           </section>
         </div>
       `;

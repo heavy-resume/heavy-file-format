@@ -3,10 +3,12 @@ import sqlWasmUrl from 'sql.js/dist/sql-wasm.wasm?url';
 
 import type { ComponentRenderHelpers } from './editor/component-helpers';
 import type { VisualBlock, VisualSection } from './editor/types';
+import { deserializeDocumentWithDiagnostics, wrapHvyFragmentAsDocument } from './serialization';
 import { getRenderApp, state } from './state';
 import type { DocumentTailAttachment, VisualDocument } from './types';
 
 export const SQLITE_TABLE_PLUGIN_ID = 'dev.heavy.sqlite-table';
+const SQLITE_ROW_COMPONENTS_TABLE = '__hvy_row_components';
 
 type SqlJsStatic = Awaited<ReturnType<typeof initSqlJs>>;
 type SqlJsDatabase = InstanceType<SqlJsStatic['Database']>;
@@ -15,6 +17,7 @@ interface SqliteTableSnapshot {
   columns: string[];
   rowIds: number[];
   rows: string[][];
+  rowHasAttachedComponent: boolean[];
 }
 
 interface SqliteRuntime {
@@ -111,7 +114,7 @@ function renderSqlitePluginContent(
     }
     const snapshot = readTableSnapshot(runtime.db, tableName);
     if (readOnly) {
-      return renderReadOnlyTable(snapshot, helpers);
+      return renderReadOnlyTable(sectionKey, block.id, tableName, snapshot, helpers);
     }
     return renderEditableTable(sectionKey, block.id, tableName, snapshot, helpers);
   } catch (error) {
@@ -190,7 +193,18 @@ function renderEditableTable(
                           </td>`
                       )
                       .join('')}
-                    <td class="table-row-utility table-row-remove-cell"></td>
+                    <td class="table-row-utility table-row-remove-cell">
+                      <button
+                        type="button"
+                        class="ghost"
+                        data-action="sqlite-open-row-component-editor"
+                        data-section-key="${helpers.escapeAttr(sectionKey)}"
+                        data-block-id="${helpers.escapeAttr(blockId)}"
+                        data-table-name="${helpers.escapeAttr(tableName)}"
+                        data-rowid="${helpers.escapeAttr(String(snapshot.rowIds[rowIndex] ?? ''))}"
+                        title="${snapshot.rowHasAttachedComponent[rowIndex] ? 'Edit attached component' : 'Attach component'}"
+                      >${snapshot.rowHasAttachedComponent[rowIndex] ? '…*' : '…'}</button>
+                    </td>
                   </tr>`
               )
               .join('')}
@@ -213,7 +227,13 @@ function renderEditableTable(
   `;
 }
 
-function renderReadOnlyTable(snapshot: SqliteTableSnapshot, helpers: ComponentRenderHelpers): string {
+function renderReadOnlyTable(
+  sectionKey: string,
+  blockId: string,
+  tableName: string,
+  snapshot: SqliteTableSnapshot,
+  helpers: ComponentRenderHelpers
+): string {
   return `<table class="reader-table">
     <thead>
       <tr>${snapshot.columns.map((column) => `<th>${helpers.escapeHtml(column)}</th>`).join('')}</tr>
@@ -222,7 +242,13 @@ function renderReadOnlyTable(snapshot: SqliteTableSnapshot, helpers: ComponentRe
       ${snapshot.rows
         .map(
           (row, rowIndex) => `
-            <tr class="table-main-row table-main-row-${rowIndex % 2 === 0 ? 'even' : 'odd'}">
+            <tr
+              class="table-main-row table-main-row-${rowIndex % 2 === 0 ? 'even' : 'odd'}${snapshot.rowHasAttachedComponent[rowIndex] ? ' sqlite-plugin-row-has-component' : ''}"
+              ${snapshot.rowHasAttachedComponent[rowIndex]
+                ? `data-action="sqlite-open-row-component-view" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(blockId)}" data-table-name="${helpers.escapeAttr(tableName)}" data-rowid="${helpers.escapeAttr(String(snapshot.rowIds[rowIndex] ?? ''))}"`
+                : ''
+              }
+            >
               ${row
                 .map((cell) => {
                   const value = helpers.escapeHtml(cell);
@@ -271,6 +297,56 @@ export async function updateSqlitePluginCell(tableName: string, rowId: number, c
   const db = await getLoadedDatabase();
   db.run(`UPDATE ${quoteIdentifier(tableName)} SET ${quoteIdentifier(columnName)} = ? WHERE rowid = ?`, [value, rowId]);
   await persistRuntimeDatabase();
+}
+
+export async function getSqliteRowComponent(tableName: string, rowId: number): Promise<string | null> {
+  const db = await getLoadedDatabase();
+  ensureRowComponentsTableExists(db);
+  const statement = db.prepare(
+    `SELECT hvy FROM ${quoteIdentifier(SQLITE_ROW_COMPONENTS_TABLE)} WHERE table_name = ? AND row_id = ?`
+  );
+
+  try {
+    statement.bind([tableName, rowId]);
+    if (!statement.step()) {
+      return null;
+    }
+    const row = statement.getAsObject() as Record<string, unknown>;
+    return typeof row.hvy === 'string' ? row.hvy : null;
+  } finally {
+    statement.free();
+  }
+}
+
+export async function setSqliteRowComponent(tableName: string, rowId: number, hvy: string): Promise<void> {
+  const db = await getLoadedDatabase();
+  ensureRowComponentsTableExists(db);
+  const trimmed = hvy.trim();
+  if (trimmed.length === 0) {
+    db.run(`DELETE FROM ${quoteIdentifier(SQLITE_ROW_COMPONENTS_TABLE)} WHERE table_name = ? AND row_id = ?`, [tableName, rowId]);
+    await persistRuntimeDatabase();
+    return;
+  }
+
+  validateAttachedComponentHvy(trimmed);
+  db.run(
+    `INSERT INTO ${quoteIdentifier(SQLITE_ROW_COMPONENTS_TABLE)} (table_name, row_id, hvy)
+     VALUES (?, ?, ?)
+     ON CONFLICT(table_name, row_id) DO UPDATE SET hvy = excluded.hvy`,
+    [tableName, rowId, trimmed]
+  );
+  await persistRuntimeDatabase();
+}
+
+export function parseAttachedComponentBlock(hvy: string): VisualBlock | null {
+  const trimmed = hvy.trim();
+  if (trimmed.length === 0) {
+    return null;
+  }
+
+  validateAttachedComponentHvy(trimmed);
+  const parsed = deserializeDocumentWithDiagnostics(wrapHvyFragmentAsDocument(trimmed), '.hvy');
+  return parsed.document.sections[0]?.blocks[0] ?? null;
 }
 
 function ensureSqliteRuntime(): void {
@@ -404,6 +480,7 @@ function readTableSnapshot(db: SqlJsDatabase, tableName: string): SqliteTableSna
   const statement = db.prepare(`SELECT rowid AS "__hvy_rowid__", * FROM ${quoteIdentifier(tableName)}`);
   const rowIds: number[] = [];
   const rows: string[][] = [];
+  const rowComponentIds = getRowComponentIdSet(db, tableName);
 
   try {
     while (statement.step()) {
@@ -419,6 +496,7 @@ function readTableSnapshot(db: SqlJsDatabase, tableName: string): SqliteTableSna
     columns,
     rowIds,
     rows,
+    rowHasAttachedComponent: rowIds.map((rowId) => rowComponentIds.has(rowId)),
   };
 }
 
@@ -436,6 +514,37 @@ function ensureTableExists(db: SqlJsDatabase, tableName: string): boolean {
   const columns = getDefaultColumnsForTable(tableName);
   db.run(`CREATE TABLE ${quoteIdentifier(tableName)} (${columns.map((column) => `${quoteIdentifier(column)} TEXT`).join(', ')})`);
   return true;
+}
+
+function ensureRowComponentsTableExists(db: SqlJsDatabase): void {
+  db.run(
+    `CREATE TABLE IF NOT EXISTS ${quoteIdentifier(SQLITE_ROW_COMPONENTS_TABLE)} (
+      table_name TEXT NOT NULL,
+      row_id INTEGER NOT NULL,
+      hvy TEXT NOT NULL,
+      PRIMARY KEY (table_name, row_id)
+    )`
+  );
+}
+
+function getRowComponentIdSet(db: SqlJsDatabase, tableName: string): Set<number> {
+  ensureRowComponentsTableExists(db);
+  const statement = db.prepare(
+    `SELECT row_id FROM ${quoteIdentifier(SQLITE_ROW_COMPONENTS_TABLE)} WHERE table_name = ?`
+  );
+  const ids = new Set<number>();
+
+  try {
+    statement.bind([tableName]);
+    while (statement.step()) {
+      const row = statement.getAsObject() as Record<string, unknown>;
+      ids.add(Number(row.row_id ?? 0));
+    }
+  } finally {
+    statement.free();
+  }
+
+  return ids;
 }
 
 function tableExists(db: SqlJsDatabase, tableName: string): boolean {
@@ -472,4 +581,21 @@ function stringifySqliteValue(value: unknown): string {
     return '[blob]';
   }
   return String(value);
+}
+
+function validateAttachedComponentHvy(hvy: string): void {
+  const parsed = deserializeDocumentWithDiagnostics(wrapHvyFragmentAsDocument(hvy), '.hvy');
+  const errors = parsed.diagnostics.filter((diagnostic) => diagnostic.severity === 'error');
+  if (errors.length > 0) {
+    throw new Error(errors.map((diagnostic) => diagnostic.message).join(' '));
+  }
+
+  if (parsed.document.sections.length !== 1) {
+    throw new Error('Attached row HVY must contain exactly one section wrapper after parsing.');
+  }
+
+  const section = parsed.document.sections[0];
+  if (!section || section.children.length > 0 || section.blocks.length !== 1) {
+    throw new Error('Attached row HVY must contain exactly one HVY component fragment.');
+  }
 }

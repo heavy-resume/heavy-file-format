@@ -52,7 +52,7 @@ import { appendUserChatMessage, requestChatTurn, requestDocumentEditChatTurn } f
 import type { RawEditorDiagnostic } from './types';
 import { requestAiComponentEdit } from './ai-edit';
 import { areTablesEnabled } from './reference-config';
-import { addSqlitePluginColumn, addSqlitePluginRow, renameSqlitePluginColumn, updateSqlitePluginCell } from './plugin-sqlite';
+import { addSqlitePluginColumn, addSqlitePluginRow, getSqliteRowComponent, renameSqlitePluginColumn, updateSqlitePluginCell } from './plugin-sqlite';
 
 let lastBoundChatMessageCount = -1;
 
@@ -1301,6 +1301,34 @@ export function bindUi(app: HTMLElement): void {
         })
         .catch((error) => {
           console.error('[hvy:sqlite-plugin] add column failed', error);
+        });
+      return;
+    }
+
+    if (action === 'sqlite-open-row-component-editor' || action === 'sqlite-open-row-component-view') {
+      const targetSectionKey = sectionKey ?? '';
+      const targetBlockId = blockId ?? '';
+      const tableName = actionButton.dataset.tableName ?? '';
+      const rowId = Number.parseInt(actionButton.dataset.rowid ?? '', 10);
+      if (tableName.length === 0 || Number.isNaN(rowId) || targetBlockId.length === 0 || targetSectionKey.length === 0) {
+        return;
+      }
+
+      void getSqliteRowComponent(tableName, rowId)
+        .then((fragment) => {
+          state.sqliteRowComponentModal = {
+            sectionKey: targetSectionKey,
+            blockId: targetBlockId,
+            tableName,
+            rowId,
+            draft: fragment ?? '<!--hvy:text {}-->\n Add row details',
+            error: null,
+            readOnly: action === 'sqlite-open-row-component-view',
+          };
+          getRenderApp()();
+        })
+        .catch((error) => {
+          console.error('[hvy:sqlite-plugin] load row component failed', error);
         });
       return;
     }

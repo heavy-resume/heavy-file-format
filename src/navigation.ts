@@ -208,6 +208,7 @@ function expandBlockPathInList(blocks: VisualBlock[], schemaId: string): { found
 export function closeModal(): void {
   state.modalSectionKey = null;
   state.componentMetaModal = null;
+  state.sqliteRowComponentModal = null;
   state.reusableSaveModal = null;
   state.themeModalOpen = false;
 }
@@ -218,6 +219,9 @@ export function closeModalIfTarget(sectionKey: string): void {
   }
   if (state.componentMetaModal?.sectionKey === sectionKey) {
     state.componentMetaModal = null;
+  }
+  if (state.sqliteRowComponentModal?.sectionKey === sectionKey) {
+    state.sqliteRowComponentModal = null;
   }
   if (state.reusableSaveModal?.sectionKey === sectionKey) {
     state.reusableSaveModal = null;
@@ -231,6 +235,7 @@ export function resetTransientUiState(): void {
   state.modalSectionKey = null;
   state.reusableSaveModal = null;
   state.componentMetaModal = null;
+  state.sqliteRowComponentModal = null;
   state.themeModalOpen = false;
   state.tempHighlights = new Set<string>();
   state.addComponentBySection = {};

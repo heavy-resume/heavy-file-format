@@ -78,6 +78,7 @@ function createInitialState(): AppState {
     future: [],
     isRestoring: false,
     componentMetaModal: null,
+    sqliteRowComponentModal: null,
     themeModalOpen: false,
     gridAddComponentByBlock: {},
     expandableEditorPanels: {},
@@ -223,6 +224,9 @@ readerRenderer = createReaderRenderer(
     },
     get modalSectionKey() {
       return state.modalSectionKey;
+    },
+    get sqliteRowComponentModal() {
+      return state.sqliteRowComponentModal;
     },
     get reusableSaveModal() {
       return state.reusableSaveModal;

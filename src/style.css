@@ -1700,6 +1700,14 @@ button.tiny {
   text-align: center;
 }
 
+.sqlite-plugin-row-has-component {
+  cursor: pointer;
+}
+
+.sqlite-plugin-row-has-component:hover td {
+  background: color-mix(in srgb, var(--hvy-accent) 8%, white);
+}
+
 .table-editor {
   display: grid;
   gap: 0.6rem;

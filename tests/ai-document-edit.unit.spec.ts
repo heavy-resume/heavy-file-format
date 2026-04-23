@@ -18,10 +18,11 @@ vi.mock('../src/ai-edit', async (importOriginal) => {
   };
 });
 
-import { buildDocumentEditFormatInstructions, requestAiDocumentEditTurn, summarizeDocumentStructure } from '../src/ai-document-edit';
+import { requestAiDocumentEditTurn, summarizeDocumentStructure } from '../src/ai-document-edit';
+import { buildDocumentEditFormatInstructions } from '../src/ai-document-edit-instructions';
 import { deserializeDocument, serializeDocument } from '../src/serialization';
 import { initState } from '../src/state';
-import type { ChatSettings } from '../src/types';
+import type { ChatMessage, ChatSettings } from '../src/types';
 
 beforeEach(() => {
   requestProxyCompletionMock.mockReset();
@@ -137,10 +138,14 @@ test('buildDocumentEditFormatInstructions documents the tool protocol', () => {
   expect(instructions).toContain('Use `grep` to search the whole serialized document with a regex pattern.');
   expect(instructions).toContain('alternation like `Python|TypeScript`');
   expect(instructions).toContain('defaults to lines 1-200');
+  expect(instructions).toContain('Use `create_section.hvy` to add one complete serialized HVY section');
+  expect(instructions).toContain('new_position_index_from_0');
   expect(instructions).toContain('{"tool":"grep","query":"Python|TypeScript","flags":"i","before":2,"after":2,"max_count":3,"reason":"optional"}');
   expect(instructions).toContain('{"tool":"grep","query":"/Python|TypeScript/i","before":2,"after":2,"max_count":3,"reason":"optional"}');
   expect(instructions).toContain('{"tool":"patch_component","component_ref":"C3","edits":[{"op":"replace","start_line":2,"end_line":2,"text":" New content"}],"reason":"optional"}');
   expect(instructions).toContain('{"tool":"create_component","position":"append-to-section","section_ref":"skills","hvy":"<!--hvy:text {}-->\\n New content","reason":"optional"}');
+  expect(instructions).toContain('{"tool":"create_section","position":"append-root","hvy":"<!--hvy: {\\"id\\":\\"new-section\\"}-->\\n#! New section');
+  expect(instructions).toContain('{"tool":"reorder_section","section_ref":"history","new_position_index_from_0":0,"reason":"optional"}');
   expect(instructions).toContain('{"tool":"remove_component","component_ref":"C3","reason":"optional"}');
   expect(instructions).toContain('{"tool":"remove_section","section_ref":"skills","reason":"optional"}');
   expect(instructions).toContain('{"tool":"done","summary":"Short summary of what changed."}');
@@ -302,6 +307,163 @@ hvy_version: 0.1
       content: 'Added a new text component.',
     })
   );
+});
+
+test('requestAiDocumentEditTurn can create a full serialized section with nested content in one tool call', async () => {
+  queueAiToolResponses(
+    '{"tool":"create_section","position":"after","target_section_ref":"education","hvy":"<!--hvy: {\\"id\\":\\"patents\\"}-->\\n#! Patents\\n\\n <!--hvy:text {}-->\\n  # Patents\\n\\n <!--hvy:component-list {\\"componentListComponent\\":\\"patent-record\\"}-->\\n\\n  <!--hvy:component-list:0 {}-->\\n\\n   <!--hvy:container {\\"id\\":\\"patent-placeholder\\"}-->\\n\\n    <!--hvy:container:0 {}-->\\n\\n     <!--hvy:text {\\"placeholder\\":\\"Patent title\\"}-->\\n      Patent title\\n\\n    <!--hvy:container:1 {}-->\\n\\n     <!--hvy:text {\\"placeholder\\":\\"Patent number, status, and date\\"}-->\\n      Patent number / status / date"}',
+    '{"tool":"done","summary":"Added Patents section."}'
+  );
+
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {}-->
+ Existing content
+
+<!--hvy: {"id":"education"}-->
+#! Education
+
+<!--hvy:text {}-->
+ Existing education
+`, '.hvy');
+  seedStateForDocument(document);
+  const settings: ChatSettings = { provider: 'anthropic', model: 'claude-sonnet-4-6' };
+
+  const result = await requestAiDocumentEditTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Add a Patents section with a placeholder patent scaffold.',
+  });
+
+  expect(result.error).toBeNull();
+  expect(document.sections.map((section) => section.title)).toEqual(['Summary', 'Education', 'Patents']);
+  const patents = document.sections[2];
+  expect(patents?.customId).toBe('patents');
+  expect(patents?.blocks).toHaveLength(2);
+  expect(patents?.blocks[1]?.schema.component).toBe('component-list');
+  const patentRecord = patents?.blocks[1]?.schema.componentListBlocks[0];
+  expect(patentRecord?.schema.component).toBe('container');
+  expect(patentRecord?.schema.id).toBe('patent-placeholder');
+  expect(patentRecord?.schema.containerBlocks.map((block) => block.text)).toEqual(['Patent title', 'Patent number / status / date']);
+});
+
+test('requestAiDocumentEditTurn can create a root section at a zero-based index', async () => {
+  queueAiToolResponses(
+    '{"tool":"create_section","position":"append-root","new_position_index_from_0":1,"hvy":"<!--hvy: {\\"id\\":\\"patents\\"}-->\\n#! Patents\\n\\n <!--hvy:text {}-->\\n  Placeholder patent"}',
+    '{"tool":"done","summary":"Inserted Patents section."}'
+  );
+
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {}-->
+ Existing summary
+
+<!--hvy: {"id":"education"}-->
+#! Education
+
+<!--hvy:text {}-->
+ Existing education
+`, '.hvy');
+  seedStateForDocument(document);
+  const settings: ChatSettings = { provider: 'anthropic', model: 'claude-sonnet-4-6' };
+
+  const result = await requestAiDocumentEditTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Add Patents between Summary and Education.',
+  });
+
+  expect(result.error).toBeNull();
+  expect(document.sections.map((section) => section.customId)).toEqual(['summary', 'patents', 'education']);
+});
+
+test('requestAiDocumentEditTurn can reorder a section to a zero-based sibling index', async () => {
+  queueAiToolResponses(
+    '{"tool":"reorder_section","section_ref":"education","new_position_index_from_0":0}',
+    '{"tool":"done","summary":"Moved Education first."}'
+  );
+
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {}-->
+ Existing summary
+
+<!--hvy: {"id":"projects"}-->
+#! Projects
+
+<!--hvy:text {}-->
+ Existing projects
+
+<!--hvy: {"id":"education"}-->
+#! Education
+
+<!--hvy:text {}-->
+ Existing education
+`, '.hvy');
+  seedStateForDocument(document);
+  const settings: ChatSettings = { provider: 'anthropic', model: 'claude-sonnet-4-6' };
+
+  const result = await requestAiDocumentEditTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Move Education to the first section.',
+  });
+
+  expect(result.error).toBeNull();
+  expect(document.sections.map((section) => section.customId)).toEqual(['education', 'summary', 'projects']);
+});
+
+test('requestAiDocumentEditTurn retries invalid multi-tool transcripts without treating them as executed work', async () => {
+  requestProxyCompletionMock
+    .mockResolvedValueOnce(
+      '{"tool":"create_section","position":"append-root","hvy":"<!--hvy: {\\"id\\":\\"imagined\\"}-->\\n#! Imagined"}\n\nThe result of this action was:\nNew section ref: imagined\n\n{"tool":"done","summary":"Imagined work."}'
+    )
+    .mockResolvedValueOnce('{"tool":"create_section","position":"append-root","hvy":"<!--hvy: {\\"id\\":\\"actual\\"}-->\\n#! Actual\\n\\n <!--hvy:text {}-->\\n  Real content"}')
+    .mockResolvedValueOnce('{"tool":"done","summary":"Added the actual section."}');
+
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {}-->
+ Existing content
+`, '.hvy');
+  seedStateForDocument(document);
+  const settings: ChatSettings = { provider: 'anthropic', model: 'claude-sonnet-4-6' };
+
+  const result = await requestAiDocumentEditTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Add a section.',
+  });
+
+  expect(result.error).toBeNull();
+  expect(document.sections.map((section) => section.customId)).toEqual(['summary', 'actual']);
+  const retryMessages = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.map((message: ChatMessage) => message.content).join('\n') ?? '';
+  expect(retryMessages).toContain('no tools were executed');
+  expect(retryMessages).not.toContain('New section ref: imagined');
 });
 
 test('requestAiDocumentEditTurn can remove a section', async () => {

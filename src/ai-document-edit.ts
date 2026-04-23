@@ -1,12 +1,25 @@
 import { requestProxyCompletion } from './chat';
 import { parseAiBlockEditResponse, requestAiComponentEdit } from './ai-edit';
 import { createEmptySection } from './document-factory';
-import { serializeBlockFragment, serializeDocument } from './serialization';
-import { findBlockContainerById, findSectionByKey, findSectionContainer, getSectionId, moveSectionRelative, visitBlocks } from './section-ops';
+import { deserializeDocumentWithDiagnostics, serializeBlockFragment, serializeDocument } from './serialization';
+import {
+  findBlockContainerById,
+  findSectionByKey,
+  findSectionContainer,
+  getSectionId,
+  moveSectionRelative,
+  moveSectionToSiblingIndex,
+  visitBlocks,
+} from './section-ops';
 import type { VisualBlock, VisualSection } from './editor/types';
 import type { ChatMessage, ChatSettings, VisualDocument } from './types';
+import {
+  buildDocumentEditFormatInstructions,
+  buildInitialDocumentEditPrompt,
+  buildToolResult,
+  DOCUMENT_EDIT_MAX_TOOL_STEPS,
+} from './ai-document-edit-instructions';
 
-const MAX_DOCUMENT_EDIT_ITERATIONS = 6;
 const MAX_SECTION_PREVIEW_LINES = 10;
 const MAX_TEXT_PREVIEW_LENGTH = 72;
 // Two block levels under a section yields three visible levels overall:
@@ -71,7 +84,9 @@ type DocumentEditToolRequest =
   | {
       tool: 'create_section';
       title?: string;
+      hvy?: string;
       position: 'append-root' | 'append-child' | 'before' | 'after';
+      new_position_index_from_0?: number;
       target_section_ref?: string;
       parent_section_ref?: string;
       reason?: string;
@@ -79,8 +94,9 @@ type DocumentEditToolRequest =
   | {
       tool: 'reorder_section';
       section_ref: string;
-      target_section_ref: string;
-      position: 'before' | 'after';
+      target_section_ref?: string;
+      position?: 'before' | 'after';
+      new_position_index_from_0?: number;
       reason?: string;
     };
 
@@ -165,7 +181,7 @@ async function runDocumentEditLoop(params: {
     },
   ];
 
-  for (let iteration = 0; iteration < MAX_DOCUMENT_EDIT_ITERATIONS; iteration += 1) {
+  for (let iteration = 0; iteration < DOCUMENT_EDIT_MAX_TOOL_STEPS; iteration += 1) {
     const response = await requestProxyCompletion({
       settings: params.settings,
       messages: conversation,
@@ -179,16 +195,11 @@ async function runDocumentEditLoop(params: {
     if (parsed.ok === false) {
       const invalidMessage = parsed.message;
       conversation = [
-        ...conversation,
-        {
-          id: crypto.randomUUID(),
-          role: 'assistant',
-          content: response,
-        },
+        ...conversation.filter((message) => message.role !== 'assistant' || !message.content.includes('The result of this action was:')),
         {
           id: crypto.randomUUID(),
           role: 'user',
-          content: `The previous response was invalid. ${invalidMessage}`,
+          content: `The previous response was invalid and no tools were executed. Ignore any tool results or summaries it claimed. ${invalidMessage}`,
         },
       ];
       continue;
@@ -263,7 +274,7 @@ async function runDocumentEditLoop(params: {
   }
 
   return {
-    summary: `Stopped after ${MAX_DOCUMENT_EDIT_ITERATIONS} steps. The AI can continue if you send another request.`,
+    summary: `Stopped after ${DOCUMENT_EDIT_MAX_TOOL_STEPS} steps. The AI can continue if you send another request.`,
   };
 }
 
@@ -593,14 +604,14 @@ function executeCreateSectionTool(
   document: VisualDocument,
   onMutation?: (group?: string) => void
 ): string {
-  const title = request.title?.trim() || 'Untitled Section';
-  const newSection = createEmptySection(resolveNewSectionLevel(request, snapshot, document), '', false);
-  newSection.title = title;
+  const targetLevel = resolveNewSectionLevel(request, snapshot, document);
+  const newSection = buildCreatedSection(request, targetLevel);
+  const title = newSection.title;
 
   if (request.position === 'append-root') {
     onMutation?.('ai-edit:section');
-    document.sections.push(newSection);
-    return `Created root section "${title}".`;
+    insertSectionAtOptionalIndex(document.sections, newSection, request.new_position_index_from_0, 'root sections');
+    return `Created root section "${title}" (${getSectionId(newSection)}).`;
   }
 
   if (request.position === 'append-child') {
@@ -614,8 +625,8 @@ function executeCreateSectionTool(
       throw new Error(`Unknown parent section ref "${parentRef}".`);
     }
     onMutation?.('ai-edit:section');
-    parent.children.push(newSection);
-    return `Created subsection "${title}" inside "${parent.title}".`;
+    insertSectionAtOptionalIndex(parent.children, newSection, request.new_position_index_from_0, `children of "${parent.title}"`);
+    return `Created subsection "${title}" (${getSectionId(newSection)}) inside "${parent.title}".`;
   }
 
   const targetRef = request.target_section_ref?.trim();
@@ -635,7 +646,55 @@ function executeCreateSectionTool(
   onMutation?.('ai-edit:section');
   const insertIndex = request.position === 'before' ? targetLocation.index : targetLocation.index + 1;
   targetLocation.container.splice(insertIndex, 0, newSection);
-  return `Created section "${title}" ${request.position} "${targetSection.title}".`;
+  return `Created section "${title}" (${getSectionId(newSection)}) ${request.position} "${targetSection.title}".`;
+}
+
+function insertSectionAtOptionalIndex(container: VisualSection[], section: VisualSection, index: number | undefined, label: string): void {
+  if (index === undefined) {
+    container.push(section);
+    return;
+  }
+  if (index < 0 || index > container.length) {
+    throw new Error(`new_position_index_from_0 ${index} is out of bounds for ${label} with ${container.length} existing section(s).`);
+  }
+  container.splice(index, 0, section);
+}
+
+function buildCreatedSection(request: Extract<DocumentEditToolRequest, { tool: 'create_section' }>, targetLevel: number): VisualSection {
+  const hvy = request.hvy?.trim();
+  if (!hvy) {
+    const title = request.title?.trim() || 'Untitled Section';
+    const section = createEmptySection(targetLevel, '', false);
+    section.title = title;
+    return section;
+  }
+
+  const parsed = deserializeDocumentWithDiagnostics(`${hvy}\n`, '.hvy');
+  const errors = parsed.diagnostics.filter((diagnostic) => diagnostic.severity === 'error');
+  if (errors.length > 0) {
+    throw new Error(`create_section.hvy must be a valid HVY section. ${errors.map((diagnostic) => diagnostic.message).join(' ')}`);
+  }
+  if (parsed.document.sections.length !== 1) {
+    throw new Error('create_section.hvy must contain exactly one top-level HVY section.');
+  }
+
+  const section = parsed.document.sections[0]!;
+  adjustSectionLevel(section, targetLevel);
+  return section;
+}
+
+function adjustSectionLevel(section: VisualSection, targetLevel: number): void {
+  const delta = targetLevel - section.level;
+  visitSectionTree(section, (candidate) => {
+    candidate.level = Math.min(Math.max(candidate.level + delta, 1), 6);
+  });
+}
+
+function visitSectionTree(section: VisualSection, visitor: (section: VisualSection) => void): void {
+  visitor(section);
+  for (const child of section.children) {
+    visitSectionTree(child, visitor);
+  }
 }
 
 function executeReorderSectionTool(
@@ -645,19 +704,32 @@ function executeReorderSectionTool(
   onMutation?: (group?: string) => void
 ): string {
   const sectionEntry = snapshot.sectionRefs.get(request.section_ref);
-  const targetEntry = snapshot.sectionRefs.get(request.target_section_ref);
   if (!sectionEntry) {
     throw new Error(`Unknown section ref "${request.section_ref}".`);
   }
-  if (!targetEntry) {
-    throw new Error(`Unknown target section ref "${request.target_section_ref}".`);
+
+  if (request.new_position_index_from_0 !== undefined) {
+    const moved = moveSectionToSiblingIndex(document.sections, sectionEntry.key, request.new_position_index_from_0);
+    if (!moved) {
+      throw new Error(`Could not move section "${request.section_ref}" to sibling index ${request.new_position_index_from_0}.`);
+    }
+    onMutation?.('ai-edit:section-order');
+    return `Moved section "${sectionEntry.title}" to sibling index ${request.new_position_index_from_0}.`;
   }
 
-  onMutation?.('ai-edit:section-order');
+  const targetRef = request.target_section_ref?.trim();
+  const targetEntry = targetRef ? snapshot.sectionRefs.get(targetRef) : null;
+  if (!targetEntry) {
+    throw new Error('reorder_section requires target_section_ref for before/after moves.');
+  }
+  if (!request.position) {
+    throw new Error('reorder_section requires position for target_section_ref moves.');
+  }
   const moved = moveSectionRelative(document.sections, sectionEntry.key, targetEntry.key, request.position);
   if (!moved) {
-    throw new Error(`Could not move section "${request.section_ref}" ${request.position} "${request.target_section_ref}".`);
+    throw new Error(`Could not move section "${request.section_ref}" ${request.position} "${targetRef}".`);
   }
+  onMutation?.('ai-edit:section-order');
   return `Moved section "${sectionEntry.title}" ${request.position} "${targetEntry.title}".`;
 }
 
@@ -681,63 +753,6 @@ function resolveNewSectionLevel(
   }
 
   return 1;
-}
-
-export function buildDocumentEditFormatInstructions(): string {
-  return [
-    'Reply with exactly one JSON object and nothing else.',
-    'Choose one tool at a time.',
-    'Valid tools are: `grep`, `view_component`, `edit_component`, `patch_component`, `create_component`, `remove_component`, `create_section`, `remove_section`, `reorder_section`, `request_structure`, `done`.',
-    'Use real section ids when a section has an id.',
-    'Use component ids when they exist. If a component has no id, use its fallback component ref like `C3`.',
-    'Do not invent ids or refs.',
-    'Use `grep` to search the whole serialized document with a regex pattern. It returns post-wrap line numbers, nearby context lines, and the nearest component id for each match clump.',
-    'For grep regexes, you may use alternation like `Python|TypeScript` and flags like `i` for case-insensitive matches.',
-    'When you need exact HVY for a component before editing it, use `view_component` first. It returns 1-based component line numbers and defaults to lines 1-200.',
-    'Use `edit_component` only for one existing component. It may revise that component in place or fully replace it, but only for that single referenced component.',
-    'Use `patch_component` for small, local changes after you have seen the numbered component lines.',
-    'Use `create_component` to add a fully defined new component near an existing one or at the end of a section.',
-    'Use `remove_component` and `remove_section` when the request requires deletion.',
-    'Use section tools for section-level structural changes.',
-    'When the request is fully satisfied, return `{"tool":"done","summary":"..."}`.',
-    'JSON must use double-quoted keys and string values.',
-    'For `create_component.hvy`, return one complete HVY component fragment as a JSON string value with escaped newlines.',
-    '',
-    'Tool shapes:',
-    '{"tool":"grep","query":"Python|TypeScript","flags":"i","before":2,"after":2,"max_count":3,"reason":"optional"}',
-    '{"tool":"grep","query":"/Python|TypeScript/i","before":2,"after":2,"max_count":3,"reason":"optional"}',
-    '{"tool":"view_component","component_ref":"C3","reason":"optional"}',
-    '{"tool":"view_component","component_ref":"skill-python-card","start_line":1,"end_line":40,"reason":"optional"}',
-    '{"tool":"edit_component","component_ref":"C3","request":"Change the label to Foo","reason":"optional"}',
-    '{"tool":"patch_component","component_ref":"C3","edits":[{"op":"replace","start_line":2,"end_line":2,"text":" New content"}],"reason":"optional"}',
-    '{"tool":"patch_component","component_ref":"C3","edits":[{"op":"insert_after","line":1,"text":"\\n <!--hvy:text {}-->\\n Added line"},{"op":"delete","start_line":4,"end_line":5}],"reason":"optional"}',
-    '{"tool":"create_component","position":"append-to-section","section_ref":"skills","hvy":"<!--hvy:text {}-->\\n New content","reason":"optional"}',
-    '{"tool":"create_component","position":"after","target_component_ref":"C3","hvy":"<!--hvy:xref-card {\\"xrefTitle\\":\\"Heavy Stack\\",\\"xrefDetail\\":\\"Project\\",\\"xrefTarget\\":\\"heavy-stack\\"}-->","reason":"optional"}',
-    '{"tool":"remove_component","component_ref":"C3","reason":"optional"}',
-    '{"tool":"create_section","position":"append-root","title":"New section","reason":"optional"}',
-    '{"tool":"create_section","position":"append-child","parent_section_ref":"skills","title":"Details","reason":"optional"}',
-    '{"tool":"remove_section","section_ref":"skills","reason":"optional"}',
-    '{"tool":"create_section","position":"before","target_section_ref":"skills","title":"Overview","reason":"optional"}',
-    '{"tool":"reorder_section","section_ref":"history","target_section_ref":"skills","position":"after","reason":"optional"}',
-    '{"tool":"request_structure","reason":"optional"}',
-    '{"tool":"done","summary":"Short summary of what changed."}',
-  ].join('\n');
-}
-
-function buildInitialDocumentEditPrompt(request: string): string {
-  return [
-    'Edit the HVY document to satisfy this request:',
-    request,
-    '',
-    'Step 1: examine the reduced document structure provided in context.',
-    'Step 2: request the single best next tool.',
-    'After each tool result, decide the next step or finish.',
-    `You have at most ${MAX_DOCUMENT_EDIT_ITERATIONS} tool steps.`,
-  ].join('\n');
-}
-
-function buildToolResult(tool: string, result: string): string {
-  return [`Tool result for ${tool}:`, result].join('\n\n');
 }
 
 function parseDocumentEditToolRequest(source: string): { ok: true; value: DocumentEditToolRequest } | { ok: false; message: string } {
@@ -862,12 +877,19 @@ function parseDocumentEditToolRequest(source: string): { ok: true; value: Docume
       if (parsed.position !== 'append-root' && parsed.position !== 'append-child' && parsed.position !== 'before' && parsed.position !== 'after') {
         return { ok: false, message: 'create_section.position must be append-root, append-child, before, or after.' };
       }
+      const title = typeof parsed.title === 'string' ? parsed.title : undefined;
+      const hvy = typeof parsed.hvy === 'string' ? parsed.hvy : undefined;
+      if (!hvy && !title) {
+        return { ok: false, message: 'create_section requires hvy or title.' };
+      }
       return {
         ok: true,
         value: {
           tool,
           position: parsed.position,
-          title: typeof parsed.title === 'string' ? parsed.title : undefined,
+          title,
+          hvy,
+          new_position_index_from_0: Number.isInteger(parsed.new_position_index_from_0) ? Number(parsed.new_position_index_from_0) : undefined,
           target_section_ref: typeof parsed.target_section_ref === 'string' ? parsed.target_section_ref : undefined,
           parent_section_ref: typeof parsed.parent_section_ref === 'string' ? parsed.parent_section_ref : undefined,
           reason: typeof parsed.reason === 'string' ? parsed.reason : undefined,
@@ -877,16 +899,17 @@ function parseDocumentEditToolRequest(source: string): { ok: true; value: Docume
     if (
       tool === 'reorder_section' &&
       typeof parsed.section_ref === 'string' &&
-      typeof parsed.target_section_ref === 'string' &&
-      (parsed.position === 'before' || parsed.position === 'after')
+      (Number.isInteger(parsed.new_position_index_from_0) ||
+        (typeof parsed.target_section_ref === 'string' && (parsed.position === 'before' || parsed.position === 'after')))
     ) {
       return {
         ok: true,
         value: {
           tool,
           section_ref: parsed.section_ref,
-          target_section_ref: parsed.target_section_ref,
-          position: parsed.position,
+          target_section_ref: typeof parsed.target_section_ref === 'string' ? parsed.target_section_ref : undefined,
+          position: parsed.position === 'before' || parsed.position === 'after' ? parsed.position : undefined,
+          new_position_index_from_0: Number.isInteger(parsed.new_position_index_from_0) ? Number(parsed.new_position_index_from_0) : undefined,
           reason: typeof parsed.reason === 'string' ? parsed.reason : undefined,
         },
       };

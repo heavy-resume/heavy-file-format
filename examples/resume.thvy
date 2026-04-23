@@ -388,7 +388,7 @@ component_defs:
 
  <!--hvy:text {"css":"margin: 0.5rem 0; margin-top: 1rem;","align":"center","placeholder":"title"}-->
 
-<!--hvy: {"id":"summary","lock":true,"contained":false,"custom_css":"padding: 0 0.35rem;"}-->
+<!--hvy: {"id":"summary","lock":true,"contained":true,"custom_css":"padding: 0 0.35rem;"}-->
 #! Summary
 
  <!--hvy:expandable {"css":"margin: 0.5rem 0;","expandableAlwaysShowStub":true,"expandableExpanded":false,"lock":true}-->

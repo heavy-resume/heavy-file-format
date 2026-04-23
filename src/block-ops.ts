@@ -16,6 +16,10 @@ import { recordHistory } from './history';
 import { getDocumentComponentDefaultCss } from './document-component-defaults';
 
 export function findBlockByIds(sectionKey: string, blockId: string): VisualBlock | null {
+  const sqliteRowComponentBlock = findSqliteRowComponentBlock(sectionKey, blockId);
+  if (sqliteRowComponentBlock) {
+    return sqliteRowComponentBlock;
+  }
   const reusableName = getReusableNameFromSectionKey(sectionKey);
   if (reusableName) {
     const template = getReusableTemplateByName(reusableName);
@@ -26,6 +30,17 @@ export function findBlockByIds(sectionKey: string, blockId: string): VisualBlock
     return null;
   }
   return findBlockInList(section.blocks, blockId);
+}
+
+function findSqliteRowComponentBlock(sectionKey: string, blockId: string): VisualBlock | null {
+  const modal = state.sqliteRowComponentModal;
+  if (!modal || modal.sectionKey !== sectionKey) {
+    return null;
+  }
+  if (!modal.block) {
+    return null;
+  }
+  return modal.block.id === blockId ? modal.block : findBlockInList([modal.block], blockId);
 }
 
 export function findBlockInList(blocks: VisualBlock[], blockId: string): VisualBlock | null {

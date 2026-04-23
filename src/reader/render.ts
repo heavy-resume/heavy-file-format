@@ -15,11 +15,11 @@ import type { ThemeConfig } from '../theme';
 import type { SqliteRowComponentModalState, VisualDocument } from '../types';
 import { getDocumentSectionDefaultCss, mergeDocumentCss } from '../document-section-defaults';
 import { areTablesEnabled } from '../reference-config';
-import { parseAttachedComponentBlock } from '../plugin-sqlite';
 
 interface ReaderRenderState {
   documentMeta: VisualDocument['meta'];
   documentSections: VisualSection[];
+  addComponentBySection: Record<string, string>;
   tempHighlights: Set<string>;
   aiEditTarget: { sectionKey: string | null; blockId: string | null };
   modalSectionKey: string | null;
@@ -48,6 +48,8 @@ interface ReaderRenderDeps {
   ensureExpandableBlocks: (block: VisualBlock) => void;
   ensureGridItems: (schema: BlockSchema) => void;
   getComponentRenderHelpers: () => ComponentRenderHelpers;
+  renderBlockContentEditor: (sectionKey: string, block: VisualBlock) => string;
+  renderComponentOptions: (selected: string) => string;
   renderBlockMetaFields: (sectionKey: string, block: VisualBlock) => string;
 }
 
@@ -364,16 +366,12 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     }
 
     if (state.sqliteRowComponentModal) {
-      let attachedBlock = null;
-      try {
-        attachedBlock = parseAttachedComponentBlock(state.sqliteRowComponentModal.draft);
-      } catch {
-        attachedBlock = null;
-      }
       const section = deps.findSectionByKey(state.documentSections, state.sqliteRowComponentModal.sectionKey);
       if (!section) {
         return '';
       }
+      const attachedBlock = state.sqliteRowComponentModal.block;
+      const addKey = `sqlite-row-component:${state.sqliteRowComponentModal.sectionKey}:${state.sqliteRowComponentModal.rowId}`;
       return `
         <div id="modalRoot" class="modal-root">
           <div class="modal-overlay" data-modal-action="close-overlay"></div>
@@ -387,20 +385,49 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
             <p class="muted">
               ${state.sqliteRowComponentModal.readOnly
                 ? 'This component is attached to the selected SQLite row.'
-                : 'Edit one complete HVY component fragment attached to this SQLite row.'}
+                : 'Edit the attached component with the normal component editor, then save it back into the SQLite row.'}
             </p>
             ${state.sqliteRowComponentModal.error ? `<div class="raw-editor-error" role="alert">${deps.escapeHtml(state.sqliteRowComponentModal.error)}</div>` : ''}
             ${
               state.sqliteRowComponentModal.readOnly
                 ? ''
-                : `<label>
-                    <span>Attached HVY</span>
-                    <textarea id="sqliteRowComponentInput" class="raw-editor-textarea" spellcheck="false">${deps.escapeHtml(state.sqliteRowComponentModal.draft)}</textarea>
+                : attachedBlock
+                ? `<label>
+                    <span>Component</span>
+                    <select
+                      data-section-key="${deps.escapeAttr(state.sqliteRowComponentModal.sectionKey)}"
+                      data-block-id="${deps.escapeAttr(attachedBlock.id)}"
+                      data-field="block-component"
+                    >
+                      ${deps.renderComponentOptions(attachedBlock.schema.component)}
+                    </select>
                   </label>
+                  <div class="editor-block sqlite-row-component-modal-editor">
+                    ${deps.renderBlockContentEditor(state.sqliteRowComponentModal.sectionKey, attachedBlock)}
+                  </div>
                   <div class="link-inline-actions reusable-save-actions">
                     <button type="button" class="ghost" data-modal-action="close">Cancel</button>
                     <button type="button" class="ghost" data-modal-action="sqlite-row-component-clear">Remove</button>
                     <button type="button" class="secondary" data-modal-action="sqlite-row-component-save">Save</button>
+                  </div>`
+                : `<article class="ghost-section-card add-ghost sqlite-row-component-ghost" data-action="sqlite-row-component-add-block" data-section-key="${deps.escapeAttr(
+                    state.sqliteRowComponentModal.sectionKey
+                  )}">
+                    <div class="ghost-plus-big"><span>+</span></div>
+                    <div class="ghost-label">Add Component</div>
+                    <label class="ghost-component-picker">
+                      <select
+                        aria-label="Row component type"
+                        data-field="row-details-new-component-type"
+                        data-row-details-key="${deps.escapeAttr(addKey)}"
+                      >
+                        <option value=""${!(state.addComponentBySection[addKey] ?? '').trim() ? ' selected' : ''}>Select component</option>
+                        ${deps.renderComponentOptions(state.addComponentBySection[addKey] ?? '')}
+                      </select>
+                    </label>
+                  </article>
+                  <div class="link-inline-actions reusable-save-actions">
+                    <button type="button" class="ghost" data-modal-action="close">Cancel</button>
                   </div>`
             }
             ${
@@ -410,7 +437,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
                   </div>`
                 : state.sqliteRowComponentModal.readOnly
                 ? '<div class="plugin-placeholder">No attached component found for this row.</div>'
-                : '<div class="plugin-placeholder">Enter one valid HVY component fragment to preview it here.</div>'
+                : '<div class="plugin-placeholder">Choose a component to attach to this row.</div>'
             }
           </section>
         </div>

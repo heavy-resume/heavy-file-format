@@ -206,6 +206,15 @@ function expandBlockPathInList(blocks: VisualBlock[], schemaId: string): { found
 }
 
 export function closeModal(): void {
+  const sqliteRowComponentModal = state.sqliteRowComponentModal;
+  if (
+    sqliteRowComponentModal
+    && state.activeEditorBlock?.sectionKey === sqliteRowComponentModal.sectionKey
+    && sqliteRowComponentModal.block
+    && findBlockInSectionById(sqliteRowComponentModal.block, state.activeEditorBlock.blockId)
+  ) {
+    state.activeEditorBlock = null;
+  }
   state.modalSectionKey = null;
   state.componentMetaModal = null;
   state.sqliteRowComponentModal = null;
@@ -221,11 +230,24 @@ export function closeModalIfTarget(sectionKey: string): void {
     state.componentMetaModal = null;
   }
   if (state.sqliteRowComponentModal?.sectionKey === sectionKey) {
-    state.sqliteRowComponentModal = null;
+    closeModal();
   }
   if (state.reusableSaveModal?.sectionKey === sectionKey) {
     state.reusableSaveModal = null;
   }
+}
+
+function findBlockInSectionById(block: import('./editor/types').VisualBlock, blockId: string): boolean {
+  if (block.id === blockId) {
+    return true;
+  }
+  return (
+    (block.schema.containerBlocks ?? []).some((child) => findBlockInSectionById(child, blockId))
+    || (block.schema.componentListBlocks ?? []).some((child) => findBlockInSectionById(child, blockId))
+    || (block.schema.gridItems ?? []).some((item) => findBlockInSectionById(item.block, blockId))
+    || (block.schema.expandableStubBlocks?.children ?? []).some((child) => findBlockInSectionById(child, blockId))
+    || (block.schema.expandableContentBlocks?.children ?? []).some((child) => findBlockInSectionById(child, blockId))
+  );
 }
 
 export function resetTransientUiState(): void {

@@ -5,6 +5,7 @@ import { saveReusableFromModal } from './reusable';
 import { findBlockByIds } from './block-ops';
 import { recordHistory } from './history';
 import { setSqliteRowComponent } from './plugin-sqlite';
+import { serializeBlockFragment } from './serialization';
 
 export function bindModal(app: HTMLElement): void {
   const modalRoot = app.querySelector<HTMLDivElement>('#modalRoot');
@@ -40,8 +41,16 @@ export function bindModal(app: HTMLElement): void {
     const saveSqliteRowComponentBtn = target.closest<HTMLElement>('[data-modal-action="sqlite-row-component-save"]');
     if (saveSqliteRowComponentBtn && state.sqliteRowComponentModal) {
       const modal = state.sqliteRowComponentModal;
+      if (!modal.block) {
+        state.sqliteRowComponentModal = {
+          ...modal,
+          error: 'Add a component before saving this row attachment.',
+        };
+        getRenderApp()();
+        return;
+      }
       recordHistory(`sqlite-row-component:${modal.tableName}:${modal.rowId}`);
-      void setSqliteRowComponent(modal.tableName, modal.rowId, modal.draft)
+      void setSqliteRowComponent(modal.tableName, modal.rowId, serializeBlockFragment(modal.block))
         .then(() => {
           closeModal();
           getRenderApp()();
@@ -124,19 +133,6 @@ export function bindModal(app: HTMLElement): void {
   }
 
   const cssInput = modalRoot.querySelector<HTMLTextAreaElement>('#modalCssInput');
-  const sqliteRowComponentInput = modalRoot.querySelector<HTMLTextAreaElement>('#sqliteRowComponentInput');
-  if (sqliteRowComponentInput && state.sqliteRowComponentModal) {
-    sqliteRowComponentInput.addEventListener('input', () => {
-      if (!state.sqliteRowComponentModal) {
-        return;
-      }
-      state.sqliteRowComponentModal = {
-        ...state.sqliteRowComponentModal,
-        draft: sqliteRowComponentInput.value,
-        error: null,
-      };
-    });
-  }
 
   if (!cssInput || !state.modalSectionKey) {
     return;

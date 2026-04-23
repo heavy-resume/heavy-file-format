@@ -213,6 +213,9 @@ readerRenderer = createReaderRenderer(
     get documentSections() {
       return state.document.sections;
     },
+    get addComponentBySection() {
+      return state.addComponentBySection;
+    },
     get tempHighlights() {
       return state.tempHighlights;
     },
@@ -254,6 +257,8 @@ readerRenderer = createReaderRenderer(
     ensureExpandableBlocks,
     ensureGridItems,
     getComponentRenderHelpers: localGetComponentRenderHelpers,
+    renderBlockContentEditor: (sectionKey, block) => editorRenderer.renderBlockContentEditor(sectionKey, block),
+    renderComponentOptions,
     renderBlockMetaFields: (sectionKey, block) => editorRenderer.renderBlockMetaFields(sectionKey, block),
   }
 );

@@ -68,7 +68,7 @@ export interface SqliteRowComponentModalState {
   blockId: string;
   tableName: string;
   rowId: number;
-  draft: string;
+  block: VisualBlock | null;
   error: string | null;
   readOnly: boolean;
 }

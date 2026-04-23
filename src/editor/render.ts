@@ -99,6 +99,7 @@ export interface EditorRenderer {
   renderSidebarEditorSections: (sections: VisualSection[]) => string;
   renderEditorBlock: (sectionKey: string, block: VisualBlock, rootSections?: VisualSection[], parentLocked?: boolean) => string;
   renderPassiveEditorBlock: (sectionKey: string, block: VisualBlock, rootSections?: VisualSection[]) => string;
+  renderBlockContentEditor: (sectionKey: string, block: VisualBlock) => string;
   renderRichToolbar: (
     sectionKey: string,
     blockId: string,
@@ -692,6 +693,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     renderSidebarEditorSections,
     renderEditorBlock: (sectionKey, block, rootSections, parentLocked) => renderEditorBlock(sectionKey, block, rootSections, parentLocked),
     renderPassiveEditorBlock: (sectionKey, block, rootSections) => renderPassiveEditorBlock(sectionKey, block, rootSections ?? []),
+    renderBlockContentEditor: (sectionKey, block) => renderBlockContentEditor(sectionKey, block),
     renderRichToolbar,
     renderMetaPanel,
     renderComponentFragment,

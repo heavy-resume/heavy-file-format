@@ -52,7 +52,14 @@ import { appendUserChatMessage, requestChatTurn, requestDocumentEditChatTurn } f
 import type { RawEditorDiagnostic } from './types';
 import { requestAiComponentEdit } from './ai-edit';
 import { areTablesEnabled } from './reference-config';
-import { addSqlitePluginColumn, addSqlitePluginRow, getSqliteRowComponent, renameSqlitePluginColumn, updateSqlitePluginCell } from './plugin-sqlite';
+import {
+  addSqlitePluginColumn,
+  addSqlitePluginRow,
+  getSqliteRowComponent,
+  parseAttachedComponentBlock,
+  renameSqlitePluginColumn,
+  updateSqlitePluginCell,
+} from './plugin-sqlite';
 
 let lastBoundChatMessageCount = -1;
 
@@ -341,6 +348,10 @@ export function bindUi(app: HTMLElement): void {
     }
 
     if (field === 'row-details-new-component-type' && target instanceof HTMLSelectElement) {
+      const key = target.dataset.rowDetailsKey;
+      if (key) {
+        state.addComponentBySection[key] = target.value;
+      }
       return;
     }
 
@@ -1316,20 +1327,47 @@ export function bindUi(app: HTMLElement): void {
 
       void getSqliteRowComponent(tableName, rowId)
         .then((fragment) => {
-          state.sqliteRowComponentModal = {
+          const modalBlock = fragment ? parseAttachedComponentBlock(fragment) : null;
+          const modalState = {
             sectionKey: targetSectionKey,
             blockId: targetBlockId,
             tableName,
             rowId,
-            draft: fragment ?? '<!--hvy:text {}-->\n Add row details',
+            block: modalBlock,
             error: null,
             readOnly: action === 'sqlite-open-row-component-view',
           };
+          state.sqliteRowComponentModal = modalState;
+          if (!modalState.readOnly && modalBlock) {
+            state.activeEditorBlock = {
+              sectionKey: targetSectionKey,
+              blockId: modalBlock.id,
+            };
+          }
           getRenderApp()();
         })
         .catch((error) => {
           console.error('[hvy:sqlite-plugin] load row component failed', error);
         });
+      return;
+    }
+
+    if (action === 'sqlite-row-component-add-block') {
+      const modal = state.sqliteRowComponentModal;
+      if (!modal || modal.readOnly || modal.block) {
+        return;
+      }
+      recordHistory(`sqlite-row-component-add:${modal.tableName}:${modal.rowId}`);
+      const addKey = `sqlite-row-component:${modal.sectionKey}:${modal.rowId}`;
+      const component = (state.addComponentBySection[addKey] ?? 'text').trim() || 'text';
+      const newBlock = createEmptyBlock(component);
+      state.sqliteRowComponentModal = {
+        ...modal,
+        block: newBlock,
+        error: null,
+      };
+      setActiveEditorBlock(modal.sectionKey, newBlock.id);
+      getRenderApp()();
       return;
     }
 

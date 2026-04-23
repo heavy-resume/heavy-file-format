@@ -166,6 +166,15 @@ editorRenderer = createEditorRenderer(
       return state.document.meta as Record<string, unknown>;
     },
     get showAdvancedEditor() {
+      const rowModal = state.sqliteRowComponentModal;
+      if (rowModal && !rowModal.readOnly) {
+        if (rowModal.mode === 'advanced') {
+          return true;
+        }
+        if (rowModal.mode === 'basic' || rowModal.mode === 'raw') {
+          return false;
+        }
+      }
       return state.showAdvancedEditor;
     },
     get addComponentBySection() {

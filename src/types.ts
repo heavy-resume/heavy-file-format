@@ -72,6 +72,8 @@ export interface SqliteRowComponentModalState {
   error: string | null;
   readOnly: boolean;
   previousActiveEditorBlock: { sectionKey: string; blockId: string } | null;
+  mode: 'basic' | 'advanced' | 'raw';
+  rawDraft: string;
 }
 
 export interface RawEditorDiagnostic {

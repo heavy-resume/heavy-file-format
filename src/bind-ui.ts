@@ -1424,6 +1424,7 @@ export function bindUi(app: HTMLElement): void {
       void getSqliteRowComponent(tableName, rowId)
         .then((fragment) => {
           const modalBlocks = fragment ? parseAttachedComponentBlocks(fragment) : [];
+          const rawDraft = fragment ?? '';
           const modalState = {
             sectionKey: targetSectionKey,
             blockId: targetBlockId,
@@ -1433,6 +1434,8 @@ export function bindUi(app: HTMLElement): void {
             error: null,
             readOnly: action === 'sqlite-open-row-component-view',
             previousActiveEditorBlock: state.activeEditorBlock ? { ...state.activeEditorBlock } : null,
+            mode: state.editorMode,
+            rawDraft,
           };
           state.sqliteRowComponentModal = modalState;
           if (!modalState.readOnly && modalBlocks[0]) {

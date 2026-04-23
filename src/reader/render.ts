@@ -15,6 +15,7 @@ import type { ThemeConfig } from '../theme';
 import type { SqliteRowComponentModalState, VisualDocument } from '../types';
 import { getDocumentSectionDefaultCss, mergeDocumentCss } from '../document-section-defaults';
 import { areTablesEnabled } from '../reference-config';
+import { parseAttachedComponentBlocks } from '../plugin-sqlite';
 
 interface ReaderRenderState {
   documentMeta: VisualDocument['meta'];
@@ -373,6 +374,14 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
         return '';
       }
       const attachedBlocks = rowModal.blocks;
+      let rawPreviewBlocks: VisualBlock[] = [];
+      if (rowModal.mode === 'raw') {
+        try {
+          rawPreviewBlocks = rowModal.rawDraft.trim().length > 0 ? parseAttachedComponentBlocks(rowModal.rawDraft) : [];
+        } catch {
+          rawPreviewBlocks = [];
+        }
+      }
       const addKey = `sqlite-row-component:${rowModal.sectionKey}:${rowModal.rowId}`;
       return `
         <div id="modalRoot" class="modal-root">
@@ -381,6 +390,13 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
             <div class="modal-head">
               <h3>${deps.escapeHtml(rowModal.tableName)} / ${deps.escapeHtml(String(rowModal.rowId))}</h3>
               <div class="modal-head-actions">
+                ${rowModal.readOnly
+                  ? ''
+                  : `<div class="editor-mode-toggle">
+                      <button type="button" class="${rowModal.mode === 'basic' ? 'secondary' : 'ghost'}" data-modal-action="sqlite-row-component-mode" data-modal-mode="basic">Basic</button>
+                      <button type="button" class="${rowModal.mode === 'advanced' ? 'secondary' : 'ghost'}" data-modal-action="sqlite-row-component-mode" data-modal-mode="advanced">Advanced</button>
+                      <button type="button" class="${rowModal.mode === 'raw' ? 'secondary' : 'ghost'}" data-modal-action="sqlite-row-component-mode" data-modal-mode="raw">Raw</button>
+                    </div>`}
                 <button type="button" data-modal-action="close">Close</button>
               </div>
             </div>
@@ -393,6 +409,16 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
             ${
               rowModal.readOnly
                 ? ''
+                : rowModal.mode === 'raw'
+                ? `<label>
+                    <span>Attached HVY</span>
+                    <textarea id="sqliteRowComponentRawInput" class="raw-editor-textarea" spellcheck="false">${deps.escapeHtml(rowModal.rawDraft)}</textarea>
+                  </label>
+                  <div class="link-inline-actions reusable-save-actions">
+                    <button type="button" class="ghost" data-modal-action="close">Cancel</button>
+                    <button type="button" class="ghost" data-modal-action="sqlite-row-component-clear">Remove</button>
+                    <button type="button" class="secondary" data-modal-action="sqlite-row-component-save">Save</button>
+                  </div>`
                 : attachedBlocks.length > 0
                 ? `<div class="sqlite-row-component-modal-stack">
                     ${attachedBlocks.map((block) => deps.renderEditorBlock(rowModal.sectionKey, block)).join('')}
@@ -439,8 +465,8 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
                   </div>`
             }
             ${
-              attachedBlocks.length > 0
-                ? attachedBlocks
+              (rowModal.mode === 'raw' ? rawPreviewBlocks : attachedBlocks).length > 0
+                ? (rowModal.mode === 'raw' ? rawPreviewBlocks : attachedBlocks)
                     .map(
                       (block) => `<div class="reader-block slot-center" style="${deps.escapeAttr(block.schema.customCss)}">
                         ${renderReaderBlock(section, block)}
@@ -449,6 +475,8 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
                     .join('')
                 : rowModal.readOnly
                 ? '<div class="plugin-placeholder">No attached component found for this row.</div>'
+                : rowModal.mode === 'raw'
+                ? '<div class="plugin-placeholder">Enter valid HVY fragments to preview them here.</div>'
                 : ''
             }
           </section>

@@ -45,6 +45,7 @@ export interface AiEditState {
 export interface PaneScrollState {
   editorTop: number;
   editorSidebarTop: number;
+  viewerSidebarTop: number;
   readerTop: number;
   windowTop: number;
 }

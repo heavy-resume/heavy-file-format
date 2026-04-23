@@ -29,6 +29,7 @@ function createHistoryTestState(): AppState {
     paneScroll: {
       editorTop: 0,
       editorSidebarTop: 0,
+      viewerSidebarTop: 0,
       readerTop: 0,
       windowTop: 0,
     },

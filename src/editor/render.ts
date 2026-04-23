@@ -367,9 +367,6 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           <div class="ghost-label">Edit Component List (${deps.escapeHtml(block.schema.componentListComponent || 'item')})</div>
         </div>`;
       }
-      // return `<div class="reader-component-list">${block.schema.componentListBlocks
-      //   .map((innerBlock) => renderPassiveEditorBlock(sectionKey, innerBlock, rootSections))
-      //   .join('')}</div>`;
     }
 
     if (base === 'grid') {

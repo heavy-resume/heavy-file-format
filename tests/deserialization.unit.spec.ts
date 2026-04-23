@@ -38,6 +38,88 @@ hvy_version: 0.1
   expect(block.schema.expandableContentBlocks.children[0]?.text).toBe('Expanded detail');
 });
 
+test('deserializes grid text without preserving structural indentation as code indentation', () => {
+  const input = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"experience"}-->
+#! Experience
+
+ <!--hvy:grid {"gridColumns":2}-->
+
+  <!--hvy:grid:0 {"id":"location"}-->
+
+   <!--hvy:text {}-->
+   Seattle, WA
+
+  <!--hvy:grid:1 {"id":"date-range"}-->
+
+   <!--hvy:text {}-->
+   05/2024 - present
+`;
+
+  const document = deserializeDocument(input, '.hvy');
+  const grid = document.sections[0]?.blocks[0];
+
+  expect(grid?.schema.gridItems[0]?.block.text).toBe('Seattle, WA');
+  expect(grid?.schema.gridItems[1]?.block.text).toBe('05/2024 - present');
+});
+
+test('deserializes fenced code while removing outer structural indentation', () => {
+  const input = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"snippet"}-->
+#! Snippet
+
+ <!--hvy:text {}-->
+  \`\`\`ts
+    const answer = 42;
+  \`\`\`
+`;
+
+  const document = deserializeDocument(input, '.hvy');
+
+  expect(document.sections[0]?.blocks[0]?.text).toBe('```ts\n  const answer = 42;\n```');
+});
+
+test('deserializes reader_max_width from document front matter', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+reader_max_width: 60rem
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {}-->
+ Hello
+`, '.hvy');
+
+  expect(document.meta.reader_max_width).toBe('60rem');
+});
+
+test('deserializes section_defaults from document front matter', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+section_defaults:
+  css: "margin: 0.5rem 0;"
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {}-->
+ Hello
+`, '.hvy');
+
+  expect(document.meta.section_defaults).toEqual({
+    css: 'margin: 0.5rem 0;',
+  });
+});
+
 test('deserializes expandable stub and content css fields', () => {
   const input = `---
 hvy_version: 0.1
@@ -165,35 +247,6 @@ hvy_version: 0.1
   const listBlock = document.sections[0]?.blocks[0];
 
   expect(listBlock.schema.componentListBlocks.map((block) => block.text)).toEqual(['Zero', 'Two', 'Three']);
-});
-
-test('deserializes table detail slots into the matching row details list', () => {
-  const input = `---
-hvy_version: 0.1
----
-
-<!--hvy: {"id":"details-table"}-->
-#! Details Table
-
- <!--hvy:table {"tableColumns":"A, B","tableRows":[{"cells":["r1a","r1b"]},{"cells":["r2a","r2b"]}]}-->
-
-  <!--hvy:table:1:0 {}-->
-
-   <!--hvy:container {}-->
-
-    <!--hvy:container:0 {}-->
-
-     <!--hvy:text {}-->
-      Row two details
-`;
-
-  const document = deserializeDocument(input, '.hvy');
-  const tableBlock = document.sections[0]?.blocks[0];
-
-  expect(tableBlock.schema.component).toBe('table');
-  expect(tableBlock.schema.tableRows[0]?.detailsBlocks ?? []).toHaveLength(0);
-  expect(tableBlock.schema.tableRows[1]?.detailsBlocks ?? []).toHaveLength(1);
-  expect(tableBlock.schema.tableRows[1]?.detailsBlocks[0]?.schema.component).toBe('container');
 });
 
 test('resume education record keeps C/C++ inside the education tools list', async () => {

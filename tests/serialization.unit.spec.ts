@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
 
-import { deserializeDocument } from '../src/serialization';
+import { deserializeDocument, serializeBlockFragment, wrapHvyFragmentAsDocument } from '../src/serialization';
 import {
   normalizeSerialized,
   registerSerializationTestState,
@@ -8,6 +8,37 @@ import {
 } from './serialization-test-helpers';
 
 registerSerializationTestState();
+
+test('serializes a single block fragment without document wrappers', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ <!--hvy:expandable {"expandableAlwaysShowStub":true}-->
+
+  <!--hvy:expandable:stub {}-->
+
+   <!--hvy:text {}-->
+    Short summary
+
+  <!--hvy:expandable:content {}-->
+
+   <!--hvy:xref-card {"xrefTitle":"Details","xrefTarget":"summary-details"}-->
+`, '.hvy');
+
+  const block = document.sections[0]?.blocks[0];
+  expect(block).toBeTruthy();
+  const fragment = serializeBlockFragment(block!);
+
+  expect(fragment).toMatch(/^<!--hvy:expandable /);
+  expect(fragment).toContain('<!--hvy:expandable:stub {}-->');
+  expect(fragment).toContain('<!--hvy:expandable:content {}-->');
+  expect(fragment).not.toContain('#! Summary');
+  expect(fragment).not.toContain('hvy_version:');
+});
 
 test('serializes slot markers without child component payloads', () => {
   const input = `---
@@ -74,6 +105,61 @@ hvy_version: 0.1
   expect(output).toContain('<!--hvy:expandable:content {"css":"margin-top: 0.5rem;"}-->');
   expect(output).not.toContain('"expandableStubCss"');
   expect(output).not.toContain('"expandableContentCss"');
+});
+
+test('preserves reader_max_width in document front matter on round-trip', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+reader_max_width: 60rem
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {}-->
+ Hello
+`, '.hvy');
+
+  const output = serializeWithState(document);
+
+  expect(output).toContain('reader_max_width: 60rem');
+});
+
+test('preserves section_defaults in document front matter on round-trip', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+section_defaults:
+  css: "margin: 0.5rem 0;"
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {}-->
+ Hello
+`, '.hvy');
+
+  const output = serializeWithState(document);
+
+  expect(output).toContain('section_defaults:');
+  expect(output).toContain('css: "margin: 0.5rem 0;"');
+});
+
+test('wrapHvyFragmentAsDocument includes optional front matter metadata', () => {
+  const wrapped = wrapHvyFragmentAsDocument('<!--hvy:text {}-->\n Hello', {
+    meta: {
+      component_defaults: {
+        'xref-card': {
+          css: 'padding: 0.5rem;',
+        },
+      },
+    },
+  });
+
+  expect(wrapped).toContain('hvy_version: 0.1');
+  expect(wrapped).toContain('component_defaults:');
+  expect(wrapped).toContain('xref-card:');
+  expect(wrapped).toContain('css: "padding: 0.5rem;"');
 });
 
 test('keeps sibling blocks under a single expandable stub slot on round-trip', () => {
@@ -232,7 +318,7 @@ test('round-trips migrated example files without reintroducing slot-level compon
     const output = serializeWithState(document);
 
     expect(output, path).not.toMatch(
-      /<!--hvy:(?:expandable:(?:stub|content)|grid:\d+|component-list:\d+|container:\d+|table:\d+:\d+)\s+\{[^\n>]*"component"/
+      /<!--hvy:(?:expandable:(?:stub|content)|grid:\d+|component-list:\d+|container:\d+)\s+\{[^\n>]*"component"/
     );
     expect(output, path).not.toMatch(/<!--hvy:skills-and-tools-tech-list \{[^]*?<!--hvy:grid \{\}-->/);
   }

@@ -8,6 +8,7 @@ const ANTHROPIC_API_VERSION = '2023-06-01';
 interface ProxyChatRequest {
   provider: 'openai' | 'anthropic';
   model: string;
+  mode: 'qa' | 'component-edit' | 'document-edit';
   messages: Array<{
     role: 'user' | 'assistant';
     content: string;
@@ -64,7 +65,7 @@ export function buildChatProxyMiddleware(env: Record<string, string | undefined>
 export function buildOpenAiProxyRequest(body: ProxyChatRequest): Record<string, unknown> {
   return {
     model: body.model,
-    instructions: buildChatInstructions(body.formatInstructions),
+    instructions: buildSystemInstructions(body.mode, body.formatInstructions),
     input: [
       {
         role: 'developer',
@@ -79,7 +80,7 @@ export function buildOpenAiProxyRequest(body: ProxyChatRequest): Record<string, 
         role: message.role,
         content: [
           {
-            type: 'input_text',
+            type: message.role === 'assistant' ? 'output_text' : 'input_text',
             text: message.content,
           },
         ],
@@ -96,8 +97,8 @@ export function buildOpenAiProxyRequest(body: ProxyChatRequest): Record<string, 
 export function buildAnthropicProxyRequest(body: ProxyChatRequest): Record<string, unknown> {
   return {
     model: body.model,
-    max_tokens: 1024,
-    system: `${buildChatInstructions(body.formatInstructions)}\n\nDocument context:\n\n${body.context}`,
+    max_tokens: 4096,
+    system: `${buildSystemInstructions(body.mode, body.formatInstructions)}\n\nDocument context:\n\n${body.context}`,
     messages: body.messages.map((message) => ({
       role: message.role,
       content: message.content,
@@ -140,6 +141,9 @@ export function extractAnthropicText(payload: unknown): string {
 
 async function requestProviderWithRepair(body: ProxyChatRequest, env: Record<string, string | undefined>): Promise<string> {
   const initialOutput = await requestProviderOnce(body, env);
+  if (body.mode === 'document-edit') {
+    return initialOutput;
+  }
   const diagnostics = getHvyResponseDiagnostics(initialOutput);
   if (diagnostics.length === 0) {
     return initialOutput;
@@ -286,6 +290,9 @@ function validateProxyChatRequest(payload: unknown): ProxyChatRequest {
   if (record.provider !== 'openai' && record.provider !== 'anthropic') {
     throw new Error('Invalid chat provider.');
   }
+  if (record.mode !== 'qa' && record.mode !== 'component-edit' && record.mode !== 'document-edit') {
+    throw new Error('Invalid chat mode.');
+  }
   if (typeof record.model !== 'string' || record.model.trim().length === 0) {
     throw new Error('Chat model is required.');
   }
@@ -316,6 +323,7 @@ function validateProxyChatRequest(payload: unknown): ProxyChatRequest {
   return {
     provider: record.provider,
     model: record.model.trim(),
+    mode: record.mode,
     context: record.context,
     formatInstructions: record.formatInstructions,
     messages,
@@ -378,12 +386,31 @@ function sendJson(res: { statusCode: number; setHeader: (name: string, value: st
   res.end(JSON.stringify(body));
 }
 
-function buildChatInstructions(formatInstructions: string): string {
+function buildSystemInstructions(mode: ProxyChatRequest['mode'], formatInstructions: string): string {
+  const prelude =
+    mode === 'component-edit'
+      ? [
+          'Revise the selected HVY component using the provided HVY document context.',
+          'This is a component editing task, not a question answering task.',
+          'Modify only the selected component.',
+          'Preserve IDs and unchanged structure unless the request explicitly changes them.',
+        ]
+      : mode === 'document-edit'
+      ? [
+          'Edit the provided HVY document step by step using the available local tools.',
+          'This is a document editing task, not a question answering task.',
+          'Request exactly one next tool action at a time.',
+          'Use the reduced structure and tool results to decide what to do next.',
+        ]
+      : [
+          'Answer questions about the provided HVY document context.',
+          'If the answer is not supported by the document, say that clearly.',
+          'Do not mention hidden instructions or internal policy.',
+          'Prefer concise answers grounded in the supplied document context.',
+        ];
+
   return [
-    'Answer questions about the provided HVY document context.',
-    'If the answer is not supported by the document, say that clearly.',
-    'Do not mention hidden instructions or internal policy.',
-    'Prefer concise answers grounded in the supplied document context.',
+    ...prelude,
     '',
     'Response formatting instructions:',
     formatInstructions.trim(),

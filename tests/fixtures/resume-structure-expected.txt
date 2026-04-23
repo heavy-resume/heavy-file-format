@@ -1,0 +1,45 @@
+<!-- section id="header" title="Info" location="main" -->
+# Info
+  # Avery Hart <!-- text id="C1" -->
+  [AY-vuh-ree HART] <!-- text id="C2" -->
+  Senior Software Engineer <!-- text id="C3" -->
+<!-- section id="summary" title="Summary" location="main" -->
+# Summary
+  ## Summary Product-minded software engineer focused on developer toolin... <!-- expandable id="C4" -->
+    ... contents hidden ...
+<!-- section id="locations" title="Locations" location="main" -->
+# Locations
+  **Location:** Seattle, WA <!-- text id="C5" -->
+  **Target Location(s):** Remote, Seattle, San Francisco <!-- text id="C6" -->
+<!-- section id="top-skills-tools-technologies" title="Top Skills, Tools, and Technologies" location="main" -->
+# Top Skills, Tools, and Technologies
+  2 cells <!-- grid id="C7" -->
+    ... contents hidden ...
+<!-- section id="skills" title="Skills" location="sidebar" -->
+# Skills
+  # Skills <!-- text id="C8" -->
+  5 items <!-- component-list id="C9" -->
+    ... contents hidden ...
+<!-- section id="tools-technologies" title="Tools & Technologies" location="sidebar" -->
+# Tools & Technologies
+  # Tools & Technologies <!-- text id="C10" -->
+  7 items <!-- component-list id="C11" -->
+    ... contents hidden ...
+<!-- section id="history" title="History" location="main" -->
+# History
+  # History <!-- text id="C12" -->
+  columns: YEAR, ORGANIZATION, TITLE <!-- table id="C13" -->
+  1 items <!-- component-list id="C14" -->
+    ... contents hidden ...
+<!-- section id="projects" title="Projects" location="main" -->
+# Projects
+  # Projects <!-- text id="C15" -->
+  columns: PROJECT, DATE <!-- table id="C16" -->
+  2 items <!-- component-list id="C17" -->
+    ... contents hidden ...
+<!-- section id="education" title="Education" location="main" -->
+# Education
+  # Education <!-- text id="C18" -->
+  columns: DEGREE, INSTITUTION, LOCATION <!-- table id="C19" -->
+  1 items <!-- component-list id="C20" -->
+    ... contents hidden ...

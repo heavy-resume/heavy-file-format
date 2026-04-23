@@ -11,6 +11,7 @@ import {
 const request = {
   provider: 'openai' as const,
   model: 'gpt-5-mini',
+  mode: 'qa' as const,
   context: 'Context body',
   formatInstructions: 'Format as HVY.',
   messages: [
@@ -46,7 +47,7 @@ test('buildOpenAiProxyRequest includes developer context and conversation turns'
         role: 'assistant',
         content: [
           {
-            type: 'input_text',
+            type: 'output_text',
             text: 'A summary.',
           },
         ],
@@ -69,13 +70,57 @@ test('buildAnthropicProxyRequest places context in system prompt and messages in
     })
   ).toEqual({
     model: 'claude-sonnet-4-6',
-    max_tokens: 1024,
+    max_tokens: 4096,
     system: expect.stringMatching(/Response formatting instructions:\nFormat as HVY\./),
     messages: [
       { role: 'user', content: 'What is this?' },
       { role: 'assistant', content: 'A summary.' },
     ],
   });
+});
+
+test('component edit requests use edit-specific system instructions', () => {
+  const openAiRequest = buildOpenAiProxyRequest({
+    ...request,
+    mode: 'component-edit',
+  });
+
+  expect(openAiRequest).toEqual(
+    expect.objectContaining({
+      instructions: expect.stringMatching(/This is a component editing task, not a question answering task\./),
+    })
+  );
+  expect(openAiRequest).toEqual(
+    expect.not.objectContaining({
+      instructions: expect.stringMatching(/Answer questions about the provided HVY document context\./),
+    })
+  );
+});
+
+test('document edit requests use document-edit-specific system instructions', () => {
+  const openAiRequest = buildOpenAiProxyRequest({
+    ...request,
+    mode: 'document-edit',
+  });
+
+  expect(openAiRequest).toEqual(
+    expect.objectContaining({
+      instructions: expect.stringMatching(/This is a document editing task, not a question answering task\./),
+    })
+  );
+  expect(openAiRequest).toEqual(
+    expect.not.objectContaining({
+      instructions: expect.stringMatching(/Modify only the selected component\./),
+    })
+  );
+});
+
+test('assistant turns use output_text in OpenAI response inputs', () => {
+  const openAiRequest = buildOpenAiProxyRequest(request) as {
+    input: Array<{ role: string; content: Array<{ type: string; text: string }> }>;
+  };
+  const assistantTurn = openAiRequest.input.find((item) => item.role === 'assistant');
+  expect(assistantTurn?.content[0]?.type).toBe('output_text');
 });
 
 test('proxy response extractors collect text from provider payloads', () => {

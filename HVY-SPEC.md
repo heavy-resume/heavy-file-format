@@ -113,6 +113,7 @@ tags: [guide, onboarding]
 
 Presentation keys in document metadata include:
 - `sidebar_label`: optional string. Use it as the label for the sidebar toggle control. Defaults to a client-defined fallback (e.g. `☰`) if absent.
+- `reader_max_width`: optional CSS width value applied to the main reader document column, for example `60rem` or `72ch`.
 
 ### 5.2 Section boundaries
 
@@ -225,6 +226,8 @@ Design the format like a document, not a form.
 
 The directive name after `hvy:` can be a component name. In that form, `component` is implied by the directive name. For compatibility, tools also support the legacy `hvy:block` directive with an explicit `component` field.
 
+Block content indentation is structural and MUST NOT be interpreted as Markdown code. Renderers MUST only render code from explicit `code` components or fenced Markdown code blocks using triple backticks (or standard Markdown fences).
+
 Expandable blocks can be emitted with specialized directives so their stub and expanded content remain normal Markdown blocks:
 
 ```markdown
@@ -289,12 +292,13 @@ Rules:
 - Multiple `hvy:expandable:stub` or `hvy:expandable:content` directives can be used for a single expandable block.
 - Each `expandable` block MUST include at least one stub child and at least one content child. Missing either side is malformed.
 - `hvy:grid` starts a grid block. Its payload is the grid block schema, with `component:"grid"` implied.
-- `hvy:grid:N`, `hvy:component-list:N`, `hvy:container:N`, and `hvy:table:R:D` are slot markers. Their payload contains slot metadata only; the actual child block is declared one indentation level deeper as its own directive.
+- `hvy:grid:N`, `hvy:component-list:N`, and `hvy:container:N` are slot markers. Their payload contains slot metadata only; the actual child block is declared one indentation level deeper as its own directive.
 - For `hvy:grid:N`, `N` determines the item's placement order. Readers and editors SHOULD tile items across `gridColumns` in slot order, wrapping to the next row as needed.
 - For `hvy:component-list:N`, `N` is an ordering key rather than just an identifier. Lower numbers render first; file order breaks ties.
 - Slot markers MUST NOT carry `component` or `type`. Documents that use the old slot-carried child-component form are malformed.
 - Plain Markdown content that appears after a `hvy:grid:N` (or standalone `hvy:component-list` / `hvy:container`) directive and before the first indexed sub-directive (`hvy:component-list:N`, `hvy:container:N`) is implicitly treated as the first block in that list or container.
 - If both `meta.blocks[n]` and a block directive describe the same logical block, `meta.blocks[n]` wins.
+- Tables are non-interactive. If authors want reveal/hide behavior or supporting narrative detail, they SHOULD wrap the table in an `expandable` rather than attaching row-level interaction metadata.
 
 ### 5.8 Recursive block shape
 
@@ -353,6 +357,14 @@ expandableStubBlocks:
 ```
 
 The `children` array uses the same recursive block object shape as other nested block arrays.
+
+For tables, each `tableRows` entry contains only:
+
+```yaml
+- cells: ["Cell A", "Cell B"]
+```
+
+Tables do not have intrinsic row expansion, row click behavior, or row-attached detail blocks in HVY v0.1. Use an enclosing `expandable` when the table should reveal additional information.
 
 For inline HVY serialization, stub-pane and content-pane CSS belong on the slot markers themselves:
 
@@ -502,20 +514,48 @@ The viewer sets each key verbatim on the document root (`root.style.setProperty(
 
 Viewers SHOULD ship built-in defaults for the following conventional names so documents that omit them still render correctly, and should provide both a light and a dark default set:
 
-- `--hvy-bg`, `--hvy-bg-alt`
-- `--hvy-surface`, `--hvy-surface-alt`, `--hvy-surface-tint`
-- `--hvy-text`, `--hvy-text-alt`, `--hvy-text-muted`
-- `--hvy-accent-1`, `--hvy-accent-1-alt`, `--hvy-accent-1-text`
-- `--hvy-accent-2`, `--hvy-accent-2-alt`
-- `--hvy-highlight-1`, `--hvy-highlight-2`
-- `--hvy-border`, `--hvy-border-alt`, `--hvy-border-input`, `--hvy-border-translucent`
-- `--hvy-xref-card-bg`, `--hvy-xref-card-hover-bg`
-- `--hvy-table-header`, `--hvy-table-row-bg-1`, `--hvy-table-row-bg-2`
-- `--hvy-shadow`, `--hvy-shadow-md`, `--hvy-shadow-lg`
-- `--hvy-overlay`
-- `--hvy-danger`
-- `--hvy-warning`, `--hvy-warning-bg`, `--hvy-warning-border`, `--hvy-warning-accent`
-- `--hvy-success`, `--hvy-success-bg`, `--hvy-success-border`
+| Variable | Affects |
+| --- | --- |
+| `--hvy-bg` | Page background |
+| `--hvy-bg-alt` | Page background gradient end |
+| `--hvy-surface` | Panel and card backgrounds |
+| `--hvy-surface-alt` | Inset and secondary panel backgrounds |
+| `--hvy-surface-tint` | Subtle panel tinting |
+| `--hvy-text` | Primary text |
+| `--hvy-text-alt` | Secondary text |
+| `--hvy-text-muted` | Muted helper text |
+| `--hvy-link-color` | Inline link text |
+| `--hvy-accent-1` | Primary accent fill |
+| `--hvy-accent-1-alt` | Primary accent border |
+| `--hvy-accent-1-text` | Text on primary accent |
+| `--hvy-accent-2` | Secondary accent fill |
+| `--hvy-accent-2-alt` | Secondary accent border |
+| `--hvy-button-bg` | Primary button background |
+| `--hvy-button-text` | Primary button text |
+| `--hvy-highlight-1` | Soft content highlight |
+| `--hvy-highlight-2` | Strong content highlight |
+| `--hvy-border` | Default panel border |
+| `--hvy-border-alt` | Emphasized border |
+| `--hvy-border-input` | Form field and table border |
+| `--hvy-border-translucent` | Floating toolbar border |
+| `--hvy-xref-card-bg` | Cross-reference card background |
+| `--hvy-xref-card-hover-bg` | Cross-reference card hover background |
+| `--hvy-table-header` | Table header background |
+| `--hvy-table-row-bg-1` | Odd table row background |
+| `--hvy-table-row-bg-2` | Even table row background |
+| `--hvy-icon-muted` | Muted icon color |
+| `--hvy-shadow` | Small shadow color |
+| `--hvy-shadow-md` | Medium shadow color |
+| `--hvy-shadow-lg` | Large shadow color |
+| `--hvy-overlay` | Modal and sidebar backdrop |
+| `--hvy-danger` | Danger action and error text |
+| `--hvy-warning` | Warning accent |
+| `--hvy-warning-bg` | Warning background |
+| `--hvy-warning-border` | Warning border |
+| `--hvy-warning-text` | Warning text |
+| `--hvy-success` | Success text |
+| `--hvy-success-bg` | Success background |
+| `--hvy-success-border` | Success border |
 
 Alternates (`*-alt`) are intended as fallbacks for cases where the base color would clash with its surroundings.
 
@@ -543,6 +583,46 @@ Rules:
 - The viewer applies these variables to the document root (typically `:root` or the document container) before any CSS blocks or inline component CSS is evaluated, so `var(--hvy-bg)` and similar expressions resolve everywhere.
 - When the viewer exposes a UI for editing theme colors, edits MUST be persisted back into `document.meta.theme.colors` so they round-trip through save.
 - Plain Markdown renderers ignore `theme`.
+
+### 5.13 Document-level component defaults
+
+A `.hvy` or `.thvy` file MAY declare default presentation values for named components in front matter under `component_defaults`.
+
+This is intended for document-wide presentation adjustments that should apply consistently without repeating the same inline `css` on every block instance.
+
+#### Front matter shape
+
+```yaml
+component_defaults:
+  xref-card:
+    css: "padding: 0.5rem;"
+```
+
+Rules:
+- Each key under `component_defaults` is a component name such as `xref-card`.
+- `css` is an optional inline CSS style string applied to the rendered root element of that component type.
+- Explicit block-level `css` remains valid and MAY be combined with or override document-level defaults in a viewer-specific way.
+- Unknown component names or unsupported default fields MUST be ignored.
+- Plain Markdown renderers ignore `component_defaults`.
+
+### 5.14 Document-level section defaults
+
+A `.hvy` or `.thvy` file MAY declare default presentation values for sections in front matter under `section_defaults`.
+
+This is intended for document-wide section wrapper styling without repeating the same `custom_css` on every section.
+
+#### Front matter shape
+
+```yaml
+section_defaults:
+  css: "margin: 0.5rem 0;"
+```
+
+Rules:
+- `css` is an optional inline CSS style string applied to each rendered section wrapper.
+- Explicit section-level `custom_css` remains valid and MAY be combined with or override document-level defaults in a viewer-specific way.
+- Unknown fields under `section_defaults` MUST be ignored.
+- Plain Markdown renderers ignore `section_defaults`.
 
 ## 6. Template & Schema (`.thvy`)
 

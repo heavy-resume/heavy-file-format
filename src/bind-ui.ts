@@ -29,8 +29,12 @@ import {
 } from './document-factory';
 import { recordHistory, undoState, redoState } from './history';
 import { navigateToSection, setSidebarOpen, setEditorSidebarOpen, closeModal, closeModalIfTarget, resetTransientUiState, resetToBlankDocument } from './navigation';
-import { deserializeDocument, deserializeDocumentWithDiagnostics, getHvyDiagnosticUsageHint } from './serialization';
-import { serializeDocument } from './serialization';
+import {
+  deserializeDocument,
+  deserializeDocumentWithDiagnostics,
+  getHvyDiagnosticUsageHint,
+  serializeDocument,
+} from './serialization';
 import { syncReusableTemplateForBlock, revertReusableComponent, findReusableOwner } from './reusable';
 import { addTableColumn, removeTableColumn, getTableColumns, moveTableColumn, moveTableRow } from './table-ops';
 import { createGridItem } from './grid-ops';
@@ -40,8 +44,10 @@ import { bindModal } from './bind-modal';
 import { bindLinkInlineModal, openLinkInlineModal } from './bind-link-modal';
 import { removeBlockFromList, findBlockInList } from './block-ops';
 import { getReusableTemplateByName } from './document-factory';
-import { clearChatConversation, persistChatSettings, requestChatCompletion } from './chat';
+import { clearChatConversation, getDefaultModelForProvider, persistChatSettings } from './chat';
+import { appendUserChatMessage, requestChatTurn, requestDocumentEditChatTurn } from './chat-session';
 import type { RawEditorDiagnostic } from './types';
+import { requestAiComponentEdit } from './ai-edit';
 
 let lastBoundChatMessageCount = -1;
 
@@ -52,6 +58,8 @@ export function bindUi(app: HTMLElement): void {
   const downloadName = app.querySelector<HTMLInputElement>('#downloadName');
   const readerDocument = app.querySelector<HTMLDivElement>('#readerDocument');
   const readerSidebarSections = app.querySelector<HTMLDivElement>('#readerSidebarSections');
+  const aiReaderDocument = app.querySelector<HTMLDivElement>('#aiReaderDocument');
+  const aiSidebarSections = app.querySelector<HTMLDivElement>('#aiSidebarSections');
   const readerNav = app.querySelector<HTMLDivElement>('#readerNav');
   const chatThread = app.querySelector<HTMLDivElement>('.chat-thread');
   const chatScrollContainer = app.querySelector<HTMLDivElement>('[data-chat-scroll-container]');
@@ -162,9 +170,22 @@ export function bindUi(app: HTMLElement): void {
       return;
     }
 
+    if (field === 'ai-model' && target instanceof HTMLInputElement) {
+      state.chat.settings.model = target.value;
+      persistChatSettings(state.chat.settings);
+      state.aiEdit.error = null;
+      return;
+    }
+
     if (field === 'chat-input' && target instanceof HTMLTextAreaElement) {
       state.chat.draft = target.value;
       state.chat.error = null;
+      return;
+    }
+
+    if (field === 'ai-edit-input' && target instanceof HTMLTextAreaElement) {
+      state.aiEdit.draft = target.value;
+      state.aiEdit.error = null;
       return;
     }
 
@@ -175,6 +196,17 @@ export function bindUi(app: HTMLElement): void {
       } else {
         delete state.document.meta.sidebar_label;
       }
+      return;
+    }
+
+    if (field === 'meta-reader-max-width' && target instanceof HTMLInputElement) {
+      recordHistory('meta:reader-max-width');
+      if (target.value.trim().length > 0) {
+        state.document.meta.reader_max_width = target.value;
+      } else {
+        delete state.document.meta.reader_max_width;
+      }
+      getRenderApp()();
       return;
     }
 
@@ -353,8 +385,22 @@ export function bindUi(app: HTMLElement): void {
     }
 
     if (action === 'switch-view') {
-      const view = actionButton.dataset.view === 'viewer' ? 'viewer' : 'editor';
+      const requestedView = actionButton.dataset.view;
+      const view = requestedView === 'viewer' ? 'viewer' : requestedView === 'ai' ? 'ai' : 'editor';
+      const crossingAiBoundary = (state.currentView === 'ai') !== (view === 'ai');
+      if (crossingAiBoundary) {
+        clearChatConversation(state.chat);
+      }
       state.currentView = view;
+      if (view !== 'ai') {
+        closeAiEditPopover();
+      }
+      getRenderApp()();
+      return;
+    }
+
+    if (action === 'close-ai-edit') {
+      closeAiEditPopover();
       getRenderApp()();
       return;
     }
@@ -665,8 +711,8 @@ export function bindUi(app: HTMLElement): void {
 
   app.addEventListener('change', (event) => {
     const target = event.target as HTMLElement | null;
-    if (target instanceof HTMLSelectElement && target.dataset.field === 'chat-provider') {
-      if (state.chat.isSending) {
+    if (target instanceof HTMLSelectElement && (target.dataset.field === 'chat-provider' || target.dataset.field === 'ai-provider')) {
+      if (state.chat.isSending || state.aiEdit.isSending) {
         return;
       }
       const previousProvider = state.chat.settings.provider;
@@ -674,18 +720,19 @@ export function bindUi(app: HTMLElement): void {
       state.chat.settings.provider = target.value === 'anthropic' ? 'anthropic' : 'openai';
       if (
         state.chat.settings.provider === 'openai' &&
-        (previousModel.length === 0 || (previousProvider === 'anthropic' && previousModel === 'claude-sonnet-4-6'))
+        (previousModel.length === 0 || (previousProvider === 'anthropic' && previousModel === getDefaultModelForProvider('anthropic')))
       ) {
-        state.chat.settings.model = 'gpt-5-mini';
+        state.chat.settings.model = getDefaultModelForProvider('openai');
       }
       if (
         state.chat.settings.provider === 'anthropic' &&
-        (previousModel.length === 0 || (previousProvider === 'openai' && previousModel === 'gpt-5-mini'))
+        (previousModel.length === 0 || (previousProvider === 'openai' && previousModel === getDefaultModelForProvider('openai')))
       ) {
-        state.chat.settings.model = 'claude-sonnet-4-6';
+        state.chat.settings.model = getDefaultModelForProvider('anthropic');
       }
       persistChatSettings(state.chat.settings);
       state.chat.error = null;
+      state.aiEdit.error = null;
       getRenderApp()();
       return;
     }
@@ -707,80 +754,73 @@ export function bindUi(app: HTMLElement): void {
 
   app.addEventListener('submit', async (event) => {
     const form = event.target as HTMLElement | null;
-    if (form?.id !== 'chatComposer') {
-      return;
-    }
-    event.preventDefault();
-    if (state.chat.isSending) {
-      return;
-    }
+    if (form?.id === 'chatComposer') {
+      event.preventDefault();
+      if (state.chat.isSending) {
+        return;
+      }
 
-    const question = state.chat.draft.trim();
-    if (question.length === 0) {
-      return;
-    }
+      const question = state.chat.draft.trim();
+      if (question.length === 0) {
+        return;
+      }
 
-    if (state.chat.settings.model.trim().length === 0) {
-      state.chat.error = 'Choose a model before sending.';
+      if (state.chat.settings.model.trim().length === 0) {
+        state.chat.error = 'Choose a model before sending.';
+        getRenderApp()();
+        return;
+      }
+
+      const previousMessages = state.chat.messages;
+      const nextMessages = appendUserChatMessage(previousMessages, question);
+
+      state.chat.messages = nextMessages;
+      state.chat.draft = '';
+      state.chat.error = null;
+      state.chat.isSending = true;
+      state.chat.requestNonce += 1;
+      const requestNonce = state.chat.requestNonce;
       getRenderApp()();
+
+      try {
+        const result =
+          state.currentView === 'ai'
+            ? await requestDocumentEditChatTurn({
+                settings: state.chat.settings,
+                document: state.document,
+                messages: previousMessages,
+                request: question,
+                onMutation: (group) => recordHistory(group),
+              })
+            : await requestChatTurn({
+                settings: state.chat.settings,
+                document: state.document,
+                messages: previousMessages,
+                question,
+              });
+        if (requestNonce !== state.chat.requestNonce) {
+          return;
+        }
+        state.chat.messages = result.messages;
+        state.chat.error = result.error;
+        if (state.currentView === 'ai' && !result.error) {
+          state.rawEditorText = serializeDocument(state.document);
+          state.rawEditorError = null;
+          state.rawEditorDiagnostics = [];
+        }
+      } finally {
+        if (requestNonce !== state.chat.requestNonce) {
+          return;
+        }
+        state.chat.isSending = false;
+        getRenderApp()();
+      }
       return;
     }
 
-    const nextMessages = [
-      ...state.chat.messages,
-      {
-        id: crypto.randomUUID(),
-        role: 'user' as const,
-        content: question,
-      },
-    ];
-
-    state.chat.messages = nextMessages;
-    state.chat.draft = '';
-    state.chat.error = null;
-    state.chat.isSending = true;
-    state.chat.requestNonce += 1;
-    const requestNonce = state.chat.requestNonce;
-    getRenderApp()();
-
-    try {
-      const answer = await requestChatCompletion({
-        settings: state.chat.settings,
-        document: state.document,
-        messages: nextMessages,
-      });
-      if (requestNonce !== state.chat.requestNonce) {
-        return;
-      }
-      state.chat.messages = [
-        ...nextMessages,
-        {
-          id: crypto.randomUUID(),
-          role: 'assistant',
-          content: answer,
-        },
-      ];
-    } catch (error) {
-      if (requestNonce !== state.chat.requestNonce) {
-        return;
-      }
-      const message = error instanceof Error ? error.message : 'Chat request failed.';
-      state.chat.error = message;
-      state.chat.messages = [
-        ...nextMessages,
-        {
-          id: crypto.randomUUID(),
-          role: 'assistant',
-          content: message,
-          error: true,
-        },
-      ];
-    } finally {
-      if (requestNonce !== state.chat.requestNonce) {
-        return;
-      }
-      state.chat.isSending = false;
-      getRenderApp()();
+    if (form?.id === 'aiEditComposer') {
+      event.preventDefault();
+      await submitAiEditRequest();
     }
   });
 
@@ -1278,6 +1318,31 @@ export function bindUi(app: HTMLElement): void {
 
   app.addEventListener('keydown', (event) => {
     const target = event.target as HTMLElement;
+    if (event.key === 'Escape' && state.aiEdit.sectionKey && state.aiEdit.blockId && !state.aiEdit.isSending) {
+      closeAiEditPopover();
+      getRenderApp()();
+      return;
+    }
+    if (
+      target instanceof HTMLTextAreaElement &&
+      target.dataset.field === 'chat-input' &&
+      event.key === 'Enter' &&
+      !event.shiftKey
+    ) {
+      event.preventDefault();
+      target.closest('form')?.requestSubmit();
+      return;
+    }
+    if (
+      target instanceof HTMLTextAreaElement &&
+      target.dataset.field === 'ai-edit-input' &&
+      event.key === 'Enter' &&
+      !event.shiftKey
+    ) {
+      event.preventDefault();
+      void submitAiEditRequest();
+      return;
+    }
     if (target instanceof HTMLInputElement && handleTagEditorKeydown(event, target, tagStateHelpers)) {
       return;
     }
@@ -1349,17 +1414,36 @@ export function bindUi(app: HTMLElement): void {
   app.addEventListener('contextmenu', (event) => {
     const target = event.target as HTMLElement;
     const anchor = target.closest<HTMLAnchorElement>('.rich-editor a[href]');
-    if (!anchor) {
+    if (anchor) {
+      const editable = anchor.closest<HTMLElement>('.rich-editor');
+      if (!editable) {
+        return;
+      }
+      event.preventDefault();
+      const range = document.createRange();
+      range.selectNodeContents(anchor);
+      openLinkInlineModal(app, editable, anchor.getAttribute('href') ?? '', range, anchor);
       return;
     }
-    const editable = anchor.closest<HTMLElement>('.rich-editor');
-    if (!editable) {
+
+    if (state.currentView !== 'ai') {
       return;
     }
+
+    const blockElement = target.closest<HTMLElement>('.reader-block[data-section-key][data-block-id]');
+    if (!blockElement) {
+      return;
+    }
+
+    const sectionKey = blockElement.dataset.sectionKey ?? '';
+    const blockId = blockElement.dataset.blockId ?? '';
+    if (!sectionKey || !blockId) {
+      return;
+    }
+
     event.preventDefault();
-    const range = document.createRange();
-    range.selectNodeContents(anchor);
-    openLinkInlineModal(app, editable, anchor.getAttribute('href') ?? '', range, anchor);
+    openAiEditPopover(sectionKey, blockId, event.clientX, event.clientY);
+    getRenderApp()();
   });
 
   app.addEventListener('input', (event) => {
@@ -1732,6 +1816,18 @@ export function bindUi(app: HTMLElement): void {
     setDraggedSectionKey(null);
     setDraggedTableItem(null);
   });
+
+  app.addEventListener('click', (event) => {
+    if (!state.aiEdit.sectionKey || !state.aiEdit.blockId) {
+      return;
+    }
+    const target = event.target as HTMLElement;
+    if (target.closest('.ai-edit-popover')) {
+      return;
+    }
+    closeAiEditPopover();
+    getRenderApp()();
+  });
   setAppEventsBound(true);
   }
 
@@ -1796,6 +1892,8 @@ export function bindUi(app: HTMLElement): void {
 
   readerDocument?.addEventListener('click', handleReaderAreaClick);
   readerSidebarSections?.addEventListener('click', handleReaderAreaClick);
+  aiReaderDocument?.addEventListener('click', handleReaderAreaClick);
+  aiSidebarSections?.addEventListener('click', handleReaderAreaClick);
 
   chatThread?.addEventListener('click', (event) => {
     const target = event.target as HTMLElement;
@@ -1858,6 +1956,122 @@ export function bindUi(app: HTMLElement): void {
 
   bindModal(app);
   bindLinkInlineModal(app);
+}
+
+function openAiEditPopover(sectionKey: string, blockId: string, clientX: number, clientY: number): void {
+  const { x, y } = clampAiEditPopoverPosition(clientX, clientY);
+  state.aiEdit = {
+    sectionKey,
+    blockId,
+    draft: '',
+    isSending: false,
+    error: null,
+    popupX: x,
+    popupY: y,
+    requestNonce: state.aiEdit.requestNonce + 1,
+  };
+}
+
+function closeAiEditPopover(): void {
+  state.aiEdit = {
+    sectionKey: null,
+    blockId: null,
+    draft: '',
+    isSending: false,
+    error: null,
+    popupX: 0,
+    popupY: 0,
+    requestNonce: state.aiEdit.requestNonce + 1,
+  };
+}
+
+function clampAiEditPopoverPosition(clientX: number, clientY: number): { x: number; y: number } {
+  const width = 420;
+  const height = 420;
+  const margin = 16;
+  const maxX = Math.max(margin, window.innerWidth - width - margin);
+  const maxY = Math.max(margin, window.innerHeight - height - margin);
+  return {
+    x: Math.min(Math.max(clientX, margin), maxX),
+    y: Math.min(Math.max(clientY, margin), maxY),
+  };
+}
+
+async function submitAiEditRequest(): Promise<void> {
+  if (state.aiEdit.isSending) {
+    return;
+  }
+
+  const sectionKey = state.aiEdit.sectionKey;
+  const blockId = state.aiEdit.blockId;
+  if (!sectionKey || !blockId) {
+    return;
+  }
+
+  const request = state.aiEdit.draft.trim();
+  if (request.length === 0) {
+    return;
+  }
+
+  if (state.chat.settings.model.trim().length === 0) {
+    state.aiEdit.error = 'Choose a model before sending.';
+    getRenderApp()();
+    return;
+  }
+
+  const block = findBlockByIds(sectionKey, blockId);
+  const section = findSectionByKey(state.document.sections, sectionKey);
+  if (!block || !section) {
+    state.aiEdit.error = 'The selected component could not be found.';
+    getRenderApp()();
+    return;
+  }
+
+  state.aiEdit.isSending = true;
+  state.aiEdit.error = null;
+  state.aiEdit.requestNonce += 1;
+  const requestNonce = state.aiEdit.requestNonce;
+  getRenderApp()();
+
+  try {
+    const result = await requestAiComponentEdit({
+      settings: state.chat.settings,
+      document: state.document,
+      sectionTitle: section.title,
+      block,
+      request,
+    });
+    if (requestNonce !== state.aiEdit.requestNonce) {
+      return;
+    }
+
+    recordHistory('ai-edit:block');
+    const originalSchemaId = block.schema.id;
+    block.text = result.block.text;
+    block.schema = result.block.schema;
+    block.schemaMode = result.block.schemaMode;
+    if (originalSchemaId.trim().length > 0 && block.schema.id.trim().length === 0) {
+      block.schema.id = originalSchemaId;
+    }
+    state.rawEditorText = serializeDocument(state.document);
+    state.rawEditorError = null;
+    state.rawEditorDiagnostics = [];
+    closeAiEditPopover();
+    getRefreshReaderPanels()();
+    getRenderApp()();
+  } catch (error) {
+    if (requestNonce !== state.aiEdit.requestNonce) {
+      return;
+    }
+    state.aiEdit.error = error instanceof Error ? error.message : 'AI component update failed.';
+    getRenderApp()();
+  } finally {
+    if (requestNonce !== state.aiEdit.requestNonce) {
+      return;
+    }
+    state.aiEdit.isSending = false;
+    getRenderApp()();
+  }
 }
 
 function bindChatThreadUi(

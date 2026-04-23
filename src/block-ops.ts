@@ -13,6 +13,7 @@ import { coerceGridColumns } from './grid-ops';
 import { normalizeMarkdownLists, markdownToEditorHtml, turndown } from './markdown';
 import { escapeAttr, escapeHtml, getInlineEditableText, renderOption } from './utils';
 import { recordHistory } from './history';
+import { getDocumentComponentDefaultCss } from './document-component-defaults';
 
 export function findBlockByIds(sectionKey: string, blockId: string): VisualBlock | null {
   const reusableName = getReusableNameFromSectionKey(sectionKey);
@@ -54,12 +55,6 @@ export function findBlockInList(blocks: VisualBlock[], blockId: string): VisualB
         return nestedGridBlock;
       }
     }
-    for (const row of block.schema.tableRows ?? []) {
-      const nestedDetails = findBlockInList(row.detailsBlocks ?? [], blockId);
-      if (nestedDetails) {
-        return nestedDetails;
-      }
-    }
   }
   return null;
 }
@@ -85,11 +80,6 @@ export function removeBlockFromList(blocks: VisualBlock[], blockId: string): boo
     }
     for (const item of block.schema.gridItems ?? []) {
       if (removeBlockFromList([item.block], blockId)) {
-        return true;
-      }
-    }
-    for (const row of block.schema.tableRows ?? []) {
-      if (removeBlockFromList(row.detailsBlocks ?? [], blockId)) {
         return true;
       }
     }
@@ -477,7 +467,6 @@ export function blockContainsBlockId(block: VisualBlock, blockId: string): boole
       || findBlockInList((block.schema.gridItems ?? []).map((item) => item.block), blockId)
       || findBlockInList(block.schema.expandableStubBlocks?.children ?? [], blockId)
       || findBlockInList(block.schema.expandableContentBlocks?.children ?? [], blockId)
-      || (block.schema.tableRows ?? []).some((row) => findBlockInList(row.detailsBlocks ?? [], blockId))
   );
 }
 
@@ -502,6 +491,7 @@ export function getComponentRenderHelpers(editorRenderer: {
     renderComponentFragment: editorRenderer.renderComponentFragment,
     renderComponentOptions,
     renderOption,
+    getDocumentComponentCss: (componentName: string) => getDocumentComponentDefaultCss(state.document.meta, componentName),
     getXrefTargetOptions,
     isXrefTargetValid,
     getTableColumns,

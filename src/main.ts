@@ -16,7 +16,7 @@ import { renderOption } from './utils';
 import { resolveBaseComponent } from './component-defs';
 import { ensureContainerBlocks, ensureComponentListBlocks, ensureExpandableBlocks, ensureGridItems } from './document-factory';
 import { isActiveEditorSectionTitle, isActiveEditorBlock, getComponentRenderHelpers, findBlockByIds } from './block-ops';
-import { commitHistorySnapshot, renderStateTracker } from './history';
+import { commitHistorySnapshot } from './history';
 import { capturePaneScroll, restorePaneScroll, centerPendingEditorSection, focusPendingSectionTitleEditor } from './scroll';
 import { bindUi } from './bind-ui';
 import { deserializeDocument, serializeDocument } from './serialization';
@@ -43,9 +43,20 @@ function createInitialState(): AppState {
     currentView: 'editor',
     editorMode: 'basic',
     chat: createDefaultChatState(),
+    aiEdit: {
+      sectionKey: null,
+      blockId: null,
+      draft: '',
+      isSending: false,
+      error: null,
+      popupX: 0,
+      popupY: 0,
+      requestNonce: 0,
+    },
     paneScroll: {
       editorTop: 0,
       editorSidebarTop: 0,
+      viewerSidebarTop: 0,
       readerTop: 0,
       windowTop: 0,
     },
@@ -76,6 +87,68 @@ function createInitialState(): AppState {
     lastHistoryAt: 0,
     pendingEditorCenterSectionKey: null,
   };
+}
+
+function renderAiEditPopover(): string {
+  if (!state.aiEdit.sectionKey || !state.aiEdit.blockId) {
+    return '';
+  }
+
+  const popupStyle = `left: ${state.aiEdit.popupX}px; top: ${state.aiEdit.popupY}px;`;
+  const providerLabel = state.chat.settings.provider === 'openai' ? 'OpenAI' : 'Anthropic';
+  const canSend = !state.aiEdit.isSending;
+
+  return `
+    <section class="ai-edit-popover" style="${escapeAttr(popupStyle)}" aria-label="Request AI component changes">
+      <div class="ai-edit-popover-head">
+        <div>
+          <h3>Request changes</h3>
+        </div>
+        <button type="button" class="ghost" data-action="close-ai-edit" aria-label="Close request changes">Close</button>
+      </div>
+      <div class="ai-edit-settings">
+        <label class="chat-setting">
+          <span>Provider</span>
+          <select data-field="ai-provider" aria-label="AI edit provider" ${state.aiEdit.isSending ? 'disabled' : ''}>
+            <option value="openai"${state.chat.settings.provider === 'openai' ? ' selected' : ''}>OpenAI</option>
+            <option value="anthropic"${state.chat.settings.provider === 'anthropic' ? ' selected' : ''}>Anthropic</option>
+          </select>
+        </label>
+
+        <label class="chat-setting">
+          <span>Model</span>
+          <input
+            type="text"
+            data-field="ai-model"
+            value="${escapeAttr(state.chat.settings.model)}"
+            placeholder="${escapeAttr(providerLabel === 'OpenAI' ? 'gpt-5-mini' : 'claude-sonnet-4-6')}"
+            autocapitalize="off"
+            autocomplete="off"
+            spellcheck="false"
+            aria-label="AI edit model"
+            ${state.aiEdit.isSending ? 'disabled' : ''}
+          />
+        </label>
+      </div>
+      ${state.aiEdit.error ? `<div class="ai-edit-error" role="alert">${escapeHtml(state.aiEdit.error)}</div>` : ''}
+      <form id="aiEditComposer" class="ai-edit-composer">
+        <label class="chat-composer-field">
+          <span>Change request</span>
+          <textarea data-field="ai-edit-input" rows="5" placeholder="Describe what should change in this component..." ${state.aiEdit.isSending ? 'disabled' : ''}>${escapeHtml(state.aiEdit.draft)}</textarea>
+        </label>
+        <div class="chat-composer-actions">
+          <span class="chat-composer-status">
+            ${
+              state.aiEdit.isSending
+                ? 'Waiting for updated component...'
+                : 'Describe the change you want, then send.'
+            }
+          </span>
+          <button type="submit" class="secondary"${canSend ? '' : ' disabled'}>${state.aiEdit.isSending ? 'Sending...' : 'Send'}</button>
+        </div>
+      </form>
+    </section>
+  `;
 }
 
 initState(createInitialState());
@@ -133,11 +206,20 @@ editorRenderer = createEditorRenderer(
 
 readerRenderer = createReaderRenderer(
   {
+    get documentMeta() {
+      return state.document.meta;
+    },
     get documentSections() {
       return state.document.sections;
     },
     get tempHighlights() {
       return state.tempHighlights;
+    },
+    get aiEditTarget() {
+      return {
+        sectionKey: state.aiEdit.sectionKey,
+        blockId: state.aiEdit.blockId,
+      };
     },
     get modalSectionKey() {
       return state.modalSectionKey;
@@ -194,6 +276,8 @@ function renderApp(): void {
   themeMs = performance.now() - stepStartedAt;
 
   const isEditorView = state.currentView === 'editor';
+  const isViewerView = state.currentView === 'viewer';
+  const isAiView = state.currentView === 'ai';
   const isAdvancedEditor = state.editorMode === 'advanced';
   const isRawEditor = state.editorMode === 'raw';
 
@@ -226,7 +310,8 @@ function renderApp(): void {
         <div class="workspace-head">
           <div class="view-tabs" role="tablist" aria-label="Workspace view">
             <button type="button" class="${isEditorView ? 'secondary' : 'ghost'}" data-action="switch-view" data-view="editor">Editor</button>
-            <button type="button" class="${!isEditorView ? 'secondary' : 'ghost'}" data-action="switch-view" data-view="viewer">Viewer</button>
+            <button type="button" class="${isViewerView ? 'secondary' : 'ghost'}" data-action="switch-view" data-view="viewer">Viewer</button>
+            <button type="button" class="${isAiView ? 'secondary' : 'ghost'}" data-action="switch-view" data-view="ai">AI</button>
           </div>
           ${
             isEditorView
@@ -278,7 +363,6 @@ function renderApp(): void {
                      </div>`
                   : `${isAdvancedEditor ? renderTemplatePanel(templateFields, state.templateValues, { escapeAttr, escapeHtml }) : ''}
                 ${isAdvancedEditor && state.metaPanelOpen ? editorRenderer.renderMetaPanel() : ''}
-                ${isAdvancedEditor ? renderStateTracker() : ''}
                 <div class="editor-shell ${state.editorSidebarOpen ? 'is-sidebar-open' : 'is-sidebar-closed'}">
                   <div class="editor-sidebar-backdrop" data-action="toggle-editor-sidebar"></div>
                   <aside class="editor-sidebar">
@@ -289,7 +373,7 @@ function renderApp(): void {
                   </aside>
                   <div id="editorTree" class="editor-tree">${editorRenderer.renderSectionEditorTree(state.document.sections)}</div>
                 </div>`}`
-              : `<div class="viewer-shell ${state.viewerSidebarOpen ? 'is-sidebar-open' : 'is-sidebar-closed'}">
+              : `<div class="viewer-shell ${isAiView ? 'ai-view-shell ' : ''}${state.viewerSidebarOpen ? 'is-sidebar-open' : 'is-sidebar-closed'}">
                    <div class="viewer-sidebar-backdrop" data-action="toggle-viewer-sidebar"></div>
                    <aside class="viewer-sidebar">
                      <button type="button" class="viewer-sidebar-tab" data-action="toggle-viewer-sidebar" aria-expanded="${state.viewerSidebarOpen ? 'true' : 'false'}" aria-label="Toggle navigation">${escapeHtml(String(state.document.meta.sidebar_label || '☰'))}</button>
@@ -297,16 +381,21 @@ function renderApp(): void {
                        <div id="readerWarnings" class="reader-warnings">${readerRenderer.renderWarnings()}</div>
                        <!-- TODO: Need to figure out what to do with navigation in the sidebar -->
                        <!-- <div id="readerNav" class="reader-nav">${readerRenderer.renderNavigation(state.document.sections)}</div> -->
-                       <div id="readerSidebarSections" class="reader-sidebar-sections">${readerRenderer.renderSidebarSections(state.document.sections)}</div>
+                       <div id="${isAiView ? 'aiSidebarSections' : 'readerSidebarSections'}" class="reader-sidebar-sections">${readerRenderer.renderSidebarSections(state.document.sections)}</div>
                      </div>
                    </aside>
-                   <div id="readerDocument" class="reader-document">${readerRenderer.renderReaderSections(state.document.sections)}</div>
+                   <div id="${isAiView ? 'aiReaderDocument' : 'readerDocument'}" class="reader-document">${readerRenderer.renderReaderSections(state.document.sections)}</div>
+                   ${
+                     isAiView
+                       ? `${renderAiEditPopover()}`
+                       : ''
+                   }
                  </div>`
           }
         </div>
       </section>
 
-      ${renderChatPanel(state.chat, state.document, { escapeAttr, escapeHtml })}
+      ${renderChatPanel(state.chat, state.document, { escapeAttr, escapeHtml }, isAiView ? 'document-edit' : 'qa')}
       ${readerRenderer.renderModal()}
       ${readerRenderer.renderLinkInlineModal()}
     </main>
@@ -362,8 +451,12 @@ function refreshReaderPanels(): void {
   let modalMs = 0;
   const warnings = app.querySelector<HTMLDivElement>('#readerWarnings');
   const nav = app.querySelector<HTMLDivElement>('#readerNav');
-  const sidebarSections = app.querySelector<HTMLDivElement>('#readerSidebarSections');
-  const reader = app.querySelector<HTMLDivElement>('#readerDocument');
+  const sidebarSections =
+    app.querySelector<HTMLDivElement>('#readerSidebarSections') ??
+    app.querySelector<HTMLDivElement>('#aiSidebarSections');
+  const reader =
+    app.querySelector<HTMLDivElement>('#readerDocument') ??
+    app.querySelector<HTMLDivElement>('#aiReaderDocument');
 
   if (warnings) {
     const stepStartedAt = performance.now();

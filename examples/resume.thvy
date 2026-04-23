@@ -2,6 +2,9 @@
 hvy_version: 0.1
 template: true
 title: Resume Template
+reader_max_width: 60rem
+section_defaults:
+  css: "margin: 0.5rem 0;"
 theme:
   colors:
     --hvy-bg: "#f5f9ff"
@@ -40,7 +43,7 @@ theme:
     --hvy-warning: "#c79200"
     --hvy-warning-bg: "#fff3de"
     --hvy-warning-border: "#ebca8d"
-    --hvy-warning-accent: "#e2b100"
+    --hvy-warning-text: "#e2b100"
     --hvy-success: "#1c6231"
     --hvy-success-bg: "#e7f9ee"
     --hvy-success-border: "#95d8a9"
@@ -385,7 +388,7 @@ component_defs:
 
  <!--hvy:text {"css":"margin: 0.5rem 0; margin-top: 1rem;","align":"center","placeholder":"title"}-->
 
-<!--hvy: {"id":"summary","lock":true,"contained":false,"custom_css":"padding: 0 0.35rem;"}-->
+<!--hvy: {"id":"summary","lock":true,"contained":true,"custom_css":"padding: 0 0.35rem;"}-->
 #! Summary
 
  <!--hvy:expandable {"css":"margin: 0.5rem 0;","expandableAlwaysShowStub":true,"expandableExpanded":false,"lock":true}-->
@@ -403,7 +406,7 @@ component_defs:
 
    <!--hvy:component-list {"componentListComponent":"text","css":"margin: 0;"}-->
 
-<!--hvy: {"id":"locations","lock":true}-->
+<!--hvy: {"id":"locations","lock":true,"contained":true,"location":"sidebar"}-->
 #! Locations
 
  <!--hvy:text {"css":"margin: 0.5rem 0;","lock":true}-->

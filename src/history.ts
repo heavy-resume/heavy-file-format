@@ -1,5 +1,5 @@
 import { state, HISTORY_GROUP_WINDOW_MS, incrementHistorySnapshotCount, incrementRecordHistoryCount, getRenderApp } from './state';
-import { debugMeasure, escapeHtml } from './utils';
+import { debugMeasure } from './utils';
 import type { VisualDocument } from './types';
 
 export function snapshotState(): string {
@@ -162,39 +162,4 @@ function restoreFromSnapshot(snapshot: string): void {
   } catch {
     // no-op
   }
-}
-
-export function renderStateTracker(): string {
-  ensureHistoryInitialized();
-  const current = snapshotState();
-  const previous =
-    [...state.history]
-      .reverse()
-      .find((snapshot) => snapshot !== current) ?? current;
-  const diff = computeSimpleDiff(previous, current);
-  return `
-    <section class="state-tracker">
-      <div class="state-head">
-        <strong>State Tracker</strong>
-        <div class="state-actions">
-          <button type="button" class="ghost" data-action="undo">Undo</button>
-          <button type="button" class="ghost" data-action="redo">Redo</button>
-        </div>
-      </div>
-      <pre>${escapeHtml(diff || 'No pending changes.')}</pre>
-    </section>
-  `;
-}
-
-function computeSimpleDiff(previous: string, current: string): string {
-  if (previous === current) {
-    return '';
-  }
-  const prevLines = previous.split('\n');
-  const currLines = current.split('\n');
-  const prevLineSet = new Set(prevLines);
-  const currLineSet = new Set(currLines);
-  const removed = prevLines.filter((line) => !currLineSet.has(line)).slice(0, 30).map((line) => `- ${line}`);
-  const added = currLines.filter((line) => !prevLineSet.has(line)).slice(0, 30).map((line) => `+ ${line}`);
-  return [...removed, ...added].join('\n');
 }

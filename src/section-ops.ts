@@ -103,6 +103,20 @@ export function moveSectionByOffset(sections: VisualSection[], sectionKey: strin
   return true;
 }
 
+export function moveSectionToSiblingIndex(sections: VisualSection[], sectionKey: string, newPositionIndexFrom0: number): boolean {
+  const location = findSectionContainer(sections, sectionKey);
+  if (!location || newPositionIndexFrom0 < 0 || newPositionIndexFrom0 >= location.container.length) {
+    return false;
+  }
+  const [movedSection] = location.container.splice(location.index, 1);
+  if (!movedSection) {
+    return false;
+  }
+  const insertIndex = Math.min(newPositionIndexFrom0, location.container.length);
+  location.container.splice(insertIndex, 0, movedSection);
+  return true;
+}
+
 export function findBlockContainerById(
   sections: VisualSection[],
   sectionKey: string,
@@ -133,12 +147,6 @@ export function findBlockContainerInList(
       findBlockContainerInList(block.schema.expandableContentBlocks?.children ?? [], blockId, block.id);
     if (nested) {
       return nested;
-    }
-    for (const row of block.schema.tableRows ?? []) {
-      const details = findBlockContainerInList(row.detailsBlocks ?? [], blockId, block.id);
-      if (details) {
-        return details;
-      }
     }
   }
   return null;
@@ -199,6 +207,5 @@ export function visitBlocksInList(blocks: VisualBlock[], visitor: (block: Visual
     visitBlocksInList((block.schema.gridItems ?? []).map((item) => item.block), visitor);
     visitBlocksInList(block.schema.expandableStubBlocks?.children ?? [], visitor);
     visitBlocksInList(block.schema.expandableContentBlocks?.children ?? [], visitor);
-    (block.schema.tableRows ?? []).forEach((row) => visitBlocksInList(row.detailsBlocks ?? [], visitor));
   });
 }

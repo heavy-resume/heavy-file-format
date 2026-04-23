@@ -2,8 +2,10 @@ import { state, REUSABLE_SECTION_DEF_PREFIX } from './state';
 import { escapeAttr, escapeHtml, renderOption } from './utils';
 import type { ComponentDefinition, SectionDefinition } from './types';
 
+let warnedAboutMissingState = false;
+
 export function getComponentDefs(): ComponentDefinition[] {
-  const defs = state.document.meta.component_defs;
+  const defs = getDocumentMetaOrNull()?.component_defs;
   if (!Array.isArray(defs)) {
     return [];
   }
@@ -11,7 +13,7 @@ export function getComponentDefs(): ComponentDefinition[] {
 }
 
 export function getSectionDefs(): SectionDefinition[] {
-  const defs = state.document.meta.section_defs;
+  const defs = getDocumentMetaOrNull()?.section_defs;
   if (!Array.isArray(defs)) {
     return [];
   }
@@ -60,4 +62,22 @@ export function resolveBaseComponent(componentName: string): string {
   }
   const def = getComponentDefs().find((item) => item.name === componentName);
   return def?.baseType || 'text';
+}
+
+function getDocumentMetaOrNull(): Record<string, unknown> | null {
+  try {
+    if (state && state.document && state.document.meta) {
+      return state.document.meta as Record<string, unknown>;
+    }
+  } catch {
+    // Fall through to a single console warning below.
+  }
+
+  if (!warnedAboutMissingState) {
+    warnedAboutMissingState = true;
+    console.error(
+      '[hvy:component-defs] state.document was unavailable while resolving component or section definitions. Falling back to built-in defaults.'
+    );
+  }
+  return null;
 }

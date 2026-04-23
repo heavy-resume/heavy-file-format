@@ -1,5 +1,5 @@
 import type { ChatMessage, ChatSettings, ChatState, VisualDocument } from './types';
-import { deserializeDocument, serializeDocument, wrapHvyFragmentAsDocument } from './serialization';
+import { deserializeDocument, serializeDocument } from './serialization';
 import { markdownToEditorHtml, normalizeMarkdownLists } from './markdown';
 import aiResponseFormatInstructions from '../AI-RESPONSE-FORMAT.md?raw';
 import type { VisualBlock, VisualSection } from './editor/types';
@@ -10,10 +10,13 @@ import { renderContainerReader } from './editor/components/container';
 import { renderGridReader } from './editor/components/grid';
 import { ensureComponentListBlocks, ensureExpandableBlocks, ensureGridItems } from './document-factory';
 import { isXrefTargetValid } from './xref-ops';
+import { getDocumentComponentDefaultCss } from './document-component-defaults';
+import { wrapChatResponseAsDocument } from './chat-response-document';
 
 const CHAT_STORAGE_KEY = 'hvy-chat-settings';
 const DEFAULT_OPENAI_MODEL = 'gpt-5-mini';
 const DEFAULT_ANTHROPIC_MODEL = 'claude-sonnet-4-6';
+export const HVY_AI_RESPONSE_FORMAT_INSTRUCTIONS = aiResponseFormatInstructions;
 
 interface RenderChatPanelDeps {
   escapeAttr: (value: string) => string;
@@ -26,10 +29,20 @@ interface ProxyChatRequest {
   messages: ChatMessage[];
   context: string;
   formatInstructions: string;
+  mode: 'qa' | 'component-edit' | 'document-edit';
 }
 
 interface ProxyChatResponse {
   output: string;
+}
+
+export interface ProxyCompletionParams {
+  settings: ChatSettings;
+  messages: ChatMessage[];
+  context: string;
+  formatInstructions: string;
+  mode: 'qa' | 'component-edit' | 'document-edit';
+  debugLabel?: string;
 }
 
 export function createDefaultChatState(): ChatState {
@@ -92,13 +105,32 @@ export function buildChatDocumentContext(document: VisualDocument): string {
   return stripDocumentHeaderAndComments(serializeDocument(document));
 }
 
-export function renderChatPanel(chat: ChatState, document: VisualDocument, deps: RenderChatPanelDeps): string {
+export function renderChatPanel(
+  chat: ChatState,
+  document: VisualDocument,
+  deps: RenderChatPanelDeps,
+  mode: 'qa' | 'document-edit' = 'qa'
+): string {
   const context = buildChatDocumentContext(document);
   const currentProviderLabel = chat.settings.provider === 'openai' ? 'OpenAI' : 'Anthropic';
   const hasDraft = chat.draft.trim().length > 0;
   const missingModel = chat.settings.model.trim().length === 0;
   const canSend = !chat.isSending && context.length > 0;
-
+  const isDocumentEdit = mode === 'document-edit';
+  const title = isDocumentEdit ? 'Edit This Document' : 'Ask This Document';
+  const subtitle = isDocumentEdit
+    ? 'AI mode can inspect structure, request targeted tools, and apply document changes step by step through the local proxy.'
+    : 'Separate from the reader. Requests go through a local proxy so provider API keys stay out of the browser.';
+  const emptyTitle = isDocumentEdit
+    ? 'Describe a document change to make in the visible HVY file.'
+    : 'Start by asking a question about the visible HVY document.';
+  const emptyBody = isDocumentEdit
+    ? 'In AI view, the model examines reduced structure first, then requests one editing tool at a time.'
+    : 'The browser sends your prompt to a same-origin proxy, and that proxy talks to the model provider.';
+  const promptLabel = isDocumentEdit ? 'Change request' : 'Question';
+  const promptPlaceholder = isDocumentEdit
+    ? 'Describe how the document should change...'
+    : 'Ask about the current HVY document...';
   return `
     <div class="chat-dock ${chat.panelOpen ? 'is-open' : 'is-closed'}" aria-label="Document chat">
       ${
@@ -106,13 +138,13 @@ export function renderChatPanel(chat: ChatState, document: VisualDocument, deps:
           ? `<aside class="chat-panel">
                <div class="chat-panel-head">
                  <div>
-                   <h2>Ask This Document</h2>
-                   <p>Separate from the reader. Requests go through a local proxy so provider API keys stay out of the browser.</p>
+                   <h2>${title}</h2>
+                   <p>${subtitle}</p>
                  </div>
                  <div class="chat-panel-head-actions">
                    <button type="button" class="ghost" data-action="clear-chat-history"${chat.messages.length === 0 ? ' disabled' : ''}>Clear</button>
-                   <button type="button" class="ghost" data-action="toggle-chat-panel" aria-label="Close chat">Close</button>
                  </div>
+                 <button type="button" class="danger chat-panel-close" data-action="toggle-chat-panel" aria-label="Close chat">×</button>
                </div>
                <div class="chat-panel-body" data-chat-scroll-container>
                  <div class="chat-settings">
@@ -140,24 +172,14 @@ export function renderChatPanel(chat: ChatState, document: VisualDocument, deps:
                    </label>
                  </div>
 
-                 <div class="chat-context-card">
-                   <strong>Context source</strong>
-                   <p>Current HVY body with YAML front matter removed and only structural HVY comments preserved for chat context.</p>
-                   <div class="chat-context-meta">
-                     <span>${context.length.toLocaleString()} chars</span>
-                     <span>${chat.messages.length} messages</span>
-                     <span>${deps.escapeHtml(currentProviderLabel)}</span>
-                   </div>
-                 </div>
-
                  ${chat.error ? `<div class="chat-error" role="alert">${deps.escapeHtml(chat.error)}</div>` : ''}
 
                  <div class="chat-thread" aria-live="polite" role="log">
                    ${
                      chat.messages.length === 0
-                       ? `<div class="chat-empty">
-                            <strong>Start by asking a question about the visible HVY document.</strong>
-                            <p>The browser sends your prompt to a same-origin proxy, and that proxy talks to the model provider.</p>
+                      ? `<div class="chat-empty">
+                           <strong>${emptyTitle}</strong>
+                           <p>${emptyBody}</p>
                           </div>`
                        : chat.messages
                            .map(
@@ -180,8 +202,8 @@ export function renderChatPanel(chat: ChatState, document: VisualDocument, deps:
                    <button type="button" class="chat-scroll-bottom" data-action="chat-scroll-bottom" hidden>Latest ↓</button>
                    <form id="chatComposer" class="chat-composer">
                      <label class="chat-composer-field">
-                       <span>Question</span>
-                       <textarea data-field="chat-input" rows="5" placeholder="Ask about the current HVY document..." ${chat.isSending ? 'disabled' : ''}>${deps.escapeHtml(chat.draft)}</textarea>
+                       <span>${promptLabel}</span>
+                       <textarea data-field="chat-input" rows="5" placeholder="${deps.escapeAttr(promptPlaceholder)}" ${chat.isSending ? 'disabled' : ''}>${deps.escapeHtml(chat.draft)}</textarea>
                      </label>
                      <div class="chat-composer-actions">
                        <span class="chat-composer-status">
@@ -191,7 +213,7 @@ export function renderChatPanel(chat: ChatState, document: VisualDocument, deps:
                              : missingModel
                              ? 'Choose a model before sending.'
                              : !hasDraft
-                             ? 'Type a question to send.'
+                             ? 'Type your prompt'
                              : 'Ready'
                          }
                        </span>
@@ -218,15 +240,28 @@ export async function requestChatCompletion(params: {
     throw new Error('The document body is empty after removing front matter and comments.');
   }
 
+  return requestProxyCompletion({
+    settings: params.settings,
+    messages: params.messages,
+    context,
+    formatInstructions: HVY_AI_RESPONSE_FORMAT_INSTRUCTIONS,
+    mode: 'qa',
+    debugLabel: 'chat',
+  });
+}
+
+export async function requestProxyCompletion(params: ProxyCompletionParams): Promise<string> {
   const requestPayload = buildProxyChatRequest({
     provider: params.settings.provider,
     model: params.settings.model,
     messages: params.messages,
-    context,
-    formatInstructions: aiResponseFormatInstructions,
+    context: params.context,
+    formatInstructions: params.formatInstructions,
+    mode: params.mode,
   });
+  const debugLabel = params.debugLabel?.trim() || 'chat';
 
-  console.debug('[hvy:chat] client request', {
+  console.debug(`[hvy:${debugLabel}] client request`, {
     provider: requestPayload.provider,
     model: requestPayload.model,
     messages: requestPayload.messages,
@@ -243,7 +278,7 @@ export async function requestChatCompletion(params: {
   });
 
   const payload = await readJsonResponse(response);
-  console.debug('[hvy:chat] client response', {
+  console.debug(`[hvy:${debugLabel}] client response`, {
     ok: response.ok,
     status: response.status,
     payload,
@@ -257,7 +292,7 @@ export async function requestChatCompletion(params: {
   }
 
   const output = (payload as ProxyChatResponse).output.trim();
-  console.debug('[hvy:chat] client extracted output', output);
+  console.debug(`[hvy:${debugLabel}] client extracted output`, output);
   return output;
 }
 
@@ -273,6 +308,7 @@ export function buildProxyChatRequest(request: ProxyChatRequest): ProxyChatReque
     })),
     context: request.context,
     formatInstructions: request.formatInstructions,
+    mode: request.mode,
   };
 }
 
@@ -286,6 +322,10 @@ export function getEnvChatSettings(env: ImportMetaEnv = import.meta.env): ChatSe
     provider,
     model,
   };
+}
+
+export function getDefaultModelForProvider(provider: ChatSettings['provider']): string {
+  return provider === 'anthropic' ? DEFAULT_ANTHROPIC_MODEL : DEFAULT_OPENAI_MODEL;
 }
 
 function getDefaultChatSettings(): ChatSettings {
@@ -374,7 +414,7 @@ function renderAssistantHvyHtml(source: string): string | null {
   }
 
   try {
-    const syntheticDocument = wrapHvyFragmentAsDocument(source, { sectionId: 'rsp', title: 'Response' });
+    const syntheticDocument = wrapChatResponseAsDocument(source);
     const document = deserializeDocument(syntheticDocument, '.hvy');
     const [wrapperSection] = document.sections;
     if (!wrapperSection) {
@@ -382,9 +422,9 @@ function renderAssistantHvyHtml(source: string): string | null {
     }
 
     const content = [
-      ...wrapperSection.blocks.map((block) => renderChatHvyBlock(block)),
-      ...wrapperSection.children.map((section) => renderChatHvySection(section)),
-      ...document.sections.slice(1).map((section) => renderChatHvySection(section)),
+      ...wrapperSection.blocks.map((block) => renderChatHvyBlock(block, document.meta)),
+      ...wrapperSection.children.map((section) => renderChatHvySection(section, document.meta)),
+      ...document.sections.slice(1).map((section) => renderChatHvySection(section, document.meta)),
     ].join('');
 
     return `<div class="chat-hvy-response">${content}</div>`;
@@ -393,26 +433,26 @@ function renderAssistantHvyHtml(source: string): string | null {
   }
 }
 
-function renderChatHvySection(section: VisualSection): string {
+function renderChatHvySection(section: VisualSection, documentMeta: VisualDocument['meta']): string {
   return `
     <section class="chat-hvy-section">
       <div class="chat-hvy-section-title">${escapeChatHtml(section.title)}</div>
       <div class="chat-hvy-section-body">
-        ${section.blocks.map((block) => renderChatHvyBlock(block)).join('')}
-        ${section.children.map((child) => renderChatHvySection(child)).join('')}
+        ${section.blocks.map((block) => renderChatHvyBlock(block, documentMeta)).join('')}
+        ${section.children.map((child) => renderChatHvySection(child, documentMeta)).join('')}
       </div>
     </section>
   `;
 }
 
-function renderChatHvyBlock(block: VisualBlock): string {
+function renderChatHvyBlock(block: VisualBlock, documentMeta: VisualDocument['meta']): string {
   const component = block.schema.component.trim();
-  const helpers = getChatReaderHelpers();
+  const helpers = getChatReaderHelpers(documentMeta);
 
   if (component === 'expandable') {
     ensureExpandableBlocks(block);
-    const stubHtml = block.schema.expandableStubBlocks.children.map((child) => renderChatHvyBlock(child)).join('');
-    const contentHtml = block.schema.expandableContentBlocks.children.map((child) => renderChatHvyBlock(child)).join('');
+    const stubHtml = block.schema.expandableStubBlocks.children.map((child) => renderChatHvyBlock(child, documentMeta)).join('');
+    const contentHtml = block.schema.expandableContentBlocks.children.map((child) => renderChatHvyBlock(child, documentMeta)).join('');
     const expanded = block.schema.expandableExpanded;
     const stubPaneStyle = block.schema.expandableStubCss ? ` style="${escapeChatAttr(block.schema.expandableStubCss)}"` : '';
     const contentPaneStyle = block.schema.expandableContentCss ? ` style="${escapeChatAttr(block.schema.expandableContentCss)}"` : '';
@@ -477,7 +517,7 @@ function getChatReaderSection(): VisualSection {
   };
 }
 
-function getChatReaderHelpers(): ComponentRenderHelpers {
+function getChatReaderHelpers(documentMeta: VisualDocument['meta']): ComponentRenderHelpers {
   return {
     escapeAttr: escapeChatAttr,
     escapeHtml: escapeChatHtml,
@@ -485,10 +525,11 @@ function getChatReaderHelpers(): ComponentRenderHelpers {
     renderRichToolbar: () => '',
     renderEditorBlock: () => '',
     renderPassiveEditorBlock: () => '',
-    renderReaderBlock: (_section: VisualSection, block: VisualBlock) => renderChatHvyBlock(block),
+    renderReaderBlock: (_section: VisualSection, block: VisualBlock) => renderChatHvyBlock(block, documentMeta),
     renderComponentFragment: (_componentName: string, content: string) => markdownToEditorHtml(normalizeMarkdownLists(content)),
     renderComponentOptions: () => '',
     renderOption: () => '',
+    getDocumentComponentCss: (componentName: string) => getDocumentComponentDefaultCss(documentMeta, componentName),
     getXrefTargetOptions: () => [],
     isXrefTargetValid,
     getTableColumns: (schema) =>

@@ -1,6 +1,7 @@
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import type { HvyDocument, HvySection } from './types';
+import { normalizeMarkdownIndentation } from '../markdown';
 
 marked.setOptions({ gfm: true, breaks: false });
 
@@ -22,7 +23,7 @@ export function buildRuntimeCss(document: HvyDocument): string {
 }
 
 function renderSection(section: HvySection): string {
-  const html = DOMPurify.sanitize(marked.parse(escapeRawHtml(section.contentMarkdown)) as string);
+  const html = DOMPurify.sanitize(marked.parse(escapeRawHtml(normalizeMarkdownIndentation(section.contentMarkdown))) as string);
   const children = section.children.map(renderSection).join('');
   const tags = Array.isArray(section.meta.tags) ? section.meta.tags.join(', ') : '';
 

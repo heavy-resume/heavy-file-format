@@ -153,15 +153,6 @@ export function schemaFromUnknown(value: unknown): BlockSchema {
       const mapped = row as JsonObject;
       return {
         cells: Array.isArray(mapped.cells) ? mapped.cells.map((cell) => String(cell ?? '')) : createDefaultTableRow(2).cells,
-        expanded: mapped.expanded === true,
-        clickable: mapped.clickable !== false,
-        detailsTitle: typeof mapped.detailsTitle === 'string' ? mapped.detailsTitle : '',
-        detailsContent:
-          typeof mapped.detailsContent === 'string' ? mapped.detailsContent : typeof mapped.details === 'string' ? mapped.details : '',
-        detailsComponent: 'container',
-        detailsBlocks: Array.isArray(mapped.detailsBlocks)
-          ? mapped.detailsBlocks.map((block) => parseVisualBlock(block))
-          : createDefaultTableRow(2).detailsBlocks,
       };
     }),
   };
@@ -219,12 +210,6 @@ export function createEmptySection(level: number, component = 'container', isGho
 export function createDefaultTableRow(columnCount: number): TableRow {
   return {
     cells: new Array(Math.max(columnCount, 1)).fill(''),
-    expanded: false,
-    clickable: true,
-    detailsTitle: '',
-    detailsContent: '',
-    detailsComponent: 'container',
-    detailsBlocks: [createEmptyBlock('container', true)],
   };
 }
 
@@ -251,10 +236,6 @@ export function cloneReusableSchema(schema: BlockSchema, componentName = schema.
   }));
   cloned.expandableStubBlocks.children = cloned.expandableStubBlocks.children.map((block) => cloneReusableBlock(block));
   cloned.expandableContentBlocks.children = cloned.expandableContentBlocks.children.map((block) => cloneReusableBlock(block));
-  cloned.tableRows = cloned.tableRows.map((row) => ({
-    ...row,
-    detailsBlocks: (row.detailsBlocks ?? []).map((block) => cloneReusableBlock(block)),
-  }));
   return cloned;
 }
 

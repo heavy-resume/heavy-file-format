@@ -31,9 +31,21 @@ export interface ChatState {
   requestNonce: number;
 }
 
+export interface AiEditState {
+  sectionKey: string | null;
+  blockId: string | null;
+  draft: string;
+  isSending: boolean;
+  error: string | null;
+  popupX: number;
+  popupY: number;
+  requestNonce: number;
+}
+
 export interface PaneScrollState {
   editorTop: number;
   editorSidebarTop: number;
+  viewerSidebarTop: number;
   readerTop: number;
   windowTop: number;
 }
@@ -72,9 +84,10 @@ export interface SectionDefinition {
 export interface AppState {
   document: VisualDocument;
   filename: string;
-  currentView: 'editor' | 'viewer';
+  currentView: 'editor' | 'viewer' | 'ai';
   editorMode: 'basic' | 'advanced' | 'raw';
   chat: ChatState;
+  aiEdit: AiEditState;
   paneScroll: PaneScrollState;
   showAdvancedEditor: boolean;
   rawEditorText: string;

@@ -12,10 +12,14 @@ import type { BlockSchema, VisualBlock, VisualSection } from '../editor/types';
 import { renderTagEditor } from '../editor/tag-editor';
 import { colorValueToPickerHex, getResolvedThemeColor, getThemeColorLabel, THEME_COLOR_NAMES } from '../theme';
 import type { ThemeConfig } from '../theme';
+import type { VisualDocument } from '../types';
+import { getDocumentSectionDefaultCss, mergeDocumentCss } from '../document-section-defaults';
 
 interface ReaderRenderState {
+  documentMeta: VisualDocument['meta'];
   documentSections: VisualSection[];
   tempHighlights: Set<string>;
+  aiEditTarget: { sectionKey: string | null; blockId: string | null };
   modalSectionKey: string | null;
   reusableSaveModal: {
     kind: 'component' | 'section';
@@ -83,7 +87,9 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     if (realSections.length === 0) {
       return '<div class="muted">No content to display yet.</div>';
     }
-    return realSections.map((section) => renderReaderSection(section)).join('');
+    const maxWidth = typeof state.documentMeta.reader_max_width === 'string' ? state.documentMeta.reader_max_width.trim() : '';
+    const bodyStyle = maxWidth.length > 0 ? ` style="max-width: ${deps.escapeAttr(maxWidth)};"` : '';
+    return `<div class="reader-document-body"${bodyStyle}>${realSections.map((section) => renderReaderSection(section)).join('')}</div>`;
   }
 
   function renderSidebarSections(sections: VisualSection[]): string {
@@ -127,9 +133,10 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
         </header>
       `
       : '';
+    const sectionStyle = mergeDocumentCss(getDocumentSectionDefaultCss(state.documentMeta), section.customCss);
 
     return `
-      <section id="${deps.escapeAttr(effectiveId)}" class="${classList}" style="${deps.escapeAttr(section.customCss)}"${toggleAttrs}>
+      <section id="${deps.escapeAttr(effectiveId)}" class="${classList}" style="${deps.escapeAttr(sectionStyle)}"${toggleAttrs}>
         ${header}
         ${content}
       </section>
@@ -148,12 +155,13 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       `reader-block-${base}`,
       `align-${block.schema.align}`,
       `slot-${block.schema.slot}`,
+      state.aiEditTarget.sectionKey === section.key && state.aiEditTarget.blockId === block.id ? 'is-ai-target' : '',
       blockDomId && state.tempHighlights.has(blockDomId) ? 'is-temp-highlighted' : '',
     ]
       .filter(Boolean)
       .map((part) => deps.escapeAttr(part))
       .join(' ');
-    const blockAttrs = `${idAttr} class="${blockClass}" data-component="${deps.escapeAttr(block.schema.component)}" style="${deps.escapeAttr(block.schema.customCss)}"`;
+    const blockAttrs = `${idAttr} class="${blockClass}" data-component="${deps.escapeAttr(block.schema.component)}" data-section-key="${deps.escapeAttr(section.key)}" data-block-id="${deps.escapeAttr(block.id)}" style="${deps.escapeAttr(block.schema.customCss)}"`;
     const helpers = deps.getComponentRenderHelpers();
 
     if (base === 'code') {

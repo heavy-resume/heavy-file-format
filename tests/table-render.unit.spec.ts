@@ -43,12 +43,6 @@ function createTableBlock(rows: string[][], options?: { showHeader?: boolean }):
       tableShowHeader: options?.showHeader ?? false,
       tableRows: rows.map((cells) => ({
         cells,
-        expanded: false,
-        clickable: true,
-        detailsTitle: '',
-        detailsContent: '',
-        detailsComponent: 'container',
-        detailsBlocks: [],
       })),
     },
   };
@@ -66,6 +60,7 @@ function createHelpers(): ComponentRenderHelpers {
     renderComponentFragment: (_componentName, content) => content,
     renderComponentOptions: () => '',
     renderOption: (value) => value,
+    getDocumentComponentCss: () => '',
     getXrefTargetOptions: () => [],
     isXrefTargetValid: () => true,
     getTableColumns: () => ['Role', 'Scope'],

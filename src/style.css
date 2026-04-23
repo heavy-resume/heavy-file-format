@@ -1670,6 +1670,36 @@ button.tiny {
   padding: 0.5rem;
 }
 
+.sqlite-plugin-editor {
+  margin-top: 0.75rem;
+}
+
+.sqlite-plugin-grid-input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  padding: 0.45rem 0.5rem;
+}
+
+.sqlite-plugin-grid-input:focus {
+  outline: 2px solid rgba(59, 130, 246, 0.28);
+  outline-offset: -2px;
+  background: rgba(255, 255, 255, 0.65);
+}
+
+.sqlite-plugin-grid-header {
+  font-weight: 600;
+}
+
+.sqlite-plugin-row-number {
+  font-size: 0.84rem;
+  color: var(--hvy-text-muted);
+  text-align: center;
+}
+
 .table-editor {
   display: grid;
   gap: 0.6rem;

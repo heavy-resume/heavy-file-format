@@ -52,6 +52,7 @@ import { appendUserChatMessage, requestChatTurn, requestDocumentEditChatTurn } f
 import type { RawEditorDiagnostic } from './types';
 import { requestAiComponentEdit } from './ai-edit';
 import { areTablesEnabled } from './reference-config';
+import { addSqlitePluginColumn, addSqlitePluginRow, renameSqlitePluginColumn, updateSqlitePluginCell } from './plugin-sqlite';
 
 let lastBoundChatMessageCount = -1;
 
@@ -381,6 +382,51 @@ export function bindUi(app: HTMLElement): void {
       state.rawEditorError = null;
       state.rawEditorDiagnostics = getRawEditorDiagnostics(target.value, state.filename);
       return;
+    }
+  });
+
+  app.addEventListener('change', (event) => {
+    const target = event.target as HTMLElement;
+    const field = target.dataset.field;
+    if (!field) {
+      return;
+    }
+
+    if (field === 'sqlite-cell' && target instanceof HTMLInputElement) {
+      const tableName = target.dataset.tableName ?? '';
+      const columnName = target.dataset.columnName ?? '';
+      const rowId = Number.parseInt(target.dataset.rowid ?? '', 10);
+      if (tableName.length === 0 || columnName.length === 0 || Number.isNaN(rowId)) {
+        return;
+      }
+      recordHistory(`sqlite-cell:${tableName}:${rowId}:${columnName}`);
+      void updateSqlitePluginCell(tableName, rowId, columnName, target.value)
+        .catch((error) => {
+          console.error('[hvy:sqlite-plugin] cell update failed', error);
+        });
+      return;
+    }
+
+    if (field === 'sqlite-column-name' && target instanceof HTMLInputElement) {
+      const tableName = target.dataset.tableName ?? '';
+      const oldColumnName = target.dataset.oldColumnName ?? '';
+      if (tableName.length === 0 || oldColumnName.length === 0) {
+        return;
+      }
+      recordHistory(`sqlite-column:${tableName}:${oldColumnName}`);
+      void renameSqlitePluginColumn(tableName, oldColumnName, target.value)
+        .then(() => {
+          const nextColumnName = target.value.trim();
+          if (nextColumnName.length === 0) {
+            return;
+          }
+          target.dataset.oldColumnName = nextColumnName;
+          syncSqliteColumnNameInDom(tableName, oldColumnName, nextColumnName, app);
+        })
+        .catch((error) => {
+          console.error('[hvy:sqlite-plugin] column rename failed', error);
+          getRenderApp()();
+        });
     }
   });
 
@@ -1224,6 +1270,38 @@ export function bindUi(app: HTMLElement): void {
       syncReusableTemplateForBlock(sectionKey, block.id);
       setActiveEditorBlock(sectionKey, block.id);
       getRenderApp()();
+      return;
+    }
+
+    if (action === 'sqlite-add-row') {
+      const tableName = actionButton.dataset.tableName ?? '';
+      if (tableName.length === 0) {
+        return;
+      }
+      recordHistory(`sqlite-add-row:${tableName}`);
+      void addSqlitePluginRow(tableName)
+        .then(() => {
+          getRenderApp()();
+        })
+        .catch((error) => {
+          console.error('[hvy:sqlite-plugin] add row failed', error);
+        });
+      return;
+    }
+
+    if (action === 'sqlite-add-column') {
+      const tableName = actionButton.dataset.tableName ?? '';
+      if (tableName.length === 0) {
+        return;
+      }
+      recordHistory(`sqlite-add-column:${tableName}`);
+      void addSqlitePluginColumn(tableName)
+        .then(() => {
+          getRenderApp()();
+        })
+        .catch((error) => {
+          console.error('[hvy:sqlite-plugin] add column failed', error);
+        });
       return;
     }
 
@@ -2143,6 +2221,27 @@ function bindChatThreadUi(
     updateScrollButton();
     lastBoundChatMessageCount = state.chat.messages.length;
   });
+}
+
+function syncSqliteColumnNameInDom(tableName: string, oldColumnName: string, nextColumnName: string, app: HTMLElement): void {
+  const escapedTableName = CSS.escape(tableName);
+  const escapedOldColumnName = CSS.escape(oldColumnName);
+
+  app
+    .querySelectorAll<HTMLElement>(
+      `[data-table-name="${escapedTableName}"][data-column-name="${escapedOldColumnName}"]`
+    )
+    .forEach((element) => {
+      element.dataset.columnName = nextColumnName;
+    });
+
+  app
+    .querySelectorAll<HTMLElement>(
+      `[data-table-name="${escapedTableName}"][data-old-column-name="${escapedOldColumnName}"]`
+    )
+    .forEach((element) => {
+      element.dataset.oldColumnName = nextColumnName;
+    });
 }
 
 function getRawEditorDiagnostics(source: string, filename: string): RawEditorDiagnostic[] {

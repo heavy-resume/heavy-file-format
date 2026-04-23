@@ -1,17 +1,10 @@
 import type { ComponentEditorRenderer, ComponentReaderRenderer } from '../component-helpers';
-
-const SQLITE_TABLE_PLUGIN_ID = 'dev.heavy.sqlite-table';
-
-function getPluginConfigValue(config: Record<string, unknown>, key: string): string {
-  const value = config[key];
-  return typeof value === 'string' ? value : '';
-}
+import { renderSqlitePluginEditor, renderSqlitePluginReader, SQLITE_TABLE_PLUGIN_ID } from '../../plugin-sqlite';
 
 export const renderPluginEditor: ComponentEditorRenderer = (sectionKey, block, helpers) => {
-  const pluginId = block.schema.plugin;
-  const source = getPluginConfigValue(block.schema.pluginConfig, 'source') || 'with-file';
-  const table = getPluginConfigValue(block.schema.pluginConfig, 'table');
-  const isSqlitePlugin = pluginId.length === 0 || pluginId === SQLITE_TABLE_PLUGIN_ID;
+  if (block.schema.plugin === SQLITE_TABLE_PLUGIN_ID || block.schema.plugin.trim().length === 0) {
+    return renderSqlitePluginEditor(sectionKey, block, helpers);
+  }
 
   return `
     <label>
@@ -20,42 +13,18 @@ export const renderPluginEditor: ComponentEditorRenderer = (sectionKey, block, h
         data-section-key="${helpers.escapeAttr(sectionKey)}"
         data-block-id="${helpers.escapeAttr(block.id)}"
         data-field="block-plugin"
-        value="${helpers.escapeAttr(pluginId)}"
+        value="${helpers.escapeAttr(block.schema.plugin)}"
         placeholder="${helpers.escapeAttr(SQLITE_TABLE_PLUGIN_ID)}"
       />
     </label>
-    ${isSqlitePlugin
-      ? `
-        <label>
-          <span>Source</span>
-          <select disabled>
-            <option selected>${helpers.escapeHtml(source)}</option>
-          </select>
-        </label>
-        <label>
-          <span>Table Name</span>
-          <input
-            data-section-key="${helpers.escapeAttr(sectionKey)}"
-            data-block-id="${helpers.escapeAttr(block.id)}"
-            data-field="block-plugin-db-table"
-            value="${helpers.escapeAttr(table)}"
-            placeholder="records"
-          />
-        </label>
-      `
-      : ''
-    }
-    <div class="plugin-placeholder">${helpers.escapeHtml(buildPluginSummary(pluginId, block.schema.pluginConfig))}</div>
+    <div class="plugin-placeholder">Plugin placeholder: ${helpers.escapeHtml(block.schema.plugin || 'No plugin set')}</div>
   `;
 };
 
-export const renderPluginReader: ComponentReaderRenderer = (_section, block, helpers) =>
-  `<div class="plugin-placeholder">${helpers.escapeHtml(buildPluginSummary(block.schema.plugin, block.schema.pluginConfig))}</div>`;
+export const renderPluginReader: ComponentReaderRenderer = (section, block, helpers) => {
+  if (block.schema.plugin === SQLITE_TABLE_PLUGIN_ID || block.schema.plugin.trim().length === 0) {
+    return renderSqlitePluginReader(section, block, helpers);
+  }
 
-function buildPluginSummary(pluginId: string, config: Record<string, unknown>): string {
-  const label = pluginId.trim().length > 0 ? pluginId : 'Plugin not configured';
-  const source = getPluginConfigValue(config, 'source');
-  const table = getPluginConfigValue(config, 'table');
-  const details = [source ? `source=${source}` : '', table ? `table=${table}` : ''].filter(Boolean).join(', ');
-  return details.length > 0 ? `${label} (${details})` : label;
-}
+  return `<div class="plugin-placeholder">Plugin placeholder: ${helpers.escapeHtml(block.schema.plugin || 'No plugin set')}</div>`;
+};

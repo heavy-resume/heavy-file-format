@@ -1,0 +1,1426 @@
+---
+hvy_version: 0.1
+title: Resume Example
+reader_max_width: 60rem
+section_defaults:
+  css: "margin: 0.5rem 0;"
+theme:
+  colors:
+    --hvy-bg: "#0f1720"
+    --hvy-bg-alt: "#161b22"
+    --hvy-surface: "#17222d"
+    --hvy-surface-alt: "#1c2733"
+    --hvy-surface-tint: "#1f3448"
+    --hvy-text: "#e7eef5"
+    --hvy-text-alt: "#a3adbf"
+    --hvy-text-muted: "#6b8fa0"
+    --hvy-accent-1: "#7db3d0"
+    --hvy-accent-1-alt: "#5a8da8"
+    --hvy-accent-1-text: "#fcfcfc"
+    --hvy-accent-2: "#6fb3c1"
+    --hvy-accent-2-alt: "#2d5d68"
+    --hvy-button-bg: "#2d6a8a"
+    --hvy-button-text: "#ffffff"
+    --hvy-link-color: "#7bc0e8"
+    --hvy-highlight-1: "rgba(125, 179, 208, 0.20)"
+    --hvy-highlight-2: "rgba(255, 214, 102, 0.25)"
+    --hvy-border: "#2a3340"
+    --hvy-border-alt: "#3d4756"
+    --hvy-border-input: "#334152"
+    --hvy-border-translucent: "rgba(42, 51, 64, 0.92)"
+    --hvy-xref-card-bg: "rgba(255, 255, 255, 0.04)"
+    --hvy-xref-card-hover-bg: "rgba(255, 255, 255, 0.08)"
+    --hvy-table-header: "#1f2a37"
+    --hvy-table-row-bg-1: "#17222d"
+    --hvy-table-row-bg-2: "#1c2835"
+    --hvy-icon-muted: "rgba(231, 238, 245, 0.33)"
+    --hvy-shadow: "rgba(0, 0, 0, 0.20)"
+    --hvy-shadow-md: "rgba(0, 0, 0, 0.30)"
+    --hvy-shadow-lg: "rgba(0, 0, 0, 0.40)"
+    --hvy-overlay: "rgba(0, 0, 0, 0.60)"
+    --hvy-danger: "#c05050"
+    --hvy-warning: "#d4a017"
+    --hvy-warning-bg: "#2a2310"
+    --hvy-warning-border: "#6b5200"
+    --hvy-warning-text: "#c79200"
+    --hvy-success: "#4cae68"
+    --hvy-success-bg: "#152b1e"
+    --hvy-success-border: "#2e7a46"
+component_defs:
+  - name: history-record
+    baseType: expandable
+    description: Expandable resume history record
+    schema:
+      css: "margin: 0;"
+      expandableAlwaysShowStub: true
+      expandableExpanded: false
+      expandableStubBlocks:
+        lock: true
+        children:
+          - text: ""
+            schema:
+              component: table
+              css: "margin: 0;  margin-top: -1px;"
+              tableColumns: "YEAR, ORGANIZATION, TITLE"
+              tableShowHeader: false
+              tableRows:
+                - cells: ["", "", ""]
+      expandableContentBlocks:
+        lock: true
+        children:
+          - text: ""
+            schema:
+              component: text
+              placeholder: Organization
+              css: "margin: 0 0 0.35rem;"
+          - text: ""
+            schema:
+              component: grid
+              css: "margin: 0.35rem 0;"
+              gridColumns: 2
+              gridItems:
+                - id: history-location
+                  block:
+                    text: ""
+                    schema:
+                      component: text
+                      placholder: location
+                      css: "margin: 0;"
+                - id: history-date-range
+                  block:
+                    text: ""
+                    schema:
+                      component: text
+                      placeholder: date range
+                      css: "margin: 0; text-align: right;"
+          - text: ""
+            schema:
+              component: text
+              css: "margin: 0.35rem 0; font-weight: 700;"
+          - text: ""
+            schema:
+              component: text
+              css: "margin: 0.35rem 0;"
+          - text: "#### Accomplishments"
+            schema:
+              component: text
+              css: "margin: 0.5rem 0 0.25rem;"
+          - text: ""
+            schema:
+              component: component-list
+              componentListComponent: text
+              css: "margin: 0;"
+              componentListBlocks: []
+          - component: skills-and-tools-tech-list
+  - name: skills-and-tools-tech-list
+    baseType: grid
+    description: Two-column skills and tools list
+    schema:
+      css: "margin: 0.5rem 0 0;"
+      gridColumns: 2
+      gridItems:
+        - id: relevant-skills
+          align: center
+          block:
+            text: ""
+            schema:
+              component: component-list
+              componentListComponent: xref-card
+              css: "margin: 0;"
+              componentListBlocks:
+                - text: "#### Relevant Skills"
+                  schema:
+                    component: text
+                    css: "margin: 0 0 0.25rem;"
+        - id: tools-technologies
+          align: center
+          block:
+            text: ""
+            schema:
+              component: component-list
+              componentListComponent: xref-card
+              css: "margin: 0;"
+              componentListBlocks:
+                - text: "#### Tools and Technologies"
+                  schema:
+                    component: text
+                    css: "margin: 0 0 0.25rem;"
+  - name: education-record
+    baseType: expandable
+    description: Expandable education record
+    schema:
+      css: "margin: 0;"
+      expandableAlwaysShowStub: true
+      expandableExpanded: false
+      expandableStubBlocks:
+        lock: true
+        children:
+          - text: ""
+            schema:
+              component: table
+              css: "margin: 0; margin-top: -1px;"
+              tableColumns: "DEGREE, INSTITUTION, LOCATION"
+              tableShowHeader: false
+              tableRows:
+                - cells: ["", "", ""]
+      expandableContentBlocks:
+        lock: true
+        css: "padding: 0.5rem;"
+        children:
+          - text: ""
+            schema:
+              component: grid
+              css: "margin: 0.35rem 0;"
+              gridColumns: 2
+              gridItems:
+                - id: education-institution-details
+                  block:
+                    text: ""
+                    schema:
+                      component: container
+                      css: "margin: 0;"
+                      containerBlocks:
+                        - text: ""
+                          schema:
+                            component: text
+                            css: "margin: 0 0 0.25rem;"
+                            placeholder: "School / University"
+                        - text: ""
+                          schema:
+                            component: text
+                            css: "margin: 0 0 0.25rem;"
+                            placeholder: "Location"
+                        - text: ""
+                          schema:
+                            component: text
+                            css: "margin: 0;"
+                            placeholder: "GPA"
+                - id: education-date-range
+                  block:
+                    text: ""
+                    schema:
+                      component: text
+                      css: "margin: 0; text-align: right;"
+                      placeholder: "Start Year – End Year"
+          - text: ""
+            schema:
+              component: text
+              css: "margin: 0.5rem 0;"
+              placeholder: "Description"
+          - component: skills-and-tools-tech-list
+          - text: "#### Classes"
+            schema:
+              component: text
+              css: "margin: 0.5rem 0 0.25rem;"
+          - text: ""
+            schema:
+              component: component-list
+              componentListComponent: text
+              css: "margin: 0;"
+              componentListBlocks: []
+  - name: project-record
+    baseType: expandable
+    description: Expandable project record
+    schema:
+      css: "margin: 0;"
+      expandableAlwaysShowStub: true
+      expandableExpanded: false
+      expandableStubBlocks:
+        lock: true
+        children:
+          - text: ""
+            schema:
+              component: table
+              css: "margin: 0;  margin-top: -1px;"
+              tableColumns: "PROJECT, DATE"
+              tableShowHeader: false
+              tableRows:
+                - cells: ["", ""]
+      expandableContentBlocks:
+        lock: true
+        css: "padding: 0.5rem;"
+        children:
+          - text: ""
+            schema:
+              component: grid
+              css: "margin: 0 0 0.35rem;"
+              gridColumns: 2
+              gridItems:
+                - id: project-title
+                  block:
+                    text: ""
+                    schema:
+                      component: text
+                      css: "margin: 0;"
+                - id: project-date-range
+                  block:
+                    text: ""
+                    schema:
+                      component: text
+                      css: "margin: 0; text-align: right;"
+          - text: ""
+            schema:
+              component: text
+              css: "margin: 0.5rem 0;"
+          - text: ""
+            schema:
+              component: text
+              css: "margin: 0.35rem 0;"
+          - component: skills-and-tools-tech-list
+  - name: skill-record-experience-section
+    baseType: container
+    description: Skill record experience section
+    schema:
+      css: "margin: 0;"
+
+      containerBlocks:
+        - text: "#### Experience"
+          schema:
+            component: text
+            css: "margin: 0.4rem 0 0.1rem;"
+        - text: ""
+          schema:
+            component: component-list
+            css: "margin: 0;"
+            componentListComponent: xref-card
+            componentListBlocks: []
+  - name: skill-record-education-section
+    baseType: container
+    description: Skill record education section
+    schema:
+      css: "margin: 0;"
+
+      containerBlocks:
+        - text: "#### Education"
+          schema:
+            component: text
+            css: "margin: 0.4rem 0 0.1rem;"
+        - text: ""
+          schema:
+            component: component-list
+            css: "margin: 0;"
+            componentListComponent: xref-card
+            componentListBlocks: []
+  - name: skill-record-projects-section
+    baseType: container
+    description: Skill record projects section
+    schema:
+      css: "margin: 0;"
+
+      containerBlocks:
+        - text: "#### Projects"
+          schema:
+            component: text
+            css: "margin: 0.4rem 0 0.1rem;"
+        - text: ""
+          schema:
+            component: component-list
+            css: "margin: 0;"
+            componentListComponent: xref-card
+            componentListBlocks: []
+  - name: skill-record-section
+    baseType: container
+    description: Reusable skill record section with heading and repeatable entries
+    schema:
+      css: "margin: 0;"
+      containerBlocks:
+        - text: ""
+          schema:
+            component: text
+            css: "margin: 0.4rem 0 0.1rem;"
+            placeholder: "#### Section title"
+        - text: ""
+          schema:
+            component: component-list
+            css: "margin: 0;"
+            componentListComponent: skill-record-entry
+            componentListBlocks: []
+  - name: skill-record
+    baseType: expandable
+    description: Skill record
+    schema:
+      css: "margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);"
+      expandableStubBlocks:
+        lock: true
+        children:
+          - text: ""
+            schema:
+              component: text
+              css: "margin: 0;"
+              placeholder: "Skill name"
+      expandableContentBlocks:
+        lock: false
+        css: "padding: 0.5rem;"
+        children:
+          - text: "#### Description"
+            schema:
+              component: text
+              css: "margin: 0.4rem 0 0.1rem;"
+          - text: ""
+            css: "margin-left: 0.5rem;"
+            schema:
+              component: text
+              css: "margin: 0 0 0.35rem; margin-left: 0.5rem;"
+              placeholder: "What is it?"
+          - text: "#### Notes"
+            schema:
+              component: text
+              css: "margin: 0.4rem 0 0.1rem;"
+          - text: ""
+            schema:
+              component: text
+              css: "margin: 0 0 0.35rem; margin-left: 0.5rem;"
+              placeholder: "Notes"
+          - component: skill-record-experience-section
+          - component: skill-record-education-section
+          - component: skill-record-projects-section
+---
+
+<!--hvy: {"id":"header","lock":true,"contained":false}-->
+#! Info
+
+ <!--hvy:text {"css":"margin-bottom: 0;","align":"center"}-->
+  # Avery Hart
+
+ <!--hvy:text {"css":"margin-top: 0;","align":"center"}-->
+  [AY-vuh-ree HART]
+
+ <!--hvy:text {"css":"margin: 0.5rem 0; margin-top: 1rem;","align":"center"}-->
+  Senior Software Engineer
+
+<!--hvy: {"id":"summary","lock":true,"contained":false}-->
+#! Summary
+
+ <!--hvy:expandable {"css":"padding:0.25rem;","expandableAlwaysShowStub":true,"expandableExpanded":false,"lock":true}-->
+
+  <!--hvy:expandable:stub {"lock":true}-->
+
+   <!--hvy:text {"css":"margin-bottom: 0;"}-->
+    ## Summary
+
+   <!--hvy:text {"css":"margin-top: 0;"}-->
+    Product-minded software engineer focused on developer tooling, AI workflows, and reusable systems that make complex products easier to ship and maintain.
+
+  <!--hvy:expandable:content {"lock":true}-->
+
+   <!--hvy:component-list {"componentListComponent":"text","css":"margin: 0;"}-->
+
+    <!--hvy:component-list:0 {}-->
+
+     <!--hvy:text {"css":"margin: 0;"}-->
+      Builds polished internal tools that reduce friction for engineers and product teams.
+
+    <!--hvy:component-list:1 {}-->
+
+     <!--hvy:text {"css":"margin: 0;"}-->
+      Comfortable moving between frontend UX, platform design, and AI-assisted workflows.
+
+    <!--hvy:component-list:2 {}-->
+
+     <!--hvy:text {"css":"margin: 0;"}-->
+      Enjoys turning messy, high-context problems into repeatable systems and clear documentation.
+
+<!--hvy: {"id":"locations","lock":true,"contained":false}-->
+#! Locations
+
+ <!--hvy:text {"css":"margin: 0.5rem 0;","lock":true}-->
+  **Location:** Seattle, WA
+
+ <!--hvy:text {"css":"margin: 0.5rem 0;","lock":true}-->
+  **Target Location(s):** Remote, Seattle, San Francisco
+
+<!--hvy: {"id":"top-skills-tools-technologies","lock":true}-->
+#! Top Skills, Tools, and Technologies
+
+ <!--hvy:grid {"css":"margin: 0.5rem 0; gap: 0.75rem;","gridColumns":2,"lock":true}-->
+
+  <!--hvy:grid:0 {"id":"top-skills"}-->
+
+   <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
+
+    <!--hvy:component-list:0 {}-->
+
+     <!--hvy:text {"css":"margin: 0 0 0.35rem;"}-->
+      ## Skills
+
+    <!--hvy:component-list:1 {}-->
+
+     <!--hvy:xref-card {"css":"margin: 0.35rem 0;","xrefTitle":"Software Engineering","xrefDetail":"Core strength","xrefTarget":"skill-software-engineering"}-->
+
+    <!--hvy:component-list:2 {}-->
+
+     <!--hvy:xref-card {"css":"margin: 0.35rem 0;","xrefTitle":"Library Development","xrefDetail":"Reusable systems","xrefTarget":"skill-library-development"}-->
+
+    <!--hvy:component-list:3 {}-->
+
+     <!--hvy:xref-card {"css":"margin: 0.35rem 0;","xrefTitle":"LLM Prompt Engineering","xrefDetail":"Product workflow design","xrefTarget":"skill-llm-prompt-engineering"}-->
+
+  <!--hvy:grid:1 {"id":"top-tools-technologies"}-->
+
+   <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
+
+    <!--hvy:component-list:0 {}-->
+
+     <!--hvy:text {"css":"margin: 0 0 0.35rem;"}-->
+      ## Tools & Technologies
+
+    <!--hvy:component-list:1 {}-->
+
+     <!--hvy:xref-card {"css":"margin: 0.35rem 0;","xrefTitle":"TypeScript","xrefDetail":"Primary application language","xrefTarget":"tool-typescript"}-->
+
+    <!--hvy:component-list:2 {}-->
+
+     <!--hvy:xref-card {"css":"margin: 0.35rem 0;","xrefTitle":"Python","xrefDetail":"Automation and prototyping","xrefTarget":"tool-python"}-->
+
+    <!--hvy:component-list:3 {}-->
+
+     <!--hvy:xref-card {"css":"margin: 0.35rem 0;","xrefTitle":"Developer Containers","xrefDetail":"Reproducible local environments","xrefTarget":"tool-developer-containers"}-->
+
+<!--hvy: {"id":"skills","lock":true,"expanded":false,"location":"sidebar"}-->
+#! Skills
+
+ <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
+  # Skills
+
+ <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"skill-record"}-->
+
+  <!--hvy:component-list:0 {}-->
+
+   <!--hvy:skill-record {"id":"skill-software-engineering","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+
+    <!--hvy:expandable:stub {}-->
+
+     <!--hvy:text {"css":"margin: 0;"}-->
+      Software Engineering
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
+      #### Description
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:text {"css":"margin: 0 0 0.35rem; margin-left: 0.5rem;"}-->
+      Designing, building, and maintaining software systems with a focus on reliability, maintainability, and developer experience.
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
+      #### Notes
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:text {"css":"margin: 0 0 0.35rem; margin-left: 0.5rem;"}-->
+      Core strength. Approaches engineering as a systems discipline — prioritizing clear APIs, testable boundaries, and incremental delivery over clever solutions.
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
+      #### Experience
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;"}-->
+
+      <!--hvy:component-list:0 {}-->
+
+       <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Senior Software Engineer","xrefDetail":"Northwind Labs","xrefTarget":"history-northwind-labs-senior-software-engineer"}-->
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
+      #### Education
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;"}-->
+
+      <!--hvy:component-list:0 {}-->
+
+       <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"B.S. Computer Science","xrefDetail":"University of Washington","xrefTarget":"education-bs-computer-science"}-->
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
+      #### Projects
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;"}-->
+
+      <!--hvy:component-list:0 {}-->
+
+       <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Heavy Stack","xrefDetail":"05/2024 - present","xrefTarget":"project-heavy-stack"}-->
+
+  <!--hvy:component-list:1 {}-->
+
+   <!--hvy:skill-record {"id":"skill-reverse-engineering","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+
+    <!--hvy:expandable:stub {}-->
+
+     <!--hvy:text {"css":"margin: 0;"}-->
+      Reverse Engineering
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
+      #### Description
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:text {"css":"margin: 0 0 0.35rem; margin-left: 0.5rem;"}-->
+      Analyzing existing systems, file formats, or tool internals to understand structure and behavior without access to original specifications.
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
+      #### Notes
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:text {"css":"margin: 0 0 0.35rem; margin-left: 0.5rem;"}-->
+      Applied primarily to understand undocumented formats and third-party tool internals for building compatible tooling.
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
+      #### Projects
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;"}-->
+
+      <!--hvy:component-list:0 {}-->
+
+       <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Heavy Stack","xrefDetail":"05/2024 - present","xrefTarget":"project-heavy-stack"}-->
+
+  <!--hvy:component-list:2 {}-->
+
+   <!--hvy:skill-record {"id":"skill-library-development","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+
+    <!--hvy:expandable:stub {}-->
+
+     <!--hvy:text {"css":"margin: 0;"}-->
+      Library Development
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
+      #### Description
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:text {"css":"margin: 0 0 0.35rem; margin-left: 0.5rem;"}-->
+      Designing and maintaining reusable software packages intended for use across multiple applications or by other developers.
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
+      #### Notes
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:text {"css":"margin: 0 0 0.35rem; margin-left: 0.5rem;"}-->
+      Built shared TypeScript platform packages that reduced duplicated code across products and improved consistency of internal tooling.
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
+      #### Projects
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;"}-->
+
+      <!--hvy:component-list:0 {}-->
+
+       <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Heavy Stack","xrefDetail":"05/2024 - present","xrefTarget":"project-heavy-stack"}-->
+
+  <!--hvy:component-list:3 {}-->
+
+   <!--hvy:skill-record {"id":"skill-llm-prompt-engineering","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+
+    <!--hvy:expandable:stub {}-->
+
+     <!--hvy:text {"css":"margin: 0;"}-->
+      LLM Prompt Engineering
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
+      #### Description
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:text {"css":"margin: 0 0 0.35rem; margin-left: 0.5rem;"}-->
+      Designing and iterating on prompts and workflows that direct large language model behavior toward reliable, useful outputs in product contexts.
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
+      #### Notes
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:text {"css":"margin: 0 0 0.35rem; margin-left: 0.5rem;"}-->
+      Used to design AI-assisted editor workflows and autonomous agent pipelines. Focuses on structured output, fallback handling, and iterative refinement.
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
+      #### Projects
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;"}-->
+
+      <!--hvy:component-list:0 {}-->
+
+       <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Autonomous Agent Hackathon","xrefDetail":"08/2023 - 08/2023","xrefTarget":"project-autonomous-agent-hackathon"}-->
+
+  <!--hvy:component-list:4 {}-->
+
+   <!--hvy:skill-record {"id":"skill-project-management","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+
+    <!--hvy:expandable:stub {}-->
+
+     <!--hvy:text {"css":"margin: 0;"}-->
+      Project Management
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
+      #### Description
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:text {"css":"margin: 0 0 0.35rem; margin-left: 0.5rem;"}-->
+      Coordinating people, timelines, and deliverables to move work from idea to shipped with clear ownership and minimal ceremony.
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
+      #### Notes
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:text {"css":"margin: 0 0 0.35rem; margin-left: 0.5rem;"}-->
+      Lightweight approach — async-first communication and clear ownership over process overhead. Comfortable leading small cross-functional efforts.
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
+      #### Projects
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;"}-->
+
+      <!--hvy:component-list:0 {}-->
+
+       <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Autonomous Agent Hackathon","xrefDetail":"08/2023 - 08/2023","xrefTarget":"project-autonomous-agent-hackathon"}-->
+
+<!--hvy: {"id":"tools-technologies","lock":true,"expanded":false,"location":"sidebar"}-->
+#! Tools & Technologies
+
+ <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
+  # Tools & Technologies
+
+ <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"skill-record"}-->
+
+  <!--hvy:component-list:0 {}-->
+
+   <!--hvy:skill-record {"id":"tool-typescript","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+
+    <!--hvy:expandable:stub {}-->
+
+     <!--hvy:text {"css":"margin: 0;"}-->
+      TypeScript
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
+      #### Description
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:text {"css":"margin: 0 0 0.35rem; margin-left: 0.5rem;"}-->
+      Statically typed superset of JavaScript used for large-scale web applications, tooling, and shared platform packages.
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
+      #### Notes
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:text {"css":"margin: 0 0 0.35rem; margin-left: 0.5rem;"}-->
+      Primary application language. Uses strict mode throughout with explicit types at API boundaries. Comfortable with both frontend and Node.js contexts.
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
+      #### Projects
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;"}-->
+
+      <!--hvy:component-list:0 {}-->
+
+       <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Heavy Stack","xrefDetail":"05/2024 - present","xrefTarget":"project-heavy-stack"}-->
+
+  <!--hvy:component-list:1 {}-->
+
+   <!--hvy:skill-record {"id":"tool-python","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+
+    <!--hvy:expandable:stub {}-->
+
+     <!--hvy:text {"css":"margin: 0;"}-->
+      Python
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
+      #### Description
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:text {"css":"margin: 0 0 0.35rem; margin-left: 0.5rem;"}-->
+      High-level dynamically typed language commonly used for scripting, automation, data processing, and AI/ML integrations.
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
+      #### Notes
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:text {"css":"margin: 0 0 0.35rem; margin-left: 0.5rem;"}-->
+      Used for automation scripts, prototyping, and AI API integrations. Comfortable with async patterns and CLI tooling.
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
+      #### Projects
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;"}-->
+
+      <!--hvy:component-list:0 {}-->
+
+       <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Heavy Stack","xrefDetail":"05/2024 - present","xrefTarget":"project-heavy-stack"}-->
+
+      <!--hvy:component-list:1 {}-->
+
+       <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Autonomous Agent Hackathon","xrefDetail":"08/2023 - 08/2023","xrefTarget":"project-autonomous-agent-hackathon"}-->
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
+      #### Education
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;"}-->
+
+      <!--hvy:component-list:0 {}-->
+
+       <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"B.S. Computer Science","xrefDetail":"University of Washington","xrefTarget":"education-bs-computer-science"}-->
+
+  <!--hvy:component-list:2 {}-->
+
+   <!--hvy:skill-record {"id":"tool-c-cpp","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+
+    <!--hvy:expandable:stub {}-->
+
+     <!--hvy:text {"css":"margin: 0;"}-->
+      C/C++
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
+      #### Description
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:text {"css":"margin: 0 0 0.35rem; margin-left: 0.5rem;"}-->
+      Systems programming languages used for performance-critical software, operating systems, compilers, and graphics work.
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
+      #### Notes
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:text {"css":"margin: 0 0 0.35rem; margin-left: 0.5rem;"}-->
+      Background from coursework in operating systems, compilers, and computer graphics. Applied in academic projects; not a current primary language.
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
+      #### Education
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;"}-->
+
+      <!--hvy:component-list:0 {}-->
+
+       <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"B.S. Computer Science","xrefDetail":"University of Washington","xrefTarget":"education-bs-computer-science"}-->
+
+  <!--hvy:component-list:3 {}-->
+
+   <!--hvy:skill-record {"id":"tool-developer-containers","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+
+    <!--hvy:expandable:stub {}-->
+
+     <!--hvy:text {"css":"margin: 0;"}-->
+      Developer Containers
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
+      #### Description
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:text {"css":"margin: 0 0 0.35rem; margin-left: 0.5rem;"}-->
+      Docker-based development environments defined as code, providing reproducible and portable local setups with all dependencies pre-configured.
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
+      #### Notes
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:text {"css":"margin: 0 0 0.35rem; margin-left: 0.5rem;"}-->
+      Built and maintained dev containers for multiple projects. Cut onboarding time from days to hours and ensured test parity with CI environments.
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
+      #### Projects
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;"}-->
+
+      <!--hvy:component-list:0 {}-->
+
+       <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Heavy Stack","xrefDetail":"05/2024 - present","xrefTarget":"project-heavy-stack"}-->
+
+      <!--hvy:component-list:1 {}-->
+
+       <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Autonomous Agent Hackathon","xrefDetail":"08/2023 - 08/2023","xrefTarget":"project-autonomous-agent-hackathon"}-->
+
+  <!--hvy:component-list:4 {}-->
+
+   <!--hvy:skill-record {"id":"tool-openai-api","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+
+    <!--hvy:expandable:stub {}-->
+
+     <!--hvy:text {"css":"margin: 0;"}-->
+      OpenAI API
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
+      #### Description
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:text {"css":"margin: 0 0 0.35rem; margin-left: 0.5rem;"}-->
+      REST API providing access to OpenAI's language and embedding models for integration into applications and agent workflows.
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
+      #### Notes
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:text {"css":"margin: 0 0 0.35rem; margin-left: 0.5rem;"}-->
+      Used to power a deep research agent during a hackathon. Familiar with prompt construction, streaming, and managing token budgets.
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
+      #### Projects
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;"}-->
+
+      <!--hvy:component-list:0 {}-->
+
+       <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Autonomous Agent Hackathon","xrefDetail":"08/2023 - 08/2023","xrefTarget":"project-autonomous-agent-hackathon"}-->
+
+  <!--hvy:component-list:5 {}-->
+
+   <!--hvy:skill-record {"id":"tool-github-codespaces","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+
+    <!--hvy:expandable:stub {}-->
+
+     <!--hvy:text {"css":"margin: 0;"}-->
+      GitHub Codespaces
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
+      #### Description
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:text {"css":"margin: 0 0 0.35rem; margin-left: 0.5rem;"}-->
+      Cloud-hosted development environments that run VS Code in the browser backed by a remote container, eliminating local setup requirements.
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
+      #### Notes
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:text {"css":"margin: 0 0 0.35rem; margin-left: 0.5rem;"}-->
+      Used as the hosting target for the Autonomous Agent Hackathon, allowing teammates to run the agent without any local environment setup.
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
+      #### Projects
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;"}-->
+
+      <!--hvy:component-list:0 {}-->
+
+       <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Autonomous Agent Hackathon","xrefDetail":"08/2023 - 08/2023","xrefTarget":"project-autonomous-agent-hackathon"}-->
+
+  <!--hvy:component-list:6 {}-->
+
+   <!--hvy:skill-record {"id":"tool-superagi","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+
+    <!--hvy:expandable:stub {}-->
+
+     <!--hvy:text {"css":"margin: 0;"}-->
+      SuperAGI
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
+      #### Description
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:text {"css":"margin: 0 0 0.35rem; margin-left: 0.5rem;"}-->
+      Open-source autonomous agent framework that orchestrates multi-step AI tasks using tools, memory, and goal-driven loops.
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
+      #### Notes
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:text {"css":"margin: 0 0 0.35rem; margin-left: 0.5rem;"}-->
+      Core technology used in the Autonomous Agent Hackathon. Designed the agent architecture and wrote all integration code connecting it to the research task pipeline.
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
+      #### Projects
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;"}-->
+
+      <!--hvy:component-list:0 {}-->
+
+       <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Autonomous Agent Hackathon","xrefDetail":"08/2023 - 08/2023","xrefTarget":"project-autonomous-agent-hackathon"}-->
+
+<!--hvy: {"id":"history","lock":true}-->
+#! History
+
+ <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
+  # History
+
+ <!--hvy:table {"css":"margin: 0.5rem 0 0;","tableColumns":"YEAR, ORGANIZATION, TITLE","tableShowHeader":true,"tableRows":[],"lock":true}-->
+
+ <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"history-record"}-->
+
+  <!--hvy:component-list:0 {}-->
+
+   <!--hvy:history-record {"id":"history-northwind-labs-senior-software-engineer","css":"margin: 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+
+    <!--hvy:expandable:stub {}-->
+
+     <!--hvy:table {"css":"margin: 0;  margin-top: -1px;","tableColumns":"YEAR, ORGANIZATION, TITLE","tableShowHeader":false,"tableRows":[{"cells":["2024","Northwind Labs","Senior Software Engineer"]}]}-->
+
+    <!--hvy:expandable:content {"css":"padding: 0.5rem;"}-->
+
+     <!--hvy:text {"css":"margin: 0 0 0.35rem;"}-->
+      ### Northwind Labs
+
+      <!--hvy:grid {"css":"margin: 0.35rem 0;","gridColumns":2}-->
+
+        <!--hvy:grid:0 {"id":"history-location"}-->
+
+         <!--hvy:text {"css":"margin: 0;"}-->
+         Seattle, WA
+
+        <!--hvy:grid:1 {"id":"history-date-range"}-->
+
+         <!--hvy:text {"css":"margin: 0; text-align: right;"}-->
+         05/2024 - present
+
+     <!--hvy:text {"css":"margin: 0.35rem 0; font-weight: 700;"}-->
+      Senior Software Engineer
+
+     <!--hvy:text {"css":"margin: 0.35rem 0;"}-->
+      Led the developer platform for an AI-enabled product line, improving local setup, internal tooling, and release confidence across a fast-moving engineering team.
+
+     <!--hvy:text {"css":"margin: 0.5rem 0 0.25rem;"}-->
+      #### Accomplishments
+
+     <!--hvy:component-list {"componentListComponent":"text","css":"margin: 0;"}-->
+
+      <!--hvy:component-list:0 {}-->
+
+       <!--hvy:text {"css":"margin: 0.25rem 0;"}-->
+        Built a shared TypeScript platform package that reduced duplicated application code across three products.
+
+      <!--hvy:component-list:1 {}-->
+
+       <!--hvy:text {"css":"margin: 0.25rem 0;"}-->
+        Introduced reproducible developer containers and test workflows that cut onboarding time from days to hours.
+
+      <!--hvy:component-list:2 {}-->
+
+       <!--hvy:text {"css":"margin: 0.25rem 0;"}-->
+        Partnered with design and product to ship AI-assisted editor workflows with measurable adoption.
+
+     <!--hvy:skills-and-tools-tech-list {}-->
+
+      <!--hvy:grid:0 {"id":"history-skills"}-->
+
+       <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
+
+        <!--hvy:component-list:0 {}-->
+
+         <!--hvy:text {"css":"margin: 0 0 0.25rem;"}-->
+          #### Skills
+
+        <!--hvy:component-list:1 {}-->
+
+         <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Software Engineering","xrefTarget":"skill-software-engineering"}-->
+
+        <!--hvy:component-list:2 {}-->
+
+         <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Library Development","xrefTarget":"skill-library-development"}-->
+
+        <!--hvy:component-list:3 {}-->
+
+         <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Project Management","xrefTarget":"skill-project-management"}-->
+
+      <!--hvy:grid:1 {"id":"history-tools-technologies"}-->
+
+       <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
+
+        <!--hvy:component-list:0 {}-->
+
+         <!--hvy:text {"css":"margin: 0 0 0.25rem;"}-->
+          #### Tools & Technologies
+
+        <!--hvy:component-list:1 {}-->
+
+         <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"TypeScript","xrefTarget":"tool-typescript"}-->
+
+        <!--hvy:component-list:2 {}-->
+
+         <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Python","xrefTarget":"tool-python"}-->
+
+        <!--hvy:component-list:3 {}-->
+
+         <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Developer Containers","xrefTarget":"tool-developer-containers"}-->
+
+<!--hvy: {"id":"projects","lock":true}-->
+#! Projects
+
+ <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
+  # Projects
+
+ <!--hvy:table {"css":"margin: 0.5rem 0 0;","tableColumns":"PROJECT, DATE","tableShowHeader":true,"tableRows":[],"lock":true}-->
+
+ <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"project-record"}-->
+
+  <!--hvy:component-list:0 {}-->
+
+   <!--hvy:project-record {"id":"project-heavy-stack","css":"margin: 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+
+    <!--hvy:expandable:stub {}-->
+
+     <!--hvy:table {"css":"margin: 0;  margin-top: -1px;","tableColumns":"PROJECT, DATE","tableShowHeader":false,"tableRows":[{"cells":["Heavy Stack","05/2024 - present"]}]}-->
+
+    <!--hvy:expandable:content {"css":"padding:0.5rem"}-->
+
+     <!--hvy:grid {"css":"margin: 0 0 0.35rem;","gridColumns":2}-->
+
+      <!--hvy:grid:0 {"id":"project-title"}-->
+
+       <!--hvy:text {"css":"margin: 0;"}-->
+        ### Heavy Stack
+
+      <!--hvy:grid:1 {"id":"project-date-range"}-->
+
+       <!--hvy:text {"css":"margin: 0; text-align: right;"}-->
+        05/2024 - present
+
+     <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
+      The Heavy Stack is the production version of the developer container used for Heavy Resume. It has various features such as hot reloading for both the application and testing, the ability to record user actions for playback later, as well as a functioning dev container with databases and everything set up and ready to go.
+
+     <!--hvy:text {"css":"margin: 0.35rem 0;"}-->
+      [Visit webpage](https://github.com) (github.com)
+
+     <!--hvy:skills-and-tools-tech-list {"css":"margin: 0.5rem 0 0;","gridColumns":2}-->
+
+      <!--hvy:grid:0 {"id":"project-relevant-skills"}-->
+
+       <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
+
+        <!--hvy:component-list:0 {}-->
+
+         <!--hvy:text {"css":"margin: 0 0 0.25rem;"}-->
+          #### Relevant Skills
+
+        <!--hvy:component-list:1 {}-->
+
+         <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Reverse Engineering","xrefTarget":"skill-reverse-engineering"}-->
+
+        <!--hvy:component-list:2 {}-->
+
+         <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Library Development","xrefTarget":"skill-library-development"}-->
+
+      <!--hvy:grid:1 {"id":"project-tools-technologies"}-->
+
+       <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
+
+        <!--hvy:component-list:0 {}-->
+
+         <!--hvy:text {"css":"margin: 0 0 0.25rem;"}-->
+          #### Tools and Technologies
+
+        <!--hvy:component-list:1 {}-->
+
+         <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"TypeScript","xrefTarget":"tool-typescript"}-->
+
+        <!--hvy:component-list:2 {}-->
+
+         <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Python","xrefTarget":"tool-python"}-->
+
+        <!--hvy:component-list:3 {}-->
+
+         <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Developer Containers","xrefTarget":"tool-developer-containers"}-->
+
+  <!--hvy:component-list:1 {}-->
+
+   <!--hvy:project-record {"id":"project-autonomous-agent-hackathon","css":"margin: 0; gap: 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+
+    <!--hvy:expandable:stub {}-->
+
+     <!--hvy:table {"css":"margin: 0; margin-top: -1px;","tableColumns":"PROJECT, DATE","tableShowHeader":false,"tableRows":[{"cells":["Autonomous Agent Hackathon","08/2023 - 08/2023"]}]}-->
+
+    <!--hvy:expandable:content {"css": "padding: 0.5rem"}-->
+
+     <!--hvy:grid {"css":"margin: 0 0 0.35rem;","gridColumns":2}-->
+
+      <!--hvy:grid:0 {"id":"project-title-hackathon"}-->
+
+       <!--hvy:text {"css":"margin: 0;"}-->
+        ### Autonomous Agent Hackathon
+
+      <!--hvy:grid:1 {"id":"project-date-range-hackathon"}-->
+
+       <!--hvy:text {"css":"margin: 0; text-align: right;"}-->
+        08/2023 - 08/2023
+
+     <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
+      Hackathon project that involved using SuperAGI to do deep research. I had the idea, wrote all of the code, and did a substantial portion of the video presentation.
+
+     <!--hvy:text {"css":"margin: 0.35rem 0;"}-->
+      [Visit webpage](https://lablab.ai) (lablab.ai)
+
+     <!--hvy:skills-and-tools-tech-list {"css":"margin: 0.5rem 0 0;","gridColumns":2}-->
+
+      <!--hvy:grid:0 {"id":"project-relevant-skills-hackathon"}-->
+
+       <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
+
+        <!--hvy:component-list:0 {}-->
+
+         <!--hvy:text {"css":"margin: 0 0 0.25rem;"}-->
+          #### Relevant Skills
+
+        <!--hvy:component-list:1 {}-->
+
+         <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"LLM Prompt Engineering","xrefTarget":"skill-llm-prompt-engineering"}-->
+
+        <!--hvy:component-list:2 {}-->
+
+         <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Project Management","xrefTarget":"skill-project-management"}-->
+
+      <!--hvy:grid:1 {"id":"project-tools-technologies-hackathon"}-->
+
+       <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
+
+        <!--hvy:component-list:0 {}-->
+
+         <!--hvy:text {"css":"margin: 0 0 0.25rem;"}-->
+          #### Tools and Technologies
+
+        <!--hvy:component-list:1 {}-->
+
+         <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Developer Containers","xrefTarget":"tool-developer-containers"}-->
+
+        <!--hvy:component-list:2 {}-->
+
+         <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"OpenAI API","xrefTarget":"tool-openai-api"}-->
+
+        <!--hvy:component-list:3 {}-->
+
+          <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Python","xrefTarget":"tool-python"}-->
+
+        <!--hvy:component-list:4 {}-->
+
+          <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"GitHub Codespaces","xrefTarget":"tool-github-codespaces"}-->
+
+        <!--hvy:component-list:5 {}-->
+
+          <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"SuperAGI","xrefTarget":"tool-superagi"}-->
+
+<!--hvy: {"id":"education","lock":true}-->
+#! Education
+
+ <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
+  # Education
+
+ <!--hvy:table {"css":"margin: 0.5rem 0 0;","tableColumns":"DEGREE, INSTITUTION, LOCATION","tableShowHeader":true,"tableRows":[],"lock":true}-->
+
+ <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"education-record"}-->
+
+  <!--hvy:component-list:0 {}-->
+
+   <!--hvy:education-record {"id":"education-bs-computer-science","css":"margin: 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+
+    <!--hvy:expandable:stub {}-->
+
+     <!--hvy:table {"css":"margin: 0; margin-top: -1px;","tableColumns":"DEGREE, INSTITUTION, LOCATION","tableShowHeader":false,"tableRows":[{"cells":["B.S. Computer Science","University of Washington","Seattle, WA"]}]}-->
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:grid {"css":"margin: 0.35rem 0;","gridColumns":2}-->
+
+      <!--hvy:grid:0 {"id":"education-institution-details"}-->
+
+       <!--hvy:component-list {"componentListComponent":"text","css":"margin: 0;"}-->
+
+        <!--hvy:component-list:0 {}-->
+
+         <!--hvy:text {"css":"margin: 0 0 0.25rem;"}-->
+          ### B.S. Computer Science
+
+        <!--hvy:component-list:1 {}-->
+
+         <!--hvy:text {"css":"margin: 0;"}-->
+          University of Washington
+
+        <!--hvy:component-list:2 {}-->
+
+         <!--hvy:text {"css":"margin: 0.15rem 0 0;"}-->
+          Seattle, WA
+
+        <!--hvy:component-list:3 {}-->
+
+         <!--hvy:text {"css":"margin: 0.15rem 0 0;"}-->
+          GPA: 3.8 / 4.0
+
+      <!--hvy:grid:1 {"id":"education-date-range"}-->
+
+       <!--hvy:text {"css":"margin: 0; text-align: right;"}-->
+        09/2019 - 06/2023
+
+     <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
+      Focused on systems programming, developer tooling, and human-computer interaction while building software for research and product-oriented team projects.
+
+     <!--hvy:skills-and-tools-tech-list {"css":"margin: 0.5rem 0 0;","gridColumns":2}-->
+
+      <!--hvy:grid:0 {"id":"education-relevant-skills"}-->
+
+       <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
+
+        <!--hvy:component-list:0 {}-->
+
+         <!--hvy:text {"css":"margin: 0 0 0.25rem;"}-->
+          #### Relevant Skills
+
+        <!--hvy:component-list:1 {}-->
+
+         <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Software Engineering","xrefTarget":"skill-software-engineering"}-->
+
+      <!--hvy:grid:1 {"id":"education-tools-technologies"}-->
+
+       <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
+
+        <!--hvy:component-list:0 {}-->
+
+         <!--hvy:text {"css":"margin: 0 0 0.25rem;"}-->
+          #### Tools and Technologies
+
+        <!--hvy:component-list:1 {}-->
+
+         <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Python","xrefTarget":"tool-python"}-->
+
+        <!--hvy:component-list:2 {}-->
+
+         <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"C/C++","xrefTarget":"tool-c-cpp"}-->
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:text {"css":"margin: 0.5rem 0 0.25rem;"}-->
+      #### Classes
+
+     <!--hvy:component-list {"componentListComponent":"text","css":"margin: 0;"}-->
+
+      <!--hvy:component-list:0 {}-->
+
+       <!--hvy:text {"css":"margin: 0.25rem 0;"}-->
+        Distributed Systems
+
+      <!--hvy:component-list:1 {}-->
+
+       <!--hvy:text {"css":"margin: 0.25rem 0;"}-->
+        Operating Systems
+
+      <!--hvy:component-list:2 {}-->
+
+       <!--hvy:text {"css":"margin: 0.25rem 0;"}-->
+        Compilers
+
+      <!--hvy:component-list:3 {}-->
+
+       <!--hvy:text {"css":"margin: 0.25rem 0;"}-->
+        Machine Learning
+
+      <!--hvy:component-list:4 {}-->
+
+       <!--hvy:text {"css":"margin: 0.25rem 0;"}-->
+        Computer Graphics
+
+      <!--hvy:component-list:5 {}-->
+
+       <!--hvy:text {"css":"margin: 0.25rem 0;"}-->
+        Human-Computer Interaction

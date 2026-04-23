@@ -29,7 +29,7 @@ interface ProxyChatRequest {
   messages: ChatMessage[];
   context: string;
   formatInstructions: string;
-  mode: 'qa' | 'component-edit';
+  mode: 'qa' | 'component-edit' | 'document-edit';
 }
 
 interface ProxyChatResponse {
@@ -41,7 +41,7 @@ export interface ProxyCompletionParams {
   messages: ChatMessage[];
   context: string;
   formatInstructions: string;
-  mode: 'qa' | 'component-edit';
+  mode: 'qa' | 'component-edit' | 'document-edit';
   debugLabel?: string;
 }
 
@@ -105,12 +105,35 @@ export function buildChatDocumentContext(document: VisualDocument): string {
   return stripDocumentHeaderAndComments(serializeDocument(document));
 }
 
-export function renderChatPanel(chat: ChatState, document: VisualDocument, deps: RenderChatPanelDeps): string {
+export function renderChatPanel(
+  chat: ChatState,
+  document: VisualDocument,
+  deps: RenderChatPanelDeps,
+  mode: 'qa' | 'document-edit' = 'qa'
+): string {
   const context = buildChatDocumentContext(document);
   const currentProviderLabel = chat.settings.provider === 'openai' ? 'OpenAI' : 'Anthropic';
   const hasDraft = chat.draft.trim().length > 0;
   const missingModel = chat.settings.model.trim().length === 0;
   const canSend = !chat.isSending && context.length > 0;
+  const isDocumentEdit = mode === 'document-edit';
+  const title = isDocumentEdit ? 'Edit This Document' : 'Ask This Document';
+  const subtitle = isDocumentEdit
+    ? 'AI mode can inspect structure, request targeted tools, and apply document changes step by step through the local proxy.'
+    : 'Separate from the reader. Requests go through a local proxy so provider API keys stay out of the browser.';
+  const emptyTitle = isDocumentEdit
+    ? 'Describe a document change to make in the visible HVY file.'
+    : 'Start by asking a question about the visible HVY document.';
+  const emptyBody = isDocumentEdit
+    ? 'In AI view, the model examines reduced structure first, then requests one editing tool at a time.'
+    : 'The browser sends your prompt to a same-origin proxy, and that proxy talks to the model provider.';
+  const promptLabel = isDocumentEdit ? 'Change request' : 'Question';
+  const promptPlaceholder = isDocumentEdit
+    ? 'Describe how the document should change...'
+    : 'Ask about the current HVY document...';
+  const contextSourceDescription = isDocumentEdit
+    ? 'Current document structure is reduced to sections, visible text, component types, and IDs before the AI requests local editing tools.'
+    : 'Current HVY body with YAML front matter removed and only structural HVY comments preserved for chat context.';
 
   return `
     <div class="chat-dock ${chat.panelOpen ? 'is-open' : 'is-closed'}" aria-label="Document chat">
@@ -119,8 +142,8 @@ export function renderChatPanel(chat: ChatState, document: VisualDocument, deps:
           ? `<aside class="chat-panel">
                <div class="chat-panel-head">
                  <div>
-                   <h2>Ask This Document</h2>
-                   <p>Separate from the reader. Requests go through a local proxy so provider API keys stay out of the browser.</p>
+                   <h2>${title}</h2>
+                   <p>${subtitle}</p>
                  </div>
                  <div class="chat-panel-head-actions">
                    <button type="button" class="ghost" data-action="clear-chat-history"${chat.messages.length === 0 ? ' disabled' : ''}>Clear</button>
@@ -155,7 +178,7 @@ export function renderChatPanel(chat: ChatState, document: VisualDocument, deps:
 
                  <div class="chat-context-card">
                    <strong>Context source</strong>
-                   <p>Current HVY body with YAML front matter removed and only structural HVY comments preserved for chat context.</p>
+                   <p>${contextSourceDescription}</p>
                    <div class="chat-context-meta">
                      <span>${context.length.toLocaleString()} chars</span>
                      <span>${chat.messages.length} messages</span>
@@ -168,9 +191,9 @@ export function renderChatPanel(chat: ChatState, document: VisualDocument, deps:
                  <div class="chat-thread" aria-live="polite" role="log">
                    ${
                      chat.messages.length === 0
-                       ? `<div class="chat-empty">
-                            <strong>Start by asking a question about the visible HVY document.</strong>
-                            <p>The browser sends your prompt to a same-origin proxy, and that proxy talks to the model provider.</p>
+                      ? `<div class="chat-empty">
+                           <strong>${emptyTitle}</strong>
+                           <p>${emptyBody}</p>
                           </div>`
                        : chat.messages
                            .map(
@@ -193,8 +216,8 @@ export function renderChatPanel(chat: ChatState, document: VisualDocument, deps:
                    <button type="button" class="chat-scroll-bottom" data-action="chat-scroll-bottom" hidden>Latest ↓</button>
                    <form id="chatComposer" class="chat-composer">
                      <label class="chat-composer-field">
-                       <span>Question</span>
-                       <textarea data-field="chat-input" rows="5" placeholder="Ask about the current HVY document..." ${chat.isSending ? 'disabled' : ''}>${deps.escapeHtml(chat.draft)}</textarea>
+                       <span>${promptLabel}</span>
+                       <textarea data-field="chat-input" rows="5" placeholder="${deps.escapeAttr(promptPlaceholder)}" ${chat.isSending ? 'disabled' : ''}>${deps.escapeHtml(chat.draft)}</textarea>
                      </label>
                      <div class="chat-composer-actions">
                        <span class="chat-composer-status">

@@ -97,6 +97,24 @@ test('component edit requests use edit-specific system instructions', () => {
   );
 });
 
+test('document edit requests use document-edit-specific system instructions', () => {
+  const openAiRequest = buildOpenAiProxyRequest({
+    ...request,
+    mode: 'document-edit',
+  });
+
+  expect(openAiRequest).toEqual(
+    expect.objectContaining({
+      instructions: expect.stringMatching(/This is a document editing task, not a question answering task\./),
+    })
+  );
+  expect(openAiRequest).toEqual(
+    expect.not.objectContaining({
+      instructions: expect.stringMatching(/Modify only the selected component\./),
+    })
+  );
+});
+
 test('assistant turns use output_text in OpenAI response inputs', () => {
   const openAiRequest = buildOpenAiProxyRequest(request) as {
     input: Array<{ role: string; content: Array<{ type: string; text: string }> }>;

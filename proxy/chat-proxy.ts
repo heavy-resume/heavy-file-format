@@ -8,7 +8,7 @@ const ANTHROPIC_API_VERSION = '2023-06-01';
 interface ProxyChatRequest {
   provider: 'openai' | 'anthropic';
   model: string;
-  mode: 'qa' | 'component-edit';
+  mode: 'qa' | 'component-edit' | 'document-edit';
   messages: Array<{
     role: 'user' | 'assistant';
     content: string;
@@ -141,6 +141,9 @@ export function extractAnthropicText(payload: unknown): string {
 
 async function requestProviderWithRepair(body: ProxyChatRequest, env: Record<string, string | undefined>): Promise<string> {
   const initialOutput = await requestProviderOnce(body, env);
+  if (body.mode === 'document-edit') {
+    return initialOutput;
+  }
   const diagnostics = getHvyResponseDiagnostics(initialOutput);
   if (diagnostics.length === 0) {
     return initialOutput;
@@ -287,7 +290,7 @@ function validateProxyChatRequest(payload: unknown): ProxyChatRequest {
   if (record.provider !== 'openai' && record.provider !== 'anthropic') {
     throw new Error('Invalid chat provider.');
   }
-  if (record.mode !== 'qa' && record.mode !== 'component-edit') {
+  if (record.mode !== 'qa' && record.mode !== 'component-edit' && record.mode !== 'document-edit') {
     throw new Error('Invalid chat mode.');
   }
   if (typeof record.model !== 'string' || record.model.trim().length === 0) {
@@ -391,6 +394,13 @@ function buildSystemInstructions(mode: ProxyChatRequest['mode'], formatInstructi
           'This is a component editing task, not a question answering task.',
           'Modify only the selected component.',
           'Preserve IDs and unchanged structure unless the request explicitly changes them.',
+        ]
+      : mode === 'document-edit'
+      ? [
+          'Edit the provided HVY document step by step using the available local tools.',
+          'This is a document editing task, not a question answering task.',
+          'Request exactly one next tool action at a time.',
+          'Use the reduced structure and tool results to decide what to do next.',
         ]
       : [
           'Answer questions about the provided HVY document context.',

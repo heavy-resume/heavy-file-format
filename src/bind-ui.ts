@@ -45,7 +45,7 @@ import { bindLinkInlineModal, openLinkInlineModal } from './bind-link-modal';
 import { removeBlockFromList, findBlockInList } from './block-ops';
 import { getReusableTemplateByName } from './document-factory';
 import { clearChatConversation, getDefaultModelForProvider, persistChatSettings } from './chat';
-import { appendUserChatMessage, requestChatTurn } from './chat-session';
+import { appendUserChatMessage, requestChatTurn, requestDocumentEditChatTurn } from './chat-session';
 import type { RawEditorDiagnostic } from './types';
 import { requestAiComponentEdit } from './ai-edit';
 
@@ -387,6 +387,10 @@ export function bindUi(app: HTMLElement): void {
     if (action === 'switch-view') {
       const requestedView = actionButton.dataset.view;
       const view = requestedView === 'viewer' ? 'viewer' : requestedView === 'ai' ? 'ai' : 'editor';
+      const crossingAiBoundary = (state.currentView === 'ai') !== (view === 'ai');
+      if (crossingAiBoundary) {
+        clearChatConversation(state.chat);
+      }
       state.currentView = view;
       if (view !== 'ai') {
         closeAiEditPopover();
@@ -779,17 +783,31 @@ export function bindUi(app: HTMLElement): void {
       getRenderApp()();
 
       try {
-        const result = await requestChatTurn({
-          settings: state.chat.settings,
-          document: state.document,
-          messages: previousMessages,
-          question,
-        });
+        const result =
+          state.currentView === 'ai'
+            ? await requestDocumentEditChatTurn({
+                settings: state.chat.settings,
+                document: state.document,
+                messages: previousMessages,
+                request: question,
+                onMutation: (group) => recordHistory(group),
+              })
+            : await requestChatTurn({
+                settings: state.chat.settings,
+                document: state.document,
+                messages: previousMessages,
+                question,
+              });
         if (requestNonce !== state.chat.requestNonce) {
           return;
         }
         state.chat.messages = result.messages;
         state.chat.error = result.error;
+        if (state.currentView === 'ai' && !result.error) {
+          state.rawEditorText = serializeDocument(state.document);
+          state.rawEditorError = null;
+          state.rawEditorDiagnostics = [];
+        }
       } finally {
         if (requestNonce !== state.chat.requestNonce) {
           return;

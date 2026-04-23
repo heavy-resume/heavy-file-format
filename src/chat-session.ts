@@ -1,5 +1,6 @@
 import { requestChatCompletion } from './chat';
 import type { ChatMessage, ChatSettings, VisualDocument } from './types';
+import { requestAiDocumentEditTurn } from './ai-document-edit';
 
 export interface ChatTurnResult {
   messages: ChatMessage[];
@@ -57,4 +58,14 @@ export async function requestChatTurn(params: {
       error: message,
     };
   }
+}
+
+export async function requestDocumentEditChatTurn(params: {
+  settings: ChatSettings;
+  document: VisualDocument;
+  messages: ChatMessage[];
+  request: string;
+  onMutation?: (group?: string) => void;
+}): Promise<ChatTurnResult> {
+  return requestAiDocumentEditTurn(params);
 }

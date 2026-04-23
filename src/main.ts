@@ -394,7 +394,7 @@ function renderApp(): void {
         </div>
       </section>
 
-      ${renderChatPanel(state.chat, state.document, { escapeAttr, escapeHtml })}
+      ${renderChatPanel(state.chat, state.document, { escapeAttr, escapeHtml }, isAiView ? 'document-edit' : 'qa')}
       ${readerRenderer.renderModal()}
       ${readerRenderer.renderLinkInlineModal()}
     </main>

@@ -226,6 +226,8 @@ Design the format like a document, not a form.
 
 The directive name after `hvy:` can be a component name. In that form, `component` is implied by the directive name. For compatibility, tools also support the legacy `hvy:block` directive with an explicit `component` field.
 
+Block content indentation is structural and MUST NOT be interpreted as Markdown code. Renderers MUST only render code from explicit `code` components or fenced Markdown code blocks using triple backticks (or standard Markdown fences).
+
 Expandable blocks can be emitted with specialized directives so their stub and expanded content remain normal Markdown blocks:
 
 ```markdown

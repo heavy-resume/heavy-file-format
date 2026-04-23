@@ -406,7 +406,7 @@ component_defs:
 
    <!--hvy:component-list {"componentListComponent":"text","css":"margin: 0;"}-->
 
-<!--hvy: {"id":"locations","lock":true}-->
+<!--hvy: {"id":"locations","lock":true,"contained":true,"location":"sidebar"}-->
 #! Locations
 
  <!--hvy:text {"css":"margin: 0.5rem 0;","lock":true}-->

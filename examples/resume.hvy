@@ -420,7 +420,7 @@ component_defs:
      <!--hvy:text {"css":"margin: 0;"}-->
       Enjoys turning messy, high-context problems into repeatable systems and clear documentation.
 
-<!--hvy: {"id":"locations","lock":true,"contained":false}-->
+<!--hvy: {"id":"locations","lock":true,"contained":true,"location":"sidebar"}-->
 #! Locations
 
  <!--hvy:text {"css":"margin: 0.5rem 0;","lock":true}-->

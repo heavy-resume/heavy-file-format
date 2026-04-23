@@ -19,7 +19,8 @@ turndown.addRule('task-list-checkbox', {
 });
 
 export function markdownToEditorHtml(markdown: string): string {
-  const html = addExternalLinkTargets(DOMPurify.sanitize(marked.parse(escapeRawHtml(markdown || '')) as string));
+  const normalized = normalizeMarkdownIndentation(markdown || '');
+  const html = addExternalLinkTargets(DOMPurify.sanitize(marked.parse(escapeRawHtml(normalized)) as string));
   const template = document.createElement('template');
   template.innerHTML = html;
   renderInlineCheckboxes(template.content);
@@ -28,6 +29,21 @@ export function markdownToEditorHtml(markdown: string): string {
     checkbox.setAttribute('contenteditable', 'false');
   });
   return template.innerHTML;
+}
+
+export function normalizeMarkdownIndentation(markdown: string): string {
+  const lines = markdown.split(/\r?\n/);
+  const indents = lines
+    .filter((line) => line.trim().length > 0)
+    .map((line) => (line.match(/^ */) ?? [''])[0].length);
+  const minIndent = indents.length > 0 ? Math.min(...indents) : 0;
+
+  if (minIndent === 0) {
+    return markdown;
+  }
+
+  const prefix = ' '.repeat(minIndent);
+  return lines.map((line) => (line.startsWith(prefix) ? line.slice(minIndent) : line)).join('\n');
 }
 
 export function addExternalLinkTargets(html: string): string {

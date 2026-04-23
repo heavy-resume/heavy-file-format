@@ -38,6 +38,53 @@ hvy_version: 0.1
   expect(block.schema.expandableContentBlocks.children[0]?.text).toBe('Expanded detail');
 });
 
+test('deserializes grid text without preserving structural indentation as code indentation', () => {
+  const input = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"experience"}-->
+#! Experience
+
+ <!--hvy:grid {"gridColumns":2}-->
+
+  <!--hvy:grid:0 {"id":"location"}-->
+
+   <!--hvy:text {}-->
+   Seattle, WA
+
+  <!--hvy:grid:1 {"id":"date-range"}-->
+
+   <!--hvy:text {}-->
+   05/2024 - present
+`;
+
+  const document = deserializeDocument(input, '.hvy');
+  const grid = document.sections[0]?.blocks[0];
+
+  expect(grid?.schema.gridItems[0]?.block.text).toBe('Seattle, WA');
+  expect(grid?.schema.gridItems[1]?.block.text).toBe('05/2024 - present');
+});
+
+test('deserializes fenced code while removing outer structural indentation', () => {
+  const input = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"snippet"}-->
+#! Snippet
+
+ <!--hvy:text {}-->
+  \`\`\`ts
+    const answer = 42;
+  \`\`\`
+`;
+
+  const document = deserializeDocument(input, '.hvy');
+
+  expect(document.sections[0]?.blocks[0]?.text).toBe('```ts\n  const answer = 42;\n```');
+});
+
 test('deserializes reader_max_width from document front matter', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1

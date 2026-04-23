@@ -11,6 +11,8 @@ Do not rely on GitHub-flavored Markdown table syntax.
 - Do not emit pipe-delimited pseudo-tables as a shortcut for structured layout.
 - If you need reveal/hide behavior around tabular information, use `expandable` components and plain text stubs instead of Markdown tables.
 
+Code blocks use backticks or the code component.
+
 Common clickable/expandable row structure:
   table - header only
   expandable

@@ -674,7 +674,7 @@ button.tiny {
   width: min(40rem, 80vw);
   max-width: min(40rem, 80vw);
   transform: translateX(-100%);
-  transition: transform 180ms ease, box-shadow 180ms ease;
+  transition: transform 360ms ease, box-shadow 360ms ease;
   z-index: 20;
   pointer-events: none;
 }
@@ -690,7 +690,7 @@ button.tiny {
   z-index: 10;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 180ms ease;
+  transition: opacity 360ms ease;
 }
 
 .viewer-shell.is-sidebar-open .viewer-sidebar-backdrop {
@@ -760,7 +760,7 @@ button.tiny {
   width: min(40rem, 80vw);
   max-width: min(40rem, 80vw);
   transform: translateX(-100%);
-  transition: transform 180ms ease, box-shadow 180ms ease;
+  transition: transform 360ms ease, box-shadow 360ms ease;
   z-index: 20;
   pointer-events: none;
 }
@@ -776,7 +776,7 @@ button.tiny {
   z-index: 10;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 180ms ease;
+  transition: opacity 360ms ease;
 }
 
 .editor-shell.is-sidebar-open .editor-sidebar-backdrop {
@@ -1038,7 +1038,7 @@ button.tiny {
   place-items: center;
   gap: 0.35rem;
   cursor: pointer;
-  transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease;
+  transition: transform 240ms ease, box-shadow 240ms ease, border-color 240ms ease;
   height: fit-content;
 }
 
@@ -1182,7 +1182,7 @@ button.tiny {
   display: grid;
   place-content: center;
   cursor: pointer;
-  transition: border-color 120ms ease, background 120ms ease, box-shadow 120ms ease, transform 120ms ease;
+  transition: border-color 240ms ease, background 240ms ease, box-shadow 240ms ease, transform 240ms ease;
 }
 
 .checkbox-label input[type='checkbox']::before,
@@ -1196,7 +1196,7 @@ button.tiny {
   margin-top: -0.08rem;
   transform: rotate(45deg) scale(0);
   transform-origin: center;
-  transition: transform 120ms ease;
+  transition: transform 240ms ease;
 }
 
 .checkbox-label input[type='checkbox']:hover,
@@ -1329,7 +1329,7 @@ button.tiny {
   padding: 0.2rem 0.35rem;
   border-radius: 0;
   cursor: pointer;
-  transition: background-color 120ms ease, box-shadow 120ms ease;
+  transition: background-color 240ms ease, box-shadow 240ms ease;
 }
 
 .editor-block-passive:hover {
@@ -2267,7 +2267,7 @@ button.tiny {
 
 .reader-section.is-collapsed-preview {
   cursor: pointer;
-  transition: border-color 120ms ease, box-shadow 120ms ease;
+  transition: border-color 240ms ease, box-shadow 240ms ease;
 }
 
 .reader-section.is-collapsed-preview .reader-section-content {
@@ -2312,7 +2312,7 @@ button.tiny {
 }
 
 .reader-xref-card {
-  transition: background-color 140ms ease, border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
+  transition: background-color 280ms ease, border-color 280ms ease, box-shadow 280ms ease, transform 280ms ease;
   justify-self: start;
 }
 
@@ -2505,7 +2505,7 @@ button.tiny {
 
 .expand-stub-toggle,
 .expand-collapse-strip {
-  transition: box-shadow 120ms ease, background-color 120ms ease;
+  transition: box-shadow 240ms ease, background-color 240ms ease;
   position: relative;
   z-index: 0;
 }
@@ -2546,11 +2546,11 @@ button.tiny {
   margin-top: 0.3rem;
   margin-bottom: 0.3rem;
   cursor: pointer;
-  animation: expandContentIn 180ms ease both;
+  animation: expandContentIn 360ms ease both;
 }
 
 .expandable-reader.is-collapsing .expand-content {
-  animation: expandContentOut 160ms ease both;
+  animation: expandContentOut 320ms ease both;
   pointer-events: none;
 }
 
@@ -2707,11 +2707,11 @@ button.tiny {
 }
 
 .reader-section.is-temp-highlighted {
-  animation: flash 1.2s ease;
+  animation: flash 2.4s ease;
 }
 
 .reader-block.is-temp-highlighted {
-  animation: flash 1.2s ease;
+  animation: flash 2.4s ease;
   border-radius: 8px;
 }
 

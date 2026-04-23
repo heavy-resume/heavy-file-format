@@ -131,10 +131,6 @@ export function renderChatPanel(
   const promptPlaceholder = isDocumentEdit
     ? 'Describe how the document should change...'
     : 'Ask about the current HVY document...';
-  const contextSourceDescription = isDocumentEdit
-    ? 'Current document structure is reduced to sections, visible text, component types, and IDs before the AI requests local editing tools.'
-    : 'Current HVY body with YAML front matter removed and only structural HVY comments preserved for chat context.';
-
   return `
     <div class="chat-dock ${chat.panelOpen ? 'is-open' : 'is-closed'}" aria-label="Document chat">
       ${
@@ -174,16 +170,6 @@ export function renderChatPanel(
                        ${chat.isSending ? 'disabled' : ''}
                      />
                    </label>
-                 </div>
-
-                 <div class="chat-context-card">
-                   <strong>Context source</strong>
-                   <p>${contextSourceDescription}</p>
-                   <div class="chat-context-meta">
-                     <span>${context.length.toLocaleString()} chars</span>
-                     <span>${chat.messages.length} messages</span>
-                     <span>${deps.escapeHtml(currentProviderLabel)}</span>
-                   </div>
                  </div>
 
                  ${chat.error ? `<div class="chat-error" role="alert">${deps.escapeHtml(chat.error)}</div>` : ''}

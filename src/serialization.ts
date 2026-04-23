@@ -664,7 +664,21 @@ function normalizeParsedBlockText(lines: string[], indent: number): string {
     end -= 1;
   }
 
-  return stripped.slice(start, end).join('\n');
+  return stripCommonIndent(stripped.slice(start, end)).join('\n');
+}
+
+function stripCommonIndent(lines: string[]): string[] {
+  const indents = lines
+    .filter((line) => line.trim().length > 0)
+    .map((line) => (line.match(/^ */) ?? [''])[0].length);
+  const minIndent = indents.length > 0 ? Math.min(...indents) : 0;
+
+  if (minIndent === 0) {
+    return lines;
+  }
+
+  const prefix = ' '.repeat(minIndent);
+  return lines.map((line) => (line.startsWith(prefix) ? line.slice(minIndent) : line));
 }
 
 function shouldCloseFrameForIndent(

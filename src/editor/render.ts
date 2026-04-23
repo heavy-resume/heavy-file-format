@@ -14,6 +14,7 @@ import { renderXrefCardEditor } from './components/xref-card';
 import { renderTagEditor } from './tag-editor';
 import { getTemplateFields, renderTemplateGhosts } from './template';
 import type { Align, BlockSchema, VisualBlock, VisualSection } from './types';
+import { normalizeMarkdownIndentation } from '../markdown';
 import bash from 'highlight.js/lib/languages/bash';
 import css from 'highlight.js/lib/languages/css';
 import javascript from 'highlight.js/lib/languages/javascript';
@@ -656,7 +657,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
 
   function renderComponentFragment(componentName: string, content: string, block: VisualBlock): string {
     const base = deps.resolveBaseComponent(componentName);
-    const normalized = escapeRawHtml(normalizeMarkdownLists(content));
+    const normalized = escapeRawHtml(normalizeMarkdownIndentation(normalizeMarkdownLists(content)));
     if (base === 'quote') {
       if (content.trim().length === 0) {
         return '';

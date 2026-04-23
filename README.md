@@ -50,6 +50,7 @@ Use of JSON and Markdown make it easy for LLMs to parse.
 ## Examples
 
 - [Example HVY Document](examples/example.hvy)
+- [CRM Example HVY Document](examples/crm.hvy)
 - [Example Resume Template (THVY)](examples/resume.thvy)
 - [Example Resume (HVY)](examples/resume.hvy)
 
@@ -61,6 +62,10 @@ A browser-based reference app is included with:
 - `Reader`: expandable sections, navigation by section ID, and section meta styling.
 - `Download`: save the current editor buffer as a local file.
 - `Select File`: pick a local file and display it immediately.
+
+Reference app feature flags:
+- Set `window.HVY_REFERENCE_CONFIG = { features: { tables: false } }` before the bundle loads to disable table authoring/rendering in an embedded host.
+- When present, SQLite plugin tail payloads are now preserved on open/download for `.hvy` files.
 
 ### Run
 

@@ -14,6 +14,7 @@ import { colorValueToPickerHex, getResolvedThemeColor, getThemeColorLabel, THEME
 import type { ThemeConfig } from '../theme';
 import type { VisualDocument } from '../types';
 import { getDocumentSectionDefaultCss, mergeDocumentCss } from '../document-section-defaults';
+import { areTablesEnabled } from '../reference-config';
 
 interface ReaderRenderState {
   documentMeta: VisualDocument['meta'];
@@ -185,6 +186,9 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       return `<div ${blockAttrs}>${renderExpandableReader(section, block, helpers)}</div>`;
     }
     if (base === 'table') {
+      if (!areTablesEnabled()) {
+        return `<div ${blockAttrs}><div class="plugin-placeholder">Table rendering is disabled in this reference implementation.</div></div>`;
+      }
       return `<div ${blockAttrs}>${renderTableReader(section, block, helpers)}</div>`;
     }
     if (base === 'xref-card') {

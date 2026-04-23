@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
 
-import { deserializeDocument, serializeBlockFragment, wrapHvyFragmentAsDocument } from '../src/serialization';
+import { deserializeDocument, HVY_TAIL_SENTINEL, serializeBlockFragment, serializeDocumentBytes, wrapHvyFragmentAsDocument } from '../src/serialization';
 import {
   normalizeSerialized,
   registerSerializationTestState,
@@ -143,6 +143,36 @@ plugins:
 
   expect(output).toContain('<!--hvy:plugin {"plugin":"dev.heavy.sqlite-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->');
   expect(output).not.toContain('"pluginUrl"');
+});
+
+test('serializes a document tail preamble and binary bytes for attached SQLite payloads', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"data"}-->
+#! Data
+
+<!--hvy:plugin {"plugin":"dev.heavy.sqlite-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->
+`, '.hvy');
+
+  document.attachmentTail = {
+    meta: {
+      plugin: 'dev.heavy.sqlite-table',
+      mediaType: 'application/vnd.sqlite3',
+      encoding: 'gzip',
+    },
+    bytes: new Uint8Array([31, 139, 8, 0, 72, 86, 89]),
+  };
+
+  const serializedText = serializeWithState(document);
+  const serializedBytes = serializeDocumentBytes(document);
+  const serializedPrefix = new TextDecoder().decode(serializedBytes.slice(0, serializedBytes.length - document.attachmentTail.bytes.length));
+
+  expect(serializedText).toContain('<!--hvy:tail {"plugin":"dev.heavy.sqlite-table","mediaType":"application/vnd.sqlite3","encoding":"gzip"}-->');
+  expect(serializedText).toContain(HVY_TAIL_SENTINEL);
+  expect(serializedPrefix).toContain(HVY_TAIL_SENTINEL);
+  expect(Array.from(serializedBytes.slice(-document.attachmentTail.bytes.length))).toEqual([31, 139, 8, 0, 72, 86, 89]);
 });
 
 test('preserves section_defaults in document front matter on round-trip', () => {

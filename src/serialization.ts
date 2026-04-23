@@ -2,7 +2,7 @@ import { stringify as stringifyYaml } from 'yaml';
 import type { BlockSchema, GridItem, TableRow, VisualBlock, VisualSection } from './editor/types';
 import type { HvySection, JsonObject } from './hvy/types';
 import { parseHvy } from './hvy/parser';
-import type { VisualDocument } from './types';
+import type { DocumentTailAttachment, VisualDocument } from './types';
 import { makeId, sanitizeOptionalId } from './utils';
 import { getSectionId } from './section-ops';
 import { resolveBaseComponent, isBuiltinComponentName } from './component-defs';
@@ -23,15 +23,22 @@ export interface DeserializeDocumentResult {
   diagnostics: HvyDiagnostic[];
 }
 
+export const HVY_TAIL_SENTINEL = '--HVY-TAIL--';
+
 export function deserializeDocument(text: string, extension: VisualDocument['extension']): VisualDocument {
   return deserializeDocumentWithDiagnostics(text, extension).document;
+}
+
+export function deserializeDocumentBytes(bytes: Uint8Array, extension: VisualDocument['extension']): VisualDocument {
+  return deserializeDocumentBytesWithDiagnostics(bytes, extension).document;
 }
 
 export function deserializeDocumentWithDiagnostics(
   text: string,
   extension: VisualDocument['extension']
 ): DeserializeDocumentResult {
-  const parsed = parseHvy(text, extension);
+  const extractedTail = splitSerializedTailText(text);
+  const parsed = parseHvy(extractedTail.text, extension);
   const meta = { ...parsed.meta };
   if (typeof meta.hvy_version === 'undefined') {
     meta.hvy_version = 0.1;
@@ -42,6 +49,7 @@ export function deserializeDocumentWithDiagnostics(
     extension,
     meta,
     sections: parsed.sections.map((section) => mapParsedSection(section, meta, diagnostics)),
+    attachmentTail: extractedTail.attachmentTail,
   };
 
   validateDocumentSemantics(document, diagnostics);
@@ -50,6 +58,16 @@ export function deserializeDocumentWithDiagnostics(
     document,
     diagnostics,
   };
+}
+
+export function deserializeDocumentBytesWithDiagnostics(
+  bytes: Uint8Array,
+  extension: VisualDocument['extension']
+): DeserializeDocumentResult {
+  const extractedTail = splitSerializedTailBytes(bytes);
+  const result = deserializeDocumentWithDiagnostics(extractedTail.text, extension);
+  result.document.attachmentTail = extractedTail.attachmentTail;
+  return result;
 }
 
 export function wrapHvyFragmentAsDocument(
@@ -777,7 +795,22 @@ export function serializeDocument(document: VisualDocument): string {
     .map((section) => serializeSection(section, 1))
     .join('\n')
     .trim();
-  return `${frontMatter}\n${body}\n`;
+  const textBody = `${frontMatter}\n${body}\n`;
+  return appendSerializedTailPreamble(textBody, document.attachmentTail);
+}
+
+export function serializeDocumentBytes(document: VisualDocument): Uint8Array {
+  const encoder = new TextEncoder();
+  const textBytes = encoder.encode(serializeDocument(document));
+  const tailBytes = document.attachmentTail?.bytes ?? new Uint8Array();
+  if (!document.attachmentTail || tailBytes.length === 0) {
+    return textBytes;
+  }
+
+  const combined = new Uint8Array(textBytes.length + tailBytes.length);
+  combined.set(textBytes, 0);
+  combined.set(tailBytes, textBytes.length);
+  return combined;
 }
 
 export function serializeDocumentHeaderYaml(document: VisualDocument): string {
@@ -814,6 +847,96 @@ function stripEditorStateFromSerializedValue(value: unknown): unknown {
     cleaned[key] = stripEditorStateFromSerializedValue(item) as JsonObject[keyof JsonObject];
   });
   return cleaned;
+}
+
+function appendSerializedTailPreamble(text: string, attachmentTail: DocumentTailAttachment | null | undefined): string {
+  if (!attachmentTail) {
+    return text;
+  }
+
+  const trimmed = text.endsWith('\n') ? text.slice(0, -1) : text;
+  return `${trimmed}\n<!--hvy:tail ${JSON.stringify(attachmentTail.meta)}-->\n${HVY_TAIL_SENTINEL}\n`;
+}
+
+function splitSerializedTailText(text: string): { text: string; attachmentTail: DocumentTailAttachment | null } {
+  const normalized = text.replace(/\r\n/g, '\n');
+  const match = normalized.match(/\n<!--hvy:tail\s+(\{[^\n\r]*\})\s*-->\n--HVY-TAIL--\n?$/);
+  if (!match) {
+    return { text, attachmentTail: null };
+  }
+
+  try {
+    const parsed = JSON.parse(match[1] ?? '{}');
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return { text, attachmentTail: null };
+    }
+    return {
+      text: normalized.slice(0, match.index ?? normalized.length),
+      attachmentTail: {
+        meta: parsed as JsonObject,
+        bytes: new Uint8Array(),
+      },
+    };
+  } catch {
+    return { text, attachmentTail: null };
+  }
+}
+
+function splitSerializedTailBytes(bytes: Uint8Array): { text: string; attachmentTail: DocumentTailAttachment | null } {
+  const decoder = new TextDecoder();
+  const decoded = decoder.decode(bytes);
+  const normalized = decoded.replace(/\r\n/g, '\n');
+  const sentinelNeedle = `\n${HVY_TAIL_SENTINEL}\n`;
+  const sentinelIndex = normalized.lastIndexOf(sentinelNeedle);
+  if (sentinelIndex < 0) {
+    return {
+      text: decoded,
+      attachmentTail: null,
+    };
+  }
+
+  const directiveLineStart = normalized.lastIndexOf('\n', sentinelIndex - 1);
+  if (directiveLineStart < 0) {
+    return {
+      text: decoded,
+      attachmentTail: null,
+    };
+  }
+
+  const directiveLine = normalized.slice(directiveLineStart + 1, sentinelIndex);
+  const directiveMatch = directiveLine.match(/^<!--hvy:tail\s+(\{[^\n\r]*\})\s*-->$/);
+  if (!directiveMatch) {
+    return {
+      text: decoded,
+      attachmentTail: null,
+    };
+  }
+
+  try {
+    const meta = JSON.parse(directiveMatch[1] ?? '{}');
+    if (!meta || typeof meta !== 'object' || Array.isArray(meta)) {
+      return {
+        text: decoded,
+        attachmentTail: null,
+      };
+    }
+
+    const encoder = new TextEncoder();
+    const tailStart = encoder.encode(normalized.slice(0, sentinelIndex + sentinelNeedle.length)).length;
+
+    return {
+      text: normalized.slice(0, directiveLineStart),
+      attachmentTail: {
+        meta: meta as JsonObject,
+        bytes: bytes.slice(tailStart),
+      },
+    };
+  } catch {
+    return {
+      text: decoded,
+      attachmentTail: null,
+    };
+  }
 }
 
 function serializeSection(section: VisualSection, level: number): string {

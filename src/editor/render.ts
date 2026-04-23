@@ -24,6 +24,7 @@ import plaintext from 'highlight.js/lib/languages/plaintext';
 import python from 'highlight.js/lib/languages/python';
 import typescript from 'highlight.js/lib/languages/typescript';
 import xml from 'highlight.js/lib/languages/xml';
+import { areTablesEnabled } from '../reference-config';
 
 hljs.registerLanguage('bash', bash);
 hljs.registerLanguage('sh', bash);
@@ -451,6 +452,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const sectionDefs = deps.getSectionDefs();
     const theme = deps.getThemeConfig();
     const colorCount = Object.keys(theme.colors).length;
+    const tableBaseTypeOption = areTablesEnabled() || defs.some((def) => def.baseType === 'table');
     return `
       <section class="meta-panel">
         <div class="meta-panel-head">
@@ -468,6 +470,11 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           <span>Reader Max Width</span>
           <input data-field="meta-reader-max-width" placeholder="60rem" value="${deps.escapeAttr(String(state.documentMeta.reader_max_width ?? ''))}" />
         </label>
+        <label class="checkbox-label">
+          <span>Tables Enabled</span>
+          <input type="checkbox" ${areTablesEnabled() ? 'checked' : ''} disabled />
+        </label>
+        <div class="muted">Reference app feature flag. This is not stored in the HVY file.</div>
         <div class="editor-grid">
           <label>
             <span>Theme Colors</span>
@@ -495,7 +502,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
                     ${deps.renderOption('quote', def.baseType)}
                     ${deps.renderOption('code', def.baseType)}
                     ${deps.renderOption('expandable', def.baseType)}
-                    ${deps.renderOption('table', def.baseType)}
+                    ${tableBaseTypeOption ? deps.renderOption('table', def.baseType) : ''}
                     ${deps.renderOption('container', def.baseType)}
                     ${deps.renderOption('component-list', def.baseType)}
                     ${deps.renderOption('grid', def.baseType)}
@@ -573,6 +580,9 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       return renderExpandableEditor(sectionKey, block, helpers);
     }
     if (component === 'table') {
+      if (!areTablesEnabled()) {
+        return '<div class="plugin-placeholder">Tables are disabled in this reference implementation.</div>';
+      }
       return renderTableEditor(sectionKey, block, helpers);
     }
     if (component === 'xref-card') {

@@ -55,6 +55,15 @@ export function normalizeFilename(input: string): string {
 
 export function downloadTextFile(filename: string, text: string): void {
   const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+  downloadBlob(filename, blob);
+}
+
+export function downloadBinaryFile(filename: string, bytes: Uint8Array): void {
+  const blob = new Blob([Uint8Array.from(bytes)], { type: 'application/octet-stream' });
+  downloadBlob(filename, blob);
+}
+
+function downloadBlob(filename: string, blob: Blob): void {
   const url = URL.createObjectURL(blob);
   const anchor = window.document.createElement('a');
   anchor.href = url;

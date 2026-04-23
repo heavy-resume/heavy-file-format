@@ -1,7 +1,7 @@
 ---
 hvy_version: 0.1
-title: Reference Implementation Demo
-reader_max_width: 60rem
+title: Job Search Workspace
+reader_max_width: 64rem
 section_defaults:
   css: "margin: 0.5rem 0;"
 plugins:
@@ -9,62 +9,64 @@ plugins:
     source: builtin://sqlite-table
 ---
 
-<!--hvy: {"id":"welcome"}-->
-#! Welcome
+<!--hvy: {"id":"overview"}-->
+#! Overview
 
 <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
-This is a **visual HVY editor**. What you see in the editor is the primary authoring experience.
-
-<!--hvy:text {"css":"margin: 0.5rem 0;"}-->
-- [ ] Draft a new section
-- [x] Verify checkbox rendering
+This default HVY document is a lightweight workspace for tracking a job search. It mixes narrative sections with a SQLite-backed plugin block whose rows are expected to come from the attached database.
 
 <!--hvy:quote {"css":"margin: 0.5rem 0;"}-->
-Design the format like a document, not a form.
+Keep the visible document focused on the next decision, and let the attached data hold the larger working set.
 
-<!--hvy:code {"codeLanguage":"ts","css":"margin: 0.5rem 0;"}-->
-export const demo = 'HVY';
+<!--hvy:grid {"css":"margin: 0.5rem 0;","gridColumns":2}-->
+
+ <!--hvy:grid:0 {"id":"goal"}-->
+
+  <!--hvy:container {"css":"margin: 0;"}-->
+
+   <!--hvy:container:0 {}-->
+
+    <!--hvy:text {"css":"margin: 0;"}-->
+     ## Current Goal
+
+   <!--hvy:container:1 {}-->
+
+    <!--hvy:text {"css":"margin: 0;"}-->
+     Land three strong interviews this month without losing track of follow-ups.
+
+ <!--hvy:grid:1 {"id":"focus"}-->
+
+  <!--hvy:container {"css":"margin: 0;"}-->
+
+   <!--hvy:container:0 {}-->
+
+    <!--hvy:text {"css":"margin: 0;"}-->
+     ## Focus This Week
+
+   <!--hvy:container:1 {}-->
+
+    <!--hvy:text {"css":"margin: 0;"}-->
+     - [x] Refresh portfolio links
+     - [ ] Send two recruiter follow-ups
+     - [ ] Tailor resume for platform roles
+
+<!--hvy:subsection {"id":"application-pipeline","highlight":true}-->
+#! Application Pipeline
+
+<!--hvy:text {"css":"margin: 0.5rem 0;"}-->
+Use the plugin block below as the working application table. The rendered rows should come from the attached SQLite file rather than from inline HVY table data.
+
+<!--hvy:plugin {"css":"margin: 0.5rem 0;","plugin":"dev.heavy.sqlite-table","pluginConfig":{"source":"with-file","table":"job_applications"}}-->
+
+<!--hvy:subsection {"id":"notes"}-->
+#! Notes
 
 <!--hvy:expandable {"css":"margin: 0.5rem 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
  <!--hvy:expandable:stub {}-->
 
-  <!--hvy:table {"css":"margin: 0.5rem 0;","tableColumns":"Column 1, Column 2","tableShowHeader":true,"tableRows":[]}-->
-
- <!--hvy:expandable:content {}-->
-
-  <!--hvy:container {"css":"margin: 0.5rem 0;"}-->
-
- <!--hvy:table {"css":"margin: 0.5rem 0;","tableColumns":"Feature, Status","tableShowHeader":true,"tableRows":[{"cells":["Inline editing","Ready"],"expanded":false,"clickable":true,"detailsTitle":"Inline editing details","detailsContent":"Headers, cells, and row details are all editable directly in the proof of concept."}]}-->
-
-  <!--hvy:table:0:0 {}-->
-
-   <!--hvy:container {"css":"margin: 0.5rem 0;"}-->
-
-<!--hvy:container {"css":"margin: 0.5rem 0;"}-->
-Containers are good defaults for subsections and grouped notes.
-
-<!--hvy:grid {"css":"margin: 0.5rem 0;","gridColumns":2}-->
-
- <!--hvy:grid:0 {"id":"griditem-demo-a"}-->
-
-  <!--hvy:text {}-->
-   Grid item A
-
- <!--hvy:grid:1 {"id":"griditem-demo-b"}-->
-
-  <!--hvy:text {}-->
-   Grid item B
-
-<!--hvy:plugin {"css":"margin: 0.5rem 0;","plugin":"dev.heavy.sqlite-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->
-
-<!--hvy:table {"css":"margin: 0;","tableColumns":"Area, Owner, Status","tableShowHeader":true,"tableRows":[]}-->
-
-<!--hvy:expandable {"css":"margin: 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
-
- <!--hvy:expandable:stub {}-->
-
-  <!--hvy:table {"css":"margin: 0;","tableColumns":"Area, Owner, Status","tableShowHeader":false,"tableRows":[{"cells":["Parser migration","Avery","In progress"],"expanded":false,"clickable":true,"detailsTitle":"","detailsContent":""},{"cells":["Schema cleanup","Drew","Ready"],"expanded":false,"clickable":true,"detailsTitle":"","detailsContent":""},{"cells":["Grid polish","Nina","Queued"],"expanded":false,"clickable":true,"detailsTitle":"","detailsContent":""}]}-->
+  <!--hvy:text {"css":"margin: 0;"}-->
+   Strong leads worth extra prep
 
  <!--hvy:expandable:content {}-->
 
@@ -73,25 +75,24 @@ Containers are good defaults for subsections and grouped notes.
    <!--hvy:container:0 {}-->
 
     <!--hvy:text {"css":"margin: 0;"}-->
-     These rows belong to the first workstream. Expand it to capture rollout notes, risks, and the next checkpoint.
+     Northwind Labs and Lattice Systems are both good fits for reusable systems work, documentation-heavy delivery, and platform ownership.
 
-<!--hvy:expandable {"css":"margin: 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
-
- <!--hvy:expandable:stub {}-->
-
-  <!--hvy:table {"css":"margin: 0;","tableColumns":"Area, Owner, Status","tableShowHeader":false,"tableRows":[{"cells":["Release cut","Mika","Blocked"],"expanded":false,"clickable":true,"detailsTitle":"","detailsContent":""}]}-->
-
- <!--hvy:expandable:content {}-->
-
-  <!--hvy:container {"css":"margin: 0;"}-->
-
-   <!--hvy:container:0 {}-->
+   <!--hvy:container:1 {}-->
 
     <!--hvy:text {"css":"margin: 0;"}-->
-     This final row group shows how a single summary row can expand into the full explanation, decision history, or unblock plan.
+     Prepare stories around migration planning, developer tooling, and AI-assisted workflows before the next calls.
 
-<!--hvy:subsection {"id":"try-it","highlight":true,"custom_css":"margin: 0.5rem 0;"}-->
-#! Container Subsection
+<!--hvy:subsection {"id":"next-steps"}-->
+#! Next Steps
 
-<!--hvy:container {"css":"margin: 0.5rem 0;"}-->
-Subsections now start as plain container sections.
+<!--hvy:component-list {"componentListComponent":"text","css":"margin: 0.5rem 0;"}-->
+
+ <!--hvy:component-list:0 {}-->
+
+  <!--hvy:text {}-->
+   Ask for feedback from roles that have stalled for more than 10 days.
+
+ <!--hvy:component-list:1 {}-->
+
+  <!--hvy:text {}-->
+   Split opportunities into "must pursue" and "nice to pursue" before adding more applications.

@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
 
-import { deserializeDocument, deserializeDocumentWithDiagnostics, getHvyDiagnosticUsageHint, getHvyResponseDiagnostics } from '../src/serialization';
+import { deserializeDocument, deserializeDocumentBytes, deserializeDocumentWithDiagnostics, getHvyDiagnosticUsageHint, getHvyResponseDiagnostics } from '../src/serialization';
 import { registerSerializationTestState } from './serialization-test-helpers';
 
 registerSerializationTestState();
@@ -123,6 +123,37 @@ plugins:
     source: 'with-file',
     table: 'work_items',
   });
+});
+
+test('deserializes a binary SQLite attachment tail from HVY bytes', () => {
+  const prefix = `---
+hvy_version: 0.1
+plugins:
+  - id: dev.heavy.sqlite-table
+    source: builtin://sqlite-table
+---
+
+<!--hvy: {"id":"data"}-->
+#! Data
+
+<!--hvy:plugin {"plugin":"dev.heavy.sqlite-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->
+<!--hvy:tail {"plugin":"dev.heavy.sqlite-table","mediaType":"application/vnd.sqlite3","encoding":"gzip"}-->
+--HVY-TAIL--
+`;
+  const prefixBytes = new TextEncoder().encode(prefix);
+  const tailBytes = new Uint8Array([31, 139, 8, 0, 83, 81, 76]);
+  const bytes = new Uint8Array(prefixBytes.length + tailBytes.length);
+  bytes.set(prefixBytes, 0);
+  bytes.set(tailBytes, prefixBytes.length);
+
+  const document = deserializeDocumentBytes(bytes, '.hvy');
+
+  expect(document.attachmentTail?.meta).toEqual({
+    plugin: 'dev.heavy.sqlite-table',
+    mediaType: 'application/vnd.sqlite3',
+    encoding: 'gzip',
+  });
+  expect(Array.from(document.attachmentTail?.bytes ?? [])).toEqual([31, 139, 8, 0, 83, 81, 76]);
 });
 
 test('deserializes section_defaults from document front matter', () => {

@@ -1,5 +1,6 @@
 import bundledResumeThvy from '../examples/resume.thvy?raw';
 import bundledResumeHvy from '../examples/resume.hvy?raw';
+import bundledCrmHvy from '../examples/crm.hvy?raw';
 import {
   state, appEventsBound, shortcutsBound,
   setAppEventsBound, setShortcutsBound,
@@ -31,14 +32,16 @@ import { recordHistory, undoState, redoState } from './history';
 import { navigateToSection, setSidebarOpen, setEditorSidebarOpen, closeModal, closeModalIfTarget, resetTransientUiState, resetToBlankDocument } from './navigation';
 import {
   deserializeDocument,
+  deserializeDocumentBytes,
   deserializeDocumentWithDiagnostics,
   getHvyDiagnosticUsageHint,
   serializeDocument,
+  serializeDocumentBytes,
 } from './serialization';
 import { syncReusableTemplateForBlock, revertReusableComponent, findReusableOwner } from './reusable';
 import { addTableColumn, removeTableColumn, getTableColumns, moveTableColumn, moveTableRow } from './table-ops';
 import { createGridItem } from './grid-ops';
-import { detectExtension, normalizeFilename, downloadTextFile, sanitizeOptionalId, moveItem } from './utils';
+import { detectExtension, normalizeFilename, downloadBinaryFile, sanitizeOptionalId, moveItem } from './utils';
 import { moveSectionRelative, moveSectionByOffset, removeSectionByKey, findBlockContainerById } from './section-ops';
 import { bindModal } from './bind-modal';
 import { bindLinkInlineModal, openLinkInlineModal } from './bind-link-modal';
@@ -48,6 +51,7 @@ import { clearChatConversation, getDefaultModelForProvider, persistChatSettings 
 import { appendUserChatMessage, requestChatTurn, requestDocumentEditChatTurn } from './chat-session';
 import type { RawEditorDiagnostic } from './types';
 import { requestAiComponentEdit } from './ai-edit';
+import { areTablesEnabled } from './reference-config';
 
 let lastBoundChatMessageCount = -1;
 
@@ -79,6 +83,20 @@ export function bindUi(app: HTMLElement): void {
 
   newBtn.addEventListener('click', () => {
     resetToBlankDocument();
+  });
+
+  const crmExampleBtn = app.querySelector<HTMLButtonElement>('#crmExampleBtn');
+  crmExampleBtn?.addEventListener('click', () => {
+    state.document = deserializeDocument(bundledCrmHvy, '.hvy');
+    state.rawEditorText = serializeDocument(state.document);
+    state.rawEditorError = null;
+    state.rawEditorDiagnostics = [];
+    state.filename = 'crm.hvy';
+    state.history = [];
+    state.future = [];
+    clearChatConversation(state.chat);
+    resetTransientUiState();
+    getRenderApp()();
   });
 
   const resumeTemplateBtn = app.querySelector<HTMLButtonElement>('#resumeTemplateBtn');
@@ -114,9 +132,10 @@ export function bindUi(app: HTMLElement): void {
     if (!file) {
       return;
     }
-    const text = await file.text();
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const text = new TextDecoder().decode(bytes);
     state.filename = file.name;
-    state.document = deserializeDocument(text, detectExtension(file.name, text));
+    state.document = deserializeDocumentBytes(bytes, detectExtension(file.name, text));
     state.rawEditorText = serializeDocument(state.document);
     state.rawEditorError = null;
     state.rawEditorDiagnostics = [];
@@ -133,8 +152,8 @@ export function bindUi(app: HTMLElement): void {
   downloadBtn.addEventListener('click', () => {
     const normalized = normalizeFilename(state.filename || 'document.hvy');
     state.filename = normalized;
-    const text = serializeDocument(state.document);
-    downloadTextFile(normalized, text);
+    const bytes = serializeDocumentBytes(state.document);
+    downloadBinaryFile(normalized, bytes);
     getRenderApp()();
   });
 
@@ -444,10 +463,17 @@ export function bindUi(app: HTMLElement): void {
       }
       try {
         recordHistory('raw-editor:apply');
+        const previousTail = state.document.attachmentTail;
         state.document = deserializeDocument(
           state.rawEditorText,
           detectExtension(state.filename, state.rawEditorText)
         );
+        if (previousTail && state.document.attachmentTail && state.document.attachmentTail.bytes.length === 0) {
+          state.document.attachmentTail = {
+            meta: state.document.attachmentTail.meta,
+            bytes: previousTail.bytes,
+          };
+        }
         state.rawEditorText = serializeDocument(state.document);
         state.rawEditorError = null;
         state.rawEditorDiagnostics = [];
@@ -1185,6 +1211,9 @@ export function bindUi(app: HTMLElement): void {
     }
 
     if (action === 'add-table-row' && blockId) {
+      if (!areTablesEnabled()) {
+        return;
+      }
       recordHistory();
       const block = resolveBlockContext(actionButton)?.block ?? findBlockByIds(sectionKey, blockId);
       if (!block) {
@@ -1199,6 +1228,9 @@ export function bindUi(app: HTMLElement): void {
     }
 
     if (action === 'add-table-column' && blockId) {
+      if (!areTablesEnabled()) {
+        return;
+      }
       recordHistory();
       const block = findBlockByIds(sectionKey, blockId);
       if (!block || block.schema.lock) {
@@ -1211,6 +1243,9 @@ export function bindUi(app: HTMLElement): void {
     }
 
     if (action === 'remove-table-column' && blockId) {
+      if (!areTablesEnabled()) {
+        return;
+      }
       recordHistory();
       const columnIndex = Number.parseInt(actionButton.dataset.columnIndex ?? '', 10);
       const block = findBlockByIds(sectionKey, blockId);
@@ -1224,6 +1259,9 @@ export function bindUi(app: HTMLElement): void {
     }
 
     if (action === 'remove-table-row' && blockId) {
+      if (!areTablesEnabled()) {
+        return;
+      }
       recordHistory();
       const rowIndex = Number.parseInt(actionButton.dataset.rowIndex ?? '', 10);
       const block = findBlockByIds(sectionKey, blockId);

@@ -1,10 +1,16 @@
 import type { BlockSchema, VisualBlock, VisualSection } from './editor/types';
 import type { JsonObject } from './hvy/types';
 
+export interface DocumentTailAttachment {
+  meta: JsonObject;
+  bytes: Uint8Array;
+}
+
 export interface VisualDocument {
   meta: JsonObject;
   extension: '.hvy' | '.thvy' | '.md';
   sections: VisualSection[];
+  attachmentTail?: DocumentTailAttachment | null;
 }
 
 export type ChatProvider = 'openai' | 'anthropic';

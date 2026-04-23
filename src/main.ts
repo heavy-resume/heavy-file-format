@@ -295,6 +295,7 @@ function renderApp(): void {
         </div>
         <div class="toolbar">
           <button id="newBtn" type="button" class="toolbar-primary-button">New</button>
+          <button id="crmExampleBtn" type="button">CRM Example</button>
           <button id="resumeTemplateBtn" type="button">Resume Template</button>
           <button id="resumeExampleBtn" type="button">Resume Example</button>
           <label class="file-picker">

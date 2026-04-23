@@ -225,6 +225,7 @@ export function createBlankDocument(): VisualDocument {
     },
     extension: '.hvy',
     sections: [],
+    attachmentTail: null,
   };
 }
 

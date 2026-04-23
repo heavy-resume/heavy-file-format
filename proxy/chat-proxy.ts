@@ -97,7 +97,7 @@ export function buildOpenAiProxyRequest(body: ProxyChatRequest): Record<string, 
 export function buildAnthropicProxyRequest(body: ProxyChatRequest): Record<string, unknown> {
   return {
     model: body.model,
-    max_tokens: 1024,
+    max_tokens: 4096,
     system: `${buildSystemInstructions(body.mode, body.formatInstructions)}\n\nDocument context:\n\n${body.context}`,
     messages: body.messages.map((message) => ({
       role: message.role,

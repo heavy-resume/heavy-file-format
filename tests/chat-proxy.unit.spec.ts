@@ -70,7 +70,7 @@ test('buildAnthropicProxyRequest places context in system prompt and messages in
     })
   ).toEqual({
     model: 'claude-sonnet-4-6',
-    max_tokens: 1024,
+    max_tokens: 4096,
     system: expect.stringMatching(/Response formatting instructions:\nFormat as HVY\./),
     messages: [
       { role: 'user', content: 'What is this?' },

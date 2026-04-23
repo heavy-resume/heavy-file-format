@@ -227,7 +227,7 @@ export function renderChatPanel(
                              : missingModel
                              ? 'Choose a model before sending.'
                              : !hasDraft
-                             ? 'Type a question to send.'
+                             ? 'Type your prompt'
                              : 'Ready'
                          }
                        </span>

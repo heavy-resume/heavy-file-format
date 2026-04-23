@@ -28,7 +28,8 @@ export function defaultBlockSchema(component = 'text'): BlockSchema {
     xrefTitle: '',
     xrefDetail: '',
     xrefTarget: '',
-    pluginUrl: '',
+    plugin: '',
+    pluginConfig: {},
     expandableStubComponent: 'container',
     expandableContentComponent: 'container',
     expandableStub: '',
@@ -135,7 +136,11 @@ export function schemaFromUnknown(value: unknown): BlockSchema {
     xrefTitle: typeof candidate.xrefTitle === 'string' ? candidate.xrefTitle : defaults.xrefTitle,
     xrefDetail: typeof candidate.xrefDetail === 'string' ? candidate.xrefDetail : defaults.xrefDetail,
     xrefTarget: typeof candidate.xrefTarget === 'string' ? candidate.xrefTarget : defaults.xrefTarget,
-    pluginUrl: typeof candidate.pluginUrl === 'string' ? candidate.pluginUrl : defaults.pluginUrl,
+    plugin: typeof candidate.plugin === 'string' ? candidate.plugin : defaults.plugin,
+    pluginConfig:
+      candidate.pluginConfig && typeof candidate.pluginConfig === 'object' && !Array.isArray(candidate.pluginConfig)
+        ? (candidate.pluginConfig as JsonObject)
+        : defaults.pluginConfig,
     expandableStubComponent:
       typeof candidate.expandableStubComponent === 'string' ? candidate.expandableStubComponent : defaults.expandableStubComponent,
     expandableContentComponent:

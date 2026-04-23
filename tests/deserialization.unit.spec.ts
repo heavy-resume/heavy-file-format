@@ -101,6 +101,30 @@ reader_max_width: 60rem
   expect(document.meta.reader_max_width).toBe('60rem');
 });
 
+test('deserializes plugin blocks with plugin identity and config', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+plugins:
+  - id: dev.heavy.sqlite-table
+    source: builtin://sqlite-table
+---
+
+<!--hvy: {"id":"data"}-->
+#! Data
+
+<!--hvy:plugin {"plugin":"dev.heavy.sqlite-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->
+`, '.hvy');
+
+  const block = document.sections[0]?.blocks[0];
+
+  expect(block?.schema.component).toBe('plugin');
+  expect(block?.schema.plugin).toBe('dev.heavy.sqlite-table');
+  expect(block?.schema.pluginConfig).toEqual({
+    source: 'with-file',
+    table: 'work_items',
+  });
+});
+
 test('deserializes section_defaults from document front matter', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1

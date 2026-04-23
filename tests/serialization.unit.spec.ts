@@ -125,6 +125,26 @@ reader_max_width: 60rem
   expect(output).toContain('reader_max_width: 60rem');
 });
 
+test('serializes plugin blocks with plugin identity and config', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+plugins:
+  - id: dev.heavy.sqlite-table
+    source: builtin://sqlite-table
+---
+
+<!--hvy: {"id":"data"}-->
+#! Data
+
+<!--hvy:plugin {"plugin":"dev.heavy.sqlite-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->
+`, '.hvy');
+
+  const output = serializeWithState(document);
+
+  expect(output).toContain('<!--hvy:plugin {"plugin":"dev.heavy.sqlite-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->');
+  expect(output).not.toContain('"pluginUrl"');
+});
+
 test('preserves section_defaults in document front matter on round-trip', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1

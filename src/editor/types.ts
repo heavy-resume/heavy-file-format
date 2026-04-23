@@ -1,3 +1,5 @@
+import type { JsonObject } from '../hvy/types';
+
 export type Align = 'left' | 'center' | 'right';
 export type Slot = 'left' | 'center' | 'right';
 
@@ -35,7 +37,8 @@ export interface BlockSchema {
   xrefTitle: string;
   xrefDetail: string;
   xrefTarget: string;
-  pluginUrl: string;
+  plugin: string;
+  pluginConfig: JsonObject;
   expandableStubComponent: string;
   expandableContentComponent: string;
   expandableStub: string;

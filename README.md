@@ -39,8 +39,9 @@ Use of JSON and Markdown make it easy for LLMs to parse.
 - [X] Color scheme editor and cleanup
 - [X] AI-based answering questions
 - [X] AI-based editing
-- [ ] Embedded and attached database support
-- [ ] Plugin support
+- [ ] Embedded and attached database runtime
+- [X] Plugin block schema and SQLite tail spec draft
+- [ ] Plugin execution/runtime
 
 ## Draft Spec
 
@@ -117,4 +118,9 @@ npm run preview
 - Sections support persistent highlight and temporary highlight on navigation.
 
 # Plugin / Callback Support
-TBD
+
+HVY has a documented plugin block envelope plus a first plugin contract for `dev.heavy.sqlite-table`.
+
+- The plugin instance is authored as a `plugin` component with `plugin` and `pluginConfig`.
+- The SQLite database is specified as a gzip-compressed tail payload appended after the textual HVY body.
+- The current reference app can author and round-trip the plugin metadata, but it does not yet read or write the binary tail runtime.

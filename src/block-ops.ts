@@ -157,8 +157,25 @@ export function handleBlockFieldInput(target: HTMLElement): boolean {
     return true;
   }
 
-  if (field === 'block-plugin-url' && target instanceof HTMLInputElement) {
-    block.schema.pluginUrl = target.value;
+  if (field === 'block-plugin' && target instanceof HTMLInputElement) {
+    block.schema.plugin = target.value;
+    if (target.value === 'dev.heavy.sqlite-table') {
+      block.schema.pluginConfig = {
+        ...block.schema.pluginConfig,
+        source: 'with-file',
+      };
+    }
+    syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
+    getRefreshReaderPanels()();
+    return true;
+  }
+
+  if (field === 'block-plugin-db-table' && target instanceof HTMLInputElement) {
+    block.schema.pluginConfig = {
+      ...block.schema.pluginConfig,
+      source: 'with-file',
+      table: target.value,
+    };
     syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
     getRefreshReaderPanels()();
     return true;

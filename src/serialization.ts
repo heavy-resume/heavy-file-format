@@ -909,7 +909,10 @@ function serializeBlockSchema(
     }
   }
   if (component === 'plugin') {
-    addIfChanged(payload, 'pluginUrl', schema.pluginUrl, defaults.pluginUrl);
+    addIfChanged(payload, 'plugin', schema.plugin, defaults.plugin);
+    if (Object.keys(schema.pluginConfig).length > 0) {
+      payload.pluginConfig = stripEditorStateFromSerializedValue(schema.pluginConfig) as JsonObject;
+    }
   }
   if (component === 'expandable') {
     addIfChanged(payload, 'expandableAlwaysShowStub', schema.expandableAlwaysShowStub, defaults.expandableAlwaysShowStub);

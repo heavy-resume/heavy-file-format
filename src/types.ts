@@ -68,9 +68,10 @@ export interface SqliteRowComponentModalState {
   blockId: string;
   tableName: string;
   rowId: number;
-  block: VisualBlock | null;
+  blocks: VisualBlock[];
   error: string | null;
   readOnly: boolean;
+  previousActiveEditorBlock: { sectionKey: string; blockId: string } | null;
 }
 
 export interface RawEditorDiagnostic {

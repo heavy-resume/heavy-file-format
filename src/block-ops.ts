@@ -37,10 +37,7 @@ function findSqliteRowComponentBlock(sectionKey: string, blockId: string): Visua
   if (!modal || modal.sectionKey !== sectionKey) {
     return null;
   }
-  if (!modal.block) {
-    return null;
-  }
-  return modal.block.id === blockId ? modal.block : findBlockInList([modal.block], blockId);
+  return findBlockInList(modal.blocks, blockId);
 }
 
 export function findBlockInList(blocks: VisualBlock[], blockId: string): VisualBlock | null {

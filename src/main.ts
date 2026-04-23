@@ -256,6 +256,7 @@ readerRenderer = createReaderRenderer(
     ensureExpandableBlocks,
     ensureGridItems,
     getComponentRenderHelpers: localGetComponentRenderHelpers,
+    renderEditorBlock: (sectionKey, block) => editorRenderer.renderEditorBlock(sectionKey, block, state.document.sections),
     renderBlockContentEditor: (sectionKey, block) => editorRenderer.renderBlockContentEditor(sectionKey, block),
     renderComponentOptions,
     renderBlockMetaFields: (sectionKey, block) => editorRenderer.renderBlockMetaFields(sectionKey, block),

@@ -42,7 +42,7 @@ import { syncReusableTemplateForBlock, revertReusableComponent, findReusableOwne
 import { addTableColumn, removeTableColumn, getTableColumns, moveTableColumn, moveTableRow } from './table-ops';
 import { createGridItem } from './grid-ops';
 import { detectExtension, normalizeFilename, downloadBinaryFile, sanitizeOptionalId, moveItem } from './utils';
-import { moveSectionRelative, moveSectionByOffset, removeSectionByKey, findBlockContainerById } from './section-ops';
+import { moveSectionRelative, moveSectionByOffset, removeSectionByKey, findBlockContainerById, findBlockContainerInList } from './section-ops';
 import { bindModal } from './bind-modal';
 import { bindLinkInlineModal, openLinkInlineModal } from './bind-link-modal';
 import { removeBlockFromList, findBlockInList } from './block-ops';
@@ -57,7 +57,7 @@ import {
   addSqlitePluginRow,
   getSqliteRowComponent,
   materializeSqlitePluginDraftRow,
-  parseAttachedComponentBlock,
+  parseAttachedComponentBlocks,
   renameSqlitePluginColumn,
   updateSqlitePluginCell,
 } from './plugin-sqlite';
@@ -1236,6 +1236,34 @@ export function bindUi(app: HTMLElement): void {
 
     if (action === 'remove-block' && blockId) {
       recordHistory();
+      const sqliteRowModal = state.sqliteRowComponentModal;
+      if (sqliteRowModal?.sectionKey === sectionKey) {
+        const activeBlockId = state.activeEditorBlock?.sectionKey === sectionKey
+          ? (state.activeEditorBlock?.blockId ?? null)
+          : null;
+        const removedBlock = activeBlockId ? findBlockByIds(sectionKey, blockId) : null;
+        const activeIsAffected = activeBlockId !== null && (
+          activeBlockId === blockId ||
+          (removedBlock !== null && findBlockInList([removedBlock], activeBlockId) !== null)
+        );
+        const parentId = activeIsAffected
+          ? findBlockContainerInList(sqliteRowModal.blocks, blockId, null)?.ownerBlockId ?? null
+          : null;
+        removeBlockFromList(sqliteRowModal.blocks, blockId);
+        if (activeIsAffected && activeBlockId) {
+          clearActiveEditorBlock(activeBlockId);
+        }
+        if (parentId) {
+          setActiveEditorBlock(sectionKey, parentId);
+        }
+        state.sqliteRowComponentModal = {
+          ...sqliteRowModal,
+          blocks: [...sqliteRowModal.blocks],
+          error: null,
+        };
+        getRenderApp()();
+        return;
+      }
       const reusableOwnerId = findReusableOwner(sectionKey, blockId)?.id ?? null;
       // Find parent before removal so we can restore edit mode if the deleted block
       // was the active one OR contained the active one (otherwise deletion would
@@ -1272,6 +1300,28 @@ export function bindUi(app: HTMLElement): void {
 
     if (action === 'move-block-up' && blockId) {
       recordHistory();
+      const sqliteRowModal = state.sqliteRowComponentModal;
+      if (sqliteRowModal?.sectionKey === sectionKey) {
+        const location = findBlockContainerInList(sqliteRowModal.blocks, blockId, null);
+        if (!location) {
+          return;
+        }
+        const targetIndex = location.index - 1;
+        if (targetIndex < 0) {
+          return;
+        }
+        const [movedBlock] = location.container.splice(location.index, 1);
+        if (!movedBlock) {
+          return;
+        }
+        location.container.splice(targetIndex, 0, movedBlock);
+        state.sqliteRowComponentModal = {
+          ...sqliteRowModal,
+          blocks: [...sqliteRowModal.blocks],
+        };
+        getRenderApp()();
+        return;
+      }
       if (moveBlockByOffset(sectionKey, blockId, -1)) {
         getRenderApp()();
       }
@@ -1280,6 +1330,28 @@ export function bindUi(app: HTMLElement): void {
 
     if (action === 'move-block-down' && blockId) {
       recordHistory();
+      const sqliteRowModal = state.sqliteRowComponentModal;
+      if (sqliteRowModal?.sectionKey === sectionKey) {
+        const location = findBlockContainerInList(sqliteRowModal.blocks, blockId, null);
+        if (!location) {
+          return;
+        }
+        const targetIndex = location.index + 1;
+        if (targetIndex >= location.container.length) {
+          return;
+        }
+        const [movedBlock] = location.container.splice(location.index, 1);
+        if (!movedBlock) {
+          return;
+        }
+        location.container.splice(targetIndex, 0, movedBlock);
+        state.sqliteRowComponentModal = {
+          ...sqliteRowModal,
+          blocks: [...sqliteRowModal.blocks],
+        };
+        getRenderApp()();
+        return;
+      }
       if (moveBlockByOffset(sectionKey, blockId, 1)) {
         getRenderApp()();
       }
@@ -1351,21 +1423,22 @@ export function bindUi(app: HTMLElement): void {
 
       void getSqliteRowComponent(tableName, rowId)
         .then((fragment) => {
-          const modalBlock = fragment ? parseAttachedComponentBlock(fragment) : null;
+          const modalBlocks = fragment ? parseAttachedComponentBlocks(fragment) : [];
           const modalState = {
             sectionKey: targetSectionKey,
             blockId: targetBlockId,
             tableName,
             rowId,
-            block: modalBlock,
+            blocks: modalBlocks,
             error: null,
             readOnly: action === 'sqlite-open-row-component-view',
+            previousActiveEditorBlock: state.activeEditorBlock ? { ...state.activeEditorBlock } : null,
           };
           state.sqliteRowComponentModal = modalState;
-          if (!modalState.readOnly && modalBlock) {
+          if (!modalState.readOnly && modalBlocks[0]) {
             state.activeEditorBlock = {
               sectionKey: targetSectionKey,
-              blockId: modalBlock.id,
+              blockId: modalBlocks[0].id,
             };
           }
           getRenderApp()();
@@ -1378,7 +1451,7 @@ export function bindUi(app: HTMLElement): void {
 
     if (action === 'sqlite-row-component-add-block') {
       const modal = state.sqliteRowComponentModal;
-      if (!modal || modal.readOnly || modal.block) {
+      if (!modal || modal.readOnly) {
         return;
       }
       recordHistory(`sqlite-row-component-add:${modal.tableName}:${modal.rowId}`);
@@ -1387,7 +1460,7 @@ export function bindUi(app: HTMLElement): void {
       const newBlock = createEmptyBlock(component);
       state.sqliteRowComponentModal = {
         ...modal,
-        block: newBlock,
+        blocks: [...modal.blocks, newBlock],
         error: null,
       };
       setActiveEditorBlock(modal.sectionKey, newBlock.id);

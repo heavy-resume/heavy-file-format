@@ -381,15 +381,15 @@ export async function setSqliteRowComponent(tableName: string, rowId: number, hv
   await persistRuntimeDatabase();
 }
 
-export function parseAttachedComponentBlock(hvy: string): VisualBlock | null {
+export function parseAttachedComponentBlocks(hvy: string): VisualBlock[] {
   const trimmed = hvy.trim();
   if (trimmed.length === 0) {
-    return null;
+    return [];
   }
 
   validateAttachedComponentHvy(trimmed);
   const parsed = deserializeDocumentWithDiagnostics(wrapHvyFragmentAsDocument(trimmed), '.hvy');
-  return parsed.document.sections[0]?.blocks[0] ?? null;
+  return parsed.document.sections[0]?.blocks ?? [];
 }
 
 function ensureSqliteRuntime(): void {
@@ -638,7 +638,7 @@ function validateAttachedComponentHvy(hvy: string): void {
   }
 
   const section = parsed.document.sections[0];
-  if (!section || section.children.length > 0 || section.blocks.length !== 1) {
-    throw new Error('Attached row HVY must contain exactly one HVY component fragment.');
+  if (!section || section.children.length > 0 || section.blocks.length === 0) {
+    throw new Error('Attached row HVY must contain one or more HVY component fragments.');
   }
 }

@@ -41,16 +41,16 @@ export function bindModal(app: HTMLElement): void {
     const saveSqliteRowComponentBtn = target.closest<HTMLElement>('[data-modal-action="sqlite-row-component-save"]');
     if (saveSqliteRowComponentBtn && state.sqliteRowComponentModal) {
       const modal = state.sqliteRowComponentModal;
-      if (!modal.block) {
+      if (modal.blocks.length === 0) {
         state.sqliteRowComponentModal = {
           ...modal,
-          error: 'Add a component before saving this row attachment.',
+          error: 'Add at least one component before saving this row attachment.',
         };
         getRenderApp()();
         return;
       }
       recordHistory(`sqlite-row-component:${modal.tableName}:${modal.rowId}`);
-      void setSqliteRowComponent(modal.tableName, modal.rowId, serializeBlockFragment(modal.block))
+      void setSqliteRowComponent(modal.tableName, modal.rowId, modal.blocks.map((block) => serializeBlockFragment(block)).join('\n\n'))
         .then(() => {
           closeModal();
           getRenderApp()();

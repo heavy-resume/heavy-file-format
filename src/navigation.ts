@@ -210,10 +210,9 @@ export function closeModal(): void {
   if (
     sqliteRowComponentModal
     && state.activeEditorBlock?.sectionKey === sqliteRowComponentModal.sectionKey
-    && sqliteRowComponentModal.block
-    && findBlockInSectionById(sqliteRowComponentModal.block, state.activeEditorBlock.blockId)
+    && sqliteRowComponentModal.blocks.some((block) => findBlockInSectionById(block, state.activeEditorBlock?.blockId ?? ''))
   ) {
-    state.activeEditorBlock = null;
+    state.activeEditorBlock = sqliteRowComponentModal.previousActiveEditorBlock;
   }
   state.modalSectionKey = null;
   state.componentMetaModal = null;

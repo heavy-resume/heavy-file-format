@@ -377,32 +377,22 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
           <div class="modal-overlay" data-modal-action="close-overlay"></div>
           <section class="modal-panel component-meta-modal">
             <div class="modal-head">
-              <h3>Row Component: ${deps.escapeHtml(state.sqliteRowComponentModal.tableName)} / ${deps.escapeHtml(String(state.sqliteRowComponentModal.rowId))}</h3>
+              <h3>${deps.escapeHtml(state.sqliteRowComponentModal.tableName)} / ${deps.escapeHtml(String(state.sqliteRowComponentModal.rowId))}</h3>
               <div class="modal-head-actions">
                 <button type="button" data-modal-action="close">Close</button>
               </div>
             </div>
             <p class="muted">
               ${state.sqliteRowComponentModal.readOnly
-                ? 'This component is attached to the selected SQLite row.'
-                : 'Edit the attached component with the normal component editor, then save it back into the SQLite row.'}
+                ? 'Component(s) attached to this row.'
+                : 'Add component(s) to this row.'}
             </p>
             ${state.sqliteRowComponentModal.error ? `<div class="raw-editor-error" role="alert">${deps.escapeHtml(state.sqliteRowComponentModal.error)}</div>` : ''}
             ${
               state.sqliteRowComponentModal.readOnly
                 ? ''
                 : attachedBlock
-                ? `<label>
-                    <span>Component</span>
-                    <select
-                      data-section-key="${deps.escapeAttr(state.sqliteRowComponentModal.sectionKey)}"
-                      data-block-id="${deps.escapeAttr(attachedBlock.id)}"
-                      data-field="block-component"
-                    >
-                      ${deps.renderComponentOptions(attachedBlock.schema.component)}
-                    </select>
-                  </label>
-                  <div class="editor-block sqlite-row-component-modal-editor">
+                ? `<div class="editor-block sqlite-row-component-modal-editor">
                     ${deps.renderBlockContentEditor(state.sqliteRowComponentModal.sectionKey, attachedBlock)}
                   </div>
                   <div class="link-inline-actions reusable-save-actions">
@@ -437,7 +427,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
                   </div>`
                 : state.sqliteRowComponentModal.readOnly
                 ? '<div class="plugin-placeholder">No attached component found for this row.</div>'
-                : '<div class="plugin-placeholder">Choose a component to attach to this row.</div>'
+                : ''
             }
           </section>
         </div>

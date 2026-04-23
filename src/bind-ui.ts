@@ -56,6 +56,7 @@ import {
   addSqlitePluginColumn,
   addSqlitePluginRow,
   getSqliteRowComponent,
+  materializeSqlitePluginDraftRow,
   parseAttachedComponentBlock,
   renameSqlitePluginColumn,
   updateSqlitePluginCell,
@@ -407,7 +408,25 @@ export function bindUi(app: HTMLElement): void {
       const tableName = target.dataset.tableName ?? '';
       const columnName = target.dataset.columnName ?? '';
       const rowId = Number.parseInt(target.dataset.rowid ?? '', 10);
-      if (tableName.length === 0 || columnName.length === 0 || Number.isNaN(rowId)) {
+      const isDraftRow = target.dataset.sqliteDraftRow === 'true';
+      if (tableName.length === 0 || columnName.length === 0) {
+        return;
+      }
+      if (isDraftRow) {
+        if (target.value.length === 0) {
+          return;
+        }
+        recordHistory(`sqlite-draft-row:${tableName}:${columnName}`);
+        void materializeSqlitePluginDraftRow(tableName, columnName, target.value)
+          .then(() => {
+            getRenderApp()();
+          })
+          .catch((error) => {
+            console.error('[hvy:sqlite-plugin] draft row materialization failed', error);
+          });
+        return;
+      }
+      if (Number.isNaN(rowId)) {
         return;
       }
       recordHistory(`sqlite-cell:${tableName}:${rowId}:${columnName}`);

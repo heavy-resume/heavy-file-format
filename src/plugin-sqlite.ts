@@ -130,6 +130,67 @@ function renderEditableTable(
   snapshot: SqliteTableSnapshot,
   helpers: ComponentRenderHelpers
 ): string {
+  const hasRows = snapshot.rows.length > 0;
+  const renderedRows = hasRows
+    ? snapshot.rows.map(
+        (row, rowIndex) => `
+          <tr class="table-row-editor table-row-editor-main">
+            <td class="table-row-utility sqlite-plugin-row-number">${rowIndex + 1}</td>
+            ${snapshot.columns
+              .map(
+                (column, cellIndex) => `
+                  <td>
+                    <input
+                      class="sqlite-plugin-grid-input"
+                      data-field="sqlite-cell"
+                      data-section-key="${helpers.escapeAttr(sectionKey)}"
+                      data-block-id="${helpers.escapeAttr(blockId)}"
+                      data-table-name="${helpers.escapeAttr(tableName)}"
+                      data-rowid="${helpers.escapeAttr(String(snapshot.rowIds[rowIndex] ?? ''))}"
+                      data-column-name="${helpers.escapeAttr(column)}"
+                      value="${helpers.escapeAttr(row[cellIndex] ?? '')}"
+                    />
+                  </td>`
+              )
+              .join('')}
+            <td class="table-row-utility table-row-remove-cell">
+              <button
+                type="button"
+                class="ghost"
+                data-action="sqlite-open-row-component-editor"
+                data-section-key="${helpers.escapeAttr(sectionKey)}"
+                data-block-id="${helpers.escapeAttr(blockId)}"
+                data-table-name="${helpers.escapeAttr(tableName)}"
+                data-rowid="${helpers.escapeAttr(String(snapshot.rowIds[rowIndex] ?? ''))}"
+                title="${snapshot.rowHasAttachedComponent[rowIndex] ? 'Edit attached component' : 'Attach component'}"
+              >${snapshot.rowHasAttachedComponent[rowIndex] ? '…*' : '…'}</button>
+            </td>
+          </tr>`
+      ).join('')
+    : `
+      <tr class="table-row-editor table-row-editor-main sqlite-plugin-draft-row">
+        <td class="table-row-utility sqlite-plugin-row-number"></td>
+        ${snapshot.columns
+          .map(
+            (column) => `
+              <td>
+                <input
+                  class="sqlite-plugin-grid-input"
+                  data-field="sqlite-cell"
+                  data-section-key="${helpers.escapeAttr(sectionKey)}"
+                  data-block-id="${helpers.escapeAttr(blockId)}"
+                  data-table-name="${helpers.escapeAttr(tableName)}"
+                  data-rowid=""
+                  data-column-name="${helpers.escapeAttr(column)}"
+                  data-sqlite-draft-row="true"
+                  value=""
+                />
+              </td>`
+          )
+          .join('')}
+        <td class="table-row-utility table-row-remove-cell"></td>
+      </tr>`;
+
   return `
     <div class="table-editor sqlite-plugin-editor">
       <div class="table-editor-head">
@@ -171,43 +232,7 @@ function renderEditableTable(
             </tr>
           </thead>
           <tbody>
-            ${snapshot.rows
-              .map(
-                (row, rowIndex) => `
-                  <tr class="table-row-editor table-row-editor-main">
-                    <td class="table-row-utility sqlite-plugin-row-number">${rowIndex + 1}</td>
-                    ${snapshot.columns
-                      .map(
-                        (column, cellIndex) => `
-                          <td>
-                            <input
-                              class="sqlite-plugin-grid-input"
-                              data-field="sqlite-cell"
-                              data-section-key="${helpers.escapeAttr(sectionKey)}"
-                              data-block-id="${helpers.escapeAttr(blockId)}"
-                              data-table-name="${helpers.escapeAttr(tableName)}"
-                              data-rowid="${helpers.escapeAttr(String(snapshot.rowIds[rowIndex] ?? ''))}"
-                              data-column-name="${helpers.escapeAttr(column)}"
-                              value="${helpers.escapeAttr(row[cellIndex] ?? '')}"
-                            />
-                          </td>`
-                      )
-                      .join('')}
-                    <td class="table-row-utility table-row-remove-cell">
-                      <button
-                        type="button"
-                        class="ghost"
-                        data-action="sqlite-open-row-component-editor"
-                        data-section-key="${helpers.escapeAttr(sectionKey)}"
-                        data-block-id="${helpers.escapeAttr(blockId)}"
-                        data-table-name="${helpers.escapeAttr(tableName)}"
-                        data-rowid="${helpers.escapeAttr(String(snapshot.rowIds[rowIndex] ?? ''))}"
-                        title="${snapshot.rowHasAttachedComponent[rowIndex] ? 'Edit attached component' : 'Attach component'}"
-                      >${snapshot.rowHasAttachedComponent[rowIndex] ? '…*' : '…'}</button>
-                    </td>
-                  </tr>`
-              )
-              .join('')}
+            ${renderedRows}
             <tr class="table-add-row-line">
               <td colspan="${snapshot.columns.length + 2}">
                 <button
@@ -267,6 +292,24 @@ export async function addSqlitePluginRow(tableName: string): Promise<void> {
   ensureTableExists(db, tableName);
   db.run(`INSERT INTO ${quoteIdentifier(tableName)} DEFAULT VALUES`);
   await persistRuntimeDatabase();
+}
+
+export async function materializeSqlitePluginDraftRow(tableName: string, columnName: string, value: string): Promise<number | null> {
+  if (value.length === 0) {
+    return null;
+  }
+
+  const db = await getLoadedDatabase();
+  ensureTableExists(db, tableName);
+  db.run(`INSERT INTO ${quoteIdentifier(tableName)} DEFAULT VALUES`);
+  const rowIdResult = db.exec('SELECT last_insert_rowid()');
+  const rowId = Number(rowIdResult[0]?.values[0]?.[0] ?? 0);
+  if (!Number.isFinite(rowId) || rowId <= 0) {
+    throw new Error('Failed to create SQLite row.');
+  }
+  db.run(`UPDATE ${quoteIdentifier(tableName)} SET ${quoteIdentifier(columnName)} = ? WHERE rowid = ?`, [value, rowId]);
+  await persistRuntimeDatabase();
+  return rowId;
 }
 
 export async function addSqlitePluginColumn(tableName: string): Promise<void> {

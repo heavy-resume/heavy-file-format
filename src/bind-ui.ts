@@ -1343,6 +1343,11 @@ export function bindUi(app: HTMLElement): void {
       if (tableName.length === 0 || Number.isNaN(rowId) || targetBlockId.length === 0 || targetSectionKey.length === 0) {
         return;
       }
+      if (action === 'sqlite-open-row-component-view' && state.currentView === 'editor') {
+        setActiveEditorBlock(targetSectionKey, targetBlockId);
+        getRenderApp()();
+        return;
+      }
 
       void getSqliteRowComponent(tableName, rowId)
         .then((fragment) => {

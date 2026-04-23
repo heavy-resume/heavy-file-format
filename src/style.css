@@ -1708,6 +1708,21 @@ button.tiny {
   background: color-mix(in srgb, var(--hvy-accent) 8%, white);
 }
 
+.sqlite-row-component-button {
+  min-width: 2rem;
+}
+
+.sqlite-row-component-button-attached {
+  border-color: color-mix(in srgb, var(--hvy-accent) 55%, var(--hvy-border));
+  background: color-mix(in srgb, var(--hvy-accent) 12%, var(--hvy-surface));
+  color: color-mix(in srgb, var(--hvy-accent) 75%, var(--hvy-text));
+}
+
+.sqlite-row-component-button-attached:hover {
+  border-color: color-mix(in srgb, var(--hvy-accent) 72%, var(--hvy-border));
+  background: color-mix(in srgb, var(--hvy-accent) 18%, var(--hvy-surface));
+}
+
 .table-editor {
   display: grid;
   gap: 0.6rem;

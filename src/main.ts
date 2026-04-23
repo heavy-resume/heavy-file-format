@@ -19,9 +19,9 @@ import { isActiveEditorSectionTitle, isActiveEditorBlock, getComponentRenderHelp
 import { commitHistorySnapshot } from './history';
 import { capturePaneScroll, restorePaneScroll, centerPendingEditorSection, focusPendingSectionTitleEditor } from './scroll';
 import { bindUi } from './bind-ui';
-import { deserializeDocument, serializeDocument } from './serialization';
+import { deserializeDocumentBytes, serializeDocument } from './serialization';
 import { createDefaultChatState, renderChatPanel } from './chat';
-import bundledExampleHvy from '../examples/example.hvy?raw';
+import { DEFAULT_EXAMPLE_HVY_BYTES } from './example-bundles';
 
 const appRoot = document.querySelector<HTMLDivElement>('#app');
 if (!appRoot) {
@@ -32,11 +32,10 @@ const app = appRoot;
 app.innerHTML = '<main class="layout"><section class="pane full-pane"><p>Loading editor...</p></section></main>';
 
 function createDefaultDocument() {
-  return deserializeDocument(bundledExampleHvy, '.hvy');
+  return deserializeDocumentBytes(DEFAULT_EXAMPLE_HVY_BYTES, '.hvy');
 }
 
-function createInitialState(): AppState {
-  const document = createDefaultDocument();
+function createInitialState(document: ReturnType<typeof deserializeDocumentBytes>): AppState {
   return {
     document,
     filename: 'example.hvy',
@@ -152,7 +151,7 @@ function renderAiEditPopover(): string {
   `;
 }
 
-initState(createInitialState());
+initState(createInitialState(createDefaultDocument()));
 
 let editorRenderer: EditorRenderer;
 let readerRenderer: ReaderRenderer;

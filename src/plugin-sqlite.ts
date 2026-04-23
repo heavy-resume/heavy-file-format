@@ -153,19 +153,19 @@ function renderEditableTable(
                   </td>`
               )
               .join('')}
-            <td class="table-row-utility table-row-remove-cell">
-              <button
-                type="button"
-                class="ghost"
-                data-action="sqlite-open-row-component-editor"
-                data-section-key="${helpers.escapeAttr(sectionKey)}"
-                data-block-id="${helpers.escapeAttr(blockId)}"
-                data-table-name="${helpers.escapeAttr(tableName)}"
-                data-rowid="${helpers.escapeAttr(String(snapshot.rowIds[rowIndex] ?? ''))}"
-                title="${snapshot.rowHasAttachedComponent[rowIndex] ? 'Edit attached component' : 'Attach component'}"
-              >${snapshot.rowHasAttachedComponent[rowIndex] ? '…*' : '…'}</button>
-            </td>
-          </tr>`
+                    <td class="table-row-utility table-row-remove-cell">
+                      <button
+                        type="button"
+                        class="ghost sqlite-row-component-button${snapshot.rowHasAttachedComponent[rowIndex] ? ' sqlite-row-component-button-attached' : ''}"
+                        data-action="sqlite-open-row-component-editor"
+                        data-section-key="${helpers.escapeAttr(sectionKey)}"
+                        data-block-id="${helpers.escapeAttr(blockId)}"
+                        data-table-name="${helpers.escapeAttr(tableName)}"
+                        data-rowid="${helpers.escapeAttr(String(snapshot.rowIds[rowIndex] ?? ''))}"
+                        title="${snapshot.rowHasAttachedComponent[rowIndex] ? 'Edit attached component' : 'Attach component'}"
+                      >…</button>
+                    </td>
+                  </tr>`
       ).join('')
     : `
       <tr class="table-row-editor table-row-editor-main sqlite-plugin-draft-row">

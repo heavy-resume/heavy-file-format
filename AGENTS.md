@@ -11,3 +11,5 @@ The spec and implementation should bias towards reusable components. I.e. consid
 The current state of the repo is where there are no "legacy files" so don't preserve any old behavior when making changes to new behavior or formats. There are no prior users.
 
 Tests are in the tests directory. For serialization / deserialization changes always ensure there's appropriate test coverage.
+
+Tests for tools should prefer BEFORE, TOOL CALL, AFTER flow and not use mock calls or things potentially altered by order. The idea this is equally human and machine readable. When naming things prefer "expected result" or similar to make it clear. Additionally, avoid moving things to variables if they're used exactly once in tests, and keep variable definitions near usage.

@@ -1,7 +1,7 @@
 import { requestProxyCompletion } from './chat';
 import { parseAiBlockEditResponse, requestAiComponentEdit } from './ai-edit';
 import { createEmptySection } from './document-factory';
-import { serializeBlockFragment } from './serialization';
+import { serializeBlockFragment, serializeDocument } from './serialization';
 import { findBlockContainerById, findSectionByKey, findSectionContainer, getSectionId, moveSectionRelative, visitBlocks } from './section-ops';
 import type { VisualBlock, VisualSection } from './editor/types';
 import type { ChatMessage, ChatSettings, VisualDocument } from './types';
@@ -14,6 +14,15 @@ const MAX_TEXT_PREVIEW_LENGTH = 72;
 const MAX_SUMMARY_NESTING = 2;
 const HIDDEN_CONTENTS_MARKER = '... contents hidden ...';
 const SENT_STRUCTURE_CONTEXT = 'Reduced document structure was already provided earlier in this edit session. Request `request_structure` if you need a fresh copy.';
+const DEFAULT_VIEW_START_LINE = 1;
+const DEFAULT_VIEW_END_LINE = 200;
+const MAX_GREP_LINE_WIDTH = 400;
+
+interface NumberedLine {
+  lineNumber: number;
+  text: string;
+  ownerId: string | null;
+}
 
 interface SectionRefEntry {
   key: string;
@@ -36,11 +45,19 @@ interface DocumentStructureSnapshot {
   componentRefs: Map<string, ComponentRefEntry>;
 }
 
+type ComponentPatchEdit =
+  | { op: 'replace'; start_line: number; end_line: number; text: string }
+  | { op: 'delete'; start_line: number; end_line: number }
+  | { op: 'insert_before'; line: number; text: string }
+  | { op: 'insert_after'; line: number; text: string };
+
 type DocumentEditToolRequest =
   | { tool: 'done'; summary?: string }
   | { tool: 'request_structure'; reason?: string }
-  | { tool: 'view_component'; component_ref: string; reason?: string }
+  | { tool: 'view_component'; component_ref: string; start_line?: number; end_line?: number; reason?: string }
+  | { tool: 'grep'; query: string; flags?: string; before?: number; after?: number; max_count?: number; reason?: string }
   | { tool: 'edit_component'; component_ref: string; request: string; reason?: string }
+  | { tool: 'patch_component'; component_ref: string; edits: ComponentPatchEdit[]; reason?: string }
   | { tool: 'remove_section'; section_ref: string; reason?: string }
   | { tool: 'remove_component'; component_ref: string; reason?: string }
   | {
@@ -100,6 +117,11 @@ export async function requestAiDocumentEditTurn(params: {
       error: null,
     };
   } catch (error) {
+    console.error('[hvy:ai-document-edit] request failed', {
+      request: params.request,
+      settings: params.settings,
+      error,
+    });
     const message = error instanceof Error ? error.message : 'AI document edit failed.';
     return {
       messages: [
@@ -183,6 +205,9 @@ async function runDocumentEditLoop(params: {
       snapshot = summarizeDocumentStructure(params.document);
       toolResult = buildToolResult('request_structure', snapshot.summary);
       contextSummary = SENT_STRUCTURE_CONTEXT;
+    } else if (parsed.value.tool === 'grep') {
+      toolResult = buildToolResult('grep', executeGrepTool(parsed.value, params.document));
+      contextSummary = SENT_STRUCTURE_CONTEXT;
     } else if (parsed.value.tool === 'view_component') {
       toolResult = buildToolResult('view_component', executeViewComponentTool(parsed.value, snapshot, params.document));
       contextSummary = SENT_STRUCTURE_CONTEXT;
@@ -191,6 +216,10 @@ async function runDocumentEditLoop(params: {
         'edit_component',
         await executeEditComponentTool(parsed.value, snapshot, params.document, params.settings, params.onMutation)
       );
+      snapshot = summarizeDocumentStructure(params.document);
+      contextSummary = SENT_STRUCTURE_CONTEXT;
+    } else if (parsed.value.tool === 'patch_component') {
+      toolResult = buildToolResult('patch_component', executePatchComponentTool(parsed.value, snapshot, params.document, params.onMutation));
       snapshot = summarizeDocumentStructure(params.document);
       contextSummary = SENT_STRUCTURE_CONTEXT;
     } else if (parsed.value.tool === 'remove_section') {
@@ -338,16 +367,57 @@ function executeViewComponentTool(
   if (!section || !block) {
     throw new Error(`Component "${request.component_ref}" could not be found.`);
   }
+  const fragment = serializeBlockFragment(block);
+  const clampRange = clampLineRange(fragment.split('\n').length, request.start_line, request.end_line);
 
   return [
     `Section title: ${section.title}`,
     `Section id: ${getSectionId(section)}`,
     `Component type: ${block.schema.component}`,
     `Component id: ${block.schema.id.trim() || '(none)'}`,
+    `Showing lines ${clampRange.startLine}-${clampRange.endLine} (default range is ${DEFAULT_VIEW_START_LINE}-${DEFAULT_VIEW_END_LINE})`,
     '',
-    'Component HVY:',
-    serializeBlockFragment(block),
+    'Component HVY with 1-based line numbers:',
+    formatNumberedFragment(fragment, clampRange.startLine, clampRange.endLine),
   ].join('\n');
+}
+
+function executeGrepTool(
+  request: Extract<DocumentEditToolRequest, { tool: 'grep' }>,
+  document: VisualDocument
+): string {
+  const query = request.query.trim();
+  if (query.length === 0) {
+    throw new Error('grep.query must be a non-empty string.');
+  }
+
+  const before = Math.max(0, request.before ?? 0);
+  const after = Math.max(0, request.after ?? 0);
+  const maxCount = Math.max(1, request.max_count ?? 5);
+  const lines = buildDocumentNumberedLines(document);
+  const matcher = buildGrepRegex(query, request.flags);
+  const matchIndexes = lines
+    .map((line, index) => ({ index, matches: matcher.test(line.text) }))
+    .filter((entry) => entry.matches)
+    .slice(0, maxCount)
+    .map((entry) => entry.index);
+
+  if (matchIndexes.length === 0) {
+    return `No matches for "${query}".`;
+  }
+
+  return matchIndexes
+    .map((matchIndex, idx) => {
+      const start = Math.max(0, matchIndex - before);
+      const end = Math.min(lines.length - 1, matchIndex + after);
+      const clump = lines.slice(start, end + 1);
+      const ownerId = lines[matchIndex]?.ownerId ?? '(none)';
+      return [
+        `Match ${idx + 1} of ${matchIndexes.length} (component_id="${ownerId}")`,
+        ...clump.map((line) => `${String(line.lineNumber).padStart(4, ' ')} | ${line.text}`),
+      ].join('\n');
+    })
+    .join('\n\n');
 }
 
 async function executeEditComponentTool(
@@ -385,6 +455,48 @@ async function executeEditComponentTool(
   }
 
   return `Updated component ${request.component_ref} (${block.schema.component}${block.schema.id.trim() ? ` id="${block.schema.id.trim()}"` : ''}).`;
+}
+
+function executePatchComponentTool(
+  request: Extract<DocumentEditToolRequest, { tool: 'patch_component' }>,
+  snapshot: DocumentStructureSnapshot,
+  document: VisualDocument,
+  onMutation?: (group?: string) => void
+): string {
+  const component = snapshot.componentRefs.get(request.component_ref);
+  if (!component) {
+    throw new Error(`Unknown component ref "${request.component_ref}". Request the structure again if needed.`);
+  }
+  const block = findBlockByInternalId(document.sections, component.blockId);
+  if (!block) {
+    throw new Error(`Component "${request.component_ref}" could not be found.`);
+  }
+
+  const originalFragment = serializeBlockFragment(block);
+  const patchedFragment = applyComponentPatchEdits(originalFragment, request.edits);
+  console.debug('[hvy:ai-document-edit] patch_component', {
+    componentRef: request.component_ref,
+    edits: request.edits,
+    originalFragment,
+    patchedFragment,
+  });
+
+  const parsed = parseAiBlockEditResponse(patchedFragment);
+  if (!parsed.block || parsed.hasErrors) {
+    const details = parsed.issues.map((issue) => `${issue.message} ${issue.hint}`.trim()).join(' ');
+    throw new Error(`patch_component produced invalid HVY. ${details}`.trim());
+  }
+
+  onMutation?.('ai-edit:block');
+  const originalSchemaId = block.schema.id;
+  block.text = parsed.block.text;
+  block.schema = parsed.block.schema;
+  block.schemaMode = parsed.block.schemaMode;
+  if (originalSchemaId.trim().length > 0 && block.schema.id.trim().length === 0) {
+    block.schema.id = originalSchemaId;
+  }
+
+  return `Patched component ${request.component_ref} with ${request.edits.length} edit${request.edits.length === 1 ? '' : 's'}.`;
 }
 
 function executeRemoveSectionTool(
@@ -575,12 +687,15 @@ export function buildDocumentEditFormatInstructions(): string {
   return [
     'Reply with exactly one JSON object and nothing else.',
     'Choose one tool at a time.',
-    'Valid tools are: `view_component`, `edit_component`, `create_component`, `remove_component`, `create_section`, `remove_section`, `reorder_section`, `request_structure`, `done`.',
+    'Valid tools are: `grep`, `view_component`, `edit_component`, `patch_component`, `create_component`, `remove_component`, `create_section`, `remove_section`, `reorder_section`, `request_structure`, `done`.',
     'Use real section ids when a section has an id.',
     'Use component ids when they exist. If a component has no id, use its fallback component ref like `C3`.',
     'Do not invent ids or refs.',
-    'When you need exact HVY for a component before editing it, use `view_component` first.',
+    'Use `grep` to search the whole serialized document with a regex pattern. It returns post-wrap line numbers, nearby context lines, and the nearest component id for each match clump.',
+    'For grep regexes, you may use alternation like `Python|TypeScript` and flags like `i` for case-insensitive matches.',
+    'When you need exact HVY for a component before editing it, use `view_component` first. It returns 1-based component line numbers and defaults to lines 1-200.',
     'Use `edit_component` only for one existing component. It may revise that component in place or fully replace it, but only for that single referenced component.',
+    'Use `patch_component` for small, local changes after you have seen the numbered component lines.',
     'Use `create_component` to add a fully defined new component near an existing one or at the end of a section.',
     'Use `remove_component` and `remove_section` when the request requires deletion.',
     'Use section tools for section-level structural changes.',
@@ -589,9 +704,13 @@ export function buildDocumentEditFormatInstructions(): string {
     'For `create_component.hvy`, return one complete HVY component fragment as a JSON string value with escaped newlines.',
     '',
     'Tool shapes:',
+    '{"tool":"grep","query":"Python|TypeScript","flags":"i","before":2,"after":2,"max_count":3,"reason":"optional"}',
+    '{"tool":"grep","query":"/Python|TypeScript/i","before":2,"after":2,"max_count":3,"reason":"optional"}',
     '{"tool":"view_component","component_ref":"C3","reason":"optional"}',
-    '{"tool":"view_component","component_ref":"skill-python-card","reason":"optional"}',
+    '{"tool":"view_component","component_ref":"skill-python-card","start_line":1,"end_line":40,"reason":"optional"}',
     '{"tool":"edit_component","component_ref":"C3","request":"Change the label to Foo","reason":"optional"}',
+    '{"tool":"patch_component","component_ref":"C3","edits":[{"op":"replace","start_line":2,"end_line":2,"text":" New content"}],"reason":"optional"}',
+    '{"tool":"patch_component","component_ref":"C3","edits":[{"op":"insert_after","line":1,"text":"\\n <!--hvy:text {}-->\\n Added line"},{"op":"delete","start_line":4,"end_line":5}],"reason":"optional"}',
     '{"tool":"create_component","position":"append-to-section","section_ref":"skills","hvy":"<!--hvy:text {}-->\\n New content","reason":"optional"}',
     '{"tool":"create_component","position":"after","target_component_ref":"C3","hvy":"<!--hvy:xref-card {\\"xrefTitle\\":\\"Heavy Stack\\",\\"xrefDetail\\":\\"Project\\",\\"xrefTarget\\":\\"heavy-stack\\"}-->","reason":"optional"}',
     '{"tool":"remove_component","component_ref":"C3","reason":"optional"}',
@@ -635,13 +754,80 @@ function parseDocumentEditToolRequest(source: string): { ok: true; value: Docume
     if (tool === 'request_structure') {
       return { ok: true, value: { tool, reason: typeof parsed.reason === 'string' ? parsed.reason : undefined } };
     }
+    if (tool === 'grep' && typeof parsed.query === 'string' && parsed.query.trim().length > 0) {
+      const flags = typeof parsed.flags === 'string' ? parsed.flags : undefined;
+      try {
+        buildGrepRegex(parsed.query, flags);
+      } catch (error) {
+        return {
+          ok: false,
+          message: error instanceof Error ? error.message : 'grep query must be a valid regex pattern.',
+        };
+      }
+      return {
+        ok: true,
+        value: {
+          tool,
+          query: parsed.query,
+          flags,
+          before: Number.isInteger(parsed.before) ? Number(parsed.before) : undefined,
+          after: Number.isInteger(parsed.after) ? Number(parsed.after) : undefined,
+          max_count: Number.isInteger(parsed.max_count) ? Number(parsed.max_count) : undefined,
+          reason: typeof parsed.reason === 'string' ? parsed.reason : undefined,
+        },
+      };
+    }
     if (tool === 'view_component' && typeof parsed.component_ref === 'string') {
-      return { ok: true, value: { tool, component_ref: parsed.component_ref, reason: typeof parsed.reason === 'string' ? parsed.reason : undefined } };
+      return {
+        ok: true,
+        value: {
+          tool,
+          component_ref: parsed.component_ref,
+          start_line: Number.isInteger(parsed.start_line) ? Number(parsed.start_line) : undefined,
+          end_line: Number.isInteger(parsed.end_line) ? Number(parsed.end_line) : undefined,
+          reason: typeof parsed.reason === 'string' ? parsed.reason : undefined,
+        },
+      };
     }
     if (tool === 'edit_component' && typeof parsed.component_ref === 'string' && typeof parsed.request === 'string' && parsed.request.trim().length > 0) {
       return {
         ok: true,
         value: { tool, component_ref: parsed.component_ref, request: parsed.request, reason: typeof parsed.reason === 'string' ? parsed.reason : undefined },
+      };
+    }
+    if (tool === 'patch_component' && typeof parsed.component_ref === 'string' && Array.isArray(parsed.edits) && parsed.edits.length > 0) {
+      const edits: ComponentPatchEdit[] = [];
+      for (const candidate of parsed.edits) {
+        if (!candidate || typeof candidate !== 'object') {
+          return { ok: false, message: 'patch_component.edits must be an array of patch operations.' };
+        }
+        const edit = candidate as Record<string, unknown>;
+        if (edit.op === 'replace' && Number.isInteger(edit.start_line) && Number.isInteger(edit.end_line) && typeof edit.text === 'string') {
+          edits.push({ op: 'replace', start_line: Number(edit.start_line), end_line: Number(edit.end_line), text: edit.text });
+          continue;
+        }
+        if (edit.op === 'delete' && Number.isInteger(edit.start_line) && Number.isInteger(edit.end_line)) {
+          edits.push({ op: 'delete', start_line: Number(edit.start_line), end_line: Number(edit.end_line) });
+          continue;
+        }
+        if (edit.op === 'insert_before' && Number.isInteger(edit.line) && typeof edit.text === 'string') {
+          edits.push({ op: 'insert_before', line: Number(edit.line), text: edit.text });
+          continue;
+        }
+        if (edit.op === 'insert_after' && Number.isInteger(edit.line) && typeof edit.text === 'string') {
+          edits.push({ op: 'insert_after', line: Number(edit.line), text: edit.text });
+          continue;
+        }
+        return { ok: false, message: 'patch_component edits must use replace, delete, insert_before, or insert_after with valid line numbers.' };
+      }
+      return {
+        ok: true,
+        value: {
+          tool,
+          component_ref: parsed.component_ref,
+          edits,
+          reason: typeof parsed.reason === 'string' ? parsed.reason : undefined,
+        },
       };
     }
     if (tool === 'remove_section' && typeof parsed.section_ref === 'string') {
@@ -723,6 +909,51 @@ function describeStructureLine(block: VisualBlock, target: string, fallbackRef: 
   return `${preview} <!-- ${block.schema.component} id="${escapeInline(target)}" -->`;
 }
 
+function formatNumberedFragment(fragment: string, startLine = DEFAULT_VIEW_START_LINE, endLine = DEFAULT_VIEW_END_LINE): string {
+  const lines = fragment.split('\n');
+  const range = clampLineRange(lines.length, startLine, endLine);
+  return lines
+    .slice(range.startLine - 1, range.endLine)
+    .map((line, index) => `${String(range.startLine + index).padStart(3, ' ')} | ${line}`)
+    .join('\n');
+}
+
+function applyComponentPatchEdits(fragment: string, edits: ComponentPatchEdit[]): string {
+  let lines = fragment.split('\n');
+  for (const edit of edits) {
+    if (edit.op === 'replace') {
+      assertValidLineRange(lines, edit.start_line, edit.end_line, 'replace');
+      lines.splice(edit.start_line - 1, edit.end_line - edit.start_line + 1, ...edit.text.split('\n'));
+      continue;
+    }
+    if (edit.op === 'delete') {
+      assertValidLineRange(lines, edit.start_line, edit.end_line, 'delete');
+      lines.splice(edit.start_line - 1, edit.end_line - edit.start_line + 1);
+      continue;
+    }
+    if (edit.op === 'insert_before') {
+      assertValidLineNumberForInsert(lines, edit.line, 'insert_before');
+      lines.splice(edit.line - 1, 0, ...edit.text.split('\n'));
+      continue;
+    }
+    assertValidLineNumberForInsert(lines, edit.line, 'insert_after');
+    lines.splice(edit.line, 0, ...edit.text.split('\n'));
+  }
+  return lines.join('\n').trim();
+}
+
+function assertValidLineRange(lines: string[], startLine: number, endLine: number, op: string): void {
+  if (startLine < 1 || endLine < startLine || endLine > lines.length) {
+    throw new Error(`${op} line range ${startLine}-${endLine} is out of bounds for a ${lines.length}-line component.`);
+  }
+}
+
+function assertValidLineNumberForInsert(lines: string[], line: number, op: string): void {
+  if (line < 1 || line > lines.length) {
+    throw new Error(`${op} line ${line} is out of bounds for a ${lines.length}-line component.`);
+  }
+}
+
 function getBlockPreview(block: VisualBlock): string {
   const component = block.schema.component;
   if (component === 'xref-card') {
@@ -798,4 +1029,82 @@ function truncatePreview(value: string): string {
     return collapsed;
   }
   return `${collapsed.slice(0, MAX_TEXT_PREVIEW_LENGTH - 1)}...`;
+}
+
+function clampLineRange(totalLines: number, startLine = DEFAULT_VIEW_START_LINE, endLine = DEFAULT_VIEW_END_LINE): {
+  startLine: number;
+  endLine: number;
+} {
+  const safeTotal = Math.max(1, totalLines);
+  const safeStart = Math.min(Math.max(1, startLine), safeTotal);
+  const safeEnd = Math.min(Math.max(safeStart, endLine), safeTotal);
+  return { startLine: safeStart, endLine: safeEnd };
+}
+
+function buildDocumentNumberedLines(document: VisualDocument): NumberedLine[] {
+  const physicalLines = serializeDocument(document).split('\n');
+  const numberedLines: NumberedLine[] = [];
+  let nextLineNumber = 1;
+  let currentOwnerId: string | null = null;
+
+  for (const physicalLine of physicalLines) {
+    currentOwnerId = detectLineOwnerId(physicalLine, currentOwnerId);
+    const wrappedLines = splitLongLine(physicalLine, MAX_GREP_LINE_WIDTH);
+    for (const wrappedLine of wrappedLines) {
+      numberedLines.push({
+        lineNumber: nextLineNumber,
+        text: wrappedLine,
+        ownerId: currentOwnerId,
+      });
+      nextLineNumber += 1;
+    }
+  }
+
+  return numberedLines;
+}
+
+function detectLineOwnerId(line: string, currentOwnerId: string | null): string | null {
+  const directiveMatch = line.match(/^\s*<!--hvy:(?:([a-z][a-z0-9-]*(?::[a-z0-9-]+)*)\s*)?(\{.*\})\s*-->$/i);
+  if (!directiveMatch) {
+    return currentOwnerId;
+  }
+
+  try {
+    const directivePath = directiveMatch[1] ?? '';
+    const payloadRaw = directiveMatch[2] ?? '{}';
+    const payload = JSON.parse(payloadRaw) as Record<string, unknown>;
+    if (typeof payload.id === 'string' && payload.id.trim().length > 0) {
+      return payload.id.trim();
+    }
+    if (directivePath === '' || directivePath === 'subsection') {
+      return currentOwnerId;
+    }
+    return currentOwnerId;
+  } catch {
+    return currentOwnerId;
+  }
+}
+
+function splitLongLine(line: string, maxWidth: number): string[] {
+  if (line.length <= maxWidth) {
+    return [line];
+  }
+  const chunks: string[] = [];
+  for (let index = 0; index < line.length; index += maxWidth) {
+    chunks.push(line.slice(index, index + maxWidth));
+  }
+  return chunks;
+}
+
+function buildGrepRegex(query: string, explicitFlags?: string): RegExp {
+  const slashRegexMatch = query.match(/^\/([\s\S]*)\/([dgimsuvy]*)$/);
+  const source = slashRegexMatch ? slashRegexMatch[1] ?? '' : query;
+  const flags = explicitFlags ?? (slashRegexMatch ? slashRegexMatch[2] : 'i') ?? 'i';
+
+  try {
+    return new RegExp(source, flags);
+  } catch (error) {
+    const details = error instanceof Error ? error.message : 'Unknown regex error.';
+    throw new Error(`grep query must be a valid regex. ${details}`);
+  }
 }

@@ -1,7 +1,8 @@
 .db-table-info {
     display: flex;
     flex-direction: row;
-    align-items: end;
+    align-items: center;
+    justify-content: space-around;
     gap: 1rem;
 }
 
@@ -38,6 +39,7 @@
     display: flex;
     align-items: center;
     gap: 0.6rem;
+    flex-direction: row;
 }
 
 .db-table-frame {
@@ -88,4 +90,8 @@
     padding: 0;
     border: 0;
     background: transparent;
+}
+
+.db-table-name {
+    max-width: 16rem;
 }

@@ -1160,6 +1160,7 @@ button.tiny {
 .editor-grid label,
 .editor-grid .editor-field,
 .editor-row label:not(.checkbox-label),
+.editor-row label:not(.checkbox-row),
 .modal-panel label {
   display: grid;
   gap: 0.24rem;

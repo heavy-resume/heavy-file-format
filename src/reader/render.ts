@@ -405,7 +405,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
                   id="dbTableQueryLimitInput"
                   type="number"
                   min="1"
-                  max="99"
+                  max="100"
                   value="${deps.escapeAttr(String(queryModal.queryLimit))}"
                 />
               </label>`}

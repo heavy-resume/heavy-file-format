@@ -116,7 +116,7 @@ export function renderDbTablePluginEditor(sectionKey: string, block: VisualBlock
 
   return `
     <span class="db-table-info">
-      <label>
+      <label class="db-table-name">
         <span>Table</span>
         <input
           data-section-key="${helpers.escapeAttr(sectionKey)}"
@@ -126,13 +126,15 @@ export function renderDbTablePluginEditor(sectionKey: string, block: VisualBlock
           placeholder="job_applications"
         />
       </label>
-      <button
-        type="button"
-        class="ghost db-table-query-button${query.length > 0 ? ' db-table-query-button-active' : ''}"
-        data-action="db-table-open-query-editor"
-        data-section-key="${helpers.escapeAttr(sectionKey)}"
-        data-block-id="${helpers.escapeAttr(block.id)}"
-      >${query.length > 0 ? 'Edit Query' : 'Query'}</button>
+      <span>
+        <button
+          type="button"
+          class="ghost db-table-query-button${query.length > 0 ? ' db-table-query-button-active' : ''}"
+          data-action="db-table-open-query-editor"
+          data-section-key="${helpers.escapeAttr(sectionKey)}"
+          data-block-id="${helpers.escapeAttr(block.id)}"
+        >Edit Query</button>
+      </span>
     </span>
     ${content}
   `;

@@ -4,7 +4,7 @@ import { closeModal } from './navigation';
 import { saveReusableFromModal } from './reusable';
 import { findBlockByIds } from './block-ops';
 import { recordHistory } from './history';
-import { parseAttachedComponentBlocks, setSqliteRowComponent } from './plugin-sqlite';
+import { parseAttachedComponentBlocks, setSqliteRowComponent } from './plugins/db-table';
 import { serializeBlockFragment } from './serialization';
 
 export function bindModal(app: HTMLElement): void {

@@ -722,7 +722,7 @@ Sections can request plugin behavior with metadata:
 Use the `plugin` block when a document embeds a client-resolved plugin instance in normal content flow:
 
 ```markdown
-<!--hvy:plugin {"plugin":"dev.heavy.sqlite-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->
+<!--hvy:plugin {"plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->
 ```
 
 Plugin block fields:
@@ -739,7 +739,7 @@ Tail format:
 1. The textual document body ends with a single-line directive:
 
 ```markdown
-<!--hvy:tail {"plugin":"dev.heavy.sqlite-table","mediaType":"application/vnd.sqlite3","encoding":"gzip"}-->
+<!--hvy:tail {"plugin":"dev.heavy.db-table","mediaType":"application/vnd.sqlite3","encoding":"gzip"}-->
 ```
 
 2. The next line MUST be the exact ASCII sentinel:
@@ -756,28 +756,28 @@ Rules:
 - If `encoding` is present, clients MUST decode the tail before handing it to the plugin.
 - Clients that do not recognize the declared plugin or tail media type SHOULD preserve the bytes but MAY render the plugin block as unsupported.
 
-### 7.5 SQLite table plugin contract
+### 7.5 DB table plugin contract
 
-The first standardized plugin contract is `dev.heavy.sqlite-table`.
+The first standardized plugin contract is `dev.heavy.db-table`.
 
 Declaration example:
 
 ```yaml
 plugins:
-  - id: dev.heavy.sqlite-table
-    source: builtin://sqlite-table
+  - id: dev.heavy.db-table
+    source: builtin://db-table
 ```
 
 Block example:
 
 ```markdown
-<!--hvy:plugin {"plugin":"dev.heavy.sqlite-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->
+<!--hvy:plugin {"plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->
 ```
 
 Plugin-specific rules:
 - `pluginConfig.source` MUST currently be `"with-file"`.
-- `pluginConfig.table` MUST be a SQLite table name to render.
-- The document tail MUST contain exactly one gzip-compressed SQLite database for this plugin.
+- `pluginConfig.table` MUST be a database table name to render.
+- The current built-in implementation stores this plugin in exactly one gzip-compressed SQLite database in the document tail.
 - Multiple plugin blocks MAY point at different tables within the same attached database.
 
 Recommended client behavior:

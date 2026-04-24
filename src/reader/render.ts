@@ -15,7 +15,7 @@ import type { ThemeConfig } from '../theme';
 import type { SqliteRowComponentModalState, VisualDocument } from '../types';
 import { getDocumentSectionDefaultCss, mergeDocumentCss } from '../document-section-defaults';
 import { areTablesEnabled } from '../reference-config';
-import { parseAttachedComponentBlocks } from '../plugin-sqlite';
+import { parseAttachedComponentBlocks } from '../plugins/db-table';
 
 interface ReaderRenderState {
   documentMeta: VisualDocument['meta'];

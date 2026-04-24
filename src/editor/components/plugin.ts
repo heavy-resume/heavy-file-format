@@ -1,30 +1,32 @@
 import type { ComponentEditorRenderer, ComponentReaderRenderer } from '../component-helpers';
-import { renderSqlitePluginEditor, renderSqlitePluginReader, SQLITE_TABLE_PLUGIN_ID } from '../../plugin-sqlite';
+import { renderDbTablePluginEditor, renderDbTablePluginReader } from '../../plugins/db-table';
+import { DB_TABLE_PLUGIN_ID, getPluginDisplayName, isDbTablePluginId } from '../../plugins/registry';
 
 export const renderPluginEditor: ComponentEditorRenderer = (sectionKey, block, helpers) => {
-  if (block.schema.plugin === SQLITE_TABLE_PLUGIN_ID || block.schema.plugin.trim().length === 0) {
-    return renderSqlitePluginEditor(sectionKey, block, helpers);
+  if (isDbTablePluginId(block.schema.plugin) || block.schema.plugin.trim().length === 0) {
+    return renderDbTablePluginEditor(sectionKey, block, helpers);
   }
 
   return `
     <label>
-      <span>Plugin</span>
-      <input
+      <span>DB Table</span>
+      <select
         data-section-key="${helpers.escapeAttr(sectionKey)}"
         data-block-id="${helpers.escapeAttr(block.id)}"
         data-field="block-plugin"
-        value="${helpers.escapeAttr(block.schema.plugin)}"
-        placeholder="${helpers.escapeAttr(SQLITE_TABLE_PLUGIN_ID)}"
-      />
+        disabled
+      >
+        <option selected>${helpers.escapeHtml(getPluginDisplayName(block.schema.plugin || DB_TABLE_PLUGIN_ID))}</option>
+      </select>
     </label>
-    <div class="plugin-placeholder">Plugin placeholder: ${helpers.escapeHtml(block.schema.plugin || 'No plugin set')}</div>
+    <div class="plugin-placeholder">This plugin is not available in the current reader.</div>
   `;
 };
 
 export const renderPluginReader: ComponentReaderRenderer = (section, block, helpers) => {
-  if (block.schema.plugin === SQLITE_TABLE_PLUGIN_ID || block.schema.plugin.trim().length === 0) {
-    return renderSqlitePluginReader(section, block, helpers);
+  if (isDbTablePluginId(block.schema.plugin) || block.schema.plugin.trim().length === 0) {
+    return renderDbTablePluginReader(section, block, helpers);
   }
 
-  return `<div class="plugin-placeholder">Plugin placeholder: ${helpers.escapeHtml(block.schema.plugin || 'No plugin set')}</div>`;
+  return `<div class="plugin-placeholder">This plugin is not available in the current reader.</div>`;
 };

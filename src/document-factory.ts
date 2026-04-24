@@ -6,6 +6,7 @@ import { getComponentDefs, getSectionDefs, resolveBaseComponent } from './compon
 import { coerceGridColumns, createGridItem as _createGridItem, parseGridItems as _parseGridItems } from './grid-ops';
 import { getTableColumns } from './table-ops';
 import { REUSABLE_SECTION_DEF_PREFIX } from './state';
+import { DB_TABLE_PLUGIN_ID } from './plugins/registry';
 
 export function defaultBlockSchema(component = 'text'): BlockSchema {
   return {
@@ -341,6 +342,13 @@ export function applyComponentDefaults(schema: BlockSchema, componentName: strin
   if (base === 'component-list') {
     schema.componentListComponent = 'text';
     ensureComponentListBlocks({ id: '', text: '', schema, schemaMode: false });
+  }
+  if (base === 'plugin' && schema.plugin.trim().length === 0) {
+    schema.plugin = DB_TABLE_PLUGIN_ID;
+    schema.pluginConfig = {
+      ...schema.pluginConfig,
+      source: 'with-file',
+    };
   }
   if (!def) {
     return;

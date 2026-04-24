@@ -129,19 +129,19 @@ test('serializes plugin blocks with plugin identity and config', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
 plugins:
-  - id: dev.heavy.sqlite-table
-    source: builtin://sqlite-table
+  - id: dev.heavy.db-table
+    source: builtin://db-table
 ---
 
 <!--hvy: {"id":"data"}-->
 #! Data
 
-<!--hvy:plugin {"plugin":"dev.heavy.sqlite-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->
+<!--hvy:plugin {"plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->
 `, '.hvy');
 
   const output = serializeWithState(document);
 
-  expect(output).toContain('<!--hvy:plugin {"plugin":"dev.heavy.sqlite-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->');
+  expect(output).toContain('<!--hvy:plugin {"plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->');
   expect(output).not.toContain('"pluginUrl"');
 });
 
@@ -153,12 +153,12 @@ hvy_version: 0.1
 <!--hvy: {"id":"data"}-->
 #! Data
 
-<!--hvy:plugin {"plugin":"dev.heavy.sqlite-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->
+<!--hvy:plugin {"plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->
 `, '.hvy');
 
   document.attachmentTail = {
     meta: {
-      plugin: 'dev.heavy.sqlite-table',
+      plugin: 'dev.heavy.db-table',
       mediaType: 'application/vnd.sqlite3',
       encoding: 'gzip',
     },
@@ -169,7 +169,7 @@ hvy_version: 0.1
   const serializedBytes = serializeDocumentBytes(document);
   const serializedPrefix = new TextDecoder().decode(serializedBytes.slice(0, serializedBytes.length - document.attachmentTail.bytes.length));
 
-  expect(serializedText).toContain('<!--hvy:tail {"plugin":"dev.heavy.sqlite-table","mediaType":"application/vnd.sqlite3","encoding":"gzip"}-->');
+  expect(serializedText).toContain('<!--hvy:tail {"plugin":"dev.heavy.db-table","mediaType":"application/vnd.sqlite3","encoding":"gzip"}-->');
   expect(serializedText).toContain(HVY_TAIL_SENTINEL);
   expect(serializedPrefix).toContain(HVY_TAIL_SENTINEL);
   expect(Array.from(serializedBytes.slice(-document.attachmentTail.bytes.length))).toEqual([31, 139, 8, 0, 72, 86, 89]);

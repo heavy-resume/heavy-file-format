@@ -40,7 +40,7 @@ Use of JSON and Markdown make it easy for LLMs to parse.
 - [X] AI-based answering questions
 - [X] AI-based editing
 - [ ] Embedded and attached database runtime
-- [X] Plugin block schema and SQLite tail spec draft
+- [X] Plugin block schema and DB table tail spec draft
 - [ ] Plugin execution/runtime
 
 ## Draft Spec
@@ -65,7 +65,7 @@ A browser-based reference app is included with:
 
 Reference app feature flags:
 - Set `window.HVY_REFERENCE_CONFIG = { features: { tables: false } }` before the bundle loads to disable table authoring/rendering in an embedded host.
-- When present, SQLite plugin tail payloads are now preserved on open/download for `.hvy` files.
+- When present, DB table tail payloads are now preserved on open/download for `.hvy` files.
 
 ### Run
 
@@ -124,8 +124,8 @@ npm run preview
 
 # Plugin / Callback Support
 
-HVY has a documented plugin block envelope plus a first plugin contract for `dev.heavy.sqlite-table`.
+HVY has a documented plugin block envelope plus a first plugin contract for `dev.heavy.db-table`.
 
 - The plugin instance is authored as a `plugin` component with `plugin` and `pluginConfig`.
-- The SQLite database is specified as a gzip-compressed tail payload appended after the textual HVY body.
+- The current built-in DB table implementation uses a gzip-compressed SQLite tail payload appended after the textual HVY body.
 - The current reference app can author and round-trip the plugin metadata, but it does not yet read or write the binary tail runtime.

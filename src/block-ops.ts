@@ -14,6 +14,7 @@ import { normalizeMarkdownLists, markdownToEditorHtml, turndown } from './markdo
 import { escapeAttr, escapeHtml, getInlineEditableText, renderOption } from './utils';
 import { recordHistory } from './history';
 import { getDocumentComponentDefaultCss } from './document-component-defaults';
+import { DB_TABLE_PLUGIN_ID, isDbTablePluginId } from './plugins/registry';
 
 export function findBlockByIds(sectionKey: string, blockId: string): VisualBlock | null {
   const sqliteRowComponentBlock = findSqliteRowComponentBlock(sectionKey, blockId);
@@ -169,9 +170,13 @@ export function handleBlockFieldInput(target: HTMLElement): boolean {
     return true;
   }
 
-  if (field === 'block-plugin' && target instanceof HTMLInputElement) {
+  if (field === 'block-plugin' && target instanceof HTMLSelectElement) {
+    if (block.schema.plugin.trim().length > 0) {
+      return true;
+    }
     block.schema.plugin = target.value;
-    if (target.value === 'dev.heavy.sqlite-table') {
+    if (isDbTablePluginId(target.value) || target.value === DB_TABLE_PLUGIN_ID) {
+      block.schema.plugin = DB_TABLE_PLUGIN_ID;
       block.schema.pluginConfig = {
         ...block.schema.pluginConfig,
         source: 'with-file',

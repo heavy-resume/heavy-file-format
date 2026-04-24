@@ -105,20 +105,20 @@ test('deserializes plugin blocks with plugin identity and config', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
 plugins:
-  - id: dev.heavy.sqlite-table
-    source: builtin://sqlite-table
+  - id: dev.heavy.db-table
+    source: builtin://db-table
 ---
 
 <!--hvy: {"id":"data"}-->
 #! Data
 
-<!--hvy:plugin {"plugin":"dev.heavy.sqlite-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->
+<!--hvy:plugin {"plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->
 `, '.hvy');
 
   const block = document.sections[0]?.blocks[0];
 
   expect(block?.schema.component).toBe('plugin');
-  expect(block?.schema.plugin).toBe('dev.heavy.sqlite-table');
+  expect(block?.schema.plugin).toBe('dev.heavy.db-table');
   expect(block?.schema.pluginConfig).toEqual({
     source: 'with-file',
     table: 'work_items',
@@ -129,15 +129,15 @@ test('deserializes a binary SQLite attachment tail from HVY bytes', () => {
   const prefix = `---
 hvy_version: 0.1
 plugins:
-  - id: dev.heavy.sqlite-table
-    source: builtin://sqlite-table
+  - id: dev.heavy.db-table
+    source: builtin://db-table
 ---
 
 <!--hvy: {"id":"data"}-->
 #! Data
 
-<!--hvy:plugin {"plugin":"dev.heavy.sqlite-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->
-<!--hvy:tail {"plugin":"dev.heavy.sqlite-table","mediaType":"application/vnd.sqlite3","encoding":"gzip"}-->
+<!--hvy:plugin {"plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->
+<!--hvy:tail {"plugin":"dev.heavy.db-table","mediaType":"application/vnd.sqlite3","encoding":"gzip"}-->
 --HVY-TAIL--
 `;
   const prefixBytes = new TextEncoder().encode(prefix);
@@ -149,7 +149,7 @@ plugins:
   const document = deserializeDocumentBytes(bytes, '.hvy');
 
   expect(document.attachmentTail?.meta).toEqual({
-    plugin: 'dev.heavy.sqlite-table',
+    plugin: 'dev.heavy.db-table',
     mediaType: 'application/vnd.sqlite3',
     encoding: 'gzip',
   });

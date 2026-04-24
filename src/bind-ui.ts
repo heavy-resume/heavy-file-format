@@ -53,14 +53,14 @@ import type { RawEditorDiagnostic } from './types';
 import { requestAiComponentEdit } from './ai-edit';
 import { areTablesEnabled } from './reference-config';
 import {
-  addSqlitePluginColumn,
-  addSqlitePluginRow,
+  addDbTableColumn,
+  addDbTableRow,
   getSqliteRowComponent,
-  materializeSqlitePluginDraftRow,
+  materializeDbTableDraftRow,
   parseAttachedComponentBlocks,
-  renameSqlitePluginColumn,
-  updateSqlitePluginCell,
-} from './plugin-sqlite';
+  renameDbTableColumn,
+  updateDbTableCell,
+} from './plugins/db-table';
 
 let lastBoundChatMessageCount = -1;
 
@@ -417,7 +417,7 @@ export function bindUi(app: HTMLElement): void {
           return;
         }
         recordHistory(`sqlite-draft-row:${tableName}:${columnName}`);
-        void materializeSqlitePluginDraftRow(tableName, columnName, target.value)
+        void materializeDbTableDraftRow(tableName, columnName, target.value)
           .then(() => {
             getRenderApp()();
           })
@@ -430,7 +430,7 @@ export function bindUi(app: HTMLElement): void {
         return;
       }
       recordHistory(`sqlite-cell:${tableName}:${rowId}:${columnName}`);
-      void updateSqlitePluginCell(tableName, rowId, columnName, target.value)
+      void updateDbTableCell(tableName, rowId, columnName, target.value)
         .catch((error) => {
           console.error('[hvy:sqlite-plugin] cell update failed', error);
         });
@@ -444,7 +444,7 @@ export function bindUi(app: HTMLElement): void {
         return;
       }
       recordHistory(`sqlite-column:${tableName}:${oldColumnName}`);
-      void renameSqlitePluginColumn(tableName, oldColumnName, target.value)
+      void renameDbTableColumn(tableName, oldColumnName, target.value)
         .then(() => {
           const nextColumnName = target.value.trim();
           if (nextColumnName.length === 0) {
@@ -1381,7 +1381,7 @@ export function bindUi(app: HTMLElement): void {
         return;
       }
       recordHistory(`sqlite-add-row:${tableName}`);
-      void addSqlitePluginRow(tableName)
+      void addDbTableRow(tableName)
         .then(() => {
           getRenderApp()();
         })
@@ -1397,7 +1397,7 @@ export function bindUi(app: HTMLElement): void {
         return;
       }
       recordHistory(`sqlite-add-column:${tableName}`);
-      void addSqlitePluginColumn(tableName)
+      void addDbTableColumn(tableName)
         .then(() => {
           getRenderApp()();
         })

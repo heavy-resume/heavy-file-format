@@ -1,0 +1,6 @@
+.db-table-info {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-around;
+    gap: 2rem;
+}

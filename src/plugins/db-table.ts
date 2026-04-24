@@ -1,13 +1,15 @@
 import initSqlJs from 'sql.js';
 import sqlWasmUrl from 'sql.js/dist/sql-wasm.wasm?url';
 
-import type { ComponentRenderHelpers } from './editor/component-helpers';
-import type { VisualBlock, VisualSection } from './editor/types';
-import { deserializeDocumentWithDiagnostics, wrapHvyFragmentAsDocument } from './serialization';
-import { getRenderApp, state } from './state';
-import type { DocumentTailAttachment, VisualDocument } from './types';
+import type { ComponentRenderHelpers } from '../editor/component-helpers';
+import type { VisualBlock, VisualSection } from '../editor/types';
+import { deserializeDocumentWithDiagnostics, wrapHvyFragmentAsDocument } from '../serialization';
+import { getRenderApp, state } from '../state';
+import type { DocumentTailAttachment, VisualDocument } from '../types';
+import { DB_TABLE_PLUGIN_ID, getAvailableDocumentPlugins, getPluginDisplayName, isDbTablePluginId } from './registry';
 
-export const SQLITE_TABLE_PLUGIN_ID = 'dev.heavy.sqlite-table';
+import './db-table.css';
+
 const SQLITE_ROW_COMPONENTS_TABLE = '__hvy_row_components';
 
 type SqlJsStatic = Awaited<ReturnType<typeof initSqlJs>>;
@@ -45,51 +47,37 @@ function getPluginConfigValue(config: Record<string, unknown>, key: string): str
   return typeof value === 'string' ? value : '';
 }
 
-export function renderSqlitePluginEditor(sectionKey: string, block: VisualBlock, helpers: ComponentRenderHelpers): string {
-  const source = getPluginConfigValue(block.schema.pluginConfig, 'source') || 'with-file';
+export function renderDbTablePluginEditor(sectionKey: string, block: VisualBlock, helpers: ComponentRenderHelpers): string {
   const tableName = getPluginConfigValue(block.schema.pluginConfig, 'table');
+  const availablePlugins = getAvailableDocumentPlugins().filter((plugin) => isDbTablePluginId(plugin.id));
   ensureSqliteRuntime();
 
-  const content = renderSqlitePluginContent(sectionKey, block, helpers, tableName, false);
+  const content = renderDbTablePluginContent(sectionKey, block, helpers, tableName, false);
 
   return `
-    <label>
-      <span>Plugin</span>
-      <input
-        data-section-key="${helpers.escapeAttr(sectionKey)}"
-        data-block-id="${helpers.escapeAttr(block.id)}"
-        data-field="block-plugin"
-        value="${helpers.escapeAttr(block.schema.plugin)}"
-        placeholder="${helpers.escapeAttr(SQLITE_TABLE_PLUGIN_ID)}"
-      />
-    </label>
-    <label>
-      <span>Source</span>
-      <select disabled>
-        <option selected>${helpers.escapeHtml(source)}</option>
-      </select>
-    </label>
-    <label>
-      <span>Table Name</span>
-      <input
-        data-section-key="${helpers.escapeAttr(sectionKey)}"
-        data-block-id="${helpers.escapeAttr(block.id)}"
-        data-field="block-plugin-db-table"
-        value="${helpers.escapeAttr(tableName)}"
-        placeholder="records"
-      />
-    </label>
+    <span class="db-table-info">
+      <label>
+        <span>Table</span>
+        <input
+          data-section-key="${helpers.escapeAttr(sectionKey)}"
+          data-block-id="${helpers.escapeAttr(block.id)}"
+          data-field="block-plugin-db-table"
+          value="${helpers.escapeAttr(tableName)}"
+          placeholder="job_applications"
+        />
+      </label>
+    </span>
     ${content}
   `;
 }
 
-export function renderSqlitePluginReader(section: VisualSection, block: VisualBlock, helpers: ComponentRenderHelpers): string {
+export function renderDbTablePluginReader(section: VisualSection, block: VisualBlock, helpers: ComponentRenderHelpers): string {
   const tableName = getPluginConfigValue(block.schema.pluginConfig, 'table');
   ensureSqliteRuntime();
-  return renderSqlitePluginContent(section.key, block, helpers, tableName, true);
+  return renderDbTablePluginContent(section.key, block, helpers, tableName, true);
 }
 
-function renderSqlitePluginContent(
+function renderDbTablePluginContent(
   sectionKey: string,
   block: VisualBlock,
   helpers: ComponentRenderHelpers,
@@ -97,15 +85,15 @@ function renderSqlitePluginContent(
   readOnly: boolean
 ): string {
   if (tableName.trim().length === 0) {
-    return '<div class="plugin-placeholder">Set a table name to open the SQLite-backed grid.</div>';
+    return '<div class="plugin-placeholder">Choose a table name to start working with this DB table.</div>';
   }
 
   if (runtime.loadError) {
-    return `<div class="plugin-placeholder">SQLite plugin error: ${helpers.escapeHtml(runtime.loadError)}</div>`;
+    return `<div class="plugin-placeholder">DB table error: ${helpers.escapeHtml(runtime.loadError)}</div>`;
   }
 
   if (runtime.loading || !runtime.db) {
-    return '<div class="plugin-placeholder">Loading SQLite table…</div>';
+    return '<div class="plugin-placeholder">Loading database table…</div>';
   }
 
   try {
@@ -118,8 +106,8 @@ function renderSqlitePluginContent(
     }
     return renderEditableTable(sectionKey, block.id, tableName, snapshot, helpers);
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown SQLite error.';
-    return `<div class="plugin-placeholder">SQLite plugin error: ${helpers.escapeHtml(message)}</div>`;
+    const message = error instanceof Error ? error.message : 'Unknown database error.';
+    return `<div class="plugin-placeholder">DB table error: ${helpers.escapeHtml(message)}</div>`;
   }
 }
 
@@ -194,8 +182,8 @@ function renderEditableTable(
   return `
     <div class="table-editor sqlite-plugin-editor">
       <div class="table-editor-head">
-        <strong>SQLite Table Editor</strong>
-        <span>Rows and columns persist in the attached SQLite database.</span>
+        <strong>DB Table</strong>
+        <span>Rows and columns persist in the attached database file.</span>
       </div>
       <div class="table-editor-frame">
         <table class="table-editor-grid sqlite-plugin-grid">
@@ -287,14 +275,14 @@ function renderReadOnlyTable(
   </table>`;
 }
 
-export async function addSqlitePluginRow(tableName: string): Promise<void> {
+export async function addDbTableRow(tableName: string): Promise<void> {
   const db = await getLoadedDatabase();
   ensureTableExists(db, tableName);
   db.run(`INSERT INTO ${quoteIdentifier(tableName)} DEFAULT VALUES`);
   await persistRuntimeDatabase();
 }
 
-export async function materializeSqlitePluginDraftRow(tableName: string, columnName: string, value: string): Promise<number | null> {
+export async function materializeDbTableDraftRow(tableName: string, columnName: string, value: string): Promise<number | null> {
   if (value.length === 0) {
     return null;
   }
@@ -305,14 +293,14 @@ export async function materializeSqlitePluginDraftRow(tableName: string, columnN
   const rowIdResult = db.exec('SELECT last_insert_rowid()');
   const rowId = Number(rowIdResult[0]?.values[0]?.[0] ?? 0);
   if (!Number.isFinite(rowId) || rowId <= 0) {
-    throw new Error('Failed to create SQLite row.');
+    throw new Error('Failed to create a database row.');
   }
   db.run(`UPDATE ${quoteIdentifier(tableName)} SET ${quoteIdentifier(columnName)} = ? WHERE rowid = ?`, [value, rowId]);
   await persistRuntimeDatabase();
   return rowId;
 }
 
-export async function addSqlitePluginColumn(tableName: string): Promise<void> {
+export async function addDbTableColumn(tableName: string): Promise<void> {
   const db = await getLoadedDatabase();
   ensureTableExists(db, tableName);
   const snapshot = readTableSnapshot(db, tableName);
@@ -321,7 +309,7 @@ export async function addSqlitePluginColumn(tableName: string): Promise<void> {
   await persistRuntimeDatabase();
 }
 
-export async function renameSqlitePluginColumn(tableName: string, oldName: string, nextName: string): Promise<void> {
+export async function renameDbTableColumn(tableName: string, oldName: string, nextName: string): Promise<void> {
   const trimmedNext = nextName.trim();
   if (trimmedNext.length === 0 || trimmedNext === oldName) {
     return;
@@ -336,7 +324,7 @@ export async function renameSqlitePluginColumn(tableName: string, oldName: strin
   await persistRuntimeDatabase();
 }
 
-export async function updateSqlitePluginCell(tableName: string, rowId: number, columnName: string, value: string): Promise<void> {
+export async function updateDbTableCell(tableName: string, rowId: number, columnName: string, value: string): Promise<void> {
   const db = await getLoadedDatabase();
   db.run(`UPDATE ${quoteIdentifier(tableName)} SET ${quoteIdentifier(columnName)} = ? WHERE rowid = ?`, [value, rowId]);
   await persistRuntimeDatabase();
@@ -412,7 +400,7 @@ function ensureSqliteRuntime(): void {
     })
     .catch((error) => {
       runtime.loading = false;
-      runtime.loadError = error instanceof Error ? error.message : 'Failed to load SQLite runtime.';
+      runtime.loadError = error instanceof Error ? error.message : 'Failed to load the database runtime.';
       getRenderApp()();
     });
 }
@@ -423,7 +411,7 @@ async function getLoadedDatabase(): Promise<SqlJsDatabase> {
     await runtime.loadPromise;
   }
   if (!runtime.db) {
-    throw new Error(runtime.loadError || 'SQLite database is unavailable.');
+    throw new Error(runtime.loadError || 'Database attachment is unavailable.');
   }
   return runtime.db;
 }
@@ -468,7 +456,7 @@ async function persistRuntimeDatabase(): Promise<void> {
     state.document.attachmentTail = {
       meta: {
         ...previousMeta,
-        plugin: SQLITE_TABLE_PLUGIN_ID,
+        plugin: DB_TABLE_PLUGIN_ID,
         mediaType: 'application/vnd.sqlite3',
         ...(encoded.encoding ? { encoding: encoded.encoding } : {}),
       },
@@ -495,7 +483,7 @@ async function encodeAttachmentBytes(bytes: Uint8Array): Promise<{ bytes: Uint8A
 
 async function ungzipBytes(bytes: Uint8Array): Promise<Uint8Array> {
   if (typeof DecompressionStream === 'undefined') {
-    throw new Error('This browser does not support gzip decompression for SQLite attachments.');
+    throw new Error('This browser does not support gzip decompression for attached database files.');
   }
   return transformBytes(bytes, new DecompressionStream('gzip'));
 }

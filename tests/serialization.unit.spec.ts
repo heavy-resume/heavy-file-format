@@ -145,6 +145,51 @@ plugins:
   expect(output).not.toContain('"pluginUrl"');
 });
 
+test('serializes db-table query text in the plugin block body', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+plugins:
+  - id: dev.heavy.db-table
+    source: builtin://db-table
+---
+
+<!--hvy: {"id":"data"}-->
+#! Data
+
+<!--hvy:plugin {"plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->
+ SELECT company, status
+ FROM work_items
+ WHERE status != 'Rejected'
+`, '.hvy');
+
+  const output = serializeWithState(document);
+
+  expect(output).toContain('<!--hvy:plugin {"plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->');
+  expect(output).toContain('SELECT company, status');
+  expect(output).toContain("WHERE status != 'Rejected'");
+});
+
+test('serializes db-table query window settings in plugin config', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+plugins:
+  - id: dev.heavy.db-table
+    source: builtin://db-table
+---
+
+<!--hvy: {"id":"data"}-->
+#! Data
+
+<!--hvy:plugin {"plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"work_items","queryDynamicWindow":false,"queryLimit":25}}-->
+ SELECT company FROM work_items
+`, '.hvy');
+
+  const output = serializeWithState(document);
+
+  expect(output).toContain('"queryDynamicWindow":false');
+  expect(output).toContain('"queryLimit":25');
+});
+
 test('serializes a document tail preamble and binary bytes for attached SQLite payloads', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1

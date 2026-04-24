@@ -291,26 +291,28 @@ function renderEditableTable(
                 .map(
                   (column) => `
                     <th>
-                      <input
-                        class="sqlite-plugin-grid-input sqlite-plugin-grid-header"
-                        data-field="sqlite-column-name"
-                        data-section-key="${helpers.escapeAttr(sectionKey)}"
-                        data-block-id="${helpers.escapeAttr(blockId)}"
-                        data-table-name="${helpers.escapeAttr(tableName)}"
-                        data-old-column-name="${helpers.escapeAttr(column)}"
-                        value="${helpers.escapeAttr(column)}"
-                        ${tableDisabledAttr}
-                      />
-                      <button
-                        type="button"
-                        class="ghost db-table-sort-button${snapshot.sortColumn === column ? ' db-table-sort-button-active' : ''}"
-                        data-action="db-table-toggle-sort"
-                        data-section-key="${helpers.escapeAttr(sectionKey)}"
-                        data-block-id="${helpers.escapeAttr(blockId)}"
-                        data-column-name="${helpers.escapeAttr(column)}"
-                        title="Sort by ${helpers.escapeAttr(column)}"
-                        ${queryActive ? 'disabled' : ''}
-                      >${snapshot.sortColumn === column ? (snapshot.sortDirection === 'desc' ? '↓' : '↑') : '↕'}</button>
+                      <div class="db-table-header-cell">
+                        <input
+                          class="sqlite-plugin-grid-input sqlite-plugin-grid-header"
+                          data-field="sqlite-column-name"
+                          data-section-key="${helpers.escapeAttr(sectionKey)}"
+                          data-block-id="${helpers.escapeAttr(blockId)}"
+                          data-table-name="${helpers.escapeAttr(tableName)}"
+                          data-old-column-name="${helpers.escapeAttr(column)}"
+                          value="${helpers.escapeAttr(column)}"
+                          ${tableDisabledAttr}
+                        />
+                        <button
+                          type="button"
+                          class="ghost db-table-sort-button${snapshot.sortColumn === column ? ' db-table-sort-button-active' : ''}"
+                          data-action="db-table-toggle-sort"
+                          data-section-key="${helpers.escapeAttr(sectionKey)}"
+                          data-block-id="${helpers.escapeAttr(blockId)}"
+                          data-column-name="${helpers.escapeAttr(column)}"
+                          title="Sort by ${helpers.escapeAttr(column)}"
+                          ${queryActive ? 'disabled' : ''}
+                        >${snapshot.sortColumn === column ? (snapshot.sortDirection === 'desc' ? '↓' : '↑') : '↕'}</button>
+                      </div>
                     </th>`
                 )
                 .join('')}

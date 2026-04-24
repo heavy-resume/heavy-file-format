@@ -59,7 +59,19 @@
     cursor: not-allowed;
 }
 
+.db-table-header-cell {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.db-table-header-cell .sqlite-plugin-grid-header {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
 .db-table-sort-button {
+    flex: 0 0 auto;
     min-width: 2rem;
     padding: 0.2rem 0.4rem;
     border-radius: 999px;

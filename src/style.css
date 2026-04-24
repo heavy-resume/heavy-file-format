@@ -1157,18 +1157,16 @@ button.tiny {
   gap: 0.5rem;
 }
 
-.editor-grid label,
-.editor-grid .editor-field,
+.editor-grid label:not(.checkbox-label),
 .editor-row label:not(.checkbox-label),
-.editor-row label:not(.checkbox-row),
-.modal-panel label {
+.modal-panel label:not(.checkbox-label) {
   display: grid;
   gap: 0.24rem;
   font-size: 0.9rem;
 }
 
 .checkbox-label {
-  display: flex !important;
+  display: flex;
   align-items: center;
   flex-direction: row;
   gap: 0.45rem;
@@ -1249,15 +1247,15 @@ button.tiny {
   cursor: not-allowed;
 }
 
-.editor-grid input,
+.editor-grid input:not([type='checkbox']),
 .editor-grid select,
-.modal-panel input,
+.modal-panel input:not([type='checkbox']),
 .editor-block textarea,
 .modal-panel textarea,
-.component-def input,
+.component-def input:not([type='checkbox']),
 .component-def select,
 .component-def textarea,
-.schema-save-card input {
+.schema-save-card input:not([type='checkbox']) {
   width: 100%;
   border: 1px solid var(--hvy-border-input);
   border-radius: 7px;

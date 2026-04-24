@@ -391,7 +391,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
                   placeholder="${deps.escapeAttr(`SELECT * FROM ${placeholderTableName}`)}"
                 >${deps.escapeHtml(queryModal.draftQuery)}</textarea>
               </label>
-              <label class="checkbox-row">
+              <label class="checkbox-label">
                 <input
                   id="dbTableQueryDynamicWindowInput"
                   type="checkbox"

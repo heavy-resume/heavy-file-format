@@ -35,13 +35,6 @@
     color: var(--reader-muted);
 }
 
-.checkbox-row {
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-    flex-direction: row;
-}
-
 .db-table-frame {
     max-height: 28rem;
     overflow-y: auto;

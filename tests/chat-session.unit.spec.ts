@@ -4,17 +4,33 @@ import { appendUserChatMessage, requestChatTurn } from '../src/chat-session';
 import { deserializeDocument } from '../src/serialization';
 import type { ChatMessage, ChatSettings } from '../src/types';
 
-const { requestChatCompletionMock } = vi.hoisted(() => ({
+const { requestChatCompletionMock, runQaToolLoopMock } = vi.hoisted(() => ({
   requestChatCompletionMock: vi.fn(),
+  runQaToolLoopMock: vi.fn(),
 }));
 
 vi.mock('../src/chat', () => ({
   requestChatCompletion: requestChatCompletionMock,
 }));
 
+vi.mock('../src/ai-qa', () => ({
+  runQaToolLoop: runQaToolLoopMock,
+}));
+
 beforeEach(() => {
   requestChatCompletionMock.mockReset();
+  runQaToolLoopMock.mockReset();
 });
+
+const DOC_WITH_DB_TABLE = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"data"}-->
+#! Data
+
+ <!--hvy:plugin {"plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->
+`;
 
 test('appendUserChatMessage appends a new user message', () => {
   const messages: ChatMessage[] = [{ id: '1', role: 'assistant', content: 'Hello' }];
@@ -60,6 +76,27 @@ test('requestChatTurn returns assistant answer on success', async () => {
       role: 'assistant',
       content: 'HVY is a document format.',
     })
+  );
+});
+
+test('requestChatTurn routes through runQaToolLoop when the document has DB tables', async () => {
+  runQaToolLoopMock.mockResolvedValue('Tool-loop answer.');
+
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+  const document = deserializeDocument(DOC_WITH_DB_TABLE, '.hvy');
+
+  const result = await requestChatTurn({
+    settings,
+    document,
+    messages: [],
+    question: 'How many rows?',
+  });
+
+  expect(runQaToolLoopMock).toHaveBeenCalledTimes(1);
+  expect(requestChatCompletionMock).not.toHaveBeenCalled();
+  expect(result.error).toBeNull();
+  expect(result.messages[1]).toEqual(
+    expect.objectContaining({ role: 'assistant', content: 'Tool-loop answer.' })
   );
 });
 

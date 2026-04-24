@@ -35,7 +35,19 @@ export async function requestAiComponentEdit(params: {
   sectionTitle: string;
   block: VisualBlock;
   request: string;
+  onBeforeMutation?: () => void;
 }): Promise<AiEditRequestResult> {
+  const { isDbTablePluginBlock, requestAiDbTableEdit } = await import('./ai-db-table-edit');
+  if (isDbTablePluginBlock(params.block)) {
+    return requestAiDbTableEdit({
+      settings: params.settings,
+      document: params.document,
+      block: params.block,
+      request: params.request,
+      onBeforeMutation: params.onBeforeMutation,
+    });
+  }
+
   const originalFragment = serializeBlockFragment(params.block);
   const context = buildAiEditContext({
     document: params.document,

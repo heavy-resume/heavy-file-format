@@ -109,7 +109,8 @@ export function renderChatPanel(
   chat: ChatState,
   document: VisualDocument,
   deps: RenderChatPanelDeps,
-  mode: 'qa' | 'document-edit' = 'qa'
+  mode: 'qa' | 'document-edit' = 'qa',
+  canCopyToHvy = false
 ): string {
   const context = buildChatDocumentContext(document);
   const currentProviderLabel = chat.settings.provider === 'openai' ? 'OpenAI' : 'Anthropic';
@@ -184,13 +185,18 @@ export function renderChatPanel(
                        : chat.messages
                            .map(
                              (message) => `
-                               <article class="chat-bubble chat-bubble-${message.role}${message.error ? ' chat-bubble-error' : ''}" data-chat-role="${deps.escapeAttr(message.role)}">
+                               <article class="chat-bubble chat-bubble-${message.role}${message.error ? ' chat-bubble-error' : ''}" data-chat-role="${deps.escapeAttr(message.role)}" data-chat-message-id="${deps.escapeAttr(message.id)}">
                                  <div class="chat-bubble-role">${deps.escapeHtml(message.role === 'user' ? 'You' : 'Assistant')}</div>
                                  <div class="chat-bubble-body">${
                                    message.role === 'assistant'
                                      ? renderAssistantMessageHtml(message.content)
                                      : deps.escapeHtml(message.content).replace(/\n/g, '<br />')
                                  }</div>
+                                 ${
+                                   canCopyToHvy && message.role === 'assistant' && !message.error
+                                     ? `<div class="chat-bubble-actions"><button type="button" class="ghost" data-action="copy-chat-response-to-hvy" data-message-id="${deps.escapeAttr(message.id)}">Copy to HVY</button></div>`
+                                     : ''
+                                 }
                                </article>
                              `
                            )

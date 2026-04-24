@@ -37,6 +37,7 @@ import {
   getHvyDiagnosticUsageHint,
   serializeDocument,
   serializeDocumentBytes,
+  wrapHvyFragmentAsDocument,
 } from './serialization';
 import { syncReusableTemplateForBlock, revertReusableComponent, findReusableOwner } from './reusable';
 import { addTableColumn, removeTableColumn, getTableColumns, moveTableColumn, moveTableRow } from './table-ops';
@@ -644,6 +645,38 @@ export function bindUi(app: HTMLElement): void {
     if (action === 'toggle-chat-panel') {
       state.chat.panelOpen = !state.chat.panelOpen;
       getRenderApp()();
+      return;
+    }
+
+    if (action === 'copy-chat-response-to-hvy') {
+      const messageId = actionButton?.dataset.messageId ?? '';
+      const message = state.chat.messages.find((candidate) => candidate.id === messageId);
+      if (!message || message.role !== 'assistant' || message.error) {
+        return;
+      }
+      try {
+        const wrapped = wrapHvyFragmentAsDocument(message.content, {
+          sectionId: `ai-response-${Date.now().toString(36)}`,
+          title: 'AI response',
+        });
+        const parsed = deserializeDocumentWithDiagnostics(wrapped, '.hvy');
+        const errors = parsed.diagnostics.filter((diagnostic) => diagnostic.severity === 'error');
+        if (errors.length > 0 || parsed.document.sections.length !== 1) {
+          state.chat.error = 'Could not parse AI response as HVY.';
+          getRenderApp()();
+          return;
+        }
+        recordHistory('chat:copy-to-hvy');
+        state.document.sections.push(parsed.document.sections[0]!);
+        state.rawEditorText = serializeDocument(state.document);
+        state.rawEditorError = null;
+        state.rawEditorDiagnostics = [];
+        state.chat.error = null;
+        getRenderApp()();
+      } catch (error) {
+        state.chat.error = error instanceof Error ? error.message : 'Copy to HVY failed.';
+        getRenderApp()();
+      }
       return;
     }
 
@@ -2381,6 +2414,7 @@ async function submitAiEditRequest(): Promise<void> {
       sectionTitle: section.title,
       block,
       request,
+      onBeforeMutation: () => recordHistory('ai-edit:db-table'),
     });
     if (requestNonce !== state.aiEdit.requestNonce) {
       return;

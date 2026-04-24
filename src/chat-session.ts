@@ -1,4 +1,6 @@
 import { requestChatCompletion } from './chat';
+import { hasDocumentDbTables } from './plugins/db-table';
+import { runQaToolLoop } from './ai-qa';
 import type { ChatMessage, ChatSettings, VisualDocument } from './types';
 import { requestAiDocumentEditTurn } from './ai-document-edit';
 
@@ -27,11 +29,18 @@ export async function requestChatTurn(params: {
   const nextMessages = appendUserChatMessage(params.messages, params.question);
 
   try {
-    const answer = await requestChatCompletion({
-      settings: params.settings,
-      document: params.document,
-      messages: nextMessages,
-    });
+    const answer = hasDocumentDbTables(params.document)
+      ? await runQaToolLoop({
+          settings: params.settings,
+          document: params.document,
+          messages: nextMessages,
+          question: params.question,
+        })
+      : await requestChatCompletion({
+          settings: params.settings,
+          document: params.document,
+          messages: nextMessages,
+        });
     return {
       messages: [
         ...nextMessages,

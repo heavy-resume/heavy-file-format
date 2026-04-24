@@ -960,6 +960,86 @@ export async function executeDbTableQueryTool(
   }
 }
 
+export interface DbTableAiSummary {
+  tableName: string;
+  schema: Array<{ name: string; type: string; notNull: boolean; pk: boolean }>;
+  sampleRows: string[][];
+  totalRows: number;
+  activeQuery: string | null;
+}
+
+export async function getDbTableAiSummary(
+  document: VisualDocument,
+  tableName: string,
+  options?: { activeQuery?: string; sampleLimit?: number }
+): Promise<DbTableAiSummary> {
+  const availableTables = getDocumentDbTableNames(document);
+  if (!availableTables.includes(tableName)) {
+    throw new Error(`Unknown DB table "${tableName}". Available tables: ${availableTables.join(', ') || '(none)'}.`);
+  }
+  const sampleLimit = Math.max(1, Math.min(Math.floor(options?.sampleLimit ?? 10), 25));
+  const activeQuery = options?.activeQuery?.trim().replace(/;+\s*$/u, '') || null;
+
+  const db = await openDocumentDatabase(document);
+  try {
+    const pragma = db.exec(`PRAGMA table_info(${quoteIdentifier(tableName)})`);
+    const pragmaRows = pragma[0]?.values ?? [];
+    const schema = pragmaRows.map((row) => ({
+      name: String(row[1] ?? ''),
+      type: String(row[2] ?? ''),
+      notNull: Number(row[3] ?? 0) === 1,
+      pk: Number(row[5] ?? 0) > 0,
+    }));
+
+    const totalRows = activeQuery
+      ? Number(
+          db.exec(`SELECT COUNT(*) FROM (${activeQuery}) AS hvy_query`)[0]?.values[0]?.[0] ?? 0
+        )
+      : Number(db.exec(`SELECT COUNT(*) FROM ${quoteIdentifier(tableName)}`)[0]?.values[0]?.[0] ?? 0);
+
+    const sampleStatement = db.prepare(
+      activeQuery
+        ? `SELECT * FROM (${activeQuery}) AS hvy_query LIMIT ${sampleLimit}`
+        : `SELECT * FROM ${quoteIdentifier(tableName)} LIMIT ${sampleLimit}`
+    );
+    const sampleColumns = sampleStatement.getColumnNames();
+    const sampleRows: string[][] = [];
+    try {
+      while (sampleStatement.step()) {
+        const row = sampleStatement.getAsObject() as Record<string, unknown>;
+        sampleRows.push(sampleColumns.map((column) => stringifySqliteValue(row[column])));
+      }
+    } finally {
+      sampleStatement.free();
+    }
+
+    return { tableName, schema, sampleRows, totalRows, activeQuery };
+  } finally {
+    try {
+      db.close();
+    } catch {
+      // Ignore close failures for ephemeral summary databases.
+    }
+  }
+}
+
+export async function executeDbTableWriteSql(sql: string): Promise<string> {
+  const trimmed = sql.trim().replace(/;+\s*$/u, '');
+  if (trimmed.length === 0) {
+    throw new Error('execute_sql requires a non-empty SQL statement.');
+  }
+  const leading = trimmed.match(/^[A-Za-z]+/)?.[0]?.toUpperCase() ?? '';
+  if (leading === 'SELECT' || leading === 'WITH') {
+    throw new Error('Use query_db_table for read-only SELECT statements. execute_sql is for write statements.');
+  }
+
+  const db = await getLoadedDatabase();
+  db.run(trimmed);
+  const changes = Number(db.exec('SELECT changes()')[0]?.values[0]?.[0] ?? 0);
+  await persistRuntimeDatabase();
+  return `Executed: ${trimmed}\nRows affected: ${changes}`;
+}
+
 async function openDocumentDatabase(document: VisualDocument): Promise<SqlJsDatabase> {
   const SQL = await getSqlJs();
   const bytes = await getAttachmentDatabaseBytes(document.attachmentTail ?? null);

@@ -196,7 +196,10 @@ export function formatSectionTitle(title: string): string {
 }
 
 export function visitBlocks(sections: VisualSection[], visitor: (block: VisualBlock) => void): void {
-  sections.forEach((section) => visitBlocksInList(section.blocks, visitor));
+  sections.forEach((section) => {
+    visitBlocksInList(section.blocks, visitor);
+    visitBlocks(section.children, visitor);
+  });
 }
 
 export function visitBlocksInList(blocks: VisualBlock[], visitor: (block: VisualBlock) => void): void {

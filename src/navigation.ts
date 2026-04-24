@@ -217,6 +217,7 @@ export function closeModal(): void {
   state.modalSectionKey = null;
   state.componentMetaModal = null;
   state.sqliteRowComponentModal = null;
+  state.dbTableQueryModal = null;
   state.reusableSaveModal = null;
   state.themeModalOpen = false;
 }
@@ -229,6 +230,9 @@ export function closeModalIfTarget(sectionKey: string): void {
     state.componentMetaModal = null;
   }
   if (state.sqliteRowComponentModal?.sectionKey === sectionKey) {
+    closeModal();
+  }
+  if (state.dbTableQueryModal?.sectionKey === sectionKey) {
     closeModal();
   }
   if (state.reusableSaveModal?.sectionKey === sectionKey) {
@@ -257,6 +261,7 @@ export function resetTransientUiState(): void {
   state.reusableSaveModal = null;
   state.componentMetaModal = null;
   state.sqliteRowComponentModal = null;
+  state.dbTableQueryModal = null;
   state.themeModalOpen = false;
   state.tempHighlights = new Set<string>();
   state.addComponentBySection = {};

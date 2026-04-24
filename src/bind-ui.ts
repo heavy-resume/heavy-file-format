@@ -56,9 +56,12 @@ import {
   addDbTableColumn,
   addDbTableRow,
   getSqliteRowComponent,
+  handleDbTableFrameScroll,
   materializeDbTableDraftRow,
   parseAttachedComponentBlocks,
   renameDbTableColumn,
+  restoreDbTableFrameScroll,
+  toggleDbTableSort,
   updateDbTableCell,
 } from './plugins/db-table';
 
@@ -167,6 +170,18 @@ export function bindUi(app: HTMLElement): void {
   });
 
   if (!appEventsBound) {
+    app.addEventListener('scroll', (event) => {
+      const target = event.target as HTMLElement | null;
+      const frame = target?.closest<HTMLElement>('[data-db-table-frame="true"]');
+      if (!frame) {
+        return;
+      }
+      if (!handleDbTableFrameScroll(frame)) {
+        return;
+      }
+      getRenderApp()();
+    }, true);
+
     app.addEventListener('input', (event) => {
     const target = event.target as HTMLElement;
     const field = target.dataset.field;
@@ -1407,6 +1422,49 @@ export function bindUi(app: HTMLElement): void {
       return;
     }
 
+    if (action === 'db-table-open-query-editor') {
+      const targetSectionKey = sectionKey ?? '';
+      const targetBlockId = blockId ?? '';
+      if (targetSectionKey.length === 0 || targetBlockId.length === 0) {
+        return;
+      }
+      const block = findBlockByIds(targetSectionKey, targetBlockId);
+      if (!block) {
+        return;
+      }
+      const pluginConfig = block.schema.pluginConfig ?? {};
+      const tableName = typeof pluginConfig.table === 'string' ? pluginConfig.table : '';
+      const dynamicWindow = typeof pluginConfig.queryDynamicWindow === 'boolean' ? pluginConfig.queryDynamicWindow : true;
+      const rawLimit = typeof pluginConfig.queryLimit === 'number'
+        ? pluginConfig.queryLimit
+        : typeof pluginConfig.queryLimit === 'string'
+          ? Number.parseInt(pluginConfig.queryLimit, 10)
+          : NaN;
+      state.dbTableQueryModal = {
+        sectionKey: targetSectionKey,
+        blockId: targetBlockId,
+        tableName,
+        draftQuery: block.text,
+        dynamicWindow,
+        queryLimit: Number.isFinite(rawLimit) ? Math.max(1, Math.min(Math.floor(rawLimit), 99)) : 50,
+        error: null,
+      };
+      getRenderApp()();
+      return;
+    }
+
+    if (action === 'db-table-toggle-sort') {
+      const targetSectionKey = sectionKey ?? '';
+      const targetBlockId = blockId ?? '';
+      const columnName = actionButton.dataset.columnName ?? '';
+      if (targetSectionKey.length === 0 || targetBlockId.length === 0 || columnName.length === 0) {
+        return;
+      }
+      toggleDbTableSort(targetSectionKey, targetBlockId, columnName);
+      getRenderApp()();
+      return;
+    }
+
     if (action === 'sqlite-open-row-component-editor' || action === 'sqlite-open-row-component-view') {
       const targetSectionKey = sectionKey ?? '';
       const targetBlockId = blockId ?? '';
@@ -2238,6 +2296,7 @@ export function bindUi(app: HTMLElement): void {
 
   bindModal(app);
   bindLinkInlineModal(app);
+  restoreDbTableFrameScroll(app);
 }
 
 function openAiEditPopover(sectionKey: string, blockId: string, clientX: number, clientY: number): void {

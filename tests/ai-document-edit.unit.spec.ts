@@ -164,6 +164,11 @@ test('buildDocumentEditFormatInstructions documents the tool protocol', () => {
   expect(instructions).toContain('{"tool":"remove_section","section_ref":"skills","reason":"optional"}');
   expect(instructions).toContain('{"tool":"done","summary":"Short summary of what changed."}');
 
+  const dbInstructions = buildDocumentEditFormatInstructions({ dbTableNames: ['work_items'] });
+  expect(dbInstructions).toContain('`query_db_table`');
+  expect(dbInstructions).toContain('Available tables: work_items');
+  expect(dbInstructions).toContain('{"tool":"query_db_table","table_name":"work_items","limit":10,"reason":"optional"}');
+
   const headerInstructions = buildHeaderEditFormatInstructions();
   expect(headerInstructions).toContain('Valid header tools are: `grep_header`, `view_header`, `patch_header`, `request_header`, `done`.');
   expect(headerInstructions).toContain('The header is YAML front matter only.');

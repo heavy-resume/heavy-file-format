@@ -12,6 +12,7 @@ import {
   moveSectionToSiblingIndex,
   visitBlocks,
 } from './section-ops';
+import { executeDbTableQueryTool, getDocumentDbTableNames } from './plugins/db-table';
 import type { VisualBlock, VisualSection } from './editor/types';
 import type { ChatMessage, ChatSettings, VisualDocument } from './types';
 import {
@@ -37,6 +38,17 @@ const SENT_STRUCTURE_CONTEXT = 'Reduced outline context was already provided ear
 const DEFAULT_VIEW_START_LINE = 1;
 const DEFAULT_VIEW_END_LINE = 200;
 const MAX_GREP_LINE_WIDTH = 400;
+
+function buildDocumentEditContextSummary(summary: string, dbTableNames: string[]): string {
+  if (dbTableNames.length === 0) {
+    return summary;
+  }
+  return [
+    summary,
+    '',
+    `DB tables available for query_db_table: ${dbTableNames.join(', ')}`,
+  ].join('\n');
+}
 
 interface NumberedLine {
   lineNumber: number;
@@ -113,6 +125,13 @@ type DocumentEditToolRequest =
       target_section_ref?: string;
       position?: 'before' | 'after';
       new_position_index_from_0?: number;
+      reason?: string;
+    }
+  | {
+      tool: 'query_db_table';
+      table_name?: string;
+      query?: string;
+      limit?: number;
       reason?: string;
     };
 
@@ -237,7 +256,8 @@ async function runDocumentEditToolLoop(params: {
   onMutation?: (group?: string) => void;
 }): Promise<{ summary: string }> {
   let snapshot = summarizeDocumentStructure(params.document);
-  let contextSummary = snapshot.summary;
+  const dbTableNames = getDocumentDbTableNames(params.document);
+  let contextSummary = buildDocumentEditContextSummary(snapshot.summary, dbTableNames);
   let conversation: ChatMessage[] = [
     {
       id: crypto.randomUUID(),
@@ -251,7 +271,7 @@ async function runDocumentEditToolLoop(params: {
       settings: params.settings,
       messages: conversation,
       context: contextSummary,
-      formatInstructions: buildDocumentEditFormatInstructions(),
+      formatInstructions: buildDocumentEditFormatInstructions({ dbTableNames }),
       mode: 'document-edit',
       debugLabel: `ai-document-edit:${iteration + 1}`,
     });
@@ -280,57 +300,67 @@ async function runDocumentEditToolLoop(params: {
     if (parsed.value.tool === 'request_structure') {
       snapshot = summarizeDocumentStructure(params.document);
       toolResult = buildToolResult('request_structure', snapshot.summary);
-      contextSummary = SENT_STRUCTURE_CONTEXT;
+      contextSummary = buildDocumentEditContextSummary(SENT_STRUCTURE_CONTEXT, dbTableNames);
     } else if (parsed.value.tool === 'grep') {
       toolResult = buildToolResult('grep', executeGrepTool(parsed.value, params.document));
-      contextSummary = SENT_STRUCTURE_CONTEXT;
+      contextSummary = buildDocumentEditContextSummary(SENT_STRUCTURE_CONTEXT, dbTableNames);
     } else if (parsed.value.tool === 'get_css') {
       toolResult = buildToolResult('get_css', executeGetCssTool(parsed.value, snapshot, params.document));
-      contextSummary = SENT_STRUCTURE_CONTEXT;
+      contextSummary = buildDocumentEditContextSummary(SENT_STRUCTURE_CONTEXT, dbTableNames);
     } else if (parsed.value.tool === 'get_properties') {
       toolResult = buildToolResult('get_properties', executeGetPropertiesTool(parsed.value, snapshot, params.document));
-      contextSummary = SENT_STRUCTURE_CONTEXT;
+      contextSummary = buildDocumentEditContextSummary(SENT_STRUCTURE_CONTEXT, dbTableNames);
     } else if (parsed.value.tool === 'set_properties') {
       toolResult = buildToolResult('set_properties', executeSetPropertiesTool(parsed.value, snapshot, params.document, params.onMutation));
       snapshot = summarizeDocumentStructure(params.document);
-      contextSummary = SENT_STRUCTURE_CONTEXT;
+      contextSummary = buildDocumentEditContextSummary(SENT_STRUCTURE_CONTEXT, dbTableNames);
     } else if (parsed.value.tool === 'view_component') {
       toolResult = buildToolResult('view_component', executeViewComponentTool(parsed.value, snapshot, params.document));
-      contextSummary = SENT_STRUCTURE_CONTEXT;
+      contextSummary = buildDocumentEditContextSummary(SENT_STRUCTURE_CONTEXT, dbTableNames);
     } else if (parsed.value.tool === 'edit_component') {
       toolResult = buildToolResult(
         'edit_component',
         await executeEditComponentTool(parsed.value, snapshot, params.document, params.settings, params.onMutation)
       );
       snapshot = summarizeDocumentStructure(params.document);
-      contextSummary = SENT_STRUCTURE_CONTEXT;
+      contextSummary = buildDocumentEditContextSummary(SENT_STRUCTURE_CONTEXT, dbTableNames);
     } else if (parsed.value.tool === 'patch_component') {
       toolResult = buildToolResult('patch_component', executePatchComponentTool(parsed.value, snapshot, params.document, params.onMutation));
       snapshot = summarizeDocumentStructure(params.document);
-      contextSummary = SENT_STRUCTURE_CONTEXT;
+      contextSummary = buildDocumentEditContextSummary(SENT_STRUCTURE_CONTEXT, dbTableNames);
     } else if (parsed.value.tool === 'remove_section') {
       toolResult = buildToolResult('remove_section', executeRemoveSectionTool(parsed.value, snapshot, params.document, params.onMutation));
       snapshot = summarizeDocumentStructure(params.document);
-      contextSummary = SENT_STRUCTURE_CONTEXT;
+      contextSummary = buildDocumentEditContextSummary(SENT_STRUCTURE_CONTEXT, dbTableNames);
     } else if (parsed.value.tool === 'remove_component') {
       toolResult = buildToolResult('remove_component', executeRemoveComponentTool(parsed.value, snapshot, params.document, params.onMutation));
       snapshot = summarizeDocumentStructure(params.document);
-      contextSummary = SENT_STRUCTURE_CONTEXT;
+      contextSummary = buildDocumentEditContextSummary(SENT_STRUCTURE_CONTEXT, dbTableNames);
     } else if (parsed.value.tool === 'create_component') {
       toolResult = buildToolResult(
         'create_component',
         executeCreateComponentTool(parsed.value, snapshot, params.document, params.onMutation)
       );
       snapshot = summarizeDocumentStructure(params.document);
-      contextSummary = SENT_STRUCTURE_CONTEXT;
+      contextSummary = buildDocumentEditContextSummary(SENT_STRUCTURE_CONTEXT, dbTableNames);
     } else if (parsed.value.tool === 'create_section') {
       toolResult = buildToolResult('create_section', executeCreateSectionTool(parsed.value, snapshot, params.document, params.onMutation));
       snapshot = summarizeDocumentStructure(params.document);
-      contextSummary = SENT_STRUCTURE_CONTEXT;
+      contextSummary = buildDocumentEditContextSummary(SENT_STRUCTURE_CONTEXT, dbTableNames);
     } else if (parsed.value.tool === 'reorder_section') {
       toolResult = buildToolResult('reorder_section', executeReorderSectionTool(parsed.value, snapshot, params.document, params.onMutation));
       snapshot = summarizeDocumentStructure(params.document);
-      contextSummary = SENT_STRUCTURE_CONTEXT;
+      contextSummary = buildDocumentEditContextSummary(SENT_STRUCTURE_CONTEXT, dbTableNames);
+    } else if (parsed.value.tool === 'query_db_table') {
+      toolResult = buildToolResult(
+        'query_db_table',
+        await executeDbTableQueryTool(params.document, {
+          tableName: parsed.value.table_name,
+          query: parsed.value.query,
+          limit: parsed.value.limit,
+        })
+      );
+      contextSummary = buildDocumentEditContextSummary(SENT_STRUCTURE_CONTEXT, dbTableNames);
     }
 
     conversation = [
@@ -1327,6 +1357,27 @@ function parseDocumentEditToolRequest(source: string): { ok: true; value: Docume
           target_section_ref: typeof parsed.target_section_ref === 'string' ? parsed.target_section_ref : undefined,
           position: parsed.position === 'before' || parsed.position === 'after' ? parsed.position : undefined,
           new_position_index_from_0: Number.isInteger(parsed.new_position_index_from_0) ? Number(parsed.new_position_index_from_0) : undefined,
+          reason: typeof parsed.reason === 'string' ? parsed.reason : undefined,
+        },
+      };
+    }
+    if (
+      tool === 'query_db_table' &&
+      (
+        typeof parsed.table_name === 'string'
+        || typeof parsed.query === 'string'
+      )
+    ) {
+      if (typeof parsed.query === 'string' && parsed.query.trim().length === 0 && typeof parsed.table_name !== 'string') {
+        return { ok: false, message: 'query_db_table requires table_name or a non-empty query.' };
+      }
+      return {
+        ok: true,
+        value: {
+          tool,
+          table_name: typeof parsed.table_name === 'string' ? parsed.table_name : undefined,
+          query: typeof parsed.query === 'string' ? parsed.query : undefined,
+          limit: Number.isInteger(parsed.limit) ? Number(parsed.limit) : undefined,
           reason: typeof parsed.reason === 'string' ? parsed.reason : undefined,
         },
       };

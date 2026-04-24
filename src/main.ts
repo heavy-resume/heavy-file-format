@@ -78,6 +78,7 @@ function createInitialState(document: ReturnType<typeof deserializeDocumentBytes
     isRestoring: false,
     componentMetaModal: null,
     sqliteRowComponentModal: null,
+    dbTableQueryModal: null,
     themeModalOpen: false,
     gridAddComponentByBlock: {},
     expandableEditorPanels: {},
@@ -238,6 +239,9 @@ readerRenderer = createReaderRenderer(
     },
     get sqliteRowComponentModal() {
       return state.sqliteRowComponentModal;
+    },
+    get dbTableQueryModal() {
+      return state.dbTableQueryModal;
     },
     get reusableSaveModal() {
       return state.reusableSaveModal;

@@ -772,11 +772,23 @@ Block example:
 
 ```markdown
 <!--hvy:plugin {"plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->
+ SELECT company, url, status
+ FROM work_items
+ WHERE status != 'Rejected'
 ```
 
 Plugin-specific rules:
 - `pluginConfig.source` MUST currently be `"with-file"`.
 - `pluginConfig.table` MUST be a database table name to render.
+- The plugin block text is interpreted as the table query string. This is an implicit property derived from the block text body rather than from `pluginConfig`.
+- If the plugin block contains non-text structured content, clients SHOULD discard that structured content for this plugin and preserve only the text body as the query value.
+- If the query text is empty after trimming, clients MUST behave as though the query were `SELECT * FROM <pluginConfig.table>`.
+- If the query text is non-empty, clients MUST render the result in a read-only state and SHOULD visually indicate that the table is query-driven rather than directly editable.
+- `pluginConfig.queryDynamicWindow` is an optional boolean. When `true` or absent, query views SHOULD use a moving offset/limit window. When `false`, clients SHOULD instead execute the query with a fixed limit and no moving offset window.
+- `pluginConfig.queryLimit` is an optional integer used when `pluginConfig.queryDynamicWindow` is `false`. Clients MUST clamp it to fewer than 100 rows.
+- Clients MUST enforce an implicit result cap of fewer than 100 rows for query-driven views.
+- Clients SHOULD render at most 50 rows at a time in the visible window and SHOULD advance or rewind the offset window as the user scrolls, for example by shifting the offset after the viewport passes roughly row 75.
+- Sort controls MAY be exposed for direct table views. If exposed, ascending and descending sort orders SHOULD be supported per visible column. Query-driven views SHOULD preserve query-defined ordering instead.
 - The current built-in implementation stores this plugin in exactly one gzip-compressed SQLite database in the document tail.
 - Multiple plugin blocks MAY point at different tables within the same attached database.
 

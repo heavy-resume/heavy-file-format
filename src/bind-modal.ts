@@ -4,7 +4,7 @@ import { closeModal } from './navigation';
 import { saveReusableFromModal } from './reusable';
 import { findBlockByIds } from './block-ops';
 import { recordHistory } from './history';
-import { parseAttachedComponentBlocks, setSqliteRowComponent } from './plugins/db-table';
+import { parseAttachedComponentBlocks, resetDbTableViewState, setSqliteRowComponent } from './plugins/db-table';
 import { serializeBlockFragment } from './serialization';
 
 export function bindModal(app: HTMLElement): void {
@@ -35,6 +35,34 @@ export function bindModal(app: HTMLElement): void {
         recordHistory,
         closeModal,
       });
+      return;
+    }
+
+    const saveDbTableQueryBtn = target.closest<HTMLElement>('[data-modal-action="db-table-query-save"]');
+    if (saveDbTableQueryBtn && state.dbTableQueryModal) {
+      const modal = state.dbTableQueryModal;
+      const block = findBlockByIds(modal.sectionKey, modal.blockId);
+      if (!block) {
+        closeModal();
+        getRenderApp()();
+        return;
+      }
+      recordHistory(`db-table-query:${modal.tableName || modal.blockId}`);
+      block.text = modal.draftQuery;
+      block.schema.pluginConfig = {
+        ...block.schema.pluginConfig,
+        source: 'with-file',
+        table: modal.tableName,
+        queryDynamicWindow: modal.dynamicWindow,
+        queryLimit: modal.dynamicWindow ? undefined : modal.queryLimit,
+      };
+      if (modal.dynamicWindow) {
+        delete block.schema.pluginConfig.queryLimit;
+      }
+      resetDbTableViewState(modal.sectionKey, modal.blockId);
+      getRefreshReaderPanels()();
+      closeModal();
+      getRenderApp()();
       return;
     }
 
@@ -181,6 +209,9 @@ export function bindModal(app: HTMLElement): void {
 
   const cssInput = modalRoot.querySelector<HTMLTextAreaElement>('#modalCssInput');
   const sqliteRowComponentRawInput = modalRoot.querySelector<HTMLTextAreaElement>('#sqliteRowComponentRawInput');
+  const dbTableQueryInput = modalRoot.querySelector<HTMLTextAreaElement>('#dbTableQueryInput');
+  const dbTableQueryDynamicWindowInput = modalRoot.querySelector<HTMLInputElement>('#dbTableQueryDynamicWindowInput');
+  const dbTableQueryLimitInput = modalRoot.querySelector<HTMLInputElement>('#dbTableQueryLimitInput');
 
   if (sqliteRowComponentRawInput && state.sqliteRowComponentModal) {
     sqliteRowComponentRawInput.addEventListener('input', () => {
@@ -190,6 +221,47 @@ export function bindModal(app: HTMLElement): void {
       state.sqliteRowComponentModal = {
         ...state.sqliteRowComponentModal,
         rawDraft: sqliteRowComponentRawInput.value,
+        error: null,
+      };
+    });
+  }
+
+  if (dbTableQueryInput && state.dbTableQueryModal) {
+    dbTableQueryInput.addEventListener('input', () => {
+      if (!state.dbTableQueryModal) {
+        return;
+      }
+      state.dbTableQueryModal = {
+        ...state.dbTableQueryModal,
+        draftQuery: dbTableQueryInput.value,
+        error: null,
+      };
+    });
+  }
+
+  if (dbTableQueryDynamicWindowInput && state.dbTableQueryModal) {
+    dbTableQueryDynamicWindowInput.addEventListener('change', () => {
+      if (!state.dbTableQueryModal) {
+        return;
+      }
+      state.dbTableQueryModal = {
+        ...state.dbTableQueryModal,
+        dynamicWindow: dbTableQueryDynamicWindowInput.checked,
+        error: null,
+      };
+      getRenderApp()();
+    });
+  }
+
+  if (dbTableQueryLimitInput && state.dbTableQueryModal) {
+    dbTableQueryLimitInput.addEventListener('input', () => {
+      if (!state.dbTableQueryModal) {
+        return;
+      }
+      const parsed = Number.parseInt(dbTableQueryLimitInput.value, 10);
+      state.dbTableQueryModal = {
+        ...state.dbTableQueryModal,
+        queryLimit: Number.isFinite(parsed) ? Math.max(1, Math.min(parsed, 99)) : state.dbTableQueryModal.queryLimit,
         error: null,
       };
     });

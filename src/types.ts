@@ -76,6 +76,16 @@ export interface SqliteRowComponentModalState {
   rawDraft: string;
 }
 
+export interface DbTableQueryModalState {
+  sectionKey: string;
+  blockId: string;
+  tableName: string;
+  draftQuery: string;
+  dynamicWindow: boolean;
+  queryLimit: number;
+  error: string | null;
+}
+
 export interface RawEditorDiagnostic {
   severity: 'warning' | 'error';
   message: string;
@@ -127,6 +137,7 @@ export interface AppState {
   isRestoring: boolean;
   componentMetaModal: { sectionKey: string; blockId: string } | null;
   sqliteRowComponentModal: SqliteRowComponentModalState | null;
+  dbTableQueryModal: DbTableQueryModalState | null;
   themeModalOpen: boolean;
   gridAddComponentByBlock: Record<string, string>;
   expandableEditorPanels: Record<string, { stubOpen: boolean; expandedOpen: boolean }>;

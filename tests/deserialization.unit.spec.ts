@@ -335,6 +335,58 @@ test('resume education record keeps C/C++ inside the education tools list', asyn
   expect(toolTitles).toContain('C/C++');
 });
 
+test('deserializes db-table query text from the plugin block body', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+plugins:
+  - id: dev.heavy.db-table
+    source: builtin://db-table
+---
+
+<!--hvy: {"id":"data"}-->
+#! Data
+
+<!--hvy:plugin {"plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->
+ SELECT company, status
+ FROM work_items
+ WHERE status != 'Rejected'
+`, '.hvy');
+
+  const block = document.sections[0]?.blocks[0];
+
+  expect(block?.schema.plugin).toBe('dev.heavy.db-table');
+  expect(block?.schema.pluginConfig).toEqual({
+    source: 'with-file',
+    table: 'work_items',
+  });
+  expect(block?.text).toBe("SELECT company, status\nFROM work_items\nWHERE status != 'Rejected'");
+});
+
+test('deserializes db-table query window settings from plugin config', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+plugins:
+  - id: dev.heavy.db-table
+    source: builtin://db-table
+---
+
+<!--hvy: {"id":"data"}-->
+#! Data
+
+<!--hvy:plugin {"plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"work_items","queryDynamicWindow":false,"queryLimit":25}}-->
+ SELECT company FROM work_items
+`, '.hvy');
+
+  const block = document.sections[0]?.blocks[0];
+
+  expect(block?.schema.pluginConfig).toEqual({
+    source: 'with-file',
+    table: 'work_items',
+    queryDynamicWindow: false,
+    queryLimit: 25,
+  });
+});
+
 test('deserialization reports invalid block directive json as diagnostics with concise hints', () => {
  const result = deserializeDocumentWithDiagnostics(`---
 hvy_version: 0.1

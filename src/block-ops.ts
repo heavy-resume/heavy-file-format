@@ -15,6 +15,7 @@ import { escapeAttr, escapeHtml, getInlineEditableText, renderOption } from './u
 import { recordHistory } from './history';
 import { getDocumentComponentDefaultCss } from './document-component-defaults';
 import { DB_TABLE_PLUGIN_ID, isDbTablePluginId } from './plugins/registry';
+import { resetDbTableViewState } from './plugins/db-table';
 
 export function findBlockByIds(sectionKey: string, blockId: string): VisualBlock | null {
   const sqliteRowComponentBlock = findSqliteRowComponentBlock(sectionKey, blockId);
@@ -193,6 +194,15 @@ export function handleBlockFieldInput(target: HTMLElement): boolean {
       source: 'with-file',
       table: target.value,
     };
+    resetDbTableViewState(target.dataset.sectionKey ?? '', block.id);
+    syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
+    getRefreshReaderPanels()();
+    return true;
+  }
+
+  if (field === 'block-plugin-query' && target instanceof HTMLTextAreaElement) {
+    block.text = target.value;
+    resetDbTableViewState(target.dataset.sectionKey ?? '', block.id);
     syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
     getRefreshReaderPanels()();
     return true;

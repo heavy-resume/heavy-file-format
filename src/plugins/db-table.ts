@@ -4,9 +4,10 @@ import sqlWasmUrl from 'sql.js/dist/sql-wasm.wasm?url';
 import type { ComponentRenderHelpers } from '../editor/component-helpers';
 import type { VisualBlock, VisualSection } from '../editor/types';
 import { deserializeDocumentWithDiagnostics, wrapHvyFragmentAsDocument } from '../serialization';
+import { visitBlocks } from '../section-ops';
 import { getRenderApp, state } from '../state';
 import type { DocumentTailAttachment, VisualDocument } from '../types';
-import { DB_TABLE_PLUGIN_ID, getAvailableDocumentPlugins, getPluginDisplayName, isDbTablePluginId } from './registry';
+import { DB_TABLE_PLUGIN_ID } from './registry';
 
 import './db-table.css';
 
@@ -20,6 +21,13 @@ interface SqliteTableSnapshot {
   rowIds: number[];
   rows: string[][];
   rowHasAttachedComponent: boolean[];
+  totalRows: number;
+  offset: number;
+  queryActive: boolean;
+  dynamicWindow: boolean;
+  queryLimit: number;
+  sortColumn: string | null;
+  sortDirection: 'asc' | 'desc' | null;
 }
 
 interface SqliteRuntime {
@@ -41,18 +49,70 @@ const runtime: SqliteRuntime = {
 };
 
 let sqlJsPromise: Promise<SqlJsStatic> | null = null;
+const DB_TABLE_WINDOW_SIZE = 50;
+const DB_TABLE_MAX_QUERY_ROWS = 99;
+const DB_TABLE_DEFAULT_STATIC_QUERY_LIMIT = 50;
+const DB_TABLE_FORWARD_SCROLL_TRIGGER = 75;
+const DB_TABLE_BACKWARD_SCROLL_TRIGGER = 25;
+const DB_TABLE_ESTIMATED_ROW_HEIGHT = 40;
+
+interface DbTableViewState {
+  offset: number;
+  scrollTop: number;
+  sortColumn: string | null;
+  sortDirection: 'asc' | 'desc' | null;
+}
+
+const dbTableViewState = new Map<string, DbTableViewState>();
+
+function getDbTableViewKey(sectionKey: string, blockId: string): string {
+  return `${sectionKey}:${blockId}`;
+}
+
+function getDbTableViewState(sectionKey: string, blockId: string): DbTableViewState {
+  const key = getDbTableViewKey(sectionKey, blockId);
+  const existing = dbTableViewState.get(key);
+  if (existing) {
+    return existing;
+  }
+  const created: DbTableViewState = {
+    offset: 0,
+    scrollTop: 0,
+    sortColumn: null,
+    sortDirection: null,
+  };
+  dbTableViewState.set(key, created);
+  return created;
+}
 
 function getPluginConfigValue(config: Record<string, unknown>, key: string): string {
   const value = config[key];
   return typeof value === 'string' ? value : '';
 }
 
+export function getDbTableQueryDynamicWindow(config: Record<string, unknown>): boolean {
+  return typeof config.queryDynamicWindow === 'boolean' ? config.queryDynamicWindow : true;
+}
+
+export function getDbTableQueryLimit(config: Record<string, unknown>): number {
+  const rawValue = config.queryLimit;
+  const parsed = typeof rawValue === 'number'
+    ? rawValue
+    : typeof rawValue === 'string'
+      ? Number.parseInt(rawValue, 10)
+      : NaN;
+  if (!Number.isFinite(parsed)) {
+    return DB_TABLE_DEFAULT_STATIC_QUERY_LIMIT;
+  }
+  return clampDbTableQueryLimit(parsed);
+}
+
 export function renderDbTablePluginEditor(sectionKey: string, block: VisualBlock, helpers: ComponentRenderHelpers): string {
   const tableName = getPluginConfigValue(block.schema.pluginConfig, 'table');
-  const availablePlugins = getAvailableDocumentPlugins().filter((plugin) => isDbTablePluginId(plugin.id));
   ensureSqliteRuntime();
 
   const content = renderDbTablePluginContent(sectionKey, block, helpers, tableName, false);
+  const query = block.text.trim();
 
   return `
     <span class="db-table-info">
@@ -66,6 +126,13 @@ export function renderDbTablePluginEditor(sectionKey: string, block: VisualBlock
           placeholder="job_applications"
         />
       </label>
+      <button
+        type="button"
+        class="ghost db-table-query-button${query.length > 0 ? ' db-table-query-button-active' : ''}"
+        data-action="db-table-open-query-editor"
+        data-section-key="${helpers.escapeAttr(sectionKey)}"
+        data-block-id="${helpers.escapeAttr(block.id)}"
+      >${query.length > 0 ? 'Edit Query' : 'Query'}</button>
     </span>
     ${content}
   `;
@@ -100,7 +167,15 @@ function renderDbTablePluginContent(
     if (ensureTableExists(runtime.db, tableName)) {
       void persistRuntimeDatabase();
     }
-    const snapshot = readTableSnapshot(runtime.db, tableName);
+    const viewState = getDbTableViewState(sectionKey, block.id);
+    const snapshot = readTableSnapshot(runtime.db, tableName, {
+      query: block.text,
+      offset: viewState.offset,
+      dynamicWindow: getDbTableQueryDynamicWindow(block.schema.pluginConfig),
+      queryLimit: getDbTableQueryLimit(block.schema.pluginConfig),
+      sortColumn: viewState.sortColumn,
+      sortDirection: viewState.sortDirection,
+    });
     if (readOnly) {
       return renderReadOnlyTable(sectionKey, block.id, tableName, snapshot, helpers);
     }
@@ -118,6 +193,11 @@ function renderEditableTable(
   snapshot: SqliteTableSnapshot,
   helpers: ComponentRenderHelpers
 ): string {
+  const queryActive = snapshot.queryActive;
+  const tableDisabledAttr = queryActive ? ' disabled' : '';
+  const topSpacerHeight = snapshot.offset * DB_TABLE_ESTIMATED_ROW_HEIGHT;
+  const remainingRows = Math.max(snapshot.totalRows - (snapshot.offset + snapshot.rows.length), 0);
+  const bottomSpacerHeight = remainingRows * DB_TABLE_ESTIMATED_ROW_HEIGHT;
   const hasRows = snapshot.rows.length > 0;
   const renderedRows = hasRows
     ? snapshot.rows.map(
@@ -137,6 +217,7 @@ function renderEditableTable(
                       data-rowid="${helpers.escapeAttr(String(snapshot.rowIds[rowIndex] ?? ''))}"
                       data-column-name="${helpers.escapeAttr(column)}"
                       value="${helpers.escapeAttr(row[cellIndex] ?? '')}"
+                      ${tableDisabledAttr}
                     />
                   </td>`
               )
@@ -151,6 +232,7 @@ function renderEditableTable(
                         data-table-name="${helpers.escapeAttr(tableName)}"
                         data-rowid="${helpers.escapeAttr(String(snapshot.rowIds[rowIndex] ?? ''))}"
                         title="${snapshot.rowHasAttachedComponent[rowIndex] ? 'Edit attached component' : 'Attach component'}"
+                        ${tableDisabledAttr}
                       >…</button>
                     </td>
                   </tr>`
@@ -172,6 +254,7 @@ function renderEditableTable(
                   data-column-name="${helpers.escapeAttr(column)}"
                   data-sqlite-draft-row="true"
                   value=""
+                  ${tableDisabledAttr}
                 />
               </td>`
           )
@@ -183,9 +266,21 @@ function renderEditableTable(
     <div class="table-editor sqlite-plugin-editor">
       <div class="table-editor-head">
         <strong>DB Table</strong>
-        <span>Rows and columns persist in the attached database file.</span>
+        <span>${
+          queryActive
+            ? snapshot.dynamicWindow
+              ? 'Query preview is read-only and is capped to fewer than 100 rows.'
+              : `Query preview is read-only. Rows limited to ${snapshot.queryLimit}.`
+            : 'Rows and columns persist in the attached database file.'
+        }</span>
       </div>
-      <div class="table-editor-frame">
+      <div
+        class="table-editor-frame db-table-frame${queryActive ? ' db-table-frame-query-active' : ''}"
+        data-db-table-frame="true"
+        data-db-table-dynamic-window="${!queryActive || snapshot.dynamicWindow ? 'true' : 'false'}"
+        data-section-key="${helpers.escapeAttr(sectionKey)}"
+        data-block-id="${helpers.escapeAttr(blockId)}"
+      >
         <table class="table-editor-grid sqlite-plugin-grid">
           <thead>
             <tr>
@@ -202,7 +297,18 @@ function renderEditableTable(
                         data-table-name="${helpers.escapeAttr(tableName)}"
                         data-old-column-name="${helpers.escapeAttr(column)}"
                         value="${helpers.escapeAttr(column)}"
+                        ${tableDisabledAttr}
                       />
+                      <button
+                        type="button"
+                        class="ghost db-table-sort-button${snapshot.sortColumn === column ? ' db-table-sort-button-active' : ''}"
+                        data-action="db-table-toggle-sort"
+                        data-section-key="${helpers.escapeAttr(sectionKey)}"
+                        data-block-id="${helpers.escapeAttr(blockId)}"
+                        data-column-name="${helpers.escapeAttr(column)}"
+                        title="Sort by ${helpers.escapeAttr(column)}"
+                        ${queryActive ? 'disabled' : ''}
+                      >${snapshot.sortColumn === column ? (snapshot.sortDirection === 'desc' ? '↓' : '↑') : '↕'}</button>
                     </th>`
                 )
                 .join('')}
@@ -215,12 +321,15 @@ function renderEditableTable(
                   data-block-id="${helpers.escapeAttr(blockId)}"
                   data-table-name="${helpers.escapeAttr(tableName)}"
                   title="Add column"
+                  ${tableDisabledAttr}
                 >+</button>
               </th>
             </tr>
           </thead>
           <tbody>
+            ${topSpacerHeight > 0 ? `<tr class="db-table-spacer-row"><td colspan="${snapshot.columns.length + 2}" style="height:${topSpacerHeight}px"></td></tr>` : ''}
             ${renderedRows}
+            ${bottomSpacerHeight > 0 ? `<tr class="db-table-spacer-row"><td colspan="${snapshot.columns.length + 2}" style="height:${bottomSpacerHeight}px"></td></tr>` : ''}
             <tr class="table-add-row-line">
               <td colspan="${snapshot.columns.length + 2}">
                 <button
@@ -230,6 +339,7 @@ function renderEditableTable(
                   data-section-key="${helpers.escapeAttr(sectionKey)}"
                   data-block-id="${helpers.escapeAttr(blockId)}"
                   data-table-name="${helpers.escapeAttr(tableName)}"
+                  ${tableDisabledAttr}
                 >+ Add Row</button>
               </td>
             </tr>
@@ -247,11 +357,21 @@ function renderReadOnlyTable(
   snapshot: SqliteTableSnapshot,
   helpers: ComponentRenderHelpers
 ): string {
-  return `<table class="reader-table">
+  const topSpacerHeight = snapshot.offset * DB_TABLE_ESTIMATED_ROW_HEIGHT;
+  const remainingRows = Math.max(snapshot.totalRows - (snapshot.offset + snapshot.rows.length), 0);
+  const bottomSpacerHeight = remainingRows * DB_TABLE_ESTIMATED_ROW_HEIGHT;
+  return `<div
+    class="table-editor-frame db-table-frame db-table-frame-readonly${snapshot.queryActive ? ' db-table-frame-query-active' : ''}"
+    data-db-table-frame="true"
+    data-db-table-dynamic-window="${!snapshot.queryActive || snapshot.dynamicWindow ? 'true' : 'false'}"
+    data-section-key="${helpers.escapeAttr(sectionKey)}"
+    data-block-id="${helpers.escapeAttr(blockId)}"
+  ><table class="reader-table">
     <thead>
       <tr>${snapshot.columns.map((column) => `<th>${helpers.escapeHtml(column)}</th>`).join('')}</tr>
     </thead>
     <tbody>
+      ${topSpacerHeight > 0 ? `<tr class="db-table-spacer-row"><td colspan="${snapshot.columns.length}" style="height:${topSpacerHeight}px"></td></tr>` : ''}
       ${snapshot.rows
         .map(
           (row, rowIndex) => `
@@ -271,8 +391,9 @@ function renderReadOnlyTable(
             </tr>`
         )
         .join('')}
+      ${bottomSpacerHeight > 0 ? `<tr class="db-table-spacer-row"><td colspan="${snapshot.columns.length}" style="height:${bottomSpacerHeight}px"></td></tr>` : ''}
     </tbody>
-  </table>`;
+  </table></div>`;
 }
 
 export async function addDbTableRow(tableName: string): Promise<void> {
@@ -303,8 +424,7 @@ export async function materializeDbTableDraftRow(tableName: string, columnName: 
 export async function addDbTableColumn(tableName: string): Promise<void> {
   const db = await getLoadedDatabase();
   ensureTableExists(db, tableName);
-  const snapshot = readTableSnapshot(db, tableName);
-  const nextName = getNextColumnName(snapshot.columns);
+  const nextName = getNextColumnName(getTableColumns(db, tableName));
   db.run(`ALTER TABLE ${quoteIdentifier(tableName)} ADD COLUMN ${quoteIdentifier(nextName)} TEXT`);
   await persistRuntimeDatabase();
 }
@@ -316,8 +436,8 @@ export async function renameDbTableColumn(tableName: string, oldName: string, ne
   }
 
   const db = await getLoadedDatabase();
-  const snapshot = readTableSnapshot(db, tableName);
-  if (snapshot.columns.includes(trimmedNext)) {
+  const columns = getTableColumns(db, tableName);
+  if (columns.includes(trimmedNext)) {
     throw new Error(`Column "${trimmedNext}" already exists.`);
   }
   db.run(`ALTER TABLE ${quoteIdentifier(tableName)} RENAME COLUMN ${quoteIdentifier(oldName)} TO ${quoteIdentifier(trimmedNext)}`);
@@ -504,19 +624,47 @@ function resetRuntime(): void {
   runtime.loadError = null;
   runtime.loadPromise = null;
   runtime.persistPromise = null;
+  dbTableViewState.clear();
 }
 
-function readTableSnapshot(db: SqlJsDatabase, tableName: string): SqliteTableSnapshot {
-  const columns = getTableColumns(db, tableName);
-  const statement = db.prepare(`SELECT rowid AS "__hvy_rowid__", * FROM ${quoteIdentifier(tableName)}`);
+function readTableSnapshot(
+  db: SqlJsDatabase,
+  tableName: string,
+  options: {
+    query: string;
+    offset: number;
+    dynamicWindow: boolean;
+    queryLimit: number;
+    sortColumn: string | null;
+    sortDirection: 'asc' | 'desc' | null;
+  }
+): SqliteTableSnapshot {
+  const normalizedQuery = options.query.trim().replace(/;+\s*$/u, '');
+  const queryActive = normalizedQuery.length > 0;
+  const dynamicWindow = queryActive ? options.dynamicWindow : true;
+  const queryLimit = clampDbTableQueryLimit(options.queryLimit);
+  const columns = queryActive ? getQueryColumns(db, normalizedQuery) : getTableColumns(db, tableName);
+  const totalRows = queryActive
+    ? getQueryRowCount(db, normalizedQuery, dynamicWindow ? DB_TABLE_MAX_QUERY_ROWS : queryLimit)
+    : getTableRowCount(db, tableName);
+  const offset = queryActive && !dynamicWindow ? 0 : clampDbTableOffset(options.offset, totalRows);
   const rowIds: number[] = [];
   const rows: string[][] = [];
-  const rowComponentIds = getRowComponentIdSet(db, tableName);
+  const rowComponentIds = queryActive ? new Set<number>() : getRowComponentIdSet(db, tableName);
+  const sortColumn = !queryActive && options.sortColumn && columns.includes(options.sortColumn) ? options.sortColumn : null;
+  const sortDirection = sortColumn ? (options.sortDirection === 'desc' ? 'desc' : 'asc') : null;
+  const statement = db.prepare(
+    queryActive
+      ? `SELECT * FROM (${normalizedQuery}) AS hvy_query LIMIT ${dynamicWindow ? DB_TABLE_WINDOW_SIZE : queryLimit} OFFSET ${offset}`
+      : `SELECT rowid AS "__hvy_rowid__", * FROM ${quoteIdentifier(tableName)}${buildSortClause(sortColumn, sortDirection)} LIMIT ${DB_TABLE_WINDOW_SIZE} OFFSET ${offset}`
+  );
 
   try {
     while (statement.step()) {
       const row = statement.getAsObject() as Record<string, unknown>;
-      rowIds.push(Number(row.__hvy_rowid__ ?? 0));
+      if (!queryActive) {
+        rowIds.push(Number(row.__hvy_rowid__ ?? 0));
+      }
       rows.push(columns.map((column) => stringifySqliteValue(row[column])));
     }
   } finally {
@@ -527,8 +675,34 @@ function readTableSnapshot(db: SqlJsDatabase, tableName: string): SqliteTableSna
     columns,
     rowIds,
     rows,
-    rowHasAttachedComponent: rowIds.map((rowId) => rowComponentIds.has(rowId)),
+    rowHasAttachedComponent: queryActive ? rows.map(() => false) : rowIds.map((rowId) => rowComponentIds.has(rowId)),
+    totalRows,
+    offset,
+    queryActive,
+    dynamicWindow,
+    queryLimit,
+    sortColumn,
+    sortDirection,
   };
+}
+
+function getTableRowCount(db: SqlJsDatabase, tableName: string): number {
+  const result = db.exec(`SELECT COUNT(*) FROM ${quoteIdentifier(tableName)}`);
+  return Number(result[0]?.values[0]?.[0] ?? 0);
+}
+
+function getQueryColumns(db: SqlJsDatabase, query: string): string[] {
+  const statement = db.prepare(`SELECT * FROM (${query}) AS hvy_query LIMIT 0`);
+  try {
+    return statement.getColumnNames().filter((column) => column.trim().length > 0);
+  } finally {
+    statement.free();
+  }
+}
+
+function getQueryRowCount(db: SqlJsDatabase, query: string, limit: number): number {
+  const result = db.exec(`SELECT COUNT(*) FROM (SELECT * FROM (${query}) AS hvy_query LIMIT ${limit}) AS hvy_query_count`);
+  return Number(result[0]?.values[0]?.[0] ?? 0);
 }
 
 function getTableColumns(db: SqlJsDatabase, tableName: string): string[] {
@@ -600,6 +774,22 @@ function getNextColumnName(existingColumns: string[]): string {
   return candidate;
 }
 
+function buildSortClause(sortColumn: string | null, sortDirection: 'asc' | 'desc' | null): string {
+  if (!sortColumn || !sortDirection) {
+    return '';
+  }
+  return ` ORDER BY ${quoteIdentifier(sortColumn)} ${sortDirection.toUpperCase()}`;
+}
+
+function clampDbTableOffset(offset: number, totalRows: number): number {
+  const maxOffset = Math.max(totalRows - DB_TABLE_WINDOW_SIZE, 0);
+  return Math.max(0, Math.min(offset, maxOffset));
+}
+
+function clampDbTableQueryLimit(value: number): number {
+  return Math.max(1, Math.min(Math.floor(value), DB_TABLE_MAX_QUERY_ROWS));
+}
+
 function quoteIdentifier(identifier: string): string {
   return `"${identifier.replaceAll('"', '""')}"`;
 }
@@ -612,6 +802,68 @@ function stringifySqliteValue(value: unknown): string {
     return '[blob]';
   }
   return String(value);
+}
+
+export function resetDbTableViewState(sectionKey: string, blockId: string): void {
+  dbTableViewState.set(getDbTableViewKey(sectionKey, blockId), {
+    offset: 0,
+    scrollTop: 0,
+    sortColumn: null,
+    sortDirection: null,
+  });
+}
+
+export function toggleDbTableSort(sectionKey: string, blockId: string, columnName: string): void {
+  const viewState = getDbTableViewState(sectionKey, blockId);
+  if (viewState.sortColumn !== columnName) {
+    viewState.sortColumn = columnName;
+    viewState.sortDirection = 'asc';
+  } else if (viewState.sortDirection === 'asc') {
+    viewState.sortDirection = 'desc';
+  } else {
+    viewState.sortColumn = null;
+    viewState.sortDirection = null;
+  }
+  viewState.offset = 0;
+  viewState.scrollTop = 0;
+}
+
+export function handleDbTableFrameScroll(frame: HTMLElement): boolean {
+  if (frame.dataset.dbTableDynamicWindow === 'false') {
+    return false;
+  }
+  const sectionKey = frame.dataset.sectionKey ?? '';
+  const blockId = frame.dataset.blockId ?? '';
+  if (sectionKey.length === 0 || blockId.length === 0) {
+    return false;
+  }
+  const viewState = getDbTableViewState(sectionKey, blockId);
+  viewState.scrollTop = frame.scrollTop;
+  const firstVisibleRow = Math.floor(frame.scrollTop / DB_TABLE_ESTIMATED_ROW_HEIGHT);
+  let nextOffset = viewState.offset;
+  if (firstVisibleRow > viewState.offset + DB_TABLE_FORWARD_SCROLL_TRIGGER) {
+    nextOffset += DB_TABLE_WINDOW_SIZE;
+  } else if (viewState.offset > 0 && firstVisibleRow < viewState.offset + DB_TABLE_BACKWARD_SCROLL_TRIGGER) {
+    nextOffset -= DB_TABLE_WINDOW_SIZE;
+  }
+  nextOffset = Math.max(0, nextOffset);
+  if (nextOffset === viewState.offset) {
+    return false;
+  }
+  viewState.offset = nextOffset;
+  return true;
+}
+
+export function restoreDbTableFrameScroll(root: ParentNode): void {
+  root.querySelectorAll<HTMLElement>('[data-db-table-frame="true"]').forEach((frame) => {
+    const sectionKey = frame.dataset.sectionKey ?? '';
+    const blockId = frame.dataset.blockId ?? '';
+    if (sectionKey.length === 0 || blockId.length === 0) {
+      return;
+    }
+    const viewState = getDbTableViewState(sectionKey, blockId);
+    frame.scrollTop = viewState.scrollTop;
+  });
 }
 
 function validateAttachedComponentHvy(hvy: string): void {
@@ -629,4 +881,87 @@ function validateAttachedComponentHvy(hvy: string): void {
   if (!section || section.children.length > 0 || section.blocks.length === 0) {
     throw new Error('Attached row HVY must contain one or more HVY component fragments.');
   }
+}
+
+export function getDocumentDbTableNames(document: VisualDocument): string[] {
+  const tableNames = new Set<string>();
+  visitBlocks(document.sections, (block) => {
+    if (block.schema.component !== 'plugin' || block.schema.plugin !== DB_TABLE_PLUGIN_ID) {
+      return;
+    }
+    const tableName = getPluginConfigValue(block.schema.pluginConfig, 'table').trim();
+    if (tableName.length > 0) {
+      tableNames.add(tableName);
+    }
+  });
+  return [...tableNames];
+}
+
+export function hasDocumentDbTables(document: VisualDocument): boolean {
+  return getDocumentDbTableNames(document).length > 0;
+}
+
+export async function executeDbTableQueryTool(
+  document: VisualDocument,
+  request: { tableName?: string; query?: string; limit?: number }
+): Promise<string> {
+  const availableTables = getDocumentDbTableNames(document);
+  if (availableTables.length === 0) {
+    throw new Error('No DB tables are available in this document.');
+  }
+
+  const db = await openDocumentDatabase(document);
+  try {
+    const requestedTable = request.tableName?.trim() ?? '';
+    if (requestedTable.length > 0 && !availableTables.includes(requestedTable)) {
+      throw new Error(`Unknown DB table "${requestedTable}". Available tables: ${availableTables.join(', ')}.`);
+    }
+
+    const normalizedQuery = (request.query ?? '').trim().replace(/;+\s*$/u, '');
+    const tableName = requestedTable || (availableTables.length === 1 ? (availableTables[0] ?? '') : '');
+    if (normalizedQuery.length === 0 && tableName.length === 0) {
+      throw new Error(`Specify table_name when querying DB tables. Available tables: ${availableTables.join(', ')}.`);
+    }
+
+    const limit = Math.max(1, Math.min(Math.floor(request.limit ?? 10), 25));
+    const query = normalizedQuery.length > 0 ? normalizedQuery : `SELECT * FROM ${quoteIdentifier(tableName)}`;
+    const statement = db.prepare(`SELECT * FROM (${query}) AS hvy_query LIMIT ${limit}`);
+    const columns = statement.getColumnNames();
+    const rows: string[][] = [];
+
+    try {
+      while (statement.step()) {
+        const row = statement.getAsObject() as Record<string, unknown>;
+        rows.push(columns.map((column) => stringifySqliteValue(row[column])));
+      }
+    } finally {
+      statement.free();
+    }
+
+    return [
+      `Available DB tables: ${availableTables.join(', ')}`,
+      `Executed query: ${query}`,
+      `Returned rows: ${rows.length}${rows.length === limit ? ` (limited to ${limit})` : ''}`,
+      '',
+      columns.length === 0
+        ? '(no columns returned)'
+        : [
+            columns.join(' | '),
+            columns.map(() => '---').join(' | '),
+            ...rows.map((row) => row.map((cell) => cell.replaceAll('\n', '\\n')).join(' | ')),
+          ].join('\n'),
+    ].join('\n');
+  } finally {
+    try {
+      db.close();
+    } catch {
+      // Ignore close failures for ephemeral AI query databases.
+    }
+  }
+}
+
+async function openDocumentDatabase(document: VisualDocument): Promise<SqlJsDatabase> {
+  const SQL = await getSqlJs();
+  const bytes = await getAttachmentDatabaseBytes(document.attachmentTail ?? null);
+  return bytes.length > 0 ? new SQL.Database(bytes) : new SQL.Database();
 }

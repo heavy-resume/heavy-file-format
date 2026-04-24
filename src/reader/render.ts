@@ -12,7 +12,7 @@ import type { BlockSchema, VisualBlock, VisualSection } from '../editor/types';
 import { renderTagEditor } from '../editor/tag-editor';
 import { colorValueToPickerHex, getResolvedThemeColor, getThemeColorLabel, THEME_COLOR_NAMES } from '../theme';
 import type { ThemeConfig } from '../theme';
-import type { SqliteRowComponentModalState, VisualDocument } from '../types';
+import type { DbTableQueryModalState, SqliteRowComponentModalState, VisualDocument } from '../types';
 import { getDocumentSectionDefaultCss, mergeDocumentCss } from '../document-section-defaults';
 import { areTablesEnabled } from '../reference-config';
 import { parseAttachedComponentBlocks } from '../plugins/db-table';
@@ -25,6 +25,7 @@ interface ReaderRenderState {
   aiEditTarget: { sectionKey: string | null; blockId: string | null };
   modalSectionKey: string | null;
   sqliteRowComponentModal: SqliteRowComponentModalState | null;
+  dbTableQueryModal: DbTableQueryModalState | null;
   reusableSaveModal: {
     kind: 'component' | 'section';
     sectionKey: string;
@@ -362,6 +363,57 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
             </div>
             <p class="muted">Meta is optional and can be used by readers, indexing, and plugins.</p>
             ${deps.renderBlockMetaFields(state.componentMetaModal.sectionKey, block)}
+          </section>
+        </div>
+      `;
+    }
+
+    if (state.dbTableQueryModal) {
+      const queryModal = state.dbTableQueryModal;
+      const placeholderTableName = queryModal.tableName.trim().length > 0 ? queryModal.tableName.trim() : '<table_name>';
+      return `
+        <div id="modalRoot" class="modal-root">
+          <div class="modal-overlay" data-modal-action="close-overlay"></div>
+          <section class="modal-panel component-meta-modal">
+            <div class="modal-head">
+              <h3>DB Table Query</h3>
+              <button type="button" data-modal-action="close">Close</button>
+            </div>
+            ${queryModal.error ? `<div class="raw-editor-error" role="alert">${deps.escapeHtml(queryModal.error)}</div>` : ''}
+            <div class="modal-field-stack">
+              <label>
+                <span>Query</span>
+                <textarea
+                  id="dbTableQueryInput"
+                  class="db-table-query-input"
+                  rows="10"
+                  spellcheck="false"
+                  placeholder="${deps.escapeAttr(`SELECT * FROM ${placeholderTableName}`)}"
+                >${deps.escapeHtml(queryModal.draftQuery)}</textarea>
+              </label>
+              <label class="checkbox-row">
+                <input
+                  id="dbTableQueryDynamicWindowInput"
+                  type="checkbox"
+                  ${queryModal.dynamicWindow ? 'checked' : ''}
+                />
+                <span>Dynamic offset and limit</span>
+              </label>
+              ${queryModal.dynamicWindow ? '' : `<label>
+                <span>Rows limited to</span>
+                <input
+                  id="dbTableQueryLimitInput"
+                  type="number"
+                  min="1"
+                  max="99"
+                  value="${deps.escapeAttr(String(queryModal.queryLimit))}"
+                />
+              </label>`}
+            </div>
+            <div class="link-inline-actions reusable-save-actions">
+              <button type="button" class="ghost" data-modal-action="close">Cancel</button>
+              <button type="button" class="secondary" data-modal-action="db-table-query-save">Save</button>
+            </div>
           </section>
         </div>
       `;

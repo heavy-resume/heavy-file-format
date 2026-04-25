@@ -414,7 +414,7 @@ export function bindUi(app: HTMLElement): void {
       return;
     }
 
-    if (field === 'image-alt' && target instanceof HTMLInputElement) {
+    if (field === 'image-alt' && (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) {
       const block = resolveBlockContext(target)?.block ?? null;
       if (!block) return;
       recordHistory(`image-alt:${block.id}`);

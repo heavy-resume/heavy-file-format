@@ -81,13 +81,13 @@ export const renderImageEditor: ComponentEditorRenderer = (sectionKey, block, he
       <div class="image-alt-label-container">
         <label class="image-alt-label">
           <span>Alt text</span>
-          <input
+          <textarea
+            rows="2"
             data-section-key="${helpers.escapeAttr(sectionKey)}"
             data-block-id="${helpers.escapeAttr(block.id)}"
             data-field="image-alt"
-            value="${helpers.escapeAttr(block.schema.imageAlt)}"
             placeholder="Describe the image"
-          />
+          >${helpers.escapeHtml(block.schema.imageAlt)}</textarea>
         </label>
       </div>
     </div>

@@ -2,7 +2,7 @@ import { stringify as stringifyYaml } from 'yaml';
 import type { BlockSchema, GridItem, TableRow, VisualBlock, VisualSection } from './editor/types';
 import type { HvySection, JsonObject } from './hvy/types';
 import { parseHvy } from './hvy/parser';
-import type { DocumentTailAttachment, VisualDocument } from './types';
+import type { DocumentAttachment, VisualDocument } from './types';
 import { makeId, sanitizeOptionalId } from './utils';
 import { getSectionId } from './section-ops';
 import { resolveBaseComponent, isBuiltinComponentName } from './component-defs';
@@ -45,11 +45,11 @@ export function deserializeDocumentWithDiagnostics(
   }
 
   const diagnostics = parsed.errors.map((message) => mapParserErrorToDiagnostic(message));
-  const document = {
+  const document: VisualDocument = {
     extension,
     meta,
     sections: parsed.sections.map((section) => mapParsedSection(section, meta, diagnostics)),
-    attachmentTail: extractedTail.attachmentTail,
+    attachments: extractedTail.attachments,
   };
 
   validateDocumentSemantics(document, diagnostics);
@@ -66,7 +66,7 @@ export function deserializeDocumentBytesWithDiagnostics(
 ): DeserializeDocumentResult {
   const extractedTail = splitSerializedTailBytes(bytes);
   const result = deserializeDocumentWithDiagnostics(extractedTail.text, extension);
-  result.document.attachmentTail = extractedTail.attachmentTail;
+  result.document.attachments = extractedTail.attachments;
   return result;
 }
 
@@ -796,20 +796,34 @@ export function serializeDocument(document: VisualDocument): string {
     .join('\n')
     .trim();
   const textBody = `${frontMatter}\n${body}\n`;
-  return appendSerializedTailPreamble(textBody, document.attachmentTail);
+  return appendSerializedTailPreamble(textBody, document.attachments);
 }
 
 export function serializeDocumentBytes(document: VisualDocument): Uint8Array {
   const encoder = new TextEncoder();
   const textBytes = encoder.encode(serializeDocument(document));
-  const tailBytes = document.attachmentTail?.bytes ?? new Uint8Array();
-  if (!document.attachmentTail || tailBytes.length === 0) {
+  const tailBytes = concatAttachmentBytes(document.attachments);
+  if (tailBytes.length === 0) {
     return textBytes;
   }
 
   const combined = new Uint8Array(textBytes.length + tailBytes.length);
   combined.set(textBytes, 0);
   combined.set(tailBytes, textBytes.length);
+  return combined;
+}
+
+function concatAttachmentBytes(attachments: DocumentAttachment[]): Uint8Array {
+  const total = attachments.reduce((sum, entry) => sum + entry.bytes.length, 0);
+  if (total === 0) {
+    return new Uint8Array();
+  }
+  const combined = new Uint8Array(total);
+  let offset = 0;
+  for (const entry of attachments) {
+    combined.set(entry.bytes, offset);
+    offset += entry.bytes.length;
+  }
   return combined;
 }
 
@@ -849,94 +863,174 @@ function stripEditorStateFromSerializedValue(value: unknown): unknown {
   return cleaned;
 }
 
-function appendSerializedTailPreamble(text: string, attachmentTail: DocumentTailAttachment | null | undefined): string {
-  if (!attachmentTail) {
+function appendSerializedTailPreamble(text: string, attachments: DocumentAttachment[]): string {
+  if (attachments.length === 0) {
     return text;
   }
 
   const trimmed = text.endsWith('\n') ? text.slice(0, -1) : text;
-  return `${trimmed}\n<!--hvy:tail ${JSON.stringify(attachmentTail.meta)}-->\n${HVY_TAIL_SENTINEL}\n`;
+  const directives = attachments
+    .map((attachment) => {
+      const meta: JsonObject = { id: attachment.id, ...attachment.meta, length: attachment.bytes.length };
+      return `<!--hvy:tail ${JSON.stringify(meta)}-->`;
+    })
+    .join('\n');
+  return `${trimmed}\n${directives}\n${HVY_TAIL_SENTINEL}\n`;
 }
 
-function splitSerializedTailText(text: string): { text: string; attachmentTail: DocumentTailAttachment | null } {
-  const normalized = text.replace(/\r\n/g, '\n');
-  const match = normalized.match(/\n<!--hvy:tail\s+(\{[^\n\r]*\})\s*-->\n--HVY-TAIL--\n?$/);
-  if (!match) {
-    return { text, attachmentTail: null };
+function parseTailDirectives(directiveBlock: string): DocumentAttachment[] | null {
+  const lines = directiveBlock.split('\n').filter((line) => line.length > 0);
+  if (lines.length === 0) {
+    return null;
   }
-
-  try {
-    const parsed = JSON.parse(match[1] ?? '{}');
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      return { text, attachmentTail: null };
+  const attachments: DocumentAttachment[] = [];
+  for (const line of lines) {
+    const match = line.match(/^<!--hvy:tail\s+(\{.*\})\s*-->$/);
+    if (!match) {
+      return null;
     }
-    return {
-      text: normalized.slice(0, match.index ?? normalized.length),
-      attachmentTail: {
-        meta: parsed as JsonObject,
+    try {
+      const parsed = JSON.parse(match[1] ?? '{}');
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        return null;
+      }
+      const obj = parsed as JsonObject;
+      const id = typeof obj.id === 'string' ? obj.id : '';
+      const meta: JsonObject = { ...obj };
+      delete meta.id;
+      delete meta.length;
+      attachments.push({
+        id,
+        meta,
         bytes: new Uint8Array(),
-      },
-    };
-  } catch {
-    return { text, attachmentTail: null };
+      });
+    } catch {
+      return null;
+    }
   }
+  return attachments;
 }
 
-function splitSerializedTailBytes(bytes: Uint8Array): { text: string; attachmentTail: DocumentTailAttachment | null } {
+function splitSerializedTailText(text: string): { text: string; attachments: DocumentAttachment[] } {
+  const normalized = text.replace(/\r\n/g, '\n');
+  const sentinelTail = `\n${HVY_TAIL_SENTINEL}\n`;
+  const sentinelTailNoNewline = `\n${HVY_TAIL_SENTINEL}`;
+  let sentinelIndex = -1;
+  let sentinelLength = 0;
+  if (normalized.endsWith(sentinelTail)) {
+    sentinelIndex = normalized.length - sentinelTail.length;
+    sentinelLength = sentinelTail.length;
+  } else if (normalized.endsWith(sentinelTailNoNewline)) {
+    sentinelIndex = normalized.length - sentinelTailNoNewline.length;
+    sentinelLength = sentinelTailNoNewline.length;
+  } else {
+    return { text, attachments: [] };
+  }
+
+  // Find start of consecutive hvy:tail directive block.
+  let directiveStart = sentinelIndex;
+  while (directiveStart > 0) {
+    const prevNewline = normalized.lastIndexOf('\n', directiveStart - 1);
+    const lineStart = prevNewline + 1;
+    const lineEnd = directiveStart;
+    const candidate = normalized.slice(lineStart, lineEnd);
+    if (/^<!--hvy:tail\s+\{.*\}\s*-->$/.test(candidate)) {
+      directiveStart = prevNewline;
+    } else {
+      break;
+    }
+  }
+
+  if (directiveStart === sentinelIndex) {
+    return { text, attachments: [] };
+  }
+
+  const directiveBlock = normalized.slice(directiveStart + 1, sentinelIndex);
+  const attachments = parseTailDirectives(directiveBlock);
+  if (!attachments) {
+    return { text, attachments: [] };
+  }
+
+  const remainingText = normalized.slice(0, directiveStart);
+  // Account for sentinel length consumed (text-only path: no bytes).
+  void sentinelLength;
+  return {
+    text: remainingText,
+    attachments,
+  };
+}
+
+function splitSerializedTailBytes(bytes: Uint8Array): { text: string; attachments: DocumentAttachment[] } {
   const decoder = new TextDecoder();
   const decoded = decoder.decode(bytes);
   const normalized = decoded.replace(/\r\n/g, '\n');
   const sentinelNeedle = `\n${HVY_TAIL_SENTINEL}\n`;
   const sentinelIndex = normalized.lastIndexOf(sentinelNeedle);
   if (sentinelIndex < 0) {
-    return {
-      text: decoded,
-      attachmentTail: null,
-    };
+    return { text: decoded, attachments: [] };
   }
 
-  const directiveLineStart = normalized.lastIndexOf('\n', sentinelIndex - 1);
-  if (directiveLineStart < 0) {
-    return {
-      text: decoded,
-      attachmentTail: null,
-    };
-  }
-
-  const directiveLine = normalized.slice(directiveLineStart + 1, sentinelIndex);
-  const directiveMatch = directiveLine.match(/^<!--hvy:tail\s+(\{[^\n\r]*\})\s*-->$/);
-  if (!directiveMatch) {
-    return {
-      text: decoded,
-      attachmentTail: null,
-    };
-  }
-
-  try {
-    const meta = JSON.parse(directiveMatch[1] ?? '{}');
-    if (!meta || typeof meta !== 'object' || Array.isArray(meta)) {
-      return {
-        text: decoded,
-        attachmentTail: null,
-      };
+  // Find consecutive hvy:tail directive block immediately preceding the sentinel.
+  let directiveStart = sentinelIndex;
+  while (directiveStart > 0) {
+    const prevNewline = normalized.lastIndexOf('\n', directiveStart - 1);
+    const lineStart = prevNewline + 1;
+    const lineEnd = directiveStart;
+    const candidate = normalized.slice(lineStart, lineEnd);
+    if (/^<!--hvy:tail\s+\{.*\}\s*-->$/.test(candidate)) {
+      directiveStart = prevNewline;
+    } else {
+      break;
     }
-
-    const encoder = new TextEncoder();
-    const tailStart = encoder.encode(normalized.slice(0, sentinelIndex + sentinelNeedle.length)).length;
-
-    return {
-      text: normalized.slice(0, directiveLineStart),
-      attachmentTail: {
-        meta: meta as JsonObject,
-        bytes: bytes.slice(tailStart),
-      },
-    };
-  } catch {
-    return {
-      text: decoded,
-      attachmentTail: null,
-    };
   }
+
+  if (directiveStart === sentinelIndex) {
+    return { text: decoded, attachments: [] };
+  }
+
+  const directiveBlock = normalized.slice(directiveStart + 1, sentinelIndex);
+  const parsedAttachments = parseTailDirectives(directiveBlock);
+  if (!parsedAttachments) {
+    return { text: decoded, attachments: [] };
+  }
+
+  // Read length from each directive line for byte splitting.
+  const lengths: number[] = [];
+  const directiveLines = directiveBlock.split('\n').filter((line) => line.length > 0);
+  for (const line of directiveLines) {
+    const match = line.match(/^<!--hvy:tail\s+(\{.*\})\s*-->$/);
+    if (!match) {
+      return { text: decoded, attachments: [] };
+    }
+    try {
+      const parsed = JSON.parse(match[1] ?? '{}') as JsonObject;
+      const length = typeof parsed.length === 'number' ? parsed.length : -1;
+      lengths.push(length);
+    } catch {
+      return { text: decoded, attachments: [] };
+    }
+  }
+
+  const encoder = new TextEncoder();
+  const tailStart = encoder.encode(normalized.slice(0, sentinelIndex + sentinelNeedle.length)).length;
+  const tailBytes = bytes.slice(tailStart);
+
+  let offset = 0;
+  for (let i = 0; i < parsedAttachments.length; i += 1) {
+    const declared = lengths[i] ?? -1;
+    const length = declared >= 0
+      ? declared
+      : i === parsedAttachments.length - 1
+        ? tailBytes.length - offset
+        : 0;
+    parsedAttachments[i].bytes = tailBytes.slice(offset, offset + length);
+    offset += length;
+  }
+
+  return {
+    text: normalized.slice(0, directiveStart),
+    attachments: parsedAttachments,
+  };
 }
 
 function serializeSection(section: VisualSection, level: number): string {
@@ -1048,6 +1142,10 @@ function serializeBlockSchema(
     if (schema.tableRows.length > 0) {
       payload.tableRows = schema.tableRows.map((row) => serializeTableRow(row));
     }
+  }
+  if (component === 'image') {
+    addIfChanged(payload, 'imageFile', schema.imageFile, defaults.imageFile);
+    addIfChanged(payload, 'imageAlt', schema.imageAlt, defaults.imageAlt);
   }
 
   return payload;

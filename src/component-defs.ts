@@ -27,9 +27,9 @@ export function getReusableNameFromSectionKey(sectionKey: string): string | null
 }
 
 export function getComponentOptions(): string[] {
-  const builtins = ['text', 'quote', 'code', 'expandable', 'container', 'component-list', 'grid', 'plugin', 'xref-card'];
+  const builtins = ['text', 'quote', 'code', 'image', 'expandable', 'container', 'component-list', 'grid', 'plugin', 'xref-card'];
   if (areTablesEnabled()) {
-    builtins.splice(4, 0, 'table');
+    builtins.splice(5, 0, 'table');
   }
   const custom = getComponentDefs()
     .map((def) => def.name.trim())
@@ -42,7 +42,7 @@ export function isBuiltinComponent(componentName: string): boolean {
 }
 
 export function isBuiltinComponentName(componentName: string): boolean {
-  return ['text', 'quote', 'code', 'expandable', 'table', 'container', 'component-list', 'grid', 'plugin', 'xref-card'].includes(componentName);
+  return ['text', 'quote', 'code', 'image', 'expandable', 'table', 'container', 'component-list', 'grid', 'plugin', 'xref-card'].includes(componentName);
 }
 
 export function renderComponentOptions(selected: string): string {

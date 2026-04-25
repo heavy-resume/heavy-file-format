@@ -85,6 +85,7 @@ export function registerSerializationTestState(): void {
         meta: { hvy_version: 0.1 },
         extension: '.hvy',
         sections: [],
+        attachments: [],
       })
     );
   });

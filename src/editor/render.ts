@@ -7,6 +7,7 @@ import { renderComponentListEditor } from './components/component-list';
 import { renderContainerEditor } from './components/container';
 import { renderExpandableEditor } from './components/expandable';
 import { renderGridEditor } from './components/grid';
+import { renderImageEditor } from './components/image';
 import { renderPluginEditor } from './components/plugin';
 import { renderTableEditor } from './components/table';
 import { renderTextEditor } from './components/text';
@@ -592,6 +593,9 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     }
     if (component === 'xref-card') {
       return renderXrefCardEditor(sectionKey, block, helpers);
+    }
+    if (component === 'image') {
+      return renderImageEditor(sectionKey, block, helpers);
     }
     return renderTextEditor(sectionKey, block, helpers);
   }

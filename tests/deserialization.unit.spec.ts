@@ -137,7 +137,7 @@ plugins:
 #! Data
 
 <!--hvy:plugin {"plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->
-<!--hvy:tail {"plugin":"dev.heavy.db-table","mediaType":"application/vnd.sqlite3","encoding":"gzip"}-->
+<!--hvy:tail {"id":"db","plugin":"dev.heavy.db-table","mediaType":"application/vnd.sqlite3","encoding":"gzip","length":7}-->
 --HVY-TAIL--
 `;
   const prefixBytes = new TextEncoder().encode(prefix);
@@ -148,12 +148,14 @@ plugins:
 
   const document = deserializeDocumentBytes(bytes, '.hvy');
 
-  expect(document.attachmentTail?.meta).toEqual({
+  expect(document.attachments).toHaveLength(1);
+  expect(document.attachments[0]?.id).toBe('db');
+  expect(document.attachments[0]?.meta).toEqual({
     plugin: 'dev.heavy.db-table',
     mediaType: 'application/vnd.sqlite3',
     encoding: 'gzip',
   });
-  expect(Array.from(document.attachmentTail?.bytes ?? [])).toEqual([31, 139, 8, 0, 83, 81, 76]);
+  expect(Array.from(document.attachments[0]?.bytes ?? [])).toEqual([31, 139, 8, 0, 83, 81, 76]);
 });
 
 test('deserializes section_defaults from document front matter', () => {

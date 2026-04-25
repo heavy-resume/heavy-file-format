@@ -3,6 +3,7 @@ import { renderComponentListReader } from '../editor/components/component-list';
 import { renderContainerReader } from '../editor/components/container';
 import { renderExpandableReader } from '../editor/components/expandable';
 import { renderGridReader } from '../editor/components/grid';
+import { renderImageReader } from '../editor/components/image';
 import { renderPluginReader } from '../editor/components/plugin';
 import { renderTableReader, resetReaderTableStripeSequence } from '../editor/components/table';
 import { renderTextReader } from '../editor/components/text';
@@ -200,6 +201,9 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     }
     if (base === 'xref-card') {
       return `<div ${blockAttrs}>${renderXrefCardReader(section, block, helpers)}</div>`;
+    }
+    if (base === 'image') {
+      return `<div ${blockAttrs}>${renderImageReader(section, block, helpers)}</div>`;
     }
     return `<div ${blockAttrs}>${renderTextReader(section, block, helpers)}</div>`;
   }

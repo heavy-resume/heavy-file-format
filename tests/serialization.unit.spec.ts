@@ -201,23 +201,27 @@ hvy_version: 0.1
 <!--hvy:plugin {"plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->
 `, '.hvy');
 
-  document.attachmentTail = {
-    meta: {
-      plugin: 'dev.heavy.db-table',
-      mediaType: 'application/vnd.sqlite3',
-      encoding: 'gzip',
+  document.attachments = [
+    {
+      id: 'db',
+      meta: {
+        plugin: 'dev.heavy.db-table',
+        mediaType: 'application/vnd.sqlite3',
+        encoding: 'gzip',
+      },
+      bytes: new Uint8Array([31, 139, 8, 0, 72, 86, 89]),
     },
-    bytes: new Uint8Array([31, 139, 8, 0, 72, 86, 89]),
-  };
+  ];
 
   const serializedText = serializeWithState(document);
   const serializedBytes = serializeDocumentBytes(document);
-  const serializedPrefix = new TextDecoder().decode(serializedBytes.slice(0, serializedBytes.length - document.attachmentTail.bytes.length));
+  const tailLength = document.attachments[0].bytes.length;
+  const serializedPrefix = new TextDecoder().decode(serializedBytes.slice(0, serializedBytes.length - tailLength));
 
-  expect(serializedText).toContain('<!--hvy:tail {"plugin":"dev.heavy.db-table","mediaType":"application/vnd.sqlite3","encoding":"gzip"}-->');
+  expect(serializedText).toContain('<!--hvy:tail {"id":"db","plugin":"dev.heavy.db-table","mediaType":"application/vnd.sqlite3","encoding":"gzip","length":7}-->');
   expect(serializedText).toContain(HVY_TAIL_SENTINEL);
   expect(serializedPrefix).toContain(HVY_TAIL_SENTINEL);
-  expect(Array.from(serializedBytes.slice(-document.attachmentTail.bytes.length))).toEqual([31, 139, 8, 0, 72, 86, 89]);
+  expect(Array.from(serializedBytes.slice(-tailLength))).toEqual([31, 139, 8, 0, 72, 86, 89]);
 });
 
 test('preserves section_defaults in document front matter on round-trip', () => {
@@ -438,4 +442,99 @@ test('serialize -> deserialize -> serialize stays stable for migrated examples',
       normalizeSerialized(firstSerialized)
     );
   }
+});
+
+test('image component round-trips imageFile and imageAlt schema fields', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"cover"}-->
+#! Cover
+
+<!--hvy:image {"imageFile":"hero.png","imageAlt":"Cover photo","css":"margin: 0.5rem auto; display: block;"}-->
+`, '.hvy');
+
+  const block = document.sections[0]?.blocks[0];
+  expect(block?.schema.component).toBe('image');
+  expect(block?.schema.imageFile).toBe('hero.png');
+  expect(block?.schema.imageAlt).toBe('Cover photo');
+
+  const output = serializeWithState(document);
+  expect(output).toContain('<!--hvy:image {');
+  expect(output).toContain('"imageFile":"hero.png"');
+  expect(output).toContain('"imageAlt":"Cover photo"');
+});
+
+test('serializes and parses multiple tail attachments with byte slicing', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"data"}-->
+#! Data
+
+<!--hvy:image {"imageFile":"a.png"}-->
+`, '.hvy');
+
+  document.attachments = [
+    {
+      id: 'db',
+      meta: { plugin: 'dev.heavy.db-table', mediaType: 'application/vnd.sqlite3', encoding: 'gzip' },
+      bytes: new Uint8Array([1, 2, 3, 4]),
+    },
+    {
+      id: 'image:a.png',
+      meta: { mediaType: 'image/png' },
+      bytes: new Uint8Array([10, 20, 30]),
+    },
+  ];
+
+  const serializedBytes = serializeDocumentBytes(document);
+  const serializedText = new TextDecoder().decode(serializedBytes);
+  expect(serializedText).toContain('"id":"db"');
+  expect(serializedText).toContain('"length":4');
+  expect(serializedText).toContain('"id":"image:a.png"');
+  expect(serializedText).toContain('"length":3');
+  expect(serializedText).toContain(HVY_TAIL_SENTINEL);
+
+  // Bytes after sentinel should equal concatenation of the two attachments.
+  const sentinelMarker = `\n${HVY_TAIL_SENTINEL}\n`;
+  const sentinelIndex = serializedText.lastIndexOf(sentinelMarker);
+  const tailStart = new TextEncoder().encode(serializedText.slice(0, sentinelIndex + sentinelMarker.length)).length;
+  expect(Array.from(serializedBytes.slice(tailStart))).toEqual([1, 2, 3, 4, 10, 20, 30]);
+});
+
+test('round-trips multiple tail attachments through serialize -> bytes -> deserialize', async () => {
+  const { deserializeDocumentBytesWithDiagnostics } = await import('../src/serialization');
+
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"data"}-->
+#! Data
+`, '.hvy');
+
+  document.attachments = [
+    {
+      id: 'db',
+      meta: { mediaType: 'application/octet-stream' },
+      bytes: new Uint8Array([1, 2, 3, 4]),
+    },
+    {
+      id: 'image:a.png',
+      meta: { mediaType: 'image/png' },
+      bytes: new Uint8Array([10, 20, 30]),
+    },
+  ];
+
+  const bytes = serializeDocumentBytes(document);
+  const result = deserializeDocumentBytesWithDiagnostics(bytes, '.hvy');
+
+  expect(result.document.attachments).toHaveLength(2);
+  expect(result.document.attachments[0].id).toBe('db');
+  expect(Array.from(result.document.attachments[0].bytes)).toEqual([1, 2, 3, 4]);
+  expect(result.document.attachments[1].id).toBe('image:a.png');
+  expect(Array.from(result.document.attachments[1].bytes)).toEqual([10, 20, 30]);
 });

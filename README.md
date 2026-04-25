@@ -39,9 +39,12 @@ Use of JSON and Markdown make it easy for LLMs to parse.
 - [X] Color scheme editor and cleanup
 - [X] AI-based answering questions
 - [X] AI-based editing
-- [ ] Embedded and attached database runtime
+- [X] Embedded / attached database runtime
 - [X] Plugin block schema and DB table tail spec draft
+- [ ] Image component
 - [ ] Plugin execution/runtime
+- [ ] Sandboxed scripting component (throttled, max lines)
+- [ ] Form component
 
 ## Draft Spec
 

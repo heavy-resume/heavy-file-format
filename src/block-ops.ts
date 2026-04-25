@@ -4,7 +4,7 @@ import type { TagRenderOptions } from './editor/tag-editor';
 import { parseTags, serializeTags } from './editor/tag-editor';
 import { state, getRefreshReaderPanels, getRenderApp } from './state';
 import { getReusableNameFromSectionKey, getComponentDefs, renderComponentOptions } from './component-defs';
-import { findSectionByKey, findBlockContainerById } from './section-ops';
+import { findSectionByKey, findBlockContainerById, moveBlockInVisualSequence } from './section-ops';
 import { getReusableTemplateByName, ensureContainerBlocks, ensureComponentListBlocks, ensureGridItems, applyComponentDefaults, instantiateReusableBlock, coerceAlign, coerceSlot } from './document-factory';
 import { syncReusableTemplateForBlock } from './reusable';
 import { normalizeXrefTarget, getXrefTargetOptions, isXrefTargetValid } from './xref-ops';
@@ -14,8 +14,14 @@ import { normalizeMarkdownLists, markdownToEditorHtml, turndown } from './markdo
 import { escapeAttr, escapeHtml, getInlineEditableText, renderOption } from './utils';
 import { recordHistory } from './history';
 import { getDocumentComponentDefaultCss } from './document-component-defaults';
+import { DB_TABLE_PLUGIN_ID, isDbTablePluginId } from './plugins/registry';
+import { resetDbTableViewState } from './plugins/db-table';
 
 export function findBlockByIds(sectionKey: string, blockId: string): VisualBlock | null {
+  const sqliteRowComponentBlock = findSqliteRowComponentBlock(sectionKey, blockId);
+  if (sqliteRowComponentBlock) {
+    return sqliteRowComponentBlock;
+  }
   const reusableName = getReusableNameFromSectionKey(sectionKey);
   if (reusableName) {
     const template = getReusableTemplateByName(reusableName);
@@ -26,6 +32,14 @@ export function findBlockByIds(sectionKey: string, blockId: string): VisualBlock
     return null;
   }
   return findBlockInList(section.blocks, blockId);
+}
+
+function findSqliteRowComponentBlock(sectionKey: string, blockId: string): VisualBlock | null {
+  const modal = state.sqliteRowComponentModal;
+  if (!modal || modal.sectionKey !== sectionKey) {
+    return null;
+  }
+  return findBlockInList(modal.blocks, blockId);
 }
 
 export function findBlockInList(blocks: VisualBlock[], blockId: string): VisualBlock | null {
@@ -157,8 +171,38 @@ export function handleBlockFieldInput(target: HTMLElement): boolean {
     return true;
   }
 
-  if (field === 'block-plugin-url' && target instanceof HTMLInputElement) {
-    block.schema.pluginUrl = target.value;
+  if (field === 'block-plugin' && target instanceof HTMLSelectElement) {
+    if (block.schema.plugin.trim().length > 0) {
+      return true;
+    }
+    block.schema.plugin = target.value;
+    if (isDbTablePluginId(target.value) || target.value === DB_TABLE_PLUGIN_ID) {
+      block.schema.plugin = DB_TABLE_PLUGIN_ID;
+      block.schema.pluginConfig = {
+        ...block.schema.pluginConfig,
+        source: 'with-file',
+      };
+    }
+    syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
+    getRefreshReaderPanels()();
+    return true;
+  }
+
+  if (field === 'block-plugin-db-table' && target instanceof HTMLInputElement) {
+    block.schema.pluginConfig = {
+      ...block.schema.pluginConfig,
+      source: 'with-file',
+      table: target.value,
+    };
+    resetDbTableViewState(target.dataset.sectionKey ?? '', block.id);
+    syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
+    getRefreshReaderPanels()();
+    return true;
+  }
+
+  if (field === 'block-plugin-query' && target instanceof HTMLTextAreaElement) {
+    block.text = target.value;
+    resetDbTableViewState(target.dataset.sectionKey ?? '', block.id);
     syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
     getRefreshReaderPanels()();
     return true;
@@ -603,6 +647,15 @@ export function moveBlockByOffset(sectionKey: string, blockId: string, offset: -
   const location = findBlockContainerById(state.document.sections, sectionKey, blockId);
   if (!location) {
     return false;
+  }
+  if (location.ownerBlockId === null) {
+    // Section-level block: walk the interleaved blocks/subsections sequence so
+    // arrows can swap with adjacent subsections by repositioning their anchors.
+    const ok = moveBlockInVisualSequence(state.document.sections, sectionKey, blockId, offset);
+    if (ok) {
+      syncReusableTemplateForBlock(sectionKey, blockId);
+    }
+    return ok;
   }
   const targetIndex = location.index + offset;
   if (targetIndex < 0 || targetIndex >= location.container.length) {

@@ -1,5 +1,6 @@
 import bundledResumeThvy from '../examples/resume.thvy?raw';
 import bundledResumeHvy from '../examples/resume.hvy?raw';
+import bundledCrmHvy from '../examples/crm.hvy?raw';
 import {
   state, appEventsBound, shortcutsBound,
   setAppEventsBound, setShortcutsBound,
@@ -31,23 +32,38 @@ import { recordHistory, undoState, redoState } from './history';
 import { navigateToSection, setSidebarOpen, setEditorSidebarOpen, closeModal, closeModalIfTarget, resetTransientUiState, resetToBlankDocument } from './navigation';
 import {
   deserializeDocument,
+  deserializeDocumentBytes,
   deserializeDocumentWithDiagnostics,
   getHvyDiagnosticUsageHint,
   serializeDocument,
+  serializeDocumentBytes,
 } from './serialization';
 import { syncReusableTemplateForBlock, revertReusableComponent, findReusableOwner } from './reusable';
 import { addTableColumn, removeTableColumn, getTableColumns, moveTableColumn, moveTableRow } from './table-ops';
 import { createGridItem } from './grid-ops';
-import { detectExtension, normalizeFilename, downloadTextFile, sanitizeOptionalId, moveItem } from './utils';
-import { moveSectionRelative, moveSectionByOffset, removeSectionByKey, findBlockContainerById } from './section-ops';
+import { detectExtension, normalizeFilename, downloadBinaryFile, sanitizeOptionalId, moveItem } from './utils';
+import { moveSectionRelative, moveSectionByOffset, removeSectionByKey, findBlockContainerById, findBlockContainerInList, makeBlockSubsection, removeSubsection } from './section-ops';
 import { bindModal } from './bind-modal';
 import { bindLinkInlineModal, openLinkInlineModal } from './bind-link-modal';
 import { removeBlockFromList, findBlockInList } from './block-ops';
 import { getReusableTemplateByName } from './document-factory';
 import { clearChatConversation, getDefaultModelForProvider, persistChatSettings } from './chat';
-import { appendUserChatMessage, requestChatTurn, requestDocumentEditChatTurn } from './chat-session';
+import { appendUserChatMessage, copyChatMessageToHvySection, requestChatTurn, requestDocumentEditChatTurn } from './chat-session';
 import type { RawEditorDiagnostic } from './types';
 import { requestAiComponentEdit } from './ai-edit';
+import { areTablesEnabled } from './reference-config';
+import {
+  addDbTableColumn,
+  addDbTableRow,
+  getSqliteRowComponent,
+  handleDbTableFrameScroll,
+  materializeDbTableDraftRow,
+  parseAttachedComponentBlocks,
+  renameDbTableColumn,
+  restoreDbTableFrameScroll,
+  toggleDbTableSort,
+  updateDbTableCell,
+} from './plugins/db-table';
 
 let lastBoundChatMessageCount = -1;
 
@@ -79,6 +95,20 @@ export function bindUi(app: HTMLElement): void {
 
   newBtn.addEventListener('click', () => {
     resetToBlankDocument();
+  });
+
+  const crmExampleBtn = app.querySelector<HTMLButtonElement>('#crmExampleBtn');
+  crmExampleBtn?.addEventListener('click', () => {
+    state.document = deserializeDocument(bundledCrmHvy, '.hvy');
+    state.rawEditorText = serializeDocument(state.document);
+    state.rawEditorError = null;
+    state.rawEditorDiagnostics = [];
+    state.filename = 'crm.hvy';
+    state.history = [];
+    state.future = [];
+    clearChatConversation(state.chat);
+    resetTransientUiState();
+    getRenderApp()();
   });
 
   const resumeTemplateBtn = app.querySelector<HTMLButtonElement>('#resumeTemplateBtn');
@@ -114,9 +144,10 @@ export function bindUi(app: HTMLElement): void {
     if (!file) {
       return;
     }
-    const text = await file.text();
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const text = new TextDecoder().decode(bytes);
     state.filename = file.name;
-    state.document = deserializeDocument(text, detectExtension(file.name, text));
+    state.document = deserializeDocumentBytes(bytes, detectExtension(file.name, text));
     state.rawEditorText = serializeDocument(state.document);
     state.rawEditorError = null;
     state.rawEditorDiagnostics = [];
@@ -133,12 +164,24 @@ export function bindUi(app: HTMLElement): void {
   downloadBtn.addEventListener('click', () => {
     const normalized = normalizeFilename(state.filename || 'document.hvy');
     state.filename = normalized;
-    const text = serializeDocument(state.document);
-    downloadTextFile(normalized, text);
+    const bytes = serializeDocumentBytes(state.document);
+    downloadBinaryFile(normalized, bytes);
     getRenderApp()();
   });
 
   if (!appEventsBound) {
+    app.addEventListener('scroll', (event) => {
+      const target = event.target as HTMLElement | null;
+      const frame = target?.closest<HTMLElement>('[data-db-table-frame="true"]');
+      if (!frame) {
+        return;
+      }
+      if (!handleDbTableFrameScroll(frame)) {
+        return;
+      }
+      getRenderApp()();
+    }, true);
+
     app.addEventListener('input', (event) => {
     const target = event.target as HTMLElement;
     const field = target.dataset.field;
@@ -321,6 +364,10 @@ export function bindUi(app: HTMLElement): void {
     }
 
     if (field === 'row-details-new-component-type' && target instanceof HTMLSelectElement) {
+      const key = target.dataset.rowDetailsKey;
+      if (key) {
+        state.addComponentBySection[key] = target.value;
+      }
       return;
     }
 
@@ -362,6 +409,69 @@ export function bindUi(app: HTMLElement): void {
       state.rawEditorError = null;
       state.rawEditorDiagnostics = getRawEditorDiagnostics(target.value, state.filename);
       return;
+    }
+  });
+
+  app.addEventListener('change', (event) => {
+    const target = event.target as HTMLElement;
+    const field = target.dataset.field;
+    if (!field) {
+      return;
+    }
+
+    if (field === 'sqlite-cell' && target instanceof HTMLInputElement) {
+      const tableName = target.dataset.tableName ?? '';
+      const columnName = target.dataset.columnName ?? '';
+      const rowId = Number.parseInt(target.dataset.rowid ?? '', 10);
+      const isDraftRow = target.dataset.sqliteDraftRow === 'true';
+      if (tableName.length === 0 || columnName.length === 0) {
+        return;
+      }
+      if (isDraftRow) {
+        if (target.value.length === 0) {
+          return;
+        }
+        recordHistory(`sqlite-draft-row:${tableName}:${columnName}`);
+        void materializeDbTableDraftRow(tableName, columnName, target.value)
+          .then(() => {
+            getRenderApp()();
+          })
+          .catch((error) => {
+            console.error('[hvy:sqlite-plugin] draft row materialization failed', error);
+          });
+        return;
+      }
+      if (Number.isNaN(rowId)) {
+        return;
+      }
+      recordHistory(`sqlite-cell:${tableName}:${rowId}:${columnName}`);
+      void updateDbTableCell(tableName, rowId, columnName, target.value)
+        .catch((error) => {
+          console.error('[hvy:sqlite-plugin] cell update failed', error);
+        });
+      return;
+    }
+
+    if (field === 'sqlite-column-name' && target instanceof HTMLInputElement) {
+      const tableName = target.dataset.tableName ?? '';
+      const oldColumnName = target.dataset.oldColumnName ?? '';
+      if (tableName.length === 0 || oldColumnName.length === 0) {
+        return;
+      }
+      recordHistory(`sqlite-column:${tableName}:${oldColumnName}`);
+      void renameDbTableColumn(tableName, oldColumnName, target.value)
+        .then(() => {
+          const nextColumnName = target.value.trim();
+          if (nextColumnName.length === 0) {
+            return;
+          }
+          target.dataset.oldColumnName = nextColumnName;
+          syncSqliteColumnNameInDom(tableName, oldColumnName, nextColumnName, app);
+        })
+        .catch((error) => {
+          console.error('[hvy:sqlite-plugin] column rename failed', error);
+          getRenderApp()();
+        });
     }
   });
 
@@ -444,10 +554,17 @@ export function bindUi(app: HTMLElement): void {
       }
       try {
         recordHistory('raw-editor:apply');
+        const previousTail = state.document.attachmentTail;
         state.document = deserializeDocument(
           state.rawEditorText,
           detectExtension(state.filename, state.rawEditorText)
         );
+        if (previousTail && state.document.attachmentTail && state.document.attachmentTail.bytes.length === 0) {
+          state.document.attachmentTail = {
+            meta: state.document.attachmentTail.meta,
+            bytes: previousTail.bytes,
+          };
+        }
         state.rawEditorText = serializeDocument(state.document);
         state.rawEditorError = null;
         state.rawEditorDiagnostics = [];
@@ -526,6 +643,27 @@ export function bindUi(app: HTMLElement): void {
 
     if (action === 'toggle-chat-panel') {
       state.chat.panelOpen = !state.chat.panelOpen;
+      getRenderApp()();
+      return;
+    }
+
+    if (action === 'copy-chat-response-to-hvy') {
+      const messageId = actionButton?.dataset.messageId ?? '';
+      const result = copyChatMessageToHvySection({
+        messages: state.chat.messages,
+        messageId,
+      });
+      if (!result.ok) {
+        state.chat.error = result.error;
+        getRenderApp()();
+        return;
+      }
+      recordHistory('chat:copy-to-hvy');
+      state.document.sections.push(result.section);
+      state.rawEditorText = serializeDocument(state.document);
+      state.rawEditorError = null;
+      state.rawEditorDiagnostics = [];
+      state.chat.error = null;
       getRenderApp()();
       return;
     }
@@ -946,27 +1084,6 @@ export function bindUi(app: HTMLElement): void {
       return;
     }
 
-    if (action === 'add-subsection') {
-      if (!section || section.lock) {
-        return;
-      }
-      recordHistory();
-      const starter = state.addComponentBySection[`subsection:${section.key}`] ?? 'blank';
-      const child =
-        starter === 'blank' ? createEmptySection(Math.min(section.level + 1, 6), '', false) : instantiateReusableSection(starter, Math.min(section.level + 1, 6));
-      if (!child) {
-        return;
-      }
-      section.children.push(child);
-      if (child.blocks[0]) {
-        setActiveEditorBlock(child.key, child.blocks[0].id);
-      } else {
-        state.activeEditorSectionTitleKey = child.key;
-        state.clearSectionTitleOnFocusKey = isDefaultUntitledSectionTitle(child.title) ? child.key : null;
-      }
-      getRenderApp()();
-      return;
-    }
 
     if (action === 'toggle-section-location') {
       if (!section) {
@@ -974,6 +1091,24 @@ export function bindUi(app: HTMLElement): void {
       }
       recordHistory();
       section.location = section.location === 'sidebar' ? 'main' : 'sidebar';
+      getRenderApp()();
+      return;
+    }
+
+    if (action === 'remove-subsection') {
+      if (!section) {
+        return;
+      }
+      recordHistory();
+      if (!removeSubsection(state.document.sections, sectionKey)) {
+        return;
+      }
+      if (state.activeEditorSectionTitleKey === sectionKey) {
+        state.activeEditorSectionTitleKey = null;
+      }
+      if (state.activeEditorBlock?.sectionKey === sectionKey) {
+        state.activeEditorBlock = null;
+      }
       getRenderApp()();
       return;
     }
@@ -1132,8 +1267,54 @@ export function bindUi(app: HTMLElement): void {
       return;
     }
 
+    if (action === 'make-block-subsection' && blockId) {
+      if (!section || section.lock) {
+        return;
+      }
+      recordHistory();
+      const newSub = makeBlockSubsection(state.document.sections, sectionKey, blockId);
+      if (!newSub) {
+        return;
+      }
+      const movedBlock = newSub.blocks[0];
+      if (movedBlock) {
+        setActiveEditorBlock(newSub.key, movedBlock.id);
+      }
+      getRenderApp()();
+      return;
+    }
+
+
     if (action === 'remove-block' && blockId) {
       recordHistory();
+      const sqliteRowModal = state.sqliteRowComponentModal;
+      if (sqliteRowModal?.sectionKey === sectionKey) {
+        const activeBlockId = state.activeEditorBlock?.sectionKey === sectionKey
+          ? (state.activeEditorBlock?.blockId ?? null)
+          : null;
+        const removedBlock = activeBlockId ? findBlockByIds(sectionKey, blockId) : null;
+        const activeIsAffected = activeBlockId !== null && (
+          activeBlockId === blockId ||
+          (removedBlock !== null && findBlockInList([removedBlock], activeBlockId) !== null)
+        );
+        const parentId = activeIsAffected
+          ? findBlockContainerInList(sqliteRowModal.blocks, blockId, null)?.ownerBlockId ?? null
+          : null;
+        removeBlockFromList(sqliteRowModal.blocks, blockId);
+        if (activeIsAffected && activeBlockId) {
+          clearActiveEditorBlock(activeBlockId);
+        }
+        if (parentId) {
+          setActiveEditorBlock(sectionKey, parentId);
+        }
+        state.sqliteRowComponentModal = {
+          ...sqliteRowModal,
+          blocks: [...sqliteRowModal.blocks],
+          error: null,
+        };
+        getRenderApp()();
+        return;
+      }
       const reusableOwnerId = findReusableOwner(sectionKey, blockId)?.id ?? null;
       // Find parent before removal so we can restore edit mode if the deleted block
       // was the active one OR contained the active one (otherwise deletion would
@@ -1170,6 +1351,28 @@ export function bindUi(app: HTMLElement): void {
 
     if (action === 'move-block-up' && blockId) {
       recordHistory();
+      const sqliteRowModal = state.sqliteRowComponentModal;
+      if (sqliteRowModal?.sectionKey === sectionKey) {
+        const location = findBlockContainerInList(sqliteRowModal.blocks, blockId, null);
+        if (!location) {
+          return;
+        }
+        const targetIndex = location.index - 1;
+        if (targetIndex < 0) {
+          return;
+        }
+        const [movedBlock] = location.container.splice(location.index, 1);
+        if (!movedBlock) {
+          return;
+        }
+        location.container.splice(targetIndex, 0, movedBlock);
+        state.sqliteRowComponentModal = {
+          ...sqliteRowModal,
+          blocks: [...sqliteRowModal.blocks],
+        };
+        getRenderApp()();
+        return;
+      }
       if (moveBlockByOffset(sectionKey, blockId, -1)) {
         getRenderApp()();
       }
@@ -1178,6 +1381,28 @@ export function bindUi(app: HTMLElement): void {
 
     if (action === 'move-block-down' && blockId) {
       recordHistory();
+      const sqliteRowModal = state.sqliteRowComponentModal;
+      if (sqliteRowModal?.sectionKey === sectionKey) {
+        const location = findBlockContainerInList(sqliteRowModal.blocks, blockId, null);
+        if (!location) {
+          return;
+        }
+        const targetIndex = location.index + 1;
+        if (targetIndex >= location.container.length) {
+          return;
+        }
+        const [movedBlock] = location.container.splice(location.index, 1);
+        if (!movedBlock) {
+          return;
+        }
+        location.container.splice(targetIndex, 0, movedBlock);
+        state.sqliteRowComponentModal = {
+          ...sqliteRowModal,
+          blocks: [...sqliteRowModal.blocks],
+        };
+        getRenderApp()();
+        return;
+      }
       if (moveBlockByOffset(sectionKey, blockId, 1)) {
         getRenderApp()();
       }
@@ -1185,6 +1410,9 @@ export function bindUi(app: HTMLElement): void {
     }
 
     if (action === 'add-table-row' && blockId) {
+      if (!areTablesEnabled()) {
+        return;
+      }
       recordHistory();
       const block = resolveBlockContext(actionButton)?.block ?? findBlockByIds(sectionKey, blockId);
       if (!block) {
@@ -1198,7 +1426,149 @@ export function bindUi(app: HTMLElement): void {
       return;
     }
 
+    if (action === 'sqlite-add-row') {
+      const tableName = actionButton.dataset.tableName ?? '';
+      if (tableName.length === 0) {
+        return;
+      }
+      recordHistory(`sqlite-add-row:${tableName}`);
+      void addDbTableRow(tableName)
+        .then(() => {
+          getRenderApp()();
+        })
+        .catch((error) => {
+          console.error('[hvy:sqlite-plugin] add row failed', error);
+        });
+      return;
+    }
+
+    if (action === 'sqlite-add-column') {
+      const tableName = actionButton.dataset.tableName ?? '';
+      if (tableName.length === 0) {
+        return;
+      }
+      recordHistory(`sqlite-add-column:${tableName}`);
+      void addDbTableColumn(tableName)
+        .then(() => {
+          getRenderApp()();
+        })
+        .catch((error) => {
+          console.error('[hvy:sqlite-plugin] add column failed', error);
+        });
+      return;
+    }
+
+    if (action === 'db-table-open-query-editor') {
+      const targetSectionKey = sectionKey ?? '';
+      const targetBlockId = blockId ?? '';
+      if (targetSectionKey.length === 0 || targetBlockId.length === 0) {
+        return;
+      }
+      const block = findBlockByIds(targetSectionKey, targetBlockId);
+      if (!block) {
+        return;
+      }
+      const pluginConfig = block.schema.pluginConfig ?? {};
+      const tableName = typeof pluginConfig.table === 'string' ? pluginConfig.table : '';
+      const dynamicWindow = typeof pluginConfig.queryDynamicWindow === 'boolean' ? pluginConfig.queryDynamicWindow : true;
+      const rawLimit = typeof pluginConfig.queryLimit === 'number'
+        ? pluginConfig.queryLimit
+        : typeof pluginConfig.queryLimit === 'string'
+          ? Number.parseInt(pluginConfig.queryLimit, 10)
+          : NaN;
+      state.dbTableQueryModal = {
+        sectionKey: targetSectionKey,
+        blockId: targetBlockId,
+        tableName,
+        draftQuery: block.text,
+        dynamicWindow,
+        queryLimit: Number.isFinite(rawLimit) ? Math.max(1, Math.min(Math.floor(rawLimit), 99)) : 50,
+        error: null,
+      };
+      getRenderApp()();
+      return;
+    }
+
+    if (action === 'db-table-toggle-sort') {
+      const targetSectionKey = sectionKey ?? '';
+      const targetBlockId = blockId ?? '';
+      const columnName = actionButton.dataset.columnName ?? '';
+      if (targetSectionKey.length === 0 || targetBlockId.length === 0 || columnName.length === 0) {
+        return;
+      }
+      toggleDbTableSort(targetSectionKey, targetBlockId, columnName);
+      getRenderApp()();
+      return;
+    }
+
+    if (action === 'sqlite-open-row-component-editor' || action === 'sqlite-open-row-component-view') {
+      const targetSectionKey = sectionKey ?? '';
+      const targetBlockId = blockId ?? '';
+      const tableName = actionButton.dataset.tableName ?? '';
+      const rowId = Number.parseInt(actionButton.dataset.rowid ?? '', 10);
+      if (tableName.length === 0 || Number.isNaN(rowId) || targetBlockId.length === 0 || targetSectionKey.length === 0) {
+        return;
+      }
+      if (action === 'sqlite-open-row-component-view' && state.currentView === 'editor') {
+        setActiveEditorBlock(targetSectionKey, targetBlockId);
+        getRenderApp()();
+        return;
+      }
+
+      void getSqliteRowComponent(tableName, rowId)
+        .then((fragment) => {
+          const modalBlocks = fragment ? parseAttachedComponentBlocks(fragment) : [];
+          const rawDraft = fragment ?? '';
+          const modalState = {
+            sectionKey: targetSectionKey,
+            blockId: targetBlockId,
+            tableName,
+            rowId,
+            blocks: modalBlocks,
+            error: null,
+            readOnly: action === 'sqlite-open-row-component-view',
+            previousActiveEditorBlock: state.activeEditorBlock ? { ...state.activeEditorBlock } : null,
+            mode: state.editorMode,
+            rawDraft,
+          };
+          state.sqliteRowComponentModal = modalState;
+          if (!modalState.readOnly && modalBlocks[0]) {
+            state.activeEditorBlock = {
+              sectionKey: targetSectionKey,
+              blockId: modalBlocks[0].id,
+            };
+          }
+          getRenderApp()();
+        })
+        .catch((error) => {
+          console.error('[hvy:sqlite-plugin] load row component failed', error);
+        });
+      return;
+    }
+
+    if (action === 'sqlite-row-component-add-block') {
+      const modal = state.sqliteRowComponentModal;
+      if (!modal || modal.readOnly) {
+        return;
+      }
+      recordHistory(`sqlite-row-component-add:${modal.tableName}:${modal.rowId}`);
+      const addKey = `sqlite-row-component:${modal.sectionKey}:${modal.rowId}`;
+      const component = (state.addComponentBySection[addKey] ?? 'text').trim() || 'text';
+      const newBlock = createEmptyBlock(component);
+      state.sqliteRowComponentModal = {
+        ...modal,
+        blocks: [...modal.blocks, newBlock],
+        error: null,
+      };
+      setActiveEditorBlock(modal.sectionKey, newBlock.id);
+      getRenderApp()();
+      return;
+    }
+
     if (action === 'add-table-column' && blockId) {
+      if (!areTablesEnabled()) {
+        return;
+      }
       recordHistory();
       const block = findBlockByIds(sectionKey, blockId);
       if (!block || block.schema.lock) {
@@ -1211,6 +1581,9 @@ export function bindUi(app: HTMLElement): void {
     }
 
     if (action === 'remove-table-column' && blockId) {
+      if (!areTablesEnabled()) {
+        return;
+      }
       recordHistory();
       const columnIndex = Number.parseInt(actionButton.dataset.columnIndex ?? '', 10);
       const block = findBlockByIds(sectionKey, blockId);
@@ -1224,6 +1597,9 @@ export function bindUi(app: HTMLElement): void {
     }
 
     if (action === 'remove-table-row' && blockId) {
+      if (!areTablesEnabled()) {
+        return;
+      }
       recordHistory();
       const rowIndex = Number.parseInt(actionButton.dataset.rowIndex ?? '', 10);
       const block = findBlockByIds(sectionKey, blockId);
@@ -1828,6 +2204,62 @@ export function bindUi(app: HTMLElement): void {
     closeAiEditPopover();
     getRenderApp()();
   });
+
+  app.addEventListener('mousedown', (event) => {
+    if (event.button !== 0) {
+      return;
+    }
+    const target = event.target as HTMLElement | null;
+    const head = target?.closest<HTMLElement>('.ai-edit-popover-head');
+    if (!head) {
+      return;
+    }
+    if (target?.closest('button, input, select, textarea, a')) {
+      return;
+    }
+    const popover = head.closest<HTMLElement>('.ai-edit-popover');
+    if (!popover) {
+      return;
+    }
+
+    event.preventDefault();
+    const startClientX = event.clientX;
+    const startClientY = event.clientY;
+    const startPopupX = state.aiEdit.popupX;
+    const startPopupY = state.aiEdit.popupY;
+
+    const clamp = (x: number, y: number): { x: number; y: number } => {
+      const maxX = Math.max(0, window.innerWidth - popover.offsetWidth);
+      const maxY = Math.max(0, window.innerHeight - popover.offsetHeight);
+      return {
+        x: Math.min(Math.max(x, 0), maxX),
+        y: Math.min(Math.max(y, 0), maxY),
+      };
+    };
+
+    const onMove = (moveEvent: MouseEvent): void => {
+      const next = clamp(
+        startPopupX + (moveEvent.clientX - startClientX),
+        startPopupY + (moveEvent.clientY - startClientY)
+      );
+      popover.style.left = `${next.x}px`;
+      popover.style.top = `${next.y}px`;
+    };
+
+    const onUp = (upEvent: MouseEvent): void => {
+      const next = clamp(
+        startPopupX + (upEvent.clientX - startClientX),
+        startPopupY + (upEvent.clientY - startClientY)
+      );
+      state.aiEdit.popupX = next.x;
+      state.aiEdit.popupY = next.y;
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  });
   setAppEventsBound(true);
   }
 
@@ -1956,6 +2388,7 @@ export function bindUi(app: HTMLElement): void {
 
   bindModal(app);
   bindLinkInlineModal(app);
+  restoreDbTableFrameScroll(app);
 }
 
 function openAiEditPopover(sectionKey: string, blockId: string, clientX: number, clientY: number): void {
@@ -2040,6 +2473,7 @@ async function submitAiEditRequest(): Promise<void> {
       sectionTitle: section.title,
       block,
       request,
+      onBeforeMutation: () => recordHistory('ai-edit:db-table'),
     });
     if (requestNonce !== state.aiEdit.requestNonce) {
       return;
@@ -2105,6 +2539,27 @@ function bindChatThreadUi(
     updateScrollButton();
     lastBoundChatMessageCount = state.chat.messages.length;
   });
+}
+
+function syncSqliteColumnNameInDom(tableName: string, oldColumnName: string, nextColumnName: string, app: HTMLElement): void {
+  const escapedTableName = CSS.escape(tableName);
+  const escapedOldColumnName = CSS.escape(oldColumnName);
+
+  app
+    .querySelectorAll<HTMLElement>(
+      `[data-table-name="${escapedTableName}"][data-column-name="${escapedOldColumnName}"]`
+    )
+    .forEach((element) => {
+      element.dataset.columnName = nextColumnName;
+    });
+
+  app
+    .querySelectorAll<HTMLElement>(
+      `[data-table-name="${escapedTableName}"][data-old-column-name="${escapedOldColumnName}"]`
+    )
+    .forEach((element) => {
+      element.dataset.oldColumnName = nextColumnName;
+    });
 }
 
 function getRawEditorDiagnostics(source: string, filename: string): RawEditorDiagnostic[] {

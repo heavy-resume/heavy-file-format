@@ -6,6 +6,7 @@ import { getComponentDefs, getSectionDefs, resolveBaseComponent } from './compon
 import { coerceGridColumns, createGridItem as _createGridItem, parseGridItems as _parseGridItems } from './grid-ops';
 import { getTableColumns } from './table-ops';
 import { REUSABLE_SECTION_DEF_PREFIX } from './state';
+import { DB_TABLE_PLUGIN_ID } from './plugins/registry';
 
 export function defaultBlockSchema(component = 'text'): BlockSchema {
   return {
@@ -28,7 +29,8 @@ export function defaultBlockSchema(component = 'text'): BlockSchema {
     xrefTitle: '',
     xrefDetail: '',
     xrefTarget: '',
-    pluginUrl: '',
+    plugin: '',
+    pluginConfig: {},
     expandableStubComponent: 'container',
     expandableContentComponent: 'container',
     expandableStub: '',
@@ -135,7 +137,11 @@ export function schemaFromUnknown(value: unknown): BlockSchema {
     xrefTitle: typeof candidate.xrefTitle === 'string' ? candidate.xrefTitle : defaults.xrefTitle,
     xrefDetail: typeof candidate.xrefDetail === 'string' ? candidate.xrefDetail : defaults.xrefDetail,
     xrefTarget: typeof candidate.xrefTarget === 'string' ? candidate.xrefTarget : defaults.xrefTarget,
-    pluginUrl: typeof candidate.pluginUrl === 'string' ? candidate.pluginUrl : defaults.pluginUrl,
+    plugin: typeof candidate.plugin === 'string' ? candidate.plugin : defaults.plugin,
+    pluginConfig:
+      candidate.pluginConfig && typeof candidate.pluginConfig === 'object' && !Array.isArray(candidate.pluginConfig)
+        ? (candidate.pluginConfig as JsonObject)
+        : defaults.pluginConfig,
     expandableStubComponent:
       typeof candidate.expandableStubComponent === 'string' ? candidate.expandableStubComponent : defaults.expandableStubComponent,
     expandableContentComponent:
@@ -220,6 +226,7 @@ export function createBlankDocument(): VisualDocument {
     },
     extension: '.hvy',
     sections: [],
+    attachmentTail: null,
   };
 }
 
@@ -335,6 +342,13 @@ export function applyComponentDefaults(schema: BlockSchema, componentName: strin
   if (base === 'component-list') {
     schema.componentListComponent = 'text';
     ensureComponentListBlocks({ id: '', text: '', schema, schemaMode: false });
+  }
+  if (base === 'plugin' && schema.plugin.trim().length === 0) {
+    schema.plugin = DB_TABLE_PLUGIN_ID;
+    schema.pluginConfig = {
+      ...schema.pluginConfig,
+      source: 'with-file',
+    };
   }
   if (!def) {
     return;

@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
 
-import { deserializeDocument, serializeBlockFragment, wrapHvyFragmentAsDocument } from '../src/serialization';
+import { deserializeDocument, HVY_TAIL_SENTINEL, serializeBlockFragment, serializeDocumentBytes, wrapHvyFragmentAsDocument } from '../src/serialization';
 import {
   normalizeSerialized,
   registerSerializationTestState,
@@ -123,6 +123,101 @@ reader_max_width: 60rem
   const output = serializeWithState(document);
 
   expect(output).toContain('reader_max_width: 60rem');
+});
+
+test('serializes plugin blocks with plugin identity and config', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+plugins:
+  - id: dev.heavy.db-table
+    source: builtin://db-table
+---
+
+<!--hvy: {"id":"data"}-->
+#! Data
+
+<!--hvy:plugin {"plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->
+`, '.hvy');
+
+  const output = serializeWithState(document);
+
+  expect(output).toContain('<!--hvy:plugin {"plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->');
+  expect(output).not.toContain('"pluginUrl"');
+});
+
+test('serializes db-table query text in the plugin block body', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+plugins:
+  - id: dev.heavy.db-table
+    source: builtin://db-table
+---
+
+<!--hvy: {"id":"data"}-->
+#! Data
+
+<!--hvy:plugin {"plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->
+ SELECT company, status
+ FROM work_items
+ WHERE status != 'Rejected'
+`, '.hvy');
+
+  const output = serializeWithState(document);
+
+  expect(output).toContain('<!--hvy:plugin {"plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->');
+  expect(output).toContain('SELECT company, status');
+  expect(output).toContain("WHERE status != 'Rejected'");
+});
+
+test('serializes db-table query window settings in plugin config', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+plugins:
+  - id: dev.heavy.db-table
+    source: builtin://db-table
+---
+
+<!--hvy: {"id":"data"}-->
+#! Data
+
+<!--hvy:plugin {"plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"work_items","queryDynamicWindow":false,"queryLimit":25}}-->
+ SELECT company FROM work_items
+`, '.hvy');
+
+  const output = serializeWithState(document);
+
+  expect(output).toContain('"queryDynamicWindow":false');
+  expect(output).toContain('"queryLimit":25');
+});
+
+test('serializes a document tail preamble and binary bytes for attached SQLite payloads', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"data"}-->
+#! Data
+
+<!--hvy:plugin {"plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->
+`, '.hvy');
+
+  document.attachmentTail = {
+    meta: {
+      plugin: 'dev.heavy.db-table',
+      mediaType: 'application/vnd.sqlite3',
+      encoding: 'gzip',
+    },
+    bytes: new Uint8Array([31, 139, 8, 0, 72, 86, 89]),
+  };
+
+  const serializedText = serializeWithState(document);
+  const serializedBytes = serializeDocumentBytes(document);
+  const serializedPrefix = new TextDecoder().decode(serializedBytes.slice(0, serializedBytes.length - document.attachmentTail.bytes.length));
+
+  expect(serializedText).toContain('<!--hvy:tail {"plugin":"dev.heavy.db-table","mediaType":"application/vnd.sqlite3","encoding":"gzip"}-->');
+  expect(serializedText).toContain(HVY_TAIL_SENTINEL);
+  expect(serializedPrefix).toContain(HVY_TAIL_SENTINEL);
+  expect(Array.from(serializedBytes.slice(-document.attachmentTail.bytes.length))).toEqual([31, 139, 8, 0, 72, 86, 89]);
 });
 
 test('preserves section_defaults in document front matter on round-trip', () => {

@@ -10,7 +10,7 @@ import { state, initState, initCallbacks, incrementRenderCount, incrementRefresh
 import type { AppState } from './types';
 import { escapeAttr, escapeHtml } from './utils';
 import { applyTheme, getThemeConfig, initColorModeSync } from './theme';
-import { flattenSections, findSectionByKey, findDuplicateSectionIds, getSectionId, formatSectionTitle, isDefaultUntitledSectionTitle } from './section-ops';
+import { flattenSections, findSectionByKey, findDuplicateSectionIds, getSectionId, formatSectionTitle, isDefaultUntitledSectionTitle, buildSectionRenderSequence } from './section-ops';
 import { renderComponentOptions, renderReusableSectionOptions, getComponentDefs, getSectionDefs, isBuiltinComponent } from './component-defs';
 import { renderOption } from './utils';
 import { resolveBaseComponent } from './component-defs';
@@ -19,9 +19,9 @@ import { isActiveEditorSectionTitle, isActiveEditorBlock, getComponentRenderHelp
 import { commitHistorySnapshot } from './history';
 import { capturePaneScroll, restorePaneScroll, centerPendingEditorSection, focusPendingSectionTitleEditor } from './scroll';
 import { bindUi } from './bind-ui';
-import { deserializeDocument, serializeDocument } from './serialization';
+import { deserializeDocumentBytes, serializeDocument } from './serialization';
 import { createDefaultChatState, renderChatPanel } from './chat';
-import bundledExampleHvy from '../examples/example.hvy?raw';
+import { DEFAULT_EXAMPLE_HVY_BYTES } from './example-bundles';
 
 const appRoot = document.querySelector<HTMLDivElement>('#app');
 if (!appRoot) {
@@ -32,11 +32,10 @@ const app = appRoot;
 app.innerHTML = '<main class="layout"><section class="pane full-pane"><p>Loading editor...</p></section></main>';
 
 function createDefaultDocument() {
-  return deserializeDocument(bundledExampleHvy, '.hvy');
+  return deserializeDocumentBytes(DEFAULT_EXAMPLE_HVY_BYTES, '.hvy');
 }
 
-function createInitialState(): AppState {
-  const document = createDefaultDocument();
+function createInitialState(document: ReturnType<typeof deserializeDocumentBytes>): AppState {
   return {
     document,
     filename: 'example.hvy',
@@ -78,6 +77,8 @@ function createInitialState(): AppState {
     future: [],
     isRestoring: false,
     componentMetaModal: null,
+    sqliteRowComponentModal: null,
+    dbTableQueryModal: null,
     themeModalOpen: false,
     gridAddComponentByBlock: {},
     expandableEditorPanels: {},
@@ -151,7 +152,7 @@ function renderAiEditPopover(): string {
   `;
 }
 
-initState(createInitialState());
+initState(createInitialState(createDefaultDocument()));
 
 let editorRenderer: EditorRenderer;
 let readerRenderer: ReaderRenderer;
@@ -166,6 +167,15 @@ editorRenderer = createEditorRenderer(
       return state.document.meta as Record<string, unknown>;
     },
     get showAdvancedEditor() {
+      const rowModal = state.sqliteRowComponentModal;
+      if (rowModal && !rowModal.readOnly) {
+        if (rowModal.mode === 'advanced') {
+          return true;
+        }
+        if (rowModal.mode === 'basic' || rowModal.mode === 'raw') {
+          return false;
+        }
+      }
       return state.showAdvancedEditor;
     },
     get addComponentBySection() {
@@ -196,6 +206,7 @@ editorRenderer = createEditorRenderer(
     isDefaultUntitledSectionTitle,
     formatSectionTitle,
     findSectionByKey,
+    buildSectionRenderSequence,
     getComponentDefs,
     getSectionDefs,
     getThemeConfig,
@@ -212,6 +223,9 @@ readerRenderer = createReaderRenderer(
     get documentSections() {
       return state.document.sections;
     },
+    get addComponentBySection() {
+      return state.addComponentBySection;
+    },
     get tempHighlights() {
       return state.tempHighlights;
     },
@@ -223,6 +237,12 @@ readerRenderer = createReaderRenderer(
     },
     get modalSectionKey() {
       return state.modalSectionKey;
+    },
+    get sqliteRowComponentModal() {
+      return state.sqliteRowComponentModal;
+    },
+    get dbTableQueryModal() {
+      return state.dbTableQueryModal;
     },
     get reusableSaveModal() {
       return state.reusableSaveModal;
@@ -250,6 +270,9 @@ readerRenderer = createReaderRenderer(
     ensureExpandableBlocks,
     ensureGridItems,
     getComponentRenderHelpers: localGetComponentRenderHelpers,
+    renderEditorBlock: (sectionKey, block) => editorRenderer.renderEditorBlock(sectionKey, block, state.document.sections),
+    renderBlockContentEditor: (sectionKey, block) => editorRenderer.renderBlockContentEditor(sectionKey, block),
+    renderComponentOptions,
     renderBlockMetaFields: (sectionKey, block) => editorRenderer.renderBlockMetaFields(sectionKey, block),
   }
 );
@@ -295,6 +318,7 @@ function renderApp(): void {
         </div>
         <div class="toolbar">
           <button id="newBtn" type="button" class="toolbar-primary-button">New</button>
+          <button id="crmExampleBtn" type="button">CRM Example</button>
           <button id="resumeTemplateBtn" type="button">Resume Template</button>
           <button id="resumeExampleBtn" type="button">Resume Example</button>
           <label class="file-picker">
@@ -395,7 +419,7 @@ function renderApp(): void {
         </div>
       </section>
 
-      ${renderChatPanel(state.chat, state.document, { escapeAttr, escapeHtml }, isAiView ? 'document-edit' : 'qa')}
+      ${renderChatPanel(state.chat, state.document, { escapeAttr, escapeHtml }, isAiView ? 'document-edit' : 'qa', state.currentView === 'editor' || state.currentView === 'ai')}
       ${readerRenderer.renderModal()}
       ${readerRenderer.renderLinkInlineModal()}
     </main>

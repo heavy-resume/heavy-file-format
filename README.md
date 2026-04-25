@@ -39,8 +39,12 @@ Use of JSON and Markdown make it easy for LLMs to parse.
 - [X] Color scheme editor and cleanup
 - [X] AI-based answering questions
 - [X] AI-based editing
-- [ ] Embedded and attached database support
-- [ ] Plugin support
+- [X] Embedded / attached database runtime
+- [X] Plugin block schema and DB table tail spec draft
+- [ ] Image component
+- [ ] Plugin execution/runtime
+- [ ] Sandboxed scripting component (throttled, max lines)
+- [ ] Form component
 
 ## Draft Spec
 
@@ -49,6 +53,7 @@ Use of JSON and Markdown make it easy for LLMs to parse.
 ## Examples
 
 - [Example HVY Document](examples/example.hvy)
+- [CRM Example HVY Document](examples/crm.hvy)
 - [Example Resume Template (THVY)](examples/resume.thvy)
 - [Example Resume (HVY)](examples/resume.hvy)
 
@@ -60,6 +65,10 @@ A browser-based reference app is included with:
 - `Reader`: expandable sections, navigation by section ID, and section meta styling.
 - `Download`: save the current editor buffer as a local file.
 - `Select File`: pick a local file and display it immediately.
+
+Reference app feature flags:
+- Set `window.HVY_REFERENCE_CONFIG = { features: { tables: false } }` before the bundle loads to disable table authoring/rendering in an embedded host.
+- When present, DB table tail payloads are now preserved on open/download for `.hvy` files.
 
 ### Run
 
@@ -117,4 +126,9 @@ npm run preview
 - Sections support persistent highlight and temporary highlight on navigation.
 
 # Plugin / Callback Support
-TBD
+
+HVY has a documented plugin block envelope plus a first plugin contract for `dev.heavy.db-table`.
+
+- The plugin instance is authored as a `plugin` component with `plugin` and `pluginConfig`.
+- The current built-in DB table implementation uses a gzip-compressed SQLite tail payload appended after the textual HVY body.
+- The current reference app can author and round-trip the plugin metadata, but it does not yet read or write the binary tail runtime.

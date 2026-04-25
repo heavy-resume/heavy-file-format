@@ -4,6 +4,8 @@ import { closeModal } from './navigation';
 import { saveReusableFromModal } from './reusable';
 import { findBlockByIds } from './block-ops';
 import { recordHistory } from './history';
+import { parseAttachedComponentBlocks, resetDbTableViewState, setSqliteRowComponent } from './plugins/db-table';
+import { serializeBlockFragment } from './serialization';
 
 export function bindModal(app: HTMLElement): void {
   const modalRoot = app.querySelector<HTMLDivElement>('#modalRoot');
@@ -33,6 +35,127 @@ export function bindModal(app: HTMLElement): void {
         recordHistory,
         closeModal,
       });
+      return;
+    }
+
+    const saveDbTableQueryBtn = target.closest<HTMLElement>('[data-modal-action="db-table-query-save"]');
+    if (saveDbTableQueryBtn && state.dbTableQueryModal) {
+      const modal = state.dbTableQueryModal;
+      const block = findBlockByIds(modal.sectionKey, modal.blockId);
+      if (!block) {
+        closeModal();
+        getRenderApp()();
+        return;
+      }
+      recordHistory(`db-table-query:${modal.tableName || modal.blockId}`);
+      block.text = modal.draftQuery;
+      block.schema.pluginConfig = {
+        ...block.schema.pluginConfig,
+        source: 'with-file',
+        table: modal.tableName,
+        queryDynamicWindow: modal.dynamicWindow,
+        queryLimit: modal.dynamicWindow ? undefined : modal.queryLimit,
+      };
+      if (modal.dynamicWindow) {
+        delete block.schema.pluginConfig.queryLimit;
+      }
+      resetDbTableViewState(modal.sectionKey, modal.blockId);
+      getRefreshReaderPanels()();
+      closeModal();
+      getRenderApp()();
+      return;
+    }
+
+    const saveSqliteRowComponentBtn = target.closest<HTMLElement>('[data-modal-action="sqlite-row-component-save"]');
+    if (saveSqliteRowComponentBtn && state.sqliteRowComponentModal) {
+      const modal = state.sqliteRowComponentModal;
+      const nextSerialized = modal.mode === 'raw' ? modal.rawDraft.trim() : modal.blocks.map((block) => serializeBlockFragment(block)).join('\n\n');
+      if (nextSerialized.length === 0) {
+        state.sqliteRowComponentModal = {
+          ...modal,
+          error: 'Add at least one component before saving this row attachment.',
+        };
+        getRenderApp()();
+        return;
+      }
+      recordHistory(`sqlite-row-component:${modal.tableName}:${modal.rowId}`);
+      void setSqliteRowComponent(modal.tableName, modal.rowId, nextSerialized)
+        .then(() => {
+          closeModal();
+          getRenderApp()();
+        })
+        .catch((error) => {
+          state.sqliteRowComponentModal = {
+            ...modal,
+            error: error instanceof Error ? error.message : 'Failed to save attached component.',
+          };
+          getRenderApp()();
+        });
+      return;
+    }
+
+    const sqliteRowComponentModeBtn = target.closest<HTMLElement>('[data-modal-action="sqlite-row-component-mode"]');
+    if (sqliteRowComponentModeBtn && state.sqliteRowComponentModal) {
+      const modal = state.sqliteRowComponentModal;
+      const nextMode = sqliteRowComponentModeBtn.dataset.modalMode;
+      if (nextMode !== 'basic' && nextMode !== 'advanced' && nextMode !== 'raw') {
+        return;
+      }
+      if (nextMode === modal.mode) {
+        return;
+      }
+
+      if (modal.mode === 'raw' && nextMode !== 'raw') {
+        try {
+          const parsedBlocks = parseAttachedComponentBlocks(modal.rawDraft);
+          state.sqliteRowComponentModal = {
+            ...modal,
+            mode: nextMode,
+            blocks: parsedBlocks,
+            error: null,
+          };
+          if (parsedBlocks[0]) {
+            state.activeEditorBlock = {
+              sectionKey: modal.sectionKey,
+              blockId: parsedBlocks[0].id,
+            };
+          }
+        } catch (error) {
+          state.sqliteRowComponentModal = {
+            ...modal,
+            error: error instanceof Error ? error.message : 'Attached HVY is invalid.',
+          };
+        }
+        getRenderApp()();
+        return;
+      }
+
+      state.sqliteRowComponentModal = {
+        ...modal,
+        mode: nextMode,
+        rawDraft: nextMode === 'raw' ? modal.blocks.map((block) => serializeBlockFragment(block)).join('\n\n') : modal.rawDraft,
+        error: null,
+      };
+      getRenderApp()();
+      return;
+    }
+
+    const clearSqliteRowComponentBtn = target.closest<HTMLElement>('[data-modal-action="sqlite-row-component-clear"]');
+    if (clearSqliteRowComponentBtn && state.sqliteRowComponentModal) {
+      const modal = state.sqliteRowComponentModal;
+      recordHistory(`sqlite-row-component-clear:${modal.tableName}:${modal.rowId}`);
+      void setSqliteRowComponent(modal.tableName, modal.rowId, '')
+        .then(() => {
+          closeModal();
+          getRenderApp()();
+        })
+        .catch((error) => {
+          state.sqliteRowComponentModal = {
+            ...modal,
+            error: error instanceof Error ? error.message : 'Failed to remove attached component.',
+          };
+          getRenderApp()();
+        });
       return;
     }
 
@@ -85,6 +208,65 @@ export function bindModal(app: HTMLElement): void {
   }
 
   const cssInput = modalRoot.querySelector<HTMLTextAreaElement>('#modalCssInput');
+  const sqliteRowComponentRawInput = modalRoot.querySelector<HTMLTextAreaElement>('#sqliteRowComponentRawInput');
+  const dbTableQueryInput = modalRoot.querySelector<HTMLTextAreaElement>('#dbTableQueryInput');
+  const dbTableQueryDynamicWindowInput = modalRoot.querySelector<HTMLInputElement>('#dbTableQueryDynamicWindowInput');
+  const dbTableQueryLimitInput = modalRoot.querySelector<HTMLInputElement>('#dbTableQueryLimitInput');
+
+  if (sqliteRowComponentRawInput && state.sqliteRowComponentModal) {
+    sqliteRowComponentRawInput.addEventListener('input', () => {
+      if (!state.sqliteRowComponentModal) {
+        return;
+      }
+      state.sqliteRowComponentModal = {
+        ...state.sqliteRowComponentModal,
+        rawDraft: sqliteRowComponentRawInput.value,
+        error: null,
+      };
+    });
+  }
+
+  if (dbTableQueryInput && state.dbTableQueryModal) {
+    dbTableQueryInput.addEventListener('input', () => {
+      if (!state.dbTableQueryModal) {
+        return;
+      }
+      state.dbTableQueryModal = {
+        ...state.dbTableQueryModal,
+        draftQuery: dbTableQueryInput.value,
+        error: null,
+      };
+    });
+  }
+
+  if (dbTableQueryDynamicWindowInput && state.dbTableQueryModal) {
+    dbTableQueryDynamicWindowInput.addEventListener('change', () => {
+      if (!state.dbTableQueryModal) {
+        return;
+      }
+      state.dbTableQueryModal = {
+        ...state.dbTableQueryModal,
+        dynamicWindow: dbTableQueryDynamicWindowInput.checked,
+        error: null,
+      };
+      getRenderApp()();
+    });
+  }
+
+  if (dbTableQueryLimitInput && state.dbTableQueryModal) {
+    dbTableQueryLimitInput.addEventListener('input', () => {
+      if (!state.dbTableQueryModal) {
+        return;
+      }
+      const parsed = Number.parseInt(dbTableQueryLimitInput.value, 10);
+      state.dbTableQueryModal = {
+        ...state.dbTableQueryModal,
+        queryLimit: Number.isFinite(parsed) ? Math.max(1, Math.min(parsed, 99)) : state.dbTableQueryModal.queryLimit,
+        error: null,
+      };
+    });
+  }
+
   if (!cssInput || !state.modalSectionKey) {
     return;
   }

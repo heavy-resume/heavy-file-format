@@ -17,12 +17,14 @@
     "dompurify": "^3.2.6",
     "highlight.js": "^11.11.1",
     "marked": "^15.0.12",
+    "sql.js": "^1.14.1",
     "turndown": "^7.2.0",
     "yaml": "^2.8.1"
   },
   "devDependencies": {
     "@playwright/test": "^1.53.0",
     "@types/node": "^24.6.0",
+    "@types/sql.js": "^1.4.11",
     "@types/turndown": "^5.0.6",
     "typescript": "^5.8.3",
     "vite": "^6.3.3",

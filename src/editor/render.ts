@@ -15,6 +15,7 @@ import { renderTagEditor } from './tag-editor';
 import { getTemplateFields, renderTemplateGhosts } from './template';
 import type { Align, BlockSchema, VisualBlock, VisualSection } from './types';
 import { normalizeMarkdownIndentation } from '../markdown';
+import { getPluginDisplayName, isDbTablePluginId } from '../plugins/registry';
 import bash from 'highlight.js/lib/languages/bash';
 import css from 'highlight.js/lib/languages/css';
 import javascript from 'highlight.js/lib/languages/javascript';
@@ -24,6 +25,7 @@ import plaintext from 'highlight.js/lib/languages/plaintext';
 import python from 'highlight.js/lib/languages/python';
 import typescript from 'highlight.js/lib/languages/typescript';
 import xml from 'highlight.js/lib/languages/xml';
+import { areTablesEnabled } from '../reference-config';
 
 hljs.registerLanguage('bash', bash);
 hljs.registerLanguage('sh', bash);
@@ -86,6 +88,9 @@ interface EditorRenderDeps {
   isDefaultUntitledSectionTitle: (title: string) => boolean;
   formatSectionTitle: (title: string) => string;
   findSectionByKey: (sections: VisualSection[], key: string) => VisualSection | null;
+  buildSectionRenderSequence: (
+    section: VisualSection
+  ) => Array<{ kind: 'block'; block: VisualBlock } | { kind: 'child'; child: VisualSection }>;
   getComponentDefs: () => ComponentDef[];
   getSectionDefs: () => SectionDef[];
   getThemeConfig: () => ThemeConfig;
@@ -98,6 +103,7 @@ export interface EditorRenderer {
   renderSidebarEditorSections: (sections: VisualSection[]) => string;
   renderEditorBlock: (sectionKey: string, block: VisualBlock, rootSections?: VisualSection[], parentLocked?: boolean) => string;
   renderPassiveEditorBlock: (sectionKey: string, block: VisualBlock, rootSections?: VisualSection[]) => string;
+  renderBlockContentEditor: (sectionKey: string, block: VisualBlock) => string;
   renderRichToolbar: (
     sectionKey: string,
     blockId: string,
@@ -149,7 +155,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     `;
   }
 
-  function renderEditorSection(section: VisualSection, rootSections: VisualSection[]): string {
+  function renderEditorSection(section: VisualSection, rootSections: VisualSection[], isSubsection = false): string {
     const visibleTitle = deps.formatSectionTitle(section.title);
     const isUntitled = deps.isDefaultUntitledSectionTitle(section.title);
     const titleEditor = deps.isActiveEditorSectionTitle(section.key)
@@ -159,8 +165,16 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       : `<button type="button" class="section-title-passive${isUntitled ? ' section-title-placeholder' : ''}" data-action="activate-section-title" data-section-key="${deps.escapeAttr(
         section.key
       )}">${deps.escapeHtml(visibleTitle)}</button>`;
+    const hasActiveBlockInSelfOrDescendants = (s: VisualSection): boolean => {
+      if (state.activeEditorBlock?.sectionKey === s.key) return true;
+      return s.children.some(hasActiveBlockInSelfOrDescendants);
+    };
+    const subsectionToggle = isSubsection && !hasActiveBlockInSelfOrDescendants(section)
+      ? `<button type="button" class="section-nest-toggle" data-action="remove-subsection" data-section-key="${deps.escapeAttr(section.key)}" aria-label="Remove subsection" title="Remove subsection">‹</button>`
+      : '';
     return `
-      <article class="editor-section-card" data-editor-section="${deps.escapeAttr(section.key)}">
+      <article class="editor-section-card${isSubsection ? ' editor-subsection-card' : ''}" data-editor-section="${deps.escapeAttr(section.key)}">
+        ${subsectionToggle}
         <div class="editor-section-head">
           <div class="section-drag-title" title="Drag to reorder section">
             <div class="editor-order-controls">
@@ -192,7 +206,10 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       }
 
         <div class="editor-blocks">
-          ${section.blocks.map((block) => renderEditorBlock(section.key, block, rootSections)).join('')}
+          ${deps.buildSectionRenderSequence(section).map((item) => item.kind === 'block'
+            ? renderEditorBlock(section.key, item.block, rootSections)
+            : renderEditorSection(item.child, rootSections, true)
+          ).join('')}
           ${section.lock
         ? ''
         : `<article class="ghost-section-card add-ghost" data-action="add-block" data-section-key="${deps.escapeAttr(section.key)}">
@@ -202,22 +219,6 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
                     <select aria-label="Section component type" data-field="new-component-type" data-section-key="${deps.escapeAttr(section.key)}">
                       <option value=""${!(state.addComponentBySection[section.key] ?? '').trim() ? ' selected' : ''}>Select component</option>
                       ${deps.renderComponentOptions(state.addComponentBySection[section.key] ?? '')}
-                    </select>
-                  </label>
-                </article>`
-      }
-        </div>
-
-        <div class="editor-children">
-          ${section.children.map((child) => renderEditorSection(child, rootSections)).join('')}
-          ${section.lock
-        ? ''
-        : `<article class="ghost-section-card add-ghost reusable-section-ghost subsection-add-button" data-action="add-subsection" data-section-key="${deps.escapeAttr(section.key)}">
-                  <div class="ghost-plus-big"><span>+</span></div>
-                  <div class="ghost-label">Add Section</div>
-                  <label class="ghost-component-picker">
-                    <select data-field="reusable-section-type" data-section-key="${deps.escapeAttr(`subsection:${section.key}`)}" aria-label="Subsection type">
-                      ${deps.renderReusableSectionOptions(state.addComponentBySection[`subsection:${section.key}`] ?? 'blank')}
                     </select>
                   </label>
                 </article>`
@@ -259,6 +260,9 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
 
   function renderEditorBlock(sectionKey: string, block: VisualBlock, rootSections?: VisualSection[], parentLocked = false): string {
     const component = block.schema.component || 'text';
+    const componentLabel = component === 'plugin'
+      ? (isDbTablePluginId(block.schema.plugin) || block.schema.plugin.trim().length === 0 ? getPluginDisplayName(block.schema.plugin || 'dev.heavy.db-table') : 'Plugin')
+      : component;
     const isActiveSelf = deps.isActiveEditorBlock(sectionKey, block.id);
     const isActiveDescendant = state.activeEditorBlock?.sectionKey === sectionKey && isDescendantActive(block, state.activeEditorBlock.blockId);
     const isActive = isActiveSelf || isActiveDescendant;
@@ -269,16 +273,18 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
 
     const contentEditor = renderBlockContentEditor(sectionKey, block);
     const canRemove = !parentLocked && !block.schema.lock;
+    const nestToggle = `<button type="button" class="block-nest-toggle" data-action="make-block-subsection" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}" aria-label="Make subsection" title="Make subsection">›</button>`;
 
     return `
       <div class="editor-block">
+        ${nestToggle}
         <div class="editor-block-head">
           <div class="section-drag-title">
             <div class="editor-order-controls">
               <button type="button" class="order-arrow-button" data-action="move-block-up" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}" aria-label="Move block up">▲</button>
               <button type="button" class="order-arrow-button" data-action="move-block-down" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}" aria-label="Move block down">▼</button>
             </div>
-            <strong class="editor-block-title">${deps.escapeHtml(component)}</strong>
+            <strong class="editor-block-title">${deps.escapeHtml(componentLabel)}</strong>
           </div>
           <div class="editor-actions">
             <button type="button" class="ghost" data-action="deactivate-block" data-section-key="${deps.escapeAttr(
@@ -451,6 +457,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const sectionDefs = deps.getSectionDefs();
     const theme = deps.getThemeConfig();
     const colorCount = Object.keys(theme.colors).length;
+    const tableBaseTypeOption = areTablesEnabled() || defs.some((def) => def.baseType === 'table');
     return `
       <section class="meta-panel">
         <div class="meta-panel-head">
@@ -468,6 +475,11 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           <span>Reader Max Width</span>
           <input data-field="meta-reader-max-width" placeholder="60rem" value="${deps.escapeAttr(String(state.documentMeta.reader_max_width ?? ''))}" />
         </label>
+        <label class="checkbox-label">
+          <span>Tables Enabled</span>
+          <input type="checkbox" ${areTablesEnabled() ? 'checked' : ''} disabled />
+        </label>
+        <div class="muted">Reference app feature flag. This is not stored in the HVY file.</div>
         <div class="editor-grid">
           <label>
             <span>Theme Colors</span>
@@ -495,7 +507,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
                     ${deps.renderOption('quote', def.baseType)}
                     ${deps.renderOption('code', def.baseType)}
                     ${deps.renderOption('expandable', def.baseType)}
-                    ${deps.renderOption('table', def.baseType)}
+                    ${tableBaseTypeOption ? deps.renderOption('table', def.baseType) : ''}
                     ${deps.renderOption('container', def.baseType)}
                     ${deps.renderOption('component-list', def.baseType)}
                     ${deps.renderOption('grid', def.baseType)}
@@ -573,6 +585,9 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       return renderExpandableEditor(sectionKey, block, helpers);
     }
     if (component === 'table') {
+      if (!areTablesEnabled()) {
+        return '<div class="plugin-placeholder">Tables are disabled in this reference implementation.</div>';
+      }
       return renderTableEditor(sectionKey, block, helpers);
     }
     if (component === 'xref-card') {
@@ -682,6 +697,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     renderSidebarEditorSections,
     renderEditorBlock: (sectionKey, block, rootSections, parentLocked) => renderEditorBlock(sectionKey, block, rootSections, parentLocked),
     renderPassiveEditorBlock: (sectionKey, block, rootSections) => renderPassiveEditorBlock(sectionKey, block, rootSections ?? []),
+    renderBlockContentEditor: (sectionKey, block) => renderBlockContentEditor(sectionKey, block),
     renderRichToolbar,
     renderMetaPanel,
     renderComponentFragment,

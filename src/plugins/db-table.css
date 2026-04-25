@@ -1,0 +1,102 @@
+.db-table-info {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-around;
+    gap: 1rem;
+}
+
+.db-table-info label {
+    flex: 1 1 auto;
+}
+
+.db-table-query-button {
+    white-space: nowrap;
+}
+
+.db-table-query-button-active {
+    border-color: color-mix(in srgb, var(--reader-accent, var(--reader-fg)) 35%, var(--reader-border) 65%);
+    background: color-mix(in srgb, var(--reader-accent, var(--reader-fg)) 10%, transparent);
+}
+
+.db-table-query-input {
+    width: 100%;
+    min-height: 7rem;
+    font: inherit;
+    color: var(--reader-fg);
+    background: var(--reader-panel);
+    border: 1px solid var(--reader-border);
+    border-radius: 0.75rem;
+    padding: 0.85rem 1rem;
+    resize: vertical;
+}
+
+.db-table-query-input::placeholder {
+    color: var(--reader-muted);
+}
+
+.db-table-frame {
+    max-height: 28rem;
+    overflow-y: auto;
+    border: 1px solid var(--reader-border);
+    border-radius: 0.9rem;
+    background: color-mix(in srgb, var(--reader-panel) 92%, white 8%);
+}
+
+.db-table-frame-query-active {
+    background:
+        linear-gradient(0deg, rgba(128, 128, 128, 0.08), rgba(128, 128, 128, 0.08)),
+        color-mix(in srgb, var(--reader-panel) 94%, white 6%);
+}
+
+.db-table-frame-query-active .sqlite-plugin-grid,
+.db-table-frame-query-active .reader-table {
+    opacity: 0.72;
+}
+
+.db-table-frame-query-active .sqlite-plugin-grid input,
+.db-table-frame-query-active .sqlite-plugin-grid button {
+    cursor: not-allowed;
+}
+
+.db-table-header-cell {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.db-table-header-cell .sqlite-plugin-grid-header {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.db-table-sort-button {
+    flex: 0 0 auto;
+    min-width: 2rem;
+    padding: 0.2rem 0.4rem;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    color: var(--reader-muted);
+}
+
+.db-table-sort-button:hover:not(:disabled),
+.db-table-sort-button:focus-visible:not(:disabled) {
+    color: var(--reader-fg);
+    border-color: var(--reader-border);
+}
+
+.db-table-sort-button-active {
+    color: var(--reader-accent, var(--reader-fg));
+    border-color: color-mix(in srgb, var(--reader-accent, var(--reader-fg)) 40%, var(--reader-border) 60%);
+    background: color-mix(in srgb, var(--reader-accent, var(--reader-fg)) 10%, transparent);
+}
+
+.db-table-spacer-row td {
+    padding: 0;
+    border: 0;
+    background: transparent;
+}
+
+.db-table-name {
+    max-width: 16rem;
+}

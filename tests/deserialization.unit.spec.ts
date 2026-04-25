@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
 
-import { deserializeDocument, deserializeDocumentWithDiagnostics, getHvyDiagnosticUsageHint, getHvyResponseDiagnostics } from '../src/serialization';
+import { deserializeDocument, deserializeDocumentBytes, deserializeDocumentWithDiagnostics, getHvyDiagnosticUsageHint, getHvyResponseDiagnostics } from '../src/serialization';
 import { registerSerializationTestState } from './serialization-test-helpers';
 
 registerSerializationTestState();
@@ -99,6 +99,61 @@ reader_max_width: 60rem
 `, '.hvy');
 
   expect(document.meta.reader_max_width).toBe('60rem');
+});
+
+test('deserializes plugin blocks with plugin identity and config', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+plugins:
+  - id: dev.heavy.db-table
+    source: builtin://db-table
+---
+
+<!--hvy: {"id":"data"}-->
+#! Data
+
+<!--hvy:plugin {"plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->
+`, '.hvy');
+
+  const block = document.sections[0]?.blocks[0];
+
+  expect(block?.schema.component).toBe('plugin');
+  expect(block?.schema.plugin).toBe('dev.heavy.db-table');
+  expect(block?.schema.pluginConfig).toEqual({
+    source: 'with-file',
+    table: 'work_items',
+  });
+});
+
+test('deserializes a binary SQLite attachment tail from HVY bytes', () => {
+  const prefix = `---
+hvy_version: 0.1
+plugins:
+  - id: dev.heavy.db-table
+    source: builtin://db-table
+---
+
+<!--hvy: {"id":"data"}-->
+#! Data
+
+<!--hvy:plugin {"plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->
+<!--hvy:tail {"plugin":"dev.heavy.db-table","mediaType":"application/vnd.sqlite3","encoding":"gzip"}-->
+--HVY-TAIL--
+`;
+  const prefixBytes = new TextEncoder().encode(prefix);
+  const tailBytes = new Uint8Array([31, 139, 8, 0, 83, 81, 76]);
+  const bytes = new Uint8Array(prefixBytes.length + tailBytes.length);
+  bytes.set(prefixBytes, 0);
+  bytes.set(tailBytes, prefixBytes.length);
+
+  const document = deserializeDocumentBytes(bytes, '.hvy');
+
+  expect(document.attachmentTail?.meta).toEqual({
+    plugin: 'dev.heavy.db-table',
+    mediaType: 'application/vnd.sqlite3',
+    encoding: 'gzip',
+  });
+  expect(Array.from(document.attachmentTail?.bytes ?? [])).toEqual([31, 139, 8, 0, 83, 81, 76]);
 });
 
 test('deserializes section_defaults from document front matter', () => {
@@ -278,6 +333,58 @@ test('resume education record keeps C/C++ inside the education tools list', asyn
 
   expect(toolTitles).toContain('Python');
   expect(toolTitles).toContain('C/C++');
+});
+
+test('deserializes db-table query text from the plugin block body', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+plugins:
+  - id: dev.heavy.db-table
+    source: builtin://db-table
+---
+
+<!--hvy: {"id":"data"}-->
+#! Data
+
+<!--hvy:plugin {"plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->
+ SELECT company, status
+ FROM work_items
+ WHERE status != 'Rejected'
+`, '.hvy');
+
+  const block = document.sections[0]?.blocks[0];
+
+  expect(block?.schema.plugin).toBe('dev.heavy.db-table');
+  expect(block?.schema.pluginConfig).toEqual({
+    source: 'with-file',
+    table: 'work_items',
+  });
+  expect(block?.text).toBe("SELECT company, status\nFROM work_items\nWHERE status != 'Rejected'");
+});
+
+test('deserializes db-table query window settings from plugin config', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+plugins:
+  - id: dev.heavy.db-table
+    source: builtin://db-table
+---
+
+<!--hvy: {"id":"data"}-->
+#! Data
+
+<!--hvy:plugin {"plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"work_items","queryDynamicWindow":false,"queryLimit":25}}-->
+ SELECT company FROM work_items
+`, '.hvy');
+
+  const block = document.sections[0]?.blocks[0];
+
+  expect(block?.schema.pluginConfig).toEqual({
+    source: 'with-file',
+    table: 'work_items',
+    queryDynamicWindow: false,
+    queryLimit: 25,
+  });
 });
 
 test('deserialization reports invalid block directive json as diagnostics with concise hints', () => {

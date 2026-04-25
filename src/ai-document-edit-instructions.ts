@@ -20,11 +20,16 @@ export function buildEditPathSelectionPrompt(request: string): string {
   ].join('\n');
 }
 
-export function buildDocumentEditFormatInstructions(): string {
+export function buildDocumentEditFormatInstructions(options?: { dbTableNames?: string[] }): string {
+  const dbTableNames = options?.dbTableNames ?? [];
+  const hasDbTables = dbTableNames.length > 0;
+  const validTools = hasDbTables
+    ? '`grep`, `get_css`, `get_properties`, `set_properties`, `view_component`, `edit_component`, `patch_component`, `create_component`, `remove_component`, `create_section`, `remove_section`, `reorder_section`, `query_db_table`, `request_structure`, `done`'
+    : '`grep`, `get_css`, `get_properties`, `set_properties`, `view_component`, `edit_component`, `patch_component`, `create_component`, `remove_component`, `create_section`, `remove_section`, `reorder_section`, `request_structure`, `done`';
   return [
     'Reply with exactly one JSON object and nothing else.',
     'Choose one tool at a time.',
-    'Valid tools are: `grep`, `get_css`, `get_properties`, `set_properties`, `view_component`, `edit_component`, `patch_component`, `create_component`, `remove_component`, `create_section`, `remove_section`, `reorder_section`, `request_structure`, `done`.',
+    `Valid tools are: ${validTools}.`,
     'Use real section ids when a section has an id.',
     'Use component ids when they exist. If a component has no id, use its fallback component ref like `C3`.',
     'Do not invent ids or refs.',
@@ -41,6 +46,13 @@ export function buildDocumentEditFormatInstructions(): string {
     'Use `create_section.hvy` to add one complete serialized HVY section, including its directive, `#!` title, blocks, and nested subsections.',
     'For `create_section`, use `new_position_index_from_0` with `append-root` or `append-child` when the new section should be inserted at a specific sibling index instead of the end.',
     'For `reorder_section`, use `new_position_index_from_0` to move a section to a specific index among its current siblings, or use `target_section_ref` plus `position` for relative moves.',
+    ...(hasDbTables
+      ? [
+          `Use \`query_db_table\` to inspect live rows from the attached DB when needed. Available tables: ${dbTableNames.join(', ')}.`,
+          'For `query_db_table`, provide `table_name` when more than one table exists, or provide a full SQL `query`. `limit` is optional and is capped for concise tool output.',
+          `When adding a component that should display rows from a DB table, use a \`db-table\` plugin block instead of the table component. A db-table renders live rows from the database. Example: \`<!--hvy:plugin {"plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"TABLE_NAME"}}-->\`. The text content after the directive is an optional SQL query filter (leave empty to show all rows).`,
+        ]
+      : []),
     'When the request is fully satisfied, return `{"tool":"done","summary":"..."}`.',
     'JSON must use double-quoted keys and string values.',
     'For `create_component.hvy`, return one complete HVY component fragment as a JSON string value with escaped newlines.',
@@ -69,6 +81,13 @@ export function buildDocumentEditFormatInstructions(): string {
     '{"tool":"create_section","position":"before","target_section_ref":"skills","hvy":"<!--hvy: {\\"id\\":\\"overview\\"}-->\\n#! Overview\\n\\n <!--hvy:text {}-->\\n  Overview content","reason":"optional"}',
     '{"tool":"reorder_section","section_ref":"history","target_section_ref":"skills","position":"after","reason":"optional"}',
     '{"tool":"reorder_section","section_ref":"history","new_position_index_from_0":0,"reason":"optional"}',
+    ...(hasDbTables
+      ? [
+          '{"tool":"query_db_table","table_name":"work_items","limit":10,"reason":"optional"}',
+          '{"tool":"query_db_table","query":"SELECT company, status FROM work_items WHERE status != \\"Rejected\\" ORDER BY company","limit":10,"reason":"optional"}',
+          `{"tool":"create_component","position":"append-to-section","section_ref":"my-section","hvy":"<!--hvy:plugin {\\"plugin\\":\\"dev.heavy.db-table\\",\\"pluginConfig\\":{\\"source\\":\\"with-file\\",\\"table\\":\\"${dbTableNames[0] ?? 'TABLE_NAME'}\\"}}-->","reason":"Add a live db-table component showing all rows"}`,
+        ]
+      : []),
     '{"tool":"request_structure","reason":"optional"}',
     '{"tool":"done","summary":"Short summary of what changed."}',
   ].join('\n');

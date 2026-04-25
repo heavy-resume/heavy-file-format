@@ -105,7 +105,7 @@ function requestTargetHighlight(
   context: { sectionFound: boolean; blockFound: boolean },
   attempt = 0
 ): void {
-  window.requestAnimationFrame(() => {
+  window.setTimeout(() => {
     const target = app.querySelector<HTMLElement>(`#${CSS.escape(sectionId)}`);
     if (!target) {
       if (attempt < 3) {
@@ -126,7 +126,7 @@ function requestTargetHighlight(
     window.setTimeout(() => {
       target.classList.remove('is-temp-highlighted');
     }, 1400);
-  });
+  }, 5);
 }
 
 interface ExpandResult {
@@ -206,8 +206,18 @@ function expandBlockPathInList(blocks: VisualBlock[], schemaId: string): { found
 }
 
 export function closeModal(): void {
+  const sqliteRowComponentModal = state.sqliteRowComponentModal;
+  if (
+    sqliteRowComponentModal
+    && state.activeEditorBlock?.sectionKey === sqliteRowComponentModal.sectionKey
+    && sqliteRowComponentModal.blocks.some((block) => findBlockInSectionById(block, state.activeEditorBlock?.blockId ?? ''))
+  ) {
+    state.activeEditorBlock = sqliteRowComponentModal.previousActiveEditorBlock;
+  }
   state.modalSectionKey = null;
   state.componentMetaModal = null;
+  state.sqliteRowComponentModal = null;
+  state.dbTableQueryModal = null;
   state.reusableSaveModal = null;
   state.themeModalOpen = false;
 }
@@ -219,9 +229,28 @@ export function closeModalIfTarget(sectionKey: string): void {
   if (state.componentMetaModal?.sectionKey === sectionKey) {
     state.componentMetaModal = null;
   }
+  if (state.sqliteRowComponentModal?.sectionKey === sectionKey) {
+    closeModal();
+  }
+  if (state.dbTableQueryModal?.sectionKey === sectionKey) {
+    closeModal();
+  }
   if (state.reusableSaveModal?.sectionKey === sectionKey) {
     state.reusableSaveModal = null;
   }
+}
+
+function findBlockInSectionById(block: import('./editor/types').VisualBlock, blockId: string): boolean {
+  if (block.id === blockId) {
+    return true;
+  }
+  return (
+    (block.schema.containerBlocks ?? []).some((child) => findBlockInSectionById(child, blockId))
+    || (block.schema.componentListBlocks ?? []).some((child) => findBlockInSectionById(child, blockId))
+    || (block.schema.gridItems ?? []).some((item) => findBlockInSectionById(item.block, blockId))
+    || (block.schema.expandableStubBlocks?.children ?? []).some((child) => findBlockInSectionById(child, blockId))
+    || (block.schema.expandableContentBlocks?.children ?? []).some((child) => findBlockInSectionById(child, blockId))
+  );
 }
 
 export function resetTransientUiState(): void {
@@ -231,6 +260,8 @@ export function resetTransientUiState(): void {
   state.modalSectionKey = null;
   state.reusableSaveModal = null;
   state.componentMetaModal = null;
+  state.sqliteRowComponentModal = null;
+  state.dbTableQueryModal = null;
   state.themeModalOpen = false;
   state.tempHighlights = new Set<string>();
   state.addComponentBySection = {};

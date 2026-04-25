@@ -47,6 +47,8 @@ export function createTestState(document: VisualDocument): AppState {
     future: [],
     isRestoring: false,
     componentMetaModal: null,
+    sqliteRowComponentModal: null,
+    dbTableQueryModal: null,
     themeModalOpen: false,
     gridAddComponentByBlock: {},
     expandableEditorPanels: {},

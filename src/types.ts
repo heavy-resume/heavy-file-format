@@ -1,10 +1,16 @@
 import type { BlockSchema, VisualBlock, VisualSection } from './editor/types';
 import type { JsonObject } from './hvy/types';
 
+export interface DocumentTailAttachment {
+  meta: JsonObject;
+  bytes: Uint8Array;
+}
+
 export interface VisualDocument {
   meta: JsonObject;
   extension: '.hvy' | '.thvy' | '.md';
   sections: VisualSection[];
+  attachmentTail?: DocumentTailAttachment | null;
 }
 
 export type ChatProvider = 'openai' | 'anthropic';
@@ -57,6 +63,29 @@ export interface ReusableSaveModalState {
   draftName: string;
 }
 
+export interface SqliteRowComponentModalState {
+  sectionKey: string;
+  blockId: string;
+  tableName: string;
+  rowId: number;
+  blocks: VisualBlock[];
+  error: string | null;
+  readOnly: boolean;
+  previousActiveEditorBlock: { sectionKey: string; blockId: string } | null;
+  mode: 'basic' | 'advanced' | 'raw';
+  rawDraft: string;
+}
+
+export interface DbTableQueryModalState {
+  sectionKey: string;
+  blockId: string;
+  tableName: string;
+  draftQuery: string;
+  dynamicWindow: boolean;
+  queryLimit: number;
+  error: string | null;
+}
+
 export interface RawEditorDiagnostic {
   severity: 'warning' | 'error';
   message: string;
@@ -107,6 +136,8 @@ export interface AppState {
   future: string[];
   isRestoring: boolean;
   componentMetaModal: { sectionKey: string; blockId: string } | null;
+  sqliteRowComponentModal: SqliteRowComponentModalState | null;
+  dbTableQueryModal: DbTableQueryModalState | null;
   themeModalOpen: boolean;
   gridAddComponentByBlock: Record<string, string>;
   expandableEditorPanels: Record<string, { stubOpen: boolean; expandedOpen: boolean }>;

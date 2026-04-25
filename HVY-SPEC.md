@@ -310,7 +310,8 @@ Block metadata optionally includes component-specific fields. Common examples in
 - `componentListBlocks`
 - `gridColumns`
 - `gridItems`
-- `pluginUrl`
+- `plugin`
+- `pluginConfig`
 - `xrefTitle`
 - `xrefDetail`
 - `xrefTarget`
@@ -700,7 +701,7 @@ plugins:
 
 Required fields:
 - `id`: globally unique plugin identifier (reverse-DNS RECOMMENDED)
-- `source`: download location/registry URL
+- `source`: plugin package location or a client-known plugin locator such as `builtin://...`
 
 Recommended fields:
 - `version`
@@ -716,6 +717,86 @@ Sections can request plugin behavior with metadata:
 #! Launch Timeline
 ```
 
+### 7.3 Plugin block component
+
+Use the `plugin` block when a document embeds a client-resolved plugin instance in normal content flow:
+
+```markdown
+<!--hvy:plugin {"plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->
+```
+
+Plugin block fields:
+- `plugin`: REQUIRED plugin identifier matching a declared plugin
+- `pluginConfig`: optional object interpreted only by that plugin
+
+HVY core only standardizes the envelope. The meaning of `pluginConfig` is plugin-specific.
+
+### 7.4 Tail payload envelope
+
+`.hvy` files MAY append a single opaque binary tail after the Markdown/HVY text body. This is intended for plugin-owned payloads such as embedded databases.
+
+Tail format:
+1. The textual document body ends with a single-line directive:
+
+```markdown
+<!--hvy:tail {"plugin":"dev.heavy.db-table","mediaType":"application/vnd.sqlite3","encoding":"gzip"}-->
+```
+
+2. The next line MUST be the exact ASCII sentinel:
+
+```text
+--HVY-TAIL--
+```
+
+3. All remaining bytes after the trailing newline of that sentinel are the tail payload.
+
+Rules:
+- Tail payloads are NOT part of Markdown parsing.
+- Tail payloads are only valid for `.hvy`, not `.thvy`.
+- If `encoding` is present, clients MUST decode the tail before handing it to the plugin.
+- Clients that do not recognize the declared plugin or tail media type SHOULD preserve the bytes but MAY render the plugin block as unsupported.
+
+### 7.5 DB table plugin contract
+
+The first standardized plugin contract is `dev.heavy.db-table`.
+
+Declaration example:
+
+```yaml
+plugins:
+  - id: dev.heavy.db-table
+    source: builtin://db-table
+```
+
+Block example:
+
+```markdown
+<!--hvy:plugin {"plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->
+ SELECT company, url, status
+ FROM work_items
+ WHERE status != 'Rejected'
+```
+
+Plugin-specific rules:
+- `pluginConfig.source` MUST currently be `"with-file"`.
+- `pluginConfig.table` MUST be a database table name to render.
+- The plugin block text is interpreted as the table query string. This is an implicit property derived from the block text body rather than from `pluginConfig`.
+- If the plugin block contains non-text structured content, clients SHOULD discard that structured content for this plugin and preserve only the text body as the query value.
+- If the query text is empty after trimming, clients MUST behave as though the query were `SELECT * FROM <pluginConfig.table>`.
+- If the query text is non-empty, clients MUST render the result in a read-only state and SHOULD visually indicate that the table is query-driven rather than directly editable.
+- `pluginConfig.queryDynamicWindow` is an optional boolean. When `true` or absent, query views SHOULD use a moving offset/limit window. When `false`, clients SHOULD instead execute the query with a fixed limit and no moving offset window.
+- `pluginConfig.queryLimit` is an optional integer used when `pluginConfig.queryDynamicWindow` is `false`. Clients MUST clamp it to fewer than 100 rows.
+- Clients MUST enforce an implicit result cap of fewer than 100 rows for query-driven views.
+- Clients SHOULD render at most 50 rows at a time in the visible window and SHOULD advance or rewind the offset window as the user scrolls, for example by shifting the offset after the viewport passes roughly row 75.
+- Sort controls MAY be exposed for direct table views. If exposed, ascending and descending sort orders SHOULD be supported per visible column. Query-driven views SHOULD preserve query-defined ordering instead.
+- The current built-in implementation stores this plugin in exactly one gzip-compressed SQLite database in the document tail.
+- Multiple plugin blocks MAY point at different tables within the same attached database.
+
+Recommended client behavior:
+- Spreadsheet-like table views SHOULD virtualize row rendering and MUST NOT attempt to render every row at once for large tables.
+- Clients MAY store row-attached HVY fragments in companion tables keyed by table name and row identifier.
+- If row-attached HVY is supported, clients MAY expose context-menu actions such as setting or viewing the attached component for a row.
+
 ## 8. Security & Runtime Constraints
 
 Client assumptions from product requirements:
@@ -728,22 +809,26 @@ Normative behavior:
 - Renderers MUST escape raw HTML in Markdown content. Rich visual structures SHOULD be represented with HVY components and metadata rather than inline HTML.
 - Remote resource fetches MUST be gated behind user network permission.
 - Plugin installation MUST show `id` and `source` before trust is granted.
+- Clients MUST treat tail payload bytes as untrusted input and only hand them to the declared plugin after normal trust checks.
 
 ## 9. Parsing Rules (Normative)
 
-1. Read file as UTF-8 text.
-2. Parse YAML front matter if present at file start.
-3. Parse Markdown into block structure. `<!--hvy: {...}-->` directives define top-level sections; `<!--hvy:subsection {...}-->` directives define subsections. An optional `#!` line immediately following sets the section title; it is consumed and not rendered. Standard ATX headings are plain content.
-4. Attach `<!--hvy:doc ...-->`, `<!--hvy:css ...-->`, block component directives such as `<!--hvy:text ...-->`, legacy `<!--hvy:block ...-->`, and `<!--hvy:expandable...-->` directives per placement rules.
-5. Extract CSS fenced blocks (language `css`) and optional preceding `hvy:css` metadata.
-6. Build section tree from directive types (`hvy:` = top-level, `hvy:subsection` = child).
-7. Validate template rules when extension is `.thvy`: require `hvy_version` and `template: true`.
+1. Read the file as bytes.
+2. If the byte stream contains a valid `hvy:tail` directive immediately followed by `--HVY-TAIL--`, split the file into text bytes before the directive and opaque tail bytes after the sentinel. Otherwise treat the whole file as text bytes.
+3. Decode the text bytes as UTF-8 text.
+4. Parse YAML front matter if present at file start.
+5. Parse Markdown into block structure. `<!--hvy: {...}-->` directives define top-level sections; `<!--hvy:subsection {...}-->` directives define subsections. An optional `#!` line immediately following sets the section title; it is consumed and not rendered. Standard ATX headings are plain content.
+6. Attach `<!--hvy:doc ...-->`, `<!--hvy:css ...-->`, block component directives such as `<!--hvy:text ...-->`, legacy `<!--hvy:block ...-->`, and `<!--hvy:expandable...-->` directives per placement rules.
+7. Extract CSS fenced blocks (language `css`) and optional preceding `hvy:css` metadata.
+8. Build section tree from directive types (`hvy:` = top-level, `hvy:subsection` = child).
+9. Validate template rules when extension is `.thvy`: require `hvy_version` and `template: true`.
 
 ## 10. Validation
 
 Document is valid HVY if:
 - It is parseable Markdown text.
 - Any `hvy:*` JSON directive is syntactically valid JSON.
+- If `hvy:tail` is present, it is followed by `--HVY-TAIL--` and only appears in `.hvy`.
 
 Additional validity for `.thvy`:
 - `template: true` exists in front matter.

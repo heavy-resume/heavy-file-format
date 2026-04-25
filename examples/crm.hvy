@@ -1,0 +1,102 @@
+---
+hvy_version: 0.1
+title: Job Application CRM
+reader_max_width: 70rem
+section_defaults:
+  css: "margin: 0.5rem 0;"
+plugins:
+  - id: dev.heavy.db-table
+    source: builtin://db-table
+---
+
+<!--hvy: {"id":"dashboard"}-->
+#! Dashboard
+
+<!--hvy:grid {"css":"margin: 0.5rem 0;","gridColumns":3}-->
+
+ <!--hvy:grid:0 {"id":"applied"}-->
+
+  <!--hvy:container {"css":"margin: 0;"}-->
+
+   <!--hvy:container:0 {}-->
+
+    <!--hvy:text {"css":"margin: 0;"}-->
+     ## Applied
+
+   <!--hvy:container:1 {}-->
+
+    <!--hvy:text {"css":"margin: 0;"}-->
+     18 active applications
+
+ <!--hvy:grid:1 {"id":"interviews"}-->
+
+  <!--hvy:container {"css":"margin: 0;"}-->
+
+   <!--hvy:container:0 {}-->
+
+    <!--hvy:text {"css":"margin: 0;"}-->
+     ## Interviews
+
+   <!--hvy:container:1 {}-->
+
+    <!--hvy:text {"css":"margin: 0;"}-->
+     5 in progress
+
+ <!--hvy:grid:2 {"id":"offers"}-->
+
+  <!--hvy:container {"css":"margin: 0;"}-->
+
+   <!--hvy:container:0 {}-->
+
+    <!--hvy:text {"css":"margin: 0;"}-->
+     ## Offers
+
+   <!--hvy:container:1 {}-->
+
+    <!--hvy:text {"css":"margin: 0;"}-->
+     1 pending decision
+
+<!--hvy:subsection {"id":"applications","highlight":true}-->
+#! Applications
+
+<!--hvy:text {"css":"margin: 0.5rem 0;"}-->
+The SQLite plugin instance is the working CRM for the full pipeline. Company, URL, and status should all come from the attached SQLite table.
+
+<!--hvy:plugin {"css":"margin: 0.5rem 0;","plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"job_applications"}}-->
+
+<!--hvy:subsection {"id":"contacts"}-->
+#! Contacts
+
+<!--hvy:text {"css":"margin: 0.5rem 0;"}-->
+This second plugin instance points at a different table in the same attached SQLite file.
+
+<!--hvy:plugin {"css":"margin: 0.5rem 0;","plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"company_contacts"}}-->
+
+<!--hvy:subsection {"id":"workflow"}-->
+#! Workflow
+
+<!--hvy:expandable {"css":"margin: 0.5rem 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+
+ <!--hvy:expandable:stub {}-->
+
+  <!--hvy:text {"css":"margin: 0;"}-->
+   Status definitions
+
+ <!--hvy:expandable:content {}-->
+
+  <!--hvy:component-list {"componentListComponent":"text","css":"margin: 0;"}-->
+
+   <!--hvy:component-list:0 {}-->
+
+    <!--hvy:text {}-->
+     `Applied`: submitted, no human response yet.
+
+   <!--hvy:component-list:1 {}-->
+
+    <!--hvy:text {}-->
+     `Hiring manager review`: recruiter handoff completed.
+
+   <!--hvy:component-list:2 {}-->
+
+    <!--hvy:text {}-->
+     `Onsite loop`: active interview sequence in progress.

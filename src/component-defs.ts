@@ -1,6 +1,7 @@
 import { state, REUSABLE_SECTION_DEF_PREFIX } from './state';
 import { escapeAttr, escapeHtml, renderOption } from './utils';
 import type { ComponentDefinition, SectionDefinition } from './types';
+import { areTablesEnabled } from './reference-config';
 
 let warnedAboutMissingState = false;
 
@@ -26,7 +27,10 @@ export function getReusableNameFromSectionKey(sectionKey: string): string | null
 }
 
 export function getComponentOptions(): string[] {
-  const builtins = ['text', 'quote', 'code', 'expandable', 'table', 'container', 'component-list', 'grid', 'plugin', 'xref-card'];
+  const builtins = ['text', 'quote', 'code', 'expandable', 'container', 'component-list', 'grid', 'plugin', 'xref-card'];
+  if (areTablesEnabled()) {
+    builtins.splice(4, 0, 'table');
+  }
   const custom = getComponentDefs()
     .map((def) => def.name.trim())
     .filter((name) => name.length > 0);
@@ -42,7 +46,11 @@ export function isBuiltinComponentName(componentName: string): boolean {
 }
 
 export function renderComponentOptions(selected: string): string {
-  return getComponentOptions().map((option) => renderOption(option, selected)).join('');
+  const options = getComponentOptions();
+  if (selected.trim().length > 0 && !options.includes(selected)) {
+    options.push(selected);
+  }
+  return options.map((option) => renderOption(option, selected)).join('');
 }
 
 export function renderReusableSectionOptions(selected: string): string {

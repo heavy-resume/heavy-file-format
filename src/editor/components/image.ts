@@ -2,6 +2,7 @@ import type { ComponentEditorRenderer, ComponentReaderRenderer, ComponentRenderH
 import type { VisualBlock } from '../types';
 import { getImageAttachment } from '../../attachments';
 import { state } from '../../state';
+import { sanitizeInlineCss } from '../../css-sanitizer';
 
 const blobUrlCache = new Map<string, { url: string; bytes: Uint8Array }>();
 
@@ -44,7 +45,8 @@ function renderPreview(block: VisualBlock, helpers: ComponentRenderHelpers): str
   if (!url) {
     return `<div class="image-empty muted">Missing attachment: ${helpers.escapeHtml(filename)}</div>`;
   }
-  return `<img class="image-block-img" src="${helpers.escapeAttr(url)}" alt="${helpers.escapeAttr(alt)}" data-image-filename="${helpers.escapeAttr(filename)}" />`;
+  const styleAttr = ` style="${helpers.escapeAttr(sanitizeInlineCss(block.schema.customCss))}"`;
+  return `<img class="image-block-img" src="${helpers.escapeAttr(url)}" alt="${helpers.escapeAttr(alt)}" data-image-filename="${helpers.escapeAttr(filename)}"${styleAttr} />`;
 }
 
 export const renderImageEditor: ComponentEditorRenderer = (sectionKey, block, helpers) => {
@@ -58,6 +60,8 @@ export const renderImageEditor: ComponentEditorRenderer = (sectionKey, block, he
           <button type="button" class="ghost" data-action="image-preset" data-image-preset="right" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}" title="Align right">Right</button>
         </div>
         <div class="toolbar-segment image-fit-buttons" role="group" aria-label="Image size">
+          <button type="button" class="ghost" data-action="image-preset" data-image-preset="small" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}" title="Small (20rem wide)">Small</button>
+          <button type="button" class="ghost" data-action="image-preset" data-image-preset="medium" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}" title="Medium (40rem wide)">Medium</button>
           <button type="button" class="ghost" data-action="image-preset" data-image-preset="fit-width" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}" title="Fit width">Fit Width</button>
           <button type="button" class="ghost" data-action="image-preset" data-image-preset="fit-height" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}" title="Fit height">Fit Height</button>
         </div>

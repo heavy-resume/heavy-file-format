@@ -1195,6 +1195,15 @@ export function bindUi(app: HTMLElement): void {
       recordHistory();
       const component = (state.addComponentBySection[section.key] ?? 'text').trim() || 'text';
       const newBlock = createEmptyBlock(component);
+      // Anchor any currently-unanchored child sections to the previous last block so
+      // the new block lands at the visual bottom (where the add-component button sits)
+      // rather than being inserted ahead of trailing subsections.
+      const previousLastBlockId = section.blocks.length > 0 ? section.blocks[section.blocks.length - 1].id : '';
+      for (const child of section.children) {
+        if (child.renderAfterBlockId == null) {
+          child.renderAfterBlockId = previousLastBlockId;
+        }
+      }
       section.blocks.push(newBlock);
       setActiveEditorBlock(section.key, newBlock.id);
       getRenderApp()();
@@ -2705,21 +2714,81 @@ function getNodeIndex(node: Node): number {
   return index;
 }
 
-const IMAGE_PRESETS: Record<string, string> = {
-  left: 'margin: 0.5rem auto 0.5rem 0; display: block;',
-  center: 'margin: 0.5rem auto; display: block;',
-  right: 'margin: 0.5rem 0 0.5rem auto; display: block;',
-  'fit-width': 'margin: 0.5rem 0; display: block; width: 100%; height: auto;',
-  'fit-height': 'margin: 0.5rem 0; display: block; height: 100%; width: auto;',
+interface ImagePresetDefinition {
+  /** Properties this preset writes onto the block. */
+  props: Record<string, string>;
+  /** Properties this preset *clears* from the existing inline css before writing
+   * `props`. Anything not listed here is preserved verbatim. */
+  controls: string[];
+}
+
+const POSITION_CONTROLS = ['margin', 'margin-top', 'margin-right', 'margin-bottom', 'margin-left', 'display'];
+const SIZE_CONTROLS = ['width', 'height', 'display'];
+
+const IMAGE_PRESETS: Record<string, ImagePresetDefinition> = {
+  left: {
+    props: { margin: '0.5rem auto 0.5rem 0', display: 'block' },
+    controls: POSITION_CONTROLS,
+  },
+  center: {
+    props: { margin: '0.5rem auto', display: 'block' },
+    controls: POSITION_CONTROLS,
+  },
+  right: {
+    props: { margin: '0.5rem 0 0.5rem auto', display: 'block' },
+    controls: POSITION_CONTROLS,
+  },
+  small: {
+    props: { width: '20rem', height: 'auto', display: 'block' },
+    controls: SIZE_CONTROLS,
+  },
+  medium: {
+    props: { width: '40rem', height: 'auto', display: 'block' },
+    controls: SIZE_CONTROLS,
+  },
+  'fit-width': {
+    props: { width: '100%', height: 'auto', display: 'block' },
+    controls: SIZE_CONTROLS,
+  },
+  'fit-height': {
+    props: { height: '100%', width: 'auto', display: 'block' },
+    controls: SIZE_CONTROLS,
+  },
 };
 
+function parseInlineCssDeclarations(css: string): Array<[string, string]> {
+  const entries: Array<[string, string]> = [];
+  for (const segment of css.split(';')) {
+    const colon = segment.indexOf(':');
+    if (colon < 0) continue;
+    const prop = segment.slice(0, colon).trim().toLowerCase();
+    const value = segment.slice(colon + 1).trim();
+    if (prop.length === 0 || value.length === 0) continue;
+    entries.push([prop, value]);
+  }
+  return entries;
+}
+
+function serializeInlineCssDeclarations(entries: Array<[string, string]>): string {
+  return entries.map(([prop, value]) => `${prop}: ${value};`).join(' ');
+}
+
+export function mergeImagePresetCss(existingCss: string, preset: string): string | null {
+  const definition = IMAGE_PRESETS[preset];
+  if (!definition) return null;
+  const cleared = new Set(definition.controls.map((prop) => prop.toLowerCase()));
+  const preserved = parseInlineCssDeclarations(existingCss).filter(([prop]) => !cleared.has(prop));
+  const merged = [...preserved, ...Object.entries(definition.props)];
+  return serializeInlineCssDeclarations(merged);
+}
+
 export function applyImagePreset(sectionKey: string, blockId: string, preset: string): void {
-  const css = IMAGE_PRESETS[preset];
-  if (!css) return;
   const block = findBlockByIds(sectionKey, blockId);
   if (!block) return;
+  const merged = mergeImagePresetCss(block.schema.customCss, preset);
+  if (merged === null) return;
   recordHistory(`image-preset:${blockId}:${preset}`);
-  block.schema.customCss = css;
+  block.schema.customCss = merged;
   syncReusableTemplateForBlock(sectionKey, blockId);
   getRefreshReaderPanels()();
   getRenderApp()();

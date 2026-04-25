@@ -6,7 +6,8 @@ import type { VisualBlock, VisualSection } from '../editor/types';
 import { deserializeDocumentWithDiagnostics, wrapHvyFragmentAsDocument } from '../serialization';
 import { visitBlocks } from '../section-ops';
 import { getRenderApp, state } from '../state';
-import type { DocumentTailAttachment, VisualDocument } from '../types';
+import type { DocumentAttachment, VisualDocument } from '../types';
+import { DB_ATTACHMENT_ID, getAttachment, setAttachment } from '../attachments';
 import { DB_TABLE_PLUGIN_ID } from './registry';
 
 import './db-table.css';
@@ -542,7 +543,7 @@ async function getLoadedDatabase(): Promise<SqlJsDatabase> {
 
 async function loadRuntimeDatabase(): Promise<void> {
   const SQL = await getSqlJs();
-  const bytes = await getAttachmentDatabaseBytes(state.document.attachmentTail ?? null);
+  const bytes = await getAttachmentDatabaseBytes(getAttachment(state.document, DB_ATTACHMENT_ID));
   runtime.db = bytes.length > 0 ? new SQL.Database(bytes) : new SQL.Database();
 }
 
@@ -555,17 +556,17 @@ async function getSqlJs(): Promise<SqlJsStatic> {
   return sqlJsPromise;
 }
 
-async function getAttachmentDatabaseBytes(attachmentTail: DocumentTailAttachment | null): Promise<Uint8Array> {
-  if (!attachmentTail || attachmentTail.bytes.length === 0) {
+async function getAttachmentDatabaseBytes(attachment: DocumentAttachment | null): Promise<Uint8Array> {
+  if (!attachment || attachment.bytes.length === 0) {
     return new Uint8Array();
   }
 
-  const encoding = typeof attachmentTail.meta.encoding === 'string' ? attachmentTail.meta.encoding : '';
+  const encoding = typeof attachment.meta.encoding === 'string' ? attachment.meta.encoding : '';
   if (encoding === 'gzip') {
-    return ungzipBytes(attachmentTail.bytes);
+    return ungzipBytes(attachment.bytes);
   }
 
-  return Uint8Array.from(attachmentTail.bytes);
+  return Uint8Array.from(attachment.bytes);
 }
 
 async function persistRuntimeDatabase(): Promise<void> {
@@ -576,16 +577,18 @@ async function persistRuntimeDatabase(): Promise<void> {
   const databaseBytes = runtime.db.export();
   runtime.persistPromise = (async () => {
     const encoded = await encodeAttachmentBytes(databaseBytes);
-    const previousMeta = state.document.attachmentTail?.meta ?? {};
-    state.document.attachmentTail = {
-      meta: {
-        ...previousMeta,
+    const previous = getAttachment(state.document, DB_ATTACHMENT_ID);
+    setAttachment(
+      state.document,
+      DB_ATTACHMENT_ID,
+      {
+        ...(previous?.meta ?? {}),
         plugin: DB_TABLE_PLUGIN_ID,
         mediaType: 'application/vnd.sqlite3',
         ...(encoded.encoding ? { encoding: encoded.encoding } : {}),
       },
-      bytes: encoded.bytes,
-    };
+      encoded.bytes
+    );
   })();
 
   await runtime.persistPromise;
@@ -1048,6 +1051,6 @@ export async function executeDbTableWriteSql(sql: string): Promise<string> {
 
 async function openDocumentDatabase(document: VisualDocument): Promise<SqlJsDatabase> {
   const SQL = await getSqlJs();
-  const bytes = await getAttachmentDatabaseBytes(document.attachmentTail ?? null);
+  const bytes = await getAttachmentDatabaseBytes(getAttachment(document, DB_ATTACHMENT_ID));
   return bytes.length > 0 ? new SQL.Database(bytes) : new SQL.Database();
 }

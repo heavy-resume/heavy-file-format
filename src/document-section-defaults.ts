@@ -1,4 +1,5 @@
 import type { JsonObject } from './hvy/types';
+import { sanitizeInlineCss } from './css-sanitizer';
 
 export function getDocumentSectionDefaultCss(documentMeta: JsonObject): string {
   const sectionDefaults = documentMeta.section_defaults;
@@ -7,10 +8,10 @@ export function getDocumentSectionDefaultCss(documentMeta: JsonObject): string {
   }
 
   const css = (sectionDefaults as Record<string, unknown>).css;
-  return typeof css === 'string' ? css : '';
+  return typeof css === 'string' ? sanitizeInlineCss(css) : '';
 }
 
 export function mergeDocumentCss(defaultCss: string, explicitCss: string): string {
-  const parts = [defaultCss.trim(), explicitCss.trim()].filter((value) => value.length > 0);
+  const parts = [sanitizeInlineCss(defaultCss).trim(), sanitizeInlineCss(explicitCss).trim()].filter((value) => value.length > 0);
   return parts.join(' ');
 }

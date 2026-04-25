@@ -282,6 +282,18 @@ Cross-reference card requirements:
 - `xrefTitle` is REQUIRED.
 - `xrefTarget` is RECOMMENDED. If omitted, implementations SHOULD preserve the card, treat it as disabled/non-navigable, and surface a warning to authors.
 
+Image blocks reference a binary attachment stored in the document tail:
+
+```markdown
+<!--hvy:image {"imageFile":"hero.png","imageAlt":"Cover photo"}-->
+```
+
+Image block fields:
+- `imageFile`: REQUIRED string naming the attached file. The bytes are stored as a tail attachment with `id` `image:<imageFile>` (see §7.4). Filenames are unique per document; writing an image with an existing filename overwrites the prior bytes.
+- `imageAlt`: optional alternate text for the rendered image.
+
+Common web image media types SHOULD be supported, including `image/png`, `image/jpeg`, `image/gif`, `image/webp`, `image/svg+xml`, `image/avif`, and `image/bmp`. Clients MUST treat tail bytes as untrusted (see §8) and SHOULD render the image inline when the attachment is present, or surface a warning when it is missing.
+
 Rules:
 - The directive MUST be on a single line.
 - The payload MUST be valid JSON object.
@@ -324,6 +336,8 @@ Block metadata optionally includes component-specific fields. Common examples in
 - `tableColumns`
 - `tableShowHeader`
 - `tableRows`
+- `imageFile`
+- `imageAlt`
 
 Nested block arrays such as `containerBlocks` use a recursive block object shape:
 
@@ -733,13 +747,14 @@ HVY core only standardizes the envelope. The meaning of `pluginConfig` is plugin
 
 ### 7.4 Tail payload envelope
 
-`.hvy` files MAY append a single opaque binary tail after the Markdown/HVY text body. This is intended for plugin-owned payloads such as embedded databases.
+`.hvy` files MAY append one or more opaque binary attachments after the Markdown/HVY text body. Attachments are intended for plugin-owned payloads (such as an embedded database) and for component-owned binary assets (such as image files referenced by `image` components).
 
 Tail format:
-1. The textual document body ends with a single-line directive:
+1. The textual document body ends with one or more consecutive single-line tail directives, each describing one attachment:
 
 ```markdown
-<!--hvy:tail {"plugin":"dev.heavy.db-table","mediaType":"application/vnd.sqlite3","encoding":"gzip"}-->
+<!--hvy:tail {"id":"db","plugin":"dev.heavy.db-table","mediaType":"application/vnd.sqlite3","encoding":"gzip","length":1234}-->
+<!--hvy:tail {"id":"image:hero.png","mediaType":"image/png","length":5678}-->
 ```
 
 2. The next line MUST be the exact ASCII sentinel:
@@ -748,13 +763,20 @@ Tail format:
 --HVY-TAIL--
 ```
 
-3. All remaining bytes after the trailing newline of that sentinel are the tail payload.
+3. All remaining bytes after the trailing newline of that sentinel are the concatenated attachment payloads, laid out in the order the directives appear. Each attachment's byte slice has length `length` from its directive.
+
+Tail directive fields:
+- `id`: REQUIRED stable identifier unique within the document. Conventional ids include `db` for the database plugin payload and `image:<filename>` for image component attachments.
+- `mediaType`: RECOMMENDED IANA media type of the decoded payload.
+- `length`: REQUIRED non-negative integer byte count for that attachment's slice. When omitted on the last directive, the slice consumes all remaining tail bytes.
+- `encoding`: optional. When `"gzip"`, the attachment bytes are gzip-compressed and clients MUST decompress before handing them to the consumer.
+- `plugin`: optional. Names the plugin that owns the attachment.
 
 Rules:
 - Tail payloads are NOT part of Markdown parsing.
 - Tail payloads are only valid for `.hvy`, not `.thvy`.
-- If `encoding` is present, clients MUST decode the tail before handing it to the plugin.
-- Clients that do not recognize the declared plugin or tail media type SHOULD preserve the bytes but MAY render the plugin block as unsupported.
+- Duplicate `id` values are not permitted; if a writer adds an attachment whose `id` already exists, the previous entry is overwritten.
+- Clients that do not recognize an attachment's declared plugin or media type SHOULD preserve the bytes and pass them through on save, but MAY render the corresponding component as unsupported.
 
 ### 7.5 DB table plugin contract
 
@@ -810,11 +832,12 @@ Normative behavior:
 - Remote resource fetches MUST be gated behind user network permission.
 - Plugin installation MUST show `id` and `source` before trust is granted.
 - Clients MUST treat tail payload bytes as untrusted input and only hand them to the declared plugin after normal trust checks.
+- Renderers MUST sanitize document-supplied CSS (inline `css` fields, fenced `~~~css` blocks, `hvy:css` directives, `theme.colors` values, `component_defaults.*.css`, `section_defaults.css`, and section/block `custom_css`) so it cannot trigger network fetches unless the user has explicitly enabled external CSS resources. Specifically, renderers MUST drop or neutralize `url(...)`, `image-set(...)`, `src(...)`, `src:` declarations, and the at-rules `@import`, `@font-face`, `@namespace`, and `@property`. Sanitization MUST decode CSS character escapes (e.g. `u\72l(...)` and `\55RL(...)`) before pattern matching so obfuscated forms are also blocked.
 
 ## 9. Parsing Rules (Normative)
 
 1. Read the file as bytes.
-2. If the byte stream contains a valid `hvy:tail` directive immediately followed by `--HVY-TAIL--`, split the file into text bytes before the directive and opaque tail bytes after the sentinel. Otherwise treat the whole file as text bytes.
+2. If the byte stream contains one or more consecutive `hvy:tail` directives immediately followed by `--HVY-TAIL--`, split the file into text bytes before the directives and opaque tail bytes after the sentinel. Each tail directive's `length` field controls how many bytes belong to that attachment, in declaration order. Otherwise treat the whole file as text bytes.
 3. Decode the text bytes as UTF-8 text.
 4. Parse YAML front matter if present at file start.
 5. Parse Markdown into block structure. `<!--hvy: {...}-->` directives define top-level sections; `<!--hvy:subsection {...}-->` directives define subsections. An optional `#!` line immediately following sets the section title; it is consumed and not rendered. Standard ATX headings are plain content.
@@ -828,7 +851,7 @@ Normative behavior:
 Document is valid HVY if:
 - It is parseable Markdown text.
 - Any `hvy:*` JSON directive is syntactically valid JSON.
-- If `hvy:tail` is present, it is followed by `--HVY-TAIL--` and only appears in `.hvy`.
+- If `hvy:tail` directives are present, they form a consecutive block immediately preceding `--HVY-TAIL--`, and only appear in `.hvy`.
 
 Additional validity for `.thvy`:
 - `template: true` exists in front matter.

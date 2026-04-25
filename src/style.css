@@ -3215,3 +3215,89 @@ button.tiny {
     grid-column: 1 / -1;
   }
 }
+
+.image-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.image-toolbar {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.image-dropzone {
+  position: relative;
+  border: 2px dashed var(--hvy-border);
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 120px;
+  background: var(--hvy-surface-alt);
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.image-dropzone.image-dropzone-active {
+  border-color: var(--hvy-accent-1);
+  background: var(--hvy-highlight-1);
+}
+
+.image-dropzone.has-image {
+  background: var(--hvy-surface);
+}
+
+.image-dropzone-hint {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--hvy-text-muted);
+}
+
+.image-pick-label input[type="file"] {
+  display: none;
+}
+
+.image-pick-button {
+  cursor: pointer;
+  text-decoration: underline;
+  color: var(--hvy-link-color);
+}
+
+.image-filename {
+  font-family: monospace;
+  font-size: 0.85em;
+  word-break: break-all;
+}
+
+.image-block-img,
+.image-reader img,
+.image-empty {
+  max-width: 100%;
+}
+
+.image-reader img {
+  display: inline-block;
+}
+
+.image-alt-label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  width: 100%;
+  max-width: 40rem;
+  text-align: center;
+}
+
+.image-alt-label-container {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  width: 100%;
+}

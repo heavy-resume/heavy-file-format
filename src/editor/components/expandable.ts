@@ -1,4 +1,5 @@
 import type { ComponentEditorRenderer, ComponentReaderRenderer } from '../component-helpers';
+import { sanitizeInlineCss } from '../../css-sanitizer';
 
 export const renderExpandableEditor: ComponentEditorRenderer = (sectionKey, block, helpers) => {
   const stubAddKey = `expandable-stub:${sectionKey}:${block.id}`;
@@ -132,8 +133,8 @@ export const renderExpandableReader: ComponentReaderRenderer = (section, block, 
   const contentHtml = block.schema.expandableContentBlocks.children.map((innerBlock) => helpers.renderReaderBlock(section, innerBlock)).join('');
   const expanded = block.schema.expandableExpanded;
   const alwaysShowStub = block.schema.expandableAlwaysShowStub;
-  const stubPaneStyle = helpers.escapeAttr(block.schema.expandableStubCss);
-  const contentPaneStyle = helpers.escapeAttr(block.schema.expandableContentCss);
+  const stubPaneStyle = helpers.escapeAttr(sanitizeInlineCss(block.schema.expandableStubCss));
+  const contentPaneStyle = helpers.escapeAttr(sanitizeInlineCss(block.schema.expandableContentCss));
   const toggleAttrs = `data-reader-action="toggle-expandable" data-section-key="${helpers.escapeAttr(section.key)}" data-block-id="${helpers.escapeAttr(
     block.id
   )}" aria-expanded="${expanded ? 'true' : 'false'}"`;

@@ -2,6 +2,7 @@ import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import type { HvyDocument, HvySection } from './types';
 import { normalizeMarkdownIndentation } from '../markdown';
+import { sanitizeCssBlock } from '../css-sanitizer';
 
 marked.setOptions({ gfm: true, breaks: false });
 
@@ -17,7 +18,7 @@ export function buildRuntimeCss(document: HvyDocument): string {
   const blocks: string[] = [];
   for (const block of document.cssBlocks) {
     const id = typeof block.meta.id === 'string' ? block.meta.id : 'anonymous';
-    blocks.push(`/* hvy:css ${id} */\n${block.css}`);
+    blocks.push(`/* hvy:css ${id} */\n${sanitizeCssBlock(block.css)}`);
   }
   return blocks.join('\n\n');
 }

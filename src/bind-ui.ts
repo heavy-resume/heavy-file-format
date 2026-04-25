@@ -64,6 +64,8 @@ import {
   toggleDbTableSort,
   updateDbTableCell,
 } from './plugins/db-table';
+import { setImageAttachment, inferImageMediaType } from './attachments';
+import { clearImageBlobUrlCache } from './editor/components/image';
 
 let lastBoundChatMessageCount = -1;
 
@@ -86,6 +88,7 @@ export function bindUi(app: HTMLElement): void {
   }
 
   bindChatThreadUi(chatThread, chatScrollContainer, chatScrollBottomButton);
+  bindImageDragAndDrop(app);
 
   const tagStateHelpers = {
     getTagState,
@@ -410,6 +413,15 @@ export function bindUi(app: HTMLElement): void {
       state.rawEditorDiagnostics = getRawEditorDiagnostics(target.value, state.filename);
       return;
     }
+
+    if (field === 'image-alt' && (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) {
+      const block = resolveBlockContext(target)?.block ?? null;
+      if (!block) return;
+      recordHistory(`image-alt:${block.id}`);
+      block.schema.imageAlt = target.value;
+      getRefreshReaderPanels()();
+      return;
+    }
   });
 
   app.addEventListener('change', (event) => {
@@ -449,6 +461,13 @@ export function bindUi(app: HTMLElement): void {
         .catch((error) => {
           console.error('[hvy:sqlite-plugin] cell update failed', error);
         });
+      return;
+    }
+
+    if (field === 'image-upload' && target instanceof HTMLInputElement) {
+      const file = target.files?.[0];
+      if (!file) return;
+      void handleImageUpload(target, file);
       return;
     }
 
@@ -554,16 +573,18 @@ export function bindUi(app: HTMLElement): void {
       }
       try {
         recordHistory('raw-editor:apply');
-        const previousTail = state.document.attachmentTail;
+        const previousAttachments = state.document.attachments;
         state.document = deserializeDocument(
           state.rawEditorText,
           detectExtension(state.filename, state.rawEditorText)
         );
-        if (previousTail && state.document.attachmentTail && state.document.attachmentTail.bytes.length === 0) {
-          state.document.attachmentTail = {
-            meta: state.document.attachmentTail.meta,
-            bytes: previousTail.bytes,
-          };
+        for (const next of state.document.attachments) {
+          if (next.bytes.length === 0) {
+            const previous = previousAttachments.find((entry) => entry.id === next.id);
+            if (previous) {
+              next.bytes = previous.bytes;
+            }
+          }
         }
         state.rawEditorText = serializeDocument(state.document);
         state.rawEditorError = null;
@@ -1174,6 +1195,15 @@ export function bindUi(app: HTMLElement): void {
       recordHistory();
       const component = (state.addComponentBySection[section.key] ?? 'text').trim() || 'text';
       const newBlock = createEmptyBlock(component);
+      // Anchor any currently-unanchored child sections to the previous last block so
+      // the new block lands at the visual bottom (where the add-component button sits)
+      // rather than being inserted ahead of trailing subsections.
+      const previousLastBlockId = section.blocks.length > 0 ? section.blocks[section.blocks.length - 1].id : '';
+      for (const child of section.children) {
+        if (child.renderAfterBlockId == null) {
+          child.renderAfterBlockId = previousLastBlockId;
+        }
+      }
       section.blocks.push(newBlock);
       setActiveEditorBlock(section.key, newBlock.id);
       getRenderApp()();
@@ -1251,6 +1281,12 @@ export function bindUi(app: HTMLElement): void {
       }
       block.schemaMode = !block.schemaMode;
       getRenderApp()();
+      return;
+    }
+
+    if (action === 'image-preset' && blockId) {
+      const preset = actionButton.dataset.imagePreset ?? '';
+      applyImagePreset(sectionKey, blockId, preset);
       return;
     }
 
@@ -2676,4 +2712,140 @@ function getNodeIndex(node: Node): number {
     current = current.previousSibling;
   }
   return index;
+}
+
+interface ImagePresetDefinition {
+  /** Properties this preset writes onto the block. */
+  props: Record<string, string>;
+  /** Properties this preset *clears* from the existing inline css before writing
+   * `props`. Anything not listed here is preserved verbatim. */
+  controls: string[];
+}
+
+const POSITION_CONTROLS = ['margin', 'margin-top', 'margin-right', 'margin-bottom', 'margin-left', 'display'];
+const SIZE_CONTROLS = ['width', 'height', 'display'];
+
+const IMAGE_PRESETS: Record<string, ImagePresetDefinition> = {
+  left: {
+    props: { margin: '0.5rem auto 0.5rem 0', display: 'block' },
+    controls: POSITION_CONTROLS,
+  },
+  center: {
+    props: { margin: '0.5rem auto', display: 'block' },
+    controls: POSITION_CONTROLS,
+  },
+  right: {
+    props: { margin: '0.5rem 0 0.5rem auto', display: 'block' },
+    controls: POSITION_CONTROLS,
+  },
+  small: {
+    props: { width: '20rem', height: 'auto', display: 'block' },
+    controls: SIZE_CONTROLS,
+  },
+  medium: {
+    props: { width: '40rem', height: 'auto', display: 'block' },
+    controls: SIZE_CONTROLS,
+  },
+  'fit-width': {
+    props: { width: '100%', height: 'auto', display: 'block' },
+    controls: SIZE_CONTROLS,
+  },
+  'fit-height': {
+    props: { height: '100%', width: 'auto', display: 'block' },
+    controls: SIZE_CONTROLS,
+  },
+};
+
+function parseInlineCssDeclarations(css: string): Array<[string, string]> {
+  const entries: Array<[string, string]> = [];
+  for (const segment of css.split(';')) {
+    const colon = segment.indexOf(':');
+    if (colon < 0) continue;
+    const prop = segment.slice(0, colon).trim().toLowerCase();
+    const value = segment.slice(colon + 1).trim();
+    if (prop.length === 0 || value.length === 0) continue;
+    entries.push([prop, value]);
+  }
+  return entries;
+}
+
+function serializeInlineCssDeclarations(entries: Array<[string, string]>): string {
+  return entries.map(([prop, value]) => `${prop}: ${value};`).join(' ');
+}
+
+export function mergeImagePresetCss(existingCss: string, preset: string): string | null {
+  const definition = IMAGE_PRESETS[preset];
+  if (!definition) return null;
+  const cleared = new Set(definition.controls.map((prop) => prop.toLowerCase()));
+  const preserved = parseInlineCssDeclarations(existingCss).filter(([prop]) => !cleared.has(prop));
+  const merged = [...preserved, ...Object.entries(definition.props)];
+  return serializeInlineCssDeclarations(merged);
+}
+
+export function applyImagePreset(sectionKey: string, blockId: string, preset: string): void {
+  const block = findBlockByIds(sectionKey, blockId);
+  if (!block) return;
+  const merged = mergeImagePresetCss(block.schema.customCss, preset);
+  if (merged === null) return;
+  recordHistory(`image-preset:${blockId}:${preset}`);
+  block.schema.customCss = merged;
+  syncReusableTemplateForBlock(sectionKey, blockId);
+  getRefreshReaderPanels()();
+  getRenderApp()();
+}
+
+export async function handleImageUpload(target: HTMLElement, file: File): Promise<void> {
+  const sectionKey = target.dataset.sectionKey ?? '';
+  const blockId = target.dataset.blockId ?? '';
+  if (!sectionKey || !blockId) return;
+  const block = findBlockByIds(sectionKey, blockId);
+  if (!block) return;
+  const filename = file.name;
+  if (!filename) return;
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const mediaType = file.type || inferImageMediaType(filename);
+  recordHistory(`image-upload:${blockId}`);
+  setImageAttachment(state.document, filename, mediaType, bytes);
+  block.schema.imageFile = filename;
+  if (!block.schema.imageAlt) {
+    block.schema.imageAlt = filename;
+  }
+  clearImageBlobUrlCache();
+  syncReusableTemplateForBlock(sectionKey, blockId);
+  getRenderApp()();
+}
+
+export function bindImageDragAndDrop(app: HTMLElement): void {
+  const overClass = 'image-dropzone-active';
+  app.addEventListener('dragenter', (event) => {
+    const dropzone = (event.target as HTMLElement | null)?.closest<HTMLElement>('[data-image-dropzone="true"]');
+    if (!dropzone) return;
+    event.preventDefault();
+    dropzone.classList.add(overClass);
+  });
+  app.addEventListener('dragover', (event) => {
+    const dropzone = (event.target as HTMLElement | null)?.closest<HTMLElement>('[data-image-dropzone="true"]');
+    if (!dropzone) return;
+    event.preventDefault();
+    if (event.dataTransfer) {
+      event.dataTransfer.dropEffect = 'copy';
+    }
+    dropzone.classList.add(overClass);
+  });
+  app.addEventListener('dragleave', (event) => {
+    const dropzone = (event.target as HTMLElement | null)?.closest<HTMLElement>('[data-image-dropzone="true"]');
+    if (!dropzone) return;
+    if (!dropzone.contains(event.relatedTarget as Node | null)) {
+      dropzone.classList.remove(overClass);
+    }
+  });
+  app.addEventListener('drop', (event) => {
+    const dropzone = (event.target as HTMLElement | null)?.closest<HTMLElement>('[data-image-dropzone="true"]');
+    if (!dropzone) return;
+    event.preventDefault();
+    dropzone.classList.remove(overClass);
+    const file = event.dataTransfer?.files?.[0];
+    if (!file || !/^image\//.test(file.type)) return;
+    void handleImageUpload(dropzone, file);
+  });
 }

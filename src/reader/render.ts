@@ -3,6 +3,7 @@ import { renderComponentListReader } from '../editor/components/component-list';
 import { renderContainerReader } from '../editor/components/container';
 import { renderExpandableReader } from '../editor/components/expandable';
 import { renderGridReader } from '../editor/components/grid';
+import { renderImageReader } from '../editor/components/image';
 import { renderPluginReader } from '../editor/components/plugin';
 import { renderTableReader, resetReaderTableStripeSequence } from '../editor/components/table';
 import { renderTextReader } from '../editor/components/text';
@@ -14,6 +15,7 @@ import { colorValueToPickerHex, getResolvedThemeColor, getThemeColorLabel, THEME
 import type { ThemeConfig } from '../theme';
 import type { DbTableQueryModalState, SqliteRowComponentModalState, VisualDocument } from '../types';
 import { getDocumentSectionDefaultCss, mergeDocumentCss } from '../document-section-defaults';
+import { sanitizeInlineCss } from '../css-sanitizer';
 import { areTablesEnabled } from '../reference-config';
 import { parseAttachedComponentBlocks } from '../plugins/db-table';
 
@@ -169,7 +171,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       .filter(Boolean)
       .map((part) => deps.escapeAttr(part))
       .join(' ');
-    const blockAttrs = `${idAttr} class="${blockClass}" data-component="${deps.escapeAttr(block.schema.component)}" data-section-key="${deps.escapeAttr(section.key)}" data-block-id="${deps.escapeAttr(block.id)}" style="${deps.escapeAttr(block.schema.customCss)}"`;
+    const blockAttrs = `${idAttr} class="${blockClass}" data-component="${deps.escapeAttr(block.schema.component)}" data-section-key="${deps.escapeAttr(section.key)}" data-block-id="${deps.escapeAttr(block.id)}" style="${deps.escapeAttr(sanitizeInlineCss(block.schema.customCss))}"`;
     const helpers = deps.getComponentRenderHelpers();
 
     if (base === 'code') {
@@ -200,6 +202,9 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     }
     if (base === 'xref-card') {
       return `<div ${blockAttrs}>${renderXrefCardReader(section, block, helpers)}</div>`;
+    }
+    if (base === 'image') {
+      return `<div ${blockAttrs}>${renderImageReader(section, block, helpers)}</div>`;
     }
     return `<div ${blockAttrs}>${renderTextReader(section, block, helpers)}</div>`;
   }
@@ -520,7 +525,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
               (rowModal.mode === 'raw' ? rawPreviewBlocks : attachedBlocks).length > 0
                 ? (rowModal.mode === 'raw' ? rawPreviewBlocks : attachedBlocks)
                     .map(
-                      (block) => `<div class="reader-block slot-center" style="${deps.escapeAttr(block.schema.customCss)}">
+                      (block) => `<div class="reader-block slot-center" style="${deps.escapeAttr(sanitizeInlineCss(block.schema.customCss))}">
                         ${renderReaderBlock(section, block)}
                       </div>`
                     )

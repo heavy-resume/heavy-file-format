@@ -7,6 +7,7 @@ import { renderComponentListEditor } from './components/component-list';
 import { renderContainerEditor } from './components/container';
 import { renderExpandableEditor } from './components/expandable';
 import { renderGridEditor } from './components/grid';
+import { renderImageEditor } from './components/image';
 import { renderPluginEditor } from './components/plugin';
 import { renderTableEditor } from './components/table';
 import { renderTextEditor } from './components/text';
@@ -26,6 +27,7 @@ import python from 'highlight.js/lib/languages/python';
 import typescript from 'highlight.js/lib/languages/typescript';
 import xml from 'highlight.js/lib/languages/xml';
 import { areTablesEnabled } from '../reference-config';
+import { sanitizeInlineCss } from '../css-sanitizer';
 
 hljs.registerLanguage('bash', bash);
 hljs.registerLanguage('sh', bash);
@@ -342,8 +344,8 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       deps.ensureExpandableBlocks(block);
       const expanded = block.schema.expandableExpanded;
       const alwaysShowStub = block.schema.expandableAlwaysShowStub;
-      const stubPaneStyle = deps.escapeAttr(block.schema.expandableStubCss);
-      const contentPaneStyle = deps.escapeAttr(block.schema.expandableContentCss);
+      const stubPaneStyle = deps.escapeAttr(sanitizeInlineCss(block.schema.expandableStubCss));
+      const contentPaneStyle = deps.escapeAttr(sanitizeInlineCss(block.schema.expandableContentCss));
       const stubHtml = block.schema.expandableStubBlocks.children
         .map((innerBlock) => renderPassiveEditorBlock(sectionKey, innerBlock, rootSections))
         .join('');
@@ -592,6 +594,9 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     }
     if (component === 'xref-card') {
       return renderXrefCardEditor(sectionKey, block, helpers);
+    }
+    if (component === 'image') {
+      return renderImageEditor(sectionKey, block, helpers);
     }
     return renderTextEditor(sectionKey, block, helpers);
   }

@@ -43,6 +43,8 @@ export function defaultBlockSchema(component = 'text'): BlockSchema {
     tableColumns: 'Column 1, Column 2',
     tableShowHeader: true,
     tableRows: [],
+    imageFile: '',
+    imageAlt: '',
   };
 }
 
@@ -161,6 +163,8 @@ export function schemaFromUnknown(value: unknown): BlockSchema {
         cells: Array.isArray(mapped.cells) ? mapped.cells.map((cell) => String(cell ?? '')) : createDefaultTableRow(2).cells,
       };
     }),
+    imageFile: typeof candidate.imageFile === 'string' ? candidate.imageFile : defaults.imageFile,
+    imageAlt: typeof candidate.imageAlt === 'string' ? candidate.imageAlt : defaults.imageAlt,
   };
 }
 
@@ -226,7 +230,7 @@ export function createBlankDocument(): VisualDocument {
     },
     extension: '.hvy',
     sections: [],
-    attachmentTail: null,
+    attachments: [],
   };
 }
 

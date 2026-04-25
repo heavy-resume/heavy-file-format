@@ -51,6 +51,8 @@ export interface BlockSchema {
   tableColumns: string;
   tableShowHeader: boolean;
   tableRows: TableRow[];
+  imageFile: string;
+  imageAlt: string;
 }
 
 export interface VisualBlock {

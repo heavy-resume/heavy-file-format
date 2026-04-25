@@ -6,6 +6,7 @@ import {
   isDbTablePluginBlock,
   parseDbTableEditToolRequest,
 } from '../src/ai-db-table-edit';
+import { formatQueryResultTable } from '../src/plugins/db-table';
 import { deserializeDocument } from '../src/serialization';
 import type { ChatSettings } from '../src/types';
 import type { DbTableAiSummary } from '../src/plugins/db-table';
@@ -218,4 +219,31 @@ test('requestAiDbTableEdit rejects blocks without a configured table name', asyn
     requestAiDbTableEdit({ settings, document: doc, block, request: 'anything' })
   ).rejects.toThrow(/no configured table name/);
   expect(requestProxyCompletionMock).not.toHaveBeenCalled();
+});
+
+test('formatQueryResultTable escapes pipe characters in cell values', () => {
+  const columns = ['name', 'value'];
+  const rows = [['foo | bar', 'baz']];
+
+  const expected = 'name | value\n--- | ---\nfoo \\| bar | baz';
+  expect(formatQueryResultTable(columns, rows)).toBe(expected);
+});
+
+test('formatQueryResultTable escapes newlines in cell values', () => {
+  const columns = ['notes'];
+  const rows = [['line one\nline two']];
+
+  const expected = 'notes\n---\nline one\\nline two';
+  expect(formatQueryResultTable(columns, rows)).toBe(expected);
+});
+
+test('formatQueryResultTable renders plain rows without modification', () => {
+  const columns = ['company', 'status'];
+  const rows = [
+    ['Acme', 'Open'],
+    ['Globex', 'Done'],
+  ];
+
+  const expected = 'company | status\n--- | ---\nAcme | Open\nGlobex | Done';
+  expect(formatQueryResultTable(columns, rows)).toBe(expected);
 });

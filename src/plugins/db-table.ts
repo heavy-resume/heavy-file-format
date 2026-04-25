@@ -905,6 +905,14 @@ export function hasDocumentDbTables(document: VisualDocument): boolean {
   return getDocumentDbTableNames(document).length > 0;
 }
 
+export function formatQueryResultTable(columns: string[], rows: string[][]): string {
+  return [
+    columns.join(' | '),
+    columns.map(() => '---').join(' | '),
+    ...rows.map((row) => row.map((cell) => cell.replaceAll('\n', '\\n').replaceAll('|', '\\|')).join(' | ')),
+  ].join('\n');
+}
+
 export async function executeDbTableQueryTool(
   document: VisualDocument,
   request: { tableName?: string; query?: string; limit?: number }
@@ -947,13 +955,7 @@ export async function executeDbTableQueryTool(
       `Executed query: ${query}`,
       `Returned rows: ${rows.length}${rows.length === limit ? ` (limited to ${limit})` : ''}`,
       '',
-      columns.length === 0
-        ? '(no columns returned)'
-        : [
-            columns.join(' | '),
-            columns.map(() => '---').join(' | '),
-            ...rows.map((row) => row.map((cell) => cell.replaceAll('\n', '\\n')).join(' | ')),
-          ].join('\n'),
+      columns.length === 0 ? '(no columns returned)' : formatQueryResultTable(columns, rows),
     ].join('\n');
   } finally {
     try {

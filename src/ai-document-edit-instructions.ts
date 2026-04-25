@@ -50,6 +50,7 @@ export function buildDocumentEditFormatInstructions(options?: { dbTableNames?: s
       ? [
           `Use \`query_db_table\` to inspect live rows from the attached DB when needed. Available tables: ${dbTableNames.join(', ')}.`,
           'For `query_db_table`, provide `table_name` when more than one table exists, or provide a full SQL `query`. `limit` is optional and is capped for concise tool output.',
+          `When adding a component that should display rows from a DB table, use a \`db-table\` plugin block instead of the table component. A db-table renders live rows from the database. Example: \`<!--hvy:plugin {"plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"TABLE_NAME"}}-->\`. The text content after the directive is an optional SQL query filter (leave empty to show all rows).`,
         ]
       : []),
     'When the request is fully satisfied, return `{"tool":"done","summary":"..."}`.',
@@ -84,6 +85,7 @@ export function buildDocumentEditFormatInstructions(options?: { dbTableNames?: s
       ? [
           '{"tool":"query_db_table","table_name":"work_items","limit":10,"reason":"optional"}',
           '{"tool":"query_db_table","query":"SELECT company, status FROM work_items WHERE status != \\"Rejected\\" ORDER BY company","limit":10,"reason":"optional"}',
+          `{"tool":"create_component","position":"append-to-section","section_ref":"my-section","hvy":"<!--hvy:plugin {\\"plugin\\":\\"dev.heavy.db-table\\",\\"pluginConfig\\":{\\"source\\":\\"with-file\\",\\"table\\":\\"${dbTableNames[0] ?? 'TABLE_NAME'}\\"}}-->","reason":"Add a live db-table component showing all rows"}`,
         ]
       : []),
     '{"tool":"request_structure","reason":"optional"}',

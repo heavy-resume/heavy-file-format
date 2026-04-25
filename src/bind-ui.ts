@@ -37,7 +37,6 @@ import {
   getHvyDiagnosticUsageHint,
   serializeDocument,
   serializeDocumentBytes,
-  wrapHvyFragmentAsDocument,
 } from './serialization';
 import { syncReusableTemplateForBlock, revertReusableComponent, findReusableOwner } from './reusable';
 import { addTableColumn, removeTableColumn, getTableColumns, moveTableColumn, moveTableRow } from './table-ops';
@@ -49,7 +48,7 @@ import { bindLinkInlineModal, openLinkInlineModal } from './bind-link-modal';
 import { removeBlockFromList, findBlockInList } from './block-ops';
 import { getReusableTemplateByName } from './document-factory';
 import { clearChatConversation, getDefaultModelForProvider, persistChatSettings } from './chat';
-import { appendUserChatMessage, requestChatTurn, requestDocumentEditChatTurn } from './chat-session';
+import { appendUserChatMessage, copyChatMessageToHvySection, requestChatTurn, requestDocumentEditChatTurn } from './chat-session';
 import type { RawEditorDiagnostic } from './types';
 import { requestAiComponentEdit } from './ai-edit';
 import { areTablesEnabled } from './reference-config';
@@ -650,33 +649,22 @@ export function bindUi(app: HTMLElement): void {
 
     if (action === 'copy-chat-response-to-hvy') {
       const messageId = actionButton?.dataset.messageId ?? '';
-      const message = state.chat.messages.find((candidate) => candidate.id === messageId);
-      if (!message || message.role !== 'assistant' || message.error) {
+      const result = copyChatMessageToHvySection({
+        messages: state.chat.messages,
+        messageId,
+      });
+      if (!result.ok) {
+        state.chat.error = result.error;
+        getRenderApp()();
         return;
       }
-      try {
-        const wrapped = wrapHvyFragmentAsDocument(message.content, {
-          sectionId: `ai-response-${Date.now().toString(36)}`,
-          title: 'AI response',
-        });
-        const parsed = deserializeDocumentWithDiagnostics(wrapped, '.hvy');
-        const errors = parsed.diagnostics.filter((diagnostic) => diagnostic.severity === 'error');
-        if (errors.length > 0 || parsed.document.sections.length !== 1) {
-          state.chat.error = 'Could not parse AI response as HVY.';
-          getRenderApp()();
-          return;
-        }
-        recordHistory('chat:copy-to-hvy');
-        state.document.sections.push(parsed.document.sections[0]!);
-        state.rawEditorText = serializeDocument(state.document);
-        state.rawEditorError = null;
-        state.rawEditorDiagnostics = [];
-        state.chat.error = null;
-        getRenderApp()();
-      } catch (error) {
-        state.chat.error = error instanceof Error ? error.message : 'Copy to HVY failed.';
-        getRenderApp()();
-      }
+      recordHistory('chat:copy-to-hvy');
+      state.document.sections.push(result.section);
+      state.rawEditorText = serializeDocument(state.document);
+      state.rawEditorError = null;
+      state.rawEditorDiagnostics = [];
+      state.chat.error = null;
+      getRenderApp()();
       return;
     }
 

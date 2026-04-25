@@ -37,13 +37,13 @@ export function buildDbTableEditFormatInstructions(tableName: string): string {
     '',
     '- `query_db_table` runs a read-only SELECT (or table_name-only fetch) so you can inspect live rows before acting. Capped at 25 rows.',
     '- `execute_sql` runs a write statement (INSERT / UPDATE / DELETE / ALTER / CREATE / REPLACE / etc.) against the attached DB. Use it to change data or schema. SELECT is rejected here.',
-    '- `edit_fragment` finishes the turn by returning a replacement HVY fragment for the component (use this when the user asked to change the stored query, limits, or other plugin config). The `hvy` value must be a single HVY `plugin` directive fragment matching the existing component shape.',
+    '- `edit_fragment` finishes the turn by returning a replacement HVY fragment for the component (use this when the user asked to change the stored query, limits, or other plugin config). The `hvy` value must be a single HVY `plugin` directive fragment. The stored SQL query is the text content that appears AFTER the `<!--hvy:plugin ...-->` directive line — it is NOT a field inside `pluginConfig`. To update the stored query, put the SQL on the line after the directive.',
     '- `done` finishes the turn without changing the HVY fragment. Use this when you only mutated data via SQL.',
     '',
     'Tool shapes:',
     '{"tool":"query_db_table","query":"SELECT * FROM ' + tableName + ' WHERE status = \\"Open\\"","limit":10,"reason":"optional"}',
     '{"tool":"execute_sql","sql":"UPDATE ' + tableName + ' SET status = \'Done\' WHERE id = 3","reason":"optional"}',
-    '{"tool":"edit_fragment","hvy":"<!--hvy:plugin {\\"plugin\\":\\"dev.heavy.db-table\\",\\"pluginConfig\\":{...}}-->","summary":"Updated stored query"}',
+    '{"tool":"edit_fragment","hvy":"<!--hvy:plugin {\\"plugin\\":\\"dev.heavy.db-table\\",\\"pluginConfig\\":{...}}-->\\nSELECT * FROM ' + tableName + ' WHERE ...","summary":"Updated stored query"}',
     '{"tool":"done","summary":"Short summary of what changed."}',
   ].join('\n');
 }
@@ -146,9 +146,7 @@ export async function requestAiDbTableEdit(params: {
     throw new Error('This db-table component has no configured table name yet. Set a table before using AI edits.');
   }
 
-  const storedQuery = typeof params.block.schema.pluginConfig.query === 'string'
-    ? params.block.schema.pluginConfig.query
-    : '';
+  const storedQuery = params.block.text.trim();
   const summary = await getDbTableAiSummary(params.document, tableName, { activeQuery: storedQuery || undefined });
   const originalFragment = serializeBlockFragment(params.block);
   const context = buildDbTableEditContext({

@@ -1,6 +1,6 @@
 import { beforeEach, expect, test, vi } from 'vitest';
 
-import { appendUserChatMessage, requestChatTurn } from '../src/chat-session';
+import { appendUserChatMessage, copyChatMessageToHvySection, requestChatTurn } from '../src/chat-session';
 import { deserializeDocument } from '../src/serialization';
 import type { ChatMessage, ChatSettings } from '../src/types';
 
@@ -128,4 +128,109 @@ test('requestChatTurn returns assistant error message on failure', async () => {
       error: true,
     })
   );
+});
+
+test('copyChatMessageToHvySection wraps a plain markdown answer into a section', () => {
+  const messages: ChatMessage[] = [
+    { id: 'm1', role: 'user', content: 'What jobs?' },
+    { id: 'm2', role: 'assistant', content: 'Northwind Labs is in Phone screen.' },
+  ];
+
+  const result = copyChatMessageToHvySection({ messages, messageId: 'm2' });
+
+  expect(result.ok).toBe(true);
+  if (!result.ok) return;
+  expect(result.section.title).toBe('AI response');
+  expect(result.section.blocks.length).toBeGreaterThan(0);
+  expect(result.section.blocks[0]?.text).toContain('Northwind Labs is in Phone screen.');
+});
+
+test('copyChatMessageToHvySection preserves markdown tables with pipe characters', () => {
+  const tableContent = 'Here are the rows:\n\n| Company | Status |\n| --- | --- |\n| Acme | Open |\n| Globex | Done |';
+  const messages: ChatMessage[] = [
+    { id: 'm1', role: 'assistant', content: tableContent },
+  ];
+
+  const result = copyChatMessageToHvySection({ messages, messageId: 'm1' });
+
+  expect(result.ok).toBe(true);
+  if (!result.ok) return;
+  const sectionText = result.section.blocks.map((block) => block.text).join('\n');
+  expect(sectionText).toContain('Acme');
+  expect(sectionText).toContain('Globex');
+});
+
+test('copyChatMessageToHvySection rejects non-existent message ids', () => {
+  const messages: ChatMessage[] = [
+    { id: 'm1', role: 'assistant', content: 'Hello' },
+  ];
+
+  const result = copyChatMessageToHvySection({ messages, messageId: 'missing' });
+
+  expect(result).toEqual({ ok: false, error: 'Message not found.' });
+});
+
+test('copyChatMessageToHvySection rejects user messages', () => {
+  const messages: ChatMessage[] = [
+    { id: 'm1', role: 'user', content: 'Hello' },
+  ];
+
+  const result = copyChatMessageToHvySection({ messages, messageId: 'm1' });
+
+  expect(result.ok).toBe(false);
+  if (result.ok) return;
+  expect(result.error).toMatch(/assistant/i);
+});
+
+test('copyChatMessageToHvySection rejects errored assistant messages', () => {
+  const messages: ChatMessage[] = [
+    { id: 'm1', role: 'assistant', content: 'Proxy unavailable.', error: true },
+  ];
+
+  const result = copyChatMessageToHvySection({ messages, messageId: 'm1' });
+
+  expect(result.ok).toBe(false);
+});
+
+test('copyChatMessageToHvySection rejects empty content', () => {
+  const messages: ChatMessage[] = [
+    { id: 'm1', role: 'assistant', content: '   \n  ' },
+  ];
+
+  const result = copyChatMessageToHvySection({ messages, messageId: 'm1' });
+
+  expect(result.ok).toBe(false);
+  if (result.ok) return;
+  expect(result.error).toMatch(/no content/i);
+});
+
+test('copyChatMessageToHvySection rejects content containing a top-level section directive', () => {
+  const hvyContent = '<!--hvy: {"id":"inner"}-->\n#! Inner\n\n <!--hvy:text {}-->\n  Body';
+  const messages: ChatMessage[] = [
+    { id: 'm1', role: 'assistant', content: hvyContent },
+  ];
+
+  const result = copyChatMessageToHvySection({ messages, messageId: 'm1' });
+
+  expect(result.ok).toBe(false);
+  if (result.ok) return;
+  expect(result.error).toMatch(/single HVY section/i);
+});
+
+test('copyChatMessageToHvySection uses the supplied title and section id', () => {
+  const messages: ChatMessage[] = [
+    { id: 'm1', role: 'assistant', content: 'Body text.' },
+  ];
+
+  const result = copyChatMessageToHvySection({
+    messages,
+    messageId: 'm1',
+    sectionIdSeed: 'custom-id',
+    title: 'Custom title',
+  });
+
+  expect(result.ok).toBe(true);
+  if (!result.ok) return;
+  expect(result.section.customId).toBe('custom-id');
+  expect(result.section.title).toBe('Custom title');
 });

@@ -1,4 +1,5 @@
 import type { JsonObject } from './hvy/types';
+import { sanitizeInlineCss } from './css-sanitizer';
 
 export function getDocumentComponentDefaultCss(documentMeta: JsonObject, componentName: string): string {
   const componentDefaults = documentMeta.component_defaults;
@@ -12,5 +13,5 @@ export function getDocumentComponentDefaultCss(documentMeta: JsonObject, compone
   }
 
   const css = (config as Record<string, unknown>).css;
-  return typeof css === 'string' ? css : '';
+  return typeof css === 'string' ? sanitizeInlineCss(css) : '';
 }

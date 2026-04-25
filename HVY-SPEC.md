@@ -832,6 +832,7 @@ Normative behavior:
 - Remote resource fetches MUST be gated behind user network permission.
 - Plugin installation MUST show `id` and `source` before trust is granted.
 - Clients MUST treat tail payload bytes as untrusted input and only hand them to the declared plugin after normal trust checks.
+- Renderers MUST sanitize document-supplied CSS (inline `css` fields, fenced `~~~css` blocks, `hvy:css` directives, `theme.colors` values, `component_defaults.*.css`, `section_defaults.css`, and section/block `custom_css`) so it cannot trigger network fetches unless the user has explicitly enabled external CSS resources. Specifically, renderers MUST drop or neutralize `url(...)`, `image-set(...)`, `src(...)`, `src:` declarations, and the at-rules `@import`, `@font-face`, `@namespace`, and `@property`. Sanitization MUST decode CSS character escapes (e.g. `u\72l(...)` and `\55RL(...)`) before pattern matching so obfuscated forms are also blocked.
 
 ## 9. Parsing Rules (Normative)
 

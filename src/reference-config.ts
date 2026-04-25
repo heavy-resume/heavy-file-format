@@ -1,5 +1,6 @@
 export interface ReferenceAppFeatures {
   tables: boolean;
+  allowExternalCss: boolean;
 }
 
 export interface ReferenceAppConfig {
@@ -15,6 +16,7 @@ declare global {
 const defaultConfig: ReferenceAppConfig = {
   features: {
     tables: true,
+    allowExternalCss: false,
   },
 };
 
@@ -36,10 +38,18 @@ export function getReferenceAppConfig(): ReferenceAppConfig {
         runtimeOverride?.features?.tables ??
         globalConfig?.features?.tables ??
         defaultConfig.features.tables,
+      allowExternalCss:
+        runtimeOverride?.features?.allowExternalCss ??
+        globalConfig?.features?.allowExternalCss ??
+        defaultConfig.features.allowExternalCss,
     },
   };
 }
 
 export function areTablesEnabled(): boolean {
   return getReferenceAppConfig().features.tables !== false;
+}
+
+export function isExternalCssAllowed(): boolean {
+  return getReferenceAppConfig().features.allowExternalCss === true;
 }

@@ -1,6 +1,8 @@
 import { state } from './state';
 import type { ThemeConfig } from './types';
 import type { JsonObject } from './hvy/types';
+import { cssFragmentTriggersNetwork } from './css-sanitizer';
+import { isExternalCssAllowed } from './reference-config';
 
 export type { ThemeConfig };
 export type ColorMode = 'light' | 'dark';
@@ -138,7 +140,11 @@ export function applyTheme(): void {
 
   root.classList.add('no-transitions');
   // Apply only user-specified overrides verbatim (key IS the CSS property name).
+  const allowExternal = isExternalCssAllowed();
   for (const [key, value] of Object.entries(theme.colors)) {
+    if (!allowExternal && cssFragmentTriggersNetwork(value)) {
+      continue;
+    }
     root.style.setProperty(key, value);
   }
   // Force a reflow so changes take effect before re-enabling transitions.

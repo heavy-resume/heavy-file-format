@@ -10,7 +10,7 @@ import { state, initState, initCallbacks, incrementRenderCount, incrementRefresh
 import type { AppState } from './types';
 import { escapeAttr, escapeHtml } from './utils';
 import { applyTheme, getThemeConfig, initColorModeSync } from './theme';
-import { flattenSections, findSectionByKey, findDuplicateSectionIds, getSectionId, formatSectionTitle, isDefaultUntitledSectionTitle } from './section-ops';
+import { flattenSections, findSectionByKey, findDuplicateSectionIds, getSectionId, formatSectionTitle, isDefaultUntitledSectionTitle, buildSectionRenderSequence } from './section-ops';
 import { renderComponentOptions, renderReusableSectionOptions, getComponentDefs, getSectionDefs, isBuiltinComponent } from './component-defs';
 import { renderOption } from './utils';
 import { resolveBaseComponent } from './component-defs';
@@ -206,6 +206,7 @@ editorRenderer = createEditorRenderer(
     isDefaultUntitledSectionTitle,
     formatSectionTitle,
     findSectionByKey,
+    buildSectionRenderSequence,
     getComponentDefs,
     getSectionDefs,
     getThemeConfig,

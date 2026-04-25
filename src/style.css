@@ -971,6 +971,7 @@ button.tiny {
 }
 
 .editor-section-card {
+  position: relative;
   border: 1px solid var(--hvy-border-input);
   border-radius: 10px;
   background: var(--hvy-surface-alt);
@@ -978,6 +979,36 @@ button.tiny {
   display: grid;
   gap: 0.55rem;
   margin-bottom: 0.55rem;
+}
+
+.editor-subsection-card {
+  padding-left: 1rem;
+}
+
+.section-nest-toggle {
+  position: absolute;
+  left: 0rem;
+  top: 0;
+  bottom: 0;
+  width: 0.85rem;
+  border: 0;
+  background: transparent;
+  color: var(--hvy-muted);
+  cursor: pointer;
+  border-radius: 10px 0 0 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.95rem;
+  line-height: 1;
+  padding: 0;
+  opacity: 0.5;
+}
+
+.section-nest-toggle:hover {
+  background: var(--hvy-border);
+  color: var(--hvy-text);
+  opacity: 1;
 }
 
 .editor-block,

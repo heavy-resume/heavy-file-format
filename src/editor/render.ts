@@ -88,6 +88,9 @@ interface EditorRenderDeps {
   isDefaultUntitledSectionTitle: (title: string) => boolean;
   formatSectionTitle: (title: string) => string;
   findSectionByKey: (sections: VisualSection[], key: string) => VisualSection | null;
+  buildSectionRenderSequence: (
+    section: VisualSection
+  ) => Array<{ kind: 'block'; block: VisualBlock } | { kind: 'child'; child: VisualSection }>;
   getComponentDefs: () => ComponentDef[];
   getSectionDefs: () => SectionDef[];
   getThemeConfig: () => ThemeConfig;
@@ -162,8 +165,12 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       : `<button type="button" class="section-title-passive${isUntitled ? ' section-title-placeholder' : ''}" data-action="activate-section-title" data-section-key="${deps.escapeAttr(
         section.key
       )}">${deps.escapeHtml(visibleTitle)}</button>`;
+    const subsectionToggle = isSubsection
+      ? `<button type="button" class="section-nest-toggle" data-action="remove-subsection" data-section-key="${deps.escapeAttr(section.key)}" aria-label="Remove subsection" title="Remove subsection">‹</button>`
+      : '';
     return `
       <article class="editor-section-card${isSubsection ? ' editor-subsection-card' : ''}" data-editor-section="${deps.escapeAttr(section.key)}">
+        ${subsectionToggle}
         <div class="editor-section-head">
           <div class="section-drag-title" title="Drag to reorder section">
             <div class="editor-order-controls">
@@ -195,7 +202,10 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       }
 
         <div class="editor-blocks">
-          ${section.blocks.map((block) => renderEditorBlock(section.key, block, rootSections, false, isSubsection)).join('')}
+          ${deps.buildSectionRenderSequence(section).map((item) => item.kind === 'block'
+            ? renderEditorBlock(section.key, item.block, rootSections)
+            : renderEditorSection(item.child, rootSections, true)
+          ).join('')}
           ${section.lock
         ? ''
         : `<article class="ghost-section-card add-ghost" data-action="add-block" data-section-key="${deps.escapeAttr(section.key)}">
@@ -209,10 +219,6 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
                   </label>
                 </article>`
       }
-        </div>
-
-        <div class="editor-children">
-          ${section.children.map((child) => renderEditorSection(child, rootSections, true)).join('')}
         </div>
       </article>
     `;
@@ -248,7 +254,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     return false;
   }
 
-  function renderEditorBlock(sectionKey: string, block: VisualBlock, rootSections?: VisualSection[], parentLocked = false, isSubsection = false): string {
+  function renderEditorBlock(sectionKey: string, block: VisualBlock, rootSections?: VisualSection[], parentLocked = false): string {
     const component = block.schema.component || 'text';
     const componentLabel = component === 'plugin'
       ? (isDbTablePluginId(block.schema.plugin) || block.schema.plugin.trim().length === 0 ? getPluginDisplayName(block.schema.plugin || 'dev.heavy.db-table') : 'Plugin')
@@ -258,14 +264,12 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const isActive = isActiveSelf || isActiveDescendant;
 
     if (!isActive) {
-      return renderPassiveEditorBlock(sectionKey, block, rootSections ?? [], isSubsection);
+      return renderPassiveEditorBlock(sectionKey, block, rootSections ?? []);
     }
 
     const contentEditor = renderBlockContentEditor(sectionKey, block);
     const canRemove = !parentLocked && !block.schema.lock;
-    const nestToggle = isSubsection
-      ? `<button type="button" class="block-nest-toggle" data-action="move-block-to-parent" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}" aria-label="Move to parent" title="Move to parent">‹</button>`
-      : `<button type="button" class="block-nest-toggle" data-action="make-block-subsection" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}" aria-label="Make subsection" title="Make subsection">›</button>`;
+    const nestToggle = `<button type="button" class="block-nest-toggle" data-action="make-block-subsection" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}" aria-label="Make subsection" title="Make subsection">›</button>`;
 
     return `
       <div class="editor-block">
@@ -302,19 +306,15 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     `;
   }
 
-  function renderPassiveEditorBlock(sectionKey: string, block: VisualBlock, rootSections: VisualSection[], isSubsection = false): string {
+  function renderPassiveEditorBlock(sectionKey: string, block: VisualBlock, rootSections: VisualSection[]): string {
     const section = deps.findSectionByKey(rootSections, sectionKey);
     if (!section) {
       return '';
     }
-    const nestToggle = isSubsection
-      ? `<button type="button" class="block-nest-toggle" data-action="move-block-to-parent" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}" aria-label="Move to parent" title="Move to parent">‹</button>`
-      : `<button type="button" class="block-nest-toggle" data-action="make-block-subsection" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}" aria-label="Make subsection" title="Make subsection">›</button>`;
     return `
       <div class="editor-block-passive" data-action="activate-block" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(
       block.id
     )}">
-        ${nestToggle}
         ${renderPassiveEditorBlockContent(sectionKey, section, block, rootSections)}
       </div>
     `;

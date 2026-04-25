@@ -4,7 +4,7 @@ import type { TagRenderOptions } from './editor/tag-editor';
 import { parseTags, serializeTags } from './editor/tag-editor';
 import { state, getRefreshReaderPanels, getRenderApp } from './state';
 import { getReusableNameFromSectionKey, getComponentDefs, renderComponentOptions } from './component-defs';
-import { findSectionByKey, findBlockContainerById } from './section-ops';
+import { findSectionByKey, findBlockContainerById, moveBlockInVisualSequence } from './section-ops';
 import { getReusableTemplateByName, ensureContainerBlocks, ensureComponentListBlocks, ensureGridItems, applyComponentDefaults, instantiateReusableBlock, coerceAlign, coerceSlot } from './document-factory';
 import { syncReusableTemplateForBlock } from './reusable';
 import { normalizeXrefTarget, getXrefTargetOptions, isXrefTargetValid } from './xref-ops';
@@ -647,6 +647,15 @@ export function moveBlockByOffset(sectionKey: string, blockId: string, offset: -
   const location = findBlockContainerById(state.document.sections, sectionKey, blockId);
   if (!location) {
     return false;
+  }
+  if (location.ownerBlockId === null) {
+    // Section-level block: walk the interleaved blocks/subsections sequence so
+    // arrows can swap with adjacent subsections by repositioning their anchors.
+    const ok = moveBlockInVisualSequence(state.document.sections, sectionKey, blockId, offset);
+    if (ok) {
+      syncReusableTemplateForBlock(sectionKey, blockId);
+    }
+    return ok;
   }
   const targetIndex = location.index + offset;
   if (targetIndex < 0 || targetIndex >= location.container.length) {

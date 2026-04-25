@@ -42,7 +42,7 @@ import { syncReusableTemplateForBlock, revertReusableComponent, findReusableOwne
 import { addTableColumn, removeTableColumn, getTableColumns, moveTableColumn, moveTableRow } from './table-ops';
 import { createGridItem } from './grid-ops';
 import { detectExtension, normalizeFilename, downloadBinaryFile, sanitizeOptionalId, moveItem } from './utils';
-import { moveSectionRelative, moveSectionByOffset, removeSectionByKey, findBlockContainerById, findBlockContainerInList, makeBlockSubsection, moveBlockToParentSection, flattenSections } from './section-ops';
+import { moveSectionRelative, moveSectionByOffset, removeSectionByKey, findBlockContainerById, findBlockContainerInList, makeBlockSubsection, removeSubsection } from './section-ops';
 import { bindModal } from './bind-modal';
 import { bindLinkInlineModal, openLinkInlineModal } from './bind-link-modal';
 import { removeBlockFromList, findBlockInList } from './block-ops';
@@ -1095,6 +1095,24 @@ export function bindUi(app: HTMLElement): void {
       return;
     }
 
+    if (action === 'remove-subsection') {
+      if (!section) {
+        return;
+      }
+      recordHistory();
+      if (!removeSubsection(state.document.sections, sectionKey)) {
+        return;
+      }
+      if (state.activeEditorSectionTitleKey === sectionKey) {
+        state.activeEditorSectionTitleKey = null;
+      }
+      if (state.activeEditorBlock?.sectionKey === sectionKey) {
+        state.activeEditorBlock = null;
+      }
+      getRenderApp()();
+      return;
+    }
+
     if (action === 'remove-section') {
       if (!section) {
         return;
@@ -1266,27 +1284,6 @@ export function bindUi(app: HTMLElement): void {
       return;
     }
 
-    if (action === 'move-block-to-parent' && blockId) {
-      if (!section || section.lock) {
-        return;
-      }
-      recordHistory();
-      const wasActive = state.activeEditorBlock?.sectionKey === sectionKey && state.activeEditorBlock?.blockId === blockId;
-      const ok = moveBlockToParentSection(state.document.sections, sectionKey, blockId);
-      if (!ok) {
-        return;
-      }
-      if (wasActive) {
-        const newHost = flattenSections(state.document.sections).find((s) =>
-          s.blocks.some((b) => b.id === blockId)
-        );
-        if (newHost) {
-          setActiveEditorBlock(newHost.key, blockId);
-        }
-      }
-      getRenderApp()();
-      return;
-    }
 
     if (action === 'remove-block' && blockId) {
       recordHistory();

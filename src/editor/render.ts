@@ -165,7 +165,11 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       : `<button type="button" class="section-title-passive${isUntitled ? ' section-title-placeholder' : ''}" data-action="activate-section-title" data-section-key="${deps.escapeAttr(
         section.key
       )}">${deps.escapeHtml(visibleTitle)}</button>`;
-    const subsectionToggle = isSubsection
+    const hasActiveBlockInSelfOrDescendants = (s: VisualSection): boolean => {
+      if (state.activeEditorBlock?.sectionKey === s.key) return true;
+      return s.children.some(hasActiveBlockInSelfOrDescendants);
+    };
+    const subsectionToggle = isSubsection && !hasActiveBlockInSelfOrDescendants(section)
       ? `<button type="button" class="section-nest-toggle" data-action="remove-subsection" data-section-key="${deps.escapeAttr(section.key)}" aria-label="Remove subsection" title="Remove subsection">‹</button>`
       : '';
     return `

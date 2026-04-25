@@ -105,7 +105,7 @@ function requestTargetHighlight(
   context: { sectionFound: boolean; blockFound: boolean },
   attempt = 0
 ): void {
-  window.requestAnimationFrame(() => {
+  window.setTimeout(() => {
     const target = app.querySelector<HTMLElement>(`#${CSS.escape(sectionId)}`);
     if (!target) {
       if (attempt < 3) {
@@ -126,7 +126,7 @@ function requestTargetHighlight(
     window.setTimeout(() => {
       target.classList.remove('is-temp-highlighted');
     }, 1400);
-  });
+  }, 5);
 }
 
 interface ExpandResult {

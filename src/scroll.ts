@@ -55,13 +55,13 @@ export function centerPendingEditorSection(app: HTMLElement): void {
     return;
   }
   state.pendingEditorCenterSectionKey = null;
-  window.requestAnimationFrame(() => {
+  window.setTimeout(() => {
     const sectionEl = app.querySelector<HTMLElement>(`[data-editor-section="${sectionKey}"]`);
     if (!sectionEl) {
       return;
     }
     sectionEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  });
+  }, 5);
 }
 
 export function focusPendingSectionTitleEditor(app: HTMLElement): void {

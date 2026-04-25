@@ -1,4 +1,5 @@
 import type { VisualBlock, VisualSection } from './editor/types';
+import { createEmptySection } from './document-factory';
 
 export function flattenSections(sections: VisualSection[]): VisualSection[] {
   const output: VisualSection[] = [];
@@ -150,6 +151,78 @@ export function findBlockContainerInList(
     }
   }
   return null;
+}
+
+/**
+ * Wrap a section-level block in a new subsection appended to that section's children.
+ * Returns the new subsection on success, or null on failure.
+ */
+export function makeBlockSubsection(
+  sections: VisualSection[],
+  sectionKey: string,
+  blockId: string
+): VisualSection | null {
+  const section = findSectionByKey(sections, sectionKey);
+  if (!section) {
+    return null;
+  }
+  const blockIndex = section.blocks.findIndex((b) => b.id === blockId);
+  if (blockIndex < 0) {
+    return null;
+  }
+  const [block] = section.blocks.splice(blockIndex, 1);
+  if (!block) {
+    return null;
+  }
+  const newSub = createEmptySection(Math.min(section.level + 1, 6), '', false);
+  newSub.blocks = [block];
+  newSub.location = section.location;
+  section.children.push(newSub);
+  return newSub;
+}
+
+/**
+ * Move a section-level block out of a subsection and into the parent section's blocks.
+ * If the block is in the middle of the subsection's blocks, the subsection is split:
+ * preceding blocks remain in the original subsection; following blocks are placed in
+ * a new subsection inserted immediately after the original. The original subsection
+ * is removed if it becomes empty (no blocks and no children).
+ * Returns true on success.
+ */
+export function moveBlockToParentSection(
+  sections: VisualSection[],
+  sectionKey: string,
+  blockId: string
+): boolean {
+  const location = findSectionContainer(sections, sectionKey);
+  if (!location || !location.parent) {
+    return false;
+  }
+  const sub = location.container[location.index];
+  const parent = location.parent;
+  const blockIndex = sub.blocks.findIndex((b) => b.id === blockId);
+  if (blockIndex < 0) {
+    return false;
+  }
+  const [movedBlock] = sub.blocks.splice(blockIndex, 1);
+  if (!movedBlock) {
+    return false;
+  }
+  const blocksAfter = sub.blocks.splice(blockIndex);
+  if (blocksAfter.length > 0) {
+    const newSub = createEmptySection(sub.level, '', false);
+    newSub.blocks = blocksAfter;
+    newSub.location = sub.location;
+    location.container.splice(location.index + 1, 0, newSub);
+  }
+  if (sub.blocks.length === 0 && sub.children.length === 0) {
+    const stillThere = location.container.indexOf(sub);
+    if (stillThere >= 0) {
+      location.container.splice(stillThere, 1);
+    }
+  }
+  parent.blocks.push(movedBlock);
+  return true;
 }
 
 export function removeSectionByKey(sections: VisualSection[], sectionKey: string): boolean {

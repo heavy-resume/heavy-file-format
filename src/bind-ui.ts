@@ -42,7 +42,7 @@ import { syncReusableTemplateForBlock, revertReusableComponent, findReusableOwne
 import { addTableColumn, removeTableColumn, getTableColumns, moveTableColumn, moveTableRow } from './table-ops';
 import { createGridItem } from './grid-ops';
 import { detectExtension, normalizeFilename, downloadBinaryFile, sanitizeOptionalId, moveItem } from './utils';
-import { moveSectionRelative, moveSectionByOffset, removeSectionByKey, findBlockContainerById, findBlockContainerInList } from './section-ops';
+import { moveSectionRelative, moveSectionByOffset, removeSectionByKey, findBlockContainerById, findBlockContainerInList, makeBlockSubsection, moveBlockToParentSection, flattenSections } from './section-ops';
 import { bindModal } from './bind-modal';
 import { bindLinkInlineModal, openLinkInlineModal } from './bind-link-modal';
 import { removeBlockFromList, findBlockInList } from './block-ops';
@@ -1084,27 +1084,6 @@ export function bindUi(app: HTMLElement): void {
       return;
     }
 
-    if (action === 'add-subsection') {
-      if (!section || section.lock) {
-        return;
-      }
-      recordHistory();
-      const starter = state.addComponentBySection[`subsection:${section.key}`] ?? 'blank';
-      const child =
-        starter === 'blank' ? createEmptySection(Math.min(section.level + 1, 6), '', false) : instantiateReusableSection(starter, Math.min(section.level + 1, 6));
-      if (!child) {
-        return;
-      }
-      section.children.push(child);
-      if (child.blocks[0]) {
-        setActiveEditorBlock(child.key, child.blocks[0].id);
-      } else {
-        state.activeEditorSectionTitleKey = child.key;
-        state.clearSectionTitleOnFocusKey = isDefaultUntitledSectionTitle(child.title) ? child.key : null;
-      }
-      getRenderApp()();
-      return;
-    }
 
     if (action === 'toggle-section-location') {
       if (!section) {
@@ -1266,6 +1245,45 @@ export function bindUi(app: HTMLElement): void {
       block.schema.align = coerceAlign(actionButton.dataset.alignValue ?? 'left');
       syncReusableTemplateForBlock(sectionKey, block.id);
       getRefreshReaderPanels()();
+      getRenderApp()();
+      return;
+    }
+
+    if (action === 'make-block-subsection' && blockId) {
+      if (!section || section.lock) {
+        return;
+      }
+      recordHistory();
+      const newSub = makeBlockSubsection(state.document.sections, sectionKey, blockId);
+      if (!newSub) {
+        return;
+      }
+      const movedBlock = newSub.blocks[0];
+      if (movedBlock) {
+        setActiveEditorBlock(newSub.key, movedBlock.id);
+      }
+      getRenderApp()();
+      return;
+    }
+
+    if (action === 'move-block-to-parent' && blockId) {
+      if (!section || section.lock) {
+        return;
+      }
+      recordHistory();
+      const wasActive = state.activeEditorBlock?.sectionKey === sectionKey && state.activeEditorBlock?.blockId === blockId;
+      const ok = moveBlockToParentSection(state.document.sections, sectionKey, blockId);
+      if (!ok) {
+        return;
+      }
+      if (wasActive) {
+        const newHost = flattenSections(state.document.sections).find((s) =>
+          s.blocks.some((b) => b.id === blockId)
+        );
+        if (newHost) {
+          setActiveEditorBlock(newHost.key, blockId);
+        }
+      }
       getRenderApp()();
       return;
     }

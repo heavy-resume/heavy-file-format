@@ -78,16 +78,18 @@ export const renderImageEditor: ComponentEditorRenderer = (sectionKey, block, he
         </div>
         <div class="image-filename muted">${filename ? helpers.escapeHtml(filename) : 'No file selected'}</div>
       </div>
-      <label class="image-alt-label">
-        <span>Alt text</span>
-        <input
-          data-section-key="${helpers.escapeAttr(sectionKey)}"
-          data-block-id="${helpers.escapeAttr(block.id)}"
-          data-field="image-alt"
-          value="${helpers.escapeAttr(block.schema.imageAlt)}"
-          placeholder="Describe the image"
-        />
-      </label>
+      <div class="image-alt-label-container">
+        <label class="image-alt-label">
+          <span>Alt text</span>
+          <input
+            data-section-key="${helpers.escapeAttr(sectionKey)}"
+            data-block-id="${helpers.escapeAttr(block.id)}"
+            data-field="image-alt"
+            value="${helpers.escapeAttr(block.schema.imageAlt)}"
+            placeholder="Describe the image"
+          />
+        </label>
+      </div>
     </div>
   `;
 };

@@ -1,5 +1,6 @@
 import './default-theme.css';
 import './style.css';
+import './state-tracker.css';
 import 'highlight.js/styles/github.css';
 
 import { createEditorRenderer, type EditorRenderer } from './editor/render';
@@ -20,7 +21,7 @@ import { commitHistorySnapshot } from './history';
 import { capturePaneScroll, restorePaneScroll, centerPendingEditorSection, focusPendingSectionTitleEditor } from './scroll';
 import { bindUi } from './bind-ui';
 import { deserializeDocumentBytes, serializeDocument } from './serialization';
-import { createDefaultChatState, renderChatPanel } from './chat';
+import { createDefaultChatState, renderChatPanel } from './chat/chat';
 import { DEFAULT_EXAMPLE_HVY_BYTES } from './example-bundles';
 
 const appRoot = document.querySelector<HTMLDivElement>('#app');

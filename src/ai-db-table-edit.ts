@@ -1,4 +1,4 @@
-import { requestProxyCompletion } from './chat';
+import { requestProxyCompletion } from './chat/chat';
 import {
   DbTableAiSummary,
   executeDbTableQueryTool,

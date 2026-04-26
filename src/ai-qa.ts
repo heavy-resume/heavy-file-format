@@ -1,4 +1,4 @@
-import { HVY_AI_RESPONSE_FORMAT_INSTRUCTIONS, buildChatDocumentContext, requestProxyCompletion } from './chat';
+import { HVY_AI_RESPONSE_FORMAT_INSTRUCTIONS, buildChatDocumentContext, requestProxyCompletion } from './chat/chat';
 import { executeDbTableQueryTool, getDocumentDbTableNames } from './plugins/db-table';
 import type { ChatMessage, ChatSettings, VisualDocument } from './types';
 

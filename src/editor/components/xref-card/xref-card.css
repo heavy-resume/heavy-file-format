@@ -1,0 +1,108 @@
+.editor-xref-card,
+.reader-xref-card {
+  display: grid;
+  gap: 0.12rem;
+  width: min(100%, 20rem);
+  max-width: 20rem;
+  min-width: min(18rem, 100%);
+  justify-self: start;
+  padding: 0.48rem 0.58rem;
+  border: 1px solid var(--hvy-border);
+  border-radius: 8px;
+  background: var(--hvy-xref-card-bg);
+  text-decoration: none;
+  box-shadow: 0 1px 2px var(--hvy-shadow);
+}
+
+.xref-card-editor {
+  gap: 0.34rem;
+}
+
+.editor-xref-card [contenteditable="true"] {
+  border-radius: 5px;
+  padding: 0.08rem 0.12rem;
+  cursor: text;
+}
+
+.editor-xref-card [contenteditable="true"]:focus {
+  outline: 2px solid var(--hvy-focus);
+  outline-offset: 1px;
+  background: var(--hvy-surface);
+}
+
+.xref-target-picker {
+  display: grid;
+  gap: 0.18rem;
+  margin-top: 0.16rem;
+}
+
+.xref-target-picker span {
+  color: var(--hvy-text-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.xref-target-picker input {
+  width: 100%;
+  min-height: 2rem;
+  border: 1px solid var(--hvy-border-input);
+  border-radius: 6px;
+  background: var(--hvy-surface);
+  padding: 0.34rem 0.45rem;
+}
+
+.editor-xref-card.is-invalid-target,
+.reader-xref-card.is-invalid-target {
+  border-color: var(--hvy-border-alt);
+  background: var(--hvy-xref-card-bg);
+  color: var(--hvy-text-muted);
+  box-shadow: none;
+}
+
+.editor-xref-card.is-invalid-target span,
+.reader-xref-card.is-invalid-target span {
+  color: var(--hvy-text-muted);
+}
+
+.editor-xref-card.is-invalid-target .xref-target-picker input {
+  border-color: var(--hvy-border-alt);
+  background: var(--hvy-surface-alt);
+}
+
+.editor-xref-card:hover,
+.editor-xref-card:focus-visible,
+.reader-xref-card:hover,
+.reader-xref-card:focus-visible {
+  border-color: var(--hvy-focus);
+  background: var(--hvy-xref-card-hover-bg);
+  text-decoration: none;
+}
+
+.editor-xref-card strong,
+.reader-xref-card strong {
+  font-size: 0.95rem;
+  line-height: 1.2;
+}
+
+.editor-xref-card span,
+.reader-xref-card span {
+  color: var(--hvy-text-muted);
+  font-size: 0.82rem;
+  line-height: 1.2;
+}
+
+.reader-xref-card {
+  transition: background-color 280ms ease, border-color 280ms ease, box-shadow 280ms ease, transform 280ms ease;
+  justify-self: start;
+}
+
+.reader-xref-card:hover,
+.reader-xref-card:focus-visible {
+  border-color: var(--hvy-focus);
+  background: var(--hvy-xref-card-hover-bg);
+  text-decoration: none;
+  box-shadow: 0 3px 10px var(--hvy-shadow-md);
+  transform: translateY(-1px);
+}

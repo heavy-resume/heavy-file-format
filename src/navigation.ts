@@ -4,7 +4,7 @@ import { getSectionId } from './section-ops';
 import { resolveBaseComponent } from './component-defs';
 import { createBlankDocument } from './document-factory';
 import { getRenderApp } from './state';
-import { clearChatConversation } from './chat';
+import { clearChatConversation } from './chat/chat';
 import { serializeDocument } from './serialization';
 
 /**

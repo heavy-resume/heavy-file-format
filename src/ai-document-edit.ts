@@ -1,5 +1,5 @@
 import { parse as parseYaml } from 'yaml';
-import { requestProxyCompletion } from './chat';
+import { requestProxyCompletion } from './chat/chat';
 import { parseAiBlockEditResponse, requestAiComponentEdit } from './ai-edit';
 import { createEmptySection } from './document-factory';
 import { deserializeDocumentWithDiagnostics, serializeBlockFragment, serializeDocument, serializeDocumentHeaderYaml } from './serialization';

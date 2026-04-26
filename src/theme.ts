@@ -1,3 +1,4 @@
+import './theme.css';
 import { state } from './state';
 import type { ThemeConfig } from './types';
 import type { JsonObject } from './hvy/types';

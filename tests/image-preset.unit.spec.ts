@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { mergeImagePresetCss } from '../src/bind-ui';
+import { mergeImagePresetCss } from '../src/editor/components/image/image';
 
 describe('mergeImagePresetCss', () => {
   test('position preset preserves size declarations', () => {

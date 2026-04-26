@@ -1,4 +1,5 @@
-import { requestProxyCompletion } from './chat';
+import './ai-edit.css';
+import { requestProxyCompletion } from './chat/chat';
 import {
   deserializeDocumentWithDiagnostics,
   getHvyDiagnosticUsageHint,

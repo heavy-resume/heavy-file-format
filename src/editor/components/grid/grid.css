@@ -1,0 +1,110 @@
+.grid-fields {
+  display: grid;
+  grid-template-columns: repeat(var(--grid-columns, 2), minmax(0, 1fr));
+  gap: 0.6rem;
+  margin: 0.5rem 0;
+}
+
+.grid-field-row {
+  border: 1px dashed var(--hvy-border-input);
+  border-radius: 8px;
+  padding: 0.45rem;
+  display: grid;
+  gap: 0.45rem;
+  align-content: start;
+  background: var(--hvy-surface-alt);
+}
+
+.grid-field-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.grid-item-controls,
+.grid-add-bar {
+  display: flex;
+  gap: 0.45rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.compact-select {
+  width: auto;
+  min-width: 0;
+}
+
+.grid-columns-input {
+  width: 5rem;
+  max-width: 5rem;
+  border: 1px solid var(--hvy-border-input);
+  border-radius: 8px;
+  padding: 0.35rem 0.5rem;
+  background: var(--hvy-surface);
+  color: var(--hvy-text);
+}
+
+.grid-item-ghost {
+  min-height: 118px;
+}
+
+.grid-add-ghost {
+  margin-top: 0.25rem;
+}
+
+.reader-grid-layout {
+  display: grid;
+  gap: 0.2rem 0.9rem;
+  align-items: start;
+}
+
+.editor-grid-passive-preview {
+  min-height: 3rem;
+}
+
+.is-passive-grid-cell .editor-block-passive {
+  min-height: 2.2rem;
+}
+
+.reader-grid-cell {
+  min-width: 0;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+}
+
+.reader-grid-cell.is-flow-track,
+.reader-grid-cell.is-single-track {
+  text-align: left;
+}
+
+.reader-grid-cell.is-terminal-track {
+  text-align: right;
+}
+
+.reader-grid-cell.is-terminal-track .reader-xref-card {
+  justify-self: end;
+  text-align: left;
+}
+
+.reader-grid-cell.is-terminal-track ul,
+.reader-grid-cell.is-terminal-track ol {
+  display: inline-block;
+  margin-left: auto;
+  margin-right: 0;
+  text-align: left;
+}
+
+.reader-grid-cell.is-bold {
+  font-weight: 700;
+}
+
+.reader-grid-cell.is-italic {
+  font-style: italic;
+}
+
+.reader-grid-body {
+  margin-top: 0.45rem;
+}

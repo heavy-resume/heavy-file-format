@@ -1,0 +1,136 @@
+.modal-root {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+}
+
+.modal-overlay {
+  position: absolute;
+  inset: 0;
+  background: var(--hvy-overlay);
+}
+
+.modal-panel {
+  position: relative;
+  z-index: 1;
+  width: min(920px, 96vw);
+  max-height: 88vh;
+  overflow: auto;
+  margin: 5vh auto;
+  border-radius: 12px;
+  border: 1px solid var(--hvy-border-input);
+  background: var(--hvy-surface);
+  padding: 0.85rem;
+}
+
+.component-meta-modal,
+.section-meta-modal {
+  width: min(640px, 94vw);
+}
+
+.modal-field-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.link-inline-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: none;
+}
+
+.link-inline-modal.is-open {
+  display: block;
+}
+
+.link-inline-overlay {
+  position: absolute;
+  inset: 0;
+  background: var(--hvy-overlay);
+}
+
+.link-inline-panel {
+  position: relative;
+  z-index: 1;
+  width: min(420px, 94vw);
+  margin: 14vh auto 0;
+  border: 1px solid var(--hvy-border-input);
+  border-radius: 10px;
+  background: var(--hvy-surface);
+  padding: 0.75rem;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.link-inline-panel h4 {
+  margin: 0;
+}
+
+.link-inline-panel label {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.link-inline-panel input {
+  border: 1px solid var(--hvy-border-input);
+  border-radius: 8px;
+  padding: 0.45rem;
+}
+
+.link-inline-actions {
+  display: flex;
+  justify-content: end;
+  gap: 0.4rem;
+}
+
+.reusable-save-actions {
+  margin-top: 0.55rem;
+}
+
+.remove-x {
+  width: 1.9rem;
+  height: 1.9rem;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  font-size: 1.2rem;
+  font-weight: 700;
+  flex: 0 0 auto;
+}
+
+.modal-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.modal-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.lock-toggle-button {
+  min-width: 8.6rem;
+  padding-inline: 0.65rem;
+  font-size: 0.92rem;
+  line-height: 1;
+}
+
+.modal-head h3 {
+  margin: 0;
+}
+
+.modal-preview {
+  margin-top: 0.75rem;
+  border-top: 1px solid var(--hvy-border);
+  padding-top: 0.65rem;
+}
+
+.muted {
+  color: var(--hvy-text-muted);
+}

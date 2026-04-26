@@ -1,0 +1,26 @@
+.state-tracker {
+  border: 1px solid var(--hvy-border);
+  border-radius: 8px;
+  background: var(--hvy-surface-alt);
+  padding: 0.6rem;
+  margin-bottom: 0.7rem;
+}
+
+.state-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.35rem;
+}
+
+.state-actions {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.state-tracker pre {
+  margin: 0;
+  max-height: 180px;
+  overflow: auto;
+  font-size: 0.78rem;
+}

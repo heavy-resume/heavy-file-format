@@ -1,0 +1,104 @@
+.rich-editor[data-placeholder]:empty::before,
+.rich-editor[data-placeholder]:has(> br:only-child)::before,
+.rich-editor[data-placeholder]:has(> p:only-child:empty)::before,
+.rich-editor[data-placeholder]:has(> p:only-child > br:only-child)::before {
+  content: attr(data-placeholder);
+  color: var(--hvy-text-muted);
+  pointer-events: none;
+  display: block;
+}
+
+.editor-block-title {
+  position: absolute;
+  left: 0;
+  top: -1.5em;
+  padding: 0 0.45rem;
+  border-radius: 999px;
+  background: var(--hvy-surface);
+  line-height: 1.1;
+  font-style: italic;
+  font-weight: 400;
+}
+
+.editor-blocks {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.rich-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-bottom: 0.4rem;
+  align-items: center;
+}
+
+.rich-toolbar button {
+  min-width: 2rem;
+  padding: 0.25rem 0.45rem;
+  background: var(--hvy-surface-alt);
+}
+
+.rich-toolbar button.secondary,
+.align-buttons button.secondary {
+  background: var(--hvy-button-bg);
+  border-color: var(--hvy-button-bg);
+  color: var(--hvy-button-text);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+}
+
+.toolbar-segment {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  align-items: center;
+}
+
+.align-buttons {
+  margin: 0;
+}
+
+.rich-editor {
+  min-height: 96px;
+  border: 1px solid var(--hvy-border-input);
+  border-radius: 7px;
+  background: var(--hvy-surface);
+  padding: 0.48rem;
+  margin-bottom: 0.45rem;
+  line-height: 1.4;
+}
+
+.rich-editor:focus {
+  outline: 2px solid var(--hvy-focus);
+  outline-offset: 1px;
+}
+
+.rich-editor p {
+  margin: 0 0 0.45rem;
+}
+
+.rich-editor p:last-child {
+  margin-bottom: 0;
+}
+
+.rich-editor ul.contains-task-list,
+.rich-editor ol.contains-task-list {
+  list-style: none;
+  padding-left: 0;
+}
+
+.rich-editor .task-list-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+  margin: 0 0 0.35rem;
+}
+
+.rich-editor .task-list-item:last-child {
+  margin-bottom: 0;
+}
+
+.rich-editor .task-list-item > input[type='checkbox'] {
+  flex: 0 0 auto;
+  margin: 0.15rem 0.22rem 0 0;
+}

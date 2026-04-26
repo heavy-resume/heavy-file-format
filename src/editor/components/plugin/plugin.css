@@ -1,0 +1,59 @@
+.plugin-placeholder {
+  border: 1px dashed var(--hvy-border-alt);
+  border-radius: 8px;
+  background: var(--hvy-surface-alt);
+  padding: 0.5rem;
+}
+
+.sqlite-plugin-editor {
+  margin-top: 0.75rem;
+}
+
+.sqlite-plugin-grid-input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  padding: 0.45rem 0.5rem;
+}
+
+.sqlite-plugin-grid-input:focus {
+  outline: 2px solid rgba(59, 130, 246, 0.28);
+  outline-offset: -2px;
+  background: rgba(255, 255, 255, 0.65);
+}
+
+.sqlite-plugin-grid-header {
+  font-weight: 600;
+}
+
+.sqlite-plugin-row-number {
+  font-size: 0.84rem;
+  color: var(--hvy-text-muted);
+  text-align: center;
+}
+
+.sqlite-plugin-row-has-component {
+  cursor: pointer;
+}
+
+.sqlite-plugin-row-has-component:hover td {
+  background: color-mix(in srgb, var(--hvy-accent) 8%, white);
+}
+
+.sqlite-row-component-button {
+  min-width: 2rem;
+}
+
+.sqlite-row-component-button-attached {
+  border-color: color-mix(in srgb, var(--hvy-accent) 55%, var(--hvy-border));
+  background: color-mix(in srgb, var(--hvy-accent) 12%, var(--hvy-surface));
+  color: color-mix(in srgb, var(--hvy-accent) 75%, var(--hvy-text));
+}
+
+.sqlite-row-component-button-attached:hover {
+  border-color: color-mix(in srgb, var(--hvy-accent) 72%, var(--hvy-border));
+  background: color-mix(in srgb, var(--hvy-accent) 18%, var(--hvy-surface));
+}

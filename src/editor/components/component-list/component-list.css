@@ -1,0 +1,13 @@
+.reader-component-list {
+  display: grid;
+}
+
+.reader-block.align-center .reader-component-list {
+  grid-template-columns: min(100%, 20rem);
+  justify-content: space-around;
+}
+
+.reader-block.align-center .reader-xref-card {
+  width: 100%;
+  text-align: left;
+}

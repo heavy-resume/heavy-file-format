@@ -1,8 +1,9 @@
-import type { ComponentEditorRenderer, ComponentReaderRenderer, ComponentRenderHelpers } from '../component-helpers';
-import type { VisualBlock } from '../types';
-import { getImageAttachment } from '../../attachments';
-import { state } from '../../state';
-import { sanitizeInlineCss } from '../../css-sanitizer';
+import './image.css';
+import type { ComponentEditorRenderer, ComponentReaderRenderer, ComponentRenderHelpers } from '../../component-helpers';
+import type { VisualBlock } from '../../types';
+import { getImageAttachment } from '../../../attachments';
+import { state } from '../../../state';
+import { sanitizeInlineCss } from '../../../css-sanitizer';
 
 const blobUrlCache = new Map<string, { url: string; bytes: Uint8Array }>();
 

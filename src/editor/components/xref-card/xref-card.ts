@@ -1,4 +1,5 @@
-import type { ComponentEditorRenderer, ComponentReaderRenderer, ComponentRenderHelpers } from '../component-helpers';
+import './xref-card.css';
+import type { ComponentEditorRenderer, ComponentReaderRenderer, ComponentRenderHelpers } from '../../component-helpers';
 
 export const renderXrefCardEditor: ComponentEditorRenderer = (sectionKey, block, helpers) => `
   <div class="xref-card-editor editor-xref-card ${helpers.isXrefTargetValid(block.schema.xrefTarget) ? '' : 'is-invalid-target'}">

@@ -1,5 +1,6 @@
-import type { ComponentEditorRenderer, ComponentReaderRenderer } from '../component-helpers';
-import { sanitizeInlineCss } from '../../css-sanitizer';
+import './expandable.css';
+import type { ComponentEditorRenderer, ComponentReaderRenderer } from '../../component-helpers';
+import { sanitizeInlineCss } from '../../../css-sanitizer';
 
 export const renderExpandableEditor: ComponentEditorRenderer = (sectionKey, block, helpers) => {
   const stubAddKey = `expandable-stub:${sectionKey}:${block.id}`;

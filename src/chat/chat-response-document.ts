@@ -1,5 +1,5 @@
-import { wrapHvyFragmentAsDocument } from './serialization';
-import type { JsonObject } from './hvy/types';
+import { wrapHvyFragmentAsDocument } from '../serialization';
+import type { JsonObject } from '../hvy/types';
 
 export const CHAT_RESPONSE_DOCUMENT_META: JsonObject = {
   component_defaults: {

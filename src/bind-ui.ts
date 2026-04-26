@@ -47,8 +47,8 @@ import { bindModal } from './bind-modal';
 import { bindLinkInlineModal, openLinkInlineModal } from './bind-link-modal';
 import { removeBlockFromList, findBlockInList } from './block-ops';
 import { getReusableTemplateByName } from './document-factory';
-import { clearChatConversation, getDefaultModelForProvider, persistChatSettings } from './chat';
-import { appendUserChatMessage, copyChatMessageToHvySection, requestChatTurn, requestDocumentEditChatTurn } from './chat-session';
+import { clearChatConversation, getDefaultModelForProvider, persistChatSettings } from './chat/chat';
+import { appendUserChatMessage, copyChatMessageToHvySection, requestChatTurn, requestDocumentEditChatTurn } from './chat/chat-session';
 import type { RawEditorDiagnostic } from './types';
 import { requestAiComponentEdit } from './ai-edit';
 import { areTablesEnabled } from './reference-config';
@@ -65,7 +65,7 @@ import {
   updateDbTableCell,
 } from './plugins/db-table';
 import { setImageAttachment, inferImageMediaType } from './attachments';
-import { clearImageBlobUrlCache } from './editor/components/image';
+import { clearImageBlobUrlCache } from './editor/components/image/image';
 
 let lastBoundChatMessageCount = -1;
 

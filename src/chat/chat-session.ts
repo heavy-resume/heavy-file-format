@@ -1,10 +1,10 @@
 import { requestChatCompletion } from './chat';
-import { hasDocumentDbTables } from './plugins/db-table';
-import { runQaToolLoop } from './ai-qa';
-import type { ChatMessage, ChatSettings, VisualDocument } from './types';
-import type { VisualSection } from './editor/types';
-import { requestAiDocumentEditTurn } from './ai-document-edit';
-import { deserializeDocumentWithDiagnostics, wrapHvyFragmentAsDocument } from './serialization';
+import { hasDocumentDbTables } from '../plugins/db-table';
+import { runQaToolLoop } from '../ai-qa';
+import type { ChatMessage, ChatSettings, VisualDocument } from '../types';
+import type { VisualSection } from '../editor/types';
+import { requestAiDocumentEditTurn } from '../ai-document-edit';
+import { deserializeDocumentWithDiagnostics, wrapHvyFragmentAsDocument } from '../serialization';
 
 export interface ChatTurnResult {
   messages: ChatMessage[];

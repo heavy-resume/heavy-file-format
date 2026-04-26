@@ -15,3 +15,5 @@ Tests are in the tests directory. For serialization / deserialization changes al
 Tests for tools should prefer BEFORE, TOOL CALL, AFTER flow and not use mock calls or things potentially altered by order. The idea this is equally human and machine readable. When naming things prefer "expected result" or similar to make it clear. Additionally, avoid moving things to variables if they're used exactly once in tests, and keep variable definitions near usage.
 
 When adding components ALWAYS PREFER REUSABLE COMPONENTS. ITS BUILT OUT SO USE IT, DONT MAKE A NEW UI.
+
+Components go into their own directories with their own css and logic files

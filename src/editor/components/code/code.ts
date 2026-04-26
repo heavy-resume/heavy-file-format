@@ -1,4 +1,5 @@
-import type { ComponentEditorRenderer, ComponentReaderRenderer } from '../component-helpers';
+import './code.css';
+import type { ComponentEditorRenderer, ComponentReaderRenderer } from '../../component-helpers';
 
 export const renderCodeEditor: ComponentEditorRenderer = (sectionKey, block, helpers) => `
   <div class="code-editor-shell">

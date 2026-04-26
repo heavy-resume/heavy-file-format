@@ -1,4 +1,5 @@
-import type { ComponentEditorRenderer, ComponentReaderRenderer } from '../component-helpers';
+import './container.css';
+import type { ComponentEditorRenderer, ComponentReaderRenderer } from '../../component-helpers';
 
 export const renderContainerEditor: ComponentEditorRenderer = (sectionKey, block, helpers) => {
   helpers.ensureContainerBlocks(block);

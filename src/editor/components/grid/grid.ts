@@ -1,4 +1,5 @@
-import type { ComponentEditorRenderer, ComponentReaderRenderer } from '../component-helpers';
+import './grid.css';
+import type { ComponentEditorRenderer, ComponentReaderRenderer } from '../../component-helpers';
 
 export const renderGridEditor: ComponentEditorRenderer = (sectionKey, block, helpers) => `
   <div class="editor-grid schema-grid">
@@ -24,7 +25,7 @@ export const renderGridEditor: ComponentEditorRenderer = (sectionKey, block, hel
                 <button type="button" class="order-arrow-button" data-action="move-grid-item-down" data-section-key="${helpers.escapeAttr(
                   sectionKey
                 )}" data-block-id="${helpers.escapeAttr(block.id)}" data-grid-item-id="${helpers.escapeAttr(item.id)}" aria-label="Move grid item down">▼</button>
-              </div>  
+              </div>
             </div>
             <button type="button" class="danger remove-x" data-action="remove-grid-item" data-section-key="${helpers.escapeAttr(
               sectionKey

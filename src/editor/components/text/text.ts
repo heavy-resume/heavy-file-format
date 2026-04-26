@@ -1,4 +1,5 @@
-import type { ComponentEditorRenderer, ComponentReaderRenderer } from '../component-helpers';
+import './text.css';
+import type { ComponentEditorRenderer, ComponentReaderRenderer } from '../../component-helpers';
 
 export const renderTextEditor: ComponentEditorRenderer = (sectionKey, block, helpers) => `
   ${helpers.renderRichToolbar(sectionKey, block.id, { includeAlign: true, align: block.schema.align })}

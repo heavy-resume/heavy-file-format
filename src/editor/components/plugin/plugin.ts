@@ -1,6 +1,7 @@
-import type { ComponentEditorRenderer, ComponentReaderRenderer } from '../component-helpers';
-import { renderDbTablePluginEditor, renderDbTablePluginReader } from '../../plugins/db-table';
-import { DB_TABLE_PLUGIN_ID, getPluginDisplayName, isDbTablePluginId } from '../../plugins/registry';
+import './plugin.css';
+import type { ComponentEditorRenderer, ComponentReaderRenderer } from '../../component-helpers';
+import { renderDbTablePluginEditor, renderDbTablePluginReader } from '../../../plugins/db-table';
+import { DB_TABLE_PLUGIN_ID, getPluginDisplayName, isDbTablePluginId } from '../../../plugins/registry';
 
 export const renderPluginEditor: ComponentEditorRenderer = (sectionKey, block, helpers) => {
   if (isDbTablePluginId(block.schema.plugin) || block.schema.plugin.trim().length === 0) {

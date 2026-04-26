@@ -1,0 +1,16 @@
+.container-inner-blocks {
+  display: grid;
+  gap: 0.65rem;
+  margin: 0.55rem 0 0.35rem;
+}
+
+.container-add-bar {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.reader-container-body {
+  margin-top: 0.2rem;
+}

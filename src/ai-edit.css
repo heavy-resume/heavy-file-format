@@ -1,0 +1,93 @@
+.ai-view-shell {
+  overflow: hidden;
+}
+
+.ai-view-hint {
+  position: absolute;
+  right: 1rem;
+  top: 1rem;
+  z-index: 6;
+  max-width: 20rem;
+  padding: 0.45rem 0.7rem;
+  border: 1px solid var(--hvy-border-translucent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--hvy-surface) 94%, transparent);
+  color: var(--hvy-text-alt);
+  box-shadow: 0 10px 24px var(--hvy-shadow);
+  backdrop-filter: blur(10px);
+  font-size: 0.84rem;
+}
+
+.ai-edit-popover {
+  position: fixed;
+  z-index: 40;
+  width: min(26rem, calc(100vw - 2rem));
+  display: grid;
+  gap: 0.8rem;
+  padding: 0.95rem;
+  border: 1px solid var(--hvy-border);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--hvy-surface) 97%, transparent);
+  box-shadow: 0 18px 40px var(--hvy-shadow-lg);
+  backdrop-filter: blur(14px);
+}
+
+.ai-edit-popover-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 0.75rem;
+  cursor: move;
+  user-select: none;
+}
+
+.ai-edit-popover-head button {
+  cursor: pointer;
+}
+
+.ai-edit-popover-head h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.ai-edit-popover-head p {
+  margin: 0.3rem 0 0;
+  color: var(--hvy-text-alt);
+  font-size: 0.9rem;
+}
+
+.ai-edit-settings {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.ai-edit-composer {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.ai-edit-error {
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--hvy-danger);
+  border-radius: 10px;
+  background: var(--hvy-danger-bg);
+  color: var(--hvy-danger);
+}
+
+@media (max-width: 760px) {
+  .ai-edit-settings {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ai-edit-popover {
+    width: calc(100vw - 1rem);
+  }
+
+  .ai-view-hint {
+    left: 1rem;
+    right: 1rem;
+    max-width: none;
+    border-radius: 12px;
+  }
+}

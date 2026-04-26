@@ -1,8 +1,8 @@
-import { HVY_AI_RESPONSE_FORMAT_INSTRUCTIONS } from './chat';
+import { HVY_AI_RESPONSE_FORMAT_INSTRUCTIONS } from './chat/chat';
 import { resolveBaseComponent } from './component-defs';
 import type { VisualBlock } from './editor/types';
 import type { RawEditorDiagnostic, VisualDocument } from './types';
-import { buildChatDocumentContext } from './chat';
+import { buildChatDocumentContext } from './chat/chat';
 
 export function buildAiEditContext(params: {
   document: VisualDocument;

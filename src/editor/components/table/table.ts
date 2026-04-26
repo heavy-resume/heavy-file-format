@@ -1,5 +1,6 @@
-import type { ComponentEditorRenderer, ComponentReaderRenderer } from '../component-helpers';
-import type { TableRow } from '../types';
+import './table.css';
+import type { ComponentEditorRenderer, ComponentReaderRenderer } from '../../component-helpers';
+import type { TableRow } from '../../types';
 
 let readerTableStripeIndex = 0;
 

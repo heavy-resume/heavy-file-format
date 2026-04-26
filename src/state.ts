@@ -36,19 +36,31 @@ export function incrementRecordHistoryCount(): number { return ++recordHistoryCo
 let _renderApp: () => void = () => { throw new Error('renderApp not initialized'); };
 let _refreshReaderPanels: () => void = () => { throw new Error('refreshReaderPanels not initialized'); };
 let _refreshModalPreview: () => void = () => { throw new Error('refreshModalPreview not initialized'); };
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let _componentRenderHelpers: any = null;
 
 export function getRenderApp(): () => void { return _renderApp; }
 export function getRefreshReaderPanels(): () => void { return _refreshReaderPanels; }
 export function getRefreshModalPreview(): () => void { return _refreshModalPreview; }
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function getCachedComponentRenderHelpers(): any {
+  if (_componentRenderHelpers === null) {
+    throw new Error('componentRenderHelpers not initialized');
+  }
+  return _componentRenderHelpers;
+}
 
 export function initCallbacks(callbacks: {
   renderApp: () => void;
   refreshReaderPanels: () => void;
   refreshModalPreview: () => void;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  componentRenderHelpers: any;
 }): void {
   _renderApp = callbacks.renderApp;
   _refreshReaderPanels = callbacks.refreshReaderPanels;
   _refreshModalPreview = callbacks.refreshModalPreview;
+  _componentRenderHelpers = callbacks.componentRenderHelpers;
 }
 
 // state is initialized lazily by main.ts after createDefaultDocument is available

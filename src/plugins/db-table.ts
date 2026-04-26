@@ -124,7 +124,7 @@ export function renderDbTablePluginEditor(sectionKey: string, block: VisualBlock
           data-block-id="${helpers.escapeAttr(block.id)}"
           data-field="block-plugin-db-table"
           value="${helpers.escapeAttr(tableName)}"
-          placeholder="job_applications"
+          placeholder="table_name_goes_here"
         />
       </label>
       <span>

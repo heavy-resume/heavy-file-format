@@ -745,7 +745,45 @@ Plugin block fields:
 
 HVY core only standardizes the envelope. The meaning of `pluginConfig` is plugin-specific.
 
-### 7.4 Tail payload envelope
+The `plugin` block additionally has a free-form text body. Like `pluginConfig`,
+the text body is plugin-specific: clients MUST preserve it verbatim across
+read/write cycles and MUST NOT attempt to interpret it as Markdown or HVY
+content. Plugins are free to use the text body as a query string, a label
+formatter, a templated expression, or any other plugin-defined payload, and
+MAY use both `pluginConfig` and the text body together (for example,
+structured numeric configuration in `pluginConfig` plus a templated label
+string in the text body).
+
+### 7.4 Plugin installation and selection
+
+A plugin is identified by a stable id (reverse-DNS RECOMMENDED) and is
+resolved by the host that embeds an HVY reader/editor, not by the document
+itself. Hosts install zero or more plugin implementations at startup; the
+reference reader/editor exposes this as a host-supplied list of plugin
+registrations. Each registration provides:
+
+- the plugin `id` matching the value used in `block.plugin`;
+- a human-readable display name (used by editors to populate the plugin
+  selector for new `plugin` blocks);
+- a factory that produces a plugin instance bound to a specific block.
+
+Plugins MUST own the rendered DOM for their block. Hosts MUST treat the
+returned element as opaque and MUST NOT mutate its children, except to remove
+it on unmount. Plugins MUST be framework-agnostic: a plugin written in plain
+JavaScript, in another language compiled to JavaScript, or in a different UI
+framework MUST be usable so long as it returns a DOM element.
+
+Plugins SHOULD style themselves using the document's standard CSS theme
+variables. This is convention, not requirement.
+
+When a `plugin` component block has no `plugin` value, editors MUST present a
+selector populated from the host's installed plugins and MUST NOT render any
+plugin instance until the user picks one. When the document declares a
+`plugin` id that the host does not have installed, the editor SHOULD still
+preserve the block (including `pluginConfig` and text body) on save, and
+SHOULD render a placeholder indicating the plugin is unavailable.
+
+### 7.5 Tail payload envelope
 
 `.hvy` files MAY append one or more opaque binary attachments after the Markdown/HVY text body. Attachments are intended for plugin-owned payloads (such as an embedded database) and for component-owned binary assets (such as image files referenced by `image` components).
 
@@ -778,7 +816,7 @@ Rules:
 - Duplicate `id` values are not permitted; if a writer adds an attachment whose `id` already exists, the previous entry is overwritten.
 - Clients that do not recognize an attachment's declared plugin or media type SHOULD preserve the bytes and pass them through on save, but MAY render the corresponding component as unsupported.
 
-### 7.5 DB table plugin contract
+### 7.6 DB table plugin contract
 
 The first standardized plugin contract is `dev.heavy.db-table`.
 

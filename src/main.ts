@@ -23,6 +23,10 @@ import { bindUi } from './bind-ui';
 import { deserializeDocumentBytes, serializeDocument } from './serialization';
 import { createDefaultChatState, renderChatPanel } from './chat/chat';
 import { DEFAULT_EXAMPLE_HVY_BYTES } from './example-bundles';
+import { registerHostPlugin } from './plugins/registry';
+import { reconcilePluginMounts } from './plugins/mount';
+import { dbTablePluginRegistration } from './plugins/db-table-plugin';
+import { progressBarPluginRegistration } from './plugins/progress-bar';
 
 const appRoot = document.querySelector<HTMLDivElement>('#app');
 if (!appRoot) {
@@ -433,6 +437,7 @@ function renderApp(): void {
 
   stepStartedAt = performance.now();
   bindUi(app);
+  reconcilePluginMounts(app);
   bindMs = performance.now() - stepStartedAt;
 
   stepStartedAt = performance.now();
@@ -499,6 +504,7 @@ function refreshReaderPanels(): void {
   if (reader) {
     const stepStartedAt = performance.now();
     reader.innerHTML = readerRenderer.renderReaderSections(state.document.sections);
+    reconcilePluginMounts(reader);
     readerMs = performance.now() - stepStartedAt;
   }
 
@@ -536,7 +542,14 @@ initCallbacks({
   renderApp,
   refreshReaderPanels,
   refreshModalPreview,
+  componentRenderHelpers: localGetComponentRenderHelpers(),
 });
+
+// Register the reference-implementation built-in plugins. Hosts that embed
+// this codebase can call setHostPlugins / registerHostPlugin before first
+// render to add their own.
+registerHostPlugin(dbTablePluginRegistration);
+registerHostPlugin(progressBarPluginRegistration);
 
 try {
   initColorModeSync();

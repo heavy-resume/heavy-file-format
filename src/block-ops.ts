@@ -14,7 +14,7 @@ import { normalizeMarkdownLists, markdownToEditorHtml, turndown } from './markdo
 import { escapeAttr, escapeHtml, getInlineEditableText, renderOption } from './utils';
 import { recordHistory } from './history';
 import { getDocumentComponentDefaultCss } from './document-component-defaults';
-import { DB_TABLE_PLUGIN_ID, isDbTablePluginId } from './plugins/registry';
+import { isDbTablePluginId } from './plugins/registry';
 import { resetDbTableViewState } from './plugins/db-table';
 
 export function findBlockByIds(sectionKey: string, blockId: string): VisualBlock | null {
@@ -172,19 +172,20 @@ export function handleBlockFieldInput(target: HTMLElement): boolean {
   }
 
   if (field === 'block-plugin' && target instanceof HTMLSelectElement) {
-    if (block.schema.plugin.trim().length > 0) {
+    const nextId = target.value.trim();
+    if (nextId === block.schema.plugin) {
       return true;
     }
-    block.schema.plugin = target.value;
-    if (isDbTablePluginId(target.value) || target.value === DB_TABLE_PLUGIN_ID) {
-      block.schema.plugin = DB_TABLE_PLUGIN_ID;
-      block.schema.pluginConfig = {
-        ...block.schema.pluginConfig,
-        source: 'with-file',
-      };
+    block.schema.plugin = nextId;
+    block.schema.pluginConfig = {};
+    block.text = '';
+    if (isDbTablePluginId(nextId)) {
+      block.schema.pluginConfig = { source: 'with-file' };
     }
+    recordHistory(`block-plugin:${target.dataset.sectionKey ?? ''}:${block.id}:${nextId}`);
     syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
     getRefreshReaderPanels()();
+    getRenderApp()();
     return true;
   }
 

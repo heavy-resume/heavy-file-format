@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
 
-import { renderTableReader, resetReaderTableStripeSequence } from '../src/editor/components/table';
+import { renderTableReader, resetReaderTableStripeSequence } from '../src/editor/components/table/table';
 import type { ComponentRenderHelpers } from '../src/editor/component-helpers';
 import type { VisualBlock, VisualSection } from '../src/editor/types';
 
@@ -45,6 +45,8 @@ function createTableBlock(rows: string[][], options?: { showHeader?: boolean }):
       tableRows: rows.map((cells) => ({
         cells,
       })),
+      imageFile: '',
+      imageAlt: '',
     },
   };
 }

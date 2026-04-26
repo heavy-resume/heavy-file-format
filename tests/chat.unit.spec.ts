@@ -6,8 +6,8 @@ import {
   getEnvChatSettings,
   mergeChatSettings,
   stripDocumentHeaderAndComments,
-} from '../src/chat';
-import { wrapChatResponseAsDocument } from '../src/chat-response-document';
+} from '../src/chat/chat';
+import { wrapChatResponseAsDocument } from '../src/chat/chat-response-document';
 import { getDocumentComponentDefaultCss } from '../src/document-component-defaults';
 import { deserializeDocument } from '../src/serialization';
 

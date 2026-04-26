@@ -3,7 +3,7 @@ import { beforeAll } from 'vitest';
 import { serializeDocument } from '../src/serialization';
 import { initCallbacks, initState, state } from '../src/state';
 import type { AppState, VisualDocument } from '../src/types';
-import { createDefaultChatState } from '../src/chat';
+import { createDefaultChatState } from '../src/chat/chat';
 
 export function createTestState(document: VisualDocument): AppState {
   return {

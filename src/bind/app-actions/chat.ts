@@ -16,7 +16,7 @@ const copyChatResponseToHvy: AppActionHandler = ({ actionButton }) => {
     messages: state.chat.messages,
     messageId,
   });
-  if (!result.ok) {
+  if (result.ok === false) {
     state.chat.error = result.error;
     getRenderApp()();
     return;

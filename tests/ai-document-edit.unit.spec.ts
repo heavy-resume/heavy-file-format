@@ -6,7 +6,7 @@ const { requestProxyCompletionMock, requestAiComponentEditMock } = vi.hoisted(()
   requestAiComponentEditMock: vi.fn(),
 }));
 
-vi.mock('../src/chat', () => ({
+vi.mock('../src/chat/chat', () => ({
   requestProxyCompletion: requestProxyCompletionMock,
 }));
 

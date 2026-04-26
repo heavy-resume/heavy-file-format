@@ -1054,3 +1054,24 @@ async function openDocumentDatabase(document: VisualDocument): Promise<SqlJsData
   const bytes = await getAttachmentDatabaseBytes(getAttachment(document, DB_ATTACHMENT_ID));
   return bytes.length > 0 ? new SQL.Database(bytes) : new SQL.Database();
 }
+
+export function syncSqliteColumnNameInDom(tableName: string, oldColumnName: string, nextColumnName: string, app: HTMLElement): void {
+  const escapedTableName = CSS.escape(tableName);
+  const escapedOldColumnName = CSS.escape(oldColumnName);
+
+  app
+    .querySelectorAll<HTMLElement>(
+      `[data-table-name="${escapedTableName}"][data-column-name="${escapedOldColumnName}"]`
+    )
+    .forEach((element) => {
+      element.dataset.columnName = nextColumnName;
+    });
+
+  app
+    .querySelectorAll<HTMLElement>(
+      `[data-table-name="${escapedTableName}"][data-old-column-name="${escapedOldColumnName}"]`
+    )
+    .forEach((element) => {
+      element.dataset.oldColumnName = nextColumnName;
+    });
+}

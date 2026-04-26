@@ -1,7 +1,7 @@
 import { expect, test } from 'vitest';
 
 import { initCallbacks, initState, state } from '../src/state';
-import { createDefaultChatState } from '../src/chat';
+import { createDefaultChatState } from '../src/chat/chat';
 import { undoState, redoState } from '../src/history';
 import type { AppState } from '../src/types';
 
@@ -11,6 +11,7 @@ function createHistoryTestState(): AppState {
       meta: { hvy_version: 0.1 },
       extension: '.hvy',
       sections: [],
+      attachments: [],
     },
     filename: 'test.hvy',
     currentView: 'editor',

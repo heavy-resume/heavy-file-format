@@ -8,8 +8,8 @@ const { requestProxyCompletionMock } = vi.hoisted(() => ({
   requestProxyCompletionMock: vi.fn(),
 }));
 
-vi.mock('../src/chat', async () => {
-  const actual = await vi.importActual<typeof import('../src/chat')>('../src/chat');
+vi.mock('../src/chat/chat', async () => {
+  const actual = await vi.importActual<typeof import('../src/chat/chat')>('../src/chat/chat');
   return {
     ...actual,
     requestProxyCompletion: requestProxyCompletionMock,

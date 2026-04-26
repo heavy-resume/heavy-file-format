@@ -14,6 +14,7 @@ test('component options exclude tables when the reference app disables them', ()
   setReferenceAppConfig({
     features: {
       tables: false,
+      allowExternalCss: false,
     },
   });
 
@@ -24,6 +25,7 @@ test('component options include tables when the reference app enables them', () 
   setReferenceAppConfig({
     features: {
       tables: true,
+      allowExternalCss: false,
     },
   });
 

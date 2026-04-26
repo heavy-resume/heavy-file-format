@@ -1,6 +1,6 @@
 import { beforeEach, expect, test, vi } from 'vitest';
 
-import { appendUserChatMessage, copyChatMessageToHvySection, requestChatTurn } from '../src/chat-session';
+import { appendUserChatMessage, copyChatMessageToHvySection, requestChatTurn } from '../src/chat/chat-session';
 import { deserializeDocument } from '../src/serialization';
 import type { ChatMessage, ChatSettings } from '../src/types';
 
@@ -9,7 +9,7 @@ const { requestChatCompletionMock, runQaToolLoopMock } = vi.hoisted(() => ({
   runQaToolLoopMock: vi.fn(),
 }));
 
-vi.mock('../src/chat', () => ({
+vi.mock('../src/chat/chat', () => ({
   requestChatCompletion: requestChatCompletionMock,
 }));
 
@@ -178,7 +178,7 @@ test('copyChatMessageToHvySection rejects user messages', () => {
   const result = copyChatMessageToHvySection({ messages, messageId: 'm1' });
 
   expect(result.ok).toBe(false);
-  if (result.ok) return;
+  if (result.ok !== false) return;
   expect(result.error).toMatch(/assistant/i);
 });
 
@@ -200,7 +200,7 @@ test('copyChatMessageToHvySection rejects empty content', () => {
   const result = copyChatMessageToHvySection({ messages, messageId: 'm1' });
 
   expect(result.ok).toBe(false);
-  if (result.ok) return;
+  if (result.ok !== false) return;
   expect(result.error).toMatch(/no content/i);
 });
 
@@ -213,7 +213,7 @@ test('copyChatMessageToHvySection rejects content containing a top-level section
   const result = copyChatMessageToHvySection({ messages, messageId: 'm1' });
 
   expect(result.ok).toBe(false);
-  if (result.ok) return;
+  if (result.ok !== false) return;
   expect(result.error).toMatch(/single HVY section/i);
 });
 

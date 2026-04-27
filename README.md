@@ -42,7 +42,7 @@ Use of JSON and Markdown make it easy for LLMs to parse.
 - [X] Embedded / attached database runtime
 - [X] Plugin block schema and DB table tail spec draft
 - [X] Image component
-- [ ] Plugin execution/runtime
+- [X] Plugin execution/runtime
 - [ ] Sandboxed scripting component (throttled, max lines)
 - [ ] Form component
 

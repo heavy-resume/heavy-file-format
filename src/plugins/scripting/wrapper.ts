@@ -10,6 +10,7 @@ interface HvyScriptingGlobal {
   runtimes: Record<string, ScriptingRuntime>;
   sources: Record<string, string>;
   errors: Record<string, string | null>;
+  callbacks: Record<string, () => void>;
 }
 
 declare global {
@@ -23,7 +24,10 @@ function getScriptingGlobal(): HvyScriptingGlobal {
     throw new Error('Scripting runtime requires a browser environment.');
   }
   if (!window.__HVY_SCRIPTING__) {
-    window.__HVY_SCRIPTING__ = { runtimes: {}, sources: {}, errors: {} };
+    window.__HVY_SCRIPTING__ = { runtimes: {}, sources: {}, errors: {}, callbacks: {} };
+  }
+  if (!window.__HVY_SCRIPTING__.callbacks) {
+    window.__HVY_SCRIPTING__.callbacks = {};
   }
   return window.__HVY_SCRIPTING__;
 }
@@ -119,10 +123,11 @@ try:
     }
     exec(__hvy_code__, __hvy_user_globals__)
     __hvy_runtime__.doc.rerender()
-    __hvy_globals__.errors['${runtimeId}'] = None
 except Exception as __hvy_err__:
     import traceback as __hvy_tb__
     __hvy_globals__.errors['${runtimeId}'] = __hvy_tb__.format_exc()
+finally:
+    __hvy_globals__.callbacks['${runtimeId}']()
 `;
 }
 
@@ -162,44 +167,66 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
   scripting.sources[runtimeId] = options.source;
   scripting.errors[runtimeId] = null;
 
+  // Do not append this to the DOM or use type="text/python", otherwise 
+  // Brython 3.14+ will detect the DOM mutation and run the script automatically 
+  // in addition to the manual run_script call below, causing a double-execution.
   const scriptElement = document.createElement('script');
-  scriptElement.type = 'text/python';
   scriptElement.id = `hvy-script-${runtimeId}`;
   scriptElement.textContent = buildPythonProgram(runtimeId);
-  document.head.appendChild(scriptElement);
 
-  try {
-    const brython = getBrython() as unknown as { run_script?: (elt: HTMLElement, name: string) => void };
-    if (typeof brython.run_script !== 'function') {
-      throw new Error('Brython run_script API unavailable.');
-    }
-    brython.run_script(scriptElement, `hvy_script_${runtimeId}`);
-    const error = scripting.errors[runtimeId];
-    if (error) {
-      return {
-        ok: false,
-        error,
-        linesExecuted: runtime.stats.linesExecuted,
-        toolCalls: runtime.stats.toolCalls,
+  return new Promise((resolve) => {
+    scripting.callbacks[runtimeId] = () => {
+      const error = scripting.errors[runtimeId];
+      const result: ScriptingRunResult = error
+        ? {
+            ok: false,
+            error,
+            linesExecuted: runtime.stats.linesExecuted,
+            toolCalls: runtime.stats.toolCalls,
+          }
+        : {
+            ok: true,
+            linesExecuted: runtime.stats.linesExecuted,
+            toolCalls: runtime.stats.toolCalls,
+          };
+
+      delete scripting.runtimes[runtimeId];
+      delete scripting.sources[runtimeId];
+      delete scripting.errors[runtimeId];
+      delete scripting.callbacks[runtimeId];
+
+      resolve(result);
+    };
+
+    try {
+      const brython = getBrython() as unknown as {
+        run_script?: (elt: HTMLElement, src: string, name: string, url: string, runLoop: boolean) => void;
       };
+      if (typeof brython.run_script !== 'function') {
+        throw new Error('Brython run_script API unavailable.');
+      }
+
+      brython.run_script(
+        scriptElement,
+        scriptElement.textContent || '',
+        `hvy_script_${runtimeId}`,
+        window.location.href || 'http://localhost/hvy-plugin',
+        true
+      );
+    } catch (error) {
+      let message = String(error);
+      try {
+        const brython = getBrython() as unknown as { error_trace?: (e: unknown) => string };
+        if (typeof brython.error_trace === 'function' && error && typeof error === 'object' && '__class__' in error) {
+          message = brython.error_trace(error);
+        } else if (error instanceof Error) {
+          message = error.message;
+        }
+      } catch (_) {
+        // fallback to original error string
+      }
+      scripting.errors[runtimeId] = message;
+      scripting.callbacks[runtimeId]();
     }
-    return {
-      ok: true,
-      linesExecuted: runtime.stats.linesExecuted,
-      toolCalls: runtime.stats.toolCalls,
-    };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    return {
-      ok: false,
-      error: message,
-      linesExecuted: runtime.stats.linesExecuted,
-      toolCalls: runtime.stats.toolCalls,
-    };
-  } finally {
-    scriptElement.remove();
-    delete scripting.runtimes[runtimeId];
-    delete scripting.sources[runtimeId];
-    delete scripting.errors[runtimeId];
-  }
+  });
 }

@@ -107,6 +107,11 @@ def __hvy_instrument__(src):
         def visit_AsyncWith(self, node):
             return self.visit_With(node)
 
+        def visit_Compare(self, node):
+            # Avoids a Brython 3.14.0 bug where generic_visit causes singletons 
+            # like ast.Eq in Compare.ops to be dropped, causing a ValueError later.
+            return node
+
     _Tracer().visit(tree)
     tree.body = [s for stmt in tree.body for s in _wrap(stmt)]
     __hvy_ast__.fix_missing_locations(tree)

@@ -40,6 +40,7 @@ interface ReaderRenderState {
   componentMetaModal: { sectionKey: string; blockId: string } | null;
   themeModalOpen: boolean;
   theme: ThemeConfig;
+  currentView: 'editor' | 'viewer' | 'ai';
 }
 
 interface ReaderRenderDeps {
@@ -181,7 +182,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       return `<div ${blockAttrs}>${renderCodeReader(section, block, helpers)}</div>`;
     }
     if (base === 'plugin') {
-      if (block.schema.plugin === SCRIPTING_PLUGIN_ID) {
+      if (block.schema.plugin === SCRIPTING_PLUGIN_ID && state.currentView === 'viewer') {
         return '';
       }
       return `<div ${blockAttrs}>${renderPluginReader(section, block, helpers)}</div>`;

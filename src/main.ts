@@ -264,6 +264,9 @@ readerRenderer = createReaderRenderer(
     get theme() {
       return getThemeConfig();
     },
+    get currentView() {
+      return state.currentView;
+    },
   },
   {
     escapeAttr,
@@ -566,6 +569,9 @@ registerHostPlugin(scriptingPluginRegistration);
 let lastScriptedDocument: typeof state.document | null = null;
 
 async function runScriptingBlocksIfNeeded(): Promise<void> {
+  if (state.currentView !== 'viewer') {
+    return;
+  }
   if (state.document === lastScriptedDocument) {
     return;
   }

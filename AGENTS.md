@@ -17,3 +17,5 @@ Tests for tools should prefer BEFORE, TOOL CALL, AFTER flow and not use mock cal
 When adding components ALWAYS PREFER REUSABLE COMPONENTS. ITS BUILT OUT SO USE IT, DONT MAKE A NEW UI.
 
 Components go into their own directories with their own css and logic files
+
+When asked to have something be HVY always use the reusable HVY rendering and not a new solution.

@@ -23,10 +23,13 @@ import { bindUi } from './bind-ui';
 import { deserializeDocumentBytes, serializeDocument } from './serialization';
 import { createDefaultChatState, renderChatPanel } from './chat/chat';
 import { DEFAULT_EXAMPLE_HVY_BYTES } from './example-bundles';
-import { registerHostPlugin } from './plugins/registry';
+import { registerHostPlugin, SCRIPTING_PLUGIN_ID } from './plugins/registry';
 import { reconcilePluginMounts, capturePluginFocus } from './plugins/mount';
 import { dbTablePluginRegistration } from './plugins/db-table-plugin';
 import { progressBarPluginRegistration } from './plugins/progress-bar';
+import { scriptingPluginRegistration, setScriptingResult } from './plugins/scripting/scripting';
+import { runUserScript } from './plugins/scripting/wrapper';
+import { visitBlocks } from './section-ops';
 
 const appRoot = document.querySelector<HTMLDivElement>('#app');
 if (!appRoot) {
@@ -472,6 +475,8 @@ function renderApp(): void {
     editorMode: state.editorMode,
     historyLength: state.history.length,
   });
+
+  void runScriptingBlocksIfNeeded();
 }
 
 function refreshReaderPanels(): void {
@@ -553,6 +558,56 @@ initCallbacks({
 // render to add their own.
 registerHostPlugin(dbTablePluginRegistration);
 registerHostPlugin(progressBarPluginRegistration);
+registerHostPlugin(scriptingPluginRegistration);
+
+// Run scripting blocks once per loaded document. Re-runs whenever the
+// document reference changes (file open, example load, new doc, etc.).
+let lastScriptedDocument: typeof state.document | null = null;
+
+async function runScriptingBlocksIfNeeded(): Promise<void> {
+  if (state.document === lastScriptedDocument) {
+    return;
+  }
+  lastScriptedDocument = state.document;
+
+  const targets: Array<{ sectionKey: string; blockId: string; source: string }> = [];
+  for (const section of state.document.sections) {
+    visitSectionForScripts(section, targets);
+  }
+  if (targets.length === 0) {
+    return;
+  }
+
+  for (const target of targets) {
+    const result = await runUserScript({
+      document: state.document,
+      source: target.source,
+    });
+    const mountSelector = `[data-scripting-mount="true"][data-scripting-section-key="${cssEscape(target.sectionKey)}"][data-scripting-block-id="${cssEscape(target.blockId)}"]`;
+    const mount = app.querySelector<HTMLElement>(mountSelector);
+    if (mount) {
+      setScriptingResult(mount, result);
+    }
+    if (!result.ok) {
+      console.error('[hvy:scripting] script error', result.error);
+    }
+  }
+}
+
+function cssEscape(value: string): string {
+  return typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(value) : value.replace(/(["\\])/g, '\\$1');
+}
+
+function visitSectionForScripts(
+  section: { key: string; blocks: { id: string; text: string; schema: { component: string; plugin: string } }[]; children: unknown[] },
+  out: Array<{ sectionKey: string; blockId: string; source: string }>
+): void {
+  visitBlocks([section as never], (block) => {
+    if (block.schema.component === 'plugin' && block.schema.plugin === SCRIPTING_PLUGIN_ID) {
+      out.push({ sectionKey: section.key, blockId: block.id, source: block.text ?? '' });
+    }
+  });
+}
 
 try {
   initColorModeSync();

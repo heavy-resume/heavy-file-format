@@ -164,17 +164,45 @@ Do NOT mention progress-bar in the spec — it's reference-impl only.
 
 ## Implementation order
 
-- [ ] 1. New `src/plugins/types.ts` with the interfaces above.
-- [ ] 2. Extend `reference-config.ts` to accept plugin registrations.
-- [ ] 3. Rework `src/plugins/registry.ts` to use the host registry.
-- [ ] 4. Mount/unmount machinery in main.ts (post-render walk + cache).
-- [ ] 5. Wrap DB-table in a factory; register it as default built-in.
-- [ ] 6. Update `editor/components/plugin/plugin.ts` to render the selector + mount placeholder.
-- [ ] 7. New `src/plugins/progress-bar.ts` and register it as a reference built-in.
-- [ ] 8. Wire `block-plugin` field handler.
-- [ ] 9. Update HVY-SPEC.md.
-- [ ] 10. Tests: progress-bar config round-trip, plugin-selector switching, unmount on
-       block deletion.
+- [x] 1. New `src/plugins/types.ts` with the interfaces above.
+- [x] 2. Host-supplied registry on `src/plugins/registry.ts` (`registerHostPlugin`,
+       `setHostPlugins`, `getHostPlugins`). Reference-config.ts deferred —
+       hosts use the registry directly, simpler to wire.
+- [x] 3. Rework `src/plugins/registry.ts` to use the host registry.
+- [x] 4. Mount/unmount machinery in `src/plugins/mount.ts` (post-render walk +
+       cache + `refresh()` + reconciliation).
+- [x] 5. Wrap DB-table in a factory; register as default built-in.
+- [x] 6. Update `editor/components/plugin/plugin.ts` to render the selector +
+       mount placeholder.
+- [x] 7. New `src/plugins/progress-bar.ts` and register as reference built-in.
+- [x] 8. Wire `block-plugin` field handler.
+- [x] 9. Update HVY-SPEC.md (added §7.4 Plugin installation and selection;
+       clarified §7.3 text-body semantics).
+- [x] 10. Tests: registry append/dedupe, document-vs-host fallback, progress-bar
+       round-trip, plugin swap reset.
+
+## Follow-up issues (round 2)
+
+- [x] 11. Plugin creation is a lock-in flow: empty plugin block shows a
+       chooser (select + "Use Plugin" button). After commit, the plugin id is
+       fixed for that block — no chooser shown thereafter; to change, delete
+       and recreate. The dead `block-plugin` field handler in block-ops.ts
+       was removed.
+- [x] 12. Chooser now renders in the block-head row (next to the block title)
+       via `renderPluginHeaderChooser` exported from the plugin component.
+- [x] 13. Focus preservation across `renderApp()` and `refreshReaderPanels()`:
+       `capturePluginFocus()` + `restorePluginFocus()` save the focused element
+       inside any cached plugin element (and its selection range), then
+       re-apply after reconcile reattaches. Note: this only helps when the
+       focused element survives the re-render. db-table's `refresh()` rebuilds
+       its inner HTML and so loses the reference — fix that by either
+       refreshing in place (diff) or skipping refresh while a child is
+       focused.
+- [ ] 14. DB-table draft-row commit should keep the user in edit mode without
+       requiring Done → re-enter to add additional rows. Suspected cause:
+       `sqliteAddRow` / `materializeDbTableDraftRow` triggers `renderApp()`
+       which rebuilds the plugin's inner HTML; the focused cell is destroyed
+       and the draft row disappears. Needs in-browser debugging.
 
 ## Future: scripting component sandbox
 

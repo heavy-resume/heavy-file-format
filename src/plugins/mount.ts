@@ -187,6 +187,59 @@ export function reconcilePluginMounts(root: ParentNode): void {
   }
 }
 
+interface SavedPluginFocus {
+  element: HTMLElement;
+  selectionStart: number | null;
+  selectionEnd: number | null;
+  selectionDirection: 'forward' | 'backward' | 'none' | null;
+}
+
+// Capture the currently-focused element if it's inside a cached plugin
+// element. The cached element survives `app.innerHTML = ...` as a detached
+// JS reference; after reconcile reattaches it, we restore focus to the same
+// input so the user can keep typing.
+export function capturePluginFocus(): SavedPluginFocus | null {
+  const active = document.activeElement;
+  if (!(active instanceof HTMLElement)) {
+    return null;
+  }
+  for (const entry of mounted.values()) {
+    if (entry.instance.element.contains(active)) {
+      let selectionStart: number | null = null;
+      let selectionEnd: number | null = null;
+      let selectionDirection: 'forward' | 'backward' | 'none' | null = null;
+      if (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement) {
+        try {
+          selectionStart = active.selectionStart;
+          selectionEnd = active.selectionEnd;
+          selectionDirection = active.selectionDirection ?? null;
+        } catch {
+          // selectionStart can throw on number/email/etc. inputs — ignore.
+        }
+      }
+      return { element: active, selectionStart, selectionEnd, selectionDirection };
+    }
+  }
+  return null;
+}
+
+export function restorePluginFocus(saved: SavedPluginFocus | null): void {
+  if (!saved) return;
+  if (!saved.element.isConnected) return;
+  try {
+    saved.element.focus({ preventScroll: true });
+    if (
+      (saved.element instanceof HTMLInputElement || saved.element instanceof HTMLTextAreaElement) &&
+      saved.selectionStart !== null &&
+      saved.selectionEnd !== null
+    ) {
+      saved.element.setSelectionRange(saved.selectionStart, saved.selectionEnd, saved.selectionDirection ?? undefined);
+    }
+  } catch {
+    // Best-effort restoration only.
+  }
+}
+
 export function unmountAllPlugins(): void {
   for (const entry of mounted.values()) {
     try {

@@ -14,7 +14,6 @@ import { normalizeMarkdownLists, markdownToEditorHtml, turndown } from './markdo
 import { escapeAttr, escapeHtml, getInlineEditableText, renderOption } from './utils';
 import { recordHistory } from './history';
 import { getDocumentComponentDefaultCss } from './document-component-defaults';
-import { isDbTablePluginId } from './plugins/registry';
 import { resetDbTableViewState } from './plugins/db-table';
 
 export function findBlockByIds(sectionKey: string, blockId: string): VisualBlock | null {
@@ -171,24 +170,6 @@ export function handleBlockFieldInput(target: HTMLElement): boolean {
     return true;
   }
 
-  if (field === 'block-plugin' && target instanceof HTMLSelectElement) {
-    const nextId = target.value.trim();
-    if (nextId === block.schema.plugin) {
-      return true;
-    }
-    block.schema.plugin = nextId;
-    block.schema.pluginConfig = {};
-    block.text = '';
-    if (isDbTablePluginId(nextId)) {
-      block.schema.pluginConfig = { source: 'with-file' };
-    }
-    recordHistory(`block-plugin:${target.dataset.sectionKey ?? ''}:${block.id}:${nextId}`);
-    syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
-    getRefreshReaderPanels()();
-    getRenderApp()();
-    return true;
-  }
-
   if (field === 'block-plugin-db-table' && target instanceof HTMLInputElement) {
     block.schema.pluginConfig = {
       ...block.schema.pluginConfig,
@@ -198,6 +179,7 @@ export function handleBlockFieldInput(target: HTMLElement): boolean {
     resetDbTableViewState(target.dataset.sectionKey ?? '', block.id);
     syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
     getRefreshReaderPanels()();
+    getRenderApp()();
     return true;
   }
 
@@ -206,6 +188,7 @@ export function handleBlockFieldInput(target: HTMLElement): boolean {
     resetDbTableViewState(target.dataset.sectionKey ?? '', block.id);
     syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
     getRefreshReaderPanels()();
+    getRenderApp()();
     return true;
   }
 

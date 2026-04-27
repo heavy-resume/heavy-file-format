@@ -4,6 +4,7 @@ import { containerActions } from './container';
 import { gridActions } from './grid';
 import { tableActions } from './table';
 import { dbTableActions } from './db-table';
+import { pluginActions } from './plugin';
 import type { ActionHandler } from './types';
 
 export const actionRegistry: Record<string, ActionHandler> = {
@@ -13,4 +14,5 @@ export const actionRegistry: Record<string, ActionHandler> = {
   ...gridActions,
   ...tableActions,
   ...dbTableActions,
+  ...pluginActions,
 };

@@ -1,3 +1,21 @@
+.plugin-chooser {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-left: 0.6rem;
+}
+
+.plugin-chooser select {
+  font: inherit;
+  padding: 0.2rem 0.35rem;
+}
+
+.plugin-chooser-empty {
+  margin-left: 0.6rem;
+  font-size: 0.85rem;
+  color: var(--hvy-text-muted);
+}
+
 .plugin-placeholder {
   border: 1px dashed var(--hvy-border-alt);
   border-radius: 8px;

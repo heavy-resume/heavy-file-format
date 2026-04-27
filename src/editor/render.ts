@@ -9,7 +9,7 @@ import { renderContainerEditor } from './components/container/container';
 import { renderExpandableEditor } from './components/expandable/expandable';
 import { renderGridEditor } from './components/grid/grid';
 import { renderImageEditor } from './components/image/image';
-import { renderPluginEditor } from './components/plugin/plugin';
+import { renderPluginEditor, renderPluginHeaderChooser, getPluginBlockHeaderLabel } from './components/plugin/plugin';
 import { renderTableEditor } from './components/table/table';
 import { renderTextEditor } from './components/text/text';
 import { renderXrefCardEditor } from './components/xref-card/xref-card';
@@ -17,7 +17,6 @@ import { renderTagEditor } from './tag-editor';
 import { getTemplateFields, renderTemplateGhosts } from './template';
 import type { Align, BlockSchema, VisualBlock, VisualSection } from './types';
 import { normalizeMarkdownIndentation } from '../markdown';
-import { getPluginDisplayName, isDbTablePluginId } from '../plugins/registry';
 import bash from 'highlight.js/lib/languages/bash';
 import css from 'highlight.js/lib/languages/css';
 import javascript from 'highlight.js/lib/languages/javascript';
@@ -263,9 +262,10 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
 
   function renderEditorBlock(sectionKey: string, block: VisualBlock, rootSections?: VisualSection[], parentLocked = false): string {
     const component = block.schema.component || 'text';
-    const componentLabel = component === 'plugin'
-      ? (isDbTablePluginId(block.schema.plugin) || block.schema.plugin.trim().length === 0 ? getPluginDisplayName(block.schema.plugin || 'dev.heavy.db-table') : 'Plugin')
-      : component;
+    const componentLabel = component === 'plugin' ? getPluginBlockHeaderLabel(block) : component;
+    const pluginHeaderChooser = component === 'plugin'
+      ? renderPluginHeaderChooser(sectionKey, block, deps.escapeAttr, deps.escapeHtml)
+      : '';
     const isActiveSelf = deps.isActiveEditorBlock(sectionKey, block.id);
     const isActiveDescendant = state.activeEditorBlock?.sectionKey === sectionKey && isDescendantActive(block, state.activeEditorBlock.blockId);
     const isActive = isActiveSelf || isActiveDescendant;
@@ -288,6 +288,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
               <button type="button" class="order-arrow-button" data-action="move-block-down" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}" aria-label="Move block down">▼</button>
             </div>
             <strong class="editor-block-title">${deps.escapeHtml(componentLabel)}</strong>
+            ${pluginHeaderChooser}
           </div>
           <div class="editor-actions">
             <button type="button" class="ghost" data-action="deactivate-block" data-section-key="${deps.escapeAttr(

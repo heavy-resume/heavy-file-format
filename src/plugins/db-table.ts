@@ -124,7 +124,7 @@ export function renderDbTablePluginEditor(sectionKey: string, block: VisualBlock
           data-block-id="${helpers.escapeAttr(block.id)}"
           data-field="block-plugin-db-table"
           value="${helpers.escapeAttr(tableName)}"
-          placeholder="job_applications"
+          placeholder="table_name_goes_here"
         />
       </label>
       <span>
@@ -446,6 +446,19 @@ export async function renameDbTableColumn(tableName: string, oldName: string, ne
     throw new Error(`Column "${trimmedNext}" already exists.`);
   }
   db.run(`ALTER TABLE ${quoteIdentifier(tableName)} RENAME COLUMN ${quoteIdentifier(oldName)} TO ${quoteIdentifier(trimmedNext)}`);
+  await persistRuntimeDatabase();
+}
+
+export async function dropDbTableColumn(tableName: string, columnName: string): Promise<void> {
+  const db = await getLoadedDatabase();
+  const columns = getTableColumns(db, tableName);
+  if (!columns.includes(columnName)) {
+    return;
+  }
+  if (columns.length <= 1) {
+    throw new Error('Cannot delete the last remaining column.');
+  }
+  db.run(`ALTER TABLE ${quoteIdentifier(tableName)} DROP COLUMN ${quoteIdentifier(columnName)}`);
   await persistRuntimeDatabase();
 }
 

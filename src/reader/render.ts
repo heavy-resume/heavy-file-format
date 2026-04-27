@@ -20,6 +20,7 @@ import { getDocumentSectionDefaultCss, mergeDocumentCss } from '../document-sect
 import { sanitizeInlineCss } from '../css-sanitizer';
 import { areTablesEnabled } from '../reference-config';
 import { parseAttachedComponentBlocks } from '../plugins/db-table';
+import { SCRIPTING_PLUGIN_ID } from '../plugins/registry';
 
 interface ReaderRenderState {
   documentMeta: VisualDocument['meta'];
@@ -180,6 +181,9 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       return `<div ${blockAttrs}>${renderCodeReader(section, block, helpers)}</div>`;
     }
     if (base === 'plugin') {
+      if (block.schema.plugin === SCRIPTING_PLUGIN_ID) {
+        return '';
+      }
       return `<div ${blockAttrs}>${renderPluginReader(section, block, helpers)}</div>`;
     }
     if (base === 'container') {

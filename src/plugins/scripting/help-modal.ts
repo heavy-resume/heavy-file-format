@@ -1,52 +1,32 @@
-import { marked } from 'marked';
-import DOMPurify from 'dompurify';
 import helpHvyRaw from './help.hvy?raw';
 import { deserializeDocument } from '../../serialization';
-import type { VisualSection } from '../../editor/types';
 
+import { getReaderRenderer } from '../../state';
+import { findSectionByKey } from '../../section-ops';
+
+let cachedDoc: ReturnType<typeof deserializeDocument> | null = null;
 let cachedHelpHtml: string | null = null;
 
-function renderHelpHtml(): string {
-  if (cachedHelpHtml !== null) {
-    return cachedHelpHtml;
+function getHelpDoc() {
+  if (!cachedDoc) {
+    cachedDoc = deserializeDocument(helpHvyRaw, '.hvy');
   }
+  return cachedDoc;
+}
+
+function renderHelpHtml(): string {
   try {
-    const doc = deserializeDocument(helpHvyRaw, '.hvy');
-    cachedHelpHtml = renderSections(doc.sections);
+    const doc = getHelpDoc();
+    const renderer = getReaderRenderer();
+    if (renderer && renderer.renderReaderSections) {
+      cachedHelpHtml = renderer.renderReaderSections(doc.sections);
+    } else {
+      cachedHelpHtml = `<p>Failed to access HVY reader renderer.</p>`;
+    }
   } catch (error) {
     cachedHelpHtml = `<p>Failed to render help: ${error instanceof Error ? error.message : String(error)}</p>`;
   }
-  return cachedHelpHtml;
-}
-
-function renderSections(sections: VisualSection[]): string {
-  return sections
-    .map((section) => {
-      const title = section.title || 'Section';
-      const collapsed = section.expanded === false;
-      const body = section.blocks
-        .map((block) => {
-          const text = block.text ?? '';
-          if (text.trim().length === 0) {
-            return '';
-          }
-          const html = DOMPurify.sanitize(marked.parse(text) as string);
-          return `<div class="hvy-scripting-help-block">${html}</div>`;
-        })
-        .join('');
-      const childHtml = renderSections(section.children);
-      const inner = `${body}${childHtml}`;
-      const escapedTitle = escapeHtml(title);
-      if (collapsed) {
-        return `<details><summary>${escapedTitle}</summary>${inner}</details>`;
-      }
-      return `<details open><summary>${escapedTitle}</summary>${inner}</details>`;
-    })
-    .join('');
-}
-
-function escapeHtml(value: string): string {
-  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  return cachedHelpHtml || '';
 }
 
 let activeBackdrop: HTMLElement | null = null;
@@ -71,7 +51,7 @@ export function openScriptingHelpModal(): void {
   head.appendChild(close);
 
   const body = document.createElement('div');
-  body.className = 'hvy-scripting-help-modal-body';
+  body.className = 'hvy-scripting-help-modal-body reader-pane';
   body.innerHTML = renderHelpHtml();
 
   modal.appendChild(head);
@@ -94,6 +74,23 @@ export function openScriptingHelpModal(): void {
       dismiss();
     }
   });
+
+  // Local handler for reader toggle (expand/collapse help sections)
+  modal.addEventListener('click', (event) => {
+    const target = event.target as HTMLElement;
+    const toggle = target.closest<HTMLElement>('[data-reader-action="toggle-expand"]');
+    if (toggle) {
+      const sectionKey = toggle.dataset.sectionKey;
+      if (!sectionKey || !cachedDoc) return;
+      const section = findSectionByKey(cachedDoc.sections, sectionKey);
+      if (section) {
+        section.expanded = !section.expanded;
+        // re-render local doc
+        body.innerHTML = renderHelpHtml();
+      }
+    }
+  });
+
   document.addEventListener('keydown', onKey);
 
   document.body.appendChild(backdrop);

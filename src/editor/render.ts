@@ -28,6 +28,7 @@ import typescript from 'highlight.js/lib/languages/typescript';
 import xml from 'highlight.js/lib/languages/xml';
 import { areTablesEnabled } from '../reference-config';
 import { sanitizeInlineCss } from '../css-sanitizer';
+import { SCRIPTING_PLUGIN_ID } from '../plugins/registry';
 
 hljs.registerLanguage('bash', bash);
 hljs.registerLanguage('sh', bash);
@@ -395,6 +396,13 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         })
         .join('');
       return `<div class="reader-grid-layout editor-grid-passive-preview" style="grid-template-columns: repeat(${columns}, minmax(0, 1fr));">${cells}</div>`;
+    }
+
+    if (base === 'plugin' && block.schema.plugin === SCRIPTING_PLUGIN_ID) {
+      if (block.text.trim().length === 0) {
+        return `<div class="editor-passive-empty-text">Empty script...</div>`;
+      }
+      return renderComponentFragment('code', block.text, { ...block, schema: { ...block.schema, codeLanguage: 'python' } } as VisualBlock);
     }
 
     if ((base === 'text' || base === 'quote') && block.text.trim().length === 0) {

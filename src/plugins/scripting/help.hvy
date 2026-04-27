@@ -5,15 +5,19 @@ title: Scripting Plugin Help
 
 <!--hvy: {"id":"overview","expanded":true}-->
 #! Overview
+# Introduction
+Give your HVY document advanced functionality with scripting. Have ... <TODO>
 
-<!--hvy:text {}-->
- The scripting plugin runs Python code (via Brython) once when the document
- loads. Use it to generate, mutate, or rearrange document content
- programmatically. Scripts cannot reach the network — they only see the
- `doc` API.
+The intended use for most people is to have AI write code for you instead of writing it yourself. Simply ask!
+
+The scripting plugin runs Python code (via Brython) once when the document
+loads. Use it to generate, mutate, or rearrange document content
+programmatically. Scripts cannot reach the network — they only see the
+`doc` API.
 
 <!--hvy: {"id":"doc-api","expanded":false}-->
 #! The `doc` API
+# The `doc` API
 
 <!--hvy:text {}-->
  Your script runs with one global injected: `doc`. Everything you can do

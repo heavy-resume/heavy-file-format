@@ -551,6 +551,7 @@ initCallbacks({
   refreshReaderPanels,
   refreshModalPreview,
   componentRenderHelpers: localGetComponentRenderHelpers(),
+  readerRenderer,
 });
 
 // Register the reference-implementation built-in plugins. Hosts that embed

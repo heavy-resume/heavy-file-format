@@ -50,17 +50,28 @@ export function getCachedComponentRenderHelpers(): any {
   return _componentRenderHelpers;
 }
 
+let _readerRenderer: any = null;
+export function getReaderRenderer(): any {
+  if (_readerRenderer === null) {
+    throw new Error('readerRenderer not initialized');
+  }
+  return _readerRenderer;
+}
+
 export function initCallbacks(callbacks: {
   renderApp: () => void;
   refreshReaderPanels: () => void;
   refreshModalPreview: () => void;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   componentRenderHelpers: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  readerRenderer: any;
 }): void {
   _renderApp = callbacks.renderApp;
   _refreshReaderPanels = callbacks.refreshReaderPanels;
   _refreshModalPreview = callbacks.refreshModalPreview;
   _componentRenderHelpers = callbacks.componentRenderHelpers;
+  _readerRenderer = callbacks.readerRenderer;
 }
 
 // state is initialized lazily by main.ts after createDefaultDocument is available

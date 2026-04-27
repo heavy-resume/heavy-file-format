@@ -12,6 +12,13 @@ import type {
 } from './types';
 import type { JsonObject } from '../hvy/types';
 
+interface SavedFocus {
+  element: HTMLElement;
+  selectionStart: number | null;
+  selectionEnd: number | null;
+  selectionDirection: 'forward' | 'backward' | 'none' | null;
+}
+
 interface MountedPlugin {
   pluginId: string;
   sectionKey: string;
@@ -19,6 +26,7 @@ interface MountedPlugin {
   mode: 'editor' | 'reader';
   instance: HvyPluginInstance;
   placeholder: HTMLElement | null;
+  pendingFocus: SavedFocus | null;
 }
 
 const MOUNT_KEY_PREFIX = 'hvy-plugin-mount';
@@ -127,6 +135,13 @@ export function reconcilePluginMounts(root: ParentNode): void {
     if (existing) {
       placeholder.replaceWith(existing.instance.element);
       existing.placeholder = existing.instance.element;
+      // Restore focus before refresh — plugins (e.g. progress-bar) that
+      // skip rebuilding while a child is focused need document.activeElement
+      // to already point at their input by the time refresh runs.
+      if (existing.pendingFocus) {
+        applySavedFocus(existing.pendingFocus);
+        existing.pendingFocus = null;
+      }
       try {
         existing.instance.refresh?.();
       } catch (error) {
@@ -167,6 +182,7 @@ export function reconcilePluginMounts(root: ParentNode): void {
       mode,
       instance,
       placeholder: instance.element,
+      pendingFocus: null,
     });
   });
 
@@ -187,44 +203,38 @@ export function reconcilePluginMounts(root: ParentNode): void {
   }
 }
 
-interface SavedPluginFocus {
-  element: HTMLElement;
-  selectionStart: number | null;
-  selectionEnd: number | null;
-  selectionDirection: 'forward' | 'backward' | 'none' | null;
-}
-
 // Capture the currently-focused element if it's inside a cached plugin
-// element. The cached element survives `app.innerHTML = ...` as a detached
-// JS reference; after reconcile reattaches it, we restore focus to the same
-// input so the user can keep typing.
-export function capturePluginFocus(): SavedPluginFocus | null {
+// element, and stash it on that mount entry so the next reconcile pass can
+// restore focus before the plugin's refresh() runs. We have to do this BEFORE
+// `app.innerHTML = ...` wipes the DOM (which detaches the focused element
+// and moves document.activeElement back to body).
+export function capturePluginFocus(): void {
   const active = document.activeElement;
   if (!(active instanceof HTMLElement)) {
-    return null;
+    return;
   }
   for (const entry of mounted.values()) {
-    if (entry.instance.element.contains(active)) {
-      let selectionStart: number | null = null;
-      let selectionEnd: number | null = null;
-      let selectionDirection: 'forward' | 'backward' | 'none' | null = null;
-      if (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement) {
-        try {
-          selectionStart = active.selectionStart;
-          selectionEnd = active.selectionEnd;
-          selectionDirection = active.selectionDirection ?? null;
-        } catch {
-          // selectionStart can throw on number/email/etc. inputs — ignore.
-        }
-      }
-      return { element: active, selectionStart, selectionEnd, selectionDirection };
+    if (!entry.instance.element.contains(active)) {
+      continue;
     }
+    let selectionStart: number | null = null;
+    let selectionEnd: number | null = null;
+    let selectionDirection: 'forward' | 'backward' | 'none' | null = null;
+    if (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement) {
+      try {
+        selectionStart = active.selectionStart;
+        selectionEnd = active.selectionEnd;
+        selectionDirection = active.selectionDirection ?? null;
+      } catch {
+        // selectionStart can throw on number/email/etc. inputs — ignore.
+      }
+    }
+    entry.pendingFocus = { element: active, selectionStart, selectionEnd, selectionDirection };
+    return;
   }
-  return null;
 }
 
-export function restorePluginFocus(saved: SavedPluginFocus | null): void {
-  if (!saved) return;
+function applySavedFocus(saved: SavedFocus): void {
   if (!saved.element.isConnected) return;
   try {
     saved.element.focus({ preventScroll: true });
@@ -236,7 +246,7 @@ export function restorePluginFocus(saved: SavedPluginFocus | null): void {
       saved.element.setSelectionRange(saved.selectionStart, saved.selectionEnd, saved.selectionDirection ?? undefined);
     }
   } catch {
-    // Best-effort restoration only.
+    // Best-effort.
   }
 }
 

@@ -449,6 +449,19 @@ export async function renameDbTableColumn(tableName: string, oldName: string, ne
   await persistRuntimeDatabase();
 }
 
+export async function dropDbTableColumn(tableName: string, columnName: string): Promise<void> {
+  const db = await getLoadedDatabase();
+  const columns = getTableColumns(db, tableName);
+  if (!columns.includes(columnName)) {
+    return;
+  }
+  if (columns.length <= 1) {
+    throw new Error('Cannot delete the last remaining column.');
+  }
+  db.run(`ALTER TABLE ${quoteIdentifier(tableName)} DROP COLUMN ${quoteIdentifier(columnName)}`);
+  await persistRuntimeDatabase();
+}
+
 export async function updateDbTableCell(tableName: string, rowId: number, columnName: string, value: string): Promise<void> {
   const db = await getLoadedDatabase();
   db.run(`UPDATE ${quoteIdentifier(tableName)} SET ${quoteIdentifier(columnName)} = ? WHERE rowid = ?`, [value, rowId]);

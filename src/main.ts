@@ -24,7 +24,7 @@ import { deserializeDocumentBytes, serializeDocument } from './serialization';
 import { createDefaultChatState, renderChatPanel } from './chat/chat';
 import { DEFAULT_EXAMPLE_HVY_BYTES } from './example-bundles';
 import { registerHostPlugin } from './plugins/registry';
-import { reconcilePluginMounts, capturePluginFocus, restorePluginFocus } from './plugins/mount';
+import { reconcilePluginMounts, capturePluginFocus } from './plugins/mount';
 import { dbTablePluginRegistration } from './plugins/db-table-plugin';
 import { progressBarPluginRegistration } from './plugins/progress-bar';
 
@@ -431,7 +431,7 @@ function renderApp(): void {
   `;
   markupMs = performance.now() - stepStartedAt;
 
-  const savedPluginFocus = capturePluginFocus();
+  capturePluginFocus();
 
   stepStartedAt = performance.now();
   app.innerHTML = markup;
@@ -440,7 +440,6 @@ function renderApp(): void {
   stepStartedAt = performance.now();
   bindUi(app);
   reconcilePluginMounts(app);
-  restorePluginFocus(savedPluginFocus);
   bindMs = performance.now() - stepStartedAt;
 
   stepStartedAt = performance.now();
@@ -506,10 +505,9 @@ function refreshReaderPanels(): void {
   }
   if (reader) {
     const stepStartedAt = performance.now();
-    const savedPluginFocus = capturePluginFocus();
+    capturePluginFocus();
     reader.innerHTML = readerRenderer.renderReaderSections(state.document.sections);
     reconcilePluginMounts(reader);
-    restorePluginFocus(savedPluginFocus);
     readerMs = performance.now() - stepStartedAt;
   }
 

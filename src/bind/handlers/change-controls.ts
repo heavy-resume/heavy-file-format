@@ -1,4 +1,5 @@
 import { getRenderApp, recordHistory, materializeDbTableDraftRow, renameDbTableColumn, syncSqliteColumnNameInDom, updateDbTableCell, handleImageUpload } from './_imports';
+import { dropDbTableColumn } from '../../plugins/db-table';
 
 export function bindChangeControls(app: HTMLElement): void {
   app.addEventListener('change', (event) => {
@@ -52,6 +53,26 @@ export function bindChangeControls(app: HTMLElement): void {
       const tableName = target.dataset.tableName ?? '';
       const oldColumnName = target.dataset.oldColumnName ?? '';
       if (tableName.length === 0 || oldColumnName.length === 0) {
+        return;
+      }
+      const trimmed = target.value.trim();
+      if (trimmed.length === 0) {
+        const proceed = window.confirm(`Delete column "${oldColumnName}"? This cannot be undone.`);
+        if (!proceed) {
+          target.value = oldColumnName;
+          return;
+        }
+        recordHistory(`sqlite-column-drop:${tableName}:${oldColumnName}`);
+        void dropDbTableColumn(tableName, oldColumnName)
+          .then(() => {
+            getRenderApp()();
+          })
+          .catch((error) => {
+            console.error('[hvy:sqlite-plugin] column drop failed', error);
+            target.value = oldColumnName;
+            window.alert(error instanceof Error ? error.message : 'Failed to delete column.');
+            getRenderApp()();
+          });
         return;
       }
       recordHistory(`sqlite-column:${tableName}:${oldColumnName}`);

@@ -156,6 +156,48 @@ export function instrumentPythonSource(source: string): string {
   return instrumented.join('\n');
 }
 
+function isImportStatementStart(line: string): boolean {
+  const trimmed = line.trimStart();
+  return /^import\b/.test(trimmed) || /^from\b.*\bimport\b/.test(trimmed);
+}
+
+export function stripPythonImports(source: string): string {
+  const lines = source.split('\n');
+  const stripped: string[] = [];
+
+  let statementOpen = false;
+  let bracketDepth = 0;
+  let tripleQuote: `'''` | `"""` | null = null;
+  let strippingImport = false;
+
+  for (const line of lines) {
+    const analysis = analyzePythonLine(line, bracketDepth, tripleQuote);
+    const indentation = line.match(/^\s*/)?.[0] ?? '';
+
+    if (!statementOpen && !analysis.isBlankOrComment && isImportStatementStart(line)) {
+      stripped.push(`${indentation}pass  # __hvy_stripped_import__`);
+      strippingImport = true;
+    } else if (strippingImport) {
+      stripped.push('');
+    } else {
+      stripped.push(line);
+    }
+
+    bracketDepth = analysis.bracketDepth;
+    tripleQuote = analysis.tripleQuote;
+
+    if (!analysis.isBlankOrComment) {
+      statementOpen = tripleQuote !== null || bracketDepth > 0 || analysis.lineContinuation;
+    }
+
+    if (strippingImport && !statementOpen) {
+      strippingImport = false;
+    }
+  }
+
+  return stripped.join('\n');
+}
+
 // The Python program executed for each user script. It pulls the runtime and
 // source out of the shared JS global, prefers sys.settrace() for line
 // counting, and falls back to a JS-side source rewrite if tracing is
@@ -240,9 +282,10 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
   const runtime = createScriptingRuntime({ document: options.document, maxLines: options.maxLines });
   const runtimeId = `r${++runtimeCounter}`;
   const scripting = getScriptingGlobal();
+  const sanitizedSource = stripPythonImports(options.source);
   scripting.runtimes[runtimeId] = runtime;
-  scripting.sources[runtimeId] = options.source;
-  scripting.instrumentedSources[runtimeId] = instrumentPythonSource(options.source);
+  scripting.sources[runtimeId] = sanitizedSource;
+  scripting.instrumentedSources[runtimeId] = instrumentPythonSource(sanitizedSource);
   scripting.errors[runtimeId] = null;
 
   // Do not append this to the DOM or use type="text/python", otherwise 

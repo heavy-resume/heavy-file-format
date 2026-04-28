@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
 
-import { buildPythonProgram, instrumentPythonSource } from '../src/plugins/scripting/wrapper';
+import { buildPythonProgram, instrumentPythonSource, stripPythonImports } from '../src/plugins/scripting/wrapper';
 
 test('instrumentPythonSource adds step calls without rewriting compare expressions', () => {
   expect(
@@ -93,4 +93,54 @@ test('buildPythonProgram prefers tracing and keeps instrumented fallback availab
   expect(program).toContain("__hvy_compilable_source__ = __hvy_source__ if __hvy_trace_enabled__ else __hvy_instrumented_source__");
   expect(program).not.toContain('NodeTransformer');
   expect(program).not.toContain('visit_Compare');
+});
+
+test('stripPythonImports replaces plain import statements with pass', () => {
+  expect(
+    stripPythonImports(
+      `import pandas
+doc.header.set("ok", "yes")
+`
+    )
+  ).toBe(
+    `pass  # __hvy_stripped_import__
+doc.header.set("ok", "yes")
+`
+  );
+});
+
+test('stripPythonImports replaces from-import statements with pass', () => {
+  expect(
+    stripPythonImports(
+      `from browser import window
+doc.header.set("ok", "yes")
+`
+    )
+  ).toBe(
+    `pass  # __hvy_stripped_import__
+doc.header.set("ok", "yes")
+`
+  );
+});
+
+test('stripPythonImports strips multiline imports while preserving block structure', () => {
+  expect(
+    stripPythonImports(
+      `if True:
+    from browser import (
+        window,
+        document,
+    )
+    doc.header.set("ok", "yes")
+`
+    )
+  ).toBe(
+    `if True:
+    pass  # __hvy_stripped_import__
+
+
+
+    doc.header.set("ok", "yes")
+`
+  );
 });

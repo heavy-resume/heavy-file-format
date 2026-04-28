@@ -16,10 +16,10 @@ interface EditorHandles {
 
 function buildEditorDom(ctx: HvyPluginContext): { root: HTMLDivElement; handles: EditorHandles } {
   const root = document.createElement('div');
-  root.className = 'hvy-scripting-editor';
+  root.className = 'hvy-scripting-editor code-editor-shell';
 
   const head = document.createElement('div');
-  head.className = 'hvy-scripting-head';
+  head.className = 'hvy-scripting-head code-editor-head';
 
   const title = document.createElement('strong');
   title.className = 'hvy-scripting-title';

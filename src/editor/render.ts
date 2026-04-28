@@ -697,7 +697,11 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     if (base === 'code') {
       const language = (block.schema.codeLanguage || 'text').trim() || 'text';
       const highlighted = highlightCode(content, language, deps.escapeHtml);
-      return `<div class="reader-code-block">
+      const codeBlockClasses = ['reader-code-block'];
+      if (block.schema.component === 'plugin' && block.schema.plugin === SCRIPTING_PLUGIN_ID) {
+        codeBlockClasses.push('reader-code-block-scripting');
+      }
+      return `<div class="${codeBlockClasses.join(' ')}">
         <div class="reader-code-head">
           <span class="reader-code-language">${deps.escapeHtml(language)}</span>
         </div>

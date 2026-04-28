@@ -34,6 +34,25 @@
   color: var(--hvy-code-text);
 }
 
+.reader-block pre code.hljs {
+  padding: 0;
+  background: transparent;
+  color: var(--hvy-code-text);
+}
+
+.reader-code-block-scripting .hljs {
+  color: var(--hvy-code-text);
+  background: transparent;
+}
+
+.reader-code-block-scripting .hljs-built_in {
+  color: #e36209;
+}
+
+.reader-code-block-scripting .hljs-string {
+  color: #032f62;
+}
+
 .code-editor-shell {
   border: 1px solid var(--hvy-border-input);
   background: var(--hvy-code-bg);

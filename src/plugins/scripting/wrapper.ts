@@ -9,6 +9,7 @@ let runtimeCounter = 0;
 interface HvyScriptingGlobal {
   runtimes: Record<string, ScriptingRuntime>;
   sources: Record<string, string>;
+  instrumentedSources: Record<string, string>;
   errors: Record<string, string | null>;
   callbacks: Record<string, () => void>;
 }
@@ -24,103 +25,169 @@ function getScriptingGlobal(): HvyScriptingGlobal {
     throw new Error('Scripting runtime requires a browser environment.');
   }
   if (!window.__HVY_SCRIPTING__) {
-    window.__HVY_SCRIPTING__ = { runtimes: {}, sources: {}, errors: {}, callbacks: {} };
+    window.__HVY_SCRIPTING__ = { runtimes: {}, sources: {}, instrumentedSources: {}, errors: {}, callbacks: {} };
   }
   if (!window.__HVY_SCRIPTING__.callbacks) {
     window.__HVY_SCRIPTING__.callbacks = {};
   }
+  if (!window.__HVY_SCRIPTING__.instrumentedSources) {
+    window.__HVY_SCRIPTING__.instrumentedSources = {};
+  }
   return window.__HVY_SCRIPTING__;
 }
 
+function isEscaped(line: string, index: number): boolean {
+  let slashCount = 0;
+  for (let cursor = index - 1; cursor >= 0 && line[cursor] === '\\'; cursor -= 1) {
+    slashCount += 1;
+  }
+  return slashCount % 2 === 1;
+}
+
+function analyzePythonLine(
+  line: string,
+  startingBracketDepth: number,
+  activeTripleQuote: `'''` | `"""` | null
+): {
+  bracketDepth: number;
+  lineContinuation: boolean;
+  tripleQuote: `'''` | `"""` | null;
+  isBlankOrComment: boolean;
+} {
+  let bracketDepth = startingBracketDepth;
+  let tripleQuote = activeTripleQuote;
+  let inSingleQuotedString: "'" | '"' | null = null;
+  let sawCode = false;
+  let lineContinuation = false;
+
+  for (let index = 0; index < line.length; index += 1) {
+    const char = line[index];
+
+    if (tripleQuote) {
+      if (line.slice(index, index + 3) === tripleQuote && !isEscaped(line, index)) {
+        tripleQuote = null;
+        index += 2;
+      }
+      continue;
+    }
+
+    if (inSingleQuotedString) {
+      if (char === inSingleQuotedString && !isEscaped(line, index)) {
+        inSingleQuotedString = null;
+      }
+      continue;
+    }
+
+    if (char === '#') {
+      break;
+    }
+
+    if (/\s/.test(char)) {
+      continue;
+    }
+
+    sawCode = true;
+
+    const tripleCandidate = line.slice(index, index + 3);
+    if ((tripleCandidate === `'''` || tripleCandidate === `"""`) && !isEscaped(line, index)) {
+      tripleQuote = tripleCandidate;
+      index += 2;
+      continue;
+    }
+
+    if ((char === "'" || char === '"') && !isEscaped(line, index)) {
+      inSingleQuotedString = char;
+      continue;
+    }
+
+    if (char === '(' || char === '[' || char === '{') {
+      bracketDepth += 1;
+      continue;
+    }
+
+    if (char === ')' || char === ']' || char === '}') {
+      bracketDepth = Math.max(0, bracketDepth - 1);
+      continue;
+    }
+  }
+
+  let trimIndex = line.length - 1;
+  while (trimIndex >= 0 && /\s/.test(line[trimIndex])) {
+    trimIndex -= 1;
+  }
+  if (trimIndex >= 0 && line[trimIndex] === '\\' && !isEscaped(line, trimIndex)) {
+    lineContinuation = true;
+  }
+
+  return {
+    bracketDepth,
+    lineContinuation,
+    tripleQuote,
+    isBlankOrComment: !sawCode,
+  };
+}
+
+export function instrumentPythonSource(source: string): string {
+  const lines = source.split('\n');
+  const instrumented: string[] = [];
+
+  let statementOpen = false;
+  let bracketDepth = 0;
+  let tripleQuote: `'''` | `"""` | null = null;
+
+  for (const line of lines) {
+    const analysis = analyzePythonLine(line, bracketDepth, tripleQuote);
+    const indentation = line.match(/^\s*/)?.[0] ?? '';
+
+    if (!analysis.isBlankOrComment && !statementOpen) {
+      instrumented.push(`${indentation}__hvy_step__()`);
+    }
+
+    instrumented.push(line);
+
+    bracketDepth = analysis.bracketDepth;
+    tripleQuote = analysis.tripleQuote;
+
+    if (!analysis.isBlankOrComment) {
+      statementOpen = tripleQuote !== null || bracketDepth > 0 || analysis.lineContinuation;
+    }
+  }
+
+  return instrumented.join('\n');
+}
+
 // The Python program executed for each user script. It pulls the runtime and
-// source out of the shared JS global, walks the AST inserting __hvy_step__
-// before every statement (recursively into nested blocks), then exec's the
-// instrumented module against globals where `doc` is already bound. Each
-// step bumps the runtime's counter and raises if it overflows the budget.
-function buildPythonProgram(runtimeId: string): string {
+// source out of the shared JS global, prefers sys.settrace() for line
+// counting, and falls back to a JS-side source rewrite if tracing is
+// unavailable in the current Brython build.
+export function buildPythonProgram(runtimeId: string): string {
   return `
-import ast as __hvy_ast__
 from browser import window as __hvy_window__
 
 __hvy_globals__ = __hvy_window__.__HVY_SCRIPTING__
 __hvy_runtime__ = __hvy_globals__.runtimes['${runtimeId}']
 __hvy_source__ = __hvy_globals__.sources['${runtimeId}']
+__hvy_instrumented_source__ = __hvy_globals__.instrumentedSources['${runtimeId}']
+__hvy_trace_enabled__ = False
 
 
-def __hvy_instrument__(src):
-    tree = __hvy_ast__.parse(src)
-
-    def _wrap(stmt):
-        stepped = __hvy_ast__.parse('__hvy_step__()').body[0]
-        __hvy_ast__.copy_location(stepped, stmt)
-        return [stepped, stmt]
-
-    class _Tracer(__hvy_ast__.NodeTransformer):
-        def _wrap_body(self, body):
-            return [s for stmt in body for s in _wrap(stmt)]
-
-        def visit_FunctionDef(self, node):
-            self.generic_visit(node)
-            node.body = self._wrap_body(node.body)
-            return node
-
-        def visit_AsyncFunctionDef(self, node):
-            self.generic_visit(node)
-            node.body = self._wrap_body(node.body)
-            return node
-
-        def visit_For(self, node):
-            self.generic_visit(node)
-            node.body = self._wrap_body(node.body)
-            node.orelse = self._wrap_body(node.orelse)
-            return node
-
-        def visit_AsyncFor(self, node):
-            return self.visit_For(node)
-
-        def visit_While(self, node):
-            self.generic_visit(node)
-            node.body = self._wrap_body(node.body)
-            node.orelse = self._wrap_body(node.orelse)
-            return node
-
-        def visit_If(self, node):
-            self.generic_visit(node)
-            node.body = self._wrap_body(node.body)
-            node.orelse = self._wrap_body(node.orelse)
-            return node
-
-        def visit_Try(self, node):
-            self.generic_visit(node)
-            node.body = self._wrap_body(node.body)
-            node.orelse = self._wrap_body(node.orelse)
-            node.finalbody = self._wrap_body(node.finalbody)
-            for handler in node.handlers:
-                handler.body = self._wrap_body(handler.body)
-            return node
-
-        def visit_With(self, node):
-            self.generic_visit(node)
-            node.body = self._wrap_body(node.body)
-            return node
-
-        def visit_AsyncWith(self, node):
-            return self.visit_With(node)
-
-        def visit_Compare(self, node):
-            # Avoids a Brython 3.14.0 bug where generic_visit causes singletons 
-            # like ast.Eq in Compare.ops to be dropped, causing a ValueError later.
-            return node
-
-    _Tracer().visit(tree)
-    tree.body = [s for stmt in tree.body for s in _wrap(stmt)]
-    __hvy_ast__.fix_missing_locations(tree)
-    return tree
+def __hvy_trace__(frame, event, arg):
+    if event == 'line':
+        __hvy_runtime__.step()
+    return __hvy_trace__
 
 
 try:
-    __hvy_module__ = __hvy_instrument__(__hvy_source__)
-    __hvy_code__ = compile(__hvy_module__, '<hvy-script>', 'exec')
+    try:
+        import sys as __hvy_sys__
+        if hasattr(__hvy_sys__, 'settrace'):
+            __hvy_sys__.settrace(__hvy_trace__)
+            __hvy_trace_enabled__ = True
+    except Exception:
+        __hvy_trace_enabled__ = False
+
+    __hvy_compilable_source__ = __hvy_source__ if __hvy_trace_enabled__ else __hvy_instrumented_source__
+    __hvy_code__ = compile(__hvy_compilable_source__, '<hvy-script>', 'exec')
     __hvy_user_globals__ = {
         '__hvy_step__': __hvy_runtime__.step,
         'doc': __hvy_runtime__.doc,
@@ -132,6 +199,11 @@ except Exception as __hvy_err__:
     import traceback as __hvy_tb__
     __hvy_globals__.errors['${runtimeId}'] = __hvy_tb__.format_exc()
 finally:
+    if __hvy_trace_enabled__:
+        try:
+            __hvy_sys__.settrace(None)
+        except Exception:
+            pass
     __hvy_globals__.callbacks['${runtimeId}']()
 `;
 }
@@ -170,6 +242,7 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
   const scripting = getScriptingGlobal();
   scripting.runtimes[runtimeId] = runtime;
   scripting.sources[runtimeId] = options.source;
+  scripting.instrumentedSources[runtimeId] = instrumentPythonSource(options.source);
   scripting.errors[runtimeId] = null;
 
   // Do not append this to the DOM or use type="text/python", otherwise 
@@ -197,6 +270,7 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
 
       delete scripting.runtimes[runtimeId];
       delete scripting.sources[runtimeId];
+      delete scripting.instrumentedSources[runtimeId];
       delete scripting.errors[runtimeId];
       delete scripting.callbacks[runtimeId];
 

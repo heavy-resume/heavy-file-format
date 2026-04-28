@@ -36,6 +36,41 @@ function getScriptingGlobal(): HvyScriptingGlobal {
   return window.__HVY_SCRIPTING__;
 }
 
+function shouldSuppressBrythonConsoleNoise(args: unknown[]): boolean {
+  const first = args[0];
+  return typeof first === 'string' && first.startsWith('method from func w-o $infos');
+}
+
+function withSuppressedBrythonConsoleNoise(run: () => void): void {
+  const originalLog = console.log;
+  const originalWarn = console.warn;
+  const originalError = console.error;
+
+  console.log = (...args: unknown[]) => {
+    if (!shouldSuppressBrythonConsoleNoise(args)) {
+      originalLog(...args);
+    }
+  };
+  console.warn = (...args: unknown[]) => {
+    if (!shouldSuppressBrythonConsoleNoise(args)) {
+      originalWarn(...args);
+    }
+  };
+  console.error = (...args: unknown[]) => {
+    if (!shouldSuppressBrythonConsoleNoise(args)) {
+      originalError(...args);
+    }
+  };
+
+  try {
+    run();
+  } finally {
+    console.log = originalLog;
+    console.warn = originalWarn;
+    console.error = originalError;
+  }
+}
+
 function isEscaped(line: string, index: number): boolean {
   let slashCount = 0;
   for (let cursor = index - 1; cursor >= 0 && line[cursor] === '\\'; cursor -= 1) {
@@ -161,6 +196,8 @@ function isImportStatementStart(line: string): boolean {
   return /^import\b/.test(trimmed) || /^from\b.*\bimport\b/.test(trimmed);
 }
 
+const STRIPPED_IMPORT_MESSAGE = 'Import statements are not allowed in HVY scripts.';
+
 export function stripPythonImports(source: string): string {
   const lines = source.split('\n');
   const stripped: string[] = [];
@@ -175,7 +212,7 @@ export function stripPythonImports(source: string): string {
     const indentation = line.match(/^\s*/)?.[0] ?? '';
 
     if (!statementOpen && !analysis.isBlankOrComment && isImportStatementStart(line)) {
-      stripped.push(`${indentation}pass  # __hvy_stripped_import__`);
+      stripped.push(`${indentation}raise RuntimeError(${JSON.stringify(STRIPPED_IMPORT_MESSAGE)})`);
       strippingImport = true;
     } else if (strippingImport) {
       stripped.push('');
@@ -196,6 +233,29 @@ export function stripPythonImports(source: string): string {
   }
 
   return stripped.join('\n');
+}
+
+export function summarizeScriptingError(rawError: string): string {
+  const trimmed = rawError.trim();
+  if (trimmed.length === 0) {
+    return 'Script failed.';
+  }
+
+  const lineMatch = trimmed.match(/File "<hvy-script>", line (\d+)/);
+  const lineSuffix = lineMatch ? ` (line ${lineMatch[1]})` : '';
+  const lines = trimmed.split('\n').map((line) => line.trim()).filter((line) => line.length > 0);
+  const lastLine = lines.at(-1) ?? 'Script failed.';
+
+  if (lastLine.includes(STRIPPED_IMPORT_MESSAGE)) {
+    return `${STRIPPED_IMPORT_MESSAGE}${lineSuffix}`;
+  }
+
+  const exceptionMatch = lastLine.match(/^([A-Za-z_][A-Za-z0-9_.]*):\s*(.+)$/);
+  if (exceptionMatch) {
+    return `${exceptionMatch[1]}: ${exceptionMatch[2]}${lineSuffix}`;
+  }
+
+  return `${lastLine}${lineSuffix}`;
 }
 
 // The Python program executed for each user script. It pulls the runtime and
@@ -253,6 +313,7 @@ finally:
 export interface ScriptingRunResult {
   ok: boolean;
   error?: string;
+  errorDetail?: string;
   linesExecuted: number;
   toolCalls: number;
 }
@@ -274,6 +335,7 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
     return {
       ok: false,
       error: error instanceof Error ? error.message : 'Failed to load Brython.',
+      errorDetail: error instanceof Error ? error.stack ?? error.message : 'Failed to load Brython.',
       linesExecuted: 0,
       toolCalls: 0,
     };
@@ -301,7 +363,8 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
       const result: ScriptingRunResult = error
         ? {
             ok: false,
-            error,
+            error: summarizeScriptingError(error),
+            errorDetail: error,
             linesExecuted: runtime.stats.linesExecuted,
             toolCalls: runtime.stats.toolCalls,
           }
@@ -327,14 +390,17 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
       if (typeof brython.run_script !== 'function') {
         throw new Error('Brython run_script API unavailable.');
       }
+      const runScript = brython.run_script;
 
-      brython.run_script(
-        scriptElement,
-        scriptElement.textContent || '',
-        `hvy_script_${runtimeId}`,
-        window.location.href || 'http://localhost/hvy-plugin',
-        true
-      );
+      withSuppressedBrythonConsoleNoise(() => {
+        runScript(
+          scriptElement,
+          scriptElement.textContent || '',
+          `hvy_script_${runtimeId}`,
+          window.location.href || 'http://localhost/hvy-plugin',
+          true
+        );
+      });
     } catch (error) {
       let message = String(error);
       try {

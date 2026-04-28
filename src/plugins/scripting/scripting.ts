@@ -14,6 +14,12 @@ interface EditorHandles {
   status: HTMLDivElement;
 }
 
+interface ReaderHandles {
+  shell: HTMLDivElement;
+  summary: HTMLDivElement;
+  detail: HTMLPreElement;
+}
+
 function buildEditorDom(ctx: HvyPluginContext): { root: HTMLDivElement; handles: EditorHandles } {
   const root = document.createElement('div');
   root.className = 'hvy-scripting-editor code-editor-shell';
@@ -54,27 +60,76 @@ function buildEditorDom(ctx: HvyPluginContext): { root: HTMLDivElement; handles:
   return { root, handles: { textarea, status } };
 }
 
+function buildReaderDom(): { root: HTMLDivElement; handles: ReaderHandles } {
+  const root = document.createElement('div');
+  root.className = 'hvy-scripting-reader-shell';
+
+  const summary = document.createElement('div');
+  summary.className = 'hvy-scripting-reader-summary';
+
+  const detail = document.createElement('pre');
+  detail.className = 'hvy-scripting-error-detail';
+
+  root.appendChild(summary);
+  root.appendChild(detail);
+
+  return {
+    root,
+    handles: {
+      shell: root,
+      summary,
+      detail,
+    },
+  };
+}
+
 interface ScriptingState {
-  lastResult: { ok: boolean; error?: string; linesExecuted: number; toolCalls: number } | null;
+  lastResult: { ok: boolean; error?: string; errorDetail?: string; linesExecuted: number; toolCalls: number } | null;
 }
 
 const scriptingState = new WeakMap<HTMLElement, ScriptingState>();
+const scriptingResultCache = new Map<string, ScriptingState['lastResult']>();
+
+function getScriptingResultCacheKey(sectionKey: string, blockId: string): string {
+  return `${sectionKey}|${blockId}`;
+}
 
 export function setScriptingResult(
   element: HTMLElement,
-  result: { ok: boolean; error?: string; linesExecuted: number; toolCalls: number }
+  result: { ok: boolean; error?: string; errorDetail?: string; linesExecuted: number; toolCalls: number }
 ): void {
   scriptingState.set(element, { lastResult: result });
+  const sectionKey = element.dataset.scriptingSectionKey;
+  const blockId = element.dataset.scriptingBlockId;
+  if (sectionKey && blockId) {
+    scriptingResultCache.set(getScriptingResultCacheKey(sectionKey, blockId), result);
+  }
   const status = element.querySelector<HTMLDivElement>('.hvy-scripting-status');
-  if (!status) return;
-  if (result.ok) {
-    status.textContent = `Executed ${result.linesExecuted} line${result.linesExecuted === 1 ? '' : 's'}, ${result.toolCalls} tool call${result.toolCalls === 1 ? '' : 's'}.`;
-    status.classList.remove('hvy-scripting-status-error');
-    status.classList.add('hvy-scripting-status-ok');
-  } else {
-    status.textContent = `Error: ${result.error ?? 'unknown error'}`;
-    status.classList.remove('hvy-scripting-status-ok');
-    status.classList.add('hvy-scripting-status-error');
+  if (status) {
+    if (result.ok) {
+      status.textContent = `Executed ${result.linesExecuted} line${result.linesExecuted === 1 ? '' : 's'}, ${result.toolCalls} tool call${result.toolCalls === 1 ? '' : 's'}.`;
+      status.classList.remove('hvy-scripting-status-error');
+      status.classList.add('hvy-scripting-status-ok');
+    } else {
+      status.textContent = `Error: ${result.error ?? 'unknown error'}`;
+      status.classList.remove('hvy-scripting-status-ok');
+      status.classList.add('hvy-scripting-status-error');
+    }
+  }
+
+  const readerShell = element.querySelector<HTMLDivElement>('.hvy-scripting-reader-shell');
+  const readerSummary = element.querySelector<HTMLDivElement>('.hvy-scripting-reader-summary');
+  const readerDetail = element.querySelector<HTMLPreElement>('.hvy-scripting-error-detail');
+  if (readerShell && readerSummary && readerDetail) {
+    if (result.ok) {
+      readerShell.classList.remove('is-visible');
+      readerSummary.textContent = '';
+      readerDetail.textContent = '';
+    } else {
+      readerShell.classList.add('is-visible');
+      readerSummary.textContent = `Script error: ${result.error ?? 'unknown error'}`;
+      readerDetail.textContent = result.errorDetail ?? result.error ?? 'unknown error';
+    }
   }
 }
 
@@ -86,11 +141,19 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
   root.dataset.scriptingBlockId = ctx.block.id;
 
   if (ctx.mode === 'reader') {
-    // Scripts have no visible reader output. Their effect on the document
-    // happens at load time. Render nothing.
+    const { root: readerRoot } = buildReaderDom();
+    root.appendChild(readerRoot);
     return {
       element: root,
-      refresh: () => {},
+      refresh: () => {
+        const cached =
+          scriptingState.get(root) ?? {
+            lastResult: scriptingResultCache.get(getScriptingResultCacheKey(ctx.sectionKey, ctx.block.id)) ?? null,
+          };
+        if (cached?.lastResult) {
+          setScriptingResult(root, cached.lastResult);
+        }
+      },
     };
   }
 
@@ -102,7 +165,10 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
     if (handles.textarea !== active && handles.textarea.value !== ctx.block.text) {
       handles.textarea.value = ctx.block.text;
     }
-    const cached = scriptingState.get(root);
+    const cached =
+      scriptingState.get(root) ?? {
+        lastResult: scriptingResultCache.get(getScriptingResultCacheKey(ctx.sectionKey, ctx.block.id)) ?? null,
+      };
     if (cached?.lastResult) {
       setScriptingResult(root, cached.lastResult);
     }

@@ -1,6 +1,11 @@
 import { expect, test } from 'vitest';
 
-import { buildPythonProgram, instrumentPythonSource, stripPythonImports } from '../src/plugins/scripting/wrapper';
+import {
+  buildPythonProgram,
+  instrumentPythonSource,
+  stripPythonImports,
+  summarizeScriptingError,
+} from '../src/plugins/scripting/wrapper';
 
 test('instrumentPythonSource adds step calls without rewriting compare expressions', () => {
   expect(
@@ -103,7 +108,7 @@ doc.header.set("ok", "yes")
 `
     )
   ).toBe(
-    `pass  # __hvy_stripped_import__
+    `raise RuntimeError("Import statements are not allowed in HVY scripts.")
 doc.header.set("ok", "yes")
 `
   );
@@ -117,7 +122,7 @@ doc.header.set("ok", "yes")
 `
     )
   ).toBe(
-    `pass  # __hvy_stripped_import__
+    `raise RuntimeError("Import statements are not allowed in HVY scripts.")
 doc.header.set("ok", "yes")
 `
   );
@@ -136,11 +141,24 @@ test('stripPythonImports strips multiline imports while preserving block structu
     )
   ).toBe(
     `if True:
-    pass  # __hvy_stripped_import__
+    raise RuntimeError("Import statements are not allowed in HVY scripts.")
 
 
 
     doc.header.set("ok", "yes")
 `
   );
+});
+
+test('summarizeScriptingError collapses tracebacks into a concise line', () => {
+  expect(
+    summarizeScriptingError(
+      `Traceback (most recent call last):
+  File "#hvy_script_r2", line 33, in <module>
+    exec(__hvy_code__, __hvy_user_globals__)
+  File "<hvy-script>", line 15, in <module>
+RuntimeError: Import statements are not allowed in HVY scripts.
+`
+    )
+  ).toBe('Import statements are not allowed in HVY scripts. (line 15)');
 });

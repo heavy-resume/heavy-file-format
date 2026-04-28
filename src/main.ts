@@ -29,7 +29,7 @@ import { dbTablePluginRegistration } from './plugins/db-table-plugin';
 import { progressBarPluginRegistration } from './plugins/progress-bar';
 import { scriptingPluginRegistration, setScriptingResult } from './plugins/scripting/scripting';
 import { runUserScript } from './plugins/scripting/wrapper';
-import { visitBlocks } from './section-ops';
+import { visitBlocksInList } from './section-ops';
 
 const appRoot = document.querySelector<HTMLDivElement>('#app');
 if (!appRoot) {
@@ -569,7 +569,7 @@ registerHostPlugin(scriptingPluginRegistration);
 let lastScriptedDocument: typeof state.document | null = null;
 
 async function runScriptingBlocksIfNeeded(): Promise<void> {
-  if (state.currentView !== 'viewer') {
+  if (state.currentView !== 'viewer' && state.currentView !== 'ai') {
     return;
   }
   if (state.document === lastScriptedDocument) {
@@ -595,9 +595,6 @@ async function runScriptingBlocksIfNeeded(): Promise<void> {
     if (mount) {
       setScriptingResult(mount, result);
     }
-    if (!result.ok) {
-      console.error('[hvy:scripting] script error', result.error);
-    }
   }
 }
 
@@ -609,11 +606,22 @@ function visitSectionForScripts(
   section: { key: string; blocks: { id: string; text: string; schema: { component: string; plugin: string } }[]; children: unknown[] },
   out: Array<{ sectionKey: string; blockId: string; source: string }>
 ): void {
-  visitBlocks([section as never], (block) => {
+  visitBlocksInSection(section, section.key, out);
+}
+
+function visitBlocksInSection(
+  section: { key: string; blocks: { id: string; text: string; schema: { component: string; plugin: string } }[]; children: unknown[] },
+  sectionKey: string,
+  out: Array<{ sectionKey: string; blockId: string; source: string }>
+): void {
+  visitBlocksInList(section.blocks as never, (block) => {
     if (block.schema.component === 'plugin' && block.schema.plugin === SCRIPTING_PLUGIN_ID) {
-      out.push({ sectionKey: section.key, blockId: block.id, source: block.text ?? '' });
+      out.push({ sectionKey, blockId: block.id, source: block.text ?? '' });
     }
   });
+  for (const child of section.children as Array<typeof section>) {
+    visitBlocksInSection(child, child.key, out);
+  }
 }
 
 async function bootstrap(): Promise<void> {

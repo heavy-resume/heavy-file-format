@@ -1,6 +1,7 @@
 .hvy-scripting {
   display: block;
   width: 100%;
+  position: relative;
 }
 
 .hvy-scripting-editor {
@@ -82,4 +83,37 @@
 .hvy-scripting-help-modal-body {
   overflow: auto;
   padding: 1rem 1.25rem;
+}
+
+.hvy-scripting-reader-shell {
+  display: none;
+  margin: 0.5rem 0;
+}
+
+.hvy-scripting-reader-shell.is-visible {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border: 1px solid color-mix(in srgb, var(--hvy-danger) 55%, var(--hvy-border));
+  border-radius: 10px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--hvy-danger) 8%, var(--hvy-code-bg));
+}
+
+.hvy-scripting-reader-summary {
+  padding: 0.75rem 0.9rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--hvy-danger) 45%, var(--hvy-border-input));
+  background: color-mix(in srgb, var(--hvy-danger) 12%, var(--hvy-surface));
+  color: var(--hvy-danger);
+  font-size: 0.9rem;
+}
+
+.hvy-scripting-error-detail {
+  margin: 0;
+  padding: 0.9rem 1rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  font: 13px/1.5 "JetBrains Mono", "Fira Code", monospace;
+  color: var(--hvy-code-text);
+  background: transparent;
 }

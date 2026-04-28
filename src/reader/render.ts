@@ -184,7 +184,18 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     if (base === 'plugin') {
       if (block.schema.plugin === SCRIPTING_PLUGIN_ID) {
         if (state.currentView === 'viewer') {
-          return '';
+          return `<div ${blockAttrs}>${renderPluginReader(section, block, helpers)}</div>`;
+        }
+        if (state.currentView === 'ai') {
+          if (block.text.trim().length === 0) {
+            return `<div ${blockAttrs}>${renderPluginReader(section, block, helpers)}</div>`;
+          }
+          const codeReader = renderCodeReader(
+            section,
+            { ...block, schema: { ...block.schema, codeLanguage: 'python' } } as VisualBlock,
+            helpers
+          );
+          return `<div ${blockAttrs}>${codeReader}${renderPluginReader(section, block, helpers)}</div>`;
         }
         if (block.text.trim().length === 0) {
           return `<div ${blockAttrs}><div class="plugin-placeholder">Empty script...</div></div>`;

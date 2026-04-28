@@ -70,6 +70,11 @@
   /* Code block */
   --hvy-code-bg: #f6f8fa;
   --hvy-code-text: #1f2328;
+  --hvy-code-muted: #5f6b76;
+  --hvy-code-string: #1f4f63;
+  --hvy-code-builtin: #b8621b;
+  --hvy-code-keyword: #a23a48;
+  --hvy-code-number: #325f6e;
 }
 
 /* Dark mode overrides */
@@ -140,4 +145,9 @@
 
   --hvy-code-bg: #161b22;
   --hvy-code-text: #c9d1d9;
+  --hvy-code-muted: #8b949e;
+  --hvy-code-string: #8ecae6;
+  --hvy-code-builtin: #ffb86b;
+  --hvy-code-keyword: #ff7b72;
+  --hvy-code-number: #79c0ff;
 }

@@ -2,6 +2,7 @@ import './default-theme.css';
 import './style.css';
 import './state-tracker.css';
 import 'highlight.js/styles/github.css';
+import bundledExampleHvyUrl from '../examples/example.hvy?url';
 
 import { createEditorRenderer, type EditorRenderer } from './editor/render';
 import { createReaderRenderer, type ReaderRenderer } from './reader/render';
@@ -22,7 +23,6 @@ import { capturePaneScroll, restorePaneScroll, centerPendingEditorSection, focus
 import { bindUi } from './bind-ui';
 import { deserializeDocumentBytes, serializeDocument } from './serialization';
 import { createDefaultChatState, renderChatPanel } from './chat/chat';
-import { DEFAULT_EXAMPLE_HVY_BYTES } from './example-bundles';
 import { registerHostPlugin, SCRIPTING_PLUGIN_ID } from './plugins/registry';
 import { reconcilePluginMounts, capturePluginFocus } from './plugins/mount';
 import { dbTablePluginRegistration } from './plugins/db-table-plugin';
@@ -39,8 +39,10 @@ const app = appRoot;
 
 app.innerHTML = '<main class="layout"><section class="pane full-pane"><p>Loading editor...</p></section></main>';
 
-function createDefaultDocument() {
-  return deserializeDocumentBytes(DEFAULT_EXAMPLE_HVY_BYTES, '.hvy');
+async function createDefaultDocument() {
+  const response = await fetch(bundledExampleHvyUrl);
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  return deserializeDocumentBytes(bytes, '.hvy');
 }
 
 function createInitialState(document: ReturnType<typeof deserializeDocumentBytes>): AppState {
@@ -159,8 +161,6 @@ function renderAiEditPopover(): string {
     </section>
   `;
 }
-
-initState(createInitialState(createDefaultDocument()));
 
 let editorRenderer: EditorRenderer;
 let readerRenderer: ReaderRenderer;
@@ -616,10 +616,13 @@ function visitSectionForScripts(
   });
 }
 
-try {
+async function bootstrap(): Promise<void> {
+  initState(createInitialState(await createDefaultDocument()));
   initColorModeSync();
   renderApp();
-} catch (error) {
+}
+
+bootstrap().catch((error) => {
   const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
   app.innerHTML = `
     <main class="layout">
@@ -631,4 +634,4 @@ try {
     </main>
   `;
   throw error;
-}
+});

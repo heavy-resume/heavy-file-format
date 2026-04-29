@@ -28,6 +28,7 @@ Intro text.
 `);
 
   expect(document.extension).toBe('.hvy');
+  expect(document.meta.reader_max_width).toBe('60rem');
   expect(document.meta.title).toBe('Project Brief');
   expect(document.sections).toHaveLength(1);
   expect(document.sections[0]?.title).toBe('Project Brief');
@@ -67,6 +68,7 @@ Plain Markdown should not go blank.
 `, '.md');
 
   expect(document.extension).toBe('.hvy');
+  expect(document.meta.reader_max_width).toBe('60rem');
   expect(document.sections[0]?.title).toBe('Notes');
   expect(document.sections[0]?.blocks[0]?.text).toBe('Plain Markdown should not go blank.');
 

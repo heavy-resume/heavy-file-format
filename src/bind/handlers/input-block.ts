@@ -1,4 +1,4 @@
-import { state, getRenderApp, getRefreshReaderPanels, getThemeConfig, applyTheme, writeThemeConfig, colorValueToPickerHex, getComponentDefs, getSectionDefs, resolveBlockContext, recordHistory, persistChatSettings, getRawEditorDiagnostics } from './_imports';
+import { state, getRefreshReaderPanels, getThemeConfig, applyTheme, writeThemeConfig, colorValueToPickerHex, getComponentDefs, getSectionDefs, resolveBlockContext, recordHistory, persistChatSettings, getRawEditorDiagnostics } from './_imports';
 
 export function bindInputBlock(app: HTMLElement): void {
     app.addEventListener('input', (event) => {
@@ -68,7 +68,11 @@ export function bindInputBlock(app: HTMLElement): void {
       } else {
         delete state.document.meta.reader_max_width;
       }
-      getRenderApp()();
+      const editorTreeBody = target.ownerDocument.querySelector<HTMLElement>('.editor-tree-body');
+      if (editorTreeBody) {
+        editorTreeBody.style.maxWidth = target.value.trim();
+      }
+      getRefreshReaderPanels()();
       return;
     }
 

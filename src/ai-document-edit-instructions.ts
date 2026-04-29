@@ -6,6 +6,7 @@ export function buildEditPathSelectionInstructions(): string {
     'Choose whether this request should edit the HVY header or the document body.',
     'Use `document` for visible content: sections, subsections, text, cards, tables, grids, layout CSS on existing sections/components, ordering, additions, and deletions.',
     'Use `header` for front matter metadata: document title, reader settings, theme, component defaults, section defaults, reusable component definitions in `component_defs`, reusable section definitions in `section_defs`, template schema, and plugin metadata.',
+    'Use `document` for requests to change visible spacing, margins, or layout between existing sections. Use `header` section defaults only when the user asks for document defaults, template defaults, or future inserted sections.',
     'If the request touches both header and document, choose the path needed for the primary requested change.',
   ].join('\n');
 }
@@ -114,6 +115,9 @@ export function buildHeaderEditFormatInstructions(): string {
     'Valid header tools are: `grep_header`, `view_header`, `patch_header`, `request_header`, `done`.',
     'The header is YAML front matter only. It contains document metadata and reusable definitions such as `component_defs` and `section_defs`.',
     'Use the header path for document-level metadata, theme colors, component defaults, section defaults, template schema, plugins, and reusable component/section definitions.',
+    'Do not invent metadata fields. For `section_defaults`, the only supported field is `css`, for example `section_defaults:\\n  css: "margin: 0.5rem 0;"`.',
+    'For `component_defaults`, each component name may contain only `css`, for example `component_defaults:\\n  xref-card:\\n    css: "margin: 0.5rem 0;"`.',
+    'Do not use `section_defaults` to satisfy requests about visible spacing between existing sections; edit the existing section CSS through the document path instead.',
     'When changing a theme palette, consider all known `theme.colors` variables listed in the header outline, including table colors: `--hvy-table-header`, `--hvy-table-row-bg-1`, and `--hvy-table-row-bg-2`.',
     'Do not use this path for visible document body content; that belongs to the document path.',
     'Use `request_header` when you need a refreshed header outline and properties.',
@@ -129,6 +133,7 @@ export function buildHeaderEditFormatInstructions(): string {
     '{"tool":"grep_header","query":"component_defs|skill-card","flags":"i","before":2,"after":8,"max_count":3,"reason":"optional"}',
     '{"tool":"view_header","start_line":1,"end_line":120,"reason":"optional"}',
     '{"tool":"patch_header","edits":[{"op":"replace","start_line":2,"end_line":2,"text":"title: New title"}],"reason":"optional"}',
+    '{"tool":"patch_header","edits":[{"op":"insert_after","line":2,"text":"section_defaults:\\n  css: \\"margin: 0.5rem 0;\\""}],"reason":"optional"}',
     '{"tool":"patch_header","edits":[{"op":"insert_after","line":10,"text":"component_defs:\\n  - name: card-list\\n    baseType: component-list\\n    description: Reusable card list"}],"reason":"optional"}',
     '{"tool":"done","summary":"Short summary of what changed."}',
   ].join('\n');

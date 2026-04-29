@@ -595,6 +595,7 @@ function executePatchHeaderTool(
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
     throw new Error('patch_header produced invalid YAML. Header YAML must parse to an object.');
   }
+  validateHeaderDefaults(parsed as JsonObject);
 
   onMutation?.('ai-edit:header');
   Object.keys(document.meta).forEach((key) => {
@@ -606,6 +607,30 @@ function executePatchHeaderTool(
   }
 
   return `Patched header with ${request.edits.length} edit${request.edits.length === 1 ? '' : 's'}.`;
+}
+
+function validateHeaderDefaults(meta: JsonObject): void {
+  assertOnlyCssDefaultFields(meta.section_defaults, 'section_defaults');
+
+  const componentDefaults = meta.component_defaults;
+  if (!componentDefaults || typeof componentDefaults !== 'object' || Array.isArray(componentDefaults)) {
+    return;
+  }
+
+  for (const [componentName, defaults] of Object.entries(componentDefaults)) {
+    assertOnlyCssDefaultFields(defaults, `component_defaults.${componentName}`);
+  }
+}
+
+function assertOnlyCssDefaultFields(value: unknown, label: string): void {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return;
+  }
+
+  const unsupportedKeys = Object.keys(value).filter((key) => key !== 'css');
+  if (unsupportedKeys.length > 0) {
+    throw new Error(`${label} only supports the "css" field. Unsupported field${unsupportedKeys.length === 1 ? '' : 's'}: ${unsupportedKeys.join(', ')}.`);
+  }
 }
 
 export function summarizeDocumentStructure(document: VisualDocument): DocumentStructureSnapshot {

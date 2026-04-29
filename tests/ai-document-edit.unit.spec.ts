@@ -139,6 +139,7 @@ test('buildDocumentEditFormatInstructions documents the tool protocol', () => {
   expect(pathInstructions).toContain('Reply with exactly one word: `document` or `header`.');
   expect(pathInstructions).toContain('Use `document` for visible content');
   expect(pathInstructions).toContain('Use `header` for front matter metadata');
+  expect(pathInstructions).toContain('Use `document` for requests to change visible spacing, margins, or layout between existing sections.');
 
   const instructions = buildDocumentEditFormatInstructions();
   expect(instructions).toContain(
@@ -173,9 +174,13 @@ test('buildDocumentEditFormatInstructions documents the tool protocol', () => {
   expect(headerInstructions).toContain('Valid header tools are: `grep_header`, `view_header`, `patch_header`, `request_header`, `done`.');
   expect(headerInstructions).toContain('The header is YAML front matter only.');
   expect(headerInstructions).toContain('component_defs');
+  expect(headerInstructions).toContain('Do not invent metadata fields.');
+  expect(headerInstructions).toContain('For `section_defaults`, the only supported field is `css`');
+  expect(headerInstructions).toContain('Do not use `section_defaults` to satisfy requests about visible spacing between existing sections');
   expect(headerInstructions).toContain('including table colors: `--hvy-table-header`, `--hvy-table-row-bg-1`, and `--hvy-table-row-bg-2`');
   expect(headerInstructions).toContain('Use `grep_header` to search the YAML header with a regex pattern before viewing or patching a specific reusable definition.');
   expect(headerInstructions).toContain('{"tool":"grep_header","query":"component_defs|skill-card","flags":"i","before":2,"after":8,"max_count":3,"reason":"optional"}');
+  expect(headerInstructions).toContain('section_defaults:\\n  css:');
   expect(headerInstructions).toContain('{"tool":"patch_header","edits":[{"op":"replace","start_line":2,"end_line":2,"text":"title: New title"}],"reason":"optional"}');
 });
 
@@ -421,6 +426,37 @@ component_defs:
       content: 'Updated the document title.',
     })
   );
+});
+
+test('requestAiDocumentEditTurn rejects invented section default fields', async () => {
+  requestProxyCompletionMock
+    .mockResolvedValueOnce('header')
+    .mockResolvedValueOnce('{"tool":"patch_header","edits":[{"op":"insert_after","line":2,"text":"section_defaults:\\n  wrapper_style: \\"margin-bottom: 24px;\\""}]}');
+
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+title: Existing
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {}-->
+ Existing content
+`, '.hvy');
+  seedStateForDocument(document);
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+
+  const result = await requestAiDocumentEditTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Add vertical margin between sections.',
+  });
+
+  expect(result.error).toBe('section_defaults only supports the "css" field. Unsupported field: wrapper_style.');
+  expect(document.meta.section_defaults).toBeUndefined();
+  expect(document.meta.title).toBe('Existing');
 });
 
 test('requestAiDocumentEditTurn can patch a component after viewing numbered lines', async () => {

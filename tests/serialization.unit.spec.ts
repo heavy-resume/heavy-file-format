@@ -256,6 +256,7 @@ test('wrapHvyFragmentAsDocument includes optional front matter metadata', () => 
   });
 
   expect(wrapped).toContain('hvy_version: 0.1');
+  expect(wrapped).toContain('reader_max_width: 60rem');
   expect(wrapped).toContain('component_defaults:');
   expect(wrapped).toContain('xref-card:');
   expect(wrapped).toContain('css: "padding: 0.5rem;"');

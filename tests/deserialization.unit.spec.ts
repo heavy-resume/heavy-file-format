@@ -101,6 +101,21 @@ reader_max_width: 60rem
   expect(document.meta.reader_max_width).toBe('60rem');
 });
 
+test('defaults reader_max_width for imported HVY without an explicit value', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {}-->
+ Hello
+`, '.hvy');
+
+  expect(document.meta.reader_max_width).toBe('60rem');
+});
+
 test('deserializes plugin blocks with plugin identity and config', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1

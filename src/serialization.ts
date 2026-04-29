@@ -8,6 +8,7 @@ import { makeId, sanitizeOptionalId } from './utils';
 import { getSectionId } from './section-ops';
 import { resolveBaseComponent, isBuiltinComponentName } from './component-defs';
 import {
+  DEFAULT_READER_MAX_WIDTH,
   defaultBlockSchema,
   schemaFromUnknown,
   createEmptyBlock,
@@ -51,6 +52,9 @@ export function deserializeDocumentWithDiagnostics(
   if (typeof meta.hvy_version === 'undefined') {
     meta.hvy_version = 0.1;
   }
+  if (typeof meta.reader_max_width === 'undefined') {
+    meta.reader_max_width = DEFAULT_READER_MAX_WIDTH;
+  }
 
   const diagnostics = parsed.errors.map((message) => mapParserErrorToDiagnostic(message));
   const document: VisualDocument = {
@@ -90,6 +94,7 @@ export function wrapHvyFragmentAsDocument(
   const title = options?.title?.trim() || 'Response';
   const meta: JsonObject = {
     hvy_version: 0.1,
+    reader_max_width: DEFAULT_READER_MAX_WIDTH,
     ...(options?.meta ?? {}),
   };
   const frontMatter = stringifyYaml(meta).trimEnd();

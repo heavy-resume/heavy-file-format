@@ -16,6 +16,20 @@ test('can add section and undo/redo', async ({ page }) => {
   await expect(sections).toHaveCount(initialCount + 1);
 });
 
+test('reader max width keeps focus while typing', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Advanced' }).click();
+  await page.getByRole('button', { name: 'Document Meta' }).click();
+
+  const readerMaxWidth = page.locator('[data-field="meta-reader-max-width"]');
+  await readerMaxWidth.fill('');
+  await readerMaxWidth.type('60rem');
+
+  await expect(readerMaxWidth).toBeFocused();
+  await expect(readerMaxWidth).toHaveValue('60rem');
+});
+
 test('checkbox action inserts a single inline checkbox without coercing content into a full checklist', async ({ page }) => {
   await page.goto('/');
 

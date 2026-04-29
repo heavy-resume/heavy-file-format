@@ -7,6 +7,8 @@ import { coerceGridColumns, createGridItem as _createGridItem, parseGridItems as
 import { getTableColumns } from './table-ops';
 import { REUSABLE_SECTION_DEF_PREFIX } from './state';
 
+export const DEFAULT_READER_MAX_WIDTH = '60rem';
+
 export function defaultBlockSchema(component = 'text'): BlockSchema {
   return {
     id: '',
@@ -226,6 +228,7 @@ export function createBlankDocument(): VisualDocument {
   return {
     meta: {
       hvy_version: 0.1,
+      reader_max_width: DEFAULT_READER_MAX_WIDTH,
     },
     extension: '.hvy',
     sections: [],

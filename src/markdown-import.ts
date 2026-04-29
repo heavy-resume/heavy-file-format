@@ -2,7 +2,7 @@ import { marked, type Token, type Tokens } from 'marked';
 import { parse as parseYaml } from 'yaml';
 import type { VisualBlock, VisualSection } from './editor/types';
 import type { JsonObject } from './hvy/types';
-import { defaultBlockSchema } from './document-factory';
+import { DEFAULT_READER_MAX_WIDTH, defaultBlockSchema } from './document-factory';
 import type { VisualDocument } from './types';
 import { makeId, sanitizeOptionalId } from './utils';
 
@@ -79,6 +79,7 @@ export function convertMarkdownToHvyDocument(sourceText: string): VisualDocument
     meta: {
       ...source.meta,
       hvy_version: source.meta.hvy_version ?? 0.1,
+      reader_max_width: source.meta.reader_max_width ?? DEFAULT_READER_MAX_WIDTH,
       ...(title ? { title } : {}),
     },
     sections: rootSections,

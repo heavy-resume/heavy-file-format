@@ -2,10 +2,14 @@ import { expect, test } from 'vitest';
 
 import {
   buildPythonProgram,
+  buildScriptingVersionMismatchMessage,
+  comparePluginVersions,
   instrumentPythonSource,
   stripPythonImports,
   summarizeScriptingError,
+  runUserScript,
 } from '../src/plugins/scripting/wrapper';
+import { SCRIPTING_PLUGIN_VERSION } from '../src/plugins/scripting/version';
 
 test('instrumentPythonSource adds step calls without rewriting compare expressions', () => {
   expect(
@@ -161,4 +165,27 @@ RuntimeError: Import statements are not allowed in HVY scripts.
 `
     )
   ).toBe('Import statements are not allowed in HVY scripts. (line 15)');
+});
+
+test('comparePluginVersions orders dot-separated versions numerically', () => {
+  expect(comparePluginVersions('0.2', '0.1')).toBe(1);
+  expect(comparePluginVersions('0.2', '0.10')).toBe(-1);
+  expect(comparePluginVersions('0.1', '0.1.0')).toBe(0);
+});
+
+test('runUserScript refuses to execute scripts that require a newer scripting plugin version', async () => {
+  const requestedVersion = `${SCRIPTING_PLUGIN_VERSION}.1`;
+  await expect(
+    runUserScript({
+      document: { meta: {}, extension: '.hvy', sections: [], attachments: [] },
+      source: 'doc.header.set("ok", "yes")',
+      pluginVersion: requestedVersion,
+    })
+  ).resolves.toEqual({
+    ok: false,
+    error: buildScriptingVersionMismatchMessage(requestedVersion),
+    errorDetail: buildScriptingVersionMismatchMessage(requestedVersion),
+    linesExecuted: 0,
+    toolCalls: 0,
+  });
 });

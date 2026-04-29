@@ -29,6 +29,7 @@ import { dbTablePluginRegistration } from './plugins/db-table-plugin';
 import { progressBarPluginRegistration } from './plugins/progress-bar';
 import { scriptingPluginRegistration, setScriptingResult } from './plugins/scripting/scripting';
 import { runUserScript } from './plugins/scripting/wrapper';
+import { getScriptingPluginVersion } from './plugins/scripting/version';
 import { visitBlocksInList } from './section-ops';
 
 const appRoot = document.querySelector<HTMLDivElement>('#app');
@@ -577,7 +578,7 @@ async function runScriptingBlocksIfNeeded(): Promise<void> {
   }
   lastScriptedDocument = state.document;
 
-  const targets: Array<{ sectionKey: string; blockId: string; source: string }> = [];
+  const targets: Array<{ sectionKey: string; blockId: string; source: string; pluginVersion: string }> = [];
   for (const section of state.document.sections) {
     visitSectionForScripts(section, targets);
   }
@@ -589,6 +590,7 @@ async function runScriptingBlocksIfNeeded(): Promise<void> {
     const result = await runUserScript({
       document: state.document,
       source: target.source,
+      pluginVersion: target.pluginVersion,
     });
     const mountSelector = `[data-scripting-mount="true"][data-scripting-section-key="${cssEscape(target.sectionKey)}"][data-scripting-block-id="${cssEscape(target.blockId)}"]`;
     const mount = app.querySelector<HTMLElement>(mountSelector);
@@ -604,7 +606,7 @@ function cssEscape(value: string): string {
 
 function visitSectionForScripts(
   section: { key: string; blocks: { id: string; text: string; schema: { component: string; plugin: string } }[]; children: unknown[] },
-  out: Array<{ sectionKey: string; blockId: string; source: string }>
+  out: Array<{ sectionKey: string; blockId: string; source: string; pluginVersion: string }>
 ): void {
   visitBlocksInSection(section, section.key, out);
 }
@@ -612,11 +614,16 @@ function visitSectionForScripts(
 function visitBlocksInSection(
   section: { key: string; blocks: { id: string; text: string; schema: { component: string; plugin: string } }[]; children: unknown[] },
   sectionKey: string,
-  out: Array<{ sectionKey: string; blockId: string; source: string }>
+  out: Array<{ sectionKey: string; blockId: string; source: string; pluginVersion: string }>
 ): void {
   visitBlocksInList(section.blocks as never, (block) => {
     if (block.schema.component === 'plugin' && block.schema.plugin === SCRIPTING_PLUGIN_ID) {
-      out.push({ sectionKey, blockId: block.id, source: block.text ?? '' });
+      out.push({
+        sectionKey,
+        blockId: block.id,
+        source: block.text ?? '',
+        pluginVersion: getScriptingPluginVersion(block.schema.pluginConfig),
+      });
     }
   });
   for (const child of section.children as Array<typeof section>) {

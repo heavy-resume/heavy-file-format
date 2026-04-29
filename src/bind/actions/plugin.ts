@@ -2,7 +2,8 @@ import { findBlockByIds } from '../../block-ops';
 import { recordHistory } from '../../history';
 import { syncReusableTemplateForBlock } from '../../reusable';
 import { getRenderApp, getRefreshReaderPanels } from '../../state';
-import { isDbTablePluginId } from '../../plugins/registry';
+import { isDbTablePluginId, SCRIPTING_PLUGIN_ID } from '../../plugins/registry';
+import { SCRIPTING_PLUGIN_VERSION } from '../../plugins/scripting/version';
 import type { ActionHandler } from './types';
 
 const commitPlugin: ActionHandler = ({ actionButton, sectionKey, blockId }) => {
@@ -27,7 +28,11 @@ const commitPlugin: ActionHandler = ({ actionButton, sectionKey, blockId }) => {
 
   recordHistory(`plugin-commit:${sectionKey}:${blockId}:${nextId}`);
   block.schema.plugin = nextId;
-  block.schema.pluginConfig = isDbTablePluginId(nextId) ? { source: 'with-file' } : {};
+  block.schema.pluginConfig = isDbTablePluginId(nextId)
+    ? { source: 'with-file' }
+    : nextId === SCRIPTING_PLUGIN_ID
+      ? { version: SCRIPTING_PLUGIN_VERSION }
+      : {};
   block.text = '';
   syncReusableTemplateForBlock(sectionKey, blockId);
   getRefreshReaderPanels()();

@@ -29,6 +29,7 @@ import xml from 'highlight.js/lib/languages/xml';
 import { areTablesEnabled } from '../reference-config';
 import { sanitizeInlineCss } from '../css-sanitizer';
 import { SCRIPTING_PLUGIN_ID } from '../plugins/registry';
+import { getScriptingPluginVersion } from '../plugins/scripting/version';
 
 hljs.registerLanguage('bash', bash);
 hljs.registerLanguage('sh', bash);
@@ -613,6 +614,19 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
 
   function renderBlockMetaFields(sectionKey: string, block: VisualBlock): string {
     const component = deps.resolveBaseComponent(block.schema.component);
+    const scriptingVersionField =
+      component === 'plugin' && block.schema.plugin === SCRIPTING_PLUGIN_ID
+        ? `<label>
+          <span>Scripting Version</span>
+          <input
+            data-section-key="${deps.escapeAttr(sectionKey)}"
+            data-block-id="${deps.escapeAttr(block.id)}"
+            data-field="block-plugin-scripting-version"
+            placeholder="${deps.escapeAttr(getScriptingPluginVersion(block.schema.pluginConfig))}"
+            value="${deps.escapeAttr(getScriptingPluginVersion(block.schema.pluginConfig))}"
+          />
+        </label>`
+        : '';
     return `
       <div class="schema-meta-stack">
         <label>
@@ -681,6 +695,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
             data-field="block-description"
           >${deps.escapeHtml(block.schema.description)}</textarea>
         </label>
+        ${scriptingVersionField}
       </div>
     `;
   }

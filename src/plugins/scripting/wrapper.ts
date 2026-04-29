@@ -1,6 +1,7 @@
 import { loadBrython, getBrython } from './brython-loader';
 import { createScriptingRuntime, type ScriptingRuntime } from './runtime';
 import type { VisualDocument } from '../../types';
+import { getScriptingPluginVersion, SCRIPTING_PLUGIN_VERSION } from './version';
 
 // Counter for unique runtime ids — each script run gets its own slot on the
 // shared __HVY_SCRIPTING__ global so concurrent runs don't collide.
@@ -198,6 +199,27 @@ function isImportStatementStart(line: string): boolean {
 
 const STRIPPED_IMPORT_MESSAGE = 'Import statements are not allowed in HVY scripts.';
 
+export function comparePluginVersions(left: string, right: string): number {
+  const leftParts = left.split('.').map((part) => Number.parseInt(part, 10));
+  const rightParts = right.split('.').map((part) => Number.parseInt(part, 10));
+  const length = Math.max(leftParts.length, rightParts.length);
+  for (let index = 0; index < length; index += 1) {
+    const leftValue = Number.isFinite(leftParts[index]) ? leftParts[index] : 0;
+    const rightValue = Number.isFinite(rightParts[index]) ? rightParts[index] : 0;
+    if (leftValue > rightValue) {
+      return 1;
+    }
+    if (leftValue < rightValue) {
+      return -1;
+    }
+  }
+  return 0;
+}
+
+export function buildScriptingVersionMismatchMessage(requestedVersion: string): string {
+  return `This HVY scripting block requires plugin version ${requestedVersion}, but this client supports ${SCRIPTING_PLUGIN_VERSION}.`;
+}
+
 export function stripPythonImports(source: string): string {
   const lines = source.split('\n');
   const stripped: string[] = [];
@@ -321,12 +343,25 @@ export interface ScriptingRunResult {
 export interface RunUserScriptOptions {
   document: VisualDocument;
   source: string;
+  pluginVersion?: string;
   maxLines?: number;
 }
 
 export async function runUserScript(options: RunUserScriptOptions): Promise<ScriptingRunResult> {
   if (options.source.trim().length === 0) {
     return { ok: true, linesExecuted: 0, toolCalls: 0 };
+  }
+
+  const requestedVersion = getScriptingPluginVersion(options.pluginVersion ? { version: options.pluginVersion } : undefined);
+  if (comparePluginVersions(requestedVersion, SCRIPTING_PLUGIN_VERSION) > 0) {
+    const error = buildScriptingVersionMismatchMessage(requestedVersion);
+    return {
+      ok: false,
+      error,
+      errorDetail: error,
+      linesExecuted: 0,
+      toolCalls: 0,
+    };
   }
 
   try {

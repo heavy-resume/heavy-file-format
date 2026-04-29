@@ -10,7 +10,9 @@ import {
   getPluginDisplayName,
   DB_TABLE_PLUGIN_ID,
   PROGRESS_BAR_PLUGIN_ID,
+  SCRIPTING_PLUGIN_ID,
 } from '../src/plugins/registry';
+import { SCRIPTING_PLUGIN_VERSION } from '../src/plugins/scripting/version';
 import { initState } from '../src/state';
 import type { AppState } from '../src/types';
 
@@ -68,6 +70,22 @@ describe('progress-bar plugin block round-trip', () => {
     expect(reserialized).toContain('"plugin":"dev.heavy.progress-bar"');
     expect(reserialized).toContain('"value":42');
     expect(reserialized).toContain('${value}%');
+  });
+});
+
+describe('scripting plugin block metadata', () => {
+  test('preserves scripting plugin version in pluginConfig across serialize/deserialize', () => {
+    const input = `---\nhvy_version: 1.0\n---\n\n#! Script\n\n<!--hvy:plugin {"plugin":"dev.heavy.scripting","pluginConfig":{"version":"${SCRIPTING_PLUGIN_VERSION}"}}-->\nprint("hello")\n`;
+    const doc = deserializeDocument(input, '.hvy');
+    const block = doc.sections[0]?.blocks.find((b) => b.schema.component === 'plugin');
+    expect(block).toBeDefined();
+    expect(block?.schema.plugin).toBe(SCRIPTING_PLUGIN_ID);
+    expect(block?.schema.pluginConfig).toMatchObject({ version: SCRIPTING_PLUGIN_VERSION });
+
+    const reserialized = serializeDocument(doc);
+    expect(reserialized).toContain('"plugin":"dev.heavy.scripting"');
+    expect(reserialized).toContain(`"version":"${SCRIPTING_PLUGIN_VERSION}"`);
+    expect(reserialized).toContain('print("hello")');
   });
 });
 

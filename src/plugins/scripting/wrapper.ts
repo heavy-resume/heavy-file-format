@@ -1,5 +1,5 @@
 import { loadBrython, getBrython } from './brython-loader';
-import { createScriptingRuntime, type ScriptingRuntime } from './runtime';
+import { createScriptingRuntime, type ScriptingFormApi, type ScriptingRuntime } from './runtime';
 import type { VisualDocument } from '../../types';
 import { getScriptingPluginVersion, SCRIPTING_PLUGIN_VERSION } from './version';
 
@@ -376,6 +376,7 @@ export interface RunUserScriptOptions {
   componentId?: string;
   pluginVersion?: string;
   maxLines?: number;
+  form?: ScriptingFormApi;
 }
 
 export async function runUserScript(options: RunUserScriptOptions): Promise<ScriptingRunResult> {
@@ -407,7 +408,7 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
     };
   }
 
-  const runtime = createScriptingRuntime({ document: options.document, maxLines: options.maxLines });
+  const runtime = createScriptingRuntime({ document: options.document, maxLines: options.maxLines, form: options.form });
   const runtimeId = `r${++runtimeCounter}`;
   const scripting = getScriptingGlobal();
   const sanitizedSource = stripPythonImports(options.source);

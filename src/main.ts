@@ -26,6 +26,7 @@ import { createDefaultChatState, renderChatPanel } from './chat/chat';
 import { registerHostPlugin, SCRIPTING_PLUGIN_ID } from './plugins/registry';
 import { reconcilePluginMounts, capturePluginFocus } from './plugins/mount';
 import { dbTablePluginRegistration } from './plugins/db-table-plugin';
+import { formPluginRegistration } from './plugins/form';
 import { progressBarPluginRegistration } from './plugins/progress-bar';
 import { scriptingPluginRegistration, setScriptingResult } from './plugins/scripting/scripting';
 import { runUserScript } from './plugins/scripting/wrapper';
@@ -562,6 +563,7 @@ initCallbacks({
 // this codebase can call setHostPlugins / registerHostPlugin before first
 // render to add their own.
 registerHostPlugin(dbTablePluginRegistration);
+registerHostPlugin(formPluginRegistration);
 registerHostPlugin(progressBarPluginRegistration);
 registerHostPlugin(scriptingPluginRegistration);
 

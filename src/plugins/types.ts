@@ -29,6 +29,7 @@ export interface HvyPluginHeaderApi {
 
 export interface HvyPluginContext {
   mode: 'editor' | 'reader';
+  advanced: boolean;
   sectionKey: string;
   block: VisualBlock;
   document: HvyPluginDocumentApi;

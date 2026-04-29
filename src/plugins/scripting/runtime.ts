@@ -27,6 +27,7 @@ interface ScriptingDocApi {
   tool: (name: string, args?: Record<string, unknown>) => string;
   header: ScriptingHeaderApi;
   attachments: ScriptingAttachmentsApi;
+  form: ScriptingFormApi;
   rerender: () => void;
 }
 
@@ -44,9 +45,40 @@ interface ScriptingAttachmentsApi {
   remove(id: string): void;
 }
 
+export interface ScriptingFormOption {
+  label: string;
+  value: string;
+}
+
+export interface ScriptingFormApi {
+  get_value(name: string): unknown;
+  set_value(name: string, value: unknown): void;
+  get_values(): Record<string, unknown>;
+  set_options(name: string, options: ScriptingFormOption[]): void;
+  get_options(name: string): ScriptingFormOption[];
+  set_error(name: string, message: string): void;
+  clear_error(name: string): void;
+}
+
 export interface ScriptingRuntimeOptions {
   maxLines?: number;
   document: VisualDocument;
+  form?: ScriptingFormApi;
+}
+
+function createUnavailableFormApi(): ScriptingFormApi {
+  const fail = () => {
+    throw new Error('doc.form is only available while running a form plugin script.');
+  };
+  return {
+    get_value: fail,
+    set_value: fail,
+    get_values: fail,
+    set_options: fail,
+    get_options: fail,
+    set_error: fail,
+    clear_error: fail,
+  };
 }
 
 export function createScriptingRuntime(options: ScriptingRuntimeOptions): ScriptingRuntime {
@@ -122,6 +154,7 @@ export function createScriptingRuntime(options: ScriptingRuntimeOptions): Script
         }
       },
     },
+    form: options.form ?? createUnavailableFormApi(),
     rerender: flushIfMutated,
   };
 

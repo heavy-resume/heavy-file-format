@@ -47,8 +47,9 @@ export interface FormFieldDefinition {
   required: boolean;
   options: FormOption[];
   triggers: Partial<Record<FormTriggerName, string>>;
-  className: string;
-  style: string;
+  meta: {
+    css: string;
+  };
 }
 
 export interface FormSpec {
@@ -56,6 +57,8 @@ export interface FormSpec {
   scripts: Record<string, string>;
   initialScript: string;
   submitScript: string;
+  submitLabel: string;
+  showSubmit: boolean;
 }
 
 export interface ParsedFormSpec {
@@ -78,8 +81,9 @@ const DEFAULT_FIELD: FormFieldDefinition = {
   required: false,
   options: [],
   triggers: {},
-  className: '',
-  style: '',
+  meta: {
+    css: '',
+  },
 };
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -129,6 +133,7 @@ function normalizeField(candidate: unknown, index: number): FormFieldDefinition 
   const rawValue = raw.value;
   const fieldValue = type === 'checkbox' ? rawValue === true || rawValue === 'true' : typeof rawValue === 'string' ? rawValue : String(rawValue ?? '');
   const options = Array.isArray(raw.options) ? raw.options.map(normalizeOption).filter((option): option is FormOption => option !== null) : [];
+  const meta = isObject(raw.meta) ? raw.meta : {};
   return {
     name,
     label,
@@ -138,8 +143,9 @@ function normalizeField(candidate: unknown, index: number): FormFieldDefinition 
     required: raw.required === true,
     options,
     triggers: normalizeTriggers(raw.triggers),
-    className: typeof raw.className === 'string' ? raw.className : typeof raw.class === 'string' ? raw.class : '',
-    style: typeof raw.style === 'string' ? raw.style : '',
+    meta: {
+      css: typeof meta.css === 'string' ? meta.css : '',
+    },
   };
 }
 
@@ -160,7 +166,7 @@ function normalizeScripts(value: unknown): Record<string, string> {
 export function parseFormSpec(source: string): ParsedFormSpec {
   if (source.trim().length === 0) {
     return {
-      spec: { fields: [], scripts: {}, initialScript: '', submitScript: '' },
+      spec: { fields: [], scripts: {}, initialScript: '', submitScript: '', submitLabel: 'Submit', showSubmit: true },
       error: null,
     };
   }
@@ -169,7 +175,7 @@ export function parseFormSpec(source: string): ParsedFormSpec {
     const parsed = parseYaml(source);
     if (!isObject(parsed)) {
       return {
-        spec: { fields: [], scripts: {}, initialScript: '', submitScript: '' },
+        spec: { fields: [], scripts: {}, initialScript: '', submitScript: '', submitLabel: 'Submit', showSubmit: true },
         error: 'Form YAML must be an object.',
       };
     }
@@ -179,12 +185,14 @@ export function parseFormSpec(source: string): ParsedFormSpec {
         scripts: normalizeScripts(parsed.scripts),
         initialScript: typeof parsed.initialScript === 'string' ? parsed.initialScript.trim() : '',
         submitScript: typeof parsed.submitScript === 'string' ? parsed.submitScript.trim() : '',
+        submitLabel: typeof parsed.submitLabel === 'string' && parsed.submitLabel.trim().length > 0 ? parsed.submitLabel : 'Submit',
+        showSubmit: parsed.showSubmit !== false,
       },
       error: null,
     };
   } catch (error) {
     return {
-      spec: { fields: [], scripts: {}, initialScript: '', submitScript: '' },
+      spec: { fields: [], scripts: {}, initialScript: '', submitScript: '', submitLabel: 'Submit', showSubmit: true },
       error: error instanceof Error ? error.message : 'Invalid form YAML.',
     };
   }
@@ -203,13 +211,14 @@ export function serializeFormSpec(spec: FormSpec): string {
     if (field.required) item.required = true;
     if (field.options.length > 0) item.options = field.options.map((option) => ({ label: option.label, value: option.value }));
     if (Object.keys(field.triggers).length > 0) item.triggers = field.triggers;
-    if (field.className.length > 0) item.className = field.className;
-    if (field.style.length > 0) item.style = field.style;
+    if (field.meta.css.length > 0) item.meta = { css: field.meta.css };
     return item;
   });
   if (Object.keys(spec.scripts).length > 0) clean.scripts = spec.scripts;
   if (spec.initialScript.length > 0) clean.initialScript = spec.initialScript;
   if (spec.submitScript.length > 0) clean.submitScript = spec.submitScript;
+  if (spec.submitLabel !== 'Submit') clean.submitLabel = spec.submitLabel;
+  if (!spec.showSubmit) clean.showSubmit = false;
   return stringifyYaml(clean).trimEnd();
 }
 
@@ -294,6 +303,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
   let runQueue = Promise.resolve();
   let forceEditorRender = false;
   const inputTimers = new Map<string, number>();
+  let openFieldMetaName: string | null = null;
 
   const parseCurrent = () => parseFormSpec(ctx.block.text);
   const commitSpec = (spec: FormSpec) => ctx.setText(serializeFormSpec(spec));
@@ -396,6 +406,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
           <span>
             <button type="button" class="ghost" data-form-action="move-field-up" data-form-field-index="${index}">Up</button>
             <button type="button" class="ghost" data-form-action="move-field-down" data-form-field-index="${index}">Down</button>
+            ${ctx.advanced ? `<button type="button" class="ghost" data-form-action="toggle-field-meta" data-form-field-index="${index}">Meta</button>` : ''}
             <button type="button" class="danger" data-form-action="remove-field" data-form-field-index="${index}">Remove</button>
           </span>
         </div>
@@ -408,11 +419,6 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
             : renderTextInput('Default Value', 'value', String(field.value ?? ''), index)}
           ${renderTextInput('Placeholder', 'placeholder', field.placeholder, index)}
           <label class="hvy-form-checkbox-label"><span>Required</span><input type="checkbox" data-form-field-index="${index}" data-form-field-prop="required" ${field.required ? 'checked' : ''}></label>
-          ${renderTextInput('Class', 'className', field.className, index)}
-          ${renderTextInput('Style', 'style', field.style, index)}
-          ${renderScriptSelect('Input Script', 'input', field.triggers.input ?? '', index, scriptNames)}
-          ${renderScriptSelect('Change Script', 'change', field.triggers.change ?? '', index, scriptNames)}
-          ${renderScriptSelect('Blur Script', 'blur', field.triggers.blur ?? '', index, scriptNames)}
         </div>
         ${(field.type === 'select' || field.type === 'radio')
           ? `<label class="hvy-form-options-editor"><span>Options</span><textarea rows="4" data-form-field-index="${index}" data-form-field-prop="options" placeholder="Label | optional-value">${escapeHtml(formatOptionsText(field.options))}</textarea></label>`
@@ -422,6 +428,34 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
     });
 
     root.appendChild(fieldSection);
+    if (ctx.advanced && openFieldMetaName) {
+      const fieldIndex = spec.fields.findIndex((field) => field.name === openFieldMetaName);
+      const field = spec.fields[fieldIndex];
+      if (field) {
+        const modal = document.createElement('div');
+        modal.className = 'hvy-form-meta-modal-backdrop';
+        modal.innerHTML = `
+          <section class="hvy-form-meta-modal" role="dialog" aria-modal="true" aria-label="Field metadata">
+            <div class="hvy-form-meta-modal-head">
+              <strong>Meta: ${escapeHtml(field.label || field.name)}</strong>
+              <button type="button" class="ghost" data-form-action="close-field-meta">Close</button>
+            </div>
+            <div class="hvy-form-meta-modal-body">
+              <label>
+                <span>CSS</span>
+                <textarea rows="5" data-form-field-index="${fieldIndex}" data-form-field-prop="metaCss" placeholder="margin: 0.5rem 0;">${escapeHtml(field.meta.css)}</textarea>
+              </label>
+              ${renderScriptSelect('Input Script', 'input', field.triggers.input ?? '', fieldIndex, scriptNames)}
+              ${renderScriptSelect('Change Script', 'change', field.triggers.change ?? '', fieldIndex, scriptNames)}
+              ${renderScriptSelect('Blur Script', 'blur', field.triggers.blur ?? '', fieldIndex, scriptNames)}
+            </div>
+          </section>
+        `;
+        root.appendChild(modal);
+      } else {
+        openFieldMetaName = null;
+      }
+    }
 
     const scriptSection = document.createElement('section');
     scriptSection.className = 'hvy-form-editor-section';
@@ -440,6 +474,8 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
     scriptControls.innerHTML = `
       ${renderTopScriptSelect('Initial Script', 'initialScript', spec.initialScript, scriptNames)}
       ${renderTopScriptSelect('Submit Script', 'submitScript', spec.submitScript, scriptNames)}
+      <label><span>Submit Label</span><input data-form-top-text="submitLabel" value="${escapeAttr(spec.submitLabel)}"></label>
+      <label class="hvy-form-checkbox-label"><span>Show Submit</span><input type="checkbox" data-form-top-checkbox="showSubmit" ${spec.showSubmit ? 'checked' : ''}></label>
     `;
     scriptSection.appendChild(scriptControls);
     for (const [name, source] of Object.entries(spec.scripts)) {
@@ -473,14 +509,16 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
     form.className = 'hvy-form-reader-form';
     form.noValidate = false;
     spec.fields.forEach((field) => form.appendChild(renderReaderField(field)));
-    const actions = document.createElement('div');
-    actions.className = 'hvy-form-actions';
-    const submit = document.createElement('button');
-    submit.type = 'submit';
-    submit.className = 'secondary';
-    submit.textContent = 'Submit';
-    actions.appendChild(submit);
-    form.appendChild(actions);
+    if (spec.showSubmit) {
+      const actions = document.createElement('div');
+      actions.className = 'hvy-form-actions';
+      const submit = document.createElement('button');
+      submit.type = 'submit';
+      submit.className = 'secondary';
+      submit.textContent = spec.submitLabel || 'Submit';
+      actions.appendChild(submit);
+      form.appendChild(actions);
+    }
     root.appendChild(form);
 
     if (statusText.length > 0) {
@@ -498,9 +536,9 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
 
   function renderReaderField(field: FormFieldDefinition): HTMLElement {
     const wrap = document.createElement('label');
-    wrap.className = `hvy-form-field hvy-form-field-${field.type}${field.className ? ` ${field.className}` : ''}`;
-    if (field.style.trim().length > 0) {
-      wrap.setAttribute('style', sanitizeInlineCss(field.style));
+    wrap.className = `hvy-form-field hvy-form-field-${field.type}`;
+    if (field.meta.css.trim().length > 0) {
+      wrap.setAttribute('style', sanitizeInlineCss(field.meta.css));
     }
     wrap.dataset.formFieldName = field.name;
     if (field.type !== 'hidden') {
@@ -627,8 +665,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       if (prop === 'name') field.name = target.value.trim();
       if (prop === 'label') field.label = target.value;
       if (prop === 'placeholder') field.placeholder = target.value;
-      if (prop === 'className') field.className = target.value;
-      if (prop === 'style') field.style = target.value;
+      if (prop === 'metaCss') field.meta.css = target.value;
       commitSpec(spec);
       return;
     }
@@ -648,6 +685,16 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
     if (target.dataset.formTopScript) {
       const key = target.dataset.formTopScript as 'initialScript' | 'submitScript';
       spec[key] = target.value.trim();
+      commitSpec(spec);
+      return;
+    }
+    if (target.dataset.formTopText === 'submitLabel') {
+      spec.submitLabel = target.value;
+      commitSpec(spec);
+      return;
+    }
+    if (target.dataset.formTopCheckbox === 'showSubmit' && target instanceof HTMLInputElement) {
+      spec.showSubmit = target.checked;
       commitSpec(spec);
       return;
     }
@@ -697,6 +744,21 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
         if (field) spec.fields.splice(targetIndex, 0, field);
       }
       forceEditorRender = true;
+    }
+    if (action === 'toggle-field-meta') {
+      const index = Number.parseInt(button.dataset.formFieldIndex ?? '', 10);
+      const field = spec.fields[index];
+      if (!field) return;
+      openFieldMetaName = field.name;
+      forceEditorRender = true;
+      renderEditor();
+      return;
+    }
+    if (action === 'close-field-meta') {
+      openFieldMetaName = null;
+      forceEditorRender = true;
+      renderEditor();
+      return;
     }
     if (action === 'add-script') {
       spec.scripts[makeUniqueScriptName(spec.scripts)] = '# Python form script';

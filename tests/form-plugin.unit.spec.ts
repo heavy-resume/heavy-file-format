@@ -18,6 +18,8 @@ describe('form plugin YAML', () => {
       input: live_update
       change: populate_food
       blur: validate_food
+    meta:
+      css: "gap: 0.5rem;"
   - name: subscribed
     label: Subscribe
     type: checkbox
@@ -27,6 +29,8 @@ scripts:
     doc.form.set_value("note", "Bring a spoon.")
 initialScript: populate_food
 submitScript: populate_food
+submitLabel: Save lunch order
+showSubmit: false
 `);
 
     expect(parsed.error).toBeNull();
@@ -45,6 +49,9 @@ submitScript: populate_food
         change: 'populate_food',
         blur: 'validate_food',
       },
+      meta: {
+        css: 'gap: 0.5rem;',
+      },
     });
     expect(parsed.spec.fields[1]).toMatchObject({
       name: 'subscribed',
@@ -54,6 +61,8 @@ submitScript: populate_food
     expect(parsed.spec.scripts.populate_food).toContain('doc.form.set_value');
     expect(parsed.spec.initialScript).toBe('populate_food');
     expect(parsed.spec.submitScript).toBe('populate_food');
+    expect(parsed.spec.submitLabel).toBe('Save lunch order');
+    expect(parsed.spec.showSubmit).toBe(false);
   });
 
   test('reports invalid YAML without throwing', () => {
@@ -69,10 +78,13 @@ submitScript: populate_food
     label: Email
     type: email
     placeholder: you@example.com
+    meta:
+      css: "max-width: 24rem;"
 scripts:
   submit_form: |
     doc.header.set("submitted", True)
 submitScript: submit_form
+submitLabel: Send details
 `);
 
     const expectedResult = serializeFormSpec(parsed.spec);
@@ -80,6 +92,9 @@ submitScript: submit_form
     expect(expectedResult).toContain('fields:');
     expect(expectedResult).toContain('type: email');
     expect(expectedResult).toContain('placeholder: you@example.com');
+    expect(expectedResult).toContain('meta:');
+    expect(expectedResult).toContain('css: "max-width: 24rem;"');
     expect(expectedResult).toContain('submit_form');
+    expect(expectedResult).toContain('submitLabel: Send details');
   });
 });

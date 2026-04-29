@@ -88,6 +88,9 @@ function buildContext(
 
   return {
     mode,
+    get advanced() {
+      return state.showAdvancedEditor;
+    },
     sectionKey,
     block,
     rawDocument: state.document,

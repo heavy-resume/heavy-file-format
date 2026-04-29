@@ -54,11 +54,14 @@
   background: var(--hvy-surface);
 }
 
-.hvy-form-checkbox-label {
+label.hvy-form-checkbox-label {
+  flex-direction: row;
+  align-items: center;
   justify-content: end;
+  gap: 0.45rem;
 }
 
-.hvy-form-checkbox-label input {
+label.hvy-form-checkbox-label input {
   width: auto;
 }
 
@@ -77,6 +80,27 @@
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
+}
+
+label.hvy-form-field-checkbox {
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.45rem;
+}
+
+label.hvy-form-field-checkbox .hvy-form-field-label {
+  order: 2;
+}
+
+label.hvy-form-field-checkbox input {
+  order: 1;
+  width: auto;
+}
+
+label.hvy-form-field-checkbox .hvy-form-field-error {
+  order: 3;
+  flex-basis: 100%;
 }
 
 .hvy-form-field-hidden {
@@ -125,4 +149,43 @@
 .hvy-form-error,
 .hvy-form-field-error {
   color: #b42318;
+}
+
+.hvy-form-meta-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: rgba(15, 23, 42, 0.35);
+}
+
+.hvy-form-meta-modal {
+  width: min(38rem, 100%);
+  max-height: min(36rem, calc(100vh - 3rem));
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  padding: 1rem;
+  border: 1px solid var(--hvy-border);
+  border-radius: 8px;
+  background: var(--hvy-surface);
+  color: var(--hvy-text);
+  box-shadow: 0 18px 50px rgba(15, 23, 42, 0.2);
+}
+
+.hvy-form-meta-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.hvy-form-meta-modal-body {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
 }

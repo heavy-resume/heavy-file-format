@@ -902,10 +902,13 @@ submitScript: submit_order
 Plugin-specific rules:
 - `pluginConfig.version` is optional and defaults to `"0.1"`.
 - The plugin block text MUST be interpreted as YAML owned by the form plugin.
-- Top-level YAML keys are `fields`, `scripts`, `initialScript`, and `submitScript`.
+- Top-level YAML keys are `fields`, `scripts`, `initialScript`, `submitScript`,
+  `submitLabel`, and `showSubmit`.
 - `fields` is an ordered list. Each field supports `name`, `label`, `type`,
-  `value`, `placeholder`, `required`, `options`, `triggers`, `className`, and
-  `style`.
+  `value`, `placeholder`, `required`, `options`, `triggers`, and `meta`.
+- Field `meta` is plugin-owned field metadata. `meta.css` is an optional
+  inline CSS style string applied to that rendered field wrapper and MUST be
+  sanitized like other document-supplied CSS.
 - Supported `type` values are `text`, `textarea`, `number`, `select`,
   `checkbox`, `radio`, `date`, `email`, `tel`, `url`, `password`, and `hidden`.
   File inputs are not part of the standard form plugin contract.
@@ -919,6 +922,10 @@ Plugin-specific rules:
 - Viewer clients MUST render an HTML `<form>`, prevent native navigation on
   submit, gather current field values, and run the named submit script when one
   is defined. No network request is implied by submitting a form.
+- `submitLabel` customizes the visible submit button text and defaults to
+  `"Submit"`. `showSubmit` defaults to `true`; when `false`, clients MUST omit
+  the visible submit button while preserving the form and any non-submit
+  triggers.
 - Form scripts run through the installed scripting runtime. During form script
   execution, `doc.form` exposes `get_value(name)`, `set_value(name, value)`,
   `get_values()`, `set_options(name, options)`, `get_options(name)`,

@@ -135,6 +135,18 @@ export function bindInputMisc(app: HTMLElement): void {
       return;
     }
 
+    if (field === 'block-schema-id' && target instanceof HTMLInputElement) {
+      const context = resolveBlockContext(target);
+      if (!context) {
+        return;
+      }
+      const block = context.block;
+      block.schema.id = sanitizeOptionalId(target.value);
+      syncReusableTemplateForBlock(sectionKey, block.id);
+      getRefreshReaderPanels()();
+      return;
+    }
+
     if (field === 'block-placeholder' && target instanceof HTMLInputElement) {
       const context = resolveBlockContext(target);
       if (!context) {

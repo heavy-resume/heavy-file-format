@@ -3,7 +3,9 @@ import { expect, test } from 'vitest';
 import {
   buildPythonProgram,
   buildScriptingVersionMismatchMessage,
+  cleanScriptingErrorDetail,
   comparePluginVersions,
+  getScriptingTraceLabel,
   instrumentPythonSource,
   stripPythonImports,
   summarizeScriptingError,
@@ -104,6 +106,12 @@ test('buildPythonProgram prefers tracing and keeps instrumented fallback availab
   expect(program).not.toContain('visit_Compare');
 });
 
+test('buildPythonProgram uses the component id in tracebacks when available', () => {
+  expect(buildPythonProgram('r7', 'import-example-script')).toContain(
+    "__hvy_code__ = compile(__hvy_compilable_source__, '<import-example-script>', 'exec')"
+  );
+});
+
 test('stripPythonImports replaces plain import statements with pass', () => {
   expect(
     stripPythonImports(
@@ -165,6 +173,28 @@ RuntimeError: Import statements are not allowed in HVY scripts.
 `
     )
   ).toBe('Import statements are not allowed in HVY scripts. (line 15)');
+});
+
+test('getScriptingTraceLabel falls back to hvy-script when the component id is blank', () => {
+  expect(getScriptingTraceLabel('')).toBe('hvy-script');
+  expect(getScriptingTraceLabel('import-example-script')).toBe('import-example-script');
+});
+
+test('cleanScriptingErrorDetail removes wrapper exec frames from tracebacks', () => {
+  expect(
+    cleanScriptingErrorDetail(
+      `Traceback (most recent call last):
+  File "#hvy_script_r2", line 33, in <module>
+    exec(__hvy_code__, __hvy_user_globals__)
+  File "<hvy-script>", line 1, in <module>
+RuntimeError: Import statements are not allowed in HVY scripts.
+`
+    )
+  ).toBe(
+    `Traceback (most recent call last):
+  File "<hvy-script>", line 1, in <module>
+RuntimeError: Import statements are not allowed in HVY scripts.`
+  );
 });
 
 test('comparePluginVersions orders dot-separated versions numerically', () => {

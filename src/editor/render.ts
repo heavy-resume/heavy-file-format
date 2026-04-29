@@ -630,6 +630,16 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     return `
       <div class="schema-meta-stack">
         <label>
+          <span>ID</span>
+          <input
+            data-section-key="${deps.escapeAttr(sectionKey)}"
+            data-block-id="${deps.escapeAttr(block.id)}"
+            data-field="block-schema-id"
+            placeholder="component-id"
+            value="${deps.escapeAttr(block.schema.id)}"
+          />
+        </label>
+        <label>
           <span>Custom CSS</span>
           <textarea
             rows="2"

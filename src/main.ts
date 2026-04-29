@@ -578,7 +578,7 @@ async function runScriptingBlocksIfNeeded(): Promise<void> {
   }
   lastScriptedDocument = state.document;
 
-  const targets: Array<{ sectionKey: string; blockId: string; source: string; pluginVersion: string }> = [];
+  const targets: Array<{ sectionKey: string; blockId: string; source: string; pluginVersion: string; componentId: string }> = [];
   for (const section of state.document.sections) {
     visitSectionForScripts(section, targets);
   }
@@ -590,6 +590,7 @@ async function runScriptingBlocksIfNeeded(): Promise<void> {
     const result = await runUserScript({
       document: state.document,
       source: target.source,
+      componentId: target.componentId,
       pluginVersion: target.pluginVersion,
     });
     const mountSelector = `[data-scripting-mount="true"][data-scripting-section-key="${cssEscape(target.sectionKey)}"][data-scripting-block-id="${cssEscape(target.blockId)}"]`;
@@ -605,16 +606,16 @@ function cssEscape(value: string): string {
 }
 
 function visitSectionForScripts(
-  section: { key: string; blocks: { id: string; text: string; schema: { component: string; plugin: string } }[]; children: unknown[] },
-  out: Array<{ sectionKey: string; blockId: string; source: string; pluginVersion: string }>
+  section: { key: string; blocks: { id: string; text: string; schema: { id?: string; component: string; plugin: string } }[]; children: unknown[] },
+  out: Array<{ sectionKey: string; blockId: string; source: string; pluginVersion: string; componentId: string }>
 ): void {
   visitBlocksInSection(section, section.key, out);
 }
 
 function visitBlocksInSection(
-  section: { key: string; blocks: { id: string; text: string; schema: { component: string; plugin: string } }[]; children: unknown[] },
+  section: { key: string; blocks: { id: string; text: string; schema: { id?: string; component: string; plugin: string } }[]; children: unknown[] },
   sectionKey: string,
-  out: Array<{ sectionKey: string; blockId: string; source: string; pluginVersion: string }>
+  out: Array<{ sectionKey: string; blockId: string; source: string; pluginVersion: string; componentId: string }>
 ): void {
   visitBlocksInList(section.blocks as never, (block) => {
     if (block.schema.component === 'plugin' && block.schema.plugin === SCRIPTING_PLUGIN_ID) {
@@ -622,6 +623,7 @@ function visitBlocksInSection(
         sectionKey,
         blockId: block.id,
         source: block.text ?? '',
+        componentId: typeof block.schema.id === 'string' ? block.schema.id : '',
         pluginVersion: getScriptingPluginVersion(block.schema.pluginConfig),
       });
     }

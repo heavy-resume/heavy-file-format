@@ -220,6 +220,11 @@ export function buildScriptingVersionMismatchMessage(requestedVersion: string): 
   return `This HVY scripting block requires plugin version ${requestedVersion}, but this client supports ${SCRIPTING_PLUGIN_VERSION}.`;
 }
 
+export function getScriptingTraceLabel(componentId?: string): string {
+  const trimmed = componentId?.trim() ?? '';
+  return trimmed.length > 0 ? trimmed.replace(/[<>]/g, '') : 'hvy-script';
+}
+
 export function stripPythonImports(source: string): string {
   const lines = source.split('\n');
   const stripped: string[] = [];
@@ -263,7 +268,7 @@ export function summarizeScriptingError(rawError: string): string {
     return 'Script failed.';
   }
 
-  const lineMatch = trimmed.match(/File "<hvy-script>", line (\d+)/);
+  const lineMatch = trimmed.match(/File "<[^"]+>", line (\d+)/);
   const lineSuffix = lineMatch ? ` (line ${lineMatch[1]})` : '';
   const lines = trimmed.split('\n').map((line) => line.trim()).filter((line) => line.length > 0);
   const lastLine = lines.at(-1) ?? 'Script failed.';
@@ -280,11 +285,36 @@ export function summarizeScriptingError(rawError: string): string {
   return `${lastLine}${lineSuffix}`;
 }
 
+export function cleanScriptingErrorDetail(rawError: string): string {
+  const trimmed = rawError.trim();
+  if (trimmed.length === 0) {
+    return 'Script failed.';
+  }
+
+  const lines = trimmed.split('\n');
+  const cleaned = lines.filter((line, index) => {
+    const nextLine = lines[index + 1] ?? '';
+    if (line.includes('File "#hvy_script_')) {
+      return false;
+    }
+    if (line.trim() === 'exec(__hvy_code__, __hvy_user_globals__)') {
+      return false;
+    }
+    if (line.trim() === '<module>' && nextLine.trim() === 'exec(__hvy_code__, __hvy_user_globals__)') {
+      return false;
+    }
+    return true;
+  });
+
+  return cleaned.join('\n').trim();
+}
+
 // The Python program executed for each user script. It pulls the runtime and
 // source out of the shared JS global, prefers sys.settrace() for line
 // counting, and falls back to a JS-side source rewrite if tracing is
 // unavailable in the current Brython build.
-export function buildPythonProgram(runtimeId: string): string {
+export function buildPythonProgram(runtimeId: string, componentId?: string): string {
+  const traceLabel = getScriptingTraceLabel(componentId);
   return `
 from browser import window as __hvy_window__
 
@@ -311,7 +341,7 @@ try:
         __hvy_trace_enabled__ = False
 
     __hvy_compilable_source__ = __hvy_source__ if __hvy_trace_enabled__ else __hvy_instrumented_source__
-    __hvy_code__ = compile(__hvy_compilable_source__, '<hvy-script>', 'exec')
+    __hvy_code__ = compile(__hvy_compilable_source__, '<${traceLabel}>', 'exec')
     __hvy_user_globals__ = {
         '__hvy_step__': __hvy_runtime__.step,
         'doc': __hvy_runtime__.doc,
@@ -343,6 +373,7 @@ export interface ScriptingRunResult {
 export interface RunUserScriptOptions {
   document: VisualDocument;
   source: string;
+  componentId?: string;
   pluginVersion?: string;
   maxLines?: number;
 }
@@ -390,7 +421,7 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
   // in addition to the manual run_script call below, causing a double-execution.
   const scriptElement = document.createElement('script');
   scriptElement.id = `hvy-script-${runtimeId}`;
-  scriptElement.textContent = buildPythonProgram(runtimeId);
+  scriptElement.textContent = buildPythonProgram(runtimeId, options.componentId);
 
   return new Promise((resolve) => {
     scripting.callbacks[runtimeId] = () => {
@@ -399,7 +430,7 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
         ? {
             ok: false,
             error: summarizeScriptingError(error),
-            errorDetail: error,
+            errorDetail: cleanScriptingErrorDetail(error),
             linesExecuted: runtime.stats.linesExecuted,
             toolCalls: runtime.stats.toolCalls,
           }

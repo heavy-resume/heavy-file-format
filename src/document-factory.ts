@@ -8,6 +8,7 @@ import { getTableColumns } from './table-ops';
 import { REUSABLE_SECTION_DEF_PREFIX } from './state';
 
 export const DEFAULT_READER_MAX_WIDTH = '60rem';
+export const DEFAULT_SECTION_CSS = 'margin: 0.5rem 0;';
 
 export function defaultBlockSchema(component = 'text'): BlockSchema {
   return {
@@ -229,6 +230,9 @@ export function createBlankDocument(): VisualDocument {
     meta: {
       hvy_version: 0.1,
       reader_max_width: DEFAULT_READER_MAX_WIDTH,
+      section_defaults: {
+        css: DEFAULT_SECTION_CSS,
+      },
     },
     extension: '.hvy',
     sections: [],

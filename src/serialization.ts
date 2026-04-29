@@ -9,6 +9,7 @@ import { getSectionId } from './section-ops';
 import { resolveBaseComponent, isBuiltinComponentName } from './component-defs';
 import {
   DEFAULT_READER_MAX_WIDTH,
+  DEFAULT_SECTION_CSS,
   defaultBlockSchema,
   schemaFromUnknown,
   createEmptyBlock,
@@ -55,6 +56,9 @@ export function deserializeDocumentWithDiagnostics(
   if (typeof meta.reader_max_width === 'undefined') {
     meta.reader_max_width = DEFAULT_READER_MAX_WIDTH;
   }
+  if (typeof meta.section_defaults === 'undefined') {
+    meta.section_defaults = { css: DEFAULT_SECTION_CSS };
+  }
 
   const diagnostics = parsed.errors.map((message) => mapParserErrorToDiagnostic(message));
   const document: VisualDocument = {
@@ -95,6 +99,9 @@ export function wrapHvyFragmentAsDocument(
   const meta: JsonObject = {
     hvy_version: 0.1,
     reader_max_width: DEFAULT_READER_MAX_WIDTH,
+    section_defaults: {
+      css: DEFAULT_SECTION_CSS,
+    },
     ...(options?.meta ?? {}),
   };
   const frontMatter = stringifyYaml(meta).trimEnd();

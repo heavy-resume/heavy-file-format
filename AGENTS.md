@@ -19,3 +19,12 @@ When adding components ALWAYS PREFER REUSABLE COMPONENTS. ITS BUILT OUT SO USE I
 Components go into their own directories with their own css and logic files
 
 When asked to have something be HVY always use the reusable HVY rendering and not a new solution.
+
+The default startup document should treat `examples/example.hvy` as the single source of truth. It contains a real HVY tail attachment, so do not load it as raw text; load it as bytes / asset URL and deserialize bytes so `--HVY-TAIL--` data does not leak into the visible document.
+
+Be careful with the app's view terminology. `AI` is a document view/editing mode that sits alongside `editor` and `viewer`; it is not the same thing as the chat panel itself. When a user refers to "AI mode", confirm whether they mean the document `AI` view versus the chat UI before making rendering or styling assumptions.
+
+Naming convention notes:
+- Avoid repeating names (ensure good grepability to avoid confusion or overloading a name)
+- Avoid repeating filenames (ensure cmd / ctrl + p doesn't reveal a bunch of files with the same name)
+  - This means: avoid adding another index.ts and another README.md, among other things

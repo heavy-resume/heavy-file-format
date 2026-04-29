@@ -28,6 +28,8 @@ import typescript from 'highlight.js/lib/languages/typescript';
 import xml from 'highlight.js/lib/languages/xml';
 import { areTablesEnabled } from '../reference-config';
 import { sanitizeInlineCss } from '../css-sanitizer';
+import { SCRIPTING_PLUGIN_ID } from '../plugins/registry';
+import { getScriptingPluginVersion } from '../plugins/scripting/version';
 
 hljs.registerLanguage('bash', bash);
 hljs.registerLanguage('sh', bash);
@@ -397,6 +399,13 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       return `<div class="reader-grid-layout editor-grid-passive-preview" style="grid-template-columns: repeat(${columns}, minmax(0, 1fr));">${cells}</div>`;
     }
 
+    if (base === 'plugin' && block.schema.plugin === SCRIPTING_PLUGIN_ID) {
+      if (block.text.trim().length === 0) {
+        return `<div class="editor-passive-empty-text">Empty script...</div>`;
+      }
+      return renderComponentFragment('code', block.text, { ...block, schema: { ...block.schema, codeLanguage: 'python' } } as VisualBlock);
+    }
+
     if ((base === 'text' || base === 'quote') && block.text.trim().length === 0) {
       const hint = block.schema.placeholder || (base === 'quote' ? 'Empty quote...' : 'Empty text...');
       const content = block.schema.placeholder
@@ -605,8 +614,31 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
 
   function renderBlockMetaFields(sectionKey: string, block: VisualBlock): string {
     const component = deps.resolveBaseComponent(block.schema.component);
+    const scriptingVersionField =
+      component === 'plugin' && block.schema.plugin === SCRIPTING_PLUGIN_ID
+        ? `<label>
+          <span>Scripting Version</span>
+          <input
+            data-section-key="${deps.escapeAttr(sectionKey)}"
+            data-block-id="${deps.escapeAttr(block.id)}"
+            data-field="block-plugin-scripting-version"
+            placeholder="${deps.escapeAttr(getScriptingPluginVersion(block.schema.pluginConfig))}"
+            value="${deps.escapeAttr(getScriptingPluginVersion(block.schema.pluginConfig))}"
+          />
+        </label>`
+        : '';
     return `
       <div class="schema-meta-stack">
+        <label>
+          <span>ID</span>
+          <input
+            data-section-key="${deps.escapeAttr(sectionKey)}"
+            data-block-id="${deps.escapeAttr(block.id)}"
+            data-field="block-schema-id"
+            placeholder="component-id"
+            value="${deps.escapeAttr(block.schema.id)}"
+          />
+        </label>
         <label>
           <span>Custom CSS</span>
           <textarea
@@ -673,6 +705,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
             data-field="block-description"
           >${deps.escapeHtml(block.schema.description)}</textarea>
         </label>
+        ${scriptingVersionField}
       </div>
     `;
   }

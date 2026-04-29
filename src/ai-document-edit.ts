@@ -1828,3 +1828,102 @@ function setCssDeclaration(declarations: Array<{ property: string; value: string
 function serializeCssDeclarations(declarations: Array<{ property: string; value: string }>): string {
   return declarations.map((declaration) => `${declaration.property}: ${declaration.value};`).join(' ');
 }
+
+// Programmatic tool dispatch — used by the scripting plugin to call the same
+// tool surface the AI agent uses, but synchronously and without the LLM
+// conversation loop. Returns the tool's textual result (matching what the AI
+// would see). Async tools like edit_component (which themselves invoke the
+// LLM) are not exposed through this entry point.
+export function executeDocumentEditToolByName(
+  toolName: string,
+  args: unknown,
+  document: VisualDocument,
+  onMutation?: (group?: string) => void
+): string {
+  const argsObject = args && typeof args === 'object' ? (args as Record<string, unknown>) : {};
+  const snapshot = summarizeDocumentStructure(document);
+
+  const request = { tool: toolName, ...argsObject } as Record<string, unknown> & { tool: string };
+
+  switch (toolName) {
+    case 'request_structure':
+      return snapshot.summary;
+    case 'grep':
+      return executeGrepTool(request as Extract<DocumentEditToolRequest, { tool: 'grep' }>, document);
+    case 'get_css':
+      return executeGetCssTool(request as Extract<DocumentEditToolRequest, { tool: 'get_css' }>, snapshot, document);
+    case 'get_properties':
+      return executeGetPropertiesTool(
+        request as Extract<DocumentEditToolRequest, { tool: 'get_properties' }>,
+        snapshot,
+        document
+      );
+    case 'set_properties':
+      return executeSetPropertiesTool(
+        request as Extract<DocumentEditToolRequest, { tool: 'set_properties' }>,
+        snapshot,
+        document,
+        onMutation
+      );
+    case 'view_component':
+      return executeViewComponentTool(
+        request as Extract<DocumentEditToolRequest, { tool: 'view_component' }>,
+        snapshot,
+        document
+      );
+    case 'patch_component':
+      return executePatchComponentTool(
+        request as Extract<DocumentEditToolRequest, { tool: 'patch_component' }>,
+        snapshot,
+        document,
+        onMutation
+      );
+    case 'remove_section':
+      return executeRemoveSectionTool(
+        request as Extract<DocumentEditToolRequest, { tool: 'remove_section' }>,
+        snapshot,
+        document,
+        onMutation
+      );
+    case 'remove_component':
+      return executeRemoveComponentTool(
+        request as Extract<DocumentEditToolRequest, { tool: 'remove_component' }>,
+        snapshot,
+        document,
+        onMutation
+      );
+    case 'create_component':
+      return executeCreateComponentTool(
+        request as Extract<DocumentEditToolRequest, { tool: 'create_component' }>,
+        snapshot,
+        document,
+        onMutation
+      );
+    case 'create_section':
+      return executeCreateSectionTool(
+        request as Extract<DocumentEditToolRequest, { tool: 'create_section' }>,
+        snapshot,
+        document,
+        onMutation
+      );
+    case 'reorder_section':
+      return executeReorderSectionTool(
+        request as Extract<DocumentEditToolRequest, { tool: 'reorder_section' }>,
+        snapshot,
+        document,
+        onMutation
+      );
+    case 'view_header':
+      return executeViewHeaderTool(request as Extract<HeaderEditToolRequest, { tool: 'view_header' }>, document);
+    case 'grep_header':
+      return executeGrepHeaderTool(request as Extract<HeaderEditToolRequest, { tool: 'grep_header' }>, document);
+    case 'patch_header':
+      return executePatchHeaderTool(
+        request as Extract<HeaderEditToolRequest, { tool: 'patch_header' }>,
+        document,
+        onMutation
+      );
+    default:
+      throw new Error(`Unknown scripting tool "${toolName}".`);
+  }
+}

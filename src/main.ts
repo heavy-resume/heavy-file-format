@@ -2,6 +2,7 @@ import './default-theme.css';
 import './style.css';
 import './state-tracker.css';
 import 'highlight.js/styles/github.css';
+import bundledExampleHvyUrl from '../examples/example.hvy?url';
 
 import { createEditorRenderer, type EditorRenderer } from './editor/render';
 import { createReaderRenderer, type ReaderRenderer } from './reader/render';
@@ -22,11 +23,14 @@ import { capturePaneScroll, restorePaneScroll, centerPendingEditorSection, focus
 import { bindUi } from './bind-ui';
 import { deserializeDocumentBytes, serializeDocument } from './serialization';
 import { createDefaultChatState, renderChatPanel } from './chat/chat';
-import { DEFAULT_EXAMPLE_HVY_BYTES } from './example-bundles';
-import { registerHostPlugin } from './plugins/registry';
+import { registerHostPlugin, SCRIPTING_PLUGIN_ID } from './plugins/registry';
 import { reconcilePluginMounts, capturePluginFocus } from './plugins/mount';
 import { dbTablePluginRegistration } from './plugins/db-table-plugin';
 import { progressBarPluginRegistration } from './plugins/progress-bar';
+import { scriptingPluginRegistration, setScriptingResult } from './plugins/scripting/scripting';
+import { runUserScript } from './plugins/scripting/wrapper';
+import { getScriptingPluginVersion } from './plugins/scripting/version';
+import { visitBlocksInList } from './section-ops';
 
 const appRoot = document.querySelector<HTMLDivElement>('#app');
 if (!appRoot) {
@@ -36,8 +40,10 @@ const app = appRoot;
 
 app.innerHTML = '<main class="layout"><section class="pane full-pane"><p>Loading editor...</p></section></main>';
 
-function createDefaultDocument() {
-  return deserializeDocumentBytes(DEFAULT_EXAMPLE_HVY_BYTES, '.hvy');
+async function createDefaultDocument() {
+  const response = await fetch(bundledExampleHvyUrl);
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  return deserializeDocumentBytes(bytes, '.hvy');
 }
 
 function createInitialState(document: ReturnType<typeof deserializeDocumentBytes>): AppState {
@@ -157,8 +163,6 @@ function renderAiEditPopover(): string {
   `;
 }
 
-initState(createInitialState(createDefaultDocument()));
-
 let editorRenderer: EditorRenderer;
 let readerRenderer: ReaderRenderer;
 
@@ -260,6 +264,9 @@ readerRenderer = createReaderRenderer(
     },
     get theme() {
       return getThemeConfig();
+    },
+    get currentView() {
+      return state.currentView;
     },
   },
   {
@@ -472,6 +479,8 @@ function renderApp(): void {
     editorMode: state.editorMode,
     historyLength: state.history.length,
   });
+
+  void runScriptingBlocksIfNeeded();
 }
 
 function refreshReaderPanels(): void {
@@ -546,6 +555,7 @@ initCallbacks({
   refreshReaderPanels,
   refreshModalPreview,
   componentRenderHelpers: localGetComponentRenderHelpers(),
+  readerRenderer,
 });
 
 // Register the reference-implementation built-in plugins. Hosts that embed
@@ -553,11 +563,83 @@ initCallbacks({
 // render to add their own.
 registerHostPlugin(dbTablePluginRegistration);
 registerHostPlugin(progressBarPluginRegistration);
+registerHostPlugin(scriptingPluginRegistration);
 
-try {
+// Run scripting blocks once per loaded document. Re-runs whenever the
+// document reference changes (file open, example load, new doc, etc.).
+let lastScriptedDocument: typeof state.document | null = null;
+
+async function runScriptingBlocksIfNeeded(): Promise<void> {
+  if (state.currentView !== 'viewer' && state.currentView !== 'ai') {
+    return;
+  }
+  if (state.document === lastScriptedDocument) {
+    return;
+  }
+  lastScriptedDocument = state.document;
+
+  const targets: Array<{ sectionKey: string; blockId: string; source: string; pluginVersion: string; componentId: string }> = [];
+  for (const section of state.document.sections) {
+    visitSectionForScripts(section, targets);
+  }
+  if (targets.length === 0) {
+    return;
+  }
+
+  for (const target of targets) {
+    const result = await runUserScript({
+      document: state.document,
+      source: target.source,
+      componentId: target.componentId,
+      pluginVersion: target.pluginVersion,
+    });
+    const mountSelector = `[data-scripting-mount="true"][data-scripting-section-key="${cssEscape(target.sectionKey)}"][data-scripting-block-id="${cssEscape(target.blockId)}"]`;
+    const mount = app.querySelector<HTMLElement>(mountSelector);
+    if (mount) {
+      setScriptingResult(mount, result);
+    }
+  }
+}
+
+function cssEscape(value: string): string {
+  return typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(value) : value.replace(/(["\\])/g, '\\$1');
+}
+
+function visitSectionForScripts(
+  section: { key: string; blocks: { id: string; text: string; schema: { id?: string; component: string; plugin: string } }[]; children: unknown[] },
+  out: Array<{ sectionKey: string; blockId: string; source: string; pluginVersion: string; componentId: string }>
+): void {
+  visitBlocksInSection(section, section.key, out);
+}
+
+function visitBlocksInSection(
+  section: { key: string; blocks: { id: string; text: string; schema: { id?: string; component: string; plugin: string } }[]; children: unknown[] },
+  sectionKey: string,
+  out: Array<{ sectionKey: string; blockId: string; source: string; pluginVersion: string; componentId: string }>
+): void {
+  visitBlocksInList(section.blocks as never, (block) => {
+    if (block.schema.component === 'plugin' && block.schema.plugin === SCRIPTING_PLUGIN_ID) {
+      out.push({
+        sectionKey,
+        blockId: block.id,
+        source: block.text ?? '',
+        componentId: typeof block.schema.id === 'string' ? block.schema.id : '',
+        pluginVersion: getScriptingPluginVersion(block.schema.pluginConfig),
+      });
+    }
+  });
+  for (const child of section.children as Array<typeof section>) {
+    visitBlocksInSection(child, child.key, out);
+  }
+}
+
+async function bootstrap(): Promise<void> {
+  initState(createInitialState(await createDefaultDocument()));
   initColorModeSync();
   renderApp();
-} catch (error) {
+}
+
+bootstrap().catch((error) => {
   const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
   app.innerHTML = `
     <main class="layout">
@@ -569,4 +651,4 @@ try {
     </main>
   `;
   throw error;
-}
+});

@@ -204,6 +204,46 @@ Do NOT mention progress-bar in the spec — it's reference-impl only.
        which rebuilds the plugin's inner HTML; the focused cell is destroyed
        and the draft row disappears. Needs in-browser debugging.
 
+## Scripting plugin (round 3 — landed)
+
+A `dev.heavy.scripting` plugin now exists. Code is held in `block.text` as
+Python; on document load (driven by a `lastScriptedDocument` guard inside
+`renderApp`) it runs once via Brython 3.14.0, lazy-loaded from CDN.
+
+- [x] Dispatcher: `executeDocumentEditToolByName(name, args, document, onMutation)`
+      exported from `ai-document-edit.ts`. Same surface as the AI agent's
+      sync tools (request_structure, grep, view_component, get_css,
+      get_properties, set_properties, patch_component, create_component,
+      remove_component, create_section, remove_section, reorder_section,
+      view_header, grep_header, patch_header). `edit_component` (LLM-driven)
+      and `query_db_table` (async) are not exposed here.
+- [x] Brython lazy-loader (`brython-loader.ts`).
+- [x] AST line wrapper: prepends `__hvy_step__()` before every statement,
+      recursing into functions, loops, conditionals, try/except, with-blocks.
+      Each step bumps a counter; default budget 100 000 lines, raises on
+      overflow.
+- [x] Python `doc` runtime exposed: `doc.tool(name, args)`, `doc.header.{get,set,remove,keys}`,
+      `doc.attachments.{list,read,write,remove}`, `doc.rerender()`.
+- [x] Plugin component: code-editor textarea + Help button. Reader mode
+      renders nothing visible (scripts are load-time only).
+- [x] On-load execution: hook in `renderApp()` runs scripts when the document
+      reference changes. `setScriptingResult()` writes status to the editor.
+- [x] Help modal: bundled `help.hvy`, deserialized and rendered as collapsible
+      `<details>` sections (`expanded:false` → collapsed by default).
+
+Known v1 limitations (deferred):
+- [ ] No worker isolation. Network blocking is "by absence" (we don't expose
+      `browser.*` to scripts, but a determined script can still
+      `from browser import window` and reach `fetch`). The plan to move
+      execution into a Web Worker still applies — it's the proper fix.
+- [ ] No async / no yield. Scripts run synchronously and may briefly block
+      the first paint. Add `await asyncio.sleep(0)` between batches once we
+      switch to an async wrapper or worker.
+- [ ] No breakpoints. The line-step hook is the obvious place to plumb them.
+- [ ] No status/error display in the reader pane (only the editor's status
+      strip).
+- [ ] Help.hvy is a starter; content needs polishing.
+
 ## Future: scripting component sandbox
 
 A future scripting component lets power users author Python (Brython) inside

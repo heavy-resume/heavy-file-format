@@ -34,6 +34,66 @@
   color: var(--hvy-code-text);
 }
 
+.reader-block pre code.hljs {
+  padding: 0;
+  background: transparent;
+  color: var(--hvy-code-text);
+}
+
+.reader-code-block .hljs {
+  color: var(--hvy-code-text);
+  background: transparent;
+}
+
+.reader-code-block .hljs-subst,
+.reader-code-block .hljs-punctuation,
+.reader-code-block .hljs-operator,
+.reader-code-block .hljs-property,
+.reader-code-block .hljs-params {
+  color: var(--hvy-code-text);
+}
+
+.reader-code-block .hljs-comment,
+.reader-code-block .hljs-code,
+.reader-code-block .hljs-formula {
+  color: var(--hvy-code-muted);
+}
+
+.reader-code-block .hljs-built_in,
+.reader-code-block .hljs-symbol,
+.reader-code-block .hljs-attr,
+.reader-code-block .hljs-attribute,
+.reader-code-block .hljs-selector-attr,
+.reader-code-block .hljs-selector-class,
+.reader-code-block .hljs-selector-id,
+.reader-code-block .hljs-meta {
+  color: var(--hvy-code-builtin);
+}
+
+.reader-code-block .hljs-string,
+.reader-code-block .hljs-regexp,
+.reader-code-block .hljs-quote {
+  color: var(--hvy-code-string);
+}
+
+.reader-code-block .hljs-number,
+.reader-code-block .hljs-literal {
+  color: var(--hvy-code-number);
+}
+
+.reader-code-block .hljs-keyword,
+.reader-code-block .hljs-doctag,
+.reader-code-block .hljs-template-tag,
+.reader-code-block .hljs-type,
+.reader-code-block .hljs-variable.language_,
+.reader-code-block .hljs-section,
+.reader-code-block .hljs-title,
+.reader-code-block .hljs-title.class_,
+.reader-code-block .hljs-title.class_.inherited__,
+.reader-code-block .hljs-title.function_ {
+  color: var(--hvy-code-keyword);
+}
+
 .code-editor-shell {
   border: 1px solid var(--hvy-border-input);
   background: var(--hvy-code-bg);

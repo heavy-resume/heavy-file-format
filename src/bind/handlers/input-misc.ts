@@ -1,4 +1,6 @@
 import { state, incrementInputEventCount, getRenderApp, getRefreshReaderPanels, handleTagEditorInput, findSectionByKey, getReusableNameFromSectionKey, resolveBlockContext, handleBlockFieldInput, recordHistory, syncReusableTemplateForBlock, sanitizeOptionalId, tagStateHelpers } from './_imports';
+import { SCRIPTING_PLUGIN_ID } from '../../plugins/registry';
+import { SCRIPTING_PLUGIN_VERSION } from '../../plugins/scripting/version';
 
 export function bindInputMisc(app: HTMLElement): void {
   app.addEventListener('input', (event) => {
@@ -133,6 +135,18 @@ export function bindInputMisc(app: HTMLElement): void {
       return;
     }
 
+    if (field === 'block-schema-id' && target instanceof HTMLInputElement) {
+      const context = resolveBlockContext(target);
+      if (!context) {
+        return;
+      }
+      const block = context.block;
+      block.schema.id = sanitizeOptionalId(target.value);
+      syncReusableTemplateForBlock(sectionKey, block.id);
+      getRefreshReaderPanels()();
+      return;
+    }
+
     if (field === 'block-placeholder' && target instanceof HTMLInputElement) {
       const context = resolveBlockContext(target);
       if (!context) {
@@ -151,6 +165,24 @@ export function bindInputMisc(app: HTMLElement): void {
       }
       const block = context.block;
       block.schema.description = target.value;
+      syncReusableTemplateForBlock(sectionKey, block.id);
+      getRefreshReaderPanels()();
+      return;
+    }
+
+    if (field === 'block-plugin-scripting-version' && target instanceof HTMLInputElement) {
+      const context = resolveBlockContext(target);
+      if (!context) {
+        return;
+      }
+      const block = context.block;
+      if (block.schema.component !== 'plugin' || block.schema.plugin !== SCRIPTING_PLUGIN_ID) {
+        return;
+      }
+      block.schema.pluginConfig = {
+        ...block.schema.pluginConfig,
+        version: target.value.trim() || SCRIPTING_PLUGIN_VERSION,
+      };
       syncReusableTemplateForBlock(sectionKey, block.id);
       getRefreshReaderPanels()();
       return;

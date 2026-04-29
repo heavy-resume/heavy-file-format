@@ -5,6 +5,7 @@ import type {
   HvyPluginRegistration,
 } from './types';
 import { PROGRESS_BAR_PLUGIN_ID } from './registry';
+import { colorValueToPickerHex, getResolvedThemeColor } from '../theme';
 
 import './progress-bar.css';
 
@@ -19,14 +20,19 @@ const DEFAULT_CONFIG: ProgressBarConfig = {
   min: 0,
   max: 100,
   value: 0,
-  color: '#3b82f6',
+  color: '#4a8fab',
 };
+
+function getDefaultProgressBarColor(): string {
+  const accent = getResolvedThemeColor('--hvy-accent-1');
+  return accent.trim().length > 0 ? colorValueToPickerHex(accent) : DEFAULT_CONFIG.color;
+}
 
 function readConfig(raw: Record<string, unknown>): ProgressBarConfig {
   const min = Number.isFinite(Number(raw.min)) ? Number(raw.min) : DEFAULT_CONFIG.min;
   const max = Number.isFinite(Number(raw.max)) ? Number(raw.max) : DEFAULT_CONFIG.max;
   const value = Number.isFinite(Number(raw.value)) ? Number(raw.value) : DEFAULT_CONFIG.value;
-  const color = typeof raw.color === 'string' && raw.color.length > 0 ? raw.color : DEFAULT_CONFIG.color;
+  const color = typeof raw.color === 'string' && raw.color.length > 0 ? raw.color : getDefaultProgressBarColor();
   return { min, max, value, color };
 }
 

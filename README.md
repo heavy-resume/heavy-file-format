@@ -43,7 +43,7 @@ Use of JSON and Markdown make it easy for LLMs to parse.
 - [X] Plugin block schema and DB table tail spec draft
 - [X] Image component
 - [X] Plugin execution/runtime
-- [ ] Sandboxed scripting component (throttled, max lines)
+- [X] Sandboxed scripting component (throttled, max lines)
 - [ ] Form component
 
 ## Draft Spec

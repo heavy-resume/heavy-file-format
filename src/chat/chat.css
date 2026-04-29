@@ -139,11 +139,16 @@
 .chat-composer textarea {
   width: 100%;
   min-width: 0;
-  border: 1px solid var(--hvy-border-alt);
+  border: 1px solid var(--hvy-border-input);
   border-radius: 10px;
-  background: color-mix(in srgb, var(--hvy-surface) 92%, transparent);
-  color: var(--hvy-text);
+  background: var(--hvy-code-bg);
+  color: var(--hvy-code-text);
   padding: 0.6rem 0.75rem;
+}
+
+.chat-setting input,
+.chat-setting select {
+  font: 13px/1.35 "JetBrains Mono", "Fira Code", monospace;
 }
 
 .chat-context-card {
@@ -319,7 +324,7 @@
   max-width: 100%;
   resize: vertical;
   min-height: 7.5rem;
-  font: inherit;
+  font: 13px/1.5 "JetBrains Mono", "Fira Code", monospace;
 }
 
 .chat-composer-actions {

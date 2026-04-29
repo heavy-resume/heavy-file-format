@@ -20,6 +20,7 @@ import { getDocumentSectionDefaultCss, mergeDocumentCss } from '../document-sect
 import { sanitizeInlineCss } from '../css-sanitizer';
 import { areTablesEnabled } from '../reference-config';
 import { parseAttachedComponentBlocks } from '../plugins/db-table';
+import { SCRIPTING_PLUGIN_ID } from '../plugins/registry';
 
 interface ReaderRenderState {
   documentMeta: VisualDocument['meta'];
@@ -39,6 +40,7 @@ interface ReaderRenderState {
   componentMetaModal: { sectionKey: string; blockId: string } | null;
   themeModalOpen: boolean;
   theme: ThemeConfig;
+  currentView: 'editor' | 'viewer' | 'ai';
 }
 
 interface ReaderRenderDeps {
@@ -180,6 +182,26 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       return `<div ${blockAttrs}>${renderCodeReader(section, block, helpers)}</div>`;
     }
     if (base === 'plugin') {
+      if (block.schema.plugin === SCRIPTING_PLUGIN_ID) {
+        if (state.currentView === 'viewer') {
+          return `<div ${blockAttrs}>${renderPluginReader(section, block, helpers)}</div>`;
+        }
+        if (state.currentView === 'ai') {
+          if (block.text.trim().length === 0) {
+            return `<div ${blockAttrs}>${renderPluginReader(section, block, helpers)}</div>`;
+          }
+          const codeReader = renderCodeReader(
+            section,
+            { ...block, schema: { ...block.schema, codeLanguage: 'python' } } as VisualBlock,
+            helpers
+          );
+          return `<div ${blockAttrs}>${codeReader}${renderPluginReader(section, block, helpers)}</div>`;
+        }
+        if (block.text.trim().length === 0) {
+          return `<div ${blockAttrs}><div class="plugin-placeholder">Empty script...</div></div>`;
+        }
+        return `<div ${blockAttrs}>${renderCodeReader(section, { ...block, schema: { ...block.schema, codeLanguage: 'python' } } as VisualBlock, helpers)}</div>`;
+      }
       return `<div ${blockAttrs}>${renderPluginReader(section, block, helpers)}</div>`;
     }
     if (base === 'container') {

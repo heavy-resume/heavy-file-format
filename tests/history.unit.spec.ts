@@ -70,6 +70,8 @@ test('undo and redo restore grouped raw editor text snapshots', () => {
     renderApp: () => {},
     refreshReaderPanels: () => {},
     refreshModalPreview: () => {},
+    componentRenderHelpers: null,
+    readerRenderer: null,
   });
   initState(createHistoryTestState());
 

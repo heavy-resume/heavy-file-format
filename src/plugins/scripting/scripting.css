@@ -1,0 +1,119 @@
+.hvy-scripting {
+  display: block;
+  width: 100%;
+  position: relative;
+}
+
+.hvy-scripting-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin-top: 0.45rem;
+}
+
+.hvy-scripting-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.hvy-scripting-title {
+  font: 600 0.78rem/1.2 "JetBrains Mono", "Fira Code", monospace;
+  color: var(--hvy-text-muted, #4b5563);
+  text-transform: lowercase;
+}
+
+.hvy-scripting-textarea {
+  width: 100%;
+  min-height: 12rem;
+  resize: vertical;
+  white-space: pre;
+  tab-size: 4;
+}
+
+.hvy-scripting-status {
+  font-size: 0.8rem;
+  min-height: 1.2em;
+  color: var(--hvy-text-muted, #6b7280);
+  padding: 0.55rem 0.7rem 0.7rem;
+  border-top: 1px solid var(--hvy-border-input, #d1d5db);
+  background: var(--hvy-code-bg, #f6f8fa);
+}
+
+.hvy-scripting-status-ok {
+  color: var(--hvy-success, #047857);
+}
+
+.hvy-scripting-status-error {
+  color: var(--hvy-danger, #b91c1c);
+  white-space: pre-wrap;
+  font-family: var(--hvy-mono, ui-monospace, monospace);
+}
+
+.hvy-scripting-help-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.hvy-scripting-help-modal {
+  background: var(--hvy-surface, #fff);
+  color: var(--hvy-text, #111827);
+  border-radius: 8px;
+  width: min(880px, 92vw);
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
+}
+
+.hvy-scripting-help-modal-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.8rem 1rem;
+  border-bottom: 1px solid var(--hvy-border, #e5e7eb);
+}
+
+.hvy-scripting-help-modal-body {
+  overflow: auto;
+  padding: 1rem 1.25rem;
+}
+
+.hvy-scripting-reader-shell {
+  display: none;
+  margin: 0.5rem 0;
+}
+
+.hvy-scripting-reader-shell.is-visible {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border: 1px solid color-mix(in srgb, var(--hvy-danger) 55%, var(--hvy-border));
+  border-radius: 10px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--hvy-danger) 8%, var(--hvy-code-bg));
+}
+
+.hvy-scripting-reader-summary {
+  padding: 0.75rem 0.9rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--hvy-danger) 45%, var(--hvy-border-input));
+  background: color-mix(in srgb, var(--hvy-danger) 12%, var(--hvy-surface));
+  color: var(--hvy-danger);
+  font-size: 0.9rem;
+}
+
+.hvy-scripting-error-detail {
+  margin: 0;
+  padding: 0.9rem 1rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  font: 13px/1.5 "JetBrains Mono", "Fira Code", monospace;
+  color: var(--hvy-code-text);
+  background: transparent;
+}

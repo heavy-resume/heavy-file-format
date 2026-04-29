@@ -1,0 +1,101 @@
+---
+hvy_version: 0.1
+title: Scripting Plugin Help
+---
+
+<!--hvy: {"id":"overview","expanded":true}-->
+#! Overview
+# Introduction
+Give your HVY document advanced functionality with scripting. Have ... <TODO>
+
+The intended use for most people is to have AI write code for you instead of writing it yourself. Simply ask!
+
+The scripting plugin runs Python code (via Brython) once when the document
+loads. Use it to generate, mutate, or rearrange document content
+programmatically. Scripts cannot reach the network — they only see the
+`doc` API.
+
+<!--hvy: {"id":"doc-api","expanded":false}-->
+#! The `doc` API
+# The `doc` API
+
+<!--hvy:text {}-->
+ Your script runs with one global injected: `doc`. Everything you can do
+ flows through it.
+
+ - `doc.tool(name, args)` — call any AI agent tool by name. Returns the
+   tool's text result. Mutating tools update the document immediately.
+ - `doc.header.get(key)` / `doc.header.set(key, value)` /
+   `doc.header.remove(key)` / `doc.header.keys()` — read and write the
+   document's YAML front matter.
+ - `doc.attachments.list()` — list attachment ids.
+ - `doc.attachments.read(id)` — return the bytes of an attachment, or
+   `None` if not present.
+ - `doc.attachments.write(id, bytes, meta=None)` — create or replace an
+   attachment.
+ - `doc.attachments.remove(id)` — delete an attachment.
+ - `doc.rerender()` — flush any pending re-render now (usually unnecessary;
+   the host re-renders automatically when the script finishes).
+
+<!--hvy: {"id":"tools","expanded":false}-->
+#! Available tools
+
+<!--hvy:text {}-->
+ The scripting `doc.tool(name, args)` surface is the same as the AI
+ agent's. Pass `args` as a Python dict; field names match the AI tool
+ schema.
+
+ Document tools:
+
+ - `request_structure` — get a structural summary.
+ - `grep` — `{ "query": "...", "flags": "i" }`.
+ - `view_component` — `{ "component_ref": "C3" }`.
+ - `get_css` / `get_properties` / `set_properties`.
+ - `patch_component` — `{ "component_ref": "C3", "edits": [...] }`.
+ - `create_component` / `remove_component`.
+ - `create_section` / `remove_section` / `reorder_section`.
+
+ Header tools:
+
+ - `view_header`, `grep_header`, `patch_header`.
+
+ `edit_component` and async tools are not exposed here.
+
+<!--hvy: {"id":"line-budget","expanded":false}-->
+#! Line budget
+
+<!--hvy:text {}-->
+ Every executed statement bumps a counter. By default the budget is
+ 100,000 lines. If your script exceeds it, execution stops with an error.
+ Tight loops are bounded the same way as straight-line code: each pass
+ through a loop body counts.
+
+<!--hvy: {"id":"examples","expanded":false}-->
+#! Examples
+
+<!--hvy:text {}-->
+ Print the document's structural summary by writing it into the header:
+
+ ```python
+ summary = doc.tool("request_structure")
+ doc.header.set("script_summary", summary[:200])
+ ```
+
+ Tag every section that mentions "TODO":
+
+ ```python
+ hits = doc.tool("grep", { "query": "TODO", "flags": "i" })
+ doc.header.set("todo_hits", hits)
+ ```
+
+<!--hvy: {"id":"limits","expanded":false}-->
+#! Limits and security
+
+<!--hvy:text {}-->
+ - No network: `fetch`, `XMLHttpRequest`, etc. are not exposed to scripts
+   in this version.
+ - No DOM: scripts cannot reach the rendered HTML; mutate the document
+   through `doc` instead.
+ - Errors abort the script and surface in the editor's status bar.
+ - Scripts run synchronously on document load. Long scripts will block
+   the first paint until they finish.

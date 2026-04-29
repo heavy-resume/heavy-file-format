@@ -49,6 +49,13 @@ export const THEME_COLOR_NAMES: readonly string[] = [
   '--hvy-success',
   '--hvy-success-bg',
   '--hvy-success-border',
+  '--hvy-code-bg',
+  '--hvy-code-text',
+  '--hvy-code-muted',
+  '--hvy-code-string',
+  '--hvy-code-builtin',
+  '--hvy-code-keyword',
+  '--hvy-code-number',
 ];
 
 const THEME_COLOR_LABELS: Record<string, string> = {
@@ -92,6 +99,13 @@ const THEME_COLOR_LABELS: Record<string, string> = {
   '--hvy-success': 'Success Text',
   '--hvy-success-bg': 'Success Background',
   '--hvy-success-border': 'Success Border',
+  '--hvy-code-bg': 'Code Block Background',
+  '--hvy-code-text': 'Code Block Base Text',
+  '--hvy-code-muted': 'Code Comment and Muted Text',
+  '--hvy-code-string': 'Code String Text',
+  '--hvy-code-builtin': 'Code Built-In Function Text',
+  '--hvy-code-keyword': 'Code Keyword Text',
+  '--hvy-code-number': 'Code Number and Literal Text',
 };
 
 let colorModeMediaQuery: MediaQueryList | null = null;

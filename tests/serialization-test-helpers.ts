@@ -79,6 +79,8 @@ export function registerSerializationTestState(): void {
       renderApp: () => {},
       refreshReaderPanels: () => {},
       refreshModalPreview: () => {},
+      componentRenderHelpers: null,
+      readerRenderer: null,
     });
     initState(
       createTestState({

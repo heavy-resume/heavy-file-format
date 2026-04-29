@@ -11,6 +11,7 @@ import {
   summarizeScriptingError,
   runUserScript,
 } from '../src/plugins/scripting/wrapper';
+import { createScriptingRuntime } from '../src/plugins/scripting/runtime';
 import { SCRIPTING_PLUGIN_VERSION } from '../src/plugins/scripting/version';
 
 test('instrumentPythonSource adds step calls without rewriting compare expressions', () => {
@@ -218,4 +219,23 @@ test('runUserScript refuses to execute scripts that require a newer scripting pl
     linesExecuted: 0,
     toolCalls: 0,
   });
+});
+
+test('createScriptingRuntime exposes a supplied form API', () => {
+  const runtime = createScriptingRuntime({
+    document: { meta: {}, extension: '.hvy', sections: [], attachments: [] },
+    form: {
+      get_value: (name) => (name === 'food' ? 'soup' : null),
+      set_value: () => {},
+      get_values: () => ({ food: 'soup' }),
+      set_options: () => {},
+      get_options: () => [{ label: 'Soup', value: 'soup' }],
+      set_error: () => {},
+      clear_error: () => {},
+    },
+  });
+
+  expect(runtime.doc.form.get_value('food')).toBe('soup');
+  expect(runtime.doc.form.get_values()).toEqual({ food: 'soup' });
+  expect(runtime.doc.form.get_options('food')).toEqual([{ label: 'Soup', value: 'soup' }]);
 });

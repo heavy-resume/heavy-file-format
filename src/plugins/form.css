@@ -1,0 +1,128 @@
+.hvy-form-plugin {
+  display: block;
+  width: 100%;
+}
+
+.hvy-form-editor-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.hvy-form-editor-head,
+.hvy-form-field-editor-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.hvy-form-field-editor,
+.hvy-form-script-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 0.75rem;
+  border: 1px solid var(--hvy-border);
+  border-radius: 6px;
+  background: var(--hvy-surface-alt);
+}
+
+.hvy-form-editor-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: 0.6rem;
+}
+
+.hvy-form-plugin label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.85rem;
+}
+
+.hvy-form-plugin input,
+.hvy-form-plugin select,
+.hvy-form-plugin textarea {
+  width: 100%;
+  font: inherit;
+  padding: 0.38rem 0.45rem;
+  border: 1px solid var(--hvy-border-input);
+  border-radius: 4px;
+  color: var(--hvy-text);
+  background: var(--hvy-surface);
+}
+
+.hvy-form-checkbox-label {
+  justify-content: end;
+}
+
+.hvy-form-checkbox-label input {
+  width: auto;
+}
+
+.hvy-form-options-editor,
+.hvy-form-script-editor textarea {
+  grid-column: 1 / -1;
+}
+
+.hvy-form-reader-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.hvy-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.hvy-form-field-hidden {
+  display: none;
+}
+
+.hvy-form-field-label {
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: var(--hvy-muted);
+}
+
+.hvy-form-radio-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+
+.hvy-form-radio-option {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.hvy-form-radio-option input {
+  width: auto;
+}
+
+.hvy-form-actions {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.hvy-form-status,
+.hvy-form-error,
+.hvy-form-field-error {
+  margin-top: 0.45rem;
+  font-size: 0.85rem;
+}
+
+.hvy-form-status {
+  color: var(--hvy-muted);
+}
+
+.hvy-form-status-error,
+.hvy-form-error,
+.hvy-form-field-error {
+  color: #b42318;
+}

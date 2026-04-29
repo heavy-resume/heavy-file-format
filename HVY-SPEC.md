@@ -857,6 +857,76 @@ Recommended client behavior:
 - Clients MAY store row-attached HVY fragments in companion tables keyed by table name and row identifier.
 - If row-attached HVY is supported, clients MAY expose context-menu actions such as setting or viewing the attached component for a row.
 
+### 7.7 Form plugin contract
+
+The built-in form plugin is `dev.heavy.form`. A form is a plugin component, not
+a native HVY container. HVY stores the plugin block and a plugin-owned YAML text
+body; individual inputs are not separate HVY components.
+
+Declaration example:
+
+```yaml
+plugins:
+  - id: dev.heavy.form
+    source: builtin://form
+```
+
+Block example:
+
+```markdown
+<!--hvy:plugin {"plugin":"dev.heavy.form","pluginConfig":{"version":"0.1"}}-->
+fields:
+  - name: food
+    label: Food
+    type: select
+    options:
+      - label: Apple
+        value: apple
+      - label: Soup
+        value: soup
+    triggers:
+      change: populate_food
+  - name: notes
+    label: Notes
+    type: textarea
+scripts:
+  populate_food: |
+    if doc.form.get_value("food") == "soup":
+        doc.form.set_value("notes", "Bring a spoon.")
+  submit_order: |
+    doc.header.set("last_order", doc.form.get_values())
+initialScript: populate_food
+submitScript: submit_order
+```
+
+Plugin-specific rules:
+- `pluginConfig.version` is optional and defaults to `"0.1"`.
+- The plugin block text MUST be interpreted as YAML owned by the form plugin.
+- Top-level YAML keys are `fields`, `scripts`, `initialScript`, and `submitScript`.
+- `fields` is an ordered list. Each field supports `name`, `label`, `type`,
+  `value`, `placeholder`, `required`, `options`, `triggers`, `className`, and
+  `style`.
+- Supported `type` values are `text`, `textarea`, `number`, `select`,
+  `checkbox`, `radio`, `date`, `email`, `tel`, `url`, `password`, and `hidden`.
+  File inputs are not part of the standard form plugin contract.
+- `options` applies to `select` and `radio`. Each option MAY be a string or an
+  object with `label` and optional `value`; when `value` is omitted, clients MUST
+  use `label` as the value.
+- `scripts` is a map from script name to Python/Brython source. `initialScript`,
+  `submitScript`, and field trigger values reference keys in this map.
+- Field `triggers` MAY define `input`, `change`, and `blur` script references.
+  Clients SHOULD debounce `input` trigger execution.
+- Viewer clients MUST render an HTML `<form>`, prevent native navigation on
+  submit, gather current field values, and run the named submit script when one
+  is defined. No network request is implied by submitting a form.
+- Form scripts run through the installed scripting runtime. During form script
+  execution, `doc.form` exposes `get_value(name)`, `set_value(name, value)`,
+  `get_values()`, `set_options(name, options)`, `get_options(name)`,
+  `set_error(name, message)`, and `clear_error(name)`.
+- Dynamic dropdown/radio options SHOULD be set by scripts using
+  `doc.form.set_options(...)` rather than by schema-level database source
+  declarations.
+
 ## 8. Security & Runtime Constraints
 
 Client assumptions from product requirements:

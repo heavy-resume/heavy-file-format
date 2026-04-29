@@ -7,9 +7,11 @@ export interface DocumentPluginDefinition {
 }
 
 export const DB_TABLE_PLUGIN_ID = 'dev.heavy.db-table';
+export const FORM_PLUGIN_ID = 'dev.heavy.form';
 export const PROGRESS_BAR_PLUGIN_ID = 'dev.heavy.progress-bar';
 export const SCRIPTING_PLUGIN_ID = 'dev.heavy.scripting';
 export const BUILTIN_DB_TABLE_PLUGIN_SOURCE = 'builtin://db-table';
+export const BUILTIN_FORM_PLUGIN_SOURCE = 'builtin://form';
 export const BUILTIN_PROGRESS_BAR_PLUGIN_SOURCE = 'builtin://progress-bar';
 export const BUILTIN_SCRIPTING_PLUGIN_SOURCE = 'builtin://scripting';
 
@@ -69,6 +71,8 @@ export function getAvailableDocumentPlugins(): DocumentPluginDefinition[] {
       source:
         entry.id === DB_TABLE_PLUGIN_ID
           ? BUILTIN_DB_TABLE_PLUGIN_SOURCE
+          : entry.id === FORM_PLUGIN_ID
+            ? BUILTIN_FORM_PLUGIN_SOURCE
           : entry.id === PROGRESS_BAR_PLUGIN_ID
             ? BUILTIN_PROGRESS_BAR_PLUGIN_SOURCE
             : entry.id === SCRIPTING_PLUGIN_ID
@@ -87,6 +91,9 @@ export function getPluginDisplayName(pluginId: string): string {
   }
   if (isDbTablePluginId(pluginId)) {
     return 'DB Table';
+  }
+  if (pluginId === FORM_PLUGIN_ID) {
+    return 'Form';
   }
   return pluginId;
 }

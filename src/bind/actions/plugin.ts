@@ -2,7 +2,7 @@ import { findBlockByIds } from '../../block-ops';
 import { recordHistory } from '../../history';
 import { syncReusableTemplateForBlock } from '../../reusable';
 import { getRenderApp, getRefreshReaderPanels } from '../../state';
-import { isDbTablePluginId, SCRIPTING_PLUGIN_ID } from '../../plugins/registry';
+import { FORM_PLUGIN_ID, isDbTablePluginId, SCRIPTING_PLUGIN_ID } from '../../plugins/registry';
 import { SCRIPTING_PLUGIN_VERSION } from '../../plugins/scripting/version';
 import type { ActionHandler } from './types';
 
@@ -30,6 +30,8 @@ const commitPlugin: ActionHandler = ({ actionButton, sectionKey, blockId }) => {
   block.schema.plugin = nextId;
   block.schema.pluginConfig = isDbTablePluginId(nextId)
     ? { source: 'with-file' }
+    : nextId === FORM_PLUGIN_ID
+      ? { version: '0.1' }
     : nextId === SCRIPTING_PLUGIN_ID
       ? { version: SCRIPTING_PLUGIN_VERSION }
       : {};

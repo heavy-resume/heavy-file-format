@@ -9,6 +9,7 @@ import {
   getHostPlugins,
   getPluginDisplayName,
   DB_TABLE_PLUGIN_ID,
+  FORM_PLUGIN_ID,
   PROGRESS_BAR_PLUGIN_ID,
   SCRIPTING_PLUGIN_ID,
 } from '../src/plugins/registry';
@@ -86,6 +87,25 @@ describe('scripting plugin block metadata', () => {
     expect(reserialized).toContain('"plugin":"dev.heavy.scripting"');
     expect(reserialized).toContain(`"version":"${SCRIPTING_PLUGIN_VERSION}"`);
     expect(reserialized).toContain('print("hello")');
+  });
+});
+
+describe('form plugin block round-trip', () => {
+  test('preserves form plugin config and YAML body across serialize/deserialize', () => {
+    const input = `---\nhvy_version: 1.0\n---\n\n#! Order\n\n<!--hvy:plugin {"plugin":"dev.heavy.form","pluginConfig":{"version":"0.1"}}-->\n fields:\n   - name: food\n     label: Food\n     type: select\n     options:\n       - Apple\n       - label: Soup\n         value: soup\n scripts:\n   submit_form: |\n     doc.header.set("submitted", doc.form.get_values())\n submitScript: submit_form\n`;
+    const doc = deserializeDocument(input, '.hvy');
+    const block = doc.sections[0]?.blocks.find((b) => b.schema.component === 'plugin');
+    expect(block).toBeDefined();
+    expect(block?.schema.plugin).toBe(FORM_PLUGIN_ID);
+    expect(block?.schema.pluginConfig).toMatchObject({ version: '0.1' });
+    expect(block?.text).toContain('fields:');
+    expect(block?.text).toContain('submit_form');
+
+    const reserialized = serializeDocument(doc);
+    expect(reserialized).toContain('"plugin":"dev.heavy.form"');
+    expect(reserialized).toContain('"version":"0.1"');
+    expect(reserialized).toContain('type: select');
+    expect(reserialized).toContain('doc.form.get_values');
   });
 });
 

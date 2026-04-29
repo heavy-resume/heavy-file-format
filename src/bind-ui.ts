@@ -6,7 +6,7 @@ import { findSectionByKey } from './section-ops';
 import { findBlockByIds } from './block-ops';
 import { navigateToSection, closeModal, resetTransientUiState, resetToBlankDocument } from './navigation';
 import { deserializeDocument, deserializeDocumentBytes, serializeDocument, serializeDocumentBytes } from './serialization';
-import { detectExtension, normalizeFilename, downloadBinaryFile } from './utils';
+import { detectExtension, normalizeFilename, normalizeMarkdownImportFilename, downloadBinaryFile } from './utils';
 import { bindModal } from './bind-modal';
 import { bindLinkInlineModal } from './bind-link-modal';
 import { clearChatConversation } from './chat/chat';
@@ -89,8 +89,9 @@ export function bindUi(app: HTMLElement): void {
     }
     const bytes = new Uint8Array(await file.arrayBuffer());
     const text = new TextDecoder().decode(bytes);
-    state.filename = file.name;
-    state.document = deserializeDocumentBytes(bytes, detectExtension(file.name, text));
+    const extension = detectExtension(file.name, text);
+    state.filename = extension === '.md' ? normalizeMarkdownImportFilename(file.name) : file.name;
+    state.document = deserializeDocumentBytes(bytes, extension);
     state.rawEditorText = serializeDocument(state.document);
     state.rawEditorError = null;
     state.rawEditorDiagnostics = [];

@@ -40,6 +40,9 @@ export function detectExtension(filename: string, fallbackContent: string): Visu
   if (lower.endsWith('.md')) {
     return '.md';
   }
+  if (lower.endsWith('.markdown')) {
+    return '.md';
+  }
   if (/template\s*:\s*true/m.test(fallbackContent)) {
     return '.thvy';
   }
@@ -51,6 +54,10 @@ export function normalizeFilename(input: string): string {
     return input;
   }
   return `${input}.hvy`;
+}
+
+export function normalizeMarkdownImportFilename(input: string): string {
+  return input.replace(/\.(md|markdown)$/i, '.hvy') || 'document.hvy';
 }
 
 export function downloadTextFile(filename: string, text: string): void {

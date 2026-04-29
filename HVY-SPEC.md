@@ -25,7 +25,14 @@ Rule: Any valid `.md` file is valid `.hvy`.
 
 ### 3.1 Markdown compatibility
 
-If HVY-specific directives are absent, parse as Markdown only. `_I'm in italics_` is used for italics rather than `*`. Conversion from markdown is HVY is client implementation dependent, but typically sections would be coerced into individual components, possibly using AI to do this best.
+If HVY-specific directives are absent, parse as Markdown only. `_I'm in italics_` is used for italics rather than `*`.
+
+When an authoring client imports a `.md` or `.markdown` file and converts it into an editable `.hvy` document, it SHOULD coerce Markdown into reusable HVY structure rather than a single opaque text blob:
+- ATX headings define section boundaries. A heading with greater depth becomes a child section of the nearest prior heading with lower depth. Markdown before the first heading goes into an "Imported Markdown" section.
+- Consecutive prose, list, blockquote, thematic-break, and raw HTML Markdown blocks become `text` components that preserve the source Markdown.
+- Fenced and indented code blocks become `code` components, preserving code text and language where available.
+- GitHub-Flavored Markdown table blocks become `table` components, using the header row for `tableColumns` and body rows for `tableRows`.
+- Imported Markdown documents SHOULD save as `.hvy` after conversion. The original Markdown source remains valid HVY by compatibility, but the editable imported representation is a richer client-authored HVY document.
 
 ### 3.2 Unusual Markdown
 

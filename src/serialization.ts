@@ -2,6 +2,7 @@ import { stringify as stringifyYaml } from 'yaml';
 import type { BlockSchema, GridItem, TableRow, VisualBlock, VisualSection } from './editor/types';
 import type { HvySection, JsonObject } from './hvy/types';
 import { parseHvy } from './hvy/parser';
+import { convertMarkdownToHvyDocument } from './markdown-import';
 import type { DocumentAttachment, VisualDocument } from './types';
 import { makeId, sanitizeOptionalId } from './utils';
 import { getSectionId } from './section-ops';
@@ -37,6 +38,13 @@ export function deserializeDocumentWithDiagnostics(
   text: string,
   extension: VisualDocument['extension']
 ): DeserializeDocumentResult {
+  if (extension === '.md') {
+    return {
+      document: convertMarkdownToHvyDocument(text),
+      diagnostics: [],
+    };
+  }
+
   const extractedTail = splitSerializedTailText(text);
   const parsed = parseHvy(extractedTail.text, extension);
   const meta = { ...parsed.meta };
@@ -64,6 +72,10 @@ export function deserializeDocumentBytesWithDiagnostics(
   bytes: Uint8Array,
   extension: VisualDocument['extension']
 ): DeserializeDocumentResult {
+  if (extension === '.md') {
+    return deserializeDocumentWithDiagnostics(new TextDecoder().decode(bytes), extension);
+  }
+
   const extractedTail = splitSerializedTailBytes(bytes);
   const result = deserializeDocumentWithDiagnostics(extractedTail.text, extension);
   result.document.attachments = extractedTail.attachments;

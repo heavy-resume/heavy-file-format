@@ -336,7 +336,7 @@ function renderApp(): void {
           <button id="resumeExampleBtn" type="button">Resume Example</button>
           <label class="file-picker">
             Select File
-            <input id="fileInput" type="file" accept=".hvy,.thvy,.md,text/markdown,text/plain" />
+            <input id="fileInput" type="file" accept=".hvy,.thvy,.md,.markdown,text/markdown,text/plain" />
           </label>
           <input id="downloadName" type="text" value="${escapeAttr(state.filename)}" aria-label="Download file name" />
           <button id="downloadBtn" type="button">Download File</button>

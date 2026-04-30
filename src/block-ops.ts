@@ -134,6 +134,7 @@ export function handleBlockFieldInput(target: HTMLElement): boolean {
     let syncMs = 0;
     let refreshMs = 0;
     let stepStartedAt = performance.now();
+    normalizeEditableListDom(target);
     block.text = normalizeMarkdownLists(turndown.turndown(target.innerHTML));
     turndownMs = performance.now() - stepStartedAt;
     syncEditableTaskListMarkup(target, block.text);
@@ -274,6 +275,7 @@ export function handleBlockFieldInput(target: HTMLElement): boolean {
       return true;
     }
     let stepStartedAt = performance.now();
+    normalizeEditableListDom(target);
     item.block.text = normalizeMarkdownLists(turndown.turndown(target.innerHTML));
     turndownMs = performance.now() - stepStartedAt;
     syncEditableTaskListMarkup(target, item.block.text);
@@ -545,6 +547,10 @@ export function applyRichAction(action: string, editable: HTMLElement, value?: s
     document.execCommand('insertUnorderedList');
   } else if (action === 'checklist') {
     insertInlineCheckboxAtSelection(editable);
+  } else if (action === 'quote') {
+    document.execCommand('formatBlock', false, 'blockquote');
+  } else if (action === 'code-block') {
+    insertCodeBlockAtSelection(editable);
   } else if (action === 'link') {
     const url = (value ?? '').trim();
     if (!url) {
@@ -555,6 +561,167 @@ export function applyRichAction(action: string, editable: HTMLElement, value?: s
 
   const inputEvent = new InputEvent('input', { bubbles: true });
   editable.dispatchEvent(inputEvent);
+}
+
+export function handleRichEditorKeydown(event: KeyboardEvent, editable: HTMLElement): boolean {
+  if (event.key === 'Tab' && isSelectionInsideEditableList(editable)) {
+    event.preventDefault();
+    document.execCommand(event.shiftKey ? 'outdent' : 'indent');
+    normalizeEditableListDom(editable);
+    editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    return true;
+  }
+
+  if (event.metaKey || event.ctrlKey || event.altKey) {
+    return false;
+  }
+
+  if (event.key === ' ' && convertMarkdownQuoteShortcut(editable)) {
+    event.preventDefault();
+    editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    return true;
+  }
+
+  if (event.key === 'Enter') {
+    const codeLanguage = getCurrentLineShortcut(editable, /^```([\w-]*)$/);
+    if (codeLanguage !== null) {
+      event.preventDefault();
+      replaceCurrentLineWithCodeBlock(editable, codeLanguage);
+      editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
+      return true;
+    }
+
+    if (convertMarkdownQuoteShortcut(editable)) {
+      event.preventDefault();
+      editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function isSelectionInsideEditableList(editable: HTMLElement): boolean {
+  const selection = window.getSelection();
+  if (!selection?.rangeCount) {
+    return false;
+  }
+  const node = selection.getRangeAt(0).startContainer;
+  const element = node instanceof Element ? node : node.parentElement;
+  return Boolean(element?.closest('li') && editable.contains(element));
+}
+
+function normalizeEditableListDom(editable: HTMLElement): void {
+  editable.querySelectorAll<HTMLElement>('ul, ol').forEach((list) => {
+    Array.from(list.children).forEach((child) => {
+      if (child instanceof HTMLElement && /^(UL|OL)$/.test(child.tagName)) {
+        const previousItem = child.previousElementSibling;
+        if (previousItem instanceof HTMLLIElement) {
+          previousItem.appendChild(child);
+        }
+      }
+    });
+  });
+}
+
+function convertMarkdownQuoteShortcut(editable: HTMLElement): boolean {
+  if (getCurrentLineShortcut(editable, /^>$/) === null) {
+    return false;
+  }
+  replaceCurrentLineText(editable, '');
+  document.execCommand('formatBlock', false, 'blockquote');
+  return true;
+}
+
+function getCurrentLineShortcut(editable: HTMLElement, pattern: RegExp): string | null {
+  const block = getSelectionBlockElement(editable);
+  const text = (block?.textContent ?? '').trim();
+  const match = text.match(pattern);
+  if (!match) {
+    return null;
+  }
+  return match[1] ?? '';
+}
+
+function replaceCurrentLineWithCodeBlock(editable: HTMLElement, language: string): void {
+  const pre = document.createElement('pre');
+  const code = document.createElement('code');
+  const normalizedLanguage = language.trim().toLowerCase();
+  if (normalizedLanguage) {
+    code.className = `language-${normalizedLanguage}`;
+    code.dataset.language = normalizedLanguage;
+  }
+  code.appendChild(document.createTextNode(''));
+  pre.appendChild(code);
+  replaceCurrentLineElement(editable, pre);
+  placeCaretInside(code);
+}
+
+function insertCodeBlockAtSelection(editable: HTMLElement): void {
+  const pre = document.createElement('pre');
+  const code = document.createElement('code');
+  code.appendChild(document.createTextNode(''));
+  pre.appendChild(code);
+  editable.focus();
+  insertNodeAtSelection(pre);
+  placeCaretInside(code);
+}
+
+function replaceCurrentLineText(editable: HTMLElement, text: string): void {
+  const block = getSelectionBlockElement(editable);
+  if (!block) {
+    return;
+  }
+  block.textContent = text;
+}
+
+function replaceCurrentLineElement(editable: HTMLElement, replacement: HTMLElement): void {
+  const block = getSelectionBlockElement(editable);
+  if (block && block !== editable) {
+    block.replaceWith(replacement);
+    return;
+  }
+  insertNodeAtSelection(replacement);
+}
+
+function insertNodeAtSelection(node: Node): void {
+  const selection = window.getSelection();
+  if (!selection?.rangeCount) {
+    return;
+  }
+  const range = selection.getRangeAt(0);
+  range.deleteContents();
+  range.insertNode(node);
+}
+
+function getSelectionBlockElement(editable: HTMLElement): HTMLElement | null {
+  const selection = window.getSelection();
+  if (!selection?.rangeCount) {
+    return null;
+  }
+  let node: Node | null = selection.getRangeAt(0).startContainer;
+  while (node && node !== editable) {
+    if (node instanceof HTMLElement && /^(P|DIV|LI|BLOCKQUOTE|PRE|H[1-6])$/.test(node.tagName)) {
+      return node;
+    }
+    node = node.parentNode;
+  }
+  return editable;
+}
+
+function placeCaretInside(element: HTMLElement): void {
+  const selection = window.getSelection();
+  if (!selection) {
+    return;
+  }
+  const range = document.createRange();
+  if (!element.firstChild) {
+    element.appendChild(document.createTextNode(''));
+  }
+  range.setStart(element.firstChild ?? element, 0);
+  range.collapse(true);
+  selection.removeAllRanges();
+  selection.addRange(range);
 }
 
 function insertInlineCheckboxAtSelection(editable: HTMLElement): void {

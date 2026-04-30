@@ -6,6 +6,7 @@ marked.setOptions({ gfm: true, breaks: false });
 
 export const turndown = new TurndownService({
   headingStyle: 'atx',
+  codeBlockStyle: 'fenced',
   bulletListMarker: '-',
   emDelimiter: '_',
 });
@@ -60,7 +61,7 @@ export function addExternalLinkTargets(html: string): string {
 }
 
 export function escapeRawHtml(markdown: string): string {
-  return markdown.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return markdown.replace(/</g, '&lt;');
 }
 
 export function normalizeMarkdownLists(markdown: string): string {

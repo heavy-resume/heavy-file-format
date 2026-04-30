@@ -16,7 +16,7 @@ import { renderXrefCardEditor } from './components/xref-card/xref-card';
 import { renderTagEditor } from './tag-editor';
 import { getTemplateFields, renderTemplateGhosts } from './template';
 import type { Align, BlockSchema, VisualBlock, VisualSection } from './types';
-import { normalizeMarkdownIndentation } from '../markdown';
+import { normalizeMarkdownIndentation, normalizeMarkdownLists } from '../markdown';
 import bash from 'highlight.js/lib/languages/bash';
 import css from 'highlight.js/lib/languages/css';
 import javascript from 'highlight.js/lib/languages/javascript';
@@ -457,6 +457,8 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           <button type="button" data-rich-action="heading-4"${fieldAttr}${gridAttr}${rowAttr} data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(blockId)}" title="Heading 4">H4</button>
           <button type="button" data-rich-action="bold"${fieldAttr}${gridAttr}${rowAttr} data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(blockId)}" title="Bold (Ctrl/Cmd+B)"><strong>B</strong></button>
           <button type="button" data-rich-action="italic"${fieldAttr}${gridAttr}${rowAttr} data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(blockId)}" title="Italic (Ctrl/Cmd+I)">Italic</button>
+          <button type="button" data-rich-action="quote"${fieldAttr}${gridAttr}${rowAttr} data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(blockId)}" title="Quote">Quote</button>
+          <button type="button" data-rich-action="code-block"${fieldAttr}${gridAttr}${rowAttr} data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(blockId)}" title="Code Block">Code</button>
           <button type="button" data-rich-action="list"${fieldAttr}${gridAttr}${rowAttr} data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(blockId)}" title="Bullet List">List</button>
           <button type="button" data-rich-action="checklist"${fieldAttr}${gridAttr}${rowAttr} data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(blockId)}" title="Checkbox">Checkbox</button>
           <button type="button" data-rich-action="link"${fieldAttr}${gridAttr}${rowAttr} data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(blockId)}" title="Link (Ctrl/Cmd+K)">Link</button>
@@ -729,7 +731,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         <pre><code class="hljs language-${deps.escapeAttr(language)}">${highlighted}</code></pre>
       </div>`;
     }
-    return unwrapSingleParagraph(addExternalLinkTargets(DOMPurify.sanitize(marked.parse(normalized) as string)));
+    return unwrapSingleParagraph(decorateMarkdownCodeBlocks(addExternalLinkTargets(DOMPurify.sanitize(marked.parse(normalized) as string))));
   }
 
   return {
@@ -745,18 +747,8 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
   };
 }
 
-function normalizeMarkdownLists(markdown: string): string {
-  return markdown.replace(/(^|\n)(- .+(?:\n- .+)*)/g, (_match, prefix, list) => {
-    const normalized = list
-      .split('\n')
-      .map((line: string) => line.trim())
-      .join('\n');
-    return `${prefix}${normalized}`;
-  });
-}
-
 function escapeRawHtml(markdown: string): string {
-  return markdown.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return markdown.replace(/</g, '&lt;');
 }
 
 function highlightCode(code: string, language: string, escapeHtml: (value: string) => string): string {
@@ -772,6 +764,31 @@ function highlightCode(code: string, language: string, escapeHtml: (value: strin
   } catch {
     return escapeHtml(code);
   }
+}
+
+function decorateMarkdownCodeBlocks(html: string): string {
+  const template = document.createElement('template');
+  template.innerHTML = html;
+  template.content.querySelectorAll<HTMLElement>('pre > code').forEach((code) => {
+    const pre = code.parentElement;
+    if (!pre || pre.parentElement?.classList.contains('reader-code-block')) {
+      return;
+    }
+    const languageClass = Array.from(code.classList).find((className) => className.startsWith('language-'));
+    const language = languageClass ? languageClass.slice('language-'.length) : code.dataset.language || 'text';
+    const wrapper = document.createElement('div');
+    wrapper.className = 'reader-code-block';
+    const head = document.createElement('div');
+    head.className = 'reader-code-head';
+    const label = document.createElement('span');
+    label.className = 'reader-code-language';
+    label.textContent = language || 'text';
+    head.appendChild(label);
+    pre.replaceWith(wrapper);
+    wrapper.appendChild(head);
+    wrapper.appendChild(pre);
+  });
+  return template.innerHTML;
 }
 
 function unwrapSingleParagraph(html: string): string {

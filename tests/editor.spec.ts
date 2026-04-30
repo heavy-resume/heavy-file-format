@@ -89,7 +89,9 @@ test('checkbox action inserts a checkbox at the current line and backspace remov
 
   await editor.evaluate((node) => {
     node.focus();
-    const textNode = node.querySelector('p')?.firstChild;
+    const textNode = Array.from(node.querySelector('p')?.childNodes ?? []).find(
+      (child) => child.nodeType === Node.TEXT_NODE && (child.textContent ?? '').includes('Draft task')
+    );
     const selection = window.getSelection();
     const range = document.createRange();
     range.setStart(textNode!, 0);
@@ -127,6 +129,119 @@ test('list action still creates a normal list without checkbox coercion', async 
   await expect(editor.locator('ul')).toHaveCount(1);
   await expect(editor.locator('li')).toHaveCount(1);
   await expect(editor.locator('input[type="checkbox"]')).toHaveCount(0);
+});
+
+test('tab indents list items inside the rich editor', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('.rich-editor').first();
+
+  await editor.evaluate((node) => {
+    node.innerHTML = '<ul><li>Parent</li><li>Child</li></ul>';
+    const textNode = node.querySelectorAll('li')[1]?.firstChild;
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.setStart(textNode!, 0);
+    range.collapse(true);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+  });
+
+  await editor.focus();
+  await page.keyboard.press('Tab');
+
+  await expect(editor.locator('ul ul li')).toContainText('Child');
+
+  await page.getByRole('button', { name: 'Done' }).first().click();
+  await expect(page.locator('.editor-block-passive').first().locator('ul ul li')).toContainText('Child');
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  await expect(page.locator('.rich-editor').first().locator('ul ul li')).toContainText('Child');
+});
+
+test('markdown shortcuts create quote and code blocks in text editor', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('.rich-editor').first();
+
+  await editor.evaluate((node) => {
+    node.innerHTML = '<p></p>';
+    const paragraph = node.querySelector('p');
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(paragraph!);
+    range.collapse(true);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+  });
+  await editor.focus();
+  await page.keyboard.type('>');
+  await page.keyboard.press('Space');
+
+  await expect(editor.locator('blockquote')).toHaveCount(1);
+  await expect(editor.locator('blockquote')).toHaveText('');
+
+  await editor.evaluate((node) => {
+    node.innerHTML = '<p>```json</p>';
+    const textNode = node.querySelector('p')?.firstChild;
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.setStart(textNode!, textNode!.textContent!.length);
+    range.collapse(true);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+  });
+  await editor.focus();
+  await page.keyboard.press('Enter');
+
+  await expect(editor.locator('pre code.language-json')).toHaveCount(1);
+});
+
+test('toolbar exposes quote and code block actions', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('.rich-editor').first();
+
+  await editor.evaluate((node) => {
+    node.innerHTML = '<p>Quoted</p>';
+    const textNode = node.querySelector('p')?.firstChild;
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(textNode!);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+  });
+  await page.getByRole('button', { name: 'Quote' }).first().click();
+  await expect(editor.locator('blockquote')).toContainText('Quoted');
+
+  await editor.evaluate((node) => {
+    node.innerHTML = '<p></p>';
+    const paragraph = node.querySelector('p');
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(paragraph!);
+    range.collapse(true);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+  });
+  await page.getByRole('button', { name: 'Code' }).first().click();
+  await expect(editor.locator('pre code')).toHaveCount(1);
+});
+
+test('code is not offered as a new component option', async ({ page }) => {
+  await page.goto('/');
+
+  const values = await page
+    .locator('[data-field="new-component-type"]')
+    .first()
+    .locator('option')
+    .evaluateAll((options) => options.map((option) => (option as HTMLOptionElement).value));
+
+  expect(values).not.toContain('code');
+  expect(values).toContain('plugin');
 });
 
 test('markdown editor auto-upgrades raw task markers', async ({ page }) => {

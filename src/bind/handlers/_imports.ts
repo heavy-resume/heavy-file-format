@@ -3,7 +3,7 @@ export { commitTagEditorDraft, handleRemoveTag, handleTagEditorInput, handleTagE
 export { getThemeConfig, applyTheme, writeThemeConfig, colorValueToPickerHex } from '../../theme';
 export { findSectionByKey, getSectionId, isDefaultUntitledSectionTitle, moveSectionRelative, moveSectionByOffset, removeSectionByKey, findBlockContainerById, findBlockContainerInList, makeBlockSubsection, removeSubsection } from '../../section-ops';
 export { getComponentDefs, getSectionDefs, getReusableNameFromSectionKey, isBuiltinComponent } from '../../component-defs';
-export { findBlockByIds, resolveBlockContext, handleBlockFieldInput, commitInlineTableEdit, setActiveEditorBlock, clearActiveEditorBlock, deactivateEditorBlock, applyRichAction, moveBlockByOffset, getTagState, setTagState, getTagRenderOptions, removeBlockFromList, findBlockInList } from '../../block-ops';
+export { findBlockByIds, resolveBlockContext, handleBlockFieldInput, commitInlineTableEdit, setActiveEditorBlock, clearActiveEditorBlock, deactivateEditorBlock, applyRichAction, handleRichEditorKeydown, moveBlockByOffset, getTagState, setTagState, getTagRenderOptions, removeBlockFromList, findBlockInList } from '../../block-ops';
 export { createEmptyBlock, createEmptySection, createDefaultTableRow, instantiateReusableSection, ensureContainerBlocks, ensureComponentListBlocks, ensureExpandableBlocks, ensureGridItems, coerceAlign, getReusableTemplateByName } from '../../document-factory';
 export { recordHistory, undoState, redoState } from '../../history';
 export { setSidebarOpen, setEditorSidebarOpen, closeModal, closeModalIfTarget, navigateToSection, resetTransientUiState } from '../../navigation';

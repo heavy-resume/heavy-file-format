@@ -1,4 +1,4 @@
-import { state, getRenderApp, handleTagEditorKeydown, applyRichAction, openLinkInlineModal, closeAiEditPopover, submitAiEditRequest, handleInlineCheckboxBackspace, tagStateHelpers } from './_imports';
+import { state, getRenderApp, handleTagEditorKeydown, applyRichAction, handleRichEditorKeydown, openLinkInlineModal, closeAiEditPopover, submitAiEditRequest, handleInlineCheckboxBackspace, tagStateHelpers } from './_imports';
 
 export function bindKeydown(app: HTMLElement): void {
   app.addEventListener('keydown', (event) => {
@@ -36,17 +36,26 @@ export function bindKeydown(app: HTMLElement): void {
       return;
     }
 
-    if (
-      target.dataset.field !== 'block-rich' &&
-      target.dataset.field !== 'block-grid-rich' &&
-      target.dataset.field !== 'table-details-rich'
-    ) {
+    const richTarget =
+      target.dataset.field === 'block-rich' ||
+      target.dataset.field === 'block-grid-rich' ||
+      target.dataset.field === 'table-details-rich'
+        ? target
+        : target.closest<HTMLElement>(
+            '[data-field="block-rich"], [data-field="block-grid-rich"], [data-field="table-details-rich"]'
+          );
+
+    if (!richTarget) {
       return;
     }
 
-    if (event.key === 'Backspace' && handleInlineCheckboxBackspace(target)) {
+    if (event.key === 'Backspace' && handleInlineCheckboxBackspace(richTarget)) {
       event.preventDefault();
-      target.dispatchEvent(new InputEvent('input', { bubbles: true }));
+      richTarget.dispatchEvent(new InputEvent('input', { bubbles: true }));
+      return;
+    }
+
+    if (handleRichEditorKeydown(event, richTarget)) {
       return;
     }
 
@@ -58,19 +67,19 @@ export function bindKeydown(app: HTMLElement): void {
     const key = event.key.toLowerCase();
     if (key === 'b') {
       event.preventDefault();
-      applyRichAction('bold', target);
+      applyRichAction('bold', richTarget);
       return;
     }
 
     if (key === 'i') {
       event.preventDefault();
-      applyRichAction('italic', target);
+      applyRichAction('italic', richTarget);
       return;
     }
 
     if (key === 'k') {
       event.preventDefault();
-      openLinkInlineModal(app, target);
+      openLinkInlineModal(app, richTarget);
     }
   });
 }

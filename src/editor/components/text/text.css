@@ -81,6 +81,28 @@
   margin-bottom: 0;
 }
 
+.rich-editor blockquote {
+  margin: 0 0 0.45rem;
+  padding: 0.2rem 0 0.2rem 0.75rem;
+  border-left: 3px solid var(--hvy-border-alt);
+  color: var(--hvy-text-alt);
+}
+
+.rich-editor pre {
+  margin: 0 0 0.45rem;
+  padding: 0.75rem;
+  overflow: auto;
+  background: var(--hvy-code-bg);
+  color: var(--hvy-code-text);
+  border: 1px solid var(--hvy-border-input);
+  border-radius: 7px;
+}
+
+.rich-editor pre code {
+  font: 13px/1.5 "JetBrains Mono", "Fira Code", monospace;
+  white-space: pre-wrap;
+}
+
 .rich-editor ul.contains-task-list,
 .rich-editor ol.contains-task-list {
   list-style: none;

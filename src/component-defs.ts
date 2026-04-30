@@ -27,7 +27,7 @@ export function getReusableNameFromSectionKey(sectionKey: string): string | null
 }
 
 export function getComponentOptions(): string[] {
-  const builtins = ['text', 'quote', 'code', 'image', 'expandable', 'container', 'component-list', 'grid', 'plugin', 'xref-card'];
+  const builtins = ['text', 'quote', 'image', 'expandable', 'container', 'component-list', 'grid', 'plugin', 'xref-card'];
   if (areTablesEnabled()) {
     builtins.splice(5, 0, 'table');
   }

@@ -123,6 +123,8 @@
   width: 1.5rem;
   height: 1.5rem;
   display: block;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .toggle-expand-button:hover {

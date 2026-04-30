@@ -344,18 +344,16 @@ test('toolbar exposes quote and code block actions', async ({ page }) => {
   await expect(editor.locator('pre code')).toHaveCount(1);
 });
 
-test('rich text formats are not offered as new component options', async ({ page }) => {
+test('section add component affordance is a compact single row', async ({ page }) => {
   await page.goto('/');
 
-  const values = await page
-    .locator('[data-field="new-component-type"]')
-    .first()
-    .locator('option')
-    .evaluateAll((options) => options.map((option) => (option as HTMLOptionElement).value));
+  const addComponent = page.locator('[data-action="add-block"]').first();
+  const box = await addComponent.boundingBox();
 
-  expect(values).not.toContain('code');
-  expect(values).not.toContain('quote');
-  expect(values).toContain('plugin');
+  await expect(addComponent).toContainText('+');
+  await expect(addComponent).toContainText('Add Component');
+  await expect(addComponent.locator('select')).toHaveCount(0);
+  expect(box?.height ?? 0).toBeLessThanOrEqual(42);
 });
 
 test('markdown editor auto-upgrades raw task markers', async ({ page }) => {

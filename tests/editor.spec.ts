@@ -197,6 +197,119 @@ test('markdown shortcuts create quote and code blocks in text editor', async ({ 
   await page.keyboard.press('Enter');
 
   await expect(editor.locator('pre code.language-json')).toHaveCount(1);
+  await expect(editor.locator('pre')).toHaveAttribute('data-code-language', 'json');
+});
+
+test('empty code blocks can be removed with backspace and delete', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('.rich-editor').first();
+
+  await editor.evaluate((node) => {
+    node.focus();
+    node.innerHTML = '<pre data-code-language="json"><code class="language-json"></code></pre>';
+    const code = node.querySelector('code');
+    const textNode = document.createTextNode('');
+    code!.appendChild(textNode);
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.setStart(textNode, 0);
+    range.collapse(true);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+  });
+  await editor.focus();
+  await page.keyboard.press('Backspace');
+
+  await expect(editor.locator('pre')).toHaveCount(0);
+
+  await editor.evaluate((node) => {
+    node.innerHTML = '<pre data-code-language="json"><code class="language-json"></code></pre>';
+    const code = node.querySelector('code');
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(code!);
+    range.collapse(true);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+  });
+  await editor.focus();
+  await page.keyboard.press('Delete');
+
+  await expect(editor.locator('pre')).toHaveCount(0);
+});
+
+test('backspace inside a non-empty code block edits text without removing the block', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('.rich-editor').first();
+
+  await editor.evaluate((node) => {
+    node.innerHTML = '<pre data-code-language="python"><code class="language-python" contenteditable="true">def python</code></pre>';
+    const textNode = node.querySelector('code')?.firstChild;
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.setStart(textNode!, textNode!.textContent!.length);
+    range.collapse(true);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+  });
+  await editor.focus();
+  await page.keyboard.press('Backspace');
+
+  await expect(editor.locator('pre')).toHaveCount(1);
+  await expect(editor.locator('code')).toContainText('def pytho');
+});
+
+test('backspace after typing in a new code block edits text without removing the block', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('.rich-editor').first();
+
+  await editor.evaluate((node) => {
+    node.innerHTML = '<p></p>';
+    const paragraph = node.querySelector('p');
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(paragraph!);
+    range.collapse(true);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+  });
+  await editor.focus();
+  await page.keyboard.type('```python');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('def python');
+  await page.keyboard.press('Backspace');
+
+  await expect(editor.locator('pre')).toHaveCount(1);
+  await expect(editor.locator('code')).toContainText('def pytho');
+});
+
+test('triple ticks typed inside a code block remain literal text', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('.rich-editor').first();
+
+  await editor.evaluate((node) => {
+    node.innerHTML = '<pre data-code-language="json"><code class="language-json" contenteditable="true">```</code></pre>';
+    const textNode = node.querySelector('code')?.firstChild;
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.setStart(textNode!, textNode!.textContent!.length);
+    range.collapse(false);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    node.focus();
+  });
+  await page.keyboard.press('Enter');
+
+  await expect(editor.locator('pre')).toHaveCount(1);
+  await expect(editor.locator('code').first()).toContainText('```');
 });
 
 test('toolbar exposes quote and code block actions', async ({ page }) => {

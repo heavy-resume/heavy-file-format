@@ -572,7 +572,17 @@ export function handleRichEditorKeydown(event: KeyboardEvent, editable: HTMLElem
     return true;
   }
 
+  if ((event.key === 'Backspace' || event.key === 'Delete') && removeEmptyCodeBlockAtSelection(editable)) {
+    event.preventDefault();
+    editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    return true;
+  }
+
   if (event.metaKey || event.ctrlKey || event.altKey) {
+    return false;
+  }
+
+  if (isSelectionInsideCodeBlock(editable)) {
     return false;
   }
 
@@ -647,10 +657,13 @@ function replaceCurrentLineWithCodeBlock(editable: HTMLElement, language: string
   const pre = document.createElement('pre');
   const code = document.createElement('code');
   const normalizedLanguage = language.trim().toLowerCase();
+  pre.dataset.codeLanguage = normalizedLanguage || 'text';
+  pre.setAttribute('contenteditable', 'false');
   if (normalizedLanguage) {
     code.className = `language-${normalizedLanguage}`;
     code.dataset.language = normalizedLanguage;
   }
+  code.setAttribute('contenteditable', 'true');
   code.appendChild(document.createTextNode(''));
   pre.appendChild(code);
   replaceCurrentLineElement(editable, pre);
@@ -660,11 +673,64 @@ function replaceCurrentLineWithCodeBlock(editable: HTMLElement, language: string
 function insertCodeBlockAtSelection(editable: HTMLElement): void {
   const pre = document.createElement('pre');
   const code = document.createElement('code');
+  pre.dataset.codeLanguage = 'text';
+  pre.setAttribute('contenteditable', 'false');
+  code.setAttribute('contenteditable', 'true');
   code.appendChild(document.createTextNode(''));
   pre.appendChild(code);
   editable.focus();
   insertNodeAtSelection(pre);
   placeCaretInside(code);
+}
+
+function removeEmptyCodeBlockAtSelection(editable: HTMLElement): boolean {
+  const pre = getSelectionCodeBlock(editable);
+  if (!pre) {
+    return false;
+  }
+  const code = pre.querySelector('code');
+  if ((code?.textContent ?? pre.textContent ?? '').trim().length > 0) {
+    return false;
+  }
+  if (!code || !isCollapsedSelectionAtStartOf(code)) {
+    return false;
+  }
+
+  const paragraph = document.createElement('p');
+  paragraph.appendChild(document.createElement('br'));
+  pre.replaceWith(paragraph);
+  placeCaretAtStart(paragraph);
+  return true;
+}
+
+function isCollapsedSelectionAtStartOf(container: HTMLElement): boolean {
+  const selection = window.getSelection();
+  if (!selection?.rangeCount || !selection.isCollapsed) {
+    return false;
+  }
+  const range = selection.getRangeAt(0);
+  if (!container.contains(range.startContainer) && range.startContainer !== container) {
+    return false;
+  }
+  const prefixRange = document.createRange();
+  prefixRange.selectNodeContents(container);
+  prefixRange.setEnd(range.startContainer, range.startOffset);
+  return prefixRange.toString().length === 0;
+}
+
+function isSelectionInsideCodeBlock(editable: HTMLElement): boolean {
+  return getSelectionCodeBlock(editable) !== null;
+}
+
+function getSelectionCodeBlock(editable: HTMLElement): HTMLPreElement | null {
+  const selection = window.getSelection();
+  if (!selection?.rangeCount) {
+    return null;
+  }
+  const node = selection.getRangeAt(0).startContainer;
+  const element = node instanceof Element ? node : node.parentElement;
+  const pre = element?.closest('pre');
+  return pre instanceof HTMLPreElement && editable.contains(pre) ? pre : null;
 }
 
 function replaceCurrentLineText(editable: HTMLElement, text: string): void {
@@ -719,6 +785,18 @@ function placeCaretInside(element: HTMLElement): void {
     element.appendChild(document.createTextNode(''));
   }
   range.setStart(element.firstChild ?? element, 0);
+  range.collapse(true);
+  selection.removeAllRanges();
+  selection.addRange(range);
+}
+
+function placeCaretAtStart(element: HTMLElement): void {
+  const selection = window.getSelection();
+  if (!selection) {
+    return;
+  }
+  const range = document.createRange();
+  range.selectNodeContents(element);
   range.collapse(true);
   selection.removeAllRanges();
   selection.addRange(range);

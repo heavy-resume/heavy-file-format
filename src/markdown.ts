@@ -24,6 +24,13 @@ export function markdownToEditorHtml(markdown: string): string {
   const html = addExternalLinkTargets(DOMPurify.sanitize(marked.parse(escapeRawHtml(normalized)) as string));
   const template = document.createElement('template');
   template.innerHTML = html;
+  template.content.querySelectorAll<HTMLElement>('pre > code').forEach((code) => {
+    const languageClass = Array.from(code.classList).find((className) => className.startsWith('language-'));
+    const language = languageClass ? languageClass.slice('language-'.length) : code.dataset.language || 'text';
+    code.parentElement?.setAttribute('data-code-language', language || 'text');
+    code.parentElement?.setAttribute('contenteditable', 'false');
+    code.setAttribute('contenteditable', 'true');
+  });
   renderInlineCheckboxes(template.content);
   template.content.querySelectorAll<HTMLInputElement>('input[type="checkbox"]').forEach((checkbox) => {
     checkbox.removeAttribute('disabled');

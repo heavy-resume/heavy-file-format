@@ -89,8 +89,9 @@
 }
 
 .rich-editor pre {
+  position: relative;
   margin: 0 0 0.45rem;
-  padding: 0.75rem;
+  padding: 1.55rem 0.75rem 0.75rem;
   overflow: auto;
   background: var(--hvy-code-bg);
   color: var(--hvy-code-text);
@@ -98,9 +99,31 @@
   border-radius: 7px;
 }
 
+.rich-editor pre::before {
+  content: attr(data-code-language);
+  position: absolute;
+  top: 0.38rem;
+  left: 0.75rem;
+  color: var(--hvy-text-muted);
+  font: 600 0.72rem/1.2 "JetBrains Mono", "Fira Code", monospace;
+  text-transform: lowercase;
+}
+
 .rich-editor pre code {
+  display: block;
+  min-height: 1.5em;
+  padding: 0;
+  border: 0;
+  outline: none;
+  box-shadow: none;
+  background: transparent;
+  color: inherit;
   font: 13px/1.5 "JetBrains Mono", "Fira Code", monospace;
   white-space: pre-wrap;
+}
+
+.rich-editor pre code:focus {
+  outline: none;
 }
 
 .rich-editor ul.contains-task-list,

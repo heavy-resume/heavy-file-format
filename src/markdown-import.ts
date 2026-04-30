@@ -62,12 +62,6 @@ export function convertMarkdownToHvyDocument(sourceText: string): VisualDocument
       continue;
     }
 
-    if (isCodeToken(token)) {
-      flushText();
-      currentSection?.blocks.push(createCodeBlock(token));
-      continue;
-    }
-
     textBuffer.push(token.raw);
   }
 
@@ -94,10 +88,6 @@ function isHeadingToken(token: Token): token is Tokens.Heading {
 
 function isTableToken(token: Token): token is Tokens.Table {
   return token.type === 'table' && Array.isArray((token as Tokens.Table).header);
-}
-
-function isCodeToken(token: Token): token is Tokens.Code {
-  return token.type === 'code' && typeof (token as Tokens.Code).text === 'string';
 }
 
 function appendHeadingSection(
@@ -146,20 +136,6 @@ function createTextBlock(text: string): VisualBlock {
     id: makeId('block'),
     text,
     schema: defaultBlockSchema('text'),
-    schemaMode: false,
-  };
-}
-
-function createCodeBlock(token: Tokens.Code): VisualBlock {
-  const schema = defaultBlockSchema('code');
-  const language = (token.lang ?? '').trim();
-  if (language) {
-    schema.codeLanguage = language;
-  }
-  return {
-    id: makeId('block'),
-    text: token.text,
-    schema,
     schemaMode: false,
   };
 }

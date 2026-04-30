@@ -38,7 +38,7 @@ Intro text.
   expect(document.sections[0]?.children[0]?.blocks[0]?.text).toBe('- Ship import\n- Preserve tables');
 });
 
-test('converts markdown tables and fenced code into dedicated HVY components', () => {
+test('converts markdown tables to HVY tables and preserves fenced code as text markdown', () => {
   const document = convertMarkdownToHvyDocument(`# Data
 
 | Name | Count |
@@ -56,9 +56,8 @@ SELECT * FROM items;
   expect(blocks[0]?.schema.component).toBe('table');
   expect(blocks[0]?.schema.tableColumns).toBe('Name, Count');
   expect(blocks[0]?.schema.tableRows).toEqual([{ cells: ['Alpha', '2'] }, { cells: ['Beta', '5'] }]);
-  expect(blocks[1]?.schema.component).toBe('code');
-  expect(blocks[1]?.schema.codeLanguage).toBe('sql');
-  expect(blocks[1]?.text).toBe('SELECT * FROM items;');
+  expect(blocks[1]?.schema.component).toBe('text');
+  expect(blocks[1]?.text).toBe('```sql\nSELECT * FROM items;\n```');
 });
 
 test('deserializes plain markdown as editable HVY instead of an empty document', () => {

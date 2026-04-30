@@ -344,7 +344,7 @@ test('toolbar exposes quote and code block actions', async ({ page }) => {
   await expect(editor.locator('pre code')).toHaveCount(1);
 });
 
-test('code is not offered as a new component option', async ({ page }) => {
+test('rich text formats are not offered as new component options', async ({ page }) => {
   await page.goto('/');
 
   const values = await page
@@ -354,6 +354,7 @@ test('code is not offered as a new component option', async ({ page }) => {
     .evaluateAll((options) => options.map((option) => (option as HTMLOptionElement).value));
 
   expect(values).not.toContain('code');
+  expect(values).not.toContain('quote');
   expect(values).toContain('plugin');
 });
 

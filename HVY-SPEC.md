@@ -29,8 +29,7 @@ If HVY-specific directives are absent, parse as Markdown only. `_I'm in italics_
 
 When an authoring client imports a `.md` or `.markdown` file and converts it into an editable `.hvy` document, it SHOULD coerce Markdown into reusable HVY structure rather than a single opaque text blob:
 - ATX headings define section boundaries. A heading with greater depth becomes a child section of the nearest prior heading with lower depth. Markdown before the first heading goes into an "Imported Markdown" section.
-- Consecutive prose, list, blockquote, thematic-break, and raw HTML Markdown blocks become `text` components that preserve the source Markdown.
-- Fenced and indented code blocks become `code` components, preserving code text and language where available.
+- Consecutive prose, list, blockquote, fenced or indented code, thematic-break, and raw HTML Markdown blocks become `text` components that preserve the source Markdown.
 - GitHub-Flavored Markdown table blocks become `table` components, using the header row for `tableColumns` and body rows for `tableRows`.
 - Imported Markdown documents SHOULD save as `.hvy` after conversion. The original Markdown source remains valid HVY by compatibility, but the editable imported representation is a richer client-authored HVY document.
 
@@ -227,13 +226,13 @@ Section metadata also includes optional presentation keys such as:
 Authoring tools emit block-scoped metadata comments directly in section content:
 
 ```markdown
-<!--hvy:quote {"css":"margin: 0.5rem 0;"}-->
-Design the format like a document, not a form.
+<!--hvy:text {"css":"margin: 0.5rem 0;"}-->
+> Design the format like a document, not a form.
 ```
 
 The directive name after `hvy:` can be a component name. In that form, `component` is implied by the directive name. For compatibility, tools also support the legacy `hvy:block` directive with an explicit `component` field.
 
-Block content indentation is structural and MUST NOT be interpreted as Markdown code. Renderers MUST only render code from explicit `code` components or fenced Markdown code blocks using triple backticks (or standard Markdown fences).
+Block content indentation is structural and MUST NOT be interpreted as Markdown code. Renderers MUST render code from fenced Markdown code blocks using triple backticks (or standard Markdown fences) inside text content.
 
 Expandable blocks can be emitted with specialized directives so their stub and expanded content remain normal Markdown blocks:
 
@@ -322,7 +321,6 @@ Rules:
 ### 5.8 Recursive block shape
 
 Block metadata optionally includes component-specific fields. Common examples include:
-- `codeLanguage`
 - `containerTitle`
 - `containerBlocks`
 - `componentListComponent`

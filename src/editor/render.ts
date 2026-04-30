@@ -218,8 +218,13 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         ? ''
         : `<article class="ghost-section-card add-ghost compact-add-component-ghost" data-action="add-block" data-section-key="${deps.escapeAttr(section.key)}">
                   <div class="ghost-plus-big"><span>+</span></div>
-                  <div class="ghost-label">Add Component</div>
-                </article>`
+                  <label class="ghost-component-picker">
+                  <select aria-label="Section component type" data-field="new-component-type" data-section-key="${deps.escapeAttr(section.key)}">
+                    <option value=""${!(state.addComponentBySection[section.key] ?? '').trim() ? ' selected' : ''}>Select component</option>
+                    ${deps.renderComponentOptions(state.addComponentBySection[section.key] ?? '')}
+                  </select>
+                </label>
+              </article>`
       }
         </div>
       </article>

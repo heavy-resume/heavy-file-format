@@ -39,6 +39,20 @@ test('resume template shows friendly empty component-list add prompts before act
   await expect(page.locator('.editor-block-passive .ghost-label', { hasText: 'Add Tool / Tech' }).first()).toBeVisible();
 });
 
+test('component-list add prompt reveals the active edit path with staggered animation', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Resume Template' }).click();
+  await page.locator('.editor-tree .editor-block-passive .ghost-label', { hasText: 'Add Skill' }).first().click();
+
+  const activatingBlocks = page.locator('.editor-block.is-activating-path');
+  await expect(activatingBlocks).toHaveCount(3);
+  await expect(activatingBlocks.nth(0)).toHaveAttribute('style', /--editor-activation-delay: 0ms;/);
+  await expect(activatingBlocks.nth(1)).toHaveAttribute('style', /--editor-activation-delay: 150ms;/);
+  await expect(activatingBlocks.nth(2)).toHaveAttribute('style', /--editor-activation-delay: 300ms;/);
+  await expect(page.locator('.editor-block[data-active-editor-block="true"] [contenteditable="true"]').first()).toBeVisible();
+});
+
 test('checkbox action inserts a single inline checkbox without coercing content into a full checklist', async ({ page }) => {
   await page.goto('/');
 

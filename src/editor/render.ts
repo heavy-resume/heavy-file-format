@@ -72,6 +72,7 @@ interface EditorRenderState {
   showAdvancedEditor: boolean;
   addComponentBySection: Record<string, string>;
   activeEditorBlock: { sectionKey: string; blockId: string } | null;
+  pendingEditorActivation: { sectionKey: string; blockId: string } | null;
   expandableEditorPanels: Record<string, { stubOpen: boolean; expandedOpen: boolean }>;
 }
 
@@ -277,11 +278,16 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     }
 
     const contentEditor = renderBlockContentEditor(sectionKey, block);
+    const activationPath = getActivationPathIds(sectionKey, rootSections ?? []);
+    const activationPathIndex = activationPath.indexOf(block.id);
+    const isActivatingPath = state.pendingEditorActivation?.sectionKey === sectionKey && activationPathIndex >= 0;
+    const activationStyle = isActivatingPath ? ` style="--editor-activation-delay: ${activationPathIndex * 150}ms;"` : '';
+    const activationAttrs = isActiveSelf ? ` data-active-editor-block="true" data-active-block-id="${deps.escapeAttr(block.id)}"` : '';
     const canRemove = !parentLocked && !block.schema.lock;
     const nestToggle = `<button type="button" class="block-nest-toggle" data-action="make-block-subsection" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}" aria-label="Make subsection" title="Make subsection">›</button>`;
 
     return `
-      <div class="editor-block">
+      <div class="editor-block${isActivatingPath ? ' is-activating-path' : ''}"${activationStyle}${activationAttrs}>
         ${nestToggle}
         <div class="editor-block-head">
           <div class="section-drag-title">
@@ -328,6 +334,18 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         ${renderPassiveEditorBlockContent(sectionKey, section, block, rootSections)}
       </div>
     `;
+  }
+
+  function getActivationPathIds(sectionKey: string, rootSections: VisualSection[]): string[] {
+    const pending = state.pendingEditorActivation;
+    if (!pending || pending.sectionKey !== sectionKey) {
+      return [];
+    }
+    const section = deps.findSectionByKey(rootSections, sectionKey);
+    if (!section) {
+      return [];
+    }
+    return findBlockPathIds(section.blocks, pending.blockId) ?? [];
   }
 
   function renderPassiveEditorBlockContent(
@@ -784,6 +802,26 @@ function highlightCode(code: string, language: string, escapeHtml: (value: strin
   } catch {
     return escapeHtml(code);
   }
+}
+
+function findBlockPathIds(blocks: VisualBlock[], targetBlockId: string): string[] | null {
+  for (const block of blocks) {
+    if (block.id === targetBlockId) {
+      return [block.id];
+    }
+    const nestedBlocks = [
+      ...(block.schema.containerBlocks ?? []),
+      ...(block.schema.componentListBlocks ?? []),
+      ...(block.schema.gridItems ?? []).map((item) => item.block),
+      ...(block.schema.expandableStubBlocks?.children ?? []),
+      ...(block.schema.expandableContentBlocks?.children ?? []),
+    ];
+    const nestedPath = findBlockPathIds(nestedBlocks, targetBlockId);
+    if (nestedPath) {
+      return [block.id, ...nestedPath];
+    }
+  }
+  return null;
 }
 
 function decorateMarkdownCodeBlocks(html: string): string {

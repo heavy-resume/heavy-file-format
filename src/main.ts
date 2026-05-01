@@ -19,7 +19,7 @@ import { resolveBaseComponent } from './component-defs';
 import { ensureContainerBlocks, ensureComponentListBlocks, ensureExpandableBlocks, ensureGridItems } from './document-factory';
 import { isActiveEditorSectionTitle, isActiveEditorBlock, getComponentRenderHelpers, findBlockByIds } from './block-ops';
 import { commitHistorySnapshot } from './history';
-import { capturePaneScroll, restorePaneScroll, centerPendingEditorSection, focusPendingSectionTitleEditor } from './scroll';
+import { capturePaneScroll, restorePaneScroll, centerPendingEditorSection, focusPendingSectionTitleEditor, scrollPendingEditorActivation } from './scroll';
 import { bindUi } from './bind-ui';
 import { deserializeDocumentBytes, serializeDocument } from './serialization';
 import { createDefaultChatState, renderChatPanel } from './chat/chat';
@@ -76,6 +76,7 @@ function createInitialState(document: ReturnType<typeof deserializeDocumentBytes
     rawEditorError: null,
     rawEditorDiagnostics: [],
     activeEditorBlock: null,
+    pendingEditorActivation: null,
     activeEditorSectionTitleKey: null,
     clearSectionTitleOnFocusKey: null,
     modalSectionKey: null,
@@ -193,6 +194,9 @@ editorRenderer = createEditorRenderer(
     },
     get activeEditorBlock() {
       return state.activeEditorBlock;
+    },
+    get pendingEditorActivation() {
+      return state.pendingEditorActivation;
     },
     get expandableEditorPanels() {
       return state.expandableEditorPanels;
@@ -461,6 +465,7 @@ function renderApp(): void {
   stepStartedAt = performance.now();
   focusPendingSectionTitleEditor(app);
   centerPendingEditorSection(app);
+  scrollPendingEditorActivation(app);
   focusMs = performance.now() - stepStartedAt;
 
   console.debug('[hvy:perf] renderApp', {

@@ -124,6 +124,7 @@ export interface AppState {
   rawEditorError: string | null;
   rawEditorDiagnostics: RawEditorDiagnostic[];
   activeEditorBlock: { sectionKey: string; blockId: string } | null;
+  pendingEditorActivation: { sectionKey: string; blockId: string } | null;
   activeEditorSectionTitleKey: string | null;
   clearSectionTitleOnFocusKey: string | null;
   modalSectionKey: string | null;

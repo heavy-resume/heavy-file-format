@@ -464,6 +464,7 @@ export function isActiveEditorBlock(sectionKey: string, blockId: string): boolea
 
 export function setActiveEditorBlock(sectionKey: string, blockId: string): void {
   state.activeEditorBlock = { sectionKey, blockId };
+  state.pendingEditorActivation = { sectionKey, blockId };
 }
 
 export function clearActiveEditorBlock(blockId?: string): void {

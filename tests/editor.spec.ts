@@ -57,6 +57,55 @@ test('resume template spaces stacked location labels from block css', async ({ p
   expect(secondBox!.y - (firstBox!.y + firstBox!.height)).toBeGreaterThan(1);
 });
 
+test('trailing spaces after bold labels remain editable outside bold text', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"locations"}-->
+#! Locations
+
+ <!--hvy:text {"css":"margin: 0.5rem 0; line-height: 1.5;","lock":true}-->
+  **Location:** 
+
+  **Target Location(s):** 
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('.editor-block-passive', { hasText: 'Location:' }).click();
+
+  const editor = page.locator('.rich-editor').first();
+  await expect(editor).toBeVisible();
+  await expect(editor).toContainText('Location:');
+  await expect(editor).toContainText('Target Location(s):');
+  await expect(editor.locator('p').first()).toHaveJSProperty('innerHTML', '<strong>Location:</strong>&nbsp;');
+
+  await editor.evaluate((node) => {
+    const paragraph = node.querySelector('p');
+    const trailingSpace = paragraph?.lastChild;
+    if (!paragraph || !trailingSpace) {
+      throw new Error('Expected trailing editable space after Location label.');
+    }
+    const range = document.createRange();
+    range.setStart(trailingSpace, trailingSpace.textContent?.length ?? 0);
+    range.collapse(true);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+  });
+  await page.keyboard.type('Seattle, WA');
+
+  await expect(editor.locator('p').first().locator('strong')).toHaveText('Location:');
+  await expect(editor.locator('p').first()).toContainText('Location: Seattle, WA');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await expect(page.locator('#rawEditor')).toContainText('**Location:** Seattle, WA');
+});
+
 test('editor pullout help balloon lists loaded sidebar sections', async ({ page }) => {
   await page.goto('/');
 

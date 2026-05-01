@@ -77,6 +77,32 @@ hvy_version: 0.1
   expect(output).not.toMatch(/<!--hvy:component-list:\d+\s+\{[^\n>]*"component"/);
 });
 
+test('round-trips trailing spaces in text block lines', () => {
+  const input = [
+    '---',
+    'hvy_version: 0.1',
+    '---',
+    '',
+    '<!--hvy: {"id":"locations"}-->',
+    '#! Locations',
+    '',
+    ' <!--hvy:text {"css":"margin: 0.5rem 0; line-height: 1.5;","lock":true}-->',
+    '  **Location:** ',
+    '',
+    '  **Target Location(s):** ',
+    '',
+  ].join('\n');
+
+  const document = deserializeDocument(input, '.hvy');
+  const block = document.sections[0]?.blocks[0];
+
+  expect(block?.text).toBe('**Location:** \n\n**Target Location(s):** ');
+
+  const expectedResult = serializeWithState(document);
+  expect(expectedResult).toContain('  **Location:** \n');
+  expect(expectedResult.endsWith('  **Target Location(s):** \n')).toBe(true);
+});
+
 test('serializes expandable stub and content css fields on the expandable slot markers', () => {
   const input = `---
 hvy_version: 0.1

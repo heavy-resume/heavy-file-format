@@ -814,11 +814,12 @@ function cleanComponentDefBlock(block: JsonObject): JsonObject {
 
 export function serializeDocument(document: VisualDocument): string {
   const frontMatter = `---\n${serializeDocumentHeaderYaml(document)}\n---\n`;
-  const body = document.sections
-    .filter((section) => !section.isGhost)
-    .map((section) => serializeSection(section, 1))
-    .join('\n')
-    .trim();
+  const body = trimBoundaryNewlines(
+    document.sections
+      .filter((section) => !section.isGhost)
+      .map((section) => serializeSection(section, 1))
+      .join('\n')
+  );
   const textBody = `${frontMatter}\n${body}\n`;
   return appendSerializedTailPreamble(textBody, document.attachments);
 }
@@ -867,7 +868,7 @@ export function serializeDocumentHeaderYaml(document: VisualDocument): string {
 }
 
 export function serializeBlockFragment(block: VisualBlock): string {
-  return serializeBlock(block, 0).trim();
+  return trimBoundaryNewlines(serializeBlock(block, 0));
 }
 
 function stripEditorStateFromSerializedValue(value: unknown): unknown {
@@ -1184,7 +1185,7 @@ function serializeBlock(
   const blockDirective = override ?? serializeBlockDirective(block.schema);
   const schemaDirective = `${' '.repeat(indent)}<!--hvy:${blockDirective.name} ${JSON.stringify(blockDirective.schema)}-->`;
   const nested = serializeNestedBlocks(block, indent + 1);
-  const text = indentMultiline(block.text.trim(), indent + 1);
+  const text = indentMultiline(trimBoundaryNewlines(block.text), indent + 1);
   return [schemaDirective, text, nested].filter((part) => part.length > 0).join('\n');
 }
 
@@ -1211,6 +1212,13 @@ function indentMultiline(text: string, indent: number): string {
     .split('\n')
     .map((line) => `${prefix}${line}`)
     .join('\n');
+}
+
+function trimBoundaryNewlines(text: string): string {
+  if (text.trim().length === 0) {
+    return '';
+  }
+  return text.replace(/^\n+|\n+$/g, '');
 }
 
 function serializeSlotDirective(name: string, schema: JsonObject, indent: number): string {

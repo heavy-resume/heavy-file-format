@@ -429,11 +429,13 @@ component_defs:
   <!--hvy:grid:0 {"id":"top-skills"}-->
 
    <!--hvy:component-list {"componentListComponent":"xref-card","componentListItemLabel":"skill","css":"margin: 0;","align":"center"}-->
-    ## Skills
+    <!--hvy:text {"align":"center","css":"margin: 0 0 0.35rem;"}-->
+     ## Skills
   <!--hvy:grid:1 {"id":"top-tools-technologies"}-->
 
    <!--hvy:component-list {"componentListComponent":"xref-card","componentListItemLabel":"tool / tech","css":"margin: 0;","align":"center"}-->
-    ## Tools & Technologies
+    <!--hvy:text {"align":"center","css":"margin: 0 0 0.35rem;"}-->
+     ## Tools & Technologies
 
 <!--hvy: {"id":"skills","lock":true,"expanded":false,"location":"sidebar"}-->
 #! Skills

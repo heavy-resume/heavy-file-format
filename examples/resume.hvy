@@ -425,7 +425,7 @@ component_defs:
 
  <!--hvy:text {"css":"margin: 0.5rem 0; line-height: 1.5;","lock":true}-->
   **Location:** Seattle, WA
-  
+
   **Target Location(s):** Remote, Seattle, San Francisco
 
 <!--hvy: {"id":"top-skills-tools-technologies","lock":true}-->
@@ -439,7 +439,7 @@ component_defs:
 
     <!--hvy:component-list:0 {}-->
 
-     <!--hvy:text {"css":"margin: 0 0 0.35rem;"}-->
+     <!--hvy:text {"align":"center","css":"margin: 0 0 0.35rem;"}-->
       ## Skills
 
     <!--hvy:component-list:1 {}-->
@@ -460,7 +460,7 @@ component_defs:
 
     <!--hvy:component-list:0 {}-->
 
-     <!--hvy:text {"css":"margin: 0 0 0.35rem;"}-->
+     <!--hvy:text {"align":"center","css":"margin: 0 0 0.35rem;"}-->
       ## Tools & Technologies
 
     <!--hvy:component-list:1 {}-->

@@ -10,7 +10,7 @@ import { syncReusableTemplateForBlock } from './reusable';
 import { normalizeXrefTarget, getXrefTargetOptions, isXrefTargetValid } from './xref-ops';
 import { getTableColumns, setTableColumns } from './table-ops';
 import { coerceGridColumns } from './grid-ops';
-import { normalizeMarkdownLists, markdownToEditorHtml, turndown } from './markdown';
+import { normalizeEditorMarkdownWhitespace, normalizeMarkdownLists, markdownToEditorHtml, turndown } from './markdown';
 import { escapeAttr, escapeHtml, getInlineEditableText, renderOption } from './utils';
 import { recordHistory } from './history';
 import { getDocumentComponentDefaultCss } from './document-component-defaults';
@@ -135,7 +135,7 @@ export function handleBlockFieldInput(target: HTMLElement): boolean {
     let refreshMs = 0;
     let stepStartedAt = performance.now();
     normalizeEditableListDom(target);
-    block.text = normalizeMarkdownLists(turndown.turndown(target.innerHTML));
+    block.text = normalizeMarkdownLists(normalizeEditorMarkdownWhitespace(turndown.turndown(target.innerHTML)));
     turndownMs = performance.now() - stepStartedAt;
     syncEditableTaskListMarkup(target, block.text);
     stepStartedAt = performance.now();
@@ -276,7 +276,7 @@ export function handleBlockFieldInput(target: HTMLElement): boolean {
     }
     let stepStartedAt = performance.now();
     normalizeEditableListDom(target);
-    item.block.text = normalizeMarkdownLists(turndown.turndown(target.innerHTML));
+    item.block.text = normalizeMarkdownLists(normalizeEditorMarkdownWhitespace(turndown.turndown(target.innerHTML)));
     turndownMs = performance.now() - stepStartedAt;
     syncEditableTaskListMarkup(target, item.block.text);
     stepStartedAt = performance.now();

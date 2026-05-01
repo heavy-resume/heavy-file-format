@@ -32,11 +32,16 @@ export function markdownToEditorHtml(markdown: string): string {
     code.setAttribute('contenteditable', 'true');
   });
   renderInlineCheckboxes(template.content);
+  preserveTrailingEditableSpaces(template.content);
   template.content.querySelectorAll<HTMLInputElement>('input[type="checkbox"]').forEach((checkbox) => {
     checkbox.removeAttribute('disabled');
     checkbox.setAttribute('contenteditable', 'false');
   });
   return template.innerHTML;
+}
+
+export function normalizeEditorMarkdownWhitespace(markdown: string): string {
+  return markdown.replace(/\u00a0/g, ' ');
 }
 
 export function normalizeMarkdownIndentation(markdown: string): string {
@@ -165,4 +170,50 @@ function renderInlineCheckboxes(root: ParentNode): void {
     }
     textNode.replaceWith(fragment);
   });
+}
+
+function preserveTrailingEditableSpaces(root: ParentNode): void {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+    acceptNode: (node) => {
+      const parent = node.parentElement;
+      if (!parent || parent.closest('code, pre, script, style, textarea')) {
+        return NodeFilter.FILTER_REJECT;
+      }
+      return / $/.test(node.textContent ?? '') ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+    },
+  });
+
+  const textNodes: Text[] = [];
+  let current = walker.nextNode();
+  while (current) {
+    if (current instanceof Text) {
+      textNodes.push(current);
+    }
+    current = walker.nextNode();
+  }
+
+  textNodes.forEach((textNode) => {
+    if (hasFollowingInlineContent(textNode)) {
+      return;
+    }
+    textNode.textContent = (textNode.textContent ?? '').replace(/ +$/, (spaces) => '\u00a0'.repeat(spaces.length));
+  });
+}
+
+function hasFollowingInlineContent(textNode: Text): boolean {
+  let next = textNode.nextSibling;
+  while (next) {
+    if (next instanceof Text) {
+      if ((next.textContent ?? '').trim().length > 0) {
+        return true;
+      }
+      next = next.nextSibling;
+      continue;
+    }
+    if (next instanceof HTMLBRElement) {
+      return false;
+    }
+    return true;
+  }
+  return false;
 }

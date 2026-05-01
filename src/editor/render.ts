@@ -31,6 +31,7 @@ import { areTablesEnabled } from '../reference-config';
 import { sanitizeInlineCss } from '../css-sanitizer';
 import { SCRIPTING_PLUGIN_ID } from '../plugins/registry';
 import { getScriptingPluginVersion } from '../plugins/scripting/version';
+import { renderAddComponentPicker } from './component-picker';
 
 hljs.registerLanguage('bash', bash);
 hljs.registerLanguage('sh', bash);
@@ -82,7 +83,6 @@ interface EditorRenderDeps {
   escapeHtml: (value: string) => string;
   flattenSections: (sections: VisualSection[]) => VisualSection[];
   renderReaderBlock: (section: VisualSection, block: VisualBlock) => string;
-  renderComponentOptions: (selected: string) => string;
   renderReusableSectionOptions: (selected: string) => string;
   renderOption: (value: string, selected: string) => string;
   resolveBaseComponent: (componentName: string) => string;
@@ -153,6 +153,14 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           .join('')}
       </ul>
     </div>`;
+  }
+
+  function renderComponentPicker(options: Parameters<typeof renderAddComponentPicker>[0]): string {
+    return renderAddComponentPicker(options, {
+      escapeAttr: deps.escapeAttr,
+      escapeHtml: deps.escapeHtml,
+      getComponentDefs: deps.getComponentDefs,
+    });
   }
 
   function renderSectionEditorTree(sections: VisualSection[]): string {
@@ -259,14 +267,13 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
                     </select>
                   </label>
                 </article>`
-          : `<article class="ghost-section-card add-ghost compact-add-component-ghost" data-action="add-block" data-section-key="${deps.escapeAttr(section.key)}">
-                  <div class="ghost-plus-big"><span>+</span></div>
-                  <label class="ghost-component-picker">
-                  <select aria-label="Section component type" data-field="new-component-type" data-section-key="${deps.escapeAttr(section.key)}">
-                    <option value=""${!(state.addComponentBySection[section.key] ?? '').trim() ? ' selected' : ''}>Select component</option>
-                    ${deps.renderComponentOptions(state.addComponentBySection[section.key] ?? '')}
-                  </select>
-                </label>
+          : `<article class="ghost-section-card add-ghost compact-add-component-ghost">
+                  ${renderComponentPicker({
+                    id: `section:${section.key}`,
+                    action: 'add-block',
+                    sectionKey: section.key,
+                    label: 'Section component type',
+                  })}
               </article>`
       }
         </div>

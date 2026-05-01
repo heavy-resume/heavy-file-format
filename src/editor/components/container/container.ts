@@ -11,16 +11,14 @@ export const renderContainerEditor: ComponentEditorRenderer = (sectionKey, block
     ${
       block.schema.lock
         ? ''
-        : `<article class="ghost-section-card add-ghost container-add-ghost" data-action="add-container-block" data-section-key="${helpers.escapeAttr(
-            sectionKey
-          )}" data-block-id="${helpers.escapeAttr(block.id)}">
-            <div class="ghost-plus-big"><span>+</span></div>
-            <div class="ghost-label">Add Component</div>
-            <label class="ghost-component-picker">
-              <select aria-label="Container component type" data-field="container-new-component-type" data-container-key="${helpers.escapeAttr(addKey)}">
-                ${helpers.renderComponentOptions(helpers.getSelectedAddComponent(addKey, 'text'))}
-              </select>
-            </label>
+        : `<article class="ghost-section-card add-ghost container-add-ghost">
+            ${helpers.renderAddComponentPicker({
+              id: addKey,
+              action: 'add-container-block',
+              sectionKey,
+              blockId: block.id,
+              label: 'Container component type',
+            })}
           </article>`
     }
   `;

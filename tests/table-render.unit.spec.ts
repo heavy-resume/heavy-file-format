@@ -63,6 +63,7 @@ function createHelpers(): ComponentRenderHelpers {
     renderReaderBlock: () => '',
     renderComponentFragment: (_componentName, content) => content,
     renderComponentOptions: () => '',
+    renderAddComponentPicker: () => '',
     renderOption: (value) => value,
     getDocumentComponentCss: () => '',
     getXrefTargetOptions: () => [],

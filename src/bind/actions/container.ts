@@ -22,7 +22,7 @@ const addComponentListItem: ActionHandler = ({ sectionKey, blockId }) => {
   getRenderApp()();
 };
 
-const addContainerBlock: ActionHandler = ({ sectionKey, blockId }) => {
+const addContainerBlock: ActionHandler = ({ actionButton, sectionKey, blockId }) => {
   if (!blockId) {
     return;
   }
@@ -33,14 +33,14 @@ const addContainerBlock: ActionHandler = ({ sectionKey, blockId }) => {
   }
   ensureContainerBlocks(block);
   const addKey = `container:${sectionKey}:${blockId}`;
-  const newBlock = createEmptyBlock(state.addComponentBySection[addKey] ?? 'text');
+  const newBlock = createEmptyBlock(actionButton.dataset.component ?? state.addComponentBySection[addKey] ?? 'text');
   block.schema.containerBlocks.push(newBlock);
   syncReusableTemplateForBlock(sectionKey, block.id);
   setActiveEditorBlock(sectionKey, newBlock.id);
   getRenderApp()();
 };
 
-const addExpandableBlock = (kind: 'stub' | 'content'): ActionHandler => ({ sectionKey, blockId }) => {
+const addExpandableBlock = (kind: 'stub' | 'content'): ActionHandler => ({ actionButton, sectionKey, blockId }) => {
   if (!blockId) {
     return;
   }
@@ -50,12 +50,9 @@ const addExpandableBlock = (kind: 'stub' | 'content'): ActionHandler => ({ secti
     return;
   }
   const target = kind === 'stub' ? block.schema.expandableStubBlocks : block.schema.expandableContentBlocks;
-  if (target.lock) {
-    return;
-  }
   ensureExpandableBlocks(block);
   const addKey = `expandable-${kind}:${sectionKey}:${blockId}`;
-  const newBlock = createEmptyBlock(state.addComponentBySection[addKey] ?? 'container');
+  const newBlock = createEmptyBlock(actionButton.dataset.component ?? state.addComponentBySection[addKey] ?? 'container');
   target.children.push(newBlock);
   syncReusableTemplateForBlock(sectionKey, block.id);
   setActiveEditorBlock(sectionKey, newBlock.id);

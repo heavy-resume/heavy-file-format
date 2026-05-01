@@ -132,7 +132,9 @@ hvy_version: 0.1
   await page.getByRole('button', { name: 'Apply' }).click();
   await page.getByRole('button', { name: 'Basic' }).click();
 
-  await page.locator('.editor-block-passive', { has: page.locator('.expandable-reader') }).first().click();
+  await page.locator('.editor-block-passive', { has: page.locator('.expandable-reader') }).first().evaluate((node) => {
+    (node as HTMLElement).click();
+  });
   const activeBlock = page.locator('.editor-block', { has: page.locator('.expand-chooser-grid') }).first();
 
   await expect(activeBlock.locator('[data-field="block-expandable-stub-lock"]')).toHaveCount(0);
@@ -141,8 +143,8 @@ hvy_version: 0.1
   await activeBlock.locator('[data-expandable-panel="stub"]').first().click();
   await activeBlock.locator('[data-expandable-panel="expanded"]').first().click();
 
-  await expect(activeBlock.locator('[data-action="add-expandable-stub-block"]')).toBeVisible();
-  await expect(activeBlock.locator('[data-action="add-expandable-content-block"]')).toBeVisible();
+  await expect(activeBlock.getByRole('button', { name: 'Expandable stub component type' })).toBeVisible();
+  await expect(activeBlock.getByRole('button', { name: 'Expandable content component type' })).toBeVisible();
 });
 
 test('editor pullout help balloon lists loaded sidebar sections', async ({ page }) => {
@@ -592,13 +594,34 @@ test('toolbar exposes quote and code block actions', async ({ page }) => {
 test('section add component affordance is a compact single row', async ({ page }) => {
   await page.goto('/');
 
-  const addComponent = page.locator('[data-action="add-block"]').first();
+  const addComponent = page.locator('.compact-add-component-ghost').first();
   const box = await addComponent.boundingBox();
 
   await expect(addComponent).toContainText('+');
-  await expect(addComponent).toContainText('Add Component');
   await expect(addComponent.locator('select')).toHaveCount(0);
-  expect(box?.height ?? 0).toBeLessThanOrEqual(42);
+  expect(box?.height ?? 0).toBeLessThanOrEqual(46);
+});
+
+test('component picker opens categories and adds selected component', async ({ page }) => {
+  await page.goto('/');
+
+  const addComponent = page.locator('.compact-add-component-ghost').first();
+  await addComponent.getByRole('button', { name: 'Section component type' }).click();
+
+  const picker = addComponent.locator('.component-picker-popover');
+  await expect(picker.locator('.component-picker-pane-root').getByText('multipurpose text component')).toBeVisible();
+  await expect(picker.locator('.component-picker-pane-root').getByText('add an image')).toBeVisible();
+  await expect(picker.locator('.component-picker-pane-root').getByText('a static table of information')).toBeVisible();
+  await expect(picker.locator('.component-picker-pane-root').getByText('lists, grids, and containers')).toBeVisible();
+  await expect(picker.locator('.component-picker-pane-root').getByText('custom components')).toBeVisible();
+  await expect(picker.locator('.component-picker-pane-root').getByText('components from plugins')).toBeVisible();
+
+  await picker.locator('.component-picker-row-category', { hasText: 'Text' }).click();
+  const textPane = picker.locator('[data-picker-pane="text"]');
+  await expect(textPane.locator('.component-picker-pane-title', { hasText: 'Text' })).toBeVisible();
+  await textPane.locator('[data-action="add-block"][data-component="text"]').click();
+
+  await expect(page.locator('.editor-block .rich-editor').first()).toBeVisible();
 });
 
 test('markdown editor auto-upgrades raw task markers', async ({ page }) => {

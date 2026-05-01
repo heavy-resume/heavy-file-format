@@ -535,6 +535,7 @@ function getChatReaderHelpers(documentMeta: VisualDocument['meta']): ComponentRe
     renderReaderBlock: (_section: VisualSection, block: VisualBlock) => renderChatHvyBlock(block, documentMeta),
     renderComponentFragment: (_componentName: string, content: string) => markdownToEditorHtml(normalizeMarkdownLists(content)),
     renderComponentOptions: () => '',
+    renderAddComponentPicker: () => '',
     renderOption: () => '',
     getDocumentComponentCss: (componentName: string) => getDocumentComponentDefaultCss(documentMeta, componentName),
     getXrefTargetOptions: () => [],

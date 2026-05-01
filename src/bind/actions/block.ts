@@ -7,12 +7,12 @@ import { syncReusableTemplateForBlock, findReusableOwner } from '../../reusable'
 import { applyImagePreset } from '../../editor/components/image/image';
 import type { ActionHandler } from './types';
 
-const addBlock: ActionHandler = ({ section }) => {
+const addBlock: ActionHandler = ({ actionButton, section }) => {
   if (!section || section.lock) {
     return;
   }
   recordHistory();
-  const component = (state.addComponentBySection[section.key] ?? 'text').trim() || 'text';
+  const component = (actionButton.dataset.component ?? state.addComponentBySection[section.key] ?? 'text').trim() || 'text';
   const newBlock = createEmptyBlock(component);
   const previousLastBlockId = section.blocks.length > 0 ? section.blocks[section.blocks.length - 1].id : '';
   for (const child of section.children) {

@@ -23,6 +23,7 @@ export interface ComponentRenderHelpers {
   renderReaderBlock: (section: VisualSection, block: VisualBlock) => string;
   renderComponentFragment: (componentName: string, content: string, block: VisualBlock) => string;
   renderComponentOptions: (selected: string) => string;
+  renderAddComponentPicker: (options: AddComponentPickerOptions) => string;
   renderOption: (value: string, selected: string) => string;
   getDocumentComponentCss: (componentName: string) => string;
   getXrefTargetOptions: () => XrefTargetOption[];
@@ -32,6 +33,15 @@ export interface ComponentRenderHelpers {
   ensureComponentListBlocks: (block: VisualBlock) => void;
   getSelectedAddComponent: (key: string, fallback: string) => string;
   isExpandableEditorPanelOpen: (sectionKey: string, blockId: string, panel: 'stub' | 'expanded', fallback: boolean) => boolean;
+}
+
+export interface AddComponentPickerOptions {
+  id: string;
+  action: string;
+  sectionKey: string;
+  blockId?: string;
+  label?: string;
+  extraAttrs?: Record<string, string>;
 }
 
 export interface ComponentEditorRenderer {

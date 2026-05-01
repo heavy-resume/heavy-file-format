@@ -11,6 +11,7 @@ import { normalizeXrefTarget, getXrefTargetOptions, isXrefTargetValid } from './
 import { getTableColumns, setTableColumns } from './table-ops';
 import { coerceGridColumns } from './grid-ops';
 import { normalizeEditorMarkdownWhitespace, normalizeMarkdownLists, markdownToEditorHtml, turndown } from './markdown';
+import { renderAddComponentPicker } from './editor/component-picker';
 import { escapeAttr, escapeHtml, getInlineEditableText, renderOption } from './utils';
 import { recordHistory } from './history';
 import { getDocumentComponentDefaultCss } from './document-component-defaults';
@@ -509,6 +510,7 @@ export function getComponentRenderHelpers(editorRenderer: {
     renderReaderBlock: readerRenderer.renderReaderBlock,
     renderComponentFragment: editorRenderer.renderComponentFragment,
     renderComponentOptions,
+    renderAddComponentPicker: (options) => renderAddComponentPicker(options, { escapeAttr, escapeHtml, getComponentDefs }),
     renderOption,
     getDocumentComponentCss: (componentName: string) => getDocumentComponentDefaultCss(state.document.meta, componentName),
     getXrefTargetOptions,

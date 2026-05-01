@@ -211,7 +211,6 @@ editorRenderer = createEditorRenderer(
     escapeHtml,
     flattenSections,
     renderReaderBlock: (section, block) => readerRenderer.renderReaderBlock(section, block),
-    renderComponentOptions,
     renderReusableSectionOptions,
     renderOption,
     resolveBaseComponent,

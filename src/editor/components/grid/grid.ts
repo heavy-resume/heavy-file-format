@@ -48,18 +48,14 @@ export const renderGridEditor: ComponentEditorRenderer = (sectionKey, block, hel
   ${
     block.schema.lock
       ? ''
-      : `<article class="ghost-section-card add-ghost grid-add-ghost" data-action="add-grid-item" data-section-key="${helpers.escapeAttr(
-          sectionKey
-        )}" data-block-id="${helpers.escapeAttr(block.id)}">
-          <div class="ghost-plus-big"><span>+</span></div>
-          <div class="ghost-label">Add Grid Component</div>
-          <label class="ghost-component-picker">
-            <select aria-label="Grid component type" data-field="new-grid-component-type" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(
-          block.id
-        )}">
-              ${helpers.renderComponentOptions(helpers.getSelectedAddComponent(block.id, 'text'))}
-            </select>
-          </label>
+      : `<article class="ghost-section-card add-ghost grid-add-ghost">
+          ${helpers.renderAddComponentPicker({
+            id: `grid:${sectionKey}:${block.id}`,
+            action: 'add-grid-item',
+            sectionKey,
+            blockId: block.id,
+            label: 'Grid component type',
+          })}
         </article>`
   }
 `;

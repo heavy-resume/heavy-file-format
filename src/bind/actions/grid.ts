@@ -18,7 +18,7 @@ const addGridItem: ActionHandler = ({ actionButton, sectionKey, blockId }) => {
   }
   ensureGridItems(block.schema);
   const item = createGridItem(block.schema.gridItems.length, block.schema.gridColumns, (c, _s) => createEmptyBlock(c, true));
-  item.block = createEmptyBlock(state.gridAddComponentByBlock[blockId] ?? 'text');
+  item.block = createEmptyBlock(actionButton.dataset.component ?? state.gridAddComponentByBlock[blockId] ?? 'text');
   block.schema.gridItems.push(item);
   syncReusableTemplateForBlock(sectionKey, block.id);
   getRenderApp()();

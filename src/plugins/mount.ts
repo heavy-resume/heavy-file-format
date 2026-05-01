@@ -73,7 +73,7 @@ function buildContext(
     syncReusableTemplateForBlock(sectionKey, blockId);
     recordHistory(`plugin-config:${registration.id}:${sectionKey}:${blockId}`);
     getRefreshReaderPanels()();
-    requestRerender();
+    refreshMountedPlugins(registration.id, sectionKey, blockId);
   };
 
   const setText = (text: string) => {
@@ -83,7 +83,7 @@ function buildContext(
     syncReusableTemplateForBlock(sectionKey, blockId);
     recordHistory(`plugin-text:${registration.id}:${sectionKey}:${blockId}`);
     getRefreshReaderPanels()();
-    requestRerender();
+    refreshMountedPlugins(registration.id, sectionKey, blockId);
   };
 
   return {
@@ -113,6 +113,19 @@ function buildContext(
     setText,
     requestRerender,
   };
+}
+
+function refreshMountedPlugins(pluginId: string, sectionKey: string, blockId: string): void {
+  for (const entry of mounted.values()) {
+    if (entry.pluginId !== pluginId || entry.sectionKey !== sectionKey || entry.blockId !== blockId) {
+      continue;
+    }
+    try {
+      entry.instance.refresh?.();
+    } catch (error) {
+      console.error('[hvy:plugin] refresh threw', error);
+    }
+  }
 }
 
 // Walk all plugin mount placeholders in the rendered DOM, instantiate factories

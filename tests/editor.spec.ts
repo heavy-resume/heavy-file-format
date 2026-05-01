@@ -58,6 +58,37 @@ test('editor pullout help balloon lists loaded sidebar sections', async ({ page 
   await expect(balloon).toBeHidden();
 });
 
+test('unlocking a section schema allows removing locked child fields', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"locations","lock":true}-->
+#! Locations
+
+ <!--hvy:text {"lock":true}-->
+  **Target Location(s):** Remote, Seattle
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Advanced' }).click();
+
+  await page.locator('.editor-block-passive', { hasText: 'Target Location(s)' }).click();
+  let activeBlock = page.locator('.editor-block[data-active-editor-block="true"]');
+  await expect(activeBlock.locator('[data-action="remove-block"]')).toHaveCount(0);
+
+  await page.locator('.editor-section-head [data-action="focus-modal"]').click();
+  await page.getByRole('button', { name: 'Unlock Schema' }).click();
+  await page.getByRole('button', { name: 'Close' }).click();
+
+  activeBlock = page.locator('.editor-block[data-active-editor-block="true"]');
+  await expect(activeBlock.locator('[data-action="remove-block"]')).toBeVisible();
+  await activeBlock.locator('[data-action="remove-block"]').click();
+  await expect(page.locator('.editor-tree', { hasText: 'Target Location(s)' })).toHaveCount(0);
+});
+
 test('component-list add prompt reveals the active edit path with staggered animation', async ({ page }) => {
   await page.goto('/');
 

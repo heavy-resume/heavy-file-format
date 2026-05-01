@@ -39,12 +39,15 @@ export interface HvyPluginContext {
   // deeply with the visual document tree can do so. Most plugins should not
   // reach for this and use the typed APIs above instead.
   rawDocument: VisualDocument;
-  // Persist a config field. Updates block.schema.pluginConfig and triggers a
-  // re-render through the host.
+  // Persist a config field. Updates block.schema.pluginConfig, refreshes this
+  // plugin instance in place, and refreshes reader panels. It must not force a
+  // full app re-render on ordinary typing because that drops focus/caret state.
   setConfig(patch: JsonObject): void;
-  // Persist plugin-interpreted text (block.text). Triggers a re-render.
+  // Persist plugin-interpreted text (block.text), refreshing this plugin
+  // instance in place and reader panels without a full app re-render.
   setText(text: string): void;
-  // Ask the host to re-render. Use sparingly; setConfig/setText already do.
+  // Ask the host to re-render. Use sparingly for structural shell changes only;
+  // setConfig/setText already refresh the mounted plugin and reader panels.
   requestRerender(): void;
 }
 

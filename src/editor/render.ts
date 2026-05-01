@@ -241,7 +241,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
 
         <div class="editor-blocks">
           ${deps.buildSectionRenderSequence(section).map((item) => item.kind === 'block'
-            ? renderEditorBlock(section.key, item.block, rootSections)
+            ? renderEditorBlock(section.key, item.block, rootSections, section.lock)
             : renderEditorSection(item.child, rootSections, true)
           ).join('')}
           ${section.lock
@@ -325,7 +325,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const activationStyle = isActivatingPath ? ` style="--editor-activation-delay: ${activationPathIndex * 150}ms;"` : '';
     const activationAttrs = isActiveSelf ? ` data-active-editor-block="true" data-active-block-id="${deps.escapeAttr(block.id)}"` : '';
     const blockMove = getBlockMoveAvailability(sectionKey, block.id, rootSections ?? []);
-    const canRemove = !parentLocked && !block.schema.lock;
+    const canRemove = !parentLocked;
     const nestToggle = `<button type="button" class="block-nest-toggle" data-action="make-block-subsection" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}" aria-label="Make subsection" title="Make subsection">›</button>`;
 
     return `

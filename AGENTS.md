@@ -18,6 +18,8 @@ When adding components ALWAYS PREFER REUSABLE COMPONENTS. ITS BUILT OUT SO USE I
 
 Components go into their own directories with their own css and logic files
 
+Editor input/focus rule: typing inside an active component or plugin must not trigger a full `getRenderApp()()` rerender unless the component is making a structural change that cannot be applied locally. Prefer mutating the document state, refreshing reader panels, and updating the component DOM in place. This is especially important for plugins: ordinary `setConfig` / `setText` style edits should preserve focus and caret selection; only explicit structural actions should request a full rerender.
+
 When asked to have something be HVY always use the reusable HVY rendering and not a new solution.
 
 The default startup document should treat `examples/example.hvy` as the single source of truth. It contains a real HVY tail attachment, so do not load it as raw text; load it as bytes / asset URL and deserialize bytes so `--HVY-TAIL--` data does not leak into the visible document.

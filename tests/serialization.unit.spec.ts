@@ -383,6 +383,25 @@ hvy_version: 0.1
   ]);
 });
 
+test('component-list item labels round-trip through directives', () => {
+  const input = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"skills"}-->
+#! Skills
+
+ <!--hvy:component-list {"componentListComponent":"skill-record","componentListItemLabel":"skill"}-->
+`;
+
+  const document = deserializeDocument(input, '.hvy');
+  const listBlock = document.sections[0]?.blocks[0];
+  const output = serializeWithState(document);
+
+  expect(listBlock.schema.componentListItemLabel).toBe('skill');
+  expect(output).toContain('<!--hvy:component-list {"componentListComponent":"skill-record","componentListItemLabel":"skill"}-->');
+});
+
 test('serializes uncontained section metadata without changing section shape on round-trip', () => {
   const input = `---
 hvy_version: 0.1

@@ -13,6 +13,7 @@ import { renderPluginEditor, renderPluginHeaderChooser, getPluginBlockHeaderLabe
 import { renderTableEditor } from './components/table/table';
 import { renderTextEditor } from './components/text/text';
 import { renderXrefCardEditor } from './components/xref-card/xref-card';
+import { getComponentListAddLabel, getComponentListEditLabel, hasComponentListItems } from './components/component-list/component-list-labels';
 import { renderTagEditor } from './tag-editor';
 import { getTemplateFields, renderTemplateGhosts } from './template';
 import type { Align, BlockSchema, VisualBlock, VisualSection } from './types';
@@ -374,9 +375,15 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
 
     if (base === 'component-list') {
       deps.ensureComponentListBlocks(block);
-      if (block.schema.componentListBlocks.length === 0) {
-        return `<div class="ghost-section-card add-ghost passive-empty-list-ghost">
-          <div class="ghost-label">Edit Component List (${deps.escapeHtml(block.schema.componentListComponent || 'item')})</div>
+      if (!hasComponentListItems(block)) {
+        const existingContent = block.schema.componentListBlocks.length > 0 ? deps.renderReaderBlock(section, block) : '';
+        const actionLabel = block.schema.lock ? getComponentListEditLabel(block) : getComponentListAddLabel(block);
+        const actionAttr = block.schema.lock ? '' : ` data-action="add-component-list-item" data-section-key="${deps.escapeAttr(
+          sectionKey
+        )}" data-block-id="${deps.escapeAttr(block.id)}"`;
+        return `${existingContent}<div class="ghost-section-card add-ghost passive-empty-list-ghost"${actionAttr}>
+          <div class="ghost-plus-big"><span>+</span></div>
+          <div class="ghost-label">${deps.escapeHtml(actionLabel)}</div>
         </div>`;
       }
     }
@@ -697,6 +704,20 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
             value="${deps.escapeAttr(block.schema.placeholder)}"
           />
         </label>
+        ${
+          component === 'component-list'
+            ? `<label>
+          <span>List Item Label</span>
+          <input
+            data-section-key="${deps.escapeAttr(sectionKey)}"
+            data-block-id="${deps.escapeAttr(block.id)}"
+            data-field="block-component-list-item-label"
+            placeholder="${deps.escapeAttr(getComponentListAddLabel(block).replace(/^Add\s+/, ''))}"
+            value="${deps.escapeAttr(block.schema.componentListItemLabel)}"
+          />
+        </label>`
+            : ''
+        }
         <label>
           <span>Description</span>
           <textarea

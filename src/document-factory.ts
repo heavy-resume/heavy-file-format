@@ -21,6 +21,7 @@ export function defaultBlockSchema(component = 'text'): BlockSchema {
     codeLanguage: 'ts',
     containerBlocks: [],
     componentListComponent: 'text',
+    componentListItemLabel: '',
     componentListBlocks: [],
     gridColumns: 2,
     gridItems: [],
@@ -129,6 +130,8 @@ export function schemaFromUnknown(value: unknown): BlockSchema {
       : [],
     componentListComponent:
       typeof candidate.componentListComponent === 'string' ? candidate.componentListComponent : defaults.componentListComponent,
+    componentListItemLabel:
+      typeof candidate.componentListItemLabel === 'string' ? candidate.componentListItemLabel : defaults.componentListItemLabel,
     componentListBlocks: Array.isArray(candidate.componentListBlocks)
       ? candidate.componentListBlocks.map((block) => parseVisualBlock(block))
       : [],

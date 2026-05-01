@@ -27,6 +27,7 @@ export interface BlockSchema {
   codeLanguage: string;
   containerBlocks: VisualBlock[];
   componentListComponent: string;
+  componentListItemLabel: string;
   componentListBlocks: VisualBlock[];
   gridColumns: number;
   gridItems: GridItem[];

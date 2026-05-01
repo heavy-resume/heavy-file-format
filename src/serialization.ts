@@ -1136,6 +1136,7 @@ function serializeBlockSchema(
   }
   if (component === 'component-list') {
     addIfChanged(payload, 'componentListComponent', schema.componentListComponent, defaults.componentListComponent);
+    addIfChanged(payload, 'componentListItemLabel', schema.componentListItemLabel, defaults.componentListItemLabel);
     if (!options.omitComponentListBlocks) {
       addBlockArrayIfPresent(payload, 'componentListBlocks', schema.componentListBlocks);
     }

@@ -1,5 +1,6 @@
 import './component-list.css';
 import type { ComponentEditorRenderer, ComponentReaderRenderer } from '../../component-helpers';
+import { getComponentListAddLabel } from './component-list-labels';
 
 export const renderComponentListEditor: ComponentEditorRenderer = (sectionKey, block, helpers) => {
   helpers.ensureComponentListBlocks(block);
@@ -22,7 +23,7 @@ export const renderComponentListEditor: ComponentEditorRenderer = (sectionKey, b
             sectionKey
           )}" data-block-id="${helpers.escapeAttr(block.id)}">
             <div class="ghost-plus-big"><span>+</span></div>
-            <div class="ghost-label">Add List Item</div>
+            <div class="ghost-label">${helpers.escapeHtml(getComponentListAddLabel(block))}</div>
           </article>`
     }
   `;

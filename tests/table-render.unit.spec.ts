@@ -19,6 +19,7 @@ function createTableBlock(rows: string[][], options?: { showHeader?: boolean }):
       codeLanguage: '',
       containerBlocks: [],
       componentListComponent: 'text',
+      componentListItemLabel: '',
       componentListBlocks: [],
       gridColumns: 2,
       gridItems: [],

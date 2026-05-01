@@ -207,6 +207,7 @@ Common block metadata fields include:
 `css` is an optional inline CSS style string applied to that block's rendered wrapper. Authoring tools expose this for layout and presentation adjustments such as collapsing spacing between adjacent blocks.
 `lock` is an optional boolean. Use it to prevent structural additions inside that block, such as nested child blocks or table-column changes.
 `placeholder` is an optional string. Display it as hint text when the block's content is empty, helping template authors communicate intent to document authors. It applies to text-based blocks and grid item blocks.
+`componentListItemLabel` is an optional human-readable singular label for items added to a `component-list`, such as `"skill"` or `"tool / tech"`. Authoring tools SHOULD use it in add/edit prompts. If omitted, tools SHOULD derive a readable fallback from `componentListComponent` by converting separators to spaces and dropping generic suffixes such as `record`, `entry`, or `item`.
 
 Section metadata also includes optional presentation keys such as:
 - `expanded`
@@ -324,6 +325,7 @@ Block metadata optionally includes component-specific fields. Common examples in
 - `containerTitle`
 - `containerBlocks`
 - `componentListComponent`
+- `componentListItemLabel`
 - `componentListBlocks`
 - `gridColumns`
 - `gridItems`

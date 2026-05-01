@@ -158,6 +158,17 @@ export function bindInputMisc(app: HTMLElement): void {
       return;
     }
 
+    if (field === 'block-component-list-item-label' && target instanceof HTMLInputElement) {
+      const context = resolveBlockContext(target);
+      if (!context) {
+        return;
+      }
+      context.block.schema.componentListItemLabel = target.value;
+      syncReusableTemplateForBlock(sectionKey, context.block.id);
+      getRenderApp()();
+      return;
+    }
+
     if (field === 'block-description' && (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) {
       const context = resolveBlockContext(target);
       if (!context) {

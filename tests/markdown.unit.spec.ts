@@ -1,7 +1,7 @@
 import { expect, test } from 'vitest';
 
 import { convertMarkdownToHvyDocument } from '../src/markdown-import';
-import { normalizeMarkdownIndentation } from '../src/markdown';
+import { normalizeMarkdownIndentation, normalizeMarkdownLists } from '../src/markdown';
 import { deserializeDocument, serializeDocument } from '../src/serialization';
 
 test('normalizes fully indented text so indentation alone does not imply code', () => {
@@ -14,6 +14,13 @@ test('preserves fenced code relative indentation after removing outer indentatio
 
 test('preserves nested list indentation when content starts at column zero', () => {
   expect(normalizeMarkdownIndentation('Skills\n  - TypeScript\n  - Testing')).toBe('Skills\n  - TypeScript\n  - Testing');
+});
+
+test('does not treat bold labels as star list items', () => {
+  expect(normalizeMarkdownLists('**Location:** Seattle, WA')).toBe('**Location:** Seattle, WA');
+  expect(normalizeMarkdownLists('**Target Location(s):** Remote, Seattle, San Francisco')).toBe(
+    '**Target Location(s):** Remote, Seattle, San Francisco'
+  );
 });
 
 test('converts markdown headings into HVY section hierarchy', () => {

@@ -417,9 +417,10 @@ component_defs:
 <!--hvy: {"id":"locations","lock":true,"contained":true,"location":"sidebar"}-->
 #! Locations
 
- <!--hvy:text {"css":"margin: 0.5rem 0;","lock":true}-->
-  **Location:**
-  **Target Location(s):**
+ <!--hvy:text {"css":"margin: 0.5rem 0; line-height: 1.5;","lock":true}-->
+  **Location:** 
+
+  **Target Location(s):** 
 
 <!--hvy: {"id":"top-skills-tools-technologies","lock":true}-->
 #! Top Skills, Tools, and Technologies

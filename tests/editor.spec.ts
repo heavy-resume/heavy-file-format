@@ -39,6 +39,24 @@ test('resume template shows friendly empty component-list add prompts before act
   await expect(page.locator('.editor-block-passive .ghost-label', { hasText: 'Add Tool / Tech' }).first()).toBeVisible();
 });
 
+test('resume template spaces stacked location labels from block css', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Resume Template' }).click();
+
+  const locationBlock = page.locator('.reader-block-text', { hasText: 'Target Location(s)' }).first();
+  await expect(locationBlock).toHaveCSS('white-space', 'pre-line');
+
+  const labels = locationBlock.locator('strong');
+  await expect(labels).toHaveCount(2);
+
+  const firstBox = await labels.nth(0).boundingBox();
+  const secondBox = await labels.nth(1).boundingBox();
+  expect(firstBox).not.toBeNull();
+  expect(secondBox).not.toBeNull();
+  expect(secondBox!.y - (firstBox!.y + firstBox!.height)).toBeGreaterThan(1);
+});
+
 test('editor pullout help balloon lists loaded sidebar sections', async ({ page }) => {
   await page.goto('/');
 

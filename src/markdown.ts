@@ -78,7 +78,7 @@ export function normalizeMarkdownLists(markdown: string): string {
 
   for (let i = 0; i < lines.length; i += 1) {
     const line = lines[i] ?? '';
-    const bullet = line.match(/^(\s*)[-*+]\s*(.+)$/);
+    const bullet = line.match(/^(\s*)[-*+]\s+(.+)$/);
     if (bullet) {
       if (!inList && out.length > 0 && out[out.length - 1].trim().length > 0) {
         out.push('');
@@ -90,7 +90,7 @@ export function normalizeMarkdownLists(markdown: string): string {
 
     if (line.trim().length === 0) {
       const next = lines[i + 1] ?? '';
-      if (inList && /^(\s*)[-*+]\s*(.+)$/.test(next)) {
+      if (inList && /^(\s*)[-*+]\s+(.+)$/.test(next)) {
         continue;
       }
       inList = false;

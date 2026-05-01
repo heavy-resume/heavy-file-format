@@ -53,6 +53,39 @@ test('component-list add prompt reveals the active edit path with staggered anim
   await expect(page.locator('.editor-block[data-active-editor-block="true"] [contenteditable="true"]').first()).toBeVisible();
 });
 
+test('move arrows only render when there is an adjacent target', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  let activeBlock = page.locator('.editor-block[data-active-editor-block="true"]');
+  await expect(activeBlock.locator('[data-action="move-block-up"]')).toHaveCount(0);
+  await expect(activeBlock.locator('[data-action="move-block-down"]')).toHaveCount(1);
+  await activeBlock.getByRole('button', { name: 'Done' }).click();
+  await page.locator('[data-action="activate-block"]').last().click();
+  activeBlock = page.locator('.editor-block[data-active-editor-block="true"]');
+  await expect(activeBlock.locator('[data-action="move-block-up"]')).toHaveCount(1);
+  await expect(activeBlock.locator('[data-action="move-block-down"]')).toHaveCount(0);
+
+  const sections = page.locator('.editor-tree > .editor-tree-body > .editor-section-card');
+  await expect(sections.first().locator(':scope > .editor-section-head [data-action="move-section-up"]')).toHaveCount(0);
+  await expect(sections.first().locator(':scope > .editor-section-head [data-action="move-section-down"]')).toHaveCount(0);
+
+  await page.locator('[data-action="add-top-level-section"]').click();
+
+  await expect(sections.first().locator(':scope > .editor-section-head [data-action="move-section-up"]')).toHaveCount(0);
+  await expect(sections.first().locator(':scope > .editor-section-head [data-action="move-section-down"]')).toHaveCount(1);
+  await expect(sections.last().locator(':scope > .editor-section-head [data-action="move-section-up"]')).toHaveCount(1);
+  await expect(sections.last().locator(':scope > .editor-section-head [data-action="move-section-down"]')).toHaveCount(0);
+
+  await page.reload();
+  await page.getByRole('button', { name: 'Resume Template' }).click();
+  await page.locator('.editor-tree .editor-block-passive .ghost-label', { hasText: 'Add Skill' }).first().click();
+
+  activeBlock = page.locator('.editor-block[data-active-editor-block="true"]');
+  await expect(activeBlock.locator('[data-action="move-block-up"]')).toHaveCount(1);
+  await expect(activeBlock.locator('[data-action="move-block-down"]')).toHaveCount(0);
+});
+
 test('checkbox action inserts a single inline checkbox without coercing content into a full checklist', async ({ page }) => {
   await page.goto('/');
 

@@ -376,6 +376,8 @@
   border: 1px solid var(--hvy-border-input);
   border-radius: 8px;
   padding: 0.35rem 0.5rem;
+  background: var(--hvy-surface);
+  color: var(--hvy-text);
   font: inherit;
   font-weight: 700;
 }

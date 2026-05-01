@@ -57,11 +57,11 @@ export const renderExpandableEditor: ComponentEditorRenderer = (sectionKey, bloc
           ${
             stub.lock
               ? ''
-              : `<article class="ghost-section-card add-ghost container-add-ghost" data-action="add-expandable-stub-block" data-section-key="${helpers.escapeAttr(
+              : `<article class="ghost-section-card add-ghost compact-add-component-ghost" data-action="add-expandable-stub-block" data-section-key="${helpers.escapeAttr(
                   sectionKey
                 )}" data-block-id="${helpers.escapeAttr(block.id)}">
                   <div class="ghost-plus-big"><span>+</span></div>
-                  <div class="ghost-label">Add Stub Component</div>
+                  <div class="ghost-label">Add Component</div>
                   <label class="ghost-component-picker">
                     <select aria-label="Expandable stub component type" data-field="expandable-stub-new-component-type" data-expandable-key="${helpers.escapeAttr(stubAddKey)}">
                       ${helpers.renderComponentOptions(helpers.getSelectedAddComponent(stubAddKey, 'container'))}
@@ -105,11 +105,11 @@ export const renderExpandableEditor: ComponentEditorRenderer = (sectionKey, bloc
           ${
             content.lock
               ? ''
-              : `<article class="ghost-section-card add-ghost container-add-ghost" data-action="add-expandable-content-block" data-section-key="${helpers.escapeAttr(
+              : `<article class="ghost-section-card add-ghost compact-add-component-ghost" data-action="add-expandable-content-block" data-section-key="${helpers.escapeAttr(
                   sectionKey
                 )}" data-block-id="${helpers.escapeAttr(block.id)}">
                   <div class="ghost-plus-big"><span>+</span></div>
-                  <div class="ghost-label">Add Expanded Component</div>
+                  <div class="ghost-label">Add Component</div>
                   <label class="ghost-component-picker">
                     <select aria-label="Expandable content component type" data-field="expandable-content-new-component-type" data-expandable-key="${helpers.escapeAttr(contentAddKey)}">
                       ${helpers.renderComponentOptions(helpers.getSelectedAddComponent(contentAddKey, 'container'))}

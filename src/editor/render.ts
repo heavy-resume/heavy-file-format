@@ -164,6 +164,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
   function renderEditorSection(section: VisualSection, rootSections: VisualSection[], isSubsection = false): string {
     const visibleTitle = deps.formatSectionTitle(section.title);
     const isUntitled = deps.isDefaultUntitledSectionTitle(section.title);
+    const sectionMove = getSectionMoveAvailability(section.key, rootSections);
     const titleEditor = deps.isActiveEditorSectionTitle(section.key)
       ? `<input autofocus class="section-title-input" data-section-key="${deps.escapeAttr(section.key)}" data-field="section-title" value="${deps.escapeAttr(
         deps.isDefaultUntitledSectionTitle(section.title) ? '' : section.title
@@ -184,8 +185,8 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         <div class="editor-section-head">
           <div class="section-drag-title" title="Drag to reorder section">
             <div class="editor-order-controls">
-              <button type="button" class="order-arrow-button" data-action="move-section-up" data-section-key="${deps.escapeAttr(section.key)}" aria-label="Move section up">▲</button>
-              <button type="button" class="order-arrow-button" data-action="move-section-down" data-section-key="${deps.escapeAttr(section.key)}" aria-label="Move section down">▼</button>
+              ${sectionMove.canMoveUp ? `<button type="button" class="order-arrow-button" data-action="move-section-up" data-section-key="${deps.escapeAttr(section.key)}" aria-label="Move section up">▲</button>` : ''}
+              ${sectionMove.canMoveDown ? `<button type="button" class="order-arrow-button" data-action="move-section-down" data-section-key="${deps.escapeAttr(section.key)}" aria-label="Move section down">▼</button>` : ''}
               <button type="button" class="section-drag-handle" draggable="true" data-drag-handle="section" data-section-key="${deps.escapeAttr(
       section.key
     )}" aria-label="Drag to reorder section">⋮⋮</button>
@@ -283,6 +284,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const isActivatingPath = state.pendingEditorActivation?.sectionKey === sectionKey && activationPathIndex >= 0;
     const activationStyle = isActivatingPath ? ` style="--editor-activation-delay: ${activationPathIndex * 150}ms;"` : '';
     const activationAttrs = isActiveSelf ? ` data-active-editor-block="true" data-active-block-id="${deps.escapeAttr(block.id)}"` : '';
+    const blockMove = getBlockMoveAvailability(sectionKey, block.id, rootSections ?? []);
     const canRemove = !parentLocked && !block.schema.lock;
     const nestToggle = `<button type="button" class="block-nest-toggle" data-action="make-block-subsection" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}" aria-label="Make subsection" title="Make subsection">›</button>`;
 
@@ -292,8 +294,8 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         <div class="editor-block-head">
           <div class="section-drag-title">
             <div class="editor-order-controls">
-              <button type="button" class="order-arrow-button" data-action="move-block-up" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}" aria-label="Move block up">▲</button>
-              <button type="button" class="order-arrow-button" data-action="move-block-down" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}" aria-label="Move block down">▼</button>
+              ${blockMove.canMoveUp ? `<button type="button" class="order-arrow-button" data-action="move-block-up" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}" aria-label="Move block up">▲</button>` : ''}
+              ${blockMove.canMoveDown ? `<button type="button" class="order-arrow-button" data-action="move-block-down" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}" aria-label="Move block down">▼</button>` : ''}
             </div>
             <strong class="editor-block-title">${deps.escapeHtml(componentLabel)}</strong>
             ${pluginHeaderChooser}
@@ -346,6 +348,48 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       return [];
     }
     return findBlockPathIds(section.blocks, pending.blockId) ?? [];
+  }
+
+  function getSectionMoveAvailability(
+    sectionKey: string,
+    sections: VisualSection[]
+  ): { canMoveUp: boolean; canMoveDown: boolean } {
+    const location = findSectionLocation(sections, sectionKey);
+    if (!location) {
+      return { canMoveUp: false, canMoveDown: false };
+    }
+    return {
+      canMoveUp: location.index > 0,
+      canMoveDown: location.index < location.container.length - 1,
+    };
+  }
+
+  function getBlockMoveAvailability(
+    sectionKey: string,
+    blockId: string,
+    rootSections: VisualSection[]
+  ): { canMoveUp: boolean; canMoveDown: boolean } {
+    const section = deps.findSectionByKey(rootSections, sectionKey);
+    if (!section) {
+      return { canMoveUp: false, canMoveDown: false };
+    }
+    const sectionBlockIndex = section.blocks.findIndex((candidate) => candidate.id === blockId);
+    if (sectionBlockIndex >= 0) {
+      const sequence = deps.buildSectionRenderSequence(section);
+      const sequenceIndex = sequence.findIndex((item) => item.kind === 'block' && item.block.id === blockId);
+      return {
+        canMoveUp: sequenceIndex > 0,
+        canMoveDown: sequenceIndex >= 0 && sequenceIndex < sequence.length - 1,
+      };
+    }
+    const location = findBlockLocation(section.blocks, blockId);
+    if (!location) {
+      return { canMoveUp: false, canMoveDown: false };
+    }
+    return {
+      canMoveUp: location.index > 0,
+      canMoveDown: location.index < location.container.length - 1,
+    };
   }
 
   function renderPassiveEditorBlockContent(
@@ -819,6 +863,45 @@ function findBlockPathIds(blocks: VisualBlock[], targetBlockId: string): string[
     const nestedPath = findBlockPathIds(nestedBlocks, targetBlockId);
     if (nestedPath) {
       return [block.id, ...nestedPath];
+    }
+  }
+  return null;
+}
+
+function findBlockLocation(
+  blocks: VisualBlock[],
+  targetBlockId: string
+): { container: VisualBlock[]; index: number } | null {
+  const index = blocks.findIndex((block) => block.id === targetBlockId);
+  if (index >= 0) {
+    return { container: blocks, index };
+  }
+  for (const block of blocks) {
+    const nested =
+      findBlockLocation(block.schema.containerBlocks ?? [], targetBlockId)
+      ?? findBlockLocation(block.schema.componentListBlocks ?? [], targetBlockId)
+      ?? findBlockLocation((block.schema.gridItems ?? []).map((item) => item.block), targetBlockId)
+      ?? findBlockLocation(block.schema.expandableStubBlocks?.children ?? [], targetBlockId)
+      ?? findBlockLocation(block.schema.expandableContentBlocks?.children ?? [], targetBlockId);
+    if (nested) {
+      return nested;
+    }
+  }
+  return null;
+}
+
+function findSectionLocation(
+  sections: VisualSection[],
+  targetSectionKey: string
+): { container: VisualSection[]; index: number } | null {
+  const index = sections.findIndex((section) => section.key === targetSectionKey);
+  if (index >= 0) {
+    return { container: sections, index };
+  }
+  for (const section of sections) {
+    const nested = findSectionLocation(section.children, targetSectionKey);
+    if (nested) {
+      return nested;
     }
   }
   return null;

@@ -269,6 +269,7 @@ export function resetTransientUiState(): void {
   state.selectedReusableComponentName = null;
   state.templateValues = {};
   state.gridAddComponentByBlock = {};
+  state.editorSidebarHelpDismissed = false;
   state.lastHistoryGroup = null;
   state.lastHistoryAt = 0;
   state.pendingEditorCenterSectionKey = null;

@@ -1,4 +1,4 @@
-import { state, getRenderApp, handleTagEditorKeydown, applyRichAction, handleRichEditorKeydown, openLinkInlineModal, closeAiEditPopover, submitAiEditRequest, handleInlineCheckboxBackspace, tagStateHelpers } from './_imports';
+import { state, getRenderApp, handleTagEditorKeydown, applyRichAction, handleRichEditorKeydown, openLinkInlineModal, closeAiEditPopover, submitAiEditRequest, handleInlineCheckboxBackspace, tagStateHelpers, findSectionByKey, createEmptyBlock, setActiveEditorBlock, recordHistory } from './_imports';
 
 export function bindKeydown(app: HTMLElement): void {
   app.addEventListener('keydown', (event) => {
@@ -29,6 +29,28 @@ export function bindKeydown(app: HTMLElement): void {
       return;
     }
     if (target instanceof HTMLInputElement && handleTagEditorKeydown(event, target, tagStateHelpers)) {
+      return;
+    }
+    if (target instanceof HTMLInputElement && target.dataset.field === 'section-title' && event.key === 'Enter') {
+      event.preventDefault();
+      const sectionKey = target.dataset.sectionKey;
+      const section = sectionKey ? findSectionByKey(state.document.sections, sectionKey) : null;
+      if (section) {
+        section.title = target.value;
+        if ((event.metaKey || event.ctrlKey) && section.title.trim().length > 0 && section.blocks.length === 0 && section.children.length === 0) {
+          recordHistory(`section-title-heading:${section.key}`);
+          const newBlock = createEmptyBlock('text');
+          newBlock.text = `${'#'.repeat(getEmptySectionHeadingLevel(section.key))} ${section.title.trim()}`;
+          section.blocks.push(newBlock);
+          state.activeEditorSectionTitleKey = null;
+          state.clearSectionTitleOnFocusKey = null;
+          setActiveEditorBlock(section.key, newBlock.id);
+        } else {
+          state.activeEditorSectionTitleKey = null;
+          state.clearSectionTitleOnFocusKey = null;
+        }
+        getRenderApp()();
+      }
       return;
     }
     if (target.dataset.inlineText === 'true' && event.key === 'Enter') {
@@ -82,4 +104,15 @@ export function bindKeydown(app: HTMLElement): void {
       openLinkInlineModal(app, richTarget);
     }
   });
+}
+
+function getEmptySectionHeadingLevel(sectionKey: string): 1 | 2 | 3 {
+  const value = state.addComponentBySection[`empty-heading:${sectionKey}`];
+  if (value === 'h2') {
+    return 2;
+  }
+  if (value === 'h3') {
+    return 3;
+  }
+  return 1;
 }

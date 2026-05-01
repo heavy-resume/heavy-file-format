@@ -74,6 +74,7 @@ interface EditorRenderState {
   activeEditorBlock: { sectionKey: string; blockId: string } | null;
   pendingEditorActivation: { sectionKey: string; blockId: string } | null;
   expandableEditorPanels: Record<string, { stubOpen: boolean; expandedOpen: boolean }>;
+  editorSidebarHelpDismissed: boolean;
 }
 
 interface EditorRenderDeps {
@@ -107,6 +108,7 @@ interface EditorRenderDeps {
 export interface EditorRenderer {
   renderSectionEditorTree: (sections: VisualSection[]) => string;
   renderSidebarEditorSections: (sections: VisualSection[]) => string;
+  renderSidebarHelpBalloon: (sections: VisualSection[]) => string;
   renderEditorBlock: (sectionKey: string, block: VisualBlock, rootSections?: VisualSection[], parentLocked?: boolean) => string;
   renderPassiveEditorBlock: (sectionKey: string, block: VisualBlock, rootSections?: VisualSection[]) => string;
   renderBlockContentEditor: (sectionKey: string, block: VisualBlock) => string;
@@ -133,6 +135,24 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       return '<div class="muted editor-sidebar-empty">Move sections here using the sidebar button.</div>';
     }
     return sidebarSections.map((section) => renderEditorSection(section, sections)).join('');
+  }
+
+  function renderSidebarHelpBalloon(sections: VisualSection[]): string {
+    if (state.editorSidebarHelpDismissed) {
+      return '';
+    }
+    const sidebarSections = sections.filter((section) => !section.isGhost && section.location === 'sidebar');
+    if (sidebarSections.length === 0) {
+      return '';
+    }
+    return `<div class="editor-sidebar-help-balloon" role="note" aria-label="Sections in pullout">
+      <div class="editor-sidebar-help-title">Contains</div>
+      <ul>
+        ${sidebarSections
+          .map((section) => `<li title="${deps.escapeAttr(deps.formatSectionTitle(section.title))}">${deps.escapeHtml(deps.formatSectionTitle(section.title))}</li>`)
+          .join('')}
+      </ul>
+    </div>`;
   }
 
   function renderSectionEditorTree(sections: VisualSection[]): string {
@@ -165,6 +185,13 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const visibleTitle = deps.formatSectionTitle(section.title);
     const isUntitled = deps.isDefaultUntitledSectionTitle(section.title);
     const sectionMove = getSectionMoveAvailability(section.key, rootSections);
+    const isNamedEmptySection =
+      !isUntitled
+      && section.title.trim().length > 0
+      && section.blocks.length === 0
+      && section.children.length === 0;
+    const emptyHeadingKey = `empty-heading:${section.key}`;
+    const emptyHeadingLevel = normalizeEmptySectionHeadingLevel(state.addComponentBySection[emptyHeadingKey]);
     const titleEditor = deps.isActiveEditorSectionTitle(section.key)
       ? `<input autofocus class="section-title-input" data-section-key="${deps.escapeAttr(section.key)}" data-field="section-title" value="${deps.escapeAttr(
         deps.isDefaultUntitledSectionTitle(section.title) ? '' : section.title
@@ -219,7 +246,20 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           ).join('')}
           ${section.lock
         ? ''
-        : `<article class="ghost-section-card add-ghost compact-add-component-ghost" data-action="add-block" data-section-key="${deps.escapeAttr(section.key)}">
+        : isNamedEmptySection
+          ? `<article class="ghost-section-card add-ghost empty-section-heading-ghost" data-action="add-empty-section-heading" data-section-key="${deps.escapeAttr(section.key)}">
+                  <div class="empty-section-heading-watermark">${deps.escapeHtml(visibleTitle)}</div>
+                  <div class="ghost-plus-big"><span>+</span></div>
+                  <div class="ghost-label">${deps.escapeHtml(visibleTitle)}</div>
+                  <label class="ghost-component-picker">
+                    <select aria-label="Heading level" data-field="empty-section-heading-level" data-section-key="${deps.escapeAttr(section.key)}">
+                      ${renderHeadingLevelOption('h1', emptyHeadingLevel, deps.escapeAttr)}
+                      ${renderHeadingLevelOption('h2', emptyHeadingLevel, deps.escapeAttr)}
+                      ${renderHeadingLevelOption('h3', emptyHeadingLevel, deps.escapeAttr)}
+                    </select>
+                  </label>
+                </article>`
+          : `<article class="ghost-section-card add-ghost compact-add-component-ghost" data-action="add-block" data-section-key="${deps.escapeAttr(section.key)}">
                   <div class="ghost-plus-big"><span>+</span></div>
                   <label class="ghost-component-picker">
                   <select aria-label="Section component type" data-field="new-component-type" data-section-key="${deps.escapeAttr(section.key)}">
@@ -819,6 +859,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
   return {
     renderSectionEditorTree,
     renderSidebarEditorSections,
+    renderSidebarHelpBalloon,
     renderEditorBlock: (sectionKey, block, rootSections, parentLocked) => renderEditorBlock(sectionKey, block, rootSections, parentLocked),
     renderPassiveEditorBlock: (sectionKey, block, rootSections) => renderPassiveEditorBlock(sectionKey, block, rootSections ?? []),
     renderBlockContentEditor: (sectionKey, block) => renderBlockContentEditor(sectionKey, block),
@@ -905,6 +946,17 @@ function findSectionLocation(
     }
   }
   return null;
+}
+
+function normalizeEmptySectionHeadingLevel(value: string | undefined): 'h1' | 'h2' | 'h3' {
+  if (value === 'h2' || value === 'h3') {
+    return value;
+  }
+  return 'h1';
+}
+
+function renderHeadingLevelOption(value: 'h1' | 'h2' | 'h3', selected: string, escapeAttr: (value: string) => string): string {
+  return `<option value="${escapeAttr(value)}" ${selected === value ? 'selected' : ''}>${value.toUpperCase()}</option>`;
 }
 
 function decorateMarkdownCodeBlocks(html: string): string {

@@ -30,6 +30,11 @@ export function bindInputMisc(app: HTMLElement): void {
       console.debug('[hvy:perf] input:end', { eventId, field, elapsedMs: Number((performance.now() - startedAt).toFixed(2)) });
       return;
     }
+    if (field === 'empty-section-heading-level' && target instanceof HTMLSelectElement) {
+      state.addComponentBySection[`empty-heading:${sectionKey}`] = target.value;
+      console.debug('[hvy:perf] input:end', { eventId, field, elapsedMs: Number((performance.now() - startedAt).toFixed(2)) });
+      return;
+    }
     if (field === 'new-grid-component-type' && target instanceof HTMLSelectElement) {
       const blockId = target.dataset.blockId;
       if (!blockId) {

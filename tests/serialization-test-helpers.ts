@@ -55,6 +55,7 @@ export function createTestState(document: VisualDocument): AppState {
     expandableEditorPanels: {},
     viewerSidebarOpen: false,
     editorSidebarOpen: false,
+    editorSidebarHelpDismissed: false,
     lastHistoryGroup: null,
     lastHistoryAt: 0,
     pendingEditorCenterSectionKey: null,

@@ -1,4 +1,4 @@
-import { getRenderApp, recordHistory, materializeDbTableDraftRow, renameDbTableColumn, syncSqliteColumnNameInDom, updateDbTableCell, handleImageUpload } from './_imports';
+import { state, getRenderApp, recordHistory, materializeDbTableDraftRow, renameDbTableColumn, syncSqliteColumnNameInDom, updateDbTableCell, handleImageUpload } from './_imports';
 import { dropDbTableColumn } from '../../plugins/db-table';
 
 export function bindChangeControls(app: HTMLElement): void {
@@ -46,6 +46,14 @@ export function bindChangeControls(app: HTMLElement): void {
       const file = target.files?.[0];
       if (!file) return;
       void handleImageUpload(target, file);
+      return;
+    }
+
+    if (field === 'empty-section-heading-level' && target instanceof HTMLSelectElement) {
+      const sectionKey = target.dataset.sectionKey;
+      if (sectionKey) {
+        state.addComponentBySection[`empty-heading:${sectionKey}`] = target.value;
+      }
       return;
     }
 

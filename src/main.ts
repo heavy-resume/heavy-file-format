@@ -97,6 +97,7 @@ function createInitialState(document: ReturnType<typeof deserializeDocumentBytes
     expandableEditorPanels: {},
     viewerSidebarOpen: false,
     editorSidebarOpen: false,
+    editorSidebarHelpDismissed: false,
     lastHistoryGroup: null,
     lastHistoryAt: 0,
     pendingEditorCenterSectionKey: null,
@@ -200,6 +201,9 @@ editorRenderer = createEditorRenderer(
     },
     get expandableEditorPanels() {
       return state.expandableEditorPanels;
+    },
+    get editorSidebarHelpDismissed() {
+      return state.editorSidebarHelpDismissed;
     },
   },
   {
@@ -408,6 +412,7 @@ function renderApp(): void {
                   <div class="editor-sidebar-backdrop" data-action="toggle-editor-sidebar"></div>
                   <aside class="editor-sidebar">
                     <button type="button" class="editor-sidebar-tab" data-action="toggle-editor-sidebar" aria-expanded="${state.editorSidebarOpen ? 'true' : 'false'}" aria-label="Toggle sidebar">☰</button>
+                    ${editorRenderer.renderSidebarHelpBalloon(state.document.sections)}
                     <div class="editor-sidebar-panel">
                       ${editorRenderer.renderSidebarEditorSections(state.document.sections)}
                     </div>

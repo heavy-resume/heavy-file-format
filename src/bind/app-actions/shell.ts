@@ -63,6 +63,7 @@ const toggleViewerSidebar: AppActionHandler = ({ app }) => {
 };
 
 const toggleEditorSidebar: AppActionHandler = ({ app }) => {
+  state.editorSidebarHelpDismissed = true;
   setEditorSidebarOpen(app, !state.editorSidebarOpen);
 };
 

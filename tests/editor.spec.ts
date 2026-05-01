@@ -39,6 +39,25 @@ test('resume template shows friendly empty component-list add prompts before act
   await expect(page.locator('.editor-block-passive .ghost-label', { hasText: 'Add Tool / Tech' }).first()).toBeVisible();
 });
 
+test('editor pullout help balloon lists loaded sidebar sections', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Resume Template' }).click();
+
+  const balloon = page.locator('.editor-sidebar-help-balloon');
+  await expect(balloon).toBeVisible();
+  await expect(balloon.locator('li')).toContainText(['Skills', 'Tools & Technologies']);
+  await expect(balloon).toHaveCSS('overflow', 'auto');
+
+  await balloon.click();
+  await expect(balloon).toBeHidden();
+
+  await page.getByRole('button', { name: 'Resume Template' }).click();
+  await expect(balloon).toBeVisible();
+  await page.locator('.editor-sidebar-tab').click();
+  await expect(balloon).toBeHidden();
+});
+
 test('component-list add prompt reveals the active edit path with staggered animation', async ({ page }) => {
   await page.goto('/');
 
@@ -84,6 +103,39 @@ test('move arrows only render when there is an adjacent target', async ({ page }
   activeBlock = page.locator('.editor-block[data-active-editor-block="true"]');
   await expect(activeBlock.locator('[data-action="move-block-up"]')).toHaveCount(1);
   await expect(activeBlock.locator('[data-action="move-block-down"]')).toHaveCount(0);
+});
+
+test('named empty sections offer a heading ghost in editor only', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"profile"}-->
+#! Profile
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  const headingGhost = page.locator('.empty-section-heading-ghost');
+  await expect(headingGhost).toBeVisible();
+  await expect(headingGhost.locator('.empty-section-heading-watermark')).toContainText('Profile');
+  await expect(headingGhost.getByRole('combobox', { name: 'Heading level' })).toHaveValue('h1');
+
+  await headingGhost.getByRole('combobox', { name: 'Heading level' }).selectOption('h2');
+  await page.locator('.section-title-passive', { hasText: 'Profile' }).click();
+  await expect(page.locator('.section-title-input')).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('.section-title-input')).toHaveCount(0);
+  await expect(headingGhost.getByRole('combobox', { name: 'Heading level' })).toHaveValue('h2');
+
+  await page.locator('.section-title-passive', { hasText: 'Profile' }).click();
+  await expect(page.locator('.section-title-input')).toBeFocused();
+  await page.keyboard.press('Control+Enter');
+
+  await expect(page.locator('.editor-block[data-active-editor-block="true"] .rich-editor h2')).toContainText('Profile');
 });
 
 test('checkbox action inserts a single inline checkbox without coercing content into a full checklist', async ({ page }) => {

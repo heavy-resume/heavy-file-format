@@ -60,6 +60,7 @@ function createHistoryTestState(): AppState {
     expandableEditorPanels: {},
     viewerSidebarOpen: false,
     editorSidebarOpen: false,
+    editorSidebarHelpDismissed: false,
     lastHistoryGroup: null,
     lastHistoryAt: 0,
     pendingEditorCenterSectionKey: null,

@@ -25,6 +25,19 @@ const addBlock: ActionHandler = ({ section }) => {
   getRenderApp()();
 };
 
+const addEmptySectionHeading: ActionHandler = ({ section }) => {
+  if (!section || section.lock || section.blocks.length > 0 || section.children.length > 0 || section.title.trim().length === 0) {
+    return;
+  }
+  recordHistory();
+  const headingLevel = normalizeEmptySectionHeadingLevel(state.addComponentBySection[`empty-heading:${section.key}`]);
+  const newBlock = createEmptyBlock('text');
+  newBlock.text = `${'#'.repeat(headingLevel)} ${section.title.trim()}`;
+  section.blocks.push(newBlock);
+  setActiveEditorBlock(section.key, newBlock.id);
+  getRenderApp()();
+};
+
 const toggleSchema: ActionHandler = ({ actionButton, blockId }) => {
   if (!blockId) {
     return;
@@ -171,6 +184,7 @@ const openComponentMeta: ActionHandler = ({ sectionKey, blockId }) => {
 
 export const blockActions: Record<string, ActionHandler> = {
   'add-block': addBlock,
+  'add-empty-section-heading': addEmptySectionHeading,
   'toggle-schema': toggleSchema,
   'image-preset': imagePreset,
   'set-block-align': setBlockAlign,
@@ -180,3 +194,13 @@ export const blockActions: Record<string, ActionHandler> = {
   'focus-modal': focusModal,
   'open-component-meta': openComponentMeta,
 };
+
+function normalizeEmptySectionHeadingLevel(value: string | undefined): 1 | 2 | 3 {
+  if (value === 'h2') {
+    return 2;
+  }
+  if (value === 'h3') {
+    return 3;
+  }
+  return 1;
+}

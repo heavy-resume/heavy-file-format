@@ -226,6 +226,14 @@ export function bindInputBlock(app: HTMLElement): void {
       return;
     }
 
+    if (field === 'empty-section-heading-level' && target instanceof HTMLSelectElement) {
+      const key = target.dataset.sectionKey;
+      if (key) {
+        state.addComponentBySection[`empty-heading:${key}`] = target.value;
+      }
+      return;
+    }
+
     if (field === 'raw-editor-text' && target instanceof HTMLTextAreaElement) {
       recordHistory('raw-editor:text');
       state.rawEditorText = target.value;

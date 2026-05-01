@@ -5,7 +5,7 @@ import { registerSerializationTestState } from './serialization-test-helpers';
 
 registerSerializationTestState();
 
-test('deserializes nested expandable slot children and part locks', () => {
+test('deserializes nested expandable slot children', () => {
   const input = `---
 hvy_version: 0.1
 ---
@@ -15,7 +15,7 @@ hvy_version: 0.1
 
  <!--hvy:expandable {"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
-  <!--hvy:expandable:stub {"lock":true}-->
+  <!--hvy:expandable:stub {}-->
 
    <!--hvy:text {"css":"margin-bottom: 0;"}-->
     ## Summary
@@ -30,12 +30,40 @@ hvy_version: 0.1
   const block = document.sections[0]?.blocks[0];
 
   expect(block.schema.component).toBe('expandable');
-  expect(block.schema.expandableStubBlocks.lock).toBe(true);
+  expect(block.schema.expandableStubBlocks.lock).toBe(false);
   expect(block.schema.expandableStubBlocks.children).toHaveLength(1);
   expect(block.schema.expandableStubBlocks.children[0]?.schema.component).toBe('text');
   expect(block.schema.expandableStubBlocks.children[0]?.text).toBe('## Summary');
   expect(block.schema.expandableContentBlocks.children).toHaveLength(1);
   expect(block.schema.expandableContentBlocks.children[0]?.text).toBe('Expanded detail');
+});
+
+test('ignores expandable slot lock metadata', () => {
+  const input = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ <!--hvy:expandable {"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+
+  <!--hvy:expandable:stub {"lock":true}-->
+
+   <!--hvy:text {}-->
+    ## Summary
+
+  <!--hvy:expandable:content {"lock":true}-->
+
+   <!--hvy:text {}-->
+    Expanded detail
+`;
+
+  const document = deserializeDocument(input, '.hvy');
+  const block = document.sections[0]?.blocks[0];
+
+  expect(block.schema.expandableStubBlocks.lock).toBe(false);
+  expect(block.schema.expandableContentBlocks.lock).toBe(false);
 });
 
 test('deserializes grid text without preserving structural indentation as code indentation', () => {

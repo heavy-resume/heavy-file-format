@@ -316,18 +316,6 @@ export function handleBlockFieldInput(target: HTMLElement): boolean {
     return true;
   }
 
-  if (field === 'block-expandable-stub-lock' && target instanceof HTMLInputElement) {
-    block.schema.expandableStubBlocks.lock = target.checked;
-    syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
-    return true;
-  }
-
-  if (field === 'block-expandable-content-lock' && target instanceof HTMLInputElement) {
-    block.schema.expandableContentBlocks.lock = target.checked;
-    syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
-    return true;
-  }
-
   if (field === 'table-show-header' && target instanceof HTMLInputElement) {
     block.schema.tableShowHeader = target.checked;
     getRefreshReaderPanels()();

@@ -457,13 +457,6 @@ function parseBlocks(
         if (!slotMetadataOnly) {
           return;
         }
-        if (parsed.lock === true) {
-          if (part === 0) {
-            parent.schema.expandableStubBlocks.lock = true;
-          } else {
-            parent.schema.expandableContentBlocks.lock = true;
-          }
-        }
         const slotCss =
           typeof parsed.css === 'string'
             ? parsed.css
@@ -1229,12 +1222,9 @@ function serializeSlotWithChild(name: string, schema: JsonObject, child: VisualB
   return [serializeSlotDirective(name, schema, indent), serializeBlock(child, indent + 1)].join('\n\n');
 }
 
-function buildExpandablePartPayload(expandableBlock: VisualBlock, part: 0 | 1, lock: boolean): JsonObject {
+function buildExpandablePartPayload(expandableBlock: VisualBlock, part: 0 | 1): JsonObject {
   const payload: JsonObject = {};
   const css = part === 0 ? expandableBlock.schema.expandableStubCss : expandableBlock.schema.expandableContentCss;
-  if (lock) {
-    payload.lock = true;
-  }
   if (css.trim().length > 0) {
     payload.css = css;
   }
@@ -1245,11 +1235,11 @@ function serializeExpandablePart(
   expandableBlock: VisualBlock,
   children: VisualBlock[],
   part: 0 | 1,
-  lock: boolean,
+  _lock: boolean,
   indent: number
 ): string {
   const name = `expandable:${part === 0 ? 'stub' : 'content'}`;
-  const payload = buildExpandablePartPayload(expandableBlock, part, lock);
+  const payload = buildExpandablePartPayload(expandableBlock, part);
   if (children.length === 0) {
     return Object.keys(payload).length > 0 ? serializeSlotDirective(name, payload, indent) : '';
   }

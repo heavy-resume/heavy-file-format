@@ -306,7 +306,7 @@ Rules:
 - The payload MUST be valid JSON object.
 - The directive applies to the immediately following content block.
 - `hvy:expandable` starts an expandable block. Its payload is the expandable block schema, with `component:"expandable"` implied.
-- `hvy:expandable:stub` and `hvy:expandable:content` are slot markers. Their payload may be empty or include only slot metadata such as `lock` and `css`.
+- `hvy:expandable:stub` and `hvy:expandable:content` are slot markers. Their payload may be empty or include only slot styling metadata such as `css`.
 - The child block for an expandable slot is declared one indentation level deeper as its own directive.
 - Multiple `hvy:expandable:stub` or `hvy:expandable:content` directives can be used for a single expandable block.
 - Each `expandable` block MUST include at least one stub child and at least one content child. Missing either side is malformed.
@@ -370,7 +370,6 @@ This is equivalent to `{ schema: { component: "my-custom-component" } }`. The fu
 
 ```yaml
 expandableStubBlocks:
-  lock: true       # optional boolean; prevents structural edits to this slot
   children:        # array of recursive block objects
     - text: ""
       schema:

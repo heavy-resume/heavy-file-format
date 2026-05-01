@@ -56,7 +56,6 @@ component_defs:
       expandableAlwaysShowStub: true
       expandableExpanded: false
       expandableStubBlocks:
-        lock: true
         children:
           - text: ""
             schema:
@@ -67,7 +66,6 @@ component_defs:
               tableRows:
                 - cells: ["", "", ""]
       expandableContentBlocks:
-        lock: true
         css: "padding: 0.5rem;"
         children:
           - text: ""
@@ -160,7 +158,6 @@ component_defs:
       expandableAlwaysShowStub: true
       expandableExpanded: false
       expandableStubBlocks:
-        lock: true
         children:
           - text: ""
             schema:
@@ -171,7 +168,6 @@ component_defs:
               tableRows:
                 - cells: ["", "", ""]
       expandableContentBlocks:
-        lock: true
         css: "padding: 0.5rem;"
         children:
           - text: ""
@@ -234,7 +230,6 @@ component_defs:
       expandableAlwaysShowStub: true
       expandableExpanded: false
       expandableStubBlocks:
-        lock: true
         css: "padding: 0.5rem;"
         children:
           - text: ""
@@ -246,7 +241,6 @@ component_defs:
               tableRows:
                 - cells: ["", ""]
       expandableContentBlocks:
-        lock: true
         children:
           - text: ""
             schema:
@@ -353,7 +347,6 @@ component_defs:
     schema:
       css: "margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);"
       expandableStubBlocks:
-        lock: true
         children:
           - text: ""
             schema:
@@ -401,16 +394,16 @@ component_defs:
 
  <!--hvy:expandable {"css":"margin: 0.5rem 0;","expandableAlwaysShowStub":true,"expandableExpanded":false,"lock":true}-->
 
-  <!--hvy:expandable:stub {"lock":true}-->
+  <!--hvy:expandable:stub {}-->
 
    <!--hvy:text {"css":"margin-bottom: 0;"}-->
      ## Summary
 
-  <!--hvy:expandable:stub {"lock":true}-->
+  <!--hvy:expandable:stub {}-->
 
    <!--hvy:text {"css":"margin-top: 0;"}-->
 
-  <!--hvy:expandable:content {"lock":true}-->
+  <!--hvy:expandable:content {}-->
 
    <!--hvy:component-list {"componentListComponent":"text","css":"margin: 0;"}-->
 

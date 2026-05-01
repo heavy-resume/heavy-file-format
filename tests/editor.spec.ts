@@ -106,6 +106,45 @@ hvy_version: 0.1
   await expect(page.locator('#rawEditor')).toContainText('**Location:** Seattle, WA');
 });
 
+test('expandable editor keeps stub and expanded slots unlocked without lock controls', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ <!--hvy:expandable {"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+
+  <!--hvy:expandable:stub {}-->
+
+   <!--hvy:text {}-->
+    ## Summary
+
+  <!--hvy:expandable:content {}-->
+
+   <!--hvy:text {}-->
+    Expanded detail
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('.editor-block-passive', { has: page.locator('.expandable-reader') }).first().click();
+  const activeBlock = page.locator('.editor-block', { has: page.locator('.expand-chooser-grid') }).first();
+
+  await expect(activeBlock.locator('[data-field="block-expandable-stub-lock"]')).toHaveCount(0);
+  await expect(activeBlock.locator('[data-field="block-expandable-content-lock"]')).toHaveCount(0);
+
+  await activeBlock.locator('[data-expandable-panel="stub"]').first().click();
+  await activeBlock.locator('[data-expandable-panel="expanded"]').first().click();
+
+  await expect(activeBlock.locator('[data-action="add-expandable-stub-block"]')).toBeVisible();
+  await expect(activeBlock.locator('[data-action="add-expandable-content-block"]')).toBeVisible();
+});
+
 test('editor pullout help balloon lists loaded sidebar sections', async ({ page }) => {
   await page.goto('/');
 

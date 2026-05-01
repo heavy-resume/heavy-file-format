@@ -36,12 +36,6 @@ export const renderExpandableEditor: ComponentEditorRenderer = (sectionKey, bloc
             )}" data-field="block-expandable-always" ${block.schema.expandableAlwaysShowStub ? 'checked' : ''} />
             <span>Always show</span>
           </label>
-          <label class="expandable-inline-toggle">
-            <input type="checkbox" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(
-              block.id
-            )}" data-field="block-expandable-stub-lock" ${stub.lock ? 'checked' : ''} />
-            <span>Lock</span>
-          </label>
           <button type="button" class="expandable-summary expandable-summary-meta-button" data-action="toggle-expandable-editor-panel" data-section-key="${helpers.escapeAttr(
             sectionKey
           )}" data-block-id="${helpers.escapeAttr(block.id)}" data-expandable-panel="stub" aria-expanded="${stubOpen ? 'true' : 'false'}">
@@ -52,12 +46,9 @@ export const renderExpandableEditor: ComponentEditorRenderer = (sectionKey, bloc
           stubOpen
             ? `<div class="expandable-part-body">
           <div class="container-inner-blocks">
-            ${stubBlocks.map((innerBlock) => helpers.renderEditorBlock(sectionKey, innerBlock, stub.lock)).join('')}
+            ${stubBlocks.map((innerBlock) => helpers.renderEditorBlock(sectionKey, innerBlock, false)).join('')}
           </div>
-          ${
-            stub.lock
-              ? ''
-              : `<article class="ghost-section-card add-ghost compact-add-component-ghost" data-action="add-expandable-stub-block" data-section-key="${helpers.escapeAttr(
+          <article class="ghost-section-card add-ghost compact-add-component-ghost" data-action="add-expandable-stub-block" data-section-key="${helpers.escapeAttr(
                   sectionKey
                 )}" data-block-id="${helpers.escapeAttr(block.id)}">
                   <div class="ghost-plus-big"><span>+</span></div>
@@ -67,8 +58,7 @@ export const renderExpandableEditor: ComponentEditorRenderer = (sectionKey, bloc
                       ${helpers.renderComponentOptions(helpers.getSelectedAddComponent(stubAddKey, 'container'))}
                     </select>
                   </label>
-                </article>`
-          }
+                </article>
         </div>`
             : `<button type="button" class="expandable-collapsed-preview expandable-collapsed-preview-button" data-action="toggle-expandable-editor-panel" data-section-key="${helpers.escapeAttr(
                 sectionKey
@@ -84,12 +74,6 @@ export const renderExpandableEditor: ComponentEditorRenderer = (sectionKey, bloc
           )}" data-block-id="${helpers.escapeAttr(block.id)}" data-expandable-panel="expanded" aria-expanded="${expandedOpen ? 'true' : 'false'}">
             <span class="expandable-label">Expanded</span>
           </button>
-          <label class="expandable-inline-toggle">
-            <input type="checkbox" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(
-              block.id
-            )}" data-field="block-expandable-content-lock" ${content.lock ? 'checked' : ''} />
-            <span>Lock</span>
-          </label>
           <button type="button" class="expandable-summary expandable-summary-meta-button" data-action="toggle-expandable-editor-panel" data-section-key="${helpers.escapeAttr(
             sectionKey
           )}" data-block-id="${helpers.escapeAttr(block.id)}" data-expandable-panel="expanded" aria-expanded="${expandedOpen ? 'true' : 'false'}">
@@ -100,12 +84,9 @@ export const renderExpandableEditor: ComponentEditorRenderer = (sectionKey, bloc
           expandedOpen
             ? `<div class="expandable-part-body">
           <div class="container-inner-blocks">
-            ${contentBlocks.map((innerBlock) => helpers.renderEditorBlock(sectionKey, innerBlock, content.lock)).join('')}
+            ${contentBlocks.map((innerBlock) => helpers.renderEditorBlock(sectionKey, innerBlock, false)).join('')}
           </div>
-          ${
-            content.lock
-              ? ''
-              : `<article class="ghost-section-card add-ghost compact-add-component-ghost" data-action="add-expandable-content-block" data-section-key="${helpers.escapeAttr(
+          <article class="ghost-section-card add-ghost compact-add-component-ghost" data-action="add-expandable-content-block" data-section-key="${helpers.escapeAttr(
                   sectionKey
                 )}" data-block-id="${helpers.escapeAttr(block.id)}">
                   <div class="ghost-plus-big"><span>+</span></div>
@@ -115,8 +96,7 @@ export const renderExpandableEditor: ComponentEditorRenderer = (sectionKey, bloc
                       ${helpers.renderComponentOptions(helpers.getSelectedAddComponent(contentAddKey, 'container'))}
                     </select>
                   </label>
-                </article>`
-          }
+                </article>
         </div>`
             : `<button type="button" class="expandable-collapsed-preview expandable-collapsed-preview-button" data-action="toggle-expandable-editor-panel" data-section-key="${helpers.escapeAttr(
                 sectionKey

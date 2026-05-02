@@ -3,6 +3,7 @@ import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import hljs from 'highlight.js/lib/core';
 import type { ComponentRenderHelpers } from './component-helpers';
+import type { ComponentPlacementState } from '../types';
 import { renderCodeEditor } from './components/code/code';
 import { renderComponentListEditor } from './components/component-list/component-list';
 import { renderContainerEditor } from './components/container/container';
@@ -73,6 +74,7 @@ interface EditorRenderState {
   showAdvancedEditor: boolean;
   addComponentBySection: Record<string, string>;
   activeEditorBlock: { sectionKey: string; blockId: string } | null;
+  componentPlacement: ComponentPlacementState | null;
   pendingEditorActivation: { sectionKey: string; blockId: string } | null;
   expandableEditorPanels: Record<string, { stubOpen: boolean; expandedOpen: boolean }>;
   editorSidebarHelpDismissed: boolean;
@@ -127,6 +129,7 @@ export interface EditorRenderer {
   renderMetaPanel: () => string;
   renderComponentFragment: (componentName: string, content: string, block: VisualBlock) => string;
   renderBlockMetaFields: (sectionKey: string, block: VisualBlock) => string;
+  renderComponentPlacementTarget: ComponentRenderHelpers['renderComponentPlacementTarget'];
 }
 
 export function createEditorRenderer(state: EditorRenderState, deps: EditorRenderDeps): EditorRenderer {
@@ -215,7 +218,9 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const subsectionToggle = isSubsection && !hasActiveBlockInSelfOrDescendants(section)
       ? `<button type="button" class="section-nest-toggle" data-action="remove-subsection" data-section-key="${deps.escapeAttr(section.key)}" aria-label="Remove subsection" title="Remove subsection">‹</button>`
       : '';
-    const addComponentGhost = `<article class="ghost-section-card add-ghost compact-add-component-ghost">
+    const addComponentGhost = state.componentPlacement
+      ? ''
+      : `<article class="ghost-section-card add-ghost compact-add-component-ghost">
                   ${renderComponentPicker({
                     id: `section:${section.key}`,
                     action: 'add-block',
@@ -257,10 +262,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       }
 
         <div class="editor-blocks">
-          ${deps.buildSectionRenderSequence(section).map((item) => item.kind === 'block'
-            ? renderEditorBlock(section.key, item.block, rootSections, section.lock)
-            : renderEditorSection(item.child, rootSections, true)
-          ).join('')}
+          ${renderEditorSectionItems(section, rootSections)}
           ${section.lock
         ? ''
         : isNamedEmptySection
@@ -282,6 +284,50 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         </div>
       </article>
     `;
+  }
+
+  function renderEditorSectionItems(section: VisualSection, rootSections: VisualSection[]): string {
+    const items = deps.buildSectionRenderSequence(section);
+    const output: string[] = [];
+    let renderedFirstBlockPlacement = false;
+    const canPlaceInSection = !section.lock;
+    for (const item of items) {
+      if (item.kind === 'block') {
+        if (!renderedFirstBlockPlacement) {
+          if (canPlaceInSection) {
+            output.push(renderComponentPlacementTarget({ container: 'section', sectionKey: section.key, placement: 'before', targetBlockId: item.block.id }));
+          }
+          renderedFirstBlockPlacement = true;
+        }
+        output.push(renderEditorBlock(section.key, item.block, rootSections, section.lock));
+        if (canPlaceInSection) {
+          output.push(renderComponentPlacementTarget({ container: 'section', sectionKey: section.key, placement: 'after', targetBlockId: item.block.id }));
+        }
+      } else {
+        output.push(renderEditorSection(item.child, rootSections, true));
+      }
+    }
+    if (!renderedFirstBlockPlacement && canPlaceInSection) {
+      output.push(renderComponentPlacementTarget({ container: 'section', sectionKey: section.key, placement: 'end' }));
+    }
+    return output.join('');
+  }
+
+  function renderComponentPlacementTarget(options: Parameters<ComponentRenderHelpers['renderComponentPlacementTarget']>[0]): string {
+    const pending = state.componentPlacement;
+    if (!pending) {
+      return '';
+    }
+    const label = `Place ${pending.mode} here`;
+    return `<button type="button" class="component-placement-target" data-action="place-component" data-section-key="${deps.escapeAttr(
+      options.sectionKey
+    )}" data-placement-container="${options.container}" data-placement="${options.placement}"${
+      options.targetBlockId ? ` data-target-block-id="${deps.escapeAttr(options.targetBlockId)}"` : ''
+    }${options.parentBlockId ? ` data-parent-block-id="${deps.escapeAttr(options.parentBlockId)}"` : ''}${
+      options.targetGridItemId ? ` data-target-grid-item-id="${deps.escapeAttr(options.targetGridItemId)}"` : ''
+    }>
+      <span>${deps.escapeHtml(label)}</span>
+    </button>`;
   }
 
   function isDescendantActive(block: VisualBlock, targetBlockId: string): boolean {
@@ -333,9 +379,17 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const activationAttrs = isActiveSelf ? ` data-active-editor-block="true" data-active-block-id="${deps.escapeAttr(block.id)}"` : '';
     const blockMove = getBlockMoveAvailability(sectionKey, block.id, rootSections ?? []);
     const canRemove = !parentLocked;
+    const placement = state.componentPlacement;
+    const isPlacementSource = placement?.sectionKey === sectionKey && placement.blockId === block.id;
+    const placementActions = canRemove
+      ? isPlacementSource
+        ? `<button type="button" class="secondary" data-action="cancel-component-placement" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}">Cancel place</button>`
+        : `<button type="button" class="ghost" data-action="start-component-move" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}">Move</button>
+           <button type="button" class="ghost" data-action="start-component-copy" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}">Copy</button>`
+      : '';
 
     return `
-      <div class="editor-block${isActivatingPath ? ' is-activating-path' : ''}"${activationStyle}${activationAttrs}>
+      <div class="editor-block${isActivatingPath ? ' is-activating-path' : ''}${isPlacementSource ? ' is-placement-source' : ''}"${activationStyle}${activationAttrs}>
         <div class="editor-block-head">
           <div class="section-drag-title">
             <div class="editor-order-controls">
@@ -345,6 +399,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
             <strong class="editor-block-title">${deps.escapeHtml(componentLabel)}</strong>
           </div>
           <div class="editor-actions">
+            ${placementActions}
             <button type="button" class="ghost" data-action="deactivate-block" data-section-key="${deps.escapeAttr(
       sectionKey
     )}" data-block-id="${deps.escapeAttr(block.id)}">Done</button>
@@ -902,6 +957,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     renderMetaPanel,
     renderComponentFragment,
     renderBlockMetaFields,
+    renderComponentPlacementTarget,
   };
 }
 

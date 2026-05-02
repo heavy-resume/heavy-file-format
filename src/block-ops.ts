@@ -553,6 +553,7 @@ export function getComponentRenderHelpers(editorRenderer: {
   renderEditorBlock: (sectionKey: string, block: VisualBlock, sections: import('./editor/types').VisualSection[], parentLocked?: boolean) => string;
   renderPassiveEditorBlock: (sectionKey: string, block: VisualBlock, sections: import('./editor/types').VisualSection[]) => string;
   renderComponentFragment: ComponentRenderHelpers['renderComponentFragment'];
+  renderComponentPlacementTarget: ComponentRenderHelpers['renderComponentPlacementTarget'];
 }, readerRenderer: { renderReaderBlock: ComponentRenderHelpers['renderReaderBlock'] }): ComponentRenderHelpers {
   return {
     escapeAttr,
@@ -565,6 +566,7 @@ export function getComponentRenderHelpers(editorRenderer: {
     renderComponentFragment: editorRenderer.renderComponentFragment,
     renderComponentOptions,
     renderAddComponentPicker: (options) => renderAddComponentPicker(options, { escapeAttr, escapeHtml, getComponentDefs }),
+    renderComponentPlacementTarget: (options) => editorRenderer.renderComponentPlacementTarget(options),
     renderOption,
     getDocumentComponentCss: (componentName: string) => getDocumentComponentDefaultCss(state.document.meta, componentName),
     getXrefTargetOptions,

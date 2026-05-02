@@ -1,12 +1,14 @@
 import { state, getRenderApp, getRefreshReaderPanels } from '../../state';
-import { findBlockByIds, resolveBlockContext, setActiveEditorBlock, clearActiveEditorBlock, moveBlockByOffset, removeBlockFromList, findBlockInList } from '../../block-ops';
-import { findBlockContainerById, findBlockContainerInList } from '../../section-ops';
+import { blockContainsBlockId, findBlockByIds, resolveBlockContext, setActiveEditorBlock, clearActiveEditorBlock, moveBlockByOffset, removeBlockFromList, findBlockInList } from '../../block-ops';
+import { findBlockContainerById, findBlockContainerInList, findSectionByKey } from '../../section-ops';
 import { createEmptyBlock, coerceAlign, getReusableTemplateByName } from '../../document-factory';
 import { recordHistory } from '../../history';
 import { syncReusableTemplateForBlock, findReusableOwner } from '../../reusable';
 import { applyImagePreset } from '../../editor/components/image/image';
 import { configurePluginBlock } from '../../plugins/plugin-block';
+import { makeId } from '../../utils';
 import type { ActionHandler } from './types';
+import type { GridItem, VisualBlock } from '../../editor/types';
 
 const addBlock: ActionHandler = ({ actionButton, section }) => {
   if (!section || section.lock) {
@@ -200,6 +202,92 @@ const openComponentMeta: ActionHandler = ({ sectionKey, blockId }) => {
   getRenderApp()();
 };
 
+const startComponentPlacement = (mode: 'move' | 'copy'): ActionHandler => ({ sectionKey, blockId }) => {
+  if (!blockId) {
+    return;
+  }
+  state.componentPlacement = { mode, sectionKey, blockId };
+  setActiveEditorBlock(sectionKey, blockId);
+  getRenderApp()();
+  centerPlacementSourceAfterRender();
+};
+
+const cancelComponentPlacement: ActionHandler = () => {
+  state.componentPlacement = null;
+  getRenderApp()();
+};
+
+const placeComponent: ActionHandler = ({ actionButton, sectionKey }) => {
+  const placement = state.componentPlacement;
+  if (!placement || !sectionKey) {
+    return;
+  }
+  const targetSection = findSectionByKey(state.document.sections, sectionKey);
+  if (!targetSection || targetSection.lock) {
+    return;
+  }
+  const sourceBlock = findBlockByIds(placement.sectionKey, placement.blockId);
+  if (!sourceBlock) {
+    state.componentPlacement = null;
+    getRenderApp()();
+    return;
+  }
+  const targetBlockId = actionButton.dataset.targetBlockId ?? '';
+  const targetGridItemId = actionButton.dataset.targetGridItemId ?? '';
+  const parentBlockId = actionButton.dataset.parentBlockId ?? '';
+  const placementContainer = actionButton.dataset.placementContainer === 'grid' ? 'grid' : 'section';
+  const targetPlacement = actionButton.dataset.placement === 'before' || actionButton.dataset.placement === 'after'
+    ? actionButton.dataset.placement
+    : 'end';
+  const gridBlock = placementContainer === 'grid' && parentBlockId ? findBlockByIds(sectionKey, parentBlockId) : null;
+  if (placementContainer === 'grid' && (!gridBlock || gridBlock.schema.component !== 'grid')) {
+    state.componentPlacement = null;
+    getRenderApp()();
+    return;
+  }
+
+  if (
+    placement.mode === 'move' &&
+    placement.sectionKey === sectionKey &&
+    (
+      targetBlockId === placement.blockId ||
+      parentBlockId === placement.blockId ||
+      getGridItemBlockId(sectionKey, parentBlockId, targetGridItemId) === placement.blockId ||
+      (parentBlockId.length > 0 && blockContainsBlockId(sourceBlock, parentBlockId))
+    )
+  ) {
+    state.componentPlacement = null;
+    getRenderApp()();
+    return;
+  }
+
+  const placedBlock = placement.mode === 'copy' ? cloneBlockForPlacement(sourceBlock) : sourceBlock;
+
+  if (placement.mode === 'move') {
+    recordHistory(`component-${placement.mode}`);
+    if (!removeBlockForPlacement(placement.sectionKey, placement.blockId)) {
+      state.componentPlacement = null;
+      getRenderApp()();
+      return;
+    }
+    syncReusableTemplateForBlock(placement.sectionKey, placement.blockId);
+  } else {
+    recordHistory(`component-${placement.mode}`);
+  }
+
+  if (placementContainer === 'grid') {
+    const insertIndex = getGridPlacementInsertIndex(gridBlock.schema.gridItems, targetPlacement, targetGridItemId);
+    gridBlock.schema.gridItems.splice(insertIndex, 0, { id: makeId('griditem'), block: placedBlock });
+  } else {
+    const insertIndex = getPlacementInsertIndex(targetSection.blocks, targetPlacement, targetBlockId);
+    targetSection.blocks.splice(insertIndex, 0, placedBlock);
+  }
+  syncReusableTemplateForBlock(sectionKey, placedBlock.id);
+  state.componentPlacement = null;
+  setActiveEditorBlock(sectionKey, placedBlock.id);
+  getRenderApp()();
+};
+
 export const blockActions: Record<string, ActionHandler> = {
   'add-block': addBlock,
   'add-empty-section-heading': addEmptySectionHeading,
@@ -211,7 +299,108 @@ export const blockActions: Record<string, ActionHandler> = {
   'move-block-down': moveBlock(1),
   'focus-modal': focusModal,
   'open-component-meta': openComponentMeta,
+  'start-component-move': startComponentPlacement('move'),
+  'start-component-copy': startComponentPlacement('copy'),
+  'cancel-component-placement': cancelComponentPlacement,
+  'place-component': placeComponent,
 };
+
+function getPlacementInsertIndex(blocks: VisualBlock[], placement: 'before' | 'after' | 'end', targetBlockId: string): number {
+  if (placement === 'end' || targetBlockId.length === 0) {
+    return blocks.length;
+  }
+  const targetIndex = blocks.findIndex((block) => block.id === targetBlockId);
+  if (targetIndex < 0) {
+    return blocks.length;
+  }
+  return placement === 'before' ? targetIndex : targetIndex + 1;
+}
+
+function getGridPlacementInsertIndex(items: GridItem[], placement: 'before' | 'after' | 'end', targetGridItemId: string): number {
+  if (placement === 'end' || targetGridItemId.length === 0) {
+    return items.length;
+  }
+  const targetIndex = items.findIndex((item) => item.id === targetGridItemId);
+  if (targetIndex < 0) {
+    return items.length;
+  }
+  return placement === 'before' ? targetIndex : targetIndex + 1;
+}
+
+function getGridItemBlockId(sectionKey: string, gridBlockId: string, gridItemId: string): string | null {
+  const gridBlock = gridBlockId ? findBlockByIds(sectionKey, gridBlockId) : null;
+  const item = gridBlock?.schema.gridItems.find((candidate) => candidate.id === gridItemId);
+  return item?.block.id ?? null;
+}
+
+function removeBlockForPlacement(sectionKey: string, blockId: string): boolean {
+  const section = findSectionByKey(state.document.sections, sectionKey);
+  return section ? removeBlockForPlacementFromList(section.blocks, blockId) : false;
+}
+
+function removeBlockForPlacementFromList(blocks: VisualBlock[], blockId: string): boolean {
+  const index = blocks.findIndex((block) => block.id === blockId);
+  if (index >= 0) {
+    blocks.splice(index, 1);
+    return true;
+  }
+  for (const block of blocks) {
+    if (removeBlockForPlacementFromList(block.schema.containerBlocks, blockId)) {
+      return true;
+    }
+    if (removeBlockForPlacementFromList(block.schema.componentListBlocks, blockId)) {
+      return true;
+    }
+    if (removeBlockForPlacementFromList(block.schema.expandableStubBlocks.children, blockId)) {
+      return true;
+    }
+    if (removeBlockForPlacementFromList(block.schema.expandableContentBlocks.children, blockId)) {
+      return true;
+    }
+    const gridItemIndex = block.schema.gridItems.findIndex((item) => item.block.id === blockId);
+    if (gridItemIndex >= 0) {
+      block.schema.gridItems.splice(gridItemIndex, 1);
+      return true;
+    }
+    for (const item of block.schema.gridItems) {
+      if (removeBlockForPlacementFromList([item.block], blockId)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function cloneBlockForPlacement(block: VisualBlock): VisualBlock {
+  const clone = JSON.parse(JSON.stringify(block)) as VisualBlock;
+  reassignBlockIds(clone);
+  return clone;
+}
+
+function reassignBlockIds(block: VisualBlock): void {
+  block.id = makeId('block');
+  block.schema.id = '';
+  block.schema.containerBlocks.forEach(reassignBlockIds);
+  block.schema.componentListBlocks.forEach(reassignBlockIds);
+  block.schema.expandableStubBlocks.children.forEach(reassignBlockIds);
+  block.schema.expandableContentBlocks.children.forEach(reassignBlockIds);
+  block.schema.gridItems.forEach((item) => {
+    item.id = makeId('griditem');
+    reassignBlockIds(item.block);
+  });
+}
+
+function centerPlacementSourceAfterRender(): void {
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      document.querySelector<HTMLElement>('.editor-block.is-placement-source')?.scrollIntoView({
+        block: 'center',
+        inline: 'nearest',
+        behavior: 'smooth',
+      });
+    });
+  });
+}
 
 function normalizeEmptySectionHeadingLevel(value: string | undefined): 1 | 2 | 3 {
   if (value === 'h2') {

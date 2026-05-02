@@ -76,6 +76,7 @@ function createInitialState(document: ReturnType<typeof deserializeDocumentBytes
     rawEditorError: null,
     rawEditorDiagnostics: [],
     activeEditorBlock: null,
+    componentPlacement: null,
     pendingEditorActivation: null,
     activeEditorSectionTitleKey: null,
     clearSectionTitleOnFocusKey: null,
@@ -195,6 +196,9 @@ editorRenderer = createEditorRenderer(
     },
     get activeEditorBlock() {
       return state.activeEditorBlock;
+    },
+    get componentPlacement() {
+      return state.componentPlacement;
     },
     get pendingEditorActivation() {
       return state.pendingEditorActivation;

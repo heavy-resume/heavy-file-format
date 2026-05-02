@@ -34,6 +34,7 @@ export function createTestState(document: VisualDocument): AppState {
     rawEditorError: null,
     rawEditorDiagnostics: [],
     activeEditorBlock: null,
+    componentPlacement: null,
     pendingEditorActivation: null,
     activeEditorSectionTitleKey: null,
     clearSectionTitleOnFocusKey: null,

@@ -87,6 +87,12 @@ export interface DbTableQueryModalState {
   error: string | null;
 }
 
+export interface ComponentPlacementState {
+  mode: 'move' | 'copy';
+  sectionKey: string;
+  blockId: string;
+}
+
 export interface RawEditorDiagnostic {
   severity: 'warning' | 'error';
   message: string;
@@ -124,6 +130,7 @@ export interface AppState {
   rawEditorError: string | null;
   rawEditorDiagnostics: RawEditorDiagnostic[];
   activeEditorBlock: { sectionKey: string; blockId: string } | null;
+  componentPlacement: ComponentPlacementState | null;
   pendingEditorActivation: { sectionKey: string; blockId: string } | null;
   activeEditorSectionTitleKey: string | null;
   clearSectionTitleOnFocusKey: string | null;

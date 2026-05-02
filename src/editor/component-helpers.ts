@@ -25,6 +25,7 @@ export interface ComponentRenderHelpers {
   renderComponentFragment: (componentName: string, content: string, block: VisualBlock) => string;
   renderComponentOptions: (selected: string) => string;
   renderAddComponentPicker: (options: AddComponentPickerOptions) => string;
+  renderComponentPlacementTarget: (options: ComponentPlacementTargetOptions) => string;
   renderOption: (value: string, selected: string) => string;
   getDocumentComponentCss: (componentName: string) => string;
   getXrefTargetOptions: () => XrefTargetOption[];
@@ -43,6 +44,15 @@ export interface AddComponentPickerOptions {
   blockId?: string;
   label?: string;
   extraAttrs?: Record<string, string>;
+}
+
+export interface ComponentPlacementTargetOptions {
+  container: 'section' | 'grid';
+  sectionKey: string;
+  placement: 'before' | 'after' | 'end';
+  targetBlockId?: string;
+  parentBlockId?: string;
+  targetGridItemId?: string;
 }
 
 export interface ComponentEditorRenderer {

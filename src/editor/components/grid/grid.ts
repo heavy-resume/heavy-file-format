@@ -1,7 +1,16 @@
 import './grid.css';
 import type { ComponentEditorRenderer, ComponentReaderRenderer } from '../../component-helpers';
 
-export const renderGridEditor: ComponentEditorRenderer = (sectionKey, block, helpers) => `
+export const renderGridEditor: ComponentEditorRenderer = (sectionKey, block, helpers) => {
+  const firstPlacementTarget = helpers.renderComponentPlacementTarget({
+    container: 'grid',
+    sectionKey,
+    parentBlockId: block.id,
+    placement: block.schema.gridItems.length > 0 ? 'before' : 'end',
+    targetGridItemId: block.schema.gridItems[0]?.id,
+  });
+  const placementMode = firstPlacementTarget.length > 0;
+  return `
   <div class="editor-grid schema-grid">
     <label>
       <span>Grid Columns</span>
@@ -13,8 +22,9 @@ export const renderGridEditor: ComponentEditorRenderer = (sectionKey, block, hel
     </label>
   </div>
   <div class="grid-fields" style="--grid-columns: ${helpers.escapeAttr(String(block.schema.gridColumns))};">
-    ${block.schema.gridItems
-      .map(
+    ${[
+      firstPlacementTarget,
+      ...block.schema.gridItems.map(
         (item) => `<div class="grid-field-row">
           <div class="grid-field-head">
             <div class="section-drag-title">
@@ -41,12 +51,19 @@ export const renderGridEditor: ComponentEditorRenderer = (sectionKey, block, hel
           <div class="grid-item-editor-shell">
             ${helpers.renderEditorBlock(sectionKey, item.block, block.schema.lock)}
           </div>
-        </div>`
-      )
-      .join('')}
+        </div>
+        ${helpers.renderComponentPlacementTarget({
+          container: 'grid',
+          sectionKey,
+          parentBlockId: block.id,
+          placement: 'after',
+          targetGridItemId: item.id,
+        })}`
+      ),
+    ].join('')}
   </div>
   ${
-    block.schema.lock
+    block.schema.lock || placementMode
       ? ''
       : `<article class="ghost-section-card add-ghost grid-add-ghost">
           ${helpers.renderAddComponentPicker({
@@ -59,6 +76,7 @@ export const renderGridEditor: ComponentEditorRenderer = (sectionKey, block, hel
         </article>`
   }
 `;
+};
 
 export const renderGridReader: ComponentReaderRenderer = (_section, block, helpers) => {
   const columns = Math.max(1, Math.min(6, block.schema.gridColumns));

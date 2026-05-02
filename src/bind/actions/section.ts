@@ -58,6 +58,9 @@ const removeSubsectionAction: ActionHandler = ({ section, sectionKey }) => {
   if (state.activeEditorBlock?.sectionKey === sectionKey) {
     state.activeEditorBlock = null;
   }
+  if (state.componentPlacement?.sectionKey === sectionKey) {
+    state.componentPlacement = null;
+  }
   getRenderApp()();
 };
 
@@ -73,6 +76,9 @@ const removeSection: ActionHandler = ({ section, sectionKey }) => {
   }
   if (state.activeEditorBlock?.sectionKey === sectionKey) {
     state.activeEditorBlock = null;
+  }
+  if (state.componentPlacement?.sectionKey === sectionKey) {
+    state.componentPlacement = null;
   }
   getRenderApp()();
 };

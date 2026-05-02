@@ -159,6 +159,7 @@ function restoreFromSnapshot(snapshot: string): void {
     state.rawEditorText = parsed.rawEditorText ?? '';
     state.rawEditorError = parsed.rawEditorError ?? null;
     state.rawEditorDiagnostics = parsed.rawEditorDiagnostics ?? [];
+    state.componentPlacement = null;
   } catch {
     // no-op
   }

@@ -1,4 +1,4 @@
-import { state, findSectionByKey, getReusableNameFromSectionKey, applyRichAction, openLinkInlineModal } from './_imports';
+import { state, findSectionByKey, getReusableNameFromSectionKey, applyRichAction, openLinkInlineModal, getRenderApp } from './_imports';
 import { actionRegistry } from '../actions/registry';
 import { openRemoveConfirmationModal } from './remove-confirmation-modal';
 
@@ -28,6 +28,15 @@ export function bindClickDispatch(app: HTMLElement): void {
 
   app.addEventListener('click', (event) => {
     const target = event.target as HTMLElement;
+    const actionButton = target.closest<HTMLElement>('[data-action]');
+
+    if (state.componentPlacement && !isPlacementModeAction(actionButton?.dataset.action ?? '')) {
+      state.componentPlacement = null;
+      event.preventDefault();
+      event.stopPropagation();
+      getRenderApp()();
+      return;
+    }
 
     if (target.closest('select') || target.closest('input')) {
       return;
@@ -56,13 +65,16 @@ export function bindClickDispatch(app: HTMLElement): void {
       return;
     }
 
-    const actionButton = target.closest<HTMLElement>('[data-action]');
     if (!actionButton) {
       return;
     }
 
     executeActionButton(app, actionButton);
   });
+}
+
+function isPlacementModeAction(action: string): boolean {
+  return action === 'place-component' || action === 'cancel-component-placement';
 }
 
 function executeActionButton(app: HTMLElement, actionButton: HTMLElement, confirmedRemoveReady = false): void {

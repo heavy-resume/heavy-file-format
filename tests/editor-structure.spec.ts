@@ -250,6 +250,84 @@ hvy_version: 0.1
   await expect(page.locator('[data-field="block-component-list-component"]')).toHaveCount(0);
 });
 
+test('component move and copy use placement boundaries', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ <!--hvy:text {"id":"alpha"}-->
+  Alpha
+
+ <!--hvy:text {"id":"beta"}-->
+  Beta
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('.editor-block-passive', { hasText: 'Alpha' }).click();
+  await page.locator('.editor-block[data-active-editor-block="true"] [data-action="start-component-copy"]').click();
+  await expect(page.locator('.component-placement-target')).toHaveCount(3);
+  await page.locator('.editor-section-head').first().click();
+  await expect(page.locator('.component-placement-target')).toHaveCount(0);
+
+  await page.locator('.editor-block[data-active-editor-block="true"] [data-action="start-component-copy"]').click();
+  await expect(page.locator('.component-placement-target')).toHaveCount(3);
+  await page.locator('[data-action="place-component"][data-placement="after"]').nth(1).click();
+
+  await page.locator('.editor-block-passive', { hasText: 'Beta' }).first().click();
+  await page.locator('.editor-block[data-active-editor-block="true"] [data-action="start-component-move"]').click();
+  await page.locator('[data-action="place-component"][data-placement="before"]').first().click();
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  const raw = await page.locator('#rawEditor').inputValue();
+  expect(raw.indexOf('Beta')).toBeLessThan(raw.indexOf('Alpha'));
+  expect(raw.match(/Alpha/g)).toHaveLength(2);
+});
+
+test('component placement supports grid slots', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ <!--hvy:grid {"id":"layout","gridColumns":2}-->
+  <!--hvy:grid:0 {}-->
+
+   <!--hvy:text {"id":"one"}-->
+    One
+
+  <!--hvy:grid:1 {}-->
+
+   <!--hvy:text {"id":"two"}-->
+    Two
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('.reader-grid-cell .editor-block-passive', { hasText: 'One' }).click();
+  await page.locator('.editor-block[data-active-editor-block="true"] [data-action="start-component-copy"]').click();
+
+  await expect(page.locator('[data-placement-container="grid"]')).toHaveCount(3);
+  await expect(page.locator('.grid-add-ghost')).toHaveCount(0);
+  await page.locator('[data-placement-container="grid"][data-placement="after"]').first().click();
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  const raw = await page.locator('#rawEditor').inputValue();
+  expect(raw.match(/One/g)).toHaveLength(2);
+  expect(raw.indexOf('One')).toBeLessThan(raw.indexOf('Two'));
+});
+
 test('move arrows only render when there is an adjacent target', async ({ page }) => {
   await page.goto('/');
 

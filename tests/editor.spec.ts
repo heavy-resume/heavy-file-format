@@ -285,7 +285,7 @@ hvy_version: 0.1
 <!--hvy: {"id":"skills"}-->
 #! Skills
 
- <!--hvy:component-list {"componentListComponent":"text"}-->
+ <!--hvy:component-list {"id":"skills-list","componentListComponent":"text"}-->
 
   <!--hvy:component-list:0 {}-->
 
@@ -306,6 +306,42 @@ hvy_version: 0.1
   await expect(activeBlock.locator('.rich-editor')).toBeVisible();
   await expect(activeBlock.locator('.rich-editor')).toContainText('Python');
   await expect(activeBlock.locator('.rich-editor')).not.toContainText('TypeScript');
+});
+
+test('clicking an already revealed nested item skips activation reveal animation', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"skills"}-->
+#! Skills
+
+ <!--hvy:component-list {"id":"skills-list","componentListComponent":"text"}-->
+
+  <!--hvy:component-list:0 {}-->
+
+   <!--hvy:text {}-->
+    Python
+
+  <!--hvy:component-list:1 {}-->
+
+   <!--hvy:text {}-->
+    TypeScript
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('.editor-blocks > .editor-block-passive').first().dispatchEvent('click');
+  await expect(page.locator('.editor-block[data-active-editor-block="true"] .editor-block-title')).toContainText('component-list');
+
+  await page.locator('.editor-block-passive', { hasText: 'Python' }).last().click();
+
+  const activeBlock = page.locator('.editor-block[data-active-editor-block="true"]');
+  await expect(activeBlock.locator('.rich-editor')).toContainText('Python');
+  await expect(page.locator('.editor-block.is-activating-path')).toHaveCount(0);
 });
 
 test('populated component-list hides the list component type dropdown', async ({ page }) => {

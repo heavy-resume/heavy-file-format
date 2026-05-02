@@ -114,10 +114,10 @@ function getPickerGroups(componentDefs: ComponentDefinition[]): PickerGroup[] {
     {
       id: 'text',
       label: 'Text',
-      description: 'multipurpose text component',
+      description: 'multipurpose',
       position: 'top',
       direct: true,
-      items: [{ value: 'text', label: 'Text', description: 'multipurpose text component' }],
+      items: [{ value: 'text', label: 'Text', description: 'multipurpose' }],
     },
     {
       id: 'image',
@@ -155,7 +155,7 @@ function getPickerGroups(componentDefs: ComponentDefinition[]): PickerGroup[] {
     {
       id: 'custom',
       label: 'Custom',
-      description: 'custom components',
+      description: 'reusable components',
       position: 'bottom',
       direct: false,
       items: [
@@ -163,13 +163,13 @@ function getPickerGroups(componentDefs: ComponentDefinition[]): PickerGroup[] {
         ...componentDefs
           .map((def) => def.name.trim())
           .filter((name) => name.length > 0)
-          .map((name) => ({ value: name, label: name, description: 'custom component' })),
+          .map((name) => ({ value: name, label: name, description: 'reusable components' })),
       ],
     },
     {
       id: 'plugins',
       label: 'Plugin',
-      description: 'components from plugins',
+      description: 'plugin components',
       position: 'bottom-right',
       direct: false,
       items: pluginItems.length > 0 ? pluginItems : [{ value: 'plugin', label: 'Plugin', description: 'No plugins installed' }],

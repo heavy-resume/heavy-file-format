@@ -74,6 +74,40 @@ export function findBlockInList(blocks: VisualBlock[], blockId: string): VisualB
   return null;
 }
 
+function findBlockPathInList(blocks: VisualBlock[], blockId: string): string[] | null {
+  for (const block of blocks) {
+    if (block.id === blockId) {
+      return [block.id];
+    }
+    const nestedBlocks = [
+      ...(block.schema.containerBlocks ?? []),
+      ...(block.schema.componentListBlocks ?? []),
+      ...((block.schema.gridItems ?? []).map((item) => item.block)),
+      ...(block.schema.expandableStubBlocks?.children ?? []),
+      ...(block.schema.expandableContentBlocks?.children ?? []),
+    ];
+    const nestedPath = findBlockPathInList(nestedBlocks, blockId);
+    if (nestedPath) {
+      return [block.id, ...nestedPath];
+    }
+  }
+  return null;
+}
+
+function getEditorBlockPathIds(sectionKey: string, blockId: string): string[] | null {
+  const sqliteRowComponentModal = state.sqliteRowComponentModal;
+  if (sqliteRowComponentModal?.sectionKey === sectionKey) {
+    return findBlockPathInList(sqliteRowComponentModal.blocks, blockId);
+  }
+  const reusableName = getReusableNameFromSectionKey(sectionKey);
+  if (reusableName) {
+    const template = getReusableTemplateByName(reusableName);
+    return template ? findBlockPathInList([template], blockId) : null;
+  }
+  const section = findSectionByKey(state.document.sections, sectionKey);
+  return section ? findBlockPathInList(section.blocks, blockId) : null;
+}
+
 export function removeBlockFromList(blocks: VisualBlock[], blockId: string): boolean {
   const index = blocks.findIndex((candidate) => candidate.id === blockId);
   if (index >= 0) {
@@ -453,8 +487,27 @@ export function isActiveEditorBlock(sectionKey: string, blockId: string): boolea
 }
 
 export function setActiveEditorBlock(sectionKey: string, blockId: string): void {
+  const currentActiveBlock = state.activeEditorBlock;
+  const currentPath = currentActiveBlock?.sectionKey === sectionKey
+    ? getEditorBlockPathIds(sectionKey, currentActiveBlock.blockId)
+    : null;
+  const nextPath = getEditorBlockPathIds(sectionKey, blockId);
   state.activeEditorBlock = { sectionKey, blockId };
-  state.pendingEditorActivation = { sectionKey, blockId };
+  state.pendingEditorActivation = shouldRevealEditorActivationPath(currentPath, nextPath)
+    ? { sectionKey, blockId }
+    : null;
+}
+
+function shouldRevealEditorActivationPath(currentPath: string[] | null, nextPath: string[] | null): boolean {
+  if (!nextPath) {
+    return true;
+  }
+  if (!currentPath) {
+    return true;
+  }
+  const sharedPathLength = nextPath.findIndex((blockId, index) => currentPath[index] !== blockId);
+  const commonLength = sharedPathLength === -1 ? Math.min(currentPath.length, nextPath.length) : sharedPathLength;
+  return commonLength < nextPath.length - 1;
 }
 
 export function clearActiveEditorBlock(blockId?: string): void {

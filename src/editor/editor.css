@@ -720,8 +720,8 @@
   align-content: center;
   justify-items: center;
   padding: 0.38rem 0.55rem;
-  /* border-color: color-mix(in srgb, var(--hvy-border) 70%, transparent);
-  border-radius: 999px; */
+  /* border-color: color-mix(in srgb, var(--hvy-border) 70%, transparent); */
+  border-radius: 999px;
   /* background: color-mix(in srgb, var(--hvy-surface) 90%, var(--hvy-surface-tint) 10%); */
   background: transparent;
   border: none;
@@ -772,7 +772,6 @@
   width: min(11rem, 78%);
   min-height: 4.8rem;
   border-color: var(--hvy-focus);
-  border-radius: 999px;
   background: color-mix(in srgb, var(--hvy-surface-tint) 72%, var(--hvy-surface) 28%);
   box-shadow: 0 16px 34px var(--hvy-shadow-md), 0 0 0 2px var(--hvy-focus-ring);
 }

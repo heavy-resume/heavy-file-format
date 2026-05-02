@@ -18,6 +18,8 @@ interface PickerGroup {
   id: string;
   label: string;
   description: string;
+  position: 'top' | 'top-left' | 'top-right' | 'bottom' | 'bottom-left' | 'bottom-right';
+  direct: boolean;
   items: PickerItem[];
 }
 
@@ -38,7 +40,7 @@ export function renderAddComponentPicker(options: AddComponentPickerOptions, dep
         <div class="component-picker-viewport">
           <div class="component-picker-panes">
             <div class="component-picker-pane component-picker-pane-root" data-picker-pane="root">
-              ${groups.map((group) => renderGroupButton(options.id, group, deps)).join('')}
+              ${groups.map((group) => renderGroupButton(options, group, deps)).join('')}
             </div>
             ${groups.map((group) => renderGroupPane(options, group, deps)).join('')}
           </div>
@@ -48,9 +50,15 @@ export function renderAddComponentPicker(options: AddComponentPickerOptions, dep
   `;
 }
 
-function renderGroupButton(_pickerId: string, group: PickerGroup, deps: RenderDeps): string {
+function renderGroupButton(options: AddComponentPickerOptions, group: PickerGroup, deps: RenderDeps): string {
+  if (group.direct && group.items.length === 1) {
+    return renderComponentButton(options, group.items[0]!, deps, {
+      className: 'component-picker-row-category component-picker-row-direct',
+      position: group.position,
+    });
+  }
   return `
-    <button type="button" class="component-picker-row component-picker-row-category" data-component-picker-pane="${deps.escapeAttr(group.id)}">
+    <button type="button" class="component-picker-row component-picker-row-category" data-picker-position="${deps.escapeAttr(group.position)}" data-component-picker-pane="${deps.escapeAttr(group.id)}">
       <span class="component-picker-row-title">${deps.escapeHtml(group.label)}</span>
       <span class="component-picker-row-description">${deps.escapeHtml(group.description)}</span>
     </button>
@@ -67,18 +75,24 @@ function renderGroupPane(options: AddComponentPickerOptions, group: PickerGroup,
   `;
 }
 
-function renderComponentButton(options: AddComponentPickerOptions, item: PickerItem, deps: RenderDeps): string {
+function renderComponentButton(
+  options: AddComponentPickerOptions,
+  item: PickerItem,
+  deps: RenderDeps,
+  display: { className?: string; position?: PickerGroup['position'] } = {}
+): string {
   const extraAttrs = Object.entries(options.extraAttrs ?? {})
     .map(([key, value]) => ` ${deps.escapeAttr(key)}="${deps.escapeAttr(value)}"`)
     .join('');
   const blockIdAttr = options.blockId ? ` data-block-id="${deps.escapeAttr(options.blockId)}"` : '';
+  const positionAttr = display.position ? ` data-picker-position="${deps.escapeAttr(display.position)}"` : '';
   return `
     <button
       type="button"
-      class="component-picker-row component-picker-row-leaf"
+      class="component-picker-row component-picker-row-leaf${display.className ? ` ${deps.escapeAttr(display.className)}` : ''}"
       data-action="${deps.escapeAttr(options.action)}"
       data-section-key="${deps.escapeAttr(options.sectionKey)}"${blockIdAttr}
-      data-component="${deps.escapeAttr(item.value)}"${extraAttrs}
+      data-component="${deps.escapeAttr(item.value)}"${positionAttr}${extraAttrs}
     >
       <span class="component-picker-row-title">${deps.escapeHtml(item.label)}</span>
       <span class="component-picker-row-description">${deps.escapeHtml(item.description)}</span>
@@ -92,12 +106,16 @@ function getPickerGroups(componentDefs: ComponentDefinition[]): PickerGroup[] {
       id: 'text',
       label: 'Text',
       description: 'multipurpose text component',
+      position: 'top',
+      direct: true,
       items: [{ value: 'text', label: 'Text', description: 'multipurpose text component' }],
     },
     {
       id: 'image',
       label: 'Image',
       description: 'add an image',
+      position: 'top-left',
+      direct: true,
       items: [{ value: 'image', label: 'Image', description: 'add an image' }],
     },
   ];
@@ -106,6 +124,8 @@ function getPickerGroups(componentDefs: ComponentDefinition[]): PickerGroup[] {
       id: 'table',
       label: 'Table',
       description: 'a static table of information',
+      position: 'top-right',
+      direct: true,
       items: [{ value: 'table', label: 'Table', description: 'a static table of information' }],
     });
   }
@@ -114,6 +134,8 @@ function getPickerGroups(componentDefs: ComponentDefinition[]): PickerGroup[] {
       id: 'containers',
       label: 'Containers',
       description: 'lists, grids, and containers',
+      position: 'bottom-left',
+      direct: false,
       items: [
         { value: 'container', label: 'Container', description: 'group components together' },
         { value: 'component-list', label: 'List', description: 'repeat a component template' },
@@ -125,6 +147,8 @@ function getPickerGroups(componentDefs: ComponentDefinition[]): PickerGroup[] {
       id: 'custom',
       label: 'Custom',
       description: 'custom components',
+      position: 'bottom',
+      direct: false,
       items: [
         { value: 'xref-card', label: 'Cross-reference card', description: 'link to another document section' },
         ...componentDefs
@@ -137,6 +161,8 @@ function getPickerGroups(componentDefs: ComponentDefinition[]): PickerGroup[] {
       id: 'plugins',
       label: 'Plugins',
       description: 'components from plugins',
+      position: 'bottom-right',
+      direct: true,
       items: [{ value: 'plugin', label: 'Plugin', description: 'components from plugins' }],
     }
   );

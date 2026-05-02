@@ -609,17 +609,24 @@ test('component picker opens categories and adds selected component', async ({ p
   await addComponent.getByRole('button', { name: 'Section component type' }).click();
 
   const picker = addComponent.locator('.component-picker-popover');
-  await expect(picker.locator('.component-picker-pane-root').getByText('multipurpose text component')).toBeVisible();
-  await expect(picker.locator('.component-picker-pane-root').getByText('add an image')).toBeVisible();
-  await expect(picker.locator('.component-picker-pane-root').getByText('a static table of information')).toBeVisible();
-  await expect(picker.locator('.component-picker-pane-root').getByText('lists, grids, and containers')).toBeVisible();
-  await expect(picker.locator('.component-picker-pane-root').getByText('custom components')).toBeVisible();
-  await expect(picker.locator('.component-picker-pane-root').getByText('components from plugins')).toBeVisible();
+  const rootPane = picker.locator('.component-picker-pane-root');
+  await expect(rootPane.locator('.component-picker-row-title', { hasText: 'Text' })).toBeVisible();
+  await expect(rootPane.locator('.component-picker-row-title', { hasText: 'Image' })).toBeVisible();
+  await expect(rootPane.locator('.component-picker-row-title', { hasText: 'Table' })).toBeVisible();
+  await expect(rootPane.locator('.component-picker-row-title', { hasText: 'Containers' })).toBeVisible();
+  await expect(rootPane.locator('.component-picker-row-title', { hasText: 'Custom' })).toBeVisible();
+  await expect(rootPane.locator('.component-picker-row-title', { hasText: 'Plugin' })).toBeVisible();
+  await expect(rootPane.getByText('multipurpose text component')).toBeHidden();
+  await rootPane.locator('.component-picker-row-direct[data-component="text"]').hover();
+  await expect(rootPane.getByText('multipurpose text component')).toBeVisible();
 
-  await picker.locator('.component-picker-row-category', { hasText: 'Text' }).click();
-  const textPane = picker.locator('[data-picker-pane="text"]');
-  await expect(textPane.locator('.component-picker-pane-title', { hasText: 'Text' })).toBeVisible();
-  await textPane.locator('[data-action="add-block"][data-component="text"]').click();
+  await picker.locator('.component-picker-row-category', { hasText: 'Containers' }).click();
+  await expect(picker.locator('[data-picker-pane="containers"] .component-picker-row-title', { hasText: 'Container' })).toBeVisible();
+  await addComponent.getByRole('button', { name: 'Section component type' }).click();
+  await expect(rootPane.locator('.component-picker-row-title', { hasText: 'Text' })).toBeVisible();
+  await expect(picker.locator('[data-picker-pane="containers"] .component-picker-row-title', { hasText: 'Container' })).toBeHidden();
+
+  await picker.locator('.component-picker-row-direct[data-component="text"]').click();
 
   await expect(page.locator('.editor-block .rich-editor').first()).toBeVisible();
 });

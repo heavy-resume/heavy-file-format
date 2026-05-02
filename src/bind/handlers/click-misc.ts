@@ -11,14 +11,18 @@ export function bindClickMisc(app: HTMLElement): void {
         picker.dataset.open = 'true';
         picker.dataset.activePane = 'root';
         placeComponentPicker(picker);
+        revealComponentPicker(picker);
       }
       return;
     }
     const pickerPaneButton = target.closest<HTMLElement>('[data-component-picker-pane]');
     if (pickerPaneButton) {
+      event.preventDefault();
       const picker = pickerPaneButton.closest<HTMLElement>('.component-picker');
       if (picker) {
+        picker.dataset.open = 'true';
         picker.dataset.activePane = pickerPaneButton.dataset.componentPickerPane ?? 'root';
+        revealComponentPicker(picker);
       }
       return;
     }
@@ -45,8 +49,20 @@ function closeOtherComponentPickers(app: HTMLElement, except?: HTMLElement): voi
   app.querySelectorAll<HTMLElement>('.component-picker[data-open="true"]').forEach((picker) => {
     if (picker !== except) {
       delete picker.dataset.open;
+      picker.dataset.activePane = 'root';
       picker.style.removeProperty('--component-picker-shift');
     }
+  });
+}
+
+function revealComponentPicker(picker: HTMLElement): void {
+  requestAnimationFrame(() => {
+    const popover = picker.querySelector<HTMLElement>('.component-picker-popover');
+    if (!popover) {
+      return;
+    }
+    popover.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    requestAnimationFrame(() => placeComponentPicker(picker));
   });
 }
 

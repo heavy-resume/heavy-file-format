@@ -43,14 +43,20 @@ function formatPluginHintLines(pluginHints: DocumentEditPluginHint[]): string[] 
   ];
 }
 
-export function buildDocumentEditFormatInstructions(options?: { dbTableNames?: string[]; pluginHints?: DocumentEditPluginHint[] }): string {
+export function buildDocumentEditFormatInstructions(options?: {
+  dbTableNames?: string[];
+  pluginHints?: DocumentEditPluginHint[];
+  planActive?: boolean;
+}): string {
   const dbTableNames = options?.dbTableNames ?? [];
   const pluginHints = options?.pluginHints ?? [];
+  const planActive = options?.planActive ?? false;
   const hasDbTables = dbTableNames.length > 0;
   const hasDbTablePlugin = pluginHints.some((plugin) => plugin.id === 'dev.heavy.db-table');
+  const planTools = planActive ? '`mark_step_done`' : '`plan`, `mark_step_done`';
   const validTools = hasDbTables
-    ? '`answer`, `plan`, `mark_step_done`, `grep`, `get_css`, `get_properties`, `set_properties`, `view_component`, `view_rendered_component`, `edit_component`, `patch_component`, `create_component`, `remove_component`, `create_section`, `remove_section`, `reorder_section`, `query_db_table`, `request_structure`, `request_rendered_structure`, `done`'
-    : '`answer`, `plan`, `mark_step_done`, `grep`, `get_css`, `get_properties`, `set_properties`, `view_component`, `view_rendered_component`, `edit_component`, `patch_component`, `create_component`, `remove_component`, `create_section`, `remove_section`, `reorder_section`, `request_structure`, `request_rendered_structure`, `done`';
+    ? `\`answer\`, ${planTools}, \`grep\`, \`get_css\`, \`get_properties\`, \`set_properties\`, \`view_component\`, \`view_rendered_component\`, \`edit_component\`, \`patch_component\`, \`create_component\`, \`remove_component\`, \`create_section\`, \`remove_section\`, \`reorder_section\`, \`query_db_table\`, \`request_structure\`, \`request_rendered_structure\`, \`done\``
+    : `\`answer\`, ${planTools}, \`grep\`, \`get_css\`, \`get_properties\`, \`set_properties\`, \`view_component\`, \`view_rendered_component\`, \`edit_component\`, \`patch_component\`, \`create_component\`, \`remove_component\`, \`create_section\`, \`remove_section\`, \`reorder_section\`, \`request_structure\`, \`request_rendered_structure\`, \`done\``;
   return [
     'Reply with exactly one JSON object and nothing else.',
     'Choose one tool at a time.',
@@ -59,7 +65,9 @@ export function buildDocumentEditFormatInstructions(options?: { dbTableNames?: s
     'All new visible content must be encoded as HVY sections and components using `<!--hvy:...-->` directives plus Markdown-like text content.',
     ...formatPluginHintLines(pluginHints),
     'Use `answer` for informational questions, explanations, or requests that do not require changing the HVY document. `answer` is final and does not mutate the document.',
-    'For larger or ambiguous edit requests, first use `plan` with explicit steps. Keep the plan concise and actionable.',
+    planActive
+      ? 'A plan already exists for this request. The `plan` tool is unavailable now; execute the current plan and use `mark_step_done` when steps are complete.'
+      : 'For larger or ambiguous edit requests, first use `plan` with explicit steps. Keep the plan concise and actionable.',
     'Create at most one plan for the current request. Once a plan exists, execute it and mark steps done instead of replacing it.',
     'When a planned step is complete, use `mark_step_done` before moving on or finishing. The current plan progress is kept in context.',
     'If the user reports an error rendered by a component or plugin, inspect rendered output, find the owning component, then fix that serialized component.',
@@ -100,7 +108,7 @@ export function buildDocumentEditFormatInstructions(options?: { dbTableNames?: s
     '',
     'Tool shapes:',
     '{"tool":"answer","answer":"Direct answer to the user."}',
-    '{"tool":"plan","steps":["Find the relevant section","Patch the component","Verify the updated structure"],"reason":"optional"}',
+    ...(planActive ? [] : ['{"tool":"plan","steps":["Find the relevant section","Patch the component","Verify the updated structure"],"reason":"optional"}']),
     '{"tool":"mark_step_done","step":1,"summary":"Found the relevant section.","reason":"optional"}',
     '{"tool":"grep","query":"Python|TypeScript","flags":"i","before":2,"after":2,"max_count":3,"reason":"optional"}',
     '{"tool":"grep","query":"/Python|TypeScript/i","before":2,"after":2,"max_count":3,"reason":"optional"}',
@@ -158,13 +166,17 @@ export function buildInitialDocumentEditPrompt(request: string): string {
   ].join('\n');
 }
 
-export function buildHeaderEditFormatInstructions(): string {
+export function buildHeaderEditFormatInstructions(options?: { planActive?: boolean }): string {
+  const planActive = options?.planActive ?? false;
+  const planTools = planActive ? '`mark_step_done`' : '`plan`, `mark_step_done`';
   return [
     'Reply with exactly one JSON object and nothing else.',
     'Choose one header tool at a time.',
-    'Valid header tools are: `answer`, `plan`, `mark_step_done`, `grep_header`, `view_header`, `patch_header`, `request_header`, `done`.',
+    `Valid header tools are: \`answer\`, ${planTools}, \`grep_header\`, \`view_header\`, \`patch_header\`, \`request_header\`, \`done\`.`,
     'Use `answer` for informational questions, explanations, or requests that do not require changing the HVY header. `answer` is final and does not mutate the document.',
-    'For larger or ambiguous header edit requests, first use `plan` with explicit steps. Create at most one plan, then execute it and mark steps done instead of replacing it.',
+    planActive
+      ? 'A plan already exists for this request. The `plan` tool is unavailable now; execute the current plan and use `mark_step_done` when steps are complete.'
+      : 'For larger or ambiguous header edit requests, first use `plan` with explicit steps. Create at most one plan, then execute it and mark steps done instead of replacing it.',
     'The header is YAML front matter only. It contains document metadata and reusable definitions such as `component_defs` and `section_defs`.',
     'Use the header path for document-level metadata, theme colors, component defaults, section defaults, template schema, plugins, and reusable component/section definitions.',
     'Do not invent metadata fields. For `section_defaults`, the only supported field is `css`, for example `section_defaults:\\n  css: "margin: 0.5rem 0;"`.',
@@ -182,7 +194,7 @@ export function buildHeaderEditFormatInstructions(): string {
     '',
     'Tool shapes:',
     '{"tool":"answer","answer":"Direct answer to the user."}',
-    '{"tool":"plan","steps":["Find the reusable definition","Patch the YAML","Verify the header"],"reason":"optional"}',
+    ...(planActive ? [] : ['{"tool":"plan","steps":["Find the reusable definition","Patch the YAML","Verify the header"],"reason":"optional"}']),
     '{"tool":"mark_step_done","step":1,"summary":"Found the reusable definition.","reason":"optional"}',
     '{"tool":"request_header","reason":"optional"}',
     '{"tool":"grep_header","query":"component_defs|skill-card","flags":"i","before":2,"after":8,"max_count":3,"reason":"optional"}',

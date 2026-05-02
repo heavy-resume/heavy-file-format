@@ -391,7 +391,7 @@ async function runDocumentEditToolLoop(params: {
       settings: params.settings,
       messages: conversation,
       context: buildLoopContext(contextSummary, plan),
-      formatInstructions: buildDocumentEditFormatInstructions({ dbTableNames, pluginHints }),
+      formatInstructions: buildDocumentEditFormatInstructions({ dbTableNames, pluginHints, planActive: plan !== null }),
       mode: 'document-edit',
       debugLabel: `ai-document-edit:${iteration + 1}`,
       signal: params.signal,
@@ -435,9 +435,8 @@ async function runDocumentEditToolLoop(params: {
     let toolResult = '';
     if (parsed.value.tool === 'plan') {
       if (plan) {
-        params.onProgress?.('Plan already exists; continuing the current plan.');
         toolResult = buildToolResult('plan', [
-          'A plan already exists. Do not replace it unless the user changes the goal.',
+          'A plan already exists and the `plan` tool is no longer available for this request.',
           'Continue by executing the next unfinished step and use `mark_step_done` when it is complete.',
           '',
           formatPlanState(plan),
@@ -449,9 +448,9 @@ async function runDocumentEditToolLoop(params: {
         params.onProgress?.(formatPlanState(plan));
       }
     } else if (parsed.value.tool === 'mark_step_done') {
-      params.onProgress?.(describeDocumentToolProgress(parsed.value));
       const result = markPlanStepDone(plan, parsed.value.step, parsed.value.summary);
       if (result.changed) {
+        params.onProgress?.(describeDocumentToolProgress(parsed.value));
         rewardLoopHealthForPlanStepDone(health);
       }
       toolResult = buildToolResult('mark_step_done', result.message);
@@ -634,7 +633,7 @@ async function runHeaderEditToolLoop(params: {
       settings: params.settings,
       messages: conversation,
       context: buildLoopContext(contextSummary, plan),
-      formatInstructions: buildHeaderEditFormatInstructions(),
+      formatInstructions: buildHeaderEditFormatInstructions({ planActive: plan !== null }),
       mode: 'document-edit',
       debugLabel: `ai-header-edit:${iteration + 1}`,
       signal: params.signal,
@@ -671,7 +670,9 @@ async function runHeaderEditToolLoop(params: {
       };
     }
 
-    params.onProgress?.(describeHeaderToolProgress(parsed.value));
+    if (parsed.value.tool !== 'plan' && parsed.value.tool !== 'mark_step_done') {
+      params.onProgress?.(describeHeaderToolProgress(parsed.value));
+    }
     const actionKey = getToolActionKey(parsed.value);
     const beforeProgress = summarizeHeaderLoopProgress(params.document, plan);
     const newInformationProgress = isHeaderInformationTool(parsed.value.tool) && !health.seenActionKeys.has(actionKey);
@@ -679,7 +680,7 @@ async function runHeaderEditToolLoop(params: {
     if (parsed.value.tool === 'plan') {
       if (plan) {
         toolResult = buildToolResult('plan', [
-          'A plan already exists. Do not replace it unless the user changes the goal.',
+          'A plan already exists and the `plan` tool is no longer available for this request.',
           'Continue by executing the next unfinished step and use `mark_step_done` when it is complete.',
           '',
           formatPlanState(plan),
@@ -688,10 +689,12 @@ async function runHeaderEditToolLoop(params: {
         plan = { steps: parsed.value.steps.map((step) => ({ text: step, done: false })) };
         rewardLoopHealthForPlanCreated(health, plan);
         toolResult = buildToolResult('plan', formatPlanState(plan));
+        params.onProgress?.(formatPlanState(plan));
       }
     } else if (parsed.value.tool === 'mark_step_done') {
       const result = markPlanStepDone(plan, parsed.value.step, parsed.value.summary);
       if (result.changed) {
+        params.onProgress?.(describeHeaderToolProgress(parsed.value));
         rewardLoopHealthForPlanStepDone(health);
       }
       toolResult = buildToolResult('mark_step_done', result.message);
@@ -972,7 +975,7 @@ function formatPlanState(plan: EditPlanState): string {
   }
   return [
     'Plan progress:',
-    ...plan.steps.map((step, index) => `- ${step.done ? '[x]' : '[ ]'} ${index + 1}. ${step.text}${step.summary ? ` — ${step.summary}` : ''}`),
+    ...plan.steps.map((step, index) => `${index + 1}. ${step.done ? '[x]' : '[ ]'} ${step.text}${step.summary ? ` — ${step.summary}` : ''}`),
   ].join('\n');
 }
 
@@ -993,6 +996,13 @@ function markPlanStepDone(plan: EditPlanState | null, stepNumber: number, summar
     };
   }
   const changed = !step.done;
+  if (!changed) {
+    return {
+      message: [`Plan step ${stepNumber} is already marked done.`, '', formatPlanState(plan)].join('\n'),
+      changed: false,
+      summary: step.summary ?? step.text,
+    };
+  }
   step.done = true;
   step.summary = summary?.trim() || step.summary;
   return { message: formatPlanState(plan), changed, summary: step.summary ?? step.text };

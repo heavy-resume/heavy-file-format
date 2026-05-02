@@ -23,6 +23,12 @@ test('does not treat bold labels as star list items', () => {
   );
 });
 
+test('normalizes ordered checkbox lists for plan progress', () => {
+  expect(normalizeMarkdownLists('Plan progress:\n1. [ ] Inspect components\n2. [x] Patch forms')).toBe(
+    'Plan progress:\n\n1. [ ] Inspect components\n2. [x] Patch forms'
+  );
+});
+
 test('escapes raw html before applying underline syntax', () => {
   expect(applyUnderlineSyntax(escapeRawHtml('++safe++ <u>unsafe</u> <script>bad()</script>'))).toBe(
     '<u>safe</u> &lt;u&gt;unsafe&lt;/u&gt; &lt;script&gt;bad()&lt;/script&gt;'

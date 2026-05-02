@@ -1,6 +1,8 @@
 import { state } from '../state';
 
 let lastBoundChatMessageCount = -1;
+let lastChatScrollTop = 0;
+let wasChatNearBottom = true;
 
 export function bindChatThreadUi(
   chatThread: HTMLDivElement | null,
@@ -14,6 +16,8 @@ export function bindChatThreadUi(
 
   const updateScrollButton = (): void => {
     const distanceFromBottom = chatScrollContainer.scrollHeight - chatScrollContainer.scrollTop - chatScrollContainer.clientHeight;
+    wasChatNearBottom = distanceFromBottom <= 48;
+    lastChatScrollTop = chatScrollContainer.scrollTop;
     chatScrollBottomButton.hidden = distanceFromBottom <= 32;
   };
 
@@ -28,7 +32,13 @@ export function bindChatThreadUi(
 
   window.requestAnimationFrame(() => {
     if (state.chat.messages.length !== lastBoundChatMessageCount) {
-      chatScrollContainer.scrollTop = chatScrollContainer.scrollHeight;
+      if (wasChatNearBottom || state.chat.messages.length > lastBoundChatMessageCount) {
+        chatScrollContainer.scrollTop = chatScrollContainer.scrollHeight;
+      } else {
+        chatScrollContainer.scrollTop = Math.min(lastChatScrollTop, chatScrollContainer.scrollHeight);
+      }
+    } else {
+      chatScrollContainer.scrollTop = Math.min(lastChatScrollTop, chatScrollContainer.scrollHeight);
     }
     updateScrollButton();
     lastBoundChatMessageCount = state.chat.messages.length;

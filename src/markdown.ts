@@ -93,6 +93,7 @@ export function normalizeMarkdownLists(markdown: string): string {
   for (let i = 0; i < lines.length; i += 1) {
     const line = lines[i] ?? '';
     const bullet = line.match(/^(\s*)[-*+]\s+(.+)$/);
+    const ordered = line.match(/^(\s*)(\d+)[.)]\s+(.+)$/);
     if (bullet) {
       if (!inList && out.length > 0 && out[out.length - 1].trim().length > 0) {
         out.push('');
@@ -101,10 +102,18 @@ export function normalizeMarkdownLists(markdown: string): string {
       inList = true;
       continue;
     }
+    if (ordered) {
+      if (!inList && out.length > 0 && out[out.length - 1].trim().length > 0) {
+        out.push('');
+      }
+      out.push(`${ordered[1]}${ordered[2]}. ${ordered[3].trim()}`);
+      inList = true;
+      continue;
+    }
 
     if (line.trim().length === 0) {
       const next = lines[i + 1] ?? '';
-      if (inList && /^(\s*)[-*+]\s+(.+)$/.test(next)) {
+      if (inList && (/^(\s*)[-*+]\s+(.+)$/.test(next) || /^(\s*)\d+[.)]\s+(.+)$/.test(next))) {
         continue;
       }
       inList = false;

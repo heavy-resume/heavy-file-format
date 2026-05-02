@@ -226,6 +226,12 @@ test('buildDocumentEditFormatInstructions documents the tool protocol', () => {
   const noPluginInstructions = buildDocumentEditFormatInstructions();
   expect(noPluginInstructions).toContain('No plugins are currently registered.');
 
+  const activePlanInstructions = buildDocumentEditFormatInstructions({ planActive: true });
+  expect(activePlanInstructions).toContain(
+    'Valid tools are: `answer`, `mark_step_done`, `grep`, `get_css`, `get_properties`, `set_properties`, `view_component`, `view_rendered_component`, `edit_component`, `patch_component`, `create_component`, `remove_component`, `create_section`, `remove_section`, `reorder_section`, `request_structure`, `request_rendered_structure`, `done`.'
+  );
+  expect(activePlanInstructions).not.toContain('{"tool":"plan"');
+
   const headerInstructions = buildHeaderEditFormatInstructions();
   expect(headerInstructions).toContain('Valid header tools are: `answer`, `plan`, `mark_step_done`, `grep_header`, `view_header`, `patch_header`, `request_header`, `done`.');
   expect(headerInstructions).toContain('Use `answer` for informational questions, explanations, or requests that do not require changing the HVY header.');
@@ -355,8 +361,9 @@ hvy_version: 0.1
 
   expect(result.error).toBeNull();
   expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.context).toContain('Plan progress:');
-  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.context).toContain('- [ ] 1. Find the summary text');
-  expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.context).toContain('- [x] 1. Find the summary text — Found the summary text.');
+  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.context).toContain('1. [ ] Find the summary text');
+  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.formatInstructions).not.toContain('{"tool":"plan"');
+  expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.context).toContain('1. [x] Find the summary text — Found the summary text.');
   expect(result.messages.some((message) => message.progress && message.content.includes('Plan progress:'))).toBe(true);
   expect(result.messages.some((message) => message.progress && message.content.includes('Find the summary text'))).toBe(true);
 });
@@ -389,9 +396,45 @@ hvy_version: 0.1
   });
 
   expect(result.error).toBeNull();
-  expect(lastToolResultBeforeCall(2)).toContain('A plan already exists. Do not replace it');
+  expect(lastToolResultBeforeCall(2)).toContain('A plan already exists and the `plan` tool is no longer available');
   expect(lastToolResultBeforeCall(2)).toContain('Find the summary text');
   expect(lastToolResultBeforeCall(2)).not.toContain('Start over with a different plan');
+});
+
+test('requestAiDocumentEditTurn does not emit repeated progress for already completed plan steps', async () => {
+  queueAiToolResponses(
+    '{"tool":"plan","steps":["Find the summary text","Patch the summary text"]}',
+    '{"tool":"mark_step_done","step":1,"summary":"Found the summary text."}',
+    '{"tool":"mark_step_done","step":1,"summary":"Found the summary text again."}',
+    '{"tool":"done","summary":"Plan checked."}'
+  );
+
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {"id":"summary-text"}-->
+ Existing content
+`, '.hvy');
+  seedStateForDocument(document);
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+  const onProgress = vi.fn();
+
+  const result = await requestAiDocumentEditTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Make a couple of careful updates to the summary.',
+    onProgress,
+  });
+
+  expect(result.error).toBeNull();
+  const progressContents = onProgress.mock.calls.map((call) => (call[0] as ChatMessage).content);
+  expect(progressContents.filter((content) => content === 'Marked plan step 1 done.')).toHaveLength(1);
+  expect(lastToolResultBeforeCall(3)).toContain('Plan step 1 is already marked done.');
 });
 
 test('requestAiDocumentEditTurn finishes automatically when the plan is complete', async () => {

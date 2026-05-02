@@ -686,34 +686,206 @@ test('toolbar exposes quote and code block actions', async ({ page }) => {
   await expect(editor.locator('pre code')).toHaveCount(1);
 });
 
-test('toolbar block style row selects and toggles headings', async ({ page }) => {
+test('inline toolbar buttons wrap and unwrap selected text', async ({ page }) => {
   await page.goto('/');
 
   await page.locator('[data-action="activate-block"]').first().click();
   const editor = page.locator('.rich-editor').first();
-  const h1Button = page.getByRole('button', { name: 'H1' }).first();
-  const textButton = page.getByRole('button', { name: 'Text' }).first();
+
+  const cases = [
+    { button: 'Bold', tag: 'strong' },
+    { button: 'Italic', tag: 'em' },
+    { button: 'Underline', tag: 'u' },
+    { button: 'Strikethrough', tag: 's, strike, del' },
+  ];
+
+  for (const item of cases) {
+    await editor.evaluate((node) => {
+      node.innerHTML = '<p>Selected text</p>';
+      const textNode = node.querySelector('p')?.firstChild;
+      const selection = window.getSelection();
+      const range = document.createRange();
+      range.selectNodeContents(textNode!);
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+      (node as HTMLElement).focus();
+    });
+    await page.getByRole('button', { name: item.button }).first().click();
+    await expect(editor.locator(item.tag)).toContainText('Selected text');
+
+    await editor.locator(item.tag).first().evaluate((node) => {
+      const selection = window.getSelection();
+      const range = document.createRange();
+      range.selectNodeContents(node);
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+    });
+    await page.getByRole('button', { name: item.button }).first().click();
+    await expect(editor.locator(item.tag)).toHaveCount(0);
+    await expect(editor).toContainText('Selected text');
+  }
+});
+
+test('inline toolbar actions toggle typing mode at a collapsed caret', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('.rich-editor').first();
+  const boldButton = page.getByRole('button', { name: 'Bold' }).first();
+  const italicButton = page.getByRole('button', { name: 'Italic' }).first();
+  const underlineButton = page.getByRole('button', { name: 'Underline' }).first();
+  const strikethroughButton = page.getByRole('button', { name: 'Strikethrough' }).first();
 
   await editor.evaluate((node) => {
-    node.innerHTML = '<p>Heading text</p>';
+    node.innerHTML = '<p><br></p>';
     const paragraph = node.querySelector('p');
     const selection = window.getSelection();
     const range = document.createRange();
     range.selectNodeContents(paragraph!);
+    range.collapse(true);
     selection?.removeAllRanges();
     selection?.addRange(range);
+    (node as HTMLElement).focus();
   });
 
-  await h1Button.click();
-  await expect(editor.locator('h1')).toContainText('Heading text');
-  await expect(h1Button).toHaveClass(/secondary/);
-  await expect(textButton).not.toHaveClass(/secondary/);
+  await boldButton.click();
+  await expect(boldButton).toHaveClass(/secondary/);
+  await page.keyboard.type('Bold');
+  await expect(editor.locator('strong')).toContainText('Bold');
 
-  await h1Button.click();
-  await expect(editor.locator('p')).toContainText('Heading text');
-  await expect(textButton).toHaveClass(/secondary/);
-  await expect(h1Button).not.toHaveClass(/secondary/);
+  await boldButton.click();
+  await expect(boldButton).not.toHaveClass(/secondary/);
+  await page.keyboard.type(' plain');
+  await expect(editor.locator('strong')).toHaveText('Bold');
+  await expect(editor).toContainText('Bold plain');
+
+  await page.keyboard.press('Control+B');
+  await expect(boldButton).toHaveClass(/secondary/);
+  await page.keyboard.type(' shortcut');
+  await expect(editor.locator('strong').last()).toContainText('shortcut');
+
+  await page.keyboard.press('Control+B');
+  await expect(boldButton).not.toHaveClass(/secondary/);
+
+  await page.keyboard.press('Control+I');
+  await expect(italicButton).toHaveClass(/secondary/);
+  await page.keyboard.type(' italic');
+  await expect(editor.locator('em')).toContainText('italic');
+
+  await page.keyboard.press('Control+I');
+  await expect(italicButton).not.toHaveClass(/secondary/);
+
+  await page.keyboard.press('Control+U');
+  await expect(underlineButton).toHaveClass(/secondary/);
+  await page.keyboard.type(' underline');
+  await expect(editor.locator('u')).toContainText('underline');
+
+  await underlineButton.click();
+  await expect(underlineButton).not.toHaveClass(/secondary/);
+
+  await strikethroughButton.click();
+  await expect(strikethroughButton).toHaveClass(/secondary/);
+  await page.keyboard.type(' strike');
+  await expect(editor.locator('s, strike, del')).toContainText('strike');
 });
+
+test('link toolbar button and keyboard shortcut open the link modal and apply links', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('.rich-editor').first();
+
+  await editor.evaluate((node) => {
+    node.innerHTML = '<p>Link me</p>';
+    const textNode = node.querySelector('p')?.firstChild;
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(textNode!);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+  });
+
+  await page.getByRole('button', { name: 'Link' }).first().click();
+  await expect(page.locator('#linkInlineModal')).toHaveClass(/is-open/);
+  await page.locator('#linkInlineInput').fill('https://example.com');
+  await page.keyboard.press('Enter');
+
+  await expect(editor.locator('a[href="https://example.com"]')).toContainText('Link me');
+
+  await editor.evaluate((node) => {
+    node.innerHTML = '<p>Shortcut link</p>';
+    const textNode = node.querySelector('p')?.firstChild;
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(textNode!);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+  });
+
+  await page.keyboard.press('Control+K');
+  await expect(page.locator('#linkInlineModal')).toHaveClass(/is-open/);
+  await page.locator('#linkInlineInput').fill('#section-id');
+  await page.keyboard.press('Enter');
+
+  await expect(editor.locator('a[href="#section-id"]')).toContainText('Shortcut link');
+});
+
+test('toolbar block style row covers text and all heading buttons', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('.rich-editor').first();
+  const textButton = page.getByRole('button', { name: 'Text' }).first();
+
+  for (const item of [
+    { button: 'H1', tag: 'h1' },
+    { button: 'H2', tag: 'h2' },
+    { button: 'H3', tag: 'h3' },
+    { button: 'H4', tag: 'h4' },
+  ]) {
+    const headingButton = page.getByRole('button', { name: item.button }).first();
+    await editor.evaluate((node) => {
+      node.innerHTML = '<p>Heading text</p>';
+      const paragraph = node.querySelector('p');
+      const selection = window.getSelection();
+      const range = document.createRange();
+      range.selectNodeContents(paragraph!);
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+      (node as HTMLElement).focus();
+    });
+
+    await headingButton.click();
+    await expect(editor.locator(item.tag)).toContainText('Heading text');
+    await expect(headingButton).toHaveClass(/secondary/);
+    await expect(textButton).not.toHaveClass(/secondary/);
+
+    await headingButton.click();
+    await expect(editor.locator('p')).toContainText('Heading text');
+    await expect(textButton).toHaveClass(/secondary/);
+    await expect(headingButton).not.toHaveClass(/secondary/);
+  }
+});
+
+test('toolbar alignment buttons update alignment and selected state', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('[data-action="activate-block"]').first().click();
+
+  for (const item of [
+    { button: 'Align center', value: 'center' },
+    { button: 'Align right', value: 'right' },
+    { button: 'Align left', value: 'left' },
+  ]) {
+    await page.getByRole('button', { name: item.button }).first().click();
+    const button = page.getByRole('button', { name: item.button }).first();
+    await expect(button).toHaveClass(/secondary/);
+    await expect(page.locator('.rich-editor').first()).toHaveAttribute('style', new RegExp(`text-align: ${item.value}`));
+  }
+});
+
 
 test('section add component affordance is a compact single row', async ({ page }) => {
   await page.goto('/');

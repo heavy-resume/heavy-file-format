@@ -99,6 +99,12 @@ export function bindKeydown(app: HTMLElement): void {
       return;
     }
 
+    if (key === 'u') {
+      event.preventDefault();
+      applyRichAction('underline', richTarget);
+      return;
+    }
+
     if (key === 'k') {
       event.preventDefault();
       openLinkInlineModal(app, richTarget);

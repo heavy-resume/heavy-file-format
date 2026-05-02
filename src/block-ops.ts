@@ -16,6 +16,7 @@ import { escapeAttr, escapeHtml, getInlineEditableText, renderOption } from './u
 import { recordHistory } from './history';
 import { getDocumentComponentDefaultCss } from './document-component-defaults';
 import { resetDbTableViewState } from './plugins/db-table';
+import { handleInlineCheckboxBackspace } from './editor/inline-checkbox';
 
 export function findBlockByIds(sectionKey: string, blockId: string): VisualBlock | null {
   const sqliteRowComponentBlock = findSqliteRowComponentBlock(sectionKey, blockId);
@@ -526,26 +527,26 @@ export function getComponentRenderHelpers(editorRenderer: {
 
 export function applyRichAction(action: string, editable: HTMLElement, value?: string): void {
   if (action === 'bold') {
-    document.execCommand('bold');
+    applyInlineRichAction(editable, 'strong', 'bold');
   } else if (action === 'italic') {
-    document.execCommand('italic');
+    applyInlineRichAction(editable, 'em', 'italic');
   } else if (action === 'underline') {
-    document.execCommand('underline');
+    applyInlineRichAction(editable, 'u', 'underline');
   } else if (action === 'strikethrough') {
-    document.execCommand('strikeThrough');
+    applyInlineRichAction(editable, 's', 'strikethrough');
   } else if (action === 'paragraph') {
-    document.execCommand('formatBlock', false, 'p');
+    formatSelectionBlock(editable, 'p');
   } else if (action.startsWith('heading-')) {
     const level = action.split('-')[1] ?? '2';
     const currentBlock = getSelectionBlockElement(editable);
     const nextBlock = currentBlock?.tagName.toLowerCase() === `h${level}` ? 'p' : `h${level}`;
-    document.execCommand('formatBlock', false, nextBlock);
+    formatSelectionBlock(editable, nextBlock);
   } else if (action === 'list') {
     document.execCommand('insertUnorderedList');
   } else if (action === 'checklist') {
     insertInlineCheckboxAtSelection(editable);
   } else if (action === 'quote') {
-    document.execCommand('formatBlock', false, 'blockquote');
+    formatSelectionBlock(editable, 'blockquote');
   } else if (action === 'code-block') {
     insertCodeBlockAtSelection(editable);
   } else if (action === 'link') {
@@ -553,12 +554,209 @@ export function applyRichAction(action: string, editable: HTMLElement, value?: s
     if (!url) {
       return;
     }
-    document.execCommand('createLink', false, url);
+    applyInlineRichAction(editable, 'a', 'link', url);
   }
 
   updateRichToolbarState(editable);
   const inputEvent = new InputEvent('input', { bubbles: true });
   editable.dispatchEvent(inputEvent);
+}
+
+function applyInlineRichAction(editable: HTMLElement, tagName: InlineRichTag, action: InlineRichAction, href?: string): void {
+  const range = getEditableSelectionRange(editable);
+  if (!range) {
+    return;
+  }
+  const selection = window.getSelection();
+  const existing = getInlineAncestor(range, editable, tagName);
+  if (range.collapsed) {
+    if (existing) {
+      if (tagName === 'a' && href) {
+        existing.setAttribute('href', href);
+        return;
+      }
+      moveCollapsedCaretOutsideInline(existing, range);
+      setPendingInlineAction(editable, action, false);
+      setSuppressedInlineAction(editable, action, true);
+      return;
+    }
+    if (tagName !== 'a') {
+      const nextActive = !getPendingInlineActions(editable).has(action);
+      setPendingInlineAction(editable, action, nextActive);
+      setSuppressedInlineAction(editable, action, !nextActive);
+    }
+    return;
+  }
+  if (existing) {
+    if (tagName === 'a' && href) {
+      existing.setAttribute('href', href);
+      return;
+    }
+    unwrapInlineElement(existing);
+    return;
+  }
+  const wrapper = document.createElement(tagName);
+  if (tagName === 'a' && href) {
+    wrapper.setAttribute('href', href);
+  }
+  const fragment = range.extractContents();
+  wrapper.appendChild(fragment);
+  range.insertNode(wrapper);
+  selection?.removeAllRanges();
+  const nextRange = document.createRange();
+  nextRange.selectNodeContents(wrapper);
+  selection?.addRange(nextRange);
+  setPendingInlineAction(editable, action, false);
+}
+
+type InlineRichAction = 'bold' | 'italic' | 'underline' | 'strikethrough' | 'link';
+type InlineRichTag = 'strong' | 'em' | 'u' | 's' | 'a';
+
+const inlineActionTagByAction: Record<InlineRichAction, InlineRichTag> = {
+  bold: 'strong',
+  italic: 'em',
+  underline: 'u',
+  strikethrough: 's',
+  link: 'a',
+};
+
+function getPendingInlineActions(editable: HTMLElement): Set<InlineRichAction> {
+  return new Set(
+    (editable.dataset.pendingInlineActions ?? '')
+      .split(/\s+/)
+      .filter((action): action is InlineRichAction => isInlineRichAction(action))
+  );
+}
+
+function setPendingInlineAction(editable: HTMLElement, action: InlineRichAction, active: boolean): void {
+  const actions = getPendingInlineActions(editable);
+  if (active) {
+    actions.add(action);
+  } else {
+    actions.delete(action);
+  }
+  editable.dataset.pendingInlineActions = Array.from(actions).join(' ');
+}
+
+function getSuppressedInlineActions(editable: HTMLElement): Set<InlineRichAction> {
+  return new Set(
+    (editable.dataset.suppressedInlineActions ?? '')
+      .split(/\s+/)
+      .filter((action): action is InlineRichAction => isInlineRichAction(action))
+  );
+}
+
+function setSuppressedInlineAction(editable: HTMLElement, action: InlineRichAction, active: boolean): void {
+  const actions = getSuppressedInlineActions(editable);
+  if (active) {
+    actions.add(action);
+  } else {
+    actions.delete(action);
+  }
+  editable.dataset.suppressedInlineActions = Array.from(actions).join(' ');
+}
+
+function isInlineRichAction(action: string): action is InlineRichAction {
+  return action === 'bold' || action === 'italic' || action === 'underline' || action === 'strikethrough' || action === 'link';
+}
+
+function getEditableSelectionRange(editable: HTMLElement): Range | null {
+  const selection = window.getSelection();
+  if (!selection?.rangeCount) {
+    return null;
+  }
+  const range = selection.getRangeAt(0);
+  return editable.contains(range.commonAncestorContainer) || range.commonAncestorContainer === editable ? range : null;
+}
+
+function getInlineAncestor(range: Range, editable: HTMLElement, tagName: string): HTMLElement | null {
+  const candidates = [range.startContainer, range.endContainer, range.commonAncestorContainer];
+  for (const node of candidates) {
+    const element = node instanceof Element ? node : node.parentElement;
+    const match = element?.closest(tagName);
+    if (match instanceof HTMLElement && editable.contains(match)) {
+      return match;
+    }
+  }
+  return null;
+}
+
+function unwrapInlineElement(element: HTMLElement): void {
+  const parent = element.parentNode;
+  if (!parent) {
+    return;
+  }
+  const firstChild = element.firstChild;
+  const lastChild = element.lastChild;
+  const fragment = document.createDocumentFragment();
+  while (element.firstChild) {
+    fragment.appendChild(element.firstChild);
+  }
+  parent.replaceChild(fragment, element);
+  if (!firstChild || !lastChild) {
+    return;
+  }
+  const range = document.createRange();
+  range.setStartBefore(firstChild);
+  range.setEndAfter(lastChild);
+  const selection = window.getSelection();
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+}
+
+function moveCollapsedCaretOutsideInline(element: HTMLElement, range: Range): void {
+  const selection = window.getSelection();
+  const prefixRange = document.createRange();
+  prefixRange.selectNodeContents(element);
+  prefixRange.setEnd(range.startContainer, range.startOffset);
+  const suffixRange = document.createRange();
+  suffixRange.selectNodeContents(element);
+  suffixRange.setStart(range.startContainer, range.startOffset);
+  const nextRange = document.createRange();
+  const parent = element.parentNode;
+  if (!parent) {
+    return;
+  }
+  if (prefixRange.toString().length === 0) {
+    const boundary = document.createTextNode('');
+    parent.insertBefore(boundary, element);
+    nextRange.setStart(boundary, 0);
+  } else if (suffixRange.toString().length === 0) {
+    const boundary = document.createTextNode('');
+    parent.insertBefore(boundary, element.nextSibling);
+    nextRange.setStart(boundary, 0);
+  } else {
+    const trailingRange = range.cloneRange();
+    trailingRange.setEndAfter(element);
+    const trailing = trailingRange.extractContents();
+    const boundary = document.createTextNode('');
+    parent.insertBefore(boundary, element.nextSibling);
+    parent.insertBefore(trailing, boundary.nextSibling);
+    nextRange.setStart(boundary, 0);
+  }
+  nextRange.collapse(true);
+  selection?.removeAllRanges();
+  selection?.addRange(nextRange);
+}
+
+function formatSelectionBlock(editable: HTMLElement, tagName: string): void {
+  const block = getSelectionBlockElement(editable);
+  if (!block || block.tagName === 'LI' || block.tagName === 'PRE') {
+    return;
+  }
+  const replacement = document.createElement(tagName);
+  while (block.firstChild) {
+    replacement.appendChild(block.firstChild);
+  }
+  if (!replacement.firstChild) {
+    replacement.appendChild(document.createElement('br'));
+  }
+  if (block === editable) {
+    editable.replaceChildren(replacement);
+  } else {
+    block.replaceWith(replacement);
+  }
+  placeCaretInside(replacement);
 }
 
 function updateRichToolbarState(editable: HTMLElement): void {
@@ -567,18 +765,34 @@ function updateRichToolbarState(editable: HTMLElement): void {
     return;
   }
   const selectedStyle = getSelectedRichBlockStyle(editable);
+  const selectedInlineActions = getSelectedInlineRichActions(editable);
   toolbar.querySelectorAll<HTMLButtonElement>('[data-rich-action]').forEach((button) => {
     const action = button.dataset.richAction ?? '';
     const selected =
       action === selectedStyle ||
-      (selectedStyle === 'paragraph' && action === 'paragraph');
-    if (!/^(paragraph|heading-[1-4]|quote|list|checklist)$/.test(action)) {
+      (selectedStyle === 'paragraph' && action === 'paragraph') ||
+      (isInlineRichAction(action) && selectedInlineActions.has(action));
+    if (!/^(paragraph|heading-[1-4]|quote|list|checklist)$/.test(action) && !isInlineRichAction(action)) {
       return;
     }
     button.classList.toggle('secondary', selected);
     button.classList.toggle('is-selected', selected);
     button.classList.toggle('ghost', !selected);
   });
+}
+
+function getSelectedInlineRichActions(editable: HTMLElement): Set<InlineRichAction> {
+  const actions = getPendingInlineActions(editable);
+  const range = getEditableSelectionRange(editable);
+  if (!range) {
+    return actions;
+  }
+  for (const action of Object.keys(inlineActionTagByAction) as InlineRichAction[]) {
+    if (getInlineAncestor(range, editable, inlineActionTagByAction[action])) {
+      actions.add(action);
+    }
+  }
+  return actions;
 }
 
 function getSelectedRichBlockStyle(editable: HTMLElement): string {
@@ -643,6 +857,60 @@ export function handleRichEditorKeydown(event: KeyboardEvent, editable: HTMLElem
   }
 
   return false;
+}
+
+export function handleRichEditorBeforeInput(event: InputEvent, editable: HTMLElement): boolean {
+  if (event.inputType === 'deleteContentBackward') {
+    if (!handleInlineCheckboxBackspace(editable)) {
+      return false;
+    }
+    editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    return true;
+  }
+
+  if (event.inputType !== 'insertText' || !event.data) {
+    return false;
+  }
+
+  const pendingActions = getPendingInlineActions(editable);
+  const suppressedActions = getSuppressedInlineActions(editable);
+  if (pendingActions.size === 0 && suppressedActions.size === 0) {
+    return false;
+  }
+
+  const range = getEditableSelectionRange(editable);
+  if (!range) {
+    return false;
+  }
+
+  for (const action of suppressedActions) {
+    const existing = getInlineAncestor(range, editable, inlineActionTagByAction[action]);
+    if (existing) {
+      moveCollapsedCaretOutsideInline(existing, range);
+    }
+  }
+  const insertionRange = getEditableSelectionRange(editable) ?? range;
+  insertionRange.deleteContents();
+  const text = document.createTextNode(event.data);
+  let node: Node = text;
+  for (const action of ['strikethrough', 'underline', 'italic', 'bold'] as InlineRichAction[]) {
+    if (!pendingActions.has(action) || getInlineAncestor(insertionRange, editable, inlineActionTagByAction[action])) {
+      continue;
+    }
+    const wrapper = document.createElement(inlineActionTagByAction[action]);
+    wrapper.appendChild(node);
+    node = wrapper;
+  }
+  insertionRange.insertNode(node);
+  const nextRange = document.createRange();
+  nextRange.setStart(text, text.textContent?.length ?? 0);
+  nextRange.collapse(true);
+  const selection = window.getSelection();
+  selection?.removeAllRanges();
+  selection?.addRange(nextRange);
+  updateRichToolbarState(editable);
+  editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
+  return true;
 }
 
 function isSelectionInsideEditableList(editable: HTMLElement): boolean {

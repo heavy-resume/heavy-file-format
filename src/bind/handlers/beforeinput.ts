@@ -1,4 +1,4 @@
-import { handleInlineCheckboxBackspace } from './_imports';
+import { handleRichEditorBeforeInput } from './_imports';
 
 export function bindBeforeinput(app: HTMLElement): void {
   app.addEventListener('beforeinput', (event) => {
@@ -16,15 +16,10 @@ export function bindBeforeinput(app: HTMLElement): void {
       return;
     }
 
-    if ((event as InputEvent).inputType !== 'deleteContentBackward') {
-      return;
-    }
-
-    if (!handleInlineCheckboxBackspace(editable)) {
+    if (!handleRichEditorBeforeInput(event as InputEvent, editable)) {
       return;
     }
 
     event.preventDefault();
-    editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
   });
 }

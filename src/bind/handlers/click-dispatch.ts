@@ -2,6 +2,13 @@ import { state, findSectionByKey, getReusableNameFromSectionKey, applyRichAction
 import { actionRegistry } from '../actions/registry';
 
 export function bindClickDispatch(app: HTMLElement): void {
+  app.addEventListener('mousedown', (event) => {
+    const target = event.target as HTMLElement;
+    if (target.closest('[data-rich-action]')) {
+      event.preventDefault();
+    }
+  });
+
   app.addEventListener('click', (event) => {
     const target = event.target as HTMLElement;
 
@@ -30,7 +37,9 @@ export function bindClickDispatch(app: HTMLElement): void {
             openLinkInlineModal(app, editable);
             return;
           }
-          editable.focus();
+          if (!editable.contains(document.activeElement)) {
+            editable.focus();
+          }
           applyRichAction(action, editable);
         }
       }

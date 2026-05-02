@@ -301,6 +301,7 @@ hvy_version: 0.1
   await expect(headingGhost).toBeVisible();
   await expect(headingGhost.locator('.empty-section-heading-watermark')).toContainText('Profile');
   await expect(headingGhost.getByRole('combobox', { name: 'Heading level' })).toHaveValue('h1');
+  await expect(page.locator('.compact-add-component-ghost').getByRole('button', { name: 'Section component type' })).toBeVisible();
 
   await headingGhost.getByRole('combobox', { name: 'Heading level' }).selectOption('h2');
   await page.locator('.section-title-passive', { hasText: 'Profile' }).click();

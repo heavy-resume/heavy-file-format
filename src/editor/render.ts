@@ -215,6 +215,14 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const subsectionToggle = isSubsection && !hasActiveBlockInSelfOrDescendants(section)
       ? `<button type="button" class="section-nest-toggle" data-action="remove-subsection" data-section-key="${deps.escapeAttr(section.key)}" aria-label="Remove subsection" title="Remove subsection">‹</button>`
       : '';
+    const addComponentGhost = `<article class="ghost-section-card add-ghost compact-add-component-ghost">
+                  ${renderComponentPicker({
+                    id: `section:${section.key}`,
+                    action: 'add-block',
+                    sectionKey: section.key,
+                    label: 'Section component type',
+                  })}
+              </article>`;
     return `
       <article class="editor-section-card${isSubsection ? ' editor-subsection-card' : ''}" data-editor-section="${deps.escapeAttr(section.key)}">
         ${subsectionToggle}
@@ -267,15 +275,9 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
                       ${renderHeadingLevelOption('h3', emptyHeadingLevel, deps.escapeAttr)}
                     </select>
                   </label>
-                </article>`
-          : `<article class="ghost-section-card add-ghost compact-add-component-ghost">
-                  ${renderComponentPicker({
-                    id: `section:${section.key}`,
-                    action: 'add-block',
-                    sectionKey: section.key,
-                    label: 'Section component type',
-                  })}
-              </article>`
+                </article>
+                ${addComponentGhost}`
+          : addComponentGhost
       }
         </div>
       </article>

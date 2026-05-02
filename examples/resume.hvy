@@ -1312,7 +1312,7 @@ component_defs:
 
      <!--hvy:table {"css":"margin: 0; margin-top: -1px;","tableColumns":"DEGREE, INSTITUTION, LOCATION","tableShowHeader":false,"tableRows":[{"cells":["B.S. Computer Science","University of Washington","Seattle, WA"]}]}-->
 
-    <!--hvy:expandable:content {}-->
+    <!--hvy:expandable:content {"css":"padding:0.5rem"}-->
 
      <!--hvy:grid {"css":"margin: 0.35rem 0;","gridColumns":2}-->
 
@@ -1379,8 +1379,6 @@ component_defs:
         <!--hvy:component-list:2 {}-->
 
          <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"C/C++","xrefTarget":"tool-c-cpp"}-->
-
-    <!--hvy:expandable:content {}-->
 
      <!--hvy:text {"css":"margin: 0.5rem 0 0.25rem;"}-->
       #### Classes

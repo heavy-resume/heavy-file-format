@@ -67,6 +67,20 @@ export function parseExpandablePart(raw: unknown): ExpandablePart {
   return { lock: false, children: [] };
 }
 
+function readExpandablePartCss(raw: unknown): string {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return '';
+  }
+  const obj = raw as JsonObject;
+  return typeof obj.css === 'string'
+    ? obj.css
+    : typeof obj.customCss === 'string'
+    ? obj.customCss
+    : typeof obj.custom_css === 'string'
+    ? obj.custom_css
+    : '';
+}
+
 export function coerceAlign(value: string): Align {
   if (value === 'center' || value === 'right') {
     return value;
@@ -154,11 +168,17 @@ export function schemaFromUnknown(value: unknown): BlockSchema {
     expandableContentComponent:
       typeof candidate.expandableContentComponent === 'string' ? candidate.expandableContentComponent : defaults.expandableContentComponent,
     expandableStub: typeof candidate.expandableStub === 'string' ? candidate.expandableStub : defaults.expandableStub,
-    expandableStubCss: typeof candidate.expandableStubCss === 'string' ? candidate.expandableStubCss : defaults.expandableStubCss,
+    expandableStubCss:
+      typeof candidate.expandableStubCss === 'string'
+        ? candidate.expandableStubCss
+        : readExpandablePartCss(candidate.expandableStubBlocks) || defaults.expandableStubCss,
     expandableStubBlocks: parseExpandablePart(candidate.expandableStubBlocks),
     expandableAlwaysShowStub: candidate.expandableAlwaysShowStub !== false,
     expandableExpanded: candidate.expandableExpanded === true,
-    expandableContentCss: typeof candidate.expandableContentCss === 'string' ? candidate.expandableContentCss : defaults.expandableContentCss,
+    expandableContentCss:
+      typeof candidate.expandableContentCss === 'string'
+        ? candidate.expandableContentCss
+        : readExpandablePartCss(candidate.expandableContentBlocks) || defaults.expandableContentCss,
     expandableContentBlocks: parseExpandablePart(candidate.expandableContentBlocks),
     tableColumns: typeof candidate.tableColumns === 'string' ? candidate.tableColumns : defaults.tableColumns,
     tableShowHeader: candidate.tableShowHeader !== false,

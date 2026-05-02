@@ -1,6 +1,8 @@
 import { expect, test } from 'vitest';
 
 import { deserializeDocument, deserializeDocumentBytes, deserializeDocumentWithDiagnostics, getHvyDiagnosticUsageHint, getHvyResponseDiagnostics } from '../src/serialization';
+import { createEmptyBlock } from '../src/document-factory';
+import { state } from '../src/state';
 import { registerSerializationTestState } from './serialization-test-helpers';
 
 registerSerializationTestState();
@@ -318,6 +320,44 @@ component_defs:
   expect(record.schema.expandableStubBlocks.children[0]?.text).toBe('Software Engineering');
   expect(record.schema.expandableContentBlocks.children).toHaveLength(1);
   expect(record.schema.expandableContentBlocks.children[0]?.text).toBe('Description body');
+});
+
+test('reusable expandable components inherit slot css from component defs', () => {
+  const input = `---
+hvy_version: 0.1
+component_defs:
+  - name: education-record
+    baseType: expandable
+    schema:
+      css: "margin: 0;"
+      expandableAlwaysShowStub: true
+      expandableExpanded: false
+      expandableStubBlocks:
+        children:
+          - text: ""
+            schema:
+              component: table
+              css: "margin: 0; margin-top: -1px;"
+      expandableContentBlocks:
+        css: "padding: 0.5rem;"
+        children:
+          - text: ""
+            schema:
+              component: text
+              placeholder: Description
+---
+
+<!--hvy: {"id":"education"}-->
+#! Education
+`;
+
+  state.document = deserializeDocument(input, '.hvy');
+
+  const record = createEmptyBlock('education-record');
+
+  expect(record.schema.component).toBe('education-record');
+  expect(record.schema.expandableContentCss).toBe('padding: 0.5rem;');
+  expect(record.schema.expandableContentBlocks.children[0]?.schema.placeholder).toBe('Description');
 });
 
 test('deserializes component-list slot order separately from file order', () => {

@@ -372,6 +372,33 @@ component_defs:
   expect(output).not.toMatch(/<!--hvy:skills-and-tools-tech-list \{[^]*?<!--hvy:grid \{\}-->/);
 });
 
+test('component def expandable slot css survives header serialization', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+component_defs:
+  - name: education-record
+    baseType: expandable
+    schema:
+      css: "margin: 0;"
+      expandableContentBlocks:
+        css: "padding: 0.5rem;"
+        children:
+          - text: ""
+            schema:
+              component: text
+              placeholder: Description
+---
+
+<!--hvy: {"id":"education"}-->
+#! Education
+`, '.hvy');
+
+  const output = serializeWithState(document);
+
+  expect(output).toContain('expandableContentBlocks:');
+  expect(output).toContain('css: "padding: 0.5rem;"');
+});
+
 test('component-list numeric slot indexes control display order with file order breaking ties', () => {
   const input = `---
 hvy_version: 0.1

@@ -763,11 +763,23 @@ function cleanComponentDefSchema(schema: JsonObject): JsonObject {
     if (BLOCK_ARRAY_KEYS.includes(key) && Array.isArray(value)) {
       result[key] = value.map((block) => cleanComponentDefBlock(block as JsonObject));
     } else if (EXPANDABLE_PART_KEYS.includes(key) && value && typeof value === 'object' && !Array.isArray(value)) {
-      const part = value as { lock?: boolean; children?: JsonObject[] };
-      result[key] = {
+      const part = value as { lock?: boolean; children?: JsonObject[]; css?: unknown; customCss?: unknown; custom_css?: unknown };
+      const cleanPart: JsonObject = {
         lock: part.lock ?? false,
         children: Array.isArray(part.children) ? part.children.map((block) => cleanComponentDefBlock(block)) : [],
       };
+      const css =
+        typeof part.css === 'string'
+          ? part.css
+          : typeof part.customCss === 'string'
+          ? part.customCss
+          : typeof part.custom_css === 'string'
+          ? part.custom_css
+          : '';
+      if (css.trim().length > 0) {
+        cleanPart.css = css;
+      }
+      result[key] = cleanPart;
     } else if (key === 'gridItems' && Array.isArray(value)) {
       result[key] = value.map((item) => {
         const obj = item as JsonObject;

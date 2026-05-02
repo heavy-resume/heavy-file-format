@@ -211,6 +211,40 @@ test('component-list add prompt reveals the active edit path with staggered anim
   await expect(page.locator('.editor-block[data-active-editor-block="true"] [contenteditable="true"]').first()).toBeVisible();
 });
 
+test('clicking a nested component-list item opens the item editor on first click', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"skills"}-->
+#! Skills
+
+ <!--hvy:component-list {"componentListComponent":"text"}-->
+
+  <!--hvy:component-list:0 {}-->
+
+   <!--hvy:text {}-->
+    Python
+
+  <!--hvy:component-list:1 {}-->
+
+   <!--hvy:text {}-->
+    TypeScript
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('.editor-block-passive', { hasText: 'Python' }).last().click();
+
+  const activeBlock = page.locator('.editor-block[data-active-editor-block="true"]');
+  await expect(activeBlock.locator('.rich-editor')).toBeVisible();
+  await expect(activeBlock.locator('.rich-editor')).toContainText('Python');
+  await expect(activeBlock.locator('.rich-editor')).not.toContainText('TypeScript');
+});
+
 test('move arrows only render when there is an adjacent target', async ({ page }) => {
   await page.goto('/');
 

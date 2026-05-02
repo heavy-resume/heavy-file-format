@@ -491,6 +491,9 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           <div class="ghost-label">${deps.escapeHtml(actionLabel)}</div>
         </div>`;
       }
+      return `<div class="reader-component-list">${(block.schema.componentListBlocks ?? [])
+        .map((innerBlock) => renderPassiveEditorBlock(sectionKey, innerBlock, rootSections))
+        .join('')}</div>`;
     }
 
     if (base === 'grid') {

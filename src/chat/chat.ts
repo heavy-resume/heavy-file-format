@@ -121,14 +121,12 @@ export function renderChatPanel(
   const isDocumentEdit = mode === 'document-edit';
   const title = isDocumentEdit ? 'Edit This Document' : 'Ask This Document';
   const subtitle = isDocumentEdit
-    ? 'AI mode can inspect structure, request targeted tools, and apply document changes step by step through the local proxy.'
+    ? 'Editing chat can inspect structure, request targeted tools, and apply document changes step by step through the local proxy.'
     : 'Separate from the reader. Requests go through a local proxy so provider API keys stay out of the browser.';
   const emptyTitle = isDocumentEdit
-    ? 'Describe a document change to make in the visible HVY file.'
-    : 'Start by asking a question about the visible HVY document.';
-  const emptyBody = isDocumentEdit
-    ? 'In AI view, the model examines reduced structure first, then requests one editing tool at a time.'
-    : 'The browser sends your prompt to a same-origin proxy, and that proxy talks to the model provider.';
+    ? 'Editing'
+    : 'Ask a question';
+  const emptyBody = 'No chat history';
   const promptLabel = isDocumentEdit ? 'Change request' : 'Question';
   const promptPlaceholder = isDocumentEdit
     ? 'Describe how the document should change...'

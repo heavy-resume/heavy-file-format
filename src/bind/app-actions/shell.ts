@@ -17,8 +17,8 @@ const redo: AppActionHandler = () => {
 const switchView: AppActionHandler = ({ actionButton }) => {
   const requestedView = actionButton.dataset.view;
   const view = requestedView === 'viewer' ? 'viewer' : requestedView === 'ai' ? 'ai' : 'editor';
-  const crossingAiBoundary = (state.currentView === 'ai') !== (view === 'ai');
-  if (crossingAiBoundary) {
+  const crossingChatModeBoundary = (state.currentView === 'viewer') !== (view === 'viewer');
+  if (crossingChatModeBoundary) {
     clearChatConversation(state.chat);
   }
   state.currentView = view;

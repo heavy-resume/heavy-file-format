@@ -32,8 +32,9 @@ export function bindSubmit(app: HTMLElement): void {
       getRenderApp()();
 
       try {
+        const isDocumentEditChat = state.currentView !== 'viewer';
         const result =
-          state.currentView === 'ai'
+          isDocumentEditChat
             ? await requestDocumentEditChatTurn({
                 settings: state.chat.settings,
                 document: state.document,
@@ -52,7 +53,7 @@ export function bindSubmit(app: HTMLElement): void {
         }
         state.chat.messages = result.messages;
         state.chat.error = result.error;
-        if (state.currentView === 'ai' && !result.error) {
+        if (isDocumentEditChat && !result.error) {
           state.rawEditorText = serializeDocument(state.document);
           state.rawEditorError = null;
           state.rawEditorDiagnostics = [];

@@ -5,6 +5,7 @@ import { createGridItem } from '../../grid-ops';
 import { recordHistory } from '../../history';
 import { syncReusableTemplateForBlock } from '../../reusable';
 import { moveItem } from '../../utils';
+import { configurePluginBlock } from '../../plugins/plugin-block';
 import type { ActionHandler } from './types';
 
 const addGridItem: ActionHandler = ({ actionButton, sectionKey, blockId }) => {
@@ -19,6 +20,9 @@ const addGridItem: ActionHandler = ({ actionButton, sectionKey, blockId }) => {
   ensureGridItems(block.schema);
   const item = createGridItem(block.schema.gridItems.length, block.schema.gridColumns, (c, _s) => createEmptyBlock(c, true));
   item.block = createEmptyBlock(actionButton.dataset.component ?? state.gridAddComponentByBlock[blockId] ?? 'text');
+  if (item.block.schema.component === 'plugin' && actionButton.dataset.pluginId) {
+    configurePluginBlock(item.block, actionButton.dataset.pluginId);
+  }
   block.schema.gridItems.push(item);
   syncReusableTemplateForBlock(sectionKey, block.id);
   getRenderApp()();

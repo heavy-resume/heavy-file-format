@@ -3,9 +3,10 @@ import { findBlockByIds, setActiveEditorBlock } from '../../block-ops';
 import { createEmptyBlock, ensureContainerBlocks, ensureComponentListBlocks, ensureExpandableBlocks } from '../../document-factory';
 import { recordHistory } from '../../history';
 import { syncReusableTemplateForBlock } from '../../reusable';
+import { configurePluginBlock } from '../../plugins/plugin-block';
 import type { ActionHandler } from './types';
 
-const addComponentListItem: ActionHandler = ({ sectionKey, blockId }) => {
+const addComponentListItem: ActionHandler = ({ actionButton, sectionKey, blockId }) => {
   if (!blockId) {
     return;
   }
@@ -16,6 +17,9 @@ const addComponentListItem: ActionHandler = ({ sectionKey, blockId }) => {
   }
   ensureComponentListBlocks(block);
   const newBlock = createEmptyBlock(block.schema.componentListComponent || 'text');
+  if (newBlock.schema.component === 'plugin' && actionButton.dataset.pluginId) {
+    configurePluginBlock(newBlock, actionButton.dataset.pluginId);
+  }
   block.schema.componentListBlocks.push(newBlock);
   syncReusableTemplateForBlock(sectionKey, block.id);
   setActiveEditorBlock(sectionKey, newBlock.id);
@@ -34,6 +38,9 @@ const addContainerBlock: ActionHandler = ({ actionButton, sectionKey, blockId })
   ensureContainerBlocks(block);
   const addKey = `container:${sectionKey}:${blockId}`;
   const newBlock = createEmptyBlock(actionButton.dataset.component ?? state.addComponentBySection[addKey] ?? 'text');
+  if (newBlock.schema.component === 'plugin' && actionButton.dataset.pluginId) {
+    configurePluginBlock(newBlock, actionButton.dataset.pluginId);
+  }
   block.schema.containerBlocks.push(newBlock);
   syncReusableTemplateForBlock(sectionKey, block.id);
   setActiveEditorBlock(sectionKey, newBlock.id);
@@ -53,6 +60,9 @@ const addExpandableBlock = (kind: 'stub' | 'content'): ActionHandler => ({ actio
   ensureExpandableBlocks(block);
   const addKey = `expandable-${kind}:${sectionKey}:${blockId}`;
   const newBlock = createEmptyBlock(actionButton.dataset.component ?? state.addComponentBySection[addKey] ?? 'container');
+  if (newBlock.schema.component === 'plugin' && actionButton.dataset.pluginId) {
+    configurePluginBlock(newBlock, actionButton.dataset.pluginId);
+  }
   target.children.push(newBlock);
   syncReusableTemplateForBlock(sectionKey, block.id);
   setActiveEditorBlock(sectionKey, newBlock.id);

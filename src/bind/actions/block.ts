@@ -5,6 +5,7 @@ import { createEmptyBlock, coerceAlign, getReusableTemplateByName } from '../../
 import { recordHistory } from '../../history';
 import { syncReusableTemplateForBlock, findReusableOwner } from '../../reusable';
 import { applyImagePreset } from '../../editor/components/image/image';
+import { configurePluginBlock } from '../../plugins/plugin-block';
 import type { ActionHandler } from './types';
 
 const addBlock: ActionHandler = ({ actionButton, section }) => {
@@ -14,6 +15,9 @@ const addBlock: ActionHandler = ({ actionButton, section }) => {
   recordHistory();
   const component = (actionButton.dataset.component ?? state.addComponentBySection[section.key] ?? 'text').trim() || 'text';
   const newBlock = createEmptyBlock(component);
+  if (component === 'plugin' && actionButton.dataset.pluginId) {
+    configurePluginBlock(newBlock, actionButton.dataset.pluginId);
+  }
   const previousLastBlockId = section.blocks.length > 0 ? section.blocks[section.blocks.length - 1].id : '';
   for (const child of section.children) {
     if (child.renderAfterBlockId == null) {

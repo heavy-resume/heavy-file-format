@@ -1,6 +1,7 @@
 import { areTablesEnabled } from '../reference-config';
 import type { ComponentDefinition } from '../types';
 import type { AddComponentPickerOptions } from './component-helpers';
+import { getHostPlugins } from '../plugins/registry';
 
 interface RenderDeps {
   escapeAttr: (value: string) => string;
@@ -12,6 +13,7 @@ interface PickerItem {
   value: string;
   label: string;
   description: string;
+  pluginId?: string;
 }
 
 interface PickerGroup {
@@ -86,13 +88,14 @@ function renderComponentButton(
     .join('');
   const blockIdAttr = options.blockId ? ` data-block-id="${deps.escapeAttr(options.blockId)}"` : '';
   const positionAttr = display.position ? ` data-picker-position="${deps.escapeAttr(display.position)}"` : '';
+  const pluginAttr = item.pluginId ? ` data-plugin-id="${deps.escapeAttr(item.pluginId)}"` : '';
   return `
     <button
       type="button"
       class="component-picker-row component-picker-row-leaf${display.className ? ` ${deps.escapeAttr(display.className)}` : ''}"
       data-action="${deps.escapeAttr(options.action)}"
       data-section-key="${deps.escapeAttr(options.sectionKey)}"${blockIdAttr}
-      data-component="${deps.escapeAttr(item.value)}"${positionAttr}${extraAttrs}
+      data-component="${deps.escapeAttr(item.value)}"${positionAttr}${pluginAttr}${extraAttrs}
     >
       <span class="component-picker-row-title">${deps.escapeHtml(item.label)}</span>
       <span class="component-picker-row-description">${deps.escapeHtml(item.description)}</span>
@@ -101,6 +104,12 @@ function renderComponentButton(
 }
 
 function getPickerGroups(componentDefs: ComponentDefinition[]): PickerGroup[] {
+  const pluginItems = getHostPlugins().map((entry) => ({
+    value: 'plugin',
+    label: entry.displayName,
+    description: entry.id,
+    pluginId: entry.id,
+  }));
   const groups: PickerGroup[] = [
     {
       id: 'text',
@@ -159,11 +168,11 @@ function getPickerGroups(componentDefs: ComponentDefinition[]): PickerGroup[] {
     },
     {
       id: 'plugins',
-      label: 'Plugins',
+      label: 'Plugin',
       description: 'components from plugins',
       position: 'bottom-right',
-      direct: true,
-      items: [{ value: 'plugin', label: 'Plugin', description: 'components from plugins' }],
+      direct: false,
+      items: pluginItems.length > 0 ? pluginItems : [{ value: 'plugin', label: 'Plugin', description: 'No plugins installed' }],
     }
   );
   return groups;

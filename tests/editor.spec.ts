@@ -626,9 +626,27 @@ test('component picker opens categories and adds selected component', async ({ p
   await expect(rootPane.locator('.component-picker-row-title', { hasText: 'Text' })).toBeVisible();
   await expect(picker.locator('[data-picker-pane="containers"] .component-picker-row-title', { hasText: 'Container' })).toBeHidden();
 
+  await picker.locator('.component-picker-row-category', { hasText: 'Plugin' }).click();
+  await expect(picker.locator('[data-picker-pane="plugins"] .component-picker-row-title', { hasText: 'DB Table' })).toBeVisible();
+  await addComponent.getByRole('button', { name: 'Section component type' }).click();
+
   await picker.locator('.component-picker-row-direct[data-component="text"]').click();
 
   await expect(page.locator('.editor-block .rich-editor').first()).toBeVisible();
+});
+
+test('component picker adds a selected plugin directly', async ({ page }) => {
+  await page.goto('/');
+
+  const addComponent = page.locator('.compact-add-component-ghost').first();
+  await addComponent.getByRole('button', { name: 'Section component type' }).click();
+
+  const picker = addComponent.locator('.component-picker-popover');
+  await picker.locator('.component-picker-row-category', { hasText: 'Plugin' }).click();
+  await picker.locator('[data-picker-pane="plugins"] .component-picker-row-title', { hasText: 'DB Table' }).click();
+
+  await expect(page.locator('.editor-block-title', { hasText: 'DB Table' }).first()).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Use Plugin' })).toHaveCount(0);
 });
 
 test('markdown editor auto-upgrades raw task markers', async ({ page }) => {

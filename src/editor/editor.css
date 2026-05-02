@@ -451,16 +451,15 @@
   display: grid;
   place-items: center;
   gap: 0.35rem;
-  cursor: pointer;
   transition: transform 240ms ease, box-shadow 240ms ease, border-color 240ms ease;
   height: fit-content;
 }
 
-.ghost-section-card:hover {
+/* .ghost-section-card:hover {
   transform: translateY(-1px);
   box-shadow: 0 8px 18px var(--hvy-shadow);
   border-color: var(--hvy-focus);
-}
+} */
 
 .ghost-section-card:focus-within {
   position: relative;
@@ -588,16 +587,17 @@
 }
 
 .component-picker-trigger {
-  width: 100%;
-  min-height: 2.1rem;
+  width: 2rem;
+  height: 2rem;
   display: grid;
   place-items: center;
   border: 1px solid var(--hvy-border-alt);
-  border-radius: 8px;
+  border-radius: 999px;
   background: var(--hvy-surface);
   color: var(--hvy-text);
   font-size: 1.15rem;
   line-height: 1;
+  cursor: pointer;
 }
 
 .component-picker-trigger:hover,
@@ -775,32 +775,32 @@
 
 .component-picker-pane-root [data-picker-position="top"]:hover,
 .component-picker-pane-root [data-picker-position="top"]:focus-visible {
-  transform: translateX(-50%) translateY(-2.35rem);
+  transform: translateX(-50%) translateY(-1.35rem);
 }
 
 .component-picker-pane-root [data-picker-position="top-left"]:hover,
 .component-picker-pane-root [data-picker-position="top-left"]:focus-visible {
-  transform: translate(-3.6rem, -1.8rem) rotate(-28deg);
+  transform: translate(-2.6rem, -1.8rem) rotate(-30deg);
 }
 
 .component-picker-pane-root [data-picker-position="top-right"]:hover,
 .component-picker-pane-root [data-picker-position="top-right"]:focus-visible {
-  transform: translate(3.6rem, -1.8rem) rotate(28deg);
+  transform: translate(2.6rem, -1.8rem) rotate(30deg);
 }
 
 .component-picker-pane-root [data-picker-position="bottom-left"]:hover,
 .component-picker-pane-root [data-picker-position="bottom-left"]:focus-visible {
-  transform: translate(-3.6rem, 1.8rem) rotate(28deg);
+  transform: translate(-2.6rem, 1.8rem) rotate(30deg);
 }
 
 .component-picker-pane-root [data-picker-position="bottom-right"]:hover,
 .component-picker-pane-root [data-picker-position="bottom-right"]:focus-visible {
-  transform: translate(3.6rem, 1.8rem) rotate(-28deg);
+  transform: translate(2.6rem, 1.8rem) rotate(-30deg);
 }
 
 .component-picker-pane-root [data-picker-position="bottom"]:hover,
 .component-picker-pane-root [data-picker-position="bottom"]:focus-visible {
-  transform: translateX(-50%) translateY(2.35rem);
+  transform: translateX(-50%) translateY(1.35rem);
 }
 
 .component-picker-row:hover,

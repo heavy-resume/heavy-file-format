@@ -2,6 +2,15 @@
   display: grid;
 }
 
+.component-list-type-summary {
+  color: var(--hvy-text-muted);
+  font-size: 0.85rem;
+}
+
+.component-list-type-summary strong {
+  color: var(--hvy-text-alt);
+}
+
 .reader-block.align-center .reader-component-list {
   grid-template-columns: min(100%, 20rem);
   justify-content: space-around;

@@ -245,6 +245,42 @@ hvy_version: 0.1
   await expect(activeBlock.locator('.rich-editor')).not.toContainText('TypeScript');
 });
 
+test('populated component-list hides the list component type dropdown', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"lists"}-->
+#! Lists
+
+ <!--hvy:component-list {"componentListComponent":"text"}-->
+
+ <!--hvy:component-list {"componentListComponent":"text"}-->
+
+  <!--hvy:component-list:0 {}-->
+
+   <!--hvy:text {}-->
+    Python
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('.editor-block-passive').nth(0).click({ position: { x: 4, y: 4 } });
+  let activeBlock = page.locator('.editor-block[data-active-editor-block="true"]');
+  await expect(activeBlock.getByText('List Component Type')).toBeVisible();
+  await activeBlock.getByRole('button', { name: 'Done' }).click();
+
+  await page.locator('.editor-block-passive', { hasText: 'Python' }).first().click();
+  activeBlock = page.locator('.editor-block[data-active-editor-block="true"]');
+  await expect(activeBlock.locator('.rich-editor')).toContainText('Python');
+  await expect(page.getByText('List type:')).toBeVisible();
+  await expect(page.getByText('List Component Type')).toHaveCount(0);
+  await expect(page.locator('[data-field="block-component-list-component"]')).toHaveCount(0);
+});
+
 test('move arrows only render when there is an adjacent target', async ({ page }) => {
   await page.goto('/');
 

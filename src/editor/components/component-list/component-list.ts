@@ -4,15 +4,21 @@ import { getComponentListAddLabel } from './component-list-labels';
 
 export const renderComponentListEditor: ComponentEditorRenderer = (sectionKey, block, helpers) => {
   helpers.ensureComponentListBlocks(block);
+  const hasItems = (block.schema.componentListBlocks ?? []).length > 0;
+  const listComponent = block.schema.componentListComponent || 'text';
   return `
-    <label>
-      <span>List Component Type</span>
-      <select data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(
-        block.id
-      )}" data-field="block-component-list-component">
-        ${helpers.renderComponentOptions(block.schema.componentListComponent || 'text')}
-      </select>
-    </label>
+    ${
+      hasItems
+        ? `<div class="component-list-type-summary">List type: <strong>${helpers.escapeHtml(listComponent)}</strong></div>`
+        : `<label>
+          <span>List Component Type</span>
+          <select data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(
+            block.id
+          )}" data-field="block-component-list-component">
+            ${helpers.renderComponentOptions(listComponent)}
+          </select>
+        </label>`
+    }
     <div class="container-inner-blocks">
       ${(block.schema.componentListBlocks ?? []).map((innerBlock) => helpers.renderEditorBlock(sectionKey, innerBlock, block.schema.lock)).join('')}
     </div>

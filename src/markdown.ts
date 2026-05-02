@@ -19,9 +19,14 @@ turndown.addRule('task-list-checkbox', {
   },
 });
 
+turndown.addRule('underline', {
+  filter: (node) => node.nodeName === 'U',
+  replacement: (content) => (content.trim().length > 0 ? `++${content}++` : ''),
+});
+
 export function markdownToEditorHtml(markdown: string): string {
   const normalized = normalizeMarkdownIndentation(markdown || '');
-  const html = addExternalLinkTargets(DOMPurify.sanitize(marked.parse(escapeRawHtml(normalized)) as string));
+  const html = addExternalLinkTargets(DOMPurify.sanitize(marked.parse(applyUnderlineSyntax(escapeRawHtml(normalized))) as string));
   const template = document.createElement('template');
   template.innerHTML = html;
   template.content.querySelectorAll<HTMLElement>('pre > code').forEach((code) => {
@@ -73,7 +78,11 @@ export function addExternalLinkTargets(html: string): string {
 }
 
 export function escapeRawHtml(markdown: string): string {
-  return markdown.replace(/</g, '&lt;');
+  return markdown.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+export function applyUnderlineSyntax(markdown: string): string {
+  return markdown.replace(/\+\+([^+\n](?:[^+\n]|\+(?!\+))*?)\+\+/g, '<u>$1</u>');
 }
 
 export function normalizeMarkdownLists(markdown: string): string {

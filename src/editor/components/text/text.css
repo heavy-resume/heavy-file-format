@@ -141,6 +141,29 @@
   font-weight: 700;
 }
 
+.underline-icon {
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 0.16rem;
+}
+
+.strikethrough-icon {
+  position: relative;
+  font-weight: 700;
+}
+
+.strikethrough-icon::after {
+  content: "";
+  position: absolute;
+  left: 0.16rem;
+  right: 0.16rem;
+  top: 50%;
+  height: 2px;
+  border-radius: 999px;
+  background: currentColor;
+  transform: translateY(-50%);
+}
+
 .quote-icon {
   font-family: Georgia, serif;
   font-size: 1.6rem;
@@ -188,9 +211,29 @@
 }
 
 .link-icon {
-  font-weight: 700;
-  text-decoration: underline;
-  text-underline-offset: 0.16rem;
+  position: relative;
+  width: 1.25rem;
+  height: 1rem;
+  transform: translateY(-0.02rem) rotate(-25deg);
+}
+
+.link-icon::before,
+.link-icon::after {
+  content: "";
+  position: absolute;
+  top: 0.24rem;
+  width: 0.48rem;
+  height: 0.3rem;
+  border: 2px solid currentColor;
+  border-radius: 999px;
+}
+
+.link-icon::before {
+  left: 0;
+}
+
+.link-icon::after {
+  right: 0;
 }
 
 .rich-editor {

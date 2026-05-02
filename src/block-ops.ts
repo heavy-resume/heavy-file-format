@@ -529,6 +529,10 @@ export function applyRichAction(action: string, editable: HTMLElement, value?: s
     document.execCommand('bold');
   } else if (action === 'italic') {
     document.execCommand('italic');
+  } else if (action === 'underline') {
+    document.execCommand('underline');
+  } else if (action === 'strikethrough') {
+    document.execCommand('strikeThrough');
   } else if (action === 'paragraph') {
     document.execCommand('formatBlock', false, 'p');
   } else if (action.startsWith('heading-')) {

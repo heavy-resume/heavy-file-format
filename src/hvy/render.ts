@@ -1,7 +1,7 @@
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import type { HvyDocument, HvySection } from './types';
-import { normalizeMarkdownIndentation } from '../markdown';
+import { applyUnderlineSyntax, escapeRawHtml, normalizeMarkdownIndentation } from '../markdown';
 import { sanitizeCssBlock } from '../css-sanitizer';
 
 marked.setOptions({ gfm: true, breaks: false });
@@ -24,7 +24,7 @@ export function buildRuntimeCss(document: HvyDocument): string {
 }
 
 function renderSection(section: HvySection): string {
-  const html = DOMPurify.sanitize(marked.parse(escapeRawHtml(normalizeMarkdownIndentation(section.contentMarkdown))) as string);
+  const html = DOMPurify.sanitize(marked.parse(applyUnderlineSyntax(escapeRawHtml(normalizeMarkdownIndentation(section.contentMarkdown)))) as string);
   const children = section.children.map(renderSection).join('');
   const tags = Array.isArray(section.meta.tags) ? section.meta.tags.join(', ') : '';
 
@@ -43,10 +43,6 @@ function renderSection(section: HvySection): string {
       ${children}
     </section>
   `;
-}
-
-function escapeRawHtml(markdown: string): string {
-  return markdown.replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 function escapeHtml(value: string): string {

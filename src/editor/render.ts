@@ -17,7 +17,7 @@ import { getComponentListAddLabel, getComponentListEditLabel, hasComponentListIt
 import { renderTagEditor } from './tag-editor';
 import { getTemplateFields, renderTemplateGhosts } from './template';
 import type { Align, BlockSchema, VisualBlock, VisualSection } from './types';
-import { normalizeMarkdownIndentation, normalizeMarkdownLists } from '../markdown';
+import { applyUnderlineSyntax, escapeRawHtml, normalizeMarkdownIndentation, normalizeMarkdownLists } from '../markdown';
 import bash from 'highlight.js/lib/languages/bash';
 import css from 'highlight.js/lib/languages/css';
 import javascript from 'highlight.js/lib/languages/javascript';
@@ -576,11 +576,13 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           ${alignControls}
           <button type="button" class="icon-button ghost" data-rich-action="bold" ${richButtonAttrs} aria-label="Bold" title="Bold (Ctrl/Cmd+B)"><strong>B</strong></button>
           <button type="button" class="icon-button ghost" data-rich-action="italic" ${richButtonAttrs} aria-label="Italic" title="Italic (Ctrl/Cmd+I)"><span class="toolbar-icon italic-icon" aria-hidden="true">I</span></button>
+          <button type="button" class="icon-button ghost" data-rich-action="underline" ${richButtonAttrs} aria-label="Underline" title="Underline"><span class="toolbar-icon underline-icon" aria-hidden="true">U</span></button>
+          <button type="button" class="icon-button ghost" data-rich-action="strikethrough" ${richButtonAttrs} aria-label="Strikethrough" title="Strikethrough"><span class="toolbar-icon strikethrough-icon" aria-hidden="true">S</span></button>
           <button type="button" class="icon-button${selectedClass(blockStyle === 'quote')}" data-rich-action="quote" ${richButtonAttrs} aria-label="Quote" title="Quote"><span class="toolbar-icon quote-icon" aria-hidden="true">“</span></button>
           <button type="button" class="icon-button ghost" data-rich-action="code-block" ${richButtonAttrs} aria-label="Code" title="Code Block"><span class="toolbar-icon code-icon" aria-hidden="true">&lt;/&gt;</span></button>
           <button type="button" class="icon-button${selectedClass(blockStyle === 'list')}" data-rich-action="list" ${richButtonAttrs} aria-label="List" title="Bullet List"><span class="toolbar-icon list-icon" aria-hidden="true"></span></button>
           <button type="button" class="icon-button${selectedClass(blockStyle === 'checklist')}" data-rich-action="checklist" ${richButtonAttrs} aria-label="Checkbox" title="Checkbox"><span class="toolbar-icon checkbox-icon" aria-hidden="true">☑</span></button>
-          <button type="button" class="icon-button ghost" data-rich-action="link" ${richButtonAttrs} aria-label="Link" title="Link (Ctrl/Cmd+K)"><span class="toolbar-icon link-icon" aria-hidden="true">A</span></button>
+          <button type="button" class="icon-button ghost" data-rich-action="link" ${richButtonAttrs} aria-label="Link" title="Link (Ctrl/Cmd+K)"><span class="toolbar-icon link-icon" aria-hidden="true"></span></button>
         </div>
       </div>
     `;
@@ -866,7 +868,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
 
   function renderComponentFragment(componentName: string, content: string, block: VisualBlock): string {
     const base = deps.resolveBaseComponent(componentName);
-    const normalized = escapeRawHtml(normalizeMarkdownIndentation(normalizeMarkdownLists(content)));
+    const normalized = applyUnderlineSyntax(escapeRawHtml(normalizeMarkdownIndentation(normalizeMarkdownLists(content))));
     if (base === 'quote') {
       if (content.trim().length === 0) {
         return '';

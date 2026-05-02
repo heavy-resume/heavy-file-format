@@ -648,6 +648,31 @@ test('toolbar exposes quote and code block actions', async ({ page }) => {
   await expect(editor.locator('blockquote')).toContainText('Quoted');
 
   await editor.evaluate((node) => {
+    node.innerHTML = '<p>Removed</p>';
+    const textNode = node.querySelector('p')?.firstChild;
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(textNode!);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+  });
+  await page.getByRole('button', { name: 'Strikethrough' }).first().click();
+  await expect(editor.locator('s, strike, del')).toContainText('Removed');
+  await expect(page.locator('[data-rich-action="link"] .link-icon').first()).toBeEmpty();
+
+  await editor.evaluate((node) => {
+    node.innerHTML = '<p>Underlined</p>';
+    const textNode = node.querySelector('p')?.firstChild;
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(textNode!);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+  });
+  await page.getByRole('button', { name: 'Underline' }).first().click();
+  await expect(editor.locator('u')).toContainText('Underlined');
+
+  await editor.evaluate((node) => {
     node.innerHTML = '<p></p>';
     const paragraph = node.querySelector('p');
     const selection = window.getSelection();

@@ -1,7 +1,7 @@
 import { expect, test } from 'vitest';
 
 import { convertMarkdownToHvyDocument } from '../src/markdown-import';
-import { normalizeMarkdownIndentation, normalizeMarkdownLists } from '../src/markdown';
+import { applyUnderlineSyntax, escapeRawHtml, normalizeMarkdownIndentation, normalizeMarkdownLists, turndown } from '../src/markdown';
 import { deserializeDocument, serializeDocument } from '../src/serialization';
 
 test('normalizes fully indented text so indentation alone does not imply code', () => {
@@ -21,6 +21,16 @@ test('does not treat bold labels as star list items', () => {
   expect(normalizeMarkdownLists('**Target Location(s):** Remote, Seattle, San Francisco')).toBe(
     '**Target Location(s):** Remote, Seattle, San Francisco'
   );
+});
+
+test('escapes raw html before applying underline syntax', () => {
+  expect(applyUnderlineSyntax(escapeRawHtml('++safe++ <u>unsafe</u> <script>bad()</script>'))).toBe(
+    '<u>safe</u> &lt;u&gt;unsafe&lt;/u&gt; &lt;script&gt;bad()&lt;/script&gt;'
+  );
+});
+
+test('serializes editor underline with hvy underline syntax', () => {
+  expect(turndown.turndown('<p><u>Important</u></p>')).toBe('++Important++');
 });
 
 test('converts markdown headings into HVY section hierarchy', () => {

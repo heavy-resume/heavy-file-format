@@ -659,6 +659,22 @@ test('enter inside a code block inserts code newlines and shift enter exits belo
   await expect(editor.locator('pre code')).toHaveText('first\nsecond');
   await expect(editor.locator('p').last()).toHaveText('Body');
   await expect(page.getByRole('button', { name: 'Code block' }).first()).not.toHaveClass(/secondary/);
+
+  await editor.locator('p').last().evaluate((node) => {
+    const textNode = node.firstChild!;
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.setStart(textNode, 0);
+    range.collapse(true);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node.closest('.rich-editor') as HTMLElement | null)?.focus();
+  });
+  await page.keyboard.press('Backspace');
+  await page.keyboard.type(' again');
+
+  await expect(editor.locator('pre code')).toHaveText('first\nsecond again');
+  await expect(page.getByRole('button', { name: 'Code block' }).first()).toHaveClass(/secondary/);
 });
 
 test('toolbar exposes quote and code block actions', async ({ page }) => {
@@ -757,6 +773,77 @@ test('toolbar exposes quote and code block actions', async ({ page }) => {
   await expect(editor.locator('pre code')).toHaveCount(1);
   await expect(editor.locator('pre')).toHaveAttribute('data-code-language', '');
   await expect(codeBlockButton).toHaveClass(/secondary/);
+
+  await codeBlockButton.click();
+  await expect(editor.locator('pre')).toHaveCount(0);
+  await expect(editor.locator('p').last()).toHaveText('');
+  await expect(codeBlockButton).not.toHaveClass(/secondary/);
+
+  await editor.evaluate((node) => {
+    node.innerHTML = '<pre data-code-language="js"><code class="language-js" contenteditable="true">const value = 1;</code></pre>';
+    const textNode = node.querySelector('code')?.firstChild;
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.setStart(textNode!, textNode!.textContent!.length);
+    range.collapse(true);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+  });
+  await codeBlockButton.click();
+  await expect(editor.locator('pre')).toHaveCount(0);
+  await expect(editor.locator('p')).toHaveText('const value = 1;');
+  await expect(codeBlockButton).not.toHaveClass(/secondary/);
+});
+
+test('select all and backspace clears mixed rich editor content', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('.rich-editor').first();
+
+  await editor.evaluate((node) => {
+    node.innerHTML =
+      '<h1>Title</h1><blockquote>Quote</blockquote><pre data-code-language="js"><code class="language-js" contenteditable="true">console.log(1)</code></pre><p>Tail</p>';
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+  });
+
+  await page.keyboard.press('Backspace');
+
+  await expect(editor.locator('h1, blockquote, pre')).toHaveCount(0);
+  await expect(editor.locator('p')).toHaveCount(1);
+  await expect(editor).toHaveText('');
+});
+
+test('select all inside first-line quote and backspace clears quote style', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('.rich-editor').first();
+  const quoteButton = page.getByRole('button', { name: 'Quote' }).first();
+
+  await editor.evaluate((node) => {
+    node.innerHTML = '<blockquote>Quote first</blockquote><p>After</p>';
+    const textNode = node.querySelector('blockquote')?.firstChild;
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(textNode!);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+  });
+
+  await page.keyboard.press('Backspace');
+
+  await expect(editor.locator('blockquote')).toHaveCount(0);
+  await expect(editor.locator('p')).toHaveCount(2);
+  await expect(quoteButton).not.toHaveClass(/secondary/);
+  await expect(editor.locator('p').first()).toHaveText('');
 });
 
 test('inline toolbar buttons wrap and unwrap selected text', async ({ page }) => {

@@ -133,7 +133,7 @@ function getPickerGroups(componentDefs: ComponentDefinition[]): PickerGroup[] {
     {
       id: 'containers',
       label: 'Containers',
-      description: 'lists, grids, and containers',
+      description: 'lists, grids, and empty containers',
       position: 'bottom-left',
       direct: false,
       items: [

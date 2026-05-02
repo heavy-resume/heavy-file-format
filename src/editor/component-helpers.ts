@@ -6,6 +6,7 @@ export interface RichToolbarOptions {
   rowIndex?: number;
   includeAlign?: boolean;
   align?: Align;
+  currentMarkdown?: string;
 }
 
 export interface XrefTargetOption {

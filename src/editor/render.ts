@@ -546,39 +546,63 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const fieldAttr = options?.field ? ` data-rich-field="${deps.escapeAttr(options.field)}"` : '';
     const gridAttr = options?.gridItemId ? ` data-grid-item-id="${deps.escapeAttr(options.gridItemId)}"` : '';
     const rowAttr = typeof options?.rowIndex === 'number' ? ` data-row-index="${options.rowIndex}"` : '';
+    const blockStyle = getMarkdownBlockStyle(options?.currentMarkdown ?? '');
+    const selectedClass = (selected: boolean) => (selected ? ' secondary is-selected' : ' ghost');
+    const richButtonAttrs = `${fieldAttr}${gridAttr}${rowAttr} data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(blockId)}"`;
     const alignControls =
       options?.includeAlign && options.align
         ? `<div class="toolbar-segment align-buttons" role="group" aria-label="Text alignment">
-            <button type="button" class="${options.align === 'left' ? 'secondary' : 'ghost'}" data-action="set-block-align" data-align-value="left" data-section-key="${deps.escapeAttr(
+            <button type="button" class="icon-button${selectedClass(options.align === 'left')}" data-action="set-block-align" data-align-value="left" data-section-key="${deps.escapeAttr(
           sectionKey
-        )}" data-block-id="${deps.escapeAttr(blockId)}">Left</button>
-            <button type="button" class="${options.align === 'center' ? 'secondary' : 'ghost'}" data-action="set-block-align" data-align-value="center" data-section-key="${deps.escapeAttr(
+        )}" data-block-id="${deps.escapeAttr(blockId)}" aria-label="Align left" title="Align left"><span class="toolbar-icon align-left-icon" aria-hidden="true"></span></button>
+            <button type="button" class="icon-button${selectedClass(options.align === 'center')}" data-action="set-block-align" data-align-value="center" data-section-key="${deps.escapeAttr(
           sectionKey
-        )}" data-block-id="${deps.escapeAttr(blockId)}">Center</button>
-            <button type="button" class="${options.align === 'right' ? 'secondary' : 'ghost'}" data-action="set-block-align" data-align-value="right" data-section-key="${deps.escapeAttr(
+        )}" data-block-id="${deps.escapeAttr(blockId)}" aria-label="Align center" title="Align center"><span class="toolbar-icon align-center-icon" aria-hidden="true"></span></button>
+            <button type="button" class="icon-button${selectedClass(options.align === 'right')}" data-action="set-block-align" data-align-value="right" data-section-key="${deps.escapeAttr(
           sectionKey
-        )}" data-block-id="${deps.escapeAttr(blockId)}">Right</button>
+        )}" data-block-id="${deps.escapeAttr(blockId)}" aria-label="Align right" title="Align right"><span class="toolbar-icon align-right-icon" aria-hidden="true"></span></button>
           </div>`
         : '';
     return `
       <div class="rich-toolbar">
-        ${alignControls}
+        <div class="toolbar-segment block-style-buttons" role="group" aria-label="Block style">
+          <button type="button" class="${selectedClass(blockStyle === 'paragraph')}" data-rich-action="paragraph" ${richButtonAttrs} title="Normal text">Text</button>
+          <button type="button" class="${selectedClass(blockStyle === 'heading-1')}" data-rich-action="heading-1" ${richButtonAttrs} title="Heading 1">H1</button>
+          <button type="button" class="${selectedClass(blockStyle === 'heading-2')}" data-rich-action="heading-2" ${richButtonAttrs} title="Heading 2">H2</button>
+          <button type="button" class="${selectedClass(blockStyle === 'heading-3')}" data-rich-action="heading-3" ${richButtonAttrs} title="Heading 3">H3</button>
+          <button type="button" class="${selectedClass(blockStyle === 'heading-4')}" data-rich-action="heading-4" ${richButtonAttrs} title="Heading 4">H4</button>
+        </div>
         <div class="toolbar-segment format-buttons" role="group" aria-label="Text formatting">
-          <button type="button" data-rich-action="paragraph"${fieldAttr}${gridAttr}${rowAttr} data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(blockId)}" title="Normal text">Text</button>
-          <button type="button" data-rich-action="heading-1"${fieldAttr}${gridAttr}${rowAttr} data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(blockId)}" title="Heading 1">H1</button>
-          <button type="button" data-rich-action="heading-2"${fieldAttr}${gridAttr}${rowAttr} data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(blockId)}" title="Heading 2">H2</button>
-          <button type="button" data-rich-action="heading-3"${fieldAttr}${gridAttr}${rowAttr} data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(blockId)}" title="Heading 3">H3</button>
-          <button type="button" data-rich-action="heading-4"${fieldAttr}${gridAttr}${rowAttr} data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(blockId)}" title="Heading 4">H4</button>
-          <button type="button" data-rich-action="bold"${fieldAttr}${gridAttr}${rowAttr} data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(blockId)}" title="Bold (Ctrl/Cmd+B)"><strong>B</strong></button>
-          <button type="button" data-rich-action="italic"${fieldAttr}${gridAttr}${rowAttr} data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(blockId)}" title="Italic (Ctrl/Cmd+I)">Italic</button>
-          <button type="button" data-rich-action="quote"${fieldAttr}${gridAttr}${rowAttr} data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(blockId)}" title="Quote">Quote</button>
-          <button type="button" data-rich-action="code-block"${fieldAttr}${gridAttr}${rowAttr} data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(blockId)}" title="Code Block">Code</button>
-          <button type="button" data-rich-action="list"${fieldAttr}${gridAttr}${rowAttr} data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(blockId)}" title="Bullet List">List</button>
-          <button type="button" data-rich-action="checklist"${fieldAttr}${gridAttr}${rowAttr} data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(blockId)}" title="Checkbox">Checkbox</button>
-          <button type="button" data-rich-action="link"${fieldAttr}${gridAttr}${rowAttr} data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(blockId)}" title="Link (Ctrl/Cmd+K)">Link</button>
+          ${alignControls}
+          <button type="button" class="icon-button ghost" data-rich-action="bold" ${richButtonAttrs} aria-label="Bold" title="Bold (Ctrl/Cmd+B)"><strong>B</strong></button>
+          <button type="button" class="icon-button ghost" data-rich-action="italic" ${richButtonAttrs} aria-label="Italic" title="Italic (Ctrl/Cmd+I)"><span class="toolbar-icon italic-icon" aria-hidden="true">I</span></button>
+          <button type="button" class="icon-button${selectedClass(blockStyle === 'quote')}" data-rich-action="quote" ${richButtonAttrs} aria-label="Quote" title="Quote"><span class="toolbar-icon quote-icon" aria-hidden="true">“</span></button>
+          <button type="button" class="icon-button ghost" data-rich-action="code-block" ${richButtonAttrs} aria-label="Code" title="Code Block"><span class="toolbar-icon code-icon" aria-hidden="true">&lt;/&gt;</span></button>
+          <button type="button" class="icon-button${selectedClass(blockStyle === 'list')}" data-rich-action="list" ${richButtonAttrs} aria-label="List" title="Bullet List"><span class="toolbar-icon list-icon" aria-hidden="true"></span></button>
+          <button type="button" class="icon-button${selectedClass(blockStyle === 'checklist')}" data-rich-action="checklist" ${richButtonAttrs} aria-label="Checkbox" title="Checkbox"><span class="toolbar-icon checkbox-icon" aria-hidden="true">☑</span></button>
+          <button type="button" class="icon-button ghost" data-rich-action="link" ${richButtonAttrs} aria-label="Link" title="Link (Ctrl/Cmd+K)"><span class="toolbar-icon link-icon" aria-hidden="true">A</span></button>
         </div>
       </div>
     `;
+  }
+
+  function getMarkdownBlockStyle(markdown: string): string {
+    const trimmed = markdown.trimStart();
+    const firstLine = trimmed.split(/\r?\n/, 1)[0] ?? '';
+    const heading = firstLine.match(/^(#{1,4})\s+/);
+    if (heading) {
+      return `heading-${heading[1].length}`;
+    }
+    if (/^[-*]\s+\[[ xX]\]\s+/.test(firstLine)) {
+      return 'checklist';
+    }
+    if (/^[-*]\s+/.test(firstLine)) {
+      return 'list';
+    }
+    if (/^>\s+/.test(firstLine)) {
+      return 'quote';
+    }
+    return 'paragraph';
   }
 
   function renderMetaPanel(): string {

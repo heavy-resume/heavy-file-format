@@ -661,6 +661,35 @@ test('toolbar exposes quote and code block actions', async ({ page }) => {
   await expect(editor.locator('pre code')).toHaveCount(1);
 });
 
+test('toolbar block style row selects and toggles headings', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('.rich-editor').first();
+  const h1Button = page.getByRole('button', { name: 'H1' }).first();
+  const textButton = page.getByRole('button', { name: 'Text' }).first();
+
+  await editor.evaluate((node) => {
+    node.innerHTML = '<p>Heading text</p>';
+    const paragraph = node.querySelector('p');
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(paragraph!);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+  });
+
+  await h1Button.click();
+  await expect(editor.locator('h1')).toContainText('Heading text');
+  await expect(h1Button).toHaveClass(/secondary/);
+  await expect(textButton).not.toHaveClass(/secondary/);
+
+  await h1Button.click();
+  await expect(editor.locator('p')).toContainText('Heading text');
+  await expect(textButton).toHaveClass(/secondary/);
+  await expect(h1Button).not.toHaveClass(/secondary/);
+});
+
 test('section add component affordance is a compact single row', async ({ page }) => {
   await page.goto('/');
 

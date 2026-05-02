@@ -533,7 +533,9 @@ export function applyRichAction(action: string, editable: HTMLElement, value?: s
     document.execCommand('formatBlock', false, 'p');
   } else if (action.startsWith('heading-')) {
     const level = action.split('-')[1] ?? '2';
-    document.execCommand('formatBlock', false, `h${level}`);
+    const currentBlock = getSelectionBlockElement(editable);
+    const nextBlock = currentBlock?.tagName.toLowerCase() === `h${level}` ? 'p' : `h${level}`;
+    document.execCommand('formatBlock', false, nextBlock);
   } else if (action === 'list') {
     document.execCommand('insertUnorderedList');
   } else if (action === 'checklist') {
@@ -550,8 +552,45 @@ export function applyRichAction(action: string, editable: HTMLElement, value?: s
     document.execCommand('createLink', false, url);
   }
 
+  updateRichToolbarState(editable);
   const inputEvent = new InputEvent('input', { bubbles: true });
   editable.dispatchEvent(inputEvent);
+}
+
+function updateRichToolbarState(editable: HTMLElement): void {
+  const toolbar = editable.closest('.editor-block')?.querySelector<HTMLElement>('.rich-toolbar');
+  if (!toolbar) {
+    return;
+  }
+  const selectedStyle = getSelectedRichBlockStyle(editable);
+  toolbar.querySelectorAll<HTMLButtonElement>('[data-rich-action]').forEach((button) => {
+    const action = button.dataset.richAction ?? '';
+    const selected =
+      action === selectedStyle ||
+      (selectedStyle === 'paragraph' && action === 'paragraph');
+    if (!/^(paragraph|heading-[1-4]|quote|list|checklist)$/.test(action)) {
+      return;
+    }
+    button.classList.toggle('secondary', selected);
+    button.classList.toggle('is-selected', selected);
+    button.classList.toggle('ghost', !selected);
+  });
+}
+
+function getSelectedRichBlockStyle(editable: HTMLElement): string {
+  const block = getSelectionBlockElement(editable);
+  const tagName = block?.tagName.toLowerCase() ?? '';
+  if (/^h[1-4]$/.test(tagName)) {
+    return `heading-${tagName.slice(1)}`;
+  }
+  if (tagName === 'blockquote') {
+    return 'quote';
+  }
+  if (block?.closest('li')) {
+    const text = block.textContent ?? '';
+    return /^\s*(☐|☑|\[[ xX]\])/.test(text) ? 'checklist' : 'list';
+  }
+  return 'paragraph';
 }
 
 export function handleRichEditorKeydown(event: KeyboardEvent, editable: HTMLElement): boolean {

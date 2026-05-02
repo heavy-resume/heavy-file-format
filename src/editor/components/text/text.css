@@ -27,11 +27,9 @@
 }
 
 .rich-toolbar {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
   gap: 0.3rem;
   margin-bottom: 0.4rem;
-  align-items: center;
 }
 
 .rich-toolbar button {
@@ -55,8 +53,144 @@
   align-items: center;
 }
 
+.block-style-buttons {
+  width: 100%;
+}
+
+.format-buttons {
+  align-items: center;
+}
+
 .align-buttons {
   margin: 0;
+}
+
+.rich-toolbar .icon-button {
+  width: 2.1rem;
+  min-width: 2.1rem;
+  height: 2rem;
+  padding: 0.2rem;
+  display: inline-grid;
+  place-items: center;
+}
+
+.toolbar-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  color: currentColor;
+  line-height: 1;
+}
+
+.align-left-icon,
+.align-center-icon,
+.align-right-icon {
+  gap: 0.16rem;
+}
+
+.align-left-icon::before,
+.align-left-icon::after,
+.align-center-icon::before,
+.align-center-icon::after,
+.align-right-icon::before,
+.align-right-icon::after {
+  content: "";
+  display: block;
+  height: 2px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.align-left-icon::before {
+  width: 1rem;
+  justify-self: start;
+  box-shadow: 0 0.32rem 0 currentColor;
+}
+
+.align-left-icon::after {
+  width: 0.68rem;
+  justify-self: start;
+}
+
+.align-center-icon::before {
+  width: 1rem;
+  justify-self: center;
+  box-shadow: 0 0.32rem 0 currentColor;
+}
+
+.align-center-icon::after {
+  width: 0.68rem;
+  justify-self: center;
+}
+
+.align-right-icon::before {
+  width: 1rem;
+  justify-self: end;
+  box-shadow: 0 0.32rem 0 currentColor;
+}
+
+.align-right-icon::after {
+  width: 0.68rem;
+  justify-self: end;
+}
+
+.italic-icon {
+  font-family: Georgia, serif;
+  font-style: italic;
+  font-weight: 700;
+}
+
+.quote-icon {
+  font-family: Georgia, serif;
+  font-size: 1.6rem;
+  transform: translateY(0.12rem);
+}
+
+.list-icon {
+  position: relative;
+  width: 1.1rem;
+  height: 0.9rem;
+}
+
+.list-icon::before,
+.list-icon::after {
+  content: "";
+  position: absolute;
+  left: 0.08rem;
+}
+
+.list-icon::before {
+  top: 0.08rem;
+  width: 0.18rem;
+  height: 0.18rem;
+  border-radius: 999px;
+  background: currentColor;
+  box-shadow:
+    0 0.31rem 0 currentColor,
+    0 0.62rem 0 currentColor;
+}
+
+.list-icon::after {
+  top: 0.13rem;
+  left: 0.4rem;
+  width: 0.62rem;
+  height: 2px;
+  border-radius: 999px;
+  background: currentColor;
+  box-shadow:
+    0 0.31rem 0 currentColor,
+    0 0.62rem 0 currentColor;
+}
+
+.checkbox-icon {
+  font-size: 1.05rem;
+}
+
+.link-icon {
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 0.16rem;
 }
 
 .rich-editor {

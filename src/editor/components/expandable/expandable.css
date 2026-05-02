@@ -37,6 +37,11 @@
   overflow: hidden;
 }
 
+.expandable-part:has(.component-picker:focus-within),
+.expandable-part:has(.component-picker[data-open="true"]) {
+  overflow: visible;
+}
+
 .expandable-label {
   font-size: 0.86rem;
   font-weight: 700;

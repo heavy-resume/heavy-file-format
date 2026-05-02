@@ -1374,15 +1374,18 @@ test('component picker opens categories and adds selected component', async ({ p
   await expect(rootPane.locator('.component-picker-row-title', { hasText: 'Containers' })).toBeVisible();
   await expect(rootPane.locator('.component-picker-row-title', { hasText: 'Custom' })).toBeVisible();
   await expect(rootPane.locator('.component-picker-row-title', { hasText: 'Plugin' })).toBeVisible();
-  await expect(rootPane.getByText('multipurpose text component')).toBeHidden();
+  await expect(rootPane.locator('.component-picker-row-direct[data-component="text"] .component-picker-row-description')).toBeHidden();
   await rootPane.locator('.component-picker-row-direct[data-component="text"]').hover();
-  await expect(rootPane.getByText('multipurpose text component')).toBeVisible();
+  await expect(rootPane.locator('.component-picker-row-direct[data-component="text"] .component-picker-row-description')).toBeVisible();
 
   await picker.locator('.component-picker-row-category', { hasText: 'Containers' }).click();
   await expect(picker.locator('[data-picker-pane="containers"] .component-picker-row-title', { hasText: 'Container' })).toBeVisible();
   await addComponent.getByRole('button', { name: 'Section component type' }).click();
   await expect(rootPane.locator('.component-picker-row-title', { hasText: 'Text' })).toBeVisible();
   await expect(picker.locator('[data-picker-pane="containers"] .component-picker-row-title', { hasText: 'Container' })).toBeHidden();
+  await rootPane.click({ position: { x: 112, y: 112 } });
+  await expect(picker).toBeHidden();
+  await addComponent.getByRole('button', { name: 'Section component type' }).click();
 
   await picker.locator('.component-picker-row-category', { hasText: 'Plugin' }).click();
   await expect(picker.locator('[data-picker-pane="plugins"] .component-picker-row-title', { hasText: 'DB Table' })).toBeVisible();

@@ -18,6 +18,13 @@ export function bindClickMisc(app: HTMLElement): void {
     if (pickerTrigger) {
       const picker = pickerTrigger.closest<HTMLElement>('.component-picker');
       if (picker) {
+        if (picker.dataset.open === 'true' && picker.dataset.activePane === 'root') {
+          delete picker.dataset.open;
+          picker.dataset.activePane = 'root';
+          picker.style.removeProperty('--component-picker-shift');
+          pickerTrigger.blur();
+          return;
+        }
         closeOtherComponentPickers(app, picker);
         picker.dataset.open = 'true';
         picker.dataset.activePane = 'root';
@@ -34,6 +41,16 @@ export function bindClickMisc(app: HTMLElement): void {
         picker.dataset.open = 'true';
         picker.dataset.activePane = pickerPaneButton.dataset.componentPickerPane ?? 'root';
         revealComponentPicker(picker);
+      }
+      return;
+    }
+    const pickerRootPane = target.closest<HTMLElement>('.component-picker-pane-root');
+    if (pickerRootPane && target === pickerRootPane) {
+      const picker = pickerRootPane.closest<HTMLElement>('.component-picker');
+      if (picker) {
+        delete picker.dataset.open;
+        picker.dataset.activePane = 'root';
+        picker.style.removeProperty('--component-picker-shift');
       }
       return;
     }

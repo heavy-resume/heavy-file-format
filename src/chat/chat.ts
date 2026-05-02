@@ -121,8 +121,18 @@ export function renderChatPanel(
   const currentProviderLabel = chat.settings.provider === 'openai' ? 'OpenAI' : 'Anthropic';
   const hasDraft = chat.draft.trim().length > 0;
   const missingModel = chat.settings.model.trim().length === 0;
-  const canSend = !chat.isSending && context.length > 0;
   const isDocumentEdit = mode === 'document-edit';
+  const canSend = !chat.isSending && !missingModel && (isDocumentEdit || context.trim().length > 0);
+  console.debug('[hvy:chat-render] composer state', {
+    panelOpen: chat.panelOpen,
+    mode,
+    canSend,
+    isSending: chat.isSending,
+    hasDraft,
+    missingModel,
+    contextLength: context.trim().length,
+    messageCount: chat.messages.length,
+  });
   const title = isDocumentEdit ? 'Edit This Document' : 'Ask This Document';
   const subtitle = isDocumentEdit
     ? 'Editing chat can inspect structure, request targeted tools, and apply document changes step by step through the local proxy.'

@@ -1,0 +1,10 @@
+Create a chore chart where you have a table where the column is a 
+person in the family (such as dad, mom, child)
+and the rows are the active chores visible from top to bottom
+
+You can add chores with a description
+
+A form lets you assign a chore
+A seperate form lets you complete a chore
+
+A table shows who's completed the most chores in the past week

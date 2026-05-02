@@ -28,6 +28,7 @@ import { deserializeDocument, serializeDocument } from '../src/serialization';
 import { initState } from '../src/state';
 import type { ChatMessage, ChatSettings } from '../src/types';
 import { dbTablePluginRegistration } from '../src/plugins/db-table-plugin';
+import { formPluginRegistration } from '../src/plugins/form';
 import { setHostPlugins } from '../src/plugins/registry';
 
 beforeEach(() => {
@@ -164,11 +165,25 @@ test('buildDocumentEditFormatInstructions documents the tool protocol', () => {
   expect(pathInstructions).toContain('Use `header` for front matter metadata');
   expect(pathInstructions).toContain('Use `document` for requests to change visible spacing, margins, or layout between existing sections.');
 
-  const instructions = buildDocumentEditFormatInstructions();
+  const instructions = buildDocumentEditFormatInstructions({
+    pluginHints: [
+      {
+        id: 'dev.test.widget',
+        displayName: 'Widget',
+        hint: 'Use widget YAML in the component body.',
+      },
+    ],
+  });
   expect(instructions).toContain(
     'Valid tools are: `answer`, `plan`, `mark_step_done`, `grep`, `get_css`, `get_properties`, `set_properties`, `view_component`, `view_rendered_component`, `edit_component`, `patch_component`, `create_component`, `remove_component`, `create_section`, `remove_section`, `reorder_section`, `request_structure`, `request_rendered_structure`, `done`.'
   );
   expect(instructions).toContain('Use `answer` for informational questions, explanations, or requests that do not require changing the HVY document.');
+  expect(instructions).toContain('This is an HVY document editing tool loop, not an HTML generator.');
+  expect(instructions).toContain('All new visible content must be encoded as HVY sections and components');
+  expect(instructions).toContain('Available plugins for `<!--hvy:plugin ...-->` blocks:');
+  expect(instructions).toContain('- Widget (dev.test.widget): Use widget YAML in the component body.');
+  expect(instructions).toContain('Only use registered plugin ids from this list.');
+  expect(instructions).not.toContain('dev.heavy.form');
   expect(instructions).toContain('{"tool":"answer","answer":"Direct answer to the user."}');
   expect(instructions).toContain('{"tool":"plan","steps":["Find the relevant section","Patch the component","Verify the updated structure"],"reason":"optional"}');
   expect(instructions).toContain('{"tool":"mark_step_done","step":1,"summary":"Found the relevant section.","reason":"optional"}');
@@ -200,6 +215,16 @@ test('buildDocumentEditFormatInstructions documents the tool protocol', () => {
   expect(dbInstructions).toContain('`query_db_table`');
   expect(dbInstructions).toContain('Available tables: work_items');
   expect(dbInstructions).toContain('{"tool":"query_db_table","table_name":"work_items","limit":10,"reason":"optional"}');
+  expect(dbInstructions).not.toContain('reason":"Add a live db-table component showing all rows"');
+
+  const dbPluginInstructions = buildDocumentEditFormatInstructions({
+    dbTableNames: ['work_items'],
+    pluginHints: [{ id: 'dev.heavy.db-table', displayName: 'DB Table', hint: 'Renders SQLite rows.' }],
+  });
+  expect(dbPluginInstructions).toContain('reason":"Add a live db-table component showing all rows"');
+
+  const noPluginInstructions = buildDocumentEditFormatInstructions();
+  expect(noPluginInstructions).toContain('No plugins are currently registered.');
 
   const headerInstructions = buildHeaderEditFormatInstructions();
   expect(headerInstructions).toContain('Valid header tools are: `answer`, `plan`, `mark_step_done`, `grep_header`, `view_header`, `patch_header`, `request_header`, `done`.');
@@ -332,6 +357,8 @@ hvy_version: 0.1
   expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.context).toContain('Plan progress:');
   expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.context).toContain('- [ ] 1. Find the summary text');
   expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.context).toContain('- [x] 1. Find the summary text — Found the summary text.');
+  expect(result.messages.some((message) => message.progress && message.content.includes('Plan progress:'))).toBe(true);
+  expect(result.messages.some((message) => message.progress && message.content.includes('Find the summary text'))).toBe(true);
 });
 
 test('requestAiDocumentEditTurn keeps one active plan instead of replacing it', async () => {
@@ -1031,6 +1058,75 @@ hvy_version: 0.1
   const retryMessages = requestProxyCompletionMock.mock.calls[2]?.[0]?.messages.map((message: ChatMessage) => message.content).join('\n') ?? '';
   expect(retryMessages).toContain('no tools were executed');
   expect(retryMessages).not.toContain('New section ref: imagined');
+});
+
+test('requestAiDocumentEditTurn rejects HTML create payloads and asks for HVY', async () => {
+  requestProxyCompletionMock
+    .mockResolvedValueOnce('document')
+    .mockResolvedValueOnce('{"tool":"create_section","position":"append-root","hvy":"<section><h1>Chores</h1><table><tr><td>Dad</td></tr></table></section>"}')
+    .mockResolvedValueOnce('{"tool":"create_section","position":"append-root","hvy":"<!--hvy: {\\"id\\":\\"chores\\"}-->\\n#! Chores\\n\\n <!--hvy:text {}-->\\n  Chore chart"}')
+    .mockResolvedValueOnce('{"tool":"done","summary":"Created chores section."}');
+
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+`, '.hvy');
+  seedStateForDocument(document);
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+
+  const result = await requestAiDocumentEditTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Create a chore chart.',
+  });
+
+  expect(result.error).toBeNull();
+  const retryMessages = requestProxyCompletionMock.mock.calls[2]?.[0]?.messages.map((message: ChatMessage) => message.content).join('\n') ?? '';
+  expect(retryMessages).toContain('contains HTML/DOM markup');
+  expect(retryMessages).toContain('document edit tools only accept serialized HVY');
+  const serialized = serializeDocument(document);
+  expect(serialized).toContain('#! Chores');
+  expect(serialized).toContain('Chore chart');
+  expect(serialized).not.toContain('<section>');
+});
+
+test('requestAiDocumentEditTurn rejects invented hvy form components and asks for the form plugin', async () => {
+  setHostPlugins([formPluginRegistration]);
+  requestProxyCompletionMock
+    .mockResolvedValueOnce('document')
+    .mockResolvedValueOnce('{"tool":"create_component","position":"append-to-section","section_ref":"summary","hvy":"<!--hvy:form {\\"id\\":\\"assign-form\\"}-->"}')
+    .mockResolvedValueOnce('{"tool":"create_component","position":"append-to-section","section_ref":"summary","hvy":"<!--hvy:plugin {\\"id\\":\\"assign-form\\",\\"plugin\\":\\"dev.heavy.form\\",\\"pluginConfig\\":{\\"version\\":\\"0.1\\"}}-->\\nfields:\\n  - name: chore\\n    label: Chore\\n    type: text\\nsubmitLabel: Assign"}')
+    .mockResolvedValueOnce('{"tool":"done","summary":"Created form plugin."}');
+
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+`, '.hvy');
+  seedStateForDocument(document);
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+
+  const result = await requestAiDocumentEditTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Create an actual assign chore form.',
+  });
+
+  expect(result.error).toBeNull();
+  const firstToolInstructions = requestProxyCompletionMock.mock.calls[1]?.[0]?.formatInstructions ?? '';
+  expect(firstToolInstructions).toContain('Form (dev.heavy.form)');
+  expect(firstToolInstructions).toContain('Supported YAML keys include `fields`');
+  const retryMessages = requestProxyCompletionMock.mock.calls[2]?.[0]?.messages.map((message: ChatMessage) => message.content).join('\n') ?? '';
+  expect(retryMessages).toContain('unsupported `hvy:form` syntax');
+  expect(retryMessages).toContain('A registered Form plugin is available');
+  const serialized = serializeDocument(document);
+  expect(serialized).toContain('"plugin":"dev.heavy.form"');
+  expect(serialized).toContain('submitLabel: Assign');
+  expect(serialized).not.toContain('hvy:form');
 });
 
 test('requestAiDocumentEditTurn can remove a section', async () => {

@@ -1,4 +1,5 @@
 import { HVY_AI_RESPONSE_FORMAT_INSTRUCTIONS } from './chat/chat';
+import { getPluginAiHintForBlock, getRegisteredPluginAiHints } from './ai-plugin-hints';
 import { resolveBaseComponent } from './component-defs';
 import type { VisualBlock } from './editor/types';
 import type { RawEditorDiagnostic, VisualDocument } from './types';
@@ -44,11 +45,22 @@ export function buildAiEditPrompt(request: string): string {
 }
 
 export function buildAiEditFormatInstructions(): string {
+  const pluginHints = getRegisteredPluginAiHints();
   return [
     HVY_AI_RESPONSE_FORMAT_INSTRUCTIONS,
     '',
     'You are revising a single HVY component, not a whole document.',
     'Return exactly one HVY component fragment.',
+    pluginHints.length > 0
+      ? [
+          'Available plugins for replacement components:',
+          ...pluginHints.map((plugin) => {
+            const hint = plugin.hint.trim();
+            return `- ${plugin.displayName} (${plugin.id})${hint ? `: ${hint}` : ''}`;
+          }),
+          'Only use registered plugin ids from this list. Do not invent plugin component directives.',
+        ].join('\n')
+      : 'No plugins are currently registered. Do not create plugin blocks or invent plugin component directives.',
     'Do not include YAML front matter, section comments, section headings, code fences, or prose outside the component.',
     'Every HVY directive payload must be strict JSON with double-quoted keys and strings.',
     'Keep HVY field value types correct. Booleans must stay booleans, strings must stay strings, and arrays/objects must keep the documented shape.',
@@ -87,6 +99,9 @@ export function formatAiEditIssueSummary(issues: RawEditorDiagnostic[]): string 
 
 export function getAiEditComponentGuidance(block: VisualBlock): string {
   const base = resolveBaseComponent(block.schema.component);
+  if (base === 'plugin') {
+    return getPluginAiHintForBlock(block);
+  }
   if (base === 'table') {
     return [
       '- Use `tableColumns` as a comma-separated string, for example `"Foo, Bar"`.',

@@ -5,16 +5,28 @@ export function bindSubmit(app: HTMLElement): void {
     const form = event.target as HTMLElement | null;
     if (form?.id === 'chatComposer') {
       event.preventDefault();
+      console.debug('[hvy:chat-submit] submit event', {
+        isSending: state.chat.isSending,
+        currentView: state.currentView,
+        draftLength: state.chat.draft.length,
+        trimmedDraftLength: state.chat.draft.trim().length,
+        provider: state.chat.settings.provider,
+        model: state.chat.settings.model,
+        requestNonce: state.chat.requestNonce,
+      });
       if (state.chat.isSending) {
+        console.debug('[hvy:chat-submit] ignored because request is already sending');
         return;
       }
 
       const question = state.chat.draft.trim();
       if (question.length === 0) {
+        console.debug('[hvy:chat-submit] ignored because prompt is empty');
         return;
       }
 
       if (state.chat.settings.model.trim().length === 0) {
+        console.debug('[hvy:chat-submit] blocked because model is empty');
         state.chat.error = 'Choose a model before sending.';
         getRenderApp()();
         return;
@@ -31,10 +43,20 @@ export function bindSubmit(app: HTMLElement): void {
       const requestNonce = state.chat.requestNonce;
       const abortController = new AbortController();
       state.chat.abortController = abortController;
+      console.debug('[hvy:chat-submit] started request', {
+        requestNonce,
+        currentView: state.currentView,
+        isDocumentEditChat: state.currentView !== 'viewer',
+        sections: state.document.sections.length,
+      });
       getRenderApp()();
 
       try {
         const isDocumentEditChat = state.currentView !== 'viewer';
+        console.debug('[hvy:chat-submit] dispatching chat turn', {
+          requestNonce,
+          mode: isDocumentEditChat ? 'document-edit' : 'qa',
+        });
         const result =
           isDocumentEditChat
             ? await requestDocumentEditChatTurn({
@@ -45,8 +67,18 @@ export function bindSubmit(app: HTMLElement): void {
                 onMutation: (group) => recordHistory(group),
                 onProgress: (message) => {
                   if (requestNonce !== state.chat.requestNonce || abortController.signal.aborted) {
+                    console.debug('[hvy:chat-submit] ignored stale progress', {
+                      requestNonce,
+                      currentNonce: state.chat.requestNonce,
+                      aborted: abortController.signal.aborted,
+                      content: message.content,
+                    });
                     return;
                   }
+                  console.debug('[hvy:chat-submit] progress', {
+                    requestNonce,
+                    content: message.content,
+                  });
                   state.chat.messages = [...state.chat.messages, message];
                   getRenderApp()();
                 },
@@ -59,7 +91,19 @@ export function bindSubmit(app: HTMLElement): void {
                 question,
                 signal: abortController.signal,
               });
+        console.debug('[hvy:chat-submit] chat turn resolved', {
+          requestNonce,
+          currentNonce: state.chat.requestNonce,
+          aborted: abortController.signal.aborted,
+          error: result.error,
+          messageCount: result.messages.length,
+        });
         if (requestNonce !== state.chat.requestNonce || abortController.signal.aborted) {
+          console.debug('[hvy:chat-submit] dropping result because request is stale or aborted', {
+            requestNonce,
+            currentNonce: state.chat.requestNonce,
+            aborted: abortController.signal.aborted,
+          });
           return;
         }
         state.chat.messages = result.messages;
@@ -71,8 +115,16 @@ export function bindSubmit(app: HTMLElement): void {
         }
       } finally {
         if (requestNonce !== state.chat.requestNonce) {
+          console.debug('[hvy:chat-submit] leaving newer request state untouched', {
+            requestNonce,
+            currentNonce: state.chat.requestNonce,
+          });
           return;
         }
+        console.debug('[hvy:chat-submit] finished request', {
+          requestNonce,
+          aborted: abortController.signal.aborted,
+        });
         state.chat.abortController = null;
         state.chat.isSending = false;
         getRenderApp()();

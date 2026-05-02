@@ -21,9 +21,33 @@ export function buildEditPathSelectionPrompt(request: string): string {
   ].join('\n');
 }
 
-export function buildDocumentEditFormatInstructions(options?: { dbTableNames?: string[] }): string {
+export interface DocumentEditPluginHint {
+  id: string;
+  displayName: string;
+  hint?: string;
+}
+
+function formatPluginHintLines(pluginHints: DocumentEditPluginHint[]): string[] {
+  if (pluginHints.length === 0) {
+    return [
+      'No plugins are currently registered. Do not create plugin blocks or invent plugin component directives unless a registered plugin is available in context.',
+    ];
+  }
+  return [
+    'Available plugins for `<!--hvy:plugin ...-->` blocks:',
+    ...pluginHints.map((plugin) => {
+      const hint = plugin.hint?.trim();
+      return `- ${plugin.displayName} (${plugin.id})${hint ? `: ${hint}` : ''}`;
+    }),
+    'Only use registered plugin ids from this list. If the user asks for plugin behavior and no matching plugin is registered, answer or ask for clarification instead of inventing a component directive.',
+  ];
+}
+
+export function buildDocumentEditFormatInstructions(options?: { dbTableNames?: string[]; pluginHints?: DocumentEditPluginHint[] }): string {
   const dbTableNames = options?.dbTableNames ?? [];
+  const pluginHints = options?.pluginHints ?? [];
   const hasDbTables = dbTableNames.length > 0;
+  const hasDbTablePlugin = pluginHints.some((plugin) => plugin.id === 'dev.heavy.db-table');
   const validTools = hasDbTables
     ? '`answer`, `plan`, `mark_step_done`, `grep`, `get_css`, `get_properties`, `set_properties`, `view_component`, `view_rendered_component`, `edit_component`, `patch_component`, `create_component`, `remove_component`, `create_section`, `remove_section`, `reorder_section`, `query_db_table`, `request_structure`, `request_rendered_structure`, `done`'
     : '`answer`, `plan`, `mark_step_done`, `grep`, `get_css`, `get_properties`, `set_properties`, `view_component`, `view_rendered_component`, `edit_component`, `patch_component`, `create_component`, `remove_component`, `create_section`, `remove_section`, `reorder_section`, `request_structure`, `request_rendered_structure`, `done`';
@@ -31,6 +55,9 @@ export function buildDocumentEditFormatInstructions(options?: { dbTableNames?: s
     'Reply with exactly one JSON object and nothing else.',
     'Choose one tool at a time.',
     `Valid tools are: ${validTools}.`,
+    'This is an HVY document editing tool loop, not an HTML generator. Do not return HTML, JSX, DOM markup, JavaScript, or CSS files as document content.',
+    'All new visible content must be encoded as HVY sections and components using `<!--hvy:...-->` directives plus Markdown-like text content.',
+    ...formatPluginHintLines(pluginHints),
     'Use `answer` for informational questions, explanations, or requests that do not require changing the HVY document. `answer` is final and does not mutate the document.',
     'For larger or ambiguous edit requests, first use `plan` with explicit steps. Keep the plan concise and actionable.',
     'Create at most one plan for the current request. Once a plan exists, execute it and mark steps done instead of replacing it.',
@@ -59,13 +86,17 @@ export function buildDocumentEditFormatInstructions(options?: { dbTableNames?: s
           `Use \`query_db_table\` to inspect live rows from the attached DB when needed. Available tables: ${dbTableNames.join(', ')}.`,
           'For `query_db_table`, provide `table_name` when more than one table exists, or provide a full SQL `query`. `limit` is optional and is capped for concise tool output.',
           'Do not invent DB column names in SQL filters. First inspect the table with `query_db_table` and only use columns returned by that table result.',
-          `When adding a component that should display rows from a DB table, use a \`db-table\` plugin block instead of the table component. A db-table renders live rows from the database. Example: \`<!--hvy:plugin {"plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"TABLE_NAME"}}-->\`. The text content after the directive is an optional SQL query filter (leave empty to show all rows).`,
+          ...(hasDbTablePlugin
+            ? [
+                `When adding a component that should display rows from a DB table, use a \`db-table\` plugin block instead of the table component. A db-table renders live rows from the database. Example: \`<!--hvy:plugin {"plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"TABLE_NAME"}}-->\`. The text content after the directive is an optional SQL query filter (leave empty to show all rows).`,
+              ]
+            : []),
         ]
       : []),
     'When an edit request is fully satisfied, return `{"tool":"done","summary":"..."}`.',
     'JSON must use double-quoted keys and string values.',
-    'For `create_component.hvy`, return one complete HVY component fragment as a JSON string value with escaped newlines.',
-    'For `create_section.hvy`, return one complete HVY section fragment as a JSON string value with escaped newlines.',
+    'For `create_component.hvy`, return one complete HVY component fragment as a JSON string value with escaped newlines. It must start with an HVY component directive such as `<!--hvy:text {}-->`, `<!--hvy:table {...}-->`, `<!--hvy:container {...}-->`, or `<!--hvy:plugin {...}-->`.',
+    'For `create_section.hvy`, return one complete HVY section fragment as a JSON string value with escaped newlines. It must start with an HVY section directive such as `<!--hvy: {"id":"new-section"}-->`, followed by a `#!` title and HVY blocks.',
     '',
     'Tool shapes:',
     '{"tool":"answer","answer":"Direct answer to the user."}',
@@ -99,7 +130,11 @@ export function buildDocumentEditFormatInstructions(options?: { dbTableNames?: s
       ? [
           '{"tool":"query_db_table","table_name":"work_items","limit":10,"reason":"optional"}',
           '{"tool":"query_db_table","query":"SELECT company, status FROM work_items WHERE status != \\"Rejected\\" ORDER BY company","limit":10,"reason":"optional"}',
-          `{"tool":"create_component","position":"append-to-section","section_ref":"my-section","hvy":"<!--hvy:plugin {\\"plugin\\":\\"dev.heavy.db-table\\",\\"pluginConfig\\":{\\"source\\":\\"with-file\\",\\"table\\":\\"${dbTableNames[0] ?? 'TABLE_NAME'}\\"}}-->","reason":"Add a live db-table component showing all rows"}`,
+          ...(hasDbTablePlugin
+            ? [
+                `{"tool":"create_component","position":"append-to-section","section_ref":"my-section","hvy":"<!--hvy:plugin {\\"plugin\\":\\"dev.heavy.db-table\\",\\"pluginConfig\\":{\\"source\\":\\"with-file\\",\\"table\\":\\"${dbTableNames[0] ?? 'TABLE_NAME'}\\"}}-->","reason":"Add a live db-table component showing all rows"}`,
+              ]
+            : []),
         ]
       : []),
     '{"tool":"request_structure","reason":"optional"}',

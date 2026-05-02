@@ -1,6 +1,7 @@
 import { parse as parseYaml } from 'yaml';
 import { requestProxyCompletion } from './chat/chat';
 import { parseAiBlockEditResponse, requestAiComponentEdit } from './ai-edit';
+import { getRegisteredPluginAiHints } from './ai-plugin-hints';
 import { createEmptySection } from './document-factory';
 import { deserializeDocumentWithDiagnostics, serializeBlockFragment, serializeDocument, serializeDocumentHeaderYaml } from './serialization';
 import {
@@ -33,7 +34,7 @@ import {
 } from './ai-document-edit-instructions';
 import type { JsonObject } from './hvy/types';
 import { getThemeColorLabel, THEME_COLOR_NAMES } from './theme';
-import { DB_TABLE_PLUGIN_ID, getHostPlugin } from './plugins/registry';
+import { DB_TABLE_PLUGIN_ID, FORM_PLUGIN_ID, getHostPlugin } from './plugins/registry';
 
 const MAX_SECTION_PREVIEW_LINES = 10;
 const MAX_TEXT_PREVIEW_LENGTH = 72;
@@ -193,6 +194,7 @@ export async function requestAiDocumentEditTurn(params: {
   const nextMessages = appendChatMessage(params.messages, params.request);
   const progressMessages: ChatMessage[] = [];
   const emitProgress = (content: string): void => {
+    console.debug('[hvy:ai-document-edit] progress', { content });
     const message: ChatMessage = {
       id: crypto.randomUUID(),
       role: 'assistant',
@@ -204,6 +206,12 @@ export async function requestAiDocumentEditTurn(params: {
   };
 
   try {
+    console.debug('[hvy:ai-document-edit] turn started', {
+      requestLength: params.request.length,
+      sections: params.document.sections.length,
+      currentMessages: params.messages.length,
+      aborted: params.signal?.aborted ?? false,
+    });
     emitProgress('Starting document edit loop.');
     const result = await runDocumentEditLoop({
       settings: params.settings,
@@ -218,6 +226,10 @@ export async function requestAiDocumentEditTurn(params: {
     if (createdDbTables.length > 0) {
       emitProgress(`Created database table${createdDbTables.length === 1 ? '' : 's'}: ${createdDbTables.join(', ')}.`);
     }
+    console.debug('[hvy:ai-document-edit] turn completed', {
+      summary: result.summary,
+      progressMessages: progressMessages.length,
+    });
     return {
       messages: [
         ...nextMessages,
@@ -287,12 +299,17 @@ async function runDocumentEditLoop(params: {
   onProgress?: (content: string) => void;
   signal?: AbortSignal;
 }): Promise<{ summary: string }> {
+  console.debug('[hvy:ai-document-edit] routing request', {
+    likelyInformational: isLikelyInformationalAnswerRequest(params.request),
+    inferredPath: inferEditPathFromRequest(params.request),
+  });
   if (isLikelyInformationalAnswerRequest(params.request)) {
     return inferEditPathFromRequest(params.request) === 'header' ? runHeaderEditToolLoop(params) : runDocumentEditToolLoop(params);
   }
 
   params.onProgress?.('Choosing whether to edit the document body or header.');
   const path = await selectEditPath(params);
+  console.debug('[hvy:ai-document-edit] selected edit path', { path });
   if (path === 'header') {
     params.onProgress?.('Using header edit tools.');
     return runHeaderEditToolLoop(params);
@@ -307,6 +324,11 @@ async function selectEditPath(params: {
   request: string;
   signal?: AbortSignal;
 }): Promise<EditPathSelection> {
+  const pathContext = buildEditPathSelectionContext(params.document);
+  console.debug('[hvy:ai-document-edit:path] requesting path selection', {
+    requestLength: params.request.length,
+    contextLength: pathContext.length,
+  });
   const response = await requestProxyCompletion({
     settings: params.settings,
     messages: [
@@ -316,13 +338,17 @@ async function selectEditPath(params: {
         content: buildEditPathSelectionPrompt(params.request),
       },
     ],
-    context: buildEditPathSelectionContext(params.document),
+    context: pathContext,
     formatInstructions: buildEditPathSelectionInstructions(),
     mode: 'document-edit',
     debugLabel: 'ai-document-edit:path',
     signal: params.signal,
   });
   const parsed = parseEditPathSelection(response);
+  console.debug('[hvy:ai-document-edit:path] path response', {
+    response,
+    parsed,
+  });
   if (parsed.ok === true) {
     return parsed.value;
   }
@@ -340,6 +366,7 @@ async function runDocumentEditToolLoop(params: {
 }): Promise<{ summary: string }> {
   let snapshot = summarizeDocumentStructure(params.document);
   const dbTableNames = getDocumentDbTableNames(params.document);
+  const pluginHints = getRegisteredPluginAiHints();
   let contextSummary = buildDocumentEditContextSummary(snapshot.summary, dbTableNames);
   let plan: EditPlanState | null = null;
   const health = createLoopHealthState();
@@ -364,7 +391,7 @@ async function runDocumentEditToolLoop(params: {
       settings: params.settings,
       messages: conversation,
       context: buildLoopContext(contextSummary, plan),
-      formatInstructions: buildDocumentEditFormatInstructions({ dbTableNames }),
+      formatInstructions: buildDocumentEditFormatInstructions({ dbTableNames, pluginHints }),
       mode: 'document-edit',
       debugLabel: `ai-document-edit:${iteration + 1}`,
       signal: params.signal,
@@ -402,13 +429,13 @@ async function runDocumentEditToolLoop(params: {
       };
     }
 
-    params.onProgress?.(describeDocumentToolProgress(parsed.value));
     const actionKey = getToolActionKey(parsed.value);
     const beforeProgress = summarizeDocumentLoopProgress(params.document, plan);
     const newInformationProgress = isDocumentInformationTool(parsed.value.tool) && !health.seenActionKeys.has(actionKey);
     let toolResult = '';
     if (parsed.value.tool === 'plan') {
       if (plan) {
+        params.onProgress?.('Plan already exists; continuing the current plan.');
         toolResult = buildToolResult('plan', [
           'A plan already exists. Do not replace it unless the user changes the goal.',
           'Continue by executing the next unfinished step and use `mark_step_done` when it is complete.',
@@ -419,8 +446,10 @@ async function runDocumentEditToolLoop(params: {
         plan = { steps: parsed.value.steps.map((step) => ({ text: step, done: false })) };
         rewardLoopHealthForPlanCreated(health, plan);
         toolResult = buildToolResult('plan', formatPlanState(plan));
+        params.onProgress?.(formatPlanState(plan));
       }
     } else if (parsed.value.tool === 'mark_step_done') {
+      params.onProgress?.(describeDocumentToolProgress(parsed.value));
       const result = markPlanStepDone(plan, parsed.value.step, parsed.value.summary);
       if (result.changed) {
         rewardLoopHealthForPlanStepDone(health);
@@ -433,33 +462,42 @@ async function runDocumentEditToolLoop(params: {
         };
       }
     } else if (parsed.value.tool === 'request_structure') {
+      params.onProgress?.(describeDocumentToolProgress(parsed.value));
       snapshot = summarizeDocumentStructure(params.document);
       toolResult = buildToolResult('request_structure', snapshot.summary);
       contextSummary = buildDocumentEditContextSummary(SENT_STRUCTURE_CONTEXT, dbTableNames);
     } else if (parsed.value.tool === 'request_rendered_structure') {
+      params.onProgress?.(describeDocumentToolProgress(parsed.value));
       snapshot = summarizeDocumentStructure(params.document);
       toolResult = buildToolResult('request_rendered_structure', await executeRequestRenderedStructureTool(snapshot, params.document));
       contextSummary = buildDocumentEditContextSummary(SENT_STRUCTURE_CONTEXT, dbTableNames);
     } else if (parsed.value.tool === 'grep') {
+      params.onProgress?.(describeDocumentToolProgress(parsed.value));
       toolResult = buildToolResult('grep', executeGrepTool(parsed.value, params.document));
       contextSummary = buildDocumentEditContextSummary(SENT_STRUCTURE_CONTEXT, dbTableNames);
     } else if (parsed.value.tool === 'get_css') {
+      params.onProgress?.(describeDocumentToolProgress(parsed.value));
       toolResult = buildToolResult('get_css', executeGetCssTool(parsed.value, snapshot, params.document));
       contextSummary = buildDocumentEditContextSummary(SENT_STRUCTURE_CONTEXT, dbTableNames);
     } else if (parsed.value.tool === 'get_properties') {
+      params.onProgress?.(describeDocumentToolProgress(parsed.value));
       toolResult = buildToolResult('get_properties', executeGetPropertiesTool(parsed.value, snapshot, params.document));
       contextSummary = buildDocumentEditContextSummary(SENT_STRUCTURE_CONTEXT, dbTableNames);
     } else if (parsed.value.tool === 'set_properties') {
+      params.onProgress?.(describeDocumentToolProgress(parsed.value));
       toolResult = buildToolResult('set_properties', executeSetPropertiesTool(parsed.value, snapshot, params.document, params.onMutation));
       snapshot = summarizeDocumentStructure(params.document);
       contextSummary = buildDocumentEditContextSummary(SENT_STRUCTURE_CONTEXT, dbTableNames);
     } else if (parsed.value.tool === 'view_component') {
+      params.onProgress?.(describeDocumentToolProgress(parsed.value));
       toolResult = buildToolResult('view_component', executeViewComponentTool(parsed.value, snapshot, params.document));
       contextSummary = buildDocumentEditContextSummary(SENT_STRUCTURE_CONTEXT, dbTableNames);
     } else if (parsed.value.tool === 'view_rendered_component') {
+      params.onProgress?.(describeDocumentToolProgress(parsed.value));
       toolResult = buildToolResult('view_rendered_component', await executeViewRenderedComponentTool(parsed.value, snapshot, params.document));
       contextSummary = buildDocumentEditContextSummary(SENT_STRUCTURE_CONTEXT, dbTableNames);
     } else if (parsed.value.tool === 'edit_component') {
+      params.onProgress?.(describeDocumentToolProgress(parsed.value));
       toolResult = buildToolResult(
         'edit_component',
         await executeEditComponentTool(parsed.value, snapshot, params.document, params.settings, params.onMutation)
@@ -467,33 +505,52 @@ async function runDocumentEditToolLoop(params: {
       snapshot = summarizeDocumentStructure(params.document);
       contextSummary = buildDocumentEditContextSummary(SENT_STRUCTURE_CONTEXT, dbTableNames);
     } else if (parsed.value.tool === 'patch_component') {
+      params.onProgress?.(describeDocumentToolProgress(parsed.value));
       toolResult = buildToolResult('patch_component', executePatchComponentTool(parsed.value, snapshot, params.document, params.onMutation));
       snapshot = summarizeDocumentStructure(params.document);
       contextSummary = buildDocumentEditContextSummary(SENT_STRUCTURE_CONTEXT, dbTableNames);
     } else if (parsed.value.tool === 'remove_section') {
+      params.onProgress?.(describeDocumentToolProgress(parsed.value));
       toolResult = buildToolResult('remove_section', executeRemoveSectionTool(parsed.value, snapshot, params.document, params.onMutation));
       snapshot = summarizeDocumentStructure(params.document);
       contextSummary = buildDocumentEditContextSummary(SENT_STRUCTURE_CONTEXT, dbTableNames);
     } else if (parsed.value.tool === 'remove_component') {
+      params.onProgress?.(describeDocumentToolProgress(parsed.value));
       toolResult = buildToolResult('remove_component', executeRemoveComponentTool(parsed.value, snapshot, params.document, params.onMutation));
       snapshot = summarizeDocumentStructure(params.document);
       contextSummary = buildDocumentEditContextSummary(SENT_STRUCTURE_CONTEXT, dbTableNames);
     } else if (parsed.value.tool === 'create_component') {
-      toolResult = buildToolResult(
-        'create_component',
-        executeCreateComponentTool(parsed.value, snapshot, params.document, params.onMutation)
-      );
-      snapshot = summarizeDocumentStructure(params.document);
-      contextSummary = buildDocumentEditContextSummary(SENT_STRUCTURE_CONTEXT, dbTableNames);
+      params.onProgress?.(describeDocumentToolProgress(parsed.value));
+      try {
+        toolResult = buildToolResult(
+          'create_component',
+          executeCreateComponentTool(parsed.value, snapshot, params.document, params.onMutation)
+        );
+        snapshot = summarizeDocumentStructure(params.document);
+        contextSummary = buildDocumentEditContextSummary(SENT_STRUCTURE_CONTEXT, dbTableNames);
+      } catch (error) {
+        const failure = formatDocumentToolFailure(error);
+        params.onProgress?.(failure);
+        toolResult = buildToolResult('create_component', failure);
+      }
     } else if (parsed.value.tool === 'create_section') {
-      toolResult = buildToolResult('create_section', executeCreateSectionTool(parsed.value, snapshot, params.document, params.onMutation));
-      snapshot = summarizeDocumentStructure(params.document);
-      contextSummary = buildDocumentEditContextSummary(SENT_STRUCTURE_CONTEXT, dbTableNames);
+      params.onProgress?.(describeDocumentToolProgress(parsed.value));
+      try {
+        toolResult = buildToolResult('create_section', executeCreateSectionTool(parsed.value, snapshot, params.document, params.onMutation));
+        snapshot = summarizeDocumentStructure(params.document);
+        contextSummary = buildDocumentEditContextSummary(SENT_STRUCTURE_CONTEXT, dbTableNames);
+      } catch (error) {
+        const failure = formatDocumentToolFailure(error);
+        params.onProgress?.(failure);
+        toolResult = buildToolResult('create_section', failure);
+      }
     } else if (parsed.value.tool === 'reorder_section') {
+      params.onProgress?.(describeDocumentToolProgress(parsed.value));
       toolResult = buildToolResult('reorder_section', executeReorderSectionTool(parsed.value, snapshot, params.document, params.onMutation));
       snapshot = summarizeDocumentStructure(params.document);
       contextSummary = buildDocumentEditContextSummary(SENT_STRUCTURE_CONTEXT, dbTableNames);
     } else if (parsed.value.tool === 'query_db_table') {
+      params.onProgress?.(describeDocumentToolProgress(parsed.value));
       let queryResult: string;
       try {
         queryResult = await executeDbTableQueryTool(params.document, {
@@ -822,6 +879,15 @@ function summarizeCompactedErrors(messages: ChatMessage[]): string {
     .filter((content) => /\b(error|failed|invalid|unknown|stuck|missing|no such column)\b/i.test(content))
     .map((content) => truncatePreview(content.replace(/\n/g, ' '), 180));
   return errors.length > 0 ? errors.slice(-4).join(' | ') : '(none recorded)';
+}
+
+function formatDocumentToolFailure(error: unknown): string {
+  const message = error instanceof Error ? error.message : 'Unknown document tool failure.';
+  return [
+    `Tool failed: ${message}`,
+    'Retry with serialized HVY only. Do not return HTML, JSX, DOM markup, JavaScript, or CSS files.',
+    'For sections, use `<!--hvy: {"id":"..."}-->`, `#! Title`, and HVY components. For components, start with an HVY component directive like `<!--hvy:text {}-->`.',
+  ].join('\n');
 }
 
 function throwIfAborted(signal: AbortSignal | undefined): void {
@@ -2101,6 +2167,10 @@ function parseDocumentEditToolRequest(source: string): { ok: true; value: Docume
       if (parsed.position !== 'append-to-section' && parsed.position !== 'before' && parsed.position !== 'after') {
         return { ok: false, message: 'create_component.position must be append-to-section, before, or after.' };
       }
+      const htmlMessage = validateHvyToolPayload(parsed.hvy, 'create_component.hvy', 'component');
+      if (htmlMessage) {
+        return { ok: false, message: htmlMessage };
+      }
       return {
         ok: true,
         value: {
@@ -2121,6 +2191,12 @@ function parseDocumentEditToolRequest(source: string): { ok: true; value: Docume
       const hvy = typeof parsed.hvy === 'string' ? parsed.hvy : undefined;
       if (!hvy && !title) {
         return { ok: false, message: 'create_section requires hvy or title.' };
+      }
+      if (hvy) {
+        const htmlMessage = validateHvyToolPayload(hvy, 'create_section.hvy', 'section');
+        if (htmlMessage) {
+          return { ok: false, message: htmlMessage };
+        }
       }
       return {
         ok: true,
@@ -2187,6 +2263,36 @@ function parseEditPathSelection(source: string): { ok: true; value: EditPathSele
     return { ok: true, value: cleaned };
   }
   return { ok: false, message: 'Path selection must be exactly "document" or "header".' };
+}
+
+function validateHvyToolPayload(hvy: string, fieldName: string, kind: 'component' | 'section'): string | null {
+  const trimmed = hvy.trim();
+  if (/^\s*<!--\s*hvy:form\b/i.test(trimmed)) {
+    const formPlugin = getHostPlugin(FORM_PLUGIN_ID);
+    return [
+      `${fieldName} uses unsupported \`hvy:form\` syntax.`,
+      formPlugin
+        ? `A registered Form plugin is available. Use \`<!--hvy:plugin {"plugin":"${FORM_PLUGIN_ID}","pluginConfig":{"version":"0.1"}}-->\` followed by form plugin body content.`
+        : 'No `hvy:form` component is registered. Use one of the registered plugin ids from the prompt, or answer that the requested functional plugin is unavailable.',
+    ].join(' ');
+  }
+  const withoutHvyComments = trimmed.replace(/<!--\s*hvy:[\s\S]*?-->/gi, '');
+  if (/<\/?(?:html|body|main|div|section|article|header|footer|nav|table|thead|tbody|tr|td|th|form|input|button|select|option|script|style|h[1-6]|p|ul|ol|li|span|label)\b/i.test(withoutHvyComments)) {
+    return [
+      `${fieldName} contains HTML/DOM markup, but document edit tools only accept serialized HVY.`,
+      kind === 'section'
+        ? 'Retry with an HVY section fragment that starts with `<!--hvy: {"id":"..."}-->`, then `#! Title`, then HVY components like `<!--hvy:text {}-->` or `<!--hvy:plugin {...}-->`.'
+        : 'Retry with one HVY component fragment that starts with an HVY directive like `<!--hvy:text {}-->`, `<!--hvy:table {...}-->`, `<!--hvy:container {...}-->`, or `<!--hvy:plugin {...}-->`.',
+      'Do not use HTML tags such as `<div>`, `<table>`, `<form>`, `<input>`, or `<button>`.',
+    ].join(' ');
+  }
+  if (kind === 'component' && !/^\s*<!--\s*hvy:[a-z][a-z0-9-]*(?::[a-z0-9-]+)*\s*\{/i.test(trimmed)) {
+    return `${fieldName} must start with one HVY component directive, for example \`<!--hvy:text {}-->\`.`;
+  }
+  if (kind === 'section' && !/^\s*<!--\s*hvy:(?:subsection\s*)?\s*\{/i.test(trimmed)) {
+    return `${fieldName} must start with one HVY section directive, for example \`<!--hvy: {"id":"new-section"}-->\`.`;
+  }
+  return null;
 }
 
 function parseHeaderEditToolRequest(source: string): { ok: true; value: HeaderEditToolRequest } | { ok: false; message: string } {

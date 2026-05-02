@@ -45,8 +45,9 @@ export function buildChatProxyMiddleware(env: Record<string, string | undefined>
 
     const upstreamAbort = new AbortController();
     let completed = false;
-    req.on('close', () => {
+    req.on('aborted', () => {
       if (!completed) {
+        console.debug('[hvy:chat-proxy] client request aborted');
         upstreamAbort.abort();
       }
     });
@@ -54,6 +55,7 @@ export function buildChatProxyMiddleware(env: Record<string, string | undefined>
     try {
       const body = validateProxyChatRequest(await readRequestJson(req));
       if (upstreamAbort.signal.aborted) {
+        console.debug('[hvy:chat-proxy] request body read after abort; skipping upstream request');
         return;
       }
       console.debug('[hvy:chat-proxy] incoming request', {
@@ -65,14 +67,22 @@ export function buildChatProxyMiddleware(env: Record<string, string | undefined>
       });
       const output = await requestProviderWithRepair(body, env, upstreamAbort.signal);
       completed = true;
+      console.debug('[hvy:chat-proxy] sending response', {
+        outputLength: output.length,
+      });
       sendJson(res, 200, { output });
     } catch (error) {
       if (isAbortError(error) || upstreamAbort.signal.aborted) {
+        console.debug('[hvy:chat-proxy] upstream request aborted');
         return;
       }
       completed = true;
       const message = error instanceof Error ? error.message : 'Proxy chat request failed.';
       const status = message.startsWith('Provider request failed:') ? 502 : 400;
+      console.debug('[hvy:chat-proxy] sending error response', {
+        status,
+        message,
+      });
       sendJson(res, status, { error: message });
     }
   };

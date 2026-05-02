@@ -42,6 +42,10 @@ export function bindInputBlock(app: HTMLElement): void {
     if (field === 'chat-input' && target instanceof HTMLTextAreaElement) {
       state.chat.draft = target.value;
       state.chat.error = null;
+      console.debug('[hvy:chat-input] draft updated', {
+        draftLength: state.chat.draft.length,
+        trimmedDraftLength: state.chat.draft.trim().length,
+      });
       return;
     }
 

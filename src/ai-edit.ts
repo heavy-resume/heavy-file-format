@@ -15,6 +15,7 @@ import {
   buildAiEditRepairPrompt,
   formatAiEditIssueSummary,
 } from './ai-edit-guidance';
+import { FORM_PLUGIN_ID, getHostPlugin } from './plugins/registry';
 
 export interface AiEditParsedResponse {
   block: VisualBlock | null;
@@ -136,16 +137,30 @@ export function sanitizeAiEditOutput(source: string): string {
 
 export function parseAiBlockEditResponse(source: string): AiEditParsedResponse {
   const cleaned = sanitizeAiEditOutput(source);
+  const earlyIssues: RawEditorDiagnostic[] = [];
+  if (/^\s*<!--\s*hvy:form\b/i.test(cleaned)) {
+    const formPlugin = getHostPlugin(FORM_PLUGIN_ID);
+    earlyIssues.push({
+      severity: 'error',
+      message: '`hvy:form` is not a supported component directive.',
+      hint: formPlugin
+        ? `A registered Form plugin is available. Return \`<!--hvy:plugin {"plugin":"${FORM_PLUGIN_ID}","pluginConfig":{"version":"0.1"}}-->\` followed by form plugin body content.`
+        : 'No `hvy:form` component is registered. Use one of the registered plugin ids from the prompt, or answer that the requested functional plugin is unavailable.',
+    });
+  }
   const { document, diagnostics } = deserializeDocumentWithDiagnostics(
     wrapHvyFragmentAsDocument(cleaned, { sectionId: 'ai-response', title: 'AI Response' }),
     '.hvy'
   );
   const [section] = document.sections;
-  const issues = diagnostics.map((diagnostic) => ({
-    severity: diagnostic.severity,
-    message: diagnostic.message,
-    hint: getHvyDiagnosticUsageHint(diagnostic),
-  }));
+  const issues = [
+    ...earlyIssues,
+    ...diagnostics.map((diagnostic) => ({
+      severity: diagnostic.severity,
+      message: diagnostic.message,
+      hint: getHvyDiagnosticUsageHint(diagnostic),
+    })),
+  ];
 
   if (!section) {
     issues.push({

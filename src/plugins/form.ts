@@ -860,5 +860,11 @@ export const formPluginFactory: HvyPluginFactory = build;
 export const formPluginRegistration: HvyPluginRegistration = {
   id: FORM_PLUGIN_ID,
   displayName: 'Form',
+  aiHint: [
+    `Form is a functional plugin. Use \`<!--hvy:plugin {"plugin":"${FORM_PLUGIN_ID}","pluginConfig":{"version":"${FORM_PLUGIN_VERSION}"}}-->\` followed by form YAML in the component body.`,
+    'Do not use `<!--hvy:form ...-->`.',
+    'Supported YAML keys include `fields`, `submitLabel`, `showSubmit`, `initialScript`, `submitScript`, and `scripts`.',
+    'Fields use `name`, `label`, `type`, optional `placeholder`, optional `required`, optional `options`, optional `value`, and optional `triggers`.',
+  ].join(' '),
   create: formPluginFactory,
 };

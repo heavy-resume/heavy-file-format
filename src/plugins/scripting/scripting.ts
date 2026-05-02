@@ -187,6 +187,11 @@ export const scriptingPluginFactory: HvyPluginFactory = build;
 export const scriptingPluginRegistration: HvyPluginRegistration = {
   id: SCRIPTING_PLUGIN_ID,
   displayName: 'Scripting',
+  aiHint: [
+    `Scripting is a functional plugin. Use \`<!--hvy:plugin {"plugin":"${SCRIPTING_PLUGIN_ID}","pluginConfig":{"version":"0.1"}}-->\`.`,
+    'Put executable script source in the component body.',
+    'Use this only when the user explicitly needs a script-backed component.',
+  ].join(' '),
   create: scriptingPluginFactory,
 };
 

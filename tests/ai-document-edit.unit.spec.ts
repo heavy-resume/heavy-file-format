@@ -22,6 +22,7 @@ import { requestAiDocumentEditTurn, summarizeDocumentStructure, summarizeHeaderS
 import {
   buildDocumentEditFormatInstructions,
   buildEditPathSelectionInstructions,
+  buildInitialDocumentEditPrompt,
   buildHeaderEditFormatInstructions,
 } from '../src/ai-document-edit-instructions';
 import { deserializeDocument, serializeDocument } from '../src/serialization';
@@ -115,8 +116,7 @@ hvy_version: 0.1
   const summary = summarizeDocumentStructure(document).summary;
 
   expect(summary).toContain('plugin id="chores-table"');
-  expect(summary).toContain('AI hint: db-table owns SQLite table "chores".');
-  expect(summary).toContain('fix the SQL query stored in the plugin body text');
+  expect(summary).toContain('AI hint: Shows SQLite table "chores"; query/filter text lives in the component body.');
 });
 
 test('summarizeDocumentStructure hides content deeper than three nesting levels', () => {
@@ -175,22 +175,25 @@ test('buildDocumentEditFormatInstructions documents the tool protocol', () => {
     ],
   });
   expect(instructions).toContain(
-    'Valid tools are: `answer`, `plan`, `mark_step_done`, `grep`, `get_css`, `get_properties`, `set_properties`, `view_component`, `view_rendered_component`, `edit_component`, `patch_component`, `create_component`, `remove_component`, `create_section`, `remove_section`, `reorder_section`, `request_structure`, `request_rendered_structure`, `done`.'
+    'Valid tools are: `answer`, `plan`, `mark_step_done`, `grep`, `get_help`, `get_css`, `get_properties`, `set_properties`, `view_component`, `view_rendered_component`, `edit_component`, `patch_component`, `create_component`, `remove_component`, `create_section`, `remove_section`, `reorder_section`, `request_structure`, `request_rendered_structure`, `done`.'
   );
   expect(instructions).toContain('Use `answer` for informational questions, explanations, or requests that do not require changing the HVY document.');
   expect(instructions).toContain('This is an HVY document editing tool loop, not an HTML generator.');
   expect(instructions).toContain('All new visible content must be encoded as HVY sections and components');
   expect(instructions).toContain('Available plugins for `<!--hvy:plugin ...-->` blocks:');
   expect(instructions).toContain('- Widget (dev.test.widget): Use widget YAML in the component body.');
-  expect(instructions).toContain('Only use registered plugin ids from this list.');
-  expect(instructions).not.toContain('dev.heavy.form');
+  expect(instructions).toContain('Only use registered plugin ids from this list. Use `get_help` for exact plugin/component syntax instead of guessing.');
+  expect(instructions).not.toContain('- Form (dev.heavy.form)');
   expect(instructions).toContain('{"tool":"answer","answer":"Direct answer to the user."}');
   expect(instructions).toContain('{"tool":"plan","steps":["Find the relevant section","Patch the component","Verify the updated structure"],"reason":"optional"}');
   expect(instructions).toContain('{"tool":"mark_step_done","step":1,"summary":"Found the relevant section.","reason":"optional"}');
+  expect(instructions).toContain('{"tool":"get_help","topic":"plugin:dev.heavy.form","reason":"optional"}');
+  expect(instructions).toContain('{"tool":"get_help","topic":"component:grid","reason":"optional"}');
   expect(instructions).toContain('It may revise that component in place or fully replace it');
   expect(instructions).toContain('Use real section ids when a section has an id.');
-  expect(instructions).toContain('Use `grep` to search the whole serialized document with a regex pattern.');
-  expect(instructions).toContain('alternation like `Python|TypeScript`');
+  expect(instructions).toContain('Use `grep` to search the serialized document.');
+  expect(instructions).toContain('Use `get_help` with topics like `plugin:dev.heavy.form`');
+  expect(buildInitialDocumentEditPrompt('Update the document.')).toContain('You have at most 50 tool steps.');
   expect(instructions).toContain('defaults to lines 1-200');
   expect(instructions).toContain('Use `request_rendered_structure` to inspect what visible components render');
   expect(instructions).toContain('Use `view_rendered_component` to inspect one component rendered as user-facing text plus plugin diagnostics.');
@@ -215,20 +218,35 @@ test('buildDocumentEditFormatInstructions documents the tool protocol', () => {
   expect(dbInstructions).toContain('`query_db_table`');
   expect(dbInstructions).toContain('Available tables: work_items');
   expect(dbInstructions).toContain('{"tool":"query_db_table","table_name":"work_items","limit":10,"reason":"optional"}');
+  expect(dbInstructions).not.toContain('`execute_sql`');
   expect(dbInstructions).not.toContain('reason":"Add a live db-table component showing all rows"');
 
   const dbPluginInstructions = buildDocumentEditFormatInstructions({
     dbTableNames: ['work_items'],
     pluginHints: [{ id: 'dev.heavy.db-table', displayName: 'DB Table', hint: 'Renders SQLite rows.' }],
   });
+  expect(dbPluginInstructions).toContain('`query_db_table`, `execute_sql`');
+  expect(dbPluginInstructions).toContain('Use `execute_sql` to create or update attached SQLite schema/data before adding db-table components that depend on it.');
+  expect(dbPluginInstructions).toContain(
+    '{"tool":"execute_sql","sql":"CREATE TABLE IF NOT EXISTS chores (id INTEGER PRIMARY KEY, title TEXT NOT NULL, description TEXT, active INTEGER DEFAULT 1)","reason":"Set up DB schema before adding db-table components"}'
+  );
   expect(dbPluginInstructions).toContain('reason":"Add a live db-table component showing all rows"');
+
+  const dbPluginOnlyInstructions = buildDocumentEditFormatInstructions({
+    pluginHints: [{ id: 'dev.heavy.db-table', displayName: 'DB Table', hint: 'Renders SQLite rows.' }],
+  });
+  expect(dbPluginOnlyInstructions).toContain('`execute_sql`');
+  expect(dbPluginOnlyInstructions).toContain(
+    'Valid tools are: `answer`, `plan`, `mark_step_done`, `grep`, `get_help`, `get_css`, `get_properties`, `set_properties`, `view_component`, `view_rendered_component`, `edit_component`, `patch_component`, `create_component`, `remove_component`, `create_section`, `remove_section`, `reorder_section`, `execute_sql`, `request_structure`, `request_rendered_structure`, `done`.'
+  );
+  expect(dbPluginOnlyInstructions).toContain('\\"table\\":\\"TABLE_NAME\\"');
 
   const noPluginInstructions = buildDocumentEditFormatInstructions();
   expect(noPluginInstructions).toContain('No plugins are currently registered.');
 
   const activePlanInstructions = buildDocumentEditFormatInstructions({ planActive: true });
   expect(activePlanInstructions).toContain(
-    'Valid tools are: `answer`, `mark_step_done`, `grep`, `get_css`, `get_properties`, `set_properties`, `view_component`, `view_rendered_component`, `edit_component`, `patch_component`, `create_component`, `remove_component`, `create_section`, `remove_section`, `reorder_section`, `request_structure`, `request_rendered_structure`, `done`.'
+    'Valid tools are: `answer`, `mark_step_done`, `grep`, `get_help`, `get_css`, `get_properties`, `set_properties`, `view_component`, `view_rendered_component`, `edit_component`, `patch_component`, `create_component`, `remove_component`, `create_section`, `remove_section`, `reorder_section`, `request_structure`, `request_rendered_structure`, `done`.'
   );
   expect(activePlanInstructions).not.toContain('{"tool":"plan"');
 
@@ -1165,7 +1183,8 @@ hvy_version: 0.1
   expect(result.error).toBeNull();
   const firstToolInstructions = requestProxyCompletionMock.mock.calls[1]?.[0]?.formatInstructions ?? '';
   expect(firstToolInstructions).toContain('Form (dev.heavy.form)');
-  expect(firstToolInstructions).toContain('Supported YAML keys include `fields`');
+  expect(firstToolInstructions).toContain('Functional form plugin; config in pluginConfig, fields/scripts in YAML body.');
+  expect(firstToolInstructions).toContain('Use `get_help` for exact plugin/component syntax instead of guessing.');
   const retryMessages = requestProxyCompletionMock.mock.calls[2]?.[0]?.messages.map((message: ChatMessage) => message.content).join('\n') ?? '';
   expect(retryMessages).toContain('unsupported `hvy:form` syntax');
   expect(retryMessages).toContain('A registered Form plugin is available');
@@ -1173,6 +1192,41 @@ hvy_version: 0.1
   expect(serialized).toContain('"plugin":"dev.heavy.form"');
   expect(serialized).toContain('submitLabel: Assign');
   expect(serialized).not.toContain('hvy:form');
+});
+
+test('requestAiDocumentEditTurn can fetch detailed plugin help on demand', async () => {
+  setHostPlugins([formPluginRegistration]);
+  queueAiToolResponses(
+    '{"tool":"get_help","topic":"plugin:dev.heavy.form","reason":"Need exact form syntax."}',
+    '{"tool":"done","summary":"Looked up form help."}'
+  );
+
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+`, '.hvy');
+  seedStateForDocument(document);
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+
+  const result = await requestAiDocumentEditTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Create an actual assign chore form.',
+  });
+
+  expect(result.error).toBeNull();
+  const helpResult = lastToolResultBeforeCall(1);
+  expect(helpResult).toContain('Tool result for get_help:');
+  expect(helpResult).toContain('Form (dev.heavy.form)');
+  expect(helpResult).toContain('Supported YAML keys include `fields`');
+  const contextAfterHelp = requestProxyCompletionMock.mock.calls[2]?.[0]?.context ?? '';
+  expect(contextAfterHelp).toContain('Recent tool help already fetched; reuse this before calling `get_help` again for the same syntax:');
+  expect(contextAfterHelp).toContain('Form (dev.heavy.form)');
+  expect(contextAfterHelp).toContain('Supported YAML keys include `fields`');
 });
 
 test('requestAiDocumentEditTurn can remove a section', async () => {

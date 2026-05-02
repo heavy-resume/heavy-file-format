@@ -33,6 +33,7 @@
 }
 
 .chat-panel {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 0.8rem;
@@ -292,7 +293,10 @@
 }
 
 .chat-scroll-bottom {
-  justify-self: end;
+  position: absolute;
+  right: 1.35rem;
+  bottom: 8.4rem;
+  z-index: 2;
   padding: 0.35rem 0.7rem;
   border-radius: 999px;
   border: 1px solid var(--hvy-border-alt);

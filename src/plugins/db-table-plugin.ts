@@ -153,6 +153,12 @@ export const dbTablePluginRegistration: HvyPluginRegistration = {
     const table = typeof block.schema.pluginConfig.table === 'string' && block.schema.pluginConfig.table.trim().length > 0
       ? block.schema.pluginConfig.table.trim()
       : '(unset)';
+    return `Shows SQLite table "${table}"; query/filter text lives in the component body.`;
+  },
+  aiHelp: (block) => {
+    const table = block && typeof block.schema.pluginConfig.table === 'string' && block.schema.pluginConfig.table.trim().length > 0
+      ? block.schema.pluginConfig.table.trim()
+      : '(unset)';
     return [
       `db-table owns SQLite table "${table}".`,
       'Rendered DB table errors usually belong to this plugin block.',

@@ -860,11 +860,14 @@ export const formPluginFactory: HvyPluginFactory = build;
 export const formPluginRegistration: HvyPluginRegistration = {
   id: FORM_PLUGIN_ID,
   displayName: 'Form',
-  aiHint: [
-    `Form is a functional plugin. Use \`<!--hvy:plugin {"plugin":"${FORM_PLUGIN_ID}","pluginConfig":{"version":"${FORM_PLUGIN_VERSION}"}}-->\` followed by form YAML in the component body.`,
+  aiHint: 'Functional form plugin; config in pluginConfig, fields/scripts in YAML body.',
+  aiHelp: [
+    `Use \`<!--hvy:plugin {"plugin":"${FORM_PLUGIN_ID}","pluginConfig":{"version":"${FORM_PLUGIN_VERSION}"}}-->\` followed by form YAML in the component body.`,
     'Do not use `<!--hvy:form ...-->`.',
     'Supported YAML keys include `fields`, `submitLabel`, `showSubmit`, `initialScript`, `submitScript`, and `scripts`.',
     'Fields use `name`, `label`, `type`, optional `placeholder`, optional `required`, optional `options`, optional `value`, and optional `triggers`.',
+    '`scripts` is a map of script names to Python/Brython source. `submitScript`, `initialScript`, and field triggers should name a script key instead of containing inline script bodies.',
+    'Script blocks must be indented under `scripts.NAME: |`; use Python comments (`# ...`) and Python dict syntax (`{"ok": True, "message": "Saved"}`), not SQL `--` comments or JavaScript-style booleans.',
   ].join(' '),
   create: formPluginFactory,
 };

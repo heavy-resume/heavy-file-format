@@ -282,8 +282,9 @@ export const progressBarPluginFactory: HvyPluginFactory = build;
 export const progressBarPluginRegistration: HvyPluginRegistration = {
   id: PROGRESS_BAR_PLUGIN_ID,
   displayName: 'Progress Bar',
-  aiHint: [
-    `Progress Bar is a functional plugin. Use \`<!--hvy:plugin {"plugin":"${PROGRESS_BAR_PLUGIN_ID}","pluginConfig":{"value":50,"min":0,"max":100}}-->\`.`,
+  aiHint: 'Functional progress meter; numeric value/min/max live in pluginConfig.',
+  aiHelp: [
+    `Use \`<!--hvy:plugin {"plugin":"${PROGRESS_BAR_PLUGIN_ID}","pluginConfig":{"value":50,"min":0,"max":100}}-->\`.`,
     'Set numeric `pluginConfig.value`, optional `min`, `max`, and visual options in `pluginConfig`.',
     'The component body may contain display text or a value template.',
   ].join(' '),

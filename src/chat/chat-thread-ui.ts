@@ -31,16 +31,18 @@ export function bindChatThreadUi(
   });
 
   window.requestAnimationFrame(() => {
-    if (state.chat.messages.length !== lastBoundChatMessageCount) {
-      if (wasChatNearBottom || state.chat.messages.length > lastBoundChatMessageCount) {
-        chatScrollContainer.scrollTop = chatScrollContainer.scrollHeight;
+    window.requestAnimationFrame(() => {
+      if (state.chat.messages.length !== lastBoundChatMessageCount) {
+        if (wasChatNearBottom || state.chat.messages.length > lastBoundChatMessageCount) {
+          chatScrollContainer.scrollTop = chatScrollContainer.scrollHeight;
+        } else {
+          chatScrollContainer.scrollTop = Math.min(lastChatScrollTop, chatScrollContainer.scrollHeight);
+        }
       } else {
         chatScrollContainer.scrollTop = Math.min(lastChatScrollTop, chatScrollContainer.scrollHeight);
       }
-    } else {
-      chatScrollContainer.scrollTop = Math.min(lastChatScrollTop, chatScrollContainer.scrollHeight);
-    }
-    updateScrollButton();
-    lastBoundChatMessageCount = state.chat.messages.length;
+      updateScrollButton();
+      lastBoundChatMessageCount = state.chat.messages.length;
+    });
   });
 }

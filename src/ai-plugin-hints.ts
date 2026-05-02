@@ -18,6 +18,16 @@ function readPluginHint(registration: ReturnType<typeof getHostPlugins>[number],
   return '';
 }
 
+function readPluginHelp(registration: ReturnType<typeof getHostPlugins>[number], block?: VisualBlock): string {
+  if (typeof registration.aiHelp === 'string') {
+    return registration.aiHelp.trim();
+  }
+  if (typeof registration.aiHelp === 'function') {
+    return registration.aiHelp(block).trim();
+  }
+  return readPluginHint(registration, block ?? createEmptyBlock('plugin', true));
+}
+
 export function getRegisteredPluginAiHints(): AiPluginHint[] {
   return getHostPlugins().map((registration) => {
     const block = createEmptyBlock('plugin', true);
@@ -38,4 +48,16 @@ export function getPluginAiHintForBlock(block: VisualBlock): string {
     return '';
   }
   return readPluginHint(registration, block);
+}
+
+export function getPluginAiHelp(pluginId: string, block?: VisualBlock): string {
+  const registration = getHostPlugin(pluginId);
+  if (!registration) {
+    return `No registered plugin found for "${pluginId}".`;
+  }
+  const help = readPluginHelp(registration, block);
+  return [
+    `${registration.displayName} (${registration.id})`,
+    help || '(no plugin-specific help registered)',
+  ].join('\n');
 }

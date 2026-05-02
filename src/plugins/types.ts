@@ -80,4 +80,7 @@ export interface HvyPluginRegistration {
   // Keep this short and action-oriented; it helps the document-edit loop know
   // which serialized fields to patch when users report plugin-rendered errors.
   aiHint?: string | ((block: VisualBlock) => string);
+  // Optional longer help. This is exposed through AI tools on demand instead of
+  // being included in every prompt.
+  aiHelp?: string | ((block?: VisualBlock) => string);
 }

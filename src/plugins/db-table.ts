@@ -790,6 +790,15 @@ function tableExists(db: SqlJsDatabase, tableName: string): boolean {
 }
 
 function getDefaultColumnsForTable(tableName: string): string[] {
+  if (/\bchores?\b/i.test(tableName)) {
+    return ['description', 'assignee', 'status', 'created_at'];
+  }
+  if (/\bassignments?\b/i.test(tableName)) {
+    return ['chore', 'person', 'assigned_at', 'status'];
+  }
+  if (/\bcompletions?\b/i.test(tableName)) {
+    return ['chore', 'person', 'completed_at'];
+  }
   if (/\b(job[_ -]?applications?|contacts?)\b/i.test(tableName)) {
     return ['Company', 'URL', 'Status'];
   }

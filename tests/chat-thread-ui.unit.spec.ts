@@ -41,3 +41,30 @@ test('bindChatThreadUi restores scroll when chat rerenders without new messages'
   expect(rerenderedContainer.scrollTop).toBe(160);
   vi.unstubAllGlobals();
 });
+
+test('bindChatThreadUi waits for two frames before restoring scroll', () => {
+  const chat = createDefaultChatState();
+  chat.messages = [
+    { id: 'm1', role: 'assistant', content: 'One' },
+    { id: 'm2', role: 'assistant', content: 'Two' },
+  ];
+  initState({ chat } as never);
+  const frameCallbacks: FrameRequestCallback[] = [];
+  vi.stubGlobal('window', {
+    requestAnimationFrame: (callback: FrameRequestCallback) => {
+      frameCallbacks.push(callback);
+      return frameCallbacks.length;
+    },
+  });
+
+  const container = makeScrollContainer();
+  container.scrollTop = 0;
+  bindChatThreadUi({} as HTMLDivElement, container as unknown as HTMLDivElement, { hidden: true, addEventListener: vi.fn() } as unknown as HTMLButtonElement);
+
+  expect(container.scrollTop).toBe(0);
+  frameCallbacks.shift()?.(0);
+  expect(container.scrollTop).toBe(0);
+  frameCallbacks.shift()?.(16);
+  expect(container.scrollTop).toBe(500);
+  vi.unstubAllGlobals();
+});

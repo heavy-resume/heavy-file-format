@@ -1,7 +1,7 @@
 import { parse as parseYaml } from 'yaml';
 import { requestProxyCompletion } from './chat/chat';
 import { parseAiBlockEditResponse, requestAiComponentEdit } from './ai-edit';
-import { getRegisteredPluginAiHints } from './ai-plugin-hints';
+import { getPluginAiHelp, getRegisteredPluginAiHints } from './ai-plugin-hints';
 import { createEmptySection } from './document-factory';
 import { deserializeDocumentWithDiagnostics, serializeBlockFragment, serializeDocument, serializeDocumentHeaderYaml } from './serialization';
 import {
@@ -15,6 +15,7 @@ import {
 } from './section-ops';
 import {
   executeDbTableQueryTool,
+  executeDbTableWriteSql,
   formatQueryResultTable,
   getDbTableRenderedText,
   getDocumentDbTableNames,
@@ -104,6 +105,7 @@ type DocumentEditToolRequest =
   | { tool: 'mark_step_done'; step: number; summary?: string; reason?: string }
   | { tool: 'request_structure'; reason?: string }
   | { tool: 'request_rendered_structure'; reason?: string }
+  | { tool: 'get_help'; topic: string; reason?: string }
   | { tool: 'view_component'; component_ref: string; start_line?: number; end_line?: number; reason?: string }
   | { tool: 'view_rendered_component'; component_ref: string; reason?: string }
   | { tool: 'grep'; query: string; flags?: string; before?: number; after?: number; max_count?: number; reason?: string }
@@ -145,6 +147,11 @@ type DocumentEditToolRequest =
       table_name?: string;
       query?: string;
       limit?: number;
+      reason?: string;
+    }
+  | {
+      tool: 'execute_sql';
+      sql: string;
       reason?: string;
     };
 
@@ -368,6 +375,7 @@ async function runDocumentEditToolLoop(params: {
   const dbTableNames = getDocumentDbTableNames(params.document);
   const pluginHints = getRegisteredPluginAiHints();
   let contextSummary = buildDocumentEditContextSummary(snapshot.summary, dbTableNames);
+  let recentToolHelp: string | null = null;
   let plan: EditPlanState | null = null;
   const health = createLoopHealthState();
   let conversation: ChatMessage[] = [
@@ -390,7 +398,7 @@ async function runDocumentEditToolLoop(params: {
     const response = await requestProxyCompletion({
       settings: params.settings,
       messages: conversation,
-      context: buildLoopContext(contextSummary, plan),
+      context: buildLoopContext(contextSummary, plan, recentToolHelp),
       formatInstructions: buildDocumentEditFormatInstructions({ dbTableNames, pluginHints, planActive: plan !== null }),
       mode: 'document-edit',
       debugLabel: `ai-document-edit:${iteration + 1}`,
@@ -469,6 +477,11 @@ async function runDocumentEditToolLoop(params: {
       params.onProgress?.(describeDocumentToolProgress(parsed.value));
       snapshot = summarizeDocumentStructure(params.document);
       toolResult = buildToolResult('request_rendered_structure', await executeRequestRenderedStructureTool(snapshot, params.document));
+      contextSummary = buildDocumentEditContextSummary(SENT_STRUCTURE_CONTEXT, dbTableNames);
+    } else if (parsed.value.tool === 'get_help') {
+      params.onProgress?.(describeDocumentToolProgress(parsed.value));
+      recentToolHelp = executeGetHelpTool(parsed.value);
+      toolResult = buildToolResult('get_help', recentToolHelp);
       contextSummary = buildDocumentEditContextSummary(SENT_STRUCTURE_CONTEXT, dbTableNames);
     } else if (parsed.value.tool === 'grep') {
       params.onProgress?.(describeDocumentToolProgress(parsed.value));
@@ -565,6 +578,18 @@ async function runDocumentEditToolLoop(params: {
         ].join('\n');
       }
       toolResult = buildToolResult('query_db_table', queryResult);
+      contextSummary = buildDocumentEditContextSummary(SENT_STRUCTURE_CONTEXT, dbTableNames);
+    } else if (parsed.value.tool === 'execute_sql') {
+      params.onProgress?.(describeDocumentToolProgress(parsed.value));
+      let sqlResult: string;
+      try {
+        params.onMutation?.('execute-sql');
+        sqlResult = await executeDbTableWriteSql(parsed.value.sql);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown database write error.';
+        sqlResult = `SQL failed: ${message}`;
+      }
+      toolResult = buildToolResult('execute_sql', sqlResult);
       contextSummary = buildDocumentEditContextSummary(SENT_STRUCTURE_CONTEXT, dbTableNames);
     }
 
@@ -752,8 +777,19 @@ async function runHeaderEditToolLoop(params: {
   };
 }
 
-function buildLoopContext(baseContext: string, plan: EditPlanState | null): string {
-  return plan ? [baseContext, '', formatPlanState(plan)].join('\n') : baseContext;
+function buildLoopContext(baseContext: string, plan: EditPlanState | null, recentToolHelp?: string | null): string {
+  const parts = [baseContext];
+  if (recentToolHelp) {
+    parts.push(
+      '',
+      'Recent tool help already fetched; reuse this before calling `get_help` again for the same syntax:',
+      recentToolHelp
+    );
+  }
+  if (plan) {
+    parts.push('', formatPlanState(plan));
+  }
+  return parts.join('\n');
 }
 
 const COMPACT_LOOP_MESSAGES_AFTER = 12;
@@ -913,6 +949,8 @@ function describeDocumentToolProgress(toolCall: DocumentEditToolRequest): string
       return 'Refreshing the document outline.';
     case 'request_rendered_structure':
       return 'Inspecting rendered document output.';
+    case 'get_help':
+      return `Getting help for ${toolCall.topic}.`;
     case 'grep':
       return `Searching the document for \`${toolCall.query}\`.`;
     case 'get_css':
@@ -943,6 +981,8 @@ function describeDocumentToolProgress(toolCall: DocumentEditToolRequest): string
       return toolCall.query
         ? `Querying the database: \`${toolCall.query}\`.`
         : `Reading database table ${toolCall.table_name ?? '(default)'}.`;
+    case 'execute_sql':
+      return 'Executing SQL against the attached database.';
     case 'answer':
     case 'done':
       return 'Finishing.';
@@ -1137,6 +1177,7 @@ function summarizeHeaderLoopProgress(document: VisualDocument, plan: EditPlanSta
 function isDocumentInformationTool(tool: DocumentEditToolRequest['tool']): boolean {
   return tool === 'request_structure'
     || tool === 'request_rendered_structure'
+    || tool === 'get_help'
     || tool === 'grep'
     || tool === 'get_css'
     || tool === 'get_properties'
@@ -1480,6 +1521,26 @@ async function executeViewRenderedComponentTool(
     'Rendered component text/diagnostics:',
     await renderComponentText(document, block, { maxDepth: 4 }),
   ].join('\n');
+}
+
+function executeGetHelpTool(request: Extract<DocumentEditToolRequest, { tool: 'get_help' }>): string {
+  const topic = request.topic.trim();
+  const pluginMatch = topic.match(/^plugin:(.+)$/i);
+  if (pluginMatch?.[1]) {
+    return getPluginAiHelp(pluginMatch[1].trim());
+  }
+  const componentMatch = topic.match(/^component:(.+)$/i);
+  const component = (componentMatch?.[1] ?? topic).trim().toLowerCase();
+  const helpByComponent: Record<string, string> = {
+    text: 'Text component: `<!--hvy:text {}-->` followed by Markdown-like text body.',
+    table: 'Table component: `<!--hvy:table {"tableColumns":"Name, Status","tableRows":[{"cells":["Example","Open"]}]}-->`. Use db-table plugins for live SQLite rows.',
+    container: 'Container component: `<!--hvy:container {}-->` with nested HVY components indented underneath.',
+    grid: 'Grid component: `<!--hvy:grid {"gridColumns":2}-->` with `<!--hvy:grid:1 {}-->`, `<!--hvy:grid:2 {}-->` slots containing nested components.',
+    expandable: 'Expandable component: use `<!--hvy:expandable {...}-->` with `<!--hvy:expandable:stub {}-->` and `<!--hvy:expandable:content {}-->` child slots.',
+    plugin: 'Plugin component: `<!--hvy:plugin {"plugin":"registered.plugin.id","pluginConfig":{}}-->` followed by plugin-owned body text. Use `get_help` with `plugin:PLUGIN_ID` for plugin-specific details.',
+    'xref-card': 'xref-card component: `<!--hvy:xref-card {"xrefTitle":"Title","xrefDetail":"Detail","xrefTarget":"target-id"}-->`.',
+  };
+  return helpByComponent[component] ?? `No detailed help registered for "${topic}". Try "plugin:PLUGIN_ID" or "component:text".`;
 }
 
 function getUniqueComponentEntries(snapshot: DocumentStructureSnapshot): ComponentRefEntry[] {
@@ -2026,6 +2087,16 @@ function parseDocumentEditToolRequest(source: string): { ok: true; value: Docume
     if (tool === 'request_rendered_structure') {
       return { ok: true, value: { tool, reason: typeof parsed.reason === 'string' ? parsed.reason : undefined } };
     }
+    if (tool === 'get_help' && typeof parsed.topic === 'string' && parsed.topic.trim().length > 0) {
+      return {
+        ok: true,
+        value: {
+          tool,
+          topic: parsed.topic.trim(),
+          reason: typeof parsed.reason === 'string' ? parsed.reason : undefined,
+        },
+      };
+    }
     if (tool === 'grep' && typeof parsed.query === 'string' && parsed.query.trim().length > 0) {
       const flags = typeof parsed.flags === 'string' ? parsed.flags : undefined;
       try {
@@ -2257,6 +2328,16 @@ function parseDocumentEditToolRequest(source: string): { ok: true; value: Docume
           table_name: typeof parsed.table_name === 'string' ? parsed.table_name : undefined,
           query: typeof parsed.query === 'string' ? parsed.query : undefined,
           limit: Number.isInteger(parsed.limit) ? Number(parsed.limit) : undefined,
+          reason: typeof parsed.reason === 'string' ? parsed.reason : undefined,
+        },
+      };
+    }
+    if (tool === 'execute_sql' && typeof parsed.sql === 'string' && parsed.sql.trim().length > 0) {
+      return {
+        ok: true,
+        value: {
+          tool,
+          sql: parsed.sql.trim(),
           reason: typeof parsed.reason === 'string' ? parsed.reason : undefined,
         },
       };

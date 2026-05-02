@@ -6,6 +6,8 @@ import {
   buildRepairPrompt,
   extractAnthropicText,
   extractOpenAiText,
+  formatTraceEvent,
+  pruneTraceLines,
 } from '../proxy/chat-proxy';
 
 const request = {
@@ -169,4 +171,53 @@ test('buildRepairPrompt turns diagnostics into concise repair guidance', () => {
       },
     ])
   ).toContain('Return the full corrected HVY response body only.');
+});
+
+test('formatTraceEvent writes one ndjson event with timestamp and payload', () => {
+  const line = formatTraceEvent(
+    {
+      runId: 'run-1',
+      phase: 'document-edit',
+      type: 'request_context',
+      payload: {
+        context: 'Context body',
+        formatInstructions: 'Format as HVY.',
+      },
+    },
+    new Date('2026-05-02T12:00:00.000Z')
+  );
+
+  expect(line.endsWith('\n')).toBe(true);
+  expect(JSON.parse(line)).toEqual({
+    timestamp: '2026-05-02T12:00:00.000Z',
+    runId: 'run-1',
+    phase: 'document-edit',
+    type: 'request_context',
+    payload: {
+      context: 'Context body',
+      formatInstructions: 'Format as HVY.',
+    },
+  });
+});
+
+test('pruneTraceLines removes the oldest 100 lines each time the trace exceeds 500 lines', () => {
+  const contents = Array.from({ length: 501 }, (_value, index) => `{"line":${index + 1}}`).join('\n') + '\n';
+
+  const pruned = pruneTraceLines(contents);
+
+  const lines = pruned.trimEnd().split('\n');
+  expect(lines).toHaveLength(401);
+  expect(lines[0]).toBe('{"line":101}');
+  expect(lines.at(-1)).toBe('{"line":501}');
+});
+
+test('pruneTraceLines prunes in 100-line chunks until an oversized trace is under the cap', () => {
+  const contents = Array.from({ length: 650 }, (_value, index) => `{"line":${index + 1}}`).join('\n') + '\n';
+
+  const pruned = pruneTraceLines(contents);
+
+  const lines = pruned.trimEnd().split('\n');
+  expect(lines).toHaveLength(450);
+  expect(lines[0]).toBe('{"line":201}');
+  expect(lines.at(-1)).toBe('{"line":650}');
 });

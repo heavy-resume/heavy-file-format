@@ -1,9 +1,32 @@
+import { randomUUID } from 'node:crypto';
+import { promises as fs } from 'node:fs';
+import path from 'node:path';
 import type { Plugin } from 'vite';
 import { getHvyDiagnosticUsageHint, getHvyResponseDiagnostics, type HvyDiagnostic } from '../src/serialization';
 
 const OPENAI_API_URL = 'https://api.openai.com/v1/responses';
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
 const ANTHROPIC_API_VERSION = '2023-06-01';
+const DEV_TRACE_DIR = path.resolve(process.cwd(), 'dev-traces');
+const AGENT_LOOP_TRACE_FILE = path.join(DEV_TRACE_DIR, 'agent-loop.ndjson');
+const AGENT_LOOP_TRACE_MAX_LINES = 500;
+const AGENT_LOOP_TRACE_PRUNE_LINES = 100;
+
+let traceWriteQueue = Promise.resolve();
+
+interface TraceEvent {
+  runId: string;
+  phase: ProxyChatRequest['mode'] | 'proxy';
+  type:
+    | 'request_context'
+    | 'provider_request'
+    | 'provider_response'
+    | 'model_response'
+    | 'invalid_response'
+    | 'error'
+    | 'stop';
+  payload: Record<string, unknown>;
+}
 
 interface ProxyChatRequest {
   provider: 'openai' | 'anthropic';
@@ -45,6 +68,7 @@ export function buildChatProxyMiddleware(env: Record<string, string | undefined>
 
     const upstreamAbort = new AbortController();
     let completed = false;
+    const runId = randomUUID();
     req.on('aborted', () => {
       if (!completed) {
         console.debug('[hvy:chat-proxy] client request aborted');
@@ -56,8 +80,27 @@ export function buildChatProxyMiddleware(env: Record<string, string | undefined>
       const body = validateProxyChatRequest(await readRequestJson(req));
       if (upstreamAbort.signal.aborted) {
         console.debug('[hvy:chat-proxy] request body read after abort; skipping upstream request');
+        writeTrace({
+          runId,
+          phase: 'proxy',
+          type: 'stop',
+          payload: { reason: 'client aborted after request body read' },
+        });
         return;
       }
+      writeTrace({
+        runId,
+        phase: body.mode,
+        type: 'request_context',
+        payload: {
+          provider: body.provider,
+          model: body.model,
+          mode: body.mode,
+          messages: body.messages,
+          context: body.context,
+          formatInstructions: body.formatInstructions,
+        },
+      });
       console.debug('[hvy:chat-proxy] incoming request', {
         provider: body.provider,
         model: body.model,
@@ -65,15 +108,27 @@ export function buildChatProxyMiddleware(env: Record<string, string | undefined>
         contextLength: body.context.length,
         formatInstructionsLength: body.formatInstructions.length,
       });
-      const output = await requestProviderWithRepair(body, env, upstreamAbort.signal);
+      const output = await requestProviderWithRepair(body, env, upstreamAbort.signal, runId);
       completed = true;
       console.debug('[hvy:chat-proxy] sending response', {
         outputLength: output.length,
+      });
+      writeTrace({
+        runId,
+        phase: body.mode,
+        type: 'stop',
+        payload: { reason: 'completed', outputLength: output.length },
       });
       sendJson(res, 200, { output });
     } catch (error) {
       if (isAbortError(error) || upstreamAbort.signal.aborted) {
         console.debug('[hvy:chat-proxy] upstream request aborted');
+        writeTrace({
+          runId,
+          phase: 'proxy',
+          type: 'stop',
+          payload: { reason: 'aborted' },
+        });
         return;
       }
       completed = true;
@@ -82,6 +137,12 @@ export function buildChatProxyMiddleware(env: Record<string, string | undefined>
       console.debug('[hvy:chat-proxy] sending error response', {
         status,
         message,
+      });
+      writeTrace({
+        runId,
+        phase: 'proxy',
+        type: 'error',
+        payload: { status, message },
       });
       sendJson(res, status, { error: message });
     }
@@ -165,8 +226,13 @@ export function extractAnthropicText(payload: unknown): string {
     .trim();
 }
 
-async function requestProviderWithRepair(body: ProxyChatRequest, env: Record<string, string | undefined>, signal?: AbortSignal): Promise<string> {
-  const initialOutput = await requestProviderOnce(body, env, signal);
+async function requestProviderWithRepair(
+  body: ProxyChatRequest,
+  env: Record<string, string | undefined>,
+  signal: AbortSignal | undefined,
+  runId: string
+): Promise<string> {
+  const initialOutput = await requestProviderOnce(body, env, signal, runId);
   if (body.mode === 'document-edit') {
     return initialOutput;
   }
@@ -176,6 +242,12 @@ async function requestProviderWithRepair(body: ProxyChatRequest, env: Record<str
   }
 
   console.debug('[hvy:chat-proxy] response diagnostics', diagnostics);
+  writeTrace({
+    runId,
+    phase: body.mode,
+    type: 'invalid_response',
+    payload: { diagnostics },
+  });
 
   const repairRequest: ProxyChatRequest = {
     ...body,
@@ -192,17 +264,22 @@ async function requestProviderWithRepair(body: ProxyChatRequest, env: Record<str
     ],
   };
 
-  const repairedOutput = await requestProviderOnce(repairRequest, env, signal);
+  const repairedOutput = await requestProviderOnce(repairRequest, env, signal, runId);
   const repairedDiagnostics = getHvyResponseDiagnostics(repairedOutput);
   console.debug('[hvy:chat-proxy] repaired response diagnostics', repairedDiagnostics);
   return repairedOutput;
 }
 
-async function requestProviderOnce(body: ProxyChatRequest, env: Record<string, string | undefined>, signal?: AbortSignal): Promise<string> {
+async function requestProviderOnce(
+  body: ProxyChatRequest,
+  env: Record<string, string | undefined>,
+  signal: AbortSignal | undefined,
+  runId: string
+): Promise<string> {
   if (body.provider === 'openai') {
-    return requestOpenAi(body, env, signal);
+    return requestOpenAi(body, env, signal, runId);
   }
-  return requestAnthropic(body, env, signal);
+  return requestAnthropic(body, env, signal, runId);
 }
 
 export function buildRepairPrompt(diagnostics: HvyDiagnostic[]): string {
@@ -232,10 +309,21 @@ ${issues}
 Return the full corrected HVY response body only. Do not add commentary outside the HVY response.`;
 }
 
-async function requestOpenAi(body: ProxyChatRequest, env: Record<string, string | undefined>, signal?: AbortSignal): Promise<string> {
+async function requestOpenAi(
+  body: ProxyChatRequest,
+  env: Record<string, string | undefined>,
+  signal: AbortSignal | undefined,
+  runId: string
+): Promise<string> {
   const apiKey = resolveProviderApiKey('openai', env);
   const upstreamRequest = buildOpenAiProxyRequest(body);
   console.debug('[hvy:chat-proxy] upstream openai request', upstreamRequest);
+  writeTrace({
+    runId,
+    phase: body.mode,
+    type: 'provider_request',
+    payload: { provider: 'openai', request: upstreamRequest },
+  });
   const response = await fetch(OPENAI_API_URL, {
     method: 'POST',
     headers: {
@@ -251,21 +339,44 @@ async function requestOpenAi(body: ProxyChatRequest, env: Record<string, string 
     status: response.status,
     payload,
   });
+  writeTrace({
+    runId,
+    phase: body.mode,
+    type: 'provider_response',
+    payload: { provider: 'openai', ok: response.ok, status: response.status, payload },
+  });
   if (!response.ok) {
     throw new Error(`Provider request failed: ${extractProviderError(payload, 'OpenAI request failed.')}`);
   }
   const output = extractOpenAiText(payload);
   console.debug('[hvy:chat-proxy] upstream openai extracted output', output);
+  writeTrace({
+    runId,
+    phase: body.mode,
+    type: 'model_response',
+    payload: { response: output },
+  });
   if (output.length === 0) {
     throw new Error('Provider request failed: OpenAI returned no assistant text.');
   }
   return output;
 }
 
-async function requestAnthropic(body: ProxyChatRequest, env: Record<string, string | undefined>, signal?: AbortSignal): Promise<string> {
+async function requestAnthropic(
+  body: ProxyChatRequest,
+  env: Record<string, string | undefined>,
+  signal: AbortSignal | undefined,
+  runId: string
+): Promise<string> {
   const apiKey = resolveProviderApiKey('anthropic', env);
   const upstreamRequest = buildAnthropicProxyRequest(body);
   console.debug('[hvy:chat-proxy] upstream anthropic request', upstreamRequest);
+  writeTrace({
+    runId,
+    phase: body.mode,
+    type: 'provider_request',
+    payload: { provider: 'anthropic', request: upstreamRequest },
+  });
   const response = await fetch(ANTHROPIC_API_URL, {
     method: 'POST',
     headers: {
@@ -282,11 +393,23 @@ async function requestAnthropic(body: ProxyChatRequest, env: Record<string, stri
     status: response.status,
     payload,
   });
+  writeTrace({
+    runId,
+    phase: body.mode,
+    type: 'provider_response',
+    payload: { provider: 'anthropic', ok: response.ok, status: response.status, payload },
+  });
   if (!response.ok) {
     throw new Error(`Provider request failed: ${extractProviderError(payload, 'Anthropic request failed.')}`);
   }
   const output = extractAnthropicText(payload);
   console.debug('[hvy:chat-proxy] upstream anthropic extracted output', output);
+  writeTrace({
+    runId,
+    phase: body.mode,
+    type: 'model_response',
+    payload: { response: output },
+  });
   if (output.length === 0) {
     throw new Error('Provider request failed: Anthropic returned no assistant text.');
   }
@@ -416,6 +539,45 @@ function sendJson(res: { statusCode: number; setHeader: (name: string, value: st
   res.statusCode = status;
   res.setHeader('Content-Type', 'application/json');
   res.end(JSON.stringify(body));
+}
+
+export function formatTraceEvent(event: TraceEvent, date = new Date()): string {
+  return JSON.stringify({
+    timestamp: date.toISOString(),
+    ...event,
+  }) + '\n';
+}
+
+export function pruneTraceLines(
+  contents: string,
+  maxLines = AGENT_LOOP_TRACE_MAX_LINES,
+  pruneLines = AGENT_LOOP_TRACE_PRUNE_LINES
+): string {
+  const lines = contents.split('\n');
+  if (lines.at(-1) === '') {
+    lines.pop();
+  }
+  while (lines.length > maxLines) {
+    lines.splice(0, Math.min(pruneLines, lines.length));
+  }
+  return lines.length > 0 ? `${lines.join('\n')}\n` : '';
+}
+
+function writeTrace(event: TraceEvent): void {
+  const line = formatTraceEvent(event);
+  traceWriteQueue = traceWriteQueue
+    .then(async () => {
+      await fs.mkdir(DEV_TRACE_DIR, { recursive: true });
+      await fs.appendFile(AGENT_LOOP_TRACE_FILE, line, 'utf8');
+      const contents = await fs.readFile(AGENT_LOOP_TRACE_FILE, 'utf8');
+      const prunedContents = pruneTraceLines(contents);
+      if (prunedContents.length !== contents.length) {
+        await fs.writeFile(AGENT_LOOP_TRACE_FILE, prunedContents, 'utf8');
+      }
+    })
+    .catch((error: unknown) => {
+      console.warn('[hvy:chat-proxy] failed to write dev trace', error);
+    });
 }
 
 function buildSystemInstructions(mode: ProxyChatRequest['mode'], formatInstructions: string): string {

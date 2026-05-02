@@ -218,7 +218,6 @@ export function renderChatPanel(
                  </div>
 
                  <div class="chat-footer">
-                   <button type="button" class="chat-scroll-bottom" data-action="chat-scroll-bottom" hidden>Latest ↓</button>
                    <form id="chatComposer" class="chat-composer">
                      <label class="chat-composer-field">
                        <span>${promptLabel}</span>
@@ -245,6 +244,7 @@ export function renderChatPanel(
                    </form>
                  </div>
                </div>
+               <button type="button" class="chat-scroll-bottom" data-action="chat-scroll-bottom" hidden>Latest ↓</button>
              </aside>`
           : ''
       }

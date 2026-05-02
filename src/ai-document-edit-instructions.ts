@@ -1,4 +1,4 @@
-export const DOCUMENT_EDIT_MAX_TOOL_STEPS = 20;
+export const DOCUMENT_EDIT_MAX_TOOL_STEPS = 50;
 
 export function buildEditPathSelectionInstructions(): string {
   return [
@@ -39,7 +39,7 @@ function formatPluginHintLines(pluginHints: DocumentEditPluginHint[]): string[] 
       const hint = plugin.hint?.trim();
       return `- ${plugin.displayName} (${plugin.id})${hint ? `: ${hint}` : ''}`;
     }),
-    'Only use registered plugin ids from this list. If the user asks for plugin behavior and no matching plugin is registered, answer or ask for clarification instead of inventing a component directive.',
+    'Only use registered plugin ids from this list. Use `get_help` for exact plugin/component syntax instead of guessing.',
   ];
 }
 
@@ -54,15 +54,17 @@ export function buildDocumentEditFormatInstructions(options?: {
   const hasDbTables = dbTableNames.length > 0;
   const hasDbTablePlugin = pluginHints.some((plugin) => plugin.id === 'dev.heavy.db-table');
   const planTools = planActive ? '`mark_step_done`' : '`plan`, `mark_step_done`';
-  const validTools = hasDbTables
-    ? `\`answer\`, ${planTools}, \`grep\`, \`get_css\`, \`get_properties\`, \`set_properties\`, \`view_component\`, \`view_rendered_component\`, \`edit_component\`, \`patch_component\`, \`create_component\`, \`remove_component\`, \`create_section\`, \`remove_section\`, \`reorder_section\`, \`query_db_table\`, \`request_structure\`, \`request_rendered_structure\`, \`done\``
-    : `\`answer\`, ${planTools}, \`grep\`, \`get_css\`, \`get_properties\`, \`set_properties\`, \`view_component\`, \`view_rendered_component\`, \`edit_component\`, \`patch_component\`, \`create_component\`, \`remove_component\`, \`create_section\`, \`remove_section\`, \`reorder_section\`, \`request_structure\`, \`request_rendered_structure\`, \`done\``;
+  const databaseTools = [
+    ...(hasDbTables ? ['`query_db_table`'] : []),
+    ...(hasDbTablePlugin ? ['`execute_sql`'] : []),
+  ].join(', ');
+  const validTools = `\`answer\`, ${planTools}, \`grep\`, \`get_help\`, \`get_css\`, \`get_properties\`, \`set_properties\`, \`view_component\`, \`view_rendered_component\`, \`edit_component\`, \`patch_component\`, \`create_component\`, \`remove_component\`, \`create_section\`, \`remove_section\`, \`reorder_section\`${databaseTools ? `, ${databaseTools}` : ''}, \`request_structure\`, \`request_rendered_structure\`, \`done\``;
   return [
     'Reply with exactly one JSON object and nothing else.',
     'Choose one tool at a time.',
     `Valid tools are: ${validTools}.`,
     'This is an HVY document editing tool loop, not an HTML generator. Do not return HTML, JSX, DOM markup, JavaScript, or CSS files as document content.',
-    'All new visible content must be encoded as HVY sections and components using `<!--hvy:...-->` directives plus Markdown-like text content.',
+    'All new visible content must be encoded as HVY sections and components using `<!--hvy:...-->` directives plus Markdown-like text content. Use `get_help` when you need exact component or plugin syntax.',
     ...formatPluginHintLines(pluginHints),
     'Use `answer` for informational questions, explanations, or requests that do not require changing the HVY document. `answer` is final and does not mutate the document.',
     planActive
@@ -74,11 +76,8 @@ export function buildDocumentEditFormatInstructions(options?: {
     'Use real section ids when a section has an id.',
     'Use component ids when they exist. If a component has no id, use its fallback component ref like `C3`.',
     'Do not invent ids or refs.',
-    'Use `grep` to search the whole serialized document with a regex pattern. It returns post-wrap line numbers, nearby context lines, and the nearest component id for each match clump.',
-    'For grep regexes, you may use alternation like `Python|TypeScript` and flags like `i` for case-insensitive matches.',
-    'Use `get_css` to read inline CSS for section ids, component ids, or fallback component refs. Optional `regex` filters returned CSS by matching the full CSS string.',
-    'Use `get_properties` to read CSS declarations by property name from a list of ids. Optional `properties` limits exact property names; optional `regex` matches property names, values, or full declarations.',
-    'Use `set_properties` to set CSS declaration properties on a list of ids. Use `null` as a property value to remove that property.',
+    'Use `grep` to search the serialized document. Use `get_help` with topics like `plugin:dev.heavy.form`, `plugin:dev.heavy.db-table`, or `component:grid` for exact syntax.',
+    'Use `get_css`, `get_properties`, and `set_properties` for inline CSS on section/component ids. Use `null` as a property value to remove it.',
     'When you need exact HVY for a component before editing it, use `view_component` first. It returns 1-based component line numbers and defaults to lines 1-200.',
     'Use `request_rendered_structure` to inspect what visible components render, especially when the user reports a visible output problem.',
     'Use `view_rendered_component` to inspect one component rendered as user-facing text plus plugin diagnostics. For db-table plugins this can reveal rendered SQL/table errors.',
@@ -92,13 +91,14 @@ export function buildDocumentEditFormatInstructions(options?: {
     ...(hasDbTables
       ? [
           `Use \`query_db_table\` to inspect live rows from the attached DB when needed. Available tables: ${dbTableNames.join(', ')}.`,
-          'For `query_db_table`, provide `table_name` when more than one table exists, or provide a full SQL `query`. `limit` is optional and is capped for concise tool output.',
+          'For `query_db_table`, provide `table_name` when more than one table exists, or provide a full SQL `query`. `limit` is optional.',
           'Do not invent DB column names in SQL filters. First inspect the table with `query_db_table` and only use columns returned by that table result.',
-          ...(hasDbTablePlugin
-            ? [
-                `When adding a component that should display rows from a DB table, use a \`db-table\` plugin block instead of the table component. A db-table renders live rows from the database. Example: \`<!--hvy:plugin {"plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"TABLE_NAME"}}-->\`. The text content after the directive is an optional SQL query filter (leave empty to show all rows).`,
-              ]
-            : []),
+        ]
+      : []),
+    ...(hasDbTablePlugin
+      ? [
+          'Use `execute_sql` to create or update attached SQLite schema/data before adding db-table components that depend on it. SELECT/WITH statements are rejected; use `query_db_table` for reads when tables are already represented in the document.',
+          'When adding a component that should display live DB rows, use a registered db-table plugin block. Use `get_help` with `plugin:dev.heavy.db-table` for exact syntax.',
         ]
       : []),
     'When an edit request is fully satisfied, return `{"tool":"done","summary":"..."}`.',
@@ -110,6 +110,8 @@ export function buildDocumentEditFormatInstructions(options?: {
     '{"tool":"answer","answer":"Direct answer to the user."}',
     ...(planActive ? [] : ['{"tool":"plan","steps":["Find the relevant section","Patch the component","Verify the updated structure"],"reason":"optional"}']),
     '{"tool":"mark_step_done","step":1,"summary":"Found the relevant section.","reason":"optional"}',
+    '{"tool":"get_help","topic":"plugin:dev.heavy.form","reason":"optional"}',
+    '{"tool":"get_help","topic":"component:grid","reason":"optional"}',
     '{"tool":"grep","query":"Python|TypeScript","flags":"i","before":2,"after":2,"max_count":3,"reason":"optional"}',
     '{"tool":"grep","query":"/Python|TypeScript/i","before":2,"after":2,"max_count":3,"reason":"optional"}',
     '{"tool":"get_css","ids":["summary","C3"],"regex":"margin|padding","flags":"i","reason":"optional"}',
@@ -138,11 +140,12 @@ export function buildDocumentEditFormatInstructions(options?: {
       ? [
           '{"tool":"query_db_table","table_name":"work_items","limit":10,"reason":"optional"}',
           '{"tool":"query_db_table","query":"SELECT company, status FROM work_items WHERE status != \\"Rejected\\" ORDER BY company","limit":10,"reason":"optional"}',
-          ...(hasDbTablePlugin
-            ? [
-                `{"tool":"create_component","position":"append-to-section","section_ref":"my-section","hvy":"<!--hvy:plugin {\\"plugin\\":\\"dev.heavy.db-table\\",\\"pluginConfig\\":{\\"source\\":\\"with-file\\",\\"table\\":\\"${dbTableNames[0] ?? 'TABLE_NAME'}\\"}}-->","reason":"Add a live db-table component showing all rows"}`,
-              ]
-            : []),
+        ]
+      : []),
+    ...(hasDbTablePlugin
+      ? [
+          '{"tool":"execute_sql","sql":"CREATE TABLE IF NOT EXISTS chores (id INTEGER PRIMARY KEY, title TEXT NOT NULL, description TEXT, active INTEGER DEFAULT 1)","reason":"Set up DB schema before adding db-table components"}',
+          `{"tool":"create_component","position":"append-to-section","section_ref":"my-section","hvy":"<!--hvy:plugin {\\"plugin\\":\\"dev.heavy.db-table\\",\\"pluginConfig\\":{\\"source\\":\\"with-file\\",\\"table\\":\\"${dbTableNames[0] ?? 'TABLE_NAME'}\\"}}-->","reason":"Add a live db-table component showing all rows"}`,
         ]
       : []),
     '{"tool":"request_structure","reason":"optional"}',

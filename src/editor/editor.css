@@ -233,6 +233,10 @@
   pointer-events: auto;
 }
 
+.editor-shell.is-sidebar-closed .editor-sidebar-panel {
+  overflow: hidden;
+}
+
 .editor-sidebar-empty {
   padding: 0.5rem 0;
 }

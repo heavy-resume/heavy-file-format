@@ -62,3 +62,7 @@
   overflow: auto;
   pointer-events: auto;
 }
+
+.viewer-shell.is-sidebar-closed .viewer-sidebar-panel {
+  overflow: hidden;
+}

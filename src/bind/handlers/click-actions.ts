@@ -1,4 +1,5 @@
 import { appActionRegistry } from '../app-actions/registry';
+import { openRemoveConfirmationModal } from './remove-confirmation-modal';
 
 export function bindClickActions(app: HTMLElement): void {
   app.addEventListener('click', (event) => {
@@ -18,9 +19,23 @@ export function bindClickActions(app: HTMLElement): void {
       return;
     }
 
+    if (requiresRemoveConfirmation(action)) {
+      event.preventDefault();
+      openRemoveConfirmationModal(() => {
+        const sectionKey = actionButton.dataset.sectionKey ?? '';
+        const blockId = actionButton.dataset.blockId ?? '';
+        handler({ app, actionButton, event, sectionKey, blockId, target });
+      });
+      return;
+    }
+
     const sectionKey = actionButton.dataset.sectionKey ?? '';
     const blockId = actionButton.dataset.blockId ?? '';
 
     handler({ app, actionButton, event, sectionKey, blockId, target });
   });
+}
+
+function requiresRemoveConfirmation(action: string): boolean {
+  return new Set(['remove-component-def', 'remove-section-def']).has(action);
 }

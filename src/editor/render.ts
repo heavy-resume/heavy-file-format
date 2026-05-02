@@ -235,7 +235,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
                    <button type="button" class="ghost" data-action="focus-modal" data-section-key="${deps.escapeAttr(section.key)}">Meta</button>`
         : ''
       }
-            <button type="button" class="${section.location === 'sidebar' ? 'secondary' : 'ghost'}" data-action="toggle-section-location" data-section-key="${deps.escapeAttr(section.key)}">${section.location === 'sidebar' ? 'main \u2192' : '\u2190 sidebar'}</button>
+            ${isSubsection ? '' : `<button type="button" class="${section.location === 'sidebar' ? 'secondary' : 'ghost'}" data-action="toggle-section-location" data-section-key="${deps.escapeAttr(section.key)}">${section.location === 'sidebar' ? 'main \u2192' : '\u2190 sidebar'}</button>`}
             <button type="button" class="danger" data-action="remove-section" data-section-key="${deps.escapeAttr(section.key)}">Remove</button>
           </div>
         </div>
@@ -331,11 +331,9 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const activationAttrs = isActiveSelf ? ` data-active-editor-block="true" data-active-block-id="${deps.escapeAttr(block.id)}"` : '';
     const blockMove = getBlockMoveAvailability(sectionKey, block.id, rootSections ?? []);
     const canRemove = !parentLocked;
-    const nestToggle = `<button type="button" class="block-nest-toggle" data-action="make-block-subsection" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}" aria-label="Make subsection" title="Make subsection">›</button>`;
 
     return `
       <div class="editor-block${isActivatingPath ? ' is-activating-path' : ''}"${activationStyle}${activationAttrs}>
-        ${nestToggle}
         <div class="editor-block-head">
           <div class="section-drag-title">
             <div class="editor-order-controls">

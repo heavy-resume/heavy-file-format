@@ -1,5 +1,6 @@
 import { state, findSectionByKey, getReusableNameFromSectionKey, applyRichAction, openLinkInlineModal } from './_imports';
 import { actionRegistry } from '../actions/registry';
+import { openRemoveConfirmationModal } from './remove-confirmation-modal';
 
 const richToolbarSelections = new WeakMap<HTMLElement, Range>();
 
@@ -60,36 +61,45 @@ export function bindClickDispatch(app: HTMLElement): void {
       return;
     }
 
-    const action = actionButton.dataset.action;
-    if (!action) {
-      return;
-    }
-
-    const handler = actionRegistry[action];
-    if (!handler) {
-      return;
-    }
-
-    const sectionKey = actionButton.dataset.sectionKey ?? '';
-    const blockId = actionButton.dataset.blockId ?? '';
-
-    if (action === 'add-top-level-section') {
-      handler({ app, actionButton, sectionKey, blockId, section: null, reusableName: null });
-      return;
-    }
-
-    if (sectionKey.length === 0) {
-      return;
-    }
-
-    const reusableName = getReusableNameFromSectionKey(sectionKey);
-    const section = reusableName ? null : findSectionByKey(state.document.sections, sectionKey);
-    if (!section && !reusableName) {
-      return;
-    }
-
-    handler({ app, actionButton, sectionKey, blockId, section, reusableName });
+    executeActionButton(app, actionButton);
   });
+}
+
+function executeActionButton(app: HTMLElement, actionButton: HTMLElement, confirmedRemoveReady = false): void {
+  const action = actionButton.dataset.action;
+  if (!action) {
+    return;
+  }
+
+  if (requiresRemoveConfirmation(action) && !confirmedRemoveReady) {
+    openRemoveConfirmationModal(() => executeActionButton(app, actionButton, true));
+    return;
+  }
+
+  const handler = actionRegistry[action];
+  if (!handler) {
+    return;
+  }
+
+  const sectionKey = actionButton.dataset.sectionKey ?? '';
+  const blockId = actionButton.dataset.blockId ?? '';
+
+  if (action === 'add-top-level-section') {
+    handler({ app, actionButton, sectionKey, blockId, section: null, reusableName: null });
+    return;
+  }
+
+  if (sectionKey.length === 0) {
+    return;
+  }
+
+  const reusableName = getReusableNameFromSectionKey(sectionKey);
+  const section = reusableName ? null : findSectionByKey(state.document.sections, sectionKey);
+  if (!section && !reusableName) {
+    return;
+  }
+
+  handler({ app, actionButton, sectionKey, blockId, section, reusableName });
 }
 
 function hasSelectionInside(editable: HTMLElement): boolean {
@@ -130,4 +140,17 @@ function getRichEditableForButton(app: HTMLElement, richButton: HTMLElement): HT
     : gridItemId
     ? app.querySelector<HTMLElement>(`${selectorBase}[data-grid-item-id="${gridItemId}"]`)
     : app.querySelector<HTMLElement>(selectorBase);
+}
+
+function requiresRemoveConfirmation(action: string): boolean {
+  return new Set([
+    'remove-block',
+    'remove-section',
+    'remove-subsection',
+    'remove-grid-item',
+    'remove-table-row',
+    'remove-table-column',
+    'remove-component-def',
+    'remove-section-def',
+  ]).has(action);
 }

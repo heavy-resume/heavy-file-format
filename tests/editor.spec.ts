@@ -16,6 +16,30 @@ test('can add section and undo/redo', async ({ page }) => {
   await expect(sections).toHaveCount(initialCount + 1);
 });
 
+test('section remove requires confirmation', async ({ page }) => {
+  await page.goto('/');
+
+  const sections = page.locator('[data-action="remove-section"]');
+  const initialCount = await sections.count();
+
+  await page.locator('[data-action="add-top-level-section"]').click();
+  await expect(sections).toHaveCount(initialCount + 1);
+
+  const removeButton = sections.nth(initialCount);
+  await removeButton.dispatchEvent('click');
+  await expect(sections).toHaveCount(initialCount + 1);
+  await expect(page.getByRole('dialog', { name: 'Confirm deletion?' })).toBeVisible();
+  await expect(removeButton).toHaveText('Remove');
+
+  await page.getByRole('button', { name: 'Cancel' }).click();
+  await expect(page.getByRole('dialog', { name: 'Confirm deletion?' })).toHaveCount(0);
+  await expect(sections).toHaveCount(initialCount + 1);
+
+  await removeButton.dispatchEvent('click');
+  await page.getByRole('button', { name: 'Delete' }).click();
+  await expect.poll(async () => sections.count()).toBeLessThan(initialCount + 1);
+});
+
 test('reader max width keeps focus while typing', async ({ page }) => {
   await page.goto('/');
 
@@ -194,7 +218,46 @@ hvy_version: 0.1
   activeBlock = page.locator('.editor-block[data-active-editor-block="true"]');
   await expect(activeBlock.locator('[data-action="remove-block"]')).toBeVisible();
   await activeBlock.locator('[data-action="remove-block"]').click();
+  await expect(page.locator('.editor-tree', { hasText: 'Target Location(s)' })).toHaveCount(1);
+  await expect(page.getByRole('dialog', { name: 'Confirm deletion?' })).toBeVisible();
+  await page.getByRole('button', { name: 'Delete' }).click();
   await expect(page.locator('.editor-tree', { hasText: 'Target Location(s)' })).toHaveCount(0);
+});
+
+test('component editors do not render subsection side buttons', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('[data-action="activate-block"]').first().click();
+
+  await expect(page.locator('.editor-block[data-active-editor-block="true"] .block-nest-toggle')).toHaveCount(0);
+  await expect(page.locator('.editor-section-head [data-action="toggle-section-location"]').first()).toBeVisible();
+});
+
+test('subsections do not render sidebar location buttons', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"parent"}-->
+#! Parent
+
+ <!--hvy:text {}-->
+  Parent body
+
+<!--hvy: {"id":"child"}-->
+## Child
+
+ <!--hvy:text {}-->
+  Child body
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Advanced' }).click();
+
+  await expect(page.locator('.editor-section-card:not(.editor-subsection-card) > .editor-section-head [data-action="toggle-section-location"]').first()).toBeVisible();
+  await expect(page.locator('.editor-subsection-card > .editor-section-head [data-action="toggle-section-location"]')).toHaveCount(0);
 });
 
 test('component-list add prompt reveals the active edit path with staggered animation', async ({ page }) => {

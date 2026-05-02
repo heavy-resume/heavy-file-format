@@ -28,6 +28,28 @@
   width: min(640px, 94vw);
 }
 
+.remove-confirmation-modal-root {
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+}
+
+.remove-confirmation-modal {
+  width: min(320px, calc(100vw - 2rem));
+  max-height: none;
+  margin: 0;
+  padding: 1rem;
+}
+
+.remove-confirmation-modal .modal-head {
+  justify-content: center;
+}
+
+.remove-confirmation-modal .modal-head-actions {
+  justify-content: center;
+  margin-top: 0.85rem;
+}
+
 .modal-field-stack {
   display: flex;
   flex-direction: column;

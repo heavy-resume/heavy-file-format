@@ -98,6 +98,7 @@ export async function runQaToolLoop(params: {
   document: VisualDocument;
   messages: ChatMessage[];
   question: string;
+  signal?: AbortSignal;
 }): Promise<string> {
   const dbTableNames = getDocumentDbTableNames(params.document);
   if (dbTableNames.length === 0) {
@@ -120,6 +121,7 @@ export async function runQaToolLoop(params: {
       formatInstructions,
       mode: 'qa',
       debugLabel: `ai-qa:${iteration + 1}`,
+      signal: params.signal,
     });
 
     const parsed = parseQaToolRequest(response);

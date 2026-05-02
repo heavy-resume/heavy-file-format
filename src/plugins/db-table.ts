@@ -933,6 +933,33 @@ export function hasDocumentDbTables(document: VisualDocument): boolean {
   return getDocumentDbTableNames(document).length > 0;
 }
 
+export async function materializeDocumentDbTables(document: VisualDocument): Promise<string[]> {
+  const tableNames = getDocumentDbTableNames(document);
+  if (tableNames.length === 0) {
+    return [];
+  }
+
+  const db = await openDocumentDatabase(document);
+  try {
+    const created: string[] = [];
+    for (const tableName of tableNames) {
+      if (ensureTableExists(db, tableName)) {
+        created.push(tableName);
+      }
+    }
+    if (created.length > 0) {
+      await persistDocumentDatabase(document, db);
+    }
+    return created;
+  } finally {
+    try {
+      db.close();
+    } catch {
+      // Ignore close failures for ephemeral materialization databases.
+    }
+  }
+}
+
 export function formatQueryResultTable(columns: string[], rows: string[][]): string {
   return [
     columns.join(' | '),
@@ -952,6 +979,11 @@ export async function executeDbTableQueryTool(
 
   const db = await openDocumentDatabase(document);
   try {
+    const createdMissingTables = availableTables.filter((tableName) => ensureTableExists(db, tableName));
+    if (createdMissingTables.length > 0) {
+      await persistDocumentDatabase(document, db);
+    }
+
     const requestedTable = request.tableName?.trim() ?? '';
     if (requestedTable.length > 0 && !availableTables.includes(requestedTable)) {
       throw new Error(`Unknown DB table "${requestedTable}". Available tables: ${availableTables.join(', ')}.`);
@@ -1016,6 +1048,9 @@ export async function getDbTableAiSummary(
 
   const db = await openDocumentDatabase(document);
   try {
+    if (ensureTableExists(db, tableName)) {
+      await persistDocumentDatabase(document, db);
+    }
     const pragma = db.exec(`PRAGMA table_info(${quoteIdentifier(tableName)})`);
     const pragmaRows = pragma[0]?.values ?? [];
     const schema = pragmaRows.map((row) => ({
@@ -1057,6 +1092,76 @@ export async function getDbTableAiSummary(
   }
 }
 
+export async function getDbTableRenderedText(document: VisualDocument, block: VisualBlock): Promise<string> {
+  if (block.schema.component !== 'plugin' || block.schema.plugin !== DB_TABLE_PLUGIN_ID) {
+    return 'This component is not a DB table plugin.';
+  }
+
+  const availableTables = getDocumentDbTableNames(document);
+  const tableName = getPluginConfigValue(block.schema.pluginConfig, 'table').trim();
+  const query = block.text.trim().replace(/;+\s*$/u, '');
+  if (tableName.length === 0) {
+    return [
+      'DB table plugin rendered output:',
+      'Error: missing pluginConfig.table.',
+      `Available DB tables: ${availableTables.join(', ') || '(none)'}`,
+    ].join('\n');
+  }
+  if (!availableTables.includes(tableName)) {
+    return [
+      'DB table plugin rendered output:',
+      `Error: unknown table "${tableName}".`,
+      `Available DB tables: ${availableTables.join(', ') || '(none)'}`,
+    ].join('\n');
+  }
+
+  const db = await openDocumentDatabase(document);
+  try {
+    if (ensureTableExists(db, tableName)) {
+      await persistDocumentDatabase(document, db);
+    }
+
+    let snapshot: SqliteTableSnapshot;
+    try {
+      snapshot = readTableSnapshot(db, tableName, {
+        query,
+        offset: 0,
+        dynamicWindow: getDbTableQueryDynamicWindow(block.schema.pluginConfig),
+        queryLimit: getDbTableQueryLimit(block.schema.pluginConfig),
+        sortColumn: null,
+        sortDirection: null,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown database table render error.';
+      const columns = getTableColumns(db, tableName);
+      return [
+        'DB table plugin rendered output:',
+        `Table: ${tableName}`,
+        `Query: ${query || '(all rows)'}`,
+        `DB table error: ${message}`,
+        `Known table columns: ${columns.join(', ') || '(none)'}`,
+      ].join('\n');
+    }
+
+    const rows = snapshot.rows.slice(0, 10);
+    return [
+      'DB table plugin rendered output:',
+      `Table: ${tableName}`,
+      `Query: ${query || '(all rows)'}`,
+      `Columns: ${snapshot.columns.join(', ') || '(none)'}`,
+      `Rows shown: ${rows.length} of ${snapshot.totalRows}`,
+      '',
+      snapshot.columns.length === 0 ? '(no columns rendered)' : formatQueryResultTable(snapshot.columns, rows),
+    ].join('\n');
+  } finally {
+    try {
+      db.close();
+    } catch {
+      // Ignore close failures for ephemeral rendered inspection databases.
+    }
+  }
+}
+
 export async function executeDbTableWriteSql(sql: string): Promise<string> {
   const trimmed = sql.trim().replace(/;+\s*$/u, '');
   if (trimmed.length === 0) {
@@ -1078,6 +1183,22 @@ async function openDocumentDatabase(document: VisualDocument): Promise<SqlJsData
   const SQL = await getSqlJs();
   const bytes = await getAttachmentDatabaseBytes(getAttachment(document, DB_ATTACHMENT_ID));
   return bytes.length > 0 ? new SQL.Database(bytes) : new SQL.Database();
+}
+
+async function persistDocumentDatabase(document: VisualDocument, db: SqlJsDatabase): Promise<void> {
+  const encoded = await encodeAttachmentBytes(db.export());
+  const previous = getAttachment(document, DB_ATTACHMENT_ID);
+  setAttachment(
+    document,
+    DB_ATTACHMENT_ID,
+    {
+      ...(previous?.meta ?? {}),
+      plugin: DB_TABLE_PLUGIN_ID,
+      mediaType: 'application/vnd.sqlite3',
+      ...(encoded.encoding ? { encoding: encoded.encoding } : {}),
+    },
+    encoded.bytes
+  );
 }
 
 export function syncSqliteColumnNameInDom(tableName: string, oldColumnName: string, nextColumnName: string, app: HTMLElement): void {

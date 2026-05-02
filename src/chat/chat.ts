@@ -44,6 +44,7 @@ export interface ProxyCompletionParams {
   formatInstructions: string;
   mode: 'qa' | 'component-edit' | 'document-edit';
   debugLabel?: string;
+  signal?: AbortSignal;
 }
 
 export function createDefaultChatState(): ChatState {
@@ -55,6 +56,7 @@ export function createDefaultChatState(): ChatState {
     error: null,
     panelOpen: false,
     requestNonce: 0,
+    abortController: null,
   };
 }
 
@@ -63,6 +65,8 @@ export function clearChatConversation(chat: ChatState): void {
   chat.messages = [];
   chat.isSending = false;
   chat.error = null;
+  chat.abortController?.abort();
+  chat.abortController = null;
   chat.requestNonce += 1;
 }
 
@@ -184,15 +188,15 @@ export function renderChatPanel(
                        : chat.messages
                            .map(
                              (message) => `
-                               <article class="chat-bubble chat-bubble-${message.role}${message.error ? ' chat-bubble-error' : ''}" data-chat-role="${deps.escapeAttr(message.role)}" data-chat-message-id="${deps.escapeAttr(message.id)}">
-                                 <div class="chat-bubble-role">${deps.escapeHtml(message.role === 'user' ? 'You' : 'Assistant')}</div>
+                               <article class="chat-bubble chat-bubble-${message.role}${message.error ? ' chat-bubble-error' : ''}${message.progress ? ' chat-bubble-progress' : ''}" data-chat-role="${deps.escapeAttr(message.role)}" data-chat-message-id="${deps.escapeAttr(message.id)}">
+                                 <div class="chat-bubble-role">${deps.escapeHtml(message.role === 'user' ? 'You' : message.progress ? 'Progress' : 'Assistant')}</div>
                                  <div class="chat-bubble-body">${
                                    message.role === 'assistant'
                                      ? renderAssistantMessageHtml(message.content)
                                      : deps.escapeHtml(message.content).replace(/\n/g, '<br />')
                                  }</div>
                                  ${
-                                   canCopyToHvy && message.role === 'assistant' && !message.error
+                                   canCopyToHvy && message.role === 'assistant' && !message.error && !message.progress
                                      ? `<div class="chat-bubble-actions"><button type="button" class="ghost" data-action="copy-chat-response-to-hvy" data-message-id="${deps.escapeAttr(message.id)}">Copy to HVY</button></div>`
                                      : ''
                                  }
@@ -213,8 +217,8 @@ export function renderChatPanel(
                      <div class="chat-composer-actions">
                        <span class="chat-composer-status">
                          ${
-                           chat.isSending
-                             ? 'Waiting for model response...'
+                          chat.isSending
+                             ? 'Working through the request...'
                              : missingModel
                              ? 'Choose a model before sending.'
                              : !hasDraft
@@ -222,7 +226,11 @@ export function renderChatPanel(
                              : 'Ready'
                          }
                        </span>
-                       <button type="submit" class="secondary"${canSend ? '' : ' disabled'}>${chat.isSending ? 'Sending...' : 'Send'}</button>
+                       ${
+                         chat.isSending
+                           ? '<button type="button" class="danger" data-action="cancel-chat-request">Stop</button>'
+                           : `<button type="submit" class="secondary"${canSend ? '' : ' disabled'}>Send</button>`
+                       }
                      </div>
                    </form>
                  </div>
@@ -239,6 +247,7 @@ export async function requestChatCompletion(params: {
   settings: ChatSettings;
   document: VisualDocument;
   messages: ChatMessage[];
+  signal?: AbortSignal;
 }): Promise<string> {
   const context = buildChatDocumentContext(params.document);
   if (context.trim().length === 0) {
@@ -252,6 +261,7 @@ export async function requestChatCompletion(params: {
     formatInstructions: HVY_AI_RESPONSE_FORMAT_INSTRUCTIONS,
     mode: 'qa',
     debugLabel: 'chat',
+    signal: params.signal,
   });
 }
 
@@ -280,6 +290,7 @@ export async function requestProxyCompletion(params: ProxyCompletionParams): Pro
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(requestPayload),
+    signal: params.signal,
   });
 
   const payload = await readJsonResponse(response);

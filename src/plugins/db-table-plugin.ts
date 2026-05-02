@@ -149,5 +149,16 @@ export const dbTablePluginFactory: HvyPluginFactory = build;
 export const dbTablePluginRegistration: HvyPluginRegistration = {
   id: DB_TABLE_PLUGIN_ID,
   displayName: 'DB Table',
+  aiHint: (block) => {
+    const table = typeof block.schema.pluginConfig.table === 'string' && block.schema.pluginConfig.table.trim().length > 0
+      ? block.schema.pluginConfig.table.trim()
+      : '(unset)';
+    return [
+      `db-table owns SQLite table "${table}".`,
+      'Rendered DB table errors usually belong to this plugin block.',
+      'Fix table selection in pluginConfig.table or fix the SQL query stored in the plugin body text.',
+      'Inspect table columns with query_db_table before writing WHERE clauses.',
+    ].join(' ');
+  },
   create: dbTablePluginFactory,
 };

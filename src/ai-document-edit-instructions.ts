@@ -1,4 +1,4 @@
-export const DOCUMENT_EDIT_MAX_TOOL_STEPS = 6;
+export const DOCUMENT_EDIT_MAX_TOOL_STEPS = 20;
 
 export function buildEditPathSelectionInstructions(): string {
   return [
@@ -25,13 +25,17 @@ export function buildDocumentEditFormatInstructions(options?: { dbTableNames?: s
   const dbTableNames = options?.dbTableNames ?? [];
   const hasDbTables = dbTableNames.length > 0;
   const validTools = hasDbTables
-    ? '`answer`, `grep`, `get_css`, `get_properties`, `set_properties`, `view_component`, `edit_component`, `patch_component`, `create_component`, `remove_component`, `create_section`, `remove_section`, `reorder_section`, `query_db_table`, `request_structure`, `done`'
-    : '`answer`, `grep`, `get_css`, `get_properties`, `set_properties`, `view_component`, `edit_component`, `patch_component`, `create_component`, `remove_component`, `create_section`, `remove_section`, `reorder_section`, `request_structure`, `done`';
+    ? '`answer`, `plan`, `mark_step_done`, `grep`, `get_css`, `get_properties`, `set_properties`, `view_component`, `view_rendered_component`, `edit_component`, `patch_component`, `create_component`, `remove_component`, `create_section`, `remove_section`, `reorder_section`, `query_db_table`, `request_structure`, `request_rendered_structure`, `done`'
+    : '`answer`, `plan`, `mark_step_done`, `grep`, `get_css`, `get_properties`, `set_properties`, `view_component`, `view_rendered_component`, `edit_component`, `patch_component`, `create_component`, `remove_component`, `create_section`, `remove_section`, `reorder_section`, `request_structure`, `request_rendered_structure`, `done`';
   return [
     'Reply with exactly one JSON object and nothing else.',
     'Choose one tool at a time.',
     `Valid tools are: ${validTools}.`,
     'Use `answer` for informational questions, explanations, or requests that do not require changing the HVY document. `answer` is final and does not mutate the document.',
+    'For larger or ambiguous edit requests, first use `plan` with explicit steps. Keep the plan concise and actionable.',
+    'Create at most one plan for the current request. Once a plan exists, execute it and mark steps done instead of replacing it.',
+    'When a planned step is complete, use `mark_step_done` before moving on or finishing. The current plan progress is kept in context.',
+    'If the user reports an error rendered by a component or plugin, inspect rendered output, find the owning component, then fix that serialized component.',
     'Use real section ids when a section has an id.',
     'Use component ids when they exist. If a component has no id, use its fallback component ref like `C3`.',
     'Do not invent ids or refs.',
@@ -41,6 +45,8 @@ export function buildDocumentEditFormatInstructions(options?: { dbTableNames?: s
     'Use `get_properties` to read CSS declarations by property name from a list of ids. Optional `properties` limits exact property names; optional `regex` matches property names, values, or full declarations.',
     'Use `set_properties` to set CSS declaration properties on a list of ids. Use `null` as a property value to remove that property.',
     'When you need exact HVY for a component before editing it, use `view_component` first. It returns 1-based component line numbers and defaults to lines 1-200.',
+    'Use `request_rendered_structure` to inspect what visible components render, especially when the user reports a visible output problem.',
+    'Use `view_rendered_component` to inspect one component rendered as user-facing text plus plugin diagnostics. For db-table plugins this can reveal rendered SQL/table errors.',
     'Use `edit_component` only for one existing component. It may revise that component in place or fully replace it, but only for that single referenced component.',
     'Use `patch_component` for small, local changes after you have seen the numbered component lines.',
     'Use `create_component` to add a fully defined new component near an existing one or at the end of a section.',
@@ -52,6 +58,7 @@ export function buildDocumentEditFormatInstructions(options?: { dbTableNames?: s
       ? [
           `Use \`query_db_table\` to inspect live rows from the attached DB when needed. Available tables: ${dbTableNames.join(', ')}.`,
           'For `query_db_table`, provide `table_name` when more than one table exists, or provide a full SQL `query`. `limit` is optional and is capped for concise tool output.',
+          'Do not invent DB column names in SQL filters. First inspect the table with `query_db_table` and only use columns returned by that table result.',
           `When adding a component that should display rows from a DB table, use a \`db-table\` plugin block instead of the table component. A db-table renders live rows from the database. Example: \`<!--hvy:plugin {"plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"TABLE_NAME"}}-->\`. The text content after the directive is an optional SQL query filter (leave empty to show all rows).`,
         ]
       : []),
@@ -62,6 +69,8 @@ export function buildDocumentEditFormatInstructions(options?: { dbTableNames?: s
     '',
     'Tool shapes:',
     '{"tool":"answer","answer":"Direct answer to the user."}',
+    '{"tool":"plan","steps":["Find the relevant section","Patch the component","Verify the updated structure"],"reason":"optional"}',
+    '{"tool":"mark_step_done","step":1,"summary":"Found the relevant section.","reason":"optional"}',
     '{"tool":"grep","query":"Python|TypeScript","flags":"i","before":2,"after":2,"max_count":3,"reason":"optional"}',
     '{"tool":"grep","query":"/Python|TypeScript/i","before":2,"after":2,"max_count":3,"reason":"optional"}',
     '{"tool":"get_css","ids":["summary","C3"],"regex":"margin|padding","flags":"i","reason":"optional"}',
@@ -70,6 +79,8 @@ export function buildDocumentEditFormatInstructions(options?: { dbTableNames?: s
     '{"tool":"set_properties","ids":["summary","C3"],"properties":{"margin":"0.5rem 0","padding":"0.25rem","background":null},"reason":"optional"}',
     '{"tool":"view_component","component_ref":"C3","reason":"optional"}',
     '{"tool":"view_component","component_ref":"skill-python-card","start_line":1,"end_line":40,"reason":"optional"}',
+    '{"tool":"request_rendered_structure","reason":"optional"}',
+    '{"tool":"view_rendered_component","component_ref":"chores-table","reason":"optional"}',
     '{"tool":"edit_component","component_ref":"C3","request":"Change the label to Foo","reason":"optional"}',
     '{"tool":"patch_component","component_ref":"C3","edits":[{"op":"replace","start_line":2,"end_line":2,"text":" New content"}],"reason":"optional"}',
     '{"tool":"patch_component","component_ref":"C3","edits":[{"op":"insert_after","line":1,"text":"\\n <!--hvy:text {}-->\\n Added line"},{"op":"delete","start_line":4,"end_line":5}],"reason":"optional"}',
@@ -105,8 +116,9 @@ export function buildInitialDocumentEditPrompt(request: string): string {
     'Use this path for visible content: sections, subsections, text, cards, tables, grids, component/section CSS, ordering, additions, and deletions.',
     'If the user is asking an informational question or does not ask for a document change, answer directly with the `answer` tool.',
     'Step 1: examine the reduced document outline provided in context.',
-    'Step 2: request the single best next tool.',
+    'Step 2: decide whether a plan is needed. Use `plan` for larger multi-step work; otherwise request the single best next tool.',
     'After each tool result, decide the next step or finish.',
+    'If you created a plan, mark each completed step with `mark_step_done` as work progresses.',
     `You have at most ${DOCUMENT_EDIT_MAX_TOOL_STEPS} tool steps.`,
   ].join('\n');
 }
@@ -115,8 +127,9 @@ export function buildHeaderEditFormatInstructions(): string {
   return [
     'Reply with exactly one JSON object and nothing else.',
     'Choose one header tool at a time.',
-    'Valid header tools are: `answer`, `grep_header`, `view_header`, `patch_header`, `request_header`, `done`.',
+    'Valid header tools are: `answer`, `plan`, `mark_step_done`, `grep_header`, `view_header`, `patch_header`, `request_header`, `done`.',
     'Use `answer` for informational questions, explanations, or requests that do not require changing the HVY header. `answer` is final and does not mutate the document.',
+    'For larger or ambiguous header edit requests, first use `plan` with explicit steps. Create at most one plan, then execute it and mark steps done instead of replacing it.',
     'The header is YAML front matter only. It contains document metadata and reusable definitions such as `component_defs` and `section_defs`.',
     'Use the header path for document-level metadata, theme colors, component defaults, section defaults, template schema, plugins, and reusable component/section definitions.',
     'Do not invent metadata fields. For `section_defaults`, the only supported field is `css`, for example `section_defaults:\\n  css: "margin: 0.5rem 0;"`.',
@@ -134,6 +147,8 @@ export function buildHeaderEditFormatInstructions(): string {
     '',
     'Tool shapes:',
     '{"tool":"answer","answer":"Direct answer to the user."}',
+    '{"tool":"plan","steps":["Find the reusable definition","Patch the YAML","Verify the header"],"reason":"optional"}',
+    '{"tool":"mark_step_done","step":1,"summary":"Found the reusable definition.","reason":"optional"}',
     '{"tool":"request_header","reason":"optional"}',
     '{"tool":"grep_header","query":"component_defs|skill-card","flags":"i","before":2,"after":8,"max_count":3,"reason":"optional"}',
     '{"tool":"view_header","start_line":1,"end_line":120,"reason":"optional"}',
@@ -153,8 +168,9 @@ export function buildInitialHeaderEditPrompt(request: string): string {
     'Use this path for document metadata and reusable definitions: title, reader settings, theme, defaults, template schema, plugins, `component_defs`, and `section_defs`.',
     'If the user is asking an informational question or does not ask for a header change, answer directly with the `answer` tool.',
     'Step 1: examine the reduced header outline and properties provided in context.',
-    'Step 2: request the single best next header tool.',
+    'Step 2: decide whether a plan is needed. Use `plan` for larger multi-step work; otherwise request the single best next header tool.',
     'After each tool result, decide the next step or finish.',
+    'If you created a plan, mark each completed step with `mark_step_done` as work progresses.',
     `You have at most ${DOCUMENT_EDIT_MAX_TOOL_STEPS} tool steps.`,
   ].join('\n');
 }

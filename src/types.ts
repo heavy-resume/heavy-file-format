@@ -21,6 +21,7 @@ export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   error?: boolean;
+  progress?: boolean;
 }
 
 export interface ChatSettings {
@@ -36,6 +37,7 @@ export interface ChatState {
   error: string | null;
   panelOpen: boolean;
   requestNonce: number;
+  abortController: AbortController | null;
 }
 
 export interface AiEditState {

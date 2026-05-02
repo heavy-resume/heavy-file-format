@@ -27,10 +27,13 @@ import {
 import { deserializeDocument, serializeDocument } from '../src/serialization';
 import { initState } from '../src/state';
 import type { ChatMessage, ChatSettings } from '../src/types';
+import { dbTablePluginRegistration } from '../src/plugins/db-table-plugin';
+import { setHostPlugins } from '../src/plugins/registry';
 
 beforeEach(() => {
   requestProxyCompletionMock.mockReset();
   requestAiComponentEditMock.mockReset();
+  setHostPlugins([]);
 });
 
 function seedStateForDocument(document: ReturnType<typeof deserializeDocument>): void {
@@ -95,6 +98,26 @@ hvy_version: 0.1
   expect(summary.componentRefs.get('skill-python-card')?.component).toBe('xref-card');
 });
 
+test('summarizeDocumentStructure includes plugin AI hints', () => {
+  setHostPlugins([dbTablePluginRegistration]);
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"chores"}-->
+#! Chores
+
+<!--hvy:plugin {"id":"chores-table","plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"chores"}}-->
+ SELECT * FROM chores WHERE completed_by IS NULL
+`, '.hvy');
+
+  const summary = summarizeDocumentStructure(document).summary;
+
+  expect(summary).toContain('plugin id="chores-table"');
+  expect(summary).toContain('AI hint: db-table owns SQLite table "chores".');
+  expect(summary).toContain('fix the SQL query stored in the plugin body text');
+});
+
 test('summarizeDocumentStructure hides content deeper than three nesting levels', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
@@ -143,15 +166,19 @@ test('buildDocumentEditFormatInstructions documents the tool protocol', () => {
 
   const instructions = buildDocumentEditFormatInstructions();
   expect(instructions).toContain(
-    'Valid tools are: `answer`, `grep`, `get_css`, `get_properties`, `set_properties`, `view_component`, `edit_component`, `patch_component`, `create_component`, `remove_component`, `create_section`, `remove_section`, `reorder_section`, `request_structure`, `done`.'
+    'Valid tools are: `answer`, `plan`, `mark_step_done`, `grep`, `get_css`, `get_properties`, `set_properties`, `view_component`, `view_rendered_component`, `edit_component`, `patch_component`, `create_component`, `remove_component`, `create_section`, `remove_section`, `reorder_section`, `request_structure`, `request_rendered_structure`, `done`.'
   );
   expect(instructions).toContain('Use `answer` for informational questions, explanations, or requests that do not require changing the HVY document.');
   expect(instructions).toContain('{"tool":"answer","answer":"Direct answer to the user."}');
+  expect(instructions).toContain('{"tool":"plan","steps":["Find the relevant section","Patch the component","Verify the updated structure"],"reason":"optional"}');
+  expect(instructions).toContain('{"tool":"mark_step_done","step":1,"summary":"Found the relevant section.","reason":"optional"}');
   expect(instructions).toContain('It may revise that component in place or fully replace it');
   expect(instructions).toContain('Use real section ids when a section has an id.');
   expect(instructions).toContain('Use `grep` to search the whole serialized document with a regex pattern.');
   expect(instructions).toContain('alternation like `Python|TypeScript`');
   expect(instructions).toContain('defaults to lines 1-200');
+  expect(instructions).toContain('Use `request_rendered_structure` to inspect what visible components render');
+  expect(instructions).toContain('Use `view_rendered_component` to inspect one component rendered as user-facing text plus plugin diagnostics.');
   expect(instructions).toContain('Use `create_section.hvy` to add one complete serialized HVY section');
   expect(instructions).toContain('new_position_index_from_0');
   expect(instructions).toContain('{"tool":"grep","query":"Python|TypeScript","flags":"i","before":2,"after":2,"max_count":3,"reason":"optional"}');
@@ -159,6 +186,8 @@ test('buildDocumentEditFormatInstructions documents the tool protocol', () => {
   expect(instructions).toContain('{"tool":"get_css","ids":["summary","C3"],"regex":"margin|padding","flags":"i","reason":"optional"}');
   expect(instructions).toContain('{"tool":"get_properties","ids":["summary","skill-python-card"],"properties":["margin","padding"],"reason":"optional"}');
   expect(instructions).toContain('{"tool":"set_properties","ids":["summary","C3"],"properties":{"margin":"0.5rem 0","padding":"0.25rem","background":null},"reason":"optional"}');
+  expect(instructions).toContain('{"tool":"request_rendered_structure","reason":"optional"}');
+  expect(instructions).toContain('{"tool":"view_rendered_component","component_ref":"chores-table","reason":"optional"}');
   expect(instructions).toContain('{"tool":"patch_component","component_ref":"C3","edits":[{"op":"replace","start_line":2,"end_line":2,"text":" New content"}],"reason":"optional"}');
   expect(instructions).toContain('{"tool":"create_component","position":"append-to-section","section_ref":"skills","hvy":"<!--hvy:text {}-->\\n New content","reason":"optional"}');
   expect(instructions).toContain('{"tool":"create_section","position":"append-root","hvy":"<!--hvy: {\\"id\\":\\"new-section\\"}-->\\n#! New section');
@@ -173,8 +202,9 @@ test('buildDocumentEditFormatInstructions documents the tool protocol', () => {
   expect(dbInstructions).toContain('{"tool":"query_db_table","table_name":"work_items","limit":10,"reason":"optional"}');
 
   const headerInstructions = buildHeaderEditFormatInstructions();
-  expect(headerInstructions).toContain('Valid header tools are: `answer`, `grep_header`, `view_header`, `patch_header`, `request_header`, `done`.');
+  expect(headerInstructions).toContain('Valid header tools are: `answer`, `plan`, `mark_step_done`, `grep_header`, `view_header`, `patch_header`, `request_header`, `done`.');
   expect(headerInstructions).toContain('Use `answer` for informational questions, explanations, or requests that do not require changing the HVY header.');
+  expect(headerInstructions).toContain('{"tool":"plan","steps":["Find the reusable definition","Patch the YAML","Verify the header"],"reason":"optional"}');
   expect(headerInstructions).toContain('The header is YAML front matter only.');
   expect(headerInstructions).toContain('component_defs');
   expect(headerInstructions).toContain('Do not invent metadata fields.');
@@ -267,6 +297,261 @@ hvy_version: 0.1
   expect(grepResult).toContain('Match 2 of 2 (component_id="tail")');
   expect(grepResult).toContain('<!--hvy:xref-card {"id":"skill-python-card"');
   expect(grepResult).toContain('Tail line');
+});
+
+test('requestAiDocumentEditTurn keeps plan progress in context', async () => {
+  queueAiToolResponses(
+    '{"tool":"plan","steps":["Find the summary text","Patch the summary text"]}',
+    '{"tool":"grep","query":"Existing","max_count":1}',
+    '{"tool":"mark_step_done","step":1,"summary":"Found the summary text."}',
+    '{"tool":"done","summary":"Plan checked."}'
+  );
+
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {"id":"summary-text"}-->
+ Existing content
+`, '.hvy');
+  seedStateForDocument(document);
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+
+  const result = await requestAiDocumentEditTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Make a couple of careful updates to the summary.',
+    onProgress: vi.fn(),
+  });
+
+  expect(result.error).toBeNull();
+  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.context).toContain('Plan progress:');
+  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.context).toContain('- [ ] 1. Find the summary text');
+  expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.context).toContain('- [x] 1. Find the summary text — Found the summary text.');
+});
+
+test('requestAiDocumentEditTurn keeps one active plan instead of replacing it', async () => {
+  queueAiToolResponses(
+    '{"tool":"plan","steps":["Find the summary text","Patch the summary text"]}',
+    '{"tool":"plan","steps":["Start over with a different plan"]}',
+    '{"tool":"done","summary":"Original plan kept."}'
+  );
+
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {"id":"summary-text"}-->
+ Existing content
+`, '.hvy');
+  seedStateForDocument(document);
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+
+  const result = await requestAiDocumentEditTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Make a couple of careful updates to the summary.',
+  });
+
+  expect(result.error).toBeNull();
+  expect(lastToolResultBeforeCall(2)).toContain('A plan already exists. Do not replace it');
+  expect(lastToolResultBeforeCall(2)).toContain('Find the summary text');
+  expect(lastToolResultBeforeCall(2)).not.toContain('Start over with a different plan');
+});
+
+test('requestAiDocumentEditTurn finishes automatically when the plan is complete', async () => {
+  queueAiToolResponses(
+    '{"tool":"plan","steps":["Find the summary text"]}',
+    '{"tool":"mark_step_done","step":1,"summary":"Found the summary text."}'
+  );
+
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {"id":"summary-text"}-->
+ Existing content
+`, '.hvy');
+  seedStateForDocument(document);
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+  const onProgress = vi.fn();
+
+  const result = await requestAiDocumentEditTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Check the summary text.',
+    onProgress,
+  });
+
+  expect(result.error).toBeNull();
+  expect(result.messages.at(-1)?.content).toBe('Found the summary text.');
+  expect(requestProxyCompletionMock).toHaveBeenCalledTimes(3);
+  expect(onProgress).toHaveBeenCalledWith(expect.objectContaining({
+    progress: true,
+    content: 'Completed all plan steps.',
+  }));
+});
+
+test('requestAiDocumentEditTurn emits visible progress messages', async () => {
+  queueAiToolResponses(
+    '{"tool":"grep","query":"Existing","max_count":1}',
+    '{"tool":"done","summary":"Checked content."}'
+  );
+
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {"id":"summary-text"}-->
+ Existing content
+`, '.hvy');
+  seedStateForDocument(document);
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+  const onProgress = vi.fn();
+
+  const result = await requestAiDocumentEditTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Search for existing content.',
+    onProgress,
+  });
+
+  expect(result.error).toBeNull();
+  expect(onProgress).toHaveBeenCalledWith(expect.objectContaining({
+    role: 'assistant',
+    progress: true,
+    content: expect.stringContaining('Choosing whether to edit'),
+  }));
+  expect(result.messages.some((message) => message.progress && message.content.includes('Searching the document'))).toBe(true);
+});
+
+test('requestAiDocumentEditTurn lets the model inspect rendered component output', async () => {
+  queueAiToolResponses(
+    '{"tool":"request_rendered_structure"}',
+    '{"tool":"view_rendered_component","component_ref":"summary-text"}',
+    '{"tool":"done","summary":"Rendered output checked."}'
+  );
+
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {"id":"summary-text","placeholder":"Summary text"}-->
+ Existing content
+`, '.hvy');
+  seedStateForDocument(document);
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+
+  const result = await requestAiDocumentEditTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Check the rendered summary for visible problems.',
+  });
+
+  expect(result.error).toBeNull();
+  expect(lastToolResultBeforeCall(1)).toContain('Tool result for request_rendered_structure:');
+  expect(lastToolResultBeforeCall(1)).toContain('- summary-text (text): Existing content');
+  expect(lastToolResultBeforeCall(2)).toContain('Tool result for view_rendered_component:');
+  expect(lastToolResultBeforeCall(2)).toContain('Rendered component text/diagnostics:');
+  expect(lastToolResultBeforeCall(2)).toContain('Existing content');
+});
+
+test('requestAiDocumentEditTurn sends a recovery prompt when the loop stalls', async () => {
+  queueAiToolResponses(
+    '{"tool":"grep","query":"Existing","max_count":1}',
+    '{"tool":"grep","query":"Existing","max_count":1}',
+    '{"tool":"grep","query":"Existing","max_count":1}',
+    '{"tool":"grep","query":"Existing","max_count":1}',
+    '{"tool":"done","summary":"Recovered."}'
+  );
+
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {"id":"summary-text"}-->
+ Existing content
+`, '.hvy');
+  seedStateForDocument(document);
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+
+  const result = await requestAiDocumentEditTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Check the existing content repeatedly until you are certain.',
+  });
+
+  expect(result.error).toBeNull();
+  expect(requestProxyCompletionMock.mock.calls.some((call) => {
+    const messages = call[0]?.messages ?? [];
+    return messages.some((message: ChatMessage) => message.content.includes('You appear to be stuck. Do not repeat the previous action.'));
+  })).toBe(true);
+});
+
+test('requestAiDocumentEditTurn compacts older tool-loop history into an operational summary', async () => {
+  queueAiToolResponses(
+    '{"tool":"grep","query":"Existing","max_count":1}',
+    '{"tool":"request_structure"}',
+    '{"tool":"view_component","component_ref":"summary-text"}',
+    '{"tool":"grep","query":"Missing","max_count":1}',
+    '{"tool":"request_rendered_structure"}',
+    '{"tool":"get_properties","ids":["summary-text"],"properties":["margin"]}',
+    '{"tool":"view_rendered_component","component_ref":"summary-text"}',
+    '{"tool":"done","summary":"Compaction checked."}'
+  );
+
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {"id":"summary-text"}-->
+ Existing content
+`, '.hvy');
+  seedStateForDocument(document);
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+
+  const result = await requestAiDocumentEditTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Inspect the summary carefully before finishing.',
+  });
+
+  expect(result.error).toBeNull();
+  const lastModelCall = requestProxyCompletionMock.mock.calls.at(-1)?.[0];
+  const compactedSummary = lastModelCall?.messages.find((message: ChatMessage) => message.content.includes('Context summary for pruned older tool-loop history'));
+  expect(compactedSummary?.content).toContain('- Goal: Inspect the summary carefully before finishing.');
+  expect(compactedSummary?.content).toContain('- Completed actions:');
+  expect(compactedSummary?.content).toContain('grep');
+  expect(compactedSummary?.content).toContain('- Important refs/ids:');
+  expect(lastModelCall?.messages.length).toBeLessThanOrEqual(8);
 });
 
 test('requestAiDocumentEditTurn can answer informational questions without mutating the document', async () => {

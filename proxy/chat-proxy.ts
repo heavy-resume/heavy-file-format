@@ -43,8 +43,19 @@ export function buildChatProxyMiddleware(env: Record<string, string | undefined>
       return;
     }
 
+    const upstreamAbort = new AbortController();
+    let completed = false;
+    req.on('close', () => {
+      if (!completed) {
+        upstreamAbort.abort();
+      }
+    });
+
     try {
       const body = validateProxyChatRequest(await readRequestJson(req));
+      if (upstreamAbort.signal.aborted) {
+        return;
+      }
       console.debug('[hvy:chat-proxy] incoming request', {
         provider: body.provider,
         model: body.model,
@@ -52,9 +63,14 @@ export function buildChatProxyMiddleware(env: Record<string, string | undefined>
         contextLength: body.context.length,
         formatInstructionsLength: body.formatInstructions.length,
       });
-      const output = await requestProviderWithRepair(body, env);
+      const output = await requestProviderWithRepair(body, env, upstreamAbort.signal);
+      completed = true;
       sendJson(res, 200, { output });
     } catch (error) {
+      if (isAbortError(error) || upstreamAbort.signal.aborted) {
+        return;
+      }
+      completed = true;
       const message = error instanceof Error ? error.message : 'Proxy chat request failed.';
       const status = message.startsWith('Provider request failed:') ? 502 : 400;
       sendJson(res, status, { error: message });
@@ -139,8 +155,8 @@ export function extractAnthropicText(payload: unknown): string {
     .trim();
 }
 
-async function requestProviderWithRepair(body: ProxyChatRequest, env: Record<string, string | undefined>): Promise<string> {
-  const initialOutput = await requestProviderOnce(body, env);
+async function requestProviderWithRepair(body: ProxyChatRequest, env: Record<string, string | undefined>, signal?: AbortSignal): Promise<string> {
+  const initialOutput = await requestProviderOnce(body, env, signal);
   if (body.mode === 'document-edit') {
     return initialOutput;
   }
@@ -166,17 +182,17 @@ async function requestProviderWithRepair(body: ProxyChatRequest, env: Record<str
     ],
   };
 
-  const repairedOutput = await requestProviderOnce(repairRequest, env);
+  const repairedOutput = await requestProviderOnce(repairRequest, env, signal);
   const repairedDiagnostics = getHvyResponseDiagnostics(repairedOutput);
   console.debug('[hvy:chat-proxy] repaired response diagnostics', repairedDiagnostics);
   return repairedOutput;
 }
 
-async function requestProviderOnce(body: ProxyChatRequest, env: Record<string, string | undefined>): Promise<string> {
+async function requestProviderOnce(body: ProxyChatRequest, env: Record<string, string | undefined>, signal?: AbortSignal): Promise<string> {
   if (body.provider === 'openai') {
-    return requestOpenAi(body, env);
+    return requestOpenAi(body, env, signal);
   }
-  return requestAnthropic(body, env);
+  return requestAnthropic(body, env, signal);
 }
 
 export function buildRepairPrompt(diagnostics: HvyDiagnostic[]): string {
@@ -206,7 +222,7 @@ ${issues}
 Return the full corrected HVY response body only. Do not add commentary outside the HVY response.`;
 }
 
-async function requestOpenAi(body: ProxyChatRequest, env: Record<string, string | undefined>): Promise<string> {
+async function requestOpenAi(body: ProxyChatRequest, env: Record<string, string | undefined>, signal?: AbortSignal): Promise<string> {
   const apiKey = resolveProviderApiKey('openai', env);
   const upstreamRequest = buildOpenAiProxyRequest(body);
   console.debug('[hvy:chat-proxy] upstream openai request', upstreamRequest);
@@ -217,6 +233,7 @@ async function requestOpenAi(body: ProxyChatRequest, env: Record<string, string 
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify(upstreamRequest),
+    signal,
   });
   const payload = await readJsonResponse(response);
   console.debug('[hvy:chat-proxy] upstream openai response', {
@@ -235,7 +252,7 @@ async function requestOpenAi(body: ProxyChatRequest, env: Record<string, string 
   return output;
 }
 
-async function requestAnthropic(body: ProxyChatRequest, env: Record<string, string | undefined>): Promise<string> {
+async function requestAnthropic(body: ProxyChatRequest, env: Record<string, string | undefined>, signal?: AbortSignal): Promise<string> {
   const apiKey = resolveProviderApiKey('anthropic', env);
   const upstreamRequest = buildAnthropicProxyRequest(body);
   console.debug('[hvy:chat-proxy] upstream anthropic request', upstreamRequest);
@@ -247,6 +264,7 @@ async function requestAnthropic(body: ProxyChatRequest, env: Record<string, stri
       'anthropic-version': ANTHROPIC_API_VERSION,
     },
     body: JSON.stringify(upstreamRequest),
+    signal,
   });
   const payload = await readJsonResponse(response);
   console.debug('[hvy:chat-proxy] upstream anthropic response', {
@@ -378,6 +396,10 @@ function extractProviderError(payload: unknown, fallback: string): string {
     return `${fallback} (${record.error.type})`;
   }
   return fallback;
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException && error.name === 'AbortError';
 }
 
 function sendJson(res: { statusCode: number; setHeader: (name: string, value: string) => void; end: (chunk: string) => void }, status: number, body: Record<string, unknown>): void {

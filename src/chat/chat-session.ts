@@ -27,6 +27,7 @@ export async function requestChatTurn(params: {
   document: VisualDocument;
   messages: ChatMessage[];
   question: string;
+  signal?: AbortSignal;
 }): Promise<ChatTurnResult> {
   const nextMessages = appendUserChatMessage(params.messages, params.question);
 
@@ -37,11 +38,13 @@ export async function requestChatTurn(params: {
           document: params.document,
           messages: nextMessages,
           question: params.question,
+          signal: params.signal,
         })
       : await requestChatCompletion({
           settings: params.settings,
           document: params.document,
           messages: nextMessages,
+          signal: params.signal,
         });
     return {
       messages: [
@@ -119,6 +122,8 @@ export async function requestDocumentEditChatTurn(params: {
   messages: ChatMessage[];
   request: string;
   onMutation?: (group?: string) => void;
+  onProgress?: (message: ChatMessage) => void;
+  signal?: AbortSignal;
 }): Promise<ChatTurnResult> {
   return requestAiDocumentEditTurn(params);
 }

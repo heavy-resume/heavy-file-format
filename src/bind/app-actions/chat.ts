@@ -30,7 +30,29 @@ const copyChatResponseToHvy: AppActionHandler = ({ actionButton }) => {
   getRenderApp()();
 };
 
+const cancelChatRequest: AppActionHandler = () => {
+  if (!state.chat.isSending) {
+    return;
+  }
+  state.chat.abortController?.abort();
+  state.chat.abortController = null;
+  state.chat.isSending = false;
+  state.chat.requestNonce += 1;
+  state.chat.error = null;
+  state.chat.messages = [
+    ...state.chat.messages,
+    {
+      id: crypto.randomUUID(),
+      role: 'assistant',
+      content: 'Stopped.',
+      progress: true,
+    },
+  ];
+  getRenderApp()();
+};
+
 export const chatActions: Record<string, AppActionHandler> = {
   'clear-chat-history': clearChatHistory,
   'copy-chat-response-to-hvy': copyChatResponseToHvy,
+  'cancel-chat-request': cancelChatRequest,
 };

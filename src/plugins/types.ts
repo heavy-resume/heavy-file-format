@@ -76,4 +76,8 @@ export interface HvyPluginRegistration {
   // Factory invoked once per mount. The host caches the returned instance per
   // (sectionKey, blockId) and reuses it across re-renders.
   create: HvyPluginFactory;
+  // Optional guidance included in the AI document outline for plugin blocks.
+  // Keep this short and action-oriented; it helps the document-edit loop know
+  // which serialized fields to patch when users report plugin-rendered errors.
+  aiHint?: string | ((block: VisualBlock) => string);
 }

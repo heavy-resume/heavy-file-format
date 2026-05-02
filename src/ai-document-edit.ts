@@ -12,7 +12,13 @@ import {
   moveSectionToSiblingIndex,
   visitBlocks,
 } from './section-ops';
-import { executeDbTableQueryTool, getDocumentDbTableNames } from './plugins/db-table';
+import {
+  executeDbTableQueryTool,
+  formatQueryResultTable,
+  getDbTableRenderedText,
+  getDocumentDbTableNames,
+  materializeDocumentDbTables,
+} from './plugins/db-table';
 import type { VisualBlock, VisualSection } from './editor/types';
 import type { ChatMessage, ChatSettings, VisualDocument } from './types';
 import {
@@ -27,6 +33,7 @@ import {
 } from './ai-document-edit-instructions';
 import type { JsonObject } from './hvy/types';
 import { getThemeColorLabel, THEME_COLOR_NAMES } from './theme';
+import { DB_TABLE_PLUGIN_ID, getHostPlugin } from './plugins/registry';
 
 const MAX_SECTION_PREVIEW_LINES = 10;
 const MAX_TEXT_PREVIEW_LENGTH = 72;
@@ -92,8 +99,12 @@ type CssPropertyMap = Record<string, string | null>;
 type DocumentEditToolRequest =
   | { tool: 'done'; summary?: string }
   | { tool: 'answer'; answer: string }
+  | { tool: 'plan'; steps: string[]; reason?: string }
+  | { tool: 'mark_step_done'; step: number; summary?: string; reason?: string }
   | { tool: 'request_structure'; reason?: string }
+  | { tool: 'request_rendered_structure'; reason?: string }
   | { tool: 'view_component'; component_ref: string; start_line?: number; end_line?: number; reason?: string }
+  | { tool: 'view_rendered_component'; component_ref: string; reason?: string }
   | { tool: 'grep'; query: string; flags?: string; before?: number; after?: number; max_count?: number; reason?: string }
   | { tool: 'get_css'; ids: string[]; regex?: string; flags?: string; reason?: string }
   | { tool: 'get_properties'; ids: string[]; properties?: string[]; regex?: string; flags?: string; reason?: string }
@@ -141,6 +152,8 @@ type EditPathSelection = 'document' | 'header';
 type HeaderEditToolRequest =
   | { tool: 'done'; summary?: string }
   | { tool: 'answer'; answer: string }
+  | { tool: 'plan'; steps: string[]; reason?: string }
+  | { tool: 'mark_step_done'; step: number; summary?: string; reason?: string }
   | { tool: 'request_header'; reason?: string }
   | { tool: 'grep_header'; query: string; flags?: string; before?: number; after?: number; max_count?: number; reason?: string }
   | { tool: 'view_header'; start_line?: number; end_line?: number; reason?: string }
@@ -151,25 +164,64 @@ interface ChatTurnResult {
   error: string | null;
 }
 
+interface EditPlanState {
+  steps: Array<{
+    text: string;
+    done: boolean;
+    summary?: string;
+  }>;
+}
+
+interface LoopHealthState {
+  stallScore: number;
+  invalidResponses: number;
+  consecutiveSameAction: number;
+  lastActionKey: string | null;
+  recoveryCount: number;
+  seenActionKeys: Set<string>;
+}
+
 export async function requestAiDocumentEditTurn(params: {
   settings: ChatSettings;
   document: VisualDocument;
   messages: ChatMessage[];
   request: string;
   onMutation?: (group?: string) => void;
+  onProgress?: (message: ChatMessage) => void;
+  signal?: AbortSignal;
 }): Promise<ChatTurnResult> {
   const nextMessages = appendChatMessage(params.messages, params.request);
+  const progressMessages: ChatMessage[] = [];
+  const emitProgress = (content: string): void => {
+    const message: ChatMessage = {
+      id: crypto.randomUUID(),
+      role: 'assistant',
+      content,
+      progress: true,
+    };
+    progressMessages.push(message);
+    params.onProgress?.(message);
+  };
 
   try {
+    emitProgress('Starting document edit loop.');
     const result = await runDocumentEditLoop({
       settings: params.settings,
       document: params.document,
       request: params.request,
       onMutation: params.onMutation,
+      onProgress: emitProgress,
+      signal: params.signal,
     });
+    throwIfAborted(params.signal);
+    const createdDbTables = await materializeDocumentDbTables(params.document);
+    if (createdDbTables.length > 0) {
+      emitProgress(`Created database table${createdDbTables.length === 1 ? '' : 's'}: ${createdDbTables.join(', ')}.`);
+    }
     return {
       messages: [
         ...nextMessages,
+        ...progressMessages,
         {
           id: crypto.randomUUID(),
           role: 'assistant',
@@ -179,6 +231,21 @@ export async function requestAiDocumentEditTurn(params: {
       error: null,
     };
   } catch (error) {
+    if (isAbortError(error)) {
+      return {
+        messages: [
+          ...nextMessages,
+          ...progressMessages,
+          {
+            id: crypto.randomUUID(),
+            role: 'assistant',
+            content: 'Stopped.',
+            progress: true,
+          },
+        ],
+        error: null,
+      };
+    }
     console.error('[hvy:ai-document-edit] request failed', {
       request: params.request,
       settings: params.settings,
@@ -188,6 +255,7 @@ export async function requestAiDocumentEditTurn(params: {
     return {
       messages: [
         ...nextMessages,
+        ...progressMessages,
         {
           id: crypto.randomUUID(),
           role: 'assistant',
@@ -216,15 +284,20 @@ async function runDocumentEditLoop(params: {
   document: VisualDocument;
   request: string;
   onMutation?: (group?: string) => void;
+  onProgress?: (content: string) => void;
+  signal?: AbortSignal;
 }): Promise<{ summary: string }> {
   if (isLikelyInformationalAnswerRequest(params.request)) {
     return inferEditPathFromRequest(params.request) === 'header' ? runHeaderEditToolLoop(params) : runDocumentEditToolLoop(params);
   }
 
+  params.onProgress?.('Choosing whether to edit the document body or header.');
   const path = await selectEditPath(params);
   if (path === 'header') {
+    params.onProgress?.('Using header edit tools.');
     return runHeaderEditToolLoop(params);
   }
+  params.onProgress?.('Using document edit tools.');
   return runDocumentEditToolLoop(params);
 }
 
@@ -232,6 +305,7 @@ async function selectEditPath(params: {
   settings: ChatSettings;
   document: VisualDocument;
   request: string;
+  signal?: AbortSignal;
 }): Promise<EditPathSelection> {
   const response = await requestProxyCompletion({
     settings: params.settings,
@@ -246,6 +320,7 @@ async function selectEditPath(params: {
     formatInstructions: buildEditPathSelectionInstructions(),
     mode: 'document-edit',
     debugLabel: 'ai-document-edit:path',
+    signal: params.signal,
   });
   const parsed = parseEditPathSelection(response);
   if (parsed.ok === true) {
@@ -260,10 +335,14 @@ async function runDocumentEditToolLoop(params: {
   document: VisualDocument;
   request: string;
   onMutation?: (group?: string) => void;
+  onProgress?: (content: string) => void;
+  signal?: AbortSignal;
 }): Promise<{ summary: string }> {
   let snapshot = summarizeDocumentStructure(params.document);
   const dbTableNames = getDocumentDbTableNames(params.document);
   let contextSummary = buildDocumentEditContextSummary(snapshot.summary, dbTableNames);
+  let plan: EditPlanState | null = null;
+  const health = createLoopHealthState();
   let conversation: ChatMessage[] = [
     {
       id: crypto.randomUUID(),
@@ -273,17 +352,30 @@ async function runDocumentEditToolLoop(params: {
   ];
 
   for (let iteration = 0; iteration < DOCUMENT_EDIT_MAX_TOOL_STEPS; iteration += 1) {
+    throwIfAborted(params.signal);
+    conversation = compactToolLoopConversation({
+      conversation,
+      goal: params.request,
+      document: params.document,
+      plan,
+      path: 'document',
+    });
     const response = await requestProxyCompletion({
       settings: params.settings,
       messages: conversation,
-      context: contextSummary,
+      context: buildLoopContext(contextSummary, plan),
       formatInstructions: buildDocumentEditFormatInstructions({ dbTableNames }),
       mode: 'document-edit',
       debugLabel: `ai-document-edit:${iteration + 1}`,
+      signal: params.signal,
     });
 
     const parsed = parseDocumentEditToolRequest(response);
     if (parsed.ok === false) {
+      const recovery = updateLoopHealthForInvalid(health, getLoopStallThreshold(params.request, plan));
+      if (health.invalidResponses >= 10 || recovery === 'stop') {
+        return { summary: 'Stopped because the AI edit loop was not producing valid tool calls. Try a narrower request or ask it to continue from the current document.' };
+      }
       const invalidMessage = parsed.message;
       conversation = [
         ...conversation.filter((message) => message.role !== 'assistant' || !message.content.includes('The result of this action was:')),
@@ -292,25 +384,61 @@ async function runDocumentEditToolLoop(params: {
           role: 'user',
           content: `The previous response was invalid and no tools were executed. Ignore any tool results or summaries it claimed. ${invalidMessage}`,
         },
+        ...(recovery === 'recover' ? [buildLoopRecoveryChatMessage()] : []),
       ];
       continue;
     }
 
     if (parsed.value.tool === 'done') {
+      params.onProgress?.('Finished edit loop.');
       return {
         summary: parsed.value.summary?.trim() || `Finished after ${iteration + 1} step${iteration === 0 ? '' : 's'}.`,
       };
     }
     if (parsed.value.tool === 'answer') {
+      params.onProgress?.('Answered without changing the document.');
       return {
         summary: parsed.value.answer.trim(),
       };
     }
 
+    params.onProgress?.(describeDocumentToolProgress(parsed.value));
+    const actionKey = getToolActionKey(parsed.value);
+    const beforeProgress = summarizeDocumentLoopProgress(params.document, plan);
+    const newInformationProgress = isDocumentInformationTool(parsed.value.tool) && !health.seenActionKeys.has(actionKey);
     let toolResult = '';
-    if (parsed.value.tool === 'request_structure') {
+    if (parsed.value.tool === 'plan') {
+      if (plan) {
+        toolResult = buildToolResult('plan', [
+          'A plan already exists. Do not replace it unless the user changes the goal.',
+          'Continue by executing the next unfinished step and use `mark_step_done` when it is complete.',
+          '',
+          formatPlanState(plan),
+        ].join('\n'));
+      } else {
+        plan = { steps: parsed.value.steps.map((step) => ({ text: step, done: false })) };
+        rewardLoopHealthForPlanCreated(health, plan);
+        toolResult = buildToolResult('plan', formatPlanState(plan));
+      }
+    } else if (parsed.value.tool === 'mark_step_done') {
+      const result = markPlanStepDone(plan, parsed.value.step, parsed.value.summary);
+      if (result.changed) {
+        rewardLoopHealthForPlanStepDone(health);
+      }
+      toolResult = buildToolResult('mark_step_done', result.message);
+      if (result.changed && isPlanComplete(plan)) {
+        params.onProgress?.('Completed all plan steps.');
+        return {
+          summary: result.summary || 'Completed all plan steps.',
+        };
+      }
+    } else if (parsed.value.tool === 'request_structure') {
       snapshot = summarizeDocumentStructure(params.document);
       toolResult = buildToolResult('request_structure', snapshot.summary);
+      contextSummary = buildDocumentEditContextSummary(SENT_STRUCTURE_CONTEXT, dbTableNames);
+    } else if (parsed.value.tool === 'request_rendered_structure') {
+      snapshot = summarizeDocumentStructure(params.document);
+      toolResult = buildToolResult('request_rendered_structure', await executeRequestRenderedStructureTool(snapshot, params.document));
       contextSummary = buildDocumentEditContextSummary(SENT_STRUCTURE_CONTEXT, dbTableNames);
     } else if (parsed.value.tool === 'grep') {
       toolResult = buildToolResult('grep', executeGrepTool(parsed.value, params.document));
@@ -327,6 +455,9 @@ async function runDocumentEditToolLoop(params: {
       contextSummary = buildDocumentEditContextSummary(SENT_STRUCTURE_CONTEXT, dbTableNames);
     } else if (parsed.value.tool === 'view_component') {
       toolResult = buildToolResult('view_component', executeViewComponentTool(parsed.value, snapshot, params.document));
+      contextSummary = buildDocumentEditContextSummary(SENT_STRUCTURE_CONTEXT, dbTableNames);
+    } else if (parsed.value.tool === 'view_rendered_component') {
+      toolResult = buildToolResult('view_rendered_component', await executeViewRenderedComponentTool(parsed.value, snapshot, params.document));
       contextSummary = buildDocumentEditContextSummary(SENT_STRUCTURE_CONTEXT, dbTableNames);
     } else if (parsed.value.tool === 'edit_component') {
       toolResult = buildToolResult(
@@ -363,15 +494,33 @@ async function runDocumentEditToolLoop(params: {
       snapshot = summarizeDocumentStructure(params.document);
       contextSummary = buildDocumentEditContextSummary(SENT_STRUCTURE_CONTEXT, dbTableNames);
     } else if (parsed.value.tool === 'query_db_table') {
-      toolResult = buildToolResult(
-        'query_db_table',
-        await executeDbTableQueryTool(params.document, {
+      let queryResult: string;
+      try {
+        queryResult = await executeDbTableQueryTool(params.document, {
           tableName: parsed.value.table_name,
           query: parsed.value.query,
           limit: parsed.value.limit,
-        })
-      );
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown database query error.';
+        queryResult = [
+          `Query failed: ${message}`,
+          'Inspect the table with query_db_table using only table_name, then retry with columns that actually exist.',
+        ].join('\n');
+      }
+      toolResult = buildToolResult('query_db_table', queryResult);
       contextSummary = buildDocumentEditContextSummary(SENT_STRUCTURE_CONTEXT, dbTableNames);
+    }
+
+    const afterProgress = summarizeDocumentLoopProgress(params.document, plan);
+    const recovery = updateLoopHealthForAction(
+      health,
+      actionKey,
+      beforeProgress !== afterProgress || newInformationProgress,
+      getLoopStallThreshold(params.request, plan)
+    );
+    if (recovery === 'stop') {
+      return { summary: 'Stopped because the AI edit loop appeared stuck repeating actions without making progress. The AI can continue if you send another request.' };
     }
 
     conversation = [
@@ -386,6 +535,7 @@ async function runDocumentEditToolLoop(params: {
         role: 'user',
         content: toolResult,
       },
+      ...(recovery === 'recover' ? [buildLoopRecoveryChatMessage()] : []),
     ];
   }
 
@@ -399,9 +549,13 @@ async function runHeaderEditToolLoop(params: {
   document: VisualDocument;
   request: string;
   onMutation?: (group?: string) => void;
+  onProgress?: (content: string) => void;
+  signal?: AbortSignal;
 }): Promise<{ summary: string }> {
   let snapshot = summarizeHeaderStructure(params.document);
   let contextSummary = snapshot.summary;
+  let plan: EditPlanState | null = null;
+  const health = createLoopHealthState();
   let conversation: ChatMessage[] = [
     {
       id: crypto.randomUUID(),
@@ -411,17 +565,30 @@ async function runHeaderEditToolLoop(params: {
   ];
 
   for (let iteration = 0; iteration < DOCUMENT_EDIT_MAX_TOOL_STEPS; iteration += 1) {
+    throwIfAborted(params.signal);
+    conversation = compactToolLoopConversation({
+      conversation,
+      goal: params.request,
+      document: params.document,
+      plan,
+      path: 'header',
+    });
     const response = await requestProxyCompletion({
       settings: params.settings,
       messages: conversation,
-      context: contextSummary,
+      context: buildLoopContext(contextSummary, plan),
       formatInstructions: buildHeaderEditFormatInstructions(),
       mode: 'document-edit',
       debugLabel: `ai-header-edit:${iteration + 1}`,
+      signal: params.signal,
     });
 
     const parsed = parseHeaderEditToolRequest(response);
     if (parsed.ok === false) {
+      const recovery = updateLoopHealthForInvalid(health, getLoopStallThreshold(params.request, plan));
+      if (health.invalidResponses >= 10 || recovery === 'stop') {
+        return { summary: 'Stopped because the AI header edit loop was not producing valid tool calls. Try a narrower request or ask it to continue from the current document.' };
+      }
       conversation = [
         ...conversation.filter((message) => message.role !== 'assistant' || !message.content.includes('The result of this action was:')),
         {
@@ -429,23 +596,55 @@ async function runHeaderEditToolLoop(params: {
           role: 'user',
           content: `The previous response was invalid and no tools were executed. Ignore any tool results or summaries it claimed. ${parsed.message}`,
         },
+        ...(recovery === 'recover' ? [buildLoopRecoveryChatMessage()] : []),
       ];
       continue;
     }
 
     if (parsed.value.tool === 'done') {
+      params.onProgress?.('Finished header edit loop.');
       return {
         summary: parsed.value.summary?.trim() || `Finished header edit after ${iteration + 1} step${iteration === 0 ? '' : 's'}.`,
       };
     }
     if (parsed.value.tool === 'answer') {
+      params.onProgress?.('Answered without changing the header.');
       return {
         summary: parsed.value.answer.trim(),
       };
     }
 
+    params.onProgress?.(describeHeaderToolProgress(parsed.value));
+    const actionKey = getToolActionKey(parsed.value);
+    const beforeProgress = summarizeHeaderLoopProgress(params.document, plan);
+    const newInformationProgress = isHeaderInformationTool(parsed.value.tool) && !health.seenActionKeys.has(actionKey);
     let toolResult = '';
-    if (parsed.value.tool === 'request_header') {
+    if (parsed.value.tool === 'plan') {
+      if (plan) {
+        toolResult = buildToolResult('plan', [
+          'A plan already exists. Do not replace it unless the user changes the goal.',
+          'Continue by executing the next unfinished step and use `mark_step_done` when it is complete.',
+          '',
+          formatPlanState(plan),
+        ].join('\n'));
+      } else {
+        plan = { steps: parsed.value.steps.map((step) => ({ text: step, done: false })) };
+        rewardLoopHealthForPlanCreated(health, plan);
+        toolResult = buildToolResult('plan', formatPlanState(plan));
+      }
+    } else if (parsed.value.tool === 'mark_step_done') {
+      const result = markPlanStepDone(plan, parsed.value.step, parsed.value.summary);
+      if (result.changed) {
+        rewardLoopHealthForPlanStepDone(health);
+      }
+      toolResult = buildToolResult('mark_step_done', result.message);
+      if (result.changed && isPlanComplete(plan)) {
+        params.onProgress?.('Completed all header plan steps.');
+        return {
+          summary: result.summary || 'Completed all header plan steps.',
+        };
+      }
+    } else if (parsed.value.tool === 'request_header') {
       snapshot = summarizeHeaderStructure(params.document);
       toolResult = buildToolResult('request_header', snapshot.summary);
       contextSummary = SENT_STRUCTURE_CONTEXT;
@@ -461,6 +660,17 @@ async function runHeaderEditToolLoop(params: {
       contextSummary = SENT_STRUCTURE_CONTEXT;
     }
 
+    const afterProgress = summarizeHeaderLoopProgress(params.document, plan);
+    const recovery = updateLoopHealthForAction(
+      health,
+      actionKey,
+      beforeProgress !== afterProgress || newInformationProgress,
+      getLoopStallThreshold(params.request, plan)
+    );
+    if (recovery === 'stop') {
+      return { summary: 'Stopped because the AI header edit loop appeared stuck repeating actions without making progress. The AI can continue if you send another request.' };
+    }
+
     conversation = [
       ...conversation,
       {
@@ -473,12 +683,394 @@ async function runHeaderEditToolLoop(params: {
         role: 'user',
         content: toolResult,
       },
+      ...(recovery === 'recover' ? [buildLoopRecoveryChatMessage()] : []),
     ];
   }
 
   return {
     summary: `Stopped after ${DOCUMENT_EDIT_MAX_TOOL_STEPS} header steps. The AI can continue if you send another request.`,
   };
+}
+
+function buildLoopContext(baseContext: string, plan: EditPlanState | null): string {
+  return plan ? [baseContext, '', formatPlanState(plan)].join('\n') : baseContext;
+}
+
+const COMPACT_LOOP_MESSAGES_AFTER = 12;
+const KEEP_RECENT_LOOP_MESSAGES = 6;
+
+function compactToolLoopConversation(params: {
+  conversation: ChatMessage[];
+  goal: string;
+  document: VisualDocument;
+  plan: EditPlanState | null;
+  path: EditPathSelection;
+}): ChatMessage[] {
+  const hasPriorSummary = params.conversation.some((message) => message.content.includes('Context summary for pruned older tool-loop history'));
+  if (
+    params.conversation.length <= COMPACT_LOOP_MESSAGES_AFTER &&
+    (!hasPriorSummary || params.conversation.length <= KEEP_RECENT_LOOP_MESSAGES + 2)
+  ) {
+    return params.conversation;
+  }
+
+  const [initialMessage, ...rest] = params.conversation;
+  if (!initialMessage) {
+    return params.conversation;
+  }
+  const recentMessages = rest.slice(-KEEP_RECENT_LOOP_MESSAGES);
+  const compactedMessages = rest.slice(0, Math.max(0, rest.length - KEEP_RECENT_LOOP_MESSAGES));
+  return [
+    initialMessage,
+    {
+      id: crypto.randomUUID(),
+      role: 'assistant',
+      content: buildToolLoopOperationalSummary({
+        goal: params.goal,
+        document: params.document,
+        plan: params.plan,
+        path: params.path,
+        compactedMessages,
+      }),
+    },
+    ...recentMessages,
+  ];
+}
+
+function buildToolLoopOperationalSummary(params: {
+  goal: string;
+  document: VisualDocument;
+  plan: EditPlanState | null;
+  path: EditPathSelection;
+  compactedMessages: ChatMessage[];
+}): string {
+  const snapshot = params.path === 'header' ? null : summarizeDocumentStructure(params.document);
+  const headerSnapshot = params.path === 'header' ? summarizeHeaderStructure(params.document) : null;
+  return [
+    'Context summary for pruned older tool-loop history:',
+    `- Goal: ${truncatePreview(params.goal, 220)}`,
+    `- Edit path: ${params.path}`,
+    `- Completed actions: ${summarizeCompactedActions(params.compactedMessages)}`,
+    `- Current task state: ${summarizeCurrentTaskState(params.document, params.plan, params.path)}`,
+    `- Important refs/ids: ${snapshot ? summarizeImportantDocumentRefs(snapshot) : summarizeImportantHeaderRefs(headerSnapshot)}`,
+    `- Unresolved errors: ${summarizeCompactedErrors(params.compactedMessages)}`,
+    `- Next valid actions: ${params.path === 'header' ? 'inspect header, patch header, mark plan step done, or finish' : 'inspect structure/rendered output, patch/create/remove/reorder components or sections, query DB tables, mark plan step done, or finish'}`,
+    '- Important constraints: do not invent ids or DB columns; use existing refs from the current outline; inspect before patching when uncertain.',
+  ].join('\n');
+}
+
+function summarizeCompactedActions(messages: ChatMessage[]): string {
+  const actions = messages
+    .filter((message) => message.role === 'assistant')
+    .map((message) => {
+      try {
+        const parsed = JSON.parse(message.content.trim()) as Record<string, unknown>;
+        if (typeof parsed.tool !== 'string') {
+          return null;
+        }
+        const target = typeof parsed.component_ref === 'string'
+          ? parsed.component_ref
+          : typeof parsed.section_ref === 'string'
+            ? parsed.section_ref
+            : typeof parsed.table_name === 'string'
+              ? parsed.table_name
+              : '';
+        return target ? `${parsed.tool}(${target})` : parsed.tool;
+      } catch {
+        return null;
+      }
+    })
+    .filter((value): value is string => Boolean(value));
+  return actions.length > 0 ? actions.slice(-10).join(', ') : '(none recorded)';
+}
+
+function summarizeCurrentTaskState(document: VisualDocument, plan: EditPlanState | null, path: EditPathSelection): string {
+  const sectionCount = document.sections.filter((section) => !section.isGhost).length;
+  let componentCount = 0;
+  visitBlocks(document.sections, () => {
+    componentCount += 1;
+  });
+  const dbTables = getDocumentDbTableNames(document);
+  const planSummary = plan ? formatPlanState(plan).split('\n').slice(1).join('; ') : 'no active plan';
+  return path === 'header'
+    ? `${Object.keys(document.meta).length} header keys; ${sectionCount} visible sections; ${planSummary}`
+    : `${sectionCount} visible sections; ${componentCount} components; DB tables: ${dbTables.join(', ') || '(none)'}; ${planSummary}`;
+}
+
+function summarizeImportantDocumentRefs(snapshot: DocumentStructureSnapshot): string {
+  const sectionIds = [...snapshot.sectionRefs.keys()].slice(0, 8);
+  const componentIds = getUniqueComponentEntries(snapshot)
+    .map((entry) => entry.componentId || entry.ref)
+    .filter(Boolean)
+    .slice(0, 12);
+  return [
+    `sections=${sectionIds.join(', ') || '(none)'}`,
+    `components=${componentIds.join(', ') || '(none)'}`,
+  ].join('; ');
+}
+
+function summarizeImportantHeaderRefs(snapshot: HeaderStructureSnapshot | null): string {
+  if (!snapshot) {
+    return '(none)';
+  }
+  return truncatePreview(snapshot.summary.replace(/\n/g, '; '), 320);
+}
+
+function summarizeCompactedErrors(messages: ChatMessage[]): string {
+  const errors = messages
+    .map((message) => message.content)
+    .filter((content) => /\b(error|failed|invalid|unknown|stuck|missing|no such column)\b/i.test(content))
+    .map((content) => truncatePreview(content.replace(/\n/g, ' '), 180));
+  return errors.length > 0 ? errors.slice(-4).join(' | ') : '(none recorded)';
+}
+
+function throwIfAborted(signal: AbortSignal | undefined): void {
+  if (signal?.aborted) {
+    throw new DOMException('Chat request stopped.', 'AbortError');
+  }
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException && error.name === 'AbortError';
+}
+
+function describeDocumentToolProgress(toolCall: DocumentEditToolRequest): string {
+  switch (toolCall.tool) {
+    case 'plan':
+      return `Created a ${toolCall.steps.length}-step plan.`;
+    case 'mark_step_done':
+      return `Marked plan step ${toolCall.step} done.`;
+    case 'request_structure':
+      return 'Refreshing the document outline.';
+    case 'request_rendered_structure':
+      return 'Inspecting rendered document output.';
+    case 'grep':
+      return `Searching the document for \`${toolCall.query}\`.`;
+    case 'get_css':
+      return `Reading CSS for ${toolCall.ids.join(', ')}.`;
+    case 'get_properties':
+      return `Reading style properties for ${toolCall.ids.join(', ')}.`;
+    case 'set_properties':
+      return `Updating style properties for ${toolCall.ids.join(', ')}.`;
+    case 'view_component':
+      return `Viewing component ${toolCall.component_ref}.`;
+    case 'view_rendered_component':
+      return `Viewing rendered output for ${toolCall.component_ref}.`;
+    case 'edit_component':
+      return `Editing component ${toolCall.component_ref}.`;
+    case 'patch_component':
+      return `Patching component ${toolCall.component_ref}.`;
+    case 'remove_section':
+      return `Removing section ${toolCall.section_ref}.`;
+    case 'remove_component':
+      return `Removing component ${toolCall.component_ref}.`;
+    case 'create_component':
+      return 'Creating a new component.';
+    case 'create_section':
+      return 'Creating a new section.';
+    case 'reorder_section':
+      return `Reordering section ${toolCall.section_ref}.`;
+    case 'query_db_table':
+      return toolCall.query
+        ? `Querying the database: \`${toolCall.query}\`.`
+        : `Reading database table ${toolCall.table_name ?? '(default)'}.`;
+    case 'answer':
+    case 'done':
+      return 'Finishing.';
+  }
+}
+
+function describeHeaderToolProgress(toolCall: HeaderEditToolRequest): string {
+  switch (toolCall.tool) {
+    case 'plan':
+      return `Created a ${toolCall.steps.length}-step header plan.`;
+    case 'mark_step_done':
+      return `Marked header plan step ${toolCall.step} done.`;
+    case 'request_header':
+      return 'Refreshing the header outline.';
+    case 'grep_header':
+      return `Searching the header for \`${toolCall.query}\`.`;
+    case 'view_header':
+      return 'Viewing header YAML.';
+    case 'patch_header':
+      return 'Patching header YAML.';
+    case 'answer':
+    case 'done':
+      return 'Finishing.';
+  }
+}
+
+function formatPlanState(plan: EditPlanState): string {
+  if (plan.steps.length === 0) {
+    return 'Plan progress:\n- (no steps)';
+  }
+  return [
+    'Plan progress:',
+    ...plan.steps.map((step, index) => `- ${step.done ? '[x]' : '[ ]'} ${index + 1}. ${step.text}${step.summary ? ` — ${step.summary}` : ''}`),
+  ].join('\n');
+}
+
+function markPlanStepDone(plan: EditPlanState | null, stepNumber: number, summary?: string): { message: string; changed: boolean; summary: string } {
+  if (!plan) {
+    return {
+      message: 'No active plan exists. If the request needs multiple steps, create one with the `plan` tool first.',
+      changed: false,
+      summary: '',
+    };
+  }
+  const step = plan.steps[stepNumber - 1];
+  if (!step) {
+    return {
+      message: `Plan step ${stepNumber} does not exist. Current plan has ${plan.steps.length} step${plan.steps.length === 1 ? '' : 's'}.`,
+      changed: false,
+      summary: '',
+    };
+  }
+  const changed = !step.done;
+  step.done = true;
+  step.summary = summary?.trim() || step.summary;
+  return { message: formatPlanState(plan), changed, summary: step.summary ?? step.text };
+}
+
+function isPlanComplete(plan: EditPlanState | null): boolean {
+  return Boolean(plan && plan.steps.length > 0 && plan.steps.every((step) => step.done));
+}
+
+function createLoopHealthState(): LoopHealthState {
+  return {
+    stallScore: 0,
+    invalidResponses: 0,
+    consecutiveSameAction: 0,
+    lastActionKey: null,
+    recoveryCount: 0,
+    seenActionKeys: new Set<string>(),
+  };
+}
+
+function getLoopStallThreshold(request: string, plan: EditPlanState | null): number {
+  const requestSize = Math.floor(request.length / 180);
+  if (!plan) {
+    return Math.min(14, 8 + requestSize);
+  }
+  const unfinishedSteps = plan.steps.filter((step) => !step.done).length;
+  return Math.min(34, 16 + requestSize + plan.steps.length * 2 + unfinishedSteps);
+}
+
+function updateLoopHealthForInvalid(health: LoopHealthState, threshold: number): 'continue' | 'recover' | 'stop' {
+  health.invalidResponses += 1;
+  health.stallScore += 3;
+  return consumeLoopHealthThreshold(health, threshold);
+}
+
+function updateLoopHealthForAction(
+  health: LoopHealthState,
+  actionKey: string,
+  madeProgress: boolean,
+  threshold: number
+): 'continue' | 'recover' | 'stop' {
+  if (health.lastActionKey === actionKey) {
+    health.consecutiveSameAction += 1;
+    health.stallScore += health.consecutiveSameAction >= 3 ? 4 : 1;
+  } else {
+    health.consecutiveSameAction = 1;
+  }
+
+  health.lastActionKey = actionKey;
+  if (madeProgress) {
+    health.stallScore = Math.max(0, health.stallScore - 2);
+  } else {
+    health.stallScore += 2;
+  }
+  health.seenActionKeys.add(actionKey);
+  if (health.consecutiveSameAction >= 5) {
+    return 'stop';
+  }
+  return consumeLoopHealthThreshold(health, threshold);
+}
+
+function rewardLoopHealthForPlanCreated(health: LoopHealthState, plan: EditPlanState): void {
+  health.stallScore = Math.max(0, health.stallScore - Math.max(3, plan.steps.length));
+}
+
+function rewardLoopHealthForPlanStepDone(health: LoopHealthState): void {
+  health.stallScore = Math.max(0, health.stallScore - 5);
+}
+
+function consumeLoopHealthThreshold(health: LoopHealthState, threshold: number): 'continue' | 'recover' | 'stop' {
+  if (health.stallScore < threshold) {
+    return 'continue';
+  }
+  if (health.recoveryCount > 0) {
+    return 'stop';
+  }
+  health.recoveryCount += 1;
+  health.stallScore = Math.floor(health.stallScore / 2);
+  return 'recover';
+}
+
+function buildLoopRecoveryChatMessage(): ChatMessage {
+  return {
+    id: crypto.randomUUID(),
+    role: 'user',
+    content: [
+      'You appear to be stuck. Do not repeat the previous action.',
+      'Choose a different valid action that advances the task, ask for missing information by using an inspection tool, or finish with the best valid result if the task is already complete.',
+      'If a plan exists, use the plan progress in context to choose the next unfinished step.',
+    ].join('\n'),
+  };
+}
+
+function getToolActionKey(toolCall: DocumentEditToolRequest | HeaderEditToolRequest): string {
+  return stableStringify(stripActionKeyNoise(toolCall));
+}
+
+function stripActionKeyNoise(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(stripActionKeyNoise);
+  }
+  if (!value || typeof value !== 'object') {
+    return value;
+  }
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .filter(([key]) => key !== 'reason' && key !== 'summary')
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, entry]) => [key, stripActionKeyNoise(entry)])
+  );
+}
+
+function stableStringify(value: unknown): string {
+  return JSON.stringify(stripActionKeyNoise(value));
+}
+
+function summarizeDocumentLoopProgress(document: VisualDocument, plan: EditPlanState | null): string {
+  return stableStringify({
+    meta: document.meta,
+    sections: document.sections,
+    plan,
+  });
+}
+
+function summarizeHeaderLoopProgress(document: VisualDocument, plan: EditPlanState | null): string {
+  return stableStringify({
+    meta: document.meta,
+    plan,
+  });
+}
+
+function isDocumentInformationTool(tool: DocumentEditToolRequest['tool']): boolean {
+  return tool === 'request_structure'
+    || tool === 'request_rendered_structure'
+    || tool === 'grep'
+    || tool === 'get_css'
+    || tool === 'get_properties'
+    || tool === 'view_component'
+    || tool === 'view_rendered_component'
+    || tool === 'query_db_table';
+}
+
+function isHeaderInformationTool(tool: HeaderEditToolRequest['tool']): boolean {
+  return tool === 'request_header' || tool === 'grep_header' || tool === 'view_header';
 }
 
 function buildEditPathSelectionContext(document: VisualDocument): string {
@@ -681,7 +1273,8 @@ export function summarizeDocumentStructure(document: VisualDocument): DocumentSt
       if (componentId.length > 0) {
         componentRefs.set(componentId, componentRefs.get(ref)!);
       }
-      lines.push(`${'  '.repeat(indent)}${describeStructureLine(block, target, ref)}`);
+      const pluginHint = getPluginAiHint(block);
+      lines.push(`${'  '.repeat(indent)}${describeStructureLine(block, target, ref)}${pluginHint ? ` AI hint: ${pluginHint}` : ''}`);
       lineBudget.remaining -= 1;
       const nestedBlocks = collectNestedBlocks(block);
       if (nestedBlocks.length === 0) {
@@ -762,6 +1355,128 @@ function executeViewComponentTool(
     'Component HVY with 1-based line numbers:',
     formatNumberedFragment(fragment, clampRange.startLine, clampRange.endLine),
   ].join('\n');
+}
+
+async function executeRequestRenderedStructureTool(snapshot: DocumentStructureSnapshot, document: VisualDocument): Promise<string> {
+  const entries = getUniqueComponentEntries(snapshot);
+  if (entries.length === 0) {
+    return '[empty] rendered document has no visible components.';
+  }
+
+  const lines: string[] = ['Rendered document component output:'];
+  for (const entry of entries.slice(0, 60)) {
+    const block = findBlockByInternalId(document.sections, entry.blockId);
+    if (!block) {
+      continue;
+    }
+    const renderedText = await renderComponentText(document, block, { maxDepth: 1 });
+    const firstLine = renderedText.split('\n').find((line) => line.trim().length > 0)?.trim() ?? '(empty)';
+    const problem = /\b(error|missing|unknown|invalid|failed)\b/i.test(renderedText) ? ' problem=possible' : '';
+    lines.push(`- ${entry.target || entry.ref} (${entry.component})${problem}: ${truncatePreview(firstLine, 160)}`);
+  }
+  if (entries.length > 60) {
+    lines.push(`... ${entries.length - 60} more components omitted. Use view_rendered_component with a component ref for details.`);
+  }
+  return lines.join('\n');
+}
+
+async function executeViewRenderedComponentTool(
+  request: Extract<DocumentEditToolRequest, { tool: 'view_rendered_component' }>,
+  snapshot: DocumentStructureSnapshot,
+  document: VisualDocument
+): Promise<string> {
+  const component = snapshot.componentRefs.get(request.component_ref);
+  if (!component) {
+    throw new Error(`Unknown component ref "${request.component_ref}". Request the structure again if needed.`);
+  }
+  const section = findSectionByKey(document.sections, component.sectionKey);
+  const block = findBlockByInternalId(document.sections, component.blockId);
+  if (!section || !block) {
+    throw new Error(`Component "${request.component_ref}" could not be found.`);
+  }
+
+  return [
+    `Section title: ${section.title}`,
+    `Section id: ${getSectionId(section)}`,
+    `Component type: ${block.schema.component}`,
+    `Component id: ${block.schema.id.trim() || '(none)'}`,
+    '',
+    'Rendered component text/diagnostics:',
+    await renderComponentText(document, block, { maxDepth: 4 }),
+  ].join('\n');
+}
+
+function getUniqueComponentEntries(snapshot: DocumentStructureSnapshot): ComponentRefEntry[] {
+  const seenBlockIds = new Set<string>();
+  const entries: ComponentRefEntry[] = [];
+  for (const entry of snapshot.componentRefs.values()) {
+    if (seenBlockIds.has(entry.blockId)) {
+      continue;
+    }
+    seenBlockIds.add(entry.blockId);
+    entries.push(entry);
+  }
+  return entries;
+}
+
+async function renderComponentText(document: VisualDocument, block: VisualBlock, options: { maxDepth: number }): Promise<string> {
+  if (block.schema.component === 'plugin' && block.schema.plugin === DB_TABLE_PLUGIN_ID) {
+    return getDbTableRenderedText(document, block);
+  }
+
+  const localLines = getLocalRenderedComponentLines(block);
+  if (options.maxDepth <= 0) {
+    return localLines.length > 0 ? localLines.join('\n') : '(empty)';
+  }
+
+  const nestedBlocks = collectNestedBlocks(block);
+  const nestedLines: string[] = [];
+  for (const child of nestedBlocks) {
+    const childText = await renderComponentText(document, child, { maxDepth: options.maxDepth - 1 });
+    if (childText.trim().length > 0 && childText.trim() !== '(empty)') {
+      nestedLines.push(`- ${child.schema.component}${child.schema.id ? ` id="${child.schema.id}"` : ''}: ${truncatePreview(childText.replace(/\s+/g, ' '), 240)}`);
+    }
+  }
+
+  const lines = [
+    ...localLines,
+    ...(nestedLines.length > 0 ? ['Nested rendered content:', ...nestedLines] : []),
+  ];
+  return lines.length > 0 ? lines.join('\n') : '(empty)';
+}
+
+function getLocalRenderedComponentLines(block: VisualBlock): string[] {
+  const component = block.schema.component;
+  if (component === 'text') {
+    return block.text.trim().length > 0 ? [block.text.trim()] : [block.schema.placeholder.trim() || '(empty text)'];
+  }
+  if (component === 'xref-card') {
+    return [
+      `Title: ${block.schema.xrefTitle || '(empty)'}`,
+      ...(block.schema.xrefDetail ? [`Detail: ${block.schema.xrefDetail}`] : []),
+      ...(block.schema.xrefTarget ? [`Target: ${block.schema.xrefTarget}`] : []),
+    ];
+  }
+  if (component === 'table') {
+    const columns = block.schema.tableColumns.split(',').map((column) => column.trim()).filter(Boolean);
+    return [
+      `Columns: ${columns.join(', ') || '(none)'}`,
+      `Rows: ${block.schema.tableRows.length}`,
+      ...(block.schema.tableRows.length > 0 ? [formatQueryResultTable(columns, block.schema.tableRows.map((row) => row.cells))] : []),
+    ];
+  }
+  if (component === 'image') {
+    return [`Image: ${block.schema.imageFile || '(none)'}`, `Alt: ${block.schema.imageAlt || '(none)'}`];
+  }
+  if (component === 'plugin') {
+    return [
+      `Plugin: ${block.schema.plugin || '(none)'}`,
+      `Config: ${JSON.stringify(block.schema.pluginConfig)}`,
+      ...(block.text.trim() ? [`Text/query: ${block.text.trim()}`] : []),
+    ];
+  }
+  const text = block.text.trim();
+  return text.length > 0 ? [text] : [];
 }
 
 function executeGrepTool(
@@ -1208,7 +1923,31 @@ function parseDocumentEditToolRequest(source: string): { ok: true; value: Docume
     if (tool === 'answer' && typeof parsed.answer === 'string' && parsed.answer.trim().length > 0) {
       return { ok: true, value: { tool, answer: parsed.answer } };
     }
+    if (tool === 'plan' && Array.isArray(parsed.steps) && parsed.steps.every((step) => typeof step === 'string' && step.trim().length > 0)) {
+      return {
+        ok: true,
+        value: {
+          tool,
+          steps: parsed.steps.map((step) => step.trim()),
+          reason: typeof parsed.reason === 'string' ? parsed.reason : undefined,
+        },
+      };
+    }
+    if (tool === 'mark_step_done' && Number.isInteger(parsed.step)) {
+      return {
+        ok: true,
+        value: {
+          tool,
+          step: Number(parsed.step),
+          summary: typeof parsed.summary === 'string' ? parsed.summary : undefined,
+          reason: typeof parsed.reason === 'string' ? parsed.reason : undefined,
+        },
+      };
+    }
     if (tool === 'request_structure') {
+      return { ok: true, value: { tool, reason: typeof parsed.reason === 'string' ? parsed.reason : undefined } };
+    }
+    if (tool === 'request_rendered_structure') {
       return { ok: true, value: { tool, reason: typeof parsed.reason === 'string' ? parsed.reason : undefined } };
     }
     if (tool === 'grep' && typeof parsed.query === 'string' && parsed.query.trim().length > 0) {
@@ -1234,8 +1973,8 @@ function parseDocumentEditToolRequest(source: string): { ok: true; value: Docume
         },
       };
     }
-	    if (tool === 'view_component' && typeof parsed.component_ref === 'string') {
-	      return {
+    if (tool === 'view_component' && typeof parsed.component_ref === 'string') {
+      return {
         ok: true,
         value: {
           tool,
@@ -1243,9 +1982,19 @@ function parseDocumentEditToolRequest(source: string): { ok: true; value: Docume
           start_line: Number.isInteger(parsed.start_line) ? Number(parsed.start_line) : undefined,
           end_line: Number.isInteger(parsed.end_line) ? Number(parsed.end_line) : undefined,
           reason: typeof parsed.reason === 'string' ? parsed.reason : undefined,
-	        },
-	      };
-	    }
+        },
+      };
+    }
+    if (tool === 'view_rendered_component' && typeof parsed.component_ref === 'string') {
+      return {
+        ok: true,
+        value: {
+          tool,
+          component_ref: parsed.component_ref,
+          reason: typeof parsed.reason === 'string' ? parsed.reason : undefined,
+        },
+      };
+    }
     if ((tool === 'get_css' || tool === 'get_properties') && Array.isArray(parsed.ids) && parsed.ids.every((id) => typeof id === 'string')) {
       const regex = typeof parsed.regex === 'string' ? parsed.regex : undefined;
       const flags = typeof parsed.flags === 'string' ? parsed.flags : undefined;
@@ -1454,6 +2203,27 @@ function parseHeaderEditToolRequest(source: string): { ok: true; value: HeaderEd
     if (tool === 'answer' && typeof parsed.answer === 'string' && parsed.answer.trim().length > 0) {
       return { ok: true, value: { tool, answer: parsed.answer } };
     }
+    if (tool === 'plan' && Array.isArray(parsed.steps) && parsed.steps.every((step) => typeof step === 'string' && step.trim().length > 0)) {
+      return {
+        ok: true,
+        value: {
+          tool,
+          steps: parsed.steps.map((step) => step.trim()),
+          reason: typeof parsed.reason === 'string' ? parsed.reason : undefined,
+        },
+      };
+    }
+    if (tool === 'mark_step_done' && Number.isInteger(parsed.step)) {
+      return {
+        ok: true,
+        value: {
+          tool,
+          step: Number(parsed.step),
+          summary: typeof parsed.summary === 'string' ? parsed.summary : undefined,
+          reason: typeof parsed.reason === 'string' ? parsed.reason : undefined,
+        },
+      };
+    }
     if (tool === 'request_header') {
       return { ok: true, value: { tool, reason: typeof parsed.reason === 'string' ? parsed.reason : undefined } };
     }
@@ -1576,6 +2346,17 @@ function describeStructureLine(block: VisualBlock, target: string, fallbackRef: 
     return `${preview} <!-- ${block.schema.component} id="${escapeInline(label)}" -->`;
   }
   return `${preview} <!-- ${block.schema.component} id="${escapeInline(target)}" -->`;
+}
+
+function getPluginAiHint(block: VisualBlock): string {
+  if (block.schema.component !== 'plugin' || !block.schema.plugin) {
+    return '';
+  }
+  const hint = getHostPlugin(block.schema.plugin)?.aiHint;
+  if (!hint) {
+    return '';
+  }
+  return (typeof hint === 'function' ? hint(block) : hint).replace(/\s+/g, ' ').trim().slice(0, 360);
 }
 
 function formatNumberedFragment(fragment: string, startLine = DEFAULT_VIEW_START_LINE, endLine = DEFAULT_VIEW_END_LINE): string {
@@ -1719,12 +2500,12 @@ function describeKnownThemeColors(meta: JsonObject): string[] {
   });
 }
 
-function truncatePreview(value: string): string {
+function truncatePreview(value: string, maxLength = MAX_TEXT_PREVIEW_LENGTH): string {
   const collapsed = value.replace(/\s+/g, ' ').trim();
-  if (collapsed.length <= MAX_TEXT_PREVIEW_LENGTH) {
+  if (collapsed.length <= maxLength) {
     return collapsed;
   }
-  return `${collapsed.slice(0, MAX_TEXT_PREVIEW_LENGTH - 1)}...`;
+  return `${collapsed.slice(0, maxLength - 1)}...`;
 }
 
 function clampLineRange(totalLines: number, startLine = DEFAULT_VIEW_START_LINE, endLine = DEFAULT_VIEW_END_LINE): {

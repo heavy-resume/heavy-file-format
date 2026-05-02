@@ -220,6 +220,16 @@
   background: color-mix(in srgb, var(--hvy-button-bg) 18%, var(--hvy-surface));
 }
 
+.chat-bubble-progress {
+  border-style: dashed;
+  background: color-mix(in srgb, var(--hvy-surface-tint) 16%, var(--hvy-surface));
+}
+
+.chat-bubble-progress .chat-bubble-body {
+  color: var(--hvy-text-alt);
+  font-size: 0.9rem;
+}
+
 .chat-bubble-error,
 .chat-error {
   border-color: color-mix(in srgb, var(--hvy-danger) 65%, var(--hvy-border));

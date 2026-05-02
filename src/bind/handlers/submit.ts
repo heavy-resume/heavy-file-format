@@ -29,6 +29,8 @@ export function bindSubmit(app: HTMLElement): void {
       state.chat.isSending = true;
       state.chat.requestNonce += 1;
       const requestNonce = state.chat.requestNonce;
+      const abortController = new AbortController();
+      state.chat.abortController = abortController;
       getRenderApp()();
 
       try {
@@ -41,14 +43,23 @@ export function bindSubmit(app: HTMLElement): void {
                 messages: previousMessages,
                 request: question,
                 onMutation: (group) => recordHistory(group),
+                onProgress: (message) => {
+                  if (requestNonce !== state.chat.requestNonce || abortController.signal.aborted) {
+                    return;
+                  }
+                  state.chat.messages = [...state.chat.messages, message];
+                  getRenderApp()();
+                },
+                signal: abortController.signal,
               })
             : await requestChatTurn({
                 settings: state.chat.settings,
                 document: state.document,
                 messages: previousMessages,
                 question,
+                signal: abortController.signal,
               });
-        if (requestNonce !== state.chat.requestNonce) {
+        if (requestNonce !== state.chat.requestNonce || abortController.signal.aborted) {
           return;
         }
         state.chat.messages = result.messages;
@@ -62,6 +73,7 @@ export function bindSubmit(app: HTMLElement): void {
         if (requestNonce !== state.chat.requestNonce) {
           return;
         }
+        state.chat.abortController = null;
         state.chat.isSending = false;
         getRenderApp()();
       }

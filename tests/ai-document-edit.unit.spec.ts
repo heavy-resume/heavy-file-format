@@ -654,8 +654,8 @@ hvy_version: 0.1
   expect(result.error).toBeNull();
   const grepResult = lastToolResultBeforeCall(1);
   expect(grepResult).toContain('Match 1 of 1 (component_id="long-text")');
-  expect(grepResult).toContain(`   9 | ${' '.repeat(2)}${'a'.repeat(398)}`);
-  expect(grepResult).toContain(`  10 | ${'a'.repeat(12)}wrapped-needle`);
+  expect(grepResult).toContain(`  12 | ${' '.repeat(2)}${'a'.repeat(398)}`);
+  expect(grepResult).toContain(`  13 | ${'a'.repeat(12)}wrapped-needle`);
 });
 
 test('requestAiDocumentEditTurn can get css and css properties for ids', async () => {
@@ -789,7 +789,7 @@ component_defs:
 test('requestAiDocumentEditTurn rejects invented section default fields', async () => {
   requestProxyCompletionMock
     .mockResolvedValueOnce('header')
-    .mockResolvedValueOnce('{"tool":"patch_header","edits":[{"op":"insert_after","line":2,"text":"section_defaults:\\n  wrapper_style: \\"margin-bottom: 24px;\\""}]}');
+    .mockResolvedValueOnce('{"tool":"patch_header","edits":[{"op":"replace","start_line":3,"end_line":4,"text":"section_defaults:\\n  wrapper_style: \\"margin-bottom: 24px;\\""}]}');
 
   const document = deserializeDocument(`---
 hvy_version: 0.1
@@ -813,7 +813,7 @@ title: Existing
   });
 
   expect(result.error).toBe('section_defaults only supports the "css" field. Unsupported field: wrapper_style.');
-  expect(document.meta.section_defaults).toBeUndefined();
+  expect(document.meta.section_defaults).toEqual({ css: 'margin: 0.5rem 0;' });
   expect(document.meta.title).toBe('Existing');
 });
 
@@ -852,6 +852,9 @@ hvy_version: 0.1
   expect(prePatchView).toContain('  2 |  Existing content');
   expect(serializeDocument(document)).toBe(`---
 hvy_version: 0.1
+reader_max_width: 60rem
+section_defaults:
+  css: "margin: 0.5rem 0;"
 ---
 
 <!--hvy: {"id":"summary","lock":false,"expanded":true,"highlight":false}-->

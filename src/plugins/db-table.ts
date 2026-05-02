@@ -313,6 +313,18 @@ function renderEditableTable(
                           title="Sort by ${helpers.escapeAttr(column)}"
                           ${queryActive ? 'disabled' : ''}
                         >${snapshot.sortColumn === column ? (snapshot.sortDirection === 'desc' ? '↓' : '↑') : '↕'}</button>
+                        <button
+                          type="button"
+                          class="ghost db-table-delete-column-button"
+                          data-action="sqlite-drop-column"
+                          data-section-key="${helpers.escapeAttr(sectionKey)}"
+                          data-block-id="${helpers.escapeAttr(blockId)}"
+                          data-table-name="${helpers.escapeAttr(tableName)}"
+                          data-column-name="${helpers.escapeAttr(column)}"
+                          aria-label="Delete column ${helpers.escapeAttr(column)}"
+                          title="Delete column ${helpers.escapeAttr(column)}"
+                          ${queryActive || snapshot.columns.length <= 1 ? 'disabled' : ''}
+                        >×</button>
                       </div>
                     </th>`
                 )

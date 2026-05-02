@@ -25,12 +25,13 @@ export function buildDocumentEditFormatInstructions(options?: { dbTableNames?: s
   const dbTableNames = options?.dbTableNames ?? [];
   const hasDbTables = dbTableNames.length > 0;
   const validTools = hasDbTables
-    ? '`grep`, `get_css`, `get_properties`, `set_properties`, `view_component`, `edit_component`, `patch_component`, `create_component`, `remove_component`, `create_section`, `remove_section`, `reorder_section`, `query_db_table`, `request_structure`, `done`'
-    : '`grep`, `get_css`, `get_properties`, `set_properties`, `view_component`, `edit_component`, `patch_component`, `create_component`, `remove_component`, `create_section`, `remove_section`, `reorder_section`, `request_structure`, `done`';
+    ? '`answer`, `grep`, `get_css`, `get_properties`, `set_properties`, `view_component`, `edit_component`, `patch_component`, `create_component`, `remove_component`, `create_section`, `remove_section`, `reorder_section`, `query_db_table`, `request_structure`, `done`'
+    : '`answer`, `grep`, `get_css`, `get_properties`, `set_properties`, `view_component`, `edit_component`, `patch_component`, `create_component`, `remove_component`, `create_section`, `remove_section`, `reorder_section`, `request_structure`, `done`';
   return [
     'Reply with exactly one JSON object and nothing else.',
     'Choose one tool at a time.',
     `Valid tools are: ${validTools}.`,
+    'Use `answer` for informational questions, explanations, or requests that do not require changing the HVY document. `answer` is final and does not mutate the document.',
     'Use real section ids when a section has an id.',
     'Use component ids when they exist. If a component has no id, use its fallback component ref like `C3`.',
     'Do not invent ids or refs.',
@@ -54,12 +55,13 @@ export function buildDocumentEditFormatInstructions(options?: { dbTableNames?: s
           `When adding a component that should display rows from a DB table, use a \`db-table\` plugin block instead of the table component. A db-table renders live rows from the database. Example: \`<!--hvy:plugin {"plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"TABLE_NAME"}}-->\`. The text content after the directive is an optional SQL query filter (leave empty to show all rows).`,
         ]
       : []),
-    'When the request is fully satisfied, return `{"tool":"done","summary":"..."}`.',
+    'When an edit request is fully satisfied, return `{"tool":"done","summary":"..."}`.',
     'JSON must use double-quoted keys and string values.',
     'For `create_component.hvy`, return one complete HVY component fragment as a JSON string value with escaped newlines.',
     'For `create_section.hvy`, return one complete HVY section fragment as a JSON string value with escaped newlines.',
     '',
     'Tool shapes:',
+    '{"tool":"answer","answer":"Direct answer to the user."}',
     '{"tool":"grep","query":"Python|TypeScript","flags":"i","before":2,"after":2,"max_count":3,"reason":"optional"}',
     '{"tool":"grep","query":"/Python|TypeScript/i","before":2,"after":2,"max_count":3,"reason":"optional"}',
     '{"tool":"get_css","ids":["summary","C3"],"regex":"margin|padding","flags":"i","reason":"optional"}',
@@ -96,11 +98,12 @@ export function buildDocumentEditFormatInstructions(options?: { dbTableNames?: s
 
 export function buildInitialDocumentEditPrompt(request: string): string {
   return [
-    'Edit the HVY document to satisfy this request:',
+    'Handle this HVY document chat request:',
     request,
     '',
     'This request has been routed to the document body edit path.',
     'Use this path for visible content: sections, subsections, text, cards, tables, grids, component/section CSS, ordering, additions, and deletions.',
+    'If the user is asking an informational question or does not ask for a document change, answer directly with the `answer` tool.',
     'Step 1: examine the reduced document outline provided in context.',
     'Step 2: request the single best next tool.',
     'After each tool result, decide the next step or finish.',
@@ -112,7 +115,8 @@ export function buildHeaderEditFormatInstructions(): string {
   return [
     'Reply with exactly one JSON object and nothing else.',
     'Choose one header tool at a time.',
-    'Valid header tools are: `grep_header`, `view_header`, `patch_header`, `request_header`, `done`.',
+    'Valid header tools are: `answer`, `grep_header`, `view_header`, `patch_header`, `request_header`, `done`.',
+    'Use `answer` for informational questions, explanations, or requests that do not require changing the HVY header. `answer` is final and does not mutate the document.',
     'The header is YAML front matter only. It contains document metadata and reusable definitions such as `component_defs` and `section_defs`.',
     'Use the header path for document-level metadata, theme colors, component defaults, section defaults, template schema, plugins, and reusable component/section definitions.',
     'Do not invent metadata fields. For `section_defaults`, the only supported field is `css`, for example `section_defaults:\\n  css: "margin: 0.5rem 0;"`.',
@@ -125,10 +129,11 @@ export function buildHeaderEditFormatInstructions(): string {
     'Use `view_header` before patching when you need exact YAML line numbers. It returns 1-based YAML header line numbers and defaults to lines 1-200.',
     'Use `patch_header` to edit metadata or reusable definitions after you have enough numbered header context. Patch the YAML header content without `---` delimiters.',
     'After `patch_header`, the full YAML header must parse to an object. Preserve unrelated metadata.',
-    'When the request is fully satisfied, return `{"tool":"done","summary":"..."}`.',
+    'When an edit request is fully satisfied, return `{"tool":"done","summary":"..."}`.',
     'JSON must use double-quoted keys and string values.',
     '',
     'Tool shapes:',
+    '{"tool":"answer","answer":"Direct answer to the user."}',
     '{"tool":"request_header","reason":"optional"}',
     '{"tool":"grep_header","query":"component_defs|skill-card","flags":"i","before":2,"after":8,"max_count":3,"reason":"optional"}',
     '{"tool":"view_header","start_line":1,"end_line":120,"reason":"optional"}',
@@ -141,11 +146,12 @@ export function buildHeaderEditFormatInstructions(): string {
 
 export function buildInitialHeaderEditPrompt(request: string): string {
   return [
-    'Edit the HVY header to satisfy this request:',
+    'Handle this HVY header chat request:',
     request,
     '',
     'This request has been routed to the header edit path.',
     'Use this path for document metadata and reusable definitions: title, reader settings, theme, defaults, template schema, plugins, `component_defs`, and `section_defs`.',
+    'If the user is asking an informational question or does not ask for a header change, answer directly with the `answer` tool.',
     'Step 1: examine the reduced header outline and properties provided in context.',
     'Step 2: request the single best next header tool.',
     'After each tool result, decide the next step or finish.',

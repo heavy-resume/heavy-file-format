@@ -65,7 +65,7 @@ export function bindChangeControls(app: HTMLElement): void {
       }
       const trimmed = target.value.trim();
       if (trimmed.length === 0) {
-        const proceed = window.confirm(`Delete column "${oldColumnName}"? This cannot be undone.`);
+        const proceed = window.confirm(`Delete column "${oldColumnName}"?`);
         if (!proceed) {
           target.value = oldColumnName;
           return;

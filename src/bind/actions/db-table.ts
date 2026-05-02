@@ -2,7 +2,7 @@ import { state, getRenderApp } from '../../state';
 import { findBlockByIds, setActiveEditorBlock } from '../../block-ops';
 import { createEmptyBlock } from '../../document-factory';
 import { recordHistory } from '../../history';
-import { addDbTableColumn, addDbTableRow, getSqliteRowComponent, parseAttachedComponentBlocks, toggleDbTableSort } from '../../plugins/db-table';
+import { addDbTableColumn, addDbTableRow, dropDbTableColumn, getSqliteRowComponent, parseAttachedComponentBlocks, toggleDbTableSort } from '../../plugins/db-table';
 import type { ActionHandler } from './types';
 
 const sqliteAddRow: ActionHandler = ({ actionButton }) => {
@@ -32,6 +32,24 @@ const sqliteAddColumn: ActionHandler = ({ actionButton }) => {
     })
     .catch((error) => {
       console.error('[hvy:sqlite-plugin] add column failed', error);
+    });
+};
+
+const sqliteDropColumn: ActionHandler = ({ actionButton }) => {
+  const tableName = actionButton.dataset.tableName ?? '';
+  const columnName = actionButton.dataset.columnName ?? '';
+  if (tableName.length === 0 || columnName.length === 0) {
+    return;
+  }
+  recordHistory(`sqlite-column-drop:${tableName}:${columnName}`);
+  void dropDbTableColumn(tableName, columnName)
+    .then(() => {
+      getRenderApp()();
+    })
+    .catch((error) => {
+      console.error('[hvy:sqlite-plugin] column drop failed', error);
+      window.alert(error instanceof Error ? error.message : 'Failed to delete column.');
+      getRenderApp()();
     });
 };
 
@@ -135,6 +153,7 @@ const sqliteRowComponentAddBlock: ActionHandler = () => {
 export const dbTableActions: Record<string, ActionHandler> = {
   'sqlite-add-row': sqliteAddRow,
   'sqlite-add-column': sqliteAddColumn,
+  'sqlite-drop-column': sqliteDropColumn,
   'db-table-open-query-editor': dbTableOpenQueryEditor,
   'db-table-toggle-sort': dbTableToggleSort,
   'sqlite-open-row-component-editor': sqliteOpenRowComponent('sqlite-open-row-component-editor'),

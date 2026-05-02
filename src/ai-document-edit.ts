@@ -91,6 +91,7 @@ type CssPropertyMap = Record<string, string | null>;
 
 type DocumentEditToolRequest =
   | { tool: 'done'; summary?: string }
+  | { tool: 'answer'; answer: string }
   | { tool: 'request_structure'; reason?: string }
   | { tool: 'view_component'; component_ref: string; start_line?: number; end_line?: number; reason?: string }
   | { tool: 'grep'; query: string; flags?: string; before?: number; after?: number; max_count?: number; reason?: string }
@@ -139,6 +140,7 @@ type EditPathSelection = 'document' | 'header';
 
 type HeaderEditToolRequest =
   | { tool: 'done'; summary?: string }
+  | { tool: 'answer'; answer: string }
   | { tool: 'request_header'; reason?: string }
   | { tool: 'grep_header'; query: string; flags?: string; before?: number; after?: number; max_count?: number; reason?: string }
   | { tool: 'view_header'; start_line?: number; end_line?: number; reason?: string }
@@ -215,6 +217,10 @@ async function runDocumentEditLoop(params: {
   request: string;
   onMutation?: (group?: string) => void;
 }): Promise<{ summary: string }> {
+  if (isLikelyInformationalAnswerRequest(params.request)) {
+    return inferEditPathFromRequest(params.request) === 'header' ? runHeaderEditToolLoop(params) : runDocumentEditToolLoop(params);
+  }
+
   const path = await selectEditPath(params);
   if (path === 'header') {
     return runHeaderEditToolLoop(params);
@@ -293,6 +299,11 @@ async function runDocumentEditToolLoop(params: {
     if (parsed.value.tool === 'done') {
       return {
         summary: parsed.value.summary?.trim() || `Finished after ${iteration + 1} step${iteration === 0 ? '' : 's'}.`,
+      };
+    }
+    if (parsed.value.tool === 'answer') {
+      return {
+        summary: parsed.value.answer.trim(),
       };
     }
 
@@ -425,6 +436,11 @@ async function runHeaderEditToolLoop(params: {
     if (parsed.value.tool === 'done') {
       return {
         summary: parsed.value.summary?.trim() || `Finished header edit after ${iteration + 1} step${iteration === 0 ? '' : 's'}.`,
+      };
+    }
+    if (parsed.value.tool === 'answer') {
+      return {
+        summary: parsed.value.answer.trim(),
       };
     }
 
@@ -1189,6 +1205,9 @@ function parseDocumentEditToolRequest(source: string): { ok: true; value: Docume
     if (tool === 'done') {
       return { ok: true, value: { tool, summary: typeof parsed.summary === 'string' ? parsed.summary : undefined } };
     }
+    if (tool === 'answer' && typeof parsed.answer === 'string' && parsed.answer.trim().length > 0) {
+      return { ok: true, value: { tool, answer: parsed.answer } };
+    }
     if (tool === 'request_structure') {
       return { ok: true, value: { tool, reason: typeof parsed.reason === 'string' ? parsed.reason : undefined } };
     }
@@ -1432,6 +1451,9 @@ function parseHeaderEditToolRequest(source: string): { ok: true; value: HeaderEd
     if (tool === 'done') {
       return { ok: true, value: { tool, summary: typeof parsed.summary === 'string' ? parsed.summary : undefined } };
     }
+    if (tool === 'answer' && typeof parsed.answer === 'string' && parsed.answer.trim().length > 0) {
+      return { ok: true, value: { tool, answer: parsed.answer } };
+    }
     if (tool === 'request_header') {
       return { ok: true, value: { tool, reason: typeof parsed.reason === 'string' ? parsed.reason : undefined } };
     }
@@ -1523,6 +1545,25 @@ function inferEditPathFromRequest(request: string): EditPathSelection {
   )
     ? 'header'
     : 'document';
+}
+
+function isLikelyInformationalAnswerRequest(request: string): boolean {
+  const normalized = request.trim().toLowerCase();
+  if (!normalized) {
+    return false;
+  }
+  if (
+    /\b(add|append|change|convert|create|delete|edit|fix|format|insert|make|move|patch|remove|rename|replace|reorder|set|style|update|write)\b/i.test(
+      normalized
+    )
+  ) {
+    return false;
+  }
+  return (
+    /\?$/.test(normalized) ||
+    /^(can|could|did|do|does|how|is|should|what|when|where|which|who|why)\b/i.test(normalized) ||
+    /^(can|could) you (explain|tell me|answer|clarify)\b/i.test(normalized)
+  );
 }
 
 function describeStructureLine(block: VisualBlock, target: string, fallbackRef: string): string {

@@ -143,8 +143,10 @@ test('buildDocumentEditFormatInstructions documents the tool protocol', () => {
 
   const instructions = buildDocumentEditFormatInstructions();
   expect(instructions).toContain(
-    'Valid tools are: `grep`, `get_css`, `get_properties`, `set_properties`, `view_component`, `edit_component`, `patch_component`, `create_component`, `remove_component`, `create_section`, `remove_section`, `reorder_section`, `request_structure`, `done`.'
+    'Valid tools are: `answer`, `grep`, `get_css`, `get_properties`, `set_properties`, `view_component`, `edit_component`, `patch_component`, `create_component`, `remove_component`, `create_section`, `remove_section`, `reorder_section`, `request_structure`, `done`.'
   );
+  expect(instructions).toContain('Use `answer` for informational questions, explanations, or requests that do not require changing the HVY document.');
+  expect(instructions).toContain('{"tool":"answer","answer":"Direct answer to the user."}');
   expect(instructions).toContain('It may revise that component in place or fully replace it');
   expect(instructions).toContain('Use real section ids when a section has an id.');
   expect(instructions).toContain('Use `grep` to search the whole serialized document with a regex pattern.');
@@ -171,7 +173,8 @@ test('buildDocumentEditFormatInstructions documents the tool protocol', () => {
   expect(dbInstructions).toContain('{"tool":"query_db_table","table_name":"work_items","limit":10,"reason":"optional"}');
 
   const headerInstructions = buildHeaderEditFormatInstructions();
-  expect(headerInstructions).toContain('Valid header tools are: `grep_header`, `view_header`, `patch_header`, `request_header`, `done`.');
+  expect(headerInstructions).toContain('Valid header tools are: `answer`, `grep_header`, `view_header`, `patch_header`, `request_header`, `done`.');
+  expect(headerInstructions).toContain('Use `answer` for informational questions, explanations, or requests that do not require changing the HVY header.');
   expect(headerInstructions).toContain('The header is YAML front matter only.');
   expect(headerInstructions).toContain('component_defs');
   expect(headerInstructions).toContain('Do not invent metadata fields.');
@@ -180,6 +183,7 @@ test('buildDocumentEditFormatInstructions documents the tool protocol', () => {
   expect(headerInstructions).toContain('including table colors: `--hvy-table-header`, `--hvy-table-row-bg-1`, and `--hvy-table-row-bg-2`');
   expect(headerInstructions).toContain('Use `grep_header` to search the YAML header with a regex pattern before viewing or patching a specific reusable definition.');
   expect(headerInstructions).toContain('{"tool":"grep_header","query":"component_defs|skill-card","flags":"i","before":2,"after":8,"max_count":3,"reason":"optional"}');
+  expect(headerInstructions).toContain('{"tool":"answer","answer":"Direct answer to the user."}');
   expect(headerInstructions).toContain('section_defaults:\\n  css:');
   expect(headerInstructions).toContain('{"tool":"patch_header","edits":[{"op":"replace","start_line":2,"end_line":2,"text":"title: New title"}],"reason":"optional"}');
 });
@@ -263,6 +267,48 @@ hvy_version: 0.1
   expect(grepResult).toContain('Match 2 of 2 (component_id="tail")');
   expect(grepResult).toContain('<!--hvy:xref-card {"id":"skill-python-card"');
   expect(grepResult).toContain('Tail line');
+});
+
+test('requestAiDocumentEditTurn can answer informational questions without mutating the document', async () => {
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"tool":"answer","answer":"Yes. SQLite supports unique constraints with UNIQUE column constraints or table constraints."}'
+  );
+
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"notes"}-->
+#! Notes
+
+<!--hvy:text {}-->
+ Existing content
+`, '.hvy');
+  seedStateForDocument(document);
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+  const onMutation = vi.fn();
+
+  const result = await requestAiDocumentEditTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Does SQLite support unique constraints?',
+    onMutation,
+  });
+
+  expect(result.error).toBeNull();
+  expect(result.messages.at(-1)).toEqual(
+    expect.objectContaining({
+      role: 'assistant',
+      content: 'Yes. SQLite supports unique constraints with UNIQUE column constraints or table constraints.',
+    })
+  );
+  expect(serializeDocument(document)).toContain('Existing content');
+  expect(onMutation).not.toHaveBeenCalled();
+  expect(requestProxyCompletionMock).toHaveBeenCalledTimes(1);
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.debugLabel).toBe('ai-document-edit:1');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.formatInstructions).toContain('`answer`');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages[0]?.content).toContain('answer directly with the `answer` tool');
 });
 
 test('requestAiDocumentEditTurn greps wrapped serialized lines with post-wrap line numbers', async () => {

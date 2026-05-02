@@ -79,8 +79,19 @@
     color: var(--reader-muted);
 }
 
+.db-table-delete-column-button {
+    flex: 0 0 auto;
+    min-width: 1.7rem;
+    padding: 0.2rem 0.35rem;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    color: var(--hvy-danger, var(--reader-muted));
+}
+
 .db-table-sort-button:hover:not(:disabled),
-.db-table-sort-button:focus-visible:not(:disabled) {
+.db-table-sort-button:focus-visible:not(:disabled),
+.db-table-delete-column-button:hover:not(:disabled),
+.db-table-delete-column-button:focus-visible:not(:disabled) {
     color: var(--reader-fg);
     border-color: var(--reader-border);
 }

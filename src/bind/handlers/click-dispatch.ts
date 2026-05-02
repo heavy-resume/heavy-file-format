@@ -150,6 +150,7 @@ function requiresRemoveConfirmation(action: string): boolean {
     'remove-grid-item',
     'remove-table-row',
     'remove-table-column',
+    'sqlite-drop-column',
     'remove-component-def',
     'remove-section-def',
   ]).has(action);

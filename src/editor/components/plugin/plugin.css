@@ -20,9 +20,9 @@
 }
 
 .sqlite-plugin-grid-input:focus {
-  outline: 2px solid rgba(59, 130, 246, 0.28);
+  outline: 2px solid var(--hvy-focus-ring);
   outline-offset: -2px;
-  background: rgba(255, 255, 255, 0.65);
+  background: color-mix(in srgb, var(--hvy-surface) 82%, var(--hvy-surface-tint) 18%);
 }
 
 .sqlite-plugin-grid-header {

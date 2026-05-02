@@ -302,11 +302,15 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
   let statusError = false;
   let runQueue = Promise.resolve();
   let forceEditorRender = false;
+  let skipNextEditorRefresh = false;
   const inputTimers = new Map<string, number>();
   let openFieldMetaName: string | null = null;
 
   const parseCurrent = () => parseFormSpec(ctx.block.text);
-  const commitSpec = (spec: FormSpec) => ctx.setText(serializeFormSpec(spec));
+  const commitSpec = (spec: FormSpec, options?: { refreshEditor?: boolean }) => {
+    skipNextEditorRefresh = ctx.mode === 'editor' && options?.refreshEditor !== true;
+    ctx.setText(serializeFormSpec(spec));
+  };
 
   const runNamedScript = (scriptName: string, reason: string): void => {
     const name = scriptName.trim();
@@ -666,7 +670,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       if (prop === 'label') field.label = target.value;
       if (prop === 'placeholder') field.placeholder = target.value;
       if (prop === 'metaCss') field.meta.css = target.value;
-      commitSpec(spec);
+      commitSpec(spec, { refreshEditor: prop === 'type' || prop === 'options' });
       return;
     }
     if (target.dataset.formFieldIndex && target.dataset.formTrigger) {
@@ -771,7 +775,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       if (spec.submitScript === name) spec.submitScript = '';
       forceEditorRender = true;
     }
-    commitSpec(spec);
+    commitSpec(spec, { refreshEditor: forceEditorRender });
   };
 
   const onSubmit = (event: Event) => {
@@ -784,6 +788,11 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
     const { spec } = parseCurrent();
     reconcileLiveState(live, spec);
     if (ctx.mode === 'editor') {
+      if (skipNextEditorRefresh && !forceEditorRender) {
+        skipNextEditorRefresh = false;
+        return;
+      }
+      skipNextEditorRefresh = false;
       if (!forceEditorRender && root.contains(document.activeElement)) {
         return;
       }

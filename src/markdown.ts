@@ -46,7 +46,7 @@ export function markdownToEditorHtml(markdown: string): string {
 }
 
 export function normalizeEditorMarkdownWhitespace(markdown: string): string {
-  return markdown.replace(/\u00a0/g, ' ');
+  return markdown.replace(/\u00a0/g, ' ').replace(/\u200b/g, '');
 }
 
 export function normalizeMarkdownIndentation(markdown: string): string {

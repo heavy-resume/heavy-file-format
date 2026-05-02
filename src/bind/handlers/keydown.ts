@@ -1,6 +1,14 @@
-import { state, getRenderApp, handleTagEditorKeydown, applyRichAction, handleRichEditorKeydown, openLinkInlineModal, closeAiEditPopover, submitAiEditRequest, handleInlineCheckboxBackspace, tagStateHelpers, findSectionByKey, createEmptyBlock, setActiveEditorBlock, recordHistory } from './_imports';
+import { state, getRenderApp, handleTagEditorKeydown, applyRichAction, handleRichEditorKeydown, refreshRichToolbarState, openLinkInlineModal, closeAiEditPopover, submitAiEditRequest, handleInlineCheckboxBackspace, tagStateHelpers, findSectionByKey, createEmptyBlock, setActiveEditorBlock, recordHistory } from './_imports';
 
 export function bindKeydown(app: HTMLElement): void {
+  app.addEventListener('keyup', (event) => {
+    const target = event.target as HTMLElement;
+    const richTarget = getRichTarget(target);
+    if (richTarget) {
+      refreshRichToolbarState(richTarget);
+    }
+  });
+
   app.addEventListener('keydown', (event) => {
     const target = event.target as HTMLElement;
     if (event.key === 'Escape' && state.aiEdit.sectionKey && state.aiEdit.blockId && !state.aiEdit.isSending) {
@@ -58,14 +66,7 @@ export function bindKeydown(app: HTMLElement): void {
       return;
     }
 
-    const richTarget =
-      target.dataset.field === 'block-rich' ||
-      target.dataset.field === 'block-grid-rich' ||
-      target.dataset.field === 'table-details-rich'
-        ? target
-        : target.closest<HTMLElement>(
-            '[data-field="block-rich"], [data-field="block-grid-rich"], [data-field="table-details-rich"]'
-          );
+    const richTarget = getRichTarget(target);
 
     if (!richTarget) {
       return;
@@ -110,6 +111,14 @@ export function bindKeydown(app: HTMLElement): void {
       openLinkInlineModal(app, richTarget);
     }
   });
+}
+
+function getRichTarget(target: HTMLElement): HTMLElement | null {
+  return target.dataset.field === 'block-rich' ||
+    target.dataset.field === 'block-grid-rich' ||
+    target.dataset.field === 'table-details-rich'
+    ? target
+    : target.closest<HTMLElement>('[data-field="block-rich"], [data-field="block-grid-rich"], [data-field="table-details-rich"]');
 }
 
 function getEmptySectionHeadingLevel(sectionKey: string): 1 | 2 | 3 {

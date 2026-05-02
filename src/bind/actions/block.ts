@@ -63,7 +63,7 @@ const imagePreset: ActionHandler = ({ actionButton, sectionKey, blockId }) => {
   applyImagePreset(sectionKey, blockId, preset);
 };
 
-const setBlockAlign: ActionHandler = ({ actionButton, sectionKey, blockId }) => {
+const setBlockAlign: ActionHandler = ({ app, actionButton, sectionKey, blockId }) => {
   if (!blockId) {
     return;
   }
@@ -75,7 +75,21 @@ const setBlockAlign: ActionHandler = ({ actionButton, sectionKey, blockId }) => 
   block.schema.align = coerceAlign(actionButton.dataset.alignValue ?? 'left');
   syncReusableTemplateForBlock(sectionKey, block.id);
   getRefreshReaderPanels()();
-  getRenderApp()();
+  const selector = `[data-section-key="${sectionKey}"][data-block-id="${block.id}"][data-field="block-rich"]`;
+  const editable = app.querySelector<HTMLElement>(selector);
+  if (editable) {
+    editable.style.textAlign = block.schema.align;
+    editable.focus();
+  }
+  actionButton
+    .closest('.align-buttons')
+    ?.querySelectorAll<HTMLButtonElement>('[data-align-value]')
+    .forEach((button) => {
+      const selected = button.dataset.alignValue === block.schema.align;
+      button.classList.toggle('secondary', selected);
+      button.classList.toggle('is-selected', selected);
+      button.classList.toggle('ghost', !selected);
+    });
 };
 
 const removeBlock: ActionHandler = ({ section, sectionKey, blockId, reusableName }) => {

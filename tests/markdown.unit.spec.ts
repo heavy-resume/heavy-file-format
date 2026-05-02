@@ -33,6 +33,10 @@ test('serializes editor underline with hvy underline syntax', () => {
   expect(turndown.turndown('<p><u>Important</u></p>')).toBe('++Important++');
 });
 
+test('serializes editor inline code with markdown backticks', () => {
+  expect(turndown.turndown('<p>Use <code>foobar</code> now</p>')).toBe('Use `foobar` now');
+});
+
 test('converts markdown headings into HVY section hierarchy', () => {
   const document = convertMarkdownToHvyDocument(`# Project Brief
 

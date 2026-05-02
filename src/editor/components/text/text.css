@@ -287,6 +287,14 @@
   text-transform: lowercase;
 }
 
+.rich-editor pre[data-code-language=""] {
+  padding-top: 0.75rem;
+}
+
+.rich-editor pre[data-code-language=""]::before {
+  content: none;
+}
+
 .rich-editor pre code {
   display: block;
   min-height: 1.5em;

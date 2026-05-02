@@ -121,6 +121,7 @@ export interface EditorRenderer {
       rowIndex?: number;
       includeAlign?: boolean;
       align?: Align;
+      currentMarkdown?: string;
     }
   ) => string;
   renderMetaPanel: () => string;
@@ -541,6 +542,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       rowIndex?: number;
       includeAlign?: boolean;
       align?: Align;
+      currentMarkdown?: string;
     }
   ): string {
     const fieldAttr = options?.field ? ` data-rich-field="${deps.escapeAttr(options.field)}"` : '';
@@ -549,6 +551,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const blockStyle = getMarkdownBlockStyle(options?.currentMarkdown ?? '');
     const selectedClass = (selected: boolean) => (selected ? ' secondary is-selected' : ' ghost');
     const richButtonAttrs = `${fieldAttr}${gridAttr}${rowAttr} data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(blockId)}"`;
+    const hotkeyModifier = typeof navigator !== 'undefined' && /Mac|iPhone|iPad|iPod/.test(navigator.platform) ? 'Cmd' : 'Ctrl';
     const alignControls =
       options?.includeAlign && options.align
         ? `<div class="toolbar-segment align-buttons" role="group" aria-label="Text alignment">
@@ -574,15 +577,15 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         </div>
         <div class="toolbar-segment format-buttons" role="group" aria-label="Text formatting">
           ${alignControls}
-          <button type="button" class="icon-button ghost" data-rich-action="bold" ${richButtonAttrs} aria-label="Bold" title="Bold (Ctrl/Cmd+B)"><strong>B</strong></button>
-          <button type="button" class="icon-button ghost" data-rich-action="italic" ${richButtonAttrs} aria-label="Italic" title="Italic (Ctrl/Cmd+I)"><span class="toolbar-icon italic-icon" aria-hidden="true">I</span></button>
-          <button type="button" class="icon-button ghost" data-rich-action="underline" ${richButtonAttrs} aria-label="Underline" title="Underline"><span class="toolbar-icon underline-icon" aria-hidden="true">U</span></button>
+          <button type="button" class="icon-button ghost" data-rich-action="bold" ${richButtonAttrs} aria-label="Bold" title="Bold (${hotkeyModifier}+B)"><strong>B</strong></button>
+          <button type="button" class="icon-button ghost" data-rich-action="italic" ${richButtonAttrs} aria-label="Italic" title="Italic (${hotkeyModifier}+I)"><span class="toolbar-icon italic-icon" aria-hidden="true">I</span></button>
+          <button type="button" class="icon-button ghost" data-rich-action="underline" ${richButtonAttrs} aria-label="Underline" title="Underline (${hotkeyModifier}+U)"><span class="toolbar-icon underline-icon" aria-hidden="true">U</span></button>
           <button type="button" class="icon-button ghost" data-rich-action="strikethrough" ${richButtonAttrs} aria-label="Strikethrough" title="Strikethrough"><span class="toolbar-icon strikethrough-icon" aria-hidden="true">S</span></button>
           <button type="button" class="icon-button${selectedClass(blockStyle === 'quote')}" data-rich-action="quote" ${richButtonAttrs} aria-label="Quote" title="Quote"><span class="toolbar-icon quote-icon" aria-hidden="true">“</span></button>
-          <button type="button" class="icon-button ghost" data-rich-action="code-block" ${richButtonAttrs} aria-label="Code" title="Code Block"><span class="toolbar-icon code-icon" aria-hidden="true">&lt;/&gt;</span></button>
+          <button type="button" class="icon-button${selectedClass(blockStyle === 'code-block')}" data-rich-action="code-block" ${richButtonAttrs} aria-label="Code block" title="Code block"><span class="toolbar-icon code-icon" aria-hidden="true">&lt;/&gt;</span></button>
           <button type="button" class="icon-button${selectedClass(blockStyle === 'list')}" data-rich-action="list" ${richButtonAttrs} aria-label="List" title="Bullet List"><span class="toolbar-icon list-icon" aria-hidden="true"></span></button>
           <button type="button" class="icon-button${selectedClass(blockStyle === 'checklist')}" data-rich-action="checklist" ${richButtonAttrs} aria-label="Checkbox" title="Checkbox"><span class="toolbar-icon checkbox-icon" aria-hidden="true">☑</span></button>
-          <button type="button" class="icon-button ghost" data-rich-action="link" ${richButtonAttrs} aria-label="Link" title="Link (Ctrl/Cmd+K)"><span class="toolbar-icon link-icon" aria-hidden="true"></span></button>
+          <button type="button" class="icon-button ghost" data-rich-action="link" ${richButtonAttrs} aria-label="Link" title="Link (${hotkeyModifier}+K)"><span class="toolbar-icon link-icon" aria-hidden="true"></span></button>
         </div>
       </div>
     `;
@@ -900,10 +903,6 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     renderComponentFragment,
     renderBlockMetaFields,
   };
-}
-
-function escapeRawHtml(markdown: string): string {
-  return markdown.replace(/</g, '&lt;');
 }
 
 function highlightCode(code: string, language: string, escapeHtml: (value: string) => string): string {

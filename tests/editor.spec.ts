@@ -629,11 +629,45 @@ test('triple ticks typed inside a code block remain literal text', async ({ page
   await expect(editor.locator('code').first()).toContainText('```');
 });
 
+test('enter inside a code block inserts code newlines and shift enter exits below it', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('.rich-editor').first();
+
+  await editor.evaluate((node) => {
+    node.innerHTML = '<pre data-code-language="python"><code class="language-python" contenteditable="true">first</code></pre>';
+    const textNode = node.querySelector('code')?.firstChild;
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.setStart(textNode!, textNode!.textContent!.length);
+    range.collapse(true);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    node.focus();
+  });
+
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('second');
+
+  await expect(editor.locator('pre')).toHaveCount(1);
+  await expect(editor.locator('code').first()).toHaveText('first\nsecond');
+
+  await page.keyboard.press('Shift+Enter');
+  await page.keyboard.type('Body');
+
+  await expect(editor.locator('pre code')).toHaveText('first\nsecond');
+  await expect(editor.locator('p').last()).toHaveText('Body');
+  await expect(page.getByRole('button', { name: 'Code block' }).first()).not.toHaveClass(/secondary/);
+});
+
 test('toolbar exposes quote and code block actions', async ({ page }) => {
   await page.goto('/');
 
   await page.locator('[data-action="activate-block"]').first().click();
   const editor = page.locator('.rich-editor').first();
+  const quoteButton = page.getByRole('button', { name: 'Quote' }).first();
+  const codeBlockButton = page.getByRole('button', { name: 'Code block' }).first();
 
   await editor.evaluate((node) => {
     node.innerHTML = '<p>Quoted</p>';
@@ -644,8 +678,45 @@ test('toolbar exposes quote and code block actions', async ({ page }) => {
     selection?.removeAllRanges();
     selection?.addRange(range);
   });
-  await page.getByRole('button', { name: 'Quote' }).first().click();
+  await quoteButton.click();
   await expect(editor.locator('blockquote')).toContainText('Quoted');
+  await expect(quoteButton).toHaveClass(/secondary/);
+
+  await quoteButton.click();
+  await expect(editor.locator('blockquote')).toHaveCount(0);
+  await expect(editor.locator('p')).toContainText('Quoted');
+  await expect(quoteButton).not.toHaveClass(/secondary/);
+
+  await editor.evaluate((node) => {
+    node.innerHTML = '<p><br></p>';
+    const paragraph = node.querySelector('p');
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(paragraph!);
+    range.collapse(true);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+  });
+  await quoteButton.click();
+  await page.keyboard.type('Quote typing works');
+  await expect(editor.locator('blockquote')).toContainText('Quote typing works');
+  await expect(quoteButton).toHaveClass(/secondary/);
+
+  await editor.evaluate((node) => {
+    node.innerHTML = '<blockquote></blockquote>';
+    const quote = node.querySelector('blockquote');
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(quote!);
+    range.collapse(true);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+  });
+  await page.keyboard.press('Backspace');
+  await expect(editor.locator('blockquote')).toHaveCount(0);
+  await expect(quoteButton).not.toHaveClass(/secondary/);
 
   await editor.evaluate((node) => {
     node.innerHTML = '<p>Removed</p>';
@@ -682,8 +753,10 @@ test('toolbar exposes quote and code block actions', async ({ page }) => {
     selection?.removeAllRanges();
     selection?.addRange(range);
   });
-  await page.getByRole('button', { name: 'Code' }).first().click();
+  await codeBlockButton.click();
   await expect(editor.locator('pre code')).toHaveCount(1);
+  await expect(editor.locator('pre')).toHaveAttribute('data-code-language', '');
+  await expect(codeBlockButton).toHaveClass(/secondary/);
 });
 
 test('inline toolbar buttons wrap and unwrap selected text', async ({ page }) => {
@@ -775,10 +848,37 @@ test('inline toolbar actions toggle typing mode at a collapsed caret', async ({ 
   await page.keyboard.press('Control+I');
   await expect(italicButton).not.toHaveClass(/secondary/);
 
+  await editor.evaluate((node) => {
+    node.innerHTML = '<p><br></p>';
+    const paragraph = node.querySelector('p');
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(paragraph!);
+    range.collapse(true);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+  });
+  await page.keyboard.press('Control+I');
+  await page.keyboard.press('Control+U');
+  await page.keyboard.type('both');
+  await expect(italicButton).toHaveClass(/secondary/);
+  await expect(underlineButton).toHaveClass(/secondary/);
+  await page.keyboard.press('Control+I');
+  await expect(italicButton).not.toHaveClass(/secondary/);
+  await expect(underlineButton).toHaveClass(/secondary/);
+  await page.keyboard.type(' underline-only');
+  await expect(editor.locator('em')).toHaveText('both');
+  await expect(editor.locator('p')).toHaveText('both underline-only');
+  await expect(editor.locator('u').first()).toContainText('both');
+  await expect(editor.locator('u').last()).toContainText('underline-only');
+  await page.keyboard.press('Control+U');
+  await expect(underlineButton).not.toHaveClass(/secondary/);
+
   await page.keyboard.press('Control+U');
   await expect(underlineButton).toHaveClass(/secondary/);
   await page.keyboard.type(' underline');
-  await expect(editor.locator('u')).toContainText('underline');
+  await expect(editor.locator('u').last()).toContainText('underline');
 
   await underlineButton.click();
   await expect(underlineButton).not.toHaveClass(/secondary/);
@@ -787,6 +887,89 @@ test('inline toolbar actions toggle typing mode at a collapsed caret', async ({ 
   await expect(strikethroughButton).toHaveClass(/secondary/);
   await page.keyboard.type(' strike');
   await expect(editor.locator('s, strike, del')).toContainText('strike');
+});
+
+test('rich toolbar preserves visible spaces while typing', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('.rich-editor').first();
+
+  await editor.evaluate((node) => {
+    node.innerHTML = '<p><br></p>';
+    const paragraph = node.querySelector('p');
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(paragraph!);
+    range.collapse(true);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+  });
+
+  await page.keyboard.type('Hello ');
+  await expect(editor).toContainText('Hello');
+  await expect(editor.locator('p')).toHaveJSProperty('innerHTML', 'Hello&nbsp;');
+
+  await page.keyboard.type('world');
+  await expect(editor).toContainText('Hello world');
+});
+
+test('inline code autoformats from backticks and escapes with arrow or click', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('.rich-editor').first();
+
+  await editor.evaluate((node) => {
+    node.innerHTML = '<p><br></p>';
+    const paragraph = node.querySelector('p');
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(paragraph!);
+    range.collapse(true);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+  });
+
+  await page.keyboard.type('Use `foobar`');
+  await expect(editor.locator('p code')).toHaveText('foobar');
+  await expect(editor.locator('p')).not.toContainText('`');
+
+  await editor.locator('p code').evaluate((node) => {
+    const textNode = node.firstChild!;
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.setStart(textNode, textNode.textContent!.length);
+    range.collapse(true);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node.parentElement?.closest('.rich-editor') as HTMLElement | null)?.focus();
+  });
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.type(' plain');
+  await expect(editor.locator('p code')).toHaveText('foobar');
+  await expect(editor.locator('p')).toContainText('Use foobar plain');
+
+  await editor.evaluate((node) => {
+    node.innerHTML = '<p><code>clickme</code></p>';
+    const code = node.querySelector('code')!;
+    const textNode = code.firstChild!;
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.setStart(textNode, textNode.textContent!.length);
+    range.collapse(true);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+  });
+  const codeBox = await editor.locator('p code').boundingBox();
+  expect(codeBox).not.toBeNull();
+  await page.mouse.click(codeBox!.x + codeBox!.width + 8, codeBox!.y + codeBox!.height / 2);
+  await page.keyboard.type(' plain');
+  await expect(editor.locator('p code')).toHaveText('clickme');
+  await expect(editor.locator('p')).toContainText('clickme plain');
 });
 
 test('link toolbar button and keyboard shortcut open the link modal and apply links', async ({ page }) => {
@@ -866,6 +1049,87 @@ test('toolbar block style row covers text and all heading buttons', async ({ pag
     await expect(editor.locator('p')).toContainText('Heading text');
     await expect(textButton).toHaveClass(/secondary/);
     await expect(headingButton).not.toHaveClass(/secondary/);
+
+    await editor.evaluate((node) => {
+      node.innerHTML = '<p>ab</p>';
+      const textNode = node.querySelector('p')?.firstChild;
+      const selection = window.getSelection();
+      const range = document.createRange();
+      range.setStart(textNode!, 1);
+      range.collapse(true);
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+      (node as HTMLElement).focus();
+    });
+
+    await headingButton.click();
+    await page.keyboard.type('X');
+    await expect(editor.locator(item.tag)).toHaveText('aXb');
+    await expect(headingButton).toHaveClass(/secondary/);
+  }
+});
+
+test('heading enter exits to normal text and updates toolbar state', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('.rich-editor').first();
+  const h1Button = page.getByRole('button', { name: 'H1' }).first();
+  const textButton = page.getByRole('button', { name: 'Text' }).first();
+
+  await editor.evaluate((node) => {
+    node.innerHTML = '<p><br></p>';
+    const paragraph = node.querySelector('p');
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(paragraph!);
+    range.collapse(true);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+  });
+
+  await h1Button.click();
+  await page.keyboard.type('Heading');
+  await expect(h1Button).toHaveClass(/secondary/);
+  await page.keyboard.press('Enter');
+
+  await expect(h1Button).not.toHaveClass(/secondary/);
+  await expect(textButton).toHaveClass(/secondary/);
+  await page.keyboard.type('Body');
+  await expect(editor.locator('h1')).toHaveText('Heading');
+  await expect(editor.locator('p').last()).toHaveText('Body');
+});
+
+test('empty heading buttons keep the caret available for typing', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('.rich-editor').first();
+
+  for (const item of [
+    { button: 'H1', tag: 'h1' },
+    { button: 'H2', tag: 'h2' },
+    { button: 'H3', tag: 'h3' },
+    { button: 'H4', tag: 'h4' },
+  ]) {
+    await editor.evaluate((node) => {
+      node.innerHTML = '<p><br></p>';
+      const paragraph = node.querySelector('p');
+      const selection = window.getSelection();
+      const range = document.createRange();
+      range.selectNodeContents(paragraph!);
+      range.collapse(true);
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+      (node as HTMLElement).focus();
+    });
+
+    const headingButton = page.getByRole('button', { name: item.button }).first();
+    await headingButton.click();
+    await expect(headingButton).toHaveClass(/secondary/);
+    await page.keyboard.type(item.button);
+    await expect(editor.locator(item.tag)).toHaveText(item.button);
   }
 });
 
@@ -883,7 +1147,19 @@ test('toolbar alignment buttons update alignment and selected state', async ({ p
     const button = page.getByRole('button', { name: item.button }).first();
     await expect(button).toHaveClass(/secondary/);
     await expect(page.locator('.rich-editor').first()).toHaveAttribute('style', new RegExp(`text-align: ${item.value}`));
+    await expect(page.locator('.rich-editor').first()).toBeFocused();
   }
+});
+
+test('toolbar buttons expose platform hotkeys in titles', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('[data-action="activate-block"]').first().click();
+
+  await expect(page.getByRole('button', { name: 'Bold' }).first()).toHaveAttribute('title', /Bold \((Cmd|Ctrl)\+B\)/);
+  await expect(page.getByRole('button', { name: 'Italic' }).first()).toHaveAttribute('title', /Italic \((Cmd|Ctrl)\+I\)/);
+  await expect(page.getByRole('button', { name: 'Underline' }).first()).toHaveAttribute('title', /Underline \((Cmd|Ctrl)\+U\)/);
+  await expect(page.getByRole('button', { name: 'Link' }).first()).toHaveAttribute('title', /Link \((Cmd|Ctrl)\+K\)/);
 });
 
 

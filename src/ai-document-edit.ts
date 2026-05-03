@@ -1,5 +1,5 @@
 import { parse as parseYaml } from 'yaml';
-import { requestProxyCompletion } from './chat/chat';
+import { requestProxyCompletion, traceAgentLoopEvent } from './chat/chat';
 import { parseAiBlockEditResponse, requestAiComponentEdit } from './ai-edit';
 import { getPluginAiHelp, getRegisteredPluginAiHints } from './ai-plugin-hints';
 import { createEmptySection } from './document-factory';
@@ -18,8 +18,8 @@ import {
   executeDbTableWriteSql,
   formatQueryResultTable,
   getDbTableRenderedText,
+  getDocumentDbTableObjectNames,
   getDocumentDbTableNames,
-  materializeDocumentDbTables,
 } from './plugins/db-table';
 import type { VisualBlock, VisualSection } from './editor/types';
 import type { ChatMessage, ChatSettings, VisualDocument } from './types';
@@ -48,15 +48,26 @@ const DEFAULT_VIEW_START_LINE = 1;
 const DEFAULT_VIEW_END_LINE = 200;
 const MAX_GREP_LINE_WIDTH = 400;
 
-function buildDocumentEditContextSummary(summary: string, dbTableNames: string[]): string {
-  if (dbTableNames.length === 0) {
-    return summary;
+function buildDocumentEditContextSummary(
+  summary: string,
+  dbObjectNames: string[],
+  configuredDbTableNames: string[]
+): string {
+  const parts = [summary];
+  if (dbObjectNames.length > 0) {
+    parts.push('', `SQLite tables/views available for query_db_table: ${dbObjectNames.join(', ')}`);
   }
-  return [
-    summary,
-    '',
-    `DB tables available for query_db_table: ${dbTableNames.join(', ')}`,
-  ].join('\n');
+  if (configuredDbTableNames.length > 0) {
+    parts.push('', `Configured db-table component targets: ${configuredDbTableNames.join(', ')}`);
+    const missingTargets = configuredDbTableNames.filter((name) => !dbObjectNames.includes(name));
+    if (missingTargets.length > 0) {
+      parts.push(
+        `Missing SQLite tables/views targeted by db-table components: ${missingTargets.join(', ')}.`,
+        'If a rendered db-table reports a missing table/view, first decide whether the component should target a base table, a derived view, or an existing SQLite object. Create the missing object with `execute_sql` or retarget pluginConfig.table only when an existing object matches the component intent.'
+      );
+    }
+  }
+  return parts.join('\n');
 }
 
 interface NumberedLine {
@@ -207,8 +218,16 @@ export async function requestAiDocumentEditTurn(params: {
 }): Promise<ChatTurnResult> {
   const nextMessages = appendChatMessage(params.messages, params.request);
   const progressMessages: ChatMessage[] = [];
+  const traceRunId = crypto.randomUUID();
   const emitProgress = (content: string): void => {
     console.debug('[hvy:ai-document-edit] progress', { content });
+    traceAgentLoopEvent({
+      runId: traceRunId,
+      phase: 'document-edit',
+      type: 'progress',
+      payload: { content },
+      signal: params.signal,
+    });
     const message: ChatMessage = {
       id: crypto.randomUUID(),
       role: 'assistant',
@@ -233,13 +252,10 @@ export async function requestAiDocumentEditTurn(params: {
       request: params.request,
       onMutation: params.onMutation,
       onProgress: emitProgress,
+      traceRunId,
       signal: params.signal,
     });
     throwIfAborted(params.signal);
-    const createdDbTables = await materializeDocumentDbTables(params.document);
-    if (createdDbTables.length > 0) {
-      emitProgress(`Created database table${createdDbTables.length === 1 ? '' : 's'}: ${createdDbTables.join(', ')}.`);
-    }
     console.debug('[hvy:ai-document-edit] turn completed', {
       summary: result.summary,
       progressMessages: progressMessages.length,
@@ -311,6 +327,7 @@ async function runDocumentEditLoop(params: {
   request: string;
   onMutation?: (group?: string) => void;
   onProgress?: (content: string) => void;
+  traceRunId?: string;
   signal?: AbortSignal;
 }): Promise<{ summary: string }> {
   console.debug('[hvy:ai-document-edit] routing request', {
@@ -336,6 +353,7 @@ async function selectEditPath(params: {
   settings: ChatSettings;
   document: VisualDocument;
   request: string;
+  traceRunId?: string;
   signal?: AbortSignal;
 }): Promise<EditPathSelection> {
   const pathContext = buildEditPathSelectionContext(params.document);
@@ -356,6 +374,7 @@ async function selectEditPath(params: {
     formatInstructions: buildEditPathSelectionInstructions(),
     mode: 'document-edit',
     debugLabel: 'ai-document-edit:path',
+    traceRunId: params.traceRunId,
     signal: params.signal,
   });
   const parsed = parseEditPathSelection(response);
@@ -376,12 +395,19 @@ async function runDocumentEditToolLoop(params: {
   request: string;
   onMutation?: (group?: string) => void;
   onProgress?: (content: string) => void;
+  traceRunId?: string;
   signal?: AbortSignal;
 }): Promise<{ summary: string }> {
   let snapshot = summarizeDocumentStructure(params.document);
-  const dbTableNames = getDocumentDbTableNames(params.document);
+  let configuredDbTableNames = getDocumentDbTableNames(params.document);
+  let dbObjectNames = await getDocumentDbTableObjectNames(params.document);
   const pluginHints = getRegisteredPluginAiHints();
-  let contextSummary = buildDocumentEditContextSummary(snapshot.summary, dbTableNames);
+  const refreshDbContext = async (summary: string): Promise<string> => {
+    configuredDbTableNames = getDocumentDbTableNames(params.document);
+    dbObjectNames = await getDocumentDbTableObjectNames(params.document);
+    return buildDocumentEditContextSummary(summary, dbObjectNames, configuredDbTableNames);
+  };
+  let contextSummary = buildDocumentEditContextSummary(snapshot.summary, dbObjectNames, configuredDbTableNames);
   let recentToolHelp: string | null = null;
   const workLedger: WorkLedgerItem[] = [];
   let latestIntent = params.request;
@@ -408,9 +434,10 @@ async function runDocumentEditToolLoop(params: {
       settings: params.settings,
       messages: conversation,
       context: buildLoopContext(contextSummary, plan, recentToolHelp, workLedger, buildIntentRecall(latestIntent, snapshot, params.document)),
-      formatInstructions: buildDocumentEditFormatInstructions({ dbTableNames, pluginHints, planActive: plan !== null }),
+      formatInstructions: buildDocumentEditFormatInstructions({ dbTableNames: dbObjectNames, pluginHints, planActive: plan !== null }),
       mode: 'document-edit',
       debugLabel: `ai-document-edit:${iteration + 1}`,
+      traceRunId: params.traceRunId,
       signal: params.signal,
     });
 
@@ -482,46 +509,46 @@ async function runDocumentEditToolLoop(params: {
       params.onProgress?.(describeDocumentToolProgress(parsed.value));
       snapshot = summarizeDocumentStructure(params.document);
       toolResult = buildToolResult('request_structure', snapshot.summary);
-      contextSummary = buildDocumentEditContextSummary(SENT_STRUCTURE_CONTEXT, dbTableNames);
+      contextSummary = await refreshDbContext(SENT_STRUCTURE_CONTEXT);
     } else if (parsed.value.tool === 'request_rendered_structure') {
       params.onProgress?.(describeDocumentToolProgress(parsed.value));
       snapshot = summarizeDocumentStructure(params.document);
       toolResult = buildToolResult('request_rendered_structure', await executeRequestRenderedStructureTool(snapshot, params.document));
-      contextSummary = buildDocumentEditContextSummary(SENT_STRUCTURE_CONTEXT, dbTableNames);
+      contextSummary = await refreshDbContext(SENT_STRUCTURE_CONTEXT);
     } else if (parsed.value.tool === 'get_help') {
       params.onProgress?.(describeDocumentToolProgress(parsed.value));
       recentToolHelp = executeGetHelpTool(parsed.value);
       toolResult = buildToolResult('get_help', recentToolHelp);
-      contextSummary = buildDocumentEditContextSummary(SENT_STRUCTURE_CONTEXT, dbTableNames);
+      contextSummary = await refreshDbContext(SENT_STRUCTURE_CONTEXT);
     } else if (parsed.value.tool === 'search_components') {
       params.onProgress?.(describeDocumentToolProgress(parsed.value));
       toolResult = buildToolResult('search_components', executeSearchComponentsTool(parsed.value, snapshot, params.document));
-      contextSummary = buildDocumentEditContextSummary(SENT_STRUCTURE_CONTEXT, dbTableNames);
+      contextSummary = await refreshDbContext(SENT_STRUCTURE_CONTEXT);
     } else if (parsed.value.tool === 'grep') {
       params.onProgress?.(describeDocumentToolProgress(parsed.value));
       toolResult = buildToolResult('grep', executeGrepTool(parsed.value, params.document));
-      contextSummary = buildDocumentEditContextSummary(SENT_STRUCTURE_CONTEXT, dbTableNames);
+      contextSummary = await refreshDbContext(SENT_STRUCTURE_CONTEXT);
     } else if (parsed.value.tool === 'get_css') {
       params.onProgress?.(describeDocumentToolProgress(parsed.value));
       toolResult = buildToolResult('get_css', executeGetCssTool(parsed.value, snapshot, params.document));
-      contextSummary = buildDocumentEditContextSummary(SENT_STRUCTURE_CONTEXT, dbTableNames);
+      contextSummary = await refreshDbContext(SENT_STRUCTURE_CONTEXT);
     } else if (parsed.value.tool === 'get_properties') {
       params.onProgress?.(describeDocumentToolProgress(parsed.value));
       toolResult = buildToolResult('get_properties', executeGetPropertiesTool(parsed.value, snapshot, params.document));
-      contextSummary = buildDocumentEditContextSummary(SENT_STRUCTURE_CONTEXT, dbTableNames);
+      contextSummary = await refreshDbContext(SENT_STRUCTURE_CONTEXT);
     } else if (parsed.value.tool === 'set_properties') {
       params.onProgress?.(describeDocumentToolProgress(parsed.value));
       toolResult = buildToolResult('set_properties', executeSetPropertiesTool(parsed.value, snapshot, params.document, params.onMutation));
       snapshot = summarizeDocumentStructure(params.document);
-      contextSummary = buildDocumentEditContextSummary(SENT_STRUCTURE_CONTEXT, dbTableNames);
+      contextSummary = await refreshDbContext(SENT_STRUCTURE_CONTEXT);
     } else if (parsed.value.tool === 'view_component') {
       params.onProgress?.(describeDocumentToolProgress(parsed.value));
       toolResult = buildToolResult('view_component', executeViewComponentTool(parsed.value, snapshot, params.document));
-      contextSummary = buildDocumentEditContextSummary(SENT_STRUCTURE_CONTEXT, dbTableNames);
+      contextSummary = await refreshDbContext(SENT_STRUCTURE_CONTEXT);
     } else if (parsed.value.tool === 'view_rendered_component') {
       params.onProgress?.(describeDocumentToolProgress(parsed.value));
       toolResult = buildToolResult('view_rendered_component', await executeViewRenderedComponentTool(parsed.value, snapshot, params.document));
-      contextSummary = buildDocumentEditContextSummary(SENT_STRUCTURE_CONTEXT, dbTableNames);
+      contextSummary = await refreshDbContext(SENT_STRUCTURE_CONTEXT);
     } else if (parsed.value.tool === 'edit_component') {
       params.onProgress?.(describeDocumentToolProgress(parsed.value));
       toolResult = buildToolResult(
@@ -529,22 +556,22 @@ async function runDocumentEditToolLoop(params: {
         await executeEditComponentTool(parsed.value, snapshot, params.document, params.settings, params.onMutation)
       );
       snapshot = summarizeDocumentStructure(params.document);
-      contextSummary = buildDocumentEditContextSummary(SENT_STRUCTURE_CONTEXT, dbTableNames);
+      contextSummary = await refreshDbContext(SENT_STRUCTURE_CONTEXT);
     } else if (parsed.value.tool === 'patch_component') {
       params.onProgress?.(describeDocumentToolProgress(parsed.value));
       toolResult = buildToolResult('patch_component', executePatchComponentTool(parsed.value, snapshot, params.document, params.onMutation));
       snapshot = summarizeDocumentStructure(params.document);
-      contextSummary = buildDocumentEditContextSummary(SENT_STRUCTURE_CONTEXT, dbTableNames);
+      contextSummary = await refreshDbContext(SENT_STRUCTURE_CONTEXT);
     } else if (parsed.value.tool === 'remove_section') {
       params.onProgress?.(describeDocumentToolProgress(parsed.value));
       toolResult = buildToolResult('remove_section', executeRemoveSectionTool(parsed.value, snapshot, params.document, params.onMutation));
       snapshot = summarizeDocumentStructure(params.document);
-      contextSummary = buildDocumentEditContextSummary(SENT_STRUCTURE_CONTEXT, dbTableNames);
+      contextSummary = await refreshDbContext(SENT_STRUCTURE_CONTEXT);
     } else if (parsed.value.tool === 'remove_component') {
       params.onProgress?.(describeDocumentToolProgress(parsed.value));
       toolResult = buildToolResult('remove_component', executeRemoveComponentTool(parsed.value, snapshot, params.document, params.onMutation));
       snapshot = summarizeDocumentStructure(params.document);
-      contextSummary = buildDocumentEditContextSummary(SENT_STRUCTURE_CONTEXT, dbTableNames);
+      contextSummary = await refreshDbContext(SENT_STRUCTURE_CONTEXT);
     } else if (parsed.value.tool === 'create_component') {
       params.onProgress?.(describeDocumentToolProgress(parsed.value));
       try {
@@ -553,7 +580,7 @@ async function runDocumentEditToolLoop(params: {
           executeCreateComponentTool(parsed.value, snapshot, params.document, params.onMutation)
         );
         snapshot = summarizeDocumentStructure(params.document);
-        contextSummary = buildDocumentEditContextSummary(SENT_STRUCTURE_CONTEXT, dbTableNames);
+        contextSummary = await refreshDbContext(SENT_STRUCTURE_CONTEXT);
       } catch (error) {
         const failure = formatDocumentToolFailure(error);
         params.onProgress?.(failure);
@@ -564,7 +591,7 @@ async function runDocumentEditToolLoop(params: {
       try {
         toolResult = buildToolResult('create_section', executeCreateSectionTool(parsed.value, snapshot, params.document, params.onMutation));
         snapshot = summarizeDocumentStructure(params.document);
-        contextSummary = buildDocumentEditContextSummary(SENT_STRUCTURE_CONTEXT, dbTableNames);
+        contextSummary = await refreshDbContext(SENT_STRUCTURE_CONTEXT);
       } catch (error) {
         const failure = formatDocumentToolFailure(error);
         params.onProgress?.(failure);
@@ -574,7 +601,7 @@ async function runDocumentEditToolLoop(params: {
       params.onProgress?.(describeDocumentToolProgress(parsed.value));
       toolResult = buildToolResult('reorder_section', executeReorderSectionTool(parsed.value, snapshot, params.document, params.onMutation));
       snapshot = summarizeDocumentStructure(params.document);
-      contextSummary = buildDocumentEditContextSummary(SENT_STRUCTURE_CONTEXT, dbTableNames);
+      contextSummary = await refreshDbContext(SENT_STRUCTURE_CONTEXT);
     } else if (parsed.value.tool === 'query_db_table') {
       params.onProgress?.(describeDocumentToolProgress(parsed.value));
       let queryResult: string;
@@ -592,7 +619,7 @@ async function runDocumentEditToolLoop(params: {
         ].join('\n');
       }
       toolResult = buildToolResult('query_db_table', queryResult);
-      contextSummary = buildDocumentEditContextSummary(SENT_STRUCTURE_CONTEXT, dbTableNames);
+      contextSummary = await refreshDbContext(SENT_STRUCTURE_CONTEXT);
     } else if (parsed.value.tool === 'execute_sql') {
       params.onProgress?.(describeDocumentToolProgress(parsed.value));
       let sqlResult: string;
@@ -604,7 +631,7 @@ async function runDocumentEditToolLoop(params: {
         sqlResult = `SQL failed: ${message}`;
       }
       toolResult = buildToolResult('execute_sql', sqlResult);
-      contextSummary = buildDocumentEditContextSummary(SENT_STRUCTURE_CONTEXT, dbTableNames);
+      contextSummary = await refreshDbContext(SENT_STRUCTURE_CONTEXT);
     }
 
     const afterProgress = summarizeDocumentLoopProgress(params.document, plan);
@@ -647,6 +674,7 @@ async function runHeaderEditToolLoop(params: {
   request: string;
   onMutation?: (group?: string) => void;
   onProgress?: (content: string) => void;
+  traceRunId?: string;
   signal?: AbortSignal;
 }): Promise<{ summary: string }> {
   let snapshot = summarizeHeaderStructure(params.document);
@@ -677,6 +705,7 @@ async function runHeaderEditToolLoop(params: {
       formatInstructions: buildHeaderEditFormatInstructions({ planActive: plan !== null }),
       mode: 'document-edit',
       debugLabel: `ai-header-edit:${iteration + 1}`,
+      traceRunId: params.traceRunId,
       signal: params.signal,
     });
 
@@ -993,11 +1022,11 @@ function summarizeCurrentTaskState(document: VisualDocument, plan: EditPlanState
   visitBlocks(document.sections, () => {
     componentCount += 1;
   });
-  const dbTables = getDocumentDbTableNames(document);
+  const configuredDbTables = getDocumentDbTableNames(document);
   const planSummary = plan ? formatPlanState(plan).split('\n').slice(1).join('; ') : 'no active plan';
   return path === 'header'
     ? `${Object.keys(document.meta).length} header keys; ${sectionCount} visible sections; ${planSummary}`
-    : `${sectionCount} visible sections; ${componentCount} components; DB tables: ${dbTables.join(', ') || '(none)'}; ${planSummary}`;
+    : `${sectionCount} visible sections; ${componentCount} components; db-table component targets: ${configuredDbTables.join(', ') || '(none)'}; ${planSummary}`;
 }
 
 function summarizeImportantDocumentRefs(snapshot: DocumentStructureSnapshot): string {

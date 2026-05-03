@@ -18,6 +18,7 @@ type SqlJsStatic = Awaited<ReturnType<typeof initSqlJs>>;
 type SqlJsDatabase = InstanceType<SqlJsStatic['Database']>;
 
 interface SqliteTableSnapshot {
+  objectType: 'table' | 'view';
   columns: string[];
   rowIds: number[];
   rows: string[][];
@@ -167,11 +168,16 @@ function renderDbTablePluginContent(
   }
 
   try {
-    if (ensureTableExists(runtime.db, tableName)) {
-      void persistRuntimeDatabase();
+    const objectType = getDbObjectType(runtime.db, tableName);
+    if (!objectType) {
+      if (readOnly) {
+        return `<div class="plugin-placeholder">DB table error: table or view "${helpers.escapeHtml(tableName)}" does not exist.</div>`;
+      }
+      return renderMissingTablePrompt(sectionKey, block.id, tableName, helpers);
     }
     const viewState = getDbTableViewState(sectionKey, block.id);
     const snapshot = readTableSnapshot(runtime.db, tableName, {
+      objectType,
       query: block.text,
       offset: viewState.offset,
       dynamicWindow: getDbTableQueryDynamicWindow(block.schema.pluginConfig),
@@ -189,6 +195,27 @@ function renderDbTablePluginContent(
   }
 }
 
+function renderMissingTablePrompt(
+  sectionKey: string,
+  blockId: string,
+  tableName: string,
+  helpers: ComponentRenderHelpers
+): string {
+  return `
+    <div class="plugin-placeholder db-table-missing">
+      <span>Table or view "${helpers.escapeHtml(tableName)}" does not exist.</span>
+      <button
+        type="button"
+        class="secondary"
+        data-action="db-table-create-table"
+        data-section-key="${helpers.escapeAttr(sectionKey)}"
+        data-block-id="${helpers.escapeAttr(blockId)}"
+        data-table-name="${helpers.escapeAttr(tableName)}"
+      >Create Table</button>
+    </div>
+  `;
+}
+
 function renderEditableTable(
   sectionKey: string,
   blockId: string,
@@ -197,7 +224,8 @@ function renderEditableTable(
   helpers: ComponentRenderHelpers
 ): string {
   const queryActive = snapshot.queryActive;
-  const tableDisabledAttr = queryActive ? ' disabled' : '';
+  const readOnlySource = queryActive || snapshot.objectType === 'view';
+  const tableDisabledAttr = readOnlySource ? ' disabled' : '';
   const topSpacerHeight = snapshot.offset * DB_TABLE_ESTIMATED_ROW_HEIGHT;
   const remainingRows = Math.max(snapshot.totalRows - (snapshot.offset + snapshot.rows.length), 0);
   const bottomSpacerHeight = remainingRows * DB_TABLE_ESTIMATED_ROW_HEIGHT;
@@ -274,6 +302,8 @@ function renderEditableTable(
             ? snapshot.dynamicWindow
               ? 'Query preview is read-only and is capped to fewer than 100 rows.'
               : `Query preview is read-only. Rows limited to ${snapshot.queryLimit}.`
+            : snapshot.objectType === 'view'
+              ? 'This database view is read-only. Create or edit the source tables to change rows.'
             : 'Rows and columns persist in the attached database file.'
         }</span>
       </div>
@@ -323,7 +353,7 @@ function renderEditableTable(
                           data-column-name="${helpers.escapeAttr(column)}"
                           aria-label="Delete column ${helpers.escapeAttr(column)}"
                           title="Delete column ${helpers.escapeAttr(column)}"
-                          ${queryActive || snapshot.columns.length <= 1 ? 'disabled' : ''}
+                          ${readOnlySource || snapshot.columns.length <= 1 ? 'disabled' : ''}
                         >×</button>
                       </div>
                     </th>`
@@ -415,9 +445,22 @@ function renderReadOnlyTable(
 
 export async function addDbTableRow(tableName: string): Promise<void> {
   const db = await getLoadedDatabase();
-  ensureTableExists(db, tableName);
+  ensureWritableTableExists(db, tableName);
   db.run(`INSERT INTO ${quoteIdentifier(tableName)} DEFAULT VALUES`);
   await persistRuntimeDatabase();
+}
+
+export async function createDbTable(tableName: string): Promise<boolean> {
+  const trimmed = tableName.trim();
+  if (trimmed.length === 0) {
+    throw new Error('Choose a table name before creating a DB table.');
+  }
+  const db = await getLoadedDatabase();
+  const created = ensureTableExists(db, trimmed);
+  if (created) {
+    await persistRuntimeDatabase();
+  }
+  return created;
 }
 
 export async function materializeDbTableDraftRow(tableName: string, columnName: string, value: string): Promise<number | null> {
@@ -426,7 +469,7 @@ export async function materializeDbTableDraftRow(tableName: string, columnName: 
   }
 
   const db = await getLoadedDatabase();
-  ensureTableExists(db, tableName);
+  ensureWritableTableExists(db, tableName);
   db.run(`INSERT INTO ${quoteIdentifier(tableName)} DEFAULT VALUES`);
   const rowIdResult = db.exec('SELECT last_insert_rowid()');
   const rowId = Number(rowIdResult[0]?.values[0]?.[0] ?? 0);
@@ -440,7 +483,7 @@ export async function materializeDbTableDraftRow(tableName: string, columnName: 
 
 export async function addDbTableColumn(tableName: string): Promise<void> {
   const db = await getLoadedDatabase();
-  ensureTableExists(db, tableName);
+  ensureWritableTableExists(db, tableName);
   const nextName = getNextColumnName(getTableColumns(db, tableName));
   db.run(`ALTER TABLE ${quoteIdentifier(tableName)} ADD COLUMN ${quoteIdentifier(nextName)} TEXT`);
   await persistRuntimeDatabase();
@@ -453,6 +496,7 @@ export async function renameDbTableColumn(tableName: string, oldName: string, ne
   }
 
   const db = await getLoadedDatabase();
+  requireWritableTable(db, tableName);
   const columns = getTableColumns(db, tableName);
   if (columns.includes(trimmedNext)) {
     throw new Error(`Column "${trimmedNext}" already exists.`);
@@ -463,6 +507,7 @@ export async function renameDbTableColumn(tableName: string, oldName: string, ne
 
 export async function dropDbTableColumn(tableName: string, columnName: string): Promise<void> {
   const db = await getLoadedDatabase();
+  requireWritableTable(db, tableName);
   const columns = getTableColumns(db, tableName);
   if (!columns.includes(columnName)) {
     return;
@@ -476,6 +521,7 @@ export async function dropDbTableColumn(tableName: string, columnName: string): 
 
 export async function updateDbTableCell(tableName: string, rowId: number, columnName: string, value: string): Promise<void> {
   const db = await getLoadedDatabase();
+  requireWritableTable(db, tableName);
   db.run(`UPDATE ${quoteIdentifier(tableName)} SET ${quoteIdentifier(columnName)} = ? WHERE rowid = ?`, [value, rowId]);
   await persistRuntimeDatabase();
 }
@@ -663,6 +709,7 @@ function readTableSnapshot(
   db: SqlJsDatabase,
   tableName: string,
   options: {
+    objectType?: 'table' | 'view';
     query: string;
     offset: number;
     dynamicWindow: boolean;
@@ -673,6 +720,11 @@ function readTableSnapshot(
 ): SqliteTableSnapshot {
   const normalizedQuery = options.query.trim().replace(/;+\s*$/u, '');
   const queryActive = normalizedQuery.length > 0;
+  const objectType = options.objectType ?? getDbObjectType(db, tableName);
+  if (!objectType) {
+    throw new Error(`Table or view "${tableName}" does not exist.`);
+  }
+  const readOnlySource = queryActive || objectType === 'view';
   const dynamicWindow = queryActive ? options.dynamicWindow : true;
   const queryLimit = clampDbTableQueryLimit(options.queryLimit);
   const columns = queryActive ? getQueryColumns(db, normalizedQuery) : getTableColumns(db, tableName);
@@ -682,19 +734,21 @@ function readTableSnapshot(
   const offset = queryActive && !dynamicWindow ? 0 : clampDbTableOffset(options.offset, totalRows);
   const rowIds: number[] = [];
   const rows: string[][] = [];
-  const rowComponentIds = queryActive ? new Set<number>() : getRowComponentIdSet(db, tableName);
-  const sortColumn = !queryActive && options.sortColumn && columns.includes(options.sortColumn) ? options.sortColumn : null;
+  const rowComponentIds = readOnlySource ? new Set<number>() : getRowComponentIdSet(db, tableName);
+  const sortColumn = !readOnlySource && options.sortColumn && columns.includes(options.sortColumn) ? options.sortColumn : null;
   const sortDirection = sortColumn ? (options.sortDirection === 'desc' ? 'desc' : 'asc') : null;
   const statement = db.prepare(
     queryActive
       ? `SELECT * FROM (${normalizedQuery}) AS hvy_query LIMIT ${dynamicWindow ? DB_TABLE_WINDOW_SIZE : queryLimit} OFFSET ${offset}`
+      : objectType === 'view'
+        ? `SELECT * FROM ${quoteIdentifier(tableName)} LIMIT ${DB_TABLE_WINDOW_SIZE} OFFSET ${offset}`
       : `SELECT rowid AS "__hvy_rowid__", * FROM ${quoteIdentifier(tableName)}${buildSortClause(sortColumn, sortDirection)} LIMIT ${DB_TABLE_WINDOW_SIZE} OFFSET ${offset}`
   );
 
   try {
     while (statement.step()) {
       const row = statement.getAsObject() as Record<string, unknown>;
-      if (!queryActive) {
+      if (!readOnlySource) {
         rowIds.push(Number(row.__hvy_rowid__ ?? 0));
       }
       rows.push(columns.map((column) => stringifySqliteValue(row[column])));
@@ -704,10 +758,11 @@ function readTableSnapshot(
   }
 
   return {
+    objectType,
     columns,
     rowIds,
     rows,
-    rowHasAttachedComponent: queryActive ? rows.map(() => false) : rowIds.map((rowId) => rowComponentIds.has(rowId)),
+    rowHasAttachedComponent: readOnlySource ? rows.map(() => false) : rowIds.map((rowId) => rowComponentIds.has(rowId)),
     totalRows,
     offset,
     queryActive,
@@ -744,13 +799,42 @@ function getTableColumns(db: SqlJsDatabase, tableName: string): string[] {
 }
 
 function ensureTableExists(db: SqlJsDatabase, tableName: string): boolean {
-  if (tableExists(db, tableName)) {
+  if (getDbObjectType(db, tableName)) {
     return false;
   }
 
   const columns = getDefaultColumnsForTable(tableName);
   db.run(`CREATE TABLE ${quoteIdentifier(tableName)} (${columns.map((column) => `${quoteIdentifier(column)} TEXT`).join(', ')})`);
   return true;
+}
+
+function ensureWritableTableExists(db: SqlJsDatabase, tableName: string): boolean {
+  const objectType = getDbObjectType(db, tableName);
+  if (objectType === 'view') {
+    throw new Error(`Cannot edit database view "${tableName}". Create or edit a source table instead.`);
+  }
+  if (objectType === 'table') {
+    return false;
+  }
+
+  const columns = getDefaultColumnsForTable(tableName);
+  db.run(`CREATE TABLE ${quoteIdentifier(tableName)} (${columns.map((column) => `${quoteIdentifier(column)} TEXT`).join(', ')})`);
+  return true;
+}
+
+function requireExistingDbObject(db: SqlJsDatabase, tableName: string): 'table' | 'view' {
+  const objectType = getDbObjectType(db, tableName);
+  if (!objectType) {
+    throw new Error(`DB object "${tableName}" does not exist. Create a table or view named "${tableName}" first.`);
+  }
+  return objectType;
+}
+
+function requireWritableTable(db: SqlJsDatabase, tableName: string): void {
+  const objectType = requireExistingDbObject(db, tableName);
+  if (objectType === 'view') {
+    throw new Error(`Cannot edit database view "${tableName}". Create or edit a source table instead.`);
+  }
 }
 
 function ensureRowComponentsTableExists(db: SqlJsDatabase): void {
@@ -784,9 +868,13 @@ function getRowComponentIdSet(db: SqlJsDatabase, tableName: string): Set<number>
   return ids;
 }
 
-function tableExists(db: SqlJsDatabase, tableName: string): boolean {
-  const result = db.exec('SELECT name FROM sqlite_master WHERE type = ? AND name = ?', ['table', tableName]);
-  return (result[0]?.values.length ?? 0) > 0;
+function getDbObjectType(db: SqlJsDatabase, tableName: string): 'table' | 'view' | null {
+  const result = db.exec(
+    "SELECT type FROM sqlite_schema WHERE name = ? AND type IN ('table', 'view') ORDER BY CASE type WHEN 'table' THEN 0 ELSE 1 END LIMIT 1",
+    [tableName]
+  );
+  const type = String(result[0]?.values[0]?.[0] ?? '');
+  return type === 'table' || type === 'view' ? type : null;
 }
 
 function getDefaultColumnsForTable(tableName: string): string[] {
@@ -938,6 +1026,29 @@ export function getDocumentDbTableNames(document: VisualDocument): string[] {
   return [...tableNames];
 }
 
+export async function getDocumentDbTableObjectNames(document: VisualDocument): Promise<string[]> {
+  const attachment = getAttachment(document, DB_ATTACHMENT_ID);
+  if (!attachment || attachment.bytes.length === 0) {
+    return [];
+  }
+  const db = await openDocumentDatabase(document);
+  try {
+    const result = db.exec(
+      "SELECT name FROM sqlite_schema WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%' AND name != ? ORDER BY name",
+      [SQLITE_ROW_COMPONENTS_TABLE]
+    );
+    return (result[0]?.values ?? [])
+      .map((row) => String(row[0] ?? '').trim())
+      .filter((name) => name.length > 0);
+  } finally {
+    try {
+      db.close();
+    } catch {
+      // Ignore close failures for ephemeral AI schema inspection databases.
+    }
+  }
+}
+
 export function hasDocumentDbTables(document: VisualDocument): boolean {
   return getDocumentDbTableNames(document).length > 0;
 }
@@ -981,30 +1092,31 @@ export async function executeDbTableQueryTool(
   document: VisualDocument,
   request: { tableName?: string; query?: string; limit?: number }
 ): Promise<string> {
-  const availableTables = getDocumentDbTableNames(document);
+  const availableTables = await getDocumentDbTableObjectNames(document);
   if (availableTables.length === 0) {
-    throw new Error('No DB tables are available in this document.');
+    throw new Error('No SQLite tables or views are available in this document.');
   }
 
   const db = await openDocumentDatabase(document);
   try {
-    const createdMissingTables = availableTables.filter((tableName) => ensureTableExists(db, tableName));
-    if (createdMissingTables.length > 0) {
-      await persistDocumentDatabase(document, db);
-    }
-
     const requestedTable = request.tableName?.trim() ?? '';
     if (requestedTable.length > 0 && !availableTables.includes(requestedTable)) {
-      throw new Error(`Unknown DB table "${requestedTable}". Available tables: ${availableTables.join(', ')}.`);
+      throw new Error(`Unknown SQLite table/view "${requestedTable}". Available SQLite tables/views: ${availableTables.join(', ')}.`);
+    }
+    if (requestedTable.length > 0) {
+      requireExistingDbObject(db, requestedTable);
     }
 
     const normalizedQuery = (request.query ?? '').trim().replace(/;+\s*$/u, '');
     const tableName = requestedTable || (availableTables.length === 1 ? (availableTables[0] ?? '') : '');
     if (normalizedQuery.length === 0 && tableName.length === 0) {
-      throw new Error(`Specify table_name when querying DB tables. Available tables: ${availableTables.join(', ')}.`);
+      throw new Error(`Specify table_name when querying SQLite tables/views. Available SQLite tables/views: ${availableTables.join(', ')}.`);
     }
 
     const limit = Math.max(1, Math.min(Math.floor(request.limit ?? 10), 25));
+    if (normalizedQuery.length === 0) {
+      requireExistingDbObject(db, tableName);
+    }
     const query = normalizedQuery.length > 0 ? normalizedQuery : `SELECT * FROM ${quoteIdentifier(tableName)}`;
     const statement = db.prepare(`SELECT * FROM (${query}) AS hvy_query LIMIT ${limit}`);
     const columns = statement.getColumnNames();
@@ -1020,7 +1132,7 @@ export async function executeDbTableQueryTool(
     }
 
     return [
-      `Available DB tables: ${availableTables.join(', ')}`,
+      `Available SQLite tables/views: ${availableTables.join(', ')}`,
       `Executed query: ${query}`,
       `Returned rows: ${rows.length}${rows.length === limit ? ` (limited to ${limit})` : ''}`,
       '',
@@ -1057,9 +1169,7 @@ export async function getDbTableAiSummary(
 
   const db = await openDocumentDatabase(document);
   try {
-    if (ensureTableExists(db, tableName)) {
-      await persistDocumentDatabase(document, db);
-    }
+    requireExistingDbObject(db, tableName);
     const pragma = db.exec(`PRAGMA table_info(${quoteIdentifier(tableName)})`);
     const pragmaRows = pragma[0]?.values ?? [];
     const schema = pragmaRows.map((row) => ({
@@ -1113,26 +1223,36 @@ export async function getDbTableRenderedText(document: VisualDocument, block: Vi
     return [
       'DB table plugin rendered output:',
       'Error: missing pluginConfig.table.',
-      `Available DB tables: ${availableTables.join(', ') || '(none)'}`,
+      `Configured db-table component targets: ${availableTables.join(', ') || '(none)'}`,
     ].join('\n');
   }
   if (!availableTables.includes(tableName)) {
     return [
       'DB table plugin rendered output:',
       `Error: unknown table "${tableName}".`,
-      `Available DB tables: ${availableTables.join(', ') || '(none)'}`,
+      `Configured db-table component targets: ${availableTables.join(', ') || '(none)'}`,
     ].join('\n');
   }
 
   const db = await openDocumentDatabase(document);
   try {
-    if (ensureTableExists(db, tableName)) {
-      await persistDocumentDatabase(document, db);
+    let objectType: 'table' | 'view';
+    try {
+      objectType = requireExistingDbObject(db, tableName);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown database table render error.';
+      return [
+        'DB table plugin rendered output:',
+        `Table: ${tableName}`,
+        `Query: ${query || '(all rows)'}`,
+        `DB table error: ${message}`,
+      ].join('\n');
     }
 
     let snapshot: SqliteTableSnapshot;
     try {
       snapshot = readTableSnapshot(db, tableName, {
+        objectType,
         query,
         offset: 0,
         dynamicWindow: getDbTableQueryDynamicWindow(block.schema.pluginConfig),

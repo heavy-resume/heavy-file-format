@@ -70,6 +70,7 @@ export function buildDocumentEditFormatInstructions(options?: {
     planActive
       ? 'A plan already exists for this request. The `plan` tool is unavailable now; execute the current plan and use `mark_step_done` when steps are complete.'
       : 'For larger or ambiguous edit requests, first use `plan` with explicit component/section work steps: create, modify, delete, reorder, inspect, or verify a component/section. Avoid vague task steps like "implement feature"; name the component or section outcome.',
+    'Each plan step should be small enough to complete with one focused tool action or one verification pass. Do not combine unrelated component, section, and schema changes into a single plan step.',
     'Create at most one plan for the current request. Once a plan exists, execute it and mark steps done instead of replacing it.',
     'When a planned step is complete, use `mark_step_done` before moving on or finishing. The current plan progress is kept in context.',
     'If the user reports an error rendered by a component or plugin, inspect rendered output, find the owning component, then fix that serialized component.',
@@ -92,7 +93,7 @@ export function buildDocumentEditFormatInstructions(options?: {
     'For `reorder_section`, use `new_position_index_from_0` to move a section to a specific index among its current siblings, or use `target_section_ref` plus `position` for relative moves.',
     ...(hasDbTables
       ? [
-          `Use \`query_db_table\` to inspect live rows from the attached DB when needed. Available tables: ${dbTableNames.join(', ')}.`,
+          `Use \`query_db_table\` to inspect live rows from the attached DB when needed. Available SQLite tables/views: ${dbTableNames.join(', ')}.`,
           'For `query_db_table`, provide `table_name` when more than one table exists, or provide a full SQL `query`. `limit` is optional.',
           'Do not invent DB column names in SQL filters. First inspect the table with `query_db_table` and only use columns returned by that table result.',
         ]
@@ -100,6 +101,8 @@ export function buildDocumentEditFormatInstructions(options?: {
     ...(hasDbTablePlugin
       ? [
           'Use `execute_sql` to create or update attached SQLite schema/data before adding db-table components that depend on it. SELECT/WITH statements are rejected; use `query_db_table` for reads when tables are already represented in the document.',
+          'For relational requests, model real entities as shared tables and use joins or SQL views for derived displays. For example, a chore chart should usually use chores/people/assignments/completions tables plus a pivot query or view, not one table per person or display column.',
+          'If a db-table component reports a missing table/view, first diagnose whether the intended object should be a base table, a derived view, or an existing table/view target. Then create the missing SQLite object with `execute_sql` or retarget pluginConfig.table to an existing object that matches the component intent. Treat pluginConfig.source as storage selection, not a schema fix.',
           'When adding a component that should display live DB rows, use a registered db-table plugin block. Use `get_help` with `plugin:dev.heavy.db-table` for exact syntax.',
         ]
       : []),

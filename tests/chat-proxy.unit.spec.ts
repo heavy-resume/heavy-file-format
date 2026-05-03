@@ -7,6 +7,7 @@ import {
   extractAnthropicText,
   extractOpenAiText,
   formatTraceEvent,
+  formatTraceTextEvent,
   pruneTraceLines,
 } from '../proxy/chat-proxy';
 
@@ -25,6 +26,9 @@ const request = {
 test('buildOpenAiProxyRequest includes developer context and conversation turns', () => {
   expect(buildOpenAiProxyRequest(request)).toEqual({
     model: 'gpt-5-mini',
+    reasoning: {
+      effort: 'high',
+    },
     instructions: expect.stringMatching(/Response formatting instructions:\nFormat as HVY\./),
     input: [
       {
@@ -198,6 +202,31 @@ test('formatTraceEvent writes one ndjson event with timestamp and payload', () =
       formatInstructions: 'Format as HVY.',
     },
   });
+});
+
+test('formatTraceTextEvent writes readable progress lines', () => {
+  const line = formatTraceTextEvent(
+    {
+      runId: 'run-1',
+      phase: 'document-edit',
+      type: 'progress',
+      payload: {
+        content: 'Viewing component C6.',
+      },
+    },
+    new Date('2026-05-02T12:00:00.000Z')
+  );
+
+  expect(line).toBe('[2026-05-02T12:00:00.000Z] run-1 document-edit progress :: Viewing component C6.\n');
+});
+
+test('buildOpenAiProxyRequest does not send trace run ids upstream', () => {
+  const openAiRequest = buildOpenAiProxyRequest({
+    ...request,
+    traceRunId: 'trace-1',
+  });
+
+  expect(JSON.stringify(openAiRequest)).not.toContain('trace-1');
 });
 
 test('pruneTraceLines removes the oldest 100 lines each time the trace exceeds 500 lines', () => {

@@ -31,6 +31,7 @@ interface ProxyChatRequest {
   context: string;
   formatInstructions: string;
   mode: 'qa' | 'component-edit' | 'document-edit';
+  traceRunId?: string;
 }
 
 interface ProxyChatResponse {
@@ -44,6 +45,15 @@ export interface ProxyCompletionParams {
   formatInstructions: string;
   mode: 'qa' | 'component-edit' | 'document-edit';
   debugLabel?: string;
+  traceRunId?: string;
+  signal?: AbortSignal;
+}
+
+export interface AgentLoopTraceEventParams {
+  runId: string;
+  phase: ProxyChatRequest['mode'] | 'proxy';
+  type: 'progress' | 'client_event';
+  payload: Record<string, unknown>;
   signal?: AbortSignal;
 }
 
@@ -283,6 +293,7 @@ export async function requestProxyCompletion(params: ProxyCompletionParams): Pro
     context: params.context,
     formatInstructions: params.formatInstructions,
     mode: params.mode,
+    traceRunId: params.traceRunId,
   });
   const debugLabel = params.debugLabel?.trim() || 'chat';
 
@@ -323,7 +334,7 @@ export async function requestProxyCompletion(params: ProxyCompletionParams): Pro
 }
 
 export function buildProxyChatRequest(request: ProxyChatRequest): ProxyChatRequest {
-  return {
+  const payload: ProxyChatRequest = {
     provider: request.provider,
     model: request.model.trim(),
     messages: request.messages.map((message) => ({
@@ -336,6 +347,31 @@ export function buildProxyChatRequest(request: ProxyChatRequest): ProxyChatReque
     formatInstructions: request.formatInstructions,
     mode: request.mode,
   };
+  if (request.traceRunId) {
+    payload.traceRunId = request.traceRunId;
+  }
+  return payload;
+}
+
+export function traceAgentLoopEvent(params: AgentLoopTraceEventParams): void {
+  if (typeof window === 'undefined' || typeof fetch === 'undefined') {
+    return;
+  }
+  void fetch('/api/agent-trace', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      runId: params.runId,
+      phase: params.phase,
+      type: params.type,
+      payload: params.payload,
+    }),
+    signal: params.signal,
+  }).catch(() => {
+    // Tracing is best-effort and must never interrupt chat flow.
+  });
 }
 
 export function getEnvChatSettings(env: ImportMetaEnv = import.meta.env): ChatSettings {

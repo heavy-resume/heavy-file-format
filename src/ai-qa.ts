@@ -1,5 +1,5 @@
 import { HVY_AI_RESPONSE_FORMAT_INSTRUCTIONS, buildChatDocumentContext, requestProxyCompletion } from './chat/chat';
-import { executeDbTableQueryTool, getDocumentDbTableNames } from './plugins/db-table';
+import { executeDbTableQueryTool, getDocumentDbTableObjectNames } from './plugins/db-table';
 import type { ChatMessage, ChatSettings, VisualDocument } from './types';
 
 export const QA_TOOL_LOOP_MAX_STEPS = 4;
@@ -12,7 +12,7 @@ export function buildQaToolLoopFormatInstructions(dbTableNames: string[]): strin
   return [
     'You are answering a question about the current HVY document.',
     'You have read-only access to the attached DB via the `query_db_table` tool. Do not issue write statements.',
-    `Available DB tables: ${dbTableNames.join(', ')}.`,
+    `Available SQLite tables/views: ${dbTableNames.join(', ')}.`,
     '',
     'Reply with exactly one JSON object and nothing else. Do not wrap it in Markdown.',
     'Choose one tool at a time.',
@@ -100,9 +100,9 @@ export async function runQaToolLoop(params: {
   question: string;
   signal?: AbortSignal;
 }): Promise<string> {
-  const dbTableNames = getDocumentDbTableNames(params.document);
+  const dbTableNames = await getDocumentDbTableObjectNames(params.document);
   if (dbTableNames.length === 0) {
-    throw new Error('runQaToolLoop requires at least one DB table. Use requestChatCompletion for non-DB documents.');
+    throw new Error('runQaToolLoop requires at least one SQLite table or view. Use requestChatCompletion for non-DB documents.');
   }
 
   const context = buildChatDocumentContext(params.document);

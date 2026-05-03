@@ -9,6 +9,7 @@ const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
 const ANTHROPIC_API_VERSION = '2023-06-01';
 const DEV_TRACE_DIR = path.resolve(process.cwd(), 'dev-traces');
 const AGENT_LOOP_TRACE_FILE = path.join(DEV_TRACE_DIR, 'agent-loop.ndjson');
+const AGENT_LOOP_TEXT_TRACE_FILE = path.join(DEV_TRACE_DIR, 'agent-loop.txt');
 const AGENT_LOOP_TRACE_MAX_LINES = 500;
 const AGENT_LOOP_TRACE_PRUNE_LINES = 100;
 
@@ -22,6 +23,8 @@ interface TraceEvent {
     | 'provider_request'
     | 'provider_response'
     | 'model_response'
+    | 'progress'
+    | 'client_event'
     | 'invalid_response'
     | 'error'
     | 'stop';
@@ -36,6 +39,7 @@ interface ProxyChatRequest {
     role: 'user' | 'assistant';
     content: string;
   }>;
+  traceRunId?: string;
   context: string;
   formatInstructions: string;
 }
@@ -56,6 +60,22 @@ export function createChatProxyPlugin(env: Record<string, string | undefined>): 
 
 export function buildChatProxyMiddleware(env: Record<string, string | undefined>) {
   return async (req, res, next) => {
+    if (req.url?.startsWith('/api/agent-trace')) {
+      if (req.method !== 'POST') {
+        sendJson(res, 405, { error: 'Method not allowed. Use POST /api/agent-trace.' });
+        return;
+      }
+      try {
+        const event = validateClientTraceEvent(await readRequestJson(req));
+        writeTrace(event);
+        sendJson(res, 200, { ok: true });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Invalid trace payload.';
+        sendJson(res, 400, { error: message });
+      }
+      return;
+    }
+
     if (!req.url?.startsWith('/api/chat')) {
       next();
       return;
@@ -68,7 +88,7 @@ export function buildChatProxyMiddleware(env: Record<string, string | undefined>
 
     const upstreamAbort = new AbortController();
     let completed = false;
-    const runId = randomUUID();
+    let runId = randomUUID();
     req.on('aborted', () => {
       if (!completed) {
         console.debug('[hvy:chat-proxy] client request aborted');
@@ -78,6 +98,7 @@ export function buildChatProxyMiddleware(env: Record<string, string | undefined>
 
     try {
       const body = validateProxyChatRequest(await readRequestJson(req));
+      runId = body.traceRunId ?? runId;
       if (upstreamAbort.signal.aborted) {
         console.debug('[hvy:chat-proxy] request body read after abort; skipping upstream request');
         writeTrace({
@@ -152,6 +173,9 @@ export function buildChatProxyMiddleware(env: Record<string, string | undefined>
 export function buildOpenAiProxyRequest(body: ProxyChatRequest): Record<string, unknown> {
   return {
     model: body.model,
+    reasoning: {
+      effort: 'high',
+    },
     instructions: buildSystemInstructions(body.mode, body.formatInstructions),
     input: [
       {
@@ -475,9 +499,35 @@ function validateProxyChatRequest(payload: unknown): ProxyChatRequest {
     provider: record.provider,
     model: record.model.trim(),
     mode: record.mode,
+    traceRunId: typeof record.traceRunId === 'string' && /^[\w:-]{1,120}$/.test(record.traceRunId) ? record.traceRunId : undefined,
     context: record.context,
     formatInstructions: record.formatInstructions,
     messages,
+  };
+}
+
+function validateClientTraceEvent(payload: unknown): TraceEvent {
+  if (!payload || typeof payload !== 'object') {
+    throw new Error('Invalid trace payload.');
+  }
+  const record = payload as Partial<TraceEvent>;
+  if (typeof record.runId !== 'string' || !/^[\w:-]{1,120}$/.test(record.runId)) {
+    throw new Error('Trace runId is required.');
+  }
+  if (record.phase !== 'qa' && record.phase !== 'component-edit' && record.phase !== 'document-edit' && record.phase !== 'proxy') {
+    throw new Error('Invalid trace phase.');
+  }
+  if (record.type !== 'progress' && record.type !== 'client_event') {
+    throw new Error('Client traces may only use progress or client_event.');
+  }
+  if (!record.payload || typeof record.payload !== 'object' || Array.isArray(record.payload)) {
+    throw new Error('Trace payload must be an object.');
+  }
+  return {
+    runId: record.runId,
+    phase: record.phase,
+    type: record.type,
+    payload: record.payload as Record<string, unknown>,
   };
 }
 
@@ -548,6 +598,12 @@ export function formatTraceEvent(event: TraceEvent, date = new Date()): string {
   }) + '\n';
 }
 
+export function formatTraceTextEvent(event: TraceEvent, date = new Date()): string {
+  const timestamp = date.toISOString();
+  const summary = summarizeTracePayload(event);
+  return `[${timestamp}] ${event.runId} ${event.phase} ${event.type}${summary ? ` :: ${summary}` : ''}\n`;
+}
+
 export function pruneTraceLines(
   contents: string,
   maxLines = AGENT_LOOP_TRACE_MAX_LINES,
@@ -565,19 +621,68 @@ export function pruneTraceLines(
 
 function writeTrace(event: TraceEvent): void {
   const line = formatTraceEvent(event);
+  const textLine = formatTraceTextEvent(event);
   traceWriteQueue = traceWriteQueue
     .then(async () => {
       await fs.mkdir(DEV_TRACE_DIR, { recursive: true });
       await fs.appendFile(AGENT_LOOP_TRACE_FILE, line, 'utf8');
+      await fs.appendFile(AGENT_LOOP_TEXT_TRACE_FILE, textLine, 'utf8');
       const contents = await fs.readFile(AGENT_LOOP_TRACE_FILE, 'utf8');
       const prunedContents = pruneTraceLines(contents);
       if (prunedContents.length !== contents.length) {
         await fs.writeFile(AGENT_LOOP_TRACE_FILE, prunedContents, 'utf8');
       }
+      const textContents = await fs.readFile(AGENT_LOOP_TEXT_TRACE_FILE, 'utf8');
+      const prunedTextContents = pruneTraceLines(textContents);
+      if (prunedTextContents.length !== textContents.length) {
+        await fs.writeFile(AGENT_LOOP_TEXT_TRACE_FILE, prunedTextContents, 'utf8');
+      }
     })
     .catch((error: unknown) => {
       console.warn('[hvy:chat-proxy] failed to write dev trace', error);
     });
+}
+
+function summarizeTracePayload(event: TraceEvent): string {
+  const payload = event.payload;
+  if (event.type === 'progress' && typeof payload.content === 'string') {
+    return payload.content;
+  }
+  if (event.type === 'model_response' && typeof payload.response === 'string') {
+    return truncateTraceText(payload.response, 240);
+  }
+  if (event.type === 'request_context') {
+    const messages = Array.isArray(payload.messages) ? payload.messages.length : 0;
+    const context = typeof payload.context === 'string' ? payload.context : '';
+    return `provider=${String(payload.provider ?? '')} model=${String(payload.model ?? '')} messages=${messages} context=${truncateTraceText(context, 240)}`;
+  }
+  if (event.type === 'provider_request') {
+    const provider = typeof payload.provider === 'string' ? payload.provider : '';
+    const request = payload.request && typeof payload.request === 'object'
+      ? payload.request as Record<string, unknown>
+      : {};
+    return `provider=${provider} model=${String(request.model ?? '')}`;
+  }
+  if (event.type === 'provider_response') {
+    return `provider=${String(payload.provider ?? '')} ok=${String(payload.ok ?? '')} status=${String(payload.status ?? '')}`;
+  }
+  if (event.type === 'error') {
+    return String(payload.message ?? payload.error ?? JSON.stringify(payload));
+  }
+  if (event.type === 'stop') {
+    return `reason=${String(payload.reason ?? '')}`;
+  }
+  if (event.type === 'client_event') {
+    return Object.entries(payload)
+      .map(([key, value]) => `${key}=${truncateTraceText(String(value), 120)}`)
+      .join(' ');
+  }
+  return truncateTraceText(JSON.stringify(payload), 240);
+}
+
+function truncateTraceText(value: string, maxLength: number): string {
+  const normalized = value.replace(/\s+/g, ' ').trim();
+  return normalized.length > maxLength ? `${normalized.slice(0, maxLength - 1)}…` : normalized;
 }
 
 function buildSystemInstructions(mode: ProxyChatRequest['mode'], formatInstructions: string): string {

@@ -90,6 +90,13 @@ test('getDocumentDbTableNames finds plugin blocks nested inside subsections', as
   expect(getDocumentDbTableNames(nestedDoc)).toEqual(['job_applications']);
 });
 
+test('getDocumentDbTableObjectNames does not treat configured component targets as SQLite objects', async () => {
+  const { getDocumentDbTableObjectNames } = await vi.importActual<typeof import('../src/plugins/db-table')>('../src/plugins/db-table');
+  const document = deserializeDocument(DOC_WITH_DB_TABLE, '.hvy');
+
+  expect(await getDocumentDbTableObjectNames(document)).toEqual([]);
+});
+
 test('isDbTablePluginBlock recognizes db-table plugin blocks', () => {
   const { block } = getDbTableBlock();
   expect(isDbTablePluginBlock(block)).toBe(true);

@@ -8,6 +8,7 @@ const { requestProxyCompletionMock, requestAiComponentEditMock } = vi.hoisted(()
 
 vi.mock('../src/chat/chat', () => ({
   requestProxyCompletion: requestProxyCompletionMock,
+  traceAgentLoopEvent: vi.fn(),
 }));
 
 vi.mock('../src/ai-edit', async (importOriginal) => {
@@ -218,7 +219,7 @@ test('buildDocumentEditFormatInstructions documents the tool protocol', () => {
 
   const dbInstructions = buildDocumentEditFormatInstructions({ dbTableNames: ['work_items'] });
   expect(dbInstructions).toContain('`query_db_table`');
-  expect(dbInstructions).toContain('Available tables: work_items');
+  expect(dbInstructions).toContain('Available SQLite tables/views: work_items');
   expect(dbInstructions).toContain('{"tool":"query_db_table","table_name":"work_items","limit":10,"reason":"optional"}');
   expect(dbInstructions).not.toContain('`execute_sql`');
   expect(dbInstructions).not.toContain('reason":"Add a live db-table component showing all rows"');
@@ -229,6 +230,10 @@ test('buildDocumentEditFormatInstructions documents the tool protocol', () => {
   });
   expect(dbPluginInstructions).toContain('`query_db_table`, `execute_sql`');
   expect(dbPluginInstructions).toContain('Use `execute_sql` to create or update attached SQLite schema/data before adding db-table components that depend on it.');
+  expect(dbPluginInstructions).toContain('Each plan step should be small enough to complete with one focused tool action or one verification pass.');
+  expect(dbPluginInstructions).toContain('model real entities as shared tables and use joins or SQL views for derived displays');
+  expect(dbPluginInstructions).toContain('not one table per person or display column');
+  expect(dbPluginInstructions).toContain('Treat pluginConfig.source as storage selection, not a schema fix.');
   expect(dbPluginInstructions).toContain(
     '{"tool":"execute_sql","sql":"CREATE TABLE IF NOT EXISTS chores (id INTEGER PRIMARY KEY, title TEXT NOT NULL, description TEXT, active INTEGER DEFAULT 1)","reason":"Set up DB schema before adding db-table components"}'
   );
@@ -1270,6 +1275,40 @@ hvy_version: 0.1
   expect(contextAfterSearch).toContain('Work ledger (recent completed/attempted tool actions; use this to avoid duplicating components/sections):');
   expect(contextAfterSearch).toContain('search_components(Add Chore form)');
   expect(contextAfterSearch).toContain('Related existing components for current intent');
+});
+
+test('requestAiDocumentEditTurn distinguishes configured db-table targets from existing SQLite objects', async () => {
+  setHostPlugins([dbTablePluginRegistration]);
+  queueAiToolResponses('{"tool":"done","summary":"Inspected DB table setup."}');
+
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"data"}-->
+#! Data
+
+<!--hvy:plugin {"plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->
+ SELECT * FROM work_items;
+`, '.hvy');
+  seedStateForDocument(document);
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+
+  const result = await requestAiDocumentEditTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Fix the missing DB table error.',
+  });
+
+  expect(result.error).toBeNull();
+  const firstToolCall = requestProxyCompletionMock.mock.calls[1]?.[0];
+  expect(firstToolCall?.context).toContain('Configured db-table component targets: work_items');
+  expect(firstToolCall?.context).toContain('Missing SQLite tables/views targeted by db-table components: work_items.');
+  expect(firstToolCall?.context).not.toContain('SQLite tables/views available for query_db_table: work_items');
+  expect(firstToolCall?.formatInstructions).toContain('`execute_sql`');
+  expect(firstToolCall?.formatInstructions).not.toContain('`query_db_table`,');
+  expect(firstToolCall?.formatInstructions).toContain('Treat pluginConfig.source as storage selection, not a schema fix.');
 });
 
 test('requestAiDocumentEditTurn can remove a section', async () => {

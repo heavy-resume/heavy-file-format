@@ -2,7 +2,7 @@ import { state, getRenderApp } from '../../state';
 import { findBlockByIds, setActiveEditorBlock } from '../../block-ops';
 import { createEmptyBlock } from '../../document-factory';
 import { recordHistory } from '../../history';
-import { addDbTableColumn, addDbTableRow, dropDbTableColumn, getSqliteRowComponent, parseAttachedComponentBlocks, toggleDbTableSort } from '../../plugins/db-table';
+import { addDbTableColumn, addDbTableRow, createDbTable, dropDbTableColumn, getSqliteRowComponent, parseAttachedComponentBlocks, toggleDbTableSort } from '../../plugins/db-table';
 import type { ActionHandler } from './types';
 
 const sqliteAddRow: ActionHandler = ({ actionButton }) => {
@@ -32,6 +32,23 @@ const sqliteAddColumn: ActionHandler = ({ actionButton }) => {
     })
     .catch((error) => {
       console.error('[hvy:sqlite-plugin] add column failed', error);
+    });
+};
+
+const dbTableCreateTable: ActionHandler = ({ actionButton }) => {
+  const tableName = actionButton.dataset.tableName ?? '';
+  if (tableName.length === 0) {
+    return;
+  }
+  recordHistory(`db-table-create-table:${tableName}`);
+  void createDbTable(tableName)
+    .then(() => {
+      getRenderApp()();
+    })
+    .catch((error) => {
+      console.error('[hvy:sqlite-plugin] create table failed', error);
+      window.alert(error instanceof Error ? error.message : 'Failed to create table.');
+      getRenderApp()();
     });
 };
 
@@ -151,6 +168,7 @@ const sqliteRowComponentAddBlock: ActionHandler = () => {
 };
 
 export const dbTableActions: Record<string, ActionHandler> = {
+  'db-table-create-table': dbTableCreateTable,
   'sqlite-add-row': sqliteAddRow,
   'sqlite-add-column': sqliteAddColumn,
   'sqlite-drop-column': sqliteDropColumn,

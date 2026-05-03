@@ -1,12 +1,11 @@
 import type { ChatMessage, VisualDocument } from './types';
-import { escapeInline, summarizeDocumentStructure, summarizeHeaderStructure, truncatePreview } from './ai-document-structure';
+import { summarizeDocumentStructure, summarizeHeaderStructure, truncatePreview } from './ai-document-structure';
 import { visitBlocks } from './section-ops';
 import { getDocumentDbTableNames } from './plugins/db-table';
 import {
   HvyRepairToolError,
   MAX_TOOL_FAILURES_IN_WINDOW,
   MAX_WORK_LEDGER_ITEMS,
-  SENT_STRUCTURE_CONTEXT,
   TOOL_FAILURE_WINDOW_SIZE,
   type DocumentEditToolRequest,
   type DocumentStructureSnapshot,
@@ -215,7 +214,7 @@ export function isToolCompatibleWithPlanStep(
   if (/\bstructure\b|\boutline\b/.test(normalized)) {
     return tool === 'request_structure';
   }
-  return tool !== 'get_help' && tool !== 'search_components';
+  return tool !== 'search_components';
 }
 
 export function summarizeSuccessfulToolAction(toolCall: DocumentEditToolRequest, toolResult: string): string {

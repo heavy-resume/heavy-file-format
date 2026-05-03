@@ -27,6 +27,7 @@ import {
   buildInitialDocumentEditPrompt,
   buildHeaderEditFormatInstructions,
 } from '../src/ai-document-edit-instructions';
+import { getDocumentEditPhaseTools } from '../src/ai-document-edit-phases';
 import { deserializeDocument, serializeDocument } from '../src/serialization';
 import { initState } from '../src/state';
 import type { ChatMessage, ChatSettings } from '../src/types';
@@ -164,6 +165,16 @@ test('summarizeDocumentStructure shows the exact reduced structure the AI sees',
 });
 
 test('buildDocumentEditFormatInstructions documents the tool protocol', () => {
+  expect(getDocumentEditPhaseTools('database')).toEqual(['answer', 'plan', 'view_component', 'grep', 'done']);
+  expect(getDocumentEditPhaseTools('database', { optionalTools: ['query_db_table', 'execute_sql'] })).toEqual([
+    'answer',
+    'plan',
+    'query_db_table',
+    'execute_sql',
+    'view_component',
+    'done',
+  ]);
+
   const instructions = buildDocumentEditFormatInstructions({
     pluginHints: [
       {
@@ -173,18 +184,18 @@ test('buildDocumentEditFormatInstructions documents the tool protocol', () => {
       },
     ],
   });
-  expect(instructions).toContain(
-    'Valid tools are: `answer`, `plan`, `mark_step_done`, `batch`, `grep`, `search_components`, `get_help`, `get_css`, `get_properties`, `set_properties`, `view_component`, `view_rendered_component`, `edit_component`, `patch_component`, `create_component`, `remove_component`, `create_section`, `remove_section`, `reorder_section`, `request_structure`, `request_rendered_structure`, `done`.'
-  );
+  expect(instructions).toContain('Current edit phase: planning.');
+  expect(instructions).toContain('Valid tools for this phase are: `answer`, `plan`, `grep`, `search_components`, `view_component`, `done`.');
+  expect(instructions).toContain('Create one concrete plan from the notes, or run one targeted search/view if targets are still unclear. Do not mutate in this phase.');
   expect(instructions).toContain('Use the notes to create one linear plan or run the next concrete tool call.');
   expect(instructions).toContain('Use the notes to create one linear plan or run the next concrete tool call.');
-  expect(instructions).toContain('Prefer `batch` for a known ordered sequence of concrete tool calls.');
+  expect(instructions).toContain('Use `batch` only when it is listed for the current phase and the calls are a known ordered sequence of concrete tool calls.');
   expect(instructions).toContain('Plan at tool-action granularity: one plan step should be completable by one normal tool call or one batch.');
   expect(instructions).toContain('If several edits will be executed together in one batch, describe that whole batch outcome as one plan step');
   expect(instructions).toContain('Registered plugin ids: dev.test.widget.');
   expect(instructions).toContain('Plan shape: `{"tool":"plan","steps":["Modify component X to remove Y","Verify no Y remains"]}`.');
   expect(instructions).toContain('Batch shape: `{"tool":"batch","calls":[{"tool":"remove_component","component_ref":"id"}]}`.');
-  expect(instructions).toContain('Use `get_help` only when exact syntax is missing from the notes or recent tool help.');
+  expect(instructions).toContain('Use `get_help` only when it is listed for the current phase and exact syntax is missing from the notes or recent tool help.');
   expect(instructions).toContain('For larger work, create one plan after reviewing the notes.');
   expect(instructions).toContain('Plan steps must be document changes or final verification, not discovery.');
   expect(instructions).toContain('Return HVY only inside create/patch payload fields; never HTML/JSX/DOM.');
@@ -207,6 +218,8 @@ test('buildDocumentEditFormatInstructions documents the tool protocol', () => {
 
   const dbInstructions = buildDocumentEditFormatInstructions({ dbTableNames: ['work_items'], request: 'Show the database table.' });
   expect(dbInstructions).toContain('`query_db_table`');
+  expect(dbInstructions).toContain('Current edit phase: database.');
+  expect(dbInstructions).toContain('Valid tools for this phase are: `answer`, `plan`, `query_db_table`, `grep`, `view_component`, `done`.');
   expect(dbInstructions).toContain('SQLite tables/views available: work_items');
   expect(dbInstructions).not.toContain('`execute_sql`');
   expect(dbInstructions).not.toContain('reason":"Add a live db-table component showing all rows"');
@@ -216,27 +229,39 @@ test('buildDocumentEditFormatInstructions documents the tool protocol', () => {
     pluginHints: [{ id: 'dev.heavy.db-table', displayName: 'DB Table', hint: 'Renders SQLite rows.' }],
     request: 'Create a db table viewer.',
   });
-  expect(dbPluginInstructions).toContain('`query_db_table`, `execute_sql`');
+  expect(dbPluginInstructions).toContain('Current edit phase: database.');
+  expect(dbPluginInstructions).toContain('Valid tools for this phase are: `answer`, `plan`, `query_db_table`, `execute_sql`, `view_component`, `done`.');
+  expect(dbPluginInstructions).toContain('SQLite tables/views available: work_items');
   expect(dbPluginInstructions).toContain('For relational displays, prefer shared tables plus joins/views over one table per display column.');
   expect(dbPluginInstructions).toContain('Treat pluginConfig.source as storage selection, not a schema fix.');
   expect(buildDocumentEditToolHelp('tool:execute_sql')).toContain('CREATE TABLE IF NOT EXISTS chores');
+
+  const explicitDbPhaseInstructions = buildDocumentEditFormatInstructions({
+    dbTableNames: ['work_items'],
+    pluginHints: [{ id: 'dev.heavy.db-table', displayName: 'DB Table', hint: 'Renders SQLite rows.' }],
+    request: 'Create a db table viewer.',
+    phase: 'database',
+  });
+  expect(explicitDbPhaseInstructions).toContain('Current edit phase: database.');
+  expect(explicitDbPhaseInstructions).toContain('Valid tools for this phase are: `answer`, `plan`, `query_db_table`, `execute_sql`, `view_component`, `done`.');
 
   const dbPluginOnlyInstructions = buildDocumentEditFormatInstructions({
     pluginHints: [{ id: 'dev.heavy.db-table', displayName: 'DB Table', hint: 'Renders SQLite rows.' }],
   });
   expect(dbPluginOnlyInstructions).not.toContain('`execute_sql`');
   expect(dbPluginOnlyInstructions).toContain(
-    'Valid tools are: `answer`, `plan`, `mark_step_done`, `batch`, `grep`, `search_components`, `get_help`, `get_css`, `get_properties`, `set_properties`, `view_component`, `view_rendered_component`, `edit_component`, `patch_component`, `create_component`, `remove_component`, `create_section`, `remove_section`, `reorder_section`, `request_structure`, `request_rendered_structure`, `done`.'
+    'Valid tools for this phase are: `answer`, `plan`, `grep`, `search_components`, `view_component`, `done`.'
   );
 
   const noPluginInstructions = buildDocumentEditFormatInstructions();
   expect(noPluginInstructions).not.toContain('Registered plugin ids:');
 
-  const activePlanInstructions = buildDocumentEditFormatInstructions({ planActive: true });
+  const activePlanInstructions = buildDocumentEditFormatInstructions({ planActive: true, phase: 'mutation' });
+  expect(activePlanInstructions).toContain('Current edit phase: mutation.');
   expect(activePlanInstructions).toContain(
-    'Valid tools are: `answer`, `mark_step_done`, `batch`, `grep`, `search_components`, `get_help`, `get_css`, `get_properties`, `set_properties`, `view_component`, `view_rendered_component`, `edit_component`, `patch_component`, `create_component`, `remove_component`, `create_section`, `remove_section`, `reorder_section`, `request_structure`, `request_rendered_structure`, `done`.'
+    'Valid tools for this phase are: `batch`, `edit_component`, `patch_component`, `view_component`, `mark_step_done`, `done`.'
   );
-  expect(activePlanInstructions).not.toContain('Valid tools are: `answer`, `plan`, `mark_step_done`');
+  expect(activePlanInstructions).not.toContain('Plan shape:');
 
   const headerInstructions = buildHeaderEditFormatInstructions();
   expect(headerInstructions).toContain('Valid header tools are: `answer`, `plan`, `mark_step_done`, `grep_header`, `view_header`, `patch_header`, `request_header`, `done`.');
@@ -1933,7 +1958,7 @@ hvy_version: 0.1
   expect(result.error).toBeNull();
   const firstToolInstructions = requestProxyCompletionMock.mock.calls[1]?.[0]?.formatInstructions ?? '';
   expect(firstToolInstructions).toContain('Registered plugin ids: dev.heavy.form.');
-  expect(firstToolInstructions).toContain('Use `get_help` only when exact syntax is missing from the notes or recent tool help.');
+  expect(firstToolInstructions).toContain('Use `get_help` only when it is listed for the current phase and exact syntax is missing from the notes or recent tool help.');
   expect(firstToolInstructions).not.toContain('Form UI. Fields and script hooks live in the YAML body.');
   const retryMessages = requestProxyCompletionMock.mock.calls[2]?.[0]?.messages.map((message: ChatMessage) => message.content).join('\n') ?? '';
   expect(retryMessages).toContain('unsupported `hvy:form` syntax');

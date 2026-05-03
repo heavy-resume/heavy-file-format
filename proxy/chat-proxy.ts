@@ -12,6 +12,7 @@ const AGENT_LOOP_TRACE_FILE = path.join(DEV_TRACE_DIR, 'agent-loop.ndjson');
 const AGENT_LOOP_TEXT_TRACE_FILE = path.join(DEV_TRACE_DIR, 'agent-loop.txt');
 const AGENT_LOOP_TRACE_MAX_LINES = 500;
 const AGENT_LOOP_TRACE_PRUNE_LINES = 100;
+const OPENAI_REASONING_EFFORT = 'medium';
 
 let traceWriteQueue = Promise.resolve();
 
@@ -175,7 +176,7 @@ export function buildOpenAiProxyRequest(body: ProxyChatRequest): Record<string, 
   return {
     model: body.model,
     reasoning: {
-      effort: 'high',
+      effort: OPENAI_REASONING_EFFORT,
     },
     instructions: buildSystemInstructions(body.mode, body.formatInstructions),
     input: [

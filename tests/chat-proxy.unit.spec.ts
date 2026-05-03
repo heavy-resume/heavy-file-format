@@ -27,7 +27,7 @@ test('buildOpenAiProxyRequest includes developer context and conversation turns'
   expect(buildOpenAiProxyRequest(request)).toEqual({
     model: 'gpt-5-mini',
     reasoning: {
-      effort: 'high',
+      effort: 'low',
     },
     instructions: expect.stringMatching(/Response formatting instructions:\nFormat as HVY\./),
     input: [

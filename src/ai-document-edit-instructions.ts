@@ -1,3 +1,6 @@
+import { buildDocumentEditPhaseInstructions } from './ai-document-edit-phase-instructions';
+import type { DocumentEditPhase, DocumentEditToolName } from './ai-document-edit-phases';
+
 export const DOCUMENT_EDIT_MAX_TOOL_STEPS = 50;
 
 export interface DocumentEditPluginHint {
@@ -11,31 +14,28 @@ export function buildDocumentEditFormatInstructions(options?: {
   pluginHints?: DocumentEditPluginHint[];
   planActive?: boolean;
   request?: string;
+  phase?: DocumentEditPhase;
 }): string {
   const dbTableNames = options?.dbTableNames ?? [];
   const pluginHints = options?.pluginHints ?? [];
   const planActive = options?.planActive ?? false;
   const request = options?.request ?? '';
   const dbRelevant = isDatabaseRelevantRequest(request);
-  const hasDbTables = dbRelevant && dbTableNames.length > 0;
-  const hasDbTablePlugin = dbRelevant && pluginHints.some((plugin) => plugin.id === 'dev.heavy.db-table');
-  const planTools = planActive ? '`mark_step_done`' : '`plan`, `mark_step_done`';
-  const databaseTools = [
-    ...(hasDbTables ? ['`query_db_table`'] : []),
-    ...(hasDbTablePlugin ? ['`execute_sql`'] : []),
-  ].join(', ');
-  const validTools = `\`answer\`, ${planTools}, \`batch\`, \`grep\`, \`search_components\`, \`get_help\`, \`get_css\`, \`get_properties\`, \`set_properties\`, \`view_component\`, \`view_rendered_component\`, \`edit_component\`, \`patch_component\`, \`create_component\`, \`remove_component\`, \`create_section\`, \`remove_section\`, \`reorder_section\`${databaseTools ? `, ${databaseTools}` : ''}, \`request_structure\`, \`request_rendered_structure\`, \`done\``;
+  const phase = options?.phase ?? (dbRelevant ? 'database' : 'planning');
+  const canQueryDbTable = dbRelevant && dbTableNames.length > 0;
+  const canExecuteSql = dbRelevant && pluginHints.some((plugin) => plugin.id === 'dev.heavy.db-table');
+  const optionalTools = getAvailableOptionalDocumentTools({ canQueryDbTable, canExecuteSql });
   return [
     'Reply with exactly one JSON object and nothing else.',
     'The document has already been walked section-by-section in the context notes. Do not start by inspecting the whole document again.',
     'Use the notes to create one linear plan or run the next concrete tool call.',
-    'Prefer `batch` for a known ordered sequence of concrete tool calls.',
+    ...buildDocumentEditPhaseInstructions({ phase, optionalTools }),
+    'Use `batch` only when it is listed for the current phase and the calls are a known ordered sequence of concrete tool calls.',
     'Plan at tool-action granularity: one plan step should be completable by one normal tool call or one batch.',
     'If several edits will be executed together in one batch, describe that whole batch outcome as one plan step instead of making one step per batched call.',
-    `Valid tools are: ${validTools}.`,
     ...(planActive ? [] : ['Plan shape: `{"tool":"plan","steps":["Modify component X to remove Y","Verify no Y remains"]}`.']),
     'Batch shape: `{"tool":"batch","calls":[{"tool":"remove_component","component_ref":"id"}]}`.',
-    'Use `get_help` only when exact syntax is missing from the notes or recent tool help. Its topic may name one tool or several, such as `patch_component, edit_component, batch`.',
+    'Use `get_help` only when it is listed for the current phase and exact syntax is missing from the notes or recent tool help. Its topic may name one tool or several, such as `patch_component, edit_component, batch`.',
     'Do not put `answer`, `done`, `plan`, `mark_step_done`, or another `batch` inside a batch.',
     ...(pluginHints.length > 0 ? [`Registered plugin ids: ${pluginHints.map((plugin) => plugin.id).join(', ')}.`] : []),
     planActive
@@ -43,13 +43,13 @@ export function buildDocumentEditFormatInstructions(options?: {
       : 'For larger work, create one plan after reviewing the notes. Plan steps must be document changes or final verification, not discovery.',
     'Use existing section/component refs from the notes. Do not invent ids.',
     'Return HVY only inside create/patch payload fields; never HTML/JSX/DOM.',
-    ...(hasDbTables
+    ...(canQueryDbTable
       ? [
           `SQLite tables/views available: ${dbTableNames.join(', ')}.`,
           'Query DB columns before writing SQL that depends on unknown columns.',
         ]
       : []),
-    ...(hasDbTablePlugin
+    ...(canExecuteSql
       ? [
           'For relational displays, prefer shared tables plus joins/views over one table per display column.',
           'Treat pluginConfig.source as storage selection, not a schema fix.',
@@ -57,6 +57,13 @@ export function buildDocumentEditFormatInstructions(options?: {
       : []),
     'When an edit request is fully satisfied, return `{"tool":"done","summary":"..."}`.',
   ].join('\n');
+}
+
+function getAvailableOptionalDocumentTools(options: { canQueryDbTable: boolean; canExecuteSql: boolean }): DocumentEditToolName[] {
+  return [
+    ...(options.canQueryDbTable ? ['query_db_table' as const] : []),
+    ...(options.canExecuteSql ? ['execute_sql' as const] : []),
+  ];
 }
 
 function isDatabaseRelevantRequest(request: string): boolean {

@@ -50,6 +50,7 @@ import {
   type WorkLedgerItem,
   type WorkNoteState,
 } from './ai-document-edit-types';
+import { selectDocumentEditPhase } from './ai-document-edit-phases';
 
 function buildDocumentEditContextSummary(
   summary: string,
@@ -272,6 +273,11 @@ async function runDocumentEditToolLoop(params: {
       plan,
       path: 'document',
     });
+    const phase = selectDocumentEditPhase({
+      request: params.request,
+      plan,
+      latestToolResult,
+    });
     const response = await requestProxyCompletion({
       settings: params.settings,
       messages: conversation,
@@ -281,6 +287,7 @@ async function runDocumentEditToolLoop(params: {
         pluginHints,
         planActive: plan !== null,
         request: params.request,
+        phase,
       }),
       mode: 'document-edit',
       debugLabel: `ai-document-edit:${iteration + 1}`,
@@ -889,11 +896,14 @@ function pruneTransientRecoveryMessages(conversation: ChatMessage[]): ChatMessag
 function orderBatchCallsForSafeExecution(calls: DocumentEditBatchToolRequest[]): DocumentEditBatchToolRequest[] {
   if (
     calls.length < 2
-    || !calls.every((call) => call.tool === 'remove_component' && parseDirectListComponentRef(call.component_ref))
+    || !calls.every((call) => isRemoveComponentCall(call) && parseDirectListComponentRef(call.component_ref))
   ) {
     return calls;
   }
   return [...calls].sort((left, right) => {
+    if (!isRemoveComponentCall(left) || !isRemoveComponentCall(right)) {
+      return 0;
+    }
     const leftRef = parseDirectListComponentRef(left.component_ref);
     const rightRef = parseDirectListComponentRef(right.component_ref);
     if (!leftRef || !rightRef || leftRef.prefix !== rightRef.prefix) {
@@ -901,6 +911,10 @@ function orderBatchCallsForSafeExecution(calls: DocumentEditBatchToolRequest[]):
     }
     return rightRef.index - leftRef.index;
   });
+}
+
+function isRemoveComponentCall(call: DocumentEditBatchToolRequest): call is Extract<DocumentEditBatchToolRequest, { tool: 'remove_component' }> {
+  return call.tool === 'remove_component';
 }
 
 function parseDirectListComponentRef(ref: string): { prefix: string; index: number } | null {

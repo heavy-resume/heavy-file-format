@@ -1,0 +1,193 @@
+---
+hvy_version: 0.1
+reader_max_width: 60rem
+section_defaults:
+  css: "margin: 0.5rem 0;"
+theme:
+  colors: {}
+---
+
+<!--hvy: {"id":"section-vgtnqj","lock":false,"expanded":true,"highlight":false}-->
+#! Intro
+
+ <!--hvy:text {}-->
+  # The CLI Interface
+  
+  The CLI interface maps a HVY file into a virutal file system
+<!--hvy: {"id":"section-w8gpsr","lock":false,"expanded":true,"highlight":false}-->
+#! Files
+
+ <!--hvy:text {}-->
+  ## Root Files
+
+ <!--hvy:expandable {}-->
+  <!--hvy:expandable:stub {}-->
+
+   <!--hvy:text {}-->
+    /header.yaml
+
+  <!--hvy:expandable:content {}-->
+
+   <!--hvy:text {}-->
+    This contains all of the yaml information EXCEPT the reusable component definitions (i.e. `component_defs)`
+
+ <!--hvy:expandable {}-->
+<!--hvy: {"id":"section-0qhc3f","lock":false,"expanded":true,"highlight":false}-->
+#! Directories
+
+ <!--hvy:text {}-->
+  ## Root Directories
+
+ <!--hvy:expandable {}-->
+  <!--hvy:expandable:stub {}-->
+
+   <!--hvy:text {}-->
+    /body
+
+  <!--hvy:expandable:content {}-->
+
+   <!--hvy:text {}-->
+    The body definition lives here. Each subcomponent is a subdirectory
+
+ <!--hvy:expandable {}-->
+  <!--hvy:expandable:stub {}-->
+
+   <!--hvy:text {}-->
+    /attachments
+
+  <!--hvy:expandable:content {}-->
+
+   <!--hvy:text {}-->
+    Attached files (the footer / tail)
+<!--hvy: {"id":"section-wrzf2x","lock":false,"expanded":true,"highlight":false}-->
+#! Component Structure
+
+ <!--hvy:text {}-->
+  # Component Structure
+  
+  Components are a subdirectory with a <component\_name.json> file setting the component type and defining the component header.  
+  
+  i.e. <`!--hvy:text {"id":"import-example-result","css":"margin: 0.5rem 0;"}--&gt;` becomes:  
+  
+  ### text.json
+  
+  with  
+  
+  \`\`\`json
+  
+  {"id":"import-example-result","css":"margin: 0.5rem 0;"}
+  
+  \`\`\`
+  
+  As the virtual file body
+  
+  ### body.txt
+  
+  This is the internal text WITHOUT components.   
+  
+  example:
+
+ <!--hvy:text {"id":"import-example-result"}-->
+  Import example result: pending  
+  
+  This is:  
+  Import example result: pending  
+  
+  inner components are place held with an identifier (c0, c1, etc) if no id is given. Indexes are a number for list items
+  
+  inner component definitions are directories
+<!--hvy: {"id":"section-7z1beu","lock":false,"expanded":true,"highlight":false}-->
+#! Supported Terminal Commands
+
+ <!--hvy:text {}-->
+  # Supported Terminal Commands
+  
+  All terminal commands support --help or man <command>
+
+ <!--hvy:expandable {}-->
+  <!--hvy:expandable:stub {}-->
+
+   <!--hvy:text {}-->
+    ls
+
+  <!--hvy:expandable:content {}-->
+
+   <!--hvy:text {}-->
+    Simple version that shows directory contents. By default shows name and directory or file designation
+
+ <!--hvy:expandable {}-->
+  <!--hvy:expandable:stub {}-->
+
+   <!--hvy:text {}-->
+    sed
+
+  <!--hvy:expandable:content {}-->
+
+   <!--hvy:text {}-->
+    Faux sed with search and replace capability
+
+ <!--hvy:expandable {}-->
+  <!--hvy:expandable:stub {}-->
+
+   <!--hvy:text {}-->
+    pwd
+
+  <!--hvy:expandable:content {}-->
+
+   <!--hvy:text {}-->
+    Show current directory
+
+ <!--hvy:expandable {}-->
+  <!--hvy:expandable:stub {}-->
+
+   <!--hvy:text {}-->
+    find
+
+  <!--hvy:expandable:content {}-->
+
+   <!--hvy:text {}-->
+    faux find
+
+ <!--hvy:expandable {}-->
+  <!--hvy:expandable:stub {}-->
+
+   <!--hvy:text {}-->
+    rg
+
+  <!--hvy:expandable:content {}-->
+
+   <!--hvy:text {}-->
+    faux rg
+
+ <!--hvy:expandable {}-->
+  <!--hvy:expandable:stub {}-->
+
+   <!--hvy:text {}-->
+    nl
+
+  <!--hvy:expandable:content {}-->
+
+   <!--hvy:text {}-->
+    count lines
+
+ <!--hvy:expandable {}-->
+  <!--hvy:expandable:stub {}-->
+
+   <!--hvy:text {}-->
+    head
+
+  <!--hvy:expandable:content {}-->
+
+   <!--hvy:text {}-->
+    faux head, default to 5 lines, max 100 lines
+
+ <!--hvy:expandable {}-->
+  <!--hvy:expandable:stub {}-->
+
+   <!--hvy:text {}-->
+    tail
+
+  <!--hvy:expandable:content {}-->
+
+   <!--hvy:text {}-->
+    Faux tail, default to 5 lines, max 100 lines

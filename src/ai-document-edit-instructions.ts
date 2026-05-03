@@ -114,9 +114,31 @@ export function buildInitialDocumentEditPrompt(request: string): string {
     'Handle this HVY document edit request:',
     request,
     '',
-    'The client has already walked the document and put section/chunk notes in context.',
+    'AI-generated section/chunk notes are in context.',
     'First review those notes. Then create one linear plan or run the next concrete tool call.',
     'Do not begin by re-reading the whole document.',
+  ].join('\n');
+}
+
+export function buildDocumentNotePrompt(request: string): string {
+  return [
+    'Take notes for this HVY document edit request:',
+    request,
+    '',
+    'Read the serialized section/chunk context.',
+    'For each chunk, write a short note saying whether it is relevant, why, and which exact component/section refs matter.',
+    'Do not plan edits yet and do not call tools.',
+  ].join('\n');
+}
+
+export function buildDocumentNoteFormatInstructions(): string {
+  return [
+    'Return concise Markdown notes only.',
+    'Group notes by chunk or section.',
+    'Use exact component/section ids from the context when relevant.',
+    'Say "not relevant" for chunks that do not matter to the request.',
+    'End with a short "Targets to review" list of the most likely refs.',
+    'Do not return JSON, tool calls, HTML, JSX, JavaScript, or CSS files.',
   ].join('\n');
 }
 

@@ -30,3 +30,5 @@ Naming convention notes:
 - Avoid repeating names (ensure good grepability to avoid confusion or overloading a name)
 - Avoid repeating filenames (ensure cmd / ctrl + p doesn't reveal a bunch of files with the same name)
   - This means: avoid adding another index.ts and another README.md, among other things
+
+Avoid letting files get over 1k in length. Consider breaking things up at that point unless there's a good reason it has to be that long.

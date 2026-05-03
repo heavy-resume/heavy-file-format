@@ -230,22 +230,22 @@ test('formatTraceTextEvent writes readable progress lines', () => {
   expect(line).toBe('[2026-05-02T12:00:00.000Z] run-1 document-edit progress :: Viewing component C6.\n');
 });
 
-test('formatTraceTextEvent summarizes document walk notes without dumping the full note body', () => {
+test('formatTraceTextEvent summarizes document walk chunks without dumping the full chunk body', () => {
   const line = formatTraceTextEvent(
     {
       runId: 'run-1',
       phase: 'document-edit',
       type: 'client_event',
       payload: {
-        event: 'document_walk_notes',
+        event: 'document_walk_chunks',
         chunks: 4,
-        notes: 'Document walk notes...\nWalk note: section="Skills"',
+        context: 'Serialized document chunks...\nWalk note: section="Skills"',
       },
     },
     new Date('2026-05-02T12:00:00.000Z')
   );
 
-  expect(line).toBe('[2026-05-02T12:00:00.000Z] run-1 document-edit client_event :: event=document_walk_notes chunks=4\n');
+  expect(line).toBe('[2026-05-02T12:00:00.000Z] run-1 document-edit client_event :: event=document_walk_chunks chunks=4\n');
 });
 
 test('formatTraceTextEvent writes readable work ledger lines', () => {

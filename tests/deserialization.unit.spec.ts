@@ -115,6 +115,55 @@ hvy_version: 0.1
   expect(document.sections[0]?.blocks[0]?.text).toBe('```ts\n  const answer = 42;\n```');
 });
 
+test('deserializes escaped fenced code markers as Markdown fences', () => {
+  const input = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"snippet"}-->
+#! Snippet
+
+ <!--hvy:text {"id":"import-example-result","css":"margin: 0.5rem 0;"}-->
+  \\\`\`\`json
+
+  {"id":"import-example-result","css":"margin: 0.5rem 0;"}
+
+  \\\`\`\`
+`;
+
+  const document = deserializeDocument(input, '.hvy');
+
+  expect(document.sections[0]?.blocks[0]?.text).toBe(
+    '```json\n\n{"id":"import-example-result","css":"margin: 0.5rem 0;"}\n\n```'
+  );
+});
+
+test('does not treat hvy directive examples inside fenced code as components', () => {
+  const input = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"snippet"}-->
+#! Snippet
+
+ <!--hvy:text {"id":"example"}-->
+  \`\`\`hvy
+  <!--hvy:text {"id":"import-example-result"}-->
+   Import example result: pending
+  \`\`\`
+
+  This is:
+  Import example result: pending
+`;
+
+  const document = deserializeDocument(input, '.hvy');
+
+  expect(document.sections[0]?.blocks).toHaveLength(1);
+  expect(document.sections[0]?.blocks[0]?.schema.id).toBe('example');
+  expect(document.sections[0]?.blocks[0]?.text).toContain('<!--hvy:text {"id":"import-example-result"}-->');
+  expect(document.sections[0]?.blocks[0]?.text).toContain('This is:\nImport example result: pending');
+});
+
 test('deserializes reader_max_width from document front matter', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1

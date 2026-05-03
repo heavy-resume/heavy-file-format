@@ -47,6 +47,10 @@ test('serializes editor inline code with markdown backticks', () => {
   expect(turndown.turndown('<p>Use <code>foobar</code> now</p>')).toBe('Use `foobar` now');
 });
 
+test('serializes editor inline code with literal angle brackets', () => {
+  expect(turndown.turndown('<p>Use <code>&lt;tag&gt;</code> now</p>')).toBe('Use `<tag>` now');
+});
+
 test('converts markdown headings into HVY section hierarchy', () => {
   const document = convertMarkdownToHvyDocument(`# Project Brief
 

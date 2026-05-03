@@ -238,6 +238,10 @@
 
 .rich-editor {
   min-height: 96px;
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: normal;
   border: 1px solid var(--hvy-border-input);
   border-radius: 7px;
   background: var(--hvy-surface);
@@ -252,7 +256,13 @@
 }
 
 .rich-editor p {
+  min-width: 0;
   margin: 0 0 0.45rem;
+}
+
+.rich-editor code:not(pre code) {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .rich-editor p:last-child {

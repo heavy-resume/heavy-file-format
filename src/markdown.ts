@@ -24,6 +24,14 @@ turndown.addRule('underline', {
   replacement: (content) => (content.trim().length > 0 ? `___${content}___` : ''),
 });
 
+turndown.addRule('inline-code-literal-text', {
+  filter: (node) => node.nodeName === 'CODE' && node.parentNode?.nodeName !== 'PRE',
+  replacement: (_content, node) => {
+    const text = (node.textContent ?? '').replace(/`/g, '\\`');
+    return text.length > 0 ? `\`${text}\`` : '';
+  },
+});
+
 export function markdownToEditorHtml(markdown: string): string {
   const normalized = normalizeMarkdownIndentation(markdown || '');
   const html = addExternalLinkTargets(DOMPurify.sanitize(marked.parse(applyUnderlineSyntax(escapeRawHtml(normalized))) as string));

@@ -604,7 +604,9 @@ export function applyRichAction(action: string, editable: HTMLElement, value?: s
     const currentBlock = getSelectionBlockElement(editable);
     formatSelectionBlock(editable, currentBlock?.tagName.toLowerCase() === 'blockquote' ? 'p' : 'blockquote');
   } else if (action === 'code-block') {
-    if (isSelectionInsideCodeBlock(editable)) {
+    if (shouldApplyInlineCodeFromCodeButton(editable)) {
+      applyInlineRichAction(editable, 'code', 'code');
+    } else if (isSelectionInsideCodeBlock(editable)) {
       convertSelectionCodeBlockToParagraph(editable);
     } else {
       insertCodeBlockAtSelection(editable);
@@ -669,8 +671,8 @@ function applyInlineRichAction(editable: HTMLElement, tagName: InlineRichTag, ac
   setPendingInlineAction(editable, action, false);
 }
 
-type InlineRichAction = 'bold' | 'italic' | 'underline' | 'strikethrough' | 'link';
-type InlineRichTag = 'strong' | 'em' | 'u' | 's' | 'a';
+type InlineRichAction = 'bold' | 'italic' | 'underline' | 'strikethrough' | 'link' | 'code';
+type InlineRichTag = 'strong' | 'em' | 'u' | 's' | 'a' | 'code';
 
 const inlineActionTagByAction: Record<InlineRichAction, InlineRichTag> = {
   bold: 'strong',
@@ -678,6 +680,7 @@ const inlineActionTagByAction: Record<InlineRichAction, InlineRichTag> = {
   underline: 'u',
   strikethrough: 's',
   link: 'a',
+  code: 'code',
 };
 
 function getPendingInlineActions(editable: HTMLElement): Set<InlineRichAction> {
@@ -717,7 +720,17 @@ function setSuppressedInlineAction(editable: HTMLElement, action: InlineRichActi
 }
 
 function isInlineRichAction(action: string): action is InlineRichAction {
-  return action === 'bold' || action === 'italic' || action === 'underline' || action === 'strikethrough' || action === 'link';
+  return action === 'bold' || action === 'italic' || action === 'underline' || action === 'strikethrough' || action === 'link' || action === 'code';
+}
+
+function shouldApplyInlineCodeFromCodeButton(editable: HTMLElement): boolean {
+  const range = getEditableSelectionRange(editable);
+  if (!range || range.collapsed || range.toString().length === 0) {
+    return false;
+  }
+  const startBlock = getBlockElementContaining(editable, range.startContainer);
+  const endBlock = getBlockElementContaining(editable, range.endContainer);
+  return !!startBlock && startBlock !== editable && startBlock === endBlock && startBlock.tagName !== 'PRE';
 }
 
 function getEditableSelectionRange(editable: HTMLElement): Range | null {
@@ -1657,7 +1670,11 @@ function getSelectionBlockElement(editable: HTMLElement): HTMLElement | null {
   if (!selection?.rangeCount) {
     return null;
   }
-  let node: Node | null = selection.getRangeAt(0).startContainer;
+  return getBlockElementContaining(editable, selection.getRangeAt(0).startContainer);
+}
+
+function getBlockElementContaining(editable: HTMLElement, container: Node): HTMLElement | null {
+  let node: Node | null = container;
   while (node && node !== editable) {
     if (node instanceof HTMLElement && /^(P|DIV|LI|BLOCKQUOTE|PRE|H[1-6])$/.test(node.tagName)) {
       return node;

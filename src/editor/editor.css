@@ -329,6 +329,7 @@
 .editor-block-passive {
   position: relative;
   padding-left: 0.85rem;
+  min-width: 0;
 }
 
 .editor-block.is-activating-path {
@@ -1183,6 +1184,7 @@
   background: var(--hvy-surface);
   margin-bottom: 0.35rem;
   position: relative;
+  max-width: 100%;
 }
 
 .editor-block-passive {

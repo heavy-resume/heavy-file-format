@@ -220,6 +220,7 @@ function parseBlocks(
   let currentIndent = 0;
   let currentTextIndent = 0;
   let sequenceCounter = 0;
+  let markdownFence: { marker: string; length: number } | null = null;
 
   const resolveParsedBase = (componentName: string): string => {
     if (isBuiltinComponentName(componentName)) {
@@ -427,6 +428,20 @@ function parseBlocks(
   };
 
   lines.forEach((line, lineIndex) => {
+    const fence = parseMarkdownFenceLine(line);
+    if (markdownFence) {
+      currentText.push(line);
+      if (fence && fence.marker === markdownFence.marker && fence.length >= markdownFence.length) {
+        markdownFence = null;
+      }
+      return;
+    }
+    if (fence) {
+      markdownFence = { marker: fence.marker, length: fence.length };
+      currentText.push(line);
+      return;
+    }
+
     const match = line.trim().match(directivePattern);
     if (!match) {
       currentText.push(line);
@@ -699,7 +714,21 @@ function normalizeParsedBlockText(lines: string[], indent: number): string {
     end -= 1;
   }
 
-  return stripCommonIndent(stripped.slice(start, end)).join('\n');
+  return normalizeEscapedMarkdownFenceLines(stripCommonIndent(stripped.slice(start, end))).join('\n');
+}
+
+function parseMarkdownFenceLine(line: string): { marker: '`' | '~'; length: number } | null {
+  const match = line.trim().match(/^\\?([`~]{3,})(?:[\w-]+)?\s*$/);
+  if (!match) {
+    return null;
+  }
+  const fence = match[1] ?? '';
+  const marker = fence[0] as '`' | '~' | undefined;
+  return marker ? { marker, length: fence.length } : null;
+}
+
+function normalizeEscapedMarkdownFenceLines(lines: string[]): string[] {
+  return lines.map((line) => line.replace(/^(\s*)\\(```+|~~~+)/, '$1$2'));
 }
 
 function stripCommonIndent(lines: string[]): string[] {

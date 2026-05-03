@@ -78,7 +78,7 @@ export function buildDocumentEditFormatInstructions(options?: {
     'Use component ids when they exist. If a component has no id, use its fallback component ref like `C3`.',
     'Do not invent ids or refs.',
     'Before creating a component that may already exist, use `search_components` with the intended label/purpose and modify the existing component when the search finds a close match.',
-    'Use `grep` to search the serialized document. Use `get_help` with topics like `plugin:dev.heavy.form`, `plugin:dev.heavy.db-table`, or `component:grid` for exact syntax.',
+    'Use `grep` to search the serialized document. Use `get_help` with topics like `plugin:PLUGIN_ID` or `component:grid` for exact syntax.',
     'Use `search_components` to search the current component/section index by intended purpose, label, plugin, text, or table name. This is local lexical search, not an external embedding API.',
     'Use `get_css`, `get_properties`, and `set_properties` for inline CSS on section/component ids. Use `null` as a property value to remove it.',
     'When you need exact HVY for a component before editing it, use `view_component` first. It returns 1-based component line numbers and defaults to lines 1-200.',
@@ -103,7 +103,7 @@ export function buildDocumentEditFormatInstructions(options?: {
           'Use `execute_sql` to create or update attached SQLite schema/data before adding db-table components that depend on it. SELECT/WITH statements are rejected; use `query_db_table` for reads when tables are already represented in the document.',
           'For relational requests, model real entities as shared tables and use joins or SQL views for derived displays. For example, a chore chart should usually use chores/people/assignments/completions tables plus a pivot query or view, not one table per person or display column.',
           'If a db-table component reports a missing table/view, first diagnose whether the intended object should be a base table, a derived view, or an existing table/view target. Then create the missing SQLite object with `execute_sql` or retarget pluginConfig.table to an existing object that matches the component intent. Treat pluginConfig.source as storage selection, not a schema fix.',
-          'When adding a component that should display live DB rows, use a registered db-table plugin block. Use `get_help` with `plugin:dev.heavy.db-table` for exact syntax.',
+          'When adding a component that should display live DB rows, use the registered plugin from the available plugin list and call `get_help` with that plugin id for exact syntax.',
         ]
       : []),
     'When an edit request is fully satisfied, return `{"tool":"done","summary":"..."}`.',
@@ -115,7 +115,7 @@ export function buildDocumentEditFormatInstructions(options?: {
     '{"tool":"answer","answer":"Direct answer to the user."}',
     ...(planActive ? [] : ['{"tool":"plan","steps":["Find the relevant section","Patch the component","Verify the updated structure"],"reason":"optional"}']),
     '{"tool":"mark_step_done","step":1,"summary":"Found the relevant section.","reason":"optional"}',
-    '{"tool":"get_help","topic":"plugin:dev.heavy.form","reason":"optional"}',
+    '{"tool":"get_help","topic":"plugin:PLUGIN_ID","reason":"optional"}',
     '{"tool":"get_help","topic":"component:grid","reason":"optional"}',
     '{"tool":"grep","query":"Python|TypeScript","flags":"i","before":2,"after":2,"max_count":3,"reason":"optional"}',
     '{"tool":"grep","query":"/Python|TypeScript/i","before":2,"after":2,"max_count":3,"reason":"optional"}',
@@ -151,7 +151,7 @@ export function buildDocumentEditFormatInstructions(options?: {
     ...(hasDbTablePlugin
       ? [
           '{"tool":"execute_sql","sql":"CREATE TABLE IF NOT EXISTS chores (id INTEGER PRIMARY KEY, title TEXT NOT NULL, description TEXT, active INTEGER DEFAULT 1)","reason":"Set up DB schema before adding db-table components"}',
-          `{"tool":"create_component","position":"append-to-section","section_ref":"my-section","hvy":"<!--hvy:plugin {\\"plugin\\":\\"dev.heavy.db-table\\",\\"pluginConfig\\":{\\"source\\":\\"with-file\\",\\"table\\":\\"${dbTableNames[0] ?? 'TABLE_NAME'}\\"}}-->","reason":"Add a live db-table component showing all rows"}`,
+          `{"tool":"create_component","position":"append-to-section","section_ref":"my-section","hvy":"<!--hvy:plugin {\\"plugin\\":\\"PLUGIN_ID\\",\\"pluginConfig\\":{}}-->","reason":"Add a registered plugin component"}`,
         ]
       : []),
     '{"tool":"request_structure","reason":"optional"}',

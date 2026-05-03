@@ -239,3 +239,20 @@ test('createScriptingRuntime exposes a supplied form API', () => {
   expect(runtime.doc.form.get_values()).toEqual({ food: 'soup' });
   expect(runtime.doc.form.get_options('food')).toEqual([{ label: 'Soup', value: 'soup' }]);
 });
+
+test('createScriptingRuntime exposes a supplied database API', () => {
+  const runtime = createScriptingRuntime({
+    document: { meta: {}, extension: '.hvy', sections: [], attachments: [] },
+    db: {
+      query: (sql, params) => [{ sql, params, title: 'Sweep' }],
+      execute: (sql, params) => `ran ${sql} with ${JSON.stringify(params)}`,
+    },
+  });
+
+  expect(runtime.doc.db.query('SELECT title FROM chores', { active: 1 })).toEqual([
+    { sql: 'SELECT title FROM chores', params: { active: 1 }, title: 'Sweep' },
+  ]);
+  expect(runtime.doc.db.execute('INSERT INTO chores (title) VALUES (?)', ['Sweep'])).toBe(
+    'ran INSERT INTO chores (title) VALUES (?) with ["Sweep"]'
+  );
+});

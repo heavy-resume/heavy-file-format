@@ -860,14 +860,16 @@ export const formPluginFactory: HvyPluginFactory = build;
 export const formPluginRegistration: HvyPluginRegistration = {
   id: FORM_PLUGIN_ID,
   displayName: 'Form',
-  aiHint: 'Functional form plugin; config in pluginConfig, fields/scripts in YAML body.',
+  aiHint: 'Form UI. Fields and script hooks live in the YAML body.',
   aiHelp: [
     `Use \`<!--hvy:plugin {"plugin":"${FORM_PLUGIN_ID}","pluginConfig":{"version":"${FORM_PLUGIN_VERSION}"}}-->\` followed by form YAML in the component body.`,
     'Do not use `<!--hvy:form ...-->`.',
     'Supported YAML keys include `fields`, `submitLabel`, `showSubmit`, `initialScript`, `submitScript`, and `scripts`.',
     'Fields use `name`, `label`, `type`, optional `placeholder`, optional `required`, optional `options`, optional `value`, and optional `triggers`.',
-    '`scripts` is a map of script names to Python/Brython source. `submitScript`, `initialScript`, and field triggers should name a script key instead of containing inline script bodies.',
-    'Script blocks must be indented under `scripts.NAME: |`; use Python comments (`# ...`) and Python dict syntax (`{"ok": True, "message": "Saved"}`), not SQL `--` comments or JavaScript-style booleans.',
+    '`scripts` maps script names to top-level Python/Brython source. `submitScript`, `initialScript`, and field triggers name a script key.',
+    'Form scripts receive `doc` plus `doc.form` for live form values, options, and errors.',
+    'Use `doc.form.get_value`, `doc.form.get_values`, `doc.form.set_value`, `doc.form.set_options`, `doc.form.set_error`, and `doc.form.clear_error` for form state.',
+    'Script blocks must be indented under `scripts.NAME: |`; use Python comments (`# ...`) and Python booleans (`True`/`False`), not SQL `--` comments or JavaScript-style booleans.',
   ].join(' '),
   create: formPluginFactory,
 };

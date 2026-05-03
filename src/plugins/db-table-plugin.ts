@@ -153,17 +153,16 @@ export const dbTablePluginRegistration: HvyPluginRegistration = {
     const table = typeof block.schema.pluginConfig.table === 'string' && block.schema.pluginConfig.table.trim().length > 0
       ? block.schema.pluginConfig.table.trim()
       : '(unset)';
-    return `Shows SQLite table "${table}"; query/filter text lives in the component body.`;
+    return `SQLite table/view display. Target: "${table}".`;
   },
   aiHelp: (block) => {
     const table = block && typeof block.schema.pluginConfig.table === 'string' && block.schema.pluginConfig.table.trim().length > 0
       ? block.schema.pluginConfig.table.trim()
       : '(unset)';
     return [
-      `db-table owns SQLite table "${table}".`,
-      'Rendered DB table errors usually belong to this plugin block.',
-      'Fix table selection in pluginConfig.table or fix the SQL query stored in the plugin body text.',
-      'Inspect table columns with query_db_table before writing WHERE clauses.',
+      `Use \`<!--hvy:plugin {"plugin":"${DB_TABLE_PLUGIN_ID}","pluginConfig":{"source":"with-file","table":"${table}"}}-->\`.`,
+      'Set `pluginConfig.table` to a SQLite table or view.',
+      'Put an optional SELECT query in the component body.',
     ].join(' ');
   },
   create: dbTablePluginFactory,

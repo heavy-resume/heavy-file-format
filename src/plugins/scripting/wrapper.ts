@@ -2,6 +2,7 @@ import { loadBrython, getBrython } from './brython-loader';
 import { createScriptingRuntime, type ScriptingFormApi, type ScriptingRuntime } from './runtime';
 import type { VisualDocument } from '../../types';
 import { getScriptingPluginVersion, SCRIPTING_PLUGIN_VERSION } from './version';
+import { createScriptingDbRuntime } from '../db-table';
 
 // Counter for unique runtime ids — each script run gets its own slot on the
 // shared __HVY_SCRIPTING__ global so concurrent runs don't collide.
@@ -408,7 +409,27 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
     };
   }
 
-  const runtime = createScriptingRuntime({ document: options.document, maxLines: options.maxLines, form: options.form });
+  let dbMutated = false;
+  let scriptingDb: Awaited<ReturnType<typeof createScriptingDbRuntime>>;
+  try {
+    scriptingDb = await createScriptingDbRuntime(options.document, () => {
+      dbMutated = true;
+    });
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : 'Failed to initialize document database.',
+      errorDetail: error instanceof Error ? error.stack ?? error.message : 'Failed to initialize document database.',
+      linesExecuted: 0,
+      toolCalls: 0,
+    };
+  }
+  const runtime = createScriptingRuntime({
+    document: options.document,
+    maxLines: options.maxLines,
+    form: options.form,
+    db: scriptingDb.api,
+  });
   const runtimeId = `r${++runtimeCounter}`;
   const scripting = getScriptingGlobal();
   const sanitizedSource = stripPythonImports(options.source);
@@ -446,6 +467,10 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
       delete scripting.instrumentedSources[runtimeId];
       delete scripting.errors[runtimeId];
       delete scripting.callbacks[runtimeId];
+      scriptingDb.dispose();
+      if (dbMutated) {
+        runtime.doc.rerender();
+      }
 
       resolve(result);
     };

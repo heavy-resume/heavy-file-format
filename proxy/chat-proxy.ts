@@ -24,6 +24,7 @@ interface TraceEvent {
     | 'provider_response'
     | 'model_response'
     | 'progress'
+    | 'work_ledger'
     | 'client_event'
     | 'invalid_response'
     | 'error'
@@ -517,8 +518,8 @@ function validateClientTraceEvent(payload: unknown): TraceEvent {
   if (record.phase !== 'qa' && record.phase !== 'component-edit' && record.phase !== 'document-edit' && record.phase !== 'proxy') {
     throw new Error('Invalid trace phase.');
   }
-  if (record.type !== 'progress' && record.type !== 'client_event') {
-    throw new Error('Client traces may only use progress or client_event.');
+  if (record.type !== 'progress' && record.type !== 'client_event' && record.type !== 'work_ledger') {
+    throw new Error('Client traces may only use progress, client_event, or work_ledger.');
   }
   if (!record.payload || typeof record.payload !== 'object' || Array.isArray(record.payload)) {
     throw new Error('Trace payload must be an object.');
@@ -647,6 +648,16 @@ function summarizeTracePayload(event: TraceEvent): string {
   const payload = event.payload;
   if (event.type === 'progress' && typeof payload.content === 'string') {
     return payload.content;
+  }
+  if (event.type === 'work_ledger') {
+    const summary = typeof payload.summary === 'string' ? payload.summary : '';
+    const action = typeof payload.action === 'string' ? payload.action : '';
+    const intent = typeof payload.intent === 'string' ? payload.intent : '';
+    return [
+      summary ? `did=${truncateTraceText(summary, 220)}` : '',
+      action ? `action=${truncateTraceText(action, 120)}` : '',
+      intent ? `intent=${truncateTraceText(intent, 180)}` : '',
+    ].filter(Boolean).join(' ');
   }
   if (event.type === 'model_response' && typeof payload.response === 'string') {
     return truncateTraceText(payload.response, 240);

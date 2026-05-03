@@ -8,8 +8,8 @@ import { state, getRefreshReaderPanels, getRenderApp } from '../../state';
 // synchronous from Python's point of view; mutations on the visual document
 // trigger a re-render once the script run finishes.
 //
-// Loose typing on purpose: the only stable contract here is "tool name + args
-// dict". Changes to the AI tool surface flow through automatically.
+// Loose typing on purpose: the stable contract here is "supported sync tool
+// name + args dict". Async/LLM/database tools are intentionally not exposed.
 
 export interface ScriptingRuntimeStats {
   toolCalls: number;
@@ -28,6 +28,7 @@ interface ScriptingDocApi {
   header: ScriptingHeaderApi;
   attachments: ScriptingAttachmentsApi;
   form: ScriptingFormApi;
+  db: ScriptingDbApi;
   rerender: () => void;
 }
 
@@ -60,10 +61,16 @@ export interface ScriptingFormApi {
   clear_error(name: string): void;
 }
 
+export interface ScriptingDbApi {
+  query(sql: string, params?: unknown): Record<string, unknown>[];
+  execute(sql: string, params?: unknown): string;
+}
+
 export interface ScriptingRuntimeOptions {
   maxLines?: number;
   document: VisualDocument;
   form?: ScriptingFormApi;
+  db?: ScriptingDbApi;
 }
 
 function createUnavailableFormApi(): ScriptingFormApi {
@@ -78,6 +85,16 @@ function createUnavailableFormApi(): ScriptingFormApi {
     get_options: fail,
     set_error: fail,
     clear_error: fail,
+  };
+}
+
+function createUnavailableDbApi(): ScriptingDbApi {
+  const fail = () => {
+    throw new Error('doc.db is unavailable because the document database could not be initialized.');
+  };
+  return {
+    query: fail,
+    execute: fail,
   };
 }
 
@@ -155,6 +172,7 @@ export function createScriptingRuntime(options: ScriptingRuntimeOptions): Script
       },
     },
     form: options.form ?? createUnavailableFormApi(),
+    db: options.db ?? createUnavailableDbApi(),
     rerender: flushIfMutated,
   };
 

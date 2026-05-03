@@ -35,7 +35,7 @@ import {
 } from './ai-document-edit-instructions';
 import type { JsonObject } from './hvy/types';
 import { getThemeColorLabel, THEME_COLOR_NAMES } from './theme';
-import { DB_TABLE_PLUGIN_ID, FORM_PLUGIN_ID, getHostPlugin } from './plugins/registry';
+import { DB_TABLE_PLUGIN_ID, getHostPlugin } from './plugins/registry';
 
 const MAX_SECTION_PREVIEW_LINES = 10;
 const MAX_TEXT_PREVIEW_LENGTH = 72;
@@ -47,6 +47,7 @@ const SENT_STRUCTURE_CONTEXT = 'Reduced outline context was already provided ear
 const DEFAULT_VIEW_START_LINE = 1;
 const DEFAULT_VIEW_END_LINE = 200;
 const MAX_GREP_LINE_WIDTH = 400;
+const MAX_WORK_LEDGER_ITEMS = 35;
 
 function buildDocumentEditContextSummary(
   summary: string,
@@ -100,6 +101,7 @@ interface DocumentStructureSnapshot {
 interface WorkLedgerItem {
   action: string;
   intent: string;
+  summary: string;
   result: string;
 }
 
@@ -478,6 +480,7 @@ async function runDocumentEditToolLoop(params: {
     const beforeProgress = summarizeDocumentLoopProgress(params.document, plan);
     const newInformationProgress = isDocumentInformationTool(parsed.value.tool) && !health.seenActionKeys.has(actionKey);
     let toolResult = '';
+    try {
     if (parsed.value.tool === 'plan') {
       if (plan) {
         toolResult = buildToolResult('plan', [
@@ -495,7 +498,9 @@ async function runDocumentEditToolLoop(params: {
     } else if (parsed.value.tool === 'mark_step_done') {
       const result = markPlanStepDone(plan, parsed.value.step, parsed.value.summary);
       if (result.changed) {
-        params.onProgress?.(describeDocumentToolProgress(parsed.value));
+        if (plan) {
+          params.onProgress?.(formatPlanState(plan));
+        }
         rewardLoopHealthForPlanStepDone(health);
       }
       toolResult = buildToolResult('mark_step_done', result.message);
@@ -633,6 +638,12 @@ async function runDocumentEditToolLoop(params: {
       toolResult = buildToolResult('execute_sql', sqlResult);
       contextSummary = await refreshDbContext(SENT_STRUCTURE_CONTEXT);
     }
+    } catch (error) {
+      const failure = formatDocumentToolFailure(error);
+      params.onProgress?.(failure);
+      toolResult = buildToolResult(parsed.value.tool, failure);
+      contextSummary = await refreshDbContext(SENT_STRUCTURE_CONTEXT);
+    }
 
     const afterProgress = summarizeDocumentLoopProgress(params.document, plan);
     const recovery = updateLoopHealthForAction(
@@ -645,7 +656,16 @@ async function runDocumentEditToolLoop(params: {
       return { summary: 'Stopped because the AI edit loop appeared stuck repeating actions without making progress. The AI can continue if you send another request.' };
     }
 
-    recordWorkLedgerItem(workLedger, parsed.value, latestIntent, toolResult);
+    const ledgerItem = recordWorkLedgerItem(workLedger, parsed.value, latestIntent, toolResult);
+    if (ledgerItem && params.traceRunId) {
+      traceAgentLoopEvent({
+        runId: params.traceRunId,
+        phase: 'document-edit',
+        type: 'work_ledger',
+        payload: ledgerItem,
+        signal: params.signal,
+      });
+    }
 
     conversation = [
       ...conversation,
@@ -764,7 +784,9 @@ async function runHeaderEditToolLoop(params: {
     } else if (parsed.value.tool === 'mark_step_done') {
       const result = markPlanStepDone(plan, parsed.value.step, parsed.value.summary);
       if (result.changed) {
-        params.onProgress?.(describeHeaderToolProgress(parsed.value));
+        if (plan) {
+          params.onProgress?.(formatPlanState(plan));
+        }
         rewardLoopHealthForPlanStepDone(health);
       }
       toolResult = buildToolResult('mark_step_done', result.message);
@@ -834,7 +856,7 @@ function buildLoopContext(
     parts.push(
       '',
       'Work ledger (recent completed/attempted tool actions; use this to avoid duplicating components/sections):',
-      ...workLedger.slice(-20).map((item, index) => `${index + 1}. ${item.action} — intent: ${item.intent} — result: ${item.result}`)
+      ...workLedger.slice(-MAX_WORK_LEDGER_ITEMS).map((item, index) => `${index + 1}. ${item.summary} — action: ${item.action} — intent: ${item.intent} — result: ${item.result}`)
     );
   }
   if (intentRecall?.trim()) {
@@ -858,18 +880,21 @@ function recordWorkLedgerItem(
   toolCall: DocumentEditToolRequest,
   intent: string,
   toolResult: string
-): void {
+): WorkLedgerItem | null {
   if (toolCall.tool === 'answer' || toolCall.tool === 'done') {
-    return;
+    return null;
   }
-  ledger.push({
+  const item: WorkLedgerItem = {
     action: describeLedgerAction(toolCall),
     intent: truncatePreview(intent.replace(/\n/g, ' '), 120),
+    summary: summarizeWorkLedgerAction(toolCall, toolResult),
     result: truncatePreview(toolResult.replace(/\n/g, ' '), 160),
-  });
-  while (ledger.length > 20) {
+  };
+  ledger.push(item);
+  while (ledger.length > MAX_WORK_LEDGER_ITEMS) {
     ledger.shift();
   }
+  return item;
 }
 
 function describeLedgerAction(toolCall: DocumentEditToolRequest): string {
@@ -902,6 +927,67 @@ function describeLedgerAction(toolCall: DocumentEditToolRequest): string {
   }
 }
 
+function summarizeWorkLedgerAction(toolCall: DocumentEditToolRequest, toolResult: string): string {
+  const failed = /\b(failed|error|invalid|unknown|missing|no such column)\b/i.test(toolResult);
+  const suffix = failed ? ' and got an error' : '';
+  switch (toolCall.tool) {
+    case 'plan':
+      return `Created a ${toolCall.steps.length}-step plan${suffix}.`;
+    case 'mark_step_done':
+      return `Marked plan step ${toolCall.step} done${suffix}.`;
+    case 'request_structure':
+      return `Refreshed the document structure${suffix}.`;
+    case 'request_rendered_structure':
+      return `Inspected the rendered document structure${suffix}.`;
+    case 'get_help':
+      return `Fetched help for ${toolCall.topic}${suffix}.`;
+    case 'search_components':
+      return `Searched existing components for "${truncatePreview(toolCall.query, 80)}"${suffix}.`;
+    case 'grep':
+      return `Searched the serialized document for "${truncatePreview(toolCall.query, 80)}"${suffix}.`;
+    case 'get_css':
+      return `Read CSS for ${formatListForSentence(toolCall.ids)}${suffix}.`;
+    case 'get_properties':
+      return `Read style properties for ${formatListForSentence(toolCall.ids)}${suffix}.`;
+    case 'set_properties':
+      return `Updated style properties for ${formatListForSentence(toolCall.ids)}${suffix}.`;
+    case 'view_component':
+      return `Viewed component ${toolCall.component_ref}${suffix}.`;
+    case 'view_rendered_component':
+      return `Viewed rendered output for ${toolCall.component_ref}${suffix}.`;
+    case 'edit_component':
+      return `Edited component ${toolCall.component_ref}${suffix}.`;
+    case 'patch_component':
+      return `Patched component ${toolCall.component_ref}${suffix}.`;
+    case 'remove_component':
+      return `Removed component ${toolCall.component_ref}${suffix}.`;
+    case 'create_component':
+      return `Created a component at ${toolCall.section_ref ?? toolCall.target_component_ref ?? toolCall.position}${suffix}.`;
+    case 'remove_section':
+      return `Removed section ${toolCall.section_ref}${suffix}.`;
+    case 'create_section':
+      return `Created a section at ${toolCall.target_section_ref ?? toolCall.parent_section_ref ?? toolCall.position}${suffix}.`;
+    case 'reorder_section':
+      return `Moved section ${toolCall.section_ref}${suffix}.`;
+    case 'query_db_table':
+      return `Read database ${toolCall.table_name ? `table/view ${toolCall.table_name}` : 'query result'}${suffix}.`;
+    case 'execute_sql':
+      return `Executed a SQLite write statement${suffix}.`;
+    default:
+      return `Ran ${toolCall.tool}${suffix}.`;
+  }
+}
+
+function formatListForSentence(values: string[]): string {
+  if (values.length === 0) {
+    return '(none)';
+  }
+  if (values.length <= 3) {
+    return values.join(', ');
+  }
+  return `${values.slice(0, 3).join(', ')}, and ${values.length - 3} more`;
+}
+
 function getDocumentToolIntent(toolCall: DocumentEditToolRequest): string {
   if ('reason' in toolCall && typeof toolCall.reason === 'string' && toolCall.reason.trim().length > 0) {
     return toolCall.reason.trim();
@@ -928,8 +1014,8 @@ function getDocumentToolIntent(toolCall: DocumentEditToolRequest): string {
   }
 }
 
-const COMPACT_LOOP_MESSAGES_AFTER = 12;
-const KEEP_RECENT_LOOP_MESSAGES = 6;
+const COMPACT_LOOP_MESSAGES_AFTER = 32;
+const KEEP_RECENT_LOOP_MESSAGES = 20;
 
 function compactToolLoopConversation(params: {
   conversation: ChatMessage[];
@@ -2603,12 +2689,9 @@ function parseEditPathSelection(source: string): { ok: true; value: EditPathSele
 function validateHvyToolPayload(hvy: string, fieldName: string, kind: 'component' | 'section'): string | null {
   const trimmed = hvy.trim();
   if (/^\s*<!--\s*hvy:form\b/i.test(trimmed)) {
-    const formPlugin = getHostPlugin(FORM_PLUGIN_ID);
     return [
       `${fieldName} uses unsupported \`hvy:form\` syntax.`,
-      formPlugin
-        ? `A registered Form plugin is available. Use \`<!--hvy:plugin {"plugin":"${FORM_PLUGIN_ID}","pluginConfig":{"version":"0.1"}}-->\` followed by form plugin body content.`
-        : 'No `hvy:form` component is registered. Use one of the registered plugin ids from the prompt, or answer that the requested functional plugin is unavailable.',
+      'Use a registered plugin id from the prompt with `<!--hvy:plugin {"plugin":"PLUGIN_ID","pluginConfig":{}}-->`, or answer that the requested plugin is unavailable.',
     ].join(' ');
   }
   const withoutHvyComments = trimmed.replace(/<!--\s*hvy:[\s\S]*?-->/gi, '');

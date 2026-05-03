@@ -117,7 +117,7 @@ hvy_version: 0.1
   const summary = summarizeDocumentStructure(document).summary;
 
   expect(summary).toContain('plugin id="chores-table"');
-  expect(summary).toContain('AI hint: Shows SQLite table "chores"; query/filter text lives in the component body.');
+  expect(summary).toContain('AI hint: SQLite table/view display. Target: "chores".');
 });
 
 test('summarizeDocumentStructure hides content deeper than three nesting levels', () => {
@@ -188,14 +188,14 @@ test('buildDocumentEditFormatInstructions documents the tool protocol', () => {
   expect(instructions).toContain('{"tool":"answer","answer":"Direct answer to the user."}');
   expect(instructions).toContain('{"tool":"plan","steps":["Find the relevant section","Patch the component","Verify the updated structure"],"reason":"optional"}');
   expect(instructions).toContain('{"tool":"mark_step_done","step":1,"summary":"Found the relevant section.","reason":"optional"}');
-  expect(instructions).toContain('{"tool":"get_help","topic":"plugin:dev.heavy.form","reason":"optional"}');
+  expect(instructions).toContain('{"tool":"get_help","topic":"plugin:PLUGIN_ID","reason":"optional"}');
   expect(instructions).toContain('{"tool":"get_help","topic":"component:grid","reason":"optional"}');
   expect(instructions).toContain('Before creating a component that may already exist, use `search_components`');
   expect(instructions).toContain('{"tool":"search_components","query":"Add Chore form","max_count":3,"reason":"Check for an existing add chore form before creating another one."}');
   expect(instructions).toContain('It may revise that component in place or fully replace it');
   expect(instructions).toContain('Use real section ids when a section has an id.');
   expect(instructions).toContain('Use `grep` to search the serialized document.');
-  expect(instructions).toContain('Use `get_help` with topics like `plugin:dev.heavy.form`');
+  expect(instructions).toContain('Use `get_help` with topics like `plugin:PLUGIN_ID`');
   expect(buildInitialDocumentEditPrompt('Update the document.')).toContain('You have at most 50 tool steps.');
   expect(instructions).toContain('defaults to lines 1-200');
   expect(instructions).toContain('Use `request_rendered_structure` to inspect what visible components render');
@@ -237,7 +237,7 @@ test('buildDocumentEditFormatInstructions documents the tool protocol', () => {
   expect(dbPluginInstructions).toContain(
     '{"tool":"execute_sql","sql":"CREATE TABLE IF NOT EXISTS chores (id INTEGER PRIMARY KEY, title TEXT NOT NULL, description TEXT, active INTEGER DEFAULT 1)","reason":"Set up DB schema before adding db-table components"}'
   );
-  expect(dbPluginInstructions).toContain('reason":"Add a live db-table component showing all rows"');
+  expect(dbPluginInstructions).toContain('reason":"Add a registered plugin component"');
 
   const dbPluginOnlyInstructions = buildDocumentEditFormatInstructions({
     pluginHints: [{ id: 'dev.heavy.db-table', displayName: 'DB Table', hint: 'Renders SQLite rows.' }],
@@ -246,7 +246,7 @@ test('buildDocumentEditFormatInstructions documents the tool protocol', () => {
   expect(dbPluginOnlyInstructions).toContain(
     'Valid tools are: `answer`, `plan`, `mark_step_done`, `grep`, `search_components`, `get_help`, `get_css`, `get_properties`, `set_properties`, `view_component`, `view_rendered_component`, `edit_component`, `patch_component`, `create_component`, `remove_component`, `create_section`, `remove_section`, `reorder_section`, `execute_sql`, `request_structure`, `request_rendered_structure`, `done`.'
   );
-  expect(dbPluginOnlyInstructions).toContain('\\"table\\":\\"TABLE_NAME\\"');
+  expect(dbPluginOnlyInstructions).toContain('\\"plugin\\":\\"PLUGIN_ID\\"');
 
   const noPluginInstructions = buildDocumentEditFormatInstructions();
   expect(noPluginInstructions).toContain('No plugins are currently registered.');
@@ -458,7 +458,7 @@ hvy_version: 0.1
 
   expect(result.error).toBeNull();
   const progressContents = onProgress.mock.calls.map((call) => (call[0] as ChatMessage).content);
-  expect(progressContents.filter((content) => content === 'Marked plan step 1 done.')).toHaveLength(1);
+  expect(progressContents.filter((content) => content.includes('1. [x] Find the summary text'))).toHaveLength(1);
   expect(lastToolResultBeforeCall(3)).toContain('Plan step 1 is already marked done.');
 });
 
@@ -493,6 +493,10 @@ hvy_version: 0.1
   expect(result.error).toBeNull();
   expect(result.messages.at(-1)?.content).toBe('Found the summary text.');
   expect(requestProxyCompletionMock).toHaveBeenCalledTimes(3);
+  expect(onProgress).toHaveBeenCalledWith(expect.objectContaining({
+    progress: true,
+    content: expect.stringContaining('1. [x] Find the summary text'),
+  }));
   expect(onProgress).toHaveBeenCalledWith(expect.objectContaining({
     progress: true,
     content: 'Completed all plan steps.',
@@ -534,6 +538,39 @@ hvy_version: 0.1
     content: expect.stringContaining('Choosing whether to edit'),
   }));
   expect(result.messages.some((message) => message.progress && message.content.includes('Searching the document'))).toBe(true);
+});
+
+test('requestAiDocumentEditTurn recovers from unknown component refs', async () => {
+  queueAiToolResponses(
+    '{"tool":"view_component","component_ref":"top-tools-technologies","reason":"Inspect the tools section."}',
+    '{"tool":"request_structure","reason":"Refresh refs after the unknown component ref error."}',
+    '{"tool":"done","summary":"Recovered by refreshing refs."}'
+  );
+
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {"id":"top-skills-tools-technologies"}-->
+ Tools and technologies
+`, '.hvy');
+  seedStateForDocument(document);
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+
+  const result = await requestAiDocumentEditTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Inspect the tools and technologies component.',
+  });
+
+  expect(result.error).toBeNull();
+  expect(lastToolResultBeforeCall(1)).toContain('Tool result for view_component:');
+  expect(lastToolResultBeforeCall(1)).toContain('Tool failed: Unknown component ref "top-tools-technologies".');
+  expect(result.messages.at(-1)?.content).toBe('Recovered by refreshing refs.');
 });
 
 test('requestAiDocumentEditTurn lets the model inspect rendered component output', async () => {
@@ -609,10 +646,20 @@ hvy_version: 0.1
 
 test('requestAiDocumentEditTurn compacts older tool-loop history into an operational summary', async () => {
   queueAiToolResponses(
-    '{"tool":"grep","query":"Existing","max_count":1}',
+    '{"tool":"grep","query":"Existing 1","max_count":1}',
+    '{"tool":"grep","query":"Existing 2","max_count":1}',
+    '{"tool":"grep","query":"Existing 3","max_count":1}',
+    '{"tool":"grep","query":"Existing 4","max_count":1}',
+    '{"tool":"grep","query":"Existing 5","max_count":1}',
+    '{"tool":"grep","query":"Existing 6","max_count":1}',
+    '{"tool":"grep","query":"Existing 7","max_count":1}',
     '{"tool":"request_structure"}',
     '{"tool":"view_component","component_ref":"summary-text"}',
-    '{"tool":"grep","query":"Missing","max_count":1}',
+    '{"tool":"grep","query":"Missing 1","max_count":1}',
+    '{"tool":"grep","query":"Missing 2","max_count":1}',
+    '{"tool":"grep","query":"Missing 3","max_count":1}',
+    '{"tool":"grep","query":"Missing 4","max_count":1}',
+    '{"tool":"grep","query":"Missing 5","max_count":1}',
     '{"tool":"request_rendered_structure"}',
     '{"tool":"get_properties","ids":["summary-text"],"properties":["margin"]}',
     '{"tool":"view_rendered_component","component_ref":"summary-text"}',
@@ -646,7 +693,7 @@ hvy_version: 0.1
   expect(compactedSummary?.content).toContain('- Completed actions:');
   expect(compactedSummary?.content).toContain('grep');
   expect(compactedSummary?.content).toContain('- Important refs/ids:');
-  expect(lastModelCall?.messages.length).toBeLessThanOrEqual(8);
+  expect(lastModelCall?.messages.length).toBeLessThanOrEqual(22);
 });
 
 test('requestAiDocumentEditTurn can answer informational questions without mutating the document', async () => {
@@ -1190,11 +1237,11 @@ hvy_version: 0.1
   expect(result.error).toBeNull();
   const firstToolInstructions = requestProxyCompletionMock.mock.calls[1]?.[0]?.formatInstructions ?? '';
   expect(firstToolInstructions).toContain('Form (dev.heavy.form)');
-  expect(firstToolInstructions).toContain('Functional form plugin; config in pluginConfig, fields/scripts in YAML body.');
+  expect(firstToolInstructions).toContain('Form UI. Fields and script hooks live in the YAML body.');
   expect(firstToolInstructions).toContain('Use `get_help` for exact plugin/component syntax instead of guessing.');
   const retryMessages = requestProxyCompletionMock.mock.calls[2]?.[0]?.messages.map((message: ChatMessage) => message.content).join('\n') ?? '';
   expect(retryMessages).toContain('unsupported `hvy:form` syntax');
-  expect(retryMessages).toContain('A registered Form plugin is available');
+  expect(retryMessages).toContain('Use a registered plugin id from the prompt');
   const serialized = serializeDocument(document);
   expect(serialized).toContain('"plugin":"dev.heavy.form"');
   expect(serialized).toContain('submitLabel: Assign');
@@ -1230,10 +1277,15 @@ hvy_version: 0.1
   expect(helpResult).toContain('Tool result for get_help:');
   expect(helpResult).toContain('Form (dev.heavy.form)');
   expect(helpResult).toContain('Supported YAML keys include `fields`');
+  expect(helpResult).toContain('Form scripts receive `doc` plus `doc.form`');
+  expect(helpResult).toContain('Use `doc.form.get_value`');
+  expect(helpResult).not.toContain('doc.db.query');
   const contextAfterHelp = requestProxyCompletionMock.mock.calls[2]?.[0]?.context ?? '';
   expect(contextAfterHelp).toContain('Recent tool help already fetched; reuse this before calling `get_help` again for the same syntax:');
   expect(contextAfterHelp).toContain('Form (dev.heavy.form)');
   expect(contextAfterHelp).toContain('Supported YAML keys include `fields`');
+  expect(contextAfterHelp).toContain('Form scripts receive `doc` plus `doc.form`');
+  expect(contextAfterHelp).not.toContain('doc.db.query');
 });
 
 test('requestAiDocumentEditTurn can search existing components and carries a work ledger', async () => {
@@ -1273,6 +1325,7 @@ hvy_version: 0.1
   expect(searchResult).toContain('If one of these already satisfies the intended purpose');
   const contextAfterSearch = requestProxyCompletionMock.mock.calls[2]?.[0]?.context ?? '';
   expect(contextAfterSearch).toContain('Work ledger (recent completed/attempted tool actions; use this to avoid duplicating components/sections):');
+  expect(contextAfterSearch).toContain('Searched existing components for "Add Chore form".');
   expect(contextAfterSearch).toContain('search_components(Add Chore form)');
   expect(contextAfterSearch).toContain('Related existing components for current intent');
 });

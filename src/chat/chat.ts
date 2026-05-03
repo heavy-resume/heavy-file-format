@@ -52,7 +52,7 @@ export interface ProxyCompletionParams {
 export interface AgentLoopTraceEventParams {
   runId: string;
   phase: ProxyChatRequest['mode'] | 'proxy';
-  type: 'progress' | 'client_event';
+  type: 'progress' | 'client_event' | 'work_ledger';
   payload: Record<string, unknown>;
   signal?: AbortSignal;
 }

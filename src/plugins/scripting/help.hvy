@@ -23,8 +23,9 @@ programmatically. Scripts cannot reach the network — they only see the
  Your script runs with one global injected: `doc`. Everything you can do
  flows through it.
 
- - `doc.tool(name, args)` — call any AI agent tool by name. Returns the
-   tool's text result. Mutating tools update the document immediately.
+ - `doc.tool(name, args)` — call a supported synchronous document tool by
+   name. Returns the tool's text result. Mutating tools update the document
+   immediately.
  - `doc.header.get(key)` / `doc.header.set(key, value)` /
    `doc.header.remove(key)` / `doc.header.keys()` — read and write the
    document's YAML front matter.
@@ -34,6 +35,8 @@ programmatically. Scripts cannot reach the network — they only see the
  - `doc.attachments.write(id, bytes, meta=None)` — create or replace an
    attachment.
  - `doc.attachments.remove(id)` — delete an attachment.
+ - Plugin-provided APIs may also be present on `doc` when the relevant plugin
+   is available. Use the relevant plugin's help for that API.
  - `doc.rerender()` — flush any pending re-render now (usually unnecessary;
    the host re-renders automatically when the script finishes).
 
@@ -41,9 +44,9 @@ programmatically. Scripts cannot reach the network — they only see the
 #! Available tools
 
 <!--hvy:text {}-->
- The scripting `doc.tool(name, args)` surface is the same as the AI
- agent's. Pass `args` as a Python dict; field names match the AI tool
- schema.
+ The scripting `doc.tool(name, args)` surface is a synchronous subset of the
+ AI agent's document-edit tools. Pass `args` as a Python dict; field names
+ match the AI tool schema.
 
  Document tools:
 
@@ -59,7 +62,17 @@ programmatically. Scripts cannot reach the network — they only see the
 
  - `view_header`, `grep_header`, `patch_header`.
 
- `edit_component` and async tools are not exposed here.
+ `edit_component`, `view_rendered_component`, `query_db_table`, `execute_sql`,
+ and other async tools are not exposed through `doc.tool(...)`.
+
+<!--hvy: {"id":"execution-model","expanded":false}-->
+#! Execution model
+
+<!--hvy:text {}-->
+ Script source is top-level Python/Brython code. A top-level `return` is a
+ syntax error, but `return` works normally inside helper functions you define.
+ Scripts receive a `doc` global and may define functions, local variables,
+ loops, and conditionals like ordinary Python.
 
 <!--hvy: {"id":"line-budget","expanded":false}-->
 #! Line budget

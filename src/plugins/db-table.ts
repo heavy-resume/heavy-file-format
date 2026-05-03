@@ -9,6 +9,7 @@ import { getRenderApp, state } from '../state';
 import type { DocumentAttachment, VisualDocument } from '../types';
 import { DB_ATTACHMENT_ID, getAttachment, setAttachment } from '../attachments';
 import { DB_TABLE_PLUGIN_ID } from './registry';
+import type { ScriptingDbApi } from './scripting/runtime';
 
 import './db-table.css';
 
@@ -16,6 +17,8 @@ const SQLITE_ROW_COMPONENTS_TABLE = '__hvy_row_components';
 
 type SqlJsStatic = Awaited<ReturnType<typeof initSqlJs>>;
 type SqlJsDatabase = InstanceType<SqlJsStatic['Database']>;
+type SqliteBindValue = number | string | Uint8Array | null;
+type SqliteBindParams = SqliteBindValue[] | Record<string, SqliteBindValue> | null;
 
 interface SqliteTableSnapshot {
   objectType: 'table' | 'view';
@@ -621,10 +624,17 @@ async function loadRuntimeDatabase(): Promise<void> {
 async function getSqlJs(): Promise<SqlJsStatic> {
   if (!sqlJsPromise) {
     sqlJsPromise = initSqlJs({
-      locateFile: () => sqlWasmUrl,
+      locateFile: () => locateSqlWasmFile(),
     });
   }
   return sqlJsPromise;
+}
+
+function locateSqlWasmFile(): string {
+  if (typeof process !== 'undefined' && process.versions?.node) {
+    return new URL('../../node_modules/sql.js/dist/sql-wasm.wasm', import.meta.url).pathname;
+  }
+  return sqlWasmUrl;
 }
 
 async function getAttachmentDatabaseBytes(attachment: DocumentAttachment | null): Promise<Uint8Array> {
@@ -1306,6 +1316,110 @@ export async function executeDbTableWriteSql(sql: string): Promise<string> {
   const changes = Number(db.exec('SELECT changes()')[0]?.values[0]?.[0] ?? 0);
   await persistRuntimeDatabase();
   return `Executed: ${trimmed}\nRows affected: ${changes}`;
+}
+
+function normalizeScriptingSqlParams(params: unknown): SqliteBindParams {
+  if (params == null) {
+    return null;
+  }
+  if (Array.isArray(params)) {
+    return params.map((value) => normalizeScriptingSqlValue(value));
+  }
+  if (typeof params === 'object') {
+    const normalized: Record<string, SqliteBindValue> = {};
+    for (const [key, value] of Object.entries(params as Record<string, unknown>)) {
+      normalized[key] = normalizeScriptingSqlValue(value);
+    }
+    return normalized;
+  }
+  throw new Error('SQL params must be a list or object.');
+}
+
+function normalizeScriptingSqlValue(value: unknown): SqliteBindValue {
+  if (value == null) {
+    return null;
+  }
+  if (typeof value === 'string' || typeof value === 'number') {
+    return value;
+  }
+  if (typeof value === 'boolean') {
+    return value ? 1 : 0;
+  }
+  if (value instanceof Uint8Array) {
+    return value;
+  }
+  throw new Error('SQL params may only contain strings, numbers, booleans, bytes, or null.');
+}
+
+function persistScriptingDatabase(document: VisualDocument, db: SqlJsDatabase): void {
+  const previous = getAttachment(document, DB_ATTACHMENT_ID);
+  setAttachment(
+    document,
+    DB_ATTACHMENT_ID,
+    {
+      ...(previous?.meta ?? {}),
+      plugin: DB_TABLE_PLUGIN_ID,
+      mediaType: 'application/vnd.sqlite3',
+    },
+    db.export()
+  );
+}
+
+export interface ScriptingDbRuntime {
+  api: ScriptingDbApi;
+  dispose(): void;
+}
+
+export async function createScriptingDbRuntime(
+  document: VisualDocument,
+  onMutation?: () => void
+): Promise<ScriptingDbRuntime> {
+  const db = await openDocumentDatabase(document);
+  const api: ScriptingDbApi = {
+    query: (sql, params) => {
+      const trimmed = String(sql ?? '').trim().replace(/;+\s*$/u, '');
+      if (trimmed.length === 0) {
+        throw new Error('doc.db.query requires a non-empty SQL query.');
+      }
+      const statement = db.prepare(trimmed, normalizeScriptingSqlParams(params));
+      const columns = statement.getColumnNames();
+      const rows: Record<string, unknown>[] = [];
+      try {
+        while (statement.step()) {
+          const row = statement.getAsObject() as Record<string, unknown>;
+          rows.push(Object.fromEntries(columns.map((column) => [column, row[column] ?? null])));
+        }
+      } finally {
+        statement.free();
+      }
+      return rows;
+    },
+    execute: (sql, params) => {
+      const trimmed = String(sql ?? '').trim().replace(/;+\s*$/u, '');
+      if (trimmed.length === 0) {
+        throw new Error('doc.db.execute requires a non-empty SQL statement.');
+      }
+      const leading = trimmed.match(/^[A-Za-z]+/)?.[0]?.toUpperCase() ?? '';
+      if (leading === 'SELECT' || leading === 'WITH') {
+        throw new Error('Use doc.db.query for read-only SELECT statements. doc.db.execute is for writes.');
+      }
+      db.run(trimmed, normalizeScriptingSqlParams(params));
+      const rowsAffected = db.getRowsModified();
+      persistScriptingDatabase(document, db);
+      onMutation?.();
+      return `Executed: ${trimmed}\nRows affected: ${rowsAffected}`;
+    },
+  };
+  return {
+    api,
+    dispose: () => {
+      try {
+        db.close();
+      } catch {
+        // Ignore close failures for scripting databases.
+      }
+    },
+  };
 }
 
 async function openDocumentDatabase(document: VisualDocument): Promise<SqlJsDatabase> {

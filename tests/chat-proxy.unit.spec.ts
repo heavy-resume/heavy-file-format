@@ -220,6 +220,24 @@ test('formatTraceTextEvent writes readable progress lines', () => {
   expect(line).toBe('[2026-05-02T12:00:00.000Z] run-1 document-edit progress :: Viewing component C6.\n');
 });
 
+test('formatTraceTextEvent writes readable work ledger lines', () => {
+  const line = formatTraceTextEvent(
+    {
+      runId: 'run-1',
+      phase: 'document-edit',
+      type: 'work_ledger',
+      payload: {
+        summary: 'Read database table assignments.',
+        action: 'query_db_table(assignments)',
+        intent: 'Inspect assignments table.',
+      },
+    },
+    new Date('2026-05-02T12:00:00.000Z')
+  );
+
+  expect(line).toBe('[2026-05-02T12:00:00.000Z] run-1 document-edit work_ledger :: did=Read database table assignments. action=query_db_table(assignments) intent=Inspect assignments table.\n');
+});
+
 test('buildOpenAiProxyRequest does not send trace run ids upstream', () => {
   const openAiRequest = buildOpenAiProxyRequest({
     ...request,

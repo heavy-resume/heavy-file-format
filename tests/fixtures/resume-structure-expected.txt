@@ -19,27 +19,27 @@
 # Skills
   # Skills <!-- text id="C8" -->
   5 items <!-- component-list id="C9" -->
-    ... contents hidden ...
+    ... contents hidden ... ids: skill-software-engineering, skill-reverse-engineering, skill-library-development, skill-llm-prompt-engineering, skill-project-management
 <!-- section id="tools-technologies" title="Tools & Technologies" location="sidebar" -->
 # Tools & Technologies
   # Tools & Technologies <!-- text id="C10" -->
   7 items <!-- component-list id="C11" -->
-    ... contents hidden ...
+    ... contents hidden ... ids: tool-typescript, tool-python, tool-c-cpp, tool-developer-containers, tool-openai-api, tool-github-codespaces, tool-superagi
 <!-- section id="history" title="History" location="main" -->
 # History
   # History <!-- text id="C12" -->
   columns: YEAR, ORGANIZATION, TITLE <!-- table id="C13" -->
   1 items <!-- component-list id="C14" -->
-    ... contents hidden ...
+    ... contents hidden ... ids: history-northwind-labs-senior-software-engineer
 <!-- section id="projects" title="Projects" location="main" -->
 # Projects
   # Projects <!-- text id="C15" -->
   columns: PROJECT, DATE <!-- table id="C16" -->
   2 items <!-- component-list id="C17" -->
-    ... contents hidden ...
+    ... contents hidden ... ids: project-heavy-stack, project-autonomous-agent-hackathon
 <!-- section id="education" title="Education" location="main" -->
 # Education
   # Education <!-- text id="C18" -->
   columns: DEGREE, INSTITUTION, LOCATION <!-- table id="C19" -->
   1 items <!-- component-list id="C20" -->
-    ... contents hidden ...
+    ... contents hidden ... ids: education-bs-computer-science

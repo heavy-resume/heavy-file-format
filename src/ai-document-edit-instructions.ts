@@ -47,12 +47,15 @@ export function buildDocumentEditFormatInstructions(options?: {
   dbTableNames?: string[];
   pluginHints?: DocumentEditPluginHint[];
   planActive?: boolean;
+  request?: string;
 }): string {
   const dbTableNames = options?.dbTableNames ?? [];
   const pluginHints = options?.pluginHints ?? [];
   const planActive = options?.planActive ?? false;
-  const hasDbTables = dbTableNames.length > 0;
-  const hasDbTablePlugin = pluginHints.some((plugin) => plugin.id === 'dev.heavy.db-table');
+  const request = options?.request ?? '';
+  const dbRelevant = isDatabaseRelevantRequest(request);
+  const hasDbTables = dbRelevant && dbTableNames.length > 0;
+  const hasDbTablePlugin = dbRelevant && pluginHints.some((plugin) => plugin.id === 'dev.heavy.db-table');
   const planTools = planActive ? '`mark_step_done`' : '`plan`, `mark_step_done`';
   const databaseTools = [
     ...(hasDbTables ? ['`query_db_table`'] : []),
@@ -64,7 +67,8 @@ export function buildDocumentEditFormatInstructions(options?: {
     'Choose one tool at a time.',
     `Valid tools are: ${validTools}.`,
     'This is an HVY document editing tool loop, not an HTML generator. Do not return HTML, JSX, DOM markup, JavaScript, or CSS files as document content.',
-    'All new visible content must be encoded as HVY sections and components using `<!--hvy:...-->` directives plus Markdown-like text content. Use `get_help` when you need exact component or plugin syntax.',
+    'All new visible content must be encoded as HVY sections and components using `<!--hvy:...-->` directives plus Markdown-like text content.',
+    'Use `get_help` for exact syntax instead of guessing. Tool help topics include `tool:patch_component`, `tool:remove_component`, `tool:create_component`, `tool:create_section`, `tool:grep`, and `tool:css`.',
     ...formatPluginHintLines(pluginHints),
     'Use `answer` for informational questions, explanations, or requests that do not require changing the HVY document. `answer` is final and does not mutate the document.',
     planActive
@@ -78,12 +82,12 @@ export function buildDocumentEditFormatInstructions(options?: {
     'Use component ids when they exist. If a component has no id, use its fallback component ref like `C3`.',
     'Do not invent ids or refs.',
     'Before creating a component that may already exist, use `search_components` with the intended label/purpose and modify the existing component when the search finds a close match.',
-    'Use `grep` to search the serialized document. Use `get_help` with topics like `plugin:PLUGIN_ID` or `component:grid` for exact syntax.',
+    'Use `grep` to search the serialized document. Use `get_help` with topics like `tool:patch_component`, `plugin:PLUGIN_ID`, or `component:grid` for exact syntax.',
     'Use `search_components` to search the current component/section index by intended purpose, label, plugin, text, or table name. This is local lexical search, not an external embedding API.',
     'Use `get_css`, `get_properties`, and `set_properties` for inline CSS on section/component ids. Use `null` as a property value to remove it.',
     'When you need exact HVY for a component before editing it, use `view_component` first. It returns 1-based component line numbers and defaults to lines 1-200.',
     'Use `request_rendered_structure` to inspect what visible components render, especially when the user reports a visible output problem.',
-    'Use `view_rendered_component` to inspect one component rendered as user-facing text plus plugin diagnostics. For db-table plugins this can reveal rendered SQL/table errors.',
+    'Use `view_rendered_component` to inspect one component rendered as user-facing text plus plugin diagnostics.',
     'Use `edit_component` only for one existing component. It may revise that component in place or fully replace it, but only for that single referenced component.',
     'Use `patch_component` for small, local changes after you have seen the numbered component lines.',
     'Use `create_component` to add a fully defined new component near an existing one or at the end of a section.',
@@ -110,53 +114,53 @@ export function buildDocumentEditFormatInstructions(options?: {
     'JSON must use double-quoted keys and string values.',
     'For `create_component.hvy`, return one complete HVY component fragment as a JSON string value with escaped newlines. It must start with an HVY component directive such as `<!--hvy:text {}-->`, `<!--hvy:table {...}-->`, `<!--hvy:container {...}-->`, or `<!--hvy:plugin {...}-->`.',
     'For `create_section.hvy`, return one complete HVY section fragment as a JSON string value with escaped newlines. It must start with an HVY section directive such as `<!--hvy: {"id":"new-section"}-->`, followed by a `#!` title and HVY blocks.',
-    '',
-    'Tool shapes:',
-    '{"tool":"answer","answer":"Direct answer to the user."}',
-    ...(planActive ? [] : ['{"tool":"plan","steps":["Find the relevant section","Patch the component","Verify the updated structure"],"reason":"optional"}']),
-    '{"tool":"mark_step_done","step":1,"summary":"Found the relevant section.","reason":"optional"}',
-    '{"tool":"get_help","topic":"plugin:PLUGIN_ID","reason":"optional"}',
-    '{"tool":"get_help","topic":"component:grid","reason":"optional"}',
-    '{"tool":"grep","query":"Python|TypeScript","flags":"i","before":2,"after":2,"max_count":3,"reason":"optional"}',
-    '{"tool":"grep","query":"/Python|TypeScript/i","before":2,"after":2,"max_count":3,"reason":"optional"}',
-    '{"tool":"search_components","query":"Add Chore form","max_count":3,"reason":"Check for an existing add chore form before creating another one."}',
-    '{"tool":"get_css","ids":["summary","C3"],"regex":"margin|padding","flags":"i","reason":"optional"}',
-    '{"tool":"get_properties","ids":["summary","skill-python-card"],"properties":["margin","padding"],"reason":"optional"}',
-    '{"tool":"get_properties","ids":["summary","C3"],"regex":"^margin","flags":"i","reason":"optional"}',
-    '{"tool":"set_properties","ids":["summary","C3"],"properties":{"margin":"0.5rem 0","padding":"0.25rem","background":null},"reason":"optional"}',
-    '{"tool":"view_component","component_ref":"C3","reason":"optional"}',
-    '{"tool":"view_component","component_ref":"skill-python-card","start_line":1,"end_line":40,"reason":"optional"}',
-    '{"tool":"request_rendered_structure","reason":"optional"}',
-    '{"tool":"view_rendered_component","component_ref":"chores-table","reason":"optional"}',
-    '{"tool":"edit_component","component_ref":"C3","request":"Change the label to Foo","reason":"optional"}',
-    '{"tool":"patch_component","component_ref":"C3","edits":[{"op":"replace","start_line":2,"end_line":2,"text":" New content"}],"reason":"optional"}',
-    '{"tool":"patch_component","component_ref":"C3","edits":[{"op":"insert_after","line":1,"text":"\\n <!--hvy:text {}-->\\n Added line"},{"op":"delete","start_line":4,"end_line":5}],"reason":"optional"}',
-    '{"tool":"create_component","position":"append-to-section","section_ref":"skills","hvy":"<!--hvy:text {}-->\\n New content","reason":"optional"}',
-    '{"tool":"create_component","position":"after","target_component_ref":"C3","hvy":"<!--hvy:xref-card {\\"xrefTitle\\":\\"Heavy Stack\\",\\"xrefDetail\\":\\"Project\\",\\"xrefTarget\\":\\"heavy-stack\\"}-->","reason":"optional"}',
-    '{"tool":"remove_component","component_ref":"C3","reason":"optional"}',
-    '{"tool":"create_section","position":"append-root","hvy":"<!--hvy: {\\"id\\":\\"new-section\\"}-->\\n#! New section\\n\\n <!--hvy:text {}-->\\n  New content","reason":"optional"}',
-    '{"tool":"create_section","position":"append-root","new_position_index_from_0":1,"hvy":"<!--hvy: {\\"id\\":\\"new-section\\"}-->\\n#! New section\\n\\n <!--hvy:text {}-->\\n  New content","reason":"optional"}',
-    '{"tool":"create_section","position":"append-child","parent_section_ref":"skills","hvy":"<!--hvy:subsection {\\"id\\":\\"details\\"}-->\\n#! Details\\n\\n <!--hvy:text {}-->\\n  Detail content","reason":"optional"}',
-    '{"tool":"create_section","position":"append-child","parent_section_ref":"skills","new_position_index_from_0":0,"hvy":"<!--hvy:subsection {\\"id\\":\\"details\\"}-->\\n#! Details\\n\\n <!--hvy:text {}-->\\n  Detail content","reason":"optional"}',
-    '{"tool":"remove_section","section_ref":"skills","reason":"optional"}',
-    '{"tool":"create_section","position":"before","target_section_ref":"skills","hvy":"<!--hvy: {\\"id\\":\\"overview\\"}-->\\n#! Overview\\n\\n <!--hvy:text {}-->\\n  Overview content","reason":"optional"}',
-    '{"tool":"reorder_section","section_ref":"history","target_section_ref":"skills","position":"after","reason":"optional"}',
-    '{"tool":"reorder_section","section_ref":"history","new_position_index_from_0":0,"reason":"optional"}',
-    ...(hasDbTables
-      ? [
-          '{"tool":"query_db_table","table_name":"work_items","limit":10,"reason":"optional"}',
-          '{"tool":"query_db_table","query":"SELECT company, status FROM work_items WHERE status != \\"Rejected\\" ORDER BY company","limit":10,"reason":"optional"}',
-        ]
-      : []),
-    ...(hasDbTablePlugin
-      ? [
-          '{"tool":"execute_sql","sql":"CREATE TABLE IF NOT EXISTS chores (id INTEGER PRIMARY KEY, title TEXT NOT NULL, description TEXT, active INTEGER DEFAULT 1)","reason":"Set up DB schema before adding db-table components"}',
-          `{"tool":"create_component","position":"append-to-section","section_ref":"my-section","hvy":"<!--hvy:plugin {\\"plugin\\":\\"PLUGIN_ID\\",\\"pluginConfig\\":{}}-->","reason":"Add a registered plugin component"}`,
-        ]
-      : []),
-    '{"tool":"request_structure","reason":"optional"}',
-    '{"tool":"done","summary":"Short summary of what changed."}',
+    'Return compact JSON using the documented field names. Ask `get_help` for a tool topic when you need an example shape.',
   ].join('\n');
+}
+
+function isDatabaseRelevantRequest(request: string): boolean {
+  return /\b(db|database|sqlite|sql|query|queries|table|tables|view|views|schema|row|rows|column|columns|db-table)\b/i.test(request);
+}
+
+export function buildDocumentEditToolHelp(topic: string): string | null {
+  const normalized = topic.trim().toLowerCase();
+  const helpByTopic: Record<string, string> = {
+    'tool:answer': '{"tool":"answer","answer":"Direct answer to the user."}',
+    'tool:done': '{"tool":"done","summary":"Short summary of what changed."}',
+    'tool:plan': '{"tool":"plan","steps":["Find the relevant component","Modify the component","Verify the result"],"reason":"optional"}',
+    'tool:mark_step_done': '{"tool":"mark_step_done","step":1,"summary":"Found the relevant component.","reason":"optional"}',
+    'tool:grep': [
+      '{"tool":"grep","query":"Python|TypeScript","flags":"i","before":2,"after":2,"max_count":3,"reason":"optional"}',
+      '{"tool":"grep","query":"/Python|TypeScript/i","before":2,"after":2,"max_count":3,"reason":"optional"}',
+    ].join('\n'),
+    'tool:search_components': '{"tool":"search_components","query":"Add Chore form","max_count":3,"reason":"Check for an existing component before creating another one."}',
+    'tool:view_component': '{"tool":"view_component","component_ref":"skill-python-card","start_line":1,"end_line":40,"reason":"optional"}',
+    'tool:view_rendered_component': '{"tool":"view_rendered_component","component_ref":"chores-table","reason":"optional"}',
+    'tool:edit_component': '{"tool":"edit_component","component_ref":"C3","request":"Change the label to Foo","reason":"optional"}',
+    'tool:patch_component': [
+      '{"tool":"patch_component","component_ref":"C3","edits":[{"op":"replace","start_line":2,"end_line":2,"text":" New content"}],"reason":"optional"}',
+      '{"tool":"patch_component","component_ref":"C3","edits":[{"op":"delete","start_line":4,"end_line":5}],"reason":"optional"}',
+      'Use patch_component for small local line edits after view_component. If the target contains nested slots and deletion is the goal, prefer remove_component with the nested component id.',
+    ].join('\n'),
+    'tool:remove_component': '{"tool":"remove_component","component_ref":"tool-typescript","reason":"Remove the nested programming language item."}',
+    'tool:create_component': [
+      '{"tool":"create_component","position":"append-to-section","section_ref":"skills","hvy":"<!--hvy:text {}-->\\n New content","reason":"optional"}',
+      '{"tool":"create_component","position":"after","target_component_ref":"C3","hvy":"<!--hvy:xref-card {\\"xrefTitle\\":\\"Heavy Stack\\",\\"xrefDetail\\":\\"Project\\",\\"xrefTarget\\":\\"heavy-stack\\"}-->","reason":"optional"}',
+    ].join('\n'),
+    'tool:create_section': '{"tool":"create_section","position":"append-root","hvy":"<!--hvy: {\\"id\\":\\"new-section\\"}-->\\n#! New section\\n\\n <!--hvy:text {}-->\\n  New content","reason":"optional"}',
+    'tool:remove_section': '{"tool":"remove_section","section_ref":"skills","reason":"optional"}',
+    'tool:reorder_section': '{"tool":"reorder_section","section_ref":"history","target_section_ref":"skills","position":"after","reason":"optional"}',
+    'tool:css': [
+      '{"tool":"get_css","ids":["summary","C3"],"regex":"margin|padding","flags":"i","reason":"optional"}',
+      '{"tool":"get_properties","ids":["summary","skill-python-card"],"properties":["margin","padding"],"reason":"optional"}',
+      '{"tool":"set_properties","ids":["summary","C3"],"properties":{"margin":"0.5rem 0","padding":"0.25rem","background":null},"reason":"optional"}',
+    ].join('\n'),
+    'tool:request_structure': '{"tool":"request_structure","reason":"optional"}',
+    'tool:request_rendered_structure': '{"tool":"request_rendered_structure","reason":"optional"}',
+    'tool:query_db_table': '{"tool":"query_db_table","table_name":"work_items","limit":10,"reason":"optional"}',
+    'tool:execute_sql': '{"tool":"execute_sql","sql":"CREATE TABLE IF NOT EXISTS chores (id INTEGER PRIMARY KEY, title TEXT NOT NULL, description TEXT, active INTEGER DEFAULT 1)","reason":"Set up DB schema before adding db-table components"}',
+  };
+  return helpByTopic[normalized] ?? null;
 }
 
 export function buildInitialDocumentEditPrompt(request: string): string {

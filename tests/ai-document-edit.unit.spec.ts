@@ -22,6 +22,7 @@ vi.mock('../src/ai-edit', async (importOriginal) => {
 import { requestAiDocumentEditTurn, summarizeDocumentStructure, summarizeHeaderStructure } from '../src/ai-document-edit';
 import {
   buildDocumentEditFormatInstructions,
+  buildDocumentEditToolHelp,
   buildEditPathSelectionInstructions,
   buildInitialDocumentEditPrompt,
   buildHeaderEditFormatInstructions,
@@ -185,48 +186,33 @@ test('buildDocumentEditFormatInstructions documents the tool protocol', () => {
   expect(instructions).toContain('- Widget (dev.test.widget): Use widget YAML in the component body.');
   expect(instructions).toContain('Only use registered plugin ids from this list. Use `get_help` for exact plugin/component syntax instead of guessing.');
   expect(instructions).not.toContain('- Form (dev.heavy.form)');
-  expect(instructions).toContain('{"tool":"answer","answer":"Direct answer to the user."}');
-  expect(instructions).toContain('{"tool":"plan","steps":["Find the relevant section","Patch the component","Verify the updated structure"],"reason":"optional"}');
-  expect(instructions).toContain('{"tool":"mark_step_done","step":1,"summary":"Found the relevant section.","reason":"optional"}');
-  expect(instructions).toContain('{"tool":"get_help","topic":"plugin:PLUGIN_ID","reason":"optional"}');
-  expect(instructions).toContain('{"tool":"get_help","topic":"component:grid","reason":"optional"}');
+  expect(instructions).not.toContain('Tool shapes:');
+  expect(instructions).not.toContain('{"tool":"answer","answer":"Direct answer to the user."}');
+  expect(instructions).toContain('Tool help topics include `tool:patch_component`, `tool:remove_component`');
   expect(instructions).toContain('Before creating a component that may already exist, use `search_components`');
-  expect(instructions).toContain('{"tool":"search_components","query":"Add Chore form","max_count":3,"reason":"Check for an existing add chore form before creating another one."}');
   expect(instructions).toContain('It may revise that component in place or fully replace it');
   expect(instructions).toContain('Use real section ids when a section has an id.');
   expect(instructions).toContain('Use `grep` to search the serialized document.');
-  expect(instructions).toContain('Use `get_help` with topics like `plugin:PLUGIN_ID`');
+  expect(instructions).toContain('Use `get_help` with topics like `tool:patch_component`, `plugin:PLUGIN_ID`');
   expect(buildInitialDocumentEditPrompt('Update the document.')).toContain('You have at most 50 tool steps.');
   expect(instructions).toContain('defaults to lines 1-200');
   expect(instructions).toContain('Use `request_rendered_structure` to inspect what visible components render');
   expect(instructions).toContain('Use `view_rendered_component` to inspect one component rendered as user-facing text plus plugin diagnostics.');
   expect(instructions).toContain('Use `create_section.hvy` to add one complete serialized HVY section');
   expect(instructions).toContain('new_position_index_from_0');
-  expect(instructions).toContain('{"tool":"grep","query":"Python|TypeScript","flags":"i","before":2,"after":2,"max_count":3,"reason":"optional"}');
-  expect(instructions).toContain('{"tool":"grep","query":"/Python|TypeScript/i","before":2,"after":2,"max_count":3,"reason":"optional"}');
-  expect(instructions).toContain('{"tool":"get_css","ids":["summary","C3"],"regex":"margin|padding","flags":"i","reason":"optional"}');
-  expect(instructions).toContain('{"tool":"get_properties","ids":["summary","skill-python-card"],"properties":["margin","padding"],"reason":"optional"}');
-  expect(instructions).toContain('{"tool":"set_properties","ids":["summary","C3"],"properties":{"margin":"0.5rem 0","padding":"0.25rem","background":null},"reason":"optional"}');
-  expect(instructions).toContain('{"tool":"request_rendered_structure","reason":"optional"}');
-  expect(instructions).toContain('{"tool":"view_rendered_component","component_ref":"chores-table","reason":"optional"}');
-  expect(instructions).toContain('{"tool":"patch_component","component_ref":"C3","edits":[{"op":"replace","start_line":2,"end_line":2,"text":" New content"}],"reason":"optional"}');
-  expect(instructions).toContain('{"tool":"create_component","position":"append-to-section","section_ref":"skills","hvy":"<!--hvy:text {}-->\\n New content","reason":"optional"}');
-  expect(instructions).toContain('{"tool":"create_section","position":"append-root","hvy":"<!--hvy: {\\"id\\":\\"new-section\\"}-->\\n#! New section');
-  expect(instructions).toContain('{"tool":"reorder_section","section_ref":"history","new_position_index_from_0":0,"reason":"optional"}');
-  expect(instructions).toContain('{"tool":"remove_component","component_ref":"C3","reason":"optional"}');
-  expect(instructions).toContain('{"tool":"remove_section","section_ref":"skills","reason":"optional"}');
-  expect(instructions).toContain('{"tool":"done","summary":"Short summary of what changed."}');
+  expect(buildDocumentEditToolHelp('tool:patch_component')).toContain('"tool":"patch_component"');
+  expect(buildDocumentEditToolHelp('tool:remove_component')).toContain('"component_ref":"tool-typescript"');
 
-  const dbInstructions = buildDocumentEditFormatInstructions({ dbTableNames: ['work_items'] });
+  const dbInstructions = buildDocumentEditFormatInstructions({ dbTableNames: ['work_items'], request: 'Show the database table.' });
   expect(dbInstructions).toContain('`query_db_table`');
   expect(dbInstructions).toContain('Available SQLite tables/views: work_items');
-  expect(dbInstructions).toContain('{"tool":"query_db_table","table_name":"work_items","limit":10,"reason":"optional"}');
   expect(dbInstructions).not.toContain('`execute_sql`');
   expect(dbInstructions).not.toContain('reason":"Add a live db-table component showing all rows"');
 
   const dbPluginInstructions = buildDocumentEditFormatInstructions({
     dbTableNames: ['work_items'],
     pluginHints: [{ id: 'dev.heavy.db-table', displayName: 'DB Table', hint: 'Renders SQLite rows.' }],
+    request: 'Create a db table viewer.',
   });
   expect(dbPluginInstructions).toContain('`query_db_table`, `execute_sql`');
   expect(dbPluginInstructions).toContain('Use `execute_sql` to create or update attached SQLite schema/data before adding db-table components that depend on it.');
@@ -234,19 +220,15 @@ test('buildDocumentEditFormatInstructions documents the tool protocol', () => {
   expect(dbPluginInstructions).toContain('model real entities as shared tables and use joins or SQL views for derived displays');
   expect(dbPluginInstructions).toContain('not one table per person or display column');
   expect(dbPluginInstructions).toContain('Treat pluginConfig.source as storage selection, not a schema fix.');
-  expect(dbPluginInstructions).toContain(
-    '{"tool":"execute_sql","sql":"CREATE TABLE IF NOT EXISTS chores (id INTEGER PRIMARY KEY, title TEXT NOT NULL, description TEXT, active INTEGER DEFAULT 1)","reason":"Set up DB schema before adding db-table components"}'
-  );
-  expect(dbPluginInstructions).toContain('reason":"Add a registered plugin component"');
+  expect(buildDocumentEditToolHelp('tool:execute_sql')).toContain('CREATE TABLE IF NOT EXISTS chores');
 
   const dbPluginOnlyInstructions = buildDocumentEditFormatInstructions({
     pluginHints: [{ id: 'dev.heavy.db-table', displayName: 'DB Table', hint: 'Renders SQLite rows.' }],
   });
-  expect(dbPluginOnlyInstructions).toContain('`execute_sql`');
+  expect(dbPluginOnlyInstructions).not.toContain('`execute_sql`');
   expect(dbPluginOnlyInstructions).toContain(
-    'Valid tools are: `answer`, `plan`, `mark_step_done`, `grep`, `search_components`, `get_help`, `get_css`, `get_properties`, `set_properties`, `view_component`, `view_rendered_component`, `edit_component`, `patch_component`, `create_component`, `remove_component`, `create_section`, `remove_section`, `reorder_section`, `execute_sql`, `request_structure`, `request_rendered_structure`, `done`.'
+    'Valid tools are: `answer`, `plan`, `mark_step_done`, `grep`, `search_components`, `get_help`, `get_css`, `get_properties`, `set_properties`, `view_component`, `view_rendered_component`, `edit_component`, `patch_component`, `create_component`, `remove_component`, `create_section`, `remove_section`, `reorder_section`, `request_structure`, `request_rendered_structure`, `done`.'
   );
-  expect(dbPluginOnlyInstructions).toContain('\\"plugin\\":\\"PLUGIN_ID\\"');
 
   const noPluginInstructions = buildDocumentEditFormatInstructions();
   expect(noPluginInstructions).toContain('No plugins are currently registered.');
@@ -255,7 +237,7 @@ test('buildDocumentEditFormatInstructions documents the tool protocol', () => {
   expect(activePlanInstructions).toContain(
     'Valid tools are: `answer`, `mark_step_done`, `grep`, `search_components`, `get_help`, `get_css`, `get_properties`, `set_properties`, `view_component`, `view_rendered_component`, `edit_component`, `patch_component`, `create_component`, `remove_component`, `create_section`, `remove_section`, `reorder_section`, `request_structure`, `request_rendered_structure`, `done`.'
   );
-  expect(activePlanInstructions).not.toContain('{"tool":"plan"');
+  expect(activePlanInstructions).not.toContain('`plan`, `mark_step_done`');
 
   const headerInstructions = buildHeaderEditFormatInstructions();
   expect(headerInstructions).toContain('Valid header tools are: `answer`, `plan`, `mark_step_done`, `grep_header`, `view_header`, `patch_header`, `request_header`, `done`.');
@@ -606,6 +588,61 @@ hvy_version: 0.1
   expect(lastToolResultBeforeCall(2)).toContain('Tool result for view_rendered_component:');
   expect(lastToolResultBeforeCall(2)).toContain('Rendered component text/diagnostics:');
   expect(lastToolResultBeforeCall(2)).toContain('Existing content');
+});
+
+test('requestAiDocumentEditTurn can view an explicit nested id hidden from the reduced outline', async () => {
+  queueAiToolResponses(
+    '{"tool":"view_component","component_ref":"tool-typescript","reason":"Inspect the nested TypeScript item."}',
+    '{"tool":"done","summary":"Inspected nested item."}'
+  );
+
+  const input = readFileSync(new URL('./fixtures/resume-structure-input.hvy', import.meta.url), 'utf8');
+  seedStateForParsing();
+  const document = deserializeDocument(input, '.hvy');
+  seedStateForDocument(document);
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+
+  const result = await requestAiDocumentEditTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Inspect the TypeScript tool card.',
+  });
+
+  expect(result.error).toBeNull();
+  expect(summarizeDocumentStructure(document).summary).toContain('... contents hidden ... ids: tool-typescript');
+  const viewResult = lastToolResultBeforeCall(1);
+  expect(viewResult).toContain('Tool result for view_component:');
+  expect(viewResult).toContain('Component id: tool-typescript');
+  expect(viewResult).toContain('Component location: section "Tools & Technologies" (tools-technologies) > component-list "C11"');
+  expect(viewResult).toContain('TypeScript');
+});
+
+test('requestAiDocumentEditTurn can remove an explicit nested component id directly', async () => {
+  queueAiToolResponses(
+    '{"tool":"remove_component","component_ref":"tool-typescript","reason":"Remove the programming language item."}',
+    '{"tool":"done","summary":"Removed TypeScript."}'
+  );
+
+  const input = readFileSync(new URL('./fixtures/resume-structure-input.hvy', import.meta.url), 'utf8');
+  seedStateForParsing();
+  const document = deserializeDocument(input, '.hvy');
+  seedStateForDocument(document);
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+
+  const result = await requestAiDocumentEditTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Remove references to programming languages.',
+  });
+
+  expect(result.error).toBeNull();
+  const serialized = serializeDocument(document);
+  expect(serialized).not.toContain('id":"tool-typescript"');
+  expect(serialized).toContain('id":"tool-python"');
+  expect(lastToolResultBeforeCall(1)).toContain('Removed component tool-typescript');
+  expect(lastToolResultBeforeCall(1)).toContain('Tools & Technologies');
 });
 
 test('requestAiDocumentEditTurn sends a recovery prompt when the loop stalls', async () => {
@@ -978,6 +1015,92 @@ section_defaults:
  <!--hvy:text {"id":"summary-text"}-->
   Updated content
 `);
+});
+
+test('requestAiDocumentEditTurn summarizes invalid nested patch failures in progress', async () => {
+  queueAiToolResponses(
+    '{"tool":"patch_component","component_ref":"items","edits":[{"op":"replace","start_line":4,"end_line":4,"text":"  <!--hvy:expandable:stub {}-->"}]}',
+    '{"tool":"done","summary":"Stopped after failed patch."}'
+  );
+
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:component-list {"id":"items","componentListComponent":"text"}-->
+
+ <!--hvy:component-list:0 {}-->
+
+  <!--hvy:text {}-->
+   Item
+`, '.hvy');
+  seedStateForDocument(document);
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+  const onProgress = vi.fn();
+
+  const result = await requestAiDocumentEditTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Patch the nested list badly.',
+    onProgress,
+  });
+
+  expect(result.error).toBeNull();
+  const progressContents = onProgress.mock.calls.map((call) => (call[0] as ChatMessage).content);
+  expect(progressContents).toContain('Tool failed: patch_component produced invalid nested HVY. Retrying with a narrower component target or remove_component is usually safer.');
+  expect(progressContents.join('\n')).not.toContain('An expandable needs a stub slot');
+  const retryPacket = lastToolResultBeforeCall(1);
+  expect(retryPacket).toContain('Repair only this malformed HVY payload. Do not reread the whole document.');
+  expect(retryPacket).toContain('Syntax problem:');
+  expect(retryPacket).toContain('Before:');
+  expect(retryPacket).toContain('Attempted after:');
+  expect(retryPacket).toContain('Reference example:');
+  expect(retryPacket).toContain('"tool":"patch_component"');
+  expect(retryPacket).not.toContain('Reduced outline context');
+});
+
+test('requestAiDocumentEditTurn returns focused repair context for malformed create_component HVY', async () => {
+  queueAiToolResponses(
+    '{"tool":"create_component","position":"append-to-section","section_ref":"summary","hvy":"<!--hvy:expandable:stub {}-->\\n Bad"}',
+    '{"tool":"done","summary":"Stopped after malformed component."}'
+  );
+
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {}-->
+ Existing content
+`, '.hvy');
+  seedStateForDocument(document);
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+  const onProgress = vi.fn();
+
+  const result = await requestAiDocumentEditTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Add a malformed component.',
+    onProgress,
+  });
+
+  expect(result.error).toBeNull();
+  const progressContents = onProgress.mock.calls.map((call) => (call[0] as ChatMessage).content);
+  expect(progressContents.join('\n')).toContain('Tool failed: create_component.hvy must contain exactly one valid HVY component.');
+  expect(progressContents.join('\n')).not.toContain('Section "AI Response"');
+  const retryPacket = lastToolResultBeforeCall(1);
+  expect(retryPacket).toContain('Repair only this malformed HVY payload. Do not reread the whole document.');
+  expect(retryPacket).toContain('Attempted after:');
+  expect(retryPacket).toContain('Reference example:');
+  expect(retryPacket).toContain('"tool":"create_component"');
+  expect(retryPacket).not.toContain('Reduced outline context');
 });
 
 test('requestAiDocumentEditTurn can create a component in a section', async () => {

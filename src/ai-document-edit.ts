@@ -27,6 +27,7 @@ import {
   buildEditPathSelectionInstructions,
   buildEditPathSelectionPrompt,
   buildDocumentEditFormatInstructions,
+  buildDocumentEditToolHelp,
   buildHeaderEditFormatInstructions,
   buildInitialDocumentEditPrompt,
   buildInitialHeaderEditPrompt,
@@ -90,12 +91,15 @@ interface ComponentRefEntry {
   componentId: string;
   component: string;
   target: string;
+  parentChain: string[];
+  hiddenFromSummary: boolean;
 }
 
 interface DocumentStructureSnapshot {
   summary: string;
   sectionRefs: Map<string, SectionRefEntry>;
   componentRefs: Map<string, ComponentRefEntry>;
+  deepComponentRefs: Map<string, ComponentRefEntry>;
 }
 
 interface WorkLedgerItem {
@@ -103,6 +107,25 @@ interface WorkLedgerItem {
   intent: string;
   summary: string;
   result: string;
+}
+
+interface HvyRepairToolContext {
+  tool: 'patch_component' | 'create_component' | 'create_section';
+  syntaxProblem: string;
+  before?: string;
+  after?: string;
+  reference: string;
+  nextAction: string;
+}
+
+class HvyRepairToolError extends Error {
+  readonly repair: HvyRepairToolContext;
+
+  constructor(message: string, repair: HvyRepairToolContext) {
+    super(message);
+    this.name = 'HvyRepairToolError';
+    this.repair = repair;
+  }
 }
 
 interface HeaderStructureSnapshot {
@@ -436,7 +459,12 @@ async function runDocumentEditToolLoop(params: {
       settings: params.settings,
       messages: conversation,
       context: buildLoopContext(contextSummary, plan, recentToolHelp, workLedger, buildIntentRecall(latestIntent, snapshot, params.document)),
-      formatInstructions: buildDocumentEditFormatInstructions({ dbTableNames: dbObjectNames, pluginHints, planActive: plan !== null }),
+      formatInstructions: buildDocumentEditFormatInstructions({
+        dbTableNames: dbObjectNames,
+        pluginHints,
+        planActive: plan !== null,
+        request: params.request,
+      }),
       mode: 'document-edit',
       debugLabel: `ai-document-edit:${iteration + 1}`,
       traceRunId: params.traceRunId,
@@ -588,7 +616,7 @@ async function runDocumentEditToolLoop(params: {
         contextSummary = await refreshDbContext(SENT_STRUCTURE_CONTEXT);
       } catch (error) {
         const failure = formatDocumentToolFailure(error);
-        params.onProgress?.(failure);
+        params.onProgress?.(formatDocumentToolFailureForProgress(error));
         toolResult = buildToolResult('create_component', failure);
       }
     } else if (parsed.value.tool === 'create_section') {
@@ -599,7 +627,7 @@ async function runDocumentEditToolLoop(params: {
         contextSummary = await refreshDbContext(SENT_STRUCTURE_CONTEXT);
       } catch (error) {
         const failure = formatDocumentToolFailure(error);
-        params.onProgress?.(failure);
+        params.onProgress?.(formatDocumentToolFailureForProgress(error));
         toolResult = buildToolResult('create_section', failure);
       }
     } else if (parsed.value.tool === 'reorder_section') {
@@ -639,9 +667,22 @@ async function runDocumentEditToolLoop(params: {
       contextSummary = await refreshDbContext(SENT_STRUCTURE_CONTEXT);
     }
     } catch (error) {
-      const failure = formatDocumentToolFailure(error);
-      params.onProgress?.(failure);
-      toolResult = buildToolResult(parsed.value.tool, failure);
+      if (params.traceRunId) {
+        traceAgentLoopEvent({
+          runId: params.traceRunId,
+          phase: 'document-edit',
+          type: 'client_event',
+          payload: {
+            event: 'tool_failure',
+            tool: parsed.value.tool,
+            action: getToolActionKey(parsed.value),
+            message: error instanceof Error ? error.message : String(error),
+          },
+          signal: params.signal,
+        });
+      }
+      params.onProgress?.(formatDocumentToolFailureForProgress(error));
+      toolResult = buildToolResult(parsed.value.tool, formatDocumentToolFailure(error));
       contextSummary = await refreshDbContext(SENT_STRUCTURE_CONTEXT);
     }
 
@@ -662,7 +703,7 @@ async function runDocumentEditToolLoop(params: {
         runId: params.traceRunId,
         phase: 'document-edit',
         type: 'work_ledger',
-        payload: ledgerItem,
+        payload: { ...ledgerItem },
         signal: params.signal,
       });
     }
@@ -1143,12 +1184,67 @@ function summarizeCompactedErrors(messages: ChatMessage[]): string {
 }
 
 function formatDocumentToolFailure(error: unknown): string {
+  if (error instanceof HvyRepairToolError) {
+    return formatHvyRepairToolFailure(error);
+  }
   const message = error instanceof Error ? error.message : 'Unknown document tool failure.';
+  const concise = summarizeToolFailureMessage(message);
   return [
-    `Tool failed: ${message}`,
+    `Tool failed: ${concise}`,
+    ...(message.length > concise.length ? [`Details: ${truncatePreview(message, 800)}`] : []),
     'Retry with serialized HVY only. Do not return HTML, JSX, DOM markup, JavaScript, or CSS files.',
     'For sections, use `<!--hvy: {"id":"..."}-->`, `#! Title`, and HVY components. For components, start with an HVY component directive like `<!--hvy:text {}-->`.',
   ].join('\n');
+}
+
+function formatDocumentToolFailureForProgress(error: unknown): string {
+  const message = error instanceof Error ? error.message : 'Unknown document tool failure.';
+  return `Tool failed: ${summarizeToolFailureMessage(message)}`;
+}
+
+function formatHvyRepairToolFailure(error: HvyRepairToolError): string {
+  const repair = error.repair;
+  return [
+    `Tool failed: ${summarizeToolFailureMessage(error.message)}`,
+    'Repair only this malformed HVY payload. Do not reread the whole document.',
+    '',
+    'Syntax problem:',
+    truncateMultiline(repair.syntaxProblem, 900),
+    ...(repair.before ? ['', 'Before:', '```hvy', truncateMultiline(repair.before, 1800), '```'] : []),
+    ...(repair.after ? ['', 'Attempted after:', '```hvy', truncateMultiline(repair.after, 2200), '```'] : []),
+    '',
+    'Reference example:',
+    '```json',
+    truncateMultiline(repair.reference, 1400),
+    '```',
+    '',
+    `Next action: ${repair.nextAction}`,
+  ].join('\n');
+}
+
+function summarizeToolFailureMessage(message: string): string {
+  if (/patch_component produced invalid HVY/i.test(message) && hasNestedSlotDiagnostics(message)) {
+    return 'patch_component produced invalid nested HVY. Retrying with a narrower component target or remove_component is usually safer.';
+  }
+  if (/create_component\.hvy must contain exactly one valid HVY component/i.test(message)) {
+    return 'create_component.hvy must contain exactly one valid HVY component. Retrying with corrected HVY is needed.';
+  }
+  if (/create_section\.hvy must be a valid HVY section|create_section\.hvy must contain exactly one top-level HVY section/i.test(message)) {
+    return 'create_section.hvy must contain exactly one valid HVY section. Retrying with corrected HVY is needed.';
+  }
+  return truncatePreview(message.replace(/\s+/g, ' '), 220);
+}
+
+function hasNestedSlotDiagnostics(message: string): boolean {
+  return /\b(expandable|component-list|grid|container) (stub\/content|slot|block)|without an enclosing|missing stub content|missing expanded content/i.test(message);
+}
+
+function truncateMultiline(value: string, maxLength: number): string {
+  const normalized = value.trim();
+  if (normalized.length <= maxLength) {
+    return normalized;
+  }
+  return `${normalized.slice(0, maxLength).trimEnd()}\n... truncated ...`;
 }
 
 function throwIfAborted(signal: AbortSignal | undefined): void {
@@ -1587,14 +1683,64 @@ export function summarizeDocumentStructure(document: VisualDocument): DocumentSt
   const lines: string[] = [];
   const sectionRefs = new Map<string, SectionRefEntry>();
   const componentRefs = new Map<string, ComponentRefEntry>();
+  const deepComponentRefs = new Map<string, ComponentRefEntry>();
   let componentCounter = 0;
+
+  const addDeepComponentRef = (
+    block: VisualBlock,
+    sectionKey: string,
+    parentChain: string[],
+    hiddenFromSummary: boolean
+  ): ComponentRefEntry => {
+    const componentId = block.schema.id.trim();
+    const entry: ComponentRefEntry = {
+      ref: componentId,
+      blockId: block.id,
+      sectionKey,
+      componentId,
+      component: block.schema.component,
+      target: componentId,
+      parentChain,
+      hiddenFromSummary,
+    };
+    if (componentId.length > 0) {
+      deepComponentRefs.set(componentId, entry);
+    }
+    return entry;
+  };
+
+  const collectDeepRefs = (
+    blocks: VisualBlock[],
+    sectionKey: string,
+    parentChain: string[],
+    hiddenFromSummary: boolean
+  ): void => {
+    for (const block of blocks) {
+      const entry = addDeepComponentRef(block, sectionKey, parentChain, hiddenFromSummary);
+      collectDeepRefs(
+        collectNestedBlocks(block),
+        sectionKey,
+        [...parentChain, formatComponentChainLabel(block, entry.target || entry.ref)],
+        hiddenFromSummary
+      );
+    }
+  };
+
+  const indexAllSectionBlocks = (sections: VisualSection[]): void => {
+    for (const section of sections) {
+      const displayTitle = section.title.trim() || 'Untitled Section';
+      collectDeepRefs(section.blocks, section.key, [`section "${displayTitle}" (${getSectionId(section)})`], true);
+      indexAllSectionBlocks(section.children);
+    }
+  };
 
   const walkBlocks = (
     blocks: VisualBlock[],
     indent: number,
     nesting: number,
     sectionKey: string,
-    lineBudget: { remaining: number }
+    lineBudget: { remaining: number },
+    parentChain: string[]
   ): void => {
     for (const block of blocks) {
       if (lineBudget.remaining <= 0) {
@@ -1611,9 +1757,12 @@ export function summarizeDocumentStructure(document: VisualDocument): DocumentSt
         componentId,
         component: block.schema.component,
         target,
+        parentChain,
+        hiddenFromSummary: false,
       });
       if (componentId.length > 0) {
         componentRefs.set(componentId, componentRefs.get(ref)!);
+        deepComponentRefs.set(componentId, componentRefs.get(ref)!);
       }
       const pluginHint = getPluginAiHint(block);
       lines.push(`${'  '.repeat(indent)}${describeStructureLine(block, target, ref)}${pluginHint ? ` AI hint: ${pluginHint}` : ''}`);
@@ -1626,11 +1775,13 @@ export function summarizeDocumentStructure(document: VisualDocument): DocumentSt
         if (lineBudget.remaining <= 0) {
           return;
         }
-        lines.push(`${'  '.repeat(indent + 1)}${HIDDEN_CONTENTS_MARKER}`);
+        const hiddenIds = collectNestedComponentIds(nestedBlocks);
+        lines.push(`${'  '.repeat(indent + 1)}${HIDDEN_CONTENTS_MARKER}${hiddenIds.length > 0 ? ` ids: ${hiddenIds.slice(0, 12).join(', ')}${hiddenIds.length > 12 ? ', ...' : ''}` : ''}`);
         lineBudget.remaining -= 1;
+        collectDeepRefs(nestedBlocks, sectionKey, [...parentChain, formatComponentChainLabel(block, target)], true);
         continue;
       }
-      walkBlocks(nestedBlocks, indent + 1, nesting + 1, sectionKey, lineBudget);
+      walkBlocks(nestedBlocks, indent + 1, nesting + 1, sectionKey, lineBudget, [...parentChain, formatComponentChainLabel(block, target)]);
     }
   };
 
@@ -1646,28 +1797,66 @@ export function summarizeDocumentStructure(document: VisualDocument): DocumentSt
       lines.push(`${'  '.repeat(depth)}<!-- section id="${escapeInline(sectionId)}" title="${escapeInline(displayTitle)}" location="${section.location}" -->`);
       lines.push(`${'  '.repeat(depth)}${'#'.repeat(Math.min(section.level, 6))} ${displayTitle}`);
       const lineBudget = { remaining: MAX_SECTION_PREVIEW_LINES };
-      walkBlocks(section.blocks, depth + 1, nesting + 1, section.key, lineBudget);
+      const sectionChain = [`section "${displayTitle}" (${sectionId})`];
+      walkBlocks(section.blocks, depth + 1, nesting + 1, section.key, lineBudget, sectionChain);
       if (lineBudget.remaining <= 0 && section.blocks.length > 0) {
         lines.push(`${'  '.repeat(depth + 1)}...`);
+        const hiddenIds = collectNestedComponentIds(section.blocks);
+        if (hiddenIds.length > 0) {
+          lines.push(`${'  '.repeat(depth + 1)}indexed hidden ids: ${hiddenIds.slice(0, 12).join(', ')}${hiddenIds.length > 12 ? ', ...' : ''}`);
+        }
       }
       if (section.children.length === 0) {
         continue;
       }
       if (nesting >= MAX_SUMMARY_NESTING) {
         lines.push(`${'  '.repeat(depth + 1)}${HIDDEN_CONTENTS_MARKER}`);
+        for (const child of section.children) {
+          collectDeepRefs(child.blocks, child.key, [`section "${child.title.trim() || 'Untitled Section'}" (${getSectionId(child)})`], true);
+        }
         continue;
       }
       walkSections(section.children, depth + 1, nesting + 1);
     }
   };
 
+  indexAllSectionBlocks(document.sections.filter((section) => !section.isGhost));
   walkSections(document.sections.filter((section) => !section.isGhost), 0, 1);
 
   return {
     summary: lines.length > 0 ? lines.join('\n') : '[empty] document has no sections',
     sectionRefs,
     componentRefs,
+    deepComponentRefs,
   };
+}
+
+function resolveComponentRef(snapshot: DocumentStructureSnapshot, componentRef: string): ComponentRefEntry | undefined {
+  const ref = componentRef.trim();
+  return snapshot.componentRefs.get(ref) ?? snapshot.deepComponentRefs.get(ref);
+}
+
+function formatComponentLocation(entry: ComponentRefEntry): string {
+  return entry.parentChain.length > 0 ? entry.parentChain.join(' > ') : 'document';
+}
+
+function formatComponentChainLabel(block: VisualBlock, target: string): string {
+  return `${block.schema.component}${target ? ` "${target}"` : ''}`;
+}
+
+function collectNestedComponentIds(blocks: VisualBlock[]): string[] {
+  const ids: string[] = [];
+  const visit = (items: VisualBlock[]): void => {
+    for (const block of items) {
+      const id = block.schema.id.trim();
+      if (id.length > 0) {
+        ids.push(id);
+      }
+      visit(collectNestedBlocks(block));
+    }
+  };
+  visit(blocks);
+  return [...new Set(ids)];
 }
 
 function executeViewComponentTool(
@@ -1675,7 +1864,7 @@ function executeViewComponentTool(
   snapshot: DocumentStructureSnapshot,
   document: VisualDocument
 ): string {
-  const component = snapshot.componentRefs.get(request.component_ref);
+  const component = resolveComponentRef(snapshot, request.component_ref);
   if (!component) {
     throw new Error(`Unknown component ref "${request.component_ref}". Request the structure again if needed.`);
   }
@@ -1692,6 +1881,7 @@ function executeViewComponentTool(
     `Section id: ${getSectionId(section)}`,
     `Component type: ${block.schema.component}`,
     `Component id: ${block.schema.id.trim() || '(none)'}`,
+    `Component location: ${formatComponentLocation(component)}`,
     `Showing lines ${clampRange.startLine}-${clampRange.endLine} (default range is ${DEFAULT_VIEW_START_LINE}-${DEFAULT_VIEW_END_LINE})`,
     '',
     'Component HVY with 1-based line numbers:',
@@ -1727,7 +1917,7 @@ async function executeViewRenderedComponentTool(
   snapshot: DocumentStructureSnapshot,
   document: VisualDocument
 ): Promise<string> {
-  const component = snapshot.componentRefs.get(request.component_ref);
+  const component = resolveComponentRef(snapshot, request.component_ref);
   if (!component) {
     throw new Error(`Unknown component ref "${request.component_ref}". Request the structure again if needed.`);
   }
@@ -1742,6 +1932,7 @@ async function executeViewRenderedComponentTool(
     `Section id: ${getSectionId(section)}`,
     `Component type: ${block.schema.component}`,
     `Component id: ${block.schema.id.trim() || '(none)'}`,
+    `Component location: ${formatComponentLocation(component)}`,
     '',
     'Rendered component text/diagnostics:',
     await renderComponentText(document, block, { maxDepth: 4 }),
@@ -1750,6 +1941,10 @@ async function executeViewRenderedComponentTool(
 
 function executeGetHelpTool(request: Extract<DocumentEditToolRequest, { tool: 'get_help' }>): string {
   const topic = request.topic.trim();
+  const toolHelp = buildDocumentEditToolHelp(topic);
+  if (toolHelp) {
+    return toolHelp;
+  }
   const pluginMatch = topic.match(/^plugin:(.+)$/i);
   if (pluginMatch?.[1]) {
     return getPluginAiHelp(pluginMatch[1].trim());
@@ -1768,10 +1963,13 @@ function executeGetHelpTool(request: Extract<DocumentEditToolRequest, { tool: 'g
   return helpByComponent[component] ?? `No detailed help registered for "${topic}". Try "plugin:PLUGIN_ID" or "component:text".`;
 }
 
-function getUniqueComponentEntries(snapshot: DocumentStructureSnapshot): ComponentRefEntry[] {
+function getUniqueComponentEntries(snapshot: DocumentStructureSnapshot, includeDeep = false): ComponentRefEntry[] {
   const seenBlockIds = new Set<string>();
   const entries: ComponentRefEntry[] = [];
-  for (const entry of snapshot.componentRefs.values()) {
+  const sourceEntries = includeDeep
+    ? [...snapshot.componentRefs.values(), ...snapshot.deepComponentRefs.values()]
+    : [...snapshot.componentRefs.values()];
+  for (const entry of sourceEntries) {
     if (seenBlockIds.has(entry.blockId)) {
       continue;
     }
@@ -1819,7 +2017,7 @@ function searchComponentIndex(
   if (queryTokens.length === 0) {
     return [];
   }
-  const entries = getUniqueComponentEntries(snapshot)
+  const entries = getUniqueComponentEntries(snapshot, true)
     .map((entry) => {
       const section = findSectionByKey(document.sections, entry.sectionKey);
       const block = findBlockByInternalId(document.sections, entry.blockId);
@@ -1845,7 +2043,7 @@ function searchComponentIndex(
       }
       const sectionLabel = section ? ` in section "${section.title || getSectionId(section)}"` : '';
       return {
-        label: `${entry.target || entry.ref} (${entry.component})${sectionLabel}`,
+        label: `${entry.target || entry.ref} (${entry.component})${sectionLabel}${entry.hiddenFromSummary ? ' [nested/hidden]' : ''}`,
         preview: truncatePreview(searchable.replace(/\s+/g, ' '), 180),
         score,
       };
@@ -2048,7 +2246,7 @@ async function executeEditComponentTool(
   settings: ChatSettings,
   onMutation?: (group?: string) => void
 ): Promise<string> {
-  const component = snapshot.componentRefs.get(request.component_ref);
+  const component = resolveComponentRef(snapshot, request.component_ref);
   if (!component) {
     throw new Error(`Unknown component ref "${request.component_ref}". Request the structure again if needed.`);
   }
@@ -2084,7 +2282,7 @@ function executePatchComponentTool(
   document: VisualDocument,
   onMutation?: (group?: string) => void
 ): string {
-  const component = snapshot.componentRefs.get(request.component_ref);
+  const component = resolveComponentRef(snapshot, request.component_ref);
   if (!component) {
     throw new Error(`Unknown component ref "${request.component_ref}". Request the structure again if needed.`);
   }
@@ -2105,7 +2303,19 @@ function executePatchComponentTool(
   const parsed = parseAiBlockEditResponse(patchedFragment);
   if (!parsed.block || parsed.hasErrors) {
     const details = parsed.issues.map((issue) => `${issue.message} ${issue.hint}`.trim()).join(' ');
-    throw new Error(`patch_component produced invalid HVY. ${details}`.trim());
+    const nestedAdvice = hasNestedSlotDiagnostics(details)
+      ? ' This target appears to contain nested slot directives; prefer a narrower explicit component id or remove_component for deleting nested items.'
+      : '';
+    throw new HvyRepairToolError(`patch_component produced invalid HVY.${nestedAdvice} ${details}`.trim(), {
+      tool: 'patch_component',
+      syntaxProblem: details,
+      before: formatPatchContextFragment(originalFragment, request.edits),
+      after: formatPatchContextFragment(patchedFragment, request.edits),
+      reference: buildDocumentEditToolHelp('tool:patch_component') ?? '{"tool":"patch_component","component_ref":"C3","edits":[]}',
+      nextAction: hasNestedSlotDiagnostics(details)
+        ? 'Retry with a narrower explicit component id or use remove_component for deleting nested items.'
+        : 'Retry patch_component with a valid single-component HVY fragment.',
+    });
   }
 
   onMutation?.('ai-edit:block');
@@ -2146,7 +2356,7 @@ function executeRemoveComponentTool(
   document: VisualDocument,
   onMutation?: (group?: string) => void
 ): string {
-  const componentEntry = snapshot.componentRefs.get(request.component_ref);
+  const componentEntry = resolveComponentRef(snapshot, request.component_ref);
   if (!componentEntry) {
     throw new Error(`Unknown component ref "${request.component_ref}".`);
   }
@@ -2157,7 +2367,7 @@ function executeRemoveComponentTool(
 
   onMutation?.('ai-edit:block');
   location.container.splice(location.index, 1);
-  return `Removed component ${request.component_ref} (${componentEntry.component}${componentEntry.componentId ? ` id="${componentEntry.componentId}"` : ''}).`;
+  return `Removed component ${request.component_ref} (${componentEntry.component}${componentEntry.componentId ? ` id="${componentEntry.componentId}"` : ''}) from ${formatComponentLocation(componentEntry)}.`;
 }
 
 function executeCreateComponentTool(
@@ -2168,8 +2378,14 @@ function executeCreateComponentTool(
 ): string {
   const parsed = parseAiBlockEditResponse(request.hvy);
   if (!parsed.block || parsed.hasErrors) {
-    const details = parsed.issues.map((issue) => issue.message).join(' ');
-    throw new Error(`create_component.hvy must contain exactly one valid HVY component. ${details}`.trim());
+    const details = parsed.issues.map((issue) => `${issue.message} ${issue.hint}`.trim()).join(' ');
+    throw new HvyRepairToolError(`create_component.hvy must contain exactly one valid HVY component. ${details}`.trim(), {
+      tool: 'create_component',
+      syntaxProblem: details,
+      after: formatNumberedFragment(request.hvy, 1, Math.min(80, Math.max(1, request.hvy.split('\n').length))),
+      reference: buildDocumentEditToolHelp('tool:create_component') ?? '{"tool":"create_component","position":"append-to-section","section_ref":"skills","hvy":"<!--hvy:text {}-->\\n New content"}',
+      nextAction: 'Retry create_component with exactly one complete top-level HVY component.',
+    });
   }
   const newBlock = parsed.block;
 
@@ -2193,7 +2409,7 @@ function executeCreateComponentTool(
   if (!targetRef) {
     throw new Error(`create_component with position "${request.position}" requires target_component_ref.`);
   }
-  const componentEntry = snapshot.componentRefs.get(targetRef);
+  const componentEntry = resolveComponentRef(snapshot, targetRef);
   if (!componentEntry) {
     throw new Error(`Unknown target component ref "${targetRef}".`);
   }
@@ -2282,10 +2498,23 @@ function buildCreatedSection(request: Extract<DocumentEditToolRequest, { tool: '
   const parsed = deserializeDocumentWithDiagnostics(`${hvy}\n`, '.hvy');
   const errors = parsed.diagnostics.filter((diagnostic) => diagnostic.severity === 'error');
   if (errors.length > 0) {
-    throw new Error(`create_section.hvy must be a valid HVY section. ${errors.map((diagnostic) => diagnostic.message).join(' ')}`);
+    const details = errors.map((diagnostic) => diagnostic.message).join(' ');
+    throw new HvyRepairToolError(`create_section.hvy must be a valid HVY section. ${details}`, {
+      tool: 'create_section',
+      syntaxProblem: details,
+      after: formatNumberedFragment(hvy, 1, Math.min(120, Math.max(1, hvy.split('\n').length))),
+      reference: buildDocumentEditToolHelp('tool:create_section') ?? '{"tool":"create_section","position":"append-root","hvy":"<!--hvy: {\\"id\\":\\"new-section\\"}-->\\n#! New section\\n\\n <!--hvy:text {}-->\\n  New content"}',
+      nextAction: 'Retry create_section with exactly one complete HVY section directive, title, and valid child components.',
+    });
   }
   if (parsed.document.sections.length !== 1) {
-    throw new Error('create_section.hvy must contain exactly one top-level HVY section.');
+    throw new HvyRepairToolError('create_section.hvy must contain exactly one top-level HVY section.', {
+      tool: 'create_section',
+      syntaxProblem: 'The payload parsed, but it did not contain exactly one top-level HVY section.',
+      after: formatNumberedFragment(hvy, 1, Math.min(120, Math.max(1, hvy.split('\n').length))),
+      reference: buildDocumentEditToolHelp('tool:create_section') ?? '{"tool":"create_section","position":"append-root","hvy":"<!--hvy: {\\"id\\":\\"new-section\\"}-->\\n#! New section\\n\\n <!--hvy:text {}-->\\n  New content"}',
+      nextAction: 'Retry create_section with one top-level section only.',
+    });
   }
 
   const section = parsed.document.sections[0]!;
@@ -2892,6 +3121,26 @@ function formatNumberedFragment(fragment: string, startLine = DEFAULT_VIEW_START
     .join('\n');
 }
 
+function formatPatchContextFragment(fragment: string, edits: ComponentPatchEdit[], radius = 6): string {
+  const lines = fragment.split('\n');
+  if (lines.length <= 80) {
+    return formatNumberedFragment(fragment, 1, lines.length);
+  }
+  const touched = edits.flatMap((edit) => {
+    if (edit.op === 'replace' || edit.op === 'delete') {
+      return [edit.start_line, edit.end_line];
+    }
+    return [edit.line];
+  });
+  const minLine = Math.max(1, Math.min(...touched) - radius);
+  const maxLine = Math.min(lines.length, Math.max(...touched) + radius);
+  return [
+    ...(minLine > 1 ? ['...'] : []),
+    formatNumberedFragment(fragment, minLine, maxLine),
+    ...(maxLine < lines.length ? ['...'] : []),
+  ].join('\n');
+}
+
 function applyComponentPatchEdits(fragment: string, edits: ComponentPatchEdit[]): string {
   let lines = fragment.split('\n');
   for (const edit of edits) {
@@ -3133,7 +3382,7 @@ function resolveCssTargets(ids: string[], snapshot: DocumentStructureSnapshot, d
       }
       continue;
     }
-    const componentEntry = snapshot.componentRefs.get(id);
+    const componentEntry = resolveComponentRef(snapshot, id);
     if (componentEntry) {
       const block = findBlockByInternalId(document.sections, componentEntry.blockId);
       const key = `component:${componentEntry.blockId}`;

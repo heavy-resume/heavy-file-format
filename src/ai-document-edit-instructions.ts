@@ -35,7 +35,7 @@ export function buildDocumentEditFormatInstructions(options?: {
     `Valid tools are: ${validTools}.`,
     ...(planActive ? [] : ['Plan shape: `{"tool":"plan","steps":["Modify component X to remove Y","Verify no Y remains"]}`.']),
     'Batch shape: `{"tool":"batch","calls":[{"tool":"remove_component","component_ref":"id"}]}`.',
-    'Use `get_help` only when exact syntax is missing from the notes or recent tool help.',
+    'Use `get_help` only when exact syntax is missing from the notes or recent tool help. Its topic may name one tool or several, such as `patch_component, edit_component, batch`.',
     'Do not put `answer`, `done`, `plan`, `mark_step_done`, or another `batch` inside a batch.',
     ...(pluginHints.length > 0 ? [`Registered plugin ids: ${pluginHints.map((plugin) => plugin.id).join(', ')}.`] : []),
     planActive
@@ -72,6 +72,7 @@ export function buildDocumentEditToolHelp(topic: string): string | null {
     'tool:mark_step_done': '{"tool":"mark_step_done","step":1,"summary":"Found the relevant component.","reason":"optional"}',
     'tool:batch': [
       '{"tool":"batch","calls":[{"tool":"grep","query":"Python|TypeScript","flags":"i","max_count":5},{"tool":"view_component","component_ref":"tool-typescript"}],"reason":"Inspect multiple targets before planning."}',
+      '{"tool":"batch","calls":[{"tool":"patch_component","component_ref":"skill-library-development","edits":[{"op":"replace","start_line":12,"end_line":12,"text":" Text with removed tokens"}]},{"tool":"remove_component","component_ref":"tool-typescript"}],"reason":"Apply one planned cleanup step."}',
       'Use batch for related inspection or a short sequence of concrete edits that should run in order. Do not include answer, done, plan, mark_step_done, or nested batch.',
       'A batch counts as one plan step. If a batch removes or edits several targets, the active plan should have one step describing the whole batch outcome.',
     ].join('\n'),
@@ -86,7 +87,10 @@ export function buildDocumentEditToolHelp(topic: string): string | null {
     'tool:patch_component': [
       '{"tool":"patch_component","component_ref":"C3","edits":[{"op":"replace","start_line":2,"end_line":2,"text":" New content"}],"reason":"optional"}',
       '{"tool":"patch_component","component_ref":"C3","edits":[{"op":"delete","start_line":4,"end_line":5}],"reason":"optional"}',
-      'Use patch_component for small local line edits after view_component. If the target contains nested slots and deletion is the goal, prefer remove_component with the nested component id.',
+      '{"tool":"patch_component","component_ref":"skill-library-development","edits":[{"op":"replace","start_line":24,"end_line":24,"text":" Built shared platform packages that reduced duplicated code."}],"reason":"Remove TypeScript with no replacement."}',
+      'Use patch_component for small local line edits after view_component. Replace the whole affected line with the final desired text when removing tokens.',
+      'Nested refs such as `C10.list[2].content[1]` may be used as component_ref when they appear in view_component output or document notes.',
+      'If the target contains nested slots and deletion is the goal, prefer remove_component with the nested component id.',
     ].join('\n'),
     'tool:remove_component': '{"tool":"remove_component","component_ref":"tool-typescript","reason":"Remove the nested programming language item."}',
     'tool:create_component': [
@@ -106,7 +110,22 @@ export function buildDocumentEditToolHelp(topic: string): string | null {
     'tool:query_db_table': '{"tool":"query_db_table","table_name":"work_items","limit":10,"reason":"optional"}',
     'tool:execute_sql': '{"tool":"execute_sql","sql":"CREATE TABLE IF NOT EXISTS chores (id INTEGER PRIMARY KEY, title TEXT NOT NULL, description TEXT, active INTEGER DEFAULT 1)","reason":"Set up DB schema before adding db-table components"}',
   };
-  return helpByTopic[normalized] ?? null;
+  if (helpByTopic[normalized]) {
+    return helpByTopic[normalized];
+  }
+
+  const requestedTopics = Object.keys(helpByTopic).filter((key) => {
+    const bareTool = key.replace(/^tool:/, '');
+    return normalized.includes(key) || normalized.includes(bareTool);
+  });
+  const uniqueTopics = [...new Set(requestedTopics)].filter((key) => key.startsWith('tool:'));
+  if (uniqueTopics.length > 0) {
+    return uniqueTopics
+      .map((key) => [`Help for ${key}:`, helpByTopic[key]].join('\n'))
+      .join('\n\n');
+  }
+
+  return null;
 }
 
 export function buildInitialDocumentEditPrompt(request: string): string {

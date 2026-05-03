@@ -197,6 +197,9 @@ test('buildDocumentEditFormatInstructions documents the tool protocol', () => {
   expect(buildDocumentEditToolHelp('tool:patch_component')).toContain('"tool":"patch_component"');
   expect(buildDocumentEditToolHelp('tool:batch')).toContain('"tool":"batch"');
   expect(buildDocumentEditToolHelp('tool:batch')).toContain('A batch counts as one plan step.');
+  expect(buildDocumentEditToolHelp('patch_component, edit_component, and batch call syntax')).toContain('Help for tool:patch_component:');
+  expect(buildDocumentEditToolHelp('patch_component, edit_component, and batch call syntax')).toContain('Help for tool:edit_component:');
+  expect(buildDocumentEditToolHelp('patch_component, edit_component, and batch call syntax')).toContain('Help for tool:batch:');
   expect(buildDocumentEditToolHelp('tool:remove_component')).toContain('"component_ref":"tool-typescript"');
 
   const dbInstructions = buildDocumentEditFormatInstructions({ dbTableNames: ['work_items'], request: 'Show the database table.' });
@@ -394,8 +397,8 @@ hvy_version: 0.1
   expect(batchResult).toContain('Call 2: view_component(skill-python-card)');
   expect(batchResult).toContain('Component HVY with 1-based line numbers:');
   const progressContents = onProgress.mock.calls.map((call) => (call[0] as ChatMessage).content);
-  expect(progressContents).toContain('Preparing document chunks for note-taking.');
-  expect(progressContents).toContain('Reviewing document chunks and taking section notes.');
+  expect(progressContents).not.toContain('Preparing document chunks for note-taking.');
+  expect(progressContents).not.toContain('Reviewing document chunks and taking section notes.');
   expect(progressContents).toContain('Running 2 document tool calls.');
   expect(progressContents).toContain('Searching the document for `Python`.');
   expect(progressContents).toContain('Viewing component skill-python-card.');

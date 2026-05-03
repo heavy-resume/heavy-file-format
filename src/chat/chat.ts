@@ -145,8 +145,8 @@ export function renderChatPanel(
   });
   const title = isDocumentEdit ? 'Edit This Document' : 'Ask This Document';
   const subtitle = isDocumentEdit
-    ? 'Editing chat can inspect structure, request targeted tools, and apply document changes step by step through the local proxy.'
-    : 'Separate from the reader. Requests go through a local proxy so provider API keys stay out of the browser.';
+    ? 'Editing chat can inspect structure, request targeted tools, and apply document changes.'
+    : '';
   const emptyTitle = isDocumentEdit
     ? 'Editing'
     : 'Ask a question';

@@ -1,9 +1,9 @@
-import { expect, test } from 'vitest';
+import { expect, test, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import { createHvyCliSession, executeHvyCliCommand } from '../src/cli-core/commands';
-import { deserializeDocument } from '../src/serialization';
+import { deserializeDocument, serializeDocument } from '../src/serialization';
 
 function createCliTestDocument() {
   return deserializeDocument(`---
@@ -72,4 +72,41 @@ test('cli accepts body section aliases from root and mutates resume virtual file
   expect(executeHvyCliCommand(document, session, 'cat /tools-technologies/tool-typescript/body.txt').output).toContain(
     'Core application language.'
   );
+});
+
+test('deserializing custom resume components does not warn about missing app state', () => {
+  const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+  createResumeCliTestDocument();
+
+  expect(consoleError).not.toHaveBeenCalledWith(expect.stringContaining('[hvy:component-defs]'));
+  consoleError.mockRestore();
+});
+
+test('cli commands can create a chore chart with tables and form plugins', () => {
+  const document = deserializeDocument('---\nhvy_version: 0.1\n---\n', '.hvy');
+  const session = createHvyCliSession();
+  const run = (command: string) => executeHvyCliCommand(document, session, command);
+
+  expect(run('hvy section add /body chore-chart "Chore Chart"').output).toBe('/body/chore-chart');
+  run('hvy text add /chore-chart overview "Track active chores, assignments, completion forms, and weekly leaders."');
+  run(
+    'hvy table add /chore-chart active-chores "Chore,Dad,Mom,Child" --row "Dishes,,,Child" --row "Trash,Dad,," --row "Laundry,,Mom,"'
+  );
+  run('form add /chore-chart add-chore-form "Add chore" "description:Description:textarea:required"');
+  run('form add /chore-chart assign-chore-form "Assign chore" "chore:Chore:text:required" "assignee:Assignee:select:required:Dad|Mom|Child"');
+  run(
+    'form add /chore-chart complete-chore-form "Complete chore" "chore:Chore:text:required" "completed_by:Completed by:select:required:Dad|Mom|Child"'
+  );
+  run('db-table add /chore-chart weekly-leaders weekly_chore_leaders "SELECT person, completed_count FROM weekly_chore_leaders ORDER BY completed_count DESC"');
+
+  expect(run('find /chore-chart -name body.txt').output).toContain('/body/chore-chart/add-chore-form/body.txt');
+  expect(run('cat /chore-chart/active-chores/table.json').output).toContain('"tableColumns": "Chore,Dad,Mom,Child"');
+  expect(run('cat /chore-chart/assign-chore-form/body.txt').output).toContain('submitLabel: Assign chore');
+  expect(run('cat /chore-chart/weekly-leaders/plugin.json').output).toContain('"table": "weekly_chore_leaders"');
+
+  const serialized = serializeDocument(document);
+  expect(serialized).toContain('<!--hvy:plugin {"id":"assign-chore-form","plugin":"dev.heavy.form"');
+  expect(serialized).toContain('<!--hvy:plugin {"id":"weekly-leaders","plugin":"dev.heavy.db-table"');
+  expect(serialized).toContain('"tableRows":[{"cells":["Dishes","","","Child"]}');
 });

@@ -6,6 +6,7 @@ import {
   type HvyVirtualEntry,
   type HvyVirtualFile,
 } from './virtual-file-system';
+import { executeHvyDocumentCommand, hvyDocumentCommandHelp } from './hvy-document-commands';
 
 export interface HvyCliSession {
   cwd: string;
@@ -29,13 +30,13 @@ export function executeHvyCliCommand(document: VisualDocument, session: HvyCliSe
 
   const command = args[0] ?? '';
   const fs = buildHvyVirtualFileSystem(document);
-  const ctx = { fs, cwd: session.cwd };
+  const ctx = { document, fs, cwd: session.cwd };
   const result = runCommand(ctx, command, args.slice(1));
   session.cwd = result.cwd;
   return result;
 }
 
-function runCommand(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd: string }, command: string, args: string[]): HvyCliExecution {
+function runCommand(ctx: { document: VisualDocument; fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd: string }, command: string, args: string[]): HvyCliExecution {
   if (args.includes('--help') || command === 'help' || command === 'man') {
     const topic = command === 'help' || command === 'man' ? args[0] : command;
     return { cwd: ctx.cwd, output: helpFor(topic), mutated: false };
@@ -72,6 +73,14 @@ function runCommand(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd
   }
   if (command === 'sed') {
     return { cwd: ctx.cwd, output: commandSed(ctx, args), mutated: true };
+  }
+  if (command === 'hvy') {
+    const result = executeHvyDocumentCommand(ctx, args);
+    return { cwd: ctx.cwd, output: result.output, mutated: result.mutated };
+  }
+  if (command === 'form' || command === 'db-table') {
+    const result = executeHvyDocumentCommand(ctx, [command, ...args]);
+    return { cwd: ctx.cwd, output: result.output, mutated: result.mutated };
   }
   throw new Error(`Unknown command "${command}". Try "help".`);
 }
@@ -219,7 +228,7 @@ function globToRegExp(glob: string): RegExp {
 
 function helpFor(topic = ''): string {
   const help: Record<string, string> = {
-    '': 'Commands: cd, pwd, ls, cat, head, tail, nl, find, rg, sed. Use man <command> for details.',
+    '': 'Commands: cd, pwd, ls, cat, head, tail, nl, find, rg, sed, hvy, form, db-table. Use man <command> for details.',
     cd: 'cd PATH\nChange the current virtual directory.',
     pwd: 'pwd\nPrint the current virtual directory.',
     ls: 'ls [PATH]\nList files and directories.',
@@ -230,6 +239,13 @@ function helpFor(topic = ''): string {
     find: 'find [PATH] [-name GLOB]\nList virtual paths below PATH.',
     rg: 'rg [-i] PATTERN [PATH]\nSearch readable virtual files.',
     sed: 'sed s/search/replace/[g] FILE\nUpdate a writable virtual file with a search/replace.',
+    hvy: hvyDocumentCommandHelp(),
+    section: hvyDocumentCommandHelp('section'),
+    text: hvyDocumentCommandHelp('text'),
+    table: hvyDocumentCommandHelp('table'),
+    plugin: hvyDocumentCommandHelp('plugin'),
+    form: hvyDocumentCommandHelp('form'),
+    'db-table': hvyDocumentCommandHelp('db-table'),
   };
   return help[topic] ?? help[''];
 }

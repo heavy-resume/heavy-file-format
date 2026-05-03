@@ -226,6 +226,10 @@ function blockSchemaToCliJson(schema: BlockSchema): JsonObject {
     value.tableShowHeader = schema.tableShowHeader;
     value.tableRows = schema.tableRows as unknown as JsonObject[];
   }
+  if (schema.component === 'plugin') {
+    value.plugin = schema.plugin;
+    value.pluginConfig = schema.pluginConfig;
+  }
   return value;
 }
 
@@ -246,6 +250,10 @@ function applyBlockSchemaJson(schema: BlockSchema, component: string, value: Jso
   if (typeof value.tableColumns === 'string') schema.tableColumns = value.tableColumns;
   if (typeof value.tableShowHeader === 'boolean') schema.tableShowHeader = value.tableShowHeader;
   if (Array.isArray(value.tableRows)) schema.tableRows = value.tableRows as unknown as BlockSchema['tableRows'];
+  if (typeof value.plugin === 'string') schema.plugin = value.plugin;
+  if (value.pluginConfig && typeof value.pluginConfig === 'object' && !Array.isArray(value.pluginConfig)) {
+    schema.pluginConfig = value.pluginConfig as JsonObject;
+  }
 }
 
 function readBlockBodyText(block: VisualBlock): string {

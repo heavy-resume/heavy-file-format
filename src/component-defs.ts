@@ -6,7 +6,11 @@ import { areTablesEnabled } from './reference-config';
 let warnedAboutMissingState = false;
 
 export function getComponentDefs(): ComponentDefinition[] {
-  const defs = getDocumentMetaOrNull()?.component_defs;
+  return getComponentDefsFromMeta(getDocumentMetaOrNull());
+}
+
+export function getComponentDefsFromMeta(meta: Record<string, unknown> | null | undefined): ComponentDefinition[] {
+  const defs = meta?.component_defs;
   if (!Array.isArray(defs)) {
     return [];
   }
@@ -65,10 +69,14 @@ export function renderReusableSectionOptions(selected: string): string {
 }
 
 export function resolveBaseComponent(componentName: string): string {
+  return resolveBaseComponentFromMeta(componentName, getDocumentMetaOrNull());
+}
+
+export function resolveBaseComponentFromMeta(componentName: string, meta: Record<string, unknown> | null | undefined): string {
   if (isBuiltinComponentName(componentName)) {
     return componentName;
   }
-  const def = getComponentDefs().find((item) => item.name === componentName);
+  const def = getComponentDefsFromMeta(meta).find((item) => item.name === componentName);
   return def?.baseType || 'text';
 }
 

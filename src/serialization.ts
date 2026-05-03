@@ -6,7 +6,7 @@ import { convertMarkdownToHvyDocument } from './markdown-import';
 import type { DocumentAttachment, VisualDocument } from './types';
 import { makeId, sanitizeOptionalId } from './utils';
 import { getSectionId } from './section-ops';
-import { resolveBaseComponent, isBuiltinComponentName } from './component-defs';
+import { resolveBaseComponentFromMeta, isBuiltinComponentName } from './component-defs';
 import {
   DEFAULT_READER_MAX_WIDTH,
   DEFAULT_SECTION_CSS,
@@ -630,21 +630,21 @@ function escapeHvyJsonString(value: string): string {
 
 function validateDocumentSemantics(document: VisualDocument, diagnostics: HvyDiagnostic[]): void {
   for (const section of document.sections) {
-    validateSectionSemantics(section, diagnostics);
+    validateSectionSemantics(section, document.meta, diagnostics);
   }
 }
 
-function validateSectionSemantics(section: VisualSection, diagnostics: HvyDiagnostic[]): void {
+function validateSectionSemantics(section: VisualSection, documentMeta: JsonObject, diagnostics: HvyDiagnostic[]): void {
   for (const block of section.blocks) {
-    validateBlockSemantics(block, section.title || section.customId || 'Untitled Section', diagnostics);
+    validateBlockSemantics(block, section.title || section.customId || 'Untitled Section', documentMeta, diagnostics);
   }
   for (const child of section.children) {
-    validateSectionSemantics(child, diagnostics);
+    validateSectionSemantics(child, documentMeta, diagnostics);
   }
 }
 
-function validateBlockSemantics(block: VisualBlock, sectionLabel: string, diagnostics: HvyDiagnostic[]): void {
-  const baseComponent = resolveBaseComponent(block.schema.component);
+function validateBlockSemantics(block: VisualBlock, sectionLabel: string, documentMeta: JsonObject, diagnostics: HvyDiagnostic[]): void {
+  const baseComponent = resolveBaseComponentFromMeta(block.schema.component, documentMeta);
 
   if (baseComponent === 'expandable') {
     if ((block.schema.expandableStubBlocks.children ?? []).length === 0) {
@@ -681,19 +681,19 @@ function validateBlockSemantics(block: VisualBlock, sectionLabel: string, diagno
   }
 
   for (const child of block.schema.containerBlocks ?? []) {
-    validateBlockSemantics(child, sectionLabel, diagnostics);
+    validateBlockSemantics(child, sectionLabel, documentMeta, diagnostics);
   }
   for (const child of block.schema.componentListBlocks ?? []) {
-    validateBlockSemantics(child, sectionLabel, diagnostics);
+    validateBlockSemantics(child, sectionLabel, documentMeta, diagnostics);
   }
   for (const child of block.schema.expandableStubBlocks?.children ?? []) {
-    validateBlockSemantics(child, sectionLabel, diagnostics);
+    validateBlockSemantics(child, sectionLabel, documentMeta, diagnostics);
   }
   for (const child of block.schema.expandableContentBlocks?.children ?? []) {
-    validateBlockSemantics(child, sectionLabel, diagnostics);
+    validateBlockSemantics(child, sectionLabel, documentMeta, diagnostics);
   }
   for (const item of block.schema.gridItems ?? []) {
-    validateBlockSemantics(item.block, sectionLabel, diagnostics);
+    validateBlockSemantics(item.block, sectionLabel, documentMeta, diagnostics);
   }
 }
 
@@ -851,7 +851,7 @@ export function serializeDocument(document: VisualDocument): string {
   const body = trimBoundaryNewlines(
     document.sections
       .filter((section) => !section.isGhost)
-      .map((section) => serializeSection(section, 1))
+      .map((section) => serializeSection(section, 1, document.meta))
       .join('\n')
   );
   const textBody = `${frontMatter}\n${body}\n`;
@@ -859,7 +859,7 @@ export function serializeDocument(document: VisualDocument): string {
 }
 
 export function serializeSectionFragment(section: VisualSection): string {
-  return serializeSection(section, 1);
+  return serializeSection(section, 1, null);
 }
 
 export function serializeDocumentBytes(document: VisualDocument): Uint8Array {
@@ -906,7 +906,7 @@ export function serializeDocumentHeaderYaml(document: VisualDocument): string {
 }
 
 export function serializeBlockFragment(block: VisualBlock): string {
-  return trimBoundaryNewlines(serializeBlock(block, 0));
+  return trimBoundaryNewlines(serializeBlock(block, 0, null));
 }
 
 function stripEditorStateFromSerializedValue(value: unknown): unknown {
@@ -1096,7 +1096,7 @@ function splitSerializedTailBytes(bytes: Uint8Array): { text: string; attachment
   };
 }
 
-function serializeSection(section: VisualSection, level: number): string {
+function serializeSection(section: VisualSection, level: number, documentMeta: JsonObject | null): string {
   const heading = `#! ${section.title}`;
   const meta: JsonObject = {
     id: getSectionId(section),
@@ -1123,12 +1123,12 @@ function serializeSection(section: VisualSection, level: number): string {
   const directive = `<!--hvy: ${JSON.stringify(meta)}-->`;
 
   const blockText = section.blocks
-    .map((block) => serializeBlock(block, 1))
+    .map((block) => serializeBlock(block, 1, documentMeta))
     .join('\n\n');
 
   const children = section.children
     .filter((child) => !child.isGhost)
-    .map((child) => serializeSection(child, level + 1))
+    .map((child) => serializeSection(child, level + 1, documentMeta))
     .join('\n\n');
 
   return `${directive}\n${heading}\n\n${blockText}${children ? `\n\n${children}` : ''}`;
@@ -1142,9 +1142,10 @@ function serializeBlockSchema(
     omitComponentListBlocks?: boolean;
     omitExpandableBlocks?: boolean;
     omitGridItems?: boolean;
-  } = {}
+  } = {},
+  documentMeta: JsonObject | null = null
 ): JsonObject {
-  const component = resolveBaseComponent(schema.component);
+  const component = resolveBaseComponentFromMeta(schema.component, documentMeta);
   const defaults = defaultBlockSchema(component);
   const payload: JsonObject = {};
 
@@ -1170,14 +1171,14 @@ function serializeBlockSchema(
   }
   if (component === 'container') {
     if (!options.omitContainerBlocks) {
-      addBlockArrayIfPresent(payload, 'containerBlocks', schema.containerBlocks);
+      addBlockArrayIfPresent(payload, 'containerBlocks', schema.containerBlocks, documentMeta);
     }
   }
   if (component === 'component-list') {
     addIfChanged(payload, 'componentListComponent', schema.componentListComponent, defaults.componentListComponent);
     addIfChanged(payload, 'componentListItemLabel', schema.componentListItemLabel, defaults.componentListItemLabel);
     if (!options.omitComponentListBlocks) {
-      addBlockArrayIfPresent(payload, 'componentListBlocks', schema.componentListBlocks);
+      addBlockArrayIfPresent(payload, 'componentListBlocks', schema.componentListBlocks, documentMeta);
     }
   }
   if (component === 'grid') {
@@ -1185,7 +1186,7 @@ function serializeBlockSchema(
     if (!options.omitGridItems && schema.gridItems.length > 0) {
       payload.gridItems = schema.gridItems.map((item) => ({
         id: item.id,
-        block: serializeVisualBlock(item.block),
+        block: serializeVisualBlock(item.block, documentMeta),
       }));
     }
   }
@@ -1218,26 +1219,27 @@ function serializeBlockSchema(
 function serializeBlock(
   block: VisualBlock,
   indent: number,
+  documentMeta: JsonObject | null,
   override?: { name: string; schema?: JsonObject }
 ): string {
-  const blockDirective = override ?? serializeBlockDirective(block.schema);
+  const blockDirective = override ?? serializeBlockDirective(block.schema, documentMeta);
   const schemaDirective = `${' '.repeat(indent)}<!--hvy:${blockDirective.name} ${JSON.stringify(blockDirective.schema)}-->`;
-  const nested = serializeNestedBlocks(block, indent + 1);
+  const nested = serializeNestedBlocks(block, indent + 1, documentMeta);
   const text = indentMultiline(trimBoundaryNewlines(block.text), indent + 1);
   return [schemaDirective, text, nested].filter((part) => part.length > 0).join('\n');
 }
 
-function serializeBlockDirective(schema: BlockSchema): { name: string; schema: JsonObject } {
+function serializeBlockDirective(schema: BlockSchema, documentMeta: JsonObject | null): { name: string; schema: JsonObject } {
   const component = schema.component.trim();
   if (/^[a-z][a-z0-9-]*$/i.test(component) && !['block', 'doc', 'css', 'subsection'].includes(component)) {
     return {
       name: component,
-      schema: serializeBlockSchema(schema, { omitComponent: true, ...nestedBlockOmitOptions(schema) }),
+      schema: serializeBlockSchema(schema, { omitComponent: true, ...nestedBlockOmitOptions(schema, documentMeta) }, documentMeta),
     };
   }
   return {
     name: 'block',
-    schema: serializeBlockSchema(schema, nestedBlockOmitOptions(schema)),
+    schema: serializeBlockSchema(schema, nestedBlockOmitOptions(schema, documentMeta), documentMeta),
   };
 }
 
@@ -1263,8 +1265,8 @@ function serializeSlotDirective(name: string, schema: JsonObject, indent: number
   return `${' '.repeat(indent)}<!--hvy:${name} ${JSON.stringify(schema)}-->`;
 }
 
-function serializeSlotWithChild(name: string, schema: JsonObject, child: VisualBlock, indent: number): string {
-  return [serializeSlotDirective(name, schema, indent), serializeBlock(child, indent + 1)].join('\n\n');
+function serializeSlotWithChild(name: string, schema: JsonObject, child: VisualBlock, indent: number, documentMeta: JsonObject | null): string {
+  return [serializeSlotDirective(name, schema, indent), serializeBlock(child, indent + 1, documentMeta)].join('\n\n');
 }
 
 function buildExpandablePartPayload(expandableBlock: VisualBlock, part: 0 | 1): JsonObject {
@@ -1281,7 +1283,8 @@ function serializeExpandablePart(
   children: VisualBlock[],
   part: 0 | 1,
   _lock: boolean,
-  indent: number
+  indent: number,
+  documentMeta: JsonObject | null
 ): string {
   const name = `expandable:${part === 0 ? 'stub' : 'content'}`;
   const payload = buildExpandablePartPayload(expandableBlock, part);
@@ -1290,54 +1293,55 @@ function serializeExpandablePart(
   }
   return [
     serializeSlotDirective(name, payload, indent),
-    children.map((child) => serializeBlock(child, indent + 1)).join('\n\n'),
+    children.map((child) => serializeBlock(child, indent + 1, documentMeta)).join('\n\n'),
   ].join('\n\n');
 }
 
-function serializeGridItemBlock(item: GridItem, index: number, indent: number): string {
+function serializeGridItemBlock(item: GridItem, index: number, indent: number, documentMeta: JsonObject | null): string {
   return serializeSlotWithChild(
     `grid:${index}`,
     {
       id: item.id,
     },
     item.block,
-    indent
+    indent,
+    documentMeta
   );
 }
 
-function serializeComponentListItemBlock(block: VisualBlock, index: number, indent: number): string {
-  return serializeSlotWithChild(`component-list:${index}`, {}, block, indent);
+function serializeComponentListItemBlock(block: VisualBlock, index: number, indent: number, documentMeta: JsonObject | null): string {
+  return serializeSlotWithChild(`component-list:${index}`, {}, block, indent, documentMeta);
 }
 
-function serializeContainerItemBlock(block: VisualBlock, index: number, indent: number): string {
-  return serializeSlotWithChild(`container:${index}`, {}, block, indent);
+function serializeContainerItemBlock(block: VisualBlock, index: number, indent: number, documentMeta: JsonObject | null): string {
+  return serializeSlotWithChild(`container:${index}`, {}, block, indent, documentMeta);
 }
 
-function serializeNestedBlocks(block: VisualBlock, indent: number): string {
-  const component = resolveBaseComponent(block.schema.component);
+function serializeNestedBlocks(block: VisualBlock, indent: number, documentMeta: JsonObject | null): string {
+  const component = resolveBaseComponentFromMeta(block.schema.component, documentMeta);
   if (component === 'expandable') {
     const stub = block.schema.expandableStubBlocks;
     const content = block.schema.expandableContentBlocks;
-    const stubPart = serializeExpandablePart(block, stub.children, 0, stub.lock, indent);
-    const contentPart = serializeExpandablePart(block, content.children, 1, content.lock, indent);
+    const stubPart = serializeExpandablePart(block, stub.children, 0, stub.lock, indent, documentMeta);
+    const contentPart = serializeExpandablePart(block, content.children, 1, content.lock, indent, documentMeta);
     return [stubPart, contentPart].filter((part) => part.length > 0).join('\n\n');
   }
   if (component === 'grid') {
-    return block.schema.gridItems.map((item, index) => serializeGridItemBlock(item, index, indent)).join('\n\n');
+    return block.schema.gridItems.map((item, index) => serializeGridItemBlock(item, index, indent, documentMeta)).join('\n\n');
   }
   if (component === 'component-list') {
     return block.schema.componentListBlocks
-      .map((innerBlock, index) => serializeComponentListItemBlock(innerBlock, index, indent))
+      .map((innerBlock, index) => serializeComponentListItemBlock(innerBlock, index, indent, documentMeta))
       .join('\n\n');
   }
   if (component === 'container') {
-    return block.schema.containerBlocks.map((innerBlock, index) => serializeContainerItemBlock(innerBlock, index, indent)).join('\n\n');
+    return block.schema.containerBlocks.map((innerBlock, index) => serializeContainerItemBlock(innerBlock, index, indent, documentMeta)).join('\n\n');
   }
   return '';
 }
 
-function nestedBlockOmitOptions(schema: BlockSchema): Parameters<typeof serializeBlockSchema>[1] {
-  const component = resolveBaseComponent(schema.component);
+function nestedBlockOmitOptions(schema: BlockSchema, documentMeta: JsonObject | null): Parameters<typeof serializeBlockSchema>[1] {
+  const component = resolveBaseComponentFromMeta(schema.component, documentMeta);
   return {
     omitContainerBlocks: component === 'container',
     omitComponentListBlocks: component === 'component-list',
@@ -1346,10 +1350,10 @@ function nestedBlockOmitOptions(schema: BlockSchema): Parameters<typeof serializ
   };
 }
 
-function serializeVisualBlock(block: VisualBlock): JsonObject {
+function serializeVisualBlock(block: VisualBlock, documentMeta: JsonObject | null = null): JsonObject {
   return {
     text: block.text,
-    schema: serializeBlockSchema(block.schema),
+    schema: serializeBlockSchema(block.schema, {}, documentMeta),
   };
 }
 
@@ -1358,11 +1362,11 @@ function serializeTableRow(row: TableRow): JsonObject {
   return serialized;
 }
 
-function addBlockArrayIfPresent(payload: JsonObject, key: string, blocks: VisualBlock[]): void {
+function addBlockArrayIfPresent(payload: JsonObject, key: string, blocks: VisualBlock[], documentMeta: JsonObject | null): void {
   if (blocks.length === 0) {
     return;
   }
-  payload[key] = blocks.map((block) => serializeVisualBlock(block));
+  payload[key] = blocks.map((block) => serializeVisualBlock(block, documentMeta));
 }
 
 function addIfChanged(payload: JsonObject, key: string, value: unknown, defaultValue: unknown): void {

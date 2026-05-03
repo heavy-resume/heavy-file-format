@@ -202,3 +202,36 @@ theme:
 
    <!--hvy:text {}-->
     Faux tail, default to 5 lines, max 100 lines
+
+ <!--hvy:expandable {}-->
+  <!--hvy:expandable:stub {}-->
+
+   <!--hvy:text {}-->
+    hvy
+
+  <!--hvy:expandable:content {}-->
+
+   <!--hvy:text {}-->
+    Document mutation namespace. Supports section add, text add, table add, and plugin add for creating HVY structure without hand-editing directives.
+
+ <!--hvy:expandable {}-->
+  <!--hvy:expandable:stub {}-->
+
+   <!--hvy:text {}-->
+    form
+
+  <!--hvy:expandable:content {}-->
+
+   <!--hvy:text {}-->
+    Form plugin shortcut. Adds a dev.heavy.form plugin with field specs like name:Label:type:required:Option A|Option B.
+
+ <!--hvy:expandable {}-->
+  <!--hvy:expandable:stub {}-->
+
+   <!--hvy:text {}-->
+    db-table
+
+  <!--hvy:expandable:content {}-->
+
+   <!--hvy:text {}-->
+    DB table plugin shortcut. Adds a dev.heavy.db-table plugin backed by a table or view, with optional SQL query text.

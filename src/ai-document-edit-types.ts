@@ -51,7 +51,7 @@ export interface WorkNoteState {
   goal: string;
   done: string[];
   currentFocus: string;
-  remaining: string[];
+  nextTask: string;
   cautions: string[];
 }
 

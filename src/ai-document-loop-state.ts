@@ -47,7 +47,7 @@ export function createInitialWorkNote(goal: string): WorkNoteState {
     goal: truncatePreview(goal.replace(/\n/g, ' '), 180),
     done: [],
     currentFocus: 'Start by choosing the next useful document edit tool.',
-    remaining: [],
+    nextTask: 'Derive the next task from the request and current context.',
     cautions: [],
   };
 }
@@ -66,8 +66,8 @@ export function formatWorkNote(note: WorkNoteState): string {
     'Work note (private scratchpad; update mentally as work progresses):',
     `Goal: ${note.goal}`,
     `Done: ${note.done.length > 0 ? note.done.slice(-6).join('; ') : '(nothing yet)'}`,
-    `Current focus: ${note.currentFocus || '(none)'}`,
-    `Remaining: ${note.remaining.length > 0 ? note.remaining.slice(0, 8).join('; ') : '(derive from plan/request)'}`,
+    `Current task: ${note.currentFocus || '(none)'}`,
+    `Next task: ${note.nextTask || '(derive from plan/request)'}`,
     `Cautions: ${note.cautions.length > 0 ? note.cautions.slice(-4).join('; ') : '(none)'}`,
   ].join('\n');
 }
@@ -76,10 +76,11 @@ export function updateWorkNoteRemaining(note: WorkNoteState, plan: EditPlanState
   if (!plan) {
     return note;
   }
+  const pendingSteps = plan.steps.filter((step) => !step.done);
   return {
     ...note,
-    currentFocus: plan.steps.find((step) => !step.done)?.text ?? 'Verify the request is fully satisfied and finish.',
-    remaining: plan.steps.filter((step) => !step.done).map((step) => step.text),
+    currentFocus: pendingSteps[0]?.text ?? 'Verify the request is fully satisfied and finish.',
+    nextTask: pendingSteps[1]?.text ?? (pendingSteps.length === 0 ? 'Finish with a concise summary.' : 'Verify progress before choosing another task.'),
   };
 }
 
@@ -486,7 +487,9 @@ export function buildToolLoopOperationalSummary(params: {
     `- Goal: ${truncatePreview(params.goal, 220)}`,
     `- Edit path: ${params.path}`,
     `- Completed actions: ${summarizeCompactedActions(params.compactedMessages)}`,
-    `- Current task state: ${summarizeCurrentTaskState(params.document, params.plan, params.path)}`,
+    `- Document state: ${summarizeDocumentTaskState(params.document, params.path)}`,
+    `- Current task: ${summarizeCurrentPlanTask(params.plan)}`,
+    `- Next task: ${summarizeNextPlanTask(params.plan)}`,
     `- Important refs/ids: ${snapshot ? summarizeImportantDocumentRefs(snapshot) : summarizeImportantHeaderRefs(headerSnapshot)}`,
     `- Unresolved errors: ${summarizeCompactedErrors(params.compactedMessages)}`,
     `- Next valid actions: ${params.path === 'header' ? 'inspect header, patch header, mark plan step done, or finish' : 'inspect structure/rendered output, patch/create/remove/reorder components or sections, query DB tables, mark plan step done, or finish'}`,
@@ -519,17 +522,31 @@ export function summarizeCompactedActions(messages: ChatMessage[]): string {
   return actions.length > 0 ? actions.slice(-10).join(', ') : '(none recorded)';
 }
 
-export function summarizeCurrentTaskState(document: VisualDocument, plan: EditPlanState | null, path: EditPathSelection): string {
+export function summarizeDocumentTaskState(document: VisualDocument, path: EditPathSelection): string {
   const sectionCount = document.sections.filter((section) => !section.isGhost).length;
   let componentCount = 0;
   visitBlocks(document.sections, () => {
     componentCount += 1;
   });
   const configuredDbTables = getDocumentDbTableNames(document);
-  const planSummary = plan ? formatPlanState(plan).split('\n').slice(1).join('; ') : 'no active plan';
   return path === 'header'
-    ? `${Object.keys(document.meta).length} header keys; ${sectionCount} visible sections; ${planSummary}`
-    : `${sectionCount} visible sections; ${componentCount} components; db-table component targets: ${configuredDbTables.join(', ') || '(none)'}; ${planSummary}`;
+    ? `${Object.keys(document.meta).length} header keys; ${sectionCount} visible sections`
+    : `${sectionCount} visible sections; ${componentCount} components; db-table component targets: ${configuredDbTables.join(', ') || '(none)'}`;
+}
+
+export function summarizeCurrentPlanTask(plan: EditPlanState | null): string {
+  if (!plan) {
+    return 'No active plan; choose the next useful action from the request and context.';
+  }
+  return plan.steps.find((step) => !step.done)?.text ?? 'All plan steps are complete; verify and finish.';
+}
+
+export function summarizeNextPlanTask(plan: EditPlanState | null): string {
+  if (!plan) {
+    return 'Create a plan only if the request needs multiple document changes.';
+  }
+  const pending = plan.steps.filter((step) => !step.done);
+  return pending[1]?.text ?? (pending.length === 0 ? 'Finish with a concise summary.' : 'Verify progress before choosing another task.');
 }
 
 export function summarizeImportantDocumentRefs(snapshot: DocumentStructureSnapshot): string {

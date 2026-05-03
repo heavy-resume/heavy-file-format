@@ -58,7 +58,7 @@ export function buildDocumentEditFormatInstructions(options?: {
     ...(hasDbTables ? ['`query_db_table`'] : []),
     ...(hasDbTablePlugin ? ['`execute_sql`'] : []),
   ].join(', ');
-  const validTools = `\`answer\`, ${planTools}, \`grep\`, \`get_help\`, \`get_css\`, \`get_properties\`, \`set_properties\`, \`view_component\`, \`view_rendered_component\`, \`edit_component\`, \`patch_component\`, \`create_component\`, \`remove_component\`, \`create_section\`, \`remove_section\`, \`reorder_section\`${databaseTools ? `, ${databaseTools}` : ''}, \`request_structure\`, \`request_rendered_structure\`, \`done\``;
+  const validTools = `\`answer\`, ${planTools}, \`grep\`, \`search_components\`, \`get_help\`, \`get_css\`, \`get_properties\`, \`set_properties\`, \`view_component\`, \`view_rendered_component\`, \`edit_component\`, \`patch_component\`, \`create_component\`, \`remove_component\`, \`create_section\`, \`remove_section\`, \`reorder_section\`${databaseTools ? `, ${databaseTools}` : ''}, \`request_structure\`, \`request_rendered_structure\`, \`done\``;
   return [
     'Reply with exactly one JSON object and nothing else.',
     'Choose one tool at a time.',
@@ -69,14 +69,16 @@ export function buildDocumentEditFormatInstructions(options?: {
     'Use `answer` for informational questions, explanations, or requests that do not require changing the HVY document. `answer` is final and does not mutate the document.',
     planActive
       ? 'A plan already exists for this request. The `plan` tool is unavailable now; execute the current plan and use `mark_step_done` when steps are complete.'
-      : 'For larger or ambiguous edit requests, first use `plan` with explicit steps. Keep the plan concise and actionable.',
+      : 'For larger or ambiguous edit requests, first use `plan` with explicit component/section work steps: create, modify, delete, reorder, inspect, or verify a component/section. Avoid vague task steps like "implement feature"; name the component or section outcome.',
     'Create at most one plan for the current request. Once a plan exists, execute it and mark steps done instead of replacing it.',
     'When a planned step is complete, use `mark_step_done` before moving on or finishing. The current plan progress is kept in context.',
     'If the user reports an error rendered by a component or plugin, inspect rendered output, find the owning component, then fix that serialized component.',
     'Use real section ids when a section has an id.',
     'Use component ids when they exist. If a component has no id, use its fallback component ref like `C3`.',
     'Do not invent ids or refs.',
+    'Before creating a component that may already exist, use `search_components` with the intended label/purpose and modify the existing component when the search finds a close match.',
     'Use `grep` to search the serialized document. Use `get_help` with topics like `plugin:dev.heavy.form`, `plugin:dev.heavy.db-table`, or `component:grid` for exact syntax.',
+    'Use `search_components` to search the current component/section index by intended purpose, label, plugin, text, or table name. This is local lexical search, not an external embedding API.',
     'Use `get_css`, `get_properties`, and `set_properties` for inline CSS on section/component ids. Use `null` as a property value to remove it.',
     'When you need exact HVY for a component before editing it, use `view_component` first. It returns 1-based component line numbers and defaults to lines 1-200.',
     'Use `request_rendered_structure` to inspect what visible components render, especially when the user reports a visible output problem.',
@@ -114,6 +116,7 @@ export function buildDocumentEditFormatInstructions(options?: {
     '{"tool":"get_help","topic":"component:grid","reason":"optional"}',
     '{"tool":"grep","query":"Python|TypeScript","flags":"i","before":2,"after":2,"max_count":3,"reason":"optional"}',
     '{"tool":"grep","query":"/Python|TypeScript/i","before":2,"after":2,"max_count":3,"reason":"optional"}',
+    '{"tool":"search_components","query":"Add Chore form","max_count":3,"reason":"Check for an existing add chore form before creating another one."}',
     '{"tool":"get_css","ids":["summary","C3"],"regex":"margin|padding","flags":"i","reason":"optional"}',
     '{"tool":"get_properties","ids":["summary","skill-python-card"],"properties":["margin","padding"],"reason":"optional"}',
     '{"tool":"get_properties","ids":["summary","C3"],"regex":"^margin","flags":"i","reason":"optional"}',

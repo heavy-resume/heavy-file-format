@@ -86,6 +86,12 @@ interface DocumentStructureSnapshot {
   componentRefs: Map<string, ComponentRefEntry>;
 }
 
+interface WorkLedgerItem {
+  action: string;
+  intent: string;
+  result: string;
+}
+
 interface HeaderStructureSnapshot {
   summary: string;
 }
@@ -106,6 +112,7 @@ type DocumentEditToolRequest =
   | { tool: 'request_structure'; reason?: string }
   | { tool: 'request_rendered_structure'; reason?: string }
   | { tool: 'get_help'; topic: string; reason?: string }
+  | { tool: 'search_components'; query: string; max_count?: number; reason?: string }
   | { tool: 'view_component'; component_ref: string; start_line?: number; end_line?: number; reason?: string }
   | { tool: 'view_rendered_component'; component_ref: string; reason?: string }
   | { tool: 'grep'; query: string; flags?: string; before?: number; after?: number; max_count?: number; reason?: string }
@@ -376,6 +383,8 @@ async function runDocumentEditToolLoop(params: {
   const pluginHints = getRegisteredPluginAiHints();
   let contextSummary = buildDocumentEditContextSummary(snapshot.summary, dbTableNames);
   let recentToolHelp: string | null = null;
+  const workLedger: WorkLedgerItem[] = [];
+  let latestIntent = params.request;
   let plan: EditPlanState | null = null;
   const health = createLoopHealthState();
   let conversation: ChatMessage[] = [
@@ -398,7 +407,7 @@ async function runDocumentEditToolLoop(params: {
     const response = await requestProxyCompletion({
       settings: params.settings,
       messages: conversation,
-      context: buildLoopContext(contextSummary, plan, recentToolHelp),
+      context: buildLoopContext(contextSummary, plan, recentToolHelp, workLedger, buildIntentRecall(latestIntent, snapshot, params.document)),
       formatInstructions: buildDocumentEditFormatInstructions({ dbTableNames, pluginHints, planActive: plan !== null }),
       mode: 'document-edit',
       debugLabel: `ai-document-edit:${iteration + 1}`,
@@ -438,6 +447,7 @@ async function runDocumentEditToolLoop(params: {
     }
 
     const actionKey = getToolActionKey(parsed.value);
+    latestIntent = getDocumentToolIntent(parsed.value) || latestIntent;
     const beforeProgress = summarizeDocumentLoopProgress(params.document, plan);
     const newInformationProgress = isDocumentInformationTool(parsed.value.tool) && !health.seenActionKeys.has(actionKey);
     let toolResult = '';
@@ -482,6 +492,10 @@ async function runDocumentEditToolLoop(params: {
       params.onProgress?.(describeDocumentToolProgress(parsed.value));
       recentToolHelp = executeGetHelpTool(parsed.value);
       toolResult = buildToolResult('get_help', recentToolHelp);
+      contextSummary = buildDocumentEditContextSummary(SENT_STRUCTURE_CONTEXT, dbTableNames);
+    } else if (parsed.value.tool === 'search_components') {
+      params.onProgress?.(describeDocumentToolProgress(parsed.value));
+      toolResult = buildToolResult('search_components', executeSearchComponentsTool(parsed.value, snapshot, params.document));
       contextSummary = buildDocumentEditContextSummary(SENT_STRUCTURE_CONTEXT, dbTableNames);
     } else if (parsed.value.tool === 'grep') {
       params.onProgress?.(describeDocumentToolProgress(parsed.value));
@@ -603,6 +617,8 @@ async function runDocumentEditToolLoop(params: {
     if (recovery === 'stop') {
       return { summary: 'Stopped because the AI edit loop appeared stuck repeating actions without making progress. The AI can continue if you send another request.' };
     }
+
+    recordWorkLedgerItem(workLedger, parsed.value, latestIntent, toolResult);
 
     conversation = [
       ...conversation,
@@ -777,8 +793,24 @@ async function runHeaderEditToolLoop(params: {
   };
 }
 
-function buildLoopContext(baseContext: string, plan: EditPlanState | null, recentToolHelp?: string | null): string {
+function buildLoopContext(
+  baseContext: string,
+  plan: EditPlanState | null,
+  recentToolHelp?: string | null,
+  workLedger?: WorkLedgerItem[],
+  intentRecall?: string
+): string {
   const parts = [baseContext];
+  if (workLedger && workLedger.length > 0) {
+    parts.push(
+      '',
+      'Work ledger (recent completed/attempted tool actions; use this to avoid duplicating components/sections):',
+      ...workLedger.slice(-20).map((item, index) => `${index + 1}. ${item.action} — intent: ${item.intent} — result: ${item.result}`)
+    );
+  }
+  if (intentRecall?.trim()) {
+    parts.push('', intentRecall.trim());
+  }
   if (recentToolHelp) {
     parts.push(
       '',
@@ -790,6 +822,81 @@ function buildLoopContext(baseContext: string, plan: EditPlanState | null, recen
     parts.push('', formatPlanState(plan));
   }
   return parts.join('\n');
+}
+
+function recordWorkLedgerItem(
+  ledger: WorkLedgerItem[],
+  toolCall: DocumentEditToolRequest,
+  intent: string,
+  toolResult: string
+): void {
+  if (toolCall.tool === 'answer' || toolCall.tool === 'done') {
+    return;
+  }
+  ledger.push({
+    action: describeLedgerAction(toolCall),
+    intent: truncatePreview(intent.replace(/\n/g, ' '), 120),
+    result: truncatePreview(toolResult.replace(/\n/g, ' '), 160),
+  });
+  while (ledger.length > 20) {
+    ledger.shift();
+  }
+}
+
+function describeLedgerAction(toolCall: DocumentEditToolRequest): string {
+  switch (toolCall.tool) {
+    case 'create_component':
+      return `create_component(${toolCall.section_ref ?? toolCall.target_component_ref ?? toolCall.position})`;
+    case 'edit_component':
+    case 'patch_component':
+    case 'remove_component':
+    case 'view_component':
+    case 'view_rendered_component':
+      return `${toolCall.tool}(${toolCall.component_ref})`;
+    case 'create_section':
+      return `create_section(${toolCall.title ?? toolCall.position})`;
+    case 'remove_section':
+    case 'reorder_section':
+      return `${toolCall.tool}(${toolCall.section_ref})`;
+    case 'search_components':
+      return `search_components(${toolCall.query})`;
+    case 'get_help':
+      return `get_help(${toolCall.topic})`;
+    case 'grep':
+      return `grep(${toolCall.query})`;
+    case 'query_db_table':
+      return `query_db_table(${toolCall.table_name ?? toolCall.query ?? 'default'})`;
+    case 'execute_sql':
+      return 'execute_sql';
+    default:
+      return toolCall.tool;
+  }
+}
+
+function getDocumentToolIntent(toolCall: DocumentEditToolRequest): string {
+  if ('reason' in toolCall && typeof toolCall.reason === 'string' && toolCall.reason.trim().length > 0) {
+    return toolCall.reason.trim();
+  }
+  switch (toolCall.tool) {
+    case 'plan':
+      return toolCall.steps.join(' ');
+    case 'mark_step_done':
+      return toolCall.summary ?? `Plan step ${toolCall.step}`;
+    case 'edit_component':
+      return toolCall.request;
+    case 'create_component':
+      return toolCall.hvy;
+    case 'create_section':
+      return toolCall.hvy ?? toolCall.title ?? '';
+    case 'search_components':
+      return toolCall.query;
+    case 'grep':
+      return toolCall.query;
+    case 'get_help':
+      return toolCall.topic;
+    default:
+      return '';
+  }
 }
 
 const COMPACT_LOOP_MESSAGES_AFTER = 12;
@@ -951,6 +1058,8 @@ function describeDocumentToolProgress(toolCall: DocumentEditToolRequest): string
       return 'Inspecting rendered document output.';
     case 'get_help':
       return `Getting help for ${toolCall.topic}.`;
+    case 'search_components':
+      return `Searching existing components for \`${toolCall.query}\`.`;
     case 'grep':
       return `Searching the document for \`${toolCall.query}\`.`;
     case 'get_css':
@@ -1178,6 +1287,7 @@ function isDocumentInformationTool(tool: DocumentEditToolRequest['tool']): boole
   return tool === 'request_structure'
     || tool === 'request_rendered_structure'
     || tool === 'get_help'
+    || tool === 'search_components'
     || tool === 'grep'
     || tool === 'get_css'
     || tool === 'get_properties'
@@ -1554,6 +1664,100 @@ function getUniqueComponentEntries(snapshot: DocumentStructureSnapshot): Compone
     entries.push(entry);
   }
   return entries;
+}
+
+function executeSearchComponentsTool(
+  request: Extract<DocumentEditToolRequest, { tool: 'search_components' }>,
+  snapshot: DocumentStructureSnapshot,
+  document: VisualDocument
+): string {
+  const matches = searchComponentIndex(request.query, snapshot, document, request.max_count ?? 5);
+  if (matches.length === 0) {
+    return `No close component/section matches found for "${request.query}".`;
+  }
+  return [
+    `Best component/section matches for "${request.query}":`,
+    ...matches.map((match, index) => `${index + 1}. ${match.label} score=${match.score} — ${match.preview}`),
+    'If one of these already satisfies the intended purpose, modify/reuse it instead of creating a duplicate.',
+  ].join('\n');
+}
+
+function buildIntentRecall(intent: string, snapshot: DocumentStructureSnapshot, document: VisualDocument): string {
+  const matches = searchComponentIndex(intent, snapshot, document, 3);
+  if (matches.length === 0) {
+    return '';
+  }
+  return [
+    `Related existing components for current intent "${truncatePreview(intent.replace(/\n/g, ' '), 100)}":`,
+    ...matches.map((match) => `- ${match.label} score=${match.score}: ${match.preview}`),
+    'Check these before creating another component with the same purpose.',
+  ].join('\n');
+}
+
+function searchComponentIndex(
+  query: string,
+  snapshot: DocumentStructureSnapshot,
+  document: VisualDocument,
+  maxCount: number
+): Array<{ label: string; preview: string; score: number }> {
+  const queryTokens = tokenizeSearchText(query);
+  if (queryTokens.length === 0) {
+    return [];
+  }
+  const entries = getUniqueComponentEntries(snapshot)
+    .map((entry) => {
+      const section = findSectionByKey(document.sections, entry.sectionKey);
+      const block = findBlockByInternalId(document.sections, entry.blockId);
+      if (!block) {
+        return null;
+      }
+      const searchable = [
+        section?.title,
+        section ? getSectionId(section) : '',
+        entry.target,
+        entry.component,
+        block.schema.component,
+        block.schema.plugin,
+        block.schema.xrefTitle,
+        block.schema.xrefDetail,
+        block.schema.tableColumns,
+        JSON.stringify(block.schema.pluginConfig ?? {}),
+        block.text,
+      ].filter((value): value is string => typeof value === 'string' && value.trim().length > 0).join(' ');
+      const score = scoreSearchMatch(queryTokens, searchable);
+      if (score <= 0) {
+        return null;
+      }
+      const sectionLabel = section ? ` in section "${section.title || getSectionId(section)}"` : '';
+      return {
+        label: `${entry.target || entry.ref} (${entry.component})${sectionLabel}`,
+        preview: truncatePreview(searchable.replace(/\s+/g, ' '), 180),
+        score,
+      };
+    })
+    .filter((value): value is { label: string; preview: string; score: number } => value !== null)
+    .sort((a, b) => b.score - a.score || a.label.localeCompare(b.label));
+  return entries.slice(0, Math.max(1, Math.min(10, maxCount)));
+}
+
+function tokenizeSearchText(value: string): string[] {
+  const stopWords = new Set(['the', 'a', 'an', 'and', 'or', 'to', 'of', 'in', 'for', 'with', 'this', 'that', 'component', 'section']);
+  return [...new Set(value.toLowerCase().match(/[a-z0-9_]+/g) ?? [])]
+    .filter((token) => token.length > 1 && !stopWords.has(token));
+}
+
+function scoreSearchMatch(queryTokens: string[], searchable: string): number {
+  const normalized = searchable.toLowerCase();
+  const targetTokens = new Set(tokenizeSearchText(normalized));
+  return queryTokens.reduce((score, token) => {
+    if (targetTokens.has(token)) {
+      return score + 3;
+    }
+    if (normalized.includes(token)) {
+      return score + 1;
+    }
+    return score;
+  }, 0);
 }
 
 async function renderComponentText(document: VisualDocument, block: VisualBlock, options: { maxDepth: number }): Promise<string> {
@@ -2093,6 +2297,17 @@ function parseDocumentEditToolRequest(source: string): { ok: true; value: Docume
         value: {
           tool,
           topic: parsed.topic.trim(),
+          reason: typeof parsed.reason === 'string' ? parsed.reason : undefined,
+        },
+      };
+    }
+    if (tool === 'search_components' && typeof parsed.query === 'string' && parsed.query.trim().length > 0) {
+      return {
+        ok: true,
+        value: {
+          tool,
+          query: parsed.query.trim(),
+          max_count: Number.isInteger(parsed.max_count) ? Number(parsed.max_count) : undefined,
           reason: typeof parsed.reason === 'string' ? parsed.reason : undefined,
         },
       };

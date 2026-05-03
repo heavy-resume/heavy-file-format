@@ -175,7 +175,7 @@ test('buildDocumentEditFormatInstructions documents the tool protocol', () => {
     ],
   });
   expect(instructions).toContain(
-    'Valid tools are: `answer`, `plan`, `mark_step_done`, `grep`, `get_help`, `get_css`, `get_properties`, `set_properties`, `view_component`, `view_rendered_component`, `edit_component`, `patch_component`, `create_component`, `remove_component`, `create_section`, `remove_section`, `reorder_section`, `request_structure`, `request_rendered_structure`, `done`.'
+    'Valid tools are: `answer`, `plan`, `mark_step_done`, `grep`, `search_components`, `get_help`, `get_css`, `get_properties`, `set_properties`, `view_component`, `view_rendered_component`, `edit_component`, `patch_component`, `create_component`, `remove_component`, `create_section`, `remove_section`, `reorder_section`, `request_structure`, `request_rendered_structure`, `done`.'
   );
   expect(instructions).toContain('Use `answer` for informational questions, explanations, or requests that do not require changing the HVY document.');
   expect(instructions).toContain('This is an HVY document editing tool loop, not an HTML generator.');
@@ -189,6 +189,8 @@ test('buildDocumentEditFormatInstructions documents the tool protocol', () => {
   expect(instructions).toContain('{"tool":"mark_step_done","step":1,"summary":"Found the relevant section.","reason":"optional"}');
   expect(instructions).toContain('{"tool":"get_help","topic":"plugin:dev.heavy.form","reason":"optional"}');
   expect(instructions).toContain('{"tool":"get_help","topic":"component:grid","reason":"optional"}');
+  expect(instructions).toContain('Before creating a component that may already exist, use `search_components`');
+  expect(instructions).toContain('{"tool":"search_components","query":"Add Chore form","max_count":3,"reason":"Check for an existing add chore form before creating another one."}');
   expect(instructions).toContain('It may revise that component in place or fully replace it');
   expect(instructions).toContain('Use real section ids when a section has an id.');
   expect(instructions).toContain('Use `grep` to search the serialized document.');
@@ -237,7 +239,7 @@ test('buildDocumentEditFormatInstructions documents the tool protocol', () => {
   });
   expect(dbPluginOnlyInstructions).toContain('`execute_sql`');
   expect(dbPluginOnlyInstructions).toContain(
-    'Valid tools are: `answer`, `plan`, `mark_step_done`, `grep`, `get_help`, `get_css`, `get_properties`, `set_properties`, `view_component`, `view_rendered_component`, `edit_component`, `patch_component`, `create_component`, `remove_component`, `create_section`, `remove_section`, `reorder_section`, `execute_sql`, `request_structure`, `request_rendered_structure`, `done`.'
+    'Valid tools are: `answer`, `plan`, `mark_step_done`, `grep`, `search_components`, `get_help`, `get_css`, `get_properties`, `set_properties`, `view_component`, `view_rendered_component`, `edit_component`, `patch_component`, `create_component`, `remove_component`, `create_section`, `remove_section`, `reorder_section`, `execute_sql`, `request_structure`, `request_rendered_structure`, `done`.'
   );
   expect(dbPluginOnlyInstructions).toContain('\\"table\\":\\"TABLE_NAME\\"');
 
@@ -246,7 +248,7 @@ test('buildDocumentEditFormatInstructions documents the tool protocol', () => {
 
   const activePlanInstructions = buildDocumentEditFormatInstructions({ planActive: true });
   expect(activePlanInstructions).toContain(
-    'Valid tools are: `answer`, `mark_step_done`, `grep`, `get_help`, `get_css`, `get_properties`, `set_properties`, `view_component`, `view_rendered_component`, `edit_component`, `patch_component`, `create_component`, `remove_component`, `create_section`, `remove_section`, `reorder_section`, `request_structure`, `request_rendered_structure`, `done`.'
+    'Valid tools are: `answer`, `mark_step_done`, `grep`, `search_components`, `get_help`, `get_css`, `get_properties`, `set_properties`, `view_component`, `view_rendered_component`, `edit_component`, `patch_component`, `create_component`, `remove_component`, `create_section`, `remove_section`, `reorder_section`, `request_structure`, `request_rendered_structure`, `done`.'
   );
   expect(activePlanInstructions).not.toContain('{"tool":"plan"');
 
@@ -1227,6 +1229,47 @@ hvy_version: 0.1
   expect(contextAfterHelp).toContain('Recent tool help already fetched; reuse this before calling `get_help` again for the same syntax:');
   expect(contextAfterHelp).toContain('Form (dev.heavy.form)');
   expect(contextAfterHelp).toContain('Supported YAML keys include `fields`');
+});
+
+test('requestAiDocumentEditTurn can search existing components and carries a work ledger', async () => {
+  queueAiToolResponses(
+    '{"tool":"search_components","query":"Add Chore form","max_count":3,"reason":"Check for an existing add chore form before creating another one."}',
+    '{"tool":"done","summary":"Checked for duplicates."}'
+  );
+
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"chores"}-->
+#! Chores
+
+<!--hvy:plugin {"id":"add-chore-form","plugin":"dev.heavy.form","pluginConfig":{"version":"0.1"}}-->
+ submitLabel: "Add Chore"
+ fields:
+ - name: title
+   label: Chore Title
+   type: text
+`, '.hvy');
+  seedStateForDocument(document);
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+
+  const result = await requestAiDocumentEditTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Add a chore form.',
+  });
+
+  expect(result.error).toBeNull();
+  const searchResult = lastToolResultBeforeCall(1);
+  expect(searchResult).toContain('Tool result for search_components:');
+  expect(searchResult).toContain('add-chore-form');
+  expect(searchResult).toContain('If one of these already satisfies the intended purpose');
+  const contextAfterSearch = requestProxyCompletionMock.mock.calls[2]?.[0]?.context ?? '';
+  expect(contextAfterSearch).toContain('Work ledger (recent completed/attempted tool actions; use this to avoid duplicating components/sections):');
+  expect(contextAfterSearch).toContain('search_components(Add Chore form)');
+  expect(contextAfterSearch).toContain('Related existing components for current intent');
 });
 
 test('requestAiDocumentEditTurn can remove a section', async () => {

@@ -27,22 +27,6 @@ export interface DocumentEditPluginHint {
   hint?: string;
 }
 
-function formatPluginHintLines(pluginHints: DocumentEditPluginHint[]): string[] {
-  if (pluginHints.length === 0) {
-    return [
-      'No plugins are currently registered. Do not create plugin blocks or invent plugin component directives unless a registered plugin is available in context.',
-    ];
-  }
-  return [
-    'Available plugins for `<!--hvy:plugin ...-->` blocks:',
-    ...pluginHints.map((plugin) => {
-      const hint = plugin.hint?.trim();
-      return `- ${plugin.displayName} (${plugin.id})${hint ? `: ${hint}` : ''}`;
-    }),
-    'Only use registered plugin ids from this list. Use `get_help` for exact plugin/component syntax instead of guessing.',
-  ];
-}
-
 export function buildDocumentEditFormatInstructions(options?: {
   dbTableNames?: string[];
   pluginHints?: DocumentEditPluginHint[];
@@ -61,61 +45,36 @@ export function buildDocumentEditFormatInstructions(options?: {
     ...(hasDbTables ? ['`query_db_table`'] : []),
     ...(hasDbTablePlugin ? ['`execute_sql`'] : []),
   ].join(', ');
-  const validTools = `\`answer\`, ${planTools}, \`grep\`, \`search_components\`, \`get_help\`, \`get_css\`, \`get_properties\`, \`set_properties\`, \`view_component\`, \`view_rendered_component\`, \`edit_component\`, \`patch_component\`, \`create_component\`, \`remove_component\`, \`create_section\`, \`remove_section\`, \`reorder_section\`${databaseTools ? `, ${databaseTools}` : ''}, \`request_structure\`, \`request_rendered_structure\`, \`done\``;
+  const validTools = `\`answer\`, ${planTools}, \`batch\`, \`grep\`, \`search_components\`, \`get_help\`, \`get_css\`, \`get_properties\`, \`set_properties\`, \`view_component\`, \`view_rendered_component\`, \`edit_component\`, \`patch_component\`, \`create_component\`, \`remove_component\`, \`create_section\`, \`remove_section\`, \`reorder_section\`${databaseTools ? `, ${databaseTools}` : ''}, \`request_structure\`, \`request_rendered_structure\`, \`done\``;
   return [
     'Reply with exactly one JSON object and nothing else.',
-    'Choose one tool at a time.',
+    'The document has already been walked section-by-section in the context notes. Do not start by inspecting the whole document again.',
+    'Use the notes to create one linear plan or run the next concrete tool call.',
+    'Prefer `batch` for a known ordered sequence of concrete tool calls.',
     `Valid tools are: ${validTools}.`,
-    'This is an HVY document editing tool loop, not an HTML generator. Do not return HTML, JSX, DOM markup, JavaScript, or CSS files as document content.',
-    'All new visible content must be encoded as HVY sections and components using `<!--hvy:...-->` directives plus Markdown-like text content.',
-    'Use `get_help` for exact syntax instead of guessing. Tool help topics include `tool:patch_component`, `tool:remove_component`, `tool:create_component`, `tool:create_section`, `tool:grep`, and `tool:css`.',
-    ...formatPluginHintLines(pluginHints),
-    'Use `answer` for informational questions, explanations, or requests that do not require changing the HVY document. `answer` is final and does not mutate the document.',
+    ...(planActive ? [] : ['Plan shape: `{"tool":"plan","steps":["Modify component X to remove Y","Verify no Y remains"]}`.']),
+    'Batch shape: `{"tool":"batch","calls":[{"tool":"remove_component","component_ref":"id"}]}`.',
+    'Use `get_help` only when exact syntax is missing from the notes or recent tool help.',
+    'Do not put `answer`, `done`, `plan`, `mark_step_done`, or another `batch` inside a batch.',
+    ...(pluginHints.length > 0 ? [`Registered plugin ids: ${pluginHints.map((plugin) => plugin.id).join(', ')}.`] : []),
     planActive
-      ? 'A plan already exists for this request. The `plan` tool is unavailable now; execute the current plan. Successful focused tool actions may be marked complete automatically; use `mark_step_done` only when bookkeeping is still missing.'
-      : 'For larger or ambiguous edit requests, inspect first when targets are unclear; use `grep`, `search_components`, `view_component`, or `request_structure` before creating a plan. After discovery, create a plan with explicit component/section change outcomes.',
-    'Plan steps should be user-visible document work: create, modify, delete, reorder, or final verify a component/section. Do not make initial discovery actions like grep/search/help/view into plan steps unless the user explicitly asks for an audit/report.',
-    'Each plan step should be small enough to complete with one focused change tool action or one final verification pass. Do not combine unrelated component, section, and schema changes into a single plan step.',
-    'Create at most one plan for the current request. Once a plan exists, execute it and mark steps done instead of replacing it.',
-    'The current plan progress and work note are kept in context; continue from the next unfinished item.',
-    'If the user reports an error rendered by a component or plugin, inspect rendered output, find the owning component, then fix that serialized component.',
-    'Use real section ids when a section has an id.',
-    'Use component ids when they exist. If a component has no id, use its fallback component ref like `C3`; nested target refs such as `C6.grid[1].list[2]` may also be available from `view_component`.',
-    'Do not invent ids or refs.',
-    'Before creating a component that may already exist, use `search_components` with the intended label/purpose and modify the existing component when the search finds a close match.',
-    'Use `grep` to search the serialized document. Use `get_help` with topics like `tool:patch_component`, `plugin:PLUGIN_ID`, or `component:grid` for exact syntax.',
-    'Use `search_components` to search the current component/section index by intended purpose, label, plugin, text, or table name. This is local lexical search, not an external embedding API.',
-    'Use `get_css`, `get_properties`, and `set_properties` for inline CSS on section/component ids. Use `null` as a property value to remove it.',
-    'When you need exact HVY for a component before editing it, use `view_component` first. It returns 1-based component line numbers and defaults to lines 1-200.',
-    'Use `request_rendered_structure` to inspect what visible components render, especially when the user reports a visible output problem.',
-    'Use `view_rendered_component` to inspect one component rendered as user-facing text plus plugin diagnostics.',
-    'Use `edit_component` only for one existing component. It may revise that component in place or fully replace it, but only for that single referenced component.',
-    'Use `patch_component` for small, local changes after you have seen the numbered component lines.',
-    'Use `create_component` to add a fully defined new component near an existing one or at the end of a section.',
-    'Use `remove_component` and `remove_section` when the request requires deletion.',
-    'Use `create_section.hvy` to add one complete serialized HVY section, including its directive, `#!` title, blocks, and nested subsections.',
-    'For `create_section`, use `new_position_index_from_0` with `append-root` or `append-child` when the new section should be inserted at a specific sibling index instead of the end.',
-    'For `reorder_section`, use `new_position_index_from_0` to move a section to a specific index among its current siblings, or use `target_section_ref` plus `position` for relative moves.',
+      ? 'A plan already exists; continue from the next unfinished step.'
+      : 'For larger work, create one plan after reviewing the notes. Plan steps must be document changes or final verification, not discovery.',
+    'Use existing section/component refs from the notes. Do not invent ids.',
+    'Return HVY only inside create/patch payload fields; never HTML/JSX/DOM.',
     ...(hasDbTables
       ? [
-          `Use \`query_db_table\` to inspect live rows from the attached DB when needed. Available SQLite tables/views: ${dbTableNames.join(', ')}.`,
-          'For `query_db_table`, provide `table_name` when more than one table exists, or provide a full SQL `query`. `limit` is optional.',
-          'Do not invent DB column names in SQL filters. First inspect the table with `query_db_table` and only use columns returned by that table result.',
+          `SQLite tables/views available: ${dbTableNames.join(', ')}.`,
+          'Query DB columns before writing SQL that depends on unknown columns.',
         ]
       : []),
     ...(hasDbTablePlugin
       ? [
-          'Use `execute_sql` to create or update attached SQLite schema/data before adding db-table components that depend on it. SELECT/WITH statements are rejected; use `query_db_table` for reads when tables are already represented in the document.',
-          'For relational requests, model real entities as shared tables and use joins or SQL views for derived displays. For example, a chore chart should usually use chores/people/assignments/completions tables plus a pivot query or view, not one table per person or display column.',
-          'If a db-table component reports a missing table/view, first diagnose whether the intended object should be a base table, a derived view, or an existing table/view target. Then create the missing SQLite object with `execute_sql` or retarget pluginConfig.table to an existing object that matches the component intent. Treat pluginConfig.source as storage selection, not a schema fix.',
-          'When adding a component that should display live DB rows, use the registered plugin from the available plugin list and call `get_help` with that plugin id for exact syntax.',
+          'For relational displays, prefer shared tables plus joins/views over one table per display column.',
+          'Treat pluginConfig.source as storage selection, not a schema fix.',
         ]
       : []),
     'When an edit request is fully satisfied, return `{"tool":"done","summary":"..."}`.',
-    'JSON must use double-quoted keys and string values.',
-    'For `create_component.hvy`, return one complete HVY component fragment as a JSON string value with escaped newlines. It must start with an HVY component directive such as `<!--hvy:text {}-->`, `<!--hvy:table {...}-->`, `<!--hvy:container {...}-->`, or `<!--hvy:plugin {...}-->`.',
-    'For `create_section.hvy`, return one complete HVY section fragment as a JSON string value with escaped newlines. It must start with an HVY section directive such as `<!--hvy: {"id":"new-section"}-->`, followed by a `#!` title and HVY blocks.',
-    'Return compact JSON using the documented field names. Ask `get_help` for a tool topic when you need an example shape.',
   ].join('\n');
 }
 
@@ -130,6 +89,10 @@ export function buildDocumentEditToolHelp(topic: string): string | null {
     'tool:done': '{"tool":"done","summary":"Short summary of what changed."}',
     'tool:plan': '{"tool":"plan","steps":["Find the relevant component","Modify the component","Verify the result"],"reason":"optional"}',
     'tool:mark_step_done': '{"tool":"mark_step_done","step":1,"summary":"Found the relevant component.","reason":"optional"}',
+    'tool:batch': [
+      '{"tool":"batch","calls":[{"tool":"grep","query":"Python|TypeScript","flags":"i","max_count":5},{"tool":"view_component","component_ref":"tool-typescript"}],"reason":"Inspect multiple targets before planning."}',
+      'Use batch for related inspection or a short sequence of concrete edits that should run in order. Do not include answer, done, plan, mark_step_done, or nested batch.',
+    ].join('\n'),
     'tool:grep': [
       '{"tool":"grep","query":"Python|TypeScript","flags":"i","before":2,"after":2,"max_count":3,"reason":"optional"}',
       '{"tool":"grep","query":"/Python|TypeScript/i","before":2,"after":2,"max_count":3,"reason":"optional"}',
@@ -166,17 +129,12 @@ export function buildDocumentEditToolHelp(topic: string): string | null {
 
 export function buildInitialDocumentEditPrompt(request: string): string {
   return [
-    'Handle this HVY document chat request:',
+    'Handle this HVY document edit request:',
     request,
     '',
-    'This request has been routed to the document body edit path.',
-    'Use this path for visible content: sections, subsections, text, cards, tables, grids, component/section CSS, ordering, additions, and deletions.',
-    'If the user is asking an informational question or does not ask for a document change, answer directly with the `answer` tool.',
-    'Step 1: examine the reduced document outline provided in context.',
-    'Step 2: if edit targets are unclear, inspect/search first; then create a plan for larger multi-step work using change/verification outcomes, or request the single best next tool for small work.',
-    'After each tool result, decide the next step or finish.',
-    'If you created a plan, mark each completed step with `mark_step_done` as work progresses.',
-    `You have at most ${DOCUMENT_EDIT_MAX_TOOL_STEPS} tool steps.`,
+    'The client has already walked the document and put section/chunk notes in context.',
+    'First review those notes. Then create one linear plan or run the next concrete tool call.',
+    'Do not begin by re-reading the whole document.',
   ].join('\n');
 }
 

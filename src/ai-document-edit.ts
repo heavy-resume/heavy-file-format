@@ -149,7 +149,7 @@ type ComponentPatchEdit =
 
 type CssPropertyMap = Record<string, string | null>;
 
-type DocumentEditToolRequest =
+type DocumentEditSingleToolRequest =
   | { tool: 'done'; summary?: string }
   | { tool: 'answer'; answer: string }
   | { tool: 'plan'; steps: string[]; reason?: string }
@@ -204,6 +204,19 @@ type DocumentEditToolRequest =
   | {
       tool: 'execute_sql';
       sql: string;
+      reason?: string;
+    };
+
+type DocumentEditBatchToolRequest = Exclude<
+  DocumentEditSingleToolRequest,
+  { tool: 'done' | 'answer' | 'plan' | 'mark_step_done' }
+>;
+
+type DocumentEditToolRequest =
+  | DocumentEditSingleToolRequest
+  | {
+      tool: 'batch';
+      calls: DocumentEditBatchToolRequest[];
       reason?: string;
     };
 
@@ -441,7 +454,8 @@ async function runDocumentEditToolLoop(params: {
     dbObjectNames = await getDocumentDbTableObjectNames(params.document);
     return buildDocumentEditContextSummary(summary, dbObjectNames, configuredDbTableNames);
   };
-  let contextSummary = buildDocumentEditContextSummary(snapshot.summary, dbObjectNames, configuredDbTableNames);
+  params.onProgress?.('Walking the document and collecting section notes.');
+  let contextSummary = buildDocumentEditContextSummary(buildDocumentWalkNotes(params.document, snapshot), dbObjectNames, configuredDbTableNames);
   let recentToolHelp: string | null = null;
   const workLedger: WorkLedgerItem[] = [];
   let latestIntent = params.request;
@@ -519,7 +533,130 @@ async function runDocumentEditToolLoop(params: {
     const newInformationProgress = isDocumentInformationTool(parsed.value.tool) && !health.seenActionKeys.has(actionKey);
     let toolResult = '';
     try {
-    if (parsed.value.tool === 'plan') {
+    if (parsed.value.tool === 'batch') {
+      params.onProgress?.(describeDocumentToolProgress(parsed.value));
+      const batchResults: string[] = [];
+      for (const [callIndex, call] of parsed.value.calls.entries()) {
+        params.onProgress?.(describeDocumentToolProgress(call));
+        latestIntent = getDocumentToolIntent(call) || latestIntent;
+        try {
+          let callResult = '';
+          if (call.tool === 'request_structure') {
+            snapshot = summarizeDocumentStructure(params.document);
+            callResult = snapshot.summary;
+            contextSummary = await refreshDbContext(SENT_STRUCTURE_CONTEXT);
+          } else if (call.tool === 'request_rendered_structure') {
+            snapshot = summarizeDocumentStructure(params.document);
+            callResult = await executeRequestRenderedStructureTool(snapshot, params.document);
+            contextSummary = await refreshDbContext(SENT_STRUCTURE_CONTEXT);
+          } else if (call.tool === 'get_help') {
+            recentToolHelp = executeGetHelpTool(call);
+            callResult = recentToolHelp;
+            contextSummary = await refreshDbContext(SENT_STRUCTURE_CONTEXT);
+          } else if (call.tool === 'search_components') {
+            callResult = executeSearchComponentsTool(call, snapshot, params.document);
+            contextSummary = await refreshDbContext(SENT_STRUCTURE_CONTEXT);
+          } else if (call.tool === 'grep') {
+            callResult = executeGrepTool(call, params.document);
+            contextSummary = await refreshDbContext(SENT_STRUCTURE_CONTEXT);
+          } else if (call.tool === 'get_css') {
+            callResult = executeGetCssTool(call, snapshot, params.document);
+            contextSummary = await refreshDbContext(SENT_STRUCTURE_CONTEXT);
+          } else if (call.tool === 'get_properties') {
+            callResult = executeGetPropertiesTool(call, snapshot, params.document);
+            contextSummary = await refreshDbContext(SENT_STRUCTURE_CONTEXT);
+          } else if (call.tool === 'set_properties') {
+            callResult = executeSetPropertiesTool(call, snapshot, params.document, params.onMutation);
+            snapshot = summarizeDocumentStructure(params.document);
+            contextSummary = await refreshDbContext(SENT_STRUCTURE_CONTEXT);
+          } else if (call.tool === 'view_component') {
+            callResult = executeViewComponentTool(call, snapshot, params.document);
+            contextSummary = await refreshDbContext(SENT_STRUCTURE_CONTEXT);
+          } else if (call.tool === 'view_rendered_component') {
+            callResult = await executeViewRenderedComponentTool(call, snapshot, params.document);
+            contextSummary = await refreshDbContext(SENT_STRUCTURE_CONTEXT);
+          } else if (call.tool === 'edit_component') {
+            callResult = await executeEditComponentTool(call, snapshot, params.document, params.settings, params.onMutation);
+            snapshot = summarizeDocumentStructure(params.document);
+            contextSummary = await refreshDbContext(SENT_STRUCTURE_CONTEXT);
+          } else if (call.tool === 'patch_component') {
+            callResult = executePatchComponentTool(call, snapshot, params.document, params.onMutation);
+            snapshot = summarizeDocumentStructure(params.document);
+            contextSummary = await refreshDbContext(SENT_STRUCTURE_CONTEXT);
+          } else if (call.tool === 'remove_section') {
+            callResult = executeRemoveSectionTool(call, snapshot, params.document, params.onMutation);
+            snapshot = summarizeDocumentStructure(params.document);
+            contextSummary = await refreshDbContext(SENT_STRUCTURE_CONTEXT);
+          } else if (call.tool === 'remove_component') {
+            callResult = executeRemoveComponentTool(call, snapshot, params.document, params.onMutation);
+            snapshot = summarizeDocumentStructure(params.document);
+            contextSummary = await refreshDbContext(SENT_STRUCTURE_CONTEXT);
+          } else if (call.tool === 'create_component') {
+            callResult = executeCreateComponentTool(call, snapshot, params.document, params.onMutation);
+            snapshot = summarizeDocumentStructure(params.document);
+            contextSummary = await refreshDbContext(SENT_STRUCTURE_CONTEXT);
+          } else if (call.tool === 'create_section') {
+            callResult = executeCreateSectionTool(call, snapshot, params.document, params.onMutation);
+            snapshot = summarizeDocumentStructure(params.document);
+            contextSummary = await refreshDbContext(SENT_STRUCTURE_CONTEXT);
+          } else if (call.tool === 'reorder_section') {
+            callResult = executeReorderSectionTool(call, snapshot, params.document, params.onMutation);
+            snapshot = summarizeDocumentStructure(params.document);
+            contextSummary = await refreshDbContext(SENT_STRUCTURE_CONTEXT);
+          } else if (call.tool === 'query_db_table') {
+            try {
+              callResult = await executeDbTableQueryTool(params.document, {
+                tableName: call.table_name,
+                query: call.query,
+                limit: call.limit,
+              });
+            } catch (error) {
+              const message = error instanceof Error ? error.message : 'Unknown database query error.';
+              callResult = [
+                `Query failed: ${message}`,
+                'Inspect the table with query_db_table using only table_name, then retry with columns that actually exist.',
+              ].join('\n');
+            }
+            contextSummary = await refreshDbContext(SENT_STRUCTURE_CONTEXT);
+          } else if (call.tool === 'execute_sql') {
+            try {
+              params.onMutation?.('execute-sql');
+              callResult = await executeDbTableWriteSql(call.sql);
+            } catch (error) {
+              const message = error instanceof Error ? error.message : 'Unknown database write error.';
+              callResult = `SQL failed: ${message}`;
+            }
+            contextSummary = await refreshDbContext(SENT_STRUCTURE_CONTEXT);
+          }
+          batchResults.push(`Call ${callIndex + 1}: ${describeLedgerAction(call)}\n${buildToolResult(call.tool, callResult)}`);
+          if (isToolResultFailure(callResult)) {
+            break;
+          }
+        } catch (error) {
+          if (params.traceRunId) {
+            traceAgentLoopEvent({
+              runId: params.traceRunId,
+              phase: 'document-edit',
+              type: 'client_event',
+              payload: {
+                event: 'tool_failure',
+                tool: call.tool,
+                action: getToolActionKey(call),
+                message: error instanceof Error ? error.message : String(error),
+              },
+              signal: params.signal,
+            });
+          }
+          params.onProgress?.(formatDocumentToolFailureForProgress(error));
+          const failure = formatDocumentToolFailure(error);
+          batchResults.push(`Call ${callIndex + 1}: ${describeLedgerAction(call)}\n${buildToolResult(call.tool, failure)}`);
+          workNote = recordWorkNoteCaution(workNote, summarizeToolFailureMessage(error instanceof Error ? error.message : String(error)));
+          contextSummary = await refreshDbContext(SENT_STRUCTURE_CONTEXT);
+          break;
+        }
+      }
+      toolResult = buildToolResult('batch', batchResults.join('\n\n'));
+    } else if (parsed.value.tool === 'plan') {
       if (plan) {
         toolResult = buildToolResult('plan', [
           'A plan already exists and the `plan` tool is no longer available for this request.',
@@ -947,6 +1084,94 @@ function buildLoopContext(
   return parts.join('\n');
 }
 
+function buildDocumentWalkNotes(document: VisualDocument, snapshot: DocumentStructureSnapshot): string {
+  const serializedLines = serializeDocument(document).split('\n');
+  const bodyStartIndex = findSerializedBodyStartIndex(serializedLines);
+  const bodyLines = serializedLines.slice(bodyStartIndex);
+  const chunks: string[] = [];
+  let currentSection = '(before first section)';
+  let chunkStart = 0;
+  for (let index = 0; index < bodyLines.length; index += 1) {
+    const line = bodyLines[index] ?? '';
+    if (/^\s*<!--hvy:(?:subsection\s*)?\s*\{/.test(line)) {
+      if (index > chunkStart) {
+        chunks.push(formatDocumentWalkChunk(bodyLines, chunkStart, index - 1, currentSection));
+      }
+      currentSection = findNextSectionTitle(bodyLines, index) ?? currentSection;
+      chunkStart = index;
+      continue;
+    }
+    if (index - chunkStart + 1 >= 100) {
+      chunks.push(formatDocumentWalkChunk(bodyLines, chunkStart, index, currentSection));
+      chunkStart = index + 1;
+    }
+  }
+  if (chunkStart < bodyLines.length) {
+    chunks.push(formatDocumentWalkChunk(bodyLines, chunkStart, bodyLines.length - 1, currentSection));
+  }
+
+  return [
+    'Document walk notes (section-by-section, up to 100 serialized lines per note):',
+    ...chunks.slice(0, 80),
+    ...(chunks.length > 80 ? [`... ${chunks.length - 80} more walk note chunks omitted.`] : []),
+    '',
+    'Reduced component/section index:',
+    snapshot.summary,
+  ].join('\n');
+}
+
+function findSerializedBodyStartIndex(lines: string[]): number {
+  if (lines[0] !== '---') {
+    return 0;
+  }
+  const closingIndex = lines.findIndex((line, index) => index > 0 && line === '---');
+  return closingIndex >= 0 ? closingIndex + 1 : 0;
+}
+
+function findNextSectionTitle(lines: string[], directiveIndex: number): string | null {
+  for (let index = directiveIndex + 1; index < Math.min(lines.length, directiveIndex + 8); index += 1) {
+    const match = (lines[index] ?? '').match(/^\s*#!+\s*(.+?)\s*$/);
+    if (match?.[1]) {
+      return match[1].trim();
+    }
+  }
+  return null;
+}
+
+function formatDocumentWalkChunk(lines: string[], startIndex: number, endIndex: number, sectionTitle: string): string {
+  const chunkLines = lines.slice(startIndex, endIndex + 1);
+  const refs = extractWalkChunkRefs(chunkLines);
+  const preview = chunkLines
+    .map((line, index) => `${String(startIndex + index + 1).padStart(4, ' ')} | ${line}`)
+    .join('\n');
+  return [
+    `Walk note: section="${sectionTitle}" lines=${startIndex + 1}-${endIndex + 1}${refs ? ` refs=${refs}` : ''}`,
+    truncateMultiline(preview, 3000),
+  ].join('\n');
+}
+
+function extractWalkChunkRefs(lines: string[]): string {
+  const refs = new Set<string>();
+  for (const line of lines) {
+    const directiveMatch = line.match(/<!--hvy:[^>]*?(\{.*\})\s*-->/);
+    if (!directiveMatch?.[1]) {
+      continue;
+    }
+    try {
+      const payload = JSON.parse(directiveMatch[1]) as Record<string, unknown>;
+      if (typeof payload.id === 'string' && payload.id.trim()) {
+        refs.add(payload.id.trim());
+      }
+      if (typeof payload.xrefTarget === 'string' && payload.xrefTarget.trim()) {
+        refs.add(payload.xrefTarget.trim());
+      }
+    } catch {
+      // Ignore malformed directive previews; parser diagnostics handle validity elsewhere.
+    }
+  }
+  return [...refs].slice(0, 20).join(', ');
+}
+
 function recordWorkLedgerItem(
   ledger: WorkLedgerItem[],
   toolCall: DocumentEditToolRequest,
@@ -1077,7 +1302,7 @@ function findAutoCompletedPlanStep(plan: EditPlanState, toolCall: DocumentEditTo
     if (step.done) {
       return;
     }
-    if (!isToolCompatibleWithPlanStep(toolCall.tool, step.text, index, plan)) {
+    if (!isToolCallCompatibleWithPlanStep(toolCall, step.text, index, plan)) {
       return;
     }
     const stepTokens = tokenizeForMatching(step.text);
@@ -1090,6 +1315,18 @@ function findAutoCompletedPlanStep(plan: EditPlanState, toolCall: DocumentEditTo
     }
   });
   return bestIndex;
+}
+
+function isToolCallCompatibleWithPlanStep(
+  toolCall: DocumentEditToolRequest,
+  step: string,
+  index: number,
+  plan: EditPlanState
+): boolean {
+  if (toolCall.tool === 'batch') {
+    return toolCall.calls.some((call) => isToolCompatibleWithPlanStep(call.tool, step, index, plan));
+  }
+  return isToolCompatibleWithPlanStep(toolCall.tool, step, index, plan);
 }
 
 function isToolCompatibleWithPlanStep(
@@ -1185,6 +1422,8 @@ const PLAN_MATCH_STOP_WORDS = new Set([
 
 function describeLedgerAction(toolCall: DocumentEditToolRequest): string {
   switch (toolCall.tool) {
+    case 'batch':
+      return `batch(${toolCall.calls.map((call) => describeLedgerAction(call)).join(', ')})`;
     case 'create_component':
       return `create_component(${toolCall.section_ref ?? toolCall.target_component_ref ?? toolCall.position})`;
     case 'edit_component':
@@ -1217,6 +1456,8 @@ function summarizeWorkLedgerAction(toolCall: DocumentEditToolRequest, toolResult
   const failed = /\b(failed|error|invalid|unknown|missing|no such column)\b/i.test(toolResult);
   const suffix = failed ? ' and got an error' : '';
   switch (toolCall.tool) {
+    case 'batch':
+      return `Ran ${toolCall.calls.length} document tool calls${suffix}.`;
     case 'plan':
       return `Created a ${toolCall.steps.length}-step plan${suffix}.`;
     case 'mark_step_done':
@@ -1279,6 +1520,8 @@ function getDocumentToolIntent(toolCall: DocumentEditToolRequest): string {
     return toolCall.reason.trim();
   }
   switch (toolCall.tool) {
+    case 'batch':
+      return toolCall.calls.map(getDocumentToolIntent).filter(Boolean).join(' ');
     case 'plan':
       return toolCall.steps.join(' ');
     case 'mark_step_done':
@@ -1504,6 +1747,8 @@ function isAbortError(error: unknown): boolean {
 
 function describeDocumentToolProgress(toolCall: DocumentEditToolRequest): string {
   switch (toolCall.tool) {
+    case 'batch':
+      return `Running ${toolCall.calls.length} document tool calls.`;
     case 'plan':
       return `Created a ${toolCall.steps.length}-step plan.`;
     case 'mark_step_done':
@@ -1740,7 +1985,8 @@ function summarizeHeaderLoopProgress(document: VisualDocument, plan: EditPlanSta
 }
 
 function isDocumentInformationTool(tool: DocumentEditToolRequest['tool']): boolean {
-  return tool === 'request_structure'
+  return tool === 'batch'
+    || tool === 'request_structure'
     || tool === 'request_rendered_structure'
     || tool === 'get_help'
     || tool === 'search_components'
@@ -2937,6 +3183,36 @@ function parseDocumentEditToolRequest(source: string): { ok: true; value: Docume
       return { ok: false, message: 'Return a single JSON object.' };
     }
     const tool = parsed.tool;
+    if (tool === 'batch') {
+      if (!Array.isArray(parsed.calls) || parsed.calls.length === 0) {
+        return { ok: false, message: 'batch.calls must be a non-empty array of tool JSON objects.' };
+      }
+      if (parsed.calls.length > 12) {
+        return { ok: false, message: 'batch.calls supports at most 12 tool calls at a time.' };
+      }
+      const calls: DocumentEditBatchToolRequest[] = [];
+      for (const [index, candidate] of parsed.calls.entries()) {
+        if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
+          return { ok: false, message: `batch.calls[${index}] must be a tool JSON object.` };
+        }
+        const parsedCall = parseDocumentEditToolRequest(JSON.stringify(candidate));
+        if (parsedCall.ok === false) {
+          return { ok: false, message: `batch.calls[${index}] is invalid: ${parsedCall.message}` };
+        }
+        if (isDocumentBatchControlTool(parsedCall.value.tool)) {
+          return { ok: false, message: `batch.calls[${index}] cannot use control tool "${parsedCall.value.tool}".` };
+        }
+        calls.push(parsedCall.value as DocumentEditBatchToolRequest);
+      }
+      return {
+        ok: true,
+        value: {
+          tool,
+          calls,
+          reason: typeof parsed.reason === 'string' ? parsed.reason : undefined,
+        },
+      };
+    }
     if (tool === 'done') {
       return { ok: true, value: { tool, summary: typeof parsed.summary === 'string' ? parsed.summary : undefined } };
     }
@@ -2951,6 +3227,12 @@ function parseDocumentEditToolRequest(source: string): { ok: true; value: Docume
           steps: parsed.steps.map((step) => step.trim()),
           reason: typeof parsed.reason === 'string' ? parsed.reason : undefined,
         },
+      };
+    }
+    if (tool === 'plan') {
+      return {
+        ok: false,
+        message: 'plan must use `steps` as an array of short document-change strings, for example `{"tool":"plan","steps":["Modify component X","Verify the result"]}`.',
       };
     }
     if (tool === 'mark_step_done' && Number.isInteger(parsed.step)) {
@@ -3258,6 +3540,10 @@ function parseEditPathSelection(source: string): { ok: true; value: EditPathSele
     return { ok: true, value: cleaned };
   }
   return { ok: false, message: 'Path selection must be exactly "document" or "header".' };
+}
+
+function isDocumentBatchControlTool(tool: DocumentEditToolRequest['tool']): boolean {
+  return tool === 'answer' || tool === 'done' || tool === 'plan' || tool === 'mark_step_done' || tool === 'batch';
 }
 
 function validateHvyToolPayload(hvy: string, fieldName: string, kind: 'component' | 'section'): string | null {

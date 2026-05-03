@@ -111,7 +111,17 @@ test('document edit requests use document-edit-specific system instructions', ()
 
   expect(openAiRequest).toEqual(
     expect.objectContaining({
-      instructions: expect.stringMatching(/This is a document editing task, not a question answering task\./),
+      instructions: expect.stringMatching(/Follow the supplied HVY document-edit protocol exactly\./),
+    })
+  );
+  expect(openAiRequest).toEqual(
+    expect.not.objectContaining({
+      instructions: expect.stringMatching(/Edit the provided HVY document step by step using the available local tools\./),
+    })
+  );
+  expect(openAiRequest).toEqual(
+    expect.not.objectContaining({
+      instructions: expect.stringMatching(/Request exactly one next tool action at a time\./),
     })
   );
   expect(openAiRequest).toEqual(

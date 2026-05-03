@@ -177,39 +177,34 @@ test('buildDocumentEditFormatInstructions documents the tool protocol', () => {
     ],
   });
   expect(instructions).toContain(
-    'Valid tools are: `answer`, `plan`, `mark_step_done`, `grep`, `search_components`, `get_help`, `get_css`, `get_properties`, `set_properties`, `view_component`, `view_rendered_component`, `edit_component`, `patch_component`, `create_component`, `remove_component`, `create_section`, `remove_section`, `reorder_section`, `request_structure`, `request_rendered_structure`, `done`.'
+    'Valid tools are: `answer`, `plan`, `mark_step_done`, `batch`, `grep`, `search_components`, `get_help`, `get_css`, `get_properties`, `set_properties`, `view_component`, `view_rendered_component`, `edit_component`, `patch_component`, `create_component`, `remove_component`, `create_section`, `remove_section`, `reorder_section`, `request_structure`, `request_rendered_structure`, `done`.'
   );
-  expect(instructions).toContain('Use `answer` for informational questions, explanations, or requests that do not require changing the HVY document.');
-  expect(instructions).toContain('This is an HVY document editing tool loop, not an HTML generator.');
-  expect(instructions).toContain('All new visible content must be encoded as HVY sections and components');
-  expect(instructions).toContain('Available plugins for `<!--hvy:plugin ...-->` blocks:');
-  expect(instructions).toContain('- Widget (dev.test.widget): Use widget YAML in the component body.');
-  expect(instructions).toContain('Only use registered plugin ids from this list. Use `get_help` for exact plugin/component syntax instead of guessing.');
+  expect(instructions).toContain('The document has already been walked section-by-section in the context notes.');
+  expect(instructions).toContain('Use the notes to create one linear plan or run the next concrete tool call.');
+  expect(instructions).toContain('Prefer `batch` for a known ordered sequence of concrete tool calls.');
+  expect(instructions).toContain('Registered plugin ids: dev.test.widget.');
+  expect(instructions).toContain('Plan shape: `{"tool":"plan","steps":["Modify component X to remove Y","Verify no Y remains"]}`.');
+  expect(instructions).toContain('Batch shape: `{"tool":"batch","calls":[{"tool":"remove_component","component_ref":"id"}]}`.');
+  expect(instructions).toContain('Use `get_help` only when exact syntax is missing from the notes or recent tool help.');
+  expect(instructions).toContain('For larger work, create one plan after reviewing the notes.');
+  expect(instructions).toContain('Plan steps must be document changes or final verification, not discovery.');
+  expect(instructions).toContain('Return HVY only inside create/patch payload fields; never HTML/JSX/DOM.');
+  expect(instructions).not.toContain('Available plugins for `<!--hvy:plugin ...-->` blocks:');
+  expect(instructions).not.toContain('- Widget (dev.test.widget): Use widget YAML in the component body.');
   expect(instructions).not.toContain('- Form (dev.heavy.form)');
   expect(instructions).not.toContain('Tool shapes:');
   expect(instructions).not.toContain('{"tool":"answer","answer":"Direct answer to the user."}');
-  expect(instructions).toContain('Tool help topics include `tool:patch_component`, `tool:remove_component`');
-  expect(instructions).toContain('inspect first when targets are unclear');
-  expect(instructions).toContain('Do not make initial discovery actions like grep/search/help/view into plan steps');
-  expect(instructions).toContain('Before creating a component that may already exist, use `search_components`');
-  expect(instructions).toContain('It may revise that component in place or fully replace it');
-  expect(instructions).toContain('Use real section ids when a section has an id.');
-  expect(instructions).toContain('nested target refs such as `C6.grid[1].list[2]`');
-  expect(instructions).toContain('Use `grep` to search the serialized document.');
-  expect(instructions).toContain('Use `get_help` with topics like `tool:patch_component`, `plugin:PLUGIN_ID`');
-  expect(buildInitialDocumentEditPrompt('Update the document.')).toContain('if edit targets are unclear, inspect/search first');
-  expect(buildInitialDocumentEditPrompt('Update the document.')).toContain('You have at most 50 tool steps.');
-  expect(instructions).toContain('defaults to lines 1-200');
-  expect(instructions).toContain('Use `request_rendered_structure` to inspect what visible components render');
-  expect(instructions).toContain('Use `view_rendered_component` to inspect one component rendered as user-facing text plus plugin diagnostics.');
-  expect(instructions).toContain('Use `create_section.hvy` to add one complete serialized HVY section');
-  expect(instructions).toContain('new_position_index_from_0');
+  expect(instructions).toContain('Do not put `answer`, `done`, `plan`, `mark_step_done`, or another `batch` inside a batch.');
+  expect(buildInitialDocumentEditPrompt('Update the document.')).toContain('The client has already walked the document and put section/chunk notes in context.');
+  expect(buildInitialDocumentEditPrompt('Update the document.')).toContain('First review those notes. Then create one linear plan or run the next concrete tool call.');
+  expect(buildInitialDocumentEditPrompt('Update the document.')).not.toContain('You have at most 50 tool steps.');
   expect(buildDocumentEditToolHelp('tool:patch_component')).toContain('"tool":"patch_component"');
+  expect(buildDocumentEditToolHelp('tool:batch')).toContain('"tool":"batch"');
   expect(buildDocumentEditToolHelp('tool:remove_component')).toContain('"component_ref":"tool-typescript"');
 
   const dbInstructions = buildDocumentEditFormatInstructions({ dbTableNames: ['work_items'], request: 'Show the database table.' });
   expect(dbInstructions).toContain('`query_db_table`');
-  expect(dbInstructions).toContain('Available SQLite tables/views: work_items');
+  expect(dbInstructions).toContain('SQLite tables/views available: work_items');
   expect(dbInstructions).not.toContain('`execute_sql`');
   expect(dbInstructions).not.toContain('reason":"Add a live db-table component showing all rows"');
 
@@ -219,10 +214,7 @@ test('buildDocumentEditFormatInstructions documents the tool protocol', () => {
     request: 'Create a db table viewer.',
   });
   expect(dbPluginInstructions).toContain('`query_db_table`, `execute_sql`');
-  expect(dbPluginInstructions).toContain('Use `execute_sql` to create or update attached SQLite schema/data before adding db-table components that depend on it.');
-  expect(dbPluginInstructions).toContain('Each plan step should be small enough to complete with one focused change tool action or one final verification pass.');
-  expect(dbPluginInstructions).toContain('model real entities as shared tables and use joins or SQL views for derived displays');
-  expect(dbPluginInstructions).toContain('not one table per person or display column');
+  expect(dbPluginInstructions).toContain('For relational displays, prefer shared tables plus joins/views over one table per display column.');
   expect(dbPluginInstructions).toContain('Treat pluginConfig.source as storage selection, not a schema fix.');
   expect(buildDocumentEditToolHelp('tool:execute_sql')).toContain('CREATE TABLE IF NOT EXISTS chores');
 
@@ -231,17 +223,17 @@ test('buildDocumentEditFormatInstructions documents the tool protocol', () => {
   });
   expect(dbPluginOnlyInstructions).not.toContain('`execute_sql`');
   expect(dbPluginOnlyInstructions).toContain(
-    'Valid tools are: `answer`, `plan`, `mark_step_done`, `grep`, `search_components`, `get_help`, `get_css`, `get_properties`, `set_properties`, `view_component`, `view_rendered_component`, `edit_component`, `patch_component`, `create_component`, `remove_component`, `create_section`, `remove_section`, `reorder_section`, `request_structure`, `request_rendered_structure`, `done`.'
+    'Valid tools are: `answer`, `plan`, `mark_step_done`, `batch`, `grep`, `search_components`, `get_help`, `get_css`, `get_properties`, `set_properties`, `view_component`, `view_rendered_component`, `edit_component`, `patch_component`, `create_component`, `remove_component`, `create_section`, `remove_section`, `reorder_section`, `request_structure`, `request_rendered_structure`, `done`.'
   );
 
   const noPluginInstructions = buildDocumentEditFormatInstructions();
-  expect(noPluginInstructions).toContain('No plugins are currently registered.');
+  expect(noPluginInstructions).not.toContain('Registered plugin ids:');
 
   const activePlanInstructions = buildDocumentEditFormatInstructions({ planActive: true });
   expect(activePlanInstructions).toContain(
-    'Valid tools are: `answer`, `mark_step_done`, `grep`, `search_components`, `get_help`, `get_css`, `get_properties`, `set_properties`, `view_component`, `view_rendered_component`, `edit_component`, `patch_component`, `create_component`, `remove_component`, `create_section`, `remove_section`, `reorder_section`, `request_structure`, `request_rendered_structure`, `done`.'
+    'Valid tools are: `answer`, `mark_step_done`, `batch`, `grep`, `search_components`, `get_help`, `get_css`, `get_properties`, `set_properties`, `view_component`, `view_rendered_component`, `edit_component`, `patch_component`, `create_component`, `remove_component`, `create_section`, `remove_section`, `reorder_section`, `request_structure`, `request_rendered_structure`, `done`.'
   );
-  expect(activePlanInstructions).not.toContain('`plan`, `mark_step_done`');
+  expect(activePlanInstructions).not.toContain('Valid tools are: `answer`, `plan`, `mark_step_done`');
 
   const headerInstructions = buildHeaderEditFormatInstructions();
   expect(headerInstructions).toContain('Valid header tools are: `answer`, `plan`, `mark_step_done`, `grep_header`, `view_header`, `patch_header`, `request_header`, `done`.');
@@ -339,6 +331,117 @@ hvy_version: 0.1
   expect(grepResult).toContain('Match 2 of 2 (component_id="tail")');
   expect(grepResult).toContain('<!--hvy:xref-card {"id":"skill-python-card"');
   expect(grepResult).toContain('Tail line');
+});
+
+test('requestAiDocumentEditTurn can batch document tool calls in one model turn', async () => {
+  queueAiToolResponses(
+    '{"tool":"batch","calls":[{"tool":"grep","query":"Python","max_count":1},{"tool":"view_component","component_ref":"skill-python-card"}],"reason":"Inspect the language card before editing."}',
+    '{"tool":"done","summary":"Batch inspection complete."}'
+  );
+
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"skills"}-->
+#! Skills
+
+<!--hvy:xref-card {"id":"skill-python-card","xrefTitle":"Python","xrefDetail":"Automation","xrefTarget":"tool-python"}-->
+`, '.hvy');
+  seedStateForDocument(document);
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+  const onProgress = vi.fn();
+
+  const result = await requestAiDocumentEditTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Inspect Python before editing.',
+    onProgress,
+  });
+
+  expect(result.error).toBeNull();
+  const initialDocumentEditContext = requestProxyCompletionMock.mock.calls[1]?.[0]?.context ?? '';
+  expect(initialDocumentEditContext).toContain('Document walk notes (section-by-section, up to 100 serialized lines per note):');
+  expect(initialDocumentEditContext).toContain('Walk note: section="Skills"');
+  expect(initialDocumentEditContext).toContain('refs=skills, skill-python-card, tool-python');
+  expect(initialDocumentEditContext).toContain('Reduced component/section index:');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.formatInstructions).not.toContain('Tool shapes:');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.formatInstructions).not.toContain('Available plugins for `<!--hvy:plugin ...-->` blocks:');
+  const batchResult = lastToolResultBeforeCall(1);
+  expect(batchResult).toContain('Tool result for batch:');
+  expect(batchResult).toContain('Call 1: grep(Python)');
+  expect(batchResult).toContain('Tool result for grep:');
+  expect(batchResult).toContain('Call 2: view_component(skill-python-card)');
+  expect(batchResult).toContain('Component HVY with 1-based line numbers:');
+  const progressContents = onProgress.mock.calls.map((call) => (call[0] as ChatMessage).content);
+  expect(progressContents).toContain('Walking the document and collecting section notes.');
+  expect(progressContents).toContain('Running 2 document tool calls.');
+  expect(progressContents).toContain('Searching the document for `Python`.');
+  expect(progressContents).toContain('Viewing component skill-python-card.');
+});
+
+test('requestAiDocumentEditTurn rejects control tools inside batch calls', async () => {
+  queueAiToolResponses(
+    '{"tool":"batch","calls":[{"tool":"done","summary":"too soon"}]}',
+    '{"tool":"done","summary":"Recovered from invalid batch."}'
+  );
+
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {"id":"summary-text"}-->
+ Existing content
+`, '.hvy');
+  seedStateForDocument(document);
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+
+  const result = await requestAiDocumentEditTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Try a batch.',
+  });
+
+  expect(result.error).toBeNull();
+  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.messages.at(-1)?.content).toContain('cannot use control tool "done"');
+});
+
+test('requestAiDocumentEditTurn can batch a mutation followed by inspection', async () => {
+  queueAiToolResponses(
+    '{"tool":"batch","calls":[{"tool":"patch_component","component_ref":"summary-text","edits":[{"op":"replace","start_line":2,"end_line":2,"text":" Updated content"}]},{"tool":"view_component","component_ref":"summary-text"}],"reason":"Patch and immediately inspect the result."}',
+    '{"tool":"done","summary":"Updated summary."}'
+  );
+
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {"id":"summary-text"}-->
+ Existing content
+`, '.hvy');
+  seedStateForDocument(document);
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+
+  const result = await requestAiDocumentEditTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Update the summary.',
+  });
+
+  expect(result.error).toBeNull();
+  expect(serializeDocument(document)).toContain('Updated content');
+  const batchResult = lastToolResultBeforeCall(1);
+  expect(batchResult).toContain('Patched component summary-text with 1 edit.');
+  expect(batchResult).toContain('Updated content');
 });
 
 test('requestAiDocumentEditTurn keeps plan progress in context', async () => {
@@ -937,7 +1040,7 @@ hvy_version: 0.1
   expect(requestProxyCompletionMock).toHaveBeenCalledTimes(1);
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.debugLabel).toBe('ai-document-edit:1');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.formatInstructions).toContain('`answer`');
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages[0]?.content).toContain('answer directly with the `answer` tool');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages[0]?.content).toContain('client has already walked the document');
 });
 
 test('requestAiDocumentEditTurn greps wrapped serialized lines with post-wrap line numbers', async () => {
@@ -1525,6 +1628,38 @@ hvy_version: 0.1
   expect(retryMessages).not.toContain('New section ref: imagined');
 });
 
+test('requestAiDocumentEditTurn gives a focused correction for malformed plan JSON', async () => {
+  requestProxyCompletionMock
+    .mockResolvedValueOnce('document')
+    .mockResolvedValueOnce('{"tool":"plan","plan":"Remove language names from relevant components."}')
+    .mockResolvedValueOnce('{"tool":"done","summary":"Recovered from malformed plan."}');
+
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {}-->
+ Existing content
+`, '.hvy');
+  seedStateForDocument(document);
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+
+  const result = await requestAiDocumentEditTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Remove language names.',
+  });
+
+  expect(result.error).toBeNull();
+  const retryMessages = requestProxyCompletionMock.mock.calls[2]?.[0]?.messages.map((message: ChatMessage) => message.content).join('\n') ?? '';
+  expect(retryMessages).toContain('plan must use `steps` as an array');
+  expect(retryMessages).toContain('{"tool":"plan","steps":["Modify component X","Verify the result"]}');
+});
+
 test('requestAiDocumentEditTurn rejects HTML create payloads and asks for HVY', async () => {
   requestProxyCompletionMock
     .mockResolvedValueOnce('document')
@@ -1583,9 +1718,9 @@ hvy_version: 0.1
 
   expect(result.error).toBeNull();
   const firstToolInstructions = requestProxyCompletionMock.mock.calls[1]?.[0]?.formatInstructions ?? '';
-  expect(firstToolInstructions).toContain('Form (dev.heavy.form)');
-  expect(firstToolInstructions).toContain('Form UI. Fields and script hooks live in the YAML body.');
-  expect(firstToolInstructions).toContain('Use `get_help` for exact plugin/component syntax instead of guessing.');
+  expect(firstToolInstructions).toContain('Registered plugin ids: dev.heavy.form.');
+  expect(firstToolInstructions).toContain('Use `get_help` only when exact syntax is missing from the notes or recent tool help.');
+  expect(firstToolInstructions).not.toContain('Form UI. Fields and script hooks live in the YAML body.');
   const retryMessages = requestProxyCompletionMock.mock.calls[2]?.[0]?.messages.map((message: ChatMessage) => message.content).join('\n') ?? '';
   expect(retryMessages).toContain('unsupported `hvy:form` syntax');
   expect(retryMessages).toContain('Use a registered plugin id from the prompt');

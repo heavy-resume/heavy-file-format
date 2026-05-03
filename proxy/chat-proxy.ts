@@ -743,10 +743,9 @@ function buildSystemInstructions(mode: ProxyChatRequest['mode'], formatInstructi
         ]
       : mode === 'document-edit'
       ? [
-          'Edit the provided HVY document step by step using the available local tools.',
-          'This is a document editing task, not a question answering task.',
-          'Request exactly one next tool action at a time.',
-          'Use the reduced structure and tool results to decide what to do next.',
+          'Follow the supplied HVY document-edit protocol exactly.',
+          'Use the provided document context only for this request.',
+          'Return only the response format requested below.',
         ]
       : [
           'Answer questions about the provided HVY document context.',

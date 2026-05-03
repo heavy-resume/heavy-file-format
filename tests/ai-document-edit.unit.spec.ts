@@ -27,7 +27,7 @@ import {
   buildInitialDocumentEditPrompt,
   buildHeaderEditFormatInstructions,
 } from '../src/ai-document-edit-instructions';
-import { findAutoCompletedPlanStep } from '../src/ai-document-loop-state';
+import { autoUpdatePlanAndWorkNote, createInitialWorkNote, findAutoCompletedPlanStep, recordWorkLedgerItem } from '../src/ai-document-loop-state';
 import { getDocumentEditPhaseTools } from '../src/ai-document-edit-phases';
 import { deserializeDocument, serializeDocument } from '../src/serialization';
 import { initState } from '../src/state';
@@ -1170,6 +1170,56 @@ test('findAutoCompletedPlanStep matches removal batches to patch steps that remo
   expect(findAutoCompletedPlanStep(plan, toolCall, toolResult)).toBe(0);
 });
 
+test('autoUpdatePlanAndWorkNote completes steps from the tool reason when the tool succeeds', () => {
+  const plan = {
+    steps: [
+      {
+        text: 'Create DB schema: tables for family_members, chores, chore_assignments with completed flag and completed_at timestamp',
+        done: false,
+      },
+      {
+        text: 'Create section Chore Chart with a db-table component',
+        done: false,
+      },
+    ],
+  };
+  const note = createInitialWorkNote('Create a chore chart.');
+  const result = autoUpdatePlanAndWorkNote(
+    plan,
+    note,
+    {
+      tool: 'execute_sql',
+      sql: 'CREATE TABLE IF NOT EXISTS family_members (id INTEGER PRIMARY KEY, name TEXT);',
+      reason: 'Create DB schema: tables for family_members, chores, chore_assignments with completed flag and completed_at timestamp',
+    },
+    'Tool result for execute_sql:\n\nExecuted: CREATE TABLE IF NOT EXISTS family_members'
+  );
+
+  expect(result.changed).toBe(true);
+  expect(plan.steps[0]?.done).toBe(true);
+  expect(plan.steps[0]?.summary).toBe('Create DB schema: tables for family_members, chores, chore_assignments with completed flag and completed_at timestamp');
+  expect(plan.steps[1]?.done).toBe(false);
+  expect(result.workNote.done).toContain('Create DB schema: tables for family_members, chores, chore_assignments with completed flag and completed_at timestamp');
+});
+
+test('recordWorkLedgerItem records successful declared work instead of only the raw tool type', () => {
+  const ledger: Parameters<typeof recordWorkLedgerItem>[0] = [];
+
+  recordWorkLedgerItem(
+    ledger,
+    {
+      tool: 'execute_sql',
+      sql: 'CREATE TABLE chores (id INTEGER PRIMARY KEY);',
+      reason: 'Create DB schema for the chore chart',
+    },
+    'Create DB schema for the chore chart',
+    'Tool result for execute_sql:\n\nExecuted: CREATE TABLE chores'
+  );
+
+  expect(ledger[0]?.summary).toBe('Create DB schema for the chore chart');
+  expect(ledger[0]?.action).toBe('execute_sql');
+});
+
 test('requestAiDocumentEditTurn drops bookkeeping-only plan steps', async () => {
   queueAiToolResponses(
     '{"tool":"plan","steps":["Remove component remove-me","Mark each edit step done and finish with a summary of changes."],"reason":"Remove target."}',
@@ -2158,7 +2208,7 @@ hvy_version: 0.1
   expect(searchResult).toContain('If one of these already satisfies the intended purpose');
   const contextAfterSearch = requestProxyCompletionMock.mock.calls[2]?.[0]?.context ?? '';
   expect(contextAfterSearch).toContain('Work ledger (recent completed/attempted tool actions; use this to avoid duplicating components/sections):');
-  expect(contextAfterSearch).toContain('Searched existing components for "Add Chore form".');
+  expect(contextAfterSearch).toContain('Check for an existing add chore form before creating another one.');
   expect(contextAfterSearch).toContain('search_components(Add Chore form)');
   expect(contextAfterSearch).toContain('Related existing components for current intent');
 });

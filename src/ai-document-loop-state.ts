@@ -31,7 +31,7 @@ export function recordWorkLedgerItem(
   const item: WorkLedgerItem = {
     action: describeLedgerAction(toolCall),
     intent: truncatePreview(intent.replace(/\n/g, ' '), 120),
-    summary: summarizeWorkLedgerAction(toolCall, toolResult),
+    summary: summarizeSuccessfulToolAction(toolCall, toolResult),
     result: truncatePreview(toolResult.replace(/\n/g, ' '), 160),
   };
   ledger.push(item);
@@ -134,9 +134,10 @@ export function isToolResultFailure(toolResult: string): boolean {
 }
 
 export function findAutoCompletedPlanStep(plan: EditPlanState, toolCall: DocumentEditToolRequest, toolResult: string): number {
+  const declaredWork = getDocumentToolIntent(toolCall);
   const actionText = [
+    declaredWork,
     describeLedgerAction(toolCall),
-    getDocumentToolIntent(toolCall),
     summarizeSuccessfulToolAction(toolCall, toolResult),
     toolResult,
   ].join(' ');
@@ -199,6 +200,12 @@ export function isToolCompatibleWithPlanStep(
   if (/\b(search|find)\b.*\b(existing )?components?\b/.test(normalized)) {
     return tool === 'search_components';
   }
+  if (tool === 'execute_sql') {
+    return /\b(db|database|sqlite|sql|schema|table|tables|view|views|insert|seed|populate|create|update|delete|write)\b/.test(normalized);
+  }
+  if (tool === 'query_db_table') {
+    return /\b(db|database|sqlite|sql|query|table|tables|view|views|row|rows|column|columns|inspect|verify|check|confirm)\b/.test(normalized);
+  }
   if (/\bremove\b|\bdelete\b/.test(normalized)) {
     return tool === 'remove_component' || tool === 'remove_section' || tool === 'patch_component' || tool === 'edit_component';
   }
@@ -221,6 +228,15 @@ export function summarizeSuccessfulToolAction(toolCall: DocumentEditToolRequest,
   const plainResult = toolResult.replace(/^Tool result for [^:]+:\s*/i, '').trim();
   if (toolCall.tool === 'answer' || toolCall.tool === 'done') {
     return '';
+  }
+  if (toolCall.tool === 'plan' || toolCall.tool === 'mark_step_done') {
+    return summarizeWorkLedgerAction(toolCall, toolResult).replace(/\.$/, '');
+  }
+  if (!isToolResultFailure(toolResult)) {
+    const declaredWork = getDocumentToolIntent(toolCall);
+    if (declaredWork) {
+      return truncatePreview(declaredWork.replace(/\n/g, ' '), 180);
+    }
   }
   if (plainResult.length > 0 && plainResult.length <= 180 && !/^Plan progress:/i.test(plainResult)) {
     return plainResult;

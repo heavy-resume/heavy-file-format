@@ -391,8 +391,48 @@ export function getDocumentToolIntent(toolCall: DocumentEditToolRequest): string
   }
 }
 
-const COMPACT_LOOP_MESSAGES_AFTER = 32;
-const KEEP_RECENT_LOOP_MESSAGES = 20;
+const COMPACT_LOOP_MESSAGES_AFTER = 8;
+const KEEP_RECENT_LOOP_MESSAGES = 4;
+const MAX_LATEST_TOOL_RESULT_CONTEXT_CHARS = 6000;
+const MAX_TOOL_RESULT_CHAT_CHARS = 700;
+
+export function formatLatestToolResultForContext(toolResult: string): string {
+  return [
+    'Latest tool result (exact recent observation; use this for the immediate next decision):',
+    truncatePreservingWhitespace(toolResult, MAX_LATEST_TOOL_RESULT_CONTEXT_CHARS),
+    'End latest tool result.',
+  ].join('\n');
+}
+
+export function summarizeToolResultForConversation(toolResult: string): string {
+  const lines = toolResult.split('\n');
+  const heading = lines[0]?.trim() || 'Tool result';
+  const actionableLines = lines
+    .slice(1)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .filter((line) => {
+      if (/^(Section title|Section id|Component type|Component id|Component location|Showing lines|Tool failed|Query failed|SQL failed|Plan progress|Rendered component text\/diagnostics|No matches|Matched)/i.test(line)) {
+        return true;
+      }
+      return /^(Created|Updated|Removed|Patched|Reordered|Executed|New section ref|New component ref|Rows|Columns|Call \d+:)/i.test(line);
+    })
+    .slice(0, 8);
+  const fallback = truncatePreview(toolResult.replace(/\s+/g, ' '), MAX_TOOL_RESULT_CHAT_CHARS);
+  const summary = actionableLines.length > 0
+    ? [heading, ...actionableLines].join('\n')
+    : fallback;
+  return [
+    'Tool observation summary:',
+    truncatePreview(summary, MAX_TOOL_RESULT_CHAT_CHARS),
+    '',
+    'The full latest tool result is in context, not repeated in chat history.',
+  ].join('\n');
+}
+
+function truncatePreservingWhitespace(value: string, maxLength: number): string {
+  return value.length <= maxLength ? value : `${value.slice(0, maxLength - 1)}...`;
+}
 
 export function compactToolLoopConversation(params: {
   conversation: ChatMessage[];

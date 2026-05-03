@@ -67,7 +67,10 @@ function queueAiToolResponses(...responses: string[]): void {
 }
 
 function lastToolResultBeforeCall(callIndex: number): string {
-  return requestProxyCompletionMock.mock.calls[callIndex + 1]?.[0]?.messages.at(-1)?.content ?? '';
+  const nextCall = requestProxyCompletionMock.mock.calls[callIndex + 1]?.[0];
+  const context = nextCall?.context ?? '';
+  const latestResult = context.match(/Latest tool result \(exact recent observation; use this for the immediate next decision\):\n([\s\S]*?)\nEnd latest tool result\./)?.[1];
+  return latestResult ?? nextCall?.messages.at(-1)?.content ?? '';
 }
 
 test('summarizeDocumentStructure produces section and component refs with visible ids and text', () => {
@@ -967,6 +970,61 @@ hvy_version: 0.1
   expect(requestProxyCompletionMock).toHaveBeenCalledTimes(3);
 });
 
+test('requestAiDocumentEditTurn accepts fenced JSON tool calls and safely removes ascending list refs', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:component-list {"id":"languages","componentListComponent":"text"}-->
+ <!--hvy:component-list:0 {}-->
+
+  <!--hvy:text {"id":"heading"}-->
+   Tools
+
+ <!--hvy:component-list:1 {}-->
+
+  <!--hvy:text {"id":"typescript-entry"}-->
+   TypeScript
+
+ <!--hvy:component-list:2 {}-->
+
+  <!--hvy:text {"id":"python-entry"}-->
+   Python
+
+ <!--hvy:component-list:3 {}-->
+
+  <!--hvy:text {"id":"containers-entry"}-->
+   Developer Containers
+`, '.hvy');
+  seedStateForDocument(document);
+  const snapshot = summarizeDocumentStructure(document);
+  const typeScriptRef = [...snapshot.deepComponentRefs.values()].find((entry) => entry.componentId === 'typescript-entry' && /\.list\[\d+\]$/.test(entry.ref))?.ref;
+  const pythonRef = [...snapshot.deepComponentRefs.values()].find((entry) => entry.componentId === 'python-entry' && /\.list\[\d+\]$/.test(entry.ref))?.ref;
+  expect(typeScriptRef).toBeTruthy();
+  expect(pythonRef).toBeTruthy();
+  queueAiToolResponses(
+    `I found the two language entries.\n\n\`\`\`json\n{"tool":"batch","calls":[{"tool":"remove_component","component_ref":"${typeScriptRef}"},{"tool":"remove_component","component_ref":"${pythonRef}"}],"reason":"Remove language entries."}\n\`\`\``,
+    '{"tool":"done","summary":"Removed language entries."}'
+  );
+  const settings: ChatSettings = { provider: 'anthropic', model: 'claude-sonnet-4-6' };
+
+  const result = await requestAiDocumentEditTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Delete programming language entries.',
+  });
+
+  expect(result.error).toBeNull();
+  const serialized = serializeDocument(document);
+  expect(serialized).not.toContain('TypeScript');
+  expect(serialized).not.toContain('Python');
+  expect(serialized).toContain('Developer Containers');
+});
+
 test('requestAiDocumentEditTurn only auto-marks plan steps for compatible tool actions', async () => {
   queueAiToolResponses(
     '{"tool":"plan","steps":["Run grep across the serialized document for TypeScript.","Re-run grep to verify there are no remaining TypeScript mentions."],"reason":"Find language mentions."}',
@@ -1321,7 +1379,7 @@ component_defs:
   expect(headerGrep).toContain('Tool result for grep_header:');
   expect(headerGrep).toContain('Header match 1 of 1');
   expect(headerGrep).toContain('name: skill-card');
-  const headerView = requestProxyCompletionMock.mock.calls[2]?.[0]?.messages.at(-1)?.content ?? '';
+  const headerView = lastToolResultBeforeCall(1);
   expect(headerView).toContain('Header YAML with 1-based line numbers:');
   expect(headerView).toContain('  2 | title: Old Resume');
   expect(result.messages.at(-1)).toEqual(
@@ -1750,6 +1808,38 @@ hvy_version: 0.1
   expect(retryMessages).toContain('Return one valid tool JSON object using the documented shapes.');
   expect(retryMessages).not.toContain('previous response was invalid');
   expect(retryMessages).not.toContain('New section ref: imagined');
+});
+
+test('requestAiDocumentEditTurn keeps only one invalid JSON correction in history', async () => {
+  queueAiToolResponses(
+    'not json',
+    'still not json',
+    '{"tool":"done","summary":"Recovered from invalid JSON."}'
+  );
+
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {}-->
+ Existing content
+`, '.hvy');
+  seedStateForDocument(document);
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+
+  const result = await requestAiDocumentEditTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Check the summary.',
+  });
+
+  expect(result.error).toBeNull();
+  const retryMessages = requestProxyCompletionMock.mock.calls[3]?.[0]?.messages.map((message: ChatMessage) => message.content).join('\n') ?? '';
+  expect(retryMessages.match(/Return one valid tool JSON object using the documented shapes\./g)).toHaveLength(1);
 });
 
 test('requestAiDocumentEditTurn gives a focused correction for malformed plan JSON', async () => {

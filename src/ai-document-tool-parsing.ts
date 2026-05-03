@@ -9,7 +9,7 @@ import type {
 } from './ai-document-edit-types';
 
 export function parseDocumentEditToolRequest(source: string): { ok: true; value: DocumentEditToolRequest } | { ok: false; message: string } {
-  const cleaned = source.trim().replace(/^```json\s*|\s*```$/g, '').trim();
+  const cleaned = normalizeToolJsonSource(source);
   try {
     const parsed = JSON.parse(cleaned) as Record<string, unknown>;
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
@@ -367,6 +367,18 @@ export function parseDocumentEditToolRequest(source: string): { ok: true; value:
   }
 }
 
+function normalizeToolJsonSource(source: string): string {
+  const trimmed = source.trim();
+  const fullFence = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+  if (fullFence?.[1]) {
+    return fullFence[1].trim();
+  }
+  const fencedJsonBlocks = [...trimmed.matchAll(/```(?:json)?\s*([\s\S]*?)\s*```/gi)]
+    .map((match) => match[1]?.trim() ?? '')
+    .filter((block) => block.startsWith('{') && block.endsWith('}'));
+  return fencedJsonBlocks.length === 1 ? fencedJsonBlocks[0] : trimmed;
+}
+
 function isDocumentBatchControlTool(tool: DocumentEditToolRequest['tool']): boolean {
   return tool === 'answer' || tool === 'done' || tool === 'plan' || tool === 'mark_step_done' || tool === 'batch';
 }
@@ -399,7 +411,7 @@ function validateHvyToolPayload(hvy: string, fieldName: string, kind: 'component
 }
 
 export function parseHeaderEditToolRequest(source: string): { ok: true; value: HeaderEditToolRequest } | { ok: false; message: string } {
-  const cleaned = source.trim().replace(/^```json\s*|\s*```$/g, '').trim();
+  const cleaned = normalizeToolJsonSource(source);
   try {
     const parsed = JSON.parse(cleaned) as Record<string, unknown>;
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {

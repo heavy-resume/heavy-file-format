@@ -17,7 +17,7 @@ import {
 } from './ai-document-edit-instructions';
 import { inferEditPathFromRequest, isLikelyInformationalAnswerRequest, parseDocumentEditToolRequest, parseHeaderEditToolRequest } from './ai-document-tool-parsing';
 import { summarizeDocumentStructure, summarizeHeaderStructure } from './ai-document-structure';
-import { autoUpdatePlanAndWorkNote, buildLoopRecoveryChatMessage, compactToolLoopConversation, createInitialWorkNote, createLoopHealthState, describeDocumentToolProgress, describeHeaderToolProgress, describeLedgerAction, formatDocumentToolFailure, formatDocumentToolFailureForProgress, formatPlanState, formatWorkNote, getDocumentToolIntent, getLoopStallThreshold, getToolActionKey, isAbortError, isDocumentInformationTool, isHeaderInformationTool, isPlanComplete, isToolResultFailure, markPlanStepDone, normalizePlanSteps, recordToolExecutionOutcome, recordWorkLedgerItem, recordWorkNoteCaution, recordWorkNoteDone, rewardLoopHealthForPlanCreated, rewardLoopHealthForPlanStepDone, summarizeDocumentLoopProgress, summarizeHeaderLoopProgress, summarizeToolFailureMessage, throwIfAborted, updateLoopHealthForAction, updateLoopHealthForInvalid, updateWorkNoteRemaining } from './ai-document-loop-state';
+import { autoUpdatePlanAndWorkNote, buildLoopRecoveryChatMessage, compactToolLoopConversation, createInitialWorkNote, createLoopHealthState, describeDocumentToolProgress, describeHeaderToolProgress, describeLedgerAction, formatDocumentToolFailure, formatDocumentToolFailureForProgress, formatLatestToolResultForContext, formatPlanState, formatWorkNote, getDocumentToolIntent, getLoopStallThreshold, getToolActionKey, isAbortError, isDocumentInformationTool, isHeaderInformationTool, isPlanComplete, isToolResultFailure, markPlanStepDone, normalizePlanSteps, recordToolExecutionOutcome, recordWorkLedgerItem, recordWorkNoteCaution, recordWorkNoteDone, rewardLoopHealthForPlanCreated, rewardLoopHealthForPlanStepDone, summarizeDocumentLoopProgress, summarizeHeaderLoopProgress, summarizeToolFailureMessage, summarizeToolResultForConversation, throwIfAborted, updateLoopHealthForAction, updateLoopHealthForInvalid, updateWorkNoteRemaining } from './ai-document-loop-state';
 export { summarizeDocumentStructure, summarizeHeaderStructure } from './ai-document-structure';
 import { buildDocumentWalkChunks, logDocumentWalkChunks, requestAiDocumentNotes } from './ai-document-notes';
 import { executeGrepHeaderTool, executePatchHeaderTool, executeViewHeaderTool } from './ai-header-edit-tools';
@@ -45,6 +45,7 @@ import {
   MAX_WORK_LEDGER_ITEMS,
   SENT_STRUCTURE_CONTEXT,
   type ChatTurnResult,
+  type DocumentEditBatchToolRequest,
   type EditPlanState,
   type WorkLedgerItem,
   type WorkNoteState,
@@ -251,6 +252,7 @@ async function runDocumentEditToolLoop(params: {
   const workLedger: WorkLedgerItem[] = [];
   let latestIntent = params.request;
   let workNote: WorkNoteState = createInitialWorkNote(params.request);
+  let latestToolResult: string | null = null;
   let plan: EditPlanState | null = null;
   const health = createLoopHealthState();
   let conversation: ChatMessage[] = [
@@ -273,7 +275,7 @@ async function runDocumentEditToolLoop(params: {
     const response = await requestProxyCompletion({
       settings: params.settings,
       messages: conversation,
-      context: buildLoopContext(contextSummary, plan, recentToolHelp, workLedger, buildIntentRecall(latestIntent, snapshot, params.document), workNote),
+      context: buildLoopContext(contextSummary, plan, recentToolHelp, workLedger, buildIntentRecall(latestIntent, snapshot, params.document), workNote, latestToolResult),
       formatInstructions: buildDocumentEditFormatInstructions({
         dbTableNames: dbObjectNames,
         pluginHints,
@@ -294,7 +296,7 @@ async function runDocumentEditToolLoop(params: {
       }
       const invalidMessage = parsed.message;
       conversation = [
-        ...conversation.filter((message) => message.role !== 'assistant' || !message.content.includes('The result of this action was:')),
+        ...pruneTransientRecoveryMessages(conversation),
         {
           id: crypto.randomUUID(),
           role: 'user',
@@ -329,7 +331,8 @@ async function runDocumentEditToolLoop(params: {
       params.onProgress?.(describeDocumentToolProgress(parsed.value));
       const batchResults: string[] = [];
       let batchShouldAbort = false;
-      for (const [callIndex, call] of parsed.value.calls.entries()) {
+      const batchCalls = orderBatchCallsForSafeExecution(parsed.value.calls);
+      for (const [callIndex, call] of batchCalls.entries()) {
         params.onProgress?.(describeDocumentToolProgress(call));
         latestIntent = getDocumentToolIntent(call) || latestIntent;
         let callHadExecutionFailure = false;
@@ -701,10 +704,11 @@ async function runDocumentEditToolLoop(params: {
       {
         id: crypto.randomUUID(),
         role: 'user',
-        content: toolResult,
+        content: summarizeToolResultForConversation(toolResult),
       },
       ...(recovery === 'recover' ? [buildLoopRecoveryChatMessage()] : []),
     ];
+    latestToolResult = toolResult;
   }
 
   return {
@@ -724,6 +728,7 @@ async function runHeaderEditToolLoop(params: {
   let snapshot = summarizeHeaderStructure(params.document);
   let contextSummary = snapshot.summary;
   let plan: EditPlanState | null = null;
+  let latestToolResult: string | null = null;
   const health = createLoopHealthState();
   let conversation: ChatMessage[] = [
     {
@@ -745,7 +750,7 @@ async function runHeaderEditToolLoop(params: {
     const response = await requestProxyCompletion({
       settings: params.settings,
       messages: conversation,
-      context: buildLoopContext(contextSummary, plan),
+      context: buildLoopContext(contextSummary, plan, null, undefined, undefined, undefined, latestToolResult),
       formatInstructions: buildHeaderEditFormatInstructions({ planActive: plan !== null }),
       mode: 'document-edit',
       debugLabel: `ai-header-edit:${iteration + 1}`,
@@ -760,7 +765,7 @@ async function runHeaderEditToolLoop(params: {
         return { summary: 'Stopped because the AI header edit loop was not producing valid tool calls. Try a narrower request or ask it to continue from the current document.' };
       }
       conversation = [
-        ...conversation.filter((message) => message.role !== 'assistant' || !message.content.includes('The result of this action was:')),
+        ...pruneTransientRecoveryMessages(conversation),
         {
           id: crypto.randomUUID(),
           role: 'user',
@@ -857,15 +862,62 @@ async function runHeaderEditToolLoop(params: {
       {
         id: crypto.randomUUID(),
         role: 'user',
-        content: toolResult,
+        content: summarizeToolResultForConversation(toolResult),
       },
       ...(recovery === 'recover' ? [buildLoopRecoveryChatMessage()] : []),
     ];
+    latestToolResult = toolResult;
   }
 
   return {
     summary: `Stopped after ${DOCUMENT_EDIT_MAX_TOOL_STEPS} header steps. The AI can continue if you send another request.`,
   };
+}
+
+function pruneTransientRecoveryMessages(conversation: ChatMessage[]): ChatMessage[] {
+  return conversation.filter((message) => {
+    if (message.role === 'assistant' && message.content.includes('The result of this action was:')) {
+      return false;
+    }
+    if (message.role !== 'user') {
+      return true;
+    }
+    return !isTransientRecoveryPrompt(message.content);
+  });
+}
+
+function orderBatchCallsForSafeExecution(calls: DocumentEditBatchToolRequest[]): DocumentEditBatchToolRequest[] {
+  if (
+    calls.length < 2
+    || !calls.every((call) => call.tool === 'remove_component' && parseDirectListComponentRef(call.component_ref))
+  ) {
+    return calls;
+  }
+  return [...calls].sort((left, right) => {
+    const leftRef = parseDirectListComponentRef(left.component_ref);
+    const rightRef = parseDirectListComponentRef(right.component_ref);
+    if (!leftRef || !rightRef || leftRef.prefix !== rightRef.prefix) {
+      return 0;
+    }
+    return rightRef.index - leftRef.index;
+  });
+}
+
+function parseDirectListComponentRef(ref: string): { prefix: string; index: number } | null {
+  const match = ref.match(/^(.*\.list\[)(\d+)(\])$/);
+  if (!match) {
+    return null;
+  }
+  return {
+    prefix: match[1],
+    index: Number(match[2]),
+  };
+}
+
+function isTransientRecoveryPrompt(content: string): boolean {
+  return content.startsWith('Return one valid tool JSON object using the documented shapes.')
+    || content.startsWith('Return one valid header tool JSON object using the documented shapes.')
+    || content.startsWith('You appear to be stuck. Do not repeat the previous action.');
 }
 
 function buildLoopContext(
@@ -874,9 +926,13 @@ function buildLoopContext(
   recentToolHelp?: string | null,
   workLedger?: WorkLedgerItem[],
   intentRecall?: string,
-  workNote?: WorkNoteState
+  workNote?: WorkNoteState,
+  latestToolResult?: string | null
 ): string {
   const parts = [baseContext];
+  if (latestToolResult) {
+    parts.push('', formatLatestToolResultForContext(latestToolResult));
+  }
   if (workNote) {
     parts.push('', formatWorkNote(workNote));
   }

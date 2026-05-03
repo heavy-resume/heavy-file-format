@@ -12,7 +12,7 @@ const AGENT_LOOP_TRACE_FILE = path.join(DEV_TRACE_DIR, 'agent-loop.ndjson');
 const AGENT_LOOP_TEXT_TRACE_FILE = path.join(DEV_TRACE_DIR, 'agent-loop.txt');
 const AGENT_LOOP_TRACE_MAX_LINES = 500;
 const AGENT_LOOP_TRACE_PRUNE_LINES = 100;
-const OPENAI_REASONING_EFFORT = 'medium';
+const OPENAI_REASONING_EFFORT = 'low';
 
 let traceWriteQueue = Promise.resolve();
 
@@ -91,12 +91,14 @@ export function buildChatProxyMiddleware(env: Record<string, string | undefined>
     const upstreamAbort = new AbortController();
     let completed = false;
     let runId = randomUUID();
-    req.on('aborted', () => {
+    const abortUpstream = (reason: string) => {
       if (!completed) {
-        console.debug('[hvy:chat-proxy] client request aborted');
+        console.debug('[hvy:chat-proxy] client connection closed before completion', { reason });
         upstreamAbort.abort();
       }
-    });
+    };
+    req.on('aborted', () => abortUpstream('request aborted'));
+    res.on('close', () => abortUpstream('response closed'));
 
     try {
       const body = validateProxyChatRequest(await readRequestJson(req));

@@ -57,6 +57,14 @@ export function bindSubmit(app: HTMLElement): void {
           requestNonce,
           mode: isDocumentEditChat ? 'document-edit' : 'qa',
         });
+        let recordedDocumentEditMutation = false;
+        const recordDocumentEditMutation = (): void => {
+          if (recordedDocumentEditMutation) {
+            return;
+          }
+          recordedDocumentEditMutation = true;
+          recordHistory(`ai-document-edit:${requestNonce}`);
+        };
         const result =
           isDocumentEditChat
             ? await requestDocumentEditChatTurn({
@@ -64,7 +72,7 @@ export function bindSubmit(app: HTMLElement): void {
                 document: state.document,
                 messages: previousMessages,
                 request: question,
-                onMutation: (group) => recordHistory(group),
+                onMutation: recordDocumentEditMutation,
                 onProgress: (message) => {
                   if (requestNonce !== state.chat.requestNonce || abortController.signal.aborted) {
                     console.debug('[hvy:chat-submit] ignored stale progress', {
@@ -112,6 +120,9 @@ export function bindSubmit(app: HTMLElement): void {
           state.rawEditorText = serializeDocument(state.document);
           state.rawEditorError = null;
           state.rawEditorDiagnostics = [];
+          if (recordedDocumentEditMutation && document.activeElement instanceof HTMLElement) {
+            document.activeElement.blur();
+          }
         }
       } finally {
         if (requestNonce !== state.chat.requestNonce) {

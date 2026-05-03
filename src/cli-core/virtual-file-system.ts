@@ -99,6 +99,25 @@ export function listDirectory(fs: HvyVirtualFileSystem, path: string): HvyVirtua
     .sort((left, right) => left.path.localeCompare(right.path));
 }
 
+export function resolveVirtualPath(fs: HvyVirtualFileSystem, cwd: string, input = '.'): string {
+  const normalized = normalizeVirtualPath(cwd, input);
+  if (fs.entries.has(normalized)) {
+    return normalized;
+  }
+
+  const trimmed = input.trim();
+  if (!trimmed.startsWith('/') && cwd !== '/') {
+    return normalized;
+  }
+
+  const bodyRelative = normalizeVirtualPath('/body', normalized.replace(/^\//, ''));
+  if (fs.entries.has(bodyRelative)) {
+    return bodyRelative;
+  }
+
+  return normalized;
+}
+
 function addSection(entries: Map<string, HvyVirtualEntry>, section: VisualSection, sectionPath: string): void {
   entries.set(sectionPath, { kind: 'dir', path: sectionPath });
   entries.set(`${sectionPath}/section.json`, {
@@ -114,7 +133,12 @@ function addSection(entries: Map<string, HvyVirtualEntry>, section: VisualSectio
 }
 
 function addBlockList(entries: Map<string, HvyVirtualEntry>, blocks: VisualBlock[], parentPath: string): void {
-  blocks.forEach((block, index) => addBlock(entries, block, `${parentPath}/${uniqueName(blockDirectoryName(block, index), entries, parentPath)}`));
+  blocks.forEach((block, index) => {
+    addBlock(entries, block, `${parentPath}/${uniqueName(blockDirectoryName(block, index), entries, parentPath)}`);
+    if (block.schema.component === 'component-list' && block.schema.componentListBlocks?.length) {
+      addBlockList(entries, block.schema.componentListBlocks, parentPath);
+    }
+  });
 }
 
 function addBlock(entries: Map<string, HvyVirtualEntry>, block: VisualBlock, blockPath: string): void {
@@ -129,9 +153,9 @@ function addBlock(entries: Map<string, HvyVirtualEntry>, block: VisualBlock, blo
   entries.set(`${blockPath}/body.txt`, {
     kind: 'file',
     path: `${blockPath}/body.txt`,
-    read: () => block.text,
+    read: () => readBlockBodyText(block),
     write: (content) => {
-      block.text = content;
+      writeBlockBodyText(block, content);
     },
   });
 
@@ -222,6 +246,39 @@ function applyBlockSchemaJson(schema: BlockSchema, component: string, value: Jso
   if (typeof value.tableColumns === 'string') schema.tableColumns = value.tableColumns;
   if (typeof value.tableShowHeader === 'boolean') schema.tableShowHeader = value.tableShowHeader;
   if (Array.isArray(value.tableRows)) schema.tableRows = value.tableRows as unknown as BlockSchema['tableRows'];
+}
+
+function readBlockBodyText(block: VisualBlock): string {
+  if (block.text) {
+    return block.text;
+  }
+  return collectNestedTextBlocks(block).map((child) => child.text).join('\n');
+}
+
+function writeBlockBodyText(block: VisualBlock, content: string): void {
+  if (block.text || collectNestedTextBlocks(block).length === 0) {
+    block.text = content;
+    return;
+  }
+
+  const nestedTextBlocks = collectNestedTextBlocks(block);
+  const lines = content.split('\n');
+  if (lines.length !== nestedTextBlocks.length) {
+    throw new Error('Nested body edits must preserve one line per nested text block.');
+  }
+  nestedTextBlocks.forEach((child, index) => {
+    child.text = lines[index] ?? '';
+  });
+}
+
+function collectNestedTextBlocks(block: VisualBlock): VisualBlock[] {
+  return [
+    ...(block.schema.containerBlocks ?? []),
+    ...(block.schema.componentListBlocks ?? []),
+    ...(block.schema.expandableStubBlocks?.children ?? []),
+    ...(block.schema.expandableContentBlocks?.children ?? []),
+    ...(block.schema.gridItems ?? []).map((item) => item.block),
+  ].flatMap((child) => (child.text ? [child] : collectNestedTextBlocks(child)));
 }
 
 function parseJsonObject(content: string, path: string): JsonObject {

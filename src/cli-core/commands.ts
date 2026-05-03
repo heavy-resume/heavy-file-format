@@ -2,7 +2,7 @@ import type { VisualDocument } from '../types';
 import {
   buildHvyVirtualFileSystem,
   listDirectory,
-  normalizeVirtualPath,
+  resolveVirtualPath,
   type HvyVirtualEntry,
   type HvyVirtualFile,
 } from './virtual-file-system';
@@ -45,7 +45,7 @@ function runCommand(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd
     return { cwd: ctx.cwd, output: ctx.cwd, mutated: false };
   }
   if (command === 'cd') {
-    const next = normalizeVirtualPath(ctx.cwd, args[0] ?? '/');
+    const next = resolveVirtualPath(ctx.fs, ctx.cwd, args[0] ?? '/');
     const entry = ctx.fs.entries.get(next);
     if (!entry || entry.kind !== 'dir') {
       throw new Error(`cd: no such directory: ${args[0] ?? '/'}`);
@@ -77,7 +77,7 @@ function runCommand(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd
 }
 
 function commandLs(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd: string }, args: string[]): string {
-  const target = normalizeVirtualPath(ctx.cwd, args.find((arg) => !arg.startsWith('-')) ?? '.');
+  const target = resolveVirtualPath(ctx.fs, ctx.cwd, args.find((arg) => !arg.startsWith('-')) ?? '.');
   const entry = ctx.fs.entries.get(target);
   if (!entry) {
     throw new Error(`ls: no such file or directory: ${target}`);
@@ -124,7 +124,7 @@ function commandNl(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd:
 }
 
 function commandFind(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd: string }, args: string[]): string {
-  const root = normalizeVirtualPath(ctx.cwd, args.find((arg) => !arg.startsWith('-')) ?? '.');
+  const root = resolveVirtualPath(ctx.fs, ctx.cwd, args.find((arg) => !arg.startsWith('-')) ?? '.');
   const nameIndex = args.indexOf('-name');
   const namePattern = nameIndex >= 0 ? args[nameIndex + 1] : '';
   const regex = namePattern ? globToRegExp(namePattern) : null;
@@ -142,7 +142,7 @@ function commandRg(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd:
     throw new Error('rg: missing search pattern');
   }
   const rootArg = args.slice(args.indexOf(pattern) + 1).find((arg) => !arg.startsWith('-')) ?? '.';
-  const root = normalizeVirtualPath(ctx.cwd, rootArg);
+  const root = resolveVirtualPath(ctx.fs, ctx.cwd, rootArg);
   const regex = new RegExp(pattern, args.includes('-i') ? 'i' : '');
   const lines: string[] = [];
   for (const entry of [...ctx.fs.entries.values()].sort((left, right) => left.path.localeCompare(right.path))) {
@@ -178,7 +178,7 @@ function commandSed(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd
 }
 
 function getReadableFile(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd: string }, path: string): HvyVirtualFile {
-  const normalized = normalizeVirtualPath(ctx.cwd, path);
+  const normalized = resolveVirtualPath(ctx.fs, ctx.cwd, path);
   const entry = ctx.fs.entries.get(normalized);
   if (!entry) {
     throw new Error(`No such file: ${normalized}`);

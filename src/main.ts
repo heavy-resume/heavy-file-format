@@ -492,13 +492,17 @@ function renderApp(): void {
         </div>
       </section>
 
-      ${renderChatPanel(
-        state.chat,
-        state.document,
-        { escapeAttr, escapeHtml },
-        isViewerView ? 'qa' : 'document-edit',
-        state.currentView === 'editor' || state.currentView === 'ai'
-      )}
+      ${
+        isCliEditor
+          ? ''
+          : renderChatPanel(
+              state.chat,
+              state.document,
+              { escapeAttr, escapeHtml },
+              isViewerView ? 'qa' : 'document-edit',
+              state.currentView === 'editor' || state.currentView === 'ai'
+            )
+      }
       ${readerRenderer.renderModal()}
       ${readerRenderer.renderLinkInlineModal()}
     </main>

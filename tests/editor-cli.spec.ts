@@ -4,13 +4,22 @@ test('cli view can navigate and edit virtual body files', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'CLI' }).click();
 
+  await expect(page.locator('.chat-launcher')).toHaveCount(0);
+  await expect(page.locator('#cliInput')).toBeFocused();
+
   await page.locator('#cliInput').fill('ls /');
   await page.keyboard.press('Enter');
   await expect(page.locator('#cliOutput')).toContainText('body');
+  await expect(page.locator('#cliInput')).toBeFocused();
 
   await page.locator('#cliInput').fill('find /body -name body.txt');
   await page.keyboard.press('Enter');
   await expect(page.locator('#cliOutput')).toContainText('body.txt');
+  await expect
+    .poll(async () =>
+      page.locator('#cliOutput').evaluate((node) => Math.abs(node.scrollHeight - node.clientHeight - node.scrollTop) <= 2)
+    )
+    .toBe(true);
 
   const bodyPath = (await page
     .locator('#cliOutput')

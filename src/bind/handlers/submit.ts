@@ -1,4 +1,4 @@
-import { state, getRenderApp, getRefreshReaderPanels, recordHistory, serializeDocument, appendUserChatMessage, requestChatTurn, requestDocumentEditChatTurn, submitAiEditRequest, submitCliCommand } from './_imports';
+import { state, getRenderApp, getRefreshReaderPanels, recordHistory, serializeDocument, appendUserChatMessage, requestChatTurn, requestDocumentEditChatTurn, submitAiEditRequest, submitCliCommand, restoreCliViewAfterRender } from './_imports';
 
 export function bindSubmit(app: HTMLElement): void {
   app.addEventListener('submit', async (event) => {
@@ -160,6 +160,7 @@ export function bindSubmit(app: HTMLElement): void {
       state.rawEditorError = null;
       state.rawEditorDiagnostics = [];
       getRenderApp()();
+      restoreCliViewAfterRender();
     }
   });
 }

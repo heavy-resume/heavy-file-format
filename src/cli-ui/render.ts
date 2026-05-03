@@ -23,7 +23,7 @@ export function renderCliView(params: {
       <div id="cliOutput" class="cli-output" aria-live="polite">${history}</div>
       <form id="cliComposer" class="cli-form">
         <code>${params.escapeHtml(params.cwd)} $</code>
-        <input id="cliInput" class="cli-input" name="cli-command" data-field="cli-command" value="${params.escapeAttr(params.draft)}" autocomplete="off" spellcheck="false" aria-label="CLI command" />
+        <input id="cliInput" class="cli-input" name="cli-command" data-field="cli-command" value="${params.escapeAttr(params.draft)}" autocomplete="off" spellcheck="false" aria-label="CLI command" autofocus />
         <button type="submit" class="secondary">Run</button>
       </form>
     </div>

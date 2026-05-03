@@ -1,0 +1,48 @@
+# Load the Resume Example, switch to Editor -> CLI, then paste these one at a time.
+
+pwd
+ls /
+ls /body
+
+# Find the resume's programming-language/tool records and related body files.
+find /body/tools-technologies -name '*typescript*'
+find /body/tools-technologies -name '*python*'
+rg 'TypeScript|Python|JavaScript' /body/tools-technologies
+rg -i 'programming language|application language|automation' /body/tools-technologies
+
+# Inspect specific virtual files for the TypeScript and Python records.
+ls /body/tools-technologies/tool-typescript
+cat /body/tools-technologies/tool-typescript/skill-record.json
+find /body/tools-technologies/tool-typescript -name body.txt
+rg 'strict mode|Node.js|frontend' /body/tools-technologies/tool-typescript
+nl /body/tools-technologies/tool-typescript/body.txt
+
+ls /body/tools-technologies/tool-python
+cat /body/tools-technologies/tool-python/skill-record.json
+find /body/tools-technologies/tool-python -name body.txt
+rg 'automation|AI|CLI' /body/tools-technologies/tool-python
+
+# Navigate around instead of using absolute paths.
+cd /body/tools-technologies
+pwd
+ls
+cd tool-typescript
+pwd
+head -n 20 skill-record.json
+tail -n 8 body.txt
+cd /
+
+# Find where language cards are referenced elsewhere in the resume.
+rg 'xrefTitle":"TypeScript"|xrefTarget":"tool-typescript"' /body
+rg 'xrefTitle":"Python"|xrefTarget":"tool-python"' /body
+rg 'Relevant Skills|Tools & Technologies' /body/history
+
+# Exercise read-only metadata files.
+cat /header.yaml
+ls /attachments
+
+# Mutating smoke test. This edits the TypeScript notes body in-place.
+# Use undo afterward if you only wanted to test the command.
+find /body/tools-technologies/tool-typescript -name body.txt
+sed s/Primary/Core/ /body/tools-technologies/tool-typescript/body.txt
+cat /body/tools-technologies/tool-typescript/body.txt

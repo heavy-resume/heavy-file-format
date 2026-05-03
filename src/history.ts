@@ -1,6 +1,7 @@
 import { state, HISTORY_GROUP_WINDOW_MS, incrementHistorySnapshotCount, incrementRecordHistoryCount, getRenderApp } from './state';
 import { debugMeasure } from './utils';
 import type { VisualDocument } from './types';
+import { saveResumeState } from './state-persistence';
 
 export function snapshotState(): string {
   return JSON.stringify(
@@ -32,6 +33,7 @@ export function commitHistorySnapshot(): void {
       state.history.shift();
     }
     state.future = [];
+    saveResumeState(state);
   }
 }
 
@@ -86,6 +88,7 @@ export function recordHistory(group?: string): void {
     }
     state.future = [];
     pushed = true;
+    saveResumeState(state);
   }
   console.debug('[hvy:perf] recordHistory', {
     recordId,

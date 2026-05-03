@@ -23,6 +23,7 @@ import { capturePaneScroll, restorePaneScroll, centerPendingEditorSection, focus
 import { bindUi } from './bind-ui';
 import { deserializeDocumentBytes, serializeDocument } from './serialization';
 import { createDefaultChatState, renderChatPanel } from './chat/chat';
+import { loadResumeState, saveResumeState } from './state-persistence';
 import { registerHostPlugin, SCRIPTING_PLUGIN_ID } from './plugins/registry';
 import { reconcilePluginMounts, capturePluginFocus } from './plugins/mount';
 import { dbTablePluginRegistration } from './plugins/db-table-plugin';
@@ -103,6 +104,39 @@ function createInitialState(document: ReturnType<typeof deserializeDocumentBytes
     lastHistoryAt: 0,
     pendingEditorCenterSectionKey: null,
   };
+}
+
+function applyResumeState(initial: AppState, resume: ReturnType<typeof loadResumeState>): AppState {
+  if (!resume) {
+    return initial;
+  }
+  return {
+    ...initial,
+    document: resume.document,
+    filename: resume.filename,
+    currentView: resume.currentView,
+    editorMode: resume.editorMode,
+    showAdvancedEditor: resume.showAdvancedEditor,
+    rawEditorText: resume.rawEditorText || serializeDocument(resume.document),
+    templateValues: resume.templateValues,
+    chat: {
+      ...initial.chat,
+      settings: resume.chat.settings,
+      draft: resume.chat.draft,
+      messages: resume.chat.messages,
+      panelOpen: resume.chat.panelOpen,
+    },
+  };
+}
+
+function bindResumePersistence(): void {
+  window.addEventListener('beforeunload', () => saveResumeState(state));
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+      saveResumeState(state);
+    }
+  });
+  window.addEventListener('pagehide', () => saveResumeState(state));
 }
 
 function renderAiEditPopover(): string {
@@ -655,7 +689,9 @@ function visitBlocksInSection(
 }
 
 async function bootstrap(): Promise<void> {
-  initState(createInitialState(await createDefaultDocument()));
+  initState(applyResumeState(createInitialState(await createDefaultDocument()), loadResumeState()));
+  bindResumePersistence();
+  saveResumeState(state);
   initColorModeSync();
   renderApp();
 }

@@ -14,6 +14,7 @@ import { restoreDbTableFrameScroll } from './plugins/db-table';
 import { bindChatThreadUi } from './chat/chat-thread-ui';
 import { bindImageDragAndDrop } from './editor/components/image/image';
 import { bindAppEvents } from './bind/app-events';
+import { saveResumeState } from './state-persistence';
 
 export function bindUi(app: HTMLElement): void {
   const newBtn = app.querySelector<HTMLButtonElement>('#newBtn');
@@ -51,6 +52,7 @@ export function bindUi(app: HTMLElement): void {
     state.future = [];
     clearChatConversation(state.chat);
     resetTransientUiState();
+    saveResumeState(state);
     getRenderApp()();
   });
 
@@ -65,6 +67,7 @@ export function bindUi(app: HTMLElement): void {
     state.future = [];
     clearChatConversation(state.chat);
     resetTransientUiState();
+    saveResumeState(state);
     getRenderApp()();
   });
 
@@ -79,6 +82,7 @@ export function bindUi(app: HTMLElement): void {
     state.future = [];
     clearChatConversation(state.chat);
     resetTransientUiState();
+    saveResumeState(state);
     getRenderApp()();
   });
 
@@ -98,11 +102,13 @@ export function bindUi(app: HTMLElement): void {
     clearChatConversation(state.chat);
     closeModal();
     resetTransientUiState();
+    saveResumeState(state);
     getRenderApp()();
   });
 
   downloadName.addEventListener('input', () => {
     state.filename = downloadName.value;
+    saveResumeState(state);
   });
 
   downloadBtn.addEventListener('click', () => {

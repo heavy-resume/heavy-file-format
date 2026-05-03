@@ -2174,7 +2174,7 @@ test('requestAiDocumentEditTurn rejects invented hvy form components and asks fo
   setHostPlugins([formPluginRegistration]);
   queueAiToolResponses(
     '{"tool":"create_component","position":"append-to-section","section_ref":"summary","hvy":"<!--hvy:form {\\"id\\":\\"assign-form\\"}-->"}',
-    '{"tool":"create_component","position":"append-to-section","section_ref":"summary","hvy":"<!--hvy:plugin {\\"id\\":\\"assign-form\\",\\"plugin\\":\\"dev.heavy.form\\",\\"pluginConfig\\":{\\"version\\":\\"0.1\\"}}-->\\nfields:\\n  - name: chore\\n    label: Chore\\n    type: text\\nsubmitLabel: Assign"}',
+    '{"tool":"create_component","position":"append-to-section","section_ref":"summary","hvy":"<!--hvy:plugin {\\"id\\":\\"assign-form\\",\\"plugin\\":\\"dev.heavy.form\\",\\"pluginConfig\\":{\\"version\\":\\"0.1\\"}}-->\\n```yaml\\nfields:\\n  - name: chore\\n    label: Chore\\n    type: text\\nsubmitLabel: Assign\\n```"}',
     '{"tool":"done","summary":"Created form plugin."}'
   );
 
@@ -2206,6 +2206,7 @@ hvy_version: 0.1
   const serialized = serializeDocument(document);
   expect(serialized).toContain('"plugin":"dev.heavy.form"');
   expect(serialized).toContain('submitLabel: Assign');
+  expect(serialized).not.toContain('```yaml');
   expect(serialized).not.toContain('hvy:form');
 });
 

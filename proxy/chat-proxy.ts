@@ -90,7 +90,7 @@ export function buildChatProxyMiddleware(env: Record<string, string | undefined>
 
     const upstreamAbort = new AbortController();
     let completed = false;
-    let runId = randomUUID();
+    let runId: string = randomUUID();
     const abortUpstream = (reason: string) => {
       if (!completed) {
         console.debug('[hvy:chat-proxy] client connection closed before completion', { reason });

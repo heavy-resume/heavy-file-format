@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from 'vitest';
-import { defineJsonTool, parseJsonToolCall, runJsonToolLoop, type JsonToolCall } from '../src/llm-tool-loop';
+import { defineJsonTool, parseJsonToolCall, runJsonToolLoop, type JsonToolCall, type JsonToolDefinition } from '../src/llm-tool-loop';
 
 type ExampleToolCall =
   | JsonToolCall<'search_notes', { query: string }>
@@ -17,7 +17,7 @@ const exampleToolDefinitions = [
     name: 'answer',
     parse: (json) => (typeof json.answer === 'string' ? { tool: 'answer', answer: json.answer } : null),
   }),
-];
+] as Array<JsonToolDefinition<ExampleToolCall>>;
 
 describe('llm-tool-loop', () => {
   test('parseJsonToolCall parses fenced JSON and validates known tool shapes', () => {

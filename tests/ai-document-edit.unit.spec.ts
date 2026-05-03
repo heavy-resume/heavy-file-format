@@ -1249,7 +1249,7 @@ test('autoUpdatePlanAndWorkNote completes steps from the tool reason when the to
 
   expect(result.changed).toBe(true);
   expect(plan.steps[0]?.done).toBe(true);
-  expect(plan.steps[0]?.summary).toBe('Create DB schema: tables for family_members, chores, chore_assignments with completed flag and completed_at timestamp');
+  expect(plan.steps[0]?.text).toBe('Create DB schema: tables for family_members, chores, chore_assignments with completed flag and completed_at timestamp');
   expect(plan.steps[1]?.done).toBe(false);
   expect(result.workNote.done).toContain('Create DB schema: tables for family_members, chores, chore_assignments with completed flag and completed_at timestamp');
 });

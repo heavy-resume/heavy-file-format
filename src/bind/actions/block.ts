@@ -276,6 +276,9 @@ const placeComponent: ActionHandler = ({ actionButton, sectionKey }) => {
   }
 
   if (placementContainer === 'grid') {
+    if (!gridBlock) {
+      return;
+    }
     const insertIndex = getGridPlacementInsertIndex(gridBlock.schema.gridItems, targetPlacement, targetGridItemId);
     gridBlock.schema.gridItems.splice(insertIndex, 0, { id: makeId('griditem'), block: placedBlock });
   } else {

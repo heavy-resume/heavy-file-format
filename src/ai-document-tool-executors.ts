@@ -33,7 +33,7 @@ export function executeViewComponentTool(
   if (!section || !block) {
     throw new Error(`Component "${request.component_ref}" could not be found.`);
   }
-  const fragment = serializeBlockFragment(block);
+  const fragment = serializeBlockFragment(block, document.meta);
   const clampRange = clampLineRange(fragment.split('\n').length, request.start_line, request.end_line);
 
   return [
@@ -63,7 +63,7 @@ export function executeViewSectionRefAsComponentTool(
   if (!section) {
     return null;
   }
-  const fragment = serializeSectionFragment(section);
+  const fragment = serializeSectionFragment(section, document.meta);
   const clampRange = clampLineRange(fragment.split('\n').length, request.start_line, request.end_line);
 
   return [
@@ -480,7 +480,7 @@ export function executePatchComponentTool(
     throw new Error(`Component "${request.component_ref}" could not be found.`);
   }
 
-  const originalFragment = serializeBlockFragment(block);
+  const originalFragment = serializeBlockFragment(block, document.meta);
   const patchedFragment = applyComponentPatchEdits(originalFragment, request.edits);
   console.debug('[hvy:ai-document-edit] patch_component', {
     componentRef: request.component_ref,

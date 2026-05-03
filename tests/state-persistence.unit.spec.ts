@@ -50,7 +50,7 @@ hvy_version: 0.1
       requestNonce: 12,
       abortController: new AbortController(),
     },
-  } as AppState);
+  } as unknown as AppState);
 
   const resumed = loadResumeState();
 

@@ -858,8 +858,8 @@ export function serializeDocument(document: VisualDocument): string {
   return appendSerializedTailPreamble(textBody, document.attachments);
 }
 
-export function serializeSectionFragment(section: VisualSection): string {
-  return serializeSection(section, 1, null);
+export function serializeSectionFragment(section: VisualSection, documentMeta: JsonObject | null = null): string {
+  return serializeSection(section, 1, documentMeta);
 }
 
 export function serializeDocumentBytes(document: VisualDocument): Uint8Array {
@@ -905,8 +905,8 @@ export function serializeDocumentHeaderYaml(document: VisualDocument): string {
   return stringifyYaml(headerMeta).trim();
 }
 
-export function serializeBlockFragment(block: VisualBlock): string {
-  return trimBoundaryNewlines(serializeBlock(block, 0, null));
+export function serializeBlockFragment(block: VisualBlock, documentMeta: JsonObject | null = null): string {
+  return trimBoundaryNewlines(serializeBlock(block, 0, documentMeta));
 }
 
 function stripEditorStateFromSerializedValue(value: unknown): unknown {

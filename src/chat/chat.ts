@@ -591,6 +591,7 @@ function getChatReaderHelpers(documentMeta: VisualDocument['meta']): ComponentRe
     renderComponentFragment: (_componentName: string, content: string) => markdownToEditorHtml(normalizeMarkdownLists(content)),
     renderComponentOptions: () => '',
     renderAddComponentPicker: () => '',
+    renderComponentPlacementTarget: () => '',
     renderOption: () => '',
     getDocumentComponentCss: (componentName: string) => getDocumentComponentDefaultCss(documentMeta, componentName),
     getXrefTargetOptions: () => [],

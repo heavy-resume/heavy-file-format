@@ -1,26 +1,5 @@
 export const DOCUMENT_EDIT_MAX_TOOL_STEPS = 50;
 
-export function buildEditPathSelectionInstructions(): string {
-  return [
-    'Reply with exactly one word: `document` or `header`.',
-    'Choose whether this request should edit the HVY header or the document body.',
-    'Use `document` for visible content: sections, subsections, text, cards, tables, grids, layout CSS on existing sections/components, ordering, additions, and deletions.',
-    'Use `header` for front matter metadata: document title, reader settings, theme, component defaults, section defaults, reusable component definitions in `component_defs`, reusable section definitions in `section_defs`, template schema, and plugin metadata.',
-    'Use `document` for requests to change visible spacing, margins, or layout between existing sections. Use `header` section defaults only when the user asks for document defaults, template defaults, or future inserted sections.',
-    'If the request touches both header and document, choose the path needed for the primary requested change.',
-  ].join('\n');
-}
-
-export function buildEditPathSelectionPrompt(request: string): string {
-  return [
-    'Decide which HVY edit path should handle this request:',
-    request,
-    '',
-    'Choose `document` for visible section/component content.',
-    'Choose `header` for document metadata and reusable definitions.',
-  ].join('\n');
-}
-
 export interface DocumentEditPluginHint {
   id: string;
   displayName: string;
@@ -51,6 +30,8 @@ export function buildDocumentEditFormatInstructions(options?: {
     'The document has already been walked section-by-section in the context notes. Do not start by inspecting the whole document again.',
     'Use the notes to create one linear plan or run the next concrete tool call.',
     'Prefer `batch` for a known ordered sequence of concrete tool calls.',
+    'Plan at tool-action granularity: one plan step should be completable by one normal tool call or one batch.',
+    'If several edits will be executed together in one batch, describe that whole batch outcome as one plan step instead of making one step per batched call.',
     `Valid tools are: ${validTools}.`,
     ...(planActive ? [] : ['Plan shape: `{"tool":"plan","steps":["Modify component X to remove Y","Verify no Y remains"]}`.']),
     'Batch shape: `{"tool":"batch","calls":[{"tool":"remove_component","component_ref":"id"}]}`.',
@@ -92,6 +73,7 @@ export function buildDocumentEditToolHelp(topic: string): string | null {
     'tool:batch': [
       '{"tool":"batch","calls":[{"tool":"grep","query":"Python|TypeScript","flags":"i","max_count":5},{"tool":"view_component","component_ref":"tool-typescript"}],"reason":"Inspect multiple targets before planning."}',
       'Use batch for related inspection or a short sequence of concrete edits that should run in order. Do not include answer, done, plan, mark_step_done, or nested batch.',
+      'A batch counts as one plan step. If a batch removes or edits several targets, the active plan should have one step describing the whole batch outcome.',
     ].join('\n'),
     'tool:grep': [
       '{"tool":"grep","query":"Python|TypeScript","flags":"i","before":2,"after":2,"max_count":3,"reason":"optional"}',

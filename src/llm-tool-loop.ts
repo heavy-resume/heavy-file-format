@@ -206,5 +206,5 @@ function defaultToolResultMessage(tool: string, result: string): string {
 }
 
 function defaultInvalidResponseMessage(message: string): string {
-  return `The previous response was invalid and no tool was executed. ${message} Reply with a single JSON tool object.`;
+  return `Return a single valid JSON tool object. ${message}`;
 }

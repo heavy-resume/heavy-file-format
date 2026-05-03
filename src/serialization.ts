@@ -829,6 +829,10 @@ export function serializeDocument(document: VisualDocument): string {
   return appendSerializedTailPreamble(textBody, document.attachments);
 }
 
+export function serializeSectionFragment(section: VisualSection): string {
+  return serializeSection(section, 1);
+}
+
 export function serializeDocumentBytes(document: VisualDocument): Uint8Array {
   const encoder = new TextEncoder();
   const textBytes = encoder.encode(serializeDocument(document));

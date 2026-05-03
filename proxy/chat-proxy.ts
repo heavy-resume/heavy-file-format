@@ -690,6 +690,9 @@ function summarizeTracePayload(event: TraceEvent): string {
     return `reason=${String(payload.reason ?? '')}`;
   }
   if (event.type === 'client_event') {
+    if (payload.event === 'document_walk_notes') {
+      return `event=document_walk_notes chunks=${String(payload.chunks ?? '')}`;
+    }
     return Object.entries(payload)
       .map(([key, value]) => `${key}=${truncateTraceText(String(value), 120)}`)
       .join(' ');

@@ -9,8 +9,7 @@ import { DB_TABLE_PLUGIN_ID } from './plugins/registry';
 import { serializeBlockFragment } from './serialization';
 import type { ChatMessage, ChatSettings, VisualDocument } from './types';
 import type { VisualBlock } from './editor/types';
-import type { AiEditRequestResult } from './ai-edit';
-import { parseAiBlockEditResponse } from './ai-edit';
+import { parseAiBlockEditResponse, type AiEditRequestResult } from './ai-component-edit-common';
 
 export const AI_DB_TABLE_EDIT_MAX_STEPS = 6;
 
@@ -196,7 +195,7 @@ export async function requestAiDbTableEdit(params: {
         {
           id: crypto.randomUUID(),
           role: 'user',
-          content: `The previous response was invalid and no tool was executed. ${parsed.message} Reply with a single JSON tool object.`,
+          content: `Return a single valid JSON tool object. ${parsed.message}`,
         },
       ];
       continue;

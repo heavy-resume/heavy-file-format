@@ -1,18 +1,19 @@
 import { beforeEach, expect, test, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 
-const { requestProxyCompletionMock, requestAiComponentEditMock } = vi.hoisted(() => ({
+const { requestProxyCompletionMock, requestAiComponentEditMock, traceAgentLoopEventMock } = vi.hoisted(() => ({
   requestProxyCompletionMock: vi.fn(),
   requestAiComponentEditMock: vi.fn(),
+  traceAgentLoopEventMock: vi.fn(),
 }));
 
 vi.mock('../src/chat/chat', () => ({
   requestProxyCompletion: requestProxyCompletionMock,
-  traceAgentLoopEvent: vi.fn(),
+  traceAgentLoopEvent: traceAgentLoopEventMock,
 }));
 
-vi.mock('../src/ai-edit', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../src/ai-edit')>();
+vi.mock('../src/ai-component-edit', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/ai-component-edit')>();
   return {
     ...actual,
     requestAiComponentEdit: requestAiComponentEditMock,
@@ -23,7 +24,6 @@ import { requestAiDocumentEditTurn, summarizeDocumentStructure, summarizeHeaderS
 import {
   buildDocumentEditFormatInstructions,
   buildDocumentEditToolHelp,
-  buildEditPathSelectionInstructions,
   buildInitialDocumentEditPrompt,
   buildHeaderEditFormatInstructions,
 } from '../src/ai-document-edit-instructions';
@@ -37,6 +37,7 @@ import { setHostPlugins } from '../src/plugins/registry';
 beforeEach(() => {
   requestProxyCompletionMock.mockReset();
   requestAiComponentEditMock.mockReset();
+  traceAgentLoopEventMock.mockReset();
   setHostPlugins([]);
 });
 
@@ -59,14 +60,13 @@ function seedStateForParsing(): void {
 }
 
 function queueAiToolResponses(...responses: string[]): void {
-  requestProxyCompletionMock.mockResolvedValueOnce('document');
   for (const response of responses) {
     requestProxyCompletionMock.mockResolvedValueOnce(response);
   }
 }
 
 function lastToolResultBeforeCall(callIndex: number): string {
-  return requestProxyCompletionMock.mock.calls[callIndex + 1]?.[0]?.messages.at(-1)?.content ?? '';
+  return requestProxyCompletionMock.mock.calls[callIndex]?.[0]?.messages.at(-1)?.content ?? '';
 }
 
 test('summarizeDocumentStructure produces section and component refs with visible ids and text', () => {
@@ -160,13 +160,6 @@ test('summarizeDocumentStructure shows the exact reduced structure the AI sees',
 });
 
 test('buildDocumentEditFormatInstructions documents the tool protocol', () => {
-  const pathInstructions = buildEditPathSelectionInstructions();
-  expect(pathInstructions).toContain('Choose whether this request should edit the HVY header or the document body.');
-  expect(pathInstructions).toContain('Reply with exactly one word: `document` or `header`.');
-  expect(pathInstructions).toContain('Use `document` for visible content');
-  expect(pathInstructions).toContain('Use `header` for front matter metadata');
-  expect(pathInstructions).toContain('Use `document` for requests to change visible spacing, margins, or layout between existing sections.');
-
   const instructions = buildDocumentEditFormatInstructions({
     pluginHints: [
       {
@@ -182,6 +175,8 @@ test('buildDocumentEditFormatInstructions documents the tool protocol', () => {
   expect(instructions).toContain('The document has already been walked section-by-section in the context notes.');
   expect(instructions).toContain('Use the notes to create one linear plan or run the next concrete tool call.');
   expect(instructions).toContain('Prefer `batch` for a known ordered sequence of concrete tool calls.');
+  expect(instructions).toContain('Plan at tool-action granularity: one plan step should be completable by one normal tool call or one batch.');
+  expect(instructions).toContain('If several edits will be executed together in one batch, describe that whole batch outcome as one plan step');
   expect(instructions).toContain('Registered plugin ids: dev.test.widget.');
   expect(instructions).toContain('Plan shape: `{"tool":"plan","steps":["Modify component X to remove Y","Verify no Y remains"]}`.');
   expect(instructions).toContain('Batch shape: `{"tool":"batch","calls":[{"tool":"remove_component","component_ref":"id"}]}`.');
@@ -200,6 +195,7 @@ test('buildDocumentEditFormatInstructions documents the tool protocol', () => {
   expect(buildInitialDocumentEditPrompt('Update the document.')).not.toContain('You have at most 50 tool steps.');
   expect(buildDocumentEditToolHelp('tool:patch_component')).toContain('"tool":"patch_component"');
   expect(buildDocumentEditToolHelp('tool:batch')).toContain('"tool":"batch"');
+  expect(buildDocumentEditToolHelp('tool:batch')).toContain('A batch counts as one plan step.');
   expect(buildDocumentEditToolHelp('tool:remove_component')).toContain('"component_ref":"tool-typescript"');
 
   const dbInstructions = buildDocumentEditFormatInstructions({ dbTableNames: ['work_items'], request: 'Show the database table.' });
@@ -361,13 +357,22 @@ hvy_version: 0.1
   });
 
   expect(result.error).toBeNull();
-  const initialDocumentEditContext = requestProxyCompletionMock.mock.calls[1]?.[0]?.context ?? '';
+  const initialDocumentEditContext = requestProxyCompletionMock.mock.calls[0]?.[0]?.context ?? '';
   expect(initialDocumentEditContext).toContain('Document walk notes (section-by-section, up to 100 serialized lines per note):');
   expect(initialDocumentEditContext).toContain('Walk note: section="Skills"');
   expect(initialDocumentEditContext).toContain('refs=skills, skill-python-card, tool-python');
   expect(initialDocumentEditContext).toContain('Reduced component/section index:');
-  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.formatInstructions).not.toContain('Tool shapes:');
-  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.formatInstructions).not.toContain('Available plugins for `<!--hvy:plugin ...-->` blocks:');
+  expect(traceAgentLoopEventMock).toHaveBeenCalledWith(expect.objectContaining({
+    phase: 'document-edit',
+    type: 'client_event',
+    payload: expect.objectContaining({
+      event: 'document_walk_notes',
+      chunks: expect.any(Number),
+      notes: expect.stringContaining('Walk note: section="Skills"'),
+    }),
+  }));
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.formatInstructions).not.toContain('Tool shapes:');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.formatInstructions).not.toContain('Available plugins for `<!--hvy:plugin ...-->` blocks:');
   const batchResult = lastToolResultBeforeCall(1);
   expect(batchResult).toContain('Tool result for batch:');
   expect(batchResult).toContain('Call 1: grep(Python)');
@@ -408,7 +413,7 @@ hvy_version: 0.1
   });
 
   expect(result.error).toBeNull();
-  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.messages.at(-1)?.content).toContain('cannot use control tool "done"');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content).toContain('cannot use control tool "done"');
 });
 
 test('requestAiDocumentEditTurn can batch a mutation followed by inspection', async () => {
@@ -474,10 +479,10 @@ hvy_version: 0.1
   });
 
   expect(result.error).toBeNull();
-  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.context).toContain('Plan progress:');
-  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.context).toContain('1. [ ] Find the summary text');
-  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.formatInstructions).not.toContain('{"tool":"plan"');
-  expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.context).toContain('1. [x] Find the summary text — Found the summary text.');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('Plan progress:');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('1. [ ] Find the summary text');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.formatInstructions).not.toContain('{"tool":"plan"');
+  expect(requestProxyCompletionMock.mock.calls[3]?.[0]?.context).toContain('1. [x] Find the summary text — Found the summary text.');
   expect(result.messages.some((message) => message.progress && message.content.includes('Plan progress:'))).toBe(true);
   expect(result.messages.some((message) => message.progress && message.content.includes('Find the summary text'))).toBe(true);
 });
@@ -581,7 +586,7 @@ hvy_version: 0.1
 
   expect(result.error).toBeNull();
   expect(result.messages.at(-1)?.content).toBe('Found the summary text.');
-  expect(requestProxyCompletionMock).toHaveBeenCalledTimes(3);
+  expect(requestProxyCompletionMock).toHaveBeenCalledTimes(2);
   expect(onProgress).toHaveBeenCalledWith(expect.objectContaining({
     progress: true,
     content: expect.stringContaining('1. [x] Find the summary text'),
@@ -621,9 +626,7 @@ hvy_version: 0.1
   });
 
   expect(result.error).toBeNull();
-  expect(onProgress).toHaveBeenCalledWith(expect.objectContaining({
-    role: 'assistant',
-    progress: true,
+  expect(onProgress).not.toHaveBeenCalledWith(expect.objectContaining({
     content: expect.stringContaining('Choosing whether to edit'),
   }));
   expect(result.messages.some((message) => message.progress && message.content.includes('Searching the document'))).toBe(true);
@@ -660,6 +663,43 @@ hvy_version: 0.1
   expect(lastToolResultBeforeCall(1)).toContain('Tool result for view_component:');
   expect(lastToolResultBeforeCall(1)).toContain('Tool failed: Unknown component ref "top-tools-technologies".');
   expect(result.messages.at(-1)?.content).toBe('Recovered by refreshing refs.');
+});
+
+test('requestAiDocumentEditTurn aborts after more than two tool failures in five calls', async () => {
+  queueAiToolResponses(
+    '{"tool":"view_component","component_ref":"missing-a","reason":"Inspect missing component A."}',
+    '{"tool":"view_component","component_ref":"missing-b","reason":"Inspect missing component B."}',
+    '{"tool":"view_component","component_ref":"missing-c","reason":"Inspect missing component C."}',
+    '{"tool":"done","summary":"This should not be reached."}'
+  );
+
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {"id":"summary-text"}-->
+ Existing content
+`, '.hvy');
+  seedStateForDocument(document);
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+  const onProgress = vi.fn();
+
+  const result = await requestAiDocumentEditTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Inspect missing components.',
+    onProgress,
+  });
+
+  expect(result.error).toBeNull();
+  expect(result.messages.at(-1)?.content).toBe('Stopped after repeated tool failures. The AI can continue if you send another request.');
+  expect(requestProxyCompletionMock).toHaveBeenCalledTimes(3);
+  const progressContents = onProgress.mock.calls.map((call) => (call[0] as ChatMessage).content).join('\n');
+  expect(progressContents).toContain('Stopped after repeated tool failures.');
 });
 
 test('requestAiDocumentEditTurn lets the model inspect rendered component output', async () => {
@@ -753,6 +793,34 @@ test('requestAiDocumentEditTurn can view a grid slot by id and exposes nested ta
   expect(viewResult).toContain('TypeScript');
 });
 
+test('requestAiDocumentEditTurn can inspect a section id passed to view_component', async () => {
+  queueAiToolResponses(
+    '{"tool":"view_component","component_ref":"top-skills-tools-technologies","reason":"Inspect the top skills and tools section."}',
+    '{"tool":"done","summary":"Inspected top skills and tools section."}'
+  );
+
+  const input = readFileSync(new URL('./fixtures/resume-structure-input.hvy', import.meta.url), 'utf8');
+  seedStateForParsing();
+  const document = deserializeDocument(input, '.hvy');
+  seedStateForDocument(document);
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+
+  const result = await requestAiDocumentEditTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Inspect the top skills and tools section.',
+  });
+
+  expect(result.error).toBeNull();
+  const viewResult = lastToolResultBeforeCall(1);
+  expect(viewResult).toContain('Section id: top-skills-tools-technologies');
+  expect(viewResult).toContain('Matched a section ref, not a component ref.');
+  expect(viewResult).toContain('Section HVY with 1-based line numbers:');
+  expect(viewResult).toContain('<!--hvy:grid:1 {"id":"top-tools-technologies"}-->');
+  expect(viewResult).toContain('TypeScript');
+});
+
 test('requestAiDocumentEditTurn accepts component_id aliases for component tools', async () => {
   queueAiToolResponses(
     '{"tool":"view_component","component_id":"top-tools-technologies","reason":"Inspect the top tools grid cell."}',
@@ -837,7 +905,48 @@ hvy_version: 0.1
   const progressContents = onProgress.mock.calls.map((call) => (call[0] as ChatMessage).content).join('\n');
   expect(progressContents).toContain('1. [x] Remove component remove-me');
   expect(progressContents).toContain('Completed all plan steps.');
-  expect(requestProxyCompletionMock).toHaveBeenCalledTimes(3);
+  expect(requestProxyCompletionMock).toHaveBeenCalledTimes(2);
+});
+
+test('requestAiDocumentEditTurn treats a batch as one completed plan step', async () => {
+  queueAiToolResponses(
+    '{"tool":"plan","steps":["Remove components remove-a and remove-b together"],"reason":"Batch related removals as one step."}',
+    '{"tool":"batch","calls":[{"tool":"remove_component","component_ref":"remove-a"},{"tool":"remove_component","component_ref":"remove-b"}],"reason":"Remove both related components together."}'
+  );
+
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {"id":"remove-a"}-->
+ Remove A
+
+<!--hvy:text {"id":"remove-b"}-->
+ Remove B
+`, '.hvy');
+  seedStateForDocument(document);
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+  const onProgress = vi.fn();
+
+  const result = await requestAiDocumentEditTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Remove both target components.',
+    onProgress,
+  });
+
+  expect(result.error).toBeNull();
+  const serialized = serializeDocument(document);
+  expect(serialized).not.toContain('remove-a');
+  expect(serialized).not.toContain('remove-b');
+  const progressContents = onProgress.mock.calls.map((call) => (call[0] as ChatMessage).content).join('\n');
+  expect(progressContents).toContain('1. [x] Remove components remove-a and remove-b together');
+  expect(progressContents).toContain('Completed all plan steps.');
+  expect(requestProxyCompletionMock).toHaveBeenCalledTimes(2);
 });
 
 test('requestAiDocumentEditTurn only auto-marks plan steps for compatible tool actions', async () => {
@@ -1149,7 +1258,6 @@ hvy_version: 0.1
 
 test('requestAiDocumentEditTurn routes header requests to header tools', async () => {
   requestProxyCompletionMock
-    .mockResolvedValueOnce('header')
     .mockResolvedValueOnce('{"tool":"grep_header","query":"skill-card","before":2,"after":4,"max_count":1}')
     .mockResolvedValueOnce('{"tool":"view_header","start_line":1,"end_line":20}')
     .mockResolvedValueOnce('{"tool":"patch_header","edits":[{"op":"replace","start_line":2,"end_line":2,"text":"title: New Resume"}]}')
@@ -1189,13 +1297,13 @@ component_defs:
       description: 'Skill card',
     },
   ]);
-  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('Header outline and properties');
-  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('component_defs:');
-  const headerGrep = requestProxyCompletionMock.mock.calls[2]?.[0]?.messages.at(-1)?.content ?? '';
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Header outline and properties');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('component_defs:');
+  const headerGrep = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content ?? '';
   expect(headerGrep).toContain('Tool result for grep_header:');
   expect(headerGrep).toContain('Header match 1 of 1');
   expect(headerGrep).toContain('name: skill-card');
-  const headerView = requestProxyCompletionMock.mock.calls[3]?.[0]?.messages.at(-1)?.content ?? '';
+  const headerView = requestProxyCompletionMock.mock.calls[2]?.[0]?.messages.at(-1)?.content ?? '';
   expect(headerView).toContain('Header YAML with 1-based line numbers:');
   expect(headerView).toContain('  2 | title: Old Resume');
   expect(result.messages.at(-1)).toEqual(
@@ -1208,7 +1316,6 @@ component_defs:
 
 test('requestAiDocumentEditTurn rejects invented section default fields', async () => {
   requestProxyCompletionMock
-    .mockResolvedValueOnce('header')
     .mockResolvedValueOnce('{"tool":"patch_header","edits":[{"op":"replace","start_line":3,"end_line":4,"text":"section_defaults:\\n  wrapper_style: \\"margin-bottom: 24px;\\""}]}');
 
   const document = deserializeDocument(`---
@@ -1229,7 +1336,7 @@ title: Existing
     settings,
     document,
     messages: [],
-    request: 'Add vertical margin between sections.',
+    request: 'Patch the header section_defaults with vertical margin.',
   });
 
   expect(result.error).toBe('section_defaults only supports the "css" field. Unsupported field: wrapper_style.');
@@ -1432,7 +1539,6 @@ hvy_version: 0.1
 
 test('requestAiDocumentEditTurn can create a component in a section', async () => {
   requestProxyCompletionMock
-    .mockResolvedValueOnce('document')
     .mockResolvedValueOnce('{"tool":"create_component","position":"append-to-section","section_ref":"summary","hvy":"<!--hvy:text {}-->\\n Added content"}')
     .mockResolvedValueOnce('{"tool":"done","summary":"Added a new text component."}');
 
@@ -1460,8 +1566,8 @@ hvy_version: 0.1
   expect(document.sections[0]?.blocks).toHaveLength(2);
   expect(document.sections[0]?.blocks[1]?.schema.component).toBe('text');
   expect(document.sections[0]?.blocks[1]?.text).toBe('Added content');
-  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('<!-- section id="summary" title="Summary" location="main" -->');
-  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.context).toContain('Reduced outline context was already provided earlier');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('<!-- section id="summary" title="Summary" location="main" -->');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('Reduced outline context was already provided earlier');
   expect(result.messages.at(-1)).toEqual(
     expect.objectContaining({
       role: 'assistant',
@@ -1594,7 +1700,6 @@ hvy_version: 0.1
 
 test('requestAiDocumentEditTurn retries invalid multi-tool transcripts without treating them as executed work', async () => {
   requestProxyCompletionMock
-    .mockResolvedValueOnce('document')
     .mockResolvedValueOnce(
       '{"tool":"create_section","position":"append-root","hvy":"<!--hvy: {\\"id\\":\\"imagined\\"}-->\\n#! Imagined"}\n\nThe result of this action was:\nNew section ref: imagined\n\n{"tool":"done","summary":"Imagined work."}'
     )
@@ -1623,14 +1728,14 @@ hvy_version: 0.1
 
   expect(result.error).toBeNull();
   expect(document.sections.map((section) => section.customId)).toEqual(['summary', 'actual']);
-  const retryMessages = requestProxyCompletionMock.mock.calls[2]?.[0]?.messages.map((message: ChatMessage) => message.content).join('\n') ?? '';
-  expect(retryMessages).toContain('no tools were executed');
+  const retryMessages = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.map((message: ChatMessage) => message.content).join('\n') ?? '';
+  expect(retryMessages).toContain('Return one valid tool JSON object using the documented shapes.');
+  expect(retryMessages).not.toContain('previous response was invalid');
   expect(retryMessages).not.toContain('New section ref: imagined');
 });
 
 test('requestAiDocumentEditTurn gives a focused correction for malformed plan JSON', async () => {
   requestProxyCompletionMock
-    .mockResolvedValueOnce('document')
     .mockResolvedValueOnce('{"tool":"plan","plan":"Remove language names from relevant components."}')
     .mockResolvedValueOnce('{"tool":"done","summary":"Recovered from malformed plan."}');
 
@@ -1655,14 +1760,13 @@ hvy_version: 0.1
   });
 
   expect(result.error).toBeNull();
-  const retryMessages = requestProxyCompletionMock.mock.calls[2]?.[0]?.messages.map((message: ChatMessage) => message.content).join('\n') ?? '';
+  const retryMessages = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.map((message: ChatMessage) => message.content).join('\n') ?? '';
   expect(retryMessages).toContain('plan must use `steps` as an array');
   expect(retryMessages).toContain('{"tool":"plan","steps":["Modify component X","Verify the result"]}');
 });
 
 test('requestAiDocumentEditTurn rejects HTML create payloads and asks for HVY', async () => {
   requestProxyCompletionMock
-    .mockResolvedValueOnce('document')
     .mockResolvedValueOnce('{"tool":"create_section","position":"append-root","hvy":"<section><h1>Chores</h1><table><tr><td>Dad</td></tr></table></section>"}')
     .mockResolvedValueOnce('{"tool":"create_section","position":"append-root","hvy":"<!--hvy: {\\"id\\":\\"chores\\"}-->\\n#! Chores\\n\\n <!--hvy:text {}-->\\n  Chore chart"}')
     .mockResolvedValueOnce('{"tool":"done","summary":"Created chores section."}');
@@ -1682,7 +1786,7 @@ hvy_version: 0.1
   });
 
   expect(result.error).toBeNull();
-  const retryMessages = requestProxyCompletionMock.mock.calls[2]?.[0]?.messages.map((message: ChatMessage) => message.content).join('\n') ?? '';
+  const retryMessages = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.map((message: ChatMessage) => message.content).join('\n') ?? '';
   expect(retryMessages).toContain('contains HTML/DOM markup');
   expect(retryMessages).toContain('document edit tools only accept serialized HVY');
   const serialized = serializeDocument(document);
@@ -1694,7 +1798,6 @@ hvy_version: 0.1
 test('requestAiDocumentEditTurn rejects invented hvy form components and asks for the form plugin', async () => {
   setHostPlugins([formPluginRegistration]);
   requestProxyCompletionMock
-    .mockResolvedValueOnce('document')
     .mockResolvedValueOnce('{"tool":"create_component","position":"append-to-section","section_ref":"summary","hvy":"<!--hvy:form {\\"id\\":\\"assign-form\\"}-->"}')
     .mockResolvedValueOnce('{"tool":"create_component","position":"append-to-section","section_ref":"summary","hvy":"<!--hvy:plugin {\\"id\\":\\"assign-form\\",\\"plugin\\":\\"dev.heavy.form\\",\\"pluginConfig\\":{\\"version\\":\\"0.1\\"}}-->\\nfields:\\n  - name: chore\\n    label: Chore\\n    type: text\\nsubmitLabel: Assign"}')
     .mockResolvedValueOnce('{"tool":"done","summary":"Created form plugin."}');
@@ -1717,11 +1820,11 @@ hvy_version: 0.1
   });
 
   expect(result.error).toBeNull();
-  const firstToolInstructions = requestProxyCompletionMock.mock.calls[1]?.[0]?.formatInstructions ?? '';
+  const firstToolInstructions = requestProxyCompletionMock.mock.calls[0]?.[0]?.formatInstructions ?? '';
   expect(firstToolInstructions).toContain('Registered plugin ids: dev.heavy.form.');
   expect(firstToolInstructions).toContain('Use `get_help` only when exact syntax is missing from the notes or recent tool help.');
   expect(firstToolInstructions).not.toContain('Form UI. Fields and script hooks live in the YAML body.');
-  const retryMessages = requestProxyCompletionMock.mock.calls[2]?.[0]?.messages.map((message: ChatMessage) => message.content).join('\n') ?? '';
+  const retryMessages = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.map((message: ChatMessage) => message.content).join('\n') ?? '';
   expect(retryMessages).toContain('unsupported `hvy:form` syntax');
   expect(retryMessages).toContain('Use a registered plugin id from the prompt');
   const serialized = serializeDocument(document);
@@ -1762,7 +1865,7 @@ hvy_version: 0.1
   expect(helpResult).toContain('Form scripts receive `doc` plus `doc.form`');
   expect(helpResult).toContain('Use `doc.form.get_value`');
   expect(helpResult).not.toContain('doc.db.query');
-  const contextAfterHelp = requestProxyCompletionMock.mock.calls[2]?.[0]?.context ?? '';
+  const contextAfterHelp = requestProxyCompletionMock.mock.calls[1]?.[0]?.context ?? '';
   expect(contextAfterHelp).toContain('Recent tool help already fetched; reuse this before calling `get_help` again for the same syntax:');
   expect(contextAfterHelp).toContain('Form (dev.heavy.form)');
   expect(contextAfterHelp).toContain('Supported YAML keys include `fields`');
@@ -1805,7 +1908,7 @@ hvy_version: 0.1
   expect(searchResult).toContain('Tool result for search_components:');
   expect(searchResult).toContain('add-chore-form');
   expect(searchResult).toContain('If one of these already satisfies the intended purpose');
-  const contextAfterSearch = requestProxyCompletionMock.mock.calls[2]?.[0]?.context ?? '';
+  const contextAfterSearch = requestProxyCompletionMock.mock.calls[1]?.[0]?.context ?? '';
   expect(contextAfterSearch).toContain('Work ledger (recent completed/attempted tool actions; use this to avoid duplicating components/sections):');
   expect(contextAfterSearch).toContain('Searched existing components for "Add Chore form".');
   expect(contextAfterSearch).toContain('search_components(Add Chore form)');
@@ -1837,7 +1940,7 @@ hvy_version: 0.1
   });
 
   expect(result.error).toBeNull();
-  const firstToolCall = requestProxyCompletionMock.mock.calls[1]?.[0];
+  const firstToolCall = requestProxyCompletionMock.mock.calls[0]?.[0];
   expect(firstToolCall?.context).toContain('Configured db-table component targets: work_items');
   expect(firstToolCall?.context).toContain('Missing SQLite tables/views targeted by db-table components: work_items.');
   expect(firstToolCall?.context).not.toContain('SQLite tables/views available for query_db_table: work_items');
@@ -1848,7 +1951,6 @@ hvy_version: 0.1
 
 test('requestAiDocumentEditTurn can remove a section', async () => {
   requestProxyCompletionMock
-    .mockResolvedValueOnce('document')
     .mockResolvedValueOnce('{"tool":"remove_section","section_ref":"details"}')
     .mockResolvedValueOnce('{"tool":"done","summary":"Removed the extra section."}');
 

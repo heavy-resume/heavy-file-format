@@ -65,8 +65,7 @@ describe('llm-tool-loop', () => {
       ...before,
       {
         role: 'user',
-        content:
-          'The previous response was invalid and no tool was executed. Response was not valid JSON. Reply with a single JSON tool object.',
+        content: 'Return a single valid JSON tool object. Response was not valid JSON.',
       },
       {
         role: 'assistant',

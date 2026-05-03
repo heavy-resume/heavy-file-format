@@ -3,7 +3,7 @@ import { findBlockByIds } from './block-ops';
 import { findSectionByKey } from './section-ops';
 import { recordHistory } from './history';
 import { serializeDocument } from './serialization';
-import { requestAiComponentEdit } from './ai-edit';
+import { requestAiComponentEdit } from './ai-component-edit';
 
 export function openAiEditPopover(sectionKey: string, blockId: string, clientX: number, clientY: number): void {
   const { x, y } = clampAiEditPopoverPosition(clientX, clientY);

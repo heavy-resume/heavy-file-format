@@ -199,11 +199,11 @@ export function isToolCompatibleWithPlanStep(
   if (/\b(search|find)\b.*\b(existing )?components?\b/.test(normalized)) {
     return tool === 'search_components';
   }
-  if (/\bpatch\b|\bedit\b|\bmodify\b|\bupdate\b|\breplace\b/.test(normalized)) {
-    return tool === 'patch_component' || tool === 'edit_component' || tool === 'set_properties';
-  }
   if (/\bremove\b|\bdelete\b/.test(normalized)) {
     return tool === 'remove_component' || tool === 'remove_section' || tool === 'patch_component' || tool === 'edit_component';
+  }
+  if (/\bpatch\b|\bedit\b|\bmodify\b|\bupdate\b|\breplace\b/.test(normalized)) {
+    return tool === 'patch_component' || tool === 'edit_component' || tool === 'set_properties';
   }
   if (/\bcreate\b|\badd\b/.test(normalized)) {
     return tool === 'create_component' || tool === 'create_section' || tool === 'edit_component';
@@ -784,6 +784,7 @@ export function createLoopHealthState(): LoopHealthState {
     stallScore: 0,
     invalidResponses: 0,
     consecutiveSameAction: 0,
+    repeatedNoProgressActions: 0,
     lastActionKey: null,
     recoveryCount: 0,
     seenActionKeys: new Set<string>(),
@@ -821,6 +822,7 @@ export function updateLoopHealthForAction(
   madeProgress: boolean,
   threshold: number
 ): 'continue' | 'recover' | 'stop' {
+  const repeatedNoProgressAction = !madeProgress && health.seenActionKeys.has(actionKey);
   if (health.lastActionKey === actionKey) {
     health.consecutiveSameAction += 1;
     health.stallScore += health.consecutiveSameAction >= 3 ? 4 : 1;
@@ -830,11 +832,16 @@ export function updateLoopHealthForAction(
 
   health.lastActionKey = actionKey;
   if (madeProgress) {
+    health.repeatedNoProgressActions = 0;
     health.stallScore = Math.max(0, health.stallScore - 2);
   } else {
+    health.repeatedNoProgressActions = repeatedNoProgressAction ? health.repeatedNoProgressActions + 1 : 0;
     health.stallScore += 2;
   }
   health.seenActionKeys.add(actionKey);
+  if (health.repeatedNoProgressActions >= 2) {
+    return 'stop';
+  }
   if (health.consecutiveSameAction >= 5) {
     return 'stop';
   }

@@ -27,6 +27,7 @@ import {
   buildInitialDocumentEditPrompt,
   buildHeaderEditFormatInstructions,
 } from '../src/ai-document-edit-instructions';
+import { findAutoCompletedPlanStep } from '../src/ai-document-loop-state';
 import { getDocumentEditPhaseTools } from '../src/ai-document-edit-phases';
 import { deserializeDocument, serializeDocument } from '../src/serialization';
 import { initState } from '../src/state';
@@ -1133,6 +1134,42 @@ hvy_version: 0.1
   expect(finalPlan).toContain('2. [ ] Re-run grep to verify there are no remaining TypeScript mentions.');
 });
 
+test('findAutoCompletedPlanStep matches removal batches to patch steps that remove content before verification steps', () => {
+  const plan = {
+    steps: [
+      {
+        text: 'Patch component C6 to remove the TypeScript and Python xref-card entries.',
+        done: false,
+      },
+      {
+        text: 'Verify removal by grepping component C6; if any references remain, remove them.',
+        done: false,
+      },
+    ],
+  };
+  const toolCall = {
+    tool: 'batch' as const,
+    calls: [
+      {
+        tool: 'remove_component' as const,
+        component_ref: 'C6.grid[1].list[1]',
+      },
+      {
+        tool: 'remove_component' as const,
+        component_ref: 'C6.grid[1].list[2]',
+      },
+    ],
+    reason: 'Remove both language xref-card entries from C6.',
+  };
+  const toolResult = [
+    'Tool result for batch:',
+    'Call 1 remove_component: Removed component C6.grid[1].list[1].',
+    'Call 2 remove_component: Removed component C6.grid[1].list[2].',
+  ].join('\n');
+
+  expect(findAutoCompletedPlanStep(plan, toolCall, toolResult)).toBe(0);
+});
+
 test('requestAiDocumentEditTurn drops bookkeeping-only plan steps', async () => {
   queueAiToolResponses(
     '{"tool":"plan","steps":["Remove component remove-me","Mark each edit step done and finish with a summary of changes."],"reason":"Remove target."}',
@@ -1169,10 +1206,9 @@ hvy_version: 0.1
 
 test('requestAiDocumentEditTurn sends a recovery prompt when the loop stalls', async () => {
   queueAiToolResponses(
-    '{"tool":"grep","query":"Existing","max_count":1}',
-    '{"tool":"grep","query":"Existing","max_count":1}',
-    '{"tool":"grep","query":"Existing","max_count":1}',
-    '{"tool":"grep","query":"Existing","max_count":1}',
+    'not json',
+    'still not json',
+    'definitely not json',
     '{"tool":"done","summary":"Recovered."}'
   );
 
@@ -1201,6 +1237,38 @@ hvy_version: 0.1
     const messages = call[0]?.messages ?? [];
     return messages.some((message: ChatMessage) => message.content.includes('You appear to be stuck. Do not repeat the previous action.'));
   })).toBe(true);
+});
+
+test('requestAiDocumentEditTurn stops after repeated no-progress batch actions', async () => {
+  queueAiToolResponses(
+    '{"tool":"batch","calls":[{"tool":"view_component","component_ref":"summary-text"},{"tool":"view_component","component_ref":"summary-text"}],"reason":"Inspect the target."}',
+    '{"tool":"batch","calls":[{"tool":"view_component","component_ref":"summary-text"},{"tool":"view_component","component_ref":"summary-text"}],"reason":"Inspect the target again."}',
+    '{"tool":"batch","calls":[{"tool":"view_component","component_ref":"summary-text"},{"tool":"view_component","component_ref":"summary-text"}],"reason":"Inspect the target a third time."}'
+  );
+
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {"id":"summary-text"}-->
+ Existing content
+`, '.hvy');
+  seedStateForDocument(document);
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+
+  const result = await requestAiDocumentEditTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Inspect the same content repeatedly.',
+  });
+
+  expect(result.error).toBeNull();
+  expect(result.messages.at(-1)?.content).toBe('Stopped because the AI edit loop appeared stuck repeating actions without making progress. The AI can continue if you send another request.');
+  expect(requestProxyCompletionMock).toHaveBeenCalledTimes(4);
 });
 
 test('requestAiDocumentEditTurn compacts older tool-loop history into an operational summary', async () => {

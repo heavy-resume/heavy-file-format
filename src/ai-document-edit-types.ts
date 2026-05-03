@@ -172,6 +172,7 @@ export interface LoopHealthState {
   stallScore: number;
   invalidResponses: number;
   consecutiveSameAction: number;
+  repeatedNoProgressActions: number;
   lastActionKey: string | null;
   recoveryCount: number;
   seenActionKeys: Set<string>;

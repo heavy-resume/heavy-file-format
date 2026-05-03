@@ -21,7 +21,7 @@ turndown.addRule('task-list-checkbox', {
 
 turndown.addRule('underline', {
   filter: (node) => node.nodeName === 'U',
-  replacement: (content) => (content.trim().length > 0 ? `++${content}++` : ''),
+  replacement: (content) => (content.trim().length > 0 ? `___${content}___` : ''),
 });
 
 export function markdownToEditorHtml(markdown: string): string {
@@ -82,7 +82,7 @@ export function escapeRawHtml(markdown: string): string {
 }
 
 export function applyUnderlineSyntax(markdown: string): string {
-  return markdown.replace(/\+\+([^+\n](?:[^+\n]|\+(?!\+))*?)\+\+/g, '<u>$1</u>');
+  return markdown.replace(/___([^_\n](?:[^_\n]|_(?!__))*?)___/g, '<u>$1</u>');
 }
 
 export function normalizeMarkdownLists(markdown: string): string {

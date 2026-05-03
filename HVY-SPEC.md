@@ -26,7 +26,7 @@ Rule: Any valid `.md` file is valid `.hvy`.
 ### 3.1 Markdown compatibility
 
 If HVY-specific directives are absent, parse as Markdown only. `_I'm in italics_` is used for italics rather than `*`.
-HVY text also supports `++underlined++` as a constrained inline underline extension. This is not standard Markdown, but remains readable as plain text in Markdown renderers that do not implement the extension.
+HVY text also supports `___underlined___` as a constrained inline underline extension. This is not standard Markdown, but remains readable as plain text in Markdown renderers that do not implement the extension. The underline marker uses three underscores so language names such as `C++` remain plain text.
 
 When an authoring client imports a `.md` or `.markdown` file and converts it into an editable `.hvy` document, it SHOULD coerce Markdown into reusable HVY structure rather than a single opaque text blob:
 - ATX headings define section boundaries. A heading with greater depth becomes a child section of the nearest prior heading with lower depth. Markdown before the first heading goes into an "Imported Markdown" section.

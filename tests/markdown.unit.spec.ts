@@ -30,13 +30,17 @@ test('normalizes ordered checkbox lists for plan progress', () => {
 });
 
 test('escapes raw html before applying underline syntax', () => {
-  expect(applyUnderlineSyntax(escapeRawHtml('++safe++ <u>unsafe</u> <script>bad()</script>'))).toBe(
+  expect(applyUnderlineSyntax(escapeRawHtml('___safe___ <u>unsafe</u> <script>bad()</script>'))).toBe(
     '<u>safe</u> &lt;u&gt;unsafe&lt;/u&gt; &lt;script&gt;bad()&lt;/script&gt;'
   );
 });
 
 test('serializes editor underline with hvy underline syntax', () => {
-  expect(turndown.turndown('<p><u>Important</u></p>')).toBe('++Important++');
+  expect(turndown.turndown('<p><u>Important</u></p>')).toBe('___Important___');
+});
+
+test('does not treat C++ as underline syntax', () => {
+  expect(applyUnderlineSyntax('Use C++ for native modules.')).toBe('Use C++ for native modules.');
 });
 
 test('serializes editor inline code with markdown backticks', () => {

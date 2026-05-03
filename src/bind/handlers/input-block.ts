@@ -246,6 +246,11 @@ export function bindInputBlock(app: HTMLElement): void {
       return;
     }
 
+    if (target.id === 'cliInput' && target instanceof HTMLInputElement) {
+      state.cliDraft = target.value;
+      return;
+    }
+
     if (field === 'image-alt' && (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) {
       const block = resolveBlockContext(target)?.block ?? null;
       if (!block) return;

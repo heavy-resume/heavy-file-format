@@ -119,6 +119,17 @@ theme:
   <!--hvy:expandable:stub {}-->
 
    <!--hvy:text {}-->
+    cd
+
+  <!--hvy:expandable:content {}-->
+
+   <!--hvy:text {}-->
+    Change the current virtual directory
+
+ <!--hvy:expandable {}-->
+  <!--hvy:expandable:stub {}-->
+
+   <!--hvy:text {}-->
     sed
 
   <!--hvy:expandable:content {}-->

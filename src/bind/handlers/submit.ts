@@ -1,4 +1,4 @@
-import { state, getRenderApp, recordHistory, serializeDocument, appendUserChatMessage, requestChatTurn, requestDocumentEditChatTurn, submitAiEditRequest } from './_imports';
+import { state, getRenderApp, getRefreshReaderPanels, recordHistory, serializeDocument, appendUserChatMessage, requestChatTurn, requestDocumentEditChatTurn, submitAiEditRequest, submitCliCommand } from './_imports';
 
 export function bindSubmit(app: HTMLElement): void {
   app.addEventListener('submit', async (event) => {
@@ -146,6 +146,20 @@ export function bindSubmit(app: HTMLElement): void {
     if (form?.id === 'aiEditComposer') {
       event.preventDefault();
       await submitAiEditRequest();
+    }
+
+    if (form?.id === 'cliComposer') {
+      event.preventDefault();
+      submitCliCommand({
+        state,
+        command: state.cliDraft,
+        recordHistory,
+        refreshReaderPanels: getRefreshReaderPanels(),
+      });
+      state.rawEditorText = serializeDocument(state.document);
+      state.rawEditorError = null;
+      state.rawEditorDiagnostics = [];
+      getRenderApp()();
     }
   });
 }

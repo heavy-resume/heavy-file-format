@@ -21,6 +21,7 @@ export { openAiEditPopover, closeAiEditPopover, submitAiEditRequest } from '../.
 export { handleInlineCheckboxBackspace } from '../../editor/inline-checkbox';
 export { getRawEditorDiagnostics } from '../../raw-editor-diagnostics';
 export { applyImagePreset, handleImageUpload } from '../../editor/components/image/image';
+export { submitCliCommand } from '../../cli-ui/submit';
 
 import { getTagState, setTagState, getTagRenderOptions } from '../../block-ops';
 export const tagStateHelpers = {

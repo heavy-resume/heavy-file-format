@@ -34,7 +34,9 @@ const closeAiEdit: AppActionHandler = () => {
 };
 
 const setEditorMode: AppActionHandler = ({ actionButton }) => {
-  const editorMode = actionButton.dataset.editorMode === 'raw'
+  const editorMode = actionButton.dataset.editorMode === 'cli'
+    ? 'cli'
+    : actionButton.dataset.editorMode === 'raw'
     ? 'raw'
     : actionButton.dataset.editorMode === 'advanced'
     ? 'advanced'

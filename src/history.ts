@@ -148,7 +148,7 @@ function restoreFromSnapshot(snapshot: string): void {
       document: VisualDocument;
       templateValues: Record<string, string>;
       filename: string;
-      editorMode?: 'basic' | 'advanced' | 'raw';
+      editorMode?: 'basic' | 'advanced' | 'raw' | 'cli';
       showAdvancedEditor?: boolean;
       rawEditorText?: string;
       rawEditorError?: string | null;

@@ -1,0 +1,64 @@
+.cli-shell {
+  height: 100%;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 0.75rem;
+}
+
+.cli-output {
+  min-height: 0;
+  overflow: auto;
+  padding: 0.85rem;
+  border: 1px solid var(--hvy-border-alt);
+  border-radius: 8px;
+  background: var(--hvy-code-bg);
+  color: var(--hvy-code-text);
+  font: 13px/1.5 "JetBrains Mono", "Fira Code", monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.cli-line {
+  margin: 0 0 0.65rem;
+}
+
+.cli-line:last-child {
+  margin-bottom: 0;
+}
+
+.cli-prompt {
+  color: var(--hvy-code-muted);
+}
+
+.cli-error {
+  color: var(--hvy-danger);
+}
+
+.cli-form {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 0.5rem;
+  align-items: center;
+  padding: 0.55rem;
+  border: 1px solid var(--hvy-border-input);
+  border-radius: 8px;
+  background: var(--hvy-surface);
+}
+
+.cli-form code {
+  color: var(--hvy-text-alt);
+}
+
+.cli-input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--hvy-text);
+  font: 13px/1.5 "JetBrains Mono", "Fira Code", monospace;
+}
+
+.cli-input:focus {
+  outline: none;
+}

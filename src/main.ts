@@ -7,6 +7,7 @@ import bundledExampleHvyUrl from '../examples/example.hvy?url';
 import { createEditorRenderer, type EditorRenderer } from './editor/render';
 import { createReaderRenderer, type ReaderRenderer } from './reader/render';
 import { getTemplateFields, renderTemplatePanel } from './editor/template';
+import { renderCliView } from './cli-ui/render';
 
 import { state, initState, initCallbacks, incrementRenderCount, incrementRefreshReaderCount } from './state';
 import type { AppState } from './types';
@@ -76,6 +77,9 @@ function createInitialState(document: ReturnType<typeof deserializeDocumentBytes
     rawEditorText: serializeDocument(document),
     rawEditorError: null,
     rawEditorDiagnostics: [],
+    cliDraft: '',
+    cliSession: { cwd: '/' },
+    cliHistory: [],
     activeEditorBlock: null,
     componentPlacement: null,
     pendingEditorActivation: null,
@@ -361,6 +365,7 @@ function renderApp(): void {
   const isAiView = state.currentView === 'ai';
   const isAdvancedEditor = state.editorMode === 'advanced';
   const isRawEditor = state.editorMode === 'raw';
+  const isCliEditor = state.editorMode === 'cli';
 
   stepStartedAt = performance.now();
   const templateFields = getTemplateFields(state.document.meta);
@@ -401,6 +406,7 @@ function renderApp(): void {
                   <button type="button" class="${state.editorMode === 'basic' ? 'secondary' : 'ghost'}" data-action="set-editor-mode" data-editor-mode="basic">Basic</button>
                   <button type="button" class="${isAdvancedEditor ? 'secondary' : 'ghost'}" data-action="set-editor-mode" data-editor-mode="advanced">Advanced</button>
                   <button type="button" class="${isRawEditor ? 'secondary' : 'ghost'}" data-action="set-editor-mode" data-editor-mode="raw">Raw</button>
+                  <button type="button" class="${isCliEditor ? 'secondary' : 'ghost'}" data-action="set-editor-mode" data-editor-mode="cli">CLI</button>
                   ${
                     isAdvancedEditor
                       ? `<button type="button" class="${state.metaPanelOpen ? 'secondary' : 'ghost'}" data-action="toggle-document-meta">Document Meta</button>`
@@ -443,6 +449,14 @@ function renderApp(): void {
                        }
                        <textarea id="rawEditor" class="raw-editor-textarea" data-field="raw-editor-text" spellcheck="false">${escapeHtml(state.rawEditorText)}</textarea>
                      </div>`
+                  : isCliEditor
+                  ? renderCliView({
+                      cwd: state.cliSession.cwd,
+                      draft: state.cliDraft,
+                      history: state.cliHistory,
+                      escapeHtml,
+                      escapeAttr,
+                    })
                   : `${isAdvancedEditor ? renderTemplatePanel(templateFields, state.templateValues, { escapeAttr, escapeHtml }) : ''}
                 ${isAdvancedEditor && state.metaPanelOpen ? editorRenderer.renderMetaPanel() : ''}
                 <div class="editor-shell ${state.editorSidebarOpen ? 'is-sidebar-open' : 'is-sidebar-closed'}">

@@ -1314,8 +1314,35 @@ export async function executeDbTableWriteSql(sql: string): Promise<string> {
   const db = await getLoadedDatabase();
   db.run(trimmed);
   const changes = Number(db.exec('SELECT changes()')[0]?.values[0]?.[0] ?? 0);
+  const schemaSummary = summarizeRuntimeDatabaseSchema(db);
   await persistRuntimeDatabase();
-  return `Executed: ${trimmed}\nRows affected: ${changes}`;
+  return [`Executed: ${trimmed}`, `Rows affected: ${changes}`, '', schemaSummary].join('\n');
+}
+
+function summarizeRuntimeDatabaseSchema(db: SqlJsDatabase): string {
+  const objectRows = db.exec(
+    "SELECT name, type FROM sqlite_schema WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%' AND name != ? ORDER BY name",
+    [SQLITE_ROW_COMPONENTS_TABLE]
+  )[0]?.values ?? [];
+  const objects = objectRows
+    .map((row) => ({
+      name: String(row[0] ?? '').trim(),
+      type: String(row[1] ?? '').trim(),
+    }))
+    .filter((object) => object.name.length > 0);
+  if (objects.length === 0) {
+    return 'SQLite schema now:\n(none)';
+  }
+  const lines = objects.map((object) => {
+    const columns = getTableColumns(db, object.name);
+    const columnSummary = columns.length > 0 ? columns.join(', ') : '(no columns)';
+    return `- ${object.name} (${object.type}): ${columnSummary}`;
+  });
+  return [
+    `Available SQLite tables/views: ${objects.map((object) => object.name).join(', ')}`,
+    'SQLite schema now:',
+    ...lines,
+  ].join('\n');
 }
 
 function normalizeScriptingSqlParams(params: unknown): SqliteBindParams {

@@ -64,8 +64,18 @@ export function getDocumentEditPhaseTools(phase: DocumentEditPhase, options?: { 
       ];
       return tools.filter((tool, index) => tools.indexOf(tool) === index);
     }
-    case 'repair':
-      return ['view_component', 'patch_component', 'edit_component', 'remove_component', 'get_help', 'done'];
+    case 'repair': {
+      const tools: DocumentEditToolName[] = [
+        optionalTools.has('query_db_table') ? 'query_db_table' : 'view_component',
+        'view_component',
+        'patch_component',
+        'edit_component',
+        'remove_component',
+        'get_help',
+        'done',
+      ];
+      return tools.filter((tool, index) => tools.indexOf(tool) === index);
+    }
     case 'verification':
       return ['grep', 'view_component', 'view_rendered_component', 'request_rendered_structure', 'mark_step_done', 'done'];
     case 'removal':

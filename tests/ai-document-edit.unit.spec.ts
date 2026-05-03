@@ -29,8 +29,9 @@ import {
 } from '../src/ai-document-edit-instructions';
 import { autoUpdatePlanAndWorkNote, createInitialWorkNote, findAutoCompletedPlanStep, recordWorkLedgerItem } from '../src/ai-document-loop-state';
 import { getDocumentEditPhaseTools } from '../src/ai-document-edit-phases';
+import { parseDocumentEditToolRequest } from '../src/ai-document-tool-parsing';
 import { deserializeDocument, serializeDocument } from '../src/serialization';
-import { initState } from '../src/state';
+import { initCallbacks, initState } from '../src/state';
 import type { ChatMessage, ChatSettings } from '../src/types';
 import { dbTablePluginRegistration } from '../src/plugins/db-table-plugin';
 import { formPluginRegistration } from '../src/plugins/form';
@@ -40,6 +41,13 @@ beforeEach(() => {
   requestProxyCompletionMock.mockReset();
   requestAiComponentEditMock.mockReset();
   traceAgentLoopEventMock.mockReset();
+  initCallbacks({
+    renderApp: () => {},
+    refreshReaderPanels: () => {},
+    refreshModalPreview: () => {},
+    componentRenderHelpers: null,
+    readerRenderer: null,
+  });
   setHostPlugins([]);
 });
 
@@ -175,6 +183,15 @@ test('buildDocumentEditFormatInstructions documents the tool protocol', () => {
     'view_component',
     'done',
   ]);
+  expect(getDocumentEditPhaseTools('repair', { optionalTools: ['query_db_table'] })).toEqual([
+    'query_db_table',
+    'view_component',
+    'patch_component',
+    'edit_component',
+    'remove_component',
+    'get_help',
+    'done',
+  ]);
 
   const instructions = buildDocumentEditFormatInstructions({
     pluginHints: [
@@ -279,6 +296,41 @@ test('buildDocumentEditFormatInstructions documents the tool protocol', () => {
   expect(headerInstructions).toContain('{"tool":"answer","answer":"Direct answer to the user."}');
   expect(headerInstructions).toContain('section_defaults:\\n  css:');
   expect(headerInstructions).toContain('{"tool":"patch_header","edits":[{"op":"replace","start_line":2,"end_line":2,"text":"title: New title"}],"reason":"optional"}');
+});
+
+test('parseDocumentEditToolRequest accepts table as a query_db_table table_name alias', () => {
+  const parsed = parseDocumentEditToolRequest('{"tool":"query_db_table","table":"chores","limit":3}');
+
+  expect(parsed.ok).toBe(true);
+  if (parsed.ok && parsed.value.tool === 'query_db_table') {
+    expect(parsed.value.table_name).toBe('chores');
+    expect(parsed.value.limit).toBe(3);
+  }
+});
+
+test('requestAiDocumentEditTurn returns a compact schema summary after execute_sql writes', async () => {
+  setHostPlugins([dbTablePluginRegistration]);
+  queueAiToolResponses(
+    '{"tool":"execute_sql","sql":"CREATE TABLE chores (id INTEGER PRIMARY KEY, title TEXT NOT NULL)","reason":"Create the chores table."}',
+    '{"tool":"done","summary":"Created chores table."}'
+  );
+  const document = deserializeDocument('---\nhvy_version: 0.1\n---\n', '.hvy');
+  seedStateForDocument(document);
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+
+  const result = await requestAiDocumentEditTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Create a database table for chores.',
+  });
+
+  expect(result.error).toBeNull();
+  const writeResult = lastToolResultBeforeCall(1);
+  expect(writeResult).toContain('Rows affected: 0');
+  expect(writeResult).toContain('Available SQLite tables/views: chores');
+  expect(writeResult).toContain('SQLite schema now:');
+  expect(writeResult).toContain('- chores (table): id, title');
 });
 
 test('summarizeHeaderStructure shows metadata and reusable definitions', () => {
@@ -1200,6 +1252,32 @@ test('autoUpdatePlanAndWorkNote completes steps from the tool reason when the to
   expect(plan.steps[0]?.summary).toBe('Create DB schema: tables for family_members, chores, chore_assignments with completed flag and completed_at timestamp');
   expect(plan.steps[1]?.done).toBe(false);
   expect(result.workNote.done).toContain('Create DB schema: tables for family_members, chores, chore_assignments with completed flag and completed_at timestamp');
+});
+
+test('findAutoCompletedPlanStep does not complete UI section steps from SQL view creation', () => {
+  const plan = {
+    steps: [
+      {
+        text: 'Create a view or query approach for the leaderboard (completions in last 7 days per member)',
+        done: false,
+      },
+      {
+        text: 'Create section Leaderboard Past 7 Days with a db-table showing completions ranked by family member',
+        done: false,
+      },
+    ],
+  };
+  const toolCall = {
+    tool: 'execute_sql' as const,
+    sql: 'CREATE VIEW IF NOT EXISTS leaderboard_7days AS SELECT member_id, COUNT(*) AS completions FROM chore_completions GROUP BY member_id;',
+  };
+  const toolResult = [
+    'Tool result for execute_sql:',
+    'Executed: CREATE VIEW IF NOT EXISTS leaderboard_7days AS SELECT member_id, COUNT(*) AS completions FROM chore_completions GROUP BY member_id',
+    'Rows affected: 0',
+  ].join('\n');
+
+  expect(findAutoCompletedPlanStep(plan, toolCall, toolResult)).toBe(0);
 });
 
 test('recordWorkLedgerItem records successful declared work instead of only the raw tool type', () => {

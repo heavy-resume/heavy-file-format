@@ -329,21 +329,26 @@ export function parseDocumentEditToolRequest(source: string): { ok: true; value:
         },
       };
     }
+    const parsedDbTableName = typeof parsed.table_name === 'string'
+      ? parsed.table_name
+      : typeof parsed.table === 'string'
+        ? parsed.table
+        : undefined;
     if (
       tool === 'query_db_table' &&
       (
-        typeof parsed.table_name === 'string'
+        typeof parsedDbTableName === 'string'
         || typeof parsed.query === 'string'
       )
     ) {
-      if (typeof parsed.query === 'string' && parsed.query.trim().length === 0 && typeof parsed.table_name !== 'string') {
+      if (typeof parsed.query === 'string' && parsed.query.trim().length === 0 && typeof parsedDbTableName !== 'string') {
         return { ok: false, message: 'query_db_table requires table_name or a non-empty query.' };
       }
       return {
         ok: true,
         value: {
           tool,
-          table_name: typeof parsed.table_name === 'string' ? parsed.table_name : undefined,
+          table_name: parsedDbTableName,
           query: typeof parsed.query === 'string' ? parsed.query : undefined,
           limit: Number.isInteger(parsed.limit) ? Number(parsed.limit) : undefined,
           reason: typeof parsed.reason === 'string' ? parsed.reason : undefined,

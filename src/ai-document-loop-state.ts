@@ -201,6 +201,9 @@ export function isToolCompatibleWithPlanStep(
     return tool === 'search_components';
   }
   if (tool === 'execute_sql') {
+    if (/\b(section|component|form|plugin|card|grid|layout|css)\b/.test(normalized)) {
+      return false;
+    }
     return /\b(db|database|sqlite|sql|schema|table|tables|view|views|insert|seed|populate|create|update|delete|write)\b/.test(normalized);
   }
   if (tool === 'query_db_table') {

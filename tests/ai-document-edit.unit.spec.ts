@@ -189,11 +189,15 @@ test('buildDocumentEditFormatInstructions documents the tool protocol', () => {
   expect(instructions).not.toContain('Tool shapes:');
   expect(instructions).not.toContain('{"tool":"answer","answer":"Direct answer to the user."}');
   expect(instructions).toContain('Tool help topics include `tool:patch_component`, `tool:remove_component`');
+  expect(instructions).toContain('inspect first when targets are unclear');
+  expect(instructions).toContain('Do not make initial discovery actions like grep/search/help/view into plan steps');
   expect(instructions).toContain('Before creating a component that may already exist, use `search_components`');
   expect(instructions).toContain('It may revise that component in place or fully replace it');
   expect(instructions).toContain('Use real section ids when a section has an id.');
+  expect(instructions).toContain('nested target refs such as `C6.grid[1].list[2]`');
   expect(instructions).toContain('Use `grep` to search the serialized document.');
   expect(instructions).toContain('Use `get_help` with topics like `tool:patch_component`, `plugin:PLUGIN_ID`');
+  expect(buildInitialDocumentEditPrompt('Update the document.')).toContain('if edit targets are unclear, inspect/search first');
   expect(buildInitialDocumentEditPrompt('Update the document.')).toContain('You have at most 50 tool steps.');
   expect(instructions).toContain('defaults to lines 1-200');
   expect(instructions).toContain('Use `request_rendered_structure` to inspect what visible components render');
@@ -216,7 +220,7 @@ test('buildDocumentEditFormatInstructions documents the tool protocol', () => {
   });
   expect(dbPluginInstructions).toContain('`query_db_table`, `execute_sql`');
   expect(dbPluginInstructions).toContain('Use `execute_sql` to create or update attached SQLite schema/data before adding db-table components that depend on it.');
-  expect(dbPluginInstructions).toContain('Each plan step should be small enough to complete with one focused tool action or one verification pass.');
+  expect(dbPluginInstructions).toContain('Each plan step should be small enough to complete with one focused change tool action or one final verification pass.');
   expect(dbPluginInstructions).toContain('model real entities as shared tables and use joins or SQL views for derived displays');
   expect(dbPluginInstructions).toContain('not one table per person or display column');
   expect(dbPluginInstructions).toContain('Treat pluginConfig.source as storage selection, not a schema fix.');
@@ -618,6 +622,58 @@ test('requestAiDocumentEditTurn can view an explicit nested id hidden from the r
   expect(viewResult).toContain('TypeScript');
 });
 
+test('requestAiDocumentEditTurn can view a grid slot by id and exposes nested target refs', async () => {
+  queueAiToolResponses(
+    '{"tool":"view_component","component_ref":"top-tools-technologies","reason":"Inspect the top tools grid cell."}',
+    '{"tool":"done","summary":"Inspected top tools grid cell."}'
+  );
+
+  const input = readFileSync(new URL('./fixtures/resume-structure-input.hvy', import.meta.url), 'utf8');
+  seedStateForParsing();
+  const document = deserializeDocument(input, '.hvy');
+  seedStateForDocument(document);
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+
+  const result = await requestAiDocumentEditTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Inspect the top tools grid cell.',
+  });
+
+  expect(result.error).toBeNull();
+  const viewResult = lastToolResultBeforeCall(1);
+  expect(viewResult).toContain('Component type: component-list');
+  expect(viewResult).toContain('Component location: section "Top Skills, Tools, and Technologies"');
+  expect(viewResult).toContain('grid cell 1 (top-tools-technologies)');
+  expect(viewResult).toContain('Nested target refs: top-tools-technologies.list[0], top-tools-technologies.list[1]');
+  expect(viewResult).toContain('TypeScript');
+});
+
+test('requestAiDocumentEditTurn accepts component_id aliases for component tools', async () => {
+  queueAiToolResponses(
+    '{"tool":"view_component","component_id":"top-tools-technologies","reason":"Inspect the top tools grid cell."}',
+    '{"tool":"done","summary":"Inspected top tools grid cell."}'
+  );
+
+  const input = readFileSync(new URL('./fixtures/resume-structure-input.hvy', import.meta.url), 'utf8');
+  seedStateForParsing();
+  const document = deserializeDocument(input, '.hvy');
+  seedStateForDocument(document);
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+
+  const result = await requestAiDocumentEditTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Inspect the top tools grid cell.',
+  });
+
+  expect(result.error).toBeNull();
+  expect(lastToolResultBeforeCall(1)).toContain('Component location: section "Top Skills, Tools, and Technologies"');
+  expect(lastToolResultBeforeCall(1)).toContain('grid cell 1 (top-tools-technologies)');
+});
+
 test('requestAiDocumentEditTurn can remove an explicit nested component id directly', async () => {
   queueAiToolResponses(
     '{"tool":"remove_component","component_ref":"tool-typescript","reason":"Remove the programming language item."}',
@@ -643,6 +699,115 @@ test('requestAiDocumentEditTurn can remove an explicit nested component id direc
   expect(serialized).toContain('id":"tool-python"');
   expect(lastToolResultBeforeCall(1)).toContain('Removed component tool-typescript');
   expect(lastToolResultBeforeCall(1)).toContain('Tools & Technologies');
+});
+
+test('requestAiDocumentEditTurn auto-marks a completed plan step after a successful tool action', async () => {
+  queueAiToolResponses(
+    '{"tool":"plan","steps":["Remove component remove-me"],"reason":"Remove the target component."}',
+    '{"tool":"remove_component","component_ref":"remove-me","reason":"Remove component remove-me."}'
+  );
+
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {"id":"remove-me"}-->
+ Remove this
+`, '.hvy');
+  seedStateForDocument(document);
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+  const onProgress = vi.fn();
+
+  const result = await requestAiDocumentEditTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Remove the target component.',
+    onProgress,
+  });
+
+  expect(result.error).toBeNull();
+  expect(serializeDocument(document)).not.toContain('remove-me');
+  const progressContents = onProgress.mock.calls.map((call) => (call[0] as ChatMessage).content).join('\n');
+  expect(progressContents).toContain('1. [x] Remove component remove-me');
+  expect(progressContents).toContain('Completed all plan steps.');
+  expect(requestProxyCompletionMock).toHaveBeenCalledTimes(3);
+});
+
+test('requestAiDocumentEditTurn only auto-marks plan steps for compatible tool actions', async () => {
+  queueAiToolResponses(
+    '{"tool":"plan","steps":["Run grep across the serialized document for TypeScript.","Re-run grep to verify there are no remaining TypeScript mentions."],"reason":"Find language mentions."}',
+    '{"tool":"get_help","topic":"tool:grep"}',
+    '{"tool":"grep","query":"TypeScript","flags":"i","reason":"Search document for TypeScript mentions."}',
+    '{"tool":"done","summary":"Stopped after initial grep."}'
+  );
+
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {"id":"summary-text"}-->
+ TypeScript
+`, '.hvy');
+  seedStateForDocument(document);
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+  const onProgress = vi.fn();
+
+  const result = await requestAiDocumentEditTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Remove programming language references.',
+    onProgress,
+  });
+
+  expect(result.error).toBeNull();
+  const progressContents = onProgress.mock.calls.map((call) => (call[0] as ChatMessage).content);
+  const afterHelpPlan = progressContents.find((content) => content.includes('Fetched help for tool:grep'));
+  expect(afterHelpPlan).toBeUndefined();
+  const finalPlan = progressContents.filter((content) => content.startsWith('Plan progress:')).at(-1) ?? '';
+  expect(finalPlan).toContain('1. [x] Run grep across the serialized document for TypeScript.');
+  expect(finalPlan).toContain('2. [ ] Re-run grep to verify there are no remaining TypeScript mentions.');
+});
+
+test('requestAiDocumentEditTurn drops bookkeeping-only plan steps', async () => {
+  queueAiToolResponses(
+    '{"tool":"plan","steps":["Remove component remove-me","Mark each edit step done and finish with a summary of changes."],"reason":"Remove target."}',
+    '{"tool":"done","summary":"Stopped after planning."}'
+  );
+
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {"id":"remove-me"}-->
+ Remove this
+`, '.hvy');
+  seedStateForDocument(document);
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+  const onProgress = vi.fn();
+
+  const result = await requestAiDocumentEditTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Remove the target component.',
+    onProgress,
+  });
+
+  expect(result.error).toBeNull();
+  const progressContents = onProgress.mock.calls.map((call) => (call[0] as ChatMessage).content).join('\n');
+  expect(progressContents).toContain('1. [ ] Remove component remove-me');
+  expect(progressContents).not.toContain('Mark each edit step done');
 });
 
 test('requestAiDocumentEditTurn sends a recovery prompt when the loop stalls', async () => {
@@ -1051,7 +1216,7 @@ hvy_version: 0.1
 
   expect(result.error).toBeNull();
   const progressContents = onProgress.mock.calls.map((call) => (call[0] as ChatMessage).content);
-  expect(progressContents).toContain('Tool failed: patch_component produced invalid nested HVY. Retrying with a narrower component target or remove_component is usually safer.');
+  expect(progressContents).toContain('Tool failed: Patch failed because the HVY fragment was invalid; retrying with a smaller edit.');
   expect(progressContents.join('\n')).not.toContain('An expandable needs a stub slot');
   const retryPacket = lastToolResultBeforeCall(1);
   expect(retryPacket).toContain('Repair only this malformed HVY payload. Do not reread the whole document.');
@@ -1061,6 +1226,65 @@ hvy_version: 0.1
   expect(retryPacket).toContain('Reference example:');
   expect(retryPacket).toContain('"tool":"patch_component"');
   expect(retryPacket).not.toContain('Reduced outline context');
+});
+
+test('requestAiDocumentEditTurn preserves indentation for local nested component patches', async () => {
+  queueAiToolResponses(
+    '{"tool":"patch_component","component_ref":"items","edits":[{"op":"replace","start_line":4,"end_line":4,"text":"<!--hvy:xref-card {\\"xrefTitle\\":\\"OpenAI API\\",\\"xrefDetail\\":\\"Model integration\\",\\"xrefTarget\\":\\"tool-openai-api\\"}-->"}]}',
+    '{"tool":"done","summary":"Updated nested card."}'
+  );
+
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:component-list {"id":"items","componentListComponent":"xref-card"}-->
+
+ <!--hvy:component-list:0 {}-->
+
+  <!--hvy:xref-card {"xrefTitle":"TypeScript","xrefDetail":"Primary application language","xrefTarget":"tool-typescript"}-->
+`, '.hvy');
+  seedStateForDocument(document);
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+
+  const result = await requestAiDocumentEditTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Replace the TypeScript card.',
+  });
+
+  expect(result.error).toBeNull();
+  const serialized = serializeDocument(document);
+  expect(serialized).toContain('xrefTitle":"OpenAI API"');
+  expect(serialized).not.toContain('TypeScript');
+});
+
+test('requestAiDocumentEditTurn patches custom component fragments with document component defs', async () => {
+  queueAiToolResponses(
+    '{"tool":"patch_component","component_ref":"tool-typescript","edits":[{"op":"replace","start_line":5,"end_line":5,"text":"    Programming systems"}],"reason":"Replace the visible label."}',
+    '{"tool":"done","summary":"Updated custom component label."}'
+  );
+
+  const input = readFileSync(new URL('./fixtures/resume-structure-input.hvy', import.meta.url), 'utf8');
+  seedStateForParsing();
+  const document = deserializeDocument(input, '.hvy');
+  seedStateForDocument(document);
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+
+  const result = await requestAiDocumentEditTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Rename the TypeScript tool label.',
+  });
+
+  expect(result.error).toBeNull();
+  const serialized = serializeDocument(document);
+  expect(serialized).toContain('Programming systems');
 });
 
 test('requestAiDocumentEditTurn returns focused repair context for malformed create_component HVY', async () => {
@@ -1093,7 +1317,7 @@ hvy_version: 0.1
 
   expect(result.error).toBeNull();
   const progressContents = onProgress.mock.calls.map((call) => (call[0] as ChatMessage).content);
-  expect(progressContents.join('\n')).toContain('Tool failed: create_component.hvy must contain exactly one valid HVY component.');
+  expect(progressContents.join('\n')).toContain('Tool failed: Create component failed because the HVY fragment was invalid; retrying with corrected HVY.');
   expect(progressContents.join('\n')).not.toContain('Section "AI Response"');
   const retryPacket = lastToolResultBeforeCall(1);
   expect(retryPacket).toContain('Repair only this malformed HVY payload. Do not reread the whole document.');

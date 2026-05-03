@@ -7,6 +7,7 @@ import {
   wrapHvyFragmentAsDocument,
 } from './serialization';
 import type { VisualBlock } from './editor/types';
+import type { JsonObject } from './hvy/types';
 import type { ChatMessage, ChatSettings, RawEditorDiagnostic, VisualDocument } from './types';
 import {
   buildAiEditContext,
@@ -134,7 +135,7 @@ export function sanitizeAiEditOutput(source: string): string {
   return fencedMatch ? fencedMatch[1].trim() : trimmed;
 }
 
-export function parseAiBlockEditResponse(source: string): AiEditParsedResponse {
+export function parseAiBlockEditResponse(source: string, meta?: JsonObject): AiEditParsedResponse {
   const cleaned = sanitizeAiEditOutput(source);
   const earlyIssues: RawEditorDiagnostic[] = [];
   if (/^\s*<!--\s*hvy:form\b/i.test(cleaned)) {
@@ -145,7 +146,7 @@ export function parseAiBlockEditResponse(source: string): AiEditParsedResponse {
     });
   }
   const { document, diagnostics } = deserializeDocumentWithDiagnostics(
-    wrapHvyFragmentAsDocument(cleaned, { sectionId: 'ai-response', title: 'AI Response' }),
+    wrapHvyFragmentAsDocument(cleaned, { sectionId: 'ai-response', title: 'AI Response', meta }),
     '.hvy'
   );
   const [section] = document.sections;

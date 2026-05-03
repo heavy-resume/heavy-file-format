@@ -675,7 +675,13 @@ function summarizeTracePayload(event: TraceEvent): string {
     return `provider=${provider} model=${String(request.model ?? '')}`;
   }
   if (event.type === 'provider_response') {
-    return `provider=${String(payload.provider ?? '')} ok=${String(payload.ok ?? '')} status=${String(payload.status ?? '')}`;
+    const usage = summarizeProviderTokenUsage(payload.payload);
+    return [
+      `provider=${String(payload.provider ?? '')}`,
+      `ok=${String(payload.ok ?? '')}`,
+      `status=${String(payload.status ?? '')}`,
+      usage,
+    ].filter(Boolean).join(' ');
   }
   if (event.type === 'error') {
     return String(payload.message ?? payload.error ?? JSON.stringify(payload));
@@ -689,6 +695,36 @@ function summarizeTracePayload(event: TraceEvent): string {
       .join(' ');
   }
   return truncateTraceText(JSON.stringify(payload), 240);
+}
+
+function summarizeProviderTokenUsage(payload: unknown): string {
+  if (!payload || typeof payload !== 'object') {
+    return '';
+  }
+  const usage = (payload as { usage?: unknown }).usage;
+  if (!usage || typeof usage !== 'object') {
+    return '';
+  }
+  const record = usage as Record<string, unknown>;
+  const inputTokens = readNumber(record.input_tokens) ?? readNumber(record.prompt_tokens);
+  const outputTokens = readNumber(record.output_tokens) ?? readNumber(record.completion_tokens);
+  const totalTokens = readNumber(record.total_tokens) ?? (typeof inputTokens === 'number' && typeof outputTokens === 'number' ? inputTokens + outputTokens : undefined);
+  const cachedTokens = readNumber((record.input_tokens_details as Record<string, unknown> | undefined)?.cached_tokens)
+    ?? readNumber((record.cache_read_input_tokens as Record<string, unknown> | undefined)?.cached_tokens)
+    ?? readNumber(record.cache_read_input_tokens);
+  const reasoningTokens = readNumber((record.output_tokens_details as Record<string, unknown> | undefined)?.reasoning_tokens);
+  const parts = [
+    typeof inputTokens === 'number' ? `input_tokens=${inputTokens}` : '',
+    typeof outputTokens === 'number' ? `output_tokens=${outputTokens}` : '',
+    typeof totalTokens === 'number' ? `total_tokens=${totalTokens}` : '',
+    typeof cachedTokens === 'number' ? `cached_tokens=${cachedTokens}` : '',
+    typeof reasoningTokens === 'number' ? `reasoning_tokens=${reasoningTokens}` : '',
+  ].filter(Boolean);
+  return parts.length > 0 ? `usage=${parts.join(',')}` : '';
+}
+
+function readNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
 function truncateTraceText(value: string, maxLength: number): string {

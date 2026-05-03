@@ -238,6 +238,37 @@ test('formatTraceTextEvent writes readable work ledger lines', () => {
   expect(line).toBe('[2026-05-02T12:00:00.000Z] run-1 document-edit work_ledger :: did=Read database table assignments. action=query_db_table(assignments) intent=Inspect assignments table.\n');
 });
 
+test('formatTraceTextEvent writes provider token usage', () => {
+  const line = formatTraceTextEvent(
+    {
+      runId: 'run-1',
+      phase: 'document-edit',
+      type: 'provider_response',
+      payload: {
+        provider: 'openai',
+        ok: true,
+        status: 200,
+        payload: {
+          usage: {
+            input_tokens: 100,
+            output_tokens: 25,
+            total_tokens: 125,
+            input_tokens_details: {
+              cached_tokens: 40,
+            },
+            output_tokens_details: {
+              reasoning_tokens: 10,
+            },
+          },
+        },
+      },
+    },
+    new Date('2026-05-02T12:00:00.000Z')
+  );
+
+  expect(line).toBe('[2026-05-02T12:00:00.000Z] run-1 document-edit provider_response :: provider=openai ok=true status=200 usage=input_tokens=100,output_tokens=25,total_tokens=125,cached_tokens=40,reasoning_tokens=10\n');
+});
+
 test('buildOpenAiProxyRequest does not send trace run ids upstream', () => {
   const openAiRequest = buildOpenAiProxyRequest({
     ...request,

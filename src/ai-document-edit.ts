@@ -93,6 +93,7 @@ interface ComponentRefEntry {
   target: string;
   parentChain: string[];
   hiddenFromSummary: boolean;
+  generated: boolean;
 }
 
 interface DocumentStructureSnapshot {
@@ -107,6 +108,14 @@ interface WorkLedgerItem {
   intent: string;
   summary: string;
   result: string;
+}
+
+interface WorkNoteState {
+  goal: string;
+  done: string[];
+  currentFocus: string;
+  remaining: string[];
+  cautions: string[];
 }
 
 interface HvyRepairToolContext {
@@ -436,6 +445,7 @@ async function runDocumentEditToolLoop(params: {
   let recentToolHelp: string | null = null;
   const workLedger: WorkLedgerItem[] = [];
   let latestIntent = params.request;
+  let workNote: WorkNoteState = createInitialWorkNote(params.request);
   let plan: EditPlanState | null = null;
   const health = createLoopHealthState();
   let conversation: ChatMessage[] = [
@@ -458,7 +468,7 @@ async function runDocumentEditToolLoop(params: {
     const response = await requestProxyCompletion({
       settings: params.settings,
       messages: conversation,
-      context: buildLoopContext(contextSummary, plan, recentToolHelp, workLedger, buildIntentRecall(latestIntent, snapshot, params.document)),
+      context: buildLoopContext(contextSummary, plan, recentToolHelp, workLedger, buildIntentRecall(latestIntent, snapshot, params.document), workNote),
       formatInstructions: buildDocumentEditFormatInstructions({
         dbTableNames: dbObjectNames,
         pluginHints,
@@ -518,7 +528,8 @@ async function runDocumentEditToolLoop(params: {
           formatPlanState(plan),
         ].join('\n'));
       } else {
-        plan = { steps: parsed.value.steps.map((step) => ({ text: step, done: false })) };
+        plan = { steps: normalizePlanSteps(parsed.value.steps).map((step) => ({ text: step, done: false })) };
+        workNote = updateWorkNoteRemaining(workNote, plan);
         rewardLoopHealthForPlanCreated(health, plan);
         toolResult = buildToolResult('plan', formatPlanState(plan));
         params.onProgress?.(formatPlanState(plan));
@@ -526,6 +537,8 @@ async function runDocumentEditToolLoop(params: {
     } else if (parsed.value.tool === 'mark_step_done') {
       const result = markPlanStepDone(plan, parsed.value.step, parsed.value.summary);
       if (result.changed) {
+        workNote = recordWorkNoteDone(workNote, result.summary || parsed.value.summary || `Plan step ${parsed.value.step}`);
+        workNote = updateWorkNoteRemaining(workNote, plan);
         if (plan) {
           params.onProgress?.(formatPlanState(plan));
         }
@@ -683,7 +696,21 @@ async function runDocumentEditToolLoop(params: {
       }
       params.onProgress?.(formatDocumentToolFailureForProgress(error));
       toolResult = buildToolResult(parsed.value.tool, formatDocumentToolFailure(error));
+      workNote = recordWorkNoteCaution(workNote, summarizeToolFailureMessage(error instanceof Error ? error.message : String(error)));
       contextSummary = await refreshDbContext(SENT_STRUCTURE_CONTEXT);
+    }
+
+    const autoCompletion = autoUpdatePlanAndWorkNote(plan, workNote, parsed.value, toolResult);
+    workNote = autoCompletion.workNote;
+    if (autoCompletion.changed) {
+      rewardLoopHealthForPlanStepDone(health);
+      params.onProgress?.(formatPlanState(plan!));
+      if (isPlanComplete(plan)) {
+        params.onProgress?.('Completed all plan steps.');
+        return {
+          summary: autoCompletion.summary || 'Completed all plan steps.',
+        };
+      }
     }
 
     const afterProgress = summarizeDocumentLoopProgress(params.document, plan);
@@ -890,9 +917,13 @@ function buildLoopContext(
   plan: EditPlanState | null,
   recentToolHelp?: string | null,
   workLedger?: WorkLedgerItem[],
-  intentRecall?: string
+  intentRecall?: string,
+  workNote?: WorkNoteState
 ): string {
   const parts = [baseContext];
+  if (workNote) {
+    parts.push('', formatWorkNote(workNote));
+  }
   if (workLedger && workLedger.length > 0) {
     parts.push(
       '',
@@ -937,6 +968,220 @@ function recordWorkLedgerItem(
   }
   return item;
 }
+
+function createInitialWorkNote(goal: string): WorkNoteState {
+  return {
+    goal: truncatePreview(goal.replace(/\n/g, ' '), 180),
+    done: [],
+    currentFocus: 'Start by choosing the next useful document edit tool.',
+    remaining: [],
+    cautions: [],
+  };
+}
+
+function normalizePlanSteps(steps: string[]): string[] {
+  const filtered = steps.filter((step) => !isBookkeepingPlanStep(step));
+  return filtered.length > 0 ? filtered : steps;
+}
+
+function isBookkeepingPlanStep(step: string): boolean {
+  return /\b(mark\b.*\bdone|finish\b.*\bsummary|summar(?:y|ize)\b.*\bchanges)\b/i.test(step);
+}
+
+function formatWorkNote(note: WorkNoteState): string {
+  return [
+    'Work note (private scratchpad; update mentally as work progresses):',
+    `Goal: ${note.goal}`,
+    `Done: ${note.done.length > 0 ? note.done.slice(-6).join('; ') : '(nothing yet)'}`,
+    `Current focus: ${note.currentFocus || '(none)'}`,
+    `Remaining: ${note.remaining.length > 0 ? note.remaining.slice(0, 8).join('; ') : '(derive from plan/request)'}`,
+    `Cautions: ${note.cautions.length > 0 ? note.cautions.slice(-4).join('; ') : '(none)'}`,
+  ].join('\n');
+}
+
+function updateWorkNoteRemaining(note: WorkNoteState, plan: EditPlanState | null): WorkNoteState {
+  if (!plan) {
+    return note;
+  }
+  return {
+    ...note,
+    currentFocus: plan.steps.find((step) => !step.done)?.text ?? 'Verify the request is fully satisfied and finish.',
+    remaining: plan.steps.filter((step) => !step.done).map((step) => step.text),
+  };
+}
+
+function recordWorkNoteDone(note: WorkNoteState, summary: string): WorkNoteState {
+  const entry = truncatePreview(summary.replace(/\n/g, ' '), 140);
+  if (!entry || note.done.includes(entry)) {
+    return note;
+  }
+  return {
+    ...note,
+    done: [...note.done, entry].slice(-12),
+  };
+}
+
+function recordWorkNoteCaution(note: WorkNoteState, caution: string): WorkNoteState {
+  const entry = truncatePreview(caution.replace(/\n/g, ' '), 160);
+  if (!entry || note.cautions.includes(entry)) {
+    return note;
+  }
+  return {
+    ...note,
+    cautions: [...note.cautions, entry].slice(-6),
+  };
+}
+
+function autoUpdatePlanAndWorkNote(
+  plan: EditPlanState | null,
+  note: WorkNoteState,
+  toolCall: DocumentEditToolRequest,
+  toolResult: string
+): { changed: boolean; summary: string; workNote: WorkNoteState } {
+  if (!plan || toolCall.tool === 'plan' || toolCall.tool === 'mark_step_done' || isToolResultFailure(toolResult)) {
+    return { changed: false, summary: '', workNote: updateWorkNoteRemaining(note, plan) };
+  }
+  const pendingIndex = findAutoCompletedPlanStep(plan, toolCall, toolResult);
+  const actionSummary = summarizeSuccessfulToolAction(toolCall, toolResult);
+  let nextNote = actionSummary ? recordWorkNoteDone(note, actionSummary) : note;
+  if (pendingIndex < 0) {
+    return { changed: false, summary: actionSummary, workNote: updateWorkNoteRemaining(nextNote, plan) };
+  }
+
+  const step = plan.steps[pendingIndex]!;
+  step.done = true;
+  step.summary = actionSummary || step.summary || summarizeWorkLedgerAction(toolCall, toolResult);
+  nextNote = recordWorkNoteDone(nextNote, step.summary);
+  nextNote = updateWorkNoteRemaining(nextNote, plan);
+  return { changed: true, summary: step.summary, workNote: nextNote };
+}
+
+function isToolResultFailure(toolResult: string): boolean {
+  return /\b(Tool failed|Query failed|SQL failed|error|invalid|unknown|missing|no such column)\b/i.test(toolResult);
+}
+
+function findAutoCompletedPlanStep(plan: EditPlanState, toolCall: DocumentEditToolRequest, toolResult: string): number {
+  const actionText = [
+    describeLedgerAction(toolCall),
+    getDocumentToolIntent(toolCall),
+    summarizeSuccessfulToolAction(toolCall, toolResult),
+    toolResult,
+  ].join(' ');
+  const actionTokens = tokenizeForMatching(actionText);
+  if (actionTokens.size === 0) {
+    return -1;
+  }
+  let bestIndex = -1;
+  let bestScore = 0;
+  plan.steps.forEach((step, index) => {
+    if (step.done) {
+      return;
+    }
+    if (!isToolCompatibleWithPlanStep(toolCall.tool, step.text, index, plan)) {
+      return;
+    }
+    const stepTokens = tokenizeForMatching(step.text);
+    const score = [...stepTokens].filter((token) => actionTokens.has(token)).length;
+    const directRef = [...extractRefsFromText(step.text)].some((ref) => actionTokens.has(normalizeMatchToken(ref)));
+    const threshold = directRef ? 1 : Math.min(4, Math.max(2, Math.ceil(stepTokens.size * 0.28)));
+    if (score >= threshold && score > bestScore) {
+      bestIndex = index;
+      bestScore = score;
+    }
+  });
+  return bestIndex;
+}
+
+function isToolCompatibleWithPlanStep(
+  tool: DocumentEditToolRequest['tool'],
+  step: string,
+  index: number,
+  plan: EditPlanState
+): boolean {
+  const normalized = step.toLowerCase();
+  if (tool === 'get_help') {
+    return /\b(get|fetch|read|inspect)\b.*\bhelp\b|\bhelp\b.*\b(tool|plugin|component|syntax)\b/.test(normalized);
+  }
+  if (/\b(re-?run|rerun|verify|confirm|check)\b.*\bgrep\b|\bgrep\b.*\b(verify|confirm|remaining|no remaining)\b/.test(normalized)) {
+    return tool === 'grep' && plan.steps.slice(0, index).some((candidate) => candidate.done && /\b(edit|patch|remove|create|update|replace|delete)\b/i.test(candidate.text));
+  }
+  if (/\bgrep\b|\bsearch\b.*\bserialized document\b/.test(normalized)) {
+    return tool === 'grep';
+  }
+  if (/\bview\b.*\bcomponent\b|\binspect\b.*\bcomponent\b/.test(normalized)) {
+    return tool === 'view_component' || tool === 'view_rendered_component';
+  }
+  if (/\b(search|find)\b.*\b(existing )?components?\b/.test(normalized)) {
+    return tool === 'search_components';
+  }
+  if (/\bpatch\b|\bedit\b|\bmodify\b|\bupdate\b|\breplace\b/.test(normalized)) {
+    return tool === 'patch_component' || tool === 'edit_component' || tool === 'set_properties';
+  }
+  if (/\bremove\b|\bdelete\b/.test(normalized)) {
+    return tool === 'remove_component' || tool === 'remove_section' || tool === 'patch_component' || tool === 'edit_component';
+  }
+  if (/\bcreate\b|\badd\b/.test(normalized)) {
+    return tool === 'create_component' || tool === 'create_section' || tool === 'edit_component';
+  }
+  if (/\b(rendered|render)\b/.test(normalized)) {
+    return tool === 'request_rendered_structure' || tool === 'view_rendered_component';
+  }
+  if (/\bstructure\b|\boutline\b/.test(normalized)) {
+    return tool === 'request_structure';
+  }
+  return tool !== 'get_help' && tool !== 'search_components';
+}
+
+function summarizeSuccessfulToolAction(toolCall: DocumentEditToolRequest, toolResult: string): string {
+  const plainResult = toolResult.replace(/^Tool result for [^:]+:\s*/i, '').trim();
+  if (toolCall.tool === 'answer' || toolCall.tool === 'done') {
+    return '';
+  }
+  if (plainResult.length > 0 && plainResult.length <= 180 && !/^Plan progress:/i.test(plainResult)) {
+    return plainResult;
+  }
+  return summarizeWorkLedgerAction(toolCall, toolResult).replace(/\.$/, '');
+}
+
+function tokenizeForMatching(value: string): Set<string> {
+  return new Set(
+    value
+      .toLowerCase()
+      .match(/[a-z0-9_#.+-]+/g)
+      ?.map(normalizeMatchToken)
+      .filter((token) => token.length >= 2 && !PLAN_MATCH_STOP_WORDS.has(token)) ?? []
+  );
+}
+
+function normalizeMatchToken(value: string): string {
+  return value.toLowerCase().replace(/^['"`]+|['"`.,:;()]+$/g, '');
+}
+
+function extractRefsFromText(value: string): Set<string> {
+  return new Set(value.match(/[A-Za-z][A-Za-z0-9_-]*(?:\[[0-9]+\]|\.[A-Za-z-]+\[[0-9]+\])*/g) ?? []);
+}
+
+const PLAN_MATCH_STOP_WORDS = new Set([
+  'the',
+  'and',
+  'for',
+  'with',
+  'from',
+  'that',
+  'this',
+  'into',
+  'then',
+  'when',
+  'step',
+  'component',
+  'section',
+  'view',
+  'remove',
+  'patch',
+  'create',
+  'update',
+  'inspect',
+]);
 
 function describeLedgerAction(toolCall: DocumentEditToolRequest): string {
   switch (toolCall.tool) {
@@ -1224,13 +1469,13 @@ function formatHvyRepairToolFailure(error: HvyRepairToolError): string {
 
 function summarizeToolFailureMessage(message: string): string {
   if (/patch_component produced invalid HVY/i.test(message) && hasNestedSlotDiagnostics(message)) {
-    return 'patch_component produced invalid nested HVY. Retrying with a narrower component target or remove_component is usually safer.';
+    return 'Patch failed because the HVY fragment was invalid; retrying with a smaller edit.';
   }
   if (/create_component\.hvy must contain exactly one valid HVY component/i.test(message)) {
-    return 'create_component.hvy must contain exactly one valid HVY component. Retrying with corrected HVY is needed.';
+    return 'Create component failed because the HVY fragment was invalid; retrying with corrected HVY.';
   }
   if (/create_section\.hvy must be a valid HVY section|create_section\.hvy must contain exactly one top-level HVY section/i.test(message)) {
-    return 'create_section.hvy must contain exactly one valid HVY section. Retrying with corrected HVY is needed.';
+    return 'Create section failed because the HVY fragment was invalid; retrying with corrected HVY.';
   }
   return truncatePreview(message.replace(/\s+/g, ' '), 220);
 }
@@ -1679,6 +1924,20 @@ function assertOnlyCssDefaultFields(value: unknown, label: string): void {
   }
 }
 
+function shouldKeepExistingComponentRef(existing: ComponentRefEntry, next: ComponentRefEntry): boolean {
+  if (!existing.hiddenFromSummary) {
+    return true;
+  }
+  if (!next.hiddenFromSummary) {
+    return false;
+  }
+  return componentRefChainScore(existing) <= componentRefChainScore(next);
+}
+
+function componentRefChainScore(entry: ComponentRefEntry): number {
+  return entry.parentChain.reduce((score, label) => score + (/\bnested\.block\[\d+\]/.test(label) ? 1 : 0), 0);
+}
+
 export function summarizeDocumentStructure(document: VisualDocument): DocumentStructureSnapshot {
   const lines: string[] = [];
   const sectionRefs = new Map<string, SectionRefEntry>();
@@ -1686,26 +1945,45 @@ export function summarizeDocumentStructure(document: VisualDocument): DocumentSt
   const deepComponentRefs = new Map<string, ComponentRefEntry>();
   let componentCounter = 0;
 
+  const registerComponentRef = (entry: ComponentRefEntry, refs: string[], visible: boolean): void => {
+    for (const rawRef of refs) {
+      const ref = rawRef.trim();
+      if (!ref) {
+        continue;
+      }
+      const existing = deepComponentRefs.get(ref);
+      if (existing && shouldKeepExistingComponentRef(existing, entry)) {
+        continue;
+      }
+      const refEntry = { ...entry, ref, target: ref };
+      deepComponentRefs.set(ref, refEntry);
+      if (visible) {
+        componentRefs.set(ref, refEntry);
+      }
+    }
+  };
+
   const addDeepComponentRef = (
     block: VisualBlock,
     sectionKey: string,
     parentChain: string[],
-    hiddenFromSummary: boolean
+    hiddenFromSummary: boolean,
+    fallbackRef?: string,
+    slotAliases: string[] = []
   ): ComponentRefEntry => {
     const componentId = block.schema.id.trim();
     const entry: ComponentRefEntry = {
-      ref: componentId,
+      ref: componentId || fallbackRef || '',
       blockId: block.id,
       sectionKey,
       componentId,
       component: block.schema.component,
-      target: componentId,
+      target: componentId || fallbackRef || '',
       parentChain,
       hiddenFromSummary,
+      generated: componentId.length === 0,
     };
-    if (componentId.length > 0) {
-      deepComponentRefs.set(componentId, entry);
-    }
+    registerComponentRef(entry, [componentId, fallbackRef ?? '', ...slotAliases], false);
     return entry;
   };
 
@@ -1713,17 +1991,58 @@ export function summarizeDocumentStructure(document: VisualDocument): DocumentSt
     blocks: VisualBlock[],
     sectionKey: string,
     parentChain: string[],
+    hiddenFromSummary: boolean,
+    pathRef = 'nested'
+  ): void => {
+    blocks.forEach((block, index) => {
+      const ref = `${pathRef}.block[${index}]`;
+      const entry = addDeepComponentRef(block, sectionKey, parentChain, hiddenFromSummary, ref);
+      collectNestedPathRefs(block, sectionKey, ref, [...parentChain, formatComponentChainLabel(block, entry.target || entry.ref)], hiddenFromSummary);
+    });
+  };
+
+  const collectNestedPathRefs = (
+    block: VisualBlock,
+    sectionKey: string,
+    baseRef: string,
+    parentChain: string[],
     hiddenFromSummary: boolean
   ): void => {
-    for (const block of blocks) {
-      const entry = addDeepComponentRef(block, sectionKey, parentChain, hiddenFromSummary);
-      collectDeepRefs(
-        collectNestedBlocks(block),
-        sectionKey,
-        [...parentChain, formatComponentChainLabel(block, entry.target || entry.ref)],
-        hiddenFromSummary
-      );
-    }
+    block.schema.containerBlocks?.forEach((child, index) => {
+      const ref = `${baseRef}.container[${index}]`;
+      const entry = addDeepComponentRef(child, sectionKey, [...parentChain, `container slot ${index}`], hiddenFromSummary, ref);
+      collectNestedPathRefs(child, sectionKey, ref, [...parentChain, formatComponentChainLabel(child, entry.target || entry.ref)], hiddenFromSummary);
+    });
+    block.schema.componentListBlocks?.forEach((child, index) => {
+      const ref = `${baseRef}.list[${index}]`;
+      const entry = addDeepComponentRef(child, sectionKey, [...parentChain, `component-list item ${index}`], hiddenFromSummary, ref);
+      collectNestedPathRefs(child, sectionKey, ref, [...parentChain, formatComponentChainLabel(child, entry.target || entry.ref)], hiddenFromSummary);
+    });
+    block.schema.gridItems?.forEach((item, index) => {
+      const ref = `${baseRef}.grid[${index}]`;
+      const aliases = [item.id];
+      const entry = addDeepComponentRef(item.block, sectionKey, [...parentChain, `grid cell ${index}${item.id ? ` (${item.id})` : ''}`], hiddenFromSummary, ref, aliases);
+      collectNestedPathRefs(item.block, sectionKey, ref, [...parentChain, formatComponentChainLabel(item.block, entry.target || entry.ref)], hiddenFromSummary);
+      if (item.id.trim().length > 0) {
+        collectNestedPathRefs(item.block, sectionKey, item.id.trim(), [...parentChain, formatComponentChainLabel(item.block, item.id.trim())], hiddenFromSummary);
+      }
+    });
+    block.schema.expandableStubBlocks?.children?.forEach((child, index) => {
+      const ref = `${baseRef}.stub[${index}]`;
+      const entry = addDeepComponentRef(child, sectionKey, [...parentChain, `expandable stub ${index}`], hiddenFromSummary, ref);
+      collectNestedPathRefs(child, sectionKey, ref, [...parentChain, formatComponentChainLabel(child, entry.target || entry.ref)], hiddenFromSummary);
+    });
+    block.schema.expandableContentBlocks?.children?.forEach((child, index) => {
+      const ref = `${baseRef}.content[${index}]`;
+      const entry = addDeepComponentRef(child, sectionKey, [...parentChain, `expandable content ${index}`], hiddenFromSummary, ref);
+      collectNestedPathRefs(child, sectionKey, ref, [...parentChain, formatComponentChainLabel(child, entry.target || entry.ref)], hiddenFromSummary);
+    });
+  };
+
+  const collectVisibleNestedPathRefs = (block: VisualBlock, sectionKey: string, visibleRef: string, parentChain: string[]): void => {
+    const entry = addDeepComponentRef(block, sectionKey, parentChain, false, visibleRef);
+    registerComponentRef(entry, [visibleRef, block.schema.id.trim()], true);
+    collectNestedPathRefs(block, sectionKey, visibleRef, [...parentChain, formatComponentChainLabel(block, entry.target || entry.ref)], true);
   };
 
   const indexAllSectionBlocks = (sections: VisualSection[]): void => {
@@ -1759,11 +2078,13 @@ export function summarizeDocumentStructure(document: VisualDocument): DocumentSt
         target,
         parentChain,
         hiddenFromSummary: false,
+        generated: componentId.length === 0,
       });
       if (componentId.length > 0) {
         componentRefs.set(componentId, componentRefs.get(ref)!);
         deepComponentRefs.set(componentId, componentRefs.get(ref)!);
       }
+      collectVisibleNestedPathRefs(block, sectionKey, ref, parentChain);
       const pluginHint = getPluginAiHint(block);
       lines.push(`${'  '.repeat(indent)}${describeStructureLine(block, target, ref)}${pluginHint ? ` AI hint: ${pluginHint}` : ''}`);
       lineBudget.remaining -= 1;
@@ -1840,6 +2161,19 @@ function formatComponentLocation(entry: ComponentRefEntry): string {
   return entry.parentChain.length > 0 ? entry.parentChain.join(' > ') : 'document';
 }
 
+function formatNestedTargetRefs(snapshot: DocumentStructureSnapshot, entry: ComponentRefEntry): string {
+  const prefix = `${entry.ref}.`;
+  const refs = [...snapshot.deepComponentRefs.values()]
+    .filter((candidate) => candidate.blockId !== entry.blockId && candidate.ref.startsWith(prefix))
+    .map((candidate) => candidate.ref)
+    .filter((ref, index, all) => all.indexOf(ref) === index)
+    .slice(0, 24);
+  if (refs.length === 0) {
+    return '';
+  }
+  return `Nested target refs: ${refs.join(', ')}${refs.length >= 24 ? ', ...' : ''}`;
+}
+
 function formatComponentChainLabel(block: VisualBlock, target: string): string {
   return `${block.schema.component}${target ? ` "${target}"` : ''}`;
 }
@@ -1882,11 +2216,12 @@ function executeViewComponentTool(
     `Component type: ${block.schema.component}`,
     `Component id: ${block.schema.id.trim() || '(none)'}`,
     `Component location: ${formatComponentLocation(component)}`,
+    formatNestedTargetRefs(snapshot, component),
     `Showing lines ${clampRange.startLine}-${clampRange.endLine} (default range is ${DEFAULT_VIEW_START_LINE}-${DEFAULT_VIEW_END_LINE})`,
     '',
     'Component HVY with 1-based line numbers:',
     formatNumberedFragment(fragment, clampRange.startLine, clampRange.endLine),
-  ].join('\n');
+  ].filter(Boolean).join('\n');
 }
 
 async function executeRequestRenderedStructureTool(snapshot: DocumentStructureSnapshot, document: VisualDocument): Promise<string> {
@@ -2300,7 +2635,7 @@ function executePatchComponentTool(
     patchedFragment,
   });
 
-  const parsed = parseAiBlockEditResponse(patchedFragment);
+  const parsed = parseAiBlockEditResponse(patchedFragment, document.meta);
   if (!parsed.block || parsed.hasErrors) {
     const details = parsed.issues.map((issue) => `${issue.message} ${issue.hint}`.trim()).join(' ');
     const nestedAdvice = hasNestedSlotDiagnostics(details)
@@ -2376,7 +2711,7 @@ function executeCreateComponentTool(
   document: VisualDocument,
   onMutation?: (group?: string) => void
 ): string {
-  const parsed = parseAiBlockEditResponse(request.hvy);
+  const parsed = parseAiBlockEditResponse(request.hvy, document.meta);
   if (!parsed.block || parsed.hasErrors) {
     const details = parsed.issues.map((issue) => `${issue.message} ${issue.hint}`.trim()).join(' ');
     throw new HvyRepairToolError(`create_component.hvy must contain exactly one valid HVY component. ${details}`.trim(), {
@@ -2679,24 +3014,34 @@ function parseDocumentEditToolRequest(source: string): { ok: true; value: Docume
         },
       };
     }
-    if (tool === 'view_component' && typeof parsed.component_ref === 'string') {
+    const parsedComponentRef = typeof parsed.component_ref === 'string'
+      ? parsed.component_ref
+      : typeof parsed.component_id === 'string'
+        ? parsed.component_id
+        : undefined;
+    const parsedTargetComponentRef = typeof parsed.target_component_ref === 'string'
+      ? parsed.target_component_ref
+      : typeof parsed.target_component_id === 'string'
+        ? parsed.target_component_id
+        : undefined;
+    if (tool === 'view_component' && typeof parsedComponentRef === 'string') {
       return {
         ok: true,
         value: {
           tool,
-          component_ref: parsed.component_ref,
+          component_ref: parsedComponentRef,
           start_line: Number.isInteger(parsed.start_line) ? Number(parsed.start_line) : undefined,
           end_line: Number.isInteger(parsed.end_line) ? Number(parsed.end_line) : undefined,
           reason: typeof parsed.reason === 'string' ? parsed.reason : undefined,
         },
       };
     }
-    if (tool === 'view_rendered_component' && typeof parsed.component_ref === 'string') {
+    if (tool === 'view_rendered_component' && typeof parsedComponentRef === 'string') {
       return {
         ok: true,
         value: {
           tool,
-          component_ref: parsed.component_ref,
+          component_ref: parsedComponentRef,
           reason: typeof parsed.reason === 'string' ? parsed.reason : undefined,
         },
       };
@@ -2750,13 +3095,13 @@ function parseDocumentEditToolRequest(source: string): { ok: true; value: Docume
         },
       };
     }
-	    if (tool === 'edit_component' && typeof parsed.component_ref === 'string' && typeof parsed.request === 'string' && parsed.request.trim().length > 0) {
+	    if (tool === 'edit_component' && typeof parsedComponentRef === 'string' && typeof parsed.request === 'string' && parsed.request.trim().length > 0) {
       return {
         ok: true,
-        value: { tool, component_ref: parsed.component_ref, request: parsed.request, reason: typeof parsed.reason === 'string' ? parsed.reason : undefined },
+        value: { tool, component_ref: parsedComponentRef, request: parsed.request, reason: typeof parsed.reason === 'string' ? parsed.reason : undefined },
       };
     }
-    if (tool === 'patch_component' && typeof parsed.component_ref === 'string' && Array.isArray(parsed.edits) && parsed.edits.length > 0) {
+    if (tool === 'patch_component' && typeof parsedComponentRef === 'string' && Array.isArray(parsed.edits) && parsed.edits.length > 0) {
       const edits: ComponentPatchEdit[] = [];
       for (const candidate of parsed.edits) {
         if (!candidate || typeof candidate !== 'object') {
@@ -2785,7 +3130,7 @@ function parseDocumentEditToolRequest(source: string): { ok: true; value: Docume
         ok: true,
         value: {
           tool,
-          component_ref: parsed.component_ref,
+          component_ref: parsedComponentRef,
           edits,
           reason: typeof parsed.reason === 'string' ? parsed.reason : undefined,
         },
@@ -2797,10 +3142,10 @@ function parseDocumentEditToolRequest(source: string): { ok: true; value: Docume
         value: { tool, section_ref: parsed.section_ref, reason: typeof parsed.reason === 'string' ? parsed.reason : undefined },
       };
     }
-    if (tool === 'remove_component' && typeof parsed.component_ref === 'string') {
+    if (tool === 'remove_component' && typeof parsedComponentRef === 'string') {
       return {
         ok: true,
-        value: { tool, component_ref: parsed.component_ref, reason: typeof parsed.reason === 'string' ? parsed.reason : undefined },
+        value: { tool, component_ref: parsedComponentRef, reason: typeof parsed.reason === 'string' ? parsed.reason : undefined },
       };
     }
     if (tool === 'create_component' && typeof parsed.position === 'string' && typeof parsed.hvy === 'string' && parsed.hvy.trim().length > 0) {
@@ -2817,7 +3162,7 @@ function parseDocumentEditToolRequest(source: string): { ok: true; value: Docume
           tool,
           position: parsed.position,
           section_ref: typeof parsed.section_ref === 'string' ? parsed.section_ref : undefined,
-          target_component_ref: typeof parsed.target_component_ref === 'string' ? parsed.target_component_ref : undefined,
+          target_component_ref: parsedTargetComponentRef,
           hvy: parsed.hvy,
           reason: typeof parsed.reason === 'string' ? parsed.reason : undefined,
         },
@@ -3146,7 +3491,11 @@ function applyComponentPatchEdits(fragment: string, edits: ComponentPatchEdit[])
   for (const edit of edits) {
     if (edit.op === 'replace') {
       assertValidLineRange(lines, edit.start_line, edit.end_line, 'replace');
-      lines.splice(edit.start_line - 1, edit.end_line - edit.start_line + 1, ...edit.text.split('\n'));
+      lines.splice(
+        edit.start_line - 1,
+        edit.end_line - edit.start_line + 1,
+        ...normalizeReplacementLines(lines.slice(edit.start_line - 1, edit.end_line), edit.text)
+      );
       continue;
     }
     if (edit.op === 'delete') {
@@ -3163,6 +3512,26 @@ function applyComponentPatchEdits(fragment: string, edits: ComponentPatchEdit[])
     lines.splice(edit.line, 0, ...edit.text.split('\n'));
   }
   return lines.join('\n').trim();
+}
+
+function normalizeReplacementLines(originalLines: string[], replacementText: string): string[] {
+  const replacementLines = replacementText.split('\n');
+  if (replacementLines.length === 0 || originalLines.length === 0) {
+    return replacementLines;
+  }
+  const originalIndent = originalLines[0]?.match(/^\s*/)?.[0] ?? '';
+  if (!originalIndent) {
+    return replacementLines;
+  }
+  const nonBlankReplacementLines = replacementLines.filter((line) => line.trim().length > 0);
+  if (nonBlankReplacementLines.length === 0) {
+    return replacementLines;
+  }
+  const replacementAlreadyIndented = nonBlankReplacementLines.some((line) => /^\s/.test(line));
+  if (replacementAlreadyIndented) {
+    return replacementLines;
+  }
+  return replacementLines.map((line) => (line.trim().length > 0 ? `${originalIndent}${line}` : line));
 }
 
 function assertValidLineRange(lines: string[], startLine: number, endLine: number, op: string): void {

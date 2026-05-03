@@ -835,7 +835,7 @@ test('requestAiDocumentEditTurn can view a grid slot by id and exposes nested ta
   expect(viewResult).toContain('Component type: component-list');
   expect(viewResult).toContain('Component location: section "Top Skills, Tools, and Technologies"');
   expect(viewResult).toContain('grid cell 1 (top-tools-technologies)');
-  expect(viewResult).toContain('Nested target refs: top-tools-technologies.list[0], top-tools-technologies.list[1]');
+  expect(viewResult).toContain('Valid nested component_ref values: top-tools-technologies.list[0], top-tools-technologies.list[1]');
   expect(viewResult).toContain('TypeScript');
 });
 
@@ -1048,6 +1048,50 @@ hvy_version: 0.1
   expect(serialized).not.toContain('TypeScript');
   expect(serialized).not.toContain('Python');
   expect(serialized).toContain('Developer Containers');
+});
+
+test('requestAiDocumentEditTurn accepts section-scoped nested refs copied from component locations', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:component-list {"id":"languages","componentListComponent":"text"}-->
+ <!--hvy:component-list:0 {}-->
+
+  <!--hvy:text {"id":"heading"}-->
+   Tools
+
+ <!--hvy:component-list:1 {}-->
+
+  <!--hvy:text {"id":"typescript-entry"}-->
+   TypeScript
+
+ <!--hvy:component-list:2 {}-->
+
+  <!--hvy:text {"id":"python-entry"}-->
+   Python
+`, '.hvy');
+  seedStateForDocument(document);
+  queueAiToolResponses(
+    '{"tool":"remove_component","component_ref":"summary nested.block[0].list[1]","reason":"Remove the TypeScript entry."}',
+    '{"tool":"done","summary":"Removed TypeScript."}'
+  );
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+
+  const result = await requestAiDocumentEditTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Delete TypeScript.',
+  });
+
+  expect(result.error).toBeNull();
+  const serialized = serializeDocument(document);
+  expect(serialized).not.toContain('TypeScript');
+  expect(serialized).toContain('Python');
 });
 
 test('requestAiDocumentEditTurn only auto-marks plan steps for compatible tool actions', async () => {

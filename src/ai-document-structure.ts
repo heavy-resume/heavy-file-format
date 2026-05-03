@@ -191,7 +191,7 @@ export function summarizeDocumentStructure(document: VisualDocument): DocumentSt
   const indexAllSectionBlocks = (sections: VisualSection[]): void => {
     for (const section of sections) {
       const displayTitle = section.title.trim() || 'Untitled Section';
-      collectDeepRefs(section.blocks, section.key, [`section "${displayTitle}" (${getSectionId(section)})`], true);
+      collectDeepRefs(section.blocks, section.key, [`section "${displayTitle}" (${getSectionId(section)})`], true, `${getSectionId(section)} nested`);
       indexAllSectionBlocks(section.children);
     }
   };
@@ -276,7 +276,13 @@ export function summarizeDocumentStructure(document: VisualDocument): DocumentSt
       if (nesting >= MAX_SUMMARY_NESTING) {
         lines.push(`${'  '.repeat(depth + 1)}${HIDDEN_CONTENTS_MARKER}`);
         for (const child of section.children) {
-          collectDeepRefs(child.blocks, child.key, [`section "${child.title.trim() || 'Untitled Section'}" (${getSectionId(child)})`], true);
+          collectDeepRefs(
+            child.blocks,
+            child.key,
+            [`section "${child.title.trim() || 'Untitled Section'}" (${getSectionId(child)})`],
+            true,
+            `${getSectionId(child)} nested`
+          );
         }
         continue;
       }
@@ -297,7 +303,15 @@ export function summarizeDocumentStructure(document: VisualDocument): DocumentSt
 
 export function resolveComponentRef(snapshot: DocumentStructureSnapshot, componentRef: string): ComponentRefEntry | undefined {
   const ref = componentRef.trim();
-  return snapshot.componentRefs.get(ref) ?? snapshot.deepComponentRefs.get(ref);
+  const direct = snapshot.componentRefs.get(ref) ?? snapshot.deepComponentRefs.get(ref);
+  if (direct) {
+    return direct;
+  }
+  const nestedPath = ref.match(/\s+(nested\.block\[\d+\].*)$/)?.[1];
+  if (!nestedPath) {
+    return undefined;
+  }
+  return snapshot.deepComponentRefs.get(nestedPath);
 }
 
 export function formatComponentLocation(entry: ComponentRefEntry): string {
@@ -314,7 +328,7 @@ export function formatNestedTargetRefs(snapshot: DocumentStructureSnapshot, entr
   if (refs.length === 0) {
     return '';
   }
-  return `Nested target refs: ${refs.join(', ')}${refs.length >= 24 ? ', ...' : ''}`;
+  return `Valid nested component_ref values: ${refs.join(', ')}${refs.length >= 24 ? ', ...' : ''}`;
 }
 
 function formatComponentChainLabel(block: VisualBlock, target: string): string {
@@ -463,4 +477,3 @@ export function truncatePreview(value: string, maxLength = MAX_TEXT_PREVIEW_LENG
   }
   return `${collapsed.slice(0, maxLength - 1)}...`;
 }
-

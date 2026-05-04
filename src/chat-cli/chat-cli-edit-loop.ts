@@ -112,7 +112,7 @@ export async function runChatCliEditLoop(params: {
     const commandHints: string[] = [];
     const commands = action.commands;
     const outputLineBudget = Math.max(1, Math.floor(CHAT_CLI_MODEL_OUTPUT_MAX_LINES / commands.length));
-    let stopAfterCommandError: Error | null = null;
+    let stopAfterCommandError: ChatCliCommandFailureError | null = null;
     let mutated = false;
     let traceOutput = '';
     for (let commandIndex = 0; commandIndex < commands.length; commandIndex += 1) {
@@ -129,7 +129,12 @@ export async function runChatCliEditLoop(params: {
         const output = error instanceof Error ? error.message : String(error);
         consecutiveCommandErrors += 1;
         if (consecutiveCommandErrors >= CHAT_CLI_MAX_CONSECUTIVE_COMMAND_ERRORS) {
-          stopAfterCommandError = new Error(`Stopped after ${CHAT_CLI_MAX_CONSECUTIVE_COMMAND_ERRORS} failed CLI commands. Last error: ${output}`);
+          stopAfterCommandError = new ChatCliCommandFailureError({
+            request: params.request,
+            command,
+            error: output,
+            scratchpad: formatScratchpadForModel(cli.snapshot()),
+          });
         }
         result = { command, cwd: cli.session.cwd, output, mutated: false };
       }
@@ -203,12 +208,13 @@ function buildChatCliLoopContext(
   priorConversation: ChatMessage[],
   urgency: number
 ): string {
-  const taskContext = resolveChatCliTaskContext(request, priorMessages);
   const omittedMessageCount = priorMessages.filter((message) => !message.progress).length - priorConversation.length;
   return [
-    'Task goal:',
-    taskContext.goal,
+    'Current request:',
+    request,
     ...(omittedMessageCount > 0 ? ['', `Earlier chat omitted: ${omittedMessageCount} message${omittedMessageCount === 1 ? '' : 's'}.`] : []),
+    '',
+    'Use the chronological chat messages and terminal results to infer the active task. If you lose the thread or need a choice from the user, use `ask QUESTION`.',
     '',
     `Current directory: ${snapshot.cwd}`,
     '',
@@ -271,36 +277,31 @@ function selectChatCliPriorMessages(messages: ChatMessage[]): ChatMessage[] {
     }));
 }
 
-function resolveChatCliTaskContext(request: string, priorMessages: ChatMessage[]): { goal: string } {
-  const messages = priorMessages.filter((message) => !message.progress);
-  const lastMessage = messages.at(-1);
-  if (!lastMessage || lastMessage.role !== 'assistant' || !isClarificationQuestion(lastMessage.content)) {
-    return { goal: request };
+class ChatCliCommandFailureError extends Error {
+  constructor(params: {
+    request: string;
+    command: string;
+    error: string;
+    scratchpad: string;
+  }) {
+    super([
+      `Stopped after ${CHAT_CLI_MAX_CONSECUTIVE_COMMAND_ERRORS} failed CLI commands.`,
+      '',
+      'Current request:',
+      params.request,
+      '',
+      'Last failed command:',
+      params.command,
+      '',
+      'Last error:',
+      params.error,
+      '',
+      'Scratchpad at failure:',
+      params.scratchpad,
+      '',
+      'Continue from the chat history and current document state. If the next step is unclear, ask a clarifying question.',
+    ].join('\n'));
   }
-
-  let firstQuestionIndex = messages.length - 1;
-  while (
-    firstQuestionIndex >= 2 &&
-    messages[firstQuestionIndex - 1]?.role === 'user' &&
-    messages[firstQuestionIndex - 2]?.role === 'assistant' &&
-    isClarificationQuestion(messages[firstQuestionIndex - 2]?.content ?? '')
-  ) {
-    firstQuestionIndex -= 2;
-  }
-
-  for (let index = firstQuestionIndex - 1; index >= 0; index -= 1) {
-    const candidate = messages[index];
-    if (candidate?.role === 'user' && candidate.content.trim()) {
-      return { goal: candidate.content.trim() };
-    }
-  }
-
-  return { goal: request };
-}
-
-function isClarificationQuestion(content: string): boolean {
-  const trimmed = content.trim();
-  return trimmed.endsWith('?') || /^(?:should|do|does|did|would|could|can|which|what|where|when|who|how)\b/i.test(trimmed);
 }
 
 function buildChatCliLoopFormatInstructions(): string {

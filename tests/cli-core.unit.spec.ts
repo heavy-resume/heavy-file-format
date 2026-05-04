@@ -49,7 +49,7 @@ test('cli echo supports shell-style redirection to writable virtual files', asyn
   const session = createHvyCliSession();
 
   expect((await executeHvyCliCommand(document, session, 'ls /')).output).toContain('file scratchpad.txt');
-  expect((await executeHvyCliCommand(document, session, 'cat /scratchpad.txt')).output).toContain('scratchpad.txt (task notes and progress)');
+  expect((await executeHvyCliCommand(document, session, 'cat /scratchpad.txt')).output).toContain('No notes yet');
   expect((await executeHvyCliCommand(document, session, 'echo "Task note" >> scratchpad.txt')).output).toBe('/scratchpad.txt: appended');
   expect((await executeHvyCliCommand(document, session, 'cat scratchpad.txt')).output).toContain('Task note');
 
@@ -66,6 +66,22 @@ test('cli echo supports shell-style redirection to writable virtual files', asyn
 
   await expect(executeHvyCliCommand(document, session, 'echo nope > /body/summary')).rejects.toThrow('Is a directory');
   expect((await executeHvyCliCommand(document, session, 'man echo')).output).toContain('echo TEXT [> FILE|>> FILE]');
+});
+
+test('cli blocks non-scratchpad commands when scratchpad is too long', async () => {
+  const document = createCliTestDocument();
+  const session = createHvyCliSession();
+
+  expect((await executeHvyCliCommand(document, session, `echo "${'x'.repeat(700)}" > scratchpad.txt`)).output).toBe('/scratchpad.txt: written');
+
+  const blocked = await executeHvyCliCommand(document, session, 'ls /');
+  expect(blocked.mutated).toBe(false);
+  expect(blocked.output).toContain('scratchpad.txt is 600 characters');
+  expect(blocked.output).toContain('Reduce scratchpad.txt before running other commands.');
+  expect(blocked.output).toContain('x'.repeat(600));
+
+  expect((await executeHvyCliCommand(document, session, 'echo "short" > scratchpad.txt')).output).toBe('/scratchpad.txt: written');
+  expect((await executeHvyCliCommand(document, session, 'ls /')).output).toContain('dir  body');
 });
 
 test('cli exposes resume component-list items by stable section paths', async () => {

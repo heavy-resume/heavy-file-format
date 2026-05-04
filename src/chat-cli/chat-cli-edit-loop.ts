@@ -59,7 +59,7 @@ export async function runChatCliEditLoop(params: {
       throw error;
     }
     await writeChatCliCommandTrace(traceRunId, action.command, result.output, params.signal);
-    if (!isSessionOnlyCommand(action.command)) {
+    if (!isSessionOnlyCommand(action.command) && !isScratchpadLimitOutput(result.output)) {
       await cli.run(`echo "${escapeEchoText(formatScratchpadProgress(action.command, result))}" >> scratchpad.txt`);
     }
     if (result.mutated && !isSessionOnlyCommand(action.command)) {
@@ -167,7 +167,7 @@ function truncateConversationMessages(messages: ChatMessage[], maxChars: number)
 function formatScratchpadProgress(command: string, result: { mutated: boolean; output: string }): string {
   const status = result.mutated ? 'changed' : 'ran';
   const output = result.output.trim().replace(/\s+/g, ' ');
-  return `${status}: ${command}${output ? ` -> ${truncateText(output, 160)}` : ''}`;
+  return `${status}: ${truncateText(command, 120)}${output ? ` -> ${truncateText(output, 160)}` : ''}`;
 }
 
 function escapeEchoText(value: string): string {
@@ -180,6 +180,10 @@ function truncateText(value: string, maxLength: number): string {
 
 function isSessionOnlyCommand(command: string): boolean {
   return /\bscratchpad\.txt\b/.test(command);
+}
+
+function isScratchpadLimitOutput(output: string): boolean {
+  return output.startsWith('scratchpad.txt is ') && output.includes('Reduce scratchpad.txt before running other commands.');
 }
 
 function throwIfAborted(signal: AbortSignal | undefined): void {

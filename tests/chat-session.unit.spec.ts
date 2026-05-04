@@ -258,6 +258,36 @@ test('requestDocumentEditChatTurn logs failed cli commands before returning the 
   );
 });
 
+test('requestDocumentEditChatTurn blocks non-scratchpad commands until long scratchpad is reduced', async () => {
+  requestProxyCompletionMock
+    .mockResolvedValueOnce(`echo "${'x'.repeat(700)}" > scratchpad.txt`)
+    .mockResolvedValueOnce('pwd')
+    .mockResolvedValueOnce('echo "short notes" > scratchpad.txt')
+    .mockResolvedValueOnce('pwd')
+    .mockResolvedValueOnce('done Reduced scratchpad and checked cwd.');
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+  const document = deserializeDocument('---\nhvy_version: 0.1\n---\n', '.hvy');
+
+  const result = await requestDocumentEditChatTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Use a very long scratchpad.',
+  });
+
+  expect(result.error).toBeNull();
+  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.messages.at(-1)?.content).toContain('scratchpad.txt is 600 characters');
+  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.messages.at(-1)?.content).toContain('Reduce scratchpad.txt before running other commands.');
+  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.context).toContain('x'.repeat(600));
+  expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.context).toContain('short notes');
+  expect(writeChatCliCommandTraceMock.mock.calls.map((call) => call[1])).toEqual([
+    `echo "${'x'.repeat(700)}" > scratchpad.txt`,
+    'pwd',
+    'echo "short notes" > scratchpad.txt',
+    'pwd',
+  ]);
+});
+
 test('copyChatMessageToHvySection wraps a plain markdown answer into a section', () => {
   const messages: ChatMessage[] = [
     { id: 'm1', role: 'user', content: 'What jobs?' },

@@ -11,6 +11,9 @@ import { createScriptingDbRuntime, formatQueryResultTable, getDocumentDbTableObj
 import type { VisualBlock, VisualSection } from '../editor/types';
 import { getSectionId } from '../section-ops';
 
+const SCRATCHPAD_SOFT_MAX_CHARS = 400;
+const SCRATCHPAD_HARD_MAX_CHARS = 600;
+
 export interface HvyCliSession {
   cwd: string;
   scratchpadContent?: string;
@@ -39,8 +42,13 @@ export async function executeHvyCliCommand(document: VisualDocument, session: Hv
   const command = args[0] ?? '';
   const fs = buildHvyVirtualFileSystem(document);
   addSessionScratchpadFile(fs, session);
+  enforceScratchpadHardCap(session);
+  if (!isScratchpadCommand(args) && isScratchpadTooLong(session)) {
+    return { cwd: session.cwd, output: buildScratchpadTooLongMessage(session.scratchpadContent ?? ''), mutated: false };
+  }
   const ctx = { document, fs, cwd: session.cwd };
   const result = await runCommand(ctx, command, args.slice(1));
+  enforceScratchpadHardCap(session);
   session.cwd = result.cwd;
   return result;
 }
@@ -211,6 +219,30 @@ function addSessionScratchpadFile(fs: ReturnType<typeof buildHvyVirtualFileSyste
 
 function defaultScratchpadContent(): string {
   return 'No notes yet. Edit /scratchpad.txt to change me. Keep track of your progress.\n';
+}
+
+function enforceScratchpadHardCap(session: HvyCliSession): void {
+  if ((session.scratchpadContent ?? '').length > SCRATCHPAD_HARD_MAX_CHARS) {
+    session.scratchpadContent = (session.scratchpadContent ?? '').slice(0, SCRATCHPAD_HARD_MAX_CHARS);
+  }
+}
+
+function isScratchpadTooLong(session: HvyCliSession): boolean {
+  return (session.scratchpadContent ?? '').length > SCRATCHPAD_SOFT_MAX_CHARS;
+}
+
+function isScratchpadCommand(args: string[]): boolean {
+  return args.some((arg) => arg === 'scratchpad.txt' || arg === '/scratchpad.txt');
+}
+
+function buildScratchpadTooLongMessage(scratchpad: string): string {
+  return [
+    `scratchpad.txt is ${scratchpad.length} characters, which is over the ${SCRATCHPAD_SOFT_MAX_CHARS} character working limit.`,
+    'Reduce scratchpad.txt before running other commands.',
+    '',
+    'scratchpad.txt:',
+    scratchpad,
+  ].join('\n');
 }
 
 function commandCat(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd: string }, args: string[]): string {

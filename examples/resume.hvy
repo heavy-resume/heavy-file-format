@@ -373,7 +373,7 @@ component_defs:
           - component: skill-record-projects-section
 ---
 
-<!--hvy: {"id":"header","lock":true,"contained":false}-->
+<!--hvy: {"id":"header","lock":true,"contained":false,"description":"Resume header with name, title, contact links, and top-level identity details."}-->
 #! Info
 
  <!--hvy:text {"css":"margin-bottom: 0;","align":"center"}-->
@@ -385,7 +385,7 @@ component_defs:
  <!--hvy:text {"css":"margin: 0.5rem 0; margin-top: 1rem;","align":"center"}-->
   Senior Software Engineer
 
-<!--hvy: {"id":"summary","lock":true,"contained":true}-->
+<!--hvy: {"id":"summary","lock":true,"contained":true,"description":"Professional summary and compact highlights for the candidate."}-->
 #! Summary
 
  <!--hvy:expandable {"css":"padding:0.25rem;","expandableAlwaysShowStub":true,"expandableExpanded":false,"lock":true}-->
@@ -417,7 +417,7 @@ component_defs:
      <!--hvy:text {"css":"margin: 0;"}-->
       Enjoys turning messy, high-context problems into repeatable systems and clear documentation.
 
-<!--hvy: {"id":"locations","lock":true,"contained":true,"location":"sidebar"}-->
+<!--hvy: {"id":"locations","lock":true,"contained":true,"location":"sidebar","description":"Sidebar location preferences and current location details."}-->
 #! Locations
 
  <!--hvy:text {"css":"margin: 0.5rem 0; line-height: 1.5;","lock":true}-->
@@ -425,7 +425,7 @@ component_defs:
 
   **Target Location(s):** Remote, Seattle, San Francisco
 
-<!--hvy: {"id":"top-skills-tools-technologies","lock":true}-->
+<!--hvy: {"id":"top-skills-tools-technologies","lock":true,"description":"Featured top skills, tools, and technologies shown prominently near the top of the resume."}-->
 #! Top Skills, Tools, and Technologies
 
  <!--hvy:grid {"css":"margin: 0.5rem 0; gap: 0.75rem;","gridColumns":2,"lock":true}-->
@@ -472,7 +472,7 @@ component_defs:
 
      <!--hvy:xref-card {"css":"margin: 0.35rem 0;","xrefTitle":"Developer Containers","xrefDetail":"Reproducible local environments","xrefTarget":"tool-developer-containers"}-->
 
-<!--hvy: {"id":"skills","lock":true,"expanded":false,"location":"sidebar"}-->
+<!--hvy: {"id":"skills","lock":true,"expanded":false,"location":"sidebar","description":"Main reusable skills library containing detailed skill records."}-->
 #! Skills
 
  <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
@@ -716,7 +716,7 @@ component_defs:
 
        <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Autonomous Agent Hackathon","xrefDetail":"08/2023 - 08/2023","xrefTarget":"project-autonomous-agent-hackathon"}-->
 
-<!--hvy: {"id":"tools-technologies","lock":true,"expanded":false,"location":"sidebar"}-->
+<!--hvy: {"id":"tools-technologies","lock":true,"expanded":false,"location":"sidebar","description":"Main reusable tools and technologies library containing detailed tool records."}-->
 #! Tools & Technologies
 
  <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
@@ -1039,7 +1039,7 @@ component_defs:
 
        <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Autonomous Agent Hackathon","xrefDetail":"08/2023 - 08/2023","xrefTarget":"project-autonomous-agent-hackathon"}-->
 
-<!--hvy: {"id":"history","lock":true}-->
+<!--hvy: {"id":"history","lock":true,"description":"Work history section with role records, accomplishments, and related skills/tools."}-->
 #! History
 
  <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
@@ -1144,7 +1144,7 @@ component_defs:
 
          <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Developer Containers","xrefTarget":"tool-developer-containers"}-->
 
-<!--hvy: {"id":"projects","lock":true}-->
+<!--hvy: {"id":"projects","lock":true,"description":"Project portfolio section with project records and related skills/tools."}-->
 #! Projects
 
  <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
@@ -1298,7 +1298,7 @@ component_defs:
 
           <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"SuperAGI","xrefTarget":"tool-superagi"}-->
 
-<!--hvy: {"id":"education","lock":true}-->
+<!--hvy: {"id":"education","lock":true,"description":"Education section with degree records and supporting details."}-->
 #! Education
 
  <!--hvy:text {"css":"margin: 0.5rem 0;"}-->

@@ -220,7 +220,7 @@ test('requestDocumentEditChatTurn trims old cli conversation messages while keep
   );
   expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.context).toContain('Task goal:\nCheck the document with several commands.');
   expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.context).toContain('scratchpad.txt:');
-  expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.context).toContain('No notes yet.');
+  expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.context).toContain('scratchpad.txt:\n');
 });
 
 test('requestDocumentEditChatTurn accepts shell-looking command wrappers', async () => {
@@ -283,7 +283,7 @@ hvy_version: 0.1
   expect(nextPrompt).toContain('text.json is the component config.');
   expect(nextPrompt).toContain('If the task is to remove this component, run: hvy remove /body/summary/intro');
   expect(nextPrompt).toContain('Source files: /body/summary/intro/text.txt and /body/summary/intro/text.json');
-  expect(nextPrompt).toContain('scratchpad.txt\nNo notes yet.');
+  expect(nextPrompt).toContain('scratchpad.txt\n(empty)');
   expect(writeChatCliCommandTraceMock).toHaveBeenCalledWith(
     'chat-cli-test',
     'cat /body/summary/intro/text.txt',

@@ -49,7 +49,7 @@ test('cli echo supports shell-style redirection to writable virtual files', asyn
   const session = createHvyCliSession();
 
   expect((await executeHvyCliCommand(document, session, 'ls /')).output).toContain('file scratchpad.txt');
-  expect((await executeHvyCliCommand(document, session, 'cat /scratchpad.txt')).output).toContain('No notes yet');
+  expect((await executeHvyCliCommand(document, session, 'cat /scratchpad.txt')).output).toBe('');
   expect((await executeHvyCliCommand(document, session, 'echo "Task note" >> scratchpad.txt')).output).toBe('/scratchpad.txt: appended');
   expect((await executeHvyCliCommand(document, session, 'cat scratchpad.txt')).output).toContain('Task note');
 
@@ -311,7 +311,7 @@ test('cli supports xargs in pipelines', async () => {
   expect((await executeHvyCliCommand(document, session, 'man xargs')).output).toContain('COMMAND | xargs [-0] [-r] [-I TOKEN] COMMAND ARG...');
 });
 
-test('cli uses normal shell precedence for rg || true pipe idioms', async () => {
+test('cli treats rg || true before a pipe as an xargs-friendly fallback idiom', async () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
 ---
@@ -320,19 +320,19 @@ hvy_version: 0.1
 #! Summary
 
 <!--hvy:text {"id":"intro"}-->
- TypeScript uses shared packages
+ Uses TypeScript packages
 `, '.hvy');
   const session = createHvyCliSession();
 
   const result = await executeHvyCliCommand(
     document,
     session,
-    'rg -l "TypeScript" -S || true | xargs -r sed -i.bak s/TypeScript//g && echo "Removed references to TypeScript" > scratchpad.txt'
+    'rg -l --hidden --no-ignore -S "TypeScript" || true | xargs -r sed -i -E \'s/([,\\/ ]*)TypeScript([,\\/ ]*)/\\1\\2/g\' && echo "Removed references to TypeScript" > scratchpad.txt'
   );
 
   expect(result.mutated).toBe(true);
   expect(result.output).toBe('/scratchpad.txt: written');
-  expect(document.sections[0]?.blocks[0]?.text).toBe('TypeScript uses shared packages');
+  expect(document.sections[0]?.blocks[0]?.text).toBe('Uses  packages');
   expect(session.scratchpadContent).toBe('Removed references to TypeScript\n');
 });
 

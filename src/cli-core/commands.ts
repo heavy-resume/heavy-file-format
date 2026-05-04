@@ -310,7 +310,7 @@ function addSessionScratchpadFile(fs: ReturnType<typeof buildHvyVirtualFileSyste
 }
 
 function defaultScratchpadContent(): string {
-  return 'No notes yet. Edit /scratchpad.txt to change me. Keep track of your progress.\n';
+  return 'I am your /scratchpad.txt - Keep track of your progress.\n';
 }
 
 function enforceScratchpadHardCap(session: HvyCliSession): void {
@@ -639,7 +639,10 @@ function commandSed(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd
 function applySedEditExpression(input: string, expression: string): string {
   const parsed = parseSedExpression(expression);
   if (parsed.kind === 'substitute') {
-    return input.replace(new RegExp(parsed.pattern, `${parsed.flags.includes('g') ? 'g' : ''}${parsed.flags.toLowerCase().includes('i') ? 'i' : ''}`), parsed.replacement);
+    return input.replace(
+      new RegExp(parsed.pattern, `${parsed.flags.includes('g') ? 'g' : ''}${parsed.flags.toLowerCase().includes('i') ? 'i' : ''}`),
+      normalizeSedReplacement(parsed.replacement)
+    );
   }
   if (parsed.kind === 'delete') {
     const regex = new RegExp(parsed.pattern, parsed.flags.toLowerCase().includes('i') ? 'i' : '');
@@ -649,6 +652,10 @@ function applySedEditExpression(input: string, expression: string): string {
       .join('\n');
   }
   throw new Error('sed: expected sed s/search/replace/[g] path or sed /pattern/d path');
+}
+
+function normalizeSedReplacement(replacement: string): string {
+  return replacement.replace(/\\([1-9])/g, '$$$1');
 }
 
 type SedExpression =
@@ -915,7 +922,7 @@ function parseRgArgs(args: string[]): {
   const parsed = parseCliFlags(args, {
     command: 'rg',
     booleanShort: ['i', 'n', 'l', 'r', 'R', 'S'],
-    booleanLong: ['ignore-case', 'line-number', 'hidden', 'no-messages', 'files-with-matches', 'list-files'],
+    booleanLong: ['ignore-case', 'line-number', 'hidden', 'no-messages', 'no-ignore', 'files-with-matches', 'list-files'],
     valueLong: ['include'],
   });
 
@@ -991,10 +998,11 @@ function parseGrepArgs(args: string[]): {
 }
 
 function parseMiniShell(args: string[]): HvyMiniShellPipeline[] {
+  const normalizedArgs = normalizeMiniShellArgs(args);
   const pipelines: HvyMiniShellPipeline[] = [];
   let current: string[] = [];
   let operator: 'first' | '&&' | '||' = 'first';
-  for (const arg of args) {
+  for (const arg of normalizedArgs) {
     if (arg === '2>/dev/null' || arg === '2>' || arg === '/dev/null') {
       continue;
     }
@@ -1012,6 +1020,19 @@ function parseMiniShell(args: string[]): HvyMiniShellPipeline[] {
     pipelines.push({ operator, commands: splitPipeline(current), tokens: current });
   }
   return pipelines;
+}
+
+function normalizeMiniShellArgs(args: string[]): string[] {
+  const normalized: string[] = [];
+  for (let index = 0; index < args.length; index += 1) {
+    if (args[index] === '||' && args[index + 1] === 'true' && args[index + 2] === '|') {
+      normalized.push('|');
+      index += 2;
+      continue;
+    }
+    normalized.push(args[index] ?? '');
+  }
+  return normalized;
 }
 
 function splitPipeline(args: string[]): string[][] {

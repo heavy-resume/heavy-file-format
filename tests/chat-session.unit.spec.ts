@@ -382,8 +382,8 @@ doc.header.set("ran_script", True)
   expect(result.error).toBeNull();
   const nextPrompt = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content ?? '';
   expect(nextPrompt).toContain('Plugin id: dev.heavy.scripting (scripting).');
-  expect(nextPrompt).toContain('The component body is top-level Python/Brython source.');
-  expect(nextPrompt).toContain('Use doc.tool(name, args) for synchronous document-edit tools');
+  expect(nextPrompt).toContain('The component body is top-level Python/Brython source with one injected global: doc.');
+  expect(nextPrompt).toContain('Document tools: request_structure, grep, view_component');
   expect(nextPrompt).toContain('doc.form exists only while running form plugin scripts.');
 });
 

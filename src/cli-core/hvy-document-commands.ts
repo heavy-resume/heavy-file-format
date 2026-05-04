@@ -7,7 +7,13 @@ import { DB_TABLE_PLUGIN_ID, FORM_PLUGIN_ID } from '../plugins/registry';
 import { getSectionId } from '../section-ops';
 import type { VisualDocument } from '../types';
 import { makeId } from '../utils';
-import { getHvyCliPluginCommandRegistration, getHvyCliPluginCommandRegistrations, type HvyCliHelpCommand } from './plugin-command-registry';
+import {
+  getHvyCliPluginCommandRegistration,
+  getHvyCliPluginCommandRegistrations,
+  getHvyCliScriptingToolHelp,
+  getHvyCliScriptingToolNames,
+  type HvyCliHelpCommand,
+} from './plugin-command-registry';
 import { resolveVirtualPath, type HvyVirtualFileSystem } from './virtual-file-system';
 
 export interface HvyDocumentCommandContext {
@@ -32,6 +38,12 @@ export function executeHvyDocumentCommand(ctx: HvyDocumentCommandContext, args: 
   if (resource === 'plugin' && action === 'db-table' && (rest[0] === 'show' || rest[0] === 'add')) {
     return addDbTablePluginBlock(ctx, rest.slice(1));
   }
+  if (resource === 'plugin' && action === 'scripting' && rest[0] === 'tool') {
+    return { output: formatScriptingToolHelp(rest[1] ?? ''), mutated: false };
+  }
+  if (resource === 'plugin' && action && rest.length === 0 && getHvyCliPluginCommandRegistration(action)) {
+    return { output: hvyDocumentCommandHelp(`plugin ${action}`), mutated: false };
+  }
   if (resource === 'section' && action === 'add') {
     return addSection(ctx, rest);
   }
@@ -54,6 +66,20 @@ export function executeHvyDocumentCommand(ctx: HvyDocumentCommandContext, args: 
 }
 
 export function hvyDocumentCommandHelp(topic = ''): string {
+  const normalizedTopic = topic.trim();
+  if (normalizedTopic.startsWith('plugin scripting tool')) {
+    return formatScriptingToolHelp(normalizedTopic.slice('plugin scripting tool'.length).trim());
+  }
+  const registeredPluginName = normalizedTopic.startsWith('plugin ')
+    ? normalizedTopic.slice('plugin '.length).split(/\s+/, 1)[0] ?? ''
+    : '';
+  const registeredPluginTopic = registeredPluginName
+    ? getHvyCliPluginCommandRegistration(registeredPluginName)
+    : null;
+  if (registeredPluginTopic) {
+    return formatRegisteredPluginHelp(registeredPluginTopic);
+  }
+
   const help: Record<string, string> = {
     '': [
       formatCommandHelp('hvy add section PARENT_PATH ID TITLE', 'Create a section.'),
@@ -71,51 +97,67 @@ export function hvyDocumentCommandHelp(topic = ''): string {
       ...getHvyCliPluginCommandRegistrations().map((plugin) => formatCommandHelp(plugin.helpTopic, `Show ${plugin.name} plugin commands.`)),
       formatCommandHelp('hvy add plugin SECTION_PATH ID PLUGIN_ID [--config JSON] [--body TEXT]', 'Create a raw plugin block by plugin id.'),
     ].join('\n'),
-    form: formatFormPluginHelp('form add'),
-    'plugin form': formatFormPluginHelp('hvy add plugin form'),
-    'db-table': formatDbTablePluginHelp('db-table'),
-    'plugin db-table': formatDbTablePluginHelp('hvy plugin db-table'),
+    form: formatLegacyPluginAliasHelp('form', 'form add'),
+    'db-table': formatLegacyPluginAliasHelp('db-table', 'db-table'),
   };
-  return help[topic] ?? help[''];
-}
-
-function formatFormPluginHelp(prefix: string): string {
-  return [
-      formatCommandHelp(
-        `${prefix} SECTION_PATH ID SUBMIT_BUTTON_LABEL FIELD... [--script NAME PYTHON] [--on-submit-script NAME]`,
-        'Append a Form plugin. FIELD uses name:Label:type[:required][:option A|option B].'
-      ),
-      formatCommandHelp('--script NAME PYTHON', 'Store a named Python script in the form YAML.'),
-      formatCommandHelp('--on-submit-script NAME', 'Run that named script when the submit button is pressed. Alias: --submit.'),
-      formatCommandHelp(
-        `Example: ${prefix} /chores add-chore "Add chore" "description:Description:textarea:required" --script submit "title = doc.form.get_value('description')\\ndoc.db.execute('INSERT INTO chores (title) VALUES (\\'' + title + '\\')')" --on-submit-script submit`,
-        'Creates a form whose submit button says "Add chore" and runs the script named submit.'
-      ),
-    ].join('\n');
-}
-
-function formatDbTablePluginHelp(prefix: string): string {
-  const showCommand = prefix === 'db-table'
-    ? 'db-table show SECTION_PATH ID TABLE [QUERY]'
-    : 'hvy add plugin db-table SECTION_PATH ID TABLE [QUERY]';
-  const operationPrefix = prefix === 'db-table' ? 'db-table' : 'hvy plugin db-table';
-  const dbTableCommands = getHvyCliPluginCommandRegistration('db-table');
-  const operationCommands = prefix === 'db-table'
-    ? [
-        { command: 'db-table query [SELECT/WITH SQL]', description: 'Run read-only SQL and print result rows.' },
-        { command: 'db-table exec [CREATE / INSERT / UPDATE / DELETE / DROP SQL]', description: 'Run modifying SQL and persist the database.' },
-        { command: 'db-table tables', description: 'List SQLite tables and views.' },
-        { command: 'db-table schema [TABLE_OR_VIEW]', description: 'Show schema details.' },
-      ]
-    : dbTableCommands?.operationCommands ?? [];
-  return [
-    formatCommandHelp(showCommand, 'Create a DB Table plugin that shows a SQLite table/view with an optional SQL query. Legacy alias: db-table show/add.'),
-    ...operationCommands.map((entry) => formatCommandHelp(prefix === 'db-table' ? entry.command : entry.command.replace('hvy plugin db-table', operationPrefix), entry.description)),
-  ].join('\n');
+  return help[normalizedTopic] ?? help[''];
 }
 
 function formatCommandHelp(command: string, description: string): string {
   return `${command}\n  ${description}`;
+}
+
+function formatLegacyPluginAliasHelp(pluginName: string, legacyPrefix: string): string {
+  const plugin = getHvyCliPluginCommandRegistration(pluginName);
+  if (!plugin) {
+    return '';
+  }
+  const commands = [...plugin.addCommands, ...plugin.operationCommands, ...(plugin.helpCommands ?? [])]
+    .map((entry) => ({
+      command: entry.command
+        .replace(/^hvy add plugin form\b/, 'form add')
+        .replace(/^hvy add plugin db-table\b/, 'db-table show')
+        .replace(/^hvy plugin db-table\b/, legacyPrefix),
+      description: entry.description,
+    }));
+  return commands.map((entry) => formatCommandHelp(entry.command, entry.description)).join('\n');
+}
+
+function formatRegisteredPluginHelp(plugin: {
+  helpTopic: string;
+  componentHints: string[];
+  addCommands: HvyCliHelpCommand[];
+  operationCommands: HvyCliHelpCommand[];
+  helpCommands?: HvyCliHelpCommand[];
+}): string {
+  const commands = [...plugin.addCommands, ...plugin.operationCommands, ...(plugin.helpCommands ?? [])];
+  return [
+    ...(commands.length > 0 ? commands.map((entry) => formatCommandHelp(entry.command, entry.description)) : [
+      formatCommandHelp(plugin.helpTopic, 'Show plugin-specific help.'),
+    ]),
+    ...(plugin.componentHints.length > 0 ? ['', 'Hints:', ...plugin.componentHints.map((hint) => `  ${hint}`)] : []),
+  ].join('\n');
+}
+
+function formatScriptingToolHelp(toolName: string): string {
+  const normalized = toolName.trim();
+  if (!normalized) {
+    return [
+      formatCommandHelp('hvy plugin scripting tool TOOL_NAME', 'Show doc.tool call shape for one scripting tool.'),
+      `Available tools: ${getHvyCliScriptingToolNames().join(', ')}`,
+    ].join('\n');
+  }
+  const help = getHvyCliScriptingToolHelp(normalized);
+  if (!help) {
+    return `Unknown scripting tool "${normalized}". Available tools: ${getHvyCliScriptingToolNames().join(', ')}`;
+  }
+  return [
+    formatCommandHelp(`hvy plugin scripting tool ${normalized}`, `Show doc.tool help for ${normalized}.`),
+    '',
+    `Use from Brython as: doc.tool("${normalized}", args_dict)`,
+    '',
+    help,
+  ].join('\n');
 }
 
 function formatPluginQuickReference(): string[] {

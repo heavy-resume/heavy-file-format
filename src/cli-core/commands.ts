@@ -10,6 +10,7 @@ import { executeHvyDocumentCommand, hvyDocumentCommandHelp } from './hvy-documen
 import { createScriptingDbRuntime, formatQueryResultTable, getDocumentDbTableObjectNames } from '../plugins/db-table';
 import type { VisualBlock, VisualSection } from '../editor/types';
 import { getSectionId } from '../section-ops';
+import { getHvyCliPluginCommandRegistration } from './plugin-command-registry';
 
 const SCRATCHPAD_SOFT_MAX_CHARS = 600;
 const SCRATCHPAD_HARD_MAX_CHARS = 800;
@@ -116,6 +117,9 @@ async function runCommand(ctx: { document: VisualDocument; fs: ReturnType<typeof
     }
     if (args[0] === 'plugin' && args[1] === 'db-table' && !args[2]) {
       return { cwd: ctx.cwd, output: helpFor('hvy plugin db-table'), mutated: false };
+    }
+    if (args[0] === 'plugin' && args[1] && !args[2] && getHvyCliPluginCommandRegistration(args[1])) {
+      return { cwd: ctx.cwd, output: helpFor(`hvy plugin ${args[1]}`), mutated: false };
     }
     if (args[0] === 'plugin' && args[1] === 'db-table' && isDbTableSqlAction(args[2] ?? '')) {
       const result = await commandDbTable(ctx.document, args.slice(2));
@@ -798,6 +802,15 @@ function globToRegExp(glob: string): RegExp {
 }
 
 function helpFor(topic = ''): string {
+  const normalizedTopic = topic.trim();
+  if (normalizedTopic.startsWith('hvy plugin ')) {
+    const pluginTopic = normalizedTopic.slice('hvy '.length);
+    const pluginName = pluginTopic.slice('plugin '.length).split(/\s+/, 1)[0] ?? '';
+    if (getHvyCliPluginCommandRegistration(pluginName)) {
+      return hvyDocumentCommandHelp(pluginTopic);
+    }
+  }
+
   const help: Record<string, string> = {
     '': 'Commands: cd, pwd, ls, cat, head, tail, nl, find, rg, rm, echo, sed, hvy. Use man <command> for details.',
     cd: formatCommandHelp('cd PATH', 'Change the current virtual directory.'),
@@ -823,7 +836,7 @@ function helpFor(topic = ''): string {
     form: `${hvyDocumentCommandHelp('plugin form')}\nLegacy alias: form add ...`,
     'db-table': `${hvyDocumentCommandHelp('plugin db-table')}\nLegacy aliases: db-table show/query/exec/tables/schema ...`,
   };
-  return help[topic] ?? help[''];
+  return help[normalizedTopic] ?? help[''];
 }
 
 function formatCommandHelp(command: string, description: string): string {

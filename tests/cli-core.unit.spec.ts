@@ -288,6 +288,38 @@ test('hvy plugin form help explains script and submit options', async () => {
   expect(help).toContain('Example: hvy add plugin form /chores add-chore');
 });
 
+test('registered plugin help topics work without special-case command handlers', async () => {
+  const document = createCliTestDocument();
+  const session = createHvyCliSession();
+
+  const manHelp = (await executeHvyCliCommand(document, session, 'man hvy plugin scripting')).output;
+  const directHelp = (await executeHvyCliCommand(document, session, 'hvy plugin scripting')).output;
+
+  expect(manHelp).toContain('hvy add plugin SECTION_PATH ID dev.heavy.scripting --config {"version":"0.1"} --body PYTHON');
+  expect(manHelp).toContain('The component body is top-level Python/Brython source with one injected global: doc.');
+  expect(manHelp).toContain('Document tools: request_structure, grep, view_component');
+  expect(manHelp).toContain('Not exposed through doc.tool: edit_component, view_rendered_component, query_db_table, execute_sql');
+  expect(manHelp).toContain('Example: summary = doc.tool("request_structure"); doc.header.set("script_summary", summary[:200])');
+  expect(manHelp).toContain('For a specific doc.tool shape, run: man hvy plugin scripting tool TOOL_NAME');
+  expect(directHelp).toBe(manHelp);
+});
+
+test('scripting plugin help can show one doc.tool shape at a time', async () => {
+  const document = createCliTestDocument();
+  const session = createHvyCliSession();
+
+  const grepHelp = (await executeHvyCliCommand(document, session, 'man hvy plugin scripting tool grep')).output;
+  const directHelp = (await executeHvyCliCommand(document, session, 'hvy plugin scripting tool patch_header')).output;
+  const listHelp = (await executeHvyCliCommand(document, session, 'man hvy plugin scripting tool')).output;
+
+  expect(grepHelp).toContain('hvy plugin scripting tool grep');
+  expect(grepHelp).toContain('Use from Brython as: doc.tool("grep", args_dict)');
+  expect(grepHelp).toContain('{"tool":"grep","query":"Python|TypeScript"');
+  expect(directHelp).toContain('Use from Brython as: doc.tool("patch_header", args_dict)');
+  expect(directHelp).toContain('{"tool":"patch_header","edits"');
+  expect(listHelp).toContain('Available tools: request_structure, grep, view_component');
+});
+
 test('db-table cli can execute modifying SQL and query rows', async () => {
   const document = deserializeDocument('---\nhvy_version: 0.1\n---\n', '.hvy');
   const session = createHvyCliSession();

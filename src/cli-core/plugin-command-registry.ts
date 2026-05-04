@@ -1,3 +1,4 @@
+import { buildDocumentEditToolHelp } from '../ai-document-edit-instructions';
 import { DB_TABLE_PLUGIN_ID, FORM_PLUGIN_ID, SCRIPTING_PLUGIN_ID } from '../plugins/registry';
 
 export interface HvyCliHelpCommand {
@@ -12,9 +13,33 @@ export interface HvyCliPluginCommandRegistration {
   componentHints: string[];
   addCommands: HvyCliHelpCommand[];
   operationCommands: HvyCliHelpCommand[];
+  helpCommands?: HvyCliHelpCommand[];
 }
 
 const pluginCommandRegistrations: HvyCliPluginCommandRegistration[] = [];
+const SCRIPTING_DOC_TOOL_NAMES = [
+  'request_structure',
+  'grep',
+  'view_component',
+  'get_css',
+  'get_properties',
+  'set_properties',
+  'patch_component',
+  'create_component',
+  'remove_component',
+  'create_section',
+  'remove_section',
+  'reorder_section',
+  'view_header',
+  'grep_header',
+  'patch_header',
+];
+
+const SCRIPTING_HEADER_TOOL_HELP: Record<string, string> = {
+  view_header: '{"tool":"view_header","start_line":1,"end_line":120,"reason":"optional"}',
+  grep_header: '{"tool":"grep_header","query":"component_defs|skill-card","flags":"i","before":2,"after":8,"max_count":3,"reason":"optional"}',
+  patch_header: '{"tool":"patch_header","edits":[{"op":"replace","start_line":2,"end_line":2,"text":"title: New title"}],"reason":"optional"}',
+};
 
 export function registerHvyCliPluginCommands(registration: HvyCliPluginCommandRegistration): void {
   const existingIndex = pluginCommandRegistrations.findIndex((entry) => entry.name === registration.name);
@@ -37,12 +62,31 @@ export function getHvyCliPluginCommandRegistrationByPluginId(pluginId: string): 
   return getHvyCliPluginCommandRegistrations().find((registration) => registration.pluginId === pluginId) ?? null;
 }
 
+export function getHvyCliScriptingToolNames(): string[] {
+  return [...SCRIPTING_DOC_TOOL_NAMES];
+}
+
+export function getHvyCliScriptingToolHelp(toolName: string): string | null {
+  const normalized = toolName.trim();
+  if (normalized.length === 0) {
+    return null;
+  }
+  if (SCRIPTING_HEADER_TOOL_HELP[normalized]) {
+    return SCRIPTING_HEADER_TOOL_HELP[normalized];
+  }
+  const lookupTopic = ['get_css', 'get_properties', 'set_properties'].includes(normalized)
+    ? 'tool:css'
+    : `tool:${normalized}`;
+  return buildDocumentEditToolHelp(lookupTopic);
+}
+
 function copyRegistration(registration: HvyCliPluginCommandRegistration): HvyCliPluginCommandRegistration {
   return {
     ...registration,
     componentHints: [...registration.componentHints],
     addCommands: [...registration.addCommands],
     operationCommands: [...registration.operationCommands],
+    helpCommands: [...(registration.helpCommands ?? [])],
   };
 }
 
@@ -65,6 +109,20 @@ registerHvyCliPluginCommands({
     },
   ],
   operationCommands: [],
+  helpCommands: [
+    {
+      command: '--script NAME PYTHON',
+      description: 'Store a named Python script in the form YAML.',
+    },
+    {
+      command: '--on-submit-script NAME',
+      description: 'Run that named script when the submit button is pressed. Alias: --submit.',
+    },
+    {
+      command: `Example: hvy add plugin form /chores add-chore "Add chore" "description:Description:textarea:required" --script submit "title = doc.form.get_value('description')\\ndoc.db.execute('INSERT INTO chores (title) VALUES (\\'' + title + '\\')')" --on-submit-script submit`,
+      description: 'Creates a form whose submit button says "Add chore" and runs the script named submit.',
+    },
+  ],
 });
 
 registerHvyCliPluginCommands({
@@ -72,15 +130,36 @@ registerHvyCliPluginCommands({
   pluginId: SCRIPTING_PLUGIN_ID,
   helpTopic: 'hvy plugin scripting',
   componentHints: [
-    'This plugin is an executable scripting block. The component body is top-level Python/Brython source.',
-    'Scripts run in a sandboxed browser Brython runtime with a doc global; imports, network, and DOM access are not allowed.',
-    'Top-level return is a syntax error. Define helper functions if you need return statements.',
-    'Use doc.tool(name, args) for synchronous document-edit tools; args are a Python dict matching the AI tool schema.',
-    'Available doc helpers include doc.header, doc.attachments, doc.db, and doc.rerender. doc.form exists only while running form plugin scripts.',
-    'The script has a line budget, so avoid unbounded loops.',
+    'Scripting runs once when the document loads. Use it to generate, mutate, or rearrange document content programmatically.',
+    'The component body is top-level Python/Brython source with one injected global: doc.',
+    'Sandbox limits: imports, network, and DOM access are not allowed. Mutate the document through doc instead.',
+    'Execution model: top-level return is a syntax error; return works inside helper functions. Loops count against a 100,000-line budget.',
+    'doc.tool(name, args) calls a synchronous subset of document-edit tools. args is a Python dict matching the AI tool schema.',
+    'Document tools: request_structure, grep, view_component, get_css, get_properties, set_properties, patch_component, create_component, remove_component, create_section, remove_section, reorder_section.',
+    'Header tools: view_header, grep_header, patch_header.',
+    'Not exposed through doc.tool: edit_component, view_rendered_component, query_db_table, execute_sql, and other async tools.',
+    'doc.header.get/set/remove/keys reads and writes front matter.',
+    'doc.attachments.list/read/write/remove works with document attachments.',
+    'doc.db.query(sql, params) and doc.db.execute(sql, params) access the attached SQLite database when available.',
+    'doc.form exists only while running form plugin scripts. Use form plugin help for doc.form methods.',
+    'doc.rerender() flushes pending rendering work, but scripts usually do not need it because the host rerenders after the script finishes.',
+    'Example: summary = doc.tool("request_structure"); doc.header.set("script_summary", summary[:200])',
+    'Example: hits = doc.tool("grep", {"query": "TODO", "flags": "i"}); doc.header.set("todo_hits", hits)',
+    'For a specific doc.tool shape, run: man hvy plugin scripting tool TOOL_NAME',
   ],
-  addCommands: [],
+  addCommands: [
+    {
+      command: 'hvy add plugin SECTION_PATH ID dev.heavy.scripting --config {"version":"0.1"} --body PYTHON',
+      description: 'Create a scripting plugin block.',
+    },
+  ],
   operationCommands: [],
+  helpCommands: [
+    {
+      command: 'hvy plugin scripting tool TOOL_NAME',
+      description: 'Show doc.tool call shape for one scripting tool.',
+    },
+  ],
 });
 
 registerHvyCliPluginCommands({
@@ -95,7 +174,7 @@ registerHvyCliPluginCommands({
   addCommands: [
     {
       command: 'hvy add plugin db-table SECTION_PATH ID TABLE [QUERY]',
-      description: 'Create a DB Table plugin component.',
+      description: 'Create a DB Table plugin that shows a SQLite table/view with an optional SQL query. Legacy alias: db-table show/add.',
     },
   ],
   operationCommands: [

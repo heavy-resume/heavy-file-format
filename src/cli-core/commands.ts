@@ -100,6 +100,9 @@ async function runCommand(ctx: { document: VisualDocument; fs: ReturnType<typeof
     return { cwd: ctx.cwd, output: commandSed(ctx, args), mutated: true };
   }
   if (command === 'hvy') {
+    if (args[0] === 'read') {
+      return { cwd: ctx.cwd, output: commandCat(ctx, args.slice(1)), mutated: false };
+    }
     if (args[0] === 'plugin' && !args[1]) {
       return { cwd: ctx.cwd, output: helpFor('hvy plugin'), mutated: false };
     }
@@ -301,26 +304,26 @@ function commandFind(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cw
 }
 
 function commandRg(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd: string }, args: string[]): string {
-  const warnings = warnUnknownOptions('rg', args, ['-i']);
-  const pattern = args.find((arg) => !arg.startsWith('-'));
-  if (!pattern) {
+  const parsed = parseRgArgs(args);
+  if (!parsed.pattern) {
     throw new Error('rg: missing search pattern');
   }
-  const rootArg = args.slice(args.indexOf(pattern) + 1).find((arg) => !arg.startsWith('-')) ?? '.';
-  const root = resolveVirtualPath(ctx.fs, ctx.cwd, rootArg);
-  const regex = new RegExp(pattern, args.includes('-i') ? 'i' : '');
+  const root = resolveVirtualPath(ctx.fs, ctx.cwd, parsed.path);
+  const regex = new RegExp(normalizeRgPattern(parsed.pattern), parsed.ignoreCase ? 'i' : '');
   const lines: string[] = [];
+  const matchingFiles = new Set<string>();
   for (const entry of [...ctx.fs.entries.values()].sort((left, right) => left.path.localeCompare(right.path))) {
     if (entry.kind !== 'file' || !(entry.path === root || entry.path.startsWith(root === '/' ? '/' : `${root}/`))) {
       continue;
     }
     entry.read().split('\n').forEach((line, index) => {
       if (regex.test(line)) {
+        matchingFiles.add(entry.path);
         lines.push(`${entry.path}:${index + 1}:${line}`);
       }
     });
   }
-  return withWarnings(lines.join('\n'), warnings);
+  return withWarnings((parsed.filesWithMatches ? [...matchingFiles] : lines).join('\n'), parsed.warnings);
 }
 
 function commandRm(ctx: { document: VisualDocument; fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd: string }, args: string[]): string {
@@ -586,6 +589,66 @@ function parseFindArgs(args: string[]): {
   return { path, namePattern, type, maxDepth, warnings };
 }
 
+function parseRgArgs(args: string[]): {
+  pattern: string;
+  path: string;
+  ignoreCase: boolean;
+  filesWithMatches: boolean;
+  warnings: string[];
+} {
+  const warnings: string[] = [];
+  const positional: string[] = [];
+  let ignoreCase = false;
+  let filesWithMatches = false;
+
+  for (const arg of args) {
+    if (arg === '--ignore-case') {
+      ignoreCase = true;
+      continue;
+    }
+    if (arg === '--line-number') {
+      continue;
+    }
+    if (arg === '--files-with-matches') {
+      filesWithMatches = true;
+      continue;
+    }
+    if (/^-[A-Za-z]+$/.test(arg)) {
+      for (const flag of arg.slice(1)) {
+        if (flag === 'i') {
+          ignoreCase = true;
+        } else if (flag === 'n') {
+          // Line numbers are always included for matched lines.
+        } else if (flag === 'l') {
+          filesWithMatches = true;
+        } else if (flag === 'r' || flag === 'R') {
+          // Virtual rg searches recursively by default.
+        } else {
+          warnings.push(`Warning: rg ignored unsupported option -${flag}`);
+        }
+      }
+      continue;
+    }
+    if (arg.startsWith('-')) {
+      warnings.push(`Warning: rg ignored unsupported option ${arg}`);
+      continue;
+    }
+    positional.push(arg);
+  }
+
+  return {
+    pattern: positional[0] ?? '',
+    path: positional[1] ?? '.',
+    ignoreCase,
+    filesWithMatches,
+    warnings,
+  };
+}
+
+function normalizeRgPattern(pattern: string): string {
+  return pattern.replaceAll('\\|', '|');
+}
+
 function warnUnknownOptions(command: string, args: string[], allowedOptions: string[]): string[] {
   return args
     .filter((arg) => arg.startsWith('-') && !allowedOptions.includes(arg))
@@ -685,7 +748,7 @@ function helpFor(topic = ''): string {
     tail: formatCommandHelp('tail [-n COUNT] FILE', 'Print the last lines of a file. COUNT maxes at 100.'),
     nl: formatCommandHelp('nl FILE', 'Print file contents with line numbers.'),
     find: formatCommandHelp('find [PATH] [-name GLOB] [-type f|d] [-maxdepth N] [-print]', 'List up to 100 virtual paths below PATH.'),
-    rg: formatCommandHelp('rg [-i] PATTERN [PATH]', 'Search readable virtual files.'),
+    rg: formatCommandHelp('rg [-i] [-n] [-l] PATTERN [PATH]', 'Search readable virtual files. Line numbers are shown by default; -l prints matching file paths.'),
     rm: formatCommandHelp('rm -r PATH...', 'Remove section or component directories from the virtual document body.'),
     echo: formatCommandHelp('echo TEXT [> FILE|>> FILE]', 'Print text, replace a writable file, or append to a writable file.'),
     sed: formatCommandHelp('sed s/search/replace/[g] FILE', 'Update a writable virtual file with a search/replace.'),

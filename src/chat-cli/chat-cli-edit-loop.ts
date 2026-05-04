@@ -23,6 +23,8 @@ export async function runChatCliEditLoop(params: {
   const cli = createChatCliInterface(params.document);
   const traceRunId = createChatCliTraceRunId();
   await writeChatCliUserQueryTrace(traceRunId, params.request, params.signal);
+  const initialRootListing = await cli.run('ls /');
+  await writeChatCliCommandTrace(traceRunId, initialRootListing.command, initialRootListing.output, params.signal);
   let conversation: ChatMessage[] = [
     {
       id: crypto.randomUUID(),
@@ -38,7 +40,7 @@ export async function runChatCliEditLoop(params: {
     const response = await requestProxyCompletion({
       settings: params.settings,
       messages: conversation,
-      context: buildChatCliLoopContext(cli.snapshot(), params.request),
+      context: buildChatCliLoopContext(cli.snapshot(), params.request, initialRootListing),
       formatInstructions: buildChatCliLoopFormatInstructions(),
       mode: 'document-edit',
       debugLabel: `chat-cli-edit:${step + 1}`,
@@ -91,7 +93,11 @@ export async function runChatCliEditLoop(params: {
   return { summary: `Stopped after ${CHAT_CLI_MAX_STEPS} CLI command steps. Send another request to continue.` };
 }
 
-function buildChatCliLoopContext(snapshot: ReturnType<ReturnType<typeof createChatCliInterface>['snapshot']>, request: string): string {
+function buildChatCliLoopContext(
+  snapshot: ReturnType<ReturnType<typeof createChatCliInterface>['snapshot']>,
+  request: string,
+  initialRootListing: { command: string; output: string }
+): string {
   return [
     'Task goal:',
     request,
@@ -101,6 +107,10 @@ function buildChatCliLoopContext(snapshot: ReturnType<ReturnType<typeof createCh
     '',
     'Persistent instructions:',
     snapshot.persistentInstructions,
+    '',
+    'Initial terminal output:',
+    `> ${initialRootListing.command}`,
+    formatCommandResultForModel(initialRootListing.output),
     '',
     `Current directory: ${snapshot.cwd}`,
     '',

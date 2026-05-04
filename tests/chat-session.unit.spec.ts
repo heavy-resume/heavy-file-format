@@ -179,6 +179,13 @@ test('requestDocumentEditChatTurn runs the CLI edit loop for document chat', asy
   );
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('scratchpad.txt:');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Task goal:\nAdd a chore section.');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Initial terminal output:\n> ls /\ndir  attachments');
+  expect(writeChatCliCommandTraceMock.mock.calls[0]).toEqual([
+    'chat-cli-test',
+    'ls /',
+    expect.stringContaining('dir  body'),
+    undefined,
+  ]);
   expect(result.messages.at(-1)).toEqual(expect.objectContaining({
     role: 'assistant',
     content: 'Created the chore section.',
@@ -288,6 +295,7 @@ test('requestDocumentEditChatTurn stops after repeated cli command errors', asyn
   expect(result.error).toBe('Stopped after 3 failed CLI commands. Last error: No such file: /missing.txt');
   expect(requestProxyCompletionMock).toHaveBeenCalledTimes(3);
   expect(writeChatCliCommandTraceMock.mock.calls.map((call) => call[2])).toEqual([
+    expect.stringContaining('dir  body'),
     'Unknown command "not-a-command". Try "help".',
     'hvy: expected add, plugin, section add, text add, table add, form add, or db-table show',
     'No such file: /missing.txt',
@@ -319,6 +327,7 @@ test('requestDocumentEditChatTurn warns when scratchpad writes exceed the note l
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('x'.repeat(800));
   expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.context).toContain('short notes');
   expect(writeChatCliCommandTraceMock.mock.calls.map((call) => call[1])).toEqual([
+    'ls /',
     `echo "${'x'.repeat(900)}" > scratchpad.txt`,
     'pwd',
     'echo "short notes" > scratchpad.txt',

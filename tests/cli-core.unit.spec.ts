@@ -153,6 +153,26 @@ test('cli find supports common filters and warns about ignored options', async (
   expect((await executeHvyCliCommand(document, session, 'ls -lah /body')).output).toContain('Warning: ls ignored unsupported option -lah');
 });
 
+test('cli rg supports common ripgrep flags and hvy read aliases cat', async () => {
+  const document = createResumeCliTestDocument();
+  const session = createHvyCliSession();
+
+  const read = await executeHvyCliCommand(document, session, 'hvy read /body/tools-technologies/tool-typescript/skill-record.txt');
+  expect(read.output).toContain('TypeScript');
+
+  const lineNumber = await executeHvyCliCommand(document, session, 'rg -n "TypeScript\\|Typescript" /body/tools-technologies');
+  expect(lineNumber.output).toContain('/body/tools-technologies/tool-typescript/skill-record.txt:1:TypeScript');
+  expect(lineNumber.output).not.toContain('Warning: rg ignored unsupported option -n');
+
+  const filesOnly = await executeHvyCliCommand(document, session, 'rg "TypeScript" /body/tools-technologies -l');
+  expect(filesOnly.output).toContain('/body/tools-technologies/tool-typescript/skill-record.txt');
+  expect(filesOnly.output).not.toContain(':1:TypeScript');
+
+  const combined = await executeHvyCliCommand(document, session, 'rg -rn "TypeScript" /body/tools-technologies');
+  expect(combined.output).not.toContain('Warning: rg ignored unsupported option -r');
+  expect(combined.output).toContain('/body/tools-technologies/tool-typescript/skill-record.txt:1:TypeScript');
+});
+
 test('cli find limits broad result sets', async () => {
   const document = deserializeDocument('---\nhvy_version: 0.1\n---\n', '.hvy');
   const session = createHvyCliSession();

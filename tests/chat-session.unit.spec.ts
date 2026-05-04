@@ -174,7 +174,7 @@ test('requestDocumentEditChatTurn runs the CLI edit loop for document chat', asy
       mode: 'document-edit',
       debugLabel: 'chat-cli-edit:1',
       context: expect.stringContaining('Valid commands:\nCommands: cd, pwd, ls, cat, head, tail, nl, find, rg, grep, sort, uniq, wc, tr, xargs, rm, echo, sed, true, hvy. Ask: ask QUESTION. Finish: done SUMMARY.'),
-      formatInstructions: expect.stringContaining('Return exactly one terminal command'),
+      formatInstructions: expect.stringContaining('Return terminal command(s)'),
     })
   );
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('scratchpad.txt:');
@@ -315,6 +315,107 @@ test('requestDocumentEditChatTurn accepts shell-looking command wrappers', async
     '$ pwd',
     'Finished CLI edit loop.',
   ]);
+});
+
+test('requestDocumentEditChatTurn runs multiple fenced shell blocks as a batch', async () => {
+  requestProxyCompletionMock
+    .mockResolvedValueOnce('```shell\ncat /body/summary/long/text.txt\n```\n```shell\ncat /body/summary/long/text.txt\n```')
+    .mockResolvedValueOnce('done Inspected the long text twice.');
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {"id":"long"}-->
+ ${Array.from({ length: 60 }, (_value, index) => `line ${index + 1}`).join('\n')}
+`, '.hvy');
+  const onProgress = vi.fn();
+
+  const result = await requestDocumentEditChatTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Inspect the long text twice.',
+    onProgress,
+  });
+
+  expect(result.error).toBeNull();
+  expect(onProgress.mock.calls.map((call) => call[0].content)).toEqual([
+    '$ cat /body/summary/long/text.txt',
+    '$ cat /body/summary/long/text.txt',
+    'Finished CLI edit loop.',
+  ]);
+  const nextPrompt = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content ?? '';
+  expect(nextPrompt).toContain('> cat /body/summary/long/text.txt');
+  expect(nextPrompt).toContain('Warning: output truncated to 50 of 60 wrapped lines (10 lines hidden).');
+});
+
+test('requestDocumentEditChatTurn divides batch output budget across three fenced shell blocks', async () => {
+  requestProxyCompletionMock
+    .mockResolvedValueOnce('```shell\ncat /body/summary/long/text.txt\n```\n```shell\ncat /body/summary/long/text.txt\n```\n```shell\ncat /body/summary/long/text.txt\n```')
+    .mockResolvedValueOnce('done Inspected the long text three times.');
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {"id":"long"}-->
+ ${Array.from({ length: 60 }, (_value, index) => `line ${index + 1}`).join('\n')}
+`, '.hvy');
+  const onProgress = vi.fn();
+
+  const result = await requestDocumentEditChatTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Inspect the long text three times.',
+    onProgress,
+  });
+
+  expect(result.error).toBeNull();
+  expect(onProgress.mock.calls.map((call) => call[0].content)).toEqual([
+    '$ cat /body/summary/long/text.txt',
+    '$ cat /body/summary/long/text.txt',
+    '$ cat /body/summary/long/text.txt',
+    'Finished CLI edit loop.',
+  ]);
+  const nextPrompt = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content ?? '';
+  expect(nextPrompt.match(/Warning: output truncated to 33 of 60 wrapped lines \(27 lines hidden\)\./g)).toHaveLength(3);
+});
+
+test('requestDocumentEditChatTurn wraps long command output lines before returning them to the model', async () => {
+  requestProxyCompletionMock
+    .mockResolvedValueOnce('cat /body/summary/long-line/text.txt')
+    .mockResolvedValueOnce('done Inspected the long line.');
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {"id":"long-line"}-->
+ ${'a'.repeat(410)}wrapped-tail
+`, '.hvy');
+
+  const result = await requestDocumentEditChatTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Inspect long line.',
+  });
+
+  expect(result.error).toBeNull();
+  const nextPrompt = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content ?? '';
+  expect(nextPrompt).toContain('a'.repeat(400));
+  expect(nextPrompt).toContain(`${'a'.repeat(10)}wrapped-tail`);
 });
 
 test('requestDocumentEditChatTurn includes component hints and scratchpad after component-path commands', async () => {
@@ -595,8 +696,8 @@ test('requestDocumentEditChatTurn treats prose and dangling fences as retryable 
 
   expect(result.error).toBeNull();
   expect(onProgress.mock.calls.map((call) => call[0].content)).toEqual(['Finished CLI edit loop.']);
-  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content).toContain('Expected exactly one terminal command');
-  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.messages.at(-1)?.content).toContain('Expected exactly one terminal command');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content).toContain('Expected terminal command(s)');
+  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.messages.at(-1)?.content).toContain('Expected terminal command(s)');
   expect(writeChatCliCommandTraceMock.mock.calls.map((call) => call[1])).toEqual(['ls /', 'hvy request_structure --collapse', 'hvy lint']);
 });
 

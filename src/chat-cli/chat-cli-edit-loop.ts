@@ -11,6 +11,8 @@ const CHAT_CLI_MAX_CONSECUTIVE_COMMAND_ERRORS = 3;
 const CHAT_CLI_MESSAGE_HISTORY_MAX_CHARS = 500;
 const CHAT_CLI_MESSAGE_HISTORY_MIN_MESSAGES = 5;
 const CHAT_CLI_PRIOR_MESSAGE_LIMIT = 5;
+const CHAT_CLI_MODEL_OUTPUT_MAX_LINES = 100;
+const CHAT_CLI_MODEL_OUTPUT_MAX_LINE_WIDTH = 400;
 const CHAT_CLI_COMMAND_NAMES = new Set(['cd', 'pwd', 'ls', 'cat', 'head', 'tail', 'nl', 'find', 'rg', 'grep', 'sort', 'uniq', 'wc', 'tr', 'xargs', 'rm', 'echo', 'sed', 'true', 'hvy', 'db-table', 'form', 'ask']);
 
 export interface ChatCliEditTurnResult {
@@ -87,40 +89,67 @@ export async function runChatCliEditLoop(params: {
       return { summary: action.question };
     }
 
-    params.onProgress?.(`$ ${action.command}`);
-    let result: Awaited<ReturnType<typeof cli.run>>;
+    const commandOutputs: Array<{ command: string; output: string }> = [];
+    const commandHints: string[] = [];
+    const commands = action.commands;
+    const outputLineBudget = Math.max(1, Math.floor(CHAT_CLI_MODEL_OUTPUT_MAX_LINES / commands.length));
     let stopAfterCommandError: Error | null = null;
-    try {
-      result = await cli.run(action.command);
-      consecutiveCommandErrors = 0;
-    } catch (error) {
-      const output = error instanceof Error ? error.message : String(error);
-      consecutiveCommandErrors += 1;
-      if (consecutiveCommandErrors >= CHAT_CLI_MAX_CONSECUTIVE_COMMAND_ERRORS) {
-        stopAfterCommandError = new Error(`Stopped after ${CHAT_CLI_MAX_CONSECUTIVE_COMMAND_ERRORS} failed CLI commands. Last error: ${output}`);
+    let mutated = false;
+    let traceOutput = '';
+    for (const command of commands) {
+      params.onProgress?.(`$ ${command}`);
+      let result: Awaited<ReturnType<typeof cli.run>>;
+      try {
+        result = await cli.run(command);
+        consecutiveCommandErrors = 0;
+      } catch (error) {
+        const output = error instanceof Error ? error.message : String(error);
+        consecutiveCommandErrors += 1;
+        if (consecutiveCommandErrors >= CHAT_CLI_MAX_CONSECUTIVE_COMMAND_ERRORS) {
+          stopAfterCommandError = new Error(`Stopped after ${CHAT_CLI_MAX_CONSECUTIVE_COMMAND_ERRORS} failed CLI commands. Last error: ${output}`);
+        }
+        result = { command, cwd: cli.session.cwd, output, mutated: false };
       }
-      result = { command: action.command, cwd: cli.session.cwd, output, mutated: false };
+      mutated = mutated || (result.mutated && !isSessionOnlyCommand(command));
+      traceOutput = result.output;
+      commandOutputs.push({
+        command,
+        output: formatOutputForModel(result.output, outputLineBudget),
+      });
+      const hints = buildChatCliComponentHints({
+        document: params.document,
+        cwd: result.cwd,
+        command,
+        output: result.output,
+      });
+      if (hints.trim()) {
+        commandHints.push(hints);
+      }
+      if (stopAfterCommandError) {
+        break;
+      }
     }
     const modelMessage = formatCommandResultForModel({
-      output: result.output,
+      output: formatBatchCommandOutput(commandOutputs),
       lintDiff: await updateLintDiff(params.document, (nextIssues) => {
         const diff = formatHvyCliLintDiff(lintIssues, nextIssues);
         lintIssues = nextIssues;
         return diff;
       }),
-      hints: buildChatCliComponentHints({
-        document: params.document,
-        cwd: result.cwd,
-        command: action.command,
-        output: result.output,
-      }),
+      hints: formatBatchHints(commandHints),
       scratchpad: formatScratchpadForModel(cli.snapshot()),
     });
-    await writeChatCliCommandTrace(traceRunId, action.command, result.output, params.signal, modelMessage);
+    await writeChatCliCommandTrace(
+      traceRunId,
+      commands.length === 1 ? commands[0] ?? '' : commands.join('\n'),
+      commands.length === 1 ? traceOutput : formatBatchCommandOutput(commandOutputs),
+      params.signal,
+      modelMessage
+    );
     if (stopAfterCommandError) {
       throw stopAfterCommandError;
     }
-    if (result.mutated && !isSessionOnlyCommand(action.command)) {
+    if (mutated) {
       params.onMutation?.('chat-cli');
     }
     conversation = [
@@ -217,14 +246,21 @@ function isClarificationQuestion(content: string): boolean {
 
 function buildChatCliLoopFormatInstructions(): string {
   return [
-    'Return exactly one terminal command as plain text, or fenced in ```shell.',
+    'Return terminal command(s) as plain text, or fenced in ```shell. Multiple ```shell blocks are allowed and run in order.',
     'To finish, return: done Short summary of what changed.',
     'To ask for clarification, return: ask Question for the user.',
-    'Do not return prose, markdown explanations, or more than one command.',
+    'Do not return prose or markdown explanations.',
   ].join('\n');
 }
 
-function parseChatCliAction(response: string): { kind: 'command'; command: string } | { kind: 'done'; summary: string } | { kind: 'ask'; question: string } | { kind: 'invalid'; message: string } {
+function parseChatCliAction(response: string): { kind: 'command'; commands: string[] } | { kind: 'done'; summary: string } | { kind: 'ask'; question: string } | { kind: 'invalid'; message: string } {
+  const fencedCommands = extractFencedShellCommands(response);
+  if (fencedCommands.kind === 'invalid') {
+    return { kind: 'invalid', message: fencedCommands.message };
+  }
+  if (fencedCommands.commands.length > 0) {
+    return { kind: 'command', commands: fencedCommands.commands };
+  }
   const cleaned = normalizeCommandResponse(response);
   const command = cleaned.replace(/^(?:[\w./~-]+)?\s*\$\s*/, '').trim();
   if (/^(done|finish|finished)\b/i.test(command)) {
@@ -237,9 +273,33 @@ function parseChatCliAction(response: string): { kind: 'command'; command: strin
       : { kind: 'invalid', message: 'Expected `ask Question for the user`.' };
   }
   if (!command || command.startsWith('```') || isLikelyProseResponse(command)) {
-    return { kind: 'invalid', message: 'Expected exactly one terminal command, `ask Question`, or `done Short summary`. Do not return prose or markdown fences.' };
+    return { kind: 'invalid', message: 'Expected terminal command(s), `ask Question`, or `done Short summary`. Do not return prose.' };
   }
-  return { kind: 'command', command };
+  return { kind: 'command', commands: [command] };
+}
+
+function extractFencedShellCommands(response: string): { kind: 'ok'; commands: string[] } | { kind: 'invalid'; message: string } {
+  const trimmed = response.replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
+  const fenceRegex = /```(?:shell|bash|sh)?[ \t]*\n?([\s\S]*?)\s*```/gi;
+  const commands: string[] = [];
+  let lastIndex = 0;
+  let outside = '';
+  for (const match of trimmed.matchAll(fenceRegex)) {
+    outside += trimmed.slice(lastIndex, match.index);
+    lastIndex = (match.index ?? 0) + match[0].length;
+    const command = (match[1] ?? '').trim();
+    if (command) {
+      commands.push(command);
+    }
+  }
+  outside += trimmed.slice(lastIndex);
+  if (commands.length === 0) {
+    return { kind: 'ok', commands };
+  }
+  if (outside.trim()) {
+    return { kind: 'invalid', message: 'Expected only terminal command fences, `ask Question`, or `done Short summary`. Do not add prose around command fences.' };
+  }
+  return { kind: 'ok', commands };
 }
 
 function normalizeCommandResponse(response: string): string {
@@ -270,6 +330,59 @@ function formatCommandResultForModel(result: string | { output: string; lintDiff
     'scratchpad.txt',
     result.scratchpad?.trimEnd() || '(empty)',
   ].join('\n');
+}
+
+function formatBatchCommandOutput(outputs: Array<{ command: string; output: string }>): string {
+  if (outputs.length === 1) {
+    return outputs[0]?.output ?? '';
+  }
+  return outputs
+    .map((result) => [`> ${result.command}`, result.output.trimEnd() || '(no output)'].join('\n'))
+    .join('\n\n');
+}
+
+function formatBatchHints(hints: string[]): string {
+  const seen = new Set<string>();
+  const uniqueHints: string[] = [];
+  for (const hint of hints) {
+    const trimmed = hint.trim();
+    if (!trimmed || seen.has(trimmed)) {
+      continue;
+    }
+    seen.add(trimmed);
+    uniqueHints.push(trimmed);
+  }
+  return uniqueHints.join('\n\n');
+}
+
+function formatOutputForModel(output: string, maxLines: number): string {
+  const wrappedLines = wrapLongOutputLines(output).split('\n');
+  if (wrappedLines.length <= maxLines) {
+    return wrappedLines.join('\n');
+  }
+  const hiddenCount = wrappedLines.length - maxLines;
+  return [
+    ...wrappedLines.slice(0, maxLines),
+    `Warning: output truncated to ${maxLines} of ${wrappedLines.length} wrapped lines (${hiddenCount} lines hidden). Narrow the command with rg, find -name, head, or a more specific path.`,
+  ].join('\n');
+}
+
+function wrapLongOutputLines(output: string): string {
+  return output
+    .split('\n')
+    .flatMap((line) => splitLongOutputLine(line, CHAT_CLI_MODEL_OUTPUT_MAX_LINE_WIDTH))
+    .join('\n');
+}
+
+function splitLongOutputLine(line: string, maxWidth: number): string[] {
+  if (line.length <= maxWidth) {
+    return [line];
+  }
+  const chunks: string[] = [];
+  for (let index = 0; index < line.length; index += maxWidth) {
+    chunks.push(line.slice(index, index + maxWidth));
+  }
+  return chunks;
 }
 
 function formatScratchpadForModel(snapshot: Pick<ReturnType<ReturnType<typeof createChatCliInterface>['snapshot']>, 'scratchpad' | 'scratchpadEdited' | 'scratchpadCommandsSinceEdit'>): string {

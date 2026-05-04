@@ -11,8 +11,8 @@ import { createScriptingDbRuntime, formatQueryResultTable, getDocumentDbTableObj
 import type { VisualBlock, VisualSection } from '../editor/types';
 import { getSectionId } from '../section-ops';
 
-const SCRATCHPAD_SOFT_MAX_CHARS = 400;
-const SCRATCHPAD_HARD_MAX_CHARS = 600;
+const SCRATCHPAD_SOFT_MAX_CHARS = 600;
+const SCRATCHPAD_HARD_MAX_CHARS = 800;
 const FIND_MAX_RESULTS = 100;
 
 export interface HvyCliSession {
@@ -44,7 +44,7 @@ export async function executeHvyCliCommand(document: VisualDocument, session: Hv
   const fs = buildHvyVirtualFileSystem(document);
   addSessionScratchpadFile(fs, session);
   enforceScratchpadHardCap(session);
-  if (!isScratchpadCommand(args) && isScratchpadTooLong(session)) {
+  if (!isScratchpadCommand(args) && !isActionCommandAllowedWithLongScratchpad(args) && isScratchpadTooLong(session)) {
     return { cwd: session.cwd, output: buildScratchpadTooLongMessage(session.scratchpadContent ?? ''), mutated: false };
   }
   const ctx = { document, fs, cwd: session.cwd };
@@ -236,10 +236,31 @@ function isScratchpadCommand(args: string[]): boolean {
   return args.some((arg) => arg === 'scratchpad.txt' || arg === '/scratchpad.txt');
 }
 
+function isActionCommandAllowedWithLongScratchpad(args: string[]): boolean {
+  const [command = '', first = '', second = '', third = ''] = args;
+  if (command === 'sed' || command === 'rm') {
+    return true;
+  }
+  if (command === 'echo') {
+    return args.includes('>') || args.includes('>>');
+  }
+  if (command === 'hvy') {
+    return first === 'add' || first === 'section' || first === 'text' || first === 'table' || first === 'form' || first === 'db-table'
+      || (first === 'plugin' && second === 'db-table' && third === 'exec');
+  }
+  if (command === 'db-table') {
+    return first === 'exec' || first === 'show' || first === 'add';
+  }
+  if (command === 'form') {
+    return first === 'add';
+  }
+  return false;
+}
+
 function buildScratchpadTooLongMessage(scratchpad: string): string {
   return [
     `scratchpad.txt is ${scratchpad.length} characters, which is over the ${SCRATCHPAD_SOFT_MAX_CHARS} character working limit.`,
-    'Reduce scratchpad.txt before running other commands.',
+    'Act on completed notes with an edit command, or rewrite scratchpad.txt shorter before running more inspection commands.',
     '',
     'scratchpad.txt:',
     scratchpad,

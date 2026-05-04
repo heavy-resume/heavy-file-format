@@ -178,6 +178,7 @@ test('requestDocumentEditChatTurn runs the CLI edit loop for document chat', asy
     })
   );
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('scratchpad.txt:');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Task goal:\nAdd a chore section.');
   expect(result.messages.at(-1)).toEqual(expect.objectContaining({
     role: 'assistant',
     content: 'Created the chore section.',
@@ -210,6 +211,7 @@ test('requestDocumentEditChatTurn trims old cli conversation messages and keeps 
   expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.context).toContain(
     'Valid commands:\nCommands: cd, pwd, ls, cat, head, tail, nl, find, rg, rm, echo, sed, hvy.'
   );
+  expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.context).toContain('Task goal:\nCheck the document with several commands.');
   expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.context).toContain('scratchpad.txt:');
   expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.context).toContain('ran: pwd -> /');
 });
@@ -294,7 +296,7 @@ test('requestDocumentEditChatTurn stops after repeated cli command errors', asyn
 
 test('requestDocumentEditChatTurn blocks non-scratchpad commands until long scratchpad is reduced', async () => {
   requestProxyCompletionMock
-    .mockResolvedValueOnce(`echo "${'x'.repeat(700)}" > scratchpad.txt`)
+    .mockResolvedValueOnce(`echo "${'x'.repeat(900)}" > scratchpad.txt`)
     .mockResolvedValueOnce('pwd')
     .mockResolvedValueOnce('echo "short notes" > scratchpad.txt')
     .mockResolvedValueOnce('pwd')
@@ -310,12 +312,14 @@ test('requestDocumentEditChatTurn blocks non-scratchpad commands until long scra
   });
 
   expect(result.error).toBeNull();
-  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.messages.at(-1)?.content).toContain('scratchpad.txt is 600 characters');
-  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.messages.at(-1)?.content).toContain('Reduce scratchpad.txt before running other commands.');
-  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.context).toContain('x'.repeat(600));
+  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.messages.at(-1)?.content).toContain('scratchpad.txt is 800 characters');
+  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.messages.at(-1)?.content).toContain(
+    'Act on completed notes with an edit command, or rewrite scratchpad.txt shorter before running more inspection commands.'
+  );
+  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.context).toContain('x'.repeat(800));
   expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.context).toContain('short notes');
   expect(writeChatCliCommandTraceMock.mock.calls.map((call) => call[1])).toEqual([
-    `echo "${'x'.repeat(700)}" > scratchpad.txt`,
+    `echo "${'x'.repeat(900)}" > scratchpad.txt`,
     'pwd',
     'echo "short notes" > scratchpad.txt',
     'pwd',

@@ -38,7 +38,7 @@ export async function runChatCliEditLoop(params: {
     const response = await requestProxyCompletion({
       settings: params.settings,
       messages: conversation,
-      context: buildChatCliLoopContext(cli.snapshot()),
+      context: buildChatCliLoopContext(cli.snapshot(), params.request),
       formatInstructions: buildChatCliLoopFormatInstructions(),
       mode: 'document-edit',
       debugLabel: `chat-cli-edit:${step + 1}`,
@@ -94,8 +94,11 @@ export async function runChatCliEditLoop(params: {
   return { summary: `Stopped after ${CHAT_CLI_MAX_STEPS} CLI command steps. Send another request to continue.` };
 }
 
-function buildChatCliLoopContext(snapshot: ReturnType<ReturnType<typeof createChatCliInterface>['snapshot']>): string {
+function buildChatCliLoopContext(snapshot: ReturnType<ReturnType<typeof createChatCliInterface>['snapshot']>, request: string): string {
   return [
+    'Task goal:',
+    request,
+    '',
     'Valid commands:',
     snapshot.commandSummary,
     '',
@@ -197,7 +200,7 @@ function isSessionOnlyCommand(command: string): boolean {
 }
 
 function isScratchpadLimitOutput(output: string): boolean {
-  return output.startsWith('scratchpad.txt is ') && output.includes('Reduce scratchpad.txt before running other commands.');
+  return output.startsWith('scratchpad.txt is ') && output.includes('rewrite scratchpad.txt shorter');
 }
 
 function throwIfAborted(signal: AbortSignal | undefined): void {

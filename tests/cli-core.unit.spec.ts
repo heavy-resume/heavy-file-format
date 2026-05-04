@@ -72,13 +72,17 @@ test('cli blocks non-scratchpad commands when scratchpad is too long', async () 
   const document = createCliTestDocument();
   const session = createHvyCliSession();
 
-  expect((await executeHvyCliCommand(document, session, `echo "${'x'.repeat(700)}" > scratchpad.txt`)).output).toBe('/scratchpad.txt: written');
+  expect((await executeHvyCliCommand(document, session, `echo "${'x'.repeat(900)}" > scratchpad.txt`)).output).toBe('/scratchpad.txt: written');
 
   const blocked = await executeHvyCliCommand(document, session, 'ls /');
   expect(blocked.mutated).toBe(false);
-  expect(blocked.output).toContain('scratchpad.txt is 600 characters');
-  expect(blocked.output).toContain('Reduce scratchpad.txt before running other commands.');
-  expect(blocked.output).toContain('x'.repeat(600));
+  expect(blocked.output).toContain('scratchpad.txt is 800 characters');
+  expect(blocked.output).toContain('Act on completed notes with an edit command, or rewrite scratchpad.txt shorter before running more inspection commands.');
+  expect(blocked.output).toContain('x'.repeat(800));
+
+  const action = await executeHvyCliCommand(document, session, 'sed s/world/there/ /body/summary/intro/text.txt');
+  expect(action.output).toBe('/body/summary/intro/text.txt: updated');
+  expect(document.sections[0]?.blocks[0]?.text).toBe('Hello there');
 
   expect((await executeHvyCliCommand(document, session, 'echo "short" > scratchpad.txt')).output).toBe('/scratchpad.txt: written');
   expect((await executeHvyCliCommand(document, session, 'ls /')).output).toContain('dir  body');

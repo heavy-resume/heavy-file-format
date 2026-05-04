@@ -15,6 +15,7 @@ import {
   type HvyCliHelpCommand,
 } from './plugin-command-registry';
 import { formatHvyRequestStructure } from './request-structure';
+import { formatHvyFindIntent } from './intent-search';
 import { resolveVirtualPath, type HvyVirtualFileSystem } from './virtual-file-system';
 
 export interface HvyDocumentCommandContext {
@@ -32,6 +33,9 @@ export function executeHvyDocumentCommand(ctx: HvyDocumentCommandContext, args: 
   const [resource, action, ...rest] = args;
   if (resource === 'request_structure') {
     return { output: formatHvyRequestStructure(ctx.document, ctx.fs, parseRequestStructureArgs([action ?? '', ...rest].filter(Boolean))), mutated: false };
+  }
+  if (resource === 'find-intent') {
+    return { output: formatHvyFindIntent(ctx.document, ctx.fs, decodeCliText(action ?? ''), parseFindIntentArgs(rest)), mutated: false };
   }
   if (resource === 'add') {
     return executeHvyAddCommand(ctx, action, rest);
@@ -66,7 +70,7 @@ export function executeHvyDocumentCommand(ctx: HvyDocumentCommandContext, args: 
   if (resource === 'db-table' && (action === 'show' || action === 'add')) {
     return addDbTablePluginBlock(ctx, rest);
   }
-  throw new Error('hvy: expected request_structure, lint, add, plugin, section add, text add, table add, form add, or db-table show');
+  throw new Error('hvy: expected request_structure, find-intent, lint, add, plugin, section add, text add, table add, form add, or db-table show');
 }
 
 export function hvyDocumentCommandHelp(topic = ''): string {
@@ -91,7 +95,8 @@ export function hvyDocumentCommandHelp(topic = ''): string {
       formatCommandHelp('hvy add table SECTION_PATH ID COLUMNS [--row CSV]...', 'Create a table component.'),
       formatCommandHelp('hvy remove PATH [--prune-xref]', 'Remove a section or component directory. Alias: hvy delete PATH.'),
       formatCommandHelp('hvy prune-xref TARGET_ID', 'Remove xref-card components pointing to TARGET_ID.'),
-      formatCommandHelp('hvy request_structure [COMPONENT_ID] [--collapse]', 'Show the component directory map for the current document.'),
+      formatCommandHelp('hvy request_structure [COMPONENT_ID] [--collapse] [--describe]', 'Show the component directory map for the current document.'),
+      formatCommandHelp('hvy find-intent QUERY [--max N] [--json]', 'Find likely edit locations for an intent.'),
       formatCommandHelp('hvy lint', 'Check the document for likely component issues.'),
       ...formatPluginQuickReference(),
       formatCommandHelp('Edit existing components', 'Use find to discover virtual files, cat to inspect them, and sed to update writable body/config files.'),
@@ -99,7 +104,8 @@ export function hvyDocumentCommandHelp(topic = ''): string {
     section: formatCommandHelp('hvy add section PARENT_PATH ID TITLE', 'Add a section under /body or under another section. Alias: hvy section add.'),
     text: formatCommandHelp('hvy add text SECTION_PATH ID TEXT', 'Append a text block to a section. Alias: hvy text add.'),
     table: formatCommandHelp('hvy add table SECTION_PATH ID COLUMNS [--row CSV]...', 'Append a table block. Columns and rows use comma-separated text. Alias: hvy table add.'),
-    request_structure: formatCommandHelp('hvy request_structure [COMPONENT_ID] [--collapse]', 'Show the component directory map, optionally scoped to one component id. --collapse compacts anonymous leaf components.'),
+    request_structure: formatCommandHelp('hvy request_structure [COMPONENT_ID] [--collapse] [--describe]', 'Show the component directory map, optionally scoped to one component id. --collapse compacts anonymous leaf components. --describe includes non-empty descriptions.'),
+    'find-intent': formatCommandHelp('hvy find-intent QUERY [--max N] [--json]', 'Search semantic section/component descriptions, ids, paths, roles, and previews for likely edit locations.'),
     lint: formatCommandHelp('hvy lint', 'Check the document for empty text, broken xrefs, empty table rows, and plugin-defined issues.'),
     prune_xref: formatCommandHelp('hvy prune-xref TARGET_ID', 'Remove xref-card components whose xrefTarget equals TARGET_ID.'),
     plugin: [
@@ -178,12 +184,17 @@ function formatPluginRegisteredHelp(plugin: { addCommands: HvyCliHelpCommand[]; 
   return [...plugin.addCommands, ...plugin.operationCommands].map((entry) => formatCommandHelp(entry.command, entry.description));
 }
 
-function parseRequestStructureArgs(args: string[]): { componentId?: string; collapse?: boolean } {
+function parseRequestStructureArgs(args: string[]): { componentId?: string; collapse?: boolean; describe?: boolean } {
   let componentId = '';
   let collapse = false;
+  let describe = false;
   for (const arg of args) {
     if (arg === '--collapse') {
       collapse = true;
+      continue;
+    }
+    if (arg === '--describe') {
+      describe = true;
       continue;
     }
     if (arg.startsWith('-')) {
@@ -197,6 +208,44 @@ function parseRequestStructureArgs(args: string[]): { componentId?: string; coll
   return {
     ...(componentId ? { componentId } : {}),
     ...(collapse ? { collapse } : {}),
+    ...(describe ? { describe } : {}),
+  };
+}
+
+function parseFindIntentArgs(args: string[]): { max?: number; json?: boolean } {
+  let max: number | undefined;
+  let json = false;
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index] ?? '';
+    if (arg === '--json') {
+      json = true;
+      continue;
+    }
+    if (arg === '--max') {
+      const value = Number(args[index + 1] ?? '');
+      if (!Number.isFinite(value) || value < 1) {
+        throw new Error('hvy find-intent: --max must be a positive number');
+      }
+      max = Math.floor(value);
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith('--max=')) {
+      const value = Number(arg.slice('--max='.length));
+      if (!Number.isFinite(value) || value < 1) {
+        throw new Error('hvy find-intent: --max must be a positive number');
+      }
+      max = Math.floor(value);
+      continue;
+    }
+    if (arg.startsWith('-')) {
+      throw new Error(`hvy find-intent: unsupported option ${arg}`);
+    }
+    throw new Error(`hvy find-intent: unexpected argument ${arg}`);
+  }
+  return {
+    ...(max ? { max } : {}),
+    ...(json ? { json } : {}),
   };
 }
 

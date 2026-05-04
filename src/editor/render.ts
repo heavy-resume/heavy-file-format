@@ -911,7 +911,11 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
             : ''
         }
         <label>
-          <span>Description</span>
+          <span class="description-label-with-action">Description${
+            block.schema.description.trim()
+              ? ''
+              : ` <button type="button" class="ghost inline-generate-description" data-action="generate-block-description" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}">Generate</button>`
+          }</span>
           <textarea
             rows="3"
             data-section-key="${deps.escapeAttr(sectionKey)}"

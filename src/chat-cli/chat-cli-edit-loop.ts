@@ -39,6 +39,8 @@ export async function runChatCliEditLoop(params: {
   let lintIssues = await runHvyCliLinter(params.document);
   const initialLint = await cli.run('hvy lint');
   await writeChatCliCommandTrace(traceRunId, initialLint.command, initialLint.output, params.signal);
+  const initialIntent = await cli.run(`hvy find-intent ${quoteChatCliShellArg(params.request)} --max 5`);
+  await writeChatCliCommandTrace(traceRunId, initialIntent.command, initialIntent.output, params.signal);
   const priorConversation = selectChatCliPriorMessages(params.priorMessages ?? []);
   let conversation: ChatMessage[] = [
     ...priorConversation,
@@ -56,7 +58,7 @@ export async function runChatCliEditLoop(params: {
     const response = await requestProxyCompletion({
       settings: params.settings,
       messages: conversation,
-      context: buildChatCliLoopContext(cli.snapshot(), params.request, params.priorMessages ?? [], priorConversation, [initialRootListing, initialStructure, initialLint]),
+      context: buildChatCliLoopContext(cli.snapshot(), params.request, params.priorMessages ?? [], priorConversation, [initialRootListing, initialStructure, initialLint, initialIntent]),
       formatInstructions: buildChatCliLoopFormatInstructions(),
       mode: 'document-edit',
       debugLabel: `chat-cli-edit:${step + 1}`,
@@ -198,6 +200,10 @@ function buildChatCliLoopContext(
     'scratchpad.txt:',
     formatScratchpadForModel(snapshot),
   ].join('\n');
+}
+
+function quoteChatCliShellArg(value: string): string {
+  return `"${value.replace(/["\\]/g, (match) => `\\${match}`)}"`;
 }
 
 function selectChatCliPriorMessages(messages: ChatMessage[]): ChatMessage[] {

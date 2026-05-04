@@ -620,7 +620,11 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
               )}
             </label>
             <label>
-              <span>Description</span>
+              <span class="description-label-with-action">Description${
+                section.description.trim()
+                  ? ''
+                  : ` <button type="button" class="ghost inline-generate-description" data-action="generate-section-description" data-section-key="${deps.escapeAttr(section.key)}">Generate</button>`
+              }</span>
               <textarea
                 rows="3"
                 data-section-key="${deps.escapeAttr(section.key)}"

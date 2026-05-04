@@ -835,6 +835,19 @@
   line-height: 1.25;
 }
 
+.description-label-with-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+}
+
+.inline-generate-description {
+  min-height: auto;
+  padding: 0.18rem 0.45rem;
+  font-size: 0.78rem;
+}
+
 .component-picker-pane-root .component-picker-row-description {
   max-height: 0;
   opacity: 0;

@@ -54,6 +54,44 @@ test('reader max width keeps focus while typing', async ({ page }) => {
   await expect(readerMaxWidth).toHaveValue('60rem');
 });
 
+test('description generate button appears only for empty component descriptions', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"profile"}-->
+#! Profile
+
+<!--hvy:text {"id":"empty-description"}-->
+ Empty description body
+
+<!--hvy:text {"id":"filled-description","description":"Existing description"}-->
+ Filled description body
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Advanced' }).click();
+
+  await page.locator('.editor-block-passive', { hasText: 'Empty description body' }).click();
+  const activeBlock = page.locator('.editor-block[data-active-editor-block="true"]');
+  await activeBlock.getByRole('button', { name: 'Meta' }).click();
+  const metaModal = page.locator('.component-meta-modal', { hasText: 'Component Meta: text' });
+  await expect(metaModal.locator('[data-action="generate-block-description"]')).toBeVisible();
+
+  await metaModal.locator('[data-action="generate-block-description"]').click();
+  await expect(metaModal.locator('[data-action="generate-block-description"]')).toHaveCount(0);
+  await expect(metaModal.locator('[data-field="block-description"]')).toHaveValue(/empty-description - text .* Empty description body/);
+  await expect(activeBlock).toHaveAttribute('data-active-editor-block', 'true');
+
+  await page.getByRole('button', { name: 'Close' }).click();
+  await activeBlock.getByRole('button', { name: 'Done' }).click();
+  await page.locator('.editor-block-passive', { hasText: 'Filled description body' }).click();
+  await page.locator('.editor-block[data-active-editor-block="true"]').getByRole('button', { name: 'Meta' }).click();
+  await expect(page.locator('.component-meta-modal', { hasText: 'Component Meta: text' }).locator('[data-action="generate-block-description"]')).toHaveCount(0);
+});
+
 test('resume template shows friendly empty component-list add prompts before activation', async ({ page }) => {
   await page.goto('/');
 

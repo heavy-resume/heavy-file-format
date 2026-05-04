@@ -1630,6 +1630,7 @@ function helpFor(topic = ''): string {
     done: formatCommandHelp('done SUMMARY', 'Finish the AI CLI edit loop with a short summary.'),
     hvy: hvyDocumentCommandHelp(),
     'hvy request_structure': hvyDocumentCommandHelp('request_structure'),
+    'hvy find-intent': hvyDocumentCommandHelp('find-intent'),
     'hvy lint': formatCommandHelp('hvy lint', 'Check the document for likely component issues.'),
     'hvy prune-xref': hvyDocumentCommandHelp('prune_xref'),
     section: hvyDocumentCommandHelp('section'),

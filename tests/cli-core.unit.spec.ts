@@ -596,6 +596,107 @@ test('collapsed request_structure keeps the example resume under 100 lines', asy
   expect(result.output).toContain('(+');
 });
 
+test('hvy find-intent ranks global skill library and top skills above local skill lists', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+component_defs:
+  - name: skills-and-tools-tech-list
+    baseType: grid
+    description: Local skills and tools list
+  - name: skill-record
+    baseType: expandable
+    description: Reusable skill record
+---
+
+<!--hvy: {"id":"skills","description":"Main reusable skills library."}-->
+#! Skills
+
+<!--hvy:component-list {"id":"skill-list","componentListComponent":"skill-record","description":"Ordered list of reusable skill records."}-->
+
+<!--hvy:skill-record {"id":"skill-software-engineering"}-->
+Software Engineering
+
+<!--hvy: {"id":"top-skills-tools-technologies","description":"Featured top skills and tools."}-->
+#! Top Skills, Tools & Technologies
+
+<!--hvy:grid {"id":"top-grid","description":"Featured top skills/tools grid."}-->
+
+<!--hvy:xref-card {"id":"software-card","xrefTitle":"Software Engineering","xrefTarget":"skill-software-engineering"}-->
+
+<!--hvy: {"id":"projects"}-->
+#! Projects
+
+<!--hvy:skills-and-tools-tech-list {"id":"project-skills","description":"Per-project supporting skills list."}-->
+
+<!--hvy: {"id":"history"}-->
+#! History
+
+<!--hvy:skills-and-tools-tech-list {"id":"history-skills","description":"Per-job supporting skills list."}-->
+`, '.hvy');
+  const session = createHvyCliSession();
+
+  const result = await executeHvyCliCommand(document, session, 'hvy find-intent "add baking as a top skill" --max 5');
+
+  const skillListIndex = result.output.indexOf('/body/skills/skill-list');
+  const topGridIndex = result.output.indexOf('/body/top-skills-tools-technologies/top-grid');
+  const projectSkillsIndex = result.output.indexOf('/body/projects/project-skills');
+  const historySkillsIndex = result.output.indexOf('/body/history/history-skills');
+  expect(skillListIndex).toBeGreaterThan(-1);
+  expect(topGridIndex).toBeGreaterThan(-1);
+  expect(skillListIndex).toBeLessThan(topGridIndex);
+  expect(projectSkillsIndex === -1 || topGridIndex < projectSkillsIndex).toBe(true);
+  expect(historySkillsIndex === -1 || topGridIndex < historySkillsIndex).toBe(true);
+  expect(result.output).toContain('likely main skills library edit surface');
+  expect(result.output).toContain('likely featured top skills/tools surface');
+});
+
+test('hvy find-intent includes descriptions and supports json output', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"planning","description":"Roadmap and planning notes."}-->
+#! Planning
+
+<!--hvy:text {"id":"roadmap","description":"Quarterly roadmap notes."}-->
+Milestones
+`, '.hvy');
+  const session = createHvyCliSession();
+
+  const text = await executeHvyCliCommand(document, session, 'hvy find-intent roadmap --max 1');
+  const json = await executeHvyCliCommand(document, session, 'hvy find-intent roadmap --max 1 --json');
+
+  expect(text.output).toContain('description: Quarterly roadmap notes.');
+  expect(JSON.parse(json.output)).toEqual([
+    expect.objectContaining({
+      path: '/body/planning/roadmap',
+      id: 'roadmap',
+      kind: 'component',
+      type: 'text',
+      description: 'Quarterly roadmap notes.',
+    }),
+  ]);
+});
+
+test('hvy request_structure --describe includes non-empty descriptions', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"planning","description":"Roadmap and planning notes."}-->
+#! Planning
+
+<!--hvy:text {"id":"roadmap","description":"Quarterly roadmap notes."}-->
+Milestones
+`, '.hvy');
+  const session = createHvyCliSession();
+
+  const result = await executeHvyCliCommand(document, session, 'hvy request_structure --describe');
+
+  expect(result.output).toContain('/planning - Roadmap and planning notes.');
+  expect(result.output).toContain('[x] text.txt id=roadmap - Quarterly roadmap notes.');
+});
+
 test('hvy lint reports core component and plugin issues', async () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1

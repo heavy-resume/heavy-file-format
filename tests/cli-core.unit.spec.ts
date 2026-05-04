@@ -515,13 +515,26 @@ component_defs:
 
   const collapsed = await executeHvyCliCommand(document, session, 'hvy request_structure --collapse');
   expect(collapsed.output).toContain('/body\n  /summary');
-  expect(collapsed.output).toContain('/intro\n      [x] text.txt id=intro');
-  expect(collapsed.output).toMatch(/\/component-list-\d+ \[l\] component-list\.txt id=C\d+\n      \/component-list\n        \/text-\d+\.\.text-\d+ \[x\] text\.txt ids=C\d+-C\d+/);
+  expect(collapsed.output).toContain('/intro [x] text.txt id=intro');
+  expect(collapsed.output).toMatch(/\/component-list-\d+ \[l\] component-list\.txt id=C\d+ \(\+3 anonymous descendants\)/);
+  expect(collapsed.output).not.toMatch(/\/text-\d+\.\.text-\d+ \[x\] text\.txt ids=C\d+-C\d+/);
   expect(collapsed.output).toMatch(/\/xref-card-\d+ \[r\] xref-card\.txt id=C\d+/);
 
   const scoped = await executeHvyCliCommand(document, session, 'hvy request_structure typescript-card');
   expect(scoped.output).toContain('/body\n  /summary\n    /typescript-card\n      [r] xref-card.txt id=typescript-card');
   expect(scoped.output).not.toContain('/intro');
+});
+
+test('collapsed request_structure keeps the example resume under 100 lines', async () => {
+  const document = createResumeCliTestDocument();
+  const session = createHvyCliSession();
+
+  const result = await executeHvyCliCommand(document, session, 'hvy request_structure --collapse');
+
+  expect(result.output.split('\n').length).toBeLessThanOrEqual(100);
+  expect(result.output).toContain('/body');
+  expect(result.output).toContain('/summary');
+  expect(result.output).toContain('(+');
 });
 
 test('deserializing custom resume components does not warn about missing app state', () => {

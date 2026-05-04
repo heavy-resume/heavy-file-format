@@ -171,12 +171,15 @@ function formatComponentTree(entries: ComponentStructureEntry[], options: { coll
 
 function formatComponentTreeNode(node: ComponentTreeNode, depth: number, options: { collapse: boolean }): string[] {
   const children = [...node.children.values()];
-  const metadataChild = options.collapse ? collapsibleMetadataChild(children) : undefined;
+  const metadataChild = options.collapse ? componentMetadataChild(children) : undefined;
   if (options.collapse && depth >= 2 && !node.entry && metadataChild) {
     const remainingChildren = children.filter((child) => child !== metadataChild);
+    const hiddenAnonymousCount = countAnonymousComponentEntries(remainingChildren);
+    const visibleChildren = remainingChildren.filter(hasExplicitComponentEntry);
+    const hiddenSummary = hiddenAnonymousCount > 0 ? ` (+${hiddenAnonymousCount} anonymous descendants)` : '';
     return [
-      `${'  '.repeat(depth)}/${node.name} ${formatComponentStructureLine(metadataChild.entry!)}`,
-      ...formatComponentTreeChildren(remainingChildren, depth + 1, options),
+      `${'  '.repeat(depth)}/${node.name} ${formatComponentStructureLine(metadataChild.entry!)}${hiddenSummary}`,
+      ...formatComponentTreeChildren(visibleChildren, depth + 1, options),
     ];
   }
   const label = node.entry ? formatComponentStructureLine(node.entry) : `/${node.name}`;
@@ -190,12 +193,32 @@ function collapsibleMetadataChild(children: ComponentTreeNode[]): ComponentTreeN
   return children.find((child) => child.entry && !child.entry.explicitId && child.children.size === 0);
 }
 
+function componentMetadataChild(children: ComponentTreeNode[]): ComponentTreeNode | undefined {
+  return children.find((child) => child.entry && child.children.size === 0);
+}
+
+function hasExplicitComponentEntry(node: ComponentTreeNode): boolean {
+  return !!node.entry?.explicitId || [...node.children.values()].some(hasExplicitComponentEntry);
+}
+
+function countAnonymousComponentEntries(nodes: ComponentTreeNode[]): number {
+  return nodes.reduce((total, node) => {
+    const own = node.entry && !node.entry.explicitId ? 1 : 0;
+    return total + own + countAnonymousComponentEntries([...node.children.values()]);
+  }, 0);
+}
+
 function formatComponentTreeChildren(children: ComponentTreeNode[], depth: number, options: { collapse: boolean }): string[] {
   if (!options.collapse) {
     return children.flatMap((child) => formatComponentTreeNode(child, depth, options));
   }
+  const coveredAnonymousLeafNames = new Set(children.flatMap(collectCoveredAnonymousLeafNames));
   const lines: string[] = [];
   for (let index = 0; index < children.length;) {
+    if (coveredAnonymousLeafNames.has(children[index]!.name) && anonymousLeafEntry(children[index])) {
+      index += 1;
+      continue;
+    }
     const run = collectAnonymousLeafRun(children, index);
     if (run.length >= 3) {
       lines.push(formatAnonymousLeafRun(run, depth));
@@ -206,6 +229,23 @@ function formatComponentTreeChildren(children: ComponentTreeNode[], depth: numbe
     index += 1;
   }
   return lines;
+}
+
+function collectCoveredAnonymousLeafNames(node: ComponentTreeNode): string[] {
+  const metadataChild = componentMetadataChild([...node.children.values()]);
+  if (!metadataChild?.entry) {
+    return [];
+  }
+  return collectAnonymousLeafNames([...node.children.values()]);
+}
+
+function collectAnonymousLeafNames(children: ComponentTreeNode[]): string[] {
+  return children.flatMap((child) => {
+    if (anonymousLeafEntry(child)) {
+      return [child.name];
+    }
+    return collectAnonymousLeafNames([...child.children.values()]);
+  });
 }
 
 function collectAnonymousLeafRun(children: ComponentTreeNode[], startIndex: number): ComponentTreeNode[] {

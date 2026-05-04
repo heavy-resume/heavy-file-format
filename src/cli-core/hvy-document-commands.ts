@@ -566,7 +566,7 @@ function createSection(id: string, title: string, level: number): VisualSection 
     level,
     expanded: true,
     highlight: false,
-    customCss: '',
+    css: '',
     tags: '',
     description: '',
     location: 'main',
@@ -691,11 +691,7 @@ function applyCliComponentText(block: VisualBlock, text: string, meta: Record<st
 function applyCliBlockConfig(schema: BlockSchema, config: JsonObject): void {
   for (const [key, value] of Object.entries(config)) {
     if (key === 'css' && typeof value === 'string') {
-      schema.customCss = value;
-      continue;
-    }
-    if (key === 'customCss' && typeof value === 'string') {
-      schema.customCss = value;
+      schema.css = value;
       continue;
     }
     if (key === 'lock' && typeof value === 'boolean') {

@@ -847,7 +847,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
             data-block-id="${deps.escapeAttr(block.id)}"
             data-field="block-custom-css"
             placeholder="margin: 0.5rem 0;"
-          >${deps.escapeHtml(block.schema.customCss)}</textarea>
+          >${deps.escapeHtml(block.schema.css)}</textarea>
         </label>
         ${
           component === 'expandable'

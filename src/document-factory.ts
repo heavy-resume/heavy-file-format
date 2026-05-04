@@ -17,7 +17,7 @@ export function defaultBlockSchema(component = 'text'): BlockSchema {
     lock: false,
     align: 'left',
     slot: 'center',
-    customCss: 'margin: 0.5rem 0;',
+    css: 'margin: 0.5rem 0;',
     codeLanguage: 'ts',
     containerBlocks: [],
     componentListComponent: 'text',
@@ -72,13 +72,7 @@ function readExpandablePartCss(raw: unknown): string {
     return '';
   }
   const obj = raw as JsonObject;
-  return typeof obj.css === 'string'
-    ? obj.css
-    : typeof obj.customCss === 'string'
-    ? obj.customCss
-    : typeof obj.custom_css === 'string'
-    ? obj.custom_css
-    : '';
+  return typeof obj.css === 'string' ? obj.css : '';
 }
 
 export function coerceAlign(value: string): Align {
@@ -130,14 +124,7 @@ export function schemaFromUnknown(value: unknown): BlockSchema {
     lock: candidate.lock === true,
     align: coerceAlign(typeof candidate.align === 'string' ? candidate.align : 'left'),
     slot: coerceSlot(typeof candidate.slot === 'string' ? candidate.slot : 'center'),
-    customCss:
-      typeof candidate.css === 'string'
-        ? candidate.css
-        : typeof candidate.customCss === 'string'
-        ? candidate.customCss
-        : typeof candidate.custom_css === 'string'
-        ? candidate.custom_css
-        : defaults.customCss,
+    css: typeof candidate.css === 'string' ? candidate.css : defaults.css,
     codeLanguage: typeof candidate.codeLanguage === 'string' ? candidate.codeLanguage : defaults.codeLanguage,
     containerBlocks: Array.isArray(candidate.containerBlocks)
       ? candidate.containerBlocks.map((block) => parseVisualBlock(block))
@@ -233,7 +220,7 @@ export function createEmptySection(level: number, component = 'container', isGho
     level,
     expanded: true,
     highlight: false,
-    customCss: '',
+    css: '',
     tags: '',
     description: '',
     location: 'main',
@@ -305,7 +292,7 @@ function cloneReusableSectionWithDelta(section: VisualSection, levelDelta: numbe
     lock: section.lock,
     expanded: section.expanded,
     highlight: section.highlight,
-    customCss: section.customCss,
+    css: section.css,
     tags: section.tags,
     description: section.description,
     location: section.location ?? 'main',

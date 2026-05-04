@@ -324,7 +324,7 @@ function sectionToCliJson(section: VisualSection): JsonObject {
     expanded: section.expanded,
     highlight: section.highlight,
     contained: section.contained,
-    custom_css: section.customCss,
+    css: section.css,
     tags: section.tags,
     description: section.description,
     location: section.location,
@@ -339,7 +339,7 @@ function applySectionJson(section: VisualSection, value: JsonObject): void {
   if (typeof value.expanded === 'boolean') section.expanded = value.expanded;
   if (typeof value.highlight === 'boolean') section.highlight = value.highlight;
   if (typeof value.contained === 'boolean') section.contained = value.contained;
-  if (typeof value.custom_css === 'string') section.customCss = value.custom_css;
+  if (typeof value.css === 'string') section.css = value.css;
   if (typeof value.tags === 'string') section.tags = value.tags;
   if (typeof value.description === 'string') section.description = value.description;
   if (value.location === 'sidebar' || value.location === 'main') section.location = value.location;
@@ -348,7 +348,7 @@ function applySectionJson(section: VisualSection, value: JsonObject): void {
 function blockSchemaToCliJson(schema: BlockSchema): JsonObject {
   const value: JsonObject = {
     id: schema.id,
-    css: schema.customCss,
+    css: schema.css,
     lock: schema.lock,
     align: schema.align,
     slot: schema.slot,
@@ -381,7 +381,7 @@ function blockSchemaToCliJson(schema: BlockSchema): JsonObject {
 function applyBlockSchemaJson(schema: BlockSchema, component: string, value: JsonObject): void {
   schema.component = component;
   if (typeof value.id === 'string') schema.id = value.id;
-  if (typeof value.css === 'string') schema.customCss = value.css;
+  if (typeof value.css === 'string') schema.css = value.css;
   if (typeof value.lock === 'boolean') schema.lock = value.lock;
   if (value.align === 'left' || value.align === 'center' || value.align === 'right') schema.align = value.align;
   if (value.slot === 'left' || value.slot === 'center' || value.slot === 'right') schema.slot = value.slot;

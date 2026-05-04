@@ -460,7 +460,7 @@ test('serializes uncontained section metadata without changing section shape on 
 hvy_version: 0.1
 ---
 
-<!--hvy: {"id":"summary","contained":false,"custom_css":"padding: 0 0.35rem;"}-->
+<!--hvy: {"id":"summary","contained":false,"css":"padding: 0 0.35rem;"}-->
 #! Summary
 
  <!--hvy:text {}-->
@@ -471,9 +471,9 @@ hvy_version: 0.1
   const output = serializeWithState(document);
   const roundTripped = deserializeDocument(output, '.hvy');
 
-  expect(output).toContain('<!--hvy: {"id":"summary","lock":false,"expanded":true,"highlight":false,"contained":false,"custom_css":"padding: 0 0.35rem;"}-->');
+  expect(output).toContain('<!--hvy: {"id":"summary","lock":false,"expanded":true,"highlight":false,"contained":false,"css":"padding: 0 0.35rem;"}-->');
   expect(roundTripped.sections[0]?.contained).toBe(false);
-  expect(roundTripped.sections[0]?.customCss).toBe('padding: 0 0.35rem;');
+  expect(roundTripped.sections[0]?.css).toBe('padding: 0 0.35rem;');
 });
 
 test('round-trips migrated example files without reintroducing slot-level component fields', async () => {

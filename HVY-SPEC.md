@@ -215,10 +215,10 @@ Section metadata also includes optional presentation keys such as:
 - `highlight`
 - `lock`
 - `contained`
-- `custom_css`
+- `css`
 - `location`
 
-`custom_css` is an optional inline CSS style string applied to the rendered section wrapper.
+`css` is an optional inline CSS style string applied to the rendered section wrapper.
 `lock` is an optional boolean. Use it to prevent adding new blocks or child sections inside that section.
 `contained` is an optional boolean. When `true` (default), render the section as the normal bordered card/container and allow collapse/expand UI. When `false`, render the section edge-to-edge without the section border/background wrapper and without the section expander/collapser.
 `location` is an optional string. Use it to route a section to a named layout zone in the viewer. Defined values are `"main"` (default) and `"sidebar"`. Unknown values SHOULD be treated as `"main"`.
@@ -464,7 +464,7 @@ section_defs:
 Notes:
 - `template` stores a full section subtree, including blocks and nested child sections.
 - Clone a `section_defs[*].template` when inserting a new section or subsection.
-- Reusable section templates preserve section-level presentation fields such as `contained`, `expanded`, `highlight`, `custom_css`, and `location`.
+- Reusable section templates preserve section-level presentation fields such as `contained`, `expanded`, `highlight`, `css`, and `location`.
 - Implementations SHOULD assign fresh section keys, block IDs, and custom IDs when instantiating a reusable section.
 - Plain Markdown renderers ignore `section_defs`.
 
@@ -631,7 +631,7 @@ Rules:
 
 A `.hvy` or `.thvy` file MAY declare default presentation values for sections in front matter under `section_defaults`.
 
-This is intended for document-wide section wrapper styling without repeating the same `custom_css` on every section.
+This is intended for document-wide section wrapper styling without repeating the same `css` on every section.
 
 #### Front matter shape
 
@@ -642,7 +642,7 @@ section_defaults:
 
 Rules:
 - `css` is an optional inline CSS style string applied to each rendered section wrapper.
-- Explicit section-level `custom_css` remains valid and MAY be combined with or override document-level defaults in a viewer-specific way.
+- Explicit section-level `css` remains valid and MAY be combined with or override document-level defaults in a viewer-specific way.
 - Unknown fields under `section_defaults` MUST be ignored.
 - Plain Markdown renderers ignore `section_defaults`.
 
@@ -954,7 +954,7 @@ Normative behavior:
 - Remote resource fetches MUST be gated behind user network permission.
 - Plugin installation MUST show `id` and `source` before trust is granted.
 - Clients MUST treat tail payload bytes as untrusted input and only hand them to the declared plugin after normal trust checks.
-- Renderers MUST sanitize document-supplied CSS (inline `css` fields, fenced `~~~css` blocks, `hvy:css` directives, `theme.colors` values, `component_defaults.*.css`, `section_defaults.css`, and section/block `custom_css`) so it cannot trigger network fetches unless the user has explicitly enabled external CSS resources. Specifically, renderers MUST drop or neutralize `url(...)`, `image-set(...)`, `src(...)`, `src:` declarations, and the at-rules `@import`, `@font-face`, `@namespace`, and `@property`. Sanitization MUST decode CSS character escapes (e.g. `u\72l(...)` and `\55RL(...)`) before pattern matching so obfuscated forms are also blocked.
+- Renderers MUST sanitize document-supplied CSS (inline `css` fields, fenced `~~~css` blocks, `hvy:css` directives, `theme.colors` values, `component_defaults.*.css`, `section_defaults.css`, and section/block `css`) so it cannot trigger network fetches unless the user has explicitly enabled external CSS resources. Specifically, renderers MUST drop or neutralize `url(...)`, `image-set(...)`, `src(...)`, `src:` declarations, and the at-rules `@import`, `@font-face`, `@namespace`, and `@property`. Sanitization MUST decode CSS character escapes (e.g. `u\72l(...)` and `\55RL(...)`) before pattern matching so obfuscated forms are also blocked.
 
 ## 9. Parsing Rules (Normative)
 

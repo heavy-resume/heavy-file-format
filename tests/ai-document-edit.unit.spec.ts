@@ -1539,7 +1539,7 @@ test('requestAiDocumentEditTurn can get css and css properties for ids', async (
 hvy_version: 0.1
 ---
 
-<!--hvy: {"id":"summary","custom_css":"padding: 0.5rem; border: 1px solid red;"}-->
+<!--hvy: {"id":"summary","css":"padding: 0.5rem; border: 1px solid red;"}-->
 #! Summary
 
 <!--hvy:xref-card {"id":"skill-python-card","css":"margin: 0.35rem 0; padding: 0.25rem; color: blue;","xrefTitle":"Python","xrefTarget":"tool-python"}-->
@@ -1577,7 +1577,7 @@ test('requestAiDocumentEditTurn can set css properties for multiple ids', async 
 hvy_version: 0.1
 ---
 
-<!--hvy: {"id":"summary","custom_css":"padding: 0.5rem; color: red;"}-->
+<!--hvy: {"id":"summary","css":"padding: 0.5rem; color: red;"}-->
 #! Summary
 
 <!--hvy:xref-card {"id":"skill-python-card","css":"margin: 0.35rem 0; color: blue;","xrefTitle":"Python","xrefTarget":"tool-python"}-->
@@ -1593,8 +1593,8 @@ hvy_version: 0.1
   });
 
   expect(result.error).toBeNull();
-  expect(document.sections[0]?.customCss).toBe('padding: 1rem; margin: 0;');
-  expect(document.sections[0]?.blocks[0]?.schema.customCss).toBe('margin: 0; padding: 1rem;');
+  expect(document.sections[0]?.css).toBe('padding: 1rem; margin: 0;');
+  expect(document.sections[0]?.blocks[0]?.schema.css).toBe('margin: 0; padding: 1rem;');
 });
 
 test('requestAiDocumentEditTurn routes header requests to header tools', async () => {

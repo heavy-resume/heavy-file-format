@@ -209,7 +209,7 @@ export function bindInputMisc(app: HTMLElement): void {
       if (!context) {
         return;
       }
-      context.block.schema.customCss = target.value;
+      context.block.schema.css = target.value;
       syncReusableTemplateForBlock(sectionKey, context.block.id);
       getRefreshReaderPanels()();
       return;

@@ -32,3 +32,5 @@ Naming convention notes:
   - This means: avoid adding another index.ts and another README.md, among other things
 
 Avoid letting files get over 1k in length. Consider breaking things up at that point unless there's a good reason it has to be that long.
+
+Use dev-traces to debug stuff the user reports as issues with the LLM based chat. The cli logs are only for the cli.

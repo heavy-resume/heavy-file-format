@@ -177,7 +177,7 @@ function mapParsedSection(section: HvySection, documentMeta: JsonObject, diagnos
     level: section.level,
     expanded: sectionMeta.expanded === false ? false : true,
     highlight: sectionMeta.highlight === true,
-    customCss: typeof sectionMeta.custom_css === 'string' ? sectionMeta.custom_css : '',
+    css: typeof sectionMeta.css === 'string' ? sectionMeta.css : '',
     tags: typeof sectionMeta.tags === 'string' ? sectionMeta.tags : '',
     description: typeof sectionMeta.description === 'string' ? sectionMeta.description : '',
     location: sectionMeta.location === 'sidebar' ? 'sidebar' : 'main',
@@ -468,18 +468,11 @@ function parseBlocks(
         );
         const part: 0 | 1 = rawParts[0] === 'stub' ? 0 : 1;
         const keys = Object.keys(parsed);
-        const slotMetadataOnly = keys.every((key) => key === 'lock' || key === 'css' || key === 'customCss' || key === 'custom_css');
+        const slotMetadataOnly = keys.every((key) => key === 'lock' || key === 'css');
         if (!slotMetadataOnly) {
           return;
         }
-        const slotCss =
-          typeof parsed.css === 'string'
-            ? parsed.css
-            : typeof parsed.customCss === 'string'
-            ? parsed.customCss
-            : typeof parsed.custom_css === 'string'
-            ? parsed.custom_css
-            : '';
+        const slotCss = typeof parsed.css === 'string' ? parsed.css : '';
         if (part === 0) {
           parent.schema.expandableStubCss = slotCss;
         } else {
@@ -792,19 +785,12 @@ function cleanComponentDefSchema(schema: JsonObject): JsonObject {
     if (BLOCK_ARRAY_KEYS.includes(key) && Array.isArray(value)) {
       result[key] = value.map((block) => cleanComponentDefBlock(block as JsonObject));
     } else if (EXPANDABLE_PART_KEYS.includes(key) && value && typeof value === 'object' && !Array.isArray(value)) {
-      const part = value as { lock?: boolean; children?: JsonObject[]; css?: unknown; customCss?: unknown; custom_css?: unknown };
+      const part = value as { lock?: boolean; children?: JsonObject[]; css?: unknown };
       const cleanPart: JsonObject = {
         lock: part.lock ?? false,
         children: Array.isArray(part.children) ? part.children.map((block) => cleanComponentDefBlock(block)) : [],
       };
-      const css =
-        typeof part.css === 'string'
-          ? part.css
-          : typeof part.customCss === 'string'
-          ? part.customCss
-          : typeof part.custom_css === 'string'
-          ? part.custom_css
-          : '';
+      const css = typeof part.css === 'string' ? part.css : '';
       if (css.trim().length > 0) {
         cleanPart.css = css;
       }
@@ -1107,8 +1093,8 @@ function serializeSection(section: VisualSection, level: number, documentMeta: J
   if (!section.contained) {
     meta.contained = false;
   }
-  if (section.customCss.trim().length > 0) {
-    meta.custom_css = section.customCss;
+  if (section.css.trim().length > 0) {
+    meta.css = section.css;
   }
   if (section.tags.trim().length > 0) {
     meta.tags = section.tags;
@@ -1156,7 +1142,7 @@ function serializeBlockSchema(
   addIfChanged(payload, 'lock', schema.lock, defaults.lock);
   addIfChanged(payload, 'align', schema.align, defaults.align);
   addIfChanged(payload, 'slot', schema.slot, defaults.slot);
-  addIfChanged(payload, 'css', schema.customCss, defaults.customCss);
+  addIfChanged(payload, 'css', schema.css, defaults.css);
   addIfChanged(payload, 'tags', schema.tags, defaults.tags);
   addIfChanged(payload, 'description', schema.description, defaults.description);
   addIfChanged(payload, 'placeholder', schema.placeholder, defaults.placeholder);

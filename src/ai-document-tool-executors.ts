@@ -809,15 +809,15 @@ function resolveCssTargets(ids: string[], snapshot: DocumentStructureSnapshot, d
 }
 
 function getTargetCss(target: CssTarget): string {
-  return target.kind === 'section' ? target.section.customCss : target.block.schema.customCss;
+  return target.kind === 'section' ? target.section.css : target.block.schema.css;
 }
 
 function setTargetCss(target: CssTarget, css: string): void {
   if (target.kind === 'section') {
-    target.section.customCss = css;
+    target.section.css = css;
     return;
   }
-  target.block.schema.customCss = css;
+  target.block.schema.css = css;
 }
 
 function parseCssDeclarations(css: string): Array<{ property: string; value: string }> {

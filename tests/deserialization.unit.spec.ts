@@ -307,7 +307,7 @@ test('deserializes uncontained section metadata', () => {
 hvy_version: 0.1
 ---
 
-<!--hvy: {"id":"summary","contained":false,"custom_css":"padding: 0 0.35rem;"}-->
+<!--hvy: {"id":"summary","contained":false,"css":"padding: 0 0.35rem;"}-->
 #! Summary
 
  <!--hvy:text {}-->
@@ -318,7 +318,7 @@ hvy_version: 0.1
   const section = document.sections[0];
 
   expect(section?.contained).toBe(false);
-  expect(section?.customCss).toBe('padding: 0 0.35rem;');
+  expect(section?.css).toBe('padding: 0 0.35rem;');
 });
 
 test('deserializes custom expandable components nested under component-list slots', () => {

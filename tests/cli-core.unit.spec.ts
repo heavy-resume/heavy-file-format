@@ -123,6 +123,8 @@ test('hvy add can create custom components and generic xref components', async (
   expect(skill.output).toContain('/body/skills/component-list-1/component-list/skill-baking: created');
   expect(skill.output).toContain('file skill-record.json');
   expect(skill.output).toContain('file skill-record.txt');
+  expect((await executeHvyCliCommand(document, session, 'cat /body/skills/component-list-1/component-list/skill-baking/skill-record.json')).output)
+    .toContain('"css": "margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);"');
   expect(xref.output).toContain('/body/top-skills-tools-technologies/grid-0/grid/top-skill-baking: created');
   expect(xref.output).toContain('file xref-card.json');
   expect(xref.output).toContain('file xref-card.txt');
@@ -145,6 +147,8 @@ test('hvy add-component aliases custom component creation', async () => {
   expect(result.output).toContain('/body/skills/component-list-1/component-list/skill-baking: created');
   expect(result.output).toContain('file skill-record.json');
   expect(result.output).toContain('file skill-record.txt');
+  expect((await executeHvyCliCommand(document, session, 'cat /body/skills/component-list-1/component-list/skill-baking/skill-record.json')).output)
+    .toContain('"css": "margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);"');
   expect((await executeHvyCliCommand(document, session, 'cat /body/skills/component-list-1/component-list/skill-baking/skill-record.txt')).output)
     .toContain('Baking');
 });

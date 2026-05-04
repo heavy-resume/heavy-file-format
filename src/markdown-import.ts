@@ -122,7 +122,7 @@ function createMarkdownSection(title: string, headingDepth: number, usedIds: Set
     level: Math.max(1, headingDepth),
     expanded: true,
     highlight: false,
-    customCss: '',
+    css: '',
     tags: '',
     description: '',
     location: 'main',

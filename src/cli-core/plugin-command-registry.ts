@@ -1,4 +1,4 @@
-import { DB_TABLE_PLUGIN_ID, FORM_PLUGIN_ID } from '../plugins/registry';
+import { DB_TABLE_PLUGIN_ID, FORM_PLUGIN_ID, SCRIPTING_PLUGIN_ID } from '../plugins/registry';
 
 export interface HvyCliHelpCommand {
   command: string;
@@ -53,6 +53,9 @@ registerHvyCliPluginCommands({
   componentHints: [
     'This plugin is a form. The form fields, submit label, scripts, and on-submit behavior live in plugin.txt as form YAML/body text.',
     'Use plugin.txt for form content and plugin.json for plugin id/config metadata.',
+    'Form scripts are top-level Python/Brython snippets under scripts.NAME and run through the sandboxed scripting runtime.',
+    'Form scripts receive doc plus doc.form. Use doc.form.get_value/get_values/set_value/set_options/set_error/clear_error for form state.',
+    'doc.tool(name, args) can call the synchronous document-edit tool subset; args are a Python dict matching the AI tool schema.',
     'When changing submit behavior, look for named scripts and on-submit script settings before editing fields.',
   ],
   addCommands: [
@@ -61,6 +64,22 @@ registerHvyCliPluginCommands({
       description: 'Create a Form plugin component.',
     },
   ],
+  operationCommands: [],
+});
+
+registerHvyCliPluginCommands({
+  name: 'scripting',
+  pluginId: SCRIPTING_PLUGIN_ID,
+  helpTopic: 'hvy plugin scripting',
+  componentHints: [
+    'This plugin is an executable scripting block. The component body is top-level Python/Brython source.',
+    'Scripts run in a sandboxed browser Brython runtime with a doc global; imports, network, and DOM access are not allowed.',
+    'Top-level return is a syntax error. Define helper functions if you need return statements.',
+    'Use doc.tool(name, args) for synchronous document-edit tools; args are a Python dict matching the AI tool schema.',
+    'Available doc helpers include doc.header, doc.attachments, doc.db, and doc.rerender. doc.form exists only while running form plugin scripts.',
+    'The script has a line budget, so avoid unbounded loops.',
+  ],
+  addCommands: [],
   operationCommands: [],
 });
 

@@ -316,8 +316,8 @@ hvy_version: 0.1
   const nextPrompt = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content ?? '';
   expect(nextPrompt).toContain('component grid: /body/dashboard/layout');
   expect(nextPrompt).toContain('Grid component: lays out child components visually like a CSS grid.');
-  expect(nextPrompt).toContain('gridColumns controls the column layout.');
-  expect(nextPrompt).toContain('To change visible grid content, inspect or edit the specific child component under grid/.');
+  expect(nextPrompt).toContain('gridColumns is a number controlling the column layout.');
+  expect(nextPrompt).toContain('Each numbered grid slot carries only slot metadata; the child block is nested one level deeper.');
 });
 
 test('requestDocumentEditChatTurn includes registered plugin component hints', async () => {
@@ -353,6 +353,38 @@ fields:
   expect(nextPrompt).toContain('Plugin id: dev.heavy.form (form).');
   expect(nextPrompt).toContain('This plugin is a form.');
   expect(nextPrompt).toContain('The form fields, submit label, scripts, and on-submit behavior live in plugin.txt');
+  expect(nextPrompt).toContain('Form scripts are top-level Python/Brython snippets');
+});
+
+test('requestDocumentEditChatTurn includes scripting plugin code hints', async () => {
+  requestProxyCompletionMock
+    .mockResolvedValueOnce('cat /body/automation/startup-script/plugin.txt')
+    .mockResolvedValueOnce('done Inspected the script plugin.');
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"automation"}-->
+#! Automation
+
+<!--hvy:plugin {"id":"startup-script","plugin":"dev.heavy.scripting","pluginConfig":{"version":"0.1"}}-->
+doc.header.set("ran_script", True)
+`, '.hvy');
+
+  const result = await requestDocumentEditChatTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Inspect script plugin.',
+  });
+
+  expect(result.error).toBeNull();
+  const nextPrompt = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content ?? '';
+  expect(nextPrompt).toContain('Plugin id: dev.heavy.scripting (scripting).');
+  expect(nextPrompt).toContain('The component body is top-level Python/Brython source.');
+  expect(nextPrompt).toContain('Use doc.tool(name, args) for synchronous document-edit tools');
+  expect(nextPrompt).toContain('doc.form exists only while running form plugin scripts.');
 });
 
 test('requestDocumentEditChatTurn keeps recent chat context for follow-up edit requests', async () => {

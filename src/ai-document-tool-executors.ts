@@ -1,6 +1,7 @@
 import { requestAiComponentEdit } from './ai-component-edit';
 import { parseAiBlockEditResponse } from './ai-component-edit-common';
 import { getPluginAiHelp } from './ai-plugin-hints';
+import { getHvyComponentHelp } from './component-help';
 import { createEmptySection } from './document-factory';
 import { deserializeDocumentWithDiagnostics, serializeBlockFragment, serializeSectionFragment } from './serialization';
 import { findBlockContainerById, findSectionByKey, findSectionContainer, getSectionId, moveSectionRelative, moveSectionToSiblingIndex } from './section-ops';
@@ -140,16 +141,8 @@ export function executeGetHelpTool(request: Extract<DocumentEditToolRequest, { t
   }
   const componentMatch = topic.match(/^component:(.+)$/i);
   const component = (componentMatch?.[1] ?? topic).trim().toLowerCase();
-  const helpByComponent: Record<string, string> = {
-    text: 'Text component: `<!--hvy:text {}-->` followed by Markdown-like text body.',
-    table: 'Table component: `<!--hvy:table {"tableColumns":"Name, Status","tableRows":[{"cells":["Example","Open"]}]}-->`. Use db-table plugins for live SQLite rows.',
-    container: 'Container component: `<!--hvy:container {}-->` with nested HVY components indented underneath.',
-    grid: 'Grid component: `<!--hvy:grid {"gridColumns":2}-->` with `<!--hvy:grid:1 {}-->`, `<!--hvy:grid:2 {}-->` slots containing nested components.',
-    expandable: 'Expandable component: use `<!--hvy:expandable {...}-->` with `<!--hvy:expandable:stub {}-->` and `<!--hvy:expandable:content {}-->` child slots.',
-    plugin: 'Plugin component: `<!--hvy:plugin {"plugin":"registered.plugin.id","pluginConfig":{}}-->` followed by plugin-owned body text. Use `get_help` with `plugin:PLUGIN_ID` for plugin-specific details.',
-    'xref-card': 'xref-card component: `<!--hvy:xref-card {"xrefTitle":"Title","xrefDetail":"Detail","xrefTarget":"target-id"}-->`.',
-  };
-  return helpByComponent[component] ?? `No detailed help registered for "${topic}". Try "plugin:PLUGIN_ID" or "component:text".`;
+  const componentHelp = getHvyComponentHelp(component);
+  return componentHelp || `No detailed help registered for "${topic}". Try "plugin:PLUGIN_ID" or "component:text".`;
 }
 
 function getUniqueComponentEntries(snapshot: DocumentStructureSnapshot, includeDeep = false): ComponentRefEntry[] {

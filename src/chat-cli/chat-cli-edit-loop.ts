@@ -1,7 +1,9 @@
 import { requestProxyCompletion } from '../chat/chat';
 import type { ChatMessage, ChatSettings, VisualDocument } from '../types';
+import { buildChatCliComponentHints } from './chat-cli-component-hints';
 import { createChatCliTraceRunId, writeChatCliCommandTrace, writeChatCliUserQueryTrace } from './chat-cli-dev-trace';
 import { createChatCliInterface } from './chat-cli-interface';
+import { buildChatCliPersistentInstructions } from './chat-cli-instructions';
 
 const CHAT_CLI_MAX_STEPS = 30;
 const CHAT_CLI_MAX_CONSECUTIVE_COMMAND_ERRORS = 3;
@@ -104,7 +106,15 @@ export async function runChatCliEditLoop(params: {
       {
         id: crypto.randomUUID(),
         role: 'user',
-        content: formatCommandResultForModel(result.output),
+        content: formatCommandResultForModel({
+          output: result.output,
+          hints: buildChatCliComponentHints({
+            document: params.document,
+            cwd: result.cwd,
+            command: action.command,
+          }),
+          scratchpad: cli.snapshot().scratchpad,
+        }),
       },
     ];
   }
@@ -128,7 +138,7 @@ function buildChatCliLoopContext(
     snapshot.commandSummary,
     '',
     'Persistent instructions:',
-    snapshot.persistentInstructions,
+    buildChatCliPersistentInstructions(),
     '',
     'Initial terminal output:',
     `> ${initialRootListing.command}`,
@@ -173,8 +183,22 @@ function normalizeCommandResponse(response: string): string {
     .find((line) => line.length > 0) ?? '';
 }
 
-function formatCommandResultForModel(output: string): string {
-  return output.trimEnd() || '(no output)';
+function formatCommandResultForModel(result: string | { output: string; hints?: string; scratchpad?: string }): string {
+  if (typeof result === 'string') {
+    return result.trimEnd() || '(no output)';
+  }
+  return [
+    'result',
+    result.output.trimEnd() || '(no output)',
+    '',
+    'What is your next command?',
+    '',
+    'hints',
+    result.hints?.trimEnd() || '(none)',
+    '',
+    'scratchpad.txt',
+    result.scratchpad?.trimEnd() || '(empty)',
+  ].join('\n');
 }
 
 function formatRecentChatContext(messages: ChatMessage[]): string {

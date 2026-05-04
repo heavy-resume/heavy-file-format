@@ -1,3 +1,5 @@
+import { DB_TABLE_PLUGIN_ID, FORM_PLUGIN_ID } from '../plugins/registry';
+
 export interface HvyCliHelpCommand {
   command: string;
   description: string;
@@ -5,7 +7,9 @@ export interface HvyCliHelpCommand {
 
 export interface HvyCliPluginCommandRegistration {
   name: string;
+  pluginId: string;
   helpTopic: string;
+  componentHints: string[];
   addCommands: HvyCliHelpCommand[];
   operationCommands: HvyCliHelpCommand[];
 }
@@ -29,9 +33,14 @@ export function getHvyCliPluginCommandRegistration(name: string): HvyCliPluginCo
   return getHvyCliPluginCommandRegistrations().find((registration) => registration.name === name) ?? null;
 }
 
+export function getHvyCliPluginCommandRegistrationByPluginId(pluginId: string): HvyCliPluginCommandRegistration | null {
+  return getHvyCliPluginCommandRegistrations().find((registration) => registration.pluginId === pluginId) ?? null;
+}
+
 function copyRegistration(registration: HvyCliPluginCommandRegistration): HvyCliPluginCommandRegistration {
   return {
     ...registration,
+    componentHints: [...registration.componentHints],
     addCommands: [...registration.addCommands],
     operationCommands: [...registration.operationCommands],
   };
@@ -39,7 +48,13 @@ function copyRegistration(registration: HvyCliPluginCommandRegistration): HvyCli
 
 registerHvyCliPluginCommands({
   name: 'form',
+  pluginId: FORM_PLUGIN_ID,
   helpTopic: 'hvy plugin form',
+  componentHints: [
+    'This plugin is a form. The form fields, submit label, scripts, and on-submit behavior live in plugin.txt as form YAML/body text.',
+    'Use plugin.txt for form content and plugin.json for plugin id/config metadata.',
+    'When changing submit behavior, look for named scripts and on-submit script settings before editing fields.',
+  ],
   addCommands: [
     {
       command: 'hvy add plugin form SECTION_PATH ID SUBMIT_BUTTON_LABEL FIELD... [--script NAME PYTHON] [--on-submit-script NAME]',
@@ -51,7 +66,13 @@ registerHvyCliPluginCommands({
 
 registerHvyCliPluginCommands({
   name: 'db-table',
+  pluginId: DB_TABLE_PLUGIN_ID,
   helpTopic: 'hvy plugin db-table',
+  componentHints: [
+    'This plugin displays a SQLite table or query result.',
+    'Use hvy plugin db-table tables/schema/query/exec to inspect or change the backing database.',
+    'Use plugin.json when changing which table/query this component displays.',
+  ],
   addCommands: [
     {
       command: 'hvy add plugin db-table SECTION_PATH ID TABLE [QUERY]',

@@ -250,6 +250,111 @@ test('requestDocumentEditChatTurn accepts shell-looking command wrappers', async
   ]);
 });
 
+test('requestDocumentEditChatTurn includes component hints and scratchpad after component-path commands', async () => {
+  requestProxyCompletionMock
+    .mockResolvedValueOnce('cat /body/summary/intro/text.txt')
+    .mockResolvedValueOnce('done Inspected the text component.');
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {"id":"intro"}-->
+ Hello
+`, '.hvy');
+
+  const result = await requestDocumentEditChatTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Inspect intro.',
+  });
+
+  expect(result.error).toBeNull();
+  const nextPrompt = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content ?? '';
+  expect(nextPrompt).toContain('result\nHello');
+  expect(nextPrompt).toContain('What is your next command?');
+  expect(nextPrompt).toContain('hints\ncomponent text: /body/summary/intro');
+  expect(nextPrompt).toContain('You can act on it directly; you do not need to keep searching once this is the target.');
+  expect(nextPrompt).toContain('text.txt is the component\'s visible/body text.');
+  expect(nextPrompt).toContain('text.json is the component config.');
+  expect(nextPrompt).toContain('If the task is to remove this component, run: hvy remove /body/summary/intro');
+  expect(nextPrompt).toContain('Source files: /body/summary/intro/text.txt and /body/summary/intro/text.json');
+  expect(nextPrompt).toContain('scratchpad.txt\nNo notes yet.');
+});
+
+test('requestDocumentEditChatTurn includes component-specific hints', async () => {
+  requestProxyCompletionMock
+    .mockResolvedValueOnce('cat /body/dashboard/layout/grid.json')
+    .mockResolvedValueOnce('done Inspected the grid component.');
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"dashboard"}-->
+#! Dashboard
+
+<!--hvy:grid {"id":"layout","gridColumns":"1fr 1fr"}-->
+<!--hvy:text {"id":"left"}-->
+ Left
+<!--hvy:text {"id":"right"}-->
+ Right
+`, '.hvy');
+
+  const result = await requestDocumentEditChatTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Inspect layout.',
+  });
+
+  expect(result.error).toBeNull();
+  const nextPrompt = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content ?? '';
+  expect(nextPrompt).toContain('component grid: /body/dashboard/layout');
+  expect(nextPrompt).toContain('Grid component: lays out child components visually like a CSS grid.');
+  expect(nextPrompt).toContain('gridColumns controls the column layout.');
+  expect(nextPrompt).toContain('To change visible grid content, inspect or edit the specific child component under grid/.');
+});
+
+test('requestDocumentEditChatTurn includes registered plugin component hints', async () => {
+  requestProxyCompletionMock
+    .mockResolvedValueOnce('cat /body/contact/contact-form/plugin.json')
+    .mockResolvedValueOnce('done Inspected the form plugin.');
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"contact"}-->
+#! Contact
+
+<!--hvy:plugin {"id":"contact-form","plugin":"dev.heavy.form","pluginConfig":{"version":"0.1"}}-->
+submitLabel: Send
+fields:
+  - name: message
+    label: Message
+    type: textarea
+`, '.hvy');
+
+  const result = await requestDocumentEditChatTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Inspect form plugin.',
+  });
+
+  expect(result.error).toBeNull();
+  const nextPrompt = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content ?? '';
+  expect(nextPrompt).toContain('component plugin: /body/contact/contact-form');
+  expect(nextPrompt).toContain('Plugin id: dev.heavy.form (form).');
+  expect(nextPrompt).toContain('This plugin is a form.');
+  expect(nextPrompt).toContain('The form fields, submit label, scripts, and on-submit behavior live in plugin.txt');
+});
+
 test('requestDocumentEditChatTurn keeps recent chat context for follow-up edit requests', async () => {
   requestProxyCompletionMock.mockResolvedValueOnce('done Checked follow-up context.');
   const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
@@ -311,8 +416,8 @@ test('requestDocumentEditChatTurn lets the cli edit loop retry after command err
   });
 
   expect(result.error).toBeNull();
-  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content).toBe(
-    'hvy: expected add, plugin, section add, text add, table add, form add, or db-table show'
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content).toContain(
+    'result\nhvy: expected add, plugin, section add, text add, table add, form add, or db-table show'
   );
   expect(writeChatCliCommandTraceMock).toHaveBeenCalledWith(
     'chat-cli-test',

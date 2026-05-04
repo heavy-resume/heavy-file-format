@@ -145,10 +145,12 @@ function buildChatCliLoopContext(
   priorMessages: ChatMessage[],
   initialOutputs: Array<{ command: string; output: string }>
 ): string {
+  const taskContext = resolveChatCliTaskContext(request, priorMessages);
   const recentChatContext = formatRecentChatContext(priorMessages);
   return [
     'Task goal:',
-    request,
+    taskContext.goal,
+    ...(taskContext.latestReply ? ['', 'Latest user reply:', taskContext.latestReply] : []),
     ...(recentChatContext ? ['', 'Recent chat context:', recentChatContext] : []),
     '',
     'Valid commands:',
@@ -165,6 +167,38 @@ function buildChatCliLoopContext(
     'scratchpad.txt:',
     formatScratchpadForModel(snapshot),
   ].join('\n');
+}
+
+function resolveChatCliTaskContext(request: string, priorMessages: ChatMessage[]): { goal: string; latestReply: string | null } {
+  const messages = priorMessages.filter((message) => !message.progress);
+  const lastMessage = messages.at(-1);
+  if (!lastMessage || lastMessage.role !== 'assistant' || !isClarificationQuestion(lastMessage.content)) {
+    return { goal: request, latestReply: null };
+  }
+
+  let firstQuestionIndex = messages.length - 1;
+  while (
+    firstQuestionIndex >= 2 &&
+    messages[firstQuestionIndex - 1]?.role === 'user' &&
+    messages[firstQuestionIndex - 2]?.role === 'assistant' &&
+    isClarificationQuestion(messages[firstQuestionIndex - 2]?.content ?? '')
+  ) {
+    firstQuestionIndex -= 2;
+  }
+
+  for (let index = firstQuestionIndex - 1; index >= 0; index -= 1) {
+    const candidate = messages[index];
+    if (candidate?.role === 'user' && candidate.content.trim()) {
+      return { goal: candidate.content.trim(), latestReply: request };
+    }
+  }
+
+  return { goal: request, latestReply: null };
+}
+
+function isClarificationQuestion(content: string): boolean {
+  const trimmed = content.trim();
+  return trimmed.endsWith('?') || /^(?:should|do|does|did|would|could|can|which|what|where|when|who|how)\b/i.test(trimmed);
 }
 
 function buildChatCliLoopFormatInstructions(): string {

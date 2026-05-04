@@ -512,6 +512,30 @@ test('requestDocumentEditChatTurn keeps recent chat context for follow-up edit r
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Removed the TypeScript tool entry');
 });
 
+test('requestDocumentEditChatTurn keeps the original task goal through clarification replies', async () => {
+  requestProxyCompletionMock.mockResolvedValueOnce('done Added the skill.');
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+  const document = deserializeDocument('---\nhvy_version: 0.1\n---\n', '.hvy');
+
+  const result = await requestDocumentEditChatTurn({
+    settings,
+    document,
+    messages: [
+      { id: 'u1', role: 'user', content: 'Add a new skill, "LLM Tooling", and add it to top skills' },
+      { id: 'a1', role: 'assistant', content: 'Should the new "LLM Tooling" skill mirror the existing skill?' },
+      { id: 'u2', role: 'user', content: "Completely new, make some stuff up and I'll fill it in" },
+      { id: 'a2', role: 'assistant', content: 'Do you want a different summary/properties?' },
+    ],
+    request: 'yes different summary / properties',
+  });
+
+  expect(result.error).toBeNull();
+  const context = requestProxyCompletionMock.mock.calls[0]?.[0]?.context ?? '';
+  expect(context).toContain('Task goal:\nAdd a new skill, "LLM Tooling", and add it to top skills');
+  expect(context).toContain('Latest user reply:\nyes different summary / properties');
+  expect(context).not.toContain('Task goal:\nyes different summary / properties');
+});
+
 test('requestDocumentEditChatTurn treats prose and dangling fences as retryable format errors', async () => {
   requestProxyCompletionMock
     .mockResolvedValueOnce('I need to see the body files to find the section.')

@@ -59,6 +59,7 @@ export function hvyDocumentCommandHelp(topic = ''): string {
       formatCommandHelp('hvy add section PARENT_PATH ID TITLE', 'Create a section.'),
       formatCommandHelp('hvy add text SECTION_PATH ID TEXT', 'Create a text component.'),
       formatCommandHelp('hvy add table SECTION_PATH ID COLUMNS [--row CSV]...', 'Create a table component.'),
+      formatCommandHelp('hvy remove PATH', 'Remove a section or component directory. Alias: hvy delete PATH.'),
       ...formatPluginQuickReference(),
       formatCommandHelp('Edit existing components', 'Use find to discover virtual files, cat to inspect them, and sed to update writable body/config files.'),
     ].join('\n'),

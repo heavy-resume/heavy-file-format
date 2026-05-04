@@ -40,18 +40,20 @@ export async function executeHvyCliCommand(document: VisualDocument, session: Hv
     return { cwd: session.cwd, output: '', mutated: false };
   }
 
-  const command = args[0] ?? '';
+  const { commandArgs, pipe } = parseSimplePipeline(args);
+  const command = commandArgs[0] ?? '';
   const fs = buildHvyVirtualFileSystem(document);
   addSessionScratchpadFile(fs, session);
   enforceScratchpadHardCap(session);
   const ctx = { document, fs, cwd: session.cwd };
-  const result = await runCommand(ctx, command, args.slice(1));
+  const result = await runCommand(ctx, command, commandArgs.slice(1));
   enforceScratchpadHardCap(session);
   session.cwd = result.cwd;
-  if (isScratchpadCommand(args) && isScratchpadTooLong(session)) {
-    return { ...result, cwd: session.cwd, output: `${result.output}\n\n${buildScratchpadTooLongMessage(session.scratchpadContent ?? '')}` };
+  const output = pipe ? applySimplePipeline(result.output, pipe) : result.output;
+  if (isScratchpadCommand(commandArgs) && isScratchpadTooLong(session)) {
+    return { ...result, cwd: session.cwd, output: `${output}\n\n${buildScratchpadTooLongMessage(session.scratchpadContent ?? '')}` };
   }
-  return result;
+  return { ...result, output };
 }
 
 async function runCommand(ctx: { document: VisualDocument; fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd: string }, command: string, args: string[]): Promise<HvyCliExecution> {
@@ -102,6 +104,9 @@ async function runCommand(ctx: { document: VisualDocument; fs: ReturnType<typeof
   if (command === 'hvy') {
     if (args[0] === 'read') {
       return { cwd: ctx.cwd, output: commandCat(ctx, args.slice(1)), mutated: false };
+    }
+    if (args[0] === 'remove' || args[0] === 'delete') {
+      return { cwd: ctx.cwd, output: commandRm(ctx, ['-r', ...args.slice(1)]), mutated: true };
     }
     if (args[0] === 'plugin' && !args[1]) {
       return { cwd: ctx.cwd, output: helpFor('hvy plugin'), mutated: false };
@@ -310,10 +315,14 @@ function commandRg(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd:
   }
   const root = resolveVirtualPath(ctx.fs, ctx.cwd, parsed.path);
   const regex = new RegExp(normalizeRgPattern(parsed.pattern), parsed.ignoreCase ? 'i' : '');
+  const includeRegexes = parsed.includeGlobs.map(globToRegExp);
   const lines: string[] = [];
   const matchingFiles = new Set<string>();
   for (const entry of [...ctx.fs.entries.values()].sort((left, right) => left.path.localeCompare(right.path))) {
     if (entry.kind !== 'file' || !(entry.path === root || entry.path.startsWith(root === '/' ? '/' : `${root}/`))) {
+      continue;
+    }
+    if (includeRegexes.length > 0 && !includeRegexes.some((regex) => regex.test(entry.path.split('/').pop() ?? ''))) {
       continue;
     }
     entry.read().split('\n').forEach((line, index) => {
@@ -594,14 +603,17 @@ function parseRgArgs(args: string[]): {
   path: string;
   ignoreCase: boolean;
   filesWithMatches: boolean;
+  includeGlobs: string[];
   warnings: string[];
 } {
   const warnings: string[] = [];
   const positional: string[] = [];
+  const includeGlobs: string[] = [];
   let ignoreCase = false;
   let filesWithMatches = false;
 
-  for (const arg of args) {
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index] ?? '';
     if (arg === '--ignore-case') {
       ignoreCase = true;
       continue;
@@ -609,8 +621,27 @@ function parseRgArgs(args: string[]): {
     if (arg === '--line-number') {
       continue;
     }
-    if (arg === '--files-with-matches') {
+    if (arg === '--files-with-matches' || arg === '--list-files') {
       filesWithMatches = true;
+      continue;
+    }
+    if (arg === '--include') {
+      const glob = args[index + 1] ?? '';
+      if (glob) {
+        includeGlobs.push(glob);
+        index += 1;
+      } else {
+        warnings.push('Warning: rg --include expects a glob');
+      }
+      continue;
+    }
+    if (arg.startsWith('--include=')) {
+      const glob = arg.slice('--include='.length);
+      if (glob) {
+        includeGlobs.push(glob);
+      } else {
+        warnings.push('Warning: rg --include expects a glob');
+      }
       continue;
     }
     if (/^-[A-Za-z]+$/.test(arg)) {
@@ -641,12 +672,41 @@ function parseRgArgs(args: string[]): {
     path: positional[1] ?? '.',
     ignoreCase,
     filesWithMatches,
+    includeGlobs,
     warnings,
   };
 }
 
 function normalizeRgPattern(pattern: string): string {
   return pattern.replaceAll('\\|', '|');
+}
+
+function parseSimplePipeline(args: string[]): { commandArgs: string[]; pipe: string[] | null } {
+  const pipeIndex = args.indexOf('|');
+  if (pipeIndex < 0) {
+    return { commandArgs: args, pipe: null };
+  }
+  return {
+    commandArgs: args.slice(0, pipeIndex),
+    pipe: args.slice(pipeIndex + 1),
+  };
+}
+
+function applySimplePipeline(output: string, pipe: string[]): string {
+  const [command = '', ...args] = pipe;
+  if (command !== 'head' && command !== 'tail') {
+    return withWarnings(output, [`Warning: unsupported pipe ignored: ${pipe.join(' ')}`]);
+  }
+  const count = parsePipelineLineCount(args, 10);
+  const lines = output.split('\n');
+  return (command === 'head' ? lines.slice(0, count) : lines.slice(Math.max(0, lines.length - count))).join('\n');
+}
+
+function parsePipelineLineCount(args: string[], fallback: number): number {
+  const explicitNIndex = args.indexOf('-n');
+  const raw = explicitNIndex >= 0 ? args[explicitNIndex + 1] : args.find((arg) => /^-\d+$/.test(arg))?.slice(1);
+  const count = Number.parseInt(raw ?? '', 10);
+  return Number.isFinite(count) ? Math.max(1, Math.min(100, count)) : fallback;
 }
 
 function warnUnknownOptions(command: string, args: string[], allowedOptions: string[]): string[] {
@@ -748,8 +808,8 @@ function helpFor(topic = ''): string {
     tail: formatCommandHelp('tail [-n COUNT] FILE', 'Print the last lines of a file. COUNT maxes at 100.'),
     nl: formatCommandHelp('nl FILE', 'Print file contents with line numbers.'),
     find: formatCommandHelp('find [PATH] [-name GLOB] [-type f|d] [-maxdepth N] [-print]', 'List up to 100 virtual paths below PATH.'),
-    rg: formatCommandHelp('rg [-i] [-n] [-l] PATTERN [PATH]', 'Search readable virtual files. Line numbers are shown by default; -l prints matching file paths.'),
-    rm: formatCommandHelp('rm -r PATH...', 'Remove section or component directories from the virtual document body.'),
+    rg: formatCommandHelp('rg [-i] [-n] [-l] [--include GLOB] PATTERN [PATH]', 'Search readable virtual files. Line numbers are shown by default; -l prints matching file paths.'),
+    rm: formatCommandHelp('rm -r PATH...', 'Remove section or component directories from the virtual document body. Alias: hvy remove PATH.'),
     echo: formatCommandHelp('echo TEXT [> FILE|>> FILE]', 'Print text, replace a writable file, or append to a writable file.'),
     sed: formatCommandHelp('sed s/search/replace/[g] FILE', 'Update a writable virtual file with a search/replace.'),
     hvy: hvyDocumentCommandHelp(),

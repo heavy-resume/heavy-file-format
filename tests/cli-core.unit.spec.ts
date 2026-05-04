@@ -81,9 +81,8 @@ test('cli warns when scratchpad writes exceed the note limit', async () => {
   const inspect = await executeHvyCliCommand(document, session, 'ls /');
   expect(inspect.output).toContain('dir  body');
 
-  await expect(executeHvyCliCommand(document, session, 'hvy delete /body/summary/intro')).rejects.toThrow(
-    'hvy: expected add, plugin, section add, text add, table add, form add, or db-table show'
-  );
+  const deleted = await executeHvyCliCommand(document, session, 'hvy delete /body/summary/intro');
+  expect(deleted.output).toBe('/body/summary/intro: removed');
 
   expect((await executeHvyCliCommand(document, session, 'echo "short" > scratchpad.txt')).output).toBe('/scratchpad.txt: written');
 });
@@ -171,6 +170,33 @@ test('cli rg supports common ripgrep flags and hvy read aliases cat', async () =
   const combined = await executeHvyCliCommand(document, session, 'rg -rn "TypeScript" /body/tools-technologies');
   expect(combined.output).not.toContain('Warning: rg ignored unsupported option -r');
   expect(combined.output).toContain('/body/tools-technologies/tool-typescript/skill-record.txt:1:TypeScript');
+
+  const listFilesAlias = await executeHvyCliCommand(document, session, 'rg -r "TypeScript" /body/tools-technologies --list-files');
+  expect(listFilesAlias.output).toContain('/body/tools-technologies/tool-typescript/skill-record.txt');
+  expect(listFilesAlias.output).not.toContain(':1:TypeScript');
+
+  const piped = await executeHvyCliCommand(document, session, 'rg -r "TypeScript" /body -l | head -3');
+  expect(piped.output.split('\n')).toHaveLength(3);
+  expect(piped.output).not.toContain('Warning: rg ignored unsupported option -3');
+
+  const includeEquals = await executeHvyCliCommand(document, session, 'rg -r "TypeScript" /body --include="*.json" -l');
+  expect(includeEquals.output).toContain('/body/top-skills-tools-technologies/grid-0/grid/xref-card-1-2/xref-card.json');
+  expect(includeEquals.output).not.toContain('skill-record.txt');
+
+  const includeSeparate = await executeHvyCliCommand(document, session, 'rg -r "" --include "*.yaml" /body -l');
+  expect(includeSeparate.output).toBe('');
+});
+
+test('cli hvy remove and delete alias recursive rm', async () => {
+  const document = createResumeCliTestDocument();
+  const session = createHvyCliSession();
+
+  const remove = await executeHvyCliCommand(document, session, 'hvy remove /body/tools-technologies/tool-typescript');
+  expect(remove.output).toBe('/body/tools-technologies/tool-typescript: removed');
+  expect(serializeDocument(document)).not.toContain('id":"tool-typescript"');
+
+  await executeHvyCliCommand(document, session, 'hvy delete /body/tools-technologies/tool-python');
+  expect(serializeDocument(document)).not.toContain('id":"tool-python"');
 });
 
 test('cli find limits broad result sets', async () => {

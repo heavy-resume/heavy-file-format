@@ -21,6 +21,7 @@ const CLI_OUTPUT_MAX_LINES = 100;
 export interface HvyCliSession {
   cwd: string;
   scratchpadContent?: string;
+  scratchpadEdited?: boolean;
   scratchpadCommandsSinceEdit?: string[];
   scratchpadTouchedThisCommand?: boolean;
 }
@@ -185,6 +186,9 @@ async function runCommand(ctx: HvyCliCommandContext, command: string, args: stri
     if (args[0] === 'lint') {
       return { cwd: ctx.cwd, output: formatHvyCliLintIssues(await runHvyCliLinter(ctx.document)), mutated: false };
     }
+    if (args[0] === 'prune-xref') {
+      return { cwd: ctx.cwd, output: commandPruneXref(ctx.document, args.slice(1)), mutated: true };
+    }
     if (args[0] === 'read') {
       return { cwd: ctx.cwd, output: commandCat(ctx, args.slice(1)), mutated: false };
     }
@@ -317,6 +321,7 @@ function addSessionScratchpadFile(fs: ReturnType<typeof buildHvyVirtualFileSyste
     read: () => session.scratchpadContent ?? defaultScratchpadContent(),
     write: (content) => {
       session.scratchpadContent = content;
+      session.scratchpadEdited = true;
       session.scratchpadTouchedThisCommand = true;
     },
   });
@@ -459,7 +464,7 @@ function commandRm(ctx: { document: VisualDocument; fs: ReturnType<typeof buildH
   const parsed = parseCliFlags(args, {
     command: 'rm',
     booleanShort: ['r', 'R', 'f'],
-    booleanLong: ['recursive', 'force'],
+    booleanLong: ['recursive', 'force', 'prune-xref'],
   });
   const recursive = parsed.flags.has('r') || parsed.flags.has('R') || parsed.flags.has('recursive');
   const force = parsed.flags.has('f') || parsed.flags.has('force');
@@ -484,10 +489,84 @@ function commandRm(ctx: { document: VisualDocument; fs: ReturnType<typeof buildH
         throw new Error(`rm: ${resolved} is a directory; use -r`);
       }
       removeDocumentDirectory(ctx.document, resolved);
-      return `${resolved}: removed`;
+      const targetId = resolved.split('/').filter(Boolean).at(-1) ?? '';
+      const xrefHint = pruneXrefHint(ctx.document, targetId, parsed.flags.has('prune-xref'));
+      return [`${resolved}: removed`, xrefHint].filter(Boolean).join('\n');
     })
     .filter((line) => line.length > 0)
     .join('\n'), parsed.warnings);
+}
+
+function commandPruneXref(document: VisualDocument, args: string[]): string {
+  const targetId = args.join(' ').trim();
+  if (!targetId) {
+    throw new Error('hvy prune-xref: expected TARGET_ID');
+  }
+  const removedPaths = collectXrefVirtualPaths(document, targetId);
+  const removedCount = pruneXrefs(document, targetId);
+  return removedCount > 0
+    ? [`Removed ${removedCount} xref-card${removedCount === 1 ? '' : 's'} pointing to ${targetId}.`, ...removedPaths.map((path) => `  ${path}`)].join('\n')
+    : `No xref-cards point to ${targetId}.`;
+}
+
+function pruneXrefHint(document: VisualDocument, targetId: string, prune: boolean): string {
+  if (!targetId) {
+    return '';
+  }
+  if (prune) {
+    const removedPaths = collectXrefVirtualPaths(document, targetId);
+    const removedCount = pruneXrefs(document, targetId);
+    return removedCount > 0
+      ? [`Pruned ${removedCount} xref-card${removedCount === 1 ? '' : 's'} pointing to ${targetId}:`, ...removedPaths.map((path) => `  ${path}`)].join('\n')
+      : '';
+  }
+  const refs = collectXrefVirtualPaths(document, targetId);
+  return refs.length > 0
+    ? [`Hint: ${refs.length} xref-card${refs.length === 1 ? '' : 's'} still point to ${targetId}. Run: hvy prune-xref ${targetId}`, ...refs.slice(0, 5).map((path) => `  ${path}`), ...(refs.length > 5 ? [`  ... ${refs.length - 5} more`] : [])].join('\n')
+    : '';
+}
+
+function pruneXrefs(document: VisualDocument, targetId: string): number {
+  return document.sections.reduce((total, section) => total + pruneXrefsFromSection(section, targetId), 0);
+}
+
+function pruneXrefsFromSection(section: VisualSection, targetId: string): number {
+  return pruneXrefsFromBlocks(section.blocks, targetId)
+    + section.children.reduce((total, child) => total + pruneXrefsFromSection(child, targetId), 0);
+}
+
+function pruneXrefsFromBlocks(blocks: VisualBlock[], targetId: string): number {
+  let removed = 0;
+  for (let index = blocks.length - 1; index >= 0; index -= 1) {
+    const block = blocks[index];
+    if (!block) {
+      continue;
+    }
+    if (block.schema.component === 'xref-card' && block.schema.xrefTarget === targetId) {
+      blocks.splice(index, 1);
+      removed += 1;
+      continue;
+    }
+    for (const nestedBlocks of getNestedBlockLists(block)) {
+      removed += pruneXrefsFromBlocks(nestedBlocks, targetId);
+    }
+  }
+  return removed;
+}
+
+function collectXrefVirtualPaths(document: VisualDocument, targetId: string): string[] {
+  const fs = buildHvyVirtualFileSystem(document);
+  return [...fs.entries.values()]
+    .filter((entry): entry is HvyVirtualFile => entry.kind === 'file' && entry.path.endsWith('/xref-card.json'))
+    .filter((entry) => {
+      try {
+        const value = JSON.parse(entry.read()) as { xrefTarget?: unknown };
+        return value.xrefTarget === targetId;
+      } catch {
+        return false;
+      }
+    })
+    .map((entry) => entry.path.replace(/\/xref-card\.json$/, ''));
 }
 
 function removeDocumentDirectory(document: VisualDocument, path: string): void {
@@ -1552,6 +1631,7 @@ function helpFor(topic = ''): string {
     hvy: hvyDocumentCommandHelp(),
     'hvy request_structure': hvyDocumentCommandHelp('request_structure'),
     'hvy lint': formatCommandHelp('hvy lint', 'Check the document for likely component issues.'),
+    'hvy prune-xref': hvyDocumentCommandHelp('prune_xref'),
     section: hvyDocumentCommandHelp('section'),
     text: hvyDocumentCommandHelp('text'),
     table: hvyDocumentCommandHelp('table'),

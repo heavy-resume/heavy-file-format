@@ -224,10 +224,12 @@ function formatCommandResultForModel(result: string | { output: string; lintDiff
   ].join('\n');
 }
 
-function formatScratchpadForModel(snapshot: Pick<ReturnType<ReturnType<typeof createChatCliInterface>['snapshot']>, 'scratchpad' | 'scratchpadCommandsSinceEdit'>): string {
+function formatScratchpadForModel(snapshot: Pick<ReturnType<ReturnType<typeof createChatCliInterface>['snapshot']>, 'scratchpad' | 'scratchpadEdited' | 'scratchpadCommandsSinceEdit'>): string {
   const commands = snapshot.scratchpadCommandsSinceEdit;
-  const ageLine = `last edited ${commands.length} command${commands.length === 1 ? '' : 's'} ago`;
-  const recentCommandLines = commands.length > 0 && commands.length <= 3
+  const ageLine = snapshot.scratchpadEdited
+    ? `last edited ${commands.length} command${commands.length === 1 ? '' : 's'} ago`
+    : 'last edited never';
+  const recentCommandLines = snapshot.scratchpadEdited && commands.length > 0 && commands.length <= 3
     ? ['', 'commands since last edit:', ...commands.map((command) => `> ${command}`)]
     : [];
   return [

@@ -31,6 +31,7 @@ test('chat cli persistent instructions stay model-facing', () => {
   expect(instructions).not.toContain('hvy plugin db-table query [SELECT/WITH SQL]');
   expect('persistentInstructions' in cli).toBe(false);
   expect(cli.snapshot().scratchpad).toContain('Keep track of your progress');
+  expect(cli.snapshot().scratchpadEdited).toBe(false);
   expect(cli.snapshot().cwd).toBe('/');
 });
 
@@ -40,7 +41,9 @@ test('chat cli exposes an ephemeral scratchpad file for task notes', async () =>
 
   expect((await cli.run('ls /')).output).toContain('file scratchpad.txt');
   expect((await cli.run('cat scratchpad.txt')).output).toContain('Keep track of your progress');
+  expect(cli.snapshot().scratchpadEdited).toBe(false);
   expect((await cli.run('echo "Found summary section" > scratchpad.txt')).output).toBe('/scratchpad.txt: written');
+  expect(cli.snapshot().scratchpadEdited).toBe(true);
   expect(cli.snapshot().scratchpadCommandsSinceEdit).toEqual([]);
   await cli.run('pwd');
   await cli.run('ls /body');

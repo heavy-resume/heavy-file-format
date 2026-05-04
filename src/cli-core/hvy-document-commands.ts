@@ -89,7 +89,8 @@ export function hvyDocumentCommandHelp(topic = ''): string {
       formatCommandHelp('hvy add section PARENT_PATH ID TITLE', 'Create a section.'),
       formatCommandHelp('hvy add text SECTION_PATH ID TEXT', 'Create a text component.'),
       formatCommandHelp('hvy add table SECTION_PATH ID COLUMNS [--row CSV]...', 'Create a table component.'),
-      formatCommandHelp('hvy remove PATH', 'Remove a section or component directory. Alias: hvy delete PATH.'),
+      formatCommandHelp('hvy remove PATH [--prune-xref]', 'Remove a section or component directory. Alias: hvy delete PATH.'),
+      formatCommandHelp('hvy prune-xref TARGET_ID', 'Remove xref-card components pointing to TARGET_ID.'),
       formatCommandHelp('hvy request_structure [COMPONENT_ID] [--collapse]', 'Show the component directory map for the current document.'),
       formatCommandHelp('hvy lint', 'Check the document for likely component issues.'),
       ...formatPluginQuickReference(),
@@ -100,6 +101,7 @@ export function hvyDocumentCommandHelp(topic = ''): string {
     table: formatCommandHelp('hvy add table SECTION_PATH ID COLUMNS [--row CSV]...', 'Append a table block. Columns and rows use comma-separated text. Alias: hvy table add.'),
     request_structure: formatCommandHelp('hvy request_structure [COMPONENT_ID] [--collapse]', 'Show the component directory map, optionally scoped to one component id. --collapse compacts anonymous leaf components.'),
     lint: formatCommandHelp('hvy lint', 'Check the document for empty text, broken xrefs, empty table rows, and plugin-defined issues.'),
+    prune_xref: formatCommandHelp('hvy prune-xref TARGET_ID', 'Remove xref-card components whose xrefTarget equals TARGET_ID.'),
     plugin: [
       ...formatPluginQuickReference(),
       ...getHvyCliPluginCommandRegistrations().map((plugin) => formatCommandHelp(plugin.helpTopic, `Show ${plugin.name} plugin commands.`)),

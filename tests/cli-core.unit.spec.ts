@@ -128,7 +128,8 @@ test('cli rm recursively removes virtual body directories', async () => {
   const result = await executeHvyCliCommand(document, session, 'rm -r body/tools-technologies/tool-typescript');
 
   expect(result.mutated).toBe(true);
-  expect(result.output).toBe('/body/tools-technologies/tool-typescript: removed');
+  expect(result.output).toContain('/body/tools-technologies/tool-typescript: removed');
+  expect(result.output).toContain('Run: hvy prune-xref tool-typescript');
   expect((await executeHvyCliCommand(document, session, 'find /body/tools-technologies -name skill-record.txt')).output).not.toContain(
     '/body/tools-technologies/tool-typescript/skill-record.txt'
   );
@@ -226,11 +227,58 @@ test('cli hvy remove and delete alias recursive rm', async () => {
   const session = createHvyCliSession();
 
   const remove = await executeHvyCliCommand(document, session, 'hvy remove /body/tools-technologies/tool-typescript');
-  expect(remove.output).toBe('/body/tools-technologies/tool-typescript: removed');
+  expect(remove.output).toContain('/body/tools-technologies/tool-typescript: removed');
+  expect(remove.output).toContain('Run: hvy prune-xref tool-typescript');
   expect(serializeDocument(document)).not.toContain('id":"tool-typescript"');
 
   await executeHvyCliCommand(document, session, 'hvy delete /body/tools-technologies/tool-python');
   expect(serializeDocument(document)).not.toContain('id":"tool-python"');
+});
+
+test('cli can prune xrefs directly or while removing a target', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {"id":"tool-typescript"}-->
+TypeScript
+
+<!--hvy:xref-card {"id":"ts-card","xrefTitle":"TypeScript","xrefTarget":"tool-typescript"}-->
+
+<!--hvy:xref-card {"id":"python-card","xrefTitle":"Python","xrefTarget":"tool-python"}-->
+`, '.hvy');
+  const session = createHvyCliSession();
+
+  const hint = await executeHvyCliCommand(document, session, 'hvy remove /body/summary/tool-typescript');
+  expect(hint.output).toContain('Hint: 1 xref-card still point to tool-typescript. Run: hvy prune-xref tool-typescript');
+  expect(serializeDocument(document)).toContain('id":"ts-card"');
+
+  const pruned = await executeHvyCliCommand(document, session, 'hvy prune-xref tool-typescript');
+  expect(pruned.output).toContain('Removed 1 xref-card pointing to tool-typescript.');
+  expect(serializeDocument(document)).not.toContain('id":"ts-card"');
+  expect(serializeDocument(document)).toContain('id":"python-card"');
+
+  const secondDocument = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {"id":"tool-ruby"}-->
+Ruby
+
+<!--hvy:xref-card {"id":"ruby-card","xrefTitle":"Ruby","xrefTarget":"tool-ruby"}-->
+`, '.hvy');
+  const secondSession = createHvyCliSession();
+  const removed = await executeHvyCliCommand(secondDocument, secondSession, 'hvy remove /body/summary/tool-ruby --prune-xref');
+
+  expect(removed.output).toContain('Pruned 1 xref-card pointing to tool-ruby:');
+  expect(serializeDocument(secondDocument)).not.toContain('tool-ruby');
+  expect(serializeDocument(secondDocument)).not.toContain('ruby-card');
 });
 
 test('cli find limits broad result sets', async () => {

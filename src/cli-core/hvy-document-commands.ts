@@ -16,7 +16,7 @@ import {
 } from './plugin-command-registry';
 import { formatHvyRequestStructure } from './request-structure';
 import { formatHvyFindIntent } from './intent-search';
-import { resolveVirtualPath, type HvyVirtualFileSystem } from './virtual-file-system';
+import { findBlockForVirtualDirectory, resolveVirtualPath, type HvyVirtualFileSystem } from './virtual-file-system';
 
 export interface HvyDocumentCommandContext {
   document: VisualDocument;
@@ -354,17 +354,30 @@ function findSectionParent(ctx: HvyDocumentCommandContext, path: string): Visual
   if (resolved === '/body') {
     return null;
   }
+  const section = findSectionByResolvedPath(ctx.document.sections, resolved);
+  if (section) {
+    return section;
+  }
+  const componentPath = findNearestComponentPath(ctx, resolved);
+  if (componentPath) {
+    throw new Error(
+      `hvy section add: sections must be added at the root level or on top of an existing section. ${path} is a component, not a section.`
+    );
+  }
   return requireSection(ctx, path, 'hvy section add');
 }
 
 function requireSection(ctx: HvyDocumentCommandContext, path: string, command: string): VisualSection {
   const resolved = resolveVirtualPath(ctx.fs, ctx.cwd, path);
-  const sectionId = resolved.split('/').filter(Boolean).pop() ?? '';
-  const section = findSectionById(ctx.document.sections, sectionId);
+  const section = findSectionByResolvedPath(ctx.document.sections, resolved);
   if (!section) {
     throw new Error(`${command}: no such section: ${path}`);
   }
   return section;
+}
+
+function findSectionByResolvedPath(sections: VisualSection[], resolvedPath: string): VisualSection | null {
+  return findSectionById(sections, resolvedPath.split('/').filter(Boolean).pop() ?? '');
 }
 
 function findSectionById(sections: VisualSection[], id: string): VisualSection | null {
@@ -378,6 +391,17 @@ function findSectionById(sections: VisualSection[], id: string): VisualSection |
     }
   }
   return null;
+}
+
+function findNearestComponentPath(ctx: HvyDocumentCommandContext, resolvedPath: string): string {
+  let candidate = resolvedPath;
+  while (candidate !== '/' && candidate !== '/body') {
+    if (findBlockForVirtualDirectory(ctx.document, candidate)) {
+      return candidate;
+    }
+    candidate = candidate.split('/').slice(0, -1).join('/') || '/';
+  }
+  return '';
 }
 
 function createSection(id: string, title: string, level: number): VisualSection {

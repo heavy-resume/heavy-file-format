@@ -1,4 +1,5 @@
 import type { ComponentDefinition, VisualDocument } from '../types';
+import { stringify as stringifyYaml } from 'yaml';
 import {
   buildHvyVirtualFileSystem,
   findBlockForVirtualDirectory,
@@ -16,7 +17,7 @@ import { getHvyCliPluginCommandRegistration } from './plugin-command-registry';
 import { formatHvyCliLintIssues, runHvyCliLinter } from './document-linter';
 import { getComponentDefsFromMeta, isBuiltinComponentName, resolveBaseComponentFromMeta } from '../component-defs';
 import { serializeBlockFragment } from '../serialization';
-import { formatHvyRequestStructure } from './request-structure';
+import { formatHvyRequestStructureForDirectory } from './request-structure';
 import { cloneReusableBlock } from '../document-factory';
 
 const SCRATCHPAD_SOFT_MAX_CHARS = 600;
@@ -339,6 +340,7 @@ function commandLs(ctx: HvyCliCommandContext, args: string[]): string {
   return withWarnings(
     [
       listDirectory(ctx.fs, target).map(formatEntry).join('\n'),
+      formatLsTargetDescription(ctx, target),
       formatLsCustomComponentDefinition(ctx, target),
     ].filter((part) => part.trim().length > 0).join('\n\n'),
     warnings
@@ -355,6 +357,41 @@ function formatLsCustomComponentDefinition(ctx: HvyCliCommandContext, directoryP
     return '';
   }
   return formatComponentDefinitionForLs(definition, ctx.document.meta);
+}
+
+function formatLsTargetDescription(ctx: HvyCliCommandContext, directoryPath: string): string {
+  const section = readJsonFileFromVirtualPath(ctx.fs, `${directoryPath}/section.json`);
+  if (section) {
+    return formatMetadataDescription('Section metadata:', section);
+  }
+  const componentName = inferComponentNameForDirectory(ctx.fs, directoryPath);
+  if (!componentName) {
+    return '';
+  }
+  const component = readJsonFileFromVirtualPath(ctx.fs, `${directoryPath}/${componentName}.json`);
+  return component ? formatMetadataDescription('Component metadata:', component) : '';
+}
+
+function formatMetadataDescription(label: string, value: Record<string, unknown>): string {
+  const description = typeof value.description === 'string' ? value.description.trim() : '';
+  if (!description) {
+    return '';
+  }
+  const id = typeof value.id === 'string' && value.id.trim() ? value.id.trim() : '';
+  return [label, ...(id ? [`  id: ${id}`] : []), `  description: ${description.replace(/\s+/g, ' ')}`].join('\n');
+}
+
+function readJsonFileFromVirtualPath(fs: ReturnType<typeof buildHvyVirtualFileSystem>, path: string): Record<string, unknown> | null {
+  const entry = fs.entries.get(path);
+  if (!entry || entry.kind !== 'file') {
+    return null;
+  }
+  try {
+    const value = JSON.parse(entry.read()) as unknown;
+    return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null;
+  } catch {
+    return null;
+  }
 }
 
 function inferComponentNameForDirectory(fs: ReturnType<typeof buildHvyVirtualFileSystem>, directoryPath: string): string {
@@ -381,7 +418,7 @@ function formatComponentDefinitionForLs(definition: ComponentDefinition, meta: R
     lines.push(`  tags: ${definition.tags.trim()}`);
   }
   if (definition.schema) {
-    lines.push('  schema:', ...JSON.stringify(definition.schema, null, 2).split('\n').map((line) => `    ${line}`));
+    lines.push('  schema:', ...stringifyYaml(definition.schema).trimEnd().split('\n').map((line) => `    ${line}`));
   } else {
     lines.push('  schema: (inherits base component defaults)');
   }
@@ -412,7 +449,7 @@ function updateScratchpadCommandHistory(session: HvyCliSession, input: string): 
 }
 
 function defaultScratchpadContent(): string {
-  return 'I am your /scratchpad.txt - Keep track of your progress.\n';
+  return 'You havent written your plan yet.\n';
 }
 
 function enforceScratchpadHardCap(session: HvyCliSession): void {
@@ -451,6 +488,7 @@ function formatCatReadableOutput(ctx: HvyCliCommandContext, path: string): strin
   }
   return [
     file.read(),
+    formatLsTargetDescription(ctx, componentDirectory),
     formatLsCustomComponentDefinition(ctx, componentDirectory),
     formatComponentRawPreview(ctx, componentDirectory),
   ].filter((part) => part.trim().length > 0).join('\n\n');
@@ -490,12 +528,9 @@ function formatComponentRawPreview(ctx: HvyCliCommandContext, directoryPath: str
   if (lines.length > COMPONENT_PREVIEW_MAX_LINES) {
     const componentId = block.schema.id.trim();
     const command = componentId
-      ? `hvy request_structure ${componentId} --collapse`
-      : 'hvy request_structure --collapse';
-    const structureLines = formatHvyRequestStructure(ctx.document, ctx.fs, {
-      ...(componentId ? { componentId } : {}),
-      collapse: true,
-    }).split('\n');
+      ? `hvy request_structure ${componentId} --describe`
+      : `hvy request_structure ${directoryPath} --describe`;
+    const structureLines = formatHvyRequestStructureForDirectory(ctx.document, ctx.fs, directoryPath, { describe: true }).split('\n');
     return [
       `Preview command: ${command}`,
       `Component preview switched to request_structure because raw HVY is ${lines.length} lines.`,
@@ -593,7 +628,7 @@ async function commandFind(ctx: HvyCliCommandContext, args: string[]): Promise<H
     ? [...parsed.warnings, `Warning: find output truncated to ${FIND_MAX_RESULTS} of ${matches.length} results.`]
     : parsed.warnings;
   if (!parsed.exec) {
-    return { cwd: ctx.cwd, output: withWarnings(matches.slice(0, FIND_MAX_RESULTS).join('\n'), warnings), mutated: false };
+    return { cwd: ctx.cwd, output: withWarningsFirst(matches.slice(0, FIND_MAX_RESULTS).join('\n'), warnings), mutated: false };
   }
 
   const commandOutputs: string[] = [];
@@ -1867,6 +1902,10 @@ function warnUnknownOptions(command: string, args: string[], allowedOptions: str
 }
 
 function withWarnings(output: string, warnings: string[]): string {
+  return [output, ...warnings].filter((line) => line.length > 0).join('\n');
+}
+
+function withWarningsFirst(output: string, warnings: string[]): string {
   return [...warnings, output].filter((line) => line.length > 0).join('\n');
 }
 

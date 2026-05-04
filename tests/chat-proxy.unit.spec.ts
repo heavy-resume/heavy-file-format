@@ -9,6 +9,7 @@ import {
   extractOpenAiReasoningSummary,
   extractOpenAiText,
   formatAiCliLogEvent,
+  formatAiCliMessagesLogEvent,
   formatTraceEvent,
   formatTraceTextEvent,
   pruneTraceLines,
@@ -330,14 +331,14 @@ test('formatAiCliLogEvent writes clean chat cli trace entries only for chat cli 
     phase: 'document-edit',
     type: 'client_event',
     payload: { event: 'ai_cli_user_query', query: 'Create a chore chart.' },
-  })).toBe('user query\nCreate a chore chart.\n');
+  })).toBe('--------\nuser query\nCreate a chore chart.\n');
 
   expect(formatAiCliLogEvent({
     runId: 'chat-cli-run-1',
     phase: 'document-edit',
     type: 'client_event',
     payload: { event: 'ai_cli_command', command: 'pwd', output: '/' },
-  })).toBe('\n> pwd\n/\n');
+  })).toBe('--------\n> pwd\n/\n');
 
   expect(formatAiCliLogEvent({
     runId: 'chat-cli-run-1',
@@ -350,7 +351,7 @@ test('formatAiCliLogEvent writes clean chat cli trace entries only for chat cli 
       modelMessage: 'result\nHello\n\nWhat is your next command?\n\nhints\ncomponent text: /body/summary/intro\n\nscratchpad.txt\nNo notes yet.',
     },
   })).toBe(
-    '\n> cat /body/summary/intro/text.txt\nresult\nHello\n\nWhat is your next command?\n\nhints\ncomponent text: /body/summary/intro\n\nscratchpad.txt\nNo notes yet.\n'
+    '--------\n> cat /body/summary/intro/text.txt\nresult\nHello\n\nWhat is your next command?\n\nhints\ncomponent text: /body/summary/intro\n\nscratchpad.txt\nNo notes yet.\n'
   );
 
   expect(formatAiCliLogEvent({
@@ -369,7 +370,7 @@ test('formatAiCliLogEvent writes clean chat cli trace entries only for chat cli 
         },
       },
     },
-  })).toBe('\ntoken usage\ninput_tokens=100, output_tokens=25, total_tokens=125\n');
+  })).toBe('--------\ntoken usage\ninput_tokens=100, output_tokens=25, total_tokens=125\n');
 
   expect(formatAiCliLogEvent({
     runId: 'chat-cli-run-1',
@@ -379,7 +380,7 @@ test('formatAiCliLogEvent writes clean chat cli trace entries only for chat cli 
       response: 'done Removed TypeScript references.',
       reasoningSummary: 'Verified no matching xref files remained.',
     },
-  })).toBe('\nmodel response\ndone Removed TypeScript references.\n\nreasoning summary\nVerified no matching xref files remained.\n');
+  })).toBe('--------\nmodel response\ndone Removed TypeScript references.\n\nreasoning summary\nVerified no matching xref files remained.\n');
 
   expect(formatAiCliLogEvent({
     runId: 'run-1',
@@ -387,6 +388,58 @@ test('formatAiCliLogEvent writes clean chat cli trace entries only for chat cli 
     type: 'client_event',
     payload: { event: 'ai_cli_command', command: 'pwd', output: '/' },
   })).toBe('');
+});
+
+test('formatAiCliMessagesLogEvent pretty prints chat cli request payloads', () => {
+  const line = formatAiCliMessagesLogEvent({
+    runId: 'chat-cli-run-1',
+    phase: 'document-edit',
+    type: 'provider_request',
+    payload: {
+      provider: 'openai',
+      request: {
+        model: 'gpt-5-mini',
+        input: [
+          {
+            role: 'developer',
+            content: [{ type: 'input_text', text: 'Document context:\n\nCurrent directory: /' }],
+          },
+          {
+            role: 'user',
+            content: [{ type: 'input_text', text: 'Add Baking.' }],
+          },
+        ],
+      },
+    },
+  });
+
+  expect(line).toContain('--------\nprovider_request readable\nrunId: chat-cli-run-1');
+  expect(line).toContain('provider: openai');
+  expect(line).toContain('input:\n[0] role: developer\ncontent[0] type: input_text\nDocument context:\n\nCurrent directory: /');
+  expect(line).toContain('[1] role: user\ncontent[0] type: input_text\nAdd Baking.');
+
+  expect(formatAiCliMessagesLogEvent({
+    runId: 'run-1',
+    phase: 'document-edit',
+    type: 'provider_request',
+    payload: { provider: 'openai', request: {} },
+  })).toBe('');
+});
+
+test('formatAiCliMessagesLogEvent includes provider responses as readable text', () => {
+  const line = formatAiCliMessagesLogEvent({
+    runId: 'chat-cli-run-1',
+    phase: 'document-edit',
+    type: 'model_response',
+    payload: {
+      response: 'done Updated file.\nSecond line.',
+      reasoningSummary: 'Inspected then edited.\nValidated result.',
+    },
+  });
+
+  expect(line).toContain('--------\nmodel_response readable\nrunId: chat-cli-run-1');
+  expect(line).toContain('response:\ndone Updated file.\nSecond line.');
+  expect(line).toContain('reasoningSummary:\nInspected then edited.\nValidated result.');
 });
 
 test('buildOpenAiProxyRequest does not send trace run ids upstream', () => {

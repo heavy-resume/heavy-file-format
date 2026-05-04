@@ -11,6 +11,7 @@ const DEV_TRACE_DIR = path.resolve(process.cwd(), 'dev-traces');
 const AGENT_LOOP_TRACE_FILE = path.join(DEV_TRACE_DIR, 'agent-loop.ndjson');
 const AGENT_LOOP_TEXT_TRACE_FILE = path.join(DEV_TRACE_DIR, 'agent-loop.txt');
 const AI_CLI_LOG_FILE = path.join(DEV_TRACE_DIR, 'ai_cli_log.txt');
+const AI_CLI_MESSAGES_LOG_FILE = path.join(DEV_TRACE_DIR, 'ai_cli_messages.txt');
 const AGENT_LOOP_TRACE_MAX_LINES = 500;
 const AGENT_LOOP_TRACE_PRUNE_LINES = 100;
 const AI_CLI_LOG_MAX_LINES = 1000;
@@ -710,6 +711,15 @@ function writeTrace(event: TraceEvent): void {
           await fs.writeFile(AI_CLI_LOG_FILE, prunedAiCliLogContents, 'utf8');
         }
       }
+      const aiCliMessagesLogEntry = formatAiCliMessagesLogEvent(event);
+      if (aiCliMessagesLogEntry) {
+        await fs.appendFile(AI_CLI_MESSAGES_LOG_FILE, aiCliMessagesLogEntry, 'utf8');
+        const aiCliMessagesLogContents = await fs.readFile(AI_CLI_MESSAGES_LOG_FILE, 'utf8');
+        const prunedAiCliMessagesLogContents = pruneTraceLines(aiCliMessagesLogContents, AI_CLI_LOG_MAX_LINES, AI_CLI_LOG_PRUNE_LINES);
+        if (prunedAiCliMessagesLogContents.length !== aiCliMessagesLogContents.length) {
+          await fs.writeFile(AI_CLI_MESSAGES_LOG_FILE, prunedAiCliMessagesLogContents, 'utf8');
+        }
+      }
     })
     .catch((error: unknown) => {
       console.warn('[hvy:chat-proxy] failed to write dev trace', error);
@@ -721,32 +731,181 @@ export function formatAiCliLogEvent(event: TraceEvent): string {
     return '';
   }
   if (event.type === 'client_event' && event.payload.event === 'ai_cli_user_query') {
-    return `user query\n${String(event.payload.query ?? '').trim()}\n`;
+    return formatAiCliLogBlock(['user query', String(event.payload.query ?? '').trim()]);
   }
   if (event.type === 'client_event' && event.payload.event === 'ai_cli_command') {
     const modelMessage = typeof event.payload.modelMessage === 'string' ? event.payload.modelMessage.trimEnd() : '';
-    return [
-      '',
+    return formatAiCliLogBlock([
       `> ${String(event.payload.command ?? '').trim()}`,
       modelMessage || String(event.payload.output ?? '').trimEnd(),
-      '',
-    ].join('\n');
+    ]);
   }
   if (event.type === 'provider_response') {
     const usage = summarizeProviderTokenUsage(event.payload.payload).replace(/^usage=/, '').replaceAll(',', ', ');
-    return usage ? `\ntoken usage\n${usage}\n` : '';
+    return usage ? formatAiCliLogBlock(['token usage', usage]) : '';
   }
   if (event.type === 'model_response' && typeof event.payload.response === 'string') {
     const reasoningSummary = typeof event.payload.reasoningSummary === 'string' ? event.payload.reasoningSummary.trimEnd() : '';
-    return [
-      '',
+    return formatAiCliLogBlock([
       'model response',
       event.payload.response.trimEnd() || '(empty)',
       ...(reasoningSummary ? ['', 'reasoning summary', reasoningSummary] : []),
-      '',
-    ].join('\n');
+    ]);
   }
   return '';
+}
+
+export function formatAiCliMessagesLogEvent(event: TraceEvent): string {
+  if (!event.runId.startsWith('chat-cli-')) {
+    return '';
+  }
+  if (event.type === 'request_context' || event.type === 'provider_request' || event.type === 'provider_response' || event.type === 'model_response') {
+    return formatAiCliLogBlock([
+      `${event.type} readable`,
+      formatReadableTraceEvent(event),
+    ]);
+  }
+  return '';
+}
+
+function formatAiCliLogBlock(lines: string[]): string {
+  return ['--------', ...lines].join('\n').trimEnd() + '\n';
+}
+
+function formatReadableTraceEvent(event: TraceEvent): string {
+  if (event.type === 'request_context') {
+    return [
+      `runId: ${event.runId}`,
+      `phase: ${event.phase}`,
+      `provider: ${String(event.payload.provider ?? '')}`,
+      `model: ${String(event.payload.model ?? '')}`,
+      '',
+      'formatInstructions:',
+      formatReadableTextBlock(String(event.payload.formatInstructions ?? '')),
+      '',
+      'context:',
+      formatReadableTextBlock(String(event.payload.context ?? '')),
+      '',
+      'messages:',
+      formatReadableMessages(event.payload.messages),
+    ].join('\n');
+  }
+  if (event.type === 'provider_request') {
+    return [
+      `runId: ${event.runId}`,
+      `phase: ${event.phase}`,
+      `provider: ${String(event.payload.provider ?? '')}`,
+      '',
+      formatReadableProviderRequest(event.payload.request),
+    ].join('\n');
+  }
+  if (event.type === 'provider_response') {
+    return [
+      `runId: ${event.runId}`,
+      `phase: ${event.phase}`,
+      `provider: ${String(event.payload.provider ?? '')}`,
+      `ok: ${String(event.payload.ok ?? '')}`,
+      `status: ${String(event.payload.status ?? '')}`,
+      '',
+      'payload:',
+      formatReadableUnknown(event.payload.payload),
+    ].join('\n');
+  }
+  if (event.type === 'model_response') {
+    return [
+      `runId: ${event.runId}`,
+      `phase: ${event.phase}`,
+      '',
+      'response:',
+      formatReadableTextBlock(String(event.payload.response ?? '')),
+      ...(typeof event.payload.reasoningSummary === 'string' && event.payload.reasoningSummary.trim()
+        ? ['', 'reasoningSummary:', formatReadableTextBlock(event.payload.reasoningSummary)]
+        : []),
+    ].join('\n');
+  }
+  return formatReadableUnknown(event.payload);
+}
+
+function formatReadableProviderRequest(value: unknown): string {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return formatReadableUnknown(value);
+  }
+  const request = value as Record<string, unknown>;
+  const lines: string[] = [];
+  for (const [key, entry] of Object.entries(request)) {
+    if (key === 'instructions' && typeof entry === 'string') {
+      lines.push('instructions:', formatReadableTextBlock(entry), '');
+      continue;
+    }
+    if (key === 'input' || key === 'messages') {
+      lines.push(`${key}:`, formatReadableMessages(entry), '');
+      continue;
+    }
+    if (key === 'system' && typeof entry === 'string') {
+      lines.push('system:', formatReadableTextBlock(entry), '');
+      continue;
+    }
+    lines.push(`${key}: ${formatReadableInline(entry)}`);
+  }
+  while (lines.at(-1) === '') {
+    lines.pop();
+  }
+  return lines.join('\n');
+}
+
+function formatReadableMessages(value: unknown): string {
+  if (!Array.isArray(value)) {
+    return formatReadableUnknown(value);
+  }
+  return value.map((message, index) => {
+    if (!message || typeof message !== 'object') {
+      return `[${index}]: ${formatReadableInline(message)}`;
+    }
+    const record = message as Record<string, unknown>;
+    return [
+      `[${index}] role: ${String(record.role ?? '')}`,
+      formatReadableMessageContent(record.content),
+    ].filter(Boolean).join('\n');
+  }).join('\n\n');
+}
+
+function formatReadableMessageContent(value: unknown): string {
+  if (typeof value === 'string') {
+    return ['content:', formatReadableTextBlock(value)].join('\n');
+  }
+  if (Array.isArray(value)) {
+    return value.map((item, index) => {
+      if (!item || typeof item !== 'object') {
+        return `content[${index}]: ${formatReadableInline(item)}`;
+      }
+      const record = item as Record<string, unknown>;
+      const type = typeof record.type === 'string' ? record.type : '';
+      const text = typeof record.text === 'string' ? record.text : '';
+      if (text) {
+        return [
+          `content[${index}]${type ? ` type: ${type}` : ''}`,
+          formatReadableTextBlock(text),
+        ].join('\n');
+      }
+      return `content[${index}]${type ? ` type: ${type}` : ''}: ${formatReadableUnknown(record)}`;
+    }).join('\n');
+  }
+  return `content: ${formatReadableUnknown(value)}`;
+}
+
+function formatReadableTextBlock(value: string): string {
+  return value.trimEnd() || '(empty)';
+}
+
+function formatReadableInline(value: unknown): string {
+  if (typeof value === 'string') {
+    return value.includes('\n') ? `\n${formatReadableTextBlock(value)}` : value;
+  }
+  return formatReadableUnknown(value);
+}
+
+function formatReadableUnknown(value: unknown): string {
+  return JSON.stringify(value, null, 2) ?? String(value);
 }
 
 function summarizeTracePayload(event: TraceEvent): string {

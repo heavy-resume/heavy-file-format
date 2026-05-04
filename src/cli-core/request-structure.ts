@@ -54,6 +54,36 @@ export function formatHvyRequestStructure(document: VisualDocument, fs: HvyVirtu
   ].join('\n');
 }
 
+export function formatHvyRequestStructureForDirectory(
+  document: VisualDocument,
+  fs: HvyVirtualFileSystem,
+  directoryPath: string,
+  options: { describe?: boolean } = {}
+): string {
+  const normalized = directoryPath.replace(/\/$/, '');
+  const rootName = normalized.split('/').filter(Boolean).at(-1) ?? 'body';
+  const entries = collectComponentStructureEntries(document, fs)
+    .map((entry, index) => withStableId(entry, index))
+    .filter((entry) => entry.directory === normalized || entry.directory.startsWith(`${normalized}/`))
+    .map((entry) => ({
+      ...entry,
+      directory: `/${rootName}${entry.directory.slice(normalized.length)}`,
+      textPath: `/${rootName}${entry.textPath.slice(normalized.length)}`,
+      jsonPath: `/${rootName}${entry.jsonPath.slice(normalized.length)}`,
+    }));
+  if (entries.length === 0) {
+    return '(no nested components)';
+  }
+  return [
+    'Components:',
+    ...formatComponentTree(entries, {
+      collapse: false,
+      describe: options.describe ?? true,
+      sectionDescriptions: new Map(),
+    }),
+  ].join('\n');
+}
+
 export function formatHvyStructureForPaths(document: VisualDocument, fs: HvyVirtualFileSystem, rawPaths: string[]): string {
   const allEntries = collectComponentStructureEntries(document, fs).map(withStableId);
   const selected = allEntries.filter((entry) =>

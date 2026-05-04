@@ -14,6 +14,7 @@ export interface HvyIntentSearchResult {
   score: number;
   reason: string;
   description?: string;
+  tags?: string;
 }
 
 interface SemanticRecord {
@@ -43,11 +44,11 @@ export function formatHvyFindIntent(document: VisualDocument, fs: HvyVirtualFile
     return `No intent matches found for "${query}".`;
   }
   return [
-    `Best locations for "${query}":`,
+    `Location results for: "${query}":`,
     ...results.map((result, index) => [
       `${index + 1}. ${result.path} id=${result.id} kind=${result.kind} type=${result.type} score=${result.score}`,
-      `   ${result.reason}`,
       ...(result.description ? [`   description: ${result.description}`] : []),
+      ...(result.tags ? [`   tags: ${result.tags}`] : []),
     ].join('\n')),
   ].join('\n');
 }
@@ -151,22 +152,23 @@ function makeRecord(record: Omit<SemanticRecord, 'searchText'>): SemanticRecord 
 function scoreSemanticRecord(record: SemanticRecord, queryTokens: string[], flags: ReturnType<typeof detectIntentFlags>, flexMatched: boolean): HvyIntentSearchResult | null {
   let score = flexMatched ? 8 : 0;
   const reasons: string[] = [];
-  score += scoreField(queryTokens, record.description, 12, 'matched description', reasons);
-  score += scoreField(queryTokens, record.title, 8, 'matched title', reasons);
-  score += scoreField(queryTokens, record.id, 7, 'matched explicit id', reasons);
-  score += scoreField(queryTokens, record.path, 6, 'matched path', reasons);
-  score += scoreField(queryTokens, record.customTypeDescription, 5, 'matched custom type description', reasons);
-  score += scoreField(queryTokens, record.type, 4, 'matched component type', reasons);
-  score += scoreField(queryTokens, record.body, 1, 'matched body preview', reasons);
+  score += scoreField(queryTokens, record.description, 24, 8, 'matched description', 'partial description match', reasons);
+  score += scoreField(queryTokens, record.tags, 18, 6, 'matched tags', 'partial tags match', reasons);
+  score += scoreField(queryTokens, record.title, 10, 3, 'matched title', 'partial title match', reasons);
+  score += scoreField(queryTokens, record.id, 3, 1, 'matched id token', 'partial id match', reasons);
+  score += scoreField(queryTokens, record.path, 2, 1, 'matched path token', 'partial path match', reasons);
+  score += scoreField(queryTokens, record.customTypeDescription, 8, 3, 'matched custom type description', 'partial custom type description match', reasons);
+  score += scoreField(queryTokens, record.type, 4, 1, 'matched component type', 'partial component type match', reasons);
+  score += scoreField(queryTokens, record.body, 1, 1, 'matched body preview', 'partial body preview match', reasons);
   for (const hint of record.roleHints) {
-    score += scoreField(queryTokens, hint, 9, `matched role hint: ${hint}`, reasons);
+    score += scoreField(queryTokens, hint, 10, 3, `matched role hint: ${hint}`, `partial role hint match: ${hint}`, reasons);
   }
 
-  if (flags.skillIntent && record.path.startsWith('/body/skills') && (record.type === 'component-list' || record.path.includes('/component-list'))) {
+  if (flags.skillIntent && record.path.startsWith('/body/skills') && record.type === 'component-list') {
     score += 95;
     reasons.unshift('likely main skills library edit surface');
   }
-  if (flags.topIntent && record.path.startsWith('/body/top-skills-tools-technologies')) {
+  if (flags.topIntent && record.path.startsWith('/body/top-skills-tools-technologies') && (record.type === 'grid' || record.kind === 'section')) {
     score += 40;
     reasons.unshift('likely featured top skills/tools surface');
   }
@@ -191,25 +193,40 @@ function scoreSemanticRecord(record: SemanticRecord, queryTokens: string[], flag
     score,
     reason: reasons.length > 0 ? [...new Set(reasons)].slice(0, 3).join('; ') : 'matched indexed content',
     ...(record.description ? { description: truncatePreview(record.description, 160) } : {}),
+    ...(record.tags ? { tags: truncatePreview(record.tags, 160) } : {}),
   };
 }
 
-function scoreField(queryTokens: string[], value: string, weight: number, reason: string, reasons: string[]): number {
+function scoreField(
+  queryTokens: string[],
+  value: string,
+  exactWeight: number,
+  partialWeight: number,
+  exactReason: string,
+  partialReason: string,
+  reasons: string[]
+): number {
   if (!value.trim()) {
     return 0;
   }
   const target = value.toLowerCase();
   const targetTokens = new Set(tokenizeIntent(target));
   let score = 0;
+  let exact = false;
+  let partial = false;
   for (const token of queryTokens) {
     if (targetTokens.has(token)) {
-      score += weight;
+      score += exactWeight;
+      exact = true;
     } else if (target.includes(token)) {
-      score += Math.max(1, Math.floor(weight / 3));
+      score += partialWeight;
+      partial = true;
     }
   }
-  if (score > 0) {
-    reasons.push(reason);
+  if (exact) {
+    reasons.push(exactReason);
+  } else if (partial) {
+    reasons.push(partialReason);
   }
   return score;
 }

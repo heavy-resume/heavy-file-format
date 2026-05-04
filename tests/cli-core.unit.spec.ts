@@ -51,6 +51,27 @@ test('cli resolves component directories for common read commands', async () => 
   expect(head.output).toContain('## Skills');
 });
 
+test('hvy add section explains when the parent path is a component', async () => {
+  const document = createResumeCliTestDocument();
+  const session = createHvyCliSession();
+
+  await expect(executeHvyCliCommand(
+    document,
+    session,
+    'hvy add section /body/top-skills-tools-technologies/grid-0 top-skill-baking Baking'
+  )).rejects.toThrow(
+    'hvy section add: sections must be added at the root level or on top of an existing section. /body/top-skills-tools-technologies/grid-0 is a component, not a section.'
+  );
+
+  await expect(executeHvyCliCommand(
+    document,
+    session,
+    'hvy add section /body/skills/component-list-1/component-list skill-baking Baking'
+  )).rejects.toThrow(
+    'hvy section add: sections must be added at the root level or on top of an existing section. /body/skills/component-list-1/component-list is a component, not a section.'
+  );
+});
+
 test('ls describes custom component definitions for custom component directories', async () => {
   const document = createResumeCliTestDocument();
   const session = createHvyCliSession();
@@ -62,7 +83,18 @@ test('ls describes custom component definitions for custom component directories
   expect(result.output).toContain('baseType: expandable');
   expect(result.output).toContain('description: Skill record');
   expect(result.output).toContain('schema:');
-  expect(result.output).toContain('"expandableContentBlocks"');
+  expect(result.output).toContain('expandableContentBlocks:');
+});
+
+test('ls shows section descriptions from section metadata', async () => {
+  const document = createResumeCliTestDocument();
+  const session = createHvyCliSession();
+
+  const result = await executeHvyCliCommand(document, session, 'ls /body/top-skills-tools-technologies');
+
+  expect(result.output).toContain('Section metadata:');
+  expect(result.output).toContain('id: top-skills-tools-technologies');
+  expect(result.output).toContain('description: Featured top skills, tools, and technologies shown prominently near the top of the resume.');
 });
 
 test('cat custom component bodies includes custom definition and component preview', async () => {
@@ -74,9 +106,10 @@ test('cat custom component bodies includes custom definition and component previ
   expect(result.output).toContain('Software Engineering');
   expect(result.output).toContain('Custom component definition:');
   expect(result.output).toContain('name: skill-record');
-  expect(result.output).toContain('Preview command: hvy request_structure skill-software-engineering --collapse');
+  expect(result.output).toContain('Preview command: hvy request_structure skill-software-engineering --describe');
   expect(result.output).toContain('Component preview switched to request_structure because raw HVY is');
   expect(result.output).toContain('/skill-software-engineering');
+  expect(result.output).toContain('/expandable-stub');
 });
 
 test('hvy preview switches long raw fragments to request_structure capped at 25 lines', async () => {
@@ -85,9 +118,10 @@ test('hvy preview switches long raw fragments to request_structure capped at 25 
 
   const result = await executeHvyCliCommand(document, session, 'hvy preview /body/skills/component-list-1/component-list/skill-software-engineering');
 
-  expect(result.output).toContain('Preview command: hvy request_structure skill-software-engineering --collapse');
+  expect(result.output).toContain('Preview command: hvy request_structure skill-software-engineering --describe');
   expect(result.output).toContain('Component preview switched to request_structure because raw HVY is');
   expect(result.output).toContain('/skill-software-engineering');
+  expect(result.output).toContain('/expandable-stub');
   expect(result.output.split('\n').length).toBeLessThanOrEqual(28);
 });
 
@@ -767,8 +801,8 @@ Software Engineering
   expect(skillListIndex).toBeLessThan(topGridIndex);
   expect(projectSkillsIndex === -1 || topGridIndex < projectSkillsIndex).toBe(true);
   expect(historySkillsIndex === -1 || topGridIndex < historySkillsIndex).toBe(true);
-  expect(result.output).toContain('likely main skills library edit surface');
-  expect(result.output).toContain('likely featured top skills/tools surface');
+  expect(result.output).toContain('description: Ordered list of reusable skill records.');
+  expect(result.output).toContain('description: Featured top skills/tools grid.');
 });
 
 test('hvy find-intent includes descriptions and supports json output', async () => {
@@ -797,6 +831,31 @@ Milestones
       description: 'Quarterly roadmap notes.',
     }),
   ]);
+});
+
+test('hvy find-intent boosts tags as explicit metadata', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"notes"}-->
+#! Notes
+
+<!--hvy:text {"id":"general","description":"General notes."}-->
+General
+
+<!--hvy:text {"id":"tagged","tags":"roadmap planning","description":"Miscellaneous."}-->
+Tagged
+`, '.hvy');
+  const session = createHvyCliSession();
+
+  const result = await executeHvyCliCommand(document, session, 'hvy find-intent roadmap --max 2');
+
+  expect(result.output.indexOf('/body/notes/tagged')).toBeGreaterThan(-1);
+  expect(result.output.indexOf('/body/notes/general') === -1 || result.output.indexOf('/body/notes/tagged') < result.output.indexOf('/body/notes/general')).toBe(true);
+  expect(result.output).toContain('description: Miscellaneous.');
+  expect(result.output).toContain('tags: roadmap planning');
+  expect(result.output).not.toContain('matched tags');
 });
 
 test('hvy request_structure --describe includes non-empty descriptions', async () => {

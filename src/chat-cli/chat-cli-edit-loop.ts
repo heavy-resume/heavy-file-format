@@ -8,12 +8,12 @@ import { buildChatCliPersistentInstructions } from './chat-cli-instructions';
 
 const CHAT_CLI_MAX_STEPS = 30;
 const CHAT_CLI_MAX_CONSECUTIVE_COMMAND_ERRORS = 3;
-const CHAT_CLI_MESSAGE_HISTORY_MAX_CHARS = 1000;
+const CHAT_CLI_MESSAGE_HISTORY_MAX_CHARS = 3000;
 const CHAT_CLI_MESSAGE_HISTORY_MIN_MESSAGES = 5;
 const CHAT_CLI_PRIOR_MESSAGE_LIMIT = 5;
 const CHAT_CLI_MODEL_OUTPUT_MAX_LINES = 100;
 const CHAT_CLI_MODEL_OUTPUT_MAX_LINE_WIDTH = 400;
-const CHAT_CLI_COMMAND_NAMES = new Set(['cd', 'pwd', 'ls', 'cat', 'head', 'tail', 'nl', 'find', 'rg', 'grep', 'sort', 'uniq', 'wc', 'tr', 'xargs', 'rm', 'echo', 'sed', 'true', 'hvy', 'db-table', 'form', 'ask']);
+const CHAT_CLI_COMMAND_NAMES = new Set(['cd', 'pwd', 'ls', 'cat', 'head', 'tail', 'nl', 'find', 'rg', 'grep', 'sort', 'uniq', 'wc', 'tr', 'xargs', 'cp', 'rm', 'echo', 'sed', 'true', 'hvy', 'db-table', 'form', 'ask']);
 
 export interface ChatCliEditTurnResult {
   summary: string;
@@ -46,6 +46,7 @@ export async function runChatCliEditLoop(params: {
   const initialIntent = await cli.run(`hvy find-intent ${quoteChatCliShellArg(params.request)} --max 5`);
   await writeChatCliCommandTrace(traceRunId, initialIntent.command, initialIntent.output, params.signal);
   const priorConversation = selectChatCliPriorMessages(params.priorMessages ?? []);
+  const initialOutputs = [initialRootListing, initialHvyHelp, initialStructure, initialLint, initialIntent];
   let conversation: ChatMessage[] = [
     ...priorConversation,
     {
@@ -53,17 +54,21 @@ export async function runChatCliEditLoop(params: {
       role: 'user',
       content: params.request,
     },
+    ...formatInitialChatCliCommandMessages(initialOutputs, cli.snapshot()),
   ];
   let consecutiveCommandErrors = 0;
   let latestTokenUsage: ChatTokenUsage | null = null;
+  let urgency = 0;
 
   for (let step = 0; step < CHAT_CLI_MAX_STEPS; step += 1) {
     throwIfAborted(params.signal);
-    conversation = compactChatCliConversation(conversation);
+    if (step > 0) {
+      conversation = compactChatCliConversation(conversation);
+    }
     const response = await requestProxyCompletion({
       settings: params.settings,
       messages: conversation,
-      context: buildChatCliLoopContext(cli.snapshot(), params.request, params.priorMessages ?? [], priorConversation, [initialRootListing, initialHvyHelp, initialStructure, initialLint, initialIntent]),
+      context: buildChatCliLoopContext(cli.snapshot(), params.request, params.priorMessages ?? [], priorConversation, urgency),
       formatInstructions: buildChatCliLoopFormatInstructions(),
       mode: 'document-edit',
       debugLabel: `chat-cli-edit:${step + 1}`,
@@ -116,6 +121,9 @@ export async function runChatCliEditLoop(params: {
       try {
         result = await cli.run(command);
         consecutiveCommandErrors = 0;
+        const commandMutatedDocument = result.mutated && !isSessionOnlyCommand(command);
+        urgency = updateChatCliUrgency(urgency, commandMutatedDocument);
+        mutated = mutated || commandMutatedDocument;
       } catch (error) {
         const output = error instanceof Error ? error.message : String(error);
         consecutiveCommandErrors += 1;
@@ -124,7 +132,6 @@ export async function runChatCliEditLoop(params: {
         }
         result = { command, cwd: cli.session.cwd, output, mutated: false };
       }
-      mutated = mutated || (result.mutated && !isSessionOnlyCommand(command));
       traceOutput = result.output;
       commandOutputs.push({
         command,
@@ -152,6 +159,7 @@ export async function runChatCliEditLoop(params: {
       }),
       hints: formatBatchHints(commandHints),
       scratchpad: formatScratchpadForModel(cli.snapshot()),
+      urgency: formatChatCliUrgency(urgency),
     });
     await writeChatCliCommandTrace(
       traceRunId,
@@ -192,7 +200,7 @@ function buildChatCliLoopContext(
   request: string,
   priorMessages: ChatMessage[],
   priorConversation: ChatMessage[],
-  initialOutputs: Array<{ command: string; output: string }>
+  urgency: number
 ): string {
   const taskContext = resolveChatCliTaskContext(request, priorMessages);
   const omittedMessageCount = priorMessages.filter((message) => !message.progress).length - priorConversation.length;
@@ -201,20 +209,49 @@ function buildChatCliLoopContext(
     taskContext.goal,
     ...(omittedMessageCount > 0 ? ['', `Earlier chat omitted: ${omittedMessageCount} message${omittedMessageCount === 1 ? '' : 's'}.`] : []),
     '',
+    `Current directory: ${snapshot.cwd}`,
+    '',
+    'scratchpad.txt:',
+    formatScratchpadForModel(snapshot),
+    '',
+    'urgency:',
+    formatChatCliUrgency(urgency),
+    '',
     'Valid commands:',
     snapshot.commandSummary,
     '',
     'Persistent instructions:',
     buildChatCliPersistentInstructions(),
-    '',
-    'Initial terminal output:',
-    ...initialOutputs.flatMap((output) => [`> ${output.command}`, formatCommandResultForModel(output.output), '']),
-    '',
-    `Current directory: ${snapshot.cwd}`,
-    '',
-    'scratchpad.txt:',
-    formatScratchpadForModel(snapshot),
   ].join('\n');
+}
+
+function formatInitialChatCliCommandMessages(
+  outputs: Array<{ command: string; output: string }>,
+  snapshot: ReturnType<ReturnType<typeof createChatCliInterface>['snapshot']>
+): ChatMessage[] {
+  return outputs.flatMap((output, index) => [
+    {
+      id: crypto.randomUUID(),
+      role: 'assistant' as const,
+      content: formatChatCliCommandForModel(output.command),
+    },
+    {
+      id: crypto.randomUUID(),
+      role: 'user' as const,
+      content: index === outputs.length - 1
+        ? formatCommandResultForModel({
+            output: output.output,
+            hints: '',
+            scratchpad: formatScratchpadForModel(snapshot),
+            urgency: formatChatCliUrgency(0),
+          })
+        : formatCommandResultForModel(output.output),
+    },
+  ]);
+}
+
+function formatChatCliCommandForModel(command: string): string {
+  return `\`\`\`shell\n${command}\n\`\`\``;
 }
 
 function quoteChatCliShellArg(value: string): string {
@@ -388,7 +425,7 @@ function normalizeCommandResponse(response: string): string {
   return commandText.trim();
 }
 
-function formatCommandResultForModel(result: string | { output: string; lintDiff?: string; hints?: string; scratchpad?: string }): string {
+function formatCommandResultForModel(result: string | { output: string; lintDiff?: string; hints?: string; scratchpad?: string; urgency?: string }): string {
   if (typeof result === 'string') {
     return result.trimEnd() || '(no output)';
   }
@@ -398,15 +435,35 @@ function formatCommandResultForModel(result: string | { output: string; lintDiff
     ...('lintDiff' in result && result.lintDiff?.trim()
       ? ['', result.lintDiff.trimEnd()]
       : []),
-    '',
-    'What is your next command?',
-    '',
     'hints',
     result.hints?.trimEnd() || '(none)',
     '',
-    'scratchpad.txt',
+    '### BEGIN /scratchpad.txt  ###',
     result.scratchpad?.trimEnd() || '(empty)',
+    '### END /scratchpad.txt ###',
+    '### BEGIN your urgency ###',
+    result.urgency?.trimEnd() || formatChatCliUrgency(0),
+    '### END your urgency ###',
+    'What is your next command(s)? You can batch commands with multiple ```shell. Remember to take notes as you go!',
   ].join('\n');
+}
+
+function updateChatCliUrgency(current: number, mutatedDocument: boolean): number {
+  return Math.max(0, current + 1 - (mutatedDocument ? 3 : 0));
+}
+
+function formatChatCliUrgency(score: number): string {
+  return `score=${score}\n${getChatCliUrgencyMessage(score)}`;
+}
+
+function getChatCliUrgencyMessage(score: number): string {
+  if (score < 2) {
+    return 'prioritize planning and understanding';
+  }
+  if (score <= 4) {
+    return 'consider making your next change soon';
+  }
+  return 'stop poking around and make changes';
 }
 
 function formatBatchCommandOutput(outputs: Array<{ command: string; output: string }>): string {

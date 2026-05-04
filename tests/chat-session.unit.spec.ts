@@ -278,10 +278,10 @@ test('requestDocumentEditChatTurn trims old cli conversation messages while keep
   });
 
   expect(result.error).toBeNull();
-  expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.messages.length).toBeGreaterThanOrEqual(5);
+  expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.messages.length).toBeGreaterThanOrEqual(10);
   expect(
     requestProxyCompletionMock.mock.calls[4]?.[0]?.messages.reduce((total: number, message: ChatMessage) => total + message.content.length, 0)
-  ).toBeLessThanOrEqual(3000);
+  ).toBeLessThanOrEqual(6000);
   expect(JSON.stringify(requestProxyCompletionMock.mock.calls[4]?.[0]?.messages)).not.toContain('x'.repeat(2500));
   expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.context).toContain(
     'Valid commands:\nCommands: cd, pwd, ls, cat, head, tail, nl, find, rg, grep, sort, uniq, wc, tr, xargs, cp, rm, echo, sed, true, hvy. Ask: ask QUESTION. Finish: done SUMMARY.'

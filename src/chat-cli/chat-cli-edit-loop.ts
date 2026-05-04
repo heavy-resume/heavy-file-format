@@ -8,9 +8,9 @@ import { buildChatCliPersistentInstructions } from './chat-cli-instructions';
 
 const CHAT_CLI_MAX_STEPS = 30;
 const CHAT_CLI_MAX_CONSECUTIVE_COMMAND_ERRORS = 3;
-const CHAT_CLI_MESSAGE_HISTORY_MAX_CHARS = 3000;
-const CHAT_CLI_MESSAGE_HISTORY_MIN_MESSAGES = 5;
-const CHAT_CLI_PRIOR_MESSAGE_LIMIT = 5;
+const CHAT_CLI_MESSAGE_HISTORY_MAX_CHARS = 6000;
+const CHAT_CLI_MESSAGE_HISTORY_MIN_MESSAGES = 10;
+const CHAT_CLI_PRIOR_MESSAGE_LIMIT = 10;
 const CHAT_CLI_MODEL_OUTPUT_MAX_LINES = 100;
 const CHAT_CLI_MODEL_OUTPUT_MAX_LINE_WIDTH = 400;
 const CHAT_CLI_COMMAND_NAMES = new Set(['cd', 'pwd', 'ls', 'cat', 'head', 'tail', 'nl', 'find', 'rg', 'grep', 'sort', 'uniq', 'wc', 'tr', 'xargs', 'cp', 'rm', 'echo', 'sed', 'true', 'hvy', 'db-table', 'form', 'ask']);

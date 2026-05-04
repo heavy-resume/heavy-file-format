@@ -4,6 +4,7 @@ import { setSidebarOpen, setEditorSidebarOpen } from '../../navigation';
 import { serializeDocument } from '../../serialization';
 import { clearChatConversation } from '../../chat/chat';
 import { closeAiEditPopover } from '../../ai-edit-popover';
+import { restoreCliViewAfterRender } from '../../cli-ui/focus';
 import type { AppActionHandler } from './types';
 
 const undo: AppActionHandler = () => {
@@ -53,6 +54,9 @@ const setEditorMode: AppActionHandler = ({ actionButton }) => {
   }
   state.activeEditorSectionTitleKey = null;
   getRenderApp()();
+  if (editorMode === 'cli') {
+    restoreCliViewAfterRender();
+  }
 };
 
 const toggleDocumentMeta: AppActionHandler = () => {

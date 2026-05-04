@@ -37,10 +37,10 @@ export function executeHvyDocumentCommand(ctx: HvyDocumentCommandContext, args: 
   if (resource === 'form' && action === 'add') {
     return addFormPluginBlock(ctx, rest);
   }
-  if (resource === 'db-table' && action === 'add') {
+  if (resource === 'db-table' && (action === 'show' || action === 'add')) {
     return addDbTablePluginBlock(ctx, rest);
   }
-  throw new Error('hvy: expected section add, text add, table add, plugin add, form add, or db-table add');
+  throw new Error('hvy: expected section add, text add, table add, plugin add, form add, or db-table show');
 }
 
 export function hvyDocumentCommandHelp(topic = ''): string {
@@ -51,14 +51,14 @@ export function hvyDocumentCommandHelp(topic = ''): string {
       'hvy table add SECTION_PATH ID COLUMNS [--row CSV]...',
       'hvy plugin add SECTION_PATH ID PLUGIN_ID [--config JSON] [--body TEXT]',
       'form add SECTION_PATH ID SUBMIT_LABEL FIELD... [--script NAME SOURCE] [--submit NAME]',
-      'db-table add SECTION_PATH ID TABLE QUERY',
+      'db-table show SECTION_PATH ID TABLE [QUERY]',
     ].join('\n'),
     section: 'hvy section add PARENT_PATH ID TITLE\nAdd a section under /body or under another section.',
     text: 'hvy text add SECTION_PATH ID TEXT\nAppend a text block to a section.',
     table: 'hvy table add SECTION_PATH ID COLUMNS [--row CSV]...\nAppend a table block. Columns and rows use comma-separated text.',
     plugin: 'hvy plugin add SECTION_PATH ID PLUGIN_ID [--config JSON] [--body TEXT]\nAppend a plugin block. Use \\n escapes inside BODY for multiline plugin text.',
     form: 'form add SECTION_PATH ID SUBMIT_LABEL FIELD... [--script NAME SOURCE] [--submit NAME]\nAppend a Form plugin. FIELD uses name:Label:type[:required][:option A|option B].',
-    'db-table': 'db-table add SECTION_PATH ID TABLE QUERY\nAppend a DB Table plugin backed by a table/view and optional SQL query text.',
+    'db-table': 'db-table show SECTION_PATH ID TABLE [QUERY]\nShow a SQLite table/view with an optional SQL query. Alias: db-table add.',
   };
   return help[topic] ?? help[''];
 }
@@ -127,9 +127,9 @@ function addFormPluginBlock(ctx: HvyDocumentCommandContext, args: string[]): Hvy
 
 function addDbTablePluginBlock(ctx: HvyDocumentCommandContext, args: string[]): HvyDocumentCommandResult {
   const [sectionPath = '', id = '', table = '', query = ''] = args;
-  const section = requireSection(ctx, sectionPath, 'db-table add');
+  const section = requireSection(ctx, sectionPath, 'db-table show');
   if (!id || !table) {
-    throw new Error('db-table add: expected SECTION_PATH ID TABLE QUERY');
+    throw new Error('db-table show: expected SECTION_PATH ID TABLE [QUERY]');
   }
   section.blocks.push(
     createPluginBlock(id, DB_TABLE_PLUGIN_ID, { source: 'with-file', table: decodeCliText(table), queryLimit: 10 }, decodeCliText(query))

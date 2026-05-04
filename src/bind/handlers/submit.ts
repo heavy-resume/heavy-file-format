@@ -150,7 +150,7 @@ export function bindSubmit(app: HTMLElement): void {
 
     if (form?.id === 'cliComposer') {
       event.preventDefault();
-      submitCliCommand({
+      await submitCliCommand({
         state,
         command: state.cliDraft,
         recordHistory,

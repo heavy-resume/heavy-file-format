@@ -36,8 +36,8 @@ doc.db.execute('UPDATE chores SET active = 0 WHERE description = \\'' + chore + 
 `);
 
   await runCliCommand(page, 'hvy section add /body chore-chart "Chore Chart"');
-  await runCliCommand(page, 'db-table add /chore-chart active-chore-chart active_chore_chart "SELECT Chore, Dad, Mom, Child FROM active_chore_chart"');
-  await runCliCommand(page, 'db-table add /chore-chart weekly-leaders weekly_chore_leaders "SELECT Person, Completed FROM weekly_chore_leaders"');
+  await runCliCommand(page, 'db-table show /chore-chart active-chore-chart active_chore_chart "SELECT Chore, Dad, Mom, Child FROM active_chore_chart"');
+  await runCliCommand(page, 'db-table show /chore-chart weekly-leaders weekly_chore_leaders "SELECT Person, Completed FROM weekly_chore_leaders"');
   await runCliCommand(
     page,
     `form add /chore-chart add-chore-form "Add chore" "description:Description:textarea:required" --script submit "${setupChoreDb}" --submit submit`

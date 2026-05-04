@@ -13,8 +13,9 @@ export function renderCliView(params: {
     ? params.history
         .map((entry) => {
           const outputClass = entry.error ? ' cli-error' : '';
+          const output = entry.output ?? '';
           return `<div class="cli-line"><span class="cli-prompt">${params.escapeHtml(entry.cwd)} $</span> ${params.escapeHtml(entry.command)}${
-            entry.output ? `\n<span class="${outputClass.trim()}">${params.escapeHtml(entry.output)}</span>` : ''
+            output ? `\n<span class="${outputClass.trim()}">${params.escapeHtml(output)}</span>` : ''
           }</div>`;
         })
         .join('')

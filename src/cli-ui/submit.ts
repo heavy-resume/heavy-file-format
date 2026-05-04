@@ -1,12 +1,12 @@
 import { executeHvyCliCommand } from '../cli-core/commands';
 import type { AppState } from '../types';
 
-export function submitCliCommand(params: {
+export async function submitCliCommand(params: {
   state: AppState;
   command: string;
   recordHistory: (label: string) => void;
   refreshReaderPanels: () => void;
-}): void {
+}): Promise<void> {
   const command = params.command.trim();
   if (!command) {
     return;
@@ -15,7 +15,7 @@ export function submitCliCommand(params: {
     if (isMutatingCliCommand(command)) {
       params.recordHistory(`cli:${command}`);
     }
-    const result = executeHvyCliCommand(params.state.document, params.state.cliSession, command);
+    const result = await executeHvyCliCommand(params.state.document, params.state.cliSession, command);
     if (result.mutated) {
       params.refreshReaderPanels();
     }
@@ -34,5 +34,5 @@ export function submitCliCommand(params: {
 }
 
 function isMutatingCliCommand(command: string): boolean {
-  return /^\s*sed(?:\s|$)/.test(command);
+  return /^\s*(?:sed|db-table\s+exec)(?:\s|$)/.test(command);
 }

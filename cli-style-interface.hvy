@@ -234,4 +234,4 @@ theme:
   <!--hvy:expandable:content {}-->
 
    <!--hvy:text {}-->
-    DB table plugin shortcut. Adds a dev.heavy.db-table plugin backed by a table or view, with optional SQL query text.
+    DB table plugin shortcut. Shows a SQLite table or view with optional SQL query text. Prefer db-table show; db-table add remains an alias.

@@ -7,6 +7,7 @@ import {
   type HvyVirtualFile,
 } from './virtual-file-system';
 import { executeHvyDocumentCommand, hvyDocumentCommandHelp } from './hvy-document-commands';
+import { createScriptingDbRuntime, formatQueryResultTable, getDocumentDbTableObjectNames } from '../plugins/db-table';
 
 export interface HvyCliSession {
   cwd: string;
@@ -26,7 +27,7 @@ export function getHvyCliCommandSummary(): string {
   return helpFor('');
 }
 
-export function executeHvyCliCommand(document: VisualDocument, session: HvyCliSession, input: string): HvyCliExecution {
+export async function executeHvyCliCommand(document: VisualDocument, session: HvyCliSession, input: string): Promise<HvyCliExecution> {
   const args = tokenizeCommand(input);
   if (args.length === 0) {
     return { cwd: session.cwd, output: '', mutated: false };
@@ -35,12 +36,12 @@ export function executeHvyCliCommand(document: VisualDocument, session: HvyCliSe
   const command = args[0] ?? '';
   const fs = buildHvyVirtualFileSystem(document);
   const ctx = { document, fs, cwd: session.cwd };
-  const result = runCommand(ctx, command, args.slice(1));
+  const result = await runCommand(ctx, command, args.slice(1));
   session.cwd = result.cwd;
   return result;
 }
 
-function runCommand(ctx: { document: VisualDocument; fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd: string }, command: string, args: string[]): HvyCliExecution {
+async function runCommand(ctx: { document: VisualDocument; fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd: string }, command: string, args: string[]): Promise<HvyCliExecution> {
   if (args.includes('--help') || command === 'help' || command === 'man') {
     const topic = command === 'help' || command === 'man' ? args[0] : command;
     return { cwd: ctx.cwd, output: helpFor(topic), mutated: false };
@@ -82,11 +83,81 @@ function runCommand(ctx: { document: VisualDocument; fs: ReturnType<typeof build
     const result = executeHvyDocumentCommand(ctx, args);
     return { cwd: ctx.cwd, output: result.output, mutated: result.mutated };
   }
+  if (command === 'db-table' && isDbTableSqlAction(args[0] ?? '')) {
+    const result = await commandDbTable(ctx.document, args);
+    return { cwd: ctx.cwd, output: result.output, mutated: result.mutated };
+  }
   if (command === 'form' || command === 'db-table') {
     const result = executeHvyDocumentCommand(ctx, [command, ...args]);
     return { cwd: ctx.cwd, output: result.output, mutated: result.mutated };
   }
   throw new Error(`Unknown command "${command}". Try "help".`);
+}
+
+function isDbTableSqlAction(action: string): boolean {
+  return action === 'query' || action === 'exec' || action === 'tables' || action === 'schema';
+}
+
+async function commandDbTable(document: VisualDocument, args: string[]): Promise<{ output: string; mutated: boolean }> {
+  const [action = '', ...rest] = args;
+  if (action === 'tables') {
+    const names = await getDocumentDbTableObjectNames(document);
+    return { output: names.length > 0 ? names.join('\n') : '(no SQLite tables or views)', mutated: false };
+  }
+  if (action === 'query') {
+    const sql = rest.join(' ').trim();
+    if (!sql) {
+      throw new Error('db-table query: expected SQL');
+    }
+    const runtime = await createScriptingDbRuntime(document);
+    try {
+      const rows = runtime.api.query(sql);
+      const columns = collectQueryColumns(rows);
+      return {
+        output: [
+          `Executed query: ${sql}`,
+          `Returned rows: ${rows.length}`,
+          '',
+          columns.length === 0 ? '(no rows)' : formatQueryResultTable(columns, rows.map((row) => columns.map((column) => stringifyCliSqlValue(row[column])))),
+        ].join('\n'),
+        mutated: false,
+      };
+    } finally {
+      runtime.dispose();
+    }
+  }
+  if (action === 'exec') {
+    const sql = rest.join(' ').trim();
+    if (!sql) {
+      throw new Error('db-table exec: expected SQL');
+    }
+    let mutated = false;
+    const runtime = await createScriptingDbRuntime(document, () => {
+      mutated = true;
+    });
+    try {
+      return { output: runtime.api.execute(sql), mutated };
+    } finally {
+      runtime.dispose();
+    }
+  }
+  if (action === 'schema') {
+    const name = rest.join(' ').trim();
+    const runtime = await createScriptingDbRuntime(document);
+    try {
+      if (!name) {
+        const rows = runtime.api.query(
+          "SELECT type, name, sql FROM sqlite_schema WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%' ORDER BY name"
+        );
+        return { output: formatSqlRows(rows, '(no SQLite tables or views)'), mutated: false };
+      }
+      const rows = runtime.api.query(`PRAGMA table_info(${quoteIdentifier(name)})`);
+      return { output: formatSqlRows(rows, `No schema rows for ${name}`), mutated: false };
+    } finally {
+      runtime.dispose();
+    }
+  }
+  throw new Error('db-table: expected show, query, exec, tables, or schema');
 }
 
 function commandLs(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd: string }, args: string[]): string {
@@ -287,6 +358,33 @@ function depthForPath(path: string): number {
   return path.split('/').filter(Boolean).length;
 }
 
+function collectQueryColumns(rows: Array<Record<string, unknown>>): string[] {
+  const columns = new Set<string>();
+  rows.forEach((row) => Object.keys(row).forEach((column) => columns.add(column)));
+  return [...columns];
+}
+
+function formatSqlRows(rows: Array<Record<string, unknown>>, emptyMessage: string): string {
+  const columns = collectQueryColumns(rows);
+  return columns.length === 0
+    ? emptyMessage
+    : formatQueryResultTable(columns, rows.map((row) => columns.map((column) => stringifyCliSqlValue(row[column]))));
+}
+
+function stringifyCliSqlValue(value: unknown): string {
+  if (value == null) {
+    return '';
+  }
+  if (value instanceof Uint8Array) {
+    return `<${value.byteLength} bytes>`;
+  }
+  return String(value);
+}
+
+function quoteIdentifier(identifier: string): string {
+  return `"${identifier.replaceAll('"', '""')}"`;
+}
+
 function formatEntry(entry: HvyVirtualEntry): string {
   return `${entry.kind === 'dir' ? 'dir ' : 'file'} ${entry.path.split('/').pop() || '/'}`;
 }
@@ -353,7 +451,13 @@ function helpFor(topic = ''): string {
     table: hvyDocumentCommandHelp('table'),
     plugin: hvyDocumentCommandHelp('plugin'),
     form: hvyDocumentCommandHelp('form'),
-    'db-table': hvyDocumentCommandHelp('db-table'),
+    'db-table': [
+      hvyDocumentCommandHelp('db-table'),
+      'db-table query [SELECT/WITH SQL]',
+      'db-table exec [CREATE / INSERT / UPDATE / DELETE / DROP SQL]',
+      'db-table tables',
+      'db-table schema [TABLE_OR_VIEW]',
+    ].join('\n'),
   };
   return help[topic] ?? help[''];
 }

@@ -1,6 +1,7 @@
 import { buildHvyVirtualFileSystem, resolveVirtualPath, type HvyVirtualEntry } from '../cli-core/virtual-file-system';
 import { tokenizeCommand } from '../cli-core/commands';
 import { getHvyCliPluginCommandRegistrationByPluginId } from '../cli-core/plugin-command-registry';
+import { extractVirtualPathsFromOutput, formatHvyStructureForPaths } from '../cli-core/request-structure';
 import { getHvyComponentHelpLines } from '../component-help';
 import type { VisualDocument } from '../types';
 
@@ -10,12 +11,22 @@ export function buildChatCliComponentHints(params: {
   document: VisualDocument;
   cwd: string;
   command: string;
+  output?: string;
 }): string {
   const fs = buildHvyVirtualFileSystem(params.document);
-  const hints = collectCommandComponentPaths(params.command, params.cwd, fs)
+  const commandHints = collectCommandComponentPaths(params.command, params.cwd, fs)
     .map((path) => buildComponentPathHint(path, fs))
     .filter((hint): hint is string => !!hint);
-  return [...new Set(hints)].slice(0, COMPONENT_HINTS_MAX_COUNT).join('\n');
+  const searchStructureHint = isSearchStyleCommand(params.command)
+    ? formatHvyStructureForPaths(fs, extractVirtualPathsFromOutput(params.output ?? ''))
+    : '';
+  const hints = [...new Set([searchStructureHint, ...commandHints].filter(Boolean))];
+  return hints.slice(0, COMPONENT_HINTS_MAX_COUNT + 1).join('\n');
+}
+
+function isSearchStyleCommand(command: string): boolean {
+  const firstCommand = tokenizeCommand(command).find((token) => token !== '|' && token !== '&&' && token !== '||') ?? '';
+  return firstCommand === 'rg' || firstCommand === 'grep' || firstCommand === 'find';
 }
 
 function collectCommandComponentPaths(command: string, cwd: string, fs: ReturnType<typeof buildHvyVirtualFileSystem>): string[] {

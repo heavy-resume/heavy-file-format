@@ -131,6 +131,9 @@ async function runCommand(ctx: HvyCliCommandContext, command: string, args: stri
   if (command === 'true') {
     return { cwd: ctx.cwd, output: '', mutated: false };
   }
+  if (command === 'ask') {
+    return { cwd: ctx.cwd, output: args.join(' ').trim(), mutated: false };
+  }
   if (command === 'cd') {
     const next = resolveVirtualPath(ctx.fs, ctx.cwd, args[0] ?? '/');
     const entry = ctx.fs.entries.get(next);
@@ -1417,7 +1420,7 @@ function helpFor(topic = ''): string {
   }
 
   const help: Record<string, string> = {
-    '': 'Commands: cd, pwd, ls, cat, head, tail, nl, find, rg, grep, sort, uniq, wc, tr, xargs, rm, echo, sed, true, hvy. Finish: done SUMMARY. Use man <command> for details.',
+    '': 'Commands: cd, pwd, ls, cat, head, tail, nl, find, rg, grep, sort, uniq, wc, tr, xargs, rm, echo, sed, true, hvy. Ask: ask QUESTION. Finish: done SUMMARY. Use man <command> for details.',
     cd: formatCommandHelp('cd PATH', 'Change the current virtual directory.'),
     pwd: formatCommandHelp('pwd', 'Print the current virtual directory.'),
     ls: formatCommandHelp('ls [PATH]', 'List files and directories.'),
@@ -1437,8 +1440,10 @@ function helpFor(topic = ''): string {
     echo: formatCommandHelp('echo TEXT [> FILE|>> FILE]', 'Print text, replace a writable file, or append to a writable file.'),
     sed: formatCommandHelp('sed [-i] [-E] s/search/replace/[gI] FILE...', 'Update writable virtual files with a search/replace.'),
     true: formatCommandHelp('true', 'Succeed without output. Useful in command chains such as COMMAND || true.'),
+    ask: formatCommandHelp('ask QUESTION', 'Pause the AI CLI edit loop and ask the user for clarification.'),
     done: formatCommandHelp('done SUMMARY', 'Finish the AI CLI edit loop with a short summary.'),
     hvy: hvyDocumentCommandHelp(),
+    'hvy request_structure': hvyDocumentCommandHelp('request_structure'),
     section: hvyDocumentCommandHelp('section'),
     text: hvyDocumentCommandHelp('text'),
     table: hvyDocumentCommandHelp('table'),

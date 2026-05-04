@@ -49,7 +49,7 @@ test('cli echo supports shell-style redirection to writable virtual files', asyn
   const session = createHvyCliSession();
 
   expect((await executeHvyCliCommand(document, session, 'ls /')).output).toContain('file scratchpad.txt');
-  expect((await executeHvyCliCommand(document, session, 'cat /scratchpad.txt')).output).toBe('');
+  expect((await executeHvyCliCommand(document, session, 'cat /scratchpad.txt')).output).toContain('Keep track of your progress');
   expect((await executeHvyCliCommand(document, session, 'echo "Task note" >> scratchpad.txt')).output).toBe('/scratchpad.txt: appended');
   expect((await executeHvyCliCommand(document, session, 'cat scratchpad.txt')).output).toContain('Task note');
 
@@ -447,12 +447,46 @@ test('cli lists text filters as supported commands', async () => {
   const session = createHvyCliSession();
 
   expect((await executeHvyCliCommand(document, session, 'help')).output).toContain(
-    'Commands: cd, pwd, ls, cat, head, tail, nl, find, rg, grep, sort, uniq, wc, tr, xargs, rm, echo, sed, true, hvy. Finish: done SUMMARY.'
+    'Commands: cd, pwd, ls, cat, head, tail, nl, find, rg, grep, sort, uniq, wc, tr, xargs, rm, echo, sed, true, hvy. Ask: ask QUESTION. Finish: done SUMMARY.'
   );
   expect((await executeHvyCliCommand(document, session, 'man wc')).output).toContain('wc -l [FILE...]');
   expect((await executeHvyCliCommand(document, session, 'man uniq')).output).toContain('uniq [FILE...]');
   expect((await executeHvyCliCommand(document, session, 'man tr')).output).toContain('tr SET1 SET2');
+  expect((await executeHvyCliCommand(document, session, 'man ask')).output).toContain('ask QUESTION');
+  expect((await executeHvyCliCommand(document, session, 'ask "Which section?"')).output).toBe('Which section?');
   expect((await executeHvyCliCommand(document, session, 'man done')).output).toContain('done SUMMARY');
+});
+
+test('hvy request_structure lists component directories and custom definitions', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+component_defs:
+  - name: skill-card
+    baseType: xref-card
+    description: Skill card
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {"id":"intro"}-->
+ Hello
+
+<!--hvy:xref-card {"id":"typescript-card","xrefTitle":"TypeScript","xrefTarget":"tool-typescript"}-->
+`, '.hvy');
+  const session = createHvyCliSession();
+
+  const result = await executeHvyCliCommand(document, session, 'hvy request_structure');
+
+  expect(result.mutated).toBe(false);
+  expect(result.output).toContain('Key: [x] text, [c] container, [p] plugin, [t] table, [i] image');
+  expect(result.output).toContain('- skill-card baseType=xref-card - Skill card');
+  expect(result.output).toContain('[x] /body/summary/intro id=intro type=text text=/body/summary/intro/text.txt');
+  expect(result.output).toContain('[r] /body/summary/typescript-card id=typescript-card type=xref-card text=/body/summary/typescript-card/xref-card.txt');
+
+  await expect(executeHvyCliCommand(document, session, 'hvy request_structure /body')).rejects.toThrow(
+    'hvy request_structure takes no arguments'
+  );
 });
 
 test('deserializing custom resume components does not warn about missing app state', () => {

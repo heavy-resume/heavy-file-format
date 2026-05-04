@@ -14,6 +14,7 @@ import {
   getHvyCliScriptingToolNames,
   type HvyCliHelpCommand,
 } from './plugin-command-registry';
+import { formatHvyRequestStructure } from './request-structure';
 import { resolveVirtualPath, type HvyVirtualFileSystem } from './virtual-file-system';
 
 export interface HvyDocumentCommandContext {
@@ -29,6 +30,12 @@ export interface HvyDocumentCommandResult {
 
 export function executeHvyDocumentCommand(ctx: HvyDocumentCommandContext, args: string[]): HvyDocumentCommandResult {
   const [resource, action, ...rest] = args;
+  if (resource === 'request_structure') {
+    if (action || rest.length > 0) {
+      throw new Error('hvy request_structure takes no arguments');
+    }
+    return { output: formatHvyRequestStructure(ctx.document, ctx.fs), mutated: false };
+  }
   if (resource === 'add') {
     return executeHvyAddCommand(ctx, action, rest);
   }
@@ -86,12 +93,14 @@ export function hvyDocumentCommandHelp(topic = ''): string {
       formatCommandHelp('hvy add text SECTION_PATH ID TEXT', 'Create a text component.'),
       formatCommandHelp('hvy add table SECTION_PATH ID COLUMNS [--row CSV]...', 'Create a table component.'),
       formatCommandHelp('hvy remove PATH', 'Remove a section or component directory. Alias: hvy delete PATH.'),
+      formatCommandHelp('hvy request_structure', 'Show the full component directory map for the current document.'),
       ...formatPluginQuickReference(),
       formatCommandHelp('Edit existing components', 'Use find to discover virtual files, cat to inspect them, and sed to update writable body/config files.'),
     ].join('\n'),
     section: formatCommandHelp('hvy add section PARENT_PATH ID TITLE', 'Add a section under /body or under another section. Alias: hvy section add.'),
     text: formatCommandHelp('hvy add text SECTION_PATH ID TEXT', 'Append a text block to a section. Alias: hvy text add.'),
     table: formatCommandHelp('hvy add table SECTION_PATH ID COLUMNS [--row CSV]...', 'Append a table block. Columns and rows use comma-separated text. Alias: hvy table add.'),
+    request_structure: formatCommandHelp('hvy request_structure', 'Show the full component directory map. Takes no arguments.'),
     plugin: [
       ...formatPluginQuickReference(),
       ...getHvyCliPluginCommandRegistrations().map((plugin) => formatCommandHelp(plugin.helpTopic, `Show ${plugin.name} plugin commands.`)),

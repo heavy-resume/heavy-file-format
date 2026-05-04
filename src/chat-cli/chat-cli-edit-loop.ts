@@ -10,7 +10,7 @@ const CHAT_CLI_MAX_CONSECUTIVE_COMMAND_ERRORS = 3;
 const CHAT_CLI_MESSAGE_HISTORY_MAX_CHARS = 500;
 const CHAT_CLI_MESSAGE_HISTORY_MIN_MESSAGES = 5;
 const CHAT_CLI_RECENT_CHAT_CONTEXT_MAX_CHARS = 700;
-const CHAT_CLI_COMMAND_NAMES = new Set(['cd', 'pwd', 'ls', 'cat', 'head', 'tail', 'nl', 'find', 'rg', 'grep', 'sort', 'uniq', 'wc', 'tr', 'xargs', 'rm', 'echo', 'sed', 'true', 'hvy', 'db-table', 'form']);
+const CHAT_CLI_COMMAND_NAMES = new Set(['cd', 'pwd', 'ls', 'cat', 'head', 'tail', 'nl', 'find', 'rg', 'grep', 'sort', 'uniq', 'wc', 'tr', 'xargs', 'rm', 'echo', 'sed', 'true', 'hvy', 'db-table', 'form', 'ask']);
 
 export interface ChatCliEditTurnResult {
   summary: string;
@@ -31,6 +31,8 @@ export async function runChatCliEditLoop(params: {
   await writeChatCliUserQueryTrace(traceRunId, params.request, params.signal);
   const initialRootListing = await cli.run('ls /');
   await writeChatCliCommandTrace(traceRunId, initialRootListing.command, initialRootListing.output, params.signal);
+  const initialStructure = await cli.run('hvy request_structure');
+  await writeChatCliCommandTrace(traceRunId, initialStructure.command, initialStructure.output, params.signal);
   let conversation: ChatMessage[] = [
     {
       id: crypto.randomUUID(),
@@ -46,7 +48,7 @@ export async function runChatCliEditLoop(params: {
     const response = await requestProxyCompletion({
       settings: params.settings,
       messages: conversation,
-      context: buildChatCliLoopContext(cli.snapshot(), params.request, params.priorMessages ?? [], initialRootListing),
+      context: buildChatCliLoopContext(cli.snapshot(), params.request, params.priorMessages ?? [], [initialRootListing, initialStructure]),
       formatInstructions: buildChatCliLoopFormatInstructions(),
       mode: 'document-edit',
       debugLabel: `chat-cli-edit:${step + 1}`,
@@ -75,6 +77,9 @@ export async function runChatCliEditLoop(params: {
       params.onProgress?.('Finished CLI edit loop.');
       return { summary: action.summary || `Finished after ${step + 1} step${step === 0 ? '' : 's'}.` };
     }
+    if (action.kind === 'ask') {
+      return { summary: action.question };
+    }
 
     params.onProgress?.(`$ ${action.command}`);
     let result: Awaited<ReturnType<typeof cli.run>>;
@@ -96,6 +101,7 @@ export async function runChatCliEditLoop(params: {
         document: params.document,
         cwd: result.cwd,
         command: action.command,
+        output: result.output,
       }),
       scratchpad: cli.snapshot().scratchpad,
     });
@@ -128,7 +134,7 @@ function buildChatCliLoopContext(
   snapshot: ReturnType<ReturnType<typeof createChatCliInterface>['snapshot']>,
   request: string,
   priorMessages: ChatMessage[],
-  initialRootListing: { command: string; output: string }
+  initialOutputs: Array<{ command: string; output: string }>
 ): string {
   const recentChatContext = formatRecentChatContext(priorMessages);
   return [
@@ -143,8 +149,7 @@ function buildChatCliLoopContext(
     buildChatCliPersistentInstructions(),
     '',
     'Initial terminal output:',
-    `> ${initialRootListing.command}`,
-    formatCommandResultForModel(initialRootListing.output),
+    ...initialOutputs.flatMap((output) => [`> ${output.command}`, formatCommandResultForModel(output.output), '']),
     '',
     `Current directory: ${snapshot.cwd}`,
     '',
@@ -157,18 +162,25 @@ function buildChatCliLoopFormatInstructions(): string {
   return [
     'Return exactly one terminal command as plain text, or fenced in ```shell.',
     'To finish, return: done Short summary of what changed.',
+    'To ask for clarification, return: ask Question for the user.',
     'Do not return prose, markdown explanations, or more than one command.',
   ].join('\n');
 }
 
-function parseChatCliAction(response: string): { kind: 'command'; command: string } | { kind: 'done'; summary: string } | { kind: 'invalid'; message: string } {
+function parseChatCliAction(response: string): { kind: 'command'; command: string } | { kind: 'done'; summary: string } | { kind: 'ask'; question: string } | { kind: 'invalid'; message: string } {
   const cleaned = normalizeCommandResponse(response);
   const command = cleaned.replace(/^(?:[\w./~-]+)?\s*\$\s*/, '').trim();
   if (/^(done|finish|finished)\b/i.test(command)) {
     return { kind: 'done', summary: command.replace(/^(done|finish|finished)[:\s-]*/i, '').trim() };
   }
+  if (/^ask\b/i.test(command)) {
+    const question = command.replace(/^ask[:\s-]*/i, '').trim();
+    return question
+      ? { kind: 'ask', question }
+      : { kind: 'invalid', message: 'Expected `ask Question for the user`.' };
+  }
   if (!command || command.startsWith('```') || isLikelyProseResponse(command)) {
-    return { kind: 'invalid', message: 'Expected exactly one terminal command, or `done Short summary`. Do not return prose or markdown fences.' };
+    return { kind: 'invalid', message: 'Expected exactly one terminal command, `ask Question`, or `done Short summary`. Do not return prose or markdown fences.' };
   }
   return { kind: 'command', command };
 }

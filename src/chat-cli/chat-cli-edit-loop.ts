@@ -85,6 +85,9 @@ export async function runChatCliEditLoop(params: {
 
 function buildChatCliLoopContext(snapshot: ReturnType<ReturnType<typeof createChatCliInterface>['snapshot']>): string {
   return [
+    'Valid commands:',
+    snapshot.commandSummary,
+    '',
     snapshot.instructions,
     '',
     `Current directory: ${snapshot.cwd}`,

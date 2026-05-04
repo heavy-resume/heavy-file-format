@@ -33,6 +33,20 @@ type HvyCliCommandContext = {
   cwd: string;
 };
 
+type HvyMiniShellPipeline = {
+  operator: 'first' | '&&' | '||';
+  commands: string[][];
+  tokens: string[];
+};
+
+type HvyMiniShellProcess = {
+  cwd: string;
+  stdout: string;
+  stderr: string;
+  status: number;
+  mutated: boolean;
+};
+
 export function createHvyCliSession(): HvyCliSession {
   return { cwd: '/', scratchpadContent: defaultScratchpadContent() };
 }
@@ -47,46 +61,36 @@ export async function executeHvyCliCommand(document: VisualDocument, session: Hv
     return { cwd: session.cwd, output: '', mutated: false };
   }
 
-  const commandGroups = splitCommandGroups(args);
-  let output = '';
+  const pipelines = parseMiniShell(args);
+  let lastProcess: HvyMiniShellProcess = { cwd: session.cwd, stdout: '', stderr: '', status: 0, mutated: false };
   let mutated = false;
   let scratchpadTouched = false;
-  let previousSucceeded = true;
+  let previousStatus = 0;
 
-  for (let index = 0; index < commandGroups.length; index += 1) {
-    const { operator, tokens: group } = commandGroups[index] ?? { operator: 'first' as const, tokens: [] };
-    if ((operator === '&&' && !previousSucceeded) || (operator === '||' && previousSucceeded)) {
+  for (let index = 0; index < pipelines.length; index += 1) {
+    const pipeline = pipelines[index] ?? { operator: 'first' as const, commands: [], tokens: [] };
+    if ((pipeline.operator === '&&' && previousStatus !== 0) || (pipeline.operator === '||' && previousStatus === 0)) {
       continue;
     }
-    const pipeline = splitPipeline(group);
-    const commandArgs = pipeline[0] ?? [];
-    const command = commandArgs[0] ?? '';
+
     const fs = buildHvyVirtualFileSystem(document);
     addSessionScratchpadFile(fs, session);
     enforceScratchpadHardCap(session);
-    const ctx: HvyCliCommandContext = { document, fs, cwd: session.cwd };
-    try {
-      const result = await runCommand(ctx, command, commandArgs.slice(1));
-      enforceScratchpadHardCap(session);
-      ctx.cwd = result.cwd;
-      const pipelineResult = await applyPipeline(ctx, result.output, pipeline.slice(1));
-      session.cwd = pipelineResult.cwd;
-      output = pipelineResult.output;
-      mutated = mutated || result.mutated || pipelineResult.mutated;
-      scratchpadTouched = scratchpadTouched || group.some((token) => token === 'scratchpad.txt' || token === '/scratchpad.txt');
-      previousSucceeded = true;
-    } catch (error) {
-      previousSucceeded = false;
-      output = error instanceof Error ? error.message : String(error);
-      if (commandGroups[index + 1]?.operator !== '||') {
-        throw error;
-      }
+    lastProcess = await executeMiniShellPipeline({ document, fs, cwd: session.cwd }, pipeline.commands);
+    enforceScratchpadHardCap(session);
+    session.cwd = lastProcess.cwd;
+    mutated = mutated || lastProcess.mutated;
+    scratchpadTouched = scratchpadTouched || pipeline.tokens.some((token) => token === 'scratchpad.txt' || token === '/scratchpad.txt');
+    previousStatus = lastProcess.status;
+
+    if (lastProcess.status !== 0 && pipelines[index + 1]?.operator !== '||') {
+      throw new Error(lastProcess.stderr || lastProcess.stdout || 'Command failed.');
     }
   }
 
-  const result = { cwd: session.cwd, output, mutated };
+  const result = { cwd: session.cwd, output: lastProcess.status === 0 ? lastProcess.stdout : lastProcess.stderr || lastProcess.stdout, mutated };
   if (scratchpadTouched && isScratchpadTooLong(session)) {
-    return { ...result, output: `${output}\n\n${buildScratchpadTooLongMessage(session.scratchpadContent ?? '')}` };
+    return { ...result, output: `${result.output}\n\n${buildScratchpadTooLongMessage(session.scratchpadContent ?? '')}` };
   }
   return result;
 }
@@ -122,6 +126,9 @@ async function runCommand(ctx: HvyCliCommandContext, command: string, args: stri
   }
   if (command === 'nl') {
     return { cwd: ctx.cwd, output: commandNl(ctx, args), mutated: false };
+  }
+  if (command === 'grep' || command === 'sort' || command === 'uniq' || command === 'wc') {
+    return runTextCommand(ctx, command, args);
   }
   if (command === 'find') {
     return commandFind(ctx, args);
@@ -750,8 +757,9 @@ function parseRgArgs(args: string[]): {
           // Line numbers are always included for matched lines.
         } else if (flag === 'l') {
           filesWithMatches = true;
-        } else if (flag === 'r' || flag === 'R') {
+        } else if (flag === 'r' || flag === 'R' || flag === 'S') {
           // Virtual rg searches recursively by default.
+          // Smart-case is unnecessary because searches are case-sensitive unless -i is present.
         } else {
           warnings.push(`Warning: rg ignored unsupported option -${flag}`);
         }
@@ -779,14 +787,14 @@ function normalizeRgPattern(pattern: string): string {
   return pattern.replaceAll('\\|', '|');
 }
 
-function splitCommandGroups(args: string[]): Array<{ operator: 'first' | '&&' | '||'; tokens: string[] }> {
-  const groups: Array<{ operator: 'first' | '&&' | '||'; tokens: string[] }> = [];
+function parseMiniShell(args: string[]): HvyMiniShellPipeline[] {
+  const pipelines: HvyMiniShellPipeline[] = [];
   let current: string[] = [];
   let operator: 'first' | '&&' | '||' = 'first';
   for (const arg of args) {
     if (arg === '&&' || arg === '||') {
       if (current.length > 0) {
-        groups.push({ operator, tokens: current });
+        pipelines.push({ operator, commands: splitPipeline(current), tokens: current });
         current = [];
       }
       operator = arg;
@@ -795,9 +803,9 @@ function splitCommandGroups(args: string[]): Array<{ operator: 'first' | '&&' | 
     current.push(arg);
   }
   if (current.length > 0) {
-    groups.push({ operator, tokens: current });
+    pipelines.push({ operator, commands: splitPipeline(current), tokens: current });
   }
-  return groups;
+  return pipelines;
 }
 
 function splitPipeline(args: string[]): string[][] {
@@ -823,65 +831,113 @@ function splitOnToken(args: string[], token: string): string[][] {
   return groups;
 }
 
-async function applyPipeline(ctx: HvyCliCommandContext, output: string, pipeline: string[][]): Promise<HvyCliExecution> {
-  let current = output;
+async function executeMiniShellPipeline(ctx: HvyCliCommandContext, commands: string[][]): Promise<HvyMiniShellProcess> {
+  let stdout = '';
+  let stderr = '';
   let mutated = false;
-  for (const stage of pipeline) {
-    const result = await applyPipelineStage(ctx, current, stage);
-    current = result.output;
+  let status = 0;
+  for (let index = 0; index < commands.length; index += 1) {
+    const result = await runMiniShellApplication(ctx, commands[index] ?? [], index === 0 ? null : stdout);
+    stdout = result.stdout;
+    stderr = result.stderr;
+    status = result.status;
     mutated = mutated || result.mutated;
     ctx.cwd = result.cwd;
+    if (status !== 0) {
+      break;
+    }
   }
-  return { cwd: ctx.cwd, output: current, mutated };
+  return { cwd: ctx.cwd, stdout, stderr, status, mutated };
 }
 
-async function applyPipelineStage(ctx: HvyCliCommandContext, output: string, stage: string[]): Promise<HvyCliExecution> {
-  const [command = '', ...args] = stage;
+async function runMiniShellApplication(ctx: HvyCliCommandContext, commandArgs: string[], stdin: string | null): Promise<HvyMiniShellProcess> {
+  const [command = '', ...args] = commandArgs;
+  if (!command) {
+    return { cwd: ctx.cwd, stdout: '', stderr: '', status: 0, mutated: false };
+  }
+  try {
+    const result = stdin === null
+      ? await runCommand(ctx, command, args)
+      : await runPipedCommand(ctx, command, args, stdin);
+    return { cwd: result.cwd, stdout: result.output, stderr: '', status: 0, mutated: result.mutated };
+  } catch (error) {
+    return {
+      cwd: ctx.cwd,
+      stdout: '',
+      stderr: error instanceof Error ? error.message : String(error),
+      status: 1,
+      mutated: false,
+    };
+  }
+}
+
+async function runPipedCommand(ctx: HvyCliCommandContext, command: string, args: string[], stdin: string): Promise<HvyCliExecution> {
   if (command === 'cat') {
-    return { cwd: ctx.cwd, output, mutated: false };
+    return { cwd: ctx.cwd, output: stdin, mutated: false };
   }
   if (command === 'nl') {
-    return { cwd: ctx.cwd, output: output
+    return { cwd: ctx.cwd, output: stdin
       .split('\n')
       .map((line, index) => `${String(index + 1).padStart(6, ' ')}\t${line}`)
       .join('\n'), mutated: false };
   }
   if (command === 'head' || command === 'tail') {
     const count = parseLineCountArg(args, 10);
-    const lines = output.split('\n');
+    const lines = stdin.split('\n');
     return { cwd: ctx.cwd, output: (command === 'head' ? lines.slice(0, count) : lines.slice(Math.max(0, lines.length - count))).join('\n'), mutated: false };
   }
   if (command === 'grep' || command === 'rg') {
-    return { cwd: ctx.cwd, output: applyGrepFilter(output, args), mutated: false };
+    return { cwd: ctx.cwd, output: applyGrepFilter(stdin, args), mutated: false };
   }
   if (command === 'sed') {
-    const sliced = applySedPrintFilter(output, args);
+    const sliced = applySedPrintFilter(stdin, args);
     if (sliced !== null) {
       return { cwd: ctx.cwd, output: sliced, mutated: false };
     }
-    const replaced = applySedReplaceFilter(output, args);
+    const replaced = applySedReplaceFilter(stdin, args);
     if (replaced !== null) {
       return { cwd: ctx.cwd, output: replaced, mutated: false };
     }
+    throw new Error('sed: expected sed -n START,ENDp or sed s/search/replace/[g]');
+  }
+  if (command === 'sort' || command === 'uniq' || command === 'wc') {
+    return { ...applyTextCommand(stdin, command, args), cwd: ctx.cwd };
+  }
+  if (command === 'xargs') {
+    return applyXargsStage(ctx, stdin, args);
+  }
+  throw new Error(`Unknown command "${command}". Try "help".`);
+}
+
+function runTextCommand(ctx: HvyCliCommandContext, command: string, args: string[]): HvyCliExecution {
+  const positional = args.filter((arg) => !arg.startsWith('-'));
+  const fileArgs = command === 'grep' ? positional.slice(1) : positional;
+  const input = fileArgs.length > 0
+    ? fileArgs.map((path) => getReadableFile(ctx, path).read()).join('\n')
+    : '';
+  return { ...applyTextCommand(input, command, args), cwd: ctx.cwd };
+}
+
+function applyTextCommand(output: string, command: string, args: string[]): HvyCliExecution {
+  if (command === 'grep') {
+    return { cwd: '/', output: applyGrepFilter(output, args), mutated: false };
   }
   if (command === 'sort') {
-    return { cwd: ctx.cwd, output: output.split('\n').sort().join('\n'), mutated: false };
+    return { cwd: '/', output: output.split('\n').sort().join('\n'), mutated: false };
   }
   if (command === 'uniq') {
-    return { cwd: ctx.cwd, output: output
+    return { cwd: '/', output: output
       .split('\n')
       .filter((line, index, lines) => index === 0 || line !== lines[index - 1])
       .join('\n'), mutated: false };
   }
   if (command === 'wc') {
-    if (args.includes('-l')) {
-      return { cwd: ctx.cwd, output: String(output.length === 0 ? 0 : output.split('\n').length), mutated: false };
+    if (!args.includes('-l')) {
+      throw new Error('wc: expected -l');
     }
+    return { cwd: '/', output: String(output.length === 0 ? 0 : output.split('\n').length), mutated: false };
   }
-  if (command === 'xargs') {
-    return applyXargsStage(ctx, output, args);
-  }
-  return { cwd: ctx.cwd, output: withWarnings(output, [`Warning: unsupported pipe ignored: ${stage.join(' ')}`]), mutated: false };
+  throw new Error(`Unknown command "${command}". Try "help".`);
 }
 
 function applyGrepFilter(output: string, args: string[]): string {
@@ -1126,7 +1182,7 @@ function helpFor(topic = ''): string {
   }
 
   const help: Record<string, string> = {
-    '': 'Commands: cd, pwd, ls, cat, head, tail, nl, find, rg, rm, echo, sed, true, hvy. Pipeline filters: head, tail, grep, rg, sed, sort, uniq, wc, xargs. Use man <command> for details.',
+    '': 'Commands: cd, pwd, ls, cat, head, tail, nl, find, rg, grep, sort, uniq, wc, xargs, rm, echo, sed, true, hvy. Finish: done SUMMARY. Use man <command> for details.',
     cd: formatCommandHelp('cd PATH', 'Change the current virtual directory.'),
     pwd: formatCommandHelp('pwd', 'Print the current virtual directory.'),
     ls: formatCommandHelp('ls [PATH]', 'List files and directories.'),
@@ -1136,11 +1192,16 @@ function helpFor(topic = ''): string {
     nl: formatCommandHelp('nl FILE', 'Print file contents with line numbers.'),
     find: formatCommandHelp('find [PATH] [-name GLOB] [-type f|d] [-maxdepth N] [-print] [-exec COMMAND {} +]', 'List up to 100 virtual paths below PATH, or run a supported command against matches with -exec.'),
     rg: formatCommandHelp('rg [-i] [-n] [-l] [--include GLOB] PATTERN [PATH]', 'Search readable virtual files. Line numbers are shown by default; -l prints matching file paths.'),
+    grep: formatCommandHelp('grep [-i] [-v] PATTERN [FILE...]', 'Filter text by pattern, or search the provided files.'),
+    sort: formatCommandHelp('sort [FILE...]', 'Sort lines.'),
+    uniq: formatCommandHelp('uniq [FILE...]', 'Remove adjacent duplicate lines.'),
+    wc: formatCommandHelp('wc -l [FILE...]', 'Count lines.'),
+    xargs: formatCommandHelp('COMMAND | xargs [-r] [-I TOKEN] COMMAND ARG...', 'Run a supported CLI command with piped non-empty lines appended, or once per line with -I replacement.'),
     rm: formatCommandHelp('rm -r PATH...', 'Remove section or component directories from the virtual document body. Alias: hvy remove PATH.'),
     echo: formatCommandHelp('echo TEXT [> FILE|>> FILE]', 'Print text, replace a writable file, or append to a writable file.'),
     sed: formatCommandHelp('sed [-i] [-E] s/search/replace/[gI] FILE...', 'Update writable virtual files with a search/replace.'),
     true: formatCommandHelp('true', 'Succeed without output. Useful in command chains such as COMMAND || true.'),
-    xargs: formatCommandHelp('COMMAND | xargs [-r] [-I TOKEN] COMMAND ARG...', 'Run a supported CLI command with piped non-empty lines appended, or once per line with -I replacement.'),
+    done: formatCommandHelp('done SUMMARY', 'Finish the AI CLI edit loop with a short summary.'),
     hvy: hvyDocumentCommandHelp(),
     section: hvyDocumentCommandHelp('section'),
     text: hvyDocumentCommandHelp('text'),

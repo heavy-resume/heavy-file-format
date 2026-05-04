@@ -173,7 +173,7 @@ test('requestDocumentEditChatTurn runs the CLI edit loop for document chat', asy
       settings,
       mode: 'document-edit',
       debugLabel: 'chat-cli-edit:1',
-      context: expect.stringContaining('Valid commands:\nCommands: cd, pwd, ls, cat, head, tail, nl, find, rg, rm, echo, sed, true, hvy.'),
+      context: expect.stringContaining('Valid commands:\nCommands: cd, pwd, ls, cat, head, tail, nl, find, rg, grep, sort, uniq, wc, xargs, rm, echo, sed, true, hvy. Finish: done SUMMARY.'),
       formatInstructions: expect.stringContaining('Return exactly one terminal command'),
     })
   );
@@ -216,7 +216,7 @@ test('requestDocumentEditChatTurn trims old cli conversation messages while keep
   ).toBeLessThanOrEqual(500);
   expect(JSON.stringify(requestProxyCompletionMock.mock.calls[4]?.[0]?.messages)).not.toContain('x'.repeat(700));
   expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.context).toContain(
-    'Valid commands:\nCommands: cd, pwd, ls, cat, head, tail, nl, find, rg, rm, echo, sed, true, hvy.'
+    'Valid commands:\nCommands: cd, pwd, ls, cat, head, tail, nl, find, rg, grep, sort, uniq, wc, xargs, rm, echo, sed, true, hvy. Finish: done SUMMARY.'
   );
   expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.context).toContain('Task goal:\nCheck the document with several commands.');
   expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.context).toContain('scratchpad.txt:');

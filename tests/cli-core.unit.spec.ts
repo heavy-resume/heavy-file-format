@@ -288,6 +288,68 @@ test('cli supports xargs in pipelines', async () => {
   expect((await executeHvyCliCommand(document, session, 'man xargs')).output).toContain('COMMAND | xargs [-r] [-I TOKEN] COMMAND ARG...');
 });
 
+test('cli uses normal shell precedence for rg || true pipe idioms', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {"id":"intro"}-->
+ TypeScript uses shared packages
+`, '.hvy');
+  const session = createHvyCliSession();
+
+  const result = await executeHvyCliCommand(
+    document,
+    session,
+    'rg -l "TypeScript" -S || true | xargs -r sed -i.bak s/TypeScript//g && echo "Removed references to TypeScript" > scratchpad.txt'
+  );
+
+  expect(result.mutated).toBe(true);
+  expect(result.output).toBe('/scratchpad.txt: written');
+  expect(document.sections[0]?.blocks[0]?.text).toBe('TypeScript uses shared packages');
+  expect(session.scratchpadContent).toBe('Removed references to TypeScript\n');
+});
+
+test('cli pipes app stdout to the next app stdin for xargs edits', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {"id":"intro"}-->
+ TypeScript uses shared packages
+`, '.hvy');
+  const session = createHvyCliSession();
+
+  const result = await executeHvyCliCommand(
+    document,
+    session,
+    'rg -l "TypeScript" -S | xargs -r sed -i.bak s/TypeScript//g && echo "Removed references to TypeScript" > scratchpad.txt'
+  );
+
+  expect(result.mutated).toBe(true);
+  expect(result.output).toBe('/scratchpad.txt: written');
+  expect(document.sections[0]?.blocks[0]?.text).toBe(' uses shared packages');
+  expect(session.scratchpadContent).toBe('Removed references to TypeScript\n');
+});
+
+test('cli lists text filters as supported commands', async () => {
+  const document = createCliTestDocument();
+  const session = createHvyCliSession();
+
+  expect((await executeHvyCliCommand(document, session, 'help')).output).toContain(
+    'Commands: cd, pwd, ls, cat, head, tail, nl, find, rg, grep, sort, uniq, wc, xargs, rm, echo, sed, true, hvy. Finish: done SUMMARY.'
+  );
+  expect((await executeHvyCliCommand(document, session, 'man wc')).output).toContain('wc -l [FILE...]');
+  expect((await executeHvyCliCommand(document, session, 'man uniq')).output).toContain('uniq [FILE...]');
+  expect((await executeHvyCliCommand(document, session, 'man done')).output).toContain('done SUMMARY');
+});
+
 test('deserializing custom resume components does not warn about missing app state', () => {
   const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
 

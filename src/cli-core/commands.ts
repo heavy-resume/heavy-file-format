@@ -341,7 +341,6 @@ function commandLs(ctx: HvyCliCommandContext, args: string[]): string {
     [
       listDirectory(ctx.fs, target).map(formatEntry).join('\n'),
       formatLsTargetDescription(ctx, target),
-      formatLsCustomComponentDefinition(ctx, target),
     ].filter((part) => part.trim().length > 0).join('\n\n'),
     warnings
   );
@@ -2057,6 +2056,8 @@ function helpFor(topic = ''): string {
     ask: formatCommandHelp('ask QUESTION', 'Pause the AI CLI edit loop and ask the user for clarification.'),
     done: formatCommandHelp('done SUMMARY', 'Finish the AI CLI edit loop with a short summary.'),
     hvy: hvyDocumentCommandHelp(),
+    'hvy add': hvyDocumentCommandHelp('add'),
+    'hvy add component': hvyDocumentCommandHelp('component'),
     'hvy request_structure': hvyDocumentCommandHelp('request_structure'),
     'hvy find-intent': hvyDocumentCommandHelp('find-intent'),
     'hvy lint': formatCommandHelp('hvy lint', 'Check the document for likely component issues.'),

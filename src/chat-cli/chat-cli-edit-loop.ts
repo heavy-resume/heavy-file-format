@@ -115,8 +115,9 @@ export async function runChatCliEditLoop(params: {
     let stopAfterCommandError: Error | null = null;
     let mutated = false;
     let traceOutput = '';
-    for (const command of commands) {
-      params.onProgress?.(`$ ${command}`);
+    for (let commandIndex = 0; commandIndex < commands.length; commandIndex += 1) {
+      const command = commands[commandIndex] ?? '';
+      params.onProgress?.(commands.length > 1 ? `$ [${commandIndex + 1}/${commands.length}] ${command}` : `$ ${command}`);
       let result: Awaited<ReturnType<typeof cli.run>>;
       try {
         result = await cli.run(command);
@@ -444,7 +445,8 @@ function formatCommandResultForModel(result: string | { output: string; lintDiff
     '### BEGIN your urgency ###',
     result.urgency?.trimEnd() || formatChatCliUrgency(0),
     '### END your urgency ###',
-    'What is your next command(s)? You can batch commands with multiple ```shell. Remember to take notes as you go!',
+    'Multiple ```shell blocks are allowed and run as a batch. Remember to take notes as you go!',
+    'What is your next command?',
   ].join('\n');
 }
 

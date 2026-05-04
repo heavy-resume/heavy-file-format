@@ -6,6 +6,7 @@ const CHAT_CLI_PERSISTENT_INSTRUCTIONS = [
   'Components have properties (json) and a body (txt). The file has a header (header.yaml) where',
   'user created component definitions go. Use request_structure and search results to identify components before acting.',
   'The filesystem is the workspace that will become one .hvy file.',
+  '/scratchpad.txt contains your ephemeral task notes and is not serialized into the HVY file.',
   'Be sure to update /scratchpad.txt to plan, update progress, and write learnings after progress is made.',
   'Have a bias for informed action. Keep scratchpad.txt short and evidence-based.',
   'Use ask if you need clarification from the user.',

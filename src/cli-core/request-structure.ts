@@ -18,6 +18,7 @@ type ComponentStructureEntry = {
 
 export type HvyRequestStructureOptions = {
   componentId?: string;
+  componentPath?: string;
   collapse?: boolean;
   describe?: boolean;
 };
@@ -38,7 +39,7 @@ const COMPONENT_TYPE_CODES: Record<string, string> = {
 
 export function formatHvyRequestStructure(document: VisualDocument, fs: HvyVirtualFileSystem, options: HvyRequestStructureOptions = {}): string {
   const entries = collectComponentStructureEntries(document, fs).map((entry, index) => withStableId(entry, index));
-  const scopedEntries = scopeEntries(entries, options.componentId);
+  const scopedEntries = scopeEntries(entries, options.componentId, options.componentPath);
   return [
     formatComponentCodeKey(),
     '',
@@ -345,7 +346,15 @@ function formatDescriptionSuffix(description: string | undefined, enabled: boole
   return ` - ${description.trim().replace(/\s+/g, ' ')}`;
 }
 
-function scopeEntries(entries: ComponentStructureEntry[], componentId = ''): ComponentStructureEntry[] {
+function scopeEntries(entries: ComponentStructureEntry[], componentId = '', componentPath = ''): ComponentStructureEntry[] {
+  const path = componentPath.replace(/\/$/, '');
+  if (path) {
+    const scoped = entries.filter((entry) => entry.directory === path || entry.directory.startsWith(`${path}/`));
+    if (scoped.length > 0) {
+      return scoped;
+    }
+    throw new Error(`hvy request_structure: unknown component path ${componentPath}`);
+  }
   const id = componentId.trim();
   if (!id) {
     return entries;

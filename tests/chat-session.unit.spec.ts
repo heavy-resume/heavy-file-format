@@ -397,8 +397,8 @@ hvy_version: 0.1
 
   expect(result.error).toBeNull();
   expect(onProgress.mock.calls.map((call) => call[0].content)).toEqual([
-    '$ cat /body/summary/long/text.txt',
-    '$ cat /body/summary/long/text.txt',
+    '$ [1/2] cat /body/summary/long/text.txt',
+    '$ [2/2] cat /body/summary/long/text.txt',
     'Finished CLI edit loop.',
   ]);
   const nextPrompt = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content ?? '';
@@ -436,15 +436,15 @@ done Created the chore section.`)
   expect(serializeDocument(document)).toContain('Weekly chore plan');
   expect(onMutation).toHaveBeenCalledWith('chat-cli');
   expect(onProgress.mock.calls.map((call) => call[0].content)).toEqual([
-    '$ hvy add section /body chores "Chores"',
-    '$ hvy add text /body/chores note "Weekly chore plan"',
+    '$ [1/2] hvy add section /body chores "Chores"',
+    '$ [2/2] hvy add text /body/chores note "Weekly chore plan"',
     'Finished CLI edit loop.',
   ]);
   const nextPrompt = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content ?? '';
   expect(nextPrompt).toContain('What is your next command?');
   expect(nextPrompt.trimEnd()).toMatch(/What is your next command\?$/);
   expect(nextPrompt).toContain('/body/chores/note');
-  expect(nextPrompt).toContain('urgency\nscore=0\nprioritize planning and understanding');
+  expect(nextPrompt).toContain('### BEGIN your urgency ###\nscore=0\nprioritize planning and understanding');
   expect(result.messages.at(-1)).toEqual(expect.objectContaining({
     role: 'assistant',
     content: 'Created the chore section.',
@@ -474,9 +474,9 @@ cat /header.yaml
 
   expect(result.error).toBeNull();
   expect(onProgress.mock.calls.map((call) => call[0].content)).toEqual([
-    '$ pwd',
-    '$ ls /body',
-    '$ cat /header.yaml',
+    '$ [1/3] pwd',
+    '$ [2/3] ls /body',
+    '$ [3/3] cat /header.yaml',
     'Finished CLI edit loop.',
   ]);
   const nextPrompt = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content ?? '';
@@ -512,9 +512,9 @@ cat /scratchpad.txt
 
   expect(result.error).toBeNull();
   expect(onProgress.mock.calls.map((call) => call[0].content)).toEqual([
-    '$ pwd',
-    "$ cat > /scratchpad.txt <<'TXT'\nPlan:\n1. Inspect\n2. Edit\nTXT",
-    '$ cat /scratchpad.txt',
+    '$ [1/3] pwd',
+    "$ [2/3] cat > /scratchpad.txt <<'TXT'\nPlan:\n1. Inspect\n2. Edit\nTXT",
+    '$ [3/3] cat /scratchpad.txt',
     'Finished CLI edit loop.',
   ]);
   const nextPrompt = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content ?? '';
@@ -549,9 +549,9 @@ hvy_version: 0.1
 
   expect(result.error).toBeNull();
   expect(onProgress.mock.calls.map((call) => call[0].content)).toEqual([
-    '$ cat /body/summary/long/text.txt',
-    '$ cat /body/summary/long/text.txt',
-    '$ cat /body/summary/long/text.txt',
+    '$ [1/3] cat /body/summary/long/text.txt',
+    '$ [2/3] cat /body/summary/long/text.txt',
+    '$ [3/3] cat /body/summary/long/text.txt',
     'Finished CLI edit loop.',
   ]);
   const nextPrompt = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content ?? '';
@@ -621,8 +621,8 @@ hvy_version: 0.1
   expect(nextPrompt).toContain('text.json is the component config.');
   expect(nextPrompt).toContain('If the task is to remove this component, run: hvy remove /body/summary/intro');
   expect(nextPrompt).toContain('Source files: /body/summary/intro/text.txt and /body/summary/intro/text.json');
-  expect(nextPrompt).toContain('scratchpad.txt\nlast edited never\n\nI am your /scratchpad.txt - Keep track of your progress.');
-  expect(nextPrompt).toContain('urgency\nscore=1\nprioritize planning and understanding');
+  expect(nextPrompt).toContain('### BEGIN /scratchpad.txt  ###\nlast edited never\n\nYou havent written your plan yet.');
+  expect(nextPrompt).toContain('### BEGIN your urgency ###\nscore=1\nprioritize planning and understanding');
   expect(nextPrompt).not.toContain('commands since last edit:');
   expect(writeChatCliCommandTraceMock).toHaveBeenCalledWith(
     'chat-cli-test',
@@ -920,7 +920,7 @@ test('requestDocumentEditChatTurn lets the cli edit loop retry after command err
     'result\nhvy: expected request_structure, find-intent, lint, add, plugin, section add, text add, table add, form add, or db-table show'
   );
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content).toContain(
-    'urgency\nscore=0\nprioritize planning and understanding'
+    '### BEGIN your urgency ###\nscore=0\nprioritize planning and understanding'
   );
   expect(writeChatCliCommandTraceMock).toHaveBeenCalledWith(
     'chat-cli-test',

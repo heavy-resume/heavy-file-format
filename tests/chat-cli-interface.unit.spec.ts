@@ -30,7 +30,7 @@ test('chat cli persistent instructions stay model-facing', () => {
   expect(instructions).not.toContain('ai_cli_log.txt');
   expect(instructions).not.toContain('hvy plugin db-table query [SELECT/WITH SQL]');
   expect('persistentInstructions' in cli).toBe(false);
-  expect(cli.snapshot().scratchpad).toContain('Keep track of your progress');
+  expect(cli.snapshot().scratchpad).toContain('You havent written your plan yet.');
   expect(cli.snapshot().scratchpadEdited).toBe(false);
   expect(cli.snapshot().cwd).toBe('/');
 });
@@ -40,7 +40,7 @@ test('chat cli exposes an ephemeral scratchpad file for task notes', async () =>
   const cli = createChatCliInterface(document);
 
   expect((await cli.run('ls /')).output).toContain('file scratchpad.txt');
-  expect((await cli.run('cat scratchpad.txt')).output).toContain('Keep track of your progress');
+  expect((await cli.run('cat scratchpad.txt')).output).toContain('You havent written your plan yet.');
   expect(cli.snapshot().scratchpadEdited).toBe(false);
   expect((await cli.run('echo "Found summary section" > scratchpad.txt')).output).toBe('/scratchpad.txt: written');
   expect(cli.snapshot().scratchpadEdited).toBe(true);
@@ -61,7 +61,10 @@ test('chat cli runs commands against the document filesystem and persists mutati
 
   expect((await cli.run('pwd')).output).toBe('/');
   expect((await cli.run('hvy add section /body chores "Chores"')).mutated).toBe(true);
-  expect((await cli.run('hvy add text /body/chores note "Weekly chore plan"')).output).toBe('/body/chores/note');
+  const addTextResult = await cli.run('hvy add text /body/chores note "Weekly chore plan"');
+  expect(addTextResult.output).toContain('/body/chores/note: created');
+  expect(addTextResult.output).toContain('file text.json');
+  expect(addTextResult.output).toContain('file text.txt');
   expect((await cli.run('find /body -type d -maxdepth 1')).output).toContain('/body/chores');
   expect((await cli.run('cat /chores/note/text.txt')).output).toBe('Weekly chore plan');
   expect(cli.snapshot().cwd).toBe('/');

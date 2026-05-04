@@ -54,6 +54,8 @@ function buildComponentPathHint(path: string, fs: ReturnType<typeof buildHvyVirt
     ...pluginSpecificHintLines(componentName, jsonPath, fs),
     `  ${componentName}.txt is the component's visible/body text. Editing it with sed or echo changes what the document shows.`,
     `  ${componentName}.json is the component config. Editing it changes metadata such as id, css, xref targets, table data, plugin config, etc.`,
+    `  To inspect its child structure, run: hvy request_structure ${componentDir} --describe`,
+    `  To preview raw HVY for this component, run: hvy preview ${componentDir}`,
     `  If the task is to remove this component, run: hvy remove ${componentDir}`,
     `  Source files: ${textPath} and ${jsonPath}`,
   ].join('\n');

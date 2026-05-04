@@ -72,18 +72,16 @@ test('hvy add section explains when the parent path is a component', async () =>
   );
 });
 
-test('ls describes custom component definitions for custom component directories', async () => {
+test('ls keeps custom component directories to file listings without schema preview noise', async () => {
   const document = createResumeCliTestDocument();
   const session = createHvyCliSession();
 
   const result = await executeHvyCliCommand(document, session, 'ls /body/skills/component-list-1/component-list/skill-software-engineering');
 
-  expect(result.output).toContain('Custom component definition:');
-  expect(result.output).toContain('name: skill-record');
-  expect(result.output).toContain('baseType: expandable');
-  expect(result.output).toContain('description: Skill record');
-  expect(result.output).toContain('schema:');
-  expect(result.output).toContain('expandableContentBlocks:');
+  expect(result.output).toContain('dir  expandable-content');
+  expect(result.output).toContain('file skill-record.json');
+  expect(result.output).not.toContain('Custom component definition:');
+  expect(result.output).not.toContain('expandableContentBlocks:');
 });
 
 test('ls shows section descriptions from section metadata', async () => {
@@ -95,6 +93,43 @@ test('ls shows section descriptions from section metadata', async () => {
   expect(result.output).toContain('Section metadata:');
   expect(result.output).toContain('id: top-skills-tools-technologies');
   expect(result.output).toContain('description: Featured top skills, tools, and technologies shown prominently near the top of the resume.');
+});
+
+test('hvy help add explains component creation commands', async () => {
+  const document = createResumeCliTestDocument();
+  const session = createHvyCliSession();
+
+  const result = await executeHvyCliCommand(document, session, 'hvy help add');
+
+  expect(result.output).toContain('hvy add component PARENT_PATH ID COMPONENT [TEXT] [--config JSON]');
+  expect(result.output).toContain('hvy add COMPONENT PARENT_PATH --id ID [TEXT] [--config JSON]');
+});
+
+test('hvy add can create custom components and generic xref components', async () => {
+  const document = createResumeCliTestDocument();
+  const session = createHvyCliSession();
+
+  const skill = await executeHvyCliCommand(
+    document,
+    session,
+    'hvy add skill-record /body/skills/component-list-1/component-list --id skill-baking Baking'
+  );
+  const xref = await executeHvyCliCommand(
+    document,
+    session,
+    'hvy add component /body/top-skills-tools-technologies/grid-0/grid top-skill-baking xref-card Baking --config \'{"xrefTarget":"skill-baking"}\''
+  );
+
+  expect(skill.output).toContain('/body/skills/component-list-1/component-list/skill-baking: created');
+  expect(skill.output).toContain('file skill-record.json');
+  expect(skill.output).toContain('file skill-record.txt');
+  expect(xref.output).toContain('/body/top-skills-tools-technologies/grid-0/grid/top-skill-baking: created');
+  expect(xref.output).toContain('file xref-card.json');
+  expect(xref.output).toContain('file xref-card.txt');
+  expect((await executeHvyCliCommand(document, session, 'cat /body/skills/component-list-1/component-list/skill-baking/skill-record.txt')).output)
+    .toContain('Baking');
+  expect((await executeHvyCliCommand(document, session, 'cat /body/top-skills-tools-technologies/grid-0/grid/top-skill-baking/xref-card.json')).output)
+    .toContain('"xrefTarget": "skill-baking"');
 });
 
 test('cat custom component bodies includes custom definition and component preview', async () => {
@@ -167,7 +202,7 @@ test('cli echo supports shell-style redirection to writable virtual files', asyn
   const session = createHvyCliSession();
 
   expect((await executeHvyCliCommand(document, session, 'ls /')).output).toContain('file scratchpad.txt');
-  expect((await executeHvyCliCommand(document, session, 'cat /scratchpad.txt')).output).toContain('Keep track of your progress');
+  expect((await executeHvyCliCommand(document, session, 'cat /scratchpad.txt')).output).toContain('You havent written your plan yet.');
   expect((await executeHvyCliCommand(document, session, 'echo "Task note" >> scratchpad.txt')).output).toBe('/scratchpad.txt: appended');
   expect((await executeHvyCliCommand(document, session, 'cat scratchpad.txt')).output).toContain('Task note');
 
@@ -737,6 +772,13 @@ component_defs:
   const scoped = await executeHvyCliCommand(document, session, 'hvy request_structure typescript-card');
   expect(scoped.output).toContain('/body\n  /summary\n    /typescript-card\n      [r] xref-card.txt id=typescript-card');
   expect(scoped.output).not.toContain('/intro');
+
+  const byPath = await executeHvyCliCommand(document, session, 'hvy request_structure /body/summary');
+  expect(byPath.output).toContain('/intro');
+  expect(byPath.output).toContain('/typescript-card');
+
+  const byRelativePath = await executeHvyCliCommand(document, session, 'hvy request_structure body/summary');
+  expect(byRelativePath.output).toContain('/intro');
 });
 
 test('collapsed request_structure keeps the example resume under 100 lines', async () => {

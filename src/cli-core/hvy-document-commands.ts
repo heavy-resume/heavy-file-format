@@ -1,7 +1,8 @@
 import { stringify as stringifyYaml } from 'yaml';
 
 import { defaultBlockSchema } from '../document-factory';
-import type { BlockSchema, VisualBlock, VisualSection } from '../editor/types';
+import type { BlockSchema, GridItem, VisualBlock, VisualSection } from '../editor/types';
+import { getComponentDefsFromMeta, isBuiltinComponentName, resolveBaseComponentFromMeta } from '../component-defs';
 import type { JsonObject } from '../hvy/types';
 import { DB_TABLE_PLUGIN_ID, FORM_PLUGIN_ID } from '../plugins/registry';
 import { getSectionId } from '../section-ops';
@@ -16,7 +17,14 @@ import {
 } from './plugin-command-registry';
 import { formatHvyRequestStructure } from './request-structure';
 import { formatHvyFindIntent } from './intent-search';
-import { findBlockForVirtualDirectory, resolveVirtualPath, type HvyVirtualFileSystem } from './virtual-file-system';
+import {
+  buildHvyVirtualFileSystem,
+  findBlockForVirtualDirectory,
+  findBlockInsertionTargetForVirtualDirectory,
+  listDirectory,
+  resolveVirtualPath,
+  type HvyVirtualFileSystem,
+} from './virtual-file-system';
 
 export interface HvyDocumentCommandContext {
   document: VisualDocument;
@@ -31,8 +39,11 @@ export interface HvyDocumentCommandResult {
 
 export function executeHvyDocumentCommand(ctx: HvyDocumentCommandContext, args: string[]): HvyDocumentCommandResult {
   const [resource, action, ...rest] = args;
+  if (resource === 'help') {
+    return { output: hvyDocumentCommandHelp([action ?? '', ...rest].filter(Boolean).join(' ')), mutated: false };
+  }
   if (resource === 'request_structure') {
-    return { output: formatHvyRequestStructure(ctx.document, ctx.fs, parseRequestStructureArgs([action ?? '', ...rest].filter(Boolean))), mutated: false };
+    return { output: formatHvyRequestStructure(ctx.document, ctx.fs, resolveRequestStructureOptions(ctx, parseRequestStructureArgs([action ?? '', ...rest].filter(Boolean)))), mutated: false };
   }
   if (resource === 'find-intent') {
     return { output: formatHvyFindIntent(ctx.document, ctx.fs, decodeCliText(action ?? ''), parseFindIntentArgs(rest)), mutated: false };
@@ -91,6 +102,8 @@ export function hvyDocumentCommandHelp(topic = ''): string {
   const help: Record<string, string> = {
     '': [
       formatCommandHelp('hvy add section PARENT_PATH ID TITLE', 'Create a section.'),
+      formatCommandHelp('hvy add component PARENT_PATH ID COMPONENT [TEXT] [--config JSON]', 'Create a builtin or custom component.'),
+      formatCommandHelp('hvy add COMPONENT PARENT_PATH --id ID [TEXT] [--config JSON]', 'Shortcut for builtin/custom component creation.'),
       formatCommandHelp('hvy add text SECTION_PATH ID TEXT', 'Create a text component.'),
       formatCommandHelp('hvy add table SECTION_PATH ID COLUMNS [--row CSV]...', 'Create a table component.'),
       formatCommandHelp('hvy remove PATH [--prune-xref]', 'Remove a section or component directory. Alias: hvy delete PATH.'),
@@ -102,6 +115,15 @@ export function hvyDocumentCommandHelp(topic = ''): string {
       ...formatPluginQuickReference(),
       formatCommandHelp('Edit existing components', 'Use find to discover virtual files, cat to inspect them, and sed to update writable body/config files.'),
     ].join('\n'),
+    add: [
+      formatCommandHelp('hvy add section PARENT_PATH ID TITLE', 'Create a section under /body or under another section.'),
+      formatCommandHelp('hvy add component PARENT_PATH ID COMPONENT [TEXT] [--config JSON]', 'Append a builtin or custom component to a section, component-list, grid, container, or expandable content path.'),
+      formatCommandHelp('hvy add COMPONENT PARENT_PATH --id ID [TEXT] [--config JSON]', 'Shortcut where COMPONENT is text, xref-card, skill-record, or another registered component type.'),
+      formatCommandHelp('hvy add text SECTION_PATH ID TEXT', 'Create a text component in a section.'),
+      formatCommandHelp('hvy add table SECTION_PATH ID COLUMNS [--row CSV]...', 'Create a static table component in a section.'),
+      formatCommandHelp('hvy add plugin SECTION_PATH ID PLUGIN_ID [--config JSON] [--body TEXT]', 'Create a raw plugin block by plugin id.'),
+    ].join('\n'),
+    component: formatCommandHelp('hvy add component PARENT_PATH ID COMPONENT [TEXT] [--config JSON]', 'Append a builtin or custom component to a section, component-list, grid, container, or expandable content path.'),
     section: formatCommandHelp('hvy add section PARENT_PATH ID TITLE', 'Add a section under /body or under another section. Alias: hvy section add.'),
     text: formatCommandHelp('hvy add text SECTION_PATH ID TEXT', 'Append a text block to a section. Alias: hvy text add.'),
     table: formatCommandHelp('hvy add table SECTION_PATH ID COLUMNS [--row CSV]...', 'Append a table block. Columns and rows use comma-separated text. Alias: hvy table add.'),
@@ -214,6 +236,32 @@ function parseRequestStructureArgs(args: string[]): { componentId?: string; coll
   };
 }
 
+function resolveRequestStructureOptions(
+  ctx: HvyDocumentCommandContext,
+  options: { componentId?: string; collapse?: boolean; describe?: boolean }
+): { componentId?: string; componentPath?: string; collapse?: boolean; describe?: boolean } {
+  const ref = options.componentId ?? '';
+  if (!ref) {
+    return options;
+  }
+  const resolved = resolveVirtualPath(ctx.fs, ctx.cwd, ref);
+  if (ctx.fs.entries.get(resolved)?.kind === 'dir') {
+    return {
+      ...options,
+      componentId: undefined,
+      componentPath: resolved,
+    };
+  }
+  if (ctx.fs.entries.get(resolved)?.kind === 'file') {
+    return {
+      ...options,
+      componentId: undefined,
+      componentPath: resolved.replace(/\/[^/]+$/, ''),
+    };
+  }
+  return options;
+}
+
 function parseFindIntentArgs(args: string[]): { max?: number; json?: boolean } {
   let max: number | undefined;
   let json = false;
@@ -255,6 +303,9 @@ function executeHvyAddCommand(ctx: HvyDocumentCommandContext, kind = '', args: s
   if (kind === 'section') {
     return addSection(ctx, args);
   }
+  if (kind === 'component') {
+    return addComponentBlock(ctx, args);
+  }
   if (kind === 'text') {
     return addTextBlock(ctx, args);
   }
@@ -271,7 +322,10 @@ function executeHvyAddCommand(ctx: HvyDocumentCommandContext, kind = '', args: s
     }
     return addPluginBlock(ctx, args);
   }
-  throw new Error('hvy add: expected section, text, table, or plugin');
+  if (isKnownComponent(ctx.document, kind)) {
+    return addComponentShortcut(ctx, kind, args);
+  }
+  throw new Error('hvy add: expected section, component, text, table, plugin, or a registered component name');
 }
 
 function addSection(ctx: HvyDocumentCommandContext, args: string[]): HvyDocumentCommandResult {
@@ -293,7 +347,7 @@ function addTextBlock(ctx: HvyDocumentCommandContext, args: string[]): HvyDocume
   const [sectionPath = '', id = '', text = ''] = args;
   const section = requireSection(ctx, sectionPath, 'hvy text add');
   section.blocks.push(createBlock('text', id, decodeCliText(text)));
-  return { output: `${sectionPath.replace(/\/$/, '')}/${id}`, mutated: true };
+  return { output: formatCreatedComponentDirectory(ctx.document, `${sectionPath.replace(/\/$/, '')}/${id}`), mutated: true };
 }
 
 function addTableBlock(ctx: HvyDocumentCommandContext, args: string[]): HvyDocumentCommandResult {
@@ -304,7 +358,103 @@ function addTableBlock(ctx: HvyDocumentCommandContext, args: string[]): HvyDocum
   schema.tableColumns = decodeCliText(columns);
   schema.tableRows = rows;
   section.blocks.push(createBlockFromSchema(schema, ''));
-  return { output: `${sectionPath.replace(/\/$/, '')}/${id}`, mutated: true };
+  return { output: formatCreatedComponentDirectory(ctx.document, `${sectionPath.replace(/\/$/, '')}/${id}`), mutated: true };
+}
+
+function addComponentShortcut(ctx: HvyDocumentCommandContext, component: string, args: string[]): HvyDocumentCommandResult {
+  const [parentPath = '', ...rest] = args;
+  const id = readOption(rest, '--id') ?? readOption(rest, '--name') ?? '';
+  const text = rest.find((arg, index) => !isOptionArg(arg) && !isOptionValue(rest, index)) ?? '';
+  const config = readOption(rest, '--config');
+  return addComponentToPath(ctx, {
+    parentPath,
+    id,
+    component,
+    text,
+    config: config ? parseJsonObject(config, 'hvy add COMPONENT --config') : {},
+    commandName: `hvy add ${component}`,
+  });
+}
+
+function addComponentBlock(ctx: HvyDocumentCommandContext, args: string[]): HvyDocumentCommandResult {
+  const [parentPath = '', id = '', component = '', text = '', ...rest] = args;
+  const config = readOption(rest, '--config');
+  return addComponentToPath(ctx, {
+    parentPath,
+    id,
+    component,
+    text,
+    config: config ? parseJsonObject(config, 'hvy add component --config') : {},
+    commandName: 'hvy add component',
+  });
+}
+
+function addComponentToPath(ctx: HvyDocumentCommandContext, params: {
+  parentPath: string;
+  id: string;
+  component: string;
+  text: string;
+  config: JsonObject;
+  commandName: string;
+}): HvyDocumentCommandResult {
+  if (!params.parentPath || !params.id || !params.component) {
+    throw new Error(`${params.commandName}: expected PARENT_PATH ID COMPONENT`);
+  }
+  if (!isKnownComponent(ctx.document, params.component)) {
+    throw new Error(`${params.commandName}: unknown component "${params.component}"`);
+  }
+  const resolvedParentPath = resolveVirtualPath(ctx.fs, ctx.cwd, params.parentPath);
+  const block = createCliComponentBlock(ctx.document, params.component, params.id, decodeCliText(params.text), params.config);
+  const target = findBlockInsertionTargetForVirtualDirectory(ctx.document, resolvedParentPath)
+    ?? findDirectBlockInsertionTarget(ctx, resolvedParentPath);
+  if (!target) {
+    throw new Error(`${params.commandName}: no component insertion target: ${params.parentPath}`);
+  }
+  target.insert(block);
+  return { output: formatCreatedComponentDirectory(ctx.document, `${resolvedParentPath.replace(/\/$/, '')}/${params.id}`), mutated: true };
+}
+
+function findDirectBlockInsertionTarget(
+  ctx: HvyDocumentCommandContext,
+  resolvedParentPath: string
+): { insert: (block: VisualBlock) => void } | null {
+  const parentBlock = findBlockForVirtualDirectory(ctx.document, resolvedParentPath);
+  if (!parentBlock) {
+    return null;
+  }
+  const baseComponent = resolveBaseComponentFromMeta(parentBlock.schema.component, ctx.document.meta);
+  if (baseComponent === 'component-list') {
+    return { insert: (block) => parentBlock.schema.componentListBlocks.push(block) };
+  }
+  if (baseComponent === 'container') {
+    return { insert: (block) => parentBlock.schema.containerBlocks.push(block) };
+  }
+  if (baseComponent === 'expandable') {
+    return { insert: (block) => parentBlock.schema.expandableContentBlocks.children.push(block) };
+  }
+  if (baseComponent === 'grid') {
+    return { insert: (block) => parentBlock.schema.gridItems.push(createCliGridItem(block)) };
+  }
+  return null;
+}
+
+function createCliGridItem(block: VisualBlock): GridItem {
+  return { id: makeId('griditem'), block };
+}
+
+function formatCreatedComponentDirectory(document: VisualDocument, componentPath: string): string {
+  const fs = buildHvyVirtualFileSystem(document);
+  const entry = fs.entries.get(componentPath);
+  if (!entry || entry.kind !== 'dir') {
+    return componentPath;
+  }
+  const children = listDirectory(fs, componentPath)
+    .map((child) => `${child.kind === 'dir' ? 'dir ' : 'file'} ${child.path.split('/').pop() ?? child.path}`)
+    .join('\n');
+  return [
+    `${componentPath}: created`,
+    ...(children ? ['files:', children] : []),
+  ].join('\n');
 }
 
 function addPluginBlock(ctx: HvyDocumentCommandContext, args: string[]): HvyDocumentCommandResult {
@@ -315,7 +465,7 @@ function addPluginBlock(ctx: HvyDocumentCommandContext, args: string[]): HvyDocu
   }
   const config = readOption(rest, '--config');
   section.blocks.push(createPluginBlock(id, plugin, config ? parseJsonObject(config, 'hvy plugin add --config') : {}, decodeCliText(readOption(rest, '--body') ?? '')));
-  return { output: `${sectionPath.replace(/\/$/, '')}/${id}`, mutated: true };
+  return { output: formatCreatedComponentDirectory(ctx.document, `${sectionPath.replace(/\/$/, '')}/${id}`), mutated: true };
 }
 
 function addFormPluginBlock(ctx: HvyDocumentCommandContext, args: string[]): HvyDocumentCommandResult {
@@ -334,7 +484,7 @@ function addFormPluginBlock(ctx: HvyDocumentCommandContext, args: string[]): Hvy
     submitLabel: decodeCliText(submitLabel),
   }).trimEnd();
   section.blocks.push(createPluginBlock(id, FORM_PLUGIN_ID, { version: '0.1' }, body));
-  return { output: `${sectionPath.replace(/\/$/, '')}/${id}`, mutated: true };
+  return { output: formatCreatedComponentDirectory(ctx.document, `${sectionPath.replace(/\/$/, '')}/${id}`), mutated: true };
 }
 
 function addDbTablePluginBlock(ctx: HvyDocumentCommandContext, args: string[]): HvyDocumentCommandResult {
@@ -346,7 +496,7 @@ function addDbTablePluginBlock(ctx: HvyDocumentCommandContext, args: string[]): 
   section.blocks.push(
     createPluginBlock(id, DB_TABLE_PLUGIN_ID, { source: 'with-file', table: decodeCliText(table), queryLimit: 10 }, decodeCliText(query))
   );
-  return { output: `${sectionPath.replace(/\/$/, '')}/${id}`, mutated: true };
+  return { output: formatCreatedComponentDirectory(ctx.document, `${sectionPath.replace(/\/$/, '')}/${id}`), mutated: true };
 }
 
 function findSectionParent(ctx: HvyDocumentCommandContext, path: string): VisualSection | null {
@@ -429,6 +579,30 @@ function createBlock(component: string, id: string, text: string): VisualBlock {
   return createBlockFromSchema(createSchema(component, id), text);
 }
 
+function createCliComponentBlock(document: VisualDocument, component: string, id: string, text: string, config: JsonObject): VisualBlock {
+  const definition = getComponentDefsFromMeta(document.meta).find((item) => item.name === component);
+  const block = definition?.template
+    ? cloneCliVisualBlock(definition.template)
+    : createBlockFromSchema(createCliComponentSchema(document, component), '');
+  block.schema.component = component;
+  block.schema.id = id;
+  applyCliBlockConfig(block.schema, config);
+  applyCliComponentText(block, text, document.meta);
+  return block;
+}
+
+function createCliComponentSchema(document: VisualDocument, component: string): BlockSchema {
+  const definition = getComponentDefsFromMeta(document.meta).find((item) => item.name === component);
+  if (definition?.schema) {
+    return cloneCliBlockSchema(definition.schema, component);
+  }
+  const baseComponent = resolveBaseComponentFromMeta(component, document.meta);
+  return {
+    ...defaultBlockSchema(baseComponent),
+    component,
+  };
+}
+
 function createBlockFromSchema(schema: BlockSchema, text: string): VisualBlock {
   return {
     id: makeId('block'),
@@ -436,6 +610,46 @@ function createBlockFromSchema(schema: BlockSchema, text: string): VisualBlock {
     schema,
     schemaMode: false,
   };
+}
+
+function cloneCliVisualBlock(block: VisualBlock): VisualBlock {
+  const schema = block.schema ?? defaultBlockSchema('text');
+  return {
+    id: makeId('block'),
+    text: block.text ?? '',
+    schema: cloneCliBlockSchema(schema, schema.component || 'text'),
+    schemaMode: false,
+  };
+}
+
+function cloneCliBlockSchema(schema: BlockSchema, componentName = schema.component): BlockSchema {
+  const raw = JSON.parse(JSON.stringify(schema)) as Partial<BlockSchema>;
+  const cloned = {
+    ...defaultBlockSchema(raw.component || componentName || 'text'),
+    ...raw,
+  } as BlockSchema;
+  cloned.component = componentName;
+  cloned.id = cloned.id ?? '';
+  cloned.containerBlocks = (cloned.containerBlocks ?? []).filter(isVisualBlockLike).map(cloneCliVisualBlock);
+  cloned.componentListBlocks = (cloned.componentListBlocks ?? []).filter(isVisualBlockLike).map(cloneCliVisualBlock);
+  cloned.gridItems = (cloned.gridItems ?? []).map((item) => ({
+    ...item,
+    id: item.id || makeId('griditem'),
+    block: item.block && isVisualBlockLike(item.block) ? cloneCliVisualBlock(item.block) : createBlockFromSchema(defaultBlockSchema('text'), ''),
+  }));
+  cloned.expandableStubBlocks = {
+    lock: cloned.expandableStubBlocks?.lock ?? false,
+    children: (cloned.expandableStubBlocks?.children ?? []).filter(isVisualBlockLike).map(cloneCliVisualBlock),
+  };
+  cloned.expandableContentBlocks = {
+    lock: cloned.expandableContentBlocks?.lock ?? false,
+    children: (cloned.expandableContentBlocks?.children ?? []).filter(isVisualBlockLike).map(cloneCliVisualBlock),
+  };
+  return cloned;
+}
+
+function isVisualBlockLike(value: unknown): value is VisualBlock {
+  return !!value && typeof value === 'object' && 'schema' in value;
 }
 
 function createPluginBlock(id: string, plugin: string, pluginConfig: JsonObject, text: string): VisualBlock {
@@ -451,6 +665,51 @@ function createSchema(component: string, id: string): BlockSchema {
     component,
     id,
   };
+}
+
+function applyCliComponentText(block: VisualBlock, text: string, meta: Record<string, unknown>): void {
+  if (!text) {
+    return;
+  }
+  const baseComponent = resolveBaseComponentFromMeta(block.schema.component, meta);
+  if (baseComponent === 'expandable') {
+    const firstStub = block.schema.expandableStubBlocks.children[0];
+    if (firstStub) {
+      firstStub.text = text;
+      return;
+    }
+    block.schema.expandableStub = text;
+    return;
+  }
+  if (baseComponent === 'xref-card') {
+    block.schema.xrefTitle = text;
+    return;
+  }
+  block.text = text;
+}
+
+function applyCliBlockConfig(schema: BlockSchema, config: JsonObject): void {
+  for (const [key, value] of Object.entries(config)) {
+    if (key === 'css' && typeof value === 'string') {
+      schema.customCss = value;
+      continue;
+    }
+    if (key === 'customCss' && typeof value === 'string') {
+      schema.customCss = value;
+      continue;
+    }
+    if (key === 'lock' && typeof value === 'boolean') {
+      schema.lock = value;
+      continue;
+    }
+    if (key in schema) {
+      (schema as unknown as Record<string, unknown>)[key] = value;
+    }
+  }
+}
+
+function isKnownComponent(document: VisualDocument, component: string): boolean {
+  return isBuiltinComponentName(component) || getComponentDefsFromMeta(document.meta).some((item) => item.name === component);
 }
 
 function readOption(args: string[], option: string): string | null {

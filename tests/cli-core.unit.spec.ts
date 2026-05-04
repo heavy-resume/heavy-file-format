@@ -74,6 +74,23 @@ test('cli accepts body section aliases from root and mutates resume virtual file
   );
 });
 
+test('cli find supports common filters and warns about ignored options', () => {
+  const document = createResumeCliTestDocument();
+  const session = createHvyCliSession();
+
+  const directories = executeHvyCliCommand(document, session, 'find /body/tools-technologies -type d -maxdepth 1 -print').output;
+  expect(directories).toContain('/body/tools-technologies/tool-typescript');
+  expect(directories).not.toContain('/body/tools-technologies/tool-typescript/expandable-content');
+
+  const files = executeHvyCliCommand(document, session, 'find /body/tools-technologies/tool-typescript -type f -name body.txt').output;
+  expect(files).toContain('/body/tools-technologies/tool-typescript/body.txt');
+
+  expect(executeHvyCliCommand(document, session, 'find /body -mtime 1 -name body.txt').output).toContain(
+    'Warning: find ignored unsupported option -mtime'
+  );
+  expect(executeHvyCliCommand(document, session, 'ls -lah /body').output).toContain('Warning: ls ignored unsupported option -lah');
+});
+
 test('deserializing custom resume components does not warn about missing app state', () => {
   const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
 

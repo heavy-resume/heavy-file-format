@@ -1,4 +1,5 @@
 import './cli-view.css';
+import { getHvyCliCommandSummary } from '../cli-core/commands';
 import type { HvyCliHistoryEntry } from '../types';
 
 export function renderCliView(params: {
@@ -18,8 +19,10 @@ export function renderCliView(params: {
         })
         .join('')
     : `<div class="cli-line"><span class="cli-prompt">/ $</span> man ls</div>`;
+  const commandSummary = getHvyCliCommandSummary();
   return `
     <div class="cli-shell">
+      <aside class="cli-command-summary" aria-label="Allowed CLI commands">${params.escapeHtml(commandSummary)}</aside>
       <div id="cliOutput" class="cli-output" aria-live="polite">${history}</div>
       <form id="cliComposer" class="cli-form">
         <code>${params.escapeHtml(params.cwd)} $</code>

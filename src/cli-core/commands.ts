@@ -22,6 +22,10 @@ export function createHvyCliSession(): HvyCliSession {
   return { cwd: '/' };
 }
 
+export function getHvyCliCommandSummary(): string {
+  return helpFor('');
+}
+
 export function executeHvyCliCommand(document: VisualDocument, session: HvyCliSession, input: string): HvyCliExecution {
   const args = tokenizeCommand(input);
   if (args.length === 0) {
@@ -86,15 +90,16 @@ function runCommand(ctx: { document: VisualDocument; fs: ReturnType<typeof build
 }
 
 function commandLs(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd: string }, args: string[]): string {
+  const warnings = warnUnknownOptions('ls', args, []);
   const target = resolveVirtualPath(ctx.fs, ctx.cwd, args.find((arg) => !arg.startsWith('-')) ?? '.');
   const entry = ctx.fs.entries.get(target);
   if (!entry) {
     throw new Error(`ls: no such file or directory: ${target}`);
   }
   if (entry.kind === 'file') {
-    return formatEntry(entry);
+    return withWarnings(formatEntry(entry), warnings);
   }
-  return listDirectory(ctx.fs, target).map(formatEntry).join('\n');
+  return withWarnings(listDirectory(ctx.fs, target).map(formatEntry).join('\n'), warnings);
 }
 
 function commandCat(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd: string }, args: string[]): string {
@@ -133,19 +138,23 @@ function commandNl(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd:
 }
 
 function commandFind(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd: string }, args: string[]): string {
-  const root = resolveVirtualPath(ctx.fs, ctx.cwd, args.find((arg) => !arg.startsWith('-')) ?? '.');
-  const nameIndex = args.indexOf('-name');
-  const namePattern = nameIndex >= 0 ? args[nameIndex + 1] : '';
-  const regex = namePattern ? globToRegExp(namePattern) : null;
-  return [...ctx.fs.entries.values()]
+  const parsed = parseFindArgs(args);
+  const root = resolveVirtualPath(ctx.fs, ctx.cwd, parsed.path);
+  const regex = parsed.namePattern ? globToRegExp(parsed.namePattern) : null;
+  const rootDepth = depthForPath(root);
+  const output = [...ctx.fs.entries.values()]
     .filter((entry) => entry.path === root || entry.path.startsWith(root === '/' ? '/' : `${root}/`))
+    .filter((entry) => !parsed.type || entry.kind === parsed.type)
+    .filter((entry) => parsed.maxDepth === null || depthForPath(entry.path) - rootDepth <= parsed.maxDepth)
     .filter((entry) => !regex || regex.test(entry.path.split('/').pop() ?? ''))
     .map((entry) => entry.path)
     .sort()
     .join('\n');
+  return withWarnings(output, parsed.warnings);
 }
 
 function commandRg(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd: string }, args: string[]): string {
+  const warnings = warnUnknownOptions('rg', args, ['-i']);
   const pattern = args.find((arg) => !arg.startsWith('-'));
   if (!pattern) {
     throw new Error('rg: missing search pattern');
@@ -164,7 +173,7 @@ function commandRg(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd:
       }
     });
   }
-  return lines.join('\n');
+  return withWarnings(lines.join('\n'), warnings);
 }
 
 function commandSed(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd: string }, args: string[]): string {
@@ -204,6 +213,78 @@ function parseLineCount(args: string[], fallback: number): { count: number; path
   const count = Number.isFinite(rawCount) ? Math.max(1, Math.min(100, rawCount)) : fallback;
   const paths = args.filter((_arg, index) => index !== nIndex && index !== nIndex + 1);
   return { count, paths };
+}
+
+function parseFindArgs(args: string[]): {
+  path: string;
+  namePattern: string;
+  type: 'file' | 'dir' | null;
+  maxDepth: number | null;
+  warnings: string[];
+} {
+  const warnings: string[] = [];
+  let path = '.';
+  let namePattern = '';
+  let type: 'file' | 'dir' | null = null;
+  let maxDepth: number | null = null;
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index] ?? '';
+    if (arg === '-name') {
+      namePattern = args[index + 1] ?? '';
+      index += 1;
+      continue;
+    }
+    if (arg === '-type') {
+      const rawType = args[index + 1] ?? '';
+      if (rawType === 'f') {
+        type = 'file';
+      } else if (rawType === 'd') {
+        type = 'dir';
+      } else {
+        throw new Error('find: -type expects f or d');
+      }
+      index += 1;
+      continue;
+    }
+    if (arg === '-maxdepth') {
+      const rawDepth = Number.parseInt(args[index + 1] ?? '', 10);
+      if (!Number.isFinite(rawDepth) || rawDepth < 0) {
+        throw new Error('find: -maxdepth expects a non-negative number');
+      }
+      maxDepth = rawDepth;
+      index += 1;
+      continue;
+    }
+    if (arg === '-print') {
+      continue;
+    }
+    if (arg.startsWith('-')) {
+      warnings.push(`Warning: find ignored unsupported option ${arg}`);
+      continue;
+    }
+    if (path === '.') {
+      path = arg;
+    } else {
+      warnings.push(`Warning: find ignored extra path ${arg}`);
+    }
+  }
+
+  return { path, namePattern, type, maxDepth, warnings };
+}
+
+function warnUnknownOptions(command: string, args: string[], allowedOptions: string[]): string[] {
+  return args
+    .filter((arg) => arg.startsWith('-') && !allowedOptions.includes(arg))
+    .map((arg) => `Warning: ${command} ignored unsupported option ${arg}`);
+}
+
+function withWarnings(output: string, warnings: string[]): string {
+  return [...warnings, output].filter((line) => line.length > 0).join('\n');
+}
+
+function depthForPath(path: string): number {
+  return path.split('/').filter(Boolean).length;
 }
 
 function formatEntry(entry: HvyVirtualEntry): string {
@@ -263,7 +344,7 @@ function helpFor(topic = ''): string {
     head: 'head [-n COUNT] FILE\nPrint the first lines of a file. COUNT maxes at 100.',
     tail: 'tail [-n COUNT] FILE\nPrint the last lines of a file. COUNT maxes at 100.',
     nl: 'nl FILE\nPrint file contents with line numbers.',
-    find: 'find [PATH] [-name GLOB]\nList virtual paths below PATH.',
+    find: 'find [PATH] [-name GLOB] [-type f|d] [-maxdepth N] [-print]\nList virtual paths below PATH.',
     rg: 'rg [-i] PATTERN [PATH]\nSearch readable virtual files.',
     sed: 'sed s/search/replace/[g] FILE\nUpdate a writable virtual file with a search/replace.',
     hvy: hvyDocumentCommandHelp(),

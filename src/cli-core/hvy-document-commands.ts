@@ -50,17 +50,32 @@ export function hvyDocumentCommandHelp(topic = ''): string {
       'hvy text add SECTION_PATH ID TEXT',
       'hvy table add SECTION_PATH ID COLUMNS [--row CSV]...',
       'hvy plugin add SECTION_PATH ID PLUGIN_ID [--config JSON] [--body TEXT]',
-      'form add SECTION_PATH ID SUBMIT_LABEL FIELD... [--script NAME SOURCE] [--submit NAME]',
+      'form add SECTION_PATH ID SUBMIT_BUTTON_LABEL FIELD... [--script NAME PYTHON] [--on-submit-script NAME]',
       'db-table show SECTION_PATH ID TABLE [QUERY]',
     ].join('\n'),
-    section: 'hvy section add PARENT_PATH ID TITLE\nAdd a section under /body or under another section.',
-    text: 'hvy text add SECTION_PATH ID TEXT\nAppend a text block to a section.',
-    table: 'hvy table add SECTION_PATH ID COLUMNS [--row CSV]...\nAppend a table block. Columns and rows use comma-separated text.',
-    plugin: 'hvy plugin add SECTION_PATH ID PLUGIN_ID [--config JSON] [--body TEXT]\nAppend a plugin block. Use \\n escapes inside BODY for multiline plugin text.',
-    form: 'form add SECTION_PATH ID SUBMIT_LABEL FIELD... [--script NAME SOURCE] [--submit NAME]\nAppend a Form plugin. FIELD uses name:Label:type[:required][:option A|option B].',
-    'db-table': 'db-table show SECTION_PATH ID TABLE [QUERY]\nShow a SQLite table/view with an optional SQL query. Alias: db-table add.',
+    section: formatCommandHelp('hvy section add PARENT_PATH ID TITLE', 'Add a section under /body or under another section.'),
+    text: formatCommandHelp('hvy text add SECTION_PATH ID TEXT', 'Append a text block to a section.'),
+    table: formatCommandHelp('hvy table add SECTION_PATH ID COLUMNS [--row CSV]...', 'Append a table block. Columns and rows use comma-separated text.'),
+    plugin: formatCommandHelp('hvy plugin add SECTION_PATH ID PLUGIN_ID [--config JSON] [--body TEXT]', 'Append a plugin block. Use \\n escapes inside BODY for multiline plugin text.'),
+    form: [
+      formatCommandHelp(
+        'form add SECTION_PATH ID SUBMIT_BUTTON_LABEL FIELD... [--script NAME PYTHON] [--on-submit-script NAME]',
+        'Append a Form plugin. FIELD uses name:Label:type[:required][:option A|option B].'
+      ),
+      formatCommandHelp('--script NAME PYTHON', 'Store a named Python script in the form YAML.'),
+      formatCommandHelp('--on-submit-script NAME', 'Run that named script when the submit button is pressed. Alias: --submit.'),
+      formatCommandHelp(
+        'Example: form add /chores add-chore "Add chore" "description:Description:textarea:required" --script submit "title = doc.form.get_value(\'description\')\\ndoc.db.execute(\'INSERT INTO chores (title) VALUES (\\\'\' + title + \'\\\')\')" --on-submit-script submit',
+        'Creates a form whose submit button says "Add chore" and runs the script named submit.'
+      ),
+    ].join('\n'),
+    'db-table': formatCommandHelp('db-table show SECTION_PATH ID TABLE [QUERY]', 'Show a SQLite table/view with an optional SQL query. Alias: db-table add.'),
   };
   return help[topic] ?? help[''];
+}
+
+function formatCommandHelp(command: string, description: string): string {
+  return `${command}\n  ${description}`;
 }
 
 function addSection(ctx: HvyDocumentCommandContext, args: string[]): HvyDocumentCommandResult {
@@ -112,13 +127,14 @@ function addFormPluginBlock(ctx: HvyDocumentCommandContext, args: string[]): Hvy
   const section = requireSection(ctx, sectionPath, 'form add');
   const fieldSpecs = rest.filter((arg, index) => !isOptionArg(arg) && !isOptionValue(rest, index));
   if (!id || !submitLabel || fieldSpecs.length === 0) {
-    throw new Error('form add: expected SECTION_PATH ID SUBMIT_LABEL FIELD...');
+    throw new Error('form add: expected SECTION_PATH ID SUBMIT_BUTTON_LABEL FIELD...');
   }
   const scripts = Object.fromEntries(readRepeatedOptionPairs(rest, '--script').map(([name, source]) => [name, decodeCliText(source)]));
+  const submitScript = readOption(rest, '--on-submit-script') ?? readOption(rest, '--submit');
   const body = stringifyYaml({
     fields: fieldSpecs.map(parseFormFieldSpec),
     ...(Object.keys(scripts).length > 0 ? { scripts } : {}),
-    ...(readOption(rest, '--submit') ? { submitScript: readOption(rest, '--submit') } : {}),
+    ...(submitScript ? { submitScript } : {}),
     submitLabel: decodeCliText(submitLabel),
   }).trimEnd();
   section.blocks.push(createPluginBlock(id, FORM_PLUGIN_ID, { version: '0.1' }, body));

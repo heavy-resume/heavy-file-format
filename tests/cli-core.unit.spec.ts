@@ -140,6 +140,18 @@ test('db-table help leads with show and keeps add as an alias', async () => {
   expect(help).toContain('db-table exec [CREATE / INSERT / UPDATE / DELETE / DROP SQL]');
 });
 
+test('form help explains script and submit options', async () => {
+  const document = createCliTestDocument();
+  const session = createHvyCliSession();
+
+  const help = (await executeHvyCliCommand(document, session, 'man form')).output;
+
+  expect(help).toContain('form add SECTION_PATH ID SUBMIT_BUTTON_LABEL FIELD... [--script NAME PYTHON] [--on-submit-script NAME]');
+  expect(help).toContain('--script NAME PYTHON\n  Store a named Python script');
+  expect(help).toContain('--on-submit-script NAME\n  Run that named script when the submit button is pressed');
+  expect(help).toContain('Example: form add /chores add-chore');
+});
+
 test('db-table cli can execute modifying SQL and query rows', async () => {
   const document = deserializeDocument('---\nhvy_version: 0.1\n---\n', '.hvy');
   const session = createHvyCliSession();

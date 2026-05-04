@@ -435,16 +435,16 @@ function globToRegExp(glob: string): RegExp {
 function helpFor(topic = ''): string {
   const help: Record<string, string> = {
     '': 'Commands: cd, pwd, ls, cat, head, tail, nl, find, rg, sed, hvy, form, db-table. Use man <command> for details.',
-    cd: 'cd PATH\nChange the current virtual directory.',
-    pwd: 'pwd\nPrint the current virtual directory.',
-    ls: 'ls [PATH]\nList files and directories.',
-    cat: 'cat FILE...\nPrint file contents.',
-    head: 'head [-n COUNT] FILE\nPrint the first lines of a file. COUNT maxes at 100.',
-    tail: 'tail [-n COUNT] FILE\nPrint the last lines of a file. COUNT maxes at 100.',
-    nl: 'nl FILE\nPrint file contents with line numbers.',
-    find: 'find [PATH] [-name GLOB] [-type f|d] [-maxdepth N] [-print]\nList virtual paths below PATH.',
-    rg: 'rg [-i] PATTERN [PATH]\nSearch readable virtual files.',
-    sed: 'sed s/search/replace/[g] FILE\nUpdate a writable virtual file with a search/replace.',
+    cd: formatCommandHelp('cd PATH', 'Change the current virtual directory.'),
+    pwd: formatCommandHelp('pwd', 'Print the current virtual directory.'),
+    ls: formatCommandHelp('ls [PATH]', 'List files and directories.'),
+    cat: formatCommandHelp('cat FILE...', 'Print file contents.'),
+    head: formatCommandHelp('head [-n COUNT] FILE', 'Print the first lines of a file. COUNT maxes at 100.'),
+    tail: formatCommandHelp('tail [-n COUNT] FILE', 'Print the last lines of a file. COUNT maxes at 100.'),
+    nl: formatCommandHelp('nl FILE', 'Print file contents with line numbers.'),
+    find: formatCommandHelp('find [PATH] [-name GLOB] [-type f|d] [-maxdepth N] [-print]', 'List virtual paths below PATH.'),
+    rg: formatCommandHelp('rg [-i] PATTERN [PATH]', 'Search readable virtual files.'),
+    sed: formatCommandHelp('sed s/search/replace/[g] FILE', 'Update a writable virtual file with a search/replace.'),
     hvy: hvyDocumentCommandHelp(),
     section: hvyDocumentCommandHelp('section'),
     text: hvyDocumentCommandHelp('text'),
@@ -453,11 +453,15 @@ function helpFor(topic = ''): string {
     form: hvyDocumentCommandHelp('form'),
     'db-table': [
       hvyDocumentCommandHelp('db-table'),
-      'db-table query [SELECT/WITH SQL]',
-      'db-table exec [CREATE / INSERT / UPDATE / DELETE / DROP SQL]',
-      'db-table tables',
-      'db-table schema [TABLE_OR_VIEW]',
+      formatCommandHelp('db-table query [SELECT/WITH SQL]', 'Run read-only SQL and print result rows.'),
+      formatCommandHelp('db-table exec [CREATE / INSERT / UPDATE / DELETE / DROP SQL]', 'Run modifying SQL and persist the database.'),
+      formatCommandHelp('db-table tables', 'List SQLite tables and views.'),
+      formatCommandHelp('db-table schema [TABLE_OR_VIEW]', 'Show schema details.'),
     ].join('\n'),
   };
   return help[topic] ?? help[''];
+}
+
+function formatCommandHelp(command: string, description: string): string {
+  return `${command}\n  ${description}`;
 }

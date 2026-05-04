@@ -50,14 +50,14 @@ export function hvyDocumentCommandHelp(topic = ''): string {
       'hvy text add SECTION_PATH ID TEXT',
       'hvy table add SECTION_PATH ID COLUMNS [--row CSV]...',
       'hvy plugin add SECTION_PATH ID PLUGIN_ID [--config JSON] [--body TEXT]',
-      'form add SECTION_PATH ID SUBMIT_LABEL FIELD...',
+      'form add SECTION_PATH ID SUBMIT_LABEL FIELD... [--script NAME SOURCE] [--submit NAME]',
       'db-table add SECTION_PATH ID TABLE QUERY',
     ].join('\n'),
     section: 'hvy section add PARENT_PATH ID TITLE\nAdd a section under /body or under another section.',
     text: 'hvy text add SECTION_PATH ID TEXT\nAppend a text block to a section.',
     table: 'hvy table add SECTION_PATH ID COLUMNS [--row CSV]...\nAppend a table block. Columns and rows use comma-separated text.',
     plugin: 'hvy plugin add SECTION_PATH ID PLUGIN_ID [--config JSON] [--body TEXT]\nAppend a plugin block. Use \\n escapes inside BODY for multiline plugin text.',
-    form: 'form add SECTION_PATH ID SUBMIT_LABEL FIELD...\nAppend a Form plugin. FIELD uses name:Label:type[:required][:option A|option B].',
+    form: 'form add SECTION_PATH ID SUBMIT_LABEL FIELD... [--script NAME SOURCE] [--submit NAME]\nAppend a Form plugin. FIELD uses name:Label:type[:required][:option A|option B].',
     'db-table': 'db-table add SECTION_PATH ID TABLE QUERY\nAppend a DB Table plugin backed by a table/view and optional SQL query text.',
   };
   return help[topic] ?? help[''];
@@ -108,13 +108,17 @@ function addPluginBlock(ctx: HvyDocumentCommandContext, args: string[]): HvyDocu
 }
 
 function addFormPluginBlock(ctx: HvyDocumentCommandContext, args: string[]): HvyDocumentCommandResult {
-  const [sectionPath = '', id = '', submitLabel = '', ...fieldSpecs] = args;
+  const [sectionPath = '', id = '', submitLabel = '', ...rest] = args;
   const section = requireSection(ctx, sectionPath, 'form add');
+  const fieldSpecs = rest.filter((arg, index) => !isOptionArg(arg) && !isOptionValue(rest, index));
   if (!id || !submitLabel || fieldSpecs.length === 0) {
     throw new Error('form add: expected SECTION_PATH ID SUBMIT_LABEL FIELD...');
   }
+  const scripts = Object.fromEntries(readRepeatedOptionPairs(rest, '--script').map(([name, source]) => [name, decodeCliText(source)]));
   const body = stringifyYaml({
     fields: fieldSpecs.map(parseFormFieldSpec),
+    ...(Object.keys(scripts).length > 0 ? { scripts } : {}),
+    ...(readOption(rest, '--submit') ? { submitScript: readOption(rest, '--submit') } : {}),
     submitLabel: decodeCliText(submitLabel),
   }).trimEnd();
   section.blocks.push(createPluginBlock(id, FORM_PLUGIN_ID, { version: '0.1' }, body));
@@ -220,6 +224,18 @@ function readOption(args: string[], option: string): string | null {
 
 function readRepeatedOption(args: string[], option: string): string[] {
   return args.flatMap((arg, index) => (arg === option ? [args[index + 1] ?? ''] : []));
+}
+
+function readRepeatedOptionPairs(args: string[], option: string): Array<[string, string]> {
+  return args.flatMap((arg, index) => (arg === option ? [[args[index + 1] ?? '', args[index + 2] ?? ''] as [string, string]] : []));
+}
+
+function isOptionArg(value: string): boolean {
+  return value.startsWith('--');
+}
+
+function isOptionValue(args: string[], index: number): boolean {
+  return args[index - 1]?.startsWith('--') === true || args[index - 2] === '--script';
 }
 
 function decodeCliText(value: string): string {

@@ -20,6 +20,7 @@ export interface ScriptingRuntime {
   doc: ScriptingDocApi;
   stats: ScriptingRuntimeStats;
   step(): void;
+  markMutated(): void;
   setLineBudget(maxLines: number): void;
 }
 
@@ -193,6 +194,7 @@ export function createScriptingRuntime(options: ScriptingRuntimeOptions): Script
         );
       }
     },
+    markMutated: onMutation,
     setLineBudget: (maxLines: number) => {
       lineBudget = Math.max(1, Math.floor(maxLines));
     },

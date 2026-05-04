@@ -410,10 +410,12 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
   }
 
   let dbMutated = false;
+  let runtime: ScriptingRuntime | null = null;
   let scriptingDb: Awaited<ReturnType<typeof createScriptingDbRuntime>>;
   try {
     scriptingDb = await createScriptingDbRuntime(options.document, () => {
       dbMutated = true;
+      runtime?.markMutated();
     });
   } catch (error) {
     return {
@@ -424,7 +426,7 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
       toolCalls: 0,
     };
   }
-  const runtime = createScriptingRuntime({
+  runtime = createScriptingRuntime({
     document: options.document,
     maxLines: options.maxLines,
     form: options.form,

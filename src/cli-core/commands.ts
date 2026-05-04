@@ -212,11 +212,38 @@ function formatEntry(entry: HvyVirtualEntry): string {
 
 function tokenizeCommand(input: string): string[] {
   const tokens: string[] = [];
-  const regex = /"([^"]*)"|'([^']*)'|(\S+)/g;
-  let match: RegExpExecArray | null = regex.exec(input);
-  while (match) {
-    tokens.push(match[1] ?? match[2] ?? match[3] ?? '');
-    match = regex.exec(input);
+  let current = '';
+  let quote: '"' | "'" | null = null;
+  for (let index = 0; index < input.length; index += 1) {
+    const char = input[index] ?? '';
+    if (char === '\\' && index + 1 < input.length) {
+      const next = input[index + 1] ?? '';
+      if (next === '\\' || next === quote || (!quote && /\s/.test(next))) {
+        current += next;
+        index += 1;
+      } else {
+        current += char;
+      }
+      continue;
+    }
+    if ((char === '"' || char === "'") && (!quote || quote === char)) {
+      quote = quote ? null : char;
+      continue;
+    }
+    if (!quote && /\s/.test(char)) {
+      if (current) {
+        tokens.push(current);
+        current = '';
+      }
+      continue;
+    }
+    current += char;
+  }
+  if (quote) {
+    throw new Error('Unclosed quote in command.');
+  }
+  if (current) {
+    tokens.push(current);
   }
   return tokens;
 }

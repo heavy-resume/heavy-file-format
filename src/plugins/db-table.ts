@@ -1390,6 +1390,10 @@ function persistScriptingDatabase(document: VisualDocument, db: SqlJsDatabase): 
     },
     db.export()
   );
+  if (runtime.documentRef === document) {
+    resetRuntime();
+    runtime.documentRef = document;
+  }
 }
 
 export interface ScriptingDbRuntime {

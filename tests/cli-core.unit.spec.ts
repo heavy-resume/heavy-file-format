@@ -51,6 +51,57 @@ test('cli resolves component directories for common read commands', async () => 
   expect(head.output).toContain('## Skills');
 });
 
+test('ls describes custom component definitions for custom component directories', async () => {
+  const document = createResumeCliTestDocument();
+  const session = createHvyCliSession();
+
+  const result = await executeHvyCliCommand(document, session, 'ls /body/skills/component-list-1/component-list/skill-software-engineering');
+
+  expect(result.output).toContain('Custom component definition:');
+  expect(result.output).toContain('name: skill-record');
+  expect(result.output).toContain('baseType: expandable');
+  expect(result.output).toContain('description: Skill record');
+  expect(result.output).toContain('schema:');
+  expect(result.output).toContain('"expandableContentBlocks"');
+});
+
+test('cat custom component bodies includes custom definition and component preview', async () => {
+  const document = createResumeCliTestDocument();
+  const session = createHvyCliSession();
+
+  const result = await executeHvyCliCommand(document, session, 'cat /body/skills/component-list-1/component-list/skill-software-engineering/skill-record.txt');
+
+  expect(result.output).toContain('Software Engineering');
+  expect(result.output).toContain('Custom component definition:');
+  expect(result.output).toContain('name: skill-record');
+  expect(result.output).toContain('Preview command: hvy request_structure skill-software-engineering --collapse');
+  expect(result.output).toContain('Component preview switched to request_structure because raw HVY is');
+  expect(result.output).toContain('/skill-software-engineering');
+});
+
+test('hvy preview switches long raw fragments to request_structure capped at 25 lines', async () => {
+  const document = createResumeCliTestDocument();
+  const session = createHvyCliSession();
+
+  const result = await executeHvyCliCommand(document, session, 'hvy preview /body/skills/component-list-1/component-list/skill-software-engineering');
+
+  expect(result.output).toContain('Preview command: hvy request_structure skill-software-engineering --collapse');
+  expect(result.output).toContain('Component preview switched to request_structure because raw HVY is');
+  expect(result.output).toContain('/skill-software-engineering');
+  expect(result.output.split('\n').length).toBeLessThanOrEqual(28);
+});
+
+test('hvy preview shows short raw fragments and the command used', async () => {
+  const document = createCliTestDocument();
+  const session = createHvyCliSession();
+
+  const result = await executeHvyCliCommand(document, session, 'hvy preview /body/summary/intro');
+
+  expect(result.output).toContain('Preview command: hvy preview /body/summary/intro');
+  expect(result.output).toContain('Component preview (raw HVY, first 25 lines):');
+  expect(result.output).toContain('<!--hvy:text {"id":"intro"}-->');
+});
+
 test('cli supports cat heredoc writes to writable virtual files', async () => {
   const document = createCliTestDocument();
   const session = createHvyCliSession();
@@ -419,6 +470,27 @@ test('cli supports xargs in pipelines', async () => {
   expect((await executeHvyCliCommand(document, session, 'man xargs')).output).toContain('COMMAND | xargs [-0] [-r] [-I TOKEN] COMMAND ARG...');
 });
 
+test('cli cp -r copies component directories with the destination id', async () => {
+  const document = createResumeCliTestDocument();
+  const session = createHvyCliSession();
+
+  const result = await executeHvyCliCommand(
+    document,
+    session,
+    'cp -r /body/skills/component-list-1/component-list/skill-llm-prompt-engineering /body/skills/component-list-1/component-list/skill-baking'
+  );
+
+  expect(result.mutated).toBe(true);
+  expect(result.output).toBe('/body/skills/component-list-1/component-list/skill-llm-prompt-engineering -> /body/skills/component-list-1/component-list/skill-baking: copied');
+  expect((await executeHvyCliCommand(document, session, 'cat /body/skills/component-list-1/component-list/skill-baking/skill-record.json')).output).toContain(
+    '"id": "skill-baking"'
+  );
+  expect((await executeHvyCliCommand(document, session, 'cat /body/skills/component-list-1/component-list/skill-baking/skill-record.txt')).output).toContain(
+    'LLM Prompt Engineering'
+  );
+  expect((await executeHvyCliCommand(document, session, 'man cp')).output).toContain('cp [-r] SOURCE DEST');
+});
+
 test('cli treats rg || true before a pipe as an xargs-friendly fallback idiom', async () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
@@ -555,7 +627,7 @@ test('cli lists text filters as supported commands', async () => {
   const session = createHvyCliSession();
 
   expect((await executeHvyCliCommand(document, session, 'help')).output).toContain(
-    'Commands: cd, pwd, ls, cat, head, tail, nl, find, rg, grep, sort, uniq, wc, tr, xargs, rm, echo, sed, true, hvy. Ask: ask QUESTION. Finish: done SUMMARY.'
+    'Commands: cd, pwd, ls, cat, head, tail, nl, find, rg, grep, sort, uniq, wc, tr, xargs, cp, rm, echo, sed, true, hvy. Ask: ask QUESTION. Finish: done SUMMARY.'
   );
   expect((await executeHvyCliCommand(document, session, 'man wc')).output).toContain('wc -l [FILE...]');
   expect((await executeHvyCliCommand(document, session, 'man uniq')).output).toContain('uniq [FILE...]');

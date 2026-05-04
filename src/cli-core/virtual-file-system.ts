@@ -1,8 +1,9 @@
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
-import type { BlockSchema, VisualBlock, VisualSection } from '../editor/types';
+import type { BlockSchema, GridItem, VisualBlock, VisualSection } from '../editor/types';
 import type { JsonObject } from '../hvy/types';
 import type { VisualDocument } from '../types';
 import { getSectionId } from '../section-ops';
+import { makeId } from '../utils';
 
 export interface HvyVirtualFile {
   kind: 'file';
@@ -21,6 +22,10 @@ export type HvyVirtualEntry = HvyVirtualFile | HvyVirtualDirectory;
 export interface HvyVirtualFileSystem {
   entries: Map<string, HvyVirtualEntry>;
 }
+
+export type HvyVirtualBlockInsertionTarget =
+  | { kind: 'blocks'; insert: (block: VisualBlock) => void }
+  | { kind: 'grid'; insert: (block: VisualBlock) => void };
 
 export function buildHvyVirtualFileSystem(document: VisualDocument): HvyVirtualFileSystem {
   const entries = new Map<string, HvyVirtualEntry>();
@@ -60,6 +65,31 @@ export function buildHvyVirtualFileSystem(document: VisualDocument): HvyVirtualF
   });
 
   return { entries };
+}
+
+export function findBlockForVirtualDirectory(document: VisualDocument, path: string): VisualBlock | null {
+  const normalized = normalizeVirtualPath('/', path);
+  const entries = new Map<string, HvyVirtualEntry>();
+  const blocks = new Map<string, VisualBlock>();
+  entries.set('/', { kind: 'dir', path: '/' });
+  entries.set('/body', { kind: 'dir', path: '/body' });
+  document.sections
+    .filter((section) => !section.isGhost)
+    .forEach((section, index) => addSectionBlockLookup(entries, blocks, section, `/body/${uniqueName(sectionDirectoryName(section, index), entries, '/body')}`));
+  return blocks.get(normalized) ?? null;
+}
+
+export function findBlockInsertionTargetForVirtualDirectory(document: VisualDocument, path: string): HvyVirtualBlockInsertionTarget | null {
+  const normalized = normalizeVirtualPath('/', path);
+  const entries = new Map<string, HvyVirtualEntry>();
+  const targets = new Map<string, HvyVirtualBlockInsertionTarget>();
+  entries.set('/', { kind: 'dir', path: '/' });
+  entries.set('/body', { kind: 'dir', path: '/body' });
+  targets.set('/body', { kind: 'blocks', insert: () => {} });
+  document.sections
+    .filter((section) => !section.isGhost)
+    .forEach((section, index) => addSectionInsertionTargets(entries, targets, section, `/body/${uniqueName(sectionDirectoryName(section, index), entries, '/body')}`));
+  return targets.get(normalized) ?? null;
 }
 
 export function normalizeVirtualPath(cwd: string, input = '.'): string {
@@ -173,6 +203,116 @@ function addNamedBlockChildren(entries: Map<string, HvyVirtualEntry>, blocks: Vi
   }
   entries.set(directoryPath, { kind: 'dir', path: directoryPath });
   addBlockList(entries, blocks, directoryPath);
+}
+
+function addSectionBlockLookup(
+  entries: Map<string, HvyVirtualEntry>,
+  lookup: Map<string, VisualBlock>,
+  section: VisualSection,
+  sectionPath: string
+): void {
+  entries.set(sectionPath, { kind: 'dir', path: sectionPath });
+  addBlockListLookup(entries, lookup, section.blocks, sectionPath);
+  section.children
+    .filter((child) => !child.isGhost)
+    .forEach((child, index) => addSectionBlockLookup(entries, lookup, child, `${sectionPath}/${uniqueName(sectionDirectoryName(child, index), entries, sectionPath)}`));
+}
+
+function addBlockListLookup(entries: Map<string, HvyVirtualEntry>, lookup: Map<string, VisualBlock>, blocks: VisualBlock[], parentPath: string): void {
+  blocks.forEach((block, index) => {
+    addBlockLookup(entries, lookup, block, `${parentPath}/${uniqueName(blockDirectoryName(block, index), entries, parentPath)}`);
+    if (block.schema.component === 'component-list' && block.schema.componentListBlocks?.length) {
+      addBlockListLookup(entries, lookup, block.schema.componentListBlocks, parentPath);
+    }
+  });
+}
+
+function addBlockLookup(entries: Map<string, HvyVirtualEntry>, lookup: Map<string, VisualBlock>, block: VisualBlock, blockPath: string): void {
+  entries.set(blockPath, { kind: 'dir', path: blockPath });
+  lookup.set(blockPath, block);
+  addNamedBlockChildrenLookup(entries, lookup, block.schema.containerBlocks ?? [], `${blockPath}/container`);
+  addNamedBlockChildrenLookup(entries, lookup, block.schema.componentListBlocks ?? [], `${blockPath}/component-list`);
+  addNamedBlockChildrenLookup(entries, lookup, block.schema.expandableStubBlocks?.children ?? [], `${blockPath}/expandable-stub`);
+  addNamedBlockChildrenLookup(entries, lookup, block.schema.expandableContentBlocks?.children ?? [], `${blockPath}/expandable-content`);
+  addNamedBlockChildrenLookup(entries, lookup, (block.schema.gridItems ?? []).map((item) => item.block), `${blockPath}/grid`);
+}
+
+function addNamedBlockChildrenLookup(entries: Map<string, HvyVirtualEntry>, lookup: Map<string, VisualBlock>, blocks: VisualBlock[], directoryPath: string): void {
+  if (blocks.length === 0) {
+    return;
+  }
+  entries.set(directoryPath, { kind: 'dir', path: directoryPath });
+  addBlockListLookup(entries, lookup, blocks, directoryPath);
+}
+
+function addSectionInsertionTargets(
+  entries: Map<string, HvyVirtualEntry>,
+  targets: Map<string, HvyVirtualBlockInsertionTarget>,
+  section: VisualSection,
+  sectionPath: string
+): void {
+  entries.set(sectionPath, { kind: 'dir', path: sectionPath });
+  targets.set(sectionPath, { kind: 'blocks', insert: (block) => section.blocks.push(block) });
+  addBlockListInsertionTargets(entries, targets, section.blocks, sectionPath);
+  section.children
+    .filter((child) => !child.isGhost)
+    .forEach((child, index) => addSectionInsertionTargets(entries, targets, child, `${sectionPath}/${uniqueName(sectionDirectoryName(child, index), entries, sectionPath)}`));
+}
+
+function addBlockListInsertionTargets(
+  entries: Map<string, HvyVirtualEntry>,
+  targets: Map<string, HvyVirtualBlockInsertionTarget>,
+  blocks: VisualBlock[],
+  parentPath: string
+): void {
+  blocks.forEach((block, index) => {
+    addBlockInsertionTargets(entries, targets, block, `${parentPath}/${uniqueName(blockDirectoryName(block, index), entries, parentPath)}`);
+    if (block.schema.component === 'component-list' && block.schema.componentListBlocks?.length) {
+      addBlockListInsertionTargets(entries, targets, block.schema.componentListBlocks, parentPath);
+    }
+  });
+}
+
+function addBlockInsertionTargets(
+  entries: Map<string, HvyVirtualEntry>,
+  targets: Map<string, HvyVirtualBlockInsertionTarget>,
+  block: VisualBlock,
+  blockPath: string
+): void {
+  entries.set(blockPath, { kind: 'dir', path: blockPath });
+  addNamedBlockChildrenInsertionTarget(entries, targets, block.schema.containerBlocks ?? [], `${blockPath}/container`);
+  addNamedBlockChildrenInsertionTarget(entries, targets, block.schema.componentListBlocks ?? [], `${blockPath}/component-list`);
+  addNamedBlockChildrenInsertionTarget(entries, targets, block.schema.expandableStubBlocks?.children ?? [], `${blockPath}/expandable-stub`);
+  addNamedBlockChildrenInsertionTarget(entries, targets, block.schema.expandableContentBlocks?.children ?? [], `${blockPath}/expandable-content`);
+  addGridInsertionTarget(entries, targets, block.schema.gridItems ?? [], `${blockPath}/grid`);
+}
+
+function addNamedBlockChildrenInsertionTarget(
+  entries: Map<string, HvyVirtualEntry>,
+  targets: Map<string, HvyVirtualBlockInsertionTarget>,
+  blocks: VisualBlock[],
+  directoryPath: string
+): void {
+  if (blocks.length === 0) {
+    return;
+  }
+  entries.set(directoryPath, { kind: 'dir', path: directoryPath });
+  targets.set(directoryPath, { kind: 'blocks', insert: (block) => blocks.push(block) });
+  addBlockListInsertionTargets(entries, targets, blocks, directoryPath);
+}
+
+function addGridInsertionTarget(
+  entries: Map<string, HvyVirtualEntry>,
+  targets: Map<string, HvyVirtualBlockInsertionTarget>,
+  gridItems: GridItem[],
+  directoryPath: string
+): void {
+  if (gridItems.length === 0) {
+    return;
+  }
+  entries.set(directoryPath, { kind: 'dir', path: directoryPath });
+  targets.set(directoryPath, { kind: 'grid', insert: (block) => gridItems.push({ id: makeId('griditem'), block }) });
+  addBlockListInsertionTargets(entries, targets, gridItems.map((item) => item.block), directoryPath);
 }
 
 function sectionToCliJson(section: VisualSection): JsonObject {

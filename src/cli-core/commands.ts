@@ -1,6 +1,8 @@
-import type { VisualDocument } from '../types';
+import type { ComponentDefinition, VisualDocument } from '../types';
 import {
   buildHvyVirtualFileSystem,
+  findBlockForVirtualDirectory,
+  findBlockInsertionTargetForVirtualDirectory,
   listDirectory,
   resolveVirtualPath,
   type HvyVirtualEntry,
@@ -12,11 +14,16 @@ import type { VisualBlock, VisualSection } from '../editor/types';
 import { getSectionId } from '../section-ops';
 import { getHvyCliPluginCommandRegistration } from './plugin-command-registry';
 import { formatHvyCliLintIssues, runHvyCliLinter } from './document-linter';
+import { getComponentDefsFromMeta, isBuiltinComponentName, resolveBaseComponentFromMeta } from '../component-defs';
+import { serializeBlockFragment } from '../serialization';
+import { formatHvyRequestStructure } from './request-structure';
+import { cloneReusableBlock } from '../document-factory';
 
 const SCRATCHPAD_SOFT_MAX_CHARS = 600;
 const SCRATCHPAD_HARD_MAX_CHARS = 800;
 const FIND_MAX_RESULTS = 100;
 const CLI_OUTPUT_MAX_LINES = 100;
+const COMPONENT_PREVIEW_MAX_LINES = 25;
 
 export interface HvyCliSession {
   cwd: string;
@@ -189,6 +196,9 @@ async function runCommand(ctx: HvyCliCommandContext, command: string, args: stri
   if (command === 'rm') {
     return { cwd: ctx.cwd, output: commandRm(ctx, args), mutated: true };
   }
+  if (command === 'cp') {
+    return { cwd: ctx.cwd, output: commandCp(ctx, args), mutated: true };
+  }
   if (command === 'echo') {
     const result = commandEcho(ctx, args);
     return { cwd: ctx.cwd, output: result.output, mutated: result.mutated };
@@ -205,6 +215,9 @@ async function runCommand(ctx: HvyCliCommandContext, command: string, args: stri
     }
     if (args[0] === 'read') {
       return { cwd: ctx.cwd, output: commandCat(ctx, args.slice(1)), mutated: false };
+    }
+    if (args[0] === 'preview') {
+      return { cwd: ctx.cwd, output: commandHvyPreview(ctx, args.slice(1)), mutated: false };
     }
     if (args[0] === 'remove' || args[0] === 'delete') {
       return { cwd: ctx.cwd, output: commandRm(ctx, ['-r', ...args.slice(1)]), mutated: true };
@@ -305,7 +318,7 @@ async function commandDbTable(document: VisualDocument, args: string[]): Promise
   throw new Error('db-table: expected show, query, exec, tables, or schema');
 }
 
-function commandLs(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd: string }, args: string[]): string {
+function commandLs(ctx: HvyCliCommandContext, args: string[]): string {
   const recursive = args.some((arg) => arg === '-R' || arg === '--recursive');
   const warnings = warnUnknownOptions('ls', args, ['-R', '--recursive']);
   const target = resolveVirtualPath(ctx.fs, ctx.cwd, args.find((arg) => !arg.startsWith('-')) ?? '.');
@@ -323,7 +336,56 @@ function commandLs(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd:
       .map((candidate) => candidate.path);
     return withWarnings(entries.join('\n'), warnings);
   }
-  return withWarnings(listDirectory(ctx.fs, target).map(formatEntry).join('\n'), warnings);
+  return withWarnings(
+    [
+      listDirectory(ctx.fs, target).map(formatEntry).join('\n'),
+      formatLsCustomComponentDefinition(ctx, target),
+    ].filter((part) => part.trim().length > 0).join('\n\n'),
+    warnings
+  );
+}
+
+function formatLsCustomComponentDefinition(ctx: HvyCliCommandContext, directoryPath: string): string {
+  const componentName = inferComponentNameForDirectory(ctx.fs, directoryPath);
+  if (!componentName || isBuiltinComponentName(componentName)) {
+    return '';
+  }
+  const definition = getComponentDefsFromMeta(ctx.document.meta).find((item) => item.name === componentName);
+  if (!definition) {
+    return '';
+  }
+  return formatComponentDefinitionForLs(definition, ctx.document.meta);
+}
+
+function inferComponentNameForDirectory(fs: ReturnType<typeof buildHvyVirtualFileSystem>, directoryPath: string): string {
+  const componentJsonFiles = listDirectory(fs, directoryPath)
+    .filter((entry): entry is HvyVirtualFile => entry.kind === 'file')
+    .map((entry) => entry.path.split('/').pop() ?? '')
+    .filter((name) => name.endsWith('.json') && name !== 'section.json');
+  if (componentJsonFiles.length !== 1) {
+    return '';
+  }
+  return componentJsonFiles[0]?.replace(/\.json$/i, '') ?? '';
+}
+
+function formatComponentDefinitionForLs(definition: ComponentDefinition, meta: Record<string, unknown>): string {
+  const lines = [
+    'Custom component definition:',
+    `  name: ${definition.name}`,
+    `  baseType: ${resolveBaseComponentFromMeta(definition.name, meta)}`,
+  ];
+  if (definition.description?.trim()) {
+    lines.push(`  description: ${definition.description.trim()}`);
+  }
+  if (definition.tags?.trim()) {
+    lines.push(`  tags: ${definition.tags.trim()}`);
+  }
+  if (definition.schema) {
+    lines.push('  schema:', ...JSON.stringify(definition.schema, null, 2).split('\n').map((line) => `    ${line}`));
+  } else {
+    lines.push('  schema: (inherits base component defaults)');
+  }
+  return lines.join('\n');
 }
 
 function addSessionScratchpadFile(fs: ReturnType<typeof buildHvyVirtualFileSystem>, session: HvyCliSession): void {
@@ -373,11 +435,79 @@ function buildScratchpadTooLongMessage(scratchpad: string): string {
   ].join('\n');
 }
 
-function commandCat(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd: string }, args: string[]): string {
+function commandCat(ctx: HvyCliCommandContext, args: string[]): string {
   if (args.length === 0) {
     throw new Error('cat: missing file operand');
   }
-  return args.map((arg) => getReadableFile(ctx, arg).read()).join('\n');
+  return args.map((arg) => formatCatReadableOutput(ctx, arg)).join('\n');
+}
+
+function formatCatReadableOutput(ctx: HvyCliCommandContext, path: string): string {
+  const file = getReadableFile(ctx, path);
+  const componentDirectory = componentDirectoryForReadableTarget(ctx, path, file.path);
+  const componentName = componentDirectory ? inferComponentNameForDirectory(ctx.fs, componentDirectory) : '';
+  if (!componentDirectory || !componentName || isBuiltinComponentName(componentName)) {
+    return file.read();
+  }
+  return [
+    file.read(),
+    formatLsCustomComponentDefinition(ctx, componentDirectory),
+    formatComponentRawPreview(ctx, componentDirectory),
+  ].filter((part) => part.trim().length > 0).join('\n\n');
+}
+
+function commandHvyPreview(ctx: HvyCliCommandContext, args: string[]): string {
+  if (args.length !== 1) {
+    throw new Error('hvy preview: expected PATH');
+  }
+  const componentDirectory = componentDirectoryForReadableTarget(ctx, args[0] ?? '');
+  if (!componentDirectory) {
+    throw new Error(formatMissingPathMessage(ctx.fs, ctx.cwd, args[0] ?? '', `hvy preview: no component found at ${args[0] ?? ''}`, 'dir'));
+  }
+  return formatComponentRawPreview(ctx, componentDirectory);
+}
+
+function componentDirectoryForReadableTarget(ctx: HvyCliCommandContext, path: string, readablePath?: string): string {
+  const normalized = resolveVirtualPath(ctx.fs, ctx.cwd, path);
+  const entry = ctx.fs.entries.get(normalized);
+  if (entry?.kind === 'dir' && inferComponentNameForDirectory(ctx.fs, normalized)) {
+    return normalized;
+  }
+  const filePath = readablePath ?? resolveReadablePath(ctx.fs, ctx.cwd, path);
+  const parent = filePath.replace(/\/[^/]+$/, '') || '/';
+  const componentName = inferComponentNameForDirectory(ctx.fs, parent);
+  const fileName = filePath.split('/').pop() ?? '';
+  return componentName && fileName === `${componentName}.txt` ? parent : '';
+}
+
+function formatComponentRawPreview(ctx: HvyCliCommandContext, directoryPath: string): string {
+  const block = findBlockForVirtualDirectory(ctx.document, directoryPath);
+  if (!block) {
+    return '';
+  }
+  const fragment = serializeBlockFragment(block, ctx.document.meta);
+  const lines = fragment.split('\n');
+  if (lines.length > COMPONENT_PREVIEW_MAX_LINES) {
+    const componentId = block.schema.id.trim();
+    const command = componentId
+      ? `hvy request_structure ${componentId} --collapse`
+      : 'hvy request_structure --collapse';
+    const structureLines = formatHvyRequestStructure(ctx.document, ctx.fs, {
+      ...(componentId ? { componentId } : {}),
+      collapse: true,
+    }).split('\n');
+    return [
+      `Preview command: ${command}`,
+      `Component preview switched to request_structure because raw HVY is ${lines.length} lines.`,
+      ...structureLines.slice(0, COMPONENT_PREVIEW_MAX_LINES),
+      ...(structureLines.length > COMPONENT_PREVIEW_MAX_LINES ? [`... ${structureLines.length - COMPONENT_PREVIEW_MAX_LINES} more lines`] : []),
+    ].join('\n');
+  }
+  return [
+    `Preview command: hvy preview ${directoryPath}`,
+    `Component preview (raw HVY, first ${COMPONENT_PREVIEW_MAX_LINES} lines):`,
+    ...lines,
+  ].join('\n');
 }
 
 function commandHeadTail(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd: string }, args: string[], command: 'head' | 'tail'): string {
@@ -548,6 +678,71 @@ function commandRm(ctx: { document: VisualDocument; fs: ReturnType<typeof buildH
     })
     .filter((line) => line.length > 0)
     .join('\n'), parsed.warnings);
+}
+
+function commandCp(ctx: HvyCliCommandContext, args: string[]): string {
+  const parsed = parseCliFlags(args, {
+    command: 'cp',
+    booleanShort: ['r', 'R'],
+    booleanLong: ['recursive'],
+  });
+  const recursive = parsed.flags.has('r') || parsed.flags.has('R') || parsed.flags.has('recursive');
+  if (parsed.positionals.length !== 2) {
+    throw new Error('cp: expected SOURCE DEST');
+  }
+  const [source = '', destination = ''] = parsed.positionals;
+  const sourcePath = resolveVirtualPath(ctx.fs, ctx.cwd, source);
+  const sourceEntry = ctx.fs.entries.get(sourcePath);
+  if (!sourceEntry) {
+    throw new Error(formatMissingPathMessage(ctx.fs, ctx.cwd, source, `cp: no such file or directory: ${source}`, source.endsWith('/') ? 'dir' : undefined));
+  }
+  if (sourceEntry.kind === 'file') {
+    return withWarnings(copyVirtualFile(ctx, sourcePath, destination), parsed.warnings);
+  }
+  if (!recursive) {
+    throw new Error(`cp: ${sourcePath} is a directory; use -r`);
+  }
+  return withWarnings(copyVirtualComponentDirectory(ctx, sourcePath, destination), parsed.warnings);
+}
+
+function copyVirtualFile(ctx: HvyCliCommandContext, sourcePath: string, destination: string): string {
+  const sourceFile = getReadableFile(ctx, sourcePath);
+  const destinationPath = resolveVirtualPath(ctx.fs, ctx.cwd, destination);
+  const destinationEntry = ctx.fs.entries.get(destinationPath);
+  if (destinationEntry?.kind === 'dir') {
+    throw new Error('cp: copying files into virtual directories is not supported; copy to an existing writable file');
+  }
+  const destinationFile = getReadableFile(ctx, destination);
+  if (!destinationFile.write) {
+    throw new Error(`cp: file is read-only: ${destinationFile.path}`);
+  }
+  destinationFile.write(sourceFile.read());
+  return `${sourceFile.path} -> ${destinationFile.path}: copied`;
+}
+
+function copyVirtualComponentDirectory(ctx: HvyCliCommandContext, sourcePath: string, destination: string): string {
+  const sourceBlock = findBlockForVirtualDirectory(ctx.document, sourcePath);
+  if (!sourceBlock) {
+    throw new Error(`cp: can only copy component directories: ${sourcePath}`);
+  }
+  const destinationPath = resolveVirtualPath(ctx.fs, ctx.cwd, destination);
+  const destinationEntry = ctx.fs.entries.get(destinationPath);
+  const finalPath = destinationEntry?.kind === 'dir'
+    ? `${destinationPath}/${sourcePath.split('/').pop() ?? 'copy'}`
+    : destinationPath;
+  if (ctx.fs.entries.has(finalPath)) {
+    throw new Error(`cp: destination already exists: ${finalPath}`);
+  }
+  const parentPath = finalPath.replace(/\/[^/]+$/, '') || '/';
+  const target = findBlockInsertionTargetForVirtualDirectory(ctx.document, parentPath);
+  if (!target) {
+    throw new Error(formatMissingPathMessage(ctx.fs, ctx.cwd, parentPath, `cp: no writable component container: ${parentPath}`, 'dir'));
+  }
+  const destinationId = finalPath.split('/').pop() ?? '';
+  const clonedBlock = cloneReusableBlock(sourceBlock);
+  clonedBlock.schema.id = destinationId;
+  target.insert(clonedBlock);
+  return `${sourcePath} -> ${finalPath}: copied`;
 }
 
 function commandPruneXref(document: VisualDocument, args: string[]): string {
@@ -1799,7 +1994,7 @@ function helpFor(topic = ''): string {
   }
 
   const help: Record<string, string> = {
-    '': 'Commands: cd, pwd, ls, cat, head, tail, nl, find, rg, grep, sort, uniq, wc, tr, xargs, rm, echo, sed, true, hvy. Ask: ask QUESTION. Finish: done SUMMARY. Use man <command> for details.',
+    '': 'Commands: cd, pwd, ls, cat, head, tail, nl, find, rg, grep, sort, uniq, wc, tr, xargs, cp, rm, echo, sed, true, hvy. Ask: ask QUESTION. Finish: done SUMMARY. Use man <command> for details.',
     cd: formatCommandHelp('cd PATH', 'Change the current virtual directory.'),
     pwd: formatCommandHelp('pwd', 'Print the current virtual directory.'),
     ls: formatCommandHelp('ls [PATH]', 'List files and directories.'),
@@ -1815,6 +2010,7 @@ function helpFor(topic = ''): string {
     wc: formatCommandHelp('wc -l [FILE...]', 'Count lines.'),
     tr: formatCommandHelp('tr SET1 SET2', 'Translate characters from stdin, including escaped \\n, \\t, and \\0.'),
     xargs: formatCommandHelp('COMMAND | xargs [-0] [-r] [-I TOKEN] COMMAND ARG...', 'Run a supported CLI command with piped items appended, or once per item with -I replacement.'),
+    cp: formatCommandHelp('cp [-r] SOURCE DEST', 'Copy a writable file into an existing writable file, or copy a component directory with -r. Component copies get the destination path id.'),
     rm: formatCommandHelp('rm -r|-rf PATH...', 'Remove section or component directories from the virtual document body. -f ignores missing paths. Alias: hvy remove PATH.'),
     echo: formatCommandHelp('echo TEXT [> FILE|>> FILE]', 'Print text, replace a writable file, or append to a writable file.'),
     sed: formatCommandHelp('sed [-i] [-E] s/search/replace/[gI] FILE...', 'Update writable virtual files with a search/replace.'),

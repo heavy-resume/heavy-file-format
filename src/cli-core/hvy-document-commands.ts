@@ -95,6 +95,7 @@ export function hvyDocumentCommandHelp(topic = ''): string {
       formatCommandHelp('hvy add table SECTION_PATH ID COLUMNS [--row CSV]...', 'Create a table component.'),
       formatCommandHelp('hvy remove PATH [--prune-xref]', 'Remove a section or component directory. Alias: hvy delete PATH.'),
       formatCommandHelp('hvy prune-xref TARGET_ID', 'Remove xref-card components pointing to TARGET_ID.'),
+      formatCommandHelp('hvy preview PATH', 'Show the raw HVY preview for a component, capped at 25 lines.'),
       formatCommandHelp('hvy request_structure [COMPONENT_ID] [--collapse] [--describe]', 'Show the component directory map for the current document.'),
       formatCommandHelp('hvy find-intent QUERY [--max N] [--json]', 'Find likely edit locations for an intent.'),
       formatCommandHelp('hvy lint', 'Check the document for likely component issues.'),
@@ -106,6 +107,7 @@ export function hvyDocumentCommandHelp(topic = ''): string {
     table: formatCommandHelp('hvy add table SECTION_PATH ID COLUMNS [--row CSV]...', 'Append a table block. Columns and rows use comma-separated text. Alias: hvy table add.'),
     request_structure: formatCommandHelp('hvy request_structure [COMPONENT_ID] [--collapse] [--describe]', 'Show the component directory map, optionally scoped to one component id. --collapse compacts anonymous leaf components. --describe includes non-empty descriptions.'),
     'find-intent': formatCommandHelp('hvy find-intent QUERY [--max N] [--json]', 'Search semantic section/component descriptions, ids, paths, roles, and previews for likely edit locations.'),
+    preview: formatCommandHelp('hvy preview PATH', 'Show the raw HVY fragment for a component directory or component body file. Output is capped at 25 lines.'),
     lint: formatCommandHelp('hvy lint', 'Check the document for empty text, broken xrefs, empty table rows, and plugin-defined issues.'),
     prune_xref: formatCommandHelp('hvy prune-xref TARGET_ID', 'Remove xref-card components whose xrefTarget equals TARGET_ID.'),
     plugin: [

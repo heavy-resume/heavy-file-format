@@ -10,7 +10,7 @@ const CHAT_CLI_MAX_STEPS = 30;
 const CHAT_CLI_MAX_CONSECUTIVE_COMMAND_ERRORS = 3;
 const CHAT_CLI_MESSAGE_HISTORY_MAX_CHARS = 500;
 const CHAT_CLI_MESSAGE_HISTORY_MIN_MESSAGES = 5;
-const CHAT_CLI_RECENT_CHAT_CONTEXT_MAX_CHARS = 700;
+const CHAT_CLI_PRIOR_MESSAGE_LIMIT = 5;
 const CHAT_CLI_COMMAND_NAMES = new Set(['cd', 'pwd', 'ls', 'cat', 'head', 'tail', 'nl', 'find', 'rg', 'grep', 'sort', 'uniq', 'wc', 'tr', 'xargs', 'rm', 'echo', 'sed', 'true', 'hvy', 'db-table', 'form', 'ask']);
 
 export interface ChatCliEditTurnResult {
@@ -37,7 +37,9 @@ export async function runChatCliEditLoop(params: {
   let lintIssues = await runHvyCliLinter(params.document);
   const initialLint = await cli.run('hvy lint');
   await writeChatCliCommandTrace(traceRunId, initialLint.command, initialLint.output, params.signal);
+  const priorConversation = selectChatCliPriorMessages(params.priorMessages ?? []);
   let conversation: ChatMessage[] = [
+    ...priorConversation,
     {
       id: crypto.randomUUID(),
       role: 'user',
@@ -52,7 +54,7 @@ export async function runChatCliEditLoop(params: {
     const response = await requestProxyCompletion({
       settings: params.settings,
       messages: conversation,
-      context: buildChatCliLoopContext(cli.snapshot(), params.request, params.priorMessages ?? [], [initialRootListing, initialStructure, initialLint]),
+      context: buildChatCliLoopContext(cli.snapshot(), params.request, params.priorMessages ?? [], priorConversation, [initialRootListing, initialStructure, initialLint]),
       formatInstructions: buildChatCliLoopFormatInstructions(),
       mode: 'document-edit',
       debugLabel: `chat-cli-edit:${step + 1}`,
@@ -143,15 +145,15 @@ function buildChatCliLoopContext(
   snapshot: ReturnType<ReturnType<typeof createChatCliInterface>['snapshot']>,
   request: string,
   priorMessages: ChatMessage[],
+  priorConversation: ChatMessage[],
   initialOutputs: Array<{ command: string; output: string }>
 ): string {
   const taskContext = resolveChatCliTaskContext(request, priorMessages);
-  const recentChatContext = formatRecentChatContext(priorMessages);
+  const omittedMessageCount = priorMessages.filter((message) => !message.progress).length - priorConversation.length;
   return [
     'Task goal:',
     taskContext.goal,
-    ...(taskContext.latestReply ? ['', 'Latest user reply:', taskContext.latestReply] : []),
-    ...(recentChatContext ? ['', 'Recent chat context:', recentChatContext] : []),
+    ...(omittedMessageCount > 0 ? ['', `Earlier chat omitted: ${omittedMessageCount} message${omittedMessageCount === 1 ? '' : 's'}.`] : []),
     '',
     'Valid commands:',
     snapshot.commandSummary,
@@ -169,11 +171,23 @@ function buildChatCliLoopContext(
   ].join('\n');
 }
 
-function resolveChatCliTaskContext(request: string, priorMessages: ChatMessage[]): { goal: string; latestReply: string | null } {
+function selectChatCliPriorMessages(messages: ChatMessage[]): ChatMessage[] {
+  return messages
+    .filter((message) => !message.progress)
+    .slice(-CHAT_CLI_PRIOR_MESSAGE_LIMIT)
+    .map((message) => ({
+      id: message.id,
+      role: message.role,
+      content: message.content,
+      ...(message.error ? { error: message.error } : {}),
+    }));
+}
+
+function resolveChatCliTaskContext(request: string, priorMessages: ChatMessage[]): { goal: string } {
   const messages = priorMessages.filter((message) => !message.progress);
   const lastMessage = messages.at(-1);
   if (!lastMessage || lastMessage.role !== 'assistant' || !isClarificationQuestion(lastMessage.content)) {
-    return { goal: request, latestReply: null };
+    return { goal: request };
   }
 
   let firstQuestionIndex = messages.length - 1;
@@ -189,11 +203,11 @@ function resolveChatCliTaskContext(request: string, priorMessages: ChatMessage[]
   for (let index = firstQuestionIndex - 1; index >= 0; index -= 1) {
     const candidate = messages[index];
     if (candidate?.role === 'user' && candidate.content.trim()) {
-      return { goal: candidate.content.trim(), latestReply: request };
+      return { goal: candidate.content.trim() };
     }
   }
 
-  return { goal: request, latestReply: null };
+  return { goal: request };
 }
 
 function isClarificationQuestion(content: string): boolean {
@@ -276,18 +290,6 @@ function formatScratchpadForModel(snapshot: Pick<ReturnType<ReturnType<typeof cr
 
 async function updateLintDiff(document: VisualDocument, update: (issues: HvyCliLintIssue[]) => string): Promise<string> {
   return update(await runHvyCliLinter(document));
-}
-
-function formatRecentChatContext(messages: ChatMessage[]): string {
-  const context = messages
-    .filter((message) => !message.progress)
-    .slice(-4)
-    .map((message) => `${message.role}: ${message.content.trim()}`)
-    .join('\n')
-    .trim();
-  return context.length <= CHAT_CLI_RECENT_CHAT_CONTEXT_MAX_CHARS
-    ? context
-    : `${context.slice(context.length - CHAT_CLI_RECENT_CHAT_CONTEXT_MAX_CHARS).trimStart()}`;
 }
 
 function isLikelyProseResponse(value: string): boolean {

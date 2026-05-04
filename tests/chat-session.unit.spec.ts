@@ -260,6 +260,36 @@ test('requestDocumentEditChatTurn returns ask commands as clarification question
   expect(onMutation).not.toHaveBeenCalled();
 });
 
+test('requestDocumentEditChatTurn keeps ask and answer history across clarification turns', async () => {
+  requestProxyCompletionMock
+    .mockResolvedValueOnce('ask Should I duplicate skill-llm-prompt-engineering?')
+    .mockResolvedValueOnce('done Added original LLM Tooling content.');
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+  const document = deserializeDocument('---\nhvy_version: 0.1\n---\n', '.hvy');
+
+  const firstResult = await requestDocumentEditChatTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Add a new skill, "LLM Tooling", and add it to top skills',
+  });
+  const secondResult = await requestDocumentEditChatTurn({
+    settings,
+    document,
+    messages: firstResult.messages,
+    request: "No make up some stuff about LLM tooling and I'll fill it in later",
+  });
+
+  expect(secondResult.error).toBeNull();
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('Task goal:\nAdd a new skill, "LLM Tooling", and add it to top skills');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).not.toContain('Latest user reply:');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages).toEqual([
+    expect.objectContaining({ role: 'user', content: 'Add a new skill, "LLM Tooling", and add it to top skills' }),
+    expect.objectContaining({ role: 'assistant', content: 'Should I duplicate skill-llm-prompt-engineering?' }),
+    expect.objectContaining({ role: 'user', content: "No make up some stuff about LLM tooling and I'll fill it in later" }),
+  ]);
+});
+
 test('requestDocumentEditChatTurn accepts shell-looking command wrappers', async () => {
   requestProxyCompletionMock
     .mockResolvedValueOnce('`ls /`')
@@ -491,7 +521,7 @@ doc.header.set("ran_script", True)
   expect(nextPrompt).toContain('doc.form exists only while running form plugin scripts.');
 });
 
-test('requestDocumentEditChatTurn keeps recent chat context for follow-up edit requests', async () => {
+test('requestDocumentEditChatTurn sends recent chat as real messages for follow-up edit requests', async () => {
   requestProxyCompletionMock.mockResolvedValueOnce('done Checked follow-up context.');
   const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
   const document = deserializeDocument('---\nhvy_version: 0.1\n---\n', '.hvy');
@@ -507,9 +537,12 @@ test('requestDocumentEditChatTurn keeps recent chat context for follow-up edit r
   });
 
   expect(result.error).toBeNull();
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Recent chat context:');
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Remove Typescript from this resume');
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Removed the TypeScript tool entry');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).not.toContain('Recent chat context:');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages).toEqual([
+    expect.objectContaining({ role: 'user', content: 'Remove Typescript from this resume' }),
+    expect.objectContaining({ role: 'assistant', content: 'Removed the TypeScript tool entry from the resume.' }),
+    expect.objectContaining({ role: 'user', content: 'remove it from the top skills, tools, and technologies too' }),
+  ]);
 });
 
 test('requestDocumentEditChatTurn keeps the original task goal through clarification replies', async () => {
@@ -532,8 +565,15 @@ test('requestDocumentEditChatTurn keeps the original task goal through clarifica
   expect(result.error).toBeNull();
   const context = requestProxyCompletionMock.mock.calls[0]?.[0]?.context ?? '';
   expect(context).toContain('Task goal:\nAdd a new skill, "LLM Tooling", and add it to top skills');
-  expect(context).toContain('Latest user reply:\nyes different summary / properties');
+  expect(context).not.toContain('Latest user reply:');
   expect(context).not.toContain('Task goal:\nyes different summary / properties');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages).toEqual([
+    expect.objectContaining({ role: 'user', content: 'Add a new skill, "LLM Tooling", and add it to top skills' }),
+    expect.objectContaining({ role: 'assistant', content: 'Should the new "LLM Tooling" skill mirror the existing skill?' }),
+    expect.objectContaining({ role: 'user', content: "Completely new, make some stuff up and I'll fill it in" }),
+    expect.objectContaining({ role: 'assistant', content: 'Do you want a different summary/properties?' }),
+    expect.objectContaining({ role: 'user', content: 'yes different summary / properties' }),
+  ]);
 });
 
 test('requestDocumentEditChatTurn treats prose and dangling fences as retryable format errors', async () => {

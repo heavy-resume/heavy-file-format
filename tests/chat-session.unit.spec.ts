@@ -90,6 +90,37 @@ test('requestChatTurn returns assistant answer on success', async () => {
   );
 });
 
+test('requestChatTurn refuses document changes in viewer mode without calling the provider', async () => {
+  requestChatCompletionMock.mockResolvedValue('Should not be called.');
+
+  const result = await requestChatTurn({
+    settings: { provider: 'openai', model: 'gpt-5-mini' },
+    document: deserializeDocument('---\nhvy_version: 0.1\n---\n\n#! Summary\n', '.hvy'),
+    messages: [],
+    question: 'Add a new skills section to this resume',
+  });
+
+  expect(result.error).toBeNull();
+  expect(result.messages.at(-1)?.content).toBe('I can’t change the document from Viewer mode. Switch to AI mode or Editor mode to make changes.');
+  expect(requestChatCompletionMock).not.toHaveBeenCalled();
+  expect(runQaToolLoopMock).not.toHaveBeenCalled();
+});
+
+test('requestChatTurn still answers informational viewer questions about changes', async () => {
+  requestChatCompletionMock.mockResolvedValue('Use AI mode to edit.');
+
+  const result = await requestChatTurn({
+    settings: { provider: 'openai', model: 'gpt-5-mini' },
+    document: deserializeDocument('---\nhvy_version: 0.1\n---\n\n#! Summary\n', '.hvy'),
+    messages: [],
+    question: 'How do I change the title?',
+  });
+
+  expect(result.error).toBeNull();
+  expect(result.messages.at(-1)?.content).toBe('Use AI mode to edit.');
+  expect(requestChatCompletionMock).toHaveBeenCalledOnce();
+});
+
 test('requestChatTurn attaches token usage to assistant answers', async () => {
   requestChatCompletionMock.mockImplementation(async (params: { onTokenUsage?: (usage: { inputTokens?: number; outputTokens?: number }) => void }) => {
     params.onTokenUsage?.({ inputTokens: 42, outputTokens: 7 });

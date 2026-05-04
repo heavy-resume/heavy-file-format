@@ -72,6 +72,19 @@ test('hvy add section explains when the parent path is a component', async () =>
   );
 });
 
+test('hvy add section treats slash as the document body root', async () => {
+  const document = createCliTestDocument();
+  const session = createHvyCliSession();
+
+  const section = await executeHvyCliCommand(document, session, 'hvy add section / chore-chart "Chore Chart"');
+  const table = await executeHvyCliCommand(document, session, 'hvy add table /chore-chart chores "chore,description,dad,mom,child" --row "Dishes,Wash dishes after dinner, , ,"');
+
+  expect(section.output).toBe('/body/chore-chart');
+  expect(table.output).toContain('/body/chore-chart/chores: created');
+  expect(document.sections.at(-1)?.customId).toBe('chore-chart');
+  expect(document.sections.at(-1)?.blocks[0]?.schema.component).toBe('table');
+});
+
 test('ls keeps custom component directories to file listings without schema preview noise', async () => {
   const document = createResumeCliTestDocument();
   const session = createHvyCliSession();

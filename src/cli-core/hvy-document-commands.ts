@@ -444,15 +444,20 @@ function createCliGridItem(block: VisualBlock): GridItem {
 
 function formatCreatedComponentDirectory(document: VisualDocument, componentPath: string): string {
   const fs = buildHvyVirtualFileSystem(document);
-  const entry = fs.entries.get(componentPath);
+  const normalizedComponentPath = fs.entries.has(componentPath)
+    ? componentPath
+    : componentPath.startsWith('/body/')
+    ? componentPath
+    : `/body${componentPath.startsWith('/') ? componentPath : `/${componentPath}`}`;
+  const entry = fs.entries.get(normalizedComponentPath);
   if (!entry || entry.kind !== 'dir') {
     return componentPath;
   }
-  const children = listDirectory(fs, componentPath)
+  const children = listDirectory(fs, normalizedComponentPath)
     .map((child) => `${child.kind === 'dir' ? 'dir ' : 'file'} ${child.path.split('/').pop() ?? child.path}`)
     .join('\n');
   return [
-    `${componentPath}: created`,
+    `${normalizedComponentPath}: created`,
     ...(children ? ['files:', children] : []),
   ].join('\n');
 }
@@ -501,7 +506,7 @@ function addDbTablePluginBlock(ctx: HvyDocumentCommandContext, args: string[]): 
 
 function findSectionParent(ctx: HvyDocumentCommandContext, path: string): VisualSection | null {
   const resolved = resolveVirtualPath(ctx.fs, ctx.cwd, path);
-  if (resolved === '/body') {
+  if (resolved === '/' || resolved === '/body') {
     return null;
   }
   const section = findSectionByResolvedPath(ctx.document.sections, resolved);

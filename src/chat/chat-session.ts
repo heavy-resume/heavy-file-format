@@ -30,6 +30,19 @@ export async function requestChatTurn(params: {
   signal?: AbortSignal;
 }): Promise<ChatTurnResult> {
   const nextMessages = appendUserChatMessage(params.messages, params.question);
+  if (isLikelyViewerChangeRequest(params.question)) {
+    return {
+      messages: [
+        ...nextMessages,
+        {
+          id: crypto.randomUUID(),
+          role: 'assistant',
+          content: 'I can’t change the document from Viewer mode. Switch to AI mode or Editor mode to make changes.',
+        },
+      ],
+      error: null,
+    };
+  }
   let reasoningSummary = '';
   let tokenUsage: ChatTokenUsage | null = null;
 
@@ -82,6 +95,18 @@ export async function requestChatTurn(params: {
       error: message,
     };
   }
+}
+
+function isLikelyViewerChangeRequest(question: string): boolean {
+  const normalized = question.trim().toLowerCase();
+  if (!normalized) {
+    return false;
+  }
+  if (/^(how|what|why|where|when|who)\b/.test(normalized)) {
+    return false;
+  }
+  return /\b(add|create|insert|edit|change|update|modify|remove|delete|replace|rename|move|reorder)\b/.test(normalized)
+    && /\b(document|resume|hvy|section|component|table|form|skill|tool|text|title|header|this)\b/.test(normalized);
 }
 
 export type CopyChatMessageResult =

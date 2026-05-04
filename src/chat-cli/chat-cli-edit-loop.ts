@@ -1,4 +1,5 @@
 import { requestProxyCompletion } from '../chat/chat';
+import { formatHvyCliLintDiff, type HvyCliLintIssue, runHvyCliLinter } from '../cli-core/document-linter';
 import type { ChatMessage, ChatSettings, VisualDocument } from '../types';
 import { buildChatCliComponentHints } from './chat-cli-component-hints';
 import { createChatCliTraceRunId, writeChatCliCommandTrace, writeChatCliUserQueryTrace } from './chat-cli-dev-trace';
@@ -33,6 +34,9 @@ export async function runChatCliEditLoop(params: {
   await writeChatCliCommandTrace(traceRunId, initialRootListing.command, initialRootListing.output, params.signal);
   const initialStructure = await cli.run('hvy request_structure --collapse');
   await writeChatCliCommandTrace(traceRunId, initialStructure.command, initialStructure.output, params.signal);
+  let lintIssues = await runHvyCliLinter(params.document);
+  const initialLint = await cli.run('hvy lint');
+  await writeChatCliCommandTrace(traceRunId, initialLint.command, initialLint.output, params.signal);
   let conversation: ChatMessage[] = [
     {
       id: crypto.randomUUID(),
@@ -48,7 +52,7 @@ export async function runChatCliEditLoop(params: {
     const response = await requestProxyCompletion({
       settings: params.settings,
       messages: conversation,
-      context: buildChatCliLoopContext(cli.snapshot(), params.request, params.priorMessages ?? [], [initialRootListing, initialStructure]),
+      context: buildChatCliLoopContext(cli.snapshot(), params.request, params.priorMessages ?? [], [initialRootListing, initialStructure, initialLint]),
       formatInstructions: buildChatCliLoopFormatInstructions(),
       mode: 'document-edit',
       debugLabel: `chat-cli-edit:${step + 1}`,
@@ -97,6 +101,11 @@ export async function runChatCliEditLoop(params: {
     }
     const modelMessage = formatCommandResultForModel({
       output: result.output,
+      lintDiff: await updateLintDiff(params.document, (nextIssues) => {
+        const diff = formatHvyCliLintDiff(lintIssues, nextIssues);
+        lintIssues = nextIssues;
+        return diff;
+      }),
       hints: buildChatCliComponentHints({
         document: params.document,
         cwd: result.cwd,
@@ -194,13 +203,16 @@ function normalizeCommandResponse(response: string): string {
   return commandText.trim();
 }
 
-function formatCommandResultForModel(result: string | { output: string; hints?: string; scratchpad?: string }): string {
+function formatCommandResultForModel(result: string | { output: string; lintDiff?: string; hints?: string; scratchpad?: string }): string {
   if (typeof result === 'string') {
     return result.trimEnd() || '(no output)';
   }
   return [
     'result',
     result.output.trimEnd() || '(no output)',
+    ...('lintDiff' in result && result.lintDiff?.trim()
+      ? ['', result.lintDiff.trimEnd()]
+      : []),
     '',
     'What is your next command?',
     '',
@@ -210,6 +222,10 @@ function formatCommandResultForModel(result: string | { output: string; hints?: 
     'scratchpad.txt',
     result.scratchpad?.trimEnd() || '(empty)',
   ].join('\n');
+}
+
+async function updateLintDiff(document: VisualDocument, update: (issues: HvyCliLintIssue[]) => string): Promise<string> {
+  return update(await runHvyCliLinter(document));
 }
 
 function formatRecentChatContext(messages: ChatMessage[]): string {

@@ -11,6 +11,7 @@ import { createScriptingDbRuntime, formatQueryResultTable, getDocumentDbTableObj
 import type { VisualBlock, VisualSection } from '../editor/types';
 import { getSectionId } from '../section-ops';
 import { getHvyCliPluginCommandRegistration } from './plugin-command-registry';
+import { formatHvyCliLintIssues, runHvyCliLinter } from './document-linter';
 
 const SCRATCHPAD_SOFT_MAX_CHARS = 600;
 const SCRATCHPAD_HARD_MAX_CHARS = 800;
@@ -177,6 +178,9 @@ async function runCommand(ctx: HvyCliCommandContext, command: string, args: stri
     return { cwd: ctx.cwd, output: commandSed(ctx, args), mutated: true };
   }
   if (command === 'hvy') {
+    if (args[0] === 'lint') {
+      return { cwd: ctx.cwd, output: formatHvyCliLintIssues(await runHvyCliLinter(ctx.document)), mutated: false };
+    }
     if (args[0] === 'read') {
       return { cwd: ctx.cwd, output: commandCat(ctx, args.slice(1)), mutated: false };
     }
@@ -1533,6 +1537,7 @@ function helpFor(topic = ''): string {
     done: formatCommandHelp('done SUMMARY', 'Finish the AI CLI edit loop with a short summary.'),
     hvy: hvyDocumentCommandHelp(),
     'hvy request_structure': hvyDocumentCommandHelp('request_structure'),
+    'hvy lint': formatCommandHelp('hvy lint', 'Check the document for likely component issues.'),
     section: hvyDocumentCommandHelp('section'),
     text: hvyDocumentCommandHelp('text'),
     table: hvyDocumentCommandHelp('table'),

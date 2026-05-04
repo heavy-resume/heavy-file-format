@@ -548,6 +548,61 @@ test('collapsed request_structure keeps the example resume under 100 lines', asy
   expect(result.output).toContain('(+');
 });
 
+test('hvy lint reports core component and plugin issues', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"empty-section"}-->
+#! Empty Section
+
+<!--hvy: {"id":"quality"}-->
+#! Quality
+
+<!--hvy:text {"id":"empty-note"}-->
+
+<!--hvy:quote {"id":"empty-quote"}-->
+
+<!--hvy:code {"id":"empty-code","codeLanguage":"ts"}-->
+
+<!--hvy:xref-card {"id":"empty-ref"}-->
+
+<!--hvy:table {"id":"chores","tableColumns":"A,B","tableRows":[{"cells":["",""]},{"cells":["Done","Mom"]}]}-->
+
+<!--hvy:component-list {"id":"empty-list","componentListComponent":"text"}-->
+
+<!--hvy:plugin {"id":"broken-db","plugin":"dev.heavy.db-table","pluginConfig":{}}-->
+
+<!--hvy:plugin {"id":"missing-db","plugin":"dev.heavy.db-table","pluginConfig":{"table":"missing_table"}}-->
+
+<!--hvy:plugin {"id":"empty-script","plugin":"dev.heavy.scripting","pluginConfig":{"version":"0.1"}}-->
+
+<!--hvy:plugin {"id":"passive-form","plugin":"dev.heavy.form","pluginConfig":{"version":"0.1"}}-->
+fields:
+  - name: chore
+    label: Chore
+    type: text
+submitLabel: Add chore
+`, '.hvy');
+  const session = createHvyCliSession();
+
+  const result = await executeHvyCliCommand(document, session, 'hvy lint');
+
+  expect(result.output).toContain('Lint issues: 12');
+  expect(result.output).toContain('[section] /body/empty-section - section has no content.');
+  expect(result.output).toContain('[text] /body/quality/empty-note - text body is empty.');
+  expect(result.output).toContain('[quote] /body/quality/empty-quote - quote body is empty.');
+  expect(result.output).toContain('[code] /body/quality/empty-code - code block body is empty.');
+  expect(result.output).toContain('[xref-card] /body/quality/empty-ref - xref-card is missing xrefTitle.');
+  expect(result.output).toContain('[xref-card] /body/quality/empty-ref - xref-card is missing xrefTarget.');
+  expect(result.output).toContain('[table] /body/quality/chores - table row 1 is empty.');
+  expect(result.output).toContain('[component-list] /body/quality/empty-list - component-list has no items.');
+  expect(result.output).toContain('[plugin] /body/quality/broken-db - db-table plugin is missing pluginConfig.table.');
+  expect(result.output).toContain('[plugin] /body/quality/missing-db - db-table pluginConfig.table references missing SQLite table/view "missing_table".');
+  expect(result.output).toContain('[plugin] /body/quality/empty-script - scripting plugin body is empty; expected Brython/Python source.');
+  expect(result.output).toContain('[plugin] /body/quality/passive-form - form has a submit button but no submitScript.');
+});
+
 test('deserializing custom resume components does not warn about missing app state', () => {
   const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
 

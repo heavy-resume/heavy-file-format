@@ -66,7 +66,7 @@ export function executeHvyDocumentCommand(ctx: HvyDocumentCommandContext, args: 
   if (resource === 'db-table' && (action === 'show' || action === 'add')) {
     return addDbTablePluginBlock(ctx, rest);
   }
-  throw new Error('hvy: expected request_structure, add, plugin, section add, text add, table add, form add, or db-table show');
+  throw new Error('hvy: expected request_structure, lint, add, plugin, section add, text add, table add, form add, or db-table show');
 }
 
 export function hvyDocumentCommandHelp(topic = ''): string {
@@ -91,6 +91,7 @@ export function hvyDocumentCommandHelp(topic = ''): string {
       formatCommandHelp('hvy add table SECTION_PATH ID COLUMNS [--row CSV]...', 'Create a table component.'),
       formatCommandHelp('hvy remove PATH', 'Remove a section or component directory. Alias: hvy delete PATH.'),
       formatCommandHelp('hvy request_structure [COMPONENT_ID] [--collapse]', 'Show the component directory map for the current document.'),
+      formatCommandHelp('hvy lint', 'Check the document for likely component issues.'),
       ...formatPluginQuickReference(),
       formatCommandHelp('Edit existing components', 'Use find to discover virtual files, cat to inspect them, and sed to update writable body/config files.'),
     ].join('\n'),
@@ -98,6 +99,7 @@ export function hvyDocumentCommandHelp(topic = ''): string {
     text: formatCommandHelp('hvy add text SECTION_PATH ID TEXT', 'Append a text block to a section. Alias: hvy text add.'),
     table: formatCommandHelp('hvy add table SECTION_PATH ID COLUMNS [--row CSV]...', 'Append a table block. Columns and rows use comma-separated text. Alias: hvy table add.'),
     request_structure: formatCommandHelp('hvy request_structure [COMPONENT_ID] [--collapse]', 'Show the component directory map, optionally scoped to one component id. --collapse compacts anonymous leaf components.'),
+    lint: formatCommandHelp('hvy lint', 'Check the document for empty text, broken xrefs, empty table rows, and plugin-defined issues.'),
     plugin: [
       ...formatPluginQuickReference(),
       ...getHvyCliPluginCommandRegistrations().map((plugin) => formatCommandHelp(plugin.helpTopic, `Show ${plugin.name} plugin commands.`)),

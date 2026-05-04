@@ -182,6 +182,7 @@ test('requestDocumentEditChatTurn runs the CLI edit loop for document chat', asy
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Initial terminal output:\n> ls /\ndir  attachments');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('> hvy request_structure --collapse');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Components:');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('> hvy lint\nNo lint issues.');
   expect(writeChatCliCommandTraceMock.mock.calls[0]).toEqual([
     'chat-cli-test',
     'ls /',
@@ -192,6 +193,12 @@ test('requestDocumentEditChatTurn runs the CLI edit loop for document chat', asy
     'chat-cli-test',
     'hvy request_structure --collapse',
     expect.stringContaining('Components:'),
+    undefined,
+  ]);
+  expect(writeChatCliCommandTraceMock.mock.calls[2]).toEqual([
+    'chat-cli-test',
+    'hvy lint',
+    'No lint issues.',
     undefined,
   ]);
   expect(result.messages.at(-1)).toEqual(expect.objectContaining({
@@ -321,6 +328,34 @@ hvy_version: 0.1
     undefined,
     expect.stringContaining('hints\ncomponent text: /body/summary/intro')
   );
+});
+
+test('requestDocumentEditChatTurn includes lint diffs after commands change issues', async () => {
+  requestProxyCompletionMock
+    .mockResolvedValueOnce('echo "Filled note" > /body/summary/empty-note/text.txt')
+    .mockResolvedValueOnce('done Fixed the empty note.');
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {"id":"empty-note"}-->
+`, '.hvy');
+
+  const result = await requestDocumentEditChatTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Fix empty text.',
+  });
+
+  expect(result.error).toBeNull();
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('[text] /body/summary/empty-note - text body is empty.');
+  const nextPrompt = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content ?? '';
+  expect(nextPrompt).toContain('lint diff\n- [text] /body/summary/empty-note - text body is empty.');
 });
 
 test('requestDocumentEditChatTurn includes component-specific hints', async () => {
@@ -497,7 +532,7 @@ test('requestDocumentEditChatTurn treats prose and dangling fences as retryable 
   expect(onProgress.mock.calls.map((call) => call[0].content)).toEqual(['Finished CLI edit loop.']);
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content).toContain('Expected exactly one terminal command');
   expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.messages.at(-1)?.content).toContain('Expected exactly one terminal command');
-  expect(writeChatCliCommandTraceMock.mock.calls.map((call) => call[1])).toEqual(['ls /', 'hvy request_structure --collapse']);
+  expect(writeChatCliCommandTraceMock.mock.calls.map((call) => call[1])).toEqual(['ls /', 'hvy request_structure --collapse', 'hvy lint']);
 });
 
 test('requestDocumentEditChatTurn preserves multiline quoted shell commands', async () => {
@@ -520,8 +555,8 @@ Progress: started" > /scratchpad.txt
   });
 
   expect(result.error).toBeNull();
-  expect(writeChatCliCommandTraceMock.mock.calls[2]?.[1]).toContain('echo "Plan:\n1. Remove xref cards');
-  expect(writeChatCliCommandTraceMock.mock.calls[2]?.[2]).toBe('/scratchpad.txt: written');
+  expect(writeChatCliCommandTraceMock.mock.calls[3]?.[1]).toContain('echo "Plan:\n1. Remove xref cards');
+  expect(writeChatCliCommandTraceMock.mock.calls[3]?.[2]).toBe('/scratchpad.txt: written');
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content).toContain('Plan:\n1. Remove xref cards');
 });
 
@@ -542,14 +577,14 @@ test('requestDocumentEditChatTurn lets the cli edit loop retry after command err
 
   expect(result.error).toBeNull();
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content).toContain(
-    'result\nhvy: expected request_structure, add, plugin, section add, text add, table add, form add, or db-table show'
+    'result\nhvy: expected request_structure, lint, add, plugin, section add, text add, table add, form add, or db-table show'
   );
   expect(writeChatCliCommandTraceMock).toHaveBeenCalledWith(
     'chat-cli-test',
     'hvy',
-    'hvy: expected request_structure, add, plugin, section add, text add, table add, form add, or db-table show',
+    'hvy: expected request_structure, lint, add, plugin, section add, text add, table add, form add, or db-table show',
     undefined,
-    expect.stringContaining('result\nhvy: expected request_structure, add, plugin, section add, text add, table add, form add, or db-table show')
+    expect.stringContaining('result\nhvy: expected request_structure, lint, add, plugin, section add, text add, table add, form add, or db-table show')
   );
 });
 
@@ -574,8 +609,9 @@ test('requestDocumentEditChatTurn stops after repeated cli command errors', asyn
   expect(writeChatCliCommandTraceMock.mock.calls.map((call) => call[2])).toEqual([
     expect.stringContaining('dir  body'),
     expect.stringContaining('Components:'),
+    'No lint issues.',
     'Unknown command "not-a-command". Try "help".',
-    'hvy: expected request_structure, add, plugin, section add, text add, table add, form add, or db-table show',
+    'hvy: expected request_structure, lint, add, plugin, section add, text add, table add, form add, or db-table show',
     expect.stringContaining('No such file: /missing.txt'),
   ]);
 });
@@ -607,6 +643,7 @@ test('requestDocumentEditChatTurn warns when scratchpad writes exceed the note l
   expect(writeChatCliCommandTraceMock.mock.calls.map((call) => call[1])).toEqual([
     'ls /',
     'hvy request_structure --collapse',
+    'hvy lint',
     `echo "${'x'.repeat(900)}" > scratchpad.txt`,
     'pwd',
     'echo "short notes" > scratchpad.txt',

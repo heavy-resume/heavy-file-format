@@ -1,5 +1,9 @@
 import { buildDocumentEditToolHelp } from '../ai-document-edit-instructions';
+import type { JsonObject } from '../hvy/types';
+import { getDocumentDbTableObjectNames } from '../plugins/db-table';
+import { parseFormSpec } from '../plugins/form';
 import { DB_TABLE_PLUGIN_ID, FORM_PLUGIN_ID, SCRIPTING_PLUGIN_ID } from '../plugins/registry';
+import type { VisualDocument } from '../types';
 
 export interface HvyCliHelpCommand {
   command: string;
@@ -14,7 +18,23 @@ export interface HvyCliPluginCommandRegistration {
   addCommands: HvyCliHelpCommand[];
   operationCommands: HvyCliHelpCommand[];
   helpCommands?: HvyCliHelpCommand[];
+  lintChecks?: HvyCliPluginLintCheck[];
 }
+
+export interface HvyCliPluginLintContext {
+  document: VisualDocument;
+  path: string;
+  textPath: string;
+  jsonPath: string;
+  config: JsonObject;
+  body: string;
+}
+
+export interface HvyCliPluginLintIssue {
+  message: string;
+}
+
+export type HvyCliPluginLintCheck = (context: HvyCliPluginLintContext) => HvyCliPluginLintIssue[] | Promise<HvyCliPluginLintIssue[]>;
 
 const pluginCommandRegistrations: HvyCliPluginCommandRegistration[] = [];
 const SCRIPTING_DOC_TOOL_NAMES = [
@@ -87,6 +107,7 @@ function copyRegistration(registration: HvyCliPluginCommandRegistration): HvyCli
     addCommands: [...registration.addCommands],
     operationCommands: [...registration.operationCommands],
     helpCommands: [...(registration.helpCommands ?? [])],
+    lintChecks: [...(registration.lintChecks ?? [])],
   };
 }
 
@@ -109,6 +130,22 @@ registerHvyCliPluginCommands({
     },
   ],
   operationCommands: [],
+  lintChecks: [
+    (context) => {
+      if (context.body.trim().length === 0) {
+        return [{ message: 'form plugin body is empty; expected form YAML with fields and submit behavior.' }];
+      }
+      const parsed = parseFormSpec(context.body);
+      if (parsed.error) {
+        return [];
+      }
+      const script = parsed.spec.submitScript.trim();
+      if (!parsed.spec.showSubmit || script.length > 0) {
+        return [];
+      }
+      return [{ message: 'form has a submit button but no submitScript.' }];
+    },
+  ],
   helpCommands: [
     {
       command: '--script NAME PYTHON',
@@ -154,6 +191,11 @@ registerHvyCliPluginCommands({
     },
   ],
   operationCommands: [],
+  lintChecks: [
+    (context) => context.body.trim().length === 0
+      ? [{ message: 'scripting plugin body is empty; expected Brython/Python source.' }]
+      : [],
+  ],
   helpCommands: [
     {
       command: 'hvy plugin scripting tool TOOL_NAME',
@@ -193,6 +235,18 @@ registerHvyCliPluginCommands({
     {
       command: 'hvy plugin db-table schema [TABLE_OR_VIEW]',
       description: 'Show schema details.',
+    },
+  ],
+  lintChecks: [
+    async (context) => {
+      const table = typeof context.config.table === 'string' ? context.config.table.trim() : '';
+      if (table.length === 0) {
+        return [{ message: 'db-table plugin is missing pluginConfig.table.' }];
+      }
+      const names = await getDocumentDbTableObjectNames(context.document);
+      return names.includes(table)
+        ? []
+        : [{ message: `db-table pluginConfig.table references missing SQLite table/view "${table}".` }];
     },
   ],
 });

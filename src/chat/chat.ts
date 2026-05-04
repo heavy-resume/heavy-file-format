@@ -1,5 +1,5 @@
 import './chat.css';
-import type { ChatMessage, ChatSettings, ChatState, VisualDocument } from '../types';
+import type { ChatMessage, ChatSettings, ChatState, ChatTokenUsage, VisualDocument } from '../types';
 import { deserializeDocument, serializeDocument } from '../serialization';
 import { markdownToEditorHtml, normalizeMarkdownLists } from '../markdown';
 import aiResponseFormatInstructions from '../../AI-RESPONSE-FORMAT.md?raw';
@@ -37,6 +37,7 @@ interface ProxyChatRequest {
 interface ProxyChatResponse {
   output: string;
   reasoningSummary?: string;
+  usage?: ChatTokenUsage;
 }
 
 export interface ProxyCompletionParams {
@@ -48,6 +49,7 @@ export interface ProxyCompletionParams {
   debugLabel?: string;
   traceRunId?: string;
   onReasoningSummary?: (summary: string) => void;
+  onTokenUsage?: (usage: ChatTokenUsage) => void;
   signal?: AbortSignal;
 }
 
@@ -135,6 +137,7 @@ export function renderChatPanel(
   const missingModel = chat.settings.model.trim().length === 0;
   const isDocumentEdit = mode === 'document-edit';
   const canSend = !chat.isSending && !missingModel && (isDocumentEdit || context.trim().length > 0);
+  const latestTokenUsage = getLatestChatTokenUsage(chat.messages);
   console.debug('[hvy:chat-render] composer state', {
     panelOpen: chat.panelOpen,
     mode,
@@ -222,6 +225,7 @@ export function renderChatPanel(
                                      ? `<details class="chat-reasoning"><summary>Reasoning Summary</summary><div>${deps.escapeHtml(message.reasoning).replace(/\n/g, '<br />')}</div></details>`
                                      : ''
                                  }
+                                 ${message.tokenUsage ? `<div class="chat-token-usage">${deps.escapeHtml(formatChatTokenUsage(message.tokenUsage))}</div>` : ''}
                                  ${
                                    canCopyToHvy && message.role === 'assistant' && !message.error && !message.progress
                                      ? `<div class="chat-bubble-actions"><button type="button" class="ghost" data-action="copy-chat-response-to-hvy" data-message-id="${deps.escapeAttr(message.id)}">Copy to HVY</button></div>`
@@ -248,8 +252,8 @@ export function renderChatPanel(
                              : missingModel
                              ? 'Choose a model before sending.'
                              : !hasDraft
-                             ? 'Type your prompt'
-                             : 'Ready'
+                             ? latestTokenUsage ? `Last ${formatChatTokenUsage(latestTokenUsage).toLowerCase()}` : 'Type your prompt'
+                             : latestTokenUsage ? `Ready · last ${formatChatTokenUsage(latestTokenUsage).toLowerCase()}` : 'Ready'
                          }
                        </span>
                        ${
@@ -275,6 +279,7 @@ export async function requestChatCompletion(params: {
   document: VisualDocument;
   messages: ChatMessage[];
   onReasoningSummary?: (summary: string) => void;
+  onTokenUsage?: (usage: ChatTokenUsage) => void;
   signal?: AbortSignal;
 }): Promise<string> {
   const context = buildChatDocumentContext(params.document);
@@ -290,6 +295,7 @@ export async function requestChatCompletion(params: {
     mode: 'qa',
     debugLabel: 'chat',
     onReasoningSummary: params.onReasoningSummary,
+    onTokenUsage: params.onTokenUsage,
     signal: params.signal,
   });
 }
@@ -344,8 +350,27 @@ export async function requestProxyCompletion(params: ProxyCompletionParams): Pro
   if (reasoningSummary) {
     params.onReasoningSummary?.(reasoningSummary);
   }
+  const usage = normalizeProxyTokenUsage((payload as ProxyChatResponse).usage);
+  if (usage) {
+    params.onTokenUsage?.(usage);
+  }
   console.debug(`[hvy:${debugLabel}] client extracted output`, output);
   return output;
+}
+
+function normalizeProxyTokenUsage(value: unknown): ChatTokenUsage | null {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+  const record = value as Record<string, unknown>;
+  const usage: ChatTokenUsage = {
+    ...(typeof record.inputTokens === 'number' ? { inputTokens: record.inputTokens } : {}),
+    ...(typeof record.outputTokens === 'number' ? { outputTokens: record.outputTokens } : {}),
+    ...(typeof record.totalTokens === 'number' ? { totalTokens: record.totalTokens } : {}),
+    ...(typeof record.cachedTokens === 'number' ? { cachedTokens: record.cachedTokens } : {}),
+    ...(typeof record.reasoningTokens === 'number' ? { reasoningTokens: record.reasoningTokens } : {}),
+  };
+  return Object.keys(usage).length > 0 ? usage : null;
 }
 
 export function buildProxyChatRequest(request: ProxyChatRequest): ProxyChatRequest {
@@ -475,6 +500,24 @@ function parseHvyCommentPayload(comment: string): Record<string, unknown> | null
   } catch {
     return null;
   }
+}
+
+function getLatestChatTokenUsage(messages: ChatMessage[]): ChatTokenUsage | null {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const usage = messages[index]?.tokenUsage;
+    if (usage) {
+      return usage;
+    }
+  }
+  return null;
+}
+
+function formatChatTokenUsage(usage: ChatTokenUsage): string {
+  const parts = [
+    typeof usage.inputTokens === 'number' ? `input ${usage.inputTokens}` : '',
+    typeof usage.outputTokens === 'number' ? `output ${usage.outputTokens}` : '',
+  ].filter(Boolean);
+  return parts.length > 0 ? `Tokens: ${parts.join(' / ')}` : '';
 }
 
 function renderAssistantMessageHtml(markdown: string): string {

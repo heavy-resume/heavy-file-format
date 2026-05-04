@@ -1,7 +1,7 @@
 import { requestChatCompletion } from './chat';
 import { hasDocumentDbTables } from '../plugins/db-table';
 import { runQaToolLoop } from '../ai-qa';
-import type { ChatMessage, ChatSettings, VisualDocument } from '../types';
+import type { ChatMessage, ChatSettings, ChatTokenUsage, VisualDocument } from '../types';
 import type { VisualSection } from '../editor/types';
 import { deserializeDocumentWithDiagnostics, wrapHvyFragmentAsDocument } from '../serialization';
 import { runChatCliEditLoop } from '../chat-cli/chat-cli-edit-loop';
@@ -31,6 +31,7 @@ export async function requestChatTurn(params: {
 }): Promise<ChatTurnResult> {
   const nextMessages = appendUserChatMessage(params.messages, params.question);
   let reasoningSummary = '';
+  let tokenUsage: ChatTokenUsage | null = null;
 
   try {
     const answer = hasDocumentDbTables(params.document)
@@ -48,6 +49,9 @@ export async function requestChatTurn(params: {
           onReasoningSummary: (summary) => {
             reasoningSummary = summary;
           },
+          onTokenUsage: (usage) => {
+            tokenUsage = usage;
+          },
           signal: params.signal,
         });
     return {
@@ -58,6 +62,7 @@ export async function requestChatTurn(params: {
           role: 'assistant',
           content: answer,
           ...(reasoningSummary ? { reasoning: reasoningSummary } : {}),
+          ...(tokenUsage ? { tokenUsage } : {}),
         },
       ],
       error: null,
@@ -159,6 +164,14 @@ export async function requestDocumentEditChatTurn(params: {
           reasoning: summary,
           progress: true,
         }),
+      onTokenUsage: (usage) =>
+        emitProgress({
+          id: crypto.randomUUID(),
+          role: 'assistant',
+          content: 'Token usage',
+          tokenUsage: usage,
+          progress: true,
+        }),
       signal: params.signal,
     });
     return {
@@ -169,6 +182,7 @@ export async function requestDocumentEditChatTurn(params: {
           id: crypto.randomUUID(),
           role: 'assistant',
           content: result.summary,
+          ...(result.tokenUsage ? { tokenUsage: result.tokenUsage } : {}),
         },
       ],
       error: null,

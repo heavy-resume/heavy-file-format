@@ -90,6 +90,32 @@ test('requestChatTurn returns assistant answer on success', async () => {
   );
 });
 
+test('requestChatTurn attaches token usage to assistant answers', async () => {
+  requestChatCompletionMock.mockImplementation(async (params: { onTokenUsage?: (usage: { inputTokens?: number; outputTokens?: number }) => void }) => {
+    params.onTokenUsage?.({ inputTokens: 42, outputTokens: 7 });
+    return 'HVY is a document format.';
+  });
+
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+  const document = deserializeDocument('---\nhvy_version: 0.1\n---\n\n#! Summary\n', '.hvy');
+
+  const result = await requestChatTurn({
+    settings,
+    document,
+    messages: [],
+    question: 'What is HVY?',
+  });
+
+  expect(result.error).toBeNull();
+  expect(result.messages.at(-1)).toEqual(
+    expect.objectContaining({
+      role: 'assistant',
+      content: 'HVY is a document format.',
+      tokenUsage: { inputTokens: 42, outputTokens: 7 },
+    })
+  );
+});
+
 test('requestChatTurn routes through runQaToolLoop when the document has DB tables', async () => {
   runQaToolLoopMock.mockResolvedValue('Tool-loop answer.');
 
@@ -143,7 +169,10 @@ test('requestChatTurn returns assistant error message on failure', async () => {
 
 test('requestDocumentEditChatTurn runs the CLI edit loop for document chat', async () => {
   requestProxyCompletionMock
-    .mockResolvedValueOnce('hvy add section /body chores "Chores"')
+    .mockImplementationOnce(async (params: { onTokenUsage?: (usage: { inputTokens?: number; outputTokens?: number }) => void }) => {
+      params.onTokenUsage?.({ inputTokens: 100, outputTokens: 10 });
+      return 'hvy add section /body chores "Chores"';
+    })
     .mockResolvedValueOnce('```shell\nhvy add text /body/chores note "Weekly chore plan"\n```')
     .mockResolvedValueOnce('done Created the chore section.');
   const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
@@ -164,10 +193,12 @@ test('requestDocumentEditChatTurn runs the CLI edit loop for document chat', asy
   expect(serializeDocument(document)).toContain('Weekly chore plan');
   expect(onMutation).toHaveBeenCalledWith('chat-cli');
   expect(onProgress.mock.calls.map((call) => call[0].content)).toEqual([
+    'Token usage',
     '$ hvy add section /body chores "Chores"',
     '$ hvy add text /body/chores note "Weekly chore plan"',
     'Finished CLI edit loop.',
   ]);
+  expect(onProgress.mock.calls[0]?.[0].tokenUsage).toEqual({ inputTokens: 100, outputTokens: 10 });
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]).toEqual(
     expect.objectContaining({
       settings,
@@ -180,10 +211,13 @@ test('requestDocumentEditChatTurn runs the CLI edit loop for document chat', asy
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('scratchpad.txt:');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Task goal:\nAdd a chore section.');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Initial terminal output:\n> ls /\ndir  attachments');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('> hvy --help');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('hvy add section PARENT_PATH ID TITLE');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('> hvy request_structure --collapse');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Components:');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('> hvy lint\nNo lint issues.');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('> hvy find-intent "Add a chore section." --max 5');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('validate it succeeded before writing success notes to scratchpad.txt');
   expect(writeChatCliCommandTraceMock.mock.calls[0]).toEqual([
     'chat-cli-test',
     'ls /',
@@ -192,17 +226,23 @@ test('requestDocumentEditChatTurn runs the CLI edit loop for document chat', asy
   ]);
   expect(writeChatCliCommandTraceMock.mock.calls[1]).toEqual([
     'chat-cli-test',
+    'hvy --help',
+    expect.stringContaining('hvy add section PARENT_PATH ID TITLE'),
+    undefined,
+  ]);
+  expect(writeChatCliCommandTraceMock.mock.calls[2]).toEqual([
+    'chat-cli-test',
     'hvy request_structure --collapse',
     expect.stringContaining('Components:'),
     undefined,
   ]);
-  expect(writeChatCliCommandTraceMock.mock.calls[2]).toEqual([
+  expect(writeChatCliCommandTraceMock.mock.calls[3]).toEqual([
     'chat-cli-test',
     'hvy lint',
     'No lint issues.',
     undefined,
   ]);
-  expect(writeChatCliCommandTraceMock.mock.calls[3]).toEqual([
+  expect(writeChatCliCommandTraceMock.mock.calls[4]).toEqual([
     'chat-cli-test',
     'hvy find-intent "Add a chore section." --max 5',
     expect.stringContaining('No intent matches found'),
@@ -235,7 +275,7 @@ test('requestDocumentEditChatTurn trims old cli conversation messages while keep
   expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.messages.length).toBeGreaterThanOrEqual(5);
   expect(
     requestProxyCompletionMock.mock.calls[4]?.[0]?.messages.reduce((total: number, message: ChatMessage) => total + message.content.length, 0)
-  ).toBeLessThanOrEqual(500);
+  ).toBeLessThanOrEqual(1000);
   expect(JSON.stringify(requestProxyCompletionMock.mock.calls[4]?.[0]?.messages)).not.toContain('x'.repeat(700));
   expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.context).toContain(
     'Valid commands:\nCommands: cd, pwd, ls, cat, head, tail, nl, find, rg, grep, sort, uniq, wc, tr, xargs, rm, echo, sed, true, hvy. Ask: ask QUESTION. Finish: done SUMMARY.'
@@ -358,6 +398,49 @@ hvy_version: 0.1
   const nextPrompt = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content ?? '';
   expect(nextPrompt).toContain('> cat /body/summary/long/text.txt');
   expect(nextPrompt).toContain('Warning: output truncated to 50 of 60 wrapped lines (10 lines hidden).');
+});
+
+test('requestDocumentEditChatTurn ignores trailing done until a later standalone finish', async () => {
+  requestProxyCompletionMock
+    .mockResolvedValueOnce(`\`\`\`shell
+hvy add section /body chores "Chores"
+\`\`\`
+
+\`\`\`shell
+hvy add text /body/chores note "Weekly chore plan"
+\`\`\`
+
+done Created the chore section.`)
+    .mockResolvedValueOnce('done Created the chore section.');
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+  const document = deserializeDocument('---\nhvy_version: 0.1\n---\n', '.hvy');
+  const onMutation = vi.fn();
+  const onProgress = vi.fn();
+
+  const result = await requestDocumentEditChatTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Add a chore section.',
+    onMutation,
+    onProgress,
+  });
+
+  expect(result.error).toBeNull();
+  expect(serializeDocument(document)).toContain('Weekly chore plan');
+  expect(onMutation).toHaveBeenCalledWith('chat-cli');
+  expect(onProgress.mock.calls.map((call) => call[0].content)).toEqual([
+    '$ hvy add section /body chores "Chores"',
+    '$ hvy add text /body/chores note "Weekly chore plan"',
+    'Finished CLI edit loop.',
+  ]);
+  const nextPrompt = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content ?? '';
+  expect(nextPrompt).toContain('What is your next command?');
+  expect(nextPrompt).toContain('/body/chores/note');
+  expect(result.messages.at(-1)).toEqual(expect.objectContaining({
+    role: 'assistant',
+    content: 'Created the chore section.',
+  }));
 });
 
 test('requestDocumentEditChatTurn splits multiline shell blocks into separate commands', async () => {
@@ -776,7 +859,7 @@ test('requestDocumentEditChatTurn treats prose and dangling fences as retryable 
   expect(onProgress.mock.calls.map((call) => call[0].content)).toEqual(['Finished CLI edit loop.']);
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content).toContain('Expected terminal command(s)');
   expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.messages.at(-1)?.content).toContain('Expected terminal command(s)');
-  expect(writeChatCliCommandTraceMock.mock.calls.map((call) => call[1])).toEqual(['ls /', 'hvy request_structure --collapse', 'hvy lint', 'hvy find-intent "Use command format." --max 5']);
+  expect(writeChatCliCommandTraceMock.mock.calls.map((call) => call[1])).toEqual(['ls /', 'hvy --help', 'hvy request_structure --collapse', 'hvy lint', 'hvy find-intent "Use command format." --max 5']);
 });
 
 test('requestDocumentEditChatTurn preserves multiline quoted shell commands', async () => {
@@ -799,8 +882,8 @@ Progress: started" > /scratchpad.txt
   });
 
   expect(result.error).toBeNull();
-  expect(writeChatCliCommandTraceMock.mock.calls[4]?.[1]).toContain('echo "Plan:\n1. Remove xref cards');
-  expect(writeChatCliCommandTraceMock.mock.calls[4]?.[2]).toBe('/scratchpad.txt: written');
+  expect(writeChatCliCommandTraceMock.mock.calls[5]?.[1]).toContain('echo "Plan:\n1. Remove xref cards');
+  expect(writeChatCliCommandTraceMock.mock.calls[5]?.[2]).toBe('/scratchpad.txt: written');
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content).toContain('Plan:\n1. Remove xref cards');
 });
 
@@ -852,6 +935,7 @@ test('requestDocumentEditChatTurn stops after repeated cli command errors', asyn
   expect(requestProxyCompletionMock).toHaveBeenCalledTimes(3);
   expect(writeChatCliCommandTraceMock.mock.calls.map((call) => call[2])).toEqual([
     expect.stringContaining('dir  body'),
+    expect.stringContaining('hvy add section PARENT_PATH ID TITLE'),
     expect.stringContaining('Components:'),
     'No lint issues.',
     expect.any(String),
@@ -887,6 +971,7 @@ test('requestDocumentEditChatTurn warns when scratchpad writes exceed the note l
   expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.context).toContain('short notes');
   expect(writeChatCliCommandTraceMock.mock.calls.map((call) => call[1])).toEqual([
     'ls /',
+    'hvy --help',
     'hvy request_structure --collapse',
     'hvy lint',
     `hvy find-intent "Use a very long scratchpad." --max 5`,

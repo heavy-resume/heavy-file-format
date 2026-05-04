@@ -24,6 +24,7 @@ export interface HvyCliSession {
   scratchpadEdited?: boolean;
   scratchpadCommandsSinceEdit?: string[];
   scratchpadTouchedThisCommand?: boolean;
+  now?: Date;
 }
 
 export interface HvyCliExecution {
@@ -62,19 +63,20 @@ export function getHvyCliCommandSummary(): string {
 
 export async function executeHvyCliCommand(document: VisualDocument, session: HvyCliSession, input: string): Promise<HvyCliExecution> {
   session.scratchpadTouchedThisCommand = false;
-  if (input.trim().startsWith('#')) {
+  const expandedInput = expandShellSubstitutions(input, session.now ?? new Date());
+  if (expandedInput.trim().startsWith('#')) {
     return { cwd: session.cwd, output: '', mutated: false };
   }
-  const heredoc = parseCatHeredocWrite(input);
+  const heredoc = parseCatHeredocWrite(expandedInput);
   if (heredoc) {
     const fs = buildHvyVirtualFileSystem(document);
     addSessionScratchpadFile(fs, session);
     const result = writeVirtualFile({ fs, cwd: session.cwd }, heredoc.path, heredoc.content, false, 'cat');
     enforceScratchpadHardCap(session);
-    updateScratchpadCommandHistory(session, input);
+    updateScratchpadCommandHistory(session, expandedInput);
     return { cwd: session.cwd, output: result.output, mutated: result.mutated };
   }
-  const args = tokenizeCommand(input);
+  const args = tokenizeCommand(expandedInput);
   if (args.length === 0) {
     return { cwd: session.cwd, output: '', mutated: false };
   }
@@ -106,7 +108,7 @@ export async function executeHvyCliCommand(document: VisualDocument, session: Hv
     }
   }
 
-  updateScratchpadCommandHistory(session, input);
+  updateScratchpadCommandHistory(session, expandedInput);
   const output = truncateCliOutput(lastProcess.status === 0 ? lastProcess.stdout : lastProcess.stderr || lastProcess.stdout, { preserveFindWarning: true });
   const result = { cwd: session.cwd, output, mutated };
   if (scratchpadTouched && isScratchpadTooLong(session)) {
@@ -935,6 +937,81 @@ function parseCatHeredocWrite(input: string): { path: string; content: string } 
     throw new Error(`cat: heredoc missing terminator ${marker}`);
   }
   return { path, content: `${lines.slice(0, markerIndex).join('\n')}\n` };
+}
+
+function expandShellSubstitutions(input: string, now: Date): string {
+  let result = '';
+  let quote: '"' | "'" | null = null;
+  for (let index = 0; index < input.length; index += 1) {
+    const char = input[index] ?? '';
+    if ((char === '"' || char === "'") && (!quote || quote === char)) {
+      quote = quote ? null : char;
+      result += char;
+      continue;
+    }
+    if (quote !== "'" && input.slice(index, index + 2) === '$(') {
+      const end = findCommandSubstitutionEnd(input, index + 2);
+      if (end < 0) {
+        throw new Error('Unclosed command substitution.');
+      }
+      result += evaluateCommandSubstitution(input.slice(index + 2, end), now);
+      index = end;
+      continue;
+    }
+    result += char;
+  }
+  return result;
+}
+
+function findCommandSubstitutionEnd(input: string, startIndex: number): number {
+  let quote: '"' | "'" | null = null;
+  for (let index = startIndex; index < input.length; index += 1) {
+    const char = input[index] ?? '';
+    if (char === '\\') {
+      index += 1;
+      continue;
+    }
+    if ((char === '"' || char === "'") && (!quote || quote === char)) {
+      quote = quote ? null : char;
+      continue;
+    }
+    if (!quote && char === ')') {
+      return index;
+    }
+  }
+  return -1;
+}
+
+function evaluateCommandSubstitution(commandText: string, now: Date): string {
+  const args = tokenizeCommand(commandText.replace(/\\"/g, '"'));
+  const [command = '', ...rest] = args;
+  if (command !== 'date') {
+    throw new Error(`Unsupported command substitution "$(${commandText})". Supported: $(date), $(date -u), $(date +FORMAT), $(date -u +FORMAT).`);
+  }
+  return formatCliDate(now, rest);
+}
+
+function formatCliDate(now: Date, args: string[]): string {
+  const useUtc = args.includes('-u') || args.includes('--utc');
+  const format = args.find((arg) => arg.startsWith('+')) ?? '+%a %b %d %H:%M:%S %Z %Y';
+  return formatDateWithPattern(now, format.slice(1), useUtc);
+}
+
+function formatDateWithPattern(date: Date, pattern: string, utc: boolean): string {
+  const part = (method: 'FullYear' | 'Month' | 'Date' | 'Hours' | 'Minutes' | 'Seconds') => {
+    const prefix = utc ? 'getUTC' : 'get';
+    return (date[`${prefix}${method}` as keyof Date] as () => number).call(date);
+  };
+  const replacements: Record<string, string> = {
+    Y: String(part('FullYear')).padStart(4, '0'),
+    m: String(part('Month') + 1).padStart(2, '0'),
+    d: String(part('Date')).padStart(2, '0'),
+    H: String(part('Hours')).padStart(2, '0'),
+    M: String(part('Minutes')).padStart(2, '0'),
+    S: String(part('Seconds')).padStart(2, '0'),
+    Z: utc ? 'UTC' : 'local',
+  };
+  return pattern.replace(/%([YmdHMSZ%])/g, (_match, token: string) => token === '%' ? '%' : replacements[token] ?? `%${token}`);
 }
 
 function formatMissingPathMessage(

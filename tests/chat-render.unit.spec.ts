@@ -1,4 +1,15 @@
-import { expect, test } from 'vitest';
+import { expect, test, vi } from 'vitest';
+
+vi.mock('dompurify', () => ({
+  default: {
+    sanitize: (value: string) => value,
+  },
+}));
+
+vi.mock('../src/markdown', () => ({
+  markdownToEditorHtml: (value: string) => value,
+  normalizeMarkdownLists: (value: string) => value,
+}));
 
 import { createDefaultChatState, renderChatPanel } from '../src/chat/chat';
 import { deserializeDocument } from '../src/serialization';
@@ -35,4 +46,28 @@ hvy_version: 0.1
   const html = renderChatPanel(chat, document, deps, 'qa');
 
   expect(html).toContain('<button type="submit" class="secondary" disabled>Send</button>');
+});
+
+test('renderChatPanel shows token usage on assistant messages', () => {
+  const chat = createDefaultChatState();
+  chat.panelOpen = true;
+  chat.messages = [
+    {
+      id: 'a1',
+      role: 'assistant',
+      content: 'Done.',
+      tokenUsage: { inputTokens: 120, outputTokens: 30 },
+    },
+  ];
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+#! Summary
+`, '.hvy');
+
+  const html = renderChatPanel(chat, document, deps, 'document-edit');
+
+  expect(html).toContain('<div class="chat-token-usage">Tokens: input 120 / output 30</div>');
+  expect(html).toContain('Last tokens: input 120 / output 30');
 });

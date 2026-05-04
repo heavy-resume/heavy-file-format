@@ -21,8 +21,17 @@ export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   reasoning?: string;
+  tokenUsage?: ChatTokenUsage;
   error?: boolean;
   progress?: boolean;
+}
+
+export interface ChatTokenUsage {
+  inputTokens?: number;
+  outputTokens?: number;
+  totalTokens?: number;
+  cachedTokens?: number;
+  reasoningTokens?: number;
 }
 
 export interface ChatSettings {

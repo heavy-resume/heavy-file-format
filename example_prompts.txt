@@ -16,3 +16,7 @@ Remove references to TypeScript in this resume.
 
 
 Remove references to programming languages in this resume. 
+
+
+
+Add Baking as both a skill and top skill. Give it placeholder info I'll modify later

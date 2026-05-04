@@ -1,6 +1,6 @@
 import { requestProxyCompletion } from '../chat/chat';
 import { formatHvyCliLintDiff, type HvyCliLintIssue, runHvyCliLinter } from '../cli-core/document-linter';
-import type { ChatMessage, ChatSettings, VisualDocument } from '../types';
+import type { ChatMessage, ChatSettings, ChatTokenUsage, VisualDocument } from '../types';
 import { buildChatCliComponentHints } from './chat-cli-component-hints';
 import { createChatCliTraceRunId, writeChatCliCommandTrace, writeChatCliUserQueryTrace } from './chat-cli-dev-trace';
 import { createChatCliInterface } from './chat-cli-interface';
@@ -8,7 +8,7 @@ import { buildChatCliPersistentInstructions } from './chat-cli-instructions';
 
 const CHAT_CLI_MAX_STEPS = 30;
 const CHAT_CLI_MAX_CONSECUTIVE_COMMAND_ERRORS = 3;
-const CHAT_CLI_MESSAGE_HISTORY_MAX_CHARS = 500;
+const CHAT_CLI_MESSAGE_HISTORY_MAX_CHARS = 1000;
 const CHAT_CLI_MESSAGE_HISTORY_MIN_MESSAGES = 5;
 const CHAT_CLI_PRIOR_MESSAGE_LIMIT = 5;
 const CHAT_CLI_MODEL_OUTPUT_MAX_LINES = 100;
@@ -17,6 +17,7 @@ const CHAT_CLI_COMMAND_NAMES = new Set(['cd', 'pwd', 'ls', 'cat', 'head', 'tail'
 
 export interface ChatCliEditTurnResult {
   summary: string;
+  tokenUsage?: ChatTokenUsage;
 }
 
 export async function runChatCliEditLoop(params: {
@@ -27,6 +28,7 @@ export async function runChatCliEditLoop(params: {
   onMutation?: (group?: string) => void;
   onProgress?: (content: string) => void;
   onReasoningSummary?: (summary: string) => void;
+  onTokenUsage?: (usage: ChatTokenUsage) => void;
   signal?: AbortSignal;
 }): Promise<ChatCliEditTurnResult> {
   const cli = createChatCliInterface(params.document);
@@ -34,6 +36,8 @@ export async function runChatCliEditLoop(params: {
   await writeChatCliUserQueryTrace(traceRunId, params.request, params.signal);
   const initialRootListing = await cli.run('ls /');
   await writeChatCliCommandTrace(traceRunId, initialRootListing.command, initialRootListing.output, params.signal);
+  const initialHvyHelp = await cli.run('hvy --help');
+  await writeChatCliCommandTrace(traceRunId, initialHvyHelp.command, initialHvyHelp.output, params.signal);
   const initialStructure = await cli.run('hvy request_structure --collapse');
   await writeChatCliCommandTrace(traceRunId, initialStructure.command, initialStructure.output, params.signal);
   let lintIssues = await runHvyCliLinter(params.document);
@@ -51,6 +55,7 @@ export async function runChatCliEditLoop(params: {
     },
   ];
   let consecutiveCommandErrors = 0;
+  let latestTokenUsage: ChatTokenUsage | null = null;
 
   for (let step = 0; step < CHAT_CLI_MAX_STEPS; step += 1) {
     throwIfAborted(params.signal);
@@ -58,12 +63,16 @@ export async function runChatCliEditLoop(params: {
     const response = await requestProxyCompletion({
       settings: params.settings,
       messages: conversation,
-      context: buildChatCliLoopContext(cli.snapshot(), params.request, params.priorMessages ?? [], priorConversation, [initialRootListing, initialStructure, initialLint, initialIntent]),
+      context: buildChatCliLoopContext(cli.snapshot(), params.request, params.priorMessages ?? [], priorConversation, [initialRootListing, initialHvyHelp, initialStructure, initialLint, initialIntent]),
       formatInstructions: buildChatCliLoopFormatInstructions(),
       mode: 'document-edit',
       debugLabel: `chat-cli-edit:${step + 1}`,
       traceRunId,
       onReasoningSummary: params.onReasoningSummary,
+      onTokenUsage: (usage) => {
+        latestTokenUsage = usage;
+        params.onTokenUsage?.(usage);
+      },
       signal: params.signal,
     });
     const action = parseChatCliAction(response);
@@ -85,10 +94,13 @@ export async function runChatCliEditLoop(params: {
     }
     if (action.kind === 'done') {
       params.onProgress?.('Finished CLI edit loop.');
-      return { summary: action.summary || `Finished after ${step + 1} step${step === 0 ? '' : 's'}.` };
+      return {
+        summary: action.summary || `Finished after ${step + 1} step${step === 0 ? '' : 's'}.`,
+        ...(latestTokenUsage ? { tokenUsage: latestTokenUsage } : {}),
+      };
     }
     if (action.kind === 'ask') {
-      return { summary: action.question };
+      return { summary: action.question, ...(latestTokenUsage ? { tokenUsage: latestTokenUsage } : {}) };
     }
 
     const commandOutputs: Array<{ command: string; output: string }> = [];
@@ -169,7 +181,10 @@ export async function runChatCliEditLoop(params: {
     ];
   }
 
-  return { summary: `Stopped after ${CHAT_CLI_MAX_STEPS} CLI command steps. Send another request to continue.` };
+  return {
+    summary: `Stopped after ${CHAT_CLI_MAX_STEPS} CLI command steps. Send another request to continue.`,
+    ...(latestTokenUsage ? { tokenUsage: latestTokenUsage } : {}),
+  };
 }
 
 function buildChatCliLoopContext(
@@ -253,8 +268,9 @@ function isClarificationQuestion(content: string): boolean {
 function buildChatCliLoopFormatInstructions(): string {
   return [
     'Return terminal command(s) as plain text, or fenced in ```shell. Multiple ```shell blocks are allowed and run in order.',
-    'To finish, return: done Short summary of what changed.',
+    'To finish, return only: done Short summary of what changed.',
     'To ask for clarification, return: ask Question for the user.',
+    'Do not include done with commands. Run commands, inspect the result, then finish in a later response.',
     'Do not return prose or markdown explanations.',
   ].join('\n');
 }
@@ -299,7 +315,9 @@ function extractFencedShellCommands(response: string): { kind: 'ok'; commands: s
   if (commands.length === 0) {
     return { kind: 'ok', commands };
   }
-  if (outside.trim()) {
+  const outsideCommand = normalizeCommandResponse(outside);
+  const hasTrailingDone = /^(done|finish|finished)\b/i.test(outsideCommand);
+  if (outside.trim() && !hasTrailingDone) {
     return { kind: 'invalid', message: 'Expected only terminal command fences, `ask Question`, or `done Short summary`. Do not add prose around command fences.' };
   }
   return { kind: 'ok', commands };

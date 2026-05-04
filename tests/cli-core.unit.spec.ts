@@ -101,6 +101,22 @@ test('cli echo supports shell-style redirection to writable virtual files', asyn
   expect((await executeHvyCliCommand(document, session, 'man echo')).output).toContain('echo TEXT [> FILE|>> FILE]');
 });
 
+test('cli expands supported date command substitutions', async () => {
+  const document = createCliTestDocument();
+  const session = createHvyCliSession();
+  session.now = new Date('2026-05-04T12:34:56Z');
+
+  const result = await executeHvyCliCommand(document, session, 'echo "last-edited: $(date -u +\\"%Y-%m-%dT%H:%M:%SZ\\")" > /scratchpad.txt');
+
+  expect(result.output).toBe('/scratchpad.txt: written');
+  expect((await executeHvyCliCommand(document, session, 'cat /scratchpad.txt')).output).toBe('last-edited: 2026-05-04T12:34:56Z\n');
+
+  await executeHvyCliCommand(document, session, 'echo \'literal: $(date -u +"%Y")\' > /scratchpad.txt');
+  expect((await executeHvyCliCommand(document, session, 'cat /scratchpad.txt')).output).toBe('literal: $(date -u +"%Y")\n');
+
+  await expect(executeHvyCliCommand(document, session, 'echo "$(whoami)"')).rejects.toThrow('Unsupported command substitution');
+});
+
 test('cli warns when scratchpad writes exceed the note limit', async () => {
   const document = createCliTestDocument();
   const session = createHvyCliSession();

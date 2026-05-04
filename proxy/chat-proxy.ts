@@ -52,6 +52,15 @@ interface ProxyChatRequest {
 interface ProviderCompletion {
   output: string;
   reasoningSummary: string;
+  usage?: ProviderTokenUsage;
+}
+
+interface ProviderTokenUsage {
+  inputTokens?: number;
+  outputTokens?: number;
+  totalTokens?: number;
+  cachedTokens?: number;
+  reasoningTokens?: number;
 }
 
 export function createChatProxyPlugin(env: Record<string, string | undefined>): Plugin {
@@ -155,6 +164,7 @@ export function buildChatProxyMiddleware(env: Record<string, string | undefined>
       sendJson(res, 200, {
         output: completion.output,
         ...(completion.reasoningSummary ? { reasoningSummary: completion.reasoningSummary } : {}),
+        ...(completion.usage ? { usage: completion.usage } : {}),
       });
     } catch (error) {
       if (isAbortError(error) || upstreamAbort.signal.aborted) {
@@ -424,6 +434,7 @@ async function requestOpenAi(
   }
   const output = extractOpenAiText(payload);
   const reasoningSummary = extractOpenAiReasoningSummary(payload);
+  const usage = extractProviderTokenUsage(payload);
   console.debug('[hvy:chat-proxy] upstream openai extracted output', output);
   writeTrace({
     runId,
@@ -434,7 +445,7 @@ async function requestOpenAi(
   if (output.length === 0) {
     throw new Error('Provider request failed: OpenAI returned no assistant text.');
   }
-  return { output, reasoningSummary };
+  return { output, reasoningSummary, ...(usage ? { usage } : {}) };
 }
 
 async function requestAnthropic(
@@ -479,6 +490,7 @@ async function requestAnthropic(
   }
   const output = extractAnthropicText(payload);
   const reasoningSummary = extractAnthropicReasoningSummary(payload);
+  const usage = extractProviderTokenUsage(payload);
   console.debug('[hvy:chat-proxy] upstream anthropic extracted output', output);
   writeTrace({
     runId,
@@ -489,7 +501,7 @@ async function requestAnthropic(
   if (output.length === 0) {
     throw new Error('Provider request failed: Anthropic returned no assistant text.');
   }
-  return { output, reasoningSummary };
+  return { output, reasoningSummary, ...(usage ? { usage } : {}) };
 }
 
 function resolveProviderApiKey(provider: ProxyChatRequest['provider'], env: Record<string, string | undefined>): string {
@@ -794,12 +806,27 @@ function summarizeTracePayload(event: TraceEvent): string {
 }
 
 function summarizeProviderTokenUsage(payload: unknown): string {
-  if (!payload || typeof payload !== 'object') {
+  const usage = extractProviderTokenUsage(payload);
+  if (!usage) {
     return '';
+  }
+  const parts = [
+    typeof usage.inputTokens === 'number' ? `input_tokens=${usage.inputTokens}` : '',
+    typeof usage.outputTokens === 'number' ? `output_tokens=${usage.outputTokens}` : '',
+    typeof usage.totalTokens === 'number' ? `total_tokens=${usage.totalTokens}` : '',
+    typeof usage.cachedTokens === 'number' ? `cached_tokens=${usage.cachedTokens}` : '',
+    typeof usage.reasoningTokens === 'number' ? `reasoning_tokens=${usage.reasoningTokens}` : '',
+  ].filter(Boolean);
+  return parts.length > 0 ? `usage=${parts.join(',')}` : '';
+}
+
+function extractProviderTokenUsage(payload: unknown): ProviderTokenUsage | null {
+  if (!payload || typeof payload !== 'object') {
+    return null;
   }
   const usage = (payload as { usage?: unknown }).usage;
   if (!usage || typeof usage !== 'object') {
-    return '';
+    return null;
   }
   const record = usage as Record<string, unknown>;
   const inputTokens = readNumber(record.input_tokens) ?? readNumber(record.prompt_tokens);
@@ -809,14 +836,14 @@ function summarizeProviderTokenUsage(payload: unknown): string {
     ?? readNumber((record.cache_read_input_tokens as Record<string, unknown> | undefined)?.cached_tokens)
     ?? readNumber(record.cache_read_input_tokens);
   const reasoningTokens = readNumber((record.output_tokens_details as Record<string, unknown> | undefined)?.reasoning_tokens);
-  const parts = [
-    typeof inputTokens === 'number' ? `input_tokens=${inputTokens}` : '',
-    typeof outputTokens === 'number' ? `output_tokens=${outputTokens}` : '',
-    typeof totalTokens === 'number' ? `total_tokens=${totalTokens}` : '',
-    typeof cachedTokens === 'number' ? `cached_tokens=${cachedTokens}` : '',
-    typeof reasoningTokens === 'number' ? `reasoning_tokens=${reasoningTokens}` : '',
-  ].filter(Boolean);
-  return parts.length > 0 ? `usage=${parts.join(',')}` : '';
+  const result: ProviderTokenUsage = {
+    ...(typeof inputTokens === 'number' ? { inputTokens } : {}),
+    ...(typeof outputTokens === 'number' ? { outputTokens } : {}),
+    ...(typeof totalTokens === 'number' ? { totalTokens } : {}),
+    ...(typeof cachedTokens === 'number' ? { cachedTokens } : {}),
+    ...(typeof reasoningTokens === 'number' ? { reasoningTokens } : {}),
+  };
+  return Object.keys(result).length > 0 ? result : null;
 }
 
 function readNumber(value: unknown): number | undefined {

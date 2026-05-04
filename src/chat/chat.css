@@ -248,6 +248,12 @@
   margin-top: 0.4rem;
 }
 
+.chat-token-usage {
+  margin-top: 0.55rem;
+  color: var(--hvy-text-alt);
+  font: 12px/1.35 "JetBrains Mono", "Fira Code", monospace;
+}
+
 .chat-bubble-error,
 .chat-error {
   border-color: color-mix(in srgb, var(--hvy-danger) 65%, var(--hvy-border));

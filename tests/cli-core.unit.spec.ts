@@ -285,7 +285,7 @@ test('cli supports xargs in pipelines', async () => {
   const emptyResult = await executeHvyCliCommand(document, session, 'find /body/summary -name missing.txt | xargs -r cat');
   expect(emptyResult.output).toBe('');
   expect(emptyResult.mutated).toBe(false);
-  expect((await executeHvyCliCommand(document, session, 'man xargs')).output).toContain('COMMAND | xargs [-r] [-I TOKEN] COMMAND ARG...');
+  expect((await executeHvyCliCommand(document, session, 'man xargs')).output).toContain('COMMAND | xargs [-0] [-r] [-I TOKEN] COMMAND ARG...');
 });
 
 test('cli uses normal shell precedence for rg || true pipe idioms', async () => {
@@ -338,15 +338,70 @@ hvy_version: 0.1
   expect(session.scratchpadContent).toBe('Removed references to TypeScript\n');
 });
 
+test('cli supports grep tr xargs sed delete shell flow', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {"id":"intro"}-->
+ Keep this
+TypeScript should be deleted
+Keep that
+`, '.hvy');
+  const session = createHvyCliSession();
+
+  const result = await executeHvyCliCommand(
+    document,
+    session,
+    'grep -RIl "TypeScript" . | tr \'\\n\' \'\\0\' | xargs -0 sed -i \'/TypeScript/d\' && echo "Removed TypeScript references from resume files" >> /scratchpad.txt'
+  );
+
+  expect(result.output).toBe('/scratchpad.txt: appended');
+  expect(result.mutated).toBe(true);
+  expect(document.sections[0]?.blocks[0]?.text).toBe('Keep this\nKeep that');
+  expect(session.scratchpadContent).toContain('Removed TypeScript references from resume files');
+});
+
+test('cli supports rg hidden no-messages null xargs sed delete shell flow', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {"id":"intro"}-->
+ Keep this
+TypeScript should be deleted
+Keep that
+`, '.hvy');
+  const session = createHvyCliSession();
+
+  const result = await executeHvyCliCommand(
+    document,
+    session,
+    'rg -l --hidden --no-messages "TypeScript" | tr \'\\n\' \'\\0\' | xargs -0 sed -i \'/TypeScript/d\' && echo "Removed TypeScript references from files" >> /scratchpad.txt'
+  );
+
+  expect(result.output).toBe('/scratchpad.txt: appended');
+  expect(result.mutated).toBe(true);
+  expect(document.sections[0]?.blocks[0]?.text).toBe('Keep this\nKeep that');
+  expect(session.scratchpadContent).toContain('Removed TypeScript references from files');
+});
+
 test('cli lists text filters as supported commands', async () => {
   const document = createCliTestDocument();
   const session = createHvyCliSession();
 
   expect((await executeHvyCliCommand(document, session, 'help')).output).toContain(
-    'Commands: cd, pwd, ls, cat, head, tail, nl, find, rg, grep, sort, uniq, wc, xargs, rm, echo, sed, true, hvy. Finish: done SUMMARY.'
+    'Commands: cd, pwd, ls, cat, head, tail, nl, find, rg, grep, sort, uniq, wc, tr, xargs, rm, echo, sed, true, hvy. Finish: done SUMMARY.'
   );
   expect((await executeHvyCliCommand(document, session, 'man wc')).output).toContain('wc -l [FILE...]');
   expect((await executeHvyCliCommand(document, session, 'man uniq')).output).toContain('uniq [FILE...]');
+  expect((await executeHvyCliCommand(document, session, 'man tr')).output).toContain('tr SET1 SET2');
   expect((await executeHvyCliCommand(document, session, 'man done')).output).toContain('done SUMMARY');
 });
 

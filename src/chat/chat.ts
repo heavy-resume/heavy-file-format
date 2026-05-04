@@ -36,6 +36,7 @@ interface ProxyChatRequest {
 
 interface ProxyChatResponse {
   output: string;
+  reasoningSummary?: string;
 }
 
 export interface ProxyCompletionParams {
@@ -46,6 +47,7 @@ export interface ProxyCompletionParams {
   mode: 'qa' | 'component-edit' | 'document-edit';
   debugLabel?: string;
   traceRunId?: string;
+  onReasoningSummary?: (summary: string) => void;
   signal?: AbortSignal;
 }
 
@@ -216,6 +218,11 @@ export function renderChatPanel(
                                      : deps.escapeHtml(message.content).replace(/\n/g, '<br />')
                                  }</div>
                                  ${
+                                   message.reasoning
+                                     ? `<details class="chat-reasoning"><summary>Reasoning Summary</summary><div>${deps.escapeHtml(message.reasoning).replace(/\n/g, '<br />')}</div></details>`
+                                     : ''
+                                 }
+                                 ${
                                    canCopyToHvy && message.role === 'assistant' && !message.error && !message.progress
                                      ? `<div class="chat-bubble-actions"><button type="button" class="ghost" data-action="copy-chat-response-to-hvy" data-message-id="${deps.escapeAttr(message.id)}">Copy to HVY</button></div>`
                                      : ''
@@ -267,6 +274,7 @@ export async function requestChatCompletion(params: {
   settings: ChatSettings;
   document: VisualDocument;
   messages: ChatMessage[];
+  onReasoningSummary?: (summary: string) => void;
   signal?: AbortSignal;
 }): Promise<string> {
   const context = buildChatDocumentContext(params.document);
@@ -281,6 +289,7 @@ export async function requestChatCompletion(params: {
     formatInstructions: HVY_AI_RESPONSE_FORMAT_INSTRUCTIONS,
     mode: 'qa',
     debugLabel: 'chat',
+    onReasoningSummary: params.onReasoningSummary,
     signal: params.signal,
   });
 }
@@ -329,6 +338,12 @@ export async function requestProxyCompletion(params: ProxyCompletionParams): Pro
   }
 
   const output = (payload as ProxyChatResponse).output.trim();
+  const reasoningSummary = typeof (payload as ProxyChatResponse).reasoningSummary === 'string'
+    ? (payload as ProxyChatResponse).reasoningSummary?.trim() ?? ''
+    : '';
+  if (reasoningSummary) {
+    params.onReasoningSummary?.(reasoningSummary);
+  }
   console.debug(`[hvy:${debugLabel}] client extracted output`, output);
   return output;
 }

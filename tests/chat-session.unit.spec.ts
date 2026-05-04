@@ -69,7 +69,7 @@ test('requestChatTurn returns assistant answer on success', async () => {
     question: 'What is HVY?',
   });
 
-  expect(requestChatCompletionMock).toHaveBeenCalledWith({
+  expect(requestChatCompletionMock).toHaveBeenCalledWith(expect.objectContaining({
     settings,
     document,
     messages: [
@@ -79,7 +79,7 @@ test('requestChatTurn returns assistant answer on success', async () => {
         content: 'What is HVY?',
       }),
     ],
-  });
+  }));
   expect(result.error).toBeNull();
   expect(result.messages).toHaveLength(3);
   expect(result.messages[2]).toEqual(
@@ -173,7 +173,7 @@ test('requestDocumentEditChatTurn runs the CLI edit loop for document chat', asy
       settings,
       mode: 'document-edit',
       debugLabel: 'chat-cli-edit:1',
-      context: expect.stringContaining('Valid commands:\nCommands: cd, pwd, ls, cat, head, tail, nl, find, rg, grep, sort, uniq, wc, xargs, rm, echo, sed, true, hvy. Finish: done SUMMARY.'),
+      context: expect.stringContaining('Valid commands:\nCommands: cd, pwd, ls, cat, head, tail, nl, find, rg, grep, sort, uniq, wc, tr, xargs, rm, echo, sed, true, hvy. Finish: done SUMMARY.'),
       formatInstructions: expect.stringContaining('Return exactly one terminal command'),
     })
   );
@@ -216,7 +216,7 @@ test('requestDocumentEditChatTurn trims old cli conversation messages while keep
   ).toBeLessThanOrEqual(500);
   expect(JSON.stringify(requestProxyCompletionMock.mock.calls[4]?.[0]?.messages)).not.toContain('x'.repeat(700));
   expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.context).toContain(
-    'Valid commands:\nCommands: cd, pwd, ls, cat, head, tail, nl, find, rg, grep, sort, uniq, wc, xargs, rm, echo, sed, true, hvy. Finish: done SUMMARY.'
+    'Valid commands:\nCommands: cd, pwd, ls, cat, head, tail, nl, find, rg, grep, sort, uniq, wc, tr, xargs, rm, echo, sed, true, hvy. Finish: done SUMMARY.'
   );
   expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.context).toContain('Task goal:\nCheck the document with several commands.');
   expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.context).toContain('scratchpad.txt:');

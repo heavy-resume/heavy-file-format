@@ -10,7 +10,7 @@ const CHAT_CLI_MAX_CONSECUTIVE_COMMAND_ERRORS = 3;
 const CHAT_CLI_MESSAGE_HISTORY_MAX_CHARS = 500;
 const CHAT_CLI_MESSAGE_HISTORY_MIN_MESSAGES = 5;
 const CHAT_CLI_RECENT_CHAT_CONTEXT_MAX_CHARS = 700;
-const CHAT_CLI_COMMAND_NAMES = new Set(['cd', 'pwd', 'ls', 'cat', 'head', 'tail', 'nl', 'find', 'rg', 'grep', 'sort', 'uniq', 'wc', 'xargs', 'rm', 'echo', 'sed', 'true', 'hvy', 'db-table', 'form']);
+const CHAT_CLI_COMMAND_NAMES = new Set(['cd', 'pwd', 'ls', 'cat', 'head', 'tail', 'nl', 'find', 'rg', 'grep', 'sort', 'uniq', 'wc', 'tr', 'xargs', 'rm', 'echo', 'sed', 'true', 'hvy', 'db-table', 'form']);
 
 export interface ChatCliEditTurnResult {
   summary: string;
@@ -23,6 +23,7 @@ export async function runChatCliEditLoop(params: {
   priorMessages?: ChatMessage[];
   onMutation?: (group?: string) => void;
   onProgress?: (content: string) => void;
+  onReasoningSummary?: (summary: string) => void;
   signal?: AbortSignal;
 }): Promise<ChatCliEditTurnResult> {
   const cli = createChatCliInterface(params.document);
@@ -50,6 +51,7 @@ export async function runChatCliEditLoop(params: {
       mode: 'document-edit',
       debugLabel: `chat-cli-edit:${step + 1}`,
       traceRunId,
+      onReasoningSummary: params.onReasoningSummary,
       signal: params.signal,
     });
     const action = parseChatCliAction(response);

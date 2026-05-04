@@ -49,6 +49,11 @@ interface ProxyChatRequest {
   formatInstructions: string;
 }
 
+interface ProviderCompletion {
+  output: string;
+  reasoningSummary: string;
+}
+
 export function createChatProxyPlugin(env: Record<string, string | undefined>): Plugin {
   const middleware = buildChatProxyMiddleware(env);
 
@@ -136,18 +141,21 @@ export function buildChatProxyMiddleware(env: Record<string, string | undefined>
         contextLength: body.context.length,
         formatInstructionsLength: body.formatInstructions.length,
       });
-      const output = await requestProviderWithRepair(body, env, upstreamAbort.signal, runId);
+      const completion = await requestProviderWithRepair(body, env, upstreamAbort.signal, runId);
       completed = true;
       console.debug('[hvy:chat-proxy] sending response', {
-        outputLength: output.length,
+        outputLength: completion.output.length,
       });
       writeTrace({
         runId,
         phase: body.mode,
         type: 'stop',
-        payload: { reason: 'completed', outputLength: output.length },
+        payload: { reason: 'completed', outputLength: completion.output.length },
       });
-      sendJson(res, 200, { output });
+      sendJson(res, 200, {
+        output: completion.output,
+        ...(completion.reasoningSummary ? { reasoningSummary: completion.reasoningSummary } : {}),
+      });
     } catch (error) {
       if (isAbortError(error) || upstreamAbort.signal.aborted) {
         console.debug('[hvy:chat-proxy] upstream request aborted');
@@ -182,6 +190,7 @@ export function buildOpenAiProxyRequest(body: ProxyChatRequest): Record<string, 
     model: body.model,
     reasoning: {
       effort: OPENAI_REASONING_EFFORT,
+      summary: 'auto',
     },
     instructions: buildSystemInstructions(body.mode, body.formatInstructions),
     input: [
@@ -245,6 +254,28 @@ export function extractOpenAiText(payload: unknown): string {
     .trim();
 }
 
+export function extractOpenAiReasoningSummary(payload: unknown): string {
+  if (!payload || typeof payload !== 'object') {
+    return '';
+  }
+  const record = payload as {
+    output?: Array<{
+      type?: string;
+      summary?: Array<{ type?: string; text?: string }>;
+      content?: Array<{ type?: string; text?: string }>;
+    }>;
+  };
+  return (record.output ?? [])
+    .filter((item) => item.type === 'reasoning')
+    .flatMap((item) => [
+      ...(item.summary ?? []).map((summary) => (typeof summary.text === 'string' ? summary.text : '')),
+      ...(item.content ?? []).map((content) => (typeof content.text === 'string' ? content.text : '')),
+    ])
+    .filter((value) => value.trim().length > 0)
+    .join('\n')
+    .trim();
+}
+
 export function extractAnthropicText(payload: unknown): string {
   if (!payload || typeof payload !== 'object') {
     return '';
@@ -257,19 +288,31 @@ export function extractAnthropicText(payload: unknown): string {
     .trim();
 }
 
+export function extractAnthropicReasoningSummary(payload: unknown): string {
+  if (!payload || typeof payload !== 'object') {
+    return '';
+  }
+  const record = payload as { content?: Array<{ type?: string; text?: string; thinking?: string }> };
+  return (record.content ?? [])
+    .map((item) => (item.type === 'thinking' && typeof item.thinking === 'string' ? item.thinking : ''))
+    .filter((value) => value.trim().length > 0)
+    .join('\n')
+    .trim();
+}
+
 async function requestProviderWithRepair(
   body: ProxyChatRequest,
   env: Record<string, string | undefined>,
   signal: AbortSignal | undefined,
   runId: string
-): Promise<string> {
-  const initialOutput = await requestProviderOnce(body, env, signal, runId);
+): Promise<ProviderCompletion> {
+  const initialCompletion = await requestProviderOnce(body, env, signal, runId);
   if (body.mode === 'document-edit') {
-    return initialOutput;
+    return initialCompletion;
   }
-  const diagnostics = getHvyResponseDiagnostics(initialOutput);
+  const diagnostics = getHvyResponseDiagnostics(initialCompletion.output);
   if (diagnostics.length === 0) {
-    return initialOutput;
+    return initialCompletion;
   }
 
   console.debug('[hvy:chat-proxy] response diagnostics', diagnostics);
@@ -286,7 +329,7 @@ async function requestProviderWithRepair(
       ...body.messages,
       {
         role: 'assistant',
-        content: initialOutput,
+        content: initialCompletion.output,
       },
       {
         role: 'user',
@@ -295,10 +338,10 @@ async function requestProviderWithRepair(
     ],
   };
 
-  const repairedOutput = await requestProviderOnce(repairRequest, env, signal, runId);
-  const repairedDiagnostics = getHvyResponseDiagnostics(repairedOutput);
+  const repairedCompletion = await requestProviderOnce(repairRequest, env, signal, runId);
+  const repairedDiagnostics = getHvyResponseDiagnostics(repairedCompletion.output);
   console.debug('[hvy:chat-proxy] repaired response diagnostics', repairedDiagnostics);
-  return repairedOutput;
+  return repairedCompletion;
 }
 
 async function requestProviderOnce(
@@ -306,7 +349,7 @@ async function requestProviderOnce(
   env: Record<string, string | undefined>,
   signal: AbortSignal | undefined,
   runId: string
-): Promise<string> {
+): Promise<ProviderCompletion> {
   if (body.provider === 'openai') {
     return requestOpenAi(body, env, signal, runId);
   }
@@ -345,7 +388,7 @@ async function requestOpenAi(
   env: Record<string, string | undefined>,
   signal: AbortSignal | undefined,
   runId: string
-): Promise<string> {
+): Promise<ProviderCompletion> {
   const apiKey = resolveProviderApiKey('openai', env);
   const upstreamRequest = buildOpenAiProxyRequest(body);
   console.debug('[hvy:chat-proxy] upstream openai request', upstreamRequest);
@@ -380,17 +423,18 @@ async function requestOpenAi(
     throw new Error(`Provider request failed: ${extractProviderError(payload, 'OpenAI request failed.')}`);
   }
   const output = extractOpenAiText(payload);
+  const reasoningSummary = extractOpenAiReasoningSummary(payload);
   console.debug('[hvy:chat-proxy] upstream openai extracted output', output);
   writeTrace({
     runId,
     phase: body.mode,
     type: 'model_response',
-    payload: { response: output },
+    payload: { response: output, reasoningSummary },
   });
   if (output.length === 0) {
     throw new Error('Provider request failed: OpenAI returned no assistant text.');
   }
-  return output;
+  return { output, reasoningSummary };
 }
 
 async function requestAnthropic(
@@ -398,7 +442,7 @@ async function requestAnthropic(
   env: Record<string, string | undefined>,
   signal: AbortSignal | undefined,
   runId: string
-): Promise<string> {
+): Promise<ProviderCompletion> {
   const apiKey = resolveProviderApiKey('anthropic', env);
   const upstreamRequest = buildAnthropicProxyRequest(body);
   console.debug('[hvy:chat-proxy] upstream anthropic request', upstreamRequest);
@@ -434,17 +478,18 @@ async function requestAnthropic(
     throw new Error(`Provider request failed: ${extractProviderError(payload, 'Anthropic request failed.')}`);
   }
   const output = extractAnthropicText(payload);
+  const reasoningSummary = extractAnthropicReasoningSummary(payload);
   console.debug('[hvy:chat-proxy] upstream anthropic extracted output', output);
   writeTrace({
     runId,
     phase: body.mode,
     type: 'model_response',
-    payload: { response: output },
+    payload: { response: output, reasoningSummary },
   });
   if (output.length === 0) {
     throw new Error('Provider request failed: Anthropic returned no assistant text.');
   }
-  return output;
+  return { output, reasoningSummary };
 }
 
 function resolveProviderApiKey(provider: ProxyChatRequest['provider'], env: Record<string, string | undefined>): string {
@@ -678,6 +723,16 @@ export function formatAiCliLogEvent(event: TraceEvent): string {
   if (event.type === 'provider_response') {
     const usage = summarizeProviderTokenUsage(event.payload.payload).replace(/^usage=/, '').replaceAll(',', ', ');
     return usage ? `\ntoken usage\n${usage}\n` : '';
+  }
+  if (event.type === 'model_response' && typeof event.payload.response === 'string') {
+    const reasoningSummary = typeof event.payload.reasoningSummary === 'string' ? event.payload.reasoningSummary.trimEnd() : '';
+    return [
+      '',
+      'model response',
+      event.payload.response.trimEnd() || '(empty)',
+      ...(reasoningSummary ? ['', 'reasoning summary', reasoningSummary] : []),
+      '',
+    ].join('\n');
   }
   return '';
 }

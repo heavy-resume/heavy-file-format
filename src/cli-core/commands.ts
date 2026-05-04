@@ -127,7 +127,10 @@ async function runCommand(ctx: HvyCliCommandContext, command: string, args: stri
   if (command === 'nl') {
     return { cwd: ctx.cwd, output: commandNl(ctx, args), mutated: false };
   }
-  if (command === 'grep' || command === 'sort' || command === 'uniq' || command === 'wc') {
+  if (command === 'grep') {
+    return { cwd: ctx.cwd, output: commandGrep(ctx, args), mutated: false };
+  }
+  if (command === 'sort' || command === 'uniq' || command === 'wc' || command === 'tr') {
     return runTextCommand(ctx, command, args);
   }
   if (command === 'find') {
@@ -574,16 +577,16 @@ function commandEcho(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cw
 }
 
 function commandSed(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd: string }, args: string[]): string {
-  const warnings = warnUnknownOptions('sed', args.filter((arg) => arg.startsWith('-')), ['-i', '-E', '-r']);
-  const positional = args.filter((arg) => arg !== '-i' && arg !== '-E' && arg !== '-r' && !warnings.includes(`Warning: sed ignored unsupported option ${arg}`));
+  const optionArgs = args.filter((arg) => arg.startsWith('-'));
+  const warnings = optionArgs
+    .filter((arg) => arg !== '-E' && arg !== '-r' && !arg.startsWith('-i'))
+    .map((arg) => `Warning: sed ignored unsupported option ${arg}`);
+  const positional = args.filter((arg) => arg !== '-E' && arg !== '-r' && !arg.startsWith('-i'));
   const expression = positional[0] ?? '';
   const paths = positional.slice(1);
-  const match = expression.match(/^s(.)(.*?)\1(.*?)\1([gIi]*)$/);
-  if (!match || paths.length === 0) {
+  if (paths.length === 0) {
     throw new Error('sed: expected sed s/search/replace/[g] path');
   }
-  const flags = `${match[4]?.toLowerCase().includes('g') ? 'g' : ''}${match[4]?.toLowerCase().includes('i') ? 'i' : ''}`;
-  const regex = new RegExp(match[2] ?? '', flags);
   return withWarnings(paths
     .map((path) => {
       const file = getReadableFile(ctx, path);
@@ -591,12 +594,29 @@ function commandSed(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd
         throw new Error(`sed: file is read-only: ${file.path}`);
       }
       const before = file.read();
-      const after = before.replace(regex, match[3] ?? '');
+      const after = applySedEditExpression(before, expression);
       file.write(after);
       const changed = before === after ? 0 : 1;
       return `${file.path}: ${changed ? 'updated' : 'no matches'}`;
     })
     .join('\n'), warnings);
+}
+
+function applySedEditExpression(input: string, expression: string): string {
+  const replaceMatch = expression.match(/^s(.)(.*?)\1(.*?)\1([gIi]*)$/);
+  if (replaceMatch) {
+    const flags = `${replaceMatch[4]?.toLowerCase().includes('g') ? 'g' : ''}${replaceMatch[4]?.toLowerCase().includes('i') ? 'i' : ''}`;
+    return input.replace(new RegExp(replaceMatch[2] ?? '', flags), replaceMatch[3] ?? '');
+  }
+  const deleteMatch = expression.match(/^\/(.*)\/d$/);
+  if (deleteMatch) {
+    const regex = new RegExp(deleteMatch[1] ?? '');
+    return input
+      .split(/\r?\n/)
+      .filter((line) => !regex.test(line))
+      .join('\n');
+  }
+  throw new Error('sed: expected sed s/search/replace/[g] path or sed /pattern/d path');
 }
 
 function getReadableFile(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd: string }, path: string): HvyVirtualFile {
@@ -726,6 +746,9 @@ function parseRgArgs(args: string[]): {
     if (arg === '--line-number') {
       continue;
     }
+    if (arg === '--hidden' || arg === '--no-messages') {
+      continue;
+    }
     if (arg === '--files-with-matches' || arg === '--list-files') {
       filesWithMatches = true;
       continue;
@@ -785,6 +808,84 @@ function parseRgArgs(args: string[]): {
 
 function normalizeRgPattern(pattern: string): string {
   return pattern.replaceAll('\\|', '|');
+}
+
+function commandGrep(ctx: HvyCliCommandContext, args: string[]): string {
+  const parsed = parseGrepArgs(args);
+  if (!parsed.pattern) {
+    throw new Error('grep: missing search pattern');
+  }
+  const regex = new RegExp(normalizeRgPattern(parsed.pattern), parsed.ignoreCase ? 'i' : '');
+  const lines: string[] = [];
+  const matchingFiles = new Set<string>();
+  const roots = parsed.paths.length > 0 ? parsed.paths : ['.'];
+  for (const rawRoot of roots) {
+    const root = resolveVirtualPath(ctx.fs, ctx.cwd, rawRoot);
+    const entry = ctx.fs.entries.get(root);
+    if (!entry) {
+      throw new Error(`grep: no such file or directory: ${root}`);
+    }
+    const candidates: HvyVirtualFile[] = entry.kind === 'file'
+      ? [entry]
+      : [...ctx.fs.entries.values()]
+        .filter((candidate): candidate is HvyVirtualFile =>
+          candidate.kind === 'file' && (candidate.path === root || candidate.path.startsWith(root === '/' ? '/' : `${root}/`)));
+    for (const candidate of candidates.sort((left, right) => left.path.localeCompare(right.path))) {
+      candidate.read().split('\n').forEach((line, index) => {
+        const matched = regex.test(line);
+        if (matched !== parsed.invert) {
+          matchingFiles.add(candidate.path);
+          if (!parsed.filesWithMatches) {
+            lines.push(`${candidate.path}:${index + 1}:${line}`);
+          }
+        }
+      });
+    }
+  }
+  return withWarnings((parsed.filesWithMatches ? [...matchingFiles] : lines).join('\n'), parsed.warnings);
+}
+
+function parseGrepArgs(args: string[]): {
+  pattern: string;
+  paths: string[];
+  ignoreCase: boolean;
+  invert: boolean;
+  filesWithMatches: boolean;
+  warnings: string[];
+} {
+  const positional: string[] = [];
+  const warnings: string[] = [];
+  let ignoreCase = false;
+  let invert = false;
+  let filesWithMatches = false;
+  for (const arg of args) {
+    if (/^-[A-Za-z]+$/.test(arg)) {
+      for (const flag of arg.slice(1)) {
+        if (flag === 'i') ignoreCase = true;
+        else if (flag === 'v') invert = true;
+        else if (flag === 'l') filesWithMatches = true;
+        else if (flag === 'R' || flag === 'r' || flag === 'I') {
+          // Virtual grep searches readable text recursively when given a directory.
+        } else {
+          warnings.push(`Warning: grep ignored unsupported option -${flag}`);
+        }
+      }
+      continue;
+    }
+    if (arg.startsWith('-')) {
+      warnings.push(`Warning: grep ignored unsupported option ${arg}`);
+      continue;
+    }
+    positional.push(arg);
+  }
+  return {
+    pattern: positional[0] ?? '',
+    paths: positional.slice(1),
+    ignoreCase,
+    invert,
+    filesWithMatches,
+    warnings,
+  };
 }
 
 function parseMiniShell(args: string[]): HvyMiniShellPipeline[] {
@@ -900,7 +1001,7 @@ async function runPipedCommand(ctx: HvyCliCommandContext, command: string, args:
     }
     throw new Error('sed: expected sed -n START,ENDp or sed s/search/replace/[g]');
   }
-  if (command === 'sort' || command === 'uniq' || command === 'wc') {
+  if (command === 'sort' || command === 'uniq' || command === 'wc' || command === 'tr') {
     return { ...applyTextCommand(stdin, command, args), cwd: ctx.cwd };
   }
   if (command === 'xargs') {
@@ -937,7 +1038,29 @@ function applyTextCommand(output: string, command: string, args: string[]): HvyC
     }
     return { cwd: '/', output: String(output.length === 0 ? 0 : output.split('\n').length), mutated: false };
   }
+  if (command === 'tr') {
+    const from = decodeTrCharacters(args[0] ?? '');
+    const to = decodeTrCharacters(args[1] ?? '');
+    if (!from) {
+      throw new Error('tr: expected SET1 SET2');
+    }
+    return { cwd: '/', output: inputTranslate(output, from, to), mutated: false };
+  }
   throw new Error(`Unknown command "${command}". Try "help".`);
+}
+
+function inputTranslate(input: string, from: string, to: string): string {
+  return [...input].map((char) => {
+    const index = from.indexOf(char);
+    return index < 0 ? char : to[Math.min(index, Math.max(0, to.length - 1))] ?? '';
+  }).join('');
+}
+
+function decodeTrCharacters(value: string): string {
+  return value
+    .replaceAll('\\n', '\n')
+    .replaceAll('\\t', '\t')
+    .replaceAll('\\0', '\0');
 }
 
 function applyGrepFilter(output: string, args: string[]): string {
@@ -966,11 +1089,11 @@ function applyGrepFilter(output: string, args: string[]): string {
 }
 
 async function applyXargsStage(ctx: HvyCliCommandContext, output: string, args: string[]): Promise<HvyCliExecution> {
+  const parsed = parseXargsArgs(args);
   const inputItems = output
-    .split(/\r?\n/)
+    .split(parsed.nullInput ? '\0' : /\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean);
-  const parsed = parseXargsArgs(args);
   if (inputItems.length === 0 && parsed.noRunIfEmpty) {
     return { cwd: ctx.cwd, output: '', mutated: false };
   }
@@ -997,14 +1120,19 @@ async function applyXargsStage(ctx: HvyCliCommandContext, output: string, args: 
   return { cwd: ctx.cwd, output: commandOutputs.join('\n'), mutated };
 }
 
-function parseXargsArgs(args: string[]): { noRunIfEmpty: boolean; replacement: string | null; command: string[] } {
+function parseXargsArgs(args: string[]): { noRunIfEmpty: boolean; nullInput: boolean; replacement: string | null; command: string[] } {
   let noRunIfEmpty = false;
+  let nullInput = false;
   let replacement: string | null = null;
   const command: string[] = [];
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index] ?? '';
     if (arg === '-r' || arg === '--no-run-if-empty') {
       noRunIfEmpty = true;
+      continue;
+    }
+    if (arg === '-0' || arg === '--null') {
+      nullInput = true;
       continue;
     }
     if (arg === '-I') {
@@ -1014,7 +1142,7 @@ function parseXargsArgs(args: string[]): { noRunIfEmpty: boolean; replacement: s
     }
     command.push(arg);
   }
-  return { noRunIfEmpty, replacement, command };
+  return { noRunIfEmpty, nullInput, replacement, command };
 }
 
 function applySedPrintFilter(output: string, args: string[]): string | null {
@@ -1182,7 +1310,7 @@ function helpFor(topic = ''): string {
   }
 
   const help: Record<string, string> = {
-    '': 'Commands: cd, pwd, ls, cat, head, tail, nl, find, rg, grep, sort, uniq, wc, xargs, rm, echo, sed, true, hvy. Finish: done SUMMARY. Use man <command> for details.',
+    '': 'Commands: cd, pwd, ls, cat, head, tail, nl, find, rg, grep, sort, uniq, wc, tr, xargs, rm, echo, sed, true, hvy. Finish: done SUMMARY. Use man <command> for details.',
     cd: formatCommandHelp('cd PATH', 'Change the current virtual directory.'),
     pwd: formatCommandHelp('pwd', 'Print the current virtual directory.'),
     ls: formatCommandHelp('ls [PATH]', 'List files and directories.'),
@@ -1192,11 +1320,12 @@ function helpFor(topic = ''): string {
     nl: formatCommandHelp('nl FILE', 'Print file contents with line numbers.'),
     find: formatCommandHelp('find [PATH] [-name GLOB] [-type f|d] [-maxdepth N] [-print] [-exec COMMAND {} +]', 'List up to 100 virtual paths below PATH, or run a supported command against matches with -exec.'),
     rg: formatCommandHelp('rg [-i] [-n] [-l] [--include GLOB] PATTERN [PATH]', 'Search readable virtual files. Line numbers are shown by default; -l prints matching file paths.'),
-    grep: formatCommandHelp('grep [-i] [-v] PATTERN [FILE...]', 'Filter text by pattern, or search the provided files.'),
+    grep: formatCommandHelp('grep [-R] [-I] [-i] [-v] [-l] PATTERN [FILE|DIR...]', 'Filter text by pattern, or search the provided files/directories.'),
     sort: formatCommandHelp('sort [FILE...]', 'Sort lines.'),
     uniq: formatCommandHelp('uniq [FILE...]', 'Remove adjacent duplicate lines.'),
     wc: formatCommandHelp('wc -l [FILE...]', 'Count lines.'),
-    xargs: formatCommandHelp('COMMAND | xargs [-r] [-I TOKEN] COMMAND ARG...', 'Run a supported CLI command with piped non-empty lines appended, or once per line with -I replacement.'),
+    tr: formatCommandHelp('tr SET1 SET2', 'Translate characters from stdin, including escaped \\n, \\t, and \\0.'),
+    xargs: formatCommandHelp('COMMAND | xargs [-0] [-r] [-I TOKEN] COMMAND ARG...', 'Run a supported CLI command with piped items appended, or once per item with -I replacement.'),
     rm: formatCommandHelp('rm -r PATH...', 'Remove section or component directories from the virtual document body. Alias: hvy remove PATH.'),
     echo: formatCommandHelp('echo TEXT [> FILE|>> FILE]', 'Print text, replace a writable file, or append to a writable file.'),
     sed: formatCommandHelp('sed [-i] [-E] s/search/replace/[gI] FILE...', 'Update writable virtual files with a search/replace.'),

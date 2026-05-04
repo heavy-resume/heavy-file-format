@@ -231,6 +231,23 @@
   font-size: 0.9rem;
 }
 
+.chat-reasoning {
+  margin-top: 0.6rem;
+  border-top: 1px solid var(--hvy-border);
+  padding-top: 0.5rem;
+  color: var(--hvy-text-alt);
+  font-size: 0.86rem;
+}
+
+.chat-reasoning summary {
+  cursor: pointer;
+  font-weight: 650;
+}
+
+.chat-reasoning div {
+  margin-top: 0.4rem;
+}
+
 .chat-bubble-error,
 .chat-error {
   border-color: color-mix(in srgb, var(--hvy-danger) 65%, var(--hvy-border));

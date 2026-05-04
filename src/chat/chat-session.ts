@@ -30,6 +30,7 @@ export async function requestChatTurn(params: {
   signal?: AbortSignal;
 }): Promise<ChatTurnResult> {
   const nextMessages = appendUserChatMessage(params.messages, params.question);
+  let reasoningSummary = '';
 
   try {
     const answer = hasDocumentDbTables(params.document)
@@ -44,6 +45,9 @@ export async function requestChatTurn(params: {
           settings: params.settings,
           document: params.document,
           messages: nextMessages,
+          onReasoningSummary: (summary) => {
+            reasoningSummary = summary;
+          },
           signal: params.signal,
         });
     return {
@@ -53,6 +57,7 @@ export async function requestChatTurn(params: {
           id: crypto.randomUUID(),
           role: 'assistant',
           content: answer,
+          ...(reasoningSummary ? { reasoning: reasoningSummary } : {}),
         },
       ],
       error: null,
@@ -144,6 +149,14 @@ export async function requestDocumentEditChatTurn(params: {
           id: crypto.randomUUID(),
           role: 'assistant',
           content,
+          progress: true,
+        }),
+      onReasoningSummary: (summary) =>
+        emitProgress({
+          id: crypto.randomUUID(),
+          role: 'assistant',
+          content: 'Reasoning summary',
+          reasoning: summary,
           progress: true,
         }),
       signal: params.signal,

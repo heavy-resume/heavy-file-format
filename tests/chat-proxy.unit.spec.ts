@@ -4,7 +4,9 @@ import {
   buildAnthropicProxyRequest,
   buildOpenAiProxyRequest,
   buildRepairPrompt,
+  extractAnthropicReasoningSummary,
   extractAnthropicText,
+  extractOpenAiReasoningSummary,
   extractOpenAiText,
   formatAiCliLogEvent,
   formatTraceEvent,
@@ -29,6 +31,7 @@ test('buildOpenAiProxyRequest includes developer context and conversation turns'
     model: 'gpt-5-mini',
     reasoning: {
       effort: 'low',
+      summary: 'auto',
     },
     instructions: expect.stringMatching(/Response formatting instructions:\nFormat as HVY\./),
     input: [
@@ -160,6 +163,29 @@ test('proxy response extractors collect text from provider payloads', () => {
       ],
     })
   ).toBe('Anthropic answer');
+});
+
+test('proxy response extractors collect provider reasoning summaries when present', () => {
+  expect(
+    extractOpenAiReasoningSummary({
+      output: [
+        {
+          type: 'reasoning',
+          summary: [
+            { type: 'summary_text', text: 'Checked matching files, then chose a targeted sed edit.' },
+          ],
+        },
+      ],
+    })
+  ).toBe('Checked matching files, then chose a targeted sed edit.');
+
+  expect(
+    extractAnthropicReasoningSummary({
+      content: [
+        { type: 'thinking', thinking: 'I should inspect the matching files before editing.' },
+      ],
+    })
+  ).toBe('I should inspect the matching files before editing.');
 });
 
 test('buildRepairPrompt turns diagnostics into concise repair guidance', () => {
@@ -344,6 +370,16 @@ test('formatAiCliLogEvent writes clean chat cli trace entries only for chat cli 
       },
     },
   })).toBe('\ntoken usage\ninput_tokens=100, output_tokens=25, total_tokens=125\n');
+
+  expect(formatAiCliLogEvent({
+    runId: 'chat-cli-run-1',
+    phase: 'document-edit',
+    type: 'model_response',
+    payload: {
+      response: 'done Removed TypeScript references.',
+      reasoningSummary: 'Verified no matching xref files remained.',
+    },
+  })).toBe('\nmodel response\ndone Removed TypeScript references.\n\nreasoning summary\nVerified no matching xref files remained.\n');
 
   expect(formatAiCliLogEvent({
     runId: 'run-1',

@@ -143,6 +143,17 @@ test('cli rm recursively removes virtual body directories', async () => {
   expect(forcedReverse.mutated).toBe(true);
 });
 
+test('cli suggests nearby paths when a path is missing', async () => {
+  const document = createResumeCliTestDocument();
+  const session = createHvyCliSession();
+
+  await expect(executeHvyCliCommand(document, session, 'hvy remove /body/tools-technologies/component-list-1/component-list/tool-typescriptx'))
+    .rejects.toThrow(/Did you mean\?\n\s+Closest existing parent: \/body\/tools-technologies\/component-list-1\/component-list\n\s+\/body\/tools-technologies\/component-list-1\/component-list\/tool-typescript/);
+
+  await expect(executeHvyCliCommand(document, session, 'cat /body/tools-technologies/tool-typescript/skill-recrod.txt'))
+    .rejects.toThrow(/Did you mean\?\n(?:.*\n)*\s+\/body\/tools-technologies\/tool-typescript\/skill-record\.txt/);
+});
+
 test('cli find supports common filters and warns about ignored options', async () => {
   const document = createResumeCliTestDocument();
   const session = createHvyCliSession();

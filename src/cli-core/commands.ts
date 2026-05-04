@@ -138,7 +138,7 @@ async function runCommand(ctx: HvyCliCommandContext, command: string, args: stri
     const next = resolveVirtualPath(ctx.fs, ctx.cwd, args[0] ?? '/');
     const entry = ctx.fs.entries.get(next);
     if (!entry || entry.kind !== 'dir') {
-      throw new Error(`cd: no such directory: ${args[0] ?? '/'}`);
+      throw new Error(formatMissingPathMessage(ctx.fs, ctx.cwd, args[0] ?? '/', `cd: no such directory: ${args[0] ?? '/'}`, 'dir'));
     }
     return { cwd: next, output: next, mutated: false };
   }
@@ -285,7 +285,7 @@ function commandLs(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd:
   const target = resolveVirtualPath(ctx.fs, ctx.cwd, args.find((arg) => !arg.startsWith('-')) ?? '.');
   const entry = ctx.fs.entries.get(target);
   if (!entry) {
-    throw new Error(`ls: no such file or directory: ${target}`);
+    throw new Error(formatMissingPathMessage(ctx.fs, ctx.cwd, target, `ls: no such file or directory: ${target}`));
   }
   if (entry.kind === 'file') {
     return withWarnings(formatEntry(entry), warnings);
@@ -457,7 +457,7 @@ function commandRm(ctx: { document: VisualDocument; fs: ReturnType<typeof buildH
         if (force) {
           return '';
         }
-        throw new Error(`rm: no such file or directory: ${target}`);
+        throw new Error(formatMissingPathMessage(ctx.fs, ctx.cwd, target, `rm: no such file or directory: ${target}`, 'dir'));
       }
       if (entry.kind === 'file') {
         throw new Error(`rm: cannot remove virtual file directly: ${resolved}`);
@@ -716,12 +716,101 @@ function getReadableFile(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>
   const normalized = resolveVirtualPath(ctx.fs, ctx.cwd, path);
   const entry = ctx.fs.entries.get(normalized);
   if (!entry) {
-    throw new Error(`No such file: ${normalized}`);
+    throw new Error(formatMissingPathMessage(ctx.fs, ctx.cwd, path, `No such file: ${normalized}`, 'file'));
   }
   if (entry.kind !== 'file') {
     throw new Error(`Is a directory: ${normalized}`);
   }
   return entry;
+}
+
+function formatMissingPathMessage(
+  fs: ReturnType<typeof buildHvyVirtualFileSystem>,
+  cwd: string,
+  rawPath: string,
+  message: string,
+  kind?: HvyVirtualEntry['kind']
+): string {
+  const suggestions = suggestVirtualPaths(fs, cwd, rawPath, kind);
+  if (suggestions.length === 0) {
+    return message;
+  }
+  return [
+    message,
+    'Did you mean?',
+    ...suggestions.map((suggestion) => `  ${suggestion}`),
+  ].join('\n');
+}
+
+function suggestVirtualPaths(
+  fs: ReturnType<typeof buildHvyVirtualFileSystem>,
+  cwd: string,
+  rawPath: string,
+  kind?: HvyVirtualEntry['kind']
+): string[] {
+  const normalized = resolveVirtualPath(fs, cwd, rawPath);
+  const closestParent = closestExistingParent(fs, normalized);
+  const basename = normalized.split('/').filter(Boolean).at(-1) ?? '';
+  const candidates = [...fs.entries.values()]
+    .filter((entry) => !kind || entry.kind === kind)
+    .filter((entry) => entry.path !== '/' && entry.path !== '/body' && entry.path !== '/attachments')
+    .map((entry) => ({ entry, score: scorePathSuggestion(normalized, basename, entry.path) }))
+    .sort((left, right) => left.score - right.score || left.entry.path.localeCompare(right.entry.path))
+    .slice(0, 3)
+    .map((candidate) => candidate.entry.path);
+  const suggestions = [
+    ...(closestParent && closestParent !== normalized ? [`Closest existing parent: ${closestParent}`] : []),
+    ...candidates,
+  ];
+  return [...new Set(suggestions)].slice(0, 4);
+}
+
+function closestExistingParent(fs: ReturnType<typeof buildHvyVirtualFileSystem>, path: string): string {
+  const parts = path.split('/').filter(Boolean);
+  while (parts.length > 0) {
+    const candidate = `/${parts.join('/')}`;
+    if (fs.entries.has(candidate)) {
+      return candidate;
+    }
+    parts.pop();
+  }
+  return '/';
+}
+
+function scorePathSuggestion(targetPath: string, targetBasename: string, candidatePath: string): number {
+  const candidateBasename = candidatePath.split('/').filter(Boolean).at(-1) ?? '';
+  const sharedPrefix = commonPrefixLength(targetPath.split('/'), candidatePath.split('/'));
+  const basenamePenalty = levenshteinDistance(targetBasename, candidateBasename);
+  const pathPenalty = levenshteinDistance(targetPath, candidatePath);
+  const containsBonus = targetBasename && candidatePath.includes(targetBasename) ? 20 : 0;
+  return pathPenalty + basenamePenalty * 3 - sharedPrefix * 8 - containsBonus;
+}
+
+function commonPrefixLength(left: string[], right: string[]): number {
+  let index = 0;
+  while (left[index] && left[index] === right[index]) {
+    index += 1;
+  }
+  return index;
+}
+
+function levenshteinDistance(left: string, right: string): number {
+  const previous = Array.from({ length: right.length + 1 }, (_value, index) => index);
+  for (let leftIndex = 1; leftIndex <= left.length; leftIndex += 1) {
+    let diagonal = previous[0] ?? 0;
+    previous[0] = leftIndex;
+    for (let rightIndex = 1; rightIndex <= right.length; rightIndex += 1) {
+      const above = previous[rightIndex] ?? 0;
+      const replace = diagonal + (left[leftIndex - 1] === right[rightIndex - 1] ? 0 : 1);
+      previous[rightIndex] = Math.min(
+        above + 1,
+        (previous[rightIndex - 1] ?? 0) + 1,
+        replace
+      );
+      diagonal = above;
+    }
+  }
+  return previous[right.length] ?? 0;
 }
 
 function parseLineCount(args: string[], fallback: number): { count: number; paths: string[] } {
@@ -956,7 +1045,7 @@ function commandGrep(ctx: HvyCliCommandContext, args: string[]): string {
     const root = resolveVirtualPath(ctx.fs, ctx.cwd, rawRoot);
     const entry = ctx.fs.entries.get(root);
     if (!entry) {
-      throw new Error(`grep: no such file or directory: ${root}`);
+      throw new Error(formatMissingPathMessage(ctx.fs, ctx.cwd, rawRoot, `grep: no such file or directory: ${root}`));
     }
     const candidates: HvyVirtualFile[] = entry.kind === 'file'
       ? [entry]

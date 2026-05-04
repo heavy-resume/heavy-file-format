@@ -568,14 +568,15 @@ test('requestDocumentEditChatTurn stops after repeated cli command errors', asyn
     request: 'Keep making bad commands.',
   });
 
-  expect(result.error).toBe('Stopped after 3 failed CLI commands. Last error: No such file: /missing.txt');
+  expect(result.error).toContain('Stopped after 3 failed CLI commands. Last error: No such file: /missing.txt');
+  expect(result.error).toContain('Did you mean?');
   expect(requestProxyCompletionMock).toHaveBeenCalledTimes(3);
   expect(writeChatCliCommandTraceMock.mock.calls.map((call) => call[2])).toEqual([
     expect.stringContaining('dir  body'),
     expect.stringContaining('Components:'),
     'Unknown command "not-a-command". Try "help".',
     'hvy: expected request_structure, add, plugin, section add, text add, table add, form add, or db-table show',
-    'No such file: /missing.txt',
+    expect.stringContaining('No such file: /missing.txt'),
   ]);
 });
 

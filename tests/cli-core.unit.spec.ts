@@ -105,17 +105,17 @@ test('cli commands can create a chore chart with tables and form plugins', async
   const session = createHvyCliSession();
   const run = (command: string) => executeHvyCliCommand(document, session, command);
 
-  expect((await run('hvy section add /body chore-chart "Chore Chart"')).output).toBe('/body/chore-chart');
-  await run('hvy text add /chore-chart overview "Track active chores, assignments, completion forms, and weekly leaders."');
+  expect((await run('hvy add section /body chore-chart "Chore Chart"')).output).toBe('/body/chore-chart');
+  await run('hvy add text /chore-chart overview "Track active chores, assignments, completion forms, and weekly leaders."');
   await run(
-    'hvy table add /chore-chart active-chores "Chore,Dad,Mom,Child" --row "Dishes,,,Child" --row "Trash,Dad,," --row "Laundry,,Mom,"'
+    'hvy add table /chore-chart active-chores "Chore,Dad,Mom,Child" --row "Dishes,,,Child" --row "Trash,Dad,," --row "Laundry,,Mom,"'
   );
-  await run('form add /chore-chart add-chore-form "Add chore" "description:Description:textarea:required"');
-  await run('form add /chore-chart assign-chore-form "Assign chore" "chore:Chore:text:required" "assignee:Assignee:select:required:Dad|Mom|Child"');
+  await run('hvy add plugin form /chore-chart add-chore-form "Add chore" "description:Description:textarea:required"');
+  await run('hvy add plugin form /chore-chart assign-chore-form "Assign chore" "chore:Chore:text:required" "assignee:Assignee:select:required:Dad|Mom|Child"');
   await run(
-    'form add /chore-chart complete-chore-form "Complete chore" "chore:Chore:text:required" "completed_by:Completed by:select:required:Dad|Mom|Child"'
+    'hvy add plugin form /chore-chart complete-chore-form "Complete chore" "chore:Chore:text:required" "completed_by:Completed by:select:required:Dad|Mom|Child"'
   );
-  await run('db-table show /chore-chart weekly-leaders weekly_chore_leaders "SELECT person, completed_count FROM weekly_chore_leaders ORDER BY completed_count DESC"');
+  await run('hvy add plugin db-table /chore-chart weekly-leaders weekly_chore_leaders "SELECT person, completed_count FROM weekly_chore_leaders ORDER BY completed_count DESC"');
 
   expect((await run('find /chore-chart -name body.txt')).output).toContain('/body/chore-chart/add-chore-form/body.txt');
   expect((await run('cat /chore-chart/active-chores/table.json')).output).toContain('"tableColumns": "Chore,Dad,Mom,Child"');
@@ -128,28 +128,28 @@ test('cli commands can create a chore chart with tables and form plugins', async
   expect(serialized).toContain('"tableRows":[{"cells":["Dishes","","","Child"]}');
 });
 
-test('db-table help leads with show and keeps add as an alias', async () => {
+test('hvy plugin db-table help leads with show and keeps add as an alias', async () => {
   const document = createCliTestDocument();
   const session = createHvyCliSession();
 
-  const help = (await executeHvyCliCommand(document, session, 'man db-table')).output;
+  const help = (await executeHvyCliCommand(document, session, 'man hvy plugin db-table')).output;
 
-  expect(help).toContain('db-table show SECTION_PATH ID TABLE [QUERY]');
-  expect(help).toContain('Alias: db-table add');
-  expect(help).toContain('db-table query [SELECT/WITH SQL]');
-  expect(help).toContain('db-table exec [CREATE / INSERT / UPDATE / DELETE / DROP SQL]');
+  expect(help).toContain('hvy add plugin db-table SECTION_PATH ID TABLE [QUERY]');
+  expect(help).toContain('Legacy alias: db-table show/add');
+  expect(help).toContain('hvy plugin db-table query [SELECT/WITH SQL]');
+  expect(help).toContain('hvy plugin db-table exec [CREATE / INSERT / UPDATE / DELETE / DROP SQL]');
 });
 
-test('form help explains script and submit options', async () => {
+test('hvy plugin form help explains script and submit options', async () => {
   const document = createCliTestDocument();
   const session = createHvyCliSession();
 
-  const help = (await executeHvyCliCommand(document, session, 'man form')).output;
+  const help = (await executeHvyCliCommand(document, session, 'man hvy plugin form')).output;
 
-  expect(help).toContain('form add SECTION_PATH ID SUBMIT_BUTTON_LABEL FIELD... [--script NAME PYTHON] [--on-submit-script NAME]');
+  expect(help).toContain('hvy add plugin form SECTION_PATH ID SUBMIT_BUTTON_LABEL FIELD... [--script NAME PYTHON] [--on-submit-script NAME]');
   expect(help).toContain('--script NAME PYTHON\n  Store a named Python script');
   expect(help).toContain('--on-submit-script NAME\n  Run that named script when the submit button is pressed');
-  expect(help).toContain('Example: form add /chores add-chore');
+  expect(help).toContain('Example: hvy add plugin form /chores add-chore');
 });
 
 test('db-table cli can execute modifying SQL and query rows', async () => {
@@ -159,18 +159,18 @@ test('db-table cli can execute modifying SQL and query rows', async () => {
   const createResult = await executeHvyCliCommand(
     document,
     session,
-    'db-table exec "CREATE TABLE chores (id INTEGER PRIMARY KEY, title TEXT NOT NULL)"'
+    'hvy plugin db-table exec "CREATE TABLE chores (id INTEGER PRIMARY KEY, title TEXT NOT NULL)"'
   );
   expect(createResult.mutated).toBe(true);
   expect(createResult.output).toContain('Executed: CREATE TABLE chores');
 
-  await executeHvyCliCommand(document, session, 'db-table exec "INSERT INTO chores (title) VALUES (\'Dishes\')"');
+  await executeHvyCliCommand(document, session, 'hvy plugin db-table exec "INSERT INTO chores (title) VALUES (\'Dishes\')"');
 
-  const queryResult = await executeHvyCliCommand(document, session, 'db-table query "SELECT title FROM chores"');
+  const queryResult = await executeHvyCliCommand(document, session, 'hvy plugin db-table query "SELECT title FROM chores"');
   expect(queryResult.mutated).toBe(false);
   expect(queryResult.output).toContain('Executed query: SELECT title FROM chores');
   expect(queryResult.output).toContain('Dishes');
 
-  expect((await executeHvyCliCommand(document, session, 'db-table tables')).output).toContain('chores');
-  expect((await executeHvyCliCommand(document, session, 'db-table schema chores')).output).toContain('title');
+  expect((await executeHvyCliCommand(document, session, 'hvy plugin db-table tables')).output).toContain('chores');
+  expect((await executeHvyCliCommand(document, session, 'hvy plugin db-table schema chores')).output).toContain('title');
 });

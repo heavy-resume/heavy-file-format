@@ -223,7 +223,7 @@ theme:
   <!--hvy:expandable:content {}-->
 
    <!--hvy:text {}-->
-    Form plugin shortcut. Adds a dev.heavy.form plugin with field specs like name:Label:type:required:Option A|Option B. The positional SUBMIT_BUTTON_LABEL sets submitLabel; --on-submit-script names the script to run on submit.
+    Form plugin shortcut under hvy add plugin form. Adds a dev.heavy.form plugin with field specs like name:Label:type:required:Option A|Option B. The positional SUBMIT_BUTTON_LABEL sets submitLabel; --on-submit-script names the script to run on submit.
 
  <!--hvy:expandable {}-->
   <!--hvy:expandable:stub {}-->
@@ -234,4 +234,4 @@ theme:
   <!--hvy:expandable:content {}-->
 
    <!--hvy:text {}-->
-    DB table plugin shortcut. Shows a SQLite table or view with optional SQL query text. Prefer db-table show; db-table add remains an alias.
+    DB table plugin shortcut under hvy add plugin db-table. Creates a DB table component that shows a SQLite table or view with optional SQL query text. Use hvy plugin db-table for query, exec, tables, and schema commands.

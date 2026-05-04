@@ -22,6 +22,15 @@ export interface HvyDocumentCommandResult {
 
 export function executeHvyDocumentCommand(ctx: HvyDocumentCommandContext, args: string[]): HvyDocumentCommandResult {
   const [resource, action, ...rest] = args;
+  if (resource === 'add') {
+    return executeHvyAddCommand(ctx, action, rest);
+  }
+  if (resource === 'plugin' && action === 'form' && rest[0] === 'add') {
+    return addFormPluginBlock(ctx, rest.slice(1));
+  }
+  if (resource === 'plugin' && action === 'db-table' && (rest[0] === 'show' || rest[0] === 'add')) {
+    return addDbTablePluginBlock(ctx, rest.slice(1));
+  }
   if (resource === 'section' && action === 'add') {
     return addSection(ctx, rest);
   }
@@ -40,42 +49,89 @@ export function executeHvyDocumentCommand(ctx: HvyDocumentCommandContext, args: 
   if (resource === 'db-table' && (action === 'show' || action === 'add')) {
     return addDbTablePluginBlock(ctx, rest);
   }
-  throw new Error('hvy: expected section add, text add, table add, plugin add, form add, or db-table show');
+  throw new Error('hvy: expected add, plugin, section add, text add, table add, form add, or db-table show');
 }
 
 export function hvyDocumentCommandHelp(topic = ''): string {
   const help: Record<string, string> = {
     '': [
-      'hvy section add PARENT_PATH ID TITLE',
-      'hvy text add SECTION_PATH ID TEXT',
-      'hvy table add SECTION_PATH ID COLUMNS [--row CSV]...',
-      'hvy plugin add SECTION_PATH ID PLUGIN_ID [--config JSON] [--body TEXT]',
-      'form add SECTION_PATH ID SUBMIT_BUTTON_LABEL FIELD... [--script NAME PYTHON] [--on-submit-script NAME]',
-      'db-table show SECTION_PATH ID TABLE [QUERY]',
+      formatCommandHelp('hvy add section PARENT_PATH ID TITLE', 'Create a section.'),
+      formatCommandHelp('hvy add text SECTION_PATH ID TEXT', 'Create a text component.'),
+      formatCommandHelp('hvy add table SECTION_PATH ID COLUMNS [--row CSV]...', 'Create a table component.'),
+      formatCommandHelp('hvy add plugin PLUGIN SECTION_PATH ID ...', 'Create a plugin component. Try `man hvy plugin`.'),
+      formatCommandHelp('Edit existing components', 'Use find to discover virtual files, cat to inspect them, and sed to update writable body/config files.'),
     ].join('\n'),
-    section: formatCommandHelp('hvy section add PARENT_PATH ID TITLE', 'Add a section under /body or under another section.'),
-    text: formatCommandHelp('hvy text add SECTION_PATH ID TEXT', 'Append a text block to a section.'),
-    table: formatCommandHelp('hvy table add SECTION_PATH ID COLUMNS [--row CSV]...', 'Append a table block. Columns and rows use comma-separated text.'),
-    plugin: formatCommandHelp('hvy plugin add SECTION_PATH ID PLUGIN_ID [--config JSON] [--body TEXT]', 'Append a plugin block. Use \\n escapes inside BODY for multiline plugin text.'),
-    form: [
+    section: formatCommandHelp('hvy add section PARENT_PATH ID TITLE', 'Add a section under /body or under another section. Alias: hvy section add.'),
+    text: formatCommandHelp('hvy add text SECTION_PATH ID TEXT', 'Append a text block to a section. Alias: hvy text add.'),
+    table: formatCommandHelp('hvy add table SECTION_PATH ID COLUMNS [--row CSV]...', 'Append a table block. Columns and rows use comma-separated text. Alias: hvy table add.'),
+    plugin: [
+      formatCommandHelp('hvy add plugin PLUGIN SECTION_PATH ID ...', 'Create a plugin component. Supported plugin shortcuts: form, db-table.'),
+      formatCommandHelp('hvy plugin form', 'Show form plugin commands.'),
+      formatCommandHelp('hvy plugin db-table', 'Show DB table plugin commands and SQL helpers.'),
+      formatCommandHelp('hvy add plugin SECTION_PATH ID PLUGIN_ID [--config JSON] [--body TEXT]', 'Create a raw plugin block by plugin id.'),
+    ].join('\n'),
+    form: formatFormPluginHelp('form add'),
+    'plugin form': formatFormPluginHelp('hvy add plugin form'),
+    'db-table': formatDbTablePluginHelp('db-table'),
+    'plugin db-table': formatDbTablePluginHelp('hvy plugin db-table'),
+  };
+  return help[topic] ?? help[''];
+}
+
+function formatFormPluginHelp(prefix: string): string {
+  return [
       formatCommandHelp(
-        'form add SECTION_PATH ID SUBMIT_BUTTON_LABEL FIELD... [--script NAME PYTHON] [--on-submit-script NAME]',
+        `${prefix} SECTION_PATH ID SUBMIT_BUTTON_LABEL FIELD... [--script NAME PYTHON] [--on-submit-script NAME]`,
         'Append a Form plugin. FIELD uses name:Label:type[:required][:option A|option B].'
       ),
       formatCommandHelp('--script NAME PYTHON', 'Store a named Python script in the form YAML.'),
       formatCommandHelp('--on-submit-script NAME', 'Run that named script when the submit button is pressed. Alias: --submit.'),
       formatCommandHelp(
-        'Example: form add /chores add-chore "Add chore" "description:Description:textarea:required" --script submit "title = doc.form.get_value(\'description\')\\ndoc.db.execute(\'INSERT INTO chores (title) VALUES (\\\'\' + title + \'\\\')\')" --on-submit-script submit',
+        `Example: ${prefix} /chores add-chore "Add chore" "description:Description:textarea:required" --script submit "title = doc.form.get_value('description')\\ndoc.db.execute('INSERT INTO chores (title) VALUES (\\'' + title + '\\')')" --on-submit-script submit`,
         'Creates a form whose submit button says "Add chore" and runs the script named submit.'
       ),
-    ].join('\n'),
-    'db-table': formatCommandHelp('db-table show SECTION_PATH ID TABLE [QUERY]', 'Show a SQLite table/view with an optional SQL query. Alias: db-table add.'),
-  };
-  return help[topic] ?? help[''];
+    ].join('\n');
+}
+
+function formatDbTablePluginHelp(prefix: string): string {
+  const showCommand = prefix === 'db-table'
+    ? 'db-table show SECTION_PATH ID TABLE [QUERY]'
+    : 'hvy add plugin db-table SECTION_PATH ID TABLE [QUERY]';
+  const operationPrefix = prefix === 'db-table' ? 'db-table' : 'hvy plugin db-table';
+  return [
+    formatCommandHelp(showCommand, 'Create a DB Table plugin that shows a SQLite table/view with an optional SQL query. Legacy alias: db-table show/add.'),
+    formatCommandHelp(`${operationPrefix} query [SELECT/WITH SQL]`, 'Run read-only SQL and print result rows.'),
+    formatCommandHelp(`${operationPrefix} exec [CREATE / INSERT / UPDATE / DELETE / DROP SQL]`, 'Run modifying SQL and persist the database.'),
+    formatCommandHelp(`${operationPrefix} tables`, 'List SQLite tables and views.'),
+    formatCommandHelp(`${operationPrefix} schema [TABLE_OR_VIEW]`, 'Show schema details.'),
+  ].join('\n');
 }
 
 function formatCommandHelp(command: string, description: string): string {
   return `${command}\n  ${description}`;
+}
+
+function executeHvyAddCommand(ctx: HvyDocumentCommandContext, kind = '', args: string[]): HvyDocumentCommandResult {
+  if (kind === 'section') {
+    return addSection(ctx, args);
+  }
+  if (kind === 'text') {
+    return addTextBlock(ctx, args);
+  }
+  if (kind === 'table') {
+    return addTableBlock(ctx, args);
+  }
+  if (kind === 'plugin') {
+    const [pluginKind = '', ...rest] = args;
+    if (pluginKind === 'form') {
+      return addFormPluginBlock(ctx, rest);
+    }
+    if (pluginKind === 'db-table') {
+      return addDbTablePluginBlock(ctx, rest);
+    }
+    return addPluginBlock(ctx, args);
+  }
+  throw new Error('hvy add: expected section, text, table, or plugin');
 }
 
 function addSection(ctx: HvyDocumentCommandContext, args: string[]): HvyDocumentCommandResult {

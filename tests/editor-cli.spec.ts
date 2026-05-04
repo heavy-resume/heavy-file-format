@@ -6,7 +6,7 @@ test('cli view can navigate and edit virtual body files', async ({ page }) => {
 
   await expect(page.locator('.chat-launcher')).toHaveCount(0);
   await expect(page.getByLabel('Allowed CLI commands')).toContainText('cd, pwd, ls, cat');
-  await expect(page.getByLabel('Allowed CLI commands')).toContainText('form, db-table');
+  await expect(page.getByLabel('Allowed CLI commands')).toContainText('sed, hvy');
   await expect(page.locator('#cliInput')).toBeFocused();
 
   await page.locator('#cliInput').fill('ls /');

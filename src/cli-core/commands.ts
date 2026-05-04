@@ -43,7 +43,7 @@ export async function executeHvyCliCommand(document: VisualDocument, session: Hv
 
 async function runCommand(ctx: { document: VisualDocument; fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd: string }, command: string, args: string[]): Promise<HvyCliExecution> {
   if (args.includes('--help') || command === 'help' || command === 'man') {
-    const topic = command === 'help' || command === 'man' ? args[0] : command;
+    const topic = command === 'help' || command === 'man' ? args.join(' ') : command;
     return { cwd: ctx.cwd, output: helpFor(topic), mutated: false };
   }
 
@@ -80,6 +80,19 @@ async function runCommand(ctx: { document: VisualDocument; fs: ReturnType<typeof
     return { cwd: ctx.cwd, output: commandSed(ctx, args), mutated: true };
   }
   if (command === 'hvy') {
+    if (args[0] === 'plugin' && !args[1]) {
+      return { cwd: ctx.cwd, output: helpFor('hvy plugin'), mutated: false };
+    }
+    if (args[0] === 'plugin' && args[1] === 'form' && !args[2]) {
+      return { cwd: ctx.cwd, output: helpFor('hvy plugin form'), mutated: false };
+    }
+    if (args[0] === 'plugin' && args[1] === 'db-table' && !args[2]) {
+      return { cwd: ctx.cwd, output: helpFor('hvy plugin db-table'), mutated: false };
+    }
+    if (args[0] === 'plugin' && args[1] === 'db-table' && isDbTableSqlAction(args[2] ?? '')) {
+      const result = await commandDbTable(ctx.document, args.slice(2));
+      return { cwd: ctx.cwd, output: result.output, mutated: result.mutated };
+    }
     const result = executeHvyDocumentCommand(ctx, args);
     return { cwd: ctx.cwd, output: result.output, mutated: result.mutated };
   }
@@ -434,7 +447,7 @@ function globToRegExp(glob: string): RegExp {
 
 function helpFor(topic = ''): string {
   const help: Record<string, string> = {
-    '': 'Commands: cd, pwd, ls, cat, head, tail, nl, find, rg, sed, hvy, form, db-table. Use man <command> for details.',
+    '': 'Commands: cd, pwd, ls, cat, head, tail, nl, find, rg, sed, hvy. Use man <command> for details.',
     cd: formatCommandHelp('cd PATH', 'Change the current virtual directory.'),
     pwd: formatCommandHelp('pwd', 'Print the current virtual directory.'),
     ls: formatCommandHelp('ls [PATH]', 'List files and directories.'),
@@ -450,14 +463,11 @@ function helpFor(topic = ''): string {
     text: hvyDocumentCommandHelp('text'),
     table: hvyDocumentCommandHelp('table'),
     plugin: hvyDocumentCommandHelp('plugin'),
-    form: hvyDocumentCommandHelp('form'),
-    'db-table': [
-      hvyDocumentCommandHelp('db-table'),
-      formatCommandHelp('db-table query [SELECT/WITH SQL]', 'Run read-only SQL and print result rows.'),
-      formatCommandHelp('db-table exec [CREATE / INSERT / UPDATE / DELETE / DROP SQL]', 'Run modifying SQL and persist the database.'),
-      formatCommandHelp('db-table tables', 'List SQLite tables and views.'),
-      formatCommandHelp('db-table schema [TABLE_OR_VIEW]', 'Show schema details.'),
-    ].join('\n'),
+    'hvy plugin': hvyDocumentCommandHelp('plugin'),
+    'hvy plugin form': hvyDocumentCommandHelp('plugin form'),
+    'hvy plugin db-table': hvyDocumentCommandHelp('plugin db-table'),
+    form: `${hvyDocumentCommandHelp('plugin form')}\nLegacy alias: form add ...`,
+    'db-table': `${hvyDocumentCommandHelp('plugin db-table')}\nLegacy aliases: db-table show/query/exec/tables/schema ...`,
   };
   return help[topic] ?? help[''];
 }

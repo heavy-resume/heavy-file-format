@@ -1077,7 +1077,7 @@ test('hvy help lists registered plugin add and operation commands as quick-refer
   expect(help).toContain('hvy cheatsheet [NAME]');
   expect(help).toContain('hvy recipe [NAME]');
   expect(help).toContain('Cheatsheets:\n- components\n- db-table\n- forms\n- scripting');
-  expect(help).toContain('Recipes:\n- chore-chart\n- form-backed-table\n- scripting');
+  expect(help).toContain('Recipes:\n- db-and-form\n- form-backed-table\n- scripting');
   expect(help).toContain('hvy add plugin form SECTION_PATH ID SUBMIT_BUTTON_LABEL FIELD...');
   expect(help).toContain('hvy add plugin db-table SECTION_PATH ID TABLE [QUERY]');
   expect(help).toContain('hvy plugin db-table query [SELECT/WITH SQL]');
@@ -1107,14 +1107,15 @@ test('hvy recipes are discovered from hvy files', async () => {
   const session = createHvyCliSession();
 
   const list = (await executeHvyCliCommand(document, session, 'hvy recipe')).output;
-  const recipe = (await executeHvyCliCommand(document, session, 'hvy recipe chore-chart')).output;
+  const recipe = (await executeHvyCliCommand(document, session, 'hvy recipe db-and-form')).output;
   const unknown = (await executeHvyCliCommand(document, session, 'hvy recipe missing')).output;
 
-  expect(list).toContain('- chore-chart');
-  expect(recipe).toContain('#! Chore Chart Recipe');
-  expect(recipe).toContain('hvy add section / chore-chart "Chore Chart"');
+  expect(list).toContain('- db-and-form');
+  expect(recipe).toContain('#! DB And Form Recipe');
+  expect(recipe).toContain('There is no database component to add.');
+  expect(recipe).toContain('doc.db.query');
   expect(recipe).toContain('Expected result:');
-  expect(unknown).toContain('Unknown recipe "missing". Available recipes: chore-chart, form-backed-table, scripting');
+  expect(unknown).toContain('Unknown recipe "missing". Available recipes: db-and-form, form-backed-table, scripting');
 });
 
 test('hvy plugin form help explains script and submit options', async () => {
@@ -1128,6 +1129,41 @@ test('hvy plugin form help explains script and submit options', async () => {
   expect(help).toContain('--on-submit-script NAME\n  Run that named script when the submit button is pressed');
   expect(help).toContain('Example: hvy add plugin form /chores add-chore');
   expect(help).toContain('See also: hvy cheatsheet scripting; hvy recipe scripting; man hvy plugin scripting tool TOOL_NAME');
+});
+
+test('hvy lint warns about unsupported doc.tool calls inside scripts', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"forms"}-->
+#! Forms
+
+<!--hvy:plugin {"id":"bad-form","plugin":"dev.heavy.form","pluginConfig":{"version":"0.1"}}-->
+fields:
+  - name: chore
+    label: Chore
+    type: text
+scripts:
+  submit: |
+    rows = doc.tool('db.query', {'query': 'SELECT * FROM chores'})
+    doc.tool("db.exec", {"sql": "DELETE FROM chores"})
+    doc.tool('refresh', {})
+    doc.tool("made_up_tool", {})
+submitScript: submit
+`, '.hvy');
+  const session = createHvyCliSession();
+
+  const result = await executeHvyCliCommand(document, session, 'hvy lint');
+
+  expect(result.output).toContain('[plugin] /body/forms/bad-form - script uses unknown doc.tool("db.query"). Valid doc.tool names: request_structure, grep, view_component');
+  expect(result.output).toContain('Use doc.db.query(sql, params) instead.');
+  expect(result.output).toContain('script uses unknown doc.tool("db.exec"). Valid doc.tool names: request_structure, grep, view_component');
+  expect(result.output).toContain('Use doc.db.execute(sql, params) instead.');
+  expect(result.output).toContain('script uses unknown doc.tool("refresh"). Valid doc.tool names: request_structure, grep, view_component');
+  expect(result.output).toContain('Remove this call or use doc.rerender() only when explicitly needed.');
+  expect(result.output).toContain('script uses unknown doc.tool("made_up_tool"). Valid doc.tool names: request_structure, grep, view_component');
+  expect(result.output).toContain('Run man hvy plugin scripting tool for details.');
 });
 
 test('registered plugin help topics work without special-case command handlers', async () => {

@@ -100,6 +100,40 @@ export function getHvyCliScriptingToolHelp(toolName: string): string | null {
   return buildDocumentEditToolHelp(lookupTopic);
 }
 
+function lintUnsupportedScriptDocToolCalls(body: string): HvyCliPluginLintIssue[] {
+  const issues: HvyCliPluginLintIssue[] = [];
+  const validToolNames = new Set(getHvyCliScriptingToolNames());
+  const validToolList = getHvyCliScriptingToolNames().join(', ');
+  const seen = new Set<string>();
+  for (const match of body.matchAll(/\bdoc\.tool\(\s*(['"])([^'"]+)\1/g)) {
+    const toolName = match[2] ?? '';
+    if (!toolName || validToolNames.has(toolName) || seen.has(toolName)) {
+      continue;
+    }
+    seen.add(toolName);
+    issues.push({
+      message: [
+        `script uses unknown doc.tool("${toolName}"). Valid doc.tool names: ${validToolList}.`,
+        formatCommonDocToolMistakeHint(toolName),
+      ].filter(Boolean).join(' '),
+    });
+  }
+  return issues;
+}
+
+function formatCommonDocToolMistakeHint(toolName: string): string {
+  if (toolName === 'db.query') {
+    return 'Use doc.db.query(sql, params) instead.';
+  }
+  if (toolName === 'db.exec' || toolName === 'db.execute') {
+    return 'Use doc.db.execute(sql, params) instead.';
+  }
+  if (toolName === 'refresh') {
+    return 'Remove this call or use doc.rerender() only when explicitly needed.';
+  }
+  return 'Run man hvy plugin scripting tool for details.';
+}
+
 function copyRegistration(registration: HvyCliPluginCommandRegistration): HvyCliPluginCommandRegistration {
   return {
     ...registration,
@@ -120,6 +154,7 @@ registerHvyCliPluginCommands({
     'Use plugin.txt for form content and plugin.json for plugin id/config metadata.',
     'Form scripts are top-level Python/Brython snippets under scripts.NAME and run through the sandboxed scripting runtime.',
     'Form scripts receive doc plus doc.form. Use doc.form.get_value/get_values/set_value/set_options/set_error/clear_error for form state.',
+    'Use doc.db.query(sql, params) and doc.db.execute(sql, params) for SQLite from form scripts; do not call doc.tool("db.query") or doc.tool("db.exec").',
     'doc.tool(name, args) can call the synchronous document-edit tool subset; args are a Python dict matching the AI tool schema.',
     'When changing submit behavior, look for named scripts and on-submit script settings before editing fields.',
     'For form submit code examples, run: hvy cheatsheet scripting, hvy recipe scripting, or man hvy plugin scripting tool TOOL_NAME.',
@@ -133,18 +168,19 @@ registerHvyCliPluginCommands({
   operationCommands: [],
   lintChecks: [
     (context) => {
+      const scriptIssues = lintUnsupportedScriptDocToolCalls(context.body);
       if (context.body.trim().length === 0) {
-        return [{ message: 'form plugin body is empty; expected form YAML with fields and submit behavior.' }];
+        return [{ message: 'form plugin body is empty; expected form YAML with fields and submit behavior.' }, ...scriptIssues];
       }
       const parsed = parseFormSpec(context.body);
       if (parsed.error) {
-        return [];
+        return scriptIssues;
       }
       const script = parsed.spec.submitScript.trim();
       if (!parsed.spec.showSubmit || script.length > 0) {
-        return [];
+        return scriptIssues;
       }
-      return [{ message: 'form has a submit button but no submitScript.' }];
+      return [{ message: 'form has a submit button but no submitScript.' }, ...scriptIssues];
     },
   ],
   helpCommands: [
@@ -198,9 +234,12 @@ registerHvyCliPluginCommands({
   ],
   operationCommands: [],
   lintChecks: [
-    (context) => context.body.trim().length === 0
-      ? [{ message: 'scripting plugin body is empty; expected Brython/Python source.' }]
-      : [],
+    (context) => [
+      ...(context.body.trim().length === 0
+        ? [{ message: 'scripting plugin body is empty; expected Brython/Python source.' }]
+        : []),
+      ...lintUnsupportedScriptDocToolCalls(context.body),
+    ],
   ],
   helpCommands: [
     {

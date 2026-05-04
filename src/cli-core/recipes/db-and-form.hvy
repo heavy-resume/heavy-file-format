@@ -1,0 +1,27 @@
+<!--hvy: {"id":"db-and-form-recipe","description":"Generic recipe for using forms with SQLite tables and db-table displays."}-->
+#! DB And Form Recipe
+
+Use this recipe when a form should write to a SQLite table, a db-table should display rows, and another form should choose from existing rows.
+
+There is no database component to add. Use `hvy plugin db-table exec` to create SQLite tables/views, `doc.db.execute` inside form scripts to change data, and `doc.db.query` inside form scripts to populate options.
+
+```shell
+hvy add section / tracker "Tracker"
+hvy plugin db-table exec "CREATE TABLE items (id INTEGER PRIMARY KEY, title TEXT NOT NULL, notes TEXT, assigned_to TEXT, completed_at TEXT)"
+hvy add plugin db-table /tracker active-items items "SELECT id, title, notes, assigned_to FROM items WHERE completed_at IS NULL ORDER BY id"
+hvy add plugin form /tracker add-item "Add item" "title:Title:text:required" "notes:Notes:textarea" --script submit "title = doc.form.get_value('title')\nnotes = doc.form.get_value('notes')\ndoc.db.execute('INSERT INTO items (title, notes) VALUES (?, ?)', [title, notes])" --on-submit-script submit
+hvy add plugin form /tracker assign-item "Assign item" "item_id:Item:select:required" "assigned_to:Assigned to:select:required:Dad|Mom|Child" --script load "rows = doc.db.query('SELECT id, title FROM items WHERE completed_at IS NULL ORDER BY id')\ndoc.form.set_options('item_id', [{'label': str(row['id']) + ': ' + row['title'], 'value': str(row['id'])} for row in rows])" --script submit "item_id = doc.form.get_value('item_id')\nassigned_to = doc.form.get_value('assigned_to')\ndoc.db.execute('UPDATE items SET assigned_to = ? WHERE id = ?', [assigned_to, item_id])" --on-submit-script submit
+hvy add plugin form /tracker complete-item "Complete item" "item_id:Item:select:required" --script load "rows = doc.db.query('SELECT id, title FROM items WHERE completed_at IS NULL ORDER BY id')\ndoc.form.set_options('item_id', [{'label': str(row['id']) + ': ' + row['title'], 'value': str(row['id'])} for row in rows])" --script submit "item_id = doc.form.get_value('item_id')\ndoc.db.execute('UPDATE items SET completed_at = datetime(''now'') WHERE id = ?', [item_id])" --on-submit-script submit
+hvy plugin db-table exec "CREATE VIEW weekly_item_leaders AS SELECT assigned_to, COUNT(*) AS completed_count FROM items WHERE completed_at IS NOT NULL AND completed_at >= datetime('now', '-7 days') GROUP BY assigned_to ORDER BY completed_count DESC"
+hvy add plugin db-table /tracker weekly-leaders weekly_item_leaders "SELECT assigned_to, completed_count FROM weekly_item_leaders"
+hvy lint
+```
+
+Expected result:
+
+- `/body/tracker` section exists.
+- `items` stores the data.
+- `active-items` displays uncompleted rows.
+- `add-item` inserts rows.
+- `assign-item` and `complete-item` populate select options from `doc.db.query`.
+- `weekly-leaders` displays an aggregate SQLite view.

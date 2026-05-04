@@ -17,16 +17,17 @@ title: Chat CLI Test
 `, '.hvy');
 }
 
-test('chat cli gives minimal filesystem-oriented instructions', () => {
+test('chat cli gives minimal persistent filesystem-oriented instructions', () => {
   const cli = createChatCliInterface(createChatCliTestDocument());
 
-  expect(cli.instructions).toContain('virtual filesystem');
-  expect(cli.instructions).toContain('will become one .hvy file');
-  expect(cli.instructions).toContain('/scratchpad.txt contains your ephemeral task notes');
-  expect(cli.instructions).toContain('Use shell commands and `help` or `man`');
-  expect(cli.instructions).not.toContain('HVY quick reference');
-  expect(cli.instructions).not.toContain('ai_cli_log.txt');
-  expect(cli.instructions).not.toContain('hvy plugin db-table query [SELECT/WITH SQL]');
+  expect(cli.persistentInstructions).toContain('virtual filesystem');
+  expect(cli.persistentInstructions).toContain('will become one .hvy file');
+  expect(cli.persistentInstructions).toContain('/scratchpad.txt contains your ephemeral task notes');
+  expect(cli.persistentInstructions).toContain('Use shell commands and `help` or `man`');
+  expect(cli.persistentInstructions).not.toContain('HVY quick reference');
+  expect(cli.persistentInstructions).not.toContain('ai_cli_log.txt');
+  expect(cli.persistentInstructions).not.toContain('hvy plugin db-table query [SELECT/WITH SQL]');
+  expect(cli.snapshot().persistentInstructions).toBe(cli.persistentInstructions);
   expect(cli.snapshot().scratchpad).toContain('No notes yet');
   expect(cli.snapshot().cwd).toBe('/');
 });

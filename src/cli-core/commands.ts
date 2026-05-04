@@ -44,13 +44,13 @@ export async function executeHvyCliCommand(document: VisualDocument, session: Hv
   const fs = buildHvyVirtualFileSystem(document);
   addSessionScratchpadFile(fs, session);
   enforceScratchpadHardCap(session);
-  if (!isScratchpadCommand(args) && !isActionCommandAllowedWithLongScratchpad(args) && isScratchpadTooLong(session)) {
-    return { cwd: session.cwd, output: buildScratchpadTooLongMessage(session.scratchpadContent ?? ''), mutated: false };
-  }
   const ctx = { document, fs, cwd: session.cwd };
   const result = await runCommand(ctx, command, args.slice(1));
   enforceScratchpadHardCap(session);
   session.cwd = result.cwd;
+  if (isScratchpadCommand(args) && isScratchpadTooLong(session)) {
+    return { ...result, cwd: session.cwd, output: `${result.output}\n\n${buildScratchpadTooLongMessage(session.scratchpadContent ?? '')}` };
+  }
   return result;
 }
 
@@ -236,31 +236,10 @@ function isScratchpadCommand(args: string[]): boolean {
   return args.some((arg) => arg === 'scratchpad.txt' || arg === '/scratchpad.txt');
 }
 
-function isActionCommandAllowedWithLongScratchpad(args: string[]): boolean {
-  const [command = '', first = '', second = '', third = ''] = args;
-  if (command === 'sed' || command === 'rm') {
-    return true;
-  }
-  if (command === 'echo') {
-    return args.includes('>') || args.includes('>>');
-  }
-  if (command === 'hvy') {
-    return first === 'add' || first === 'section' || first === 'text' || first === 'table' || first === 'form' || first === 'db-table'
-      || (first === 'plugin' && second === 'db-table' && third === 'exec');
-  }
-  if (command === 'db-table') {
-    return first === 'exec' || first === 'show' || first === 'add';
-  }
-  if (command === 'form') {
-    return first === 'add';
-  }
-  return false;
-}
-
 function buildScratchpadTooLongMessage(scratchpad: string): string {
   return [
     `scratchpad.txt is ${scratchpad.length} characters, which is over the ${SCRATCHPAD_SOFT_MAX_CHARS} character working limit.`,
-    'Act on completed notes with an edit command, or rewrite scratchpad.txt shorter before running more inspection commands.',
+    'Rewrite scratchpad.txt shorter before adding more notes.',
     '',
     'scratchpad.txt:',
     scratchpad,

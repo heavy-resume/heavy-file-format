@@ -70,9 +70,6 @@ export async function runChatCliEditLoop(params: {
     if (!commandFailed) {
       await writeChatCliCommandTrace(traceRunId, action.command, result.output, params.signal);
     }
-    if (!commandFailed && !isSessionOnlyCommand(action.command) && !isScratchpadLimitOutput(result.output)) {
-      await cli.run(`echo "${escapeEchoText(formatScratchpadProgress(action.command, result))}" >> scratchpad.txt`);
-    }
     if (result.mutated && !isSessionOnlyCommand(action.command)) {
       params.onMutation?.('chat-cli');
     }
@@ -102,7 +99,8 @@ function buildChatCliLoopContext(snapshot: ReturnType<ReturnType<typeof createCh
     'Valid commands:',
     snapshot.commandSummary,
     '',
-    snapshot.instructions,
+    'Persistent instructions:',
+    snapshot.persistentInstructions,
     '',
     `Current directory: ${snapshot.cwd}`,
     '',
@@ -181,26 +179,8 @@ function truncateConversationMessages(messages: ChatMessage[], maxChars: number)
   });
 }
 
-function formatScratchpadProgress(command: string, result: { mutated: boolean; output: string }): string {
-  const status = result.mutated ? 'changed' : 'ran';
-  const output = result.output.trim().replace(/\s+/g, ' ');
-  return `${status}: ${truncateText(command, 120)}${output ? ` -> ${truncateText(output, 160)}` : ''}`;
-}
-
-function escapeEchoText(value: string): string {
-  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-}
-
-function truncateText(value: string, maxLength: number): string {
-  return value.length <= maxLength ? value : `${value.slice(0, maxLength - 1)}...`;
-}
-
 function isSessionOnlyCommand(command: string): boolean {
   return /\bscratchpad\.txt\b/.test(command);
-}
-
-function isScratchpadLimitOutput(output: string): boolean {
-  return output.startsWith('scratchpad.txt is ') && output.includes('rewrite scratchpad.txt shorter');
 }
 
 function throwIfAborted(signal: AbortSignal | undefined): void {

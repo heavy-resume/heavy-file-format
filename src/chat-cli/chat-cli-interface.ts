@@ -6,7 +6,7 @@ import {
   type HvyCliSession,
 } from '../cli-core/commands';
 import type { VisualDocument } from '../types';
-import { buildChatCliInstructions } from './chat-cli-instructions';
+import { buildChatCliPersistentInstructions } from './chat-cli-instructions';
 
 export interface ChatCliCommandResult extends HvyCliExecution {
   command: string;
@@ -15,21 +15,21 @@ export interface ChatCliCommandResult extends HvyCliExecution {
 export interface ChatCliSnapshot {
   cwd: string;
   commandSummary: string;
-  instructions: string;
+  persistentInstructions: string;
   scratchpad: string;
 }
 
 export interface ChatCliInterface {
-  readonly instructions: string;
+  readonly persistentInstructions: string;
   readonly session: HvyCliSession;
   run(command: string): Promise<ChatCliCommandResult>;
   snapshot(): ChatCliSnapshot;
 }
 
 export function createChatCliInterface(document: VisualDocument, session: HvyCliSession = createHvyCliSession()): ChatCliInterface {
-  const instructions = buildChatCliInstructions();
+  const persistentInstructions = buildChatCliPersistentInstructions();
   return {
-    instructions,
+    persistentInstructions,
     session,
     async run(command: string): Promise<ChatCliCommandResult> {
       const result = await executeHvyCliCommand(document, session, command);
@@ -39,7 +39,7 @@ export function createChatCliInterface(document: VisualDocument, session: HvyCli
       return {
         cwd: session.cwd,
         commandSummary: getHvyCliCommandSummary(),
-        instructions,
+        persistentInstructions,
         scratchpad: session.scratchpadContent ?? '',
       };
     },

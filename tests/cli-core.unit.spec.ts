@@ -68,24 +68,24 @@ test('cli echo supports shell-style redirection to writable virtual files', asyn
   expect((await executeHvyCliCommand(document, session, 'man echo')).output).toContain('echo TEXT [> FILE|>> FILE]');
 });
 
-test('cli blocks non-scratchpad commands when scratchpad is too long', async () => {
+test('cli warns when scratchpad writes exceed the note limit', async () => {
   const document = createCliTestDocument();
   const session = createHvyCliSession();
 
-  expect((await executeHvyCliCommand(document, session, `echo "${'x'.repeat(900)}" > scratchpad.txt`)).output).toBe('/scratchpad.txt: written');
+  const warning = await executeHvyCliCommand(document, session, `echo "${'x'.repeat(900)}" > scratchpad.txt`);
+  expect(warning.output).toContain('/scratchpad.txt: written');
+  expect(warning.output).toContain('scratchpad.txt is 800 characters');
+  expect(warning.output).toContain('Rewrite scratchpad.txt shorter before adding more notes.');
+  expect(warning.output).toContain('x'.repeat(800));
 
-  const blocked = await executeHvyCliCommand(document, session, 'ls /');
-  expect(blocked.mutated).toBe(false);
-  expect(blocked.output).toContain('scratchpad.txt is 800 characters');
-  expect(blocked.output).toContain('Act on completed notes with an edit command, or rewrite scratchpad.txt shorter before running more inspection commands.');
-  expect(blocked.output).toContain('x'.repeat(800));
+  const inspect = await executeHvyCliCommand(document, session, 'ls /');
+  expect(inspect.output).toContain('dir  body');
 
-  const action = await executeHvyCliCommand(document, session, 'sed s/world/there/ /body/summary/intro/text.txt');
-  expect(action.output).toBe('/body/summary/intro/text.txt: updated');
-  expect(document.sections[0]?.blocks[0]?.text).toBe('Hello there');
+  await expect(executeHvyCliCommand(document, session, 'hvy delete /body/summary/intro')).rejects.toThrow(
+    'hvy: expected add, plugin, section add, text add, table add, form add, or db-table show'
+  );
 
   expect((await executeHvyCliCommand(document, session, 'echo "short" > scratchpad.txt')).output).toBe('/scratchpad.txt: written');
-  expect((await executeHvyCliCommand(document, session, 'ls /')).output).toContain('dir  body');
 });
 
 test('cli exposes resume component-list items by stable section paths', async () => {

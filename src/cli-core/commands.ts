@@ -15,6 +15,7 @@ import { getHvyCliPluginCommandRegistration } from './plugin-command-registry';
 const SCRATCHPAD_SOFT_MAX_CHARS = 600;
 const SCRATCHPAD_HARD_MAX_CHARS = 800;
 const FIND_MAX_RESULTS = 100;
+const CLI_OUTPUT_MAX_LINES = 100;
 
 export interface HvyCliSession {
   cwd: string;
@@ -88,11 +89,34 @@ export async function executeHvyCliCommand(document: VisualDocument, session: Hv
     }
   }
 
-  const result = { cwd: session.cwd, output: lastProcess.status === 0 ? lastProcess.stdout : lastProcess.stderr || lastProcess.stdout, mutated };
+  const output = truncateCliOutput(lastProcess.status === 0 ? lastProcess.stdout : lastProcess.stderr || lastProcess.stdout, { preserveFindWarning: true });
+  const result = { cwd: session.cwd, output, mutated };
   if (scratchpadTouched && isScratchpadTooLong(session)) {
     return { ...result, output: `${result.output}\n\n${buildScratchpadTooLongMessage(session.scratchpadContent ?? '')}` };
   }
   return result;
+}
+
+function truncateCliOutput(output: string, options: { preserveFindWarning?: boolean } = {}): string {
+  if (!output) {
+    return output;
+  }
+  const lines = output.split('\n');
+  if (lines.length <= CLI_OUTPUT_MAX_LINES) {
+    return output;
+  }
+  const hiddenCount = lines.length - CLI_OUTPUT_MAX_LINES;
+  if (options.preserveFindWarning && /^Warning: find output truncated/.test(lines[0] ?? '')) {
+    return [
+      lines[0],
+      ...lines.slice(1, CLI_OUTPUT_MAX_LINES + 1),
+      `Warning: output truncated to ${CLI_OUTPUT_MAX_LINES} of ${lines.length - 1} result lines (${Math.max(0, hiddenCount - 1)} lines hidden). Narrow the command with rg, find -name, head, or a more specific path.`,
+    ].join('\n');
+  }
+  return [
+    ...lines.slice(0, CLI_OUTPUT_MAX_LINES),
+    `Warning: output truncated to ${CLI_OUTPUT_MAX_LINES} of ${lines.length} lines (${hiddenCount} lines hidden). Narrow the command with rg, find -name, head, or a more specific path.`,
+  ].join('\n');
 }
 
 async function runCommand(ctx: HvyCliCommandContext, command: string, args: string[]): Promise<HvyCliExecution> {
@@ -411,16 +435,25 @@ function commandRg(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd:
 }
 
 function commandRm(ctx: { document: VisualDocument; fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd: string }, args: string[]): string {
-  const recursive = args.some((arg) => arg === '-r' || arg === '-R' || arg === '--recursive');
-  const targets = args.filter((arg) => !arg.startsWith('-'));
+  const parsed = parseCliFlags(args, {
+    command: 'rm',
+    booleanShort: ['r', 'R', 'f'],
+    booleanLong: ['recursive', 'force'],
+  });
+  const recursive = parsed.flags.has('r') || parsed.flags.has('R') || parsed.flags.has('recursive');
+  const force = parsed.flags.has('f') || parsed.flags.has('force');
+  const targets = parsed.positionals;
   if (targets.length === 0) {
     throw new Error('rm: missing operand');
   }
-  return targets
+  return withWarnings(targets
     .map((target) => {
       const resolved = resolveVirtualPath(ctx.fs, ctx.cwd, target);
       const entry = ctx.fs.entries.get(resolved);
       if (!entry) {
+        if (force) {
+          return '';
+        }
         throw new Error(`rm: no such file or directory: ${target}`);
       }
       if (entry.kind === 'file') {
@@ -432,7 +465,8 @@ function commandRm(ctx: { document: VisualDocument; fs: ReturnType<typeof buildH
       removeDocumentDirectory(ctx.document, resolved);
       return `${resolved}: removed`;
     })
-    .join('\n');
+    .filter((line) => line.length > 0)
+    .join('\n'), parsed.warnings);
 }
 
 function removeDocumentDirectory(document: VisualDocument, path: string): void {
@@ -577,13 +611,13 @@ function commandEcho(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cw
 }
 
 function commandSed(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd: string }, args: string[]): string {
-  const optionArgs = args.filter((arg) => arg.startsWith('-'));
-  const warnings = optionArgs
-    .filter((arg) => arg !== '-E' && arg !== '-r' && !arg.startsWith('-i'))
-    .map((arg) => `Warning: sed ignored unsupported option ${arg}`);
-  const positional = args.filter((arg) => arg !== '-E' && arg !== '-r' && !arg.startsWith('-i'));
-  const expression = positional[0] ?? '';
-  const paths = positional.slice(1);
+  const parsed = parseCliFlags(args, {
+    command: 'sed',
+    booleanShort: ['E', 'r', 'n'],
+    prefixShort: ['i'],
+  });
+  const expression = parsed.positionals[0] ?? '';
+  const paths = parsed.positionals.slice(1);
   if (paths.length === 0) {
     throw new Error('sed: expected sed s/search/replace/[g] path');
   }
@@ -599,24 +633,73 @@ function commandSed(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd
       const changed = before === after ? 0 : 1;
       return `${file.path}: ${changed ? 'updated' : 'no matches'}`;
     })
-    .join('\n'), warnings);
+    .join('\n'), parsed.warnings);
 }
 
 function applySedEditExpression(input: string, expression: string): string {
-  const replaceMatch = expression.match(/^s(.)(.*?)\1(.*?)\1([gIi]*)$/);
-  if (replaceMatch) {
-    const flags = `${replaceMatch[4]?.toLowerCase().includes('g') ? 'g' : ''}${replaceMatch[4]?.toLowerCase().includes('i') ? 'i' : ''}`;
-    return input.replace(new RegExp(replaceMatch[2] ?? '', flags), replaceMatch[3] ?? '');
+  const parsed = parseSedExpression(expression);
+  if (parsed.kind === 'substitute') {
+    return input.replace(new RegExp(parsed.pattern, `${parsed.flags.includes('g') ? 'g' : ''}${parsed.flags.toLowerCase().includes('i') ? 'i' : ''}`), parsed.replacement);
   }
-  const deleteMatch = expression.match(/^\/(.*)\/d$/);
-  if (deleteMatch) {
-    const regex = new RegExp(deleteMatch[1] ?? '');
+  if (parsed.kind === 'delete') {
+    const regex = new RegExp(parsed.pattern, parsed.flags.toLowerCase().includes('i') ? 'i' : '');
     return input
       .split(/\r?\n/)
       .filter((line) => !regex.test(line))
       .join('\n');
   }
   throw new Error('sed: expected sed s/search/replace/[g] path or sed /pattern/d path');
+}
+
+type SedExpression =
+  | { kind: 'substitute'; pattern: string; replacement: string; flags: string }
+  | { kind: 'delete'; pattern: string; flags: string };
+
+function parseSedExpression(expression: string): SedExpression {
+  if (expression.startsWith('s') && expression.length >= 2) {
+    const delimiter = expression[1] ?? '';
+    const first = readDelimitedSegment(expression, 2, delimiter);
+    const second = readDelimitedSegment(expression, first.nextIndex, delimiter);
+    return {
+      kind: 'substitute',
+      pattern: first.value,
+      replacement: second.value,
+      flags: expression.slice(second.nextIndex),
+    };
+  }
+
+  const delimiter = expression[0] ?? '';
+  if (!delimiter || /[A-Za-z0-9\\]/.test(delimiter)) {
+    throw new Error('sed: expected sed s/search/replace/[g] path or sed /pattern/d path');
+  }
+  const pattern = readDelimitedSegment(expression, 1, delimiter);
+  const suffix = expression.slice(pattern.nextIndex);
+  if (!suffix.toLowerCase().includes('d')) {
+    throw new Error('sed: expected sed s/search/replace/[g] path or sed /pattern/d path');
+  }
+  return {
+    kind: 'delete',
+    pattern: pattern.value,
+    flags: suffix.replace(/[dD]/g, ''),
+  };
+}
+
+function readDelimitedSegment(value: string, startIndex: number, delimiter: string): { value: string; nextIndex: number } {
+  let result = '';
+  for (let index = startIndex; index < value.length; index += 1) {
+    const char = value[index] ?? '';
+    if (char === '\\' && index + 1 < value.length) {
+      const next = value[index + 1] ?? '';
+      result += next === delimiter ? next : `${char}${next}`;
+      index += 1;
+      continue;
+    }
+    if (char === delimiter) {
+      return { value: result, nextIndex: index + 1 };
+    }
+    result += char;
+  }
+  throw new Error('sed: unterminated expression');
 }
 
 function getReadableFile(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd: string }, path: string): HvyVirtualFile {
@@ -637,6 +720,104 @@ function parseLineCount(args: string[], fallback: number): { count: number; path
   const count = Number.isFinite(rawCount) ? Math.max(1, Math.min(100, rawCount)) : fallback;
   const paths = args.filter((_arg, index) => index !== nIndex && index !== nIndex + 1);
   return { count, paths };
+}
+
+type CliFlagSpec = {
+  command: string;
+  booleanShort?: string[];
+  booleanLong?: string[];
+  valueShort?: string[];
+  valueLong?: string[];
+  prefixShort?: string[];
+};
+
+type ParsedCliFlags = {
+  flags: Set<string>;
+  values: Map<string, string[]>;
+  positionals: string[];
+  warnings: string[];
+};
+
+function parseCliFlags(args: string[], spec: CliFlagSpec): ParsedCliFlags {
+  const booleanShort = new Set(spec.booleanShort ?? []);
+  const booleanLong = new Set(spec.booleanLong ?? []);
+  const valueShort = new Set(spec.valueShort ?? []);
+  const valueLong = new Set(spec.valueLong ?? []);
+  const prefixShort = new Set(spec.prefixShort ?? []);
+  const flags = new Set<string>();
+  const values = new Map<string, string[]>();
+  const positionals: string[] = [];
+  const warnings: string[] = [];
+  let parsingFlags = true;
+
+  const addValue = (name: string, value: string) => {
+    values.set(name, [...(values.get(name) ?? []), value]);
+  };
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index] ?? '';
+    if (!parsingFlags || arg === '-' || !arg.startsWith('-')) {
+      positionals.push(arg);
+      continue;
+    }
+    if (arg === '--') {
+      parsingFlags = false;
+      continue;
+    }
+    if (arg.startsWith('--')) {
+      const raw = arg.slice(2);
+      const equalsIndex = raw.indexOf('=');
+      const name = equalsIndex >= 0 ? raw.slice(0, equalsIndex) : raw;
+      if (booleanLong.has(name)) {
+        flags.add(name);
+        continue;
+      }
+      if (valueLong.has(name)) {
+        const value = equalsIndex >= 0 ? raw.slice(equalsIndex + 1) : args[index + 1];
+        if (value === undefined || (equalsIndex < 0 && value.startsWith('-'))) {
+          throw new Error(`${spec.command}: --${name} expects a value`);
+        }
+        addValue(name, value);
+        if (equalsIndex < 0) {
+          index += 1;
+        }
+        continue;
+      }
+      warnings.push(`Warning: ${spec.command} ignored unsupported option --${name}`);
+      continue;
+    }
+
+    const cluster = arg.slice(1);
+    for (let clusterIndex = 0; clusterIndex < cluster.length; clusterIndex += 1) {
+      const name = cluster[clusterIndex] ?? '';
+      const rest = cluster.slice(clusterIndex + 1);
+      if (booleanShort.has(name)) {
+        flags.add(name);
+        continue;
+      }
+      if (prefixShort.has(name)) {
+        flags.add(name);
+        if (rest.length > 0) {
+          addValue(name, rest);
+        }
+        break;
+      }
+      if (valueShort.has(name)) {
+        const value = rest.length > 0 ? rest : args[index + 1];
+        if (value === undefined || (rest.length === 0 && value.startsWith('-'))) {
+          throw new Error(`${spec.command}: -${name} expects a value`);
+        }
+        addValue(name, value);
+        if (rest.length === 0) {
+          index += 1;
+        }
+        break;
+      }
+      warnings.push(`Warning: ${spec.command} ignored unsupported option -${name}`);
+    }
+  }
+
+  return { flags, values, positionals, warnings };
 }
 
 function parseFindArgs(args: string[]): {
@@ -731,78 +912,20 @@ function parseRgArgs(args: string[]): {
   includeGlobs: string[];
   warnings: string[];
 } {
-  const warnings: string[] = [];
-  const positional: string[] = [];
-  const includeGlobs: string[] = [];
-  let ignoreCase = false;
-  let filesWithMatches = false;
-
-  for (let index = 0; index < args.length; index += 1) {
-    const arg = args[index] ?? '';
-    if (arg === '--ignore-case') {
-      ignoreCase = true;
-      continue;
-    }
-    if (arg === '--line-number') {
-      continue;
-    }
-    if (arg === '--hidden' || arg === '--no-messages') {
-      continue;
-    }
-    if (arg === '--files-with-matches' || arg === '--list-files') {
-      filesWithMatches = true;
-      continue;
-    }
-    if (arg === '--include') {
-      const glob = args[index + 1] ?? '';
-      if (glob) {
-        includeGlobs.push(glob);
-        index += 1;
-      } else {
-        warnings.push('Warning: rg --include expects a glob');
-      }
-      continue;
-    }
-    if (arg.startsWith('--include=')) {
-      const glob = arg.slice('--include='.length);
-      if (glob) {
-        includeGlobs.push(glob);
-      } else {
-        warnings.push('Warning: rg --include expects a glob');
-      }
-      continue;
-    }
-    if (/^-[A-Za-z]+$/.test(arg)) {
-      for (const flag of arg.slice(1)) {
-        if (flag === 'i') {
-          ignoreCase = true;
-        } else if (flag === 'n') {
-          // Line numbers are always included for matched lines.
-        } else if (flag === 'l') {
-          filesWithMatches = true;
-        } else if (flag === 'r' || flag === 'R' || flag === 'S') {
-          // Virtual rg searches recursively by default.
-          // Smart-case is unnecessary because searches are case-sensitive unless -i is present.
-        } else {
-          warnings.push(`Warning: rg ignored unsupported option -${flag}`);
-        }
-      }
-      continue;
-    }
-    if (arg.startsWith('-')) {
-      warnings.push(`Warning: rg ignored unsupported option ${arg}`);
-      continue;
-    }
-    positional.push(arg);
-  }
+  const parsed = parseCliFlags(args, {
+    command: 'rg',
+    booleanShort: ['i', 'n', 'l', 'r', 'R', 'S'],
+    booleanLong: ['ignore-case', 'line-number', 'hidden', 'no-messages', 'files-with-matches', 'list-files'],
+    valueLong: ['include'],
+  });
 
   return {
-    pattern: positional[0] ?? '',
-    path: positional[1] ?? '.',
-    ignoreCase,
-    filesWithMatches,
-    includeGlobs,
-    warnings,
+    pattern: parsed.positionals[0] ?? '',
+    path: parsed.positionals[1] ?? '.',
+    ignoreCase: parsed.flags.has('i') || parsed.flags.has('ignore-case'),
+    filesWithMatches: parsed.flags.has('l') || parsed.flags.has('files-with-matches') || parsed.flags.has('list-files'),
+    includeGlobs: parsed.values.get('include') ?? [],
+    warnings: parsed.warnings,
   };
 }
 
@@ -853,38 +976,17 @@ function parseGrepArgs(args: string[]): {
   filesWithMatches: boolean;
   warnings: string[];
 } {
-  const positional: string[] = [];
-  const warnings: string[] = [];
-  let ignoreCase = false;
-  let invert = false;
-  let filesWithMatches = false;
-  for (const arg of args) {
-    if (/^-[A-Za-z]+$/.test(arg)) {
-      for (const flag of arg.slice(1)) {
-        if (flag === 'i') ignoreCase = true;
-        else if (flag === 'v') invert = true;
-        else if (flag === 'l') filesWithMatches = true;
-        else if (flag === 'R' || flag === 'r' || flag === 'I') {
-          // Virtual grep searches readable text recursively when given a directory.
-        } else {
-          warnings.push(`Warning: grep ignored unsupported option -${flag}`);
-        }
-      }
-      continue;
-    }
-    if (arg.startsWith('-')) {
-      warnings.push(`Warning: grep ignored unsupported option ${arg}`);
-      continue;
-    }
-    positional.push(arg);
-  }
+  const parsed = parseCliFlags(args, {
+    command: 'grep',
+    booleanShort: ['i', 'v', 'l', 'R', 'r', 'I'],
+  });
   return {
-    pattern: positional[0] ?? '',
-    paths: positional.slice(1),
-    ignoreCase,
-    invert,
-    filesWithMatches,
-    warnings,
+    pattern: parsed.positionals[0] ?? '',
+    paths: parsed.positionals.slice(1),
+    ignoreCase: parsed.flags.has('i'),
+    invert: parsed.flags.has('v'),
+    filesWithMatches: parsed.flags.has('l'),
+    warnings: parsed.warnings,
   };
 }
 
@@ -893,6 +995,9 @@ function parseMiniShell(args: string[]): HvyMiniShellPipeline[] {
   let current: string[] = [];
   let operator: 'first' | '&&' | '||' = 'first';
   for (const arg of args) {
+    if (arg === '2>/dev/null' || arg === '2>' || arg === '/dev/null') {
+      continue;
+    }
     if (arg === '&&' || arg === '||') {
       if (current.length > 0) {
         pipelines.push({ operator, commands: splitPipeline(current), tokens: current });
@@ -1064,28 +1169,19 @@ function decodeTrCharacters(value: string): string {
 }
 
 function applyGrepFilter(output: string, args: string[]): string {
-  let ignoreCase = false;
-  let invert = false;
-  const positional: string[] = [];
-  for (const arg of args) {
-    if (/^-[A-Za-z]+$/.test(arg)) {
-      for (const flag of arg.slice(1)) {
-        if (flag === 'i') ignoreCase = true;
-        if (flag === 'v') invert = true;
-      }
-      continue;
-    }
-    positional.push(arg);
-  }
-  const pattern = positional[0] ?? '';
+  const parsed = parseCliFlags(args, {
+    command: 'grep',
+    booleanShort: ['i', 'v'],
+  });
+  const pattern = parsed.positionals[0] ?? '';
   if (!pattern) {
-    return withWarnings(output, [`Warning: ${args[0] ?? 'grep'} filter missing pattern`]);
+    return withWarnings(output, [`Warning: grep filter missing pattern`, ...parsed.warnings]);
   }
-  const regex = new RegExp(normalizeRgPattern(pattern), ignoreCase ? 'i' : '');
-  return output
+  const regex = new RegExp(normalizeRgPattern(pattern), parsed.flags.has('i') ? 'i' : '');
+  return withWarnings(output
     .split('\n')
-    .filter((line) => regex.test(line) !== invert)
-    .join('\n');
+    .filter((line) => regex.test(line) !== parsed.flags.has('v'))
+    .join('\n'), parsed.warnings);
 }
 
 async function applyXargsStage(ctx: HvyCliCommandContext, output: string, args: string[]): Promise<HvyCliExecution> {
@@ -1121,28 +1217,18 @@ async function applyXargsStage(ctx: HvyCliCommandContext, output: string, args: 
 }
 
 function parseXargsArgs(args: string[]): { noRunIfEmpty: boolean; nullInput: boolean; replacement: string | null; command: string[] } {
-  let noRunIfEmpty = false;
-  let nullInput = false;
-  let replacement: string | null = null;
-  const command: string[] = [];
-  for (let index = 0; index < args.length; index += 1) {
-    const arg = args[index] ?? '';
-    if (arg === '-r' || arg === '--no-run-if-empty') {
-      noRunIfEmpty = true;
-      continue;
-    }
-    if (arg === '-0' || arg === '--null') {
-      nullInput = true;
-      continue;
-    }
-    if (arg === '-I') {
-      replacement = args[index + 1] ?? '{}';
-      index += 1;
-      continue;
-    }
-    command.push(arg);
-  }
-  return { noRunIfEmpty, nullInput, replacement, command };
+  const parsed = parseCliFlags(args, {
+    command: 'xargs',
+    booleanShort: ['r', '0'],
+    booleanLong: ['no-run-if-empty', 'null'],
+    valueShort: ['I'],
+  });
+  return {
+    noRunIfEmpty: parsed.flags.has('r') || parsed.flags.has('no-run-if-empty'),
+    nullInput: parsed.flags.has('0') || parsed.flags.has('null'),
+    replacement: parsed.values.get('I')?.[0] ?? null,
+    command: parsed.positionals,
+  };
 }
 
 function applySedPrintFilter(output: string, args: string[]): string | null {
@@ -1326,7 +1412,7 @@ function helpFor(topic = ''): string {
     wc: formatCommandHelp('wc -l [FILE...]', 'Count lines.'),
     tr: formatCommandHelp('tr SET1 SET2', 'Translate characters from stdin, including escaped \\n, \\t, and \\0.'),
     xargs: formatCommandHelp('COMMAND | xargs [-0] [-r] [-I TOKEN] COMMAND ARG...', 'Run a supported CLI command with piped items appended, or once per item with -I replacement.'),
-    rm: formatCommandHelp('rm -r PATH...', 'Remove section or component directories from the virtual document body. Alias: hvy remove PATH.'),
+    rm: formatCommandHelp('rm -r|-rf PATH...', 'Remove section or component directories from the virtual document body. -f ignores missing paths. Alias: hvy remove PATH.'),
     echo: formatCommandHelp('echo TEXT [> FILE|>> FILE]', 'Print text, replace a writable file, or append to a writable file.'),
     sed: formatCommandHelp('sed [-i] [-E] s/search/replace/[gI] FILE...', 'Update writable virtual files with a search/replace.'),
     true: formatCommandHelp('true', 'Succeed without output. Useful in command chains such as COMMAND || true.'),

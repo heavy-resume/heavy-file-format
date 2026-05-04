@@ -133,6 +133,14 @@ test('cli rm recursively removes virtual body directories', async () => {
     '/body/tools-technologies/tool-typescript/skill-record.txt'
   );
   expect(serializeDocument(document)).not.toContain('id":"tool-typescript"');
+
+  const forced = await executeHvyCliCommand(document, session, 'rm -rf body/tools-technologies/missing-tool');
+  expect(forced.output).toBe('');
+  expect(forced.mutated).toBe(true);
+
+  const forcedReverse = await executeHvyCliCommand(document, session, 'rm -fr body/tools-technologies/missing-tool');
+  expect(forcedReverse.output).toBe('');
+  expect(forcedReverse.mutated).toBe(true);
 });
 
 test('cli find supports common filters and warns about ignored options', async () => {
@@ -225,6 +233,21 @@ test('cli find limits broad result sets', async () => {
   const output = (await executeHvyCliCommand(document, session, 'find /body -type d')).output;
   expect(output.split('\n').filter((line) => line.startsWith('/body'))).toHaveLength(100);
   expect(output).toContain('Warning: find output truncated to 100 of 106 results.');
+});
+
+test('cli command output is capped at 100 lines', async () => {
+  const document = deserializeDocument('---\nhvy_version: 0.1\n---\n', '.hvy');
+  const session = createHvyCliSession();
+
+  for (let index = 0; index < 105; index += 1) {
+    await executeHvyCliCommand(document, session, `hvy add section /body item-${index} "Item ${index}"`);
+  }
+
+  const result = await executeHvyCliCommand(document, session, 'find /body -type f -name section.json -exec sed s/TypeScript//g {} +');
+
+  expect(result.output.split('\n')).toHaveLength(101);
+  expect(result.output).toContain('Warning: output truncated to 100 of 105 lines (5 lines hidden).');
+  expect(result.output).toContain('Narrow the command with rg, find -name, head, or a more specific path.');
 });
 
 test('cli supports shell-style && command chaining', async () => {
@@ -390,6 +413,33 @@ Keep that
   expect(result.mutated).toBe(true);
   expect(document.sections[0]?.blocks[0]?.text).toBe('Keep this\nKeep that');
   expect(session.scratchpadContent).toContain('Removed TypeScript references from files');
+});
+
+test('cli supports sed delete flags and stderr dev null redirection', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {"id":"intro"}-->
+ Keep this
+typescript should be deleted
+Keep that
+`, '.hvy');
+  const session = createHvyCliSession();
+
+  const result = await executeHvyCliCommand(
+    document,
+    session,
+    'rg -l --hidden -S -i "TypeScript" / | xargs -r sed -i \'/TypeScript/Id\' && rm -r /body/missing 2>/dev/null || true && echo "Removed TypeScript entries and directory" >> /scratchpad.txt'
+  );
+
+  expect(result.output).toBe('/scratchpad.txt: appended');
+  expect(result.mutated).toBe(true);
+  expect(document.sections[0]?.blocks[0]?.text).toBe('Keep this\nKeep that');
+  expect(session.scratchpadContent).toContain('Removed TypeScript entries and directory');
 });
 
 test('cli lists text filters as supported commands', async () => {

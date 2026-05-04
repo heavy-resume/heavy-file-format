@@ -10,7 +10,7 @@ const CHAT_CLI_MAX_CONSECUTIVE_COMMAND_ERRORS = 3;
 const CHAT_CLI_MESSAGE_HISTORY_MAX_CHARS = 500;
 const CHAT_CLI_MESSAGE_HISTORY_MIN_MESSAGES = 5;
 const CHAT_CLI_RECENT_CHAT_CONTEXT_MAX_CHARS = 700;
-const CHAT_CLI_COMMAND_NAMES = new Set(['cd', 'pwd', 'ls', 'cat', 'head', 'tail', 'nl', 'find', 'rg', 'rm', 'echo', 'sed', 'xargs', 'hvy', 'db-table', 'form']);
+const CHAT_CLI_COMMAND_NAMES = new Set(['cd', 'pwd', 'ls', 'cat', 'head', 'tail', 'nl', 'find', 'rg', 'rm', 'echo', 'sed', 'xargs', 'true', 'hvy', 'db-table', 'form']);
 
 export interface ChatCliEditTurnResult {
   summary: string;

@@ -51,8 +51,13 @@ export async function executeHvyCliCommand(document: VisualDocument, session: Hv
   let output = '';
   let mutated = false;
   let scratchpadTouched = false;
+  let previousSucceeded = true;
 
-  for (const group of commandGroups) {
+  for (let index = 0; index < commandGroups.length; index += 1) {
+    const { operator, tokens: group } = commandGroups[index] ?? { operator: 'first' as const, tokens: [] };
+    if ((operator === '&&' && !previousSucceeded) || (operator === '||' && previousSucceeded)) {
+      continue;
+    }
     const pipeline = splitPipeline(group);
     const commandArgs = pipeline[0] ?? [];
     const command = commandArgs[0] ?? '';
@@ -60,14 +65,23 @@ export async function executeHvyCliCommand(document: VisualDocument, session: Hv
     addSessionScratchpadFile(fs, session);
     enforceScratchpadHardCap(session);
     const ctx: HvyCliCommandContext = { document, fs, cwd: session.cwd };
-    const result = await runCommand(ctx, command, commandArgs.slice(1));
-    enforceScratchpadHardCap(session);
-    ctx.cwd = result.cwd;
-    const pipelineResult = await applyPipeline(ctx, result.output, pipeline.slice(1));
-    session.cwd = pipelineResult.cwd;
-    output = pipelineResult.output;
-    mutated = mutated || result.mutated || pipelineResult.mutated;
-    scratchpadTouched = scratchpadTouched || group.some((token) => token === 'scratchpad.txt' || token === '/scratchpad.txt');
+    try {
+      const result = await runCommand(ctx, command, commandArgs.slice(1));
+      enforceScratchpadHardCap(session);
+      ctx.cwd = result.cwd;
+      const pipelineResult = await applyPipeline(ctx, result.output, pipeline.slice(1));
+      session.cwd = pipelineResult.cwd;
+      output = pipelineResult.output;
+      mutated = mutated || result.mutated || pipelineResult.mutated;
+      scratchpadTouched = scratchpadTouched || group.some((token) => token === 'scratchpad.txt' || token === '/scratchpad.txt');
+      previousSucceeded = true;
+    } catch (error) {
+      previousSucceeded = false;
+      output = error instanceof Error ? error.message : String(error);
+      if (commandGroups[index + 1]?.operator !== '||') {
+        throw error;
+      }
+    }
   }
 
   const result = { cwd: session.cwd, output, mutated };
@@ -85,6 +99,9 @@ async function runCommand(ctx: HvyCliCommandContext, command: string, args: stri
 
   if (command === 'pwd') {
     return { cwd: ctx.cwd, output: ctx.cwd, mutated: false };
+  }
+  if (command === 'true') {
+    return { cwd: ctx.cwd, output: '', mutated: false };
   }
   if (command === 'cd') {
     const next = resolveVirtualPath(ctx.fs, ctx.cwd, args[0] ?? '/');
@@ -107,7 +124,7 @@ async function runCommand(ctx: HvyCliCommandContext, command: string, args: stri
     return { cwd: ctx.cwd, output: commandNl(ctx, args), mutated: false };
   }
   if (command === 'find') {
-    return { cwd: ctx.cwd, output: commandFind(ctx, args), mutated: false };
+    return commandFind(ctx, args);
   }
   if (command === 'rg') {
     return { cwd: ctx.cwd, output: commandRg(ctx, args), mutated: false };
@@ -317,7 +334,7 @@ function commandNl(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd:
     .join('\n');
 }
 
-function commandFind(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd: string }, args: string[]): string {
+async function commandFind(ctx: HvyCliCommandContext, args: string[]): Promise<HvyCliExecution> {
   const parsed = parseFindArgs(args);
   const root = resolveVirtualPath(ctx.fs, ctx.cwd, parsed.path);
   const regex = parsed.namePattern ? globToRegExp(parsed.namePattern) : null;
@@ -329,11 +346,31 @@ function commandFind(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cw
     .filter((entry) => !regex || regex.test(entry.path.split('/').pop() ?? ''))
     .map((entry) => entry.path)
     .sort();
-  const output = matches.slice(0, FIND_MAX_RESULTS).join('\n');
-  const warnings = matches.length > FIND_MAX_RESULTS
+  const warnings = matches.length > FIND_MAX_RESULTS && !parsed.exec
     ? [...parsed.warnings, `Warning: find output truncated to ${FIND_MAX_RESULTS} of ${matches.length} results.`]
     : parsed.warnings;
-  return withWarnings(output, warnings);
+  if (!parsed.exec) {
+    return { cwd: ctx.cwd, output: withWarnings(matches.slice(0, FIND_MAX_RESULTS).join('\n'), warnings), mutated: false };
+  }
+
+  const commandOutputs: string[] = [];
+  let mutated = false;
+  const runs = parsed.exec.terminator === '+'
+    ? [expandFindExecCommand(parsed.exec.command, matches)]
+    : matches.map((match) => expandFindExecCommand(parsed.exec?.command ?? [], [match]));
+  for (const runArgs of runs) {
+    const [command = '', ...commandRest] = runArgs;
+    if (!command) {
+      throw new Error('find: -exec expected command');
+    }
+    const result = await runCommand(ctx, command, commandRest);
+    mutated = mutated || result.mutated;
+    ctx.cwd = result.cwd;
+    if (result.output) {
+      commandOutputs.push(result.output);
+    }
+  }
+  return { cwd: ctx.cwd, output: withWarnings(commandOutputs.join('\n'), warnings), mutated };
 }
 
 function commandRg(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd: string }, args: string[]): string {
@@ -530,14 +567,17 @@ function commandEcho(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cw
 }
 
 function commandSed(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd: string }, args: string[]): string {
-  const expression = args[0] ?? '';
-  const paths = args.slice(1);
-  const match = expression.match(/^s(.)(.*?)\1(.*?)\1([g]*)$/);
+  const warnings = warnUnknownOptions('sed', args.filter((arg) => arg.startsWith('-')), ['-i', '-E', '-r']);
+  const positional = args.filter((arg) => arg !== '-i' && arg !== '-E' && arg !== '-r' && !warnings.includes(`Warning: sed ignored unsupported option ${arg}`));
+  const expression = positional[0] ?? '';
+  const paths = positional.slice(1);
+  const match = expression.match(/^s(.)(.*?)\1(.*?)\1([gIi]*)$/);
   if (!match || paths.length === 0) {
     throw new Error('sed: expected sed s/search/replace/[g] path');
   }
-  const regex = new RegExp(match[2] ?? '', match[4]?.includes('g') ? 'g' : '');
-  return paths
+  const flags = `${match[4]?.toLowerCase().includes('g') ? 'g' : ''}${match[4]?.toLowerCase().includes('i') ? 'i' : ''}`;
+  const regex = new RegExp(match[2] ?? '', flags);
+  return withWarnings(paths
     .map((path) => {
       const file = getReadableFile(ctx, path);
       if (!file.write) {
@@ -549,7 +589,7 @@ function commandSed(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd
       const changed = before === after ? 0 : 1;
       return `${file.path}: ${changed ? 'updated' : 'no matches'}`;
     })
-    .join('\n');
+    .join('\n'), warnings);
 }
 
 function getReadableFile(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd: string }, path: string): HvyVirtualFile {
@@ -577,6 +617,7 @@ function parseFindArgs(args: string[]): {
   namePattern: string;
   type: 'file' | 'dir' | null;
   maxDepth: number | null;
+  exec: { command: string[]; terminator: '+' | ';' } | null;
   warnings: string[];
 } {
   const warnings: string[] = [];
@@ -584,6 +625,7 @@ function parseFindArgs(args: string[]): {
   let namePattern = '';
   let type: 'file' | 'dir' | null = null;
   let maxDepth: number | null = null;
+  let exec: { command: string[]; terminator: '+' | ';' } | null = null;
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index] ?? '';
@@ -616,6 +658,24 @@ function parseFindArgs(args: string[]): {
     if (arg === '-print') {
       continue;
     }
+    if (arg === '-exec') {
+      const command: string[] = [];
+      let terminator: '+' | ';' | null = null;
+      for (let execIndex = index + 1; execIndex < args.length; execIndex += 1) {
+        const execArg = args[execIndex] ?? '';
+        if (execArg === '+' || execArg === ';' || execArg === '\\;') {
+          terminator = execArg === '+' ? '+' : ';';
+          index = execIndex;
+          break;
+        }
+        command.push(execArg);
+      }
+      if (!terminator) {
+        throw new Error('find: -exec expected terminating + or ;');
+      }
+      exec = { command, terminator };
+      continue;
+    }
     if (arg.startsWith('-')) {
       warnings.push(`Warning: find ignored unsupported option ${arg}`);
       continue;
@@ -627,7 +687,13 @@ function parseFindArgs(args: string[]): {
     }
   }
 
-  return { path, namePattern, type, maxDepth, warnings };
+  return { path, namePattern, type, maxDepth, exec, warnings };
+}
+
+function expandFindExecCommand(command: string[], paths: string[]): string[] {
+  return command.some((arg) => arg === '{}')
+    ? command.flatMap((arg) => (arg === '{}' ? paths : [arg]))
+    : [...command, ...paths];
 }
 
 function parseRgArgs(args: string[]): {
@@ -713,8 +779,25 @@ function normalizeRgPattern(pattern: string): string {
   return pattern.replaceAll('\\|', '|');
 }
 
-function splitCommandGroups(args: string[]): string[][] {
-  return splitOnToken(args, '&&');
+function splitCommandGroups(args: string[]): Array<{ operator: 'first' | '&&' | '||'; tokens: string[] }> {
+  const groups: Array<{ operator: 'first' | '&&' | '||'; tokens: string[] }> = [];
+  let current: string[] = [];
+  let operator: 'first' | '&&' | '||' = 'first';
+  for (const arg of args) {
+    if (arg === '&&' || arg === '||') {
+      if (current.length > 0) {
+        groups.push({ operator, tokens: current });
+        current = [];
+      }
+      operator = arg;
+      continue;
+    }
+    current.push(arg);
+  }
+  if (current.length > 0) {
+    groups.push({ operator, tokens: current });
+  }
+  return groups;
 }
 
 function splitPipeline(args: string[]): string[][] {
@@ -969,6 +1052,15 @@ export function tokenizeCommand(input: string): string[] {
       index += 1;
       continue;
     }
+    if (!quote && input.slice(index, index + 2) === '||') {
+      if (current) {
+        tokens.push(current);
+        current = '';
+      }
+      tokens.push('||');
+      index += 1;
+      continue;
+    }
     if (!quote && input.slice(index, index + 2) === '>>') {
       if (current) {
         tokens.push(current);
@@ -1034,7 +1126,7 @@ function helpFor(topic = ''): string {
   }
 
   const help: Record<string, string> = {
-    '': 'Commands: cd, pwd, ls, cat, head, tail, nl, find, rg, rm, echo, sed, hvy. Pipeline filters: head, tail, grep, rg, sed, sort, uniq, wc, xargs. Use man <command> for details.',
+    '': 'Commands: cd, pwd, ls, cat, head, tail, nl, find, rg, rm, echo, sed, true, hvy. Pipeline filters: head, tail, grep, rg, sed, sort, uniq, wc, xargs. Use man <command> for details.',
     cd: formatCommandHelp('cd PATH', 'Change the current virtual directory.'),
     pwd: formatCommandHelp('pwd', 'Print the current virtual directory.'),
     ls: formatCommandHelp('ls [PATH]', 'List files and directories.'),
@@ -1042,11 +1134,12 @@ function helpFor(topic = ''): string {
     head: formatCommandHelp('head [-n COUNT] FILE', 'Print the first lines of a file. COUNT maxes at 100.'),
     tail: formatCommandHelp('tail [-n COUNT] FILE', 'Print the last lines of a file. COUNT maxes at 100.'),
     nl: formatCommandHelp('nl FILE', 'Print file contents with line numbers.'),
-    find: formatCommandHelp('find [PATH] [-name GLOB] [-type f|d] [-maxdepth N] [-print]', 'List up to 100 virtual paths below PATH.'),
+    find: formatCommandHelp('find [PATH] [-name GLOB] [-type f|d] [-maxdepth N] [-print] [-exec COMMAND {} +]', 'List up to 100 virtual paths below PATH, or run a supported command against matches with -exec.'),
     rg: formatCommandHelp('rg [-i] [-n] [-l] [--include GLOB] PATTERN [PATH]', 'Search readable virtual files. Line numbers are shown by default; -l prints matching file paths.'),
     rm: formatCommandHelp('rm -r PATH...', 'Remove section or component directories from the virtual document body. Alias: hvy remove PATH.'),
     echo: formatCommandHelp('echo TEXT [> FILE|>> FILE]', 'Print text, replace a writable file, or append to a writable file.'),
-    sed: formatCommandHelp('sed s/search/replace/[g] FILE', 'Update a writable virtual file with a search/replace.'),
+    sed: formatCommandHelp('sed [-i] [-E] s/search/replace/[gI] FILE...', 'Update writable virtual files with a search/replace.'),
+    true: formatCommandHelp('true', 'Succeed without output. Useful in command chains such as COMMAND || true.'),
     xargs: formatCommandHelp('COMMAND | xargs [-r] [-I TOKEN] COMMAND ARG...', 'Run a supported CLI command with piped non-empty lines appended, or once per line with -I replacement.'),
     hvy: hvyDocumentCommandHelp(),
     section: hvyDocumentCommandHelp('section'),

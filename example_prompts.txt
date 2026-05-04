@@ -8,3 +8,11 @@ A form lets you assign a chore
 A seperate form lets you complete a chore
 
 A table shows who's completed the most chores in the past week
+
+
+
+Remove references to TypeScript in this resume.
+
+
+
+Remove references to programming languages in this resume. 

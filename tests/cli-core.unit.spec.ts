@@ -243,6 +243,33 @@ test('cli supports shell-style && command chaining', async () => {
   expect(session.scratchpadContent).toBe('updated intro\n');
 });
 
+test('cli supports shell-style || command chaining', async () => {
+  const document = createCliTestDocument();
+  const session = createHvyCliSession();
+
+  const recovered = await executeHvyCliCommand(document, session, 'cat /missing.txt || true && echo "recovered"');
+  expect(recovered.output).toBe('recovered');
+  expect(recovered.mutated).toBe(false);
+
+  const skipped = await executeHvyCliCommand(document, session, 'cat /body/summary/intro/text.txt || echo "fallback"');
+  expect(skipped.output).toBe('Hello world');
+});
+
+test('cli supports find -exec with sed -i -E for shell-like batch edits', async () => {
+  const document = createCliTestDocument();
+  const session = createHvyCliSession();
+
+  const result = await executeHvyCliCommand(
+    document,
+    session,
+    'find body -type f -name "*.txt" -exec sed -i -E s/world/there/g {} + && echo done Removed world'
+  );
+
+  expect(result.output).toBe('done Removed world');
+  expect(result.mutated).toBe(true);
+  expect(document.sections[0]?.blocks[0]?.text).toBe('Hello there');
+});
+
 test('cli supports xargs in pipelines', async () => {
   const document = createCliTestDocument();
   const session = createHvyCliSession();

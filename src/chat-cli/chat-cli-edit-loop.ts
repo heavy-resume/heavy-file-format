@@ -293,10 +293,7 @@ function extractFencedShellCommands(response: string): { kind: 'ok'; commands: s
   for (const match of trimmed.matchAll(fenceRegex)) {
     outside += trimmed.slice(lastIndex, match.index);
     lastIndex = (match.index ?? 0) + match[0].length;
-    const command = (match[1] ?? '').trim();
-    if (command) {
-      commands.push(command);
-    }
+    commands.push(...splitShellBlockCommands(match[1] ?? ''));
   }
   outside += trimmed.slice(lastIndex);
   if (commands.length === 0) {
@@ -306,6 +303,62 @@ function extractFencedShellCommands(response: string): { kind: 'ok'; commands: s
     return { kind: 'invalid', message: 'Expected only terminal command fences, `ask Question`, or `done Short summary`. Do not add prose around command fences.' };
   }
   return { kind: 'ok', commands };
+}
+
+function splitShellBlockCommands(source: string): string[] {
+  const commands: string[] = [];
+  let current = '';
+  let quote: '"' | "'" | null = null;
+  let escaping = false;
+  let heredocMarker: string | null = null;
+  for (const line of source.replace(/\r\n?/g, '\n').split('\n')) {
+    const trimmedLine = line.trim();
+    if (!quote && !heredocMarker && !current.trim() && (!trimmedLine || trimmedLine.startsWith('#'))) {
+      continue;
+    }
+    current = current ? `${current}\n${line}` : line;
+    if (heredocMarker) {
+      if (trimmedLine === heredocMarker) {
+        commands.push(current.trim());
+        current = '';
+        heredocMarker = null;
+      }
+      continue;
+    }
+    for (let index = 0; index < line.length; index += 1) {
+      const char = line[index] ?? '';
+      if (escaping) {
+        escaping = false;
+        continue;
+      }
+      if (char === '\\') {
+        escaping = true;
+        continue;
+      }
+      if ((char === '"' || char === "'") && (!quote || quote === char)) {
+        quote = quote ? null : char;
+      }
+    }
+    if (!quote) {
+      const heredoc = line.match(/<<\s*['"]?([A-Za-z0-9_.-]+)['"]?\s*$/);
+      if (heredoc) {
+        heredocMarker = heredoc[1] ?? null;
+        continue;
+      }
+    }
+    if (!quote && current.trim()) {
+      commands.push(current.trim());
+      current = '';
+    }
+  }
+  if (quote) {
+    commands.push(current.trim());
+    return commands;
+  }
+  if (current.trim()) {
+    commands.push(current.trim());
+  }
+  return commands;
 }
 
 function normalizeCommandResponse(response: string): string {

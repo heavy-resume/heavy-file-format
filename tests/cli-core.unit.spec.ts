@@ -33,6 +33,39 @@ test('cli can navigate and read virtual component files', async () => {
   expect((await executeHvyCliCommand(document, session, 'cat intro/text.json')).output).toContain('"css": "margin: 0.5rem 0;"');
 });
 
+test('cli resolves component directories for common read commands', async () => {
+  const document = createResumeCliTestDocument();
+  const session = createHvyCliSession();
+
+  const catDirectory = await executeHvyCliCommand(document, session, 'cat /body/skills/skill-software-engineering');
+  expect(catDirectory.output).toContain('Software Engineering');
+  expect(catDirectory.output).toContain('#### Description');
+
+  const catTxtAlias = await executeHvyCliCommand(document, session, 'cat /body/skills/skill-software-engineering.txt');
+  expect(catTxtAlias.output).toContain('Software Engineering');
+
+  const numbered = await executeHvyCliCommand(document, session, 'nl -ba /body/skills/skill-software-engineering');
+  expect(numbered.output).toContain('     1\tSoftware Engineering');
+
+  const head = await executeHvyCliCommand(document, session, 'head -n 1 /body/top-skills-tools-technologies/grid-0');
+  expect(head.output).toContain('## Skills');
+});
+
+test('cli supports cat heredoc writes to writable virtual files', async () => {
+  const document = createCliTestDocument();
+  const session = createHvyCliSession();
+
+  const result = await executeHvyCliCommand(document, session, `cat > /scratchpad.txt <<'TXT'
+Plan:
+1. Inspect
+2. Edit
+TXT`);
+
+  expect(result.output).toBe('/scratchpad.txt: written');
+  expect(result.mutated).toBe(true);
+  expect((await executeHvyCliCommand(document, session, 'cat /scratchpad.txt')).output).toBe('Plan:\n1. Inspect\n2. Edit\n');
+});
+
 test('cli sed updates writable virtual files', async () => {
   const document = createCliTestDocument();
   const session = createHvyCliSession();

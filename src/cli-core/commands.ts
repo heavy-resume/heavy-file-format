@@ -62,6 +62,18 @@ export function getHvyCliCommandSummary(): string {
 
 export async function executeHvyCliCommand(document: VisualDocument, session: HvyCliSession, input: string): Promise<HvyCliExecution> {
   session.scratchpadTouchedThisCommand = false;
+  if (input.trim().startsWith('#')) {
+    return { cwd: session.cwd, output: '', mutated: false };
+  }
+  const heredoc = parseCatHeredocWrite(input);
+  if (heredoc) {
+    const fs = buildHvyVirtualFileSystem(document);
+    addSessionScratchpadFile(fs, session);
+    const result = writeVirtualFile({ fs, cwd: session.cwd }, heredoc.path, heredoc.content, false, 'cat');
+    enforceScratchpadHardCap(session);
+    updateScratchpadCommandHistory(session, input);
+    return { cwd: session.cwd, output: result.output, mutated: result.mutated };
+  }
   const args = tokenizeCommand(input);
   if (args.length === 0) {
     return { cwd: session.cwd, output: '', mutated: false };
@@ -380,18 +392,57 @@ function commandHeadTail(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>
 }
 
 function commandNl(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd: string }, args: string[]): string {
-  if (args.length === 0) {
+  const parsed = parseNlArgs(args);
+  if (parsed.paths.length === 0) {
     throw new Error('nl: missing file operand');
   }
-  return args
+  return parsed.paths
     .map((path) =>
       getReadableFile(ctx, path)
         .read()
         .split('\n')
-        .map((line, index) => `${String(index + 1).padStart(6, ' ')}\t${line}`)
+        .map((line, index) => `${String(index + 1).padStart(parsed.width, ' ')}${parsed.separator}${line}`)
         .join('\n')
     )
     .join('\n');
+}
+
+function parseNlArgs(args: string[]): { paths: string[]; width: number; separator: string } {
+  const paths: string[] = [];
+  let width = 6;
+  let separator = '\t';
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index] ?? '';
+    if (arg === '-ba' || arg === '-bt' || arg === '-bn' || arg === '-b' || arg === '-n') {
+      if (arg === '-b' || arg === '-n') {
+        index += 1;
+      }
+      continue;
+    }
+    if (arg === '-w') {
+      width = Math.max(1, Number.parseInt(args[index + 1] ?? '6', 10) || 6);
+      index += 1;
+      continue;
+    }
+    if (/^-w\d+$/.test(arg)) {
+      width = Math.max(1, Number.parseInt(arg.slice(2), 10) || 6);
+      continue;
+    }
+    if (arg === '-s') {
+      separator = args[index + 1] ?? separator;
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith('-s')) {
+      separator = arg.slice(2);
+      continue;
+    }
+    if (arg.startsWith('-')) {
+      continue;
+    }
+    paths.push(arg);
+  }
+  return { paths, width, separator };
 }
 
 async function commandFind(ctx: HvyCliCommandContext, args: string[]): Promise<HvyCliExecution> {
@@ -701,13 +752,23 @@ function commandEcho(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cw
   if (args.slice(redirectIndex + 2).length > 0) {
     throw new Error('echo: expected redirection at the end of the command');
   }
+  const text = `${args.slice(0, redirectIndex).join(' ')}\n`;
+  return writeVirtualFile(ctx, path, text, operator === '>>', 'echo');
+}
+
+function writeVirtualFile(
+  ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd: string },
+  path: string,
+  content: string,
+  append: boolean,
+  command: string
+): { output: string; mutated: boolean } {
   const file = getReadableFile(ctx, path);
   if (!file.write) {
-    throw new Error(`echo: file is read-only: ${file.path}`);
+    throw new Error(`${command}: file is read-only: ${file.path}`);
   }
-  const text = `${args.slice(0, redirectIndex).join(' ')}\n`;
-  file.write(operator === '>>' ? `${file.read()}${text}` : text);
-  return { output: `${file.path}: ${operator === '>>' ? 'appended' : 'written'}`, mutated: true };
+  file.write(append ? `${file.read()}${content}` : content);
+  return { output: `${file.path}: ${append ? 'appended' : 'written'}`, mutated: true };
 }
 
 function commandSed(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd: string }, args: string[]): string {
@@ -810,7 +871,7 @@ function readDelimitedSegment(value: string, startIndex: number, delimiter: stri
 }
 
 function getReadableFile(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd: string }, path: string): HvyVirtualFile {
-  const normalized = resolveVirtualPath(ctx.fs, ctx.cwd, path);
+  const normalized = resolveReadablePath(ctx.fs, ctx.cwd, path);
   const entry = ctx.fs.entries.get(normalized);
   if (!entry) {
     throw new Error(formatMissingPathMessage(ctx.fs, ctx.cwd, path, `No such file: ${normalized}`, 'file'));
@@ -819,6 +880,61 @@ function getReadableFile(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>
     throw new Error(`Is a directory: ${normalized}`);
   }
   return entry;
+}
+
+function resolveReadablePath(fs: ReturnType<typeof buildHvyVirtualFileSystem>, cwd: string, path: string): string {
+  const normalized = resolveVirtualPath(fs, cwd, path);
+  const entry = fs.entries.get(normalized);
+  if (entry?.kind === 'file') {
+    return normalized;
+  }
+  if (entry?.kind === 'dir') {
+    const componentBody = readableBodyFileForDirectory(fs, normalized);
+    if (componentBody) {
+      return componentBody;
+    }
+  }
+  if (normalized.endsWith('.txt')) {
+    const withoutExtension = normalized.slice(0, -'.txt'.length);
+    const directoryEntry = fs.entries.get(withoutExtension);
+    if (directoryEntry?.kind === 'dir') {
+      const componentBody = readableBodyFileForDirectory(fs, withoutExtension);
+      if (componentBody) {
+        return componentBody;
+      }
+    }
+  }
+  return normalized;
+}
+
+function readableBodyFileForDirectory(fs: ReturnType<typeof buildHvyVirtualFileSystem>, directory: string): string | null {
+  const directFiles = listDirectory(fs, directory)
+    .filter((entry): entry is HvyVirtualFile => entry.kind === 'file')
+    .map((entry) => entry.path)
+    .filter((entryPath) => entryPath.endsWith('.txt'));
+  return directFiles.length === 1 ? directFiles[0] ?? null : null;
+}
+
+function parseCatHeredocWrite(input: string): { path: string; content: string } | null {
+  const normalized = input.replace(/\r\n?/g, '\n');
+  const firstLineEnd = normalized.indexOf('\n');
+  if (firstLineEnd < 0) {
+    return null;
+  }
+  const firstLine = normalized.slice(0, firstLineEnd).trim();
+  const match = firstLine.match(/^cat\s*>\s*(\S+)\s*<<\s*['"]?([A-Za-z0-9_.-]+)['"]?$/);
+  if (!match) {
+    return null;
+  }
+  const path = match[1] ?? '';
+  const marker = match[2] ?? '';
+  const body = normalized.slice(firstLineEnd + 1);
+  const lines = body.split('\n');
+  const markerIndex = lines.findIndex((line) => line.trim() === marker);
+  if (markerIndex < 0) {
+    throw new Error(`cat: heredoc missing terminator ${marker}`);
+  }
+  return { path, content: `${lines.slice(0, markerIndex).join('\n')}\n` };
 }
 
 function formatMissingPathMessage(
@@ -1613,7 +1729,7 @@ function helpFor(topic = ''): string {
     cat: formatCommandHelp('cat FILE...', 'Print file contents.'),
     head: formatCommandHelp('head [-n COUNT] FILE', 'Print the first lines of a file. COUNT maxes at 100.'),
     tail: formatCommandHelp('tail [-n COUNT] FILE', 'Print the last lines of a file. COUNT maxes at 100.'),
-    nl: formatCommandHelp('nl FILE', 'Print file contents with line numbers.'),
+    nl: formatCommandHelp('nl [-ba] FILE', 'Print file contents with line numbers. Common numbering flags such as -ba are accepted.'),
     find: formatCommandHelp('find [PATH] [-name GLOB] [-type f|d] [-maxdepth N] [-print] [-exec COMMAND {} +]', 'List up to 100 virtual paths below PATH, or run a supported command against matches with -exec.'),
     rg: formatCommandHelp('rg [-i] [-n] [-l] [--include GLOB] PATTERN [PATH]', 'Search readable virtual files. Line numbers are shown by default; -l prints matching file paths.'),
     grep: formatCommandHelp('grep [-R] [-I] [-i] [-v] [-l] PATTERN [FILE|DIR...]', 'Filter text by pattern, or search the provided files/directories.'),

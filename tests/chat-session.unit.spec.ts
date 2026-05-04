@@ -360,6 +360,77 @@ hvy_version: 0.1
   expect(nextPrompt).toContain('Warning: output truncated to 50 of 60 wrapped lines (10 lines hidden).');
 });
 
+test('requestDocumentEditChatTurn splits multiline shell blocks into separate commands', async () => {
+  requestProxyCompletionMock
+    .mockResolvedValueOnce(`\`\`\`shell
+# inspect obvious locations first
+pwd
+ls /body
+cat /header.yaml
+\`\`\``)
+    .mockResolvedValueOnce('done Inspected initial locations.');
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+  const document = deserializeDocument('---\nhvy_version: 0.1\ntitle: Split Test\n---\n\n#! Summary\n', '.hvy');
+  const onProgress = vi.fn();
+
+  const result = await requestDocumentEditChatTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Inspect with one multiline shell block.',
+    onProgress,
+  });
+
+  expect(result.error).toBeNull();
+  expect(onProgress.mock.calls.map((call) => call[0].content)).toEqual([
+    '$ pwd',
+    '$ ls /body',
+    '$ cat /header.yaml',
+    'Finished CLI edit loop.',
+  ]);
+  const nextPrompt = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content ?? '';
+  expect(nextPrompt).toContain('> pwd\n/');
+  expect(nextPrompt).toContain('> ls /body');
+  expect(nextPrompt).toContain('> cat /header.yaml');
+  expect(nextPrompt).not.toContain('# inspect obvious locations first');
+});
+
+test('requestDocumentEditChatTurn preserves heredoc shell commands while splitting surrounding lines', async () => {
+  requestProxyCompletionMock
+    .mockResolvedValueOnce(`\`\`\`shell
+pwd
+cat > /scratchpad.txt <<'TXT'
+Plan:
+1. Inspect
+2. Edit
+TXT
+cat /scratchpad.txt
+\`\`\``)
+    .mockResolvedValueOnce('done Wrote and read scratchpad.');
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+  const document = deserializeDocument('---\nhvy_version: 0.1\n---\n', '.hvy');
+  const onProgress = vi.fn();
+
+  const result = await requestDocumentEditChatTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Write a heredoc note.',
+    onProgress,
+  });
+
+  expect(result.error).toBeNull();
+  expect(onProgress.mock.calls.map((call) => call[0].content)).toEqual([
+    '$ pwd',
+    "$ cat > /scratchpad.txt <<'TXT'\nPlan:\n1. Inspect\n2. Edit\nTXT",
+    '$ cat /scratchpad.txt',
+    'Finished CLI edit loop.',
+  ]);
+  const nextPrompt = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content ?? '';
+  expect(nextPrompt).toContain("> cat > /scratchpad.txt <<'TXT'\nPlan:\n1. Inspect\n2. Edit\nTXT\n/scratchpad.txt: written");
+  expect(nextPrompt).toContain('> cat /scratchpad.txt\nPlan:\n1. Inspect\n2. Edit');
+});
+
 test('requestDocumentEditChatTurn divides batch output budget across three fenced shell blocks', async () => {
   requestProxyCompletionMock
     .mockResolvedValueOnce('```shell\ncat /body/summary/long/text.txt\n```\n```shell\ncat /body/summary/long/text.txt\n```\n```shell\ncat /body/summary/long/text.txt\n```')

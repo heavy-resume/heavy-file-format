@@ -137,6 +137,7 @@ export async function requestDocumentEditChatTurn(params: {
       settings: params.settings,
       document: params.document,
       request: params.request,
+      priorMessages: params.messages,
       onMutation: params.onMutation,
       onProgress: (content) =>
         emitProgress({

@@ -7,6 +7,8 @@ const CHAT_CLI_MAX_STEPS = 30;
 const CHAT_CLI_MAX_CONSECUTIVE_COMMAND_ERRORS = 3;
 const CHAT_CLI_MESSAGE_HISTORY_MAX_CHARS = 500;
 const CHAT_CLI_MESSAGE_HISTORY_MIN_MESSAGES = 5;
+const CHAT_CLI_RECENT_CHAT_CONTEXT_MAX_CHARS = 700;
+const CHAT_CLI_COMMAND_NAMES = new Set(['cd', 'pwd', 'ls', 'cat', 'head', 'tail', 'nl', 'find', 'rg', 'rm', 'echo', 'sed', 'hvy', 'db-table', 'form']);
 
 export interface ChatCliEditTurnResult {
   summary: string;
@@ -16,6 +18,7 @@ export async function runChatCliEditLoop(params: {
   settings: ChatSettings;
   document: VisualDocument;
   request: string;
+  priorMessages?: ChatMessage[];
   onMutation?: (group?: string) => void;
   onProgress?: (content: string) => void;
   signal?: AbortSignal;
@@ -40,7 +43,7 @@ export async function runChatCliEditLoop(params: {
     const response = await requestProxyCompletion({
       settings: params.settings,
       messages: conversation,
-      context: buildChatCliLoopContext(cli.snapshot(), params.request, initialRootListing),
+      context: buildChatCliLoopContext(cli.snapshot(), params.request, params.priorMessages ?? [], initialRootListing),
       formatInstructions: buildChatCliLoopFormatInstructions(),
       mode: 'document-edit',
       debugLabel: `chat-cli-edit:${step + 1}`,
@@ -48,6 +51,22 @@ export async function runChatCliEditLoop(params: {
       signal: params.signal,
     });
     const action = parseChatCliAction(response);
+    if (action.kind === 'invalid') {
+      conversation = [
+        ...conversation,
+        {
+          id: crypto.randomUUID(),
+          role: 'assistant',
+          content: response,
+        },
+        {
+          id: crypto.randomUUID(),
+          role: 'user',
+          content: action.message,
+        },
+      ];
+      continue;
+    }
     if (action.kind === 'done') {
       params.onProgress?.('Finished CLI edit loop.');
       return { summary: action.summary || `Finished after ${step + 1} step${step === 0 ? '' : 's'}.` };
@@ -96,11 +115,14 @@ export async function runChatCliEditLoop(params: {
 function buildChatCliLoopContext(
   snapshot: ReturnType<ReturnType<typeof createChatCliInterface>['snapshot']>,
   request: string,
+  priorMessages: ChatMessage[],
   initialRootListing: { command: string; output: string }
 ): string {
+  const recentChatContext = formatRecentChatContext(priorMessages);
   return [
     'Task goal:',
     request,
+    ...(recentChatContext ? ['', 'Recent chat context:', recentChatContext] : []),
     '',
     'Valid commands:',
     snapshot.commandSummary,
@@ -127,14 +149,14 @@ function buildChatCliLoopFormatInstructions(): string {
   ].join('\n');
 }
 
-function parseChatCliAction(response: string): { kind: 'command'; command: string } | { kind: 'done'; summary: string } {
+function parseChatCliAction(response: string): { kind: 'command'; command: string } | { kind: 'done'; summary: string } | { kind: 'invalid'; message: string } {
   const cleaned = normalizeCommandResponse(response);
-  if (/^(done|finish|finished)\b/i.test(cleaned)) {
-    return { kind: 'done', summary: cleaned.replace(/^(done|finish|finished)[:\s-]*/i, '').trim() };
-  }
   const command = cleaned.replace(/^(?:[\w./~-]+)?\s*\$\s*/, '').trim();
-  if (!command) {
-    throw new Error('CLI edit response did not include a command or done summary.');
+  if (/^(done|finish|finished)\b/i.test(command)) {
+    return { kind: 'done', summary: command.replace(/^(done|finish|finished)[:\s-]*/i, '').trim() };
+  }
+  if (!command || command.startsWith('```') || isLikelyProseResponse(command)) {
+    return { kind: 'invalid', message: 'Expected exactly one terminal command, or `done Short summary`. Do not return prose or markdown fences.' };
   }
   return { kind: 'command', command };
 }
@@ -153,6 +175,23 @@ function normalizeCommandResponse(response: string): string {
 
 function formatCommandResultForModel(output: string): string {
   return output.trimEnd() || '(no output)';
+}
+
+function formatRecentChatContext(messages: ChatMessage[]): string {
+  const context = messages
+    .filter((message) => !message.progress)
+    .slice(-4)
+    .map((message) => `${message.role}: ${message.content.trim()}`)
+    .join('\n')
+    .trim();
+  return context.length <= CHAT_CLI_RECENT_CHAT_CONTEXT_MAX_CHARS
+    ? context
+    : `${context.slice(context.length - CHAT_CLI_RECENT_CHAT_CONTEXT_MAX_CHARS).trimStart()}`;
+}
+
+function isLikelyProseResponse(value: string): boolean {
+  const firstWord = value.split(/\s+/, 1)[0]?.replace(/^\$\s*/, '') ?? '';
+  return value.includes(' ') && !CHAT_CLI_COMMAND_NAMES.has(firstWord);
 }
 
 function compactChatCliConversation(messages: ChatMessage[]): ChatMessage[] {

@@ -250,6 +250,51 @@ test('requestDocumentEditChatTurn accepts shell-looking command wrappers', async
   ]);
 });
 
+test('requestDocumentEditChatTurn keeps recent chat context for follow-up edit requests', async () => {
+  requestProxyCompletionMock.mockResolvedValueOnce('done Checked follow-up context.');
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+  const document = deserializeDocument('---\nhvy_version: 0.1\n---\n', '.hvy');
+
+  const result = await requestDocumentEditChatTurn({
+    settings,
+    document,
+    messages: [
+      { id: 'u1', role: 'user', content: 'Remove Typescript from this resume' },
+      { id: 'a1', role: 'assistant', content: 'Removed the TypeScript tool entry from the resume.' },
+    ],
+    request: 'remove it from the top skills, tools, and technologies too',
+  });
+
+  expect(result.error).toBeNull();
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Recent chat context:');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Remove Typescript from this resume');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Removed the TypeScript tool entry');
+});
+
+test('requestDocumentEditChatTurn treats prose and dangling fences as retryable format errors', async () => {
+  requestProxyCompletionMock
+    .mockResolvedValueOnce('I need to see the body files to find the section.')
+    .mockResolvedValueOnce('```shell')
+    .mockResolvedValueOnce('done Recovered from bad formats.');
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+  const document = deserializeDocument('---\nhvy_version: 0.1\n---\n', '.hvy');
+  const onProgress = vi.fn();
+
+  const result = await requestDocumentEditChatTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Use command format.',
+    onProgress,
+  });
+
+  expect(result.error).toBeNull();
+  expect(onProgress.mock.calls.map((call) => call[0].content)).toEqual(['Finished CLI edit loop.']);
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content).toContain('Expected exactly one terminal command');
+  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.messages.at(-1)?.content).toContain('Expected exactly one terminal command');
+  expect(writeChatCliCommandTraceMock.mock.calls.map((call) => call[1])).toEqual(['ls /']);
+});
+
 test('requestDocumentEditChatTurn lets the cli edit loop retry after command errors', async () => {
   requestProxyCompletionMock
     .mockResolvedValueOnce('hvy')

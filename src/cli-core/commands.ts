@@ -1,5 +1,4 @@
-import type { ComponentDefinition, VisualDocument } from '../types';
-import { stringify as stringifyYaml } from 'yaml';
+import type { VisualDocument } from '../types';
 import {
   buildHvyVirtualFileSystem,
   findBlockForVirtualDirectory,
@@ -15,7 +14,7 @@ import type { VisualBlock, VisualSection } from '../editor/types';
 import { getSectionId } from '../section-ops';
 import { getHvyCliPluginCommandRegistration } from './plugin-command-registry';
 import { formatHvyCliLintIssues, runHvyCliLinter } from './document-linter';
-import { getComponentDefsFromMeta, isBuiltinComponentName, resolveBaseComponentFromMeta } from '../component-defs';
+import { isBuiltinComponentName } from '../component-defs';
 import { serializeBlockFragment } from '../serialization';
 import { formatHvyRequestStructureForDirectory } from './request-structure';
 import { cloneReusableBlock } from '../document-factory';
@@ -208,6 +207,11 @@ async function runCommand(ctx: HvyCliCommandContext, command: string, args: stri
     return { cwd: ctx.cwd, output: commandSed(ctx, args), mutated: true };
   }
   if (command === 'hvy') {
+    if (args[0] === 'add-component') {
+      const [component = '', ...rest] = args.slice(1);
+      const result = executeHvyDocumentCommand(ctx, ['add', component, ...rest]);
+      return { cwd: ctx.cwd, output: result.output, mutated: result.mutated };
+    }
     if (args[0] === 'lint') {
       return { cwd: ctx.cwd, output: formatHvyCliLintIssues(await runHvyCliLinter(ctx.document)), mutated: false };
     }
@@ -346,18 +350,6 @@ function commandLs(ctx: HvyCliCommandContext, args: string[]): string {
   );
 }
 
-function formatLsCustomComponentDefinition(ctx: HvyCliCommandContext, directoryPath: string): string {
-  const componentName = inferComponentNameForDirectory(ctx.fs, directoryPath);
-  if (!componentName || isBuiltinComponentName(componentName)) {
-    return '';
-  }
-  const definition = getComponentDefsFromMeta(ctx.document.meta).find((item) => item.name === componentName);
-  if (!definition) {
-    return '';
-  }
-  return formatComponentDefinitionForLs(definition, ctx.document.meta);
-}
-
 function formatLsTargetDescription(ctx: HvyCliCommandContext, directoryPath: string): string {
   const section = readJsonFileFromVirtualPath(ctx.fs, `${directoryPath}/section.json`);
   if (section) {
@@ -402,26 +394,6 @@ function inferComponentNameForDirectory(fs: ReturnType<typeof buildHvyVirtualFil
     return '';
   }
   return componentJsonFiles[0]?.replace(/\.json$/i, '') ?? '';
-}
-
-function formatComponentDefinitionForLs(definition: ComponentDefinition, meta: Record<string, unknown>): string {
-  const lines = [
-    'Custom component definition:',
-    `  name: ${definition.name}`,
-    `  baseType: ${resolveBaseComponentFromMeta(definition.name, meta)}`,
-  ];
-  if (definition.description?.trim()) {
-    lines.push(`  description: ${definition.description.trim()}`);
-  }
-  if (definition.tags?.trim()) {
-    lines.push(`  tags: ${definition.tags.trim()}`);
-  }
-  if (definition.schema) {
-    lines.push('  schema:', ...stringifyYaml(definition.schema).trimEnd().split('\n').map((line) => `    ${line}`));
-  } else {
-    lines.push('  schema: (inherits base component defaults)');
-  }
-  return lines.join('\n');
 }
 
 function addSessionScratchpadFile(fs: ReturnType<typeof buildHvyVirtualFileSystem>, session: HvyCliSession): void {
@@ -488,8 +460,6 @@ function formatCatReadableOutput(ctx: HvyCliCommandContext, path: string): strin
   return [
     file.read(),
     formatLsTargetDescription(ctx, componentDirectory),
-    formatLsCustomComponentDefinition(ctx, componentDirectory),
-    formatComponentRawPreview(ctx, componentDirectory),
   ].filter((part) => part.trim().length > 0).join('\n\n');
 }
 
@@ -1613,8 +1583,18 @@ function parseMiniShell(args: string[]): HvyMiniShellPipeline[] {
   const pipelines: HvyMiniShellPipeline[] = [];
   let current: string[] = [];
   let operator: 'first' | '&&' | '||' = 'first';
-  for (const arg of normalizedArgs) {
-    if (arg === '2>/dev/null' || arg === '2>' || arg === '/dev/null') {
+  for (let index = 0; index < normalizedArgs.length; index += 1) {
+    const arg = normalizedArgs[index] ?? '';
+    if (
+      arg === '2>/dev/null'
+      || arg === '2>&1'
+      || arg === '2>'
+      || arg === '/dev/null'
+      || (arg === '2' && normalizedArgs[index + 1] === '>' && normalizedArgs[index + 2] === '&1')
+    ) {
+      if (arg === '2' && normalizedArgs[index + 1] === '>' && normalizedArgs[index + 2] === '&1') {
+        index += 2;
+      }
       continue;
     }
     if (arg === '&&' || arg === '||') {

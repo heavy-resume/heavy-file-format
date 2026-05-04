@@ -616,11 +616,10 @@ hvy_version: 0.1
   expect(nextPrompt).toContain('What is your next command?');
   expect(nextPrompt.trimEnd()).toMatch(/What is your next command\?$/);
   expect(nextPrompt).toContain('hints\ncomponent text: /body/summary/intro');
-  expect(nextPrompt).toContain('You can act on it directly; you do not need to keep searching once this is the target.');
-  expect(nextPrompt).toContain('text.txt is the component\'s visible/body text.');
-  expect(nextPrompt).toContain('text.json is the component config.');
-  expect(nextPrompt).toContain('If the task is to remove this component, run: hvy remove /body/summary/intro');
-  expect(nextPrompt).toContain('Source files: /body/summary/intro/text.txt and /body/summary/intro/text.json');
+  expect(nextPrompt).toContain('Text component: Markdown block content rendered in normal document flow.');
+  expect(nextPrompt).toContain('edit: text.txt for body, text.json for config.');
+  expect(nextPrompt).toContain('structure: hvy request_structure /body/summary/intro --describe. remove: hvy remove /body/summary/intro.');
+  expect(nextPrompt).toContain('create sibling: hvy add text /body/summary --id NEW_ID "Title"');
   expect(nextPrompt).toContain('### BEGIN /scratchpad.txt  ###\nlast edited never\n\nYou havent written your plan yet.');
   expect(nextPrompt).toContain('### BEGIN your urgency ###\nscore=1\nprioritize planning and understanding');
   expect(nextPrompt).not.toContain('commands since last edit:');
@@ -694,8 +693,9 @@ hvy_version: 0.1
   const nextPrompt = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content ?? '';
   expect(nextPrompt).toContain('component grid: /body/dashboard/layout');
   expect(nextPrompt).toContain('Grid component: lays out child components visually like a CSS grid.');
-  expect(nextPrompt).toContain('gridColumns is a number controlling the column layout.');
-  expect(nextPrompt).toContain('Each numbered grid slot carries only slot metadata; the child block is nested one level deeper.');
+  expect(nextPrompt).toContain('edit: grid.txt for body, grid.json for config.');
+  expect(nextPrompt).toContain('structure: hvy request_structure /body/dashboard/layout --describe. remove: hvy remove /body/dashboard/layout.');
+  expect(nextPrompt).toContain('create sibling: hvy add grid /body/dashboard --id NEW_ID "Title"');
 });
 
 test('requestDocumentEditChatTurn includes structure hints after search commands', async () => {

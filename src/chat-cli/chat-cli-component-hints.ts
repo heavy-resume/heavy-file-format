@@ -45,24 +45,27 @@ function buildComponentPathHint(path: string, fs: ReturnType<typeof buildHvyVirt
   if (!componentName) {
     return null;
   }
-  const textPath = `${componentDir}/${componentName}.txt`;
-  const jsonPath = `${componentDir}/${componentName}.json`;
   return [
     `component ${componentName}: ${componentDir}`,
-    `  This directory is one HVY component. You can act on it directly; you do not need to keep searching once this is the target.`,
     ...componentSpecificHintLines(componentName),
-    ...pluginSpecificHintLines(componentName, jsonPath, fs),
-    `  ${componentName}.txt is the component's visible/body text. Editing it with sed or echo changes what the document shows.`,
-    `  ${componentName}.json is the component config. Editing it changes metadata such as id, css, xref targets, table data, plugin config, etc.`,
-    `  To inspect its child structure, run: hvy request_structure ${componentDir} --describe`,
-    `  To preview raw HVY for this component, run: hvy preview ${componentDir}`,
-    `  If the task is to remove this component, run: hvy remove ${componentDir}`,
-    `  Source files: ${textPath} and ${jsonPath}`,
+    ...pluginSpecificHintLines(componentName, `${componentDir}/${componentName}.json`, fs),
+    `  edit: ${componentName}.txt for body, ${componentName}.json for config.`,
+    `  structure: hvy request_structure ${componentDir} --describe. remove: hvy remove ${componentDir}.`,
+    `  create sibling: ${formatCreateSiblingHint(componentDir, componentName)}`,
   ].join('\n');
 }
 
 function componentSpecificHintLines(componentName: string): string[] {
-  return getHvyComponentHelpLines(componentName).map((line) => `  ${line}`);
+  const [firstHelpLine = ''] = getHvyComponentHelpLines(componentName);
+  return firstHelpLine ? [`  ${firstHelpLine}`] : [];
+}
+
+function formatCreateSiblingHint(componentDir: string, componentName: string): string {
+  const parentPath = componentDir.replace(/\/[^/]+$/, '') || '/body';
+  if (componentName === 'xref-card') {
+    return `hvy add component ${parentPath} NEW_ID xref-card "Title" --config '{"xrefTarget":"target-id"}'`;
+  }
+  return `hvy add ${componentName} ${parentPath} --id NEW_ID "Title"`;
 }
 
 function pluginSpecificHintLines(componentName: string, jsonPath: string, fs: ReturnType<typeof buildHvyVirtualFileSystem>): string[] {

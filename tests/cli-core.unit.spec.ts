@@ -132,19 +132,33 @@ test('hvy add can create custom components and generic xref components', async (
     .toContain('"xrefTarget": "skill-baking"');
 });
 
-test('cat custom component bodies includes custom definition and component preview', async () => {
+test('hvy add-component aliases custom component creation', async () => {
+  const document = createResumeCliTestDocument();
+  const session = createHvyCliSession();
+
+  const result = await executeHvyCliCommand(
+    document,
+    session,
+    'hvy add-component skill-record /body/skills/component-list-1/component-list --id skill-baking Baking'
+  );
+
+  expect(result.output).toContain('/body/skills/component-list-1/component-list/skill-baking: created');
+  expect(result.output).toContain('file skill-record.json');
+  expect(result.output).toContain('file skill-record.txt');
+  expect((await executeHvyCliCommand(document, session, 'cat /body/skills/component-list-1/component-list/skill-baking/skill-record.txt')).output)
+    .toContain('Baking');
+});
+
+test('cat custom component bodies stays focused on file content', async () => {
   const document = createResumeCliTestDocument();
   const session = createHvyCliSession();
 
   const result = await executeHvyCliCommand(document, session, 'cat /body/skills/component-list-1/component-list/skill-software-engineering/skill-record.txt');
 
   expect(result.output).toContain('Software Engineering');
-  expect(result.output).toContain('Custom component definition:');
-  expect(result.output).toContain('name: skill-record');
-  expect(result.output).toContain('Preview command: hvy request_structure skill-software-engineering --describe');
-  expect(result.output).toContain('Component preview switched to request_structure because raw HVY is');
-  expect(result.output).toContain('/skill-software-engineering');
-  expect(result.output).toContain('/expandable-stub');
+  expect(result.output).not.toContain('Custom component definition:');
+  expect(result.output).not.toContain('Preview command: hvy request_structure');
+  expect(result.output).not.toContain('Component preview switched to request_structure');
 });
 
 test('hvy preview switches long raw fragments to request_structure capped at 25 lines', async () => {
@@ -689,6 +703,20 @@ Keep that
   expect(result.mutated).toBe(true);
   expect(document.sections[0]?.blocks[0]?.text).toBe('Keep this\nKeep that');
   expect(session.scratchpadContent).toContain('Removed TypeScript entries and directory');
+});
+
+test('cli ignores stderr merge redirection in request_structure pipelines', async () => {
+  const document = createResumeCliTestDocument();
+  const session = createHvyCliSession();
+
+  const result = await executeHvyCliCommand(
+    document,
+    session,
+    'hvy request_structure /body/top-skills-tools-technologies --describe 2>&1 | head -5'
+  );
+
+  expect(result.output).toContain('Key: [x] text');
+  expect(result.output).not.toContain('expected at most one component id');
 });
 
 test('cli lists text filters as supported commands', async () => {

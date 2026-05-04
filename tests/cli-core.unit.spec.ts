@@ -1074,6 +1074,10 @@ test('hvy help lists registered plugin add and operation commands as quick-refer
 
   const help = (await executeHvyCliCommand(document, session, 'man hvy')).output;
 
+  expect(help).toContain('hvy cheatsheet [NAME]');
+  expect(help).toContain('hvy recipe [NAME]');
+  expect(help).toContain('Cheatsheets:\n- components\n- db-table\n- forms\n- scripting');
+  expect(help).toContain('Recipes:\n- chore-chart\n- form-backed-table');
   expect(help).toContain('hvy add plugin form SECTION_PATH ID SUBMIT_BUTTON_LABEL FIELD...');
   expect(help).toContain('hvy add plugin db-table SECTION_PATH ID TABLE [QUERY]');
   expect(help).toContain('hvy plugin db-table query [SELECT/WITH SQL]');
@@ -1081,6 +1085,36 @@ test('hvy help lists registered plugin add and operation commands as quick-refer
   expect(help).toContain('hvy plugin db-table tables');
   expect(help).toContain('hvy plugin db-table schema [TABLE_OR_VIEW]');
   expect(help).not.toContain('Try `man hvy plugin`');
+});
+
+test('hvy cheatsheets are discovered from markdown files', async () => {
+  const document = createCliTestDocument();
+  const session = createHvyCliSession();
+
+  const list = (await executeHvyCliCommand(document, session, 'hvy cheatsheet')).output;
+  const dbTable = (await executeHvyCliCommand(document, session, 'hvy cheatsheet db-table')).output;
+  const unknown = (await executeHvyCliCommand(document, session, 'hvy cheatsheet missing')).output;
+
+  expect(list).toContain('- db-table');
+  expect(dbTable).toContain('# DB Table Cheatsheet');
+  expect(dbTable).toContain('There is no separate database component to add.');
+  expect(dbTable).toContain('hvy plugin db-table exec');
+  expect(unknown).toContain('Unknown cheatsheet "missing". Available cheatsheets: components, db-table, forms, scripting');
+});
+
+test('hvy recipes are discovered from hvy files', async () => {
+  const document = createCliTestDocument();
+  const session = createHvyCliSession();
+
+  const list = (await executeHvyCliCommand(document, session, 'hvy recipe')).output;
+  const recipe = (await executeHvyCliCommand(document, session, 'hvy recipe chore-chart')).output;
+  const unknown = (await executeHvyCliCommand(document, session, 'hvy recipe missing')).output;
+
+  expect(list).toContain('- chore-chart');
+  expect(recipe).toContain('#! Chore Chart Recipe');
+  expect(recipe).toContain('hvy add section / chore-chart "Chore Chart"');
+  expect(recipe).toContain('Expected result:');
+  expect(unknown).toContain('Unknown recipe "missing". Available recipes: chore-chart, form-backed-table');
 });
 
 test('hvy plugin form help explains script and submit options', async () => {

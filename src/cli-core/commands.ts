@@ -2040,6 +2040,8 @@ function helpFor(topic = ''): string {
     'hvy add component': hvyDocumentCommandHelp('component'),
     'hvy request_structure': hvyDocumentCommandHelp('request_structure'),
     'hvy find-intent': hvyDocumentCommandHelp('find-intent'),
+    'hvy cheatsheet': hvyDocumentCommandHelp('cheatsheet'),
+    'hvy recipe': hvyDocumentCommandHelp('recipe'),
     'hvy lint': formatCommandHelp('hvy lint', 'Check the document for likely component issues.'),
     'hvy prune-xref': hvyDocumentCommandHelp('prune_xref'),
     section: hvyDocumentCommandHelp('section'),

@@ -15,6 +15,14 @@ import {
   getHvyCliScriptingToolNames,
   type HvyCliHelpCommand,
 } from './plugin-command-registry';
+import {
+  formatHvyCheatsheetList,
+  formatHvyRecipeList,
+  getHvyCheatsheet,
+  getHvyCheatsheetNames,
+  getHvyRecipe,
+  getHvyRecipeNames,
+} from './reference-library';
 import { formatHvyRequestStructure } from './request-structure';
 import { formatHvyFindIntent } from './intent-search';
 import {
@@ -47,6 +55,12 @@ export function executeHvyDocumentCommand(ctx: HvyDocumentCommandContext, args: 
   }
   if (resource === 'find-intent') {
     return { output: formatHvyFindIntent(ctx.document, ctx.fs, decodeCliText(action ?? ''), parseFindIntentArgs(rest)), mutated: false };
+  }
+  if (resource === 'cheatsheet') {
+    return { output: formatCheatsheet(action ?? ''), mutated: false };
+  }
+  if (resource === 'recipe') {
+    return { output: formatRecipe(action ?? ''), mutated: false };
   }
   if (resource === 'add') {
     return executeHvyAddCommand(ctx, action, rest);
@@ -81,7 +95,7 @@ export function executeHvyDocumentCommand(ctx: HvyDocumentCommandContext, args: 
   if (resource === 'db-table' && (action === 'show' || action === 'add')) {
     return addDbTablePluginBlock(ctx, rest);
   }
-  throw new Error('hvy: expected request_structure, find-intent, lint, add, plugin, section add, text add, table add, form add, or db-table show');
+  throw new Error('hvy: expected request_structure, find-intent, cheatsheet, recipe, lint, add, plugin, section add, text add, table add, form add, or db-table show');
 }
 
 export function hvyDocumentCommandHelp(topic = ''): string {
@@ -111,7 +125,11 @@ export function hvyDocumentCommandHelp(topic = ''): string {
       formatCommandHelp('hvy preview PATH', 'Show the raw HVY preview for a component, capped at 25 lines.'),
       formatCommandHelp('hvy request_structure [COMPONENT_ID] [--collapse] [--describe]', 'Show the component directory map for the current document.'),
       formatCommandHelp('hvy find-intent QUERY [--max N] [--json]', 'Find likely edit locations for an intent.'),
+      formatCommandHelp('hvy cheatsheet [NAME]', 'List or show concise command examples from file-backed cheatsheets.'),
+      formatCommandHelp('hvy recipe [NAME]', 'List or show file-backed HVY recipes for composed document patterns.'),
       formatCommandHelp('hvy lint', 'Check the document for likely component issues.'),
+      formatHvyCheatsheetList(),
+      formatHvyRecipeList(),
       ...formatPluginQuickReference(),
       formatCommandHelp('Edit existing components', 'Use find to discover virtual files, cat to inspect them, and sed to update writable body/config files.'),
     ].join('\n'),
@@ -129,6 +147,14 @@ export function hvyDocumentCommandHelp(topic = ''): string {
     table: formatCommandHelp('hvy add table SECTION_PATH ID COLUMNS [--row CSV]...', 'Append a table block. Columns and rows use comma-separated text. Alias: hvy table add.'),
     request_structure: formatCommandHelp('hvy request_structure [COMPONENT_ID] [--collapse] [--describe]', 'Show the component directory map, optionally scoped to one component id. --collapse compacts anonymous leaf components. --describe includes non-empty descriptions.'),
     'find-intent': formatCommandHelp('hvy find-intent QUERY [--max N] [--json]', 'Search semantic section/component descriptions, ids, paths, roles, and previews for likely edit locations.'),
+    cheatsheet: [
+      formatCommandHelp('hvy cheatsheet [NAME]', 'List available cheatsheets or show one by name. Cheatsheets are discovered from src/cli-core/cheatsheets/*.md.'),
+      formatHvyCheatsheetList(),
+    ].join('\n'),
+    recipe: [
+      formatCommandHelp('hvy recipe [NAME]', 'List available recipes or show one by name. Recipes are discovered from src/cli-core/recipes/*.hvy.'),
+      formatHvyRecipeList(),
+    ].join('\n'),
     preview: formatCommandHelp('hvy preview PATH', 'Show the raw HVY fragment for a component directory or component body file. Output is capped at 25 lines.'),
     lint: formatCommandHelp('hvy lint', 'Check the document for empty text, broken xrefs, empty table rows, and plugin-defined issues.'),
     prune_xref: formatCommandHelp('hvy prune-xref TARGET_ID', 'Remove xref-card components whose xrefTarget equals TARGET_ID.'),
@@ -141,6 +167,28 @@ export function hvyDocumentCommandHelp(topic = ''): string {
     'db-table': formatLegacyPluginAliasHelp('db-table', 'db-table'),
   };
   return help[normalizedTopic] ?? help[''];
+}
+
+function formatCheatsheet(name: string): string {
+  if (!name.trim()) {
+    return formatHvyCheatsheetList();
+  }
+  const content = getHvyCheatsheet(name);
+  if (!content) {
+    return `Unknown cheatsheet "${name}". Available cheatsheets: ${getHvyCheatsheetNames().join(', ') || '(none)'}`;
+  }
+  return content;
+}
+
+function formatRecipe(name: string): string {
+  if (!name.trim()) {
+    return formatHvyRecipeList();
+  }
+  const content = getHvyRecipe(name);
+  if (!content) {
+    return `Unknown recipe "${name}". Available recipes: ${getHvyRecipeNames().join(', ') || '(none)'}`;
+  }
+  return content;
 }
 
 function formatCommandHelp(command: string, description: string): string {

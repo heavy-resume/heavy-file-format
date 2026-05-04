@@ -247,7 +247,7 @@ test('requestDocumentEditChatTurn runs the CLI edit loop for document chat', asy
     expect.objectContaining({ role: 'assistant', content: '```shell\nls /\n```' }),
     expect.objectContaining({ role: 'user', content: expect.stringContaining('dir  attachments') }),
     expect.objectContaining({ role: 'assistant', content: '```shell\nhvy --help\n```' }),
-    expect.objectContaining({ role: 'user', content: expect.stringContaining('hvy add section PARENT_PATH ID TITLE') }),
+    expect.objectContaining({ role: 'user', content: expect.stringContaining('Recipes:\n- chore-chart\n- form-backed-table') }),
     expect.objectContaining({ role: 'assistant', content: '```shell\nhvy request_structure --collapse\n```' }),
     expect.objectContaining({ role: 'user', content: expect.stringContaining('Components:') }),
     expect.objectContaining({ role: 'assistant', content: '```shell\nhvy lint\n```' }),
@@ -264,7 +264,7 @@ test('requestDocumentEditChatTurn runs the CLI edit loop for document chat', asy
   expect(writeChatCliCommandTraceMock.mock.calls[1]).toEqual([
     'chat-cli-test',
     'hvy --help',
-    expect.stringContaining('hvy add section PARENT_PATH ID TITLE'),
+    expect.stringContaining('Cheatsheets:\n- components\n- db-table\n- forms\n- scripting'),
     undefined,
   ]);
   expect(writeChatCliCommandTraceMock.mock.calls[2]).toEqual([
@@ -948,7 +948,7 @@ test('requestDocumentEditChatTurn lets the cli edit loop retry after command err
 
   expect(result.error).toBeNull();
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content).toContain(
-    'result\nhvy: expected request_structure, find-intent, lint, add, plugin, section add, text add, table add, form add, or db-table show'
+    'result\nhvy: expected request_structure, find-intent, cheatsheet, recipe, lint, add, plugin, section add, text add, table add, form add, or db-table show'
   );
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content).toContain(
     '### BEGIN your urgency ###\nscore=0\nprioritize planning and understanding'
@@ -956,9 +956,9 @@ test('requestDocumentEditChatTurn lets the cli edit loop retry after command err
   expect(writeChatCliCommandTraceMock).toHaveBeenCalledWith(
     'chat-cli-test',
     'hvy',
-    'hvy: expected request_structure, find-intent, lint, add, plugin, section add, text add, table add, form add, or db-table show',
+    'hvy: expected request_structure, find-intent, cheatsheet, recipe, lint, add, plugin, section add, text add, table add, form add, or db-table show',
     undefined,
-    expect.stringContaining('result\nhvy: expected request_structure, find-intent, lint, add, plugin, section add, text add, table add, form add, or db-table show')
+    expect.stringContaining('result\nhvy: expected request_structure, find-intent, cheatsheet, recipe, lint, add, plugin, section add, text add, table add, form add, or db-table show')
   );
 });
 
@@ -987,7 +987,7 @@ test('requestDocumentEditChatTurn stops after repeated cli command errors', asyn
     'No lint issues.',
     expect.any(String),
     'Unknown command "not-a-command". Try "help".',
-    'hvy: expected request_structure, find-intent, lint, add, plugin, section add, text add, table add, form add, or db-table show',
+    'hvy: expected request_structure, find-intent, cheatsheet, recipe, lint, add, plugin, section add, text add, table add, form add, or db-table show',
     expect.stringContaining('No such file: /missing.txt'),
   ]);
 });

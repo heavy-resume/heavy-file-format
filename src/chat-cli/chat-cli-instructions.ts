@@ -14,6 +14,7 @@ const CHAT_CLI_PERSISTENT_INSTRUCTIONS = [
   'Dont write shell scripts they dont work. Actually go find things and properly add / modify / delete them.',
   'Prefer fewer commands for larger or ambiguous items; make a brief plan first, then validate edits before recording completion.',
   'Most tasks require several commands to complete. For example, if adding a script component you would refer to man hvy plugin scripting to understand it.',
+  'Use hvy cheatsheet NAME or hvy recipe NAME for short examples before composing forms, scripting, or database-backed components.',
   'Use rg/find to locate candidate components, then prefer hvy remove for whole components and xrefs.',
   'Use shell commands and `help CMD` or `man CMD` to discover the interface and learn how to use things.',
 ];

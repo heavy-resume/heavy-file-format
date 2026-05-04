@@ -472,6 +472,23 @@ component_defs:
 <!--hvy:text {"id":"intro"}-->
  Hello
 
+<!--hvy:component-list {"componentListComponent":"text"}-->
+
+ <!--hvy:component-list:0 {}-->
+
+  <!--hvy:text {}-->
+   Nested anonymous text
+
+ <!--hvy:component-list:1 {}-->
+
+  <!--hvy:text {}-->
+   Second anonymous text
+
+ <!--hvy:component-list:2 {}-->
+
+  <!--hvy:text {}-->
+   Third anonymous text
+
 <!--hvy:xref-card {"id":"typescript-card","xrefTitle":"TypeScript","xrefTarget":"tool-typescript"}-->
 
 <!--hvy:xref-card {"xrefTitle":"Python","xrefTarget":"tool-python"}-->
@@ -486,14 +503,25 @@ component_defs:
   expect(result.output).toContain('Custom types use their base type code.');
   expect(result.output).toContain('- skill-card baseType=xref-card - Skill card');
   expect(result.output).toContain('Components:');
-  expect(result.output).toContain('/body\n  /summary\n    /intro [x] text.txt id=intro');
-  expect(result.output).toContain('/typescript-card [r] xref-card.txt id=typescript-card');
-  expect(result.output).toMatch(/\/xref-card-\d+ \[r\] xref-card\.txt id=C\d+/);
-  expect(result.output).toContain('/library-card [r] skill-card.txt id=library-card');
+  expect(result.output).toContain('/body\n  /summary');
+  expect(result.output).toContain('/intro\n      [x] text.txt id=intro');
+  expect(result.output).toMatch(/\/component-list-\d+\n      \[l\] component-list\.txt id=C\d+\n      \/component-list\n        \/text-\d+\n          \[x\] text\.txt id=C\d+/);
+  expect(result.output).toContain('/typescript-card\n      [r] xref-card.txt id=typescript-card');
+  expect(result.output).toMatch(/\/xref-card-\d+\n      \[r\] xref-card\.txt id=C\d+/);
+  expect(result.output).toContain('/library-card\n      [r] skill-card.txt id=library-card');
+  expect(result.output.indexOf('/intro')).toBeLessThan(result.output.indexOf('/component-list-'));
+  expect(result.output.indexOf('/component-list-')).toBeLessThan(result.output.indexOf('/typescript-card'));
+  expect(result.output.indexOf('/typescript-card')).toBeLessThan(result.output.indexOf('/library-card'));
 
-  await expect(executeHvyCliCommand(document, session, 'hvy request_structure /body')).rejects.toThrow(
-    'hvy request_structure takes no arguments'
-  );
+  const collapsed = await executeHvyCliCommand(document, session, 'hvy request_structure --collapse');
+  expect(collapsed.output).toContain('/body\n  /summary');
+  expect(collapsed.output).toContain('/intro\n      [x] text.txt id=intro');
+  expect(collapsed.output).toMatch(/\/component-list-\d+ \[l\] component-list\.txt id=C\d+\n      \/component-list\n        \/text-\d+\.\.text-\d+ \[x\] text\.txt ids=C\d+-C\d+/);
+  expect(collapsed.output).toMatch(/\/xref-card-\d+ \[r\] xref-card\.txt id=C\d+/);
+
+  const scoped = await executeHvyCliCommand(document, session, 'hvy request_structure typescript-card');
+  expect(scoped.output).toContain('/body\n  /summary\n    /typescript-card\n      [r] xref-card.txt id=typescript-card');
+  expect(scoped.output).not.toContain('/intro');
 });
 
 test('deserializing custom resume components does not warn about missing app state', () => {

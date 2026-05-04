@@ -31,7 +31,7 @@ export async function runChatCliEditLoop(params: {
   await writeChatCliUserQueryTrace(traceRunId, params.request, params.signal);
   const initialRootListing = await cli.run('ls /');
   await writeChatCliCommandTrace(traceRunId, initialRootListing.command, initialRootListing.output, params.signal);
-  const initialStructure = await cli.run('hvy request_structure');
+  const initialStructure = await cli.run('hvy request_structure --collapse');
   await writeChatCliCommandTrace(traceRunId, initialStructure.command, initialStructure.output, params.signal);
   let conversation: ChatMessage[] = [
     {

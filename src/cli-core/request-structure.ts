@@ -7,11 +7,17 @@ type ComponentStructureEntry = {
   code: string;
   directory: string;
   id: string;
+  explicitId: boolean;
   type: string;
   textPath: string;
   jsonPath: string;
   xrefTitle?: string;
   xrefTarget?: string;
+};
+
+export type HvyRequestStructureOptions = {
+  componentId?: string;
+  collapse?: boolean;
 };
 
 const COMPONENT_TYPE_CODES: Record<string, string> = {
@@ -28,8 +34,9 @@ const COMPONENT_TYPE_CODES: Record<string, string> = {
   'xref-card': 'r',
 };
 
-export function formatHvyRequestStructure(document: VisualDocument, fs: HvyVirtualFileSystem): string {
+export function formatHvyRequestStructure(document: VisualDocument, fs: HvyVirtualFileSystem, options: HvyRequestStructureOptions = {}): string {
   const entries = collectComponentStructureEntries(document, fs).map((entry, index) => withStableId(entry, index));
+  const scopedEntries = scopeEntries(entries, options.componentId);
   return [
     formatComponentCodeKey(),
     '',
@@ -37,7 +44,7 @@ export function formatHvyRequestStructure(document: VisualDocument, fs: HvyVirtu
     ...formatCustomComponentDefinitions(document),
     '',
     'Components:',
-    ...formatComponentTree(entries),
+    ...formatComponentTree(scopedEntries, { collapse: options.collapse ?? false }),
   ].join('\n');
 }
 
@@ -69,8 +76,7 @@ function collectComponentStructureEntries(document: VisualDocument, fs: HvyVirtu
     .filter((entry): entry is HvyVirtualEntry & { kind: 'file' } =>
       entry.kind === 'file' && entry.path.startsWith('/body/') && entry.path.endsWith('.json') && !entry.path.endsWith('/section.json'))
     .map((entry) => componentEntryFromJsonFile(document, fs, entry.path))
-    .filter((entry): entry is ComponentStructureEntry => !!entry)
-    .sort((left, right) => left.directory.localeCompare(right.directory));
+    .filter((entry): entry is ComponentStructureEntry => !!entry);
 }
 
 function componentEntryFromJsonFile(document: VisualDocument, fs: HvyVirtualFileSystem, jsonPath: string): ComponentStructureEntry | null {
@@ -87,6 +93,7 @@ function componentEntryFromJsonFile(document: VisualDocument, fs: HvyVirtualFile
     code: COMPONENT_TYPE_CODES[baseType] ?? '?',
     directory,
     id: typeof config.id === 'string' && config.id.trim() ? config.id.trim() : '',
+    explicitId: typeof config.id === 'string' && config.id.trim().length > 0,
     type,
     textPath,
     jsonPath,
@@ -147,7 +154,7 @@ type ComponentTreeNode = {
   entry?: ComponentStructureEntry;
 };
 
-function formatComponentTree(entries: ComponentStructureEntry[]): string[] {
+function formatComponentTree(entries: ComponentStructureEntry[], options: { collapse: boolean }): string[] {
   const root: ComponentTreeNode = { name: '', children: new Map() };
   for (const entry of entries) {
     const parts = entry.textPath.split('/').filter(Boolean);
@@ -159,21 +166,92 @@ function formatComponentTree(entries: ComponentStructureEntry[]): string[] {
     }
     current.entry = entry;
   }
-  return [...root.children.values()].flatMap((child) => formatComponentTreeNode(child, 0));
+  return [...root.children.values()].flatMap((child) => formatComponentTreeNode(child, 0, options));
 }
 
-function formatComponentTreeNode(node: ComponentTreeNode, depth: number): string[] {
+function formatComponentTreeNode(node: ComponentTreeNode, depth: number, options: { collapse: boolean }): string[] {
   const children = [...node.children.values()];
-  if (!node.entry && children.length === 1 && children[0]?.entry && children[0].children.size === 0) {
-    return [`${'  '.repeat(depth)}/${node.name} ${formatComponentStructureLine(children[0].entry)}`];
+  const metadataChild = options.collapse ? collapsibleMetadataChild(children) : undefined;
+  if (options.collapse && depth >= 2 && !node.entry && metadataChild) {
+    const remainingChildren = children.filter((child) => child !== metadataChild);
+    return [
+      `${'  '.repeat(depth)}/${node.name} ${formatComponentStructureLine(metadataChild.entry!)}`,
+      ...formatComponentTreeChildren(remainingChildren, depth + 1, options),
+    ];
   }
   const label = node.entry ? formatComponentStructureLine(node.entry) : `/${node.name}`;
   return [
     `${'  '.repeat(depth)}${label}`,
-    ...children.flatMap((child) => formatComponentTreeNode(child, depth + 1)),
+    ...formatComponentTreeChildren(children, depth + 1, options),
   ];
+}
+
+function collapsibleMetadataChild(children: ComponentTreeNode[]): ComponentTreeNode | undefined {
+  return children.find((child) => child.entry && !child.entry.explicitId && child.children.size === 0);
+}
+
+function formatComponentTreeChildren(children: ComponentTreeNode[], depth: number, options: { collapse: boolean }): string[] {
+  if (!options.collapse) {
+    return children.flatMap((child) => formatComponentTreeNode(child, depth, options));
+  }
+  const lines: string[] = [];
+  for (let index = 0; index < children.length;) {
+    const run = collectAnonymousLeafRun(children, index);
+    if (run.length >= 3) {
+      lines.push(formatAnonymousLeafRun(run, depth));
+      index += run.length;
+      continue;
+    }
+    lines.push(...formatComponentTreeNode(children[index]!, depth, options));
+    index += 1;
+  }
+  return lines;
+}
+
+function collectAnonymousLeafRun(children: ComponentTreeNode[], startIndex: number): ComponentTreeNode[] {
+  const firstEntry = anonymousLeafEntry(children[startIndex]);
+  if (!firstEntry) {
+    return [];
+  }
+  const run: ComponentTreeNode[] = [];
+  for (let index = startIndex; index < children.length; index += 1) {
+    const entry = anonymousLeafEntry(children[index]);
+    if (!entry || entry.code !== firstEntry.code || entry.type !== firstEntry.type) {
+      break;
+    }
+    run.push(children[index]!);
+  }
+  return run;
+}
+
+function anonymousLeafEntry(node: ComponentTreeNode | undefined): ComponentStructureEntry | undefined {
+  if (!node || node.entry || node.children.size !== 1) {
+    return undefined;
+  }
+  const metadataChild = collapsibleMetadataChild([...node.children.values()]);
+  return metadataChild?.entry;
+}
+
+function formatAnonymousLeafRun(run: ComponentTreeNode[], depth: number): string {
+  const first = run[0]!;
+  const last = run[run.length - 1]!;
+  const firstEntry = anonymousLeafEntry(first)!;
+  const lastEntry = anonymousLeafEntry(last)!;
+  return `${'  '.repeat(depth)}/${first.name}..${last.name} [${firstEntry.code}] ${firstEntry.textPath.split('/').pop() ?? firstEntry.textPath} ids=${firstEntry.id}-${lastEntry.id}`;
 }
 
 function withStableId(entry: ComponentStructureEntry, index: number): ComponentStructureEntry {
   return entry.id ? entry : { ...entry, id: `C${index}` };
+}
+
+function scopeEntries(entries: ComponentStructureEntry[], componentId = ''): ComponentStructureEntry[] {
+  const id = componentId.trim();
+  if (!id) {
+    return entries;
+  }
+  const root = entries.find((entry) => entry.id === id);
+  if (!root) {
+    throw new Error(`hvy request_structure: unknown component id ${id}`);
+  }
+  return entries.filter((entry) => entry.directory === root.directory || entry.directory.startsWith(`${root.directory}/`));
 }

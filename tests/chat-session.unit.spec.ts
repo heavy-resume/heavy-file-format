@@ -180,7 +180,7 @@ test('requestDocumentEditChatTurn runs the CLI edit loop for document chat', asy
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('scratchpad.txt:');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Task goal:\nAdd a chore section.');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Initial terminal output:\n> ls /\ndir  attachments');
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('> hvy request_structure');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('> hvy request_structure --collapse');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Components:');
   expect(writeChatCliCommandTraceMock.mock.calls[0]).toEqual([
     'chat-cli-test',
@@ -190,7 +190,7 @@ test('requestDocumentEditChatTurn runs the CLI edit loop for document chat', asy
   ]);
   expect(writeChatCliCommandTraceMock.mock.calls[1]).toEqual([
     'chat-cli-test',
-    'hvy request_structure',
+    'hvy request_structure --collapse',
     expect.stringContaining('Components:'),
     undefined,
   ]);
@@ -497,7 +497,7 @@ test('requestDocumentEditChatTurn treats prose and dangling fences as retryable 
   expect(onProgress.mock.calls.map((call) => call[0].content)).toEqual(['Finished CLI edit loop.']);
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content).toContain('Expected exactly one terminal command');
   expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.messages.at(-1)?.content).toContain('Expected exactly one terminal command');
-  expect(writeChatCliCommandTraceMock.mock.calls.map((call) => call[1])).toEqual(['ls /', 'hvy request_structure']);
+  expect(writeChatCliCommandTraceMock.mock.calls.map((call) => call[1])).toEqual(['ls /', 'hvy request_structure --collapse']);
 });
 
 test('requestDocumentEditChatTurn lets the cli edit loop retry after command errors', async () => {
@@ -580,7 +580,7 @@ test('requestDocumentEditChatTurn warns when scratchpad writes exceed the note l
   expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.context).toContain('short notes');
   expect(writeChatCliCommandTraceMock.mock.calls.map((call) => call[1])).toEqual([
     'ls /',
-    'hvy request_structure',
+    'hvy request_structure --collapse',
     `echo "${'x'.repeat(900)}" > scratchpad.txt`,
     'pwd',
     'echo "short notes" > scratchpad.txt',

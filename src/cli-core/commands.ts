@@ -21,6 +21,8 @@ const CLI_OUTPUT_MAX_LINES = 100;
 export interface HvyCliSession {
   cwd: string;
   scratchpadContent?: string;
+  scratchpadCommandsSinceEdit?: string[];
+  scratchpadTouchedThisCommand?: boolean;
 }
 
 export interface HvyCliExecution {
@@ -58,6 +60,7 @@ export function getHvyCliCommandSummary(): string {
 }
 
 export async function executeHvyCliCommand(document: VisualDocument, session: HvyCliSession, input: string): Promise<HvyCliExecution> {
+  session.scratchpadTouchedThisCommand = false;
   const args = tokenizeCommand(input);
   if (args.length === 0) {
     return { cwd: session.cwd, output: '', mutated: false };
@@ -90,6 +93,7 @@ export async function executeHvyCliCommand(document: VisualDocument, session: Hv
     }
   }
 
+  updateScratchpadCommandHistory(session, input);
   const output = truncateCliOutput(lastProcess.status === 0 ? lastProcess.stdout : lastProcess.stderr || lastProcess.stdout, { preserveFindWarning: true });
   const result = { cwd: session.cwd, output, mutated };
   if (scratchpadTouched && isScratchpadTooLong(session)) {
@@ -306,14 +310,24 @@ function commandLs(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd:
 
 function addSessionScratchpadFile(fs: ReturnType<typeof buildHvyVirtualFileSystem>, session: HvyCliSession): void {
   session.scratchpadContent ??= defaultScratchpadContent();
+  session.scratchpadCommandsSinceEdit ??= [];
   fs.entries.set('/scratchpad.txt', {
     kind: 'file',
     path: '/scratchpad.txt',
     read: () => session.scratchpadContent ?? defaultScratchpadContent(),
     write: (content) => {
       session.scratchpadContent = content;
+      session.scratchpadTouchedThisCommand = true;
     },
   });
+}
+
+function updateScratchpadCommandHistory(session: HvyCliSession, input: string): void {
+  if (session.scratchpadTouchedThisCommand) {
+    session.scratchpadCommandsSinceEdit = [];
+    return;
+  }
+  session.scratchpadCommandsSinceEdit = [...(session.scratchpadCommandsSinceEdit ?? []), input].slice(-4);
 }
 
 function defaultScratchpadContent(): string {

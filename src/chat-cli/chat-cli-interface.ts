@@ -15,6 +15,7 @@ export interface ChatCliSnapshot {
   cwd: string;
   commandSummary: string;
   scratchpad: string;
+  scratchpadCommandsSinceEdit: string[];
 }
 
 export interface ChatCliInterface {
@@ -35,6 +36,7 @@ export function createChatCliInterface(document: VisualDocument, session: HvyCli
         cwd: session.cwd,
         commandSummary: getHvyCliCommandSummary(),
         scratchpad: session.scratchpadContent ?? '',
+        scratchpadCommandsSinceEdit: session.scratchpadCommandsSinceEdit ?? [],
       };
     },
   };

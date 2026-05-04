@@ -41,7 +41,12 @@ test('chat cli exposes an ephemeral scratchpad file for task notes', async () =>
   expect((await cli.run('ls /')).output).toContain('file scratchpad.txt');
   expect((await cli.run('cat scratchpad.txt')).output).toContain('Keep track of your progress');
   expect((await cli.run('echo "Found summary section" > scratchpad.txt')).output).toBe('/scratchpad.txt: written');
+  expect(cli.snapshot().scratchpadCommandsSinceEdit).toEqual([]);
+  await cli.run('pwd');
+  await cli.run('ls /body');
+  expect(cli.snapshot().scratchpadCommandsSinceEdit).toEqual(['pwd', 'ls /body']);
   expect((await cli.run('echo "Added chores section" >> /scratchpad.txt')).output).toBe('/scratchpad.txt: appended');
+  expect(cli.snapshot().scratchpadCommandsSinceEdit).toEqual([]);
   expect((await cli.run('nl scratchpad.txt')).output).toContain('Found summary section');
   expect((await cli.run('cat /scratchpad.txt')).output).toContain('Added chores section');
   expect(serializeDocument(document)).not.toContain('Found summary section');

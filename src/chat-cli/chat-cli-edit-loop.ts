@@ -112,7 +112,7 @@ export async function runChatCliEditLoop(params: {
         command: action.command,
         output: result.output,
       }),
-      scratchpad: cli.snapshot().scratchpad,
+      scratchpad: formatScratchpadForModel(cli.snapshot()),
     });
     await writeChatCliCommandTrace(traceRunId, action.command, result.output, params.signal, modelMessage);
     if (stopAfterCommandError) {
@@ -163,7 +163,7 @@ function buildChatCliLoopContext(
     `Current directory: ${snapshot.cwd}`,
     '',
     'scratchpad.txt:',
-    snapshot.scratchpad.trimEnd(),
+    formatScratchpadForModel(snapshot),
   ].join('\n');
 }
 
@@ -221,6 +221,20 @@ function formatCommandResultForModel(result: string | { output: string; lintDiff
     '',
     'scratchpad.txt',
     result.scratchpad?.trimEnd() || '(empty)',
+  ].join('\n');
+}
+
+function formatScratchpadForModel(snapshot: Pick<ReturnType<ReturnType<typeof createChatCliInterface>['snapshot']>, 'scratchpad' | 'scratchpadCommandsSinceEdit'>): string {
+  const commands = snapshot.scratchpadCommandsSinceEdit;
+  const ageLine = `last edited ${commands.length} command${commands.length === 1 ? '' : 's'} ago`;
+  const recentCommandLines = commands.length > 0 && commands.length <= 3
+    ? ['', 'commands since last edit:', ...commands.map((command) => `> ${command}`)]
+    : [];
+  return [
+    ageLine,
+    ...recentCommandLines,
+    '',
+    snapshot.scratchpad.trimEnd() || '(empty)',
   ].join('\n');
 }
 

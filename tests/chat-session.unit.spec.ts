@@ -320,7 +320,8 @@ hvy_version: 0.1
   expect(nextPrompt).toContain('text.json is the component config.');
   expect(nextPrompt).toContain('If the task is to remove this component, run: hvy remove /body/summary/intro');
   expect(nextPrompt).toContain('Source files: /body/summary/intro/text.txt and /body/summary/intro/text.json');
-  expect(nextPrompt).toContain('scratchpad.txt\nI am your /scratchpad.txt - Keep track of your progress.');
+  expect(nextPrompt).toContain('scratchpad.txt\nlast edited 4 commands ago\n\nI am your /scratchpad.txt - Keep track of your progress.');
+  expect(nextPrompt).not.toContain('commands since last edit:');
   expect(writeChatCliCommandTraceMock).toHaveBeenCalledWith(
     'chat-cli-test',
     'cat /body/summary/intro/text.txt',

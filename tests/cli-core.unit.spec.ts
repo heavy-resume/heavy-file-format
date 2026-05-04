@@ -1077,7 +1077,7 @@ test('hvy help lists registered plugin add and operation commands as quick-refer
   expect(help).toContain('hvy cheatsheet [NAME]');
   expect(help).toContain('hvy recipe [NAME]');
   expect(help).toContain('Cheatsheets:\n- components\n- db-table\n- forms\n- scripting');
-  expect(help).toContain('Recipes:\n- chore-chart\n- form-backed-table');
+  expect(help).toContain('Recipes:\n- chore-chart\n- form-backed-table\n- scripting');
   expect(help).toContain('hvy add plugin form SECTION_PATH ID SUBMIT_BUTTON_LABEL FIELD...');
   expect(help).toContain('hvy add plugin db-table SECTION_PATH ID TABLE [QUERY]');
   expect(help).toContain('hvy plugin db-table query [SELECT/WITH SQL]');
@@ -1114,7 +1114,7 @@ test('hvy recipes are discovered from hvy files', async () => {
   expect(recipe).toContain('#! Chore Chart Recipe');
   expect(recipe).toContain('hvy add section / chore-chart "Chore Chart"');
   expect(recipe).toContain('Expected result:');
-  expect(unknown).toContain('Unknown recipe "missing". Available recipes: chore-chart, form-backed-table');
+  expect(unknown).toContain('Unknown recipe "missing". Available recipes: chore-chart, form-backed-table, scripting');
 });
 
 test('hvy plugin form help explains script and submit options', async () => {
@@ -1127,6 +1127,7 @@ test('hvy plugin form help explains script and submit options', async () => {
   expect(help).toContain('--script NAME PYTHON\n  Store a named Python script');
   expect(help).toContain('--on-submit-script NAME\n  Run that named script when the submit button is pressed');
   expect(help).toContain('Example: hvy add plugin form /chores add-chore');
+  expect(help).toContain('See also: hvy cheatsheet scripting; hvy recipe scripting; man hvy plugin scripting tool TOOL_NAME');
 });
 
 test('registered plugin help topics work without special-case command handlers', async () => {

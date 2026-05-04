@@ -122,6 +122,7 @@ registerHvyCliPluginCommands({
     'Form scripts receive doc plus doc.form. Use doc.form.get_value/get_values/set_value/set_options/set_error/clear_error for form state.',
     'doc.tool(name, args) can call the synchronous document-edit tool subset; args are a Python dict matching the AI tool schema.',
     'When changing submit behavior, look for named scripts and on-submit script settings before editing fields.',
+    'For form submit code examples, run: hvy cheatsheet scripting, hvy recipe scripting, or man hvy plugin scripting tool TOOL_NAME.',
   ],
   addCommands: [
     {
@@ -158,6 +159,10 @@ registerHvyCliPluginCommands({
     {
       command: `Example: hvy add plugin form /chores add-chore "Add chore" "description:Description:textarea:required" --script submit "title = doc.form.get_value('description')\\ndoc.db.execute('INSERT INTO chores (title) VALUES (\\'' + title + '\\')')" --on-submit-script submit`,
       description: 'Creates a form whose submit button says "Add chore" and runs the script named submit.',
+    },
+    {
+      command: 'See also: hvy cheatsheet scripting; hvy recipe scripting; man hvy plugin scripting tool TOOL_NAME',
+      description: 'Use scripting help for doc, doc.form, doc.db, and doc.tool examples.',
     },
   ],
 });

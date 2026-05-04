@@ -22,6 +22,29 @@ doc.db.execute("INSERT INTO chores (title) VALUES (?)", ["Dishes"])
 doc.tool("request_structure", {})
 ```
 
+Use tool help for exact `doc.tool` call shapes:
+
+```shell
+man hvy plugin scripting tool
+man hvy plugin scripting tool request_structure
+man hvy plugin scripting tool grep
+man hvy plugin scripting tool view_component
+man hvy plugin scripting tool patch_component
+man hvy plugin scripting tool create_component
+man hvy plugin scripting tool remove_component
+man hvy plugin scripting tool create_section
+man hvy plugin scripting tool execute_sql
+```
+
+Common `doc.tool` examples:
+
+```python
+summary = doc.tool("request_structure", {})
+hits = doc.tool("grep", {"query": "TODO", "flags": "i"})
+component = doc.tool("view_component", {"component_ref": "C3"})
+doc.tool("patch_component", {"component_ref": "C3", "edits": [{"op": "replace", "start_line": 2, "end_line": 2, "text": " New text"}]})
+```
+
 Form scripts also get:
 
 ```python

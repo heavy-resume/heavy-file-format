@@ -247,7 +247,7 @@ test('requestDocumentEditChatTurn runs the CLI edit loop for document chat', asy
     expect.objectContaining({ role: 'assistant', content: '```shell\nls /\n```' }),
     expect.objectContaining({ role: 'user', content: expect.stringContaining('dir  attachments') }),
     expect.objectContaining({ role: 'assistant', content: '```shell\nhvy --help\n```' }),
-    expect.objectContaining({ role: 'user', content: expect.stringContaining('Recipes:\n- chore-chart\n- form-backed-table') }),
+    expect.objectContaining({ role: 'user', content: expect.stringContaining('Recipes:\n- chore-chart\n- form-backed-table\n- scripting') }),
     expect.objectContaining({ role: 'assistant', content: '```shell\nhvy request_structure --collapse\n```' }),
     expect.objectContaining({ role: 'user', content: expect.stringContaining('Components:') }),
     expect.objectContaining({ role: 'assistant', content: '```shell\nhvy lint\n```' }),

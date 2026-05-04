@@ -150,6 +150,10 @@ test('cli find supports common filters and warns about ignored options', async (
     'Warning: find ignored unsupported option -mtime'
   );
   expect((await executeHvyCliCommand(document, session, 'ls -lah /body')).output).toContain('Warning: ls ignored unsupported option -lah');
+
+  const recursiveList = await executeHvyCliCommand(document, session, 'ls -R body | sed -n "1,5p"');
+  expect(recursiveList.output.split('\n')).toHaveLength(5);
+  expect(recursiveList.output).toContain('/body');
 });
 
 test('cli rg supports common ripgrep flags and hvy read aliases cat', async () => {
@@ -178,6 +182,17 @@ test('cli rg supports common ripgrep flags and hvy read aliases cat', async () =
   const piped = await executeHvyCliCommand(document, session, 'rg -r "TypeScript" /body -l | head -3');
   expect(piped.output.split('\n')).toHaveLength(3);
   expect(piped.output).not.toContain('Warning: rg ignored unsupported option -3');
+
+  const multiPiped = await executeHvyCliCommand(document, session, 'rg -r "TypeScript" /body -l | head -10 | sed -n "1,3p"');
+  expect(multiPiped.output.split('\n')).toHaveLength(3);
+  expect(multiPiped.output).not.toContain('Warning: unsupported pipe ignored');
+
+  const filtered = await executeHvyCliCommand(document, session, 'rg -r "TypeScript" /body -l | grep tools | sort | uniq | wc -l');
+  expect(Number.parseInt(filtered.output, 10)).toBeGreaterThan(0);
+
+  const replaced = await executeHvyCliCommand(document, session, 'echo "TypeScript language" | sed s/TypeScript/Programming/g | nl');
+  expect(replaced.output).toContain('Programming language');
+  expect(replaced.output).toContain('1');
 
   const includeEquals = await executeHvyCliCommand(document, session, 'rg -r "TypeScript" /body --include="*.json" -l');
   expect(includeEquals.output).toContain('/body/top-skills-tools-technologies/grid-0/grid/xref-card-1-2/xref-card.json');
@@ -210,6 +225,40 @@ test('cli find limits broad result sets', async () => {
   const output = (await executeHvyCliCommand(document, session, 'find /body -type d')).output;
   expect(output.split('\n').filter((line) => line.startsWith('/body'))).toHaveLength(100);
   expect(output).toContain('Warning: find output truncated to 100 of 106 results.');
+});
+
+test('cli supports shell-style && command chaining', async () => {
+  const document = createCliTestDocument();
+  const session = createHvyCliSession();
+
+  const chained = await executeHvyCliCommand(
+    document,
+    session,
+    'sed s/world/there/ /body/summary/intro/text.txt && echo "updated intro" >/scratchpad.txt && cat /body/summary/intro/text.txt'
+  );
+
+  expect(chained.mutated).toBe(true);
+  expect(chained.output).toBe('Hello there');
+  expect(document.sections[0]?.blocks[0]?.text).toBe('Hello there');
+  expect(session.scratchpadContent).toBe('updated intro\n');
+});
+
+test('cli supports xargs in pipelines', async () => {
+  const document = createCliTestDocument();
+  const session = createHvyCliSession();
+
+  const catResult = await executeHvyCliCommand(document, session, 'find /body/summary -name text.txt | xargs cat');
+  expect(catResult.output).toBe('Hello world');
+
+  const sedResult = await executeHvyCliCommand(document, session, 'find /body/summary -name text.txt | xargs -I {} sed s/world/there/ {}');
+  expect(sedResult.mutated).toBe(true);
+  expect(sedResult.output).toBe('/body/summary/intro/text.txt: updated');
+  expect(document.sections[0]?.blocks[0]?.text).toBe('Hello there');
+
+  const emptyResult = await executeHvyCliCommand(document, session, 'find /body/summary -name missing.txt | xargs -r cat');
+  expect(emptyResult.output).toBe('');
+  expect(emptyResult.mutated).toBe(false);
+  expect((await executeHvyCliCommand(document, session, 'man xargs')).output).toContain('COMMAND | xargs [-r] [-I TOKEN] COMMAND ARG...');
 });
 
 test('deserializing custom resume components does not warn about missing app state', () => {

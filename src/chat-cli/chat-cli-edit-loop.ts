@@ -10,7 +10,7 @@ const CHAT_CLI_MAX_CONSECUTIVE_COMMAND_ERRORS = 3;
 const CHAT_CLI_MESSAGE_HISTORY_MAX_CHARS = 500;
 const CHAT_CLI_MESSAGE_HISTORY_MIN_MESSAGES = 5;
 const CHAT_CLI_RECENT_CHAT_CONTEXT_MAX_CHARS = 700;
-const CHAT_CLI_COMMAND_NAMES = new Set(['cd', 'pwd', 'ls', 'cat', 'head', 'tail', 'nl', 'find', 'rg', 'rm', 'echo', 'sed', 'hvy', 'db-table', 'form']);
+const CHAT_CLI_COMMAND_NAMES = new Set(['cd', 'pwd', 'ls', 'cat', 'head', 'tail', 'nl', 'find', 'rg', 'rm', 'echo', 'sed', 'xargs', 'hvy', 'db-table', 'form']);
 
 export interface ChatCliEditTurnResult {
   summary: string;
@@ -76,22 +76,30 @@ export async function runChatCliEditLoop(params: {
 
     params.onProgress?.(`$ ${action.command}`);
     let result: Awaited<ReturnType<typeof cli.run>>;
-    let commandFailed = false;
+    let stopAfterCommandError: Error | null = null;
     try {
       result = await cli.run(action.command);
       consecutiveCommandErrors = 0;
     } catch (error) {
       const output = error instanceof Error ? error.message : String(error);
-      await writeChatCliCommandTrace(traceRunId, action.command, output, params.signal);
       consecutiveCommandErrors += 1;
       if (consecutiveCommandErrors >= CHAT_CLI_MAX_CONSECUTIVE_COMMAND_ERRORS) {
-        throw new Error(`Stopped after ${CHAT_CLI_MAX_CONSECUTIVE_COMMAND_ERRORS} failed CLI commands. Last error: ${output}`);
+        stopAfterCommandError = new Error(`Stopped after ${CHAT_CLI_MAX_CONSECUTIVE_COMMAND_ERRORS} failed CLI commands. Last error: ${output}`);
       }
       result = { command: action.command, cwd: cli.session.cwd, output, mutated: false };
-      commandFailed = true;
     }
-    if (!commandFailed) {
-      await writeChatCliCommandTrace(traceRunId, action.command, result.output, params.signal);
+    const modelMessage = formatCommandResultForModel({
+      output: result.output,
+      hints: buildChatCliComponentHints({
+        document: params.document,
+        cwd: result.cwd,
+        command: action.command,
+      }),
+      scratchpad: cli.snapshot().scratchpad,
+    });
+    await writeChatCliCommandTrace(traceRunId, action.command, result.output, params.signal, modelMessage);
+    if (stopAfterCommandError) {
+      throw stopAfterCommandError;
     }
     if (result.mutated && !isSessionOnlyCommand(action.command)) {
       params.onMutation?.('chat-cli');
@@ -106,15 +114,7 @@ export async function runChatCliEditLoop(params: {
       {
         id: crypto.randomUUID(),
         role: 'user',
-        content: formatCommandResultForModel({
-          output: result.output,
-          hints: buildChatCliComponentHints({
-            document: params.document,
-            cwd: result.cwd,
-            command: action.command,
-          }),
-          scratchpad: cli.snapshot().scratchpad,
-        }),
+        content: modelMessage,
       },
     ];
   }

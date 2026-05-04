@@ -6,8 +6,14 @@ export async function writeChatCliUserQueryTrace(runId: string, query: string, s
   await writeChatCliTraceEvent(runId, { event: 'ai_cli_user_query', query }, signal);
 }
 
-export async function writeChatCliCommandTrace(runId: string, command: string, output: string, signal?: AbortSignal): Promise<void> {
-  await writeChatCliTraceEvent(runId, { event: 'ai_cli_command', command, output }, signal);
+export async function writeChatCliCommandTrace(
+  runId: string,
+  command: string,
+  output: string,
+  signal?: AbortSignal,
+  modelMessage?: string
+): Promise<void> {
+  await writeChatCliTraceEvent(runId, { event: 'ai_cli_command', command, output, modelMessage }, signal);
 }
 
 async function writeChatCliTraceEvent(runId: string, payload: Record<string, unknown>, signal?: AbortSignal): Promise<void> {

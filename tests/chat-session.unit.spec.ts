@@ -284,6 +284,13 @@ hvy_version: 0.1
   expect(nextPrompt).toContain('If the task is to remove this component, run: hvy remove /body/summary/intro');
   expect(nextPrompt).toContain('Source files: /body/summary/intro/text.txt and /body/summary/intro/text.json');
   expect(nextPrompt).toContain('scratchpad.txt\nNo notes yet.');
+  expect(writeChatCliCommandTraceMock).toHaveBeenCalledWith(
+    'chat-cli-test',
+    'cat /body/summary/intro/text.txt',
+    'Hello',
+    undefined,
+    expect.stringContaining('hints\ncomponent text: /body/summary/intro')
+  );
 });
 
 test('requestDocumentEditChatTurn includes component-specific hints', async () => {
@@ -455,7 +462,8 @@ test('requestDocumentEditChatTurn lets the cli edit loop retry after command err
     'chat-cli-test',
     'hvy',
     'hvy: expected add, plugin, section add, text add, table add, form add, or db-table show',
-    undefined
+    undefined,
+    expect.stringContaining('result\nhvy: expected add, plugin, section add, text add, table add, form add, or db-table show')
   );
 });
 

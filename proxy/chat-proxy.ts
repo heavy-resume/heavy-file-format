@@ -13,7 +13,7 @@ const AGENT_LOOP_TEXT_TRACE_FILE = path.join(DEV_TRACE_DIR, 'agent-loop.txt');
 const AI_CLI_LOG_FILE = path.join(DEV_TRACE_DIR, 'ai_cli_log.txt');
 const AGENT_LOOP_TRACE_MAX_LINES = 500;
 const AGENT_LOOP_TRACE_PRUNE_LINES = 100;
-const AI_CLI_LOG_MAX_LINES = 500;
+const AI_CLI_LOG_MAX_LINES = 1000;
 const AI_CLI_LOG_PRUNE_LINES = 50;
 const OPENAI_REASONING_EFFORT = 'low';
 
@@ -667,10 +667,11 @@ export function formatAiCliLogEvent(event: TraceEvent): string {
     return `user query\n${String(event.payload.query ?? '').trim()}\n`;
   }
   if (event.type === 'client_event' && event.payload.event === 'ai_cli_command') {
+    const modelMessage = typeof event.payload.modelMessage === 'string' ? event.payload.modelMessage.trimEnd() : '';
     return [
       '',
       `> ${String(event.payload.command ?? '').trim()}`,
-      String(event.payload.output ?? '').trimEnd(),
+      modelMessage || String(event.payload.output ?? '').trimEnd(),
       '',
     ].join('\n');
   }

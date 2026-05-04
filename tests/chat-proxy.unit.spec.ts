@@ -316,6 +316,20 @@ test('formatAiCliLogEvent writes clean chat cli trace entries only for chat cli 
   expect(formatAiCliLogEvent({
     runId: 'chat-cli-run-1',
     phase: 'document-edit',
+    type: 'client_event',
+    payload: {
+      event: 'ai_cli_command',
+      command: 'cat /body/summary/intro/text.txt',
+      output: 'Hello',
+      modelMessage: 'result\nHello\n\nWhat is your next command?\n\nhints\ncomponent text: /body/summary/intro\n\nscratchpad.txt\nNo notes yet.',
+    },
+  })).toBe(
+    '\n> cat /body/summary/intro/text.txt\nresult\nHello\n\nWhat is your next command?\n\nhints\ncomponent text: /body/summary/intro\n\nscratchpad.txt\nNo notes yet.\n'
+  );
+
+  expect(formatAiCliLogEvent({
+    runId: 'chat-cli-run-1',
+    phase: 'document-edit',
     type: 'provider_response',
     payload: {
       provider: 'openai',

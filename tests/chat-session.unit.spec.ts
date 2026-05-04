@@ -241,8 +241,11 @@ test('requestDocumentEditChatTurn accepts shell-looking command wrappers', async
   ]);
 });
 
-test('requestDocumentEditChatTurn logs failed cli commands before returning the error', async () => {
-  requestProxyCompletionMock.mockResolvedValueOnce('not-a-command');
+test('requestDocumentEditChatTurn lets the cli edit loop retry after command errors', async () => {
+  requestProxyCompletionMock
+    .mockResolvedValueOnce('hvy')
+    .mockResolvedValueOnce('pwd')
+    .mockResolvedValueOnce('done Recovered after checking the working directory.');
   const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
   const document = deserializeDocument('---\nhvy_version: 0.1\n---\n', '.hvy');
 
@@ -250,16 +253,43 @@ test('requestDocumentEditChatTurn logs failed cli commands before returning the 
     settings,
     document,
     messages: [],
-    request: 'Run a bad command.',
+    request: 'Run a command and recover if needed.',
   });
 
-  expect(result.error).toBe('Unknown command "not-a-command". Try "help".');
+  expect(result.error).toBeNull();
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content).toBe(
+    'hvy: expected add, plugin, section add, text add, table add, form add, or db-table show'
+  );
   expect(writeChatCliCommandTraceMock).toHaveBeenCalledWith(
     'chat-cli-test',
-    'not-a-command',
-    'Unknown command "not-a-command". Try "help".',
+    'hvy',
+    'hvy: expected add, plugin, section add, text add, table add, form add, or db-table show',
     undefined
   );
+});
+
+test('requestDocumentEditChatTurn stops after repeated cli command errors', async () => {
+  requestProxyCompletionMock
+    .mockResolvedValueOnce('not-a-command')
+    .mockResolvedValueOnce('hvy')
+    .mockResolvedValueOnce('cat missing.txt');
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+  const document = deserializeDocument('---\nhvy_version: 0.1\n---\n', '.hvy');
+
+  const result = await requestDocumentEditChatTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Keep making bad commands.',
+  });
+
+  expect(result.error).toBe('Stopped after 3 failed CLI commands. Last error: No such file: /missing.txt');
+  expect(requestProxyCompletionMock).toHaveBeenCalledTimes(3);
+  expect(writeChatCliCommandTraceMock.mock.calls.map((call) => call[2])).toEqual([
+    'Unknown command "not-a-command". Try "help".',
+    'hvy: expected add, plugin, section add, text add, table add, form add, or db-table show',
+    'No such file: /missing.txt',
+  ]);
 });
 
 test('requestDocumentEditChatTurn blocks non-scratchpad commands until long scratchpad is reduced', async () => {

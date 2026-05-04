@@ -4,6 +4,7 @@ import { createChatCliTraceRunId, writeChatCliCommandTrace, writeChatCliUserQuer
 import { createChatCliInterface } from './chat-cli-interface';
 
 const CHAT_CLI_MAX_STEPS = 30;
+const CHAT_CLI_MAX_CONSECUTIVE_COMMAND_ERRORS = 3;
 const CHAT_CLI_MESSAGE_HISTORY_MAX_CHARS = 500;
 const CHAT_CLI_MESSAGE_HISTORY_MIN_MESSAGES = 5;
 
@@ -29,6 +30,7 @@ export async function runChatCliEditLoop(params: {
       content: params.request,
     },
   ];
+  let consecutiveCommandErrors = 0;
 
   for (let step = 0; step < CHAT_CLI_MAX_STEPS; step += 1) {
     throwIfAborted(params.signal);
@@ -51,15 +53,24 @@ export async function runChatCliEditLoop(params: {
 
     params.onProgress?.(`$ ${action.command}`);
     let result: Awaited<ReturnType<typeof cli.run>>;
+    let commandFailed = false;
     try {
       result = await cli.run(action.command);
+      consecutiveCommandErrors = 0;
     } catch (error) {
       const output = error instanceof Error ? error.message : String(error);
       await writeChatCliCommandTrace(traceRunId, action.command, output, params.signal);
-      throw error;
+      consecutiveCommandErrors += 1;
+      if (consecutiveCommandErrors >= CHAT_CLI_MAX_CONSECUTIVE_COMMAND_ERRORS) {
+        throw new Error(`Stopped after ${CHAT_CLI_MAX_CONSECUTIVE_COMMAND_ERRORS} failed CLI commands. Last error: ${output}`);
+      }
+      result = { command: action.command, cwd: cli.session.cwd, output, mutated: false };
+      commandFailed = true;
     }
-    await writeChatCliCommandTrace(traceRunId, action.command, result.output, params.signal);
-    if (!isSessionOnlyCommand(action.command) && !isScratchpadLimitOutput(result.output)) {
+    if (!commandFailed) {
+      await writeChatCliCommandTrace(traceRunId, action.command, result.output, params.signal);
+    }
+    if (!commandFailed && !isSessionOnlyCommand(action.command) && !isScratchpadLimitOutput(result.output)) {
       await cli.run(`echo "${escapeEchoText(formatScratchpadProgress(action.command, result))}" >> scratchpad.txt`);
     }
     if (result.mutated && !isSessionOnlyCommand(action.command)) {

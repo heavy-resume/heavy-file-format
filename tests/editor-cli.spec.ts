@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-test('cli view can navigate and edit virtual body files', async ({ page }) => {
+test('cli view can navigate and edit virtual component text files', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'CLI' }).click();
 
@@ -19,9 +19,9 @@ test('cli view can navigate and edit virtual body files', async ({ page }) => {
   await expect(page.locator('#cliOutput')).toContainText('ls /');
   await expect(page.locator('#cliInput')).toBeFocused();
 
-  await page.locator('#cliInput').fill('find /body -name body.txt');
+  await page.locator('#cliInput').fill('find /body -name text.txt');
   await page.keyboard.press('Enter');
-  await expect(page.locator('#cliOutput')).toContainText('body.txt');
+  await expect(page.locator('#cliOutput')).toContainText('text.txt');
   await expect
     .poll(async () =>
       page.locator('#cliOutput').evaluate((node) => Math.abs(node.scrollHeight - node.clientHeight - node.scrollTop) <= 2)
@@ -30,7 +30,7 @@ test('cli view can navigate and edit virtual body files', async ({ page }) => {
 
   const bodyPath = (await page
     .locator('#cliOutput')
-    .textContent())?.match(/\/body\/overview\/import-failure-example\/import-example-result\/body\.txt/)?.[0];
+    .textContent())?.match(/\/body\/overview\/import-failure-example\/import-example-result\/text\.txt/)?.[0];
   expect(bodyPath).toBeTruthy();
 
   await page.locator('#cliInput').fill(`sed s/pending/done/ ${bodyPath}`);

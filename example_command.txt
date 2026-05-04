@@ -4,7 +4,7 @@ pwd
 ls /
 ls /body
 
-# Find the resume's programming-language/tool records and related body files.
+# Find the resume's programming-language/tool records and related content files.
 find /body/tools-technologies -name '*typescript*'
 find /body/tools-technologies -name '*python*'
 rg 'TypeScript|Python|JavaScript' /body/tools-technologies
@@ -13,13 +13,13 @@ rg -i 'programming language|application language|automation' /body/tools-technol
 # Inspect specific virtual files for the TypeScript and Python records.
 ls /body/tools-technologies/tool-typescript
 cat /body/tools-technologies/tool-typescript/skill-record.json
-find /body/tools-technologies/tool-typescript -name body.txt
+find /body/tools-technologies/tool-typescript -name skill-record.txt
 rg 'strict mode|Node.js|frontend' /body/tools-technologies/tool-typescript
-nl /body/tools-technologies/tool-typescript/body.txt
+nl /body/tools-technologies/tool-typescript/skill-record.txt
 
 ls /body/tools-technologies/tool-python
 cat /body/tools-technologies/tool-python/skill-record.json
-find /body/tools-technologies/tool-python -name body.txt
+find /body/tools-technologies/tool-python -name skill-record.txt
 rg 'automation|AI|CLI' /body/tools-technologies/tool-python
 
 # Navigate around instead of using absolute paths.
@@ -29,7 +29,7 @@ ls
 cd tool-typescript
 pwd
 head -n 20 skill-record.json
-tail -n 8 body.txt
+tail -n 8 skill-record.txt
 cd /
 
 # Find where language cards are referenced elsewhere in the resume.
@@ -43,6 +43,6 @@ ls /attachments
 
 # Mutating smoke test. This edits the TypeScript notes body in-place.
 # Use undo afterward if you only wanted to test the command.
-find /body/tools-technologies/tool-typescript -name body.txt
-sed s/Primary/Core/ /body/tools-technologies/tool-typescript/body.txt
-cat /body/tools-technologies/tool-typescript/body.txt
+find /body/tools-technologies/tool-typescript -name skill-record.txt
+sed s/Primary/Core/ /body/tools-technologies/tool-typescript/skill-record.txt
+cat /body/tools-technologies/tool-typescript/skill-record.txt

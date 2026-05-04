@@ -150,9 +150,10 @@ function addBlock(entries: Map<string, HvyVirtualEntry>, block: VisualBlock, blo
     read: () => `${JSON.stringify(blockSchemaToCliJson(block.schema), null, 2)}\n`,
     write: (content) => applyBlockSchemaJson(block.schema, componentNameFromPath(componentFile), parseJsonObject(content, componentFile)),
   });
-  entries.set(`${blockPath}/body.txt`, {
+  const bodyTextFile = `${blockPath}/${sanitizePathSegment(block.schema.component) || 'component'}.txt`;
+  entries.set(bodyTextFile, {
     kind: 'file',
-    path: `${blockPath}/body.txt`,
+    path: bodyTextFile,
     read: () => readBlockBodyText(block),
     write: (content) => {
       writeBlockBodyText(block, content);

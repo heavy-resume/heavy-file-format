@@ -81,9 +81,9 @@ theme:
   
   As the virtual file body
   
-  ### body.txt
+  ### text.txt
   
-  This is the internal text WITHOUT components.   
+  Component text files use the component name, such as text.txt, plugin.txt, or skill-record.txt. This is the internal text WITHOUT components.   
   
   example:
 

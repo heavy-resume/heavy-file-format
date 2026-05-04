@@ -29,7 +29,7 @@ test('cli can navigate and read virtual component files', async () => {
 
   expect((await executeHvyCliCommand(document, session, 'ls /')).output).toContain('body');
   expect((await executeHvyCliCommand(document, session, 'cd /body/summary')).cwd).toBe('/body/summary');
-  expect((await executeHvyCliCommand(document, session, 'cat intro/body.txt')).output).toBe('Hello world');
+  expect((await executeHvyCliCommand(document, session, 'cat intro/text.txt')).output).toBe('Hello world');
   expect((await executeHvyCliCommand(document, session, 'cat intro/text.json')).output).toContain('"css": "margin: 0.5rem 0;"');
 });
 
@@ -37,7 +37,7 @@ test('cli sed updates writable virtual files', async () => {
   const document = createCliTestDocument();
   const session = createHvyCliSession();
 
-  const result = await executeHvyCliCommand(document, session, 'sed s/world/there/ /body/summary/intro/body.txt');
+  const result = await executeHvyCliCommand(document, session, 'sed s/world/there/ /body/summary/intro/text.txt');
 
   expect(result.mutated).toBe(true);
   expect(result.output).toContain('updated');
@@ -55,14 +55,14 @@ test('cli echo supports shell-style redirection to writable virtual files', asyn
 
   expect((await executeHvyCliCommand(document, session, 'echo "plain output"')).output).toBe('plain output');
 
-  const writeResult = await executeHvyCliCommand(document, session, 'echo "First note" > /body/summary/intro/body.txt');
+  const writeResult = await executeHvyCliCommand(document, session, 'echo "First note" > /body/summary/intro/text.txt');
   expect(writeResult.mutated).toBe(true);
-  expect(writeResult.output).toBe('/body/summary/intro/body.txt: written');
+  expect(writeResult.output).toBe('/body/summary/intro/text.txt: written');
 
-  const appendResult = await executeHvyCliCommand(document, session, 'echo "Second note" >> /body/summary/intro/body.txt');
+  const appendResult = await executeHvyCliCommand(document, session, 'echo "Second note" >> /body/summary/intro/text.txt');
   expect(appendResult.mutated).toBe(true);
-  expect(appendResult.output).toBe('/body/summary/intro/body.txt: appended');
-  expect((await executeHvyCliCommand(document, session, 'cat /body/summary/intro/body.txt')).output).toBe('First note\nSecond note\n');
+  expect(appendResult.output).toBe('/body/summary/intro/text.txt: appended');
+  expect((await executeHvyCliCommand(document, session, 'cat /body/summary/intro/text.txt')).output).toBe('First note\nSecond note\n');
 
   await expect(executeHvyCliCommand(document, session, 'echo nope > /body/summary')).rejects.toThrow('Is a directory');
   expect((await executeHvyCliCommand(document, session, 'man echo')).output).toContain('echo TEXT [> FILE|>> FILE]');
@@ -91,10 +91,10 @@ test('cli exposes resume component-list items by stable section paths', async ()
   expect((await executeHvyCliCommand(document, session, 'ls /body')).output).toContain('dir  tools-technologies');
   expect((await executeHvyCliCommand(document, session, 'cd tools-technologies')).cwd).toBe('/body/tools-technologies');
   expect((await executeHvyCliCommand(document, session, 'pwd')).output).toBe('/body/tools-technologies');
-  expect((await executeHvyCliCommand(document, session, 'find tool-typescript -name body.txt')).output).toContain(
-    '/body/tools-technologies/tool-typescript/body.txt'
+  expect((await executeHvyCliCommand(document, session, 'find tool-typescript -name skill-record.txt')).output).toContain(
+    '/body/tools-technologies/tool-typescript/skill-record.txt'
   );
-  expect((await executeHvyCliCommand(document, session, 'cat tool-typescript/body.txt')).output).toContain('Primary application language.');
+  expect((await executeHvyCliCommand(document, session, 'cat tool-typescript/skill-record.txt')).output).toContain('Primary application language.');
 });
 
 test('cli accepts body section aliases from root and mutates resume virtual files', async () => {
@@ -103,13 +103,13 @@ test('cli accepts body section aliases from root and mutates resume virtual file
 
   expect((await executeHvyCliCommand(document, session, 'cd /tools-technologies')).cwd).toBe('/body/tools-technologies');
 
-  const before = await executeHvyCliCommand(document, session, 'find /body/tools-technologies/tool-typescript -name body.txt');
-  expect(before.output).toContain('/body/tools-technologies/tool-typescript/body.txt');
+  const before = await executeHvyCliCommand(document, session, 'find /body/tools-technologies/tool-typescript -name skill-record.txt');
+  expect(before.output).toContain('/body/tools-technologies/tool-typescript/skill-record.txt');
 
-  const result = await executeHvyCliCommand(document, session, 'sed s/Primary/Core/ /body/tools-technologies/tool-typescript/body.txt');
+  const result = await executeHvyCliCommand(document, session, 'sed s/Primary/Core/ /body/tools-technologies/tool-typescript/skill-record.txt');
   expect(result.mutated).toBe(true);
-  expect(result.output).toBe('/body/tools-technologies/tool-typescript/body.txt: updated');
-  expect((await executeHvyCliCommand(document, session, 'cat /tools-technologies/tool-typescript/body.txt')).output).toContain(
+  expect(result.output).toBe('/body/tools-technologies/tool-typescript/skill-record.txt: updated');
+  expect((await executeHvyCliCommand(document, session, 'cat /tools-technologies/tool-typescript/skill-record.txt')).output).toContain(
     'Core application language.'
   );
 });
@@ -126,8 +126,8 @@ test('cli rm recursively removes virtual body directories', async () => {
 
   expect(result.mutated).toBe(true);
   expect(result.output).toBe('/body/tools-technologies/tool-typescript: removed');
-  expect((await executeHvyCliCommand(document, session, 'find /body/tools-technologies -name body.txt')).output).not.toContain(
-    '/body/tools-technologies/tool-typescript/body.txt'
+  expect((await executeHvyCliCommand(document, session, 'find /body/tools-technologies -name skill-record.txt')).output).not.toContain(
+    '/body/tools-technologies/tool-typescript/skill-record.txt'
   );
   expect(serializeDocument(document)).not.toContain('id":"tool-typescript"');
 });
@@ -140,13 +140,26 @@ test('cli find supports common filters and warns about ignored options', async (
   expect(directories).toContain('/body/tools-technologies/tool-typescript');
   expect(directories).not.toContain('/body/tools-technologies/tool-typescript/expandable-content');
 
-  const files = (await executeHvyCliCommand(document, session, 'find /body/tools-technologies/tool-typescript -type f -name body.txt')).output;
-  expect(files).toContain('/body/tools-technologies/tool-typescript/body.txt');
+  const files = (await executeHvyCliCommand(document, session, 'find /body/tools-technologies/tool-typescript -type f -name skill-record.txt')).output;
+  expect(files).toContain('/body/tools-technologies/tool-typescript/skill-record.txt');
 
-  expect((await executeHvyCliCommand(document, session, 'find /body -mtime 1 -name body.txt')).output).toContain(
+  expect((await executeHvyCliCommand(document, session, 'find /body -mtime 1 -name skill-record.txt')).output).toContain(
     'Warning: find ignored unsupported option -mtime'
   );
   expect((await executeHvyCliCommand(document, session, 'ls -lah /body')).output).toContain('Warning: ls ignored unsupported option -lah');
+});
+
+test('cli find limits broad result sets', async () => {
+  const document = deserializeDocument('---\nhvy_version: 0.1\n---\n', '.hvy');
+  const session = createHvyCliSession();
+
+  for (let index = 0; index < 105; index += 1) {
+    await executeHvyCliCommand(document, session, `hvy add section /body item-${index} "Item ${index}"`);
+  }
+
+  const output = (await executeHvyCliCommand(document, session, 'find /body -type d')).output;
+  expect(output.split('\n').filter((line) => line.startsWith('/body'))).toHaveLength(100);
+  expect(output).toContain('Warning: find output truncated to 100 of 106 results.');
 });
 
 test('deserializing custom resume components does not warn about missing app state', () => {
@@ -175,9 +188,9 @@ test('cli commands can create a chore chart with tables and form plugins', async
   );
   await run('hvy add plugin db-table /chore-chart weekly-leaders weekly_chore_leaders "SELECT person, completed_count FROM weekly_chore_leaders ORDER BY completed_count DESC"');
 
-  expect((await run('find /chore-chart -name body.txt')).output).toContain('/body/chore-chart/add-chore-form/body.txt');
+  expect((await run('find /chore-chart -name plugin.txt')).output).toContain('/body/chore-chart/add-chore-form/plugin.txt');
   expect((await run('cat /chore-chart/active-chores/table.json')).output).toContain('"tableColumns": "Chore,Dad,Mom,Child"');
-  expect((await run('cat /chore-chart/assign-chore-form/body.txt')).output).toContain('submitLabel: Assign chore');
+  expect((await run('cat /chore-chart/assign-chore-form/plugin.txt')).output).toContain('submitLabel: Assign chore');
   expect((await run('cat /chore-chart/weekly-leaders/plugin.json')).output).toContain('"table": "weekly_chore_leaders"');
 
   const serialized = serializeDocument(document);

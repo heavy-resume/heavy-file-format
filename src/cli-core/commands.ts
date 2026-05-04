@@ -13,6 +13,7 @@ import { getSectionId } from '../section-ops';
 
 const SCRATCHPAD_SOFT_MAX_CHARS = 400;
 const SCRATCHPAD_HARD_MAX_CHARS = 600;
+const FIND_MAX_RESULTS = 100;
 
 export interface HvyCliSession {
   cwd: string;
@@ -285,15 +286,18 @@ function commandFind(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cw
   const root = resolveVirtualPath(ctx.fs, ctx.cwd, parsed.path);
   const regex = parsed.namePattern ? globToRegExp(parsed.namePattern) : null;
   const rootDepth = depthForPath(root);
-  const output = [...ctx.fs.entries.values()]
+  const matches = [...ctx.fs.entries.values()]
     .filter((entry) => entry.path === root || entry.path.startsWith(root === '/' ? '/' : `${root}/`))
     .filter((entry) => !parsed.type || entry.kind === parsed.type)
     .filter((entry) => parsed.maxDepth === null || depthForPath(entry.path) - rootDepth <= parsed.maxDepth)
     .filter((entry) => !regex || regex.test(entry.path.split('/').pop() ?? ''))
     .map((entry) => entry.path)
-    .sort()
-    .join('\n');
-  return withWarnings(output, parsed.warnings);
+    .sort();
+  const output = matches.slice(0, FIND_MAX_RESULTS).join('\n');
+  const warnings = matches.length > FIND_MAX_RESULTS
+    ? [...parsed.warnings, `Warning: find output truncated to ${FIND_MAX_RESULTS} of ${matches.length} results.`]
+    : parsed.warnings;
+  return withWarnings(output, warnings);
 }
 
 function commandRg(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd: string }, args: string[]): string {
@@ -680,7 +684,7 @@ function helpFor(topic = ''): string {
     head: formatCommandHelp('head [-n COUNT] FILE', 'Print the first lines of a file. COUNT maxes at 100.'),
     tail: formatCommandHelp('tail [-n COUNT] FILE', 'Print the last lines of a file. COUNT maxes at 100.'),
     nl: formatCommandHelp('nl FILE', 'Print file contents with line numbers.'),
-    find: formatCommandHelp('find [PATH] [-name GLOB] [-type f|d] [-maxdepth N] [-print]', 'List virtual paths below PATH.'),
+    find: formatCommandHelp('find [PATH] [-name GLOB] [-type f|d] [-maxdepth N] [-print]', 'List up to 100 virtual paths below PATH.'),
     rg: formatCommandHelp('rg [-i] PATTERN [PATH]', 'Search readable virtual files.'),
     rm: formatCommandHelp('rm -r PATH...', 'Remove section or component directories from the virtual document body.'),
     echo: formatCommandHelp('echo TEXT [> FILE|>> FILE]', 'Print text, replace a writable file, or append to a writable file.'),

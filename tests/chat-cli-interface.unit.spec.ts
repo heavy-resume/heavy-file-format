@@ -52,7 +52,7 @@ test('chat cli runs commands against the document filesystem and persists mutati
   expect((await cli.run('hvy add section /body chores "Chores"')).mutated).toBe(true);
   expect((await cli.run('hvy add text /body/chores note "Weekly chore plan"')).output).toBe('/body/chores/note');
   expect((await cli.run('find /body -type d -maxdepth 1')).output).toContain('/body/chores');
-  expect((await cli.run('cat /chores/note/body.txt')).output).toBe('Weekly chore plan');
+  expect((await cli.run('cat /chores/note/text.txt')).output).toBe('Weekly chore plan');
   expect(cli.snapshot().cwd).toBe('/');
   expect(serializeDocument(document)).toContain('Weekly chore plan');
 });

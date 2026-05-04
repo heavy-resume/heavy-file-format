@@ -7,6 +7,7 @@ import { DB_TABLE_PLUGIN_ID, FORM_PLUGIN_ID } from '../plugins/registry';
 import { getSectionId } from '../section-ops';
 import type { VisualDocument } from '../types';
 import { makeId } from '../utils';
+import { getHvyCliPluginCommandRegistration, getHvyCliPluginCommandRegistrations, type HvyCliHelpCommand } from './plugin-command-registry';
 import { resolveVirtualPath, type HvyVirtualFileSystem } from './virtual-file-system';
 
 export interface HvyDocumentCommandContext {
@@ -58,16 +59,15 @@ export function hvyDocumentCommandHelp(topic = ''): string {
       formatCommandHelp('hvy add section PARENT_PATH ID TITLE', 'Create a section.'),
       formatCommandHelp('hvy add text SECTION_PATH ID TEXT', 'Create a text component.'),
       formatCommandHelp('hvy add table SECTION_PATH ID COLUMNS [--row CSV]...', 'Create a table component.'),
-      formatCommandHelp('hvy add plugin PLUGIN SECTION_PATH ID ...', 'Create a plugin component. Try `man hvy plugin`.'),
+      ...formatPluginQuickReference(),
       formatCommandHelp('Edit existing components', 'Use find to discover virtual files, cat to inspect them, and sed to update writable body/config files.'),
     ].join('\n'),
     section: formatCommandHelp('hvy add section PARENT_PATH ID TITLE', 'Add a section under /body or under another section. Alias: hvy section add.'),
     text: formatCommandHelp('hvy add text SECTION_PATH ID TEXT', 'Append a text block to a section. Alias: hvy text add.'),
     table: formatCommandHelp('hvy add table SECTION_PATH ID COLUMNS [--row CSV]...', 'Append a table block. Columns and rows use comma-separated text. Alias: hvy table add.'),
     plugin: [
-      formatCommandHelp('hvy add plugin PLUGIN SECTION_PATH ID ...', 'Create a plugin component. Supported plugin shortcuts: form, db-table.'),
-      formatCommandHelp('hvy plugin form', 'Show form plugin commands.'),
-      formatCommandHelp('hvy plugin db-table', 'Show DB table plugin commands and SQL helpers.'),
+      ...formatPluginQuickReference(),
+      ...getHvyCliPluginCommandRegistrations().map((plugin) => formatCommandHelp(plugin.helpTopic, `Show ${plugin.name} plugin commands.`)),
       formatCommandHelp('hvy add plugin SECTION_PATH ID PLUGIN_ID [--config JSON] [--body TEXT]', 'Create a raw plugin block by plugin id.'),
     ].join('\n'),
     form: formatFormPluginHelp('form add'),
@@ -98,17 +98,31 @@ function formatDbTablePluginHelp(prefix: string): string {
     ? 'db-table show SECTION_PATH ID TABLE [QUERY]'
     : 'hvy add plugin db-table SECTION_PATH ID TABLE [QUERY]';
   const operationPrefix = prefix === 'db-table' ? 'db-table' : 'hvy plugin db-table';
+  const dbTableCommands = getHvyCliPluginCommandRegistration('db-table');
+  const operationCommands = prefix === 'db-table'
+    ? [
+        { command: 'db-table query [SELECT/WITH SQL]', description: 'Run read-only SQL and print result rows.' },
+        { command: 'db-table exec [CREATE / INSERT / UPDATE / DELETE / DROP SQL]', description: 'Run modifying SQL and persist the database.' },
+        { command: 'db-table tables', description: 'List SQLite tables and views.' },
+        { command: 'db-table schema [TABLE_OR_VIEW]', description: 'Show schema details.' },
+      ]
+    : dbTableCommands?.operationCommands ?? [];
   return [
     formatCommandHelp(showCommand, 'Create a DB Table plugin that shows a SQLite table/view with an optional SQL query. Legacy alias: db-table show/add.'),
-    formatCommandHelp(`${operationPrefix} query [SELECT/WITH SQL]`, 'Run read-only SQL and print result rows.'),
-    formatCommandHelp(`${operationPrefix} exec [CREATE / INSERT / UPDATE / DELETE / DROP SQL]`, 'Run modifying SQL and persist the database.'),
-    formatCommandHelp(`${operationPrefix} tables`, 'List SQLite tables and views.'),
-    formatCommandHelp(`${operationPrefix} schema [TABLE_OR_VIEW]`, 'Show schema details.'),
+    ...operationCommands.map((entry) => formatCommandHelp(prefix === 'db-table' ? entry.command : entry.command.replace('hvy plugin db-table', operationPrefix), entry.description)),
   ].join('\n');
 }
 
 function formatCommandHelp(command: string, description: string): string {
   return `${command}\n  ${description}`;
+}
+
+function formatPluginQuickReference(): string[] {
+  return getHvyCliPluginCommandRegistrations().flatMap((plugin) => formatPluginRegisteredHelp(plugin));
+}
+
+function formatPluginRegisteredHelp(plugin: { addCommands: HvyCliHelpCommand[]; operationCommands: HvyCliHelpCommand[] }): string[] {
+  return [...plugin.addCommands, ...plugin.operationCommands].map((entry) => formatCommandHelp(entry.command, entry.description));
 }
 
 function executeHvyAddCommand(ctx: HvyDocumentCommandContext, kind = '', args: string[]): HvyDocumentCommandResult {

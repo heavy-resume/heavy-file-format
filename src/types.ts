@@ -110,6 +110,7 @@ export interface HvyCliHistoryEntry {
 
 export interface HvyCliSessionState {
   cwd: string;
+  scratchpadContent?: string;
 }
 
 export interface ThemeConfig {

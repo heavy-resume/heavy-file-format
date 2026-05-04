@@ -8,9 +8,12 @@ import {
 } from './virtual-file-system';
 import { executeHvyDocumentCommand, hvyDocumentCommandHelp } from './hvy-document-commands';
 import { createScriptingDbRuntime, formatQueryResultTable, getDocumentDbTableObjectNames } from '../plugins/db-table';
+import type { VisualBlock, VisualSection } from '../editor/types';
+import { getSectionId } from '../section-ops';
 
 export interface HvyCliSession {
   cwd: string;
+  scratchpadContent?: string;
 }
 
 export interface HvyCliExecution {
@@ -20,7 +23,7 @@ export interface HvyCliExecution {
 }
 
 export function createHvyCliSession(): HvyCliSession {
-  return { cwd: '/' };
+  return { cwd: '/', scratchpadContent: defaultScratchpadContent() };
 }
 
 export function getHvyCliCommandSummary(): string {
@@ -35,6 +38,7 @@ export async function executeHvyCliCommand(document: VisualDocument, session: Hv
 
   const command = args[0] ?? '';
   const fs = buildHvyVirtualFileSystem(document);
+  addSessionScratchpadFile(fs, session);
   const ctx = { document, fs, cwd: session.cwd };
   const result = await runCommand(ctx, command, args.slice(1));
   session.cwd = result.cwd;
@@ -75,6 +79,13 @@ async function runCommand(ctx: { document: VisualDocument; fs: ReturnType<typeof
   }
   if (command === 'rg') {
     return { cwd: ctx.cwd, output: commandRg(ctx, args), mutated: false };
+  }
+  if (command === 'rm') {
+    return { cwd: ctx.cwd, output: commandRm(ctx, args), mutated: true };
+  }
+  if (command === 'echo') {
+    const result = commandEcho(ctx, args);
+    return { cwd: ctx.cwd, output: result.output, mutated: result.mutated };
   }
   if (command === 'sed') {
     return { cwd: ctx.cwd, output: commandSed(ctx, args), mutated: true };
@@ -186,6 +197,22 @@ function commandLs(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd:
   return withWarnings(listDirectory(ctx.fs, target).map(formatEntry).join('\n'), warnings);
 }
 
+function addSessionScratchpadFile(fs: ReturnType<typeof buildHvyVirtualFileSystem>, session: HvyCliSession): void {
+  session.scratchpadContent ??= defaultScratchpadContent();
+  fs.entries.set('/scratchpad.txt', {
+    kind: 'file',
+    path: '/scratchpad.txt',
+    read: () => session.scratchpadContent ?? defaultScratchpadContent(),
+    write: (content) => {
+      session.scratchpadContent = content;
+    },
+  });
+}
+
+function defaultScratchpadContent(): string {
+  return 'No notes yet. Edit /scratchpad.txt to change me. Keep track of your progress.\n';
+}
+
 function commandCat(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd: string }, args: string[]): string {
   if (args.length === 0) {
     throw new Error('cat: missing file operand');
@@ -258,6 +285,172 @@ function commandRg(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd:
     });
   }
   return withWarnings(lines.join('\n'), warnings);
+}
+
+function commandRm(ctx: { document: VisualDocument; fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd: string }, args: string[]): string {
+  const recursive = args.some((arg) => arg === '-r' || arg === '-R' || arg === '--recursive');
+  const targets = args.filter((arg) => !arg.startsWith('-'));
+  if (targets.length === 0) {
+    throw new Error('rm: missing operand');
+  }
+  return targets
+    .map((target) => {
+      const resolved = resolveVirtualPath(ctx.fs, ctx.cwd, target);
+      const entry = ctx.fs.entries.get(resolved);
+      if (!entry) {
+        throw new Error(`rm: no such file or directory: ${target}`);
+      }
+      if (entry.kind === 'file') {
+        throw new Error(`rm: cannot remove virtual file directly: ${resolved}`);
+      }
+      if (!recursive) {
+        throw new Error(`rm: ${resolved} is a directory; use -r`);
+      }
+      removeDocumentDirectory(ctx.document, resolved);
+      return `${resolved}: removed`;
+    })
+    .join('\n');
+}
+
+function removeDocumentDirectory(document: VisualDocument, path: string): void {
+  if (path === '/' || path === '/body' || path === '/attachments') {
+    throw new Error(`rm: refusing to remove protected directory: ${path}`);
+  }
+  if (!path.startsWith('/body/')) {
+    throw new Error(`rm: can only remove document body directories: ${path}`);
+  }
+  const parts = path.split('/').filter(Boolean).slice(1);
+  if (!removeBodyPath(document.sections, parts)) {
+    throw new Error(`rm: cannot map virtual path to document node: ${path}`);
+  }
+}
+
+function removeBodyPath(sections: VisualSection[], parts: string[]): boolean {
+  if (parts.length === 0) {
+    return false;
+  }
+  const [head = '', ...tail] = parts;
+  const sectionIndex = sections.findIndex((section) => pathSegmentForId(getSectionId(section)) === head);
+  if (sectionIndex >= 0) {
+    const section = sections[sectionIndex];
+    if (!section) {
+      return false;
+    }
+    if (tail.length === 0) {
+      sections.splice(sectionIndex, 1);
+      return true;
+    }
+    return removeFromSection(section, tail);
+  }
+  return false;
+}
+
+function removeFromSection(section: VisualSection, parts: string[]): boolean {
+  if (parts.length === 0) {
+    return false;
+  }
+  const [head = '', ...tail] = parts;
+  const childSectionIndex = section.children.findIndex((child) => pathSegmentForId(getSectionId(child)) === head);
+  if (childSectionIndex >= 0) {
+    const child = section.children[childSectionIndex];
+    if (!child) {
+      return false;
+    }
+    if (tail.length === 0) {
+      section.children.splice(childSectionIndex, 1);
+      return true;
+    }
+    return removeFromSection(child, tail);
+  }
+  const blockRemoved = removeBlockPath(section.blocks, [head, ...tail]);
+  if (blockRemoved) {
+    return true;
+  }
+  return false;
+}
+
+function removeBlockPath(blocks: VisualBlock[], parts: string[]): boolean {
+  const [head = '', ...tail] = parts;
+  for (let index = 0; index < blocks.length; index += 1) {
+    const block = blocks[index];
+    if (!block) {
+      continue;
+    }
+    if (pathSegmentForId(block.schema.id) === head) {
+      if (tail.length === 0) {
+        blocks.splice(index, 1);
+        return true;
+      }
+      return removeFromBlock(block, tail);
+    }
+    for (const nestedBlocks of getNestedBlockLists(block)) {
+      if (removeBlockPath(nestedBlocks, parts)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function removeFromBlock(block: VisualBlock, parts: string[]): boolean {
+  const [head = '', ...tail] = parts;
+  const nestedLists = getNestedBlockLists(block);
+  for (const nestedBlocks of nestedLists) {
+    for (let index = 0; index < nestedBlocks.length; index += 1) {
+      const child = nestedBlocks[index];
+      if (!child) {
+        continue;
+      }
+      if (pathSegmentForId(child.schema.id) === head) {
+        if (tail.length === 0) {
+          nestedBlocks.splice(index, 1);
+          return true;
+        }
+        return removeFromBlock(child, tail);
+      }
+    }
+  }
+  return false;
+}
+
+function getNestedBlockLists(block: VisualBlock): VisualBlock[][] {
+  return [
+    block.schema.containerBlocks ?? [],
+    block.schema.componentListBlocks ?? [],
+    block.schema.expandableStubBlocks?.children ?? [],
+    block.schema.expandableContentBlocks?.children ?? [],
+    (block.schema.gridItems ?? []).map((item) => item.block),
+  ];
+}
+
+function pathSegmentForId(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+function commandEcho(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd: string }, args: string[]): { output: string; mutated: boolean } {
+  const redirectIndex = args.findIndex((arg) => arg === '>' || arg === '>>');
+  if (redirectIndex < 0) {
+    return { output: args.join(' '), mutated: false };
+  }
+  const operator = args[redirectIndex] ?? '';
+  const path = args[redirectIndex + 1] ?? '';
+  if (!path) {
+    throw new Error(`echo: ${operator} requires a file path`);
+  }
+  if (args.slice(redirectIndex + 2).length > 0) {
+    throw new Error('echo: expected redirection at the end of the command');
+  }
+  const file = getReadableFile(ctx, path);
+  if (!file.write) {
+    throw new Error(`echo: file is read-only: ${file.path}`);
+  }
+  const text = `${args.slice(0, redirectIndex).join(' ')}\n`;
+  file.write(operator === '>>' ? `${file.read()}${text}` : text);
+  return { output: `${file.path}: ${operator === '>>' ? 'appended' : 'written'}`, mutated: true };
 }
 
 function commandSed(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd: string }, args: string[]): string {
@@ -402,7 +595,7 @@ function formatEntry(entry: HvyVirtualEntry): string {
   return `${entry.kind === 'dir' ? 'dir ' : 'file'} ${entry.path.split('/').pop() || '/'}`;
 }
 
-function tokenizeCommand(input: string): string[] {
+export function tokenizeCommand(input: string): string[] {
   const tokens: string[] = [];
   let current = '';
   let quote: '"' | "'" | null = null;
@@ -447,7 +640,7 @@ function globToRegExp(glob: string): RegExp {
 
 function helpFor(topic = ''): string {
   const help: Record<string, string> = {
-    '': 'Commands: cd, pwd, ls, cat, head, tail, nl, find, rg, sed, hvy. Use man <command> for details.',
+    '': 'Commands: cd, pwd, ls, cat, head, tail, nl, find, rg, rm, echo, sed, hvy. Use man <command> for details.',
     cd: formatCommandHelp('cd PATH', 'Change the current virtual directory.'),
     pwd: formatCommandHelp('pwd', 'Print the current virtual directory.'),
     ls: formatCommandHelp('ls [PATH]', 'List files and directories.'),
@@ -457,6 +650,8 @@ function helpFor(topic = ''): string {
     nl: formatCommandHelp('nl FILE', 'Print file contents with line numbers.'),
     find: formatCommandHelp('find [PATH] [-name GLOB] [-type f|d] [-maxdepth N] [-print]', 'List virtual paths below PATH.'),
     rg: formatCommandHelp('rg [-i] PATTERN [PATH]', 'Search readable virtual files.'),
+    rm: formatCommandHelp('rm -r PATH...', 'Remove section or component directories from the virtual document body.'),
+    echo: formatCommandHelp('echo TEXT [> FILE|>> FILE]', 'Print text, replace a writable file, or append to a writable file.'),
     sed: formatCommandHelp('sed s/search/replace/[g] FILE', 'Update a writable virtual file with a search/replace.'),
     hvy: hvyDocumentCommandHelp(),
     section: hvyDocumentCommandHelp('section'),

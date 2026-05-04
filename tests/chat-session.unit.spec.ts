@@ -1,25 +1,36 @@
 import { beforeEach, expect, test, vi } from 'vitest';
 
-import { appendUserChatMessage, copyChatMessageToHvySection, requestChatTurn } from '../src/chat/chat-session';
-import { deserializeDocument } from '../src/serialization';
+import { appendUserChatMessage, copyChatMessageToHvySection, requestChatTurn, requestDocumentEditChatTurn } from '../src/chat/chat-session';
+import { deserializeDocument, serializeDocument } from '../src/serialization';
 import type { ChatMessage, ChatSettings } from '../src/types';
 
-const { requestChatCompletionMock, runQaToolLoopMock } = vi.hoisted(() => ({
+const { requestChatCompletionMock, requestProxyCompletionMock, runQaToolLoopMock, writeChatCliCommandTraceMock } = vi.hoisted(() => ({
   requestChatCompletionMock: vi.fn(),
+  requestProxyCompletionMock: vi.fn(),
   runQaToolLoopMock: vi.fn(),
+  writeChatCliCommandTraceMock: vi.fn(),
 }));
 
 vi.mock('../src/chat/chat', () => ({
   requestChatCompletion: requestChatCompletionMock,
+  requestProxyCompletion: requestProxyCompletionMock,
 }));
 
 vi.mock('../src/ai-qa', () => ({
   runQaToolLoop: runQaToolLoopMock,
 }));
 
+vi.mock('../src/chat-cli/chat-cli-dev-trace', () => ({
+  createChatCliTraceRunId: () => 'chat-cli-test',
+  writeChatCliUserQueryTrace: vi.fn(),
+  writeChatCliCommandTrace: writeChatCliCommandTraceMock,
+}));
+
 beforeEach(() => {
   requestChatCompletionMock.mockReset();
+  requestProxyCompletionMock.mockReset();
   runQaToolLoopMock.mockReset();
+  writeChatCliCommandTraceMock.mockReset();
 });
 
 const DOC_WITH_DB_TABLE = `---
@@ -127,6 +138,123 @@ test('requestChatTurn returns assistant error message on failure', async () => {
       content: 'Proxy unavailable.',
       error: true,
     })
+  );
+});
+
+test('requestDocumentEditChatTurn runs the CLI edit loop for document chat', async () => {
+  requestProxyCompletionMock
+    .mockResolvedValueOnce('hvy add section /body chores "Chores"')
+    .mockResolvedValueOnce('```shell\nhvy add text /body/chores note "Weekly chore plan"\n```')
+    .mockResolvedValueOnce('done Created the chore section.');
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+  const document = deserializeDocument('---\nhvy_version: 0.1\n---\n', '.hvy');
+  const onMutation = vi.fn();
+  const onProgress = vi.fn();
+
+  const result = await requestDocumentEditChatTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Add a chore section.',
+    onMutation,
+    onProgress,
+  });
+
+  expect(result.error).toBeNull();
+  expect(serializeDocument(document)).toContain('Weekly chore plan');
+  expect(onMutation).toHaveBeenCalledWith('chat-cli');
+  expect(onProgress.mock.calls.map((call) => call[0].content)).toEqual([
+    '$ hvy add section /body chores "Chores"',
+    '$ hvy add text /body/chores note "Weekly chore plan"',
+    'Finished CLI edit loop.',
+  ]);
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]).toEqual(
+    expect.objectContaining({
+      settings,
+      mode: 'document-edit',
+      debugLabel: 'chat-cli-edit:1',
+      context: expect.stringContaining('scratchpad.txt:'),
+      formatInstructions: expect.stringContaining('Return exactly one terminal command'),
+    })
+  );
+  expect(result.messages.at(-1)).toEqual(expect.objectContaining({
+    role: 'assistant',
+    content: 'Created the chore section.',
+  }));
+});
+
+test('requestDocumentEditChatTurn trims old cli conversation messages and keeps scratchpad progress', async () => {
+  requestProxyCompletionMock
+    .mockResolvedValueOnce(`echo "${'x'.repeat(700)}"`)
+    .mockResolvedValueOnce('pwd')
+    .mockResolvedValueOnce('pwd')
+    .mockResolvedValueOnce('pwd')
+    .mockResolvedValueOnce('done Checked the document.');
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+  const document = deserializeDocument('---\nhvy_version: 0.1\n---\n', '.hvy');
+
+  const result = await requestDocumentEditChatTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Check the document with several commands.',
+  });
+
+  expect(result.error).toBeNull();
+  expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.messages.length).toBeGreaterThanOrEqual(5);
+  expect(
+    requestProxyCompletionMock.mock.calls[4]?.[0]?.messages.reduce((total: number, message: ChatMessage) => total + message.content.length, 0)
+  ).toBeLessThanOrEqual(500);
+  expect(JSON.stringify(requestProxyCompletionMock.mock.calls[4]?.[0]?.messages)).not.toContain('x'.repeat(700));
+  expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.context).toContain('scratchpad.txt:');
+  expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.context).toContain('ran: pwd -> /');
+});
+
+test('requestDocumentEditChatTurn accepts shell-looking command wrappers', async () => {
+  requestProxyCompletionMock
+    .mockResolvedValueOnce('`ls /`')
+    .mockResolvedValueOnce('```shell\nls /body```')
+    .mockResolvedValueOnce('/ $ pwd')
+    .mockResolvedValueOnce('done Checked shell wrappers.');
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+  const document = deserializeDocument('---\nhvy_version: 0.1\n---\n', '.hvy');
+  const onProgress = vi.fn();
+
+  const result = await requestDocumentEditChatTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Check shell command wrappers.',
+    onProgress,
+  });
+
+  expect(result.error).toBeNull();
+  expect(onProgress.mock.calls.map((call) => call[0].content)).toEqual([
+    '$ ls /',
+    '$ ls /body',
+    '$ pwd',
+    'Finished CLI edit loop.',
+  ]);
+});
+
+test('requestDocumentEditChatTurn logs failed cli commands before returning the error', async () => {
+  requestProxyCompletionMock.mockResolvedValueOnce('not-a-command');
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+  const document = deserializeDocument('---\nhvy_version: 0.1\n---\n', '.hvy');
+
+  const result = await requestDocumentEditChatTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Run a bad command.',
+  });
+
+  expect(result.error).toBe('Unknown command "not-a-command". Try "help".');
+  expect(writeChatCliCommandTraceMock).toHaveBeenCalledWith(
+    'chat-cli-test',
+    'not-a-command',
+    'Unknown command "not-a-command". Try "help".',
+    undefined
   );
 });
 

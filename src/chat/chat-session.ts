@@ -3,8 +3,8 @@ import { hasDocumentDbTables } from '../plugins/db-table';
 import { runQaToolLoop } from '../ai-qa';
 import type { ChatMessage, ChatSettings, VisualDocument } from '../types';
 import type { VisualSection } from '../editor/types';
-import { requestAiDocumentEditTurn } from '../ai-document-edit';
 import { deserializeDocumentWithDiagnostics, wrapHvyFragmentAsDocument } from '../serialization';
+import { runChatCliEditLoop } from '../chat-cli/chat-cli-edit-loop';
 
 export interface ChatTurnResult {
   messages: ChatMessage[];
@@ -125,5 +125,54 @@ export async function requestDocumentEditChatTurn(params: {
   onProgress?: (message: ChatMessage) => void;
   signal?: AbortSignal;
 }): Promise<ChatTurnResult> {
-  return requestAiDocumentEditTurn(params);
+  const nextMessages = appendUserChatMessage(params.messages, params.request);
+  const progressMessages: ChatMessage[] = [];
+  const emitProgress = (message: ChatMessage): void => {
+    progressMessages.push(message);
+    params.onProgress?.(message);
+  };
+
+  try {
+    const result = await runChatCliEditLoop({
+      settings: params.settings,
+      document: params.document,
+      request: params.request,
+      onMutation: params.onMutation,
+      onProgress: (content) =>
+        emitProgress({
+          id: crypto.randomUUID(),
+          role: 'assistant',
+          content,
+          progress: true,
+        }),
+      signal: params.signal,
+    });
+    return {
+      messages: [
+        ...nextMessages,
+        ...progressMessages,
+        {
+          id: crypto.randomUUID(),
+          role: 'assistant',
+          content: result.summary,
+        },
+      ],
+      error: null,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'CLI document edit failed.';
+    return {
+      messages: [
+        ...nextMessages,
+        ...progressMessages,
+        {
+          id: crypto.randomUUID(),
+          role: 'assistant',
+          content: message,
+          error: true,
+        },
+      ],
+      error: message,
+    };
+  }
 }

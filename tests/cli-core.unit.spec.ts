@@ -44,6 +44,30 @@ test('cli sed updates writable virtual files', async () => {
   expect(document.sections[0]?.blocks[0]?.text).toBe('Hello there');
 });
 
+test('cli echo supports shell-style redirection to writable virtual files', async () => {
+  const document = createCliTestDocument();
+  const session = createHvyCliSession();
+
+  expect((await executeHvyCliCommand(document, session, 'ls /')).output).toContain('file scratchpad.txt');
+  expect((await executeHvyCliCommand(document, session, 'cat /scratchpad.txt')).output).toContain('scratchpad.txt (task notes and progress)');
+  expect((await executeHvyCliCommand(document, session, 'echo "Task note" >> scratchpad.txt')).output).toBe('/scratchpad.txt: appended');
+  expect((await executeHvyCliCommand(document, session, 'cat scratchpad.txt')).output).toContain('Task note');
+
+  expect((await executeHvyCliCommand(document, session, 'echo "plain output"')).output).toBe('plain output');
+
+  const writeResult = await executeHvyCliCommand(document, session, 'echo "First note" > /body/summary/intro/body.txt');
+  expect(writeResult.mutated).toBe(true);
+  expect(writeResult.output).toBe('/body/summary/intro/body.txt: written');
+
+  const appendResult = await executeHvyCliCommand(document, session, 'echo "Second note" >> /body/summary/intro/body.txt');
+  expect(appendResult.mutated).toBe(true);
+  expect(appendResult.output).toBe('/body/summary/intro/body.txt: appended');
+  expect((await executeHvyCliCommand(document, session, 'cat /body/summary/intro/body.txt')).output).toBe('First note\nSecond note\n');
+
+  await expect(executeHvyCliCommand(document, session, 'echo nope > /body/summary')).rejects.toThrow('Is a directory');
+  expect((await executeHvyCliCommand(document, session, 'man echo')).output).toContain('echo TEXT [> FILE|>> FILE]');
+});
+
 test('cli exposes resume component-list items by stable section paths', async () => {
   const document = createResumeCliTestDocument();
   const session = createHvyCliSession();
@@ -72,6 +96,24 @@ test('cli accepts body section aliases from root and mutates resume virtual file
   expect((await executeHvyCliCommand(document, session, 'cat /tools-technologies/tool-typescript/body.txt')).output).toContain(
     'Core application language.'
   );
+});
+
+test('cli rm recursively removes virtual body directories', async () => {
+  const document = createResumeCliTestDocument();
+  const session = createHvyCliSession();
+
+  await expect(executeHvyCliCommand(document, session, 'rm /body/tools-technologies/tool-typescript')).rejects.toThrow(
+    'is a directory; use -r'
+  );
+
+  const result = await executeHvyCliCommand(document, session, 'rm -r body/tools-technologies/tool-typescript');
+
+  expect(result.mutated).toBe(true);
+  expect(result.output).toBe('/body/tools-technologies/tool-typescript: removed');
+  expect((await executeHvyCliCommand(document, session, 'find /body/tools-technologies -name body.txt')).output).not.toContain(
+    '/body/tools-technologies/tool-typescript/body.txt'
+  );
+  expect(serializeDocument(document)).not.toContain('id":"tool-typescript"');
 });
 
 test('cli find supports common filters and warns about ignored options', async () => {
@@ -138,6 +180,21 @@ test('hvy plugin db-table help leads with show and keeps add as an alias', async
   expect(help).toContain('Legacy alias: db-table show/add');
   expect(help).toContain('hvy plugin db-table query [SELECT/WITH SQL]');
   expect(help).toContain('hvy plugin db-table exec [CREATE / INSERT / UPDATE / DELETE / DROP SQL]');
+});
+
+test('hvy help lists registered plugin add and operation commands as quick-reference options', async () => {
+  const document = createCliTestDocument();
+  const session = createHvyCliSession();
+
+  const help = (await executeHvyCliCommand(document, session, 'man hvy')).output;
+
+  expect(help).toContain('hvy add plugin form SECTION_PATH ID SUBMIT_BUTTON_LABEL FIELD...');
+  expect(help).toContain('hvy add plugin db-table SECTION_PATH ID TABLE [QUERY]');
+  expect(help).toContain('hvy plugin db-table query [SELECT/WITH SQL]');
+  expect(help).toContain('hvy plugin db-table exec [CREATE / INSERT / UPDATE / DELETE / DROP SQL]');
+  expect(help).toContain('hvy plugin db-table tables');
+  expect(help).toContain('hvy plugin db-table schema [TABLE_OR_VIEW]');
+  expect(help).not.toContain('Try `man hvy plugin`');
 });
 
 test('hvy plugin form help explains script and submit options', async () => {

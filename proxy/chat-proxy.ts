@@ -10,8 +10,11 @@ const ANTHROPIC_API_VERSION = '2023-06-01';
 const DEV_TRACE_DIR = path.resolve(process.cwd(), 'dev-traces');
 const AGENT_LOOP_TRACE_FILE = path.join(DEV_TRACE_DIR, 'agent-loop.ndjson');
 const AGENT_LOOP_TEXT_TRACE_FILE = path.join(DEV_TRACE_DIR, 'agent-loop.txt');
+const AI_CLI_LOG_FILE = path.join(DEV_TRACE_DIR, 'ai_cli_log.txt');
 const AGENT_LOOP_TRACE_MAX_LINES = 500;
 const AGENT_LOOP_TRACE_PRUNE_LINES = 100;
+const AI_CLI_LOG_MAX_LINES = 500;
+const AI_CLI_LOG_PRUNE_LINES = 50;
 const OPENAI_REASONING_EFFORT = 'low';
 
 let traceWriteQueue = Promise.resolve();
@@ -641,10 +644,41 @@ function writeTrace(event: TraceEvent): void {
       if (prunedTextContents.length !== textContents.length) {
         await fs.writeFile(AGENT_LOOP_TEXT_TRACE_FILE, prunedTextContents, 'utf8');
       }
+      const aiCliLogEntry = formatAiCliLogEvent(event);
+      if (aiCliLogEntry) {
+        await fs.appendFile(AI_CLI_LOG_FILE, aiCliLogEntry, 'utf8');
+        const aiCliLogContents = await fs.readFile(AI_CLI_LOG_FILE, 'utf8');
+        const prunedAiCliLogContents = pruneTraceLines(aiCliLogContents, AI_CLI_LOG_MAX_LINES, AI_CLI_LOG_PRUNE_LINES);
+        if (prunedAiCliLogContents.length !== aiCliLogContents.length) {
+          await fs.writeFile(AI_CLI_LOG_FILE, prunedAiCliLogContents, 'utf8');
+        }
+      }
     })
     .catch((error: unknown) => {
       console.warn('[hvy:chat-proxy] failed to write dev trace', error);
     });
+}
+
+export function formatAiCliLogEvent(event: TraceEvent): string {
+  if (!event.runId.startsWith('chat-cli-')) {
+    return '';
+  }
+  if (event.type === 'client_event' && event.payload.event === 'ai_cli_user_query') {
+    return `user query\n${String(event.payload.query ?? '').trim()}\n`;
+  }
+  if (event.type === 'client_event' && event.payload.event === 'ai_cli_command') {
+    return [
+      '',
+      `> ${String(event.payload.command ?? '').trim()}`,
+      String(event.payload.output ?? '').trimEnd(),
+      '',
+    ].join('\n');
+  }
+  if (event.type === 'provider_response') {
+    const usage = summarizeProviderTokenUsage(event.payload.payload).replace(/^usage=/, '').replaceAll(',', ', ');
+    return usage ? `\ntoken usage\n${usage}\n` : '';
+  }
+  return '';
 }
 
 function summarizeTracePayload(event: TraceEvent): string {

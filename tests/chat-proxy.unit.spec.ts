@@ -6,6 +6,7 @@ import {
   buildRepairPrompt,
   extractAnthropicText,
   extractOpenAiText,
+  formatAiCliLogEvent,
   formatTraceEvent,
   formatTraceTextEvent,
   pruneTraceLines,
@@ -295,6 +296,47 @@ test('formatTraceTextEvent writes provider token usage', () => {
   );
 
   expect(line).toBe('[2026-05-02T12:00:00.000Z] run-1 document-edit provider_response :: provider=openai ok=true status=200 usage=input_tokens=100,output_tokens=25,total_tokens=125,cached_tokens=40,reasoning_tokens=10\n');
+});
+
+test('formatAiCliLogEvent writes clean chat cli trace entries only for chat cli runs', () => {
+  expect(formatAiCliLogEvent({
+    runId: 'chat-cli-run-1',
+    phase: 'document-edit',
+    type: 'client_event',
+    payload: { event: 'ai_cli_user_query', query: 'Create a chore chart.' },
+  })).toBe('user query\nCreate a chore chart.\n');
+
+  expect(formatAiCliLogEvent({
+    runId: 'chat-cli-run-1',
+    phase: 'document-edit',
+    type: 'client_event',
+    payload: { event: 'ai_cli_command', command: 'pwd', output: '/' },
+  })).toBe('\n> pwd\n/\n');
+
+  expect(formatAiCliLogEvent({
+    runId: 'chat-cli-run-1',
+    phase: 'document-edit',
+    type: 'provider_response',
+    payload: {
+      provider: 'openai',
+      ok: true,
+      status: 200,
+      payload: {
+        usage: {
+          input_tokens: 100,
+          output_tokens: 25,
+          total_tokens: 125,
+        },
+      },
+    },
+  })).toBe('\ntoken usage\ninput_tokens=100, output_tokens=25, total_tokens=125\n');
+
+  expect(formatAiCliLogEvent({
+    runId: 'run-1',
+    phase: 'document-edit',
+    type: 'client_event',
+    payload: { event: 'ai_cli_command', command: 'pwd', output: '/' },
+  })).toBe('');
 });
 
 test('buildOpenAiProxyRequest does not send trace run ids upstream', () => {

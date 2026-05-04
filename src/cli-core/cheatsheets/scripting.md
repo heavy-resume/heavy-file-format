@@ -19,8 +19,11 @@ doc.header.get("key")
 doc.header.set("key", "value")
 doc.db.query("SELECT * FROM chores")
 doc.db.execute("INSERT INTO chores (title) VALUES (?)", ["Dishes"])
+doc.cli.run("hvy request_structure --collapse")
 doc.tool("request_structure", {})
 ```
+
+`doc.cli.run(COMMAND)` runs one synchronous virtual CLI command and returns stdout. It supports document/file commands such as `hvy add`, `hvy remove`, `hvy request_structure`, `cat`, `rg`, `find`, and `sed`. It does not run pipes, shell chains, redirection, `ask`, `done`, or db-table SQL commands; use `doc.db.query` and `doc.db.execute` for SQL.
 
 Use tool help for exact `doc.tool` call shapes:
 

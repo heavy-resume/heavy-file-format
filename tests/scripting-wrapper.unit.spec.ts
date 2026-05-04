@@ -13,6 +13,7 @@ import {
 } from '../src/plugins/scripting/wrapper';
 import { createScriptingRuntime } from '../src/plugins/scripting/runtime';
 import { SCRIPTING_PLUGIN_VERSION } from '../src/plugins/scripting/version';
+import { deserializeDocument } from '../src/serialization';
 
 test('instrumentPythonSource adds step calls without rewriting compare expressions', () => {
   expect(
@@ -254,5 +255,29 @@ test('createScriptingRuntime exposes a supplied database API', () => {
   ]);
   expect(runtime.doc.db.execute('INSERT INTO chores (title) VALUES (?)', ['Sweep'])).toBe(
     'ran INSERT INTO chores (title) VALUES (?) with ["Sweep"]'
+  );
+});
+
+test('createScriptingRuntime exposes synchronous hvy cli commands', () => {
+  const document = deserializeDocument('---\nhvy_version: 0.1\n---\n', '.hvy');
+  const runtime = createScriptingRuntime({ document });
+
+  expect(runtime.doc.cli.run('hvy add section / notes "Notes"')).toBe('/body/notes');
+  expect(runtime.doc.cli.run('hvy add text /notes intro "Hello from CLI"')).toContain('/body/notes/intro: created');
+  expect(runtime.doc.cli.run('cat /notes/intro/text.txt')).toBe('Hello from CLI');
+  expect(runtime.stats.toolCalls).toBe(3);
+});
+
+test('createScriptingRuntime points db-table SQL callers at doc.db instead of cli', () => {
+  const runtime = createScriptingRuntime({
+    document: { meta: {}, extension: '.hvy', sections: [], attachments: [] },
+    db: {
+      query: () => [],
+      execute: () => 'ok',
+    },
+  });
+
+  expect(() => runtime.doc.cli.run('hvy plugin db-table exec "CREATE TABLE things (id INTEGER)"')).toThrow(
+    'doc.cli.run cannot run db-table SQL commands. Use doc.db.query or doc.db.execute instead.'
   );
 });

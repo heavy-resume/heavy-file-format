@@ -35,6 +35,10 @@ programmatically. Scripts cannot reach the network — they only see the
  - `doc.attachments.write(id, bytes, meta=None)` — create or replace an
    attachment.
  - `doc.attachments.remove(id)` — delete an attachment.
+ - `doc.cli.run(command)` — run one synchronous virtual CLI command and
+   return stdout. Use this for commands such as `hvy add`, `hvy remove`,
+   `hvy request_structure`, `cat`, `rg`, `find`, and `sed`. Use `doc.db`
+   directly for SQL rather than `hvy plugin db-table query/exec`.
  - Plugin-provided APIs may also be present on `doc` when the relevant plugin
    is available. Use the relevant plugin's help for that API.
  - `doc.rerender()` — flush any pending re-render now (usually unnecessary;
@@ -99,6 +103,13 @@ programmatically. Scripts cannot reach the network — they only see the
  ```python
  hits = doc.tool("grep", { "query": "TODO", "flags": "i" })
  doc.header.set("todo_hits", hits)
+ ```
+
+ Use the virtual CLI from a script:
+
+ ```python
+ out = doc.cli.run("hvy request_structure --collapse")
+ doc.header.set("structure_preview", out[:200])
  ```
 
 <!--hvy: {"id":"limits","expanded":false}-->

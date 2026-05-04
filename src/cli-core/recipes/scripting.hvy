@@ -10,6 +10,12 @@ hvy preview /automation/summarize
 hvy lint
 ```
 
+The same scripting block could use the virtual CLI directly:
+
+```shell
+hvy add plugin /automation cli-example dev.heavy.scripting --config "{\"version\":\"0.1\"}" --body "out = doc.cli.run('hvy request_structure --collapse')\ndoc.header.set('cli_structure_preview', out[:200])"
+```
+
 For forms, store the script on the form and set it as the submit handler:
 
 ```shell
@@ -35,5 +41,6 @@ Expected result:
 
 - `/body/automation/summarize` is a scripting plugin.
 - The script runs in sandboxed Brython/Python with one global: `doc`.
+- `doc.cli.run(COMMAND)` runs one synchronous virtual CLI command and returns stdout.
 - Form scripts also get `doc.form`.
 - `doc.db` works directly with the attached SQLite database; no database component is required.

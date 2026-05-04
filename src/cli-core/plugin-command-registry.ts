@@ -183,6 +183,7 @@ registerHvyCliPluginCommands({
     'doc.header.get/set/remove/keys reads and writes front matter.',
     'doc.attachments.list/read/write/remove works with document attachments.',
     'doc.db.query(sql, params) and doc.db.execute(sql, params) access the attached SQLite database when available.',
+    'doc.cli.run(command) runs one synchronous virtual CLI command and returns stdout; use doc.db for SQL.',
     'doc.form exists only while running form plugin scripts. Use form plugin help for doc.form methods.',
     'doc.rerender() flushes pending rendering work, but scripts usually do not need it because the host rerenders after the script finishes.',
     'Example: summary = doc.tool("request_structure"); doc.header.set("script_summary", summary[:200])',

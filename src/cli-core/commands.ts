@@ -124,6 +124,87 @@ export async function executeHvyCliCommand(document: VisualDocument, session: Hv
   return result;
 }
 
+export function executeHvyCliCommandSync(document: VisualDocument, input: string, cwd = '/'): HvyCliExecution {
+  const expandedInput = expandShellSubstitutions(input, new Date());
+  const args = tokenizeCommand(expandedInput);
+  if (args.length === 0) {
+    return { cwd, output: '', mutated: false };
+  }
+  if (args.some((arg) => ['|', '&&', '||', ';', '>', '>>', '<'].includes(arg))) {
+    throw new Error('doc.cli.run supports one command at a time without pipes, command chaining, or redirection.');
+  }
+  const [command = '', ...rest] = args;
+  const fs = buildHvyVirtualFileSystem(document);
+  const ctx: HvyCliCommandContext = { document, fs, cwd };
+  if (command === 'help' || command === 'man') {
+    return { cwd, output: helpFor(rest.join(' ')), mutated: false };
+  }
+  if (rest.includes('--help')) {
+    return { cwd, output: helpFor(command), mutated: false };
+  }
+  if (command === 'pwd') {
+    return { cwd, output: cwd, mutated: false };
+  }
+  if (command === 'ls') {
+    return { cwd, output: commandLs(ctx, rest), mutated: false };
+  }
+  if (command === 'cat') {
+    return { cwd, output: commandCat(ctx, rest), mutated: false };
+  }
+  if (command === 'head' || command === 'tail') {
+    return { cwd, output: commandHeadTail(ctx, rest, command), mutated: false };
+  }
+  if (command === 'nl') {
+    return { cwd, output: commandNl(ctx, rest), mutated: false };
+  }
+  if (command === 'rg') {
+    return { cwd, output: commandRg(ctx, rest), mutated: false };
+  }
+  if (command === 'grep') {
+    return { cwd, output: commandGrep(ctx, rest), mutated: false };
+  }
+  if (command === 'find') {
+    return { cwd, output: commandFindWithoutExec(ctx, rest), mutated: false };
+  }
+  if (command === 'rm') {
+    return { cwd, output: commandRm(ctx, rest), mutated: true };
+  }
+  if (command === 'cp') {
+    return { cwd, output: commandCp(ctx, rest), mutated: true };
+  }
+  if (command === 'sed') {
+    return { cwd, output: commandSed(ctx, rest), mutated: true };
+  }
+  if (command === 'hvy') {
+    if (rest[0] === 'lint') {
+      throw new Error('doc.cli.run cannot run hvy lint because plugin lint checks may be async.');
+    }
+    if (rest[0] === 'plugin' && rest[1] === 'db-table' && isDbTableSqlAction(rest[2] ?? '')) {
+      throw new Error('doc.cli.run cannot run db-table SQL commands. Use doc.db.query or doc.db.execute instead.');
+    }
+    if (rest[0] === 'add-component') {
+      const [component = '', ...componentRest] = rest.slice(1);
+      const result = executeHvyDocumentCommand(ctx, ['add', component, ...componentRest]);
+      return { cwd, output: result.output, mutated: result.mutated };
+    }
+    if (rest[0] === 'prune-xref') {
+      return { cwd, output: commandPruneXref(document, rest.slice(1)), mutated: true };
+    }
+    if (rest[0] === 'read') {
+      return { cwd, output: commandCat(ctx, rest.slice(1)), mutated: false };
+    }
+    if (rest[0] === 'preview') {
+      return { cwd, output: commandHvyPreview(ctx, rest.slice(1)), mutated: false };
+    }
+    if (rest[0] === 'remove' || rest[0] === 'delete') {
+      return { cwd, output: commandRm(ctx, ['-r', ...rest.slice(1)]), mutated: true };
+    }
+    const result = executeHvyDocumentCommand(ctx, rest);
+    return { cwd, output: result.output, mutated: result.mutated };
+  }
+  throw new Error(`doc.cli.run does not support command "${command}".`);
+}
+
 function truncateCliOutput(output: string, options: { preserveFindWarning?: boolean } = {}): string {
   if (!output) {
     return output;
@@ -583,19 +664,7 @@ function parseNlArgs(args: string[]): { paths: string[]; width: number; separato
 
 async function commandFind(ctx: HvyCliCommandContext, args: string[]): Promise<HvyCliExecution> {
   const parsed = parseFindArgs(args);
-  const root = resolveVirtualPath(ctx.fs, ctx.cwd, parsed.path);
-  const regex = parsed.namePattern ? globToRegExp(parsed.namePattern) : null;
-  const rootDepth = depthForPath(root);
-  const matches = [...ctx.fs.entries.values()]
-    .filter((entry) => entry.path === root || entry.path.startsWith(root === '/' ? '/' : `${root}/`))
-    .filter((entry) => !parsed.type || entry.kind === parsed.type)
-    .filter((entry) => parsed.maxDepth === null || depthForPath(entry.path) - rootDepth <= parsed.maxDepth)
-    .filter((entry) => !regex || regex.test(entry.path.split('/').pop() ?? ''))
-    .map((entry) => entry.path)
-    .sort();
-  const warnings = matches.length > FIND_MAX_RESULTS && !parsed.exec
-    ? [...parsed.warnings, `Warning: find output truncated to ${FIND_MAX_RESULTS} of ${matches.length} results.`]
-    : parsed.warnings;
+  const { matches, warnings } = collectFindMatches(ctx, parsed);
   if (!parsed.exec) {
     return { cwd: ctx.cwd, output: withWarningsFirst(matches.slice(0, FIND_MAX_RESULTS).join('\n'), warnings), mutated: false };
   }
@@ -618,6 +687,34 @@ async function commandFind(ctx: HvyCliCommandContext, args: string[]): Promise<H
     }
   }
   return { cwd: ctx.cwd, output: withWarnings(commandOutputs.join('\n'), warnings), mutated };
+}
+
+function commandFindWithoutExec(ctx: HvyCliCommandContext, args: string[]): string {
+  const parsed = parseFindArgs(args);
+  if (parsed.exec) {
+    throw new Error('doc.cli.run find does not support -exec.');
+  }
+  const { matches, warnings } = collectFindMatches(ctx, parsed);
+  return withWarningsFirst(matches.slice(0, FIND_MAX_RESULTS).join('\n'), warnings);
+}
+
+function collectFindMatches(ctx: HvyCliCommandContext, parsed: ReturnType<typeof parseFindArgs>): { matches: string[]; warnings: string[] } {
+  const root = resolveVirtualPath(ctx.fs, ctx.cwd, parsed.path);
+  const regex = parsed.namePattern ? globToRegExp(parsed.namePattern) : null;
+  const rootDepth = depthForPath(root);
+  const matches = [...ctx.fs.entries.values()]
+    .filter((entry) => entry.path === root || entry.path.startsWith(root === '/' ? '/' : `${root}/`))
+    .filter((entry) => !parsed.type || entry.kind === parsed.type)
+    .filter((entry) => parsed.maxDepth === null || depthForPath(entry.path) - rootDepth <= parsed.maxDepth)
+    .filter((entry) => !regex || regex.test(entry.path.split('/').pop() ?? ''))
+    .map((entry) => entry.path)
+    .sort();
+  return {
+    matches,
+    warnings: matches.length > FIND_MAX_RESULTS && !parsed.exec
+      ? [...parsed.warnings, `Warning: find output truncated to ${FIND_MAX_RESULTS} of ${matches.length} results.`]
+      : parsed.warnings,
+  };
 }
 
 function commandRg(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd: string }, args: string[]): string {

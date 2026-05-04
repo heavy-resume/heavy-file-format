@@ -24,6 +24,7 @@ import { capturePaneScroll, restorePaneScroll, centerPendingEditorSection, focus
 import { bindUi } from './bind-ui';
 import { deserializeDocumentBytes, serializeDocument } from './serialization';
 import { createDefaultChatState, renderChatPanel } from './chat/chat';
+import { captureChatThreadScroll, restoreChatThreadScroll } from './chat/chat-thread-ui';
 import { loadResumeState, saveResumeState } from './state-persistence';
 import { registerHostPlugin, SCRIPTING_PLUGIN_ID } from './plugins/registry';
 import { reconcilePluginMounts, capturePluginFocus } from './plugins/mount';
@@ -354,6 +355,7 @@ function renderApp(): void {
 
   let stepStartedAt = performance.now();
   state.paneScroll = capturePaneScroll(state.paneScroll, app);
+  const chatScroll = captureChatThreadScroll(app);
   captureMs = performance.now() - stepStartedAt;
 
   stepStartedAt = performance.now();
@@ -522,6 +524,7 @@ function renderApp(): void {
 
   stepStartedAt = performance.now();
   restorePaneScroll(state.paneScroll, app);
+  restoreChatThreadScroll(app, chatScroll);
   restoreMs = performance.now() - stepStartedAt;
 
   stepStartedAt = performance.now();

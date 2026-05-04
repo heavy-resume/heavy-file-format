@@ -5,6 +5,47 @@ let lastBoundChatMessageSignature = '';
 let lastChatScrollTop = 0;
 let wasChatNearBottom = true;
 
+export type ChatThreadScrollState = {
+  scrollTop: number;
+  distanceFromBottom: number;
+  stickToLatest: boolean;
+} | null;
+
+export function captureChatThreadScroll(root: ParentNode): ChatThreadScrollState {
+  const chatScrollContainer = root.querySelector<HTMLDivElement>('[data-chat-scroll-container]');
+  if (!chatScrollContainer || !state.chat.panelOpen) {
+    return null;
+  }
+  const distanceFromBottom = chatScrollContainer.scrollHeight - chatScrollContainer.scrollTop - chatScrollContainer.clientHeight;
+  return {
+    scrollTop: chatScrollContainer.scrollTop,
+    distanceFromBottom,
+    stickToLatest: state.chat.isSending || distanceFromBottom <= 48,
+  };
+}
+
+export function restoreChatThreadScroll(root: ParentNode, captured: ChatThreadScrollState): void {
+  if (!captured || !state.chat.panelOpen) {
+    return;
+  }
+  const restore = (): void => {
+    const chatScrollContainer = root.querySelector<HTMLDivElement>('[data-chat-scroll-container]');
+    if (!chatScrollContainer) {
+      return;
+    }
+    if (captured.stickToLatest) {
+      chatScrollContainer.scrollTop = chatScrollContainer.scrollHeight;
+      return;
+    }
+    chatScrollContainer.scrollTop = Math.min(captured.scrollTop, chatScrollContainer.scrollHeight);
+  };
+  restore();
+  window.requestAnimationFrame(() => {
+    restore();
+    window.requestAnimationFrame(restore);
+  });
+}
+
 export function bindChatThreadUi(
   chatThread: HTMLDivElement | null,
   chatScrollContainer: HTMLDivElement | null,

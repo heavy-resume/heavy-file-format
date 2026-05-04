@@ -1,3 +1,4 @@
+import { resolveBaseComponentFromMeta } from '../component-defs';
 import type { JsonObject } from '../hvy/types';
 import type { VisualDocument } from '../types';
 import type { HvyVirtualEntry, HvyVirtualFileSystem } from './virtual-file-system';
@@ -28,19 +29,20 @@ const COMPONENT_TYPE_CODES: Record<string, string> = {
 };
 
 export function formatHvyRequestStructure(document: VisualDocument, fs: HvyVirtualFileSystem): string {
+  const entries = collectComponentStructureEntries(document, fs).map((entry, index) => withStableId(entry, index));
   return [
     formatComponentCodeKey(),
     '',
     'Custom component types:',
     ...formatCustomComponentDefinitions(document),
     '',
-    'Component directories:',
-    ...collectComponentStructureEntries(fs).map(formatComponentStructureLine),
+    'Components:',
+    ...formatComponentTree(entries),
   ].join('\n');
 }
 
-export function formatHvyStructureForPaths(fs: HvyVirtualFileSystem, rawPaths: string[]): string {
-  const allEntries = collectComponentStructureEntries(fs);
+export function formatHvyStructureForPaths(document: VisualDocument, fs: HvyVirtualFileSystem, rawPaths: string[]): string {
+  const allEntries = collectComponentStructureEntries(document, fs).map(withStableId);
   const selected = allEntries.filter((entry) =>
     rawPaths.some((path) => path === entry.directory || path === entry.textPath || path === entry.jsonPath || path.startsWith(`${entry.directory}/`))
   );
@@ -62,16 +64,16 @@ export function extractVirtualPathsFromOutput(output: string): string[] {
     .filter(Boolean);
 }
 
-function collectComponentStructureEntries(fs: HvyVirtualFileSystem): ComponentStructureEntry[] {
+function collectComponentStructureEntries(document: VisualDocument, fs: HvyVirtualFileSystem): ComponentStructureEntry[] {
   return [...fs.entries.values()]
     .filter((entry): entry is HvyVirtualEntry & { kind: 'file' } =>
       entry.kind === 'file' && entry.path.startsWith('/body/') && entry.path.endsWith('.json') && !entry.path.endsWith('/section.json'))
-    .map((entry) => componentEntryFromJsonFile(fs, entry.path))
+    .map((entry) => componentEntryFromJsonFile(document, fs, entry.path))
     .filter((entry): entry is ComponentStructureEntry => !!entry)
     .sort((left, right) => left.directory.localeCompare(right.directory));
 }
 
-function componentEntryFromJsonFile(fs: HvyVirtualFileSystem, jsonPath: string): ComponentStructureEntry | null {
+function componentEntryFromJsonFile(document: VisualDocument, fs: HvyVirtualFileSystem, jsonPath: string): ComponentStructureEntry | null {
   const directory = jsonPath.replace(/\/[^/]+$/, '');
   const type = jsonPath.split('/').pop()?.replace(/\.json$/, '') ?? '';
   const textPath = `${directory}/${type}.txt`;
@@ -80,10 +82,11 @@ function componentEntryFromJsonFile(fs: HvyVirtualFileSystem, jsonPath: string):
     return null;
   }
   const config = readJsonFile(fs, jsonPath);
+  const baseType = resolveBaseComponentFromMeta(type, document.meta);
   return {
-    code: COMPONENT_TYPE_CODES[type] ?? '?',
+    code: COMPONENT_TYPE_CODES[baseType] ?? '?',
     directory,
-    id: typeof config.id === 'string' && config.id.trim() ? config.id.trim() : '(none)',
+    id: typeof config.id === 'string' && config.id.trim() ? config.id.trim() : '',
     type,
     textPath,
     jsonPath,
@@ -106,7 +109,7 @@ function readJsonFile(fs: HvyVirtualFileSystem, path: string): JsonObject {
 }
 
 function formatComponentCodeKey(): string {
-  return 'Key: [x] text, [c] container, [p] plugin, [t] table, [i] image, [g] grid, [l] component-list, [e] expandable, [r] xref-card, [?] custom/unknown.';
+  return 'Key: [x] text, [c] container, [p] plugin, [t] table, [i] image, [g] grid, [l] component-list, [e] expandable, [r] xref-card, [?] unknown. Custom types use their base type code.';
 }
 
 function formatCustomComponentDefinitions(document: VisualDocument): string[] {
@@ -124,7 +127,7 @@ function formatCustomComponentDefinitions(document: VisualDocument): string[] {
 }
 
 function formatComponentStructureLine(entry: ComponentStructureEntry): string {
-  return `[${entry.code}] ${entry.directory} id=${entry.id} type=${entry.type} text=${entry.textPath}`;
+  return `[${entry.code}] ${entry.textPath.split('/').pop() ?? entry.textPath} id=${entry.id}`;
 }
 
 function formatSearchStructureLine(entry: ComponentStructureEntry): string {
@@ -136,4 +139,41 @@ function formatSearchStructureLine(entry: ComponentStructureEntry): string {
       ].join('')
     : '';
   return `${formatComponentStructureLine(entry)}${xref}`;
+}
+
+type ComponentTreeNode = {
+  name: string;
+  children: Map<string, ComponentTreeNode>;
+  entry?: ComponentStructureEntry;
+};
+
+function formatComponentTree(entries: ComponentStructureEntry[]): string[] {
+  const root: ComponentTreeNode = { name: '', children: new Map() };
+  for (const entry of entries) {
+    const parts = entry.textPath.split('/').filter(Boolean);
+    let current = root;
+    for (const part of parts) {
+      const child = current.children.get(part) ?? { name: part, children: new Map() };
+      current.children.set(part, child);
+      current = child;
+    }
+    current.entry = entry;
+  }
+  return [...root.children.values()].flatMap((child) => formatComponentTreeNode(child, 0));
+}
+
+function formatComponentTreeNode(node: ComponentTreeNode, depth: number): string[] {
+  const children = [...node.children.values()];
+  if (!node.entry && children.length === 1 && children[0]?.entry && children[0].children.size === 0) {
+    return [`${'  '.repeat(depth)}/${node.name} ${formatComponentStructureLine(children[0].entry)}`];
+  }
+  const label = node.entry ? formatComponentStructureLine(node.entry) : `/${node.name}`;
+  return [
+    `${'  '.repeat(depth)}${label}`,
+    ...children.flatMap((child) => formatComponentTreeNode(child, depth + 1)),
+  ];
+}
+
+function withStableId(entry: ComponentStructureEntry, index: number): ComponentStructureEntry {
+  return entry.id ? entry : { ...entry, id: `C${index}` };
 }

@@ -69,7 +69,7 @@ export function executeHvyDocumentCommand(ctx: HvyDocumentCommandContext, args: 
   if (resource === 'db-table' && (action === 'show' || action === 'add')) {
     return addDbTablePluginBlock(ctx, rest);
   }
-  throw new Error('hvy: expected add, plugin, section add, text add, table add, form add, or db-table show');
+  throw new Error('hvy: expected request_structure, add, plugin, section add, text add, table add, form add, or db-table show');
 }
 
 export function hvyDocumentCommandHelp(topic = ''): string {

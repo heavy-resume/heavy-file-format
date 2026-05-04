@@ -18,7 +18,7 @@ export function buildChatCliComponentHints(params: {
     .map((path) => buildComponentPathHint(path, fs))
     .filter((hint): hint is string => !!hint);
   const searchStructureHint = isSearchStyleCommand(params.command)
-    ? formatHvyStructureForPaths(fs, extractVirtualPathsFromOutput(params.output ?? ''))
+    ? formatHvyStructureForPaths(params.document, fs, extractVirtualPathsFromOutput(params.output ?? ''))
     : '';
   const hints = [...new Set([searchStructureHint, ...commandHints].filter(Boolean))];
   return hints.slice(0, COMPONENT_HINTS_MAX_COUNT + 1).join('\n');

@@ -1,6 +1,6 @@
 const CHAT_CLI_PERSISTENT_INSTRUCTIONS = [
-  'You are editing an HVY document through a virtual filesystem and virtual shell. You are not familiar with this.',
-  'This is a complex document that consists of many components (like a DOM) but in a directory structure.',
+  'You are editing an HVY document through a limited virtual filesystem / shell. You are not familiar with this.',
+  'This is a complex document that consists of many nested components (like a DOM) but looks like a directory structure.',
   'Components have properties (json) and a body (txt). The file has a header (header.yaml) where',
   'user created component definitions go. Use request_structure and search results to identify components before acting.',
   'The filesystem is the workspace that will become one .hvy file.',

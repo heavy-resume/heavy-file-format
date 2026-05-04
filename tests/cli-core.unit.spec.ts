@@ -473,16 +473,23 @@ component_defs:
  Hello
 
 <!--hvy:xref-card {"id":"typescript-card","xrefTitle":"TypeScript","xrefTarget":"tool-typescript"}-->
+
+<!--hvy:xref-card {"xrefTitle":"Python","xrefTarget":"tool-python"}-->
+
+<!--hvy:skill-card {"id":"library-card","xrefTitle":"Library Development","xrefTarget":"skill-library-development"}-->
 `, '.hvy');
   const session = createHvyCliSession();
 
   const result = await executeHvyCliCommand(document, session, 'hvy request_structure');
 
   expect(result.mutated).toBe(false);
-  expect(result.output).toContain('Key: [x] text, [c] container, [p] plugin, [t] table, [i] image');
+  expect(result.output).toContain('Custom types use their base type code.');
   expect(result.output).toContain('- skill-card baseType=xref-card - Skill card');
-  expect(result.output).toContain('[x] /body/summary/intro id=intro type=text text=/body/summary/intro/text.txt');
-  expect(result.output).toContain('[r] /body/summary/typescript-card id=typescript-card type=xref-card text=/body/summary/typescript-card/xref-card.txt');
+  expect(result.output).toContain('Components:');
+  expect(result.output).toContain('/body\n  /summary\n    /intro [x] text.txt id=intro');
+  expect(result.output).toContain('/typescript-card [r] xref-card.txt id=typescript-card');
+  expect(result.output).toMatch(/\/xref-card-\d+ \[r\] xref-card\.txt id=C\d+/);
+  expect(result.output).toContain('/library-card [r] skill-card.txt id=library-card');
 
   await expect(executeHvyCliCommand(document, session, 'hvy request_structure /body')).rejects.toThrow(
     'hvy request_structure takes no arguments'

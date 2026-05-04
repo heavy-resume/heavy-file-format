@@ -181,7 +181,7 @@ test('requestDocumentEditChatTurn runs the CLI edit loop for document chat', asy
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Task goal:\nAdd a chore section.');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Initial terminal output:\n> ls /\ndir  attachments');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('> hvy request_structure');
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Component directories:');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Components:');
   expect(writeChatCliCommandTraceMock.mock.calls[0]).toEqual([
     'chat-cli-test',
     'ls /',
@@ -191,7 +191,7 @@ test('requestDocumentEditChatTurn runs the CLI edit loop for document chat', asy
   expect(writeChatCliCommandTraceMock.mock.calls[1]).toEqual([
     'chat-cli-test',
     'hvy request_structure',
-    expect.stringContaining('Component directories:'),
+    expect.stringContaining('Components:'),
     undefined,
   ]);
   expect(result.messages.at(-1)).toEqual(expect.objectContaining({
@@ -383,7 +383,7 @@ hvy_version: 0.1
   const nextPrompt = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content ?? '';
   expect(nextPrompt).toContain('Search result component structure:');
   expect(nextPrompt).toContain('Key: [x] text, [c] container');
-  expect(nextPrompt).toContain('[r] /body/summary/typescript-card id=typescript-card type=xref-card');
+  expect(nextPrompt).toContain('[r] xref-card.txt id=typescript-card');
   expect(nextPrompt).toContain('xrefTarget=tool-typescript');
   expect(nextPrompt).toContain('prefer `hvy remove /body/summary/typescript-card` over editing JSON text');
 });
@@ -517,14 +517,14 @@ test('requestDocumentEditChatTurn lets the cli edit loop retry after command err
 
   expect(result.error).toBeNull();
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content).toContain(
-    'result\nhvy: expected add, plugin, section add, text add, table add, form add, or db-table show'
+    'result\nhvy: expected request_structure, add, plugin, section add, text add, table add, form add, or db-table show'
   );
   expect(writeChatCliCommandTraceMock).toHaveBeenCalledWith(
     'chat-cli-test',
     'hvy',
-    'hvy: expected add, plugin, section add, text add, table add, form add, or db-table show',
+    'hvy: expected request_structure, add, plugin, section add, text add, table add, form add, or db-table show',
     undefined,
-    expect.stringContaining('result\nhvy: expected add, plugin, section add, text add, table add, form add, or db-table show')
+    expect.stringContaining('result\nhvy: expected request_structure, add, plugin, section add, text add, table add, form add, or db-table show')
   );
 });
 
@@ -547,9 +547,9 @@ test('requestDocumentEditChatTurn stops after repeated cli command errors', asyn
   expect(requestProxyCompletionMock).toHaveBeenCalledTimes(3);
   expect(writeChatCliCommandTraceMock.mock.calls.map((call) => call[2])).toEqual([
     expect.stringContaining('dir  body'),
-    expect.stringContaining('Component directories:'),
+    expect.stringContaining('Components:'),
     'Unknown command "not-a-command". Try "help".',
-    'hvy: expected add, plugin, section add, text add, table add, form add, or db-table show',
+    'hvy: expected request_structure, add, plugin, section add, text add, table add, form add, or db-table show',
     'No such file: /missing.txt',
   ]);
 });

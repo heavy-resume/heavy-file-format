@@ -191,10 +191,7 @@ function normalizeCommandResponse(response: string): string {
   const unfenced = fenced ? fenced[1]?.trim() ?? '' : withoutControlChars;
   const inlineCode = unfenced.match(/^`([^`]+)`$/);
   const commandText = inlineCode ? inlineCode[1]?.trim() ?? '' : unfenced;
-  return commandText
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .find((line) => line.length > 0) ?? '';
+  return commandText.trim();
 }
 
 function formatCommandResultForModel(result: string | { output: string; hints?: string; scratchpad?: string }): string {

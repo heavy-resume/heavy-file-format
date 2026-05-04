@@ -500,6 +500,31 @@ test('requestDocumentEditChatTurn treats prose and dangling fences as retryable 
   expect(writeChatCliCommandTraceMock.mock.calls.map((call) => call[1])).toEqual(['ls /', 'hvy request_structure --collapse']);
 });
 
+test('requestDocumentEditChatTurn preserves multiline quoted shell commands', async () => {
+  requestProxyCompletionMock
+    .mockResolvedValueOnce(`\`\`\`shell
+echo "Plan:
+1. Remove xref cards
+2. Verify results
+Progress: started" > /scratchpad.txt
+\`\`\``)
+    .mockResolvedValueOnce('done Wrote the plan.');
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+  const document = deserializeDocument('---\nhvy_version: 0.1\n---\n', '.hvy');
+
+  const result = await requestDocumentEditChatTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Write a multiline plan.',
+  });
+
+  expect(result.error).toBeNull();
+  expect(writeChatCliCommandTraceMock.mock.calls[2]?.[1]).toContain('echo "Plan:\n1. Remove xref cards');
+  expect(writeChatCliCommandTraceMock.mock.calls[2]?.[2]).toBe('/scratchpad.txt: written');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content).toContain('Plan:\n1. Remove xref cards');
+});
+
 test('requestDocumentEditChatTurn lets the cli edit loop retry after command errors', async () => {
   requestProxyCompletionMock
     .mockResolvedValueOnce('hvy')

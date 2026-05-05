@@ -13,6 +13,7 @@ import { findSectionByKey } from '../section-ops';
 import { findBlockByIds } from '../block-ops';
 import { getCachedComponentRenderHelpers } from '../state';
 import { DB_TABLE_PLUGIN_ID } from './registry';
+import dbTableDocumentation from './db-table.about.txt?raw';
 
 // Captured focus state inside a db-table editor before its inner HTML is
 // rebuilt. Each input is identified by its data-* attributes (which db-table
@@ -149,6 +150,10 @@ export const dbTablePluginFactory: HvyPluginFactory = build;
 export const dbTablePluginRegistration: HvyPluginRegistration = {
   id: DB_TABLE_PLUGIN_ID,
   displayName: 'DB Table',
+  documentation: {
+    filename: 'about-db-table.txt',
+    text: dbTableDocumentation,
+  },
   aiHint: (block) => {
     const table = typeof block.schema.pluginConfig.table === 'string' && block.schema.pluginConfig.table.trim().length > 0
       ? block.schema.pluginConfig.table.trim()

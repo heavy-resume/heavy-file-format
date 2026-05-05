@@ -1,0 +1,4 @@
+Container component: groups nested HVY components.
+containerBlocks holds the child block array.
+Plain Markdown before the first numbered container slot is treated as the first implicit child block.
+Numbered container slots order children by their numeric suffix; slot markers carry only slot metadata.

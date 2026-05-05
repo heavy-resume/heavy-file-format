@@ -3,6 +3,8 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import { createHvyCliSession, executeHvyCliCommand } from '../src/cli-core/commands';
+import { formPluginRegistration } from '../src/plugins/form';
+import { setHostPlugins } from '../src/plugins/registry';
 import { deserializeDocument, serializeDocument } from '../src/serialization';
 
 function createCliTestDocument() {
@@ -29,10 +31,38 @@ test('cli can navigate and read virtual component files', async () => {
 
   expect((await executeHvyCliCommand(document, session, 'ls /')).output).toContain('body');
   expect((await executeHvyCliCommand(document, session, 'cd /body/summary')).cwd).toBe('/body/summary');
+  expect((await executeHvyCliCommand(document, session, 'ls /body/summary')).output).toContain('file about-section.txt [ro]');
+  expect((await executeHvyCliCommand(document, session, 'ls /body/summary')).output).toContain('file section-info.txt [ro]');
+  expect((await executeHvyCliCommand(document, session, 'cat /body/summary/about-section.txt')).output).toContain(
+    'Section: top-level or nested document region with a heading and ordered content.'
+  );
+  expect((await executeHvyCliCommand(document, session, 'cat /body/summary/section-info.txt')).output).toContain(
+    'Section: top-level or nested document region with a heading and ordered content.'
+  );
+  expect((await executeHvyCliCommand(document, session, 'cat /body/summary/section-info.txt')).output).toContain('This section');
   expect((await executeHvyCliCommand(document, session, 'ls /body/summary/intro')).output).toContain('file text.txt [w]');
+  expect((await executeHvyCliCommand(document, session, 'ls /body/summary/intro')).output).toContain('file about-text.txt [ro]');
   expect((await executeHvyCliCommand(document, session, 'cat intro/text.txt')).output).toBe('Hello world');
   expect((await executeHvyCliCommand(document, session, 'cat intro/text.json')).output).toContain('"css": "margin: 0.5rem 0;"');
+  expect((await executeHvyCliCommand(document, session, 'cat intro/about-text.txt')).output).toContain('Text component: Markdown block content rendered in normal document flow.');
   expect((await executeHvyCliCommand(document, session, 'man ls')).output).toContain('Files are marked [w] writable or [ro] read-only.');
+});
+
+test('about-section includes the section metadata description when present', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"history","description":"Work history section. Keep entries reverse chronological."}-->
+#! History
+`, '.hvy');
+  const session = createHvyCliSession();
+
+  const about = await executeHvyCliCommand(document, session, 'cat /body/history/about-section.txt');
+
+  expect(about.output).toContain('Section description:');
+  expect(about.output).toContain('Work history section. Keep entries reverse chronological.');
+  expect(about.output).toContain('Section: top-level or nested document region with a heading and ordered content.');
 });
 
 test('cli accepts shell commands prefixed with hvy', async () => {
@@ -52,14 +82,14 @@ test('cli resolves component directories for common read commands', async () => 
   const document = createResumeCliTestDocument();
   const session = createHvyCliSession();
 
-  const catDirectory = await executeHvyCliCommand(document, session, 'cat /body/skills/skill-software-engineering');
+  const catDirectory = await executeHvyCliCommand(document, session, 'cat /body/skills/component-list-1/skill-software-engineering');
   expect(catDirectory.output).toContain('Software Engineering');
   expect(catDirectory.output).toContain('#### Description');
 
-  const catTxtAlias = await executeHvyCliCommand(document, session, 'cat /body/skills/skill-software-engineering.txt');
+  const catTxtAlias = await executeHvyCliCommand(document, session, 'cat /body/skills/component-list-1/skill-software-engineering.txt');
   expect(catTxtAlias.output).toContain('Software Engineering');
 
-  const numbered = await executeHvyCliCommand(document, session, 'nl -ba /body/skills/skill-software-engineering');
+  const numbered = await executeHvyCliCommand(document, session, 'nl -ba /body/skills/component-list-1/skill-software-engineering');
   expect(numbered.output).toContain('     1\tSoftware Engineering');
 
   const head = await executeHvyCliCommand(document, session, 'head -n 1 /body/top-skills-tools-technologies/grid-0');
@@ -105,6 +135,35 @@ scripts:
   expect((await executeHvyCliCommand(document, session, 'cat /body/automation/assign/plugin.txt')).output).toContain('doc.form.set_options("Chore", [])');
 });
 
+test('cli exposes plugin-registered documentation files next to plugin virtual files', async () => {
+  setHostPlugins([formPluginRegistration]);
+  try {
+    const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"automation"}-->
+#! Automation
+
+<!--hvy:plugin {"id":"assign","plugin":"dev.heavy.form","pluginConfig":{"version":"0.1","submitLabel":"Assign"}}-->
+fields:
+  - label: Chore
+    type: select
+`, '.hvy');
+    const session = createHvyCliSession();
+
+    const listing = await executeHvyCliCommand(document, session, 'ls /body/automation/assign');
+    const docs = await executeHvyCliCommand(document, session, 'cat /body/automation/assign/about-form.txt');
+
+    expect(listing.output).toContain('file about-plugin.txt [ro]');
+    expect(listing.output).toContain('file about-form.txt [ro]');
+    expect(docs.output).toContain('Form plugin: renders editable form fields and optional scripted behavior.');
+    expect(docs.output).toContain('Fields live in plugin.txt as YAML under the fields key.');
+  } finally {
+    setHostPlugins([]);
+  }
+});
+
 test('hvy add section explains when the parent path is a component', async () => {
   const document = createResumeCliTestDocument();
   const session = createHvyCliSession();
@@ -120,9 +179,9 @@ test('hvy add section explains when the parent path is a component', async () =>
   await expect(executeHvyCliCommand(
     document,
     session,
-    'hvy add section /body/skills/component-list-1/component-list skill-baking Baking'
+    'hvy add section /body/skills/component-list-1 skill-baking Baking'
   )).rejects.toThrow(
-    'hvy section add: sections must be added at the root level or on top of an existing section. /body/skills/component-list-1/component-list is a component, not a section.'
+    'hvy section add: sections must be added at the root level or on top of an existing section. /body/skills/component-list-1 is a component, not a section.'
   );
 });
 
@@ -143,12 +202,39 @@ test('ls keeps custom component directories to file listings without schema prev
   const document = createResumeCliTestDocument();
   const session = createHvyCliSession();
 
-  const result = await executeHvyCliCommand(document, session, 'ls /body/skills/component-list-1/component-list/skill-software-engineering');
+  const result = await executeHvyCliCommand(document, session, 'ls /body/skills/component-list-1/skill-software-engineering');
 
   expect(result.output).toContain('dir  expandable-content');
+  expect(result.output).toContain('file about-skill-record.txt [ro]');
   expect(result.output).toContain('file skill-record.json');
+  expect(result.output).not.toContain('skill-record-info.txt');
   expect(result.output).not.toContain('Custom component definition:');
   expect(result.output).not.toContain('expandableContentBlocks:');
+});
+
+test('cli exposes reusable component documentation in about files', async () => {
+  const document = createResumeCliTestDocument();
+  const session = createHvyCliSession();
+
+  const about = await executeHvyCliCommand(
+    document,
+    session,
+    'cat /body/skills/component-list-1/skill-software-engineering/about-skill-record.txt'
+  );
+
+  expect(about.output).toContain('About skill-record');
+  expect(about.output).toContain('reusable component: skill-record');
+  expect(about.output).toContain('base component: expandable');
+  expect(about.output).toContain('Edit this reusable component definition in /header.yaml under component_defs.');
+  expect(about.output).toContain('Reusable definition YAML:');
+  expect(about.output).toContain('```yaml');
+  expect(about.output).toContain('- name: skill-record');
+  expect(about.output).toContain('description: Canonical expandable record for one skill, tool, or technology');
+  expect(about.output).toContain('Virtual directory mapping:');
+  expect(about.output).toContain('- /skill-record contains one skill-record component instance.');
+  expect(about.output).toContain('- expandable-stub/ contains the always-visible summary children.');
+  expect(about.output).toContain('- expandable-content/ contains the revealed detail children.');
+  expect(about.output).toContain('Expandable component: reveal/hide component with stub and content slots.');
 });
 
 test('ls shows nested component description context for selected component directories', async () => {
@@ -170,17 +256,17 @@ component_defs:
 `, '.hvy');
   const session = createHvyCliSession();
 
-  const result = await executeHvyCliCommand(document, session, 'ls /body/history/history-list/component-list/history-acme');
+  const result = await executeHvyCliCommand(document, session, 'ls /body/history/history-list/history-acme');
 
   expect(result.output).toContain('Component context:');
   expect(result.output).toContain('/body/history section id=history');
   expect(result.output).toContain('description: Work history is reverse chronological.');
   expect(result.output).toContain('/body/history/history-list component-type: component-list id=history-list');
   expect(result.output).toContain('list item custom-type: history-record base-type: expandable');
-  expect(result.output).toContain('/body/history/history-list/component-list/history-acme custom-type: history-record base-type: expandable id=history-acme');
+  expect(result.output).toContain('/body/history/history-list/history-acme custom-type: history-record base-type: expandable id=history-acme');
   expect(result.output).toContain('description: Acme role details.');
   expect(result.output).toContain('reusable definition: One expandable work-history role at one organization.');
-  expect(result.output.indexOf('/body/history/history-list/component-list/history-acme')).toBeLessThan(
+  expect(result.output.indexOf('/body/history/history-list/history-acme')).toBeLessThan(
     result.output.indexOf('/body/history/history-list component-type: component-list')
   );
   expect(result.output.indexOf('/body/history/history-list component-type: component-list')).toBeLessThan(
@@ -210,18 +296,18 @@ component_defs:
   const componentListHint = buildChatCliComponentHints({
     document,
     cwd: '/',
-    command: 'cat /body/history/history-list/component-list.txt',
+    command: 'cat /body/history/history-list.txt',
   });
   const reusableItemHint = buildChatCliComponentHints({
     document,
     cwd: '/',
-    command: 'cat /body/history/history-list/component-list/history-acme/history-record.txt',
+    command: 'cat /body/history/history-list/history-acme/history-record.txt',
   });
 
-  expect(componentListHint).toContain('optional list-item creation: hvy add history-record /body/history/history-list/component-list --id NEW_ID');
+  expect(componentListHint).toContain('optional list-item creation: hvy add history-record /body/history/history-list --id NEW_ID');
   expect(componentListHint).toContain('after creating a list item, inspect it with hvy request_structure NEW_ID --describe');
   expect(componentListHint).toContain('component-list.txt is a text preview of existing leaf items');
-  expect(reusableItemHint).toContain('optional blank sibling creation: hvy add history-record /body/history/history-list/component-list --id NEW_ID');
+  expect(reusableItemHint).toContain('optional blank sibling creation: hvy add history-record /body/history/history-list --id NEW_ID');
   expect(reusableItemHint).toContain('after creating a reusable component, inspect it with hvy request_structure NEW_ID --describe');
   expect(componentListHint).not.toContain('"Title"');
   expect(reusableItemHint).not.toContain('"Title"');
@@ -255,7 +341,7 @@ test('hvy add can create custom components and generic xref components', async (
   const skill = await executeHvyCliCommand(
     document,
     session,
-    'hvy add skill-record /body/skills/component-list-1/component-list --id skill-baking Baking'
+    'hvy add skill-record /body/skills/component-list-1 --id skill-baking Baking'
   );
   const xref = await executeHvyCliCommand(
     document,
@@ -263,17 +349,17 @@ test('hvy add can create custom components and generic xref components', async (
     'hvy add component /body/top-skills-tools-technologies/grid-0/grid top-skill-baking xref-card Baking --config \'{"xrefTarget":"skill-baking"}\''
   );
 
-  expect(skill.output).toContain('/body/skills/component-list-1/component-list/skill-baking: created');
+  expect(skill.output).toContain('/body/skills/component-list-1/skill-baking: created');
   expect(skill.output).toContain('file skill-record.json');
   expect(skill.output).toContain('file skill-record.txt');
-  expect(skill.output).toContain('next:\n  hvy request_structure /body/skills/component-list-1/component-list/skill-baking --describe');
+  expect(skill.output).toContain('next:\n  hvy request_structure /body/skills/component-list-1/skill-baking --describe');
   expect(skill.output).toContain('Fill the leaf body/config files shown by request_structure.');
-  expect((await executeHvyCliCommand(document, session, 'cat /body/skills/component-list-1/component-list/skill-baking/skill-record.json')).output)
+  expect((await executeHvyCliCommand(document, session, 'cat /body/skills/component-list-1/skill-baking/skill-record.json')).output)
     .toContain('"css": "margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);"');
   expect(xref.output).toContain('/body/top-skills-tools-technologies/grid-0/grid/top-skill-baking: created');
   expect(xref.output).toContain('file xref-card.json');
   expect(xref.output).toContain('file xref-card.txt');
-  expect((await executeHvyCliCommand(document, session, 'cat /body/skills/component-list-1/component-list/skill-baking/skill-record.txt')).output)
+  expect((await executeHvyCliCommand(document, session, 'cat /body/skills/component-list-1/skill-baking/skill-record.txt')).output)
     .toContain('Baking');
   expect((await executeHvyCliCommand(document, session, 'cat /body/top-skills-tools-technologies/grid-0/grid/top-skill-baking/xref-card.json')).output)
     .toContain('"xrefTarget": "skill-baking"');
@@ -285,13 +371,13 @@ test('aggregate body write errors explain how to fill nested reusable components
   await executeHvyCliCommand(
     document,
     session,
-    'hvy add skill-record /body/skills/component-list-1/component-list --id skill-baking Baking'
+    'hvy add skill-record /body/skills/component-list-1 --id skill-baking Baking'
   );
 
   await expect(executeHvyCliCommand(
     document,
     session,
-    'echo "one\\ntwo" > /body/skills/component-list-1/component-list/skill-baking/skill-record.txt'
+    'echo "one\\ntwo" > /body/skills/component-list-1/skill-baking/skill-record.txt'
   )).rejects.toThrow('Use hvy request_structure COMPONENT_ID --describe to find leaf files');
 });
 
@@ -302,15 +388,15 @@ test('hvy add-component aliases custom component creation', async () => {
   const result = await executeHvyCliCommand(
     document,
     session,
-    'hvy add-component skill-record /body/skills/component-list-1/component-list --id skill-baking Baking'
+    'hvy add-component skill-record /body/skills/component-list-1 --id skill-baking Baking'
   );
 
-  expect(result.output).toContain('/body/skills/component-list-1/component-list/skill-baking: created');
+  expect(result.output).toContain('/body/skills/component-list-1/skill-baking: created');
   expect(result.output).toContain('file skill-record.json');
   expect(result.output).toContain('file skill-record.txt');
-  expect((await executeHvyCliCommand(document, session, 'cat /body/skills/component-list-1/component-list/skill-baking/skill-record.json')).output)
+  expect((await executeHvyCliCommand(document, session, 'cat /body/skills/component-list-1/skill-baking/skill-record.json')).output)
     .toContain('"css": "margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);"');
-  expect((await executeHvyCliCommand(document, session, 'cat /body/skills/component-list-1/component-list/skill-baking/skill-record.txt')).output)
+  expect((await executeHvyCliCommand(document, session, 'cat /body/skills/component-list-1/skill-baking/skill-record.txt')).output)
     .toContain('Baking');
 });
 
@@ -318,7 +404,7 @@ test('cat custom component bodies stays focused on file content', async () => {
   const document = createResumeCliTestDocument();
   const session = createHvyCliSession();
 
-  const result = await executeHvyCliCommand(document, session, 'cat /body/skills/component-list-1/component-list/skill-software-engineering/skill-record.txt');
+  const result = await executeHvyCliCommand(document, session, 'cat /body/skills/component-list-1/skill-software-engineering/skill-record.txt');
 
   expect(result.output).toContain('Software Engineering');
   expect(result.output).not.toContain('Custom component definition:');
@@ -330,7 +416,7 @@ test('hvy preview switches long raw fragments to request_structure capped at 25 
   const document = createResumeCliTestDocument();
   const session = createHvyCliSession();
 
-  const result = await executeHvyCliCommand(document, session, 'hvy preview /body/skills/component-list-1/component-list/skill-software-engineering');
+  const result = await executeHvyCliCommand(document, session, 'hvy preview /body/skills/component-list-1/skill-software-engineering');
 
   expect(result.output).toContain('Preview command: hvy request_structure skill-software-engineering --describe');
   expect(result.output).toContain('Component preview switched to request_structure because raw HVY is');
@@ -507,16 +593,16 @@ hvy_version: 0.1
   expect(serializeDocument(document)).toContain('"tableColumns":"Task, Done"');
   expect(serializeDocument(document)).toContain('"tableRows":[{"cells":["Trash","No"]},{"cells":["Dishes","Yes"]}]');
 
-  await expect(executeHvyCliCommand(document, session, 'echo "- id: item-1" > /body/quality/empty-list/component-list.txt')).rejects.toThrow(
-    'component-list.txt is a read-only preview until list items exist. Use hvy add ITEM_TYPE PATH/component-list --id NEW_ID'
+  await expect(executeHvyCliCommand(document, session, 'echo "- id: item-1" > /body/quality/empty-list.txt')).rejects.toThrow(
+    'component-list.txt is a read-only preview until list items exist. Use hvy add ITEM_TYPE PATH --id NEW_ID'
   );
 
   expect((await executeHvyCliCommand(document, session, 'hvy lint')).output).toContain('[component-list] /body/quality/empty-list - component-list has no items.');
-  expect((await executeHvyCliCommand(document, session, 'ls /body/quality/empty-list')).output).toContain('dir  component-list');
-  expect((await executeHvyCliCommand(document, session, 'hvy add text /body/quality/empty-list/component-list --id item-1 "First item"')).output).toContain(
-    '/body/quality/empty-list/component-list/item-1: created'
+  expect((await executeHvyCliCommand(document, session, 'ls /body/quality/empty-list')).output).not.toContain('dir  component-list');
+  expect((await executeHvyCliCommand(document, session, 'hvy add text /body/quality/empty-list --id item-1 "First item"')).output).toContain(
+    '/body/quality/empty-list/item-1: created'
   );
-  expect((await executeHvyCliCommand(document, session, 'cat /body/quality/empty-list/component-list/item-1/text.txt')).output).toBe('First item');
+  expect((await executeHvyCliCommand(document, session, 'cat /body/quality/empty-list/item-1/text.txt')).output).toBe('First item');
 });
 
 test('cli expands supported date command substitutions', async () => {
@@ -561,10 +647,10 @@ test('cli exposes resume component-list items by stable section paths', async ()
   expect((await executeHvyCliCommand(document, session, 'ls /body')).output).toContain('dir  tools-technologies');
   expect((await executeHvyCliCommand(document, session, 'cd tools-technologies')).cwd).toBe('/body/tools-technologies');
   expect((await executeHvyCliCommand(document, session, 'pwd')).output).toBe('/body/tools-technologies');
-  expect((await executeHvyCliCommand(document, session, 'find tool-typescript -name skill-record.txt')).output).toContain(
-    '/body/tools-technologies/tool-typescript/skill-record.txt'
+  expect((await executeHvyCliCommand(document, session, 'find component-list-1/tool-typescript -name skill-record.txt')).output).toContain(
+    '/body/tools-technologies/component-list-1/tool-typescript/skill-record.txt'
   );
-  expect((await executeHvyCliCommand(document, session, 'cat tool-typescript/skill-record.txt')).output).toContain('Primary application language.');
+  expect((await executeHvyCliCommand(document, session, 'cat component-list-1/tool-typescript/skill-record.txt')).output).toContain('Primary application language.');
 });
 
 test('cli accepts body section aliases from root and mutates resume virtual files', async () => {
@@ -573,13 +659,13 @@ test('cli accepts body section aliases from root and mutates resume virtual file
 
   expect((await executeHvyCliCommand(document, session, 'cd /tools-technologies')).cwd).toBe('/body/tools-technologies');
 
-  const before = await executeHvyCliCommand(document, session, 'find /body/tools-technologies/tool-typescript -name skill-record.txt');
-  expect(before.output).toContain('/body/tools-technologies/tool-typescript/skill-record.txt');
+  const before = await executeHvyCliCommand(document, session, 'find /body/tools-technologies/component-list-1/tool-typescript -name skill-record.txt');
+  expect(before.output).toContain('/body/tools-technologies/component-list-1/tool-typescript/skill-record.txt');
 
-  const result = await executeHvyCliCommand(document, session, 'sed s/Primary/Core/ /body/tools-technologies/tool-typescript/skill-record.txt');
+  const result = await executeHvyCliCommand(document, session, 'sed s/Primary/Core/ /body/tools-technologies/component-list-1/tool-typescript/skill-record.txt');
   expect(result.mutated).toBe(true);
-  expect(result.output).toBe('/body/tools-technologies/tool-typescript/skill-record.txt: updated');
-  expect((await executeHvyCliCommand(document, session, 'cat /tools-technologies/tool-typescript/skill-record.txt')).output).toContain(
+  expect(result.output).toBe('/body/tools-technologies/component-list-1/tool-typescript/skill-record.txt: updated');
+  expect((await executeHvyCliCommand(document, session, 'cat /tools-technologies/component-list-1/tool-typescript/skill-record.txt')).output).toContain(
     'Core application language.'
   );
 });
@@ -588,17 +674,17 @@ test('cli rm recursively removes virtual body directories', async () => {
   const document = createResumeCliTestDocument();
   const session = createHvyCliSession();
 
-  await expect(executeHvyCliCommand(document, session, 'rm /body/tools-technologies/tool-typescript')).rejects.toThrow(
+  await expect(executeHvyCliCommand(document, session, 'rm /body/tools-technologies/component-list-1/tool-typescript')).rejects.toThrow(
     'is a directory; use -r'
   );
 
-  const result = await executeHvyCliCommand(document, session, 'rm -r body/tools-technologies/tool-typescript');
+  const result = await executeHvyCliCommand(document, session, 'rm -r body/tools-technologies/component-list-1/tool-typescript');
 
   expect(result.mutated).toBe(true);
-  expect(result.output).toContain('/body/tools-technologies/tool-typescript: removed');
+  expect(result.output).toContain('/body/tools-technologies/component-list-1/tool-typescript: removed');
   expect(result.output).toContain('Run: hvy prune-xref tool-typescript');
   expect((await executeHvyCliCommand(document, session, 'find /body/tools-technologies -name skill-record.txt')).output).not.toContain(
-    '/body/tools-technologies/tool-typescript/skill-record.txt'
+    '/body/tools-technologies/component-list-1/tool-typescript/skill-record.txt'
   );
   expect(serializeDocument(document)).not.toContain('id":"tool-typescript"');
 
@@ -615,23 +701,23 @@ test('cli suggests nearby paths when a path is missing', async () => {
   const document = createResumeCliTestDocument();
   const session = createHvyCliSession();
 
-  await expect(executeHvyCliCommand(document, session, 'hvy remove /body/tools-technologies/component-list-1/component-list/tool-typescriptx'))
-    .rejects.toThrow(/Did you mean\?\n\s+Closest existing parent: \/body\/tools-technologies\/component-list-1\/component-list\n\s+\/body\/tools-technologies\/component-list-1\/component-list\/tool-typescript/);
+  await expect(executeHvyCliCommand(document, session, 'hvy remove /body/tools-technologies/component-list-1/tool-typescriptx'))
+    .rejects.toThrow(/Did you mean\?\n\s+Closest existing parent: \/body\/tools-technologies\/component-list-1\n\s+\/body\/tools-technologies\/component-list-1\/tool-typescript/);
 
-  await expect(executeHvyCliCommand(document, session, 'cat /body/tools-technologies/tool-typescript/skill-recrod.txt'))
-    .rejects.toThrow(/Did you mean\?\n(?:.*\n)*\s+\/body\/tools-technologies\/tool-typescript\/skill-record\.txt/);
+  await expect(executeHvyCliCommand(document, session, 'cat /body/tools-technologies/component-list-1/tool-typescript/skill-recrod.txt'))
+    .rejects.toThrow(/Did you mean\?\n(?:.*\n)*\s+\/body\/tools-technologies\/component-list-1\/tool-typescript\/skill-record\.txt/);
 });
 
 test('cli find supports common filters and warns about ignored options', async () => {
   const document = createResumeCliTestDocument();
   const session = createHvyCliSession();
 
-  const directories = (await executeHvyCliCommand(document, session, 'find /body/tools-technologies -type d -maxdepth 1 -print')).output;
-  expect(directories).toContain('/body/tools-technologies/tool-typescript');
-  expect(directories).not.toContain('/body/tools-technologies/tool-typescript/expandable-content');
+  const directories = (await executeHvyCliCommand(document, session, 'find /body/tools-technologies -type d -maxdepth 2 -print')).output;
+  expect(directories).toContain('/body/tools-technologies/component-list-1/tool-typescript');
+  expect(directories).not.toContain('/body/tools-technologies/component-list-1/tool-typescript/expandable-content');
 
-  const files = (await executeHvyCliCommand(document, session, 'find /body/tools-technologies/tool-typescript -type f -name skill-record.txt')).output;
-  expect(files).toContain('/body/tools-technologies/tool-typescript/skill-record.txt');
+  const files = (await executeHvyCliCommand(document, session, 'find /body/tools-technologies/component-list-1/tool-typescript -type f -name skill-record.txt')).output;
+  expect(files).toContain('/body/tools-technologies/component-list-1/tool-typescript/skill-record.txt');
 
   expect((await executeHvyCliCommand(document, session, 'find /body -mtime 1 -name skill-record.txt')).output).toContain(
     'Warning: find ignored unsupported option -mtime'
@@ -647,23 +733,23 @@ test('cli rg supports common ripgrep flags and hvy read aliases cat', async () =
   const document = createResumeCliTestDocument();
   const session = createHvyCliSession();
 
-  const read = await executeHvyCliCommand(document, session, 'hvy read /body/tools-technologies/tool-typescript/skill-record.txt');
+  const read = await executeHvyCliCommand(document, session, 'hvy read /body/tools-technologies/component-list-1/tool-typescript/skill-record.txt');
   expect(read.output).toContain('TypeScript');
 
   const lineNumber = await executeHvyCliCommand(document, session, 'rg -n "TypeScript\\|Typescript" /body/tools-technologies');
-  expect(lineNumber.output).toContain('/body/tools-technologies/tool-typescript/skill-record.txt:1:TypeScript');
+  expect(lineNumber.output).toContain('/body/tools-technologies/component-list-1/tool-typescript/skill-record.txt:1:TypeScript');
   expect(lineNumber.output).not.toContain('Warning: rg ignored unsupported option -n');
 
   const filesOnly = await executeHvyCliCommand(document, session, 'rg "TypeScript" /body/tools-technologies -l');
-  expect(filesOnly.output).toContain('/body/tools-technologies/tool-typescript/skill-record.txt');
+  expect(filesOnly.output).toContain('/body/tools-technologies/component-list-1/tool-typescript/skill-record.txt');
   expect(filesOnly.output).not.toContain(':1:TypeScript');
 
   const combined = await executeHvyCliCommand(document, session, 'rg -rn "TypeScript" /body/tools-technologies');
   expect(combined.output).not.toContain('Warning: rg ignored unsupported option -r');
-  expect(combined.output).toContain('/body/tools-technologies/tool-typescript/skill-record.txt:1:TypeScript');
+  expect(combined.output).toContain('/body/tools-technologies/component-list-1/tool-typescript/skill-record.txt:1:TypeScript');
 
   const listFilesAlias = await executeHvyCliCommand(document, session, 'rg -r "TypeScript" /body/tools-technologies --list-files');
-  expect(listFilesAlias.output).toContain('/body/tools-technologies/tool-typescript/skill-record.txt');
+  expect(listFilesAlias.output).toContain('/body/tools-technologies/component-list-1/tool-typescript/skill-record.txt');
   expect(listFilesAlias.output).not.toContain(':1:TypeScript');
 
   const piped = await executeHvyCliCommand(document, session, 'rg -r "TypeScript" /body -l | head -3');
@@ -682,7 +768,7 @@ test('cli rg supports common ripgrep flags and hvy read aliases cat', async () =
   expect(replaced.output).toContain('1');
 
   const includeEquals = await executeHvyCliCommand(document, session, 'rg -r "TypeScript" /body --include="*.json" -l');
-  expect(includeEquals.output).toContain('/body/top-skills-tools-technologies/grid-0/grid/xref-card-1-2/xref-card.json');
+  expect(includeEquals.output).toContain('/body/top-skills-tools-technologies/grid-0/grid/component-list-1/xref-card-1/xref-card.json');
   expect(includeEquals.output).not.toContain('skill-record.txt');
 
   const includeSeparate = await executeHvyCliCommand(document, session, 'rg -r "" --include "*.yaml" /body -l');
@@ -693,12 +779,12 @@ test('cli hvy remove and delete alias recursive rm', async () => {
   const document = createResumeCliTestDocument();
   const session = createHvyCliSession();
 
-  const remove = await executeHvyCliCommand(document, session, 'hvy remove /body/tools-technologies/tool-typescript');
-  expect(remove.output).toContain('/body/tools-technologies/tool-typescript: removed');
+  const remove = await executeHvyCliCommand(document, session, 'hvy remove /body/tools-technologies/component-list-1/tool-typescript');
+  expect(remove.output).toContain('/body/tools-technologies/component-list-1/tool-typescript: removed');
   expect(remove.output).toContain('Run: hvy prune-xref tool-typescript');
   expect(serializeDocument(document)).not.toContain('id":"tool-typescript"');
 
-  await executeHvyCliCommand(document, session, 'hvy delete /body/tools-technologies/tool-python');
+  await executeHvyCliCommand(document, session, 'hvy delete /body/tools-technologies/component-list-1/tool-python');
   expect(serializeDocument(document)).not.toContain('id":"tool-python"');
 });
 
@@ -831,7 +917,7 @@ test('cli supports find -exec with sed -i -E for shell-like batch edits', async 
   const result = await executeHvyCliCommand(
     document,
     session,
-    'find body -type f -name "*.txt" -exec sed -i -E s/world/there/g {} + && echo done Removed world'
+    'find body -type f -name "text.txt" -exec sed -i -E s/world/there/g {} + && echo done Removed world'
   );
 
   expect(result.output).toBe('done Removed world');
@@ -864,15 +950,15 @@ test('cli cp -r copies component directories with the destination id', async () 
   const result = await executeHvyCliCommand(
     document,
     session,
-    'cp -r /body/skills/component-list-1/component-list/skill-llm-prompt-engineering /body/skills/component-list-1/component-list/skill-baking'
+    'cp -r /body/skills/component-list-1/skill-llm-prompt-engineering /body/skills/component-list-1/skill-baking'
   );
 
   expect(result.mutated).toBe(true);
-  expect(result.output).toBe('/body/skills/component-list-1/component-list/skill-llm-prompt-engineering -> /body/skills/component-list-1/component-list/skill-baking: copied');
-  expect((await executeHvyCliCommand(document, session, 'cat /body/skills/component-list-1/component-list/skill-baking/skill-record.json')).output).toContain(
+  expect(result.output).toBe('/body/skills/component-list-1/skill-llm-prompt-engineering -> /body/skills/component-list-1/skill-baking: copied');
+  expect((await executeHvyCliCommand(document, session, 'cat /body/skills/component-list-1/skill-baking/skill-record.json')).output).toContain(
     '"id": "skill-baking"'
   );
-  expect((await executeHvyCliCommand(document, session, 'cat /body/skills/component-list-1/component-list/skill-baking/skill-record.txt')).output).toContain(
+  expect((await executeHvyCliCommand(document, session, 'cat /body/skills/component-list-1/skill-baking/skill-record.txt')).output).toContain(
     'LLM Prompt Engineering'
   );
   expect((await executeHvyCliCommand(document, session, 'man cp')).output).toContain('cp [-r] SOURCE DEST');
@@ -1273,7 +1359,7 @@ component_defs:
   expect(result.output).toContain('Components:');
   expect(result.output).toContain('/body\n  /summary');
   expect(result.output).toContain('/intro\n      [x] text.txt id=intro');
-  expect(result.output).toMatch(/\/component-list-\d+\n      \[l\] component-list\.txt id=C\d+\n      \/component-list\n        \/text-\d+\n          \[x\] text\.txt id=C\d+/);
+  expect(result.output).toMatch(/\/component-list-\d+\n      \[l\] component-list\.txt id=C\d+\n      \/text-\d+\n        \[x\] text\.txt id=C\d+/);
   expect(result.output).toContain('/typescript-card\n      [r] xref-card.txt id=typescript-card');
   expect(result.output).toMatch(/\/xref-card-\d+\n      \[r\] xref-card\.txt id=C\d+/);
   expect(result.output).toContain('/library-card\n      [r] skill-card.txt id=library-card');
@@ -1526,7 +1612,7 @@ hvy_version: 0.1
 
   const result = await executeHvyCliCommand(document, session, 'hvy lint');
 
-  expect(result.output).toContain('[text] /body/history/history-list/component-list/history-acme - text body is empty. (placeholder: Organization)');
+  expect(result.output).toContain('[text] /body/history/history-list/history-acme - text body is empty. (placeholder: Organization)');
   expect(result.output).not.toContain('/body/history/history-acme - text body is empty.');
 });
 

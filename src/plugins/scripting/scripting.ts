@@ -6,6 +6,7 @@ import type {
 } from '../types';
 import { SCRIPTING_PLUGIN_ID } from '../registry';
 import { openScriptingHelpModal } from './help-modal';
+import scriptingDocumentation from './about-scripting.txt?raw';
 
 import './scripting.css';
 
@@ -185,6 +186,10 @@ export const scriptingPluginFactory: HvyPluginFactory = build;
 export const scriptingPluginRegistration: HvyPluginRegistration = {
   id: SCRIPTING_PLUGIN_ID,
   displayName: 'Scripting',
+  documentation: {
+    filename: 'about-scripting.txt',
+    text: scriptingDocumentation,
+  },
   aiHint: 'Script-backed component. Executable source is exposed as script.py.',
   aiHelp: [
     `Use \`<!--hvy:plugin {"plugin":"${SCRIPTING_PLUGIN_ID}","pluginConfig":{"version":"0.1"}}-->\`.`,

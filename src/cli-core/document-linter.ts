@@ -57,21 +57,8 @@ function isLintableComponentJsonPath(fs: HvyVirtualFileSystem, entry: HvyVirtual
     && !!findComponentBodyPath(fs, entry.path.replace(/\/[^/]+$/, ''), entry.path.split('/').pop()?.replace(/\.json$/, '') ?? '');
 }
 
-function isFlattenedComponentListAlias(fs: HvyVirtualFileSystem, jsonPath: string): boolean {
-  const directory = jsonPath.replace(/\/[^/]+$/, '');
-  const parent = directory.replace(/\/[^/]+$/, '');
-  if (!parent || parent === '/body' || parent.includes('/component-list')) {
-    return false;
-  }
-  const fileName = jsonPath.split('/').pop() ?? '';
-  const componentListAliases = [...fs.entries.keys()]
-    .filter((path) => path.startsWith(`${parent}/`) && path.includes('/component-list/') && path.endsWith(`/${fileName}`));
-  if (componentListAliases.length === 0) {
-    return false;
-  }
-  const bodyName = fileName.replace(/\.json$/, '.txt');
-  const aliasBody = `${directory}/${bodyName}`;
-  return fs.entries.has(aliasBody);
+function isFlattenedComponentListAlias(_fs: HvyVirtualFileSystem, _jsonPath: string): boolean {
+  return false;
 }
 
 export function fixHvyCliLintIssues(document: VisualDocument): string[] {
@@ -222,7 +209,12 @@ function lintSections(fs: HvyVirtualFileSystem): HvyCliLintIssue[] {
     .filter((entry): entry is HvyVirtualEntry & { kind: 'file' } => entry.kind === 'file' && entry.path.startsWith('/body/') && entry.path.endsWith('/section.json'))
     .filter((entry) => {
       const sectionPath = entry.path.replace(/\/section\.json$/, '');
-      return ![...fs.entries.keys()].some((candidatePath) => candidatePath.startsWith(`${sectionPath}/`) && candidatePath !== entry.path);
+      return ![...fs.entries.keys()].some((candidatePath) =>
+        candidatePath.startsWith(`${sectionPath}/`)
+        && candidatePath !== entry.path
+        && candidatePath !== `${sectionPath}/section-info.txt`
+        && candidatePath !== `${sectionPath}/about-section.txt`
+      );
     })
     .map((entry) => {
       const sectionPath = entry.path.replace(/\/section\.json$/, '');
@@ -246,7 +238,7 @@ function lintCoreComponent(params: { fs: HvyVirtualFileSystem; path: string; com
   if (params.baseComponent === 'code' && params.body.trim().length === 0) {
     issues.push(createLintIssue(params, 'empty-code', formatEmptyBodyMessage('code block body is empty.', params.config)));
   }
-  if (params.baseComponent === 'component-list' && !hasChildComponent(params.fs, `${params.path}/component-list`)) {
+  if (params.baseComponent === 'component-list' && !hasChildComponent(params.fs, params.path)) {
     issues.push(createLintIssue(params, 'empty-component-list', 'component-list has no items.'));
   }
   if (params.baseComponent === 'xref-card') {
@@ -388,7 +380,10 @@ function getStoredPluginAlias(pluginId: string): { alias: string; pluginId: stri
 
 function hasChildComponent(fs: HvyVirtualFileSystem, path: string): boolean {
   return [...fs.entries.keys()].some((candidatePath) =>
-    candidatePath.startsWith(`${path}/`) && candidatePath.endsWith('.json') && !candidatePath.endsWith('/section.json'));
+    candidatePath.startsWith(`${path}/`)
+    && candidatePath.endsWith('.json')
+    && !candidatePath.endsWith('/section.json')
+    && candidatePath.slice(path.length + 1).includes('/'));
 }
 
 function createLintIssue(params: { path: string; component: string }, code: string, message: string): HvyCliLintIssue {

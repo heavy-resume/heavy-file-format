@@ -1,0 +1,4 @@
+Progress Bar plugin: renders a numeric progress meter.
+Numeric value, min, max, and visual options live in plugin.json pluginConfig.
+The component body may contain display text or a value template.
+Use this plugin when a document needs a simple visual status indicator.

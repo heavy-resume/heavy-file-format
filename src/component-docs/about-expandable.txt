@@ -1,0 +1,6 @@
+Expandable component: reveal/hide component with stub and content slots.
+The stub is the always-visible summary; content is the detail shown when expanded.
+Each expandable must have at least one stub child and one content child.
+expandableAlwaysShowStub controls whether the stub remains visible while expanded.
+expandableExpanded stores the default expanded state.
+Pane-level styles belong to the stub/content slots in inline HVY and to expandableStubCss/expandableContentCss in schema form.

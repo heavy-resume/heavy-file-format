@@ -457,13 +457,11 @@ function selectInitialCwdForSelectedComponent(
 function nearestComponentListParent(fs: ReturnType<typeof buildHvyVirtualFileSystem>, selectedPath: string): string {
   let current = selectedPath.replace(/\/+$/, '');
   while (current.startsWith('/body/')) {
+    const entry = fs.entries.get(`${current}/component-list.json`);
+    if (entry?.kind === 'file') {
+      return current;
+    }
     const parent = getParentVirtualPath(current);
-    if (parent.endsWith('/component-list') && fs.entries.get(parent)?.kind === 'dir') {
-      return parent;
-    }
-    if (fs.entries.get(`${current}/component-list`)?.kind === 'dir') {
-      return `${current}/component-list`;
-    }
     current = parent;
   }
   return '';

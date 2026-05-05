@@ -11,6 +11,7 @@ import { runUserScript, type ScriptingRunResult } from './scripting/wrapper';
 import type { ScriptingFormApi, ScriptingFormOption } from './scripting/runtime';
 import { sanitizeInlineCss } from '../css-sanitizer';
 import type { JsonObject } from '../hvy/types';
+import formDocumentation from './form.about.txt?raw';
 
 import './form.css';
 
@@ -944,6 +945,10 @@ export const formPluginFactory: HvyPluginFactory = build;
 export const formPluginRegistration: HvyPluginRegistration = {
   id: FORM_PLUGIN_ID,
   displayName: 'Form',
+  documentation: {
+    filename: 'about-form.txt',
+    text: formDocumentation,
+  },
   aiHint: 'Form UI. Fields live in plugin.txt; named scripts are also exposed as sibling .py files. Form-level hooks live in plugin.json pluginConfig.',
   aiHelp: [
     `Use \`<!--hvy:plugin {"plugin":"${FORM_PLUGIN_ID}","pluginConfig":{"version":"${FORM_PLUGIN_VERSION}","submitLabel":"Submit","submitScript":"submit"}}-->\` followed by form YAML in the component body.`,

@@ -83,4 +83,11 @@ export interface HvyPluginRegistration {
   // Optional longer help. This is exposed through AI tools on demand instead of
   // being included in every prompt.
   aiHelp?: string | ((block?: VisualBlock) => string);
+  // Optional read-only documentation file exposed by CLI virtual plugin
+  // component directories. The file itself should live next to the plugin
+  // implementation so plugin docs are easy to find and update.
+  documentation?: {
+    filename: string;
+    text: string;
+  };
 }

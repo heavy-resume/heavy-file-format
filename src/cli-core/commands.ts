@@ -1037,10 +1037,59 @@ function removeDocumentDirectory(document: VisualDocument, path: string): void {
   if (!path.startsWith('/body/')) {
     throw new Error(`rm: can only remove document body directories: ${path}`);
   }
+  const targetBlock = findBlockForVirtualDirectory(document, path);
+  if (targetBlock && removeBlockReferenceFromSections(document.sections, targetBlock)) {
+    return;
+  }
   const parts = path.split('/').filter(Boolean).slice(1);
   if (!removeBodyPath(document.sections, parts)) {
     throw new Error(`rm: cannot map virtual path to document node: ${path}`);
   }
+}
+
+function removeBlockReferenceFromSections(sections: VisualSection[], target: VisualBlock): boolean {
+  for (const section of sections) {
+    if (removeBlockReferenceFromList(section.blocks, target)) {
+      return true;
+    }
+    if (removeBlockReferenceFromSections(section.children, target)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function removeBlockReferenceFromList(blocks: VisualBlock[], target: VisualBlock): boolean {
+  const index = blocks.indexOf(target);
+  if (index >= 0) {
+    blocks.splice(index, 1);
+    return true;
+  }
+  for (const block of blocks) {
+    if (removeBlockReferenceFromList(block.schema.containerBlocks ?? [], target)) {
+      return true;
+    }
+    if (removeBlockReferenceFromList(block.schema.componentListBlocks ?? [], target)) {
+      return true;
+    }
+    if (removeBlockReferenceFromList(block.schema.expandableStubBlocks?.children ?? [], target)) {
+      return true;
+    }
+    if (removeBlockReferenceFromList(block.schema.expandableContentBlocks?.children ?? [], target)) {
+      return true;
+    }
+    const gridIndex = (block.schema.gridItems ?? []).findIndex((item) => item.block === target);
+    if (gridIndex >= 0) {
+      block.schema.gridItems.splice(gridIndex, 1);
+      return true;
+    }
+    for (const item of block.schema.gridItems ?? []) {
+      if (removeBlockReferenceFromList([item.block], target)) {
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 function removeBodyPath(sections: VisualSection[], parts: string[]): boolean {
@@ -1376,6 +1425,10 @@ function readableBodyFileForDirectory(fs: ReturnType<typeof buildHvyVirtualFileS
   const directFiles = listDirectory(fs, directory)
     .filter((entry): entry is HvyVirtualFile => entry.kind === 'file')
     .map((entry) => entry.path)
+    .filter((entryPath) => {
+      const filename = entryPath.split('/').pop() ?? '';
+      return !filename.startsWith('about-') && filename !== 'section-info.txt';
+    })
     .filter((entryPath) => entryPath.endsWith('.txt') || entryPath.endsWith('.py'));
   return directFiles.length === 1 ? directFiles[0] ?? null : null;
 }

@@ -1,0 +1,3 @@
+Image component: renders a binary image attachment from imageFile.
+imageFile is required and names the document tail attachment with id image:<filename>.
+imageAlt is optional alternate text for the rendered image.

@@ -1,0 +1,7 @@
+DB Table plugin: displays dynamic rows from a backend table, view, or SELECT query.
+pluginConfig.table names the table or view to display.
+The plugin body may contain an optional SELECT query for display.
+Use hvy plugin db-table tables to inspect available tables and views.
+Use hvy plugin db-table schema TABLE_OR_VIEW to inspect columns.
+Use hvy plugin db-table query for read-only SELECT/WITH SQL.
+Use hvy plugin db-table exec for CREATE, INSERT, UPDATE, DELETE, DROP, and other modifying SQL.

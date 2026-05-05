@@ -1,0 +1,5 @@
+xref-card component: visible cross-reference card linking to another component or section.
+xrefTitle is required and is the visible card title.
+xrefDetail is optional supporting text shown on the card.
+xrefTarget is the target id without #. If omitted, the card is preserved but disabled/non-navigable.
+Use xref-cards instead of plain links when referencing another HVY item.

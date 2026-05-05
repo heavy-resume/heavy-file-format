@@ -3,6 +3,15 @@ hvy_version: 0.1
 template: true
 title: Resume Template
 reader_max_width: 60rem
+ai-context: >-
+  This is a resume template. Use the top-skills-tools-technologies section for featured
+  xref-card links only; the skills and tools-technologies sidebar sections are the main
+  reusable libraries for detailed skill/tool records. History, projects, and education
+  each have a summary table followed by a component-list of expandable records; keep
+  both in reverse chronological order with newest entries first. One organization,
+  project, degree, skill, or tool should usually be represented as one expandable
+  reusable record. Local skills/tools lists inside history, project, and education records
+  are supporting xrefs and should not be treated as the main libraries.
 section_defaults:
   css: "margin: 0.5rem 0;"
 theme:
@@ -50,7 +59,7 @@ theme:
 component_defs:
   - name: history-record
     baseType: expandable
-    description: Expandable resume history record
+    description: One expandable work-history role at a single organization; stub table summarizes year, organization, and title, while expanded content holds location, date range, title, description, accomplishments, and supporting skill/tool xrefs.
     schema:
       css: "margin: 0;"
       expandableAlwaysShowStub: true
@@ -117,7 +126,7 @@ component_defs:
           - component: skills-and-tools-tech-list
   - name: skills-and-tools-tech-list
     baseType: grid
-    description: Two-column skills and tools list
+    description: "Two-column supporting xref grid: left column links to skill records, right column links to tool/technology records. Use inside history, project, and education records; do not store canonical skill/tool details here."
     schema:
       css: "margin: 0.5rem 0 0;"
       gridColumns: 2
@@ -152,7 +161,7 @@ component_defs:
                     css: "margin: 0 0 0.25rem;"
   - name: education-record
     baseType: expandable
-    description: Expandable education record
+    description: One expandable education entry for a degree or program; stub table summarizes degree, institution, and location, while expanded content holds details, description, classes, and supporting skill/tool xrefs.
     schema:
       css: "margin: 0;"
       expandableAlwaysShowStub: true
@@ -224,7 +233,7 @@ component_defs:
               componentListBlocks: []
   - name: project-record
     baseType: expandable
-    description: Expandable project record
+    description: One expandable project entry; stub table summarizes project and date, while expanded content holds title, date range, description, link, and supporting skill/tool xrefs.
     schema:
       css: "margin: 0;"
       expandableAlwaysShowStub: true
@@ -275,7 +284,7 @@ component_defs:
           - component: skills-and-tools-tech-list
   - name: skill-record-experience-section
     baseType: container
-    description: Skill record experience section
+    description: Skill/tool record subsection listing xrefs to relevant work-history records.
     schema:
       css: "margin: 0;"
 
@@ -293,7 +302,7 @@ component_defs:
             componentListBlocks: []
   - name: skill-record-education-section
     baseType: container
-    description: Skill record education section
+    description: Skill/tool record subsection listing xrefs to relevant education records.
     schema:
       css: "margin: 0;"
 
@@ -311,7 +320,7 @@ component_defs:
             componentListBlocks: []
   - name: skill-record-projects-section
     baseType: container
-    description: Skill record projects section
+    description: Skill/tool record subsection listing xrefs to relevant project records.
     schema:
       css: "margin: 0;"
 
@@ -329,7 +338,7 @@ component_defs:
             componentListBlocks: []
   - name: skill-record-section
     baseType: container
-    description: Reusable skill record section with heading and repeatable entries
+    description: "Reusable subsection pattern for a skill/tool record: heading plus repeatable detail entries."
     schema:
       css: "margin: 0;"
       containerBlocks:
@@ -347,7 +356,7 @@ component_defs:
             componentListBlocks: []
   - name: skill-record
     baseType: expandable
-    description: Skill record
+    description: Canonical expandable record for one skill, tool, or technology in the main library; use xref-cards elsewhere to point at this record instead of duplicating details.
     schema:
       css: "margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);"
       expandableStubBlocks:
@@ -419,7 +428,7 @@ component_defs:
 
   **Target Location(s):** 
 
-<!--hvy: {"id":"top-skills-tools-technologies","lock":true,"description":"Featured top skills, tools, and technologies shown prominently near the top of the resume."}-->
+<!--hvy: {"id":"top-skills-tools-technologies","lock":true,"description":"Featured top skills, tools, and technologies shown near the top of the resume. Add only xref-cards here that point to canonical records in skills or tools-technologies."}-->
 #! Top Skills, Tools, and Technologies
 
  <!--hvy:grid {"css":"margin: 0.5rem 0; gap: 0.75rem;","gridColumns":2,"lock":true}-->
@@ -434,7 +443,7 @@ component_defs:
     <!--hvy:text {"align":"center","css":"margin: 0 0 0.35rem;"}-->
      ## Tools & Technologies
 
-<!--hvy: {"id":"skills","lock":true,"expanded":false,"location":"sidebar","description":"Main reusable skills library containing detailed skill records."}-->
+<!--hvy: {"id":"skills","lock":true,"expanded":false,"location":"sidebar","description":"Main reusable skills library containing canonical skill-record expandables. Add new skills here before adding featured or local xrefs."}-->
 #! Skills
 
  <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
@@ -442,7 +451,7 @@ component_defs:
 
  <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"skill-record","componentListItemLabel":"skill"}-->
 
-<!--hvy: {"id":"tools-technologies","lock":true,"expanded":false,"location":"sidebar","description":"Main reusable tools and technologies library containing detailed tool records."}-->
+<!--hvy: {"id":"tools-technologies","lock":true,"expanded":false,"location":"sidebar","description":"Main reusable tools and technologies library containing canonical skill-record expandables for tools/tech. Add new tools here before adding featured or local xrefs."}-->
 #! Tools & Technologies
 
  <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
@@ -450,32 +459,32 @@ component_defs:
 
  <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"skill-record","componentListItemLabel":"tool / tech"}-->
 
-<!--hvy: {"id":"history","lock":true,"description":"Work history section with role records, accomplishments, and related skills/tools."}-->
+<!--hvy: {"id":"history","lock":true,"description":"Work history section. Keep the summary table and history-record component-list in reverse chronological order with newest roles first; each organization/role is one expandable history-record."}-->
 #! History
 
  <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
   # History
 
- <!--hvy:table {"css":"margin: 0.5rem 0 0;","tableColumns":"YEAR, ORGANIZATION, TITLE","tableShowHeader":true,"tableRows":[],"lock":true}-->
+ <!--hvy:table {"css":"margin: 0.5rem 0 0;","tableColumns":"YEAR, ORGANIZATION, TITLE","tableShowHeader":true,"tableRows":[],"lock":true,"description":"Static summary table for history records; keep rows reverse chronological and aligned with the history-record list below."}-->
 
  <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"history-record","componentListItemLabel":"history"}-->
 
-<!--hvy: {"id":"projects","lock":true,"description":"Project portfolio section with project records and related skills/tools."}-->
+<!--hvy: {"id":"projects","lock":true,"description":"Project portfolio section. Keep the summary table and project-record component-list in reverse chronological order with newest projects first; each project is one expandable project-record."}-->
 #! Projects
 
  <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
   # Projects
 
- <!--hvy:table {"css":"margin: 0.5rem 0 0;","tableColumns":"PROJECT, DATE","tableShowHeader":true,"tableRows":[],"lock":true}-->
+ <!--hvy:table {"css":"margin: 0.5rem 0 0;","tableColumns":"PROJECT, DATE","tableShowHeader":true,"tableRows":[],"lock":true,"description":"Static summary table for project records; keep rows reverse chronological and aligned with the project-record list below."}-->
 
  <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"project-record","componentListItemLabel":"project"}-->
 
-<!--hvy: {"id":"education","lock":true,"description":"Education section with degree records and supporting details."}-->
+<!--hvy: {"id":"education","lock":true,"description":"Education section. Keep the summary table and education-record component-list in reverse chronological order when multiple entries exist; each degree/program is one expandable education-record."}-->
 #! Education
 
  <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
   # Education
 
- <!--hvy:table {"css":"margin: 0.5rem 0 0;","tableColumns":"DEGREE, INSTITUTION, LOCATION","tableShowHeader":true,"tableRows":[],"lock":true}-->
+ <!--hvy:table {"css":"margin: 0.5rem 0 0;","tableColumns":"DEGREE, INSTITUTION, LOCATION","tableShowHeader":true,"tableRows":[],"lock":true,"description":"Static summary table for education records; keep rows aligned with the education-record list below."}-->
 
  <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"education-record","componentListItemLabel":"education"}-->

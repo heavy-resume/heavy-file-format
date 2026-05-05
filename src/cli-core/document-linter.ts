@@ -144,7 +144,10 @@ async function lintPluginComponent(params: { document: VisualDocument; path: str
     }];
   }
   const registration = getHvyCliPluginCommandRegistrationByPluginId(pluginId);
-  const issueGroups = await Promise.all((registration?.lintChecks ?? []).map(async (check, index) =>
+  if (!registration) {
+    return [];
+  }
+  const issueGroups = await Promise.all((registration.lintChecks ?? []).map(async (check, index) =>
     (await check({
       document: params.document,
       path: params.path,
@@ -158,10 +161,18 @@ async function lintPluginComponent(params: { document: VisualDocument; path: str
       key: `${params.path}:plugin-${index + 1}-${issueIndex + 1}:${issue.message}`,
       path: params.path,
       component: 'plugin',
-      message: issue.message,
+      message: appendPluginLintHelp(issue.message, registration),
     }))
   ));
   return issueGroups.flat();
+}
+
+function appendPluginLintHelp(
+  message: string,
+  registration: NonNullable<ReturnType<typeof getHvyCliPluginCommandRegistrationByPluginId>>
+): string {
+  const cheatsheet = registration.cheatsheetName ?? registration.name;
+  return `${message} For help, run hvy cheatsheet ${cheatsheet} or man ${registration.helpTopic}.`;
 }
 
 function fixSectionPluginAliasIds(section: VisualSection, fixed: string[]): void {

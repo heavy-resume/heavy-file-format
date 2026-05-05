@@ -16,6 +16,7 @@ export interface HvyCliPluginCommandRegistration {
   name: string;
   pluginId: string;
   helpTopic: string;
+  cheatsheetName?: string;
   componentHints: string[];
   addCommands: HvyCliHelpCommand[];
   operationCommands: HvyCliHelpCommand[];
@@ -151,6 +152,7 @@ registerHvyCliPluginCommands({
   name: 'form',
   pluginId: FORM_PLUGIN_ID,
   helpTopic: 'hvy plugin form',
+  cheatsheetName: 'forms',
   componentHints: [
     'This plugin is a form. The form fields, submit label, scripts, and on-submit behavior live in plugin.txt as form YAML/body text.',
     'Use plugin.txt for form content and plugin.json for plugin id/config metadata.',
@@ -163,7 +165,7 @@ registerHvyCliPluginCommands({
   ],
   addCommands: [
     {
-      command: 'hvy add plugin form SECTION_PATH ID SUBMIT_BUTTON_LABEL FIELD_LABEL:TYPE... [--script NAME PYTHON] [--on-submit-script NAME]',
+      command: 'hvy add plugin form SECTION_PATH ID SUBMIT_BUTTON_LABEL FIELD_LABEL:TYPE... [--script NAME PYTHON] [--initial-script NAME] [--on-submit-script NAME]',
       description: 'Create a Form plugin component.',
     },
   ],
@@ -192,8 +194,16 @@ registerHvyCliPluginCommands({
       description: 'Store a named Python script in the form YAML.',
     },
     {
+      command: '--initial-script NAME',
+      description: 'Run that named script when the form first renders. Use this to populate select/radio options from doc.db.query via doc.form.set_options.',
+    },
+    {
       command: '--on-submit-script NAME',
       description: 'Run that named script when the submit button is pressed. Alias: --submit.',
+    },
+    {
+      command: `Dynamic select example: hvy add plugin form /chores assign-chore "Assign chore" "Chore:select:required" --script load "rows = doc.db.query('SELECT id, title FROM chores ORDER BY id')\\ndoc.form.set_options('Chore', [{'label': row['title'], 'value': str(row['id'])} for row in rows])" --initial-script load`,
+      description: 'Populates a select from SQLite. There is no optionsQuery YAML key; use initialScript plus doc.form.set_options.',
     },
     {
       command: `Example: hvy add plugin form /chores add-chore "Add chore" "Description:textarea:required" --script submit "title = doc.form.get_value('Description')\\ndoc.db.execute('INSERT INTO chores (title) VALUES (\\'' + title + '\\')')" --on-submit-script submit`,

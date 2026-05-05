@@ -764,6 +764,34 @@ scripts:
   const result = await executeHvyCliCommand(document, session, 'hvy lint');
 
   expect(result.output).toContain('[plugin] /body/chore-chart/assign-chore - form YAML error: Implicit keys need to be on a single line');
+  expect(result.output).toContain('For help, run hvy cheatsheet forms or man hvy plugin form.');
+});
+
+test('hvy lint points unsupported form schema keys to form help', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"chore-chart"}-->
+#! Chore Chart
+
+<!--hvy:plugin {"id":"assign-chore","plugin":"dev.heavy.form","pluginConfig":{"version":"0.1"}}-->
+fields:
+  - label: Chore
+    type: select
+    required: true
+    options_query: SELECT id AS value, title AS label FROM chores ORDER BY id ASC
+scripts:
+  submit: >-
+    pass
+submitScript: submit
+`, '.hvy');
+  const session = createHvyCliSession();
+
+  const result = await executeHvyCliCommand(document, session, 'hvy lint');
+
+  expect(result.output).toContain('[plugin] /body/chore-chart/assign-chore - form field "Chore" has unsupported key "options_query".');
+  expect(result.output).toContain('For help, run hvy cheatsheet forms or man hvy plugin form.');
 });
 
 test('cli supports sed delete flags and stderr dev null redirection', async () => {
@@ -1109,7 +1137,9 @@ test('cli commands can create a chore chart with tables and form plugins', async
     'hvy add table /chore-chart active-chores "Chore,Dad,Mom,Child" --row "Dishes,,,Child" --row "Trash,Dad,," --row "Laundry,,Mom,"'
   );
   await run('hvy add plugin form /chore-chart add-chore-form "Add chore" "Description:textarea:required"');
-  await run('hvy add plugin form /chore-chart assign-chore-form "Assign chore" "Chore:text:required" "Assignee:select:required:Dad|Mom|Child"');
+  await run(
+    'hvy add plugin form /chore-chart assign-chore-form "Assign chore" "Chore:select:required" "Assignee:select:required:Dad|Mom|Child" --script load "rows = doc.db.query(\'SELECT id, description FROM chores ORDER BY id\')\\ndoc.form.set_options(\'Chore\', [{\'label\': row[\'description\'], \'value\': str(row[\'id\'])} for row in rows])" --initial-script load'
+  );
   await run(
     'hvy add plugin form /chore-chart complete-chore-form "Complete chore" "Chore:text:required" "Completed by:select:required:Dad|Mom|Child"'
   );
@@ -1118,6 +1148,8 @@ test('cli commands can create a chore chart with tables and form plugins', async
   expect((await run('find /chore-chart -name plugin.txt')).output).toContain('/body/chore-chart/add-chore-form/plugin.txt');
   expect((await run('cat /chore-chart/active-chores/table.json')).output).toContain('"tableColumns": "Chore,Dad,Mom,Child"');
   expect((await run('cat /chore-chart/assign-chore-form/plugin.txt')).output).toContain('submitLabel: Assign chore');
+  expect((await run('cat /chore-chart/assign-chore-form/plugin.txt')).output).toContain('initialScript: load');
+  expect((await run('cat /chore-chart/assign-chore-form/plugin.txt')).output).toContain("doc.form.set_options('Chore'");
   expect((await run('cat /chore-chart/assign-chore-form/plugin.json')).output).toContain('"plugin": "dev.heavy.form"');
   expect((await run('cat /chore-chart/weekly-leaders/plugin.json')).output).toContain('"table": "weekly_chore_leaders"');
   expect((await run('cat /chore-chart/weekly-leaders/plugin.json')).output).toContain('"plugin": "dev.heavy.db-table"');
@@ -1255,9 +1287,11 @@ test('hvy plugin form help explains script and submit options', async () => {
 
   const help = (await executeHvyCliCommand(document, session, 'man hvy plugin form')).output;
 
-  expect(help).toContain('hvy add plugin form SECTION_PATH ID SUBMIT_BUTTON_LABEL FIELD_LABEL:TYPE... [--script NAME PYTHON] [--on-submit-script NAME]');
+  expect(help).toContain('hvy add plugin form SECTION_PATH ID SUBMIT_BUTTON_LABEL FIELD_LABEL:TYPE... [--script NAME PYTHON] [--initial-script NAME] [--on-submit-script NAME]');
   expect(help).toContain('--script NAME PYTHON\n  Store a named Python script');
+  expect(help).toContain('--initial-script NAME\n  Run that named script when the form first renders');
   expect(help).toContain('--on-submit-script NAME\n  Run that named script when the submit button is pressed');
+  expect(help).toContain('There is no optionsQuery YAML key');
   expect(help).toContain('Example: hvy add plugin form /chores add-chore');
   expect(help).toContain('See also: hvy cheatsheet scripting; hvy recipe scripting; man hvy plugin scripting tool TOOL_NAME');
 });

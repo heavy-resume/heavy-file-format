@@ -792,6 +792,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       forceEditorRender = false;
       renderEditor();
     } else {
+      initialized = false;
       renderReader();
     }
   };

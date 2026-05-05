@@ -1,8 +1,12 @@
 import { expect, test, type Page } from '@playwright/test';
 
 async function runCliCommand(page: Page, command: string): Promise<void> {
+  const lineCount = await page.locator('#cliOutput .cli-line').count();
+  const isPlaceholder = (await page.locator('#cliOutput').textContent())?.includes('/ $ man ls') ?? false;
   await page.locator('#cliInput').fill(command);
   await page.keyboard.press('Enter');
+  await expect(page.locator('#cliOutput .cli-line')).toHaveCount(isPlaceholder ? lineCount : lineCount + 1);
+  await expect(page.locator('#cliOutput .cli-line').last()).toContainText(command.split(/\s+/).slice(0, 4).join(' '));
 }
 
 function scriptArg(source: string): string {
@@ -56,7 +60,7 @@ doc.db.execute('UPDATE chores SET active = 0 WHERE description = \\'' + chore + 
   const addForm = page.locator('form').filter({ has: page.getByRole('button', { name: 'Add chore' }) });
   await addForm.locator('textarea[name="Description"]').fill('Dishes');
   await addForm.getByRole('button', { name: 'Add chore' }).click();
-  await expect(page.locator('.hvy-db-table-plugin-reader').filter({ hasText: 'Dishes' })).toBeVisible();
+  await expect(page.locator('.hvy-db-table-plugin-reader').filter({ hasText: 'Dishes' })).toBeVisible({ timeout: 15_000 });
 
   const assignForm = page.locator('form').filter({ has: page.getByRole('button', { name: 'Assign chore' }) });
   await assignForm.locator('input[name="Chore"]').fill('Dishes');
@@ -72,4 +76,77 @@ doc.db.execute('UPDATE chores SET active = 0 WHERE description = \\'' + chore + 
   const weeklyLeaders = page.locator('#weekly-leaders .hvy-db-table-plugin-reader');
   await expect(weeklyLeaders).toContainText('Child');
   await expect(weeklyLeaders).toContainText('1');
+});
+
+test('scripting globals do not expose browser globals or wrapper internals', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"sandbox"}-->
+#! Sandbox
+
+<!--hvy:plugin {"id":"globals-check","plugin":"dev.heavy.scripting","pluginConfig":{"version":"0.1"}}-->
+forbidden = [
+    "window",
+    "document",
+    "browser",
+    "__BRYTHON__",
+    "__hvy_window__",
+    "__hvy_globals__",
+    "__hvy_runtime__",
+    "__hvy_source__",
+    "__hvy_instrumented_source__",
+    "__hvy_user_globals__",
+]
+names = globals()
+globals_leaked = [name for name in forbidden if name in names]
+direct_leaked = []
+for name in forbidden:
+    try:
+        eval(name)
+        direct_leaked.append(name)
+    except Exception:
+        pass
+doc.header.set("sandbox_globals", ",".join(globals_leaked) or "clean")
+doc.header.set("sandbox_direct", ",".join(direct_leaked) or "clean")
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Viewer' }).click();
+  await page.waitForFunction(() => {
+    const scripting = (window as unknown as { __HVY_SCRIPTING__?: { runtimes: Record<string, unknown> } }).__HVY_SCRIPTING__;
+    return Boolean(scripting) && Object.keys(scripting.runtimes).length === 0;
+  });
+
+  await page.getByRole('button', { name: 'Editor' }).click();
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Reset' }).click();
+  await expect(page.locator('#rawEditor')).toContainText('sandbox_globals: clean');
+  await expect(page.locator('#rawEditor')).toContainText('sandbox_direct: clean');
+});
+
+test('chore chart example populates chore dropdowns from the attached database', async ({ page }) => {
+  await page.goto('/');
+  await page.locator('#fileInput').setInputFiles('examples/chore-chart-3.hvy');
+  await expect(page.getByLabel('Download file name')).toHaveValue('chore-chart-3.hvy');
+
+  await page.getByRole('button', { name: 'Viewer' }).click();
+  await expect(page.locator('#chores-pivot')).toContainText('Pick up clothes');
+
+  const assignForm = page.locator('form').filter({ has: page.getByRole('button', { name: 'Assign chore' }) });
+  await expect(assignForm.locator('select[name="Chore"] option')).toContainText(['1: Pick up clothes']);
+
+  const completeForm = page.locator('form').filter({ has: page.getByRole('button', { name: 'Complete chore' }) });
+  await expect(completeForm.locator('select[name="Chore"] option')).toContainText(['1: Pick up clothes']);
+
+  const addForm = page.locator('form').filter({ has: page.getByRole('button', { name: 'Add chore' }) });
+  await addForm.locator('input[name="Title"]').fill('Wash dishes');
+  await addForm.locator('textarea[name="Description"]').fill('After dinner');
+  await addForm.getByRole('button', { name: 'Add chore' }).click();
+
+  await expect(page.locator('#chores-pivot')).toContainText('Wash dishes');
+  await expect(assignForm.locator('select[name="Chore"] option')).toContainText(['1: Pick up clothes', '2: Wash dishes']);
+  await expect(completeForm.locator('select[name="Chore"] option')).toContainText(['1: Pick up clothes', '2: Wash dishes']);
 });

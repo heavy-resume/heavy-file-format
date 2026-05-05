@@ -554,10 +554,12 @@ function addFormPluginBlock(ctx: HvyDocumentCommandContext, args: string[]): Hvy
     throw new Error('form add: expected SECTION_PATH ID SUBMIT_BUTTON_LABEL FIELD...');
   }
   const scripts = Object.fromEntries(readRepeatedOptionPairs(rest, '--script').map(([name, source]) => [name, decodeCliText(source)]));
+  const initialScript = readOption(rest, '--initial-script');
   const submitScript = readOption(rest, '--on-submit-script') ?? readOption(rest, '--submit');
   const body = stringifyYaml({
     fields: fieldSpecs.map(parseFormFieldSpec),
     ...(Object.keys(scripts).length > 0 ? { scripts } : {}),
+    ...(initialScript ? { initialScript } : {}),
     ...(submitScript ? { submitScript } : {}),
     submitLabel: decodeCliText(submitLabel),
   }).trimEnd();

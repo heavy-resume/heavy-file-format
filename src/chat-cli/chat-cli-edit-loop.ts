@@ -582,11 +582,10 @@ function normalizeCommandResponse(response: string): string {
 
 function formatCommandResultForModel(result: string | { output: string; diagnosticsDiff?: string; hints?: string; introducedDiagnostics?: string; scratchpad?: string; urgency?: string; cwd?: string }): string {
   if (typeof result === 'string') {
-    return result.trimEnd() || '(no output)';
+    return formatCommandResultSection(result);
   }
   return [
-    'result',
-    result.output.trimEnd() || '(no output)',
+    formatCommandResultSection(result.output),
     'diagnostics',
     result.diagnosticsDiff?.trimEnd() || '(no changes)',
     'hints',
@@ -603,6 +602,14 @@ function formatCommandResultForModel(result: string | { output: string; diagnost
     'Multiple ```shell blocks are allowed and run as a batch. Remember to take notes as you go!',
     `Current directory: ${result.cwd || '/'}`,
     'What is your next command?',
+  ].join('\n');
+}
+
+function formatCommandResultSection(output: string): string {
+  return [
+    '### CMD RESULT ###',
+    output.trimEnd() || '(no output)',
+    '### END CMD RESULT ###',
   ].join('\n');
 }
 
@@ -629,7 +636,7 @@ function formatBatchCommandOutput(outputs: Array<{ command: string; output: stri
     return outputs[0]?.output ?? '';
   }
   return outputs
-    .map((result) => [`> ${result.command}`, result.output.trimEnd() || '(no output)'].join('\n'))
+    .map((result) => [`CMD: ${result.command}`, result.output.trimEnd() || '(no output)'].join('\n'))
     .join('\n\n');
 }
 
@@ -683,7 +690,7 @@ function formatScratchpadForModel(snapshot: Pick<ReturnType<ReturnType<typeof cr
     ? `last edited ${commands.length} command${commands.length === 1 ? '' : 's'} ago`
     : 'last edited never';
   const recentCommandLines = snapshot.scratchpadEdited && commands.length > 0 && commands.length <= 3
-    ? ['', 'commands since last edit:', ...commands.map((command) => `> ${command}`)]
+    ? ['', 'commands since last edit:', ...commands.map((command) => `CMD: ${command}`)]
     : [];
   return [
     ageLine,

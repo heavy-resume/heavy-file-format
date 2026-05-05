@@ -29,8 +29,10 @@ test('cli can navigate and read virtual component files', async () => {
 
   expect((await executeHvyCliCommand(document, session, 'ls /')).output).toContain('body');
   expect((await executeHvyCliCommand(document, session, 'cd /body/summary')).cwd).toBe('/body/summary');
+  expect((await executeHvyCliCommand(document, session, 'ls /body/summary/intro')).output).toContain('file text.txt [w]');
   expect((await executeHvyCliCommand(document, session, 'cat intro/text.txt')).output).toBe('Hello world');
   expect((await executeHvyCliCommand(document, session, 'cat intro/text.json')).output).toContain('"css": "margin: 0.5rem 0;"');
+  expect((await executeHvyCliCommand(document, session, 'man ls')).output).toContain('Files are marked [w] writable or [ro] read-only.');
 });
 
 test('cli accepts shell commands prefixed with hvy', async () => {
@@ -477,8 +479,9 @@ hvy_version: 0.1
   const session = createHvyCliSession();
 
   const listing = await executeHvyCliCommand(document, session, 'ls /body/quality/chores');
-  expect(listing.output).toContain('file tableColumns.json');
-  expect(listing.output).toContain('file tableRows.json');
+  expect(listing.output).toContain('file table.txt [ro]');
+  expect(listing.output).toContain('file tableColumns.json [w]');
+  expect(listing.output).toContain('file tableRows.json [w]');
 
   expect((await executeHvyCliCommand(document, session, 'cat /body/quality/chores/table.txt')).output).toBe('Chore | Owner\nDishes | Mom\n');
   expect((await executeHvyCliCommand(document, session, 'cat /body/quality/chores/tableColumns.json')).output).toBe('[\n  "Chore",\n  "Owner"\n]\n');

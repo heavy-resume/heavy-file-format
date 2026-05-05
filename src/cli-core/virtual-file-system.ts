@@ -13,6 +13,7 @@ export interface HvyVirtualFile {
   path: string;
   read: () => string;
   write?: (content: string) => void;
+  writable?: boolean;
 }
 
 export interface HvyVirtualDirectory {
@@ -204,6 +205,7 @@ function addBlock(entries: Map<string, HvyVirtualEntry>, block: VisualBlock, blo
     kind: 'file',
     path: bodyTextFile,
     read: () => readBlockBodyText(block),
+    writable: block.schema.component === 'table' ? false : undefined,
     write: (content) => {
       writeBlockBodyText(block, content);
     },

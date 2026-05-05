@@ -2270,7 +2270,10 @@ function quoteIdentifier(identifier: string): string {
 }
 
 function formatEntry(entry: HvyVirtualEntry): string {
-  return `${entry.kind === 'dir' ? 'dir ' : 'file'} ${entry.path.split('/').pop() || '/'}`;
+  if (entry.kind === 'dir') {
+    return `dir  ${entry.path.split('/').pop() || '/'}`;
+  }
+  return `file ${entry.path.split('/').pop() || '/'} ${entry.write && entry.writable !== false ? '[w]' : '[ro]'}`;
 }
 
 export function tokenizeCommand(input: string): string[] {
@@ -2365,7 +2368,7 @@ function helpFor(topic = ''): string {
     '': 'Commands: cd, pwd, ls, cat, head, tail, nl, find, rg, grep, sort, uniq, wc, tr, xargs, cp, rm, echo, sed, true, hvy. Ask: ask QUESTION. Finish: done SUMMARY. Use man <command> for details.',
     cd: formatCommandHelp('cd PATH', 'Change the current virtual directory.'),
     pwd: formatCommandHelp('pwd', 'Print the current virtual directory.'),
-    ls: formatCommandHelp('ls [PATH]', 'List files and directories.'),
+    ls: formatCommandHelp('ls [PATH]', 'List files and directories. Files are marked [w] writable or [ro] read-only.'),
     cat: formatCommandHelp('cat FILE...', 'Print file contents.'),
     head: formatCommandHelp('head [-n COUNT] FILE', 'Print the first lines of a file. COUNT maxes at 100.'),
     tail: formatCommandHelp('tail [-n COUNT] FILE', 'Print the last lines of a file. COUNT maxes at 100.'),

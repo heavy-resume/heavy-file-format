@@ -271,7 +271,7 @@ test('requestDocumentEditChatTurn runs the CLI edit loop for document chat', asy
     expect.objectContaining({ role: 'assistant', content: '```shell\nhvy request_structure --collapse\n```' }),
     expect.objectContaining({ role: 'user', content: expect.stringContaining('Components:') }),
     expect.objectContaining({ role: 'assistant', content: '```shell\nhvy lint\n```' }),
-    expect.objectContaining({ role: 'user', content: 'No lint issues.' }),
+    expect.objectContaining({ role: 'user', content: '### CMD RESULT ###\nNo lint issues.\n### END CMD RESULT ###' }),
     expect.objectContaining({ role: 'assistant', content: '```shell\nhvy find-intent "Add a chore section." --max 5\n```' }),
     expect.objectContaining({ role: 'user', content: expect.stringContaining('What is your next command?') }),
   ]));
@@ -580,7 +580,7 @@ hvy_version: 0.1
     '$ [2/2] cat /body/summary/long/text.txt',
   ]);
   const nextPrompt = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content ?? '';
-  expect(nextPrompt).toContain('> cat /body/summary/long/text.txt');
+  expect(nextPrompt).toContain('CMD: cat /body/summary/long/text.txt');
   expect(nextPrompt).toContain('Warning: output truncated to 50 of 60 wrapped lines (10 lines hidden).');
 });
 
@@ -656,9 +656,9 @@ cat /header.yaml
     '$ [3/3] cat /header.yaml',
   ]);
   const nextPrompt = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content ?? '';
-  expect(nextPrompt).toContain('> pwd\n/');
-  expect(nextPrompt).toContain('> ls /body');
-  expect(nextPrompt).toContain('> cat /header.yaml');
+  expect(nextPrompt).toContain('CMD: pwd\n/');
+  expect(nextPrompt).toContain('CMD: ls /body');
+  expect(nextPrompt).toContain('CMD: cat /header.yaml');
   expect(nextPrompt).not.toContain('# inspect obvious locations first');
 });
 
@@ -693,8 +693,8 @@ cat /scratchpad.txt
     '$ [3/3] cat /scratchpad.txt',
   ]);
   const nextPrompt = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content ?? '';
-  expect(nextPrompt).toContain("> cat > /scratchpad.txt <<'TXT'\nPlan:\n1. Inspect\n2. Edit\nTXT\n/scratchpad.txt: written");
-  expect(nextPrompt).toContain('> cat /scratchpad.txt\nPlan:\n1. Inspect\n2. Edit');
+  expect(nextPrompt).toContain("CMD: cat > /scratchpad.txt <<'TXT'\nPlan:\n1. Inspect\n2. Edit\nTXT\n/scratchpad.txt: written");
+  expect(nextPrompt).toContain('CMD: cat /scratchpad.txt\nPlan:\n1. Inspect\n2. Edit');
 });
 
 test('requestDocumentEditChatTurn divides batch output budget across three fenced shell blocks', async () => {
@@ -786,7 +786,7 @@ hvy_version: 0.1
 
   expect(result.error).toBeNull();
   const nextPrompt = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content ?? '';
-  expect(nextPrompt).toContain('result\nHello');
+  expect(nextPrompt).toContain('### CMD RESULT ###\nHello\n### END CMD RESULT ###');
   expect(nextPrompt).toContain('What is your next command?');
   expect(nextPrompt.trimEnd()).toMatch(/What is your next command\?$/);
   expect(nextPrompt).toContain('hints\ncomponent text: /body/summary/intro');
@@ -1168,7 +1168,7 @@ test('requestDocumentEditChatTurn lets the cli edit loop retry after command err
 
   expect(result.error).toBeNull();
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content).toContain(
-    'result\nhvy: expected request_structure, find-intent, cheatsheet, recipe, lint, add, plugin, section add, text add, table add, form add, or db-table show'
+    '### CMD RESULT ###\nhvy: expected request_structure, find-intent, cheatsheet, recipe, lint, add, plugin, section add, text add, table add, form add, or db-table show\n### END CMD RESULT ###'
   );
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content).toContain(
     '### BEGIN your urgency ###\nscore=0\nprioritize planning and understanding'
@@ -1178,7 +1178,7 @@ test('requestDocumentEditChatTurn lets the cli edit loop retry after command err
     'hvy',
     'hvy: expected request_structure, find-intent, cheatsheet, recipe, lint, add, plugin, section add, text add, table add, form add, or db-table show',
     undefined,
-    expect.stringContaining('result\nhvy: expected request_structure, find-intent, cheatsheet, recipe, lint, add, plugin, section add, text add, table add, form add, or db-table show')
+    expect.stringContaining('### CMD RESULT ###\nhvy: expected request_structure, find-intent, cheatsheet, recipe, lint, add, plugin, section add, text add, table add, form add, or db-table show\n### END CMD RESULT ###')
   );
 });
 

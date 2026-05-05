@@ -736,7 +736,7 @@ export function formatAiCliLogEvent(event: TraceEvent): string {
   if (event.type === 'client_event' && event.payload.event === 'ai_cli_command') {
     const modelMessage = typeof event.payload.modelMessage === 'string' ? event.payload.modelMessage.trimEnd() : '';
     return formatAiCliLogBlock([
-      `> ${String(event.payload.command ?? '').trim()}`,
+      `CMD: ${String(event.payload.command ?? '').trim()}`,
       modelMessage || String(event.payload.output ?? '').trimEnd(),
     ]);
   }

@@ -558,30 +558,31 @@ function renderChatWorkMessageHtml(message: ChatMessage, deps: RenderChatPanelDe
     <div class="chat-bubble-body chat-work-body">
       ${isRunning ? `<span class="chat-work-pulse" aria-hidden="true"></span><span>${summary}</span>` : summary}
     </div>
-    ${renderChatWorkDetails(work, deps, isRunning)}
+    ${renderChatWorkDetails(work, deps, message.id)}
     ${message.tokenUsage || work.tokenUsage ? `<div class="chat-token-usage">${deps.escapeHtml(formatChatTokenUsage(message.tokenUsage ?? work.tokenUsage!))}</div>` : ''}
   `;
 }
 
-function renderChatWorkDetails(work: ChatWorkState, deps: RenderChatPanelDeps, open: boolean): string {
+function renderChatWorkDetails(work: ChatWorkState, deps: RenderChatPanelDeps, messageId: string): string {
   const detailLines = work.details.length > 0 ? work.details : ['No command history yet.'];
   const reasoningLines = work.reasoning.length > 0 ? work.reasoning : [];
   return `
-    <details class="chat-work-details"${open ? ' open' : ''}>
-      <summary>${open ? 'Details' : 'Work details'}</summary>
+    <details class="chat-work-details" data-chat-work-details="${deps.escapeAttr(`${messageId}:commands`)}">
+      <summary>Show command history</summary>
       <div class="chat-work-detail-section">
-        <strong>Commands</strong>
-        <pre>${deps.escapeHtml(detailLines.join('\n'))}</pre>
+        <pre class="chat-work-detail-scroll">${deps.escapeHtml(detailLines.join('\n'))}</pre>
       </div>
-      ${
-        reasoningLines.length > 0
-          ? `<div class="chat-work-detail-section">
-               <strong>Reasoning history</strong>
-               <pre>${deps.escapeHtml(reasoningLines.join('\n\n'))}</pre>
-             </div>`
-          : ''
-      }
     </details>
+    ${
+      reasoningLines.length > 0
+        ? `<details class="chat-work-details" data-chat-work-details="${deps.escapeAttr(`${messageId}:reasoning`)}">
+             <summary>Show reasoning history</summary>
+             <div class="chat-work-detail-section">
+               <pre class="chat-work-detail-scroll">${deps.escapeHtml(reasoningLines.join('\n\n'))}</pre>
+             </div>
+           </details>`
+        : ''
+    }
   `;
 }
 

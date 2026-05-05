@@ -4,6 +4,7 @@ let lastBoundChatMessageCount = -1;
 let lastBoundChatMessageSignature = '';
 let lastChatScrollTop = 0;
 let wasChatNearBottom = true;
+const openChatWorkDetails = new Set<string>();
 
 export type ChatThreadScrollState = {
   scrollTop: number;
@@ -75,6 +76,28 @@ export function bindChatThreadUi(
     });
   });
 
+  chatThread.querySelectorAll<HTMLDetailsElement>('[data-chat-work-details]').forEach((details) => {
+    const key = details.dataset.chatWorkDetails ?? '';
+    if (key && openChatWorkDetails.has(key)) {
+      details.open = true;
+    }
+    details.addEventListener('toggle', () => {
+      const nextKey = details.dataset.chatWorkDetails ?? '';
+      if (!nextKey) {
+        return;
+      }
+      if (details.open) {
+        openChatWorkDetails.add(nextKey);
+        scrollWorkDetailsToLatest(details);
+      } else {
+        openChatWorkDetails.delete(nextKey);
+      }
+    });
+    if (details.open) {
+      scrollWorkDetailsToLatest(details);
+    }
+  });
+
   window.requestAnimationFrame(() => {
     window.requestAnimationFrame(() => {
       const nextSignature = chatMessageSignature();
@@ -87,6 +110,7 @@ export function bindChatThreadUi(
         chatScrollContainer.scrollTop = Math.min(lastChatScrollTop, chatScrollContainer.scrollHeight);
       }
       updateScrollButton();
+      chatThread.querySelectorAll<HTMLDetailsElement>('[data-chat-work-details][open]').forEach(scrollWorkDetailsToLatest);
       lastBoundChatMessageCount = state.chat.messages.length;
       lastBoundChatMessageSignature = nextSignature;
     });
@@ -102,4 +126,12 @@ function scrollChatToLatest(chatScrollContainer: HTMLDivElement): void {
   window.requestAnimationFrame(() => {
     chatScrollContainer.scrollTop = chatScrollContainer.scrollHeight;
   });
+}
+
+function scrollWorkDetailsToLatest(details: HTMLDetailsElement): void {
+  const scroller = details.querySelector<HTMLElement>('.chat-work-detail-scroll');
+  if (!scroller) {
+    return;
+  }
+  scroller.scrollTop = scroller.scrollHeight;
 }

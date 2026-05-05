@@ -270,12 +270,6 @@
   margin-top: 0.55rem;
 }
 
-.chat-work-detail-section strong {
-  display: block;
-  margin-bottom: 0.25rem;
-  color: var(--hvy-text);
-}
-
 .chat-work-detail-section pre {
   max-height: 12rem;
   overflow: auto;

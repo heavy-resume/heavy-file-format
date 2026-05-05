@@ -5,6 +5,7 @@ import { validateDbTableObjectName } from '../plugins/db-table-identifiers';
 import { parseFormSpec } from '../plugins/form';
 import { DB_TABLE_PLUGIN_ID, FORM_PLUGIN_ID, SCRIPTING_PLUGIN_ID } from '../plugins/registry';
 import type { VisualDocument } from '../types';
+import { parse as parseYaml } from 'yaml';
 
 export interface HvyCliHelpCommand {
   command: string;
@@ -175,13 +176,14 @@ registerHvyCliPluginCommands({
       }
       const parsed = parseFormSpec(context.body);
       if (parsed.error) {
-        return scriptIssues;
+        return [{ message: `form YAML error: ${parsed.error}` }, ...scriptIssues];
       }
+      const schemaIssues = lintFormSchemaShape(context.body);
       const script = parsed.spec.submitScript.trim();
       if (!parsed.spec.showSubmit || script.length > 0) {
-        return scriptIssues;
+        return [...schemaIssues, ...scriptIssues];
       }
-      return [{ message: 'form has a submit button but no submitScript.' }, ...scriptIssues];
+      return [{ message: 'form has a submit button but no submitScript.' }, ...schemaIssues, ...scriptIssues];
     },
   ],
   helpCommands: [
@@ -203,6 +205,44 @@ registerHvyCliPluginCommands({
     },
   ],
 });
+
+const FORM_TOP_LEVEL_KEYS = new Set(['fields', 'scripts', 'initialScript', 'submitScript', 'submitLabel', 'showSubmit']);
+const FORM_FIELD_KEYS = new Set(['label', 'type', 'required', 'options', 'triggers', 'value', 'placeholder', 'description', 'meta']);
+
+function lintFormSchemaShape(body: string): HvyCliPluginLintIssue[] {
+  let parsed: unknown;
+  try {
+    parsed = parseYaml(body);
+  } catch {
+    return [];
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return [];
+  }
+  const issues: HvyCliPluginLintIssue[] = [];
+  for (const key of Object.keys(parsed)) {
+    if (!FORM_TOP_LEVEL_KEYS.has(key)) {
+      issues.push({ message: `form YAML has unsupported top-level key "${key}".` });
+    }
+  }
+  const fields = (parsed as { fields?: unknown }).fields;
+  if (Array.isArray(fields)) {
+    fields.forEach((field, index) => {
+      if (!field || typeof field !== 'object' || Array.isArray(field)) {
+        return;
+      }
+      for (const key of Object.keys(field)) {
+        if (!FORM_FIELD_KEYS.has(key)) {
+          const label = typeof (field as { label?: unknown }).label === 'string' && (field as { label: string }).label.trim()
+            ? (field as { label: string }).label.trim()
+            : `#${index + 1}`;
+          issues.push({ message: `form field "${label}" has unsupported key "${key}".` });
+        }
+      }
+    });
+  }
+  return issues;
+}
 
 registerHvyCliPluginCommands({
   name: 'scripting',

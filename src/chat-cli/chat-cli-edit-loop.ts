@@ -143,27 +143,25 @@ export async function runChatCliEditLoop(params: {
     let stopAfterCommandError: ChatCliCommandFailureError | null = null;
     let mutated = false;
     let traceOutput = '';
+    let batchHadSuccess = false;
+    let batchHadError = false;
+    let lastFailedCommand = '';
+    let lastCommandError = '';
     for (let commandIndex = 0; commandIndex < commands.length; commandIndex += 1) {
       const command = commands[commandIndex] ?? '';
       params.onProgress?.(commands.length > 1 ? `$ [${commandIndex + 1}/${commands.length}] ${command}` : `$ ${command}`);
       let result: Awaited<ReturnType<typeof cli.run>>;
       try {
         result = await cli.run(command);
-        consecutiveCommandErrors = 0;
+        batchHadSuccess = true;
         const commandMutatedDocument = result.mutated && !isSessionOnlyCommand(command);
         urgency = updateChatCliUrgency(urgency, commandMutatedDocument);
         mutated = mutated || commandMutatedDocument;
       } catch (error) {
         const output = error instanceof Error ? error.message : String(error);
-        consecutiveCommandErrors += 1;
-        if (consecutiveCommandErrors >= CHAT_CLI_MAX_CONSECUTIVE_COMMAND_ERRORS) {
-          stopAfterCommandError = new ChatCliCommandFailureError({
-            request: params.request,
-            command,
-            error: output,
-            scratchpad: formatScratchpadForModel(cli.snapshot()),
-          });
-        }
+        batchHadError = true;
+        lastFailedCommand = command;
+        lastCommandError = output;
         result = { command, cwd: cli.session.cwd, output, mutated: false };
       }
       traceOutput = result.output;
@@ -180,8 +178,18 @@ export async function runChatCliEditLoop(params: {
       if (hints.trim()) {
         commandHints.push(hints);
       }
-      if (stopAfterCommandError) {
-        break;
+    }
+    if (batchHadSuccess) {
+      consecutiveCommandErrors = 0;
+    } else if (batchHadError) {
+      consecutiveCommandErrors += 1;
+      if (consecutiveCommandErrors >= CHAT_CLI_MAX_CONSECUTIVE_COMMAND_ERRORS) {
+        stopAfterCommandError = new ChatCliCommandFailureError({
+          request: params.request,
+          command: lastFailedCommand,
+          error: lastCommandError,
+          scratchpad: formatScratchpadForModel(cli.snapshot()),
+        });
       }
     }
     const modelMessage = formatCommandResultForModel({

@@ -25,15 +25,23 @@ export function buildChatCliComponentHints(params: {
 }
 
 function isSearchStyleCommand(command: string): boolean {
-  const firstCommand = tokenizeCommand(command).find((token) => token !== '|' && token !== '&&' && token !== '||') ?? '';
+  const firstCommand = tokenizeCommandSafely(command).find((token) => token !== '|' && token !== '&&' && token !== '||') ?? '';
   return firstCommand === 'rg' || firstCommand === 'grep' || firstCommand === 'find';
 }
 
 function collectCommandComponentPaths(command: string, cwd: string, fs: ReturnType<typeof buildHvyVirtualFileSystem>): string[] {
-  return tokenizeCommand(command)
+  return tokenizeCommandSafely(command)
     .filter((arg) => !arg.startsWith('-') && (arg.includes('/') || /\.(?:json|txt)$/i.test(arg)))
     .map((arg) => resolveVirtualPath(fs, cwd, arg))
     .filter((path) => path.startsWith('/body/'));
+}
+
+function tokenizeCommandSafely(command: string): string[] {
+  try {
+    return tokenizeCommand(command);
+  } catch {
+    return [];
+  }
 }
 
 function buildComponentPathHint(path: string, fs: ReturnType<typeof buildHvyVirtualFileSystem>): string | null {

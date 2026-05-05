@@ -1040,6 +1040,56 @@ test('requestDocumentEditChatTurn lets the cli edit loop retry after command err
   );
 });
 
+test('requestDocumentEditChatTurn counts a failed command batch as one retry attempt', async () => {
+  requestProxyCompletionMock
+    .mockResolvedValueOnce(`\`\`\`shell
+not-a-command
+hvy
+cat missing.txt
+\`\`\``)
+    .mockResolvedValueOnce('pwd')
+    .mockResolvedValueOnce('done Recovered after one failed batch.');
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+  const document = deserializeDocument('---\nhvy_version: 0.1\n---\n', '.hvy');
+
+  const result = await requestDocumentEditChatTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Recover from one bad batch.',
+  });
+
+  expect(result.error).toBeNull();
+  expect(requestProxyCompletionMock).toHaveBeenCalledTimes(3);
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content).toContain(
+    'Unknown command "not-a-command". Try "help".'
+  );
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content).toContain(
+    'No such file: /missing.txt'
+  );
+  expect(writeChatCliCommandTraceMock.mock.calls[5]?.[1]).toBe('not-a-command\nhvy\ncat missing.txt');
+});
+
+test('requestDocumentEditChatTurn treats unclosed shell quotes as retryable command errors', async () => {
+  requestProxyCompletionMock
+    .mockResolvedValueOnce('echo "unterminated')
+    .mockResolvedValueOnce('pwd')
+    .mockResolvedValueOnce('done Recovered from the quote error.');
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+  const document = deserializeDocument('---\nhvy_version: 0.1\n---\n', '.hvy');
+
+  const result = await requestDocumentEditChatTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Recover from quote syntax.',
+  });
+
+  expect(result.error).toBeNull();
+  expect(requestProxyCompletionMock).toHaveBeenCalledTimes(3);
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content).toContain('Unclosed quote in command.');
+});
+
 test('requestDocumentEditChatTurn stops after repeated cli command errors', async () => {
   requestProxyCompletionMock
     .mockResolvedValueOnce('not-a-command')

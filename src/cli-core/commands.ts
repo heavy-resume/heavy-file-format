@@ -173,7 +173,8 @@ export function executeHvyCliCommandSync(document: VisualDocument, input: string
     return { cwd, output: commandCp(ctx, rest), mutated: true };
   }
   if (command === 'sed') {
-    return { cwd, output: commandSed(ctx, rest), mutated: true };
+    const result = commandSed(ctx, rest);
+    return { cwd, output: result.output, mutated: result.mutated };
   }
   if (command === 'hvy') {
     if (rest[0] === 'lint') {
@@ -285,7 +286,8 @@ async function runCommand(ctx: HvyCliCommandContext, command: string, args: stri
     return { cwd: ctx.cwd, output: result.output, mutated: result.mutated };
   }
   if (command === 'sed') {
-    return { cwd: ctx.cwd, output: commandSed(ctx, args), mutated: true };
+    const result = commandSed(ctx, args);
+    return { cwd: ctx.cwd, output: result.output, mutated: result.mutated };
   }
   if (command === 'hvy') {
     if (args[0] === 'add-component') {
@@ -1076,7 +1078,7 @@ function writeVirtualFile(
   return { output: `${file.path}: ${append ? 'appended' : 'written'}`, mutated: true };
 }
 
-function commandSed(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd: string }, args: string[]): string {
+function commandSed(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd: string }, args: string[]): { output: string; mutated: boolean } {
   const parsed = parseCliFlags(args, {
     command: 'sed',
     booleanShort: ['E', 'r', 'n'],
@@ -1085,9 +1087,16 @@ function commandSed(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd
   const expression = parsed.positionals[0] ?? '';
   const paths = parsed.positionals.slice(1);
   if (paths.length === 0) {
-    throw new Error('sed: expected sed s/search/replace/[g] path');
+    throw new Error('sed: expected sed -n START,ENDp FILE... or sed s/search/replace/[g] path');
   }
-  return withWarnings(paths
+  if (parsed.flags.has('n')) {
+    const outputs = paths.map((path) => applySedPrintFilter(getReadableFile(ctx, path).read(), ['-n', expression]));
+    if (outputs.some((output) => output === null)) {
+      throw new Error('sed: expected sed -n START,ENDp FILE... or sed s/search/replace/[g] path');
+    }
+    return { output: withWarnings(outputs.join('\n'), parsed.warnings), mutated: false };
+  }
+  return { output: withWarnings(paths
     .map((path) => {
       const file = getReadableFile(ctx, path);
       if (!file.write) {
@@ -1099,7 +1108,7 @@ function commandSed(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd
       const changed = before === after ? 0 : 1;
       return `${file.path}: ${changed ? 'updated' : 'no matches'}`;
     })
-    .join('\n'), parsed.warnings);
+    .join('\n'), parsed.warnings), mutated: true };
 }
 
 function applySedEditExpression(input: string, expression: string): string {
@@ -1137,7 +1146,7 @@ function parseSedExpression(expression: string): SedExpression {
       kind: 'substitute',
       pattern: first.value,
       replacement: second.value,
-      flags: expression.slice(second.nextIndex),
+      flags: parseSedFlags(expression.slice(second.nextIndex), 'substitute'),
     };
   }
 
@@ -1153,8 +1162,16 @@ function parseSedExpression(expression: string): SedExpression {
   return {
     kind: 'delete',
     pattern: pattern.value,
-    flags: suffix.replace(/[dD]/g, ''),
+    flags: parseSedFlags(suffix.replace(/[dD]/g, ''), 'delete'),
   };
+}
+
+function parseSedFlags(flags: string, kind: SedExpression['kind']): string {
+  const allowed = kind === 'substitute' ? /^[gIi]*$/ : /^[Ii]*$/;
+  if (!allowed.test(flags)) {
+    throw new Error(`sed: unsupported ${kind} flags "${flags}". Escape delimiter characters in the pattern/replacement or choose a delimiter not present in the expression.`);
+  }
+  return flags;
 }
 
 function readDelimitedSegment(value: string, startIndex: number, delimiter: string): { value: string; nextIndex: number } {
@@ -2135,7 +2152,7 @@ function helpFor(topic = ''): string {
     cp: formatCommandHelp('cp [-r] SOURCE DEST', 'Copy a writable file into an existing writable file, or copy a component directory with -r. Component copies get the destination path id.'),
     rm: formatCommandHelp('rm -r|-rf PATH...', 'Remove section or component directories from the virtual document body. -f ignores missing paths. Alias: hvy remove PATH.'),
     echo: formatCommandHelp('echo TEXT [> FILE|>> FILE]', 'Print text, replace a writable file, or append to a writable file.'),
-    sed: formatCommandHelp('sed [-i] [-E] s/search/replace/[gI] FILE...', 'Update writable virtual files with a search/replace.'),
+    sed: formatCommandHelp('sed -n START,ENDp FILE...\nsed [-i] [-E] s/search/replace/[gI] FILE...', 'Print selected line ranges, or update writable virtual files with search/replace or /pattern/d deletion.'),
     true: formatCommandHelp('true', 'Succeed without output. Useful in command chains such as COMMAND || true.'),
     ask: formatCommandHelp('ask QUESTION', 'Pause the AI CLI edit loop and ask the user for clarification.'),
     done: formatCommandHelp('done SUMMARY', 'Finish the AI CLI edit loop with a short summary.'),

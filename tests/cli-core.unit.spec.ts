@@ -228,6 +228,51 @@ test('cli sed updates writable virtual files', async () => {
   expect(document.sections[0]?.blocks[0]?.text).toBe('Hello there');
 });
 
+test('cli sed prints file line ranges without mutating', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {"id":"intro"}-->
+ one
+two
+three
+four
+`, '.hvy');
+  const session = createHvyCliSession();
+
+  const result = await executeHvyCliCommand(document, session, `sed -n '2,3p' /body/summary/intro/text.txt`);
+
+  expect(result.mutated).toBe(false);
+  expect(result.output).toBe('two\nthree');
+  expect(document.sections[0]?.blocks[0]?.text).toBe('one\ntwo\nthree\nfour');
+  expect((await executeHvyCliCommand(document, session, 'man sed')).output).toContain('sed -n START,ENDp FILE...');
+});
+
+test('cli sed rejects malformed substitute flags before mutating', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {"id":"intro"}-->
+ optionsQuery: SELECT id || '|' || title AS option
+`, '.hvy');
+  const session = createHvyCliSession();
+
+  await expect(executeHvyCliCommand(
+    document,
+    session,
+    `sed -i "s|optionsQuery: SELECT id || '|' || title AS option|optionsQuery: SELECT title AS option|" /body/summary/intro/text.txt`
+  )).rejects.toThrow('sed: unsupported substitute flags');
+  expect(document.sections[0]?.blocks[0]?.text).toBe("optionsQuery: SELECT id || '|' || title AS option");
+});
+
 test('cli echo supports shell-style redirection to writable virtual files', async () => {
   const document = createCliTestDocument();
   const session = createHvyCliSession();
@@ -693,6 +738,32 @@ Keep that
   expect(result.mutated).toBe(true);
   expect(document.sections[0]?.blocks[0]?.text).toBe('Keep this\nKeep that');
   expect(session.scratchpadContent).toContain('Removed TypeScript references from files');
+});
+
+test('hvy lint catches unsupported form YAML keys', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"chore-chart"}-->
+#! Chore Chart
+
+<!--hvy:plugin {"id":"assign-chore","plugin":"dev.heavy.form","pluginConfig":{"version":"0.1"}}-->
+fields:
+  - label: Chore
+    type: select
+    required: true
+    || '|' || title AS option, id AS value FROM chores ORDER BY id ASC
+submitScript: submit
+scripts:
+  submit: >-
+    pass
+`, '.hvy');
+  const session = createHvyCliSession();
+
+  const result = await executeHvyCliCommand(document, session, 'hvy lint');
+
+  expect(result.output).toContain('[plugin] /body/chore-chart/assign-chore - form YAML error: Implicit keys need to be on a single line');
 });
 
 test('cli supports sed delete flags and stderr dev null redirection', async () => {

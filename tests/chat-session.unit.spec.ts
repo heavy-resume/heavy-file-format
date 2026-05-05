@@ -255,7 +255,7 @@ test('requestDocumentEditChatTurn runs the CLI edit loop for document chat', asy
       mode: 'document-edit',
       debugLabel: 'chat-cli-edit:1',
       context: expect.stringContaining('Valid commands (in order of preference):\nCommands: hvy, nl, rg, find, sed, echo, cat, ls, pwd, cd, cp, rm, grep, sort, uniq, wc, tr, xargs, head, tail, true. Ask: ask QUESTION. Finish: done SUMMARY.'),
-      formatInstructions: expect.stringContaining('Return terminal command(s)'),
+      formatInstructions: expect.stringContaining('Return concise notes plus terminal command(s).'),
     })
   );
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('scratchpad.txt:');
@@ -547,6 +547,37 @@ test('requestDocumentEditChatTurn accepts shell-looking command wrappers', async
     '$ ls /body',
     '$ pwd',
   ]);
+});
+
+test('requestDocumentEditChatTurn accepts concise notes around fenced shell commands', async () => {
+  requestProxyCompletionMock
+    .mockResolvedValueOnce(`What you are doing: Inspecting the current directory.
+Why you are doing it: I need to choose the right edit target.
+What you are unsure of: Whether the section already exists.
+\`\`\`shell
+pwd
+\`\`\``)
+    .mockResolvedValueOnce('done Inspected with notes.');
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+  const document = deserializeDocument('---\nhvy_version: 0.1\n---\n', '.hvy');
+  const onProgress = vi.fn();
+
+  const result = await requestDocumentEditChatTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Inspect with notes.',
+    onProgress,
+  });
+
+  expect(result.error).toBeNull();
+  expect(onProgress.mock.calls.map((call) => call[0].content)).toEqual([
+    'Notes\nWhat you are doing: Inspecting the current directory.\nWhy you are doing it: I need to choose the right edit target.\nWhat you are unsure of: Whether the section already exists.',
+    '$ pwd',
+  ]);
+  const nextPrompt = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content ?? '';
+  expect(nextPrompt).toContain('notes from your previous response\nWhat you are doing: Inspecting the current directory.');
+  expect(nextPrompt).toContain('### CMD RESULT ###\n/\n### END CMD RESULT ###');
 });
 
 test('requestDocumentEditChatTurn runs multiple fenced shell blocks as a batch', async () => {
@@ -1123,8 +1154,8 @@ test('requestDocumentEditChatTurn treats prose and dangling fences as retryable 
 
   expect(result.error).toBeNull();
   expect(onProgress).not.toHaveBeenCalled();
-  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content).toContain('Expected terminal command(s)');
-  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.messages.at(-1)?.content).toContain('Expected terminal command(s)');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content).toContain('Expected concise notes plus fenced ```shell commands');
+  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.messages.at(-1)?.content).toContain('Expected concise notes plus fenced ```shell commands');
   expect(writeChatCliCommandTraceMock.mock.calls.map((call) => call[1])).toEqual(['ls /', 'hvy --help', 'hvy request_structure --collapse', 'hvy lint', 'hvy find-intent "Use command format." --max 5']);
 });
 

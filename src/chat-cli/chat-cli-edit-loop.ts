@@ -176,6 +176,9 @@ export async function runChatCliEditLoop(params: {
     if (action.kind === 'ask') {
       return { summary: action.question, asked: true, ...(latestTokenUsage ? { tokenUsage: latestTokenUsage } : {}) };
     }
+    if (action.notes.trim()) {
+      params.onProgress?.(`Notes\n${action.notes.trim()}`);
+    }
 
     const commandOutputs: Array<{ command: string; output: string }> = [];
     const commandHints: string[] = [];
@@ -237,6 +240,7 @@ export async function runChatCliEditLoop(params: {
     }
     const modelMessage = formatCommandResultForModel({
       output: formatBatchCommandOutput(commandOutputs),
+      assistantNotes: action.notes,
       diagnosticsDiff: await updateDiagnosticsState(params.document, diagnostics, mutated, (nextIssues) => {
         const diff = formatHvyCliDiagnosticDiff(diagnostics, nextIssues);
         diagnostics = nextIssues;
@@ -458,21 +462,23 @@ class ChatCliCommandFailureError extends Error {
 
 function buildChatCliLoopFormatInstructions(): string {
   return [
-    'Return terminal command(s) as plain text, or fenced in ```shell. Multiple ```shell blocks are allowed and run in order.',
+    'Return concise notes plus terminal command(s).',
+    'At the top, write exactly these note labels with short answers: What you are doing, Why you are doing it, What you are unsure of.',
+    'Wrap commands in ```shell fences. Multiple ```shell blocks are allowed and run in order.',
+    'Text outside ```shell fences is treated as notes for your future self and shown in history.',
     'To finish, return only: done Short summary of what changed.',
     'To ask for requirements, NOT CLI clarification from the non-technical user, return: ask followed by the actual question.',
     'Do not include done with commands. Run commands, inspect the result, then finish in a later response.',
-    'Do not return prose or markdown explanations.',
   ].join('\n');
 }
 
-function parseChatCliAction(response: string): { kind: 'command'; commands: string[] } | { kind: 'done'; summary: string } | { kind: 'ask'; question: string } | { kind: 'invalid'; message: string } {
+function parseChatCliAction(response: string): { kind: 'command'; commands: string[]; notes: string } | { kind: 'done'; summary: string } | { kind: 'ask'; question: string } | { kind: 'invalid'; message: string } {
   const fencedCommands = extractFencedShellCommands(response);
   if (fencedCommands.kind === 'invalid') {
     return { kind: 'invalid', message: fencedCommands.message };
   }
   if (fencedCommands.commands.length > 0) {
-    return { kind: 'command', commands: fencedCommands.commands };
+    return { kind: 'command', commands: fencedCommands.commands, notes: fencedCommands.notes };
   }
   const cleaned = normalizeCommandResponse(response);
   const command = cleaned.replace(/^(?:[\w./~-]+)?\s*\$\s*/, '').trim();
@@ -489,12 +495,12 @@ function parseChatCliAction(response: string): { kind: 'command'; commands: stri
       : { kind: 'invalid', message: 'Expected `ask Question for the user`.' };
   }
   if (!command || command.startsWith('```') || isLikelyProseResponse(command)) {
-    return { kind: 'invalid', message: 'Expected terminal command(s), `ask Question`, or `done Short summary`. Do not return prose.' };
+    return { kind: 'invalid', message: 'Expected concise notes plus fenced ```shell commands, `ask Question`, or `done Short summary`. Notes alone are not enough.' };
   }
-  return { kind: 'command', commands: [command] };
+  return { kind: 'command', commands: [command], notes: '' };
 }
 
-function extractFencedShellCommands(response: string): { kind: 'ok'; commands: string[] } | { kind: 'invalid'; message: string } {
+function extractFencedShellCommands(response: string): { kind: 'ok'; commands: string[]; notes: string } | { kind: 'invalid'; message: string } {
   const trimmed = response.replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
   const fenceRegex = /```(?:shell|bash|sh)?[ \t]*\n?([\s\S]*?)\s*```/gi;
   const commands: string[] = [];
@@ -507,14 +513,11 @@ function extractFencedShellCommands(response: string): { kind: 'ok'; commands: s
   }
   outside += trimmed.slice(lastIndex);
   if (commands.length === 0) {
-    return { kind: 'ok', commands };
+    return { kind: 'ok', commands, notes: '' };
   }
   const outsideCommand = normalizeCommandResponse(outside);
   const hasTrailingDone = /^(done|finish|finished)\b/i.test(outsideCommand);
-  if (outside.trim() && !hasTrailingDone) {
-    return { kind: 'invalid', message: 'Expected only terminal command fences, `ask Question`, or `done Short summary`. Do not add prose around command fences.' };
-  }
-  return { kind: 'ok', commands };
+  return { kind: 'ok', commands, notes: hasTrailingDone ? '' : normalizeAssistantNotes(outside) };
 }
 
 function splitShellBlockCommands(source: string): string[] {
@@ -582,11 +585,19 @@ function normalizeCommandResponse(response: string): string {
   return commandText.trim();
 }
 
-function formatCommandResultForModel(result: string | { output: string; diagnosticsDiff?: string; hints?: string; introducedDiagnostics?: string; scratchpad?: string; urgency?: string; cwd?: string }): string {
+function normalizeAssistantNotes(notes: string): string {
+  return notes
+    .replace(/[\u200B-\u200D\uFEFF]/g, '')
+    .replace(/```[\s\S]*?```/g, '')
+    .trim();
+}
+
+function formatCommandResultForModel(result: string | { output: string; assistantNotes?: string; diagnosticsDiff?: string; hints?: string; introducedDiagnostics?: string; scratchpad?: string; urgency?: string; cwd?: string }): string {
   if (typeof result === 'string') {
     return formatCommandResultSection(result);
   }
   return [
+    ...(result.assistantNotes?.trim() ? ['notes from your previous response', result.assistantNotes.trimEnd(), ''] : []),
     formatCommandResultSection(result.output),
     'diagnostics',
     result.diagnosticsDiff?.trimEnd() || '(no changes)',

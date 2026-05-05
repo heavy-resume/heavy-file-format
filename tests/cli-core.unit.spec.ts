@@ -1346,6 +1346,73 @@ fields:
   expect(result.output).toContain('[plugin] /body/quality/passive-form - form has a submit button but no submitScript.');
 });
 
+test('hvy lint reports database schemas stored in header metadata', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+tables:
+  job_applications:
+    columns:
+      id: integer
+      company: text
+---
+
+<!--hvy: {"id":"crm"}-->
+#! CRM
+
+<!--hvy:text {"id":"intro"}-->
+Track applications
+`, '.hvy');
+  const session = createHvyCliSession();
+
+  const result = await executeHvyCliCommand(document, session, 'hvy lint');
+
+  expect(result.output).toContain('Lint issues: 1');
+  expect(result.output).toContain('[header] /header.yaml - header.yaml has unsupported "tables" metadata that looks like a database schema.');
+  expect(result.output).toContain('SQL tables/views live in the db-table backend; inspect or change them with hvy plugin db-table tables, hvy plugin db-table schema, and hvy plugin db-table exec.');
+});
+
+test('hvy lint reports unused header metadata for supported format versions', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+workflow_state:
+  owner: qa
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {"id":"intro"}-->
+Hello
+`, '.hvy');
+  const session = createHvyCliSession();
+
+  const result = await executeHvyCliCommand(document, session, 'hvy lint');
+
+  expect(result.output).toContain('Lint issues: 1');
+  expect(result.output).toContain('[header] /header.yaml - header.yaml metadata key "workflow_state" is not used by HVY 0.1 or this editor. Remove it if it was accidental.');
+});
+
+test('hvy lint warns on newer HVY versions before assuming unused metadata', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.2
+future_field: true
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {"id":"intro"}-->
+Hello
+`, '.hvy');
+  const session = createHvyCliSession();
+
+  const result = await executeHvyCliCommand(document, session, 'hvy lint');
+
+  expect(result.output).toContain('Lint issues: 1');
+  expect(result.output).toContain('[header] /header.yaml - This file uses hvy_version 0.2, but this client supports 0.1. Avoid editing with this client until it supports that HVY version.');
+  expect(result.output).not.toContain('future_field');
+});
+
 test('deserializing custom resume components does not warn about missing app state', () => {
   const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
 

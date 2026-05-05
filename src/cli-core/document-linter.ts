@@ -8,6 +8,25 @@ import type { VisualDocument } from '../types';
 import { getHvyCliPluginCommandRegistrationByPluginId } from './plugin-command-registry';
 import { buildHvyVirtualFileSystem, type HvyVirtualEntry, type HvyVirtualFileSystem } from './virtual-file-system';
 
+const SUPPORTED_HVY_VERSION = '0.1';
+const KNOWN_HEADER_METADATA_KEYS = new Set([
+  'hvy_version',
+  'title',
+  'description',
+  'author',
+  'tags',
+  'sidebar_label',
+  'reader_max_width',
+  'theme',
+  'template',
+  'component_defs',
+  'section_defs',
+  'component_defaults',
+  'section_defaults',
+  'plugins',
+]);
+const DATABASE_SCHEMA_HEADER_KEYS = new Set(['tables', 'database', 'schema', 'columns']);
+
 export interface HvyCliLintIssue {
   key: string;
   path: string;
@@ -22,6 +41,7 @@ export async function runHvyCliLinter(document: VisualDocument): Promise<HvyCliL
       entry.kind === 'file' && entry.path.startsWith('/body/') && entry.path.endsWith('.json') && !entry.path.endsWith('/section.json'))
     .map((entry) => lintComponentFile(document, fs, entry.path)));
   return [
+    ...lintHeader(document),
     ...lintSections(fs),
     ...componentIssues.flat(),
   ];
@@ -85,6 +105,83 @@ function findComponentBodyPath(fs: HvyVirtualFileSystem, directory: string, comp
     }
   }
   return `${directory}/${component}.txt`;
+}
+
+function lintHeader(document: VisualDocument): HvyCliLintIssue[] {
+  const issues: HvyCliLintIssue[] = [];
+  const version = readHeaderVersion(document.meta.hvy_version);
+  if (!version) {
+    issues.push({
+      key: '/header.yaml:hvy-version-invalid',
+      path: '/header.yaml',
+      component: 'header',
+      message: 'header.yaml has an invalid hvy_version. Expected a dotted numeric version such as 0.1.',
+    });
+    return issues;
+  }
+  if (compareDottedVersions(version, SUPPORTED_HVY_VERSION) > 0) {
+    issues.push({
+      key: '/header.yaml:hvy-version-newer',
+      path: '/header.yaml',
+      component: 'header',
+      message: `This file uses hvy_version ${version}, but this client supports ${SUPPORTED_HVY_VERSION}. Avoid editing with this client until it supports that HVY version.`,
+    });
+    return issues;
+  }
+
+  for (const key of Object.keys(document.meta)) {
+    if (DATABASE_SCHEMA_HEADER_KEYS.has(key)) {
+      issues.push({
+        key: `/header.yaml:db-schema-metadata:${key}`,
+        path: '/header.yaml',
+        component: 'header',
+        message: `header.yaml has unsupported "${key}" metadata that looks like a database schema. SQL tables/views live in the db-table backend; inspect or change them with hvy plugin db-table tables, hvy plugin db-table schema, and hvy plugin db-table exec.`,
+      });
+      continue;
+    }
+    if (!KNOWN_HEADER_METADATA_KEYS.has(key)) {
+      issues.push({
+        key: `/header.yaml:unused-metadata:${key}`,
+        path: '/header.yaml',
+        component: 'header',
+        message: `header.yaml metadata key "${key}" is not used by HVY ${SUPPORTED_HVY_VERSION} or this editor. Remove it if it was accidental.`,
+      });
+    }
+  }
+  return issues;
+}
+
+function readHeaderVersion(value: unknown): string | null {
+  let version: string | null = null;
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    version = String(value);
+  }
+  if (typeof value === 'string' && value.trim().length > 0) {
+    version = value.trim();
+  }
+  return version && parseDottedVersion(version) ? version : null;
+}
+
+function compareDottedVersions(left: string, right: string): number {
+  const leftParts = parseDottedVersion(left);
+  const rightParts = parseDottedVersion(right);
+  if (!leftParts || !rightParts) return 0;
+  const length = Math.max(leftParts.length, rightParts.length);
+  for (let index = 0; index < length; index += 1) {
+    const leftPart = leftParts[index] ?? 0;
+    const rightPart = rightParts[index] ?? 0;
+    if (leftPart !== rightPart) {
+      return leftPart > rightPart ? 1 : -1;
+    }
+  }
+  return 0;
+}
+
+function parseDottedVersion(value: string): number[] | null {
+  if (!/^\d+(?:\.\d+)*$/.test(value)) {
+    return null;
+  }
+  return value.split('.').map((part) => Number(part));
 }
 
 function lintSections(fs: HvyVirtualFileSystem): HvyCliLintIssue[] {

@@ -578,7 +578,11 @@ function inferComponentNameForDirectory(fs: ReturnType<typeof buildHvyVirtualFil
   const componentJsonFiles = listDirectory(fs, directoryPath)
     .filter((entry): entry is HvyVirtualFile => entry.kind === 'file')
     .map((entry) => entry.path.split('/').pop() ?? '')
-    .filter((name) => name.endsWith('.json') && name !== 'section.json');
+    .filter((name) => name.endsWith('.json') && name !== 'section.json')
+    .filter((name) => {
+      const component = name.replace(/\.json$/i, '');
+      return fs.entries.get(`${directoryPath}/${component}.txt`)?.kind === 'file' || fs.entries.get(`${directoryPath}/script.py`)?.kind === 'file';
+    });
   if (componentJsonFiles.length !== 1) {
     return '';
   }

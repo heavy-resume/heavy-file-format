@@ -212,6 +212,7 @@ component_defs:
 
   expect(componentListHint).toContain('add list item: hvy add history-record /body/history/history-list/component-list --id NEW_ID');
   expect(componentListHint).toContain('then fill fields: hvy request_structure NEW_ID --describe');
+  expect(componentListHint).toContain('component-list.txt is a text preview of existing leaf items');
   expect(reusableItemHint).toContain('create blank sibling: hvy add history-record /body/history/history-list/component-list --id NEW_ID');
   expect(reusableItemHint).toContain('then fill fields: hvy request_structure NEW_ID --describe');
   expect(componentListHint).not.toContain('"Title"');
@@ -459,6 +460,49 @@ test('cli echo supports shell-style redirection to writable virtual files', asyn
 
   await expect(executeHvyCliCommand(document, session, 'echo nope > /body/summary')).rejects.toThrow('Is a directory');
   expect((await executeHvyCliCommand(document, session, 'man echo')).output).toContain('echo TEXT [> FILE|>> FILE]');
+});
+
+test('cli exposes static table body as read-only preview and rejects empty component-list body writes', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"quality"}-->
+#! Quality
+
+<!--hvy:table {"id":"chores","tableColumns":"Chore,Owner","tableRows":[{"cells":["Dishes","Mom"]}]}-->
+
+<!--hvy:component-list {"id":"empty-list","componentListComponent":"text"}-->
+`, '.hvy');
+  const session = createHvyCliSession();
+
+  const listing = await executeHvyCliCommand(document, session, 'ls /body/quality/chores');
+  expect(listing.output).toContain('file tableColumns.json');
+  expect(listing.output).toContain('file tableRows.json');
+
+  expect((await executeHvyCliCommand(document, session, 'cat /body/quality/chores/table.txt')).output).toBe('Chore | Owner\nDishes | Mom\n');
+  expect((await executeHvyCliCommand(document, session, 'cat /body/quality/chores/tableColumns.json')).output).toBe('[\n  "Chore",\n  "Owner"\n]\n');
+  expect((await executeHvyCliCommand(document, session, 'cat /body/quality/chores/tableRows.json')).output).toBe('[\n  [\n    "Dishes",\n    "Mom"\n  ]\n]\n');
+
+  await expect(executeHvyCliCommand(document, session, 'echo "Chore | Owner" > /body/quality/chores/table.txt')).rejects.toThrow(
+    'table.txt is a read-only preview for static table components. Edit tableColumns.json and tableRows.json instead'
+  );
+
+  expect((await executeHvyCliCommand(document, session, 'echo \'["Task","Done"]\' > /body/quality/chores/tableColumns.json')).output).toBe(
+    '/body/quality/chores/tableColumns.json: written'
+  );
+  expect((await executeHvyCliCommand(document, session, 'echo \'[["Trash","No"],["Dishes","Yes"]]\' > /body/quality/chores/tableRows.json')).output).toBe(
+    '/body/quality/chores/tableRows.json: written'
+  );
+  expect((await executeHvyCliCommand(document, session, 'cat /body/quality/chores/table.txt')).output).toBe('Task | Done\nTrash | No\nDishes | Yes\n');
+  expect(serializeDocument(document)).toContain('"tableColumns":"Task, Done"');
+  expect(serializeDocument(document)).toContain('"tableRows":[{"cells":["Trash","No"]},{"cells":["Dishes","Yes"]}]');
+
+  await expect(executeHvyCliCommand(document, session, 'echo "- id: item-1" > /body/quality/empty-list/component-list.txt')).rejects.toThrow(
+    'component-list.txt is a read-only preview until list items exist. Use hvy add ITEM_TYPE PATH/component-list --id NEW_ID'
+  );
+
+  expect((await executeHvyCliCommand(document, session, 'hvy lint')).output).toContain('[component-list] /body/quality/empty-list - component-list has no items.');
 });
 
 test('cli expands supported date command substitutions', async () => {
@@ -1568,7 +1612,8 @@ test('cli commands can create a chore chart with tables and form plugins', async
   await run('hvy add plugin db-table /chore-chart weekly-leaders weekly_chore_leaders "SELECT person, completed_count FROM weekly_chore_leaders ORDER BY completed_count DESC"');
 
   expect((await run('find /chore-chart -name plugin.txt')).output).toContain('/body/chore-chart/add-chore-form/plugin.txt');
-  expect((await run('cat /chore-chart/active-chores/table.json')).output).toContain('"tableColumns": "Chore,Dad,Mom,Child"');
+  expect((await run('cat /chore-chart/active-chores/tableColumns.json')).output).toContain('"Chore"');
+  expect((await run('cat /chore-chart/active-chores/tableRows.json')).output).toContain('"Dishes"');
   expect((await run('cat /chore-chart/assign-chore-form/plugin.json')).output).toContain('"submitLabel": "Assign chore"');
   expect((await run('cat /chore-chart/assign-chore-form/plugin.json')).output).toContain('"initialScript": "load"');
   expect((await run('cat /chore-chart/assign-chore-form/plugin.txt')).output).toContain("doc.form.set_options('Chore'");

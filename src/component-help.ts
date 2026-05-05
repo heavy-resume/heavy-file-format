@@ -16,9 +16,10 @@ const HVY_COMPONENT_HELP: Record<string, string[]> = {
   ],
   table: [
     'Table component: static table data rendered from configured rows and columns.',
-    'tableColumns is a comma-separated column list.',
+    'In the CLI, tableColumns.json is a JSON array of strings and tableRows.json is a JSON array of string arrays.',
+    'In raw HVY schema, tableColumns is a comma-separated column list.',
     'tableShowHeader controls whether the header row is shown.',
-    'tableRows is an array of rows, and each row contains only cells, for example {"cells":["Example","Open"]}.',
+    'In raw HVY schema, tableRows is an array of rows, and each row contains only cells, for example {"cells":["Example","Open"]}.',
     'Tables are non-interactive; use surrounding components when rows need narrative detail or reveal/hide behavior.',
   ],
   container: [

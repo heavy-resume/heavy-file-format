@@ -6,6 +6,7 @@ import { getSectionId } from '../section-ops';
 import { makeId } from '../utils';
 import { FORM_PLUGIN_ID, SCRIPTING_PLUGIN_ID } from '../plugins/registry';
 import { parseFormSpec, serializeFormSpec } from '../plugins/form';
+import { splitColumns } from '../table-ops';
 
 export interface HvyVirtualFile {
   kind: 'file';
@@ -207,6 +208,7 @@ function addBlock(entries: Map<string, HvyVirtualEntry>, block: VisualBlock, blo
       writeBlockBodyText(block, content);
     },
   });
+  addTableDataFiles(entries, block, blockPath);
   addFormScriptFiles(entries, block, blockPath);
 
   addNamedBlockChildren(entries, block.schema.containerBlocks ?? [], `${blockPath}/container`);
@@ -386,9 +388,7 @@ function blockSchemaToCliJson(schema: BlockSchema): JsonObject {
     value.xrefTarget = schema.xrefTarget;
   }
   if (schema.component === 'table') {
-    value.tableColumns = schema.tableColumns;
     value.tableShowHeader = schema.tableShowHeader;
-    value.tableRows = schema.tableRows as unknown as JsonObject[];
   }
   if (schema.component === 'plugin') {
     value.plugin = schema.plugin;
@@ -423,19 +423,56 @@ function applyBlockSchemaJson(schema: BlockSchema, component: string, value: Jso
 }
 
 function readBlockBodyText(block: VisualBlock): string {
+  if (block.schema.component === 'table') {
+    return formatTableBodyText(block.schema);
+  }
   if (block.text) {
     return block.text;
   }
   return collectNestedTextBlocks(block).map((child) => child.text).join('\n');
 }
 
+function addTableDataFiles(entries: Map<string, HvyVirtualEntry>, block: VisualBlock, blockPath: string): void {
+  if (block.schema.component !== 'table') {
+    return;
+  }
+  entries.set(`${blockPath}/tableColumns.json`, {
+    kind: 'file',
+    path: `${blockPath}/tableColumns.json`,
+    read: () => `${JSON.stringify(splitColumns(block.schema.tableColumns), null, 2)}\n`,
+    write: (content) => {
+      block.schema.tableColumns = parseJsonStringArray(content, `${blockPath}/tableColumns.json`).join(', ');
+    },
+  });
+  entries.set(`${blockPath}/tableRows.json`, {
+    kind: 'file',
+    path: `${blockPath}/tableRows.json`,
+    read: () => `${JSON.stringify(block.schema.tableRows.map((row) => row.cells), null, 2)}\n`,
+    write: (content) => {
+      block.schema.tableRows = parseJsonTableRows(content, `${blockPath}/tableRows.json`);
+    },
+  });
+}
+
 function writeBlockBodyText(block: VisualBlock, content: string): void {
-  if (block.text || collectNestedTextBlocks(block).length === 0) {
+  if (block.schema.component === 'table') {
+    throw new Error(
+      'table.txt is a read-only preview for static table components. Edit tableColumns.json and tableRows.json instead, or use hvy add table to create a replacement table.'
+    );
+  }
+
+  const nestedTextBlocks = collectNestedTextBlocks(block);
+  if (block.schema.component === 'component-list' && nestedTextBlocks.length === 0) {
+    throw new Error(
+      'component-list.txt is a read-only preview until list items exist. Use hvy add ITEM_TYPE PATH/component-list --id NEW_ID to create a list item, then edit that item\'s leaf body/config files.'
+    );
+  }
+
+  if (block.text || nestedTextBlocks.length === 0) {
     block.text = content;
     return;
   }
 
-  const nestedTextBlocks = collectNestedTextBlocks(block);
   const lines = content.split('\n');
   if (lines.length !== nestedTextBlocks.length) {
     throw new Error(
@@ -444,6 +481,44 @@ function writeBlockBodyText(block: VisualBlock, content: string): void {
   }
   nestedTextBlocks.forEach((child, index) => {
     child.text = lines[index] ?? '';
+  });
+}
+
+function formatTableBodyText(schema: BlockSchema): string {
+  const columns = splitColumns(schema.tableColumns);
+  const rows = schema.tableRows.map((row) => row.cells);
+  const lines = [columns, ...rows].map((cells) => cells.map((cell) => cell.trim()).join(' | '));
+  return `${lines.join('\n')}\n`;
+}
+
+function parseJsonStringArray(content: string, filename: string): string[] {
+  let value: unknown;
+  try {
+    value = JSON.parse(content);
+  } catch {
+    throw new Error(`${filename} must be a JSON array of strings.`);
+  }
+  if (!Array.isArray(value) || value.some((item) => typeof item !== 'string')) {
+    throw new Error(`${filename} must be a JSON array of strings.`);
+  }
+  return value;
+}
+
+function parseJsonTableRows(content: string, filename: string): BlockSchema['tableRows'] {
+  let value: unknown;
+  try {
+    value = JSON.parse(content);
+  } catch {
+    throw new Error(`${filename} must be a JSON array of string arrays.`);
+  }
+  if (!Array.isArray(value)) {
+    throw new Error(`${filename} must be a JSON array of string arrays.`);
+  }
+  return value.map((row, index) => {
+    if (!Array.isArray(row) || row.some((cell) => typeof cell !== 'string')) {
+      throw new Error(`${filename} row ${index + 1} must be a JSON array of strings.`);
+    }
+    return { cells: row };
   });
 }
 

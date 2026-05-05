@@ -59,7 +59,7 @@ function buildComponentPathHint(path: string, fs: ReturnType<typeof buildHvyVirt
     ...(document ? [formatHvyComponentDescriptionHistory(document, fs, '/', componentDir)].filter(Boolean) : []),
     ...componentSpecificHintLines(componentName),
     ...pluginSpecificHintLines(componentName, `${componentDir}/${componentName}.json`, fs),
-    `  edit: ${bodyFileNameForDirectory(componentDir, componentName, fs)} for body, ${componentName}.json for config.`,
+    `  edit: ${formatEditHint(componentDir, componentName, fs)}`,
     `  structure: hvy request_structure ${componentDir} --describe. remove: hvy remove ${componentDir}.`,
     ...formatCreateRelatedHints(componentDir, componentName, fs),
   ].join('\n');
@@ -68,6 +68,16 @@ function buildComponentPathHint(path: string, fs: ReturnType<typeof buildHvyVirt
 function componentSpecificHintLines(componentName: string): string[] {
   const [firstHelpLine = ''] = getHvyComponentHelpLines(componentName);
   return firstHelpLine ? [`  ${firstHelpLine}`] : [];
+}
+
+function formatEditHint(componentDir: string, componentName: string, fs: ReturnType<typeof buildHvyVirtualFileSystem>): string {
+  if (componentName === 'table') {
+    return `tableColumns.json and tableRows.json for static table data, ${componentName}.json for display config; ${bodyFileNameForDirectory(componentDir, componentName, fs)} is a read-only preview.`;
+  }
+  if (componentName === 'component-list') {
+    return `use hvy add ITEM_TYPE ${componentDir}/component-list --id NEW_ID for list items; ${bodyFileNameForDirectory(componentDir, componentName, fs)} is a text preview of existing leaf items.`;
+  }
+  return `${bodyFileNameForDirectory(componentDir, componentName, fs)} for body, ${componentName}.json for config.`;
 }
 
 function formatCreateRelatedHints(componentDir: string, componentName: string, fs: ReturnType<typeof buildHvyVirtualFileSystem>): string[] {
@@ -161,7 +171,7 @@ function componentNameForDirectory(path: string, fs: ReturnType<typeof buildHvyV
 }
 
 function hasTextSibling(path: string, componentName: string, fs: ReturnType<typeof buildHvyVirtualFileSystem>): boolean {
-  return !!bodyFileNameForDirectory(path, componentName, fs);
+  return [`${componentName}.txt`, 'script.py'].some((filename) => fs.entries.get(`${path}/${filename}`)?.kind === 'file');
 }
 
 function bodyFileNameForDirectory(path: string, componentName: string, fs: ReturnType<typeof buildHvyVirtualFileSystem>): string {

@@ -104,13 +104,14 @@ export function getAiEditComponentGuidance(block: VisualBlock): string {
   }
   if (base === 'table') {
     return [
-      '- Use `tableColumns` as a comma-separated string, for example `"Foo, Bar"`.',
-      '- Use `tableRows` as an array of rows with `cells` arrays.',
-      '- Each table row only contains `cells`, which is an array of strings.',
+      '- In the CLI, edit tableColumns.json and tableRows.json for static table data; table.txt is only a read-only preview.',
+      '- tableColumns.json is a JSON array of strings, for example ["Name","Status"].',
+      '- tableRows.json is a JSON array of string arrays, for example [["Alpha","Open"]].',
+      '- In raw HVY schema/config, tableColumns serializes as a comma-separated string and tableRows serializes as rows with cells arrays.',
       '- Do not invent row-level interaction or detail fields for tables.',
-      '- Do not invent `columns` or `rows` keys.',
+      '- Do not invent columns or rows keys.',
       '- Tables are non-interactive. If the user asks for reveal/hide behavior, extra narrative detail, or expandable content, replace the table with an `expandable` or another better-fitting component instead of forcing the table schema.',
-      '- Do not use GitHub-flavored Markdown table syntax or pipe-delimited pseudo-tables as a shortcut.',
+      '- Do not write YAML, Markdown tables, or pipe-delimited rows into table.txt.',
       '- If converting a table to nested expandables, keep the column header in the outer expandable stub only.',
       '- Put one expandable per data row inside the outer expandable content, and do not wrap the header as its own row expandable.',
     ].join('\n');

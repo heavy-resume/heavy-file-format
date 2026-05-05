@@ -118,6 +118,12 @@ async function lintComponentFile(document: VisualDocument, fs: HvyVirtualFileSys
   const textPath = findComponentBodyPath(fs, directory, component);
   const body = readFile(fs, textPath);
   const config = readJsonFile(fs, jsonPath);
+  if (component === 'table') {
+    const tableRows = readJsonFileValue(fs, `${directory}/tableRows.json`);
+    if (Array.isArray(tableRows)) {
+      config.tableRows = tableRows.map((row) => ({ cells: Array.isArray(row) ? row : [] })) as unknown as JsonObject[];
+    }
+  }
   const baseComponent = resolveBaseComponentFromMeta(component, document.meta);
   return [
     ...lintCoreComponent({ fs, path: directory, component, baseComponent, config, body }),
@@ -131,7 +137,7 @@ function findComponentBodyPath(fs: HvyVirtualFileSystem, directory: string, comp
       return path;
     }
   }
-  return `${directory}/${component}.txt`;
+  return '';
 }
 
 function lintHeader(document: VisualDocument): HvyCliLintIssue[] {
@@ -404,15 +410,19 @@ function readFile(fs: HvyVirtualFileSystem, path: string): string {
 }
 
 function readJsonFile(fs: HvyVirtualFileSystem, path: string): JsonObject {
+  const value = readJsonFileValue(fs, path);
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as JsonObject : {};
+}
+
+function readJsonFileValue(fs: HvyVirtualFileSystem, path: string): unknown {
   const entry = fs.entries.get(path);
   if (!entry || entry.kind !== 'file') {
-    return {};
+    return null;
   }
   try {
-    const value = JSON.parse(entry.read()) as unknown;
-    return value && typeof value === 'object' && !Array.isArray(value) ? value as JsonObject : {};
+    return JSON.parse(entry.read()) as unknown;
   } catch {
-    return {};
+    return null;
   }
 }
 

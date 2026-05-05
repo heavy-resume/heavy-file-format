@@ -10,6 +10,7 @@ import {
   stripPythonImports,
   summarizeScriptingError,
   runUserScript,
+  wrapPythonSourceInFunction,
 } from '../src/plugins/scripting/wrapper';
 import { createScriptingRuntime } from '../src/plugins/scripting/runtime';
 import { SCRIPTING_PLUGIN_VERSION } from '../src/plugins/scripting/version';
@@ -106,6 +107,21 @@ test('buildPythonProgram prefers tracing and keeps instrumented fallback availab
   expect(program).toContain("__hvy_compilable_source__ = __hvy_source__ if __hvy_trace_enabled__ else __hvy_instrumented_source__");
   expect(program).not.toContain('NodeTransformer');
   expect(program).not.toContain('visit_Compare');
+});
+
+test('wrapPythonSourceInFunction allows top-level return semantics', () => {
+  expect(
+    wrapPythonSourceInFunction(
+      `doc.header.set("phase", "before")
+return
+doc.header.set("phase", "after")`
+    )
+  ).toBe(
+    `def __hvy_user_main__():
+    doc.header.set("phase", "before")
+    return
+    doc.header.set("phase", "after")`
+  );
 });
 
 test('buildPythonProgram uses the component id in tracebacks when available', () => {

@@ -193,6 +193,17 @@ export function instrumentPythonSource(source: string): string {
   return instrumented.join('\n');
 }
 
+export function wrapPythonSourceInFunction(source: string): string {
+  const lines = source.split('\n');
+  const body = lines.length > 0 && lines.some((line) => line.trim().length > 0)
+    ? lines.map((line) => `    ${line}`)
+    : ['    pass'];
+  return [
+    'def __hvy_user_main__():',
+    ...body,
+  ].join('\n');
+}
+
 function isImportStatementStart(line: string): boolean {
   const trimmed = line.trimStart();
   return /^import\b/.test(trimmed) || /^from\b.*\bimport\b/.test(trimmed);
@@ -336,6 +347,7 @@ __hvy_forbidden_global_names__ = (
     '__hvy_source__',
     '__hvy_instrumented_source__',
     '__hvy_user_globals__',
+    '__hvy_user_main__',
 )
 
 
@@ -398,6 +410,10 @@ try:
     }
     __hvy_sanitize_user_globals__()
     exec(__hvy_code__, __hvy_user_globals__)
+    __hvy_entrypoint__ = __hvy_user_globals__.get('__hvy_user_main__')
+    __hvy_sanitize_user_globals__()
+    if __hvy_entrypoint__ is not None:
+        __hvy_entrypoint__()
     __hvy_runtime__.doc.rerender()
 except Exception as __hvy_err__:
     import traceback as __hvy_tb__
@@ -485,8 +501,8 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
   const scripting = getScriptingGlobal();
   const sanitizedSource = stripPythonImports(options.source);
   scripting.runtimes[runtimeId] = runtime;
-  scripting.sources[runtimeId] = sanitizedSource;
-  scripting.instrumentedSources[runtimeId] = instrumentPythonSource(sanitizedSource);
+  scripting.sources[runtimeId] = wrapPythonSourceInFunction(sanitizedSource);
+  scripting.instrumentedSources[runtimeId] = wrapPythonSourceInFunction(instrumentPythonSource(sanitizedSource));
   scripting.errors[runtimeId] = null;
 
   // Do not append this to the DOM or use type="text/python", otherwise 
@@ -540,7 +556,7 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
           scriptElement,
           scriptElement.textContent || '',
           `hvy_script_${runtimeId}`,
-          window.location.href || 'http://localhost/hvy-plugin',
+          `${window.location.href || 'http://localhost/hvy-plugin'}#hvy-script-${runtimeId}`,
           true
         );
       });

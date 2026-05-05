@@ -85,10 +85,11 @@ function buildReaderDom(): { root: HTMLDivElement; handles: ReaderHandles } {
 
 interface ScriptingState {
   lastResult: { ok: boolean; error?: string; errorDetail?: string; linesExecuted: number; toolCalls: number } | null;
+  sourceSignature: string;
 }
 
 const scriptingState = new WeakMap<HTMLElement, ScriptingState>();
-const scriptingResultCache = new Map<string, ScriptingState['lastResult']>();
+const scriptingResultCache = new Map<string, ScriptingState>();
 
 function getScriptingResultCacheKey(sectionKey: string, blockId: string): string {
   return `${sectionKey}|${blockId}`;
@@ -96,13 +97,14 @@ function getScriptingResultCacheKey(sectionKey: string, blockId: string): string
 
 export function setScriptingResult(
   element: HTMLElement,
-  result: { ok: boolean; error?: string; errorDetail?: string; linesExecuted: number; toolCalls: number }
+  result: { ok: boolean; error?: string; errorDetail?: string; linesExecuted: number; toolCalls: number },
+  sourceSignature = element.dataset.scriptingSourceSignature ?? ''
 ): void {
-  scriptingState.set(element, { lastResult: result });
+  scriptingState.set(element, { lastResult: result, sourceSignature });
   const sectionKey = element.dataset.scriptingSectionKey;
   const blockId = element.dataset.scriptingBlockId;
   if (sectionKey && blockId) {
-    scriptingResultCache.set(getScriptingResultCacheKey(sectionKey, blockId), result);
+    scriptingResultCache.set(getScriptingResultCacheKey(sectionKey, blockId), { lastResult: result, sourceSignature });
   }
   const status = element.querySelector<HTMLDivElement>('.hvy-scripting-status');
   if (status) {
@@ -139,6 +141,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
   root.dataset.scriptingMount = 'true';
   root.dataset.scriptingSectionKey = ctx.sectionKey;
   root.dataset.scriptingBlockId = ctx.block.id;
+  root.dataset.scriptingSourceSignature = ctx.block.text;
 
   if (ctx.mode === 'reader') {
     const { root: readerRoot } = buildReaderDom();
@@ -146,10 +149,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
     return {
       element: root,
       refresh: () => {
-        const cached =
-          scriptingState.get(root) ?? {
-            lastResult: scriptingResultCache.get(getScriptingResultCacheKey(ctx.sectionKey, ctx.block.id)) ?? null,
-          };
+        const cached = getFreshScriptingResult(root, ctx.sectionKey, ctx.block.id, ctx.block.text);
         if (cached?.lastResult) {
           setScriptingResult(root, cached.lastResult);
         }
@@ -161,14 +161,12 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
   root.appendChild(editorRoot);
 
   const sync = () => {
+    root.dataset.scriptingSourceSignature = ctx.block.text;
     const active = document.activeElement;
     if (handles.textarea !== active && handles.textarea.value !== ctx.block.text) {
       handles.textarea.value = ctx.block.text;
     }
-    const cached =
-      scriptingState.get(root) ?? {
-        lastResult: scriptingResultCache.get(getScriptingResultCacheKey(ctx.sectionKey, ctx.block.id)) ?? null,
-      };
+    const cached = getFreshScriptingResult(root, ctx.sectionKey, ctx.block.id, ctx.block.text);
     if (cached?.lastResult) {
       setScriptingResult(root, cached.lastResult);
     }
@@ -191,12 +189,27 @@ export const scriptingPluginRegistration: HvyPluginRegistration = {
   aiHelp: [
     `Use \`<!--hvy:plugin {"plugin":"${SCRIPTING_PLUGIN_ID}","pluginConfig":{"version":"0.1"}}-->\`.`,
     'Put executable script source in the component body.',
-    'Scripts run as top-level Python/Brython code with a `doc` global. Top-level `return` is a syntax error, though `return` is fine inside helper functions you define.',
+    'Scripts run as Python/Brython code wrapped in a generated function with a `doc` global, so `return` can stop the script early.',
     'Use the `doc` API for host capabilities: document tools through `doc.tool(name, args)`, header helpers, attachment helpers, and plugin-provided APIs.',
     'Use this only when the user explicitly needs a script-backed component.',
   ].join(' '),
   create: scriptingPluginFactory,
 };
+
+function getFreshScriptingResult(
+  element: HTMLElement,
+  sectionKey: string,
+  blockId: string,
+  sourceSignature: string
+): ScriptingState | null {
+  const existing = scriptingState.get(element)
+    ?? scriptingResultCache.get(getScriptingResultCacheKey(sectionKey, blockId))
+    ?? null;
+  if (!existing || existing.sourceSignature !== sourceSignature) {
+    return null;
+  }
+  return existing;
+}
 
 export function findScriptingMounts(root: ParentNode): HTMLElement[] {
   return Array.from(root.querySelectorAll<HTMLElement>('[data-scripting-mount="true"]'));

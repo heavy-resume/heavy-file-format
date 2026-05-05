@@ -80,6 +80,8 @@ doc.db.execute('UPDATE chores SET active = 0 WHERE description = \\'' + chore + 
 
 test('scripting globals do not expose browser globals or wrapper internals', async ({ page }) => {
   await page.goto('/');
+  await page.getByRole('button', { name: 'Editor' }).click();
+  await page.getByRole('button', { name: 'Editor' }).click();
   await page.getByRole('button', { name: 'Raw' }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
@@ -100,6 +102,7 @@ forbidden = [
     "__hvy_source__",
     "__hvy_instrumented_source__",
     "__hvy_user_globals__",
+    "__hvy_user_main__",
 ]
 names = globals()
 globals_leaked = [name for name in forbidden if name in names]
@@ -125,6 +128,50 @@ doc.header.set("sandbox_direct", ",".join(direct_leaked) or "clean")
   await page.getByRole('button', { name: 'Reset' }).click();
   await expect(page.locator('#rawEditor')).toContainText('sandbox_globals: clean');
   await expect(page.locator('#rawEditor')).toContainText('sandbox_direct: clean');
+});
+
+test('scripting and form scripts allow return to stop execution', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"return-check"}-->
+#! Return Check
+
+<!--hvy:plugin {"id":"startup-script","plugin":"dev.heavy.scripting","pluginConfig":{"version":"0.1"}}-->
+doc.header.set("script_return", "before")
+return
+doc.header.set("script_return", "after")
+
+<!--hvy:plugin {"id":"return-form","plugin":"dev.heavy.form","pluginConfig":{"version":"0.1","submitLabel":"Submit","submitScript":"submit"}}-->
+fields:
+  - label: Value
+    type: text
+scripts:
+  submit: |-
+    doc.header.set("form_return", doc.form.get_value("Value"))
+    return
+    doc.header.set("form_return", "after")
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Viewer' }).click();
+  await page.waitForFunction(() => {
+    const scripting = (window as unknown as { __HVY_SCRIPTING__?: { runtimes: Record<string, unknown> } }).__HVY_SCRIPTING__;
+    return Boolean(scripting) && Object.keys(scripting.runtimes).length === 0;
+  });
+
+  const form = page.locator('form').filter({ has: page.getByRole('button', { name: 'Submit' }) });
+  await form.locator('input[name="Value"]').fill('before');
+  await form.getByRole('button', { name: 'Submit' }).click();
+
+  await page.getByRole('button', { name: 'Editor' }).click();
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await expect(page.locator('#rawEditor')).toContainText('script_return: before');
+  await expect(page.locator('#rawEditor')).toContainText('form_return: before');
+  await expect(page.locator('#rawEditor')).not.toContainText('script_return: after');
+  await expect(page.locator('#rawEditor')).not.toContainText('form_return: after');
 });
 
 test('chore chart example populates chore dropdowns from the attached database', async ({ page }) => {

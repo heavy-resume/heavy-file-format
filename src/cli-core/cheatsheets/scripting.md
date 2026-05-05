@@ -56,4 +56,4 @@ doc.form.set_value("Field label", "value")
 doc.form.set_error("Field label", "Message")
 ```
 
-Top-level `return` is a syntax error. Define helper functions if you need returns.
+Scripts are wrapped in a generated function before Brython runs them, so `return` can stop a script early.

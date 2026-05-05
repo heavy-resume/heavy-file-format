@@ -841,7 +841,7 @@ fields:
   expect(nextPrompt).toContain('Plugin id: dev.heavy.form (form).');
   expect(nextPrompt).toContain('This plugin is a form.');
   expect(nextPrompt).toContain('Fields and named script bodies live in plugin.txt');
-  expect(nextPrompt).toContain('Form scripts are top-level Python/Brython snippets');
+  expect(nextPrompt).toContain('Form scripts are Python/Brython snippets under scripts.NAME, wrapped in a generated function');
 });
 
 test('requestDocumentEditChatTurn includes scripting plugin code hints', async () => {
@@ -870,7 +870,7 @@ doc.header.set("ran_script", True)
   expect(result.error).toBeNull();
   const nextPrompt = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content ?? '';
   expect(nextPrompt).toContain('Plugin id: dev.heavy.scripting (scripting).');
-  expect(nextPrompt).toContain('The component body is top-level Python/Brython source with one injected global: doc.');
+  expect(nextPrompt).toContain('The component body is Python/Brython source wrapped in a generated function with one injected global: doc.');
   expect(nextPrompt).toContain('Document tools: request_structure, grep, view_component');
   expect(nextPrompt).toContain('doc.form exists only while running form plugin scripts.');
 });

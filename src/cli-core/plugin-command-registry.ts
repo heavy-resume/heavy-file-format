@@ -156,7 +156,7 @@ registerHvyCliPluginCommands({
   componentHints: [
     'This plugin is a form. Fields and named script bodies live in plugin.txt as form YAML.',
     'Use plugin.json pluginConfig for form-level behavior: submitLabel, showSubmit, initialScript, and submitScript.',
-    'Form scripts are top-level Python/Brython snippets under scripts.NAME and run through the sandboxed scripting runtime.',
+    'Form scripts are Python/Brython snippets under scripts.NAME, wrapped in a generated function, and run through the sandboxed scripting runtime.',
     'Form scripts receive doc plus doc.form. Use field labels with doc.form.get_value/get_values/set_value/set_options/set_error/clear_error.',
     'Use doc.db.query(sql, params) and doc.db.execute(sql, params) for the current document SQL backend from form scripts; do not call doc.tool("db.query") or doc.tool("db.exec").',
     'doc.tool(name, args) can call the synchronous document-edit tool subset; args are a Python dict matching the AI tool schema.',
@@ -332,9 +332,9 @@ registerHvyCliPluginCommands({
   helpTopic: 'hvy plugin scripting',
   componentHints: [
     'Scripting runs once when the document loads. Use it to generate, mutate, or rearrange document content programmatically.',
-    'The component body is top-level Python/Brython source with one injected global: doc.',
+    'The component body is Python/Brython source wrapped in a generated function with one injected global: doc.',
     'Sandbox limits: imports, network, and DOM access are not allowed. Mutate the document through doc instead.',
-    'Execution model: top-level return is a syntax error; return works inside helper functions. Loops count against a 100,000-line budget.',
+    'Execution model: source is wrapped in a generated function, so return can stop the script early. Loops count against a 100,000-line budget.',
     'doc.tool(name, args) calls a synchronous subset of document-edit tools. args is a Python dict matching the AI tool schema.',
     'Document tools: request_structure, grep, view_component, get_css, get_properties, set_properties, patch_component, create_component, remove_component, create_section, remove_section, reorder_section.',
     'Header tools: view_header, grep_header, patch_header.',

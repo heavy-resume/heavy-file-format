@@ -887,7 +887,7 @@ export const formPluginRegistration: HvyPluginRegistration = {
     'Supported form YAML keys include `fields` and `scripts`.',
     'Form-level behavior keys live in pluginConfig: `submitLabel`, `showSubmit`, `initialScript`, and `submitScript`.',
     'Fields use `label`, `type`, optional `placeholder`, optional `required`, optional `options`, optional `value`, and optional `triggers`. The label is both visible text and the script key.',
-    '`scripts` maps script names to top-level Python/Brython source. `pluginConfig.submitScript`, `pluginConfig.initialScript`, and field triggers name a script key.',
+    '`scripts` maps script names to Python/Brython source wrapped in a generated function. `pluginConfig.submitScript`, `pluginConfig.initialScript`, and field triggers name a script key.',
     'Form scripts receive `doc` plus `doc.form` for live form values, options, and errors.',
     'Use `doc.form.get_value`, `doc.form.get_values`, `doc.form.set_value`, `doc.form.set_options`, `doc.form.set_error`, and `doc.form.clear_error` for form state.',
     'Script blocks must be indented under `scripts.NAME: |`; use Python comments (`# ...`) and Python booleans (`True`/`False`), not SQL `--` comments or JavaScript-style booleans.',

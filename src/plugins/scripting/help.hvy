@@ -73,10 +73,10 @@ programmatically. Scripts cannot reach the network — they only see the
 #! Execution model
 
 <!--hvy:text {}-->
- Script source is top-level Python/Brython code. A top-level `return` is a
- syntax error, but `return` works normally inside helper functions you define.
- Scripts receive a `doc` global and may define functions, local variables,
- loops, and conditionals like ordinary Python.
+ Script source is wrapped in a generated function before Brython runs it, so
+ `return` can stop the script early. Scripts receive a `doc` global and may
+ define functions, local variables, loops, and conditionals like ordinary
+ Python.
 
 <!--hvy: {"id":"line-budget","expanded":false}-->
 #! Line budget

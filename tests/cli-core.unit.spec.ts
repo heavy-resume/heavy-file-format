@@ -1448,7 +1448,7 @@ test('registered plugin help topics work without special-case command handlers',
   const directHelp = (await executeHvyCliCommand(document, session, 'hvy plugin scripting')).output;
 
   expect(manHelp).toContain('hvy add plugin SECTION_PATH ID dev.heavy.scripting --config {"version":"0.1"} --body PYTHON');
-  expect(manHelp).toContain('The component body is top-level Python/Brython source with one injected global: doc.');
+  expect(manHelp).toContain('The component body is Python/Brython source wrapped in a generated function with one injected global: doc.');
   expect(manHelp).toContain('Document tools: request_structure, grep, view_component');
   expect(manHelp).toContain('Not exposed through doc.tool: edit_component, view_rendered_component, query_db_table, execute_sql');
   expect(manHelp).toContain('Example: summary = doc.tool("request_structure"); doc.header.set("script_summary", summary[:200])');

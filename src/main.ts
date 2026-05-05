@@ -642,22 +642,27 @@ registerHostPlugin(progressBarPluginRegistration);
 registerHostPlugin(scriptingPluginRegistration);
 
 // Run scripting blocks once per loaded document. Re-runs whenever the
-// document reference changes (file open, example load, new doc, etc.).
+// document reference or script source changes (file open, raw edit, new doc, etc.).
 let lastScriptedDocument: typeof state.document | null = null;
+let lastScriptedSignature = '';
 
 async function runScriptingBlocksIfNeeded(): Promise<void> {
   if (state.currentView !== 'viewer' && state.currentView !== 'ai') {
     return;
   }
-  if (state.document === lastScriptedDocument) {
-    return;
-  }
-  lastScriptedDocument = state.document;
-
   const targets: Array<{ sectionKey: string; blockId: string; source: string; pluginVersion: string; componentId: string }> = [];
   for (const section of state.document.sections) {
     visitSectionForScripts(section, targets);
   }
+  const signature = targets
+    .map((target) => `${target.sectionKey}\u0000${target.blockId}\u0000${target.pluginVersion}\u0000${target.source}`)
+    .join('\u0001');
+  if (state.document === lastScriptedDocument && signature === lastScriptedSignature) {
+    return;
+  }
+  lastScriptedDocument = state.document;
+  lastScriptedSignature = signature;
+
   if (targets.length === 0) {
     return;
   }
@@ -672,7 +677,7 @@ async function runScriptingBlocksIfNeeded(): Promise<void> {
     const mountSelector = `[data-scripting-mount="true"][data-scripting-section-key="${cssEscape(target.sectionKey)}"][data-scripting-block-id="${cssEscape(target.blockId)}"]`;
     const mount = app.querySelector<HTMLElement>(mountSelector);
     if (mount) {
-      setScriptingResult(mount, result);
+      setScriptingResult(mount, result, target.source);
     }
   }
 }

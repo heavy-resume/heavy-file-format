@@ -17,6 +17,7 @@ const CHAT_CLI_PERSISTENT_INSTRUCTIONS = [
   'Use hvy cheatsheet NAME or hvy recipe NAME for short examples before composing forms, scripting, or database-backed components.',
   'Use rg/find to locate candidate components, then prefer hvy remove for whole components and xrefs.',
   'Use shell commands and `help CMD` or `man CMD` to discover the interface and learn how to use things.',
+  'Use the hvy command to create new components or learn how to use them but use typical shell commands to edit them.'
 ];
 
 export function buildChatCliPersistentInstructions(): string {

@@ -350,7 +350,7 @@ function buildChatCliLoopFormatInstructions(): string {
   return [
     'Return terminal command(s) as plain text, or fenced in ```shell. Multiple ```shell blocks are allowed and run in order.',
     'To finish, return only: done Short summary of what changed.',
-    'To ask for clarification, return: ask Question for the user.',
+    'To ask for requirements, NOT CLI clarification from the non-technical user, return: ask Question for the user.',
     'Do not include done with commands. Run commands, inspect the result, then finish in a later response.',
     'Do not return prose or markdown explanations.',
   ].join('\n');

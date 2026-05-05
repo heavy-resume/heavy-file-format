@@ -101,13 +101,13 @@ function collectComponentContextEntries(document: VisualDocument, fs: HvyVirtual
     || entry.definitionDescription
     || entry.componentListComponent
     || entry.kind === 'section'
-  );
+  ).reverse();
 }
 
 function formatContextEntry(entry: ComponentContextEntry): string[] {
   const label = entry.kind === 'section'
     ? `${entry.path} section`
-    : `${entry.path} ${entry.type}${entry.baseType !== entry.type ? ` base=${entry.baseType}` : ''}`;
+    : formatComponentContextLabel(entry);
   const lines = [`- ${label}${entry.id ? ` id=${entry.id}` : ''}`];
   if (entry.description) {
     lines.push(`  description: ${oneLine(entry.description)}`);
@@ -116,9 +116,23 @@ function formatContextEntry(entry: ComponentContextEntry): string[] {
     lines.push(`  reusable definition: ${oneLine(entry.definitionDescription)}`);
   }
   if (entry.componentListComponent) {
-    lines.push(`  list item type: ${entry.componentListComponent}${entry.componentListComponentBaseType ? ` base=${entry.componentListComponentBaseType}` : ''}`);
+    lines.push(`  ${formatListItemType(entry)}`);
   }
   return lines;
+}
+
+function formatComponentContextLabel(entry: ComponentContextEntry): string {
+  if (entry.baseType && entry.baseType !== entry.type) {
+    return `${entry.path} custom-type: ${entry.type} base-type: ${entry.baseType}`;
+  }
+  return `${entry.path} component-type: ${entry.type}`;
+}
+
+function formatListItemType(entry: ComponentContextEntry): string {
+  if (entry.componentListComponentBaseType && entry.componentListComponentBaseType !== entry.componentListComponent) {
+    return `list item custom-type: ${entry.componentListComponent} base-type: ${entry.componentListComponentBaseType}`;
+  }
+  return `list item type: ${entry.componentListComponent}`;
 }
 
 function inferComponentType(fs: HvyVirtualFileSystem, path: string): string {

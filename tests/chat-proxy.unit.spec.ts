@@ -338,7 +338,7 @@ test('formatAiCliLogEvent writes clean chat cli trace entries only for chat cli 
     phase: 'document-edit',
     type: 'client_event',
     payload: { event: 'ai_cli_command', command: 'pwd', output: '/' },
-  })).toBe('--------\n> pwd\n/\n');
+  })).toBe('--------\nCMD: pwd\n/\n');
 
   expect(formatAiCliLogEvent({
     runId: 'chat-cli-run-1',
@@ -351,7 +351,7 @@ test('formatAiCliLogEvent writes clean chat cli trace entries only for chat cli 
       modelMessage: 'result\nHello\n\nWhat is your next command?\n\nhints\ncomponent text: /body/summary/intro\n\nscratchpad.txt\nNo notes yet.',
     },
   })).toBe(
-    '--------\n> cat /body/summary/intro/text.txt\nresult\nHello\n\nWhat is your next command?\n\nhints\ncomponent text: /body/summary/intro\n\nscratchpad.txt\nNo notes yet.\n'
+    '--------\nCMD: cat /body/summary/intro/text.txt\nresult\nHello\n\nWhat is your next command?\n\nhints\ncomponent text: /body/summary/intro\n\nscratchpad.txt\nNo notes yet.\n'
   );
 
   expect(formatAiCliLogEvent({
@@ -413,10 +413,16 @@ test('formatAiCliMessagesLogEvent pretty prints chat cli request payloads', () =
     },
   });
 
-  expect(line).toContain('--------\nprovider_request readable\nrunId: chat-cli-run-1');
-  expect(line).toContain('provider: openai');
-  expect(line).toContain('input:\n[0] role: developer\ncontent[0] type: input_text\nDocument context:\n\nCurrent directory: /');
-  expect(line).toContain('[1] role: user\ncontent[0] type: input_text\nAdd Baking.');
+  expect(line).toContain('--------\nprovider_request readable\n{');
+  expect(line).toContain('"runId": "chat-cli-run-1"');
+  expect(line).toContain('"provider": "openai"');
+  expect(line).toContain('"input": [');
+  expect(line).toContain('"role": "developer"');
+  expect(line).toContain('"type": "input_text"');
+  expect(line).toContain('"text": "Document context:\n\nCurrent directory: /"');
+  expect(line).toContain('"role": "user"');
+  expect(line).toContain('"text": "Add Baking."');
+  expect(line).not.toContain('\\n');
 
   expect(formatAiCliMessagesLogEvent({
     runId: 'run-1',
@@ -437,9 +443,11 @@ test('formatAiCliMessagesLogEvent includes provider responses as readable text',
     },
   });
 
-  expect(line).toContain('--------\nmodel_response readable\nrunId: chat-cli-run-1');
-  expect(line).toContain('response:\ndone Updated file.\nSecond line.');
-  expect(line).toContain('reasoningSummary:\nInspected then edited.\nValidated result.');
+  expect(line).toContain('--------\nmodel_response readable\n{');
+  expect(line).toContain('"runId": "chat-cli-run-1"');
+  expect(line).toContain('"response": "done Updated file.\nSecond line."');
+  expect(line).toContain('"reasoningSummary": "Inspected then edited.\nValidated result."');
+  expect(line).not.toContain('\\n');
 });
 
 test('buildOpenAiProxyRequest does not send trace run ids upstream', () => {

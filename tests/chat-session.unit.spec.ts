@@ -438,11 +438,12 @@ test('requestDocumentEditChatTurn trims old cli conversation messages while keep
   });
 
   expect(result.error).toBeNull();
-  expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.messages.length).toBeGreaterThanOrEqual(10);
+  expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.messages.length).toBeGreaterThan(0);
   expect(
     requestProxyCompletionMock.mock.calls[4]?.[0]?.messages.reduce((total: number, message: ChatMessage) => total + message.content.length, 0)
   ).toBeLessThanOrEqual(6000);
   expect(JSON.stringify(requestProxyCompletionMock.mock.calls[4]?.[0]?.messages)).not.toContain('x'.repeat(2500));
+  expect(JSON.stringify(requestProxyCompletionMock.mock.calls[4]?.[0]?.messages)).not.toContain('... truncated ...');
   expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.context).toContain(
     'Valid commands (in order of preference):\nCommands: hvy, nl, rg, find, sed, echo, cat, ls, pwd, cd, cp, rm, grep, sort, uniq, wc, tr, xargs, head, tail, true. Ask: ask QUESTION. Finish: done SUMMARY.'
   );
@@ -612,7 +613,7 @@ hvy_version: 0.1
   ]);
   const nextPrompt = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content ?? '';
   expect(nextPrompt).toContain('CMD: cat /body/summary/long/text.txt');
-  expect(nextPrompt).toContain('Warning: output truncated to 50 of 60 wrapped lines (10 lines hidden).');
+  expect(nextPrompt).not.toContain('Warning: output truncated');
   expect(nextPrompt).toContain('### BEGIN your urgency ###\nscore=1\nprioritize planning and understanding');
 });
 
@@ -742,7 +743,7 @@ hvy_version: 0.1
 #! Summary
 
 <!--hvy:text {"id":"long"}-->
- ${Array.from({ length: 60 }, (_value, index) => `line ${index + 1}`).join('\n')}
+ ${Array.from({ length: 120 }, (_value, index) => `line ${index + 1}`).join('\n')}
 `, '.hvy');
   const onProgress = vi.fn();
 
@@ -761,8 +762,50 @@ hvy_version: 0.1
     '$ [3/3] cat /body/summary/long/text.txt',
   ]);
   const nextPrompt = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content ?? '';
-  expect(nextPrompt.match(/Warning: output truncated to 33 of 60 wrapped lines \(27 lines hidden\)\./g)).toHaveLength(3);
+  expect(nextPrompt).toContain('Warning: output truncated to 66 of 120 wrapped lines (54 lines hidden).');
   expect(nextPrompt).toContain('### BEGIN your urgency ###\nscore=1\nprioritize planning and understanding');
+});
+
+test('requestDocumentEditChatTurn rejects oversized command batches before running them', async () => {
+  requestProxyCompletionMock
+    .mockResolvedValueOnce(`\`\`\`shell
+pwd
+ls /
+cat /header.yaml
+hvy lint
+hvy --help
+hvy request_structure --collapse
+hvy find-intent "summary" --max 5
+find /body -maxdepth 2
+rg "Summary" /body
+cat /scratchpad.txt
+pwd
+\`\`\``)
+    .mockResolvedValueOnce('done Kept the batch small.');
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+  const document = deserializeDocument('---\nhvy_version: 0.1\n---\n', '.hvy');
+  const onProgress = vi.fn();
+
+  const result = await requestDocumentEditChatTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Try too many commands.',
+    onProgress,
+  });
+
+  expect(result.error).toBeNull();
+  expect(onProgress).not.toHaveBeenCalled();
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content).toBe(
+    'Batch has 11 commands. Run at most 4 focused commands per response, or up to 10 when necessary. What is your next command?'
+  );
+  expect(writeChatCliCommandTraceMock.mock.calls.map((call) => call[1])).toEqual([
+    'ls /',
+    'hvy --help',
+    'hvy request_structure --collapse',
+    'hvy lint',
+    'hvy find-intent "Try too many commands." --max 5',
+  ]);
 });
 
 test('requestDocumentEditChatTurn wraps long command output lines before returning them to the model', async () => {

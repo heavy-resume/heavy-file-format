@@ -26,3 +26,9 @@ Add Baking as both a skill and top skill. Give it placeholder info I'll modify l
 Can you update this to add a row for 2025 and 2026 with the organization Heavy Resume and the role as Founder?
 
 Location is Seattle, WA. Leave the rest as defaults
+
+
+
+Can you add a new history record that covers 2025 and 2026 with the organization as Heavy Resume and the role as Founder?
+
+Location is Fairwood, WA. Leave the rest as defaults.

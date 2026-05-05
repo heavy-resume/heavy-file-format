@@ -23,7 +23,7 @@ import { formatHvyComponentDescriptionHistory } from './component-description-hi
 const SCRATCHPAD_SOFT_MAX_CHARS = 600;
 const SCRATCHPAD_HARD_MAX_CHARS = 800;
 const FIND_MAX_RESULTS = 100;
-const CLI_OUTPUT_MAX_LINES = 100;
+const CLI_OUTPUT_MAX_LINES = 200;
 const COMPONENT_PREVIEW_MAX_LINES = 25;
 
 export interface HvyCliSession {
@@ -613,7 +613,12 @@ function updateScratchpadCommandHistory(session: HvyCliSession, input: string): 
 }
 
 function defaultScratchpadContent(): string {
-  return 'You havent written your plan yet.\n';
+  return [
+    'No task notes yet.',
+    'Write concise notes here after you understand the request.',
+    'Track what changed, what remains, and validation results.',
+    '',
+  ].join('\n');
 }
 
 function enforceScratchpadHardCap(session: HvyCliSession): void {

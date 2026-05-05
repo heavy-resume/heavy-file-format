@@ -14,8 +14,8 @@ const AI_CLI_LOG_FILE = path.join(DEV_TRACE_DIR, 'ai_cli_log.txt');
 const AI_CLI_MESSAGES_LOG_FILE = path.join(DEV_TRACE_DIR, 'ai_cli_messages.txt');
 const AGENT_LOOP_TRACE_MAX_LINES = 500;
 const AGENT_LOOP_TRACE_PRUNE_LINES = 100;
-const AI_CLI_LOG_MAX_LINES = 1000;
-const AI_CLI_LOG_PRUNE_LINES = 50;
+const AI_CLI_LOG_MAX_LINES = 2000;
+const AI_CLI_LOG_PRUNE_LINES = 100;
 const OPENAI_REASONING_EFFORT = 'low';
 
 let traceWriteQueue = Promise.resolve();
@@ -773,139 +773,51 @@ function formatAiCliLogBlock(lines: string[]): string {
 }
 
 function formatReadableTraceEvent(event: TraceEvent): string {
-  if (event.type === 'request_context') {
-    return [
-      `runId: ${event.runId}`,
-      `phase: ${event.phase}`,
-      `provider: ${String(event.payload.provider ?? '')}`,
-      `model: ${String(event.payload.model ?? '')}`,
-      '',
-      'formatInstructions:',
-      formatReadableTextBlock(String(event.payload.formatInstructions ?? '')),
-      '',
-      'context:',
-      formatReadableTextBlock(String(event.payload.context ?? '')),
-      '',
-      'messages:',
-      formatReadableMessages(event.payload.messages),
-    ].join('\n');
-  }
-  if (event.type === 'provider_request') {
-    return [
-      `runId: ${event.runId}`,
-      `phase: ${event.phase}`,
-      `provider: ${String(event.payload.provider ?? '')}`,
-      '',
-      formatReadableProviderRequest(event.payload.request),
-    ].join('\n');
-  }
-  if (event.type === 'provider_response') {
-    return [
-      `runId: ${event.runId}`,
-      `phase: ${event.phase}`,
-      `provider: ${String(event.payload.provider ?? '')}`,
-      `ok: ${String(event.payload.ok ?? '')}`,
-      `status: ${String(event.payload.status ?? '')}`,
-      '',
-      'payload:',
-      formatReadableUnknown(event.payload.payload),
-    ].join('\n');
-  }
-  if (event.type === 'model_response') {
-    return [
-      `runId: ${event.runId}`,
-      `phase: ${event.phase}`,
-      '',
-      'response:',
-      formatReadableTextBlock(String(event.payload.response ?? '')),
-      ...(typeof event.payload.reasoningSummary === 'string' && event.payload.reasoningSummary.trim()
-        ? ['', 'reasoningSummary:', formatReadableTextBlock(event.payload.reasoningSummary)]
-        : []),
-    ].join('\n');
-  }
-  return formatReadableUnknown(event.payload);
-}
-
-function formatReadableProviderRequest(value: unknown): string {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    return formatReadableUnknown(value);
-  }
-  const request = value as Record<string, unknown>;
-  const lines: string[] = [];
-  for (const [key, entry] of Object.entries(request)) {
-    if (key === 'instructions' && typeof entry === 'string') {
-      lines.push('instructions:', formatReadableTextBlock(entry), '');
-      continue;
-    }
-    if (key === 'input' || key === 'messages') {
-      lines.push(`${key}:`, formatReadableMessages(entry), '');
-      continue;
-    }
-    if (key === 'system' && typeof entry === 'string') {
-      lines.push('system:', formatReadableTextBlock(entry), '');
-      continue;
-    }
-    lines.push(`${key}: ${formatReadableInline(entry)}`);
-  }
-  while (lines.at(-1) === '') {
-    lines.pop();
-  }
-  return lines.join('\n');
-}
-
-function formatReadableMessages(value: unknown): string {
-  if (!Array.isArray(value)) {
-    return formatReadableUnknown(value);
-  }
-  return value.map((message, index) => {
-    if (!message || typeof message !== 'object') {
-      return `[${index}]: ${formatReadableInline(message)}`;
-    }
-    const record = message as Record<string, unknown>;
-    return [
-      `[${index}] role: ${String(record.role ?? '')}`,
-      formatReadableMessageContent(record.content),
-    ].filter(Boolean).join('\n');
-  }).join('\n\n');
-}
-
-function formatReadableMessageContent(value: unknown): string {
-  if (typeof value === 'string') {
-    return ['content:', formatReadableTextBlock(value)].join('\n');
-  }
-  if (Array.isArray(value)) {
-    return value.map((item, index) => {
-      if (!item || typeof item !== 'object') {
-        return `content[${index}]: ${formatReadableInline(item)}`;
-      }
-      const record = item as Record<string, unknown>;
-      const type = typeof record.type === 'string' ? record.type : '';
-      const text = typeof record.text === 'string' ? record.text : '';
-      if (text) {
-        return [
-          `content[${index}]${type ? ` type: ${type}` : ''}`,
-          formatReadableTextBlock(text),
-        ].join('\n');
-      }
-      return `content[${index}]${type ? ` type: ${type}` : ''}: ${formatReadableUnknown(record)}`;
-    }).join('\n');
-  }
-  return `content: ${formatReadableUnknown(value)}`;
-}
-
-function formatReadableTextBlock(value: string): string {
-  return value.trimEnd() || '(empty)';
-}
-
-function formatReadableInline(value: unknown): string {
-  if (typeof value === 'string') {
-    return value.includes('\n') ? `\n${formatReadableTextBlock(value)}` : value;
-  }
-  return formatReadableUnknown(value);
+  return formatReadableValue({
+    runId: event.runId,
+    phase: event.phase,
+    type: event.type,
+    payload: event.payload,
+  });
 }
 
 function formatReadableUnknown(value: unknown): string {
   return JSON.stringify(value, null, 2) ?? String(value);
+}
+
+function formatReadableValue(value: unknown, indent = 0): string {
+  const space = ' '.repeat(indent);
+  const childSpace = ' '.repeat(indent + 2);
+  if (typeof value === 'string') {
+    return `"${value}"`;
+  }
+  if (typeof value === 'number' || typeof value === 'boolean' || value === null) {
+    return JSON.stringify(value);
+  }
+  if (Array.isArray(value)) {
+    if (value.length === 0) {
+      return '[]';
+    }
+    return [
+      '[',
+      ...value.map((item, index) => `${childSpace}${formatReadableValue(item, indent + 2)}${index === value.length - 1 ? '' : ','}`),
+      `${space}]`,
+    ].join('\n');
+  }
+  if (value && typeof value === 'object') {
+    const entries = Object.entries(value as Record<string, unknown>).filter(([, entry]) => entry !== undefined);
+    if (entries.length === 0) {
+      return '{}';
+    }
+    return [
+      '{',
+      ...entries.map(([key, entry], index) =>
+        `${childSpace}"${key}": ${formatReadableValue(entry, indent + 2)}${index === entries.length - 1 ? '' : ','}`
+      ),
+      `${space}}`,
+    ].join('\n');
+  }
+  return formatReadableUnknown(value);
 }
 
 function summarizeTracePayload(event: TraceEvent): string {

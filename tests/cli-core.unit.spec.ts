@@ -175,11 +175,17 @@ component_defs:
   expect(result.output).toContain('Component context:');
   expect(result.output).toContain('/body/history section id=history');
   expect(result.output).toContain('description: Work history is reverse chronological.');
-  expect(result.output).toContain('/body/history/history-list component-list id=history-list');
-  expect(result.output).toContain('list item type: history-record base=expandable');
-  expect(result.output).toContain('/body/history/history-list/component-list/history-acme history-record base=expandable id=history-acme');
+  expect(result.output).toContain('/body/history/history-list component-type: component-list id=history-list');
+  expect(result.output).toContain('list item custom-type: history-record base-type: expandable');
+  expect(result.output).toContain('/body/history/history-list/component-list/history-acme custom-type: history-record base-type: expandable id=history-acme');
   expect(result.output).toContain('description: Acme role details.');
   expect(result.output).toContain('reusable definition: One expandable work-history role at one organization.');
+  expect(result.output.indexOf('/body/history/history-list/component-list/history-acme')).toBeLessThan(
+    result.output.indexOf('/body/history/history-list component-type: component-list')
+  );
+  expect(result.output.indexOf('/body/history/history-list component-type: component-list')).toBeLessThan(
+    result.output.indexOf('/body/history section id=history')
+  );
 });
 
 test('component hints tell agents to add component-list items blank before filling fields', async () => {
@@ -445,7 +451,7 @@ test('cli echo supports shell-style redirection to writable virtual files', asyn
   const session = createHvyCliSession();
 
   expect((await executeHvyCliCommand(document, session, 'ls /')).output).toContain('file scratchpad.txt');
-  expect((await executeHvyCliCommand(document, session, 'cat /scratchpad.txt')).output).toContain('You havent written your plan yet.');
+  expect((await executeHvyCliCommand(document, session, 'cat /scratchpad.txt')).output).toContain('No task notes yet.');
   expect((await executeHvyCliCommand(document, session, 'echo "Task note" >> scratchpad.txt')).output).toBe('/scratchpad.txt: appended');
   expect((await executeHvyCliCommand(document, session, 'cat scratchpad.txt')).output).toContain('Task note');
 
@@ -755,18 +761,18 @@ test('cli find limits broad result sets', async () => {
   expect(output).toContain('Warning: find output truncated to 100 of 106 results.');
 });
 
-test('cli command output is capped at 100 lines', async () => {
+test('cli command output is capped at 200 lines', async () => {
   const document = deserializeDocument('---\nhvy_version: 0.1\n---\n', '.hvy');
   const session = createHvyCliSession();
 
-  for (let index = 0; index < 105; index += 1) {
+  for (let index = 0; index < 205; index += 1) {
     await executeHvyCliCommand(document, session, `hvy add section /body item-${index} "Item ${index}"`);
   }
 
   const result = await executeHvyCliCommand(document, session, 'find /body -type f -name section.json -exec sed s/TypeScript//g {} +');
 
-  expect(result.output.split('\n')).toHaveLength(101);
-  expect(result.output).toContain('Warning: output truncated to 100 of 105 lines (5 lines hidden).');
+  expect(result.output.split('\n')).toHaveLength(201);
+  expect(result.output).toContain('Warning: output truncated to 200 of 205 lines (5 lines hidden).');
   expect(result.output).toContain('Narrow the command with rg, find -name, head, or a more specific path.');
 });
 

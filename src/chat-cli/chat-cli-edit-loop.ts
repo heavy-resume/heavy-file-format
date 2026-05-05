@@ -17,10 +17,11 @@ import { buildChatCliPersistentInstructions } from './chat-cli-instructions';
 const CHAT_CLI_MAX_STEPS = 30;
 const CHAT_CLI_MAX_CONSECUTIVE_COMMAND_ERRORS = 3;
 const CHAT_CLI_MESSAGE_HISTORY_MAX_CHARS = 6000;
-const CHAT_CLI_MESSAGE_HISTORY_MIN_MESSAGES = 10;
 const CHAT_CLI_PRIOR_MESSAGE_LIMIT = 10;
-const CHAT_CLI_MODEL_OUTPUT_MAX_LINES = 100;
+const CHAT_CLI_MODEL_OUTPUT_MAX_LINES = 200;
 const CHAT_CLI_MODEL_OUTPUT_MAX_LINE_WIDTH = 400;
+const CHAT_CLI_RECOMMENDED_BATCH_COMMANDS = 4;
+const CHAT_CLI_MAX_BATCH_COMMANDS = 10;
 const CHAT_CLI_COMMAND_NAMES = new Set(['cd', 'pwd', 'ls', 'cat', 'head', 'tail', 'nl', 'find', 'rg', 'grep', 'sort', 'uniq', 'wc', 'tr', 'xargs', 'cp', 'rm', 'echo', 'sed', 'true', 'hvy', 'db-table', 'form', 'ask']);
 const introducedDiagnosticsByDocument = new WeakMap<VisualDocument, Map<string, HvyCliDiagnosticIssue>>();
 
@@ -183,6 +184,22 @@ export async function runChatCliEditLoop(params: {
     const commandOutputs: Array<{ command: string; output: string }> = [];
     const commandHints: string[] = [];
     const commands = action.commands;
+    if (commands.length > CHAT_CLI_MAX_BATCH_COMMANDS) {
+      conversation = [
+        ...conversation,
+        {
+          id: crypto.randomUUID(),
+          role: 'assistant',
+          content: response,
+        },
+        {
+          id: crypto.randomUUID(),
+          role: 'user',
+          content: `Batch has ${commands.length} commands. Run at most ${CHAT_CLI_RECOMMENDED_BATCH_COMMANDS} focused commands per response, or up to ${CHAT_CLI_MAX_BATCH_COMMANDS} when necessary. What is your next command?`,
+        },
+      ];
+      continue;
+    }
     const outputLineBudget = Math.max(1, Math.floor(CHAT_CLI_MODEL_OUTPUT_MAX_LINES / commands.length));
     let stopAfterCommandError: ChatCliCommandFailureError | null = null;
     let mutated = false;
@@ -464,7 +481,7 @@ function buildChatCliLoopFormatInstructions(): string {
   return [
     'Return concise notes plus terminal command(s).',
     'At the top, write exactly these note labels with short answers: What you are doing, Why you are doing it, What you are unsure of.',
-    'Wrap commands in ```shell fences. Multiple ```shell blocks are allowed and run in order.',
+    `Wrap commands in \`\`\`shell fences. Multiple \`\`\`shell blocks are allowed and run in order. Keep batches to at most ${CHAT_CLI_RECOMMENDED_BATCH_COMMANDS} focused commands.`,
     'Text outside ```shell fences is treated as notes for your future self and shown in history.',
     'To finish, return only: done Short summary of what changed.',
     'To ask for requirements, NOT CLI clarification from the non-technical user, return: ask followed by the actual question.',
@@ -612,7 +629,7 @@ function formatCommandResultForModel(result: string | { output: string; assistan
     '### BEGIN your urgency ###',
     result.urgency?.trimEnd() || formatChatCliUrgency(0),
     '### END your urgency ###',
-    'Multiple ```shell blocks are allowed and run as a batch. Remember to take notes as you go!',
+    `Multiple \`\`\`shell blocks are allowed and run as a batch. Keep batches to ${CHAT_CLI_RECOMMENDED_BATCH_COMMANDS} focused commands. Remember to take notes as you go!`,
     `Current directory: ${result.cwd || '/'}`,
     'What is your next command?',
   ].join('\n');
@@ -789,37 +806,27 @@ function isLikelyProseResponse(value: string): boolean {
 }
 
 function compactChatCliConversation(messages: ChatMessage[]): ChatMessage[] {
-  if (messages.length <= CHAT_CLI_MESSAGE_HISTORY_MIN_MESSAGES || countMessageChars(messages) <= CHAT_CLI_MESSAGE_HISTORY_MAX_CHARS) {
+  if (countMessageChars(messages) <= CHAT_CLI_MESSAGE_HISTORY_MAX_CHARS) {
     return messages;
   }
-  let startIndex = Math.max(0, messages.length - CHAT_CLI_MESSAGE_HISTORY_MIN_MESSAGES);
-  while (startIndex > 0 && countMessageChars(messages.slice(startIndex)) < CHAT_CLI_MESSAGE_HISTORY_MAX_CHARS) {
-    startIndex -= 1;
+  const compacted: ChatMessage[] = [];
+  let totalChars = 0;
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (!message) {
+      continue;
+    }
+    if (compacted.length > 0 && totalChars + message.content.length > CHAT_CLI_MESSAGE_HISTORY_MAX_CHARS) {
+      break;
+    }
+    compacted.unshift(message);
+    totalChars += message.content.length;
   }
-  return truncateConversationMessages(messages.slice(startIndex), CHAT_CLI_MESSAGE_HISTORY_MAX_CHARS);
+  return compacted;
 }
 
 function countMessageChars(messages: ChatMessage[]): number {
   return messages.reduce((total, message) => total + message.content.length, 0);
-}
-
-function truncateConversationMessages(messages: ChatMessage[], maxChars: number): ChatMessage[] {
-  let remainingOverage = countMessageChars(messages) - maxChars;
-  if (remainingOverage <= 0) {
-    return messages;
-  }
-  return messages.map((message) => {
-    if (remainingOverage <= 0 || message.content.length <= 80) {
-      return message;
-    }
-    const marker = '\n... truncated ...';
-    const removable = Math.min(remainingOverage, message.content.length - 80);
-    remainingOverage -= removable;
-    return {
-      ...message,
-      content: `${message.content.slice(0, message.content.length - removable - marker.length).trimEnd()}${marker}`,
-    };
-  });
 }
 
 function isSessionOnlyCommand(command: string): boolean {

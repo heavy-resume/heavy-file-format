@@ -15,6 +15,7 @@ const KNOWN_HEADER_METADATA_KEYS = new Set([
   'description',
   'author',
   'tags',
+  'ai-context',
   'sidebar_label',
   'reader_max_width',
   'theme',

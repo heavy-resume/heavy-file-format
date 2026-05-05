@@ -54,6 +54,23 @@ test('reader max width keeps focus while typing', async ({ page }) => {
   await expect(readerMaxWidth).toHaveValue('60rem');
 });
 
+test('document ai context is editable metadata and keeps focus while typing', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Advanced' }).click();
+  await page.getByRole('button', { name: 'Document Meta' }).click();
+
+  const aiContext = page.locator('[data-field="meta-ai-context"]');
+  await aiContext.fill('');
+  await aiContext.type('Use top skills as featured skills.');
+
+  await expect(aiContext).toBeFocused();
+  await expect(aiContext).toHaveValue('Use top skills as featured skills.');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await expect(page.locator('#rawEditor')).toContainText('ai-context: Use top skills as featured skills.');
+});
+
 test('description generate button appears only for empty component descriptions', async ({ page }) => {
   await page.goto('/');
 

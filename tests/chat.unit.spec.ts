@@ -58,6 +58,26 @@ hvy_version: 0.1
   expect(buildChatDocumentContext(document)).not.toContain('<!--hvy:text');
 });
 
+test('buildChatDocumentContext prepends document ai context from metadata', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+ai-context: This resume uses top-skills-tools-technologies as featured skills.
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {}-->
+ Hello there
+`, '.hvy');
+
+  const context = buildChatDocumentContext(document);
+
+  expect(context).toContain('Document context:\nThis resume uses top-skills-tools-technologies as featured skills.');
+  expect(context).toContain('Document body:\n<!--hvy: {"id":"summary"');
+  expect(context).not.toContain('ai-context:');
+});
+
 test('buildChatDocumentContext keeps xref-card content under skills headings', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1

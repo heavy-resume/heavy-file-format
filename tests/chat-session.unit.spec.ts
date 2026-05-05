@@ -311,6 +311,75 @@ test('requestDocumentEditChatTurn runs the CLI edit loop for document chat', asy
   }));
 });
 
+test('requestDocumentEditChatTurn includes document ai context in the CLI prompt', async () => {
+  requestProxyCompletionMock.mockResolvedValueOnce('done Read the context.');
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+ai-context: The top skills grid is the featured skills surface; the skills section is the library.
+---
+
+<!--hvy: {"id":"skills"}-->
+#! Skills
+
+<!--hvy:text {"id":"intro"}-->
+Hello
+`, '.hvy');
+
+  await requestDocumentEditChatTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Add baking as a top skill.',
+  });
+
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain(
+    'Document context:\nThe top skills grid is the featured skills surface; the skills section is the library.'
+  );
+});
+
+test('requestDocumentEditChatTurn can focus the CLI loop on a selected component', async () => {
+  requestProxyCompletionMock.mockResolvedValueOnce('done Updated the selected component.');
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {"id":"intro","description":"Opening paragraph."}-->
+Hello world
+`, '.hvy');
+
+  const result = await requestDocumentEditChatTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Make this warmer.',
+    selectedComponent: {
+      path: '/body/summary/intro',
+      sectionTitle: 'Summary',
+      component: 'text',
+      baseComponent: 'text',
+      schemaId: 'intro',
+    },
+  });
+
+  expect(result.error).toBeNull();
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Selected component focus:');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Path: /body/summary/intro');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Current directory: /body/summary/intro');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Start from this component path.');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages).toEqual(expect.arrayContaining([
+    expect.objectContaining({ role: 'assistant', content: '```shell\nhvy preview .\n```' }),
+    expect.objectContaining({ role: 'user', content: expect.stringContaining('Component preview (raw HVY, first 25 lines):') }),
+    expect.objectContaining({ role: 'user', content: expect.stringContaining('Current directory: /body/summary/intro\nWhat is your next command?') }),
+  ]));
+  expect(writeChatCliCommandTraceMock.mock.calls.map((call) => call[1])).not.toContain('cd "/body/summary/intro"');
+  expect(writeChatCliCommandTraceMock.mock.calls.map((call) => call[1])).toContain('hvy preview .');
+});
+
 test('requestDocumentEditChatTurn trims old cli conversation messages while keeping stable context', async () => {
   requestProxyCompletionMock
     .mockResolvedValueOnce(`echo "${'x'.repeat(2500)}"`)

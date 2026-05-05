@@ -4,7 +4,7 @@ import { runQaToolLoop } from '../ai-qa';
 import type { ChatMessage, ChatSettings, ChatTokenUsage, ChatWorkState, VisualDocument } from '../types';
 import type { VisualSection } from '../editor/types';
 import { deserializeDocumentWithDiagnostics, wrapHvyFragmentAsDocument } from '../serialization';
-import { runChatCliEditLoop } from '../chat-cli/chat-cli-edit-loop';
+import { runChatCliEditLoop, type ChatCliSelectedComponentFocus } from '../chat-cli/chat-cli-edit-loop';
 
 export interface ChatTurnResult {
   messages: ChatMessage[];
@@ -156,6 +156,7 @@ export async function requestDocumentEditChatTurn(params: {
   document: VisualDocument;
   messages: ChatMessage[];
   request: string;
+  selectedComponent?: ChatCliSelectedComponentFocus;
   onMutation?: (group?: string) => void;
   onProgress?: (message: ChatMessage) => void;
   signal?: AbortSignal;
@@ -192,6 +193,7 @@ export async function requestDocumentEditChatTurn(params: {
       document: params.document,
       request: params.request,
       priorMessages: params.messages,
+      selectedComponent: params.selectedComponent,
       onMutation: params.onMutation,
       onProgress: (content) =>
         emitProgress({

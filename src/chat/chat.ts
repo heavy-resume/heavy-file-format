@@ -13,6 +13,7 @@ import { ensureComponentListBlocks, ensureExpandableBlocks, ensureGridItems } fr
 import { isXrefTargetValid } from '../xref-ops';
 import { getDocumentComponentDefaultCss } from '../document-component-defaults';
 import { wrapChatResponseAsDocument } from './chat-response-document';
+import { getDocumentAiContext } from '../document-ai-context';
 
 const CHAT_STORAGE_KEY = 'hvy-chat-settings';
 const DEFAULT_OPENAI_MODEL = 'gpt-5-mini';
@@ -121,7 +122,18 @@ export function stripDocumentHeaderAndComments(source: string): string {
 }
 
 export function buildChatDocumentContext(document: VisualDocument): string {
-  return stripDocumentHeaderAndComments(serializeDocument(document));
+  const bodyContext = stripDocumentHeaderAndComments(serializeDocument(document));
+  const aiContext = getDocumentAiContext(document);
+  if (!aiContext) {
+    return bodyContext;
+  }
+  return [
+    'Document context:',
+    aiContext,
+    '',
+    'Document body:',
+    bodyContext,
+  ].join('\n');
 }
 
 export function renderChatPanel(

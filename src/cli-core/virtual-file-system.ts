@@ -81,6 +81,22 @@ export function findBlockForVirtualDirectory(document: VisualDocument, path: str
   return blocks.get(normalized) ?? null;
 }
 
+export function findVirtualDirectoryForBlock(document: VisualDocument, targetBlock: VisualBlock): string | null {
+  const entries = new Map<string, HvyVirtualEntry>();
+  const blocks = new Map<string, VisualBlock>();
+  entries.set('/', { kind: 'dir', path: '/' });
+  entries.set('/body', { kind: 'dir', path: '/body' });
+  document.sections
+    .filter((section) => !section.isGhost)
+    .forEach((section, index) => addSectionBlockLookup(entries, blocks, section, `/body/${uniqueName(sectionDirectoryName(section, index), entries, '/body')}`));
+  for (const [path, block] of blocks) {
+    if (block === targetBlock) {
+      return path;
+    }
+  }
+  return null;
+}
+
 export function findBlockInsertionTargetForVirtualDirectory(document: VisualDocument, path: string): HvyVirtualBlockInsertionTarget | null {
   const normalized = normalizeVirtualPath('/', path);
   const entries = new Map<string, HvyVirtualEntry>();

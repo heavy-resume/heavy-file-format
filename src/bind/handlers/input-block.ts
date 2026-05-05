@@ -80,6 +80,16 @@ export function bindInputBlock(app: HTMLElement): void {
       return;
     }
 
+    if (field === 'meta-ai-context' && target instanceof HTMLTextAreaElement) {
+      recordHistory('meta:ai-context');
+      if (target.value.trim().length > 0) {
+        state.document.meta['ai-context'] = target.value;
+      } else {
+        delete state.document.meta['ai-context'];
+      }
+      return;
+    }
+
     if (field === 'theme-color-picker' && target instanceof HTMLInputElement) {
       const name = target.dataset.colorName ?? '';
       if (!name) return;

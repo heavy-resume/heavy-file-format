@@ -688,6 +688,14 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           <span>Reader Max Width</span>
           <input data-field="meta-reader-max-width" placeholder="60rem" value="${deps.escapeAttr(String(state.documentMeta.reader_max_width ?? ''))}" />
         </label>
+        <label>
+          <span>AI Context</span>
+          <textarea
+            rows="4"
+            data-field="meta-ai-context"
+            placeholder="Tell the AI how this document is organized and what intent to preserve."
+          >${deps.escapeHtml(String(state.documentMeta['ai-context'] ?? ''))}</textarea>
+        </label>
         <label class="checkbox-label">
           <span>Tables Enabled</span>
           <input type="checkbox" ${areTablesEnabled() ? 'checked' : ''} disabled />

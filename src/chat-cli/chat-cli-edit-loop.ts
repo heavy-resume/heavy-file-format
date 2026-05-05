@@ -6,6 +6,7 @@ import {
   type HvyCliDiagnosticIssue,
 } from '../cli-core/document-diagnostics';
 import type { ChatMessage, ChatSettings, ChatTokenUsage, VisualDocument } from '../types';
+import { getDocumentAiContext } from '../document-ai-context';
 import { buildChatCliComponentHints } from './chat-cli-component-hints';
 import { createChatCliTraceRunId, writeChatCliCommandTrace, writeChatCliUserQueryTrace } from './chat-cli-dev-trace';
 import { createChatCliInterface } from './chat-cli-interface';
@@ -26,11 +27,21 @@ export interface ChatCliEditTurnResult {
   tokenUsage?: ChatTokenUsage;
 }
 
+export interface ChatCliSelectedComponentFocus {
+  path: string;
+  sectionTitle: string;
+  component: string;
+  baseComponent: string;
+  schemaId: string;
+  guidance?: string;
+}
+
 export async function runChatCliEditLoop(params: {
   settings: ChatSettings;
   document: VisualDocument;
   request: string;
   priorMessages?: ChatMessage[];
+  selectedComponent?: ChatCliSelectedComponentFocus;
   onMutation?: (group?: string) => void;
   onProgress?: (content: string) => void;
   onReasoningSummary?: (summary: string) => void;
@@ -38,6 +49,9 @@ export async function runChatCliEditLoop(params: {
   signal?: AbortSignal;
 }): Promise<ChatCliEditTurnResult> {
   const cli = createChatCliInterface(params.document);
+  if (params.selectedComponent?.path) {
+    cli.session.cwd = params.selectedComponent.path;
+  }
   const traceRunId = createChatCliTraceRunId();
   await writeChatCliUserQueryTrace(traceRunId, params.request, params.signal);
   const initialRootListing = await cli.run('ls /');
@@ -52,8 +66,21 @@ export async function runChatCliEditLoop(params: {
   await writeChatCliCommandTrace(traceRunId, initialLint.command, initialLint.output, params.signal);
   const initialIntent = await cli.run(`hvy find-intent ${quoteChatCliShellArg(params.request)} --max 5`);
   await writeChatCliCommandTrace(traceRunId, initialIntent.command, initialIntent.output, params.signal);
+  const initialSelectedPreview = params.selectedComponent?.path
+    ? await cli.run('hvy preview .')
+    : null;
+  if (initialSelectedPreview) {
+    await writeChatCliCommandTrace(traceRunId, initialSelectedPreview.command, initialSelectedPreview.output, params.signal);
+  }
   const priorConversation = selectChatCliPriorMessages(params.priorMessages ?? []);
-  const initialOutputs = [initialRootListing, initialHvyHelp, initialStructure, initialLint, initialIntent];
+  const initialOutputs = [
+    initialRootListing,
+    initialHvyHelp,
+    initialStructure,
+    initialLint,
+    initialIntent,
+    ...(initialSelectedPreview ? [initialSelectedPreview] : []),
+  ];
   let conversation: ChatMessage[] = [
     ...priorConversation,
     {
@@ -77,11 +104,13 @@ export async function runChatCliEditLoop(params: {
       messages: conversation,
       context: buildChatCliLoopContext(
         cli.snapshot(),
+        params.document,
         params.request,
         params.priorMessages ?? [],
         priorConversation,
         urgency,
-        getIntroducedDiagnostics(params.document)
+        getIntroducedDiagnostics(params.document),
+        params.selectedComponent
       ),
       formatInstructions: buildChatCliLoopFormatInstructions(),
       mode: 'document-edit',
@@ -208,6 +237,7 @@ export async function runChatCliEditLoop(params: {
       introducedDiagnostics: formatIntroducedDiagnosticsForModel(getIntroducedDiagnostics(params.document)),
       scratchpad: formatScratchpadForModel(cli.snapshot()),
       urgency: formatChatCliUrgency(urgency),
+      cwd: cli.snapshot().cwd,
     });
     await writeChatCliCommandTrace(
       traceRunId,
@@ -245,19 +275,24 @@ export async function runChatCliEditLoop(params: {
 
 function buildChatCliLoopContext(
   snapshot: ReturnType<ReturnType<typeof createChatCliInterface>['snapshot']>,
+  document: VisualDocument,
   request: string,
   priorMessages: ChatMessage[],
   priorConversation: ChatMessage[],
   urgency: number,
-  introducedDiagnostics: HvyCliDiagnosticIssue[]
+  introducedDiagnostics: HvyCliDiagnosticIssue[],
+  selectedComponent?: ChatCliSelectedComponentFocus
 ): string {
   const omittedMessageCount = priorMessages.filter((message) => !message.progress).length - priorConversation.length;
+  const documentAiContext = getDocumentAiContext(document);
   return [
     'Current request:',
     request,
+    ...(documentAiContext ? ['', 'Document context:', documentAiContext] : []),
     ...(omittedMessageCount > 0 ? ['', `Earlier chat omitted: ${omittedMessageCount} message${omittedMessageCount === 1 ? '' : 's'}.`] : []),
     '',
     'Use the chronological chat messages and terminal results to infer the active task. If you lose the thread or need a choice from the user, use `ask QUESTION`.',
+    ...(selectedComponent ? ['', 'Selected component focus:', formatSelectedComponentFocus(selectedComponent)] : []),
     '',
     `Current directory: ${snapshot.cwd}`,
     '',
@@ -275,6 +310,18 @@ function buildChatCliLoopContext(
     '',
     'Persistent instructions:',
     buildChatCliPersistentInstructions(),
+  ].join('\n');
+}
+
+function formatSelectedComponentFocus(focus: ChatCliSelectedComponentFocus): string {
+  return [
+    `Path: ${focus.path}`,
+    `Section: ${focus.sectionTitle}`,
+    `Component: ${focus.component}`,
+    `Base component: ${focus.baseComponent}`,
+    `Schema ID: ${focus.schemaId || '(none)'}`,
+    ...(focus.guidance?.trim() ? ['Component guidance:', focus.guidance.trim()] : []),
+    'Start from this component path. Prefer editing this component unless the user request clearly requires related components.',
   ].join('\n');
 }
 
@@ -298,6 +345,7 @@ function formatInitialChatCliCommandMessages(
             introducedDiagnostics: '',
             scratchpad: formatScratchpadForModel(snapshot),
             urgency: formatChatCliUrgency(0),
+            cwd: snapshot.cwd,
           })
         : formatCommandResultForModel(output.output),
     },
@@ -477,7 +525,7 @@ function normalizeCommandResponse(response: string): string {
   return commandText.trim();
 }
 
-function formatCommandResultForModel(result: string | { output: string; diagnosticsDiff?: string; hints?: string; introducedDiagnostics?: string; scratchpad?: string; urgency?: string }): string {
+function formatCommandResultForModel(result: string | { output: string; diagnosticsDiff?: string; hints?: string; introducedDiagnostics?: string; scratchpad?: string; urgency?: string; cwd?: string }): string {
   if (typeof result === 'string') {
     return result.trimEnd() || '(no output)';
   }
@@ -498,6 +546,7 @@ function formatCommandResultForModel(result: string | { output: string; diagnost
     result.urgency?.trimEnd() || formatChatCliUrgency(0),
     '### END your urgency ###',
     'Multiple ```shell blocks are allowed and run as a batch. Remember to take notes as you go!',
+    `Current directory: ${result.cwd || '/'}`,
     'What is your next command?',
   ].join('\n');
 }

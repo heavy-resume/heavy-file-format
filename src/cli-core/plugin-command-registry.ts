@@ -306,9 +306,9 @@ registerHvyCliPluginCommands({
   pluginId: DB_TABLE_PLUGIN_ID,
   helpTopic: 'hvy plugin db-table',
   componentHints: [
-    'This plugin displays a SQLite table or query result.',
-    'Use hvy plugin db-table tables/schema/query/exec to inspect or change the backing database.',
-    'Use plugin.json when changing which table/query this component displays.',
+    'This plugin displays rows from an existing SQLite table/view, optionally filtered by a read-only SELECT/WITH query.',
+    'plugin.json pluginConfig.table must be a table/view name, not SQL. plugin.txt may contain display SQL, but it does not create tables or views.',
+    'Create tables/views with hvy plugin db-table exec. Inspect objects with hvy plugin db-table tables/schema/query.',
   ],
   addCommands: [
     {
@@ -343,7 +343,10 @@ registerHvyCliPluginCommands({
       }
       const names = await getDocumentDbTableObjectNames(context.document);
       if (!names.includes(table)) {
-        return [{ message: `db-table pluginConfig.table references missing SQLite table/view "${table}".` }];
+        const existingObjects = names.length > 0 ? names.join(', ') : '(none)';
+        return [{
+          message: `db-table pluginConfig.table references missing SQLite table/view "${table}". Create it with hvy plugin db-table exec "CREATE VIEW ${table} AS SELECT ..." or change pluginConfig.table to an existing table/view. Existing tables/views: ${existingObjects}.`,
+        }];
       }
       const query = context.body.trim();
       if (query.length === 0) {

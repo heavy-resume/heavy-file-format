@@ -2,6 +2,11 @@
 
 There is no separate database component to add. The document has an attached SQLite database; start using it with SQL.
 
+DB Table components have two separate parts:
+
+- `plugin.json` stores `pluginConfig.table`, which must be the name of an existing SQLite table or view.
+- `plugin.txt` stores optional read-only `SELECT` or `WITH` SQL for displaying rows. This SQL does not create tables or views.
+
 Create or change tables and views:
 
 ```shell
@@ -22,4 +27,16 @@ Display rows in the document:
 ```shell
 hvy add plugin db-table /chore-chart active-chores chores "SELECT title, assigned_to FROM chores WHERE completed_at IS NULL"
 hvy add plugin db-table /chore-chart weekly-leaders weekly_chore_leaders "SELECT assigned_to, completed_count FROM weekly_chore_leaders"
+```
+
+Fix an existing DB Table component:
+
+```shell
+cat /body/chore-chart/active-chores/plugin.json
+cat /body/chore-chart/active-chores/plugin.txt
+hvy plugin db-table tables
+hvy plugin db-table exec "CREATE VIEW active_chores AS SELECT title, assigned_to FROM chores WHERE completed_at IS NULL"
+echo '{"id":"active-chores","css":"","plugin":"dev.heavy.db-table","pluginConfig":{"table":"active_chores"}}' > /body/chore-chart/active-chores/plugin.json
+echo 'SELECT title, assigned_to FROM active_chores' > /body/chore-chart/active-chores/plugin.txt
+hvy lint
 ```

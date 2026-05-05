@@ -846,8 +846,9 @@ Block example:
 
 Plugin-specific rules:
 - `pluginConfig.source` MUST currently be `"with-file"`.
-- `pluginConfig.table` MUST be a database table name to render.
-- The plugin block text is interpreted as the table query string. This is an implicit property derived from the block text body rather than from `pluginConfig`.
+- `pluginConfig.table` MUST be an existing SQLite table or view name to render. It MUST NOT contain SQL.
+- The plugin block text is interpreted as an optional read-only `SELECT` or `WITH` query string. This is an implicit property derived from the block text body rather than from `pluginConfig`.
+- Query text does not create database objects. Tables and views MUST be created through the database execution API before a DB Table component can reference them.
 - If the plugin block contains non-text structured content, clients SHOULD discard that structured content for this plugin and preserve only the text body as the query value.
 - If the query text is empty after trimming, clients MUST behave as though the query were `SELECT * FROM <pluginConfig.table>`.
 - If the query text is non-empty, clients MUST render the result in a read-only state and SHOULD visually indicate that the table is query-driven rather than directly editable.

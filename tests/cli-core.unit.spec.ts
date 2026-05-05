@@ -570,6 +570,26 @@ test('cli supports shell-style && command chaining', async () => {
   expect(session.scratchpadContent).toBe('updated intro\n');
 });
 
+test('cli supports stdout redirection for read commands and blocks same-file overwrites', async () => {
+  const document = createCliTestDocument();
+  const session = createHvyCliSession();
+
+  const redirected = await executeHvyCliCommand(
+    document,
+    session,
+    'nl -ba /body/summary/intro/text.txt > /scratchpad.txt'
+  );
+  expect(redirected.output).toBe('/scratchpad.txt: written');
+  expect(session.scratchpadContent).toContain('Hello world');
+
+  await expect(executeHvyCliCommand(
+    document,
+    session,
+    'nl -ba /body/summary/intro/text.txt > /body/summary/intro/text.txt'
+  )).rejects.toThrow('nl: cannot redirect output to the same file being read: /body/summary/intro/text.txt');
+  expect(document.sections[0]?.blocks[0]?.text).toBe('Hello world');
+});
+
 test('cli supports shell-style || command chaining', async () => {
   const document = createCliTestDocument();
   const session = createHvyCliSession();
@@ -1134,7 +1154,7 @@ fields:
   expect(result.output).toContain('[table] /body/quality/chores - table row 1 is empty.');
   expect(result.output).toContain('[component-list] /body/quality/empty-list - component-list has no items.');
   expect(result.output).toContain('[plugin] /body/quality/broken-db - db-table plugin is missing pluginConfig.table.');
-  expect(result.output).toContain('[plugin] /body/quality/missing-db - db-table pluginConfig.table references missing SQLite table/view "missing_table".');
+  expect(result.output).toContain('[plugin] /body/quality/missing-db - db-table pluginConfig.table references missing SQLite table/view "missing_table". Create it with hvy plugin db-table exec "CREATE VIEW missing_table AS SELECT ..."');
   expect(result.output).toContain('[plugin] /body/quality/empty-script - scripting plugin body is empty; expected Brython/Python source.');
   expect(result.output).toContain('[plugin] /body/quality/passive-form - form has a submit button but no submitScript.');
 });
@@ -1250,6 +1270,7 @@ test('hvy plugin db-table help leads with show and keeps add as an alias', async
   expect(help).toContain('Legacy alias: db-table show/add');
   expect(help).toContain('hvy plugin db-table query [SELECT/WITH SQL]');
   expect(help).toContain('hvy plugin db-table exec [CREATE / INSERT / UPDATE / DELETE / DROP SQL]');
+  expect(help).toContain('pluginConfig.table must be a table/view name, not SQL.');
 });
 
 test('hvy help lists registered plugin add and operation commands as quick-reference options', async () => {
@@ -1282,6 +1303,8 @@ test('hvy cheatsheets are discovered from markdown files', async () => {
   expect(list).toContain('- db-table');
   expect(dbTable).toContain('# DB Table Cheatsheet');
   expect(dbTable).toContain('There is no separate database component to add.');
+  expect(dbTable).toContain('pluginConfig.table`, which must be the name of an existing SQLite table or view.');
+  expect(dbTable).toContain('plugin.txt` stores optional read-only `SELECT` or `WITH` SQL');
   expect(dbTable).toContain('hvy plugin db-table exec');
   expect(unknown).toContain('Unknown cheatsheet "missing". Available cheatsheets: components, db-table, forms, scripting');
 });
@@ -1422,6 +1445,28 @@ hvy_version: 0.1
 
   expect(result.output).toContain('[plugin] /body/quality/broken-query - db-table query is invalid:');
   expect(result.output).toContain('unrecognized token: ":"');
+});
+
+test('hvy lint tells db-table users how to create missing views', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"quality"}-->
+#! Quality
+
+<!--hvy:plugin {"id":"missing-view","plugin":"dev.heavy.db-table","pluginConfig":{"table":"active_chores_view"}}-->
+ SELECT title FROM active_chores_view
+`, '.hvy');
+  const session = createHvyCliSession();
+
+  await executeHvyCliCommand(document, session, 'hvy plugin db-table exec "CREATE TABLE chores (id INTEGER PRIMARY KEY, title TEXT NOT NULL)"');
+
+  const result = await executeHvyCliCommand(document, session, 'hvy lint');
+
+  expect(result.output).toContain('[plugin] /body/quality/missing-view - db-table pluginConfig.table references missing SQLite table/view "active_chores_view".');
+  expect(result.output).toContain('Create it with hvy plugin db-table exec "CREATE VIEW active_chores_view AS SELECT ..."');
+  expect(result.output).toContain('Existing tables/views: chores.');
 });
 
 test('hvy lint reports db-table SQL stored as a table name', async () => {

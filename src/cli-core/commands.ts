@@ -1712,8 +1712,13 @@ function parseMiniShell(args: string[]): HvyMiniShellPipeline[] {
       || arg === '2>'
       || arg === '/dev/null'
       || (arg === '2' && normalizedArgs[index + 1] === '>' && normalizedArgs[index + 2] === '&1')
+      || (arg === '2' && normalizedArgs[index + 1] === '>' && normalizedArgs[index + 2] === '/dev/null')
     ) {
-      if (arg === '2' && normalizedArgs[index + 1] === '>' && normalizedArgs[index + 2] === '&1') {
+      if (
+        arg === '2'
+        && normalizedArgs[index + 1] === '>'
+        && (normalizedArgs[index + 2] === '&1' || normalizedArgs[index + 2] === '/dev/null')
+      ) {
         index += 2;
       }
       continue;
@@ -1790,15 +1795,29 @@ async function executeMiniShellPipeline(ctx: HvyCliCommandContext, commands: str
 }
 
 async function runMiniShellApplication(ctx: HvyCliCommandContext, commandArgs: string[], stdin: string | null): Promise<HvyMiniShellProcess> {
-  const [command = '', ...args] = commandArgs;
+  const redirect = parseStdoutRedirection(commandArgs);
+  const [command = '', ...args] = redirect.commandArgs;
   if (!command) {
     return { cwd: ctx.cwd, stdout: '', stderr: '', status: 0, mutated: false };
   }
   try {
+    if (redirect.targetPath) {
+      assertStdoutRedirectionIsNotInputFile(ctx, command, args, redirect.targetPath);
+    }
     const result = stdin === null
       ? await runCommand(ctx, command, args)
       : await runPipedCommand(ctx, command, args, stdin);
-    return { cwd: result.cwd, stdout: result.output, stderr: '', status: 0, mutated: result.mutated };
+    if (!redirect.targetPath) {
+      return { cwd: result.cwd, stdout: result.output, stderr: '', status: 0, mutated: result.mutated };
+    }
+    const writeResult = writeVirtualFile(
+      { fs: ctx.fs, cwd: result.cwd },
+      redirect.targetPath,
+      command === 'echo' ? `${result.output}\n` : result.output,
+      redirect.append,
+      command
+    );
+    return { cwd: result.cwd, stdout: writeResult.output, stderr: '', status: 0, mutated: true };
   } catch (error) {
     return {
       cwd: ctx.cwd,
@@ -1808,6 +1827,74 @@ async function runMiniShellApplication(ctx: HvyCliCommandContext, commandArgs: s
       mutated: false,
     };
   }
+}
+
+function parseStdoutRedirection(commandArgs: string[]): { commandArgs: string[]; targetPath: string; append: boolean } {
+  const redirectIndex = commandArgs.findIndex((arg) => arg === '>' || arg === '>>');
+  if (redirectIndex < 0) {
+    return { commandArgs, targetPath: '', append: false };
+  }
+  const operator = commandArgs[redirectIndex] ?? '';
+  const targetPath = commandArgs[redirectIndex + 1] ?? '';
+  if (!targetPath) {
+    throw new Error(`${commandArgs[0] ?? 'command'}: ${operator} requires a file path`);
+  }
+  if (commandArgs.slice(redirectIndex + 2).length > 0) {
+    throw new Error(`${commandArgs[0] ?? 'command'}: expected redirection at the end of the command`);
+  }
+  return {
+    commandArgs: commandArgs.slice(0, redirectIndex),
+    targetPath,
+    append: operator === '>>',
+  };
+}
+
+function assertStdoutRedirectionIsNotInputFile(
+  ctx: HvyCliCommandContext,
+  command: string,
+  args: string[],
+  targetPath: string
+): void {
+  const target = resolveReadablePath(ctx.fs, ctx.cwd, targetPath);
+  if (!ctx.fs.entries.has(target)) {
+    return;
+  }
+  const inputs = getCommandReadableInputPaths(command, args)
+    .map((path) => resolveReadablePath(ctx.fs, ctx.cwd, path))
+    .filter((path) => ctx.fs.entries.get(path)?.kind === 'file');
+  if (inputs.includes(target)) {
+    throw new Error(`${command}: cannot redirect output to the same file being read: ${target}`);
+  }
+}
+
+function getCommandReadableInputPaths(command: string, args: string[]): string[] {
+  if (command === 'cat') {
+    return args;
+  }
+  if (command === 'nl') {
+    return parseNlArgs(args).paths;
+  }
+  if (command === 'head' || command === 'tail') {
+    return parseLineCount(args, 5).paths;
+  }
+  if (command === 'grep') {
+    return parseGrepArgs(args).paths;
+  }
+  if (command === 'rg') {
+    return [parseRgArgs(args).path];
+  }
+  if (command === 'sed') {
+    const parsed = parseCliFlags(args, {
+      command: 'sed',
+      booleanShort: ['E', 'r', 'n'],
+      prefixShort: ['i'],
+    });
+    return parsed.positionals.slice(1);
+  }
+  if (command === 'sort' || command === 'uniq' || command === 'wc') {
+    return args.filter((arg) => !arg.startsWith('-'));
+  }
+  return [];
 }
 
 async function runPipedCommand(ctx: HvyCliCommandContext, command: string, args: string[], stdin: string): Promise<HvyCliExecution> {

@@ -594,14 +594,17 @@ export function deactivateEditorBlock(sectionKey: string, blockId: string): void
   if (!activeBlockId) {
     return;
   }
+  if (activeBlockId === blockId) {
+    state.activeEditorBlock = null;
+    return;
+  }
   const clickedBlock = findBlockByIds(sectionKey, blockId);
   const shouldDeactivate =
-    activeBlockId === blockId || (clickedBlock ? blockContainsBlockId(clickedBlock, activeBlockId) : false);
+    clickedBlock ? blockContainsBlockId(clickedBlock, activeBlockId) : false;
   if (!shouldDeactivate) {
     return;
   }
-  const parentId = findBlockContainerById(state.document.sections, sectionKey, blockId)?.ownerBlockId ?? null;
-  state.activeEditorBlock = parentId ? { sectionKey, blockId: parentId } : null;
+  state.activeEditorBlock = null;
 }
 
 export function blockContainsBlockId(block: VisualBlock, blockId: string): boolean {

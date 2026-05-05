@@ -214,6 +214,69 @@ hvy_version: 0.1
   await expect(page.locator('.editor-block.is-activating-path')).toHaveCount(0);
 });
 
+test('editing a second component-list item does not overwrite the first item', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"skills"}-->
+#! Skills
+
+ <!--hvy:component-list {"id":"skills-list","componentListComponent":"text"}-->
+
+  <!--hvy:component-list:0 {}-->
+
+   <!--hvy:text {}-->
+    Python
+
+  <!--hvy:component-list:1 {}-->
+
+   <!--hvy:text {}-->
+    TypeScript
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('.editor-block-passive', { hasText: 'TypeScript' }).last().click();
+  const activeEditor = page.locator('.editor-block[data-active-editor-block="true"] .rich-editor');
+  await expect(activeEditor).toContainText('TypeScript');
+  await activeEditor.fill('Rust');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  const raw = await page.locator('#rawEditor').inputValue();
+  expect(raw).toContain('Python');
+  expect(raw).toContain('Rust');
+  expect(raw).not.toContain('TypeScript');
+  expect(raw.indexOf('Python')).toBeLessThan(raw.indexOf('Rust'));
+});
+
+test('editing the second resume project does not duplicate it after done', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Resume Example' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  const projectEntry = page.locator('.editor-block-passive', { hasText: 'Autonomous Agent Hackathon' }).last();
+  await projectEntry.click();
+  await page.locator('[data-expandable-panel="expanded"]').last().click();
+  await page.locator('.editor-block-passive', { hasText: 'Autonomous Agent Hackathon' }).last().click();
+  const expandedTitleEditor = page.locator('.rich-editor', { hasText: 'Autonomous Agent Hackathon' }).first();
+  await expect(expandedTitleEditor).toBeVisible();
+  await expandedTitleEditor.click();
+  await page.getByRole('button', { name: 'H2' }).click();
+
+  const projectRecordEditor = page.locator('.editor-block', { has: page.locator('.editor-block-title', { hasText: 'project-record' }) }).last();
+  await projectRecordEditor.getByRole('button', { name: 'Done' }).first().click();
+  await expect(page.locator('.editor-block[data-active-editor-block="true"]')).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  const raw = await page.locator('#rawEditor').inputValue();
+  expect(raw.match(/<!--hvy:project-record/g) ?? []).toHaveLength(2);
+});
+
 test('populated component-list hides the list component type dropdown', async ({ page }) => {
   await page.goto('/');
 

@@ -8,10 +8,13 @@ ai-context: >-
   xref-card links only; the skills and tools-technologies sidebar sections are the main
   reusable libraries for detailed skill/tool records. History, projects, and education
   each have a summary table followed by a component-list of expandable records; keep
-  both in reverse chronological order with newest entries first. One organization,
-  project, degree, skill, or tool should usually be represented as one expandable
-  reusable record. Local skills/tools lists inside history, project, and education records
-  are supporting xrefs and should not be treated as the main libraries.
+  both in reverse chronological order with newest entries first. History should use one
+  expandable record per organization when roles are contiguous; put promotions, title
+  changes, or adjacent date ranges at the same organization inside that single expanded
+  record instead of creating duplicate organization rows. One project, degree, skill, or
+  tool should usually be represented as one expandable reusable record. Local skills/tools
+  lists inside history, project, and education records are supporting xrefs and should not
+  be treated as the main libraries.
 section_defaults:
   css: "margin: 0.5rem 0;"
 theme:
@@ -59,7 +62,7 @@ theme:
 component_defs:
   - name: history-record
     baseType: expandable
-    description: One expandable work-history role at a single organization; stub table summarizes year, organization, and title, while expanded content holds location, date range, title, description, accomplishments, and supporting skill/tool xrefs.
+    description: One expandable work-history organization record; if multiple roles or date ranges at the same organization are contiguous, keep them inside this one record rather than creating separate organization rows. The stub table summarizes the overall year range, organization, and current/primary title, while expanded content holds role details, location, date ranges, descriptions, accomplishments, and supporting skill/tool xrefs.
     schema:
       css: "margin: 0;"
       expandableAlwaysShowStub: true
@@ -459,13 +462,13 @@ component_defs:
 
  <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"skill-record","componentListItemLabel":"tool / tech"}-->
 
-<!--hvy: {"id":"history","lock":true,"description":"Work history section. Keep the summary table and history-record component-list in reverse chronological order with newest roles first; each organization/role is one expandable history-record."}-->
+<!--hvy: {"id":"history","lock":true,"description":"Work history section. Keep the summary table and history-record component-list in reverse chronological order with newest organizations first. Use one expandable history-record per organization when roles are contiguous; represent promotions or adjacent title/date changes inside that record instead of adding duplicate organization rows."}-->
 #! History
 
  <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
   # History
 
- <!--hvy:table {"css":"margin: 0.5rem 0 0;","tableColumns":"YEAR, ORGANIZATION, TITLE","tableShowHeader":true,"tableRows":[],"lock":true,"description":"Static summary table for history records; keep rows reverse chronological and aligned with the history-record list below."}-->
+ <!--hvy:table {"css":"margin: 0.5rem 0 0;","tableColumns":"YEAR, ORGANIZATION, TITLE","tableShowHeader":true,"tableRows":[],"lock":true,"description":"Static summary table for history records; keep rows reverse chronological and aligned with the history-record list below. If contiguous roles share an organization, use one summary row for the combined organization record."}-->
 
  <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"history-record","componentListItemLabel":"history"}-->
 

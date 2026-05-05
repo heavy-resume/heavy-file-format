@@ -212,11 +212,11 @@ component_defs:
     command: 'cat /body/history/history-list/component-list/history-acme/history-record.txt',
   });
 
-  expect(componentListHint).toContain('add list item: hvy add history-record /body/history/history-list/component-list --id NEW_ID');
-  expect(componentListHint).toContain('then fill fields: hvy request_structure NEW_ID --describe');
+  expect(componentListHint).toContain('optional list-item creation: hvy add history-record /body/history/history-list/component-list --id NEW_ID');
+  expect(componentListHint).toContain('after creating a list item, inspect it with hvy request_structure NEW_ID --describe');
   expect(componentListHint).toContain('component-list.txt is a text preview of existing leaf items');
-  expect(reusableItemHint).toContain('create blank sibling: hvy add history-record /body/history/history-list/component-list --id NEW_ID');
-  expect(reusableItemHint).toContain('then fill fields: hvy request_structure NEW_ID --describe');
+  expect(reusableItemHint).toContain('optional blank sibling creation: hvy add history-record /body/history/history-list/component-list --id NEW_ID');
+  expect(reusableItemHint).toContain('after creating a reusable component, inspect it with hvy request_structure NEW_ID --describe');
   expect(componentListHint).not.toContain('"Title"');
   expect(reusableItemHint).not.toContain('"Title"');
 });

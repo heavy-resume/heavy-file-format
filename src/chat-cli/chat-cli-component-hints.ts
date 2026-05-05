@@ -59,8 +59,8 @@ function buildComponentPathHint(path: string, fs: ReturnType<typeof buildHvyVirt
     ...(document ? [formatHvyComponentDescriptionHistory(document, fs, '/', componentDir)].filter(Boolean) : []),
     ...componentSpecificHintLines(componentName),
     ...pluginSpecificHintLines(componentName, `${componentDir}/${componentName}.json`, fs),
-    `  edit: ${formatEditHint(componentDir, componentName, fs)}`,
-    `  structure: hvy request_structure ${componentDir} --describe. remove: hvy remove ${componentDir}.`,
+    `  files: ${formatEditHint(componentDir, componentName, fs)}`,
+    `  optional commands: inspect with hvy request_structure ${componentDir} --describe; remove this component with hvy remove ${componentDir}.`,
     ...formatCreateRelatedHints(componentDir, componentName, fs),
   ].join('\n');
 }
@@ -86,21 +86,21 @@ function formatCreateRelatedHints(componentDir: string, componentName: string, f
     const itemType = readComponentListItemType(`${componentDir}/component-list.json`, fs);
     if (itemType) {
       return [
-        `  add list item: hvy add ${itemType} ${componentDir}/component-list --id NEW_ID`,
-        '  then fill fields: hvy request_structure NEW_ID --describe, then edit the leaf body/config files.',
+        `  optional list-item creation: hvy add ${itemType} ${componentDir}/component-list --id NEW_ID`,
+        '  after creating a list item, inspect it with hvy request_structure NEW_ID --describe and then edit its leaf body/config files.',
       ];
     }
   }
   if (componentName === 'xref-card') {
-    return [`  create sibling: hvy add component ${parentPath} NEW_ID xref-card "Visible label" --config '{"xrefTarget":"target-id"}'`];
+    return [`  optional sibling creation: hvy add component ${parentPath} NEW_ID xref-card "Visible label" --config '{"xrefTarget":"target-id"}'`];
   }
   if (isLikelyReusableComponent(componentName)) {
     return [
-      `  create blank sibling: hvy add ${componentName} ${parentPath} --id NEW_ID`,
-      '  then fill fields: hvy request_structure NEW_ID --describe, then edit the leaf body/config files.',
+      `  optional blank sibling creation: hvy add ${componentName} ${parentPath} --id NEW_ID`,
+      '  after creating a reusable component, inspect it with hvy request_structure NEW_ID --describe and then edit its leaf body/config files.',
     ];
   }
-  return [`  create sibling: hvy add ${componentName} ${parentPath} --id NEW_ID "Initial body text"`];
+  return [`  optional sibling creation: hvy add ${componentName} ${parentPath} --id NEW_ID "Initial body text"`];
 }
 
 function readComponentListItemType(jsonPath: string, fs: ReturnType<typeof buildHvyVirtualFileSystem>): string {

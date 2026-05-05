@@ -588,7 +588,7 @@ function formatCommandResultForModel(result: string | { output: string; diagnost
     formatCommandResultSection(result.output),
     'diagnostics',
     result.diagnosticsDiff?.trimEnd() || '(no changes)',
-    'hints',
+    'optional context, not required actions',
     result.hints?.trimEnd() || '(none)',
     'AI-introduced diagnostics',
     result.introducedDiagnostics?.trimEnd() || '(none)',

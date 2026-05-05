@@ -53,7 +53,11 @@ export async function runChatCliEditLoop(params: {
 }): Promise<ChatCliEditTurnResult> {
   const cli = createChatCliInterface(params.document);
   if (params.selectedComponent?.path) {
-    cli.session.cwd = params.selectedComponent.path;
+    cli.session.cwd = selectInitialCwdForSelectedComponent(
+      buildHvyVirtualFileSystem(params.document),
+      params.selectedComponent.path,
+      params.request
+    );
   }
   const traceRunId = createChatCliTraceRunId();
   await writeChatCliUserQueryTrace(traceRunId, params.request, params.signal);
@@ -70,7 +74,7 @@ export async function runChatCliEditLoop(params: {
   const initialIntent = await cli.run(`hvy find-intent ${quoteChatCliShellArg(params.request)} --max 5`);
   await writeChatCliCommandTrace(traceRunId, initialIntent.command, initialIntent.output, params.signal);
   const initialSelectedPreview = params.selectedComponent?.path
-    ? await cli.run('hvy preview .')
+    ? await cli.run(`hvy preview ${quoteChatCliShellArg(params.selectedComponent.path)}`)
     : null;
   if (initialSelectedPreview) {
     await writeChatCliCommandTrace(traceRunId, initialSelectedPreview.command, initialSelectedPreview.output, params.signal);
@@ -333,6 +337,33 @@ function formatSelectedComponentFocus(focus: ChatCliSelectedComponentFocus, requ
       ? 'This request appears to add a new item. Do not overwrite the selected component. Inspect the parent path and add a sibling or nearby child in the appropriate container.'
       : 'Prefer editing this component only when the request is asking to change, remove, or refine the selected component itself.',
   ].join('\n');
+}
+
+function selectInitialCwdForSelectedComponent(
+  fs: ReturnType<typeof buildHvyVirtualFileSystem>,
+  selectedPath: string,
+  request: string
+): string {
+  if (!isAddLikeSelectedComponentRequest(request)) {
+    return selectedPath;
+  }
+  const componentListParent = nearestComponentListParent(fs, selectedPath);
+  return componentListParent || selectedPath;
+}
+
+function nearestComponentListParent(fs: ReturnType<typeof buildHvyVirtualFileSystem>, selectedPath: string): string {
+  let current = selectedPath.replace(/\/+$/, '');
+  while (current.startsWith('/body/')) {
+    const parent = getParentVirtualPath(current);
+    if (parent.endsWith('/component-list') && fs.entries.get(parent)?.kind === 'dir') {
+      return parent;
+    }
+    if (fs.entries.get(`${current}/component-list`)?.kind === 'dir') {
+      return `${current}/component-list`;
+    }
+    current = parent;
+  }
+  return '';
 }
 
 function getParentVirtualPath(path: string): string {

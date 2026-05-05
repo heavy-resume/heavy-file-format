@@ -376,12 +376,12 @@ Hello world
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('description: Opening paragraph.');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('currently in the directory representing the component to change');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages).toEqual(expect.arrayContaining([
-    expect.objectContaining({ role: 'assistant', content: '```shell\nhvy preview .\n```' }),
+    expect.objectContaining({ role: 'assistant', content: '```shell\nhvy preview "/body/summary/intro"\n```' }),
     expect.objectContaining({ role: 'user', content: expect.stringContaining('Component preview (raw HVY, first 25 lines):') }),
     expect.objectContaining({ role: 'user', content: expect.stringContaining('Current directory: /body/summary/intro\nWhat is your next command?') }),
   ]));
   expect(writeChatCliCommandTraceMock.mock.calls.map((call) => call[1])).not.toContain('cd "/body/summary/intro"');
-  expect(writeChatCliCommandTraceMock.mock.calls.map((call) => call[1])).toContain('hvy preview .');
+  expect(writeChatCliCommandTraceMock.mock.calls.map((call) => call[1])).toContain('hvy preview "/body/summary/intro"');
 });
 
 test('requestDocumentEditChatTurn treats selected components as examples for add requests', async () => {
@@ -415,6 +415,7 @@ hvy_version: 0.1
 
   expect(result.error).toBeNull();
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Parent path: /body/summary/items/component-list');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Current directory: /body/summary/items/component-list');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('This request appears to add a new item.');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Do not overwrite the selected component.');
 });
@@ -792,7 +793,7 @@ hvy_version: 0.1
   expect(nextPrompt).toContain('Text component: Markdown block content rendered in normal document flow.');
   expect(nextPrompt).toContain('edit: text.txt for body, text.json for config.');
   expect(nextPrompt).toContain('structure: hvy request_structure /body/summary/intro --describe. remove: hvy remove /body/summary/intro.');
-  expect(nextPrompt).toContain('create sibling: hvy add text /body/summary --id NEW_ID "Title"');
+  expect(nextPrompt).toContain('create sibling: hvy add text /body/summary --id NEW_ID "Initial body text"');
   expect(nextPrompt).toContain('### BEGIN /scratchpad.txt  ###\nlast edited never\n\nYou havent written your plan yet.');
   expect(nextPrompt).toContain('### BEGIN your urgency ###\nscore=1\nprioritize planning and understanding');
   expect(nextPrompt).not.toContain('commands since last edit:');
@@ -918,7 +919,7 @@ hvy_version: 0.1
   expect(nextPrompt).toContain('Grid component: lays out child components visually like a CSS grid.');
   expect(nextPrompt).toContain('edit: grid.txt for body, grid.json for config.');
   expect(nextPrompt).toContain('structure: hvy request_structure /body/dashboard/layout --describe. remove: hvy remove /body/dashboard/layout.');
-  expect(nextPrompt).toContain('create sibling: hvy add grid /body/dashboard --id NEW_ID "Title"');
+  expect(nextPrompt).toContain('create sibling: hvy add grid /body/dashboard --id NEW_ID "Initial body text"');
 });
 
 test('requestDocumentEditChatTurn includes structure hints after search commands', async () => {

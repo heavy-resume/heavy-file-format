@@ -180,6 +180,44 @@ component_defs:
   expect(result.output).toContain('reusable definition: One expandable work-history role at one organization.');
 });
 
+test('component hints tell agents to add component-list items blank before filling fields', async () => {
+  const { buildChatCliComponentHints } = await import('../src/chat-cli/chat-cli-component-hints');
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+component_defs:
+  - name: history-record
+    baseType: expandable
+    description: One expandable work-history role at one organization.
+---
+
+<!--hvy: {"id":"history","description":"Work history is reverse chronological."}-->
+#! History
+
+<!--hvy:component-list {"id":"history-list","componentListComponent":"history-record","description":"List of organization role records."}-->
+
+ <!--hvy:history-record {"id":"history-acme"}-->
+  Acme
+`, '.hvy');
+
+  const componentListHint = buildChatCliComponentHints({
+    document,
+    cwd: '/',
+    command: 'cat /body/history/history-list/component-list.txt',
+  });
+  const reusableItemHint = buildChatCliComponentHints({
+    document,
+    cwd: '/',
+    command: 'cat /body/history/history-list/component-list/history-acme/history-record.txt',
+  });
+
+  expect(componentListHint).toContain('add list item: hvy add history-record /body/history/history-list/component-list --id NEW_ID');
+  expect(componentListHint).toContain('then fill fields: hvy request_structure NEW_ID --describe');
+  expect(reusableItemHint).toContain('create blank sibling: hvy add history-record /body/history/history-list/component-list --id NEW_ID');
+  expect(reusableItemHint).toContain('then fill fields: hvy request_structure NEW_ID --describe');
+  expect(componentListHint).not.toContain('"Title"');
+  expect(reusableItemHint).not.toContain('"Title"');
+});
+
 test('ls shows section descriptions from section metadata', async () => {
   const document = createResumeCliTestDocument();
   const session = createHvyCliSession();
@@ -219,6 +257,8 @@ test('hvy add can create custom components and generic xref components', async (
   expect(skill.output).toContain('/body/skills/component-list-1/component-list/skill-baking: created');
   expect(skill.output).toContain('file skill-record.json');
   expect(skill.output).toContain('file skill-record.txt');
+  expect(skill.output).toContain('next:\n  hvy request_structure /body/skills/component-list-1/component-list/skill-baking --describe');
+  expect(skill.output).toContain('Fill the leaf body/config files shown by request_structure.');
   expect((await executeHvyCliCommand(document, session, 'cat /body/skills/component-list-1/component-list/skill-baking/skill-record.json')).output)
     .toContain('"css": "margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);"');
   expect(xref.output).toContain('/body/top-skills-tools-technologies/grid-0/grid/top-skill-baking: created');
@@ -228,6 +268,22 @@ test('hvy add can create custom components and generic xref components', async (
     .toContain('Baking');
   expect((await executeHvyCliCommand(document, session, 'cat /body/top-skills-tools-technologies/grid-0/grid/top-skill-baking/xref-card.json')).output)
     .toContain('"xrefTarget": "skill-baking"');
+});
+
+test('aggregate body write errors explain how to fill nested reusable components', async () => {
+  const document = createResumeCliTestDocument();
+  const session = createHvyCliSession();
+  await executeHvyCliCommand(
+    document,
+    session,
+    'hvy add skill-record /body/skills/component-list-1/component-list --id skill-baking Baking'
+  );
+
+  await expect(executeHvyCliCommand(
+    document,
+    session,
+    'echo "one\\ntwo" > /body/skills/component-list-1/component-list/skill-baking/skill-record.txt'
+  )).rejects.toThrow('Use hvy request_structure COMPONENT_ID --describe to find leaf files');
 });
 
 test('hvy add-component aliases custom component creation', async () => {
@@ -1375,6 +1431,23 @@ fields:
   expect(result.output).toContain('[plugin] /body/quality/missing-db - db-table pluginConfig.table references missing table/view "missing_table". Create it with hvy plugin db-table exec "CREATE VIEW missing_table AS SELECT ..."');
   expect(result.output).toContain('[plugin] /body/quality/empty-script - scripting plugin body is empty; expected Brython/Python source.');
   expect(result.output).toContain('[plugin] /body/quality/passive-form - form has a submit button but no submitScript.');
+});
+
+test('hvy lint includes placeholder context for empty reusable leaf fields', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"quality"}-->
+#! Quality
+
+<!--hvy:text {"id":"empty-note","placeholder":"Organization"}-->
+`, '.hvy');
+  const session = createHvyCliSession();
+
+  const result = await executeHvyCliCommand(document, session, 'hvy lint');
+
+  expect(result.output).toContain('[text] /body/quality/empty-note - text body is empty. (placeholder: Organization)');
 });
 
 test('hvy lint reports database schemas stored in header metadata', async () => {

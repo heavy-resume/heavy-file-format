@@ -438,7 +438,9 @@ function writeBlockBodyText(block: VisualBlock, content: string): void {
   const nestedTextBlocks = collectNestedTextBlocks(block);
   const lines = content.split('\n');
   if (lines.length !== nestedTextBlocks.length) {
-    throw new Error('Nested body edits must preserve one line per nested text block.');
+    throw new Error(
+      `Nested body edits must preserve one line per nested text block: expected ${nestedTextBlocks.length} line${nestedTextBlocks.length === 1 ? '' : 's'}, got ${lines.length}. Use hvy request_structure COMPONENT_ID --describe to find leaf files, then edit those leaf body/config files instead of replacing the aggregate body.`
+    );
   }
   nestedTextBlocks.forEach((child, index) => {
     child.text = lines[index] ?? '';

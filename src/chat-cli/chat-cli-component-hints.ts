@@ -61,7 +61,7 @@ function buildComponentPathHint(path: string, fs: ReturnType<typeof buildHvyVirt
     ...pluginSpecificHintLines(componentName, `${componentDir}/${componentName}.json`, fs),
     `  edit: ${bodyFileNameForDirectory(componentDir, componentName, fs)} for body, ${componentName}.json for config.`,
     `  structure: hvy request_structure ${componentDir} --describe. remove: hvy remove ${componentDir}.`,
-    `  create sibling: ${formatCreateSiblingHint(componentDir, componentName)}`,
+    ...formatCreateRelatedHints(componentDir, componentName, fs),
   ].join('\n');
 }
 
@@ -70,12 +70,44 @@ function componentSpecificHintLines(componentName: string): string[] {
   return firstHelpLine ? [`  ${firstHelpLine}`] : [];
 }
 
-function formatCreateSiblingHint(componentDir: string, componentName: string): string {
+function formatCreateRelatedHints(componentDir: string, componentName: string, fs: ReturnType<typeof buildHvyVirtualFileSystem>): string[] {
   const parentPath = componentDir.replace(/\/[^/]+$/, '') || '/body';
-  if (componentName === 'xref-card') {
-    return `hvy add component ${parentPath} NEW_ID xref-card "Title" --config '{"xrefTarget":"target-id"}'`;
+  if (componentName === 'component-list') {
+    const itemType = readComponentListItemType(`${componentDir}/component-list.json`, fs);
+    if (itemType) {
+      return [
+        `  add list item: hvy add ${itemType} ${componentDir}/component-list --id NEW_ID`,
+        '  then fill fields: hvy request_structure NEW_ID --describe, then edit the leaf body/config files.',
+      ];
+    }
   }
-  return `hvy add ${componentName} ${parentPath} --id NEW_ID "Title"`;
+  if (componentName === 'xref-card') {
+    return [`  create sibling: hvy add component ${parentPath} NEW_ID xref-card "Visible label" --config '{"xrefTarget":"target-id"}'`];
+  }
+  if (isLikelyReusableComponent(componentName)) {
+    return [
+      `  create blank sibling: hvy add ${componentName} ${parentPath} --id NEW_ID`,
+      '  then fill fields: hvy request_structure NEW_ID --describe, then edit the leaf body/config files.',
+    ];
+  }
+  return [`  create sibling: hvy add ${componentName} ${parentPath} --id NEW_ID "Initial body text"`];
+}
+
+function readComponentListItemType(jsonPath: string, fs: ReturnType<typeof buildHvyVirtualFileSystem>): string {
+  const entry = fs.entries.get(jsonPath);
+  if (!entry || entry.kind !== 'file') {
+    return '';
+  }
+  try {
+    const value = JSON.parse(entry.read()) as { componentListComponent?: unknown };
+    return typeof value.componentListComponent === 'string' ? value.componentListComponent.trim() : '';
+  } catch {
+    return '';
+  }
+}
+
+function isLikelyReusableComponent(componentName: string): boolean {
+  return !['text', 'quote', 'code', 'image', 'table', 'container', 'grid', 'expandable', 'plugin', 'component-list'].includes(componentName);
 }
 
 function pluginSpecificHintLines(componentName: string, jsonPath: string, fs: ReturnType<typeof buildHvyVirtualFileSystem>): string[] {

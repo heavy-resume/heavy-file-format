@@ -23,7 +23,7 @@ import {
   getHvyRecipe,
   getHvyRecipeNames,
 } from './reference-library';
-import { formatHvyRequestStructure } from './request-structure';
+import { formatHvyRequestStructure, formatHvyRequestStructureForDirectory } from './request-structure';
 import { formatHvyFindIntent } from './intent-search';
 import {
   buildHvyVirtualFileSystem,
@@ -504,9 +504,27 @@ function formatCreatedComponentDirectory(document: VisualDocument, componentPath
   const children = listDirectory(fs, normalizedComponentPath)
     .map((child) => `${child.kind === 'dir' ? 'dir ' : 'file'} ${child.path.split('/').pop() ?? child.path}`)
     .join('\n');
+  const component = findBlockForVirtualDirectory(document, normalizedComponentPath);
+  const componentName = component?.schema.component ?? '';
+  const baseComponent = componentName ? resolveBaseComponentFromMeta(componentName, document.meta) : '';
+  const fillGuide = componentName && (!isBuiltinComponentName(componentName) || ['expandable', 'container', 'grid', 'component-list'].includes(baseComponent))
+    ? formatCreatedComplexComponentGuide(document, fs, normalizedComponentPath)
+    : '';
   return [
     `${normalizedComponentPath}: created`,
     ...(children ? ['files:', children] : []),
+    ...(fillGuide ? ['', fillGuide] : []),
+  ].join('\n');
+}
+
+function formatCreatedComplexComponentGuide(document: VisualDocument, fs: HvyVirtualFileSystem, componentPath: string): string {
+  return [
+    'next:',
+    `  hvy request_structure ${componentPath} --describe`,
+    '  Fill the leaf body/config files shown by request_structure.',
+    '  For nested reusable components, avoid overwriting the aggregate *.txt file unless you preserve one line per nested text block.',
+    '',
+    ...formatHvyRequestStructureForDirectory(document, fs, componentPath, { describe: true }).split('\n').slice(0, 14),
   ].join('\n');
 }
 

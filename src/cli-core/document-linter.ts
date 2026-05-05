@@ -206,13 +206,13 @@ function lintSections(fs: HvyVirtualFileSystem): HvyCliLintIssue[] {
 function lintCoreComponent(params: { fs: HvyVirtualFileSystem; path: string; component: string; baseComponent: string; config: JsonObject; body: string }): HvyCliLintIssue[] {
   const issues: HvyCliLintIssue[] = [];
   if (params.baseComponent === 'text' && params.body.trim().length === 0) {
-    issues.push(createLintIssue(params, 'empty-text', 'text body is empty.'));
+    issues.push(createLintIssue(params, 'empty-text', formatEmptyBodyMessage('text body is empty.', params.config)));
   }
   if (params.baseComponent === 'quote' && params.body.trim().length === 0) {
-    issues.push(createLintIssue(params, 'empty-quote', 'quote body is empty.'));
+    issues.push(createLintIssue(params, 'empty-quote', formatEmptyBodyMessage('quote body is empty.', params.config)));
   }
   if (params.baseComponent === 'code' && params.body.trim().length === 0) {
-    issues.push(createLintIssue(params, 'empty-code', 'code block body is empty.'));
+    issues.push(createLintIssue(params, 'empty-code', formatEmptyBodyMessage('code block body is empty.', params.config)));
   }
   if (params.baseComponent === 'component-list' && !hasChildComponent(params.fs, `${params.path}/component-list`)) {
     issues.push(createLintIssue(params, 'empty-component-list', 'component-list has no items.'));
@@ -237,6 +237,16 @@ function lintCoreComponent(params: { fs: HvyVirtualFileSystem; path: string; com
     });
   }
   return issues;
+}
+
+function formatEmptyBodyMessage(message: string, config: JsonObject): string {
+  const placeholder = readTrimmedString(config.placeholder);
+  const description = readTrimmedString(config.description);
+  const hints = [
+    ...(placeholder ? [`placeholder: ${placeholder}`] : []),
+    ...(description ? [`description: ${description}`] : []),
+  ];
+  return hints.length > 0 ? `${message} (${hints.join('; ')})` : message;
 }
 
 async function lintPluginComponent(params: { document: VisualDocument; path: string; textPath: string; jsonPath: string; config: JsonObject; body: string }): Promise<HvyCliLintIssue[]> {

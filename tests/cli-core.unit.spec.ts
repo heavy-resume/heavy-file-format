@@ -850,6 +850,61 @@ scripts:
   expect(result.output).toContain('For help, run hvy cheatsheet forms or man hvy plugin form.');
 });
 
+test('hvy lint catches and fixes non-canonical form field type aliases', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"chore-chart"}-->
+#! Chore Chart
+
+<!--hvy:plugin {"id":"assign-chore","plugin":"dev.heavy.form","pluginConfig":{"version":"0.1","initialScript":"load","submitScript":"submit"}}-->
+fields:
+  - label: Chore
+    type: DROPDOWN
+scripts:
+  load: >-
+    pass
+  submit: >-
+    pass
+`, '.hvy');
+  const session = createHvyCliSession();
+
+  const before = await executeHvyCliCommand(document, session, 'hvy lint');
+  const fix = await executeHvyCliCommand(document, session, 'hvy lint --fix');
+  const after = await executeHvyCliCommand(document, session, 'hvy lint');
+
+  expect(before.output).toContain('[plugin] /body/chore-chart/assign-chore - form field "Chore" uses non-canonical type "DROPDOWN". Use "select" instead. Run hvy lint --fix to rewrite form field types.');
+  expect(fix.output).toContain('- assign-chore: canonicalized form field types');
+  expect(after.output).not.toContain('DROPDOWN');
+  expect(serializeDocument(document)).toContain('type: select');
+});
+
+test('hvy lint warns about unsupported form field types', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"chore-chart"}-->
+#! Chore Chart
+
+<!--hvy:plugin {"id":"assign-chore","plugin":"dev.heavy.form","pluginConfig":{"version":"0.1","initialScript":"load","submitScript":"submit"}}-->
+fields:
+  - label: Chore
+    type: combobox
+scripts:
+  load: >-
+    pass
+  submit: >-
+    pass
+`, '.hvy');
+  const session = createHvyCliSession();
+
+  const result = await executeHvyCliCommand(document, session, 'hvy lint');
+
+  expect(result.output).toContain('[plugin] /body/chore-chart/assign-chore - form field "Chore" uses unsupported type "combobox". Valid types: text, textarea, number, select, checkbox, radio, date, email, tel, url, password, hidden. Use "select" for dropdowns.');
+});
+
 test('hvy lint points form behavior YAML keys to plugin config', async () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1

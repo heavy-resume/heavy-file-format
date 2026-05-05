@@ -70,6 +70,17 @@ scripts:
     expect(parsed.spec.fields).toEqual([]);
   });
 
+  test('normalizes case-insensitive dropdown field aliases to select', () => {
+    const parsed = parseFormSpec(`fields:
+  - label: Chore
+    type: DROPDOWN
+`);
+
+    expect(parsed.error).toBeNull();
+    expect(parsed.spec.fields[0]?.type).toBe('select');
+    expect(serializeFormSpec(parsed.spec)).toContain('type: select');
+  });
+
   test('serializes normalized form data back to YAML', () => {
     const parsed = parseFormSpec(`fields:
   - label: Email

@@ -2,7 +2,7 @@ import { buildDocumentEditToolHelp } from '../ai-document-edit-instructions';
 import type { JsonObject } from '../hvy/types';
 import { getDbTableAiSummary, getDocumentDbTableObjectNames, validateDocumentDbSql } from '../plugins/db-table';
 import { validateDbTableObjectName } from '../plugins/db-table-identifiers';
-import { parseFormSpec } from '../plugins/form';
+import { findFormFieldTypeIssues, parseFormSpec } from '../plugins/form';
 import { DB_TABLE_PLUGIN_ID, FORM_PLUGIN_ID, SCRIPTING_PLUGIN_ID } from '../plugins/registry';
 import type { VisualDocument } from '../types';
 import { parse as parseYaml } from 'yaml';
@@ -257,6 +257,17 @@ function lintFormSchemaShape(body: string): HvyCliPluginLintIssue[] {
         }
       }
     });
+  }
+  for (const issue of findFormFieldTypeIssues(body)) {
+    if (issue.canonicalType) {
+      issues.push({
+        message: `form field "${issue.label}" uses non-canonical type "${issue.rawType}". Use "${issue.canonicalType}" instead. Run hvy lint --fix to rewrite form field types.`,
+      });
+    } else {
+      issues.push({
+        message: `form field "${issue.label}" uses unsupported type "${issue.rawType}". Valid types: text, textarea, number, select, checkbox, radio, date, email, tel, url, password, hidden. Use "select" for dropdowns.`,
+      });
+    }
   }
   return issues;
 }

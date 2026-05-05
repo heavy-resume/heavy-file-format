@@ -1,7 +1,9 @@
 import { resolveBaseComponentFromMeta } from '../component-defs';
 import type { VisualBlock, VisualSection } from '../editor/types';
 import type { JsonObject } from '../hvy/types';
+import { findFormFieldTypeIssues, parseFormSpec, serializeFormSpec } from '../plugins/form';
 import { DB_TABLE_PLUGIN_ID, FORM_PLUGIN_ID, SCRIPTING_PLUGIN_ID } from '../plugins/registry';
+import { visitBlocks } from '../section-ops';
 import type { VisualDocument } from '../types';
 import { getHvyCliPluginCommandRegistrationByPluginId } from './plugin-command-registry';
 import { buildHvyVirtualFileSystem, type HvyVirtualEntry, type HvyVirtualFileSystem } from './virtual-file-system';
@@ -30,6 +32,7 @@ export function fixHvyCliLintIssues(document: VisualDocument): string[] {
   for (const section of document.sections) {
     fixSectionPluginAliasIds(section, fixed);
   }
+  fixFormFieldTypeAliases(document, fixed);
   return fixed;
 }
 
@@ -205,6 +208,20 @@ function fixBlockPluginAliasIds(block: VisualBlock, fixed: string[]): void {
   for (const child of block.schema.expandableContentBlocks?.children ?? []) {
     fixBlockPluginAliasIds(child, fixed);
   }
+}
+
+function fixFormFieldTypeAliases(document: VisualDocument, fixed: string[]): void {
+  visitBlocks(document.sections, (block) => {
+    if (block.schema.plugin !== FORM_PLUGIN_ID || findFormFieldTypeIssues(block.text).every((issue) => !issue.canonicalType)) {
+      return;
+    }
+    const parsed = parseFormSpec(block.text, block.schema.pluginConfig);
+    if (parsed.error) {
+      return;
+    }
+    block.text = serializeFormSpec(parsed.spec);
+    fixed.push(`${block.schema.id || '(anonymous form)'}: canonicalized form field types`);
+  });
 }
 
 function getStoredPluginAlias(pluginId: string): { alias: string; pluginId: string } | null {

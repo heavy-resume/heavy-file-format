@@ -34,6 +34,10 @@ const FIELD_TYPES = [
 type FormFieldType = (typeof FIELD_TYPES)[number];
 type FormTriggerName = 'input' | 'change' | 'blur';
 
+const FIELD_TYPE_ALIASES: Record<string, FormFieldType> = {
+  dropdown: 'select',
+};
+
 export interface FormOption {
   label: string;
   value: string;
@@ -93,8 +97,55 @@ function isObject(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
 }
 
+export interface FormFieldTypeIssue {
+  label: string;
+  index: number;
+  rawType: string;
+  canonicalType: FormFieldType | null;
+}
+
+export function getCanonicalFormFieldType(value: unknown): FormFieldType | null {
+  if (typeof value !== 'string') {
+    return null;
+  }
+  const normalized = value.trim().toLowerCase();
+  if (FIELD_TYPE_ALIASES[normalized]) {
+    return FIELD_TYPE_ALIASES[normalized];
+  }
+  return FIELD_TYPES.includes(normalized as FormFieldType) ? (normalized as FormFieldType) : null;
+}
+
+export function findFormFieldTypeIssues(source: string): FormFieldTypeIssue[] {
+  let parsed: unknown;
+  try {
+    parsed = parseYaml(source);
+  } catch {
+    return [];
+  }
+  if (!isObject(parsed) || !Array.isArray(parsed.fields)) {
+    return [];
+  }
+  const issues: FormFieldTypeIssue[] = [];
+  parsed.fields.forEach((field, index) => {
+    if (!isObject(field) || typeof field.type !== 'string') {
+      return;
+    }
+    const rawType = field.type.trim();
+    const canonicalType = getCanonicalFormFieldType(rawType);
+    if (canonicalType === null || rawType !== canonicalType) {
+      issues.push({
+        label: typeof field.label === 'string' && field.label.trim() ? field.label.trim() : `Field ${index + 1}`,
+        index,
+        rawType,
+        canonicalType,
+      });
+    }
+  });
+  return issues;
+}
+
 function normalizeFieldType(value: unknown): FormFieldType {
-  return typeof value === 'string' && FIELD_TYPES.includes(value as FormFieldType) ? (value as FormFieldType) : 'text';
+  return getCanonicalFormFieldType(value) ?? 'text';
 }
 
 function normalizeOption(value: unknown): FormOption | null {

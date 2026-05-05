@@ -252,6 +252,31 @@ four
   expect((await executeHvyCliCommand(document, session, 'man sed')).output).toContain('sed -n START,ENDp FILE...');
 });
 
+test('cli sed supports line-addressed edits', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {"id":"intro"}-->
+ keep
+/doc.db.execute("CREATE TABLE chores (id INTEGER)")
+drop me
+`, '.hvy');
+  const session = createHvyCliSession();
+
+  const result = await executeHvyCliCommand(document, session, 'sed -i "2s/^\\\\///" /body/summary/intro/text.txt');
+
+  expect(result.output).toBe('/body/summary/intro/text.txt: updated');
+  expect(document.sections[0]?.blocks[0]?.text).toBe('keep\ndoc.db.execute("CREATE TABLE chores (id INTEGER)")\ndrop me');
+
+  const deleted = await executeHvyCliCommand(document, session, 'sed -i 3d /body/summary/intro/text.txt');
+  expect(deleted.output).toBe('/body/summary/intro/text.txt: updated');
+  expect(document.sections[0]?.blocks[0]?.text).toBe('keep\ndoc.db.execute("CREATE TABLE chores (id INTEGER)")');
+});
+
 test('cli sed rejects malformed substitute flags before mutating', async () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1

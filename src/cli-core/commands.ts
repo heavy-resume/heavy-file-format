@@ -1113,13 +1113,33 @@ function commandSed(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd
 
 function applySedEditExpression(input: string, expression: string): string {
   const parsed = parseSedExpression(expression);
+  if (parsed.lineNumber != null) {
+    const lines = input.split(/\r?\n/);
+    const index = parsed.lineNumber - 1;
+    if (index < 0 || index >= lines.length) {
+      return input;
+    }
+    if (parsed.kind === 'substitute') {
+      lines[index] = applySedSubstitution(lines[index] ?? '', parsed);
+      return lines.join('\n');
+    }
+    if (parsed.pattern == null) {
+      lines.splice(index, 1);
+      return lines.join('\n');
+    }
+    const regex = new RegExp(parsed.pattern, parsed.flags.toLowerCase().includes('i') ? 'i' : '');
+    if (regex.test(lines[index] ?? '')) {
+      lines.splice(index, 1);
+    }
+    return lines.join('\n');
+  }
   if (parsed.kind === 'substitute') {
-    return input.replace(
-      new RegExp(parsed.pattern, `${parsed.flags.includes('g') ? 'g' : ''}${parsed.flags.toLowerCase().includes('i') ? 'i' : ''}`),
-      normalizeSedReplacement(parsed.replacement)
-    );
+    return applySedSubstitution(input, parsed);
   }
   if (parsed.kind === 'delete') {
+    if (parsed.pattern == null) {
+      throw new Error('sed: expected sed s/search/replace/[g] path or sed /pattern/d path');
+    }
     const regex = new RegExp(parsed.pattern, parsed.flags.toLowerCase().includes('i') ? 'i' : '');
     return input
       .split(/\r?\n/)
@@ -1129,15 +1149,35 @@ function applySedEditExpression(input: string, expression: string): string {
   throw new Error('sed: expected sed s/search/replace/[g] path or sed /pattern/d path');
 }
 
+function applySedSubstitution(input: string, parsed: Extract<SedExpression, { kind: 'substitute' }>): string {
+  return input.replace(
+    new RegExp(parsed.pattern, `${parsed.flags.includes('g') ? 'g' : ''}${parsed.flags.toLowerCase().includes('i') ? 'i' : ''}`),
+    normalizeSedReplacement(parsed.replacement)
+  );
+}
+
 function normalizeSedReplacement(replacement: string): string {
   return replacement.replace(/\\([1-9])/g, '$$$1');
 }
 
 type SedExpression =
-  | { kind: 'substitute'; pattern: string; replacement: string; flags: string }
-  | { kind: 'delete'; pattern: string; flags: string };
+  | { kind: 'substitute'; pattern: string; replacement: string; flags: string; lineNumber?: number }
+  | { kind: 'delete'; pattern?: string; flags: string; lineNumber?: number };
 
 function parseSedExpression(expression: string): SedExpression {
+  const address = expression.match(/^(\d+)(.*)$/);
+  if (address) {
+    const lineNumber = Number.parseInt(address[1] ?? '', 10);
+    const rest = address[2] ?? '';
+    if (!Number.isFinite(lineNumber) || lineNumber < 1 || rest.length === 0) {
+      throw new Error('sed: expected sed s/search/replace/[g] path or sed /pattern/d path');
+    }
+    if (rest.toLowerCase() === 'd') {
+      return { kind: 'delete', flags: '', lineNumber };
+    }
+    return { ...parseSedExpression(rest), lineNumber };
+  }
+
   if (expression.startsWith('s') && expression.length >= 2) {
     const delimiter = expression[1] ?? '';
     const first = readDelimitedSegment(expression, 2, delimiter);
@@ -2066,13 +2106,12 @@ function applySedPrintFilter(output: string, args: string[]): string | null {
 }
 
 function applySedReplaceFilter(output: string, args: string[]): string | null {
-  const expression = args.find((arg) => /^s(.)(.*?)\1(.*?)\1[gIig]*$/.test(arg));
-  const match = expression?.match(/^s(.)(.*?)\1(.*?)\1([gIig]*)$/);
-  if (!match) {
+  const expression = args.find((arg) => /^\d*s(.)(.*?)\1(.*?)\1[gIig]*$/.test(arg));
+  if (!expression) {
     return null;
   }
-  const flags = `${match[4]?.toLowerCase().includes('g') ? 'g' : ''}${match[4]?.toLowerCase().includes('i') ? 'i' : ''}`;
-  return output.replace(new RegExp(match[2] ?? '', flags), match[3] ?? '');
+  const parsed = parseSedExpression(expression);
+  return parsed.kind === 'substitute' ? applySedEditExpression(output, expression) : null;
 }
 
 function parseLineCountArg(args: string[], fallback: number): number {

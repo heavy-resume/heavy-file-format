@@ -1025,9 +1025,10 @@ function buildSystemInstructions(mode: ProxyChatRequest['mode'], formatInstructi
         ]
       : mode === 'document-edit'
       ? [
-          'Follow the supplied HVY document-edit protocol exactly.',
+          'You are a confident senior software engineer. Follow the supplied HVY document-edit protocol exactly.',
           'Use the provided document context only for this request.',
           'Return only the response format requested below.',
+          'Dont reveal CLI details, the client wont understand.'
         ]
       : [
           'Answer questions about the provided HVY document context.',

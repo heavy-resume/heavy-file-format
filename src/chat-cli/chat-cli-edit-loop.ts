@@ -7,6 +7,8 @@ import {
 } from '../cli-core/document-diagnostics';
 import type { ChatMessage, ChatSettings, ChatTokenUsage, VisualDocument } from '../types';
 import { getDocumentAiContext } from '../document-ai-context';
+import { buildHvyVirtualFileSystem } from '../cli-core/virtual-file-system';
+import { formatHvyComponentDescriptionHistory } from '../cli-core/component-description-history';
 import { buildChatCliComponentHints } from './chat-cli-component-hints';
 import { createChatCliTraceRunId, writeChatCliCommandTrace, writeChatCliUserQueryTrace } from './chat-cli-dev-trace';
 import { createChatCliInterface } from './chat-cli-interface';
@@ -286,6 +288,7 @@ function buildChatCliLoopContext(
 ): string {
   const omittedMessageCount = priorMessages.filter((message) => !message.progress).length - priorConversation.length;
   const documentAiContext = getDocumentAiContext(document);
+  const cwdComponentContext = formatHvyComponentDescriptionHistory(document, buildHvyVirtualFileSystem(document), snapshot.cwd);
   return [
     'Current request:',
     request,
@@ -296,6 +299,7 @@ function buildChatCliLoopContext(
     ...(selectedComponent ? ['', 'Selected component focus:', formatSelectedComponentFocus(selectedComponent, request)] : []),
     '',
     `Current directory: ${snapshot.cwd}`,
+    ...(cwdComponentContext ? ['', cwdComponentContext] : []),
     '',
     'scratchpad.txt:',
     formatScratchpadForModel(snapshot),

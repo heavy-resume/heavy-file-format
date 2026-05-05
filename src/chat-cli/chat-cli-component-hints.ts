@@ -2,6 +2,7 @@ import { buildHvyVirtualFileSystem, resolveVirtualPath, type HvyVirtualEntry } f
 import { tokenizeCommand } from '../cli-core/commands';
 import { getHvyCliPluginCommandRegistrationByPluginId } from '../cli-core/plugin-command-registry';
 import { extractVirtualPathsFromOutput, formatHvyStructureForPaths } from '../cli-core/request-structure';
+import { formatHvyComponentDescriptionHistory } from '../cli-core/component-description-history';
 import { getHvyComponentHelpLines } from '../component-help';
 import type { VisualDocument } from '../types';
 
@@ -15,7 +16,7 @@ export function buildChatCliComponentHints(params: {
 }): string {
   const fs = buildHvyVirtualFileSystem(params.document);
   const commandHints = collectCommandComponentPaths(params.command, params.cwd, fs)
-    .map((path) => buildComponentPathHint(path, fs))
+    .map((path) => buildComponentPathHint(path, fs, params.document))
     .filter((hint): hint is string => !!hint);
   const searchStructureHint = isSearchStyleCommand(params.command)
     ? formatHvyStructureForPaths(params.document, fs, extractVirtualPathsFromOutput(params.output ?? ''))
@@ -44,7 +45,7 @@ function tokenizeCommandSafely(command: string): string[] {
   }
 }
 
-function buildComponentPathHint(path: string, fs: ReturnType<typeof buildHvyVirtualFileSystem>): string | null {
+function buildComponentPathHint(path: string, fs: ReturnType<typeof buildHvyVirtualFileSystem>, document?: VisualDocument): string | null {
   const componentDir = findComponentDirectory(path, fs);
   if (!componentDir) {
     return null;
@@ -55,6 +56,7 @@ function buildComponentPathHint(path: string, fs: ReturnType<typeof buildHvyVirt
   }
   return [
     `component ${componentName}: ${componentDir}`,
+    ...(document ? [formatHvyComponentDescriptionHistory(document, fs, '/', componentDir)].filter(Boolean) : []),
     ...componentSpecificHintLines(componentName),
     ...pluginSpecificHintLines(componentName, `${componentDir}/${componentName}.json`, fs),
     `  edit: ${bodyFileNameForDirectory(componentDir, componentName, fs)} for body, ${componentName}.json for config.`,

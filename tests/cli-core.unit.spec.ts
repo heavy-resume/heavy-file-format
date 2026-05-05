@@ -149,15 +149,46 @@ test('ls keeps custom component directories to file listings without schema prev
   expect(result.output).not.toContain('expandableContentBlocks:');
 });
 
+test('ls shows nested component description context for selected component directories', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+component_defs:
+  - name: history-record
+    baseType: expandable
+    description: One expandable work-history role at one organization.
+---
+
+<!--hvy: {"id":"history","description":"Work history is reverse chronological."}-->
+#! History
+
+<!--hvy:component-list {"id":"history-list","componentListComponent":"history-record","description":"List of organization role records."}-->
+
+ <!--hvy:history-record {"id":"history-acme","description":"Acme role details."}-->
+  Acme
+`, '.hvy');
+  const session = createHvyCliSession();
+
+  const result = await executeHvyCliCommand(document, session, 'ls /body/history/history-list/component-list/history-acme');
+
+  expect(result.output).toContain('Component context:');
+  expect(result.output).toContain('/body/history section id=history');
+  expect(result.output).toContain('description: Work history is reverse chronological.');
+  expect(result.output).toContain('/body/history/history-list component-list id=history-list');
+  expect(result.output).toContain('list item type: history-record base=expandable');
+  expect(result.output).toContain('/body/history/history-list/component-list/history-acme history-record base=expandable id=history-acme');
+  expect(result.output).toContain('description: Acme role details.');
+  expect(result.output).toContain('reusable definition: One expandable work-history role at one organization.');
+});
+
 test('ls shows section descriptions from section metadata', async () => {
   const document = createResumeCliTestDocument();
   const session = createHvyCliSession();
 
   const result = await executeHvyCliCommand(document, session, 'ls /body/top-skills-tools-technologies');
 
-  expect(result.output).toContain('Section metadata:');
-  expect(result.output).toContain('id: top-skills-tools-technologies');
-  expect(result.output).toContain('description: Featured top skills, tools, and technologies shown prominently near the top of the resume.');
+  expect(result.output).toContain('Component context:');
+  expect(result.output).toContain('/body/top-skills-tools-technologies section id=top-skills-tools-technologies');
+  expect(result.output).toContain('description: Featured top skills, tools, and technologies shown near the top of the resume.');
 });
 
 test('hvy help add explains component creation commands', async () => {

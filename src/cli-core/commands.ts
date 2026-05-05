@@ -18,6 +18,7 @@ import { isBuiltinComponentName } from '../component-defs';
 import { serializeBlockFragment } from '../serialization';
 import { formatHvyRequestStructureForDirectory } from './request-structure';
 import { cloneReusableBlock } from '../document-factory';
+import { formatHvyComponentDescriptionHistory } from './component-description-history';
 
 const SCRATCHPAD_SOFT_MAX_CHARS = 600;
 const SCRATCHPAD_HARD_MAX_CHARS = 800;
@@ -535,6 +536,10 @@ function commandLs(ctx: HvyCliCommandContext, args: string[]): string {
 }
 
 function formatLsTargetDescription(ctx: HvyCliCommandContext, directoryPath: string): string {
+  const context = formatHvyComponentDescriptionHistory(ctx.document, ctx.fs, ctx.cwd, directoryPath);
+  if (context) {
+    return context;
+  }
   const section = readJsonFileFromVirtualPath(ctx.fs, `${directoryPath}/section.json`);
   if (section) {
     return formatMetadataDescription('Section metadata:', section);

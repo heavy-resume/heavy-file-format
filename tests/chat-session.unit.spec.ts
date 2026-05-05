@@ -345,7 +345,7 @@ test('requestDocumentEditChatTurn can focus the CLI loop on a selected component
 hvy_version: 0.1
 ---
 
-<!--hvy: {"id":"summary"}-->
+<!--hvy: {"id":"summary","description":"Summary section guidance."}-->
 #! Summary
 
 <!--hvy:text {"id":"intro","description":"Opening paragraph."}-->
@@ -371,6 +371,9 @@ Hello world
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Path: /body/summary/intro');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Parent path: /body/summary');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Current directory: /body/summary/intro');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Component context:');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('description: Summary section guidance.');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('description: Opening paragraph.');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('currently in the directory representing the component to change');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages).toEqual(expect.arrayContaining([
     expect.objectContaining({ role: 'assistant', content: '```shell\nhvy preview .\n```' }),

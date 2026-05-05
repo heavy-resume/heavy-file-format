@@ -213,15 +213,15 @@ function addBlock(entries: Map<string, HvyVirtualEntry>, block: VisualBlock, blo
   addTableDataFiles(entries, block, blockPath);
   addFormScriptFiles(entries, block, blockPath);
 
-  addNamedBlockChildren(entries, block.schema.containerBlocks ?? [], `${blockPath}/container`);
-  addNamedBlockChildren(entries, block.schema.componentListBlocks ?? [], `${blockPath}/component-list`);
-  addNamedBlockChildren(entries, block.schema.expandableStubBlocks?.children ?? [], `${blockPath}/expandable-stub`);
-  addNamedBlockChildren(entries, block.schema.expandableContentBlocks?.children ?? [], `${blockPath}/expandable-content`);
-  addNamedBlockChildren(entries, (block.schema.gridItems ?? []).map((item) => item.block), `${blockPath}/grid`);
+  addNamedBlockChildren(entries, block.schema.containerBlocks ?? [], `${blockPath}/container`, block.schema.component === 'container');
+  addNamedBlockChildren(entries, block.schema.componentListBlocks ?? [], `${blockPath}/component-list`, block.schema.component === 'component-list');
+  addNamedBlockChildren(entries, block.schema.expandableStubBlocks?.children ?? [], `${blockPath}/expandable-stub`, block.schema.component === 'expandable');
+  addNamedBlockChildren(entries, block.schema.expandableContentBlocks?.children ?? [], `${blockPath}/expandable-content`, block.schema.component === 'expandable');
+  addNamedBlockChildren(entries, (block.schema.gridItems ?? []).map((item) => item.block), `${blockPath}/grid`, block.schema.component === 'grid');
 }
 
-function addNamedBlockChildren(entries: Map<string, HvyVirtualEntry>, blocks: VisualBlock[], directoryPath: string): void {
-  if (blocks.length === 0) {
+function addNamedBlockChildren(entries: Map<string, HvyVirtualEntry>, blocks: VisualBlock[], directoryPath: string, keepEmptyDirectory = false): void {
+  if (blocks.length === 0 && !keepEmptyDirectory) {
     return;
   }
   entries.set(directoryPath, { kind: 'dir', path: directoryPath });
@@ -303,20 +303,21 @@ function addBlockInsertionTargets(
   blockPath: string
 ): void {
   entries.set(blockPath, { kind: 'dir', path: blockPath });
-  addNamedBlockChildrenInsertionTarget(entries, targets, block.schema.containerBlocks ?? [], `${blockPath}/container`);
-  addNamedBlockChildrenInsertionTarget(entries, targets, block.schema.componentListBlocks ?? [], `${blockPath}/component-list`);
-  addNamedBlockChildrenInsertionTarget(entries, targets, block.schema.expandableStubBlocks?.children ?? [], `${blockPath}/expandable-stub`);
-  addNamedBlockChildrenInsertionTarget(entries, targets, block.schema.expandableContentBlocks?.children ?? [], `${blockPath}/expandable-content`);
-  addGridInsertionTarget(entries, targets, block.schema.gridItems ?? [], `${blockPath}/grid`);
+  addNamedBlockChildrenInsertionTarget(entries, targets, block.schema.containerBlocks ?? [], `${blockPath}/container`, block.schema.component === 'container');
+  addNamedBlockChildrenInsertionTarget(entries, targets, block.schema.componentListBlocks ?? [], `${blockPath}/component-list`, block.schema.component === 'component-list');
+  addNamedBlockChildrenInsertionTarget(entries, targets, block.schema.expandableStubBlocks?.children ?? [], `${blockPath}/expandable-stub`, block.schema.component === 'expandable');
+  addNamedBlockChildrenInsertionTarget(entries, targets, block.schema.expandableContentBlocks?.children ?? [], `${blockPath}/expandable-content`, block.schema.component === 'expandable');
+  addGridInsertionTarget(entries, targets, block.schema.gridItems ?? [], `${blockPath}/grid`, block.schema.component === 'grid');
 }
 
 function addNamedBlockChildrenInsertionTarget(
   entries: Map<string, HvyVirtualEntry>,
   targets: Map<string, HvyVirtualBlockInsertionTarget>,
   blocks: VisualBlock[],
-  directoryPath: string
+  directoryPath: string,
+  keepEmptyDirectory = false
 ): void {
-  if (blocks.length === 0) {
+  if (blocks.length === 0 && !keepEmptyDirectory) {
     return;
   }
   entries.set(directoryPath, { kind: 'dir', path: directoryPath });
@@ -328,9 +329,10 @@ function addGridInsertionTarget(
   entries: Map<string, HvyVirtualEntry>,
   targets: Map<string, HvyVirtualBlockInsertionTarget>,
   gridItems: GridItem[],
-  directoryPath: string
+  directoryPath: string,
+  keepEmptyDirectory = false
 ): void {
-  if (gridItems.length === 0) {
+  if (gridItems.length === 0 && !keepEmptyDirectory) {
     return;
   }
   entries.set(directoryPath, { kind: 'dir', path: directoryPath });

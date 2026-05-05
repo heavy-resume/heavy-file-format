@@ -506,6 +506,11 @@ hvy_version: 0.1
   );
 
   expect((await executeHvyCliCommand(document, session, 'hvy lint')).output).toContain('[component-list] /body/quality/empty-list - component-list has no items.');
+  expect((await executeHvyCliCommand(document, session, 'ls /body/quality/empty-list')).output).toContain('dir  component-list');
+  expect((await executeHvyCliCommand(document, session, 'hvy add text /body/quality/empty-list/component-list --id item-1 "First item"')).output).toContain(
+    '/body/quality/empty-list/component-list/item-1: created'
+  );
+  expect((await executeHvyCliCommand(document, session, 'cat /body/quality/empty-list/component-list/item-1/text.txt')).output).toBe('First item');
 });
 
 test('cli expands supported date command substitutions', async () => {

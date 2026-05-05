@@ -355,6 +355,9 @@ function executeHvyAddCommand(ctx: HvyDocumentCommandContext, kind = '', args: s
     return addComponentBlock(ctx, args);
   }
   if (kind === 'text') {
+    if (args.includes('--id') || args.includes('--name')) {
+      return addComponentShortcut(ctx, kind, args);
+    }
     return addTextBlock(ctx, args);
   }
   if (kind === 'table') {

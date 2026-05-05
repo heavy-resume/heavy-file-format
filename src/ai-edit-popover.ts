@@ -93,6 +93,9 @@ export async function submitAiEditRequest(): Promise<void> {
   state.aiEdit.error = null;
   state.aiEdit.requestNonce += 1;
   const requestNonce = state.aiEdit.requestNonce;
+  state.aiEdit.sectionKey = null;
+  state.aiEdit.blockId = null;
+  state.aiEdit.draft = '';
   const previousMessages = state.chat.messages;
   state.chat.messages = appendUserChatMessage(previousMessages, request);
   state.chat.panelOpen = true;
@@ -154,7 +157,7 @@ export async function submitAiEditRequest(): Promise<void> {
     state.rawEditorError = null;
     state.rawEditorDiagnostics = [];
     if (result.error) {
-      state.aiEdit.error = result.error;
+      state.chat.error = result.error;
     } else {
       closeAiEditPopover();
       if (!result.awaitingUser) {
@@ -167,8 +170,7 @@ export async function submitAiEditRequest(): Promise<void> {
     if (requestNonce !== state.aiEdit.requestNonce) {
       return;
     }
-    state.aiEdit.error = error instanceof Error ? error.message : 'AI component update failed.';
-    state.chat.error = state.aiEdit.error;
+    state.chat.error = error instanceof Error ? error.message : 'AI component update failed.';
     getRenderApp()();
   } finally {
     if (chatRequestNonce === state.chat.requestNonce) {

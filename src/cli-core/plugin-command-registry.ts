@@ -161,6 +161,7 @@ registerHvyCliPluginCommands({
     'Use doc.db.query(sql, params) and doc.db.execute(sql, params) for the current document SQL backend from form scripts; do not call doc.tool("db.query") or doc.tool("db.exec").',
     'doc.tool(name, args) can call the synchronous document-edit tool subset; args are a Python dict matching the AI tool schema.',
     'When changing submit behavior, look for named scripts and on-submit script settings before editing fields.',
+    'For dynamic form options, run: hvy recipe populate-form-options-from-db.',
     'For form submit code examples, run: hvy cheatsheet scripting, hvy recipe scripting, or man hvy plugin scripting tool TOOL_NAME.',
   ],
   addCommands: [
@@ -206,6 +207,10 @@ registerHvyCliPluginCommands({
     {
       command: `Dynamic select example: hvy add plugin form /chores assign-chore "Assign chore" "Chore:select:required" --script load "rows = doc.db.query('SELECT id, title FROM chores ORDER BY id')\\ndoc.form.set_options('Chore', [{'label': row['title'], 'value': str(row['id'])} for row in rows])" --initial-script load`,
       description: 'Populates a select from the current SQL backend. There is no optionsQuery YAML key; use initialScript plus doc.form.set_options.',
+    },
+    {
+      command: 'See also: hvy recipe populate-form-options-from-db',
+      description: 'Focused recipe for populating select/radio options from backend rows.',
     },
     {
       command: `Example: hvy add plugin form /chores add-chore "Add chore" "Description:textarea:required" --script submit "title = doc.form.get_value('Description')\\ndoc.db.execute('INSERT INTO chores (title) VALUES (\\'' + title + '\\')')" --on-submit-script submit`,

@@ -174,6 +174,31 @@ scripts:
   await expect(page.locator('#rawEditor')).not.toContainText('form_return: after');
 });
 
+test('form initial scripts accept tuple-shaped dynamic options', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"tuple-options"}-->
+#! Tuple Options
+
+<!--hvy:plugin {"id":"tuple-form","plugin":"dev.heavy.form","pluginConfig":{"version":"0.1","submitLabel":"Submit","initialScript":"load"}}-->
+fields:
+  - label: Choice
+    type: select
+scripts:
+  load: |-
+    doc.form.set_options("Choice", [("a", "Alpha"), ("b", "Beta")])
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Viewer' }).click();
+
+  const form = page.locator('form').filter({ has: page.getByRole('button', { name: 'Submit' }) });
+  await expect(form.locator('select[name="Choice"] option')).toContainText(['Alpha', 'Beta']);
+});
+
 test('chore chart example populates chore dropdowns from the attached database', async ({ page }) => {
   await page.goto('/');
   await page.locator('#fileInput').setInputFiles('examples/chore-chart-3.hvy');

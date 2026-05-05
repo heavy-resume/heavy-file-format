@@ -1453,7 +1453,10 @@ export async function createScriptingDbRuntime(
       try {
         while (statement.step()) {
           const row = statement.getAsObject() as Record<string, unknown>;
-          rows.push(Object.fromEntries(columns.map((column) => [column, row[column] ?? null])));
+          rows.push(Object.fromEntries(columns.flatMap((column, index) => [
+            [column, row[column] ?? null],
+            [String(index), row[column] ?? null],
+          ])));
         }
       } finally {
         statement.free();

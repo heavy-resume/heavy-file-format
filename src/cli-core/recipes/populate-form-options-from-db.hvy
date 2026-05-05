@@ -1,0 +1,23 @@
+<!--hvy: {"id":"populate-form-options-from-db-recipe","description":"Recipe for populating form select/radio options from backend rows with doc.db.query and doc.form.set_options."}-->
+#! Populate Form Options From DB Recipe
+
+Use this when a form field should choose from rows in the current backend table, such as choosing an active chore, item, person, or project.
+
+There is no `optionsQuery` YAML key. Store a named initial script in `plugin.txt`, point `plugin.json` pluginConfig.initialScript at that script, and call `doc.form.set_options("Field label", options)`.
+
+```shell
+hvy plugin db-table exec "CREATE TABLE items (id INTEGER PRIMARY KEY, title TEXT NOT NULL, completed_at TEXT)"
+hvy plugin db-table exec "INSERT INTO items (title) VALUES ('First item')"
+hvy add section / tracker "Tracker"
+hvy add plugin form /tracker choose-item "Choose item" "Item:select:required" --script load "rows = doc.db.query('SELECT id, title FROM items WHERE completed_at IS NULL ORDER BY id')\noptions = [{'label': str(row['id']) + ': ' + row['title'], 'value': str(row['id'])} for row in rows]\ndoc.form.set_options('Item', options)" --initial-script load --script submit "item_id = doc.form.get_value('Item')\ndoc.db.execute('UPDATE items SET completed_at = datetime(''now'') WHERE id = ?', [item_id])" --on-submit-script submit
+hvy lint
+```
+
+Expected result:
+
+- `/body/tracker/choose-item` is a form plugin.
+- `plugin.json` has `pluginConfig.initialScript` set to `load`.
+- `plugin.txt` has an `Item` select field and a `load` script.
+- The `load` script queries backend rows with `doc.db.query`.
+- The `load` script passes options shaped as `{"label": "...", "value": "..."}` to `doc.form.set_options`.
+- The submit script reads the selected id with `doc.form.get_value("Item")`.

@@ -37,6 +37,14 @@ hvy add plugin form /chore-chart assign-chore "Assign chore" "Chore:select:requi
 
 There is no `optionsQuery` YAML key. Dynamic select/radio options are set from scripts with `doc.form.set_options(label, options)`.
 
+For a focused example, run:
+
+```shell
+hvy recipe populate-form-options-from-db
+```
+
+`doc.form.set_options` prefers option objects shaped as `{"label": "Visible text", "value": "stored-value"}`.
+
 When editing an existing form, keep the split clear:
 
 - `plugin.json` stores form-level behavior in `pluginConfig`.

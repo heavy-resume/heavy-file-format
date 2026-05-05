@@ -352,10 +352,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       set_options: (fieldName, options) => {
         live.options[fieldName] = Array.isArray(options)
           ? options
-              .map((option) => ({
-                label: String((option as ScriptingFormOption).label ?? ''),
-                value: String((option as ScriptingFormOption).value ?? (option as ScriptingFormOption).label ?? ''),
-              }))
+              .map(normalizeScriptingFormOption)
               .filter((option) => option.label.length > 0)
           : [];
         renderReader();
@@ -552,6 +549,22 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       initialized = true;
       runNamedScript(spec.initialScript, 'initial');
     }
+  }
+
+  function normalizeScriptingFormOption(option: unknown): ScriptingFormOption {
+    if (Array.isArray(option)) {
+      const value = String(option[0] ?? '');
+      const label = String(option[1] ?? option[0] ?? '');
+      return { label, value };
+    }
+    if (option && typeof option === 'object') {
+      const record = option as { label?: unknown; value?: unknown };
+      const label = String(record.label ?? '');
+      const value = String(record.value ?? record.label ?? '');
+      return { label, value };
+    }
+    const value = String(option ?? '');
+    return { label: value, value };
   }
 
   function renderReaderField(field: FormFieldDefinition): HTMLElement {

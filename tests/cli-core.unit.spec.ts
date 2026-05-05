@@ -1349,7 +1349,7 @@ test('hvy help lists registered plugin add and operation commands as quick-refer
   expect(help).toContain('hvy cheatsheet [NAME]');
   expect(help).toContain('hvy recipe [NAME]');
   expect(help).toContain('Cheatsheets:\n- components\n- db-table\n- forms\n- scripting');
-  expect(help).toContain('Recipes:\n- db-and-form\n- form-backed-table\n- scripting');
+  expect(help).toContain('Recipes:\n- db-and-form\n- form-backed-table\n- populate-form-options-from-db\n- scripting');
   expect(help).toContain('hvy add plugin form SECTION_PATH ID SUBMIT_BUTTON_LABEL FIELD_LABEL:TYPE...');
   expect(help).toContain('hvy add plugin db-table SECTION_PATH ID TABLE [QUERY]');
   expect(help).toContain('hvy plugin db-table query [SELECT/WITH SQL]');
@@ -1382,14 +1382,19 @@ test('hvy recipes are discovered from hvy files', async () => {
 
   const list = (await executeHvyCliCommand(document, session, 'hvy recipe')).output;
   const recipe = (await executeHvyCliCommand(document, session, 'hvy recipe db-and-form')).output;
+  const optionsRecipe = (await executeHvyCliCommand(document, session, 'hvy recipe populate-form-options-from-db')).output;
   const unknown = (await executeHvyCliCommand(document, session, 'hvy recipe missing')).output;
 
   expect(list).toContain('- db-and-form');
+  expect(list).toContain('- populate-form-options-from-db');
   expect(recipe).toContain('#! DB And Form Recipe');
   expect(recipe).toContain('There is no database component to add.');
   expect(recipe).toContain('doc.db.query');
   expect(recipe).toContain('Expected result:');
-  expect(unknown).toContain('Unknown recipe "missing". Available recipes: db-and-form, form-backed-table, scripting');
+  expect(optionsRecipe).toContain('#! Populate Form Options From DB Recipe');
+  expect(optionsRecipe).toContain('doc.form.set_options');
+  expect(optionsRecipe).toContain('There is no `optionsQuery` YAML key.');
+  expect(unknown).toContain('Unknown recipe "missing". Available recipes: db-and-form, form-backed-table, populate-form-options-from-db, scripting');
 });
 
 test('hvy plugin form help explains script and submit options', async () => {
@@ -1403,6 +1408,7 @@ test('hvy plugin form help explains script and submit options', async () => {
   expect(help).toContain('--initial-script NAME\n  Store pluginConfig.initialScript=NAME');
   expect(help).toContain('--on-submit-script NAME\n  Store pluginConfig.submitScript=NAME');
   expect(help).toContain('There is no optionsQuery YAML key');
+  expect(help).toContain('hvy recipe populate-form-options-from-db');
   expect(help).toContain('Example: hvy add plugin form /chores add-chore');
   expect(help).toContain('See also: hvy cheatsheet scripting; hvy recipe scripting; man hvy plugin scripting tool TOOL_NAME');
 });

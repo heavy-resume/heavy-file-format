@@ -72,6 +72,7 @@ export function createDefaultChatState(): ChatState {
     panelOpen: false,
     requestNonce: 0,
     abortController: null,
+    cliSim: null,
   };
 }
 
@@ -82,6 +83,7 @@ export function clearChatConversation(chat: ChatState): void {
   chat.error = null;
   chat.abortController?.abort();
   chat.abortController = null;
+  chat.cliSim = null;
   chat.requestNonce += 1;
 }
 
@@ -206,6 +208,11 @@ export function renderChatPanel(
                    <p>${subtitle}</p>
                  </div>
                  <div class="chat-panel-head-actions">
+                   ${
+                    isDocumentEdit
+                      ? `<button type="button" class="ghost" data-action="prepare-chat-cli-sim"${chat.isSending || !hasDraft || missingModel ? ' disabled' : ''}>CLI Sim</button>`
+                      : ''
+                   }
                    <button type="button" class="ghost" data-action="clear-chat-history"${chat.messages.length === 0 ? ' disabled' : ''}>Clear</button>
                  </div>
                  <button type="button" class="danger chat-panel-close" data-action="toggle-chat-panel" aria-label="Close chat">×</button>
@@ -237,6 +244,7 @@ export function renderChatPanel(
                  </div>
 
                  ${chat.error ? `<div class="chat-error" role="alert">${deps.escapeHtml(chat.error)}</div>` : ''}
+                 ${chat.cliSim ? renderChatCliSimHtml(chat.cliSim, deps) : ''}
 
                  <div class="chat-thread" aria-live="polite" role="log">
                    ${
@@ -261,6 +269,41 @@ export function renderChatPanel(
       }
       <button type="button" class="chat-launcher" data-action="toggle-chat-panel" aria-expanded="${chat.panelOpen ? 'true' : 'false'}" aria-label="${chat.panelOpen ? 'Close chat' : 'Open chat'}">?</button>
     </div>
+  `;
+}
+
+function renderChatCliSimHtml(sim: NonNullable<ChatState['cliSim']>, deps: RenderChatPanelDeps): string {
+  const canRun = !!sim.requestPayload && !sim.isPreparing && !sim.isSending;
+  return `
+    <section class="chat-cli-sim" aria-label="CLI simulation">
+      <div class="chat-cli-sim-head">
+        <strong>CLI Sim</strong>
+        <button type="button" class="secondary" data-action="run-chat-cli-sim-step"${canRun ? '' : ' disabled'}>
+          ${sim.responseJson ? 'Run Again' : 'Get Response'}
+        </button>
+      </div>
+      ${sim.error ? `<div class="chat-error" role="alert">${deps.escapeHtml(sim.error)}</div>` : ''}
+      <details open>
+        <summary>Request JSON</summary>
+        <pre>${deps.escapeHtml(sim.requestJson || (sim.isPreparing ? 'Preparing...' : ''))}</pre>
+      </details>
+      ${
+        sim.responseJson
+          ? `<details open>
+               <summary>Response JSON</summary>
+               <pre>${deps.escapeHtml(sim.responseJson)}</pre>
+             </details>`
+          : ''
+      }
+      ${
+        sim.reasoningSummary
+          ? `<details>
+               <summary>Thinking summary</summary>
+               <pre>${deps.escapeHtml(sim.reasoningSummary)}</pre>
+             </details>`
+          : ''
+      }
+    </section>
   `;
 }
 

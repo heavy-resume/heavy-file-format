@@ -42,3 +42,5 @@ When assessing mistakes LLMs show in the chat interface, refrain from solving th
 When updating UI, strongly consider how scrolling would happen and whether things would constantly scroll-to-top on rerender. This happens a lot.
 
 When the user asks to investigate a problem don't jump into a solution.
+
+Under no circumstance should a log have its own code path that would deviate from what it is supposed to be logging (except, strictly, for readability mutations.) Logs should be "raw data" first. Do not create a log where the actual thing being logged is intrepetted as one thing and then the log independently interpets it as presumably the same thing. Do the interpreation, then log it. Restructure the code if that won't work.

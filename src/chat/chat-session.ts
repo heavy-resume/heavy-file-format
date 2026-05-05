@@ -1,15 +1,25 @@
-import { requestChatCompletion } from './chat';
+import { buildProxyChatRequest, requestChatCompletion } from './chat';
 import { hasDocumentDbTables } from '../plugins/db-table';
 import { runQaToolLoop } from '../ai-qa';
 import type { ChatMessage, ChatSettings, ChatTokenUsage, ChatWorkState, VisualDocument } from '../types';
 import type { VisualSection } from '../editor/types';
 import { deserializeDocumentWithDiagnostics, wrapHvyFragmentAsDocument } from '../serialization';
-import { runChatCliEditLoop, type ChatCliSelectedComponentFocus } from '../chat-cli/chat-cli-edit-loop';
+import { buildChatCliInitialProxyTurnRequest, runChatCliEditLoop, type ChatCliSelectedComponentFocus } from '../chat-cli/chat-cli-edit-loop';
 
 export interface ChatTurnResult {
   messages: ChatMessage[];
   error: string | null;
   awaitingUser?: boolean;
+}
+
+export interface DocumentEditCliSimRequest {
+  requestPayload: unknown;
+  requestJson: string;
+}
+
+export interface DocumentEditCliSimResponse {
+  responseJson: string;
+  reasoningSummary: string;
 }
 
 export function appendUserChatMessage(messages: ChatMessage[], question: string): ChatMessage[] {
@@ -257,6 +267,75 @@ export async function requestDocumentEditChatTurn(params: {
       error: message,
     };
   }
+}
+
+export async function buildDocumentEditCliSimRequest(params: {
+  settings: ChatSettings;
+  document: VisualDocument;
+  messages: ChatMessage[];
+  request: string;
+  selectedComponent?: ChatCliSelectedComponentFocus;
+  signal?: AbortSignal;
+}): Promise<DocumentEditCliSimRequest> {
+  const initial = await buildChatCliInitialProxyTurnRequest({
+    document: params.document,
+    request: params.request,
+    priorMessages: params.messages,
+    selectedComponent: params.selectedComponent,
+    signal: params.signal,
+  });
+  const requestPayload = buildProxyChatRequest({
+    provider: params.settings.provider,
+    model: params.settings.model,
+    messages: initial.messages,
+    context: initial.context,
+    formatInstructions: initial.formatInstructions,
+    mode: 'document-edit',
+    traceRunId: initial.traceRunId,
+  });
+  return {
+    requestPayload,
+    requestJson: JSON.stringify(requestPayload, null, 2),
+  };
+}
+
+export async function runDocumentEditCliSimStep(params: {
+  requestPayload: unknown;
+  signal?: AbortSignal;
+}): Promise<DocumentEditCliSimResponse> {
+  const response = await fetch('/api/chat', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(params.requestPayload),
+    signal: params.signal,
+  });
+  const payload = await readChatCliSimJsonResponse(response);
+  if (!response.ok) {
+    throw new Error(extractChatCliSimError(payload));
+  }
+  return {
+    responseJson: JSON.stringify(payload, null, 2),
+    reasoningSummary: typeof (payload as { reasoningSummary?: unknown } | null)?.reasoningSummary === 'string'
+      ? ((payload as { reasoningSummary?: string }).reasoningSummary ?? '')
+      : '',
+  };
+}
+
+async function readChatCliSimJsonResponse(response: Response): Promise<unknown> {
+  try {
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
+
+function extractChatCliSimError(payload: unknown): string {
+  if (payload && typeof payload === 'object' && typeof (payload as { error?: unknown }).error === 'string') {
+    return (payload as { error: string }).error;
+  }
+  return 'CLI sim request failed.';
 }
 
 function shouldRenderChatWorkProgress(work: ChatWorkState, message: ChatMessage): boolean {

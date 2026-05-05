@@ -31,6 +31,13 @@ export interface ChatCliEditTurnResult {
   asked?: boolean;
 }
 
+export interface ChatCliInitialTurnRequest {
+  messages: ChatMessage[];
+  context: string;
+  formatInstructions: string;
+  traceRunId: string;
+}
+
 export interface ChatCliSelectedComponentFocus {
   path: string;
   sectionTitle: string;
@@ -52,52 +59,14 @@ export async function runChatCliEditLoop(params: {
   onTokenUsage?: (usage: ChatTokenUsage) => void;
   signal?: AbortSignal;
 }): Promise<ChatCliEditTurnResult> {
-  const cli = createChatCliInterface(params.document);
-  if (params.selectedComponent?.path) {
-    cli.session.cwd = selectInitialCwdForSelectedComponent(
-      buildHvyVirtualFileSystem(params.document),
-      params.selectedComponent.path,
-      params.request
-    );
-  }
   const traceRunId = createChatCliTraceRunId();
   await writeChatCliUserQueryTrace(traceRunId, params.request, params.signal);
-  const initialRootListing = await cli.run('ls /');
-  await writeChatCliCommandTrace(traceRunId, initialRootListing.command, initialRootListing.output, params.signal);
-  const initialHvyHelp = await cli.run('hvy --help');
-  await writeChatCliCommandTrace(traceRunId, initialHvyHelp.command, initialHvyHelp.output, params.signal);
-  const initialStructure = await cli.run('hvy request_structure --collapse');
-  await writeChatCliCommandTrace(traceRunId, initialStructure.command, initialStructure.output, params.signal);
-  let diagnostics = await collectHvyCliDiagnostics(params.document);
+  const initial = await buildChatCliInitialTurnRequest({ ...params, traceRunId, writeTrace: true });
+  const cli = initial.cli;
+  let diagnostics = initial.diagnostics;
   syncIntroducedDiagnostics(params.document, diagnostics);
-  const initialLint = await cli.run('hvy lint');
-  await writeChatCliCommandTrace(traceRunId, initialLint.command, initialLint.output, params.signal);
-  const initialIntent = await cli.run(`hvy find-intent ${quoteChatCliShellArg(params.request)} --max 5`);
-  await writeChatCliCommandTrace(traceRunId, initialIntent.command, initialIntent.output, params.signal);
-  const initialSelectedPreview = params.selectedComponent?.path
-    ? await cli.run(`hvy preview ${quoteChatCliShellArg(params.selectedComponent.path)}`)
-    : null;
-  if (initialSelectedPreview) {
-    await writeChatCliCommandTrace(traceRunId, initialSelectedPreview.command, initialSelectedPreview.output, params.signal);
-  }
-  const priorConversation = selectChatCliPriorMessages(params.priorMessages ?? []);
-  const initialOutputs = [
-    initialRootListing,
-    initialHvyHelp,
-    initialStructure,
-    initialLint,
-    initialIntent,
-    ...(initialSelectedPreview ? [initialSelectedPreview] : []),
-  ];
-  let conversation: ChatMessage[] = [
-    ...priorConversation,
-    {
-      id: crypto.randomUUID(),
-      role: 'user',
-      content: params.request,
-    },
-    ...formatInitialChatCliCommandMessages(initialOutputs, cli.snapshot()),
-  ];
+  let conversation: ChatMessage[] = initial.messages;
+  let priorConversation = initial.priorConversation;
   let consecutiveCommandErrors = 0;
   let latestTokenUsage: ChatTokenUsage | null = null;
   let urgency = 0;
@@ -300,6 +269,99 @@ export async function runChatCliEditLoop(params: {
   return {
     summary: `Stopped after ${CHAT_CLI_MAX_STEPS} CLI command steps. Send another request to continue.`,
     ...(latestTokenUsage ? { tokenUsage: latestTokenUsage } : {}),
+  };
+}
+
+export async function buildChatCliInitialProxyTurnRequest(params: {
+  document: VisualDocument;
+  request: string;
+  priorMessages?: ChatMessage[];
+  selectedComponent?: ChatCliSelectedComponentFocus;
+  signal?: AbortSignal;
+}): Promise<ChatCliInitialTurnRequest> {
+  const traceRunId = createChatCliTraceRunId();
+  const initial = await buildChatCliInitialTurnRequest({ ...params, traceRunId, writeTrace: false });
+  return {
+    messages: initial.messages,
+    context: initial.context,
+    formatInstructions: initial.formatInstructions,
+    traceRunId,
+  };
+}
+
+async function buildChatCliInitialTurnRequest(params: {
+  document: VisualDocument;
+  request: string;
+  priorMessages?: ChatMessage[];
+  selectedComponent?: ChatCliSelectedComponentFocus;
+  signal?: AbortSignal;
+  traceRunId: string;
+  writeTrace: boolean;
+}): Promise<ChatCliInitialTurnRequest & {
+  cli: ReturnType<typeof createChatCliInterface>;
+  diagnostics: HvyCliDiagnosticIssue[];
+  priorConversation: ChatMessage[];
+}> {
+  const cli = createChatCliInterface(params.document);
+  if (params.selectedComponent?.path) {
+    cli.session.cwd = selectInitialCwdForSelectedComponent(
+      buildHvyVirtualFileSystem(params.document),
+      params.selectedComponent.path,
+      params.request
+    );
+  }
+  const runInitialCommand = async (command: string) => {
+    const output = await cli.run(command);
+    if (params.writeTrace) {
+      await writeChatCliCommandTrace(params.traceRunId, output.command, output.output, params.signal);
+    }
+    return output;
+  };
+  const initialRootListing = await runInitialCommand('ls /');
+  const initialHvyHelp = await runInitialCommand('hvy --help');
+  const initialStructure = await runInitialCommand('hvy request_structure --collapse');
+  const diagnostics = await collectHvyCliDiagnostics(params.document);
+  const initialLint = await runInitialCommand('hvy lint');
+  const initialIntent = await runInitialCommand(`hvy find-intent ${quoteChatCliShellArg(params.request)} --max 5`);
+  const initialSelectedPreview = params.selectedComponent?.path
+    ? await runInitialCommand(`hvy preview ${quoteChatCliShellArg(params.selectedComponent.path)}`)
+    : null;
+  const priorConversation = selectChatCliPriorMessages(params.priorMessages ?? []);
+  const initialOutputs = [
+    initialRootListing,
+    initialHvyHelp,
+    initialStructure,
+    initialLint,
+    initialIntent,
+    ...(initialSelectedPreview ? [initialSelectedPreview] : []),
+  ];
+  const messages: ChatMessage[] = [
+    ...priorConversation,
+    {
+      id: crypto.randomUUID(),
+      role: 'user',
+      content: params.request,
+    },
+    ...formatInitialChatCliCommandMessages(initialOutputs, cli.snapshot()),
+  ];
+  const context = buildChatCliLoopContext(
+    cli.snapshot(),
+    params.document,
+    params.request,
+    params.priorMessages ?? [],
+    priorConversation,
+    0,
+    getIntroducedDiagnostics(params.document),
+    params.selectedComponent
+  );
+  return {
+    cli,
+    diagnostics,
+    priorConversation,
+    messages,
+    context,
+    formatInstructions: buildChatCliLoopFormatInstructions(),
+    traceRunId: params.traceRunId,
   };
 }
 

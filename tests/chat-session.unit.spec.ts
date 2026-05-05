@@ -1,17 +1,19 @@
 import { beforeEach, expect, test, vi } from 'vitest';
 
-import { appendUserChatMessage, copyChatMessageToHvySection, requestChatTurn, requestDocumentEditChatTurn } from '../src/chat/chat-session';
+import { appendUserChatMessage, buildDocumentEditCliSimRequest, copyChatMessageToHvySection, requestChatTurn, requestDocumentEditChatTurn } from '../src/chat/chat-session';
 import { deserializeDocument, serializeDocument } from '../src/serialization';
 import type { ChatMessage, ChatSettings } from '../src/types';
 
-const { requestChatCompletionMock, requestProxyCompletionMock, runQaToolLoopMock, writeChatCliCommandTraceMock } = vi.hoisted(() => ({
+const { requestChatCompletionMock, requestProxyCompletionMock, runQaToolLoopMock, writeChatCliCommandTraceMock, writeChatCliUserQueryTraceMock } = vi.hoisted(() => ({
   requestChatCompletionMock: vi.fn(),
   requestProxyCompletionMock: vi.fn(),
   runQaToolLoopMock: vi.fn(),
   writeChatCliCommandTraceMock: vi.fn(),
+  writeChatCliUserQueryTraceMock: vi.fn(),
 }));
 
 vi.mock('../src/chat/chat', () => ({
+  buildProxyChatRequest: (request: object) => request,
   requestChatCompletion: requestChatCompletionMock,
   requestProxyCompletion: requestProxyCompletionMock,
 }));
@@ -22,7 +24,7 @@ vi.mock('../src/ai-qa', () => ({
 
 vi.mock('../src/chat-cli/chat-cli-dev-trace', () => ({
   createChatCliTraceRunId: () => 'chat-cli-test',
-  writeChatCliUserQueryTrace: vi.fn(),
+  writeChatCliUserQueryTrace: writeChatCliUserQueryTraceMock,
   writeChatCliCommandTrace: writeChatCliCommandTraceMock,
 }));
 
@@ -31,6 +33,7 @@ beforeEach(() => {
   requestProxyCompletionMock.mockReset();
   runQaToolLoopMock.mockReset();
   writeChatCliCommandTraceMock.mockReset();
+  writeChatCliUserQueryTraceMock.mockReset();
 });
 
 const DOC_WITH_DB_TABLE = `---
@@ -263,7 +266,9 @@ test('requestDocumentEditChatTurn runs the CLI edit loop for document chat', asy
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Use the chronological chat messages and terminal results to infer the active task.');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('validate edits before recording completion');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('urgency:\nscore=0\nprioritize planning and understanding');
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages).toEqual(expect.arrayContaining([
+  const firstMessages = requestProxyCompletionMock.mock.calls[0]?.[0]?.messages;
+  expect(firstMessages).toEqual([
+    expect.objectContaining({ role: 'user', content: 'Add a chore section.' }),
     expect.objectContaining({ role: 'assistant', content: '```shell\nls /\n```' }),
     expect.objectContaining({ role: 'user', content: expect.stringContaining('dir  attachments') }),
     expect.objectContaining({ role: 'assistant', content: '```shell\nhvy --help\n```' }),
@@ -274,7 +279,12 @@ test('requestDocumentEditChatTurn runs the CLI edit loop for document chat', asy
     expect.objectContaining({ role: 'user', content: '### CMD RESULT ###\nNo lint issues.\n### END CMD RESULT ###' }),
     expect.objectContaining({ role: 'assistant', content: '```shell\nhvy find-intent "Add a chore section." --max 5\n```' }),
     expect.objectContaining({ role: 'user', content: expect.stringContaining('What is your next command?') }),
-  ]));
+  ]);
+  expect(firstMessages?.at(-1)?.role).toBe('user');
+  expect(firstMessages?.at(-1)?.content).toContain('Current directory: /');
+  expect(firstMessages?.at(-1)?.content).toContain('### BEGIN /scratchpad.txt  ###\nlast edited never\n\nYou havent written your plan yet.');
+  expect(firstMessages?.at(-1)?.content.trim().endsWith('What is your next command?')).toBe(true);
+  expect(writeChatCliUserQueryTraceMock.mock.calls[0]).toEqual(['chat-cli-test', 'Add a chore section.', undefined]);
   expect(writeChatCliCommandTraceMock.mock.calls[0]).toEqual([
     'chat-cli-test',
     'ls /',
@@ -336,6 +346,51 @@ Hello
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain(
     'Document context:\nThe top skills grid is the featured skills surface; the skills section is the library.'
   );
+});
+
+test('buildDocumentEditCliSimRequest exposes the exact chronological CLI request payload', async () => {
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+  const document = deserializeDocument('---\nhvy_version: 0.1\n---\n', '.hvy');
+
+  const result = await buildDocumentEditCliSimRequest({
+    settings,
+    document,
+    messages: [],
+    request: 'Add a chore section.',
+  });
+  const payload = JSON.parse(result.requestJson) as {
+    provider: string;
+    model: string;
+    mode: string;
+    messages: ChatMessage[];
+    context: string;
+    formatInstructions: string;
+  };
+
+  expect(payload).toEqual(expect.objectContaining({
+    provider: 'openai',
+    model: 'gpt-5-mini',
+    mode: 'document-edit',
+    formatInstructions: expect.stringContaining('Return concise notes plus terminal command(s).'),
+  }));
+  expect(payload.messages).toEqual([
+    expect.objectContaining({ role: 'user', content: 'Add a chore section.' }),
+    expect.objectContaining({ role: 'assistant', content: '```shell\nls /\n```' }),
+    expect.objectContaining({ role: 'user', content: expect.stringContaining('dir  body') }),
+    expect.objectContaining({ role: 'assistant', content: '```shell\nhvy --help\n```' }),
+    expect.objectContaining({ role: 'user', content: expect.stringContaining('hvy add section PARENT_PATH ID TITLE') }),
+    expect.objectContaining({ role: 'assistant', content: '```shell\nhvy request_structure --collapse\n```' }),
+    expect.objectContaining({ role: 'user', content: expect.stringContaining('Components:') }),
+    expect.objectContaining({ role: 'assistant', content: '```shell\nhvy lint\n```' }),
+    expect.objectContaining({ role: 'user', content: '### CMD RESULT ###\nNo lint issues.\n### END CMD RESULT ###' }),
+    expect.objectContaining({ role: 'assistant', content: '```shell\nhvy find-intent "Add a chore section." --max 5\n```' }),
+    expect.objectContaining({ role: 'user', content: expect.stringContaining('What is your next command?') }),
+  ]);
+  expect(payload.messages.at(-1)?.content).toContain('### BEGIN /scratchpad.txt  ###\nlast edited never\n\nYou havent written your plan yet.');
+  expect(payload.messages.at(-1)?.content.trim().endsWith('What is your next command?')).toBe(true);
+  expect(result.requestJson).toContain('"content": "```shell\\nls /\\n```"');
+  expect(writeChatCliCommandTraceMock).not.toHaveBeenCalled();
+  expect(writeChatCliUserQueryTraceMock).not.toHaveBeenCalled();
 });
 
 test('requestDocumentEditChatTurn can focus the CLI loop on a selected component', async () => {

@@ -88,3 +88,34 @@ hvy_version: 0.1
   expect(html).toContain('Working through the request...');
   expect(html).toContain('data-action="cancel-chat-request"');
 });
+
+test('renderChatPanel shows CLI sim request, response, and thinking summary', () => {
+  const chat = createDefaultChatState();
+  chat.panelOpen = true;
+  chat.draft = 'Add a chore section.';
+  chat.cliSim = {
+    requestPayload: { messages: [] },
+    requestJson: '{\n  "messages": []\n}',
+    responseJson: '{\n  "output": "done Added it."\n}',
+    reasoningSummary: 'Checked the structure, then edited.',
+    isPreparing: false,
+    isSending: false,
+    error: null,
+  };
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+`, '.hvy');
+
+  const html = renderChatPanel(chat, document, deps, 'document-edit');
+
+  expect(html).toContain('data-action="prepare-chat-cli-sim"');
+  expect(html).toContain('CLI Sim');
+  expect(html).toContain('Request JSON');
+  expect(html).toContain('"messages": []');
+  expect(html).toContain('Response JSON');
+  expect(html).toContain('"output": "done Added it."');
+  expect(html).toContain('Thinking summary');
+  expect(html).toContain('Checked the structure, then edited.');
+  expect(html).toContain('data-action="run-chat-cli-sim-step"');
+});

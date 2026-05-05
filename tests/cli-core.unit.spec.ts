@@ -451,7 +451,7 @@ test('cli echo supports shell-style redirection to writable virtual files', asyn
   const session = createHvyCliSession();
 
   expect((await executeHvyCliCommand(document, session, 'ls /')).output).toContain('file scratchpad.txt');
-  expect((await executeHvyCliCommand(document, session, 'cat /scratchpad.txt')).output).toContain('No task notes yet.');
+  expect((await executeHvyCliCommand(document, session, 'cat /scratchpad.txt')).output).toContain('You havent written your plan yet.');
   expect((await executeHvyCliCommand(document, session, 'echo "Task note" >> scratchpad.txt')).output).toBe('/scratchpad.txt: appended');
   expect((await executeHvyCliCommand(document, session, 'cat scratchpad.txt')).output).toContain('Task note');
 

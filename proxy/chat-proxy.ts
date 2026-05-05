@@ -759,10 +759,22 @@ export function formatAiCliMessagesLogEvent(event: TraceEvent): string {
   if (!event.runId.startsWith('chat-cli-')) {
     return '';
   }
-  if (event.type === 'request_context' || event.type === 'provider_request' || event.type === 'provider_response' || event.type === 'model_response') {
+  if (event.type === 'request_context') {
+    return formatAiCliLogBlock(['client_request', formatJsonForAiCliMessagesLog(event.payload)]);
+  }
+  if (event.type === 'provider_request') {
+    return formatAiCliLogBlock(['provider_request', formatJsonForAiCliMessagesLog(event.payload.request)]);
+  }
+  if (event.type === 'provider_response') {
+    return formatAiCliLogBlock(['provider_response', formatJsonForAiCliMessagesLog(event.payload)]);
+  }
+  if (event.type === 'model_response') {
     return formatAiCliLogBlock([
-      `${event.type} readable`,
-      formatReadableTraceEvent(event),
+      'model_response',
+      formatJsonForAiCliMessagesLog({
+        response: event.payload.response,
+        reasoningSummary: event.payload.reasoningSummary,
+      }),
     ]);
   }
   return '';
@@ -772,52 +784,8 @@ function formatAiCliLogBlock(lines: string[]): string {
   return ['--------', ...lines].join('\n').trimEnd() + '\n';
 }
 
-function formatReadableTraceEvent(event: TraceEvent): string {
-  return formatReadableValue({
-    runId: event.runId,
-    phase: event.phase,
-    type: event.type,
-    payload: event.payload,
-  });
-}
-
-function formatReadableUnknown(value: unknown): string {
+function formatJsonForAiCliMessagesLog(value: unknown): string {
   return JSON.stringify(value, null, 2) ?? String(value);
-}
-
-function formatReadableValue(value: unknown, indent = 0): string {
-  const space = ' '.repeat(indent);
-  const childSpace = ' '.repeat(indent + 2);
-  if (typeof value === 'string') {
-    return `"${value}"`;
-  }
-  if (typeof value === 'number' || typeof value === 'boolean' || value === null) {
-    return JSON.stringify(value);
-  }
-  if (Array.isArray(value)) {
-    if (value.length === 0) {
-      return '[]';
-    }
-    return [
-      '[',
-      ...value.map((item, index) => `${childSpace}${formatReadableValue(item, indent + 2)}${index === value.length - 1 ? '' : ','}`),
-      `${space}]`,
-    ].join('\n');
-  }
-  if (value && typeof value === 'object') {
-    const entries = Object.entries(value as Record<string, unknown>).filter(([, entry]) => entry !== undefined);
-    if (entries.length === 0) {
-      return '{}';
-    }
-    return [
-      '{',
-      ...entries.map(([key, entry], index) =>
-        `${childSpace}"${key}": ${formatReadableValue(entry, indent + 2)}${index === entries.length - 1 ? '' : ','}`
-      ),
-      `${space}}`,
-    ].join('\n');
-  }
-  return formatReadableUnknown(value);
 }
 
 function summarizeTracePayload(event: TraceEvent): string {

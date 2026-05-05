@@ -43,6 +43,16 @@ export interface ChatWorkState {
   tokenUsage?: ChatTokenUsage;
 }
 
+export interface ChatCliSimState {
+  requestPayload: unknown | null;
+  requestJson: string;
+  responseJson: string;
+  reasoningSummary: string;
+  isPreparing: boolean;
+  isSending: boolean;
+  error: string | null;
+}
+
 export interface ChatSettings {
   provider: ChatProvider;
   model: string;
@@ -57,6 +67,7 @@ export interface ChatState {
   panelOpen: boolean;
   requestNonce: number;
   abortController: AbortController | null;
+  cliSim: ChatCliSimState | null;
 }
 
 export interface AiEditState {

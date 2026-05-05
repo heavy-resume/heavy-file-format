@@ -613,12 +613,7 @@ function updateScratchpadCommandHistory(session: HvyCliSession, input: string): 
 }
 
 function defaultScratchpadContent(): string {
-  return [
-    'No task notes yet.',
-    'Write concise notes here after you understand the request.',
-    'Track what changed, what remains, and validation results.',
-    '',
-  ].join('\n');
+  return 'You havent written your plan yet.\n';
 }
 
 function enforceScratchpadHardCap(session: HvyCliSession): void {

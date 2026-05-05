@@ -3,7 +3,7 @@ import type { ComponentRenderHelpers } from './editor/component-helpers';
 import type { TagRenderOptions } from './editor/tag-editor';
 import { parseTags, serializeTags } from './editor/tag-editor';
 import { state, getRefreshReaderPanels, getRenderApp } from './state';
-import { getReusableNameFromSectionKey, getComponentDefs, renderComponentOptions } from './component-defs';
+import { getReusableNameFromSectionKey, getComponentDefs, renderComponentOptions, resolveBaseComponent } from './component-defs';
 import { findSectionByKey, findBlockContainerById, moveBlockInVisualSequence } from './section-ops';
 import { getReusableTemplateByName, ensureContainerBlocks, ensureComponentListBlocks, ensureGridItems, applyComponentDefaults, instantiateReusableBlock, coerceAlign, coerceSlot } from './document-factory';
 import { syncReusableTemplateForBlock } from './reusable';
@@ -43,29 +43,33 @@ function findSqliteRowComponentBlock(sectionKey: string, blockId: string): Visua
   return findBlockInList(modal.blocks, blockId);
 }
 
-export function findBlockInList(blocks: VisualBlock[], blockId: string): VisualBlock | null {
+export function findBlockInList(blocks: VisualBlock[], blockId: string, seen = new Set<VisualBlock>()): VisualBlock | null {
   for (const block of blocks) {
+    if (seen.has(block)) {
+      continue;
+    }
+    seen.add(block);
     if (block.id === blockId) {
       return block;
     }
-    const nestedContainer = findBlockInList(block.schema.containerBlocks ?? [], blockId);
+    const nestedContainer = findBlockInList(block.schema.containerBlocks ?? [], blockId, seen);
     if (nestedContainer) {
       return nestedContainer;
     }
-    const nestedComponentList = findBlockInList(block.schema.componentListBlocks ?? [], blockId);
+    const nestedComponentList = findBlockInList(block.schema.componentListBlocks ?? [], blockId, seen);
     if (nestedComponentList) {
       return nestedComponentList;
     }
-    const nestedExpandableStub = findBlockInList(block.schema.expandableStubBlocks?.children ?? [], blockId);
+    const nestedExpandableStub = findBlockInList(block.schema.expandableStubBlocks?.children ?? [], blockId, seen);
     if (nestedExpandableStub) {
       return nestedExpandableStub;
     }
-    const nestedExpandableContent = findBlockInList(block.schema.expandableContentBlocks?.children ?? [], blockId);
+    const nestedExpandableContent = findBlockInList(block.schema.expandableContentBlocks?.children ?? [], blockId, seen);
     if (nestedExpandableContent) {
       return nestedExpandableContent;
     }
     for (const item of block.schema.gridItems ?? []) {
-      const nestedGridBlock = findBlockInList([item.block], blockId);
+      const nestedGridBlock = findBlockInList([item.block], blockId, seen);
       if (nestedGridBlock) {
         return nestedGridBlock;
       }
@@ -108,27 +112,31 @@ function getEditorBlockPathIds(sectionKey: string, blockId: string): string[] | 
   return section ? findBlockPathInList(section.blocks, blockId) : null;
 }
 
-export function removeBlockFromList(blocks: VisualBlock[], blockId: string): boolean {
+export function removeBlockFromList(blocks: VisualBlock[], blockId: string, seen = new Set<VisualBlock>()): boolean {
   const index = blocks.findIndex((candidate) => candidate.id === blockId);
   if (index >= 0) {
     blocks.splice(index, 1);
     return true;
   }
   for (const block of blocks) {
-    if (removeBlockFromList(block.schema.containerBlocks ?? [], blockId)) {
+    if (seen.has(block)) {
+      continue;
+    }
+    seen.add(block);
+    if (removeBlockFromList(block.schema.containerBlocks ?? [], blockId, seen)) {
       return true;
     }
-    if (removeBlockFromList(block.schema.componentListBlocks ?? [], blockId)) {
+    if (removeBlockFromList(block.schema.componentListBlocks ?? [], blockId, seen)) {
       return true;
     }
-    if (removeBlockFromList(block.schema.expandableStubBlocks?.children ?? [], blockId)) {
+    if (removeBlockFromList(block.schema.expandableStubBlocks?.children ?? [], blockId, seen)) {
       return true;
     }
-    if (removeBlockFromList(block.schema.expandableContentBlocks?.children ?? [], blockId)) {
+    if (removeBlockFromList(block.schema.expandableContentBlocks?.children ?? [], blockId, seen)) {
       return true;
     }
     for (const item of block.schema.gridItems ?? []) {
-      if (removeBlockFromList([item.block], blockId)) {
+      if (removeBlockFromList([item.block], blockId, seen)) {
         return true;
       }
     }
@@ -493,9 +501,71 @@ export function setActiveEditorBlock(sectionKey: string, blockId: string): void 
     : null;
   const nextPath = getEditorBlockPathIds(sectionKey, blockId);
   state.activeEditorBlock = { sectionKey, blockId };
+  openExpandableEditorPanelsToBlock(sectionKey, blockId);
   state.pendingEditorActivation = shouldRevealEditorActivationPath(currentPath, nextPath)
     ? { sectionKey, blockId }
     : null;
+}
+
+function openExpandableEditorPanelsToBlock(sectionKey: string, blockId: string): void {
+  const rootBlocks = getEditorRootBlocks(sectionKey);
+  if (!rootBlocks) {
+    return;
+  }
+  openExpandableEditorPanelsInList(sectionKey, rootBlocks, blockId);
+}
+
+function getEditorRootBlocks(sectionKey: string): VisualBlock[] | null {
+  const sqliteRowComponentModal = state.sqliteRowComponentModal;
+  if (sqliteRowComponentModal?.sectionKey === sectionKey) {
+    return sqliteRowComponentModal.blocks;
+  }
+  const reusableName = getReusableNameFromSectionKey(sectionKey);
+  if (reusableName) {
+    const template = getReusableTemplateByName(reusableName);
+    return template ? [template] : null;
+  }
+  const section = findSectionByKey(state.document.sections, sectionKey);
+  return section?.blocks ?? null;
+}
+
+function openExpandableEditorPanelsInList(sectionKey: string, blocks: VisualBlock[], targetBlockId: string): boolean {
+  for (const block of blocks) {
+    if (block.id === targetBlockId) {
+      return true;
+    }
+
+    if (resolveBaseComponent(block.schema.component) === 'expandable') {
+      if (openExpandableEditorPanelsInList(sectionKey, block.schema.expandableStubBlocks?.children ?? [], targetBlockId)) {
+        setExpandableEditorPanelOpen(sectionKey, block.id, 'stub');
+        return true;
+      }
+      if (openExpandableEditorPanelsInList(sectionKey, block.schema.expandableContentBlocks?.children ?? [], targetBlockId)) {
+        setExpandableEditorPanelOpen(sectionKey, block.id, 'expanded');
+        return true;
+      }
+    }
+
+    if (openExpandableEditorPanelsInList(sectionKey, block.schema.containerBlocks ?? [], targetBlockId)) {
+      return true;
+    }
+    if (openExpandableEditorPanelsInList(sectionKey, block.schema.componentListBlocks ?? [], targetBlockId)) {
+      return true;
+    }
+    if (openExpandableEditorPanelsInList(sectionKey, (block.schema.gridItems ?? []).map((item) => item.block), targetBlockId)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function setExpandableEditorPanelOpen(sectionKey: string, blockId: string, panel: 'stub' | 'expanded'): void {
+  const key = `${sectionKey}:${blockId}`;
+  const current = state.expandableEditorPanels[key] ?? { stubOpen: false, expandedOpen: false };
+  state.expandableEditorPanels[key] = {
+    ...current,
+    [panel === 'stub' ? 'stubOpen' : 'expandedOpen']: true,
+  };
 }
 
 function shouldRevealEditorActivationPath(currentPath: string[] | null, nextPath: string[] | null): boolean {

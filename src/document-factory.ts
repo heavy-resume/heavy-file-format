@@ -51,18 +51,22 @@ export function defaultBlockSchema(component = 'text'): BlockSchema {
   };
 }
 
-export function parseExpandablePart(raw: unknown): ExpandablePart {
+export function parseExpandablePart(raw: unknown, seen = new WeakSet<object>()): ExpandablePart {
   // New format: { lock: boolean, children: VisualBlock[] }
   if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    if (seen.has(raw)) {
+      return { lock: false, children: [] };
+    }
+    seen.add(raw);
     const obj = raw as JsonObject;
     return {
       lock: obj.lock === true,
-      children: Array.isArray(obj.children) ? obj.children.map((b) => parseVisualBlock(b)) : [],
+      children: Array.isArray(obj.children) ? obj.children.map((b) => parseVisualBlock(b, seen)) : [],
     };
   }
   // Backward compat: old flat array format
   if (Array.isArray(raw)) {
-    return { lock: false, children: raw.map((b) => parseVisualBlock(b)) };
+    return { lock: false, children: raw.map((b) => parseVisualBlock(b, seen)) };
   }
   return { lock: false, children: [] };
 }
@@ -89,17 +93,21 @@ export function coerceSlot(value: string): Slot {
   return 'center';
 }
 
-export function parseVisualBlock(candidate: unknown): VisualBlock {
+export function parseVisualBlock(candidate: unknown, seen = new WeakSet<object>()): VisualBlock {
   if (!candidate || typeof candidate !== 'object') {
     return createEmptyBlock('container', true);
   }
+  if (seen.has(candidate)) {
+    return createEmptyBlock('container', true);
+  }
+  seen.add(candidate);
   const raw = candidate as JsonObject;
   // Shorthand: { component: 'name' } without a 'schema' wrapper.
   // Instantiate from the component def template so all nested content (titles, blocks, etc.) is populated.
   if (!raw.schema && typeof raw.component === 'string') {
     return createEmptyBlock(raw.component);
   }
-  const schema = schemaFromUnknown(raw.schema);
+  const schema = schemaFromUnknown(raw.schema, seen);
   return {
     id: typeof raw.id === 'string' ? raw.id : makeId('block'),
     text: typeof raw.text === 'string' ? raw.text : '',
@@ -108,16 +116,21 @@ export function parseVisualBlock(candidate: unknown): VisualBlock {
   };
 }
 
-export function schemaFromUnknown(value: unknown): BlockSchema {
+export function schemaFromUnknown(value: unknown, seen = new WeakSet<object>()): BlockSchema {
   if (!value || typeof value !== 'object') {
     return defaultBlockSchema('text');
   }
+  if (seen.has(value)) {
+    return defaultBlockSchema('container');
+  }
+  seen.add(value);
   const candidate = value as JsonObject;
   const component = typeof candidate.component === 'string' ? candidate.component : 'text';
   const defaults = defaultBlockSchema(component);
   const rows = Array.isArray(candidate.tableRows) ? candidate.tableRows : [];
   const gridColumns = coerceGridColumns(candidate.gridColumns ?? candidate.gridTemplateColumns);
-  const parsedGridItems = _parseGridItems(candidate, gridColumns, component, _createBlockSkip, parseVisualBlock);
+  const parseNestedVisualBlock = (raw: unknown): VisualBlock => parseVisualBlock(raw, seen);
+  const parsedGridItems = _parseGridItems(candidate, gridColumns, component, _createBlockSkip, parseNestedVisualBlock);
   return {
     component,
     id: typeof candidate.id === 'string' ? candidate.id : defaults.id,
@@ -127,14 +140,14 @@ export function schemaFromUnknown(value: unknown): BlockSchema {
     css: typeof candidate.css === 'string' ? candidate.css : defaults.css,
     codeLanguage: typeof candidate.codeLanguage === 'string' ? candidate.codeLanguage : defaults.codeLanguage,
     containerBlocks: Array.isArray(candidate.containerBlocks)
-      ? candidate.containerBlocks.map((block) => parseVisualBlock(block))
+      ? candidate.containerBlocks.map((block) => parseVisualBlock(block, seen))
       : [],
     componentListComponent:
       typeof candidate.componentListComponent === 'string' ? candidate.componentListComponent : defaults.componentListComponent,
     componentListItemLabel:
       typeof candidate.componentListItemLabel === 'string' ? candidate.componentListItemLabel : defaults.componentListItemLabel,
     componentListBlocks: Array.isArray(candidate.componentListBlocks)
-      ? candidate.componentListBlocks.map((block) => parseVisualBlock(block))
+      ? candidate.componentListBlocks.map((block) => parseVisualBlock(block, seen))
       : [],
     gridColumns,
     gridItems: parsedGridItems,
@@ -159,14 +172,14 @@ export function schemaFromUnknown(value: unknown): BlockSchema {
       typeof candidate.expandableStubCss === 'string'
         ? candidate.expandableStubCss
         : readExpandablePartCss(candidate.expandableStubBlocks) || defaults.expandableStubCss,
-    expandableStubBlocks: parseExpandablePart(candidate.expandableStubBlocks),
+    expandableStubBlocks: parseExpandablePart(candidate.expandableStubBlocks, seen),
     expandableAlwaysShowStub: candidate.expandableAlwaysShowStub !== false,
     expandableExpanded: candidate.expandableExpanded === true,
     expandableContentCss:
       typeof candidate.expandableContentCss === 'string'
         ? candidate.expandableContentCss
         : readExpandablePartCss(candidate.expandableContentBlocks) || defaults.expandableContentCss,
-    expandableContentBlocks: parseExpandablePart(candidate.expandableContentBlocks),
+    expandableContentBlocks: parseExpandablePart(candidate.expandableContentBlocks, seen),
     tableColumns: typeof candidate.tableColumns === 'string' ? candidate.tableColumns : defaults.tableColumns,
     tableShowHeader: candidate.tableShowHeader !== false,
     tableRows: rows.map((row) => {

@@ -1244,6 +1244,8 @@
   background: var(--hvy-surface-alt);
   padding: 0.6rem;
   margin-bottom: 0.7rem;
+  display: grid;
+  gap: 0.65rem;
 }
 
 .template-title {
@@ -1271,6 +1273,30 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.meta-panel label:not(.checkbox-label) {
+  display: grid;
+  gap: 0.24rem;
+  min-width: 0;
+  font-size: 0.9rem;
+}
+
+.meta-panel input:not([type='checkbox']),
+.meta-panel textarea {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--hvy-border-input);
+  border-radius: 7px;
+  padding: 0.44rem;
+  background: var(--hvy-surface);
+  color: var(--hvy-text);
+  font: inherit;
+}
+
+.meta-panel textarea {
+  min-height: 5.5rem;
+  resize: vertical;
 }
 
 .schema-editor,

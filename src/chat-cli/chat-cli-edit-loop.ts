@@ -293,7 +293,7 @@ function buildChatCliLoopContext(
     ...(omittedMessageCount > 0 ? ['', `Earlier chat omitted: ${omittedMessageCount} message${omittedMessageCount === 1 ? '' : 's'}.`] : []),
     '',
     'Use the chronological chat messages and terminal results to infer the active task. If you lose the thread or need a choice from the user, use `ask QUESTION`.',
-    ...(selectedComponent ? ['', 'Selected component focus:', formatSelectedComponentFocus(selectedComponent)] : []),
+    ...(selectedComponent ? ['', 'Selected component focus:', formatSelectedComponentFocus(selectedComponent, request)] : []),
     '',
     `Current directory: ${snapshot.cwd}`,
     '',
@@ -314,16 +314,35 @@ function buildChatCliLoopContext(
   ].join('\n');
 }
 
-function formatSelectedComponentFocus(focus: ChatCliSelectedComponentFocus): string {
+function formatSelectedComponentFocus(focus: ChatCliSelectedComponentFocus, request: string): string {
+  const parentPath = getParentVirtualPath(focus.path);
   return [
     `Path: ${focus.path}`,
+    `Parent path: ${parentPath}`,
     `Section: ${focus.sectionTitle}`,
     `Component: ${focus.component}`,
     `Base component: ${focus.baseComponent}`,
     `Schema ID: ${focus.schemaId || '(none)'}`,
     ...(focus.guidance?.trim() ? ['Component guidance:', focus.guidance.trim()] : []),
-    'Start from this component path. Prefer editing this component unless the user request clearly requires related components.',
+    'You are currently in the directory representing the component to change, or possibly next to or near the component to change, or an example of a component you would add.',
+    isAddLikeSelectedComponentRequest(request)
+      ? 'This request appears to add a new item. Do not overwrite the selected component. Inspect the parent path and add a sibling or nearby child in the appropriate container.'
+      : 'Prefer editing this component only when the request is asking to change, remove, or refine the selected component itself.',
   ].join('\n');
+}
+
+function getParentVirtualPath(path: string): string {
+  const normalized = path.replace(/\/+$/, '');
+  const index = normalized.lastIndexOf('/');
+  if (index <= 0) {
+    return '/';
+  }
+  return normalized.slice(0, index);
+}
+
+function isAddLikeSelectedComponentRequest(request: string): boolean {
+  return /\b(add|create|insert|append|new|another|additional)\b/i.test(request)
+    && !/\b(replace|rewrite|rename|change this|update this|modify this|remove this|delete this)\b/i.test(request);
 }
 
 function formatInitialChatCliCommandMessages(

@@ -377,8 +377,10 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const isActivatingPath = state.pendingEditorActivation?.sectionKey === sectionKey && activationPathIndex >= 0;
     const activationStyle = isActivatingPath ? ` style="--editor-activation-delay: ${activationPathIndex * 150}ms;"` : '';
     const activationAttrs = isActiveSelf ? ` data-active-editor-block="true" data-active-block-id="${deps.escapeAttr(block.id)}"` : '';
-    const blockMove = getBlockMoveAvailability(sectionKey, block.id, rootSections ?? []);
-    const canRemove = !parentLocked;
+    const blockMove = isActiveSelf
+      ? getBlockMoveAvailability(sectionKey, block.id, rootSections ?? [])
+      : { canMoveUp: false, canMoveDown: false };
+    const canRemove = isActiveSelf && !parentLocked;
     const placement = state.componentPlacement;
     const isPlacementSource = placement?.sectionKey === sectionKey && placement.blockId === block.id;
     const placementActions = canRemove
@@ -399,11 +401,11 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
             <strong class="editor-block-title">${deps.escapeHtml(componentLabel)}</strong>
           </div>
           <div class="editor-actions">
-            ${placementActions}
+            ${isActiveSelf ? placementActions : ''}
             <button type="button" class="ghost" data-action="deactivate-block" data-section-key="${deps.escapeAttr(
       sectionKey
     )}" data-block-id="${deps.escapeAttr(block.id)}">Done</button>
-            ${state.showAdvancedEditor
+            ${state.showAdvancedEditor && isActiveSelf
         ? `<button type="button" class="ghost" data-action="open-save-component-def" data-section-key="${deps.escapeAttr(
           sectionKey
         )}" data-block-id="${deps.escapeAttr(block.id)}">Reusable</button>

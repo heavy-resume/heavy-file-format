@@ -369,8 +369,9 @@ Hello world
   expect(result.error).toBeNull();
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Selected component focus:');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Path: /body/summary/intro');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Parent path: /body/summary');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Current directory: /body/summary/intro');
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Start from this component path.');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('currently in the directory representing the component to change');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages).toEqual(expect.arrayContaining([
     expect.objectContaining({ role: 'assistant', content: '```shell\nhvy preview .\n```' }),
     expect.objectContaining({ role: 'user', content: expect.stringContaining('Component preview (raw HVY, first 25 lines):') }),
@@ -378,6 +379,41 @@ Hello world
   ]));
   expect(writeChatCliCommandTraceMock.mock.calls.map((call) => call[1])).not.toContain('cd "/body/summary/intro"');
   expect(writeChatCliCommandTraceMock.mock.calls.map((call) => call[1])).toContain('hvy preview .');
+});
+
+test('requestDocumentEditChatTurn treats selected components as examples for add requests', async () => {
+  requestProxyCompletionMock.mockResolvedValueOnce('done Added a sibling list item.');
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:component-list {"id":"items"}-->
+  <!--hvy:text {"id":"existing"}-->
+  Existing item
+`, '.hvy');
+
+  const result = await requestDocumentEditChatTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Add another list item about shipping.',
+    selectedComponent: {
+      path: '/body/summary/items/component-list/existing',
+      sectionTitle: 'Summary',
+      component: 'text',
+      baseComponent: 'text',
+      schemaId: 'existing',
+    },
+  });
+
+  expect(result.error).toBeNull();
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Parent path: /body/summary/items/component-list');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('This request appears to add a new item.');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Do not overwrite the selected component.');
 });
 
 test('requestDocumentEditChatTurn trims old cli conversation messages while keeping stable context', async () => {

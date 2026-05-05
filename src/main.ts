@@ -148,10 +148,12 @@ function renderAiEditPopover(): string {
   if (!state.aiEdit.sectionKey || !state.aiEdit.blockId) {
     return '';
   }
+  if (state.aiEdit.isSending) {
+    return '';
+  }
 
   const popupStyle = `left: ${state.aiEdit.popupX}px; top: ${state.aiEdit.popupY}px;`;
   const providerLabel = state.chat.settings.provider === 'openai' ? 'OpenAI' : 'Anthropic';
-  const canSend = !state.aiEdit.isSending;
 
   return `
     <section class="ai-edit-popover" style="${escapeAttr(popupStyle)}" aria-label="Request AI component changes">
@@ -164,7 +166,7 @@ function renderAiEditPopover(): string {
       <div class="ai-edit-settings">
         <label class="chat-setting">
           <span>Provider</span>
-          <select data-field="ai-provider" aria-label="AI edit provider" ${state.aiEdit.isSending ? 'disabled' : ''}>
+          <select data-field="ai-provider" aria-label="AI edit provider">
             <option value="openai"${state.chat.settings.provider === 'openai' ? ' selected' : ''}>OpenAI</option>
             <option value="anthropic"${state.chat.settings.provider === 'anthropic' ? ' selected' : ''}>Anthropic</option>
           </select>
@@ -181,7 +183,6 @@ function renderAiEditPopover(): string {
             autocomplete="off"
             spellcheck="false"
             aria-label="AI edit model"
-            ${state.aiEdit.isSending ? 'disabled' : ''}
           />
         </label>
       </div>
@@ -189,17 +190,11 @@ function renderAiEditPopover(): string {
       <form id="aiEditComposer" class="ai-edit-composer">
         <label class="chat-composer-field">
           <span>Change request</span>
-          <textarea data-field="ai-edit-input" rows="5" placeholder="Describe what should change in this component..." ${state.aiEdit.isSending ? 'disabled' : ''}>${escapeHtml(state.aiEdit.draft)}</textarea>
+          <textarea data-field="ai-edit-input" rows="5" placeholder="Describe what should change in this component...">${escapeHtml(state.aiEdit.draft)}</textarea>
         </label>
         <div class="chat-composer-actions">
-          <span class="chat-composer-status">
-            ${
-              state.aiEdit.isSending
-                ? 'Waiting for updated component...'
-                : 'Describe the change you want, then send.'
-            }
-          </span>
-          <button type="submit" class="secondary"${canSend ? '' : ' disabled'}>${state.aiEdit.isSending ? 'Sending...' : 'Send'}</button>
+          <span class="chat-composer-status">Describe the change you want, then send.</span>
+          <button type="submit" class="secondary">Send</button>
         </div>
       </form>
     </section>

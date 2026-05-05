@@ -265,7 +265,7 @@ function buildChatCliLoopContext(
     'AI-introduced lint issues:',
     formatIntroducedLintIssuesForModel(introducedLintIssues),
     '',
-    'Valid commands:',
+    'Valid commands (in order of preference):',
     snapshot.commandSummary,
     '',
     'Persistent instructions:',
@@ -350,7 +350,7 @@ function buildChatCliLoopFormatInstructions(): string {
   return [
     'Return terminal command(s) as plain text, or fenced in ```shell. Multiple ```shell blocks are allowed and run in order.',
     'To finish, return only: done Short summary of what changed.',
-    'To ask for requirements, NOT CLI clarification from the non-technical user, return: ask Question for the user.',
+    'To ask for requirements, NOT CLI clarification from the non-technical user, return: ask followed by the actual question.',
     'Do not include done with commands. Run commands, inspect the result, then finish in a later response.',
     'Do not return prose or markdown explanations.',
   ].join('\n');
@@ -371,6 +371,9 @@ function parseChatCliAction(response: string): { kind: 'command'; commands: stri
   }
   if (/^ask\b/i.test(command)) {
     const question = command.replace(/^ask[:\s-]*/i, '').trim();
+    if (/^question for the user[.?]?$/i.test(question)) {
+      return { kind: 'invalid', message: 'Replace the ask placeholder with the actual question, or run a command. Do not return `ask Question for the user` literally.' };
+    }
     return question
       ? { kind: 'ask', question }
       : { kind: 'invalid', message: 'Expected `ask Question for the user`.' };

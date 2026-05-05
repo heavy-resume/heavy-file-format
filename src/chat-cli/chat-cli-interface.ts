@@ -1,7 +1,7 @@
 import {
   createHvyCliSession,
   executeHvyCliCommand,
-  getHvyCliCommandSummary,
+  getHvyCliPreferredCommandSummary,
   type HvyCliExecution,
   type HvyCliSession,
 } from '../cli-core/commands';
@@ -35,7 +35,7 @@ export function createChatCliInterface(document: VisualDocument, session: HvyCli
     snapshot(): ChatCliSnapshot {
       return {
         cwd: session.cwd,
-        commandSummary: getHvyCliCommandSummary(),
+        commandSummary: getHvyCliPreferredCommandSummary(),
         scratchpad: session.scratchpadContent ?? '',
         scratchpadEdited: session.scratchpadEdited ?? false,
         scratchpadCommandsSinceEdit: session.scratchpadCommandsSinceEdit ?? [],

@@ -251,7 +251,7 @@ test('requestDocumentEditChatTurn runs the CLI edit loop for document chat', asy
       settings,
       mode: 'document-edit',
       debugLabel: 'chat-cli-edit:1',
-      context: expect.stringContaining('Valid commands:\nCommands: cd, pwd, ls, cat, head, tail, nl, find, rg, grep, sort, uniq, wc, tr, xargs, cp, rm, echo, sed, true, hvy. Ask: ask QUESTION. Finish: done SUMMARY.'),
+      context: expect.stringContaining('Valid commands (in order of preference):\nCommands: hvy, nl, rg, find, sed, echo, cat, ls, pwd, cd, cp, rm, grep, sort, uniq, wc, tr, xargs, head, tail, true. Ask: ask QUESTION. Finish: done SUMMARY.'),
       formatInstructions: expect.stringContaining('Return terminal command(s)'),
     })
   );
@@ -264,7 +264,7 @@ test('requestDocumentEditChatTurn runs the CLI edit loop for document chat', asy
     expect.objectContaining({ role: 'assistant', content: '```shell\nls /\n```' }),
     expect.objectContaining({ role: 'user', content: expect.stringContaining('dir  attachments') }),
     expect.objectContaining({ role: 'assistant', content: '```shell\nhvy --help\n```' }),
-    expect.objectContaining({ role: 'user', content: expect.stringContaining('Recipes:\n- db-and-form\n- form-backed-table\n- scripting') }),
+    expect.objectContaining({ role: 'user', content: expect.stringContaining('Recipes:\n- db-and-form\n- form-backed-table\n- populate-form-options-from-db\n- scripting') }),
     expect.objectContaining({ role: 'assistant', content: '```shell\nhvy request_structure --collapse\n```' }),
     expect.objectContaining({ role: 'user', content: expect.stringContaining('Components:') }),
     expect.objectContaining({ role: 'assistant', content: '```shell\nhvy lint\n```' }),
@@ -332,7 +332,7 @@ test('requestDocumentEditChatTurn trims old cli conversation messages while keep
   ).toBeLessThanOrEqual(6000);
   expect(JSON.stringify(requestProxyCompletionMock.mock.calls[4]?.[0]?.messages)).not.toContain('x'.repeat(2500));
   expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.context).toContain(
-    'Valid commands:\nCommands: cd, pwd, ls, cat, head, tail, nl, find, rg, grep, sort, uniq, wc, tr, xargs, cp, rm, echo, sed, true, hvy. Ask: ask QUESTION. Finish: done SUMMARY.'
+    'Valid commands (in order of preference):\nCommands: hvy, nl, rg, find, sed, echo, cat, ls, pwd, cd, cp, rm, grep, sort, uniq, wc, tr, xargs, head, tail, true. Ask: ask QUESTION. Finish: done SUMMARY.'
   );
   expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.context).toContain('Current request:\nCheck the document with several commands.');
   expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.context).toContain('scratchpad.txt:');
@@ -359,6 +359,25 @@ test('requestDocumentEditChatTurn returns ask commands as clarification question
     content: 'Which section should I update?',
   }));
   expect(onMutation).not.toHaveBeenCalled();
+});
+
+test('requestDocumentEditChatTurn retries when ask placeholder is returned literally', async () => {
+  requestProxyCompletionMock
+    .mockResolvedValueOnce('ask Question for the user')
+    .mockResolvedValueOnce('ask Which section should I update?');
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+  const document = deserializeDocument('---\nhvy_version: 0.1\n---\n', '.hvy');
+
+  const result = await requestDocumentEditChatTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Update the section.',
+  });
+
+  expect(result.error).toBeNull();
+  expect(result.messages.at(-1)?.content).toBe('Which section should I update?');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content).toContain('Do not return `ask Question for the user` literally.');
 });
 
 test('requestDocumentEditChatTurn keeps ask and answer history across clarification turns', async () => {

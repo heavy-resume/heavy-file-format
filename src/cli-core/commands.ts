@@ -68,6 +68,10 @@ export function getHvyCliCommandSummary(): string {
   return helpFor('');
 }
 
+export function getHvyCliPreferredCommandSummary(): string {
+  return 'Commands: hvy, nl, rg, find, sed, echo, cat, ls, pwd, cd, cp, rm, grep, sort, uniq, wc, tr, xargs, head, tail, true. Ask: ask QUESTION. Finish: done SUMMARY. Use man <command> for details.';
+}
+
 export async function executeHvyCliCommand(document: VisualDocument, session: HvyCliSession, input: string): Promise<HvyCliExecution> {
   session.scratchpadTouchedThisCommand = false;
   const expandedInput = expandShellSubstitutions(input, session.now ?? new Date());

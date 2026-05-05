@@ -9,6 +9,7 @@ import { getRenderApp, state } from '../state';
 import type { DocumentAttachment, VisualDocument } from '../types';
 import { DB_ATTACHMENT_ID, getAttachment, setAttachment } from '../attachments';
 import { DB_TABLE_PLUGIN_ID } from './registry';
+import { validateDbTableObjectName } from './db-table-identifiers';
 import type { ScriptingDbApi } from './scripting/runtime';
 
 import './db-table.css';
@@ -160,6 +161,10 @@ function renderDbTablePluginContent(
 ): string {
   if (tableName.trim().length === 0) {
     return '<div class="plugin-placeholder">Choose a table name to start working with this DB table.</div>';
+  }
+  const tableNameError = validateDbTableObjectName(tableName);
+  if (tableNameError) {
+    return `<div class="plugin-placeholder">DB table error: ${helpers.escapeHtml(tableNameError)}</div>`;
   }
 
   if (runtime.loadError) {
@@ -455,8 +460,9 @@ export async function addDbTableRow(tableName: string): Promise<void> {
 
 export async function createDbTable(tableName: string): Promise<boolean> {
   const trimmed = tableName.trim();
-  if (trimmed.length === 0) {
-    throw new Error('Choose a table name before creating a DB table.');
+  const tableNameError = validateDbTableObjectName(trimmed);
+  if (tableNameError) {
+    throw new Error(tableNameError);
   }
   const db = await getLoadedDatabase();
   const created = ensureTableExists(db, trimmed);

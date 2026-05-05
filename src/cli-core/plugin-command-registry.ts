@@ -1,6 +1,7 @@
 import { buildDocumentEditToolHelp } from '../ai-document-edit-instructions';
 import type { JsonObject } from '../hvy/types';
-import { getDocumentDbTableObjectNames } from '../plugins/db-table';
+import { getDbTableAiSummary, getDocumentDbTableObjectNames } from '../plugins/db-table';
+import { validateDbTableObjectName } from '../plugins/db-table-identifiers';
 import { parseFormSpec } from '../plugins/form';
 import { DB_TABLE_PLUGIN_ID, FORM_PLUGIN_ID, SCRIPTING_PLUGIN_ID } from '../plugins/registry';
 import type { VisualDocument } from '../types';
@@ -285,13 +286,25 @@ registerHvyCliPluginCommands({
   lintChecks: [
     async (context) => {
       const table = typeof context.config.table === 'string' ? context.config.table.trim() : '';
-      if (table.length === 0) {
-        return [{ message: 'db-table plugin is missing pluginConfig.table.' }];
+      const tableNameError = validateDbTableObjectName(table);
+      if (tableNameError) {
+        return [{ message: tableNameError }];
       }
       const names = await getDocumentDbTableObjectNames(context.document);
-      return names.includes(table)
-        ? []
-        : [{ message: `db-table pluginConfig.table references missing SQLite table/view "${table}".` }];
+      if (!names.includes(table)) {
+        return [{ message: `db-table pluginConfig.table references missing SQLite table/view "${table}".` }];
+      }
+      const query = context.body.trim();
+      if (query.length === 0) {
+        return [];
+      }
+      try {
+        await getDbTableAiSummary(context.document, table, { activeQuery: query, sampleLimit: 1 });
+        return [];
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown database query error.';
+        return [{ message: `db-table query is invalid: ${message}` }];
+      }
     },
   ],
 });

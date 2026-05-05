@@ -1279,3 +1279,76 @@ test('db-table cli can execute modifying SQL and query rows', async () => {
   expect((await executeHvyCliCommand(document, session, 'hvy plugin db-table tables')).output).toContain('chores');
   expect((await executeHvyCliCommand(document, session, 'hvy plugin db-table schema chores')).output).toContain('title');
 });
+
+test('hvy lint reports db-table query errors with component location', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"quality"}-->
+#! Quality
+`, '.hvy');
+  const session = createHvyCliSession();
+
+  await executeHvyCliCommand(document, session, 'hvy plugin db-table exec "CREATE TABLE chores (id INTEGER PRIMARY KEY, title TEXT NOT NULL)"');
+  await executeHvyCliCommand(document, session, 'hvy add plugin db-table /quality broken-query chores ":"');
+
+  const result = await executeHvyCliCommand(document, session, 'hvy lint');
+
+  expect(result.output).toContain('[plugin] /body/quality/broken-query - db-table query is invalid:');
+  expect(result.output).toContain('unrecognized token: ":"');
+});
+
+test('hvy lint reports db-table SQL stored as a table name', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"quality"}-->
+#! Quality
+
+<!--hvy:plugin {"id":"broken-table-name","plugin":"dev.heavy.db-table","pluginConfig":{"table":"SELECT id AS id, title AS Chore FROM chores ORDER BY id"}}-->
+`, '.hvy');
+  const session = createHvyCliSession();
+
+  const result = await executeHvyCliCommand(document, session, 'hvy lint');
+
+  expect(result.output).toContain('[plugin] /body/quality/broken-table-name - db-table pluginConfig.table contains SQL.');
+  expect(result.output).toContain('Set pluginConfig.table to a table/view name and put SELECT/WITH SQL in plugin.txt.');
+});
+
+test('hvy lint reports db-table table names with spaces', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"quality"}-->
+#! Quality
+
+<!--hvy:plugin {"id":"spaced-table","plugin":"dev.heavy.db-table","pluginConfig":{"table":"active chores"}}-->
+`, '.hvy');
+  const session = createHvyCliSession();
+
+  const result = await executeHvyCliCommand(document, session, 'hvy lint');
+
+  expect(result.output).toContain('[plugin] /body/quality/spaced-table - db-table pluginConfig.table contains spaces.');
+  expect(result.output).toContain('Use a table/view name without spaces, and put SELECT/WITH SQL in plugin.txt.');
+});
+
+test('hvy lint reports db-table table names using reserved SQLite words', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"quality"}-->
+#! Quality
+
+<!--hvy:plugin {"id":"reserved-table","plugin":"dev.heavy.db-table","pluginConfig":{"table":"order"}}-->
+`, '.hvy');
+  const session = createHvyCliSession();
+
+  const result = await executeHvyCliCommand(document, session, 'hvy lint');
+
+  expect(result.output).toContain('[plugin] /body/quality/reserved-table - db-table pluginConfig.table uses reserved SQLite word "order".');
+  expect(result.output).toContain('Choose a non-keyword table/view name.');
+});

@@ -310,21 +310,39 @@ async function buildChatCliInitialTurnRequest(params: {
       params.request
     );
   }
-  const runInitialCommand = async (command: string) => {
+  const runInitialCommand = async (explanation: string, command: string) => {
     const output = await cli.run(command);
     if (params.writeTrace) {
       await writeChatCliCommandTrace(params.traceRunId, output.command, output.output, params.signal);
     }
-    return output;
+    return { ...output, explanation };
   };
-  const initialRootListing = await runInitialCommand('ls /');
-  const initialHvyHelp = await runInitialCommand('hvy --help');
-  const initialStructure = await runInitialCommand('hvy request_structure --collapse');
+  const initialRootListing = await runInitialCommand(
+    'I am getting the root structure of this HVY document like it is a file system. If I am ls-ing a component, this explains what it is.',
+    'ls /'
+  );
+  const initialHvyHelp = await runInitialCommand(
+    'I am checking the HVY CLI help to see how to create new components, learn how plugins work, etc.',
+    'hvy --help'
+  );
+  const initialStructure = await runInitialCommand(
+    'I am getting the component structure so I can identify sections, reusable component types, and likely edit surfaces.',
+    'hvy request_structure --collapse'
+  );
   const diagnostics = await collectHvyCliDiagnostics(params.document);
-  const initialLint = await runInitialCommand('hvy lint');
-  const initialIntent = await runInitialCommand(`hvy find-intent ${quoteChatCliShellArg(params.request)} --max 5`);
+  const initialLint = await runInitialCommand(
+    'I am checking for existing document issues before making changes so new problems can be distinguished from old ones.',
+    'hvy lint'
+  );
+  const initialIntent = await runInitialCommand(
+    'I am searching for the most likely locations related to the user request so I can avoid blind grep-and-edit behavior.',
+    `hvy find-intent ${quoteChatCliShellArg(params.request)} --max 5`
+  );
   const initialSelectedPreview = params.selectedComponent?.path
-    ? await runInitialCommand(`hvy preview ${quoteChatCliShellArg(params.selectedComponent.path)}`)
+    ? await runInitialCommand(
+        'I am previewing the selected component because the request started from a specific place in the document.',
+        `hvy preview ${quoteChatCliShellArg(params.selectedComponent.path)}`
+      )
     : null;
   const priorConversation = selectChatCliPriorMessages(params.priorMessages ?? []);
   const initialOutputs = [
@@ -466,14 +484,14 @@ function isAddLikeSelectedComponentRequest(request: string): boolean {
 }
 
 function formatInitialChatCliCommandMessages(
-  outputs: Array<{ command: string; output: string }>,
+  outputs: Array<{ command: string; output: string; explanation?: string }>,
   snapshot: ReturnType<ReturnType<typeof createChatCliInterface>['snapshot']>
 ): ChatMessage[] {
   return outputs.flatMap((output, index) => [
     {
       id: crypto.randomUUID(),
       role: 'assistant' as const,
-      content: formatChatCliCommandForModel(output.command),
+      content: formatChatCliCommandForModel(output.command, output.explanation),
     },
     {
       id: crypto.randomUUID(),
@@ -492,8 +510,11 @@ function formatInitialChatCliCommandMessages(
   ]);
 }
 
-function formatChatCliCommandForModel(command: string): string {
-  return `\`\`\`shell\n${command}\n\`\`\``;
+function formatChatCliCommandForModel(command: string, explanation?: string): string {
+  return [
+    ...(explanation?.trim() ? [explanation.trim(), ''] : []),
+    `\`\`\`shell\n${command}\n\`\`\``,
+  ].join('\n');
 }
 
 function quoteChatCliShellArg(value: string): string {

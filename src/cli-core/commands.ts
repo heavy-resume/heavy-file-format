@@ -1367,7 +1367,7 @@ function readableBodyFileForDirectory(fs: ReturnType<typeof buildHvyVirtualFileS
   const directFiles = listDirectory(fs, directory)
     .filter((entry): entry is HvyVirtualFile => entry.kind === 'file')
     .map((entry) => entry.path)
-    .filter((entryPath) => entryPath.endsWith('.txt'));
+    .filter((entryPath) => entryPath.endsWith('.txt') || entryPath.endsWith('.py'));
   return directFiles.length === 1 ? directFiles[0] ?? null : null;
 }
 

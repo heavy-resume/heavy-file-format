@@ -64,6 +64,45 @@ test('cli resolves component directories for common read commands', async () => 
   expect(head.output).toContain('## Skills');
 });
 
+test('cli exposes form scripts and scripting plugin bodies as python files', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"automation"}-->
+#! Automation
+
+<!--hvy:plugin {"id":"startup","plugin":"dev.heavy.scripting","pluginConfig":{"version":"0.1"}}-->
+doc.header.set("started", True)
+
+<!--hvy:plugin {"id":"assign","plugin":"dev.heavy.form","pluginConfig":{"version":"0.1","initialScript":"load","submitScript":"submit"}}-->
+fields:
+  - label: Chore
+    type: select
+scripts:
+  load: |
+    rows = doc.db.query("SELECT id, title FROM chores", [])
+    doc.form.set_options("Chore", [{"label": row["title"], "value": str(row["id"])} for row in rows])
+  submit: |
+    chore = doc.form.get_value("Chore")
+`, '.hvy');
+  const session = createHvyCliSession();
+
+  expect((await executeHvyCliCommand(document, session, 'ls /body/automation/startup')).output).toContain('file script.py');
+  expect((await executeHvyCliCommand(document, session, 'cat /body/automation/startup')).output).toContain('doc.header.set("started", True)');
+  expect((await executeHvyCliCommand(document, session, 'hvy request_structure startup')).output).toContain('[p] script.py id=startup');
+
+  const listForm = await executeHvyCliCommand(document, session, 'ls /body/automation/assign');
+  expect(listForm.output).toContain('file load.py');
+  expect(listForm.output).toContain('file submit.py');
+  expect((await executeHvyCliCommand(document, session, 'cat /body/automation/assign/load.py')).output).toContain('doc.form.set_options("Chore"');
+
+  const updated = await executeHvyCliCommand(document, session, 'echo "doc.form.set_options(\\"Chore\\", [])" > /body/automation/assign/load.py');
+  expect(updated.output).toBe('/body/automation/assign/load.py: written');
+  expect((await executeHvyCliCommand(document, session, 'cat /body/automation/assign/plugin.txt')).output).toContain('load: |');
+  expect((await executeHvyCliCommand(document, session, 'cat /body/automation/assign/plugin.txt')).output).toContain('doc.form.set_options("Chore", [])');
+});
+
 test('hvy add section explains when the parent path is a component', async () => {
   const document = createResumeCliTestDocument();
   const session = createHvyCliSession();
@@ -850,6 +889,32 @@ scripts:
   expect(result.output).toContain('For help, run hvy cheatsheet forms or man hvy plugin form.');
 });
 
+test('hvy lint warns when form scripts use folded YAML scalars', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"chore-chart"}-->
+#! Chore Chart
+
+<!--hvy:plugin {"id":"assign-chore","plugin":"dev.heavy.form","pluginConfig":{"version":"0.1","initialScript":"load","submitScript":"submit"}}-->
+fields:
+  - label: Chore
+    type: select
+scripts:
+  load: >
+    pass
+  submit: >-
+    pass
+`, '.hvy');
+  const session = createHvyCliSession();
+
+  const result = await executeHvyCliCommand(document, session, 'hvy lint');
+
+  expect(result.output).toContain('[plugin] /body/chore-chart/assign-chore - form script "load" uses folded YAML scalar ">". Use literal scalar "|" so Python newlines and indentation are preserved.');
+  expect(result.output).toContain('[plugin] /body/chore-chart/assign-chore - form script "submit" uses folded YAML scalar ">-". Use literal scalar "|" so Python newlines and indentation are preserved.');
+});
+
 test('hvy lint catches and fixes non-canonical form field type aliases', async () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
@@ -1393,6 +1458,8 @@ test('hvy plugin db-table help leads with show and keeps add as an alias', async
   expect(help).toContain('hvy plugin db-table query [SELECT/WITH SQL]');
   expect(help).toContain('hvy plugin db-table exec [CREATE / INSERT / UPDATE / DELETE / DROP SQL]');
   expect(help).toContain('pluginConfig.table must be a table/view name, not SQL.');
+  expect(help).toContain('hvy plugin db-table tables && hvy plugin db-table schema');
+  expect(help).toContain('Do not grep for CREATE TABLE');
 });
 
 test('hvy help lists registered plugin add and operation commands as quick-reference options', async () => {
@@ -1427,6 +1494,7 @@ test('hvy cheatsheets are discovered from markdown files', async () => {
   expect(dbTable).toContain('Use the `db-table` plugin when rows should come from a live data source instead of static table component rows.');
   expect(dbTable).toContain('pluginConfig.table`, which must be the name of an existing table or view in the current backend.');
   expect(dbTable).toContain('plugin.txt` stores optional read-only `SELECT` or `WITH` SQL');
+  expect(dbTable).toContain('Do not search the document for `CREATE TABLE`');
   expect(dbTable).toContain('hvy plugin db-table exec');
   expect(unknown).toContain('Unknown cheatsheet "missing". Available cheatsheets: components, db-table, forms, scripting');
 });
@@ -1466,6 +1534,7 @@ test('hvy plugin form help explains script and submit options', async () => {
   expect(help).toContain('hvy recipe populate-form-options-from-db');
   expect(help).toContain('Example: hvy add plugin form /chores add-chore');
   expect(help).toContain('See also: hvy cheatsheet scripting; hvy recipe scripting; man hvy plugin scripting tool TOOL_NAME');
+  expect(help).toContain('plugin.txt scripts.NAME: |');
 });
 
 test('hvy lint warns about unsupported doc.tool calls inside scripts', async () => {
@@ -1509,7 +1578,7 @@ test('registered plugin help topics work without special-case command handlers',
   const directHelp = (await executeHvyCliCommand(document, session, 'hvy plugin scripting')).output;
 
   expect(manHelp).toContain('hvy add plugin SECTION_PATH ID dev.heavy.scripting --config {"version":"0.1"} --body PYTHON');
-  expect(manHelp).toContain('The component body is Python/Brython source wrapped in a generated function with one injected global: doc.');
+  expect(manHelp).toContain('The component body is exposed as script.py. It is Python/Brython source wrapped in a generated function with one injected global: doc.');
   expect(manHelp).toContain('Document tools: request_structure, grep, view_component');
   expect(manHelp).toContain('Not exposed through doc.tool: edit_component, view_rendered_component, query_db_table, execute_sql');
   expect(manHelp).toContain('Example: summary = doc.tool("request_structure"); doc.header.set("script_summary", summary[:200])');

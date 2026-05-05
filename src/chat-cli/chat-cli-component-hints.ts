@@ -31,7 +31,7 @@ function isSearchStyleCommand(command: string): boolean {
 
 function collectCommandComponentPaths(command: string, cwd: string, fs: ReturnType<typeof buildHvyVirtualFileSystem>): string[] {
   return tokenizeCommandSafely(command)
-    .filter((arg) => !arg.startsWith('-') && (arg.includes('/') || /\.(?:json|txt)$/i.test(arg)))
+    .filter((arg) => !arg.startsWith('-') && (arg.includes('/') || /\.(?:json|txt|py)$/i.test(arg)))
     .map((arg) => resolveVirtualPath(fs, cwd, arg))
     .filter((path) => path.startsWith('/body/'));
 }
@@ -57,7 +57,7 @@ function buildComponentPathHint(path: string, fs: ReturnType<typeof buildHvyVirt
     `component ${componentName}: ${componentDir}`,
     ...componentSpecificHintLines(componentName),
     ...pluginSpecificHintLines(componentName, `${componentDir}/${componentName}.json`, fs),
-    `  edit: ${componentName}.txt for body, ${componentName}.json for config.`,
+    `  edit: ${bodyFileNameForDirectory(componentDir, componentName, fs)} for body, ${componentName}.json for config.`,
     `  structure: hvy request_structure ${componentDir} --describe. remove: hvy remove ${componentDir}.`,
     `  create sibling: ${formatCreateSiblingHint(componentDir, componentName)}`,
   ].join('\n');
@@ -127,7 +127,16 @@ function componentNameForDirectory(path: string, fs: ReturnType<typeof buildHvyV
 }
 
 function hasTextSibling(path: string, componentName: string, fs: ReturnType<typeof buildHvyVirtualFileSystem>): boolean {
-  return fs.entries.get(`${path}/${componentName}.txt`)?.kind === 'file';
+  return !!bodyFileNameForDirectory(path, componentName, fs);
+}
+
+function bodyFileNameForDirectory(path: string, componentName: string, fs: ReturnType<typeof buildHvyVirtualFileSystem>): string {
+  for (const filename of [`${componentName}.txt`, 'script.py']) {
+    if (fs.entries.get(`${path}/${filename}`)?.kind === 'file') {
+      return filename;
+    }
+  }
+  return `${componentName}.txt`;
 }
 
 function isDirectChild(parent: string, entry: HvyVirtualEntry): boolean {

@@ -155,8 +155,10 @@ registerHvyCliPluginCommands({
   cheatsheetName: 'forms',
   componentHints: [
     'This plugin is a form. Fields and named script bodies live in plugin.txt as form YAML.',
+    'Named scripts are also exposed as sibling .py virtual files such as load.py or on_submit.py; prefer editing those files for script changes.',
     'Use plugin.json pluginConfig for form-level behavior: submitLabel, showSubmit, initialScript, and submitScript.',
     'Form scripts are Python/Brython snippets under scripts.NAME, wrapped in a generated function, and run through the sandboxed scripting runtime.',
+    'When editing plugin.txt directly, write form scripts as literal YAML blocks with `|`, not folded blocks with `>`, so Python newlines and indentation are preserved.',
     'Form scripts receive doc plus doc.form. Use field labels with doc.form.get_value/get_values/set_value/set_options/set_error/clear_error.',
     'Use doc.db.query(sql, params) and doc.db.execute(sql, params) for the current document SQL backend from form scripts; do not call doc.tool("db.query") or doc.tool("db.exec").',
     'doc.tool(name, args) can call the synchronous document-edit tool subset; args are a Python dict matching the AI tool schema.',
@@ -175,20 +177,21 @@ registerHvyCliPluginCommands({
     async (context) => {
       const scriptIssues = lintUnsupportedScriptDocToolCalls(context.body);
       const sqlIssues = await lintFormScriptSql(context);
+      const scriptScalarIssues = lintFormScriptScalarStyle(context.body);
       if (context.body.trim().length === 0) {
-        return [{ message: 'form plugin body is empty; expected form YAML with fields and named script bodies.' }, ...scriptIssues, ...sqlIssues];
+        return [{ message: 'form plugin body is empty; expected form YAML with fields and named script bodies.' }, ...scriptIssues, ...sqlIssues, ...scriptScalarIssues];
       }
       const parsed = parseFormSpec(context.body);
       if (parsed.error) {
-        return [{ message: `form YAML error: ${parsed.error}` }, ...scriptIssues, ...sqlIssues];
+        return [{ message: `form YAML error: ${parsed.error}` }, ...scriptIssues, ...sqlIssues, ...scriptScalarIssues];
       }
       const parsedWithConfig = parseFormSpec(context.body, context.config);
       const schemaIssues = lintFormSchemaShape(context.body);
       const script = parsedWithConfig.spec.submitScript.trim();
       if (!parsedWithConfig.spec.showSubmit || script.length > 0) {
-        return [...schemaIssues, ...scriptIssues, ...sqlIssues];
+        return [...schemaIssues, ...scriptIssues, ...sqlIssues, ...scriptScalarIssues];
       }
-      return [{ message: 'form has a submit button but no submitScript.' }, ...schemaIssues, ...scriptIssues, ...sqlIssues];
+      return [{ message: 'form has a submit button but no submitScript.' }, ...schemaIssues, ...scriptIssues, ...sqlIssues, ...scriptScalarIssues];
     },
   ],
   helpCommands: [
@@ -219,6 +222,10 @@ registerHvyCliPluginCommands({
     {
       command: 'See also: hvy cheatsheet scripting; hvy recipe scripting; man hvy plugin scripting tool TOOL_NAME',
       description: 'Use scripting help for doc, doc.form, doc.db, and doc.tool examples.',
+    },
+    {
+      command: 'plugin.txt scripts.NAME: |',
+      description: 'Use literal YAML blocks for Python scripts. Avoid scripts.NAME: > because folded YAML can break Python indentation.',
     },
   ],
 });
@@ -266,6 +273,40 @@ function lintFormSchemaShape(body: string): HvyCliPluginLintIssue[] {
     } else {
       issues.push({
         message: `form field "${issue.label}" uses unsupported type "${issue.rawType}". Valid types: text, textarea, number, select, checkbox, radio, date, email, tel, url, password, hidden. Use "select" for dropdowns.`,
+      });
+    }
+  }
+  return issues;
+}
+
+function lintFormScriptScalarStyle(body: string): HvyCliPluginLintIssue[] {
+  const issues: HvyCliPluginLintIssue[] = [];
+  const lines = body.split('\n');
+  let inScripts = false;
+  let scriptsIndent = 0;
+  for (const line of lines) {
+    const scriptsMatch = line.match(/^(\s*)scripts:\s*$/);
+    if (scriptsMatch) {
+      inScripts = true;
+      scriptsIndent = scriptsMatch[1]?.length ?? 0;
+      continue;
+    }
+    if (!inScripts) {
+      continue;
+    }
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) {
+      continue;
+    }
+    const indent = line.match(/^\s*/)?.[0].length ?? 0;
+    if (indent <= scriptsIndent) {
+      inScripts = false;
+      continue;
+    }
+    const scriptMatch = line.match(/^\s*([A-Za-z_][\w-]*)\s*:\s*(>-?|>)\s*(?:#.*)?$/);
+    if (scriptMatch) {
+      issues.push({
+        message: `form script "${scriptMatch[1]}" uses folded YAML scalar "${scriptMatch[2]}". Use literal scalar "|" so Python newlines and indentation are preserved.`,
       });
     }
   }
@@ -348,7 +389,7 @@ registerHvyCliPluginCommands({
   helpTopic: 'hvy plugin scripting',
   componentHints: [
     'Scripting runs once when the document loads. Use it to generate, mutate, or rearrange document content programmatically.',
-    'The component body is Python/Brython source wrapped in a generated function with one injected global: doc.',
+    'The component body is exposed as script.py. It is Python/Brython source wrapped in a generated function with one injected global: doc.',
     'Sandbox limits: imports, network, and DOM access are not allowed. Mutate the document through doc instead.',
     'Execution model: source is wrapped in a generated function, so return can stop the script early. Loops count against a 100,000-line budget.',
     'doc.tool(name, args) calls a synchronous subset of document-edit tools. args is a Python dict matching the AI tool schema.',
@@ -396,6 +437,7 @@ registerHvyCliPluginCommands({
     'This plugin displays dynamic data-backed rows from an existing table/view, optionally filtered by a read-only SELECT/WITH query.',
     'plugin.json pluginConfig.table must be a table/view name, not SQL. plugin.txt may contain display SQL, but it does not create tables or views.',
     'For the current built-in SQL backend, create tables/views with hvy plugin db-table exec. Inspect objects with hvy plugin db-table tables/schema/query.',
+    'To understand existing backend objects, run hvy plugin db-table tables or hvy plugin db-table schema. Do not grep for CREATE TABLE; it may find stale examples, recipes, or notes.',
   ],
   addCommands: [
     {
@@ -419,6 +461,16 @@ registerHvyCliPluginCommands({
     {
       command: 'hvy plugin db-table schema [TABLE_OR_VIEW]',
       description: 'Show schema details.',
+    },
+  ],
+  helpCommands: [
+    {
+      command: 'hvy plugin db-table tables && hvy plugin db-table schema',
+      description: 'Inspect the current backend. Prefer this over searching the document for CREATE TABLE.',
+    },
+    {
+      command: 'hvy cheatsheet db-table',
+      description: 'Show a concise guide for creating tables/views and displaying dynamic rows.',
     },
   ],
   lintChecks: [

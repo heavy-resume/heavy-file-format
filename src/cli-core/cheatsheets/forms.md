@@ -79,10 +79,12 @@ fields:
       - Mom
       - Child
 scripts:
-  load: >-
+  load: |
     rows = doc.db.query("SELECT id, title FROM chores ORDER BY id")
     doc.form.set_options("Chore", [{"label": row["title"], "value": str(row["id"])} for row in rows])
-  submit: >-
+  submit: |
     chore = doc.form.get_value("Chore")
     person = doc.form.get_value("Assigned to")
 ```
+
+Use `|` for script bodies in `plugin.txt`. Do not use `>` or `>-` for Python scripts; folded YAML can collapse newlines and break indentation.

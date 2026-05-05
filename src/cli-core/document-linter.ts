@@ -68,7 +68,7 @@ export function formatHvyCliLintDiff(before: HvyCliLintIssue[], after: HvyCliLin
 async function lintComponentFile(document: VisualDocument, fs: HvyVirtualFileSystem, jsonPath: string): Promise<HvyCliLintIssue[]> {
   const directory = jsonPath.replace(/\/[^/]+$/, '');
   const component = jsonPath.split('/').pop()?.replace(/\.json$/, '') ?? '';
-  const textPath = `${directory}/${component}.txt`;
+  const textPath = findComponentBodyPath(fs, directory, component);
   const body = readFile(fs, textPath);
   const config = readJsonFile(fs, jsonPath);
   const baseComponent = resolveBaseComponentFromMeta(component, document.meta);
@@ -76,6 +76,15 @@ async function lintComponentFile(document: VisualDocument, fs: HvyVirtualFileSys
     ...lintCoreComponent({ fs, path: directory, component, baseComponent, config, body }),
     ...await lintPluginComponent({ document, path: directory, textPath, jsonPath, config, body }),
   ];
+}
+
+function findComponentBodyPath(fs: HvyVirtualFileSystem, directory: string, component: string): string {
+  for (const path of [`${directory}/${component}.txt`, `${directory}/script.py`]) {
+    if (fs.entries.get(path)?.kind === 'file') {
+      return path;
+    }
+  }
+  return `${directory}/${component}.txt`;
 }
 
 function lintSections(fs: HvyVirtualFileSystem): HvyCliLintIssue[] {

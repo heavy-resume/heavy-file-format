@@ -4,6 +4,8 @@ import type { JsonObject } from '../hvy/types';
 import type { VisualDocument } from '../types';
 import { getSectionId } from '../section-ops';
 import { makeId } from '../utils';
+import { FORM_PLUGIN_ID, SCRIPTING_PLUGIN_ID } from '../plugins/registry';
+import { parseFormSpec, serializeFormSpec } from '../plugins/form';
 
 export interface HvyVirtualFile {
   kind: 'file';
@@ -180,7 +182,7 @@ function addBlock(entries: Map<string, HvyVirtualEntry>, block: VisualBlock, blo
     read: () => `${JSON.stringify(blockSchemaToCliJson(block.schema), null, 2)}\n`,
     write: (content) => applyBlockSchemaJson(block.schema, componentNameFromPath(componentFile), parseJsonObject(content, componentFile)),
   });
-  const bodyTextFile = `${blockPath}/${sanitizePathSegment(block.schema.component) || 'component'}.txt`;
+  const bodyTextFile = `${blockPath}/${bodyFileNameForBlock(block)}`;
   entries.set(bodyTextFile, {
     kind: 'file',
     path: bodyTextFile,
@@ -189,6 +191,7 @@ function addBlock(entries: Map<string, HvyVirtualEntry>, block: VisualBlock, blo
       writeBlockBodyText(block, content);
     },
   });
+  addFormScriptFiles(entries, block, blockPath);
 
   addNamedBlockChildren(entries, block.schema.containerBlocks ?? [], `${blockPath}/container`);
   addNamedBlockChildren(entries, block.schema.componentListBlocks ?? [], `${blockPath}/component-list`);
@@ -424,6 +427,39 @@ function writeBlockBodyText(block: VisualBlock, content: string): void {
   nestedTextBlocks.forEach((child, index) => {
     child.text = lines[index] ?? '';
   });
+}
+
+function addFormScriptFiles(entries: Map<string, HvyVirtualEntry>, block: VisualBlock, blockPath: string): void {
+  if (block.schema.component !== 'plugin' || block.schema.plugin !== FORM_PLUGIN_ID) {
+    return;
+  }
+  const parsed = parseFormSpec(block.text, block.schema.pluginConfig);
+  if (parsed.error) {
+    return;
+  }
+  for (const scriptName of Object.keys(parsed.spec.scripts)) {
+    const filename = uniqueName(`${sanitizePathSegment(scriptName) || 'script'}.py`, entries, blockPath);
+    entries.set(`${blockPath}/${filename}`, {
+      kind: 'file',
+      path: `${blockPath}/${filename}`,
+      read: () => parseFormSpec(block.text, block.schema.pluginConfig).spec.scripts[scriptName] ?? '',
+      write: (content) => {
+        const current = parseFormSpec(block.text, block.schema.pluginConfig);
+        if (current.error) {
+          throw new Error(`${blockPath}/plugin.txt has invalid form YAML; fix plugin.txt before editing ${filename}.`);
+        }
+        current.spec.scripts[scriptName] = content;
+        block.text = serializeFormSpec(current.spec);
+      },
+    });
+  }
+}
+
+function bodyFileNameForBlock(block: VisualBlock): string {
+  if (block.schema.component === 'plugin' && block.schema.plugin === SCRIPTING_PLUGIN_ID) {
+    return 'script.py';
+  }
+  return `${sanitizePathSegment(block.schema.component) || 'component'}.txt`;
 }
 
 function collectNestedTextBlocks(block: VisualBlock): VisualBlock[] {

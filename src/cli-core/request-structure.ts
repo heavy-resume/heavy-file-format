@@ -119,9 +119,8 @@ function collectComponentStructureEntries(document: VisualDocument, fs: HvyVirtu
 function componentEntryFromJsonFile(document: VisualDocument, fs: HvyVirtualFileSystem, jsonPath: string): ComponentStructureEntry | null {
   const directory = jsonPath.replace(/\/[^/]+$/, '');
   const type = jsonPath.split('/').pop()?.replace(/\.json$/, '') ?? '';
-  const textPath = `${directory}/${type}.txt`;
-  const textEntry = fs.entries.get(textPath);
-  if (!type || textEntry?.kind !== 'file') {
+  const textPath = findPrimaryBodyFilePath(fs, directory, type);
+  if (!type || !textPath) {
     return null;
   }
   const config = readJsonFile(fs, jsonPath);
@@ -138,6 +137,24 @@ function componentEntryFromJsonFile(document: VisualDocument, fs: HvyVirtualFile
     xrefTitle: typeof config.xrefTitle === 'string' && config.xrefTitle.trim() ? config.xrefTitle.trim() : undefined,
     xrefTarget: typeof config.xrefTarget === 'string' && config.xrefTarget.trim() ? config.xrefTarget.trim() : undefined,
   };
+}
+
+function findPrimaryBodyFilePath(fs: HvyVirtualFileSystem, directory: string, type: string): string {
+  const candidates = [`${directory}/${type}.txt`, `${directory}/script.py`];
+  for (const path of candidates) {
+    if (fs.entries.get(path)?.kind === 'file') {
+      return path;
+    }
+  }
+  const directBodyFiles = [...fs.entries.values()]
+    .filter((entry): entry is HvyVirtualEntry & { kind: 'file' } =>
+      entry.kind === 'file'
+      && entry.path.startsWith(`${directory}/`)
+      && !entry.path.slice(directory.length + 1).includes('/')
+      && (entry.path.endsWith('.txt') || entry.path.endsWith('.py')))
+    .map((entry) => entry.path)
+    .sort();
+  return directBodyFiles[0] ?? '';
 }
 
 function readJsonFile(fs: HvyVirtualFileSystem, path: string): JsonObject {

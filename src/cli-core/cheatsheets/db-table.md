@@ -19,8 +19,11 @@ Inspect the current backend:
 ```shell
 hvy plugin db-table tables
 hvy plugin db-table schema chores
+hvy plugin db-table schema
 hvy plugin db-table query "SELECT * FROM chores"
 ```
+
+Use `hvy plugin db-table tables` and `hvy plugin db-table schema` to inspect the current backend. Do not search the document for `CREATE TABLE`; that can find examples, recipes, scratchpad notes, or stale setup scripts instead of the live backend schema.
 
 Display rows in the document:
 

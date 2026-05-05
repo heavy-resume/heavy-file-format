@@ -944,7 +944,7 @@ export const formPluginFactory: HvyPluginFactory = build;
 export const formPluginRegistration: HvyPluginRegistration = {
   id: FORM_PLUGIN_ID,
   displayName: 'Form',
-  aiHint: 'Form UI. Fields and script bodies live in plugin.txt; form-level hooks live in plugin.json pluginConfig.',
+  aiHint: 'Form UI. Fields live in plugin.txt; named scripts are also exposed as sibling .py files. Form-level hooks live in plugin.json pluginConfig.',
   aiHelp: [
     `Use \`<!--hvy:plugin {"plugin":"${FORM_PLUGIN_ID}","pluginConfig":{"version":"${FORM_PLUGIN_VERSION}","submitLabel":"Submit","submitScript":"submit"}}-->\` followed by form YAML in the component body.`,
     'Do not use `<!--hvy:form ...-->`.',

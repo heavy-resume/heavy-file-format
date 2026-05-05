@@ -699,7 +699,7 @@ hvy_version: 0.1
   );
 });
 
-test('requestDocumentEditChatTurn includes lint diffs after commands change issues', async () => {
+test('requestDocumentEditChatTurn includes diagnostics diffs after commands change issues', async () => {
   requestProxyCompletionMock
     .mockResolvedValueOnce('echo "Filled note" > /body/summary/empty-note/text.txt')
     .mockResolvedValueOnce('done Fixed the empty note.');
@@ -727,10 +727,11 @@ hvy_version: 0.1
     expect.objectContaining({ role: 'user', content: expect.stringContaining('[text] /body/summary/empty-note - text body is empty.') }),
   ]));
   const nextPrompt = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content ?? '';
-  expect(nextPrompt).toContain('lint diff\n- [text] /body/summary/empty-note - text body is empty.');
+  expect(nextPrompt).toContain('diagnostics\n');
+  expect(nextPrompt).toContain('diagnostics diff\n- [text] /body/summary/empty-note - text body is empty.');
 });
 
-test('requestDocumentEditChatTurn keeps AI-introduced lint issues active until fixed', async () => {
+test('requestDocumentEditChatTurn keeps AI-introduced diagnostics active until fixed', async () => {
   requestProxyCompletionMock
     .mockResolvedValueOnce('hvy add text /summary empty placeholder && echo "" > /body/summary/empty/text.txt')
     .mockResolvedValueOnce('ask Should I keep going?')
@@ -758,7 +759,7 @@ hvy_version: 0.1
     role: 'assistant',
     content: 'Should I keep going?',
   }));
-  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('AI-introduced lint issues:');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('AI-introduced diagnostics:');
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('[text] /body/summary/empty - text body is empty.');
 
   const secondResult = await requestDocumentEditChatTurn({
@@ -776,7 +777,7 @@ hvy_version: 0.1
   expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.context).toContain('[text] /body/summary/empty - text body is empty.');
   expect(requestProxyCompletionMock.mock.calls[3]?.[0]?.messages.at(-1)?.content).toContain('You cannot finish yet.');
   expect(requestProxyCompletionMock.mock.calls[3]?.[0]?.messages.at(-1)?.content).toContain('Fix them before finishing');
-  expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.context).toContain('AI-introduced lint issues:\n(none)');
+  expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.context).toContain('AI-introduced diagnostics:\n(none)');
 });
 
 test('requestDocumentEditChatTurn includes component-specific hints', async () => {
@@ -881,7 +882,7 @@ fields:
 
 test('requestDocumentEditChatTurn includes scripting plugin code hints', async () => {
   requestProxyCompletionMock
-    .mockResolvedValueOnce('cat /body/automation/startup-script/plugin.txt')
+    .mockResolvedValueOnce('cat /body/automation/startup-script/script.py')
     .mockResolvedValueOnce('done Inspected the script plugin.');
   const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
   const document = deserializeDocument(`---
@@ -905,7 +906,7 @@ doc.header.set("ran_script", True)
   expect(result.error).toBeNull();
   const nextPrompt = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content ?? '';
   expect(nextPrompt).toContain('Plugin id: dev.heavy.scripting (scripting).');
-  expect(nextPrompt).toContain('The component body is Python/Brython source wrapped in a generated function with one injected global: doc.');
+  expect(nextPrompt).toContain('The component body is exposed as script.py. It is Python/Brython source wrapped in a generated function with one injected global: doc.');
   expect(nextPrompt).toContain('Document tools: request_structure, grep, view_component');
   expect(nextPrompt).toContain('doc.form exists only while running form plugin scripts.');
 });

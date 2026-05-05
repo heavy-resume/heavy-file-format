@@ -185,7 +185,7 @@ export const scriptingPluginFactory: HvyPluginFactory = build;
 export const scriptingPluginRegistration: HvyPluginRegistration = {
   id: SCRIPTING_PLUGIN_ID,
   displayName: 'Scripting',
-  aiHint: 'Script-backed component. Executable source lives in the body.',
+  aiHint: 'Script-backed component. Executable source is exposed as script.py.',
   aiHelp: [
     `Use \`<!--hvy:plugin {"plugin":"${SCRIPTING_PLUGIN_ID}","pluginConfig":{"version":"0.1"}}-->\`.`,
     'Put executable script source in the component body.',

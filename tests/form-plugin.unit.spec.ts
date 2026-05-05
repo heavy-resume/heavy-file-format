@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 
-import { parseFormSpec, serializeFormSpec } from '../src/plugins/form';
+import { parseFormSpec, serializeFormConfig, serializeFormSpec } from '../src/plugins/form';
 
 describe('form plugin YAML', () => {
   test('normalizes fields, options, scripts, and triggers from YAML', () => {
@@ -25,11 +25,12 @@ describe('form plugin YAML', () => {
 scripts:
   populate_food: |
     doc.form.set_value("Notes", "Bring a spoon.")
-initialScript: populate_food
-submitScript: populate_food
-submitLabel: Save lunch order
-showSubmit: false
-`);
+`, {
+      initialScript: 'populate_food',
+      submitScript: 'populate_food',
+      submitLabel: 'Save lunch order',
+      showSubmit: false,
+    });
 
     expect(parsed.error).toBeNull();
     expect(parsed.spec.fields[0]).toMatchObject({
@@ -79,8 +80,6 @@ showSubmit: false
 scripts:
   submit_form: |
     doc.header.set("submitted", True)
-submitScript: submit_form
-submitLabel: Send details
 `);
 
     const expectedResult = serializeFormSpec(parsed.spec);
@@ -91,6 +90,10 @@ submitLabel: Send details
     expect(expectedResult).toContain('meta:');
     expect(expectedResult).toContain('css: "max-width: 24rem;"');
     expect(expectedResult).toContain('submit_form');
-    expect(expectedResult).toContain('submitLabel: Send details');
+    expect(expectedResult).not.toContain('submitLabel');
+    expect(serializeFormConfig({ ...parsed.spec, submitLabel: 'Send details', submitScript: 'submit_form' })).toMatchObject({
+      submitLabel: 'Send details',
+      submitScript: 'submit_form',
+    });
   });
 });

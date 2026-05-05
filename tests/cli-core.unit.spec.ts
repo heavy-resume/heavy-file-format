@@ -748,13 +748,12 @@ hvy_version: 0.1
 <!--hvy: {"id":"chore-chart"}-->
 #! Chore Chart
 
-<!--hvy:plugin {"id":"assign-chore","plugin":"dev.heavy.form","pluginConfig":{"version":"0.1"}}-->
+<!--hvy:plugin {"id":"assign-chore","plugin":"dev.heavy.form","pluginConfig":{"version":"0.1","submitScript":"submit"}}-->
 fields:
   - label: Chore
     type: select
     required: true
     || '|' || title AS option, id AS value FROM chores ORDER BY id ASC
-submitScript: submit
 scripts:
   submit: >-
     pass
@@ -775,12 +774,36 @@ hvy_version: 0.1
 <!--hvy: {"id":"chore-chart"}-->
 #! Chore Chart
 
-<!--hvy:plugin {"id":"assign-chore","plugin":"dev.heavy.form","pluginConfig":{"version":"0.1"}}-->
+<!--hvy:plugin {"id":"assign-chore","plugin":"dev.heavy.form","pluginConfig":{"version":"0.1","submitScript":"submit"}}-->
 fields:
   - label: Chore
     type: select
     required: true
     options_query: SELECT id AS value, title AS label FROM chores ORDER BY id ASC
+scripts:
+  submit: >-
+    pass
+`, '.hvy');
+  const session = createHvyCliSession();
+
+  const result = await executeHvyCliCommand(document, session, 'hvy lint');
+
+  expect(result.output).toContain('[plugin] /body/chore-chart/assign-chore - form field "Chore" has unsupported key "options_query".');
+  expect(result.output).toContain('For help, run hvy cheatsheet forms or man hvy plugin form.');
+});
+
+test('hvy lint points form behavior YAML keys to plugin config', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"chore-chart"}-->
+#! Chore Chart
+
+<!--hvy:plugin {"id":"assign-chore","plugin":"dev.heavy.form","pluginConfig":{"version":"0.1"}}-->
+fields:
+  - label: Chore
+    type: select
 scripts:
   submit: >-
     pass
@@ -790,8 +813,8 @@ submitScript: submit
 
   const result = await executeHvyCliCommand(document, session, 'hvy lint');
 
-  expect(result.output).toContain('[plugin] /body/chore-chart/assign-chore - form field "Chore" has unsupported key "options_query".');
-  expect(result.output).toContain('For help, run hvy cheatsheet forms or man hvy plugin form.');
+  expect(result.output).toContain('[plugin] /body/chore-chart/assign-chore - form YAML has unsupported top-level key "submitScript".');
+  expect(result.output).toContain('[plugin] /body/chore-chart/assign-chore - form has a submit button but no submitScript.');
 });
 
 test('cli supports sed delete flags and stderr dev null redirection', async () => {
@@ -1092,11 +1115,10 @@ hvy_version: 0.1
 
 <!--hvy:plugin {"id":"empty-script","plugin":"dev.heavy.scripting","pluginConfig":{"version":"0.1"}}-->
 
-<!--hvy:plugin {"id":"passive-form","plugin":"dev.heavy.form","pluginConfig":{"version":"0.1"}}-->
+<!--hvy:plugin {"id":"passive-form","plugin":"dev.heavy.form","pluginConfig":{"version":"0.1","submitLabel":"Add chore"}}-->
 fields:
   - label: Chore
     type: text
-submitLabel: Add chore
 `, '.hvy');
   const session = createHvyCliSession();
 
@@ -1147,8 +1169,8 @@ test('cli commands can create a chore chart with tables and form plugins', async
 
   expect((await run('find /chore-chart -name plugin.txt')).output).toContain('/body/chore-chart/add-chore-form/plugin.txt');
   expect((await run('cat /chore-chart/active-chores/table.json')).output).toContain('"tableColumns": "Chore,Dad,Mom,Child"');
-  expect((await run('cat /chore-chart/assign-chore-form/plugin.txt')).output).toContain('submitLabel: Assign chore');
-  expect((await run('cat /chore-chart/assign-chore-form/plugin.txt')).output).toContain('initialScript: load');
+  expect((await run('cat /chore-chart/assign-chore-form/plugin.json')).output).toContain('"submitLabel": "Assign chore"');
+  expect((await run('cat /chore-chart/assign-chore-form/plugin.json')).output).toContain('"initialScript": "load"');
   expect((await run('cat /chore-chart/assign-chore-form/plugin.txt')).output).toContain("doc.form.set_options('Chore'");
   expect((await run('cat /chore-chart/assign-chore-form/plugin.json')).output).toContain('"plugin": "dev.heavy.form"');
   expect((await run('cat /chore-chart/weekly-leaders/plugin.json')).output).toContain('"table": "weekly_chore_leaders"');
@@ -1195,11 +1217,10 @@ hvy_version: 0.1
 
 <!--hvy:plugin {"id":"bad-db","plugin":"db-table","pluginConfig":{"table":"chores"}}-->
 
-<!--hvy:plugin {"id":"bad-form","plugin":"form","pluginConfig":{"version":"0.1"}}-->
+<!--hvy:plugin {"id":"bad-form","plugin":"form","pluginConfig":{"version":"0.1","submitLabel":"Add chore"}}-->
 fields:
   - label: Chore
     type: text
-submitLabel: Add chore
 `, '.hvy');
   const session = createHvyCliSession();
 
@@ -1289,8 +1310,8 @@ test('hvy plugin form help explains script and submit options', async () => {
 
   expect(help).toContain('hvy add plugin form SECTION_PATH ID SUBMIT_BUTTON_LABEL FIELD_LABEL:TYPE... [--script NAME PYTHON] [--initial-script NAME] [--on-submit-script NAME]');
   expect(help).toContain('--script NAME PYTHON\n  Store a named Python script');
-  expect(help).toContain('--initial-script NAME\n  Run that named script when the form first renders');
-  expect(help).toContain('--on-submit-script NAME\n  Run that named script when the submit button is pressed');
+  expect(help).toContain('--initial-script NAME\n  Store pluginConfig.initialScript=NAME');
+  expect(help).toContain('--on-submit-script NAME\n  Store pluginConfig.submitScript=NAME');
   expect(help).toContain('There is no optionsQuery YAML key');
   expect(help).toContain('Example: hvy add plugin form /chores add-chore');
   expect(help).toContain('See also: hvy cheatsheet scripting; hvy recipe scripting; man hvy plugin scripting tool TOOL_NAME');
@@ -1304,7 +1325,7 @@ hvy_version: 0.1
 <!--hvy: {"id":"forms"}-->
 #! Forms
 
-<!--hvy:plugin {"id":"bad-form","plugin":"dev.heavy.form","pluginConfig":{"version":"0.1"}}-->
+<!--hvy:plugin {"id":"bad-form","plugin":"dev.heavy.form","pluginConfig":{"version":"0.1","submitScript":"submit"}}-->
 fields:
   - label: Chore
     type: text
@@ -1314,7 +1335,6 @@ scripts:
     doc.tool("db.exec", {"sql": "DELETE FROM chores"})
     doc.tool('refresh', {})
     doc.tool("made_up_tool", {})
-submitScript: submit
 `, '.hvy');
   const session = createHvyCliSession();
 

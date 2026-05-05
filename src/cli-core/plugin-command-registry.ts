@@ -154,8 +154,8 @@ registerHvyCliPluginCommands({
   helpTopic: 'hvy plugin form',
   cheatsheetName: 'forms',
   componentHints: [
-    'This plugin is a form. The form fields, submit label, scripts, and on-submit behavior live in plugin.txt as form YAML/body text.',
-    'Use plugin.txt for form content and plugin.json for plugin id/config metadata.',
+    'This plugin is a form. Fields and named script bodies live in plugin.txt as form YAML.',
+    'Use plugin.json pluginConfig for form-level behavior: submitLabel, showSubmit, initialScript, and submitScript.',
     'Form scripts are top-level Python/Brython snippets under scripts.NAME and run through the sandboxed scripting runtime.',
     'Form scripts receive doc plus doc.form. Use field labels with doc.form.get_value/get_values/set_value/set_options/set_error/clear_error.',
     'Use doc.db.query(sql, params) and doc.db.execute(sql, params) for SQLite from form scripts; do not call doc.tool("db.query") or doc.tool("db.exec").',
@@ -174,15 +174,16 @@ registerHvyCliPluginCommands({
     (context) => {
       const scriptIssues = lintUnsupportedScriptDocToolCalls(context.body);
       if (context.body.trim().length === 0) {
-        return [{ message: 'form plugin body is empty; expected form YAML with fields and submit behavior.' }, ...scriptIssues];
+        return [{ message: 'form plugin body is empty; expected form YAML with fields and named script bodies.' }, ...scriptIssues];
       }
       const parsed = parseFormSpec(context.body);
       if (parsed.error) {
         return [{ message: `form YAML error: ${parsed.error}` }, ...scriptIssues];
       }
+      const parsedWithConfig = parseFormSpec(context.body, context.config);
       const schemaIssues = lintFormSchemaShape(context.body);
-      const script = parsed.spec.submitScript.trim();
-      if (!parsed.spec.showSubmit || script.length > 0) {
+      const script = parsedWithConfig.spec.submitScript.trim();
+      if (!parsedWithConfig.spec.showSubmit || script.length > 0) {
         return [...schemaIssues, ...scriptIssues];
       }
       return [{ message: 'form has a submit button but no submitScript.' }, ...schemaIssues, ...scriptIssues];
@@ -195,11 +196,11 @@ registerHvyCliPluginCommands({
     },
     {
       command: '--initial-script NAME',
-      description: 'Run that named script when the form first renders. Use this to populate select/radio options from doc.db.query via doc.form.set_options.',
+      description: 'Store pluginConfig.initialScript=NAME so that named script runs when the form first renders. Use this to populate select/radio options from doc.db.query via doc.form.set_options.',
     },
     {
       command: '--on-submit-script NAME',
-      description: 'Run that named script when the submit button is pressed. Alias: --submit.',
+      description: 'Store pluginConfig.submitScript=NAME so that named script runs when the submit button is pressed. Alias: --submit.',
     },
     {
       command: `Dynamic select example: hvy add plugin form /chores assign-chore "Assign chore" "Chore:select:required" --script load "rows = doc.db.query('SELECT id, title FROM chores ORDER BY id')\\ndoc.form.set_options('Chore', [{'label': row['title'], 'value': str(row['id'])} for row in rows])" --initial-script load`,
@@ -216,7 +217,7 @@ registerHvyCliPluginCommands({
   ],
 });
 
-const FORM_TOP_LEVEL_KEYS = new Set(['fields', 'scripts', 'initialScript', 'submitScript', 'submitLabel', 'showSubmit']);
+const FORM_TOP_LEVEL_KEYS = new Set(['fields', 'scripts']);
 const FORM_FIELD_KEYS = new Set(['label', 'type', 'required', 'options', 'triggers', 'value', 'placeholder', 'description', 'meta']);
 
 function lintFormSchemaShape(body: string): HvyCliPluginLintIssue[] {

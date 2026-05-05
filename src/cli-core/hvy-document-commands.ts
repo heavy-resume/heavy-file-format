@@ -559,11 +559,13 @@ function addFormPluginBlock(ctx: HvyDocumentCommandContext, args: string[]): Hvy
   const body = stringifyYaml({
     fields: fieldSpecs.map(parseFormFieldSpec),
     ...(Object.keys(scripts).length > 0 ? { scripts } : {}),
+  }).trimEnd();
+  section.blocks.push(createPluginBlock(id, FORM_PLUGIN_ID, {
+    version: '0.1',
+    submitLabel: decodeCliText(submitLabel),
     ...(initialScript ? { initialScript } : {}),
     ...(submitScript ? { submitScript } : {}),
-    submitLabel: decodeCliText(submitLabel),
-  }).trimEnd();
-  section.blocks.push(createPluginBlock(id, FORM_PLUGIN_ID, { version: '0.1' }, body));
+  }, body));
   return { output: formatCreatedComponentDirectory(ctx.document, `${sectionPath.replace(/\/$/, '')}/${id}`), mutated: true };
 }
 

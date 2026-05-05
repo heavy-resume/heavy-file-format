@@ -223,7 +223,7 @@ theme:
   <!--hvy:expandable:content {}-->
 
    <!--hvy:text {}-->
-    Form plugin shortcut under hvy add plugin form. Adds a dev.heavy.form plugin with field specs like Label:type:required:Option A|Option B. The positional SUBMIT_BUTTON_LABEL sets submitLabel; --on-submit-script names the script to run on submit.
+    Form plugin shortcut under hvy add plugin form. Adds a dev.heavy.form plugin with field specs like Label:type:required:Option A|Option B. The positional SUBMIT_BUTTON_LABEL sets pluginConfig.submitLabel; --on-submit-script sets pluginConfig.submitScript.
 
  <!--hvy:expandable {}-->
   <!--hvy:expandable:stub {}-->

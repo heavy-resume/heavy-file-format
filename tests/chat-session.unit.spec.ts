@@ -822,8 +822,7 @@ hvy_version: 0.1
 <!--hvy: {"id":"contact"}-->
 #! Contact
 
-<!--hvy:plugin {"id":"contact-form","plugin":"dev.heavy.form","pluginConfig":{"version":"0.1"}}-->
-submitLabel: Send
+<!--hvy:plugin {"id":"contact-form","plugin":"dev.heavy.form","pluginConfig":{"version":"0.1","submitLabel":"Send"}}-->
 fields:
   - label: Message
     type: textarea
@@ -841,7 +840,7 @@ fields:
   expect(nextPrompt).toContain('component plugin: /body/contact/contact-form');
   expect(nextPrompt).toContain('Plugin id: dev.heavy.form (form).');
   expect(nextPrompt).toContain('This plugin is a form.');
-  expect(nextPrompt).toContain('The form fields, submit label, scripts, and on-submit behavior live in plugin.txt');
+  expect(nextPrompt).toContain('Fields and named script bodies live in plugin.txt');
   expect(nextPrompt).toContain('Form scripts are top-level Python/Brython snippets');
 });
 

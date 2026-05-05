@@ -881,7 +881,7 @@ plugins:
 Block example:
 
 ```markdown
-<!--hvy:plugin {"plugin":"dev.heavy.form","pluginConfig":{"version":"0.1"}}-->
+<!--hvy:plugin {"plugin":"dev.heavy.form","pluginConfig":{"version":"0.1","initialScript":"populate_food","submitScript":"submit_order","submitLabel":"Save order"}}-->
 fields:
   - label: Food
     type: select
@@ -900,15 +900,18 @@ scripts:
         doc.form.set_value("Notes", "Bring a spoon.")
   submit_order: |
     doc.header.set("last_order", doc.form.get_values())
-initialScript: populate_food
-submitScript: submit_order
 ```
 
 Plugin-specific rules:
 - `pluginConfig.version` is optional and defaults to `"0.1"`.
+- Form-level behavior is stored in `pluginConfig`. `pluginConfig.initialScript`
+  and `pluginConfig.submitScript` reference named scripts from the form body.
+  `pluginConfig.submitLabel` customizes the visible submit button text and
+  defaults to `"Submit"`. `pluginConfig.showSubmit` defaults to `true`; when
+  `false`, clients MUST omit the visible submit button while preserving the form
+  and any non-submit triggers.
 - The plugin block text MUST be interpreted as YAML owned by the form plugin.
-- Top-level YAML keys are `fields`, `scripts`, `initialScript`, `submitScript`,
-  `submitLabel`, and `showSubmit`.
+- Top-level YAML keys are `fields` and `scripts`.
 - `fields` is an ordered list. Each field supports `label`, `type`,
   `value`, `placeholder`, `required`, `options`, `triggers`, and `meta`.
 - Field `label` is both the visible label and the script key used with
@@ -922,17 +925,14 @@ Plugin-specific rules:
 - `options` applies to `select` and `radio`. Each option MAY be a string or an
   object with `label` and optional `value`; when `value` is omitted, clients MUST
   use `label` as the value.
-- `scripts` is a map from script name to Python/Brython source. `initialScript`,
-  `submitScript`, and field trigger values reference keys in this map.
+- `scripts` is a map from script name to Python/Brython source.
+  `pluginConfig.initialScript`, `pluginConfig.submitScript`, and field trigger
+  values reference keys in this map.
 - Field `triggers` MAY define `input`, `change`, and `blur` script references.
   Clients SHOULD debounce `input` trigger execution.
 - Viewer clients MUST render an HTML `<form>`, prevent native navigation on
   submit, gather current field values, and run the named submit script when one
   is defined. No network request is implied by submitting a form.
-- `submitLabel` customizes the visible submit button text and defaults to
-  `"Submit"`. `showSubmit` defaults to `true`; when `false`, clients MUST omit
-  the visible submit button while preserving the form and any non-submit
-  triggers.
 - Form scripts run through the installed scripting runtime. During form script
   execution, `doc.form` exposes `get_value(label)`, `set_value(label, value)`,
   `get_values()`, `set_options(label, options)`, `get_options(label)`,

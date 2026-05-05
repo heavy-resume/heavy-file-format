@@ -10,6 +10,7 @@ import { FORM_PLUGIN_ID } from './registry';
 import { runUserScript, type ScriptingRunResult } from './scripting/wrapper';
 import type { ScriptingFormApi, ScriptingFormOption } from './scripting/runtime';
 import { sanitizeInlineCss } from '../css-sanitizer';
+import type { JsonObject } from '../hvy/types';
 
 import './form.css';
 
@@ -69,6 +70,10 @@ interface LiveFormState {
   values: Record<string, string | boolean>;
   options: Record<string, FormOption[]>;
   errors: Record<string, string>;
+}
+
+function defaultFormSpec(): FormSpec {
+  return { fields: [], scripts: {}, initialScript: '', submitScript: '', submitLabel: 'Submit', showSubmit: true };
 }
 
 const DEFAULT_FIELD: FormFieldDefinition = {
@@ -159,10 +164,30 @@ function normalizeScripts(value: unknown): Record<string, string> {
   return scripts;
 }
 
-export function parseFormSpec(source: string): ParsedFormSpec {
+function parseFormConfig(config?: JsonObject): Pick<FormSpec, 'initialScript' | 'submitScript' | 'submitLabel' | 'showSubmit'> {
+  return {
+    initialScript: typeof config?.initialScript === 'string' ? config.initialScript.trim() : '',
+    submitScript: typeof config?.submitScript === 'string' ? config.submitScript.trim() : '',
+    submitLabel: typeof config?.submitLabel === 'string' && config.submitLabel.trim().length > 0 ? config.submitLabel : 'Submit',
+    showSubmit: config?.showSubmit !== false,
+  };
+}
+
+export function serializeFormConfig(spec: FormSpec): JsonObject {
+  return {
+    version: FORM_PLUGIN_VERSION,
+    initialScript: spec.initialScript,
+    submitScript: spec.submitScript,
+    submitLabel: spec.submitLabel,
+    showSubmit: spec.showSubmit,
+  };
+}
+
+export function parseFormSpec(source: string, config?: JsonObject): ParsedFormSpec {
+  const behavior = parseFormConfig(config);
   if (source.trim().length === 0) {
     return {
-      spec: { fields: [], scripts: {}, initialScript: '', submitScript: '', submitLabel: 'Submit', showSubmit: true },
+      spec: { ...defaultFormSpec(), ...behavior },
       error: null,
     };
   }
@@ -171,7 +196,7 @@ export function parseFormSpec(source: string): ParsedFormSpec {
     const parsed = parseYaml(source);
     if (!isObject(parsed)) {
       return {
-        spec: { fields: [], scripts: {}, initialScript: '', submitScript: '', submitLabel: 'Submit', showSubmit: true },
+        spec: { ...defaultFormSpec(), ...behavior },
         error: 'Form YAML must be an object.',
       };
     }
@@ -179,16 +204,13 @@ export function parseFormSpec(source: string): ParsedFormSpec {
       spec: {
         fields: Array.isArray(parsed.fields) ? parsed.fields.map(normalizeField) : [],
         scripts: normalizeScripts(parsed.scripts),
-        initialScript: typeof parsed.initialScript === 'string' ? parsed.initialScript.trim() : '',
-        submitScript: typeof parsed.submitScript === 'string' ? parsed.submitScript.trim() : '',
-        submitLabel: typeof parsed.submitLabel === 'string' && parsed.submitLabel.trim().length > 0 ? parsed.submitLabel : 'Submit',
-        showSubmit: parsed.showSubmit !== false,
+        ...behavior,
       },
       error: null,
     };
   } catch (error) {
     return {
-      spec: { fields: [], scripts: {}, initialScript: '', submitScript: '', submitLabel: 'Submit', showSubmit: true },
+      spec: { ...defaultFormSpec(), ...behavior },
       error: error instanceof Error ? error.message : 'Invalid form YAML.',
     };
   }
@@ -210,10 +232,6 @@ export function serializeFormSpec(spec: FormSpec): string {
     return item;
   });
   if (Object.keys(spec.scripts).length > 0) clean.scripts = spec.scripts;
-  if (spec.initialScript.length > 0) clean.initialScript = spec.initialScript;
-  if (spec.submitScript.length > 0) clean.submitScript = spec.submitScript;
-  if (spec.submitLabel !== 'Submit') clean.submitLabel = spec.submitLabel;
-  if (!spec.showSubmit) clean.showSubmit = false;
   return stringifyYaml(clean).trimEnd();
 }
 
@@ -291,7 +309,7 @@ function resultText(result: ScriptingRunResult): string {
 function build(ctx: HvyPluginContext): HvyPluginInstance {
   const root = document.createElement('div');
   root.className = `hvy-form-plugin hvy-form-plugin-${ctx.mode}`;
-  let live = createLiveState(parseFormSpec(ctx.block.text).spec);
+  let live = createLiveState(parseFormSpec(ctx.block.text, ctx.block.schema.pluginConfig).spec);
   let initialized = false;
   let statusText = '';
   let statusError = false;
@@ -301,10 +319,14 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
   const inputTimers = new Map<string, number>();
   let openFieldMetaLabel: string | null = null;
 
-  const parseCurrent = () => parseFormSpec(ctx.block.text);
+  const parseCurrent = () => parseFormSpec(ctx.block.text, ctx.block.schema.pluginConfig);
   const commitSpec = (spec: FormSpec, options?: { refreshEditor?: boolean }) => {
     skipNextEditorRefresh = ctx.mode === 'editor' && options?.refreshEditor !== true;
     ctx.setText(serializeFormSpec(spec));
+  };
+  const commitBehavior = (spec: FormSpec) => {
+    skipNextEditorRefresh = ctx.mode === 'editor';
+    ctx.setConfig(serializeFormConfig(spec));
   };
 
   const runNamedScript = (scriptName: string, reason: string): void => {
@@ -682,17 +704,17 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
     if (target.dataset.formTopScript) {
       const key = target.dataset.formTopScript as 'initialScript' | 'submitScript';
       spec[key] = target.value.trim();
-      commitSpec(spec);
+      commitBehavior(spec);
       return;
     }
     if (target.dataset.formTopText === 'submitLabel') {
       spec.submitLabel = target.value;
-      commitSpec(spec);
+      commitBehavior(spec);
       return;
     }
     if (target.dataset.formTopCheckbox === 'showSubmit' && target instanceof HTMLInputElement) {
       spec.showSubmit = target.checked;
-      commitSpec(spec);
+      commitBehavior(spec);
       return;
     }
     if (target.dataset.formScriptSource) {
@@ -714,6 +736,9 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
         }
       }
       commitSpec(spec);
+      if (spec.initialScript === nextName || spec.submitScript === nextName) {
+        commitBehavior(spec);
+      }
     }
   };
 
@@ -766,6 +791,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       delete spec.scripts[name];
       if (spec.initialScript === name) spec.initialScript = '';
       if (spec.submitScript === name) spec.submitScript = '';
+      commitBehavior(spec);
       forceEditorRender = true;
     }
     commitSpec(spec, { refreshEditor: forceEditorRender });
@@ -854,13 +880,14 @@ export const formPluginFactory: HvyPluginFactory = build;
 export const formPluginRegistration: HvyPluginRegistration = {
   id: FORM_PLUGIN_ID,
   displayName: 'Form',
-  aiHint: 'Form UI. Fields and script hooks live in the YAML body.',
+  aiHint: 'Form UI. Fields and script bodies live in plugin.txt; form-level hooks live in plugin.json pluginConfig.',
   aiHelp: [
-    `Use \`<!--hvy:plugin {"plugin":"${FORM_PLUGIN_ID}","pluginConfig":{"version":"${FORM_PLUGIN_VERSION}"}}-->\` followed by form YAML in the component body.`,
+    `Use \`<!--hvy:plugin {"plugin":"${FORM_PLUGIN_ID}","pluginConfig":{"version":"${FORM_PLUGIN_VERSION}","submitLabel":"Submit","submitScript":"submit"}}-->\` followed by form YAML in the component body.`,
     'Do not use `<!--hvy:form ...-->`.',
-    'Supported YAML keys include `fields`, `submitLabel`, `showSubmit`, `initialScript`, `submitScript`, and `scripts`.',
+    'Supported form YAML keys include `fields` and `scripts`.',
+    'Form-level behavior keys live in pluginConfig: `submitLabel`, `showSubmit`, `initialScript`, and `submitScript`.',
     'Fields use `label`, `type`, optional `placeholder`, optional `required`, optional `options`, optional `value`, and optional `triggers`. The label is both visible text and the script key.',
-    '`scripts` maps script names to top-level Python/Brython source. `submitScript`, `initialScript`, and field triggers name a script key.',
+    '`scripts` maps script names to top-level Python/Brython source. `pluginConfig.submitScript`, `pluginConfig.initialScript`, and field triggers name a script key.',
     'Form scripts receive `doc` plus `doc.form` for live form values, options, and errors.',
     'Use `doc.form.get_value`, `doc.form.get_values`, `doc.form.set_value`, `doc.form.set_options`, `doc.form.set_error`, and `doc.form.clear_error` for form state.',
     'Script blocks must be indented under `scripts.NAME: |`; use Python comments (`# ...`) and Python booleans (`True`/`False`), not SQL `--` comments or JavaScript-style booleans.',

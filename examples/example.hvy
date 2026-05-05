@@ -148,10 +148,9 @@ for line in output.split('\n'):
 <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
 These form plugin blocks keep their input definitions in YAML text owned by `dev.heavy.form`. They exercise static options, script-populated fields, field triggers, submit handling, and the core HTML input types without introducing standalone HVY input components.
 
-<!--hvy:plugin {"css":"margin: 0.5rem 0;","plugin":"dev.heavy.form","pluginConfig":{"version":"0.1"}}-->
+<!--hvy:plugin {"css":"margin: 0.5rem 0;","plugin":"dev.heavy.form","pluginConfig":{"version":"0.1","initialScript":"populate_lunch","submitScript":"submit_lunch","submitLabel":"Save lunch order"}}-->
 fields:
-  - name: food
-    label: Lunch choice
+  - label: Lunch choice
     type: select
     value: soup
     required: true
@@ -164,71 +163,57 @@ fields:
         value: salad
     triggers:
       change: populate_lunch
-  - name: side
-    label: Suggested side
+  - label: Suggested side
     type: text
     placeholder: Pick a food first
-  - name: delivery_date
-    label: Delivery date
+  - label: Delivery date
     type: date
-  - name: notes
-    label: Notes
+  - label: Notes
     type: textarea
     placeholder: Allergies, timing, or other details
-  - name: rush
-    label: Rush order
+  - label: Rush order
     type: checkbox
     value: false
 scripts:
   populate_lunch: |
-    food = doc.form.get_value("food")
+    food = doc.form.get_value("Lunch choice")
     sides = {
         "sandwich": "Kettle chips",
         "soup": "Sourdough roll",
         "salad": "Iced tea",
     }
-    doc.form.set_value("side", sides.get(food, ""))
+    doc.form.set_value("Suggested side", sides.get(food, ""))
   submit_lunch: |
     values = doc.form.get_values()
-    if not values.get("delivery_date"):
-        doc.form.set_error("delivery_date", "Choose a delivery date before submitting.")
+    if not values.get("Delivery date"):
+        doc.form.set_error("Delivery date", "Choose a delivery date before submitting.")
     else:
-        doc.form.clear_error("delivery_date")
+        doc.form.clear_error("Delivery date")
         doc.header.set("last_lunch_order", values)
-initialScript: populate_lunch
-submitScript: submit_lunch
-submitLabel: Save lunch order
 
-<!--hvy:plugin {"css":"margin: 0.5rem 0;","plugin":"dev.heavy.form","pluginConfig":{"version":"0.1"}}-->
+<!--hvy:plugin {"css":"margin: 0.5rem 0;","plugin":"dev.heavy.form","pluginConfig":{"version":"0.1","initialScript":"update_summary","submitScript":"submit_contact","showSubmit":false}}-->
 fields:
-  - name: full_name
-    label: Full name
+  - label: Full name
     type: text
     placeholder: Ada Lovelace
     required: true
-  - name: contact_email
-    label: Email
+  - label: Email
     type: email
     placeholder: ada@example.com
-  - name: phone
-    label: Phone
+  - label: Phone
     type: tel
     placeholder: 555-0100
-  - name: portfolio
-    label: Portfolio URL
+  - label: Portfolio URL
     type: url
     placeholder: https://example.com
-  - name: password
-    label: Access phrase
+  - label: Access phrase
     type: password
-  - name: interview_count
-    label: Interview count
+  - label: Interview count
     type: number
     value: "3"
     triggers:
       input: update_summary
-  - name: contact_method
-    label: Preferred contact
+  - label: Preferred contact
     type: radio
     value: email
     options:
@@ -240,30 +225,25 @@ fields:
         value: portfolio
     triggers:
       change: update_summary
-  - name: summary
-    label: Summary
+  - label: Summary
     type: textarea
     meta:
       css: "min-height: 4rem;"
-  - name: source
-    label: Source
+  - label: Source
     type: hidden
     value: example-document
 scripts:
   update_summary: |
-    count = doc.form.get_value("interview_count") or "0"
-    method = doc.form.get_value("contact_method") or "email"
-    doc.form.set_value("summary", f"Plan for {count} interview touchpoint(s), follow up by {method}.")
+    count = doc.form.get_value("Interview count") or "0"
+    method = doc.form.get_value("Preferred contact") or "email"
+    doc.form.set_value("Summary", f"Plan for {count} interview touchpoint(s), follow up by {method}.")
   submit_contact: |
     values = doc.form.get_values()
-    if not values.get("full_name"):
-        doc.form.set_error("full_name", "Name is required.")
+    if not values.get("Full name"):
+        doc.form.set_error("Full name", "Name is required.")
     else:
-        doc.form.clear_error("full_name")
+        doc.form.clear_error("Full name")
         doc.header.set("last_contact_form", values)
-initialScript: update_summary
-submitScript: submit_contact
-showSubmit: false
 
 <!--hvy:subsection {"id":"import-failure-example"}-->
 #! Import Failure Example

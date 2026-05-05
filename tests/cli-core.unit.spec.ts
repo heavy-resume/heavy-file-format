@@ -1047,12 +1047,73 @@ test('cli commands can create a chore chart with tables and form plugins', async
   expect((await run('find /chore-chart -name plugin.txt')).output).toContain('/body/chore-chart/add-chore-form/plugin.txt');
   expect((await run('cat /chore-chart/active-chores/table.json')).output).toContain('"tableColumns": "Chore,Dad,Mom,Child"');
   expect((await run('cat /chore-chart/assign-chore-form/plugin.txt')).output).toContain('submitLabel: Assign chore');
+  expect((await run('cat /chore-chart/assign-chore-form/plugin.json')).output).toContain('"plugin": "dev.heavy.form"');
   expect((await run('cat /chore-chart/weekly-leaders/plugin.json')).output).toContain('"table": "weekly_chore_leaders"');
+  expect((await run('cat /chore-chart/weekly-leaders/plugin.json')).output).toContain('"plugin": "dev.heavy.db-table"');
 
   const serialized = serializeDocument(document);
   expect(serialized).toContain('<!--hvy:plugin {"id":"assign-chore-form","plugin":"dev.heavy.form"');
   expect(serialized).toContain('<!--hvy:plugin {"id":"weekly-leaders","plugin":"dev.heavy.db-table"');
   expect(serialized).toContain('"tableRows":[{"cells":["Dishes","","","Child"]}');
+});
+
+test('raw plugin creation rejects command aliases and accepts canonical plugin ids', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"quality"}-->
+#! Quality
+`, '.hvy');
+  const session = createHvyCliSession();
+
+  await expect(executeHvyCliCommand(document, session, 'hvy add plugin /quality bad-db db-table')).rejects.toThrow(
+    'hvy plugin add: "db-table" is a CLI command alias, not a stored plugin id. Use "hvy add plugin db-table SECTION_PATH ID TABLE [QUERY]" or plugin id "dev.heavy.db-table".'
+  );
+
+  const result = await executeHvyCliCommand(
+    document,
+    session,
+    'hvy add plugin /quality raw-scripting dev.heavy.scripting --config \'{"version":"0.1"}\' --body "doc.header.set(\'status\', \'ready\')"'
+  );
+
+  expect(result.output).toContain('/body/quality/raw-scripting: created');
+  expect((await executeHvyCliCommand(document, session, 'cat /body/quality/raw-scripting/plugin.json')).output)
+    .toContain('"plugin": "dev.heavy.scripting"');
+});
+
+test('hvy lint reports and fixes stored plugin command aliases', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"quality"}-->
+#! Quality
+
+<!--hvy:plugin {"id":"bad-db","plugin":"db-table","pluginConfig":{"table":"chores"}}-->
+
+<!--hvy:plugin {"id":"bad-form","plugin":"form","pluginConfig":{"version":"0.1"}}-->
+fields:
+  - label: Chore
+    type: text
+submitLabel: Add chore
+`, '.hvy');
+  const session = createHvyCliSession();
+
+  const before = await executeHvyCliCommand(document, session, 'hvy lint');
+  expect(before.output).toContain('[plugin] /body/quality/bad-db - plugin id "db-table" is a CLI command alias, not a stored plugin id. Run hvy lint --fix to change it to "dev.heavy.db-table".');
+  expect(before.output).toContain('[plugin] /body/quality/bad-form - plugin id "form" is a CLI command alias, not a stored plugin id. Run hvy lint --fix to change it to "dev.heavy.form".');
+
+  const fix = await executeHvyCliCommand(document, session, 'hvy lint --fix');
+  expect(fix.output).toContain('Applied lint fixes:');
+  expect(fix.output).toContain('- bad-db: db-table -> dev.heavy.db-table');
+  expect(fix.output).toContain('- bad-form: form -> dev.heavy.form');
+  expect(fix.mutated).toBe(true);
+
+  const serialized = serializeDocument(document);
+  expect(serialized).toContain('<!--hvy:plugin {"id":"bad-db","plugin":"dev.heavy.db-table"');
+  expect(serialized).toContain('<!--hvy:plugin {"id":"bad-form","plugin":"dev.heavy.form"');
+  expect((await executeHvyCliCommand(document, session, 'hvy lint')).output).not.toContain('is a CLI command alias');
 });
 
 test('hvy plugin db-table help leads with show and keeps add as an alias', async () => {

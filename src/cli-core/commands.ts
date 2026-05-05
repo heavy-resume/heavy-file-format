@@ -13,7 +13,7 @@ import { createScriptingDbRuntime, formatQueryResultTable, getDocumentDbTableObj
 import type { VisualBlock, VisualSection } from '../editor/types';
 import { getSectionId } from '../section-ops';
 import { getHvyCliPluginCommandRegistration } from './plugin-command-registry';
-import { formatHvyCliLintIssues, runHvyCliLinter } from './document-linter';
+import { fixHvyCliLintIssues, formatHvyCliLintIssues, runHvyCliLinter } from './document-linter';
 import { isBuiltinComponentName } from '../component-defs';
 import { serializeBlockFragment } from '../serialization';
 import { formatHvyRequestStructureForDirectory } from './request-structure';
@@ -294,6 +294,13 @@ async function runCommand(ctx: HvyCliCommandContext, command: string, args: stri
       return { cwd: ctx.cwd, output: result.output, mutated: result.mutated };
     }
     if (args[0] === 'lint') {
+      if (args[1] === '--fix') {
+        const fixed = fixHvyCliLintIssues(ctx.document);
+        if (fixed.length === 0) {
+          return { cwd: ctx.cwd, output: 'No lint fixes applied.', mutated: false };
+        }
+        return { cwd: ctx.cwd, output: ['Applied lint fixes:', ...fixed.map((line) => `- ${line}`)].join('\n'), mutated: true };
+      }
       return { cwd: ctx.cwd, output: formatHvyCliLintIssues(await runHvyCliLinter(ctx.document)), mutated: false };
     }
     if (args[0] === 'prune-xref') {
@@ -2139,7 +2146,7 @@ function helpFor(topic = ''): string {
     'hvy find-intent': hvyDocumentCommandHelp('find-intent'),
     'hvy cheatsheet': hvyDocumentCommandHelp('cheatsheet'),
     'hvy recipe': hvyDocumentCommandHelp('recipe'),
-    'hvy lint': formatCommandHelp('hvy lint', 'Check the document for likely component issues.'),
+    'hvy lint': formatCommandHelp('hvy lint [--fix]', 'Check the document for likely component issues. --fix repairs safe structural issues such as plugin id aliases.'),
     'hvy prune-xref': hvyDocumentCommandHelp('prune_xref'),
     section: hvyDocumentCommandHelp('section'),
     text: hvyDocumentCommandHelp('text'),

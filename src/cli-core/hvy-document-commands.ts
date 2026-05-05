@@ -127,7 +127,7 @@ export function hvyDocumentCommandHelp(topic = ''): string {
       formatCommandHelp('hvy find-intent QUERY [--max N] [--json]', 'Find likely edit locations for an intent.'),
       formatCommandHelp('hvy cheatsheet [NAME]', 'List or show concise command examples from file-backed cheatsheets.'),
       formatCommandHelp('hvy recipe [NAME]', 'List or show file-backed HVY recipes for composed document patterns.'),
-      formatCommandHelp('hvy lint', 'Check the document for likely component issues.'),
+      formatCommandHelp('hvy lint [--fix]', 'Check the document for likely component issues. --fix repairs safe structural issues such as plugin id aliases.'),
       formatHvyCheatsheetList(),
       formatHvyRecipeList(),
       ...formatPluginQuickReference(),
@@ -139,7 +139,7 @@ export function hvyDocumentCommandHelp(topic = ''): string {
       formatCommandHelp('hvy add COMPONENT PARENT_PATH --id ID [TEXT] [--config JSON]', 'Shortcut where COMPONENT is text, xref-card, skill-record, or another registered component type.'),
       formatCommandHelp('hvy add text SECTION_PATH ID TEXT', 'Create a text component in a section.'),
       formatCommandHelp('hvy add table SECTION_PATH ID COLUMNS [--row CSV]...', 'Create a static table component in a section.'),
-      formatCommandHelp('hvy add plugin SECTION_PATH ID PLUGIN_ID [--config JSON] [--body TEXT]', 'Create a raw plugin block by plugin id.'),
+      formatCommandHelp('hvy add plugin SECTION_PATH ID PLUGIN_ID [--config JSON] [--body TEXT]', 'Create a raw plugin block by canonical plugin id, such as dev.heavy.form or dev.heavy.db-table.'),
     ].join('\n'),
     component: formatCommandHelp('hvy add component PARENT_PATH ID COMPONENT [TEXT] [--config JSON]', 'Append a builtin or custom component to a section, component-list, grid, container, or expandable content path.'),
     section: formatCommandHelp('hvy add section PARENT_PATH ID TITLE', 'Add a section under /body or under another section. Alias: hvy section add.'),
@@ -156,12 +156,12 @@ export function hvyDocumentCommandHelp(topic = ''): string {
       formatHvyRecipeList(),
     ].join('\n'),
     preview: formatCommandHelp('hvy preview PATH', 'Show the raw HVY fragment for a component directory or component body file. Output is capped at 25 lines.'),
-    lint: formatCommandHelp('hvy lint', 'Check the document for empty text, broken xrefs, empty table rows, and plugin-defined issues.'),
+    lint: formatCommandHelp('hvy lint [--fix]', 'Check the document for empty text, broken xrefs, empty table rows, and plugin-defined issues. --fix repairs safe structural issues such as plugin id aliases.'),
     prune_xref: formatCommandHelp('hvy prune-xref TARGET_ID', 'Remove xref-card components whose xrefTarget equals TARGET_ID.'),
     plugin: [
       ...formatPluginQuickReference(),
       ...getHvyCliPluginCommandRegistrations().map((plugin) => formatCommandHelp(plugin.helpTopic, `Show ${plugin.name} plugin commands.`)),
-      formatCommandHelp('hvy add plugin SECTION_PATH ID PLUGIN_ID [--config JSON] [--body TEXT]', 'Create a raw plugin block by plugin id.'),
+      formatCommandHelp('hvy add plugin SECTION_PATH ID PLUGIN_ID [--config JSON] [--body TEXT]', 'Create a raw plugin block by canonical plugin id, such as dev.heavy.form or dev.heavy.db-table.'),
     ].join('\n'),
     form: formatLegacyPluginAliasHelp('form', 'form add'),
     'db-table': formatLegacyPluginAliasHelp('db-table', 'db-table'),
@@ -512,13 +512,38 @@ function formatCreatedComponentDirectory(document: VisualDocument, componentPath
 
 function addPluginBlock(ctx: HvyDocumentCommandContext, args: string[]): HvyDocumentCommandResult {
   const [sectionPath = '', id = '', plugin = '', ...rest] = args;
+  if (plugin === 'form' && rest.some((arg, index) => !isOptionArg(arg) && !isOptionValue(rest, index))) {
+    return addFormPluginBlock(ctx, [sectionPath, id, ...rest]);
+  }
   const section = requireSection(ctx, sectionPath, 'hvy plugin add');
   if (!plugin) {
     throw new Error('hvy plugin add: expected SECTION_PATH ID PLUGIN_ID');
   }
+  const aliasError = formatRawPluginAliasError(plugin);
+  if (aliasError) {
+    throw new Error(aliasError);
+  }
   const config = readOption(rest, '--config');
-  section.blocks.push(createPluginBlock(id, plugin, config ? parseJsonObject(config, 'hvy plugin add --config') : {}, decodeCliText(readOption(rest, '--body') ?? '')));
+  section.blocks.push(createPluginBlock(
+    id,
+    plugin,
+    config ? parseJsonObject(config, 'hvy plugin add --config') : {},
+    decodeCliText(readOption(rest, '--body') ?? '')
+  ));
   return { output: formatCreatedComponentDirectory(ctx.document, `${sectionPath.replace(/\/$/, '')}/${id}`), mutated: true };
+}
+
+function formatRawPluginAliasError(plugin: string): string {
+  if (plugin === 'form') {
+    return 'hvy plugin add: "form" is a CLI command alias, not a stored plugin id. Use "hvy add plugin form SECTION_PATH ID SUBMIT_BUTTON_LABEL FIELD_LABEL:TYPE..." or plugin id "dev.heavy.form".';
+  }
+  if (plugin === 'db-table') {
+    return 'hvy plugin add: "db-table" is a CLI command alias, not a stored plugin id. Use "hvy add plugin db-table SECTION_PATH ID TABLE [QUERY]" or plugin id "dev.heavy.db-table".';
+  }
+  if (plugin === 'scripting') {
+    return 'hvy plugin add: "scripting" is a CLI command alias, not a stored plugin id. Use plugin id "dev.heavy.scripting".';
+  }
+  return '';
 }
 
 function addFormPluginBlock(ctx: HvyDocumentCommandContext, args: string[]): HvyDocumentCommandResult {

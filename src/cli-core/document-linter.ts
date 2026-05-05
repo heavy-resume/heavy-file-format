@@ -1,5 +1,7 @@
 import { resolveBaseComponentFromMeta } from '../component-defs';
+import type { VisualBlock, VisualSection } from '../editor/types';
 import type { JsonObject } from '../hvy/types';
+import { DB_TABLE_PLUGIN_ID, FORM_PLUGIN_ID, SCRIPTING_PLUGIN_ID } from '../plugins/registry';
 import type { VisualDocument } from '../types';
 import { getHvyCliPluginCommandRegistrationByPluginId } from './plugin-command-registry';
 import { buildHvyVirtualFileSystem, type HvyVirtualEntry, type HvyVirtualFileSystem } from './virtual-file-system';
@@ -21,6 +23,14 @@ export async function runHvyCliLinter(document: VisualDocument): Promise<HvyCliL
     ...lintSections(fs),
     ...componentIssues.flat(),
   ];
+}
+
+export function fixHvyCliLintIssues(document: VisualDocument): string[] {
+  const fixed: string[] = [];
+  for (const section of document.sections) {
+    fixSectionPluginAliasIds(section, fixed);
+  }
+  return fixed;
 }
 
 export function formatHvyCliLintIssues(issues: HvyCliLintIssue[]): string {
@@ -124,6 +134,15 @@ async function lintPluginComponent(params: { document: VisualDocument; path: str
   if (!pluginId) {
     return [];
   }
+  const alias = getStoredPluginAlias(pluginId);
+  if (alias) {
+    return [{
+      key: `${params.path}:plugin-id-alias:${pluginId}`,
+      path: params.path,
+      component: 'plugin',
+      message: `plugin id "${pluginId}" is a CLI command alias, not a stored plugin id. Run hvy lint --fix to change it to "${alias.pluginId}".`,
+    }];
+  }
   const registration = getHvyCliPluginCommandRegistrationByPluginId(pluginId);
   const issueGroups = await Promise.all((registration?.lintChecks ?? []).map(async (check, index) =>
     (await check({
@@ -143,6 +162,51 @@ async function lintPluginComponent(params: { document: VisualDocument; path: str
     }))
   ));
   return issueGroups.flat();
+}
+
+function fixSectionPluginAliasIds(section: VisualSection, fixed: string[]): void {
+  for (const block of section.blocks) {
+    fixBlockPluginAliasIds(block, fixed);
+  }
+  for (const child of section.children) {
+    fixSectionPluginAliasIds(child, fixed);
+  }
+}
+
+function fixBlockPluginAliasIds(block: VisualBlock, fixed: string[]): void {
+  const plugin = getStoredPluginAlias(block.schema.plugin ?? '');
+  if (plugin) {
+    block.schema.plugin = plugin.pluginId;
+    fixed.push(`${block.schema.id || '(anonymous plugin)'}: ${plugin.alias} -> ${plugin.pluginId}`);
+  }
+  for (const child of block.schema.containerBlocks ?? []) {
+    fixBlockPluginAliasIds(child, fixed);
+  }
+  for (const child of block.schema.componentListBlocks ?? []) {
+    fixBlockPluginAliasIds(child, fixed);
+  }
+  for (const item of block.schema.gridItems ?? []) {
+    fixBlockPluginAliasIds(item.block, fixed);
+  }
+  for (const child of block.schema.expandableStubBlocks?.children ?? []) {
+    fixBlockPluginAliasIds(child, fixed);
+  }
+  for (const child of block.schema.expandableContentBlocks?.children ?? []) {
+    fixBlockPluginAliasIds(child, fixed);
+  }
+}
+
+function getStoredPluginAlias(pluginId: string): { alias: string; pluginId: string } | null {
+  if (pluginId === 'form') {
+    return { alias: 'form', pluginId: FORM_PLUGIN_ID };
+  }
+  if (pluginId === 'db-table') {
+    return { alias: 'db-table', pluginId: DB_TABLE_PLUGIN_ID };
+  }
+  if (pluginId === 'scripting') {
+    return { alias: 'scripting', pluginId: SCRIPTING_PLUGIN_ID };
+  }
+  return null;
 }
 
 function hasChildComponent(fs: HvyVirtualFileSystem, path: string): boolean {

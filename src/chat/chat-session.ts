@@ -9,6 +9,7 @@ import { runChatCliEditLoop, type ChatCliSelectedComponentFocus } from '../chat-
 export interface ChatTurnResult {
   messages: ChatMessage[];
   error: string | null;
+  awaitingUser?: boolean;
 }
 
 export function appendUserChatMessage(messages: ChatMessage[], question: string): ChatMessage[] {
@@ -235,6 +236,7 @@ export async function requestDocumentEditChatTurn(params: {
         },
       ],
       error: null,
+      awaitingUser: result.asked,
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : 'CLI document edit failed.';

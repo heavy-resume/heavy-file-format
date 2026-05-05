@@ -71,3 +71,20 @@ hvy_version: 0.1
   expect(html).toContain('<div class="chat-token-usage">Tokens: input 120 / output 30</div>');
   expect(html).toContain('Last tokens: input 120 / output 30');
 });
+
+test('renderChatPanel hides the change request input while document edits are running', () => {
+  const chat = createDefaultChatState();
+  chat.panelOpen = true;
+  chat.isSending = true;
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+`, '.hvy');
+
+  const html = renderChatPanel(chat, document, deps, 'document-edit');
+
+  expect(html).not.toContain('data-field="chat-input"');
+  expect(html).not.toContain('Change request');
+  expect(html).toContain('Working through the request...');
+  expect(html).toContain('data-action="cancel-chat-request"');
+});

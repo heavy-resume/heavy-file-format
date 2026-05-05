@@ -157,6 +157,9 @@ export async function submitAiEditRequest(): Promise<void> {
       state.aiEdit.error = result.error;
     } else {
       closeAiEditPopover();
+      if (!result.awaitingUser) {
+        state.chat.panelOpen = false;
+      }
       getRefreshReaderPanels()();
     }
     getRenderApp()();
@@ -168,12 +171,13 @@ export async function submitAiEditRequest(): Promise<void> {
     state.chat.error = state.aiEdit.error;
     getRenderApp()();
   } finally {
-    if (requestNonce !== state.aiEdit.requestNonce) {
-      return;
-    }
     if (chatRequestNonce === state.chat.requestNonce) {
       state.chat.abortController = null;
       state.chat.isSending = false;
+    }
+    if (requestNonce !== state.aiEdit.requestNonce) {
+      getRenderApp()();
+      return;
     }
     state.aiEdit.isSending = false;
     getRenderApp()();

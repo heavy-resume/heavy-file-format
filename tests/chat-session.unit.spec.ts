@@ -430,6 +430,7 @@ test('requestDocumentEditChatTurn returns ask commands as clarification question
     role: 'assistant',
     content: 'Which section should I update?',
   }));
+  expect(result.awaitingUser).toBe(true);
   expect(onMutation).not.toHaveBeenCalled();
 });
 

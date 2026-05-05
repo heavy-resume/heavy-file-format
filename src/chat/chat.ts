@@ -172,6 +172,29 @@ export function renderChatPanel(
   const promptPlaceholder = isDocumentEdit
     ? 'Describe how the document should change...'
     : 'Ask about the current HVY document...';
+  const composerHtml = chat.isSending
+    ? `<div class="chat-busy-footer">
+         <span class="chat-composer-status">Working through the request...</span>
+         <button type="button" class="danger" data-action="cancel-chat-request">Stop</button>
+       </div>`
+    : `<form id="chatComposer" class="chat-composer">
+         <label class="chat-composer-field">
+           <span>${promptLabel}</span>
+           <textarea data-field="chat-input" rows="5" placeholder="${deps.escapeAttr(promptPlaceholder)}">${deps.escapeHtml(chat.draft)}</textarea>
+         </label>
+         <div class="chat-composer-actions">
+           <span class="chat-composer-status">
+             ${
+              missingModel
+                 ? 'Choose a model before sending.'
+                 : !hasDraft
+                 ? latestTokenUsage ? `Last ${formatChatTokenUsage(latestTokenUsage).toLowerCase()}` : 'Type your prompt'
+                 : latestTokenUsage ? `Ready · last ${formatChatTokenUsage(latestTokenUsage).toLowerCase()}` : 'Ready'
+             }
+           </span>
+           <button type="submit" class="secondary"${canSend ? '' : ' disabled'}>Send</button>
+         </div>
+       </form>`;
   return `
     <div class="chat-dock ${chat.panelOpen ? 'is-open' : 'is-closed'}" aria-label="Document chat">
       ${
@@ -229,30 +252,7 @@ export function renderChatPanel(
                  </div>
 
                  <div class="chat-footer">
-                   <form id="chatComposer" class="chat-composer">
-                     <label class="chat-composer-field">
-                       <span>${promptLabel}</span>
-                       <textarea data-field="chat-input" rows="5" placeholder="${deps.escapeAttr(promptPlaceholder)}" ${chat.isSending ? 'disabled' : ''}>${deps.escapeHtml(chat.draft)}</textarea>
-                     </label>
-                     <div class="chat-composer-actions">
-                       <span class="chat-composer-status">
-                         ${
-                          chat.isSending
-                             ? 'Working through the request...'
-                             : missingModel
-                             ? 'Choose a model before sending.'
-                             : !hasDraft
-                             ? latestTokenUsage ? `Last ${formatChatTokenUsage(latestTokenUsage).toLowerCase()}` : 'Type your prompt'
-                             : latestTokenUsage ? `Ready · last ${formatChatTokenUsage(latestTokenUsage).toLowerCase()}` : 'Ready'
-                         }
-                       </span>
-                       ${
-                         chat.isSending
-                           ? '<button type="button" class="danger" data-action="cancel-chat-request">Stop</button>'
-                           : `<button type="submit" class="secondary"${canSend ? '' : ' disabled'}>Send</button>`
-                       }
-                     </div>
-                   </form>
+                   ${composerHtml}
                  </div>
                </div>
                <button type="button" class="chat-scroll-bottom" data-action="chat-scroll-bottom" hidden>Latest ↓</button>

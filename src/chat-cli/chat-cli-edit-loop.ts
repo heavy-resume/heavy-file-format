@@ -25,6 +25,7 @@ const introducedDiagnosticsByDocument = new WeakMap<VisualDocument, Map<string, 
 export interface ChatCliEditTurnResult {
   summary: string;
   tokenUsage?: ChatTokenUsage;
+  asked?: boolean;
 }
 
 export interface ChatCliSelectedComponentFocus {
@@ -167,7 +168,7 @@ export async function runChatCliEditLoop(params: {
       };
     }
     if (action.kind === 'ask') {
-      return { summary: action.question, ...(latestTokenUsage ? { tokenUsage: latestTokenUsage } : {}) };
+      return { summary: action.question, asked: true, ...(latestTokenUsage ? { tokenUsage: latestTokenUsage } : {}) };
     }
 
     const commandOutputs: Array<{ command: string; output: string }> = [];

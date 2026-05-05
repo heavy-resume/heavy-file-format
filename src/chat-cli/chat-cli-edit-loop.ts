@@ -1,5 +1,5 @@
 import { requestProxyCompletion } from '../chat/chat';
-import { formatHvyCliLintDiff, type HvyCliLintIssue, runHvyCliLinter } from '../cli-core/document-linter';
+import { formatHvyCliLintDiff, formatHvyCliLintIssueLine, type HvyCliLintIssue, runHvyCliLinter } from '../cli-core/document-linter';
 import type { ChatMessage, ChatSettings, ChatTokenUsage, VisualDocument } from '../types';
 import { buildChatCliComponentHints } from './chat-cli-component-hints';
 import { createChatCliTraceRunId, writeChatCliCommandTrace, writeChatCliUserQueryTrace } from './chat-cli-dev-trace';
@@ -14,6 +14,7 @@ const CHAT_CLI_PRIOR_MESSAGE_LIMIT = 10;
 const CHAT_CLI_MODEL_OUTPUT_MAX_LINES = 100;
 const CHAT_CLI_MODEL_OUTPUT_MAX_LINE_WIDTH = 400;
 const CHAT_CLI_COMMAND_NAMES = new Set(['cd', 'pwd', 'ls', 'cat', 'head', 'tail', 'nl', 'find', 'rg', 'grep', 'sort', 'uniq', 'wc', 'tr', 'xargs', 'cp', 'rm', 'echo', 'sed', 'true', 'hvy', 'db-table', 'form', 'ask']);
+const introducedLintIssuesByDocument = new WeakMap<VisualDocument, Map<string, HvyCliLintIssue>>();
 
 export interface ChatCliEditTurnResult {
   summary: string;
@@ -41,6 +42,7 @@ export async function runChatCliEditLoop(params: {
   const initialStructure = await cli.run('hvy request_structure --collapse');
   await writeChatCliCommandTrace(traceRunId, initialStructure.command, initialStructure.output, params.signal);
   let lintIssues = await runHvyCliLinter(params.document);
+  syncIntroducedLintIssues(params.document, lintIssues);
   const initialLint = await cli.run('hvy lint');
   await writeChatCliCommandTrace(traceRunId, initialLint.command, initialLint.output, params.signal);
   const initialIntent = await cli.run(`hvy find-intent ${quoteChatCliShellArg(params.request)} --max 5`);
@@ -68,7 +70,14 @@ export async function runChatCliEditLoop(params: {
     const response = await requestProxyCompletion({
       settings: params.settings,
       messages: conversation,
-      context: buildChatCliLoopContext(cli.snapshot(), params.request, params.priorMessages ?? [], priorConversation, urgency),
+      context: buildChatCliLoopContext(
+        cli.snapshot(),
+        params.request,
+        params.priorMessages ?? [],
+        priorConversation,
+        urgency,
+        getIntroducedLintIssues(params.document)
+      ),
       formatInstructions: buildChatCliLoopFormatInstructions(),
       mode: 'document-edit',
       debugLabel: `chat-cli-edit:${step + 1}`,
@@ -98,6 +107,25 @@ export async function runChatCliEditLoop(params: {
       continue;
     }
     if (action.kind === 'done') {
+      lintIssues = await runHvyCliLinter(params.document);
+      syncIntroducedLintIssues(params.document, lintIssues);
+      const introducedIssues = getIntroducedLintIssues(params.document);
+      if (introducedIssues.length > 0) {
+        conversation = [
+          ...conversation,
+          {
+            id: crypto.randomUUID(),
+            role: 'assistant',
+            content: response,
+          },
+          {
+            id: crypto.randomUUID(),
+            role: 'user',
+            content: formatIntroducedLintIssuesPrompt(introducedIssues),
+          },
+        ];
+        continue;
+      }
       params.onProgress?.('Finished CLI edit loop.');
       return {
         summary: action.summary || `Finished after ${step + 1} step${step === 0 ? '' : 's'}.`,
@@ -158,12 +186,13 @@ export async function runChatCliEditLoop(params: {
     }
     const modelMessage = formatCommandResultForModel({
       output: formatBatchCommandOutput(commandOutputs),
-      lintDiff: await updateLintDiff(params.document, (nextIssues) => {
+      lintDiff: await updateLintState(params.document, lintIssues, mutated, (nextIssues) => {
         const diff = formatHvyCliLintDiff(lintIssues, nextIssues);
         lintIssues = nextIssues;
         return diff;
       }),
       hints: formatBatchHints(commandHints),
+      introducedLintIssues: formatIntroducedLintIssuesForModel(getIntroducedLintIssues(params.document)),
       scratchpad: formatScratchpadForModel(cli.snapshot()),
       urgency: formatChatCliUrgency(urgency),
     });
@@ -206,7 +235,8 @@ function buildChatCliLoopContext(
   request: string,
   priorMessages: ChatMessage[],
   priorConversation: ChatMessage[],
-  urgency: number
+  urgency: number,
+  introducedLintIssues: HvyCliLintIssue[]
 ): string {
   const omittedMessageCount = priorMessages.filter((message) => !message.progress).length - priorConversation.length;
   return [
@@ -223,6 +253,9 @@ function buildChatCliLoopContext(
     '',
     'urgency:',
     formatChatCliUrgency(urgency),
+    '',
+    'AI-introduced lint issues:',
+    formatIntroducedLintIssuesForModel(introducedLintIssues),
     '',
     'Valid commands:',
     snapshot.commandSummary,
@@ -249,6 +282,7 @@ function formatInitialChatCliCommandMessages(
         ? formatCommandResultForModel({
             output: output.output,
             hints: '',
+            introducedLintIssues: '',
             scratchpad: formatScratchpadForModel(snapshot),
             urgency: formatChatCliUrgency(0),
           })
@@ -427,7 +461,7 @@ function normalizeCommandResponse(response: string): string {
   return commandText.trim();
 }
 
-function formatCommandResultForModel(result: string | { output: string; lintDiff?: string; hints?: string; scratchpad?: string; urgency?: string }): string {
+function formatCommandResultForModel(result: string | { output: string; lintDiff?: string; hints?: string; introducedLintIssues?: string; scratchpad?: string; urgency?: string }): string {
   if (typeof result === 'string') {
     return result.trimEnd() || '(no output)';
   }
@@ -439,6 +473,8 @@ function formatCommandResultForModel(result: string | { output: string; lintDiff
       : []),
     'hints',
     result.hints?.trimEnd() || '(none)',
+    'AI-introduced lint issues',
+    result.introducedLintIssues?.trimEnd() || '(none)',
     '',
     '### BEGIN /scratchpad.txt  ###',
     result.scratchpad?.trimEnd() || '(empty)',
@@ -538,8 +574,74 @@ function formatScratchpadForModel(snapshot: Pick<ReturnType<ReturnType<typeof cr
   ].join('\n');
 }
 
-async function updateLintDiff(document: VisualDocument, update: (issues: HvyCliLintIssue[]) => string): Promise<string> {
-  return update(await runHvyCliLinter(document));
+function getIntroducedLintIssues(document: VisualDocument): HvyCliLintIssue[] {
+  return [...(introducedLintIssuesByDocument.get(document)?.values() ?? [])];
+}
+
+function recordIntroducedLintIssues(document: VisualDocument, previousIssues: HvyCliLintIssue[], nextIssues: HvyCliLintIssue[]): void {
+  const previousKeys = new Set(previousIssues.map((issue) => issue.key));
+  const introduced = getIntroducedLintIssueMap(document);
+  for (const issue of nextIssues) {
+    if (!previousKeys.has(issue.key)) {
+      introduced.set(issue.key, issue);
+    }
+  }
+}
+
+function syncIntroducedLintIssues(document: VisualDocument, currentIssues: HvyCliLintIssue[]): void {
+  const currentByKey = new Map(currentIssues.map((issue) => [issue.key, issue]));
+  const introduced = getIntroducedLintIssueMap(document);
+  for (const key of [...introduced.keys()]) {
+    const current = currentByKey.get(key);
+    if (current) {
+      introduced.set(key, current);
+    } else {
+      introduced.delete(key);
+    }
+  }
+}
+
+function getIntroducedLintIssueMap(document: VisualDocument): Map<string, HvyCliLintIssue> {
+  const existing = introducedLintIssuesByDocument.get(document);
+  if (existing) {
+    return existing;
+  }
+  const created = new Map<string, HvyCliLintIssue>();
+  introducedLintIssuesByDocument.set(document, created);
+  return created;
+}
+
+function formatIntroducedLintIssuesForModel(issues: HvyCliLintIssue[]): string {
+  if (issues.length === 0) {
+    return '(none)';
+  }
+  return [
+    'These lint issues were introduced by prior AI edits and remain unresolved. Fix them before finishing:',
+    ...issues.map(formatHvyCliLintIssueLine),
+  ].join('\n');
+}
+
+function formatIntroducedLintIssuesPrompt(issues: HvyCliLintIssue[]): string {
+  return [
+    'You cannot finish yet.',
+    formatIntroducedLintIssuesForModel(issues),
+    '',
+    'Run commands to fix these issues, then run hvy lint to verify they are gone. What is your next command?',
+  ].join('\n');
+}
+
+async function updateLintState(
+  document: VisualDocument,
+  previousIssues: HvyCliLintIssue[],
+  mutated: boolean,
+  update: (issues: HvyCliLintIssue[]) => string
+): Promise<string> {
+  const nextIssues = await runHvyCliLinter(document);
+  if (mutated) {
+    recordIntroducedLintIssues(document, previousIssues, nextIssues);
+  }
+  syncIntroducedLintIssues(document, nextIssues);
+  return update(nextIssues);
 }
 
 function isLikelyProseResponse(value: string): boolean {

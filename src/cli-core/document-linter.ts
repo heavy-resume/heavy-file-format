@@ -39,13 +39,13 @@ export function formatHvyCliLintIssues(issues: HvyCliLintIssue[]): string {
   }
   return [
     `Lint issues: ${issues.length}`,
-    ...issues.map(formatLintIssueLine),
+    ...issues.map(formatHvyCliLintIssueLine),
   ].join('\n');
 }
 
 export function formatHvyCliLintDiff(before: HvyCliLintIssue[], after: HvyCliLintIssue[]): string {
-  const beforeLines = new Map(before.map((issue) => [issue.key, formatLintIssueLine(issue)]));
-  const afterLines = new Map(after.map((issue) => [issue.key, formatLintIssueLine(issue)]));
+  const beforeLines = new Map(before.map((issue) => [issue.key, formatHvyCliLintIssueLine(issue)]));
+  const afterLines = new Map(after.map((issue) => [issue.key, formatHvyCliLintIssueLine(issue)]));
   const removed = [...beforeLines.entries()]
     .filter(([key]) => !afterLines.has(key))
     .map(([, line]) => `- ${line}`);
@@ -223,7 +223,7 @@ function createLintIssue(params: { path: string; component: string }, code: stri
   };
 }
 
-function formatLintIssueLine(issue: HvyCliLintIssue): string {
+export function formatHvyCliLintIssueLine(issue: HvyCliLintIssue): string {
   return `[${issue.component}] ${issue.path} - ${issue.message}`;
 }
 

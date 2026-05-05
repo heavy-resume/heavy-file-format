@@ -695,6 +695,55 @@ hvy_version: 0.1
   expect(nextPrompt).toContain('lint diff\n- [text] /body/summary/empty-note - text body is empty.');
 });
 
+test('requestDocumentEditChatTurn keeps AI-introduced lint issues active until fixed', async () => {
+  requestProxyCompletionMock
+    .mockResolvedValueOnce('hvy add text /summary empty placeholder && echo "" > /body/summary/empty/text.txt')
+    .mockResolvedValueOnce('ask Should I keep going?')
+    .mockResolvedValueOnce('done Created the note.')
+    .mockResolvedValueOnce('echo "Fixed note" > /body/summary/empty/text.txt')
+    .mockResolvedValueOnce('done Fixed the note.');
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+`, '.hvy');
+
+  const firstResult = await requestDocumentEditChatTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Create a placeholder note.',
+  });
+
+  expect(firstResult.error).toBeNull();
+  expect(firstResult.messages.at(-1)).toEqual(expect.objectContaining({
+    role: 'assistant',
+    content: 'Should I keep going?',
+  }));
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('AI-introduced lint issues:');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('[text] /body/summary/empty - text body is empty.');
+
+  const secondResult = await requestDocumentEditChatTurn({
+    settings,
+    document,
+    messages: firstResult.messages,
+    request: 'yes, finish',
+  });
+
+  expect(secondResult.error).toBeNull();
+  expect(secondResult.messages.at(-1)).toEqual(expect.objectContaining({
+    role: 'assistant',
+    content: 'Fixed the note.',
+  }));
+  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.context).toContain('[text] /body/summary/empty - text body is empty.');
+  expect(requestProxyCompletionMock.mock.calls[3]?.[0]?.messages.at(-1)?.content).toContain('You cannot finish yet.');
+  expect(requestProxyCompletionMock.mock.calls[3]?.[0]?.messages.at(-1)?.content).toContain('Fix them before finishing');
+  expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.context).toContain('AI-introduced lint issues:\n(none)');
+});
+
 test('requestDocumentEditChatTurn includes component-specific hints', async () => {
   requestProxyCompletionMock
     .mockResolvedValueOnce('cat /body/dashboard/layout/grid.json')

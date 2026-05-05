@@ -1450,6 +1450,28 @@ hvy_version: 0.1
   expect(result.output).toContain('[text] /body/quality/empty-note - text body is empty. (placeholder: Organization)');
 });
 
+test('hvy lint reports structural component-list paths instead of flattened aliases', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"history"}-->
+#! History
+
+<!--hvy:component-list {"id":"history-list","componentListComponent":"text"}-->
+
+ <!--hvy:component-list:0 {}-->
+
+  <!--hvy:text {"id":"history-acme","placeholder":"Organization"}-->
+`, '.hvy');
+  const session = createHvyCliSession();
+
+  const result = await executeHvyCliCommand(document, session, 'hvy lint');
+
+  expect(result.output).toContain('[text] /body/history/history-list/component-list/history-acme - text body is empty. (placeholder: Organization)');
+  expect(result.output).not.toContain('/body/history/history-acme - text body is empty.');
+});
+
 test('hvy lint reports database schemas stored in header metadata', async () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1

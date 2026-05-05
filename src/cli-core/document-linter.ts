@@ -37,15 +37,41 @@ export interface HvyCliLintIssue {
 
 export async function runHvyCliLinter(document: VisualDocument): Promise<HvyCliLintIssue[]> {
   const fs = buildHvyVirtualFileSystem(document);
-  const componentIssues = await Promise.all([...fs.entries.values()]
-    .filter((entry): entry is HvyVirtualEntry & { kind: 'file' } =>
-      entry.kind === 'file' && entry.path.startsWith('/body/') && entry.path.endsWith('.json') && !entry.path.endsWith('/section.json'))
+  const componentJsonFiles = [...fs.entries.values()]
+    .filter((entry): entry is HvyVirtualEntry & { kind: 'file' } => isLintableComponentJsonPath(fs, entry))
+    .filter((entry) => !isFlattenedComponentListAlias(fs, entry.path));
+  const componentIssues = await Promise.all(componentJsonFiles
     .map((entry) => lintComponentFile(document, fs, entry.path)));
   return [
     ...lintHeader(document),
     ...lintSections(fs),
     ...componentIssues.flat(),
   ];
+}
+
+function isLintableComponentJsonPath(fs: HvyVirtualFileSystem, entry: HvyVirtualEntry): entry is HvyVirtualEntry & { kind: 'file' } {
+  return entry.kind === 'file'
+    && entry.path.startsWith('/body/')
+    && entry.path.endsWith('.json')
+    && !entry.path.endsWith('/section.json')
+    && !!findComponentBodyPath(fs, entry.path.replace(/\/[^/]+$/, ''), entry.path.split('/').pop()?.replace(/\.json$/, '') ?? '');
+}
+
+function isFlattenedComponentListAlias(fs: HvyVirtualFileSystem, jsonPath: string): boolean {
+  const directory = jsonPath.replace(/\/[^/]+$/, '');
+  const parent = directory.replace(/\/[^/]+$/, '');
+  if (!parent || parent === '/body' || parent.includes('/component-list')) {
+    return false;
+  }
+  const fileName = jsonPath.split('/').pop() ?? '';
+  const componentListAliases = [...fs.entries.keys()]
+    .filter((path) => path.startsWith(`${parent}/`) && path.includes('/component-list/') && path.endsWith(`/${fileName}`));
+  if (componentListAliases.length === 0) {
+    return false;
+  }
+  const bodyName = fileName.replace(/\.json$/, '.txt');
+  const aliasBody = `${directory}/${bodyName}`;
+  return fs.entries.has(aliasBody);
 }
 
 export function fixHvyCliLintIssues(document: VisualDocument): string[] {

@@ -1,4 +1,5 @@
-Table component: static table data rendered from configured rows and columns.
+# Table Components #
+Static table data rendered from configured rows and columns.
 In the CLI, tableColumns.json is a JSON array of strings and tableRows.json is a JSON array of string arrays.
 In raw HVY schema, tableColumns is a comma-separated column list.
 tableShowHeader controls whether the header row is shown.

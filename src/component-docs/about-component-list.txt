@@ -1,4 +1,5 @@
-Component-list component: repeated child components.
+# Component-List Components #
+Repeated child components.
 componentListComponent describes what kind of item the list is expected to contain.
 componentListItemLabel is a human-friendly singular label for add/edit prompts.
 componentListBlocks holds the ordered child blocks.

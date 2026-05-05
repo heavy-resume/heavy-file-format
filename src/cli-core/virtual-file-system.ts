@@ -395,8 +395,8 @@ function formatSectionInfo(section: VisualSection): string {
     '',
     'This section',
     `id: ${getSectionId(section) || '(none)'}`,
-    `title: ${section.title || '(untitled)'}`,
-    `level: ${section.level}`,
+    `name: ${section.title || '(untitled)'}`,
+    `section nesting level: ${section.level}`,
     ...(section.description?.trim() ? [`description: ${section.description.trim()}`] : []),
     ...(section.tags?.trim() ? [`tags: ${section.tags.trim()}`] : []),
     ...(section.location ? [`location: ${section.location}`] : []),
@@ -407,10 +407,10 @@ function formatSectionInfo(section: VisualSection): string {
 function formatSectionAbout(section: VisualSection): string {
   const helpLines = getHvySectionHelpLines();
   return `${[
-    'About section',
+    ...(helpLines.length > 0 ? [helpLines[0] ?? ''] : ['# Sections #']),
     ...(section.description?.trim() ? ['', 'Section description:', section.description.trim()] : []),
     '',
-    ...(helpLines.length > 0 ? helpLines : ['No section documentation is registered yet.']),
+    ...(helpLines.length > 1 ? helpLines.slice(1) : helpLines.length === 0 ? ['No section documentation is registered yet.'] : []),
     '',
   ].join('\n')}`;
 }
@@ -465,18 +465,21 @@ function formatComponentAbout(meta: JsonObject, component: string): string {
   const baseComponent = resolveBaseComponentFromMeta(component, meta);
   const helpLines = getHvyComponentHelpLines(baseComponent);
   const isReusableComponent = !!definition && definition.name !== baseComponent;
+  if (!isReusableComponent) {
+    return `${(helpLines.length > 0 ? helpLines : [`# ${component} Components #`, 'No component documentation is registered yet.']).join('\n').trimEnd()}\n`;
+  }
   const lines = [
     `About ${component}`,
-    isReusableComponent ? `reusable component: ${definition.name}` : '',
-    isReusableComponent && definition.baseType ? `base component: ${definition.baseType}` : '',
-    isReusableComponent ? 'Edit this reusable component definition in /header.yaml under component_defs.' : '',
-    isReusableComponent ? 'Reusable definition YAML:' : '',
-    isReusableComponent ? '```yaml' : '',
-    isReusableComponent ? formatReusableDefinitionYaml(definition) : '',
-    isReusableComponent ? '```' : '',
-    isReusableComponent ? '' : '',
-    isReusableComponent ? 'Virtual directory mapping:' : '',
-    ...(isReusableComponent ? formatComponentDirectoryMapping(component, baseComponent) : []),
+    `reusable component: ${definition.name}`,
+    definition.baseType ? `base component: ${definition.baseType}` : '',
+    'Edit this reusable component definition in /header.yaml under component_defs.',
+    'Reusable definition YAML:',
+    '```yaml',
+    formatReusableDefinitionYaml(definition),
+    '```',
+    '',
+    'Virtual directory mapping:',
+    ...formatComponentDirectoryMapping(component, baseComponent),
     '',
     ...(helpLines.length > 0 ? helpLines : [`${component} component: no component documentation is registered yet.`]),
     '',

@@ -1,4 +1,5 @@
-DB Table plugin: displays dynamic rows from a backend table, view, or SELECT query.
+# DB Table Plugins #
+Displays dynamic rows from a backend table, view, or SELECT query.
 pluginConfig.table names the table or view to display.
 The plugin body may contain an optional SELECT query for display.
 Use hvy plugin db-table tables to inspect available tables and views.

@@ -1,4 +1,5 @@
-Section: top-level or nested document region with a heading and ordered content.
+# Sections #
+Sections are top-level or nested document region with a heading and ordered content.
 Sections may contain child sections and component blocks.
 Section level controls heading depth; section title is the visible heading text.
 Sections can be addressed by id and may carry description, tags, layout location, and CSS metadata.

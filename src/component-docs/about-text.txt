@@ -1,4 +1,5 @@
-Text component: Markdown block content rendered in normal document flow.
+# Text Components #
+Markdown block content rendered in normal document flow.
 The body may contain prose, headings, lists, blockquotes, fenced code blocks, thematic breaks, and inline Markdown formatting.
 Use Markdown fences for code; structural indentation around HVY directives is not Markdown code indentation.
 Raw HTML in text content is preserved as source text but renderers must escape or sanitize it.

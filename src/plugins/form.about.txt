@@ -1,4 +1,5 @@
-Form plugin: renders editable form fields and optional scripted behavior.
+# Form Plugins #
+Renders editable form fields and optional scripted behavior.
 Fields live in plugin.txt as YAML under the fields key.
 Form-level settings live in plugin.json pluginConfig, including submitLabel, showSubmit, initialScript, and submitScript.
 Fields use label as both visible text and the scripting key.

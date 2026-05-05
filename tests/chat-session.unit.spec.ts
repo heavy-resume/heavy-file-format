@@ -460,7 +460,7 @@ hvy_version: 0.1
     messages: [],
     request: 'Add another list item about shipping.',
     selectedComponent: {
-      path: '/body/summary/items/component-list/existing',
+      path: '/body/summary/items/existing',
       sectionTitle: 'Summary',
       component: 'text',
       baseComponent: 'text',
@@ -469,8 +469,8 @@ hvy_version: 0.1
   });
 
   expect(result.error).toBeNull();
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Parent path: /body/summary/items/component-list');
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Current directory: /body/summary/items/component-list');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Parent path: /body/summary/items');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Current directory: /body/summary/items');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('This request appears to add a new item.');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Do not overwrite the selected component.');
 });
@@ -921,7 +921,7 @@ hvy_version: 0.1
   expect(nextPrompt).toContain('What is your next command?');
   expect(nextPrompt.trimEnd()).toMatch(/What is your next command\?$/);
   expect(nextPrompt).toContain('optional context, not required actions\ncomponent text: /body/summary/intro');
-  expect(nextPrompt).toContain('Text component: Markdown block content rendered in normal document flow.');
+  expect(nextPrompt).toContain('# Text Components #');
   expect(nextPrompt).toContain('files: text.txt for body, text.json for config.');
   expect(nextPrompt).toContain('optional commands: inspect with hvy request_structure /body/summary/intro --describe; remove this component with hvy remove /body/summary/intro.');
   expect(nextPrompt).toContain('optional sibling creation: hvy add text /body/summary --id NEW_ID "Initial body text"');
@@ -1047,7 +1047,7 @@ hvy_version: 0.1
   expect(result.error).toBeNull();
   const nextPrompt = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content ?? '';
   expect(nextPrompt).toContain('component grid: /body/dashboard/layout');
-  expect(nextPrompt).toContain('Grid component: lays out child components visually like a CSS grid.');
+  expect(nextPrompt).toContain('# Grid Components #');
   expect(nextPrompt).toContain('files: grid.txt for body, grid.json for config.');
   expect(nextPrompt).toContain('optional commands: inspect with hvy request_structure /body/dashboard/layout --describe; remove this component with hvy remove /body/dashboard/layout.');
   expect(nextPrompt).toContain('optional sibling creation: hvy add grid /body/dashboard --id NEW_ID "Initial body text"');

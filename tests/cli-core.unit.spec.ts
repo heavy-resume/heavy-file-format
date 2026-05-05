@@ -34,17 +34,19 @@ test('cli can navigate and read virtual component files', async () => {
   expect((await executeHvyCliCommand(document, session, 'ls /body/summary')).output).toContain('file about-section.txt [ro]');
   expect((await executeHvyCliCommand(document, session, 'ls /body/summary')).output).toContain('file section-info.txt [ro]');
   expect((await executeHvyCliCommand(document, session, 'cat /body/summary/about-section.txt')).output).toContain(
-    'Section: top-level or nested document region with a heading and ordered content.'
+    '# Sections #'
   );
   expect((await executeHvyCliCommand(document, session, 'cat /body/summary/section-info.txt')).output).toContain(
-    'Section: top-level or nested document region with a heading and ordered content.'
+    '# Sections #'
   );
   expect((await executeHvyCliCommand(document, session, 'cat /body/summary/section-info.txt')).output).toContain('This section');
+  expect((await executeHvyCliCommand(document, session, 'cat /body/summary/section-info.txt')).output).toContain('name: Summary');
+  expect((await executeHvyCliCommand(document, session, 'cat /body/summary/section-info.txt')).output).toContain('section nesting level: 1');
   expect((await executeHvyCliCommand(document, session, 'ls /body/summary/intro')).output).toContain('file text.txt [w]');
   expect((await executeHvyCliCommand(document, session, 'ls /body/summary/intro')).output).toContain('file about-text.txt [ro]');
   expect((await executeHvyCliCommand(document, session, 'cat intro/text.txt')).output).toBe('Hello world');
   expect((await executeHvyCliCommand(document, session, 'cat intro/text.json')).output).toContain('"css": "margin: 0.5rem 0;"');
-  expect((await executeHvyCliCommand(document, session, 'cat intro/about-text.txt')).output).toContain('Text component: Markdown block content rendered in normal document flow.');
+  expect((await executeHvyCliCommand(document, session, 'cat intro/about-text.txt')).output).toContain('# Text Components #');
   expect((await executeHvyCliCommand(document, session, 'man ls')).output).toContain('Files are marked [w] writable or [ro] read-only.');
 });
 
@@ -62,7 +64,7 @@ hvy_version: 0.1
 
   expect(about.output).toContain('Section description:');
   expect(about.output).toContain('Work history section. Keep entries reverse chronological.');
-  expect(about.output).toContain('Section: top-level or nested document region with a heading and ordered content.');
+  expect(about.output).toContain('# Sections #');
 });
 
 test('cli accepts shell commands prefixed with hvy', async () => {
@@ -157,7 +159,7 @@ fields:
 
     expect(listing.output).toContain('file about-plugin.txt [ro]');
     expect(listing.output).toContain('file about-form.txt [ro]');
-    expect(docs.output).toContain('Form plugin: renders editable form fields and optional scripted behavior.');
+    expect(docs.output).toContain('# Form Plugins #');
     expect(docs.output).toContain('Fields live in plugin.txt as YAML under the fields key.');
   } finally {
     setHostPlugins([]);
@@ -234,7 +236,7 @@ test('cli exposes reusable component documentation in about files', async () => 
   expect(about.output).toContain('- /skill-record contains one skill-record component instance.');
   expect(about.output).toContain('- expandable-stub/ contains the always-visible summary children.');
   expect(about.output).toContain('- expandable-content/ contains the revealed detail children.');
-  expect(about.output).toContain('Expandable component: reveal/hide component with stub and content slots.');
+  expect(about.output).toContain('# Expandable Components #');
 });
 
 test('ls shows nested component description context for selected component directories', async () => {

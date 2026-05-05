@@ -105,8 +105,8 @@ function isLikelyViewerChangeRequest(question: string): boolean {
   if (/^(how|what|why|where|when|who)\b/.test(normalized)) {
     return false;
   }
-  return /\b(add|create|insert|edit|change|update|modify|remove|delete|replace|rename|move|reorder)\b/.test(normalized)
-    && /\b(document|resume|hvy|section|component|table|form|skill|tool|text|title|header|this)\b/.test(normalized);
+  return /\b(add|create|insert|edit|change|update|modify|remove|delete|replace|rename|move|reorder|finish|complete|implement|wire|wiring|rig|rigging)\b/.test(normalized)
+    && /\b(document|resume|hvy|sections?|components?|tables?|forms?|skills?|tools?|text|title|header|this)\b/.test(normalized);
 }
 
 export type CopyChatMessageResult =

@@ -106,6 +106,22 @@ test('requestChatTurn refuses document changes in viewer mode without calling th
   expect(runQaToolLoopMock).not.toHaveBeenCalled();
 });
 
+test('requestChatTurn refuses DB-backed viewer change requests before QA routing', async () => {
+  runQaToolLoopMock.mockResolvedValue('Should not be called.');
+
+  const result = await requestChatTurn({
+    settings: { provider: 'openai', model: 'gpt-5-mini' },
+    document: deserializeDocument(DOC_WITH_DB_TABLE, '.hvy'),
+    messages: [],
+    question: 'Can you finish rigging up the Assign Chore and Complete Chore forms?',
+  });
+
+  expect(result.error).toBeNull();
+  expect(result.messages.at(-1)?.content).toBe('I can’t change the document from Viewer mode. Switch to AI mode or Editor mode to make changes.');
+  expect(requestChatCompletionMock).not.toHaveBeenCalled();
+  expect(runQaToolLoopMock).not.toHaveBeenCalled();
+});
+
 test('requestChatTurn still answers informational viewer questions about changes', async () => {
   requestChatCompletionMock.mockResolvedValue('Use AI mode to edit.');
 

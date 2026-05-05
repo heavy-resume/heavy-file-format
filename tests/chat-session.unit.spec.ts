@@ -582,6 +582,7 @@ hvy_version: 0.1
   const nextPrompt = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content ?? '';
   expect(nextPrompt).toContain('CMD: cat /body/summary/long/text.txt');
   expect(nextPrompt).toContain('Warning: output truncated to 50 of 60 wrapped lines (10 lines hidden).');
+  expect(nextPrompt).toContain('### BEGIN your urgency ###\nscore=1\nprioritize planning and understanding');
 });
 
 test('requestDocumentEditChatTurn ignores trailing done until a later standalone finish', async () => {
@@ -730,6 +731,7 @@ hvy_version: 0.1
   ]);
   const nextPrompt = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content ?? '';
   expect(nextPrompt.match(/Warning: output truncated to 33 of 60 wrapped lines \(27 lines hidden\)\./g)).toHaveLength(3);
+  expect(nextPrompt).toContain('### BEGIN your urgency ###\nscore=1\nprioritize planning and understanding');
 });
 
 test('requestDocumentEditChatTurn wraps long command output lines before returning them to the model', async () => {

@@ -21,6 +21,7 @@ export function openAiEditPopover(sectionKey: string, blockId: string, clientX: 
     popupY: y,
     requestNonce: state.aiEdit.requestNonce + 1,
   };
+  state.chat.panelOpen = false;
 }
 
 export function closeAiEditPopover(): void {

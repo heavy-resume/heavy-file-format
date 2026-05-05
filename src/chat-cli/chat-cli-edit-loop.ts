@@ -196,7 +196,6 @@ export async function runChatCliEditLoop(params: {
         result = await cli.run(command);
         batchHadSuccess = true;
         const commandMutatedDocument = result.mutated && !isSessionOnlyCommand(command);
-        urgency = updateChatCliUrgency(urgency, commandMutatedDocument);
         mutated = mutated || commandMutatedDocument;
       } catch (error) {
         const output = error instanceof Error ? error.message : String(error);
@@ -232,6 +231,9 @@ export async function runChatCliEditLoop(params: {
           scratchpad: formatScratchpadForModel(cli.snapshot()),
         });
       }
+    }
+    if (batchHadSuccess) {
+      urgency = updateChatCliUrgency(urgency, mutated);
     }
     const modelMessage = formatCommandResultForModel({
       output: formatBatchCommandOutput(commandOutputs),

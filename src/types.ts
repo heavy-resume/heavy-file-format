@@ -24,6 +24,7 @@ export interface ChatMessage {
   tokenUsage?: ChatTokenUsage;
   error?: boolean;
   progress?: boolean;
+  work?: ChatWorkState;
 }
 
 export interface ChatTokenUsage {
@@ -32,6 +33,14 @@ export interface ChatTokenUsage {
   totalTokens?: number;
   cachedTokens?: number;
   reasoningTokens?: number;
+}
+
+export interface ChatWorkState {
+  status: 'running' | 'done' | 'error';
+  lastCommand?: string;
+  details: string[];
+  reasoning: string[];
+  tokenUsage?: ChatTokenUsage;
 }
 
 export interface ChatSettings {

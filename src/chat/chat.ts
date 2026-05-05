@@ -1,5 +1,5 @@
 import './chat.css';
-import type { ChatMessage, ChatSettings, ChatState, ChatTokenUsage, VisualDocument } from '../types';
+import type { ChatMessage, ChatSettings, ChatState, ChatTokenUsage, ChatWorkState, VisualDocument } from '../types';
 import { deserializeDocument, serializeDocument } from '../serialization';
 import { markdownToEditorHtml, normalizeMarkdownLists } from '../markdown';
 import aiResponseFormatInstructions from '../../AI-RESPONSE-FORMAT.md?raw';
@@ -211,29 +211,7 @@ export function renderChatPanel(
                            <p>${emptyBody}</p>
                           </div>`
                        : chat.messages
-                           .map(
-                             (message) => `
-                               <article class="chat-bubble chat-bubble-${message.role}${message.error ? ' chat-bubble-error' : ''}${message.progress ? ' chat-bubble-progress' : ''}" data-chat-role="${deps.escapeAttr(message.role)}" data-chat-message-id="${deps.escapeAttr(message.id)}">
-                                 <div class="chat-bubble-role">${deps.escapeHtml(message.role === 'user' ? 'You' : message.progress ? 'Progress' : 'Assistant')}</div>
-                                 <div class="chat-bubble-body">${
-                                   message.role === 'assistant'
-                                     ? renderAssistantMessageHtml(message.content)
-                                     : deps.escapeHtml(message.content).replace(/\n/g, '<br />')
-                                 }</div>
-                                 ${
-                                   message.reasoning
-                                     ? `<details class="chat-reasoning"><summary>Reasoning Summary</summary><div>${deps.escapeHtml(message.reasoning).replace(/\n/g, '<br />')}</div></details>`
-                                     : ''
-                                 }
-                                 ${message.tokenUsage ? `<div class="chat-token-usage">${deps.escapeHtml(formatChatTokenUsage(message.tokenUsage))}</div>` : ''}
-                                 ${
-                                   canCopyToHvy && message.role === 'assistant' && !message.error && !message.progress
-                                     ? `<div class="chat-bubble-actions"><button type="button" class="ghost" data-action="copy-chat-response-to-hvy" data-message-id="${deps.escapeAttr(message.id)}">Copy to HVY</button></div>`
-                                     : ''
-                                 }
-                               </article>
-                             `
-                           )
+                           .map((message) => renderChatMessageHtml(message, deps, canCopyToHvy))
                            .join('')
                    }
                  </div>
@@ -518,6 +496,93 @@ function formatChatTokenUsage(usage: ChatTokenUsage): string {
     typeof usage.outputTokens === 'number' ? `output ${usage.outputTokens}` : '',
   ].filter(Boolean);
   return parts.length > 0 ? `Tokens: ${parts.join(' / ')}` : '';
+}
+
+function renderChatMessageHtml(message: ChatMessage, deps: RenderChatPanelDeps, canCopyToHvy: boolean): string {
+  const classes = [
+    'chat-bubble',
+    `chat-bubble-${message.role}`,
+    message.error ? 'chat-bubble-error' : '',
+    message.progress ? 'chat-bubble-progress' : '',
+    message.work ? 'chat-bubble-work' : '',
+  ].filter(Boolean).join(' ');
+  return `
+    <article class="${classes}" data-chat-role="${deps.escapeAttr(message.role)}" data-chat-message-id="${deps.escapeAttr(message.id)}">
+      <div class="chat-bubble-role">${deps.escapeHtml(formatChatBubbleRole(message))}</div>
+      ${message.work ? renderChatWorkMessageHtml(message, deps) : renderStandardChatMessageHtml(message, deps)}
+      ${
+        canCopyToHvy && message.role === 'assistant' && !message.error && !message.progress
+          ? `<div class="chat-bubble-actions"><button type="button" class="ghost" data-action="copy-chat-response-to-hvy" data-message-id="${deps.escapeAttr(message.id)}">Copy to HVY</button></div>`
+          : ''
+      }
+    </article>
+  `;
+}
+
+function formatChatBubbleRole(message: ChatMessage): string {
+  if (message.role === 'user') {
+    return 'You';
+  }
+  if (message.work?.status === 'running') {
+    return 'Working';
+  }
+  return 'Assistant';
+}
+
+function renderStandardChatMessageHtml(message: ChatMessage, deps: RenderChatPanelDeps): string {
+  return `
+    <div class="chat-bubble-body">${
+      message.role === 'assistant'
+        ? renderAssistantMessageHtml(message.content)
+        : deps.escapeHtml(message.content).replace(/\n/g, '<br />')
+    }</div>
+    ${
+      message.reasoning
+        ? `<details class="chat-reasoning"><summary>Reasoning Summary</summary><div>${deps.escapeHtml(message.reasoning).replace(/\n/g, '<br />')}</div></details>`
+        : ''
+    }
+    ${message.tokenUsage ? `<div class="chat-token-usage">${deps.escapeHtml(formatChatTokenUsage(message.tokenUsage))}</div>` : ''}
+  `;
+}
+
+function renderChatWorkMessageHtml(message: ChatMessage, deps: RenderChatPanelDeps): string {
+  const work = message.work;
+  if (!work) {
+    return renderStandardChatMessageHtml(message, deps);
+  }
+  const isRunning = work.status === 'running';
+  const summary = isRunning
+    ? deps.escapeHtml(work.lastCommand ? `Last command: ${work.lastCommand}` : message.content || 'Working through the request...')
+    : renderAssistantMessageHtml(message.content);
+  return `
+    <div class="chat-bubble-body chat-work-body">
+      ${isRunning ? `<span class="chat-work-pulse" aria-hidden="true"></span><span>${summary}</span>` : summary}
+    </div>
+    ${renderChatWorkDetails(work, deps, isRunning)}
+    ${message.tokenUsage || work.tokenUsage ? `<div class="chat-token-usage">${deps.escapeHtml(formatChatTokenUsage(message.tokenUsage ?? work.tokenUsage!))}</div>` : ''}
+  `;
+}
+
+function renderChatWorkDetails(work: ChatWorkState, deps: RenderChatPanelDeps, open: boolean): string {
+  const detailLines = work.details.length > 0 ? work.details : ['No command history yet.'];
+  const reasoningLines = work.reasoning.length > 0 ? work.reasoning : [];
+  return `
+    <details class="chat-work-details"${open ? ' open' : ''}>
+      <summary>${open ? 'Details' : 'Work details'}</summary>
+      <div class="chat-work-detail-section">
+        <strong>Commands</strong>
+        <pre>${deps.escapeHtml(detailLines.join('\n'))}</pre>
+      </div>
+      ${
+        reasoningLines.length > 0
+          ? `<div class="chat-work-detail-section">
+               <strong>Reasoning history</strong>
+               <pre>${deps.escapeHtml(reasoningLines.join('\n\n'))}</pre>
+             </div>`
+          : ''
+      }
+    </details>
+  `;
 }
 
 function renderAssistantMessageHtml(markdown: string): string {

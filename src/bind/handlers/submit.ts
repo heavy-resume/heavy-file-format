@@ -87,7 +87,7 @@ export function bindSubmit(app: HTMLElement): void {
                     requestNonce,
                     content: message.content,
                   });
-                  state.chat.messages = [...state.chat.messages, message];
+                  state.chat.messages = upsertChatProgressMessage(state.chat.messages, message);
                   getRenderApp()();
                 },
                 signal: abortController.signal,
@@ -163,4 +163,12 @@ export function bindSubmit(app: HTMLElement): void {
       restoreCliViewAfterRender();
     }
   });
+}
+
+function upsertChatProgressMessage(messages: typeof state.chat.messages, message: typeof state.chat.messages[number]): typeof state.chat.messages {
+  const existingIndex = messages.findIndex((candidate) => candidate.id === message.id);
+  if (existingIndex < 0) {
+    return [...messages, message];
+  }
+  return messages.map((candidate, index) => (index === existingIndex ? message : candidate));
 }

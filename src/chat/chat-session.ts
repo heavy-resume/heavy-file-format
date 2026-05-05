@@ -1,7 +1,7 @@
 import { requestChatCompletion } from './chat';
 import { hasDocumentDbTables } from '../plugins/db-table';
 import { runQaToolLoop } from '../ai-qa';
-import type { ChatMessage, ChatSettings, ChatTokenUsage, VisualDocument } from '../types';
+import type { ChatMessage, ChatSettings, ChatTokenUsage, ChatWorkState, VisualDocument } from '../types';
 import type { VisualSection } from '../editor/types';
 import { deserializeDocumentWithDiagnostics, wrapHvyFragmentAsDocument } from '../serialization';
 import { runChatCliEditLoop } from '../chat-cli/chat-cli-edit-loop';
@@ -161,10 +161,29 @@ export async function requestDocumentEditChatTurn(params: {
   signal?: AbortSignal;
 }): Promise<ChatTurnResult> {
   const nextMessages = appendUserChatMessage(params.messages, params.request);
-  const progressMessages: ChatMessage[] = [];
+  const workMessageId = crypto.randomUUID();
+  const workState: ChatWorkState = {
+    status: 'running',
+    details: [],
+    reasoning: [],
+  };
   const emitProgress = (message: ChatMessage): void => {
-    progressMessages.push(message);
-    params.onProgress?.(message);
+    if (message.content === 'Finished CLI edit loop.') {
+      return;
+    }
+    const shouldRenderBefore = shouldRenderChatWorkProgress(workState, message);
+    updateChatWorkState(workState, message);
+    if (!shouldRenderBefore && workState.details.length === 0 && workState.reasoning.length === 0) {
+      return;
+    }
+    params.onProgress?.({
+      id: workMessageId,
+      role: 'assistant',
+      content: formatChatWorkMessageContent(workState),
+      progress: true,
+      ...(workState.tokenUsage ? { tokenUsage: workState.tokenUsage } : {}),
+      work: cloneChatWorkState(workState),
+    });
   };
 
   try {
@@ -202,11 +221,14 @@ export async function requestDocumentEditChatTurn(params: {
     return {
       messages: [
         ...nextMessages,
-        ...progressMessages,
         {
-          id: crypto.randomUUID(),
+          id: workMessageId,
           role: 'assistant',
           content: result.summary,
+          work: {
+            ...cloneChatWorkState(workState),
+            status: 'done',
+          },
           ...(result.tokenUsage ? { tokenUsage: result.tokenUsage } : {}),
         },
       ],
@@ -217,15 +239,64 @@ export async function requestDocumentEditChatTurn(params: {
     return {
       messages: [
         ...nextMessages,
-        ...progressMessages,
         {
-          id: crypto.randomUUID(),
+          id: workMessageId,
           role: 'assistant',
           content: message,
           error: true,
+          work: {
+            ...cloneChatWorkState(workState),
+            status: 'error',
+          },
         },
       ],
       error: message,
     };
   }
+}
+
+function shouldRenderChatWorkProgress(work: ChatWorkState, message: ChatMessage): boolean {
+  if (message.tokenUsage && !message.reasoning && message.content === 'Token usage') {
+    return work.details.length > 0 || work.reasoning.length > 0;
+  }
+  return !!message.reasoning || !!message.content.trim() || work.details.length > 0 || work.reasoning.length > 0;
+}
+
+function updateChatWorkState(work: ChatWorkState, message: ChatMessage): void {
+  if (message.reasoning) {
+    work.reasoning.push(message.reasoning);
+    return;
+  }
+  if (message.tokenUsage) {
+    work.tokenUsage = message.tokenUsage;
+    return;
+  }
+  const content = message.content.trim();
+  if (!content) {
+    return;
+  }
+  if (content.startsWith('$ ')) {
+    work.lastCommand = content.replace(/^\$\s*/, '').trim();
+    work.details.push(content);
+    return;
+  }
+  work.details.push(content);
+}
+
+function formatChatWorkMessageContent(work: ChatWorkState): string {
+  if (work.lastCommand) {
+    return `$ ${work.lastCommand}`;
+  }
+  const latestDetail = work.details.at(-1);
+  return latestDetail ?? 'Working...';
+}
+
+function cloneChatWorkState(work: ChatWorkState): ChatWorkState {
+  return {
+    status: work.status,
+    ...(work.lastCommand ? { lastCommand: work.lastCommand } : {}),
+    details: [...work.details],
+    reasoning: [...work.reasoning],
+    ...(work.tokenUsage ? { tokenUsage: work.tokenUsage } : {}),
+  };
 }

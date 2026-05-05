@@ -38,3 +38,5 @@ Use dev-traces to debug stuff the user reports as issues with the LLM based chat
 Refrain from the temptation to solve things with laser "if" conditionals and always consider the long term reusable solution - if we had different plugins, different extra features, would this idea work?
 
 When assessing mistakes LLMs show in the chat interface, refrain from solving things with aliases without asking first.
+
+When updating UI, strongly consider how scrolling would happen and whether things would constantly scroll-to-top on rerender. This happens a lot.

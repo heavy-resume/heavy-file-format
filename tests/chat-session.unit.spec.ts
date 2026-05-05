@@ -240,12 +240,15 @@ test('requestDocumentEditChatTurn runs the CLI edit loop for document chat', asy
   expect(serializeDocument(document)).toContain('Weekly chore plan');
   expect(onMutation).toHaveBeenCalledWith('chat-cli');
   expect(onProgress.mock.calls.map((call) => call[0].content)).toEqual([
-    'Token usage',
     '$ hvy add section /body chores "Chores"',
     '$ hvy add text /body/chores note "Weekly chore plan"',
-    'Finished CLI edit loop.',
   ]);
-  expect(onProgress.mock.calls[0]?.[0].tokenUsage).toEqual({ inputTokens: 100, outputTokens: 10 });
+  expect(onProgress.mock.calls[0]?.[0].work?.tokenUsage).toEqual({ inputTokens: 100, outputTokens: 10 });
+  expect(result.messages.at(-1)?.work?.status).toBe('done');
+  expect(result.messages.at(-1)?.work?.details).toEqual([
+    '$ hvy add section /body chores "Chores"',
+    '$ hvy add text /body/chores note "Weekly chore plan"',
+  ]);
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]).toEqual(
     expect.objectContaining({
       settings,
@@ -433,7 +436,6 @@ test('requestDocumentEditChatTurn accepts shell-looking command wrappers', async
     '$ ls /',
     '$ ls /body',
     '$ pwd',
-    'Finished CLI edit loop.',
   ]);
 });
 
@@ -466,7 +468,6 @@ hvy_version: 0.1
   expect(onProgress.mock.calls.map((call) => call[0].content)).toEqual([
     '$ [1/2] cat /body/summary/long/text.txt',
     '$ [2/2] cat /body/summary/long/text.txt',
-    'Finished CLI edit loop.',
   ]);
   const nextPrompt = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content ?? '';
   expect(nextPrompt).toContain('> cat /body/summary/long/text.txt');
@@ -505,7 +506,6 @@ done Created the chore section.`)
   expect(onProgress.mock.calls.map((call) => call[0].content)).toEqual([
     '$ [1/2] hvy add section /body chores "Chores"',
     '$ [2/2] hvy add text /body/chores note "Weekly chore plan"',
-    'Finished CLI edit loop.',
   ]);
   const nextPrompt = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content ?? '';
   expect(nextPrompt).toContain('What is your next command?');
@@ -544,7 +544,6 @@ cat /header.yaml
     '$ [1/3] pwd',
     '$ [2/3] ls /body',
     '$ [3/3] cat /header.yaml',
-    'Finished CLI edit loop.',
   ]);
   const nextPrompt = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content ?? '';
   expect(nextPrompt).toContain('> pwd\n/');
@@ -582,7 +581,6 @@ cat /scratchpad.txt
     '$ [1/3] pwd',
     "$ [2/3] cat > /scratchpad.txt <<'TXT'\nPlan:\n1. Inspect\n2. Edit\nTXT",
     '$ [3/3] cat /scratchpad.txt',
-    'Finished CLI edit loop.',
   ]);
   const nextPrompt = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content ?? '';
   expect(nextPrompt).toContain("> cat > /scratchpad.txt <<'TXT'\nPlan:\n1. Inspect\n2. Edit\nTXT\n/scratchpad.txt: written");
@@ -619,7 +617,6 @@ hvy_version: 0.1
     '$ [1/3] cat /body/summary/long/text.txt',
     '$ [2/3] cat /body/summary/long/text.txt',
     '$ [3/3] cat /body/summary/long/text.txt',
-    'Finished CLI edit loop.',
   ]);
   const nextPrompt = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content ?? '';
   expect(nextPrompt.match(/Warning: output truncated to 33 of 60 wrapped lines \(27 lines hidden\)\./g)).toHaveLength(3);
@@ -1013,7 +1010,7 @@ test('requestDocumentEditChatTurn treats prose and dangling fences as retryable 
   });
 
   expect(result.error).toBeNull();
-  expect(onProgress.mock.calls.map((call) => call[0].content)).toEqual(['Finished CLI edit loop.']);
+  expect(onProgress).not.toHaveBeenCalled();
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content).toContain('Expected terminal command(s)');
   expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.messages.at(-1)?.content).toContain('Expected terminal command(s)');
   expect(writeChatCliCommandTraceMock.mock.calls.map((call) => call[1])).toEqual(['ls /', 'hvy --help', 'hvy request_structure --collapse', 'hvy lint', 'hvy find-intent "Use command format." --max 5']);

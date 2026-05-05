@@ -89,6 +89,20 @@ hvy_version: 0.1
   expect(html).toContain('data-action="cancel-chat-request"');
 });
 
+test('renderChatPanel shows CLI sim as a toggle before a draft exists', () => {
+  const chat = createDefaultChatState();
+  chat.panelOpen = true;
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+`, '.hvy');
+
+  const html = renderChatPanel(chat, document, deps, 'document-edit');
+
+  expect(html).toContain('data-action="toggle-chat-cli-sim"');
+  expect(html).toContain('<button type="button" class="ghost" data-action="toggle-chat-cli-sim">CLI Sim Off</button>');
+});
+
 test('renderChatPanel shows CLI sim request, response, and thinking summary', () => {
   const chat = createDefaultChatState();
   chat.panelOpen = true;
@@ -109,7 +123,7 @@ hvy_version: 0.1
 
   const html = renderChatPanel(chat, document, deps, 'document-edit');
 
-  expect(html).toContain('data-action="prepare-chat-cli-sim"');
+  expect(html).toContain('data-action="toggle-chat-cli-sim"');
   expect(html).toContain('CLI Sim');
   expect(html).toContain('Request JSON');
   expect(html).toContain('"messages": []');

@@ -14,7 +14,7 @@ export { createGridItem } from '../../grid-ops';
 export { detectExtension, sanitizeOptionalId, moveItem } from '../../utils';
 export { openLinkInlineModal } from '../../bind-link-modal';
 export { clearChatConversation, getDefaultModelForProvider, persistChatSettings } from '../../chat/chat';
-export { appendUserChatMessage, copyChatMessageToHvySection, requestChatTurn, requestDocumentEditChatTurn } from '../../chat/chat-session';
+export { appendUserChatMessage, buildDocumentEditCliSimRequest, copyChatMessageToHvySection, requestChatTurn, requestDocumentEditChatTurn } from '../../chat/chat-session';
 export { areTablesEnabled } from '../../reference-config';
 export { addDbTableColumn, addDbTableRow, getSqliteRowComponent, handleDbTableFrameScroll, materializeDbTableDraftRow, parseAttachedComponentBlocks, renameDbTableColumn, syncSqliteColumnNameInDom, toggleDbTableSort, updateDbTableCell } from '../../plugins/db-table';
 export { openAiEditPopover, closeAiEditPopover, submitAiEditRequest } from '../../ai-edit-popover';

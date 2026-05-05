@@ -1,4 +1,4 @@
-import { state, getRenderApp, getRefreshReaderPanels, recordHistory, serializeDocument, appendUserChatMessage, requestChatTurn, requestDocumentEditChatTurn, submitAiEditRequest, submitCliCommand, restoreCliViewAfterRender } from './_imports';
+import { state, getRenderApp, getRefreshReaderPanels, recordHistory, serializeDocument, appendUserChatMessage, buildDocumentEditCliSimRequest, requestChatTurn, requestDocumentEditChatTurn, submitAiEditRequest, submitCliCommand, restoreCliViewAfterRender } from './_imports';
 
 export function bindSubmit(app: HTMLElement): void {
   app.addEventListener('submit', async (event) => {
@@ -28,6 +28,49 @@ export function bindSubmit(app: HTMLElement): void {
       if (state.chat.settings.model.trim().length === 0) {
         console.debug('[hvy:chat-submit] blocked because model is empty');
         state.chat.error = 'Choose a model before sending.';
+        getRenderApp()();
+        return;
+      }
+
+      if (state.currentView !== 'viewer' && state.chat.cliSimEnabled) {
+        state.chat.cliSim = {
+          requestPayload: null,
+          requestJson: 'Preparing...',
+          responseJson: '',
+          reasoningSummary: '',
+          isPreparing: true,
+          isSending: false,
+          error: null,
+        };
+        state.chat.error = null;
+        getRenderApp()();
+        try {
+          const result = await buildDocumentEditCliSimRequest({
+            settings: state.chat.settings,
+            document: state.document,
+            messages: state.chat.messages,
+            request: question,
+          });
+          state.chat.cliSim = {
+            requestPayload: result.requestPayload,
+            requestJson: result.requestJson,
+            responseJson: '',
+            reasoningSummary: '',
+            isPreparing: false,
+            isSending: false,
+            error: null,
+          };
+        } catch (error) {
+          state.chat.cliSim = {
+            requestPayload: null,
+            requestJson: '',
+            responseJson: '',
+            reasoningSummary: '',
+            isPreparing: false,
+            isSending: false,
+            error: error instanceof Error ? error.message : 'Failed to prepare CLI sim.',
+          };
+        }
         getRenderApp()();
         return;
       }

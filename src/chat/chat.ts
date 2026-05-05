@@ -72,6 +72,7 @@ export function createDefaultChatState(): ChatState {
     panelOpen: false,
     requestNonce: 0,
     abortController: null,
+    cliSimEnabled: false,
     cliSim: null,
   };
 }
@@ -83,6 +84,7 @@ export function clearChatConversation(chat: ChatState): void {
   chat.error = null;
   chat.abortController?.abort();
   chat.abortController = null;
+  chat.cliSimEnabled = false;
   chat.cliSim = null;
   chat.requestNonce += 1;
 }
@@ -210,7 +212,7 @@ export function renderChatPanel(
                  <div class="chat-panel-head-actions">
                    ${
                     isDocumentEdit
-                      ? `<button type="button" class="ghost" data-action="prepare-chat-cli-sim"${chat.isSending || !hasDraft || missingModel ? ' disabled' : ''}>CLI Sim</button>`
+                      ? `<button type="button" class="${chat.cliSimEnabled ? 'secondary' : 'ghost'}" data-action="toggle-chat-cli-sim"${chat.isSending || missingModel ? ' disabled' : ''}>CLI Sim ${chat.cliSimEnabled ? 'On' : 'Off'}</button>`
                       : ''
                    }
                    <button type="button" class="ghost" data-action="clear-chat-history"${chat.messages.length === 0 ? ' disabled' : ''}>Clear</button>

@@ -2,7 +2,7 @@ import { state, getRenderApp } from '../../state';
 import { recordHistory } from '../../history';
 import { serializeDocument } from '../../serialization';
 import { clearChatConversation } from '../../chat/chat';
-import { buildDocumentEditCliSimRequest, copyChatMessageToHvySection, runDocumentEditCliSimStep } from '../../chat/chat-session';
+import { copyChatMessageToHvySection, runDocumentEditCliSimStep } from '../../chat/chat-session';
 import type { AppActionHandler } from './types';
 
 const clearChatHistory: AppActionHandler = () => {
@@ -51,54 +51,13 @@ const cancelChatRequest: AppActionHandler = () => {
   getRenderApp()();
 };
 
-const prepareChatCliSim: AppActionHandler = () => {
-  const request = state.chat.draft.trim();
-  if (!request) {
-    state.chat.error = 'Type a change request before preparing CLI sim.';
-    getRenderApp()();
-    return;
-  }
-  state.chat.cliSim = {
-    requestPayload: null,
-    requestJson: 'Preparing...',
-    responseJson: '',
-    reasoningSummary: '',
-    isPreparing: true,
-    isSending: false,
-    error: null,
-  };
+const toggleChatCliSim: AppActionHandler = () => {
+  state.chat.cliSimEnabled = !state.chat.cliSimEnabled;
   state.chat.error = null;
+  if (!state.chat.cliSimEnabled) {
+    state.chat.cliSim = null;
+  }
   getRenderApp()();
-  void buildDocumentEditCliSimRequest({
-    settings: state.chat.settings,
-    document: state.document,
-    messages: state.chat.messages,
-    request,
-  })
-    .then((result) => {
-      state.chat.cliSim = {
-        requestPayload: result.requestPayload,
-        requestJson: result.requestJson,
-        responseJson: '',
-        reasoningSummary: '',
-        isPreparing: false,
-        isSending: false,
-        error: null,
-      };
-      getRenderApp()();
-    })
-    .catch((error: unknown) => {
-      state.chat.cliSim = {
-        requestPayload: null,
-        requestJson: '',
-        responseJson: '',
-        reasoningSummary: '',
-        isPreparing: false,
-        isSending: false,
-        error: error instanceof Error ? error.message : 'Failed to prepare CLI sim.',
-      };
-      getRenderApp()();
-    });
 };
 
 const runChatCliSimStep: AppActionHandler = () => {
@@ -146,6 +105,6 @@ export const chatActions: Record<string, AppActionHandler> = {
   'clear-chat-history': clearChatHistory,
   'copy-chat-response-to-hvy': copyChatResponseToHvy,
   'cancel-chat-request': cancelChatRequest,
-  'prepare-chat-cli-sim': prepareChatCliSim,
+  'toggle-chat-cli-sim': toggleChatCliSim,
   'run-chat-cli-sim-step': runChatCliSimStep,
 };

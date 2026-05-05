@@ -67,6 +67,7 @@ export interface ChatState {
   panelOpen: boolean;
   requestNonce: number;
   abortController: AbortController | null;
+  cliSimEnabled: boolean;
   cliSim: ChatCliSimState | null;
 }
 

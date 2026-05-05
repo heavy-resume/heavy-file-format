@@ -25,8 +25,8 @@ export function isDbTablePluginBlock(block: VisualBlock): boolean {
 
 export function buildDbTableEditFormatInstructions(tableName: string): string {
   return [
-    'You are revising a `db-table` plugin component. The component renders rows from a SQLite table attached to the HVY document.',
-    'Editing *data* in the table means running SQL against the attached database, not changing the HVY fragment.',
+    'You are revising a `db-table` plugin component. The component renders dynamic data-backed rows from a table or view attached to the HVY document.',
+    'Editing *data* in the table means running SQL against the current backend, not changing the HVY fragment.',
     'Editing the component\'s *configuration* (the stored SQL query, queryLimit, queryDynamicWindow, etc.) means returning a new HVY fragment.',
     '',
     'Reply with exactly one JSON object and nothing else. Do not wrap it in Markdown.',

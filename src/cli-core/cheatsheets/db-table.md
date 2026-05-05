@@ -1,10 +1,10 @@
-# DB Table Cheatsheet
+# Dynamic Table Cheatsheet
 
-There is no separate database component to add. The document has an attached SQLite database; start using it with SQL.
+Use the `db-table` plugin when rows should come from a live data source instead of static table component rows. The current built-in backend is the attached SQL database, so start by creating tables or views with SQL.
 
-DB Table components have two separate parts:
+Dynamic table components have two separate parts:
 
-- `plugin.json` stores `pluginConfig.table`, which must be the name of an existing SQLite table or view.
+- `plugin.json` stores `pluginConfig.table`, which must be the name of an existing table or view in the current backend.
 - `plugin.txt` stores optional read-only `SELECT` or `WITH` SQL for displaying rows. This SQL does not create tables or views.
 
 Create or change tables and views:
@@ -14,7 +14,7 @@ hvy plugin db-table exec "CREATE TABLE chores (id INTEGER PRIMARY KEY, title TEX
 hvy plugin db-table exec "CREATE VIEW weekly_chore_leaders AS SELECT assigned_to, COUNT(*) AS completed_count FROM chores WHERE completed_at >= datetime('now', '-7 days') GROUP BY assigned_to"
 ```
 
-Inspect the database:
+Inspect the current backend:
 
 ```shell
 hvy plugin db-table tables

@@ -212,7 +212,7 @@ theme:
   <!--hvy:expandable:content {}-->
 
    <!--hvy:text {}-->
-    Document mutation namespace. Supports section add, text add, table add, and plugin add for creating HVY structure without hand-editing directives.
+    Document mutation namespace. Supports section add, text add, static table add, and plugin add for creating HVY structure without hand-editing directives.
 
  <!--hvy:expandable {}-->
   <!--hvy:expandable:stub {}-->
@@ -234,4 +234,4 @@ theme:
   <!--hvy:expandable:content {}-->
 
    <!--hvy:text {}-->
-    DB table plugin shortcut under hvy add plugin db-table. Creates a DB table component that shows a SQLite table or view with optional SQL query text. Use hvy plugin db-table for query, exec, tables, and schema commands.
+    Dynamic table plugin shortcut under hvy add plugin db-table. Creates a data-backed table component that shows a table or view from the current SQL backend with optional display query text. Use hvy plugin db-table for query, exec, tables, and schema commands.

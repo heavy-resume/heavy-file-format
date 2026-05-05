@@ -200,6 +200,9 @@ export function executeHvyCliCommandSync(document: VisualDocument, input: string
     if (rest[0] === 'remove' || rest[0] === 'delete') {
       return { cwd, output: commandRm(ctx, ['-r', ...rest.slice(1)]), mutated: true };
     }
+    if (isHvyShellAliasCommand(rest[0] ?? '')) {
+      return executeHvyShellAliasCommandSync(ctx, rest[0] ?? '', rest.slice(1));
+    }
     const result = executeHvyDocumentCommand(ctx, rest);
     return { cwd, output: result.output, mutated: result.mutated };
   }
@@ -317,6 +320,9 @@ async function runCommand(ctx: HvyCliCommandContext, command: string, args: stri
     if (args[0] === 'remove' || args[0] === 'delete') {
       return { cwd: ctx.cwd, output: commandRm(ctx, ['-r', ...args.slice(1)]), mutated: true };
     }
+    if (isHvyShellAliasCommand(args[0] ?? '')) {
+      return runCommand(ctx, args[0] ?? '', args.slice(1));
+    }
     if (args[0] === 'plugin' && !args[1]) {
       return { cwd: ctx.cwd, output: helpFor('hvy plugin'), mutated: false };
     }
@@ -345,6 +351,90 @@ async function runCommand(ctx: HvyCliCommandContext, command: string, args: stri
     return { cwd: ctx.cwd, output: result.output, mutated: result.mutated };
   }
   throw new Error(`Unknown command "${command}". Try "help".`);
+}
+
+function isHvyShellAliasCommand(command: string): boolean {
+  return new Set([
+    'pwd',
+    'true',
+    'ask',
+    'cd',
+    'ls',
+    'cat',
+    'head',
+    'tail',
+    'nl',
+    'grep',
+    'sort',
+    'uniq',
+    'wc',
+    'tr',
+    'find',
+    'rg',
+    'rm',
+    'cp',
+    'echo',
+    'sed',
+  ]).has(command);
+}
+
+function executeHvyShellAliasCommandSync(ctx: HvyCliCommandContext, command: string, args: string[]): HvyCliExecution {
+  if (command === 'pwd') {
+    return { cwd: ctx.cwd, output: ctx.cwd, mutated: false };
+  }
+  if (command === 'true') {
+    return { cwd: ctx.cwd, output: '', mutated: false };
+  }
+  if (command === 'ask') {
+    return { cwd: ctx.cwd, output: args.join(' ').trim(), mutated: false };
+  }
+  if (command === 'cd') {
+    const next = resolveVirtualPath(ctx.fs, ctx.cwd, args[0] ?? '/');
+    const entry = ctx.fs.entries.get(next);
+    if (!entry || entry.kind !== 'dir') {
+      throw new Error(formatMissingPathMessage(ctx.fs, ctx.cwd, args[0] ?? '/', `cd: no such directory: ${args[0] ?? '/'}`, 'dir'));
+    }
+    return { cwd: next, output: next, mutated: false };
+  }
+  if (command === 'ls') {
+    return { cwd: ctx.cwd, output: commandLs(ctx, args), mutated: false };
+  }
+  if (command === 'cat') {
+    return { cwd: ctx.cwd, output: commandCat(ctx, args), mutated: false };
+  }
+  if (command === 'head' || command === 'tail') {
+    return { cwd: ctx.cwd, output: commandHeadTail(ctx, args, command), mutated: false };
+  }
+  if (command === 'nl') {
+    return { cwd: ctx.cwd, output: commandNl(ctx, args), mutated: false };
+  }
+  if (command === 'rg') {
+    return { cwd: ctx.cwd, output: commandRg(ctx, args), mutated: false };
+  }
+  if (command === 'grep') {
+    return { cwd: ctx.cwd, output: commandGrep(ctx, args), mutated: false };
+  }
+  if (command === 'find') {
+    return { cwd: ctx.cwd, output: commandFindWithoutExec(ctx, args), mutated: false };
+  }
+  if (command === 'rm') {
+    return { cwd: ctx.cwd, output: commandRm(ctx, args), mutated: true };
+  }
+  if (command === 'cp') {
+    return { cwd: ctx.cwd, output: commandCp(ctx, args), mutated: true };
+  }
+  if (command === 'sed') {
+    const result = commandSed(ctx, args);
+    return { cwd: ctx.cwd, output: result.output, mutated: result.mutated };
+  }
+  if (command === 'sort' || command === 'uniq' || command === 'wc' || command === 'tr') {
+    return runTextCommand(ctx, command, args);
+  }
+  if (command === 'echo') {
+    const result = commandEcho(ctx, args);
+    return { cwd: ctx.cwd, output: result.output, mutated: result.mutated };
+  }
+  throw new Error(`doc.cli.run does not support command "hvy ${command}".`);
 }
 
 function isDbTableSqlAction(action: string): boolean {

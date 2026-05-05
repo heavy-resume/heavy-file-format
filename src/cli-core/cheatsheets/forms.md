@@ -29,7 +29,7 @@ hvy add plugin form /chore-chart complete-chore "Complete chore" "Chore:text:req
 
 Use `--script NAME PYTHON` to store a named script. Use `--on-submit-script NAME` to run it when the submit button is pressed.
 
-Populate a select from SQLite when the form renders:
+Populate a select from the current SQL backend when the form renders:
 
 ```shell
 hvy add plugin form /chore-chart assign-chore "Assign chore" "Chore:select:required" "Assigned to:select:required:Dad|Mom|Child" --script load "rows = doc.db.query('SELECT id, title FROM chores ORDER BY id')\ndoc.form.set_options('Chore', [{'label': row['title'], 'value': str(row['id'])} for row in rows])" --initial-script load

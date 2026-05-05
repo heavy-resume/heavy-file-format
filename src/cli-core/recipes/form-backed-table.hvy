@@ -1,4 +1,4 @@
-<!--hvy: {"id":"form-backed-table-recipe","description":"Recipe for creating a SQLite table, a form that inserts rows, and a db-table view."}-->
+<!--hvy: {"id":"form-backed-table-recipe","description":"Recipe for creating a dynamic data-backed table, a form that inserts rows, and a db-table view."}-->
 #! Form Backed Table Recipe
 
 Use this when a form should create rows and a table should show those rows.
@@ -15,5 +15,5 @@ hvy lint
 Expected result:
 
 - `/body/tracker` section exists.
-- The form inserts into SQLite table `items`.
+- The form inserts into the backend table `items`.
 - The db-table plugin displays current rows from `items`.

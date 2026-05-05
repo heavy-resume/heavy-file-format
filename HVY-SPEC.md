@@ -380,13 +380,15 @@ expandableStubBlocks:
 
 The `children` array uses the same recursive block object shape as other nested block arrays.
 
-For tables, each `tableRows` entry contains only:
+The built-in `table` component is static document data stored in `tableColumns` and `tableRows`. Use a dynamic data-backed plugin such as `dev.heavy.db-table` when rows should come from a backend query.
+
+For static tables, each `tableRows` entry contains only:
 
 ```yaml
 - cells: ["Cell A", "Cell B"]
 ```
 
-Tables do not have intrinsic row expansion, row click behavior, or row-attached detail blocks in HVY v0.1. Use an enclosing `expandable` when the table should reveal additional information.
+Static tables do not have intrinsic row expansion, row click behavior, or row-attached detail blocks in HVY v0.1. Use an enclosing `expandable` when the table should reveal additional information.
 
 For inline HVY serialization, stub-pane and content-pane CSS belong on the slot markers themselves:
 
@@ -846,9 +848,9 @@ Block example:
 
 Plugin-specific rules:
 - `pluginConfig.source` MUST currently be `"with-file"`.
-- `pluginConfig.table` MUST be an existing SQLite table or view name to render. It MUST NOT contain SQL.
+- `pluginConfig.table` MUST be an existing table or view name in the plugin's current data backend. It MUST NOT contain SQL.
 - The plugin block text is interpreted as an optional read-only `SELECT` or `WITH` query string. This is an implicit property derived from the block text body rather than from `pluginConfig`.
-- Query text does not create database objects. Tables and views MUST be created through the database execution API before a DB Table component can reference them.
+- Query text does not create data objects. Tables and views MUST be created through the backend execution API before a DB Table component can reference them.
 - If the plugin block contains non-text structured content, clients SHOULD discard that structured content for this plugin and preserve only the text body as the query value.
 - If the query text is empty after trimming, clients MUST behave as though the query were `SELECT * FROM <pluginConfig.table>`.
 - If the query text is non-empty, clients MUST render the result in a read-only state and SHOULD visually indicate that the table is query-driven rather than directly editable.
@@ -857,8 +859,8 @@ Plugin-specific rules:
 - Clients MUST enforce an implicit result cap of fewer than 100 rows for query-driven views.
 - Clients SHOULD render at most 50 rows at a time in the visible window and SHOULD advance or rewind the offset window as the user scrolls, for example by shifting the offset after the viewport passes roughly row 75.
 - Sort controls MAY be exposed for direct table views. If exposed, ascending and descending sort orders SHOULD be supported per visible column. Query-driven views SHOULD preserve query-defined ordering instead.
-- The current built-in implementation stores this plugin in exactly one gzip-compressed SQLite database in the document tail.
-- Multiple plugin blocks MAY point at different tables within the same attached database.
+- The current built-in implementation stores this plugin in exactly one gzip-compressed SQL database in the document tail.
+- Multiple plugin blocks MAY point at different tables within the same attached backend.
 
 Recommended client behavior:
 - Spreadsheet-like table views SHOULD virtualize row rendering and MUST NOT attempt to render every row at once for large tables.

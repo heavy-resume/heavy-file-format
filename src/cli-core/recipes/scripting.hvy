@@ -43,4 +43,4 @@ Expected result:
 - The script runs in sandboxed Brython/Python with one global: `doc`.
 - `doc.cli.run(COMMAND)` runs one synchronous virtual CLI command and returns stdout.
 - Form scripts also get `doc.form`.
-- `doc.db` works directly with the attached SQLite database; no database component is required.
+- `doc.db` works directly with the current document SQL backend; no database component is required.

@@ -1402,6 +1402,35 @@ function persistScriptingDatabase(document: VisualDocument, db: SqlJsDatabase): 
   }
 }
 
+export async function validateDocumentDbSql(
+  document: VisualDocument,
+  sql: string,
+  mode: 'query' | 'execute'
+): Promise<void> {
+  const trimmed = String(sql ?? '').trim().replace(/;+\s*$/u, '');
+  if (trimmed.length === 0) {
+    throw new Error(`doc.db.${mode} requires non-empty SQL.`);
+  }
+  const leading = trimmed.match(/^[A-Za-z]+/)?.[0]?.toUpperCase() ?? '';
+  if (mode === 'query' && leading !== 'SELECT' && leading !== 'WITH') {
+    throw new Error('doc.db.query should use read-only SELECT/WITH SQL.');
+  }
+  if (mode === 'execute' && (leading === 'SELECT' || leading === 'WITH')) {
+    throw new Error('Use doc.db.query for read-only SELECT/WITH SQL. doc.db.execute is for writes.');
+  }
+  const db = await openDocumentDatabase(document);
+  try {
+    const statement = db.prepare(trimmed);
+    statement.free();
+  } finally {
+    try {
+      db.close();
+    } catch {
+      // Ignore close failures for ephemeral lint databases.
+    }
+  }
+}
+
 export interface ScriptingDbRuntime {
   api: ScriptingDbApi;
   dispose(): void;

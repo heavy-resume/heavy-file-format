@@ -132,7 +132,7 @@ hvy_version: 0.1
   const summary = summarizeDocumentStructure(document).summary;
 
   expect(summary).toContain('plugin id="chores-table"');
-  expect(summary).toContain('AI hint: SQLite table/view display. Target: "chores".');
+  expect(summary).toContain('AI hint: Dynamic data-backed table/view display. Target: "chores".');
 });
 
 test('summarizeDocumentStructure hides content deeper than three nesting levels', () => {

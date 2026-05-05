@@ -1,9 +1,9 @@
-<!--hvy: {"id":"db-and-form-recipe","description":"Generic recipe for using forms with SQLite tables and db-table displays."}-->
+<!--hvy: {"id":"db-and-form-recipe","description":"Generic recipe for using forms with dynamic data-backed tables and db-table displays."}-->
 #! DB And Form Recipe
 
-Use this recipe when a form should write to a SQLite table, a db-table should display rows, and another form should choose from existing rows.
+Use this recipe when a form should write to a backend table, a db-table should display rows, and another form should choose from existing rows.
 
-There is no database component to add. Use `hvy plugin db-table exec` to create SQLite tables/views, `doc.db.execute` inside form scripts to change data, and `doc.db.query` inside form scripts to populate options.
+There is no database component to add. Use `hvy plugin db-table exec` to create backend tables/views, `doc.db.execute` inside form scripts to change data, and `doc.db.query` inside form scripts to populate options.
 
 ```shell
 hvy add section / tracker "Tracker"
@@ -24,4 +24,4 @@ Expected result:
 - `active-items` displays uncompleted rows.
 - `add-item` inserts rows.
 - `assign-item` and `complete-item` populate select options from `doc.db.query`.
-- `weekly-leaders` displays an aggregate SQLite view.
+- `weekly-leaders` displays an aggregate backend view.

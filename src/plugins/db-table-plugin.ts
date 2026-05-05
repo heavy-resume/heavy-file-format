@@ -153,7 +153,7 @@ export const dbTablePluginRegistration: HvyPluginRegistration = {
     const table = typeof block.schema.pluginConfig.table === 'string' && block.schema.pluginConfig.table.trim().length > 0
       ? block.schema.pluginConfig.table.trim()
       : '(unset)';
-    return `SQLite table/view display. Target: "${table}".`;
+    return `Dynamic data-backed table/view display. Target: "${table}".`;
   },
   aiHelp: (block) => {
     const table = block && typeof block.schema.pluginConfig.table === 'string' && block.schema.pluginConfig.table.trim().length > 0
@@ -161,7 +161,7 @@ export const dbTablePluginRegistration: HvyPluginRegistration = {
       : '(unset)';
     return [
       `Use \`<!--hvy:plugin {"plugin":"${DB_TABLE_PLUGIN_ID}","pluginConfig":{"source":"with-file","table":"${table}"}}-->\`.`,
-      'Set `pluginConfig.table` to a SQLite table or view.',
+      'Set `pluginConfig.table` to a backend table or view.',
       'Put an optional SELECT query in the component body.',
     ].join(' ');
   },

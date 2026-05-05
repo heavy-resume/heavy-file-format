@@ -14,6 +14,8 @@ hvy add table /my-section table-id "Name,Status" --row "Dishes,Active"
 hvy add skill-record /body/skills/component-list-1/component-list --id skill-new "New Skill"
 ```
 
+`hvy add table` creates a static document table: rows and columns are stored directly on the component. Use `hvy add plugin db-table` for dynamic data-backed rows.
+
 Inspect before editing:
 
 ```shell

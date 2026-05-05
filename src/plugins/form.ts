@@ -39,7 +39,6 @@ export interface FormOption {
 }
 
 export interface FormFieldDefinition {
-  name: string;
   label: string;
   type: FormFieldType;
   value: string | boolean;
@@ -73,7 +72,6 @@ interface LiveFormState {
 }
 
 const DEFAULT_FIELD: FormFieldDefinition = {
-  name: 'field',
   label: 'Field',
   type: 'text',
   value: '',
@@ -127,15 +125,13 @@ function normalizeTriggers(value: unknown): Partial<Record<FormTriggerName, stri
 
 function normalizeField(candidate: unknown, index: number): FormFieldDefinition {
   const raw = isObject(candidate) ? candidate : {};
-  const name = typeof raw.name === 'string' && raw.name.trim().length > 0 ? raw.name.trim() : `field_${index + 1}`;
-  const label = typeof raw.label === 'string' && raw.label.trim().length > 0 ? raw.label : name;
+  const label = typeof raw.label === 'string' && raw.label.trim().length > 0 ? raw.label.trim() : `Field ${index + 1}`;
   const type = normalizeFieldType(raw.type);
   const rawValue = raw.value;
   const fieldValue = type === 'checkbox' ? rawValue === true || rawValue === 'true' : typeof rawValue === 'string' ? rawValue : String(rawValue ?? '');
   const options = Array.isArray(raw.options) ? raw.options.map(normalizeOption).filter((option): option is FormOption => option !== null) : [];
   const meta = isObject(raw.meta) ? raw.meta : {};
   return {
-    name,
     label,
     type,
     value: fieldValue,
@@ -202,7 +198,6 @@ export function serializeFormSpec(spec: FormSpec): string {
   const clean: Record<string, unknown> = {};
   clean.fields = spec.fields.map((field) => {
     const item: Record<string, unknown> = {
-      name: field.name,
       label: field.label,
       type: field.type,
     };
@@ -222,13 +217,13 @@ export function serializeFormSpec(spec: FormSpec): string {
   return stringifyYaml(clean).trimEnd();
 }
 
-function makeUniqueFieldName(fields: FormFieldDefinition[]): string {
+function makeUniqueFieldLabel(fields: FormFieldDefinition[]): string {
   let index = fields.length + 1;
-  const names = new Set(fields.map((field) => field.name));
-  while (names.has(`field_${index}`)) {
+  const labels = new Set(fields.map((field) => field.label));
+  while (labels.has(`Field ${index}`)) {
     index += 1;
   }
-  return `field_${index}`;
+  return `Field ${index}`;
 }
 
 function makeUniqueScriptName(scripts: Record<string, string>): string {
@@ -261,27 +256,27 @@ function createLiveState(spec: FormSpec): LiveFormState {
   const values: Record<string, string | boolean> = {};
   const options: Record<string, FormOption[]> = {};
   for (const field of spec.fields) {
-    values[field.name] = field.value;
-    options[field.name] = field.options.map((option) => ({ ...option }));
+    values[field.label] = field.value;
+    options[field.label] = field.options.map((option) => ({ ...option }));
   }
   return { values, options, errors: {} };
 }
 
 function reconcileLiveState(live: LiveFormState, spec: FormSpec): void {
-  const fieldNames = new Set(spec.fields.map((field) => field.name));
+  const fieldLabels = new Set(spec.fields.map((field) => field.label));
   for (const field of spec.fields) {
-    if (!(field.name in live.values)) {
-      live.values[field.name] = field.value;
+    if (!(field.label in live.values)) {
+      live.values[field.label] = field.value;
     }
-    if (!(field.name in live.options)) {
-      live.options[field.name] = field.options.map((option) => ({ ...option }));
+    if (!(field.label in live.options)) {
+      live.options[field.label] = field.options.map((option) => ({ ...option }));
     }
   }
-  for (const name of Object.keys(live.values)) {
-    if (!fieldNames.has(name)) {
-      delete live.values[name];
-      delete live.options[name];
-      delete live.errors[name];
+  for (const label of Object.keys(live.values)) {
+    if (!fieldLabels.has(label)) {
+      delete live.values[label];
+      delete live.options[label];
+      delete live.errors[label];
     }
   }
 }
@@ -304,7 +299,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
   let forceEditorRender = false;
   let skipNextEditorRefresh = false;
   const inputTimers = new Map<string, number>();
-  let openFieldMetaName: string | null = null;
+  let openFieldMetaLabel: string | null = null;
 
   const parseCurrent = () => parseFormSpec(ctx.block.text);
   const commitSpec = (spec: FormSpec, options?: { refreshEditor?: boolean }) => {
@@ -406,7 +401,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       article.dataset.formFieldIndex = String(index);
       article.innerHTML = `
         <div class="hvy-form-field-editor-head">
-          <strong>${escapeHtml(field.label || field.name)}</strong>
+          <strong>${escapeHtml(field.label)}</strong>
           <span>
             <button type="button" class="ghost" data-form-action="move-field-up" data-form-field-index="${index}">Up</button>
             <button type="button" class="ghost" data-form-action="move-field-down" data-form-field-index="${index}">Down</button>
@@ -415,7 +410,6 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
           </span>
         </div>
         <div class="hvy-form-editor-grid">
-          ${renderTextInput('Name', 'name', field.name, index)}
           ${renderTextInput('Label', 'label', field.label, index)}
           <label><span>Type</span><select data-form-field-index="${index}" data-form-field-prop="type">${FIELD_TYPES.map((type) => `<option value="${type}"${field.type === type ? ' selected' : ''}>${type}</option>`).join('')}</select></label>
           ${field.type === 'checkbox'
@@ -432,8 +426,8 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
     });
 
     root.appendChild(fieldSection);
-    if (ctx.advanced && openFieldMetaName) {
-      const fieldIndex = spec.fields.findIndex((field) => field.name === openFieldMetaName);
+    if (ctx.advanced && openFieldMetaLabel) {
+      const fieldIndex = spec.fields.findIndex((field) => field.label === openFieldMetaLabel);
       const field = spec.fields[fieldIndex];
       if (field) {
         const modal = document.createElement('div');
@@ -441,7 +435,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
         modal.innerHTML = `
           <section class="hvy-form-meta-modal" role="dialog" aria-modal="true" aria-label="Field metadata">
             <div class="hvy-form-meta-modal-head">
-              <strong>Meta: ${escapeHtml(field.label || field.name)}</strong>
+              <strong>Meta: ${escapeHtml(field.label)}</strong>
               <button type="button" class="ghost" data-form-action="close-field-meta">Close</button>
             </div>
             <div class="hvy-form-meta-modal-body">
@@ -457,7 +451,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
         `;
         root.appendChild(modal);
       } else {
-        openFieldMetaName = null;
+        openFieldMetaLabel = null;
       }
     }
 
@@ -544,7 +538,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
     if (field.meta.css.trim().length > 0) {
       wrap.setAttribute('style', sanitizeInlineCss(field.meta.css));
     }
-    wrap.dataset.formFieldName = field.name;
+    wrap.dataset.formFieldLabel = field.label;
     if (field.type !== 'hidden') {
       const label = document.createElement('span');
       label.className = 'hvy-form-field-label';
@@ -552,19 +546,19 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       wrap.appendChild(label);
     }
 
-    const value = live.values[field.name] ?? field.value;
+    const value = live.values[field.label] ?? field.value;
     if (field.type === 'textarea') {
       const textarea = document.createElement('textarea');
-      textarea.name = field.name;
+      textarea.name = field.label;
       textarea.value = String(value ?? '');
       textarea.placeholder = field.placeholder;
       textarea.required = field.required;
       appendControl(wrap, textarea, field);
     } else if (field.type === 'select') {
       const select = document.createElement('select');
-      select.name = field.name;
+      select.name = field.label;
       select.required = field.required;
-      for (const option of live.options[field.name] ?? field.options) {
+      for (const option of live.options[field.label] ?? field.options) {
         const node = document.createElement('option');
         node.value = option.value;
         node.textContent = option.label;
@@ -575,12 +569,12 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
     } else if (field.type === 'radio') {
       const group = document.createElement('div');
       group.className = 'hvy-form-radio-group';
-      for (const option of live.options[field.name] ?? field.options) {
+      for (const option of live.options[field.label] ?? field.options) {
         const radioLabel = document.createElement('label');
         radioLabel.className = 'hvy-form-radio-option';
         const radio = document.createElement('input');
         radio.type = 'radio';
-        radio.name = field.name;
+        radio.name = field.label;
         radio.value = option.value;
         radio.checked = option.value === value;
         radio.required = field.required;
@@ -593,7 +587,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
     } else {
       const input = document.createElement('input');
       input.type = field.type;
-      input.name = field.name;
+      input.name = field.label;
       input.placeholder = field.placeholder;
       input.required = field.required;
       if (field.type === 'checkbox') {
@@ -604,7 +598,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       appendControl(wrap, input, field);
     }
 
-    const error = live.errors[field.name];
+    const error = live.errors[field.label];
     if (error) {
       const errorNode = document.createElement('span');
       errorNode.className = 'hvy-form-field-error';
@@ -621,35 +615,35 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
 
   function wireControl(control: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement, field: FormFieldDefinition): void {
     control.dataset.formControl = 'true';
-    control.dataset.formFieldName = field.name;
+    control.dataset.formFieldLabel = field.label;
     control.addEventListener('input', () => {
       updateLiveValue(control, field);
       const script = field.triggers.input ?? '';
       if (script.length > 0) {
-        const key = field.name;
+        const key = field.label;
         const existing = inputTimers.get(key);
         if (existing) {
           window.clearTimeout(existing);
         }
-        inputTimers.set(key, window.setTimeout(() => runNamedScript(script, `input:${field.name}`), 250));
+        inputTimers.set(key, window.setTimeout(() => runNamedScript(script, `input:${field.label}`), 250));
       }
     });
     control.addEventListener('change', () => {
       updateLiveValue(control, field);
-      runNamedScript(field.triggers.change ?? '', `change:${field.name}`);
+      runNamedScript(field.triggers.change ?? '', `change:${field.label}`);
     });
     control.addEventListener('blur', () => {
       updateLiveValue(control, field);
-      runNamedScript(field.triggers.blur ?? '', `blur:${field.name}`);
+      runNamedScript(field.triggers.blur ?? '', `blur:${field.label}`);
     });
   }
 
   function updateLiveValue(control: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement, field: FormFieldDefinition): void {
     if (control instanceof HTMLInputElement && control.type === 'checkbox') {
-      live.values[field.name] = control.checked;
+      live.values[field.label] = control.checked;
       return;
     }
-    live.values[field.name] = control.value;
+    live.values[field.label] = control.value;
   }
 
   const onEditorInput = (event: Event) => {
@@ -666,7 +660,6 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       if (prop === 'required' && target instanceof HTMLInputElement) field.required = target.checked;
       if (prop === 'value') field.value = target instanceof HTMLInputElement && target.type === 'checkbox' ? target.checked : target.value;
       if (prop === 'options' && target instanceof HTMLTextAreaElement) field.options = parseOptionsText(target.value);
-      if (prop === 'name') field.name = target.value.trim();
       if (prop === 'label') field.label = target.value;
       if (prop === 'placeholder') field.placeholder = target.value;
       if (prop === 'metaCss') field.meta.css = target.value;
@@ -731,8 +724,8 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
     const { spec } = parseCurrent();
     const action = button.dataset.formAction;
     if (action === 'add-field') {
-      const name = makeUniqueFieldName(spec.fields);
-      spec.fields.push({ ...DEFAULT_FIELD, name, label: `Field ${spec.fields.length + 1}` });
+      const label = makeUniqueFieldLabel(spec.fields);
+      spec.fields.push({ ...DEFAULT_FIELD, label });
       forceEditorRender = true;
     }
     if (action === 'remove-field') {
@@ -753,13 +746,13 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       const index = Number.parseInt(button.dataset.formFieldIndex ?? '', 10);
       const field = spec.fields[index];
       if (!field) return;
-      openFieldMetaName = field.name;
+      openFieldMetaLabel = field.label;
       forceEditorRender = true;
       renderEditor();
       return;
     }
     if (action === 'close-field-meta') {
-      openFieldMetaName = null;
+      openFieldMetaLabel = null;
       forceEditorRender = true;
       renderEditor();
       return;
@@ -865,7 +858,7 @@ export const formPluginRegistration: HvyPluginRegistration = {
     `Use \`<!--hvy:plugin {"plugin":"${FORM_PLUGIN_ID}","pluginConfig":{"version":"${FORM_PLUGIN_VERSION}"}}-->\` followed by form YAML in the component body.`,
     'Do not use `<!--hvy:form ...-->`.',
     'Supported YAML keys include `fields`, `submitLabel`, `showSubmit`, `initialScript`, `submitScript`, and `scripts`.',
-    'Fields use `name`, `label`, `type`, optional `placeholder`, optional `required`, optional `options`, optional `value`, and optional `triggers`.',
+    'Fields use `label`, `type`, optional `placeholder`, optional `required`, optional `options`, optional `value`, and optional `triggers`. The label is both visible text and the script key.',
     '`scripts` maps script names to top-level Python/Brython source. `submitScript`, `initialScript`, and field triggers name a script key.',
     'Form scripts receive `doc` plus `doc.form` for live form values, options, and errors.',
     'Use `doc.form.get_value`, `doc.form.get_values`, `doc.form.set_value`, `doc.form.set_options`, `doc.form.set_error`, and `doc.form.clear_error` for form state.',

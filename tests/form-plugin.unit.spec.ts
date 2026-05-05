@@ -5,8 +5,7 @@ import { parseFormSpec, serializeFormSpec } from '../src/plugins/form';
 describe('form plugin YAML', () => {
   test('normalizes fields, options, scripts, and triggers from YAML', () => {
     const parsed = parseFormSpec(`fields:
-  - name: food
-    label: Food
+  - label: Food
     type: select
     value: soup
     required: true
@@ -20,13 +19,12 @@ describe('form plugin YAML', () => {
       blur: validate_food
     meta:
       css: "gap: 0.5rem;"
-  - name: subscribed
-    label: Subscribe
+  - label: Subscribe
     type: checkbox
     value: true
 scripts:
   populate_food: |
-    doc.form.set_value("note", "Bring a spoon.")
+    doc.form.set_value("Notes", "Bring a spoon.")
 initialScript: populate_food
 submitScript: populate_food
 submitLabel: Save lunch order
@@ -35,7 +33,6 @@ showSubmit: false
 
     expect(parsed.error).toBeNull();
     expect(parsed.spec.fields[0]).toMatchObject({
-      name: 'food',
       label: 'Food',
       type: 'select',
       value: 'soup',
@@ -54,7 +51,7 @@ showSubmit: false
       },
     });
     expect(parsed.spec.fields[1]).toMatchObject({
-      name: 'subscribed',
+      label: 'Subscribe',
       type: 'checkbox',
       value: true,
     });
@@ -66,7 +63,7 @@ showSubmit: false
   });
 
   test('reports invalid YAML without throwing', () => {
-    const parsed = parseFormSpec('fields:\n  - name: food\n    type: [');
+    const parsed = parseFormSpec('fields:\n  - label: Food\n    type: [');
 
     expect(parsed.error).toContain('Flow sequence');
     expect(parsed.spec.fields).toEqual([]);
@@ -74,8 +71,7 @@ showSubmit: false
 
   test('serializes normalized form data back to YAML', () => {
     const parsed = parseFormSpec(`fields:
-  - name: email
-    label: Email
+  - label: Email
     type: email
     placeholder: you@example.com
     meta:

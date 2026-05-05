@@ -883,8 +883,7 @@ Block example:
 ```markdown
 <!--hvy:plugin {"plugin":"dev.heavy.form","pluginConfig":{"version":"0.1"}}-->
 fields:
-  - name: food
-    label: Food
+  - label: Food
     type: select
     options:
       - label: Apple
@@ -893,13 +892,12 @@ fields:
         value: soup
     triggers:
       change: populate_food
-  - name: notes
-    label: Notes
+  - label: Notes
     type: textarea
 scripts:
   populate_food: |
-    if doc.form.get_value("food") == "soup":
-        doc.form.set_value("notes", "Bring a spoon.")
+    if doc.form.get_value("Food") == "soup":
+        doc.form.set_value("Notes", "Bring a spoon.")
   submit_order: |
     doc.header.set("last_order", doc.form.get_values())
 initialScript: populate_food
@@ -911,8 +909,10 @@ Plugin-specific rules:
 - The plugin block text MUST be interpreted as YAML owned by the form plugin.
 - Top-level YAML keys are `fields`, `scripts`, `initialScript`, `submitScript`,
   `submitLabel`, and `showSubmit`.
-- `fields` is an ordered list. Each field supports `name`, `label`, `type`,
+- `fields` is an ordered list. Each field supports `label`, `type`,
   `value`, `placeholder`, `required`, `options`, `triggers`, and `meta`.
+- Field `label` is both the visible label and the script key used with
+  `doc.form` helpers.
 - Field `meta` is plugin-owned field metadata. `meta.css` is an optional
   inline CSS style string applied to that rendered field wrapper and MUST be
   sanitized like other document-supplied CSS.
@@ -934,9 +934,9 @@ Plugin-specific rules:
   the visible submit button while preserving the form and any non-submit
   triggers.
 - Form scripts run through the installed scripting runtime. During form script
-  execution, `doc.form` exposes `get_value(name)`, `set_value(name, value)`,
-  `get_values()`, `set_options(name, options)`, `get_options(name)`,
-  `set_error(name, message)`, and `clear_error(name)`.
+  execution, `doc.form` exposes `get_value(label)`, `set_value(label, value)`,
+  `get_values()`, `set_options(label, options)`, `get_options(label)`,
+  `set_error(label, message)`, and `clear_error(label)`.
 - Dynamic dropdown/radio options SHOULD be set by scripts using
   `doc.form.set_options(...)` rather than by schema-level database source
   declarations.

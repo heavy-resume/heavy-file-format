@@ -92,7 +92,7 @@ describe('scripting plugin block metadata', () => {
 
 describe('form plugin block round-trip', () => {
   test('preserves form plugin config and YAML body across serialize/deserialize', () => {
-    const input = `---\nhvy_version: 1.0\n---\n\n#! Order\n\n<!--hvy:plugin {"plugin":"dev.heavy.form","pluginConfig":{"version":"0.1"}}-->\n fields:\n   - name: food\n     label: Food\n     type: select\n     options:\n       - Apple\n       - label: Soup\n         value: soup\n scripts:\n   submit_form: |\n     doc.header.set("submitted", doc.form.get_values())\n submitScript: submit_form\n`;
+    const input = `---\nhvy_version: 1.0\n---\n\n#! Order\n\n<!--hvy:plugin {"plugin":"dev.heavy.form","pluginConfig":{"version":"0.1"}}-->\n fields:\n   - label: Food\n     type: select\n     options:\n       - Apple\n       - label: Soup\n         value: soup\n scripts:\n   submit_form: |\n     doc.header.set("submitted", doc.form.get_values())\n submitScript: submit_form\n`;
     const doc = deserializeDocument(input, '.hvy');
     const block = doc.sections[0]?.blocks.find((b) => b.schema.component === 'plugin');
     expect(block).toBeDefined();

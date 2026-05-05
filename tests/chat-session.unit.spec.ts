@@ -776,8 +776,7 @@ hvy_version: 0.1
 <!--hvy:plugin {"id":"contact-form","plugin":"dev.heavy.form","pluginConfig":{"version":"0.1"}}-->
 submitLabel: Send
 fields:
-  - name: message
-    label: Message
+  - label: Message
     type: textarea
 `, '.hvy');
 

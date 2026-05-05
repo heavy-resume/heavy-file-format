@@ -21,7 +21,7 @@ For forms, store the script on the form and set it as the submit handler:
 ```shell
 hvy add section / chore-chart "Chore Chart"
 hvy plugin db-table exec "CREATE TABLE chores (id INTEGER PRIMARY KEY, title TEXT NOT NULL)"
-hvy add plugin form /chore-chart add-chore "Add chore" "title:Title:text:required" --script submit "title = doc.form.get_value('title')\ndoc.db.execute('INSERT INTO chores (title) VALUES (?)', [title])" --on-submit-script submit
+hvy add plugin form /chore-chart add-chore "Add chore" "Title:text:required" --script submit "title = doc.form.get_value('Title')\ndoc.db.execute('INSERT INTO chores (title) VALUES (?)', [title])" --on-submit-script submit
 hvy add plugin db-table /chore-chart chores chores "SELECT id, title FROM chores ORDER BY id DESC"
 hvy lint
 ```

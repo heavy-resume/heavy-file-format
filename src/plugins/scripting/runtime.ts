@@ -55,13 +55,13 @@ export interface ScriptingFormOption {
 }
 
 export interface ScriptingFormApi {
-  get_value(name: string): unknown;
-  set_value(name: string, value: unknown): void;
+  get_value(label: string): unknown;
+  set_value(label: string, value: unknown): void;
   get_values(): Record<string, unknown>;
-  set_options(name: string, options: ScriptingFormOption[]): void;
-  get_options(name: string): ScriptingFormOption[];
-  set_error(name: string, message: string): void;
-  clear_error(name: string): void;
+  set_options(label: string, options: ScriptingFormOption[]): void;
+  get_options(label: string): ScriptingFormOption[];
+  set_error(label: string, message: string): void;
+  clear_error(label: string): void;
 }
 
 export interface ScriptingDbApi {

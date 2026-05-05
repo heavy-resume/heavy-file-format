@@ -153,7 +153,7 @@ registerHvyCliPluginCommands({
     'This plugin is a form. The form fields, submit label, scripts, and on-submit behavior live in plugin.txt as form YAML/body text.',
     'Use plugin.txt for form content and plugin.json for plugin id/config metadata.',
     'Form scripts are top-level Python/Brython snippets under scripts.NAME and run through the sandboxed scripting runtime.',
-    'Form scripts receive doc plus doc.form. Use doc.form.get_value/get_values/set_value/set_options/set_error/clear_error for form state.',
+    'Form scripts receive doc plus doc.form. Use field labels with doc.form.get_value/get_values/set_value/set_options/set_error/clear_error.',
     'Use doc.db.query(sql, params) and doc.db.execute(sql, params) for SQLite from form scripts; do not call doc.tool("db.query") or doc.tool("db.exec").',
     'doc.tool(name, args) can call the synchronous document-edit tool subset; args are a Python dict matching the AI tool schema.',
     'When changing submit behavior, look for named scripts and on-submit script settings before editing fields.',
@@ -161,7 +161,7 @@ registerHvyCliPluginCommands({
   ],
   addCommands: [
     {
-      command: 'hvy add plugin form SECTION_PATH ID SUBMIT_BUTTON_LABEL FIELD... [--script NAME PYTHON] [--on-submit-script NAME]',
+      command: 'hvy add plugin form SECTION_PATH ID SUBMIT_BUTTON_LABEL FIELD_LABEL:TYPE... [--script NAME PYTHON] [--on-submit-script NAME]',
       description: 'Create a Form plugin component.',
     },
   ],
@@ -193,7 +193,7 @@ registerHvyCliPluginCommands({
       description: 'Run that named script when the submit button is pressed. Alias: --submit.',
     },
     {
-      command: `Example: hvy add plugin form /chores add-chore "Add chore" "description:Description:textarea:required" --script submit "title = doc.form.get_value('description')\\ndoc.db.execute('INSERT INTO chores (title) VALUES (\\'' + title + '\\')')" --on-submit-script submit`,
+      command: `Example: hvy add plugin form /chores add-chore "Add chore" "Description:textarea:required" --script submit "title = doc.form.get_value('Description')\\ndoc.db.execute('INSERT INTO chores (title) VALUES (\\'' + title + '\\')')" --on-submit-script submit`,
       description: 'Creates a form whose submit button says "Add chore" and runs the script named submit.',
     },
     {

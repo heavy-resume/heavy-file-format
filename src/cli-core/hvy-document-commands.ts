@@ -791,10 +791,9 @@ function splitCsvText(value: string): string[] {
 }
 
 function parseFormFieldSpec(spec: string): JsonObject {
-  const [name = '', label = '', type = 'text', ...rest] = decodeCliText(spec).split(':');
+  const [label = '', type = 'text', ...rest] = decodeCliText(spec).split(':');
   const field: JsonObject = {
-    name,
-    label: label || name,
+    label: humanizeFormFieldLabel(label),
     type: type || 'text',
   };
   if (rest.includes('required')) {
@@ -805,6 +804,17 @@ function parseFormFieldSpec(spec: string): JsonObject {
     field.options = optionPart.split('|').map((option) => option.trim()).filter((option) => option.length > 0);
   }
   return field;
+}
+
+function humanizeFormFieldLabel(label: string): string {
+  const trimmed = label.trim();
+  if (!trimmed) {
+    return 'Field';
+  }
+  return trimmed
+    .replace(/[-_]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .replace(/^./, (match) => match.toUpperCase());
 }
 
 function parseJsonObject(content: string, label: string): JsonObject {

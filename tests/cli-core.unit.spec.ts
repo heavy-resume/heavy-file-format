@@ -995,8 +995,7 @@ hvy_version: 0.1
 
 <!--hvy:plugin {"id":"passive-form","plugin":"dev.heavy.form","pluginConfig":{"version":"0.1"}}-->
 fields:
-  - name: chore
-    label: Chore
+  - label: Chore
     type: text
 submitLabel: Add chore
 `, '.hvy');
@@ -1038,10 +1037,10 @@ test('cli commands can create a chore chart with tables and form plugins', async
   await run(
     'hvy add table /chore-chart active-chores "Chore,Dad,Mom,Child" --row "Dishes,,,Child" --row "Trash,Dad,," --row "Laundry,,Mom,"'
   );
-  await run('hvy add plugin form /chore-chart add-chore-form "Add chore" "description:Description:textarea:required"');
-  await run('hvy add plugin form /chore-chart assign-chore-form "Assign chore" "chore:Chore:text:required" "assignee:Assignee:select:required:Dad|Mom|Child"');
+  await run('hvy add plugin form /chore-chart add-chore-form "Add chore" "Description:textarea:required"');
+  await run('hvy add plugin form /chore-chart assign-chore-form "Assign chore" "Chore:text:required" "Assignee:select:required:Dad|Mom|Child"');
   await run(
-    'hvy add plugin form /chore-chart complete-chore-form "Complete chore" "chore:Chore:text:required" "completed_by:Completed by:select:required:Dad|Mom|Child"'
+    'hvy add plugin form /chore-chart complete-chore-form "Complete chore" "Chore:text:required" "Completed by:select:required:Dad|Mom|Child"'
   );
   await run('hvy add plugin db-table /chore-chart weekly-leaders weekly_chore_leaders "SELECT person, completed_count FROM weekly_chore_leaders ORDER BY completed_count DESC"');
 
@@ -1078,7 +1077,7 @@ test('hvy help lists registered plugin add and operation commands as quick-refer
   expect(help).toContain('hvy recipe [NAME]');
   expect(help).toContain('Cheatsheets:\n- components\n- db-table\n- forms\n- scripting');
   expect(help).toContain('Recipes:\n- db-and-form\n- form-backed-table\n- scripting');
-  expect(help).toContain('hvy add plugin form SECTION_PATH ID SUBMIT_BUTTON_LABEL FIELD...');
+  expect(help).toContain('hvy add plugin form SECTION_PATH ID SUBMIT_BUTTON_LABEL FIELD_LABEL:TYPE...');
   expect(help).toContain('hvy add plugin db-table SECTION_PATH ID TABLE [QUERY]');
   expect(help).toContain('hvy plugin db-table query [SELECT/WITH SQL]');
   expect(help).toContain('hvy plugin db-table exec [CREATE / INSERT / UPDATE / DELETE / DROP SQL]');
@@ -1124,7 +1123,7 @@ test('hvy plugin form help explains script and submit options', async () => {
 
   const help = (await executeHvyCliCommand(document, session, 'man hvy plugin form')).output;
 
-  expect(help).toContain('hvy add plugin form SECTION_PATH ID SUBMIT_BUTTON_LABEL FIELD... [--script NAME PYTHON] [--on-submit-script NAME]');
+  expect(help).toContain('hvy add plugin form SECTION_PATH ID SUBMIT_BUTTON_LABEL FIELD_LABEL:TYPE... [--script NAME PYTHON] [--on-submit-script NAME]');
   expect(help).toContain('--script NAME PYTHON\n  Store a named Python script');
   expect(help).toContain('--on-submit-script NAME\n  Run that named script when the submit button is pressed');
   expect(help).toContain('Example: hvy add plugin form /chores add-chore');
@@ -1141,8 +1140,7 @@ hvy_version: 0.1
 
 <!--hvy:plugin {"id":"bad-form","plugin":"dev.heavy.form","pluginConfig":{"version":"0.1"}}-->
 fields:
-  - name: chore
-    label: Chore
+  - label: Chore
     type: text
 scripts:
   submit: |

@@ -6,7 +6,7 @@ Use this when a form should create rows and a table should show those rows.
 ```shell
 hvy add section / tracker "Tracker"
 hvy plugin db-table exec "CREATE TABLE items (id INTEGER PRIMARY KEY, title TEXT NOT NULL, notes TEXT)"
-hvy add plugin form /tracker add-item "Add item" "title:Title:text:required" "notes:Notes:textarea" --script submit "title = doc.form.get_value('title')\nnotes = doc.form.get_value('notes')\ndoc.db.execute('INSERT INTO items (title, notes) VALUES (?, ?)', [title, notes])" --on-submit-script submit
+hvy add plugin form /tracker add-item "Add item" "Title:text:required" "Notes:textarea" --script submit "title = doc.form.get_value('Title')\nnotes = doc.form.get_value('Notes')\ndoc.db.execute('INSERT INTO items (title, notes) VALUES (?, ?)', [title, notes])" --on-submit-script submit
 hvy add plugin db-table /tracker items-table items "SELECT id, title, notes FROM items ORDER BY id DESC"
 hvy plugin db-table query "SELECT id, title FROM items"
 hvy lint

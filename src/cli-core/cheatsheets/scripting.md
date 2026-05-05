@@ -51,9 +51,9 @@ doc.tool("patch_component", {"component_ref": "C3", "edits": [{"op": "replace", 
 Form scripts also get:
 
 ```python
-doc.form.get_value("field")
-doc.form.set_value("field", "value")
-doc.form.set_error("field", "Message")
+doc.form.get_value("Field label")
+doc.form.set_value("Field label", "value")
+doc.form.set_error("Field label", "Message")
 ```
 
 Top-level `return` is a syntax error. Define helper functions if you need returns.

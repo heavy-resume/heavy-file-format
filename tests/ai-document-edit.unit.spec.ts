@@ -2174,7 +2174,7 @@ test('requestAiDocumentEditTurn rejects invented hvy form components and asks fo
   setHostPlugins([formPluginRegistration]);
   queueAiToolResponses(
     '{"tool":"create_component","position":"append-to-section","section_ref":"summary","hvy":"<!--hvy:form {\\"id\\":\\"assign-form\\"}-->"}',
-    '{"tool":"create_component","position":"append-to-section","section_ref":"summary","hvy":"<!--hvy:plugin {\\"id\\":\\"assign-form\\",\\"plugin\\":\\"dev.heavy.form\\",\\"pluginConfig\\":{\\"version\\":\\"0.1\\"}}-->\\n```yaml\\nfields:\\n  - name: chore\\n    label: Chore\\n    type: text\\nsubmitLabel: Assign\\n```"}',
+    '{"tool":"create_component","position":"append-to-section","section_ref":"summary","hvy":"<!--hvy:plugin {\\"id\\":\\"assign-form\\",\\"plugin\\":\\"dev.heavy.form\\",\\"pluginConfig\\":{\\"version\\":\\"0.1\\"}}-->\\n```yaml\\nfields:\\n  - label: Chore\\n    type: text\\nsubmitLabel: Assign\\n```"}',
     '{"tool":"done","summary":"Created form plugin."}'
   );
 
@@ -2266,8 +2266,7 @@ hvy_version: 0.1
 <!--hvy:plugin {"id":"add-chore-form","plugin":"dev.heavy.form","pluginConfig":{"version":"0.1"}}-->
  submitLabel: "Add Chore"
  fields:
- - name: title
-   label: Chore Title
+ - label: Chore Title
    type: text
 `, '.hvy');
   seedStateForDocument(document);

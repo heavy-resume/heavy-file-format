@@ -49,7 +49,7 @@ programmatically. Scripts cannot reach the network — they only see the
 
 <!--hvy:text {}-->
  The scripting `doc.tool(name, args)` surface is a synchronous subset of the
- AI agent's document-edit tools. Pass `args` as a Python dict; field names
+ AI agent's document-edit tools. Pass `args` as a Python dict; argument names
  match the AI tool schema.
 
  Document tools:

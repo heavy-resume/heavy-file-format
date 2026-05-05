@@ -226,9 +226,9 @@ test('createScriptingRuntime exposes a supplied form API', () => {
   const runtime = createScriptingRuntime({
     document: { meta: {}, extension: '.hvy', sections: [], attachments: [] },
     form: {
-      get_value: (name) => (name === 'food' ? 'soup' : null),
+      get_value: (label) => (label === 'Food' ? 'soup' : null),
       set_value: () => {},
-      get_values: () => ({ food: 'soup' }),
+      get_values: () => ({ Food: 'soup' }),
       set_options: () => {},
       get_options: () => [{ label: 'Soup', value: 'soup' }],
       set_error: () => {},
@@ -236,9 +236,9 @@ test('createScriptingRuntime exposes a supplied form API', () => {
     },
   });
 
-  expect(runtime.doc.form.get_value('food')).toBe('soup');
-  expect(runtime.doc.form.get_values()).toEqual({ food: 'soup' });
-  expect(runtime.doc.form.get_options('food')).toEqual([{ label: 'Soup', value: 'soup' }]);
+  expect(runtime.doc.form.get_value('Food')).toBe('soup');
+  expect(runtime.doc.form.get_values()).toEqual({ Food: 'soup' });
+  expect(runtime.doc.form.get_options('Food')).toEqual([{ label: 'Soup', value: 'soup' }]);
 });
 
 test('createScriptingRuntime exposes a supplied database API', () => {

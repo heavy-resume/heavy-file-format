@@ -30,6 +30,7 @@ interface ProxyChatRequest {
   model: string;
   messages: ChatMessage[];
   context: string;
+  // Natural-language response instructions, not a provider JSON schema.
   formatInstructions: string;
   mode: 'qa' | 'component-edit' | 'document-edit';
   traceRunId?: string;
@@ -45,6 +46,7 @@ export interface ProxyCompletionParams {
   settings: ChatSettings;
   messages: ChatMessage[];
   context: string;
+  // Natural-language response instructions, not a provider JSON schema.
   formatInstructions: string;
   mode: 'qa' | 'component-edit' | 'document-edit';
   debugLabel?: string;

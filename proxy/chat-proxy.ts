@@ -47,6 +47,7 @@ interface ProxyChatRequest {
   }>;
   traceRunId?: string;
   context: string;
+  // Natural-language response instructions, not a provider JSON schema.
   formatInstructions: string;
 }
 

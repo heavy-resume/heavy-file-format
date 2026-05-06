@@ -23,6 +23,7 @@ const CHAT_CLI_MODEL_OUTPUT_MAX_LINES = 200;
 const CHAT_CLI_MODEL_OUTPUT_MAX_LINE_WIDTH = 400;
 const CHAT_CLI_RECOMMENDED_BATCH_COMMANDS = 4;
 const CHAT_CLI_MAX_BATCH_COMMANDS = 10;
+const CHAT_CLI_BATCH_GUIDANCE = `Keep batches to at most ${CHAT_CLI_RECOMMENDED_BATCH_COMMANDS} focused commands.`;
 const CHAT_CLI_COMMAND_NAMES = new Set(['cd', 'pwd', 'ls', 'cat', 'head', 'tail', 'nl', 'find', 'rg', 'grep', 'sort', 'uniq', 'wc', 'tr', 'xargs', 'cp', 'rm', 'echo', 'sed', 'true', 'hvy', 'db-table', 'form', 'ask']);
 const introducedDiagnosticsByDocument = new WeakMap<VisualDocument, Map<string, HvyCliDiagnosticIssue>>();
 
@@ -288,7 +289,7 @@ async function advanceChatCliTurnState(params: {
     params.onProgress?.(`Notes\n${action.notes.trim()}`);
   }
   if (commands.length > CHAT_CLI_MAX_BATCH_COMMANDS) {
-    const message = `Batch has ${commands.length} commands. Run at most ${CHAT_CLI_RECOMMENDED_BATCH_COMMANDS} focused commands per response, or up to ${CHAT_CLI_MAX_BATCH_COMMANDS} when necessary. What is your next command?`;
+    const message = formatOversizedChatCliBatchMessage(commands.length);
     return buildSimAdvanceResult(
       params,
       [
@@ -421,8 +422,6 @@ function buildSimAdvanceResult(
       params.state.request,
       params.state.priorMessages,
       params.state.priorConversation,
-      urgency,
-      getIntroducedDiagnostics(params.document),
       params.state.selectedComponent
     ),
     formatInstructions: buildChatCliLoopFormatInstructions(),
@@ -504,7 +503,7 @@ async function buildChatCliInitialTurnRequest(params: {
       role: 'user',
       content: params.request,
     },
-    ...formatInitialChatCliCommandMessages(initialOutputs, cli.snapshot()),
+    ...formatInitialChatCliCommandMessages(initialOutputs, cli.snapshot(), getIntroducedDiagnostics(params.document)),
   ];
   const context = buildChatCliLoopContext(
     cli.snapshot(),
@@ -512,8 +511,6 @@ async function buildChatCliInitialTurnRequest(params: {
     params.request,
     params.priorMessages ?? [],
     priorConversation,
-    0,
-    getIntroducedDiagnostics(params.document),
     params.selectedComponent
   );
   return {
@@ -533,8 +530,6 @@ function buildChatCliLoopContext(
   request: string,
   priorMessages: ChatMessage[],
   priorConversation: ChatMessage[],
-  urgency: number,
-  introducedDiagnostics: HvyCliDiagnosticIssue[],
   selectedComponent?: ChatCliSelectedComponentFocus
 ): string {
   const omittedMessageCount = priorMessages.filter((message) => !message.progress).length - priorConversation.length;
@@ -548,18 +543,7 @@ function buildChatCliLoopContext(
     '',
     'Use the chronological chat messages and terminal results to infer the active task. If you lose the thread or need a choice from the user, use `ask QUESTION`.',
     ...(selectedComponent ? ['', 'Selected component focus:', formatSelectedComponentFocus(selectedComponent, request)] : []),
-    '',
-    `Current directory: ${snapshot.cwd}`,
     ...(cwdComponentContext ? ['', cwdComponentContext] : []),
-    '',
-    'scratchpad.txt:',
-    formatScratchpadForModel(snapshot),
-    '',
-    'urgency:',
-    formatChatCliUrgency(urgency),
-    '',
-    'AI-introduced diagnostics:',
-    formatIntroducedDiagnosticsForModel(introducedDiagnostics),
     '',
     'Valid commands (in order of preference):',
     snapshot.commandSummary,
@@ -627,7 +611,8 @@ function isAddLikeSelectedComponentRequest(request: string): boolean {
 
 function formatInitialChatCliCommandMessages(
   outputs: Array<{ command: string; output: string; explanation?: string }>,
-  snapshot: ReturnType<ReturnType<typeof createChatCliInterface>['snapshot']>
+  snapshot: ReturnType<ReturnType<typeof createChatCliInterface>['snapshot']>,
+  introducedDiagnostics: HvyCliDiagnosticIssue[]
 ): ChatMessage[] {
   return outputs.flatMap((output, index) => [
     {
@@ -642,7 +627,7 @@ function formatInitialChatCliCommandMessages(
         ? formatCommandResultForModel({
             output: output.output,
             hints: '',
-            introducedDiagnostics: '',
+            introducedDiagnostics: formatIntroducedDiagnosticsForModel(introducedDiagnostics),
             scratchpad: formatScratchpadForModel(snapshot),
             urgency: formatChatCliUrgency(0),
             cwd: snapshot.cwd,
@@ -706,7 +691,7 @@ function buildChatCliLoopFormatInstructions(): string {
   return [
     'Return concise notes plus terminal command(s).',
     'At the top, write exactly these note labels with short answers: What you are doing, Why you are doing it, What you are unsure of.',
-    `Wrap commands in \`\`\`shell fences. Multiple \`\`\`shell blocks are allowed and run in order. Keep batches to at most ${CHAT_CLI_RECOMMENDED_BATCH_COMMANDS} focused commands.`,
+    `Wrap commands in \`\`\`shell fences. Multiple \`\`\`shell blocks are allowed and run in order. ${CHAT_CLI_BATCH_GUIDANCE}`,
     'Text outside ```shell fences is shown as progress notes for debugging. It is not a substitute for commands.',
     'To finish, return only: done Short summary of what changed.',
     'To ask for requirements, NOT CLI clarification from the non-technical user, return: ask followed by the actual question.',
@@ -853,7 +838,7 @@ function formatCommandResultForModel(result: string | { output: string; diagnost
     '### BEGIN your urgency ###',
     result.urgency?.trimEnd() || formatChatCliUrgency(0),
     '### END your urgency ###',
-    `Multiple \`\`\`shell blocks are allowed and run as a batch. Keep batches to ${CHAT_CLI_RECOMMENDED_BATCH_COMMANDS} focused commands. Remember to take notes as you go!`,
+    `Multiple \`\`\`shell blocks are allowed and run as a batch. ${CHAT_CLI_BATCH_GUIDANCE} Remember to take notes as you go!`,
     `Current directory: ${result.cwd || '/'}`,
     'What is your next command?',
   ].join('\n');
@@ -876,13 +861,17 @@ function formatChatCliUrgency(score: number): string {
 }
 
 function getChatCliUrgencyMessage(score: number): string {
-  if (score < 2) {
+  if (score < 3) {
     return 'prioritize planning and understanding';
   }
-  if (score <= 4) {
+  if (score <= 5) {
     return 'consider making your next change soon';
   }
   return 'stop poking around and make changes';
+}
+
+function formatOversizedChatCliBatchMessage(commandCount: number): string {
+  return `Batch has ${commandCount} commands. Run at most ${CHAT_CLI_RECOMMENDED_BATCH_COMMANDS} focused commands per response, or up to ${CHAT_CLI_MAX_BATCH_COMMANDS} when necessary. What is your next command?`;
 }
 
 function formatBatchCommandOutput(outputs: Array<{ command: string; output: string }>): string {

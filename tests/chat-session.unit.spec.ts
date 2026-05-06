@@ -261,11 +261,11 @@ test('requestDocumentEditChatTurn runs the CLI edit loop for document chat', asy
       formatInstructions: expect.stringContaining('Return concise notes plus terminal command(s).'),
     })
   );
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('scratchpad.txt:');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Current request:\nAdd a chore section.');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Use the chronological chat messages and terminal results to infer the active task.');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('validate edits before recording completion');
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('urgency:\nscore=0\nprioritize planning and understanding');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).not.toContain('scratchpad.txt:');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).not.toContain('urgency:\nscore=0\nprioritize planning and understanding');
   const firstMessages = requestProxyCompletionMock.mock.calls[0]?.[0]?.messages;
   expect(firstMessages).toEqual([
     expect.objectContaining({ role: 'user', content: 'Add a chore section.' }),
@@ -456,7 +456,6 @@ Hello world
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Selected component focus:');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Path: /body/summary/intro');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Parent path: /body/summary');
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Current directory: /body/summary/intro');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Component context:');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('description: Summary section guidance.');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('description: Opening paragraph.');
@@ -501,9 +500,9 @@ hvy_version: 0.1
 
   expect(result.error).toBeNull();
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Parent path: /body/summary/items');
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Current directory: /body/summary/items');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('This request appears to add a new item.');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Do not overwrite the selected component.');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages.at(-1)?.content).toContain('Current directory: /body/summary/items');
 });
 
 test('requestDocumentEditChatTurn trims old cli conversation messages while keeping stable context', async () => {
@@ -534,8 +533,8 @@ test('requestDocumentEditChatTurn trims old cli conversation messages while keep
     'Valid commands (in order of preference):\nCommands: hvy, nl, rg, find, sed, echo, cat, ls, pwd, cd, cp, rm, grep, sort, uniq, wc, tr, xargs, head, tail, true. Ask: ask QUESTION. Finish: done SUMMARY.'
   );
   expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.context).toContain('Current request:\nCheck the document with several commands.');
-  expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.context).toContain('scratchpad.txt:');
-  expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.context).toContain('scratchpad.txt:\n');
+  expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.context).not.toContain('scratchpad.txt:');
+  expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.messages.at(-1)?.content).toContain('### BEGIN /scratchpad.txt  ###');
 });
 
 test('requestDocumentEditChatTurn returns ask commands as clarification questions', async () => {
@@ -700,6 +699,29 @@ hvy_version: 0.1
   expect(nextPrompt).toContain('CMD: cat /body/summary/long/text.txt');
   expect(nextPrompt).not.toContain('Warning: output truncated');
   expect(nextPrompt).toContain('### BEGIN your urgency ###\nscore=1\nprioritize planning and understanding');
+});
+
+test('requestDocumentEditChatTurn increments urgency once per successful AI command response', async () => {
+  requestProxyCompletionMock
+    .mockResolvedValueOnce('```shell\npwd\n```')
+    .mockResolvedValueOnce('```shell\nls /\n```')
+    .mockResolvedValueOnce('```shell\nhvy lint\n```')
+    .mockResolvedValueOnce('done Inspected three times.');
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+  const document = deserializeDocument('---\nhvy_version: 0.1\n---\n', '.hvy');
+
+  const result = await requestDocumentEditChatTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Inspect three times.',
+  });
+
+  expect(result.error).toBeNull();
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages.at(-1)?.content).toContain('### BEGIN your urgency ###\nscore=0\nprioritize planning and understanding');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content).toContain('### BEGIN your urgency ###\nscore=1\nprioritize planning and understanding');
+  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.messages.at(-1)?.content).toContain('### BEGIN your urgency ###\nscore=2\nprioritize planning and understanding');
+  expect(requestProxyCompletionMock.mock.calls[3]?.[0]?.messages.at(-1)?.content).toContain('### BEGIN your urgency ###\nscore=3\nconsider making your next change soon');
 });
 
 test('requestDocumentEditChatTurn ignores trailing done until a later standalone finish', async () => {
@@ -1027,8 +1049,8 @@ hvy_version: 0.1
     role: 'assistant',
     content: 'Should I keep going?',
   }));
-  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('AI-introduced diagnostics:');
-  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('[text] /body/summary/empty - text body is empty.');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content).toContain('AI-introduced diagnostics');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content).toContain('[text] /body/summary/empty - text body is empty.');
 
   const secondResult = await requestDocumentEditChatTurn({
     settings,
@@ -1042,10 +1064,10 @@ hvy_version: 0.1
     role: 'assistant',
     content: 'Fixed the note.',
   }));
-  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.context).toContain('[text] /body/summary/empty - text body is empty.');
+  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.messages.at(-1)?.content).toContain('[text] /body/summary/empty - text body is empty.');
   expect(requestProxyCompletionMock.mock.calls[3]?.[0]?.messages.at(-1)?.content).toContain('You cannot finish yet.');
   expect(requestProxyCompletionMock.mock.calls[3]?.[0]?.messages.at(-1)?.content).toContain('Fix them before finishing');
-  expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.context).toContain('AI-introduced diagnostics:\n(none)');
+  expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.messages.at(-1)?.content).toContain('AI-introduced diagnostics\n(none)');
 });
 
 test('requestDocumentEditChatTurn includes component-specific hints', async () => {
@@ -1450,8 +1472,8 @@ test('requestDocumentEditChatTurn warns when scratchpad writes exceed the note l
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content).toContain(
     'Rewrite scratchpad.txt shorter before adding more notes.'
   );
-  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('x'.repeat(800));
-  expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.context).toContain('short notes');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content).toContain('x'.repeat(800));
+  expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.messages.at(-1)?.content).toContain('short notes');
   expect(writeChatCliCommandTraceMock.mock.calls.map((call) => call[1])).toEqual([
     'ls /',
     'hvy --help',

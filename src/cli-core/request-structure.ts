@@ -239,7 +239,7 @@ function formatComponentTreeNode(node: ComponentTreeNode, depth: number, options
     const remainingChildren = children.filter((child) => child !== metadataChild);
     const hiddenAnonymousCount = countAnonymousComponentEntries(remainingChildren);
     const visibleChildren = remainingChildren.filter(hasExplicitComponentEntry);
-    const hiddenSummary = hiddenAnonymousCount > 0 ? ` (+${hiddenAnonymousCount} anonymous descendants)` : '';
+    const hiddenSummary = hiddenAnonymousCount > 0 ? ` (+${hiddenAnonymousCount} hidden)` : '';
     return [
       `${'  '.repeat(depth)}/${node.name} ${formatComponentStructureLine(metadataChild.entry!)}${hiddenSummary}${formatDescriptionSuffix(metadataChild.entry!.description, options.describe)}`,
       ...formatComponentTreeChildren(visibleChildren, depth + 1, options),

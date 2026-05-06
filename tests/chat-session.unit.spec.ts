@@ -412,6 +412,8 @@ test('advanceDocumentEditCliSimStep executes the response and prepares the next 
   const payload = JSON.parse(result.requestJson) as { messages: ChatMessage[] };
 
   expect(result.commandResultMessage).toContain('### CMD RESULT ###\nCMD: pwd\n/');
+  expect(result.commandResultMessage).toContain('diagnostics\n(no changes)');
+  expect(result.commandResultMessage).not.toContain('sim mode');
   expect(payload.messages).not.toContainEqual(expect.objectContaining({
     role: 'assistant',
     content: expect.stringContaining('```shell\npwd\n```'),

@@ -44,6 +44,7 @@ export interface ChatCliSimTurnState extends ChatCliInitialTurnRequest {
   priorMessages: ChatMessage[];
   priorConversation: ChatMessage[];
   session: HvyCliSession;
+  diagnostics: HvyCliDiagnosticIssue[];
   urgency: number;
   selectedComponent?: ChatCliSelectedComponentFocus;
 }
@@ -51,6 +52,10 @@ export interface ChatCliSimTurnState extends ChatCliInitialTurnRequest {
 export interface ChatCliSimAdvanceResult extends ChatCliSimTurnState {
   commandResultMessage: string;
   mutated: boolean;
+  batchHadSuccess?: boolean;
+  batchHadError?: boolean;
+  lastFailedCommand?: string;
+  lastCommandError?: string;
   terminalSummary?: string;
   askedQuestion?: string;
 }
@@ -79,33 +84,35 @@ export async function runChatCliEditLoop(params: {
   const traceRunId = createChatCliTraceRunId();
   await writeChatCliUserQueryTrace(traceRunId, params.request, params.signal);
   const initial = await buildChatCliInitialTurnRequest({ ...params, traceRunId, writeTrace: true });
-  const cli = initial.cli;
-  let diagnostics = initial.diagnostics;
-  syncIntroducedDiagnostics(params.document, diagnostics);
-  let conversation: ChatMessage[] = initial.messages;
-  let priorConversation = initial.priorConversation;
+  let turnState: ChatCliSimTurnState = {
+    messages: initial.messages,
+    context: initial.context,
+    formatInstructions: initial.formatInstructions,
+    traceRunId,
+    request: params.request,
+    priorMessages: params.priorMessages ?? [],
+    priorConversation: initial.priorConversation,
+    session: initial.cli.session,
+    diagnostics: initial.diagnostics,
+    urgency: 0,
+    ...(params.selectedComponent ? { selectedComponent: params.selectedComponent } : {}),
+  };
+  if ((params.priorMessages ?? []).some((message) => message.role === 'assistant' && message.work)) {
+    recordIntroducedDiagnostics(params.document, [], turnState.diagnostics);
+  }
+  syncIntroducedDiagnostics(params.document, turnState.diagnostics);
   let consecutiveCommandErrors = 0;
   let latestTokenUsage: ChatTokenUsage | null = null;
-  let urgency = 0;
 
   for (let step = 0; step < CHAT_CLI_MAX_STEPS; step += 1) {
     throwIfAborted(params.signal);
     if (step > 0) {
-      conversation = compactChatCliConversation(conversation);
+      turnState = { ...turnState, messages: compactChatCliConversation(turnState.messages) };
     }
     const response = await requestProxyCompletion({
       settings: params.settings,
-      messages: conversation,
-      context: buildChatCliLoopContext(
-        cli.snapshot(),
-        params.document,
-        params.request,
-        params.priorMessages ?? [],
-        priorConversation,
-        urgency,
-        getIntroducedDiagnostics(params.document),
-        params.selectedComponent
-      ),
+      messages: turnState.messages,
+      context: turnState.context,
       formatInstructions: buildChatCliLoopFormatInstructions(),
       mode: 'document-edit',
       debugLabel: `chat-cli-edit:${step + 1}`,
@@ -117,149 +124,67 @@ export async function runChatCliEditLoop(params: {
       },
       signal: params.signal,
     });
-    const action = parseChatCliAction(response);
-    if (action.kind === 'invalid') {
-      conversation = [
-        ...conversation,
-        {
-          id: crypto.randomUUID(),
-          role: 'user',
-          content: action.message,
-        },
-      ];
+    const advanced = await advanceChatCliTurnState({
+      document: params.document,
+      state: turnState,
+      assistantOutput: response,
+      signal: params.signal,
+      onProgress: params.onProgress,
+      traceRunId,
+      writeTrace: true,
+    });
+    turnState = advanced;
+    if (advanced.commandResultMessage) {
+      if (advanced.batchHadSuccess) {
+        consecutiveCommandErrors = 0;
+      } else if (advanced.batchHadError) {
+        consecutiveCommandErrors += 1;
+        if (consecutiveCommandErrors >= CHAT_CLI_MAX_CONSECUTIVE_COMMAND_ERRORS) {
+          throw new ChatCliCommandFailureError({
+            request: params.request,
+            command: advanced.lastFailedCommand ?? '',
+            error: advanced.lastCommandError ?? '',
+            scratchpad: formatScratchpadForModel(createChatCliInterface(params.document, turnState.session).snapshot()),
+          });
+        }
+      }
+      if (advanced.mutated) {
+        params.onMutation?.('chat-cli');
+      }
+    }
+    if (!advanced.terminalSummary && !advanced.askedQuestion) {
       continue;
     }
-    if (action.kind === 'done') {
-      diagnostics = await collectHvyCliDiagnostics(params.document);
+    if (advanced.terminalSummary) {
+      const diagnostics = await collectHvyCliDiagnostics(params.document);
+      turnState = { ...turnState, diagnostics };
+      const existingIntroducedIssues = getIntroducedDiagnostics(params.document);
       syncIntroducedDiagnostics(params.document, diagnostics);
       const introducedIssues = getIntroducedDiagnostics(params.document);
-      if (introducedIssues.length > 0) {
-        conversation = [
-          ...conversation,
-          {
-            id: crypto.randomUUID(),
-            role: 'user',
-            content: formatIntroducedLintIssuesPrompt(introducedIssues),
-          },
-        ];
+      const blockingIntroducedIssues = introducedIssues.length > 0 ? introducedIssues : existingIntroducedIssues;
+      if (blockingIntroducedIssues.length > 0) {
+        turnState = {
+          ...turnState,
+          messages: [
+            ...turnState.messages,
+            {
+              id: crypto.randomUUID(),
+              role: 'user',
+              content: formatIntroducedLintIssuesPrompt(blockingIntroducedIssues),
+            },
+          ],
+        };
         continue;
       }
       params.onProgress?.('Finished CLI edit loop.');
       return {
-        summary: action.summary || `Finished after ${step + 1} step${step === 0 ? '' : 's'}.`,
+        summary: advanced.terminalSummary || `Finished after ${step + 1} step${step === 0 ? '' : 's'}.`,
         ...(latestTokenUsage ? { tokenUsage: latestTokenUsage } : {}),
       };
     }
-    if (action.kind === 'ask') {
-      return { summary: action.question, asked: true, ...(latestTokenUsage ? { tokenUsage: latestTokenUsage } : {}) };
+    if (advanced.askedQuestion) {
+      return { summary: advanced.askedQuestion, asked: true, ...(latestTokenUsage ? { tokenUsage: latestTokenUsage } : {}) };
     }
-    if (action.notes.trim()) {
-      params.onProgress?.(`Notes\n${action.notes.trim()}`);
-    }
-
-    const commandOutputs: Array<{ command: string; output: string }> = [];
-    const commandHints: string[] = [];
-    const commands = action.commands;
-    if (commands.length > CHAT_CLI_MAX_BATCH_COMMANDS) {
-      conversation = [
-        ...conversation,
-        {
-          id: crypto.randomUUID(),
-          role: 'user',
-          content: `Batch has ${commands.length} commands. Run at most ${CHAT_CLI_RECOMMENDED_BATCH_COMMANDS} focused commands per response, or up to ${CHAT_CLI_MAX_BATCH_COMMANDS} when necessary. What is your next command?`,
-        },
-      ];
-      continue;
-    }
-    const outputLineBudget = Math.max(1, Math.floor(CHAT_CLI_MODEL_OUTPUT_MAX_LINES / commands.length));
-    let stopAfterCommandError: ChatCliCommandFailureError | null = null;
-    let mutated = false;
-    let traceOutput = '';
-    let batchHadSuccess = false;
-    let batchHadError = false;
-    let lastFailedCommand = '';
-    let lastCommandError = '';
-    for (let commandIndex = 0; commandIndex < commands.length; commandIndex += 1) {
-      const command = commands[commandIndex] ?? '';
-      params.onProgress?.(commands.length > 1 ? `$ [${commandIndex + 1}/${commands.length}] ${command}` : `$ ${command}`);
-      let result: Awaited<ReturnType<typeof cli.run>>;
-      try {
-        result = await cli.run(command);
-        batchHadSuccess = true;
-        const commandMutatedDocument = result.mutated && !isSessionOnlyCommand(command);
-        mutated = mutated || commandMutatedDocument;
-      } catch (error) {
-        const output = error instanceof Error ? error.message : String(error);
-        batchHadError = true;
-        lastFailedCommand = command;
-        lastCommandError = output;
-        result = { command, cwd: cli.session.cwd, output, mutated: false };
-      }
-      traceOutput = result.output;
-      commandOutputs.push({
-        command,
-        output: formatOutputForModel(result.output, outputLineBudget),
-      });
-      const hints = buildChatCliComponentHints({
-        document: params.document,
-        cwd: result.cwd,
-        command,
-        output: result.output,
-      });
-      if (hints.trim()) {
-        commandHints.push(hints);
-      }
-    }
-    if (batchHadSuccess) {
-      consecutiveCommandErrors = 0;
-    } else if (batchHadError) {
-      consecutiveCommandErrors += 1;
-      if (consecutiveCommandErrors >= CHAT_CLI_MAX_CONSECUTIVE_COMMAND_ERRORS) {
-        stopAfterCommandError = new ChatCliCommandFailureError({
-          request: params.request,
-          command: lastFailedCommand,
-          error: lastCommandError,
-          scratchpad: formatScratchpadForModel(cli.snapshot()),
-        });
-      }
-    }
-    if (batchHadSuccess) {
-      urgency = updateChatCliUrgency(urgency, mutated);
-    }
-    const modelMessage = formatCommandResultForModel({
-      output: formatBatchCommandOutput(commandOutputs),
-      diagnosticsDiff: await updateDiagnosticsState(params.document, diagnostics, mutated, (nextIssues) => {
-        const diff = formatHvyCliDiagnosticDiff(diagnostics, nextIssues);
-        diagnostics = nextIssues;
-        return diff;
-      }),
-      hints: formatBatchHints(commandHints),
-      introducedDiagnostics: formatIntroducedDiagnosticsForModel(getIntroducedDiagnostics(params.document)),
-      scratchpad: formatScratchpadForModel(cli.snapshot()),
-      urgency: formatChatCliUrgency(urgency),
-      cwd: cli.snapshot().cwd,
-    });
-    await writeChatCliCommandTrace(
-      traceRunId,
-      commands.length === 1 ? commands[0] ?? '' : commands.join('\n'),
-      commands.length === 1 ? traceOutput : formatBatchCommandOutput(commandOutputs),
-      params.signal,
-      modelMessage
-    );
-    if (stopAfterCommandError) {
-      throw stopAfterCommandError;
-    }
-    if (mutated) {
-      params.onMutation?.('chat-cli');
-    }
-    conversation = [
-      ...conversation,
-      {
-        id: crypto.randomUUID(),
-        role: 'user',
-        content: modelMessage,
-      },
-    ];
   }
 
   return {
@@ -303,6 +228,7 @@ export async function buildChatCliInitialSimTurnState(params: {
     priorMessages: params.priorMessages ?? [],
     priorConversation: initial.priorConversation,
     session: initial.cli.session,
+    diagnostics: initial.diagnostics,
     urgency: 0,
     ...(params.selectedComponent ? { selectedComponent: params.selectedComponent } : {}),
   };
@@ -313,6 +239,18 @@ export async function advanceChatCliSimTurnState(params: {
   state: ChatCliSimTurnState;
   assistantOutput: string;
   signal?: AbortSignal;
+}): Promise<ChatCliSimAdvanceResult> {
+  return advanceChatCliTurnState(params);
+}
+
+async function advanceChatCliTurnState(params: {
+  document: VisualDocument;
+  state: ChatCliSimTurnState;
+  assistantOutput: string;
+  signal?: AbortSignal;
+  onProgress?: (content: string) => void;
+  traceRunId?: string;
+  writeTrace?: boolean;
 }): Promise<ChatCliSimAdvanceResult> {
   throwIfAborted(params.signal);
   const action = parseChatCliAction(params.assistantOutput);
@@ -325,7 +263,7 @@ export async function advanceChatCliSimTurnState(params: {
         content: action.message,
       },
     ];
-    return buildSimAdvanceResult(params, messages, action.message, false, params.state.urgency);
+    return buildSimAdvanceResult(params, messages, action.message, false, params.state.urgency, params.state.diagnostics);
   }
   if (action.kind === 'done') {
     return {
@@ -345,26 +283,57 @@ export async function advanceChatCliSimTurnState(params: {
   }
 
   const cli = createChatCliInterface(params.document, params.state.session);
-  const commands = action.commands.slice(0, CHAT_CLI_MAX_BATCH_COMMANDS);
+  const commands = action.commands;
+  if (action.notes.trim()) {
+    params.onProgress?.(`Notes\n${action.notes.trim()}`);
+  }
+  if (commands.length > CHAT_CLI_MAX_BATCH_COMMANDS) {
+    const message = `Batch has ${commands.length} commands. Run at most ${CHAT_CLI_RECOMMENDED_BATCH_COMMANDS} focused commands per response, or up to ${CHAT_CLI_MAX_BATCH_COMMANDS} when necessary. What is your next command?`;
+    return buildSimAdvanceResult(
+      params,
+      [
+        ...params.state.messages,
+        {
+          id: crypto.randomUUID(),
+          role: 'user' as const,
+          content: message,
+        },
+      ],
+      message,
+      false,
+      params.state.urgency,
+      params.state.diagnostics
+    );
+  }
   const outputLineBudget = Math.max(1, Math.floor(CHAT_CLI_MODEL_OUTPUT_MAX_LINES / Math.max(commands.length, 1)));
   const commandOutputs: Array<{ command: string; output: string }> = [];
   const commandHints: string[] = [];
   let mutated = false;
   let batchHadSuccess = false;
-  for (const command of commands) {
+  let batchHadError = false;
+  let lastFailedCommand = '';
+  let lastCommandError = '';
+  let traceOutput = '';
+  for (let commandIndex = 0; commandIndex < commands.length; commandIndex += 1) {
+    const command = commands[commandIndex] ?? '';
+    params.onProgress?.(commands.length > 1 ? `$ [${commandIndex + 1}/${commands.length}] ${command}` : `$ ${command}`);
     let result: Awaited<ReturnType<typeof cli.run>>;
     try {
       result = await cli.run(command);
       batchHadSuccess = true;
       mutated = mutated || (result.mutated && !isSessionOnlyCommand(command));
     } catch (error) {
+      batchHadError = true;
+      lastFailedCommand = command;
+      lastCommandError = error instanceof Error ? error.message : String(error);
       result = {
         command,
         cwd: cli.session.cwd,
-        output: error instanceof Error ? error.message : String(error),
+        output: lastCommandError,
         mutated: false,
       };
     }
+    traceOutput = result.output;
     commandOutputs.push({ command, output: formatOutputForModel(result.output, outputLineBudget) });
     const hints = buildChatCliComponentHints({
       document: params.document,
@@ -377,9 +346,15 @@ export async function advanceChatCliSimTurnState(params: {
     }
   }
   const urgency = batchHadSuccess ? updateChatCliUrgency(params.state.urgency, mutated) : params.state.urgency;
+  let diagnostics = params.state.diagnostics;
+  const diagnosticsDiff = await updateDiagnosticsState(params.document, params.state.diagnostics, mutated, (nextIssues) => {
+    const diff = formatHvyCliDiagnosticDiff(params.state.diagnostics, nextIssues);
+    diagnostics = nextIssues;
+    return diff;
+  });
   const commandResultMessage = formatCommandResultForModel({
     output: formatBatchCommandOutput(commandOutputs),
-    diagnosticsDiff: '(sim mode: diagnostics diff not computed)',
+    diagnosticsDiff,
     hints: formatBatchHints(commandHints),
     introducedDiagnostics: formatIntroducedDiagnosticsForModel(getIntroducedDiagnostics(params.document)),
     scratchpad: formatScratchpadForModel(cli.snapshot()),
@@ -394,7 +369,22 @@ export async function advanceChatCliSimTurnState(params: {
       content: commandResultMessage,
     },
   ];
-  return buildSimAdvanceResult(params, messages, commandResultMessage, mutated, urgency);
+  if (params.writeTrace && params.traceRunId) {
+    await writeChatCliCommandTrace(
+      params.traceRunId,
+      commands.length === 1 ? commands[0] ?? '' : commands.join('\n'),
+      commands.length === 1 ? traceOutput : formatBatchCommandOutput(commandOutputs),
+      params.signal,
+      commandResultMessage
+    );
+  }
+  return {
+    ...buildSimAdvanceResult(params, messages, commandResultMessage, mutated, urgency, diagnostics),
+    batchHadSuccess,
+    batchHadError,
+    lastFailedCommand,
+    lastCommandError,
+  };
 }
 
 function buildSimAdvanceResult(
@@ -407,11 +397,23 @@ function buildSimAdvanceResult(
   messages: ChatMessage[],
   commandResultMessage: string,
   mutated: boolean,
-  urgency: number
+  urgency: number,
+  diagnostics: HvyCliDiagnosticIssue[]
 ): ChatCliSimAdvanceResult {
   const cli = createChatCliInterface(params.document, params.state.session);
+  const {
+    terminalSummary: _terminalSummary,
+    askedQuestion: _askedQuestion,
+    batchHadSuccess: _batchHadSuccess,
+    batchHadError: _batchHadError,
+    lastFailedCommand: _lastFailedCommand,
+    lastCommandError: _lastCommandError,
+    commandResultMessage: _commandResultMessage,
+    mutated: _mutated,
+    ...baseState
+  } = params.state as ChatCliSimAdvanceResult;
   return {
-    ...params.state,
+    ...baseState,
     messages,
     context: buildChatCliLoopContext(
       cli.snapshot(),
@@ -424,6 +426,7 @@ function buildSimAdvanceResult(
       params.state.selectedComponent
     ),
     formatInstructions: buildChatCliLoopFormatInstructions(),
+    diagnostics,
     urgency,
     commandResultMessage,
     mutated,

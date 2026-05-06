@@ -28,6 +28,7 @@ const SCRATCHPAD_HARD_MAX_CHARS = 800;
 const FIND_MAX_RESULTS = 100;
 const CLI_OUTPUT_MAX_LINES = 200;
 const COMPONENT_PREVIEW_MAX_LINES = 100;
+const LS_COMPONENT_PREVIEW_MAX_CHARS = 40;
 const RAW_HVY_MAX_CHARS = 4000;
 const RAW_HVY_PREVIEW_MAX_LINES = 100;
 const RAW_HVY_PREVIEW_WRAP_WIDTH = 400;
@@ -532,9 +533,13 @@ function commandLs(ctx: HvyCliCommandContext, args: string[]): string {
       .map((candidate) => candidate.path);
     return withWarnings(entries.join('\n'), warnings);
   }
+  const listing = [
+    'type name [editable] | description | preview',
+    listDirectory(ctx.fs, target).map((candidate) => formatEntry(ctx.fs, candidate)).join('\n'),
+  ].filter((part) => part.trim().length > 0).join('\n');
   return withWarnings(
     [
-      listDirectory(ctx.fs, target).map((candidate) => formatEntry(ctx.fs, candidate)).join('\n'),
+      listing,
       formatLsTargetDescription(ctx, target),
     ].filter((part) => part.trim().length > 0).join('\n\n'),
     warnings
@@ -2780,7 +2785,7 @@ function formatDirectoryEntryDescription(fs: ReturnType<typeof buildHvyVirtualFi
   }
   const componentName = inferComponentNameForDirectory(fs, path);
   if (componentName) {
-    return `${componentName} component directory; contains body/config files and nested child directories`;
+    return formatComponentDirectoryDescription(fs, path, componentName);
   }
   const name = path.split('/').pop() ?? '';
   if (name === 'expandable-stub') {
@@ -2802,61 +2807,99 @@ function isTopLevelSectionPath(path: string): boolean {
   return path.startsWith('/body/') && !path.slice('/body/'.length).includes('/');
 }
 
+function formatComponentDirectoryDescription(fs: ReturnType<typeof buildHvyVirtualFileSystem>, path: string, componentName: string): string {
+  const componentLabel = componentName === 'table' ? 'static table component' : `${componentName} component`;
+  const preview = componentName === 'table'
+    ? formatTableDirectoryPreview(fs, path)
+    : formatComponentBodyPreview(fs, path, componentName);
+  return preview ? `${componentLabel} | ${preview}` : componentLabel;
+}
+
+function formatTableDirectoryPreview(fs: ReturnType<typeof buildHvyVirtualFileSystem>, path: string): string {
+  const tableEntry = fs.entries.get(`${path}/table.txt`);
+  if (tableEntry?.kind !== 'file') {
+    return '';
+  }
+  return compactLsComponentPreview(tableEntry.read(), (line) => line.replace(/\s*\|\s*/g, ' '));
+}
+
+function formatComponentBodyPreview(fs: ReturnType<typeof buildHvyVirtualFileSystem>, path: string, componentName: string): string {
+  const bodyEntry = fs.entries.get(`${path}/${componentName}.txt`);
+  if (bodyEntry?.kind !== 'file') {
+    return '';
+  }
+  return compactLsComponentPreview(bodyEntry.read());
+}
+
+function compactLsComponentPreview(value: string, normalizeLine: (line: string) => string = (line) => line): string {
+  const lines = value.split('\n').map((line) => normalizeLine(line).replace(/\s+/g, ' ').trim());
+  const firstContentIndex = lines.findIndex((line) => line.length > 0);
+  if (firstContentIndex < 0) {
+    return '';
+  }
+  const firstContentLine = lines[firstContentIndex] ?? '';
+  const hasMoreContent = lines.slice(firstContentIndex + 1).some((line) => line.length > 0);
+  if (firstContentLine.length > LS_COMPONENT_PREVIEW_MAX_CHARS) {
+    return `${firstContentLine.slice(0, LS_COMPONENT_PREVIEW_MAX_CHARS)}...`;
+  }
+  return hasMoreContent ? `${firstContentLine}...` : firstContentLine;
+}
+
 function formatFileEntryDescription(fs: ReturnType<typeof buildHvyVirtualFileSystem>, path: string): string {
   const filename = path.split('/').pop() ?? '';
   const directoryPath = path.replace(/\/[^/]+$/, '') || '/';
   if (path === '/header.yaml') {
-    return 'writable document metadata YAML';
+    return 'document metadata YAML';
   }
   if (path === '/scratchpad.txt') {
     return 'ephemeral AI task notes; not serialized into the HVY document';
   }
   if (filename === 'raw.hvy') {
-    return `${formatRawHvySubject(fs, directoryPath)}; editable because it is under 4000 characters`;
+    return formatRawHvySubject(fs, directoryPath);
   }
   if (filename === 'raw-preview.hvy.txt') {
-    return `first 100 prewrapped lines of ${formatRawHvySubject(fs, directoryPath)}; raw.hvy is hidden because it is 4000+ characters`;
+    return `first 100 prewrapped lines of ${formatRawHvySubject(fs, directoryPath)}; raw.hvy hidden because it is 4000+ characters`;
   }
   if (filename === 'raw.wip.hvy') {
-    return 'failed raw.hvy draft preserved after a parse error; edit or inspect it, then write corrected content to raw.hvy';
+    return 'failed raw.hvy draft preserved after a parse error';
   }
   if (filename === 'section.json') {
-    return 'writable section metadata and display settings';
+    return 'section metadata and display settings';
   }
   if (filename === 'section-info.txt') {
-    return 'read-only summary of this section and its metadata';
+    return 'summary of this section and its metadata';
   }
   if (filename === 'about-section.txt') {
-    return 'read-only documentation for section directories';
+    return 'section documentation';
   }
   if (filename === 'children-order.json') {
     return formatChildrenOrderDescription(fs, directoryPath);
   }
   if (filename === 'tableColumns.json') {
-    return 'writable static table column names as a JSON string array';
+    return 'static table column names as a JSON string array';
   }
   if (filename === 'tableRows.json') {
-    return 'writable static table rows as a JSON array of string arrays';
+    return 'static table rows as a JSON array of string arrays';
   }
   if (filename.startsWith('about-') && filename.endsWith('.txt')) {
-    return 'read-only documentation for this component or plugin type';
+    return 'documentation for this component or plugin type';
   }
   if (filename.endsWith('.py')) {
-    return 'writable Python/Brython script source exposed from a scripting or form plugin';
+    return 'Python/Brython script source exposed from a scripting or form plugin';
   }
   const componentName = inferComponentNameForDirectory(fs, directoryPath);
   if (componentName && filename === `${componentName}.json`) {
-    return `writable ${componentName} component config`;
+    return `${componentName} component config`;
   }
   if (componentName && filename === `${componentName}.txt`) {
     const bodyEntry = fs.entries.get(path);
     if (componentName === 'table' || bodyEntry?.kind === 'file' && bodyEntry.writable === false) {
-      return `read-only ${componentName} component body preview`;
+      return `${componentName} component body preview`;
     }
-    return `writable ${componentName} component body text`;
+    return `${componentName} component body text`;
   }
   if (directoryPath === '/attachments' && filename.endsWith('.json')) {
-    return 'read-only attachment metadata summary';
+    return 'attachment metadata summary';
   }
   return '';
 }
@@ -2864,38 +2907,38 @@ function formatFileEntryDescription(fs: ReturnType<typeof buildHvyVirtualFileSys
 function formatChildrenOrderDescription(fs: ReturnType<typeof buildHvyVirtualFileSystem>, directoryPath: string): string {
   const name = directoryPath.split('/').pop() ?? '';
   if (directoryPath === '/body') {
-    return 'writable top-level section order; edit to reorder sections';
+    return 'top-level section order';
   }
   if (name === 'expandable-stub') {
-    return "writable order for components inside the expandable's stub";
+    return "order for components inside the expandable's stub";
   }
   if (name === 'expandable-content') {
-    return "writable order for components inside the expandable's content";
+    return "order for components inside the expandable's content";
   }
   if (name === 'container') {
-    return 'writable order for components inside this container';
+    return 'order for components inside this container';
   }
   if (name === 'grid') {
-    return 'writable grid item order';
+    return 'grid item order';
   }
   const componentName = inferComponentNameForDirectory(fs, directoryPath);
   if (componentName === 'component-list') {
-    return 'writable list item order';
+    return 'list item order';
   }
   if (fs.entries.has(`${directoryPath}/section.json`)) {
-    return 'writable order for this section\'s subsections and components';
+    return 'order for this section\'s subsections and components';
   }
-  return 'writable child order';
+  return 'child order';
 }
 
 function formatRawHvySubject(fs: ReturnType<typeof buildHvyVirtualFileSystem>, directoryPath: string): string {
   if (directoryPath === '/') {
-    return 'complete serialized HVY document';
+    return 'raw HVY for this document';
   }
   if (fs.entries.has(`${directoryPath}/section.json`)) {
-    return 'serialized HVY section fragment';
+    return 'raw HVY for this section';
   }
-  return 'serialized HVY component fragment';
+  return 'raw HVY for this component';
 }
 
 function formatEntryTags(fs: ReturnType<typeof buildHvyVirtualFileSystem>, entry: HvyVirtualEntry): string {

@@ -33,11 +33,16 @@ test('cli can navigate and read virtual component files', async () => {
   expect((await executeHvyCliCommand(document, session, 'cd /body/summary')).cwd).toBe('/body/summary');
   expect((await executeHvyCliCommand(document, session, 'ls /body/summary')).output).toContain('file about-section.txt [ro]');
   expect((await executeHvyCliCommand(document, session, 'ls /body/summary')).output).toContain('file section-info.txt [ro]');
+  expect((await executeHvyCliCommand(document, session, 'ls /body/summary')).output).toContain('type name [editable] | description | preview');
+  expect((await executeHvyCliCommand(document, session, 'ls /body/summary')).output).toContain(
+    'type name [editable] | description | preview\nfile section.json [w]'
+  );
   expect((await executeHvyCliCommand(document, session, 'ls /')).output).toContain('dir  body | document body sections and components');
-  expect((await executeHvyCliCommand(document, session, 'ls /body')).output).toContain('file children-order.json [w] | writable top-level section order; edit to reorder sections');
+  expect((await executeHvyCliCommand(document, session, 'ls /body')).output).toContain('file children-order.json [w] | top-level section order');
   expect((await executeHvyCliCommand(document, session, 'ls /body')).output).toContain('dir  summary | section');
-  expect((await executeHvyCliCommand(document, session, 'ls /')).output).toContain('file header.yaml [w] | writable document metadata YAML');
+  expect((await executeHvyCliCommand(document, session, 'ls /')).output).toContain('file header.yaml [w] | document metadata YAML');
   expect((await executeHvyCliCommand(document, session, 'ls /')).output).toContain('file scratchpad.txt [w] | ephemeral AI task notes');
+  expect((await executeHvyCliCommand(document, session, 'ls /body/summary')).output).toContain('dir  intro | text component | Hello world');
   expect((await executeHvyCliCommand(document, session, 'cat /body/summary/about-section.txt')).output).toContain(
     '# Sections #'
   );
@@ -676,9 +681,13 @@ hvy_version: 0.1
 `, '.hvy');
   const session = createHvyCliSession();
 
+  expect((await executeHvyCliCommand(document, session, 'ls /body/quality')).output).toContain(
+    'dir  items | component-list component | Banana...'
+  );
+
   const before = await executeHvyCliCommand(document, session, 'ls /body/quality/items');
   expect(before.output.indexOf('dir  banana')).toBeLessThan(before.output.indexOf('dir  apple'));
-  expect(before.output).toContain('file children-order.json [w] | writable list item order');
+  expect(before.output).toContain('file children-order.json [w] | list item order');
   expect((await executeHvyCliCommand(document, session, 'cat /body/quality/items/children-order.json')).output).toBe(
     '[\n  "banana",\n  "apple",\n  "cherry"\n]\n'
   );
@@ -703,7 +712,7 @@ test('cli exposes raw.hvy for small documents and applies valid raw edits', asyn
 
   const root = await executeHvyCliCommand(document, session, 'ls /');
   expect(root.output).toContain('file raw.hvy [w]');
-  expect(root.output).toContain('raw.hvy [w] | complete serialized HVY document');
+  expect(root.output).toContain('raw.hvy [w] | raw HVY for this document');
 
   const before = await executeHvyCliCommand(document, session, 'cat /raw.hvy');
   expect(before.output).toContain('#! Summary');
@@ -779,7 +788,7 @@ test('cli exposes raw.hvy in component directories and applies valid component e
 
   const listing = await executeHvyCliCommand(document, session, 'ls /body/summary/intro');
   expect(listing.output).toContain('file raw.hvy [w]');
-  expect(listing.output).toContain('raw.hvy [w] | serialized HVY component fragment');
+  expect(listing.output).toContain('raw.hvy [w] | raw HVY for this component');
 
   const before = await executeHvyCliCommand(document, session, 'cat /body/summary/intro/raw.hvy');
   expect(before.output).toContain('<!--hvy:text');
@@ -818,7 +827,7 @@ test('cli exposes raw.hvy in section directories and applies valid section edits
 
   const listing = await executeHvyCliCommand(document, session, 'ls /body/summary');
   expect(listing.output).toContain('file raw.hvy [w]');
-  expect(listing.output).toContain('raw.hvy [w] | serialized HVY section fragment');
+  expect(listing.output).toContain('raw.hvy [w] | raw HVY for this section');
 
   const before = await executeHvyCliCommand(document, session, 'cat /body/summary/raw.hvy');
   expect(before.output).toContain('#! Summary');
@@ -859,7 +868,7 @@ hvy_version: 0.1
   const structural = await executeHvyCliCommand(document, session, 'ls /body/summary/details/expandable-stub');
 
   expect(structural.output).toContain('nearest raw-editable parent | /body/summary/details/raw.hvy');
-  expect(structural.output).not.toContain('raw.hvy [w] | serialized HVY component fragment');
+  expect(structural.output).not.toContain('raw.hvy [w] | raw HVY for this component');
 });
 
 test('cli keeps failed section raw.hvy edits in section raw.wip.hvy', async () => {
@@ -931,9 +940,15 @@ test('cli shows labeled tags for resume header tables without changing directory
   const document = createResumeCliTestDocument();
   const session = createHvyCliSession();
 
-  expect((await executeHvyCliCommand(document, session, 'ls /body/history')).output).toContain('dir  table-1 tags=[table-header]');
-  expect((await executeHvyCliCommand(document, session, 'ls /body/projects')).output).toContain('dir  table-1 tags=[table-header]');
-  expect((await executeHvyCliCommand(document, session, 'ls /body/education')).output).toContain('dir  table-1 tags=[table-header]');
+  expect((await executeHvyCliCommand(document, session, 'ls /body/history')).output).toContain(
+    'dir  table-1 tags=[table-header] | static table component | YEAR ORGANIZATION TITLE'
+  );
+  expect((await executeHvyCliCommand(document, session, 'ls /body/projects')).output).toContain(
+    'dir  table-1 tags=[table-header] | static table component | PROJECT DATE'
+  );
+  expect((await executeHvyCliCommand(document, session, 'ls /body/education')).output).toContain(
+    'dir  table-1 tags=[table-header] | static table component | DEGREE INSTITUTION LOCATION'
+  );
   expect((await executeHvyCliCommand(document, session, 'cat /body/history/table-1/table.json')).output).toContain('"id": ""');
 });
 

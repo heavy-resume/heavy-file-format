@@ -1,5 +1,43 @@
 # Text Components #
-Markdown block content rendered in normal document flow.
-The body may contain prose, headings, lists, blockquotes, fenced code blocks, thematic breaks, and inline Markdown formatting.
-Use Markdown fences for code; structural indentation around HVY directives is not Markdown code indentation.
-Raw HTML in text content is preserved as source text but renderers must escape or sanitize it.
+Text components contain HVY Markdown rendered in normal document flow.
+
+## Markdown Compatibility ##
+Any valid Markdown content is valid HVY text. If a document has no HVY directives, clients parse it as Markdown only.
+Plain Markdown renderers ignore HVY metadata, so text content should stay readable as ordinary Markdown.
+
+## Blocks ##
+Text bodies may contain prose, visible ATX headings, lists, blockquotes, fenced code blocks, indented code blocks, thematic breaks, raw HTML source text, and inline Markdown formatting.
+Consecutive prose, list, blockquote, fenced or indented code, thematic-break, and raw HTML blocks become text components when a Markdown file is imported into editable HVY.
+Nonstandard Markdown rendering behavior is ignored unless HVY defines it explicitly.
+
+## Headings ##
+Use standard Markdown headings, from # through ######, for visible headings inside a text component.
+Standard ATX headings are plain Markdown content and do not create HVY sections.
+HVY section titles use #! Title immediately after a section directive. #! lines are consumed by the parser and are never rendered as Markdown content.
+
+## Inline Formatting ##
+Use _text_ for italics.
+HVY also supports ___text___ as a constrained inline underline extension. Triple underscores were chosen so language names such as C++ remain plain text.
+The underline extension is intentionally nonstandard Markdown, but remains readable in renderers that do not implement it.
+
+## Code And Indentation ##
+Use fenced Markdown code blocks with triple backticks or standard Markdown fences for visible code.
+Structural indentation around HVY directives is not Markdown code indentation.
+If you need code inside a text component, prefer an explicit fenced code block.
+
+## Tables ##
+GitHub-Flavored Markdown table blocks are valid Markdown source.
+When importing Markdown into editable HVY, clients should convert GFM tables into static table components with tableColumns and tableRows.
+For editable structured data, use a table component instead of leaving table-shaped content in text.
+
+## Raw HTML ##
+Raw HTML may appear as Markdown source text.
+Renderers must escape raw HTML in Markdown content. Rich visual structures should be represented with HVY components and metadata rather than inline HTML.
+
+## CSS Fences ##
+At document parse time, fenced blocks with language css are extracted as document CSS blocks.
+Do not rely on text components as the primary place for document styling; use component CSS metadata or HVY CSS blocks.
+
+## Implicit Text ##
+Plain Markdown that appears before the first indexed child directive inside a component-list, container, or grid is treated as an implicit text block.
+This allows a short heading or note to appear above child components without adding an explicit wrapper directive.

@@ -555,7 +555,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       const listContent = `<div class="reader-component-list">${(block.schema.componentListBlocks ?? [])
         .map((innerBlock) => renderPassiveEditorBlock(sectionKey, innerBlock, rootSections))
         .join('')}</div>`;
-      return `${addControl}${listContent}`;
+      return `${listContent}${addControl}`;
     }
 
     if (base === 'grid') {

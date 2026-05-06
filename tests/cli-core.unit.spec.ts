@@ -903,6 +903,14 @@ EOF`);
   const afterChanged = await executeHvyCliCommand(document, session, 'cat /body/history/component-list-2/history-placeholder-repro/raw.hvy');
   expect(afterChanged.output).toContain('"placeholder":"alternate description"');
   expect(afterChanged.output).not.toContain('"placeholder":"description"');
+
+  await executeHvyCliCommand(document, session, `cat > /body/history/component-list-2/history-placeholder-repro/raw.hvy <<'EOF'
+${afterChanged.output.replace('"placeholder":"alternate description"', '"placeholder":""')}
+EOF`);
+
+  const afterRemoved = await executeHvyCliCommand(document, session, 'cat /body/history/component-list-2/history-placeholder-repro/raw.hvy');
+  expect(afterRemoved.output).not.toContain('"placeholder":"alternate description"');
+  expect(afterRemoved.output).not.toContain('"placeholder":"description"');
 });
 
 test('cli keeps failed component raw.hvy edits in component raw.wip.hvy', async () => {

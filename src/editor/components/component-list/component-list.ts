@@ -27,7 +27,6 @@ export const renderComponentListEditor: ComponentEditorRenderer = (sectionKey, b
           </select>
         </label>`
     }
-    ${hasItems ? addControl : ''}
     <div class="container-inner-blocks">
       ${(block.schema.componentListBlocks ?? []).map((innerBlock) => helpers.renderEditorBlock(sectionKey, innerBlock, block.schema.lock)).join('')}
     </div>

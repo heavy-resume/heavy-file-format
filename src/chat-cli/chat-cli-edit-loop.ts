@@ -848,15 +848,9 @@ function formatCommandResultForModel(result: string | { output: string; diagnost
     '### BEGIN your urgency ###',
     result.urgency?.trimEnd() || formatChatCliUrgency(0),
     '### END your urgency ###',
-    '### COMMAND GUIDANCE ###',
-    `Multiple \`\`\`shell blocks are allowed and run as a batch. ${CHAT_CLI_BATCH_GUIDANCE} Remember to take notes as you go!`,
-    '### END COMMAND GUIDANCE ###',
-    '### CURRENT DIRECTORY ###',
+    `Command guidance: Multiple \`\`\`shell blocks are allowed and run as a batch. ${CHAT_CLI_BATCH_GUIDANCE}`,
     `Current directory: ${result.cwd || '/'}`,
-    '### END CURRENT DIRECTORY ###',
-    '### NEXT STEP ###',
-    'What is your next command?',
-    '### END NEXT STEP ###',
+    formatNextResponseInstruction(),
   ].join('\n');
 }
 
@@ -897,10 +891,12 @@ function formatOversizedChatCliBatchMessage(commandCount: number): string {
     '### COMMAND ERROR ###',
     `Batch has ${commandCount} commands. Run at most ${CHAT_CLI_RECOMMENDED_BATCH_COMMANDS} focused commands per response, or up to ${CHAT_CLI_MAX_BATCH_COMMANDS} when necessary.`,
     '### END COMMAND ERROR ###',
-    '### NEXT STEP ###',
-    'What is your next command?',
-    '### END NEXT STEP ###',
+    formatNextResponseInstruction(),
   ].join('\n');
+}
+
+function formatNextResponseInstruction(): string {
+  return 'Next response: Write concise What / Why / Unsure of and shell command(s), else ask QUESTION, else done SUMMARY.';
 }
 
 function formatBatchCommandOutput(outputs: Array<{ command: string; output: string }>): string {
@@ -1024,9 +1020,7 @@ function formatIntroducedLintIssuesPrompt(issues: HvyCliDiagnosticIssue[]): stri
     '### UNRESOLVED DIAGNOSTICS INTRODUCED BY YOUR CHANGES ###',
     formatIntroducedDiagnosticsForModel(issues),
     '### END UNRESOLVED DIAGNOSTICS INTRODUCED BY YOUR CHANGES ###',
-    '### NEXT STEP ###',
-    'Run commands to fix these diagnostics, then run hvy lint to verify they are gone. What is your next command?',
-    '### END NEXT STEP ###',
+    'Next response: Write concise What you are doing / Why you are doing it / What you are unsure of notes, then run commands to fix clear diagnostics and run hvy lint to verify them, or explain intentional warnings in done SUMMARY.',
   ].join('\n');
 }
 

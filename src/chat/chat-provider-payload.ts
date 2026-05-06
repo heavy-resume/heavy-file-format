@@ -39,11 +39,11 @@ export function buildOpenAiProxyRequest(body: ProviderProxyChatRequest): Record<
         ],
       },
       {
-        role: 'developer',
+        role: 'user',
         content: [
           {
             type: 'input_text',
-            text: `Document context:\n\n${body.context}`,
+            text: `Request context:\n\n${body.context}`,
           },
         ],
       },
@@ -70,11 +70,17 @@ export function buildAnthropicProxyRequest(body: ProviderProxyChatRequest): Reco
   return {
     model: body.model,
     max_tokens: 4096,
-    system: `${buildSystemInstructions(body.mode, systemMessages)}\n\nDocument context:\n\n${body.context}`,
-    messages: conversationMessages.map((message) => ({
-      role: message.role,
-      content: message.content,
-    })),
+    system: buildSystemInstructions(body.mode, systemMessages),
+    messages: [
+      {
+        role: 'user',
+        content: `Request context:\n\n${body.context}`,
+      },
+      ...conversationMessages.map((message) => ({
+        role: message.role,
+        content: message.content,
+      })),
+    ],
   };
 }
 

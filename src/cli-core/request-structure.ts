@@ -12,8 +12,14 @@ type ComponentStructureEntry = {
   textPath: string;
   jsonPath: string;
   description?: string;
+  tags?: string;
   xrefTitle?: string;
   xrefTarget?: string;
+};
+
+type SectionStructureMeta = {
+  description?: string;
+  tags?: string;
 };
 
 export type HvyRequestStructureOptions = {
@@ -41,8 +47,6 @@ export function formatHvyRequestStructure(document: VisualDocument, fs: HvyVirtu
   const entries = collectComponentStructureEntries(document, fs).map((entry, index) => withStableId(entry, index));
   const scopedEntries = scopeEntries(entries, options.componentId, options.componentPath);
   return [
-    formatComponentCodeKey(),
-    '',
     'Custom component types:',
     ...formatCustomComponentDefinitions(document),
     '',
@@ -50,7 +54,7 @@ export function formatHvyRequestStructure(document: VisualDocument, fs: HvyVirtu
     ...formatComponentTree(scopedEntries, {
       collapse: options.collapse ?? false,
       describe: options.describe ?? false,
-      sectionDescriptions: collectSectionDescriptions(fs),
+      sectionMeta: collectSectionStructureMeta(fs),
     }),
   ].join('\n');
 }
@@ -80,7 +84,7 @@ export function formatHvyRequestStructureForDirectory(
     ...formatComponentTree(entries, {
       collapse: false,
       describe: options.describe ?? true,
-      sectionDescriptions: new Map(),
+      sectionMeta: new Map(),
     }),
   ].join('\n');
 }
@@ -96,7 +100,6 @@ export function formatHvyStructureForPaths(document: VisualDocument, fs: HvyVirt
   }
   return [
     'Search result component structure:',
-    formatComponentCodeKey(),
     ...unique.slice(0, 12).map(formatSearchStructureLine),
     ...(unique.length > 12 ? [`... ${unique.length - 12} more matched components omitted.`] : []),
   ].join('\n');
@@ -138,6 +141,7 @@ function componentEntryFromJsonFile(document: VisualDocument, fs: HvyVirtualFile
     textPath,
     jsonPath,
     description: typeof config.description === 'string' && config.description.trim() ? config.description.trim() : undefined,
+    tags: typeof config.tags === 'string' && config.tags.trim() ? config.tags.trim() : undefined,
     xrefTitle: typeof config.xrefTitle === 'string' && config.xrefTitle.trim() ? config.xrefTitle.trim() : undefined,
     xrefTarget: typeof config.xrefTarget === 'string' && config.xrefTarget.trim() ? config.xrefTarget.trim() : undefined,
   };
@@ -177,10 +181,6 @@ function readJsonFile(fs: HvyVirtualFileSystem, path: string): JsonObject {
   }
 }
 
-function formatComponentCodeKey(): string {
-  return 'Key: [x] text, [c] container, [p] plugin, [t] table, [i] image, [g] grid, [l] component-list, [e] expandable, [r] xref-card, [?] unknown. Custom types use their base type code.';
-}
-
 function formatCustomComponentDefinitions(document: VisualDocument): string[] {
   const definitions = Array.isArray(document.meta.component_defs) ? document.meta.component_defs : [];
   if (definitions.length === 0) {
@@ -196,7 +196,7 @@ function formatCustomComponentDefinitions(document: VisualDocument): string[] {
 }
 
 function formatComponentStructureLine(entry: ComponentStructureEntry): string {
-  return `[${entry.code}] ${entry.textPath.split('/').pop() ?? entry.textPath} id=${entry.id}`;
+  return `${entry.textPath.split('/').pop() ?? entry.textPath} id=${entry.id}${formatTagsSuffix(entry.tags)}`;
 }
 
 function formatSearchStructureLine(entry: ComponentStructureEntry): string {
@@ -217,7 +217,7 @@ type ComponentTreeNode = {
   entry?: ComponentStructureEntry;
 };
 
-function formatComponentTree(entries: ComponentStructureEntry[], options: { collapse: boolean; describe: boolean; sectionDescriptions: Map<string, string> }): string[] {
+function formatComponentTree(entries: ComponentStructureEntry[], options: { collapse: boolean; describe: boolean; sectionMeta: Map<string, SectionStructureMeta> }): string[] {
   const root: ComponentTreeNode = { name: '', path: '/', children: new Map() };
   for (const entry of entries) {
     const parts = entry.textPath.split('/').filter(Boolean);
@@ -232,7 +232,7 @@ function formatComponentTree(entries: ComponentStructureEntry[], options: { coll
   return [...root.children.values()].flatMap((child) => formatComponentTreeNode(child, 0, options));
 }
 
-function formatComponentTreeNode(node: ComponentTreeNode, depth: number, options: { collapse: boolean; describe: boolean; sectionDescriptions: Map<string, string> }): string[] {
+function formatComponentTreeNode(node: ComponentTreeNode, depth: number, options: { collapse: boolean; describe: boolean; sectionMeta: Map<string, SectionStructureMeta> }): string[] {
   const children = [...node.children.values()];
   const metadataChild = options.collapse ? componentMetadataChild(children) : undefined;
   if (options.collapse && depth >= 2 && !node.entry && metadataChild) {
@@ -245,9 +245,10 @@ function formatComponentTreeNode(node: ComponentTreeNode, depth: number, options
       ...formatComponentTreeChildren(visibleChildren, depth + 1, options),
     ];
   }
+  const sectionMeta = options.sectionMeta.get(node.path);
   const label = node.entry
     ? `${formatComponentStructureLine(node.entry)}${formatDescriptionSuffix(node.entry.description, options.describe)}`
-    : `/${node.name}${formatDescriptionSuffix(options.sectionDescriptions.get(node.path), options.describe)}`;
+    : `/${node.name}${formatTagsSuffix(sectionMeta?.tags)}${formatDescriptionSuffix(sectionMeta?.description, options.describe)}`;
   return [
     `${'  '.repeat(depth)}${label}`,
     ...formatComponentTreeChildren(children, depth + 1, options),
@@ -273,7 +274,7 @@ function countAnonymousComponentEntries(nodes: ComponentTreeNode[]): number {
   }, 0);
 }
 
-function formatComponentTreeChildren(children: ComponentTreeNode[], depth: number, options: { collapse: boolean; describe: boolean; sectionDescriptions: Map<string, string> }): string[] {
+function formatComponentTreeChildren(children: ComponentTreeNode[], depth: number, options: { collapse: boolean; describe: boolean; sectionMeta: Map<string, SectionStructureMeta> }): string[] {
   if (!options.collapse) {
     return children.flatMap((child) => formatComponentTreeNode(child, depth, options));
   }
@@ -342,25 +343,32 @@ function formatAnonymousLeafRun(run: ComponentTreeNode[], depth: number): string
   const last = run[run.length - 1]!;
   const firstEntry = anonymousLeafEntry(first)!;
   const lastEntry = anonymousLeafEntry(last)!;
-  return `${'  '.repeat(depth)}/${first.name}..${last.name} [${firstEntry.code}] ${firstEntry.textPath.split('/').pop() ?? firstEntry.textPath} ids=${firstEntry.id}-${lastEntry.id}`;
+  return `${'  '.repeat(depth)}/${first.name}..${last.name} ${firstEntry.textPath.split('/').pop() ?? firstEntry.textPath} ids=${firstEntry.id}-${lastEntry.id}${formatTagsSuffix(firstEntry.tags)}`;
 }
 
 function withStableId(entry: ComponentStructureEntry, index: number): ComponentStructureEntry {
   return entry.id ? entry : { ...entry, id: `C${index}` };
 }
 
-function collectSectionDescriptions(fs: HvyVirtualFileSystem): Map<string, string> {
-  const descriptions = new Map<string, string>();
+function collectSectionStructureMeta(fs: HvyVirtualFileSystem): Map<string, SectionStructureMeta> {
+  const sectionMeta = new Map<string, SectionStructureMeta>();
   for (const [path, entry] of fs.entries) {
     if (entry.kind !== 'file' || !path.endsWith('/section.json')) {
       continue;
     }
-    const description = readJsonFile(fs, path).description;
-    if (typeof description === 'string' && description.trim()) {
-      descriptions.set(path.replace(/\/section\.json$/, ''), description.trim());
+    const config = readJsonFile(fs, path);
+    const description = typeof config.description === 'string' && config.description.trim() ? config.description.trim() : undefined;
+    const tags = typeof config.tags === 'string' && config.tags.trim() ? config.tags.trim() : undefined;
+    if (description || tags) {
+      sectionMeta.set(path.replace(/\/section\.json$/, ''), { description, tags });
     }
   }
-  return descriptions;
+  return sectionMeta;
+}
+
+function formatTagsSuffix(tags: string | undefined): string {
+  const values = tags?.split(',').map((tag) => tag.trim()).filter(Boolean) ?? [];
+  return values.length > 0 ? ` tags=[${values.join(', ')}]` : '';
 }
 
 function formatDescriptionSuffix(description: string | undefined, enabled: boolean): string {

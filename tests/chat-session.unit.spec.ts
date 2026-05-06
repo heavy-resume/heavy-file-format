@@ -277,8 +277,9 @@ test('requestDocumentEditChatTurn runs the CLI edit loop for document chat', asy
   );
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.systemInstructions).toContain('Response instructions:\nReturn concise notes plus terminal command(s).');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.systemInstructions).toContain('validation, then done');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.systemInstructions).toContain('ask followed by the actual question');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Current request:\nAdd a chore section.');
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Use the chronological chat messages and terminal results to infer the active task.');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).not.toContain('Use the chronological chat messages and terminal results to infer the active task.');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).not.toContain('Valid commands (in order of preference):');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).not.toContain('Persistent instructions:');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).not.toContain('scratchpad.txt:');
@@ -295,12 +296,12 @@ test('requestDocumentEditChatTurn runs the CLI edit loop for document chat', asy
     expect.objectContaining({ role: 'assistant', content: expect.stringContaining('```shell\nhvy lint\n```') }),
     expect.objectContaining({ role: 'user', content: '### CMD RESULT ###\nNo lint issues.\n### END CMD RESULT ###' }),
     expect.objectContaining({ role: 'assistant', content: expect.stringContaining('```shell\nhvy find-intent "Add a chore section." --max 5\n```') }),
-    expect.objectContaining({ role: 'user', content: expect.stringContaining('What is your next command?') }),
+    expect.objectContaining({ role: 'user', content: expect.stringContaining('### NEXT STEP ###\nWhat is your next command?\n### END NEXT STEP ###') }),
   ]);
   expect(firstMessages?.at(-1)?.role).toBe('user');
-  expect(firstMessages?.at(-1)?.content).toContain('Current directory: /');
+  expect(firstMessages?.at(-1)?.content).toContain('### CURRENT DIRECTORY ###\nCurrent directory: /\n### END CURRENT DIRECTORY ###');
   expect(firstMessages?.at(-1)?.content).toContain('### BEGIN /scratchpad.txt  ###\nlast edited never\n\nYou havent written your plan yet.');
-  expect(firstMessages?.at(-1)?.content.trim().endsWith('What is your next command?')).toBe(true);
+  expect(firstMessages?.at(-1)?.content.trim().endsWith('### END NEXT STEP ###')).toBe(true);
   expect(writeChatCliUserQueryTraceMock.mock.calls[0]).toEqual(['chat-cli-test', 'Add a chore section.', undefined]);
   expect(writeChatCliCommandTraceMock.mock.calls[0]).toEqual([
     'chat-cli-test',
@@ -391,7 +392,7 @@ test('buildDocumentEditCliSimRequest exposes the exact provider-facing CLI reque
   expect(payload).not.toHaveProperty('systemInstructions');
   expect(payload.input).toEqual([
     expect.objectContaining({ role: 'system', content: [expect.objectContaining({ text: expect.stringContaining('Response instructions:\nReturn concise notes plus terminal command(s).') })] }),
-    expect.objectContaining({ role: 'developer', content: [expect.objectContaining({ text: expect.stringContaining('Current request:\nAdd a chore section.') })] }),
+    expect.objectContaining({ role: 'user', content: [expect.objectContaining({ text: expect.stringContaining('Request context:\n\nCurrent request:\nAdd a chore section.') })] }),
     expect.objectContaining({ role: 'user', content: [expect.objectContaining({ text: 'Add a chore section.' })] }),
     expect.objectContaining({ role: 'assistant', content: [expect.objectContaining({ text: expect.stringContaining('```shell\nls /\n```') })] }),
     expect.objectContaining({ role: 'user', content: [expect.objectContaining({ text: expect.stringContaining('dir  body') })] }),
@@ -402,10 +403,10 @@ test('buildDocumentEditCliSimRequest exposes the exact provider-facing CLI reque
     expect.objectContaining({ role: 'assistant', content: [expect.objectContaining({ text: expect.stringContaining('```shell\nhvy lint\n```') })] }),
     expect.objectContaining({ role: 'user', content: [expect.objectContaining({ text: '### CMD RESULT ###\nNo lint issues.\n### END CMD RESULT ###' })] }),
     expect.objectContaining({ role: 'assistant', content: [expect.objectContaining({ text: expect.stringContaining('```shell\nhvy find-intent "Add a chore section." --max 5\n```') })] }),
-    expect.objectContaining({ role: 'user', content: [expect.objectContaining({ text: expect.stringContaining('What is your next command?') })] }),
+    expect.objectContaining({ role: 'user', content: [expect.objectContaining({ text: expect.stringContaining('### NEXT STEP ###\nWhat is your next command?\n### END NEXT STEP ###') })] }),
   ]);
   expect(payload.input.at(-1)?.content[0]?.text).toContain('### BEGIN /scratchpad.txt  ###\nlast edited never\n\nYou havent written your plan yet.');
-  expect(payload.input.at(-1)?.content[0]?.text.trim().endsWith('What is your next command?')).toBe(true);
+  expect(payload.input.at(-1)?.content[0]?.text.trim().endsWith('### END NEXT STEP ###')).toBe(true);
   expect(result.requestJson).toContain('```shell\\nls /\\n```');
   expect(writeChatCliCommandTraceMock).not.toHaveBeenCalled();
   expect(writeChatCliUserQueryTraceMock).not.toHaveBeenCalled();
@@ -430,7 +431,7 @@ test('advanceDocumentEditCliSimStep executes the response and prepares the next 
   const payload = JSON.parse(result.requestJson) as { input: Array<{ role: string; content: Array<{ text: string }> }> };
 
   expect(result.commandResultMessage).toContain('### CMD RESULT ###\nCMD: pwd\n/');
-  expect(result.commandResultMessage).toContain('diagnostics\n(no changes)');
+  expect(result.commandResultMessage).toContain('### DIAGNOSTICS CHANGES FROM THIS COMMAND ###\n(no changes)\n### END DIAGNOSTICS CHANGES FROM THIS COMMAND ###');
   expect(result.commandResultMessage).not.toContain('sim mode');
   expect(payload.input).not.toContainEqual(expect.objectContaining({
     role: 'assistant',
@@ -438,7 +439,7 @@ test('advanceDocumentEditCliSimStep executes the response and prepares the next 
   }));
   expect(payload.input.at(-1)).toEqual(expect.objectContaining({
     role: 'user',
-    content: [expect.objectContaining({ text: expect.stringContaining('What is your next command?') })],
+    content: [expect.objectContaining({ text: expect.stringContaining('### NEXT STEP ###\nWhat is your next command?\n### END NEXT STEP ###') })],
   }));
 });
 
@@ -480,8 +481,8 @@ Hello world
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('currently in the directory representing the component to change');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages).toEqual(expect.arrayContaining([
     expect.objectContaining({ role: 'assistant', content: expect.stringContaining('```shell\nhvy preview "/body/summary/intro"\n```') }),
-    expect.objectContaining({ role: 'user', content: expect.stringContaining('Component preview (raw HVY, first 25 lines):') }),
-    expect.objectContaining({ role: 'user', content: expect.stringContaining('Current directory: /body/summary/intro\nWhat is your next command?') }),
+    expect.objectContaining({ role: 'user', content: expect.stringContaining('Component preview (raw HVY, first 100 lines):') }),
+    expect.objectContaining({ role: 'user', content: expect.stringContaining('### CURRENT DIRECTORY ###\nCurrent directory: /body/summary/intro\n### END CURRENT DIRECTORY ###') }),
   ]));
   expect(writeChatCliCommandTraceMock.mock.calls.map((call) => call[1])).not.toContain('cd "/body/summary/intro"');
   expect(writeChatCliCommandTraceMock.mock.calls.map((call) => call[1])).toContain('hvy preview "/body/summary/intro"');
@@ -520,7 +521,7 @@ hvy_version: 0.1
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Parent path: /body/summary/items');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('This request appears to add a new item.');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Do not overwrite the selected component.');
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages.at(-1)?.content).toContain('Current directory: /body/summary/items');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages.at(-1)?.content).toContain('### CURRENT DIRECTORY ###\nCurrent directory: /body/summary/items\n### END CURRENT DIRECTORY ###');
 });
 
 test('requestDocumentEditChatTurn compacts old cli conversation after high provider input tokens', async () => {
@@ -784,8 +785,8 @@ done Created the chore section.`)
     '$ [2/2] hvy add text /body/chores note "Weekly chore plan"',
   ]);
   const nextPrompt = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content ?? '';
-  expect(nextPrompt).toContain('What is your next command?');
-  expect(nextPrompt.trimEnd()).toMatch(/What is your next command\?$/);
+  expect(nextPrompt).toContain('### NEXT STEP ###\nWhat is your next command?\n### END NEXT STEP ###');
+  expect(nextPrompt.trimEnd()).toMatch(/### END NEXT STEP ###$/);
   expect(nextPrompt).toContain('/body/chores/note');
   expect(nextPrompt).toContain('### BEGIN your urgency ###\nscore=0\nprioritize planning and understanding');
   expect(result.messages.at(-1)).toEqual(expect.objectContaining({
@@ -930,7 +931,7 @@ pwd
   expect(result.error).toBeNull();
   expect(onProgress).not.toHaveBeenCalled();
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content).toBe(
-    'Batch has 11 commands. Run at most 4 focused commands per response, or up to 10 when necessary. What is your next command?'
+    '### COMMAND ERROR ###\nBatch has 11 commands. Run at most 4 focused commands per response, or up to 10 when necessary.\n### END COMMAND ERROR ###\n### NEXT STEP ###\nWhat is your next command?\n### END NEXT STEP ###'
   );
   expect(writeChatCliCommandTraceMock.mock.calls.map((call) => call[1])).toEqual([
     'ls /',
@@ -996,9 +997,9 @@ hvy_version: 0.1
   expect(result.error).toBeNull();
   const nextPrompt = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content ?? '';
   expect(nextPrompt).toContain('### CMD RESULT ###\nCMD: cat /body/summary/intro/text.txt\nHello\n### END CMD RESULT ###');
-  expect(nextPrompt).toContain('What is your next command?');
-  expect(nextPrompt.trimEnd()).toMatch(/What is your next command\?$/);
-  expect(nextPrompt).toContain('optional context, not required actions\ncomponent text: /body/summary/intro');
+  expect(nextPrompt).toContain('### NEXT STEP ###\nWhat is your next command?\n### END NEXT STEP ###');
+  expect(nextPrompt.trimEnd()).toMatch(/### END NEXT STEP ###$/);
+  expect(nextPrompt).toContain('### OPTIONAL CONTEXT (NOT REQUIRED ACTIONS) ###\ncomponent text: /body/summary/intro');
   expect(nextPrompt).toContain('# Text Components #');
   expect(nextPrompt).toContain('files: text.txt for body, text.json for config.');
   expect(nextPrompt).toContain('optional commands: inspect with hvy request_structure /body/summary/intro --describe; remove this component with hvy remove /body/summary/intro.');
@@ -1011,7 +1012,7 @@ hvy_version: 0.1
     'cat /body/summary/intro/text.txt',
     'Hello',
     undefined,
-    expect.stringContaining('optional context, not required actions\ncomponent text: /body/summary/intro')
+    expect.stringContaining('### OPTIONAL CONTEXT (NOT REQUIRED ACTIONS) ###\ncomponent text: /body/summary/intro')
   );
 });
 
@@ -1043,11 +1044,11 @@ hvy_version: 0.1
     expect.objectContaining({ role: 'user', content: expect.stringContaining('[text] /body/summary/empty-note - text body is empty.') }),
   ]));
   const nextPrompt = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content ?? '';
-  expect(nextPrompt).toContain('diagnostics\n');
+  expect(nextPrompt).toContain('### DIAGNOSTICS CHANGES FROM THIS COMMAND ###\n');
   expect(nextPrompt).toContain('diagnostics diff\n- [text] /body/summary/empty-note - text body is empty.');
 });
 
-test('requestDocumentEditChatTurn keeps AI-introduced diagnostics active until fixed', async () => {
+test('requestDocumentEditChatTurn keeps diagnostics introduced by your changes active until fixed', async () => {
   requestProxyCompletionMock
     .mockResolvedValueOnce('hvy add text /summary empty placeholder && echo "" > /body/summary/empty/text.txt')
     .mockResolvedValueOnce('ask Should I keep going?')
@@ -1075,7 +1076,7 @@ hvy_version: 0.1
     role: 'assistant',
     content: 'Should I keep going?',
   }));
-  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content).toContain('AI-introduced diagnostics');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content).toContain('### UNRESOLVED DIAGNOSTICS INTRODUCED BY YOUR CHANGES ###');
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content).toContain('[text] /body/summary/empty - text body is empty.');
 
   const secondResult = await requestDocumentEditChatTurn({
@@ -1093,7 +1094,7 @@ hvy_version: 0.1
   expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.messages.at(-1)?.content).toContain('[text] /body/summary/empty - text body is empty.');
   expect(requestProxyCompletionMock.mock.calls[3]?.[0]?.messages.at(-1)?.content).toContain('You cannot finish yet.');
   expect(requestProxyCompletionMock.mock.calls[3]?.[0]?.messages.at(-1)?.content).toContain('Fix them before finishing');
-  expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.messages.at(-1)?.content).toContain('AI-introduced diagnostics\n(none)');
+  expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.messages.at(-1)?.content).toContain('### UNRESOLVED DIAGNOSTICS INTRODUCED BY YOUR CHANGES ###\n(none)');
 });
 
 test('requestDocumentEditChatTurn includes component-specific hints', async () => {
@@ -1156,8 +1157,8 @@ hvy_version: 0.1
   expect(result.error).toBeNull();
   const nextPrompt = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content ?? '';
   expect(nextPrompt).toContain('Search result component structure:');
-  expect(nextPrompt).toContain('Key: [x] text, [c] container');
-  expect(nextPrompt).toContain('[r] xref-card.txt id=typescript-card');
+  expect(nextPrompt).not.toContain('Key: [x] text, [c] container');
+  expect(nextPrompt).toContain('xref-card.txt id=typescript-card');
   expect(nextPrompt).toContain('xrefTarget=tool-typescript');
   expect(nextPrompt).toContain('prefer `hvy remove /body/summary/typescript-card` over editing JSON text');
 });
@@ -1271,7 +1272,7 @@ test('requestDocumentEditChatTurn keeps chronological clarification history with
   expect(result.error).toBeNull();
   const context = requestProxyCompletionMock.mock.calls[0]?.[0]?.context ?? '';
   expect(context).toContain('Current request:\nyes different summary / properties');
-  expect(context).toContain('Use the chronological chat messages and terminal results to infer the active task.');
+  expect(context).not.toContain('Use the chronological chat messages and terminal results to infer the active task.');
   expect(context).not.toContain('Task goal:');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages.slice(0, 5)).toEqual([
     expect.objectContaining({ role: 'user', content: 'Add a new skill, "LLM Tooling", and add it to top skills' }),
@@ -1300,7 +1301,7 @@ test('requestDocumentEditChatTurn treats continue as chronological context inste
   expect(result.error).toBeNull();
   const context = requestProxyCompletionMock.mock.calls[0]?.[0]?.context ?? '';
   expect(context).toContain('Current request:\ncontinue');
-  expect(context).toContain('Use the chronological chat messages and terminal results to infer the active task.');
+  expect(context).not.toContain('Use the chronological chat messages and terminal results to infer the active task.');
   expect(context).not.toContain('Task goal:');
   expect(writeChatCliCommandTraceMock.mock.calls.map((call) => call[1])).toContain('hvy find-intent "continue" --max 5');
   expect(writeChatCliCommandTraceMock.mock.calls.map((call) => call[1])).not.toContain('hvy find-intent "Create a chore chart with forms and a leaderboard\ncontinue" --max 5');

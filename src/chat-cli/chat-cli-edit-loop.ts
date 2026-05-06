@@ -544,8 +544,6 @@ function buildChatCliLoopContext(
     request,
     ...(documentAiContext ? ['', 'Document context:', documentAiContext] : []),
     ...(omittedMessageCount > 0 ? ['', `Earlier chat omitted: ${omittedMessageCount} message${omittedMessageCount === 1 ? '' : 's'}.`] : []),
-    '',
-    'Use the chronological chat messages and terminal results to infer the active task. If you lose the thread or need a choice from the user, use `ask QUESTION`.',
     ...(selectedComponent ? ['', 'Selected component focus:', formatSelectedComponentFocus(selectedComponent, request)] : []),
     ...(cwdComponentContext ? ['', cwdComponentContext] : []),
   ].join('\n');
@@ -835,22 +833,30 @@ function formatCommandResultForModel(result: string | { output: string; diagnost
   }
   return [
     formatCommandResultSection(result.output),
-    'diagnostics',
+    '### DIAGNOSTICS CHANGES FROM THIS COMMAND ###',
     result.diagnosticsDiff?.trimEnd() || '(no changes)',
-    'optional context, not required actions',
+    '### END DIAGNOSTICS CHANGES FROM THIS COMMAND ###',
+    '### OPTIONAL CONTEXT (NOT REQUIRED ACTIONS) ###',
     result.hints?.trimEnd() || '(none)',
-    'AI-introduced diagnostics',
+    '### END OPTIONAL CONTEXT ###',
+    '### UNRESOLVED DIAGNOSTICS INTRODUCED BY YOUR CHANGES ###',
     result.introducedDiagnostics?.trimEnd() || '(none)',
-    '',
+    '### END UNRESOLVED DIAGNOSTICS INTRODUCED BY YOUR CHANGES ###',
     '### BEGIN /scratchpad.txt  ###',
     result.scratchpad?.trimEnd() || '(empty)',
     '### END /scratchpad.txt ###',
     '### BEGIN your urgency ###',
     result.urgency?.trimEnd() || formatChatCliUrgency(0),
     '### END your urgency ###',
+    '### COMMAND GUIDANCE ###',
     `Multiple \`\`\`shell blocks are allowed and run as a batch. ${CHAT_CLI_BATCH_GUIDANCE} Remember to take notes as you go!`,
+    '### END COMMAND GUIDANCE ###',
+    '### CURRENT DIRECTORY ###',
     `Current directory: ${result.cwd || '/'}`,
+    '### END CURRENT DIRECTORY ###',
+    '### NEXT STEP ###',
     'What is your next command?',
+    '### END NEXT STEP ###',
   ].join('\n');
 }
 
@@ -881,7 +887,14 @@ function getChatCliUrgencyMessage(score: number): string {
 }
 
 function formatOversizedChatCliBatchMessage(commandCount: number): string {
-  return `Batch has ${commandCount} commands. Run at most ${CHAT_CLI_RECOMMENDED_BATCH_COMMANDS} focused commands per response, or up to ${CHAT_CLI_MAX_BATCH_COMMANDS} when necessary. What is your next command?`;
+  return [
+    '### COMMAND ERROR ###',
+    `Batch has ${commandCount} commands. Run at most ${CHAT_CLI_RECOMMENDED_BATCH_COMMANDS} focused commands per response, or up to ${CHAT_CLI_MAX_BATCH_COMMANDS} when necessary.`,
+    '### END COMMAND ERROR ###',
+    '### NEXT STEP ###',
+    'What is your next command?',
+    '### END NEXT STEP ###',
+  ].join('\n');
 }
 
 function formatBatchCommandOutput(outputs: Array<{ command: string; output: string }>): string {
@@ -992,17 +1005,22 @@ function formatIntroducedDiagnosticsForModel(issues: HvyCliDiagnosticIssue[]): s
     return '(none)';
   }
   return [
-    'These diagnostics were introduced by prior AI edits and remain unresolved. Fix them before finishing:',
+    'These diagnostics were introduced by your changes and remain unresolved. Fix them before finishing:',
     ...issues.map(formatHvyCliDiagnosticIssueLine),
   ].join('\n');
 }
 
 function formatIntroducedLintIssuesPrompt(issues: HvyCliDiagnosticIssue[]): string {
   return [
+    '### BLOCKED ###',
     'You cannot finish yet.',
+    '### END BLOCKED ###',
+    '### UNRESOLVED DIAGNOSTICS INTRODUCED BY YOUR CHANGES ###',
     formatIntroducedDiagnosticsForModel(issues),
-    '',
+    '### END UNRESOLVED DIAGNOSTICS INTRODUCED BY YOUR CHANGES ###',
+    '### NEXT STEP ###',
     'Run commands to fix these diagnostics, then run hvy lint to verify they are gone. What is your next command?',
+    '### END NEXT STEP ###',
   ].join('\n');
 }
 

@@ -124,7 +124,7 @@ scripts:
 
   expect((await executeHvyCliCommand(document, session, 'ls /body/automation/startup')).output).toContain('file script.py');
   expect((await executeHvyCliCommand(document, session, 'cat /body/automation/startup')).output).toContain('doc.header.set("started", True)');
-  expect((await executeHvyCliCommand(document, session, 'hvy request_structure startup')).output).toContain('[p] script.py id=startup');
+  expect((await executeHvyCliCommand(document, session, 'hvy request_structure startup')).output).toContain('script.py id=startup');
 
   const listForm = await executeHvyCliCommand(document, session, 'ls /body/automation/assign');
   expect(listForm.output).toContain('file load.py');
@@ -414,17 +414,30 @@ test('cat custom component bodies stays focused on file content', async () => {
   expect(result.output).not.toContain('Component preview switched to request_structure');
 });
 
-test('hvy preview switches long raw fragments to request_structure capped at 25 lines', async () => {
-  const document = createResumeCliTestDocument();
+test('hvy preview switches long raw fragments to request_structure capped at 100 lines', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"details"}-->
+#! Details
+
+<!--hvy:component-list {"id":"long-list","componentListComponent":"text"}-->
+${Array.from({ length: 110 }, (_, index) => `
+ <!--hvy:component-list:${index} {}>
+
+  <!--hvy:text {}>
+   Item ${index}
+`).join('')}
+`, '.hvy');
   const session = createHvyCliSession();
 
-  const result = await executeHvyCliCommand(document, session, 'hvy preview /body/skills/component-list-1/skill-software-engineering');
+  const result = await executeHvyCliCommand(document, session, 'hvy preview /body/details/long-list');
 
-  expect(result.output).toContain('Preview command: hvy request_structure skill-software-engineering --describe');
+  expect(result.output).toContain('Preview command: hvy request_structure long-list --describe');
   expect(result.output).toContain('Component preview switched to request_structure because raw HVY is');
-  expect(result.output).toContain('/skill-software-engineering');
-  expect(result.output).toContain('/expandable-stub');
-  expect(result.output.split('\n').length).toBeLessThanOrEqual(28);
+  expect(result.output).toContain('/long-list');
+  expect(result.output.split('\n').length).toBeLessThanOrEqual(103);
 });
 
 test('hvy preview shows short raw fragments and the command used', async () => {
@@ -434,7 +447,7 @@ test('hvy preview shows short raw fragments and the command used', async () => {
   const result = await executeHvyCliCommand(document, session, 'hvy preview /body/summary/intro');
 
   expect(result.output).toContain('Preview command: hvy preview /body/summary/intro');
-  expect(result.output).toContain('Component preview (raw HVY, first 25 lines):');
+  expect(result.output).toContain('Component preview (raw HVY, first 100 lines):');
   expect(result.output).toContain('<!--hvy:text {"id":"intro"}-->');
 });
 
@@ -1542,7 +1555,7 @@ test('cli ignores stderr merge redirection in request_structure pipelines', asyn
     'hvy request_structure /body/top-skills-tools-technologies --describe 2>&1 | head -5'
   );
 
-  expect(result.output).toContain('Key: [x] text');
+  expect(result.output).toContain('Custom component types:');
   expect(result.output).not.toContain('expected at most one component id');
 });
 
@@ -1570,10 +1583,10 @@ component_defs:
     description: Skill card
 ---
 
-<!--hvy: {"id":"summary"}-->
+<!--hvy: {"id":"summary","tags":"overview, canonical"}-->
 #! Summary
 
-<!--hvy:text {"id":"intro"}-->
+<!--hvy:text {"id":"intro","tags":"lead-in"}-->
  Hello
 
 <!--hvy:component-list {"componentListComponent":"text"}-->
@@ -1604,28 +1617,27 @@ component_defs:
   const result = await executeHvyCliCommand(document, session, 'hvy request_structure');
 
   expect(result.mutated).toBe(false);
-  expect(result.output).toContain('Custom types use their base type code.');
   expect(result.output).toContain('- skill-card baseType=xref-card - Skill card');
   expect(result.output).toContain('Components:');
-  expect(result.output).toContain('/body\n  /summary');
-  expect(result.output).toContain('/intro\n      [x] text.txt id=intro');
-  expect(result.output).toMatch(/\/component-list-\d+\n      \[l\] component-list\.txt id=C\d+\n      \/text-\d+\n        \[x\] text\.txt id=C\d+/);
-  expect(result.output).toContain('/typescript-card\n      [r] xref-card.txt id=typescript-card');
-  expect(result.output).toMatch(/\/xref-card-\d+\n      \[r\] xref-card\.txt id=C\d+/);
-  expect(result.output).toContain('/library-card\n      [r] skill-card.txt id=library-card');
+  expect(result.output).toContain('/body\n  /summary tags=[overview, canonical]');
+  expect(result.output).toContain('/intro\n      text.txt id=intro tags=[lead-in]');
+  expect(result.output).toMatch(/\/component-list-\d+\n      component-list\.txt id=C\d+\n      \/text-\d+\n        text\.txt id=C\d+/);
+  expect(result.output).toContain('/typescript-card\n      xref-card.txt id=typescript-card');
+  expect(result.output).toMatch(/\/xref-card-\d+\n      xref-card\.txt id=C\d+/);
+  expect(result.output).toContain('/library-card\n      skill-card.txt id=library-card');
   expect(result.output.indexOf('/intro')).toBeLessThan(result.output.indexOf('/component-list-'));
   expect(result.output.indexOf('/component-list-')).toBeLessThan(result.output.indexOf('/typescript-card'));
   expect(result.output.indexOf('/typescript-card')).toBeLessThan(result.output.indexOf('/library-card'));
 
   const collapsed = await executeHvyCliCommand(document, session, 'hvy request_structure --collapse');
-  expect(collapsed.output).toContain('/body\n  /summary');
-  expect(collapsed.output).toContain('/intro [x] text.txt id=intro');
-  expect(collapsed.output).toMatch(/\/component-list-\d+ \[l\] component-list\.txt id=C\d+ \(\+3 anonymous descendants\)/);
-  expect(collapsed.output).not.toMatch(/\/text-\d+\.\.text-\d+ \[x\] text\.txt ids=C\d+-C\d+/);
-  expect(collapsed.output).toMatch(/\/xref-card-\d+ \[r\] xref-card\.txt id=C\d+/);
+  expect(collapsed.output).toContain('/body\n  /summary tags=[overview, canonical]');
+  expect(collapsed.output).toContain('/intro text.txt id=intro tags=[lead-in]');
+  expect(collapsed.output).toMatch(/\/component-list-\d+ component-list\.txt id=C\d+ \(\+3 hidden\)/);
+  expect(collapsed.output).not.toMatch(/\/text-\d+\.\.text-\d+ text\.txt ids=C\d+-C\d+/);
+  expect(collapsed.output).toMatch(/\/xref-card-\d+ xref-card\.txt id=C\d+/);
 
   const scoped = await executeHvyCliCommand(document, session, 'hvy request_structure typescript-card');
-  expect(scoped.output).toContain('/body\n  /summary\n    /typescript-card\n      [r] xref-card.txt id=typescript-card');
+  expect(scoped.output).toContain('/body\n  /summary tags=[overview, canonical]\n    /typescript-card\n      xref-card.txt id=typescript-card');
   expect(scoped.output).not.toContain('/intro');
 
   const byPath = await executeHvyCliCommand(document, session, 'hvy request_structure /body/summary');
@@ -1760,18 +1772,18 @@ test('hvy request_structure --describe includes non-empty descriptions', async (
 hvy_version: 0.1
 ---
 
-<!--hvy: {"id":"planning","description":"Roadmap and planning notes."}-->
+<!--hvy: {"id":"planning","description":"Roadmap and planning notes.","tags":"planning, roadmap"}-->
 #! Planning
 
-<!--hvy:text {"id":"roadmap","description":"Quarterly roadmap notes."}-->
+<!--hvy:text {"id":"roadmap","description":"Quarterly roadmap notes.","tags":"quarterly"}-->
 Milestones
 `, '.hvy');
   const session = createHvyCliSession();
 
   const result = await executeHvyCliCommand(document, session, 'hvy request_structure --describe');
 
-  expect(result.output).toContain('/planning - Roadmap and planning notes.');
-  expect(result.output).toContain('[x] text.txt id=roadmap - Quarterly roadmap notes.');
+  expect(result.output).toContain('/planning tags=[planning, roadmap] - Roadmap and planning notes.');
+  expect(result.output).toContain('text.txt id=roadmap tags=[quarterly] - Quarterly roadmap notes.');
 });
 
 test('hvy lint reports core component and plugin issues', async () => {

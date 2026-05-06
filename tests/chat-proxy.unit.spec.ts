@@ -26,7 +26,7 @@ const request = {
   ],
 };
 
-test('buildOpenAiProxyRequest includes developer context and conversation turns', () => {
+test('buildOpenAiProxyRequest includes request context as a user message and conversation turns', () => {
   expect(buildOpenAiProxyRequest({
     ...request,
     messages: [
@@ -50,11 +50,11 @@ test('buildOpenAiProxyRequest includes developer context and conversation turns'
         ],
       },
       {
-        role: 'developer',
+        role: 'user',
         content: [
           {
             type: 'input_text',
-            text: 'Document context:\n\nContext body',
+            text: 'Request context:\n\nContext body',
           },
         ],
       },
@@ -85,7 +85,7 @@ test('buildOpenAiProxyRequest includes developer context and conversation turns'
   });
 });
 
-test('buildAnthropicProxyRequest places context in system prompt and messages in order', () => {
+test('buildAnthropicProxyRequest places context as a user message and messages in order', () => {
   expect(
     buildAnthropicProxyRequest({
       ...request,
@@ -99,8 +99,9 @@ test('buildAnthropicProxyRequest places context in system prompt and messages in
   ).toEqual({
     model: 'claude-sonnet-4-6',
     max_tokens: 4096,
-    system: expect.stringMatching(/Answer questions about the provided HVY document context\.[\s\S]*Use the CLI protocol\.[\s\S]*Document context:\n\nContext body/),
+    system: expect.stringMatching(/Answer questions about the provided HVY document context\.[\s\S]*Use the CLI protocol\./),
     messages: [
+      { role: 'user', content: 'Request context:\n\nContext body' },
       { role: 'user', content: 'What is this?' },
       { role: 'assistant', content: 'A summary.' },
     ],
@@ -463,8 +464,8 @@ test('formatAiCliMessagesLogEvent dumps exact chat cli provider request payloads
         model: 'gpt-5-mini',
         input: [
           {
-            role: 'developer',
-            content: [{ type: 'input_text', text: 'Document context:\n\nCurrent directory: /' }],
+            role: 'user',
+            content: [{ type: 'input_text', text: 'Request context:\n\nCurrent directory: /' }],
           },
           {
             role: 'user',
@@ -477,9 +478,9 @@ test('formatAiCliMessagesLogEvent dumps exact chat cli provider request payloads
 
   expect(line).toContain('--------\nprovider_request\n{');
   expect(line).toContain('"input": [');
-  expect(line).toContain('"role": "developer"');
+  expect(line).not.toContain('"role": "developer"');
   expect(line).toContain('"type": "input_text"');
-  expect(line).toContain('"text": "Document context:\\n\\nCurrent directory: /"');
+  expect(line).toContain('"text": "Request context:\\n\\nCurrent directory: /"');
   expect(line).toContain('"role": "user"');
   expect(line).toContain('"text": "Add Baking."');
   expect(line).toContain('\\n');

@@ -703,7 +703,8 @@ class ChatCliCommandFailureError extends Error {
 function buildChatCliLoopFormatInstructions(): string {
   return [
     'When continuing, return concise notes plus terminal command(s).',
-    'For continuing responses, write exactly these note labels with short answers: What you are doing, Why you are doing it, What you are unsure of.',
+    'For continuing responses, write exactly one note block at the top with these three short lines: What you are doing, Why you are doing it, What you are unsure of.',
+    'Do not repeat the What / Why / Unsure notes before each command. One response gets one note block total.',
     `Wrap each command in its own \`\`\`shell fence. Multiple \`\`\`shell blocks are allowed and run in order. ${CHAT_CLI_BATCH_GUIDANCE}`,
     'Text outside ```shell fences is shown as progress notes for debugging. It is not a substitute for commands.',
     'To finish, run `done MESSAGE_TO_USER` as the only command in the response.',
@@ -894,6 +895,7 @@ function formatCommandResultForModel(result: string | { output: string; diagnost
     return formatCommandResultSection(result);
   }
   return [
+    `Current directory: ${result.cwd || '/'}`,
     formatCommandResultOutput(result.output),
     '### DIAGNOSTICS CHANGES FROM THIS COMMAND ###',
     result.diagnosticsDiff?.trimEnd() || '(no changes)',
@@ -911,7 +913,6 @@ function formatCommandResultForModel(result: string | { output: string; diagnost
     result.urgency?.trimEnd() || formatChatCliUrgency(0),
     '### END your urgency ###',
     `Command guidance: ${CHAT_CLI_BATCH_GUIDANCE}`,
-    `Current directory: ${result.cwd || '/'}`,
     formatNextResponseInstruction(),
   ].join('\n');
 }
@@ -958,7 +959,7 @@ function formatOversizedChatCliBatchMessage(commandCount: number): string {
 }
 
 function formatNextResponseInstruction(): string {
-  return 'Next response: Write concise What / Why / Unsure of and shell command(s), or run ask QUESTION, or run done MESSAGE_TO_USER.';
+  return 'Next response: Write one concise What / Why / Unsure note block followed by shell command(s), or run ask QUESTION, or run done MESSAGE_TO_USER.';
 }
 
 function formatBatchCommandOutput(outputs: Array<{ command: string; output: string }>): string {
@@ -1015,7 +1016,7 @@ function splitLongOutputLine(line: string, maxWidth: number): string[] {
 }
 
 function isComponentCreationCommand(command: string): boolean {
-  return /^\s*hvy\s+add\b/.test(command);
+  return /^\s*hvy\s+(?:append-child|prepend-child)\b/.test(command);
 }
 
 function formatScratchpadForModel(snapshot: Pick<ReturnType<ReturnType<typeof createChatCliInterface>['snapshot']>, 'scratchpad' | 'scratchpadEdited' | 'scratchpadCommandsSinceEdit'>): string {

@@ -90,6 +90,7 @@ const runChatCliSimStep: AppActionHandler = () => {
           return;
         }
         if (result.mutated) {
+          recordHistory('chat-cli-sim');
           state.rawEditorText = serializeDocument(state.document);
           state.rawEditorError = null;
           state.rawEditorDiagnostics = [];

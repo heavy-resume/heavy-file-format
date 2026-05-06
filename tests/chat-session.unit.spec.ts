@@ -297,7 +297,7 @@ test('requestDocumentEditChatTurn runs the CLI edit loop for document chat', asy
     expect.objectContaining({ role: 'assistant', content: expect.stringContaining('```shell\nhvy lint\n```') }),
     expect.objectContaining({ role: 'user', content: '### CMD RESULT ###\nNo lint issues.\n### END CMD RESULT ###' }),
     expect.objectContaining({ role: 'assistant', content: expect.stringContaining('```shell\nhvy find-intent "Add a chore section." --max 5\n```') }),
-    expect.objectContaining({ role: 'user', content: expect.stringContaining('Next response: Write concise What / Why / Unsure of') }),
+    expect.objectContaining({ role: 'user', content: expect.stringContaining('Next response: Write one concise What / Why / Unsure note block') }),
   ]);
   expect(firstMessages?.at(-1)?.role).toBe('user');
   expect(firstMessages?.at(-1)?.content).toContain('Current directory: /');
@@ -404,7 +404,7 @@ test('buildDocumentEditCliSimRequest exposes the exact provider-facing CLI reque
     expect.objectContaining({ role: 'assistant', content: [expect.objectContaining({ text: expect.stringContaining('```shell\nhvy lint\n```') })] }),
     expect.objectContaining({ role: 'user', content: [expect.objectContaining({ text: '### CMD RESULT ###\nNo lint issues.\n### END CMD RESULT ###' })] }),
     expect.objectContaining({ role: 'assistant', content: [expect.objectContaining({ text: expect.stringContaining('```shell\nhvy find-intent "Add a chore section." --max 5\n```') })] }),
-    expect.objectContaining({ role: 'user', content: [expect.objectContaining({ text: expect.stringContaining('Next response: Write concise What / Why / Unsure of') })] }),
+    expect.objectContaining({ role: 'user', content: [expect.objectContaining({ text: expect.stringContaining('Next response: Write one concise What / Why / Unsure note block') })] }),
   ]);
   expect(payload.input.at(-1)?.content[0]?.text).toContain('### BEGIN /scratchpad.txt  ###\nlast edited never\n\nYou havent written your plan yet.');
   expect(payload.input.at(-1)?.content[0]?.text.trim().endsWith('or run ask QUESTION, or run done MESSAGE_TO_USER.')).toBe(true);
@@ -431,6 +431,7 @@ test('advanceDocumentEditCliSimStep executes the response and prepares the next 
   });
   const payload = JSON.parse(result.requestJson) as { input: Array<{ role: string; content: Array<{ text: string }> }> };
 
+  expect(result.commandResultMessage.startsWith('Current directory: /')).toBe(true);
   expect(result.commandResultMessage).toContain('CMD: pwd\n### CMD RESULT ###\n/');
   expect(result.commandResultMessage).toContain('### DIAGNOSTICS CHANGES FROM THIS COMMAND ###\n(no changes)\n### END DIAGNOSTICS CHANGES FROM THIS COMMAND ###');
   expect(result.commandResultMessage).not.toContain('sim mode');
@@ -440,8 +441,46 @@ test('advanceDocumentEditCliSimStep executes the response and prepares the next 
   }));
   expect(payload.input.at(-1)).toEqual(expect.objectContaining({
     role: 'user',
-    content: [expect.objectContaining({ text: expect.stringContaining('Next response: Write concise What / Why / Unsure of') })],
+    content: [expect.objectContaining({ text: expect.stringContaining('Next response: Write one concise What / Why / Unsure note block') })],
   }));
+});
+
+test('advanceDocumentEditCliSimStep mutates the same document for prepend-child commands', async () => {
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+component_defs:
+  - name: history-record
+    baseType: expandable
+    description: Work history record.
+---
+
+<!--hvy: {"id":"history"}-->
+#! History
+
+<!--hvy:component-list {"id":"history-list","componentListComponent":"history-record"}-->
+
+ <!--hvy:history-record {"id":"history-existing"}-->
+  Existing
+`, '.hvy');
+  const initial = await buildDocumentEditCliSimRequest({
+    settings,
+    document,
+    messages: [],
+    request: 'Add history.',
+  });
+
+  const result = await advanceDocumentEditCliSimStep({
+    settings,
+    document,
+    turnState: initial.turnState,
+    assistantOutput: 'What you are doing: adding history\nWhy you are doing it: requested\nWhat you are unsure of: nothing\n```shell\nhvy prepend-child history-record /body/history/history-list --id history-new New\n```',
+  });
+
+  expect(result.mutated).toBe(true);
+  expect(serializeDocument(document)).toContain('<!--hvy:history-record {"id":"history-new"');
+  expect(serializeDocument(document)).toMatch(/history-new[\s\S]*history-existing/);
+  expect(result.commandResultMessage).toContain('Current directory: /body/history/history-list/history-new');
 });
 
 test('requestDocumentEditChatTurn can focus the CLI loop on a selected component', async () => {
@@ -846,7 +885,7 @@ done Created the chore section.`)
     '$ [2/2] hvy append-child text /body/chores note "Weekly chore plan"',
   ]);
   const nextPrompt = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content ?? '';
-  expect(nextPrompt).toContain('Next response: Write concise What / Why / Unsure of');
+  expect(nextPrompt).toContain('Next response: Write one concise What / Why / Unsure note block');
   expect(nextPrompt.trimEnd()).toMatch(/or run ask QUESTION, or run done MESSAGE_TO_USER\.$/);
   expect(nextPrompt).toContain('/body/chores/note');
   expect(nextPrompt).toContain('### BEGIN your urgency ###\nscore=0\nprioritize planning and understanding');
@@ -992,7 +1031,7 @@ pwd
   expect(result.error).toBeNull();
   expect(onProgress).not.toHaveBeenCalled();
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content).toBe(
-    '### COMMAND ERROR ###\nBatch has 11 commands. Use one command per ```shell block and at most 4 ```shell blocks per response.\n### END COMMAND ERROR ###\nNext response: Write concise What / Why / Unsure of and shell command(s), or run ask QUESTION, or run done MESSAGE_TO_USER.'
+    '### COMMAND ERROR ###\nBatch has 11 commands. Use one command per ```shell block and at most 4 ```shell blocks per response.\n### END COMMAND ERROR ###\nNext response: Write one concise What / Why / Unsure note block followed by shell command(s), or run ask QUESTION, or run done MESSAGE_TO_USER.'
   );
   expect(writeChatCliCommandTraceMock.mock.calls.map((call) => call[1])).toEqual([
     'ls /',
@@ -1088,7 +1127,7 @@ hvy_version: 0.1
   expect(result.error).toBeNull();
   const nextPrompt = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content ?? '';
   expect(nextPrompt).toContain('CMD: cat /body/summary/intro/text.txt\n### CMD RESULT ###\nHello\n### END CMD RESULT ###');
-  expect(nextPrompt).toContain('Next response: Write concise What / Why / Unsure of');
+  expect(nextPrompt).toContain('Next response: Write one concise What / Why / Unsure note block');
   expect(nextPrompt.trimEnd()).toMatch(/or run ask QUESTION, or run done MESSAGE_TO_USER\.$/);
   expect(nextPrompt).toContain('### OPTIONAL CONTEXT (NOT REQUIRED ACTIONS) ###\ncomponent text: /body/summary/intro');
   expect(nextPrompt).toContain('# Text Components #');

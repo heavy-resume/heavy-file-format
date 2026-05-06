@@ -2784,10 +2784,10 @@ function formatDirectoryEntryDescription(fs: ReturnType<typeof buildHvyVirtualFi
   }
   const name = path.split('/').pop() ?? '';
   if (name === 'expandable-stub') {
-    return `expandable stub child slot; raw edits available through ${findNearestRawEditableParent(fs, path) || 'the parent component'}`;
+    return `expandable's stub children; raw edits available through ${findNearestRawEditableParent(fs, path) || 'the parent component'}`;
   }
   if (name === 'expandable-content') {
-    return `expandable content child slot; raw edits available through ${findNearestRawEditableParent(fs, path) || 'the parent component'}`;
+    return `expandable's content children; raw edits available through ${findNearestRawEditableParent(fs, path) || 'the parent component'}`;
   }
   if (name === 'container') {
     return `container child slot; raw edits available through ${findNearestRawEditableParent(fs, path) || 'the parent component'}`;
@@ -2830,7 +2830,7 @@ function formatFileEntryDescription(fs: ReturnType<typeof buildHvyVirtualFileSys
     return 'read-only documentation for section directories';
   }
   if (filename === 'children-order.json') {
-    return 'writable ordered child keys; edit to reorder children';
+    return formatChildrenOrderDescription(fs, directoryPath);
   }
   if (filename === 'tableColumns.json') {
     return 'writable static table column names as a JSON string array';
@@ -2859,6 +2859,33 @@ function formatFileEntryDescription(fs: ReturnType<typeof buildHvyVirtualFileSys
     return 'read-only attachment metadata summary';
   }
   return '';
+}
+
+function formatChildrenOrderDescription(fs: ReturnType<typeof buildHvyVirtualFileSystem>, directoryPath: string): string {
+  const name = directoryPath.split('/').pop() ?? '';
+  if (directoryPath === '/body') {
+    return 'writable top-level section order; edit to reorder sections';
+  }
+  if (name === 'expandable-stub') {
+    return "writable order for components inside the expandable's stub";
+  }
+  if (name === 'expandable-content') {
+    return "writable order for components inside the expandable's content";
+  }
+  if (name === 'container') {
+    return 'writable order for components inside this container';
+  }
+  if (name === 'grid') {
+    return 'writable grid item order';
+  }
+  const componentName = inferComponentNameForDirectory(fs, directoryPath);
+  if (componentName === 'component-list') {
+    return 'writable list item order';
+  }
+  if (fs.entries.has(`${directoryPath}/section.json`)) {
+    return 'writable order for this section\'s subsections and components';
+  }
+  return 'writable child order';
 }
 
 function formatRawHvySubject(fs: ReturnType<typeof buildHvyVirtualFileSystem>, directoryPath: string): string {

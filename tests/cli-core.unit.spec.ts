@@ -34,6 +34,7 @@ test('cli can navigate and read virtual component files', async () => {
   expect((await executeHvyCliCommand(document, session, 'ls /body/summary')).output).toContain('file about-section.txt [ro]');
   expect((await executeHvyCliCommand(document, session, 'ls /body/summary')).output).toContain('file section-info.txt [ro]');
   expect((await executeHvyCliCommand(document, session, 'ls /')).output).toContain('dir  body | document body sections and components');
+  expect((await executeHvyCliCommand(document, session, 'ls /body')).output).toContain('file children-order.json [w] | writable top-level section order; edit to reorder sections');
   expect((await executeHvyCliCommand(document, session, 'ls /body')).output).toContain('dir  summary | section');
   expect((await executeHvyCliCommand(document, session, 'ls /')).output).toContain('file header.yaml [w] | writable document metadata YAML');
   expect((await executeHvyCliCommand(document, session, 'ls /')).output).toContain('file scratchpad.txt [w] | ephemeral AI task notes');
@@ -677,7 +678,7 @@ hvy_version: 0.1
 
   const before = await executeHvyCliCommand(document, session, 'ls /body/quality/items');
   expect(before.output.indexOf('dir  banana')).toBeLessThan(before.output.indexOf('dir  apple'));
-  expect(before.output).toContain('file children-order.json [w]');
+  expect(before.output).toContain('file children-order.json [w] | writable list item order');
   expect((await executeHvyCliCommand(document, session, 'cat /body/quality/items/children-order.json')).output).toBe(
     '[\n  "banana",\n  "apple",\n  "cherry"\n]\n'
   );

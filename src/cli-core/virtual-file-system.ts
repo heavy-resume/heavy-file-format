@@ -612,7 +612,8 @@ function formatComponentDirectoryMapping(component: string, baseComponent: strin
   if (baseComponent === 'expandable') {
     lines.push('- expandable-stub/ contains the always-visible summary children.');
     lines.push('- expandable-content/ contains the revealed detail children.');
-    lines.push('- expandable-stub/children-order.json and expandable-content/children-order.json reorder children in each slot.');
+    lines.push("- expandable-stub/children-order.json reorders components inside the expandable's stub.");
+    lines.push("- expandable-content/children-order.json reorders components inside the expandable's content.");
   } else if (baseComponent === 'container') {
     lines.push('- container/ contains the ordered child components.');
     lines.push('- container/children-order.json reorders container children.');

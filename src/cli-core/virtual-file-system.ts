@@ -647,7 +647,6 @@ function applyBlockSchemaJson(schema: BlockSchema, component: string, value: Jso
   if (typeof value.xrefDetail === 'string') schema.xrefDetail = value.xrefDetail;
   if (typeof value.xrefTarget === 'string') schema.xrefTarget = value.xrefTarget;
   if (Array.isArray(value.tableColumns)) schema.tableColumns = parseStringList(value.tableColumns);
-  if (typeof value.tableColumns === 'string') schema.tableColumns = value.tableColumns.split(',').map((column) => column.trim()).filter((column) => column.length > 0);
   if (typeof value.tableShowHeader === 'boolean') schema.tableShowHeader = value.tableShowHeader;
   if (Array.isArray(value.tableRows)) schema.tableRows = value.tableRows as unknown as BlockSchema['tableRows'];
   if (typeof value.plugin === 'string') schema.plugin = value.plugin;
@@ -749,9 +748,6 @@ function parseJsonTableRows(content: string, filename: string): BlockSchema['tab
     throw new Error(`${filename} must be a JSON array of row objects with cells arrays.`);
   }
   return value.map((row, index) => {
-    if (Array.isArray(row)) {
-      return { cells: row.map((cell) => String(cell ?? '')) };
-    }
     if (!row || typeof row !== 'object' || Array.isArray(row) || !Array.isArray((row as JsonObject).cells)) {
       throw new Error(`${filename} row ${index + 1} must be an object with a cells array.`);
     }

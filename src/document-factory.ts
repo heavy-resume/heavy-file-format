@@ -197,9 +197,6 @@ function parseTableColumns(raw: unknown, fallback: string[]): string[] {
   if (Array.isArray(raw)) {
     return raw.map((column) => String(column ?? ''));
   }
-  if (typeof raw === 'string') {
-    return raw.split(',').map((column) => column.trim()).filter((column) => column.length > 0);
-  }
   return [...fallback];
 }
 

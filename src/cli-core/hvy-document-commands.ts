@@ -1,4 +1,4 @@
-import { defaultBlockSchema } from '../document-factory';
+import { defaultBlockSchema, schemaFromUnknown } from '../document-factory';
 import type { BlockSchema, GridItem, VisualBlock, VisualSection } from '../editor/types';
 import { getComponentDefsFromMeta, isBuiltinComponentName, resolveBaseComponentFromMeta } from '../component-defs';
 import type { JsonObject } from '../hvy/types';
@@ -762,11 +762,7 @@ function cloneCliVisualBlock(block: VisualBlock): VisualBlock {
 }
 
 function cloneCliBlockSchema(schema: BlockSchema, componentName = schema.component): BlockSchema {
-  const raw = JSON.parse(JSON.stringify(schema)) as Partial<BlockSchema>;
-  const cloned = {
-    ...defaultBlockSchema(raw.component || componentName || 'text'),
-    ...raw,
-  } as BlockSchema;
+  const cloned = schemaFromUnknown(JSON.parse(JSON.stringify(schema)) as JsonObject);
   cloned.component = componentName;
   cloned.id = cloned.id ?? '';
   cloned.containerBlocks = (cloned.containerBlocks ?? []).filter(isVisualBlockLike).map(cloneCliVisualBlock);

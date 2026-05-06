@@ -3,7 +3,8 @@
 Create a scripting plugin:
 
 ```shell
-hvy insert 0 plugin /a-section setup dev.heavy.scripting --config "{\"version\":\"0.1\"}" --body "doc.header.set('status', 'ready')"
+hvy insert 0 plugin /a-section setup dev.heavy.scripting
+echo "doc.header.set('status', 'ready')" > /body/a-section/setup/script.py
 ```
 
 Scripts are sandboxed Brython/Python with one injected global:

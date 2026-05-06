@@ -9,19 +9,28 @@ hvy insert 0 section / a-section "A Section"
 Create builtin or custom components:
 
 ```shell
-hvy insert 0 text /a-section intro "Visible text"
-hvy insert -1 table /a-section a-table "Name,Status" --row "Example,Active"
-hvy insert -1 xref-card /a-section a-reference "Reference title" --config '{"xrefTarget":"target-id"}'
+hvy insert 0 text /a-section intro
+hvy insert -1 table /a-section a-table
+hvy insert -1 xref-card /a-section a-reference
+```
+
+Creation only answers "what is it?" and "where is it?". After creation, edit the generated files:
+
+```shell
+echo "Visible text" > /body/a-section/intro/text.txt
+echo '["Name","Status"]' > /body/a-section/a-table/tableColumns.json
+echo '[["Example","Active"]]' > /body/a-section/a-table/tableRows.json
+echo '{"id":"a-reference","xrefTitle":"Reference title","xrefTarget":"target-id"}' > /body/a-section/a-reference/xref-card.json
 ```
 
 Insert into the middle of existing ordered children:
 
 ```shell
-hvy insert 2 text /a-section middle-note "Inserted before the current third child"
-hvy insert -2 text /a-section before-last "Inserted before the current last child"
+hvy insert 2 text /a-section middle-note
+hvy insert -2 text /a-section before-last
 ```
 
-`hvy insert INDEX table` creates a static document table: rows and columns are stored directly on the component. Use `hvy insert INDEX plugin db-table` for dynamic data-backed rows.
+`hvy insert INDEX table` creates a blank static document table. Rows and columns are stored directly on the component in `tableColumns.json` and `tableRows.json`. Use `hvy insert INDEX plugin db-table` for dynamic data-backed rows.
 
 Inspect before editing:
 

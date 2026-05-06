@@ -168,8 +168,8 @@ registerHvyCliPluginCommands({
   ],
   addCommands: [
     {
-      command: 'hvy insert INDEX plugin form SECTION_PATH ID SUBMIT_BUTTON_LABEL FIELD_LABEL:TYPE... [--script NAME PYTHON] [--initial-script NAME] [--on-submit-script NAME]',
-      description: 'Create a Form plugin component.',
+      command: 'hvy insert INDEX plugin form SECTION_PATH ID',
+      description: 'Create a blank Form plugin component. Edit plugin.txt for fields/scripts and plugin.json for submit settings.',
     },
   ],
   operationCommands: [],
@@ -196,28 +196,28 @@ registerHvyCliPluginCommands({
   ],
   helpCommands: [
     {
-      command: '--script NAME PYTHON',
-      description: 'Store a named Python script in the form YAML.',
+      command: 'plugin.txt',
+      description: 'Stores form YAML: fields and scripts.NAME blocks.',
     },
     {
-      command: '--initial-script NAME',
-      description: 'Store pluginConfig.initialScript=NAME so that named script runs when the form first renders. Use this to populate select/radio options from doc.db.query via doc.form.set_options.',
+      command: 'plugin.json',
+      description: 'Stores form-level behavior in pluginConfig: submitLabel, showSubmit, initialScript, and submitScript.',
     },
     {
-      command: '--on-submit-script NAME',
-      description: 'Store pluginConfig.submitScript=NAME so that named script runs when the submit button is pressed. Alias: --submit.',
-    },
-    {
-      command: `Dynamic select example: hvy insert 0 plugin form /a-section choose-item "Choose item" "Item:select:required" --script load "rows = doc.db.query('SELECT id, title FROM items ORDER BY id')\\ndoc.form.set_options('Item', [{'label': row['title'], 'value': str(row['id'])} for row in rows])" --initial-script load`,
-      description: 'Populates a select from the current SQL backend. There is no optionsQuery YAML key; use initialScript plus doc.form.set_options.',
+      command: 'load.py, on_submit.py, etc.',
+      description: 'Named scripts in plugin.txt are also exposed as sibling .py files; prefer editing those for Python changes.',
     },
     {
       command: 'See also: hvy recipe populate-form-options-from-db',
       description: 'Focused recipe for populating select/radio options from backend rows.',
     },
     {
-      command: `Example: hvy insert 0 plugin form /a-section add-item "Add item" "Description:textarea:required" --script submit "title = doc.form.get_value('Description')\\ndoc.db.execute('INSERT INTO items (title) VALUES (\\'' + title + '\\')')" --on-submit-script submit`,
-      description: 'Creates a form whose submit button says "Add item" and runs the script named submit.',
+      command: 'No optionsQuery key',
+      description: 'There is no optionsQuery YAML key. Use an initialScript plus doc.form.set_options(label, options).',
+    },
+    {
+      command: 'Create then fill: hvy insert 0 plugin form /a-section add-item',
+      description: 'After creation, edit add-item/plugin.txt and add-item/plugin.json instead of putting fields/scripts on the create command.',
     },
     {
       command: 'See also: hvy cheatsheet scripting; hvy recipe scripting; man hvy plugin scripting tool TOOL_NAME',
@@ -408,8 +408,8 @@ registerHvyCliPluginCommands({
   ],
   addCommands: [
     {
-      command: 'hvy insert INDEX plugin SECTION_PATH ID dev.heavy.scripting --config {"version":"0.1"} --body PYTHON',
-      description: 'Create a scripting plugin block.',
+      command: 'hvy insert INDEX plugin SECTION_PATH ID dev.heavy.scripting',
+      description: 'Create a blank scripting plugin block. Edit plugin.txt or script.py after creation.',
     },
   ],
   operationCommands: [],
@@ -441,8 +441,8 @@ registerHvyCliPluginCommands({
   ],
   addCommands: [
     {
-      command: 'hvy insert INDEX plugin db-table SECTION_PATH ID TABLE [QUERY]',
-      description: 'Create a dynamic table plugin that shows a backend table/view with an optional SQL query.',
+      command: 'hvy insert INDEX plugin db-table SECTION_PATH ID',
+      description: 'Create a blank dynamic table plugin. Edit plugin.json for table/view and plugin.txt for optional display SQL.',
     },
   ],
   operationCommands: [

@@ -10,7 +10,11 @@ async function runCliCommand(page: Page, command: string): Promise<void> {
 }
 
 function scriptArg(source: string): string {
-  return source.trim().replace(/\n/g, '\\n');
+  return source.trim().replace(/\n/g, '\n    ');
+}
+
+function writeFileCommand(path: string, content: string): string {
+  return `echo ${JSON.stringify(content.trimEnd().replace(/\n/g, '\\n'))} > ${path}`;
 }
 
 test('cli-created chore chart form and db-table plugins run end to end', async ({ page }) => {
@@ -40,20 +44,53 @@ doc.db.execute('UPDATE chores SET active = 0 WHERE description = \\'' + chore + 
 `);
 
   await runCliCommand(page, 'hvy insert 0 section /body chore-chart "Chore Chart"');
-  await runCliCommand(page, 'hvy insert 0 plugin db-table /chore-chart active-chore-chart active_chore_chart "SELECT Chore, Dad, Mom, Child FROM active_chore_chart"');
-  await runCliCommand(page, 'hvy insert -1 plugin db-table /chore-chart weekly-leaders weekly_chore_leaders "SELECT Person, Completed FROM weekly_chore_leaders"');
-  await runCliCommand(
-    page,
-    `hvy insert 0 plugin form /chore-chart add-chore-form "Add chore" "Description:textarea:required" --script submit "${setupChoreDb}" --on-submit-script submit`
-  );
-  await runCliCommand(
-    page,
-    `hvy insert -1 plugin form /chore-chart assign-chore-form "Assign chore" "Chore:text:required" "Assignee:select:required:Dad|Mom|Child" --script submit "${assignChore}" --on-submit-script submit`
-  );
-  await runCliCommand(
-    page,
-    `hvy insert -1 plugin form /chore-chart complete-chore-form "Complete chore" "Chore:text:required" "Completed by:select:required:Dad|Mom|Child" --script submit "${completeChore}" --on-submit-script submit`
-  );
+  await runCliCommand(page, 'hvy insert 0 plugin db-table /chore-chart active-chore-chart');
+  await runCliCommand(page, writeFileCommand('/chore-chart/active-chore-chart/plugin.json', '{"id":"active-chore-chart","plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"active_chore_chart","queryLimit":10}}'));
+  await runCliCommand(page, writeFileCommand('/chore-chart/active-chore-chart/plugin.txt', 'SELECT Chore, Dad, Mom, Child FROM active_chore_chart'));
+  await runCliCommand(page, 'hvy insert -1 plugin db-table /chore-chart weekly-leaders');
+  await runCliCommand(page, writeFileCommand('/chore-chart/weekly-leaders/plugin.json', '{"id":"weekly-leaders","plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"weekly_chore_leaders","queryLimit":10}}'));
+  await runCliCommand(page, writeFileCommand('/chore-chart/weekly-leaders/plugin.txt', 'SELECT Person, Completed FROM weekly_chore_leaders'));
+  await runCliCommand(page, 'hvy insert 0 plugin form /chore-chart add-chore-form');
+  await runCliCommand(page, writeFileCommand('/chore-chart/add-chore-form/plugin.json', '{"id":"add-chore-form","plugin":"dev.heavy.form","pluginConfig":{"version":"0.1","submitLabel":"Add chore","showSubmit":true,"submitScript":"submit"}}'));
+  await runCliCommand(page, writeFileCommand('/chore-chart/add-chore-form/plugin.txt', `fields:
+  - label: Description
+    type: textarea
+    required: true
+scripts:
+  submit: |
+    ${setupChoreDb}`));
+  await runCliCommand(page, 'hvy insert -1 plugin form /chore-chart assign-chore-form');
+  await runCliCommand(page, writeFileCommand('/chore-chart/assign-chore-form/plugin.json', '{"id":"assign-chore-form","plugin":"dev.heavy.form","pluginConfig":{"version":"0.1","submitLabel":"Assign chore","showSubmit":true,"submitScript":"submit"}}'));
+  await runCliCommand(page, writeFileCommand('/chore-chart/assign-chore-form/plugin.txt', `fields:
+  - label: Chore
+    type: text
+    required: true
+  - label: Assignee
+    type: select
+    required: true
+    options:
+      - Dad
+      - Mom
+      - Child
+scripts:
+  submit: |
+    ${assignChore}`));
+  await runCliCommand(page, 'hvy insert -1 plugin form /chore-chart complete-chore-form');
+  await runCliCommand(page, writeFileCommand('/chore-chart/complete-chore-form/plugin.json', '{"id":"complete-chore-form","plugin":"dev.heavy.form","pluginConfig":{"version":"0.1","submitLabel":"Complete chore","showSubmit":true,"submitScript":"submit"}}'));
+  await runCliCommand(page, writeFileCommand('/chore-chart/complete-chore-form/plugin.txt', `fields:
+  - label: Chore
+    type: text
+    required: true
+  - label: Completed by
+    type: select
+    required: true
+    options:
+      - Dad
+      - Mom
+      - Child
+scripts:
+  submit: |
+    ${completeChore}`));
 
   await page.getByRole('button', { name: 'Viewer' }).click();
 

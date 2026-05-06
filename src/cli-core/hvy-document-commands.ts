@@ -1,5 +1,3 @@
-import { stringify as stringifyYaml } from 'yaml';
-
 import { defaultBlockSchema } from '../document-factory';
 import type { BlockSchema, GridItem, VisualBlock, VisualSection } from '../editor/types';
 import { getComponentDefsFromMeta, isBuiltinComponentName, resolveBaseComponentFromMeta } from '../component-defs';
@@ -92,10 +90,10 @@ export function hvyDocumentCommandHelp(topic = ''): string {
 
   const help: Record<string, string> = {
     '': [
-      formatCommandHelp('hvy insert INDEX COMPONENT PARENT_PATH [TEXT] [--id ID] [--config JSON]', 'Insert a builtin or custom component. Component ids are optional; use --id only when you need a stable id. INDEX is zero-based and supports Python-style negative indexes; 0 is the front, -1 is the back.'),
+      formatCommandHelp('hvy insert INDEX COMPONENT PARENT_PATH [ID|--id ID]', 'Insert a blank builtin or custom component. Component ids are optional; use --id only when you need a stable id. INDEX is zero-based and supports Python-style negative indexes; 0 is the front, -1 is the back.'),
       formatCommandHelp('hvy insert INDEX section PARENT_PATH ID TITLE', 'Create a section.'),
-      formatCommandHelp('hvy insert INDEX text SECTION_PATH ID TEXT', 'Create a text component.'),
-      formatCommandHelp('hvy insert INDEX table SECTION_PATH ID COLUMNS [--row CSV]...', 'Create a static table component.'),
+      formatCommandHelp('hvy insert INDEX text PARENT_PATH [ID|--id ID]', 'Create a blank text component. Edit text.txt after creation.'),
+      formatCommandHelp('hvy insert INDEX table PARENT_PATH [ID|--id ID]', 'Create a blank static table component. Edit tableColumns.json and tableRows.json after creation.'),
       formatCommandHelp('hvy remove PATH [--prune-xref]', 'Remove a section or component directory. Alias: hvy delete PATH.'),
       formatCommandHelp('hvy prune-xref TARGET_ID', 'Remove xref-card components pointing to TARGET_ID.'),
       formatCommandHelp('hvy preview PATH', 'Show the raw HVY preview for a component, capped at 100 lines.'),
@@ -110,27 +108,28 @@ export function hvyDocumentCommandHelp(topic = ''): string {
       formatCommandHelp('Edit existing components', 'Use find to discover virtual files, cat to inspect them, and sed to update writable body/config files.'),
     ].join('\n'),
     insert: [
-      formatCommandHelp('hvy insert INDEX COMPONENT PARENT_PATH [TEXT] [--id ID] [--config JSON]', 'Insert a builtin or custom component to a section, component-list, grid, container, or expandable content path. Component ids are optional; use --id only when you need a stable id. INDEX is zero-based and supports Python-style negative indexes; 0 is the front, -1 is the back.'),
+      formatCommandHelp('hvy insert INDEX COMPONENT PARENT_PATH [ID|--id ID]', 'Insert a blank builtin or custom component to a section, component-list, grid, container, or expandable content path. Edit generated body/config files after creation. Component ids are optional; use --id only when you need a stable id. INDEX is zero-based and supports Python-style negative indexes; 0 is the front, -1 is the back.'),
       formatCommandHelp('hvy insert INDEX section PARENT_PATH ID TITLE', 'Add a section under /body or under another section.'),
-      formatCommandHelp('hvy insert INDEX text SECTION_PATH ID TEXT', 'Insert a text block into a section.'),
-      formatCommandHelp('hvy insert INDEX table SECTION_PATH ID COLUMNS [--row CSV]...', 'Insert a static table block. Columns and rows use comma-separated text.'),
-      formatCommandHelp('hvy insert INDEX plugin SECTION_PATH ID PLUGIN_ID [--config JSON] [--body TEXT]', 'Insert a raw plugin block by canonical plugin id, such as dev.heavy.form or dev.heavy.db-table.'),
+      formatCommandHelp('hvy insert INDEX text PARENT_PATH [ID|--id ID]', 'Insert a blank text block.'),
+      formatCommandHelp('hvy insert INDEX table PARENT_PATH [ID|--id ID]', 'Insert a blank static table block.'),
+      formatCommandHelp('hvy insert INDEX plugin SECTION_PATH ID PLUGIN_ID', 'Insert a blank raw plugin block by canonical plugin id, such as dev.heavy.form or dev.heavy.db-table.'),
       '',
       'Examples:',
       '  hvy insert 0 section /body a-section "A Section"',
-      '  hvy insert 0 /a-section/text-0 . intro "Visible text"',
+      '  cd /a-section',
+      '  hvy insert 0 text . intro',
       '  hvy insert -1 container . a-container',
       '  hvy insert 0 container a-container nested-container',
-      '  hvy insert -1 component-list . a-list --config \'{"componentListComponent":"text"}\'',
+      '  hvy insert -1 component-list . a-list',
       '  hvy insert -1 grid . a-grid',
-      '  hvy insert -2 table . a-table "Name,Status" --row "Example,Active"',
+      '  hvy insert -2 table . a-table',
     ].join('\n'),
     component: [
-      formatCommandHelp('hvy insert INDEX COMPONENT PARENT_PATH [TEXT] [--id ID] [--config JSON]', 'Insert a builtin or custom component to a section, component-list, grid, container, or expandable content path. Component ids are optional; use --id only when you need a stable id. INDEX is zero-based and supports Python-style negative indexes; 0 is the front, -1 is the back.'),
+      formatCommandHelp('hvy insert INDEX COMPONENT PARENT_PATH [ID|--id ID]', 'Insert a blank builtin or custom component to a section, component-list, grid, container, or expandable content path. Edit generated body/config files after creation. Component ids are optional; use --id only when you need a stable id. INDEX is zero-based and supports Python-style negative indexes; 0 is the front, -1 is the back.'),
     ].join('\n'),
     section: formatCommandHelp('hvy insert INDEX section PARENT_PATH ID TITLE', 'Add a section under /body or under another section. INDEX is zero-based and supports Python-style negative indexes; 0 is the front, -1 is the back.'),
-    text: formatCommandHelp('hvy insert INDEX text SECTION_PATH ID TEXT', 'Insert a text block into a section. INDEX is zero-based and supports Python-style negative indexes; 0 is the front, -1 is the back.'),
-    table: formatCommandHelp('hvy insert INDEX table SECTION_PATH ID COLUMNS [--row CSV]...', 'Insert a static table block. Columns and rows use comma-separated text. INDEX is zero-based and supports Python-style negative indexes; 0 is the front, -1 is the back.'),
+    text: formatCommandHelp('hvy insert INDEX text PARENT_PATH [ID|--id ID]', 'Insert a blank text block. Edit text.txt after creation. INDEX is zero-based and supports Python-style negative indexes; 0 is the front, -1 is the back.'),
+    table: formatCommandHelp('hvy insert INDEX table PARENT_PATH [ID|--id ID]', 'Insert a blank static table block. Edit tableColumns.json and tableRows.json after creation. INDEX is zero-based and supports Python-style negative indexes; 0 is the front, -1 is the back.'),
     request_structure: formatCommandHelp('hvy request_structure [COMPONENT_ID] [--collapse] [--describe]', 'Show the component directory map, optionally scoped to one component id. --collapse compacts anonymous leaf components. --describe includes non-empty descriptions.'),
     'find-intent': formatCommandHelp('hvy find-intent QUERY [--max N] [--json]', 'Search semantic section/component descriptions, ids, paths, roles, and previews for likely edit locations.'),
     cheatsheet: [
@@ -147,7 +146,7 @@ export function hvyDocumentCommandHelp(topic = ''): string {
     plugin: [
       ...formatPluginQuickReference(),
       ...getHvyCliPluginCommandRegistrations().map((plugin) => formatCommandHelp(plugin.helpTopic, `Show ${plugin.name} plugin commands.`)),
-      formatCommandHelp('hvy insert INDEX plugin SECTION_PATH ID PLUGIN_ID [--config JSON] [--body TEXT]', 'Create a raw plugin block by canonical plugin id, such as dev.heavy.form or dev.heavy.db-table. INDEX is zero-based and supports Python-style negative indexes; 0 is the front, -1 is the back.'),
+      formatCommandHelp('hvy insert INDEX plugin SECTION_PATH ID PLUGIN_ID', 'Create a blank raw plugin block by canonical plugin id, such as dev.heavy.form or dev.heavy.db-table. INDEX is zero-based and supports Python-style negative indexes; 0 is the front, -1 is the back.'),
     ].join('\n'),
     form: hvyDocumentCommandHelp('plugin form'),
     'db-table': hvyDocumentCommandHelp('plugin db-table'),
@@ -325,13 +324,10 @@ function executeHvyInsertCommand(ctx: HvyDocumentCommandContext, indexArg = '', 
     return addSection(ctx, args, index);
   }
   if (kind === 'text') {
-    if (args.includes('--id') || args.includes('--name')) {
-      return addComponentShortcut(ctx, kind, args, index);
-    }
-    return addTextBlock(ctx, args, index);
+    return addComponentShortcut(ctx, kind, args, index);
   }
   if (kind === 'table') {
-    return addTableBlock(ctx, args, index);
+    return addComponentShortcut(ctx, kind, args, index);
   }
   if (kind === 'plugin') {
     const [pluginKind = '', ...rest] = args;
@@ -375,39 +371,33 @@ function addSection(ctx: HvyDocumentCommandContext, args: string[], index: HvyIn
   return { output: path, mutated: true, cwd: path };
 }
 
-function addTextBlock(ctx: HvyDocumentCommandContext, args: string[], index: HvyInsertIndex = -1): HvyDocumentCommandResult {
-  const [sectionPath = '', id = '', text = ''] = args;
-  const section = requireSection(ctx, sectionPath, 'hvy insert text');
-  insertChild(section.blocks, createBlock('text', id, decodeCliText(text)), index);
-  const path = `${resolveVirtualPath(ctx.fs, ctx.cwd, sectionPath).replace(/\/$/, '')}/${id}`;
-  return { output: formatCreatedComponentDirectory(ctx.document, path, resolveVirtualPath(ctx.fs, ctx.cwd, sectionPath), null, 'blocks'), mutated: true, cwd: path };
-}
-
-function addTableBlock(ctx: HvyDocumentCommandContext, args: string[], index: HvyInsertIndex = -1): HvyDocumentCommandResult {
-  const [sectionPath = '', id = '', columns = '', ...rest] = args;
-  const section = requireSection(ctx, sectionPath, 'hvy insert table');
-  const rows = readRepeatedOption(rest, '--row').map((row) => ({ cells: splitCsvText(decodeCliText(row)) }));
-  const schema = createSchema('table', id);
-  schema.tableColumns = decodeCliText(columns);
-  schema.tableRows = rows;
-  insertChild(section.blocks, createBlockFromSchema(schema, ''), index);
-  const path = `${resolveVirtualPath(ctx.fs, ctx.cwd, sectionPath).replace(/\/$/, '')}/${id}`;
-  return { output: formatCreatedComponentDirectory(ctx.document, path, resolveVirtualPath(ctx.fs, ctx.cwd, sectionPath), null, 'blocks'), mutated: true, cwd: path };
-}
-
 function addComponentShortcut(ctx: HvyDocumentCommandContext, component: string, args: string[], index: HvyInsertIndex = -1): HvyDocumentCommandResult {
   const [parentPath = '', ...rest] = args;
-  const explicitId = readOption(rest, '--id') ?? readOption(rest, '--name') ?? '';
+  if (readOption(rest, '--config') !== null) {
+    throw new Error(`hvy insert ${component}: creation does not accept --config; create the component, inspect it, then edit the generated *.json files.`);
+  }
+  if (rest.includes('--name')) {
+    throw new Error(`hvy insert ${component}: use --id ID, not --name.`);
+  }
+  const unsupportedOption = rest.find((arg) => isOptionArg(arg) && arg !== '--id');
+  if (unsupportedOption) {
+    throw new Error(`hvy insert ${component}: unsupported option ${unsupportedOption}; create it blank, then edit generated body/config files.`);
+  }
+  if (rest.includes('--id') && !readOption(rest, '--id')) {
+    throw new Error(`hvy insert ${component}: --id requires a value.`);
+  }
+  const explicitId = readOption(rest, '--id') ?? '';
   const positionals = rest.filter((arg, index) => !isOptionArg(arg) && !isOptionValue(rest, index));
-  const positionalId = !explicitId && looksLikeCliComponentId(positionals[0] ?? '') ? positionals[0] ?? '' : '';
-  const text = (positionalId ? positionals[1] : positionals[0]) ?? '';
-  const config = readOption(rest, '--config');
+  if (explicitId && positionals.length > 0) {
+    throw new Error(`hvy insert ${component}: creation accepts either positional ID or --id ID, not both.`);
+  }
+  if (positionals.length > 1) {
+    throw new Error(`hvy insert ${component}: creation does not accept inline content; create it blank, then edit generated body/config files.`);
+  }
   return addComponentToPath(ctx, {
     parentPath,
-    id: explicitId || positionalId,
+    id: explicitId || positionals[0] || '',
     component,
-    text,
-    config: config ? parseJsonObject(config, 'hvy insert COMPONENT --config') : {},
     commandName: `hvy insert ${index} ${component}`,
     index,
   });
@@ -417,20 +407,18 @@ function addComponentToPath(ctx: HvyDocumentCommandContext, params: {
   parentPath: string;
   id: string;
   component: string;
-  text: string;
-  config: JsonObject;
   commandName: string;
   index?: HvyInsertIndex;
 }): HvyDocumentCommandResult {
   if (!params.parentPath || !params.component) {
-    throw new Error(`${params.commandName}: expected PARENT_PATH [TEXT] [--id ID]`);
+    throw new Error(`${params.commandName}: expected PARENT_PATH [ID|--id ID]`);
   }
   if (!isKnownComponent(ctx.document, params.component)) {
     throw new Error(`${params.commandName}: unknown component "${params.component}"`);
   }
   const resolvedParentPath = resolveVirtualPath(ctx.fs, ctx.cwd, params.parentPath);
   const id = params.id || generateStableCliComponentId(ctx.fs, resolvedParentPath, params.component);
-  const block = createCliComponentBlock(ctx.document, params.component, id, decodeCliText(params.text), params.config);
+  const block = createCliComponentBlock(ctx.document, params.component, id);
   const parentBlock = findBlockForVirtualDirectory(ctx.document, resolvedParentPath);
   const target = findBlockInsertionTargetForVirtualDirectory(ctx.document, resolvedParentPath)
     ?? findDirectBlockInsertionTarget(ctx, resolvedParentPath);
@@ -440,10 +428,6 @@ function addComponentToPath(ctx: HvyDocumentCommandContext, params: {
   target.insert(block, params.index ?? -1);
   const path = `${resolvedParentPath.replace(/\/$/, '')}/${id}`;
   return { output: formatCreatedComponentDirectory(ctx.document, path, resolvedParentPath, parentBlock, target.kind), mutated: true, cwd: path };
-}
-
-function looksLikeCliComponentId(value: string): boolean {
-  return /^[a-z0-9]+(?:-[a-z0-9]+)+$/i.test(value);
 }
 
 function generateStableCliComponentId(fs: HvyVirtualFileSystem, resolvedParentPath: string, component: string): string {
@@ -596,34 +580,28 @@ function formatCreatedComplexComponentGuide(document: VisualDocument, fs: HvyVir
 
 function addPluginBlock(ctx: HvyDocumentCommandContext, args: string[], index: HvyInsertIndex = -1): HvyDocumentCommandResult {
   const [sectionPath = '', id = '', plugin = '', ...rest] = args;
-  if (plugin === 'form' && rest.some((arg, index) => !isOptionArg(arg) && !isOptionValue(rest, index))) {
-    return addFormPluginBlock(ctx, [sectionPath, id, ...rest], index);
-  }
   const section = requireSection(ctx, sectionPath, 'hvy plugin add');
   if (!plugin) {
     throw new Error('hvy plugin add: expected SECTION_PATH ID PLUGIN_ID');
+  }
+  if (rest.length > 0) {
+    throw new Error('hvy plugin add: creation does not accept inline config or body; create it blank, then edit plugin.json and plugin.txt.');
   }
   const aliasError = formatRawPluginAliasError(plugin);
   if (aliasError) {
     throw new Error(aliasError);
   }
-  const config = readOption(rest, '--config');
-  insertChild(section.blocks, createPluginBlock(
-    id,
-    plugin,
-    config ? parseJsonObject(config, 'hvy plugin add --config') : {},
-    decodeCliText(readOption(rest, '--body') ?? '')
-  ), index);
+  insertChild(section.blocks, createPluginBlock(id, plugin, {}, ''), index);
   const path = `${resolveVirtualPath(ctx.fs, ctx.cwd, sectionPath).replace(/\/$/, '')}/${id}`;
   return { output: formatCreatedComponentDirectory(ctx.document, path, resolveVirtualPath(ctx.fs, ctx.cwd, sectionPath), null, 'blocks'), mutated: true, cwd: path };
 }
 
 function formatRawPluginAliasError(plugin: string): string {
   if (plugin === 'form') {
-    return 'hvy plugin add: "form" is a CLI command alias, not a stored plugin id. Use "hvy insert INDEX plugin form SECTION_PATH ID SUBMIT_BUTTON_LABEL FIELD_LABEL:TYPE..." or plugin id "dev.heavy.form".';
+    return 'hvy plugin add: "form" is a CLI command alias, not a stored plugin id. Use "hvy insert INDEX plugin form SECTION_PATH ID" or plugin id "dev.heavy.form".';
   }
   if (plugin === 'db-table') {
-    return 'hvy plugin add: "db-table" is a CLI command alias, not a stored plugin id. Use "hvy insert INDEX plugin db-table SECTION_PATH ID TABLE [QUERY]" or plugin id "dev.heavy.db-table".';
+    return 'hvy plugin add: "db-table" is a CLI command alias, not a stored plugin id. Use "hvy insert INDEX plugin db-table SECTION_PATH ID" or plugin id "dev.heavy.db-table".';
   }
   if (plugin === 'scripting') {
     return 'hvy plugin add: "scripting" is a CLI command alias, not a stored plugin id. Use plugin id "dev.heavy.scripting".';
@@ -632,38 +610,34 @@ function formatRawPluginAliasError(plugin: string): string {
 }
 
 function addFormPluginBlock(ctx: HvyDocumentCommandContext, args: string[], index: HvyInsertIndex = -1): HvyDocumentCommandResult {
-  const [sectionPath = '', id = '', submitLabel = '', ...rest] = args;
+  const [sectionPath = '', id = '', ...rest] = args;
   const section = requireSection(ctx, sectionPath, 'hvy insert plugin form');
-  const fieldSpecs = rest.filter((arg, index) => !isOptionArg(arg) && !isOptionValue(rest, index));
-  if (!id || !submitLabel || fieldSpecs.length === 0) {
-    throw new Error('hvy insert plugin form: expected SECTION_PATH ID SUBMIT_BUTTON_LABEL FIELD...');
+  if (!id) {
+    throw new Error('hvy insert plugin form: expected SECTION_PATH ID');
   }
-  const scripts = Object.fromEntries(readRepeatedOptionPairs(rest, '--script').map(([name, source]) => [name, decodeCliText(source)]));
-  const initialScript = readOption(rest, '--initial-script');
-  const submitScript = readOption(rest, '--on-submit-script') ?? readOption(rest, '--submit');
-  const body = stringifyYaml({
-    fields: fieldSpecs.map(parseFormFieldSpec),
-    ...(Object.keys(scripts).length > 0 ? { scripts } : {}),
-  }).trimEnd();
+  if (rest.length > 0) {
+    throw new Error('hvy insert plugin form: creation does not accept fields, scripts, or submit settings; create it blank, then edit plugin.txt and plugin.json.');
+  }
   insertChild(section.blocks, createPluginBlock(id, FORM_PLUGIN_ID, {
     version: '0.1',
-    submitLabel: decodeCliText(submitLabel),
-    ...(initialScript ? { initialScript } : {}),
-    ...(submitScript ? { submitScript } : {}),
-  }, body), index);
+    showSubmit: false,
+  }, 'fields: []'), index);
   const path = `${resolveVirtualPath(ctx.fs, ctx.cwd, sectionPath).replace(/\/$/, '')}/${id}`;
   return { output: formatCreatedComponentDirectory(ctx.document, path, resolveVirtualPath(ctx.fs, ctx.cwd, sectionPath), null, 'blocks'), mutated: true, cwd: path };
 }
 
 function addDbTablePluginBlock(ctx: HvyDocumentCommandContext, args: string[], index: HvyInsertIndex = -1): HvyDocumentCommandResult {
-  const [sectionPath = '', id = '', table = '', query = ''] = args;
+  const [sectionPath = '', id = '', ...rest] = args;
   const section = requireSection(ctx, sectionPath, 'hvy insert plugin db-table');
-  if (!id || !table) {
-    throw new Error('hvy insert plugin db-table: expected SECTION_PATH ID TABLE [QUERY]');
+  if (!id) {
+    throw new Error('hvy insert plugin db-table: expected SECTION_PATH ID');
+  }
+  if (rest.length > 0) {
+    throw new Error('hvy insert plugin db-table: creation does not accept table or query inline; create it blank, then edit plugin.json and plugin.txt.');
   }
   insertChild(
     section.blocks,
-    createPluginBlock(id, DB_TABLE_PLUGIN_ID, { source: 'with-file', table: decodeCliText(table), queryLimit: 10 }, decodeCliText(query)),
+    createPluginBlock(id, DB_TABLE_PLUGIN_ID, { source: 'with-file', table: '', queryLimit: 10 }, ''),
     index
   );
   const path = `${resolveVirtualPath(ctx.fs, ctx.cwd, sectionPath).replace(/\/$/, '')}/${id}`;
@@ -746,19 +720,13 @@ function createSection(id: string, title: string, level: number): VisualSection 
   };
 }
 
-function createBlock(component: string, id: string, text: string): VisualBlock {
-  return createBlockFromSchema(createSchema(component, id), text);
-}
-
-function createCliComponentBlock(document: VisualDocument, component: string, id: string, text: string, config: JsonObject): VisualBlock {
+function createCliComponentBlock(document: VisualDocument, component: string, id: string): VisualBlock {
   const definition = getComponentDefsFromMeta(document.meta).find((item) => item.name === component);
   const block = definition?.template
     ? cloneCliVisualBlock(definition.template)
     : createBlockFromSchema(createCliComponentSchema(document, component), '');
   block.schema.component = component;
   block.schema.id = id;
-  applyCliBlockConfig(block.schema, config);
-  applyCliComponentText(block, text, document.meta);
   return block;
 }
 
@@ -838,43 +806,6 @@ function createSchema(component: string, id: string): BlockSchema {
   };
 }
 
-function applyCliComponentText(block: VisualBlock, text: string, meta: Record<string, unknown>): void {
-  if (!text) {
-    return;
-  }
-  const baseComponent = resolveBaseComponentFromMeta(block.schema.component, meta);
-  if (baseComponent === 'expandable') {
-    const firstStub = block.schema.expandableStubBlocks.children[0];
-    if (firstStub) {
-      firstStub.text = text;
-      return;
-    }
-    block.schema.expandableStub = text;
-    return;
-  }
-  if (baseComponent === 'xref-card') {
-    block.schema.xrefTitle = text;
-    return;
-  }
-  block.text = text;
-}
-
-function applyCliBlockConfig(schema: BlockSchema, config: JsonObject): void {
-  for (const [key, value] of Object.entries(config)) {
-    if (key === 'css' && typeof value === 'string') {
-      schema.css = value;
-      continue;
-    }
-    if (key === 'lock' && typeof value === 'boolean') {
-      schema.lock = value;
-      continue;
-    }
-    if (key in schema) {
-      (schema as unknown as Record<string, unknown>)[key] = value;
-    }
-  }
-}
-
 function isKnownComponent(document: VisualDocument, component: string): boolean {
   return isBuiltinComponentName(component) || getComponentDefsFromMeta(document.meta).some((item) => item.name === component);
 }
@@ -882,14 +813,6 @@ function isKnownComponent(document: VisualDocument, component: string): boolean 
 function readOption(args: string[], option: string): string | null {
   const index = args.indexOf(option);
   return index >= 0 ? args[index + 1] ?? '' : null;
-}
-
-function readRepeatedOption(args: string[], option: string): string[] {
-  return args.flatMap((arg, index) => (arg === option ? [args[index + 1] ?? ''] : []));
-}
-
-function readRepeatedOptionPairs(args: string[], option: string): Array<[string, string]> {
-  return args.flatMap((arg, index) => (arg === option ? [[args[index + 1] ?? '', args[index + 2] ?? ''] as [string, string]] : []));
 }
 
 function isOptionArg(value: string): boolean {
@@ -902,43 +825,4 @@ function isOptionValue(args: string[], index: number): boolean {
 
 function decodeCliText(value: string): string {
   return value.replace(/\\n/g, '\n').replace(/\\t/g, '\t').replace(/\\"/g, '"').replace(/\\\\/g, '\\');
-}
-
-function splitCsvText(value: string): string[] {
-  return value.split(',').map((cell) => cell.trim());
-}
-
-function parseFormFieldSpec(spec: string): JsonObject {
-  const [label = '', type = 'text', ...rest] = decodeCliText(spec).split(':');
-  const field: JsonObject = {
-    label: humanizeFormFieldLabel(label),
-    type: type || 'text',
-  };
-  if (rest.includes('required')) {
-    field.required = true;
-  }
-  const optionPart = rest.find((part) => part.includes('|'));
-  if (optionPart) {
-    field.options = optionPart.split('|').map((option) => option.trim()).filter((option) => option.length > 0);
-  }
-  return field;
-}
-
-function humanizeFormFieldLabel(label: string): string {
-  const trimmed = label.trim();
-  if (!trimmed) {
-    return 'Field';
-  }
-  return trimmed
-    .replace(/[-_]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .replace(/^./, (match) => match.toUpperCase());
-}
-
-function parseJsonObject(content: string, label: string): JsonObject {
-  const parsed = JSON.parse(content) as unknown;
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    throw new Error(`${label} must be a JSON object.`);
-  }
-  return parsed as JsonObject;
 }

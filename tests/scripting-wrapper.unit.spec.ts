@@ -279,8 +279,8 @@ test('createScriptingRuntime exposes synchronous hvy cli commands', () => {
   const runtime = createScriptingRuntime({ document });
 
   expect(runtime.doc.cli.run('hvy insert 0 section / notes "Notes"')).toBe('/body/notes');
-  expect(runtime.doc.cli.run('hvy insert 0 text /notes intro "Hello from CLI"')).toContain('/body/notes/intro: created');
-  expect(runtime.doc.cli.run('cat /notes/intro/text.txt')).toBe('Hello from CLI');
+  expect(runtime.doc.cli.run('hvy insert 0 text /notes intro')).toContain('/body/notes/intro: created');
+  expect(runtime.doc.cli.run('cat /notes/intro/text.txt')).toBe('');
   expect(runtime.stats.toolCalls).toBe(3);
 });
 

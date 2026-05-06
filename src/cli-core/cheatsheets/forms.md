@@ -3,8 +3,10 @@
 Create a form:
 
 ```shell
-hvy insert 0 plugin form /a-section add-item "Add item" "Title:text:required" "Description:textarea"
+hvy insert 0 plugin form /a-section add-item
 ```
+
+Then edit `add-item/plugin.txt` for fields/scripts and `add-item/plugin.json` for submit settings.
 
 Field format:
 
@@ -24,15 +26,17 @@ datetime
 Create a form with submit logic:
 
 ```shell
-hvy insert 0 plugin form /a-section complete-item "Complete item" "Item:text:required" "Completed by:select:required:Person A|Person B|Person C" --script submit "item = doc.form.get_value('Item')\nperson = doc.form.get_value('Completed by')\ndoc.db.execute('INSERT INTO completions (item_id, completed_by, completed_at) VALUES (?, ?, datetime(''now''))', [item, person])" --on-submit-script submit
+hvy insert 0 plugin form /a-section complete-item
+echo '{"id":"complete-item","plugin":"dev.heavy.form","pluginConfig":{"version":"0.1","submitLabel":"Complete item","showSubmit":true,"submitScript":"submit"}}' > /body/a-section/complete-item/plugin.json
 ```
 
-Use `--script NAME PYTHON` to store a named script. Use `--on-submit-script NAME` to run it when the submit button is pressed.
+Store fields and named scripts in `plugin.txt`. Use `pluginConfig.submitScript` in `plugin.json` to run a named script when the submit button is pressed.
 
 Populate a select from the current SQL backend when the form renders:
 
 ```shell
-hvy insert 0 plugin form /a-section choose-item "Choose item" "Item:select:required" "Assigned to:select:required:Person A|Person B|Person C" --script load "rows = doc.db.query('SELECT id, title FROM items ORDER BY id')\ndoc.form.set_options('Item', [{'label': row['title'], 'value': str(row['id'])} for row in rows])" --initial-script load
+hvy insert 0 plugin form /a-section choose-item
+echo '{"id":"choose-item","plugin":"dev.heavy.form","pluginConfig":{"version":"0.1","submitLabel":"Choose item","showSubmit":true,"initialScript":"load","submitScript":"submit"}}' > /body/a-section/choose-item/plugin.json
 ```
 
 There is no `optionsQuery` YAML key. Dynamic select/radio options are set from scripts with `doc.form.set_options(label, options)`.

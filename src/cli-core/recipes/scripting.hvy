@@ -5,7 +5,8 @@ Use this recipe when a document needs load-time automation or when a form submit
 
 ```shell
 hvy insert 0 section / a-section "A Section"
-hvy insert 0 plugin /a-section summarize dev.heavy.scripting --config "{\"version\":\"0.1\"}" --body "summary = doc.tool('request_structure', {})\ndoc.header.set('script_summary', summary[:200])"
+hvy insert 0 plugin /a-section summarize dev.heavy.scripting
+echo "summary = doc.tool('request_structure', {})\ndoc.header.set('script_summary', summary[:200])" > /body/a-section/summarize/script.py
 hvy preview /a-section/summarize
 hvy lint
 ```
@@ -13,7 +14,8 @@ hvy lint
 The same scripting block could use the virtual CLI directly:
 
 ```shell
-hvy insert 0 plugin /a-section cli-example dev.heavy.scripting --config "{\"version\":\"0.1\"}" --body "out = doc.cli.run('hvy request_structure --collapse')\ndoc.header.set('cli_structure_preview', out[:200])"
+hvy insert 0 plugin /a-section cli-example dev.heavy.scripting
+echo "out = doc.cli.run('hvy request_structure --collapse')\ndoc.header.set('cli_structure_preview', out[:200])" > /body/a-section/cli-example/script.py
 ```
 
 For forms, store the script on the form and set it as the submit handler:
@@ -21,8 +23,11 @@ For forms, store the script on the form and set it as the submit handler:
 ```shell
 hvy insert 0 section / another-section "Another Section"
 hvy plugin db-table exec "CREATE TABLE items (id INTEGER PRIMARY KEY, title TEXT NOT NULL)"
-hvy insert 0 plugin form /another-section add-item "Add item" "Title:text:required" --script submit "title = doc.form.get_value('Title')\ndoc.db.execute('INSERT INTO items (title) VALUES (?)', [title])" --on-submit-script submit
-hvy insert -1 plugin db-table /another-section items-table items "SELECT id, title FROM items ORDER BY id DESC"
+hvy insert 0 plugin form /another-section add-item
+echo '{"id":"add-item","plugin":"dev.heavy.form","pluginConfig":{"version":"0.1","submitLabel":"Add item","showSubmit":true,"submitScript":"submit"}}' > /body/another-section/add-item/plugin.json
+hvy insert -1 plugin db-table /another-section items-table
+echo '{"id":"items-table","plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"items","queryLimit":10}}' > /body/another-section/items-table/plugin.json
+echo 'SELECT id, title FROM items ORDER BY id DESC' > /body/another-section/items-table/plugin.txt
 hvy lint
 ```
 

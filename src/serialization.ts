@@ -758,7 +758,7 @@ const BLOCK_ARRAY_KEYS = ['containerBlocks', 'componentListBlocks'];
 const EXPANDABLE_PART_KEYS = ['expandableStubBlocks', 'expandableContentBlocks'];
 
 // Serialize a component def to clean YAML format:
-// - strips `component` from schema (redundant with `baseType`)
+// - strips `component` from the root schema (redundant with `baseType`)
 // - strips `template` (runtime-only)
 // - uses { component: name } shorthand for custom component blocks in nested lists
 function serializeComponentDef(raw: JsonObject): JsonObject {
@@ -767,7 +767,7 @@ function serializeComponentDef(raw: JsonObject): JsonObject {
     if (key === 'template') continue; // runtime-only; derived from schema
     if (key === 'schema') {
       if (value && typeof value === 'object') {
-        result.schema = cleanComponentDefSchema(value as JsonObject);
+        result.schema = cleanComponentDefSchema(value as JsonObject, true);
       }
     } else {
       result[key] = value;
@@ -776,10 +776,10 @@ function serializeComponentDef(raw: JsonObject): JsonObject {
   return result;
 }
 
-function cleanComponentDefSchema(schema: JsonObject): JsonObject {
+function cleanComponentDefSchema(schema: JsonObject, stripRootComponent = false): JsonObject {
   const result: JsonObject = {};
   for (const [key, value] of Object.entries(schema)) {
-    if (key === 'component') continue; // redundant with baseType
+    if (key === 'component' && stripRootComponent) continue; // redundant with baseType only on the reusable root
     if (key === 'schemaMode') continue; // editor state
     if (key === 'id' && (value === '' || value === null || value === undefined)) continue;
     if (BLOCK_ARRAY_KEYS.includes(key) && Array.isArray(value)) {
@@ -827,7 +827,7 @@ function cleanComponentDefBlock(block: JsonObject): JsonObject {
   const result: JsonObject = {};
   if (typeof block.text === 'string') result.text = block.text;
   if (block.schema && typeof block.schema === 'object') {
-    result.schema = cleanComponentDefSchema(block.schema as JsonObject);
+    result.schema = cleanComponentDefSchema(block.schema as JsonObject, false);
   }
   return result;
 }

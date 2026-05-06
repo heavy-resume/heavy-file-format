@@ -9,7 +9,9 @@ There is no `optionsQuery` YAML key. Store a named initial script in `plugin.txt
 hvy plugin db-table exec "CREATE TABLE items (id INTEGER PRIMARY KEY, title TEXT NOT NULL, completed_at TEXT)"
 hvy plugin db-table exec "INSERT INTO items (title) VALUES ('First item')"
 hvy insert 0 section / a-section "A Section"
-hvy insert 0 plugin form /a-section choose-item "Choose item" "Item:select:required" --script load "rows = doc.db.query('SELECT id, title FROM items WHERE completed_at IS NULL ORDER BY id')\noptions = [{'label': str(row['id']) + ': ' + row['title'], 'value': str(row['id'])} for row in rows]\ndoc.form.set_options('Item', options)" --initial-script load --script submit "item_id = doc.form.get_value('Item')\ndoc.db.execute('UPDATE items SET completed_at = datetime(''now'') WHERE id = ?', [item_id])" --on-submit-script submit
+hvy insert 0 plugin form /a-section choose-item
+echo '{"id":"choose-item","plugin":"dev.heavy.form","pluginConfig":{"version":"0.1","submitLabel":"Choose item","showSubmit":true,"initialScript":"load","submitScript":"submit"}}' > /body/a-section/choose-item/plugin.json
+echo 'fields:\n  - label: Item\n    type: select\n    required: true\nscripts:\n  load: |\n    rows = doc.db.query("SELECT id, title FROM items WHERE completed_at IS NULL ORDER BY id")\n    options = [{"label": str(row["id"]) + ": " + row["title"], "value": str(row["id"])} for row in rows]\n    doc.form.set_options("Item", options)\n  submit: |\n    item_id = doc.form.get_value("Item")\n    doc.db.execute("UPDATE items SET completed_at = datetime('"'"'now'"'"') WHERE id = ?", [item_id])' > /body/a-section/choose-item/plugin.txt
 hvy lint
 ```
 

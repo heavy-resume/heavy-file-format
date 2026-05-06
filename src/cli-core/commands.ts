@@ -1616,8 +1616,15 @@ function commandEcho(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cw
   if (args.slice(redirectIndex + 2).length > 0) {
     throw new Error('echo: expected redirection at the end of the command');
   }
-  const text = `${args.slice(0, redirectIndex).join(' ')}\n`;
+  const text = `${decodeEchoEscapes(args.slice(0, redirectIndex).join(' '))}\n`;
   return writeVirtualFile(ctx, path, text, operator === '>>', 'echo');
+}
+
+function decodeEchoEscapes(value: string): string {
+  return value
+    .replaceAll('\\n', '\n')
+    .replaceAll('\\t', '\t')
+    .replaceAll('\\\\', '\\');
 }
 
 function writeVirtualFile(
@@ -2428,7 +2435,7 @@ async function runMiniShellApplication(ctx: HvyCliCommandContext, commandArgs: s
     const writeResult = writeVirtualFile(
       { fs: ctx.fs, cwd: result.cwd },
       redirect.targetPath,
-      command === 'echo' ? `${result.output}\n` : result.output,
+      command === 'echo' ? `${decodeEchoEscapes(result.output)}\n` : result.output,
       redirect.append,
       command
     );

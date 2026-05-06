@@ -28,8 +28,12 @@ Use `hvy plugin db-table tables` and `hvy plugin db-table schema` to inspect the
 Display rows in the document:
 
 ```shell
-hvy insert 0 plugin db-table /a-section active-items items "SELECT title, assigned_to FROM items WHERE completed_at IS NULL"
-hvy insert -1 plugin db-table /a-section weekly-leaders weekly_item_leaders "SELECT assigned_to, completed_count FROM weekly_item_leaders"
+hvy insert 0 plugin db-table /a-section active-items
+echo '{"id":"active-items","plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"items","queryLimit":10}}' > /body/a-section/active-items/plugin.json
+echo 'SELECT title, assigned_to FROM items WHERE completed_at IS NULL' > /body/a-section/active-items/plugin.txt
+hvy insert -1 plugin db-table /a-section weekly-leaders
+echo '{"id":"weekly-leaders","plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"weekly_item_leaders","queryLimit":10}}' > /body/a-section/weekly-leaders/plugin.json
+echo 'SELECT assigned_to, completed_count FROM weekly_item_leaders' > /body/a-section/weekly-leaders/plugin.txt
 ```
 
 Fix an existing DB Table component:

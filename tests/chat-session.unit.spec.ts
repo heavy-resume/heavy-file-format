@@ -238,7 +238,7 @@ test('requestDocumentEditChatTurn runs the CLI edit loop for document chat', asy
       params.onTokenUsage?.({ inputTokens: 100, outputTokens: 10 });
       return 'hvy insert 0 section /body chores "Chores"';
     })
-    .mockResolvedValueOnce('```shell\nhvy insert 0 text /body/chores note "Weekly chore plan"\n```')
+    .mockResolvedValueOnce('```shell\nhvy insert 0 text /body/chores note\necho "Weekly chore plan" > /body/chores/note/text.txt\n```')
     .mockResolvedValueOnce('done Created the chore section.');
   const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
   const document = deserializeDocument('---\nhvy_version: 0.1\n---\n', '.hvy');
@@ -259,13 +259,15 @@ test('requestDocumentEditChatTurn runs the CLI edit loop for document chat', asy
   expect(onMutation).toHaveBeenCalledWith('chat-cli');
   expect(onProgress.mock.calls.map((call) => call[0].content)).toEqual([
     '$ hvy insert 0 section /body chores "Chores"',
-    '$ hvy insert 0 text /body/chores note "Weekly chore plan"',
+    '$ [1/2] hvy insert 0 text /body/chores note',
+    '$ [2/2] echo "Weekly chore plan" > /body/chores/note/text.txt',
   ]);
   expect(onProgress.mock.calls[0]?.[0].work?.tokenUsage).toEqual({ inputTokens: 100, outputTokens: 10 });
   expect(result.messages.at(-1)?.work?.status).toBe('done');
   expect(result.messages.at(-1)?.work?.details).toEqual([
     '$ hvy insert 0 section /body chores "Chores"',
-    '$ hvy insert 0 text /body/chores note "Weekly chore plan"',
+    '$ [1/2] hvy insert 0 text /body/chores note',
+    '$ [2/2] echo "Weekly chore plan" > /body/chores/note/text.txt',
   ]);
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]).toEqual(
     expect.objectContaining({
@@ -474,7 +476,7 @@ component_defs:
     settings,
     document,
     turnState: initial.turnState,
-    assistantOutput: 'What you are doing: adding history\nWhy you are doing it: requested\nWhat you are unsure of: nothing\n```shell\nhvy insert 0 history-record /body/history/history-list --id history-new New\n```',
+    assistantOutput: 'What you are doing: adding history\nWhy you are doing it: requested\nWhat you are unsure of: nothing\n```shell\nhvy insert 0 history-record /body/history/history-list --id history-new\n```',
   });
 
   expect(result.mutated).toBe(true);
@@ -858,7 +860,8 @@ hvy insert 0 section /body chores "Chores"
 \`\`\`
 
 \`\`\`shell
-hvy insert 0 text /body/chores note "Weekly chore plan"
+hvy insert 0 text /body/chores note
+echo "Weekly chore plan" > /body/chores/note/text.txt
 \`\`\`
 
 done Created the chore section.`)
@@ -881,8 +884,9 @@ done Created the chore section.`)
   expect(serializeDocument(document)).toContain('Weekly chore plan');
   expect(onMutation).toHaveBeenCalledWith('chat-cli');
   expect(onProgress.mock.calls.map((call) => call[0].content)).toEqual([
-    '$ [1/2] hvy insert 0 section /body chores "Chores"',
-    '$ [2/2] hvy insert 0 text /body/chores note "Weekly chore plan"',
+    '$ [1/3] hvy insert 0 section /body chores "Chores"',
+    '$ [2/3] hvy insert 0 text /body/chores note',
+    '$ [3/3] echo "Weekly chore plan" > /body/chores/note/text.txt',
   ]);
   const nextPrompt = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content ?? '';
   expect(nextPrompt).toContain('Next response: Write one concise What / Why / Unsure note block');
@@ -1148,7 +1152,7 @@ hvy_version: 0.1
 
 test('requestDocumentEditChatTurn omits optional component hints after creation commands', async () => {
   requestProxyCompletionMock
-    .mockResolvedValueOnce('hvy insert -1 text /summary --id note "Hello"')
+    .mockResolvedValueOnce('hvy insert -1 text /summary --id note')
     .mockResolvedValueOnce('done Added note.');
   const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
   const document = deserializeDocument(`---
@@ -1168,7 +1172,7 @@ hvy_version: 0.1
 
   expect(result.error).toBeNull();
   const nextPrompt = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content ?? '';
-  expect(nextPrompt).toContain('CMD: hvy insert -1 text /summary --id note "Hello"');
+  expect(nextPrompt).toContain('CMD: hvy insert -1 text /summary --id note');
   expect(nextPrompt).toContain('Current directory: /body/summary/note');
   expect(nextPrompt).toContain('### OPTIONAL CONTEXT (NOT REQUIRED ACTIONS) ###\n(none)');
   expect(nextPrompt).not.toContain('component section');
@@ -1210,7 +1214,7 @@ hvy_version: 0.1
 
 test('requestDocumentEditChatTurn keeps diagnostics introduced by your changes active until fixed', async () => {
   requestProxyCompletionMock
-    .mockResolvedValueOnce('hvy insert -1 xref-card /body/summary --id empty-ref Placeholder')
+    .mockResolvedValueOnce('hvy insert -1 xref-card /body/summary --id empty-ref')
     .mockResolvedValueOnce('ask Should I keep going?')
     .mockResolvedValueOnce('done Created the xref.')
     .mockResolvedValueOnce('echo \'{"id":"empty-ref","xrefTitle":"Summary","xrefTarget":"summary"}\' > /body/summary/empty-ref/xref-card.json')

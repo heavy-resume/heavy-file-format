@@ -455,6 +455,43 @@ hvy_version: 0.1
   expect(output).toContain('<!--hvy:component-list {"componentListComponent":"skill-record","componentListItemLabel":"skill"}-->');
 });
 
+test('reusable component definitions preserve nested builtin component types', () => {
+  const input = `---
+hvy_version: 0.1
+component_defs:
+  - name: history-record
+    baseType: expandable
+    schema:
+      component: history-record
+      expandableStubBlocks:
+        lock: false
+        children:
+          - text: ""
+            schema:
+              component: table
+              tableColumns: YEAR, ORGANIZATION, TITLE
+              tableRows:
+                - cells:
+                    - ""
+                    - ""
+                    - ""
+      expandableContentBlocks:
+        lock: false
+        children: []
+---
+
+<!--hvy: {"id":"history"}-->
+#! History
+`;
+
+  const document = deserializeDocument(input, '.hvy');
+  const output = serializeWithState(document);
+
+  expect(output).not.toContain('component: history-record');
+  expect(output).toContain('component: table');
+  expect(output).toContain('tableColumns: YEAR, ORGANIZATION, TITLE');
+});
+
 test('serializes uncontained section metadata without changing section shape on round-trip', () => {
   const input = `---
 hvy_version: 0.1

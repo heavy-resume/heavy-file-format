@@ -3,6 +3,7 @@ import {
   buildHvyVirtualFileSystem,
   findBlockForVirtualDirectory,
   findBlockInsertionTargetForVirtualDirectory,
+  findSectionForVirtualDirectory,
   listDirectory,
   resolveVirtualPath,
   type HvyVirtualEntry,
@@ -19,12 +20,17 @@ import { serializeBlockFragment } from '../serialization';
 import { formatHvyRequestStructureForDirectory } from './request-structure';
 import { cloneReusableBlock } from '../document-factory';
 import { formatHvyComponentDescriptionHistory } from './component-description-history';
+import { deserializeDocumentWithDiagnostics, serializeDocument, serializeSectionFragment } from '../serialization';
+import { parseAiBlockEditResponse } from '../ai-component-edit-common';
 
 const SCRATCHPAD_SOFT_MAX_CHARS = 600;
 const SCRATCHPAD_HARD_MAX_CHARS = 800;
 const FIND_MAX_RESULTS = 100;
 const CLI_OUTPUT_MAX_LINES = 200;
 const COMPONENT_PREVIEW_MAX_LINES = 25;
+const RAW_HVY_MAX_CHARS = 4000;
+const RAW_HVY_PREVIEW_MAX_LINES = 100;
+const RAW_HVY_PREVIEW_WRAP_WIDTH = 400;
 
 export interface HvyCliSession {
   cwd: string;
@@ -32,6 +38,9 @@ export interface HvyCliSession {
   scratchpadEdited?: boolean;
   scratchpadCommandsSinceEdit?: string[];
   scratchpadTouchedThisCommand?: boolean;
+  rawWipContent?: string;
+  rawWipContentByPath?: Record<string, string>;
+  rawSectionWipContentByPath?: Record<string, string>;
   now?: Date;
 }
 
@@ -82,7 +91,7 @@ export async function executeHvyCliCommand(document: VisualDocument, session: Hv
   const heredoc = parseCatHeredocWrite(expandedInput);
   if (heredoc) {
     const fs = buildHvyVirtualFileSystem(document);
-    addSessionScratchpadFile(fs, session);
+    addSessionFiles(fs, document, session);
     const result = writeVirtualFile({ fs, cwd: session.cwd }, heredoc.path, heredoc.content, false, 'cat');
     enforceScratchpadHardCap(session);
     updateScratchpadCommandHistory(session, expandedInput);
@@ -106,7 +115,7 @@ export async function executeHvyCliCommand(document: VisualDocument, session: Hv
     }
 
     const fs = buildHvyVirtualFileSystem(document);
-    addSessionScratchpadFile(fs, session);
+    addSessionFiles(fs, document, session);
     enforceScratchpadHardCap(session);
     lastProcess = await executeMiniShellPipeline({ document, fs, cwd: session.cwd }, pipeline.commands);
     enforceScratchpadHardCap(session);
@@ -535,20 +544,68 @@ function commandLs(ctx: HvyCliCommandContext, args: string[]): string {
 }
 
 function formatLsTargetDescription(ctx: HvyCliCommandContext, directoryPath: string): string {
+  const rawAccess = formatRawHvyDescription(ctx.fs, directoryPath);
+  if (directoryPath === '/') {
+    return rawAccess;
+  }
   const context = formatHvyComponentDescriptionHistory(ctx.document, ctx.fs, ctx.cwd, directoryPath);
   if (context) {
-    return context;
+    return [context, rawAccess].filter(Boolean).join('\n\n');
   }
   const section = readJsonFileFromVirtualPath(ctx.fs, `${directoryPath}/section.json`);
   if (section) {
-    return formatMetadataDescription('Section metadata:', section);
+    return [formatMetadataDescription('Section metadata:', section), rawAccess].filter(Boolean).join('\n\n');
   }
   const componentName = inferComponentNameForDirectory(ctx.fs, directoryPath);
   if (!componentName) {
-    return '';
+    return rawAccess;
   }
   const component = readJsonFileFromVirtualPath(ctx.fs, `${directoryPath}/${componentName}.json`);
-  return component ? formatMetadataDescription('Component metadata:', component) : '';
+  return [component ? formatMetadataDescription('Component metadata:', component) : '', rawAccess].filter(Boolean).join('\n\n');
+}
+
+function formatRawHvyDescription(fs: ReturnType<typeof buildHvyVirtualFileSystem>, directoryPath: string): string {
+  const lines: string[] = [];
+  const rawPath = directoryPath === '/' ? '/raw.hvy' : `${directoryPath}/raw.hvy`;
+  const previewPath = directoryPath === '/' ? '/raw-preview.hvy.txt' : `${directoryPath}/raw-preview.hvy.txt`;
+  const wipPath = directoryPath === '/' ? '/raw.wip.hvy' : `${directoryPath}/raw.wip.hvy`;
+  const nearestRawEditableParent = findNearestRawEditableParent(fs, directoryPath);
+  const subject = directoryPath === '/'
+    ? 'complete serialized HVY document'
+    : fs.entries.has(`${directoryPath}/section.json`)
+      ? 'serialized HVY section fragment'
+      : 'serialized HVY component fragment';
+  if (fs.entries.has(rawPath)) {
+    lines.push(`- raw.hvy [w]: ${subject}; editable because it is under 4000 characters.`);
+  }
+  if (fs.entries.has(previewPath)) {
+    lines.push(`- raw-preview.hvy.txt [ro]: first 100 prewrapped lines of ${subject}; raw.hvy is hidden because it is 4000+ characters.`);
+  }
+  if (fs.entries.has(wipPath)) {
+    lines.push('- raw.wip.hvy [w]: failed raw.hvy draft preserved after a parse error; edit or inspect it, then write corrected content to raw.hvy.');
+  }
+  if (nearestRawEditableParent) {
+    lines.push(`- nearest raw-editable parent: ${nearestRawEditableParent}`);
+  }
+  if (lines.length === 0) {
+    return '';
+  }
+  return ['Raw HVY access:', ...lines].join('\n');
+}
+
+function findNearestRawEditableParent(fs: ReturnType<typeof buildHvyVirtualFileSystem>, directoryPath: string): string {
+  let current = directoryPath;
+  while (true) {
+    const rawPath = current === '/' ? '/raw.hvy' : `${current}/raw.hvy`;
+    const entry = fs.entries.get(rawPath);
+    if (entry?.kind === 'file' && entry.write && entry.writable !== false) {
+      return rawPath;
+    }
+    if (current === '/') {
+      return '';
+    }
+    current = current.replace(/\/[^/]+$/, '') || '/';
+  }
 }
 
 function formatMetadataDescription(label: string, value: Record<string, unknown>): string {
@@ -588,6 +645,11 @@ function inferComponentNameForDirectory(fs: ReturnType<typeof buildHvyVirtualFil
   return componentJsonFiles[0]?.replace(/\.json$/i, '') ?? '';
 }
 
+function addSessionFiles(fs: ReturnType<typeof buildHvyVirtualFileSystem>, document: VisualDocument, session: HvyCliSession): void {
+  addSessionScratchpadFile(fs, session);
+  addSessionRawHvyFiles(fs, document, session);
+}
+
 function addSessionScratchpadFile(fs: ReturnType<typeof buildHvyVirtualFileSystem>, session: HvyCliSession): void {
   session.scratchpadContent ??= defaultScratchpadContent();
   session.scratchpadCommandsSinceEdit ??= [];
@@ -601,6 +663,319 @@ function addSessionScratchpadFile(fs: ReturnType<typeof buildHvyVirtualFileSyste
       session.scratchpadTouchedThisCommand = true;
     },
   });
+}
+
+function addSessionRawHvyFiles(fs: ReturnType<typeof buildHvyVirtualFileSystem>, document: VisualDocument, session: HvyCliSession): void {
+  addSessionRawDocumentFiles(fs, document, session);
+  addSessionRawSectionFiles(fs, document, session);
+  addSessionRawComponentFiles(fs, document, session);
+}
+
+function addSessionRawDocumentFiles(fs: ReturnType<typeof buildHvyVirtualFileSystem>, document: VisualDocument, session: HvyCliSession): void {
+  const serialized = serializeDocument(document);
+  if (serialized.length < RAW_HVY_MAX_CHARS) {
+    fs.entries.set('/raw.hvy', {
+      kind: 'file',
+      path: '/raw.hvy',
+      read: () => serializeDocument(document),
+      write: (content) => {
+        const result = deserializeDocumentWithDiagnostics(content, document.extension === '.md' ? '.hvy' : document.extension);
+        const errors = result.diagnostics.filter((diagnostic) => diagnostic.severity === 'error');
+        if (errors.length > 0) {
+          session.rawWipContent = content;
+          throw new Error([
+            '/raw.hvy did not parse; document was not changed.',
+            '/raw.wip.hvy now contains the failed draft so you can inspect or repair it.',
+            '',
+            ...errors.map((diagnostic) => `${diagnostic.code}: ${diagnostic.message}`),
+          ].join('\n'));
+        }
+        replaceDocumentContents(document, result.document);
+        session.rawWipContent = undefined;
+      },
+    });
+  } else {
+    fs.entries.set('/raw-preview.hvy.txt', {
+      kind: 'file',
+      path: '/raw-preview.hvy.txt',
+      read: () => formatRawHvyPreview(serialized),
+    });
+  }
+
+  if (typeof session.rawWipContent === 'string') {
+    fs.entries.set('/raw.wip.hvy', {
+      kind: 'file',
+      path: '/raw.wip.hvy',
+      read: () => session.rawWipContent ?? '',
+      write: (content) => {
+        session.rawWipContent = content;
+      },
+    });
+  }
+}
+
+function addSessionRawSectionFiles(fs: ReturnType<typeof buildHvyVirtualFileSystem>, document: VisualDocument, session: HvyCliSession): void {
+  session.rawSectionWipContentByPath ??= {};
+  for (const entry of [...fs.entries.values()]) {
+    if (entry.kind !== 'dir' || !fs.entries.has(`${entry.path}/section.json`)) {
+      continue;
+    }
+    const section = findSectionForVirtualDirectory(document, entry.path);
+    if (!section) {
+      continue;
+    }
+    addRawSectionFilesForSection(fs, document, session, entry.path, section);
+  }
+}
+
+function addRawSectionFilesForSection(
+  fs: ReturnType<typeof buildHvyVirtualFileSystem>,
+  document: VisualDocument,
+  session: HvyCliSession,
+  sectionPath: string,
+  section: VisualSection
+): void {
+  const fragment = serializeSectionFragment(section, document.meta);
+  if (fragment.length < RAW_HVY_MAX_CHARS) {
+    fs.entries.set(`${sectionPath}/raw.hvy`, {
+      kind: 'file',
+      path: `${sectionPath}/raw.hvy`,
+      read: () => serializeSectionFragment(section, document.meta),
+      write: (content) => {
+        const directiveIssue = validateRawSectionFragmentShape(content);
+        if (directiveIssue) {
+          failRawSectionWrite(session, sectionPath, content, [directiveIssue]);
+        }
+        const result = deserializeDocumentWithDiagnostics(content, document.extension === '.md' ? '.hvy' : document.extension);
+        const errors = result.diagnostics.filter((diagnostic) => diagnostic.severity === 'error');
+        if (errors.length > 0 || result.document.sections.filter((candidate) => !candidate.isGhost).length !== 1) {
+          failRawSectionWrite(
+            session,
+            sectionPath,
+            content,
+            [
+              ...errors.map((diagnostic) => `${diagnostic.code}: ${diagnostic.message}`),
+              ...(result.document.sections.filter((candidate) => !candidate.isGhost).length !== 1
+                ? ['error: raw section fragments must parse into exactly one section.']
+                : []),
+            ]
+          );
+        }
+        const [nextSection] = result.document.sections.filter((candidate) => !candidate.isGhost);
+        if (!nextSection) {
+          failRawSectionWrite(session, sectionPath, content, ['error: raw section fragments must parse into exactly one section.']);
+        }
+        replaceSectionContents(section, nextSection);
+        delete session.rawSectionWipContentByPath?.[`${sectionPath}/raw.wip.hvy`];
+      },
+    });
+  } else {
+    fs.entries.set(`${sectionPath}/raw-preview.hvy.txt`, {
+      kind: 'file',
+      path: `${sectionPath}/raw-preview.hvy.txt`,
+      read: () => formatRawHvyPreview(fragment),
+    });
+  }
+
+  const wipPath = `${sectionPath}/raw.wip.hvy`;
+  if (typeof session.rawSectionWipContentByPath?.[wipPath] === 'string') {
+    fs.entries.set(wipPath, {
+      kind: 'file',
+      path: wipPath,
+      read: () => session.rawSectionWipContentByPath?.[wipPath] ?? '',
+      write: (content) => {
+        session.rawSectionWipContentByPath ??= {};
+        session.rawSectionWipContentByPath[wipPath] = content;
+      },
+    });
+  }
+}
+
+function addSessionRawComponentFiles(fs: ReturnType<typeof buildHvyVirtualFileSystem>, document: VisualDocument, session: HvyCliSession): void {
+  session.rawWipContentByPath ??= {};
+  for (const entry of [...fs.entries.values()]) {
+    if (entry.kind !== 'dir' || entry.path === '/' || entry.path === '/body' || entry.path === '/attachments') {
+      continue;
+    }
+    const block = findBlockForVirtualDirectory(document, entry.path);
+    if (!block) {
+      continue;
+    }
+    addRawComponentFilesForBlock(fs, document, session, entry.path, block);
+  }
+}
+
+function addRawComponentFilesForBlock(
+  fs: ReturnType<typeof buildHvyVirtualFileSystem>,
+  document: VisualDocument,
+  session: HvyCliSession,
+  blockPath: string,
+  block: VisualBlock
+): void {
+  const fragment = serializeBlockFragment(block, document.meta);
+  if (fragment.length < RAW_HVY_MAX_CHARS) {
+    fs.entries.set(`${blockPath}/raw.hvy`, {
+      kind: 'file',
+      path: `${blockPath}/raw.hvy`,
+      read: () => serializeBlockFragment(block, document.meta),
+      write: (content) => {
+        const directiveIssue = validateRawComponentFragmentShape(content);
+        if (directiveIssue) {
+          failRawComponentWrite(session, blockPath, content, [directiveIssue]);
+        }
+        const parsed = parseAiBlockEditResponse(content, document.meta);
+        if (parsed.hasErrors || !parsed.block) {
+          failRawComponentWrite(
+            session,
+            blockPath,
+            content,
+            parsed.issues.map((issue) => `${issue.severity}: ${issue.message}${issue.hint ? ` ${issue.hint}` : ''}`)
+          );
+        }
+        replaceBlockContents(block, parsed.block);
+        delete session.rawWipContentByPath?.[`${blockPath}/raw.wip.hvy`];
+      },
+    });
+  } else {
+    fs.entries.set(`${blockPath}/raw-preview.hvy.txt`, {
+      kind: 'file',
+      path: `${blockPath}/raw-preview.hvy.txt`,
+      read: () => formatRawHvyPreview(fragment),
+    });
+  }
+
+  const wipPath = `${blockPath}/raw.wip.hvy`;
+  if (typeof session.rawWipContentByPath?.[wipPath] === 'string') {
+    fs.entries.set(wipPath, {
+      kind: 'file',
+      path: wipPath,
+      read: () => session.rawWipContentByPath?.[wipPath] ?? '',
+      write: (content) => {
+        session.rawWipContentByPath ??= {};
+        session.rawWipContentByPath[wipPath] = content;
+      },
+    });
+  }
+}
+
+function validateRawComponentFragmentShape(content: string): string {
+  const trimmed = content.trimStart();
+  if (!trimmed.startsWith('<!--hvy:')) {
+    return 'error: raw component fragments must start with an HVY component directive such as <!--hvy:text {}-->.';
+  }
+  const firstLine = trimmed.split(/\r?\n/, 1)[0] ?? '';
+  if (!firstLine.includes('-->')) {
+    return 'error: raw component directive comment is not closed with -->.';
+  }
+  const match = firstLine.match(/^<!--\s*hvy:([a-z][a-z0-9-]*)\s+([\s\S]*?)\s*-->\s*$/i);
+  if (!match) {
+    return 'error: raw component directive must look like <!--hvy:text {}--> with valid component name and JSON metadata.';
+  }
+  try {
+    JSON.parse(match[2] ?? '');
+  } catch {
+    return 'error: raw component directive metadata is not valid JSON.';
+  }
+  return '';
+}
+
+function validateRawSectionFragmentShape(content: string): string {
+  const trimmed = content.trimStart();
+  if (!trimmed.startsWith('<!--hvy:')) {
+    return 'error: raw section fragments must start with an HVY section directive such as <!--hvy: {"id":"section-id"}-->.';
+  }
+  const firstLine = trimmed.split(/\r?\n/, 1)[0] ?? '';
+  const match = firstLine.match(/^<!--\s*hvy:\s+([\s\S]*?)\s*-->\s*$/i);
+  if (!match) {
+    return 'error: raw section directive must look like <!--hvy: {"id":"section-id"}--> with valid JSON metadata.';
+  }
+  try {
+    JSON.parse(match[1] ?? '');
+  } catch {
+    return 'error: raw section directive metadata is not valid JSON.';
+  }
+  return '';
+}
+
+function failRawComponentWrite(session: HvyCliSession, blockPath: string, content: string, issues: string[]): never {
+  session.rawWipContentByPath ??= {};
+  session.rawWipContentByPath[`${blockPath}/raw.wip.hvy`] = content;
+  throw new Error([
+    `${blockPath}/raw.hvy did not parse; component was not changed.`,
+    `${blockPath}/raw.wip.hvy now contains the failed draft so you can inspect or repair it.`,
+    '',
+    ...issues,
+  ].join('\n'));
+}
+
+function failRawSectionWrite(session: HvyCliSession, sectionPath: string, content: string, issues: string[]): never {
+  session.rawSectionWipContentByPath ??= {};
+  session.rawSectionWipContentByPath[`${sectionPath}/raw.wip.hvy`] = content;
+  throw new Error([
+    `${sectionPath}/raw.hvy did not parse; section was not changed.`,
+    `${sectionPath}/raw.wip.hvy now contains the failed draft so you can inspect or repair it.`,
+    '',
+    ...issues,
+  ].join('\n'));
+}
+
+function replaceDocumentContents(target: VisualDocument, source: VisualDocument): void {
+  target.meta = source.meta;
+  target.extension = source.extension;
+  target.sections = source.sections;
+  target.attachments = source.attachments;
+}
+
+function replaceSectionContents(target: VisualSection, source: VisualSection): void {
+  const key = target.key;
+  target.customId = source.customId;
+  target.contained = source.contained;
+  target.lock = source.lock;
+  target.idEditorOpen = source.idEditorOpen;
+  target.isGhost = source.isGhost;
+  target.title = source.title;
+  target.level = source.level;
+  target.expanded = source.expanded;
+  target.highlight = source.highlight;
+  target.css = source.css;
+  target.tags = source.tags;
+  target.description = source.description;
+  target.location = source.location;
+  target.blocks = source.blocks;
+  target.children = source.children;
+  target.autoTail = source.autoTail;
+  target.renderAfterBlockId = source.renderAfterBlockId;
+  target.key = key;
+}
+
+function replaceBlockContents(target: VisualBlock, source: VisualBlock): void {
+  target.id = source.id;
+  target.text = source.text;
+  target.schema = source.schema;
+  target.schemaMode = source.schemaMode;
+}
+
+function formatRawHvyPreview(serialized: string): string {
+  const wrappedLines = wrapRawHvyPreviewLines(serialized).split('\n');
+  return wrappedLines.slice(0, RAW_HVY_PREVIEW_MAX_LINES).join('\n');
+}
+
+function wrapRawHvyPreviewLines(output: string): string {
+  return output
+    .split('\n')
+    .flatMap((line) => splitRawHvyPreviewLine(line, RAW_HVY_PREVIEW_WRAP_WIDTH))
+    .join('\n');
+}
+
+function splitRawHvyPreviewLine(line: string, maxWidth: number): string[] {
+  if (line.length <= maxWidth) {
+    return [line];
+  }
+  const chunks: string[] = [];
+  for (let index = 0; index < line.length; index += maxWidth) {
+    chunks.push(line.slice(index, index + maxWidth));
+  }
+  return chunks;
 }
 
 function updateScratchpadCommandHistory(session: HvyCliSession, input: string): void {
@@ -840,6 +1215,9 @@ function commandRg(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd:
   const matchingFiles = new Set<string>();
   for (const entry of [...ctx.fs.entries.values()].sort((left, right) => left.path.localeCompare(right.path))) {
     if (entry.kind !== 'file' || !(entry.path === root || entry.path.startsWith(root === '/' ? '/' : `${root}/`))) {
+      continue;
+    }
+    if (!isSearchVisibleFile(entry.path, root)) {
       continue;
     }
     if (includeRegexes.length > 0 && !includeRegexes.some((regex) => regex.test(entry.path.split('/').pop() ?? ''))) {
@@ -1856,7 +2234,9 @@ function commandGrep(ctx: HvyCliCommandContext, args: string[]): string {
       ? [entry]
       : [...ctx.fs.entries.values()]
         .filter((candidate): candidate is HvyVirtualFile =>
-          candidate.kind === 'file' && (candidate.path === root || candidate.path.startsWith(root === '/' ? '/' : `${root}/`)));
+          candidate.kind === 'file' &&
+          (candidate.path === root || candidate.path.startsWith(root === '/' ? '/' : `${root}/`)) &&
+          isSearchVisibleFile(candidate.path, root));
     for (const candidate of candidates.sort((left, right) => left.path.localeCompare(right.path))) {
       candidate.read().split('\n').forEach((line, index) => {
         const matched = regex.test(line);
@@ -1870,6 +2250,18 @@ function commandGrep(ctx: HvyCliCommandContext, args: string[]): string {
     }
   }
   return withWarnings((parsed.filesWithMatches ? [...matchingFiles] : lines).join('\n'), parsed.warnings);
+}
+
+function isSearchVisibleFile(path: string, root: string): boolean {
+  if (!isRawHvyFile(path)) {
+    return true;
+  }
+  return root === path;
+}
+
+function isRawHvyFile(path: string): boolean {
+  const filename = path.split('/').pop() ?? '';
+  return filename === 'raw.hvy' || filename === 'raw-preview.hvy.txt' || filename === 'raw.wip.hvy';
 }
 
 function parseGrepArgs(args: string[]): {

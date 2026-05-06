@@ -83,6 +83,18 @@ export function findBlockForVirtualDirectory(document: VisualDocument, path: str
   return blocks.get(normalized) ?? null;
 }
 
+export function findSectionForVirtualDirectory(document: VisualDocument, path: string): VisualSection | null {
+  const normalized = normalizeVirtualPath('/', path);
+  const entries = new Map<string, HvyVirtualEntry>();
+  const sections = new Map<string, VisualSection>();
+  entries.set('/', { kind: 'dir', path: '/' });
+  entries.set('/body', { kind: 'dir', path: '/body' });
+  document.sections
+    .filter((section) => !section.isGhost)
+    .forEach((section, index) => addSectionLookup(entries, sections, section, `/body/${uniqueName(sectionDirectoryName(section, index), entries, '/body')}`));
+  return sections.get(normalized) ?? null;
+}
+
 export function findVirtualDirectoryForBlock(document: VisualDocument, targetBlock: VisualBlock): string | null {
   const entries = new Map<string, HvyVirtualEntry>();
   const blocks = new Map<string, VisualBlock>();
@@ -97,6 +109,19 @@ export function findVirtualDirectoryForBlock(document: VisualDocument, targetBlo
     }
   }
   return null;
+}
+
+function addSectionLookup(
+  entries: Map<string, HvyVirtualEntry>,
+  lookup: Map<string, VisualSection>,
+  section: VisualSection,
+  sectionPath: string
+): void {
+  entries.set(sectionPath, { kind: 'dir', path: sectionPath });
+  lookup.set(sectionPath, section);
+  section.children
+    .filter((child) => !child.isGhost)
+    .forEach((child, index) => addSectionLookup(entries, lookup, child, `${sectionPath}/${uniqueName(sectionDirectoryName(child, index), entries, sectionPath)}`));
 }
 
 export function findBlockInsertionTargetForVirtualDirectory(document: VisualDocument, path: string): HvyVirtualBlockInsertionTarget | null {

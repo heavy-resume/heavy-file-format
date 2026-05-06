@@ -660,6 +660,29 @@ hvy_version: 0.1
   expect((await executeHvyCliCommand(document, session, 'cat /body/quality/empty-list/item-1/text.txt')).output).toBe('First item');
 });
 
+test('cli static table directory previews follow header visibility', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"quality"}-->
+#! Quality
+
+<!--hvy:table {"id":"visible-header","tableColumns":"Year,Organization,Title","tableShowHeader":true,"tableRows":[{"cells":["2024","Northwind","Engineer"]}]}-->
+
+<!--hvy:table {"id":"hidden-header-with-row","tableColumns":"Year,Organization,Title","tableShowHeader":false,"tableRows":[{"cells":["2025","Heavy Resume","Founder"]}]}-->
+
+<!--hvy:table {"id":"hidden-header-empty","tableColumns":"Year,Organization,Title","tableShowHeader":false,"tableRows":[]}-->
+`, '.hvy');
+  const session = createHvyCliSession();
+
+  const listing = await executeHvyCliCommand(document, session, 'ls /body/quality');
+
+  expect(listing.output).toContain('dir  visible-header | static table component | Year Organization Title');
+  expect(listing.output).toContain('dir  hidden-header-with-row | static table component | 2025 Heavy Resume Founder');
+  expect(listing.output).toContain('dir  hidden-header-empty | static table component | Year Organization Title');
+});
+
 test('cli exposes writable children-order files for ordered component children', async () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1

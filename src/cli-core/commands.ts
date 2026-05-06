@@ -588,6 +588,19 @@ function readJsonFileFromVirtualPath(fs: ReturnType<typeof buildHvyVirtualFileSy
   }
 }
 
+function readJsonArrayFromVirtualPath(fs: ReturnType<typeof buildHvyVirtualFileSystem>, path: string): unknown[] {
+  const entry = fs.entries.get(path);
+  if (!entry || entry.kind !== 'file') {
+    return [];
+  }
+  try {
+    const value = JSON.parse(entry.read()) as unknown;
+    return Array.isArray(value) ? value : [];
+  } catch {
+    return [];
+  }
+}
+
 function inferComponentNameForDirectory(fs: ReturnType<typeof buildHvyVirtualFileSystem>, directoryPath: string): string {
   const componentJsonFiles = listDirectory(fs, directoryPath)
     .filter((entry): entry is HvyVirtualFile => entry.kind === 'file')
@@ -2797,11 +2810,22 @@ function formatStructuralDirectoryDescription(fs: ReturnType<typeof buildHvyVirt
 }
 
 function formatTableDirectoryPreview(fs: ReturnType<typeof buildHvyVirtualFileSystem>, path: string): string {
-  const tableEntry = fs.entries.get(`${path}/table.txt`);
-  if (tableEntry?.kind !== 'file') {
-    return '';
+  const table = readJsonFileFromVirtualPath(fs, `${path}/table.json`);
+  const columns = readJsonArrayFromVirtualPath(fs, `${path}/tableColumns.json`).filter((value): value is string => typeof value === 'string');
+  const rows = readJsonArrayFromVirtualPath(fs, `${path}/tableRows.json`)
+    .filter((value): value is string[] => Array.isArray(value))
+    .map((row) => row.filter((cell): cell is string => typeof cell === 'string'));
+  const firstNonEmptyRow = rows.find((row) => row.some((cell) => cell.trim().length > 0));
+  const showHeader = table?.tableShowHeader !== false;
+
+  // Static table directory previews follow what the reader emphasizes:
+  // visible headers preview with the header, hidden-header tables preview
+  // with the first non-empty row, and empty hidden-header tables fall back
+  // to the header so the table shape is still legible in `ls`.
+  if (showHeader || !firstNonEmptyRow) {
+    return compactLsComponentPreview(columns.join(' '));
   }
-  return compactLsComponentPreview(tableEntry.read(), (line) => line.replace(/\s*\|\s*/g, ' '));
+  return compactLsComponentPreview(firstNonEmptyRow.join(' '));
 }
 
 function formatComponentPreview(fs: ReturnType<typeof buildHvyVirtualFileSystem>, path: string, componentName: string): string {

@@ -13,6 +13,7 @@ import { buildChatCliComponentHints } from './chat-cli-component-hints';
 import { createChatCliTraceRunId, writeChatCliCommandTrace, writeChatCliUserQueryTrace } from './chat-cli-dev-trace';
 import { createChatCliInterface } from './chat-cli-interface';
 import { buildChatCliPersistentInstructions } from './chat-cli-instructions';
+import type { HvyCliSession } from '../cli-core/commands';
 
 const CHAT_CLI_MAX_STEPS = 30;
 const CHAT_CLI_MAX_CONSECUTIVE_COMMAND_ERRORS = 3;
@@ -36,6 +37,22 @@ export interface ChatCliInitialTurnRequest {
   context: string;
   formatInstructions: string;
   traceRunId: string;
+}
+
+export interface ChatCliSimTurnState extends ChatCliInitialTurnRequest {
+  request: string;
+  priorMessages: ChatMessage[];
+  priorConversation: ChatMessage[];
+  session: HvyCliSession;
+  urgency: number;
+  selectedComponent?: ChatCliSelectedComponentFocus;
+}
+
+export interface ChatCliSimAdvanceResult extends ChatCliSimTurnState {
+  commandResultMessage: string;
+  mutated: boolean;
+  terminalSummary?: string;
+  askedQuestion?: string;
 }
 
 export interface ChatCliSelectedComponentFocus {
@@ -286,6 +303,162 @@ export async function buildChatCliInitialProxyTurnRequest(params: {
     context: initial.context,
     formatInstructions: initial.formatInstructions,
     traceRunId,
+  };
+}
+
+export async function buildChatCliInitialSimTurnState(params: {
+  document: VisualDocument;
+  request: string;
+  priorMessages?: ChatMessage[];
+  selectedComponent?: ChatCliSelectedComponentFocus;
+  signal?: AbortSignal;
+}): Promise<ChatCliSimTurnState> {
+  const traceRunId = createChatCliTraceRunId();
+  const initial = await buildChatCliInitialTurnRequest({ ...params, traceRunId, writeTrace: false });
+  return {
+    messages: initial.messages,
+    context: initial.context,
+    formatInstructions: initial.formatInstructions,
+    traceRunId,
+    request: params.request,
+    priorMessages: params.priorMessages ?? [],
+    priorConversation: initial.priorConversation,
+    session: initial.cli.session,
+    urgency: 0,
+    ...(params.selectedComponent ? { selectedComponent: params.selectedComponent } : {}),
+  };
+}
+
+export async function advanceChatCliSimTurnState(params: {
+  document: VisualDocument;
+  state: ChatCliSimTurnState;
+  assistantOutput: string;
+  signal?: AbortSignal;
+}): Promise<ChatCliSimAdvanceResult> {
+  throwIfAborted(params.signal);
+  const action = parseChatCliAction(params.assistantOutput);
+  if (action.kind === 'invalid') {
+    const messages = [
+      ...params.state.messages,
+      {
+        id: crypto.randomUUID(),
+        role: 'assistant' as const,
+        content: params.assistantOutput,
+      },
+      {
+        id: crypto.randomUUID(),
+        role: 'user' as const,
+        content: action.message,
+      },
+    ];
+    return buildSimAdvanceResult(params, messages, action.message, false, params.state.urgency);
+  }
+  if (action.kind === 'done') {
+    return {
+      ...params.state,
+      terminalSummary: action.summary,
+      commandResultMessage: `done ${action.summary}`,
+      mutated: false,
+    };
+  }
+  if (action.kind === 'ask') {
+    return {
+      ...params.state,
+      askedQuestion: action.question,
+      commandResultMessage: `ask ${action.question}`,
+      mutated: false,
+    };
+  }
+
+  const cli = createChatCliInterface(params.document, params.state.session);
+  const commands = action.commands.slice(0, CHAT_CLI_MAX_BATCH_COMMANDS);
+  const outputLineBudget = Math.max(1, Math.floor(CHAT_CLI_MODEL_OUTPUT_MAX_LINES / Math.max(commands.length, 1)));
+  const commandOutputs: Array<{ command: string; output: string }> = [];
+  const commandHints: string[] = [];
+  let mutated = false;
+  let batchHadSuccess = false;
+  for (const command of commands) {
+    let result: Awaited<ReturnType<typeof cli.run>>;
+    try {
+      result = await cli.run(command);
+      batchHadSuccess = true;
+      mutated = mutated || (result.mutated && !isSessionOnlyCommand(command));
+    } catch (error) {
+      result = {
+        command,
+        cwd: cli.session.cwd,
+        output: error instanceof Error ? error.message : String(error),
+        mutated: false,
+      };
+    }
+    commandOutputs.push({ command, output: formatOutputForModel(result.output, outputLineBudget) });
+    const hints = buildChatCliComponentHints({
+      document: params.document,
+      cwd: result.cwd,
+      command,
+      output: result.output,
+    });
+    if (hints.trim()) {
+      commandHints.push(hints);
+    }
+  }
+  const urgency = batchHadSuccess ? updateChatCliUrgency(params.state.urgency, mutated) : params.state.urgency;
+  const commandResultMessage = formatCommandResultForModel({
+    output: formatBatchCommandOutput(commandOutputs),
+    assistantNotes: action.notes,
+    diagnosticsDiff: '(sim mode: diagnostics diff not computed)',
+    hints: formatBatchHints(commandHints),
+    introducedDiagnostics: formatIntroducedDiagnosticsForModel(getIntroducedDiagnostics(params.document)),
+    scratchpad: formatScratchpadForModel(cli.snapshot()),
+    urgency: formatChatCliUrgency(urgency),
+    cwd: cli.snapshot().cwd,
+  });
+  const messages = [
+    ...params.state.messages,
+    {
+      id: crypto.randomUUID(),
+      role: 'assistant' as const,
+      content: params.assistantOutput,
+    },
+    {
+      id: crypto.randomUUID(),
+      role: 'user' as const,
+      content: commandResultMessage,
+    },
+  ];
+  return buildSimAdvanceResult(params, messages, commandResultMessage, mutated, urgency);
+}
+
+function buildSimAdvanceResult(
+  params: {
+    document: VisualDocument;
+    state: ChatCliSimTurnState;
+    assistantOutput: string;
+    signal?: AbortSignal;
+  },
+  messages: ChatMessage[],
+  commandResultMessage: string,
+  mutated: boolean,
+  urgency: number
+): ChatCliSimAdvanceResult {
+  const cli = createChatCliInterface(params.document, params.state.session);
+  return {
+    ...params.state,
+    messages,
+    context: buildChatCliLoopContext(
+      cli.snapshot(),
+      params.document,
+      params.state.request,
+      params.state.priorMessages,
+      params.state.priorConversation,
+      urgency,
+      getIntroducedDiagnostics(params.document),
+      params.state.selectedComponent
+    ),
+    formatInstructions: buildChatCliLoopFormatInstructions(),
+    urgency,
+    commandResultMessage,
+    mutated,
   };
 }
 

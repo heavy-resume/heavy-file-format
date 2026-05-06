@@ -47,7 +47,10 @@ export interface ChatCliSimState {
   requestPayload: unknown | null;
   requestJson: string;
   responseJson: string;
+  responseOutput: string;
   reasoningSummary: string;
+  commandResultMessage: string;
+  turnState: unknown | null;
   isPreparing: boolean;
   isSending: boolean;
   error: string | null;

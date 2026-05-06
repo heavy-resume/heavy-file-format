@@ -111,7 +111,10 @@ test('renderChatPanel shows CLI sim request, response, and thinking summary', ()
     requestPayload: { messages: [] },
     requestJson: '{\n  "messages": []\n}',
     responseJson: '{\n  "output": "done Added it."\n}',
+    responseOutput: 'done Added it.',
     reasoningSummary: 'Checked the structure, then edited.',
+    commandResultMessage: '',
+    turnState: {},
     isPreparing: false,
     isSending: false,
     error: null,
@@ -132,4 +135,5 @@ hvy_version: 0.1
   expect(html).toContain('Thinking summary');
   expect(html).toContain('Checked the structure, then edited.');
   expect(html).toContain('data-action="run-chat-cli-sim-step"');
+  expect(html).toContain('Run Commands And Prepare Next');
 });

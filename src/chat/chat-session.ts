@@ -4,7 +4,13 @@ import { runQaToolLoop } from '../ai-qa';
 import type { ChatMessage, ChatSettings, ChatTokenUsage, ChatWorkState, VisualDocument } from '../types';
 import type { VisualSection } from '../editor/types';
 import { deserializeDocumentWithDiagnostics, wrapHvyFragmentAsDocument } from '../serialization';
-import { buildChatCliInitialProxyTurnRequest, runChatCliEditLoop, type ChatCliSelectedComponentFocus } from '../chat-cli/chat-cli-edit-loop';
+import {
+  advanceChatCliSimTurnState,
+  buildChatCliInitialSimTurnState,
+  runChatCliEditLoop,
+  type ChatCliSelectedComponentFocus,
+  type ChatCliSimTurnState,
+} from '../chat-cli/chat-cli-edit-loop';
 
 export interface ChatTurnResult {
   messages: ChatMessage[];
@@ -15,11 +21,23 @@ export interface ChatTurnResult {
 export interface DocumentEditCliSimRequest {
   requestPayload: unknown;
   requestJson: string;
+  turnState: ChatCliSimTurnState;
 }
 
 export interface DocumentEditCliSimResponse {
   responseJson: string;
   reasoningSummary: string;
+  output: string;
+}
+
+export interface DocumentEditCliSimAdvance {
+  requestPayload: unknown | null;
+  requestJson: string;
+  turnState: ChatCliSimTurnState;
+  commandResultMessage: string;
+  mutated: boolean;
+  terminalSummary?: string;
+  askedQuestion?: string;
 }
 
 export function appendUserChatMessage(messages: ChatMessage[], question: string): ChatMessage[] {
@@ -277,7 +295,7 @@ export async function buildDocumentEditCliSimRequest(params: {
   selectedComponent?: ChatCliSelectedComponentFocus;
   signal?: AbortSignal;
 }): Promise<DocumentEditCliSimRequest> {
-  const initial = await buildChatCliInitialProxyTurnRequest({
+  const initial = await buildChatCliInitialSimTurnState({
     document: params.document,
     request: params.request,
     priorMessages: params.messages,
@@ -296,6 +314,7 @@ export async function buildDocumentEditCliSimRequest(params: {
   return {
     requestPayload,
     requestJson: JSON.stringify(requestPayload, null, 2),
+    turnState: initial,
   };
 }
 
@@ -320,6 +339,51 @@ export async function runDocumentEditCliSimStep(params: {
     reasoningSummary: typeof (payload as { reasoningSummary?: unknown } | null)?.reasoningSummary === 'string'
       ? ((payload as { reasoningSummary?: string }).reasoningSummary ?? '')
       : '',
+    output: typeof (payload as { output?: unknown } | null)?.output === 'string'
+      ? ((payload as { output: string }).output ?? '')
+      : '',
+  };
+}
+
+export async function advanceDocumentEditCliSimStep(params: {
+  settings: ChatSettings;
+  document: VisualDocument;
+  turnState: ChatCliSimTurnState;
+  assistantOutput: string;
+  signal?: AbortSignal;
+}): Promise<DocumentEditCliSimAdvance> {
+  const next = await advanceChatCliSimTurnState({
+    document: params.document,
+    state: params.turnState,
+    assistantOutput: params.assistantOutput,
+    signal: params.signal,
+  });
+  if (next.terminalSummary || next.askedQuestion) {
+    return {
+      requestPayload: null,
+      requestJson: '',
+      turnState: next,
+      commandResultMessage: next.commandResultMessage,
+      mutated: next.mutated,
+      ...(next.terminalSummary ? { terminalSummary: next.terminalSummary } : {}),
+      ...(next.askedQuestion ? { askedQuestion: next.askedQuestion } : {}),
+    };
+  }
+  const requestPayload = buildProxyChatRequest({
+    provider: params.settings.provider,
+    model: params.settings.model,
+    messages: next.messages,
+    context: next.context,
+    formatInstructions: next.formatInstructions,
+    mode: 'document-edit',
+    traceRunId: next.traceRunId,
+  });
+  return {
+    requestPayload,
+    requestJson: JSON.stringify(requestPayload, null, 2),
+    turnState: next,
+    commandResultMessage: next.commandResultMessage,
+    mutated: next.mutated,
   };
 }
 

@@ -2,7 +2,7 @@ import { state, getRenderApp } from '../../state';
 import { recordHistory } from '../../history';
 import { serializeDocument } from '../../serialization';
 import { clearChatConversation } from '../../chat/chat';
-import { copyChatMessageToHvySection, runDocumentEditCliSimStep } from '../../chat/chat-session';
+import { advanceDocumentEditCliSimStep, copyChatMessageToHvySection, runDocumentEditCliSimStep, type DocumentEditCliSimRequest } from '../../chat/chat-session';
 import type { AppActionHandler } from './types';
 
 const clearChatHistory: AppActionHandler = () => {
@@ -62,7 +62,66 @@ const toggleChatCliSim: AppActionHandler = () => {
 
 const runChatCliSimStep: AppActionHandler = () => {
   const sim = state.chat.cliSim;
-  const requestPayload = sim?.requestPayload;
+  if (!sim?.requestPayload && !sim?.responseOutput) {
+    state.chat.error = 'Prepare CLI sim before requesting a response.';
+    getRenderApp()();
+    return;
+  }
+  if (sim.responseOutput) {
+    if (!sim.turnState) {
+      state.chat.error = 'CLI sim is missing its turn state. Prepare the sim again.';
+      getRenderApp()();
+      return;
+    }
+    state.chat.cliSim = {
+      ...sim,
+      isPreparing: true,
+      error: null,
+    };
+    getRenderApp()();
+    void advanceDocumentEditCliSimStep({
+      settings: state.chat.settings,
+      document: state.document,
+      turnState: sim.turnState as DocumentEditCliSimRequest['turnState'],
+      assistantOutput: sim.responseOutput,
+    })
+      .then((result) => {
+        if (!state.chat.cliSim) {
+          return;
+        }
+        if (result.mutated) {
+          state.rawEditorText = serializeDocument(state.document);
+          state.rawEditorError = null;
+          state.rawEditorDiagnostics = [];
+        }
+        state.chat.cliSim = {
+          ...state.chat.cliSim,
+          requestPayload: result.requestPayload,
+          requestJson: result.requestJson || '(terminal response; no next request)',
+          responseJson: '',
+          responseOutput: '',
+          commandResultMessage: result.commandResultMessage,
+          turnState: result.turnState,
+          isPreparing: false,
+          isSending: false,
+          error: null,
+        };
+        getRenderApp()();
+      })
+      .catch((error: unknown) => {
+        if (!state.chat.cliSim) {
+          return;
+        }
+        state.chat.cliSim = {
+          ...state.chat.cliSim,
+          isPreparing: false,
+          error: error instanceof Error ? error.message : 'CLI sim next step failed.',
+        };
+        getRenderApp()();
+      });
+    return;
+  }
+  const requestPayload = sim.requestPayload;
   if (!requestPayload) {
     state.chat.error = 'Prepare CLI sim before requesting a response.';
     getRenderApp()();
@@ -82,6 +141,7 @@ const runChatCliSimStep: AppActionHandler = () => {
       state.chat.cliSim = {
         ...state.chat.cliSim,
         responseJson: result.responseJson,
+        responseOutput: result.output,
         reasoningSummary: result.reasoningSummary,
         isSending: false,
         error: null,

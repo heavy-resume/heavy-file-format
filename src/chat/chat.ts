@@ -275,16 +275,33 @@ export function renderChatPanel(
 }
 
 function renderChatCliSimHtml(sim: NonNullable<ChatState['cliSim']>, deps: RenderChatPanelDeps): string {
-  const canRun = !!sim.requestPayload && !sim.isPreparing && !sim.isSending;
+  const isBusy = sim.isPreparing || sim.isSending;
+  const canRun = (!!sim.requestPayload || !!sim.responseOutput) && !isBusy;
+  const buttonLabel = sim.isSending
+    ? 'Getting Response...'
+    : sim.isPreparing
+    ? 'Preparing Next Step...'
+    : sim.responseOutput
+    ? 'Run Commands And Prepare Next'
+    : 'Get Response';
   return `
     <section class="chat-cli-sim" aria-label="CLI simulation">
       <div class="chat-cli-sim-head">
         <strong>CLI Sim</strong>
         <button type="button" class="secondary" data-action="run-chat-cli-sim-step"${canRun ? '' : ' disabled'}>
-          ${sim.responseJson ? 'Run Again' : 'Get Response'}
+          ${buttonLabel}
         </button>
       </div>
       ${sim.error ? `<div class="chat-error" role="alert">${deps.escapeHtml(sim.error)}</div>` : ''}
+      ${isBusy ? `<div class="chat-composer-status">${deps.escapeHtml(buttonLabel)}</div>` : ''}
+      ${
+        sim.commandResultMessage
+          ? `<details open>
+               <summary>Last command result</summary>
+               <pre>${deps.escapeHtml(sim.commandResultMessage)}</pre>
+             </details>`
+          : ''
+      }
       <details open>
         <summary>Request JSON</summary>
         <pre>${deps.escapeHtml(sim.requestJson || (sim.isPreparing ? 'Preparing...' : ''))}</pre>

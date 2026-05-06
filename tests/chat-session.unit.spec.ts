@@ -1,6 +1,6 @@
 import { beforeEach, expect, test, vi } from 'vitest';
 
-import { appendUserChatMessage, buildDocumentEditCliSimRequest, copyChatMessageToHvySection, requestChatTurn, requestDocumentEditChatTurn } from '../src/chat/chat-session';
+import { advanceDocumentEditCliSimStep, appendUserChatMessage, buildDocumentEditCliSimRequest, copyChatMessageToHvySection, requestChatTurn, requestDocumentEditChatTurn } from '../src/chat/chat-session';
 import { deserializeDocument, serializeDocument } from '../src/serialization';
 import type { ChatMessage, ChatSettings } from '../src/types';
 
@@ -391,6 +391,35 @@ test('buildDocumentEditCliSimRequest exposes the exact chronological CLI request
   expect(result.requestJson).toContain('```shell\\nls /\\n```');
   expect(writeChatCliCommandTraceMock).not.toHaveBeenCalled();
   expect(writeChatCliUserQueryTraceMock).not.toHaveBeenCalled();
+});
+
+test('advanceDocumentEditCliSimStep executes the response and prepares the next chronological request payload', async () => {
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+  const document = deserializeDocument('---\nhvy_version: 0.1\n---\n', '.hvy');
+  const initial = await buildDocumentEditCliSimRequest({
+    settings,
+    document,
+    messages: [],
+    request: 'Inspect the document.',
+  });
+
+  const result = await advanceDocumentEditCliSimStep({
+    settings,
+    document,
+    turnState: initial.turnState,
+    assistantOutput: 'What you are doing: checking location\nWhy you are doing it: verify context\nWhat you are unsure of: nothing\n```shell\npwd\n```',
+  });
+  const payload = JSON.parse(result.requestJson) as { messages: ChatMessage[] };
+
+  expect(result.commandResultMessage).toContain('### CMD RESULT ###\n/');
+  expect(payload.messages.at(-2)).toEqual(expect.objectContaining({
+    role: 'assistant',
+    content: expect.stringContaining('```shell\npwd\n```'),
+  }));
+  expect(payload.messages.at(-1)).toEqual(expect.objectContaining({
+    role: 'user',
+    content: expect.stringContaining('What is your next command?'),
+  }));
 });
 
 test('requestDocumentEditChatTurn can focus the CLI loop on a selected component', async () => {

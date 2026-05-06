@@ -427,6 +427,10 @@ test('hvy insert can create custom components without explicit ids', async () =>
   expect(generated.cwd).toBe('/body/history/component-list-2/history-record-1');
   expect(positionalId.output).toContain('/body/history/component-list-2/history-heavy-resume-founder: created');
   expect(positionalId.cwd).toBe('/body/history/component-list-2/history-heavy-resume-founder');
+  expect((await executeHvyCliCommand(document, session, 'cat /body/history/component-list-2/history-heavy-resume-founder/expandable-stub/table-0/tableColumns.json')).output)
+    .toBe('[\n  "YEAR",\n  "ORGANIZATION",\n  "TITLE"\n]\n');
+  expect((await executeHvyCliCommand(document, session, 'cat /body/history/component-list-2/history-heavy-resume-founder/expandable-stub/table-0/table.txt')).output)
+    .toBe('YEAR | ORGANIZATION | TITLE\n |  | \n');
   expect((await executeHvyCliCommand(document, session, 'cat /body/history/component-list-2/children-order.json')).output)
     .toMatch(/history-heavy-resume-founder[\s\S]*history-record-1[\s\S]*history-northwind-labs-senior-software-engineer/);
 });

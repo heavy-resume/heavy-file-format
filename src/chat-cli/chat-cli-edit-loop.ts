@@ -1170,7 +1170,7 @@ async function summarizeCompactedChatCliMessages(params: {
           ].join('\n'),
         },
       ],
-      context: '',
+      context: 'Compacting older HVY CLI document-edit messages for the next model turn.',
       responseInstructions: 'Return only the compacted summary text.',
       systemInstructions: [
         'You compact HVY CLI agent history for a later AI model turn.',
@@ -1197,11 +1197,33 @@ function formatMessagesForCompactionSummary(messages: ChatMessage[]): string {
 }
 
 function fallbackCompactedChatCliSummary(request: string, messages: ChatMessage[]): string {
+  const recent = messages
+    .slice(-4)
+    .map((message, index) => {
+      const label = `${index + 1}. ${message.role}${message.error ? ' error' : ''}`;
+      return `${label}\n${compactFallbackMessageContent(message.content)}`;
+    })
+    .join('\n\n');
   return [
     `Current request: ${request}`,
     `Compacted ${messages.length} older CLI message${messages.length === 1 ? '' : 's'}.`,
-    'The detailed older command history was removed to keep the model context small.',
+    'Automatic summary failed, so this deterministic tail preserves recent compacted context.',
+    recent ? `Recent compacted tail:\n${recent}` : '',
   ].join('\n');
+}
+
+function compactFallbackMessageContent(content: string): string {
+  const lines = content
+    .split('\n')
+    .map((line) => line.trimEnd())
+    .filter((line) => line.trim().length > 0);
+  const selected = lines.length > 28 ? lines.slice(-28) : lines;
+  const text = selected.join('\n');
+  const maxChars = 1400;
+  if (text.length <= maxChars) {
+    return text;
+  }
+  return `${text.slice(0, maxChars).trimEnd()}\n[older compacted message content omitted]`;
 }
 
 function countMessageChars(messages: ChatMessage[]): number {

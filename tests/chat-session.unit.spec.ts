@@ -592,6 +592,7 @@ test('requestDocumentEditChatTurn compacts old cli conversation after high provi
     compactionProvider: 'openai',
     compactionModel: 'gpt-5.4-nano',
   });
+  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.context).toBe('Compacting older HVY CLI document-edit messages for the next model turn.');
   const compactedMessages = requestProxyCompletionMock.mock.calls[3]?.[0]?.messages ?? [];
   expect(compactedMessages[0]?.content).toContain('### COMPACTED PRIOR CLI HISTORY ###');
   expect(compactedMessages[0]?.content).toContain('Goal: check the document. Progress: ran x and y echo commands.');
@@ -605,6 +606,36 @@ test('requestDocumentEditChatTurn compacts old cli conversation after high provi
   expect(requestProxyCompletionMock.mock.calls[5]?.[0]?.context).toContain('Current request:\nCheck the document with several commands.');
   expect(requestProxyCompletionMock.mock.calls[5]?.[0]?.context).not.toContain('scratchpad.txt:');
   expect(requestProxyCompletionMock.mock.calls[5]?.[0]?.messages.at(-1)?.content).toContain('### BEGIN /scratchpad.txt  ###');
+});
+
+test('requestDocumentEditChatTurn falls back to useful compacted context when compaction request fails', async () => {
+  requestProxyCompletionMock
+    .mockImplementationOnce(async (params: { onTokenUsage?: (usage: { inputTokens?: number; outputTokens?: number }) => void }) => {
+      params.onTokenUsage?.({ inputTokens: 9_000, outputTokens: 10 });
+      return `echo "${'first inspection '.repeat(800)}"`;
+    })
+    .mockImplementationOnce(async (params: { onTokenUsage?: (usage: { inputTokens?: number; outputTokens?: number }) => void }) => {
+      params.onTokenUsage?.({ inputTokens: 10_500, outputTokens: 10 });
+      return `echo "${'second inspection '.repeat(800)}"`;
+    })
+    .mockRejectedValueOnce(new Error('Chat request failed.'))
+    .mockResolvedValueOnce('done Finished after compaction fallback.');
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+  const document = deserializeDocument('---\nhvy_version: 0.1\n---\n', '.hvy');
+
+  const result = await requestDocumentEditChatTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Check the document with fallback compaction.',
+  });
+
+  expect(result.error).toBeNull();
+  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.debugLabel).toBe('chat-cli-compaction');
+  const compactedMessages = requestProxyCompletionMock.mock.calls[3]?.[0]?.messages ?? [];
+  expect(compactedMessages[0]?.content).toContain('Automatic summary failed');
+  expect(compactedMessages[0]?.content).toContain('first inspection');
+  expect(compactedMessages[0]?.content).not.toContain('The detailed older command history was removed');
 });
 
 test('requestDocumentEditChatTurn returns ask commands as clarification questions', async () => {

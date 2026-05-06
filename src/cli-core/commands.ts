@@ -522,7 +522,6 @@ function commandLs(ctx: HvyCliCommandContext, args: string[]): string {
   if (recursive) {
     const entries = [...ctx.fs.entries.values()]
       .filter((candidate) => candidate.path === target || candidate.path.startsWith(target === '/' ? '/' : `${target}/`))
-      .sort((left, right) => left.path.localeCompare(right.path))
       .map((candidate) => candidate.path);
     return withWarnings(entries.join('\n'), warnings);
   }

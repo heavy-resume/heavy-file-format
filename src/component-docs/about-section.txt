@@ -6,3 +6,4 @@ Sections can be addressed by id and may carry description, tags, layout location
 Sections should encompass atomic thoughts. They are intended to be reorganized based on the viewer.
 
 Sections can have their own subsections but components cannot. Subsections are visibly indented on the viewer.
+Use children-order.json to reorder child sections when it is present.

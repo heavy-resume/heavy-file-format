@@ -59,9 +59,7 @@ export function buildHvyVirtualFileSystem(document: VisualDocument): HvyVirtualF
     }
   );
 
-  document.sections
-    .filter((section) => !section.isGhost)
-    .forEach((section, index) => addSection(entries, document.meta, section, `/body/${uniqueName(sectionDirectoryName(section, index), entries, '/body')}`));
+  addSectionList(entries, document.meta, document.sections.filter((section) => !section.isGhost), '/body');
 
   document.attachments.forEach((attachment, index) => {
     const filename = uniqueName(`${sanitizePathSegment(attachment.id) || `attachment-${index}`}.json`, entries, '/attachments');
@@ -147,8 +145,7 @@ export function listDirectory(fs: HvyVirtualFileSystem, path: string): HvyVirtua
   }
   return [...names]
     .map((entryPath) => fs.entries.get(entryPath))
-    .filter((entry): entry is HvyVirtualEntry => !!entry)
-    .sort((left, right) => left.path.localeCompare(right.path));
+    .filter((entry): entry is HvyVirtualEntry => !!entry);
 }
 
 export function resolveVirtualPath(fs: HvyVirtualFileSystem, cwd: string, input = '.'): string {
@@ -189,15 +186,27 @@ function addSection(entries: Map<string, HvyVirtualEntry>, meta: JsonObject, sec
     read: () => formatSectionAbout(section),
   });
   addBlockList(entries, meta, section.blocks, sectionPath);
-  section.children
-    .filter((child) => !child.isGhost)
-    .forEach((child, index) => addSection(entries, meta, child, `${sectionPath}/${uniqueName(sectionDirectoryName(child, index), entries, sectionPath)}`));
+  addSectionList(entries, meta, section.children.filter((child) => !child.isGhost), sectionPath);
+}
+
+function addSectionList(entries: Map<string, HvyVirtualEntry>, meta: JsonObject, sections: VisualSection[], parentPath: string): void {
+  const keys: string[] = [];
+  sections.forEach((section, index) => {
+    const key = uniqueName(sectionDirectoryName(section, index), entries, parentPath);
+    keys.push(key);
+    addSection(entries, meta, section, `${parentPath}/${key}`);
+  });
+  addOrderFile(entries, `${parentPath}/children-order.json`, keys, (nextKeys) => reorderByKeys(sections, keys, nextKeys));
 }
 
 function addBlockList(entries: Map<string, HvyVirtualEntry>, meta: JsonObject, blocks: VisualBlock[], parentPath: string): void {
+  const keys: string[] = [];
   blocks.forEach((block, index) => {
-    addBlock(entries, meta, block, `${parentPath}/${uniqueName(blockDirectoryName(block, index), entries, parentPath)}`);
+    const key = uniqueName(blockDirectoryName(block, index), entries, parentPath);
+    keys.push(key);
+    addBlock(entries, meta, block, `${parentPath}/${key}`);
   });
+  addOrderFile(entries, `${parentPath}/children-order.json`, keys, (nextKeys) => reorderByKeys(blocks, keys, nextKeys));
 }
 
 function addBlock(entries: Map<string, HvyVirtualEntry>, meta: JsonObject, block: VisualBlock, blockPath: string): void {
@@ -235,7 +244,21 @@ function addBlock(entries: Map<string, HvyVirtualEntry>, meta: JsonObject, block
   }
   addNamedBlockChildren(entries, meta, block.schema.expandableStubBlocks?.children ?? [], `${blockPath}/expandable-stub`, block.schema.component === 'expandable');
   addNamedBlockChildren(entries, meta, block.schema.expandableContentBlocks?.children ?? [], `${blockPath}/expandable-content`, block.schema.component === 'expandable');
-  addNamedBlockChildren(entries, meta, (block.schema.gridItems ?? []).map((item) => item.block), `${blockPath}/grid`, block.schema.component === 'grid');
+  addGridItems(entries, meta, block.schema.gridItems ?? [], `${blockPath}/grid`, block.schema.component === 'grid');
+}
+
+function addGridItems(entries: Map<string, HvyVirtualEntry>, meta: JsonObject, gridItems: GridItem[], directoryPath: string, keepEmptyDirectory = false): void {
+  if (gridItems.length === 0 && !keepEmptyDirectory) {
+    return;
+  }
+  entries.set(directoryPath, { kind: 'dir', path: directoryPath });
+  const keys: string[] = [];
+  gridItems.forEach((item, index) => {
+    const key = uniqueName(blockDirectoryName(item.block, index), entries, directoryPath);
+    keys.push(key);
+    addBlock(entries, meta, item.block, `${directoryPath}/${key}`);
+  });
+  addOrderFile(entries, `${directoryPath}/children-order.json`, keys, (nextKeys) => reorderByKeys(gridItems, keys, nextKeys));
 }
 
 function addPluginDocumentationFile(entries: Map<string, HvyVirtualEntry>, block: VisualBlock, blockPath: string): void {
@@ -260,6 +283,45 @@ function addNamedBlockChildren(entries: Map<string, HvyVirtualEntry>, meta: Json
   }
   entries.set(directoryPath, { kind: 'dir', path: directoryPath });
   addBlockList(entries, meta, blocks, directoryPath);
+}
+
+function addOrderFile(entries: Map<string, HvyVirtualEntry>, path: string, keys: string[], reorder: (nextKeys: string[]) => void): void {
+  entries.set(path, {
+    kind: 'file',
+    path,
+    read: () => `${JSON.stringify(keys, null, 2)}\n`,
+    write: (content) => reorder(readOrderFileKeys(content, path, keys)),
+  });
+}
+
+function readOrderFileKeys(content: string, path: string, currentKeys: string[]): string[] {
+  const parsed = JSON.parse(content) as unknown;
+  if (!Array.isArray(parsed) || !parsed.every((item) => typeof item === 'string')) {
+    throw new Error(`${path} must be a JSON array of child directory names.`);
+  }
+  const nextKeys = parsed as string[];
+  const duplicates = nextKeys.filter((key, index) => nextKeys.indexOf(key) !== index);
+  if (duplicates.length > 0) {
+    throw new Error(`${path} has duplicate child keys: ${[...new Set(duplicates)].join(', ')}`);
+  }
+  const expected = new Set(currentKeys);
+  const actual = new Set(nextKeys);
+  const missing = currentKeys.filter((key) => !actual.has(key));
+  const unknown = nextKeys.filter((key) => !expected.has(key));
+  if (missing.length > 0 || unknown.length > 0) {
+    throw new Error([
+      `${path} must contain exactly the current child directory names.`,
+      ...(missing.length > 0 ? [`Missing: ${missing.join(', ')}`] : []),
+      ...(unknown.length > 0 ? [`Unknown: ${unknown.join(', ')}`] : []),
+      `Expected: ${currentKeys.join(', ') || '(none)'}`,
+    ].join('\n'));
+  }
+  return nextKeys;
+}
+
+function reorderByKeys<T>(items: T[], currentKeys: string[], nextKeys: string[]): void {
+  const byKey = new Map(currentKeys.map((key, index) => [key, items[index]]));
+  items.splice(0, items.length, ...nextKeys.map((key) => byKey.get(key)).filter((item): item is T => item !== undefined));
 }
 
 function addSectionBlockLookup(
@@ -509,12 +571,16 @@ function formatComponentDirectoryMapping(component: string, baseComponent: strin
   if (baseComponent === 'expandable') {
     lines.push('- expandable-stub/ contains the always-visible summary children.');
     lines.push('- expandable-content/ contains the revealed detail children.');
+    lines.push('- expandable-stub/children-order.json and expandable-content/children-order.json reorder children in each slot.');
   } else if (baseComponent === 'container') {
     lines.push('- container/ contains the ordered child components.');
+    lines.push('- container/children-order.json reorders container children.');
   } else if (baseComponent === 'component-list') {
     lines.push('- repeated child item components appear directly as sibling directories in this component-list directory.');
+    lines.push('- children-order.json reorders list items.');
   } else if (baseComponent === 'grid') {
     lines.push('- grid/ contains the grid item components.');
+    lines.push('- grid/children-order.json reorders grid items.');
   } else if (baseComponent === 'table') {
     lines.push('- tableColumns.json and tableRows.json are writable static table data files.');
   } else if (baseComponent === 'plugin') {

@@ -1,5 +1,6 @@
 # Grid Components #
 Lays out child components visually like a CSS grid.
+Use grid/children-order.json to reorder grid items.
 gridColumns is a number controlling the column layout.
 gridItems holds ordered grid slots; readers tile items across gridColumns and wrap to new rows.
 Each numbered grid slot carries only slot metadata; the child block is nested one level deeper.

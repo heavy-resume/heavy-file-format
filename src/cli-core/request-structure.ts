@@ -111,7 +111,11 @@ export function extractVirtualPathsFromOutput(output: string): string[] {
 function collectComponentStructureEntries(document: VisualDocument, fs: HvyVirtualFileSystem): ComponentStructureEntry[] {
   return [...fs.entries.values()]
     .filter((entry): entry is HvyVirtualEntry & { kind: 'file' } =>
-      entry.kind === 'file' && entry.path.startsWith('/body/') && entry.path.endsWith('.json') && !entry.path.endsWith('/section.json'))
+      entry.kind === 'file'
+      && entry.path.startsWith('/body/')
+      && entry.path.endsWith('.json')
+      && !entry.path.endsWith('/section.json')
+      && !entry.path.endsWith('/children-order.json'))
     .map((entry) => componentEntryFromJsonFile(document, fs, entry.path))
     .filter((entry): entry is ComponentStructureEntry => !!entry);
 }
@@ -151,6 +155,9 @@ function findPrimaryBodyFilePath(fs: HvyVirtualFileSystem, directory: string, ty
       entry.kind === 'file'
       && entry.path.startsWith(`${directory}/`)
       && !entry.path.slice(directory.length + 1).includes('/')
+      && !entry.path.split('/').pop()?.startsWith('about-')
+      && !entry.path.endsWith('/section-info.txt')
+      && !entry.path.endsWith('/children-order.json')
       && (entry.path.endsWith('.txt') || entry.path.endsWith('.py')))
     .map((entry) => entry.path)
     .sort();

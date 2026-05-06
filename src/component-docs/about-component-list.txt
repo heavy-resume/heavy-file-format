@@ -1,5 +1,7 @@
 # Component-List Components #
 Repeated child components.
+Child item directories appear directly inside the component-list directory.
+Use children-order.json to reorder list items.
 componentListComponent describes what kind of item the list is expected to contain.
 componentListItemLabel is a human-friendly singular label for add/edit prompts.
 componentListBlocks holds the ordered child blocks.

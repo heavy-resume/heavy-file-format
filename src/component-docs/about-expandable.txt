@@ -1,5 +1,6 @@
 # Expandable Components #
 Reveal/hide component with stub and content slots.
+Use expandable-stub/children-order.json or expandable-content/children-order.json to reorder children in each slot.
 The stub is the always-visible summary; content is the detail shown when expanded.
 Each expandable must have at least one stub child and one content child.
 expandableAlwaysShowStub controls whether the stub remains visible while expanded.

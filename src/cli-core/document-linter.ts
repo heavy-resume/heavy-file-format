@@ -54,6 +54,7 @@ function isLintableComponentJsonPath(fs: HvyVirtualFileSystem, entry: HvyVirtual
     && entry.path.startsWith('/body/')
     && entry.path.endsWith('.json')
     && !entry.path.endsWith('/section.json')
+    && !entry.path.endsWith('/children-order.json')
     && !!findComponentBodyPath(fs, entry.path.replace(/\/[^/]+$/, ''), entry.path.split('/').pop()?.replace(/\.json$/, '') ?? '');
 }
 
@@ -214,6 +215,7 @@ function lintSections(fs: HvyVirtualFileSystem): HvyCliLintIssue[] {
         && candidatePath !== entry.path
         && candidatePath !== `${sectionPath}/section-info.txt`
         && candidatePath !== `${sectionPath}/about-section.txt`
+        && candidatePath !== `${sectionPath}/children-order.json`
       );
     })
     .map((entry) => {

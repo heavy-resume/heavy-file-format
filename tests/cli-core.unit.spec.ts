@@ -607,6 +607,48 @@ hvy_version: 0.1
   expect((await executeHvyCliCommand(document, session, 'cat /body/quality/empty-list/item-1/text.txt')).output).toBe('First item');
 });
 
+test('cli exposes writable children-order files for ordered component children', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"quality"}-->
+#! Quality
+
+<!--hvy:component-list {"id":"items","componentListComponent":"text"}-->
+
+ <!--hvy:text {"id":"banana"}-->
+ Banana
+
+ <!--hvy:text {"id":"apple"}-->
+ Apple
+
+ <!--hvy:text {"id":"cherry"}-->
+ Cherry
+`, '.hvy');
+  const session = createHvyCliSession();
+
+  const before = await executeHvyCliCommand(document, session, 'ls /body/quality/items');
+  expect(before.output.indexOf('dir  banana')).toBeLessThan(before.output.indexOf('dir  apple'));
+  expect(before.output).toContain('file children-order.json [w]');
+  expect((await executeHvyCliCommand(document, session, 'cat /body/quality/items/children-order.json')).output).toBe(
+    '[\n  "banana",\n  "apple",\n  "cherry"\n]\n'
+  );
+
+  const reordered = await executeHvyCliCommand(document, session, 'echo \'["apple","cherry","banana"]\' > /body/quality/items/children-order.json');
+  expect(reordered.output).toBe('/body/quality/items/children-order.json: written');
+  const after = await executeHvyCliCommand(document, session, 'ls /body/quality/items');
+  expect(after.output.indexOf('dir  apple')).toBeLessThan(after.output.indexOf('dir  cherry'));
+  expect(after.output.indexOf('dir  cherry')).toBeLessThan(after.output.indexOf('dir  banana'));
+
+  await expect(executeHvyCliCommand(document, session, 'echo \'["apple","apple","banana"]\' > /body/quality/items/children-order.json'))
+    .rejects.toThrow('/body/quality/items/children-order.json has duplicate child keys: apple');
+  await expect(executeHvyCliCommand(document, session, 'echo \'["apple","banana","durian"]\' > /body/quality/items/children-order.json'))
+    .rejects.toThrow('Unknown: durian');
+  await expect(executeHvyCliCommand(document, session, 'echo \'["apple","banana"]\' > /body/quality/items/children-order.json'))
+    .rejects.toThrow('Missing: cherry');
+});
+
 test('cli expands supported date command substitutions', async () => {
   const document = createCliTestDocument();
   const session = createHvyCliSession();

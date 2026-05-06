@@ -217,7 +217,7 @@ test('ls keeps custom component directories to file listings without schema prev
   const result = await executeHvyCliCommand(document, session, 'ls /body/skills/component-list-1/skill-software-engineering');
 
   expect(result.output).toContain('dir  expandable-content');
-  expect(result.output).toContain('file about-skill-record.txt [ro]');
+  expect(result.output).toContain('file about-skill-record.txt [ro] | documentation for reusable component type and schema');
   expect(result.output).toContain('file skill-record.json');
   expect(result.output).not.toContain('skill-record-info.txt');
   expect(result.output).not.toContain('Custom component definition:');
@@ -846,7 +846,7 @@ EOF`);
   expect(document.sections[0]?.blocks[0]?.text).toBe('Section raw edit');
 });
 
-test('ls shows the nearest raw-editable parent for structural directories', async () => {
+test('ls shows structural directory previews without raw-edit hints', async () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
 ---
@@ -867,7 +867,12 @@ hvy_version: 0.1
 
   const structural = await executeHvyCliCommand(document, session, 'ls /body/summary/details/expandable-stub');
 
-  expect(structural.output).toContain('nearest raw-editable parent | /body/summary/details/raw.hvy');
+  expect(structural.output).toContain("type name [editable] | description | preview\ndir  stub | text component | Stub");
+  expect((await executeHvyCliCommand(document, session, 'ls /body/summary/details')).output).toContain("dir  expandable-stub | expandable's stub | Stub");
+  expect((await executeHvyCliCommand(document, session, 'ls /body/summary/details')).output).toContain("dir  expandable-content | expandable's content | Detail");
+  expect(structural.output).toContain("Component context:");
+  expect(structural.output).not.toContain('raw edits available through');
+  expect(structural.output).not.toContain('nearest raw-editable parent | /body/summary/details/raw.hvy');
   expect(structural.output).not.toContain('raw.hvy [w] | raw HVY for this component');
 });
 

@@ -547,51 +547,23 @@ function commandLs(ctx: HvyCliCommandContext, args: string[]): string {
 }
 
 function formatLsTargetDescription(ctx: HvyCliCommandContext, directoryPath: string): string {
-  const nearestRawEditableParent = formatNearestRawEditableParentDescription(ctx.fs, directoryPath);
   if (directoryPath === '/') {
     return '';
   }
   const context = formatHvyComponentDescriptionHistory(ctx.document, ctx.fs, ctx.cwd, directoryPath);
   if (context) {
-    return [context, nearestRawEditableParent].filter(Boolean).join('\n');
+    return context;
   }
   const section = readJsonFileFromVirtualPath(ctx.fs, `${directoryPath}/section.json`);
   if (section) {
-    return [formatMetadataDescription('Section metadata:', section), nearestRawEditableParent].filter(Boolean).join('\n');
+    return formatMetadataDescription('Section metadata:', section);
   }
   const componentName = inferComponentNameForDirectory(ctx.fs, directoryPath);
   if (!componentName) {
-    return nearestRawEditableParent;
-  }
-  const component = readJsonFileFromVirtualPath(ctx.fs, `${directoryPath}/${componentName}.json`);
-  return [component ? formatMetadataDescription('Component metadata:', component) : '', nearestRawEditableParent].filter(Boolean).join('\n');
-}
-
-function formatNearestRawEditableParentDescription(fs: ReturnType<typeof buildHvyVirtualFileSystem>, directoryPath: string): string {
-  if (
-    fs.entries.has(directoryPath === '/' ? '/raw.hvy' : `${directoryPath}/raw.hvy`)
-    || fs.entries.has(directoryPath === '/' ? '/raw-preview.hvy.txt' : `${directoryPath}/raw-preview.hvy.txt`)
-    || fs.entries.has(directoryPath === '/' ? '/raw.wip.hvy' : `${directoryPath}/raw.wip.hvy`)
-  ) {
     return '';
   }
-  const nearest = findNearestRawEditableParent(fs, directoryPath);
-  return nearest ? `nearest raw-editable parent | ${nearest}` : '';
-}
-
-function findNearestRawEditableParent(fs: ReturnType<typeof buildHvyVirtualFileSystem>, directoryPath: string): string {
-  let current = directoryPath;
-  while (true) {
-    const rawPath = current === '/' ? '/raw.hvy' : `${current}/raw.hvy`;
-    const entry = fs.entries.get(rawPath);
-    if (entry?.kind === 'file' && entry.write && entry.writable !== false) {
-      return rawPath;
-    }
-    if (current === '/') {
-      return '';
-    }
-    current = current.replace(/\/[^/]+$/, '') || '/';
-  }
+  const component = readJsonFileFromVirtualPath(ctx.fs, `${directoryPath}/${componentName}.json`);
+  return component ? formatMetadataDescription('Component metadata:', component) : '';
 }
 
 function formatMetadataDescription(label: string, value: Record<string, unknown>): string {
@@ -2789,16 +2761,16 @@ function formatDirectoryEntryDescription(fs: ReturnType<typeof buildHvyVirtualFi
   }
   const name = path.split('/').pop() ?? '';
   if (name === 'expandable-stub') {
-    return `expandable's stub children; raw edits available through ${findNearestRawEditableParent(fs, path) || 'the parent component'}`;
+    return formatStructuralDirectoryDescription(fs, path, "expandable's stub");
   }
   if (name === 'expandable-content') {
-    return `expandable's content children; raw edits available through ${findNearestRawEditableParent(fs, path) || 'the parent component'}`;
+    return formatStructuralDirectoryDescription(fs, path, "expandable's content");
   }
   if (name === 'container') {
-    return `container child slot; raw edits available through ${findNearestRawEditableParent(fs, path) || 'the parent component'}`;
+    return formatStructuralDirectoryDescription(fs, path, 'container children');
   }
   if (name === 'grid') {
-    return `grid item collection; raw edits available through ${findNearestRawEditableParent(fs, path) || 'the parent grid component'}`;
+    return formatStructuralDirectoryDescription(fs, path, 'grid items');
   }
   return '';
 }
@@ -2809,10 +2781,19 @@ function isTopLevelSectionPath(path: string): boolean {
 
 function formatComponentDirectoryDescription(fs: ReturnType<typeof buildHvyVirtualFileSystem>, path: string, componentName: string): string {
   const componentLabel = componentName === 'table' ? 'static table component' : `${componentName} component`;
-  const preview = componentName === 'table'
-    ? formatTableDirectoryPreview(fs, path)
-    : formatComponentBodyPreview(fs, path, componentName);
+  const preview = formatComponentPreview(fs, path, componentName);
   return preview ? `${componentLabel} | ${preview}` : componentLabel;
+}
+
+function formatStructuralDirectoryDescription(fs: ReturnType<typeof buildHvyVirtualFileSystem>, path: string, label: string): string {
+  const preview = listDirectory(fs, path)
+    .filter((entry) => entry.kind === 'dir')
+    .map((entry) => {
+      const componentName = inferComponentNameForDirectory(fs, entry.path);
+      return componentName ? formatComponentPreview(fs, entry.path, componentName) : '';
+    })
+    .find((value) => value.length > 0);
+  return preview ? `${label} | ${preview}` : label;
 }
 
 function formatTableDirectoryPreview(fs: ReturnType<typeof buildHvyVirtualFileSystem>, path: string): string {
@@ -2821,6 +2802,12 @@ function formatTableDirectoryPreview(fs: ReturnType<typeof buildHvyVirtualFileSy
     return '';
   }
   return compactLsComponentPreview(tableEntry.read(), (line) => line.replace(/\s*\|\s*/g, ' '));
+}
+
+function formatComponentPreview(fs: ReturnType<typeof buildHvyVirtualFileSystem>, path: string, componentName: string): string {
+  return componentName === 'table'
+    ? formatTableDirectoryPreview(fs, path)
+    : formatComponentBodyPreview(fs, path, componentName);
 }
 
 function formatComponentBodyPreview(fs: ReturnType<typeof buildHvyVirtualFileSystem>, path: string, componentName: string): string {
@@ -2882,7 +2869,11 @@ function formatFileEntryDescription(fs: ReturnType<typeof buildHvyVirtualFileSys
     return 'static table rows as a JSON array of string arrays';
   }
   if (filename.startsWith('about-') && filename.endsWith('.txt')) {
-    return 'documentation for this component or plugin type';
+    const docsEntry = fs.entries.get(path);
+    if (docsEntry?.kind === 'file' && docsEntry.read().includes('reusable component:')) {
+      return 'documentation for reusable component type and schema';
+    }
+    return 'documentation for component or plugin type and schema';
   }
   if (filename.endsWith('.py')) {
     return 'Python/Brython script source exposed from a scripting or form plugin';

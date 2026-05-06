@@ -411,8 +411,8 @@ test('advanceDocumentEditCliSimStep executes the response and prepares the next 
   });
   const payload = JSON.parse(result.requestJson) as { messages: ChatMessage[] };
 
-  expect(result.commandResultMessage).toContain('### CMD RESULT ###\n/');
-  expect(payload.messages.at(-2)).toEqual(expect.objectContaining({
+  expect(result.commandResultMessage).toContain('### CMD RESULT ###\nCMD: pwd\n/');
+  expect(payload.messages).not.toContainEqual(expect.objectContaining({
     role: 'assistant',
     content: expect.stringContaining('```shell\npwd\n```'),
   }));
@@ -661,8 +661,7 @@ pwd
     '$ pwd',
   ]);
   const nextPrompt = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content ?? '';
-  expect(nextPrompt).toContain('notes from your previous response\nWhat you are doing: Inspecting the current directory.');
-  expect(nextPrompt).toContain('### CMD RESULT ###\n/\n### END CMD RESULT ###');
+  expect(nextPrompt).toContain('### CMD RESULT ###\nCMD: pwd\n/\n### END CMD RESULT ###');
 });
 
 test('requestDocumentEditChatTurn runs multiple fenced shell blocks as a batch', async () => {
@@ -946,7 +945,7 @@ hvy_version: 0.1
 
   expect(result.error).toBeNull();
   const nextPrompt = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content ?? '';
-  expect(nextPrompt).toContain('### CMD RESULT ###\nHello\n### END CMD RESULT ###');
+  expect(nextPrompt).toContain('### CMD RESULT ###\nCMD: cat /body/summary/intro/text.txt\nHello\n### END CMD RESULT ###');
   expect(nextPrompt).toContain('What is your next command?');
   expect(nextPrompt.trimEnd()).toMatch(/What is your next command\?$/);
   expect(nextPrompt).toContain('optional context, not required actions\ncomponent text: /body/summary/intro');
@@ -1328,7 +1327,7 @@ test('requestDocumentEditChatTurn lets the cli edit loop retry after command err
 
   expect(result.error).toBeNull();
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content).toContain(
-    '### CMD RESULT ###\nhvy: expected request_structure, find-intent, cheatsheet, recipe, lint, add, plugin, section add, text add, table add, form add, or db-table show\n### END CMD RESULT ###'
+    '### CMD RESULT ###\nCMD: hvy\nhvy: expected request_structure, find-intent, cheatsheet, recipe, lint, add, plugin, section add, text add, table add, form add, or db-table show\n### END CMD RESULT ###'
   );
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content).toContain(
     '### BEGIN your urgency ###\nscore=0\nprioritize planning and understanding'
@@ -1338,7 +1337,7 @@ test('requestDocumentEditChatTurn lets the cli edit loop retry after command err
     'hvy',
     'hvy: expected request_structure, find-intent, cheatsheet, recipe, lint, add, plugin, section add, text add, table add, form add, or db-table show',
     undefined,
-    expect.stringContaining('### CMD RESULT ###\nhvy: expected request_structure, find-intent, cheatsheet, recipe, lint, add, plugin, section add, text add, table add, form add, or db-table show\n### END CMD RESULT ###')
+    expect.stringContaining('### CMD RESULT ###\nCMD: hvy\nhvy: expected request_structure, find-intent, cheatsheet, recipe, lint, add, plugin, section add, text add, table add, form add, or db-table show\n### END CMD RESULT ###')
   );
 });
 

@@ -123,11 +123,6 @@ export async function runChatCliEditLoop(params: {
         ...conversation,
         {
           id: crypto.randomUUID(),
-          role: 'assistant',
-          content: response,
-        },
-        {
-          id: crypto.randomUUID(),
           role: 'user',
           content: action.message,
         },
@@ -141,11 +136,6 @@ export async function runChatCliEditLoop(params: {
       if (introducedIssues.length > 0) {
         conversation = [
           ...conversation,
-          {
-            id: crypto.randomUUID(),
-            role: 'assistant',
-            content: response,
-          },
           {
             id: crypto.randomUUID(),
             role: 'user',
@@ -173,11 +163,6 @@ export async function runChatCliEditLoop(params: {
     if (commands.length > CHAT_CLI_MAX_BATCH_COMMANDS) {
       conversation = [
         ...conversation,
-        {
-          id: crypto.randomUUID(),
-          role: 'assistant',
-          content: response,
-        },
         {
           id: crypto.randomUUID(),
           role: 'user',
@@ -243,7 +228,6 @@ export async function runChatCliEditLoop(params: {
     }
     const modelMessage = formatCommandResultForModel({
       output: formatBatchCommandOutput(commandOutputs),
-      assistantNotes: action.notes,
       diagnosticsDiff: await updateDiagnosticsState(params.document, diagnostics, mutated, (nextIssues) => {
         const diff = formatHvyCliDiagnosticDiff(diagnostics, nextIssues);
         diagnostics = nextIssues;
@@ -270,11 +254,6 @@ export async function runChatCliEditLoop(params: {
     }
     conversation = [
       ...conversation,
-      {
-        id: crypto.randomUUID(),
-        role: 'assistant',
-        content: response,
-      },
       {
         id: crypto.randomUUID(),
         role: 'user',
@@ -342,11 +321,6 @@ export async function advanceChatCliSimTurnState(params: {
       ...params.state.messages,
       {
         id: crypto.randomUUID(),
-        role: 'assistant' as const,
-        content: params.assistantOutput,
-      },
-      {
-        id: crypto.randomUUID(),
         role: 'user' as const,
         content: action.message,
       },
@@ -405,7 +379,6 @@ export async function advanceChatCliSimTurnState(params: {
   const urgency = batchHadSuccess ? updateChatCliUrgency(params.state.urgency, mutated) : params.state.urgency;
   const commandResultMessage = formatCommandResultForModel({
     output: formatBatchCommandOutput(commandOutputs),
-    assistantNotes: action.notes,
     diagnosticsDiff: '(sim mode: diagnostics diff not computed)',
     hints: formatBatchHints(commandHints),
     introducedDiagnostics: formatIntroducedDiagnosticsForModel(getIntroducedDiagnostics(params.document)),
@@ -415,11 +388,6 @@ export async function advanceChatCliSimTurnState(params: {
   });
   const messages = [
     ...params.state.messages,
-    {
-      id: crypto.randomUUID(),
-      role: 'assistant' as const,
-      content: params.assistantOutput,
-    },
     {
       id: crypto.randomUUID(),
       role: 'user' as const,
@@ -736,7 +704,7 @@ function buildChatCliLoopFormatInstructions(): string {
     'Return concise notes plus terminal command(s).',
     'At the top, write exactly these note labels with short answers: What you are doing, Why you are doing it, What you are unsure of.',
     `Wrap commands in \`\`\`shell fences. Multiple \`\`\`shell blocks are allowed and run in order. Keep batches to at most ${CHAT_CLI_RECOMMENDED_BATCH_COMMANDS} focused commands.`,
-    'Text outside ```shell fences is treated as notes for your future self and shown in history.',
+    'Text outside ```shell fences is shown as progress notes for debugging. It is not a substitute for commands.',
     'To finish, return only: done Short summary of what changed.',
     'To ask for requirements, NOT CLI clarification from the non-technical user, return: ask followed by the actual question.',
     'Do not include done with commands. Run commands, inspect the result, then finish in a later response.',
@@ -863,12 +831,11 @@ function normalizeAssistantNotes(notes: string): string {
     .trim();
 }
 
-function formatCommandResultForModel(result: string | { output: string; assistantNotes?: string; diagnosticsDiff?: string; hints?: string; introducedDiagnostics?: string; scratchpad?: string; urgency?: string; cwd?: string }): string {
+function formatCommandResultForModel(result: string | { output: string; diagnosticsDiff?: string; hints?: string; introducedDiagnostics?: string; scratchpad?: string; urgency?: string; cwd?: string }): string {
   if (typeof result === 'string') {
     return formatCommandResultSection(result);
   }
   return [
-    ...(result.assistantNotes?.trim() ? ['notes from your previous response', result.assistantNotes.trimEnd(), ''] : []),
     formatCommandResultSection(result.output),
     'diagnostics',
     result.diagnosticsDiff?.trimEnd() || '(no changes)',
@@ -916,9 +883,6 @@ function getChatCliUrgencyMessage(score: number): string {
 }
 
 function formatBatchCommandOutput(outputs: Array<{ command: string; output: string }>): string {
-  if (outputs.length === 1) {
-    return outputs[0]?.output ?? '';
-  }
   return outputs
     .map((result) => [`CMD: ${result.command}`, result.output.trimEnd() || '(no output)'].join('\n'))
     .join('\n\n');

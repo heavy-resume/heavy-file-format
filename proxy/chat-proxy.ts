@@ -257,12 +257,21 @@ export function extractOpenAiText(payload: unknown): string {
     return record.output_text.trim();
   }
 
+  const messages = (record.output ?? [])
+    .filter((item) => (item as { type?: string }).type === 'message')
+    .flatMap((item) => item.content ?? [])
+    .map((item) => (item.type === 'output_text' && typeof item.text === 'string' ? item.text : ''))
+    .filter((value) => value.trim().length > 0);
+  const finalMessage = messages.at(-1)?.trim();
+  if (finalMessage) {
+    return finalMessage;
+  }
+
   return (record.output ?? [])
     .flatMap((item) => item.content ?? [])
     .map((item) => (item.type === 'output_text' && typeof item.text === 'string' ? item.text : ''))
-    .filter((value) => value.trim().length > 0)
-    .join('\n')
-    .trim();
+    .find((value) => value.trim().length > 0)
+    ?.trim() ?? '';
 }
 
 export function extractOpenAiReasoningSummary(payload: unknown): string {

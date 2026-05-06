@@ -149,6 +149,7 @@ test('proxy response extractors collect text from provider payloads', () => {
     extractOpenAiText({
       output: [
         {
+          type: 'message',
           content: [
             { type: 'output_text', text: 'OpenAI answer' },
           ],
@@ -156,6 +157,27 @@ test('proxy response extractors collect text from provider payloads', () => {
       ],
     })
   ).toBe('OpenAI answer');
+
+  expect(
+    extractOpenAiText({
+      output: [
+        {
+          type: 'message',
+          phase: 'commentary',
+          content: [
+            { type: 'output_text', text: 'Duplicate answer' },
+          ],
+        },
+        {
+          type: 'message',
+          phase: 'final_answer',
+          content: [
+            { type: 'output_text', text: 'Duplicate answer' },
+          ],
+        },
+      ],
+    })
+  ).toBe('Duplicate answer');
 
   expect(
     extractAnthropicText({

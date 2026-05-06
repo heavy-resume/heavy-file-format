@@ -540,8 +540,8 @@ function formatCreatedChildOrderGuide(
   const itemName = baseComponent === 'component-list' ? 'list item' : insertionKind === 'grid' ? 'grid item' : 'child';
   return [
     'order:',
-    `  New ${itemName}s are appended by default.`,
-    `  To reorder after creation, edit ${orderPath}.`,
+    `  children-order.json controls ${itemName} order.`,
+    `  Inspect or edit ${orderPath} when placement matters.`,
     `  Example: cat ${orderPath}`,
   ].join('\n');
 }

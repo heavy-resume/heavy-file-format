@@ -316,11 +316,12 @@ component_defs:
     command: 'cat /body/history/history-list/history-acme/history-record.txt',
   });
 
-  expect(componentListHint).toContain('optional list-item creation: hvy append-child history-record /body/history/history-list --id NEW_ID');
-  expect(componentListHint).toContain('after creating a list item, inspect it with hvy request_structure NEW_ID --describe');
-  expect(componentListHint).toContain('component-list.txt is a text preview of existing leaf items');
-  expect(reusableItemHint).toContain('optional blank sibling creation: hvy append-child history-record /body/history/history-list --id NEW_ID');
-  expect(reusableItemHint).toContain('after creating a reusable component, inspect it with hvy request_structure NEW_ID --describe');
+  expect(componentListHint).toContain('component-list.json defines the list item type');
+  expect(componentListHint).toContain('children-order.json controls list item order');
+  expect(componentListHint).toContain('component-list.txt is a preview of existing leaf item text');
+  expect(componentListHint).not.toContain('optional list-item creation');
+  expect(reusableItemHint).not.toContain('optional blank sibling creation');
+  expect(reusableItemHint).not.toContain('after creating a reusable component');
   expect(componentListHint).not.toContain('"Title"');
   expect(reusableItemHint).not.toContain('"Title"');
 });
@@ -364,8 +365,8 @@ test('hvy append-child can create custom components and generic xref components'
   expect(skill.output).toContain('/body/skills/component-list-1/skill-baking: created');
   expect(skill.output).toContain('file skill-record.json');
   expect(skill.output).toContain('file skill-record.txt');
-  expect(skill.output).toContain('order:\n  New list items are appended by default.');
-  expect(skill.output).toContain('To reorder after creation, edit /body/skills/component-list-1/children-order.json.');
+  expect(skill.output).toContain('order:\n  children-order.json controls list item order.');
+  expect(skill.output).toContain('Inspect or edit /body/skills/component-list-1/children-order.json when placement matters.');
   expect(skill.output).toContain('next:\n  hvy request_structure /body/skills/component-list-1/skill-baking --describe');
   expect(skill.output).toContain('Fill the leaf body/config files shown by request_structure.');
   expect(skill.output).toContain('### CREATED CUSTOM COMPONENT ###');
@@ -380,8 +381,8 @@ test('hvy append-child can create custom components and generic xref components'
   expect(xref.output).toContain('/body/top-skills-tools-technologies/grid-0/grid/top-skill-baking: created');
   expect(xref.output).toContain('file xref-card.json');
   expect(xref.output).toContain('file xref-card.txt');
-  expect(xref.output).toContain('order:\n  New grid items are appended by default.');
-  expect(xref.output).toContain('To reorder after creation, edit /body/top-skills-tools-technologies/grid-0/grid/children-order.json.');
+  expect(xref.output).toContain('order:\n  children-order.json controls grid item order.');
+  expect(xref.output).toContain('Inspect or edit /body/top-skills-tools-technologies/grid-0/grid/children-order.json when placement matters.');
   expect(xref.output).not.toContain('### CREATED CUSTOM COMPONENT ###');
   expect((await executeHvyCliCommand(document, session, 'cat /body/skills/component-list-1/skill-baking/skill-record.txt')).output)
     .toContain('Baking');
@@ -649,7 +650,7 @@ hvy_version: 0.1
   expect(serializeDocument(document)).toContain('"tableRows":[{"cells":["Trash","No"]},{"cells":["Dishes","Yes"]}]');
 
   await expect(executeHvyCliCommand(document, session, 'echo "- id: item-1" > /body/quality/empty-list.txt')).rejects.toThrow(
-    'component-list.txt is a read-only preview until list items exist. Use hvy append-child ITEM_TYPE PATH --id NEW_ID'
+    'component-list.txt is a read-only preview until list items exist. component-list.json defines the item type and children-order.json controls item order.'
   );
 
   expect((await executeHvyCliCommand(document, session, 'hvy lint')).output).toBe('No lint issues.');

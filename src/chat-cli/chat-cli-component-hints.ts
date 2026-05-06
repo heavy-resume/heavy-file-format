@@ -74,8 +74,6 @@ function buildComponentPathHint(path: string, fs: ReturnType<typeof buildHvyVirt
     ...componentSpecificHintLines(componentName),
     ...pluginSpecificHintLines(componentName, `${componentDir}/${componentName}.json`, fs),
     `  files: ${formatEditHint(componentDir, componentName, fs)}`,
-    `  optional commands: inspect with hvy request_structure ${componentDir} --describe; remove this component with hvy remove ${componentDir}.`,
-    ...formatCreateRelatedHints(componentDir, componentName, fs),
   ].join('\n');
 }
 
@@ -86,52 +84,12 @@ function componentSpecificHintLines(componentName: string): string[] {
 
 function formatEditHint(componentDir: string, componentName: string, fs: ReturnType<typeof buildHvyVirtualFileSystem>): string {
   if (componentName === 'table') {
-    return `tableColumns.json and tableRows.json for static table data, ${componentName}.json for display config; ${bodyFileNameForDirectory(componentDir, componentName, fs)} is a read-only preview.`;
+    return `tableColumns.json and tableRows.json hold static table data; ${componentName}.json holds display config; ${bodyFileNameForDirectory(componentDir, componentName, fs)} is a preview.`;
   }
   if (componentName === 'component-list') {
-    return `use hvy append-child ITEM_TYPE ${componentDir} --id NEW_ID for list items; ${bodyFileNameForDirectory(componentDir, componentName, fs)} is a text preview of existing leaf items.`;
+    return `component-list.json defines the list item type; children-order.json controls list item order; ${bodyFileNameForDirectory(componentDir, componentName, fs)} is a preview of existing leaf item text.`;
   }
   return `${bodyFileNameForDirectory(componentDir, componentName, fs)} for body, ${componentName}.json for config.`;
-}
-
-function formatCreateRelatedHints(componentDir: string, componentName: string, fs: ReturnType<typeof buildHvyVirtualFileSystem>): string[] {
-  const parentPath = componentDir.replace(/\/[^/]+$/, '') || '/body';
-  if (componentName === 'component-list') {
-    const itemType = readComponentListItemType(`${componentDir}/component-list.json`, fs);
-    if (itemType) {
-      return [
-        `  optional list-item creation: hvy append-child ${itemType} ${componentDir} --id NEW_ID`,
-        '  after creating a list item, inspect it with hvy request_structure NEW_ID --describe and then edit its leaf body/config files.',
-      ];
-    }
-  }
-  if (componentName === 'xref-card') {
-    return [`  optional sibling creation: hvy append-child component ${parentPath} NEW_ID xref-card "Visible label" --config '{"xrefTarget":"target-id"}'`];
-  }
-  if (isLikelyReusableComponent(componentName)) {
-    return [
-      `  optional blank sibling creation: hvy append-child ${componentName} ${parentPath} --id NEW_ID`,
-      '  after creating a reusable component, inspect it with hvy request_structure NEW_ID --describe and then edit its leaf body/config files.',
-    ];
-  }
-  return [`  optional sibling creation: hvy append-child ${componentName} ${parentPath} --id NEW_ID "Initial body text"`];
-}
-
-function readComponentListItemType(jsonPath: string, fs: ReturnType<typeof buildHvyVirtualFileSystem>): string {
-  const entry = fs.entries.get(jsonPath);
-  if (!entry || entry.kind !== 'file') {
-    return '';
-  }
-  try {
-    const value = JSON.parse(entry.read()) as { componentListComponent?: unknown };
-    return typeof value.componentListComponent === 'string' ? value.componentListComponent.trim() : '';
-  } catch {
-    return '';
-  }
-}
-
-function isLikelyReusableComponent(componentName: string): boolean {
-  return !['text', 'image', 'table', 'container', 'grid', 'expandable', 'plugin', 'component-list'].includes(componentName);
 }
 
 function pluginSpecificHintLines(componentName: string, jsonPath: string, fs: ReturnType<typeof buildHvyVirtualFileSystem>): string[] {

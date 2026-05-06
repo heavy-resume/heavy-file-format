@@ -1093,8 +1093,8 @@ hvy_version: 0.1
   expect(nextPrompt).toContain('### OPTIONAL CONTEXT (NOT REQUIRED ACTIONS) ###\ncomponent text: /body/summary/intro');
   expect(nextPrompt).toContain('# Text Components #');
   expect(nextPrompt).toContain('files: text.txt for body, text.json for config.');
-  expect(nextPrompt).toContain('optional commands: inspect with hvy request_structure /body/summary/intro --describe; remove this component with hvy remove /body/summary/intro.');
-  expect(nextPrompt).toContain('optional sibling creation: hvy append-child text /body/summary --id NEW_ID "Initial body text"');
+  expect(nextPrompt).not.toContain('optional commands: inspect with hvy request_structure');
+  expect(nextPrompt).not.toContain('optional sibling creation');
   expect(nextPrompt).toContain('### BEGIN /scratchpad.txt  ###\nlast edited never\n\nYou havent written your plan yet.');
   expect(nextPrompt).toContain('### BEGIN your urgency ###\nscore=1\nprioritize planning and understanding');
   expect(nextPrompt).not.toContain('commands since last edit:');
@@ -1249,8 +1249,8 @@ hvy_version: 0.1
   expect(nextPrompt).toContain('component grid: /body/dashboard/layout');
   expect(nextPrompt).toContain('# Grid Components #');
   expect(nextPrompt).toContain('files: grid.txt for body, grid.json for config.');
-  expect(nextPrompt).toContain('optional commands: inspect with hvy request_structure /body/dashboard/layout --describe; remove this component with hvy remove /body/dashboard/layout.');
-  expect(nextPrompt).toContain('optional sibling creation: hvy append-child grid /body/dashboard --id NEW_ID "Initial body text"');
+  expect(nextPrompt).not.toContain('optional commands: inspect with hvy request_structure');
+  expect(nextPrompt).not.toContain('optional sibling creation');
 });
 
 test('requestDocumentEditChatTurn includes structure hints after search commands', async () => {

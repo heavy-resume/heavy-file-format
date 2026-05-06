@@ -690,14 +690,14 @@ function addTableDataFiles(entries: Map<string, HvyVirtualEntry>, block: VisualB
 function writeBlockBodyText(block: VisualBlock, content: string): void {
   if (block.schema.component === 'table') {
     throw new Error(
-      'table.txt is a read-only preview for static table components. Edit tableColumns.json and tableRows.json instead, or use hvy append-child table to create a replacement table.'
+      'table.txt is a read-only preview for static table components. Edit tableColumns.json and tableRows.json instead.'
     );
   }
 
   const nestedTextBlocks = collectNestedTextBlocks(block);
   if (block.schema.component === 'component-list' && nestedTextBlocks.length === 0) {
     throw new Error(
-      'component-list.txt is a read-only preview until list items exist. Use hvy append-child ITEM_TYPE PATH --id NEW_ID to create a list item, then edit that item\'s leaf body/config files.'
+      'component-list.txt is a read-only preview until list items exist. component-list.json defines the item type and children-order.json controls item order.'
     );
   }
 

@@ -242,6 +242,49 @@ hvy_version: 0.1
   await expect(page.locator('.editor-block.is-activating-path')).toHaveCount(0);
 });
 
+test('active nested list item exposes delete controls on ancestor components', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"history"}-->
+#! History
+
+ <!--hvy:component-list {"id":"history-list","componentListComponent":"expandable"}-->
+
+  <!--hvy:component-list:0 {}-->
+
+   <!--hvy:expandable {"id":"history-row","expandableExpanded":true}-->
+
+    <!--hvy:expandable:stub {}-->
+
+     <!--hvy:text {}-->
+      Heavy Resume
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:text {}-->
+      Founder details
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('.editor-block-passive', { hasText: 'Founder details' }).last().click();
+
+  await expect(page.locator('.editor-block-head', { hasText: 'component-list' }).locator('[data-action="remove-block"]')).toBeVisible();
+  await expect(page.locator('.editor-block-head', { hasText: 'expandable' }).locator('[data-action="remove-block"]')).toBeVisible();
+
+  await page.locator('.editor-block-head', { hasText: 'expandable' }).locator('[data-action="remove-block"]').click();
+  await page.getByRole('button', { name: 'Delete' }).click();
+  await page.getByRole('button', { name: 'Raw' }).click();
+  const raw = await page.locator('#rawEditor').inputValue();
+  expect(raw).not.toContain('Founder details');
+  expect(raw).toContain('component-list');
+});
+
 test('cli-created expanded history record can be closed and followed by another list item', async ({ page }) => {
   await page.goto('/');
 

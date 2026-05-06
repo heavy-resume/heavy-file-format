@@ -379,7 +379,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const blockMove = isActiveSelf
       ? getBlockMoveAvailability(sectionKey, block.id, rootSections ?? [])
       : { canMoveUp: false, canMoveDown: false };
-    const canRemove = isActiveSelf && !parentLocked;
+    const canRemove = isActive && !parentLocked;
     const placement = state.componentPlacement;
     const isPlacementSource = placement?.sectionKey === sectionKey && placement.blockId === block.id;
     const placementActions = canRemove

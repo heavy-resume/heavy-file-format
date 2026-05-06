@@ -1,4 +1,4 @@
-import { state, getRenderApp, getRefreshReaderPanels, recordHistory, serializeDocument, appendUserChatMessage, buildDocumentEditCliSimRequest, requestChatTurn, requestDocumentEditChatTurn, submitAiEditRequest, submitCliCommand, restoreCliViewAfterRender } from './_imports';
+import { state, getRenderApp, getRefreshReaderPanels, recordHistory, serializeDocument, appendUserChatMessage, buildDocumentEditCliSimRequest, requestChatTurn, requestDocumentEditChatTurn, saveResumeState, submitAiEditRequest, submitCliCommand, restoreCliViewAfterRender } from './_imports';
 
 export function bindSubmit(app: HTMLElement): void {
   app.addEventListener('submit', async (event) => {
@@ -92,6 +92,7 @@ export function bindSubmit(app: HTMLElement): void {
       state.chat.error = null;
       state.chat.isSending = true;
       state.chat.requestNonce += 1;
+      saveResumeState(state);
       const requestNonce = state.chat.requestNonce;
       const abortController = new AbortController();
       state.chat.abortController = abortController;
@@ -140,6 +141,7 @@ export function bindSubmit(app: HTMLElement): void {
                     content: message.content,
                   });
                   state.chat.messages = upsertChatProgressMessage(state.chat.messages, message);
+                  saveResumeState(state);
                   getRenderApp()();
                 },
                 signal: abortController.signal,
@@ -168,6 +170,7 @@ export function bindSubmit(app: HTMLElement): void {
         }
         state.chat.messages = result.messages;
         state.chat.error = result.error;
+        saveResumeState(state);
         if (isDocumentEditChat && !result.error) {
           state.rawEditorText = serializeDocument(state.document);
           state.rawEditorError = null;
@@ -190,6 +193,7 @@ export function bindSubmit(app: HTMLElement): void {
         });
         state.chat.abortController = null;
         state.chat.isSending = false;
+        saveResumeState(state);
         getRenderApp()();
       }
       return;

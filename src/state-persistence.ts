@@ -64,7 +64,7 @@ export function loadResumeState(): LoadedResumeState | null {
         settings: normalizeChatSettings(parsed.chat?.settings),
         draft: typeof parsed.chat?.draft === 'string' ? parsed.chat.draft : '',
         messages: Array.isArray(parsed.chat?.messages)
-          ? parsed.chat.messages.filter(isChatMessage)
+          ? parsed.chat.messages.map(normalizeChatMessage).filter((message): message is ChatMessage => Boolean(message))
           : [],
         panelOpen: Boolean(parsed.chat?.panelOpen),
       },
@@ -92,7 +92,7 @@ export function saveResumeState(state: AppState): void {
       chat: {
         settings: state.chat.settings,
         draft: state.chat.draft,
-        messages: state.chat.messages.filter((message) => !message.progress),
+        messages: state.chat.messages,
         panelOpen: state.chat.panelOpen,
       },
       documentBase64: bytesToBase64(serializeDocumentBytes(state.document)),
@@ -179,5 +179,57 @@ function isChatMessage(value: unknown): value is ChatMessage {
     ((value as ChatMessage).role === 'user' || (value as ChatMessage).role === 'assistant') &&
     typeof (value as ChatMessage).id === 'string' &&
     typeof (value as ChatMessage).content === 'string'
+  );
+}
+
+function normalizeChatMessage(value: unknown): ChatMessage | null {
+  if (!isChatMessage(value)) {
+    return null;
+  }
+  const message = value as ChatMessage;
+  const work = normalizeChatWorkState(message.work);
+  const wasRunning = work?.status === 'running';
+  return {
+    id: message.id,
+    role: message.role,
+    content: wasRunning && !message.content.trim()
+      ? 'Interrupted by page reload.'
+      : message.content,
+    ...(typeof message.reasoning === 'string' ? { reasoning: message.reasoning } : {}),
+    ...(isChatTokenUsage(message.tokenUsage) ? { tokenUsage: message.tokenUsage } : {}),
+    ...(message.error || wasRunning ? { error: true } : {}),
+    ...(message.progress && !wasRunning ? { progress: message.progress } : {}),
+    ...(work ? { work: wasRunning ? { ...work, status: 'error' } : work } : {}),
+  };
+}
+
+function normalizeChatWorkState(value: unknown): ChatMessage['work'] | undefined {
+  if (!value || typeof value !== 'object') {
+    return undefined;
+  }
+  const raw = value as ChatMessage['work'];
+  if (!raw || (raw.status !== 'running' && raw.status !== 'done' && raw.status !== 'error')) {
+    return undefined;
+  }
+  return {
+    status: raw.status,
+    ...(typeof raw.lastCommand === 'string' ? { lastCommand: raw.lastCommand } : {}),
+    details: Array.isArray(raw.details) ? raw.details.filter((entry) => typeof entry === 'string') : [],
+    reasoning: Array.isArray(raw.reasoning) ? raw.reasoning.filter((entry) => typeof entry === 'string') : [],
+    ...(isChatTokenUsage(raw.tokenUsage) ? { tokenUsage: raw.tokenUsage } : {}),
+  };
+}
+
+function isChatTokenUsage(value: unknown): value is NonNullable<ChatMessage['tokenUsage']> {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+  const raw = value as NonNullable<ChatMessage['tokenUsage']>;
+  return (
+    (raw.inputTokens === undefined || typeof raw.inputTokens === 'number') &&
+    (raw.outputTokens === undefined || typeof raw.outputTokens === 'number') &&
+    (raw.totalTokens === undefined || typeof raw.totalTokens === 'number') &&
+    (raw.cachedTokens === undefined || typeof raw.cachedTokens === 'number') &&
+    (raw.reasoningTokens === undefined || typeof raw.reasoningTokens === 'number')
   );
 }

@@ -76,27 +76,29 @@ export function bindChatThreadUi(
     });
   });
 
-  chatThread.querySelectorAll<HTMLDetailsElement>('[data-chat-work-details]').forEach((details) => {
-    const key = details.dataset.chatWorkDetails ?? '';
-    if (key && openChatWorkDetails.has(key)) {
-      details.open = true;
-    }
-    details.addEventListener('toggle', () => {
-      const nextKey = details.dataset.chatWorkDetails ?? '';
-      if (!nextKey) {
-        return;
+  if (typeof chatThread.querySelectorAll === 'function') {
+    chatThread.querySelectorAll<HTMLDetailsElement>('[data-chat-work-details]').forEach((details) => {
+      const key = details.dataset.chatWorkDetails ?? '';
+      if (key && openChatWorkDetails.has(key)) {
+        details.open = true;
       }
       if (details.open) {
-        openChatWorkDetails.add(nextKey);
         scrollWorkDetailsToLatest(details);
-      } else {
-        openChatWorkDetails.delete(nextKey);
       }
+      details.addEventListener('toggle', () => {
+        const nextKey = details.dataset.chatWorkDetails ?? '';
+        if (!nextKey) {
+          return;
+        }
+        if (details.open) {
+          openChatWorkDetails.add(nextKey);
+          scrollWorkDetailsToLatest(details);
+        } else {
+          openChatWorkDetails.delete(nextKey);
+        }
+      });
     });
-    if (details.open) {
-      scrollWorkDetailsToLatest(details);
-    }
-  });
+  }
 
   window.requestAnimationFrame(() => {
     window.requestAnimationFrame(() => {
@@ -110,7 +112,9 @@ export function bindChatThreadUi(
         chatScrollContainer.scrollTop = Math.min(lastChatScrollTop, chatScrollContainer.scrollHeight);
       }
       updateScrollButton();
-      chatThread.querySelectorAll<HTMLDetailsElement>('[data-chat-work-details][open]').forEach(scrollWorkDetailsToLatest);
+      if (typeof chatThread.querySelectorAll === 'function') {
+        chatThread.querySelectorAll<HTMLDetailsElement>('[data-chat-work-details][open]').forEach(scrollWorkDetailsToLatest);
+      }
       lastBoundChatMessageCount = state.chat.messages.length;
       lastBoundChatMessageSignature = nextSignature;
     });

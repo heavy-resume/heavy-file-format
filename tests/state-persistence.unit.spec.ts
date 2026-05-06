@@ -41,7 +41,18 @@ hvy_version: 0.1
       draft: 'continue this',
       messages: [
         { id: 'm1', role: 'user', content: 'Please edit.' },
-        { id: 'm2', role: 'assistant', content: 'Working...', progress: true },
+        {
+          id: 'm2',
+          role: 'assistant',
+          content: 'Working...',
+          progress: true,
+          work: {
+            status: 'running',
+            lastCommand: 'hvy lint',
+            details: ['$ hvy lint'],
+            reasoning: ['Checking the document.'],
+          },
+        },
         { id: 'm3', role: 'assistant', content: 'Done.' },
       ],
       panelOpen: true,
@@ -64,6 +75,18 @@ hvy_version: 0.1
   expect(resumed?.chat.panelOpen).toBe(true);
   expect(resumed?.chat.messages).toEqual([
     { id: 'm1', role: 'user', content: 'Please edit.' },
+    {
+      id: 'm2',
+      role: 'assistant',
+      content: 'Working...',
+      error: true,
+      work: {
+        status: 'error',
+        lastCommand: 'hvy lint',
+        details: ['$ hvy lint'],
+        reasoning: ['Checking the document.'],
+      },
+    },
     { id: 'm3', role: 'assistant', content: 'Done.' },
   ]);
   expect(resumed?.document.sections[0]?.title).toBe('Summary');

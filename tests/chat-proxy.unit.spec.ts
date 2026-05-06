@@ -438,7 +438,7 @@ test('formatAiCliLogEvent writes clean chat cli trace entries only for chat cli 
 });
 
 test('formatAiCliMessagesLogEvent dumps exact chat cli provider request payloads as JSON', () => {
-  const clientLine = formatAiCliMessagesLogEvent({
+  expect(formatAiCliMessagesLogEvent({
     runId: 'chat-cli-run-1',
     phase: 'document-edit',
     type: 'request_context',
@@ -451,11 +451,7 @@ test('formatAiCliMessagesLogEvent dumps exact chat cli provider request payloads
       ],
       context: 'Current request:\nAdd Baking.',
     },
-  });
-
-  expect(clientLine).toContain('--------\nclient_request\n{');
-  expect(clientLine).toContain('"content": "```shell\\nls /\\n```"');
-  expect(clientLine).toContain('"content": "### BEGIN /scratchpad.txt  ###\\nlast edited never\\n\\nYou havent written your plan yet."');
+  })).toBe('');
 
   const line = formatAiCliMessagesLogEvent({
     runId: 'chat-cli-run-1',

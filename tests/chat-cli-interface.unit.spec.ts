@@ -25,7 +25,8 @@ test('chat cli persistent instructions stay model-facing', () => {
   expect(instructions).toContain('virtual filesystem');
   expect(instructions).toContain('will become one .hvy file');
   expect(instructions).toContain('/scratchpad.txt contains your ephemeral task notes');
-  expect(instructions).toContain('Use shell commands and `help CMD` or `man CMD`');
+  expect(instructions).toContain('Use hvy request_structure');
+  expect(instructions).toContain('man/help');
   expect(instructions).not.toContain('HVY quick reference');
   expect(instructions).not.toContain('ai_cli_log.txt');
   expect(instructions).not.toContain('hvy plugin db-table query [SELECT/WITH SQL]');

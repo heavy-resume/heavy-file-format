@@ -276,7 +276,7 @@ test('requestDocumentEditChatTurn runs the CLI edit loop for document chat', asy
     })
   );
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.systemInstructions).toContain('Response instructions:\nReturn concise notes plus terminal command(s).');
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.systemInstructions).toContain('validate edits before recording completion');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.systemInstructions).toContain('validation, then done');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Current request:\nAdd a chore section.');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Use the chronological chat messages and terminal results to infer the active task.');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).not.toContain('Valid commands (in order of preference):');
@@ -365,7 +365,7 @@ Hello
   );
 });
 
-test('buildDocumentEditCliSimRequest exposes the exact chronological CLI request payload', async () => {
+test('buildDocumentEditCliSimRequest exposes the exact provider-facing CLI request payload', async () => {
   const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
   const document = deserializeDocument('---\nhvy_version: 0.1\n---\n', '.hvy');
 
@@ -376,36 +376,36 @@ test('buildDocumentEditCliSimRequest exposes the exact chronological CLI request
     request: 'Add a chore section.',
   });
   const payload = JSON.parse(result.requestJson) as {
-    provider: string;
     model: string;
-    mode: string;
-    messages: Array<{ role: string; content: string }>;
-    context: string;
+    input: Array<{ role: string; content: Array<{ text: string; type: string }> }>;
   };
 
   expect(payload).toEqual(expect.objectContaining({
-    provider: 'openai',
     model: 'gpt-5-mini',
-    mode: 'document-edit',
   }));
+  expect(payload).not.toHaveProperty('provider');
+  expect(payload).not.toHaveProperty('mode');
+  expect(payload).not.toHaveProperty('context');
+  expect(payload).not.toHaveProperty('messages');
   expect(payload).not.toHaveProperty('responseInstructions');
   expect(payload).not.toHaveProperty('systemInstructions');
-  expect(payload.messages).toEqual([
-    expect.objectContaining({ role: 'system', content: expect.stringContaining('Response instructions:\nReturn concise notes plus terminal command(s).') }),
-    expect.objectContaining({ role: 'user', content: 'Add a chore section.' }),
-    expect.objectContaining({ role: 'assistant', content: expect.stringContaining('```shell\nls /\n```') }),
-    expect.objectContaining({ role: 'user', content: expect.stringContaining('dir  body') }),
-    expect.objectContaining({ role: 'assistant', content: expect.stringContaining('```shell\nhvy --help\n```') }),
-    expect.objectContaining({ role: 'user', content: expect.stringContaining('hvy add section PARENT_PATH ID TITLE') }),
-    expect.objectContaining({ role: 'assistant', content: expect.stringContaining('```shell\nhvy request_structure --collapse\n```') }),
-    expect.objectContaining({ role: 'user', content: expect.stringContaining('Components:') }),
-    expect.objectContaining({ role: 'assistant', content: expect.stringContaining('```shell\nhvy lint\n```') }),
-    expect.objectContaining({ role: 'user', content: '### CMD RESULT ###\nNo lint issues.\n### END CMD RESULT ###' }),
-    expect.objectContaining({ role: 'assistant', content: expect.stringContaining('```shell\nhvy find-intent "Add a chore section." --max 5\n```') }),
-    expect.objectContaining({ role: 'user', content: expect.stringContaining('What is your next command?') }),
+  expect(payload.input).toEqual([
+    expect.objectContaining({ role: 'system', content: [expect.objectContaining({ text: expect.stringContaining('Response instructions:\nReturn concise notes plus terminal command(s).') })] }),
+    expect.objectContaining({ role: 'developer', content: [expect.objectContaining({ text: expect.stringContaining('Current request:\nAdd a chore section.') })] }),
+    expect.objectContaining({ role: 'user', content: [expect.objectContaining({ text: 'Add a chore section.' })] }),
+    expect.objectContaining({ role: 'assistant', content: [expect.objectContaining({ text: expect.stringContaining('```shell\nls /\n```') })] }),
+    expect.objectContaining({ role: 'user', content: [expect.objectContaining({ text: expect.stringContaining('dir  body') })] }),
+    expect.objectContaining({ role: 'assistant', content: [expect.objectContaining({ text: expect.stringContaining('```shell\nhvy --help\n```') })] }),
+    expect.objectContaining({ role: 'user', content: [expect.objectContaining({ text: expect.stringContaining('hvy add section PARENT_PATH ID TITLE') })] }),
+    expect.objectContaining({ role: 'assistant', content: [expect.objectContaining({ text: expect.stringContaining('```shell\nhvy request_structure --collapse\n```') })] }),
+    expect.objectContaining({ role: 'user', content: [expect.objectContaining({ text: expect.stringContaining('Components:') })] }),
+    expect.objectContaining({ role: 'assistant', content: [expect.objectContaining({ text: expect.stringContaining('```shell\nhvy lint\n```') })] }),
+    expect.objectContaining({ role: 'user', content: [expect.objectContaining({ text: '### CMD RESULT ###\nNo lint issues.\n### END CMD RESULT ###' })] }),
+    expect.objectContaining({ role: 'assistant', content: [expect.objectContaining({ text: expect.stringContaining('```shell\nhvy find-intent "Add a chore section." --max 5\n```') })] }),
+    expect.objectContaining({ role: 'user', content: [expect.objectContaining({ text: expect.stringContaining('What is your next command?') })] }),
   ]);
-  expect(payload.messages.at(-1)?.content).toContain('### BEGIN /scratchpad.txt  ###\nlast edited never\n\nYou havent written your plan yet.');
-  expect(payload.messages.at(-1)?.content.trim().endsWith('What is your next command?')).toBe(true);
+  expect(payload.input.at(-1)?.content[0]?.text).toContain('### BEGIN /scratchpad.txt  ###\nlast edited never\n\nYou havent written your plan yet.');
+  expect(payload.input.at(-1)?.content[0]?.text.trim().endsWith('What is your next command?')).toBe(true);
   expect(result.requestJson).toContain('```shell\\nls /\\n```');
   expect(writeChatCliCommandTraceMock).not.toHaveBeenCalled();
   expect(writeChatCliUserQueryTraceMock).not.toHaveBeenCalled();
@@ -427,18 +427,18 @@ test('advanceDocumentEditCliSimStep executes the response and prepares the next 
     turnState: initial.turnState,
     assistantOutput: 'What you are doing: checking location\nWhy you are doing it: verify context\nWhat you are unsure of: nothing\n```shell\npwd\n```',
   });
-  const payload = JSON.parse(result.requestJson) as { messages: ChatMessage[] };
+  const payload = JSON.parse(result.requestJson) as { input: Array<{ role: string; content: Array<{ text: string }> }> };
 
   expect(result.commandResultMessage).toContain('### CMD RESULT ###\nCMD: pwd\n/');
   expect(result.commandResultMessage).toContain('diagnostics\n(no changes)');
   expect(result.commandResultMessage).not.toContain('sim mode');
-  expect(payload.messages).not.toContainEqual(expect.objectContaining({
+  expect(payload.input).not.toContainEqual(expect.objectContaining({
     role: 'assistant',
-    content: expect.stringContaining('```shell\npwd\n```'),
+    content: [expect.objectContaining({ text: expect.stringContaining('```shell\npwd\n```') })],
   }));
-  expect(payload.messages.at(-1)).toEqual(expect.objectContaining({
+  expect(payload.input.at(-1)).toEqual(expect.objectContaining({
     role: 'user',
-    content: expect.stringContaining('What is your next command?'),
+    content: [expect.objectContaining({ text: expect.stringContaining('What is your next command?') })],
   }));
 });
 

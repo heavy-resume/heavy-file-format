@@ -1,4 +1,5 @@
 import { buildProxyChatRequest, requestChatCompletion } from './chat';
+import { buildProviderProxyRequest, type ProviderProxyChatRequest } from './chat-provider-payload';
 import { hasDocumentDbTables } from '../plugins/db-table';
 import { runQaToolLoop } from '../ai-qa';
 import type { ChatMessage, ChatSettings, ChatTokenUsage, ChatWorkState, VisualDocument } from '../types';
@@ -313,7 +314,7 @@ export async function buildDocumentEditCliSimRequest(params: {
   });
   return {
     requestPayload,
-    requestJson: JSON.stringify(requestPayload, null, 2),
+    requestJson: formatCliSimProviderRequestJson(requestPayload),
     turnState: initial,
   };
 }
@@ -380,11 +381,15 @@ export async function advanceDocumentEditCliSimStep(params: {
   });
   return {
     requestPayload,
-    requestJson: JSON.stringify(requestPayload, null, 2),
+    requestJson: formatCliSimProviderRequestJson(requestPayload),
     turnState: next,
     commandResultMessage: next.commandResultMessage,
     mutated: next.mutated,
   };
+}
+
+function formatCliSimProviderRequestJson(requestPayload: unknown): string {
+  return JSON.stringify(buildProviderProxyRequest(requestPayload as ProviderProxyChatRequest), null, 2);
 }
 
 async function readChatCliSimJsonResponse(response: Response): Promise<unknown> {

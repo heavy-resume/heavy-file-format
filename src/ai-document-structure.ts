@@ -380,7 +380,7 @@ function getBlockPreview(block: VisualBlock): string {
     return truncatePreview([block.schema.xrefTitle, block.schema.xrefDetail].filter((value) => value.trim().length > 0).join(' - '));
   }
   if (component === 'table') {
-    return truncatePreview(`columns: ${block.schema.tableColumns}`);
+    return truncatePreview(`columns: ${block.schema.tableColumns.join(', ')}`);
   }
   if (component === 'expandable') {
     const stubText = flattenBlockText(block.schema.expandableStubBlocks?.children ?? []);

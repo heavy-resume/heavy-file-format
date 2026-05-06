@@ -1185,7 +1185,7 @@ function serializeBlockSchema(
     // Stub/content blocks are serialized as nested block directives, not inline in schema JSON.
   }
   if (component === 'table') {
-    addIfChanged(payload, 'tableColumns', schema.tableColumns, defaults.tableColumns);
+    addArrayIfChanged(payload, 'tableColumns', schema.tableColumns, defaults.tableColumns);
     addIfChanged(payload, 'tableShowHeader', schema.tableShowHeader, defaults.tableShowHeader);
     if (schema.tableRows.length > 0) {
       payload.tableRows = schema.tableRows.map((row) => serializeTableRow(row));
@@ -1360,4 +1360,11 @@ function addIfChanged(payload: JsonObject, key: string, value: unknown, defaultV
     return;
   }
   payload[key] = value as JsonObject[keyof JsonObject];
+}
+
+function addArrayIfChanged(payload: JsonObject, key: string, value: unknown[], defaultValue: unknown[]): void {
+  if (value.length === defaultValue.length && value.every((item, index) => item === defaultValue[index])) {
+    return;
+  }
+  payload[key] = value;
 }

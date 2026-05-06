@@ -143,7 +143,7 @@ function createTextBlock(text: string): VisualBlock {
 function createTableBlock(token: Tokens.Table): VisualBlock {
   const schema = defaultBlockSchema('table');
   const columns = token.header.map((cell, index) => normalizeTableCellText(cell.text) || `Column ${index + 1}`);
-  schema.tableColumns = columns.map((column) => column.replaceAll(',', '')).join(', ');
+  schema.tableColumns = columns;
   schema.tableShowHeader = true;
   schema.tableRows = token.rows.map((row) => ({
     cells: columns.map((_, index) => normalizeTableCellText(row[index]?.text ?? '')),

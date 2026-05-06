@@ -43,7 +43,7 @@ export function defaultBlockSchema(component = 'text'): BlockSchema {
     expandableExpanded: false,
     expandableContentCss: '',
     expandableContentBlocks: { lock: false, children: [] },
-    tableColumns: 'Column 1, Column 2',
+    tableColumns: ['Column 1', 'Column 2'],
     tableShowHeader: true,
     tableRows: [],
     imageFile: '',
@@ -180,7 +180,7 @@ export function schemaFromUnknown(value: unknown, seen = new WeakSet<object>()):
         ? candidate.expandableContentCss
         : readExpandablePartCss(candidate.expandableContentBlocks) || defaults.expandableContentCss,
     expandableContentBlocks: parseExpandablePart(candidate.expandableContentBlocks, seen),
-    tableColumns: typeof candidate.tableColumns === 'string' ? candidate.tableColumns : defaults.tableColumns,
+    tableColumns: parseTableColumns(candidate.tableColumns, defaults.tableColumns),
     tableShowHeader: candidate.tableShowHeader !== false,
     tableRows: rows.map((row) => {
       const mapped = row as JsonObject;
@@ -191,6 +191,16 @@ export function schemaFromUnknown(value: unknown, seen = new WeakSet<object>()):
     imageFile: typeof candidate.imageFile === 'string' ? candidate.imageFile : defaults.imageFile,
     imageAlt: typeof candidate.imageAlt === 'string' ? candidate.imageAlt : defaults.imageAlt,
   };
+}
+
+function parseTableColumns(raw: unknown, fallback: string[]): string[] {
+  if (Array.isArray(raw)) {
+    return raw.map((column) => String(column ?? ''));
+  }
+  if (typeof raw === 'string') {
+    return raw.split(',').map((column) => column.trim()).filter((column) => column.length > 0);
+  }
+  return [...fallback];
 }
 
 // Internal helper for grid/table callbacks that always skip component defaults

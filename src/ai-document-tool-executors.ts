@@ -215,7 +215,7 @@ function searchComponentIndex(
         block.schema.plugin,
         block.schema.xrefTitle,
         block.schema.xrefDetail,
-        block.schema.tableColumns,
+        block.schema.tableColumns.join(' '),
         JSON.stringify(block.schema.pluginConfig ?? {}),
         block.text,
       ].filter((value): value is string => typeof value === 'string' && value.trim().length > 0).join(' ');
@@ -294,7 +294,7 @@ function getLocalRenderedComponentLines(block: VisualBlock): string[] {
     ];
   }
   if (component === 'table') {
-    const columns = block.schema.tableColumns.split(',').map((column) => column.trim()).filter(Boolean);
+    const columns = block.schema.tableColumns.map((column) => column.trim()).filter(Boolean);
     return [
       `Columns: ${columns.join(', ') || '(none)'}`,
       `Rows: ${block.schema.tableRows.length}`,

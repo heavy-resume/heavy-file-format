@@ -6,7 +6,7 @@ import { getSectionId } from '../section-ops';
 import { makeId } from '../utils';
 import { FORM_PLUGIN_ID, getHostPlugin, SCRIPTING_PLUGIN_ID } from '../plugins/registry';
 import { parseFormSpec, serializeFormSpec } from '../plugins/form';
-import { splitColumns } from '../table-ops';
+import { getTableColumns } from '../table-ops';
 import { getHvyComponentHelpLines, getHvySectionHelpLines } from '../component-help';
 import { getComponentDefsFromMeta, resolveBaseComponentFromMeta } from '../component-defs';
 
@@ -646,7 +646,8 @@ function applyBlockSchemaJson(schema: BlockSchema, component: string, value: Jso
   if (typeof value.xrefTitle === 'string') schema.xrefTitle = value.xrefTitle;
   if (typeof value.xrefDetail === 'string') schema.xrefDetail = value.xrefDetail;
   if (typeof value.xrefTarget === 'string') schema.xrefTarget = value.xrefTarget;
-  if (typeof value.tableColumns === 'string') schema.tableColumns = value.tableColumns;
+  if (Array.isArray(value.tableColumns)) schema.tableColumns = parseStringList(value.tableColumns);
+  if (typeof value.tableColumns === 'string') schema.tableColumns = value.tableColumns.split(',').map((column) => column.trim()).filter((column) => column.length > 0);
   if (typeof value.tableShowHeader === 'boolean') schema.tableShowHeader = value.tableShowHeader;
   if (Array.isArray(value.tableRows)) schema.tableRows = value.tableRows as unknown as BlockSchema['tableRows'];
   if (typeof value.plugin === 'string') schema.plugin = value.plugin;
@@ -672,15 +673,15 @@ function addTableDataFiles(entries: Map<string, HvyVirtualEntry>, block: VisualB
   entries.set(`${blockPath}/tableColumns.json`, {
     kind: 'file',
     path: `${blockPath}/tableColumns.json`,
-    read: () => `${JSON.stringify(splitColumns(block.schema.tableColumns), null, 2)}\n`,
+    read: () => `${JSON.stringify(getTableColumns(block.schema), null, 2)}\n`,
     write: (content) => {
-      block.schema.tableColumns = parseJsonStringArray(content, `${blockPath}/tableColumns.json`).join(', ');
+      block.schema.tableColumns = parseJsonStringArray(content, `${blockPath}/tableColumns.json`);
     },
   });
   entries.set(`${blockPath}/tableRows.json`, {
     kind: 'file',
     path: `${blockPath}/tableRows.json`,
-    read: () => `${JSON.stringify(block.schema.tableRows.map((row) => row.cells), null, 2)}\n`,
+    read: () => `${JSON.stringify(block.schema.tableRows, null, 2)}\n`,
     write: (content) => {
       block.schema.tableRows = parseJsonTableRows(content, `${blockPath}/tableRows.json`);
     },
@@ -718,7 +719,7 @@ function writeBlockBodyText(block: VisualBlock, content: string): void {
 }
 
 function formatTableBodyText(schema: BlockSchema): string {
-  const columns = splitColumns(schema.tableColumns);
+  const columns = getTableColumns(schema);
   const rows = schema.tableRows.map((row) => row.cells);
   const lines = [columns, ...rows].map((cells) => cells.map((cell) => cell.trim()).join(' | '));
   return `${lines.join('\n')}\n`;
@@ -742,17 +743,24 @@ function parseJsonTableRows(content: string, filename: string): BlockSchema['tab
   try {
     value = JSON.parse(content);
   } catch {
-    throw new Error(`${filename} must be a JSON array of string arrays.`);
+    throw new Error(`${filename} must be a JSON array of row objects with cells arrays.`);
   }
   if (!Array.isArray(value)) {
-    throw new Error(`${filename} must be a JSON array of string arrays.`);
+    throw new Error(`${filename} must be a JSON array of row objects with cells arrays.`);
   }
   return value.map((row, index) => {
-    if (!Array.isArray(row) || row.some((cell) => typeof cell !== 'string')) {
-      throw new Error(`${filename} row ${index + 1} must be a JSON array of strings.`);
+    if (Array.isArray(row)) {
+      return { cells: row.map((cell) => String(cell ?? '')) };
     }
-    return { cells: row };
+    if (!row || typeof row !== 'object' || Array.isArray(row) || !Array.isArray((row as JsonObject).cells)) {
+      throw new Error(`${filename} row ${index + 1} must be an object with a cells array.`);
+    }
+    return { cells: parseStringList((row as JsonObject).cells as unknown[]) };
   });
+}
+
+function parseStringList(value: unknown[]): string[] {
+  return value.map((item) => String(item ?? ''));
 }
 
 function addFormScriptFiles(entries: Map<string, HvyVirtualEntry>, block: VisualBlock, blockPath: string): void {

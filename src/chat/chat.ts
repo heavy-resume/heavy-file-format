@@ -850,11 +850,7 @@ function getChatReaderHelpers(documentMeta: VisualDocument['meta']): ComponentRe
     getDocumentComponentCss: (componentName: string) => getDocumentComponentDefaultCss(documentMeta, componentName),
     getXrefTargetOptions: () => [],
     isXrefTargetValid,
-    getTableColumns: (schema) =>
-      schema.tableColumns
-        .split(',')
-        .map((column) => column.trim())
-        .filter((column) => column.length > 0),
+    getTableColumns: (schema) => schema.tableColumns.map((column) => column.trim()).filter((column) => column.length > 0),
     ensureComponentListBlocks,
     ensureContainerBlocks: (_block: VisualBlock) => {},
     getSelectedAddComponent: () => 'text',

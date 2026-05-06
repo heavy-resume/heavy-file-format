@@ -49,7 +49,7 @@ export interface BlockSchema {
   expandableExpanded: boolean;
   expandableContentCss: string;
   expandableContentBlocks: ExpandablePart;
-  tableColumns: string;
+  tableColumns: string[];
   tableShowHeader: boolean;
   tableRows: TableRow[];
   imageFile: string;

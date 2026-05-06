@@ -469,7 +469,7 @@ component_defs:
           - text: ""
             schema:
               component: table
-              tableColumns: YEAR, ORGANIZATION, TITLE
+              tableColumns: ["YEAR", "ORGANIZATION", "TITLE"]
               tableRows:
                 - cells:
                     - ""
@@ -489,7 +489,7 @@ component_defs:
 
   expect(output).not.toContain('component: history-record');
   expect(output).toContain('component: table');
-  expect(output).toContain('tableColumns: YEAR, ORGANIZATION, TITLE');
+  expect(output).toContain('tableColumns:\n                - YEAR\n                - ORGANIZATION\n                - TITLE');
 });
 
 test('serializes uncontained section metadata without changing section shape on round-trip', () => {

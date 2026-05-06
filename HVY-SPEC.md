@@ -382,7 +382,13 @@ The `children` array uses the same recursive block object shape as other nested 
 
 The built-in `table` component is static document data stored in `tableColumns` and `tableRows`. Use a dynamic data-backed plugin such as `dev.heavy.db-table` when rows should come from a backend query.
 
-For static tables, each `tableRows` entry contains only:
+For static tables, `tableColumns` is a JSON/YAML array of strings:
+
+```yaml
+tableColumns: ["Column A", "Column B"]
+```
+
+Each `tableRows` entry contains only:
 
 ```yaml
 - cells: ["Cell A", "Cell B"]

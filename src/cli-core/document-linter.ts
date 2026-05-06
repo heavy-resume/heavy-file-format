@@ -109,7 +109,12 @@ async function lintComponentFile(document: VisualDocument, fs: HvyVirtualFileSys
   if (component === 'table') {
     const tableRows = readJsonFileValue(fs, `${directory}/tableRows.json`);
     if (Array.isArray(tableRows)) {
-      config.tableRows = tableRows.map((row) => ({ cells: Array.isArray(row) ? row : [] })) as unknown as JsonObject[];
+      config.tableRows = tableRows.map((row) => {
+        if (row && typeof row === 'object' && !Array.isArray(row) && Array.isArray((row as JsonObject).cells)) {
+          return row;
+        }
+        return { cells: Array.isArray(row) ? row : [] };
+      }) as unknown as JsonObject[];
     }
   }
   const baseComponent = resolveBaseComponentFromMeta(component, document.meta);

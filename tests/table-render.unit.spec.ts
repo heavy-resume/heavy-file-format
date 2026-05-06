@@ -41,7 +41,7 @@ function createTableBlock(rows: string[][], options?: { showHeader?: boolean }):
       expandableExpanded: false,
       expandableContentCss: '',
       expandableContentBlocks: { lock: false, children: [] },
-      tableColumns: 'Role, Scope',
+      tableColumns: ['Role', 'Scope'],
       tableShowHeader: options?.showHeader ?? false,
       tableRows: rows.map((cells) => ({
         cells,

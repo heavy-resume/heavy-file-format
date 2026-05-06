@@ -2864,8 +2864,10 @@ function formatTableDirectoryPreview(fs: ReturnType<typeof buildHvyVirtualFileSy
   const table = readJsonFileFromVirtualPath(fs, `${path}/table.json`);
   const columns = readJsonArrayFromVirtualPath(fs, `${path}/tableColumns.json`).filter((value): value is string => typeof value === 'string');
   const rows = readJsonArrayFromVirtualPath(fs, `${path}/tableRows.json`)
-    .filter((value): value is string[] => Array.isArray(value))
-    .map((row) => row.filter((cell): cell is string => typeof cell === 'string'));
+    .map((row) => row && typeof row === 'object' && !Array.isArray(row) && Array.isArray((row as { cells?: unknown }).cells)
+      ? (row as { cells: unknown[] }).cells.filter((cell): cell is string => typeof cell === 'string')
+      : []
+    );
   const firstNonEmptyRow = rows.find((row) => row.some((cell) => cell.trim().length > 0));
   const showHeader = table?.tableShowHeader !== false;
 
@@ -2941,7 +2943,7 @@ function formatFileEntryDescription(fs: ReturnType<typeof buildHvyVirtualFileSys
     return 'static table column names as a JSON string array';
   }
   if (filename === 'tableRows.json') {
-    return 'static table rows as a JSON array of string arrays';
+    return 'static table rows as a JSON array of row objects with cells arrays';
   }
   if (filename.startsWith('about-') && filename.endsWith('.txt')) {
     const docsEntry = fs.entries.get(path);

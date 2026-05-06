@@ -673,7 +673,7 @@ hvy_version: 0.1
 <!--hvy: {"id":"quality"}-->
 #! Quality
 
-<!--hvy:table {"id":"chores","tableColumns":"Chore,Owner","tableRows":[{"cells":["Dishes","Mom"]}]}-->
+<!--hvy:table {"id":"chores","tableColumns":["Chore","Owner"],"tableRows":[{"cells":["Dishes","Mom"]}]}-->
 
 <!--hvy:component-list {"id":"empty-list","componentListComponent":"text"}-->
 `, '.hvy');
@@ -686,7 +686,7 @@ hvy_version: 0.1
 
   expect((await executeHvyCliCommand(document, session, 'cat /body/quality/chores/table.txt')).output).toBe('Chore | Owner\nDishes | Mom\n');
   expect((await executeHvyCliCommand(document, session, 'cat /body/quality/chores/tableColumns.json')).output).toBe('[\n  "Chore",\n  "Owner"\n]\n');
-  expect((await executeHvyCliCommand(document, session, 'cat /body/quality/chores/tableRows.json')).output).toBe('[\n  [\n    "Dishes",\n    "Mom"\n  ]\n]\n');
+  expect((await executeHvyCliCommand(document, session, 'cat /body/quality/chores/tableRows.json')).output).toBe('[\n  {\n    "cells": [\n      "Dishes",\n      "Mom"\n    ]\n  }\n]\n');
 
   await expect(executeHvyCliCommand(document, session, 'echo "Chore | Owner" > /body/quality/chores/table.txt')).rejects.toThrow(
     'table.txt is a read-only preview for static table components. Edit tableColumns.json and tableRows.json instead'
@@ -695,11 +695,11 @@ hvy_version: 0.1
   expect((await executeHvyCliCommand(document, session, 'echo \'["Task","Done"]\' > /body/quality/chores/tableColumns.json')).output).toBe(
     '/body/quality/chores/tableColumns.json: written'
   );
-  expect((await executeHvyCliCommand(document, session, 'echo \'[["Trash","No"],["Dishes","Yes"]]\' > /body/quality/chores/tableRows.json')).output).toBe(
+  expect((await executeHvyCliCommand(document, session, 'echo \'[{"cells":["Trash","No"]},{"cells":["Dishes","Yes"]}]\' > /body/quality/chores/tableRows.json')).output).toBe(
     '/body/quality/chores/tableRows.json: written'
   );
   expect((await executeHvyCliCommand(document, session, 'cat /body/quality/chores/table.txt')).output).toBe('Task | Done\nTrash | No\nDishes | Yes\n');
-  expect(serializeDocument(document)).toContain('"tableColumns":"Task, Done"');
+  expect(serializeDocument(document)).toContain('"tableColumns":["Task","Done"]');
   expect(serializeDocument(document)).toContain('"tableRows":[{"cells":["Trash","No"]},{"cells":["Dishes","Yes"]}]');
 
   await expect(executeHvyCliCommand(document, session, 'echo "- id: item-1" > /body/quality/empty-list.txt')).rejects.toThrow(
@@ -722,11 +722,11 @@ hvy_version: 0.1
 <!--hvy: {"id":"quality"}-->
 #! Quality
 
-<!--hvy:table {"id":"visible-header","tableColumns":"Year,Organization,Title","tableShowHeader":true,"tableRows":[{"cells":["2024","Northwind","Engineer"]}]}-->
+<!--hvy:table {"id":"visible-header","tableColumns":["Year","Organization","Title"],"tableShowHeader":true,"tableRows":[{"cells":["2024","Northwind","Engineer"]}]}-->
 
-<!--hvy:table {"id":"hidden-header-with-row","tableColumns":"Year,Organization,Title","tableShowHeader":false,"tableRows":[{"cells":["2025","Heavy Resume","Founder"]}]}-->
+<!--hvy:table {"id":"hidden-header-with-row","tableColumns":["Year","Organization","Title"],"tableShowHeader":false,"tableRows":[{"cells":["2025","Heavy Resume","Founder"]}]}-->
 
-<!--hvy:table {"id":"hidden-header-empty","tableColumns":"Year,Organization,Title","tableShowHeader":false,"tableRows":[]}-->
+<!--hvy:table {"id":"hidden-header-empty","tableColumns":["Year","Organization","Title"],"tableShowHeader":false,"tableRows":[]}-->
 `, '.hvy');
   const session = createHvyCliSession();
 
@@ -1970,7 +1970,7 @@ hvy_version: 0.1
 
 <!--hvy:xref-card {"id":"empty-ref"}-->
 
-<!--hvy:table {"id":"chores","tableColumns":"A,B","tableRows":[{"cells":["",""]},{"cells":["Done","Mom"]}]}-->
+<!--hvy:table {"id":"chores","tableColumns":["A","B"],"tableRows":[{"cells":["",""]},{"cells":["Done","Mom"]}]}-->
 
 <!--hvy:component-list {"id":"empty-list","componentListComponent":"text"}-->
 
@@ -2088,7 +2088,7 @@ test('cli commands can create a chore chart with tables and form plugins', async
   await run('echo "Track active chores, assignments, completion forms, and weekly leaders." > /chore-chart/overview/text.txt');
   await run('hvy insert -1 table /chore-chart active-chores');
   await run('echo \'["Chore","Dad","Mom","Child"]\' > /chore-chart/active-chores/tableColumns.json');
-  await run('echo \'[["Dishes","","","Child"],["Trash","Dad","",""],["Laundry","","Mom",""]]\' > /chore-chart/active-chores/tableRows.json');
+  await run('echo \'[{"cells":["Dishes","","","Child"]},{"cells":["Trash","Dad","",""]},{"cells":["Laundry","","Mom",""]}]\' > /chore-chart/active-chores/tableRows.json');
   await run('hvy insert 0 plugin form /chore-chart add-chore-form');
   await run('echo \'{"id":"add-chore-form","plugin":"dev.heavy.form","pluginConfig":{"version":"0.1","submitLabel":"Add chore","showSubmit":true}}\' > /chore-chart/add-chore-form/plugin.json');
   await run('echo "fields:\\n  - label: Description\\n    type: textarea\\n    required: true" > /chore-chart/add-chore-form/plugin.txt');

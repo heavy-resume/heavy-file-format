@@ -291,7 +291,7 @@ test('cli-created expanded history record can be closed and followed by another 
   await page.getByRole('button', { name: 'Resume Template' }).click();
   await page.getByRole('button', { name: 'CLI' }).click();
   await runCliCommand(page, 'hvy insert 0 history-record /body/history/component-list-2 --id history-reproco-founder');
-  await runCliCommand(page, writeFileCommand('/body/history/component-list-2/history-reproco-founder/expandable-stub/table-0/tableRows.json', '[["2025-2026","ReproCo","Founder"]]'));
+  await runCliCommand(page, writeFileCommand('/body/history/component-list-2/history-reproco-founder/expandable-stub/table-0/tableRows.json', '[{"cells":["2025-2026","ReproCo","Founder"]}]'));
   await runCliCommand(page, writeFileCommand('/body/history/component-list-2/history-reproco-founder/expandable-content/text-0/text.txt', '### ReproCo'));
 
   await page.getByRole('button', { name: 'AI' }).click();

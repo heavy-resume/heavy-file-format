@@ -19,7 +19,7 @@ Creation only answers "what is it?" and "where is it?". After creation, edit the
 ```shell
 echo "Visible text" > /body/a-section/intro/text.txt
 echo '["Name","Status"]' > /body/a-section/a-table/tableColumns.json
-echo '[["Example","Active"]]' > /body/a-section/a-table/tableRows.json
+echo '[{"cells":["Example","Active"]}]' > /body/a-section/a-table/tableRows.json
 echo '{"id":"a-reference","xrefTitle":"Reference title","xrefTarget":"target-id"}' > /body/a-section/a-reference/xref-card.json
 ```
 

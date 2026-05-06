@@ -13,13 +13,21 @@ const { requestChatCompletionMock, requestProxyCompletionMock, runQaToolLoopMock
 }));
 
 vi.mock('../src/chat/chat', () => ({
-  appendProxyResponseInstructions: (context: string, responseInstructions: string) => [
-    context.trimEnd(),
-    '',
-    'Response instructions:',
-    responseInstructions.trim(),
-  ].join('\n'),
-  buildProxyChatRequest: (request: object) => request,
+  buildProxyChatRequest: (request: {
+    messages: ChatMessage[];
+    systemInstructions?: string;
+  } & Record<string, unknown>) => {
+    const { systemInstructions, ...rest } = request;
+    return {
+      ...rest,
+      messages: [
+        ...(systemInstructions?.trim()
+          ? [{ id: 'system', role: 'system', content: systemInstructions.trim() }]
+          : []),
+        ...request.messages,
+      ],
+    };
+  },
   requestChatCompletion: requestChatCompletionMock,
   requestProxyCompletion: requestProxyCompletionMock,
 }));
@@ -263,13 +271,16 @@ test('requestDocumentEditChatTurn runs the CLI edit loop for document chat', asy
       settings,
       mode: 'document-edit',
       debugLabel: 'chat-cli-edit:1',
-      context: expect.stringContaining('Valid commands (in order of preference):\nCommands: hvy, nl, rg, find, sed, echo, cat, ls, pwd, cd, cp, rm, grep, sort, uniq, wc, tr, xargs, head, tail, true. Ask: ask QUESTION. Finish: done SUMMARY.'),
-      responseInstructions: expect.stringContaining('Return concise notes plus terminal command(s).'),
+      context: expect.stringContaining('Current request:\nAdd a chore section.'),
+      systemInstructions: expect.stringContaining('Valid commands (in order of preference):\nCommands: hvy, nl, rg, find, sed, echo, cat, ls, pwd, cd, cp, rm, grep, sort, uniq, wc, tr, xargs, head, tail, true. Ask: ask QUESTION. Finish: done SUMMARY.'),
     })
   );
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.systemInstructions).toContain('Response instructions:\nReturn concise notes plus terminal command(s).');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.systemInstructions).toContain('validate edits before recording completion');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Current request:\nAdd a chore section.');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Use the chronological chat messages and terminal results to infer the active task.');
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('validate edits before recording completion');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).not.toContain('Valid commands (in order of preference):');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).not.toContain('Persistent instructions:');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).not.toContain('scratchpad.txt:');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).not.toContain('urgency:\nscore=0\nprioritize planning and understanding');
   const firstMessages = requestProxyCompletionMock.mock.calls[0]?.[0]?.messages;
@@ -368,7 +379,7 @@ test('buildDocumentEditCliSimRequest exposes the exact chronological CLI request
     provider: string;
     model: string;
     mode: string;
-    messages: ChatMessage[];
+    messages: Array<{ role: string; content: string }>;
     context: string;
   };
 
@@ -378,8 +389,9 @@ test('buildDocumentEditCliSimRequest exposes the exact chronological CLI request
     mode: 'document-edit',
   }));
   expect(payload).not.toHaveProperty('responseInstructions');
-  expect(payload.context).toContain('Response instructions:\nReturn concise notes plus terminal command(s).');
+  expect(payload).not.toHaveProperty('systemInstructions');
   expect(payload.messages).toEqual([
+    expect.objectContaining({ role: 'system', content: expect.stringContaining('Response instructions:\nReturn concise notes plus terminal command(s).') }),
     expect.objectContaining({ role: 'user', content: 'Add a chore section.' }),
     expect.objectContaining({ role: 'assistant', content: expect.stringContaining('```shell\nls /\n```') }),
     expect.objectContaining({ role: 'user', content: expect.stringContaining('dir  body') }),
@@ -535,7 +547,7 @@ test('requestDocumentEditChatTurn trims old cli conversation messages while keep
   ).toBeLessThanOrEqual(6000);
   expect(JSON.stringify(requestProxyCompletionMock.mock.calls[4]?.[0]?.messages)).not.toContain('x'.repeat(2500));
   expect(JSON.stringify(requestProxyCompletionMock.mock.calls[4]?.[0]?.messages)).not.toContain('... truncated ...');
-  expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.context).toContain(
+  expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.systemInstructions).toContain(
     'Valid commands (in order of preference):\nCommands: hvy, nl, rg, find, sed, echo, cat, ls, pwd, cd, cp, rm, grep, sort, uniq, wc, tr, xargs, head, tail, true. Ask: ask QUESTION. Finish: done SUMMARY.'
   );
   expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.context).toContain('Current request:\nCheck the document with several commands.');

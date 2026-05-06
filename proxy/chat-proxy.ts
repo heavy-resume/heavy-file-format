@@ -42,7 +42,7 @@ interface ProxyChatRequest {
   model: string;
   mode: 'qa' | 'component-edit' | 'document-edit';
   messages: Array<{
-    role: 'user' | 'assistant';
+    role: 'system' | 'user' | 'assistant';
     content: string;
   }>;
   traceRunId?: string;
@@ -194,14 +194,23 @@ export function buildChatProxyMiddleware(env: Record<string, string | undefined>
 }
 
 export function buildOpenAiProxyRequest(body: ProxyChatRequest): Record<string, unknown> {
+  const { systemMessages, conversationMessages } = splitProxyMessages(body.messages);
   return {
     model: body.model,
     reasoning: {
       effort: OPENAI_REASONING_EFFORT,
       summary: 'auto',
     },
-    instructions: buildSystemInstructions(body.mode),
     input: [
+      {
+        role: 'system',
+        content: [
+          {
+            type: 'input_text',
+            text: buildSystemInstructions(body.mode, systemMessages),
+          },
+        ],
+      },
       {
         role: 'developer',
         content: [
@@ -211,7 +220,7 @@ export function buildOpenAiProxyRequest(body: ProxyChatRequest): Record<string, 
           },
         ],
       },
-      ...body.messages.map((message) => ({
+      ...conversationMessages.map((message) => ({
         role: message.role,
         content: [
           {
@@ -230,11 +239,12 @@ export function buildOpenAiProxyRequest(body: ProxyChatRequest): Record<string, 
 }
 
 export function buildAnthropicProxyRequest(body: ProxyChatRequest): Record<string, unknown> {
+  const { systemMessages, conversationMessages } = splitProxyMessages(body.messages);
   return {
     model: body.model,
     max_tokens: 4096,
-    system: `${buildSystemInstructions(body.mode)}\n\nDocument context:\n\n${body.context}`,
-    messages: body.messages.map((message) => ({
+    system: `${buildSystemInstructions(body.mode, systemMessages)}\n\nDocument context:\n\n${body.context}`,
+    messages: conversationMessages.map((message) => ({
       role: message.role,
       content: message.content,
     })),
@@ -554,7 +564,7 @@ function validateProxyChatRequest(payload: unknown): ProxyChatRequest {
       throw new Error('Invalid chat message.');
     }
     const typed = message as ProxyChatRequest['messages'][number];
-    if ((typed.role !== 'user' && typed.role !== 'assistant') || typeof typed.content !== 'string' || typed.content.trim().length === 0) {
+    if ((typed.role !== 'system' && typed.role !== 'user' && typed.role !== 'assistant') || typeof typed.content !== 'string' || typed.content.trim().length === 0) {
       throw new Error('Invalid chat message.');
     }
     return {
@@ -896,7 +906,21 @@ function truncateTraceText(value: string, maxLength: number): string {
   return normalized.length > maxLength ? `${normalized.slice(0, maxLength - 1)}…` : normalized;
 }
 
-function buildSystemInstructions(mode: ProxyChatRequest['mode']): string {
+function splitProxyMessages(messages: ProxyChatRequest['messages']): {
+  systemMessages: string[];
+  conversationMessages: Array<{ role: 'user' | 'assistant'; content: string }>;
+} {
+  return {
+    systemMessages: messages
+      .filter((message) => message.role === 'system')
+      .map((message) => message.content.trim())
+      .filter((content) => content.length > 0),
+    conversationMessages: messages
+      .filter((message): message is { role: 'user' | 'assistant'; content: string } => message.role === 'user' || message.role === 'assistant'),
+  };
+}
+
+function buildSystemInstructions(mode: ProxyChatRequest['mode'], systemMessages: string[] = []): string {
   const prelude =
     mode === 'component-edit'
       ? [
@@ -919,7 +943,10 @@ function buildSystemInstructions(mode: ProxyChatRequest['mode']): string {
           'Prefer concise answers grounded in the supplied document context.',
         ];
 
-  return prelude.join('\n');
+  return [
+    ...prelude,
+    ...(systemMessages.length > 0 ? ['', ...systemMessages] : []),
+  ].join('\n');
 }
 
 function firstNonEmptyString(...values: Array<string | undefined>): string {

@@ -27,14 +27,28 @@ const request = {
 };
 
 test('buildOpenAiProxyRequest includes developer context and conversation turns', () => {
-  expect(buildOpenAiProxyRequest(request)).toEqual({
+  expect(buildOpenAiProxyRequest({
+    ...request,
+    messages: [
+      { role: 'system' as const, content: 'Use the CLI protocol.' },
+      ...request.messages,
+    ],
+  })).toEqual({
     model: 'gpt-5-mini',
     reasoning: {
       effort: 'low',
       summary: 'auto',
     },
-    instructions: expect.stringMatching(/Answer questions about the provided HVY document context\./),
     input: [
+      {
+        role: 'system',
+        content: [
+          {
+            type: 'input_text',
+            text: expect.stringMatching(/Answer questions about the provided HVY document context\.[\s\S]*Use the CLI protocol\./),
+          },
+        ],
+      },
       {
         role: 'developer',
         content: [
@@ -77,11 +91,15 @@ test('buildAnthropicProxyRequest places context in system prompt and messages in
       ...request,
       provider: 'anthropic',
       model: 'claude-sonnet-4-6',
+      messages: [
+        { role: 'system' as const, content: 'Use the CLI protocol.' },
+        ...request.messages,
+      ],
     })
   ).toEqual({
     model: 'claude-sonnet-4-6',
     max_tokens: 4096,
-    system: expect.stringMatching(/Answer questions about the provided HVY document context\./),
+    system: expect.stringMatching(/Answer questions about the provided HVY document context\.[\s\S]*Use the CLI protocol\.[\s\S]*Document context:\n\nContext body/),
     messages: [
       { role: 'user', content: 'What is this?' },
       { role: 'assistant', content: 'A summary.' },
@@ -97,7 +115,12 @@ test('component edit requests use edit-specific system instructions', () => {
 
   expect(openAiRequest).toEqual(
     expect.objectContaining({
-      instructions: expect.stringMatching(/This is a component editing task, not a question answering task\./),
+      input: expect.arrayContaining([
+        expect.objectContaining({
+          role: 'system',
+          content: [expect.objectContaining({ text: expect.stringMatching(/This is a component editing task, not a question answering task\./) })],
+        }),
+      ]),
     })
   );
   expect(openAiRequest).toEqual(
@@ -115,7 +138,12 @@ test('document edit requests use document-edit-specific system instructions', ()
 
   expect(openAiRequest).toEqual(
     expect.objectContaining({
-      instructions: expect.stringMatching(/Follow the supplied HVY document-edit protocol exactly\./),
+      input: expect.arrayContaining([
+        expect.objectContaining({
+          role: 'system',
+          content: [expect.objectContaining({ text: expect.stringMatching(/Follow the supplied HVY document-edit protocol exactly\./) })],
+        }),
+      ]),
     })
   );
   expect(openAiRequest).toEqual(

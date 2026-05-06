@@ -36,7 +36,7 @@ export interface ChatCliEditTurnResult {
 export interface ChatCliInitialTurnRequest {
   messages: ChatMessage[];
   context: string;
-  responseInstructions: string;
+  systemInstructions: string;
   traceRunId: string;
 }
 
@@ -88,7 +88,7 @@ export async function runChatCliEditLoop(params: {
   let turnState: ChatCliSimTurnState = {
     messages: initial.messages,
     context: initial.context,
-    responseInstructions: initial.responseInstructions,
+    systemInstructions: initial.systemInstructions,
     traceRunId,
     request: params.request,
     priorMessages: params.priorMessages ?? [],
@@ -114,7 +114,8 @@ export async function runChatCliEditLoop(params: {
       settings: params.settings,
       messages: turnState.messages,
       context: turnState.context,
-      responseInstructions: buildChatCliLoopFormatInstructions(),
+      responseInstructions: '',
+      systemInstructions: turnState.systemInstructions,
       mode: 'document-edit',
       debugLabel: `chat-cli-edit:${step + 1}`,
       traceRunId,
@@ -206,7 +207,7 @@ export async function buildChatCliInitialProxyTurnRequest(params: {
   return {
     messages: initial.messages,
     context: initial.context,
-    responseInstructions: initial.responseInstructions,
+    systemInstructions: initial.systemInstructions,
     traceRunId,
   };
 }
@@ -223,7 +224,7 @@ export async function buildChatCliInitialSimTurnState(params: {
   return {
     messages: initial.messages,
     context: initial.context,
-    responseInstructions: initial.responseInstructions,
+    systemInstructions: initial.systemInstructions,
     traceRunId,
     request: params.request,
     priorMessages: params.priorMessages ?? [],
@@ -424,7 +425,7 @@ function buildSimAdvanceResult(
       params.state.priorConversation,
       params.state.selectedComponent
     ),
-    responseInstructions: buildChatCliLoopFormatInstructions(),
+    systemInstructions: buildChatCliLoopSystemInstructions(cli.snapshot().commandSummary),
     diagnostics,
     urgency,
     commandResultMessage,
@@ -519,7 +520,7 @@ async function buildChatCliInitialTurnRequest(params: {
     priorConversation,
     messages,
     context,
-    responseInstructions: buildChatCliLoopFormatInstructions(),
+    systemInstructions: buildChatCliLoopSystemInstructions(cli.snapshot().commandSummary),
     traceRunId: params.traceRunId,
   };
 }
@@ -544,12 +545,6 @@ function buildChatCliLoopContext(
     'Use the chronological chat messages and terminal results to infer the active task. If you lose the thread or need a choice from the user, use `ask QUESTION`.',
     ...(selectedComponent ? ['', 'Selected component focus:', formatSelectedComponentFocus(selectedComponent, request)] : []),
     ...(cwdComponentContext ? ['', cwdComponentContext] : []),
-    '',
-    'Valid commands (in order of preference):',
-    snapshot.commandSummary,
-    '',
-    'Persistent instructions:',
-    buildChatCliPersistentInstructions(),
   ].join('\n');
 }
 
@@ -696,6 +691,18 @@ function buildChatCliLoopFormatInstructions(): string {
     'To finish, return only: done Short summary of what changed.',
     'To ask for requirements, NOT CLI clarification from the non-technical user, return: ask followed by the actual question.',
     'Do not include done with commands. Run commands, inspect the result, then finish in a later response.',
+  ].join('\n');
+}
+
+function buildChatCliLoopSystemInstructions(commandSummary: string): string {
+  return [
+    buildChatCliPersistentInstructions(),
+    '',
+    'Valid commands (in order of preference):',
+    commandSummary,
+    '',
+    'Response instructions:',
+    buildChatCliLoopFormatInstructions(),
   ].join('\n');
 }
 

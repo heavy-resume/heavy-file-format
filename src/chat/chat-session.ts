@@ -1,4 +1,4 @@
-import { appendProxyResponseInstructions, buildProxyChatRequest, requestChatCompletion } from './chat';
+import { buildProxyChatRequest, requestChatCompletion } from './chat';
 import { hasDocumentDbTables } from '../plugins/db-table';
 import { runQaToolLoop } from '../ai-qa';
 import type { ChatMessage, ChatSettings, ChatTokenUsage, ChatWorkState, VisualDocument } from '../types';
@@ -306,7 +306,8 @@ export async function buildDocumentEditCliSimRequest(params: {
     provider: params.settings.provider,
     model: params.settings.model,
     messages: initial.messages,
-    context: appendProxyResponseInstructions(initial.context, initial.responseInstructions),
+    context: initial.context,
+    systemInstructions: initial.systemInstructions,
     mode: 'document-edit',
     traceRunId: initial.traceRunId,
   });
@@ -372,7 +373,8 @@ export async function advanceDocumentEditCliSimStep(params: {
     provider: params.settings.provider,
     model: params.settings.model,
     messages: next.messages,
-    context: appendProxyResponseInstructions(next.context, next.responseInstructions),
+    context: next.context,
+    systemInstructions: next.systemInstructions,
     mode: 'document-edit',
     traceRunId: next.traceRunId,
   });

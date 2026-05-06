@@ -25,13 +25,25 @@ interface RenderChatPanelDeps {
   escapeHtml: (value: string) => string;
 }
 
+interface ProxyChatMessage {
+  id?: string;
+  role: 'system' | ChatMessage['role'];
+  content: string;
+  error?: boolean;
+}
+
 interface ProxyChatRequest {
   provider: ChatSettings['provider'];
   model: string;
-  messages: ChatMessage[];
+  messages: ProxyChatMessage[];
   context: string;
   mode: 'qa' | 'component-edit' | 'document-edit';
   traceRunId?: string;
+}
+
+interface ProxyChatRequestInput extends Omit<ProxyChatRequest, 'messages'> {
+  messages: ChatMessage[];
+  systemInstructions?: string;
 }
 
 interface ProxyChatResponse {
@@ -46,6 +58,7 @@ export interface ProxyCompletionParams {
   context: string;
   // Natural-language response instructions, not a provider JSON schema.
   responseInstructions: string;
+  systemInstructions?: string;
   mode: 'qa' | 'component-edit' | 'document-edit';
   debugLabel?: string;
   traceRunId?: string;
@@ -357,7 +370,8 @@ export async function requestProxyCompletion(params: ProxyCompletionParams): Pro
     provider: params.settings.provider,
     model: params.settings.model,
     messages: params.messages,
-    context: appendProxyResponseInstructions(params.context, params.responseInstructions),
+    context: params.context,
+    systemInstructions: params.systemInstructions ?? params.responseInstructions,
     mode: params.mode,
     traceRunId: params.traceRunId,
   });
@@ -423,16 +437,25 @@ function normalizeProxyTokenUsage(value: unknown): ChatTokenUsage | null {
   return Object.keys(usage).length > 0 ? usage : null;
 }
 
-export function buildProxyChatRequest(request: ProxyChatRequest): ProxyChatRequest {
+export function buildProxyChatRequest(request: ProxyChatRequestInput): ProxyChatRequest {
   const payload: ProxyChatRequest = {
     provider: request.provider,
     model: request.model.trim(),
-    messages: request.messages.map((message) => ({
-      id: message.id,
-      role: message.role,
-      content: message.content,
-      error: message.error,
-    })),
+    messages: [
+      ...(request.systemInstructions?.trim()
+        ? [{
+            id: 'system',
+            role: 'system' as const,
+            content: request.systemInstructions.trim(),
+          }]
+        : []),
+      ...request.messages.map((message) => ({
+        id: message.id,
+        role: message.role,
+        content: message.content,
+        error: message.error,
+      })),
+    ],
     context: request.context,
     mode: request.mode,
   };
@@ -440,15 +463,6 @@ export function buildProxyChatRequest(request: ProxyChatRequest): ProxyChatReque
     payload.traceRunId = request.traceRunId;
   }
   return payload;
-}
-
-export function appendProxyResponseInstructions(context: string, responseInstructions: string): string {
-  return [
-    context.trimEnd(),
-    '',
-    'Response instructions:',
-    responseInstructions.trim(),
-  ].join('\n');
 }
 
 export function traceAgentLoopEvent(params: AgentLoopTraceEventParams): void {

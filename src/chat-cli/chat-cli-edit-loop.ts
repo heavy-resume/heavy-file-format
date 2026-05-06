@@ -25,7 +25,7 @@ const CHAT_CLI_MODEL_OUTPUT_MAX_LINES = 200;
 const CHAT_CLI_MODEL_OUTPUT_MAX_LINE_WIDTH = 400;
 const CHAT_CLI_RECOMMENDED_BATCH_COMMANDS = 4;
 const CHAT_CLI_MAX_BATCH_COMMANDS = 10;
-const CHAT_CLI_BATCH_GUIDANCE = `Keep batches to at most ${CHAT_CLI_RECOMMENDED_BATCH_COMMANDS} focused commands.`;
+const CHAT_CLI_BATCH_GUIDANCE = `Use one command per \`\`\`shell block and at most ${CHAT_CLI_RECOMMENDED_BATCH_COMMANDS} \`\`\`shell blocks per response.`;
 const CHAT_CLI_COMMAND_NAMES = new Set(['cd', 'pwd', 'ls', 'cat', 'head', 'tail', 'nl', 'find', 'rg', 'grep', 'sort', 'uniq', 'wc', 'tr', 'xargs', 'cp', 'rm', 'echo', 'sed', 'true', 'hvy', 'db-table', 'form', 'ask']);
 const introducedDiagnosticsByDocument = new WeakMap<VisualDocument, Map<string, HvyCliDiagnosticIssue>>();
 
@@ -704,7 +704,7 @@ function buildChatCliLoopFormatInstructions(): string {
   return [
     'When continuing, return concise notes plus terminal command(s).',
     'For continuing responses, write exactly these note labels with short answers: What you are doing, Why you are doing it, What you are unsure of.',
-    `Wrap commands in \`\`\`shell fences. Multiple \`\`\`shell blocks are allowed and run in order. ${CHAT_CLI_BATCH_GUIDANCE}`,
+    `Wrap each command in its own \`\`\`shell fence. Multiple \`\`\`shell blocks are allowed and run in order. ${CHAT_CLI_BATCH_GUIDANCE}`,
     'Text outside ```shell fences is shown as progress notes for debugging. It is not a substitute for commands.',
     'To finish, run `done MESSAGE_TO_USER` as the only command in the response.',
     'To ask for requirements, NOT CLI clarification from the non-technical user, run `ask QUESTION` as the only command in the response.',
@@ -910,7 +910,7 @@ function formatCommandResultForModel(result: string | { output: string; diagnost
     '### BEGIN your urgency ###',
     result.urgency?.trimEnd() || formatChatCliUrgency(0),
     '### END your urgency ###',
-    `Command guidance: Multiple \`\`\`shell blocks are allowed and run as a batch. ${CHAT_CLI_BATCH_GUIDANCE}`,
+    `Command guidance: ${CHAT_CLI_BATCH_GUIDANCE}`,
     `Current directory: ${result.cwd || '/'}`,
     formatNextResponseInstruction(),
   ].join('\n');
@@ -951,7 +951,7 @@ function getChatCliUrgencyMessage(score: number): string {
 function formatOversizedChatCliBatchMessage(commandCount: number): string {
   return [
     '### COMMAND ERROR ###',
-    `Batch has ${commandCount} commands. Run at most ${CHAT_CLI_RECOMMENDED_BATCH_COMMANDS} focused commands per response, or up to ${CHAT_CLI_MAX_BATCH_COMMANDS} when necessary.`,
+    `Batch has ${commandCount} commands. Use one command per \`\`\`shell block and at most ${CHAT_CLI_RECOMMENDED_BATCH_COMMANDS} \`\`\`shell blocks per response.`,
     '### END COMMAND ERROR ###',
     formatNextResponseInstruction(),
   ].join('\n');

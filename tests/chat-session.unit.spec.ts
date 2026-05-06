@@ -992,7 +992,7 @@ pwd
   expect(result.error).toBeNull();
   expect(onProgress).not.toHaveBeenCalled();
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content).toBe(
-    '### COMMAND ERROR ###\nBatch has 11 commands. Run at most 4 focused commands per response, or up to 10 when necessary.\n### END COMMAND ERROR ###\nNext response: Write concise What / Why / Unsure of and shell command(s), or run ask QUESTION, or run done MESSAGE_TO_USER.'
+    '### COMMAND ERROR ###\nBatch has 11 commands. Use one command per ```shell block and at most 4 ```shell blocks per response.\n### END COMMAND ERROR ###\nNext response: Write concise What / Why / Unsure of and shell command(s), or run ask QUESTION, or run done MESSAGE_TO_USER.'
   );
   expect(writeChatCliCommandTraceMock.mock.calls.map((call) => call[1])).toEqual([
     'ls /',

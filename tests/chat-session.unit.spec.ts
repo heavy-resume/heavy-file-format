@@ -523,11 +523,20 @@ hvy_version: 0.1
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages.at(-1)?.content).toContain('Current directory: /body/summary/items');
 });
 
-test('requestDocumentEditChatTurn trims old cli conversation messages while keeping stable context', async () => {
+test('requestDocumentEditChatTurn compacts old cli conversation after high provider input tokens', async () => {
   requestProxyCompletionMock
-    .mockResolvedValueOnce(`echo "${'x'.repeat(2500)}"`)
-    .mockResolvedValueOnce('pwd')
-    .mockResolvedValueOnce('pwd')
+    .mockImplementationOnce(async (params: { onTokenUsage?: (usage: { inputTokens?: number; outputTokens?: number }) => void }) => {
+      params.onTokenUsage?.({ inputTokens: 9_000, outputTokens: 10 });
+      return `echo "${'x'.repeat(12000)}"`;
+    })
+    .mockImplementationOnce(async (params: { onTokenUsage?: (usage: { inputTokens?: number; outputTokens?: number }) => void }) => {
+      params.onTokenUsage?.({ inputTokens: 10_500, outputTokens: 10 });
+      return `echo "${'y'.repeat(12000)}"`;
+    })
+    .mockImplementationOnce(async (params: { onTokenUsage?: (usage: { inputTokens?: number; outputTokens?: number }) => void }) => {
+      params.onTokenUsage?.({ inputTokens: 7_000, outputTokens: 10 });
+      return `echo "${'z'.repeat(12000)}"`;
+    })
     .mockResolvedValueOnce('pwd')
     .mockResolvedValueOnce('done Checked the document.');
   const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
@@ -541,11 +550,10 @@ test('requestDocumentEditChatTurn trims old cli conversation messages while keep
   });
 
   expect(result.error).toBeNull();
+  expect(JSON.stringify(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages)).toContain('x'.repeat(12000));
+  expect(JSON.stringify(requestProxyCompletionMock.mock.calls[2]?.[0]?.messages)).not.toContain('x'.repeat(12000));
   expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.messages.length).toBeGreaterThan(0);
-  expect(
-    requestProxyCompletionMock.mock.calls[4]?.[0]?.messages.reduce((total: number, message: ChatMessage) => total + message.content.length, 0)
-  ).toBeLessThanOrEqual(6000);
-  expect(JSON.stringify(requestProxyCompletionMock.mock.calls[4]?.[0]?.messages)).not.toContain('x'.repeat(2500));
+  expect(JSON.stringify(requestProxyCompletionMock.mock.calls[4]?.[0]?.messages)).not.toContain('x'.repeat(12000));
   expect(JSON.stringify(requestProxyCompletionMock.mock.calls[4]?.[0]?.messages)).not.toContain('... truncated ...');
   expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.systemInstructions).toContain(
     'Valid commands (in order of preference):\nCommands: hvy, nl, rg, find, sed, echo, cat, ls, pwd, cd, cp, rm, grep, sort, uniq, wc, tr, xargs, head, tail, true. Ask: ask QUESTION. Finish: done SUMMARY.'

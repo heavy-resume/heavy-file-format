@@ -17,7 +17,9 @@ import type { HvyCliSession } from '../cli-core/commands';
 
 const CHAT_CLI_MAX_STEPS = 30;
 const CHAT_CLI_MAX_CONSECUTIVE_COMMAND_ERRORS = 3;
-const CHAT_CLI_MESSAGE_HISTORY_MAX_CHARS = 6000;
+const CHAT_CLI_MESSAGE_HISTORY_HIGH_WATER_TOKENS = 10_000;
+const CHAT_CLI_MESSAGE_HISTORY_TARGET_CHARS = 24_000;
+const CHAT_CLI_MESSAGE_HISTORY_FALLBACK_HIGH_WATER_CHARS = 40_000;
 const CHAT_CLI_PRIOR_MESSAGE_LIMIT = 10;
 const CHAT_CLI_MODEL_OUTPUT_MAX_LINES = 200;
 const CHAT_CLI_MODEL_OUTPUT_MAX_LINE_WIDTH = 400;
@@ -104,12 +106,10 @@ export async function runChatCliEditLoop(params: {
   syncIntroducedDiagnostics(params.document, turnState.diagnostics);
   let consecutiveCommandErrors = 0;
   let latestTokenUsage: ChatTokenUsage | null = null;
+  let latestInputTokens: number | undefined;
 
   for (let step = 0; step < CHAT_CLI_MAX_STEPS; step += 1) {
     throwIfAborted(params.signal);
-    if (step > 0) {
-      turnState = { ...turnState, messages: compactChatCliConversation(turnState.messages) };
-    }
     const response = await requestProxyCompletion({
       settings: params.settings,
       messages: turnState.messages,
@@ -122,6 +122,7 @@ export async function runChatCliEditLoop(params: {
       onReasoningSummary: params.onReasoningSummary,
       onTokenUsage: (usage) => {
         latestTokenUsage = usage;
+        latestInputTokens = usage.inputTokens;
         params.onTokenUsage?.(usage);
       },
       signal: params.signal,
@@ -134,6 +135,7 @@ export async function runChatCliEditLoop(params: {
       onProgress: params.onProgress,
       traceRunId,
       writeTrace: true,
+      lastInputTokens: latestInputTokens,
     });
     turnState = advanced;
     if (advanced.commandResultMessage) {
@@ -253,6 +255,7 @@ async function advanceChatCliTurnState(params: {
   onProgress?: (content: string) => void;
   traceRunId?: string;
   writeTrace?: boolean;
+  lastInputTokens?: number;
 }): Promise<ChatCliSimAdvanceResult> {
   throwIfAborted(params.signal);
   const action = parseChatCliAction(params.assistantOutput);
@@ -381,7 +384,7 @@ async function advanceChatCliTurnState(params: {
     );
   }
   return {
-    ...buildSimAdvanceResult(params, messages, commandResultMessage, mutated, urgency, diagnostics),
+    ...buildSimAdvanceResult(params, compactChatCliConversation(messages, params.lastInputTokens), commandResultMessage, mutated, urgency, diagnostics),
     batchHadSuccess,
     batchHadError,
     lastFailedCommand,
@@ -1022,8 +1025,11 @@ function isLikelyProseResponse(value: string): boolean {
   return value.includes(' ') && !CHAT_CLI_COMMAND_NAMES.has(firstWord);
 }
 
-function compactChatCliConversation(messages: ChatMessage[]): ChatMessage[] {
-  if (countMessageChars(messages) <= CHAT_CLI_MESSAGE_HISTORY_MAX_CHARS) {
+function compactChatCliConversation(messages: ChatMessage[], lastInputTokens?: number): ChatMessage[] {
+  const shouldCompact = typeof lastInputTokens === 'number'
+    ? lastInputTokens >= CHAT_CLI_MESSAGE_HISTORY_HIGH_WATER_TOKENS
+    : countMessageChars(messages) > CHAT_CLI_MESSAGE_HISTORY_FALLBACK_HIGH_WATER_CHARS;
+  if (!shouldCompact) {
     return messages;
   }
   const compacted: ChatMessage[] = [];
@@ -1033,7 +1039,7 @@ function compactChatCliConversation(messages: ChatMessage[]): ChatMessage[] {
     if (!message) {
       continue;
     }
-    if (compacted.length > 0 && totalChars + message.content.length > CHAT_CLI_MESSAGE_HISTORY_MAX_CHARS) {
+    if (compacted.length > 0 && totalChars + message.content.length > CHAT_CLI_MESSAGE_HISTORY_TARGET_CHARS) {
       break;
     }
     compacted.unshift(message);

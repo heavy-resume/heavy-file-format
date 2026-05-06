@@ -36,7 +36,7 @@ export interface ChatCliEditTurnResult {
 export interface ChatCliInitialTurnRequest {
   messages: ChatMessage[];
   context: string;
-  formatInstructions: string;
+  responseInstructions: string;
   traceRunId: string;
 }
 
@@ -88,7 +88,7 @@ export async function runChatCliEditLoop(params: {
   let turnState: ChatCliSimTurnState = {
     messages: initial.messages,
     context: initial.context,
-    formatInstructions: initial.formatInstructions,
+    responseInstructions: initial.responseInstructions,
     traceRunId,
     request: params.request,
     priorMessages: params.priorMessages ?? [],
@@ -114,7 +114,7 @@ export async function runChatCliEditLoop(params: {
       settings: params.settings,
       messages: turnState.messages,
       context: turnState.context,
-      formatInstructions: buildChatCliLoopFormatInstructions(),
+      responseInstructions: buildChatCliLoopFormatInstructions(),
       mode: 'document-edit',
       debugLabel: `chat-cli-edit:${step + 1}`,
       traceRunId,
@@ -206,7 +206,7 @@ export async function buildChatCliInitialProxyTurnRequest(params: {
   return {
     messages: initial.messages,
     context: initial.context,
-    formatInstructions: initial.formatInstructions,
+    responseInstructions: initial.responseInstructions,
     traceRunId,
   };
 }
@@ -223,7 +223,7 @@ export async function buildChatCliInitialSimTurnState(params: {
   return {
     messages: initial.messages,
     context: initial.context,
-    formatInstructions: initial.formatInstructions,
+    responseInstructions: initial.responseInstructions,
     traceRunId,
     request: params.request,
     priorMessages: params.priorMessages ?? [],
@@ -424,7 +424,7 @@ function buildSimAdvanceResult(
       params.state.priorConversation,
       params.state.selectedComponent
     ),
-    formatInstructions: buildChatCliLoopFormatInstructions(),
+    responseInstructions: buildChatCliLoopFormatInstructions(),
     diagnostics,
     urgency,
     commandResultMessage,
@@ -519,7 +519,7 @@ async function buildChatCliInitialTurnRequest(params: {
     priorConversation,
     messages,
     context,
-    formatInstructions: buildChatCliLoopFormatInstructions(),
+    responseInstructions: buildChatCliLoopFormatInstructions(),
     traceRunId: params.traceRunId,
   };
 }

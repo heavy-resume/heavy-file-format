@@ -469,8 +469,8 @@ hvy_version: 0.1
       notes: expect.stringContaining('AI note: reviewed the document chunks.'),
     }),
   }));
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.formatInstructions).not.toContain('Tool shapes:');
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.formatInstructions).not.toContain('Available plugins for `<!--hvy:plugin ...-->` blocks:');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.responseInstructions).not.toContain('Tool shapes:');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.responseInstructions).not.toContain('Available plugins for `<!--hvy:plugin ...-->` blocks:');
   const batchResult = lastToolResultBeforeCall(1);
   expect(batchResult).toContain('Tool result for batch:');
   expect(batchResult).toContain('Call 1: grep(Python)');
@@ -580,7 +580,7 @@ hvy_version: 0.1
   expect(result.error).toBeNull();
   expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.context).toContain('Plan progress:');
   expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.context).toContain('1. [ ] Find the summary text');
-  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.formatInstructions).not.toContain('{"tool":"plan"');
+  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.responseInstructions).not.toContain('{"tool":"plan"');
   expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.context).toContain('1. [x] Find the summary text — Found the summary text.');
   expect(result.messages.some((message) => message.progress && message.content.includes('Plan progress:'))).toBe(true);
   expect(result.messages.some((message) => message.progress && message.content.includes('Find the summary text'))).toBe(true);
@@ -1489,7 +1489,7 @@ hvy_version: 0.1
   expect(onMutation).not.toHaveBeenCalled();
   expect(requestProxyCompletionMock).toHaveBeenCalledTimes(1);
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.debugLabel).toBe('ai-document-edit:1');
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.formatInstructions).toContain('`answer`');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.responseInstructions).toContain('`answer`');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages[0]?.content).toContain('AI-generated section/chunk notes are in context');
 });
 
@@ -2196,7 +2196,7 @@ hvy_version: 0.1
   });
 
   expect(result.error).toBeNull();
-  const firstToolInstructions = requestProxyCompletionMock.mock.calls[1]?.[0]?.formatInstructions ?? '';
+  const firstToolInstructions = requestProxyCompletionMock.mock.calls[1]?.[0]?.responseInstructions ?? '';
   expect(firstToolInstructions).toContain('Registered plugin ids: dev.heavy.form.');
   expect(firstToolInstructions).toContain('Use `get_help` only when it is listed for the current phase and exact syntax is missing from the notes or recent tool help.');
   expect(firstToolInstructions).not.toContain('Form UI. Fields and script hooks live in the YAML body.');
@@ -2320,9 +2320,9 @@ hvy_version: 0.1
   expect(firstToolCall?.context).toContain('Configured db-table component targets: work_items');
   expect(firstToolCall?.context).toContain('Missing SQLite tables/views targeted by db-table components: work_items.');
   expect(firstToolCall?.context).not.toContain('SQLite tables/views available for query_db_table: work_items');
-  expect(firstToolCall?.formatInstructions).toContain('`execute_sql`');
-  expect(firstToolCall?.formatInstructions).not.toContain('`query_db_table`,');
-  expect(firstToolCall?.formatInstructions).toContain('Treat pluginConfig.source as storage selection, not a schema fix.');
+  expect(firstToolCall?.responseInstructions).toContain('`execute_sql`');
+  expect(firstToolCall?.responseInstructions).not.toContain('`query_db_table`,');
+  expect(firstToolCall?.responseInstructions).toContain('Treat pluginConfig.source as storage selection, not a schema fix.');
 });
 
 test('requestAiDocumentEditTurn can remove a section', async () => {

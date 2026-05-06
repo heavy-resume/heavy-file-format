@@ -282,7 +282,7 @@ async function runDocumentEditToolLoop(params: {
       settings: params.settings,
       messages: conversation,
       context: buildLoopContext(contextSummary, plan, recentToolHelp, workLedger, buildIntentRecall(latestIntent, snapshot, params.document), workNote, latestToolResult),
-      formatInstructions: buildDocumentEditFormatInstructions({
+      responseInstructions: buildDocumentEditFormatInstructions({
         dbTableNames: dbObjectNames,
         pluginHints,
         planActive: plan !== null,
@@ -758,7 +758,7 @@ async function runHeaderEditToolLoop(params: {
       settings: params.settings,
       messages: conversation,
       context: buildLoopContext(contextSummary, plan, null, undefined, undefined, undefined, latestToolResult),
-      formatInstructions: buildHeaderEditFormatInstructions({ planActive: plan !== null }),
+      responseInstructions: buildHeaderEditFormatInstructions({ planActive: plan !== null }),
       mode: 'document-edit',
       debugLabel: `ai-header-edit:${iteration + 1}`,
       traceRunId: params.traceRunId,

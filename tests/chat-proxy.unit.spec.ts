@@ -20,7 +20,6 @@ const request = {
   model: 'gpt-5-mini',
   mode: 'qa' as const,
   context: 'Context body',
-  formatInstructions: 'Format as HVY.',
   messages: [
     { role: 'user' as const, content: 'What is this?' },
     { role: 'assistant' as const, content: 'A summary.' },
@@ -34,7 +33,7 @@ test('buildOpenAiProxyRequest includes developer context and conversation turns'
       effort: 'low',
       summary: 'auto',
     },
-    instructions: expect.stringMatching(/Response formatting instructions:\nFormat as HVY\./),
+    instructions: expect.stringMatching(/Answer questions about the provided HVY document context\./),
     input: [
       {
         role: 'developer',
@@ -82,7 +81,7 @@ test('buildAnthropicProxyRequest places context in system prompt and messages in
   ).toEqual({
     model: 'claude-sonnet-4-6',
     max_tokens: 4096,
-    system: expect.stringMatching(/Response formatting instructions:\nFormat as HVY\./),
+    system: expect.stringMatching(/Answer questions about the provided HVY document context\./),
     messages: [
       { role: 'user', content: 'What is this?' },
       { role: 'assistant', content: 'A summary.' },
@@ -245,7 +244,6 @@ test('formatTraceEvent writes one ndjson event with timestamp and payload', () =
       type: 'request_context',
       payload: {
         context: 'Context body',
-        formatInstructions: 'Format as HVY.',
       },
     },
     new Date('2026-05-02T12:00:00.000Z')
@@ -259,7 +257,6 @@ test('formatTraceEvent writes one ndjson event with timestamp and payload', () =
     type: 'request_context',
     payload: {
       context: 'Context body',
-      formatInstructions: 'Format as HVY.',
     },
   });
 });
@@ -425,7 +422,6 @@ test('formatAiCliMessagesLogEvent dumps exact chat cli provider request payloads
         { role: 'user', content: '### BEGIN /scratchpad.txt  ###\nlast edited never\n\nYou havent written your plan yet.' },
       ],
       context: 'Current request:\nAdd Baking.',
-      formatInstructions: 'Return command(s).',
     },
   });
 

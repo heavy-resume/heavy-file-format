@@ -30,8 +30,6 @@ interface ProxyChatRequest {
   model: string;
   messages: ChatMessage[];
   context: string;
-  // Natural-language response instructions, not a provider JSON schema.
-  formatInstructions: string;
   mode: 'qa' | 'component-edit' | 'document-edit';
   traceRunId?: string;
 }
@@ -47,7 +45,7 @@ export interface ProxyCompletionParams {
   messages: ChatMessage[];
   context: string;
   // Natural-language response instructions, not a provider JSON schema.
-  formatInstructions: string;
+  responseInstructions: string;
   mode: 'qa' | 'component-edit' | 'document-edit';
   debugLabel?: string;
   traceRunId?: string;
@@ -345,7 +343,7 @@ export async function requestChatCompletion(params: {
     settings: params.settings,
     messages: params.messages,
     context,
-    formatInstructions: HVY_AI_RESPONSE_FORMAT_INSTRUCTIONS,
+    responseInstructions: HVY_AI_RESPONSE_FORMAT_INSTRUCTIONS,
     mode: 'qa',
     debugLabel: 'chat',
     onReasoningSummary: params.onReasoningSummary,
@@ -359,8 +357,7 @@ export async function requestProxyCompletion(params: ProxyCompletionParams): Pro
     provider: params.settings.provider,
     model: params.settings.model,
     messages: params.messages,
-    context: params.context,
-    formatInstructions: params.formatInstructions,
+    context: appendProxyResponseInstructions(params.context, params.responseInstructions),
     mode: params.mode,
     traceRunId: params.traceRunId,
   });
@@ -371,7 +368,6 @@ export async function requestProxyCompletion(params: ProxyCompletionParams): Pro
     model: requestPayload.model,
     messages: requestPayload.messages,
     contextLength: requestPayload.context.length,
-    formatInstructionsLength: requestPayload.formatInstructions.length,
   });
 
   const response = await fetch('/api/chat', {
@@ -438,13 +434,21 @@ export function buildProxyChatRequest(request: ProxyChatRequest): ProxyChatReque
       error: message.error,
     })),
     context: request.context,
-    formatInstructions: request.formatInstructions,
     mode: request.mode,
   };
   if (request.traceRunId) {
     payload.traceRunId = request.traceRunId;
   }
   return payload;
+}
+
+export function appendProxyResponseInstructions(context: string, responseInstructions: string): string {
+  return [
+    context.trimEnd(),
+    '',
+    'Response instructions:',
+    responseInstructions.trim(),
+  ].join('\n');
 }
 
 export function traceAgentLoopEvent(params: AgentLoopTraceEventParams): void {

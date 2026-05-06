@@ -50,7 +50,7 @@ export async function requestAiComponentEdit(params: {
     settings: params.settings,
     messages: conversation,
     context,
-    formatInstructions: buildAiEditFormatInstructions(),
+    responseInstructions: buildAiEditFormatInstructions(),
     mode: 'component-edit',
     debugLabel: 'ai-edit',
   });
@@ -84,7 +84,7 @@ export async function requestAiComponentEdit(params: {
       settings: params.settings,
       messages: repairConversation,
       context,
-      formatInstructions: buildAiEditFormatInstructions(),
+      responseInstructions: buildAiEditFormatInstructions(),
       mode: 'component-edit',
       debugLabel: 'ai-edit-repair',
     });

@@ -29,7 +29,7 @@ export async function requestAiDocumentNotes(params: {
       },
     ],
     context: params.chunks.text,
-    formatInstructions: buildDocumentNoteFormatInstructions(),
+    responseInstructions: buildDocumentNoteFormatInstructions(),
     mode: 'document-edit',
     debugLabel: 'ai-document-notes',
     traceRunId: params.traceRunId,

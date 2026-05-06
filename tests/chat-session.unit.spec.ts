@@ -13,6 +13,12 @@ const { requestChatCompletionMock, requestProxyCompletionMock, runQaToolLoopMock
 }));
 
 vi.mock('../src/chat/chat', () => ({
+  appendProxyResponseInstructions: (context: string, responseInstructions: string) => [
+    context.trimEnd(),
+    '',
+    'Response instructions:',
+    responseInstructions.trim(),
+  ].join('\n'),
   buildProxyChatRequest: (request: object) => request,
   requestChatCompletion: requestChatCompletionMock,
   requestProxyCompletion: requestProxyCompletionMock,
@@ -258,7 +264,7 @@ test('requestDocumentEditChatTurn runs the CLI edit loop for document chat', asy
       mode: 'document-edit',
       debugLabel: 'chat-cli-edit:1',
       context: expect.stringContaining('Valid commands (in order of preference):\nCommands: hvy, nl, rg, find, sed, echo, cat, ls, pwd, cd, cp, rm, grep, sort, uniq, wc, tr, xargs, head, tail, true. Ask: ask QUESTION. Finish: done SUMMARY.'),
-      formatInstructions: expect.stringContaining('Return concise notes plus terminal command(s).'),
+      responseInstructions: expect.stringContaining('Return concise notes plus terminal command(s).'),
     })
   );
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Current request:\nAdd a chore section.');
@@ -364,15 +370,15 @@ test('buildDocumentEditCliSimRequest exposes the exact chronological CLI request
     mode: string;
     messages: ChatMessage[];
     context: string;
-    formatInstructions: string;
   };
 
   expect(payload).toEqual(expect.objectContaining({
     provider: 'openai',
     model: 'gpt-5-mini',
     mode: 'document-edit',
-    formatInstructions: expect.stringContaining('Return concise notes plus terminal command(s).'),
   }));
+  expect(payload).not.toHaveProperty('responseInstructions');
+  expect(payload.context).toContain('Response instructions:\nReturn concise notes plus terminal command(s).');
   expect(payload.messages).toEqual([
     expect.objectContaining({ role: 'user', content: 'Add a chore section.' }),
     expect.objectContaining({ role: 'assistant', content: expect.stringContaining('```shell\nls /\n```') }),

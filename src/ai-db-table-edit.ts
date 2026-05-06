@@ -153,7 +153,7 @@ export async function requestAiDbTableEdit(params: {
     fragment: originalFragment,
     summary,
   });
-  const formatInstructions = buildDbTableEditFormatInstructions(tableName);
+  const responseInstructions = buildDbTableEditFormatInstructions(tableName);
 
   let mutationRecorded = false;
   const recordMutationOnce = (): void => {
@@ -183,7 +183,7 @@ export async function requestAiDbTableEdit(params: {
       settings: params.settings,
       messages: conversation,
       context,
-      formatInstructions,
+      responseInstructions,
       mode: 'component-edit',
       debugLabel: `ai-db-table-edit:${iteration + 1}`,
     });

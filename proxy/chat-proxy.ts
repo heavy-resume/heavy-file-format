@@ -47,8 +47,6 @@ interface ProxyChatRequest {
   }>;
   traceRunId?: string;
   context: string;
-  // Natural-language response instructions, not a provider JSON schema.
-  formatInstructions: string;
 }
 
 interface ProviderCompletion {
@@ -142,7 +140,6 @@ export function buildChatProxyMiddleware(env: Record<string, string | undefined>
           mode: body.mode,
           messages: body.messages,
           context: body.context,
-          formatInstructions: body.formatInstructions,
         },
       });
       console.debug('[hvy:chat-proxy] incoming request', {
@@ -150,7 +147,6 @@ export function buildChatProxyMiddleware(env: Record<string, string | undefined>
         model: body.model,
         messages: body.messages,
         contextLength: body.context.length,
-        formatInstructionsLength: body.formatInstructions.length,
       });
       const completion = await requestProviderWithRepair(body, env, upstreamAbort.signal, runId);
       completed = true;
@@ -204,7 +200,7 @@ export function buildOpenAiProxyRequest(body: ProxyChatRequest): Record<string, 
       effort: OPENAI_REASONING_EFFORT,
       summary: 'auto',
     },
-    instructions: buildSystemInstructions(body.mode, body.formatInstructions),
+    instructions: buildSystemInstructions(body.mode),
     input: [
       {
         role: 'developer',
@@ -237,7 +233,7 @@ export function buildAnthropicProxyRequest(body: ProxyChatRequest): Record<strin
   return {
     model: body.model,
     max_tokens: 4096,
-    system: `${buildSystemInstructions(body.mode, body.formatInstructions)}\n\nDocument context:\n\n${body.context}`,
+    system: `${buildSystemInstructions(body.mode)}\n\nDocument context:\n\n${body.context}`,
     messages: body.messages.map((message) => ({
       role: message.role,
       content: message.content,
@@ -549,9 +545,6 @@ function validateProxyChatRequest(payload: unknown): ProxyChatRequest {
   if (typeof record.context !== 'string' || record.context.trim().length === 0) {
     throw new Error('Chat context is required.');
   }
-  if (typeof record.formatInstructions !== 'string' || record.formatInstructions.trim().length === 0) {
-    throw new Error('Chat format instructions are required.');
-  }
   if (!Array.isArray(record.messages) || record.messages.length === 0) {
     throw new Error('At least one chat message is required.');
   }
@@ -576,7 +569,6 @@ function validateProxyChatRequest(payload: unknown): ProxyChatRequest {
     mode: record.mode,
     traceRunId: typeof record.traceRunId === 'string' && /^[\w:-]{1,120}$/.test(record.traceRunId) ? record.traceRunId : undefined,
     context: record.context,
-    formatInstructions: record.formatInstructions,
     messages,
   };
 }
@@ -904,7 +896,7 @@ function truncateTraceText(value: string, maxLength: number): string {
   return normalized.length > maxLength ? `${normalized.slice(0, maxLength - 1)}…` : normalized;
 }
 
-function buildSystemInstructions(mode: ProxyChatRequest['mode'], formatInstructions: string): string {
+function buildSystemInstructions(mode: ProxyChatRequest['mode']): string {
   const prelude =
     mode === 'component-edit'
       ? [
@@ -927,12 +919,7 @@ function buildSystemInstructions(mode: ProxyChatRequest['mode'], formatInstructi
           'Prefer concise answers grounded in the supplied document context.',
         ];
 
-  return [
-    ...prelude,
-    '',
-    'Response formatting instructions:',
-    formatInstructions.trim(),
-  ].join('\n');
+  return prelude.join('\n');
 }
 
 function firstNonEmptyString(...values: Array<string | undefined>): string {

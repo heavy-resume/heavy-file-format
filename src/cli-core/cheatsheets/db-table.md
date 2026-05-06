@@ -10,17 +10,17 @@ Dynamic table components have two separate parts:
 Create or change tables and views:
 
 ```shell
-hvy plugin db-table exec "CREATE TABLE chores (id INTEGER PRIMARY KEY, title TEXT NOT NULL, assigned_to TEXT, completed_at TEXT)"
-hvy plugin db-table exec "CREATE VIEW weekly_chore_leaders AS SELECT assigned_to, COUNT(*) AS completed_count FROM chores WHERE completed_at >= datetime('now', '-7 days') GROUP BY assigned_to"
+hvy plugin db-table exec "CREATE TABLE items (id INTEGER PRIMARY KEY, title TEXT NOT NULL, assigned_to TEXT, completed_at TEXT)"
+hvy plugin db-table exec "CREATE VIEW weekly_item_leaders AS SELECT assigned_to, COUNT(*) AS completed_count FROM items WHERE completed_at >= datetime('now', '-7 days') GROUP BY assigned_to"
 ```
 
 Inspect the current backend:
 
 ```shell
 hvy plugin db-table tables
-hvy plugin db-table schema chores
+hvy plugin db-table schema items
 hvy plugin db-table schema
-hvy plugin db-table query "SELECT * FROM chores"
+hvy plugin db-table query "SELECT * FROM items"
 ```
 
 Use `hvy plugin db-table tables` and `hvy plugin db-table schema` to inspect the current backend. Do not search the document for `CREATE TABLE`; that can find examples, recipes, scratchpad notes, or stale setup scripts instead of the live backend schema.
@@ -28,18 +28,18 @@ Use `hvy plugin db-table tables` and `hvy plugin db-table schema` to inspect the
 Display rows in the document:
 
 ```shell
-hvy insert 0 plugin db-table /chore-chart active-chores chores "SELECT title, assigned_to FROM chores WHERE completed_at IS NULL"
-hvy insert -1 plugin db-table /chore-chart weekly-leaders weekly_chore_leaders "SELECT assigned_to, completed_count FROM weekly_chore_leaders"
+hvy insert 0 plugin db-table /a-section active-items items "SELECT title, assigned_to FROM items WHERE completed_at IS NULL"
+hvy insert -1 plugin db-table /a-section weekly-leaders weekly_item_leaders "SELECT assigned_to, completed_count FROM weekly_item_leaders"
 ```
 
 Fix an existing DB Table component:
 
 ```shell
-cat /body/chore-chart/active-chores/plugin.json
-cat /body/chore-chart/active-chores/plugin.txt
+cat /body/a-section/active-items/plugin.json
+cat /body/a-section/active-items/plugin.txt
 hvy plugin db-table tables
-hvy plugin db-table exec "CREATE VIEW active_chores AS SELECT title, assigned_to FROM chores WHERE completed_at IS NULL"
-echo '{"id":"active-chores","css":"","plugin":"dev.heavy.db-table","pluginConfig":{"table":"active_chores"}}' > /body/chore-chart/active-chores/plugin.json
-echo 'SELECT title, assigned_to FROM active_chores' > /body/chore-chart/active-chores/plugin.txt
+hvy plugin db-table exec "CREATE VIEW active_items AS SELECT title, assigned_to FROM items WHERE completed_at IS NULL"
+echo '{"id":"active-items","css":"","plugin":"dev.heavy.db-table","pluginConfig":{"table":"active_items"}}' > /body/a-section/active-items/plugin.json
+echo 'SELECT title, assigned_to FROM active_items' > /body/a-section/active-items/plugin.txt
 hvy lint
 ```

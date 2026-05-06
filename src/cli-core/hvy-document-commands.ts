@@ -92,7 +92,7 @@ export function hvyDocumentCommandHelp(topic = ''): string {
 
   const help: Record<string, string> = {
     '': [
-      formatCommandHelp('hvy insert INDEX COMPONENT PARENT_PATH --id ID [TEXT] [--config JSON]', 'Insert a builtin or custom component. INDEX is zero-based and supports Python-style negative indexes; 0 is the front, -1 is the back.'),
+      formatCommandHelp('hvy insert INDEX COMPONENT PARENT_PATH [TEXT] [--id ID] [--config JSON]', 'Insert a builtin or custom component. Component ids are optional; use --id only when you need a stable id. INDEX is zero-based and supports Python-style negative indexes; 0 is the front, -1 is the back.'),
       formatCommandHelp('hvy insert INDEX section PARENT_PATH ID TITLE', 'Create a section.'),
       formatCommandHelp('hvy insert INDEX text SECTION_PATH ID TEXT', 'Create a text component.'),
       formatCommandHelp('hvy insert INDEX table SECTION_PATH ID COLUMNS [--row CSV]...', 'Create a static table component.'),
@@ -110,20 +110,23 @@ export function hvyDocumentCommandHelp(topic = ''): string {
       formatCommandHelp('Edit existing components', 'Use find to discover virtual files, cat to inspect them, and sed to update writable body/config files.'),
     ].join('\n'),
     insert: [
-      formatCommandHelp('hvy insert INDEX COMPONENT PARENT_PATH --id ID [TEXT] [--config JSON]', 'Insert a builtin or custom component to a section, component-list, grid, container, or expandable content path. INDEX is zero-based and supports Python-style negative indexes; 0 is the front, -1 is the back.'),
+      formatCommandHelp('hvy insert INDEX COMPONENT PARENT_PATH [TEXT] [--id ID] [--config JSON]', 'Insert a builtin or custom component to a section, component-list, grid, container, or expandable content path. Component ids are optional; use --id only when you need a stable id. INDEX is zero-based and supports Python-style negative indexes; 0 is the front, -1 is the back.'),
       formatCommandHelp('hvy insert INDEX section PARENT_PATH ID TITLE', 'Add a section under /body or under another section.'),
       formatCommandHelp('hvy insert INDEX text SECTION_PATH ID TEXT', 'Insert a text block into a section.'),
       formatCommandHelp('hvy insert INDEX table SECTION_PATH ID COLUMNS [--row CSV]...', 'Insert a static table block. Columns and rows use comma-separated text.'),
       formatCommandHelp('hvy insert INDEX plugin SECTION_PATH ID PLUGIN_ID [--config JSON] [--body TEXT]', 'Insert a raw plugin block by canonical plugin id, such as dev.heavy.form or dev.heavy.db-table.'),
       '',
       'Examples:',
-      '  hvy insert 0 history-record /body/history/component-list-2 --id history-new',
-      '  hvy insert 0 text /body/summary intro "Visible text"',
-      '  hvy insert 2 text /body/summary middle-note "Inserted before the current third child"',
-      '  hvy insert -2 skill-record /body/skills/component-list-1 --id skill-before-last',
+      '  hvy insert 0 section /body a-section "A Section"',
+      '  hvy insert 0 /a-section/text-0 . intro "Visible text"',
+      '  hvy insert -1 container . a-container',
+      '  hvy insert 0 container a-container nested-container',
+      '  hvy insert -1 component-list . a-list --config \'{"componentListComponent":"text"}\'',
+      '  hvy insert -1 grid . a-grid',
+      '  hvy insert -2 table . a-table "Name,Status" --row "Example,Active"',
     ].join('\n'),
     component: [
-      formatCommandHelp('hvy insert INDEX COMPONENT PARENT_PATH --id ID [TEXT] [--config JSON]', 'Insert a builtin or custom component to a section, component-list, grid, container, or expandable content path. INDEX is zero-based and supports Python-style negative indexes; 0 is the front, -1 is the back.'),
+      formatCommandHelp('hvy insert INDEX COMPONENT PARENT_PATH [TEXT] [--id ID] [--config JSON]', 'Insert a builtin or custom component to a section, component-list, grid, container, or expandable content path. Component ids are optional; use --id only when you need a stable id. INDEX is zero-based and supports Python-style negative indexes; 0 is the front, -1 is the back.'),
     ].join('\n'),
     section: formatCommandHelp('hvy insert INDEX section PARENT_PATH ID TITLE', 'Add a section under /body or under another section. INDEX is zero-based and supports Python-style negative indexes; 0 is the front, -1 is the back.'),
     text: formatCommandHelp('hvy insert INDEX text SECTION_PATH ID TEXT', 'Insert a text block into a section. INDEX is zero-based and supports Python-style negative indexes; 0 is the front, -1 is the back.'),
@@ -394,12 +397,14 @@ function addTableBlock(ctx: HvyDocumentCommandContext, args: string[], index: Hv
 
 function addComponentShortcut(ctx: HvyDocumentCommandContext, component: string, args: string[], index: HvyInsertIndex = -1): HvyDocumentCommandResult {
   const [parentPath = '', ...rest] = args;
-  const id = readOption(rest, '--id') ?? readOption(rest, '--name') ?? '';
-  const text = rest.find((arg, index) => !isOptionArg(arg) && !isOptionValue(rest, index)) ?? '';
+  const explicitId = readOption(rest, '--id') ?? readOption(rest, '--name') ?? '';
+  const positionals = rest.filter((arg, index) => !isOptionArg(arg) && !isOptionValue(rest, index));
+  const positionalId = !explicitId && looksLikeCliComponentId(positionals[0] ?? '') ? positionals[0] ?? '' : '';
+  const text = (positionalId ? positionals[1] : positionals[0]) ?? '';
   const config = readOption(rest, '--config');
   return addComponentToPath(ctx, {
     parentPath,
-    id,
+    id: explicitId || positionalId,
     component,
     text,
     config: config ? parseJsonObject(config, 'hvy insert COMPONENT --config') : {},
@@ -417,14 +422,15 @@ function addComponentToPath(ctx: HvyDocumentCommandContext, params: {
   commandName: string;
   index?: HvyInsertIndex;
 }): HvyDocumentCommandResult {
-  if (!params.parentPath || !params.id || !params.component) {
-    throw new Error(`${params.commandName}: expected PARENT_PATH --id ID [TEXT]`);
+  if (!params.parentPath || !params.component) {
+    throw new Error(`${params.commandName}: expected PARENT_PATH [TEXT] [--id ID]`);
   }
   if (!isKnownComponent(ctx.document, params.component)) {
     throw new Error(`${params.commandName}: unknown component "${params.component}"`);
   }
   const resolvedParentPath = resolveVirtualPath(ctx.fs, ctx.cwd, params.parentPath);
-  const block = createCliComponentBlock(ctx.document, params.component, params.id, decodeCliText(params.text), params.config);
+  const id = params.id || generateStableCliComponentId(ctx.fs, resolvedParentPath, params.component);
+  const block = createCliComponentBlock(ctx.document, params.component, id, decodeCliText(params.text), params.config);
   const parentBlock = findBlockForVirtualDirectory(ctx.document, resolvedParentPath);
   const target = findBlockInsertionTargetForVirtualDirectory(ctx.document, resolvedParentPath)
     ?? findDirectBlockInsertionTarget(ctx, resolvedParentPath);
@@ -432,8 +438,28 @@ function addComponentToPath(ctx: HvyDocumentCommandContext, params: {
     throw new Error(`${params.commandName}: no component insertion target: ${params.parentPath}`);
   }
   target.insert(block, params.index ?? -1);
-  const path = `${resolvedParentPath.replace(/\/$/, '')}/${params.id}`;
+  const path = `${resolvedParentPath.replace(/\/$/, '')}/${id}`;
   return { output: formatCreatedComponentDirectory(ctx.document, path, resolvedParentPath, parentBlock, target.kind), mutated: true, cwd: path };
+}
+
+function looksLikeCliComponentId(value: string): boolean {
+  return /^[a-z0-9]+(?:-[a-z0-9]+)+$/i.test(value);
+}
+
+function generateStableCliComponentId(fs: HvyVirtualFileSystem, resolvedParentPath: string, component: string): string {
+  const base = sanitizeCliIdSegment(component) || 'component';
+  const parentPath = resolvedParentPath.replace(/\/$/, '');
+  for (let index = 1; index < 10000; index += 1) {
+    const candidate = `${base}-${index}`;
+    if (!fs.entries.has(`${parentPath}/${candidate}`)) {
+      return candidate;
+    }
+  }
+  return `${base}-${Date.now()}`;
+}
+
+function sanitizeCliIdSegment(value: string): string {
+  return value.trim().toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '').replace(/-{2,}/g, '-');
 }
 
 function findDirectBlockInsertionTarget(

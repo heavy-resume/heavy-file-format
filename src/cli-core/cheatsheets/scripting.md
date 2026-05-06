@@ -3,7 +3,7 @@
 Create a scripting plugin:
 
 ```shell
-hvy insert 0 plugin /my-section setup dev.heavy.scripting --config "{\"version\":\"0.1\"}" --body "doc.header.set('status', 'ready')"
+hvy insert 0 plugin /a-section setup dev.heavy.scripting --config "{\"version\":\"0.1\"}" --body "doc.header.set('status', 'ready')"
 ```
 
 Scripts are sandboxed Brython/Python with one injected global:
@@ -17,8 +17,8 @@ Useful APIs:
 ```python
 doc.header.get("key")
 doc.header.set("key", "value")
-doc.db.query("SELECT * FROM chores")
-doc.db.execute("INSERT INTO chores (title) VALUES (?)", ["Dishes"])
+doc.db.query("SELECT * FROM items")
+doc.db.execute("INSERT INTO items (title) VALUES (?)", ["Example"])
 doc.cli.run("hvy request_structure --collapse")
 doc.tool("request_structure", {})
 ```

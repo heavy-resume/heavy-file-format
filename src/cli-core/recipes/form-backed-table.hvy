@@ -4,16 +4,16 @@
 Use this when a form should create rows and a table should show those rows.
 
 ```shell
-hvy insert 0 section / tracker "Tracker"
+hvy insert 0 section / a-section "A Section"
 hvy plugin db-table exec "CREATE TABLE items (id INTEGER PRIMARY KEY, title TEXT NOT NULL, notes TEXT)"
-hvy insert 0 plugin form /tracker add-item "Add item" "Title:text:required" "Notes:textarea" --script submit "title = doc.form.get_value('Title')\nnotes = doc.form.get_value('Notes')\ndoc.db.execute('INSERT INTO items (title, notes) VALUES (?, ?)', [title, notes])" --on-submit-script submit
-hvy insert -1 plugin db-table /tracker items-table items "SELECT id, title, notes FROM items ORDER BY id DESC"
+hvy insert 0 plugin form /a-section add-item "Add item" "Title:text:required" "Notes:textarea" --script submit "title = doc.form.get_value('Title')\nnotes = doc.form.get_value('Notes')\ndoc.db.execute('INSERT INTO items (title, notes) VALUES (?, ?)', [title, notes])" --on-submit-script submit
+hvy insert -1 plugin db-table /a-section items-table items "SELECT id, title, notes FROM items ORDER BY id DESC"
 hvy plugin db-table query "SELECT id, title FROM items"
 hvy lint
 ```
 
 Expected result:
 
-- `/body/tracker` section exists.
+- `/body/a-section` section exists.
 - The form inserts into the backend table `items`.
 - The db-table plugin displays current rows from `items`.

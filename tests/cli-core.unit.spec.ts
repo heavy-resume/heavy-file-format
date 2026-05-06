@@ -343,9 +343,16 @@ test('hvy help insert explains component creation commands', async () => {
 
   const result = await executeHvyCliCommand(document, session, 'hvy help insert');
 
-  expect(result.output).toContain('hvy insert INDEX COMPONENT PARENT_PATH --id ID [TEXT] [--config JSON]');
-  expect(result.output).toContain('hvy insert 2 text /body/summary middle-note');
-  expect(result.output).toContain('hvy insert -2 skill-record /body/skills/component-list-1 --id skill-before-last');
+  expect(result.output).toContain('hvy insert INDEX COMPONENT PARENT_PATH [TEXT] [--id ID] [--config JSON]');
+  expect(result.output).toContain('cd /a-section');
+  expect(result.output).toContain('hvy insert 0 text . intro');
+  expect(result.output).toContain('hvy insert -1 container . a-container');
+  expect(result.output).toContain('hvy insert 0 container a-container nested-container');
+  expect(result.output).toContain('hvy insert -1 component-list . a-list');
+  expect(result.output).toContain('hvy insert -1 grid . a-grid');
+  expect(result.output).toContain('hvy insert -2 table . a-table');
+  expect(result.output).not.toContain('/body/skills/component-list-1');
+  expect(result.output).not.toContain('/body/history/component-list-2');
   expect(result.output).not.toContain('hvy insert -1 component PARENT_PATH ID COMPONENT');
 });
 
@@ -401,6 +408,29 @@ test('hvy insert -1 can create custom components and xref components', async () 
     .toContain('Baking');
   expect((await executeHvyCliCommand(document, session, 'cat /body/top-skills-tools-technologies/grid-0/grid/top-skill-baking/xref-card.json')).output)
     .toContain('"xrefTarget": "skill-baking"');
+});
+
+test('hvy insert can create custom components without explicit ids', async () => {
+  const document = createResumeCliTestDocument();
+  const session = createHvyCliSession();
+
+  const generated = await executeHvyCliCommand(
+    document,
+    session,
+    'hvy insert 0 history-record /body/history/component-list-2'
+  );
+  const positionalId = await executeHvyCliCommand(
+    document,
+    session,
+    'hvy insert 0 history-record /body/history/component-list-2 history-heavy-resume-founder'
+  );
+
+  expect(generated.output).toContain('/body/history/component-list-2/history-record-1: created');
+  expect(generated.cwd).toBe('/body/history/component-list-2/history-record-1');
+  expect(positionalId.output).toContain('/body/history/component-list-2/history-heavy-resume-founder: created');
+  expect(positionalId.cwd).toBe('/body/history/component-list-2/history-heavy-resume-founder');
+  expect((await executeHvyCliCommand(document, session, 'cat /body/history/component-list-2/children-order.json')).output)
+    .toMatch(/history-heavy-resume-founder[\s\S]*history-record-1[\s\S]*history-northwind-labs-senior-software-engineer/);
 });
 
 test('hvy insert -1 changes cwd to the newly created component', async () => {
@@ -2197,7 +2227,7 @@ test('hvy plugin form help explains script and submit options', async () => {
   expect(help).toContain('--on-submit-script NAME\n  Store pluginConfig.submitScript=NAME');
   expect(help).toContain('There is no optionsQuery YAML key');
   expect(help).toContain('hvy recipe populate-form-options-from-db');
-  expect(help).toContain('Example: hvy insert 0 plugin form /chores add-chore');
+  expect(help).toContain('Example: hvy insert 0 plugin form /a-section add-item');
   expect(help).toContain('See also: hvy cheatsheet scripting; hvy recipe scripting; man hvy plugin scripting tool TOOL_NAME');
   expect(help).toContain('plugin.txt scripts.NAME: |');
 });

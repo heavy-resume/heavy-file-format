@@ -208,7 +208,7 @@ registerHvyCliPluginCommands({
       description: 'Store pluginConfig.submitScript=NAME so that named script runs when the submit button is pressed. Alias: --submit.',
     },
     {
-      command: `Dynamic select example: hvy insert 0 plugin form /chores assign-chore "Assign chore" "Chore:select:required" --script load "rows = doc.db.query('SELECT id, title FROM chores ORDER BY id')\\ndoc.form.set_options('Chore', [{'label': row['title'], 'value': str(row['id'])} for row in rows])" --initial-script load`,
+      command: `Dynamic select example: hvy insert 0 plugin form /a-section choose-item "Choose item" "Item:select:required" --script load "rows = doc.db.query('SELECT id, title FROM items ORDER BY id')\\ndoc.form.set_options('Item', [{'label': row['title'], 'value': str(row['id'])} for row in rows])" --initial-script load`,
       description: 'Populates a select from the current SQL backend. There is no optionsQuery YAML key; use initialScript plus doc.form.set_options.',
     },
     {
@@ -216,8 +216,8 @@ registerHvyCliPluginCommands({
       description: 'Focused recipe for populating select/radio options from backend rows.',
     },
     {
-      command: `Example: hvy insert 0 plugin form /chores add-chore "Add chore" "Description:textarea:required" --script submit "title = doc.form.get_value('Description')\\ndoc.db.execute('INSERT INTO chores (title) VALUES (\\'' + title + '\\')')" --on-submit-script submit`,
-      description: 'Creates a form whose submit button says "Add chore" and runs the script named submit.',
+      command: `Example: hvy insert 0 plugin form /a-section add-item "Add item" "Description:textarea:required" --script submit "title = doc.form.get_value('Description')\\ndoc.db.execute('INSERT INTO items (title) VALUES (\\'' + title + '\\')')" --on-submit-script submit`,
+      description: 'Creates a form whose submit button says "Add item" and runs the script named submit.',
     },
     {
       command: 'See also: hvy cheatsheet scripting; hvy recipe scripting; man hvy plugin scripting tool TOOL_NAME',

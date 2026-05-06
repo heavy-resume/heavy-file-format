@@ -61,8 +61,8 @@ test('chat cli runs commands against the document filesystem and persists mutati
   const cli = createChatCliInterface(document);
 
   expect((await cli.run('pwd')).output).toBe('/');
-  expect((await cli.run('hvy append-child section /body chores "Chores"')).mutated).toBe(true);
-  const addTextResult = await cli.run('hvy append-child text /body/chores note "Weekly chore plan"');
+  expect((await cli.run('hvy insert -1 section /body chores "Chores"')).mutated).toBe(true);
+  const addTextResult = await cli.run('hvy insert -1 text /body/chores note "Weekly chore plan"');
   expect(addTextResult.output).toContain('/body/chores/note: created');
   expect(addTextResult.output).toContain('file text.json');
   expect(addTextResult.output).toContain('file text.txt');

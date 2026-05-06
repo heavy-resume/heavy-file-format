@@ -30,8 +30,8 @@ export interface HvyVirtualFileSystem {
 }
 
 export type HvyVirtualBlockInsertionTarget =
-  | { kind: 'blocks'; insert: (block: VisualBlock, position?: 'append' | 'prepend') => void }
-  | { kind: 'grid'; insert: (block: VisualBlock, position?: 'append' | 'prepend') => void };
+  | { kind: 'blocks'; insert: (block: VisualBlock, index?: number) => void }
+  | { kind: 'grid'; insert: (block: VisualBlock, index?: number) => void };
 
 export function buildHvyVirtualFileSystem(document: VisualDocument): HvyVirtualFileSystem {
   const entries = new Map<string, HvyVirtualEntry>();
@@ -395,7 +395,7 @@ function addSectionInsertionTargets(
   sectionPath: string
 ): void {
   entries.set(sectionPath, { kind: 'dir', path: sectionPath });
-  targets.set(sectionPath, { kind: 'blocks', insert: (block, position = 'append') => insertBlock(section.blocks, block, position) });
+  targets.set(sectionPath, { kind: 'blocks', insert: (block, index = -1) => insertBlock(section.blocks, block, index) });
   addBlockListInsertionTargets(entries, targets, section.blocks, sectionPath);
   section.children
     .filter((child) => !child.isGhost)
@@ -422,7 +422,7 @@ function addBlockInsertionTargets(
   entries.set(blockPath, { kind: 'dir', path: blockPath });
   addNamedBlockChildrenInsertionTarget(entries, targets, block.schema.containerBlocks ?? [], `${blockPath}/container`, block.schema.component === 'container');
   if (block.schema.component === 'component-list') {
-    targets.set(blockPath, { kind: 'blocks', insert: (newBlock, position = 'append') => insertBlock(block.schema.componentListBlocks, newBlock, position) });
+    targets.set(blockPath, { kind: 'blocks', insert: (newBlock, index = -1) => insertBlock(block.schema.componentListBlocks, newBlock, index) });
     addBlockListInsertionTargets(entries, targets, block.schema.componentListBlocks ?? [], blockPath);
   }
   addNamedBlockChildrenInsertionTarget(entries, targets, block.schema.expandableStubBlocks?.children ?? [], `${blockPath}/expandable-stub`, block.schema.component === 'expandable');
@@ -441,7 +441,7 @@ function addNamedBlockChildrenInsertionTarget(
     return;
   }
   entries.set(directoryPath, { kind: 'dir', path: directoryPath });
-  targets.set(directoryPath, { kind: 'blocks', insert: (block, position = 'append') => insertBlock(blocks, block, position) });
+  targets.set(directoryPath, { kind: 'blocks', insert: (block, index = -1) => insertBlock(blocks, block, index) });
   addBlockListInsertionTargets(entries, targets, blocks, directoryPath);
 }
 
@@ -456,25 +456,25 @@ function addGridInsertionTarget(
     return;
   }
   entries.set(directoryPath, { kind: 'dir', path: directoryPath });
-  targets.set(directoryPath, { kind: 'grid', insert: (block, position = 'append') => insertGridItem(gridItems, block, position) });
+  targets.set(directoryPath, { kind: 'grid', insert: (block, index = -1) => insertGridItem(gridItems, block, index) });
   addBlockListInsertionTargets(entries, targets, gridItems.map((item) => item.block), directoryPath);
 }
 
-function insertBlock(blocks: VisualBlock[], block: VisualBlock, position: 'append' | 'prepend'): void {
-  if (position === 'prepend') {
-    blocks.unshift(block);
-    return;
-  }
-  blocks.push(block);
+function insertBlock(blocks: VisualBlock[], block: VisualBlock, index: number): void {
+  blocks.splice(resolveInsertIndex(index, blocks.length), 0, block);
 }
 
-function insertGridItem(gridItems: GridItem[], block: VisualBlock, position: 'append' | 'prepend'): void {
+function insertGridItem(gridItems: GridItem[], block: VisualBlock, index: number): void {
   const item = { id: makeId('griditem'), block };
-  if (position === 'prepend') {
-    gridItems.unshift(item);
-    return;
+  gridItems.splice(resolveInsertIndex(index, gridItems.length), 0, item);
+}
+
+function resolveInsertIndex(index: number, childCount: number): number {
+  const resolvedIndex = index < 0 ? childCount + index + 1 : index;
+  if (resolvedIndex < 0 || resolvedIndex > childCount) {
+    throw new Error(`hvy insert: index ${index} is out of range for ${childCount} children. Use 0 for the front or Python-style negative indexes such as -1 for the back.`);
   }
-  gridItems.push(item);
+  return resolvedIndex;
 }
 
 function sectionToCliJson(section: VisualSection): JsonObject {

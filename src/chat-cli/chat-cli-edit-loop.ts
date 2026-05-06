@@ -1016,7 +1016,7 @@ function splitLongOutputLine(line: string, maxWidth: number): string[] {
 }
 
 function isComponentCreationCommand(command: string): boolean {
-  return /^\s*hvy\s+(?:append-child|prepend-child)\b/.test(command);
+  return /^\s*hvy\s+insert\b/.test(command);
 }
 
 function formatScratchpadForModel(snapshot: Pick<ReturnType<ReturnType<typeof createChatCliInterface>['snapshot']>, 'scratchpad' | 'scratchpadEdited' | 'scratchpadCommandsSinceEdit'>): string {

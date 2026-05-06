@@ -46,3 +46,5 @@ When the user asks to investigate a problem don't jump into a solution.
 Under no circumstance should a log have its own code path that would deviate from what it is supposed to be logging (except, strictly, for readability mutations.) Logs should be "raw data" first. Do not ever try to reconstruct what you think should show up in point A by having log code reconstruct in point B. Restructure the code if that isn't simple and obvious.
 
 Do not alter logging in any form without permission.
+
+For CLI/API design, avoid one-off special cases that look like a broader convention. Prefer APIs and more long term facing over APIs that merely solve the immediate example. Don't spend effort writing something limited when something much more capable is basically the same work.

@@ -236,9 +236,9 @@ test('requestDocumentEditChatTurn runs the CLI edit loop for document chat', asy
   requestProxyCompletionMock
     .mockImplementationOnce(async (params: { onTokenUsage?: (usage: { inputTokens?: number; outputTokens?: number }) => void }) => {
       params.onTokenUsage?.({ inputTokens: 100, outputTokens: 10 });
-      return 'hvy append-child section /body chores "Chores"';
+      return 'hvy insert -1 section /body chores "Chores"';
     })
-    .mockResolvedValueOnce('```shell\nhvy append-child text /body/chores note "Weekly chore plan"\n```')
+    .mockResolvedValueOnce('```shell\nhvy insert -1 text /body/chores note "Weekly chore plan"\n```')
     .mockResolvedValueOnce('done Created the chore section.');
   const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
   const document = deserializeDocument('---\nhvy_version: 0.1\n---\n', '.hvy');
@@ -258,14 +258,14 @@ test('requestDocumentEditChatTurn runs the CLI edit loop for document chat', asy
   expect(serializeDocument(document)).toContain('Weekly chore plan');
   expect(onMutation).toHaveBeenCalledWith('chat-cli');
   expect(onProgress.mock.calls.map((call) => call[0].content)).toEqual([
-    '$ hvy append-child section /body chores "Chores"',
-    '$ hvy append-child text /body/chores note "Weekly chore plan"',
+    '$ hvy insert -1 section /body chores "Chores"',
+    '$ hvy insert -1 text /body/chores note "Weekly chore plan"',
   ]);
   expect(onProgress.mock.calls[0]?.[0].work?.tokenUsage).toEqual({ inputTokens: 100, outputTokens: 10 });
   expect(result.messages.at(-1)?.work?.status).toBe('done');
   expect(result.messages.at(-1)?.work?.details).toEqual([
-    '$ hvy append-child section /body chores "Chores"',
-    '$ hvy append-child text /body/chores note "Weekly chore plan"',
+    '$ hvy insert -1 section /body chores "Chores"',
+    '$ hvy insert -1 text /body/chores note "Weekly chore plan"',
   ]);
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]).toEqual(
     expect.objectContaining({
@@ -398,7 +398,7 @@ test('buildDocumentEditCliSimRequest exposes the exact provider-facing CLI reque
     expect.objectContaining({ role: 'assistant', content: [expect.objectContaining({ text: expect.stringContaining('```shell\nls /\n```') })] }),
     expect.objectContaining({ role: 'user', content: [expect.objectContaining({ text: expect.stringContaining('dir  body') })] }),
     expect.objectContaining({ role: 'assistant', content: [expect.objectContaining({ text: expect.stringContaining('```shell\nhvy --help\n```') })] }),
-    expect.objectContaining({ role: 'user', content: [expect.objectContaining({ text: expect.stringContaining('hvy append-child section PARENT_PATH ID TITLE') })] }),
+    expect.objectContaining({ role: 'user', content: [expect.objectContaining({ text: expect.stringContaining('hvy insert INDEX section PARENT_PATH ID TITLE') })] }),
     expect.objectContaining({ role: 'assistant', content: [expect.objectContaining({ text: expect.stringContaining('```shell\nhvy request_structure --collapse\n```') })] }),
     expect.objectContaining({ role: 'user', content: [expect.objectContaining({ text: expect.stringContaining('Components:') })] }),
     expect.objectContaining({ role: 'assistant', content: [expect.objectContaining({ text: expect.stringContaining('```shell\nhvy lint\n```') })] }),
@@ -445,7 +445,7 @@ test('advanceDocumentEditCliSimStep executes the response and prepares the next 
   }));
 });
 
-test('advanceDocumentEditCliSimStep mutates the same document for prepend-child commands', async () => {
+test('advanceDocumentEditCliSimStep mutates the same document for insert commands', async () => {
   const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
   const document = deserializeDocument(`---
 hvy_version: 0.1
@@ -474,7 +474,7 @@ component_defs:
     settings,
     document,
     turnState: initial.turnState,
-    assistantOutput: 'What you are doing: adding history\nWhy you are doing it: requested\nWhat you are unsure of: nothing\n```shell\nhvy prepend-child history-record /body/history/history-list --id history-new New\n```',
+    assistantOutput: 'What you are doing: adding history\nWhy you are doing it: requested\nWhat you are unsure of: nothing\n```shell\nhvy insert 0 history-record /body/history/history-list --id history-new New\n```',
   });
 
   expect(result.mutated).toBe(true);
@@ -854,11 +854,11 @@ test('requestDocumentEditChatTurn increments urgency once per successful AI comm
 test('requestDocumentEditChatTurn ignores trailing done until a later standalone finish', async () => {
   requestProxyCompletionMock
     .mockResolvedValueOnce(`\`\`\`shell
-hvy append-child section /body chores "Chores"
+hvy insert -1 section /body chores "Chores"
 \`\`\`
 
 \`\`\`shell
-hvy append-child text /body/chores note "Weekly chore plan"
+hvy insert -1 text /body/chores note "Weekly chore plan"
 \`\`\`
 
 done Created the chore section.`)
@@ -881,8 +881,8 @@ done Created the chore section.`)
   expect(serializeDocument(document)).toContain('Weekly chore plan');
   expect(onMutation).toHaveBeenCalledWith('chat-cli');
   expect(onProgress.mock.calls.map((call) => call[0].content)).toEqual([
-    '$ [1/2] hvy append-child section /body chores "Chores"',
-    '$ [2/2] hvy append-child text /body/chores note "Weekly chore plan"',
+    '$ [1/2] hvy insert -1 section /body chores "Chores"',
+    '$ [2/2] hvy insert -1 text /body/chores note "Weekly chore plan"',
   ]);
   const nextPrompt = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content ?? '';
   expect(nextPrompt).toContain('Next response: Write one concise What / Why / Unsure note block');
@@ -1148,7 +1148,7 @@ hvy_version: 0.1
 
 test('requestDocumentEditChatTurn omits optional component hints after creation commands', async () => {
   requestProxyCompletionMock
-    .mockResolvedValueOnce('hvy append-child text /summary --id note "Hello"')
+    .mockResolvedValueOnce('hvy insert -1 text /summary --id note "Hello"')
     .mockResolvedValueOnce('done Added note.');
   const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
   const document = deserializeDocument(`---
@@ -1168,7 +1168,7 @@ hvy_version: 0.1
 
   expect(result.error).toBeNull();
   const nextPrompt = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content ?? '';
-  expect(nextPrompt).toContain('CMD: hvy append-child text /summary --id note "Hello"');
+  expect(nextPrompt).toContain('CMD: hvy insert -1 text /summary --id note "Hello"');
   expect(nextPrompt).toContain('Current directory: /body/summary/note');
   expect(nextPrompt).toContain('### OPTIONAL CONTEXT (NOT REQUIRED ACTIONS) ###\n(none)');
   expect(nextPrompt).not.toContain('component section');
@@ -1210,7 +1210,7 @@ hvy_version: 0.1
 
 test('requestDocumentEditChatTurn keeps diagnostics introduced by your changes active until fixed', async () => {
   requestProxyCompletionMock
-    .mockResolvedValueOnce('hvy append-child component /body/summary empty-ref xref-card Placeholder')
+    .mockResolvedValueOnce('hvy insert -1 xref-card /body/summary --id empty-ref Placeholder')
     .mockResolvedValueOnce('ask Should I keep going?')
     .mockResolvedValueOnce('done Created the xref.')
     .mockResolvedValueOnce('echo \'{"id":"empty-ref","xrefTitle":"Summary","xrefTarget":"summary"}\' > /body/summary/empty-ref/xref-card.json')
@@ -1538,7 +1538,7 @@ test('requestDocumentEditChatTurn lets the cli edit loop retry after command err
 
   expect(result.error).toBeNull();
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content).toContain(
-    'CMD: hvy\n### CMD RESULT ###\nhvy: expected request_structure, find-intent, cheatsheet, recipe, lint, append-child, prepend-child, plugin, remove, prune-xref, preview, or help\n### END CMD RESULT ###'
+    'CMD: hvy\n### CMD RESULT ###\nhvy: expected request_structure, find-intent, cheatsheet, recipe, lint, insert, plugin, remove, prune-xref, preview, or help\n### END CMD RESULT ###'
   );
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content).toContain(
     '### BEGIN your urgency ###\nscore=0\nprioritize planning and understanding'
@@ -1546,9 +1546,9 @@ test('requestDocumentEditChatTurn lets the cli edit loop retry after command err
   expect(writeChatCliCommandTraceMock).toHaveBeenCalledWith(
     'chat-cli-test',
     'hvy',
-    'hvy: expected request_structure, find-intent, cheatsheet, recipe, lint, append-child, prepend-child, plugin, remove, prune-xref, preview, or help',
+    'hvy: expected request_structure, find-intent, cheatsheet, recipe, lint, insert, plugin, remove, prune-xref, preview, or help',
     undefined,
-    expect.stringContaining('CMD: hvy\n### CMD RESULT ###\nhvy: expected request_structure, find-intent, cheatsheet, recipe, lint, append-child, prepend-child, plugin, remove, prune-xref, preview, or help\n### END CMD RESULT ###')
+    expect.stringContaining('CMD: hvy\n### CMD RESULT ###\nhvy: expected request_structure, find-intent, cheatsheet, recipe, lint, insert, plugin, remove, prune-xref, preview, or help\n### END CMD RESULT ###')
   );
 });
 
@@ -1627,12 +1627,12 @@ test('requestDocumentEditChatTurn stops after repeated cli command errors', asyn
   expect(requestProxyCompletionMock).toHaveBeenCalledTimes(3);
   expect(writeChatCliCommandTraceMock.mock.calls.map((call) => call[2])).toEqual([
     expect.stringContaining('dir  body'),
-    expect.stringContaining('hvy append-child section PARENT_PATH ID TITLE'),
+    expect.stringContaining('hvy insert INDEX section PARENT_PATH ID TITLE'),
     expect.stringContaining('Components:'),
     'No lint issues.',
     expect.any(String),
     'Unknown command "not-a-command". Try "help".',
-    'hvy: expected request_structure, find-intent, cheatsheet, recipe, lint, append-child, prepend-child, plugin, remove, prune-xref, preview, or help',
+    'hvy: expected request_structure, find-intent, cheatsheet, recipe, lint, insert, plugin, remove, prune-xref, preview, or help',
     expect.stringContaining('No such file: /missing.txt'),
   ]);
 });

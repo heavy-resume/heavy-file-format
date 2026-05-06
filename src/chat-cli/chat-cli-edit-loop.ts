@@ -23,7 +23,6 @@ const CHAT_CLI_PRIOR_MESSAGE_LIMIT = 10;
 const CHAT_CLI_MODEL_OUTPUT_MAX_LINES = 200;
 const CHAT_CLI_MODEL_OUTPUT_MAX_LINE_WIDTH = 400;
 const CHAT_CLI_RECOMMENDED_BATCH_COMMANDS = 4;
-const CHAT_CLI_MAX_BATCH_COMMANDS = 10;
 const CHAT_CLI_BATCH_GUIDANCE = `Use one command per \`\`\`shell block and at most ${CHAT_CLI_RECOMMENDED_BATCH_COMMANDS} \`\`\`shell blocks per response.`;
 const CHAT_CLI_COMMAND_NAMES = new Set(['cd', 'pwd', 'ls', 'cat', 'head', 'tail', 'nl', 'find', 'rg', 'grep', 'sort', 'uniq', 'wc', 'tr', 'xargs', 'cp', 'rm', 'echo', 'sed', 'true', 'hvy', 'db-table', 'form', 'ask']);
 const introducedDiagnosticsByDocument = new WeakMap<VisualDocument, Map<string, HvyCliDiagnosticIssue>>();
@@ -297,28 +296,14 @@ async function advanceChatCliTurnState(params: {
 
   const cli = createChatCliInterface(params.document, params.state.session);
   const commands = action.commands;
+  const executableCommands = commands.length > CHAT_CLI_RECOMMENDED_BATCH_COMMANDS
+    ? commands.slice(0, CHAT_CLI_RECOMMENDED_BATCH_COMMANDS)
+    : commands;
+  const skippedCommandCount = commands.length - executableCommands.length;
   if (action.notes.trim()) {
     params.onProgress?.(`Notes\n${action.notes.trim()}`);
   }
-  if (commands.length > CHAT_CLI_MAX_BATCH_COMMANDS) {
-    const message = formatOversizedChatCliBatchMessage(commands.length);
-    return buildSimAdvanceResult(
-      params,
-      [
-        ...params.state.messages,
-        {
-          id: crypto.randomUUID(),
-          role: 'user' as const,
-          content: message,
-        },
-      ],
-      message,
-      false,
-      params.state.urgency,
-      params.state.diagnostics
-    );
-  }
-  const outputLineBudget = Math.max(1, Math.floor(CHAT_CLI_MODEL_OUTPUT_MAX_LINES / Math.max(commands.length, 1)));
+  const outputLineBudget = Math.max(1, Math.floor(CHAT_CLI_MODEL_OUTPUT_MAX_LINES / Math.max(executableCommands.length, 1)));
   const commandOutputs: Array<{ command: string; output: string }> = [];
   const commandHints: string[] = [];
   let mutated = false;
@@ -327,9 +312,9 @@ async function advanceChatCliTurnState(params: {
   let lastFailedCommand = '';
   let lastCommandError = '';
   let traceOutput = '';
-  for (let commandIndex = 0; commandIndex < commands.length; commandIndex += 1) {
-    const command = commands[commandIndex] ?? '';
-    params.onProgress?.(commands.length > 1 ? `$ [${commandIndex + 1}/${commands.length}] ${command}` : `$ ${command}`);
+  for (let commandIndex = 0; commandIndex < executableCommands.length; commandIndex += 1) {
+    const command = executableCommands[commandIndex] ?? '';
+    params.onProgress?.(executableCommands.length > 1 ? `$ [${commandIndex + 1}/${executableCommands.length}] ${command}` : `$ ${command}`);
     let result: Awaited<ReturnType<typeof cli.run>>;
     try {
       result = await cli.run(command);
@@ -363,6 +348,7 @@ async function advanceChatCliTurnState(params: {
   const urgency = batchHadSuccess ? updateChatCliUrgency(params.state.urgency, mutated) : params.state.urgency;
   const commandResultMessage = formatCommandResultForModel({
     output: formatBatchCommandOutput(commandOutputs),
+    skippedCommandCount,
     hints: formatBatchHints(commandHints),
     scratchpad: formatScratchpadForModel(cli.snapshot()),
     urgency: formatChatCliUrgency(urgency),
@@ -379,8 +365,8 @@ async function advanceChatCliTurnState(params: {
   if (params.writeTrace && params.traceRunId) {
     await writeChatCliCommandTrace(
       params.traceRunId,
-      commands.length === 1 ? commands[0] ?? '' : commands.join('\n'),
-      commands.length === 1 ? traceOutput : formatBatchCommandOutput(commandOutputs),
+      executableCommands.length === 1 ? executableCommands[0] ?? '' : executableCommands.join('\n'),
+      executableCommands.length === 1 ? traceOutput : formatBatchCommandOutput(commandOutputs),
       params.signal,
       commandResultMessage
     );
@@ -717,7 +703,8 @@ function parseChatCliAction(response: string): { kind: 'command'; commands: stri
     return { kind: 'invalid', message: fencedCommands.message };
   }
   if (fencedCommands.commands.length > 0) {
-    const terminal = parseTerminalChatCliCommand(fencedCommands.commands);
+    const terminalCommandsToEvaluate = fencedCommands.commands.slice(0, CHAT_CLI_RECOMMENDED_BATCH_COMMANDS);
+    const terminal = parseTerminalChatCliCommand(terminalCommandsToEvaluate);
     if (terminal) {
       return terminal;
     }
@@ -796,12 +783,25 @@ function extractFencedShellCommands(response: string): { kind: 'ok'; commands: s
     commands.push(...splitShellBlockCommands(match[1] ?? ''));
   }
   outside += trimmed.slice(lastIndex);
-  if (commands.length === 0) {
+  const uniqueCommands = dedupeChatCliCommands(commands);
+  if (uniqueCommands.length === 0) {
     return { kind: 'ok', commands, notes: '' };
   }
   const outsideCommand = normalizeCommandResponse(outside);
   const hasTrailingDone = /^(done|finish|finished)\b/i.test(outsideCommand);
-  return { kind: 'ok', commands, notes: hasTrailingDone ? '' : normalizeAssistantNotes(outside) };
+  return { kind: 'ok', commands: uniqueCommands, notes: hasTrailingDone ? '' : normalizeAssistantNotes(outside) };
+}
+
+function dedupeChatCliCommands(commands: string[]): string[] {
+  const seen = new Set<string>();
+  return commands.filter((command) => {
+    const normalized = command.trim().replace(/\r\n?/g, '\n');
+    if (seen.has(normalized)) {
+      return false;
+    }
+    seen.add(normalized);
+    return true;
+  });
 }
 
 function splitShellBlockCommands(source: string): string[] {
@@ -876,13 +876,14 @@ function normalizeAssistantNotes(notes: string): string {
     .trim();
 }
 
-function formatCommandResultForModel(result: string | { output: string; hints?: string; scratchpad?: string; urgency?: string; cwd?: string }): string {
+function formatCommandResultForModel(result: string | { output: string; skippedCommandCount?: number; hints?: string; scratchpad?: string; urgency?: string; cwd?: string }): string {
   if (typeof result === 'string') {
     return formatCommandResultSection(result);
   }
   return [
     `Current directory: ${result.cwd || '/'}`,
     formatCommandResultOutput(result.output),
+    ...(result.skippedCommandCount && result.skippedCommandCount > 0 ? [formatSkippedCommandNotice(result.skippedCommandCount)] : []),
     '### OPTIONAL CONTEXT (NOT REQUIRED ACTIONS) ###',
     result.hints?.trimEnd() || '(none)',
     '### END OPTIONAL CONTEXT ###',
@@ -894,6 +895,18 @@ function formatCommandResultForModel(result: string | { output: string; hints?: 
     '### END your urgency ###',
     `Command guidance: ${CHAT_CLI_BATCH_GUIDANCE}`,
     formatNextResponseInstruction(),
+  ].join('\n');
+}
+
+function formatSkippedCommandNotice(skippedCommandCount: number): string {
+  if (skippedCommandCount <= 0) {
+    return '';
+  }
+  return [
+    '### COMMANDS NOT RUN ###',
+    `${skippedCommandCount} command${skippedCommandCount === 1 ? '' : 's'} not run because this response exceeded the ${CHAT_CLI_RECOMMENDED_BATCH_COMMANDS}-command batch limit.`,
+    'Only the CMD results above came from commands that actually ran.',
+    '### END COMMANDS NOT RUN ###',
   ].join('\n');
 }
 
@@ -927,15 +940,6 @@ function getChatCliUrgencyMessage(score: number): string {
     return 'consider making your next change soon';
   }
   return 'stop poking around and make changes';
-}
-
-function formatOversizedChatCliBatchMessage(commandCount: number): string {
-  return [
-    '### COMMAND ERROR ###',
-    `Batch has ${commandCount} commands. Use one command per \`\`\`shell block and at most ${CHAT_CLI_RECOMMENDED_BATCH_COMMANDS} \`\`\`shell blocks per response.`,
-    '### END COMMAND ERROR ###',
-    formatNextResponseInstruction(),
-  ].join('\n');
 }
 
 function formatNextResponseInstruction(): string {

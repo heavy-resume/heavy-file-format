@@ -786,8 +786,8 @@ pwd
 
 test('requestDocumentEditChatTurn runs multiple fenced shell blocks as a batch', async () => {
   requestProxyCompletionMock
-    .mockResolvedValueOnce('```shell\ncat /body/summary/long/text.txt\n```\n```shell\ncat /body/summary/long/text.txt\n```')
-    .mockResolvedValueOnce('done Inspected the long text twice.');
+    .mockResolvedValueOnce('```shell\ncat /body/summary/long/text.txt\n```\n```shell\npwd\n```')
+    .mockResolvedValueOnce('done Inspected the long text and cwd.');
   const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
   const document = deserializeDocument(`---
 hvy_version: 0.1
@@ -805,19 +805,42 @@ hvy_version: 0.1
     settings,
     document,
     messages: [],
-    request: 'Inspect the long text twice.',
+    request: 'Inspect the long text and cwd.',
     onProgress,
   });
 
   expect(result.error).toBeNull();
   expect(onProgress.mock.calls.map((call) => call[0].content)).toEqual([
     '$ [1/2] cat /body/summary/long/text.txt',
-    '$ [2/2] cat /body/summary/long/text.txt',
+    '$ [2/2] pwd',
   ]);
   const nextPrompt = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content ?? '';
   expect(nextPrompt).toContain('CMD: cat /body/summary/long/text.txt');
+  expect(nextPrompt).toContain('CMD: pwd');
   expect(nextPrompt).not.toContain('Warning: output truncated');
   expect(nextPrompt).toContain('### BEGIN your urgency ###\nscore=1\nprioritize planning and understanding');
+});
+
+test('requestDocumentEditChatTurn dedupes identical fenced commands in one response', async () => {
+  requestProxyCompletionMock
+    .mockResolvedValueOnce('```shell\npwd\n```\n```shell\npwd\n```\n```shell\npwd\n```')
+    .mockResolvedValueOnce('done Inspected cwd once.');
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+  const document = deserializeDocument('---\nhvy_version: 0.1\n---\n', '.hvy');
+  const onProgress = vi.fn();
+
+  const result = await requestDocumentEditChatTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Inspect cwd.',
+    onProgress,
+  });
+
+  expect(result.error).toBeNull();
+  expect(onProgress.mock.calls.map((call) => call[0].content)).toEqual(['$ pwd']);
+  const nextPrompt = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content ?? '';
+  expect(nextPrompt.match(/CMD: pwd/g) ?? []).toHaveLength(1);
 });
 
 test('requestDocumentEditChatTurn increments urgency once per successful AI command response', async () => {
@@ -960,8 +983,8 @@ cat /scratchpad.txt
 
 test('requestDocumentEditChatTurn divides batch output budget across three fenced shell blocks', async () => {
   requestProxyCompletionMock
-    .mockResolvedValueOnce('```shell\ncat /body/summary/long/text.txt\n```\n```shell\ncat /body/summary/long/text.txt\n```\n```shell\ncat /body/summary/long/text.txt\n```')
-    .mockResolvedValueOnce('done Inspected the long text three times.');
+    .mockResolvedValueOnce('```shell\ncat /body/summary/long-a/text.txt\n```\n```shell\ncat /body/summary/long-b/text.txt\n```\n```shell\ncat /body/summary/long-c/text.txt\n```')
+    .mockResolvedValueOnce('done Inspected the long text fields.');
   const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
   const document = deserializeDocument(`---
 hvy_version: 0.1
@@ -970,7 +993,13 @@ hvy_version: 0.1
 <!--hvy: {"id":"summary"}-->
 #! Summary
 
-<!--hvy:text {"id":"long"}-->
+<!--hvy:text {"id":"long-a"}-->
+ ${Array.from({ length: 120 }, (_value, index) => `line ${index + 1}`).join('\n')}
+
+<!--hvy:text {"id":"long-b"}-->
+ ${Array.from({ length: 120 }, (_value, index) => `line ${index + 1}`).join('\n')}
+
+<!--hvy:text {"id":"long-c"}-->
  ${Array.from({ length: 120 }, (_value, index) => `line ${index + 1}`).join('\n')}
 `, '.hvy');
   const onProgress = vi.fn();
@@ -979,22 +1008,22 @@ hvy_version: 0.1
     settings,
     document,
     messages: [],
-    request: 'Inspect the long text three times.',
+    request: 'Inspect the long text fields.',
     onProgress,
   });
 
   expect(result.error).toBeNull();
   expect(onProgress.mock.calls.map((call) => call[0].content)).toEqual([
-    '$ [1/3] cat /body/summary/long/text.txt',
-    '$ [2/3] cat /body/summary/long/text.txt',
-    '$ [3/3] cat /body/summary/long/text.txt',
+    '$ [1/3] cat /body/summary/long-a/text.txt',
+    '$ [2/3] cat /body/summary/long-b/text.txt',
+    '$ [3/3] cat /body/summary/long-c/text.txt',
   ]);
   const nextPrompt = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content ?? '';
   expect(nextPrompt).toContain('Warning: output truncated to 66 of 120 wrapped lines (54 lines hidden).');
   expect(nextPrompt).toContain('### BEGIN your urgency ###\nscore=1\nprioritize planning and understanding');
 });
 
-test('requestDocumentEditChatTurn rejects oversized command batches before running them', async () => {
+test('requestDocumentEditChatTurn runs the first four commands from oversized command batches', async () => {
   requestProxyCompletionMock
     .mockResolvedValueOnce(`\`\`\`shell
 pwd
@@ -1007,7 +1036,7 @@ hvy find-intent "summary" --max 5
 find /body -maxdepth 2
 rg "Summary" /body
 cat /scratchpad.txt
-pwd
+true
 \`\`\``)
     .mockResolvedValueOnce('done Kept the batch small.');
   const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
@@ -1023,15 +1052,24 @@ pwd
   });
 
   expect(result.error).toBeNull();
-  expect(onProgress).not.toHaveBeenCalled();
-  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content).toBe(
-    '### COMMAND ERROR ###\nBatch has 11 commands. Use one command per ```shell block and at most 4 ```shell blocks per response.\n### END COMMAND ERROR ###\nNext response: Write one concise What / Why / Unsure note block followed by shell command(s), or run ask QUESTION, or run done MESSAGE_TO_USER.'
+  expect(onProgress.mock.calls.map((call) => call[0].content)).toEqual([
+    '$ [1/4] pwd',
+    '$ [2/4] ls /',
+    '$ [3/4] cat /header.yaml',
+    '$ [4/4] hvy lint',
+  ]);
+  const nextPrompt = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content ?? '';
+  expect(nextPrompt).toContain('CMD: pwd\n### CMD RESULT ###\n/');
+  expect(nextPrompt).toContain(
+    '### COMMANDS NOT RUN ###\n7 commands not run because this response exceeded the 4-command batch limit.\nOnly the CMD results above came from commands that actually ran.\n### END COMMANDS NOT RUN ###'
   );
+  expect(nextPrompt).not.toContain('hvy request_structure --collapse');
   expect(writeChatCliCommandTraceMock.mock.calls.map((call) => call[1])).toEqual([
     'ls /',
     'hvy --help',
     'hvy request_structure --collapse',
     'hvy find-intent "Try too many commands." --max 5',
+    'pwd\nls /\ncat /header.yaml\nhvy lint',
   ]);
 });
 

@@ -56,3 +56,31 @@ test('chat stays scrolled to latest across full rerenders', async ({ page }) => 
     scroller.evaluate((node) => node.scrollHeight - node.scrollTop - node.clientHeight)
   ).toBeLessThanOrEqual(12);
 });
+
+test('right click AI change request uses CLI sim when enabled', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Open chat' }).click();
+  await page.getByRole('button', { name: 'CLI Sim Off' }).click();
+  await expect(page.getByRole('button', { name: 'CLI Sim On' })).toBeVisible();
+
+  await page.locator('[data-action="switch-view"][data-view="ai"]').click();
+  const targetBlock = page.locator('.reader-block[data-section-key][data-block-id]').first();
+  await targetBlock.dispatchEvent('contextmenu', {
+    clientX: 240,
+    clientY: 220,
+    button: 2,
+  });
+
+  await expect(page.locator('.ai-edit-popover')).toBeVisible();
+  await page.locator('[data-field="ai-edit-input"]').fill('Tighten this wording.');
+  await page.locator('#aiEditComposer').evaluate((form) => {
+    (form as HTMLFormElement).requestSubmit();
+  });
+
+  await expect(page.locator('.ai-edit-popover')).toHaveCount(0);
+  await expect(page.locator('.chat-cli-sim')).toBeVisible();
+  await expect(page.locator('.chat-cli-sim summary', { hasText: 'Request JSON' })).toBeVisible();
+  await expect(page.locator('.chat-cli-sim pre').first()).toContainText('Tighten this wording.');
+  await expect(page.locator('.chat-cli-sim pre').first()).toContainText('Selected component focus');
+});

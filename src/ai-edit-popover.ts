@@ -3,7 +3,7 @@ import { findBlockByIds } from './block-ops';
 import { findSectionByKey } from './section-ops';
 import { recordHistory } from './history';
 import { serializeDocument } from './serialization';
-import { appendUserChatMessage, requestDocumentEditChatTurn } from './chat/chat-session';
+import { appendUserChatMessage, buildDocumentEditCliSimRequest, requestDocumentEditChatTurn } from './chat/chat-session';
 import { resolveBaseComponent } from './component-defs';
 import { findVirtualDirectoryForBlock } from './cli-core/virtual-file-system';
 import { getAiEditComponentGuidance } from './ai-edit-guidance';
@@ -89,6 +89,85 @@ export async function submitAiEditRequest(): Promise<void> {
     getRenderApp()();
     return;
   }
+  const selectedComponent = {
+    path: componentPath,
+    sectionTitle: section.title,
+    component: block.schema.component,
+    baseComponent: resolveBaseComponent(block.schema.component),
+    schemaId: block.schema.id,
+    guidance: getAiEditComponentGuidance(block),
+  };
+
+  if (state.chat.cliSimEnabled) {
+    state.aiEdit.isSending = true;
+    state.aiEdit.error = null;
+    state.aiEdit.requestNonce += 1;
+    const requestNonce = state.aiEdit.requestNonce;
+    state.aiEdit.sectionKey = null;
+    state.aiEdit.blockId = null;
+    state.aiEdit.draft = '';
+    state.chat.panelOpen = true;
+    state.chat.error = null;
+    state.chat.cliSim = {
+      requestPayload: null,
+      requestJson: 'Preparing...',
+      responseJson: '',
+      responseOutput: '',
+      reasoningSummary: '',
+      commandResultMessage: '',
+      turnState: null,
+      isPreparing: true,
+      isSending: false,
+      error: null,
+    };
+    getRenderApp()();
+    try {
+      const result = await buildDocumentEditCliSimRequest({
+        settings: state.chat.settings,
+        document: state.document,
+        messages: state.chat.messages,
+        request,
+        selectedComponent,
+      });
+      if (requestNonce !== state.aiEdit.requestNonce) {
+        return;
+      }
+      state.chat.cliSim = {
+        requestPayload: result.requestPayload,
+        requestJson: result.requestJson,
+        responseJson: '',
+        responseOutput: '',
+        reasoningSummary: '',
+        commandResultMessage: '',
+        turnState: result.turnState,
+        isPreparing: false,
+        isSending: false,
+        error: null,
+      };
+    } catch (error) {
+      if (requestNonce !== state.aiEdit.requestNonce) {
+        return;
+      }
+      state.chat.cliSim = {
+        requestPayload: null,
+        requestJson: '',
+        responseJson: '',
+        responseOutput: '',
+        reasoningSummary: '',
+        commandResultMessage: '',
+        turnState: null,
+        isPreparing: false,
+        isSending: false,
+        error: error instanceof Error ? error.message : 'Failed to prepare CLI sim.',
+      };
+    } finally {
+      if (requestNonce === state.aiEdit.requestNonce) {
+        state.aiEdit.isSending = false;
+      }
+      getRenderApp()();
+    }
+    return;
+  }
 
   state.aiEdit.isSending = true;
   state.aiEdit.error = null;
@@ -122,14 +201,7 @@ export async function submitAiEditRequest(): Promise<void> {
       document: state.document,
       request,
       messages: previousMessages,
-      selectedComponent: {
-        path: componentPath,
-        sectionTitle: section.title,
-        component: block.schema.component,
-        baseComponent: resolveBaseComponent(block.schema.component),
-        schemaId: block.schema.id,
-        guidance: getAiEditComponentGuidance(block),
-      },
+      selectedComponent,
       onMutation: recordCliMutation,
       onProgress: (message) => {
         if (

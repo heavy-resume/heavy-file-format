@@ -971,6 +971,36 @@ hvy_version: 0.1
   expect(nextPrompt).toContain(`${'a'.repeat(10)}wrapped-tail`);
 });
 
+test('requestDocumentEditChatTurn preserves long command output lines that contain spaces', async () => {
+  requestProxyCompletionMock
+    .mockResolvedValueOnce('cat /body/summary/long-line/text.txt')
+    .mockResolvedValueOnce('done Inspected the long line.');
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {"id":"long-line"}-->
+ ${Array.from({ length: 90 }, () => 'represent').join(' ')}
+`, '.hvy');
+
+  const result = await requestDocumentEditChatTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Inspect long line.',
+  });
+
+  expect(result.error).toBeNull();
+  const nextPrompt = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content ?? '';
+  expect(nextPrompt).not.toContain('repres\nent');
+  expect(nextPrompt).not.toContain('represent\nrepresent');
+  expect(nextPrompt).toContain(Array.from({ length: 90 }, () => 'represent').join(' '));
+});
+
 test('requestDocumentEditChatTurn includes component hints and scratchpad after component-path commands', async () => {
   requestProxyCompletionMock
     .mockResolvedValueOnce('cat /body/summary/intro/text.txt')
@@ -1014,6 +1044,34 @@ hvy_version: 0.1
     undefined,
     expect.stringContaining('### OPTIONAL CONTEXT (NOT REQUIRED ACTIONS) ###\ncomponent text: /body/summary/intro')
   );
+});
+
+test('requestDocumentEditChatTurn omits optional component hints after hvy add commands', async () => {
+  requestProxyCompletionMock
+    .mockResolvedValueOnce('hvy add text /summary --id note "Hello"')
+    .mockResolvedValueOnce('done Added note.');
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+`, '.hvy');
+
+  const result = await requestDocumentEditChatTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Add note.',
+  });
+
+  expect(result.error).toBeNull();
+  const nextPrompt = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content ?? '';
+  expect(nextPrompt).toContain('CMD: hvy add text /summary --id note "Hello"');
+  expect(nextPrompt).toContain('### OPTIONAL CONTEXT (NOT REQUIRED ACTIONS) ###\n(none)');
+  expect(nextPrompt).not.toContain('component section');
+  expect(nextPrompt).not.toContain('component text: /body/summary/note');
 });
 
 test('requestDocumentEditChatTurn includes diagnostics diffs after commands change issues', async () => {

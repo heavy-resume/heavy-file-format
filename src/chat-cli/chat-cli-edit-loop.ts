@@ -340,14 +340,16 @@ async function advanceChatCliTurnState(params: {
     }
     traceOutput = result.output;
     commandOutputs.push({ command, output: formatOutputForModel(result.output, outputLineBudget) });
-    const hints = buildChatCliComponentHints({
-      document: params.document,
-      cwd: result.cwd,
-      command,
-      output: result.output,
-    });
-    if (hints.trim()) {
-      commandHints.push(hints);
+    if (!isComponentCreationCommand(command)) {
+      const hints = buildChatCliComponentHints({
+        document: params.document,
+        cwd: result.cwd,
+        command,
+        output: result.output,
+      });
+      if (hints.trim()) {
+        commandHints.push(hints);
+      }
     }
   }
   const urgency = batchHadSuccess ? updateChatCliUrgency(params.state.urgency, mutated) : params.state.urgency;
@@ -942,11 +944,18 @@ function splitLongOutputLine(line: string, maxWidth: number): string[] {
   if (line.length <= maxWidth) {
     return [line];
   }
+  if (/\s/.test(line.slice(0, maxWidth + 1))) {
+    return [line];
+  }
   const chunks: string[] = [];
   for (let index = 0; index < line.length; index += maxWidth) {
     chunks.push(line.slice(index, index + maxWidth));
   }
   return chunks;
+}
+
+function isComponentCreationCommand(command: string): boolean {
+  return /^\s*hvy\s+add\b/.test(command);
 }
 
 function formatScratchpadForModel(snapshot: Pick<ReturnType<ReturnType<typeof createChatCliInterface>['snapshot']>, 'scratchpad' | 'scratchpadEdited' | 'scratchpadCommandsSinceEdit'>): string {

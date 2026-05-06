@@ -1783,7 +1783,7 @@ hvy_version: 0.1
 <!--hvy: {"id":"planning","description":"Roadmap and planning notes.","tags":"planning, roadmap"}-->
 #! Planning
 
-<!--hvy:text {"id":"roadmap","description":"Quarterly roadmap notes.","tags":"quarterly"}-->
+<!--hvy:text {"id":"roadmap","description":"Quarterly roadmap notes.","tags":"quarterly","placeholder":"Roadmap details"}-->
 Milestones
 `, '.hvy');
   const session = createHvyCliSession();
@@ -1791,7 +1791,7 @@ Milestones
   const result = await executeHvyCliCommand(document, session, 'hvy request_structure --describe');
 
   expect(result.output).toContain('/planning tags=[planning, roadmap] - Roadmap and planning notes.');
-  expect(result.output).toContain('text.txt id=roadmap tags=[quarterly] - Quarterly roadmap notes.');
+  expect(result.output).toContain('text.txt id=roadmap tags=[quarterly] placeholder="Roadmap details" - Quarterly roadmap notes.');
 });
 
 test('hvy lint reports core component and plugin issues', async () => {

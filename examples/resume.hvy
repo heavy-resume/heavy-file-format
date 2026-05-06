@@ -95,7 +95,7 @@ component_defs:
                     text: ""
                     schema:
                       component: text
-                      placholder: location
+                      placeholder: location
                       css: "margin: 0;"
                 - id: history-date-range
                   block:
@@ -107,10 +107,12 @@ component_defs:
           - text: ""
             schema:
               component: text
+              placeholder: job title
               css: "margin: 0.35rem 0; font-weight: 700;"
           - text: ""
             schema:
               component: text
+              placeholder: description
               css: "margin: 0.35rem 0;"
           - text: "#### Accomplishments"
             schema:
@@ -120,6 +122,7 @@ component_defs:
             schema:
               component: component-list
               componentListComponent: text
+              componentListItemLabel: accomplishment
               css: "margin: 0;"
               componentListBlocks: []
           - component: skills-and-tools-tech-list

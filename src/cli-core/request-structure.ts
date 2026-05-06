@@ -12,6 +12,7 @@ type ComponentStructureEntry = {
   textPath: string;
   jsonPath: string;
   description?: string;
+  placeholder?: string;
   tags?: string;
   xrefTitle?: string;
   xrefTarget?: string;
@@ -141,6 +142,7 @@ function componentEntryFromJsonFile(document: VisualDocument, fs: HvyVirtualFile
     textPath,
     jsonPath,
     description: typeof config.description === 'string' && config.description.trim() ? config.description.trim() : undefined,
+    placeholder: typeof config.placeholder === 'string' && config.placeholder.trim() ? config.placeholder.trim() : undefined,
     tags: typeof config.tags === 'string' && config.tags.trim() ? config.tags.trim() : undefined,
     xrefTitle: typeof config.xrefTitle === 'string' && config.xrefTitle.trim() ? config.xrefTitle.trim() : undefined,
     xrefTarget: typeof config.xrefTarget === 'string' && config.xrefTarget.trim() ? config.xrefTarget.trim() : undefined,
@@ -195,8 +197,8 @@ function formatCustomComponentDefinitions(document: VisualDocument): string[] {
   });
 }
 
-function formatComponentStructureLine(entry: ComponentStructureEntry): string {
-  return `${entry.textPath.split('/').pop() ?? entry.textPath} id=${entry.id}${formatTagsSuffix(entry.tags)}`;
+function formatComponentStructureLine(entry: ComponentStructureEntry, options: { describe?: boolean } = {}): string {
+  return `${entry.textPath.split('/').pop() ?? entry.textPath} id=${entry.id}${formatTagsSuffix(entry.tags)}${formatPlaceholderSuffix(entry.placeholder, options.describe ?? false)}`;
 }
 
 function formatSearchStructureLine(entry: ComponentStructureEntry): string {
@@ -207,7 +209,7 @@ function formatSearchStructureLine(entry: ComponentStructureEntry): string {
         ' - if removing this reference, prefer `hvy remove ' + entry.directory + '` over editing JSON text.',
       ].join('')
     : '';
-  return `${formatComponentStructureLine(entry)}${xref}`;
+  return `${formatComponentStructureLine(entry, { describe: true })}${xref}`;
 }
 
 type ComponentTreeNode = {
@@ -241,13 +243,13 @@ function formatComponentTreeNode(node: ComponentTreeNode, depth: number, options
     const visibleChildren = remainingChildren.filter(hasExplicitComponentEntry);
     const hiddenSummary = hiddenAnonymousCount > 0 ? ` (+${hiddenAnonymousCount} hidden)` : '';
     return [
-      `${'  '.repeat(depth)}/${node.name} ${formatComponentStructureLine(metadataChild.entry!)}${hiddenSummary}${formatDescriptionSuffix(metadataChild.entry!.description, options.describe)}`,
+      `${'  '.repeat(depth)}/${node.name} ${formatComponentStructureLine(metadataChild.entry!, { describe: options.describe })}${hiddenSummary}${formatDescriptionSuffix(metadataChild.entry!.description, options.describe)}`,
       ...formatComponentTreeChildren(visibleChildren, depth + 1, options),
     ];
   }
   const sectionMeta = options.sectionMeta.get(node.path);
   const label = node.entry
-    ? `${formatComponentStructureLine(node.entry)}${formatDescriptionSuffix(node.entry.description, options.describe)}`
+    ? `${formatComponentStructureLine(node.entry, { describe: options.describe })}${formatDescriptionSuffix(node.entry.description, options.describe)}`
     : `/${node.name}${formatTagsSuffix(sectionMeta?.tags)}${formatDescriptionSuffix(sectionMeta?.description, options.describe)}`;
   return [
     `${'  '.repeat(depth)}${label}`,
@@ -376,6 +378,13 @@ function formatDescriptionSuffix(description: string | undefined, enabled: boole
     return '';
   }
   return ` - ${description.trim().replace(/\s+/g, ' ')}`;
+}
+
+function formatPlaceholderSuffix(placeholder: string | undefined, enabled: boolean): string {
+  if (!enabled || !placeholder?.trim()) {
+    return '';
+  }
+  return ` placeholder="${placeholder.trim().replace(/\s+/g, ' ')}"`;
 }
 
 function scopeEntries(entries: ComponentStructureEntry[], componentId = '', componentPath = ''): ComponentStructureEntry[] {

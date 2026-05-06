@@ -3,18 +3,25 @@
 Create a top-level section:
 
 ```shell
-hvy insert -1 section / my-section "My Section"
+hvy insert 0 section / my-section "My Section"
 ```
 
 Create builtin or custom components:
 
 ```shell
-hvy insert -1 text /my-section intro "Visible text"
+hvy insert 0 text /my-section intro "Visible text"
 hvy insert -1 table /my-section table-id "Name,Status" --row "Dishes,Active"
-hvy insert -1 skill-record /body/skills/component-list-1 --id skill-new "New Skill"
+hvy insert 0 skill-record /body/skills/component-list-1 --id skill-new "New Skill"
 ```
 
-`hvy insert -1 table` creates a static document table: rows and columns are stored directly on the component. Use `hvy insert -1 plugin db-table` for dynamic data-backed rows.
+Insert into the middle of existing ordered children:
+
+```shell
+hvy insert 2 text /my-section middle-note "Inserted before the current third child"
+hvy insert -2 skill-record /body/skills/component-list-1 --id skill-before-last "Before Last"
+```
+
+`hvy insert INDEX table` creates a static document table: rows and columns are stored directly on the component. Use `hvy insert INDEX plugin db-table` for dynamic data-backed rows.
 
 Inspect before editing:
 

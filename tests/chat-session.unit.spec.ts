@@ -236,9 +236,9 @@ test('requestDocumentEditChatTurn runs the CLI edit loop for document chat', asy
   requestProxyCompletionMock
     .mockImplementationOnce(async (params: { onTokenUsage?: (usage: { inputTokens?: number; outputTokens?: number }) => void }) => {
       params.onTokenUsage?.({ inputTokens: 100, outputTokens: 10 });
-      return 'hvy insert -1 section /body chores "Chores"';
+      return 'hvy insert 0 section /body chores "Chores"';
     })
-    .mockResolvedValueOnce('```shell\nhvy insert -1 text /body/chores note "Weekly chore plan"\n```')
+    .mockResolvedValueOnce('```shell\nhvy insert 0 text /body/chores note "Weekly chore plan"\n```')
     .mockResolvedValueOnce('done Created the chore section.');
   const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
   const document = deserializeDocument('---\nhvy_version: 0.1\n---\n', '.hvy');
@@ -258,14 +258,14 @@ test('requestDocumentEditChatTurn runs the CLI edit loop for document chat', asy
   expect(serializeDocument(document)).toContain('Weekly chore plan');
   expect(onMutation).toHaveBeenCalledWith('chat-cli');
   expect(onProgress.mock.calls.map((call) => call[0].content)).toEqual([
-    '$ hvy insert -1 section /body chores "Chores"',
-    '$ hvy insert -1 text /body/chores note "Weekly chore plan"',
+    '$ hvy insert 0 section /body chores "Chores"',
+    '$ hvy insert 0 text /body/chores note "Weekly chore plan"',
   ]);
   expect(onProgress.mock.calls[0]?.[0].work?.tokenUsage).toEqual({ inputTokens: 100, outputTokens: 10 });
   expect(result.messages.at(-1)?.work?.status).toBe('done');
   expect(result.messages.at(-1)?.work?.details).toEqual([
-    '$ hvy insert -1 section /body chores "Chores"',
-    '$ hvy insert -1 text /body/chores note "Weekly chore plan"',
+    '$ hvy insert 0 section /body chores "Chores"',
+    '$ hvy insert 0 text /body/chores note "Weekly chore plan"',
   ]);
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]).toEqual(
     expect.objectContaining({
@@ -854,11 +854,11 @@ test('requestDocumentEditChatTurn increments urgency once per successful AI comm
 test('requestDocumentEditChatTurn ignores trailing done until a later standalone finish', async () => {
   requestProxyCompletionMock
     .mockResolvedValueOnce(`\`\`\`shell
-hvy insert -1 section /body chores "Chores"
+hvy insert 0 section /body chores "Chores"
 \`\`\`
 
 \`\`\`shell
-hvy insert -1 text /body/chores note "Weekly chore plan"
+hvy insert 0 text /body/chores note "Weekly chore plan"
 \`\`\`
 
 done Created the chore section.`)
@@ -881,8 +881,8 @@ done Created the chore section.`)
   expect(serializeDocument(document)).toContain('Weekly chore plan');
   expect(onMutation).toHaveBeenCalledWith('chat-cli');
   expect(onProgress.mock.calls.map((call) => call[0].content)).toEqual([
-    '$ [1/2] hvy insert -1 section /body chores "Chores"',
-    '$ [2/2] hvy insert -1 text /body/chores note "Weekly chore plan"',
+    '$ [1/2] hvy insert 0 section /body chores "Chores"',
+    '$ [2/2] hvy insert 0 text /body/chores note "Weekly chore plan"',
   ]);
   const nextPrompt = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content ?? '';
   expect(nextPrompt).toContain('Next response: Write one concise What / Why / Unsure note block');

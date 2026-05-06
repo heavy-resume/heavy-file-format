@@ -4,8 +4,8 @@
 Use this recipe when a document needs load-time automation or when a form submit script needs to mutate the document/database.
 
 ```shell
-hvy insert -1 section / automation "Automation"
-hvy insert -1 plugin /automation summarize dev.heavy.scripting --config "{\"version\":\"0.1\"}" --body "summary = doc.tool('request_structure', {})\ndoc.header.set('script_summary', summary[:200])"
+hvy insert 0 section / automation "Automation"
+hvy insert 0 plugin /automation summarize dev.heavy.scripting --config "{\"version\":\"0.1\"}" --body "summary = doc.tool('request_structure', {})\ndoc.header.set('script_summary', summary[:200])"
 hvy preview /automation/summarize
 hvy lint
 ```
@@ -13,15 +13,15 @@ hvy lint
 The same scripting block could use the virtual CLI directly:
 
 ```shell
-hvy insert -1 plugin /automation cli-example dev.heavy.scripting --config "{\"version\":\"0.1\"}" --body "out = doc.cli.run('hvy request_structure --collapse')\ndoc.header.set('cli_structure_preview', out[:200])"
+hvy insert 0 plugin /automation cli-example dev.heavy.scripting --config "{\"version\":\"0.1\"}" --body "out = doc.cli.run('hvy request_structure --collapse')\ndoc.header.set('cli_structure_preview', out[:200])"
 ```
 
 For forms, store the script on the form and set it as the submit handler:
 
 ```shell
-hvy insert -1 section / chore-chart "Chore Chart"
+hvy insert 0 section / chore-chart "Chore Chart"
 hvy plugin db-table exec "CREATE TABLE chores (id INTEGER PRIMARY KEY, title TEXT NOT NULL)"
-hvy insert -1 plugin form /chore-chart add-chore "Add chore" "Title:text:required" --script submit "title = doc.form.get_value('Title')\ndoc.db.execute('INSERT INTO chores (title) VALUES (?)', [title])" --on-submit-script submit
+hvy insert 0 plugin form /chore-chart add-chore "Add chore" "Title:text:required" --script submit "title = doc.form.get_value('Title')\ndoc.db.execute('INSERT INTO chores (title) VALUES (?)', [title])" --on-submit-script submit
 hvy insert -1 plugin db-table /chore-chart chores chores "SELECT id, title FROM chores ORDER BY id DESC"
 hvy lint
 ```

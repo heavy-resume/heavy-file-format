@@ -176,14 +176,14 @@ fields:
   }
 });
 
-test('hvy insert -1 section explains when the parent path is a component', async () => {
+test('hvy insert 0 section explains when the parent path is a component', async () => {
   const document = createResumeCliTestDocument();
   const session = createHvyCliSession();
 
   await expect(executeHvyCliCommand(
     document,
     session,
-    'hvy insert -1 section /body/top-skills-tools-technologies/grid-0 top-skill-baking Baking'
+    'hvy insert 0 section /body/top-skills-tools-technologies/grid-0 top-skill-baking Baking'
   )).rejects.toThrow(
     'hvy insert section: sections must be added at the root level or on top of an existing section. /body/top-skills-tools-technologies/grid-0 is a component, not a section.'
   );
@@ -191,23 +191,23 @@ test('hvy insert -1 section explains when the parent path is a component', async
   await expect(executeHvyCliCommand(
     document,
     session,
-    'hvy insert -1 section /body/skills/component-list-1 skill-baking Baking'
+    'hvy insert 0 section /body/skills/component-list-1 skill-baking Baking'
   )).rejects.toThrow(
     'hvy insert section: sections must be added at the root level or on top of an existing section. /body/skills/component-list-1 is a component, not a section.'
   );
 });
 
-test('hvy insert -1 section treats slash as the document body root', async () => {
+test('hvy insert 0 section treats slash as the document body root', async () => {
   const document = createCliTestDocument();
   const session = createHvyCliSession();
 
-  const section = await executeHvyCliCommand(document, session, 'hvy insert -1 section / chore-chart "Chore Chart"');
+  const section = await executeHvyCliCommand(document, session, 'hvy insert 0 section / chore-chart "Chore Chart"');
   const table = await executeHvyCliCommand(document, session, 'hvy insert -1 table /chore-chart chores "chore,description,dad,mom,child" --row "Dishes,Wash dishes after dinner, , ,"');
 
   expect(section.output).toBe('/body/chore-chart');
   expect(table.output).toContain('/body/chore-chart/chores: created');
-  expect(document.sections.at(-1)?.customId).toBe('chore-chart');
-  expect(document.sections.at(-1)?.blocks[0]?.schema.component).toBe('table');
+  expect(document.sections[0]?.customId).toBe('chore-chart');
+  expect(document.sections[0]?.blocks[0]?.schema.component).toBe('table');
 });
 
 test('ls keeps custom component directories to file listings without schema preview noise', async () => {
@@ -344,6 +344,8 @@ test('hvy help insert explains component creation commands', async () => {
   const result = await executeHvyCliCommand(document, session, 'hvy help insert');
 
   expect(result.output).toContain('hvy insert INDEX COMPONENT PARENT_PATH --id ID [TEXT] [--config JSON]');
+  expect(result.output).toContain('hvy insert 2 text /body/summary middle-note');
+  expect(result.output).toContain('hvy insert -2 skill-record /body/skills/component-list-1 --id skill-before-last');
   expect(result.output).not.toContain('hvy insert -1 component PARENT_PATH ID COMPONENT');
 });
 
@@ -2023,12 +2025,12 @@ test('cli commands can create a chore chart with tables and form plugins', async
   const session = createHvyCliSession();
   const run = (command: string) => executeHvyCliCommand(document, session, command);
 
-  expect((await run('hvy insert -1 section /body chore-chart "Chore Chart"')).output).toBe('/body/chore-chart');
+  expect((await run('hvy insert 0 section /body chore-chart "Chore Chart"')).output).toBe('/body/chore-chart');
   await run('hvy insert -1 text /chore-chart overview "Track active chores, assignments, completion forms, and weekly leaders."');
   await run(
     'hvy insert -1 table /chore-chart active-chores "Chore,Dad,Mom,Child" --row "Dishes,,,Child" --row "Trash,Dad,," --row "Laundry,,Mom,"'
   );
-  await run('hvy insert -1 plugin form /chore-chart add-chore-form "Add chore" "Description:textarea:required"');
+  await run('hvy insert 0 plugin form /chore-chart add-chore-form "Add chore" "Description:textarea:required"');
   await run(
     'hvy insert -1 plugin form /chore-chart assign-chore-form "Assign chore" "Chore:select:required" "Assignee:select:required:Dad|Mom|Child" --script load "rows = doc.db.query(\'SELECT id, description FROM chores ORDER BY id\')\\ndoc.form.set_options(\'Chore\', [{\'label\': row[\'description\'], \'value\': str(row[\'id\'])} for row in rows])" --initial-script load'
   );
@@ -2195,7 +2197,7 @@ test('hvy plugin form help explains script and submit options', async () => {
   expect(help).toContain('--on-submit-script NAME\n  Store pluginConfig.submitScript=NAME');
   expect(help).toContain('There is no optionsQuery YAML key');
   expect(help).toContain('hvy recipe populate-form-options-from-db');
-  expect(help).toContain('Example: hvy insert -1 plugin form /chores add-chore');
+  expect(help).toContain('Example: hvy insert 0 plugin form /chores add-chore');
   expect(help).toContain('See also: hvy cheatsheet scripting; hvy recipe scripting; man hvy plugin scripting tool TOOL_NAME');
   expect(help).toContain('plugin.txt scripts.NAME: |');
 });

@@ -28,7 +28,7 @@ Use `hvy plugin db-table tables` and `hvy plugin db-table schema` to inspect the
 Display rows in the document:
 
 ```shell
-hvy insert -1 plugin db-table /chore-chart active-chores chores "SELECT title, assigned_to FROM chores WHERE completed_at IS NULL"
+hvy insert 0 plugin db-table /chore-chart active-chores chores "SELECT title, assigned_to FROM chores WHERE completed_at IS NULL"
 hvy insert -1 plugin db-table /chore-chart weekly-leaders weekly_chore_leaders "SELECT assigned_to, completed_count FROM weekly_chore_leaders"
 ```
 

@@ -3,7 +3,7 @@
 Create a scripting plugin:
 
 ```shell
-hvy insert -1 plugin /my-section setup dev.heavy.scripting --config "{\"version\":\"0.1\"}" --body "doc.header.set('status', 'ready')"
+hvy insert 0 plugin /my-section setup dev.heavy.scripting --config "{\"version\":\"0.1\"}" --body "doc.header.set('status', 'ready')"
 ```
 
 Scripts are sandboxed Brython/Python with one injected global:
@@ -23,7 +23,7 @@ doc.cli.run("hvy request_structure --collapse")
 doc.tool("request_structure", {})
 ```
 
-`doc.cli.run(COMMAND)` runs one synchronous virtual CLI command and returns stdout. It supports document/file commands such as `hvy insert -1`, `hvy remove`, `hvy request_structure`, `cat`, `rg`, `find`, and `sed`. It does not run pipes, shell chains, redirection, `ask`, `done`, or db-table SQL commands; use `doc.db.query` and `doc.db.execute` for SQL.
+`doc.cli.run(COMMAND)` runs one synchronous virtual CLI command and returns stdout. It supports document/file commands such as `hvy insert`, `hvy remove`, `hvy request_structure`, `cat`, `rg`, `find`, and `sed`. It does not run pipes, shell chains, redirection, `ask`, `done`, or db-table SQL commands; use `doc.db.query` and `doc.db.execute` for SQL.
 
 Use tool help for exact `doc.tool` call shapes:
 

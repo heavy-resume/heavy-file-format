@@ -39,12 +39,12 @@ doc.db.execute('INSERT INTO chore_completions (chore_description, completed_by) 
 doc.db.execute('UPDATE chores SET active = 0 WHERE description = \\'' + chore + '\\'')
 `);
 
-  await runCliCommand(page, 'hvy insert -1 section /body chore-chart "Chore Chart"');
-  await runCliCommand(page, 'hvy insert -1 plugin db-table /chore-chart active-chore-chart active_chore_chart "SELECT Chore, Dad, Mom, Child FROM active_chore_chart"');
+  await runCliCommand(page, 'hvy insert 0 section /body chore-chart "Chore Chart"');
+  await runCliCommand(page, 'hvy insert 0 plugin db-table /chore-chart active-chore-chart active_chore_chart "SELECT Chore, Dad, Mom, Child FROM active_chore_chart"');
   await runCliCommand(page, 'hvy insert -1 plugin db-table /chore-chart weekly-leaders weekly_chore_leaders "SELECT Person, Completed FROM weekly_chore_leaders"');
   await runCliCommand(
     page,
-    `hvy insert -1 plugin form /chore-chart add-chore-form "Add chore" "Description:textarea:required" --script submit "${setupChoreDb}" --on-submit-script submit`
+    `hvy insert 0 plugin form /chore-chart add-chore-form "Add chore" "Description:textarea:required" --script submit "${setupChoreDb}" --on-submit-script submit`
   );
   await runCliCommand(
     page,

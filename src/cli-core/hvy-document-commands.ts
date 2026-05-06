@@ -118,7 +118,9 @@ export function hvyDocumentCommandHelp(topic = ''): string {
       '',
       'Examples:',
       '  hvy insert 0 history-record /body/history/component-list-2 --id history-new',
-      '  hvy insert -1 text /body/summary intro "Visible text"',
+      '  hvy insert 0 text /body/summary intro "Visible text"',
+      '  hvy insert 2 text /body/summary middle-note "Inserted before the current third child"',
+      '  hvy insert -2 skill-record /body/skills/component-list-1 --id skill-before-last',
     ].join('\n'),
     component: [
       formatCommandHelp('hvy insert INDEX COMPONENT PARENT_PATH --id ID [TEXT] [--config JSON]', 'Insert a builtin or custom component to a section, component-list, grid, container, or expandable content path. INDEX is zero-based and supports Python-style negative indexes; 0 is the front, -1 is the back.'),

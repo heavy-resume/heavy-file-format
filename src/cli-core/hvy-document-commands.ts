@@ -63,9 +63,6 @@ export function executeHvyDocumentCommand(ctx: HvyDocumentCommandContext, args: 
   if (resource === 'recipe') {
     return { output: formatRecipe(action ?? ''), mutated: false };
   }
-  if (resource === 'add') {
-    throw new Error('hvy add has been replaced by hvy append-child and hvy prepend-child.');
-  }
   if (resource === 'append-child' || resource === 'prepend-child') {
     return executeHvyChildCommand(ctx, resource === 'prepend-child' ? 'prepend' : 'append', action, rest);
   }

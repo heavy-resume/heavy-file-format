@@ -210,14 +210,13 @@ export function extractOpenAiText(payload: unknown): string {
     return record.output_text.trim();
   }
 
-  const messages = (record.output ?? [])
+  const messageTexts = (record.output ?? [])
     .filter((item) => (item as { type?: string }).type === 'message')
     .flatMap((item) => item.content ?? [])
     .map((item) => (item.type === 'output_text' && typeof item.text === 'string' ? item.text : ''))
     .filter((value) => value.trim().length > 0);
-  const finalMessage = messages.at(-1)?.trim();
-  if (finalMessage) {
-    return finalMessage;
+  if (messageTexts.length > 0) {
+    return messageTexts.map((message) => message.trim()).join('\n\n');
   }
 
   return (record.output ?? [])

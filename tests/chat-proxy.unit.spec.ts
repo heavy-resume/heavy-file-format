@@ -188,24 +188,38 @@ test('proxy response extractors collect text from provider payloads', () => {
 
   expect(
     extractOpenAiText({
+      output_text: 'Aggregated answer',
+      output: [
+        {
+          type: 'message',
+          content: [
+            { type: 'output_text', text: 'Ignored message answer' },
+          ],
+        },
+      ],
+    })
+  ).toBe('Aggregated answer');
+
+  expect(
+    extractOpenAiText({
       output: [
         {
           type: 'message',
           phase: 'commentary',
           content: [
-            { type: 'output_text', text: 'Duplicate answer' },
+            { type: 'output_text', text: '```shell\ncat /body/example/text.txt\n```' },
           ],
         },
         {
           type: 'message',
           phase: 'final_answer',
           content: [
-            { type: 'output_text', text: 'Duplicate answer' },
+            { type: 'output_text', text: 'done Updated example.' },
           ],
         },
       ],
     })
-  ).toBe('Duplicate answer');
+  ).toBe('```shell\ncat /body/example/text.txt\n```\n\ndone Updated example.');
 
   expect(
     extractAnthropicText({

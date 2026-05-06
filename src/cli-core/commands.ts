@@ -816,6 +816,7 @@ function addRawComponentFilesForBlock(
         if (tagIssue) {
           failRawComponentWrite(session, blockPath, content, [tagIssue]);
         }
+        preserveOmittedEmptyTextPlaceholders(block, parsed.block, content);
         replaceBlockContents(block, parsed.block);
         delete session.rawWipContentByPath?.[`${blockPath}/raw.wip.hvy`];
       },
@@ -981,6 +982,49 @@ function replaceBlockContents(target: VisualBlock, source: VisualBlock): void {
   target.text = source.text;
   target.schema = source.schema;
   target.schemaMode = source.schemaMode;
+}
+
+function preserveOmittedEmptyTextPlaceholders(previousBlock: VisualBlock, nextBlock: VisualBlock, rawFragment: string): void {
+  const previousTextBlocks = collectTextBlocks(previousBlock);
+  const nextTextBlocks = collectTextBlocks(nextBlock);
+  const rawTextDirectives = collectRawTextDirectivePlaceholderPresence(rawFragment);
+  nextTextBlocks.forEach((nextTextBlock, index) => {
+    const previousTextBlock = previousTextBlocks[index];
+    const rawTextDirective = rawTextDirectives[index];
+    if (
+      !previousTextBlock ||
+      rawTextDirective?.hasPlaceholder ||
+      !previousTextBlock.schema.placeholder.trim() ||
+      previousTextBlock.text.trim() ||
+      nextTextBlock.text.trim() ||
+      nextTextBlock.schema.placeholder.trim()
+    ) {
+      return;
+    }
+    nextTextBlock.schema.placeholder = previousTextBlock.schema.placeholder;
+  });
+}
+
+function collectTextBlocks(block: VisualBlock): VisualBlock[] {
+  const blocks = block.schema.component === 'text' ? [block] : [];
+  for (const nestedBlocks of getNestedBlockLists(block)) {
+    for (const nestedBlock of nestedBlocks) {
+      blocks.push(...collectTextBlocks(nestedBlock));
+    }
+  }
+  return blocks;
+}
+
+function collectRawTextDirectivePlaceholderPresence(rawFragment: string): Array<{ hasPlaceholder: boolean }> {
+  const matches = rawFragment.matchAll(/<!--\s*hvy:text\s+([\s\S]*?)\s*-->/gi);
+  return [...matches].map((match) => {
+    try {
+      const parsed = JSON.parse(match[1] ?? '{}') as unknown;
+      return { hasPlaceholder: !!parsed && typeof parsed === 'object' && !Array.isArray(parsed) && Object.prototype.hasOwnProperty.call(parsed, 'placeholder') };
+    } catch {
+      return { hasPlaceholder: false };
+    }
+  });
 }
 
 function formatRawHvyPreview(serialized: string): string {

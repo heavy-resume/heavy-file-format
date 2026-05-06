@@ -1,4 +1,16 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
+
+async function runCliCommand(page: Page, command: string): Promise<void> {
+  const lineCount = await page.locator('#cliOutput .cli-line').count();
+  const isPlaceholder = (await page.locator('#cliOutput').textContent())?.includes('/ $ man ls') ?? false;
+  await page.locator('#cliInput').fill(command);
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#cliOutput .cli-line')).toHaveCount(isPlaceholder ? lineCount : lineCount + 1);
+}
+
+function writeFileCommand(path: string, content: string): string {
+  return `echo ${JSON.stringify(content.trimEnd().replace(/\n/g, '\\n'))} > ${path}`;
+}
 
 test('expandable editor keeps stub and expanded slots unlocked without lock controls', async ({ page }) => {
   await page.goto('/');
@@ -230,6 +242,39 @@ hvy_version: 0.1
   await expect(page.locator('.editor-block.is-activating-path')).toHaveCount(0);
 });
 
+test('cli-created expanded history record can be closed and followed by another list item', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Resume Template' }).click();
+  await page.getByRole('button', { name: 'CLI' }).click();
+  await runCliCommand(page, 'hvy insert 0 history-record /body/history/component-list-2 --id history-reproco-founder');
+  await runCliCommand(page, writeFileCommand('/body/history/component-list-2/history-reproco-founder/expandable-stub/table-0/tableRows.json', '[["2025-2026","ReproCo","Founder"]]'));
+  await runCliCommand(page, writeFileCommand('/body/history/component-list-2/history-reproco-founder/expandable-content/text-0/text.txt', '### ReproCo'));
+
+  await page.getByRole('button', { name: 'AI' }).click();
+  const aiRecord = page.locator('#aiReaderDocument .reader-block', { hasText: 'ReproCo' }).first();
+  await aiRecord.locator('[data-reader-action="toggle-expandable"]').first().click();
+
+  await page.getByRole('button', { name: 'Editor' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await expect(page.locator('.passive-list-add-ghost', { hasText: 'Add History' }).first()).toBeVisible();
+  const passiveRecord = page.locator('.editor-block-passive', { hasText: 'ReproCo' }).last();
+  await expect(passiveRecord).not.toContainText('Empty text');
+
+  await passiveRecord.click();
+  const activeRecord = page.locator('.editor-block[data-active-editor-block="true"]');
+  await expect(activeRecord).not.toContainText('Empty text');
+  await activeRecord.getByRole('button', { name: 'Done' }).click();
+  await expect(page.locator('.editor-block[data-active-editor-block="true"]')).toHaveCount(0);
+  await expect(page.locator('.passive-list-add-ghost', { hasText: 'Add History' }).first()).toBeVisible();
+
+  await page.locator('.passive-list-add-ghost', { hasText: 'Add History' }).first().click();
+  await page.getByRole('button', { name: 'Raw' }).click();
+  const raw = await page.locator('#rawEditor').inputValue();
+  expect(raw.match(/<!--hvy:history-record/g) ?? []).toHaveLength(2);
+});
+
 test('editing a second component-list item does not overwrite the first item', async ({ page }) => {
   await page.goto('/');
 
@@ -321,7 +366,7 @@ hvy_version: 0.1
   await expect(activeBlock.getByText('List Component Type')).toBeVisible();
   await activeBlock.getByRole('button', { name: 'Done' }).click();
 
-  await page.locator('.editor-block-passive', { hasText: 'Python' }).first().click();
+  await page.locator('.editor-block-passive', { hasText: 'Python' }).last().click();
   activeBlock = page.locator('.editor-block[data-active-editor-block="true"]');
   await expect(activeBlock.locator('.rich-editor')).toContainText('Python');
   await expect(page.getByText('List type:')).toBeVisible();

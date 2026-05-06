@@ -19,8 +19,16 @@ const switchView: AppActionHandler = ({ actionButton }) => {
   const requestedView = actionButton.dataset.view;
   const view = requestedView === 'viewer' ? 'viewer' : requestedView === 'ai' ? 'ai' : 'editor';
   const crossingChatModeBoundary = (state.currentView === 'viewer') !== (view === 'viewer');
+  const crossingEditorBoundary = (state.currentView === 'editor') !== (view === 'editor');
   if (crossingChatModeBoundary) {
     clearChatConversation(state.chat);
+  }
+  if (crossingEditorBoundary) {
+    state.activeEditorBlock = null;
+    state.pendingEditorActivation = null;
+    state.activeEditorSectionTitleKey = null;
+    state.clearSectionTitleOnFocusKey = null;
+    state.componentPlacement = null;
   }
   state.currentView = view;
   if (view !== 'ai') {

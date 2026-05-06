@@ -881,6 +881,30 @@ EOF`);
   expect(serializeDocument(document)).toContain('Raw component edit');
 });
 
+test('component raw.hvy edits preserve omitted placeholders on unchanged empty text blocks', async () => {
+  const document = createResumeCliTestDocument();
+  const session = createHvyCliSession();
+
+  await executeHvyCliCommand(document, session, 'hvy insert 0 history-record /body/history/component-list-2 --id history-placeholder-repro');
+  const before = await executeHvyCliCommand(document, session, 'cat /body/history/component-list-2/history-placeholder-repro/raw.hvy');
+  expect(before.output).toContain('"placeholder":"description"');
+
+  await executeHvyCliCommand(document, session, `cat > /body/history/component-list-2/history-placeholder-repro/raw.hvy <<'EOF'
+${before.output.replace(',"placeholder":"description"', '')}
+EOF`);
+
+  const afterOmitted = await executeHvyCliCommand(document, session, 'cat /body/history/component-list-2/history-placeholder-repro/raw.hvy');
+  expect(afterOmitted.output).toContain('"placeholder":"description"');
+
+  await executeHvyCliCommand(document, session, `cat > /body/history/component-list-2/history-placeholder-repro/raw.hvy <<'EOF'
+${afterOmitted.output.replace('"placeholder":"description"', '"placeholder":"alternate description"')}
+EOF`);
+
+  const afterChanged = await executeHvyCliCommand(document, session, 'cat /body/history/component-list-2/history-placeholder-repro/raw.hvy');
+  expect(afterChanged.output).toContain('"placeholder":"alternate description"');
+  expect(afterChanged.output).not.toContain('"placeholder":"description"');
+});
+
 test('cli keeps failed component raw.hvy edits in component raw.wip.hvy', async () => {
   const document = createCliTestDocument();
   const session = createHvyCliSession();

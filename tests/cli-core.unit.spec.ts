@@ -33,6 +33,10 @@ test('cli can navigate and read virtual component files', async () => {
   expect((await executeHvyCliCommand(document, session, 'cd /body/summary')).cwd).toBe('/body/summary');
   expect((await executeHvyCliCommand(document, session, 'ls /body/summary')).output).toContain('file about-section.txt [ro]');
   expect((await executeHvyCliCommand(document, session, 'ls /body/summary')).output).toContain('file section-info.txt [ro]');
+  expect((await executeHvyCliCommand(document, session, 'ls /')).output).toContain('dir  body | document body sections and components');
+  expect((await executeHvyCliCommand(document, session, 'ls /body')).output).toContain('dir  summary | section');
+  expect((await executeHvyCliCommand(document, session, 'ls /')).output).toContain('file header.yaml [w] | writable document metadata YAML');
+  expect((await executeHvyCliCommand(document, session, 'ls /')).output).toContain('file scratchpad.txt [w] | ephemeral AI task notes');
   expect((await executeHvyCliCommand(document, session, 'cat /body/summary/about-section.txt')).output).toContain(
     '# Sections #'
   );
@@ -47,7 +51,7 @@ test('cli can navigate and read virtual component files', async () => {
   expect((await executeHvyCliCommand(document, session, 'cat intro/text.txt')).output).toBe('Hello world');
   expect((await executeHvyCliCommand(document, session, 'cat intro/text.json')).output).toContain('"css": "margin: 0.5rem 0;"');
   expect((await executeHvyCliCommand(document, session, 'cat intro/about-text.txt')).output).toContain('# Text Components #');
-  expect((await executeHvyCliCommand(document, session, 'man ls')).output).toContain('Files are marked [w] writable or [ro] read-only.');
+  expect((await executeHvyCliCommand(document, session, 'man ls')).output).toContain('stable entries include pipe-delimited descriptions.');
 });
 
 test('about-section includes the section metadata description when present', async () => {
@@ -698,7 +702,7 @@ test('cli exposes raw.hvy for small documents and applies valid raw edits', asyn
 
   const root = await executeHvyCliCommand(document, session, 'ls /');
   expect(root.output).toContain('file raw.hvy [w]');
-  expect(root.output).toContain('raw.hvy [w]: complete serialized HVY document');
+  expect(root.output).toContain('raw.hvy [w] | complete serialized HVY document');
 
   const before = await executeHvyCliCommand(document, session, 'cat /raw.hvy');
   expect(before.output).toContain('#! Summary');
@@ -737,7 +741,7 @@ EOF`)).rejects.toThrow('/raw.hvy did not parse; document was not changed.');
   expect(serializeDocument(document)).toBe(before);
   const root = await executeHvyCliCommand(document, session, 'ls /');
   expect(root.output).toContain('file raw.wip.hvy [w]');
-  expect(root.output).toContain('raw.wip.hvy [w]: failed raw.hvy draft preserved after a parse error');
+  expect(root.output).toContain('raw.wip.hvy [w] | failed raw.hvy draft preserved after a parse error');
   expect((await executeHvyCliCommand(document, session, 'cat /raw.wip.hvy')).output).toContain('#! Broken');
 });
 
@@ -758,7 +762,7 @@ ${Array.from({ length: 500 }, (_, index) => ` Line ${index}`).join('\n')}
   const root = await executeHvyCliCommand(document, session, 'ls /');
   expect(root.output).toContain('file raw-preview.hvy.txt [ro]');
   expect(root.output).not.toContain('file raw.hvy [w]');
-  expect(root.output).toContain('raw-preview.hvy.txt [ro]: first 100 prewrapped lines');
+  expect(root.output).toContain('raw-preview.hvy.txt [ro] | first 100 prewrapped lines');
 
   const preview = await executeHvyCliCommand(document, session, 'cat /raw-preview.hvy.txt');
   expect(preview.output.split('\n')).toHaveLength(100);
@@ -774,7 +778,7 @@ test('cli exposes raw.hvy in component directories and applies valid component e
 
   const listing = await executeHvyCliCommand(document, session, 'ls /body/summary/intro');
   expect(listing.output).toContain('file raw.hvy [w]');
-  expect(listing.output).toContain('raw.hvy [w]: serialized HVY component fragment');
+  expect(listing.output).toContain('raw.hvy [w] | serialized HVY component fragment');
 
   const before = await executeHvyCliCommand(document, session, 'cat /body/summary/intro/raw.hvy');
   expect(before.output).toContain('<!--hvy:text');
@@ -803,7 +807,7 @@ EOF`)).rejects.toThrow('/body/summary/intro/raw.hvy did not parse; component was
   expect(document.sections[0]?.blocks[0]?.text).toBe(before);
   const listing = await executeHvyCliCommand(document, session, 'ls /body/summary/intro');
   expect(listing.output).toContain('file raw.wip.hvy [w]');
-  expect(listing.output).toContain('raw.wip.hvy [w]: failed raw.hvy draft preserved after a parse error');
+  expect(listing.output).toContain('raw.wip.hvy [w] | failed raw.hvy draft preserved after a parse error');
   expect((await executeHvyCliCommand(document, session, 'cat /body/summary/intro/raw.wip.hvy')).output).toContain('Broken component');
 });
 
@@ -813,7 +817,7 @@ test('cli exposes raw.hvy in section directories and applies valid section edits
 
   const listing = await executeHvyCliCommand(document, session, 'ls /body/summary');
   expect(listing.output).toContain('file raw.hvy [w]');
-  expect(listing.output).toContain('raw.hvy [w]: serialized HVY section fragment');
+  expect(listing.output).toContain('raw.hvy [w] | serialized HVY section fragment');
 
   const before = await executeHvyCliCommand(document, session, 'cat /body/summary/raw.hvy');
   expect(before.output).toContain('#! Summary');
@@ -853,9 +857,8 @@ hvy_version: 0.1
 
   const structural = await executeHvyCliCommand(document, session, 'ls /body/summary/details/expandable-stub');
 
-  expect(structural.output).toContain('Raw HVY access:');
-  expect(structural.output).toContain('- nearest raw-editable parent: /body/summary/details/raw.hvy');
-  expect(structural.output).not.toContain('raw.hvy [w]: serialized HVY component fragment');
+  expect(structural.output).toContain('nearest raw-editable parent | /body/summary/details/raw.hvy');
+  expect(structural.output).not.toContain('raw.hvy [w] | serialized HVY component fragment');
 });
 
 test('cli keeps failed section raw.hvy edits in section raw.wip.hvy', async () => {
@@ -871,7 +874,7 @@ EOF`)).rejects.toThrow('/body/summary/raw.hvy did not parse; section was not cha
   expect(serializeDocument(document)).toBe(before);
   const listing = await executeHvyCliCommand(document, session, 'ls /body/summary');
   expect(listing.output).toContain('file raw.wip.hvy [w]');
-  expect(listing.output).toContain('raw.wip.hvy [w]: failed raw.hvy draft preserved after a parse error');
+  expect(listing.output).toContain('raw.wip.hvy [w] | failed raw.hvy draft preserved after a parse error');
   expect((await executeHvyCliCommand(document, session, 'cat /body/summary/raw.wip.hvy')).output).toContain('Broken Section');
 });
 

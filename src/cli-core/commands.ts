@@ -542,53 +542,36 @@ function commandLs(ctx: HvyCliCommandContext, args: string[]): string {
 }
 
 function formatLsTargetDescription(ctx: HvyCliCommandContext, directoryPath: string): string {
-  const rawAccess = formatRawHvyDescription(ctx.fs, directoryPath);
+  const nearestRawEditableParent = formatNearestRawEditableParentDescription(ctx.fs, directoryPath);
   if (directoryPath === '/') {
-    return rawAccess;
+    return '';
   }
   const context = formatHvyComponentDescriptionHistory(ctx.document, ctx.fs, ctx.cwd, directoryPath);
   if (context) {
-    return [context, rawAccess].filter(Boolean).join('\n\n');
+    return [context, nearestRawEditableParent].filter(Boolean).join('\n');
   }
   const section = readJsonFileFromVirtualPath(ctx.fs, `${directoryPath}/section.json`);
   if (section) {
-    return [formatMetadataDescription('Section metadata:', section), rawAccess].filter(Boolean).join('\n\n');
+    return [formatMetadataDescription('Section metadata:', section), nearestRawEditableParent].filter(Boolean).join('\n');
   }
   const componentName = inferComponentNameForDirectory(ctx.fs, directoryPath);
   if (!componentName) {
-    return rawAccess;
+    return nearestRawEditableParent;
   }
   const component = readJsonFileFromVirtualPath(ctx.fs, `${directoryPath}/${componentName}.json`);
-  return [component ? formatMetadataDescription('Component metadata:', component) : '', rawAccess].filter(Boolean).join('\n\n');
+  return [component ? formatMetadataDescription('Component metadata:', component) : '', nearestRawEditableParent].filter(Boolean).join('\n');
 }
 
-function formatRawHvyDescription(fs: ReturnType<typeof buildHvyVirtualFileSystem>, directoryPath: string): string {
-  const lines: string[] = [];
-  const rawPath = directoryPath === '/' ? '/raw.hvy' : `${directoryPath}/raw.hvy`;
-  const previewPath = directoryPath === '/' ? '/raw-preview.hvy.txt' : `${directoryPath}/raw-preview.hvy.txt`;
-  const wipPath = directoryPath === '/' ? '/raw.wip.hvy' : `${directoryPath}/raw.wip.hvy`;
-  const nearestRawEditableParent = findNearestRawEditableParent(fs, directoryPath);
-  const subject = directoryPath === '/'
-    ? 'complete serialized HVY document'
-    : fs.entries.has(`${directoryPath}/section.json`)
-      ? 'serialized HVY section fragment'
-      : 'serialized HVY component fragment';
-  if (fs.entries.has(rawPath)) {
-    lines.push(`- raw.hvy [w]: ${subject}; editable because it is under 4000 characters.`);
-  }
-  if (fs.entries.has(previewPath)) {
-    lines.push(`- raw-preview.hvy.txt [ro]: first 100 prewrapped lines of ${subject}; raw.hvy is hidden because it is 4000+ characters.`);
-  }
-  if (fs.entries.has(wipPath)) {
-    lines.push('- raw.wip.hvy [w]: failed raw.hvy draft preserved after a parse error; edit or inspect it, then write corrected content to raw.hvy.');
-  }
-  if (nearestRawEditableParent) {
-    lines.push(`- nearest raw-editable parent: ${nearestRawEditableParent}`);
-  }
-  if (lines.length === 0) {
+function formatNearestRawEditableParentDescription(fs: ReturnType<typeof buildHvyVirtualFileSystem>, directoryPath: string): string {
+  if (
+    fs.entries.has(directoryPath === '/' ? '/raw.hvy' : `${directoryPath}/raw.hvy`)
+    || fs.entries.has(directoryPath === '/' ? '/raw-preview.hvy.txt' : `${directoryPath}/raw-preview.hvy.txt`)
+    || fs.entries.has(directoryPath === '/' ? '/raw.wip.hvy' : `${directoryPath}/raw.wip.hvy`)
+  ) {
     return '';
   }
-  return ['Raw HVY access:', ...lines].join('\n');
+  const nearest = findNearestRawEditableParent(fs, directoryPath);
+  return nearest ? `nearest raw-editable parent | ${nearest}` : '';
 }
 
 function findNearestRawEditableParent(fs: ReturnType<typeof buildHvyVirtualFileSystem>, directoryPath: string): string {
@@ -2770,10 +2753,122 @@ function quoteIdentifier(identifier: string): string {
 
 function formatEntry(fs: ReturnType<typeof buildHvyVirtualFileSystem>, entry: HvyVirtualEntry): string {
   const tags = formatEntryTags(fs, entry);
+  const description = formatEntryDescription(fs, entry);
+  const suffix = `${tags}${description ? ` | ${description}` : ''}`;
   if (entry.kind === 'dir') {
-    return `dir  ${entry.path.split('/').pop() || '/'}${tags}`;
+    return `dir  ${entry.path.split('/').pop() || '/'}${suffix}`;
   }
-  return `file ${entry.path.split('/').pop() || '/'} ${entry.write && entry.writable !== false ? '[w]' : '[ro]'}${tags}`;
+  return `file ${entry.path.split('/').pop() || '/'} ${entry.write && entry.writable !== false ? '[w]' : '[ro]'}${suffix}`;
+}
+
+function formatEntryDescription(fs: ReturnType<typeof buildHvyVirtualFileSystem>, entry: HvyVirtualEntry): string {
+  if (entry.kind === 'dir') {
+    return formatDirectoryEntryDescription(fs, entry.path);
+  }
+  return formatFileEntryDescription(fs, entry.path);
+}
+
+function formatDirectoryEntryDescription(fs: ReturnType<typeof buildHvyVirtualFileSystem>, path: string): string {
+  if (path === '/body') {
+    return 'document body sections and components';
+  }
+  if (path === '/attachments') {
+    return 'document attachment metadata files';
+  }
+  if (fs.entries.has(`${path}/section.json`)) {
+    return isTopLevelSectionPath(path) ? 'section' : 'subsection';
+  }
+  const componentName = inferComponentNameForDirectory(fs, path);
+  if (componentName) {
+    return `${componentName} component directory; contains body/config files and nested child directories`;
+  }
+  const name = path.split('/').pop() ?? '';
+  if (name === 'expandable-stub') {
+    return `expandable stub child slot; raw edits available through ${findNearestRawEditableParent(fs, path) || 'the parent component'}`;
+  }
+  if (name === 'expandable-content') {
+    return `expandable content child slot; raw edits available through ${findNearestRawEditableParent(fs, path) || 'the parent component'}`;
+  }
+  if (name === 'container') {
+    return `container child slot; raw edits available through ${findNearestRawEditableParent(fs, path) || 'the parent component'}`;
+  }
+  if (name === 'grid') {
+    return `grid item collection; raw edits available through ${findNearestRawEditableParent(fs, path) || 'the parent grid component'}`;
+  }
+  return '';
+}
+
+function isTopLevelSectionPath(path: string): boolean {
+  return path.startsWith('/body/') && !path.slice('/body/'.length).includes('/');
+}
+
+function formatFileEntryDescription(fs: ReturnType<typeof buildHvyVirtualFileSystem>, path: string): string {
+  const filename = path.split('/').pop() ?? '';
+  const directoryPath = path.replace(/\/[^/]+$/, '') || '/';
+  if (path === '/header.yaml') {
+    return 'writable document metadata YAML';
+  }
+  if (path === '/scratchpad.txt') {
+    return 'ephemeral AI task notes; not serialized into the HVY document';
+  }
+  if (filename === 'raw.hvy') {
+    return `${formatRawHvySubject(fs, directoryPath)}; editable because it is under 4000 characters`;
+  }
+  if (filename === 'raw-preview.hvy.txt') {
+    return `first 100 prewrapped lines of ${formatRawHvySubject(fs, directoryPath)}; raw.hvy is hidden because it is 4000+ characters`;
+  }
+  if (filename === 'raw.wip.hvy') {
+    return 'failed raw.hvy draft preserved after a parse error; edit or inspect it, then write corrected content to raw.hvy';
+  }
+  if (filename === 'section.json') {
+    return 'writable section metadata and display settings';
+  }
+  if (filename === 'section-info.txt') {
+    return 'read-only summary of this section and its metadata';
+  }
+  if (filename === 'about-section.txt') {
+    return 'read-only documentation for section directories';
+  }
+  if (filename === 'children-order.json') {
+    return 'writable ordered child keys; edit to reorder children';
+  }
+  if (filename === 'tableColumns.json') {
+    return 'writable static table column names as a JSON string array';
+  }
+  if (filename === 'tableRows.json') {
+    return 'writable static table rows as a JSON array of string arrays';
+  }
+  if (filename.startsWith('about-') && filename.endsWith('.txt')) {
+    return 'read-only documentation for this component or plugin type';
+  }
+  if (filename.endsWith('.py')) {
+    return 'writable Python/Brython script source exposed from a scripting or form plugin';
+  }
+  const componentName = inferComponentNameForDirectory(fs, directoryPath);
+  if (componentName && filename === `${componentName}.json`) {
+    return `writable ${componentName} component config`;
+  }
+  if (componentName && filename === `${componentName}.txt`) {
+    const bodyEntry = fs.entries.get(path);
+    if (componentName === 'table' || bodyEntry?.kind === 'file' && bodyEntry.writable === false) {
+      return `read-only ${componentName} component body preview`;
+    }
+    return `writable ${componentName} component body text`;
+  }
+  if (directoryPath === '/attachments' && filename.endsWith('.json')) {
+    return 'read-only attachment metadata summary';
+  }
+  return '';
+}
+
+function formatRawHvySubject(fs: ReturnType<typeof buildHvyVirtualFileSystem>, directoryPath: string): string {
+  if (directoryPath === '/') {
+    return 'complete serialized HVY document';
+  }
+  if (fs.entries.has(`${directoryPath}/section.json`)) {
+    return 'serialized HVY section fragment';
+  }
+  return 'serialized HVY component fragment';
 }
 
 function formatEntryTags(fs: ReturnType<typeof buildHvyVirtualFileSystem>, entry: HvyVirtualEntry): string {
@@ -2894,7 +2989,7 @@ function helpFor(topic = ''): string {
     '': 'Commands: cd, pwd, ls, cat, head, tail, nl, find, rg, grep, sort, uniq, wc, tr, xargs, cp, rm, echo, sed, true, hvy. Ask: ask QUESTION. Finish: done MESSAGE_TO_USER. Use man <command> for details.',
     cd: formatCommandHelp('cd PATH', 'Change the current virtual directory.'),
     pwd: formatCommandHelp('pwd', 'Print the current virtual directory.'),
-    ls: formatCommandHelp('ls [PATH]', 'List files and directories. Files are marked [w] writable or [ro] read-only.'),
+    ls: formatCommandHelp('ls [PATH]', 'List files and directories. Files are marked [w] writable or [ro] read-only; stable entries include pipe-delimited descriptions.'),
     cat: formatCommandHelp('cat FILE...', 'Print file contents.'),
     head: formatCommandHelp('head [-n COUNT] FILE', 'Print the first lines of a file. COUNT maxes at 100.'),
     tail: formatCommandHelp('tail [-n COUNT] FILE', 'Print the last lines of a file. COUNT maxes at 100.'),

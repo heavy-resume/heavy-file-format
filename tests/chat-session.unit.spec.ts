@@ -272,12 +272,12 @@ test('requestDocumentEditChatTurn runs the CLI edit loop for document chat', asy
       mode: 'document-edit',
       debugLabel: 'chat-cli-edit:1',
       context: expect.stringContaining('Current request:\nAdd a chore section.'),
-      systemInstructions: expect.stringContaining('Valid commands (in order of preference):\nCommands: hvy, nl, rg, find, sed, echo, cat, ls, pwd, cd, cp, rm, grep, sort, uniq, wc, tr, xargs, head, tail, true. Ask: ask QUESTION. Finish: done SUMMARY.'),
+      systemInstructions: expect.stringContaining('Valid commands (in order of preference):\nCommands: hvy, nl, rg, find, sed, echo, cat, ls, pwd, cd, cp, rm, grep, sort, uniq, wc, tr, xargs, head, tail, true. Ask: ask QUESTION. Finish: done MESSAGE_TO_USER.'),
     })
   );
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.systemInstructions).toContain('Response instructions:\nReturn concise notes plus terminal command(s).');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.systemInstructions).toContain('Response instructions:\nWhen continuing, return concise notes plus terminal command(s).');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.systemInstructions).toContain('validation, then done');
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.systemInstructions).toContain('ask followed by the actual question');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.systemInstructions).toContain('run `ask QUESTION` as the only command');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Current request:\nAdd a chore section.');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).not.toContain('Use the chronological chat messages and terminal results to infer the active task.');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).not.toContain('Valid commands (in order of preference):');
@@ -301,7 +301,7 @@ test('requestDocumentEditChatTurn runs the CLI edit loop for document chat', asy
   expect(firstMessages?.at(-1)?.role).toBe('user');
   expect(firstMessages?.at(-1)?.content).toContain('Current directory: /');
   expect(firstMessages?.at(-1)?.content).toContain('### BEGIN /scratchpad.txt  ###\nlast edited never\n\nYou havent written your plan yet.');
-  expect(firstMessages?.at(-1)?.content.trim().endsWith('else ask QUESTION, else done SUMMARY.')).toBe(true);
+  expect(firstMessages?.at(-1)?.content.trim().endsWith('or run ask QUESTION, or run done MESSAGE_TO_USER.')).toBe(true);
   expect(writeChatCliUserQueryTraceMock.mock.calls[0]).toEqual(['chat-cli-test', 'Add a chore section.', undefined]);
   expect(writeChatCliCommandTraceMock.mock.calls[0]).toEqual([
     'chat-cli-test',
@@ -391,7 +391,7 @@ test('buildDocumentEditCliSimRequest exposes the exact provider-facing CLI reque
   expect(payload).not.toHaveProperty('responseInstructions');
   expect(payload).not.toHaveProperty('systemInstructions');
   expect(payload.input).toEqual([
-    expect.objectContaining({ role: 'system', content: [expect.objectContaining({ text: expect.stringContaining('Response instructions:\nReturn concise notes plus terminal command(s).') })] }),
+    expect.objectContaining({ role: 'system', content: [expect.objectContaining({ text: expect.stringContaining('Response instructions:\nWhen continuing, return concise notes plus terminal command(s).') })] }),
     expect.objectContaining({ role: 'user', content: [expect.objectContaining({ text: expect.stringContaining('Request context:\n\nCurrent request:\nAdd a chore section.') })] }),
     expect.objectContaining({ role: 'user', content: [expect.objectContaining({ text: 'Add a chore section.' })] }),
     expect.objectContaining({ role: 'assistant', content: [expect.objectContaining({ text: expect.stringContaining('```shell\nls /\n```') })] }),
@@ -406,7 +406,7 @@ test('buildDocumentEditCliSimRequest exposes the exact provider-facing CLI reque
     expect.objectContaining({ role: 'user', content: [expect.objectContaining({ text: expect.stringContaining('Next response: Write concise What / Why / Unsure of') })] }),
   ]);
   expect(payload.input.at(-1)?.content[0]?.text).toContain('### BEGIN /scratchpad.txt  ###\nlast edited never\n\nYou havent written your plan yet.');
-  expect(payload.input.at(-1)?.content[0]?.text.trim().endsWith('else ask QUESTION, else done SUMMARY.')).toBe(true);
+  expect(payload.input.at(-1)?.content[0]?.text.trim().endsWith('or run ask QUESTION, or run done MESSAGE_TO_USER.')).toBe(true);
   expect(result.requestJson).toContain('```shell\\nls /\\n```');
   expect(writeChatCliCommandTraceMock).not.toHaveBeenCalled();
   expect(writeChatCliUserQueryTraceMock).not.toHaveBeenCalled();
@@ -557,7 +557,7 @@ test('requestDocumentEditChatTurn compacts old cli conversation after high provi
   expect(JSON.stringify(requestProxyCompletionMock.mock.calls[4]?.[0]?.messages)).not.toContain('x'.repeat(12000));
   expect(JSON.stringify(requestProxyCompletionMock.mock.calls[4]?.[0]?.messages)).not.toContain('... truncated ...');
   expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.systemInstructions).toContain(
-    'Valid commands (in order of preference):\nCommands: hvy, nl, rg, find, sed, echo, cat, ls, pwd, cd, cp, rm, grep, sort, uniq, wc, tr, xargs, head, tail, true. Ask: ask QUESTION. Finish: done SUMMARY.'
+    'Valid commands (in order of preference):\nCommands: hvy, nl, rg, find, sed, echo, cat, ls, pwd, cd, cp, rm, grep, sort, uniq, wc, tr, xargs, head, tail, true. Ask: ask QUESTION. Finish: done MESSAGE_TO_USER.'
   );
   expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.context).toContain('Current request:\nCheck the document with several commands.');
   expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.context).not.toContain('scratchpad.txt:');
@@ -587,6 +587,32 @@ test('requestDocumentEditChatTurn returns ask commands as clarification question
   expect(onMutation).not.toHaveBeenCalled();
 });
 
+test('requestDocumentEditChatTurn accepts fenced done commands with notes', async () => {
+  requestProxyCompletionMock.mockResolvedValueOnce(`What you are doing: Finalizing the change.
+Why you are doing it: The edit was already validated.
+What you are unsure of: Nothing.
+
+\`\`\`shell
+done Updated the history record.
+\`\`\``);
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+  const document = deserializeDocument('---\nhvy_version: 0.1\n---\n', '.hvy');
+
+  const result = await requestDocumentEditChatTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Finish.',
+  });
+
+  expect(result.error).toBeNull();
+  expect(result.messages.at(-1)).toEqual(expect.objectContaining({
+    role: 'assistant',
+    content: 'Updated the history record.',
+  }));
+  expect(requestProxyCompletionMock).toHaveBeenCalledTimes(1);
+});
+
 test('requestDocumentEditChatTurn retries when ask placeholder is returned literally', async () => {
   requestProxyCompletionMock
     .mockResolvedValueOnce('ask Question for the user')
@@ -604,6 +630,29 @@ test('requestDocumentEditChatTurn retries when ask placeholder is returned liter
   expect(result.error).toBeNull();
   expect(result.messages.at(-1)?.content).toBe('Which section should I update?');
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content).toContain('Do not return `ask Question for the user` literally.');
+});
+
+test('requestDocumentEditChatTurn rejects done batched with other commands', async () => {
+  requestProxyCompletionMock
+    .mockResolvedValueOnce(`\`\`\`shell
+hvy lint
+done Updated the document.
+\`\`\``)
+    .mockResolvedValueOnce('done Updated the document.');
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+  const document = deserializeDocument('---\nhvy_version: 0.1\n---\n', '.hvy');
+
+  const result = await requestDocumentEditChatTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Finish.',
+  });
+
+  expect(result.error).toBeNull();
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content).toContain(
+    'Run `done MESSAGE_TO_USER` or `ask QUESTION` as the only command in the response.'
+  );
 });
 
 test('requestDocumentEditChatTurn keeps ask and answer history across clarification turns', async () => {
@@ -786,7 +835,7 @@ done Created the chore section.`)
   ]);
   const nextPrompt = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content ?? '';
   expect(nextPrompt).toContain('Next response: Write concise What / Why / Unsure of');
-  expect(nextPrompt.trimEnd()).toMatch(/else ask QUESTION, else done SUMMARY\.$/);
+  expect(nextPrompt.trimEnd()).toMatch(/or run ask QUESTION, or run done MESSAGE_TO_USER\.$/);
   expect(nextPrompt).toContain('/body/chores/note');
   expect(nextPrompt).toContain('### BEGIN your urgency ###\nscore=0\nprioritize planning and understanding');
   expect(result.messages.at(-1)).toEqual(expect.objectContaining({
@@ -931,7 +980,7 @@ pwd
   expect(result.error).toBeNull();
   expect(onProgress).not.toHaveBeenCalled();
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content).toBe(
-    '### COMMAND ERROR ###\nBatch has 11 commands. Run at most 4 focused commands per response, or up to 10 when necessary.\n### END COMMAND ERROR ###\nNext response: Write concise What / Why / Unsure of and shell command(s), else ask QUESTION, else done SUMMARY.'
+    '### COMMAND ERROR ###\nBatch has 11 commands. Run at most 4 focused commands per response, or up to 10 when necessary.\n### END COMMAND ERROR ###\nNext response: Write concise What / Why / Unsure of and shell command(s), or run ask QUESTION, or run done MESSAGE_TO_USER.'
   );
   expect(writeChatCliCommandTraceMock.mock.calls.map((call) => call[1])).toEqual([
     'ls /',
@@ -1028,7 +1077,7 @@ hvy_version: 0.1
   const nextPrompt = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content ?? '';
   expect(nextPrompt).toContain('CMD: cat /body/summary/intro/text.txt\n### CMD RESULT ###\nHello\n### END CMD RESULT ###');
   expect(nextPrompt).toContain('Next response: Write concise What / Why / Unsure of');
-  expect(nextPrompt.trimEnd()).toMatch(/else ask QUESTION, else done SUMMARY\.$/);
+  expect(nextPrompt.trimEnd()).toMatch(/or run ask QUESTION, or run done MESSAGE_TO_USER\.$/);
   expect(nextPrompt).toContain('### OPTIONAL CONTEXT (NOT REQUIRED ACTIONS) ###\ncomponent text: /body/summary/intro');
   expect(nextPrompt).toContain('# Text Components #');
   expect(nextPrompt).toContain('files: text.txt for body, text.json for config.');
@@ -1069,6 +1118,7 @@ hvy_version: 0.1
   expect(result.error).toBeNull();
   const nextPrompt = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content ?? '';
   expect(nextPrompt).toContain('CMD: hvy add text /summary --id note "Hello"');
+  expect(nextPrompt).toContain('Current directory: /body/summary/note');
   expect(nextPrompt).toContain('### OPTIONAL CONTEXT (NOT REQUIRED ACTIONS) ###\n(none)');
   expect(nextPrompt).not.toContain('component section');
   expect(nextPrompt).not.toContain('component text: /body/summary/note');

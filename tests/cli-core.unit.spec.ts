@@ -375,6 +375,22 @@ test('hvy add can create custom components and generic xref components', async (
     .toContain('"xrefTarget": "skill-baking"');
 });
 
+test('hvy add changes cwd to the newly created component', async () => {
+  const document = createResumeCliTestDocument();
+  const session = createHvyCliSession();
+
+  const created = await executeHvyCliCommand(
+    document,
+    session,
+    'hvy add history-record /body/history/component-list-2 --id history-heavy-resume-founder'
+  );
+
+  expect(created.cwd).toBe('/body/history/component-list-2/history-heavy-resume-founder');
+  expect(session.cwd).toBe('/body/history/component-list-2/history-heavy-resume-founder');
+  expect((await executeHvyCliCommand(document, session, 'pwd')).output).toBe('/body/history/component-list-2/history-heavy-resume-founder');
+  expect((await executeHvyCliCommand(document, session, 'ls')).output).toContain('file raw.hvy [w]');
+});
+
 test('aggregate body write errors explain how to fill nested reusable components', async () => {
   const document = createResumeCliTestDocument();
   const session = createHvyCliSession();
@@ -1572,14 +1588,15 @@ test('cli lists text filters as supported commands', async () => {
   const session = createHvyCliSession();
 
   expect((await executeHvyCliCommand(document, session, 'help')).output).toContain(
-    'Commands: cd, pwd, ls, cat, head, tail, nl, find, rg, grep, sort, uniq, wc, tr, xargs, cp, rm, echo, sed, true, hvy. Ask: ask QUESTION. Finish: done SUMMARY.'
+    'Commands: cd, pwd, ls, cat, head, tail, nl, find, rg, grep, sort, uniq, wc, tr, xargs, cp, rm, echo, sed, true, hvy. Ask: ask QUESTION. Finish: done MESSAGE_TO_USER.'
   );
   expect((await executeHvyCliCommand(document, session, 'man wc')).output).toContain('wc -l [FILE...]');
   expect((await executeHvyCliCommand(document, session, 'man uniq')).output).toContain('uniq [FILE...]');
   expect((await executeHvyCliCommand(document, session, 'man tr')).output).toContain('tr SET1 SET2');
   expect((await executeHvyCliCommand(document, session, 'man ask')).output).toContain('ask QUESTION');
   expect((await executeHvyCliCommand(document, session, 'ask "Which section?"')).output).toBe('Which section?');
-  expect((await executeHvyCliCommand(document, session, 'man done')).output).toContain('done SUMMARY');
+  expect((await executeHvyCliCommand(document, session, 'man done')).output).toContain('done MESSAGE_TO_USER');
+  expect((await executeHvyCliCommand(document, session, 'done "Updated the document."')).output).toBe('Updated the document.');
 });
 
 test('hvy request_structure lists component directories and custom definitions', async () => {

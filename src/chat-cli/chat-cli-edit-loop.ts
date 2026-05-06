@@ -687,13 +687,13 @@ class ChatCliCommandFailureError extends Error {
 
 function buildChatCliLoopFormatInstructions(): string {
   return [
-    'Return concise notes plus terminal command(s).',
-    'At the top, write exactly these note labels with short answers: What you are doing, Why you are doing it, What you are unsure of.',
+    'When continuing, return concise notes plus terminal command(s).',
+    'For continuing responses, write exactly these note labels with short answers: What you are doing, Why you are doing it, What you are unsure of.',
     `Wrap commands in \`\`\`shell fences. Multiple \`\`\`shell blocks are allowed and run in order. ${CHAT_CLI_BATCH_GUIDANCE}`,
     'Text outside ```shell fences is shown as progress notes for debugging. It is not a substitute for commands.',
-    'To finish, return only: done Short summary of what changed.',
-    'To ask for requirements, NOT CLI clarification from the non-technical user, return: ask followed by the actual question.',
-    'Do not include done with commands. Run commands, inspect the result, then finish in a later response.',
+    'To finish, run `done MESSAGE_TO_USER` as the only command in the response.',
+    'To ask for requirements, NOT CLI clarification from the non-technical user, run `ask QUESTION` as the only command in the response.',
+    'Do not include done with edit/inspection commands. Run commands, inspect the result, then finish in a later response.',
   ].join('\n');
 }
 
@@ -715,10 +715,18 @@ function parseChatCliAction(response: string): { kind: 'command'; commands: stri
     return { kind: 'invalid', message: fencedCommands.message };
   }
   if (fencedCommands.commands.length > 0) {
+    const terminal = parseTerminalChatCliCommand(fencedCommands.commands);
+    if (terminal) {
+      return terminal;
+    }
     return { kind: 'command', commands: fencedCommands.commands, notes: fencedCommands.notes };
   }
   const cleaned = normalizeCommandResponse(response);
   const command = cleaned.replace(/^(?:[\w./~-]+)?\s*\$\s*/, '').trim();
+  const terminalLine = parseTerminalChatCliLine(command) ?? parseTerminalChatCliLine(lastNonEmptyLine(command));
+  if (terminalLine) {
+    return terminalLine;
+  }
   if (/^(done|finish|finished)\b/i.test(command)) {
     return { kind: 'done', summary: command.replace(/^(done|finish|finished)[:\s-]*/i, '').trim() };
   }
@@ -732,9 +740,46 @@ function parseChatCliAction(response: string): { kind: 'command'; commands: stri
       : { kind: 'invalid', message: 'Expected `ask Question for the user`.' };
   }
   if (!command || command.startsWith('```') || isLikelyProseResponse(command)) {
-    return { kind: 'invalid', message: 'Expected concise notes plus fenced ```shell commands, `ask Question`, or `done Short summary`. Notes alone are not enough.' };
+    return { kind: 'invalid', message: 'Expected concise notes plus fenced ```shell commands, `ask QUESTION`, or `done MESSAGE_TO_USER`. Notes alone are not enough.' };
   }
   return { kind: 'command', commands: [command], notes: '' };
+}
+
+function parseTerminalChatCliCommand(commands: string[]): { kind: 'done'; summary: string } | { kind: 'ask'; question: string } | { kind: 'invalid'; message: string } | null {
+  const terminalCommands = commands
+    .map((command) => parseTerminalChatCliLine(command))
+    .filter((command): command is { kind: 'done'; summary: string } | { kind: 'ask'; question: string } | { kind: 'invalid'; message: string } => !!command);
+  if (terminalCommands.length === 0) {
+    return null;
+  }
+  if (commands.length > 1) {
+    return { kind: 'invalid', message: 'Run `done MESSAGE_TO_USER` or `ask QUESTION` as the only command in the response.' };
+  }
+  return terminalCommands[0] ?? null;
+}
+
+function parseTerminalChatCliLine(command: string): { kind: 'done'; summary: string } | { kind: 'ask'; question: string } | { kind: 'invalid'; message: string } | null {
+  const line = command.trim();
+  if (/^(done|finish|finished)\b/i.test(line)) {
+    const summary = line.replace(/^(done|finish|finished)[:\s-]*/i, '').trim();
+    return summary
+      ? { kind: 'done', summary }
+      : { kind: 'invalid', message: 'Expected `done MESSAGE_TO_USER`.' };
+  }
+  if (/^ask\b/i.test(line)) {
+    const question = line.replace(/^ask[:\s-]*/i, '').trim();
+    if (/^question for the user[.?]?$/i.test(question)) {
+      return { kind: 'invalid', message: 'Replace the ask placeholder with the actual question, or run a command. Do not return `ask Question for the user` literally.' };
+    }
+    return question
+      ? { kind: 'ask', question }
+      : { kind: 'invalid', message: 'Expected `ask QUESTION`.' };
+  }
+  return null;
+}
+
+function lastNonEmptyLine(value: string): string {
+  return value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).at(-1) ?? '';
 }
 
 function extractFencedShellCommands(response: string): { kind: 'ok'; commands: string[]; notes: string } | { kind: 'invalid'; message: string } {
@@ -898,7 +943,7 @@ function formatOversizedChatCliBatchMessage(commandCount: number): string {
 }
 
 function formatNextResponseInstruction(): string {
-  return 'Next response: Write concise What / Why / Unsure of and shell command(s), else ask QUESTION, else done SUMMARY.';
+  return 'Next response: Write concise What / Why / Unsure of and shell command(s), or run ask QUESTION, or run done MESSAGE_TO_USER.';
 }
 
 function formatBatchCommandOutput(outputs: Array<{ command: string; output: string }>): string {
@@ -1029,7 +1074,7 @@ function formatIntroducedLintIssuesPrompt(issues: HvyCliDiagnosticIssue[]): stri
     '### UNRESOLVED DIAGNOSTICS INTRODUCED BY YOUR CHANGES ###',
     formatIntroducedDiagnosticsForModel(issues),
     '### END UNRESOLVED DIAGNOSTICS INTRODUCED BY YOUR CHANGES ###',
-    'Next response: Write concise What you are doing / Why you are doing it / What you are unsure of notes, then run commands to fix clear diagnostics and run hvy lint to verify them, or explain intentional warnings in done SUMMARY.',
+    'Next response: Write concise What you are doing / Why you are doing it / What you are unsure of notes, then run commands to fix clear diagnostics and run hvy lint to verify them, or explain intentional warnings with done MESSAGE_TO_USER.',
   ].join('\n');
 }
 

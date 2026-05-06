@@ -68,6 +68,6 @@ test('chat cli runs commands against the document filesystem and persists mutati
   expect(addTextResult.output).toContain('file text.txt');
   expect((await cli.run('find /body -type d -maxdepth 1')).output).toContain('/body/chores');
   expect((await cli.run('cat /chores/note/text.txt')).output).toBe('Weekly chore plan');
-  expect(cli.snapshot().cwd).toBe('/');
+  expect(cli.snapshot().cwd).toBe('/body/chores/note');
   expect(serializeDocument(document)).toContain('Weekly chore plan');
 });

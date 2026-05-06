@@ -43,6 +43,7 @@ export interface HvyDocumentCommandContext {
 export interface HvyDocumentCommandResult {
   output: string;
   mutated: boolean;
+  cwd?: string;
 }
 
 export function executeHvyDocumentCommand(ctx: HvyDocumentCommandContext, args: string[]): HvyDocumentCommandResult {
@@ -391,14 +392,19 @@ function addSection(ctx: HvyDocumentCommandContext, args: string[]): HvyDocument
   } else {
     ctx.document.sections.push(section);
   }
-  return { output: `/body/${id}`, mutated: true };
+  const resolvedParentPath = resolveVirtualPath(ctx.fs, ctx.cwd, parentPath);
+  const path = resolvedParentPath === '/' || resolvedParentPath === '/body'
+    ? `/body/${id}`
+    : `${resolvedParentPath.replace(/\/$/, '')}/${id}`;
+  return { output: path, mutated: true, cwd: path };
 }
 
 function addTextBlock(ctx: HvyDocumentCommandContext, args: string[]): HvyDocumentCommandResult {
   const [sectionPath = '', id = '', text = ''] = args;
   const section = requireSection(ctx, sectionPath, 'hvy text add');
   section.blocks.push(createBlock('text', id, decodeCliText(text)));
-  return { output: formatCreatedComponentDirectory(ctx.document, `${sectionPath.replace(/\/$/, '')}/${id}`), mutated: true };
+  const path = `${resolveVirtualPath(ctx.fs, ctx.cwd, sectionPath).replace(/\/$/, '')}/${id}`;
+  return { output: formatCreatedComponentDirectory(ctx.document, path), mutated: true, cwd: path };
 }
 
 function addTableBlock(ctx: HvyDocumentCommandContext, args: string[]): HvyDocumentCommandResult {
@@ -409,7 +415,8 @@ function addTableBlock(ctx: HvyDocumentCommandContext, args: string[]): HvyDocum
   schema.tableColumns = decodeCliText(columns);
   schema.tableRows = rows;
   section.blocks.push(createBlockFromSchema(schema, ''));
-  return { output: formatCreatedComponentDirectory(ctx.document, `${sectionPath.replace(/\/$/, '')}/${id}`), mutated: true };
+  const path = `${resolveVirtualPath(ctx.fs, ctx.cwd, sectionPath).replace(/\/$/, '')}/${id}`;
+  return { output: formatCreatedComponentDirectory(ctx.document, path), mutated: true, cwd: path };
 }
 
 function addComponentShortcut(ctx: HvyDocumentCommandContext, component: string, args: string[]): HvyDocumentCommandResult {
@@ -462,7 +469,8 @@ function addComponentToPath(ctx: HvyDocumentCommandContext, params: {
     throw new Error(`${params.commandName}: no component insertion target: ${params.parentPath}`);
   }
   target.insert(block);
-  return { output: formatCreatedComponentDirectory(ctx.document, `${resolvedParentPath.replace(/\/$/, '')}/${params.id}`), mutated: true };
+  const path = `${resolvedParentPath.replace(/\/$/, '')}/${params.id}`;
+  return { output: formatCreatedComponentDirectory(ctx.document, path), mutated: true, cwd: path };
 }
 
 function findDirectBlockInsertionTarget(
@@ -573,7 +581,8 @@ function addPluginBlock(ctx: HvyDocumentCommandContext, args: string[]): HvyDocu
     config ? parseJsonObject(config, 'hvy plugin add --config') : {},
     decodeCliText(readOption(rest, '--body') ?? '')
   ));
-  return { output: formatCreatedComponentDirectory(ctx.document, `${sectionPath.replace(/\/$/, '')}/${id}`), mutated: true };
+  const path = `${resolveVirtualPath(ctx.fs, ctx.cwd, sectionPath).replace(/\/$/, '')}/${id}`;
+  return { output: formatCreatedComponentDirectory(ctx.document, path), mutated: true, cwd: path };
 }
 
 function formatRawPluginAliasError(plugin: string): string {
@@ -609,7 +618,8 @@ function addFormPluginBlock(ctx: HvyDocumentCommandContext, args: string[]): Hvy
     ...(initialScript ? { initialScript } : {}),
     ...(submitScript ? { submitScript } : {}),
   }, body));
-  return { output: formatCreatedComponentDirectory(ctx.document, `${sectionPath.replace(/\/$/, '')}/${id}`), mutated: true };
+  const path = `${resolveVirtualPath(ctx.fs, ctx.cwd, sectionPath).replace(/\/$/, '')}/${id}`;
+  return { output: formatCreatedComponentDirectory(ctx.document, path), mutated: true, cwd: path };
 }
 
 function addDbTablePluginBlock(ctx: HvyDocumentCommandContext, args: string[]): HvyDocumentCommandResult {
@@ -621,7 +631,8 @@ function addDbTablePluginBlock(ctx: HvyDocumentCommandContext, args: string[]): 
   section.blocks.push(
     createPluginBlock(id, DB_TABLE_PLUGIN_ID, { source: 'with-file', table: decodeCliText(table), queryLimit: 10 }, decodeCliText(query))
   );
-  return { output: formatCreatedComponentDirectory(ctx.document, `${sectionPath.replace(/\/$/, '')}/${id}`), mutated: true };
+  const path = `${resolveVirtualPath(ctx.fs, ctx.cwd, sectionPath).replace(/\/$/, '')}/${id}`;
+  return { output: formatCreatedComponentDirectory(ctx.document, path), mutated: true, cwd: path };
 }
 
 function findSectionParent(ctx: HvyDocumentCommandContext, path: string): VisualSection | null {

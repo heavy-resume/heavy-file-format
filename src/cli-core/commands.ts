@@ -79,7 +79,7 @@ export function getHvyCliCommandSummary(): string {
 }
 
 export function getHvyCliPreferredCommandSummary(): string {
-  return 'Commands: hvy, nl, rg, find, sed, echo, cat, ls, pwd, cd, cp, rm, grep, sort, uniq, wc, tr, xargs, head, tail, true. Ask: ask QUESTION. Finish: done SUMMARY. Use man <command> for details.';
+  return 'Commands: hvy, nl, rg, find, sed, echo, cat, ls, pwd, cd, cp, rm, grep, sort, uniq, wc, tr, xargs, head, tail, true. Ask: ask QUESTION. Finish: done MESSAGE_TO_USER. Use man <command> for details.';
 }
 
 export async function executeHvyCliCommand(document: VisualDocument, session: HvyCliSession, input: string): Promise<HvyCliExecution> {
@@ -159,6 +159,15 @@ export function executeHvyCliCommandSync(document: VisualDocument, input: string
   if (command === 'pwd') {
     return { cwd, output: cwd, mutated: false };
   }
+  if (command === 'true') {
+    return { cwd, output: '', mutated: false };
+  }
+  if (command === 'ask') {
+    return { cwd, output: rest.join(' ').trim(), mutated: false };
+  }
+  if (command === 'done') {
+    return { cwd, output: rest.join(' ').trim(), mutated: false };
+  }
   if (command === 'ls') {
     return { cwd, output: commandLs(ctx, rest), mutated: false };
   }
@@ -200,7 +209,7 @@ export function executeHvyCliCommandSync(document: VisualDocument, input: string
     if (rest[0] === 'add-component') {
       const [component = '', ...componentRest] = rest.slice(1);
       const result = executeHvyDocumentCommand(ctx, ['add', component, ...componentRest]);
-      return { cwd, output: result.output, mutated: result.mutated };
+      return { cwd: result.cwd ?? cwd, output: result.output, mutated: result.mutated };
     }
     if (rest[0] === 'prune-xref') {
       return { cwd, output: commandPruneXref(document, rest.slice(1)), mutated: true };
@@ -218,7 +227,7 @@ export function executeHvyCliCommandSync(document: VisualDocument, input: string
       return executeHvyShellAliasCommandSync(ctx, rest[0] ?? '', rest.slice(1));
     }
     const result = executeHvyDocumentCommand(ctx, rest);
-    return { cwd, output: result.output, mutated: result.mutated };
+    return { cwd: result.cwd ?? cwd, output: result.output, mutated: result.mutated };
   }
   throw new Error(`doc.cli.run does not support command "${command}".`);
 }
@@ -258,6 +267,9 @@ async function runCommand(ctx: HvyCliCommandContext, command: string, args: stri
     return { cwd: ctx.cwd, output: '', mutated: false };
   }
   if (command === 'ask') {
+    return { cwd: ctx.cwd, output: args.join(' ').trim(), mutated: false };
+  }
+  if (command === 'done') {
     return { cwd: ctx.cwd, output: args.join(' ').trim(), mutated: false };
   }
   if (command === 'cd') {
@@ -310,7 +322,7 @@ async function runCommand(ctx: HvyCliCommandContext, command: string, args: stri
     if (args[0] === 'add-component') {
       const [component = '', ...rest] = args.slice(1);
       const result = executeHvyDocumentCommand(ctx, ['add', component, ...rest]);
-      return { cwd: ctx.cwd, output: result.output, mutated: result.mutated };
+      return { cwd: result.cwd ?? ctx.cwd, output: result.output, mutated: result.mutated };
     }
     if (args[0] === 'lint') {
       if (args[1] === '--fix') {
@@ -354,7 +366,7 @@ async function runCommand(ctx: HvyCliCommandContext, command: string, args: stri
       return { cwd: ctx.cwd, output: result.output, mutated: result.mutated };
     }
     const result = executeHvyDocumentCommand(ctx, args);
-    return { cwd: ctx.cwd, output: result.output, mutated: result.mutated };
+    return { cwd: result.cwd ?? ctx.cwd, output: result.output, mutated: result.mutated };
   }
   if (command === 'db-table' && isDbTableSqlAction(args[0] ?? '')) {
     const result = await commandDbTable(ctx.document, args);
@@ -362,7 +374,7 @@ async function runCommand(ctx: HvyCliCommandContext, command: string, args: stri
   }
   if (command === 'form' || command === 'db-table') {
     const result = executeHvyDocumentCommand(ctx, [command, ...args]);
-    return { cwd: ctx.cwd, output: result.output, mutated: result.mutated };
+    return { cwd: result.cwd ?? ctx.cwd, output: result.output, mutated: result.mutated };
   }
   throw new Error(`Unknown command "${command}". Try "help".`);
 }
@@ -372,6 +384,7 @@ function isHvyShellAliasCommand(command: string): boolean {
     'pwd',
     'true',
     'ask',
+    'done',
     'cd',
     'ls',
     'cat',
@@ -400,6 +413,9 @@ function executeHvyShellAliasCommandSync(ctx: HvyCliCommandContext, command: str
     return { cwd: ctx.cwd, output: '', mutated: false };
   }
   if (command === 'ask') {
+    return { cwd: ctx.cwd, output: args.join(' ').trim(), mutated: false };
+  }
+  if (command === 'done') {
     return { cwd: ctx.cwd, output: args.join(' ').trim(), mutated: false };
   }
   if (command === 'cd') {
@@ -2893,7 +2909,7 @@ function helpFor(topic = ''): string {
   }
 
   const help: Record<string, string> = {
-    '': 'Commands: cd, pwd, ls, cat, head, tail, nl, find, rg, grep, sort, uniq, wc, tr, xargs, cp, rm, echo, sed, true, hvy. Ask: ask QUESTION. Finish: done SUMMARY. Use man <command> for details.',
+    '': 'Commands: cd, pwd, ls, cat, head, tail, nl, find, rg, grep, sort, uniq, wc, tr, xargs, cp, rm, echo, sed, true, hvy. Ask: ask QUESTION. Finish: done MESSAGE_TO_USER. Use man <command> for details.',
     cd: formatCommandHelp('cd PATH', 'Change the current virtual directory.'),
     pwd: formatCommandHelp('pwd', 'Print the current virtual directory.'),
     ls: formatCommandHelp('ls [PATH]', 'List files and directories. Files are marked [w] writable or [ro] read-only.'),
@@ -2915,7 +2931,7 @@ function helpFor(topic = ''): string {
     sed: formatCommandHelp('sed -n START,ENDp FILE...\nsed [-i] [-E] s/search/replace/[gI] FILE...', 'Print selected line ranges, or update writable virtual files with search/replace or /pattern/d deletion.'),
     true: formatCommandHelp('true', 'Succeed without output. Useful in command chains such as COMMAND || true.'),
     ask: formatCommandHelp('ask QUESTION', 'Pause the AI CLI edit loop and ask the user for clarification.'),
-    done: formatCommandHelp('done SUMMARY', 'Finish the AI CLI edit loop with a short summary.'),
+    done: formatCommandHelp('done MESSAGE_TO_USER', 'Finish the AI CLI edit loop with the message to show the user.'),
     hvy: hvyDocumentCommandHelp(),
     'hvy add': hvyDocumentCommandHelp('add'),
     'hvy add component': hvyDocumentCommandHelp('component'),

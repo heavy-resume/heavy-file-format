@@ -1,4 +1,5 @@
 import { state, getRenderApp, handleTagEditorKeydown, applyRichAction, handleRichEditorKeydown, refreshRichToolbarState, openLinkInlineModal, closeAiEditPopover, submitAiEditRequest, handleInlineCheckboxBackspace, tagStateHelpers, findSectionByKey, createEmptyBlock, setActiveEditorBlock, recordHistory } from './_imports';
+import { completeCliInput } from '../../cli-ui/completion';
 
 export function bindKeydown(app: HTMLElement): void {
   app.addEventListener('keyup', (event) => {
@@ -34,6 +35,22 @@ export function bindKeydown(app: HTMLElement): void {
     ) {
       event.preventDefault();
       void submitAiEditRequest();
+      return;
+    }
+    if (target instanceof HTMLInputElement && target.id === 'cliInput' && event.key === 'Tab') {
+      const completed = completeCliInput({
+        document: state.document,
+        session: state.cliSession,
+        value: target.value,
+        selectionStart: target.selectionStart ?? target.value.length,
+        selectionEnd: target.selectionEnd ?? target.value.length,
+      });
+      if (completed) {
+        event.preventDefault();
+        target.value = completed.value;
+        target.setSelectionRange(completed.selectionStart, completed.selectionEnd);
+        state.cliDraft = completed.value;
+      }
       return;
     }
     if (target instanceof HTMLInputElement && handleTagEditorKeydown(event, target, tagStateHelpers)) {

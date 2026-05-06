@@ -356,11 +356,19 @@ test('hvy add can create custom components and generic xref components', async (
   expect(skill.output).toContain('file skill-record.txt');
   expect(skill.output).toContain('next:\n  hvy request_structure /body/skills/component-list-1/skill-baking --describe');
   expect(skill.output).toContain('Fill the leaf body/config files shown by request_structure.');
+  expect(skill.output).toContain('### CREATED CUSTOM COMPONENT ###');
+  expect(skill.output).toContain('Successfully created custom component skill-record.');
+  expect(skill.output).toContain('Displaying about-skill-record.txt so you know how to inspect this component again.');
+  expect(skill.output).toContain('### ABOUT COMPONENT FILE ###\nCMD: cat /body/skills/component-list-1/skill-baking/about-skill-record.txt');
+  expect(skill.output).toContain('About skill-record');
+  expect(skill.output).toContain('Reusable definition YAML:');
+  expect(skill.output).toContain('### END ABOUT COMPONENT FILE ###');
   expect((await executeHvyCliCommand(document, session, 'cat /body/skills/component-list-1/skill-baking/skill-record.json')).output)
     .toContain('"css": "margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);"');
   expect(xref.output).toContain('/body/top-skills-tools-technologies/grid-0/grid/top-skill-baking: created');
   expect(xref.output).toContain('file xref-card.json');
   expect(xref.output).toContain('file xref-card.txt');
+  expect(xref.output).not.toContain('### CREATED CUSTOM COMPONENT ###');
   expect((await executeHvyCliCommand(document, session, 'cat /body/skills/component-list-1/skill-baking/skill-record.txt')).output)
     .toContain('Baking');
   expect((await executeHvyCliCommand(document, session, 'cat /body/top-skills-tools-technologies/grid-0/grid/top-skill-baking/xref-card.json')).output)

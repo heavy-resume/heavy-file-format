@@ -513,10 +513,32 @@ function formatCreatedComponentDirectory(document: VisualDocument, componentPath
   const fillGuide = componentName && (!isBuiltinComponentName(componentName) || ['expandable', 'container', 'grid', 'component-list'].includes(baseComponent))
     ? formatCreatedComplexComponentGuide(document, fs, normalizedComponentPath)
     : '';
+  const aboutFileDisplay = componentName && !isBuiltinComponentName(componentName)
+    ? formatCreatedCustomComponentAboutDisplay(fs, normalizedComponentPath, componentName)
+    : '';
   return [
     `${normalizedComponentPath}: created`,
     ...(children ? ['files:', children] : []),
     ...(fillGuide ? ['', fillGuide] : []),
+    ...(aboutFileDisplay ? ['', aboutFileDisplay] : []),
+  ].join('\n');
+}
+
+function formatCreatedCustomComponentAboutDisplay(fs: HvyVirtualFileSystem, componentPath: string, componentName: string): string {
+  const aboutPath = `${componentPath}/about-${componentName}.txt`;
+  const aboutFile = fs.entries.get(aboutPath);
+  if (!aboutFile || aboutFile.kind !== 'file') {
+    return '';
+  }
+  return [
+    '### CREATED CUSTOM COMPONENT ###',
+    `Successfully created custom component ${componentName}.`,
+    `Displaying about-${componentName}.txt so you know how to inspect this component again.`,
+    '### END CREATED CUSTOM COMPONENT ###',
+    '### ABOUT COMPONENT FILE ###',
+    `CMD: cat ${aboutPath}`,
+    aboutFile.read().trimEnd(),
+    '### END ABOUT COMPONENT FILE ###',
   ].join('\n');
 }
 

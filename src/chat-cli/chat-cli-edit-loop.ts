@@ -832,7 +832,7 @@ function formatCommandResultForModel(result: string | { output: string; diagnost
     return formatCommandResultSection(result);
   }
   return [
-    formatCommandResultSection(result.output),
+    formatCommandResultOutput(result.output),
     '### DIAGNOSTICS CHANGES FROM THIS COMMAND ###',
     result.diagnosticsDiff?.trimEnd() || '(no changes)',
     '### END DIAGNOSTICS CHANGES FROM THIS COMMAND ###',
@@ -858,6 +858,12 @@ function formatCommandResultForModel(result: string | { output: string; diagnost
     'What is your next command?',
     '### END NEXT STEP ###',
   ].join('\n');
+}
+
+function formatCommandResultOutput(output: string): string {
+  return output.trimStart().startsWith('CMD: ') && output.includes('### CMD RESULT ###')
+    ? output.trimEnd()
+    : formatCommandResultSection(output);
 }
 
 function formatCommandResultSection(output: string): string {
@@ -899,7 +905,7 @@ function formatOversizedChatCliBatchMessage(commandCount: number): string {
 
 function formatBatchCommandOutput(outputs: Array<{ command: string; output: string }>): string {
   return outputs
-    .map((result) => [`CMD: ${result.command}`, result.output.trimEnd() || '(no output)'].join('\n'))
+    .map((result) => [`CMD: ${result.command}`, formatCommandResultSection(result.output)].join('\n'))
     .join('\n\n');
 }
 

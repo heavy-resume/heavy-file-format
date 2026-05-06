@@ -1,3 +1,0 @@
-# Quote Components #
-Markdown body rendered as a blockquote.
-Use it for quoted or called-out prose, not for nested child components.

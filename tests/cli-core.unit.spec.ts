@@ -620,7 +620,7 @@ hvy_version: 0.1
     'component-list.txt is a read-only preview until list items exist. Use hvy add ITEM_TYPE PATH --id NEW_ID'
   );
 
-  expect((await executeHvyCliCommand(document, session, 'hvy lint')).output).toContain('[component-list] /body/quality/empty-list - component-list has no items.');
+  expect((await executeHvyCliCommand(document, session, 'hvy lint')).output).toBe('No lint issues.');
   expect((await executeHvyCliCommand(document, session, 'ls /body/quality/empty-list')).output).not.toContain('dir  component-list');
   expect((await executeHvyCliCommand(document, session, 'hvy add text /body/quality/empty-list --id item-1 "First item"')).output).toContain(
     '/body/quality/empty-list/item-1: created'
@@ -1805,11 +1805,12 @@ hvy_version: 0.1
 <!--hvy: {"id":"quality"}-->
 #! Quality
 
-<!--hvy:text {"id":"empty-note"}-->
+<!--hvy:text {"id":"text-with-empty-blocks"}-->
+>
 
-<!--hvy:quote {"id":"empty-quote"}-->
+\`\`\`ts
 
-<!--hvy:code {"id":"empty-code","codeLanguage":"ts"}-->
+\`\`\`
 
 <!--hvy:xref-card {"id":"empty-ref"}-->
 
@@ -1832,58 +1833,17 @@ fields:
 
   const result = await executeHvyCliCommand(document, session, 'hvy lint');
 
-  expect(result.output).toContain('Lint issues: 12');
+  expect(result.output).toContain('Lint issues: 10');
   expect(result.output).toContain('[section] /body/empty-section - section has no content.');
-  expect(result.output).toContain('[text] /body/quality/empty-note - text body is empty.');
-  expect(result.output).toContain('[quote] /body/quality/empty-quote - quote body is empty.');
-  expect(result.output).toContain('[code] /body/quality/empty-code - code block body is empty.');
+  expect(result.output).toContain('[text] /body/quality/text-with-empty-blocks - empty Markdown quote block at line 1.');
+  expect(result.output).toContain('[text] /body/quality/text-with-empty-blocks - empty Markdown code block starting at line 3.');
   expect(result.output).toContain('[xref-card] /body/quality/empty-ref - xref-card is missing xrefTitle.');
   expect(result.output).toContain('[xref-card] /body/quality/empty-ref - xref-card is missing xrefTarget.');
   expect(result.output).toContain('[table] /body/quality/chores - table row 1 is empty.');
-  expect(result.output).toContain('[component-list] /body/quality/empty-list - component-list has no items.');
   expect(result.output).toContain('[plugin] /body/quality/broken-db - db-table plugin is missing pluginConfig.table.');
   expect(result.output).toContain('[plugin] /body/quality/missing-db - db-table pluginConfig.table references missing table/view "missing_table". Create it with hvy plugin db-table exec "CREATE VIEW missing_table AS SELECT ..."');
   expect(result.output).toContain('[plugin] /body/quality/empty-script - scripting plugin body is empty; expected Brython/Python source.');
   expect(result.output).toContain('[plugin] /body/quality/passive-form - form has a submit button but no submitScript.');
-});
-
-test('hvy lint includes placeholder context for empty reusable leaf fields', async () => {
-  const document = deserializeDocument(`---
-hvy_version: 0.1
----
-
-<!--hvy: {"id":"quality"}-->
-#! Quality
-
-<!--hvy:text {"id":"empty-note","placeholder":"Organization"}-->
-`, '.hvy');
-  const session = createHvyCliSession();
-
-  const result = await executeHvyCliCommand(document, session, 'hvy lint');
-
-  expect(result.output).toContain('[text] /body/quality/empty-note - text body is empty. (placeholder: Organization)');
-});
-
-test('hvy lint reports structural component-list paths instead of flattened aliases', async () => {
-  const document = deserializeDocument(`---
-hvy_version: 0.1
----
-
-<!--hvy: {"id":"history"}-->
-#! History
-
-<!--hvy:component-list {"id":"history-list","componentListComponent":"text"}-->
-
- <!--hvy:component-list:0 {}-->
-
-  <!--hvy:text {"id":"history-acme","placeholder":"Organization"}-->
-`, '.hvy');
-  const session = createHvyCliSession();
-
-  const result = await executeHvyCliCommand(document, session, 'hvy lint');
-
-  expect(result.output).toContain('[text] /body/history/history-list/history-acme - text body is empty. (placeholder: Organization)');
-  expect(result.output).not.toContain('/body/history/history-acme - text body is empty.');
 });
 
 test('hvy lint reports database schemas stored in header metadata', async () => {

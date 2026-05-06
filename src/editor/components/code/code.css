@@ -81,16 +81,19 @@
   color: var(--hvy-code-number);
 }
 
+.reader-code-block .hljs-title,
+.reader-code-block .hljs-title.class_,
+.reader-code-block .hljs-title.class_.inherited__,
+.reader-code-block .hljs-title.function_ {
+  color: var(--hvy-code-function);
+}
+
 .reader-code-block .hljs-keyword,
 .reader-code-block .hljs-doctag,
 .reader-code-block .hljs-template-tag,
 .reader-code-block .hljs-type,
 .reader-code-block .hljs-variable.language_,
-.reader-code-block .hljs-section,
-.reader-code-block .hljs-title,
-.reader-code-block .hljs-title.class_,
-.reader-code-block .hljs-title.class_.inherited__,
-.reader-code-block .hljs-title.function_ {
+.reader-code-block .hljs-section {
   color: var(--hvy-code-keyword);
 }
 

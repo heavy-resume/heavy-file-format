@@ -527,7 +527,6 @@ function blockSchemaToCliJson(schema: BlockSchema): JsonObject {
     description: schema.description,
     placeholder: schema.placeholder,
   };
-  if (schema.component === 'code') value.codeLanguage = schema.codeLanguage;
   if (schema.component === 'component-list') {
     value.componentListComponent = schema.componentListComponent;
     value.componentListItemLabel = schema.componentListItemLabel;
@@ -626,7 +625,6 @@ function applyBlockSchemaJson(schema: BlockSchema, component: string, value: Jso
   if (typeof value.placeholder === 'string') schema.placeholder = value.placeholder;
   if (typeof value.componentListComponent === 'string') schema.componentListComponent = value.componentListComponent;
   if (typeof value.componentListItemLabel === 'string') schema.componentListItemLabel = value.componentListItemLabel;
-  if (typeof value.codeLanguage === 'string') schema.codeLanguage = value.codeLanguage;
   if (typeof value.xrefTitle === 'string') schema.xrefTitle = value.xrefTitle;
   if (typeof value.xrefDetail === 'string') schema.xrefDetail = value.xrefDetail;
   if (typeof value.xrefTarget === 'string') schema.xrefTarget = value.xrefTarget;

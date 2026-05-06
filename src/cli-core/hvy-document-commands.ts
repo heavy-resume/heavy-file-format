@@ -156,7 +156,7 @@ export function hvyDocumentCommandHelp(topic = ''): string {
       formatHvyRecipeList(),
     ].join('\n'),
     preview: formatCommandHelp('hvy preview PATH', 'Show the raw HVY fragment for a component directory or component body file. Output is capped at 100 lines.'),
-    lint: formatCommandHelp('hvy lint [--fix]', 'Check the document for empty text, broken xrefs, empty table rows, and plugin-defined issues. --fix repairs safe structural issues such as plugin id aliases.'),
+    lint: formatCommandHelp('hvy lint [--fix]', 'Check the document for broken xrefs, empty table rows, and plugin-defined issues. --fix repairs safe structural issues such as plugin id aliases.'),
     prune_xref: formatCommandHelp('hvy prune-xref TARGET_ID', 'Remove xref-card components whose xrefTarget equals TARGET_ID.'),
     plugin: [
       ...formatPluginQuickReference(),

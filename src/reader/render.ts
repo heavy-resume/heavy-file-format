@@ -159,9 +159,6 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
 
   function renderReaderBlock(section: VisualSection, block: VisualBlock): string {
     const base = deps.resolveBaseComponent(block.schema.component);
-    if (base === 'quote' && block.text.trim().length === 0) {
-      return '';
-    }
     const blockDomId = getBlockDomId(block);
     const idAttr = blockDomId ? ` id="${deps.escapeAttr(blockDomId)}"` : '';
     const blockClass = [
@@ -178,9 +175,6 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     const blockAttrs = `${idAttr} class="${blockClass}" data-component="${deps.escapeAttr(block.schema.component)}" data-section-key="${deps.escapeAttr(section.key)}" data-block-id="${deps.escapeAttr(block.id)}" style="${deps.escapeAttr(sanitizeInlineCss(block.schema.css))}"`;
     const helpers = deps.getComponentRenderHelpers();
 
-    if (base === 'code') {
-      return `<div ${blockAttrs}>${renderCodeReader(section, block, helpers)}</div>`;
-    }
     if (base === 'plugin') {
       if (block.schema.plugin === SCRIPTING_PLUGIN_ID) {
         if (state.currentView === 'viewer') {

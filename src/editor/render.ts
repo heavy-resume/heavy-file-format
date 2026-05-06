@@ -4,7 +4,6 @@ import DOMPurify from 'dompurify';
 import hljs from 'highlight.js/lib/core';
 import type { ComponentRenderHelpers } from './component-helpers';
 import type { ComponentPlacementState } from '../types';
-import { renderCodeEditor } from './components/code/code';
 import { renderComponentListEditor } from './components/component-list/component-list';
 import { renderContainerEditor } from './components/container/container';
 import { renderExpandableEditor } from './components/expandable/expandable';
@@ -575,13 +574,13 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       if (block.text.trim().length === 0) {
         return `<div class="editor-passive-empty-text">Empty script...</div>`;
       }
-      return renderComponentFragment('code', block.text, { ...block, schema: { ...block.schema, codeLanguage: 'python' } } as VisualBlock);
+      return renderSyntaxHighlightedCode(block.text, 'python');
     }
 
-    if ((base === 'text' || base === 'quote') && block.text.trim().length === 0) {
-      const hint = block.schema.placeholder || (base === 'quote' ? 'Empty quote...' : 'Empty text...');
+    if (base === 'text' && block.text.trim().length === 0) {
+      const hint = block.schema.placeholder || 'Empty text...';
       const content = block.schema.placeholder
-        ? renderComponentFragment('text', hint, block)
+        ? renderTextFragment(hint)
         : deps.escapeHtml(hint);
       const alignStyle = block.schema.align ? ` style="text-align: ${deps.escapeAttr(block.schema.align)};"` : '';
       return `<div class="editor-passive-empty-text${block.schema.placeholder ? ' has-placeholder' : ''}"${alignStyle}>${content}</div>`;
@@ -786,9 +785,6 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const component = deps.resolveBaseComponent(block.schema.component);
     const helpers = deps.getComponentRenderHelpers();
 
-    if (component === 'code') {
-      return renderCodeEditor(sectionKey, block, helpers);
-    }
     if (component === 'plugin') {
       return renderPluginEditor(sectionKey, block, helpers);
     }
@@ -938,26 +934,27 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     `;
   }
 
-  function renderComponentFragment(componentName: string, content: string, block: VisualBlock): string {
-    const base = deps.resolveBaseComponent(componentName);
+  function renderTextFragment(content: string): string {
     const normalized = applyUnderlineSyntax(escapeRawHtml(normalizeMarkdownIndentation(normalizeMarkdownLists(content))));
-    if (base === 'quote') {
-      if (content.trim().length === 0) {
-        return '';
-      }
-      return `<blockquote>${unwrapSingleParagraph(addExternalLinkTargets(DOMPurify.sanitize(marked.parse(normalized) as string)))}</blockquote>`;
+    return unwrapSingleParagraph(decorateMarkdownCodeBlocks(addExternalLinkTargets(DOMPurify.sanitize(marked.parse(normalized) as string)), deps.escapeHtml));
+  }
+
+  function renderComponentFragment(componentName: string, content: string, block: VisualBlock): string {
+    if (componentName === 'code') {
+      return renderSyntaxHighlightedCode(content, block.schema.codeLanguage || 'text');
     }
-    if (base === 'code') {
-      const language = (block.schema.codeLanguage || 'text').trim() || 'text';
-      const highlighted = highlightCode(content, language, deps.escapeHtml);
-      return `<div class="reader-code-block">
-        <div class="reader-code-head">
-          <span class="reader-code-language">${deps.escapeHtml(language)}</span>
-        </div>
-        <pre><code class="hljs language-${deps.escapeAttr(language)}">${highlighted}</code></pre>
-      </div>`;
-    }
-    return unwrapSingleParagraph(decorateMarkdownCodeBlocks(addExternalLinkTargets(DOMPurify.sanitize(marked.parse(normalized) as string))));
+    return renderTextFragment(content);
+  }
+
+  function renderSyntaxHighlightedCode(content: string, languageName: string): string {
+    const language = languageName.trim() || 'text';
+    const highlighted = highlightCode(content, language, deps.escapeHtml);
+    return `<div class="reader-code-block">
+      <div class="reader-code-head">
+        <span class="reader-code-language">${deps.escapeHtml(language)}</span>
+      </div>
+      <pre><code class="hljs language-${deps.escapeAttr(language)}">${highlighted}</code></pre>
+    </div>`;
   }
 
   return {
@@ -1060,7 +1057,7 @@ function renderHeadingLevelOption(value: 'h1' | 'h2' | 'h3', selected: string, e
   return `<option value="${escapeAttr(value)}" ${selected === value ? 'selected' : ''}>${value.toUpperCase()}</option>`;
 }
 
-function decorateMarkdownCodeBlocks(html: string): string {
+function decorateMarkdownCodeBlocks(html: string, escapeHtml: (value: string) => string): string {
   const template = document.createElement('template');
   template.innerHTML = html;
   template.content.querySelectorAll<HTMLElement>('pre > code').forEach((code) => {
@@ -1070,6 +1067,9 @@ function decorateMarkdownCodeBlocks(html: string): string {
     }
     const languageClass = Array.from(code.classList).find((className) => className.startsWith('language-'));
     const language = languageClass ? languageClass.slice('language-'.length) : code.dataset.language || 'text';
+    const rawCode = code.textContent ?? '';
+    code.classList.add('hljs');
+    code.innerHTML = highlightCode(rawCode, language || 'text', escapeHtml);
     const wrapper = document.createElement('div');
     wrapper.className = 'reader-code-block';
     const head = document.createElement('div');

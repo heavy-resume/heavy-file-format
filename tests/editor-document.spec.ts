@@ -136,6 +136,45 @@ test('resume template spaces stacked location labels from block css', async ({ p
   expect(secondBox!.y - (firstBox!.y + firstBox!.height)).toBeGreaterThan(1);
 });
 
+test('text component fenced python code is syntax highlighted', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"code-sample"}-->
+#! Code Sample
+
+<!--hvy:text {"id":"python-example"}-->
+\`\`\`python
+def greet(name):
+    return f"hello {name}"
+\`\`\`
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  const code = page.locator('.reader-code-block code.language-python').first();
+  await expect(code).toBeVisible();
+  const defKeyword = code.locator('.hljs-keyword', { hasText: 'def' }).first();
+  const functionTitle = code.locator('.hljs-title.function_', { hasText: 'greet' }).first();
+  await expect(defKeyword).toBeVisible();
+  await expect(functionTitle).toBeVisible();
+  await expect(code.locator('.hljs-keyword', { hasText: 'return' })).toBeVisible();
+  await expect.poll(async () => ({
+    keyword: await defKeyword.evaluate((node) => getComputedStyle(node).color),
+    functionTitle: await functionTitle.evaluate((node) => getComputedStyle(node).color),
+  })).toMatchObject({
+    keyword: expect.not.stringMatching(/^$/),
+    functionTitle: expect.not.stringMatching(/^$/),
+  });
+  expect(await defKeyword.evaluate((node) => getComputedStyle(node).color)).not.toBe(
+    await functionTitle.evaluate((node) => getComputedStyle(node).color)
+  );
+});
+
 test('trailing spaces after bold labels remain editable outside bold text', async ({ page }) => {
   await page.goto('/');
 

@@ -114,7 +114,7 @@ async function lintComponentFile(document: VisualDocument, fs: HvyVirtualFileSys
   }
   const baseComponent = resolveBaseComponentFromMeta(component, document.meta);
   return [
-    ...lintCoreComponent({ fs, path: directory, component, baseComponent, config, body }),
+    ...lintCoreComponent({ path: directory, component, baseComponent, config, body }),
     ...await lintPluginComponent({ document, path: directory, textPath, jsonPath, config, body }),
   ];
 }
@@ -229,19 +229,10 @@ function lintSections(fs: HvyVirtualFileSystem): HvyCliLintIssue[] {
     });
 }
 
-function lintCoreComponent(params: { fs: HvyVirtualFileSystem; path: string; component: string; baseComponent: string; config: JsonObject; body: string }): HvyCliLintIssue[] {
+function lintCoreComponent(params: { path: string; component: string; baseComponent: string; config: JsonObject; body: string }): HvyCliLintIssue[] {
   const issues: HvyCliLintIssue[] = [];
-  if (params.baseComponent === 'text' && params.body.trim().length === 0) {
-    issues.push(createLintIssue(params, 'empty-text', formatEmptyBodyMessage('text body is empty.', params.config)));
-  }
-  if (params.baseComponent === 'quote' && params.body.trim().length === 0) {
-    issues.push(createLintIssue(params, 'empty-quote', formatEmptyBodyMessage('quote body is empty.', params.config)));
-  }
-  if (params.baseComponent === 'code' && params.body.trim().length === 0) {
-    issues.push(createLintIssue(params, 'empty-code', formatEmptyBodyMessage('code block body is empty.', params.config)));
-  }
-  if (params.baseComponent === 'component-list' && !hasChildComponent(params.fs, params.path)) {
-    issues.push(createLintIssue(params, 'empty-component-list', 'component-list has no items.'));
+  if (params.baseComponent === 'text') {
+    issues.push(...lintTextMarkdownBlocks(params));
   }
   if (params.baseComponent === 'xref-card') {
     if (readTrimmedString(params.config.xrefTitle).length === 0) {
@@ -265,14 +256,42 @@ function lintCoreComponent(params: { fs: HvyVirtualFileSystem; path: string; com
   return issues;
 }
 
-function formatEmptyBodyMessage(message: string, config: JsonObject): string {
-  const placeholder = readTrimmedString(config.placeholder);
-  const description = readTrimmedString(config.description);
-  const hints = [
-    ...(placeholder ? [`placeholder: ${placeholder}`] : []),
-    ...(description ? [`description: ${description}`] : []),
-  ];
-  return hints.length > 0 ? `${message} (${hints.join('; ')})` : message;
+function lintTextMarkdownBlocks(params: { path: string; component: string; body: string }): HvyCliLintIssue[] {
+  const lines = params.body.split(/\r?\n/);
+  const issues: HvyCliLintIssue[] = [];
+  lines.forEach((line, index) => {
+    if (/^\s*>\s*$/.test(line)) {
+      issues.push(createLintIssue(params, `empty-markdown-quote-${index + 1}`, `empty Markdown quote block at line ${index + 1}.`));
+    }
+  });
+  for (let index = 0; index < lines.length; index += 1) {
+    const fence = lines[index]?.match(/^(\s*)(`{3,}|~{3,})/);
+    if (!fence) {
+      continue;
+    }
+    const marker = fence[2]?.[0] ?? '';
+    const length = fence[2]?.length ?? 3;
+    let closeIndex = -1;
+    for (let scan = index + 1; scan < lines.length; scan += 1) {
+      if (new RegExp(`^\\s*${escapeRegExp(marker)}{${length},}\\s*$`).test(lines[scan] ?? '')) {
+        closeIndex = scan;
+        break;
+      }
+    }
+    if (closeIndex < 0) {
+      continue;
+    }
+    const content = lines.slice(index + 1, closeIndex).join('\n').trim();
+    if (content.length === 0) {
+      issues.push(createLintIssue(params, `empty-markdown-code-${index + 1}`, `empty Markdown code block starting at line ${index + 1}.`));
+    }
+    index = closeIndex;
+  }
+  return issues;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 async function lintPluginComponent(params: { document: VisualDocument; path: string; textPath: string; jsonPath: string; config: JsonObject; body: string }): Promise<HvyCliLintIssue[]> {
@@ -378,14 +397,6 @@ function getStoredPluginAlias(pluginId: string): { alias: string; pluginId: stri
     return { alias: 'scripting', pluginId: SCRIPTING_PLUGIN_ID };
   }
   return null;
-}
-
-function hasChildComponent(fs: HvyVirtualFileSystem, path: string): boolean {
-  return [...fs.entries.keys()].some((candidatePath) =>
-    candidatePath.startsWith(`${path}/`)
-    && candidatePath.endsWith('.json')
-    && !candidatePath.endsWith('/section.json')
-    && candidatePath.slice(path.length + 1).includes('/'));
 }
 
 function createLintIssue(params: { path: string; component: string }, code: string, message: string): HvyCliLintIssue {

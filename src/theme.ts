@@ -58,6 +58,7 @@ export const THEME_COLOR_NAMES: readonly string[] = [
   '--hvy-code-string',
   '--hvy-code-builtin',
   '--hvy-code-keyword',
+  '--hvy-code-function',
   '--hvy-code-number',
 ];
 
@@ -111,6 +112,7 @@ const THEME_COLOR_LABELS: Record<string, string> = {
   '--hvy-code-string': 'Code String Text',
   '--hvy-code-builtin': 'Code Built-In Function Text',
   '--hvy-code-keyword': 'Code Keyword Text',
+  '--hvy-code-function': 'Code Function and Title Text',
   '--hvy-code-number': 'Code Number and Literal Text',
 };
 

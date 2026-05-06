@@ -131,7 +131,7 @@ function readComponentListItemType(jsonPath: string, fs: ReturnType<typeof build
 }
 
 function isLikelyReusableComponent(componentName: string): boolean {
-  return !['text', 'quote', 'code', 'image', 'table', 'container', 'grid', 'expandable', 'plugin', 'component-list'].includes(componentName);
+  return !['text', 'image', 'table', 'container', 'grid', 'expandable', 'plugin', 'component-list'].includes(componentName);
 }
 
 function pluginSpecificHintLines(componentName: string, jsonPath: string, fs: ReturnType<typeof buildHvyVirtualFileSystem>): string[] {

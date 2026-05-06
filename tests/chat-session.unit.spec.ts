@@ -1018,8 +1018,8 @@ hvy_version: 0.1
 
 test('requestDocumentEditChatTurn includes diagnostics diffs after commands change issues', async () => {
   requestProxyCompletionMock
-    .mockResolvedValueOnce('echo "Filled note" > /body/summary/empty-note/text.txt')
-    .mockResolvedValueOnce('done Fixed the empty note.');
+    .mockResolvedValueOnce('echo \'{"id":"empty-ref","xrefTitle":"Summary","xrefTarget":"summary"}\' > /body/summary/empty-ref/xref-card.json')
+    .mockResolvedValueOnce('done Fixed the empty xref.');
   const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
   const document = deserializeDocument(`---
 hvy_version: 0.1
@@ -1028,33 +1028,34 @@ hvy_version: 0.1
 <!--hvy: {"id":"summary"}-->
 #! Summary
 
-<!--hvy:text {"id":"empty-note"}-->
+<!--hvy:xref-card {"id":"empty-ref"}-->
 `, '.hvy');
 
   const result = await requestDocumentEditChatTurn({
     settings,
     document,
     messages: [],
-    request: 'Fix empty text.',
+    request: 'Fix empty xref.',
   });
 
   expect(result.error).toBeNull();
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages).toEqual(expect.arrayContaining([
     expect.objectContaining({ role: 'assistant', content: expect.stringContaining('```shell\nhvy lint\n```') }),
-    expect.objectContaining({ role: 'user', content: expect.stringContaining('[text] /body/summary/empty-note - text body is empty.') }),
+    expect.objectContaining({ role: 'user', content: expect.stringContaining('[xref-card] /body/summary/empty-ref - xref-card is missing xrefTitle.') }),
   ]));
   const nextPrompt = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content ?? '';
   expect(nextPrompt).toContain('### DIAGNOSTICS CHANGES FROM THIS COMMAND ###\n');
-  expect(nextPrompt).toContain('diagnostics diff\n- [text] /body/summary/empty-note - text body is empty.');
+  expect(nextPrompt).toContain('diagnostics diff\n- [xref-card] /body/summary/empty-ref - xref-card is missing xrefTitle.');
+  expect(nextPrompt).toContain('- [xref-card] /body/summary/empty-ref - xref-card is missing xrefTarget.');
 });
 
 test('requestDocumentEditChatTurn keeps diagnostics introduced by your changes active until fixed', async () => {
   requestProxyCompletionMock
-    .mockResolvedValueOnce('hvy add text /summary empty placeholder && echo "" > /body/summary/empty/text.txt')
+    .mockResolvedValueOnce('hvy add component /body/summary empty-ref xref-card Placeholder')
     .mockResolvedValueOnce('ask Should I keep going?')
-    .mockResolvedValueOnce('done Created the note.')
-    .mockResolvedValueOnce('echo "Fixed note" > /body/summary/empty/text.txt')
-    .mockResolvedValueOnce('done Fixed the note.');
+    .mockResolvedValueOnce('done Created the xref.')
+    .mockResolvedValueOnce('echo \'{"id":"empty-ref","xrefTitle":"Summary","xrefTarget":"summary"}\' > /body/summary/empty-ref/xref-card.json')
+    .mockResolvedValueOnce('done Fixed the xref.');
   const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
   const document = deserializeDocument(`---
 hvy_version: 0.1
@@ -1068,7 +1069,7 @@ hvy_version: 0.1
     settings,
     document,
     messages: [],
-    request: 'Create a placeholder note.',
+    request: 'Create a placeholder xref.',
   });
 
   expect(firstResult.error).toBeNull();
@@ -1077,7 +1078,7 @@ hvy_version: 0.1
     content: 'Should I keep going?',
   }));
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content).toContain('### UNRESOLVED DIAGNOSTICS INTRODUCED BY YOUR CHANGES ###');
-  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content).toContain('[text] /body/summary/empty - text body is empty.');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content).toContain('[xref-card] /body/summary/empty-ref - xref-card is missing xrefTarget.');
 
   const secondResult = await requestDocumentEditChatTurn({
     settings,
@@ -1089,9 +1090,9 @@ hvy_version: 0.1
   expect(secondResult.error).toBeNull();
   expect(secondResult.messages.at(-1)).toEqual(expect.objectContaining({
     role: 'assistant',
-    content: 'Fixed the note.',
+    content: 'Fixed the xref.',
   }));
-  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.messages.at(-1)?.content).toContain('[text] /body/summary/empty - text body is empty.');
+  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.messages.at(-1)?.content).toContain('[xref-card] /body/summary/empty-ref - xref-card is missing xrefTarget.');
   expect(requestProxyCompletionMock.mock.calls[3]?.[0]?.messages.at(-1)?.content).toContain('You cannot finish yet.');
   expect(requestProxyCompletionMock.mock.calls[3]?.[0]?.messages.at(-1)?.content).toContain('Fix them before finishing');
   expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.messages.at(-1)?.content).toContain('### UNRESOLVED DIAGNOSTICS INTRODUCED BY YOUR CHANGES ###\n(none)');

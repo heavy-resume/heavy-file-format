@@ -46,7 +46,7 @@ export function isBuiltinComponent(componentName: string): boolean {
 }
 
 export function isBuiltinComponentName(componentName: string): boolean {
-  return ['text', 'quote', 'code', 'image', 'expandable', 'table', 'container', 'component-list', 'grid', 'plugin', 'xref-card'].includes(componentName);
+  return ['text', 'image', 'expandable', 'table', 'container', 'component-list', 'grid', 'plugin', 'xref-card'].includes(componentName);
 }
 
 export function renderComponentOptions(selected: string): string {

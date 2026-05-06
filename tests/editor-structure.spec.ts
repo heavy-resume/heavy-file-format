@@ -131,10 +131,23 @@ hvy_version: 0.1
 });
 
 test('component-list add prompt reveals the active edit path with staggered animation', async ({ page }) => {
+  await page.addInitScript(() => {
+    const originalScrollIntoView = Element.prototype.scrollIntoView;
+    (window as any).__hvyScrollIntoViewCalls = [];
+    Element.prototype.scrollIntoView = function scrollIntoViewSpy(options?: boolean | ScrollIntoViewOptions): void {
+      (window as any).__hvyScrollIntoViewCalls.push({
+        activeEditorBlock: this instanceof Element && this.matches('[data-active-editor-block="true"]'),
+        block: typeof options === 'object' ? options.block : undefined,
+      });
+      originalScrollIntoView.call(this, options as never);
+    };
+  });
   await page.goto('/');
 
   await page.getByRole('button', { name: 'Resume Template' }).click();
-  await page.locator('.editor-tree .editor-block-passive .ghost-label', { hasText: 'Add Skill' }).first().click();
+  const addSkill = page.locator('.editor-tree .editor-block-passive .add-ghost', { hasText: 'Add Skill' }).first();
+  await expect(addSkill).toHaveCSS('cursor', 'pointer');
+  await addSkill.click();
 
   const activatingBlocks = page.locator('.editor-block.is-activating-path');
   await expect(activatingBlocks).toHaveCount(3);
@@ -142,6 +155,9 @@ test('component-list add prompt reveals the active edit path with staggered anim
   await expect(activatingBlocks.nth(1)).toHaveAttribute('style', /--editor-activation-delay: 150ms;/);
   await expect(activatingBlocks.nth(2)).toHaveAttribute('style', /--editor-activation-delay: 300ms;/);
   await expect(page.locator('.editor-block[data-active-editor-block="true"] [contenteditable="true"]').first()).toBeVisible();
+  await expect.poll(() => page.evaluate(() => (window as any).__hvyScrollIntoViewCalls.some(
+    (call: { activeEditorBlock: boolean; block?: ScrollLogicalPosition }) => call.activeEditorBlock && call.block === 'center'
+  ))).toBe(true);
 });
 
 test('clicking a nested component-list item opens the item editor on first click', async ({ page }) => {

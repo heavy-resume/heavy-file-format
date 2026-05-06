@@ -24,6 +24,7 @@ const addComponentListItem: ActionHandler = ({ actionButton, sectionKey, blockId
   syncReusableTemplateForBlock(sectionKey, block.id);
   setActiveEditorBlock(sectionKey, newBlock.id);
   getRenderApp()();
+  centerActiveEditorBlockAfterRender(newBlock.id);
 };
 
 const addContainerBlock: ActionHandler = ({ actionButton, sectionKey, blockId }) => {
@@ -68,6 +69,18 @@ const addExpandableBlock = (kind: 'stub' | 'content'): ActionHandler => ({ actio
   setActiveEditorBlock(sectionKey, newBlock.id);
   getRenderApp()();
 };
+
+function centerActiveEditorBlockAfterRender(blockId: string): void {
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      document.querySelector<HTMLElement>(`.editor-block[data-active-block-id="${CSS.escape(blockId)}"]`)?.scrollIntoView({
+        block: 'center',
+        inline: 'nearest',
+        behavior: 'smooth',
+      });
+    });
+  });
+}
 
 export const containerActions: Record<string, ActionHandler> = {
   'add-component-list-item': addComponentListItem,

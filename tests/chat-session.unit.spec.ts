@@ -296,12 +296,12 @@ test('requestDocumentEditChatTurn runs the CLI edit loop for document chat', asy
     expect.objectContaining({ role: 'assistant', content: expect.stringContaining('```shell\nhvy lint\n```') }),
     expect.objectContaining({ role: 'user', content: '### CMD RESULT ###\nNo lint issues.\n### END CMD RESULT ###' }),
     expect.objectContaining({ role: 'assistant', content: expect.stringContaining('```shell\nhvy find-intent "Add a chore section." --max 5\n```') }),
-    expect.objectContaining({ role: 'user', content: expect.stringContaining('Next response: Write concise What you are doing / Why you are doing it / What you are unsure of notes') }),
+    expect.objectContaining({ role: 'user', content: expect.stringContaining('Next response: Write concise What / Why / Unsure of') }),
   ]);
   expect(firstMessages?.at(-1)?.role).toBe('user');
   expect(firstMessages?.at(-1)?.content).toContain('Current directory: /');
   expect(firstMessages?.at(-1)?.content).toContain('### BEGIN /scratchpad.txt  ###\nlast edited never\n\nYou havent written your plan yet.');
-  expect(firstMessages?.at(-1)?.content.trim().endsWith('then return shell command(s), ask QUESTION, or done SUMMARY.')).toBe(true);
+  expect(firstMessages?.at(-1)?.content.trim().endsWith('else ask QUESTION, else done SUMMARY.')).toBe(true);
   expect(writeChatCliUserQueryTraceMock.mock.calls[0]).toEqual(['chat-cli-test', 'Add a chore section.', undefined]);
   expect(writeChatCliCommandTraceMock.mock.calls[0]).toEqual([
     'chat-cli-test',
@@ -403,10 +403,10 @@ test('buildDocumentEditCliSimRequest exposes the exact provider-facing CLI reque
     expect.objectContaining({ role: 'assistant', content: [expect.objectContaining({ text: expect.stringContaining('```shell\nhvy lint\n```') })] }),
     expect.objectContaining({ role: 'user', content: [expect.objectContaining({ text: '### CMD RESULT ###\nNo lint issues.\n### END CMD RESULT ###' })] }),
     expect.objectContaining({ role: 'assistant', content: [expect.objectContaining({ text: expect.stringContaining('```shell\nhvy find-intent "Add a chore section." --max 5\n```') })] }),
-    expect.objectContaining({ role: 'user', content: [expect.objectContaining({ text: expect.stringContaining('Next response: Write concise What you are doing / Why you are doing it / What you are unsure of notes') })] }),
+    expect.objectContaining({ role: 'user', content: [expect.objectContaining({ text: expect.stringContaining('Next response: Write concise What / Why / Unsure of') })] }),
   ]);
   expect(payload.input.at(-1)?.content[0]?.text).toContain('### BEGIN /scratchpad.txt  ###\nlast edited never\n\nYou havent written your plan yet.');
-  expect(payload.input.at(-1)?.content[0]?.text.trim().endsWith('then return shell command(s), ask QUESTION, or done SUMMARY.')).toBe(true);
+  expect(payload.input.at(-1)?.content[0]?.text.trim().endsWith('else ask QUESTION, else done SUMMARY.')).toBe(true);
   expect(result.requestJson).toContain('```shell\\nls /\\n```');
   expect(writeChatCliCommandTraceMock).not.toHaveBeenCalled();
   expect(writeChatCliUserQueryTraceMock).not.toHaveBeenCalled();
@@ -439,7 +439,7 @@ test('advanceDocumentEditCliSimStep executes the response and prepares the next 
   }));
   expect(payload.input.at(-1)).toEqual(expect.objectContaining({
     role: 'user',
-    content: [expect.objectContaining({ text: expect.stringContaining('Next response: Write concise What you are doing / Why you are doing it / What you are unsure of notes') })],
+    content: [expect.objectContaining({ text: expect.stringContaining('Next response: Write concise What / Why / Unsure of') })],
   }));
 });
 
@@ -785,8 +785,8 @@ done Created the chore section.`)
     '$ [2/2] hvy add text /body/chores note "Weekly chore plan"',
   ]);
   const nextPrompt = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content ?? '';
-  expect(nextPrompt).toContain('Next response: Write concise What you are doing / Why you are doing it / What you are unsure of notes');
-  expect(nextPrompt.trimEnd()).toMatch(/then return shell command\(s\), ask QUESTION, or done SUMMARY\.$/);
+  expect(nextPrompt).toContain('Next response: Write concise What / Why / Unsure of');
+  expect(nextPrompt.trimEnd()).toMatch(/else ask QUESTION, else done SUMMARY\.$/);
   expect(nextPrompt).toContain('/body/chores/note');
   expect(nextPrompt).toContain('### BEGIN your urgency ###\nscore=0\nprioritize planning and understanding');
   expect(result.messages.at(-1)).toEqual(expect.objectContaining({
@@ -931,7 +931,7 @@ pwd
   expect(result.error).toBeNull();
   expect(onProgress).not.toHaveBeenCalled();
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content).toBe(
-    '### COMMAND ERROR ###\nBatch has 11 commands. Run at most 4 focused commands per response, or up to 10 when necessary.\n### END COMMAND ERROR ###\nNext response: Write concise What you are doing / Why you are doing it / What you are unsure of notes, then return shell command(s), ask QUESTION, or done SUMMARY.'
+    '### COMMAND ERROR ###\nBatch has 11 commands. Run at most 4 focused commands per response, or up to 10 when necessary.\n### END COMMAND ERROR ###\nNext response: Write concise What / Why / Unsure of and shell command(s), else ask QUESTION, else done SUMMARY.'
   );
   expect(writeChatCliCommandTraceMock.mock.calls.map((call) => call[1])).toEqual([
     'ls /',
@@ -997,8 +997,8 @@ hvy_version: 0.1
   expect(result.error).toBeNull();
   const nextPrompt = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content ?? '';
   expect(nextPrompt).toContain('CMD: cat /body/summary/intro/text.txt\n### CMD RESULT ###\nHello\n### END CMD RESULT ###');
-  expect(nextPrompt).toContain('Next response: Write concise What you are doing / Why you are doing it / What you are unsure of notes');
-  expect(nextPrompt.trimEnd()).toMatch(/then return shell command\(s\), ask QUESTION, or done SUMMARY\.$/);
+  expect(nextPrompt).toContain('Next response: Write concise What / Why / Unsure of');
+  expect(nextPrompt.trimEnd()).toMatch(/else ask QUESTION, else done SUMMARY\.$/);
   expect(nextPrompt).toContain('### OPTIONAL CONTEXT (NOT REQUIRED ACTIONS) ###\ncomponent text: /body/summary/intro');
   expect(nextPrompt).toContain('# Text Components #');
   expect(nextPrompt).toContain('files: text.txt for body, text.json for config.');

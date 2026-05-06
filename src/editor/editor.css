@@ -506,6 +506,7 @@
 .add-ghost {
   padding: 0.8rem;
   margin-top: 0.35rem;
+  cursor: pointer;
 }
 
 .compact-add-component-ghost {

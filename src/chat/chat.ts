@@ -18,6 +18,7 @@ import { getDocumentAiContext } from '../document-ai-context';
 const CHAT_STORAGE_KEY = 'hvy-chat-settings';
 const DEFAULT_OPENAI_MODEL = 'gpt-5-mini';
 const DEFAULT_ANTHROPIC_MODEL = 'claude-sonnet-4-6';
+export const DEFAULT_OPENAI_COMPACTION_MODEL = 'gpt-5.4-nano';
 export const HVY_AI_RESPONSE_FORMAT_INSTRUCTIONS = aiResponseFormatInstructions;
 
 interface RenderChatPanelDeps {
@@ -256,6 +257,29 @@ export function renderChatPanel(
                        ${chat.isSending ? 'disabled' : ''}
                      />
                    </label>
+
+                   <label class="chat-setting">
+                     <span>Compaction provider</span>
+                     <select data-field="chat-compaction-provider" aria-label="Chat compaction provider" ${chat.isSending ? 'disabled' : ''}>
+                       <option value="openai"${(chat.settings.compactionProvider ?? 'openai') === 'openai' ? ' selected' : ''}>OpenAI</option>
+                       <option value="anthropic"${chat.settings.compactionProvider === 'anthropic' ? ' selected' : ''}>Anthropic</option>
+                     </select>
+                   </label>
+
+                   <label class="chat-setting">
+                     <span>Compaction model</span>
+                     <input
+                       type="text"
+                       data-field="chat-compaction-model"
+                       value="${deps.escapeAttr(chat.settings.compactionModel ?? DEFAULT_OPENAI_COMPACTION_MODEL)}"
+                       placeholder="${deps.escapeAttr(DEFAULT_OPENAI_COMPACTION_MODEL)}"
+                       autocapitalize="off"
+                       autocomplete="off"
+                       spellcheck="false"
+                       aria-label="Chat compaction model"
+                       ${chat.isSending ? 'disabled' : ''}
+                     />
+                   </label>
                  </div>
 
                  ${chat.error ? `<div class="chat-error" role="alert">${deps.escapeHtml(chat.error)}</div>` : ''}
@@ -491,10 +515,14 @@ export function getEnvChatSettings(env: ImportMetaEnv = import.meta.env): ChatSe
   const providerDefaultModel = provider === 'anthropic' ? DEFAULT_ANTHROPIC_MODEL : DEFAULT_OPENAI_MODEL;
   const providerSpecificModel = provider === 'anthropic' ? env.VITE_ANTHROPIC_MODEL : env.VITE_OPENAI_MODEL;
   const model = firstNonEmptyString(env.VITE_HVY_CHAT_MODEL, providerSpecificModel, providerDefaultModel);
+  const compactionProvider = env.VITE_HVY_CHAT_COMPACTION_PROVIDER === 'anthropic' ? 'anthropic' : 'openai';
+  const compactionModel = firstNonEmptyString(env.VITE_HVY_CHAT_COMPACTION_MODEL, DEFAULT_OPENAI_COMPACTION_MODEL);
 
   return {
     provider,
     model,
+    compactionProvider,
+    compactionModel,
   };
 }
 
@@ -510,6 +538,10 @@ function sanitizeChatSettings(settings: Partial<ChatSettings> | null | undefined
   return {
     provider: settings?.provider === 'anthropic' ? 'anthropic' : defaults.provider,
     model: typeof settings?.model === 'string' && settings.model.trim().length > 0 ? settings.model : defaults.model,
+    compactionProvider: settings?.compactionProvider === 'anthropic' ? 'anthropic' : defaults.compactionProvider ?? 'openai',
+    compactionModel: typeof settings?.compactionModel === 'string' && settings.compactionModel.trim().length > 0
+      ? settings.compactionModel
+      : defaults.compactionModel ?? DEFAULT_OPENAI_COMPACTION_MODEL,
   };
 }
 
@@ -518,6 +550,10 @@ export function mergeChatSettings(settings: Partial<ChatSettings> | null | undef
   return {
     provider: sanitized.provider,
     model: sanitized.model.trim().length > 0 ? sanitized.model : defaults.model,
+    compactionProvider: sanitized.compactionProvider ?? defaults.compactionProvider ?? 'openai',
+    compactionModel: sanitized.compactionModel?.trim()
+      ? sanitized.compactionModel
+      : defaults.compactionModel ?? DEFAULT_OPENAI_COMPACTION_MODEL,
   };
 }
 

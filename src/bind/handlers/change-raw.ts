@@ -3,6 +3,17 @@ import { state, getRenderApp, getDefaultModelForProvider, persistChatSettings } 
 export function bindChangeRaw(app: HTMLElement): void {
   app.addEventListener('change', (event) => {
     const target = event.target as HTMLElement | null;
+    if (target instanceof HTMLSelectElement && target.dataset.field === 'chat-compaction-provider') {
+      if (state.chat.isSending || state.aiEdit.isSending) {
+        return;
+      }
+      state.chat.settings.compactionProvider = target.value === 'anthropic' ? 'anthropic' : 'openai';
+      persistChatSettings(state.chat.settings);
+      state.chat.error = null;
+      state.aiEdit.error = null;
+      getRenderApp()();
+      return;
+    }
     if (target instanceof HTMLSelectElement && (target.dataset.field === 'chat-provider' || target.dataset.field === 'ai-provider')) {
       if (state.chat.isSending || state.aiEdit.isSending) {
         return;

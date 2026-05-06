@@ -23,7 +23,7 @@ import { commitHistorySnapshot } from './history';
 import { capturePaneScroll, restorePaneScroll, centerPendingEditorSection, focusPendingSectionTitleEditor, scrollPendingEditorActivation } from './scroll';
 import { bindUi } from './bind-ui';
 import { deserializeDocumentBytes, serializeDocument } from './serialization';
-import { createDefaultChatState, renderChatPanel } from './chat/chat';
+import { DEFAULT_OPENAI_COMPACTION_MODEL, createDefaultChatState, renderChatPanel } from './chat/chat';
 import { captureChatThreadScroll, restoreChatThreadScroll } from './chat/chat-thread-ui';
 import { loadResumeState, saveResumeState } from './state-persistence';
 import { registerHostPlugin, SCRIPTING_PLUGIN_ID } from './plugins/registry';
@@ -183,6 +183,28 @@ function renderAiEditPopover(): string {
             autocomplete="off"
             spellcheck="false"
             aria-label="AI edit model"
+          />
+        </label>
+
+        <label class="chat-setting">
+          <span>Compaction provider</span>
+          <select data-field="chat-compaction-provider" aria-label="AI edit compaction provider">
+            <option value="openai"${(state.chat.settings.compactionProvider ?? 'openai') === 'openai' ? ' selected' : ''}>OpenAI</option>
+            <option value="anthropic"${state.chat.settings.compactionProvider === 'anthropic' ? ' selected' : ''}>Anthropic</option>
+          </select>
+        </label>
+
+        <label class="chat-setting">
+          <span>Compaction model</span>
+          <input
+            type="text"
+            data-field="chat-compaction-model"
+            value="${escapeAttr(state.chat.settings.compactionModel ?? DEFAULT_OPENAI_COMPACTION_MODEL)}"
+            placeholder="${escapeAttr(DEFAULT_OPENAI_COMPACTION_MODEL)}"
+            autocapitalize="off"
+            autocomplete="off"
+            spellcheck="false"
+            aria-label="AI edit compaction model"
           />
         </label>
       </div>

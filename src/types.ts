@@ -59,6 +59,8 @@ export interface ChatCliSimState {
 export interface ChatSettings {
   provider: ChatProvider;
   model: string;
+  compactionProvider?: ChatProvider;
+  compactionModel?: string;
 }
 
 export interface ChatState {

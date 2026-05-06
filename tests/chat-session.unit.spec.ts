@@ -13,6 +13,7 @@ const { requestChatCompletionMock, requestProxyCompletionMock, runQaToolLoopMock
 }));
 
 vi.mock('../src/chat/chat', () => ({
+  DEFAULT_OPENAI_COMPACTION_MODEL: 'gpt-5.4-nano',
   buildProxyChatRequest: (request: {
     messages: ChatMessage[];
     systemInstructions?: string;
@@ -534,6 +535,7 @@ test('requestDocumentEditChatTurn compacts old cli conversation after high provi
       params.onTokenUsage?.({ inputTokens: 10_500, outputTokens: 10 });
       return `echo "${'y'.repeat(12000)}"`;
     })
+    .mockResolvedValueOnce('Goal: check the document. Progress: ran x and y echo commands.')
     .mockImplementationOnce(async (params: { onTokenUsage?: (usage: { inputTokens?: number; outputTokens?: number }) => void }) => {
       params.onTokenUsage?.({ inputTokens: 7_000, outputTokens: 10 });
       return `echo "${'z'.repeat(12000)}"`;
@@ -552,16 +554,26 @@ test('requestDocumentEditChatTurn compacts old cli conversation after high provi
 
   expect(result.error).toBeNull();
   expect(JSON.stringify(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages)).toContain('x'.repeat(12000));
-  expect(JSON.stringify(requestProxyCompletionMock.mock.calls[2]?.[0]?.messages)).not.toContain('x'.repeat(12000));
-  expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.messages.length).toBeGreaterThan(0);
-  expect(JSON.stringify(requestProxyCompletionMock.mock.calls[4]?.[0]?.messages)).not.toContain('x'.repeat(12000));
-  expect(JSON.stringify(requestProxyCompletionMock.mock.calls[4]?.[0]?.messages)).not.toContain('... truncated ...');
-  expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.systemInstructions).toContain(
+  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.debugLabel).toBe('chat-cli-compaction');
+  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.settings).toEqual({
+    provider: 'openai',
+    model: 'gpt-5.4-nano',
+    compactionProvider: 'openai',
+    compactionModel: 'gpt-5.4-nano',
+  });
+  const compactedMessages = requestProxyCompletionMock.mock.calls[3]?.[0]?.messages ?? [];
+  expect(compactedMessages[0]?.content).toContain('### COMPACTED PRIOR CLI HISTORY ###');
+  expect(compactedMessages[0]?.content).toContain('Goal: check the document. Progress: ran x and y echo commands.');
+  expect(JSON.stringify(compactedMessages)).not.toContain('x'.repeat(12000));
+  expect(requestProxyCompletionMock.mock.calls[5]?.[0]?.messages.length).toBeGreaterThan(0);
+  expect(JSON.stringify(requestProxyCompletionMock.mock.calls[5]?.[0]?.messages)).not.toContain('x'.repeat(12000));
+  expect(JSON.stringify(requestProxyCompletionMock.mock.calls[5]?.[0]?.messages)).not.toContain('... truncated ...');
+  expect(requestProxyCompletionMock.mock.calls[5]?.[0]?.systemInstructions).toContain(
     'Valid commands (in order of preference):\nCommands: hvy, nl, rg, find, sed, echo, cat, ls, pwd, cd, cp, rm, grep, sort, uniq, wc, tr, xargs, head, tail, true. Ask: ask QUESTION. Finish: done MESSAGE_TO_USER.'
   );
-  expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.context).toContain('Current request:\nCheck the document with several commands.');
-  expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.context).not.toContain('scratchpad.txt:');
-  expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.messages.at(-1)?.content).toContain('### BEGIN /scratchpad.txt  ###');
+  expect(requestProxyCompletionMock.mock.calls[5]?.[0]?.context).toContain('Current request:\nCheck the document with several commands.');
+  expect(requestProxyCompletionMock.mock.calls[5]?.[0]?.context).not.toContain('scratchpad.txt:');
+  expect(requestProxyCompletionMock.mock.calls[5]?.[0]?.messages.at(-1)?.content).toContain('### BEGIN /scratchpad.txt  ###');
 });
 
 test('requestDocumentEditChatTurn returns ask commands as clarification questions', async () => {

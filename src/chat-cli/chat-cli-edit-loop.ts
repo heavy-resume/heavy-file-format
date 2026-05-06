@@ -1,4 +1,4 @@
-import { requestProxyCompletion } from '../chat/chat';
+import { DEFAULT_OPENAI_COMPACTION_MODEL, requestProxyCompletion } from '../chat/chat';
 import {
   collectHvyCliDiagnostics,
   formatHvyCliDiagnosticDiff,
@@ -44,6 +44,7 @@ export interface ChatCliInitialTurnRequest {
 
 export interface ChatCliSimTurnState extends ChatCliInitialTurnRequest {
   request: string;
+  settings?: ChatSettings;
   priorMessages: ChatMessage[];
   priorConversation: ChatMessage[];
   session: HvyCliSession;
@@ -93,6 +94,7 @@ export async function runChatCliEditLoop(params: {
     systemInstructions: initial.systemInstructions,
     traceRunId,
     request: params.request,
+    settings: params.settings,
     priorMessages: params.priorMessages ?? [],
     priorConversation: initial.priorConversation,
     session: initial.cli.session,
@@ -128,6 +130,7 @@ export async function runChatCliEditLoop(params: {
       signal: params.signal,
     });
     const advanced = await advanceChatCliTurnState({
+      settings: params.settings,
       document: params.document,
       state: turnState,
       assistantOutput: response,
@@ -215,6 +218,7 @@ export async function buildChatCliInitialProxyTurnRequest(params: {
 }
 
 export async function buildChatCliInitialSimTurnState(params: {
+  settings?: ChatSettings;
   document: VisualDocument;
   request: string;
   priorMessages?: ChatMessage[];
@@ -229,6 +233,7 @@ export async function buildChatCliInitialSimTurnState(params: {
     systemInstructions: initial.systemInstructions,
     traceRunId,
     request: params.request,
+    ...(params.settings ? { settings: params.settings } : {}),
     priorMessages: params.priorMessages ?? [],
     priorConversation: initial.priorConversation,
     session: initial.cli.session,
@@ -239,6 +244,7 @@ export async function buildChatCliInitialSimTurnState(params: {
 }
 
 export async function advanceChatCliSimTurnState(params: {
+  settings?: ChatSettings;
   document: VisualDocument;
   state: ChatCliSimTurnState;
   assistantOutput: string;
@@ -248,6 +254,7 @@ export async function advanceChatCliSimTurnState(params: {
 }
 
 async function advanceChatCliTurnState(params: {
+  settings?: ChatSettings;
   document: VisualDocument;
   state: ChatCliSimTurnState;
   assistantOutput: string;
@@ -385,8 +392,16 @@ async function advanceChatCliTurnState(params: {
       commandResultMessage
     );
   }
+  const compactedMessages = await compactChatCliConversation({
+    messages,
+    settings: params.settings ?? params.state.settings,
+    request: params.state.request,
+    lastInputTokens: params.lastInputTokens,
+    signal: params.signal,
+    traceRunId: params.traceRunId,
+  });
   return {
-    ...buildSimAdvanceResult(params, compactChatCliConversation(messages, params.lastInputTokens), commandResultMessage, mutated, urgency, diagnostics),
+    ...buildSimAdvanceResult(params, compactedMessages, commandResultMessage, mutated, urgency, diagnostics),
     batchHadSuccess,
     batchHadError,
     lastFailedCommand,
@@ -1097,27 +1112,124 @@ function isLikelyProseResponse(value: string): boolean {
   return value.includes(' ') && !CHAT_CLI_COMMAND_NAMES.has(firstWord);
 }
 
-function compactChatCliConversation(messages: ChatMessage[], lastInputTokens?: number): ChatMessage[] {
-  const shouldCompact = typeof lastInputTokens === 'number'
-    ? lastInputTokens >= CHAT_CLI_MESSAGE_HISTORY_HIGH_WATER_TOKENS
-    : countMessageChars(messages) > CHAT_CLI_MESSAGE_HISTORY_FALLBACK_HIGH_WATER_CHARS;
+async function compactChatCliConversation(params: {
+  messages: ChatMessage[];
+  settings?: ChatSettings;
+  request: string;
+  lastInputTokens?: number;
+  signal?: AbortSignal;
+  traceRunId?: string;
+}): Promise<ChatMessage[]> {
+  const shouldCompact = typeof params.lastInputTokens === 'number'
+    ? params.lastInputTokens >= CHAT_CLI_MESSAGE_HISTORY_HIGH_WATER_TOKENS
+    : countMessageChars(params.messages) > CHAT_CLI_MESSAGE_HISTORY_FALLBACK_HIGH_WATER_CHARS;
   if (!shouldCompact) {
-    return messages;
+    return params.messages;
   }
-  const compacted: ChatMessage[] = [];
+  const retained: ChatMessage[] = [];
   let totalChars = 0;
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
-    const message = messages[index];
+  for (let index = params.messages.length - 1; index >= 0; index -= 1) {
+    const message = params.messages[index];
     if (!message) {
       continue;
     }
-    if (compacted.length > 0 && totalChars + message.content.length > CHAT_CLI_MESSAGE_HISTORY_TARGET_CHARS) {
+    if (retained.length > 0 && totalChars + message.content.length > CHAT_CLI_MESSAGE_HISTORY_TARGET_CHARS) {
       break;
     }
-    compacted.unshift(message);
+    retained.unshift(message);
     totalChars += message.content.length;
   }
-  return compacted;
+  const retainedIds = new Set(retained.map((message) => message.id));
+  const compactedAway = params.messages.filter((message) => !retainedIds.has(message.id));
+  if (compactedAway.length === 0) {
+    return params.messages;
+  }
+  const summary = await summarizeCompactedChatCliMessages({
+    settings: params.settings,
+    request: params.request,
+    messages: compactedAway,
+    signal: params.signal,
+    traceRunId: params.traceRunId,
+  });
+  return [
+    {
+      id: crypto.randomUUID(),
+      role: 'user',
+      content: [
+        '### COMPACTED PRIOR CLI HISTORY ###',
+        summary.trim() || fallbackCompactedChatCliSummary(params.request, compactedAway),
+        '### END COMPACTED PRIOR CLI HISTORY ###',
+      ].join('\n'),
+    },
+    ...retained,
+  ];
+}
+
+async function summarizeCompactedChatCliMessages(params: {
+  settings?: ChatSettings;
+  request: string;
+  messages: ChatMessage[];
+  signal?: AbortSignal;
+  traceRunId?: string;
+}): Promise<string> {
+  const compactionModel = params.settings?.compactionModel?.trim() || DEFAULT_OPENAI_COMPACTION_MODEL;
+  const compactionProvider = params.settings?.compactionProvider ?? 'openai';
+  try {
+    return await requestProxyCompletion({
+      settings: {
+        provider: compactionProvider,
+        model: compactionModel,
+        compactionProvider,
+        compactionModel,
+      },
+      messages: [
+        {
+          id: crypto.randomUUID(),
+          role: 'user',
+          content: [
+            'Summarize this compacted HVY CLI document-edit history for the next model turn.',
+            'Preserve the user goal, completed edits, relevant paths/components, validation results, unresolved errors, current plan, and anything the next turn must not redo.',
+            'Write one concise factual message. Do not invent progress.',
+            '',
+            `Current request:\n${params.request}`,
+            '',
+            'Compacted chronological messages:',
+            formatMessagesForCompactionSummary(params.messages),
+          ].join('\n'),
+        },
+      ],
+      context: '',
+      responseInstructions: 'Return only the compacted summary text.',
+      systemInstructions: [
+        'You compact HVY CLI agent history for a later AI model turn.',
+        'Be concise, chronological, and factual.',
+        'Summarize goal and progress; keep actionable errors and pending work.',
+      ].join('\n'),
+      mode: 'qa',
+      debugLabel: 'chat-cli-compaction',
+      traceRunId: params.traceRunId,
+      signal: params.signal,
+    });
+  } catch {
+    return fallbackCompactedChatCliSummary(params.request, params.messages);
+  }
+}
+
+function formatMessagesForCompactionSummary(messages: ChatMessage[]): string {
+  return messages
+    .map((message, index) => {
+      const header = `${index + 1}. ${message.role}${message.error ? ' error' : ''}`;
+      return `${header}\n${message.content}`;
+    })
+    .join('\n\n');
+}
+
+function fallbackCompactedChatCliSummary(request: string, messages: ChatMessage[]): string {
+  return [
+    `Current request: ${request}`,
+    `Compacted ${messages.length} older CLI message${messages.length === 1 ? '' : 's'}.`,
+    'The detailed older command history was removed to keep the model context small.',
+  ].join('\n');
 }
 
 function countMessageChars(messages: ChatMessage[]): number {

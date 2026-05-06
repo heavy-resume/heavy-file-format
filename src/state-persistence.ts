@@ -2,6 +2,12 @@ import { deserializeDocumentBytes, serializeDocumentBytes } from './serializatio
 import type { AppState, ChatMessage, ChatSettings, VisualDocument } from './types';
 
 const RESUME_STORAGE_KEY = 'hvy-editor-resume-state-v1';
+const DEFAULT_SAVED_CHAT_SETTINGS: ChatSettings = {
+  provider: 'openai',
+  model: 'gpt-5-mini',
+  compactionProvider: 'openai',
+  compactionModel: 'gpt-5.4-nano',
+};
 
 interface ResumeStatePayload {
   version: 1;
@@ -55,9 +61,7 @@ export function loadResumeState(): LoadedResumeState | null {
       rawEditorText: typeof parsed.rawEditorText === 'string' ? parsed.rawEditorText : '',
       templateValues: isStringRecord(parsed.templateValues) ? parsed.templateValues : {},
       chat: {
-        settings: isChatSettings(parsed.chat?.settings)
-          ? parsed.chat.settings
-          : { provider: 'openai', model: 'gpt-5-mini' },
+        settings: normalizeChatSettings(parsed.chat?.settings),
         draft: typeof parsed.chat?.draft === 'string' ? parsed.chat.draft : '',
         messages: Array.isArray(parsed.chat?.messages)
           ? parsed.chat.messages.filter(isChatMessage)
@@ -152,6 +156,20 @@ function isChatSettings(value: unknown): value is ChatSettings {
     ((value as ChatSettings).provider === 'openai' || (value as ChatSettings).provider === 'anthropic') &&
     typeof (value as ChatSettings).model === 'string'
   );
+}
+
+function normalizeChatSettings(value: unknown): ChatSettings {
+  if (!isChatSettings(value)) {
+    return DEFAULT_SAVED_CHAT_SETTINGS;
+  }
+  return {
+    provider: value.provider,
+    model: value.model,
+    compactionProvider: value.compactionProvider === 'anthropic' ? 'anthropic' : DEFAULT_SAVED_CHAT_SETTINGS.compactionProvider,
+    compactionModel: typeof value.compactionModel === 'string' && value.compactionModel.trim()
+      ? value.compactionModel
+      : DEFAULT_SAVED_CHAT_SETTINGS.compactionModel,
+  };
 }
 
 function isChatMessage(value: unknown): value is ChatMessage {

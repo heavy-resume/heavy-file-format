@@ -32,6 +32,13 @@ export function bindInputBlock(app: HTMLElement): void {
       return;
     }
 
+    if (field === 'chat-compaction-model' && target instanceof HTMLInputElement) {
+      state.chat.settings.compactionModel = target.value;
+      persistChatSettings(state.chat.settings);
+      state.chat.error = null;
+      return;
+    }
+
     if (field === 'ai-model' && target instanceof HTMLInputElement) {
       state.chat.settings.model = target.value;
       persistChatSettings(state.chat.settings);

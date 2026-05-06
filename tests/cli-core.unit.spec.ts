@@ -880,6 +880,29 @@ test('cli exposes resume component-list items by stable section paths', async ()
   expect((await executeHvyCliCommand(document, session, 'cat component-list-1/tool-typescript/skill-record.txt')).output).toContain('Primary application language.');
 });
 
+test('cli shows labeled tags for resume header tables without changing directory identity', async () => {
+  const document = createResumeCliTestDocument();
+  const session = createHvyCliSession();
+
+  expect((await executeHvyCliCommand(document, session, 'ls /body/history')).output).toContain('dir  table-1 tags=[table-header]');
+  expect((await executeHvyCliCommand(document, session, 'ls /body/projects')).output).toContain('dir  table-1 tags=[table-header]');
+  expect((await executeHvyCliCommand(document, session, 'ls /body/education')).output).toContain('dir  table-1 tags=[table-header]');
+  expect((await executeHvyCliCommand(document, session, 'cat /body/history/table-1/table.json')).output).toContain('"id": ""');
+});
+
+test('cli rejects square brackets in tags because ls displays bracketed tag labels', async () => {
+  const document = createCliTestDocument();
+  const session = createHvyCliSession();
+
+  await expect(
+    executeHvyCliCommand(
+      document,
+      session,
+      'echo \'{"id":"intro","css":"margin: 0.5rem 0;","lock":false,"align":"left","slot":"center","tags":"bad[tag]","description":"","placeholder":""}\' > /body/summary/intro/text.json'
+    )
+  ).rejects.toThrow('text.json tags cannot contain [ or ]. Tags are displayed as tags=[...] by the CLI.');
+});
+
 test('cli accepts body section aliases from root and mutates resume virtual files', async () => {
   const document = createResumeCliTestDocument();
   const session = createHvyCliSession();

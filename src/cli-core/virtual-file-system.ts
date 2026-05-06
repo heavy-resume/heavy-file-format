@@ -511,7 +511,7 @@ function applySectionJson(section: VisualSection, value: JsonObject): void {
   if (typeof value.highlight === 'boolean') section.highlight = value.highlight;
   if (typeof value.contained === 'boolean') section.contained = value.contained;
   if (typeof value.css === 'string') section.css = value.css;
-  if (typeof value.tags === 'string') section.tags = value.tags;
+  if (typeof value.tags === 'string') section.tags = validateTags(value.tags, 'section.json tags');
   if (typeof value.description === 'string') section.description = value.description;
   if (value.location === 'sidebar' || value.location === 'main') section.location = value.location;
 }
@@ -621,7 +621,7 @@ function applyBlockSchemaJson(schema: BlockSchema, component: string, value: Jso
   if (typeof value.lock === 'boolean') schema.lock = value.lock;
   if (value.align === 'left' || value.align === 'center' || value.align === 'right') schema.align = value.align;
   if (value.slot === 'left' || value.slot === 'center' || value.slot === 'right') schema.slot = value.slot;
-  if (typeof value.tags === 'string') schema.tags = value.tags;
+  if (typeof value.tags === 'string') schema.tags = validateTags(value.tags, `${component}.json tags`);
   if (typeof value.description === 'string') schema.description = value.description;
   if (typeof value.placeholder === 'string') schema.placeholder = value.placeholder;
   if (typeof value.componentListComponent === 'string') schema.componentListComponent = value.componentListComponent;
@@ -806,6 +806,13 @@ function blockDirectoryName(block: VisualBlock, index: number): string {
 function componentNameFromPath(path: string): string {
   const name = path.split('/').pop() ?? 'text.json';
   return name.replace(/\.json$/i, '') || 'text';
+}
+
+function validateTags(value: string, fieldName: string): string {
+  if (/[\[\]]/.test(value)) {
+    throw new Error(`${fieldName} cannot contain [ or ]. Tags are displayed as tags=[...] by the CLI.`);
+  }
+  return value;
 }
 
 function uniqueName(name: string, entries: Map<string, HvyVirtualEntry>, parentPath: string): string {

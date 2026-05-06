@@ -6,8 +6,9 @@ ai-context: >-
   This is a resume document. Use the top-skills-tools-technologies section for featured
   xref-card links only; the skills and tools-technologies sidebar sections are the main
   reusable libraries for detailed skill/tool records. History, projects, and education
-  each have a summary table followed by a component-list of expandable records; keep
-  both in reverse chronological order with newest entries first. History should use one
+  each have a static table used only as the visible column header for the expandable
+  record rows in the following component-list; keep both in reverse chronological order
+  with newest entries first. History should use one
   expandable record per organization when roles are contiguous; put promotions, title
   changes, or adjacent date ranges at the same organization inside that single expanded
   record instead of creating duplicate organization rows. One project, degree, skill, or
@@ -385,7 +386,7 @@ component_defs:
           - component: skill-record-projects-section
 ---
 
-<!--hvy: {"id":"header","lock":true,"contained":false,"description":"Resume header with name, title, contact links, and top-level identity details."}-->
+<!--hvy: {"id":"header","lock":true,"contained":false,"tags":"identity, contact, title","description":"Resume header with name, title, contact links, and top-level identity details."}-->
 #! Info
 
  <!--hvy:text {"css":"margin-bottom: 0;","align":"center"}-->
@@ -397,7 +398,7 @@ component_defs:
  <!--hvy:text {"css":"margin: 0.5rem 0; margin-top: 1rem;","align":"center"}-->
   Senior Software Engineer
 
-<!--hvy: {"id":"summary","lock":true,"contained":true,"description":"Professional summary and compact highlights for the candidate."}-->
+<!--hvy: {"id":"summary","lock":true,"contained":true,"tags":"summary, highlights, profile","description":"Professional summary and compact highlights for the candidate."}-->
 #! Summary
 
  <!--hvy:expandable {"css":"padding:0.25rem;","expandableAlwaysShowStub":true,"expandableExpanded":false,"lock":true}-->
@@ -429,7 +430,7 @@ component_defs:
      <!--hvy:text {"css":"margin: 0;"}-->
       Enjoys turning messy, high-context problems into repeatable systems and clear documentation.
 
-<!--hvy: {"id":"locations","lock":true,"contained":true,"location":"sidebar","description":"Sidebar location preferences and current location details."}-->
+<!--hvy: {"id":"locations","lock":true,"contained":true,"location":"sidebar","tags":"sidebar, location, preferences","description":"Sidebar location preferences and current location details."}-->
 #! Locations
 
  <!--hvy:text {"css":"margin: 0.5rem 0; line-height: 1.5;","lock":true}-->
@@ -437,7 +438,7 @@ component_defs:
 
   **Target Location(s):** Remote, Seattle, San Francisco
 
-<!--hvy: {"id":"top-skills-tools-technologies","lock":true,"description":"Featured top skills, tools, and technologies shown near the top of the resume. Add only xref-cards here that point to canonical records in skills or tools-technologies."}-->
+<!--hvy: {"id":"top-skills-tools-technologies","lock":true,"tags":"featured, top-skills, xrefs","description":"Featured top skills, tools, and technologies shown near the top of the resume. Add only xref-cards here that point to canonical records in skills or tools-technologies."}-->
 #! Top Skills, Tools, and Technologies
 
  <!--hvy:grid {"css":"margin: 0.5rem 0; gap: 0.75rem;","gridColumns":2,"lock":true}-->
@@ -484,7 +485,7 @@ component_defs:
 
      <!--hvy:xref-card {"css":"margin: 0.35rem 0;","xrefTitle":"Developer Containers","xrefDetail":"Reproducible local environments","xrefTarget":"tool-developer-containers"}-->
 
-<!--hvy: {"id":"skills","lock":true,"expanded":false,"location":"sidebar","description":"Main reusable skills library containing canonical skill-record expandables. Add new skills here before adding featured or local xrefs."}-->
+<!--hvy: {"id":"skills","lock":true,"expanded":false,"location":"sidebar","tags":"sidebar, skills-library, canonical-records","description":"Main reusable skills library containing canonical skill-record expandables. Add new skills here before adding featured or local xrefs."}-->
 #! Skills
 
  <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
@@ -728,7 +729,7 @@ component_defs:
 
        <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Autonomous Agent Hackathon","xrefDetail":"08/2023 - 08/2023","xrefTarget":"project-autonomous-agent-hackathon"}-->
 
-<!--hvy: {"id":"tools-technologies","lock":true,"expanded":false,"location":"sidebar","description":"Main reusable tools and technologies library containing canonical skill-record expandables for tools/tech. Add new tools here before adding featured or local xrefs."}-->
+<!--hvy: {"id":"tools-technologies","lock":true,"expanded":false,"location":"sidebar","tags":"sidebar, tools-library, technologies, canonical-records","description":"Main reusable tools and technologies library containing canonical skill-record expandables for tools/tech. Add new tools here before adding featured or local xrefs."}-->
 #! Tools & Technologies
 
  <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
@@ -1051,13 +1052,13 @@ component_defs:
 
        <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Autonomous Agent Hackathon","xrefDetail":"08/2023 - 08/2023","xrefTarget":"project-autonomous-agent-hackathon"}-->
 
-<!--hvy: {"id":"history","lock":true,"description":"Work history section. Keep the summary table and history-record component-list in reverse chronological order with newest organizations first. Use one expandable history-record per organization when roles are contiguous; represent promotions or adjacent title/date changes inside that record instead of adding duplicate organization rows."}-->
+<!--hvy: {"id":"history","lock":true,"tags":"work-history, experience, reverse-chronological","description":"Work history section. The static table is only the visible column header for the expandable history-record rows in the following component-list; do not add data rows to that table. Keep the header table and history-record component-list in reverse chronological order with newest organizations first. Use one expandable history-record per organization when roles are contiguous; represent promotions or adjacent title/date changes inside that record instead of adding duplicate organization rows."}-->
 #! History
 
  <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
   # History
 
- <!--hvy:table {"css":"margin: 0.5rem 0 0;","tableColumns":"YEAR, ORGANIZATION, TITLE","tableShowHeader":true,"tableRows":[],"lock":true,"description":"Static summary table for history records; keep rows reverse chronological and aligned with the history-record list below. If contiguous roles share an organization, use one summary row for the combined organization record."}-->
+ <!--hvy:table {"css":"margin: 0.5rem 0 0;","tags":"table-header","tableColumns":"YEAR, ORGANIZATION, TITLE","tableShowHeader":true,"tableRows":[],"lock":true,"description":"Header-only static table for the expandable history-record rows below. Leave tableRows empty; each visible data row comes from an expandable history-record stub table in the component-list. Keep history-records reverse chronological. If contiguous roles share an organization, use one expandable organization record."}-->
 
  <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"history-record"}-->
 
@@ -1156,13 +1157,13 @@ component_defs:
 
          <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Developer Containers","xrefTarget":"tool-developer-containers"}-->
 
-<!--hvy: {"id":"projects","lock":true,"description":"Project portfolio section. Keep the summary table and project-record component-list in reverse chronological order with newest projects first; each project is one expandable project-record."}-->
+<!--hvy: {"id":"projects","lock":true,"tags":"projects, portfolio, reverse-chronological","description":"Project portfolio section. The static table is only the visible column header for the expandable project-record rows in the following component-list; do not add data rows to that table. Keep the header table and project-record component-list in reverse chronological order with newest projects first; each project is one expandable project-record."}-->
 #! Projects
 
  <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
   # Projects
 
- <!--hvy:table {"css":"margin: 0.5rem 0 0;","tableColumns":"PROJECT, DATE","tableShowHeader":true,"tableRows":[],"lock":true,"description":"Static summary table for project records; keep rows reverse chronological and aligned with the project-record list below."}-->
+ <!--hvy:table {"css":"margin: 0.5rem 0 0;","tags":"table-header","tableColumns":"PROJECT, DATE","tableShowHeader":true,"tableRows":[],"lock":true,"description":"Header-only static table for the expandable project-record rows below. Leave tableRows empty; each visible data row comes from an expandable project-record stub table in the component-list. Keep project-records reverse chronological."}-->
 
  <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"project-record"}-->
 
@@ -1310,13 +1311,13 @@ component_defs:
 
           <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"SuperAGI","xrefTarget":"tool-superagi"}-->
 
-<!--hvy: {"id":"education","lock":true,"description":"Education section. Keep the summary table and education-record component-list in reverse chronological order when multiple entries exist; each degree/program is one expandable education-record."}-->
+<!--hvy: {"id":"education","lock":true,"tags":"education, credentials, reverse-chronological","description":"Education section. The static table is only the visible column header for the expandable education-record rows in the following component-list; do not add data rows to that table. Keep the header table and education-record component-list in reverse chronological order when multiple entries exist; each degree/program is one expandable education-record."}-->
 #! Education
 
  <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
   # Education
 
- <!--hvy:table {"css":"margin: 0.5rem 0 0;","tableColumns":"DEGREE, INSTITUTION, LOCATION","tableShowHeader":true,"tableRows":[],"lock":true,"description":"Static summary table for education records; keep rows aligned with the education-record list below."}-->
+ <!--hvy:table {"css":"margin: 0.5rem 0 0;","tags":"table-header","tableColumns":"DEGREE, INSTITUTION, LOCATION","tableShowHeader":true,"tableRows":[],"lock":true,"description":"Header-only static table for the expandable education-record rows below. Leave tableRows empty; each visible data row comes from an expandable education-record stub table in the component-list. Keep education-records aligned and reverse chronological when multiple entries exist."}-->
 
  <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"education-record"}-->
 

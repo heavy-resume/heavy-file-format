@@ -526,7 +526,7 @@ function commandLs(ctx: HvyCliCommandContext, args: string[]): string {
     throw new Error(formatMissingPathMessage(ctx.fs, ctx.cwd, target, `ls: no such file or directory: ${target}`));
   }
   if (entry.kind === 'file') {
-    return withWarnings(formatEntry(entry), warnings);
+    return withWarnings(formatEntry(ctx.fs, entry), warnings);
   }
   if (recursive) {
     const entries = [...ctx.fs.entries.values()]
@@ -536,7 +536,7 @@ function commandLs(ctx: HvyCliCommandContext, args: string[]): string {
   }
   return withWarnings(
     [
-      listDirectory(ctx.fs, target).map(formatEntry).join('\n'),
+      listDirectory(ctx.fs, target).map((candidate) => formatEntry(ctx.fs, candidate)).join('\n'),
       formatLsTargetDescription(ctx, target),
     ].filter((part) => part.trim().length > 0).join('\n\n'),
     warnings
@@ -690,6 +690,11 @@ function addSessionRawDocumentFiles(fs: ReturnType<typeof buildHvyVirtualFileSys
             ...errors.map((diagnostic) => `${diagnostic.code}: ${diagnostic.message}`),
           ].join('\n'));
         }
+        const tagIssue = validateDocumentTagsForRaw(result.document);
+        if (tagIssue) {
+          session.rawWipContent = content;
+          throw new Error(['/raw.hvy did not parse; document was not changed.', '/raw.wip.hvy now contains the failed draft so you can inspect or repair it.', '', tagIssue].join('\n'));
+        }
         replaceDocumentContents(document, result.document);
         session.rawWipContent = undefined;
       },
@@ -765,6 +770,10 @@ function addRawSectionFilesForSection(
         if (!nextSection) {
           failRawSectionWrite(session, sectionPath, content, ['error: raw section fragments must parse into exactly one section.']);
         }
+        const tagIssue = validateSectionTagsForRaw(nextSection);
+        if (tagIssue) {
+          failRawSectionWrite(session, sectionPath, content, [tagIssue]);
+        }
         replaceSectionContents(section, nextSection);
         delete session.rawSectionWipContentByPath?.[`${sectionPath}/raw.wip.hvy`];
       },
@@ -831,6 +840,10 @@ function addRawComponentFilesForBlock(
             content,
             parsed.issues.map((issue) => `${issue.severity}: ${issue.message}${issue.hint ? ` ${issue.hint}` : ''}`)
           );
+        }
+        const tagIssue = validateBlockTagsForRaw(parsed.block);
+        if (tagIssue) {
+          failRawComponentWrite(session, blockPath, content, [tagIssue]);
         }
         replaceBlockContents(block, parsed.block);
         delete session.rawWipContentByPath?.[`${blockPath}/raw.wip.hvy`];
@@ -917,6 +930,50 @@ function failRawSectionWrite(session: HvyCliSession, sectionPath: string, conten
     '',
     ...issues,
   ].join('\n'));
+}
+
+function validateDocumentTagsForRaw(document: VisualDocument): string {
+  for (const section of document.sections) {
+    const issue = validateSectionTagsForRaw(section);
+    if (issue) {
+      return issue;
+    }
+  }
+  return '';
+}
+
+function validateSectionTagsForRaw(section: VisualSection): string {
+  if (/[\[\]]/.test(section.tags)) {
+    return 'error: section tags cannot contain [ or ]. Tags are displayed as tags=[...] by the CLI.';
+  }
+  for (const block of section.blocks) {
+    const issue = validateBlockTagsForRaw(block);
+    if (issue) {
+      return issue;
+    }
+  }
+  for (const child of section.children) {
+    const issue = validateSectionTagsForRaw(child);
+    if (issue) {
+      return issue;
+    }
+  }
+  return '';
+}
+
+function validateBlockTagsForRaw(block: VisualBlock): string {
+  if (/[\[\]]/.test(block.schema.tags)) {
+    return `error: ${block.schema.component} tags cannot contain [ or ]. Tags are displayed as tags=[...] by the CLI.`;
+  }
+  for (const childList of getNestedBlockLists(block)) {
+    for (const child of childList) {
+      const issue = validateBlockTagsForRaw(child);
+      if (issue) {
+        return issue;
+      }
+    }
+  }
+  return '';
 }
 
 function replaceDocumentContents(target: VisualDocument, source: VisualDocument): void {
@@ -2713,11 +2770,38 @@ function quoteIdentifier(identifier: string): string {
   return `"${identifier.replaceAll('"', '""')}"`;
 }
 
-function formatEntry(entry: HvyVirtualEntry): string {
+function formatEntry(fs: ReturnType<typeof buildHvyVirtualFileSystem>, entry: HvyVirtualEntry): string {
+  const tags = formatEntryTags(fs, entry);
   if (entry.kind === 'dir') {
-    return `dir  ${entry.path.split('/').pop() || '/'}`;
+    return `dir  ${entry.path.split('/').pop() || '/'}${tags}`;
   }
-  return `file ${entry.path.split('/').pop() || '/'} ${entry.write && entry.writable !== false ? '[w]' : '[ro]'}`;
+  return `file ${entry.path.split('/').pop() || '/'} ${entry.write && entry.writable !== false ? '[w]' : '[ro]'}${tags}`;
+}
+
+function formatEntryTags(fs: ReturnType<typeof buildHvyVirtualFileSystem>, entry: HvyVirtualEntry): string {
+  const tags = readEntryTags(fs, entry).split(',').map((tag) => tag.trim()).filter(Boolean);
+  return tags.length > 0 ? ` tags=[${tags.join(', ')}]` : '';
+}
+
+function readEntryTags(fs: ReturnType<typeof buildHvyVirtualFileSystem>, entry: HvyVirtualEntry): string {
+  if (entry.kind === 'dir') {
+    const section = readJsonFileFromVirtualPath(fs, `${entry.path}/section.json`);
+    if (typeof section?.tags === 'string') {
+      return section.tags;
+    }
+    const componentName = inferComponentNameForDirectory(fs, entry.path);
+    if (!componentName) {
+      return '';
+    }
+    const component = readJsonFileFromVirtualPath(fs, `${entry.path}/${componentName}.json`);
+    return typeof component?.tags === 'string' ? component.tags : '';
+  }
+  const filename = entry.path.split('/').pop() ?? '';
+  if (!filename.endsWith('.json') || filename === 'section.json') {
+    return '';
+  }
+  const component = readJsonFileFromVirtualPath(fs, entry.path);
+  return typeof component?.tags === 'string' ? component.tags : '';
 }
 
 export function tokenizeCommand(input: string): string[] {

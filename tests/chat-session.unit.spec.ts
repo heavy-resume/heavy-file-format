@@ -296,8 +296,6 @@ test('requestDocumentEditChatTurn runs the CLI edit loop for document chat', asy
     expect.objectContaining({ role: 'user', content: expect.stringContaining('Recipes:\n- db-and-form\n- form-backed-table\n- populate-form-options-from-db\n- scripting') }),
     expect.objectContaining({ role: 'assistant', content: expect.stringContaining('```shell\nhvy request_structure --collapse\n```') }),
     expect.objectContaining({ role: 'user', content: expect.stringContaining('Components:') }),
-    expect.objectContaining({ role: 'assistant', content: expect.stringContaining('```shell\nhvy lint\n```') }),
-    expect.objectContaining({ role: 'user', content: '### CMD RESULT ###\nNo lint issues.\n### END CMD RESULT ###' }),
     expect.objectContaining({ role: 'assistant', content: expect.stringContaining('```shell\nhvy find-intent "Add a chore section." --max 5\n```') }),
     expect.objectContaining({ role: 'user', content: expect.stringContaining('Next response: Write one concise What / Why / Unsure note block') }),
   ]);
@@ -325,12 +323,6 @@ test('requestDocumentEditChatTurn runs the CLI edit loop for document chat', asy
     undefined,
   ]);
   expect(writeChatCliCommandTraceMock.mock.calls[3]).toEqual([
-    'chat-cli-test',
-    'hvy lint',
-    'No lint issues.',
-    undefined,
-  ]);
-  expect(writeChatCliCommandTraceMock.mock.calls[4]).toEqual([
     'chat-cli-test',
     'hvy find-intent "Add a chore section." --max 5',
     expect.stringContaining('No intent matches found'),
@@ -403,8 +395,6 @@ test('buildDocumentEditCliSimRequest exposes the exact provider-facing CLI reque
     expect.objectContaining({ role: 'user', content: [expect.objectContaining({ text: expect.stringContaining('hvy insert INDEX section PARENT_PATH ID TITLE') })] }),
     expect.objectContaining({ role: 'assistant', content: [expect.objectContaining({ text: expect.stringContaining('```shell\nhvy request_structure --collapse\n```') })] }),
     expect.objectContaining({ role: 'user', content: [expect.objectContaining({ text: expect.stringContaining('Components:') })] }),
-    expect.objectContaining({ role: 'assistant', content: [expect.objectContaining({ text: expect.stringContaining('```shell\nhvy lint\n```') })] }),
-    expect.objectContaining({ role: 'user', content: [expect.objectContaining({ text: '### CMD RESULT ###\nNo lint issues.\n### END CMD RESULT ###' })] }),
     expect.objectContaining({ role: 'assistant', content: [expect.objectContaining({ text: expect.stringContaining('```shell\nhvy find-intent "Add a chore section." --max 5\n```') })] }),
     expect.objectContaining({ role: 'user', content: [expect.objectContaining({ text: expect.stringContaining('Next response: Write one concise What / Why / Unsure note block') })] }),
   ]);
@@ -435,7 +425,7 @@ test('advanceDocumentEditCliSimStep executes the response and prepares the next 
 
   expect(result.commandResultMessage.startsWith('Current directory: /')).toBe(true);
   expect(result.commandResultMessage).toContain('CMD: pwd\n### CMD RESULT ###\n/');
-  expect(result.commandResultMessage).toContain('### DIAGNOSTICS CHANGES FROM THIS COMMAND ###\n(no changes)\n### END DIAGNOSTICS CHANGES FROM THIS COMMAND ###');
+  expect(result.commandResultMessage).not.toContain('### DIAGNOSTICS CHANGES FROM THIS COMMAND ###');
   expect(result.commandResultMessage).not.toContain('sim mode');
   expect(payload.input).not.toContainEqual(expect.objectContaining({
     role: 'assistant',
@@ -1041,7 +1031,6 @@ pwd
     'ls /',
     'hvy --help',
     'hvy request_structure --collapse',
-    'hvy lint',
     'hvy find-intent "Try too many commands." --max 5',
   ]);
 });
@@ -1179,9 +1168,11 @@ hvy_version: 0.1
   expect(nextPrompt).not.toContain('component text: /body/summary/note');
 });
 
-test('requestDocumentEditChatTurn includes diagnostics diffs after commands change issues', async () => {
+test('requestDocumentEditChatTurn waits until done to report introduced diagnostics', async () => {
   requestProxyCompletionMock
-    .mockResolvedValueOnce('echo \'{"id":"empty-ref","xrefTitle":"Summary","xrefTarget":"summary"}\' > /body/summary/empty-ref/xref-card.json')
+    .mockResolvedValueOnce('hvy insert -1 xref-card /body/summary --id new-empty-ref')
+    .mockResolvedValueOnce('done Created the placeholder xref.')
+    .mockResolvedValueOnce('echo \'{"id":"new-empty-ref","xrefTitle":"Summary","xrefTarget":"summary"}\' > /body/summary/new-empty-ref/xref-card.json')
     .mockResolvedValueOnce('done Fixed the empty xref.');
   const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
   const document = deserializeDocument(`---
@@ -1202,14 +1193,12 @@ hvy_version: 0.1
   });
 
   expect(result.error).toBeNull();
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages).toEqual(expect.arrayContaining([
-    expect.objectContaining({ role: 'assistant', content: expect.stringContaining('```shell\nhvy lint\n```') }),
-    expect.objectContaining({ role: 'user', content: expect.stringContaining('[xref-card] /body/summary/empty-ref - xref-card is missing xrefTitle.') }),
-  ]));
   const nextPrompt = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content ?? '';
-  expect(nextPrompt).toContain('### DIAGNOSTICS CHANGES FROM THIS COMMAND ###\n');
-  expect(nextPrompt).toContain('diagnostics diff\n- [xref-card] /body/summary/empty-ref - xref-card is missing xrefTitle.');
-  expect(nextPrompt).toContain('- [xref-card] /body/summary/empty-ref - xref-card is missing xrefTarget.');
+  expect(nextPrompt).not.toContain('### DIAGNOSTICS CHANGES FROM THIS COMMAND ###');
+  expect(nextPrompt).not.toContain('xref-card is missing xrefTarget');
+  const donePrompt = requestProxyCompletionMock.mock.calls[2]?.[0]?.messages.at(-1)?.content ?? '';
+  expect(donePrompt).toContain('You cannot finish yet.');
+  expect(donePrompt).toContain('[xref-card] /body/summary/new-empty-ref - xref-card is missing xrefTarget.');
 });
 
 test('requestDocumentEditChatTurn keeps diagnostics introduced by your changes active until fixed', async () => {
@@ -1240,8 +1229,7 @@ hvy_version: 0.1
     role: 'assistant',
     content: 'Should I keep going?',
   }));
-  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content).toContain('### UNRESOLVED DIAGNOSTICS INTRODUCED BY YOUR CHANGES ###');
-  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content).toContain('[xref-card] /body/summary/empty-ref - xref-card is missing xrefTarget.');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content).not.toContain('### UNRESOLVED DIAGNOSTICS INTRODUCED BY YOUR CHANGES ###');
 
   const secondResult = await requestDocumentEditChatTurn({
     settings,
@@ -1255,10 +1243,9 @@ hvy_version: 0.1
     role: 'assistant',
     content: 'Fixed the xref.',
   }));
-  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.messages.at(-1)?.content).toContain('[xref-card] /body/summary/empty-ref - xref-card is missing xrefTarget.');
   expect(requestProxyCompletionMock.mock.calls[3]?.[0]?.messages.at(-1)?.content).toContain('You cannot finish yet.');
   expect(requestProxyCompletionMock.mock.calls[3]?.[0]?.messages.at(-1)?.content).toContain('Fix them before finishing');
-  expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.messages.at(-1)?.content).toContain('### UNRESOLVED DIAGNOSTICS INTRODUCED BY YOUR CHANGES ###\n(none)');
+  expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.messages.at(-1)?.content).not.toContain('### UNRESOLVED DIAGNOSTICS INTRODUCED BY YOUR CHANGES ###\n(none)');
 });
 
 test('requestDocumentEditChatTurn includes component-specific hints', async () => {
@@ -1497,7 +1484,7 @@ test('requestDocumentEditChatTurn treats prose and dangling fences as retryable 
   expect(onProgress).not.toHaveBeenCalled();
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content).toContain('Expected concise notes plus fenced ```shell commands');
   expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.messages.at(-1)?.content).toContain('Expected concise notes plus fenced ```shell commands');
-  expect(writeChatCliCommandTraceMock.mock.calls.map((call) => call[1])).toEqual(['ls /', 'hvy --help', 'hvy request_structure --collapse', 'hvy lint', 'hvy find-intent "Use command format." --max 5']);
+  expect(writeChatCliCommandTraceMock.mock.calls.map((call) => call[1])).toEqual(['ls /', 'hvy --help', 'hvy request_structure --collapse', 'hvy find-intent "Use command format." --max 5']);
 });
 
 test('requestDocumentEditChatTurn preserves multiline quoted shell commands', async () => {
@@ -1520,8 +1507,10 @@ Progress: started" > /scratchpad.txt
   });
 
   expect(result.error).toBeNull();
-  expect(writeChatCliCommandTraceMock.mock.calls[5]?.[1]).toContain('echo "Plan:\n1. Remove xref cards');
-  expect(writeChatCliCommandTraceMock.mock.calls[5]?.[2]).toBe('/scratchpad.txt: written');
+  const scratchpadWriteTrace = writeChatCliCommandTraceMock.mock.calls.find((call) =>
+    String(call[1]).includes('echo "Plan:\n1. Remove xref cards')
+  );
+  expect(scratchpadWriteTrace?.[2]).toBe('/scratchpad.txt: written');
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content).toContain('Plan:\n1. Remove xref cards');
 });
 
@@ -1583,7 +1572,7 @@ cat missing.txt
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content).toContain(
     'No such file: /missing.txt'
   );
-  expect(writeChatCliCommandTraceMock.mock.calls[5]?.[1]).toBe('not-a-command\nhvy\ncat missing.txt');
+  expect(writeChatCliCommandTraceMock.mock.calls.map((call) => call[1])).toContain('not-a-command\nhvy\ncat missing.txt');
 });
 
 test('requestDocumentEditChatTurn treats unclosed shell quotes as retryable command errors', async () => {
@@ -1633,7 +1622,6 @@ test('requestDocumentEditChatTurn stops after repeated cli command errors', asyn
     expect.stringContaining('dir  body'),
     expect.stringContaining('hvy insert INDEX section PARENT_PATH ID TITLE'),
     expect.stringContaining('Components:'),
-    'No lint issues.',
     expect.any(String),
     'Unknown command "not-a-command". Try "help".',
     'hvy: expected request_structure, find-intent, cheatsheet, recipe, lint, insert, plugin, remove, prune-xref, preview, or help',
@@ -1669,7 +1657,6 @@ test('requestDocumentEditChatTurn warns when scratchpad writes exceed the note l
     'ls /',
     'hvy --help',
     'hvy request_structure --collapse',
-    'hvy lint',
     `hvy find-intent "Use a very long scratchpad." --max 5`,
     `echo "${'x'.repeat(900)}" > scratchpad.txt`,
     'pwd',

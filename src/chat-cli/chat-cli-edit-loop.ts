@@ -1,7 +1,6 @@
 import { DEFAULT_OPENAI_COMPACTION_MODEL, requestProxyCompletion } from '../chat/chat';
 import {
   collectHvyCliDiagnostics,
-  formatHvyCliDiagnosticDiff,
   formatHvyCliDiagnosticIssueLine,
   type HvyCliDiagnosticIssue,
 } from '../cli-core/document-diagnostics';
@@ -163,26 +162,6 @@ export async function runChatCliEditLoop(params: {
       continue;
     }
     if (advanced.terminalSummary) {
-      const diagnostics = await collectHvyCliDiagnostics(params.document);
-      turnState = { ...turnState, diagnostics };
-      const existingIntroducedIssues = getIntroducedDiagnostics(params.document);
-      syncIntroducedDiagnostics(params.document, diagnostics);
-      const introducedIssues = getIntroducedDiagnostics(params.document);
-      const blockingIntroducedIssues = introducedIssues.length > 0 ? introducedIssues : existingIntroducedIssues;
-      if (blockingIntroducedIssues.length > 0) {
-        turnState = {
-          ...turnState,
-          messages: [
-            ...turnState.messages,
-            {
-              id: crypto.randomUUID(),
-              role: 'user',
-              content: formatIntroducedLintIssuesPrompt(blockingIntroducedIssues),
-            },
-          ],
-        };
-        continue;
-      }
       params.onProgress?.('Finished CLI edit loop.');
       return {
         summary: advanced.terminalSummary || `Finished after ${step + 1} step${step === 0 ? '' : 's'}.`,
@@ -278,6 +257,28 @@ async function advanceChatCliTurnState(params: {
     return buildSimAdvanceResult(params, messages, action.message, false, params.state.urgency, params.state.diagnostics);
   }
   if (action.kind === 'done') {
+    const diagnostics = await collectHvyCliDiagnostics(params.document);
+    recordIntroducedDiagnostics(params.document, params.state.diagnostics, diagnostics);
+    syncIntroducedDiagnostics(params.document, diagnostics);
+    const introducedIssues = getIntroducedDiagnostics(params.document);
+    if (introducedIssues.length > 0) {
+      const message = formatIntroducedLintIssuesPrompt(introducedIssues);
+      return buildSimAdvanceResult(
+        params,
+        [
+          ...params.state.messages,
+          {
+            id: crypto.randomUUID(),
+            role: 'user' as const,
+            content: message,
+          },
+        ],
+        message,
+        false,
+        params.state.urgency,
+        params.state.diagnostics
+      );
+    }
     return {
       ...params.state,
       terminalSummary: action.summary,
@@ -360,17 +361,9 @@ async function advanceChatCliTurnState(params: {
     }
   }
   const urgency = batchHadSuccess ? updateChatCliUrgency(params.state.urgency, mutated) : params.state.urgency;
-  let diagnostics = params.state.diagnostics;
-  const diagnosticsDiff = await updateDiagnosticsState(params.document, params.state.diagnostics, mutated, (nextIssues) => {
-    const diff = formatHvyCliDiagnosticDiff(params.state.diagnostics, nextIssues);
-    diagnostics = nextIssues;
-    return diff;
-  });
   const commandResultMessage = formatCommandResultForModel({
     output: formatBatchCommandOutput(commandOutputs),
-    diagnosticsDiff,
     hints: formatBatchHints(commandHints),
-    introducedDiagnostics: formatIntroducedDiagnosticsForModel(getIntroducedDiagnostics(params.document)),
     scratchpad: formatScratchpadForModel(cli.snapshot()),
     urgency: formatChatCliUrgency(urgency),
     cwd: cli.snapshot().cwd,
@@ -401,7 +394,7 @@ async function advanceChatCliTurnState(params: {
     traceRunId: params.traceRunId,
   });
   return {
-    ...buildSimAdvanceResult(params, compactedMessages, commandResultMessage, mutated, urgency, diagnostics),
+    ...buildSimAdvanceResult(params, compactedMessages, commandResultMessage, mutated, urgency, params.state.diagnostics),
     batchHadSuccess,
     batchHadError,
     lastFailedCommand,
@@ -494,10 +487,6 @@ async function buildChatCliInitialTurnRequest(params: {
     'hvy request_structure --collapse'
   );
   const diagnostics = await collectHvyCliDiagnostics(params.document);
-  const initialLint = await runInitialCommand(
-    'I am checking for existing document issues before making changes so new problems can be distinguished from old ones.',
-    'hvy lint'
-  );
   const initialIntent = await runInitialCommand(
     'I am searching for the most likely locations related to the user request so I can avoid blind grep-and-edit behavior.',
     `hvy find-intent ${quoteChatCliShellArg(params.request)} --max 5`
@@ -513,7 +502,6 @@ async function buildChatCliInitialTurnRequest(params: {
     initialRootListing,
     initialHvyHelp,
     initialStructure,
-    initialLint,
     initialIntent,
     ...(initialSelectedPreview ? [initialSelectedPreview] : []),
   ];
@@ -524,7 +512,7 @@ async function buildChatCliInitialTurnRequest(params: {
       role: 'user',
       content: params.request,
     },
-    ...formatInitialChatCliCommandMessages(initialOutputs, cli.snapshot(), getIntroducedDiagnostics(params.document)),
+    ...formatInitialChatCliCommandMessages(initialOutputs, cli.snapshot()),
   ];
   const context = buildChatCliLoopContext(
     cli.snapshot(),
@@ -624,8 +612,7 @@ function isAddLikeSelectedComponentRequest(request: string): boolean {
 
 function formatInitialChatCliCommandMessages(
   outputs: Array<{ command: string; output: string; explanation?: string }>,
-  snapshot: ReturnType<ReturnType<typeof createChatCliInterface>['snapshot']>,
-  introducedDiagnostics: HvyCliDiagnosticIssue[]
+  snapshot: ReturnType<ReturnType<typeof createChatCliInterface>['snapshot']>
 ): ChatMessage[] {
   return outputs.flatMap((output, index) => [
     {
@@ -640,7 +627,6 @@ function formatInitialChatCliCommandMessages(
         ? formatCommandResultForModel({
             output: output.output,
             hints: '',
-            introducedDiagnostics: formatIntroducedDiagnosticsForModel(introducedDiagnostics),
             scratchpad: formatScratchpadForModel(snapshot),
             urgency: formatChatCliUrgency(0),
             cwd: snapshot.cwd,
@@ -890,22 +876,16 @@ function normalizeAssistantNotes(notes: string): string {
     .trim();
 }
 
-function formatCommandResultForModel(result: string | { output: string; diagnosticsDiff?: string; hints?: string; introducedDiagnostics?: string; scratchpad?: string; urgency?: string; cwd?: string }): string {
+function formatCommandResultForModel(result: string | { output: string; hints?: string; scratchpad?: string; urgency?: string; cwd?: string }): string {
   if (typeof result === 'string') {
     return formatCommandResultSection(result);
   }
   return [
     `Current directory: ${result.cwd || '/'}`,
     formatCommandResultOutput(result.output),
-    '### DIAGNOSTICS CHANGES FROM THIS COMMAND ###',
-    result.diagnosticsDiff?.trimEnd() || '(no changes)',
-    '### END DIAGNOSTICS CHANGES FROM THIS COMMAND ###',
     '### OPTIONAL CONTEXT (NOT REQUIRED ACTIONS) ###',
     result.hints?.trimEnd() || '(none)',
     '### END OPTIONAL CONTEXT ###',
-    '### UNRESOLVED DIAGNOSTICS INTRODUCED BY YOUR CHANGES ###',
-    result.introducedDiagnostics?.trimEnd() || '(none)',
-    '### END UNRESOLVED DIAGNOSTICS INTRODUCED BY YOUR CHANGES ###',
     '### BEGIN /scratchpad.txt  ###',
     result.scratchpad?.trimEnd() || '(empty)',
     '### END /scratchpad.txt ###',
@@ -1094,19 +1074,6 @@ function formatIntroducedLintIssuesPrompt(issues: HvyCliDiagnosticIssue[]): stri
   ].join('\n');
 }
 
-async function updateDiagnosticsState(
-  document: VisualDocument,
-  previousIssues: HvyCliDiagnosticIssue[],
-  mutated: boolean,
-  update: (issues: HvyCliDiagnosticIssue[]) => string
-): Promise<string> {
-  const nextIssues = await collectHvyCliDiagnostics(document);
-  if (mutated) {
-    recordIntroducedDiagnostics(document, previousIssues, nextIssues);
-  }
-  syncIntroducedDiagnostics(document, nextIssues);
-  return update(nextIssues);
-}
 
 function isLikelyProseResponse(value: string): boolean {
   const firstWord = value.split(/\s+/, 1)[0]?.replace(/^\$\s*/, '') ?? '';

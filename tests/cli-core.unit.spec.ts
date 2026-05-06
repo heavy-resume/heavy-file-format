@@ -175,7 +175,7 @@ test('hvy append-child section explains when the parent path is a component', as
     session,
     'hvy append-child section /body/top-skills-tools-technologies/grid-0 top-skill-baking Baking'
   )).rejects.toThrow(
-    'hvy section add: sections must be added at the root level or on top of an existing section. /body/top-skills-tools-technologies/grid-0 is a component, not a section.'
+    'hvy append-child section: sections must be added at the root level or on top of an existing section. /body/top-skills-tools-technologies/grid-0 is a component, not a section.'
   );
 
   await expect(executeHvyCliCommand(
@@ -183,7 +183,7 @@ test('hvy append-child section explains when the parent path is a component', as
     session,
     'hvy append-child section /body/skills/component-list-1 skill-baking Baking'
   )).rejects.toThrow(
-    'hvy section add: sections must be added at the root level or on top of an existing section. /body/skills/component-list-1 is a component, not a section.'
+    'hvy append-child section: sections must be added at the root level or on top of an existing section. /body/skills/component-list-1 is a component, not a section.'
   );
 });
 
@@ -2038,14 +2038,13 @@ fields:
   expect((await executeHvyCliCommand(document, session, 'hvy lint')).output).not.toContain('is a CLI command alias');
 });
 
-test('hvy plugin db-table help leads with show and keeps add as an alias', async () => {
+test('hvy plugin db-table help shows canonical creation and operations', async () => {
   const document = createCliTestDocument();
   const session = createHvyCliSession();
 
   const help = (await executeHvyCliCommand(document, session, 'man hvy plugin db-table')).output;
 
   expect(help).toContain('hvy append-child plugin db-table SECTION_PATH ID TABLE [QUERY]');
-  expect(help).toContain('Legacy alias: db-table show/add');
   expect(help).toContain('hvy plugin db-table query [SELECT/WITH SQL]');
   expect(help).toContain('hvy plugin db-table exec [CREATE / INSERT / UPDATE / DELETE / DROP SQL]');
   expect(help).toContain('pluginConfig.table must be a table/view name, not SQL.');

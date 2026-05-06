@@ -442,7 +442,7 @@ registerHvyCliPluginCommands({
   addCommands: [
     {
       command: 'hvy append-child plugin db-table SECTION_PATH ID TABLE [QUERY]',
-      description: 'Create a dynamic table plugin that shows a backend table/view with an optional SQL query. Legacy alias: db-table show/add.',
+      description: 'Create a dynamic table plugin that shows a backend table/view with an optional SQL query.',
     },
   ],
   operationCommands: [

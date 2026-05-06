@@ -212,7 +212,7 @@ theme:
   <!--hvy:expandable:content {}-->
 
    <!--hvy:text {}-->
-    Document mutation namespace. Supports section add, text add, static table add, and plugin add for creating HVY structure without hand-editing directives.
+    Document mutation namespace. Use hvy append-child to add new children at the end of an ordered parent, or hvy prepend-child to add them at the beginning. Supports sections, text, static tables, plugins, and registered reusable component types without hand-editing directives.
 
  <!--hvy:expandable {}-->
   <!--hvy:expandable:stub {}-->
@@ -223,7 +223,7 @@ theme:
   <!--hvy:expandable:content {}-->
 
    <!--hvy:text {}-->
-    Form plugin shortcut under hvy add plugin form. Adds a dev.heavy.form plugin with field specs like Label:type:required:Option A|Option B. The positional SUBMIT_BUTTON_LABEL sets pluginConfig.submitLabel; --on-submit-script sets pluginConfig.submitScript.
+    Form plugin creation uses hvy append-child plugin form SECTION_PATH ID SUBMIT_BUTTON_LABEL FIELD_LABEL:TYPE... Adds a dev.heavy.form plugin with field specs like Label:type:required:Option A|Option B. The positional SUBMIT_BUTTON_LABEL sets pluginConfig.submitLabel; --on-submit-script sets pluginConfig.submitScript.
 
  <!--hvy:expandable {}-->
   <!--hvy:expandable:stub {}-->
@@ -234,4 +234,4 @@ theme:
   <!--hvy:expandable:content {}-->
 
    <!--hvy:text {}-->
-    Dynamic table plugin shortcut under hvy add plugin db-table. Creates a data-backed table component that shows a table or view from the current SQL backend with optional display query text. Use hvy plugin db-table for query, exec, tables, and schema commands.
+    Dynamic table plugin creation uses hvy append-child plugin db-table SECTION_PATH ID TABLE [QUERY]. Creates a data-backed table component that shows a table or view from the current SQL backend with optional display query text. Use hvy plugin db-table for query, exec, tables, and schema commands.

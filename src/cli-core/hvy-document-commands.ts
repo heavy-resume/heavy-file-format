@@ -69,37 +69,13 @@ export function executeHvyDocumentCommand(ctx: HvyDocumentCommandContext, args: 
   if (resource === 'append-child' || resource === 'prepend-child') {
     return executeHvyChildCommand(ctx, resource === 'prepend-child' ? 'prepend' : 'append', action, rest);
   }
-  if (resource === 'plugin' && action === 'form' && rest[0] === 'add') {
-    return addFormPluginBlock(ctx, rest.slice(1));
-  }
-  if (resource === 'plugin' && action === 'db-table' && (rest[0] === 'show' || rest[0] === 'add')) {
-    return addDbTablePluginBlock(ctx, rest.slice(1));
-  }
   if (resource === 'plugin' && action === 'scripting' && rest[0] === 'tool') {
     return { output: formatScriptingToolHelp(rest[1] ?? ''), mutated: false };
   }
   if (resource === 'plugin' && action && rest.length === 0 && getHvyCliPluginCommandRegistration(action)) {
     return { output: hvyDocumentCommandHelp(`plugin ${action}`), mutated: false };
   }
-  if (resource === 'section' && action === 'add') {
-    return addSection(ctx, rest);
-  }
-  if (resource === 'text' && action === 'add') {
-    return addTextBlock(ctx, rest);
-  }
-  if (resource === 'table' && action === 'add') {
-    return addTableBlock(ctx, rest);
-  }
-  if (resource === 'plugin' && action === 'add') {
-    return addPluginBlock(ctx, rest);
-  }
-  if (resource === 'form' && action === 'add') {
-    return addFormPluginBlock(ctx, rest);
-  }
-  if (resource === 'db-table' && (action === 'show' || action === 'add')) {
-    return addDbTablePluginBlock(ctx, rest);
-  }
-  throw new Error('hvy: expected request_structure, find-intent, cheatsheet, recipe, lint, append-child, prepend-child, plugin, section add, text add, table add, form add, or db-table show');
+  throw new Error('hvy: expected request_structure, find-intent, cheatsheet, recipe, lint, append-child, prepend-child, plugin, remove, prune-xref, preview, or help');
 }
 
 export function hvyDocumentCommandHelp(topic = ''): string {
@@ -155,9 +131,9 @@ export function hvyDocumentCommandHelp(topic = ''): string {
       formatCommandHelp('hvy prepend-child plugin SECTION_PATH ID PLUGIN_ID [--config JSON] [--body TEXT]', 'Prepend a raw plugin block by canonical plugin id, such as dev.heavy.form or dev.heavy.db-table.'),
     ].join('\n'),
     component: formatCommandHelp('hvy append-child component PARENT_PATH ID COMPONENT [TEXT] [--config JSON]', 'Append a builtin or custom component to a section, component-list, grid, container, or expandable content path.'),
-    section: formatCommandHelp('hvy append-child section PARENT_PATH ID TITLE', 'Add a section under /body or under another section. Alias: hvy section add.'),
-    text: formatCommandHelp('hvy append-child text SECTION_PATH ID TEXT', 'Append a text block to a section. Alias: hvy text add.'),
-    table: formatCommandHelp('hvy append-child table SECTION_PATH ID COLUMNS [--row CSV]...', 'Append a static table block. Columns and rows use comma-separated text. Alias: hvy table add.'),
+    section: formatCommandHelp('hvy append-child section PARENT_PATH ID TITLE', 'Add a section under /body or under another section.'),
+    text: formatCommandHelp('hvy append-child text SECTION_PATH ID TEXT', 'Append a text block to a section.'),
+    table: formatCommandHelp('hvy append-child table SECTION_PATH ID COLUMNS [--row CSV]...', 'Append a static table block. Columns and rows use comma-separated text.'),
     request_structure: formatCommandHelp('hvy request_structure [COMPONENT_ID] [--collapse] [--describe]', 'Show the component directory map, optionally scoped to one component id. --collapse compacts anonymous leaf components. --describe includes non-empty descriptions.'),
     'find-intent': formatCommandHelp('hvy find-intent QUERY [--max N] [--json]', 'Search semantic section/component descriptions, ids, paths, roles, and previews for likely edit locations.'),
     cheatsheet: [
@@ -176,8 +152,8 @@ export function hvyDocumentCommandHelp(topic = ''): string {
       ...getHvyCliPluginCommandRegistrations().map((plugin) => formatCommandHelp(plugin.helpTopic, `Show ${plugin.name} plugin commands.`)),
       formatCommandHelp('hvy append-child plugin SECTION_PATH ID PLUGIN_ID [--config JSON] [--body TEXT]', 'Create a raw plugin block by canonical plugin id, such as dev.heavy.form or dev.heavy.db-table.'),
     ].join('\n'),
-    form: formatLegacyPluginAliasHelp('form', 'form add'),
-    'db-table': formatLegacyPluginAliasHelp('db-table', 'db-table'),
+    form: hvyDocumentCommandHelp('plugin form'),
+    'db-table': hvyDocumentCommandHelp('plugin db-table'),
   };
   return help[normalizedTopic] ?? help[''];
 }
@@ -206,22 +182,6 @@ function formatRecipe(name: string): string {
 
 function formatCommandHelp(command: string, description: string): string {
   return `${command}\n  ${description}`;
-}
-
-function formatLegacyPluginAliasHelp(pluginName: string, legacyPrefix: string): string {
-  const plugin = getHvyCliPluginCommandRegistration(pluginName);
-  if (!plugin) {
-    return '';
-  }
-  const commands = [...plugin.addCommands, ...plugin.operationCommands, ...(plugin.helpCommands ?? [])]
-    .map((entry) => ({
-      command: entry.command
-        .replace(/^hvy append-child plugin form\b/, 'form add')
-        .replace(/^hvy append-child plugin db-table\b/, 'db-table show')
-        .replace(/^hvy plugin db-table\b/, legacyPrefix),
-      description: entry.description,
-    }));
-  return commands.map((entry) => formatCommandHelp(entry.command, entry.description)).join('\n');
 }
 
 function formatRegisteredPluginHelp(plugin: {
@@ -397,7 +357,7 @@ function executeHvyChildCommand(ctx: HvyDocumentCommandContext, position: HvyChi
 function addSection(ctx: HvyDocumentCommandContext, args: string[], position: HvyChildPosition = 'append'): HvyDocumentCommandResult {
   const [parentPath = '', id = '', title = ''] = args;
   if (!parentPath || !id || !title) {
-    throw new Error('hvy section add: expected PARENT_PATH ID TITLE');
+    throw new Error('hvy append-child section: expected PARENT_PATH ID TITLE');
   }
   const parent = findSectionParent(ctx, parentPath);
   const section = createSection(id, decodeCliText(title), parent ? parent.level + 1 : 1);
@@ -415,7 +375,7 @@ function addSection(ctx: HvyDocumentCommandContext, args: string[], position: Hv
 
 function addTextBlock(ctx: HvyDocumentCommandContext, args: string[], position: HvyChildPosition = 'append'): HvyDocumentCommandResult {
   const [sectionPath = '', id = '', text = ''] = args;
-  const section = requireSection(ctx, sectionPath, 'hvy text add');
+  const section = requireSection(ctx, sectionPath, 'hvy append-child text');
   insertChild(section.blocks, createBlock('text', id, decodeCliText(text)), position);
   const path = `${resolveVirtualPath(ctx.fs, ctx.cwd, sectionPath).replace(/\/$/, '')}/${id}`;
   return { output: formatCreatedComponentDirectory(ctx.document, path, resolveVirtualPath(ctx.fs, ctx.cwd, sectionPath), null, 'blocks'), mutated: true, cwd: path };
@@ -423,7 +383,7 @@ function addTextBlock(ctx: HvyDocumentCommandContext, args: string[], position: 
 
 function addTableBlock(ctx: HvyDocumentCommandContext, args: string[], position: HvyChildPosition = 'append'): HvyDocumentCommandResult {
   const [sectionPath = '', id = '', columns = '', ...rest] = args;
-  const section = requireSection(ctx, sectionPath, 'hvy table add');
+  const section = requireSection(ctx, sectionPath, 'hvy append-child table');
   const rows = readRepeatedOption(rest, '--row').map((row) => ({ cells: splitCsvText(decodeCliText(row)) }));
   const schema = createSchema('table', id);
   schema.tableColumns = decodeCliText(columns);
@@ -657,10 +617,10 @@ function formatRawPluginAliasError(plugin: string): string {
 
 function addFormPluginBlock(ctx: HvyDocumentCommandContext, args: string[], position: HvyChildPosition = 'append'): HvyDocumentCommandResult {
   const [sectionPath = '', id = '', submitLabel = '', ...rest] = args;
-  const section = requireSection(ctx, sectionPath, 'form add');
+  const section = requireSection(ctx, sectionPath, 'hvy append-child plugin form');
   const fieldSpecs = rest.filter((arg, index) => !isOptionArg(arg) && !isOptionValue(rest, index));
   if (!id || !submitLabel || fieldSpecs.length === 0) {
-    throw new Error('form add: expected SECTION_PATH ID SUBMIT_BUTTON_LABEL FIELD...');
+    throw new Error('hvy append-child plugin form: expected SECTION_PATH ID SUBMIT_BUTTON_LABEL FIELD...');
   }
   const scripts = Object.fromEntries(readRepeatedOptionPairs(rest, '--script').map(([name, source]) => [name, decodeCliText(source)]));
   const initialScript = readOption(rest, '--initial-script');
@@ -681,9 +641,9 @@ function addFormPluginBlock(ctx: HvyDocumentCommandContext, args: string[], posi
 
 function addDbTablePluginBlock(ctx: HvyDocumentCommandContext, args: string[], position: HvyChildPosition = 'append'): HvyDocumentCommandResult {
   const [sectionPath = '', id = '', table = '', query = ''] = args;
-  const section = requireSection(ctx, sectionPath, 'db-table show');
+  const section = requireSection(ctx, sectionPath, 'hvy append-child plugin db-table');
   if (!id || !table) {
-    throw new Error('db-table show: expected SECTION_PATH ID TABLE [QUERY]');
+    throw new Error('hvy append-child plugin db-table: expected SECTION_PATH ID TABLE [QUERY]');
   }
   insertChild(
     section.blocks,
@@ -706,10 +666,10 @@ function findSectionParent(ctx: HvyDocumentCommandContext, path: string): Visual
   const componentPath = findNearestComponentPath(ctx, resolved);
   if (componentPath) {
     throw new Error(
-      `hvy section add: sections must be added at the root level or on top of an existing section. ${path} is a component, not a section.`
+      `hvy append-child section: sections must be added at the root level or on top of an existing section. ${path} is a component, not a section.`
     );
   }
-  return requireSection(ctx, path, 'hvy section add');
+  return requireSection(ctx, path, 'hvy append-child section');
 }
 
 function requireSection(ctx: HvyDocumentCommandContext, path: string, command: string): VisualSection {

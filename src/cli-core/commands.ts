@@ -358,14 +358,6 @@ async function runCommand(ctx: HvyCliCommandContext, command: string, args: stri
     const result = executeHvyDocumentCommand(ctx, args);
     return { cwd: result.cwd ?? ctx.cwd, output: result.output, mutated: result.mutated };
   }
-  if (command === 'db-table' && isDbTableSqlAction(args[0] ?? '')) {
-    const result = await commandDbTable(ctx.document, args);
-    return { cwd: ctx.cwd, output: result.output, mutated: result.mutated };
-  }
-  if (command === 'form' || command === 'db-table') {
-    const result = executeHvyDocumentCommand(ctx, [command, ...args]);
-    return { cwd: result.cwd ?? ctx.cwd, output: result.output, mutated: result.mutated };
-  }
   throw new Error(`Unknown command "${command}". Try "help".`);
 }
 
@@ -2931,15 +2923,10 @@ function helpFor(topic = ''): string {
     'hvy recipe': hvyDocumentCommandHelp('recipe'),
     'hvy lint': formatCommandHelp('hvy lint [--fix]', 'Check the document for likely component issues. --fix repairs safe structural issues such as plugin id aliases.'),
     'hvy prune-xref': hvyDocumentCommandHelp('prune_xref'),
-    section: hvyDocumentCommandHelp('section'),
-    text: hvyDocumentCommandHelp('text'),
-    table: hvyDocumentCommandHelp('table'),
     plugin: hvyDocumentCommandHelp('plugin'),
     'hvy plugin': hvyDocumentCommandHelp('plugin'),
     'hvy plugin form': hvyDocumentCommandHelp('plugin form'),
     'hvy plugin db-table': hvyDocumentCommandHelp('plugin db-table'),
-    form: `${hvyDocumentCommandHelp('plugin form')}\nLegacy alias: form add ...`,
-    'db-table': `${hvyDocumentCommandHelp('plugin db-table')}\nLegacy aliases: db-table show/query/exec/tables/schema ...`,
   };
   return help[normalizedTopic] ?? help[''];
 }

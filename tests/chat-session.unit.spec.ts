@@ -1499,7 +1499,7 @@ test('requestDocumentEditChatTurn lets the cli edit loop retry after command err
 
   expect(result.error).toBeNull();
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content).toContain(
-    'CMD: hvy\n### CMD RESULT ###\nhvy: expected request_structure, find-intent, cheatsheet, recipe, lint, append-child, prepend-child, plugin, section add, text add, table add, form add, or db-table show\n### END CMD RESULT ###'
+    'CMD: hvy\n### CMD RESULT ###\nhvy: expected request_structure, find-intent, cheatsheet, recipe, lint, append-child, prepend-child, plugin, remove, prune-xref, preview, or help\n### END CMD RESULT ###'
   );
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content).toContain(
     '### BEGIN your urgency ###\nscore=0\nprioritize planning and understanding'
@@ -1507,9 +1507,9 @@ test('requestDocumentEditChatTurn lets the cli edit loop retry after command err
   expect(writeChatCliCommandTraceMock).toHaveBeenCalledWith(
     'chat-cli-test',
     'hvy',
-    'hvy: expected request_structure, find-intent, cheatsheet, recipe, lint, append-child, prepend-child, plugin, section add, text add, table add, form add, or db-table show',
+    'hvy: expected request_structure, find-intent, cheatsheet, recipe, lint, append-child, prepend-child, plugin, remove, prune-xref, preview, or help',
     undefined,
-    expect.stringContaining('CMD: hvy\n### CMD RESULT ###\nhvy: expected request_structure, find-intent, cheatsheet, recipe, lint, append-child, prepend-child, plugin, section add, text add, table add, form add, or db-table show\n### END CMD RESULT ###')
+    expect.stringContaining('CMD: hvy\n### CMD RESULT ###\nhvy: expected request_structure, find-intent, cheatsheet, recipe, lint, append-child, prepend-child, plugin, remove, prune-xref, preview, or help\n### END CMD RESULT ###')
   );
 });
 
@@ -1593,7 +1593,7 @@ test('requestDocumentEditChatTurn stops after repeated cli command errors', asyn
     'No lint issues.',
     expect.any(String),
     'Unknown command "not-a-command". Try "help".',
-    'hvy: expected request_structure, find-intent, cheatsheet, recipe, lint, append-child, prepend-child, plugin, section add, text add, table add, form add, or db-table show',
+    'hvy: expected request_structure, find-intent, cheatsheet, recipe, lint, append-child, prepend-child, plugin, remove, prune-xref, preview, or help',
     expect.stringContaining('No such file: /missing.txt'),
   ]);
 });

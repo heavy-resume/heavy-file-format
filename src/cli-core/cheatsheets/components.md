@@ -3,18 +3,18 @@
 Create a top-level section:
 
 ```shell
-hvy add section / my-section "My Section"
+hvy append-child section / my-section "My Section"
 ```
 
 Create builtin or custom components:
 
 ```shell
-hvy add text /my-section intro "Visible text"
-hvy add table /my-section table-id "Name,Status" --row "Dishes,Active"
-hvy add skill-record /body/skills/component-list-1 --id skill-new "New Skill"
+hvy append-child text /my-section intro "Visible text"
+hvy append-child table /my-section table-id "Name,Status" --row "Dishes,Active"
+hvy append-child skill-record /body/skills/component-list-1 --id skill-new "New Skill"
 ```
 
-`hvy add table` creates a static document table: rows and columns are stored directly on the component. Use `hvy add plugin db-table` for dynamic data-backed rows.
+`hvy append-child table` creates a static document table: rows and columns are stored directly on the component. Use `hvy append-child plugin db-table` for dynamic data-backed rows.
 
 Inspect before editing:
 

@@ -166,14 +166,14 @@ fields:
   }
 });
 
-test('hvy add section explains when the parent path is a component', async () => {
+test('hvy append-child section explains when the parent path is a component', async () => {
   const document = createResumeCliTestDocument();
   const session = createHvyCliSession();
 
   await expect(executeHvyCliCommand(
     document,
     session,
-    'hvy add section /body/top-skills-tools-technologies/grid-0 top-skill-baking Baking'
+    'hvy append-child section /body/top-skills-tools-technologies/grid-0 top-skill-baking Baking'
   )).rejects.toThrow(
     'hvy section add: sections must be added at the root level or on top of an existing section. /body/top-skills-tools-technologies/grid-0 is a component, not a section.'
   );
@@ -181,18 +181,18 @@ test('hvy add section explains when the parent path is a component', async () =>
   await expect(executeHvyCliCommand(
     document,
     session,
-    'hvy add section /body/skills/component-list-1 skill-baking Baking'
+    'hvy append-child section /body/skills/component-list-1 skill-baking Baking'
   )).rejects.toThrow(
     'hvy section add: sections must be added at the root level or on top of an existing section. /body/skills/component-list-1 is a component, not a section.'
   );
 });
 
-test('hvy add section treats slash as the document body root', async () => {
+test('hvy append-child section treats slash as the document body root', async () => {
   const document = createCliTestDocument();
   const session = createHvyCliSession();
 
-  const section = await executeHvyCliCommand(document, session, 'hvy add section / chore-chart "Chore Chart"');
-  const table = await executeHvyCliCommand(document, session, 'hvy add table /chore-chart chores "chore,description,dad,mom,child" --row "Dishes,Wash dishes after dinner, , ,"');
+  const section = await executeHvyCliCommand(document, session, 'hvy append-child section / chore-chart "Chore Chart"');
+  const table = await executeHvyCliCommand(document, session, 'hvy append-child table /chore-chart chores "chore,description,dad,mom,child" --row "Dishes,Wash dishes after dinner, , ,"');
 
   expect(section.output).toBe('/body/chore-chart');
   expect(table.output).toContain('/body/chore-chart/chores: created');
@@ -306,10 +306,10 @@ component_defs:
     command: 'cat /body/history/history-list/history-acme/history-record.txt',
   });
 
-  expect(componentListHint).toContain('optional list-item creation: hvy add history-record /body/history/history-list --id NEW_ID');
+  expect(componentListHint).toContain('optional list-item creation: hvy append-child history-record /body/history/history-list --id NEW_ID');
   expect(componentListHint).toContain('after creating a list item, inspect it with hvy request_structure NEW_ID --describe');
   expect(componentListHint).toContain('component-list.txt is a text preview of existing leaf items');
-  expect(reusableItemHint).toContain('optional blank sibling creation: hvy add history-record /body/history/history-list --id NEW_ID');
+  expect(reusableItemHint).toContain('optional blank sibling creation: hvy append-child history-record /body/history/history-list --id NEW_ID');
   expect(reusableItemHint).toContain('after creating a reusable component, inspect it with hvy request_structure NEW_ID --describe');
   expect(componentListHint).not.toContain('"Title"');
   expect(reusableItemHint).not.toContain('"Title"');
@@ -326,34 +326,36 @@ test('ls shows section descriptions from section metadata', async () => {
   expect(result.output).toContain('description: Featured top skills, tools, and technologies shown near the top of the resume.');
 });
 
-test('hvy help add explains component creation commands', async () => {
+test('hvy help append-child explains component creation commands', async () => {
   const document = createResumeCliTestDocument();
   const session = createHvyCliSession();
 
-  const result = await executeHvyCliCommand(document, session, 'hvy help add');
+  const result = await executeHvyCliCommand(document, session, 'hvy help append-child');
 
-  expect(result.output).toContain('hvy add component PARENT_PATH ID COMPONENT [TEXT] [--config JSON]');
-  expect(result.output).toContain('hvy add COMPONENT PARENT_PATH --id ID [TEXT] [--config JSON]');
+  expect(result.output).toContain('hvy append-child component PARENT_PATH ID COMPONENT [TEXT] [--config JSON]');
+  expect(result.output).toContain('hvy append-child COMPONENT PARENT_PATH --id ID [TEXT] [--config JSON]');
 });
 
-test('hvy add can create custom components and generic xref components', async () => {
+test('hvy append-child can create custom components and generic xref components', async () => {
   const document = createResumeCliTestDocument();
   const session = createHvyCliSession();
 
   const skill = await executeHvyCliCommand(
     document,
     session,
-    'hvy add skill-record /body/skills/component-list-1 --id skill-baking Baking'
+    'hvy append-child skill-record /body/skills/component-list-1 --id skill-baking Baking'
   );
   const xref = await executeHvyCliCommand(
     document,
     session,
-    'hvy add component /body/top-skills-tools-technologies/grid-0/grid top-skill-baking xref-card Baking --config \'{"xrefTarget":"skill-baking"}\''
+    'hvy append-child component /body/top-skills-tools-technologies/grid-0/grid top-skill-baking xref-card Baking --config \'{"xrefTarget":"skill-baking"}\''
   );
 
   expect(skill.output).toContain('/body/skills/component-list-1/skill-baking: created');
   expect(skill.output).toContain('file skill-record.json');
   expect(skill.output).toContain('file skill-record.txt');
+  expect(skill.output).toContain('order:\n  New list items are appended by default.');
+  expect(skill.output).toContain('To reorder after creation, edit /body/skills/component-list-1/children-order.json.');
   expect(skill.output).toContain('next:\n  hvy request_structure /body/skills/component-list-1/skill-baking --describe');
   expect(skill.output).toContain('Fill the leaf body/config files shown by request_structure.');
   expect(skill.output).toContain('### CREATED CUSTOM COMPONENT ###');
@@ -368,6 +370,8 @@ test('hvy add can create custom components and generic xref components', async (
   expect(xref.output).toContain('/body/top-skills-tools-technologies/grid-0/grid/top-skill-baking: created');
   expect(xref.output).toContain('file xref-card.json');
   expect(xref.output).toContain('file xref-card.txt');
+  expect(xref.output).toContain('order:\n  New grid items are appended by default.');
+  expect(xref.output).toContain('To reorder after creation, edit /body/top-skills-tools-technologies/grid-0/grid/children-order.json.');
   expect(xref.output).not.toContain('### CREATED CUSTOM COMPONENT ###');
   expect((await executeHvyCliCommand(document, session, 'cat /body/skills/component-list-1/skill-baking/skill-record.txt')).output)
     .toContain('Baking');
@@ -375,14 +379,14 @@ test('hvy add can create custom components and generic xref components', async (
     .toContain('"xrefTarget": "skill-baking"');
 });
 
-test('hvy add changes cwd to the newly created component', async () => {
+test('hvy append-child changes cwd to the newly created component', async () => {
   const document = createResumeCliTestDocument();
   const session = createHvyCliSession();
 
   const created = await executeHvyCliCommand(
     document,
     session,
-    'hvy add history-record /body/history/component-list-2 --id history-heavy-resume-founder'
+    'hvy append-child history-record /body/history/component-list-2 --id history-heavy-resume-founder'
   );
 
   expect(created.cwd).toBe('/body/history/component-list-2/history-heavy-resume-founder');
@@ -397,7 +401,7 @@ test('aggregate body write errors explain how to fill nested reusable components
   await executeHvyCliCommand(
     document,
     session,
-    'hvy add skill-record /body/skills/component-list-1 --id skill-baking Baking'
+    'hvy append-child skill-record /body/skills/component-list-1 --id skill-baking Baking'
   );
 
   await expect(executeHvyCliCommand(
@@ -407,19 +411,21 @@ test('aggregate body write errors explain how to fill nested reusable components
   )).rejects.toThrow('Use hvy request_structure COMPONENT_ID --describe to find leaf files');
 });
 
-test('hvy add-component aliases custom component creation', async () => {
+test('hvy prepend-child creates custom components at the beginning', async () => {
   const document = createResumeCliTestDocument();
   const session = createHvyCliSession();
 
   const result = await executeHvyCliCommand(
     document,
     session,
-    'hvy add-component skill-record /body/skills/component-list-1 --id skill-baking Baking'
+    'hvy prepend-child skill-record /body/skills/component-list-1 --id skill-baking Baking'
   );
 
   expect(result.output).toContain('/body/skills/component-list-1/skill-baking: created');
   expect(result.output).toContain('file skill-record.json');
   expect(result.output).toContain('file skill-record.txt');
+  expect((await executeHvyCliCommand(document, session, 'cat /body/skills/component-list-1/children-order.json')).output)
+    .toMatch(/skill-baking[\s\S]*skill-software-engineering/);
   expect((await executeHvyCliCommand(document, session, 'cat /body/skills/component-list-1/skill-baking/skill-record.json')).output)
     .toContain('"css": "margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);"');
   expect((await executeHvyCliCommand(document, session, 'cat /body/skills/component-list-1/skill-baking/skill-record.txt')).output)
@@ -633,12 +639,12 @@ hvy_version: 0.1
   expect(serializeDocument(document)).toContain('"tableRows":[{"cells":["Trash","No"]},{"cells":["Dishes","Yes"]}]');
 
   await expect(executeHvyCliCommand(document, session, 'echo "- id: item-1" > /body/quality/empty-list.txt')).rejects.toThrow(
-    'component-list.txt is a read-only preview until list items exist. Use hvy add ITEM_TYPE PATH --id NEW_ID'
+    'component-list.txt is a read-only preview until list items exist. Use hvy append-child ITEM_TYPE PATH --id NEW_ID'
   );
 
   expect((await executeHvyCliCommand(document, session, 'hvy lint')).output).toBe('No lint issues.');
   expect((await executeHvyCliCommand(document, session, 'ls /body/quality/empty-list')).output).not.toContain('dir  component-list');
-  expect((await executeHvyCliCommand(document, session, 'hvy add text /body/quality/empty-list --id item-1 "First item"')).output).toContain(
+  expect((await executeHvyCliCommand(document, session, 'hvy append-child text /body/quality/empty-list --id item-1 "First item"')).output).toContain(
     '/body/quality/empty-list/item-1: created'
   );
   expect((await executeHvyCliCommand(document, session, 'cat /body/quality/empty-list/item-1/text.txt')).output).toBe('First item');
@@ -1126,7 +1132,7 @@ test('cli find limits broad result sets', async () => {
   const session = createHvyCliSession();
 
   for (let index = 0; index < 105; index += 1) {
-    await executeHvyCliCommand(document, session, `hvy add section /body item-${index} "Item ${index}"`);
+    await executeHvyCliCommand(document, session, `hvy append-child section /body item-${index} "Item ${index}"`);
   }
 
   const output = (await executeHvyCliCommand(document, session, 'find /body -type d')).output;
@@ -1139,7 +1145,7 @@ test('cli command output is capped at 200 lines', async () => {
   const session = createHvyCliSession();
 
   for (let index = 0; index < 205; index += 1) {
-    await executeHvyCliCommand(document, session, `hvy add section /body item-${index} "Item ${index}"`);
+    await executeHvyCliCommand(document, session, `hvy append-child section /body item-${index} "Item ${index}"`);
   }
 
   const result = await executeHvyCliCommand(document, session, 'find /body -type f -name section.json -exec sed s/TypeScript//g {} +');
@@ -1944,19 +1950,19 @@ test('cli commands can create a chore chart with tables and form plugins', async
   const session = createHvyCliSession();
   const run = (command: string) => executeHvyCliCommand(document, session, command);
 
-  expect((await run('hvy add section /body chore-chart "Chore Chart"')).output).toBe('/body/chore-chart');
-  await run('hvy add text /chore-chart overview "Track active chores, assignments, completion forms, and weekly leaders."');
+  expect((await run('hvy append-child section /body chore-chart "Chore Chart"')).output).toBe('/body/chore-chart');
+  await run('hvy append-child text /chore-chart overview "Track active chores, assignments, completion forms, and weekly leaders."');
   await run(
-    'hvy add table /chore-chart active-chores "Chore,Dad,Mom,Child" --row "Dishes,,,Child" --row "Trash,Dad,," --row "Laundry,,Mom,"'
+    'hvy append-child table /chore-chart active-chores "Chore,Dad,Mom,Child" --row "Dishes,,,Child" --row "Trash,Dad,," --row "Laundry,,Mom,"'
   );
-  await run('hvy add plugin form /chore-chart add-chore-form "Add chore" "Description:textarea:required"');
+  await run('hvy append-child plugin form /chore-chart add-chore-form "Add chore" "Description:textarea:required"');
   await run(
-    'hvy add plugin form /chore-chart assign-chore-form "Assign chore" "Chore:select:required" "Assignee:select:required:Dad|Mom|Child" --script load "rows = doc.db.query(\'SELECT id, description FROM chores ORDER BY id\')\\ndoc.form.set_options(\'Chore\', [{\'label\': row[\'description\'], \'value\': str(row[\'id\'])} for row in rows])" --initial-script load'
+    'hvy append-child plugin form /chore-chart assign-chore-form "Assign chore" "Chore:select:required" "Assignee:select:required:Dad|Mom|Child" --script load "rows = doc.db.query(\'SELECT id, description FROM chores ORDER BY id\')\\ndoc.form.set_options(\'Chore\', [{\'label\': row[\'description\'], \'value\': str(row[\'id\'])} for row in rows])" --initial-script load'
   );
   await run(
-    'hvy add plugin form /chore-chart complete-chore-form "Complete chore" "Chore:text:required" "Completed by:select:required:Dad|Mom|Child"'
+    'hvy append-child plugin form /chore-chart complete-chore-form "Complete chore" "Chore:text:required" "Completed by:select:required:Dad|Mom|Child"'
   );
-  await run('hvy add plugin db-table /chore-chart weekly-leaders weekly_chore_leaders "SELECT person, completed_count FROM weekly_chore_leaders ORDER BY completed_count DESC"');
+  await run('hvy append-child plugin db-table /chore-chart weekly-leaders weekly_chore_leaders "SELECT person, completed_count FROM weekly_chore_leaders ORDER BY completed_count DESC"');
 
   expect((await run('find /chore-chart -name plugin.txt')).output).toContain('/body/chore-chart/add-chore-form/plugin.txt');
   expect((await run('cat /chore-chart/active-chores/tableColumns.json')).output).toContain('"Chore"');
@@ -1984,14 +1990,14 @@ hvy_version: 0.1
 `, '.hvy');
   const session = createHvyCliSession();
 
-  await expect(executeHvyCliCommand(document, session, 'hvy add plugin /quality bad-db db-table')).rejects.toThrow(
-    'hvy plugin add: "db-table" is a CLI command alias, not a stored plugin id. Use "hvy add plugin db-table SECTION_PATH ID TABLE [QUERY]" or plugin id "dev.heavy.db-table".'
+  await expect(executeHvyCliCommand(document, session, 'hvy append-child plugin /quality bad-db db-table')).rejects.toThrow(
+    'hvy plugin add: "db-table" is a CLI command alias, not a stored plugin id. Use "hvy append-child plugin db-table SECTION_PATH ID TABLE [QUERY]" or plugin id "dev.heavy.db-table".'
   );
 
   const result = await executeHvyCliCommand(
     document,
     session,
-    'hvy add plugin /quality raw-scripting dev.heavy.scripting --config \'{"version":"0.1"}\' --body "doc.header.set(\'status\', \'ready\')"'
+    'hvy append-child plugin /quality raw-scripting dev.heavy.scripting --config \'{"version":"0.1"}\' --body "doc.header.set(\'status\', \'ready\')"'
   );
 
   expect(result.output).toContain('/body/quality/raw-scripting: created');
@@ -2038,7 +2044,7 @@ test('hvy plugin db-table help leads with show and keeps add as an alias', async
 
   const help = (await executeHvyCliCommand(document, session, 'man hvy plugin db-table')).output;
 
-  expect(help).toContain('hvy add plugin db-table SECTION_PATH ID TABLE [QUERY]');
+  expect(help).toContain('hvy append-child plugin db-table SECTION_PATH ID TABLE [QUERY]');
   expect(help).toContain('Legacy alias: db-table show/add');
   expect(help).toContain('hvy plugin db-table query [SELECT/WITH SQL]');
   expect(help).toContain('hvy plugin db-table exec [CREATE / INSERT / UPDATE / DELETE / DROP SQL]');
@@ -2057,8 +2063,8 @@ test('hvy help lists registered plugin add and operation commands as quick-refer
   expect(help).toContain('hvy recipe [NAME]');
   expect(help).toContain('Cheatsheets:\n- components\n- db-table\n- forms\n- scripting');
   expect(help).toContain('Recipes:\n- db-and-form\n- form-backed-table\n- populate-form-options-from-db\n- scripting');
-  expect(help).toContain('hvy add plugin form SECTION_PATH ID SUBMIT_BUTTON_LABEL FIELD_LABEL:TYPE...');
-  expect(help).toContain('hvy add plugin db-table SECTION_PATH ID TABLE [QUERY]');
+  expect(help).toContain('hvy append-child plugin form SECTION_PATH ID SUBMIT_BUTTON_LABEL FIELD_LABEL:TYPE...');
+  expect(help).toContain('hvy append-child plugin db-table SECTION_PATH ID TABLE [QUERY]');
   expect(help).toContain('hvy plugin db-table query [SELECT/WITH SQL]');
   expect(help).toContain('hvy plugin db-table exec [CREATE / INSERT / UPDATE / DELETE / DROP SQL]');
   expect(help).toContain('hvy plugin db-table tables');
@@ -2111,13 +2117,13 @@ test('hvy plugin form help explains script and submit options', async () => {
 
   const help = (await executeHvyCliCommand(document, session, 'man hvy plugin form')).output;
 
-  expect(help).toContain('hvy add plugin form SECTION_PATH ID SUBMIT_BUTTON_LABEL FIELD_LABEL:TYPE... [--script NAME PYTHON] [--initial-script NAME] [--on-submit-script NAME]');
+  expect(help).toContain('hvy append-child plugin form SECTION_PATH ID SUBMIT_BUTTON_LABEL FIELD_LABEL:TYPE... [--script NAME PYTHON] [--initial-script NAME] [--on-submit-script NAME]');
   expect(help).toContain('--script NAME PYTHON\n  Store a named Python script');
   expect(help).toContain('--initial-script NAME\n  Store pluginConfig.initialScript=NAME');
   expect(help).toContain('--on-submit-script NAME\n  Store pluginConfig.submitScript=NAME');
   expect(help).toContain('There is no optionsQuery YAML key');
   expect(help).toContain('hvy recipe populate-form-options-from-db');
-  expect(help).toContain('Example: hvy add plugin form /chores add-chore');
+  expect(help).toContain('Example: hvy append-child plugin form /chores add-chore');
   expect(help).toContain('See also: hvy cheatsheet scripting; hvy recipe scripting; man hvy plugin scripting tool TOOL_NAME');
   expect(help).toContain('plugin.txt scripts.NAME: |');
 });
@@ -2162,7 +2168,7 @@ test('registered plugin help topics work without special-case command handlers',
   const manHelp = (await executeHvyCliCommand(document, session, 'man hvy plugin scripting')).output;
   const directHelp = (await executeHvyCliCommand(document, session, 'hvy plugin scripting')).output;
 
-  expect(manHelp).toContain('hvy add plugin SECTION_PATH ID dev.heavy.scripting --config {"version":"0.1"} --body PYTHON');
+  expect(manHelp).toContain('hvy append-child plugin SECTION_PATH ID dev.heavy.scripting --config {"version":"0.1"} --body PYTHON');
   expect(manHelp).toContain('The component body is exposed as script.py. It is Python/Brython source wrapped in a generated function with one injected global: doc.');
   expect(manHelp).toContain('Document tools: request_structure, grep, view_component');
   expect(manHelp).toContain('Not exposed through doc.tool: edit_component, view_rendered_component, query_db_table, execute_sql');
@@ -2221,7 +2227,7 @@ hvy_version: 0.1
   const session = createHvyCliSession();
 
   await executeHvyCliCommand(document, session, 'hvy plugin db-table exec "CREATE TABLE chores (id INTEGER PRIMARY KEY, title TEXT NOT NULL)"');
-  await executeHvyCliCommand(document, session, 'hvy add plugin db-table /quality broken-query chores ":"');
+  await executeHvyCliCommand(document, session, 'hvy append-child plugin db-table /quality broken-query chores ":"');
 
   const result = await executeHvyCliCommand(document, session, 'hvy lint');
 

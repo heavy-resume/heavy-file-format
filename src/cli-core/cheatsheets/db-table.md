@@ -28,8 +28,8 @@ Use `hvy plugin db-table tables` and `hvy plugin db-table schema` to inspect the
 Display rows in the document:
 
 ```shell
-hvy add plugin db-table /chore-chart active-chores chores "SELECT title, assigned_to FROM chores WHERE completed_at IS NULL"
-hvy add plugin db-table /chore-chart weekly-leaders weekly_chore_leaders "SELECT assigned_to, completed_count FROM weekly_chore_leaders"
+hvy append-child plugin db-table /chore-chart active-chores chores "SELECT title, assigned_to FROM chores WHERE completed_at IS NULL"
+hvy append-child plugin db-table /chore-chart weekly-leaders weekly_chore_leaders "SELECT assigned_to, completed_count FROM weekly_chore_leaders"
 ```
 
 Fix an existing DB Table component:

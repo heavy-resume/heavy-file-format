@@ -36,7 +36,7 @@ programmatically. Scripts cannot reach the network — they only see the
    attachment.
  - `doc.attachments.remove(id)` — delete an attachment.
  - `doc.cli.run(command)` — run one synchronous virtual CLI command and
-   return stdout. Use this for commands such as `hvy add`, `hvy remove`,
+   return stdout. Use this for commands such as `hvy append-child`, `hvy remove`,
    `hvy request_structure`, `cat`, `rg`, `find`, and `sed`. Use `doc.db`
    directly for SQL rather than `hvy plugin db-table query/exec`.
  - Plugin-provided APIs may also be present on `doc` when the relevant plugin

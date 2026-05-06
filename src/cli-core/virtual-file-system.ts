@@ -30,8 +30,8 @@ export interface HvyVirtualFileSystem {
 }
 
 export type HvyVirtualBlockInsertionTarget =
-  | { kind: 'blocks'; insert: (block: VisualBlock) => void }
-  | { kind: 'grid'; insert: (block: VisualBlock) => void };
+  | { kind: 'blocks'; insert: (block: VisualBlock, position?: 'append' | 'prepend') => void }
+  | { kind: 'grid'; insert: (block: VisualBlock, position?: 'append' | 'prepend') => void };
 
 export function buildHvyVirtualFileSystem(document: VisualDocument): HvyVirtualFileSystem {
   const entries = new Map<string, HvyVirtualEntry>();
@@ -395,7 +395,7 @@ function addSectionInsertionTargets(
   sectionPath: string
 ): void {
   entries.set(sectionPath, { kind: 'dir', path: sectionPath });
-  targets.set(sectionPath, { kind: 'blocks', insert: (block) => section.blocks.push(block) });
+  targets.set(sectionPath, { kind: 'blocks', insert: (block, position = 'append') => insertBlock(section.blocks, block, position) });
   addBlockListInsertionTargets(entries, targets, section.blocks, sectionPath);
   section.children
     .filter((child) => !child.isGhost)
@@ -422,7 +422,7 @@ function addBlockInsertionTargets(
   entries.set(blockPath, { kind: 'dir', path: blockPath });
   addNamedBlockChildrenInsertionTarget(entries, targets, block.schema.containerBlocks ?? [], `${blockPath}/container`, block.schema.component === 'container');
   if (block.schema.component === 'component-list') {
-    targets.set(blockPath, { kind: 'blocks', insert: (newBlock) => block.schema.componentListBlocks.push(newBlock) });
+    targets.set(blockPath, { kind: 'blocks', insert: (newBlock, position = 'append') => insertBlock(block.schema.componentListBlocks, newBlock, position) });
     addBlockListInsertionTargets(entries, targets, block.schema.componentListBlocks ?? [], blockPath);
   }
   addNamedBlockChildrenInsertionTarget(entries, targets, block.schema.expandableStubBlocks?.children ?? [], `${blockPath}/expandable-stub`, block.schema.component === 'expandable');
@@ -441,7 +441,7 @@ function addNamedBlockChildrenInsertionTarget(
     return;
   }
   entries.set(directoryPath, { kind: 'dir', path: directoryPath });
-  targets.set(directoryPath, { kind: 'blocks', insert: (block) => blocks.push(block) });
+  targets.set(directoryPath, { kind: 'blocks', insert: (block, position = 'append') => insertBlock(blocks, block, position) });
   addBlockListInsertionTargets(entries, targets, blocks, directoryPath);
 }
 
@@ -456,8 +456,25 @@ function addGridInsertionTarget(
     return;
   }
   entries.set(directoryPath, { kind: 'dir', path: directoryPath });
-  targets.set(directoryPath, { kind: 'grid', insert: (block) => gridItems.push({ id: makeId('griditem'), block }) });
+  targets.set(directoryPath, { kind: 'grid', insert: (block, position = 'append') => insertGridItem(gridItems, block, position) });
   addBlockListInsertionTargets(entries, targets, gridItems.map((item) => item.block), directoryPath);
+}
+
+function insertBlock(blocks: VisualBlock[], block: VisualBlock, position: 'append' | 'prepend'): void {
+  if (position === 'prepend') {
+    blocks.unshift(block);
+    return;
+  }
+  blocks.push(block);
+}
+
+function insertGridItem(gridItems: GridItem[], block: VisualBlock, position: 'append' | 'prepend'): void {
+  const item = { id: makeId('griditem'), block };
+  if (position === 'prepend') {
+    gridItems.unshift(item);
+    return;
+  }
+  gridItems.push(item);
 }
 
 function sectionToCliJson(section: VisualSection): JsonObject {
@@ -672,14 +689,14 @@ function addTableDataFiles(entries: Map<string, HvyVirtualEntry>, block: VisualB
 function writeBlockBodyText(block: VisualBlock, content: string): void {
   if (block.schema.component === 'table') {
     throw new Error(
-      'table.txt is a read-only preview for static table components. Edit tableColumns.json and tableRows.json instead, or use hvy add table to create a replacement table.'
+      'table.txt is a read-only preview for static table components. Edit tableColumns.json and tableRows.json instead, or use hvy append-child table to create a replacement table.'
     );
   }
 
   const nestedTextBlocks = collectNestedTextBlocks(block);
   if (block.schema.component === 'component-list' && nestedTextBlocks.length === 0) {
     throw new Error(
-      'component-list.txt is a read-only preview until list items exist. Use hvy add ITEM_TYPE PATH --id NEW_ID to create a list item, then edit that item\'s leaf body/config files.'
+      'component-list.txt is a read-only preview until list items exist. Use hvy append-child ITEM_TYPE PATH --id NEW_ID to create a list item, then edit that item\'s leaf body/config files.'
     );
   }
 

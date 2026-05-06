@@ -206,11 +206,6 @@ export function executeHvyCliCommandSync(document: VisualDocument, input: string
     if (rest[0] === 'plugin' && rest[1] === 'db-table' && isDbTableSqlAction(rest[2] ?? '')) {
       throw new Error('doc.cli.run cannot run db-table SQL commands. Use doc.db.query or doc.db.execute instead.');
     }
-    if (rest[0] === 'add-component') {
-      const [component = '', ...componentRest] = rest.slice(1);
-      const result = executeHvyDocumentCommand(ctx, ['add', component, ...componentRest]);
-      return { cwd: result.cwd ?? cwd, output: result.output, mutated: result.mutated };
-    }
     if (rest[0] === 'prune-xref') {
       return { cwd, output: commandPruneXref(document, rest.slice(1)), mutated: true };
     }
@@ -319,11 +314,6 @@ async function runCommand(ctx: HvyCliCommandContext, command: string, args: stri
     return { cwd: ctx.cwd, output: result.output, mutated: result.mutated };
   }
   if (command === 'hvy') {
-    if (args[0] === 'add-component') {
-      const [component = '', ...rest] = args.slice(1);
-      const result = executeHvyDocumentCommand(ctx, ['add', component, ...rest]);
-      return { cwd: result.cwd ?? ctx.cwd, output: result.output, mutated: result.mutated };
-    }
     if (args[0] === 'lint') {
       if (args[1] === '--fix') {
         const fixed = fixHvyCliLintIssues(ctx.document);
@@ -2933,8 +2923,8 @@ function helpFor(topic = ''): string {
     ask: formatCommandHelp('ask QUESTION', 'Pause the AI CLI edit loop and ask the user for clarification.'),
     done: formatCommandHelp('done MESSAGE_TO_USER', 'Finish the AI CLI edit loop with the message to show the user.'),
     hvy: hvyDocumentCommandHelp(),
-    'hvy add': hvyDocumentCommandHelp('add'),
-    'hvy add component': hvyDocumentCommandHelp('component'),
+    'hvy append-child': hvyDocumentCommandHelp('append-child'),
+    'hvy prepend-child': hvyDocumentCommandHelp('prepend-child'),
     'hvy request_structure': hvyDocumentCommandHelp('request_structure'),
     'hvy find-intent': hvyDocumentCommandHelp('find-intent'),
     'hvy cheatsheet': hvyDocumentCommandHelp('cheatsheet'),

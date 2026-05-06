@@ -39,20 +39,20 @@ doc.db.execute('INSERT INTO chore_completions (chore_description, completed_by) 
 doc.db.execute('UPDATE chores SET active = 0 WHERE description = \\'' + chore + '\\'')
 `);
 
-  await runCliCommand(page, 'hvy add section /body chore-chart "Chore Chart"');
-  await runCliCommand(page, 'hvy add plugin db-table /chore-chart active-chore-chart active_chore_chart "SELECT Chore, Dad, Mom, Child FROM active_chore_chart"');
-  await runCliCommand(page, 'hvy add plugin db-table /chore-chart weekly-leaders weekly_chore_leaders "SELECT Person, Completed FROM weekly_chore_leaders"');
+  await runCliCommand(page, 'hvy append-child section /body chore-chart "Chore Chart"');
+  await runCliCommand(page, 'hvy append-child plugin db-table /chore-chart active-chore-chart active_chore_chart "SELECT Chore, Dad, Mom, Child FROM active_chore_chart"');
+  await runCliCommand(page, 'hvy append-child plugin db-table /chore-chart weekly-leaders weekly_chore_leaders "SELECT Person, Completed FROM weekly_chore_leaders"');
   await runCliCommand(
     page,
-    `hvy add plugin form /chore-chart add-chore-form "Add chore" "Description:textarea:required" --script submit "${setupChoreDb}" --on-submit-script submit`
+    `hvy append-child plugin form /chore-chart add-chore-form "Add chore" "Description:textarea:required" --script submit "${setupChoreDb}" --on-submit-script submit`
   );
   await runCliCommand(
     page,
-    `hvy add plugin form /chore-chart assign-chore-form "Assign chore" "Chore:text:required" "Assignee:select:required:Dad|Mom|Child" --script submit "${assignChore}" --on-submit-script submit`
+    `hvy append-child plugin form /chore-chart assign-chore-form "Assign chore" "Chore:text:required" "Assignee:select:required:Dad|Mom|Child" --script submit "${assignChore}" --on-submit-script submit`
   );
   await runCliCommand(
     page,
-    `hvy add plugin form /chore-chart complete-chore-form "Complete chore" "Chore:text:required" "Completed by:select:required:Dad|Mom|Child" --script submit "${completeChore}" --on-submit-script submit`
+    `hvy append-child plugin form /chore-chart complete-chore-form "Complete chore" "Chore:text:required" "Completed by:select:required:Dad|Mom|Child" --script submit "${completeChore}" --on-submit-script submit`
   );
 
   await page.getByRole('button', { name: 'Viewer' }).click();

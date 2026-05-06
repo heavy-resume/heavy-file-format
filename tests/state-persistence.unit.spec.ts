@@ -61,6 +61,18 @@ hvy_version: 0.1
       requestNonce: 12,
       abortController: new AbortController(),
     },
+    cliDraft: 'ls /body',
+    cliSession: {
+      cwd: '/body/summary',
+      scratchpadContent: 'Plan\n',
+      scratchpadEdited: true,
+      scratchpadCommandsSinceEdit: ['ls /body'],
+      rawWipContentByPath: { '/body/summary/intro/raw.wip.hvy': 'broken' },
+    },
+    cliHistory: [
+      { cwd: '/', command: 'ls /', output: 'dir body', error: false },
+      { cwd: '/body/summary', command: 'cat missing', output: 'no such file', error: true },
+    ],
   } as unknown as AppState);
 
   const resumed = loadResumeState();
@@ -73,6 +85,20 @@ hvy_version: 0.1
   expect(resumed?.templateValues).toEqual({ name: 'Ada' });
   expect(resumed?.chat.draft).toBe('continue this');
   expect(resumed?.chat.panelOpen).toBe(true);
+  expect(resumed?.cli).toEqual({
+    draft: 'ls /body',
+    session: {
+      cwd: '/body/summary',
+      scratchpadContent: 'Plan\n',
+      scratchpadEdited: true,
+      scratchpadCommandsSinceEdit: ['ls /body'],
+      rawWipContentByPath: { '/body/summary/intro/raw.wip.hvy': 'broken' },
+    },
+    history: [
+      { cwd: '/', command: 'ls /', output: 'dir body', error: false },
+      { cwd: '/body/summary', command: 'cat missing', output: 'no such file', error: true },
+    ],
+  });
   expect(resumed?.chat.messages).toEqual([
     { id: 'm1', role: 'user', content: 'Please edit.' },
     {

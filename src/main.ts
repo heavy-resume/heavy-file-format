@@ -131,6 +131,9 @@ function applyResumeState(initial: AppState, resume: ReturnType<typeof loadResum
       messages: resume.chat.messages,
       panelOpen: resume.chat.panelOpen,
     },
+    cliDraft: resume.cli.draft,
+    cliSession: resume.cli.session,
+    cliHistory: resume.cli.history,
   };
 }
 

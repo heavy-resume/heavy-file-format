@@ -147,6 +147,11 @@ export interface HvyCliHistoryEntry {
 export interface HvyCliSessionState {
   cwd: string;
   scratchpadContent?: string;
+  scratchpadEdited?: boolean;
+  scratchpadCommandsSinceEdit?: string[];
+  rawWipContent?: string;
+  rawWipContentByPath?: Record<string, string>;
+  rawSectionWipContentByPath?: Record<string, string>;
 }
 
 export interface ThemeConfig {

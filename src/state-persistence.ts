@@ -1,5 +1,5 @@
 import { deserializeDocumentBytes, serializeDocumentBytes } from './serialization';
-import type { AppState, ChatMessage, ChatSettings, VisualDocument } from './types';
+import type { AppState, ChatMessage, ChatSettings, HvyCliHistoryEntry, HvyCliSessionState, VisualDocument } from './types';
 
 const RESUME_STORAGE_KEY = 'hvy-editor-resume-state-v1';
 const DEFAULT_SAVED_CHAT_SETTINGS: ChatSettings = {
@@ -24,6 +24,11 @@ interface ResumeStatePayload {
     messages: ChatMessage[];
     panelOpen: boolean;
   };
+  cli: {
+    draft: string;
+    session: HvyCliSessionState;
+    history: HvyCliHistoryEntry[];
+  };
   documentBase64: string;
 }
 
@@ -36,6 +41,7 @@ export interface LoadedResumeState {
   rawEditorText: string;
   templateValues: Record<string, string>;
   chat: ResumeStatePayload['chat'];
+  cli: ResumeStatePayload['cli'];
 }
 
 export function loadResumeState(): LoadedResumeState | null {
@@ -68,6 +74,13 @@ export function loadResumeState(): LoadedResumeState | null {
           : [],
         panelOpen: Boolean(parsed.chat?.panelOpen),
       },
+      cli: {
+        draft: typeof parsed.cli?.draft === 'string' ? parsed.cli.draft : '',
+        session: normalizeCliSession(parsed.cli?.session),
+        history: Array.isArray(parsed.cli?.history)
+          ? parsed.cli.history.map(normalizeCliHistoryEntry).filter((entry): entry is HvyCliHistoryEntry => Boolean(entry))
+          : [],
+      },
     };
   } catch (error) {
     console.warn('[hvy:resume] failed to load saved state', error);
@@ -94,6 +107,11 @@ export function saveResumeState(state: AppState): void {
         draft: state.chat.draft,
         messages: state.chat.messages,
         panelOpen: state.chat.panelOpen,
+      },
+      cli: {
+        draft: state.cliDraft,
+        session: state.cliSession,
+        history: state.cliHistory,
       },
       documentBase64: bytesToBase64(serializeDocumentBytes(state.document)),
     };
@@ -200,6 +218,40 @@ function normalizeChatMessage(value: unknown): ChatMessage | null {
     ...(message.error || wasRunning ? { error: true } : {}),
     ...(message.progress && !wasRunning ? { progress: message.progress } : {}),
     ...(work ? { work: wasRunning ? { ...work, status: 'error' } : work } : {}),
+  };
+}
+
+function normalizeCliSession(value: unknown): HvyCliSessionState {
+  if (!value || typeof value !== 'object') {
+    return { cwd: '/' };
+  }
+  const raw = value as Partial<HvyCliSessionState>;
+  return {
+    cwd: typeof raw.cwd === 'string' && raw.cwd.startsWith('/') ? raw.cwd : '/',
+    ...(typeof raw.scratchpadContent === 'string' ? { scratchpadContent: raw.scratchpadContent } : {}),
+    ...(typeof raw.scratchpadEdited === 'boolean' ? { scratchpadEdited: raw.scratchpadEdited } : {}),
+    ...(Array.isArray(raw.scratchpadCommandsSinceEdit)
+      ? { scratchpadCommandsSinceEdit: raw.scratchpadCommandsSinceEdit.filter((entry) => typeof entry === 'string') }
+      : {}),
+    ...(typeof raw.rawWipContent === 'string' ? { rawWipContent: raw.rawWipContent } : {}),
+    ...(isStringRecord(raw.rawWipContentByPath) ? { rawWipContentByPath: raw.rawWipContentByPath } : {}),
+    ...(isStringRecord(raw.rawSectionWipContentByPath) ? { rawSectionWipContentByPath: raw.rawSectionWipContentByPath } : {}),
+  };
+}
+
+function normalizeCliHistoryEntry(value: unknown): HvyCliHistoryEntry | null {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+  const raw = value as Partial<HvyCliHistoryEntry>;
+  if (typeof raw.cwd !== 'string' || typeof raw.command !== 'string') {
+    return null;
+  }
+  return {
+    cwd: raw.cwd.startsWith('/') ? raw.cwd : '/',
+    command: raw.command,
+    output: typeof raw.output === 'string' ? raw.output : '',
+    error: Boolean(raw.error),
   };
 }
 

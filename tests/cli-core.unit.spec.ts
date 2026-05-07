@@ -750,6 +750,26 @@ test('cli echo supports shell-style redirection to writable virtual files', asyn
   expect((await executeHvyCliCommand(document, session, 'man echo')).output).toContain('echo TEXT [> FILE|>> FILE]');
 });
 
+test('cli printf supports formatting and redirection without adding a newline', async () => {
+  const document = createCliTestDocument();
+  const session = createHvyCliSession();
+
+  expect((await executeHvyCliCommand(document, session, 'printf "Hello %s\\n" world')).output).toBe('Hello world\n');
+
+  const writeResult = await executeHvyCliCommand(
+    document,
+    session,
+    'printf "%s\\n%s" "First note" "Second note" > /body/summary/intro/text.txt'
+  );
+  expect(writeResult.output).toBe('/body/summary/intro/text.txt: written');
+  expect((await executeHvyCliCommand(document, session, 'cat /body/summary/intro/text.txt')).output).toBe('First note\nSecond note');
+
+  await executeHvyCliCommand(document, session, 'printf "\\nThird note" >> /body/summary/intro/text.txt');
+  expect((await executeHvyCliCommand(document, session, 'cat /body/summary/intro/text.txt')).output).toBe('First note\nSecond note\nThird note');
+  expect((await executeHvyCliCommand(document, session, 'printf "%s" "Pipe text" | cat')).output).toBe('Pipe text');
+  expect((await executeHvyCliCommand(document, session, 'man printf')).output).toContain('printf FORMAT [ARG...] [> FILE|>> FILE]');
+});
+
 test('cli exposes static table body as read-only preview and rejects empty component-list body writes', async () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
@@ -1826,7 +1846,7 @@ test('cli lists text filters as supported commands', async () => {
   const session = createHvyCliSession();
 
   expect((await executeHvyCliCommand(document, session, 'help')).output).toContain(
-    'Commands: cd, pwd, ls, cat, head, tail, nl, find, rg, grep, sort, uniq, wc, tr, xargs, cp, rm, echo, sed, true, hvy. Ask: ask QUESTION. Finish: done MESSAGE_TO_USER.'
+    'Commands: cd, pwd, ls, cat, head, tail, nl, find, rg, grep, sort, uniq, wc, tr, xargs, cp, rm, printf, echo, sed, true, hvy. Ask: ask QUESTION. Finish: done MESSAGE_TO_USER.'
   );
   expect((await executeHvyCliCommand(document, session, 'man wc')).output).toContain('wc -l [FILE...]');
   expect((await executeHvyCliCommand(document, session, 'man uniq')).output).toContain('uniq [FILE...]');

@@ -79,7 +79,7 @@ export function getHvyCliCommandSummary(): string {
 }
 
 export function getHvyCliPreferredCommandSummary(): string {
-  return 'Commands: hvy, nl, rg, find, sed, echo, cat, ls, pwd, cd, cp, rm, grep, sort, uniq, wc, tr, xargs, head, tail, true. Ask: ask QUESTION. Finish: done MESSAGE_TO_USER. Use man <command> for details.';
+  return 'Commands: hvy, nl, rg, find, sed, printf, echo, cat, ls, pwd, cd, cp, rm, grep, sort, uniq, wc, tr, xargs, head, tail, true. Ask: ask QUESTION. Finish: done MESSAGE_TO_USER. Use man <command> for details.';
 }
 
 export async function executeHvyCliCommand(document: VisualDocument, session: HvyCliSession, input: string): Promise<HvyCliExecution> {
@@ -218,6 +218,14 @@ export function executeHvyCliCommandSync(document: VisualDocument, input: string
   if (command === 'cp') {
     return { cwd, output: commandCp(ctx, rest), mutated: true };
   }
+  if (command === 'echo') {
+    const result = commandEcho(ctx, rest);
+    return { cwd, output: result.output, mutated: result.mutated };
+  }
+  if (command === 'printf') {
+    const result = commandPrintf(ctx, rest);
+    return { cwd, output: result.output, mutated: result.mutated };
+  }
   if (command === 'sed') {
     const result = commandSed(ctx, rest);
     return { cwd, output: result.output, mutated: result.mutated };
@@ -332,6 +340,10 @@ async function runCommand(ctx: HvyCliCommandContext, command: string, args: stri
     const result = commandEcho(ctx, args);
     return { cwd: ctx.cwd, output: result.output, mutated: result.mutated };
   }
+  if (command === 'printf') {
+    const result = commandPrintf(ctx, args);
+    return { cwd: ctx.cwd, output: result.output, mutated: result.mutated };
+  }
   if (command === 'sed') {
     const result = commandSed(ctx, args);
     return { cwd: ctx.cwd, output: result.output, mutated: result.mutated };
@@ -406,6 +418,7 @@ function isHvyShellAliasCommand(command: string): boolean {
     'rm',
     'cp',
     'echo',
+    'printf',
     'sed',
   ]).has(command);
 }
@@ -467,6 +480,10 @@ function executeHvyShellAliasCommandSync(ctx: HvyCliCommandContext, command: str
   }
   if (command === 'echo') {
     const result = commandEcho(ctx, args);
+    return { cwd: ctx.cwd, output: result.output, mutated: result.mutated };
+  }
+  if (command === 'printf') {
+    const result = commandPrintf(ctx, args);
     return { cwd: ctx.cwd, output: result.output, mutated: result.mutated };
   }
   throw new Error(`doc.cli.run does not support command "hvy ${command}".`);
@@ -1673,10 +1690,107 @@ function commandEcho(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cw
   return writeVirtualFile(ctx, path, text, operator === '>>', 'echo');
 }
 
+function commandPrintf(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd: string }, args: string[]): { output: string; mutated: boolean } {
+  const redirectIndex = args.findIndex((arg) => arg === '>' || arg === '>>');
+  const printArgs = redirectIndex < 0 ? args : args.slice(0, redirectIndex);
+  const output = formatPrintfOutput(printArgs);
+  if (redirectIndex < 0) {
+    return { output, mutated: false };
+  }
+  const operator = args[redirectIndex] ?? '';
+  const path = args[redirectIndex + 1] ?? '';
+  if (!path) {
+    throw new Error(`printf: ${operator} requires a file path`);
+  }
+  if (args.slice(redirectIndex + 2).length > 0) {
+    throw new Error('printf: expected redirection at the end of the command');
+  }
+  return writeVirtualFile(ctx, path, output, operator === '>>', 'printf');
+}
+
+function formatPrintfOutput(args: string[]): string {
+  if (args.length === 0) {
+    return '';
+  }
+  const format = decodePrintfEscapes(args[0] ?? '');
+  const values = args.slice(1);
+  if (!printfFormatConsumesArguments(format)) {
+    return format;
+  }
+  let output = '';
+  let valueIndex = 0;
+  do {
+    const formatted = applyPrintfFormat(format, values, valueIndex);
+    output += formatted.output;
+    valueIndex = formatted.nextValueIndex;
+  } while (valueIndex < values.length);
+  return output;
+}
+
+function printfFormatConsumesArguments(format: string): boolean {
+  for (let index = 0; index < format.length; index += 1) {
+    if (format[index] !== '%') {
+      continue;
+    }
+    const next = format[index + 1] ?? '';
+    if (next && next !== '%') {
+      return true;
+    }
+    index += 1;
+  }
+  return false;
+}
+
+function applyPrintfFormat(format: string, values: string[], startValueIndex: number): { output: string; nextValueIndex: number } {
+  let output = '';
+  let valueIndex = startValueIndex;
+  for (let index = 0; index < format.length; index += 1) {
+    const char = format[index] ?? '';
+    if (char !== '%') {
+      output += char;
+      continue;
+    }
+    const specifier = format[index + 1] ?? '';
+    if (!specifier) {
+      output += '%';
+      continue;
+    }
+    index += 1;
+    if (specifier === '%') {
+      output += '%';
+      continue;
+    }
+    const value = values[valueIndex] ?? '';
+    valueIndex += 1;
+    if (specifier === 's') {
+      output += value;
+      continue;
+    }
+    if (specifier === 'b') {
+      output += decodePrintfEscapes(value);
+      continue;
+    }
+    if (specifier === 'd' || specifier === 'i') {
+      output += String(Number.parseInt(value || '0', 10) || 0);
+      continue;
+    }
+    output += `%${specifier}`;
+  }
+  return { output, nextValueIndex: valueIndex };
+}
+
 function decodeEchoEscapes(value: string): string {
   return value
     .replaceAll('\\n', '\n')
     .replaceAll('\\t', '\t')
+    .replaceAll('\\\\', '\\');
+}
+
+function decodePrintfEscapes(value: string): string {
+  return value
+    .replaceAll('\\n', '\n')
+    .replaceAll('\\t', '\t')
+    .replaceAll('\\r', '\r')
     .replaceAll('\\\\', '\\');
 }
 
@@ -2614,6 +2728,9 @@ async function runPipedCommand(ctx: HvyCliCommandContext, command: string, args:
   if (command === 'sort' || command === 'uniq' || command === 'wc' || command === 'tr') {
     return { ...applyTextCommand(stdin, command, args), cwd: ctx.cwd };
   }
+  if (command === 'printf') {
+    return { cwd: ctx.cwd, output: formatPrintfOutput(args), mutated: false };
+  }
   if (command === 'xargs') {
     return applyXargsStage(ctx, stdin, args);
   }
@@ -3143,7 +3260,7 @@ function helpFor(topic = ''): string {
   }
 
   const help: Record<string, string> = {
-    '': 'Commands: cd, pwd, ls, cat, head, tail, nl, find, rg, grep, sort, uniq, wc, tr, xargs, cp, rm, echo, sed, true, hvy. Ask: ask QUESTION. Finish: done MESSAGE_TO_USER. Use man <command> for details.',
+    '': 'Commands: cd, pwd, ls, cat, head, tail, nl, find, rg, grep, sort, uniq, wc, tr, xargs, cp, rm, printf, echo, sed, true, hvy. Ask: ask QUESTION. Finish: done MESSAGE_TO_USER. Use man <command> for details.',
     cd: formatCommandHelp('cd PATH', 'Change the current virtual directory.'),
     pwd: formatCommandHelp('pwd', 'Print the current virtual directory.'),
     ls: formatCommandHelp('ls [PATH]', 'List files and directories. Files are marked [w] writable or [ro] read-only; stable entries include pipe-delimited descriptions.'),
@@ -3161,6 +3278,7 @@ function helpFor(topic = ''): string {
     xargs: formatCommandHelp('COMMAND | xargs [-0] [-r] [-I TOKEN] COMMAND ARG...', 'Run a supported CLI command with piped items appended, or once per item with -I replacement.'),
     cp: formatCommandHelp('cp [-r] SOURCE DEST', 'Copy a writable file into an existing writable file, or copy a component directory with -r. Component copies get the destination path id.'),
     rm: formatCommandHelp('rm -r|-rf PATH...', 'Remove section or component directories from the virtual document body. -f ignores missing paths. Alias: hvy remove PATH.'),
+    printf: formatCommandHelp('printf FORMAT [ARG...] [> FILE|>> FILE]', 'Print formatted text without adding a newline, replace a writable file, or append to a writable file. Supports common escapes and %s, %b, %d, %i, and %%.'),
     echo: formatCommandHelp('echo TEXT [> FILE|>> FILE]', 'Print text, replace a writable file, or append to a writable file.'),
     sed: formatCommandHelp('sed -n START,ENDp FILE...\nsed [-i] [-E] s/search/replace/[gI] FILE...', 'Print selected line ranges, or update writable virtual files with search/replace or /pattern/d deletion.'),
     true: formatCommandHelp('true', 'Succeed without output. Useful in command chains such as COMMAND || true.'),

@@ -3,10 +3,14 @@ import { state, getRenderApp, getRefreshReaderPanels, getRefreshModalPreview } f
 import { findSectionByKey } from './section-ops';
 import { closeModal } from './navigation';
 import { saveReusableFromModal } from './reusable';
-import { findBlockByIds } from './block-ops';
+import { findBlockByIds, setActiveEditorBlock } from './block-ops';
 import { recordHistory } from './history';
 import { parseAttachedComponentBlocks, resetDbTableViewState, setSqliteRowComponent } from './plugins/db-table';
 import { serializeBlockFragment } from './serialization';
+import { ensureComponentListBlocks, ensureContainerBlocks, ensureExpandableBlocks } from './document-factory';
+import { createGridItem } from './grid-ops';
+import { syncReusableTemplateForBlock } from './reusable';
+import { createBlockFromReusableTemplateValues } from './bind/actions/reusable-template';
 
 export function bindModal(app: HTMLElement): void {
   const modalRoot = app.querySelector<HTMLDivElement>('#modalRoot');
@@ -36,6 +40,12 @@ export function bindModal(app: HTMLElement): void {
         recordHistory,
         closeModal,
       });
+      return;
+    }
+
+    const insertReusableTemplateBtn = target.closest<HTMLElement>('[data-modal-action="insert-reusable-template"]');
+    if (insertReusableTemplateBtn && state.reusableTemplateModal) {
+      insertReusableTemplateFromModal(modalRoot);
       return;
     }
 
@@ -281,4 +291,62 @@ export function bindModal(app: HTMLElement): void {
     getRefreshReaderPanels()();
     getRefreshModalPreview()();
   });
+}
+
+function insertReusableTemplateFromModal(modalRoot: HTMLDivElement): void {
+  const modal = state.reusableTemplateModal;
+  if (!modal) {
+    return;
+  }
+  const values: Record<string, string> = {};
+  modalRoot.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('[data-template-variable]').forEach((input) => {
+    const key = input.dataset.templateVariable;
+    if (key) {
+      values[key] = input.value;
+    }
+  });
+  let newBlock;
+  try {
+    newBlock = createBlockFromReusableTemplateValues(modal.component, values);
+  } catch (error) {
+    console.error('[hvy:template] failed to insert reusable component from template modal', error);
+    return;
+  }
+
+  const target = modal.target;
+  recordHistory(`reusable-template:${modal.component}`);
+  if (target.kind === 'section') {
+    const section = findSectionByKey(state.document.sections, target.sectionKey);
+    if (!section || section.lock) {
+      closeModal();
+      getRenderApp()();
+      return;
+    }
+    section.blocks.push(newBlock);
+  } else {
+    const block = findBlockByIds(target.sectionKey, target.blockId);
+    if (!block || block.schema.lock) {
+      closeModal();
+      getRenderApp()();
+      return;
+    }
+    if (target.kind === 'component-list') {
+      ensureComponentListBlocks(block);
+      block.schema.componentListBlocks.push(newBlock);
+    } else if (target.kind === 'container') {
+      ensureContainerBlocks(block);
+      block.schema.containerBlocks.push(newBlock);
+    } else if (target.kind === 'grid') {
+      block.schema.gridItems.push(createGridItem(block.schema.gridItems.length, block.schema.gridColumns, () => newBlock));
+      block.schema.gridItems[block.schema.gridItems.length - 1].block = newBlock;
+    } else {
+      ensureExpandableBlocks(block);
+      const expandableTarget = target.part === 'stub' ? block.schema.expandableStubBlocks.children : block.schema.expandableContentBlocks.children;
+      expandableTarget.push(newBlock);
+    }
+    syncReusableTemplateForBlock(target.sectionKey, target.blockId);
+  }
+  setActiveEditorBlock(target.sectionKey, newBlock.id);
+  closeModal();
+  getRenderApp()();
 }

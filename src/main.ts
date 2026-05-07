@@ -88,6 +88,7 @@ function createInitialState(document: ReturnType<typeof deserializeDocumentBytes
     clearSectionTitleOnFocusKey: null,
     modalSectionKey: null,
     reusableSaveModal: null,
+    reusableTemplateModal: null,
     tempHighlights: new Set<string>(),
     addComponentBySection: {},
     metaPanelOpen: false,
@@ -327,6 +328,9 @@ readerRenderer = createReaderRenderer(
     },
     get reusableSaveModal() {
       return state.reusableSaveModal;
+    },
+    get reusableTemplateModal() {
+      return state.reusableTemplateModal;
     },
     get componentMetaModal() {
       return state.componentMetaModal;

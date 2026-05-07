@@ -6,20 +6,25 @@ import { recordHistory } from '../../history';
 import { syncReusableTemplateForBlock } from '../../reusable';
 import { moveItem } from '../../utils';
 import { configurePluginBlock } from '../../plugins/plugin-block';
+import { openReusableTemplateModalIfNeeded } from './reusable-template';
 import type { ActionHandler } from './types';
 
 const addGridItem: ActionHandler = ({ actionButton, sectionKey, blockId }) => {
   if (!blockId) {
     return;
   }
-  recordHistory();
   const block = resolveBlockContext(actionButton)?.block ?? null;
   if (!block || block.schema.lock) {
     return;
   }
   ensureGridItems(block.schema);
+  const component = actionButton.dataset.component ?? state.gridAddComponentByBlock[blockId] ?? 'text';
+  if (openReusableTemplateModalIfNeeded(component, { kind: 'grid', sectionKey, blockId })) {
+    return;
+  }
+  recordHistory();
   const item = createGridItem(block.schema.gridItems.length, block.schema.gridColumns, (c, _s) => createEmptyBlock(c, true));
-  item.block = createEmptyBlock(actionButton.dataset.component ?? state.gridAddComponentByBlock[blockId] ?? 'text');
+  item.block = createEmptyBlock(component);
   if (item.block.schema.component === 'plugin' && actionButton.dataset.pluginId) {
     configurePluginBlock(item.block, actionButton.dataset.pluginId);
   }

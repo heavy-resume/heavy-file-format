@@ -4,19 +4,24 @@ import { createEmptyBlock, ensureContainerBlocks, ensureComponentListBlocks, ens
 import { recordHistory } from '../../history';
 import { syncReusableTemplateForBlock } from '../../reusable';
 import { configurePluginBlock } from '../../plugins/plugin-block';
+import { openReusableTemplateModalIfNeeded } from './reusable-template';
 import type { ActionHandler } from './types';
 
 const addComponentListItem: ActionHandler = ({ actionButton, sectionKey, blockId }) => {
   if (!blockId) {
     return;
   }
-  recordHistory();
   const block = findBlockByIds(sectionKey, blockId);
   if (!block || block.schema.lock) {
     return;
   }
   ensureComponentListBlocks(block);
-  const newBlock = createEmptyBlock(block.schema.componentListComponent || 'text');
+  const component = block.schema.componentListComponent || 'text';
+  if (openReusableTemplateModalIfNeeded(component, { kind: 'component-list', sectionKey, blockId })) {
+    return;
+  }
+  recordHistory();
+  const newBlock = createEmptyBlock(component);
   if (newBlock.schema.component === 'plugin' && actionButton.dataset.pluginId) {
     configurePluginBlock(newBlock, actionButton.dataset.pluginId);
   }
@@ -31,14 +36,18 @@ const addContainerBlock: ActionHandler = ({ actionButton, sectionKey, blockId })
   if (!blockId) {
     return;
   }
-  recordHistory();
   const block = findBlockByIds(sectionKey, blockId);
   if (!block || block.schema.lock) {
     return;
   }
   ensureContainerBlocks(block);
   const addKey = `container:${sectionKey}:${blockId}`;
-  const newBlock = createEmptyBlock(actionButton.dataset.component ?? state.addComponentBySection[addKey] ?? 'text');
+  const component = actionButton.dataset.component ?? state.addComponentBySection[addKey] ?? 'text';
+  if (openReusableTemplateModalIfNeeded(component, { kind: 'container', sectionKey, blockId })) {
+    return;
+  }
+  recordHistory();
+  const newBlock = createEmptyBlock(component);
   if (newBlock.schema.component === 'plugin' && actionButton.dataset.pluginId) {
     configurePluginBlock(newBlock, actionButton.dataset.pluginId);
   }
@@ -52,7 +61,6 @@ const addExpandableBlock = (kind: 'stub' | 'content'): ActionHandler => ({ actio
   if (!blockId) {
     return;
   }
-  recordHistory();
   const block = findBlockByIds(sectionKey, blockId);
   if (!block) {
     return;
@@ -60,7 +68,12 @@ const addExpandableBlock = (kind: 'stub' | 'content'): ActionHandler => ({ actio
   const target = kind === 'stub' ? block.schema.expandableStubBlocks : block.schema.expandableContentBlocks;
   ensureExpandableBlocks(block);
   const addKey = `expandable-${kind}:${sectionKey}:${blockId}`;
-  const newBlock = createEmptyBlock(actionButton.dataset.component ?? state.addComponentBySection[addKey] ?? 'container');
+  const component = actionButton.dataset.component ?? state.addComponentBySection[addKey] ?? 'container';
+  if (openReusableTemplateModalIfNeeded(component, { kind: 'expandable', sectionKey, blockId, part: kind })) {
+    return;
+  }
+  recordHistory();
+  const newBlock = createEmptyBlock(component);
   if (newBlock.schema.component === 'plugin' && actionButton.dataset.pluginId) {
     configurePluginBlock(newBlock, actionButton.dataset.pluginId);
   }

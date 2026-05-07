@@ -43,6 +43,7 @@ export function createTestState(document: VisualDocument): AppState {
     clearSectionTitleOnFocusKey: null,
     modalSectionKey: null,
     reusableSaveModal: null,
+    reusableTemplateModal: null,
     tempHighlights: new Set<string>(),
     addComponentBySection: {},
     metaPanelOpen: false,

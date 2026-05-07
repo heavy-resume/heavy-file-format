@@ -25,6 +25,49 @@ function createResumeCliTestDocument() {
   return deserializeDocument(readFileSync(fileURLToPath(new URL('../examples/resume.hvy', import.meta.url)), 'utf8'), '.hvy');
 }
 
+function createTemplatedCliTestDocument() {
+  return deserializeDocument(`---
+hvy_version: 0.1
+title: CLI Template Test
+component_defs:
+  - name: history-record
+    baseType: expandable
+    schema:
+      css: "margin: 0;"
+      description: "{% description | block %}"
+      expandableStubBlocks:
+        lock: false
+        children:
+          - text: ""
+            schema:
+              component: table
+              tableColumns: ["YEAR", "ORGANIZATION", "TITLE"]
+              tableRows:
+                - cells: ["{% years %}", "{% organization %}", "{% role %}"]
+      expandableContentBlocks:
+        lock: false
+        children:
+          - text: "{% organization %}"
+            schema:
+              component: text
+              placeholder: Organization
+          - text: "{% description | block %}"
+            schema:
+              component: text
+              placeholder: Description
+  - name: untokened-record
+    baseType: text
+    schema:
+      placeholder: Empty
+---
+
+<!--hvy: {"id":"history"}-->
+#! History
+
+<!--hvy:component-list {"id":"history-list","componentListComponent":"history-record"}-->
+`, '.hvy');
+}
+
 test('cli can navigate and read virtual component files', async () => {
   const document = createCliTestDocument();
   const session = createHvyCliSession();
@@ -430,6 +473,62 @@ test('hvy insert -1 can create custom components and xref components', async () 
   expect(xref.output).not.toContain('### CREATED CUSTOM COMPONENT ###');
   expect((await executeHvyCliCommand(document, session, 'cat /body/top-skills-tools-technologies/grid-0/grid/top-skill-baking/xref-card.json')).output)
     .toContain('"xrefTarget": ""');
+});
+
+test('hvy insert can fill reusable component template values from exact JSON keys', async () => {
+  const document = createTemplatedCliTestDocument();
+  const session = createHvyCliSession();
+
+  const created = await executeHvyCliCommand(
+    document,
+    session,
+    'hvy insert 0 history-record /body/history/history-list --id history-heavy --using-template \'{"years":"2025-2026","organization":"Heavy Resume","role":"Founder","description":"Line one\\nLine two"}\''
+  );
+
+  expect(created.output).toContain('/body/history/history-list/history-heavy: created');
+  expect((await executeHvyCliCommand(document, session, 'cat /body/history/history-list/history-heavy/expandable-stub/table-0/tableRows.json')).output)
+    .toContain('"Heavy Resume"');
+  expect((await executeHvyCliCommand(document, session, 'cat /body/history/history-list/history-heavy/expandable-content/text-0/text.txt')).output)
+    .toBe('Heavy Resume');
+  expect((await executeHvyCliCommand(document, session, 'cat /body/history/history-list/history-heavy/expandable-content/text-1/text.txt')).output)
+    .toBe('Line one\nLine two');
+});
+
+test('hvy insert template values reject missing extra invalid and multiline text values', async () => {
+  const document = createTemplatedCliTestDocument();
+  const session = createHvyCliSession();
+
+  await expect(executeHvyCliCommand(
+    document,
+    session,
+    'hvy insert 0 history-record /body/history/history-list --using-template \'{"years":"2025","organization":"Heavy","role":"Founder"}\''
+  )).rejects.toThrow('Missing keys: description');
+  await expect(executeHvyCliCommand(
+    document,
+    session,
+    'hvy insert 0 history-record /body/history/history-list --using-template \'{"years":"2025","organization":"Heavy","role":"Founder","description":"","extra":""}\''
+  )).rejects.toThrow('Extra keys: extra');
+  await expect(executeHvyCliCommand(
+    document,
+    session,
+    'hvy insert 0 history-record /body/history/history-list --using-template \'{"years":"2025\\n2026","organization":"Heavy","role":"Founder","description":""}\''
+  )).rejects.toThrow('Template value "years" is type text and cannot contain newlines.');
+  await expect(executeHvyCliCommand(
+    document,
+    session,
+    'hvy insert 0 history-record /body/history/history-list --using-template not-json'
+  )).rejects.toThrow('--using-template must be a JSON object of string values.');
+  await expect(executeHvyCliCommand(
+    document,
+    session,
+    'hvy insert 0 history-record /body/history/history-list --using-template \'{"years":2025,"organization":"Heavy","role":"Founder","description":""}\''
+  )).rejects.toThrow('--using-template value for "years" must be a string.');
+  await expect(executeHvyCliCommand(
+    document,
+    session,
+    'hvy insert 0 untokened-record /body/history --using-template \'{}\''
+  )).rejects.toThrow('hvy insert untokened-record: --using-template requires template variables. Expected keys: (none)');
+  expect(document.sections[0]?.blocks).toHaveLength(1);
 });
 
 test('hvy insert can opt in to returning order and structure on creation', async () => {

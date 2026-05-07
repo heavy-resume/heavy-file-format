@@ -445,6 +445,22 @@ Notes:
 - Implementations SHOULD render custom components according to `baseType` and preserve the custom component name for editing and round-tripping.
 - Plain Markdown renderers ignore `component_defs`.
 
+Reusable component templates MAY include value tokens in any string field. Tokens use Markdown-safe text and are replaced only when an authoring tool creates a component instance from the reusable definition:
+
+```text
+{% organization %}
+{% role | text %}
+{% description | block %}
+```
+
+Template value notes:
+- `{% name %}` is equivalent to `{% name | text %}`.
+- `text` values are single-line values; `block` values may contain multiple lines.
+- Variable names MUST be identifier-like strings: letters, numbers, and underscores, starting with a letter or underscore.
+- Repeated variables use the same value; conflicting types for the same variable are invalid.
+- Blank values are allowed. Replacing a token with a blank value does not remove or change separate schema fields such as `placeholder`.
+- Authoring tools that accept explicit template values SHOULD require the provided keys to exactly match the expected variable names.
+
 ### 5.10 Reusable section definitions
 
 Document metadata optionally includes `section_defs`, an array of reusable section definitions for authoring tools.

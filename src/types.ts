@@ -103,6 +103,16 @@ export interface ReusableSaveModalState {
   draftName: string;
 }
 
+export interface ReusableTemplateModalState {
+  component: string;
+  target:
+    | { kind: 'section'; sectionKey: string }
+    | { kind: 'component-list'; sectionKey: string; blockId: string }
+    | { kind: 'container'; sectionKey: string; blockId: string }
+    | { kind: 'grid'; sectionKey: string; blockId: string }
+    | { kind: 'expandable'; sectionKey: string; blockId: string; part: 'stub' | 'content' };
+}
+
 export interface SqliteRowComponentModalState {
   sectionKey: string;
   blockId: string;
@@ -195,6 +205,7 @@ export interface AppState {
   clearSectionTitleOnFocusKey: string | null;
   modalSectionKey: string | null;
   reusableSaveModal: ReusableSaveModalState | null;
+  reusableTemplateModal: ReusableTemplateModalState | null;
   tempHighlights: Set<string>;
   addComponentBySection: Record<string, string>;
   metaPanelOpen: boolean;

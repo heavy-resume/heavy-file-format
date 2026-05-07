@@ -7,6 +7,7 @@ import { syncReusableTemplateForBlock, findReusableOwner } from '../../reusable'
 import { applyImagePreset } from '../../editor/components/image/image';
 import { configurePluginBlock } from '../../plugins/plugin-block';
 import { makeId } from '../../utils';
+import { openReusableTemplateModalIfNeeded } from './reusable-template';
 import type { ActionHandler } from './types';
 import type { GridItem, VisualBlock } from '../../editor/types';
 
@@ -14,8 +15,11 @@ const addBlock: ActionHandler = ({ actionButton, section }) => {
   if (!section || section.lock) {
     return;
   }
-  recordHistory();
   const component = (actionButton.dataset.component ?? state.addComponentBySection[section.key] ?? 'text').trim() || 'text';
+  if (openReusableTemplateModalIfNeeded(component, { kind: 'section', sectionKey: section.key })) {
+    return;
+  }
+  recordHistory();
   const newBlock = createEmptyBlock(component);
   if (component === 'plugin' && actionButton.dataset.pluginId) {
     configurePluginBlock(newBlock, actionButton.dataset.pluginId);

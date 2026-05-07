@@ -15,9 +15,11 @@ import { buildChatCliPersistentInstructions } from './chat-cli-instructions';
 import type { HvyCliSession } from '../cli-core/commands';
 import {
   appendProviderToolResultsToState,
+  buildInitialProviderToolState,
   type ProviderToolCall,
   type ProviderToolDefinition,
   type ProviderToolResult,
+  type ProviderToolTurn,
   type ProviderToolState,
 } from '../chat/provider-tools';
 
@@ -45,6 +47,7 @@ export interface ChatCliInitialTurnRequest {
   context: string;
   systemInstructions: string;
   traceRunId: string;
+  toolState?: ProviderToolState;
 }
 
 export interface ChatCliSimTurnState extends ChatCliInitialTurnRequest {
@@ -107,6 +110,7 @@ export async function runChatCliEditLoop(params: {
     session: initial.cli.session,
     diagnostics: initial.diagnostics,
     urgency: 0,
+    ...(initial.toolState ? { toolState: initial.toolState } : {}),
     ...(params.selectedComponent ? { selectedComponent: params.selectedComponent } : {}),
   };
   if ((params.priorMessages ?? []).some((message) => message.role === 'assistant' && message.work)) {
@@ -214,6 +218,7 @@ export async function buildChatCliInitialProxyTurnRequest(params: {
     context: initial.context,
     systemInstructions: initial.systemInstructions,
     traceRunId,
+    ...(initial.toolState ? { toolState: initial.toolState } : {}),
   };
 }
 
@@ -239,6 +244,7 @@ export async function buildChatCliInitialSimTurnState(params: {
     session: initial.cli.session,
     diagnostics: initial.diagnostics,
     urgency: 0,
+    ...(initial.toolState ? { toolState: initial.toolState } : {}),
     ...(params.selectedComponent ? { selectedComponent: params.selectedComponent } : {}),
   };
 }
@@ -601,6 +607,8 @@ function buildSimAdvanceResult(
     lastCommandError: _lastCommandError,
     commandResultMessage: _commandResultMessage,
     mutated: _mutated,
+    toolState: _toolState,
+    toolTurn: _toolTurn,
     ...baseState
   } = params.state as ChatCliSimAdvanceResult;
   return {
@@ -623,6 +631,7 @@ function buildSimAdvanceResult(
 }
 
 async function buildChatCliInitialTurnRequest(params: {
+  settings?: ChatSettings;
   document: VisualDocument;
   request: string;
   priorMessages?: ChatMessage[];
@@ -634,6 +643,7 @@ async function buildChatCliInitialTurnRequest(params: {
   cli: ReturnType<typeof createChatCliInterface>;
   diagnostics: HvyCliDiagnosticIssue[];
   priorConversation: ChatMessage[];
+  toolState?: ProviderToolState;
 }> {
   const cli = createChatCliInterface(params.document);
   if (params.selectedComponent?.path) {
@@ -698,14 +708,124 @@ async function buildChatCliInitialTurnRequest(params: {
     priorConversation,
     params.selectedComponent
   );
+  const systemInstructions = buildChatCliLoopSystemInstructions(cli.snapshot().commandSummary);
+  const provider = params.settings?.provider ?? 'openai';
+  const toolState = buildInitialChatCliToolState({
+    provider,
+    model: params.settings?.model ?? '',
+    messages: [
+      ...priorConversation,
+      {
+        id: crypto.randomUUID(),
+        role: 'user',
+        content: params.request,
+      },
+    ],
+    context,
+    systemInstructions,
+    initialOutputs,
+  });
   return {
     cli,
     diagnostics,
     priorConversation,
     messages,
     context,
-    systemInstructions: buildChatCliLoopSystemInstructions(cli.snapshot().commandSummary),
+    systemInstructions,
+    toolState,
     traceRunId: params.traceRunId,
+  };
+}
+
+function buildInitialChatCliToolState(params: {
+  provider: ChatSettings['provider'];
+  model: string;
+  messages: ChatMessage[];
+  context: string;
+  systemInstructions: string;
+  initialOutputs: Array<{ command: string; output: string }>;
+}): ProviderToolState {
+  let state = buildInitialProviderToolState({
+    provider: params.provider,
+    model: params.model,
+    mode: 'document-edit',
+    messages: [
+      {
+        role: 'system',
+        content: params.systemInstructions,
+      },
+      ...params.messages,
+    ],
+    context: params.context,
+    tools: buildChatCliNativeToolDefinitions(),
+  });
+  for (let index = 0; index < params.initialOutputs.length; index += 1) {
+    const output = params.initialOutputs[index];
+    if (!output) {
+      continue;
+    }
+    const callId = `startup_call_${index + 1}`;
+    const turn = buildSyntheticChatCliToolTurn(params.provider, callId, output.command);
+    state = appendProviderToolResultsToState(state, turn, [{
+      callId,
+      output: JSON.stringify({
+        stdout: output.output,
+        stderr: '',
+        exit_code: 0,
+        cwd: '/',
+        mutated: false,
+      }),
+    }]);
+  }
+  return state;
+}
+
+function buildSyntheticChatCliToolTurn(provider: ChatSettings['provider'], callId: string, command: string): ProviderToolTurn {
+  if (provider === 'anthropic') {
+    return {
+      output: '',
+      reasoningSummary: '',
+      toolCalls: [{ id: callId, name: 'run_hvy_cli', arguments: { command } }],
+      nativeMessages: [{
+        role: 'assistant',
+        content: [{
+          type: 'tool_use',
+          id: callId,
+          name: 'run_hvy_cli',
+          input: { command },
+        }],
+      }],
+    };
+  }
+  if (provider === 'qwen') {
+    return {
+      output: '',
+      reasoningSummary: '',
+      toolCalls: [{ id: callId, name: 'run_hvy_cli', arguments: { command } }],
+      nativeMessages: [{
+        role: 'assistant',
+        content: '',
+        tool_calls: [{
+          id: callId,
+          type: 'function',
+          function: {
+            name: 'run_hvy_cli',
+            arguments: JSON.stringify({ command }),
+          },
+        }],
+      }],
+    };
+  }
+  return {
+    output: '',
+    reasoningSummary: '',
+    toolCalls: [{ id: callId, name: 'run_hvy_cli', arguments: { command } }],
+    nativeMessages: [{
+      type: 'function_call',
+      call_id: callId,
+      name: 'run_hvy_cli',
+      arguments: JSON.stringify({ command }),
+    }],
   };
 }
 

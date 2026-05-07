@@ -460,7 +460,12 @@ test('buildDocumentEditCliSimRequest exposes the exact provider-facing CLI reque
   });
   const payload = JSON.parse(result.requestJson) as {
     model: string;
-    input: Array<{ role: string; content: Array<{ text: string; type: string }> }>;
+    tools?: Array<{ name: string }>;
+    input: Array<
+      | { role: string; content: Array<{ text: string; type: string }> }
+      | { type: 'function_call'; call_id: string; name: string; arguments: string }
+      | { type: 'function_call_output'; call_id: string; output: string }
+    >;
   };
 
   expect(payload).toEqual(expect.objectContaining({
@@ -472,24 +477,55 @@ test('buildDocumentEditCliSimRequest exposes the exact provider-facing CLI reque
   expect(payload).not.toHaveProperty('messages');
   expect(payload).not.toHaveProperty('responseInstructions');
   expect(payload).not.toHaveProperty('systemInstructions');
+  expect(payload.tools?.map((tool) => tool.name)).toEqual(['run_hvy_cli', 'finish_task', 'ask_user']);
   expect(payload.input).toEqual([
     expect.objectContaining({ role: 'system', content: [expect.objectContaining({ text: expect.stringContaining('Response instructions:\nWhen continuing, return concise notes plus terminal command(s).') })] }),
     expect.objectContaining({ role: 'user', content: [expect.objectContaining({ text: expect.stringContaining('Request context:\n\nCurrent request:\nAdd a chore section.') })] }),
     expect.objectContaining({ role: 'user', content: [expect.objectContaining({ text: 'Add a chore section.' })] }),
-    expect.objectContaining({ role: 'assistant', content: [expect.objectContaining({ text: expect.stringContaining('```shell\nls /\n```') })] }),
-    expect.objectContaining({ role: 'user', content: [expect.objectContaining({ text: expect.stringContaining('dir  body') })] }),
-    expect.objectContaining({ role: 'assistant', content: [expect.objectContaining({ text: expect.stringContaining('```shell\nhvy --help\n```') })] }),
-    expect.objectContaining({ role: 'user', content: [expect.objectContaining({ text: expect.stringContaining('hvy insert INDEX section PARENT_PATH ID TITLE') })] }),
-    expect.objectContaining({ role: 'assistant', content: [expect.objectContaining({ text: expect.stringContaining('```shell\nhvy request_structure --collapse\n```') })] }),
-    expect.objectContaining({ role: 'user', content: [expect.objectContaining({ text: expect.stringContaining('Components:') })] }),
-    expect.objectContaining({ role: 'assistant', content: [expect.objectContaining({ text: expect.stringContaining('```shell\nhvy find-intent "Add a chore section." --max 5\n```') })] }),
-    expect.objectContaining({ role: 'user', content: [expect.objectContaining({ text: expect.stringContaining('Next response: Write one concise What / Why / Unsure note block') })] }),
+    { type: 'function_call', call_id: 'startup_call_1', name: 'run_hvy_cli', arguments: '{"command":"ls /"}' },
+    expect.objectContaining({ type: 'function_call_output', call_id: 'startup_call_1', output: expect.stringContaining('dir  body') }),
+    { type: 'function_call', call_id: 'startup_call_2', name: 'run_hvy_cli', arguments: '{"command":"hvy --help"}' },
+    expect.objectContaining({ type: 'function_call_output', call_id: 'startup_call_2', output: expect.stringContaining('hvy insert INDEX section PARENT_PATH ID TITLE') }),
+    { type: 'function_call', call_id: 'startup_call_3', name: 'run_hvy_cli', arguments: '{"command":"hvy request_structure --collapse"}' },
+    expect.objectContaining({ type: 'function_call_output', call_id: 'startup_call_3', output: expect.stringContaining('Components:') }),
+    { type: 'function_call', call_id: 'startup_call_4', name: 'run_hvy_cli', arguments: '{"command":"hvy find-intent \\"Add a chore section.\\" --max 5"}' },
+    expect.objectContaining({ type: 'function_call_output', call_id: 'startup_call_4', output: expect.stringContaining('No intent matches found') }),
   ]);
-  expect(payload.input.at(-1)?.content[0]?.text).toContain('### BEGIN /scratchpad.txt  ###\nlast edited never\n\nYou havent written your plan yet.');
-  expect(payload.input.at(-1)?.content[0]?.text.trim().endsWith('or run ask QUESTION, or run done MESSAGE_TO_USER.')).toBe(true);
-  expect(result.requestJson).toContain('```shell\\nls /\\n```');
+  expect(result.requestJson).not.toContain('### CMD RESULT ###');
+  expect(result.requestJson).not.toContain('```shell\\nls /\\n```');
   expect(writeChatCliCommandTraceMock).not.toHaveBeenCalled();
   expect(writeChatCliUserQueryTraceMock).not.toHaveBeenCalled();
+});
+
+test('buildDocumentEditCliSimRequest displays the provider request derived from the same proxy payload it will send', async () => {
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+  const document = deserializeDocument('---\nhvy_version: 0.1\n---\n', '.hvy');
+
+  const result = await buildDocumentEditCliSimRequest({
+    settings,
+    document,
+    messages: [],
+    request: 'Inspect the document.',
+  });
+
+  const renderedProviderRequest = JSON.parse(result.requestJson);
+  const proxyPayload = result.requestPayload as {
+    provider: string;
+    model: string;
+    tools?: Array<{ name: string }>;
+  };
+  expect(proxyPayload).toEqual(expect.objectContaining({
+    provider: 'openai',
+    model: 'gpt-5-mini',
+    tools: expect.arrayContaining([expect.objectContaining({ name: 'run_hvy_cli' })]),
+  }));
+  expect(renderedProviderRequest).toEqual(expect.objectContaining({
+    model: 'gpt-5-mini',
+    input: expect.arrayContaining([
+      { type: 'function_call', call_id: 'startup_call_1', name: 'run_hvy_cli', arguments: '{"command":"ls /"}' },
+      expect.objectContaining({ type: 'function_call_output', call_id: 'startup_call_1' }),
+    ]),
+  }));
 });
 
 test('advanceDocumentEditCliSimStep executes the response and prepares the next chronological request payload', async () => {
@@ -506,9 +542,26 @@ test('advanceDocumentEditCliSimStep executes the response and prepares the next 
     settings,
     document,
     turnState: initial.turnState,
-    assistantOutput: 'What you are doing: checking location\nWhy you are doing it: verify context\nWhat you are unsure of: nothing\n```shell\npwd\n```',
+    assistantOutput: '',
+    toolTurn: {
+      output: '',
+      reasoningSummary: '',
+      toolCalls: [{
+        id: 'call_pwd',
+        name: 'run_hvy_cli',
+        arguments: { command: 'pwd' },
+      }],
+      nativeMessages: [{ type: 'function_call', call_id: 'call_pwd', name: 'run_hvy_cli', arguments: '{"command":"pwd"}' }],
+      toolState: initial.turnState.toolState ?? { provider: 'openai', input: [] },
+    },
   });
-  const payload = JSON.parse(result.requestJson) as { input: Array<{ role: string; content: Array<{ text: string }> }> };
+  const payload = JSON.parse(result.requestJson) as {
+    input: Array<
+      | { role: string; content: Array<{ text: string }> }
+      | { type: 'function_call'; call_id: string; name: string; arguments: string }
+      | { type: 'function_call_output'; call_id: string; output: string }
+    >;
+  };
 
   expect(result.commandResultMessage.startsWith('Current directory: /')).toBe(true);
   expect(result.commandResultMessage).toContain('CMD: pwd\n### CMD RESULT ###\n/');
@@ -518,10 +571,18 @@ test('advanceDocumentEditCliSimStep executes the response and prepares the next 
     role: 'assistant',
     content: [expect.objectContaining({ text: expect.stringContaining('```shell\npwd\n```') })],
   }));
-  expect(payload.input.at(-1)).toEqual(expect.objectContaining({
-    role: 'user',
-    content: [expect.objectContaining({ text: expect.stringContaining('Next response: Write one concise What / Why / Unsure note block') })],
+  expect(payload.input.at(-2)).toEqual(expect.objectContaining({
+    type: 'function_call',
+    call_id: 'call_pwd',
+    name: 'run_hvy_cli',
+    arguments: '{"command":"pwd"}',
   }));
+  expect(payload.input.at(-1)).toEqual(expect.objectContaining({
+    type: 'function_call_output',
+    call_id: 'call_pwd',
+    output: expect.stringContaining('"stdout":"/"'),
+  }));
+  expect(result.requestJson).not.toContain('### CMD RESULT ###');
 });
 
 test('advanceDocumentEditCliSimStep mutates the same document for insert commands', async () => {

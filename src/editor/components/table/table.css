@@ -81,7 +81,7 @@
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: start;
   gap: 0.2rem;
-  padding: 0.12rem 0.18rem;
+  padding: 0.05rem 0.08rem;
 }
 
 .table-inline-edit-shell {
@@ -90,7 +90,7 @@
 }
 
 .table-inline-toolbar {
-  position: static;
+  position: absolute;
   top: calc(100% + 0.15rem);
   right: 0;
   z-index: 30;
@@ -105,7 +105,7 @@
   border-radius: 8px;
   background: color-mix(in srgb, var(--hvy-surface) 96%, transparent);
   box-shadow: 0 8px 18px var(--hvy-shadow);
-  margin-bottom: 0.18rem;
+  margin: 0;
   opacity: 1;
   pointer-events: auto;
   transform: none;
@@ -169,9 +169,10 @@
 
 .table-inline-text {
   width: 100%;
-  padding: 0.42rem 0.5rem;
+  padding: 0.26rem 0.38rem;
   border-radius: 8px;
   overflow: hidden;
+  line-height: 1.25;
   white-space: pre-wrap;
   overflow-wrap: break-word;
 }

@@ -1,18 +1,16 @@
-import { state, getRenderApp, closeAiEditPopover, handleRichEditorClick } from './_imports';
+import { state, getRenderApp, closeAiEditPopover, completePendingRichAnnotation, handleRichEditorClick } from './_imports';
 
 export function bindClickMisc(app: HTMLElement): void {
+  app.addEventListener('mouseup', (event) => {
+    const richTarget = getRichTarget(event.target as HTMLElement);
+    if (richTarget) {
+      completePendingRichAnnotation(richTarget);
+    }
+  });
+
   app.addEventListener('click', (event) => {
     const target = event.target as HTMLElement;
-    const richTarget =
-      target.dataset.field === 'block-rich' ||
-      target.dataset.field === 'block-grid-rich' ||
-      target.dataset.field === 'table-details-rich' ||
-      target.dataset.field === 'table-column' ||
-      target.dataset.field === 'table-cell'
-        ? target
-        : target.closest<HTMLElement>(
-            '[data-field="block-rich"], [data-field="block-grid-rich"], [data-field="table-details-rich"], [data-field="table-column"], [data-field="table-cell"]'
-          );
+    const richTarget = getRichTarget(target);
     if (richTarget) {
       handleRichEditorClick(event, richTarget);
     }
@@ -73,6 +71,18 @@ export function bindClickMisc(app: HTMLElement): void {
     closeAiEditPopover();
     getRenderApp()();
   });
+}
+
+function getRichTarget(target: HTMLElement): HTMLElement | null {
+  return target.dataset.field === 'block-rich' ||
+    target.dataset.field === 'block-grid-rich' ||
+    target.dataset.field === 'table-details-rich' ||
+    target.dataset.field === 'table-column' ||
+    target.dataset.field === 'table-cell'
+    ? target
+    : target.closest<HTMLElement>(
+        '[data-field="block-rich"], [data-field="block-grid-rich"], [data-field="table-details-rich"], [data-field="table-column"], [data-field="table-cell"]'
+      );
 }
 
 function closeOtherComponentPickers(app: HTMLElement, except?: HTMLElement): void {

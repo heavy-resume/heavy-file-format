@@ -673,6 +673,14 @@ export function applyRichAction(action: string, editable: HTMLElement, value?: s
     updateRichToolbarState(editable);
     return;
   }
+  if (action === 'short' || action === 'nowrap') {
+    const changed = toggleAnnotationAction(editable, action);
+    updateRichToolbarState(editable);
+    if (changed) {
+      editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    }
+    return;
+  }
   if (action === 'bold') {
     applyInlineRichAction(editable, 'strong', 'bold');
   } else if (action === 'italic') {
@@ -709,10 +717,6 @@ export function applyRichAction(action: string, editable: HTMLElement, value?: s
       return;
     }
     applyInlineRichAction(editable, 'a', 'link', url);
-  } else if (action === 'short') {
-    toggleShortAnnotation(editable);
-  } else if (action === 'nowrap') {
-    toggleNowrapAnnotation(editable);
   }
 
   updateRichToolbarState(editable);
@@ -748,18 +752,70 @@ function toggleExistingTableAnnotationPreview(action: string, editable: HTMLElem
   return true;
 }
 
-function toggleShortAnnotation(editable: HTMLElement): void {
+type AnnotationAction = 'short' | 'nowrap';
+
+function toggleAnnotationAction(editable: HTMLElement, action: AnnotationAction): boolean {
   const range = getEditableSelectionRange(editable);
-  if (!range) {
-    return;
-  }
-  const existing = getAnnotationAncestor(range, 'hvyShort');
+  const annotationKey = action === 'short' ? 'hvyShort' : 'hvyNowrap';
+  const existing = range ? getAnnotationAncestor(range, annotationKey) : null;
   if (existing) {
-    unwrapShortAnnotation(existing);
-    return;
+    clearPendingAnnotationAction(editable);
+    if (action === 'short') {
+      unwrapShortAnnotation(existing);
+    } else {
+      unwrapInlineElement(existing);
+    }
+    return true;
   }
+  if (!range || range.collapsed || range.toString().length === 0) {
+    togglePendingAnnotationAction(editable, action);
+    return false;
+  }
+  clearPendingAnnotationAction(editable);
+  return action === 'short' ? wrapShortAnnotation(range) : wrapNowrapAnnotation(range);
+}
+
+export function completePendingRichAnnotation(editable: HTMLElement): boolean {
+  const action = getPendingAnnotationAction(editable);
+  if (!action) {
+    refreshRichToolbarState(editable);
+    return false;
+  }
+  const range = getEditableSelectionRange(editable);
+  if (!range || range.collapsed || range.toString().length === 0) {
+    refreshRichToolbarState(editable);
+    return false;
+  }
+  clearPendingAnnotationAction(editable);
+  const changed = action === 'short' ? wrapShortAnnotation(range) : wrapNowrapAnnotation(range);
+  updateRichToolbarState(editable);
+  if (changed) {
+    editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
+  }
+  return changed;
+}
+
+function getPendingAnnotationAction(editable: HTMLElement): AnnotationAction | null {
+  return editable.dataset.pendingAnnotationAction === 'short' || editable.dataset.pendingAnnotationAction === 'nowrap'
+    ? editable.dataset.pendingAnnotationAction
+    : null;
+}
+
+function togglePendingAnnotationAction(editable: HTMLElement, action: AnnotationAction): void {
+  if (getPendingAnnotationAction(editable) === action) {
+    clearPendingAnnotationAction(editable);
+  } else {
+    editable.dataset.pendingAnnotationAction = action;
+  }
+}
+
+function clearPendingAnnotationAction(editable: HTMLElement): void {
+  delete editable.dataset.pendingAnnotationAction;
+}
+
+function wrapShortAnnotation(range: Range): boolean {
   if (range.collapsed || range.toString().length === 0) {
-    return;
+    return false;
   }
   const selectionText = range.toString();
   const wrapper = document.createElement('span');
@@ -777,20 +833,12 @@ function toggleShortAnnotation(editable: HTMLElement): void {
   range.deleteContents();
   range.insertNode(wrapper);
   selectElementContents(short);
+  return true;
 }
 
-function toggleNowrapAnnotation(editable: HTMLElement): void {
-  const range = getEditableSelectionRange(editable);
-  if (!range) {
-    return;
-  }
-  const existing = getAnnotationAncestor(range, 'hvyNowrap');
-  if (existing) {
-    unwrapInlineElement(existing);
-    return;
-  }
+function wrapNowrapAnnotation(range: Range): boolean {
   if (range.collapsed || range.toString().length === 0) {
-    return;
+    return false;
   }
   const wrapper = document.createElement('span');
   wrapper.className = 'hvy-nowrap';
@@ -799,6 +847,7 @@ function toggleNowrapAnnotation(editable: HTMLElement): void {
   wrapper.appendChild(fragment);
   range.insertNode(wrapper);
   selectElementContents(wrapper);
+  return true;
 }
 
 function unwrapShortAnnotation(element: HTMLElement): void {
@@ -1114,8 +1163,8 @@ function updateRichToolbarState(editable: HTMLElement): void {
             : shell && action === 'nowrap'
             ? shell.classList.contains('is-previewing-nowrap')
             : action === 'short'
-            ? Boolean(range && getAnnotationAncestor(range, 'hvyShort'))
-            : Boolean(range && getAnnotationAncestor(range, 'hvyNowrap'));
+            ? getPendingAnnotationAction(editable) === 'short' || Boolean(range && getAnnotationAncestor(range, 'hvyShort'))
+            : getPendingAnnotationAction(editable) === 'nowrap' || Boolean(range && getAnnotationAncestor(range, 'hvyNowrap'));
         button.classList.toggle('secondary', selected);
         button.classList.toggle('is-selected', selected);
         button.classList.toggle('ghost', !selected);

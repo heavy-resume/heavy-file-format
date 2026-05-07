@@ -133,9 +133,13 @@ export function bindKeydown(app: HTMLElement): void {
 function getRichTarget(target: HTMLElement): HTMLElement | null {
   return target.dataset.field === 'block-rich' ||
     target.dataset.field === 'block-grid-rich' ||
-    target.dataset.field === 'table-details-rich'
+    target.dataset.field === 'table-details-rich' ||
+    target.dataset.field === 'table-column' ||
+    target.dataset.field === 'table-cell'
     ? target
-    : target.closest<HTMLElement>('[data-field="block-rich"], [data-field="block-grid-rich"], [data-field="table-details-rich"]');
+    : target.closest<HTMLElement>(
+        '[data-field="block-rich"], [data-field="block-grid-rich"], [data-field="table-details-rich"], [data-field="table-column"], [data-field="table-cell"]'
+      );
 }
 
 function getEmptySectionHeadingLevel(sectionKey: string): 1 | 2 | 3 {

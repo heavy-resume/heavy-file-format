@@ -64,19 +64,21 @@ function renderTableRowEditor(
       ${safeColumns
         .map(
           (_column, cellIndex) => `<td>
-            <div
-              class="inline-editable table-inline-text"
-              contenteditable="true"
-              spellcheck="false"
-              data-inline-text="true"
-              data-section-key="${helpers.escapeAttr(sectionKey)}"
-              data-block-id="${helpers.escapeAttr(blockId)}"
-              data-row-index="${rowIndex}"
-              data-cell-index="${cellIndex}"
-              data-field="table-cell"
-              data-placeholder="${helpers.escapeAttr(safeColumns[cellIndex] || 'Cell value')}"
-            >${renderTableInlineEditorHtml(row.cells[cellIndex] ?? '', helpers)}</div>
-            ${renderTableInlineToolbar(sectionKey, blockId, 'table-cell', helpers, { rowIndex, cellIndex })}
+            <div class="table-inline-edit-shell">
+              <div
+                class="inline-editable table-inline-text"
+                contenteditable="true"
+                spellcheck="false"
+                data-inline-text="true"
+                data-section-key="${helpers.escapeAttr(sectionKey)}"
+                data-block-id="${helpers.escapeAttr(blockId)}"
+                data-row-index="${rowIndex}"
+                data-cell-index="${cellIndex}"
+                data-field="table-cell"
+                data-placeholder="${helpers.escapeAttr(safeColumns[cellIndex] || 'Cell value')}"
+              >${renderTableInlineEditorHtml(row.cells[cellIndex] ?? '', helpers)}</div>
+              ${renderTableInlineToolbar(sectionKey, blockId, 'table-cell', helpers, { rowIndex, cellIndex })}
+            </div>
           </td>`
         )
         .join('')}
@@ -128,17 +130,19 @@ export const renderTableEditor: ComponentEditorRenderer = (sectionKey, block, he
                           data-column-index="${columnIndex}"
                           title="Drag to reorder column"
                         >::</button>
-                        <div
-                          class="inline-editable table-inline-text table-column-name"
-                          contenteditable="${block.schema.lock ? 'false' : 'true'}"
-                          spellcheck="false"
-                          data-inline-text="true"
-                          data-section-key="${helpers.escapeAttr(sectionKey)}"
-                          data-block-id="${helpers.escapeAttr(block.id)}"
-                          data-column-index="${columnIndex}"
-                          data-field="table-column"
-                        >${renderTableInlineEditorHtml(column, helpers)}</div>
-                        ${renderTableInlineToolbar(sectionKey, block.id, 'table-column', helpers, { columnIndex })}
+                        <div class="table-inline-edit-shell">
+                          <div
+                            class="inline-editable table-inline-text table-column-name"
+                            contenteditable="${block.schema.lock ? 'false' : 'true'}"
+                            spellcheck="false"
+                            data-inline-text="true"
+                            data-section-key="${helpers.escapeAttr(sectionKey)}"
+                            data-block-id="${helpers.escapeAttr(block.id)}"
+                            data-column-index="${columnIndex}"
+                            data-field="table-column"
+                          >${renderTableInlineEditorHtml(column, helpers)}</div>
+                          ${renderTableInlineToolbar(sectionKey, block.id, 'table-column', helpers, { columnIndex })}
+                        </div>
                         ${
                           block.schema.lock
                             ? ''

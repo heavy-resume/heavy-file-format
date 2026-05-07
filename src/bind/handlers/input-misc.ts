@@ -250,7 +250,7 @@ export function bindInputMisc(app: HTMLElement): void {
     }
 
     if (handleBlockFieldInput(target)) {
-      if (field === 'block-rich' || field === 'block-grid-rich' || field === 'table-details-rich') {
+      if (field === 'block-rich' || field === 'block-grid-rich' || field === 'table-details-rich' || field === 'table-cell' || field === 'table-column') {
         refreshRichToolbarState(target);
       }
       console.debug('[hvy:perf] input:end', { eventId, field, elapsedMs: Number((performance.now() - startedAt).toFixed(2)), handledBy: 'block-field' });

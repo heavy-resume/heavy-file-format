@@ -44,10 +44,14 @@
 .hvy-short-value {
   display: none;
   min-width: 3ch;
+  outline: none;
+}
+
+.rich-editor .hvy-short-value,
+.table-inline-text .hvy-short-value {
   padding: 0 0.22em;
   border: 1px dashed currentColor;
   border-radius: 0.2em;
-  outline: none;
 }
 
 .hvy-short-value:empty::before {

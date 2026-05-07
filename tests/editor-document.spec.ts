@@ -173,6 +173,7 @@ hvy_version: 0.1
   await expect(table.locator('th').first()).toHaveAttribute('title', 'Tool');
   await expect(table.locator('th').nth(1).locator('.hvy-short-full')).toBeHidden();
   await expect(table.locator('th').nth(1).locator('.hvy-short-value')).toHaveText('Desc');
+  await expect(table.locator('th').nth(1).locator('.hvy-short-value')).toHaveCSS('border-style', 'none');
   await expect(table.locator('td').nth(1)).toHaveCSS('white-space', 'nowrap');
   await expect(table.locator('td').nth(1)).toHaveCSS('text-overflow', 'ellipsis');
   await expect(table.locator('td').nth(1)).toHaveAttribute('title', 'Responsive table text should wrap inside the phone preview instead of pushing the table wider than its container.');
@@ -189,28 +190,81 @@ hvy_version: 0.1
 <!--hvy: {"id":"table-test"}-->
 #! Table Test
 
-<!--hvy:table {"id":"editable-table","tableColumns":["Organization","Status"],"tableShowHeader":true,"tableRows":[{"cells":["Northwind Labs","Active"]}]}-->
+<!--hvy:table {"id":"editable-table","lock":true,"tableColumns":["<!--hvy:short {\\"to\\":\\"Org\\"}-->Organization<!--/hvy:short-->","<!--hvy:nowrap-->Long Status Header<!--/hvy:nowrap-->"],"tableShowHeader":true,"tableRows":[{"cells":["Northwind Labs","Active"]}]}-->
 `);
   await page.getByRole('button', { name: 'Apply' }).click();
   await page.getByRole('button', { name: 'Basic' }).click();
   await page.locator('.editor-block-passive', { hasText: 'Northwind Labs' }).click();
 
   const column = page.locator('.table-column-name[data-column-index="0"]');
-  await column.evaluate((node) => {
-    const range = document.createRange();
-    range.selectNodeContents(node);
-    const selection = window.getSelection();
-    selection?.removeAllRanges();
-    selection?.addRange(range);
-  });
-  await page.locator('.table-inline-toolbar [data-rich-action="short"][data-rich-field="table-column"][data-column-index="0"]').click();
-  await column.locator('.hvy-short-value').evaluate((node) => {
-    node.textContent = 'Org';
-    node.dispatchEvent(new InputEvent('input', { bubbles: true }));
-  });
+  const shortButton = page.locator('.table-inline-toolbar [data-rich-action="short"][data-rich-field="table-column"][data-column-index="0"]');
+  await expect.poll(async () => column.evaluate((node) => (node as HTMLElement).innerText.trim())).toBe('Organization');
+  await expect(column.locator('.hvy-short-full')).toBeVisible();
+  await expect(column.locator('.hvy-short-value')).toBeHidden();
+  await expect(shortButton).not.toHaveClass(/is-selected/);
+
+  await column.hover();
+  await shortButton.click();
+  await expect(shortButton).toHaveClass(/is-selected/);
+  await expect(column.locator('.hvy-short-full')).toHaveText('Organization');
+  await expect(column.locator('.hvy-short-value')).toHaveText('Org');
+  await expect(column.locator('.hvy-short-full')).toBeHidden();
+  await expect(column.locator('.hvy-short-value')).toBeVisible();
+
+  await shortButton.click();
+  await expect(shortButton).not.toHaveClass(/is-selected/);
+  await expect.poll(async () => column.evaluate((node) => (node as HTMLElement).innerText.trim())).toBe('Organization');
+  await expect(column.locator('.hvy-short')).toHaveCount(1);
+
+  const nowrapColumn = page.locator('.table-column-name[data-column-index="1"]');
+  const nowrapButton = page.locator('.table-inline-toolbar [data-rich-action="nowrap"][data-rich-field="table-column"][data-column-index="1"]');
+  await expect(nowrapButton).not.toHaveClass(/is-selected/);
+  await nowrapColumn.hover();
+  await nowrapButton.click();
+  await expect(nowrapButton).toHaveClass(/is-selected/);
+  await expect(nowrapColumn.locator('.hvy-nowrap')).toHaveText('Long Status Header');
+  await nowrapButton.click();
+  await expect(nowrapButton).not.toHaveClass(/is-selected/);
+  await expect(nowrapColumn.locator('.hvy-nowrap')).toHaveCount(1);
 
   await page.getByRole('button', { name: 'Raw' }).click();
   await expect(page.locator('#rawEditor')).toContainText('<!--hvy:short {\\"to\\":\\"Org\\"}-->Organization<!--/hvy:short-->');
+  await expect(page.locator('#rawEditor')).toContainText('<!--hvy:nowrap-->Long Status Header<!--/hvy:nowrap-->');
+});
+
+test('table editor defaults existing short annotations on in phone and tablet previews', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"table-test"}-->
+#! Table Test
+
+<!--hvy:table {"id":"editable-table","lock":true,"tableColumns":["<!--hvy:short {\\"to\\":\\"Org\\"}-->Organization<!--/hvy:short-->","Status"],"tableShowHeader":true,"tableRows":[{"cells":["Northwind Labs","Active"]}]}-->
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+  await page.getByRole('button', { name: 'Phone 390' }).click();
+  await page.locator('.editor-block-passive', { hasText: 'Northwind Labs' }).click();
+
+  const column = page.locator('.table-column-name[data-column-index="0"]');
+  const shortButton = page.locator('.table-inline-toolbar [data-rich-action="short"][data-rich-field="table-column"][data-column-index="0"]');
+
+  const selectedShortBackground = await shortButton.evaluate((node) => getComputedStyle(node).backgroundColor);
+  expect(selectedShortBackground).not.toBe('rgba(0, 0, 0, 0)');
+  await expect.poll(async () => column.evaluate((node) => (node as HTMLElement).innerText.trim())).toBe('Org');
+
+  await column.hover();
+  await shortButton.click();
+  await expect.poll(async () => shortButton.evaluate((node) => getComputedStyle(node).backgroundColor)).not.toBe(selectedShortBackground);
+  await expect.poll(async () => column.evaluate((node) => (node as HTMLElement).innerText.trim())).toBe('Organization');
+
+  await page.getByRole('button', { name: 'Tablet 768' }).click();
+  await expect.poll(async () => shortButton.evaluate((node) => getComputedStyle(node).backgroundColor)).toBe(selectedShortBackground);
+  await expect.poll(async () => column.evaluate((node) => (node as HTMLElement).innerText.trim())).toBe('Org');
 });
 
 test('document ai context is editable metadata and keeps focus while typing', async ({ page }) => {

@@ -6,10 +6,12 @@ export function bindClickMisc(app: HTMLElement): void {
     const richTarget =
       target.dataset.field === 'block-rich' ||
       target.dataset.field === 'block-grid-rich' ||
-      target.dataset.field === 'table-details-rich'
+      target.dataset.field === 'table-details-rich' ||
+      target.dataset.field === 'table-column' ||
+      target.dataset.field === 'table-cell'
         ? target
         : target.closest<HTMLElement>(
-            '[data-field="block-rich"], [data-field="block-grid-rich"], [data-field="table-details-rich"]'
+            '[data-field="block-rich"], [data-field="block-grid-rich"], [data-field="table-details-rich"], [data-field="table-column"], [data-field="table-cell"]'
           );
     if (richTarget) {
       handleRichEditorClick(event, richTarget);

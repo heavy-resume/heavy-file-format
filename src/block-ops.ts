@@ -669,6 +669,10 @@ export function getComponentRenderHelpers(editorRenderer: {
 }
 
 export function applyRichAction(action: string, editable: HTMLElement, value?: string): void {
+  if ((action === 'short' || action === 'nowrap') && toggleExistingTableAnnotationPreview(action, editable)) {
+    updateRichToolbarState(editable);
+    return;
+  }
   if (action === 'bold') {
     applyInlineRichAction(editable, 'strong', 'bold');
   } else if (action === 'italic') {
@@ -714,6 +718,34 @@ export function applyRichAction(action: string, editable: HTMLElement, value?: s
   updateRichToolbarState(editable);
   const inputEvent = new InputEvent('input', { bubbles: true });
   editable.dispatchEvent(inputEvent);
+}
+
+function toggleExistingTableAnnotationPreview(action: string, editable: HTMLElement): boolean {
+  if (editable.dataset.field !== 'table-column' && editable.dataset.field !== 'table-cell') {
+    return false;
+  }
+  const shell = editable.closest<HTMLElement>('.table-inline-edit-shell');
+  if (!shell) {
+    return false;
+  }
+  if (action === 'short' && editable.querySelector('[data-hvy-short="true"]')) {
+    if (isTableShortPreviewSelected(shell, editable)) {
+      shell.classList.remove('is-previewing-short');
+      shell.classList.add('is-previewing-full');
+    } else {
+      shell.classList.add('is-previewing-short');
+      shell.classList.remove('is-previewing-full');
+    }
+    return true;
+  }
+  if (action === 'nowrap' && editable.querySelector('[data-hvy-nowrap="true"]')) {
+    shell.classList.toggle('is-previewing-nowrap');
+    return true;
+  }
+  if (editable.isContentEditable) {
+    return false;
+  }
+  return true;
 }
 
 function toggleShortAnnotation(editable: HTMLElement): void {
@@ -1061,36 +1093,59 @@ export function handleRichEditorClick(event: MouseEvent, editable: HTMLElement):
 }
 
 function updateRichToolbarState(editable: HTMLElement): void {
-  const toolbar = editable.closest('.editor-block')?.querySelector<HTMLElement>('.rich-toolbar');
-  if (!toolbar) {
+  const toolbars = [
+    editable.closest('.table-inline-edit-shell')?.querySelector<HTMLElement>('.table-inline-toolbar') ?? null,
+    editable.closest('.editor-block')?.querySelector<HTMLElement>('.rich-toolbar') ?? null,
+  ].filter((toolbar): toolbar is HTMLElement => Boolean(toolbar));
+  if (toolbars.length === 0) {
     return;
   }
   const selectedStyle = getSelectedRichBlockStyle(editable);
   const selectedInlineActions = getSelectedInlineRichActions(editable);
   const range = getEditableSelectionRange(editable);
-  toolbar.querySelectorAll<HTMLButtonElement>('[data-rich-action]').forEach((button) => {
-    const action = button.dataset.richAction ?? '';
-    if (action === 'short' || action === 'nowrap') {
+  toolbars.forEach((toolbar) => {
+    toolbar.querySelectorAll<HTMLButtonElement>('[data-rich-action]').forEach((button) => {
+      const action = button.dataset.richAction ?? '';
+      if (action === 'short' || action === 'nowrap') {
+        const shell = toolbar.closest<HTMLElement>('.table-inline-edit-shell');
+        const selected =
+          shell && action === 'short'
+            ? isTableShortPreviewSelected(shell, editable)
+            : shell && action === 'nowrap'
+            ? shell.classList.contains('is-previewing-nowrap')
+            : action === 'short'
+            ? Boolean(range && getAnnotationAncestor(range, 'hvyShort'))
+            : Boolean(range && getAnnotationAncestor(range, 'hvyNowrap'));
+        button.classList.toggle('secondary', selected);
+        button.classList.toggle('is-selected', selected);
+        button.classList.toggle('ghost', !selected);
+        return;
+      }
       const selected =
-        action === 'short'
-          ? Boolean(range && getAnnotationAncestor(range, 'hvyShort'))
-          : Boolean(range && getAnnotationAncestor(range, 'hvyNowrap'));
+        action === selectedStyle ||
+        (selectedStyle === 'paragraph' && action === 'paragraph') ||
+        (isInlineRichAction(action) && selectedInlineActions.has(action));
+      if (!/^(paragraph|heading-[1-4]|quote|code-block|list|checklist)$/.test(action) && !isInlineRichAction(action)) {
+        return;
+      }
       button.classList.toggle('secondary', selected);
       button.classList.toggle('is-selected', selected);
       button.classList.toggle('ghost', !selected);
-      return;
-    }
-    const selected =
-      action === selectedStyle ||
-      (selectedStyle === 'paragraph' && action === 'paragraph') ||
-      (isInlineRichAction(action) && selectedInlineActions.has(action));
-    if (!/^(paragraph|heading-[1-4]|quote|code-block|list|checklist)$/.test(action) && !isInlineRichAction(action)) {
-      return;
-    }
-    button.classList.toggle('secondary', selected);
-    button.classList.toggle('is-selected', selected);
-    button.classList.toggle('ghost', !selected);
+    });
   });
+}
+
+function isTableShortPreviewSelected(shell: HTMLElement, editable: HTMLElement): boolean {
+  if (!editable.querySelector('[data-hvy-short="true"]')) {
+    return false;
+  }
+  if (shell.classList.contains('is-previewing-full')) {
+    return false;
+  }
+  if (shell.classList.contains('is-previewing-short')) {
+    return true;
+  }
+  return Boolean(editable.closest('.hvy-surface-phone, .hvy-surface-tablet'));
 }
 
 function getSelectedInlineRichActions(editable: HTMLElement): Set<InlineRichAction> {

@@ -88,14 +88,29 @@ export async function executeHvyCliCommand(document: VisualDocument, session: Hv
   if (expandedInput.trim().startsWith('#')) {
     return { cwd: session.cwd, output: '', mutated: false };
   }
-  const heredoc = parseCatHeredocWrite(expandedInput);
-  if (heredoc) {
-    const fs = buildHvyVirtualFileSystem(document);
-    addSessionFiles(fs, document, session);
-    const result = writeVirtualFile({ fs, cwd: session.cwd }, heredoc.path, heredoc.content, false, 'cat');
-    enforceScratchpadHardCap(session);
+  const heredocs = parseCatHeredocWrites(expandedInput);
+  if (heredocs) {
+    const outputs: string[] = [];
+    let mutated = false;
+    let scratchpadTouched = false;
+    for (const heredoc of heredocs) {
+      const fs = buildHvyVirtualFileSystem(document);
+      addSessionFiles(fs, document, session);
+      const result = writeVirtualFile({ fs, cwd: session.cwd }, heredoc.path, heredoc.content, false, 'cat');
+      enforceScratchpadHardCap(session);
+      if (result.output) {
+        outputs.push(result.output);
+      }
+      mutated = mutated || result.mutated;
+      scratchpadTouched = scratchpadTouched || heredoc.path === 'scratchpad.txt' || heredoc.path === '/scratchpad.txt';
+    }
     updateScratchpadCommandHistory(session, expandedInput);
-    return { cwd: session.cwd, output: result.output, mutated: result.mutated };
+    const output = truncateCliOutput(outputs.join('\n'));
+    const result = { cwd: session.cwd, output, mutated };
+    if (scratchpadTouched && isScratchpadTooLong(session)) {
+      return { ...result, output: `${result.output}\n\n${buildScratchpadTooLongMessage(session.scratchpadContent ?? '')}` };
+    }
+    return result;
   }
   const args = tokenizeCommand(expandedInput);
   if (args.length === 0) {
@@ -1883,26 +1898,36 @@ function readableBodyFileForDirectory(fs: ReturnType<typeof buildHvyVirtualFileS
   return directFiles.length === 1 ? directFiles[0] ?? null : null;
 }
 
-function parseCatHeredocWrite(input: string): { path: string; content: string } | null {
+function parseCatHeredocWrites(input: string): Array<{ path: string; content: string }> | null {
   const normalized = input.replace(/\r\n?/g, '\n');
-  const firstLineEnd = normalized.indexOf('\n');
-  if (firstLineEnd < 0) {
+  let remaining = normalized.trimStart();
+  if (!remaining.startsWith('cat ')) {
     return null;
   }
-  const firstLine = normalized.slice(0, firstLineEnd).trim();
-  const match = firstLine.match(/^cat\s*>\s*(\S+)\s*<<\s*['"]?([A-Za-z0-9_.-]+)['"]?$/);
-  if (!match) {
-    return null;
+  const writes: Array<{ path: string; content: string }> = [];
+  while (remaining.trim().length > 0) {
+    remaining = remaining.trimStart();
+    const firstLineEnd = remaining.indexOf('\n');
+    if (firstLineEnd < 0) {
+      return null;
+    }
+    const firstLine = remaining.slice(0, firstLineEnd).trim();
+    const match = firstLine.match(/^cat\s*>\s*(\S+)\s*<<\s*['"]?([A-Za-z0-9_.-]+)['"]?$/);
+    if (!match) {
+      return writes.length > 0 ? null : null;
+    }
+    const path = match[1] ?? '';
+    const marker = match[2] ?? '';
+    const body = remaining.slice(firstLineEnd + 1);
+    const lines = body.split('\n');
+    const markerIndex = lines.findIndex((line) => line.trim() === marker);
+    if (markerIndex < 0) {
+      throw new Error(`cat: heredoc missing terminator ${marker}`);
+    }
+    writes.push({ path, content: `${lines.slice(0, markerIndex).join('\n')}\n` });
+    remaining = lines.slice(markerIndex + 1).join('\n');
   }
-  const path = match[1] ?? '';
-  const marker = match[2] ?? '';
-  const body = normalized.slice(firstLineEnd + 1);
-  const lines = body.split('\n');
-  const markerIndex = lines.findIndex((line) => line.trim() === marker);
-  if (markerIndex < 0) {
-    throw new Error(`cat: heredoc missing terminator ${marker}`);
-  }
-  return { path, content: `${lines.slice(0, markerIndex).join('\n')}\n` };
+  return writes.length > 0 ? writes : null;
 }
 
 function expandShellSubstitutions(input: string, now: Date): string {

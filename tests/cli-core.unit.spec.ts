@@ -590,6 +590,23 @@ TXT`);
   expect((await executeHvyCliCommand(document, session, 'cat /scratchpad.txt')).output).toBe('Plan:\n1. Inspect\n2. Edit\n');
 });
 
+test('cli supports multiple sequential cat heredoc writes', async () => {
+  const document = createCliTestDocument();
+  const session = createHvyCliSession();
+
+  const result = await executeHvyCliCommand(document, session, `cat > /body/summary/intro/text.txt <<'TXT'
+Updated intro
+TXT
+cat > /scratchpad.txt <<'NOTE'
+Updated intro and notes.
+NOTE`);
+
+  expect(result.output).toBe('/body/summary/intro/text.txt: written\n/scratchpad.txt: written');
+  expect(result.mutated).toBe(true);
+  expect((await executeHvyCliCommand(document, session, 'cat /body/summary/intro/text.txt')).output).toBe('Updated intro\n');
+  expect((await executeHvyCliCommand(document, session, 'cat /scratchpad.txt')).output).toBe('Updated intro and notes.\n');
+});
+
 test('cli sed updates writable virtual files', async () => {
   const document = createCliTestDocument();
   const session = createHvyCliSession();

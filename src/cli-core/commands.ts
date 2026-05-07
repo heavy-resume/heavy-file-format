@@ -107,6 +107,7 @@ export async function executeHvyCliCommand(document: VisualDocument, session: Hv
   let mutated = false;
   let scratchpadTouched = false;
   let previousStatus = 0;
+  const outputParts: string[] = [];
 
   for (let index = 0; index < pipelines.length; index += 1) {
     const pipeline = pipelines[index] ?? { operator: 'first' as const, commands: [], tokens: [] };
@@ -124,13 +125,20 @@ export async function executeHvyCliCommand(document: VisualDocument, session: Hv
     scratchpadTouched = scratchpadTouched || pipeline.tokens.some((token) => token === 'scratchpad.txt' || token === '/scratchpad.txt');
     previousStatus = lastProcess.status;
 
+    if (lastProcess.status === 0 && lastProcess.stdout) {
+      outputParts.push(lastProcess.stdout);
+    }
+
     if (lastProcess.status !== 0 && pipelines[index + 1]?.operator !== '||') {
       throw new Error(lastProcess.stderr || lastProcess.stdout || 'Command failed.');
     }
   }
 
   updateScratchpadCommandHistory(session, expandedInput);
-  const output = truncateCliOutput(lastProcess.status === 0 ? lastProcess.stdout : lastProcess.stderr || lastProcess.stdout, { preserveFindWarning: true });
+  const rawOutput = outputParts.length > 0
+    ? outputParts.join('\n')
+    : lastProcess.status === 0 ? lastProcess.stdout : lastProcess.stderr || lastProcess.stdout;
+  const output = truncateCliOutput(rawOutput, { preserveFindWarning: true });
   const result = { cwd: session.cwd, output, mutated };
   if (scratchpadTouched && isScratchpadTooLong(session)) {
     return { ...result, output: `${result.output}\n\n${buildScratchpadTooLongMessage(session.scratchpadContent ?? '')}` };

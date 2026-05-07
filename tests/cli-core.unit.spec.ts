@@ -1329,9 +1329,23 @@ test('cli supports shell-style && command chaining', async () => {
   );
 
   expect(chained.mutated).toBe(true);
-  expect(chained.output).toBe('Hello there');
+  expect(chained.output).toBe('/body/summary/intro/text.txt: updated\n/scratchpad.txt: written\nHello there');
   expect(document.sections[0]?.blocks[0]?.text).toBe('Hello there');
   expect(session.scratchpadContent).toBe('updated intro\n');
+});
+
+test('cli concatenates stdout across successful && command segments', async () => {
+  const document = createCliTestDocument();
+  const session = createHvyCliSession();
+
+  const output = (await executeHvyCliCommand(
+    document,
+    session,
+    'cat /body/summary/intro/text.txt && echo "---" && cat /body/summary/intro/text.json'
+  )).output;
+
+  expect(output).toContain('Hello world\n---\n{');
+  expect(output).toContain('"id": "intro"');
 });
 
 test('cli supports stdout redirection for read commands and blocks same-file overwrites', async () => {
@@ -1376,7 +1390,7 @@ test('cli supports find -exec with sed -i -E for shell-like batch edits', async 
     'find body -type f -name "text.txt" -exec sed -i -E s/world/there/g {} + && echo done Removed world'
   );
 
-  expect(result.output).toBe('done Removed world');
+  expect(result.output).toBe('/body/summary/intro/text.txt: updated\ndone Removed world');
   expect(result.mutated).toBe(true);
   expect(document.sections[0]?.blocks[0]?.text).toBe('Hello there');
 });
@@ -1440,7 +1454,7 @@ hvy_version: 0.1
   );
 
   expect(result.mutated).toBe(true);
-  expect(result.output).toBe('/scratchpad.txt: written');
+  expect(result.output).toBe('/body/summary/intro/text.txt: updated\n/scratchpad.txt: written');
   expect(document.sections[0]?.blocks[0]?.text).toBe('Uses  packages');
   expect(session.scratchpadContent).toBe('Removed references to TypeScript\n');
 });
@@ -1465,7 +1479,7 @@ hvy_version: 0.1
   );
 
   expect(result.mutated).toBe(true);
-  expect(result.output).toBe('/scratchpad.txt: written');
+  expect(result.output).toBe('/body/summary/intro/text.txt: updated\n/scratchpad.txt: written');
   expect(document.sections[0]?.blocks[0]?.text).toBe(' uses shared packages');
   expect(session.scratchpadContent).toBe('Removed references to TypeScript\n');
 });
@@ -1491,7 +1505,7 @@ Keep that
     'grep -RIl "TypeScript" . | tr \'\\n\' \'\\0\' | xargs -0 sed -i \'/TypeScript/d\' && echo "Removed TypeScript references from resume files" >> /scratchpad.txt'
   );
 
-  expect(result.output).toBe('/scratchpad.txt: appended');
+  expect(result.output).toBe('/body/summary/intro/text.txt: updated\n/scratchpad.txt: appended');
   expect(result.mutated).toBe(true);
   expect(document.sections[0]?.blocks[0]?.text).toBe('Keep this\nKeep that');
   expect(session.scratchpadContent).toContain('Removed TypeScript references from resume files');
@@ -1518,7 +1532,7 @@ Keep that
     'rg -l --hidden --no-messages "TypeScript" | tr \'\\n\' \'\\0\' | xargs -0 sed -i \'/TypeScript/d\' && echo "Removed TypeScript references from files" >> /scratchpad.txt'
   );
 
-  expect(result.output).toBe('/scratchpad.txt: appended');
+  expect(result.output).toBe('/body/summary/intro/text.txt: updated\n/scratchpad.txt: appended');
   expect(result.mutated).toBe(true);
   expect(document.sections[0]?.blocks[0]?.text).toBe('Keep this\nKeep that');
   expect(session.scratchpadContent).toContain('Removed TypeScript references from files');
@@ -1732,7 +1746,7 @@ Keep that
     'rg -l --hidden -S -i "TypeScript" / | xargs -r sed -i \'/TypeScript/Id\' && rm -r /body/missing 2>/dev/null || true && echo "Removed TypeScript entries and directory" >> /scratchpad.txt'
   );
 
-  expect(result.output).toBe('/scratchpad.txt: appended');
+  expect(result.output).toBe('/body/summary/intro/text.txt: updated\n/scratchpad.txt: appended');
   expect(result.mutated).toBe(true);
   expect(document.sections[0]?.blocks[0]?.text).toBe('Keep this\nKeep that');
   expect(session.scratchpadContent).toContain('Removed TypeScript entries and directory');

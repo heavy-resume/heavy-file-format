@@ -88,6 +88,11 @@ hvy_version: 0.1
   await page.mouse.click((box?.x ?? 0) + 5, (box?.y ?? 0) + 5);
 
   await expect(page.locator('#readerDocument')).toContainText('Expanded detail');
+
+  await page.getByRole('button', { name: 'Editor' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await expect(page.locator('#editorTree')).not.toContainText('Expanded detail');
 });
 
 test('editor pullout help balloon lists loaded sidebar sections', async ({ page }) => {

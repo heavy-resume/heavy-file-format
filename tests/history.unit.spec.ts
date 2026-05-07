@@ -63,6 +63,7 @@ function createHistoryTestState(): AppState {
     themeModalOpen: false,
     gridAddComponentByBlock: {},
     expandableEditorPanels: {},
+    readerExpandableState: {},
     viewerSidebarOpen: false,
     editorSidebarOpen: false,
     editorSidebarHelpDismissed: false,

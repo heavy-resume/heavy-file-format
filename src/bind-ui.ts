@@ -163,17 +163,18 @@ export function bindUi(app: HTMLElement): void {
       if (!block) {
         return;
       }
-      const willCollapse = block.schema.expandableExpanded;
+      const expandableStateKey = `${sectionKey}:${blockId}`;
+      const willCollapse = state.readerExpandableState[expandableStateKey] ?? block.schema.expandableExpanded;
       if (willCollapse) {
         // Animate collapse before re-rendering
         const readerEl = app.querySelector<HTMLElement>(`[data-expandable-id="${CSS.escape(blockId)}"]`);
         readerEl?.classList.add('is-collapsing');
         window.setTimeout(() => {
-          block.schema.expandableExpanded = false;
+          state.readerExpandableState[expandableStateKey] = false;
           getRefreshReaderPanels()();
         }, 160);
       } else {
-        block.schema.expandableExpanded = true;
+        state.readerExpandableState[expandableStateKey] = true;
         getRefreshReaderPanels()();
       }
     }

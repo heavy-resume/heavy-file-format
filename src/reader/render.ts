@@ -44,6 +44,7 @@ interface ReaderRenderState {
   themeModalOpen: boolean;
   theme: ThemeConfig;
   currentView: 'editor' | 'viewer' | 'ai';
+  readerExpandableState: Record<string, boolean>;
 }
 
 interface ReaderRenderDeps {
@@ -162,6 +163,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
 
   function renderReaderBlock(section: VisualSection, block: VisualBlock): string {
     const base = deps.resolveBaseComponent(block.schema.component);
+    const readerExpanded = base === 'expandable' ? getReaderExpandableExpanded(section.key, block) : block.schema.expandableExpanded;
     const blockDomId = getBlockDomId(block);
     const idAttr = blockDomId ? ` id="${deps.escapeAttr(blockDomId)}"` : '';
     const blockClass = [
@@ -176,7 +178,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       .map((part) => deps.escapeAttr(part))
       .join(' ');
     const expandableAttrs = base === 'expandable'
-      ? ` data-reader-action="toggle-expandable" aria-expanded="${block.schema.expandableExpanded ? 'true' : 'false'}"`
+      ? ` data-reader-action="toggle-expandable" aria-expanded="${readerExpanded ? 'true' : 'false'}"`
       : '';
     const blockAttrs = `${idAttr} class="${blockClass}" data-component="${deps.escapeAttr(block.schema.component)}" data-section-key="${deps.escapeAttr(section.key)}" data-block-id="${deps.escapeAttr(block.id)}"${expandableAttrs} style="${deps.escapeAttr(sanitizeInlineCss(block.schema.css))}"`;
     const helpers = deps.getComponentRenderHelpers();
@@ -216,7 +218,14 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     }
     if (base === 'expandable') {
       deps.ensureExpandableBlocks(block);
-      return `<div ${blockAttrs}>${renderExpandableReader(section, block, helpers)}</div>`;
+      const readerBlock = {
+        ...block,
+        schema: {
+          ...block.schema,
+          expandableExpanded: readerExpanded,
+        },
+      } as VisualBlock;
+      return `<div ${blockAttrs}>${renderExpandableReader(section, readerBlock, helpers)}</div>`;
     }
     if (base === 'table') {
       if (!areTablesEnabled()) {
@@ -235,6 +244,11 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
 
   function getBlockDomId(block: VisualBlock): string {
     return block.schema.id.trim();
+  }
+
+  function getReaderExpandableExpanded(sectionKey: string, block: VisualBlock): boolean {
+    const key = `${sectionKey}:${block.id}`;
+    return state.readerExpandableState[key] ?? block.schema.expandableExpanded;
   }
 
   function renderThemeModal(): string {

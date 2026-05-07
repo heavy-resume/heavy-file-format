@@ -220,6 +220,7 @@ export interface AppState {
   themeModalOpen: boolean;
   gridAddComponentByBlock: Record<string, string>;
   expandableEditorPanels: Record<string, { stubOpen: boolean; expandedOpen: boolean }>;
+  readerExpandableState: Record<string, boolean>;
   viewerSidebarOpen: boolean;
   editorSidebarOpen: boolean;
   editorSidebarHelpDismissed: boolean;

@@ -103,6 +103,7 @@ function createInitialState(document: ReturnType<typeof deserializeDocumentBytes
     themeModalOpen: false,
     gridAddComponentByBlock: {},
     expandableEditorPanels: {},
+    readerExpandableState: {},
     viewerSidebarOpen: false,
     editorSidebarOpen: false,
     editorSidebarHelpDismissed: false,
@@ -343,6 +344,9 @@ readerRenderer = createReaderRenderer(
     },
     get currentView() {
       return state.currentView;
+    },
+    get readerExpandableState() {
+      return state.readerExpandableState;
     },
   },
   {

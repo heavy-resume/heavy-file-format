@@ -102,60 +102,6 @@ test('mobile adjustment mode removes short annotation when text matches full val
   await expect(page.locator('#rawEditor')).toContainText('Tools & Technologies');
 });
 
-test('nowrap toolbar annotation toggles selected text', async ({ page }) => {
-  await page.goto('/');
-
-  await page.locator('[data-action="activate-block"]').first().click();
-  const editor = page.locator('.rich-editor').first();
-
-  await editor.evaluate((node) => {
-    node.innerHTML = '<p>Tools &amp; Technologies</p>';
-    const textNode = node.querySelector('p')?.firstChild;
-    const selection = window.getSelection();
-    const range = document.createRange();
-    range.selectNodeContents(textNode!);
-    selection?.removeAllRanges();
-    selection?.addRange(range);
-    (node as HTMLElement).focus();
-  });
-
-  await page.getByRole('button', { name: 'Nowrap' }).first().click();
-  await expect(editor.locator('.hvy-nowrap')).toContainText('Tools & Technologies');
-
-  await page.getByRole('button', { name: 'Nowrap' }).first().click();
-  await expect(editor.locator('.hvy-nowrap')).toHaveCount(0);
-
-  await page.getByRole('button', { name: 'Raw' }).click();
-  await expect(page.locator('#rawEditor')).not.toContainText('<!--hvy:nowrap-->Tools & Technologies<!--/hvy:nowrap-->');
-});
-
-test('nowrap toolbar button can arm and disarm without editing text', async ({ page }) => {
-  await page.goto('/');
-
-  await page.locator('[data-action="activate-block"]').first().click();
-  const editor = page.locator('.rich-editor').first();
-  const nowrapButton = page.getByRole('button', { name: 'Nowrap' }).first();
-
-  await editor.evaluate((node) => {
-    node.innerHTML = '<p>Tools &amp; Technologies</p>';
-    const paragraph = node.querySelector('p');
-    const selection = window.getSelection();
-    const range = document.createRange();
-    range.selectNodeContents(paragraph!);
-    range.collapse(true);
-    selection?.removeAllRanges();
-    selection?.addRange(range);
-    (node as HTMLElement).focus();
-  });
-
-  await nowrapButton.click();
-  await expect(nowrapButton).toHaveClass(/secondary/);
-
-  await nowrapButton.click();
-  await expect(nowrapButton).not.toHaveClass(/secondary/);
-  await expect(editor.locator('.hvy-nowrap')).toHaveCount(0);
-});
-
 test('inline toolbar actions toggle typing mode at a collapsed caret', async ({ page }) => {
   await page.goto('/');
 

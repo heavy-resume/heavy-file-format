@@ -670,9 +670,6 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           <button type="button" class="icon-button${selectedClass(blockStyle === 'checklist')}" data-rich-action="checklist" ${richButtonAttrs} aria-label="Checkbox" title="Checkbox"><span class="toolbar-icon checkbox-icon" aria-hidden="true">☑</span></button>
           <button type="button" class="icon-button ghost" data-rich-action="link" ${richButtonAttrs} aria-label="Link" title="Link (${hotkeyModifier}+K)"><span class="toolbar-icon link-icon" aria-hidden="true"></span></button>
         </div>
-        <div class="toolbar-segment responsive-format-buttons" role="group" aria-label="Responsive text formatting">
-          <button type="button" class="ghost" data-rich-action="nowrap" ${richButtonAttrs} title="No wrap">Nowrap</button>
-        </div>
       </div>
     `;
   }

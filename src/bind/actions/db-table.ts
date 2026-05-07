@@ -123,6 +123,7 @@ const sqliteOpenRowComponent = (action: 'sqlite-open-row-component-editor' | 'sq
     .then((fragment) => {
       const modalBlocks = fragment ? parseAttachedComponentBlocks(fragment) : [];
       const rawDraft = fragment ?? '';
+      const modalMode: 'basic' | 'advanced' | 'raw' = state.editorMode === 'advanced' || state.editorMode === 'raw' ? state.editorMode : 'basic';
       const modalState = {
         sectionKey,
         blockId,
@@ -132,7 +133,7 @@ const sqliteOpenRowComponent = (action: 'sqlite-open-row-component-editor' | 'sq
         error: null,
         readOnly: action === 'sqlite-open-row-component-view',
         previousActiveEditorBlock: state.activeEditorBlock ? { ...state.activeEditorBlock } : null,
-        mode: state.editorMode === 'cli' ? 'basic' : state.editorMode,
+        mode: modalMode,
         rawDraft,
       };
       state.sqliteRowComponentModal = modalState;

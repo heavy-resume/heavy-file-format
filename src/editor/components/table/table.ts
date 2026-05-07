@@ -23,19 +23,13 @@ function renderTableInlineReaderHtml(value: string, block: Parameters<ComponentR
 }
 
 function renderTableInlineToolbar(
-  sectionKey: string,
-  blockId: string,
-  field: 'table-column' | 'table-cell',
-  helpers: Parameters<ComponentEditorRenderer>[2],
-  indices: { columnIndex?: number; rowIndex?: number; cellIndex?: number }
+  _sectionKey: string,
+  _blockId: string,
+  _field: 'table-column' | 'table-cell',
+  _helpers: Parameters<ComponentEditorRenderer>[2],
+  _indices: { columnIndex?: number; rowIndex?: number; cellIndex?: number }
 ): string {
-  const rowAttrs = indices.rowIndex === undefined ? '' : ` data-row-index="${indices.rowIndex}"`;
-  const columnAttrs = indices.columnIndex === undefined ? '' : ` data-column-index="${indices.columnIndex}"`;
-  const cellAttrs = indices.cellIndex === undefined ? '' : ` data-cell-index="${indices.cellIndex}"`;
-  return `<div class="table-inline-toolbar" aria-label="Table inline tools">
-    <button type="button" class="ghost" data-rich-action="short" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(blockId)}" data-rich-field="${field}"${rowAttrs}${columnAttrs}${cellAttrs} title="Short text">Short</button>
-    <button type="button" class="ghost" data-rich-action="nowrap" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(blockId)}" data-rich-field="${field}"${rowAttrs}${columnAttrs}${cellAttrs} title="No wrap">Nowrap</button>
-  </div>`;
+  return '';
 }
 
 function renderTableRowEditor(

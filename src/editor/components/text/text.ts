@@ -2,20 +2,28 @@ import './text.css';
 import type { ComponentEditorRenderer, ComponentReaderRenderer } from '../../component-helpers';
 import { splitTextFillIn } from '../../../text-fill-in';
 
+const FILL_IN_RENDER_TOKEN = 'HVY_FILL_IN_VALUE_TOKEN';
+
 export const renderTextEditor: ComponentEditorRenderer = (sectionKey, block, helpers) => {
   const fillIn = block.schema.fillIn ? splitTextFillIn(block.text) : null;
   if (fillIn) {
+    const fillInBox = `<span
+      class="text-fill-in-box"
+      contenteditable="true"
+      data-section-key="${helpers.escapeAttr(sectionKey)}"
+      data-block-id="${helpers.escapeAttr(block.id)}"
+      data-field="text-fill-in-value"
+      data-fill-before="${helpers.escapeAttr(fillIn.before)}"
+      data-fill-after="${helpers.escapeAttr(fillIn.after)}"
+      data-placeholder="${helpers.escapeAttr(block.schema.placeholder || 'value')}"
+    ></span>`;
+    const html = helpers.markdownToEditorHtml(`${fillIn.before}${FILL_IN_RENDER_TOKEN}${fillIn.after}`).replace(
+      FILL_IN_RENDER_TOKEN,
+      fillInBox
+    );
     return `
-      <div class="text-fill-in-editor" style="text-align: ${helpers.escapeAttr(block.schema.align)};">
-        <span class="text-fill-in-scaffold">${helpers.escapeHtml(fillIn.before)}</span>
-        <input
-          data-section-key="${helpers.escapeAttr(sectionKey)}"
-          data-block-id="${helpers.escapeAttr(block.id)}"
-          data-field="text-fill-in-value"
-          placeholder="${helpers.escapeAttr(block.schema.placeholder || 'value')}"
-        />
-        <span class="text-fill-in-scaffold">${helpers.escapeHtml(fillIn.after)}</span>
-        <button type="button" class="secondary" data-action="apply-text-fill-in" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}">Apply</button>
+      <div class="rich-editor text-fill-in-editor" style="text-align: ${helpers.escapeAttr(block.schema.align)};">
+        ${html}
       </div>
     `;
   }

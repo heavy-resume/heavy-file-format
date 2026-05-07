@@ -120,9 +120,9 @@ hvy_version: 0.1
   await page.getByRole('button', { name: 'Close' }).click();
 
   await expect(page.locator('[data-field="text-fill-in-value"]')).toBeVisible();
-  await expect(page.locator('.text-fill-in-scaffold')).toContainText(['# ']);
+  await expect(page.locator('#editorTree h1 .text-fill-in-box')).toBeVisible();
+  expect((await page.locator('[data-field="text-fill-in-value"]').boundingBox())?.width ?? 0).toBeGreaterThan(40);
   await page.locator('[data-field="text-fill-in-value"]').fill('Ada Lovelace');
-  await page.getByRole('button', { name: 'Apply' }).click();
 
   await expect(page.locator('#editorTree h1')).toHaveText('Ada Lovelace');
   await page.getByRole('button', { name: 'Raw' }).click();

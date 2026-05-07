@@ -8,7 +8,7 @@ import { applyImagePreset } from '../../editor/components/image/image';
 import { configurePluginBlock } from '../../plugins/plugin-block';
 import { makeId } from '../../utils';
 import { openReusableTemplateModalIfNeeded } from './reusable-template';
-import { applyTextFillInValue, hasTextFillInMarker, prepareTextFillIn, removeTextFillInMarkers } from '../../text-fill-in';
+import { prepareTextFillIn, removeTextFillInMarkers } from '../../text-fill-in';
 import type { ActionHandler } from './types';
 import type { GridItem, VisualBlock } from '../../editor/types';
 
@@ -123,24 +123,6 @@ const removeTextFillIn: ActionHandler = ({ actionButton, sectionKey }) => {
   recordHistory(`text:${block.id}:fill-in:remove`);
   block.text = removeTextFillInMarkers(block.text);
   block.schema.fillIn = false;
-  syncReusableTemplateForBlock(sectionKey, block.id);
-  getRenderApp()();
-};
-
-const applyTextFillIn: ActionHandler = ({ app, actionButton, sectionKey, blockId }) => {
-  if (!blockId) {
-    return;
-  }
-  const block = resolveBlockContext(actionButton)?.block ?? null;
-  if (!block) {
-    return;
-  }
-  const input = app.querySelector<HTMLInputElement>(
-    `[data-field="text-fill-in-value"][data-section-key="${sectionKey}"][data-block-id="${blockId}"]`
-  );
-  recordHistory(`text:${block.id}:fill-in:apply`);
-  block.text = applyTextFillInValue(block.text, input?.value ?? '');
-  block.schema.fillIn = hasTextFillInMarker(block.text);
   syncReusableTemplateForBlock(sectionKey, block.id);
   getRenderApp()();
 };
@@ -350,7 +332,6 @@ export const blockActions: Record<string, ActionHandler> = {
   'set-block-align': setBlockAlign,
   'set-text-fill-in': setTextFillIn,
   'remove-text-fill-in': removeTextFillIn,
-  'apply-text-fill-in': applyTextFillIn,
   'remove-block': removeBlock,
   'move-block-up': moveBlock(-1),
   'move-block-down': moveBlock(1),

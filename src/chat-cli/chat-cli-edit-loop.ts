@@ -395,13 +395,7 @@ async function advanceChatCliNativeToolTurnState(params: {
   }
 
   const urgency = batchHadSuccess ? updateChatCliUrgency(params.state.urgency, mutated) : params.state.urgency;
-  const commandResultMessage = formatCommandResultForModel({
-    output: formatBatchCommandOutput(commandOutputs),
-    hints: '',
-    scratchpad: formatScratchpadForModel(cli.snapshot()),
-    urgency: formatChatCliUrgency(urgency),
-    cwd: cli.snapshot().cwd,
-  });
+  const commandResultMessage = formatToolCommandResultDisplay(formatBatchCommandOutput(commandOutputs), cli.snapshot().cwd);
   const messages = await compactChatCliConversation({
     messages: params.state.messages,
     settings: params.settings ?? params.state.settings,
@@ -1258,6 +1252,13 @@ function formatCommandResultForModel(result: string | { output: string; skippedC
     '### END your urgency ###',
     `Command guidance: ${CHAT_CLI_BATCH_GUIDANCE}`,
     formatNextResponseInstruction(),
+  ].join('\n');
+}
+
+function formatToolCommandResultDisplay(output: string, cwd: string): string {
+  return [
+    `Current directory: ${cwd || '/'}`,
+    formatCommandResultOutput(output),
   ].join('\n');
 }
 

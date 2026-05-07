@@ -411,27 +411,65 @@ test('hvy insert -1 can create custom components and xref components', async () 
   expect(skill.output).toContain('/body/skills/component-list-1/skill-baking: created');
   expect(skill.output).toContain('file skill-record.json');
   expect(skill.output).toContain('file skill-record.txt');
-  expect(skill.output).toContain('order:\n  children-order.json controls list item order.');
-  expect(skill.output).toContain('Inspect or edit /body/skills/component-list-1/children-order.json when placement matters.');
-  expect(skill.output).toContain('next:\n  hvy request_structure /body/skills/component-list-1/skill-baking --describe');
-  expect(skill.output).toContain('Fill the leaf body/config files shown by request_structure.');
-  expect(skill.output).toContain('### CREATED CUSTOM COMPONENT ###');
-  expect(skill.output).toContain('Successfully created custom component skill-record.');
-  expect(skill.output).toContain('Displaying about-skill-record.txt so you know how to inspect this component again.');
-  expect(skill.output).toContain('### ABOUT COMPONENT FILE ###\nCMD: cat /body/skills/component-list-1/skill-baking/about-skill-record.txt');
-  expect(skill.output).toContain('About skill-record');
-  expect(skill.output).toContain('Reusable definition YAML:');
-  expect(skill.output).toContain('### END ABOUT COMPONENT FILE ###');
+  expect(skill.output).not.toContain('order:');
+  expect(skill.output).not.toContain('next:');
+  expect(skill.output).not.toContain('hvy request_structure');
+  expect(skill.output).not.toContain('Components:');
+  expect(skill.output).not.toContain('about:');
+  expect(skill.output).not.toContain('### CREATED CUSTOM COMPONENT ###');
+  expect(skill.output).not.toContain('### ABOUT CUSTOM COMPONENT ###');
+  expect(skill.output).not.toContain('### ABOUT COMPONENT FILE ###');
+  expect(skill.output).not.toContain('CMD: cat');
+  expect(skill.output).not.toContain('Reusable definition YAML:');
   expect((await executeHvyCliCommand(document, session, 'cat /body/skills/component-list-1/skill-baking/skill-record.json')).output)
     .toContain('"css": "margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);"');
   expect(xref.output).toContain('/body/top-skills-tools-technologies/grid-0/grid/top-skill-baking: created');
   expect(xref.output).toContain('file xref-card.json');
   expect(xref.output).toContain('file xref-card.txt');
-  expect(xref.output).toContain('order:\n  children-order.json controls grid item order.');
-  expect(xref.output).toContain('Inspect or edit /body/top-skills-tools-technologies/grid-0/grid/children-order.json when placement matters.');
+  expect(xref.output).not.toContain('order:');
   expect(xref.output).not.toContain('### CREATED CUSTOM COMPONENT ###');
   expect((await executeHvyCliCommand(document, session, 'cat /body/top-skills-tools-technologies/grid-0/grid/top-skill-baking/xref-card.json')).output)
     .toContain('"xrefTarget": ""');
+});
+
+test('hvy insert can opt in to returning order and structure on creation', async () => {
+  const document = createResumeCliTestDocument();
+  const session = createHvyCliSession();
+
+  const skill = await executeHvyCliCommand(
+    document,
+    session,
+    'hvy insert -1 skill-record /body/skills/component-list-1 --id skill-baking --return-order-on-creation --return-structure-on-creation'
+  );
+
+  expect(skill.output).toContain('order:\n  children-order.json controls list item order.');
+  expect(skill.output).toContain('Inspect or edit /body/skills/component-list-1/children-order.json when placement matters.');
+  expect(skill.output).toContain('### CREATED COMPONENT STRUCTURE ###');
+  expect(skill.output).toContain('/skill-baking');
+  expect(skill.output).toContain('skill-record.txt id=skill-baking');
+  expect(skill.output).toContain('### END CREATED COMPONENT STRUCTURE ###');
+});
+
+test('hvy insert can opt in to returning custom component about text on creation', async () => {
+  const document = createResumeCliTestDocument();
+  const session = createHvyCliSession();
+
+  const skill = await executeHvyCliCommand(
+    document,
+    session,
+    'hvy insert -1 skill-record /body/skills/component-list-1 --id skill-baking --return-about-txt-on-creation'
+  );
+
+  expect(skill.output).toContain('### CREATED CUSTOM COMPONENT ###');
+  expect(skill.output).toContain('Successfully created custom component skill-record.');
+  expect(skill.output).toContain('Use about-skill-record.txt to inspect this reusable component guidance again.');
+  expect(skill.output).toContain('### END CREATED CUSTOM COMPONENT ###');
+  expect(skill.output).toContain('### ABOUT CUSTOM COMPONENT ###');
+  expect(skill.output).toContain('About skill-record');
+  expect(skill.output).toContain('Reusable definition YAML:');
+  expect(skill.output).toContain('### END ABOUT CUSTOM COMPONENT ###');
+  expect(skill.output).not.toContain('### ABOUT COMPONENT FILE ###');
+  expect(skill.output).not.toContain('CMD: cat');
 });
 
 test('hvy insert can create custom components without explicit ids', async () => {

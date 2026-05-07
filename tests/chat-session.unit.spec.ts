@@ -566,6 +566,9 @@ test('advanceDocumentEditCliSimStep executes the response and prepares the next 
   expect(result.commandResultMessage.startsWith('Current directory: /')).toBe(true);
   expect(result.commandResultMessage).toContain('CMD: pwd\n### CMD RESULT ###\n/');
   expect(result.commandResultMessage).not.toContain('### DIAGNOSTICS CHANGES FROM THIS COMMAND ###');
+  expect(result.commandResultMessage).not.toContain('### OPTIONAL CONTEXT');
+  expect(result.commandResultMessage).not.toContain('### BEGIN /scratchpad.txt');
+  expect(result.commandResultMessage).not.toContain('Command guidance:');
   expect(result.commandResultMessage).not.toContain('sim mode');
   expect(payload.input).not.toContainEqual(expect.objectContaining({
     role: 'assistant',

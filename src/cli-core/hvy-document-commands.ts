@@ -90,7 +90,7 @@ export function hvyDocumentCommandHelp(topic = ''): string {
 
   const help: Record<string, string> = {
     '': [
-      formatCommandHelp('hvy insert INDEX COMPONENT PARENT_PATH [ID|--id ID]', 'Insert a blank builtin or custom component. Component ids are optional; use --id only when you need a stable id. INDEX is zero-based and supports Python-style negative indexes; 0 is the front, -1 is the back.'),
+      formatCommandHelp('hvy insert INDEX COMPONENT PARENT_PATH [ID|--id ID] [--return-order-on-creation] [--return-structure-on-creation] [--return-about-txt-on-creation]', 'Insert a blank builtin or custom component. Component ids are optional; use --id only when you need a stable id. INDEX is zero-based and supports Python-style negative indexes; 0 is the front, -1 is the back.'),
       formatCommandHelp('hvy insert INDEX section PARENT_PATH ID TITLE', 'Create a section.'),
       formatCommandHelp('hvy insert INDEX text PARENT_PATH [ID|--id ID]', 'Create a blank text component. Edit text.txt after creation.'),
       formatCommandHelp('hvy insert INDEX table PARENT_PATH [ID|--id ID]', 'Create a blank static table component. Edit tableColumns.json and tableRows.json after creation.'),
@@ -108,7 +108,7 @@ export function hvyDocumentCommandHelp(topic = ''): string {
       formatCommandHelp('Edit existing components', 'Use find to discover virtual files, cat to inspect them, and sed to update writable body/config files.'),
     ].join('\n'),
     insert: [
-      formatCommandHelp('hvy insert INDEX COMPONENT PARENT_PATH [ID|--id ID]', 'Insert a blank builtin or custom component to a section, component-list, grid, container, or expandable content path. Edit generated body/config files after creation. Component ids are optional; use --id only when you need a stable id. INDEX is zero-based and supports Python-style negative indexes; 0 is the front, -1 is the back.'),
+      formatCommandHelp('hvy insert INDEX COMPONENT PARENT_PATH [ID|--id ID] [--return-order-on-creation] [--return-structure-on-creation] [--return-about-txt-on-creation]', 'Insert a blank builtin or custom component to a section, component-list, grid, container, or expandable content path. Edit generated body/config files after creation. Component ids are optional; use --id only when you need a stable id. INDEX is zero-based and supports Python-style negative indexes; 0 is the front, -1 is the back.'),
       formatCommandHelp('hvy insert INDEX section PARENT_PATH ID TITLE', 'Add a section under /body or under another section.'),
       formatCommandHelp('hvy insert INDEX text PARENT_PATH [ID|--id ID]', 'Insert a blank text block.'),
       formatCommandHelp('hvy insert INDEX table PARENT_PATH [ID|--id ID]', 'Insert a blank static table block.'),
@@ -125,7 +125,7 @@ export function hvyDocumentCommandHelp(topic = ''): string {
       '  hvy insert -2 table . a-table',
     ].join('\n'),
     component: [
-      formatCommandHelp('hvy insert INDEX COMPONENT PARENT_PATH [ID|--id ID]', 'Insert a blank builtin or custom component to a section, component-list, grid, container, or expandable content path. Edit generated body/config files after creation. Component ids are optional; use --id only when you need a stable id. INDEX is zero-based and supports Python-style negative indexes; 0 is the front, -1 is the back.'),
+      formatCommandHelp('hvy insert INDEX COMPONENT PARENT_PATH [ID|--id ID] [--return-order-on-creation] [--return-structure-on-creation] [--return-about-txt-on-creation]', 'Insert a blank builtin or custom component to a section, component-list, grid, container, or expandable content path. Edit generated body/config files after creation. Component ids are optional; use --id only when you need a stable id. INDEX is zero-based and supports Python-style negative indexes; 0 is the front, -1 is the back.'),
     ].join('\n'),
     section: formatCommandHelp('hvy insert INDEX section PARENT_PATH ID TITLE', 'Add a section under /body or under another section. INDEX is zero-based and supports Python-style negative indexes; 0 is the front, -1 is the back.'),
     text: formatCommandHelp('hvy insert INDEX text PARENT_PATH [ID|--id ID]', 'Insert a blank text block. Edit text.txt after creation. INDEX is zero-based and supports Python-style negative indexes; 0 is the front, -1 is the back.'),
@@ -373,21 +373,29 @@ function addSection(ctx: HvyDocumentCommandContext, args: string[], index: HvyIn
 
 function addComponentShortcut(ctx: HvyDocumentCommandContext, component: string, args: string[], index: HvyInsertIndex = -1): HvyDocumentCommandResult {
   const [parentPath = '', ...rest] = args;
-  if (readOption(rest, '--config') !== null) {
+  const returnAboutTxtOnCreation = rest.includes('--return-about-txt-on-creation');
+  const returnOrderOnCreation = rest.includes('--return-order-on-creation');
+  const returnStructureOnCreation = rest.includes('--return-structure-on-creation');
+  const optionRest = rest.filter((arg) => ![
+    '--return-about-txt-on-creation',
+    '--return-order-on-creation',
+    '--return-structure-on-creation',
+  ].includes(arg));
+  if (readOption(optionRest, '--config') !== null) {
     throw new Error(`hvy insert ${component}: creation does not accept --config; create the component, inspect it, then edit the generated *.json files.`);
   }
-  if (rest.includes('--name')) {
+  if (optionRest.includes('--name')) {
     throw new Error(`hvy insert ${component}: use --id ID, not --name.`);
   }
-  const unsupportedOption = rest.find((arg) => isOptionArg(arg) && arg !== '--id');
+  const unsupportedOption = optionRest.find((arg) => isOptionArg(arg) && arg !== '--id');
   if (unsupportedOption) {
     throw new Error(`hvy insert ${component}: unsupported option ${unsupportedOption}; create it blank, then edit generated body/config files.`);
   }
-  if (rest.includes('--id') && !readOption(rest, '--id')) {
+  if (optionRest.includes('--id') && !readOption(optionRest, '--id')) {
     throw new Error(`hvy insert ${component}: --id requires a value.`);
   }
-  const explicitId = readOption(rest, '--id') ?? '';
-  const positionals = rest.filter((arg, index) => !isOptionArg(arg) && !isOptionValue(rest, index));
+  const explicitId = readOption(optionRest, '--id') ?? '';
+  const positionals = optionRest.filter((arg, index) => !isOptionArg(arg) && !isOptionValue(optionRest, index));
   if (explicitId && positionals.length > 0) {
     throw new Error(`hvy insert ${component}: creation accepts either positional ID or --id ID, not both.`);
   }
@@ -400,6 +408,9 @@ function addComponentShortcut(ctx: HvyDocumentCommandContext, component: string,
     component,
     commandName: `hvy insert ${index} ${component}`,
     index,
+    returnAboutTxtOnCreation,
+    returnOrderOnCreation,
+    returnStructureOnCreation,
   });
 }
 
@@ -409,6 +420,9 @@ function addComponentToPath(ctx: HvyDocumentCommandContext, params: {
   component: string;
   commandName: string;
   index?: HvyInsertIndex;
+  returnAboutTxtOnCreation?: boolean;
+  returnOrderOnCreation?: boolean;
+  returnStructureOnCreation?: boolean;
 }): HvyDocumentCommandResult {
   if (!params.parentPath || !params.component) {
     throw new Error(`${params.commandName}: expected PARENT_PATH [ID|--id ID]`);
@@ -427,7 +441,15 @@ function addComponentToPath(ctx: HvyDocumentCommandContext, params: {
   }
   target.insert(block, params.index ?? -1);
   const path = `${resolvedParentPath.replace(/\/$/, '')}/${id}`;
-  return { output: formatCreatedComponentDirectory(ctx.document, path, resolvedParentPath, parentBlock, target.kind), mutated: true, cwd: path };
+  return {
+    output: formatCreatedComponentDirectory(ctx.document, path, resolvedParentPath, parentBlock, target.kind, {
+      returnAboutTxtOnCreation: params.returnAboutTxtOnCreation,
+      returnOrderOnCreation: params.returnOrderOnCreation,
+      returnStructureOnCreation: params.returnStructureOnCreation,
+    }),
+    mutated: true,
+    cwd: path,
+  };
 }
 
 function generateStableCliComponentId(fs: HvyVirtualFileSystem, resolvedParentPath: string, component: string): string {
@@ -492,7 +514,12 @@ function formatCreatedComponentDirectory(
   componentPath: string,
   parentPath = '',
   parentBlock: VisualBlock | null = null,
-  insertionKind?: 'blocks' | 'grid'
+  insertionKind?: 'blocks' | 'grid',
+  options: {
+    returnAboutTxtOnCreation?: boolean;
+    returnOrderOnCreation?: boolean;
+    returnStructureOnCreation?: boolean;
+  } = {}
 ): string {
   const fs = buildHvyVirtualFileSystem(document);
   const normalizedComponentPath = fs.entries.has(componentPath)
@@ -509,19 +536,20 @@ function formatCreatedComponentDirectory(
     .join('\n');
   const component = findBlockForVirtualDirectory(document, normalizedComponentPath);
   const componentName = component?.schema.component ?? '';
-  const baseComponent = componentName ? resolveBaseComponentFromMeta(componentName, document.meta) : '';
-  const fillGuide = componentName && (!isBuiltinComponentName(componentName) || ['expandable', 'container', 'grid', 'component-list'].includes(baseComponent))
-    ? formatCreatedComplexComponentGuide(document, fs, normalizedComponentPath)
+  const structureDisplay = componentName && options.returnStructureOnCreation
+    ? formatCreatedComponentStructureDisplay(document, fs, normalizedComponentPath)
     : '';
   const aboutFileDisplay = componentName && !isBuiltinComponentName(componentName)
-    ? formatCreatedCustomComponentAboutDisplay(fs, normalizedComponentPath, componentName)
+    ? formatCreatedCustomComponentAboutDisplay(fs, normalizedComponentPath, componentName, !!options.returnAboutTxtOnCreation)
     : '';
-  const orderGuide = formatCreatedChildOrderGuide(document, parentPath, parentBlock, insertionKind);
+  const orderGuide = options.returnOrderOnCreation
+    ? formatCreatedChildOrderGuide(document, parentPath, parentBlock, insertionKind)
+    : '';
   return [
     `${normalizedComponentPath}: created`,
     ...(children ? ['files:', children] : []),
     ...(orderGuide ? ['', orderGuide] : []),
-    ...(fillGuide ? ['', fillGuide] : []),
+    ...(structureDisplay ? ['', structureDisplay] : []),
     ...(aboutFileDisplay ? ['', aboutFileDisplay] : []),
   ].join('\n');
 }
@@ -549,32 +577,36 @@ function formatCreatedChildOrderGuide(
   ].join('\n');
 }
 
-function formatCreatedCustomComponentAboutDisplay(fs: HvyVirtualFileSystem, componentPath: string, componentName: string): string {
+function formatCreatedCustomComponentAboutDisplay(
+  fs: HvyVirtualFileSystem,
+  componentPath: string,
+  componentName: string,
+  returnAboutTxtOnCreation: boolean
+): string {
   const aboutPath = `${componentPath}/about-${componentName}.txt`;
   const aboutFile = fs.entries.get(aboutPath);
   if (!aboutFile || aboutFile.kind !== 'file') {
     return '';
   }
+  if (!returnAboutTxtOnCreation) {
+    return '';
+  }
   return [
     '### CREATED CUSTOM COMPONENT ###',
     `Successfully created custom component ${componentName}.`,
-    `Displaying about-${componentName}.txt so you know how to inspect this component again.`,
+    `Use about-${componentName}.txt to inspect this reusable component guidance again.`,
     '### END CREATED CUSTOM COMPONENT ###',
-    '### ABOUT COMPONENT FILE ###',
-    `CMD: cat ${aboutPath}`,
+    '### ABOUT CUSTOM COMPONENT ###',
     aboutFile.read().trimEnd(),
-    '### END ABOUT COMPONENT FILE ###',
+    '### END ABOUT CUSTOM COMPONENT ###',
   ].join('\n');
 }
 
-function formatCreatedComplexComponentGuide(document: VisualDocument, fs: HvyVirtualFileSystem, componentPath: string): string {
+function formatCreatedComponentStructureDisplay(document: VisualDocument, fs: HvyVirtualFileSystem, componentPath: string): string {
   return [
-    'next:',
-    `  hvy request_structure ${componentPath} --describe`,
-    '  Fill the leaf body/config files shown by request_structure.',
-    '  For nested reusable components, avoid overwriting the aggregate *.txt file unless you preserve one line per nested text block.',
-    '',
-    ...formatHvyRequestStructureForDirectory(document, fs, componentPath, { describe: true }).split('\n').slice(0, 14),
+    '### CREATED COMPONENT STRUCTURE ###',
+    formatHvyRequestStructureForDirectory(document, fs, componentPath, { describe: true }),
+    '### END CREATED COMPONENT STRUCTURE ###',
   ].join('\n');
 }
 

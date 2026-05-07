@@ -5,10 +5,9 @@ const CHAT_CLI_PERSISTENT_INSTRUCTIONS = [
   'Use hvy request_structure, hvy find-intent, man/help, cheatsheets, recipes, and component hints to choose edit targets.',
   'Use hvy lint to validate when you think the edit is ready to finish.',
   'Use hvy commands to create/remove components; use shell commands to inspect and edit writable files.',
-  '/scratchpad.txt contains your ephemeral task notes and is not serialized into the HVY file.',
-  'Keep /scratchpad.txt short and evidence-based; update it after progress, then act on it.',
-  'Prefer a brief plan, focused commands, validation, then done MESSAGE_TO_USER.',
-  'Use ask only for user requirements; use done MESSAGE_TO_USER only after validating the edit.'
+  '/scratchpad.txt is optional temporary working memory and is not serialized into the HVY file.',
+  'Do not use /scratchpad.txt to report completion; report completion with the finish mechanism.',
+  'Prefer a brief plan, focused commands, validation, then finish.'
 ];
 
 export function buildChatCliPersistentInstructions(): string {

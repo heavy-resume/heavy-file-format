@@ -321,6 +321,12 @@ async function advanceChatCliNativeToolTurnState(params: {
       if (!command) {
         throw new Error('run_hvy_cli requires a non-empty command.');
       }
+      if (/^\s*done(?:\s|$)/.test(command)) {
+        throw new Error('Native tool mode uses finish_task({ summary }), not run_hvy_cli with done.');
+      }
+      if (/^\s*ask(?:\s|$)/.test(command)) {
+        throw new Error('Native tool mode uses ask_user({ question }), not run_hvy_cli with ask.');
+      }
       const execution = await cli.run(command);
       stdout = execution.output;
       commandMutated = execution.mutated && !isSessionOnlyCommand(command);
@@ -978,14 +984,13 @@ class ChatCliCommandFailureError extends Error {
 
 function buildChatCliLoopFormatInstructions(): string {
   return [
-    'When continuing, return concise notes plus terminal command(s).',
-    'For continuing responses, write exactly one note block at the top with these three short lines: What you are doing, Why you are doing it, What you are unsure of.',
-    'Do not repeat the What / Why / Unsure notes before each command. One response gets one note block total.',
-    `Wrap each command in its own \`\`\`shell fence. Multiple \`\`\`shell blocks are allowed and run in order. ${CHAT_CLI_BATCH_GUIDANCE}`,
-    'Text outside ```shell fences is shown as progress notes for debugging. It is not a substitute for commands.',
-    'To finish, run `done MESSAGE_TO_USER` as the only command in the response.',
-    'To ask for requirements, NOT CLI clarification from the non-technical user, run `ask QUESTION` as the only command in the response.',
-    'Do not include done with edit/inspection commands. Run commands, inspect the result, then finish in a later response.',
+    'Use the provided tools instead of writing terminal commands as text.',
+    'Use run_hvy_cli for HVY virtual CLI commands.',
+    `Call run_hvy_cli at most ${CHAT_CLI_RECOMMENDED_BATCH_COMMANDS} times per response.`,
+    'Use finish_task for the final user-facing completion summary after validating the edit.',
+    'Use ask_user only for user requirement questions, not CLI syntax questions.',
+    'Do not call run_hvy_cli with done or ask; those are text-mode fallback commands, not native-tool commands.',
+    'Do not write completion summaries to /scratchpad.txt.',
   ].join('\n');
 }
 
@@ -994,11 +999,17 @@ function buildChatCliLoopSystemInstructions(commandSummary: string): string {
     buildChatCliPersistentInstructions(),
     '',
     'Valid commands (in order of preference):',
-    commandSummary,
+    formatNativeToolCommandSummary(commandSummary),
     '',
     'Response instructions:',
     buildChatCliLoopFormatInstructions(),
   ].join('\n');
+}
+
+function formatNativeToolCommandSummary(commandSummary: string): string {
+  return commandSummary
+    .replace(/ Ask: ask QUESTION\./, ' Ask: use ask_user tool.')
+    .replace(/ Finish: done MESSAGE_TO_USER\./, ' Finish: use finish_task tool.');
 }
 
 export function buildChatCliNativeToolDefinitions(): ProviderToolDefinition[] {

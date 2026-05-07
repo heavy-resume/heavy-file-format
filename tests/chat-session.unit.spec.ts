@@ -289,12 +289,12 @@ test('requestDocumentEditChatTurn runs the CLI edit loop for document chat', asy
       mode: 'document-edit',
       debugLabel: 'chat-cli-edit:1',
       context: expect.stringContaining('Current request:\nAdd a chore section.'),
-      systemInstructions: expect.stringContaining('Valid commands (in order of preference):\nCommands: hvy, nl, rg, find, sed, echo, cat, ls, pwd, cd, cp, rm, grep, sort, uniq, wc, tr, xargs, head, tail, true. Ask: ask QUESTION. Finish: done MESSAGE_TO_USER.'),
+      systemInstructions: expect.stringContaining('Valid commands (in order of preference):\nCommands: hvy, nl, rg, find, sed, echo, cat, ls, pwd, cd, cp, rm, grep, sort, uniq, wc, tr, xargs, head, tail, true. Ask: use ask_user tool. Finish: use finish_task tool.'),
     })
   );
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.systemInstructions).toContain('Response instructions:\nWhen continuing, return concise notes plus terminal command(s).');
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.systemInstructions).toContain('validation, then done');
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.systemInstructions).toContain('run `ask QUESTION` as the only command');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.systemInstructions).toContain('Response instructions:\nUse the provided tools instead of writing terminal commands as text.');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.systemInstructions).toContain('Use finish_task for the final user-facing completion summary');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.systemInstructions).toContain('Do not call run_hvy_cli with done or ask');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Current request:\nAdd a chore section.');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).not.toContain('Use the chronological chat messages and terminal results to infer the active task.');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).not.toContain('Valid commands (in order of preference):');
@@ -479,7 +479,7 @@ test('buildDocumentEditCliSimRequest exposes the exact provider-facing CLI reque
   expect(payload).not.toHaveProperty('systemInstructions');
   expect(payload.tools?.map((tool) => tool.name)).toEqual(['run_hvy_cli', 'finish_task', 'ask_user']);
   expect(payload.input).toEqual([
-    expect.objectContaining({ role: 'system', content: [expect.objectContaining({ text: expect.stringContaining('Response instructions:\nWhen continuing, return concise notes plus terminal command(s).') })] }),
+    expect.objectContaining({ role: 'system', content: [expect.objectContaining({ text: expect.stringContaining('Response instructions:\nUse the provided tools instead of writing terminal commands as text.') })] }),
     expect.objectContaining({ role: 'user', content: [expect.objectContaining({ text: expect.stringContaining('Request context:\n\nCurrent request:\nAdd a chore section.') })] }),
     expect.objectContaining({ role: 'user', content: [expect.objectContaining({ text: 'Add a chore section.' })] }),
     { type: 'function_call', call_id: 'startup_call_1', name: 'run_hvy_cli', arguments: '{"command":"ls /"}' },
@@ -626,6 +626,54 @@ component_defs:
   expect(result.commandResultMessage).toContain('Current directory: /body/history/history-list/history-new');
 });
 
+test('advanceDocumentEditCliSimStep rejects done through run_hvy_cli in native tool mode', async () => {
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+`, '.hvy');
+  const initial = await buildDocumentEditCliSimRequest({
+    settings,
+    document,
+    messages: [],
+    request: 'Finish.',
+  });
+
+  const result = await advanceDocumentEditCliSimStep({
+    settings,
+    document,
+    turnState: initial.turnState,
+    assistantOutput: '',
+    toolTurn: {
+      output: '',
+      reasoningSummary: '',
+      toolCalls: [{
+        id: 'call_done',
+        name: 'run_hvy_cli',
+        arguments: { command: 'done Updated it.' },
+      }],
+      nativeMessages: [{ type: 'function_call', call_id: 'call_done', name: 'run_hvy_cli', arguments: '{"command":"done Updated it."}' }],
+      toolState: initial.turnState.toolState ?? { provider: 'openai', input: [] },
+    },
+  });
+
+  expect(result.commandResultMessage).toContain('Native tool mode uses finish_task({ summary }), not run_hvy_cli with done.');
+  expect(result.terminalSummary).toBeUndefined();
+  expect(result.turnState.toolState).toEqual(expect.objectContaining({
+    provider: 'openai',
+    input: expect.arrayContaining([
+      expect.objectContaining({
+        type: 'function_call_output',
+        call_id: 'call_done',
+        output: expect.stringContaining('finish_task'),
+      }),
+    ]),
+  }));
+});
+
 test('requestDocumentEditChatTurn can focus the CLI loop on a selected component', async () => {
   requestProxyCompletionMock.mockResolvedValueOnce('done Updated the selected component.');
   const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
@@ -752,7 +800,7 @@ test('requestDocumentEditChatTurn compacts old cli conversation after high provi
   expect(JSON.stringify(requestProxyCompletionMock.mock.calls[5]?.[0]?.messages)).not.toContain('x'.repeat(12000));
   expect(JSON.stringify(requestProxyCompletionMock.mock.calls[5]?.[0]?.messages)).not.toContain('... truncated ...');
   expect(requestProxyCompletionMock.mock.calls[5]?.[0]?.systemInstructions).toContain(
-    'Valid commands (in order of preference):\nCommands: hvy, nl, rg, find, sed, echo, cat, ls, pwd, cd, cp, rm, grep, sort, uniq, wc, tr, xargs, head, tail, true. Ask: ask QUESTION. Finish: done MESSAGE_TO_USER.'
+    'Valid commands (in order of preference):\nCommands: hvy, nl, rg, find, sed, echo, cat, ls, pwd, cd, cp, rm, grep, sort, uniq, wc, tr, xargs, head, tail, true. Ask: use ask_user tool. Finish: use finish_task tool.'
   );
   expect(requestProxyCompletionMock.mock.calls[5]?.[0]?.context).toContain('Current request:\nCheck the document with several commands.');
   expect(requestProxyCompletionMock.mock.calls[5]?.[0]?.context).not.toContain('scratchpad.txt:');

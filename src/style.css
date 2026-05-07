@@ -2,6 +2,7 @@
   font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
   color: var(--hvy-text);
   background: radial-gradient(circle at 10% 20%, var(--hvy-bg), var(--hvy-bg-alt) 48%, var(--hvy-bg-alt));
+  --hvy-sidebar-tab-size: 2.9rem;
 }
 
 * {

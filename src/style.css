@@ -3,6 +3,7 @@
   color: var(--hvy-text);
   background: radial-gradient(circle at 10% 20%, var(--hvy-bg), var(--hvy-bg-alt) 48%, var(--hvy-bg-alt));
   --hvy-sidebar-tab-size: 2.9rem;
+  --hvy-sidebar-footprint: 3.25rem;
 }
 
 * {
@@ -276,10 +277,49 @@ button.tiny {
   flex: 0 0 auto;
 }
 
+.hvy-preview-frame-phone {
+  --hvy-sidebar-tab-size: 2.15rem;
+  --hvy-sidebar-footprint: 2.35rem;
+}
+
+.hvy-preview-frame-tablet {
+  --hvy-sidebar-tab-size: 2.55rem;
+  --hvy-sidebar-footprint: 2.8rem;
+}
+
 .pane.hvy-preview-frame-phone,
 .pane.hvy-preview-frame-tablet,
 .pane.hvy-preview-frame-desktop {
   padding: 0;
+}
+
+.sidebar-tab-hamburger {
+  position: relative;
+  display: block;
+  width: clamp(0.82rem, calc(var(--hvy-sidebar-tab-size) * 0.38), 1.05rem);
+  height: clamp(0.56rem, calc(var(--hvy-sidebar-tab-size) * 0.29), 0.74rem);
+  color: currentColor;
+}
+
+.sidebar-tab-hamburger::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 100%;
+  height: 2px;
+  border-radius: 999px;
+  background: currentColor;
+  box-shadow:
+    0 calc(clamp(0.56rem, calc(var(--hvy-sidebar-tab-size) * 0.29), 0.74rem) * -0.5) 0 currentColor,
+    0 calc(clamp(0.56rem, calc(var(--hvy-sidebar-tab-size) * 0.29), 0.74rem) * 0.5) 0 currentColor;
+  transform: translateY(-50%);
+}
+
+.sidebar-tab-label {
+  display: block;
+  line-height: 1;
+  text-align: center;
 }
 
 .viewer-shell {
@@ -291,7 +331,7 @@ button.tiny {
 .viewer-shell .reader-document {
   height: 100%;
   overflow: auto;
-  padding-left: 3.25rem;
+  padding-left: var(--hvy-sidebar-footprint);
   scrollbar-gutter: stable;
 }
 

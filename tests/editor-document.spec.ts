@@ -68,13 +68,20 @@ test('responsive preview controls resize document frame without resizing app chr
   await page.getByRole('button', { name: 'Phone 390' }).click();
   await expect.poll(async () => Math.round((await pane.boundingBox())?.width ?? 0)).toBe(390);
   await expect.poll(async () => Math.round((await previewFrame.boundingBox())?.width ?? 0)).toBe(390);
-  await expect.poll(async () => Math.round((await surface.boundingBox())?.width ?? 0)).toBe(390);
+  await expect.poll(async () => Math.round((await surface.boundingBox())?.width ?? 0)).toBeGreaterThan(320);
+  expect(Math.round((await surface.boundingBox())?.width ?? 0)).toBeLessThan(390);
+  const phonePaneBox = await pane.boundingBox();
+  const phoneSurfaceBox = await surface.boundingBox();
+  expect(phonePaneBox).not.toBeNull();
+  expect(phoneSurfaceBox).not.toBeNull();
+  expect(Math.round(phoneSurfaceBox!.x + phoneSurfaceBox!.width)).toBeLessThanOrEqual(Math.round(phonePaneBox!.x + phonePaneBox!.width) + 1);
   expect(Math.round((await workspace.boundingBox())?.width ?? 0)).toBe(Math.round(initialWorkspaceWidth));
 
   await page.getByRole('button', { name: 'Tablet 768' }).click();
   await expect.poll(async () => Math.round((await pane.boundingBox())?.width ?? 0)).toBe(768);
   await expect.poll(async () => Math.round((await previewFrame.boundingBox())?.width ?? 0)).toBe(768);
-  await expect.poll(async () => Math.round((await surface.boundingBox())?.width ?? 0)).toBe(768);
+  await expect.poll(async () => Math.round((await surface.boundingBox())?.width ?? 0)).toBeGreaterThan(700);
+  expect(Math.round((await surface.boundingBox())?.width ?? 0)).toBeLessThan(768);
   expect(Math.round((await workspace.boundingBox())?.width ?? 0)).toBe(Math.round(initialWorkspaceWidth));
 
   await page.getByRole('button', { name: 'Full' }).click();
@@ -91,13 +98,15 @@ test('responsive preview applies to pullout document surfaces', async ({ page })
   await page.locator('.editor-sidebar-tab').click();
   await expect.poll(async () => Math.round((await page.locator('.editor-pane').boundingBox())?.width ?? 0)).toBe(390);
   await expect.poll(async () => Math.round((await page.locator('.editor-shell').boundingBox())?.width ?? 0)).toBe(390);
-  await expect.poll(async () => Math.round((await page.locator('.editor-sidebar-panel .hvy-surface').boundingBox())?.width ?? 0)).toBe(390);
+  await expect.poll(async () => Math.round((await page.locator('.editor-sidebar').boundingBox())?.width ?? 0)).toBeLessThan(390);
+  await expect.poll(async () => Math.round((await page.locator('.editor-sidebar-panel .hvy-surface').boundingBox())?.width ?? 0)).toBeLessThan(390);
 
   await page.getByRole('button', { name: 'Viewer' }).click();
   await page.locator('.viewer-sidebar-tab').click();
   await expect.poll(async () => Math.round((await page.locator('.reader-pane').boundingBox())?.width ?? 0)).toBe(390);
   await expect.poll(async () => Math.round((await page.locator('.viewer-shell').boundingBox())?.width ?? 0)).toBe(390);
-  await expect.poll(async () => Math.round((await page.locator('.viewer-sidebar-panel .hvy-surface').boundingBox())?.width ?? 0)).toBe(390);
+  await expect.poll(async () => Math.round((await page.locator('.viewer-sidebar').boundingBox())?.width ?? 0)).toBeLessThan(390);
+  await expect.poll(async () => Math.round((await page.locator('.viewer-sidebar-panel .hvy-surface').boundingBox())?.width ?? 0)).toBeLessThan(390);
 });
 
 test('responsive preview applies container query defaults', async ({ page }) => {

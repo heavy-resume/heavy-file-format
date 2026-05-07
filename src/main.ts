@@ -509,7 +509,7 @@ function renderApp(): void {
                 <div${renderResponsivePreviewFrameAttrs(`editor-shell ${state.editorSidebarOpen ? 'is-sidebar-open' : 'is-sidebar-closed'}`)}>
                   <div class="editor-sidebar-backdrop" data-action="toggle-editor-sidebar"></div>
                   <aside class="editor-sidebar">
-                    <button type="button" class="editor-sidebar-tab" data-action="toggle-editor-sidebar" aria-expanded="${state.editorSidebarOpen ? 'true' : 'false'}" aria-label="Toggle sidebar">☰</button>
+                    <button type="button" class="editor-sidebar-tab" data-action="toggle-editor-sidebar" aria-expanded="${state.editorSidebarOpen ? 'true' : 'false'}" aria-label="Toggle sidebar"><span class="sidebar-tab-hamburger" aria-hidden="true"></span></button>
                     ${editorRenderer.renderSidebarHelpBalloon(state.document.sections)}
                     <div class="editor-sidebar-panel">
                       ${editorRenderer.renderSidebarEditorSections(state.document.sections)}
@@ -520,7 +520,7 @@ function renderApp(): void {
               : `<div${renderResponsivePreviewFrameAttrs(`viewer-shell ${isAiView ? 'ai-view-shell ' : ''}${state.viewerSidebarOpen ? 'is-sidebar-open' : 'is-sidebar-closed'}`)}>
                    <div class="viewer-sidebar-backdrop" data-action="toggle-viewer-sidebar"></div>
                    <aside class="viewer-sidebar">
-                     <button type="button" class="viewer-sidebar-tab" data-action="toggle-viewer-sidebar" aria-expanded="${state.viewerSidebarOpen ? 'true' : 'false'}" aria-label="Toggle navigation">${escapeHtml(String(state.document.meta.sidebar_label || '☰'))}</button>
+                     <button type="button" class="viewer-sidebar-tab" data-action="toggle-viewer-sidebar" aria-expanded="${state.viewerSidebarOpen ? 'true' : 'false'}" aria-label="Toggle navigation">${renderSidebarTabLabel()}</button>
                      <div class="viewer-sidebar-panel">
                        <div id="readerWarnings" class="reader-warnings">${readerRenderer.renderWarnings()}</div>
                        <!-- TODO: Need to figure out what to do with navigation in the sidebar -->
@@ -632,6 +632,13 @@ function renderResponsivePreviewFrameAttrs(baseClass: string): string {
   const className = `${baseClass} hvy-preview-frame hvy-preview-frame-${state.responsivePreview}`;
   const style = width ? ` style="width: ${escapeAttr(width)};"` : '';
   return ` class="${escapeAttr(className)}"${style}`;
+}
+
+function renderSidebarTabLabel(): string {
+  const label = String(state.document.meta.sidebar_label || '☰');
+  return label === '☰'
+    ? '<span class="sidebar-tab-hamburger" aria-hidden="true"></span>'
+    : `<span class="sidebar-tab-label">${escapeHtml(label)}</span>`;
 }
 
 function refreshReaderPanels(): void {

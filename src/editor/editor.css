@@ -10,7 +10,7 @@
   min-width: 0;
   height: 100%;
   overflow: auto;
-  padding-left: 3.25rem;
+  padding-left: var(--hvy-sidebar-footprint);
   scrollbar-gutter: stable;
 }
 
@@ -22,8 +22,8 @@
 .editor-sidebar {
   position: absolute;
   inset: 0 auto 0 0;
-  width: min(40rem, calc(100% - var(--hvy-sidebar-tab-size)));
-  max-width: min(40rem, calc(100% - var(--hvy-sidebar-tab-size)));
+  width: min(40rem, calc(100% - var(--hvy-sidebar-footprint)));
+  max-width: min(40rem, calc(100% - var(--hvy-sidebar-footprint)));
   transform: translateX(-100%);
   transition: transform 360ms ease, box-shadow 360ms ease;
   z-index: 20;

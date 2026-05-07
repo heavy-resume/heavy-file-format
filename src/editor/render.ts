@@ -198,18 +198,9 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     `;
   }
 
-  function renderResponsiveSurfaceAttrs(documentMaxWidth: string): string {
+  function renderResponsiveSurfaceAttrs(_documentMaxWidth: string): string {
     const preview = state.responsivePreview;
-    const width =
-      preview === 'phone'
-        ? '390px'
-        : preview === 'tablet'
-        ? '768px'
-        : preview === 'desktop'
-        ? documentMaxWidth || '960px'
-        : '';
-    const style = width ? ` style="width: ${deps.escapeAttr(width)};"` : '';
-    return ` class="hvy-surface hvy-surface-${deps.escapeAttr(preview)}"${style}`;
+    return ` class="hvy-surface hvy-surface-${deps.escapeAttr(preview)}"`;
   }
 
   function renderEditorSection(section: VisualSection, rootSections: VisualSection[], isSubsection = false): string {

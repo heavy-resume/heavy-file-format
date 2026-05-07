@@ -271,6 +271,9 @@ editorRenderer = createEditorRenderer(
     get editorSidebarHelpDismissed() {
       return state.editorSidebarHelpDismissed;
     },
+    get currentView() {
+      return state.currentView;
+    },
   },
   {
     escapeAttr,

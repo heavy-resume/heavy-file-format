@@ -34,6 +34,7 @@ export interface BlockSchema {
   tags: string;
   description: string;
   placeholder: string;
+  fillIn: boolean;
   metaOpen: boolean;
   xrefTitle: string;
   xrefDetail: string;

@@ -1146,6 +1146,7 @@ function serializeBlockSchema(
   addIfChanged(payload, 'tags', schema.tags, defaults.tags);
   addIfChanged(payload, 'description', schema.description, defaults.description);
   addIfChanged(payload, 'placeholder', schema.placeholder, defaults.placeholder);
+  addIfChanged(payload, 'fillIn', schema.fillIn, defaults.fillIn);
 
   if (component === 'xref-card') {
     addIfChanged(payload, 'xrefTitle', schema.xrefTitle, defaults.xrefTitle);

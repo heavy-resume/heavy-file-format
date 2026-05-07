@@ -32,6 +32,7 @@ import { sanitizeInlineCss } from '../css-sanitizer';
 import { SCRIPTING_PLUGIN_ID } from '../plugins/registry';
 import { getScriptingPluginVersion } from '../plugins/scripting/version';
 import { renderAddComponentPicker } from './component-picker';
+import { TEXT_FILL_IN_MARKER, hasTextFillInMarker } from '../text-fill-in';
 
 hljs.registerLanguage('bash', bash);
 hljs.registerLanguage('sh', bash);
@@ -77,6 +78,7 @@ interface EditorRenderState {
   pendingEditorActivation: { sectionKey: string; blockId: string } | null;
   expandableEditorPanels: Record<string, { stubOpen: boolean; expandedOpen: boolean }>;
   editorSidebarHelpDismissed: boolean;
+  currentView: 'editor' | 'viewer' | 'ai';
 }
 
 interface EditorRenderDeps {
@@ -908,6 +910,11 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           />
         </label>
         ${
+          component === 'text'
+            ? renderTextFillInControls(sectionKey, block)
+            : ''
+        }
+        ${
           component === 'component-list'
             ? `<label>
           <span>List Item Label</span>
@@ -939,6 +946,33 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     `;
   }
 
+  function renderTextFillInControls(sectionKey: string, block: VisualBlock): string {
+    const hasMarker = hasTextFillInMarker(block.text);
+    return `
+      <div class="block-meta-field">
+        <span>Fill-in Placeholder</span>
+        <div class="toolbar-segment">
+          <button
+            type="button"
+            class="${hasMarker ? 'ghost' : 'secondary'}"
+            data-action="set-text-fill-in"
+            data-section-key="${deps.escapeAttr(sectionKey)}"
+            data-block-id="${deps.escapeAttr(block.id)}"
+            ${hasMarker ? 'disabled' : ''}
+          >Set</button>
+          <button
+            type="button"
+            class="${hasMarker ? 'secondary' : 'ghost'}"
+            data-action="remove-text-fill-in"
+            data-section-key="${deps.escapeAttr(sectionKey)}"
+            data-block-id="${deps.escapeAttr(block.id)}"
+            ${hasMarker ? '' : 'disabled'}
+          >Remove</button>
+        </div>
+      </div>
+    `;
+  }
+
   function renderTextFragment(content: string): string {
     const normalized = applyUnderlineSyntax(escapeRawHtml(normalizeMarkdownIndentation(normalizeMarkdownLists(content))));
     return unwrapSingleParagraph(decorateMarkdownCodeBlocks(addExternalLinkTargets(DOMPurify.sanitize(marked.parse(normalized) as string)), deps.escapeHtml));
@@ -947,6 +981,16 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
   function renderComponentFragment(componentName: string, content: string, block: VisualBlock): string {
     if (componentName === 'code') {
       return renderSyntaxHighlightedCode(content, block.schema.codeLanguage || 'text');
+    }
+    if (componentName === 'text' && block.schema.fillIn && hasTextFillInMarker(content)) {
+      if (state.currentView === 'viewer') {
+        return renderTextFragment(content.replaceAll(TEXT_FILL_IN_MARKER, ''));
+      }
+      const token = 'HVY_FILL_IN_VALUE_TOKEN';
+      return renderTextFragment(content.replace(TEXT_FILL_IN_MARKER, token)).replace(
+        token,
+        `<span class="text-fill-in-box" data-placeholder="${deps.escapeAttr(block.schema.placeholder || 'value')}"></span>`
+      );
     }
     return renderTextFragment(content);
   }

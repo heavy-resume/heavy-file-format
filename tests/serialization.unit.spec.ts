@@ -565,6 +565,18 @@ test('round-trips migrated example files without reintroducing slot-level compon
   }
 });
 
+test('resume template uses fill-in heading text for the default name', async () => {
+  const fs = await import('node:fs/promises');
+  const input = await fs.readFile('examples/resume.thvy', 'utf8');
+  const document = deserializeDocument(input, '.thvy');
+  const header = document.sections.find((section) => section.customId === 'header');
+  const name = header?.blocks[0];
+
+  expect(name?.text.trim()).toBe('# <!-- value -->');
+  expect(name?.schema.placeholder).toBe('Name');
+  expect(name?.schema.fillIn).toBe(true);
+});
+
 test('serialize -> deserialize -> serialize stays stable for migrated examples', async () => {
   const fs = await import('node:fs/promises');
   const files: Array<[string, '.hvy' | '.thvy']> = [

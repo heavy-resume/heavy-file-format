@@ -8,6 +8,35 @@
   display: block;
 }
 
+.text-fill-in-editor {
+  cursor: text;
+}
+
+.text-fill-in-box {
+  display: inline-block;
+  min-width: 7ch;
+  padding: 0 0.25em;
+  border: 1px dashed currentColor;
+  border-radius: 0.2em;
+  color: var(--hvy-text);
+  line-height: 1.15;
+  vertical-align: baseline;
+  outline: none;
+  white-space: pre-wrap;
+}
+
+.text-fill-in-box:empty::before {
+  content: attr(data-placeholder);
+  color: var(--hvy-text-muted);
+  opacity: 0.72;
+  pointer-events: none;
+}
+
+.text-fill-in-box:focus {
+  border-style: solid;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--hvy-focus-ring, #2563eb) 20%, transparent);
+}
+
 .editor-block-title {
   position: absolute;
   left: 0;

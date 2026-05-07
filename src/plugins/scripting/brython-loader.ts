@@ -1,7 +1,7 @@
 // Lazy-loads the local Brython core bundle. Only triggered the first time a
 // scripting plugin actually needs to run user code, so a document with no
-// scripting blocks pays nothing. HVY scripts still disallow imports, but
-// Brython's run_script path expects its local stdlib bootstrap metadata.
+// scripting blocks pays nothing. HVY scripts disallow user imports, so we load
+// a generated tiny VFS bootstrap instead of Brython's multi-megabyte stdlib.
 
 interface BrythonGlobal {
   builtins: Record<string, unknown>;
@@ -22,11 +22,11 @@ declare global {
 let loadPromise: Promise<void> | null = null;
 
 async function loadBrythonCore(): Promise<void> {
-  const [coreModule, stdlibModule] = await Promise.all([
+  const [coreModule, minimalVfsModule] = await Promise.all([
     import('brython/brython.min.js?raw'),
-    import('brython/brython_stdlib.js?raw'),
+    import('virtual:hvy-brython-minimal-vfs'),
   ]);
-  await loadScriptSource(`${coreModule.default}\n${stdlibModule.default}`);
+  await loadScriptSource(`${coreModule.default}\n${minimalVfsModule.default}`);
 }
 
 function loadScriptSource(source: string): Promise<void> {

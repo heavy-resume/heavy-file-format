@@ -150,8 +150,7 @@ export function bindUi(app: HTMLElement): void {
 
     const expandable = target.closest<HTMLElement>('[data-reader-action="toggle-expandable"]');
     if (expandable) {
-      // When clicking inside the content area, guard against interactive descendants
-      if (expandable.dataset.expandableContent === 'true' && target.closest('a, button, input, select, textarea')) {
+      if (target.closest('a, button, input, select, textarea, [contenteditable="true"], [role="button"]')) {
         return;
       }
       event.stopPropagation();

@@ -53,6 +53,43 @@ hvy_version: 0.1
   await expect(activeBlock.getByRole('button', { name: 'Expandable content component type' })).toBeVisible();
 });
 
+test('expandable reader toggles from the styled outer block padding', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ <!--hvy:expandable {"id":"padded-card","css":"padding: 1.5rem; border: 1px solid red;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+
+  <!--hvy:expandable:stub {}-->
+
+   <!--hvy:text {}-->
+    Clickable Stub
+
+  <!--hvy:expandable:content {}-->
+
+   <!--hvy:text {}-->
+    Expanded detail
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Viewer' }).click();
+
+  await expect(page.locator('#padded-card')).toHaveAttribute('data-reader-action', 'toggle-expandable');
+  await expect(page.locator('#padded-card')).toHaveCSS('cursor', 'pointer');
+  await expect(page.locator('#readerDocument')).not.toContainText('Expanded detail');
+
+  const box = await page.locator('#padded-card').boundingBox();
+  expect(box).not.toBeNull();
+  await page.mouse.click((box?.x ?? 0) + 5, (box?.y ?? 0) + 5);
+
+  await expect(page.locator('#readerDocument')).toContainText('Expanded detail');
+});
+
 test('editor pullout help balloon lists loaded sidebar sections', async ({ page }) => {
   await page.goto('/');
 

@@ -175,7 +175,10 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       .filter(Boolean)
       .map((part) => deps.escapeAttr(part))
       .join(' ');
-    const blockAttrs = `${idAttr} class="${blockClass}" data-component="${deps.escapeAttr(block.schema.component)}" data-section-key="${deps.escapeAttr(section.key)}" data-block-id="${deps.escapeAttr(block.id)}" style="${deps.escapeAttr(sanitizeInlineCss(block.schema.css))}"`;
+    const expandableAttrs = base === 'expandable'
+      ? ` data-reader-action="toggle-expandable" aria-expanded="${block.schema.expandableExpanded ? 'true' : 'false'}"`
+      : '';
+    const blockAttrs = `${idAttr} class="${blockClass}" data-component="${deps.escapeAttr(block.schema.component)}" data-section-key="${deps.escapeAttr(section.key)}" data-block-id="${deps.escapeAttr(block.id)}"${expandableAttrs} style="${deps.escapeAttr(sanitizeInlineCss(block.schema.css))}"`;
     const helpers = deps.getComponentRenderHelpers();
 
     if (base === 'plugin') {

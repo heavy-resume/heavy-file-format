@@ -1,0 +1,25 @@
+<!--hvy: {"id":"populate-form-options-from-db-recipe","description":"Recipe for populating form select/radio options from backend rows with doc.db.query and doc.form.set_options."}-->
+#! Populate Form Options From DB Recipe
+
+Use this when a form field should choose from rows in the current backend table, such as choosing an item, person, or project.
+
+There is no `optionsQuery` YAML key. Store a named initial script in `plugin.txt`, point `plugin.json` pluginConfig.initialScript at that script, and call `doc.form.set_options("Field label", options)`.
+
+```shell
+hvy plugin db-table exec "CREATE TABLE items (id INTEGER PRIMARY KEY, title TEXT NOT NULL, completed_at TEXT)"
+hvy plugin db-table exec "INSERT INTO items (title) VALUES ('First item')"
+hvy insert 0 section / a-section "A Section"
+hvy insert 0 plugin form /a-section choose-item
+echo '{"id":"choose-item","plugin":"dev.heavy.form","pluginConfig":{"version":"0.1","submitLabel":"Choose item","showSubmit":true,"initialScript":"load","submitScript":"submit"}}' > /body/a-section/choose-item/plugin.json
+echo 'fields:\n  - label: Item\n    type: select\n    required: true\nscripts:\n  load: |\n    rows = doc.db.query("SELECT id, title FROM items WHERE completed_at IS NULL ORDER BY id")\n    options = [{"label": str(row["id"]) + ": " + row["title"], "value": str(row["id"])} for row in rows]\n    doc.form.set_options("Item", options)\n  submit: |\n    item_id = doc.form.get_value("Item")\n    doc.db.execute("UPDATE items SET completed_at = datetime('"'"'now'"'"') WHERE id = ?", [item_id])' > /body/a-section/choose-item/plugin.txt
+hvy lint
+```
+
+Expected result:
+
+- `/body/a-section/choose-item` is a form plugin.
+- `plugin.json` has `pluginConfig.initialScript` set to `load`.
+- `plugin.txt` has an `Item` select field and a `load` script.
+- The `load` script queries backend rows with `doc.db.query`.
+- The `load` script passes options shaped as `{"label": "...", "value": "..."}` to `doc.form.set_options`.
+- The submit script reads the selected id with `doc.form.get_value("Item")`.

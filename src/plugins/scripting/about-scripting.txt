@@ -1,0 +1,7 @@
+# Scripting Plugins #
+Executes sandboxed Brython/Python source from script.py.
+The component body is top-level script source and is exposed as script.py in the CLI.
+Scripts run wrapped in a generated function with a doc global, so return can stop a script early.
+Use doc helpers for document data, header metadata, attachments, database access, rerendering, and supported document tools.
+Imports, network access, and direct DOM/window access are restricted by the scripting sandbox.
+Use form plugin scripts when the script is specifically attached to form state or submit behavior.

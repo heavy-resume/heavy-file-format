@@ -132,7 +132,7 @@ hvy_version: 0.1
   const summary = summarizeDocumentStructure(document).summary;
 
   expect(summary).toContain('plugin id="chores-table"');
-  expect(summary).toContain('AI hint: SQLite table/view display. Target: "chores".');
+  expect(summary).toContain('AI hint: Dynamic data-backed table/view display. Target: "chores".');
 });
 
 test('summarizeDocumentStructure hides content deeper than three nesting levels', () => {
@@ -469,8 +469,8 @@ hvy_version: 0.1
       notes: expect.stringContaining('AI note: reviewed the document chunks.'),
     }),
   }));
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.formatInstructions).not.toContain('Tool shapes:');
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.formatInstructions).not.toContain('Available plugins for `<!--hvy:plugin ...-->` blocks:');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.responseInstructions).not.toContain('Tool shapes:');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.responseInstructions).not.toContain('Available plugins for `<!--hvy:plugin ...-->` blocks:');
   const batchResult = lastToolResultBeforeCall(1);
   expect(batchResult).toContain('Tool result for batch:');
   expect(batchResult).toContain('Call 1: grep(Python)');
@@ -580,7 +580,7 @@ hvy_version: 0.1
   expect(result.error).toBeNull();
   expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.context).toContain('Plan progress:');
   expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.context).toContain('1. [ ] Find the summary text');
-  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.formatInstructions).not.toContain('{"tool":"plan"');
+  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.responseInstructions).not.toContain('{"tool":"plan"');
   expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.context).toContain('1. [x] Find the summary text — Found the summary text.');
   expect(result.messages.some((message) => message.progress && message.content.includes('Plan progress:'))).toBe(true);
   expect(result.messages.some((message) => message.progress && message.content.includes('Find the summary text'))).toBe(true);
@@ -1249,7 +1249,7 @@ test('autoUpdatePlanAndWorkNote completes steps from the tool reason when the to
 
   expect(result.changed).toBe(true);
   expect(plan.steps[0]?.done).toBe(true);
-  expect(plan.steps[0]?.summary).toBe('Create DB schema: tables for family_members, chores, chore_assignments with completed flag and completed_at timestamp');
+  expect(plan.steps[0]?.text).toBe('Create DB schema: tables for family_members, chores, chore_assignments with completed flag and completed_at timestamp');
   expect(plan.steps[1]?.done).toBe(false);
   expect(result.workNote.done).toContain('Create DB schema: tables for family_members, chores, chore_assignments with completed flag and completed_at timestamp');
 });
@@ -1489,7 +1489,7 @@ hvy_version: 0.1
   expect(onMutation).not.toHaveBeenCalled();
   expect(requestProxyCompletionMock).toHaveBeenCalledTimes(1);
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.debugLabel).toBe('ai-document-edit:1');
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.formatInstructions).toContain('`answer`');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.responseInstructions).toContain('`answer`');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages[0]?.content).toContain('AI-generated section/chunk notes are in context');
 });
 
@@ -1539,7 +1539,7 @@ test('requestAiDocumentEditTurn can get css and css properties for ids', async (
 hvy_version: 0.1
 ---
 
-<!--hvy: {"id":"summary","custom_css":"padding: 0.5rem; border: 1px solid red;"}-->
+<!--hvy: {"id":"summary","css":"padding: 0.5rem; border: 1px solid red;"}-->
 #! Summary
 
 <!--hvy:xref-card {"id":"skill-python-card","css":"margin: 0.35rem 0; padding: 0.25rem; color: blue;","xrefTitle":"Python","xrefTarget":"tool-python"}-->
@@ -1577,7 +1577,7 @@ test('requestAiDocumentEditTurn can set css properties for multiple ids', async 
 hvy_version: 0.1
 ---
 
-<!--hvy: {"id":"summary","custom_css":"padding: 0.5rem; color: red;"}-->
+<!--hvy: {"id":"summary","css":"padding: 0.5rem; color: red;"}-->
 #! Summary
 
 <!--hvy:xref-card {"id":"skill-python-card","css":"margin: 0.35rem 0; color: blue;","xrefTitle":"Python","xrefTarget":"tool-python"}-->
@@ -1593,8 +1593,8 @@ hvy_version: 0.1
   });
 
   expect(result.error).toBeNull();
-  expect(document.sections[0]?.customCss).toBe('padding: 1rem; margin: 0;');
-  expect(document.sections[0]?.blocks[0]?.schema.customCss).toBe('margin: 0; padding: 1rem;');
+  expect(document.sections[0]?.css).toBe('padding: 1rem; margin: 0;');
+  expect(document.sections[0]?.blocks[0]?.schema.css).toBe('margin: 0; padding: 1rem;');
 });
 
 test('requestAiDocumentEditTurn routes header requests to header tools', async () => {
@@ -2174,7 +2174,7 @@ test('requestAiDocumentEditTurn rejects invented hvy form components and asks fo
   setHostPlugins([formPluginRegistration]);
   queueAiToolResponses(
     '{"tool":"create_component","position":"append-to-section","section_ref":"summary","hvy":"<!--hvy:form {\\"id\\":\\"assign-form\\"}-->"}',
-    '{"tool":"create_component","position":"append-to-section","section_ref":"summary","hvy":"<!--hvy:plugin {\\"id\\":\\"assign-form\\",\\"plugin\\":\\"dev.heavy.form\\",\\"pluginConfig\\":{\\"version\\":\\"0.1\\"}}-->\\n```yaml\\nfields:\\n  - name: chore\\n    label: Chore\\n    type: text\\nsubmitLabel: Assign\\n```"}',
+    '{"tool":"create_component","position":"append-to-section","section_ref":"summary","hvy":"<!--hvy:plugin {\\"id\\":\\"assign-form\\",\\"plugin\\":\\"dev.heavy.form\\",\\"pluginConfig\\":{\\"version\\":\\"0.1\\",\\"submitLabel\\":\\"Assign\\"}}-->\\n```yaml\\nfields:\\n  - label: Chore\\n    type: text\\n```"}',
     '{"tool":"done","summary":"Created form plugin."}'
   );
 
@@ -2196,7 +2196,7 @@ hvy_version: 0.1
   });
 
   expect(result.error).toBeNull();
-  const firstToolInstructions = requestProxyCompletionMock.mock.calls[1]?.[0]?.formatInstructions ?? '';
+  const firstToolInstructions = requestProxyCompletionMock.mock.calls[1]?.[0]?.responseInstructions ?? '';
   expect(firstToolInstructions).toContain('Registered plugin ids: dev.heavy.form.');
   expect(firstToolInstructions).toContain('Use `get_help` only when it is listed for the current phase and exact syntax is missing from the notes or recent tool help.');
   expect(firstToolInstructions).not.toContain('Form UI. Fields and script hooks live in the YAML body.');
@@ -2205,7 +2205,7 @@ hvy_version: 0.1
   expect(retryMessages).toContain('Use a registered plugin id from the prompt');
   const serialized = serializeDocument(document);
   expect(serialized).toContain('"plugin":"dev.heavy.form"');
-  expect(serialized).toContain('submitLabel: Assign');
+  expect(serialized).toContain('"submitLabel":"Assign"');
   expect(serialized).not.toContain('```yaml');
   expect(serialized).not.toContain('hvy:form');
 });
@@ -2238,14 +2238,15 @@ hvy_version: 0.1
   const helpResult = lastToolResultBeforeCall(1);
   expect(helpResult).toContain('Tool result for get_help:');
   expect(helpResult).toContain('Form (dev.heavy.form)');
-  expect(helpResult).toContain('Supported YAML keys include `fields`');
+  expect(helpResult).toContain('Supported form YAML keys include `fields`');
+  expect(helpResult).toContain('Form-level behavior keys live in pluginConfig');
   expect(helpResult).toContain('Form scripts receive `doc` plus `doc.form`');
   expect(helpResult).toContain('Use `doc.form.get_value`');
   expect(helpResult).not.toContain('doc.db.query');
   const contextAfterHelp = requestProxyCompletionMock.mock.calls[2]?.[0]?.context ?? '';
   expect(contextAfterHelp).toContain('Recent tool help already fetched; reuse this before calling `get_help` again for the same syntax:');
   expect(contextAfterHelp).toContain('Form (dev.heavy.form)');
-  expect(contextAfterHelp).toContain('Supported YAML keys include `fields`');
+  expect(contextAfterHelp).toContain('Supported form YAML keys include `fields`');
   expect(contextAfterHelp).toContain('Form scripts receive `doc` plus `doc.form`');
   expect(contextAfterHelp).not.toContain('doc.db.query');
 });
@@ -2263,11 +2264,9 @@ hvy_version: 0.1
 <!--hvy: {"id":"chores"}-->
 #! Chores
 
-<!--hvy:plugin {"id":"add-chore-form","plugin":"dev.heavy.form","pluginConfig":{"version":"0.1"}}-->
- submitLabel: "Add Chore"
+<!--hvy:plugin {"id":"add-chore-form","plugin":"dev.heavy.form","pluginConfig":{"version":"0.1","submitLabel":"Add Chore"}}-->
  fields:
- - name: title
-   label: Chore Title
+ - label: Chore Title
    type: text
 `, '.hvy');
   seedStateForDocument(document);
@@ -2321,9 +2320,9 @@ hvy_version: 0.1
   expect(firstToolCall?.context).toContain('Configured db-table component targets: work_items');
   expect(firstToolCall?.context).toContain('Missing SQLite tables/views targeted by db-table components: work_items.');
   expect(firstToolCall?.context).not.toContain('SQLite tables/views available for query_db_table: work_items');
-  expect(firstToolCall?.formatInstructions).toContain('`execute_sql`');
-  expect(firstToolCall?.formatInstructions).not.toContain('`query_db_table`,');
-  expect(firstToolCall?.formatInstructions).toContain('Treat pluginConfig.source as storage selection, not a schema fix.');
+  expect(firstToolCall?.responseInstructions).toContain('`execute_sql`');
+  expect(firstToolCall?.responseInstructions).not.toContain('`query_db_table`,');
+  expect(firstToolCall?.responseInstructions).toContain('Treat pluginConfig.source as storage selection, not a schema fix.');
 });
 
 test('requestAiDocumentEditTurn can remove a section', async () => {

@@ -455,12 +455,49 @@ hvy_version: 0.1
   expect(output).toContain('<!--hvy:component-list {"componentListComponent":"skill-record","componentListItemLabel":"skill"}-->');
 });
 
+test('reusable component definitions preserve nested builtin component types', () => {
+  const input = `---
+hvy_version: 0.1
+component_defs:
+  - name: history-record
+    baseType: expandable
+    schema:
+      component: history-record
+      expandableStubBlocks:
+        lock: false
+        children:
+          - text: ""
+            schema:
+              component: table
+              tableColumns: ["YEAR", "ORGANIZATION", "TITLE"]
+              tableRows:
+                - cells:
+                    - ""
+                    - ""
+                    - ""
+      expandableContentBlocks:
+        lock: false
+        children: []
+---
+
+<!--hvy: {"id":"history"}-->
+#! History
+`;
+
+  const document = deserializeDocument(input, '.hvy');
+  const output = serializeWithState(document);
+
+  expect(output).not.toContain('component: history-record');
+  expect(output).toContain('component: table');
+  expect(output).toContain('tableColumns:\n                - YEAR\n                - ORGANIZATION\n                - TITLE');
+});
+
 test('serializes uncontained section metadata without changing section shape on round-trip', () => {
   const input = `---
 hvy_version: 0.1
 ---
 
-<!--hvy: {"id":"summary","contained":false,"custom_css":"padding: 0 0.35rem;"}-->
+<!--hvy: {"id":"summary","contained":false,"css":"padding: 0 0.35rem;"}-->
 #! Summary
 
  <!--hvy:text {}-->
@@ -471,9 +508,9 @@ hvy_version: 0.1
   const output = serializeWithState(document);
   const roundTripped = deserializeDocument(output, '.hvy');
 
-  expect(output).toContain('<!--hvy: {"id":"summary","lock":false,"expanded":true,"highlight":false,"contained":false,"custom_css":"padding: 0 0.35rem;"}-->');
+  expect(output).toContain('<!--hvy: {"id":"summary","lock":false,"expanded":true,"highlight":false,"contained":false,"css":"padding: 0 0.35rem;"}-->');
   expect(roundTripped.sections[0]?.contained).toBe(false);
-  expect(roundTripped.sections[0]?.customCss).toBe('padding: 0 0.35rem;');
+  expect(roundTripped.sections[0]?.css).toBe('padding: 0 0.35rem;');
 });
 
 test('round-trips migrated example files without reintroducing slot-level component fields', async () => {

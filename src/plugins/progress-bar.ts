@@ -6,6 +6,7 @@ import type {
 } from './types';
 import { PROGRESS_BAR_PLUGIN_ID } from './registry';
 import { colorValueToPickerHex, getResolvedThemeColor } from '../theme';
+import progressBarDocumentation from './progress-bar.about.txt?raw';
 
 import './progress-bar.css';
 
@@ -282,6 +283,10 @@ export const progressBarPluginFactory: HvyPluginFactory = build;
 export const progressBarPluginRegistration: HvyPluginRegistration = {
   id: PROGRESS_BAR_PLUGIN_ID,
   displayName: 'Progress Bar',
+  documentation: {
+    filename: 'about-progress-bar.txt',
+    text: progressBarDocumentation,
+  },
   aiHint: 'Progress meter. Numeric value/min/max live in pluginConfig.',
   aiHelp: [
     `Use \`<!--hvy:plugin {"plugin":"${PROGRESS_BAR_PLUGIN_ID}","pluginConfig":{"value":50,"min":0,"max":100}}-->\`.`,

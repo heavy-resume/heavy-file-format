@@ -32,8 +32,9 @@ plugin mount itself.
 The runtime intentionally avoids Brython AST mutation. The current flow is:
 
 1. Strip Python `import` statements before execution.
-2. Prefer `sys.settrace()` for line counting.
-3. Fall back to host-side source instrumentation when tracing is unavailable.
+2. Wrap the source in a generated function so `return` can stop the script early.
+3. Prefer `sys.settrace()` for line counting.
+4. Fall back to host-side source instrumentation when tracing is unavailable.
 
 This was chosen because Brython AST rewriting proved brittle for some compare
 expressions during `compile(...)`.

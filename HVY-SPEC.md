@@ -215,10 +215,10 @@ Section metadata also includes optional presentation keys such as:
 - `highlight`
 - `lock`
 - `contained`
-- `custom_css`
+- `css`
 - `location`
 
-`custom_css` is an optional inline CSS style string applied to the rendered section wrapper.
+`css` is an optional inline CSS style string applied to the rendered section wrapper.
 `lock` is an optional boolean. Use it to prevent adding new blocks or child sections inside that section.
 `contained` is an optional boolean. When `true` (default), render the section as the normal bordered card/container and allow collapse/expand UI. When `false`, render the section edge-to-edge without the section border/background wrapper and without the section expander/collapser.
 `location` is an optional string. Use it to route a section to a named layout zone in the viewer. Defined values are `"main"` (default) and `"sidebar"`. Unknown values SHOULD be treated as `"main"`.
@@ -380,13 +380,21 @@ expandableStubBlocks:
 
 The `children` array uses the same recursive block object shape as other nested block arrays.
 
-For tables, each `tableRows` entry contains only:
+The built-in `table` component is static document data stored in `tableColumns` and `tableRows`. Use a dynamic data-backed plugin such as `dev.heavy.db-table` when rows should come from a backend query.
+
+For static tables, `tableColumns` is a JSON/YAML array of strings:
+
+```yaml
+tableColumns: ["Column A", "Column B"]
+```
+
+Each `tableRows` entry contains only:
 
 ```yaml
 - cells: ["Cell A", "Cell B"]
 ```
 
-Tables do not have intrinsic row expansion, row click behavior, or row-attached detail blocks in HVY v0.1. Use an enclosing `expandable` when the table should reveal additional information.
+Static tables do not have intrinsic row expansion, row click behavior, or row-attached detail blocks in HVY v0.1. Use an enclosing `expandable` when the table should reveal additional information.
 
 For inline HVY serialization, stub-pane and content-pane CSS belong on the slot markers themselves:
 
@@ -464,7 +472,7 @@ section_defs:
 Notes:
 - `template` stores a full section subtree, including blocks and nested child sections.
 - Clone a `section_defs[*].template` when inserting a new section or subsection.
-- Reusable section templates preserve section-level presentation fields such as `contained`, `expanded`, `highlight`, `custom_css`, and `location`.
+- Reusable section templates preserve section-level presentation fields such as `contained`, `expanded`, `highlight`, `css`, and `location`.
 - Implementations SHOULD assign fresh section keys, block IDs, and custom IDs when instantiating a reusable section.
 - Plain Markdown renderers ignore `section_defs`.
 
@@ -631,7 +639,7 @@ Rules:
 
 A `.hvy` or `.thvy` file MAY declare default presentation values for sections in front matter under `section_defaults`.
 
-This is intended for document-wide section wrapper styling without repeating the same `custom_css` on every section.
+This is intended for document-wide section wrapper styling without repeating the same `css` on every section.
 
 #### Front matter shape
 
@@ -642,7 +650,7 @@ section_defaults:
 
 Rules:
 - `css` is an optional inline CSS style string applied to each rendered section wrapper.
-- Explicit section-level `custom_css` remains valid and MAY be combined with or override document-level defaults in a viewer-specific way.
+- Explicit section-level `css` remains valid and MAY be combined with or override document-level defaults in a viewer-specific way.
 - Unknown fields under `section_defaults` MUST be ignored.
 - Plain Markdown renderers ignore `section_defaults`.
 
@@ -846,8 +854,9 @@ Block example:
 
 Plugin-specific rules:
 - `pluginConfig.source` MUST currently be `"with-file"`.
-- `pluginConfig.table` MUST be a database table name to render.
-- The plugin block text is interpreted as the table query string. This is an implicit property derived from the block text body rather than from `pluginConfig`.
+- `pluginConfig.table` MUST be an existing table or view name in the plugin's current data backend. It MUST NOT contain SQL.
+- The plugin block text is interpreted as an optional read-only `SELECT` or `WITH` query string. This is an implicit property derived from the block text body rather than from `pluginConfig`.
+- Query text does not create data objects. Tables and views MUST be created through the backend execution API before a DB Table component can reference them.
 - If the plugin block contains non-text structured content, clients SHOULD discard that structured content for this plugin and preserve only the text body as the query value.
 - If the query text is empty after trimming, clients MUST behave as though the query were `SELECT * FROM <pluginConfig.table>`.
 - If the query text is non-empty, clients MUST render the result in a read-only state and SHOULD visually indicate that the table is query-driven rather than directly editable.
@@ -856,8 +865,8 @@ Plugin-specific rules:
 - Clients MUST enforce an implicit result cap of fewer than 100 rows for query-driven views.
 - Clients SHOULD render at most 50 rows at a time in the visible window and SHOULD advance or rewind the offset window as the user scrolls, for example by shifting the offset after the viewport passes roughly row 75.
 - Sort controls MAY be exposed for direct table views. If exposed, ascending and descending sort orders SHOULD be supported per visible column. Query-driven views SHOULD preserve query-defined ordering instead.
-- The current built-in implementation stores this plugin in exactly one gzip-compressed SQLite database in the document tail.
-- Multiple plugin blocks MAY point at different tables within the same attached database.
+- The current built-in implementation stores this plugin in exactly one gzip-compressed SQL database in the document tail.
+- Multiple plugin blocks MAY point at different tables within the same attached backend.
 
 Recommended client behavior:
 - Spreadsheet-like table views SHOULD virtualize row rendering and MUST NOT attempt to render every row at once for large tables.
@@ -881,10 +890,9 @@ plugins:
 Block example:
 
 ```markdown
-<!--hvy:plugin {"plugin":"dev.heavy.form","pluginConfig":{"version":"0.1"}}-->
+<!--hvy:plugin {"plugin":"dev.heavy.form","pluginConfig":{"version":"0.1","initialScript":"populate_food","submitScript":"submit_order","submitLabel":"Save order"}}-->
 fields:
-  - name: food
-    label: Food
+  - label: Food
     type: select
     options:
       - label: Apple
@@ -893,26 +901,30 @@ fields:
         value: soup
     triggers:
       change: populate_food
-  - name: notes
-    label: Notes
+  - label: Notes
     type: textarea
 scripts:
   populate_food: |
-    if doc.form.get_value("food") == "soup":
-        doc.form.set_value("notes", "Bring a spoon.")
+    if doc.form.get_value("Food") == "soup":
+        doc.form.set_value("Notes", "Bring a spoon.")
   submit_order: |
     doc.header.set("last_order", doc.form.get_values())
-initialScript: populate_food
-submitScript: submit_order
 ```
 
 Plugin-specific rules:
 - `pluginConfig.version` is optional and defaults to `"0.1"`.
+- Form-level behavior is stored in `pluginConfig`. `pluginConfig.initialScript`
+  and `pluginConfig.submitScript` reference named scripts from the form body.
+  `pluginConfig.submitLabel` customizes the visible submit button text and
+  defaults to `"Submit"`. `pluginConfig.showSubmit` defaults to `true`; when
+  `false`, clients MUST omit the visible submit button while preserving the form
+  and any non-submit triggers.
 - The plugin block text MUST be interpreted as YAML owned by the form plugin.
-- Top-level YAML keys are `fields`, `scripts`, `initialScript`, `submitScript`,
-  `submitLabel`, and `showSubmit`.
-- `fields` is an ordered list. Each field supports `name`, `label`, `type`,
+- Top-level YAML keys are `fields` and `scripts`.
+- `fields` is an ordered list. Each field supports `label`, `type`,
   `value`, `placeholder`, `required`, `options`, `triggers`, and `meta`.
+- Field `label` is both the visible label and the script key used with
+  `doc.form` helpers.
 - Field `meta` is plugin-owned field metadata. `meta.css` is an optional
   inline CSS style string applied to that rendered field wrapper and MUST be
   sanitized like other document-supplied CSS.
@@ -922,21 +934,18 @@ Plugin-specific rules:
 - `options` applies to `select` and `radio`. Each option MAY be a string or an
   object with `label` and optional `value`; when `value` is omitted, clients MUST
   use `label` as the value.
-- `scripts` is a map from script name to Python/Brython source. `initialScript`,
-  `submitScript`, and field trigger values reference keys in this map.
+- `scripts` is a map from script name to Python/Brython source.
+  `pluginConfig.initialScript`, `pluginConfig.submitScript`, and field trigger
+  values reference keys in this map.
 - Field `triggers` MAY define `input`, `change`, and `blur` script references.
   Clients SHOULD debounce `input` trigger execution.
 - Viewer clients MUST render an HTML `<form>`, prevent native navigation on
   submit, gather current field values, and run the named submit script when one
   is defined. No network request is implied by submitting a form.
-- `submitLabel` customizes the visible submit button text and defaults to
-  `"Submit"`. `showSubmit` defaults to `true`; when `false`, clients MUST omit
-  the visible submit button while preserving the form and any non-submit
-  triggers.
 - Form scripts run through the installed scripting runtime. During form script
-  execution, `doc.form` exposes `get_value(name)`, `set_value(name, value)`,
-  `get_values()`, `set_options(name, options)`, `get_options(name)`,
-  `set_error(name, message)`, and `clear_error(name)`.
+  execution, `doc.form` exposes `get_value(label)`, `set_value(label, value)`,
+  `get_values()`, `set_options(label, options)`, `get_options(label)`,
+  `set_error(label, message)`, and `clear_error(label)`.
 - Dynamic dropdown/radio options SHOULD be set by scripts using
   `doc.form.set_options(...)` rather than by schema-level database source
   declarations.
@@ -954,7 +963,7 @@ Normative behavior:
 - Remote resource fetches MUST be gated behind user network permission.
 - Plugin installation MUST show `id` and `source` before trust is granted.
 - Clients MUST treat tail payload bytes as untrusted input and only hand them to the declared plugin after normal trust checks.
-- Renderers MUST sanitize document-supplied CSS (inline `css` fields, fenced `~~~css` blocks, `hvy:css` directives, `theme.colors` values, `component_defaults.*.css`, `section_defaults.css`, and section/block `custom_css`) so it cannot trigger network fetches unless the user has explicitly enabled external CSS resources. Specifically, renderers MUST drop or neutralize `url(...)`, `image-set(...)`, `src(...)`, `src:` declarations, and the at-rules `@import`, `@font-face`, `@namespace`, and `@property`. Sanitization MUST decode CSS character escapes (e.g. `u\72l(...)` and `\55RL(...)`) before pattern matching so obfuscated forms are also blocked.
+- Renderers MUST sanitize document-supplied CSS (inline `css` fields, fenced `~~~css` blocks, `hvy:css` directives, `theme.colors` values, `component_defaults.*.css`, `section_defaults.css`, and section/block `css`) so it cannot trigger network fetches unless the user has explicitly enabled external CSS resources. Specifically, renderers MUST drop or neutralize `url(...)`, `image-set(...)`, `src(...)`, `src:` declarations, and the at-rules `@import`, `@font-face`, `@namespace`, and `@property`. Sanitization MUST decode CSS character escapes (e.g. `u\72l(...)` and `\55RL(...)`) before pattern matching so obfuscated forms are also blocked.
 
 ## 9. Parsing Rules (Normative)
 

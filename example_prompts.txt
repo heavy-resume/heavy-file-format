@@ -8,3 +8,27 @@ A form lets you assign a chore
 A seperate form lets you complete a chore
 
 A table shows who's completed the most chores in the past week
+
+
+
+Remove references to TypeScript in this resume.
+
+
+
+Remove references to programming languages in this resume. 
+
+
+
+Add Baking as both a skill and top skill. Give it placeholder info I'll modify later
+
+
+
+Can you update this to add a row for 2025 and 2026 with the organization Heavy Resume and the role as Founder?
+
+Location is Seattle, WA. Leave the rest as defaults
+
+
+
+Can you add a new history record that covers 2025 and 2026 with the organization as Heavy Resume and the role as Founder?
+
+Location is Fairwood, WA. Leave the rest as defaults.

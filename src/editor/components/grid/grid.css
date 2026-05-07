@@ -75,28 +75,6 @@
   border-radius: 0;
 }
 
-.reader-grid-cell.is-flow-track,
-.reader-grid-cell.is-single-track {
-  text-align: left;
-}
-
-.reader-grid-cell.is-terminal-track {
-  text-align: right;
-}
-
-.reader-grid-cell.is-terminal-track .reader-xref-card {
-  justify-self: end;
-  text-align: left;
-}
-
-.reader-grid-cell.is-terminal-track ul,
-.reader-grid-cell.is-terminal-track ol {
-  display: inline-block;
-  margin-left: auto;
-  margin-right: 0;
-  text-align: left;
-}
-
 .reader-grid-cell.is-bold {
   font-weight: 700;
 }

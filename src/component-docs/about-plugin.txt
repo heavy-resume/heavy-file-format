@@ -1,0 +1,5 @@
+# Plugin Components #
+Host-resolved extension block rendered in normal document flow.
+plugin is the required plugin identifier; pluginConfig is optional plugin-owned metadata.
+The body is plugin-owned free-form text and must be preserved verbatim rather than interpreted as Markdown or HVY.
+If the plugin is unavailable, clients should preserve the block and show an unavailable-plugin placeholder.

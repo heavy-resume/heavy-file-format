@@ -74,6 +74,7 @@
   --hvy-code-string: #1f4f63;
   --hvy-code-builtin: #b8621b;
   --hvy-code-keyword: #a23a48;
+  --hvy-code-function: #6f42c1;
   --hvy-code-number: #325f6e;
 }
 
@@ -149,5 +150,6 @@
   --hvy-code-string: #8ecae6;
   --hvy-code-builtin: #ffb86b;
   --hvy-code-keyword: #ff7b72;
+  --hvy-code-function: #d2a8ff;
   --hvy-code-number: #79c0ff;
 }

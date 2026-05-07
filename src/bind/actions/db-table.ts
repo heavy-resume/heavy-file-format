@@ -132,7 +132,7 @@ const sqliteOpenRowComponent = (action: 'sqlite-open-row-component-editor' | 'sq
         error: null,
         readOnly: action === 'sqlite-open-row-component-view',
         previousActiveEditorBlock: state.activeEditorBlock ? { ...state.activeEditorBlock } : null,
-        mode: state.editorMode,
+        mode: state.editorMode === 'cli' ? 'basic' : state.editorMode,
         rawDraft,
       };
       state.sqliteRowComponentModal = modalState;

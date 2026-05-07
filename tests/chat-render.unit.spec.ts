@@ -1,4 +1,15 @@
-import { expect, test } from 'vitest';
+import { expect, test, vi } from 'vitest';
+
+vi.mock('dompurify', () => ({
+  default: {
+    sanitize: (value: string) => value,
+  },
+}));
+
+vi.mock('../src/markdown', () => ({
+  markdownToEditorHtml: (value: string) => value,
+  normalizeMarkdownLists: (value: string) => value,
+}));
 
 import { createDefaultChatState, renderChatPanel } from '../src/chat/chat';
 import { deserializeDocument } from '../src/serialization';
@@ -35,4 +46,94 @@ hvy_version: 0.1
   const html = renderChatPanel(chat, document, deps, 'qa');
 
   expect(html).toContain('<button type="submit" class="secondary" disabled>Send</button>');
+});
+
+test('renderChatPanel shows token usage on assistant messages', () => {
+  const chat = createDefaultChatState();
+  chat.panelOpen = true;
+  chat.messages = [
+    {
+      id: 'a1',
+      role: 'assistant',
+      content: 'Done.',
+      tokenUsage: { inputTokens: 120, outputTokens: 30 },
+    },
+  ];
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+#! Summary
+`, '.hvy');
+
+  const html = renderChatPanel(chat, document, deps, 'document-edit');
+
+  expect(html).toContain('<div class="chat-token-usage">Tokens: input 120 / output 30</div>');
+  expect(html).toContain('Last tokens: input 120 / output 30');
+});
+
+test('renderChatPanel hides the change request input while document edits are running', () => {
+  const chat = createDefaultChatState();
+  chat.panelOpen = true;
+  chat.isSending = true;
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+`, '.hvy');
+
+  const html = renderChatPanel(chat, document, deps, 'document-edit');
+
+  expect(html).not.toContain('data-field="chat-input"');
+  expect(html).not.toContain('Change request');
+  expect(html).toContain('Working through the request...');
+  expect(html).toContain('data-action="cancel-chat-request"');
+});
+
+test('renderChatPanel shows CLI sim as a toggle before a draft exists', () => {
+  const chat = createDefaultChatState();
+  chat.panelOpen = true;
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+`, '.hvy');
+
+  const html = renderChatPanel(chat, document, deps, 'document-edit');
+
+  expect(html).toContain('data-action="toggle-chat-cli-sim"');
+  expect(html).toContain('<button type="button" class="ghost" data-action="toggle-chat-cli-sim">CLI Sim Off</button>');
+});
+
+test('renderChatPanel shows CLI sim request, response, and thinking summary', () => {
+  const chat = createDefaultChatState();
+  chat.panelOpen = true;
+  chat.draft = 'Add a chore section.';
+  chat.cliSim = {
+    requestPayload: { messages: [] },
+    requestJson: '{\n  "messages": []\n}',
+    responseJson: '{\n  "output": "done Added it."\n}',
+    responseOutput: 'done Added it.',
+    reasoningSummary: 'Checked the structure, then edited.',
+    commandResultMessage: '',
+    turnState: {},
+    isPreparing: false,
+    isSending: false,
+    error: null,
+  };
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+`, '.hvy');
+
+  const html = renderChatPanel(chat, document, deps, 'document-edit');
+
+  expect(html).toContain('data-action="toggle-chat-cli-sim"');
+  expect(html).toContain('CLI Sim');
+  expect(html).toContain('Request JSON');
+  expect(html).toContain('"messages": []');
+  expect(html).toContain('Response JSON');
+  expect(html).toContain('"output": "done Added it."');
+  expect(html).toContain('Thinking summary');
+  expect(html).toContain('Checked the structure, then edited.');
+  expect(html).toContain('data-action="run-chat-cli-sim-step"');
+  expect(html).toContain('Run Commands And Prepare Next');
 });

@@ -1,0 +1,6 @@
+# Container Components #
+Groups nested HVY components.
+Use children-order.json to reorder container children.
+containerBlocks holds the child block array.
+Plain Markdown before the first numbered container slot is treated as the first implicit child block.
+Numbered container slots order children by their numeric suffix; slot markers carry only slot metadata.

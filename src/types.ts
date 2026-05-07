@@ -14,19 +14,54 @@ export interface VisualDocument {
   attachments: DocumentAttachment[];
 }
 
-export type ChatProvider = 'openai' | 'anthropic';
+export type ChatProvider = 'openai' | 'anthropic' | 'qwen';
 
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
+  reasoning?: string;
+  tokenUsage?: ChatTokenUsage;
   error?: boolean;
   progress?: boolean;
+  work?: ChatWorkState;
+}
+
+export interface ChatTokenUsage {
+  inputTokens?: number;
+  outputTokens?: number;
+  totalTokens?: number;
+  cachedTokens?: number;
+  reasoningTokens?: number;
+}
+
+export interface ChatWorkState {
+  status: 'running' | 'done' | 'error';
+  lastCommand?: string;
+  details: string[];
+  reasoning: string[];
+  tokenUsage?: ChatTokenUsage;
+}
+
+export interface ChatCliSimState {
+  requestPayload: unknown | null;
+  requestJson: string;
+  responseJson: string;
+  responseOutput: string;
+  toolTurn?: unknown;
+  reasoningSummary: string;
+  commandResultMessage: string;
+  turnState: unknown | null;
+  isPreparing: boolean;
+  isSending: boolean;
+  error: string | null;
 }
 
 export interface ChatSettings {
   provider: ChatProvider;
   model: string;
+  compactionProvider?: ChatProvider;
+  compactionModel?: string;
 }
 
 export interface ChatState {
@@ -38,6 +73,8 @@ export interface ChatState {
   panelOpen: boolean;
   requestNonce: number;
   abortController: AbortController | null;
+  cliSimEnabled: boolean;
+  cliSim: ChatCliSimState | null;
 }
 
 export interface AiEditState {
@@ -101,6 +138,23 @@ export interface RawEditorDiagnostic {
   hint: string;
 }
 
+export interface HvyCliHistoryEntry {
+  cwd: string;
+  command: string;
+  output: string;
+  error: boolean;
+}
+
+export interface HvyCliSessionState {
+  cwd: string;
+  scratchpadContent?: string;
+  scratchpadEdited?: boolean;
+  scratchpadCommandsSinceEdit?: string[];
+  rawWipContent?: string;
+  rawWipContentByPath?: Record<string, string>;
+  rawSectionWipContentByPath?: Record<string, string>;
+}
+
 export interface ThemeConfig {
   colors: Record<string, string>;
 }
@@ -123,7 +177,7 @@ export interface AppState {
   document: VisualDocument;
   filename: string;
   currentView: 'editor' | 'viewer' | 'ai';
-  editorMode: 'basic' | 'advanced' | 'raw';
+  editorMode: 'basic' | 'advanced' | 'raw' | 'cli';
   chat: ChatState;
   aiEdit: AiEditState;
   paneScroll: PaneScrollState;
@@ -131,6 +185,9 @@ export interface AppState {
   rawEditorText: string;
   rawEditorError: string | null;
   rawEditorDiagnostics: RawEditorDiagnostic[];
+  cliDraft: string;
+  cliSession: HvyCliSessionState;
+  cliHistory: HvyCliHistoryEntry[];
   activeEditorBlock: { sectionKey: string; blockId: string } | null;
   componentPlacement: ComponentPlacementState | null;
   pendingEditorActivation: { sectionKey: string; blockId: string } | null;

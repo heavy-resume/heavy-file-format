@@ -1,4 +1,16 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
+
+async function runCliCommand(page: Page, command: string): Promise<void> {
+  const lineCount = await page.locator('#cliOutput .cli-line').count();
+  const isPlaceholder = (await page.locator('#cliOutput').textContent())?.includes('/ $ man ls') ?? false;
+  await page.locator('#cliInput').fill(command);
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#cliOutput .cli-line')).toHaveCount(isPlaceholder ? lineCount : lineCount + 1);
+}
+
+function writeFileCommand(path: string, content: string): string {
+  return `echo ${JSON.stringify(content.trimEnd().replace(/\n/g, '\\n'))} > ${path}`;
+}
 
 test('expandable editor keeps stub and expanded slots unlocked without lock controls', async ({ page }) => {
   await page.goto('/');
@@ -131,10 +143,23 @@ hvy_version: 0.1
 });
 
 test('component-list add prompt reveals the active edit path with staggered animation', async ({ page }) => {
+  await page.addInitScript(() => {
+    const originalScrollIntoView = Element.prototype.scrollIntoView;
+    (window as any).__hvyScrollIntoViewCalls = [];
+    Element.prototype.scrollIntoView = function scrollIntoViewSpy(options?: boolean | ScrollIntoViewOptions): void {
+      (window as any).__hvyScrollIntoViewCalls.push({
+        activeEditorBlock: this instanceof Element && this.matches('[data-active-editor-block="true"]'),
+        block: typeof options === 'object' ? options.block : undefined,
+      });
+      originalScrollIntoView.call(this, options as never);
+    };
+  });
   await page.goto('/');
 
   await page.getByRole('button', { name: 'Resume Template' }).click();
-  await page.locator('.editor-tree .editor-block-passive .ghost-label', { hasText: 'Add Skill' }).first().click();
+  const addSkill = page.locator('.editor-tree .editor-block-passive .add-ghost', { hasText: 'Add Skill' }).first();
+  await expect(addSkill).toHaveCSS('cursor', 'pointer');
+  await addSkill.click();
 
   const activatingBlocks = page.locator('.editor-block.is-activating-path');
   await expect(activatingBlocks).toHaveCount(3);
@@ -142,6 +167,9 @@ test('component-list add prompt reveals the active edit path with staggered anim
   await expect(activatingBlocks.nth(1)).toHaveAttribute('style', /--editor-activation-delay: 150ms;/);
   await expect(activatingBlocks.nth(2)).toHaveAttribute('style', /--editor-activation-delay: 300ms;/);
   await expect(page.locator('.editor-block[data-active-editor-block="true"] [contenteditable="true"]').first()).toBeVisible();
+  await expect.poll(() => page.evaluate(() => (window as any).__hvyScrollIntoViewCalls.some(
+    (call: { activeEditorBlock: boolean; block?: ScrollLogicalPosition }) => call.activeEditorBlock && call.block === 'center'
+  ))).toBe(true);
 });
 
 test('clicking a nested component-list item opens the item editor on first click', async ({ page }) => {
@@ -214,6 +242,145 @@ hvy_version: 0.1
   await expect(page.locator('.editor-block.is-activating-path')).toHaveCount(0);
 });
 
+test('active nested list item exposes delete controls on ancestor components', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"history"}-->
+#! History
+
+ <!--hvy:component-list {"id":"history-list","componentListComponent":"expandable"}-->
+
+  <!--hvy:component-list:0 {}-->
+
+   <!--hvy:expandable {"id":"history-row","expandableExpanded":true}-->
+
+    <!--hvy:expandable:stub {}-->
+
+     <!--hvy:text {}-->
+      Heavy Resume
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:text {}-->
+      Founder details
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('.editor-block-passive', { hasText: 'Founder details' }).last().click();
+
+  await expect(page.locator('.editor-block-head', { hasText: 'component-list' }).locator('[data-action="remove-block"]')).toBeVisible();
+  await expect(page.locator('.editor-block-head', { hasText: 'expandable' }).locator('[data-action="remove-block"]')).toBeVisible();
+
+  await page.locator('.editor-block-head', { hasText: 'expandable' }).locator('[data-action="remove-block"]').click();
+  await page.getByRole('button', { name: 'Delete' }).click();
+  await page.getByRole('button', { name: 'Raw' }).click();
+  const raw = await page.locator('#rawEditor').inputValue();
+  expect(raw).not.toContain('Founder details');
+  expect(raw).toContain('component-list');
+});
+
+test('cli-created expanded history record can be closed and followed by another list item', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Resume Template' }).click();
+  await page.getByRole('button', { name: 'CLI' }).click();
+  await runCliCommand(page, 'hvy insert 0 history-record /body/history/component-list-2 --id history-reproco-founder');
+  await runCliCommand(page, writeFileCommand('/body/history/component-list-2/history-reproco-founder/expandable-stub/table-0/tableRows.json', '[{"cells":["2025-2026","ReproCo","Founder"]}]'));
+  await runCliCommand(page, writeFileCommand('/body/history/component-list-2/history-reproco-founder/expandable-content/text-0/text.txt', '### ReproCo'));
+
+  await page.getByRole('button', { name: 'AI' }).click();
+  const aiRecord = page.locator('#aiReaderDocument .reader-block', { hasText: 'ReproCo' }).first();
+  await aiRecord.locator('[data-reader-action="toggle-expandable"]').first().click();
+
+  await page.getByRole('button', { name: 'Editor' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await expect(page.locator('.passive-list-add-ghost', { hasText: 'Add History' }).first()).toBeVisible();
+  const passiveRecord = page.locator('.editor-block-passive', { hasText: 'ReproCo' }).last();
+  await expect(passiveRecord).not.toContainText('Empty text');
+
+  await passiveRecord.click();
+  const activeRecord = page.locator('.editor-block[data-active-editor-block="true"]');
+  await expect(activeRecord).not.toContainText('Empty text');
+  await activeRecord.getByRole('button', { name: 'Done' }).click();
+  await expect(page.locator('.editor-block[data-active-editor-block="true"]')).toHaveCount(0);
+  await expect(page.locator('.passive-list-add-ghost', { hasText: 'Add History' }).first()).toBeVisible();
+
+  await page.locator('.passive-list-add-ghost', { hasText: 'Add History' }).first().click();
+  await page.getByRole('button', { name: 'Raw' }).click();
+  const raw = await page.locator('#rawEditor').inputValue();
+  expect(raw.match(/<!--hvy:history-record/g) ?? []).toHaveLength(2);
+});
+
+test('editing a second component-list item does not overwrite the first item', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"skills"}-->
+#! Skills
+
+ <!--hvy:component-list {"id":"skills-list","componentListComponent":"text"}-->
+
+  <!--hvy:component-list:0 {}-->
+
+   <!--hvy:text {}-->
+    Python
+
+  <!--hvy:component-list:1 {}-->
+
+   <!--hvy:text {}-->
+    TypeScript
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('.editor-block-passive', { hasText: 'TypeScript' }).last().click();
+  const activeEditor = page.locator('.editor-block[data-active-editor-block="true"] .rich-editor');
+  await expect(activeEditor).toContainText('TypeScript');
+  await activeEditor.fill('Rust');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  const raw = await page.locator('#rawEditor').inputValue();
+  expect(raw).toContain('Python');
+  expect(raw).toContain('Rust');
+  expect(raw).not.toContain('TypeScript');
+  expect(raw.indexOf('Python')).toBeLessThan(raw.indexOf('Rust'));
+});
+
+test('editing the second resume project does not duplicate it after done', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Resume Example' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  const projectEntry = page.locator('.editor-block-passive', { hasText: 'Autonomous Agent Hackathon' }).last();
+  await projectEntry.click();
+  await page.locator('[data-expandable-panel="expanded"]').last().click();
+  await page.locator('.editor-block-passive', { hasText: 'Autonomous Agent Hackathon' }).last().click();
+  const expandedTitleEditor = page.locator('.rich-editor', { hasText: 'Autonomous Agent Hackathon' }).first();
+  await expect(expandedTitleEditor).toBeVisible();
+  await expandedTitleEditor.click();
+  await page.getByRole('button', { name: 'H2' }).click();
+
+  const projectRecordEditor = page.locator('.editor-block', { has: page.locator('.editor-block-title', { hasText: 'project-record' }) }).last();
+  await projectRecordEditor.getByRole('button', { name: 'Done' }).first().click();
+  await expect(page.locator('.editor-block[data-active-editor-block="true"]')).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  const raw = await page.locator('#rawEditor').inputValue();
+  expect(raw.match(/<!--hvy:project-record/g) ?? []).toHaveLength(2);
+});
+
 test('populated component-list hides the list component type dropdown', async ({ page }) => {
   await page.goto('/');
 
@@ -242,7 +409,7 @@ hvy_version: 0.1
   await expect(activeBlock.getByText('List Component Type')).toBeVisible();
   await activeBlock.getByRole('button', { name: 'Done' }).click();
 
-  await page.locator('.editor-block-passive', { hasText: 'Python' }).first().click();
+  await page.locator('.editor-block-passive', { hasText: 'Python' }).last().click();
   activeBlock = page.locator('.editor-block[data-active-editor-block="true"]');
   await expect(activeBlock.locator('.rich-editor')).toContainText('Python');
   await expect(page.getByText('List type:')).toBeVisible();

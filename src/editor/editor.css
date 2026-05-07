@@ -329,6 +329,7 @@
 .editor-block-passive {
   position: relative;
   padding-left: 0.85rem;
+  min-width: 0;
 }
 
 .editor-block.is-activating-path {
@@ -505,6 +506,7 @@
 .add-ghost {
   padding: 0.8rem;
   margin-top: 0.35rem;
+  cursor: pointer;
 }
 
 .compact-add-component-ghost {
@@ -832,6 +834,19 @@
   color: var(--hvy-text-muted);
   font-size: 0.82rem;
   line-height: 1.25;
+}
+
+.description-label-with-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+}
+
+.inline-generate-description {
+  min-height: auto;
+  padding: 0.18rem 0.45rem;
+  font-size: 0.78rem;
 }
 
 .component-picker-pane-root .component-picker-row-description {
@@ -1183,6 +1198,7 @@
   background: var(--hvy-surface);
   margin-bottom: 0.35rem;
   position: relative;
+  max-width: 100%;
 }
 
 .editor-block-passive {
@@ -1229,6 +1245,8 @@
   background: var(--hvy-surface-alt);
   padding: 0.6rem;
   margin-bottom: 0.7rem;
+  display: grid;
+  gap: 0.65rem;
 }
 
 .template-title {
@@ -1256,6 +1274,30 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.meta-panel label:not(.checkbox-label) {
+  display: grid;
+  gap: 0.24rem;
+  min-width: 0;
+  font-size: 0.9rem;
+}
+
+.meta-panel input:not([type='checkbox']),
+.meta-panel textarea {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--hvy-border-input);
+  border-radius: 7px;
+  padding: 0.44rem;
+  background: var(--hvy-surface);
+  color: var(--hvy-text);
+  font: inherit;
+}
+
+.meta-panel textarea {
+  min-height: 5.5rem;
+  resize: vertical;
 }
 
 .schema-editor,

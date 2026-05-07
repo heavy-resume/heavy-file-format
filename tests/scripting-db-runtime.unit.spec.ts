@@ -21,7 +21,7 @@ test('createScriptingDbRuntime exposes query and execute against the document da
 
     const expectedResult = runtime.api.query('SELECT title FROM chores WHERE title = ?', ['Sweep']);
 
-    expect(expectedResult).toEqual([{ title: 'Sweep' }]);
+    expect(expectedResult).toEqual([{ title: 'Sweep', 0: 'Sweep' }]);
     expect(mutated).toBe(2);
     expect(getAttachment(document, 'db')).not.toBeNull();
   } finally {

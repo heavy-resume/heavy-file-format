@@ -110,7 +110,7 @@ export async function runQaToolLoop(params: {
     throw new Error('The document body is empty after removing front matter and comments.');
   }
 
-  const formatInstructions = buildQaToolLoopFormatInstructions(dbTableNames);
+  const responseInstructions = buildQaToolLoopFormatInstructions(dbTableNames);
   let conversation: ChatMessage[] = [...params.messages];
 
   for (let iteration = 0; iteration < QA_TOOL_LOOP_MAX_STEPS; iteration += 1) {
@@ -118,7 +118,7 @@ export async function runQaToolLoop(params: {
       settings: params.settings,
       messages: conversation,
       context,
-      formatInstructions,
+      responseInstructions,
       mode: 'qa',
       debugLabel: `ai-qa:${iteration + 1}`,
       signal: params.signal,

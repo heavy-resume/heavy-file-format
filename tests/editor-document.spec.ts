@@ -54,6 +54,61 @@ test('reader max width keeps focus while typing', async ({ page }) => {
   await expect(readerMaxWidth).toHaveValue('60rem');
 });
 
+test('document ai context is editable metadata and keeps focus while typing', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Advanced' }).click();
+  await page.getByRole('button', { name: 'Document Meta' }).click();
+
+  const aiContext = page.locator('[data-field="meta-ai-context"]');
+  await aiContext.fill('');
+  await aiContext.type('Use top skills as featured skills.');
+
+  await expect(aiContext).toBeFocused();
+  await expect(aiContext).toHaveValue('Use top skills as featured skills.');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await expect(page.locator('#rawEditor')).toContainText('ai-context: Use top skills as featured skills.');
+});
+
+test('description generate button appears only for empty component descriptions', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"profile"}-->
+#! Profile
+
+<!--hvy:text {"id":"empty-description"}-->
+ Empty description body
+
+<!--hvy:text {"id":"filled-description","description":"Existing description"}-->
+ Filled description body
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Advanced' }).click();
+
+  await page.locator('.editor-block-passive', { hasText: 'Empty description body' }).click();
+  const activeBlock = page.locator('.editor-block[data-active-editor-block="true"]');
+  await activeBlock.getByRole('button', { name: 'Meta' }).click();
+  const metaModal = page.locator('.component-meta-modal', { hasText: 'Component Meta: text' });
+  await expect(metaModal.locator('[data-action="generate-block-description"]')).toBeVisible();
+
+  await metaModal.locator('[data-action="generate-block-description"]').click();
+  await expect(metaModal.locator('[data-action="generate-block-description"]')).toHaveCount(0);
+  await expect(metaModal.locator('[data-field="block-description"]')).toHaveValue(/empty-description - text .* Empty description body/);
+  await expect(activeBlock).toHaveAttribute('data-active-editor-block', 'true');
+
+  await page.getByRole('button', { name: 'Close' }).click();
+  await activeBlock.getByRole('button', { name: 'Done' }).click();
+  await page.locator('.editor-block-passive', { hasText: 'Filled description body' }).click();
+  await page.locator('.editor-block[data-active-editor-block="true"]').getByRole('button', { name: 'Meta' }).click();
+  await expect(page.locator('.component-meta-modal', { hasText: 'Component Meta: text' }).locator('[data-action="generate-block-description"]')).toHaveCount(0);
+});
+
 test('resume template shows friendly empty component-list add prompts before activation', async ({ page }) => {
   await page.goto('/');
 
@@ -79,6 +134,45 @@ test('resume template spaces stacked location labels from block css', async ({ p
   expect(firstBox).not.toBeNull();
   expect(secondBox).not.toBeNull();
   expect(secondBox!.y - (firstBox!.y + firstBox!.height)).toBeGreaterThan(1);
+});
+
+test('text component fenced python code is syntax highlighted', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"code-sample"}-->
+#! Code Sample
+
+<!--hvy:text {"id":"python-example"}-->
+\`\`\`python
+def greet(name):
+    return f"hello {name}"
+\`\`\`
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  const code = page.locator('.reader-code-block code.language-python').first();
+  await expect(code).toBeVisible();
+  const defKeyword = code.locator('.hljs-keyword', { hasText: 'def' }).first();
+  const functionTitle = code.locator('.hljs-title.function_', { hasText: 'greet' }).first();
+  await expect(defKeyword).toBeVisible();
+  await expect(functionTitle).toBeVisible();
+  await expect(code.locator('.hljs-keyword', { hasText: 'return' })).toBeVisible();
+  await expect.poll(async () => ({
+    keyword: await defKeyword.evaluate((node) => getComputedStyle(node).color),
+    functionTitle: await functionTitle.evaluate((node) => getComputedStyle(node).color),
+  })).toMatchObject({
+    keyword: expect.not.stringMatching(/^$/),
+    functionTitle: expect.not.stringMatching(/^$/),
+  });
+  expect(await defKeyword.evaluate((node) => getComputedStyle(node).color)).not.toBe(
+    await functionTitle.evaluate((node) => getComputedStyle(node).color)
+  );
 });
 
 test('trailing spaces after bold labels remain editable outside bold text', async ({ page }) => {

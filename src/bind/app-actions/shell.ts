@@ -4,6 +4,7 @@ import { setSidebarOpen, setEditorSidebarOpen } from '../../navigation';
 import { serializeDocument } from '../../serialization';
 import { clearChatConversation } from '../../chat/chat';
 import { closeAiEditPopover } from '../../ai-edit-popover';
+import { restoreCliViewAfterRender } from '../../cli-ui/focus';
 import type { AppActionHandler } from './types';
 
 const undo: AppActionHandler = () => {
@@ -18,8 +19,16 @@ const switchView: AppActionHandler = ({ actionButton }) => {
   const requestedView = actionButton.dataset.view;
   const view = requestedView === 'viewer' ? 'viewer' : requestedView === 'ai' ? 'ai' : 'editor';
   const crossingChatModeBoundary = (state.currentView === 'viewer') !== (view === 'viewer');
+  const crossingEditorBoundary = (state.currentView === 'editor') !== (view === 'editor');
   if (crossingChatModeBoundary) {
     clearChatConversation(state.chat);
+  }
+  if (crossingEditorBoundary) {
+    state.activeEditorBlock = null;
+    state.pendingEditorActivation = null;
+    state.activeEditorSectionTitleKey = null;
+    state.clearSectionTitleOnFocusKey = null;
+    state.componentPlacement = null;
   }
   state.currentView = view;
   if (view !== 'ai') {
@@ -34,7 +43,9 @@ const closeAiEdit: AppActionHandler = () => {
 };
 
 const setEditorMode: AppActionHandler = ({ actionButton }) => {
-  const editorMode = actionButton.dataset.editorMode === 'raw'
+  const editorMode = actionButton.dataset.editorMode === 'cli'
+    ? 'cli'
+    : actionButton.dataset.editorMode === 'raw'
     ? 'raw'
     : actionButton.dataset.editorMode === 'advanced'
     ? 'advanced'
@@ -51,6 +62,9 @@ const setEditorMode: AppActionHandler = ({ actionButton }) => {
   }
   state.activeEditorSectionTitleKey = null;
   getRenderApp()();
+  if (editorMode === 'cli') {
+    restoreCliViewAfterRender();
+  }
 };
 
 const toggleDocumentMeta: AppActionHandler = () => {

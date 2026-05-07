@@ -23,7 +23,7 @@ export interface BlockSchema {
   lock: boolean;
   align: Align;
   slot: Slot;
-  customCss: string;
+  css: string;
   codeLanguage: string;
   containerBlocks: VisualBlock[];
   componentListComponent: string;
@@ -49,7 +49,7 @@ export interface BlockSchema {
   expandableExpanded: boolean;
   expandableContentCss: string;
   expandableContentBlocks: ExpandablePart;
-  tableColumns: string;
+  tableColumns: string[];
   tableShowHeader: boolean;
   tableRows: TableRow[];
   imageFile: string;
@@ -76,7 +76,7 @@ export interface VisualSection {
   level: number;
   expanded: boolean;
   highlight: boolean;
-  customCss: string;
+  css: string;
   tags: string;
   description: string;
   location: SectionLocation;

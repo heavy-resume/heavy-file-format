@@ -49,7 +49,7 @@ function renderPreview(block: VisualBlock, helpers: ComponentRenderHelpers): str
   if (!url) {
     return `<div class="image-empty muted">Missing attachment: ${helpers.escapeHtml(filename)}</div>`;
   }
-  const styleAttr = ` style="${helpers.escapeAttr(sanitizeInlineCss(block.schema.customCss))}"`;
+  const styleAttr = ` style="${helpers.escapeAttr(sanitizeInlineCss(block.schema.css))}"`;
   return `<img class="image-block-img" src="${helpers.escapeAttr(url)}" alt="${helpers.escapeAttr(alt)}" data-image-filename="${helpers.escapeAttr(filename)}"${styleAttr} />`;
 }
 
@@ -177,10 +177,10 @@ export function mergeImagePresetCss(existingCss: string, preset: string): string
 export function applyImagePreset(sectionKey: string, blockId: string, preset: string): void {
   const block = findBlockByIds(sectionKey, blockId);
   if (!block) return;
-  const merged = mergeImagePresetCss(block.schema.customCss, preset);
+  const merged = mergeImagePresetCss(block.schema.css, preset);
   if (merged === null) return;
   recordHistory(`image-preset:${blockId}:${preset}`);
-  block.schema.customCss = merged;
+  block.schema.css = merged;
   syncReusableTemplateForBlock(sectionKey, blockId);
   getRefreshReaderPanels()();
   getRenderApp()();

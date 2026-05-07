@@ -1,6 +1,7 @@
 import { requestAiComponentEdit } from './ai-component-edit';
 import { parseAiBlockEditResponse } from './ai-component-edit-common';
 import { getPluginAiHelp } from './ai-plugin-hints';
+import { getHvyComponentHelp } from './component-help';
 import { createEmptySection } from './document-factory';
 import { deserializeDocumentWithDiagnostics, serializeBlockFragment, serializeSectionFragment } from './serialization';
 import { findBlockContainerById, findSectionByKey, findSectionContainer, getSectionId, moveSectionRelative, moveSectionToSiblingIndex } from './section-ops';
@@ -33,7 +34,7 @@ export function executeViewComponentTool(
   if (!section || !block) {
     throw new Error(`Component "${request.component_ref}" could not be found.`);
   }
-  const fragment = serializeBlockFragment(block);
+  const fragment = serializeBlockFragment(block, document.meta);
   const clampRange = clampLineRange(fragment.split('\n').length, request.start_line, request.end_line);
 
   return [
@@ -63,7 +64,7 @@ export function executeViewSectionRefAsComponentTool(
   if (!section) {
     return null;
   }
-  const fragment = serializeSectionFragment(section);
+  const fragment = serializeSectionFragment(section, document.meta);
   const clampRange = clampLineRange(fragment.split('\n').length, request.start_line, request.end_line);
 
   return [
@@ -140,16 +141,8 @@ export function executeGetHelpTool(request: Extract<DocumentEditToolRequest, { t
   }
   const componentMatch = topic.match(/^component:(.+)$/i);
   const component = (componentMatch?.[1] ?? topic).trim().toLowerCase();
-  const helpByComponent: Record<string, string> = {
-    text: 'Text component: `<!--hvy:text {}-->` followed by Markdown-like text body.',
-    table: 'Table component: `<!--hvy:table {"tableColumns":"Name, Status","tableRows":[{"cells":["Example","Open"]}]}-->`. Use db-table plugins for live SQLite rows.',
-    container: 'Container component: `<!--hvy:container {}-->` with nested HVY components indented underneath.',
-    grid: 'Grid component: `<!--hvy:grid {"gridColumns":2}-->` with `<!--hvy:grid:1 {}-->`, `<!--hvy:grid:2 {}-->` slots containing nested components.',
-    expandable: 'Expandable component: use `<!--hvy:expandable {...}-->` with `<!--hvy:expandable:stub {}-->` and `<!--hvy:expandable:content {}-->` child slots.',
-    plugin: 'Plugin component: `<!--hvy:plugin {"plugin":"registered.plugin.id","pluginConfig":{}}-->` followed by plugin-owned body text. Use `get_help` with `plugin:PLUGIN_ID` for plugin-specific details.',
-    'xref-card': 'xref-card component: `<!--hvy:xref-card {"xrefTitle":"Title","xrefDetail":"Detail","xrefTarget":"target-id"}-->`.',
-  };
-  return helpByComponent[component] ?? `No detailed help registered for "${topic}". Try "plugin:PLUGIN_ID" or "component:text".`;
+  const componentHelp = getHvyComponentHelp(component);
+  return componentHelp || `No detailed help registered for "${topic}". Try "plugin:PLUGIN_ID" or "component:text".`;
 }
 
 function getUniqueComponentEntries(snapshot: DocumentStructureSnapshot, includeDeep = false): ComponentRefEntry[] {
@@ -222,7 +215,7 @@ function searchComponentIndex(
         block.schema.plugin,
         block.schema.xrefTitle,
         block.schema.xrefDetail,
-        block.schema.tableColumns,
+        block.schema.tableColumns.join(' '),
         JSON.stringify(block.schema.pluginConfig ?? {}),
         block.text,
       ].filter((value): value is string => typeof value === 'string' && value.trim().length > 0).join(' ');
@@ -301,7 +294,7 @@ function getLocalRenderedComponentLines(block: VisualBlock): string[] {
     ];
   }
   if (component === 'table') {
-    const columns = block.schema.tableColumns.split(',').map((column) => column.trim()).filter(Boolean);
+    const columns = block.schema.tableColumns.map((column) => column.trim()).filter(Boolean);
     return [
       `Columns: ${columns.join(', ') || '(none)'}`,
       `Rows: ${block.schema.tableRows.length}`,
@@ -480,7 +473,7 @@ export function executePatchComponentTool(
     throw new Error(`Component "${request.component_ref}" could not be found.`);
   }
 
-  const originalFragment = serializeBlockFragment(block);
+  const originalFragment = serializeBlockFragment(block, document.meta);
   const patchedFragment = applyComponentPatchEdits(originalFragment, request.edits);
   console.debug('[hvy:ai-document-edit] patch_component', {
     componentRef: request.component_ref,
@@ -816,15 +809,15 @@ function resolveCssTargets(ids: string[], snapshot: DocumentStructureSnapshot, d
 }
 
 function getTargetCss(target: CssTarget): string {
-  return target.kind === 'section' ? target.section.customCss : target.block.schema.customCss;
+  return target.kind === 'section' ? target.section.css : target.block.schema.css;
 }
 
 function setTargetCss(target: CssTarget, css: string): void {
   if (target.kind === 'section') {
-    target.section.customCss = css;
+    target.section.css = css;
     return;
   }
-  target.block.schema.customCss = css;
+  target.block.schema.css = css;
 }
 
 function parseCssDeclarations(css: string): Array<{ property: string; value: string }> {

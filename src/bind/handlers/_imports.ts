@@ -8,19 +8,22 @@ export { createEmptyBlock, createEmptySection, createDefaultTableRow, instantiat
 export { recordHistory, undoState, redoState } from '../../history';
 export { setSidebarOpen, setEditorSidebarOpen, closeModal, closeModalIfTarget, navigateToSection, resetTransientUiState } from '../../navigation';
 export { deserializeDocument, serializeDocument } from '../../serialization';
+export { saveResumeState } from '../../state-persistence';
 export { syncReusableTemplateForBlock, revertReusableComponent, findReusableOwner } from '../../reusable';
 export { addTableColumn, removeTableColumn, getTableColumns, moveTableColumn, moveTableRow } from '../../table-ops';
 export { createGridItem } from '../../grid-ops';
 export { detectExtension, sanitizeOptionalId, moveItem } from '../../utils';
 export { openLinkInlineModal } from '../../bind-link-modal';
 export { clearChatConversation, getDefaultModelForProvider, persistChatSettings } from '../../chat/chat';
-export { appendUserChatMessage, copyChatMessageToHvySection, requestChatTurn, requestDocumentEditChatTurn } from '../../chat/chat-session';
+export { appendUserChatMessage, buildDocumentEditCliSimRequest, copyChatMessageToHvySection, requestChatTurn, requestDocumentEditChatTurn } from '../../chat/chat-session';
 export { areTablesEnabled } from '../../reference-config';
 export { addDbTableColumn, addDbTableRow, getSqliteRowComponent, handleDbTableFrameScroll, materializeDbTableDraftRow, parseAttachedComponentBlocks, renameDbTableColumn, syncSqliteColumnNameInDom, toggleDbTableSort, updateDbTableCell } from '../../plugins/db-table';
 export { openAiEditPopover, closeAiEditPopover, submitAiEditRequest } from '../../ai-edit-popover';
 export { handleInlineCheckboxBackspace } from '../../editor/inline-checkbox';
 export { getRawEditorDiagnostics } from '../../raw-editor-diagnostics';
 export { applyImagePreset, handleImageUpload } from '../../editor/components/image/image';
+export { submitCliCommand } from '../../cli-ui/submit';
+export { restoreCliViewAfterRender } from '../../cli-ui/focus';
 
 import { getTagState, setTagState, getTagRenderOptions } from '../../block-ops';
 export const tagStateHelpers = {

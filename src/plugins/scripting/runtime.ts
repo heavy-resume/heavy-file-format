@@ -2,6 +2,7 @@ import type { JsonObject } from '../../hvy/types';
 import type { VisualDocument } from '../../types';
 import { getAttachment, removeAttachment, setAttachment } from '../../attachments';
 import { executeDocumentEditToolByName } from '../../ai-document-edit';
+import { executeHvyCliCommandSync } from '../../cli-core/commands';
 import { state, getRefreshReaderPanels, getRenderApp } from '../../state';
 
 // JS-side `doc` runtime exposed to the user's Python script. Every method is
@@ -20,6 +21,7 @@ export interface ScriptingRuntime {
   doc: ScriptingDocApi;
   stats: ScriptingRuntimeStats;
   step(): void;
+  markMutated(): void;
   setLineBudget(maxLines: number): void;
 }
 
@@ -29,6 +31,7 @@ interface ScriptingDocApi {
   attachments: ScriptingAttachmentsApi;
   form: ScriptingFormApi;
   db: ScriptingDbApi;
+  cli: ScriptingCliApi;
   rerender: () => void;
 }
 
@@ -52,18 +55,22 @@ export interface ScriptingFormOption {
 }
 
 export interface ScriptingFormApi {
-  get_value(name: string): unknown;
-  set_value(name: string, value: unknown): void;
+  get_value(label: string): unknown;
+  set_value(label: string, value: unknown): void;
   get_values(): Record<string, unknown>;
-  set_options(name: string, options: ScriptingFormOption[]): void;
-  get_options(name: string): ScriptingFormOption[];
-  set_error(name: string, message: string): void;
-  clear_error(name: string): void;
+  set_options(label: string, options: ScriptingFormOption[]): void;
+  get_options(label: string): ScriptingFormOption[];
+  set_error(label: string, message: string): void;
+  clear_error(label: string): void;
 }
 
 export interface ScriptingDbApi {
   query(sql: string, params?: unknown): Record<string, unknown>[];
   execute(sql: string, params?: unknown): string;
+}
+
+export interface ScriptingCliApi {
+  run(command: string): string;
 }
 
 export interface ScriptingRuntimeOptions {
@@ -173,6 +180,16 @@ export function createScriptingRuntime(options: ScriptingRuntimeOptions): Script
     },
     form: options.form ?? createUnavailableFormApi(),
     db: options.db ?? createUnavailableDbApi(),
+    cli: {
+      run: (command) => {
+        stats.toolCalls += 1;
+        const result = executeHvyCliCommandSync(options.document, command);
+        if (result.mutated) {
+          mutated = true;
+        }
+        return result.output;
+      },
+    },
     rerender: flushIfMutated,
   };
 
@@ -193,6 +210,7 @@ export function createScriptingRuntime(options: ScriptingRuntimeOptions): Script
         );
       }
     },
+    markMutated: onMutation,
     setLineBudget: (maxLines: number) => {
       lineBudget = Math.max(1, Math.floor(maxLines));
     },

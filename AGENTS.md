@@ -32,3 +32,19 @@ Naming convention notes:
   - This means: avoid adding another index.ts and another README.md, among other things
 
 Avoid letting files get over 1k in length. Consider breaking things up at that point unless there's a good reason it has to be that long.
+
+Use dev-traces to debug stuff the user reports as issues with the LLM based chat. The cli logs are only for the cli.
+
+Refrain from the temptation to solve things with laser "if" conditionals and always consider the long term reusable solution - if we had different plugins, different extra features, would this idea work? Don't go out and chase LLM mistakes by muddying up the interface.
+
+When assessing mistakes LLMs show in the chat interface, refrain from solving things with aliases without asking first.
+
+When updating UI, strongly consider how scrolling would happen and whether things would constantly scroll-to-top on rerender. This happens a lot.
+
+When the user asks to investigate a problem don't jump into a solution.
+
+Under no circumstance should a log have its own code path that would deviate from what it is supposed to be logging (except, strictly, for readability mutations.) Logs should be "raw data" first. Do not ever try to reconstruct what you think should show up in point A by having log code reconstruct in point B. Restructure the code if that isn't simple and obvious.
+
+Do not alter logging in any form without permission.
+
+For CLI/API design, avoid one-off special cases that look like a broader convention. Prefer APIs and more long term facing over APIs that merely solve the immediate example. Don't spend effort writing something limited when something much more capable is basically the same work.

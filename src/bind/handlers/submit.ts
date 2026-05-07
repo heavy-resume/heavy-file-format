@@ -1,4 +1,4 @@
-import { state, getRenderApp, recordHistory, serializeDocument, appendUserChatMessage, requestChatTurn, requestDocumentEditChatTurn, submitAiEditRequest } from './_imports';
+import { state, getRenderApp, getRefreshReaderPanels, recordHistory, serializeDocument, appendUserChatMessage, buildDocumentEditCliSimRequest, requestChatTurn, requestDocumentEditChatTurn, saveResumeState, submitAiEditRequest, submitCliCommand, restoreCliViewAfterRender } from './_imports';
 
 export function bindSubmit(app: HTMLElement): void {
   app.addEventListener('submit', async (event) => {
@@ -32,6 +32,58 @@ export function bindSubmit(app: HTMLElement): void {
         return;
       }
 
+      if (state.currentView !== 'viewer' && state.chat.cliSimEnabled) {
+        state.chat.cliSim = {
+          requestPayload: null,
+          requestJson: 'Preparing...',
+          responseJson: '',
+          responseOutput: '',
+          reasoningSummary: '',
+          commandResultMessage: '',
+          turnState: null,
+          isPreparing: true,
+          isSending: false,
+          error: null,
+        };
+        state.chat.error = null;
+        getRenderApp()();
+        try {
+          const result = await buildDocumentEditCliSimRequest({
+            settings: state.chat.settings,
+            document: state.document,
+            messages: state.chat.messages,
+            request: question,
+          });
+          state.chat.cliSim = {
+            requestPayload: result.requestPayload,
+            requestJson: result.requestJson,
+            responseJson: '',
+            responseOutput: '',
+            reasoningSummary: '',
+            commandResultMessage: '',
+            turnState: result.turnState,
+            isPreparing: false,
+            isSending: false,
+            error: null,
+          };
+        } catch (error) {
+          state.chat.cliSim = {
+            requestPayload: null,
+            requestJson: '',
+            responseJson: '',
+            responseOutput: '',
+            reasoningSummary: '',
+            commandResultMessage: '',
+            turnState: null,
+            isPreparing: false,
+            isSending: false,
+            error: error instanceof Error ? error.message : 'Failed to prepare CLI sim.',
+          };
+        }
+        getRenderApp()();
+        return;
+      }
+
       const previousMessages = state.chat.messages;
       const nextMessages = appendUserChatMessage(previousMessages, question);
 
@@ -40,6 +92,7 @@ export function bindSubmit(app: HTMLElement): void {
       state.chat.error = null;
       state.chat.isSending = true;
       state.chat.requestNonce += 1;
+      saveResumeState(state);
       const requestNonce = state.chat.requestNonce;
       const abortController = new AbortController();
       state.chat.abortController = abortController;
@@ -87,7 +140,8 @@ export function bindSubmit(app: HTMLElement): void {
                     requestNonce,
                     content: message.content,
                   });
-                  state.chat.messages = [...state.chat.messages, message];
+                  state.chat.messages = upsertChatProgressMessage(state.chat.messages, message);
+                  saveResumeState(state);
                   getRenderApp()();
                 },
                 signal: abortController.signal,
@@ -116,6 +170,7 @@ export function bindSubmit(app: HTMLElement): void {
         }
         state.chat.messages = result.messages;
         state.chat.error = result.error;
+        saveResumeState(state);
         if (isDocumentEditChat && !result.error) {
           state.rawEditorText = serializeDocument(state.document);
           state.rawEditorError = null;
@@ -138,6 +193,7 @@ export function bindSubmit(app: HTMLElement): void {
         });
         state.chat.abortController = null;
         state.chat.isSending = false;
+        saveResumeState(state);
         getRenderApp()();
       }
       return;
@@ -147,5 +203,28 @@ export function bindSubmit(app: HTMLElement): void {
       event.preventDefault();
       await submitAiEditRequest();
     }
+
+    if (form?.id === 'cliComposer') {
+      event.preventDefault();
+      await submitCliCommand({
+        state,
+        command: state.cliDraft,
+        recordHistory,
+        refreshReaderPanels: getRefreshReaderPanels(),
+      });
+      state.rawEditorText = serializeDocument(state.document);
+      state.rawEditorError = null;
+      state.rawEditorDiagnostics = [];
+      getRenderApp()();
+      restoreCliViewAfterRender();
+    }
   });
+}
+
+function upsertChatProgressMessage(messages: typeof state.chat.messages, message: typeof state.chat.messages[number]): typeof state.chat.messages {
+  const existingIndex = messages.findIndex((candidate) => candidate.id === message.id);
+  if (existingIndex < 0) {
+    return [...messages, message];
+  }
+  return messages.map((candidate, index) => (index === existingIndex ? message : candidate));
 }

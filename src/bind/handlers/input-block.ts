@@ -32,6 +32,13 @@ export function bindInputBlock(app: HTMLElement): void {
       return;
     }
 
+    if (field === 'chat-compaction-model' && target instanceof HTMLInputElement) {
+      state.chat.settings.compactionModel = target.value;
+      persistChatSettings(state.chat.settings);
+      state.chat.error = null;
+      return;
+    }
+
     if (field === 'ai-model' && target instanceof HTMLInputElement) {
       state.chat.settings.model = target.value;
       persistChatSettings(state.chat.settings);
@@ -77,6 +84,16 @@ export function bindInputBlock(app: HTMLElement): void {
         editorTreeBody.style.maxWidth = target.value.trim();
       }
       getRefreshReaderPanels()();
+      return;
+    }
+
+    if (field === 'meta-ai-context' && target instanceof HTMLTextAreaElement) {
+      recordHistory('meta:ai-context');
+      if (target.value.trim().length > 0) {
+        state.document.meta['ai-context'] = target.value;
+      } else {
+        delete state.document.meta['ai-context'];
+      }
       return;
     }
 
@@ -243,6 +260,11 @@ export function bindInputBlock(app: HTMLElement): void {
       state.rawEditorText = target.value;
       state.rawEditorError = null;
       state.rawEditorDiagnostics = getRawEditorDiagnostics(target.value, state.filename);
+      return;
+    }
+
+    if (target.id === 'cliInput' && target instanceof HTMLInputElement) {
+      state.cliDraft = target.value;
       return;
     }
 

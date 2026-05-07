@@ -1,0 +1,503 @@
+import { buildDocumentEditToolHelp } from '../ai-document-edit-instructions';
+import type { JsonObject } from '../hvy/types';
+import { getDbTableAiSummary, getDocumentDbTableObjectNames, validateDocumentDbSql } from '../plugins/db-table';
+import { validateDbTableObjectName } from '../plugins/db-table-identifiers';
+import { findFormFieldTypeIssues, parseFormSpec } from '../plugins/form';
+import { DB_TABLE_PLUGIN_ID, FORM_PLUGIN_ID, SCRIPTING_PLUGIN_ID } from '../plugins/registry';
+import type { VisualDocument } from '../types';
+import { parse as parseYaml } from 'yaml';
+
+export interface HvyCliHelpCommand {
+  command: string;
+  description: string;
+}
+
+export interface HvyCliPluginCommandRegistration {
+  name: string;
+  pluginId: string;
+  helpTopic: string;
+  cheatsheetName?: string;
+  componentHints: string[];
+  addCommands: HvyCliHelpCommand[];
+  operationCommands: HvyCliHelpCommand[];
+  helpCommands?: HvyCliHelpCommand[];
+  lintChecks?: HvyCliPluginLintCheck[];
+}
+
+export interface HvyCliPluginLintContext {
+  document: VisualDocument;
+  path: string;
+  textPath: string;
+  jsonPath: string;
+  config: JsonObject;
+  body: string;
+}
+
+export interface HvyCliPluginLintIssue {
+  message: string;
+}
+
+export type HvyCliPluginLintCheck = (context: HvyCliPluginLintContext) => HvyCliPluginLintIssue[] | Promise<HvyCliPluginLintIssue[]>;
+
+const pluginCommandRegistrations: HvyCliPluginCommandRegistration[] = [];
+const SCRIPTING_DOC_TOOL_NAMES = [
+  'request_structure',
+  'grep',
+  'view_component',
+  'get_css',
+  'get_properties',
+  'set_properties',
+  'patch_component',
+  'create_component',
+  'remove_component',
+  'create_section',
+  'remove_section',
+  'reorder_section',
+  'view_header',
+  'grep_header',
+  'patch_header',
+];
+
+const SCRIPTING_HEADER_TOOL_HELP: Record<string, string> = {
+  view_header: '{"tool":"view_header","start_line":1,"end_line":120,"reason":"optional"}',
+  grep_header: '{"tool":"grep_header","query":"component_defs|skill-card","flags":"i","before":2,"after":8,"max_count":3,"reason":"optional"}',
+  patch_header: '{"tool":"patch_header","edits":[{"op":"replace","start_line":2,"end_line":2,"text":"title: New title"}],"reason":"optional"}',
+};
+
+export function registerHvyCliPluginCommands(registration: HvyCliPluginCommandRegistration): void {
+  const existingIndex = pluginCommandRegistrations.findIndex((entry) => entry.name === registration.name);
+  if (existingIndex >= 0) {
+    pluginCommandRegistrations[existingIndex] = copyRegistration(registration);
+  } else {
+    pluginCommandRegistrations.push(copyRegistration(registration));
+  }
+}
+
+export function getHvyCliPluginCommandRegistrations(): HvyCliPluginCommandRegistration[] {
+  return pluginCommandRegistrations.map(copyRegistration);
+}
+
+export function getHvyCliPluginCommandRegistration(name: string): HvyCliPluginCommandRegistration | null {
+  return getHvyCliPluginCommandRegistrations().find((registration) => registration.name === name) ?? null;
+}
+
+export function getHvyCliPluginCommandRegistrationByPluginId(pluginId: string): HvyCliPluginCommandRegistration | null {
+  return getHvyCliPluginCommandRegistrations().find((registration) => registration.pluginId === pluginId) ?? null;
+}
+
+export function getHvyCliScriptingToolNames(): string[] {
+  return [...SCRIPTING_DOC_TOOL_NAMES];
+}
+
+export function getHvyCliScriptingToolHelp(toolName: string): string | null {
+  const normalized = toolName.trim();
+  if (normalized.length === 0) {
+    return null;
+  }
+  if (SCRIPTING_HEADER_TOOL_HELP[normalized]) {
+    return SCRIPTING_HEADER_TOOL_HELP[normalized];
+  }
+  const lookupTopic = ['get_css', 'get_properties', 'set_properties'].includes(normalized)
+    ? 'tool:css'
+    : `tool:${normalized}`;
+  return buildDocumentEditToolHelp(lookupTopic);
+}
+
+function lintUnsupportedScriptDocToolCalls(body: string): HvyCliPluginLintIssue[] {
+  const issues: HvyCliPluginLintIssue[] = [];
+  const validToolNames = new Set(getHvyCliScriptingToolNames());
+  const validToolList = getHvyCliScriptingToolNames().join(', ');
+  const seen = new Set<string>();
+  for (const match of body.matchAll(/\bdoc\.tool\(\s*(['"])([^'"]+)\1/g)) {
+    const toolName = match[2] ?? '';
+    if (!toolName || validToolNames.has(toolName) || seen.has(toolName)) {
+      continue;
+    }
+    seen.add(toolName);
+    issues.push({
+      message: [
+        `script uses unknown doc.tool("${toolName}"). Valid doc.tool names: ${validToolList}.`,
+        formatCommonDocToolMistakeHint(toolName),
+      ].filter(Boolean).join(' '),
+    });
+  }
+  return issues;
+}
+
+function formatCommonDocToolMistakeHint(toolName: string): string {
+  if (toolName === 'db.query') {
+    return 'Use doc.db.query(sql, params) instead.';
+  }
+  if (toolName === 'db.exec' || toolName === 'db.execute') {
+    return 'Use doc.db.execute(sql, params) instead.';
+  }
+  if (toolName === 'refresh') {
+    return 'Remove this call or use doc.rerender() only when explicitly needed.';
+  }
+  return 'Run man hvy plugin scripting tool for details.';
+}
+
+function copyRegistration(registration: HvyCliPluginCommandRegistration): HvyCliPluginCommandRegistration {
+  return {
+    ...registration,
+    componentHints: [...registration.componentHints],
+    addCommands: [...registration.addCommands],
+    operationCommands: [...registration.operationCommands],
+    helpCommands: [...(registration.helpCommands ?? [])],
+    lintChecks: [...(registration.lintChecks ?? [])],
+  };
+}
+
+registerHvyCliPluginCommands({
+  name: 'form',
+  pluginId: FORM_PLUGIN_ID,
+  helpTopic: 'hvy plugin form',
+  cheatsheetName: 'forms',
+  componentHints: [
+    'This plugin is a form. Fields and named script bodies live in plugin.txt as form YAML.',
+    'Named scripts are also exposed as sibling .py virtual files such as load.py or on_submit.py; prefer editing those files for script changes.',
+    'Use plugin.json pluginConfig for form-level behavior: submitLabel, showSubmit, initialScript, and submitScript.',
+    'Form scripts are Python/Brython snippets under scripts.NAME, wrapped in a generated function, and run through the sandboxed scripting runtime.',
+    'When editing plugin.txt directly, write form scripts as literal YAML blocks with `|`, not folded blocks with `>`, so Python newlines and indentation are preserved.',
+    'Form scripts receive doc plus doc.form. Use field labels with doc.form.get_value/get_values/set_value/set_options/set_error/clear_error.',
+    'Use doc.db.query(sql, params) and doc.db.execute(sql, params) for the current document SQL backend from form scripts; do not call doc.tool("db.query") or doc.tool("db.exec").',
+    'doc.tool(name, args) can call the synchronous document-edit tool subset; args are a Python dict matching the AI tool schema.',
+    'When changing submit behavior, look for named scripts and on-submit script settings before editing fields.',
+    'For dynamic form options, run: hvy recipe populate-form-options-from-db.',
+    'For form submit code examples, run: hvy cheatsheet scripting, hvy recipe scripting, or man hvy plugin scripting tool TOOL_NAME.',
+  ],
+  addCommands: [
+    {
+      command: 'hvy insert INDEX plugin form SECTION_PATH ID',
+      description: 'Create a blank Form plugin component. Edit plugin.txt for fields/scripts and plugin.json for submit settings.',
+    },
+  ],
+  operationCommands: [],
+  lintChecks: [
+    async (context) => {
+      const scriptIssues = lintUnsupportedScriptDocToolCalls(context.body);
+      const sqlIssues = await lintFormScriptSql(context);
+      const scriptScalarIssues = lintFormScriptScalarStyle(context.body);
+      if (context.body.trim().length === 0) {
+        return [{ message: 'form plugin body is empty; expected form YAML with fields and named script bodies.' }, ...scriptIssues, ...sqlIssues, ...scriptScalarIssues];
+      }
+      const parsed = parseFormSpec(context.body);
+      if (parsed.error) {
+        return [{ message: `form YAML error: ${parsed.error}` }, ...scriptIssues, ...sqlIssues, ...scriptScalarIssues];
+      }
+      const parsedWithConfig = parseFormSpec(context.body, context.config);
+      const schemaIssues = lintFormSchemaShape(context.body);
+      const script = parsedWithConfig.spec.submitScript.trim();
+      if (!parsedWithConfig.spec.showSubmit || script.length > 0) {
+        return [...schemaIssues, ...scriptIssues, ...sqlIssues, ...scriptScalarIssues];
+      }
+      return [{ message: 'form has a submit button but no submitScript.' }, ...schemaIssues, ...scriptIssues, ...sqlIssues, ...scriptScalarIssues];
+    },
+  ],
+  helpCommands: [
+    {
+      command: 'plugin.txt',
+      description: 'Stores form YAML: fields and scripts.NAME blocks.',
+    },
+    {
+      command: 'plugin.json',
+      description: 'Stores form-level behavior in pluginConfig: submitLabel, showSubmit, initialScript, and submitScript.',
+    },
+    {
+      command: 'load.py, on_submit.py, etc.',
+      description: 'Named scripts in plugin.txt are also exposed as sibling .py files; prefer editing those for Python changes.',
+    },
+    {
+      command: 'See also: hvy recipe populate-form-options-from-db',
+      description: 'Focused recipe for populating select/radio options from backend rows.',
+    },
+    {
+      command: 'No optionsQuery key',
+      description: 'There is no optionsQuery YAML key. Use an initialScript plus doc.form.set_options(label, options).',
+    },
+    {
+      command: 'Create then fill: hvy insert 0 plugin form /a-section add-item',
+      description: 'After creation, edit add-item/plugin.txt and add-item/plugin.json instead of putting fields/scripts on the create command.',
+    },
+    {
+      command: 'See also: hvy cheatsheet scripting; hvy recipe scripting; man hvy plugin scripting tool TOOL_NAME',
+      description: 'Use scripting help for doc, doc.form, doc.db, and doc.tool examples.',
+    },
+    {
+      command: 'plugin.txt scripts.NAME: |',
+      description: 'Use literal YAML blocks for Python scripts. Avoid scripts.NAME: > because folded YAML can break Python indentation.',
+    },
+  ],
+});
+
+const FORM_TOP_LEVEL_KEYS = new Set(['fields', 'scripts']);
+const FORM_FIELD_KEYS = new Set(['label', 'type', 'required', 'options', 'triggers', 'value', 'placeholder', 'description', 'meta']);
+
+function lintFormSchemaShape(body: string): HvyCliPluginLintIssue[] {
+  let parsed: unknown;
+  try {
+    parsed = parseYaml(body);
+  } catch {
+    return [];
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return [];
+  }
+  const issues: HvyCliPluginLintIssue[] = [];
+  for (const key of Object.keys(parsed)) {
+    if (!FORM_TOP_LEVEL_KEYS.has(key)) {
+      issues.push({ message: `form YAML has unsupported top-level key "${key}".` });
+    }
+  }
+  const fields = (parsed as { fields?: unknown }).fields;
+  if (Array.isArray(fields)) {
+    fields.forEach((field, index) => {
+      if (!field || typeof field !== 'object' || Array.isArray(field)) {
+        return;
+      }
+      for (const key of Object.keys(field)) {
+        if (!FORM_FIELD_KEYS.has(key)) {
+          const label = typeof (field as { label?: unknown }).label === 'string' && (field as { label: string }).label.trim()
+            ? (field as { label: string }).label.trim()
+            : `#${index + 1}`;
+          issues.push({ message: `form field "${label}" has unsupported key "${key}".` });
+        }
+      }
+    });
+  }
+  for (const issue of findFormFieldTypeIssues(body)) {
+    if (issue.canonicalType) {
+      issues.push({
+        message: `form field "${issue.label}" uses non-canonical type "${issue.rawType}". Use "${issue.canonicalType}" instead. Run hvy lint --fix to rewrite form field types.`,
+      });
+    } else {
+      issues.push({
+        message: `form field "${issue.label}" uses unsupported type "${issue.rawType}". Valid types: text, textarea, number, select, checkbox, radio, date, email, tel, url, password, hidden. Use "select" for dropdowns.`,
+      });
+    }
+  }
+  return issues;
+}
+
+function lintFormScriptScalarStyle(body: string): HvyCliPluginLintIssue[] {
+  const issues: HvyCliPluginLintIssue[] = [];
+  const lines = body.split('\n');
+  let inScripts = false;
+  let scriptsIndent = 0;
+  for (const line of lines) {
+    const scriptsMatch = line.match(/^(\s*)scripts:\s*$/);
+    if (scriptsMatch) {
+      inScripts = true;
+      scriptsIndent = scriptsMatch[1]?.length ?? 0;
+      continue;
+    }
+    if (!inScripts) {
+      continue;
+    }
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) {
+      continue;
+    }
+    const indent = line.match(/^\s*/)?.[0].length ?? 0;
+    if (indent <= scriptsIndent) {
+      inScripts = false;
+      continue;
+    }
+    const scriptMatch = line.match(/^\s*([A-Za-z_][\w-]*)\s*:\s*(>-?|>)\s*(?:#.*)?$/);
+    if (scriptMatch) {
+      issues.push({
+        message: `form script "${scriptMatch[1]}" uses folded YAML scalar "${scriptMatch[2]}". Use literal scalar "|" so Python newlines and indentation are preserved.`,
+      });
+    }
+  }
+  return issues;
+}
+
+async function lintFormScriptSql(context: HvyCliPluginLintContext): Promise<HvyCliPluginLintIssue[]> {
+  const issues: HvyCliPluginLintIssue[] = [];
+  for (const call of extractDocDbSqlCalls(context.body)) {
+    try {
+      await validateDocumentDbSql(context.document, call.sql, call.method);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown SQL error.';
+      issues.push({ message: `form script doc.db.${call.method} SQL is invalid: ${message}` });
+    }
+  }
+  return issues;
+}
+
+function extractDocDbSqlCalls(body: string): Array<{ method: 'query' | 'execute'; sql: string }> {
+  const calls: Array<{ method: 'query' | 'execute'; sql: string }> = [];
+  const matcher = /\bdoc\.db\.(query|execute)\s*\(/g;
+  for (const match of body.matchAll(matcher)) {
+    const method = match[1] === 'execute' ? 'execute' : 'query';
+    const start = (match.index ?? 0) + match[0].length;
+    const literal = readFirstStringLiteral(body, start);
+    if (literal) {
+      calls.push({ method, sql: literal.value });
+    }
+  }
+  return calls;
+}
+
+function readFirstStringLiteral(source: string, startIndex: number): { value: string } | null {
+  let index = startIndex;
+  while (/\s/u.test(source[index] ?? '')) {
+    index += 1;
+  }
+  const quote = source[index];
+  if (quote !== '"' && quote !== "'") {
+    return null;
+  }
+  const triple = source.slice(index, index + 3) === quote.repeat(3);
+  const endQuote = triple ? quote.repeat(3) : quote;
+  index += triple ? 3 : 1;
+  let value = '';
+  while (index < source.length) {
+    if (source.slice(index, index + endQuote.length) === endQuote) {
+      return { value };
+    }
+    const char = source[index] ?? '';
+    if (!triple && char === '\\') {
+      const next = source[index + 1] ?? '';
+      value += decodeEscapedPythonStringChar(next);
+      index += 2;
+      continue;
+    }
+    value += char;
+    index += 1;
+  }
+  return null;
+}
+
+function decodeEscapedPythonStringChar(char: string): string {
+  if (char === 'n') {
+    return '\n';
+  }
+  if (char === 't') {
+    return '\t';
+  }
+  if (char === 'r') {
+    return '\r';
+  }
+  return char;
+}
+
+registerHvyCliPluginCommands({
+  name: 'scripting',
+  pluginId: SCRIPTING_PLUGIN_ID,
+  helpTopic: 'hvy plugin scripting',
+  componentHints: [
+    'Scripting runs once when the document loads. Use it to generate, mutate, or rearrange document content programmatically.',
+    'The component body is exposed as script.py. It is Python/Brython source wrapped in a generated function with one injected global: doc.',
+    'Sandbox limits: imports, network, and DOM access are not allowed. Mutate the document through doc instead.',
+    'Execution model: source is wrapped in a generated function, so return can stop the script early. Loops count against a 100,000-line budget.',
+    'doc.tool(name, args) calls a synchronous subset of document-edit tools. args is a Python dict matching the AI tool schema.',
+    'Document tools: request_structure, grep, view_component, get_css, get_properties, set_properties, patch_component, create_component, remove_component, create_section, remove_section, reorder_section.',
+    'Header tools: view_header, grep_header, patch_header.',
+    'Not exposed through doc.tool: edit_component, view_rendered_component, query_db_table, execute_sql, and other async tools.',
+    'doc.header.get/set/remove/keys reads and writes front matter.',
+    'doc.attachments.list/read/write/remove works with document attachments.',
+    'doc.db.query(sql, params) and doc.db.execute(sql, params) access the current document SQL backend when available.',
+    'doc.cli.run(command) runs one synchronous virtual CLI command and returns stdout; use doc.db for SQL.',
+    'doc.form exists only while running form plugin scripts. Use form plugin help for doc.form methods.',
+    'doc.rerender() flushes pending rendering work, but scripts usually do not need it because the host rerenders after the script finishes.',
+    'Example: summary = doc.tool("request_structure"); doc.header.set("script_summary", summary[:200])',
+    'Example: hits = doc.tool("grep", {"query": "TODO", "flags": "i"}); doc.header.set("todo_hits", hits)',
+    'For a specific doc.tool shape, run: man hvy plugin scripting tool TOOL_NAME',
+  ],
+  addCommands: [
+    {
+      command: 'hvy insert INDEX plugin SECTION_PATH ID dev.heavy.scripting',
+      description: 'Create a blank scripting plugin block. Edit plugin.txt or script.py after creation.',
+    },
+  ],
+  operationCommands: [],
+  lintChecks: [
+    (context) => [
+      ...(context.body.trim().length === 0
+        ? [{ message: 'scripting plugin body is empty; expected Brython/Python source.' }]
+        : []),
+      ...lintUnsupportedScriptDocToolCalls(context.body),
+    ],
+  ],
+  helpCommands: [
+    {
+      command: 'hvy plugin scripting tool TOOL_NAME',
+      description: 'Show doc.tool call shape for one scripting tool.',
+    },
+  ],
+});
+
+registerHvyCliPluginCommands({
+  name: 'db-table',
+  pluginId: DB_TABLE_PLUGIN_ID,
+  helpTopic: 'hvy plugin db-table',
+  componentHints: [
+    'This plugin displays dynamic data-backed rows from an existing table/view, optionally filtered by a read-only SELECT/WITH query.',
+    'plugin.json pluginConfig.table must be a table/view name, not SQL. plugin.txt may contain display SQL, but it does not create tables or views.',
+    'For the current built-in SQL backend, create tables/views with hvy plugin db-table exec. Inspect objects with hvy plugin db-table tables/schema/query.',
+    'To understand existing backend objects, run hvy plugin db-table tables or hvy plugin db-table schema. Do not grep for CREATE TABLE; it may find stale examples, recipes, or notes.',
+  ],
+  addCommands: [
+    {
+      command: 'hvy insert INDEX plugin db-table SECTION_PATH ID',
+      description: 'Create a blank dynamic table plugin. Edit plugin.json for table/view and plugin.txt for optional display SQL.',
+    },
+  ],
+  operationCommands: [
+    {
+      command: 'hvy plugin db-table query [SELECT/WITH SQL]',
+      description: 'Run read-only SQL and print result rows.',
+    },
+    {
+      command: 'hvy plugin db-table exec [CREATE / INSERT / UPDATE / DELETE / DROP SQL]',
+      description: 'Run modifying SQL and persist the database.',
+    },
+    {
+      command: 'hvy plugin db-table tables',
+      description: 'List tables and views in the current backend.',
+    },
+    {
+      command: 'hvy plugin db-table schema [TABLE_OR_VIEW]',
+      description: 'Show schema details.',
+    },
+  ],
+  helpCommands: [
+    {
+      command: 'hvy plugin db-table tables && hvy plugin db-table schema',
+      description: 'Inspect the current backend. Prefer this over searching the document for CREATE TABLE.',
+    },
+    {
+      command: 'hvy cheatsheet db-table',
+      description: 'Show a concise guide for creating tables/views and displaying dynamic rows.',
+    },
+  ],
+  lintChecks: [
+    async (context) => {
+      const table = typeof context.config.table === 'string' ? context.config.table.trim() : '';
+      const tableNameError = validateDbTableObjectName(table);
+      if (tableNameError) {
+        return [{ message: tableNameError }];
+      }
+      const names = await getDocumentDbTableObjectNames(context.document);
+      if (!names.includes(table)) {
+        const existingObjects = names.length > 0 ? names.join(', ') : '(none)';
+        return [{
+          message: `db-table pluginConfig.table references missing table/view "${table}". Create it with hvy plugin db-table exec "CREATE VIEW ${table} AS SELECT ..." or change pluginConfig.table to an existing table/view. Existing tables/views: ${existingObjects}.`,
+        }];
+      }
+      const query = context.body.trim();
+      if (query.length === 0) {
+        return [];
+      }
+      try {
+        await getDbTableAiSummary(context.document, table, { activeQuery: query, sampleLimit: 1 });
+        return [];
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown database query error.';
+        return [{ message: `db-table query is invalid: ${message}` }];
+      }
+    },
+  ],
+});

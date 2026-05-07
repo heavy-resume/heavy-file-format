@@ -2,17 +2,36 @@ import { randomUUID } from 'node:crypto';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import type { Plugin } from 'vite';
+import {
+  buildAnthropicProxyRequest,
+  buildOpenAiProxyRequest,
+  buildQwenProxyRequest,
+} from '../src/chat/chat-provider-payload';
+import {
+  buildInitialProviderToolState,
+  buildProviderToolProxyRequest,
+  extractProviderToolTurn,
+  type ProviderToolDefinition,
+  type ProviderToolProxyChatRequest,
+  type ProviderToolState,
+  type ToolProvider,
+} from '../src/chat/provider-tools';
 import { getHvyDiagnosticUsageHint, getHvyResponseDiagnostics, type HvyDiagnostic } from '../src/serialization';
 
 const OPENAI_API_URL = 'https://api.openai.com/v1/responses';
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
+const QWEN_API_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions';
 const ANTHROPIC_API_VERSION = '2023-06-01';
 const DEV_TRACE_DIR = path.resolve(process.cwd(), 'dev-traces');
 const AGENT_LOOP_TRACE_FILE = path.join(DEV_TRACE_DIR, 'agent-loop.ndjson');
 const AGENT_LOOP_TEXT_TRACE_FILE = path.join(DEV_TRACE_DIR, 'agent-loop.txt');
+const AI_CLI_LOG_FILE = path.join(DEV_TRACE_DIR, 'ai_cli_log.txt');
+const AI_CLI_MESSAGES_LOG_FILE = path.join(DEV_TRACE_DIR, 'ai_cli_messages.txt');
 const AGENT_LOOP_TRACE_MAX_LINES = 500;
 const AGENT_LOOP_TRACE_PRUNE_LINES = 100;
-const OPENAI_REASONING_EFFORT = 'low';
+const AI_CLI_LOG_MAX_LINES = 2000;
+const AI_CLI_LOG_PRUNE_LINES = 100;
+export { buildAnthropicProxyRequest, buildOpenAiProxyRequest, buildQwenProxyRequest };
 
 let traceWriteQueue = Promise.resolve();
 
@@ -34,16 +53,34 @@ interface TraceEvent {
 }
 
 interface ProxyChatRequest {
-  provider: 'openai' | 'anthropic';
+  provider: ToolProvider;
   model: string;
   mode: 'qa' | 'component-edit' | 'document-edit';
   messages: Array<{
-    role: 'user' | 'assistant';
+    role: 'system' | 'user' | 'assistant';
     content: string;
   }>;
   traceRunId?: string;
   context: string;
-  formatInstructions: string;
+  tools?: ProviderToolDefinition[];
+  toolState?: ProviderToolState;
+}
+
+interface ProviderCompletion {
+  output: string;
+  reasoningSummary: string;
+  usage?: ProviderTokenUsage;
+  toolCalls?: unknown[];
+  nativeMessages?: unknown[];
+  toolState?: ProviderToolState;
+}
+
+interface ProviderTokenUsage {
+  inputTokens?: number;
+  outputTokens?: number;
+  totalTokens?: number;
+  cachedTokens?: number;
+  reasoningTokens?: number;
 }
 
 export function createChatProxyPlugin(env: Record<string, string | undefined>): Plugin {
@@ -90,7 +127,7 @@ export function buildChatProxyMiddleware(env: Record<string, string | undefined>
 
     const upstreamAbort = new AbortController();
     let completed = false;
-    let runId = randomUUID();
+    let runId: string = randomUUID();
     const abortUpstream = (reason: string) => {
       if (!completed) {
         console.debug('[hvy:chat-proxy] client connection closed before completion', { reason });
@@ -123,7 +160,6 @@ export function buildChatProxyMiddleware(env: Record<string, string | undefined>
           mode: body.mode,
           messages: body.messages,
           context: body.context,
-          formatInstructions: body.formatInstructions,
         },
       });
       console.debug('[hvy:chat-proxy] incoming request', {
@@ -131,20 +167,26 @@ export function buildChatProxyMiddleware(env: Record<string, string | undefined>
         model: body.model,
         messages: body.messages,
         contextLength: body.context.length,
-        formatInstructionsLength: body.formatInstructions.length,
       });
-      const output = await requestProviderWithRepair(body, env, upstreamAbort.signal, runId);
+      const completion = await requestProviderWithRepair(body, env, upstreamAbort.signal, runId);
       completed = true;
       console.debug('[hvy:chat-proxy] sending response', {
-        outputLength: output.length,
+        outputLength: completion.output.length,
       });
       writeTrace({
         runId,
         phase: body.mode,
         type: 'stop',
-        payload: { reason: 'completed', outputLength: output.length },
+        payload: { reason: 'completed', outputLength: completion.output.length },
       });
-      sendJson(res, 200, { output });
+      sendJson(res, 200, {
+        output: completion.output,
+        ...(completion.reasoningSummary ? { reasoningSummary: completion.reasoningSummary } : {}),
+        ...(completion.usage ? { usage: completion.usage } : {}),
+        ...(completion.toolCalls ? { toolCalls: completion.toolCalls } : {}),
+        ...(completion.nativeMessages ? { nativeMessages: completion.nativeMessages } : {}),
+        ...(completion.toolState ? { toolState: completion.toolState } : {}),
+      });
     } catch (error) {
       if (isAbortError(error) || upstreamAbort.signal.aborted) {
         console.debug('[hvy:chat-proxy] upstream request aborted');
@@ -174,53 +216,6 @@ export function buildChatProxyMiddleware(env: Record<string, string | undefined>
   };
 }
 
-export function buildOpenAiProxyRequest(body: ProxyChatRequest): Record<string, unknown> {
-  return {
-    model: body.model,
-    reasoning: {
-      effort: OPENAI_REASONING_EFFORT,
-    },
-    instructions: buildSystemInstructions(body.mode, body.formatInstructions),
-    input: [
-      {
-        role: 'developer',
-        content: [
-          {
-            type: 'input_text',
-            text: `Document context:\n\n${body.context}`,
-          },
-        ],
-      },
-      ...body.messages.map((message) => ({
-        role: message.role,
-        content: [
-          {
-            type: message.role === 'assistant' ? 'output_text' : 'input_text',
-            text: message.content,
-          },
-        ],
-      })),
-    ],
-    text: {
-      format: {
-        type: 'text',
-      },
-    },
-  };
-}
-
-export function buildAnthropicProxyRequest(body: ProxyChatRequest): Record<string, unknown> {
-  return {
-    model: body.model,
-    max_tokens: 4096,
-    system: `${buildSystemInstructions(body.mode, body.formatInstructions)}\n\nDocument context:\n\n${body.context}`,
-    messages: body.messages.map((message) => ({
-      role: message.role,
-      content: message.content,
-    })),
-  };
-}
-
 export function extractOpenAiText(payload: unknown): string {
   if (!payload || typeof payload !== 'object') {
     return '';
@@ -234,9 +229,39 @@ export function extractOpenAiText(payload: unknown): string {
     return record.output_text.trim();
   }
 
+  const messageTexts = (record.output ?? [])
+    .filter((item) => (item as { type?: string }).type === 'message')
+    .flatMap((item) => item.content ?? [])
+    .map((item) => (item.type === 'output_text' && typeof item.text === 'string' ? item.text : ''))
+    .filter((value) => value.trim().length > 0);
+  if (messageTexts.length > 0) {
+    return messageTexts.map((message) => message.trim()).join('\n\n');
+  }
+
   return (record.output ?? [])
     .flatMap((item) => item.content ?? [])
     .map((item) => (item.type === 'output_text' && typeof item.text === 'string' ? item.text : ''))
+    .find((value) => value.trim().length > 0)
+    ?.trim() ?? '';
+}
+
+export function extractOpenAiReasoningSummary(payload: unknown): string {
+  if (!payload || typeof payload !== 'object') {
+    return '';
+  }
+  const record = payload as {
+    output?: Array<{
+      type?: string;
+      summary?: Array<{ type?: string; text?: string }>;
+      content?: Array<{ type?: string; text?: string }>;
+    }>;
+  };
+  return (record.output ?? [])
+    .filter((item) => item.type === 'reasoning')
+    .flatMap((item) => [
+      ...(item.summary ?? []).map((summary) => (typeof summary.text === 'string' ? summary.text : '')),
+      ...(item.content ?? []).map((content) => (typeof content.text === 'string' ? content.text : '')),
+    ])
     .filter((value) => value.trim().length > 0)
     .join('\n')
     .trim();
@@ -254,19 +279,31 @@ export function extractAnthropicText(payload: unknown): string {
     .trim();
 }
 
+export function extractAnthropicReasoningSummary(payload: unknown): string {
+  if (!payload || typeof payload !== 'object') {
+    return '';
+  }
+  const record = payload as { content?: Array<{ type?: string; text?: string; thinking?: string }> };
+  return (record.content ?? [])
+    .map((item) => (item.type === 'thinking' && typeof item.thinking === 'string' ? item.thinking : ''))
+    .filter((value) => value.trim().length > 0)
+    .join('\n')
+    .trim();
+}
+
 async function requestProviderWithRepair(
   body: ProxyChatRequest,
   env: Record<string, string | undefined>,
   signal: AbortSignal | undefined,
   runId: string
-): Promise<string> {
-  const initialOutput = await requestProviderOnce(body, env, signal, runId);
+): Promise<ProviderCompletion> {
+  const initialCompletion = await requestProviderOnce(body, env, signal, runId);
   if (body.mode === 'document-edit') {
-    return initialOutput;
+    return initialCompletion;
   }
-  const diagnostics = getHvyResponseDiagnostics(initialOutput);
+  const diagnostics = getHvyResponseDiagnostics(initialCompletion.output);
   if (diagnostics.length === 0) {
-    return initialOutput;
+    return initialCompletion;
   }
 
   console.debug('[hvy:chat-proxy] response diagnostics', diagnostics);
@@ -283,7 +320,7 @@ async function requestProviderWithRepair(
       ...body.messages,
       {
         role: 'assistant',
-        content: initialOutput,
+        content: initialCompletion.output,
       },
       {
         role: 'user',
@@ -292,10 +329,10 @@ async function requestProviderWithRepair(
     ],
   };
 
-  const repairedOutput = await requestProviderOnce(repairRequest, env, signal, runId);
-  const repairedDiagnostics = getHvyResponseDiagnostics(repairedOutput);
+  const repairedCompletion = await requestProviderOnce(repairRequest, env, signal, runId);
+  const repairedDiagnostics = getHvyResponseDiagnostics(repairedCompletion.output);
   console.debug('[hvy:chat-proxy] repaired response diagnostics', repairedDiagnostics);
-  return repairedOutput;
+  return repairedCompletion;
 }
 
 async function requestProviderOnce(
@@ -303,9 +340,15 @@ async function requestProviderOnce(
   env: Record<string, string | undefined>,
   signal: AbortSignal | undefined,
   runId: string
-): Promise<string> {
+): Promise<ProviderCompletion> {
+  if (body.tools && body.tools.length > 0) {
+    return requestProviderToolTurn(body, env, signal, runId);
+  }
   if (body.provider === 'openai') {
     return requestOpenAi(body, env, signal, runId);
+  }
+  if (body.provider === 'qwen') {
+    return requestQwen(body, env, signal, runId);
   }
   return requestAnthropic(body, env, signal, runId);
 }
@@ -342,7 +385,7 @@ async function requestOpenAi(
   env: Record<string, string | undefined>,
   signal: AbortSignal | undefined,
   runId: string
-): Promise<string> {
+): Promise<ProviderCompletion> {
   const apiKey = resolveProviderApiKey('openai', env);
   const upstreamRequest = buildOpenAiProxyRequest(body);
   console.debug('[hvy:chat-proxy] upstream openai request', upstreamRequest);
@@ -377,17 +420,85 @@ async function requestOpenAi(
     throw new Error(`Provider request failed: ${extractProviderError(payload, 'OpenAI request failed.')}`);
   }
   const output = extractOpenAiText(payload);
+  const reasoningSummary = extractOpenAiReasoningSummary(payload);
+  const usage = extractProviderTokenUsage(payload);
   console.debug('[hvy:chat-proxy] upstream openai extracted output', output);
   writeTrace({
     runId,
     phase: body.mode,
     type: 'model_response',
-    payload: { response: output },
+    payload: { response: output, reasoningSummary },
   });
   if (output.length === 0) {
     throw new Error('Provider request failed: OpenAI returned no assistant text.');
   }
-  return output;
+  return { output, reasoningSummary, ...(usage ? { usage } : {}) };
+}
+
+async function requestProviderToolTurn(
+  body: ProxyChatRequest,
+  env: Record<string, string | undefined>,
+  signal: AbortSignal | undefined,
+  runId: string
+): Promise<ProviderCompletion> {
+  const apiKey = resolveProviderApiKey(body.provider, env);
+  const toolRequest = body as ProviderToolProxyChatRequest;
+  const toolState = buildInitialProviderToolState(toolRequest);
+  const upstreamRequest = buildProviderToolProxyRequest({
+    ...toolRequest,
+    toolState,
+  });
+  console.debug(`[hvy:chat-proxy] upstream ${body.provider} native tool request`, upstreamRequest);
+  writeTrace({
+    runId,
+    phase: body.mode,
+    type: 'provider_request',
+    payload: { provider: body.provider, request: upstreamRequest },
+  });
+  const response = await fetch(resolveProviderApiUrl(body.provider), {
+    method: 'POST',
+    headers: buildProviderHeaders(body.provider, apiKey),
+    body: JSON.stringify(upstreamRequest),
+    signal,
+  });
+  const payload = await readJsonResponse(response);
+  console.debug(`[hvy:chat-proxy] upstream ${body.provider} native tool response`, {
+    ok: response.ok,
+    status: response.status,
+    payload,
+  });
+  writeTrace({
+    runId,
+    phase: body.mode,
+    type: 'provider_response',
+    payload: { provider: body.provider, ok: response.ok, status: response.status, payload },
+  });
+  if (!response.ok) {
+    throw new Error(`Provider request failed: ${extractProviderError(payload, `${body.provider} request failed.`)}`);
+  }
+  const turn = extractProviderToolTurn(body.provider, payload);
+  const usage = extractProviderTokenUsage(payload);
+  writeTrace({
+    runId,
+    phase: body.mode,
+    type: 'model_response',
+    payload: {
+      response: turn.output,
+      reasoningSummary: turn.reasoningSummary,
+      toolCalls: turn.toolCalls,
+    },
+  });
+  if (turn.output.length === 0 && turn.toolCalls.length === 0) {
+    throw new Error(`Provider request failed: ${body.provider} returned no assistant text or tool calls.`);
+  }
+  return {
+    output: turn.output,
+    reasoningSummary: turn.reasoningSummary,
+    ...(usage ? { usage } : {}),
+    toolCalls: turn.toolCalls,
+    nativeMessages: turn.nativeMessages,
+    toolState,
+  };
 }
 
 async function requestAnthropic(
@@ -395,7 +506,7 @@ async function requestAnthropic(
   env: Record<string, string | undefined>,
   signal: AbortSignal | undefined,
   runId: string
-): Promise<string> {
+): Promise<ProviderCompletion> {
   const apiKey = resolveProviderApiKey('anthropic', env);
   const upstreamRequest = buildAnthropicProxyRequest(body);
   console.debug('[hvy:chat-proxy] upstream anthropic request', upstreamRequest);
@@ -431,33 +542,104 @@ async function requestAnthropic(
     throw new Error(`Provider request failed: ${extractProviderError(payload, 'Anthropic request failed.')}`);
   }
   const output = extractAnthropicText(payload);
+  const reasoningSummary = extractAnthropicReasoningSummary(payload);
+  const usage = extractProviderTokenUsage(payload);
   console.debug('[hvy:chat-proxy] upstream anthropic extracted output', output);
   writeTrace({
     runId,
     phase: body.mode,
     type: 'model_response',
-    payload: { response: output },
+    payload: { response: output, reasoningSummary },
   });
   if (output.length === 0) {
     throw new Error('Provider request failed: Anthropic returned no assistant text.');
   }
-  return output;
+  return { output, reasoningSummary, ...(usage ? { usage } : {}) };
+}
+
+async function requestQwen(
+  body: ProxyChatRequest,
+  env: Record<string, string | undefined>,
+  signal: AbortSignal | undefined,
+  runId: string
+): Promise<ProviderCompletion> {
+  const apiKey = resolveProviderApiKey('qwen', env);
+  const upstreamRequest = buildProviderToolProxyRequest({
+    ...(body as ProviderToolProxyChatRequest),
+    tools: [],
+  });
+  console.debug('[hvy:chat-proxy] upstream qwen request', upstreamRequest);
+  writeTrace({
+    runId,
+    phase: body.mode,
+    type: 'provider_request',
+    payload: { provider: 'qwen', request: upstreamRequest },
+  });
+  const response = await fetch(QWEN_API_URL, {
+    method: 'POST',
+    headers: buildProviderHeaders('qwen', apiKey),
+    body: JSON.stringify(upstreamRequest),
+    signal,
+  });
+  const payload = await readJsonResponse(response);
+  writeTrace({
+    runId,
+    phase: body.mode,
+    type: 'provider_response',
+    payload: { provider: 'qwen', ok: response.ok, status: response.status, payload },
+  });
+  if (!response.ok) {
+    throw new Error(`Provider request failed: ${extractProviderError(payload, 'Qwen request failed.')}`);
+  }
+  const turn = extractProviderToolTurn('qwen', payload);
+  const usage = extractProviderTokenUsage(payload);
+  if (turn.output.length === 0) {
+    throw new Error('Provider request failed: Qwen returned no assistant text.');
+  }
+  return { output: turn.output, reasoningSummary: '', ...(usage ? { usage } : {}) };
 }
 
 function resolveProviderApiKey(provider: ProxyChatRequest['provider'], env: Record<string, string | undefined>): string {
   const key = provider === 'openai'
     ? firstNonEmptyString(env.OPENAI_API_KEY, env.VITE_OPENAI_API_KEY)
-    : firstNonEmptyString(env.ANTHROPIC_API_KEY, env.VITE_ANTHROPIC_API_KEY);
+    : provider === 'anthropic'
+    ? firstNonEmptyString(env.ANTHROPIC_API_KEY, env.VITE_ANTHROPIC_API_KEY)
+    : firstNonEmptyString(env.QWEN_API_KEY, env.DASHSCOPE_API_KEY, env.VITE_QWEN_API_KEY, env.VITE_DASHSCOPE_API_KEY);
 
   if (!key) {
     throw new Error(
       provider === 'openai'
         ? 'OPENAI_API_KEY is not configured for the local proxy.'
-        : 'ANTHROPIC_API_KEY is not configured for the local proxy.'
+        : provider === 'anthropic'
+        ? 'ANTHROPIC_API_KEY is not configured for the local proxy.'
+        : 'QWEN_API_KEY or DASHSCOPE_API_KEY is not configured for the local proxy.'
     );
   }
 
   return key;
+}
+
+function resolveProviderApiUrl(provider: ProxyChatRequest['provider']): string {
+  if (provider === 'anthropic') {
+    return ANTHROPIC_API_URL;
+  }
+  if (provider === 'qwen') {
+    return QWEN_API_URL;
+  }
+  return OPENAI_API_URL;
+}
+
+function buildProviderHeaders(provider: ProxyChatRequest['provider'], apiKey: string): Record<string, string> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${apiKey}`,
+  };
+  if (provider === 'anthropic') {
+    delete headers.Authorization;
+    headers['x-api-key'] = apiKey;
+    headers['anthropic-version'] = ANTHROPIC_API_VERSION;
+  }
+  return headers;
 }
 
 function validateProxyChatRequest(payload: unknown): ProxyChatRequest {
@@ -466,7 +648,7 @@ function validateProxyChatRequest(payload: unknown): ProxyChatRequest {
   }
 
   const record = payload as Partial<ProxyChatRequest>;
-  if (record.provider !== 'openai' && record.provider !== 'anthropic') {
+  if (record.provider !== 'openai' && record.provider !== 'anthropic' && record.provider !== 'qwen') {
     throw new Error('Invalid chat provider.');
   }
   if (record.mode !== 'qa' && record.mode !== 'component-edit' && record.mode !== 'document-edit') {
@@ -478,9 +660,6 @@ function validateProxyChatRequest(payload: unknown): ProxyChatRequest {
   if (typeof record.context !== 'string' || record.context.trim().length === 0) {
     throw new Error('Chat context is required.');
   }
-  if (typeof record.formatInstructions !== 'string' || record.formatInstructions.trim().length === 0) {
-    throw new Error('Chat format instructions are required.');
-  }
   if (!Array.isArray(record.messages) || record.messages.length === 0) {
     throw new Error('At least one chat message is required.');
   }
@@ -490,7 +669,7 @@ function validateProxyChatRequest(payload: unknown): ProxyChatRequest {
       throw new Error('Invalid chat message.');
     }
     const typed = message as ProxyChatRequest['messages'][number];
-    if ((typed.role !== 'user' && typed.role !== 'assistant') || typeof typed.content !== 'string' || typed.content.trim().length === 0) {
+    if ((typed.role !== 'system' && typed.role !== 'user' && typed.role !== 'assistant') || typeof typed.content !== 'string' || typed.content.trim().length === 0) {
       throw new Error('Invalid chat message.');
     }
     return {
@@ -499,15 +678,45 @@ function validateProxyChatRequest(payload: unknown): ProxyChatRequest {
     };
   });
 
-  return {
+  const request: ProxyChatRequest = {
     provider: record.provider,
     model: record.model.trim(),
     mode: record.mode,
     traceRunId: typeof record.traceRunId === 'string' && /^[\w:-]{1,120}$/.test(record.traceRunId) ? record.traceRunId : undefined,
     context: record.context,
-    formatInstructions: record.formatInstructions,
     messages,
   };
+  if (Array.isArray(record.tools)) {
+    request.tools = validateProviderToolDefinitions(record.tools);
+  }
+  if (record.toolState && typeof record.toolState === 'object') {
+    request.toolState = record.toolState as ProviderToolState;
+  }
+  return request;
+}
+
+function validateProviderToolDefinitions(value: unknown[]): ProviderToolDefinition[] {
+  return value.map((tool) => {
+    if (!tool || typeof tool !== 'object' || Array.isArray(tool)) {
+      throw new Error('Invalid native tool definition.');
+    }
+    const record = tool as Partial<ProviderToolDefinition>;
+    if (typeof record.name !== 'string' || !/^[A-Za-z_][A-Za-z0-9_]{0,63}$/.test(record.name)) {
+      throw new Error('Invalid native tool name.');
+    }
+    if (typeof record.description !== 'string' || record.description.trim().length === 0) {
+      throw new Error('Invalid native tool description.');
+    }
+    if (!record.inputSchema || typeof record.inputSchema !== 'object' || Array.isArray(record.inputSchema)) {
+      throw new Error('Invalid native tool input schema.');
+    }
+    return {
+      name: record.name,
+      description: record.description,
+      inputSchema: record.inputSchema as Record<string, unknown>,
+      ...(record.strict ? { strict: true } : {}),
+    };
+  });
 }
 
 function validateClientTraceEvent(payload: unknown): TraceEvent {
@@ -641,10 +850,87 @@ function writeTrace(event: TraceEvent): void {
       if (prunedTextContents.length !== textContents.length) {
         await fs.writeFile(AGENT_LOOP_TEXT_TRACE_FILE, prunedTextContents, 'utf8');
       }
+      const aiCliLogEntry = formatAiCliLogEvent(event);
+      if (aiCliLogEntry) {
+        await fs.appendFile(AI_CLI_LOG_FILE, aiCliLogEntry, 'utf8');
+        const aiCliLogContents = await fs.readFile(AI_CLI_LOG_FILE, 'utf8');
+        const prunedAiCliLogContents = pruneTraceLines(aiCliLogContents, AI_CLI_LOG_MAX_LINES, AI_CLI_LOG_PRUNE_LINES);
+        if (prunedAiCliLogContents.length !== aiCliLogContents.length) {
+          await fs.writeFile(AI_CLI_LOG_FILE, prunedAiCliLogContents, 'utf8');
+        }
+      }
+      const aiCliMessagesLogEntry = formatAiCliMessagesLogEvent(event);
+      if (aiCliMessagesLogEntry) {
+        await fs.appendFile(AI_CLI_MESSAGES_LOG_FILE, aiCliMessagesLogEntry, 'utf8');
+        const aiCliMessagesLogContents = await fs.readFile(AI_CLI_MESSAGES_LOG_FILE, 'utf8');
+        const prunedAiCliMessagesLogContents = pruneTraceLines(aiCliMessagesLogContents, AI_CLI_LOG_MAX_LINES, AI_CLI_LOG_PRUNE_LINES);
+        if (prunedAiCliMessagesLogContents.length !== aiCliMessagesLogContents.length) {
+          await fs.writeFile(AI_CLI_MESSAGES_LOG_FILE, prunedAiCliMessagesLogContents, 'utf8');
+        }
+      }
     })
     .catch((error: unknown) => {
       console.warn('[hvy:chat-proxy] failed to write dev trace', error);
     });
+}
+
+export function formatAiCliLogEvent(event: TraceEvent): string {
+  if (!event.runId.startsWith('chat-cli-')) {
+    return '';
+  }
+  if (event.type === 'client_event' && event.payload.event === 'ai_cli_user_query') {
+    return formatAiCliLogBlock(['user query', String(event.payload.query ?? '').trim()]);
+  }
+  if (event.type === 'client_event' && event.payload.event === 'ai_cli_command') {
+    const modelMessage = typeof event.payload.modelMessage === 'string' ? event.payload.modelMessage.trimEnd() : '';
+    return formatAiCliLogBlock([
+      `CMD: ${String(event.payload.command ?? '').trim()}`,
+      modelMessage || String(event.payload.output ?? '').trimEnd(),
+    ]);
+  }
+  if (event.type === 'provider_response') {
+    const usage = summarizeProviderTokenUsage(event.payload.payload).replace(/^usage=/, '').replaceAll(',', ', ');
+    return usage ? formatAiCliLogBlock(['token usage', usage]) : '';
+  }
+  if (event.type === 'model_response' && typeof event.payload.response === 'string') {
+    const reasoningSummary = typeof event.payload.reasoningSummary === 'string' ? event.payload.reasoningSummary.trimEnd() : '';
+    return formatAiCliLogBlock([
+      'model response',
+      event.payload.response.trimEnd() || '(empty)',
+      ...(reasoningSummary ? ['', 'reasoning summary', reasoningSummary] : []),
+    ]);
+  }
+  return '';
+}
+
+export function formatAiCliMessagesLogEvent(event: TraceEvent): string {
+  if (!event.runId.startsWith('chat-cli-')) {
+    return '';
+  }
+  if (event.type === 'provider_request') {
+    return formatAiCliLogBlock(['provider_request', formatJsonForAiCliMessagesLog(event.payload.request)]);
+  }
+  if (event.type === 'provider_response') {
+    return formatAiCliLogBlock(['provider_response', formatJsonForAiCliMessagesLog(event.payload)]);
+  }
+  if (event.type === 'model_response') {
+    return formatAiCliLogBlock([
+      'model_response',
+      formatJsonForAiCliMessagesLog({
+        response: event.payload.response,
+        reasoningSummary: event.payload.reasoningSummary,
+      }),
+    ]);
+  }
+  return '';
+}
+
+function formatAiCliLogBlock(lines: string[]): string {
+  return ['--------', ...lines].join('\n').trimEnd() + '\n';
+}
+
+function formatJsonForAiCliMessagesLog(value: unknown): string {
+  return JSON.stringify(value, null, 2) ?? String(value);
 }
 
 function summarizeTracePayload(event: TraceEvent): string {
@@ -704,12 +990,27 @@ function summarizeTracePayload(event: TraceEvent): string {
 }
 
 function summarizeProviderTokenUsage(payload: unknown): string {
-  if (!payload || typeof payload !== 'object') {
+  const usage = extractProviderTokenUsage(payload);
+  if (!usage) {
     return '';
+  }
+  const parts = [
+    typeof usage.inputTokens === 'number' ? `input_tokens=${usage.inputTokens}` : '',
+    typeof usage.outputTokens === 'number' ? `output_tokens=${usage.outputTokens}` : '',
+    typeof usage.totalTokens === 'number' ? `total_tokens=${usage.totalTokens}` : '',
+    typeof usage.cachedTokens === 'number' ? `cached_tokens=${usage.cachedTokens}` : '',
+    typeof usage.reasoningTokens === 'number' ? `reasoning_tokens=${usage.reasoningTokens}` : '',
+  ].filter(Boolean);
+  return parts.length > 0 ? `usage=${parts.join(',')}` : '';
+}
+
+function extractProviderTokenUsage(payload: unknown): ProviderTokenUsage | null {
+  if (!payload || typeof payload !== 'object') {
+    return null;
   }
   const usage = (payload as { usage?: unknown }).usage;
   if (!usage || typeof usage !== 'object') {
-    return '';
+    return null;
   }
   const record = usage as Record<string, unknown>;
   const inputTokens = readNumber(record.input_tokens) ?? readNumber(record.prompt_tokens);
@@ -719,14 +1020,14 @@ function summarizeProviderTokenUsage(payload: unknown): string {
     ?? readNumber((record.cache_read_input_tokens as Record<string, unknown> | undefined)?.cached_tokens)
     ?? readNumber(record.cache_read_input_tokens);
   const reasoningTokens = readNumber((record.output_tokens_details as Record<string, unknown> | undefined)?.reasoning_tokens);
-  const parts = [
-    typeof inputTokens === 'number' ? `input_tokens=${inputTokens}` : '',
-    typeof outputTokens === 'number' ? `output_tokens=${outputTokens}` : '',
-    typeof totalTokens === 'number' ? `total_tokens=${totalTokens}` : '',
-    typeof cachedTokens === 'number' ? `cached_tokens=${cachedTokens}` : '',
-    typeof reasoningTokens === 'number' ? `reasoning_tokens=${reasoningTokens}` : '',
-  ].filter(Boolean);
-  return parts.length > 0 ? `usage=${parts.join(',')}` : '';
+  const result: ProviderTokenUsage = {
+    ...(typeof inputTokens === 'number' ? { inputTokens } : {}),
+    ...(typeof outputTokens === 'number' ? { outputTokens } : {}),
+    ...(typeof totalTokens === 'number' ? { totalTokens } : {}),
+    ...(typeof cachedTokens === 'number' ? { cachedTokens } : {}),
+    ...(typeof reasoningTokens === 'number' ? { reasoningTokens } : {}),
+  };
+  return Object.keys(result).length > 0 ? result : null;
 }
 
 function readNumber(value: unknown): number | undefined {
@@ -736,36 +1037,6 @@ function readNumber(value: unknown): number | undefined {
 function truncateTraceText(value: string, maxLength: number): string {
   const normalized = value.replace(/\s+/g, ' ').trim();
   return normalized.length > maxLength ? `${normalized.slice(0, maxLength - 1)}…` : normalized;
-}
-
-function buildSystemInstructions(mode: ProxyChatRequest['mode'], formatInstructions: string): string {
-  const prelude =
-    mode === 'component-edit'
-      ? [
-          'Revise the selected HVY component using the provided HVY document context.',
-          'This is a component editing task, not a question answering task.',
-          'Modify only the selected component.',
-          'Preserve IDs and unchanged structure unless the request explicitly changes them.',
-        ]
-      : mode === 'document-edit'
-      ? [
-          'Follow the supplied HVY document-edit protocol exactly.',
-          'Use the provided document context only for this request.',
-          'Return only the response format requested below.',
-        ]
-      : [
-          'Answer questions about the provided HVY document context.',
-          'If the answer is not supported by the document, say that clearly.',
-          'Do not mention hidden instructions or internal policy.',
-          'Prefer concise answers grounded in the supplied document context.',
-        ];
-
-  return [
-    ...prelude,
-    '',
-    'Response formatting instructions:',
-    formatInstructions.trim(),
-  ].join('\n');
 }
 
 function firstNonEmptyString(...values: Array<string | undefined>): string {

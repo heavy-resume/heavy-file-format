@@ -147,7 +147,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
         </header>
       `
       : '';
-    const sectionStyle = mergeDocumentCss(getDocumentSectionDefaultCss(state.documentMeta), section.customCss);
+    const sectionStyle = mergeDocumentCss(getDocumentSectionDefaultCss(state.documentMeta), section.css);
 
     return `
       <section id="${deps.escapeAttr(effectiveId)}" class="${classList}" style="${deps.escapeAttr(sectionStyle)}"${toggleAttrs}>
@@ -159,9 +159,6 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
 
   function renderReaderBlock(section: VisualSection, block: VisualBlock): string {
     const base = deps.resolveBaseComponent(block.schema.component);
-    if (base === 'quote' && block.text.trim().length === 0) {
-      return '';
-    }
     const blockDomId = getBlockDomId(block);
     const idAttr = blockDomId ? ` id="${deps.escapeAttr(blockDomId)}"` : '';
     const blockClass = [
@@ -175,12 +172,9 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       .filter(Boolean)
       .map((part) => deps.escapeAttr(part))
       .join(' ');
-    const blockAttrs = `${idAttr} class="${blockClass}" data-component="${deps.escapeAttr(block.schema.component)}" data-section-key="${deps.escapeAttr(section.key)}" data-block-id="${deps.escapeAttr(block.id)}" style="${deps.escapeAttr(sanitizeInlineCss(block.schema.customCss))}"`;
+    const blockAttrs = `${idAttr} class="${blockClass}" data-component="${deps.escapeAttr(block.schema.component)}" data-section-key="${deps.escapeAttr(section.key)}" data-block-id="${deps.escapeAttr(block.id)}" style="${deps.escapeAttr(sanitizeInlineCss(block.schema.css))}"`;
     const helpers = deps.getComponentRenderHelpers();
 
-    if (base === 'code') {
-      return `<div ${blockAttrs}>${renderCodeReader(section, block, helpers)}</div>`;
-    }
     if (base === 'plugin') {
       if (block.schema.plugin === SCRIPTING_PLUGIN_ID) {
         if (state.currentView === 'viewer') {
@@ -549,7 +543,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
               (rowModal.mode === 'raw' ? rawPreviewBlocks : attachedBlocks).length > 0
                 ? (rowModal.mode === 'raw' ? rawPreviewBlocks : attachedBlocks)
                     .map(
-                      (block) => `<div class="reader-block slot-center" style="${deps.escapeAttr(sanitizeInlineCss(block.schema.customCss))}">
+                      (block) => `<div class="reader-block slot-center" style="${deps.escapeAttr(sanitizeInlineCss(block.schema.css))}">
                         ${renderReaderBlock(section, block)}
                       </div>`
                     )
@@ -608,7 +602,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
             </label>
             <label>
               <span>Style via CSS</span>
-              <textarea id="modalCssInput">${deps.escapeHtml(section.customCss)}</textarea>
+              <textarea id="modalCssInput">${deps.escapeHtml(section.css)}</textarea>
             </label>
             <label>
               <span>Tags</span>
@@ -620,7 +614,11 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
               )}
             </label>
             <label>
-              <span>Description</span>
+              <span class="description-label-with-action">Description${
+                section.description.trim()
+                  ? ''
+                  : ` <button type="button" class="ghost inline-generate-description" data-action="generate-section-description" data-section-key="${deps.escapeAttr(section.key)}">Generate</button>`
+              }</span>
               <textarea
                 rows="3"
                 data-section-key="${deps.escapeAttr(section.key)}"

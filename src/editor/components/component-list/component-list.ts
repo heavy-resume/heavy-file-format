@@ -6,6 +6,14 @@ export const renderComponentListEditor: ComponentEditorRenderer = (sectionKey, b
   helpers.ensureComponentListBlocks(block);
   const hasItems = (block.schema.componentListBlocks ?? []).length > 0;
   const listComponent = block.schema.componentListComponent || 'text';
+  const addControl = block.schema.lock
+    ? ''
+    : `<article class="ghost-section-card add-ghost component-list-add-ghost" data-action="add-component-list-item" data-section-key="${helpers.escapeAttr(
+        sectionKey
+      )}" data-block-id="${helpers.escapeAttr(block.id)}">
+        <div class="ghost-plus-big"><span>+</span></div>
+        <div class="ghost-label">${helpers.escapeHtml(getComponentListAddLabel(block))}</div>
+      </article>`;
   return `
     ${
       hasItems
@@ -22,16 +30,7 @@ export const renderComponentListEditor: ComponentEditorRenderer = (sectionKey, b
     <div class="container-inner-blocks">
       ${(block.schema.componentListBlocks ?? []).map((innerBlock) => helpers.renderEditorBlock(sectionKey, innerBlock, block.schema.lock)).join('')}
     </div>
-    ${
-      block.schema.lock
-        ? ''
-        : `<article class="ghost-section-card add-ghost container-add-ghost" data-action="add-component-list-item" data-section-key="${helpers.escapeAttr(
-            sectionKey
-          )}" data-block-id="${helpers.escapeAttr(block.id)}">
-            <div class="ghost-plus-big"><span>+</span></div>
-            <div class="ghost-label">${helpers.escapeHtml(getComponentListAddLabel(block))}</div>
-          </article>`
-    }
+    ${addControl}
   `;
 };
 

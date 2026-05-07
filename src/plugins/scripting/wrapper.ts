@@ -193,6 +193,17 @@ export function instrumentPythonSource(source: string): string {
   return instrumented.join('\n');
 }
 
+export function wrapPythonSourceInFunction(source: string): string {
+  const lines = source.split('\n');
+  const body = lines.length > 0 && lines.some((line) => line.trim().length > 0)
+    ? lines.map((line) => `    ${line}`)
+    : ['    pass'];
+  return [
+    'def __hvy_user_main__():',
+    ...body,
+  ].join('\n');
+}
+
 function isImportStatementStart(line: string): boolean {
   const trimmed = line.trimStart();
   return /^import\b/.test(trimmed) || /^from\b.*\bimport\b/.test(trimmed);
@@ -324,11 +335,58 @@ __hvy_runtime__ = __hvy_globals__.runtimes['${runtimeId}']
 __hvy_source__ = __hvy_globals__.sources['${runtimeId}']
 __hvy_instrumented_source__ = __hvy_globals__.instrumentedSources['${runtimeId}']
 __hvy_trace_enabled__ = False
+__hvy_builtin_eval__ = eval
+__hvy_forbidden_global_names__ = (
+    'window',
+    'document',
+    'browser',
+    '__BRYTHON__',
+    '__hvy_window__',
+    '__hvy_globals__',
+    '__hvy_runtime__',
+    '__hvy_source__',
+    '__hvy_instrumented_source__',
+    '__hvy_user_globals__',
+    '__hvy_user_main__',
+)
+
+
+def __hvy_sanitize_user_globals__():
+    try:
+        for __hvy_name__ in __hvy_forbidden_global_names__:
+            __hvy_user_globals__.pop(__hvy_name__, None)
+    except Exception:
+        pass
+
+
+def __hvy_user_step__():
+    __hvy_runtime__.step()
+    __hvy_sanitize_user_globals__()
+
+
+def __hvy_safe_globals__():
+    __hvy_sanitize_user_globals__()
+    return {
+        __hvy_key__: __hvy_value__
+        for __hvy_key__, __hvy_value__ in __hvy_user_globals__.items()
+        if __hvy_key__ not in __hvy_forbidden_global_names__
+    }
+
+
+def __hvy_safe_eval__(expression, globals=None, locals=None):
+    if isinstance(expression, str) and expression.strip() in __hvy_forbidden_global_names__:
+        raise NameError("name '" + expression.strip() + "' is not defined")
+    __hvy_sanitize_user_globals__()
+    if globals is None and locals is None:
+        return __hvy_builtin_eval__(expression, __hvy_user_globals__)
+    if locals is None:
+        return __hvy_builtin_eval__(expression, globals)
+    return __hvy_builtin_eval__(expression, globals, locals)
 
 
 def __hvy_trace__(frame, event, arg):
     if event == 'line':
-        __hvy_runtime__.step()
+        __hvy_user_step__()
     return __hvy_trace__
 
 
@@ -344,11 +402,18 @@ try:
     __hvy_compilable_source__ = __hvy_source__ if __hvy_trace_enabled__ else __hvy_instrumented_source__
     __hvy_code__ = compile(__hvy_compilable_source__, '<${traceLabel}>', 'exec')
     __hvy_user_globals__ = {
-        '__hvy_step__': __hvy_runtime__.step,
+        '__hvy_step__': __hvy_user_step__,
         'doc': __hvy_runtime__.doc,
+        'eval': __hvy_safe_eval__,
+        'globals': __hvy_safe_globals__,
         '__name__': '__hvy_script__',
     }
+    __hvy_sanitize_user_globals__()
     exec(__hvy_code__, __hvy_user_globals__)
+    __hvy_entrypoint__ = __hvy_user_globals__.get('__hvy_user_main__')
+    __hvy_sanitize_user_globals__()
+    if __hvy_entrypoint__ is not None:
+        __hvy_entrypoint__()
     __hvy_runtime__.doc.rerender()
 except Exception as __hvy_err__:
     import traceback as __hvy_tb__
@@ -410,10 +475,12 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
   }
 
   let dbMutated = false;
+  let runtime: ScriptingRuntime | null = null;
   let scriptingDb: Awaited<ReturnType<typeof createScriptingDbRuntime>>;
   try {
     scriptingDb = await createScriptingDbRuntime(options.document, () => {
       dbMutated = true;
+      runtime?.markMutated();
     });
   } catch (error) {
     return {
@@ -424,7 +491,7 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
       toolCalls: 0,
     };
   }
-  const runtime = createScriptingRuntime({
+  runtime = createScriptingRuntime({
     document: options.document,
     maxLines: options.maxLines,
     form: options.form,
@@ -434,8 +501,8 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
   const scripting = getScriptingGlobal();
   const sanitizedSource = stripPythonImports(options.source);
   scripting.runtimes[runtimeId] = runtime;
-  scripting.sources[runtimeId] = sanitizedSource;
-  scripting.instrumentedSources[runtimeId] = instrumentPythonSource(sanitizedSource);
+  scripting.sources[runtimeId] = wrapPythonSourceInFunction(sanitizedSource);
+  scripting.instrumentedSources[runtimeId] = wrapPythonSourceInFunction(instrumentPythonSource(sanitizedSource));
   scripting.errors[runtimeId] = null;
 
   // Do not append this to the DOM or use type="text/python", otherwise 
@@ -489,7 +556,7 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
           scriptElement,
           scriptElement.textContent || '',
           `hvy_script_${runtimeId}`,
-          window.location.href || 'http://localhost/hvy-plugin',
+          `${window.location.href || 'http://localhost/hvy-plugin'}#hvy-script-${runtimeId}`,
           true
         );
       });

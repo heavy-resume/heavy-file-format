@@ -47,6 +47,10 @@ test('serializes editor inline code with markdown backticks', () => {
   expect(turndown.turndown('<p>Use <code>foobar</code> now</p>')).toBe('Use `foobar` now');
 });
 
+test('serializes editor inline code with literal angle brackets', () => {
+  expect(turndown.turndown('<p>Use <code>&lt;tag&gt;</code> now</p>')).toBe('Use `<tag>` now');
+});
+
 test('converts markdown headings into HVY section hierarchy', () => {
   const document = convertMarkdownToHvyDocument(`# Project Brief
 
@@ -85,7 +89,7 @@ SELECT * FROM items;
   const blocks = document.sections[0]?.blocks ?? [];
 
   expect(blocks[0]?.schema.component).toBe('table');
-  expect(blocks[0]?.schema.tableColumns).toBe('Name, Count');
+  expect(blocks[0]?.schema.tableColumns).toEqual(['Name', 'Count']);
   expect(blocks[0]?.schema.tableRows).toEqual([{ cells: ['Alpha', '2'] }, { cells: ['Beta', '5'] }]);
   expect(blocks[1]?.schema.component).toBe('text');
   expect(blocks[1]?.text).toBe('```sql\nSELECT * FROM items;\n```');

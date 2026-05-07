@@ -277,7 +277,7 @@ export function bindModal(app: HTMLElement): void {
     if (!section) {
       return;
     }
-    section.customCss = cssInput.value;
+    section.css = cssInput.value;
     getRefreshReaderPanels()();
     getRefreshModalPreview()();
   });

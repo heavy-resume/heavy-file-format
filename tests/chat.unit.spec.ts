@@ -58,6 +58,26 @@ hvy_version: 0.1
   expect(buildChatDocumentContext(document)).not.toContain('<!--hvy:text');
 });
 
+test('buildChatDocumentContext prepends document ai context from metadata', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+ai-context: This resume uses top-skills-tools-technologies as featured skills.
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {}-->
+ Hello there
+`, '.hvy');
+
+  const context = buildChatDocumentContext(document);
+
+  expect(context).toContain('Document context:\nThis resume uses top-skills-tools-technologies as featured skills.');
+  expect(context).toContain('Document body:\n<!--hvy: {"id":"summary"');
+  expect(context).not.toContain('ai-context:');
+});
+
 test('buildChatDocumentContext keeps xref-card content under skills headings', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
@@ -100,7 +120,6 @@ test('buildProxyChatRequest preserves provider, model, messages, and context', (
       provider: 'openai',
       model: 'gpt-5-mini',
       context: 'Context body',
-      formatInstructions: 'Format as HVY.',
       mode: 'qa',
       messages: [
         { id: '1', role: 'user', content: 'What is this?' },
@@ -111,7 +130,6 @@ test('buildProxyChatRequest preserves provider, model, messages, and context', (
     provider: 'openai',
     model: 'gpt-5-mini',
     context: 'Context body',
-    formatInstructions: 'Format as HVY.',
     mode: 'qa',
     messages: [
       { id: '1', role: 'user', content: 'What is this?', error: undefined },
@@ -125,10 +143,14 @@ test('getEnvChatSettings prepopulates provider and model from vite env vars', ()
     getEnvChatSettings({
       VITE_HVY_CHAT_PROVIDER: 'anthropic',
       VITE_HVY_CHAT_MODEL: 'claude-custom',
-    } as ImportMetaEnv)
+      VITE_HVY_CHAT_COMPACTION_PROVIDER: 'openai',
+      VITE_HVY_CHAT_COMPACTION_MODEL: 'gpt-5.4-nano',
+    } as unknown as ImportMetaEnv)
   ).toEqual({
     provider: 'anthropic',
     model: 'claude-custom',
+    compactionProvider: 'openai',
+    compactionModel: 'gpt-5.4-nano',
   });
 });
 
@@ -141,6 +163,8 @@ test('getEnvChatSettings falls back to provider-specific model and then built-in
   ).toEqual({
     provider: 'openai',
     model: 'gpt-dev',
+    compactionProvider: 'openai',
+    compactionModel: 'gpt-5.4-nano',
   });
 
   expect(
@@ -150,6 +174,8 @@ test('getEnvChatSettings falls back to provider-specific model and then built-in
   ).toEqual({
     provider: 'anthropic',
     model: 'claude-sonnet-4-6',
+    compactionProvider: 'openai',
+    compactionModel: 'gpt-5.4-nano',
   });
 });
 
@@ -163,11 +189,15 @@ test('mergeChatSettings keeps env defaults when localStorage values are empty st
       {
         provider: 'openai',
         model: 'gpt-5-mini',
+        compactionProvider: 'openai',
+        compactionModel: 'gpt-5.4-nano',
       }
     )
   ).toEqual({
     provider: 'openai',
     model: 'gpt-5-mini',
+    compactionProvider: 'openai',
+    compactionModel: 'gpt-5.4-nano',
   });
 });
 

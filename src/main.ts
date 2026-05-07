@@ -7,6 +7,7 @@ import bundledExampleHvyUrl from '../examples/example.hvy?url';
 import { createEditorRenderer, type EditorRenderer } from './editor/render';
 import { createReaderRenderer, type ReaderRenderer } from './reader/render';
 import { getTemplateFields, renderTemplatePanel } from './editor/template';
+import { renderCliView } from './cli-ui/render';
 
 import { state, initState, initCallbacks, incrementRenderCount, incrementRefreshReaderCount } from './state';
 import type { AppState } from './types';
@@ -22,7 +23,8 @@ import { commitHistorySnapshot } from './history';
 import { capturePaneScroll, restorePaneScroll, centerPendingEditorSection, focusPendingSectionTitleEditor, scrollPendingEditorActivation } from './scroll';
 import { bindUi } from './bind-ui';
 import { deserializeDocumentBytes, serializeDocument } from './serialization';
-import { createDefaultChatState, renderChatPanel } from './chat/chat';
+import { DEFAULT_OPENAI_COMPACTION_MODEL, createDefaultChatState, renderChatPanel } from './chat/chat';
+import { captureChatThreadScroll, restoreChatThreadScroll } from './chat/chat-thread-ui';
 import { loadResumeState, saveResumeState } from './state-persistence';
 import { registerHostPlugin, SCRIPTING_PLUGIN_ID } from './plugins/registry';
 import { reconcilePluginMounts, capturePluginFocus } from './plugins/mount';
@@ -76,6 +78,9 @@ function createInitialState(document: ReturnType<typeof deserializeDocumentBytes
     rawEditorText: serializeDocument(document),
     rawEditorError: null,
     rawEditorDiagnostics: [],
+    cliDraft: '',
+    cliSession: { cwd: '/' },
+    cliHistory: [],
     activeEditorBlock: null,
     componentPlacement: null,
     pendingEditorActivation: null,
@@ -126,6 +131,9 @@ function applyResumeState(initial: AppState, resume: ReturnType<typeof loadResum
       messages: resume.chat.messages,
       panelOpen: resume.chat.panelOpen,
     },
+    cliDraft: resume.cli.draft,
+    cliSession: resume.cli.session,
+    cliHistory: resume.cli.history,
   };
 }
 
@@ -143,10 +151,12 @@ function renderAiEditPopover(): string {
   if (!state.aiEdit.sectionKey || !state.aiEdit.blockId) {
     return '';
   }
+  if (state.aiEdit.isSending) {
+    return '';
+  }
 
   const popupStyle = `left: ${state.aiEdit.popupX}px; top: ${state.aiEdit.popupY}px;`;
-  const providerLabel = state.chat.settings.provider === 'openai' ? 'OpenAI' : 'Anthropic';
-  const canSend = !state.aiEdit.isSending;
+  const providerLabel = state.chat.settings.provider === 'openai' ? 'OpenAI' : state.chat.settings.provider === 'qwen' ? 'Qwen' : 'Anthropic';
 
   return `
     <section class="ai-edit-popover" style="${escapeAttr(popupStyle)}" aria-label="Request AI component changes">
@@ -159,9 +169,10 @@ function renderAiEditPopover(): string {
       <div class="ai-edit-settings">
         <label class="chat-setting">
           <span>Provider</span>
-          <select data-field="ai-provider" aria-label="AI edit provider" ${state.aiEdit.isSending ? 'disabled' : ''}>
+          <select data-field="ai-provider" aria-label="AI edit provider">
             <option value="openai"${state.chat.settings.provider === 'openai' ? ' selected' : ''}>OpenAI</option>
             <option value="anthropic"${state.chat.settings.provider === 'anthropic' ? ' selected' : ''}>Anthropic</option>
+            <option value="qwen"${state.chat.settings.provider === 'qwen' ? ' selected' : ''}>Qwen</option>
           </select>
         </label>
 
@@ -171,12 +182,33 @@ function renderAiEditPopover(): string {
             type="text"
             data-field="ai-model"
             value="${escapeAttr(state.chat.settings.model)}"
-            placeholder="${escapeAttr(providerLabel === 'OpenAI' ? 'gpt-5-mini' : 'claude-sonnet-4-6')}"
+            placeholder="${escapeAttr(providerLabel === 'OpenAI' ? 'gpt-5-mini' : providerLabel === 'Qwen' ? 'qwen-plus' : 'claude-sonnet-4-6')}"
             autocapitalize="off"
             autocomplete="off"
             spellcheck="false"
             aria-label="AI edit model"
-            ${state.aiEdit.isSending ? 'disabled' : ''}
+          />
+        </label>
+
+        <label class="chat-setting">
+          <span>Compaction provider</span>
+          <select data-field="chat-compaction-provider" aria-label="AI edit compaction provider">
+            <option value="openai"${(state.chat.settings.compactionProvider ?? 'openai') === 'openai' ? ' selected' : ''}>OpenAI</option>
+            <option value="anthropic"${state.chat.settings.compactionProvider === 'anthropic' ? ' selected' : ''}>Anthropic</option>
+          </select>
+        </label>
+
+        <label class="chat-setting">
+          <span>Compaction model</span>
+          <input
+            type="text"
+            data-field="chat-compaction-model"
+            value="${escapeAttr(state.chat.settings.compactionModel ?? DEFAULT_OPENAI_COMPACTION_MODEL)}"
+            placeholder="${escapeAttr(DEFAULT_OPENAI_COMPACTION_MODEL)}"
+            autocapitalize="off"
+            autocomplete="off"
+            spellcheck="false"
+            aria-label="AI edit compaction model"
           />
         </label>
       </div>
@@ -184,17 +216,11 @@ function renderAiEditPopover(): string {
       <form id="aiEditComposer" class="ai-edit-composer">
         <label class="chat-composer-field">
           <span>Change request</span>
-          <textarea data-field="ai-edit-input" rows="5" placeholder="Describe what should change in this component..." ${state.aiEdit.isSending ? 'disabled' : ''}>${escapeHtml(state.aiEdit.draft)}</textarea>
+          <textarea data-field="ai-edit-input" rows="5" placeholder="Describe what should change in this component...">${escapeHtml(state.aiEdit.draft)}</textarea>
         </label>
         <div class="chat-composer-actions">
-          <span class="chat-composer-status">
-            ${
-              state.aiEdit.isSending
-                ? 'Waiting for updated component...'
-                : 'Describe the change you want, then send.'
-            }
-          </span>
-          <button type="submit" class="secondary"${canSend ? '' : ' disabled'}>${state.aiEdit.isSending ? 'Sending...' : 'Send'}</button>
+          <span class="chat-composer-status">Describe the change you want, then send.</span>
+          <button type="submit" class="secondary">Send</button>
         </div>
       </form>
     </section>
@@ -350,6 +376,7 @@ function renderApp(): void {
 
   let stepStartedAt = performance.now();
   state.paneScroll = capturePaneScroll(state.paneScroll, app);
+  const chatScroll = captureChatThreadScroll(app);
   captureMs = performance.now() - stepStartedAt;
 
   stepStartedAt = performance.now();
@@ -361,6 +388,7 @@ function renderApp(): void {
   const isAiView = state.currentView === 'ai';
   const isAdvancedEditor = state.editorMode === 'advanced';
   const isRawEditor = state.editorMode === 'raw';
+  const isCliEditor = state.editorMode === 'cli';
 
   stepStartedAt = performance.now();
   const templateFields = getTemplateFields(state.document.meta);
@@ -401,6 +429,7 @@ function renderApp(): void {
                   <button type="button" class="${state.editorMode === 'basic' ? 'secondary' : 'ghost'}" data-action="set-editor-mode" data-editor-mode="basic">Basic</button>
                   <button type="button" class="${isAdvancedEditor ? 'secondary' : 'ghost'}" data-action="set-editor-mode" data-editor-mode="advanced">Advanced</button>
                   <button type="button" class="${isRawEditor ? 'secondary' : 'ghost'}" data-action="set-editor-mode" data-editor-mode="raw">Raw</button>
+                  <button type="button" class="${isCliEditor ? 'secondary' : 'ghost'}" data-action="set-editor-mode" data-editor-mode="cli">CLI</button>
                   ${
                     isAdvancedEditor
                       ? `<button type="button" class="${state.metaPanelOpen ? 'secondary' : 'ghost'}" data-action="toggle-document-meta">Document Meta</button>`
@@ -443,6 +472,14 @@ function renderApp(): void {
                        }
                        <textarea id="rawEditor" class="raw-editor-textarea" data-field="raw-editor-text" spellcheck="false">${escapeHtml(state.rawEditorText)}</textarea>
                      </div>`
+                  : isCliEditor
+                  ? renderCliView({
+                      cwd: state.cliSession.cwd,
+                      draft: state.cliDraft,
+                      history: state.cliHistory,
+                      escapeHtml,
+                      escapeAttr,
+                    })
                   : `${isAdvancedEditor ? renderTemplatePanel(templateFields, state.templateValues, { escapeAttr, escapeHtml }) : ''}
                 ${isAdvancedEditor && state.metaPanelOpen ? editorRenderer.renderMetaPanel() : ''}
                 <div class="editor-shell ${state.editorSidebarOpen ? 'is-sidebar-open' : 'is-sidebar-closed'}">
@@ -478,13 +515,17 @@ function renderApp(): void {
         </div>
       </section>
 
-      ${renderChatPanel(
-        state.chat,
-        state.document,
-        { escapeAttr, escapeHtml },
-        isViewerView ? 'qa' : 'document-edit',
-        state.currentView === 'editor' || state.currentView === 'ai'
-      )}
+      ${
+        isCliEditor
+          ? ''
+          : renderChatPanel(
+              state.chat,
+              state.document,
+              { escapeAttr, escapeHtml },
+              isViewerView ? 'qa' : 'document-edit',
+              state.currentView === 'editor' || state.currentView === 'ai'
+            )
+      }
       ${readerRenderer.renderModal()}
       ${readerRenderer.renderLinkInlineModal()}
     </main>
@@ -504,6 +545,7 @@ function renderApp(): void {
 
   stepStartedAt = performance.now();
   restorePaneScroll(state.paneScroll, app);
+  restoreChatThreadScroll(app, chatScroll);
   restoreMs = performance.now() - stepStartedAt;
 
   stepStartedAt = performance.now();
@@ -621,22 +663,27 @@ registerHostPlugin(progressBarPluginRegistration);
 registerHostPlugin(scriptingPluginRegistration);
 
 // Run scripting blocks once per loaded document. Re-runs whenever the
-// document reference changes (file open, example load, new doc, etc.).
+// document reference or script source changes (file open, raw edit, new doc, etc.).
 let lastScriptedDocument: typeof state.document | null = null;
+let lastScriptedSignature = '';
 
 async function runScriptingBlocksIfNeeded(): Promise<void> {
   if (state.currentView !== 'viewer' && state.currentView !== 'ai') {
     return;
   }
-  if (state.document === lastScriptedDocument) {
-    return;
-  }
-  lastScriptedDocument = state.document;
-
   const targets: Array<{ sectionKey: string; blockId: string; source: string; pluginVersion: string; componentId: string }> = [];
   for (const section of state.document.sections) {
     visitSectionForScripts(section, targets);
   }
+  const signature = targets
+    .map((target) => `${target.sectionKey}\u0000${target.blockId}\u0000${target.pluginVersion}\u0000${target.source}`)
+    .join('\u0001');
+  if (state.document === lastScriptedDocument && signature === lastScriptedSignature) {
+    return;
+  }
+  lastScriptedDocument = state.document;
+  lastScriptedSignature = signature;
+
   if (targets.length === 0) {
     return;
   }
@@ -651,7 +698,7 @@ async function runScriptingBlocksIfNeeded(): Promise<void> {
     const mountSelector = `[data-scripting-mount="true"][data-scripting-section-key="${cssEscape(target.sectionKey)}"][data-scripting-block-id="${cssEscape(target.blockId)}"]`;
     const mount = app.querySelector<HTMLElement>(mountSelector);
     if (mount) {
-      setScriptingResult(mount, result);
+      setScriptingResult(mount, result, target.source);
     }
   }
 }

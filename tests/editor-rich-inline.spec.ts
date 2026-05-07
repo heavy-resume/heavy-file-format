@@ -156,6 +156,34 @@ test('rich toolbar preserves visible spaces while typing', async ({ page }) => {
   await expect(editor).toContainText('Hello world');
 });
 
+test('rich editor wraps long text without expanding its block', async ({ page }) => {
+  await page.setViewportSize({ width: 520, height: 720 });
+  await page.goto('/');
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('.rich-editor').first();
+  const block = page.locator('.editor-block').first();
+
+  await editor.evaluate((node) => {
+    node.innerHTML = '<p><br></p>';
+    const paragraph = node.querySelector('p');
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(paragraph!);
+    range.collapse(true);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+  });
+
+  const widthBefore = await block.evaluate((node) => node.getBoundingClientRect().width);
+  await page.keyboard.type('supercalifragilisticexpialidocious'.repeat(8));
+  const widthAfter = await block.evaluate((node) => node.getBoundingClientRect().width);
+
+  expect(widthAfter).toBeLessThanOrEqual(widthBefore + 1);
+  await expect(editor.locator('p')).toHaveCSS('overflow-wrap', 'anywhere');
+});
+
 test('inline code autoformats from backticks and escapes with arrow or click', async ({ page }) => {
   await page.goto('/');
 
@@ -211,6 +239,35 @@ test('inline code autoformats from backticks and escapes with arrow or click', a
   await page.keyboard.type(' plain');
   await expect(editor.locator('p code')).toHaveText('clickme');
   await expect(editor.locator('p')).toContainText('clickme plain');
+});
+
+test('code button wraps selected text as inline code and preserves angle brackets', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('.rich-editor').first();
+
+  await editor.evaluate((node) => {
+    node.innerHTML = '<p>Use &lt;tag&gt; now</p>';
+    const textNode = node.querySelector('p')?.firstChild;
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.setStart(textNode!, 4);
+    range.setEnd(textNode!, 9);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+  });
+
+  await page.getByRole('button', { name: 'Code block' }).first().click();
+
+  await expect(editor.locator('p code')).toHaveText('<tag>');
+  await expect(editor.locator('p')).toHaveText('Use <tag> now');
+  await expect(editor.locator('pre')).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await expect(page.locator('#rawEditor')).toContainText('Use `<tag>` now');
+  await page.getByRole('button', { name: 'Basic' }).click();
 });
 
 test('link toolbar button and keyboard shortcut open the link modal and apply links', async ({ page }) => {

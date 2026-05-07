@@ -9,6 +9,7 @@ import { getRenderApp, state } from '../state';
 import type { DocumentAttachment, VisualDocument } from '../types';
 import { DB_ATTACHMENT_ID, getAttachment, setAttachment } from '../attachments';
 import { DB_TABLE_PLUGIN_ID } from './registry';
+import { validateDbTableObjectName } from './db-table-identifiers';
 import type { ScriptingDbApi } from './scripting/runtime';
 
 import './db-table.css';
@@ -160,6 +161,10 @@ function renderDbTablePluginContent(
 ): string {
   if (tableName.trim().length === 0) {
     return '<div class="plugin-placeholder">Choose a table name to start working with this DB table.</div>';
+  }
+  const tableNameError = validateDbTableObjectName(tableName);
+  if (tableNameError) {
+    return `<div class="plugin-placeholder">DB table error: ${helpers.escapeHtml(tableNameError)}</div>`;
   }
 
   if (runtime.loadError) {
@@ -455,8 +460,9 @@ export async function addDbTableRow(tableName: string): Promise<void> {
 
 export async function createDbTable(tableName: string): Promise<boolean> {
   const trimmed = tableName.trim();
-  if (trimmed.length === 0) {
-    throw new Error('Choose a table name before creating a DB table.');
+  const tableNameError = validateDbTableObjectName(trimmed);
+  if (tableNameError) {
+    throw new Error(tableNameError);
   }
   const db = await getLoadedDatabase();
   const created = ensureTableExists(db, trimmed);
@@ -1390,6 +1396,39 @@ function persistScriptingDatabase(document: VisualDocument, db: SqlJsDatabase): 
     },
     db.export()
   );
+  if (runtime.documentRef === document) {
+    resetRuntime();
+    runtime.documentRef = document;
+  }
+}
+
+export async function validateDocumentDbSql(
+  document: VisualDocument,
+  sql: string,
+  mode: 'query' | 'execute'
+): Promise<void> {
+  const trimmed = String(sql ?? '').trim().replace(/;+\s*$/u, '');
+  if (trimmed.length === 0) {
+    throw new Error(`doc.db.${mode} requires non-empty SQL.`);
+  }
+  const leading = trimmed.match(/^[A-Za-z]+/)?.[0]?.toUpperCase() ?? '';
+  if (mode === 'query' && leading !== 'SELECT' && leading !== 'WITH') {
+    throw new Error('doc.db.query should use read-only SELECT/WITH SQL.');
+  }
+  if (mode === 'execute' && (leading === 'SELECT' || leading === 'WITH')) {
+    throw new Error('Use doc.db.query for read-only SELECT/WITH SQL. doc.db.execute is for writes.');
+  }
+  const db = await openDocumentDatabase(document);
+  try {
+    const statement = db.prepare(trimmed);
+    statement.free();
+  } finally {
+    try {
+      db.close();
+    } catch {
+      // Ignore close failures for ephemeral lint databases.
+    }
+  }
 }
 
 export interface ScriptingDbRuntime {
@@ -1414,7 +1453,10 @@ export async function createScriptingDbRuntime(
       try {
         while (statement.step()) {
           const row = statement.getAsObject() as Record<string, unknown>;
-          rows.push(Object.fromEntries(columns.map((column) => [column, row[column] ?? null])));
+          rows.push(Object.fromEntries(columns.flatMap((column, index) => [
+            [column, row[column] ?? null],
+            [String(index), row[column] ?? null],
+          ])));
         }
       } finally {
         statement.free();

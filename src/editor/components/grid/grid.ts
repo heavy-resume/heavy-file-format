@@ -85,8 +85,7 @@ export const renderGridReader: ComponentReaderRenderer = (_section, block, helpe
     .map((item, index) => {
       const columnIndex = columns <= 1 ? 1 : (index % columns) + 1;
       const gridColumn = columns <= 1 ? '1 / -1' : `${columnIndex} / span 1`;
-      const placementClass = columns <= 1 ? ' is-single-track' : columnIndex === columns ? ' is-terminal-track' : ' is-flow-track';
-      return `<div class="reader-grid-cell${placementClass}" style="grid-column: ${helpers.escapeAttr(gridColumn)};">${helpers.renderReaderBlock(
+      return `<div class="reader-grid-cell" style="grid-column: ${helpers.escapeAttr(gridColumn)};">${helpers.renderReaderBlock(
         _section,
         item.block
       )}</div>`;

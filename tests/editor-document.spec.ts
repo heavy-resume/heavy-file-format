@@ -70,6 +70,20 @@ test('responsive preview controls resize only the document surface', async ({ pa
   expect(Math.round((await pane.boundingBox())?.width ?? 0)).toBe(Math.round(initialPaneWidth));
 });
 
+test('responsive preview applies to pullout document surfaces', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Resume Template' }).click();
+  await page.getByRole('button', { name: 'Phone 390' }).click();
+
+  await page.locator('.editor-sidebar-tab').click();
+  await expect.poll(async () => Math.round((await page.locator('.editor-sidebar-panel .hvy-surface').boundingBox())?.width ?? 0)).toBe(390);
+
+  await page.getByRole('button', { name: 'Viewer' }).click();
+  await page.locator('.viewer-sidebar-tab').click();
+  await expect.poll(async () => Math.round((await page.locator('.viewer-sidebar-panel .hvy-surface').boundingBox())?.width ?? 0)).toBe(390);
+});
+
 test('responsive preview applies container query defaults', async ({ page }) => {
   await page.goto('/');
 

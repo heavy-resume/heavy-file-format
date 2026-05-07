@@ -139,7 +139,8 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     if (sidebarSections.length === 0) {
       return '<div class="muted editor-sidebar-empty">Move sections here using the sidebar button.</div>';
     }
-    return sidebarSections.map((section) => renderEditorSection(section, sections)).join('');
+    const surfaceAttrs = renderResponsiveSurfaceAttrs('');
+    return `<div${surfaceAttrs}><div class="editor-tree-body editor-sidebar-tree-body">${sidebarSections.map((section) => renderEditorSection(section, sections)).join('')}</div></div>`;
   }
 
   function renderSidebarHelpBalloon(sections: VisualSection[]): string {

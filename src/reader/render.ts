@@ -129,7 +129,11 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
   function renderSidebarSections(sections: VisualSection[]): string {
     resetReaderTableStripeSequence();
     const sidebarSections = sections.filter((section) => !section.isGhost && section.location === 'sidebar');
-    return sidebarSections.map((section) => renderReaderSection(section)).join('');
+    if (sidebarSections.length === 0) {
+      return '';
+    }
+    const surfaceAttrs = renderResponsiveSurfaceAttrs('');
+    return `<div${surfaceAttrs}><div class="reader-sidebar-surface-body">${sidebarSections.map((section) => renderReaderSection(section)).join('')}</div></div>`;
   }
 
   function renderReaderSection(section: VisualSection): string {

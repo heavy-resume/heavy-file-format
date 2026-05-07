@@ -21,6 +21,7 @@
 }
 
 .table-editor-frame {
+  max-width: 100%;
   overflow: auto;
   border: 1px solid var(--hvy-border);
   border-radius: 12px;
@@ -30,7 +31,7 @@
 .table-editor-grid {
   width: 100%;
   border-collapse: collapse;
-  min-width: 540px;
+  min-width: min(100%, 540px);
   table-layout: fixed;
 }
 
@@ -179,12 +180,14 @@
 
 .reader-table {
   width: 100%;
+  max-width: 100%;
   border-collapse: collapse;
   table-layout: fixed;
   min-height: 1ch;
 }
 
 .reader-table-frame {
+  width: 100%;
   max-width: 100%;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
@@ -197,6 +200,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  overflow-wrap: anywhere;
   min-height: 1ch;
 }
 
@@ -232,7 +236,29 @@
 }
 
 @container hvy-surface (inline-size < 48rem) {
+  .table-editor-grid,
   .reader-table {
-    min-width: 36rem;
+    min-width: 100%;
+  }
+
+  .reader-table th,
+  .reader-table td {
+    white-space: normal;
+    text-overflow: clip;
+  }
+}
+
+@container hvy-surface (inline-size < 30rem) {
+  .table-editor-grid {
+    font-size: 0.84rem;
+  }
+
+  .reader-table {
+    font-size: 0.86rem;
+  }
+
+  .reader-table th,
+  .reader-table td {
+    padding: 0.28rem 0.35rem;
   }
 }

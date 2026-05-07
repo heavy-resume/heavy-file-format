@@ -128,6 +128,33 @@ test('responsive preview applies container query defaults', async ({ page }) => 
   await expect(editor.locator('.hvy-short-value')).toBeVisible();
 });
 
+test('tables resize inside narrow responsive preview containers', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"table-test"}-->
+#! Table Test
+
+<!--hvy:table {"id":"narrow-table","tableColumns":["Tool","Description","Status"],"tableShowHeader":true,"tableRows":[{"cells":["Heavy File Format","Responsive table text should wrap inside the phone preview instead of pushing the table wider than its container.","In progress"]}]}-->
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Viewer' }).click();
+  await page.getByRole('button', { name: 'Phone 390' }).click();
+
+  const pane = page.locator('.reader-pane');
+  const frame = page.locator('.reader-table-frame');
+  const table = page.locator('.reader-table');
+
+  await expect.poll(async () => Math.round((await pane.boundingBox())?.width ?? 0)).toBe(390);
+  await expect.poll(async () => Math.round((await frame.boundingBox())?.width ?? 0)).toBeLessThan(360);
+  await expect.poll(async () => Math.round((await table.boundingBox())?.width ?? 0)).toBeLessThanOrEqual(Math.round((await frame.boundingBox())?.width ?? 0) + 1);
+  await expect(table.locator('td').nth(1)).toHaveCSS('white-space', 'normal');
+});
+
 test('document ai context is editable metadata and keeps focus while typing', async ({ page }) => {
   await page.goto('/');
 

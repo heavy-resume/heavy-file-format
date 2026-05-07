@@ -407,7 +407,7 @@ function renderApp(): void {
   const isAdvancedEditor = state.editorMode === 'advanced';
   const isRawEditor = state.editorMode === 'raw';
   const isCliEditor = state.editorMode === 'cli';
-  const canPreviewSurface = !isRawEditor && !isCliEditor;
+  const canPreviewSurface = !isEditorView || (!isRawEditor && !isCliEditor);
 
   stepStartedAt = performance.now();
   const templateFields = getTemplateFields(state.document.meta);

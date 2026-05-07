@@ -26,6 +26,7 @@ function createTableBlock(rows: string[][], options?: { showHeader?: boolean }):
       tags: '',
       description: '',
       placeholder: '',
+      fillIn: false,
       metaOpen: false,
       xrefTitle: '',
       xrefDetail: '',

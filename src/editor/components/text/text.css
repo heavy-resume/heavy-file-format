@@ -8,6 +8,23 @@
   display: block;
 }
 
+.text-fill-in-editor {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.text-fill-in-editor input {
+  min-width: 12rem;
+  flex: 1 1 12rem;
+}
+
+.text-fill-in-scaffold {
+  color: var(--hvy-text-muted);
+  white-space: pre-wrap;
+}
+
 .editor-block-title {
   position: absolute;
   left: 0;

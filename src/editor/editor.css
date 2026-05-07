@@ -1026,7 +1026,8 @@
 
 .editor-grid label:not(.checkbox-label),
 .editor-row label:not(.checkbox-label),
-.modal-panel label:not(.checkbox-label) {
+.modal-panel label:not(.checkbox-label),
+.block-meta-field {
   display: grid;
   gap: 0.24rem;
   font-size: 0.9rem;

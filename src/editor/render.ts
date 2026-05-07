@@ -32,6 +32,7 @@ import { sanitizeInlineCss } from '../css-sanitizer';
 import { SCRIPTING_PLUGIN_ID } from '../plugins/registry';
 import { getScriptingPluginVersion } from '../plugins/scripting/version';
 import { renderAddComponentPicker } from './component-picker';
+import { hasTextFillInMarker } from '../text-fill-in';
 
 hljs.registerLanguage('bash', bash);
 hljs.registerLanguage('sh', bash);
@@ -908,6 +909,11 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           />
         </label>
         ${
+          component === 'text'
+            ? renderTextFillInControls(sectionKey, block)
+            : ''
+        }
+        ${
           component === 'component-list'
             ? `<label>
           <span>List Item Label</span>
@@ -935,6 +941,33 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           >${deps.escapeHtml(block.schema.description)}</textarea>
         </label>
         ${scriptingVersionField}
+      </div>
+    `;
+  }
+
+  function renderTextFillInControls(sectionKey: string, block: VisualBlock): string {
+    const hasMarker = hasTextFillInMarker(block.text);
+    return `
+      <div class="block-meta-field">
+        <span>Fill-in Placeholder</span>
+        <div class="toolbar-segment">
+          <button
+            type="button"
+            class="${hasMarker ? 'ghost' : 'secondary'}"
+            data-action="set-text-fill-in"
+            data-section-key="${deps.escapeAttr(sectionKey)}"
+            data-block-id="${deps.escapeAttr(block.id)}"
+            ${hasMarker ? 'disabled' : ''}
+          >Set</button>
+          <button
+            type="button"
+            class="${hasMarker ? 'secondary' : 'ghost'}"
+            data-action="remove-text-fill-in"
+            data-section-key="${deps.escapeAttr(sectionKey)}"
+            data-block-id="${deps.escapeAttr(block.id)}"
+            ${hasMarker ? '' : 'disabled'}
+          >Remove</button>
+        </div>
       </div>
     `;
   }

@@ -95,6 +95,42 @@ hvy_version: 0.1
   await expect(page.locator('#editorTree')).not.toContainText('Expanded detail');
 });
 
+test('advanced text fill-in controls constrain basic editing to the value marker', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"header"}-->
+#! Header
+
+ <!--hvy:text {"id":"name","align":"center","placeholder":"Name"}-->
+  # Name
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+  await page.getByRole('button', { name: 'Advanced' }).click();
+
+  await page.locator('.editor-block-passive', { has: page.locator('#name') }).click();
+  await expect(page.locator('[data-action="open-component-meta"][data-block-id]')).toBeVisible();
+  await page.locator('[data-action="open-component-meta"][data-block-id]').click();
+  await page.locator('[data-action="set-text-fill-in"]').click();
+  await page.getByRole('button', { name: 'Close' }).click();
+
+  await expect(page.locator('[data-field="text-fill-in-value"]')).toBeVisible();
+  await expect(page.locator('.text-fill-in-scaffold')).toContainText(['# ']);
+  await page.locator('[data-field="text-fill-in-value"]').fill('Ada Lovelace');
+  await page.getByRole('button', { name: 'Apply' }).click();
+
+  await expect(page.locator('#editorTree h1')).toHaveText('Ada Lovelace');
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await expect(page.locator('#rawEditor')).toContainText('# Ada Lovelace');
+  await expect(page.locator('#rawEditor')).not.toContainText('<!-- value -->');
+  await expect(page.locator('#rawEditor')).not.toContainText('"fillIn"');
+});
+
 test('editor pullout help balloon lists loaded sidebar sections', async ({ page }) => {
   await page.goto('/');
 

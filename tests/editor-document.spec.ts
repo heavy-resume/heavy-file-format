@@ -74,7 +74,7 @@ test('responsive preview controls resize document frame without resizing app chr
   const phoneSurfaceBox = await surface.boundingBox();
   expect(phonePaneBox).not.toBeNull();
   expect(phoneSurfaceBox).not.toBeNull();
-  expect(Math.round(phoneSurfaceBox!.x + phoneSurfaceBox!.width)).toBeLessThanOrEqual(Math.round(phonePaneBox!.x + phonePaneBox!.width) + 1);
+  expect(Math.round(phonePaneBox!.x + phonePaneBox!.width - (phoneSurfaceBox!.x + phoneSurfaceBox!.width))).toBeGreaterThanOrEqual(8);
   expect(Math.round((await workspace.boundingBox())?.width ?? 0)).toBe(Math.round(initialWorkspaceWidth));
 
   await page.getByRole('button', { name: 'Tablet 768' }).click();
@@ -82,11 +82,29 @@ test('responsive preview controls resize document frame without resizing app chr
   await expect.poll(async () => Math.round((await previewFrame.boundingBox())?.width ?? 0)).toBe(768);
   await expect.poll(async () => Math.round((await surface.boundingBox())?.width ?? 0)).toBeGreaterThan(700);
   expect(Math.round((await surface.boundingBox())?.width ?? 0)).toBeLessThan(768);
+  const tabletPaneBox = await pane.boundingBox();
+  const tabletSurfaceBox = await surface.boundingBox();
+  expect(tabletPaneBox).not.toBeNull();
+  expect(tabletSurfaceBox).not.toBeNull();
+  expect(Math.round(tabletPaneBox!.x + tabletPaneBox!.width - (tabletSurfaceBox!.x + tabletSurfaceBox!.width))).toBeGreaterThanOrEqual(10);
   expect(Math.round((await workspace.boundingBox())?.width ?? 0)).toBe(Math.round(initialWorkspaceWidth));
 
   await page.getByRole('button', { name: 'Full' }).click();
   await expect.poll(async () => Math.round((await pane.boundingBox())?.width ?? 0)).toBe(Math.round(initialPaneWidth));
   await expect.poll(async () => Math.round((await previewFrame.boundingBox())?.width ?? 0)).toBeGreaterThan(768);
+  const fullPaneBox = await pane.boundingBox();
+  const fullSurfaceBox = await surface.boundingBox();
+  expect(fullPaneBox).not.toBeNull();
+  expect(fullSurfaceBox).not.toBeNull();
+  expect(Math.round(fullPaneBox!.x + fullPaneBox!.width - (fullSurfaceBox!.x + fullSurfaceBox!.width))).toBeGreaterThanOrEqual(12);
+
+  await page.getByRole('button', { name: 'Desktop' }).click();
+  await expect.poll(async () => Math.round((await pane.boundingBox())?.width ?? 0)).toBeGreaterThan(768);
+  const desktopPaneBox = await pane.boundingBox();
+  const desktopSurfaceBox = await surface.boundingBox();
+  expect(desktopPaneBox).not.toBeNull();
+  expect(desktopSurfaceBox).not.toBeNull();
+  expect(Math.round(desktopPaneBox!.x + desktopPaneBox!.width - (desktopSurfaceBox!.x + desktopSurfaceBox!.width))).toBeGreaterThanOrEqual(12);
 });
 
 test('responsive preview applies to pullout document surfaces', async ({ page }) => {

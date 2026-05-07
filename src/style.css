@@ -4,6 +4,7 @@
   background: radial-gradient(circle at 10% 20%, var(--hvy-bg), var(--hvy-bg-alt) 48%, var(--hvy-bg-alt));
   --hvy-sidebar-tab-size: 2.9rem;
   --hvy-sidebar-footprint: 3.25rem;
+  --hvy-document-edge-gutter: 0.9rem;
 }
 
 * {
@@ -280,11 +281,13 @@ button.tiny {
 .hvy-preview-frame-phone {
   --hvy-sidebar-tab-size: 2.15rem;
   --hvy-sidebar-footprint: 2.35rem;
+  --hvy-document-edge-gutter: 0.55rem;
 }
 
 .hvy-preview-frame-tablet {
   --hvy-sidebar-tab-size: 2.55rem;
   --hvy-sidebar-footprint: 2.8rem;
+  --hvy-document-edge-gutter: 0.75rem;
 }
 
 .pane.hvy-preview-frame-phone,
@@ -332,7 +335,8 @@ button.tiny {
   height: 100%;
   overflow: auto;
   padding-left: var(--hvy-sidebar-footprint);
-  scrollbar-gutter: stable;
+  padding-right: var(--hvy-document-edge-gutter);
+  scrollbar-gutter: stable both-edges;
 }
 
 .reader-document-body {

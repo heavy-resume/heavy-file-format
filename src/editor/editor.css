@@ -11,7 +11,8 @@
   height: 100%;
   overflow: auto;
   padding-left: var(--hvy-sidebar-footprint);
-  scrollbar-gutter: stable;
+  padding-right: var(--hvy-document-edge-gutter);
+  scrollbar-gutter: stable both-edges;
 }
 
 .editor-tree-body {

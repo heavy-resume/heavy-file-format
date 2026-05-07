@@ -14,7 +14,7 @@ export interface VisualDocument {
   attachments: DocumentAttachment[];
 }
 
-export type ChatProvider = 'openai' | 'anthropic';
+export type ChatProvider = 'openai' | 'anthropic' | 'qwen';
 
 export interface ChatMessage {
   id: string;
@@ -48,6 +48,7 @@ export interface ChatCliSimState {
   requestJson: string;
   responseJson: string;
   responseOutput: string;
+  toolTurn?: unknown;
   reasoningSummary: string;
   commandResultMessage: string;
   turnState: unknown | null;

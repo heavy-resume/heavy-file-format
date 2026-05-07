@@ -4,9 +4,10 @@ import { advanceDocumentEditCliSimStep, appendUserChatMessage, buildDocumentEdit
 import { deserializeDocument, serializeDocument } from '../src/serialization';
 import type { ChatMessage, ChatSettings } from '../src/types';
 
-const { requestChatCompletionMock, requestProxyCompletionMock, runQaToolLoopMock, writeChatCliCommandTraceMock, writeChatCliUserQueryTraceMock } = vi.hoisted(() => ({
+const { requestChatCompletionMock, requestProxyCompletionMock, requestProxyToolTurnMock, runQaToolLoopMock, writeChatCliCommandTraceMock, writeChatCliUserQueryTraceMock } = vi.hoisted(() => ({
   requestChatCompletionMock: vi.fn(),
   requestProxyCompletionMock: vi.fn(),
+  requestProxyToolTurnMock: vi.fn(),
   runQaToolLoopMock: vi.fn(),
   writeChatCliCommandTraceMock: vi.fn(),
   writeChatCliUserQueryTraceMock: vi.fn(),
@@ -31,6 +32,7 @@ vi.mock('../src/chat/chat', () => ({
   },
   requestChatCompletion: requestChatCompletionMock,
   requestProxyCompletion: requestProxyCompletionMock,
+  requestProxyToolTurn: requestProxyToolTurnMock,
 }));
 
 vi.mock('../src/ai-qa', () => ({
@@ -46,6 +48,18 @@ vi.mock('../src/chat-cli/chat-cli-dev-trace', () => ({
 beforeEach(() => {
   requestChatCompletionMock.mockReset();
   requestProxyCompletionMock.mockReset();
+  requestProxyToolTurnMock.mockReset();
+  requestProxyToolTurnMock.mockImplementation(async (params: { settings: ChatSettings }) => ({
+    output: await requestProxyCompletionMock(params),
+    reasoningSummary: '',
+    toolCalls: [],
+    nativeMessages: [],
+    toolState: params.settings.provider === 'anthropic'
+      ? { provider: 'anthropic', system: '', messages: [] }
+      : params.settings.provider === 'qwen'
+      ? { provider: 'qwen', messages: [] }
+      : { provider: 'openai', input: [] },
+  }));
   runQaToolLoopMock.mockReset();
   writeChatCliCommandTraceMock.mockReset();
   writeChatCliUserQueryTraceMock.mockReset();
@@ -328,6 +342,79 @@ test('requestDocumentEditChatTurn runs the CLI edit loop for document chat', asy
     expect.stringContaining('No intent matches found'),
     undefined,
   ]);
+  expect(result.messages.at(-1)).toEqual(expect.objectContaining({
+    role: 'assistant',
+    content: 'Created the chore section.',
+  }));
+});
+
+test('requestDocumentEditChatTurn can run native provider tool calls', async () => {
+  requestProxyCompletionMock.mockReset();
+  requestProxyToolTurnMock
+    .mockResolvedValueOnce({
+      output: '',
+      reasoningSummary: 'Create the section.',
+      toolCalls: [
+        {
+          id: 'call_1',
+          name: 'run_hvy_cli',
+          arguments: { command: 'hvy insert 0 section /body chores "Chores"' },
+        },
+        {
+          id: 'call_2',
+          name: 'run_hvy_cli',
+          arguments: { command: 'hvy insert 0 text /body/chores note' },
+        },
+      ],
+      nativeMessages: [
+        { type: 'function_call', call_id: 'call_1', name: 'run_hvy_cli', arguments: '{"command":"hvy insert 0 section /body chores \\"Chores\\""}' },
+        { type: 'function_call', call_id: 'call_2', name: 'run_hvy_cli', arguments: '{"command":"hvy insert 0 text /body/chores note"}' },
+      ],
+      toolState: { provider: 'openai', input: [] },
+    })
+    .mockResolvedValueOnce({
+      output: '',
+      reasoningSummary: '',
+      toolCalls: [{
+        id: 'call_2',
+        name: 'finish_task',
+        arguments: { summary: 'Created the chore section.' },
+      }],
+      nativeMessages: [{ type: 'function_call', call_id: 'call_2', name: 'finish_task', arguments: '{"summary":"Created the chore section."}' }],
+      toolState: { provider: 'openai', input: [] },
+    });
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+  const document = deserializeDocument('---\nhvy_version: 0.1\n---\n', '.hvy');
+  const onProgress = vi.fn();
+
+  const result = await requestDocumentEditChatTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Add a chore section.',
+    onProgress,
+  });
+
+  expect(result.error).toBeNull();
+  expect(serializeDocument(document)).toContain('#! Chores');
+  expect(requestProxyCompletionMock).not.toHaveBeenCalled();
+  expect(requestProxyToolTurnMock.mock.calls[0]?.[0]).toEqual(expect.objectContaining({
+    tools: expect.arrayContaining([
+      expect.objectContaining({ name: 'run_hvy_cli' }),
+      expect.objectContaining({ name: 'finish_task' }),
+      expect.objectContaining({ name: 'ask_user' }),
+    ]),
+  }));
+  expect(requestProxyToolTurnMock.mock.calls[1]?.[0]?.toolState).toEqual(expect.objectContaining({
+    provider: 'openai',
+    input: expect.arrayContaining([
+      { type: 'function_call', call_id: 'call_1', name: 'run_hvy_cli', arguments: '{"command":"hvy insert 0 section /body chores \\"Chores\\""}' },
+      expect.objectContaining({ type: 'function_call_output', call_id: 'call_1' }),
+      { type: 'function_call', call_id: 'call_2', name: 'run_hvy_cli', arguments: '{"command":"hvy insert 0 text /body/chores note"}' },
+      expect.objectContaining({ type: 'function_call_output', call_id: 'call_2' }),
+    ]),
+  }));
+  expect(onProgress.mock.calls.map((call) => call[0].content)).toContain('$ hvy insert 0 section /body chores "Chores"');
   expect(result.messages.at(-1)).toEqual(expect.objectContaining({
     role: 'assistant',
     content: 'Created the chore section.',

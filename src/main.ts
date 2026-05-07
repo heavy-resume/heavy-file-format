@@ -156,7 +156,7 @@ function renderAiEditPopover(): string {
   }
 
   const popupStyle = `left: ${state.aiEdit.popupX}px; top: ${state.aiEdit.popupY}px;`;
-  const providerLabel = state.chat.settings.provider === 'openai' ? 'OpenAI' : 'Anthropic';
+  const providerLabel = state.chat.settings.provider === 'openai' ? 'OpenAI' : state.chat.settings.provider === 'qwen' ? 'Qwen' : 'Anthropic';
 
   return `
     <section class="ai-edit-popover" style="${escapeAttr(popupStyle)}" aria-label="Request AI component changes">
@@ -172,6 +172,7 @@ function renderAiEditPopover(): string {
           <select data-field="ai-provider" aria-label="AI edit provider">
             <option value="openai"${state.chat.settings.provider === 'openai' ? ' selected' : ''}>OpenAI</option>
             <option value="anthropic"${state.chat.settings.provider === 'anthropic' ? ' selected' : ''}>Anthropic</option>
+            <option value="qwen"${state.chat.settings.provider === 'qwen' ? ' selected' : ''}>Qwen</option>
           </select>
         </label>
 
@@ -181,7 +182,7 @@ function renderAiEditPopover(): string {
             type="text"
             data-field="ai-model"
             value="${escapeAttr(state.chat.settings.model)}"
-            placeholder="${escapeAttr(providerLabel === 'OpenAI' ? 'gpt-5-mini' : 'claude-sonnet-4-6')}"
+            placeholder="${escapeAttr(providerLabel === 'OpenAI' ? 'gpt-5-mini' : providerLabel === 'Qwen' ? 'qwen-plus' : 'claude-sonnet-4-6')}"
             autocapitalize="off"
             autocomplete="off"
             spellcheck="false"

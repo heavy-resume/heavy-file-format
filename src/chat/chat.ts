@@ -14,10 +14,12 @@ import { isXrefTargetValid } from '../xref-ops';
 import { getDocumentComponentDefaultCss } from '../document-component-defaults';
 import { wrapChatResponseAsDocument } from './chat-response-document';
 import { getDocumentAiContext } from '../document-ai-context';
+import type { ProviderToolCall, ProviderToolDefinition, ProviderToolState } from './provider-tools';
 
 const CHAT_STORAGE_KEY = 'hvy-chat-settings';
 const DEFAULT_OPENAI_MODEL = 'gpt-5-mini';
 const DEFAULT_ANTHROPIC_MODEL = 'claude-sonnet-4-6';
+const DEFAULT_QWEN_MODEL = 'qwen-plus';
 export const DEFAULT_OPENAI_COMPACTION_MODEL = 'gpt-5.4-nano';
 export const HVY_AI_RESPONSE_FORMAT_INSTRUCTIONS = aiResponseFormatInstructions;
 
@@ -40,6 +42,8 @@ interface ProxyChatRequest {
   context: string;
   mode: 'qa' | 'component-edit' | 'document-edit';
   traceRunId?: string;
+  tools?: ProviderToolDefinition[];
+  toolState?: ProviderToolState;
 }
 
 interface ProxyChatRequestInput extends Omit<ProxyChatRequest, 'messages'> {
@@ -51,6 +55,9 @@ interface ProxyChatResponse {
   output: string;
   reasoningSummary?: string;
   usage?: ChatTokenUsage;
+  toolCalls?: ProviderToolCall[];
+  nativeMessages?: unknown[];
+  toolState?: ProviderToolState;
 }
 
 export interface ProxyCompletionParams {
@@ -66,6 +73,20 @@ export interface ProxyCompletionParams {
   onReasoningSummary?: (summary: string) => void;
   onTokenUsage?: (usage: ChatTokenUsage) => void;
   signal?: AbortSignal;
+}
+
+export interface ProxyToolTurnParams extends Omit<ProxyCompletionParams, 'responseInstructions'> {
+  tools: ProviderToolDefinition[];
+  toolState?: ProviderToolState;
+}
+
+export interface ProxyToolTurn {
+  output: string;
+  reasoningSummary: string;
+  usage?: ChatTokenUsage;
+  toolCalls: ProviderToolCall[];
+  nativeMessages: unknown[];
+  toolState: ProviderToolState;
 }
 
 export interface AgentLoopTraceEventParams {
@@ -162,7 +183,6 @@ export function renderChatPanel(
   canCopyToHvy = false
 ): string {
   const context = buildChatDocumentContext(document);
-  const currentProviderLabel = chat.settings.provider === 'openai' ? 'OpenAI' : 'Anthropic';
   const hasDraft = chat.draft.trim().length > 0;
   const missingModel = chat.settings.model.trim().length === 0;
   const isDocumentEdit = mode === 'document-edit';
@@ -240,6 +260,7 @@ export function renderChatPanel(
                      <select data-field="chat-provider" aria-label="Chat provider" ${chat.isSending ? 'disabled' : ''}>
                        <option value="openai"${chat.settings.provider === 'openai' ? ' selected' : ''}>OpenAI</option>
                        <option value="anthropic"${chat.settings.provider === 'anthropic' ? ' selected' : ''}>Anthropic</option>
+                       <option value="qwen"${chat.settings.provider === 'qwen' ? ' selected' : ''}>Qwen</option>
                      </select>
                    </label>
 
@@ -249,7 +270,7 @@ export function renderChatPanel(
                        type="text"
                        data-field="chat-model"
                        value="${deps.escapeAttr(chat.settings.model)}"
-                       placeholder="${deps.escapeAttr(currentProviderLabel === 'OpenAI' ? DEFAULT_OPENAI_MODEL : DEFAULT_ANTHROPIC_MODEL)}"
+                       placeholder="${deps.escapeAttr(getDefaultModelForProvider(chat.settings.provider))}"
                        autocapitalize="off"
                        autocomplete="off"
                        spellcheck="false"
@@ -446,6 +467,69 @@ export async function requestProxyCompletion(params: ProxyCompletionParams): Pro
   return output;
 }
 
+export async function requestProxyToolTurn(params: ProxyToolTurnParams): Promise<ProxyToolTurn> {
+  const requestPayload = buildProxyChatRequest({
+    provider: params.settings.provider,
+    model: params.settings.model,
+    messages: params.messages,
+    context: params.context,
+    systemInstructions: params.systemInstructions,
+    mode: params.mode,
+    traceRunId: params.traceRunId,
+    tools: params.tools,
+    toolState: params.toolState,
+  });
+  const debugLabel = params.debugLabel?.trim() || 'chat-tools';
+
+  console.debug(`[hvy:${debugLabel}] client native tool request`, {
+    provider: requestPayload.provider,
+    model: requestPayload.model,
+    toolCount: params.tools.length,
+    hasToolState: !!params.toolState,
+  });
+
+  const response = await fetch('/api/chat', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(requestPayload),
+    signal: params.signal,
+  });
+
+  const payload = await readJsonResponse(response);
+  console.debug(`[hvy:${debugLabel}] client native tool response`, {
+    ok: response.ok,
+    status: response.status,
+    payload,
+  });
+  if (!response.ok) {
+    throw new Error(extractProxyError(payload, 'Chat tool request failed.'));
+  }
+
+  const typed = payload as ProxyChatResponse | null;
+  if (!typed?.toolState || !Array.isArray(typed.toolCalls) || !Array.isArray(typed.nativeMessages)) {
+    throw new Error('Proxy returned an invalid native tool turn.');
+  }
+  const output = typeof typed.output === 'string' ? typed.output.trim() : '';
+  const reasoningSummary = typeof typed.reasoningSummary === 'string' ? typed.reasoningSummary.trim() : '';
+  if (reasoningSummary) {
+    params.onReasoningSummary?.(reasoningSummary);
+  }
+  const usage = normalizeProxyTokenUsage(typed.usage);
+  if (usage) {
+    params.onTokenUsage?.(usage);
+  }
+  return {
+    output,
+    reasoningSummary,
+    ...(usage ? { usage } : {}),
+    toolCalls: typed.toolCalls,
+    nativeMessages: typed.nativeMessages,
+    toolState: typed.toolState,
+  };
+}
+
 function normalizeProxyTokenUsage(value: unknown): ChatTokenUsage | null {
   if (!value || typeof value !== 'object') {
     return null;
@@ -486,6 +570,12 @@ export function buildProxyChatRequest(request: ProxyChatRequestInput): ProxyChat
   if (request.traceRunId) {
     payload.traceRunId = request.traceRunId;
   }
+  if (request.tools) {
+    payload.tools = request.tools;
+  }
+  if (request.toolState) {
+    payload.toolState = request.toolState;
+  }
   return payload;
 }
 
@@ -511,9 +601,9 @@ export function traceAgentLoopEvent(params: AgentLoopTraceEventParams): void {
 }
 
 export function getEnvChatSettings(env: ImportMetaEnv = import.meta.env): ChatSettings {
-  const provider = env.VITE_HVY_CHAT_PROVIDER === 'anthropic' ? 'anthropic' : 'openai';
-  const providerDefaultModel = provider === 'anthropic' ? DEFAULT_ANTHROPIC_MODEL : DEFAULT_OPENAI_MODEL;
-  const providerSpecificModel = provider === 'anthropic' ? env.VITE_ANTHROPIC_MODEL : env.VITE_OPENAI_MODEL;
+  const provider = env.VITE_HVY_CHAT_PROVIDER === 'anthropic' || env.VITE_HVY_CHAT_PROVIDER === 'qwen' ? env.VITE_HVY_CHAT_PROVIDER : 'openai';
+  const providerDefaultModel = getDefaultModelForProvider(provider);
+  const providerSpecificModel = provider === 'anthropic' ? env.VITE_ANTHROPIC_MODEL : provider === 'qwen' ? env.VITE_QWEN_MODEL : env.VITE_OPENAI_MODEL;
   const model = firstNonEmptyString(env.VITE_HVY_CHAT_MODEL, providerSpecificModel, providerDefaultModel);
   const compactionProvider = env.VITE_HVY_CHAT_COMPACTION_PROVIDER === 'anthropic' ? 'anthropic' : 'openai';
   const compactionModel = firstNonEmptyString(env.VITE_HVY_CHAT_COMPACTION_MODEL, DEFAULT_OPENAI_COMPACTION_MODEL);
@@ -527,7 +617,7 @@ export function getEnvChatSettings(env: ImportMetaEnv = import.meta.env): ChatSe
 }
 
 export function getDefaultModelForProvider(provider: ChatSettings['provider']): string {
-  return provider === 'anthropic' ? DEFAULT_ANTHROPIC_MODEL : DEFAULT_OPENAI_MODEL;
+  return provider === 'anthropic' ? DEFAULT_ANTHROPIC_MODEL : provider === 'qwen' ? DEFAULT_QWEN_MODEL : DEFAULT_OPENAI_MODEL;
 }
 
 function getDefaultChatSettings(): ChatSettings {
@@ -536,7 +626,7 @@ function getDefaultChatSettings(): ChatSettings {
 
 function sanitizeChatSettings(settings: Partial<ChatSettings> | null | undefined, defaults: ChatSettings): ChatSettings {
   return {
-    provider: settings?.provider === 'anthropic' ? 'anthropic' : defaults.provider,
+    provider: settings?.provider === 'anthropic' || settings?.provider === 'qwen' ? settings.provider : defaults.provider,
     model: typeof settings?.model === 'string' && settings.model.trim().length > 0 ? settings.model : defaults.model,
     compactionProvider: settings?.compactionProvider === 'anthropic' ? 'anthropic' : defaults.compactionProvider ?? 'openai',
     compactionModel: typeof settings?.compactionModel === 'string' && settings.compactionModel.trim().length > 0

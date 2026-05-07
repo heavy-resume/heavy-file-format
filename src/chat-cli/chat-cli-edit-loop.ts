@@ -1,4 +1,4 @@
-import { DEFAULT_OPENAI_COMPACTION_MODEL, requestProxyCompletion } from '../chat/chat';
+import { DEFAULT_OPENAI_COMPACTION_MODEL, requestProxyCompletion, requestProxyToolTurn, type ProxyToolTurn } from '../chat/chat';
 import {
   collectHvyCliDiagnostics,
   formatHvyCliDiagnosticIssueLine,
@@ -13,6 +13,13 @@ import { createChatCliTraceRunId, writeChatCliCommandTrace, writeChatCliUserQuer
 import { createChatCliInterface } from './chat-cli-interface';
 import { buildChatCliPersistentInstructions } from './chat-cli-instructions';
 import type { HvyCliSession } from '../cli-core/commands';
+import {
+  appendProviderToolResultsToState,
+  type ProviderToolCall,
+  type ProviderToolDefinition,
+  type ProviderToolResult,
+  type ProviderToolState,
+} from '../chat/provider-tools';
 
 const CHAT_CLI_MAX_STEPS = 30;
 const CHAT_CLI_MAX_CONSECUTIVE_COMMAND_ERRORS = 3;
@@ -49,6 +56,7 @@ export interface ChatCliSimTurnState extends ChatCliInitialTurnRequest {
   diagnostics: HvyCliDiagnosticIssue[];
   urgency: number;
   selectedComponent?: ChatCliSelectedComponentFocus;
+  toolState?: ProviderToolState;
 }
 
 export interface ChatCliSimAdvanceResult extends ChatCliSimTurnState {
@@ -60,6 +68,7 @@ export interface ChatCliSimAdvanceResult extends ChatCliSimTurnState {
   lastCommandError?: string;
   terminalSummary?: string;
   askedQuestion?: string;
+  toolTurn?: ProxyToolTurn;
 }
 
 export interface ChatCliSelectedComponentFocus {
@@ -110,15 +119,16 @@ export async function runChatCliEditLoop(params: {
 
   for (let step = 0; step < CHAT_CLI_MAX_STEPS; step += 1) {
     throwIfAborted(params.signal);
-    const response = await requestProxyCompletion({
+    const nativeTurn = await requestProxyToolTurn({
       settings: params.settings,
       messages: turnState.messages,
       context: turnState.context,
-      responseInstructions: '',
       systemInstructions: turnState.systemInstructions,
       mode: 'document-edit',
       debugLabel: `chat-cli-edit:${step + 1}`,
       traceRunId,
+      tools: buildChatCliNativeToolDefinitions(),
+      ...(turnState.toolState ? { toolState: turnState.toolState } : {}),
       onReasoningSummary: params.onReasoningSummary,
       onTokenUsage: (usage) => {
         latestTokenUsage = usage;
@@ -127,11 +137,23 @@ export async function runChatCliEditLoop(params: {
       },
       signal: params.signal,
     });
-    const advanced = await advanceChatCliTurnState({
+    const advanced = nativeTurn.toolCalls.length > 0
+      ? await advanceChatCliNativeToolTurnState({
+          settings: params.settings,
+          document: params.document,
+          state: turnState,
+          turn: nativeTurn,
+          signal: params.signal,
+          onProgress: params.onProgress,
+          traceRunId,
+          writeTrace: true,
+          lastInputTokens: latestInputTokens,
+        })
+      : await advanceChatCliTurnState({
       settings: params.settings,
       document: params.document,
       state: turnState,
-      assistantOutput: response,
+      assistantOutput: nativeTurn.output,
       signal: params.signal,
       onProgress: params.onProgress,
       traceRunId,
@@ -226,9 +248,177 @@ export async function advanceChatCliSimTurnState(params: {
   document: VisualDocument;
   state: ChatCliSimTurnState;
   assistantOutput: string;
+  toolTurn?: ProxyToolTurn;
   signal?: AbortSignal;
 }): Promise<ChatCliSimAdvanceResult> {
-  return advanceChatCliTurnState(params);
+  return params.toolTurn
+    ? advanceChatCliNativeToolTurnState({ ...params, turn: params.toolTurn })
+    : advanceChatCliTurnState(params);
+}
+
+async function advanceChatCliNativeToolTurnState(params: {
+  settings?: ChatSettings;
+  document: VisualDocument;
+  state: ChatCliSimTurnState;
+  turn: ProxyToolTurn;
+  signal?: AbortSignal;
+  onProgress?: (content: string) => void;
+  traceRunId?: string;
+  writeTrace?: boolean;
+  lastInputTokens?: number;
+}): Promise<ChatCliSimAdvanceResult> {
+  throwIfAborted(params.signal);
+  const cli = createChatCliInterface(params.document, params.state.session);
+  const results: ProviderToolResult[] = [];
+  const commandOutputs: Array<{ command: string; output: string }> = [];
+  let mutated = false;
+  let batchHadSuccess = false;
+  let batchHadError = false;
+  let lastFailedCommand = '';
+  let lastCommandError = '';
+  let terminalSummary = '';
+  let askedQuestion = '';
+
+  for (const call of params.turn.toolCalls) {
+    if (call.name === 'finish_task') {
+      terminalSummary = getStringToolArg(call, 'summary');
+      results.push({ callId: call.id, output: JSON.stringify({ ok: true }) });
+      continue;
+    }
+    if (call.name === 'ask_user') {
+      askedQuestion = getStringToolArg(call, 'question');
+      results.push({ callId: call.id, output: JSON.stringify({ ok: true }) });
+      continue;
+    }
+    if (call.name !== 'run_hvy_cli') {
+      const output = JSON.stringify({
+        stdout: '',
+        stderr: `Unknown tool: ${call.name}`,
+        exit_code: 1,
+        cwd: cli.snapshot().cwd,
+        mutated: false,
+      });
+      results.push({ callId: call.id, output, isError: true });
+      batchHadError = true;
+      lastFailedCommand = call.name;
+      lastCommandError = `Unknown tool: ${call.name}`;
+      continue;
+    }
+
+    const command = getStringToolArg(call, 'command').trim();
+    params.onProgress?.(`$ ${command}`);
+    let stdout = '';
+    let stderr = '';
+    let exitCode = 0;
+    let commandMutated = false;
+    try {
+      if (!command) {
+        throw new Error('run_hvy_cli requires a non-empty command.');
+      }
+      const execution = await cli.run(command);
+      stdout = execution.output;
+      commandMutated = execution.mutated && !isSessionOnlyCommand(command);
+      mutated = mutated || commandMutated;
+      batchHadSuccess = true;
+      commandOutputs.push({ command, output: formatOutputForModel(stdout, CHAT_CLI_MODEL_OUTPUT_MAX_LINES) });
+      if (params.writeTrace && params.traceRunId) {
+        await writeChatCliCommandTrace(params.traceRunId, command, stdout, params.signal);
+      }
+    } catch (error) {
+      stderr = error instanceof Error ? error.message : String(error);
+      exitCode = 1;
+      batchHadError = true;
+      lastFailedCommand = command;
+      lastCommandError = stderr;
+      commandOutputs.push({ command, output: stderr });
+      if (params.writeTrace && params.traceRunId) {
+        await writeChatCliCommandTrace(params.traceRunId, command, stderr, params.signal);
+      }
+    }
+    results.push({
+      callId: call.id,
+      output: JSON.stringify({
+        stdout,
+        stderr,
+        exit_code: exitCode,
+        cwd: cli.snapshot().cwd,
+        mutated: commandMutated,
+      }),
+      ...(exitCode === 0 ? {} : { isError: true }),
+    });
+  }
+
+  if (terminalSummary) {
+    const diagnostics = await collectHvyCliDiagnostics(params.document);
+    recordIntroducedDiagnostics(params.document, params.state.diagnostics, diagnostics);
+    syncIntroducedDiagnostics(params.document, diagnostics);
+    const introducedIssues = getIntroducedDiagnostics(params.document);
+    if (introducedIssues.length > 0) {
+      const message = formatIntroducedLintIssuesPrompt(introducedIssues);
+      return {
+        ...buildSimAdvanceResult({ ...params, assistantOutput: params.turn.output }, params.state.messages, message, false, params.state.urgency, diagnostics),
+        toolTurn: params.turn,
+        toolState: appendProviderToolResultsToState(params.turn.toolState, params.turn, [
+          ...results.filter((result) => result.callId !== params.turn.toolCalls.find((call) => call.name === 'finish_task')?.id),
+          {
+            callId: params.turn.toolCalls.find((call) => call.name === 'finish_task')?.id ?? '',
+            output: JSON.stringify({ ok: false, stderr: message }),
+            isError: true,
+          },
+        ]),
+      };
+    }
+    return {
+      ...params.state,
+      terminalSummary,
+      commandResultMessage: `finish_task ${terminalSummary}`,
+      mutated: false,
+      toolTurn: params.turn,
+      toolState: appendProviderToolResultsToState(params.turn.toolState, params.turn, results),
+    };
+  }
+  if (askedQuestion) {
+    return {
+      ...params.state,
+      askedQuestion,
+      commandResultMessage: `ask_user ${askedQuestion}`,
+      mutated: false,
+      toolTurn: params.turn,
+      toolState: appendProviderToolResultsToState(params.turn.toolState, params.turn, results),
+    };
+  }
+
+  const urgency = batchHadSuccess ? updateChatCliUrgency(params.state.urgency, mutated) : params.state.urgency;
+  const commandResultMessage = formatCommandResultForModel({
+    output: formatBatchCommandOutput(commandOutputs),
+    hints: '',
+    scratchpad: formatScratchpadForModel(cli.snapshot()),
+    urgency: formatChatCliUrgency(urgency),
+    cwd: cli.snapshot().cwd,
+  });
+  const messages = await compactChatCliConversation({
+    messages: params.state.messages,
+    settings: params.settings ?? params.state.settings,
+    request: params.state.request,
+    lastInputTokens: params.lastInputTokens,
+    signal: params.signal,
+    traceRunId: params.traceRunId,
+  });
+
+  return {
+    ...buildSimAdvanceResult({ ...params, assistantOutput: params.turn.output }, messages, commandResultMessage, mutated, urgency, params.state.diagnostics),
+    batchHadSuccess,
+    batchHadError,
+    lastFailedCommand,
+    lastCommandError,
+    toolTurn: params.turn,
+    toolState: appendProviderToolResultsToState(params.turn.toolState, params.turn, results),
+  };
+}
+
+function getStringToolArg(call: ProviderToolCall, key: string): string {
+  const value = call.arguments[key];
+  return typeof value === 'string' ? value : '';
 }
 
 async function advanceChatCliTurnState(params: {
@@ -695,6 +885,59 @@ function buildChatCliLoopSystemInstructions(commandSummary: string): string {
     'Response instructions:',
     buildChatCliLoopFormatInstructions(),
   ].join('\n');
+}
+
+export function buildChatCliNativeToolDefinitions(): ProviderToolDefinition[] {
+  return [
+    {
+      name: 'run_hvy_cli',
+      description: 'Run exactly one command in the limited HVY virtual CLI. This is not the host OS shell.',
+      strict: true,
+      inputSchema: {
+        type: 'object',
+        properties: {
+          command: {
+            type: 'string',
+            description: 'One HVY virtual CLI command with no markdown fence.',
+          },
+        },
+        required: ['command'],
+        additionalProperties: false,
+      },
+    },
+    {
+      name: 'finish_task',
+      description: 'Finish the user request after validating the edits. Use only when no more commands are needed.',
+      strict: true,
+      inputSchema: {
+        type: 'object',
+        properties: {
+          summary: {
+            type: 'string',
+            description: 'Short user-facing summary of what changed.',
+          },
+        },
+        required: ['summary'],
+        additionalProperties: false,
+      },
+    },
+    {
+      name: 'ask_user',
+      description: 'Ask the user for a requirement choice. Do not use this for CLI syntax questions.',
+      strict: true,
+      inputSchema: {
+        type: 'object',
+        properties: {
+          question: {
+            type: 'string',
+            description: 'The actual question for the user.',
+          },
+        },
+        required: ['question'],
+        additionalProperties: false,
+      },
+    },
+  ];
 }
 
 function parseChatCliAction(response: string): { kind: 'command'; commands: string[]; notes: string } | { kind: 'done'; summary: string } | { kind: 'ask'; question: string } | { kind: 'invalid'; message: string } {

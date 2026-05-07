@@ -171,7 +171,7 @@ function isChatSettings(value: unknown): value is ChatSettings {
   return Boolean(
     value &&
     typeof value === 'object' &&
-    ((value as ChatSettings).provider === 'openai' || (value as ChatSettings).provider === 'anthropic') &&
+    ((value as ChatSettings).provider === 'openai' || (value as ChatSettings).provider === 'anthropic' || (value as ChatSettings).provider === 'qwen') &&
     typeof (value as ChatSettings).model === 'string'
   );
 }

@@ -84,6 +84,7 @@ const runChatCliSimStep: AppActionHandler = () => {
       document: state.document,
       turnState: sim.turnState as DocumentEditCliSimRequest['turnState'],
       assistantOutput: sim.responseOutput,
+      ...(sim.toolTurn ? { toolTurn: sim.toolTurn as Parameters<typeof advanceDocumentEditCliSimStep>[0]['toolTurn'] } : {}),
     })
       .then((result) => {
         if (!state.chat.cliSim) {
@@ -101,6 +102,7 @@ const runChatCliSimStep: AppActionHandler = () => {
           requestJson: result.requestJson || '(terminal response; no next request)',
           responseJson: '',
           responseOutput: '',
+          toolTurn: undefined,
           commandResultMessage: result.commandResultMessage,
           turnState: result.turnState,
           isPreparing: false,
@@ -142,7 +144,8 @@ const runChatCliSimStep: AppActionHandler = () => {
       state.chat.cliSim = {
         ...state.chat.cliSim,
         responseJson: result.responseJson,
-        responseOutput: result.output,
+        responseOutput: result.toolTurn?.toolCalls.length ? '(native tool calls ready)' : result.output,
+        toolTurn: result.toolTurn,
         reasoningSummary: result.reasoningSummary,
         isSending: false,
         error: null,

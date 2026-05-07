@@ -20,18 +20,24 @@ export function bindChangeRaw(app: HTMLElement): void {
       }
       const previousProvider = state.chat.settings.provider;
       const previousModel = state.chat.settings.model.trim();
-      state.chat.settings.provider = target.value === 'anthropic' ? 'anthropic' : 'openai';
+      state.chat.settings.provider = target.value === 'anthropic' || target.value === 'qwen' ? target.value : 'openai';
       if (
         state.chat.settings.provider === 'openai' &&
-        (previousModel.length === 0 || (previousProvider === 'anthropic' && previousModel === getDefaultModelForProvider('anthropic')))
+        (previousModel.length === 0 || previousModel === getDefaultModelForProvider(previousProvider))
       ) {
         state.chat.settings.model = getDefaultModelForProvider('openai');
       }
       if (
         state.chat.settings.provider === 'anthropic' &&
-        (previousModel.length === 0 || (previousProvider === 'openai' && previousModel === getDefaultModelForProvider('openai')))
+        (previousModel.length === 0 || previousModel === getDefaultModelForProvider(previousProvider))
       ) {
         state.chat.settings.model = getDefaultModelForProvider('anthropic');
+      }
+      if (
+        state.chat.settings.provider === 'qwen' &&
+        (previousModel.length === 0 || previousModel === getDefaultModelForProvider(previousProvider))
+      ) {
+        state.chat.settings.model = getDefaultModelForProvider('qwen');
       }
       persistChatSettings(state.chat.settings);
       state.chat.error = null;

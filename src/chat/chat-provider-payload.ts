@@ -1,7 +1,7 @@
 const OPENAI_REASONING_EFFORT = 'low';
 
 export interface ProviderProxyChatRequest {
-  provider: 'openai' | 'anthropic';
+  provider: 'openai' | 'anthropic' | 'qwen';
   model: string;
   mode: 'qa' | 'component-edit' | 'document-edit';
   messages: Array<{
@@ -15,7 +15,9 @@ export interface ProviderProxyChatRequest {
 }
 
 export function buildProviderProxyRequest(body: ProviderProxyChatRequest): Record<string, unknown> {
-  return body.provider === 'anthropic'
+  return body.provider === 'qwen'
+    ? buildQwenProxyRequest(body)
+    : body.provider === 'anthropic'
     ? buildAnthropicProxyRequest(body)
     : buildOpenAiProxyRequest(body);
 }
@@ -72,6 +74,27 @@ export function buildAnthropicProxyRequest(body: ProviderProxyChatRequest): Reco
     max_tokens: 4096,
     system: buildSystemInstructions(body.mode, systemMessages),
     messages: [
+      {
+        role: 'user',
+        content: `Request context:\n\n${body.context}`,
+      },
+      ...conversationMessages.map((message) => ({
+        role: message.role,
+        content: message.content,
+      })),
+    ],
+  };
+}
+
+export function buildQwenProxyRequest(body: ProviderProxyChatRequest): Record<string, unknown> {
+  const { systemMessages, conversationMessages } = splitProxyMessages(body.messages);
+  return {
+    model: body.model,
+    messages: [
+      {
+        role: 'system',
+        content: buildSystemInstructions(body.mode, systemMessages),
+      },
       {
         role: 'user',
         content: `Request context:\n\n${body.context}`,

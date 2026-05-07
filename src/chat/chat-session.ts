@@ -1,5 +1,6 @@
-import { buildProxyChatRequest, requestChatCompletion } from './chat';
+import { buildProxyChatRequest, requestChatCompletion, type ProxyToolTurn } from './chat';
 import { buildProviderProxyRequest, type ProviderProxyChatRequest } from './chat-provider-payload';
+import { buildProviderToolProxyRequest, type ProviderToolProxyChatRequest } from './provider-tools';
 import { hasDocumentDbTables } from '../plugins/db-table';
 import { runQaToolLoop } from '../ai-qa';
 import type { ChatMessage, ChatSettings, ChatTokenUsage, ChatWorkState, VisualDocument } from '../types';
@@ -7,6 +8,7 @@ import type { VisualSection } from '../editor/types';
 import { deserializeDocumentWithDiagnostics, wrapHvyFragmentAsDocument } from '../serialization';
 import {
   advanceChatCliSimTurnState,
+  buildChatCliNativeToolDefinitions,
   buildChatCliInitialSimTurnState,
   runChatCliEditLoop,
   type ChatCliSelectedComponentFocus,
@@ -29,6 +31,7 @@ export interface DocumentEditCliSimResponse {
   responseJson: string;
   reasoningSummary: string;
   output: string;
+  toolTurn?: ProxyToolTurn;
 }
 
 export interface DocumentEditCliSimAdvance {
@@ -311,6 +314,8 @@ export async function buildDocumentEditCliSimRequest(params: {
     systemInstructions: initial.systemInstructions,
     mode: 'document-edit',
     traceRunId: initial.traceRunId,
+    tools: buildChatCliNativeToolDefinitions(),
+    ...(initial.toolState ? { toolState: initial.toolState } : {}),
   });
   return {
     requestPayload,
@@ -343,6 +348,15 @@ export async function runDocumentEditCliSimStep(params: {
     output: typeof (payload as { output?: unknown } | null)?.output === 'string'
       ? ((payload as { output: string }).output ?? '')
       : '',
+    ...(isProxyToolTurnPayload(payload) ? {
+      toolTurn: {
+        output: typeof payload.output === 'string' ? payload.output : '',
+        reasoningSummary: typeof payload.reasoningSummary === 'string' ? payload.reasoningSummary : '',
+        toolCalls: payload.toolCalls,
+        nativeMessages: payload.nativeMessages,
+        toolState: payload.toolState,
+      },
+    } : {}),
   };
 }
 
@@ -351,12 +365,14 @@ export async function advanceDocumentEditCliSimStep(params: {
   document: VisualDocument;
   turnState: ChatCliSimTurnState;
   assistantOutput: string;
+  toolTurn?: ProxyToolTurn;
   signal?: AbortSignal;
 }): Promise<DocumentEditCliSimAdvance> {
   const next = await advanceChatCliSimTurnState({
     document: params.document,
     state: params.turnState,
     assistantOutput: params.assistantOutput,
+    ...(params.toolTurn ? { toolTurn: params.toolTurn } : {}),
     signal: params.signal,
   });
   if (next.terminalSummary || next.askedQuestion) {
@@ -378,6 +394,8 @@ export async function advanceDocumentEditCliSimStep(params: {
     systemInstructions: next.systemInstructions,
     mode: 'document-edit',
     traceRunId: next.traceRunId,
+    tools: buildChatCliNativeToolDefinitions(),
+    ...(next.toolState ? { toolState: next.toolState } : {}),
   });
   return {
     requestPayload,
@@ -389,7 +407,28 @@ export async function advanceDocumentEditCliSimStep(params: {
 }
 
 function formatCliSimProviderRequestJson(requestPayload: unknown): string {
-  return JSON.stringify(buildProviderProxyRequest(requestPayload as ProviderProxyChatRequest), null, 2);
+  const record = requestPayload && typeof requestPayload === 'object' ? requestPayload as { tools?: unknown[] } : {};
+  return JSON.stringify(
+    Array.isArray(record.tools)
+      ? buildProviderToolProxyRequest(requestPayload as ProviderToolProxyChatRequest)
+      : buildProviderProxyRequest(requestPayload as ProviderProxyChatRequest),
+    null,
+    2
+  );
+}
+
+function isProxyToolTurnPayload(payload: unknown): payload is {
+  output?: string;
+  reasoningSummary?: string;
+  toolCalls: ProxyToolTurn['toolCalls'];
+  nativeMessages: unknown[];
+  toolState: ProxyToolTurn['toolState'];
+} {
+  return !!payload
+    && typeof payload === 'object'
+    && Array.isArray((payload as { toolCalls?: unknown }).toolCalls)
+    && Array.isArray((payload as { nativeMessages?: unknown }).nativeMessages)
+    && !!(payload as { toolState?: unknown }).toolState;
 }
 
 async function readChatCliSimJsonResponse(response: Response): Promise<unknown> {

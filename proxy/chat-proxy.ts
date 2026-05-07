@@ -5,11 +5,22 @@ import type { Plugin } from 'vite';
 import {
   buildAnthropicProxyRequest,
   buildOpenAiProxyRequest,
+  buildQwenProxyRequest,
 } from '../src/chat/chat-provider-payload';
+import {
+  buildInitialProviderToolState,
+  buildProviderToolProxyRequest,
+  extractProviderToolTurn,
+  type ProviderToolDefinition,
+  type ProviderToolProxyChatRequest,
+  type ProviderToolState,
+  type ToolProvider,
+} from '../src/chat/provider-tools';
 import { getHvyDiagnosticUsageHint, getHvyResponseDiagnostics, type HvyDiagnostic } from '../src/serialization';
 
 const OPENAI_API_URL = 'https://api.openai.com/v1/responses';
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
+const QWEN_API_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions';
 const ANTHROPIC_API_VERSION = '2023-06-01';
 const DEV_TRACE_DIR = path.resolve(process.cwd(), 'dev-traces');
 const AGENT_LOOP_TRACE_FILE = path.join(DEV_TRACE_DIR, 'agent-loop.ndjson');
@@ -20,7 +31,7 @@ const AGENT_LOOP_TRACE_MAX_LINES = 500;
 const AGENT_LOOP_TRACE_PRUNE_LINES = 100;
 const AI_CLI_LOG_MAX_LINES = 2000;
 const AI_CLI_LOG_PRUNE_LINES = 100;
-export { buildAnthropicProxyRequest, buildOpenAiProxyRequest };
+export { buildAnthropicProxyRequest, buildOpenAiProxyRequest, buildQwenProxyRequest };
 
 let traceWriteQueue = Promise.resolve();
 
@@ -42,7 +53,7 @@ interface TraceEvent {
 }
 
 interface ProxyChatRequest {
-  provider: 'openai' | 'anthropic';
+  provider: ToolProvider;
   model: string;
   mode: 'qa' | 'component-edit' | 'document-edit';
   messages: Array<{
@@ -51,12 +62,17 @@ interface ProxyChatRequest {
   }>;
   traceRunId?: string;
   context: string;
+  tools?: ProviderToolDefinition[];
+  toolState?: ProviderToolState;
 }
 
 interface ProviderCompletion {
   output: string;
   reasoningSummary: string;
   usage?: ProviderTokenUsage;
+  toolCalls?: unknown[];
+  nativeMessages?: unknown[];
+  toolState?: ProviderToolState;
 }
 
 interface ProviderTokenUsage {
@@ -167,6 +183,9 @@ export function buildChatProxyMiddleware(env: Record<string, string | undefined>
         output: completion.output,
         ...(completion.reasoningSummary ? { reasoningSummary: completion.reasoningSummary } : {}),
         ...(completion.usage ? { usage: completion.usage } : {}),
+        ...(completion.toolCalls ? { toolCalls: completion.toolCalls } : {}),
+        ...(completion.nativeMessages ? { nativeMessages: completion.nativeMessages } : {}),
+        ...(completion.toolState ? { toolState: completion.toolState } : {}),
       });
     } catch (error) {
       if (isAbortError(error) || upstreamAbort.signal.aborted) {
@@ -322,8 +341,14 @@ async function requestProviderOnce(
   signal: AbortSignal | undefined,
   runId: string
 ): Promise<ProviderCompletion> {
+  if (body.tools && body.tools.length > 0) {
+    return requestProviderToolTurn(body, env, signal, runId);
+  }
   if (body.provider === 'openai') {
     return requestOpenAi(body, env, signal, runId);
+  }
+  if (body.provider === 'qwen') {
+    return requestQwen(body, env, signal, runId);
   }
   return requestAnthropic(body, env, signal, runId);
 }
@@ -410,6 +435,72 @@ async function requestOpenAi(
   return { output, reasoningSummary, ...(usage ? { usage } : {}) };
 }
 
+async function requestProviderToolTurn(
+  body: ProxyChatRequest,
+  env: Record<string, string | undefined>,
+  signal: AbortSignal | undefined,
+  runId: string
+): Promise<ProviderCompletion> {
+  const apiKey = resolveProviderApiKey(body.provider, env);
+  const toolRequest = body as ProviderToolProxyChatRequest;
+  const toolState = buildInitialProviderToolState(toolRequest);
+  const upstreamRequest = buildProviderToolProxyRequest({
+    ...toolRequest,
+    toolState,
+  });
+  console.debug(`[hvy:chat-proxy] upstream ${body.provider} native tool request`, upstreamRequest);
+  writeTrace({
+    runId,
+    phase: body.mode,
+    type: 'provider_request',
+    payload: { provider: body.provider, request: upstreamRequest },
+  });
+  const response = await fetch(resolveProviderApiUrl(body.provider), {
+    method: 'POST',
+    headers: buildProviderHeaders(body.provider, apiKey),
+    body: JSON.stringify(upstreamRequest),
+    signal,
+  });
+  const payload = await readJsonResponse(response);
+  console.debug(`[hvy:chat-proxy] upstream ${body.provider} native tool response`, {
+    ok: response.ok,
+    status: response.status,
+    payload,
+  });
+  writeTrace({
+    runId,
+    phase: body.mode,
+    type: 'provider_response',
+    payload: { provider: body.provider, ok: response.ok, status: response.status, payload },
+  });
+  if (!response.ok) {
+    throw new Error(`Provider request failed: ${extractProviderError(payload, `${body.provider} request failed.`)}`);
+  }
+  const turn = extractProviderToolTurn(body.provider, payload);
+  const usage = extractProviderTokenUsage(payload);
+  writeTrace({
+    runId,
+    phase: body.mode,
+    type: 'model_response',
+    payload: {
+      response: turn.output,
+      reasoningSummary: turn.reasoningSummary,
+      toolCalls: turn.toolCalls,
+    },
+  });
+  if (turn.output.length === 0 && turn.toolCalls.length === 0) {
+    throw new Error(`Provider request failed: ${body.provider} returned no assistant text or tool calls.`);
+  }
+  return {
+    output: turn.output,
+    reasoningSummary: turn.reasoningSummary,
+    ...(usage ? { usage } : {}),
+    toolCalls: turn.toolCalls,
+    nativeMessages: turn.nativeMessages,
+    toolState,
+  };
+}
+
 async function requestAnthropic(
   body: ProxyChatRequest,
   env: Record<string, string | undefined>,
@@ -466,20 +557,89 @@ async function requestAnthropic(
   return { output, reasoningSummary, ...(usage ? { usage } : {}) };
 }
 
+async function requestQwen(
+  body: ProxyChatRequest,
+  env: Record<string, string | undefined>,
+  signal: AbortSignal | undefined,
+  runId: string
+): Promise<ProviderCompletion> {
+  const apiKey = resolveProviderApiKey('qwen', env);
+  const upstreamRequest = buildProviderToolProxyRequest({
+    ...(body as ProviderToolProxyChatRequest),
+    tools: [],
+  });
+  console.debug('[hvy:chat-proxy] upstream qwen request', upstreamRequest);
+  writeTrace({
+    runId,
+    phase: body.mode,
+    type: 'provider_request',
+    payload: { provider: 'qwen', request: upstreamRequest },
+  });
+  const response = await fetch(QWEN_API_URL, {
+    method: 'POST',
+    headers: buildProviderHeaders('qwen', apiKey),
+    body: JSON.stringify(upstreamRequest),
+    signal,
+  });
+  const payload = await readJsonResponse(response);
+  writeTrace({
+    runId,
+    phase: body.mode,
+    type: 'provider_response',
+    payload: { provider: 'qwen', ok: response.ok, status: response.status, payload },
+  });
+  if (!response.ok) {
+    throw new Error(`Provider request failed: ${extractProviderError(payload, 'Qwen request failed.')}`);
+  }
+  const turn = extractProviderToolTurn('qwen', payload);
+  const usage = extractProviderTokenUsage(payload);
+  if (turn.output.length === 0) {
+    throw new Error('Provider request failed: Qwen returned no assistant text.');
+  }
+  return { output: turn.output, reasoningSummary: '', ...(usage ? { usage } : {}) };
+}
+
 function resolveProviderApiKey(provider: ProxyChatRequest['provider'], env: Record<string, string | undefined>): string {
   const key = provider === 'openai'
     ? firstNonEmptyString(env.OPENAI_API_KEY, env.VITE_OPENAI_API_KEY)
-    : firstNonEmptyString(env.ANTHROPIC_API_KEY, env.VITE_ANTHROPIC_API_KEY);
+    : provider === 'anthropic'
+    ? firstNonEmptyString(env.ANTHROPIC_API_KEY, env.VITE_ANTHROPIC_API_KEY)
+    : firstNonEmptyString(env.QWEN_API_KEY, env.DASHSCOPE_API_KEY, env.VITE_QWEN_API_KEY, env.VITE_DASHSCOPE_API_KEY);
 
   if (!key) {
     throw new Error(
       provider === 'openai'
         ? 'OPENAI_API_KEY is not configured for the local proxy.'
-        : 'ANTHROPIC_API_KEY is not configured for the local proxy.'
+        : provider === 'anthropic'
+        ? 'ANTHROPIC_API_KEY is not configured for the local proxy.'
+        : 'QWEN_API_KEY or DASHSCOPE_API_KEY is not configured for the local proxy.'
     );
   }
 
   return key;
+}
+
+function resolveProviderApiUrl(provider: ProxyChatRequest['provider']): string {
+  if (provider === 'anthropic') {
+    return ANTHROPIC_API_URL;
+  }
+  if (provider === 'qwen') {
+    return QWEN_API_URL;
+  }
+  return OPENAI_API_URL;
+}
+
+function buildProviderHeaders(provider: ProxyChatRequest['provider'], apiKey: string): Record<string, string> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${apiKey}`,
+  };
+  if (provider === 'anthropic') {
+    delete headers.Authorization;
+    headers['x-api-key'] = apiKey;
+    headers['anthropic-version'] = ANTHROPIC_API_VERSION;
+  }
+  return headers;
 }
 
 function validateProxyChatRequest(payload: unknown): ProxyChatRequest {
@@ -488,7 +648,7 @@ function validateProxyChatRequest(payload: unknown): ProxyChatRequest {
   }
 
   const record = payload as Partial<ProxyChatRequest>;
-  if (record.provider !== 'openai' && record.provider !== 'anthropic') {
+  if (record.provider !== 'openai' && record.provider !== 'anthropic' && record.provider !== 'qwen') {
     throw new Error('Invalid chat provider.');
   }
   if (record.mode !== 'qa' && record.mode !== 'component-edit' && record.mode !== 'document-edit') {
@@ -518,7 +678,7 @@ function validateProxyChatRequest(payload: unknown): ProxyChatRequest {
     };
   });
 
-  return {
+  const request: ProxyChatRequest = {
     provider: record.provider,
     model: record.model.trim(),
     mode: record.mode,
@@ -526,6 +686,37 @@ function validateProxyChatRequest(payload: unknown): ProxyChatRequest {
     context: record.context,
     messages,
   };
+  if (Array.isArray(record.tools)) {
+    request.tools = validateProviderToolDefinitions(record.tools);
+  }
+  if (record.toolState && typeof record.toolState === 'object') {
+    request.toolState = record.toolState as ProviderToolState;
+  }
+  return request;
+}
+
+function validateProviderToolDefinitions(value: unknown[]): ProviderToolDefinition[] {
+  return value.map((tool) => {
+    if (!tool || typeof tool !== 'object' || Array.isArray(tool)) {
+      throw new Error('Invalid native tool definition.');
+    }
+    const record = tool as Partial<ProviderToolDefinition>;
+    if (typeof record.name !== 'string' || !/^[A-Za-z_][A-Za-z0-9_]{0,63}$/.test(record.name)) {
+      throw new Error('Invalid native tool name.');
+    }
+    if (typeof record.description !== 'string' || record.description.trim().length === 0) {
+      throw new Error('Invalid native tool description.');
+    }
+    if (!record.inputSchema || typeof record.inputSchema !== 'object' || Array.isArray(record.inputSchema)) {
+      throw new Error('Invalid native tool input schema.');
+    }
+    return {
+      name: record.name,
+      description: record.description,
+      inputSchema: record.inputSchema as Record<string, unknown>,
+      ...(record.strict ? { strict: true } : {}),
+    };
+  });
 }
 
 function validateClientTraceEvent(payload: unknown): TraceEvent {

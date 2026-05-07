@@ -3,6 +3,7 @@ import { expect, test } from 'vitest';
 import {
   buildAnthropicProxyRequest,
   buildOpenAiProxyRequest,
+  buildQwenProxyRequest,
   buildRepairPrompt,
   extractAnthropicReasoningSummary,
   extractAnthropicText,
@@ -14,6 +15,13 @@ import {
   formatTraceTextEvent,
   pruneTraceLines,
 } from '../proxy/chat-proxy';
+import {
+  appendProviderToolResultsToState,
+  buildInitialProviderToolState,
+  buildProviderToolProxyRequest,
+  extractProviderToolTurn,
+  type ProviderToolDefinition,
+} from '../src/chat/provider-tools';
 
 const request = {
   provider: 'openai' as const,
@@ -104,6 +112,155 @@ test('buildAnthropicProxyRequest places context as a user message and messages i
       { role: 'user', content: 'Request context:\n\nContext body' },
       { role: 'user', content: 'What is this?' },
       { role: 'assistant', content: 'A summary.' },
+    ],
+  });
+});
+
+test('buildQwenProxyRequest uses OpenAI-compatible chat messages', () => {
+  expect(buildQwenProxyRequest({
+    ...request,
+    provider: 'qwen',
+    model: 'qwen-plus',
+    messages: [
+      { role: 'system' as const, content: 'Use the CLI protocol.' },
+      ...request.messages,
+    ],
+  })).toEqual({
+    model: 'qwen-plus',
+    messages: [
+      { role: 'system', content: expect.stringMatching(/Answer questions about the provided HVY document context\.[\s\S]*Use the CLI protocol\./) },
+      { role: 'user', content: 'Request context:\n\nContext body' },
+      { role: 'user', content: 'What is this?' },
+      { role: 'assistant', content: 'A summary.' },
+    ],
+  });
+});
+
+test('provider tool adapters build OpenAI Responses function calls and append outputs', () => {
+  const tools: ProviderToolDefinition[] = [{
+    name: 'run_hvy_cli',
+    description: 'Run one HVY command.',
+    strict: true,
+    inputSchema: {
+      type: 'object',
+      properties: { command: { type: 'string' } },
+      required: ['command'],
+      additionalProperties: false,
+    },
+  }];
+  const state = buildInitialProviderToolState({ ...request, tools });
+  expect(state.provider).toBe('openai');
+  expect(buildProviderToolProxyRequest({ ...request, tools, toolState: state })).toEqual(expect.objectContaining({
+    tools: [{
+      type: 'function',
+      name: 'run_hvy_cli',
+      description: 'Run one HVY command.',
+      parameters: tools[0]?.inputSchema,
+      strict: true,
+    }],
+    input: expect.arrayContaining([
+      expect.objectContaining({ role: 'system' }),
+      expect.objectContaining({ role: 'user' }),
+    ]),
+  }));
+  const turn = extractProviderToolTurn('openai', {
+    output: [
+      { type: 'reasoning', summary: [{ type: 'summary_text', text: 'Need inspect.' }] },
+      { type: 'function_call', call_id: 'call_1', name: 'run_hvy_cli', arguments: '{"command":"ls /"}' },
+    ],
+  });
+
+  expect(turn.toolCalls).toEqual([{ id: 'call_1', name: 'run_hvy_cli', arguments: { command: 'ls /' } }]);
+  expect(turn.reasoningSummary).toBe('Need inspect.');
+  expect(appendProviderToolResultsToState(state, turn, [{ callId: 'call_1', output: '{"stdout":"ok","stderr":"","exit_code":0}' }])).toEqual({
+    provider: 'openai',
+    input: [
+      ...(state.provider === 'openai' ? state.input : []),
+      ...turn.nativeMessages,
+      { type: 'function_call_output', call_id: 'call_1', output: '{"stdout":"ok","stderr":"","exit_code":0}' },
+    ],
+  });
+});
+
+test('provider tool adapters build Anthropic tool_use and tool_result turns', () => {
+  const tools: ProviderToolDefinition[] = [{
+    name: 'run_hvy_cli',
+    description: 'Run one HVY command.',
+    inputSchema: { type: 'object', properties: { command: { type: 'string' } }, required: ['command'] },
+  }];
+  const state = buildInitialProviderToolState({ ...request, provider: 'anthropic', tools });
+  expect(buildProviderToolProxyRequest({ ...request, provider: 'anthropic', tools, toolState: state })).toEqual(expect.objectContaining({
+    tools: [{ name: 'run_hvy_cli', description: 'Run one HVY command.', input_schema: tools[0]?.inputSchema }],
+  }));
+  const turn = extractProviderToolTurn('anthropic', {
+    content: [
+      { type: 'text', text: 'I will inspect.' },
+      { type: 'tool_use', id: 'toolu_1', name: 'run_hvy_cli', input: { command: 'pwd' } },
+    ],
+  });
+
+  expect(turn.output).toBe('I will inspect.');
+  expect(turn.toolCalls).toEqual([{ id: 'toolu_1', name: 'run_hvy_cli', arguments: { command: 'pwd' } }]);
+  expect(appendProviderToolResultsToState(state, turn, [{ callId: 'toolu_1', output: '{"stdout":"/","stderr":"","exit_code":0}' }])).toEqual({
+    provider: 'anthropic',
+    system: state.provider === 'anthropic' ? state.system : '',
+    messages: [
+      ...(state.provider === 'anthropic' ? state.messages : []),
+      { role: 'assistant', content: [
+        { type: 'text', text: 'I will inspect.' },
+        { type: 'tool_use', id: 'toolu_1', name: 'run_hvy_cli', input: { command: 'pwd' } },
+      ] },
+      { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'toolu_1', content: '{"stdout":"/","stderr":"","exit_code":0}' }] },
+    ],
+  });
+});
+
+test('provider tool adapters build Qwen OpenAI-compatible tool calls', () => {
+  const tools: ProviderToolDefinition[] = [{
+    name: 'run_hvy_cli',
+    description: 'Run one HVY command.',
+    inputSchema: { type: 'object', properties: { command: { type: 'string' } }, required: ['command'] },
+  }];
+  const state = buildInitialProviderToolState({ ...request, provider: 'qwen', tools });
+  expect(buildProviderToolProxyRequest({ ...request, provider: 'qwen', tools, toolState: state })).toEqual(expect.objectContaining({
+    tools: [{
+      type: 'function',
+      function: {
+        name: 'run_hvy_cli',
+        description: 'Run one HVY command.',
+        parameters: tools[0]?.inputSchema,
+      },
+    }],
+  }));
+  const turn = extractProviderToolTurn('qwen', {
+    choices: [{
+      message: {
+        role: 'assistant',
+        content: '',
+        tool_calls: [{
+          id: 'call_1',
+          type: 'function',
+          function: { name: 'run_hvy_cli', arguments: '{"command":"pwd"}' },
+        }],
+      },
+    }],
+  });
+
+  expect(turn.toolCalls).toEqual([{ id: 'call_1', name: 'run_hvy_cli', arguments: { command: 'pwd' } }]);
+  expect(appendProviderToolResultsToState(state, turn, [{ callId: 'call_1', output: '{"stdout":"/","stderr":"","exit_code":0}' }])).toEqual({
+    provider: 'qwen',
+    messages: [
+      ...(state.provider === 'qwen' ? state.messages : []),
+      {
+        role: 'assistant',
+        content: '',
+        tool_calls: [{
+          id: 'call_1',
+          type: 'function',
+          function: { name: 'run_hvy_cli', arguments: '{"command":"pwd"}' },
+        }],
+      },
+      { role: 'tool', tool_call_id: 'call_1', content: '{"stdout":"/","stderr":"","exit_code":0}' },
     ],
   });
 });

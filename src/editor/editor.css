@@ -901,12 +901,41 @@
 
 .editor-block-head {
   position: relative;
+  padding-right: 2.1rem;
 }
 
 .editor-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 0.35rem;
+}
+
+.editor-block-context-actions {
+  position: absolute;
+  top: 0;
+  right: 2.45rem;
+  z-index: 2;
+  display: flex;
+  gap: 0.25rem;
+  max-width: calc(100% - 6.2rem);
+  padding: 0 0.3rem;
+  border-radius: 999px;
+  background: var(--hvy-surface);
+  transform: translateY(-50%);
+}
+
+.editor-block-context-actions button {
+  min-height: 1.45rem;
+  padding: 0.12rem 0.35rem;
+  font-size: 0.72rem;
+  line-height: 1;
+}
+
+.editor-block-remove-button {
+  position: absolute;
+  top: 0.3rem;
+  right: 0.3rem;
+  z-index: 3;
 }
 
 .component-placement-target {

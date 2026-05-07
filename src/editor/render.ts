@@ -399,9 +399,25 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         : `<button type="button" class="ghost" data-action="start-component-move" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}">Move</button>
            <button type="button" class="ghost" data-action="start-component-copy" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}">Copy</button>`
       : '';
+    const componentMetaActions = state.showAdvancedEditor && isActiveSelf
+      ? `<div class="editor-block-context-actions" aria-label="Component options">
+          <button type="button" class="ghost" data-action="open-save-component-def" data-section-key="${deps.escapeAttr(
+        sectionKey
+      )}" data-block-id="${deps.escapeAttr(block.id)}">Reusable</button>
+          <button type="button" class="ghost" data-action="open-component-meta" data-section-key="${deps.escapeAttr(
+        sectionKey
+      )}" data-block-id="${deps.escapeAttr(block.id)}">Meta</button>
+        </div>`
+      : '';
+    const removeButton = canRemove
+      ? `<button type="button" class="danger remove-x editor-block-remove-button" data-action="remove-block" data-section-key="${deps.escapeAttr(
+        sectionKey
+      )}" data-block-id="${deps.escapeAttr(block.id)}" aria-label="Remove ${deps.escapeAttr(componentLabel)}">×</button>`
+      : '';
 
     return `
       <div class="editor-block${isActivatingPath ? ' is-activating-path' : ''}${isPlacementSource ? ' is-placement-source' : ''}"${activationStyle}${activationAttrs}>
+        ${componentMetaActions}
         <div class="editor-block-head">
           <div class="section-drag-title">
             <div class="editor-order-controls">
@@ -415,18 +431,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
             <button type="button" class="ghost" data-action="deactivate-block" data-section-key="${deps.escapeAttr(
       sectionKey
     )}" data-block-id="${deps.escapeAttr(block.id)}">Done</button>
-            ${state.showAdvancedEditor && isActiveSelf
-        ? `<button type="button" class="ghost" data-action="open-save-component-def" data-section-key="${deps.escapeAttr(
-          sectionKey
-        )}" data-block-id="${deps.escapeAttr(block.id)}">Reusable</button>
-                   <button type="button" class="ghost" data-action="open-component-meta" data-section-key="${deps.escapeAttr(
-          sectionKey
-        )}" data-block-id="${deps.escapeAttr(block.id)}">Meta</button>`
-        : ''
-      }
-            ${canRemove ? `<button type="button" class="danger remove-x" data-action="remove-block" data-section-key="${deps.escapeAttr(
-        sectionKey
-      )}" data-block-id="${deps.escapeAttr(block.id)}">×</button>` : ''}
+            ${removeButton}
           </div>
         </div>
 
@@ -659,6 +664,8 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           <button type="button" class="icon-button${selectedClass(blockStyle === 'list')}" data-rich-action="list" ${richButtonAttrs} aria-label="List" title="Bullet List"><span class="toolbar-icon list-icon" aria-hidden="true"></span></button>
           <button type="button" class="icon-button${selectedClass(blockStyle === 'checklist')}" data-rich-action="checklist" ${richButtonAttrs} aria-label="Checkbox" title="Checkbox"><span class="toolbar-icon checkbox-icon" aria-hidden="true">☑</span></button>
           <button type="button" class="icon-button ghost" data-rich-action="link" ${richButtonAttrs} aria-label="Link" title="Link (${hotkeyModifier}+K)"><span class="toolbar-icon link-icon" aria-hidden="true"></span></button>
+        </div>
+        <div class="toolbar-segment responsive-format-buttons" role="group" aria-label="Responsive text formatting">
           <button type="button" class="ghost" data-rich-action="short" ${richButtonAttrs} ${shortEnabled ? '' : 'disabled'} title="Short text">Short</button>
           <button type="button" class="ghost" data-rich-action="nowrap" ${richButtonAttrs} title="No wrap">Nowrap</button>
         </div>

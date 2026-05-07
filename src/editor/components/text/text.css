@@ -147,6 +147,11 @@
   align-items: center;
 }
 
+.responsive-format-buttons {
+  width: 100%;
+  justify-content: flex-end;
+}
+
 .align-buttons {
   margin: 0;
 }

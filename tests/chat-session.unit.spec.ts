@@ -421,6 +421,63 @@ test('requestDocumentEditChatTurn can run native provider tool calls', async () 
   }));
 });
 
+test('requestDocumentEditChatTurn compacts native provider tool state after high provider input tokens', async () => {
+  requestProxyCompletionMock.mockReset();
+  requestProxyCompletionMock.mockResolvedValueOnce('Goal: inspect the document. Progress: inspected startup output and ran pwd.');
+  requestProxyToolTurnMock
+    .mockImplementationOnce(async (params: {
+      toolState?: unknown;
+      onTokenUsage?: (usage: { inputTokens?: number; outputTokens?: number }) => void;
+    }) => {
+      params.onTokenUsage?.({ inputTokens: 12_500, outputTokens: 10 });
+      return {
+        output: '',
+        reasoningSummary: '',
+        toolCalls: [{
+          id: 'call_1',
+          name: 'run_hvy_cli',
+          arguments: { command: 'pwd' },
+        }],
+        nativeMessages: [{
+          type: 'function_call',
+          call_id: 'call_1',
+          name: 'run_hvy_cli',
+          arguments: '{"command":"pwd"}',
+        }],
+        toolState: params.toolState,
+      };
+    })
+    .mockImplementationOnce(async (params: { toolState?: { provider: 'openai'; input: unknown[] } }) => ({
+      output: '',
+      reasoningSummary: '',
+      toolCalls: [{
+        id: 'call_2',
+        name: 'finish_task',
+        arguments: { summary: 'Checked the document.' },
+      }],
+      nativeMessages: [{ type: 'function_call', call_id: 'call_2', name: 'finish_task', arguments: '{"summary":"Checked the document."}' }],
+      toolState: params.toolState,
+    }));
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+  const document = deserializeDocument('---\nhvy_version: 0.1\n---\n', '.hvy');
+
+  const result = await requestDocumentEditChatTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Inspect the document.',
+  });
+
+  expect(result.error).toBeNull();
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.debugLabel).toBe('chat-cli-tool-compaction');
+  const secondToolState = requestProxyToolTurnMock.mock.calls[1]?.[0]?.toolState as { provider: 'openai'; input: unknown[] };
+  expect(secondToolState.provider).toBe('openai');
+  expect(JSON.stringify(secondToolState.input)).toContain('### COMPACTED PRIOR CLI TOOL HISTORY ###');
+  expect(JSON.stringify(secondToolState.input)).toContain('Goal: inspect the document. Progress: inspected startup output and ran pwd.');
+  expect(JSON.stringify(secondToolState.input)).not.toContain('startup_call_1');
+  expect(JSON.stringify(secondToolState.input)).not.toContain('call_1');
+});
+
 test('requestDocumentEditChatTurn includes document ai context in the CLI prompt', async () => {
   requestProxyCompletionMock.mockResolvedValueOnce('done Read the context.');
   const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
@@ -762,7 +819,7 @@ test('requestDocumentEditChatTurn compacts old cli conversation after high provi
       return `echo "${'x'.repeat(12000)}"`;
     })
     .mockImplementationOnce(async (params: { onTokenUsage?: (usage: { inputTokens?: number; outputTokens?: number }) => void }) => {
-      params.onTokenUsage?.({ inputTokens: 10_500, outputTokens: 10 });
+      params.onTokenUsage?.({ inputTokens: 12_500, outputTokens: 10 });
       return `echo "${'y'.repeat(12000)}"`;
     })
     .mockResolvedValueOnce('Goal: check the document. Progress: ran x and y echo commands.')
@@ -770,8 +827,14 @@ test('requestDocumentEditChatTurn compacts old cli conversation after high provi
       params.onTokenUsage?.({ inputTokens: 7_000, outputTokens: 10 });
       return `echo "${'z'.repeat(12000)}"`;
     })
-    .mockResolvedValueOnce('pwd')
-    .mockResolvedValueOnce('done Checked the document.');
+    .mockImplementationOnce(async (params: { onTokenUsage?: (usage: { inputTokens?: number; outputTokens?: number }) => void }) => {
+      params.onTokenUsage?.({ inputTokens: 7_000, outputTokens: 10 });
+      return 'pwd';
+    })
+    .mockImplementationOnce(async (params: { onTokenUsage?: (usage: { inputTokens?: number; outputTokens?: number }) => void }) => {
+      params.onTokenUsage?.({ inputTokens: 7_000, outputTokens: 10 });
+      return 'done Checked the document.';
+    });
   const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
   const document = deserializeDocument('---\nhvy_version: 0.1\n---\n', '.hvy');
 
@@ -814,7 +877,7 @@ test('requestDocumentEditChatTurn falls back to useful compacted context when co
       return `echo "${'first inspection '.repeat(800)}"`;
     })
     .mockImplementationOnce(async (params: { onTokenUsage?: (usage: { inputTokens?: number; outputTokens?: number }) => void }) => {
-      params.onTokenUsage?.({ inputTokens: 10_500, outputTokens: 10 });
+      params.onTokenUsage?.({ inputTokens: 12_500, outputTokens: 10 });
       return `echo "${'second inspection '.repeat(800)}"`;
     })
     .mockRejectedValueOnce(new Error('Chat request failed.'))

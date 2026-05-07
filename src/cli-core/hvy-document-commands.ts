@@ -7,6 +7,13 @@ import { getSectionId } from '../section-ops';
 import type { VisualDocument } from '../types';
 import { makeId } from '../utils';
 import {
+  applyReusableTemplateValues,
+  extractReusableTemplateVariablesFromDefinition,
+  formatTemplateKeys,
+  parseReusableTemplateJson,
+  validateReusableTemplateValues,
+} from '../reusable-template-values';
+import {
   getHvyCliPluginCommandRegistration,
   getHvyCliPluginCommandRegistrations,
   getHvyCliScriptingToolHelp,
@@ -90,7 +97,7 @@ export function hvyDocumentCommandHelp(topic = ''): string {
 
   const help: Record<string, string> = {
     '': [
-      formatCommandHelp('hvy insert INDEX COMPONENT PARENT_PATH [ID|--id ID] [--return-order-on-creation] [--return-structure-on-creation] [--return-about-txt-on-creation]', 'Insert a blank builtin or custom component. Component ids are optional; use --id only when you need a stable id. INDEX is zero-based and supports Python-style negative indexes; 0 is the front, -1 is the back.'),
+      formatCommandHelp('hvy insert INDEX COMPONENT PARENT_PATH [ID|--id ID] [--using-template JSON] [--return-order-on-creation] [--return-structure-on-creation] [--return-about-txt-on-creation]', 'Insert a blank builtin or custom component. Reusable components with template variables require exact JSON values with --using-template. Component ids are optional; use --id only when you need a stable id. INDEX is zero-based and supports Python-style negative indexes; 0 is the front, -1 is the back.'),
       formatCommandHelp('hvy insert INDEX section PARENT_PATH ID TITLE', 'Create a section.'),
       formatCommandHelp('hvy insert INDEX text PARENT_PATH [ID|--id ID]', 'Create a blank text component. Edit text.txt after creation.'),
       formatCommandHelp('hvy insert INDEX table PARENT_PATH [ID|--id ID]', 'Create a blank static table component. Edit tableColumns.json and tableRows.json after creation.'),
@@ -108,7 +115,7 @@ export function hvyDocumentCommandHelp(topic = ''): string {
       formatCommandHelp('Edit existing components', 'Use find to discover virtual files, cat to inspect them, and sed to update writable body/config files.'),
     ].join('\n'),
     insert: [
-      formatCommandHelp('hvy insert INDEX COMPONENT PARENT_PATH [ID|--id ID] [--return-order-on-creation] [--return-structure-on-creation] [--return-about-txt-on-creation]', 'Insert a blank builtin or custom component to a section, component-list, grid, container, or expandable content path. Edit generated body/config files after creation. Component ids are optional; use --id only when you need a stable id. INDEX is zero-based and supports Python-style negative indexes; 0 is the front, -1 is the back.'),
+      formatCommandHelp('hvy insert INDEX COMPONENT PARENT_PATH [ID|--id ID] [--using-template JSON] [--return-order-on-creation] [--return-structure-on-creation] [--return-about-txt-on-creation]', 'Insert a blank builtin or custom component to a section, component-list, grid, container, or expandable content path. Reusable components with template variables require --using-template with exact JSON keys. Edit generated body/config files after creation. Component ids are optional; use --id only when you need a stable id. INDEX is zero-based and supports Python-style negative indexes; 0 is the front, -1 is the back.'),
       formatCommandHelp('hvy insert INDEX section PARENT_PATH ID TITLE', 'Add a section under /body or under another section.'),
       formatCommandHelp('hvy insert INDEX text PARENT_PATH [ID|--id ID]', 'Insert a blank text block.'),
       formatCommandHelp('hvy insert INDEX table PARENT_PATH [ID|--id ID]', 'Insert a blank static table block.'),
@@ -125,7 +132,7 @@ export function hvyDocumentCommandHelp(topic = ''): string {
       '  hvy insert -2 table . a-table',
     ].join('\n'),
     component: [
-      formatCommandHelp('hvy insert INDEX COMPONENT PARENT_PATH [ID|--id ID] [--return-order-on-creation] [--return-structure-on-creation] [--return-about-txt-on-creation]', 'Insert a blank builtin or custom component to a section, component-list, grid, container, or expandable content path. Edit generated body/config files after creation. Component ids are optional; use --id only when you need a stable id. INDEX is zero-based and supports Python-style negative indexes; 0 is the front, -1 is the back.'),
+      formatCommandHelp('hvy insert INDEX COMPONENT PARENT_PATH [ID|--id ID] [--using-template JSON] [--return-order-on-creation] [--return-structure-on-creation] [--return-about-txt-on-creation]', 'Insert a blank builtin or custom component to a section, component-list, grid, container, or expandable content path. Reusable components with template variables require --using-template with exact JSON keys. Edit generated body/config files after creation. Component ids are optional; use --id only when you need a stable id. INDEX is zero-based and supports Python-style negative indexes; 0 is the front, -1 is the back.'),
     ].join('\n'),
     section: formatCommandHelp('hvy insert INDEX section PARENT_PATH ID TITLE', 'Add a section under /body or under another section. INDEX is zero-based and supports Python-style negative indexes; 0 is the front, -1 is the back.'),
     text: formatCommandHelp('hvy insert INDEX text PARENT_PATH [ID|--id ID]', 'Insert a blank text block. Edit text.txt after creation. INDEX is zero-based and supports Python-style negative indexes; 0 is the front, -1 is the back.'),
@@ -376,16 +383,20 @@ function addComponentShortcut(ctx: HvyDocumentCommandContext, component: string,
   const returnAboutTxtOnCreation = rest.includes('--return-about-txt-on-creation');
   const returnOrderOnCreation = rest.includes('--return-order-on-creation');
   const returnStructureOnCreation = rest.includes('--return-structure-on-creation');
-  const optionRest = rest.filter((arg) => ![
+  const usingTemplateRaw = readOption(rest, '--using-template');
+  const optionRest = rest.filter((arg, argIndex) => ![
     '--return-about-txt-on-creation',
     '--return-order-on-creation',
     '--return-structure-on-creation',
-  ].includes(arg));
+  ].includes(arg) && arg !== '--using-template' && rest[argIndex - 1] !== '--using-template');
   if (readOption(optionRest, '--config') !== null) {
     throw new Error(`hvy insert ${component}: creation does not accept --config; create the component, inspect it, then edit the generated *.json files.`);
   }
   if (optionRest.includes('--name')) {
     throw new Error(`hvy insert ${component}: use --id ID, not --name.`);
+  }
+  if (rest.includes('--using-template') && usingTemplateRaw === '') {
+    throw new Error(`hvy insert ${component}: --using-template requires a JSON object.`);
   }
   const unsupportedOption = optionRest.find((arg) => isOptionArg(arg) && arg !== '--id');
   if (unsupportedOption) {
@@ -411,6 +422,7 @@ function addComponentShortcut(ctx: HvyDocumentCommandContext, component: string,
     returnAboutTxtOnCreation,
     returnOrderOnCreation,
     returnStructureOnCreation,
+    templateValues: usingTemplateRaw === null ? null : parseReusableTemplateJson(usingTemplateRaw),
   });
 }
 
@@ -423,6 +435,7 @@ function addComponentToPath(ctx: HvyDocumentCommandContext, params: {
   returnAboutTxtOnCreation?: boolean;
   returnOrderOnCreation?: boolean;
   returnStructureOnCreation?: boolean;
+  templateValues?: Record<string, string> | null;
 }): HvyDocumentCommandResult {
   if (!params.parentPath || !params.component) {
     throw new Error(`${params.commandName}: expected PARENT_PATH [ID|--id ID]`);
@@ -432,7 +445,7 @@ function addComponentToPath(ctx: HvyDocumentCommandContext, params: {
   }
   const resolvedParentPath = resolveVirtualPath(ctx.fs, ctx.cwd, params.parentPath);
   const id = params.id || generateStableCliComponentId(ctx.fs, resolvedParentPath, params.component);
-  const block = createCliComponentBlock(ctx.document, params.component, id);
+  const block = createCliComponentBlock(ctx.document, params.component, id, params.templateValues ?? null);
   const parentBlock = findBlockForVirtualDirectory(ctx.document, resolvedParentPath);
   const target = findBlockInsertionTargetForVirtualDirectory(ctx.document, resolvedParentPath)
     ?? findDirectBlockInsertionTarget(ctx, resolvedParentPath);
@@ -752,13 +765,28 @@ function createSection(id: string, title: string, level: number): VisualSection 
   };
 }
 
-function createCliComponentBlock(document: VisualDocument, component: string, id: string): VisualBlock {
+function createCliComponentBlock(document: VisualDocument, component: string, id: string, templateValues: Record<string, string> | null = null): VisualBlock {
   const definition = getComponentDefsFromMeta(document.meta).find((item) => item.name === component);
+  const variables = extractReusableTemplateVariablesFromDefinition(definition);
+  if (!templateValues && variables.length > 0) {
+    throw new Error(`hvy insert ${component}: template values required. Use --using-template with expected keys: ${formatTemplateKeys(variables.map((variable) => variable.name))}`);
+  }
+  if (templateValues) {
+    if (variables.length === 0) {
+      throw new Error(`hvy insert ${component}: --using-template requires template variables. Expected keys: ${formatTemplateKeys([])}`);
+    }
+    validateReusableTemplateValues(variables, templateValues);
+  }
   const block = definition?.template
     ? cloneCliVisualBlock(definition.template)
     : createBlockFromSchema(createCliComponentSchema(document, component), '');
   block.schema.component = component;
   block.schema.id = id;
+  if (templateValues) {
+    applyReusableTemplateValues(block, templateValues);
+    block.schema.component = component;
+    block.schema.id = id;
+  }
   return block;
 }
 

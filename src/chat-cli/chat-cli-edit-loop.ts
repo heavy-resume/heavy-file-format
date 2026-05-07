@@ -25,7 +25,7 @@ import {
 
 const CHAT_CLI_MAX_STEPS = 30;
 const CHAT_CLI_MAX_CONSECUTIVE_COMMAND_ERRORS = 3;
-const CHAT_CLI_MESSAGE_HISTORY_HIGH_WATER_TOKENS = 10_000;
+const CHAT_CLI_MESSAGE_HISTORY_HIGH_WATER_TOKENS = 12_000;
 const CHAT_CLI_MESSAGE_HISTORY_TARGET_CHARS = 24_000;
 const CHAT_CLI_MESSAGE_HISTORY_FALLBACK_HIGH_WATER_CHARS = 40_000;
 const CHAT_CLI_PRIOR_MESSAGE_LIMIT = 10;
@@ -119,10 +119,10 @@ export async function runChatCliEditLoop(params: {
   syncIntroducedDiagnostics(params.document, turnState.diagnostics);
   let consecutiveCommandErrors = 0;
   let latestTokenUsage: ChatTokenUsage | null = null;
-  let latestInputTokens: number | undefined;
 
   for (let step = 0; step < CHAT_CLI_MAX_STEPS; step += 1) {
     throwIfAborted(params.signal);
+    let currentInputTokens: number | undefined;
     const nativeTurn = await requestProxyToolTurn({
       settings: params.settings,
       messages: turnState.messages,
@@ -136,7 +136,7 @@ export async function runChatCliEditLoop(params: {
       onReasoningSummary: params.onReasoningSummary,
       onTokenUsage: (usage) => {
         latestTokenUsage = usage;
-        latestInputTokens = usage.inputTokens;
+        currentInputTokens = usage.inputTokens;
         params.onTokenUsage?.(usage);
       },
       signal: params.signal,
@@ -151,7 +151,7 @@ export async function runChatCliEditLoop(params: {
           onProgress: params.onProgress,
           traceRunId,
           writeTrace: true,
-          lastInputTokens: latestInputTokens,
+          lastInputTokens: currentInputTokens,
         })
       : await advanceChatCliTurnState({
       settings: params.settings,
@@ -162,7 +162,7 @@ export async function runChatCliEditLoop(params: {
       onProgress: params.onProgress,
       traceRunId,
       writeTrace: true,
-      lastInputTokens: latestInputTokens,
+      lastInputTokens: currentInputTokens,
     });
     turnState = advanced;
     if (advanced.commandResultMessage) {
@@ -367,9 +367,7 @@ async function advanceChatCliNativeToolTurnState(params: {
     const introducedIssues = getIntroducedDiagnostics(params.document);
     if (introducedIssues.length > 0) {
       const message = formatIntroducedLintIssuesPrompt(introducedIssues);
-      return {
-        ...buildSimAdvanceResult({ ...params, assistantOutput: params.turn.output }, params.state.messages, message, false, params.state.urgency, diagnostics),
-        toolTurn: params.turn,
+      const toolState = await compactChatCliToolState({
         toolState: appendProviderToolResultsToState(params.turn.toolState, params.turn, [
           ...results.filter((result) => result.callId !== params.turn.toolCalls.find((call) => call.name === 'finish_task')?.id),
           {
@@ -378,6 +376,16 @@ async function advanceChatCliNativeToolTurnState(params: {
             isError: true,
           },
         ]),
+        settings: params.settings ?? params.state.settings,
+        request: params.state.request,
+        lastInputTokens: params.lastInputTokens,
+        signal: params.signal,
+        traceRunId: params.traceRunId,
+      });
+      return {
+        ...buildSimAdvanceResult({ ...params, assistantOutput: params.turn.output }, params.state.messages, message, false, params.state.urgency, diagnostics),
+        toolTurn: params.turn,
+        toolState,
       };
     }
     return {
@@ -402,8 +410,10 @@ async function advanceChatCliNativeToolTurnState(params: {
 
   const urgency = batchHadSuccess ? updateChatCliUrgency(params.state.urgency, mutated) : params.state.urgency;
   const commandResultMessage = formatToolCommandResultDisplay(formatBatchCommandOutput(commandOutputs), cli.snapshot().cwd);
-  const messages = await compactChatCliConversation({
-    messages: params.state.messages,
+  const messages = params.state.messages;
+
+  const toolState = await compactChatCliToolState({
+    toolState: appendProviderToolResultsToState(params.turn.toolState, params.turn, results),
     settings: params.settings ?? params.state.settings,
     request: params.state.request,
     lastInputTokens: params.lastInputTokens,
@@ -418,7 +428,7 @@ async function advanceChatCliNativeToolTurnState(params: {
     lastFailedCommand,
     lastCommandError,
     toolTurn: params.turn,
-    toolState: appendProviderToolResultsToState(params.turn.toolState, params.turn, results),
+    toolState,
   };
 }
 
@@ -1562,6 +1572,84 @@ async function summarizeCompactedChatCliMessages(params: {
   }
 }
 
+async function compactChatCliToolState(params: {
+  toolState: ProviderToolState;
+  settings?: ChatSettings;
+  request: string;
+  lastInputTokens?: number;
+  signal?: AbortSignal;
+  traceRunId?: string;
+}): Promise<ProviderToolState> {
+  const shouldCompact = typeof params.lastInputTokens === 'number'
+    ? params.lastInputTokens >= CHAT_CLI_MESSAGE_HISTORY_HIGH_WATER_TOKENS
+    : countProviderToolStateChars(params.toolState) > CHAT_CLI_MESSAGE_HISTORY_FALLBACK_HIGH_WATER_CHARS;
+  if (!shouldCompact || !providerToolStateHasToolHistory(params.toolState)) {
+    return params.toolState;
+  }
+  const summary = await summarizeCompactedChatCliToolState({
+    settings: params.settings,
+    request: params.request,
+    toolState: params.toolState,
+    signal: params.signal,
+    traceRunId: params.traceRunId,
+  });
+  return rebuildCompactedProviderToolState(params.toolState, [
+    '### COMPACTED PRIOR CLI TOOL HISTORY ###',
+    summary.trim() || fallbackCompactedChatCliToolStateSummary(params.request, params.toolState),
+    '### END COMPACTED PRIOR CLI TOOL HISTORY ###',
+  ].join('\n'));
+}
+
+async function summarizeCompactedChatCliToolState(params: {
+  settings?: ChatSettings;
+  request: string;
+  toolState: ProviderToolState;
+  signal?: AbortSignal;
+  traceRunId?: string;
+}): Promise<string> {
+  const compactionModel = params.settings?.compactionModel?.trim() || DEFAULT_OPENAI_COMPACTION_MODEL;
+  const compactionProvider = params.settings?.compactionProvider ?? 'openai';
+  try {
+    return await requestProxyCompletion({
+      settings: {
+        provider: compactionProvider,
+        model: compactionModel,
+        compactionProvider,
+        compactionModel,
+      },
+      messages: [
+        {
+          id: crypto.randomUUID(),
+          role: 'user',
+          content: [
+            'Summarize this compacted HVY CLI native-tool document-edit history for the next model turn.',
+            'Preserve the user goal, completed edits, relevant paths/components, validation results, unresolved errors, current plan, and anything the next turn must not redo.',
+            'Write one concise factual message. Do not invent progress.',
+            '',
+            `Current request:\n${params.request}`,
+            '',
+            'Compacted provider tool state:',
+            formatProviderToolStateForCompactionSummary(params.toolState),
+          ].join('\n'),
+        },
+      ],
+      context: 'Compacting older HVY CLI native-tool messages for the next model turn.',
+      responseInstructions: 'Return only the compacted summary text.',
+      systemInstructions: [
+        'You compact HVY CLI native-tool agent history for a later AI model turn.',
+        'Be concise, chronological, and factual.',
+        'Summarize goal and progress; keep actionable errors and pending work.',
+      ].join('\n'),
+      mode: 'qa',
+      debugLabel: 'chat-cli-tool-compaction',
+      traceRunId: params.traceRunId,
+      signal: params.signal,
+    });
+  } catch {
+    return fallbackCompactedChatCliToolStateSummary(params.request, params.toolState);
+  }
+}
+
 function formatMessagesForCompactionSummary(messages: ChatMessage[]): string {
   return messages
     .map((message, index) => {
@@ -1587,6 +1675,96 @@ function fallbackCompactedChatCliSummary(request: string, messages: ChatMessage[
   ].join('\n');
 }
 
+function fallbackCompactedChatCliToolStateSummary(request: string, toolState: ProviderToolState): string {
+  const formatted = formatProviderToolStateForCompactionSummary(toolState);
+  const tail = compactFallbackMessageContent(formatted).split('\n').slice(-40).join('\n');
+  return [
+    `Current request: ${request}`,
+    'Compacted older native tool history.',
+    'Automatic summary failed, so this deterministic tail preserves recent compacted tool context.',
+    tail ? `Recent compacted native-tool tail:\n${tail}` : '',
+  ].join('\n');
+}
+
+function rebuildCompactedProviderToolState(toolState: ProviderToolState, summary: string): ProviderToolState {
+  if (toolState.provider === 'openai') {
+    return {
+      provider: 'openai',
+      input: [
+        ...collectOpenAiPinnedToolStateItems(toolState.input),
+        {
+          role: 'user',
+          content: [{ type: 'input_text', text: summary }],
+        },
+      ],
+    };
+  }
+  if (toolState.provider === 'anthropic') {
+    return {
+      provider: 'anthropic',
+      system: toolState.system,
+      messages: [
+        ...collectAnthropicPinnedToolStateMessages(toolState.messages),
+        { role: 'user', content: summary },
+      ],
+    };
+  }
+  return {
+    provider: 'qwen',
+    messages: [
+      ...collectQwenPinnedToolStateMessages(toolState.messages),
+      { role: 'user', content: summary },
+    ],
+  };
+}
+
+function collectOpenAiPinnedToolStateItems(input: unknown[]): unknown[] {
+  const firstToolIndex = input.findIndex((item) => isRecord(item) && typeof item.type === 'string');
+  return firstToolIndex === -1 ? input : input.slice(0, firstToolIndex);
+}
+
+function collectAnthropicPinnedToolStateMessages(messages: unknown[]): unknown[] {
+  const firstToolIndex = messages.findIndex((message) => {
+    if (!isRecord(message)) {
+      return false;
+    }
+    const content = message.content;
+    return Array.isArray(content) && content.some((item) => isRecord(item) && (item.type === 'tool_use' || item.type === 'tool_result'));
+  });
+  return firstToolIndex === -1 ? messages : messages.slice(0, firstToolIndex);
+}
+
+function collectQwenPinnedToolStateMessages(messages: unknown[]): unknown[] {
+  const firstToolIndex = messages.findIndex((message) => isRecord(message) && (message.role === 'tool' || Array.isArray(message.tool_calls)));
+  return firstToolIndex === -1 ? messages : messages.slice(0, firstToolIndex);
+}
+
+function providerToolStateHasToolHistory(toolState: ProviderToolState): boolean {
+  if (toolState.provider === 'openai') {
+    return toolState.input.some((item) => isRecord(item) && typeof item.type === 'string');
+  }
+  if (toolState.provider === 'anthropic') {
+    return toolState.messages.some((message) => {
+      if (!isRecord(message) || !Array.isArray(message.content)) {
+        return false;
+      }
+      return message.content.some((item) => isRecord(item) && (item.type === 'tool_use' || item.type === 'tool_result'));
+    });
+  }
+  return toolState.messages.some((message) => isRecord(message) && (message.role === 'tool' || Array.isArray(message.tool_calls)));
+}
+
+function countProviderToolStateChars(toolState: ProviderToolState): number {
+  return JSON.stringify(toolState).length;
+}
+
+function formatProviderToolStateForCompactionSummary(toolState: ProviderToolState): string {
+  const payload = toolState.provider === 'openai'
+    ? toolState.input
+    : toolState.messages;
+  return JSON.stringify(payload, null, 2);
+}
+
 function compactFallbackMessageContent(content: string): string {
   const lines = content
     .split('\n')
@@ -1603,6 +1781,10 @@ function compactFallbackMessageContent(content: string): string {
 
 function countMessageChars(messages: ChatMessage[]): number {
   return messages.reduce((total, message) => total + message.content.length, 0);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
 }
 
 function isSessionOnlyCommand(command: string): boolean {

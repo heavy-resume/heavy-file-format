@@ -136,6 +136,79 @@ test('resume template spaces stacked location labels from block css', async ({ p
   expect(secondBox!.y - (firstBox!.y + firstBox!.height)).toBeGreaterThan(1);
 });
 
+test('custom component templates open a fill modal before editor insertion', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+component_defs:
+  - name: card-record
+    baseType: container
+    schema:
+      containerBlocks:
+        - text: "{% title %}"
+          schema:
+            component: text
+            placeholder: Title
+        - text: "{% details | block %}"
+          schema:
+            component: text
+            placeholder: Details
+---
+
+<!--hvy: {"id":"cards"}-->
+#! Cards
+
+<!--hvy:component-list {"id":"card-list","componentListComponent":"card-record"}-->
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('.ghost-label', { hasText: 'Add Card' }).click();
+  const modal = page.locator('.component-meta-modal', { hasText: 'card-record' });
+  await expect(modal).toBeVisible();
+  await expect(modal.locator('input[data-template-variable="title"]')).toBeVisible();
+  await expect(modal.locator('textarea[data-template-variable="details"]')).toBeVisible();
+
+  await modal.locator('input[data-template-variable="title"]').fill('Launch Notes');
+  await modal.locator('textarea[data-template-variable="details"]').fill('Line one\nLine two');
+  await modal.getByRole('button', { name: 'Insert' }).click();
+
+  const inserted = page.locator('.editor-block', { hasText: 'card-record' });
+  await expect(inserted.locator('.editor-block-passive', { hasText: 'Launch Notes' })).toBeVisible();
+  await expect(inserted.locator('.editor-block-passive', { hasText: 'Line one' })).toBeVisible();
+});
+
+test('custom component template modal cancel leaves the document unchanged', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+component_defs:
+  - name: card-record
+    baseType: text
+    schema:
+      id: "{% title %}"
+      placeholder: Card title
+---
+
+<!--hvy: {"id":"cards"}-->
+#! Cards
+
+<!--hvy:component-list {"id":"card-list","componentListComponent":"card-record"}-->
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('.ghost-label', { hasText: 'Add Card' }).click();
+  const modal = page.locator('.component-meta-modal', { hasText: 'card-record' });
+  await expect(modal).toBeVisible();
+  await modal.getByRole('button', { name: 'Cancel' }).click();
+  await expect(page.locator('.reader-block-text', { hasText: 'Card title' })).toHaveCount(0);
+});
+
 test('text component fenced python code is syntax highlighted', async ({ page }) => {
   await page.goto('/');
 

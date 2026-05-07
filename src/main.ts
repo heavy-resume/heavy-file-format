@@ -88,6 +88,7 @@ function createInitialState(document: ReturnType<typeof deserializeDocumentBytes
     clearSectionTitleOnFocusKey: null,
     modalSectionKey: null,
     reusableSaveModal: null,
+    reusableTemplateModal: null,
     tempHighlights: new Set<string>(),
     addComponentBySection: {},
     metaPanelOpen: false,
@@ -102,6 +103,7 @@ function createInitialState(document: ReturnType<typeof deserializeDocumentBytes
     themeModalOpen: false,
     gridAddComponentByBlock: {},
     expandableEditorPanels: {},
+    readerExpandableState: {},
     viewerSidebarOpen: false,
     editorSidebarOpen: false,
     editorSidebarHelpDismissed: false,
@@ -328,6 +330,9 @@ readerRenderer = createReaderRenderer(
     get reusableSaveModal() {
       return state.reusableSaveModal;
     },
+    get reusableTemplateModal() {
+      return state.reusableTemplateModal;
+    },
     get componentMetaModal() {
       return state.componentMetaModal;
     },
@@ -339,6 +344,9 @@ readerRenderer = createReaderRenderer(
     },
     get currentView() {
       return state.currentView;
+    },
+    get readerExpandableState() {
+      return state.readerExpandableState;
     },
   },
   {

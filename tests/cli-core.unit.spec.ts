@@ -25,6 +25,49 @@ function createResumeCliTestDocument() {
   return deserializeDocument(readFileSync(fileURLToPath(new URL('../examples/resume.hvy', import.meta.url)), 'utf8'), '.hvy');
 }
 
+function createTemplatedCliTestDocument() {
+  return deserializeDocument(`---
+hvy_version: 0.1
+title: CLI Template Test
+component_defs:
+  - name: history-record
+    baseType: expandable
+    schema:
+      css: "margin: 0;"
+      description: "{% description | block %}"
+      expandableStubBlocks:
+        lock: false
+        children:
+          - text: ""
+            schema:
+              component: table
+              tableColumns: ["YEAR", "ORGANIZATION", "TITLE"]
+              tableRows:
+                - cells: ["{% years %}", "{% organization %}", "{% role %}"]
+      expandableContentBlocks:
+        lock: false
+        children:
+          - text: "{% organization %}"
+            schema:
+              component: text
+              placeholder: Organization
+          - text: "{% description | block %}"
+            schema:
+              component: text
+              placeholder: Description
+  - name: untokened-record
+    baseType: text
+    schema:
+      placeholder: Empty
+---
+
+<!--hvy: {"id":"history"}-->
+#! History
+
+<!--hvy:component-list {"id":"history-list","componentListComponent":"history-record"}-->
+`, '.hvy');
+}
+
 test('cli can navigate and read virtual component files', async () => {
   const document = createCliTestDocument();
   const session = createHvyCliSession();
@@ -400,7 +443,7 @@ test('hvy insert -1 can create custom components and xref components', async () 
   const skill = await executeHvyCliCommand(
     document,
     session,
-    'hvy insert -1 skill-record /body/skills/component-list-1 --id skill-baking'
+    'hvy insert -1 skill-record /body/skills/component-list-1 --id skill-baking --using-template \'{"skill":"","description":"","notes":""}\''
   );
   const xref = await executeHvyCliCommand(
     document,
@@ -432,6 +475,67 @@ test('hvy insert -1 can create custom components and xref components', async () 
     .toContain('"xrefTarget": ""');
 });
 
+test('hvy insert can fill reusable component template values from exact JSON keys', async () => {
+  const document = createTemplatedCliTestDocument();
+  const session = createHvyCliSession();
+
+  const created = await executeHvyCliCommand(
+    document,
+    session,
+    'hvy insert 0 history-record /body/history/history-list --id history-heavy --using-template \'{"years":"2025-2026","organization":"Heavy Resume","role":"Founder","description":"Line one\\nLine two"}\''
+  );
+
+  expect(created.output).toContain('/body/history/history-list/history-heavy: created');
+  expect((await executeHvyCliCommand(document, session, 'cat /body/history/history-list/history-heavy/expandable-stub/table-0/tableRows.json')).output)
+    .toContain('"Heavy Resume"');
+  expect((await executeHvyCliCommand(document, session, 'cat /body/history/history-list/history-heavy/expandable-content/text-0/text.txt')).output)
+    .toBe('Heavy Resume');
+  expect((await executeHvyCliCommand(document, session, 'cat /body/history/history-list/history-heavy/expandable-content/text-1/text.txt')).output)
+    .toBe('Line one\nLine two');
+});
+
+test('hvy insert template values reject missing extra invalid and multiline text values', async () => {
+  const document = createTemplatedCliTestDocument();
+  const session = createHvyCliSession();
+
+  await expect(executeHvyCliCommand(
+    document,
+    session,
+    'hvy insert 0 history-record /body/history/history-list'
+  )).rejects.toThrow('hvy insert history-record: template values required. Use --using-template with expected keys: description, years, organization, role');
+  await expect(executeHvyCliCommand(
+    document,
+    session,
+    'hvy insert 0 history-record /body/history/history-list --using-template \'{"years":"2025","organization":"Heavy","role":"Founder"}\''
+  )).rejects.toThrow('Missing keys: description');
+  await expect(executeHvyCliCommand(
+    document,
+    session,
+    'hvy insert 0 history-record /body/history/history-list --using-template \'{"years":"2025","organization":"Heavy","role":"Founder","description":"","extra":""}\''
+  )).rejects.toThrow('Extra keys: extra');
+  await expect(executeHvyCliCommand(
+    document,
+    session,
+    'hvy insert 0 history-record /body/history/history-list --using-template \'{"years":"2025\\n2026","organization":"Heavy","role":"Founder","description":""}\''
+  )).rejects.toThrow('Template value "years" is type text and cannot contain newlines.');
+  await expect(executeHvyCliCommand(
+    document,
+    session,
+    'hvy insert 0 history-record /body/history/history-list --using-template not-json'
+  )).rejects.toThrow('--using-template must be a JSON object of string values.');
+  await expect(executeHvyCliCommand(
+    document,
+    session,
+    'hvy insert 0 history-record /body/history/history-list --using-template \'{"years":2025,"organization":"Heavy","role":"Founder","description":""}\''
+  )).rejects.toThrow('--using-template value for "years" must be a string.');
+  await expect(executeHvyCliCommand(
+    document,
+    session,
+    'hvy insert 0 untokened-record /body/history --using-template \'{}\''
+  )).rejects.toThrow('hvy insert untokened-record: --using-template requires template variables. Expected keys: (none)');
+  expect(document.sections[0]?.blocks).toHaveLength(1);
+});
+
 test('hvy insert can opt in to returning order and structure on creation', async () => {
   const document = createResumeCliTestDocument();
   const session = createHvyCliSession();
@@ -439,7 +543,7 @@ test('hvy insert can opt in to returning order and structure on creation', async
   const skill = await executeHvyCliCommand(
     document,
     session,
-    'hvy insert -1 skill-record /body/skills/component-list-1 --id skill-baking --return-order-on-creation --return-structure-on-creation'
+    'hvy insert -1 skill-record /body/skills/component-list-1 --id skill-baking --using-template \'{"skill":"","description":"","notes":""}\' --return-order-on-creation --return-structure-on-creation'
   );
 
   expect(skill.output).toContain('order:\n  children-order.json controls list item order.');
@@ -457,7 +561,7 @@ test('hvy insert can opt in to returning custom component about text on creation
   const skill = await executeHvyCliCommand(
     document,
     session,
-    'hvy insert -1 skill-record /body/skills/component-list-1 --id skill-baking --return-about-txt-on-creation'
+    'hvy insert -1 skill-record /body/skills/component-list-1 --id skill-baking --using-template \'{"skill":"","description":"","notes":""}\' --return-about-txt-on-creation'
   );
 
   expect(skill.output).toContain('### CREATED CUSTOM COMPONENT ###');
@@ -479,12 +583,12 @@ test('hvy insert can create custom components without explicit ids', async () =>
   const generated = await executeHvyCliCommand(
     document,
     session,
-    'hvy insert 0 history-record /body/history/component-list-2'
+    'hvy insert 0 history-record /body/history/component-list-2 --using-template \'{"years":"","organization":"","role":"","location":"","date_range":"","description":""}\''
   );
   const positionalId = await executeHvyCliCommand(
     document,
     session,
-    'hvy insert 0 history-record /body/history/component-list-2 history-heavy-resume-founder'
+    'hvy insert 0 history-record /body/history/component-list-2 history-heavy-resume-founder --using-template \'{"years":"","organization":"","role":"","location":"","date_range":"","description":""}\''
   );
 
   expect(generated.output).toContain('/body/history/component-list-2/history-record-1: created');
@@ -506,7 +610,7 @@ test('hvy insert -1 changes cwd to the newly created component', async () => {
   const created = await executeHvyCliCommand(
     document,
     session,
-    'hvy insert -1 history-record /body/history/component-list-2 --id history-heavy-resume-founder'
+    'hvy insert -1 history-record /body/history/component-list-2 --id history-heavy-resume-founder --using-template \'{"years":"","organization":"","role":"","location":"","date_range":"","description":""}\''
   );
 
   expect(created.cwd).toBe('/body/history/component-list-2/history-heavy-resume-founder');
@@ -521,7 +625,7 @@ test('aggregate body write errors explain how to fill nested reusable components
   await executeHvyCliCommand(
     document,
     session,
-    'hvy insert -1 skill-record /body/skills/component-list-1 --id skill-baking'
+    'hvy insert -1 skill-record /body/skills/component-list-1 --id skill-baking --using-template \'{"skill":"","description":"","notes":""}\''
   );
 
   await expect(executeHvyCliCommand(
@@ -538,7 +642,7 @@ test('hvy insert 0 creates custom components at the beginning', async () => {
   const result = await executeHvyCliCommand(
     document,
     session,
-    'hvy insert 0 skill-record /body/skills/component-list-1 --id skill-baking'
+    'hvy insert 0 skill-record /body/skills/component-list-1 --id skill-baking --using-template \'{"skill":"","description":"","notes":""}\''
   );
 
   expect(result.output).toContain('/body/skills/component-list-1/skill-baking: created');
@@ -554,9 +658,9 @@ test('hvy insert uses zero-based indexes and Python-style negative indexes', asy
   const document = createResumeCliTestDocument();
   const session = createHvyCliSession();
 
-  await executeHvyCliCommand(document, session, 'hvy insert 1 skill-record /body/skills/component-list-1 --id skill-baking');
-  await executeHvyCliCommand(document, session, 'hvy insert -2 skill-record /body/skills/component-list-1 --id skill-penultimate');
-  await executeHvyCliCommand(document, session, 'hvy insert -1 skill-record /body/skills/component-list-1 --id skill-last');
+  await executeHvyCliCommand(document, session, 'hvy insert 1 skill-record /body/skills/component-list-1 --id skill-baking --using-template \'{"skill":"","description":"","notes":""}\'');
+  await executeHvyCliCommand(document, session, 'hvy insert -2 skill-record /body/skills/component-list-1 --id skill-penultimate --using-template \'{"skill":"","description":"","notes":""}\'');
+  await executeHvyCliCommand(document, session, 'hvy insert -1 skill-record /body/skills/component-list-1 --id skill-last --using-template \'{"skill":"","description":"","notes":""}\'');
 
   const order = (await executeHvyCliCommand(document, session, 'cat /body/skills/component-list-1/children-order.json')).output;
 
@@ -990,7 +1094,7 @@ test('component raw.hvy edits preserve omitted placeholders on unchanged empty t
   const document = createResumeCliTestDocument();
   const session = createHvyCliSession();
 
-  await executeHvyCliCommand(document, session, 'hvy insert 0 history-record /body/history/component-list-2 --id history-placeholder-repro');
+  await executeHvyCliCommand(document, session, 'hvy insert 0 history-record /body/history/component-list-2 --id history-placeholder-repro --using-template \'{"years":"","organization":"","role":"","location":"","date_range":"","description":""}\'');
   const before = await executeHvyCliCommand(document, session, 'cat /body/history/component-list-2/history-placeholder-repro/raw.hvy');
   expect(before.output).toContain('"placeholder":"description"');
 

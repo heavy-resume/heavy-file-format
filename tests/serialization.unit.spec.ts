@@ -492,6 +492,38 @@ component_defs:
   expect(output).toContain('tableColumns:\n                - YEAR\n                - ORGANIZATION\n                - TITLE');
 });
 
+test('reusable component definitions preserve template value tokens in schema strings', () => {
+  const input = `---
+hvy_version: 0.1
+component_defs:
+  - name: history-record
+    baseType: expandable
+    schema:
+      description: "{% description | block %}"
+      expandableStubBlocks:
+        lock: false
+        children:
+          - text: ""
+            schema:
+              component: table
+              tableColumns: ["YEAR", "ORGANIZATION", "TITLE"]
+              tableRows:
+                - cells: ["{% years %}", "{% organization | text %}", "{% role %}"]
+---
+
+<!--hvy: {"id":"history"}-->
+#! History
+`;
+
+  const document = deserializeDocument(input, '.hvy');
+  const output = serializeWithState(document);
+
+  expect(output).toContain('description: "{% description | block %}"');
+  expect(output).toContain('- "{% years %}"');
+  expect(output).toContain('- "{% organization | text %}"');
+  expect(output).toContain('- "{% role %}"');
+});
+
 test('serializes uncontained section metadata without changing section shape on round-trip', () => {
   const input = `---
 hvy_version: 0.1

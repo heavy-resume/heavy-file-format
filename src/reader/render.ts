@@ -21,6 +21,8 @@ import { sanitizeInlineCss } from '../css-sanitizer';
 import { areTablesEnabled } from '../reference-config';
 import { parseAttachedComponentBlocks } from '../plugins/db-table';
 import { SCRIPTING_PLUGIN_ID } from '../plugins/registry';
+import { getComponentDefsFromMeta } from '../component-defs';
+import { extractReusableTemplateVariablesFromDefinition } from '../reusable-template-values';
 
 interface ReaderRenderState {
   documentMeta: VisualDocument['meta'];
@@ -37,10 +39,12 @@ interface ReaderRenderState {
     blockId?: string;
     draftName: string;
   } | null;
+  reusableTemplateModal: import('../types').ReusableTemplateModalState | null;
   componentMetaModal: { sectionKey: string; blockId: string } | null;
   themeModalOpen: boolean;
   theme: ThemeConfig;
   currentView: 'editor' | 'viewer' | 'ai';
+  readerExpandableState: Record<string, boolean>;
 }
 
 interface ReaderRenderDeps {
@@ -159,6 +163,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
 
   function renderReaderBlock(section: VisualSection, block: VisualBlock): string {
     const base = deps.resolveBaseComponent(block.schema.component);
+    const readerExpanded = base === 'expandable' ? getReaderExpandableExpanded(section.key, block) : block.schema.expandableExpanded;
     const blockDomId = getBlockDomId(block);
     const idAttr = blockDomId ? ` id="${deps.escapeAttr(blockDomId)}"` : '';
     const blockClass = [
@@ -172,7 +177,10 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       .filter(Boolean)
       .map((part) => deps.escapeAttr(part))
       .join(' ');
-    const blockAttrs = `${idAttr} class="${blockClass}" data-component="${deps.escapeAttr(block.schema.component)}" data-section-key="${deps.escapeAttr(section.key)}" data-block-id="${deps.escapeAttr(block.id)}" style="${deps.escapeAttr(sanitizeInlineCss(block.schema.css))}"`;
+    const expandableAttrs = base === 'expandable'
+      ? ` data-reader-action="toggle-expandable" aria-expanded="${readerExpanded ? 'true' : 'false'}"`
+      : '';
+    const blockAttrs = `${idAttr} class="${blockClass}" data-component="${deps.escapeAttr(block.schema.component)}" data-section-key="${deps.escapeAttr(section.key)}" data-block-id="${deps.escapeAttr(block.id)}"${expandableAttrs} style="${deps.escapeAttr(sanitizeInlineCss(block.schema.css))}"`;
     const helpers = deps.getComponentRenderHelpers();
 
     if (base === 'plugin') {
@@ -210,7 +218,14 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     }
     if (base === 'expandable') {
       deps.ensureExpandableBlocks(block);
-      return `<div ${blockAttrs}>${renderExpandableReader(section, block, helpers)}</div>`;
+      const readerBlock = {
+        ...block,
+        schema: {
+          ...block.schema,
+          expandableExpanded: readerExpanded,
+        },
+      } as VisualBlock;
+      return `<div ${blockAttrs}>${renderExpandableReader(section, readerBlock, helpers)}</div>`;
     }
     if (base === 'table') {
       if (!areTablesEnabled()) {
@@ -229,6 +244,11 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
 
   function getBlockDomId(block: VisualBlock): string {
     return block.schema.id.trim();
+  }
+
+  function getReaderExpandableExpanded(sectionKey: string, block: VisualBlock): boolean {
+    const key = `${sectionKey}:${block.id}`;
+    return state.readerExpandableState[key] ?? block.schema.expandableExpanded;
   }
 
   function renderThemeModal(): string {
@@ -353,6 +373,43 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
             <div class="link-inline-actions reusable-save-actions">
               <button type="button" class="ghost" data-modal-action="close">Cancel</button>
               <button type="button" class="secondary" data-modal-action="save-reusable">Save Reusable</button>
+            </div>
+          </section>
+        </div>
+      `;
+    }
+
+    if (state.reusableTemplateModal) {
+      const definition = getComponentDefsFromMeta(state.documentMeta).find((item) => item.name === state.reusableTemplateModal?.component);
+      const variables = extractReusableTemplateVariablesFromDefinition(definition);
+      const fields = variables.map((variable) => {
+        const id = `reusableTemplateValue_${variable.name}`;
+        const label = deps.escapeHtml(variable.name);
+        return variable.type === 'block'
+          ? `<label>
+              <span>${label}</span>
+              <textarea id="${deps.escapeAttr(id)}" data-template-variable="${deps.escapeAttr(variable.name)}" rows="5"></textarea>
+            </label>`
+          : `<label>
+              <span>${label}</span>
+              <input id="${deps.escapeAttr(id)}" data-template-variable="${deps.escapeAttr(variable.name)}" />
+            </label>`;
+      }).join('');
+      return `
+        <div id="modalRoot" class="modal-root">
+          <div class="modal-overlay" data-modal-action="close-overlay"></div>
+          <section class="modal-panel component-meta-modal">
+            <div class="modal-head">
+              <h3>${deps.escapeHtml(state.reusableTemplateModal.component)}</h3>
+              <button type="button" data-modal-action="close">Close</button>
+            </div>
+            <p class="muted">Fill reusable component template values. Blank values are allowed.</p>
+            <div class="modal-field-stack">
+              ${fields}
+            </div>
+            <div class="link-inline-actions reusable-save-actions">
+              <button type="button" class="ghost" data-modal-action="close">Cancel</button>
+              <button type="button" class="secondary" data-modal-action="insert-reusable-template">Insert</button>
             </div>
           </section>
         </div>

@@ -76,10 +76,10 @@ component_defs:
               tableColumns: ["YEAR", "ORGANIZATION", "TITLE"]
               tableShowHeader: false
               tableRows:
-                - cells: ["", "", ""]
+                - cells: ["{% years %}", "{% organization %}", "{% role %}"]
       expandableContentBlocks:
         children:
-          - text: ""
+          - text: "{% organization %}"
             schema:
               component: text
               placeholder: Organization
@@ -92,24 +92,24 @@ component_defs:
               gridItems:
                 - id: history-location
                   block:
-                    text: ""
+                    text: "{% location %}"
                     schema:
                       component: text
                       placeholder: location
                       css: "margin: 0;"
                 - id: history-date-range
                   block:
-                    text: ""
+                    text: "{% date_range %}"
                     schema:
                       component: text
                       placeholder: date range
                       css: "margin: 0; text-align: right;"
-          - text: ""
+          - text: "{% role %}"
             schema:
               component: text
               placeholder: job title
               css: "margin: 0.35rem 0; font-weight: 700;"
-          - text: ""
+          - text: "{% description | block %}"
             schema:
               component: text
               placeholder: description
@@ -175,7 +175,7 @@ component_defs:
               tableColumns: ["DEGREE", "INSTITUTION", "LOCATION"]
               tableShowHeader: false
               tableRows:
-                - cells: ["", "", ""]
+                - cells: ["{% degree %}", "{% institution %}", "{% location %}"]
       expandableContentBlocks:
         css: "padding: 0.5rem;"
         children:
@@ -192,29 +192,29 @@ component_defs:
                       component: container
                       css: "margin: 0;"
                       containerBlocks:
-                        - text: ""
+                        - text: "{% institution %}"
                           schema:
                             component: text
                             css: "margin: 0 0 0.25rem;"
                             placeholder: "School / University"
-                        - text: ""
+                        - text: "{% location %}"
                           schema:
                             component: text
                             css: "margin: 0 0 0.25rem;"
                             placeholder: "Location"
-                        - text: ""
+                        - text: "{% gpa %}"
                           schema:
                             component: text
                             css: "margin: 0;"
                             placeholder: "GPA"
                 - id: education-date-range
                   block:
-                    text: ""
+                    text: "{% date_range %}"
                     schema:
                       component: text
                       css: "margin: 0; text-align: right;"
                       placeholder: "Start Year – End Year"
-          - text: ""
+          - text: "{% description | block %}"
             schema:
               component: text
               css: "margin: 0.5rem 0;"
@@ -246,7 +246,7 @@ component_defs:
               tableColumns: ["PROJECT", "DATE"]
               tableShowHeader: false
               tableRows:
-                - cells: ["", ""]
+                - cells: ["{% project %}", "{% date_range %}"]
       expandableContentBlocks:
         css: "padding: 0.5rem;"
         children:
@@ -258,24 +258,24 @@ component_defs:
               gridItems:
                 - id: project-title
                   block:
-                    text: ""
+                    text: "{% project %}"
                     schema:
                       component: text
                       css: "margin: 0;"
                       placeholder: "Project name"
                 - id: project-date-range
                   block:
-                    text: ""
+                    text: "{% date_range %}"
                     schema:
                       component: text
                       css: "margin: 0; text-align: right;"
                       placeholder: "Date range"
-          - text: ""
+          - text: "{% description | block %}"
             schema:
               component: text
               css: "margin: 0.5rem 0;"
               placeholder: "Project description"
-          - text: ""
+          - text: "{% link %}"
             schema:
               component: text
               css: "margin: 0.35rem 0;"
@@ -338,7 +338,7 @@ component_defs:
     schema:
       css: "margin: 0;"
       containerBlocks:
-        - text: ""
+        - text: "{% section_title %}"
           schema:
             component: text
             css: "margin: 0.4rem 0 0.1rem;"
@@ -356,7 +356,7 @@ component_defs:
       css: "margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);"
       expandableStubBlocks:
         children:
-          - text: ""
+          - text: "{% skill %}"
             schema:
               component: text
               css: "margin: 0;"
@@ -369,7 +369,7 @@ component_defs:
             schema:
               component: text
               css: "margin: 0.4rem 0 0.1rem;"
-          - text: ""
+          - text: "{% description | block %}"
             css: "margin-left: 0.5rem;"
             schema:
               component: text
@@ -379,7 +379,7 @@ component_defs:
             schema:
               component: text
               css: "margin: 0.4rem 0 0.1rem;"
-          - text: ""
+          - text: "{% notes | block %}"
             schema:
               component: text
               css: "margin: 0 0 0.35rem; margin-left: 0.5rem;"

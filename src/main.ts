@@ -278,6 +278,9 @@ editorRenderer = createEditorRenderer(
     get responsivePreview() {
       return state.responsivePreview;
     },
+    get mobileAdjustmentMode() {
+      return state.editorMode === 'mobile-adjustment';
+    },
   },
   {
     escapeAttr,
@@ -405,6 +408,7 @@ function renderApp(): void {
   const isViewerView = state.currentView === 'viewer';
   const isAiView = state.currentView === 'ai';
   const isAdvancedEditor = state.editorMode === 'advanced';
+  const isMobileAdjustmentEditor = state.editorMode === 'mobile-adjustment';
   const isRawEditor = state.editorMode === 'raw';
   const isCliEditor = state.editorMode === 'cli';
   const canPreviewSurface = !isEditorView || (!isRawEditor && !isCliEditor);
@@ -449,6 +453,7 @@ function renderApp(): void {
                   ${
                     isEditorView
                       ? `<button type="button" class="${state.editorMode === 'basic' ? 'secondary' : 'ghost'}" data-action="set-editor-mode" data-editor-mode="basic">Basic</button>
+                  <button type="button" class="${isMobileAdjustmentEditor ? 'secondary' : 'ghost'}" data-action="set-editor-mode" data-editor-mode="mobile-adjustment">Mobile Adjustment</button>
                   <button type="button" class="${isAdvancedEditor ? 'secondary' : 'ghost'}" data-action="set-editor-mode" data-editor-mode="advanced">Advanced</button>
                   <button type="button" class="${isRawEditor ? 'secondary' : 'ghost'}" data-action="set-editor-mode" data-editor-mode="raw">Raw</button>
                   <button type="button" class="${isCliEditor ? 'secondary' : 'ghost'}" data-action="set-editor-mode" data-editor-mode="cli">CLI</button>`

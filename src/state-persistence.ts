@@ -155,7 +155,7 @@ function isCurrentView(value: unknown): value is AppState['currentView'] {
 }
 
 function isEditorMode(value: unknown): value is AppState['editorMode'] {
-  return value === 'basic' || value === 'advanced' || value === 'raw' || value === 'cli';
+  return value === 'basic' || value === 'mobile-adjustment' || value === 'advanced' || value === 'raw' || value === 'cli';
 }
 
 function isStringRecord(value: unknown): value is Record<string, string> {

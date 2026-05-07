@@ -78,6 +78,10 @@ export function markdownToEditorHtml(markdown: string): string {
   return template.innerHTML;
 }
 
+export function markdownToMobileAdjustmentEditorHtml(markdown: string): string {
+  return markdownToEditorHtml(renderShortAnnotationsAsMobileText(markdown));
+}
+
 export function markdownToReaderHtml(markdown: string): string {
   const annotations = extractResponsiveAnnotations(markdown || '', { editable: false });
   const html = sanitizeHtml(marked.parse(applyUnderlineSyntax(escapeRawHtml(annotations.markdown))) as string);
@@ -111,6 +115,29 @@ function extractResponsiveAnnotations(markdown: string, options: { editable: boo
     makeToken(renderNowrapAnnotationHtml(text))
   );
   return { markdown: withNowrap, tokens };
+}
+
+export function renderShortAnnotationsAsFullText(markdown: string): string {
+  return replaceShortAnnotations(markdown, (_rawJson, fullText) => fullText);
+}
+
+export function renderShortAnnotationsAsMobileText(markdown: string): string {
+  return replaceShortAnnotations(markdown, (rawJson, fullText) => parseShortAnnotationPayload(rawJson)?.to ?? fullText);
+}
+
+export function applyMobileShortAdjustment(fullMarkdown: string, mobileMarkdown: string): string {
+  const full = renderShortAnnotationsAsFullText(fullMarkdown).trim();
+  const mobile = mobileMarkdown.trim();
+  if (full.length === 0 || mobile.length === 0 || mobile === full) {
+    return full;
+  }
+  return `<!--hvy:short ${JSON.stringify({ to: mobile })}-->${full}<!--/hvy:short-->`;
+}
+
+function replaceShortAnnotations(markdown: string, replacement: (rawJson: string, fullText: string) => string): string {
+  return (markdown || '').replace(/<!--hvy:short\s+(\{.*?\})-->([\s\S]*?)<!--\/hvy:short-->/g, (_match, rawJson, fullText) =>
+    replacement(rawJson, fullText)
+  );
 }
 
 function restoreResponsiveAnnotationTokens(html: string, tokens: ResponsiveAnnotationToken[]): string {

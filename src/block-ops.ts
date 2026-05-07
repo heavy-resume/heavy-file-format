@@ -10,7 +10,7 @@ import { syncReusableTemplateForBlock } from './reusable';
 import { normalizeXrefTarget, getXrefTargetOptions, isXrefTargetValid } from './xref-ops';
 import { getTableColumns, setTableColumns } from './table-ops';
 import { coerceGridColumns } from './grid-ops';
-import { normalizeEditorMarkdownWhitespace, normalizeMarkdownLists, markdownToEditorHtml, turndown } from './markdown';
+import { applyMobileShortAdjustment, normalizeEditorMarkdownWhitespace, normalizeMarkdownLists, markdownToEditorHtml, turndown } from './markdown';
 import { renderAddComponentPicker } from './editor/component-picker';
 import { escapeAttr, escapeHtml, getInlineEditableText, renderOption } from './utils';
 import { recordHistory } from './history';
@@ -180,7 +180,8 @@ export function handleBlockFieldInput(target: HTMLElement): boolean {
     let refreshMs = 0;
     let stepStartedAt = performance.now();
     normalizeEditableListDom(target);
-    block.text = normalizeMarkdownLists(normalizeEditorMarkdownWhitespace(turndown.turndown(target.innerHTML)));
+    const editedMarkdown = normalizeMarkdownLists(normalizeEditorMarkdownWhitespace(turndown.turndown(target.innerHTML)));
+    block.text = state.editorMode === 'mobile-adjustment' ? applyMobileShortAdjustment(block.text, editedMarkdown) : editedMarkdown;
     turndownMs = performance.now() - stepStartedAt;
     syncEditableTaskListMarkup(target, block.text);
     stepStartedAt = performance.now();
@@ -665,6 +666,7 @@ export function getComponentRenderHelpers(editorRenderer: {
     getSelectedAddComponent: (key: string, fallback: string) => state.addComponentBySection[key] ?? fallback,
     isExpandableEditorPanelOpen: (sectionKey, blockId, panel, fallback) =>
       state.expandableEditorPanels[`${sectionKey}:${blockId}`]?.[panel === 'stub' ? 'stubOpen' : 'expandedOpen'] ?? fallback,
+    isMobileAdjustmentMode: () => state.editorMode === 'mobile-adjustment',
   };
 }
 

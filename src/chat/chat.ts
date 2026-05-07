@@ -945,6 +945,7 @@ function getChatReaderHelpers(documentMeta: VisualDocument['meta']): ComponentRe
     ensureContainerBlocks: (_block: VisualBlock) => {},
     getSelectedAddComponent: () => 'text',
     isExpandableEditorPanelOpen: () => false,
+    isMobileAdjustmentMode: () => false,
   };
 }
 

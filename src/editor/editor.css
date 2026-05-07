@@ -493,9 +493,10 @@
 }
 
 .ghost-plus-big span {
+  display: grid;
+  place-items: center;
   font-size: 2.1rem;
-  line-height: 0.8;
-  transform: translateY(-3px);
+  line-height: 1;
 }
 
 .ghost-label {
@@ -530,7 +531,6 @@
 .compact-add-component-ghost .ghost-plus-big span {
   font-size: 1.1rem;
   line-height: 1;
-  transform: translateY(-1px);
 }
 
 .compact-add-component-ghost .ghost-label {
@@ -605,6 +605,12 @@
   font-size: 1.15rem;
   line-height: 1;
   cursor: pointer;
+}
+
+.component-picker-trigger span {
+  display: grid;
+  place-items: center;
+  line-height: 1;
 }
 
 .component-picker-trigger:hover,

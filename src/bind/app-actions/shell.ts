@@ -49,10 +49,15 @@ const setEditorMode: AppActionHandler = ({ actionButton }) => {
     ? 'raw'
     : actionButton.dataset.editorMode === 'advanced'
     ? 'advanced'
+    : actionButton.dataset.editorMode === 'mobile-adjustment'
+    ? 'mobile-adjustment'
     : 'basic';
-  state.editorMode = editorMode;
-  state.showAdvancedEditor = editorMode === 'advanced';
-  if (editorMode === 'raw') {
+  state.editorMode = state.editorMode === 'mobile-adjustment' && editorMode === 'mobile-adjustment' ? 'basic' : editorMode;
+  state.showAdvancedEditor = state.editorMode === 'advanced';
+  if (state.editorMode === 'mobile-adjustment') {
+    state.componentPlacement = null;
+  }
+  if (state.editorMode === 'raw') {
     state.rawEditorText = serializeDocument(state.document);
     state.rawEditorError = null;
     state.rawEditorDiagnostics = [];
@@ -62,7 +67,7 @@ const setEditorMode: AppActionHandler = ({ actionButton }) => {
   }
   state.activeEditorSectionTitleKey = null;
   getRenderApp()();
-  if (editorMode === 'cli') {
+  if (state.editorMode === 'cli') {
     restoreCliViewAfterRender();
   }
 };

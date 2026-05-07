@@ -79,6 +79,7 @@ interface EditorRenderState {
   editorSidebarHelpDismissed: boolean;
   currentView: 'editor' | 'viewer' | 'ai';
   responsivePreview: 'full' | 'phone' | 'tablet' | 'desktop';
+  mobileAdjustmentMode: boolean;
 }
 
 interface EditorRenderDeps {
@@ -184,7 +185,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
             : ''
           }
           ${sectionCards}
-          <article class="ghost-section-card add-ghost reusable-section-ghost" data-action="add-top-level-section" data-section-key="__top_level__">
+          ${state.mobileAdjustmentMode ? '' : `<article class="ghost-section-card add-ghost reusable-section-ghost" data-action="add-top-level-section" data-section-key="__top_level__">
             <div class="ghost-plus-big"><span>+</span></div>
             <div class="ghost-label">Add Section</div>
             <label class="ghost-component-picker">
@@ -192,7 +193,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
                 ${deps.renderReusableSectionOptions(state.addComponentBySection.__top_level__ ?? 'blank')}
               </select>
             </label>
-          </article>
+          </article>`}
         </div>
       </div>
     `;
@@ -228,7 +229,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const subsectionToggle = isSubsection && !hasActiveBlockInSelfOrDescendants(section)
       ? `<button type="button" class="section-nest-toggle" data-action="remove-subsection" data-section-key="${deps.escapeAttr(section.key)}" aria-label="Remove subsection" title="Remove subsection">‹</button>`
       : '';
-    const addComponentGhost = state.componentPlacement
+    const addComponentGhost = state.componentPlacement || state.mobileAdjustmentMode
       ? ''
       : `<article class="ghost-section-card add-ghost compact-add-component-ghost">
                   ${renderComponentPicker({
@@ -273,7 +274,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
 
         <div class="editor-blocks">
           ${renderEditorSectionItems(section, rootSections)}
-          ${section.lock
+          ${state.mobileAdjustmentMode || section.lock
         ? ''
         : isNamedEmptySection
           ? `<article class="ghost-section-card add-ghost empty-section-heading-ghost" data-action="add-empty-section-heading" data-section-key="${deps.escapeAttr(section.key)}">
@@ -427,11 +428,11 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
             <strong class="editor-block-title">${deps.escapeHtml(componentLabel)}</strong>
           </div>
           <div class="editor-actions">
-            ${isActiveSelf ? placementActions : ''}
+            ${state.mobileAdjustmentMode ? '' : isActiveSelf ? placementActions : ''}
             <button type="button" class="ghost" data-action="deactivate-block" data-section-key="${deps.escapeAttr(
       sectionKey
     )}" data-block-id="${deps.escapeAttr(block.id)}">Done</button>
-            ${removeButton}
+            ${state.mobileAdjustmentMode ? '' : removeButton}
           </div>
         </div>
 
@@ -553,6 +554,11 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
 
     if (base === 'component-list') {
       deps.ensureComponentListBlocks(block);
+      if (state.mobileAdjustmentMode) {
+        return `<div class="reader-component-list">${(block.schema.componentListBlocks ?? [])
+          .map((innerBlock) => renderPassiveEditorBlock(sectionKey, innerBlock, rootSections))
+          .join('')}</div>`;
+      }
       const actionLabel = block.schema.lock ? getComponentListEditLabel(block) : getComponentListAddLabel(block);
       const actionAttr = block.schema.lock ? '' : ` data-action="add-component-list-item" data-section-key="${deps.escapeAttr(
         sectionKey
@@ -643,7 +649,6 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         )}" data-block-id="${deps.escapeAttr(blockId)}" aria-label="Align right" title="Align right"><span class="toolbar-icon align-right-icon" aria-hidden="true"></span></button>
           </div>`
         : '';
-    const shortEnabled = state.responsivePreview === 'phone' || state.responsivePreview === 'tablet';
     return `
       <div class="rich-toolbar">
         <div class="toolbar-segment block-style-buttons" role="group" aria-label="Block style">
@@ -666,7 +671,6 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           <button type="button" class="icon-button ghost" data-rich-action="link" ${richButtonAttrs} aria-label="Link" title="Link (${hotkeyModifier}+K)"><span class="toolbar-icon link-icon" aria-hidden="true"></span></button>
         </div>
         <div class="toolbar-segment responsive-format-buttons" role="group" aria-label="Responsive text formatting">
-          <button type="button" class="ghost" data-rich-action="short" ${richButtonAttrs} ${shortEnabled ? '' : 'disabled'} title="Short text">Short</button>
           <button type="button" class="ghost" data-rich-action="nowrap" ${richButtonAttrs} title="No wrap">Nowrap</button>
         </div>
       </div>

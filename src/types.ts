@@ -187,7 +187,7 @@ export interface AppState {
   document: VisualDocument;
   filename: string;
   currentView: 'editor' | 'viewer' | 'ai';
-  editorMode: 'basic' | 'advanced' | 'raw' | 'cli';
+  editorMode: 'basic' | 'mobile-adjustment' | 'advanced' | 'raw' | 'cli';
   responsivePreview: 'full' | 'phone' | 'tablet' | 'desktop';
   chat: ChatState;
   aiEdit: AiEditState;

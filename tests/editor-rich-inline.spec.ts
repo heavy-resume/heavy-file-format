@@ -40,7 +40,7 @@ test('inline toolbar buttons wrap and unwrap selected text', async ({ page }) =>
   }
 });
 
-test('short toolbar annotation round trips through raw hvy', async ({ page }) => {
+test('mobile adjustment mode writes text edits as short annotations', async ({ page }) => {
   await page.goto('/');
 
   await page.getByRole('button', { name: 'Phone 390' }).click();
@@ -56,12 +56,19 @@ test('short toolbar annotation round trips through raw hvy', async ({ page }) =>
     selection?.removeAllRanges();
     selection?.addRange(range);
     (node as HTMLElement).focus();
+    node.dispatchEvent(new InputEvent('input', { bubbles: true }));
   });
 
-  await page.getByRole('button', { name: 'Short' }).first().click();
-  await expect(editor.locator('.hvy-short-value')).toBeVisible();
-  await page.keyboard.type('Tools & Tech');
-  await expect(editor.locator('.hvy-short-value')).toHaveText('Tools & Tech');
+  await page.getByRole('button', { name: 'Mobile Adjustment' }).click();
+  await expect(page.getByRole('button', { name: 'Mobile Adjustment' })).toHaveClass(/secondary/);
+  await expect(page.getByRole('button', { name: 'Short' })).toHaveCount(0);
+  await expect(page.locator('.ghost-label', { hasText: 'Add Text' })).toHaveCount(0);
+
+  const mobileEditor = page.locator('.rich-editor').first();
+  await mobileEditor.evaluate((node) => {
+    node.textContent = 'Tools & Tech';
+    node.dispatchEvent(new InputEvent('input', { bubbles: true }));
+  });
 
   await page.getByRole('button', { name: 'Raw' }).click();
   await expect(page.locator('#rawEditor')).toContainText(
@@ -69,41 +76,30 @@ test('short toolbar annotation round trips through raw hvy', async ({ page }) =>
   );
 });
 
-test('short toolbar button arms a selection mode when no text is selected', async ({ page }) => {
+test('mobile adjustment mode removes short annotation when text matches full value', async ({ page }) => {
   await page.goto('/');
 
   await page.getByRole('button', { name: 'Phone 390' }).click();
   await page.locator('[data-action="activate-block"]').first().click();
   const editor = page.locator('.rich-editor').first();
-  const shortButton = page.getByRole('button', { name: 'Short' }).first();
-
   await editor.evaluate((node) => {
-    node.innerHTML = '<p>Tools &amp; Technologies</p>';
-    const paragraph = node.querySelector('p');
-    const selection = window.getSelection();
-    const range = document.createRange();
-    range.selectNodeContents(paragraph!);
-    range.collapse(true);
-    selection?.removeAllRanges();
-    selection?.addRange(range);
-    (node as HTMLElement).focus();
+    node.innerHTML =
+      '<p><span class="hvy-short" data-hvy-short="true"><span class="hvy-short-full">Tools &amp; Technologies</span><span class="hvy-short-value">Tools &amp; Tech</span></span></p>';
+    node.dispatchEvent(new InputEvent('input', { bubbles: true }));
   });
 
-  await shortButton.click();
-  await expect(shortButton).toHaveClass(/secondary/);
+  await page.getByRole('button', { name: 'Mobile Adjustment' }).click();
+  const mobileEditor = page.locator('.rich-editor').first();
+  await expect(mobileEditor).toHaveText('Tools & Tech');
 
-  await editor.evaluate((node) => {
-    const textNode = node.querySelector('p')?.firstChild;
-    const selection = window.getSelection();
-    const range = document.createRange();
-    range.selectNodeContents(textNode!);
-    selection?.removeAllRanges();
-    selection?.addRange(range);
-    node.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+  await mobileEditor.evaluate((node) => {
+    node.textContent = 'Tools & Technologies';
+    node.dispatchEvent(new InputEvent('input', { bubbles: true }));
   });
 
-  await expect(editor.locator('.hvy-short-value')).toBeVisible();
-  await expect(shortButton).toHaveClass(/secondary/);
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await expect(page.locator('#rawEditor')).not.toContainText('<!--hvy:short');
+  await expect(page.locator('#rawEditor')).toContainText('Tools & Technologies');
 });
 
 test('nowrap toolbar annotation toggles selected text', async ({ page }) => {

@@ -15,7 +15,8 @@ export function bindFocus(app: HTMLElement): void {
   });
 
   app.addEventListener('focusout', (event) => {
-    const target = event.target as HTMLElement;
+    const rawTarget = event.target as HTMLElement;
+    const target = rawTarget.dataset.field ? rawTarget : rawTarget.closest<HTMLElement>('[data-field]') ?? rawTarget;
     if (target.dataset.field === 'table-cell' || target.dataset.field === 'table-column') {
       commitInlineTableEdit(target);
     }

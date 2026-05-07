@@ -14,6 +14,30 @@ function getNextReaderTableStripeClass(): 'even' | 'odd' {
   return stripe;
 }
 
+function renderTableInlineEditorHtml(value: string, helpers: Parameters<ComponentEditorRenderer>[2]): string {
+  return helpers.markdownToEditorHtml(value).replace(/^<p>([\s\S]*)<\/p>$/i, '$1');
+}
+
+function renderTableInlineReaderHtml(value: string, block: Parameters<ComponentReaderRenderer>[1], helpers: Parameters<ComponentReaderRenderer>[2]): string {
+  return helpers.renderComponentFragment('text', value, block);
+}
+
+function renderTableInlineToolbar(
+  sectionKey: string,
+  blockId: string,
+  field: 'table-column' | 'table-cell',
+  helpers: Parameters<ComponentEditorRenderer>[2],
+  indices: { columnIndex?: number; rowIndex?: number; cellIndex?: number }
+): string {
+  const rowAttrs = indices.rowIndex === undefined ? '' : ` data-row-index="${indices.rowIndex}"`;
+  const columnAttrs = indices.columnIndex === undefined ? '' : ` data-column-index="${indices.columnIndex}"`;
+  const cellAttrs = indices.cellIndex === undefined ? '' : ` data-cell-index="${indices.cellIndex}"`;
+  return `<div class="table-inline-toolbar" aria-label="Table inline tools">
+    <button type="button" class="ghost" data-rich-action="short" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(blockId)}" data-rich-field="${field}"${rowAttrs}${columnAttrs}${cellAttrs} title="Short text">Short</button>
+    <button type="button" class="ghost" data-rich-action="nowrap" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(blockId)}" data-rich-field="${field}"${rowAttrs}${columnAttrs}${cellAttrs} title="No wrap">Nowrap</button>
+  </div>`;
+}
+
 function renderTableRowEditor(
   sectionKey: string,
   blockId: string,
@@ -51,7 +75,8 @@ function renderTableRowEditor(
               data-cell-index="${cellIndex}"
               data-field="table-cell"
               data-placeholder="${helpers.escapeAttr(safeColumns[cellIndex] || 'Cell value')}"
-            >${helpers.escapeHtml(row.cells[cellIndex] ?? '')}</div>
+            >${renderTableInlineEditorHtml(row.cells[cellIndex] ?? '', helpers)}</div>
+            ${renderTableInlineToolbar(sectionKey, blockId, 'table-cell', helpers, { rowIndex, cellIndex })}
           </td>`
         )
         .join('')}
@@ -83,7 +108,7 @@ export const renderTableEditor: ComponentEditorRenderer = (sectionKey, block, he
         Show header row
       </label>
       <div class="table-editor-frame">
-        <table class="table-editor-grid">
+        <table class="table-editor-grid" style="--hvy-table-editor-columns: ${Math.max(columns.length, 1)};">
           <thead>
             <tr>
               <th class="table-utility-cell"></th>
@@ -112,7 +137,8 @@ export const renderTableEditor: ComponentEditorRenderer = (sectionKey, block, he
                           data-block-id="${helpers.escapeAttr(block.id)}"
                           data-column-index="${columnIndex}"
                           data-field="table-column"
-                        >${helpers.escapeHtml(column)}</div>
+                        >${renderTableInlineEditorHtml(column, helpers)}</div>
+                        ${renderTableInlineToolbar(sectionKey, block.id, 'table-column', helpers, { columnIndex })}
                         ${
                           block.schema.lock
                             ? ''
@@ -160,7 +186,7 @@ export const renderTableReader: ComponentReaderRenderer = (_section, block, help
     ${
       block.schema.tableShowHeader
         ? `<thead>
-      <tr>${columns.map((column) => `<th title="${helpers.escapeAttr(column)}">${helpers.escapeHtml(column)}</th>`).join('')}</tr>
+      <tr>${columns.map((column) => `<th title="${helpers.escapeAttr(column)}">${renderTableInlineReaderHtml(column, block, helpers)}</th>`).join('')}</tr>
     </thead>`
         : ''
     }
@@ -174,7 +200,7 @@ export const renderTableReader: ComponentReaderRenderer = (_section, block, help
                 const title = helpers.escapeAttr(row.cells[cellIndex] ?? '');
                 const placeholder = helpers.escapeAttr(column || 'Cell value');
                 return value
-                  ? `<td title="${title}">${value}</td>`
+                  ? `<td title="${title}">${renderTableInlineReaderHtml(row.cells[cellIndex] ?? '', block, helpers)}</td>`
                   : `<td data-placeholder="${placeholder}"></td>`;
               }).join('')}
             </tr>

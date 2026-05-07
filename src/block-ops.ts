@@ -381,7 +381,7 @@ export function handleBlockFieldInput(target: HTMLElement): boolean {
     const columnIndex = Number.parseInt(target.dataset.columnIndex ?? '', 10);
     if (!Number.isNaN(columnIndex)) {
       const columns = getTableColumns(block.schema);
-      columns[columnIndex] = getInlineEditableText(target);
+      columns[columnIndex] = getInlineEditableMarkdown(target);
       setTableColumns(block.schema, columns);
     }
     console.debug('[hvy:perf] handleBlockFieldInput', {
@@ -397,7 +397,7 @@ export function handleBlockFieldInput(target: HTMLElement): boolean {
     const cellIndex = Number.parseInt(target.dataset.cellIndex ?? '', 10);
     const row = block.schema.tableRows[rowIndex];
     if (row && !Number.isNaN(cellIndex)) {
-      row.cells[cellIndex] = getInlineEditableText(target);
+      row.cells[cellIndex] = getInlineEditableMarkdown(target);
     }
     console.debug('[hvy:perf] handleBlockFieldInput', {
       field,
@@ -423,6 +423,10 @@ export function handleBlockFieldInput(target: HTMLElement): boolean {
   }
 
   return false;
+}
+
+function getInlineEditableMarkdown(target: HTMLElement): string {
+  return normalizeEditorMarkdownWhitespace(turndown.turndown(target)).replace(/\s*\n+\s*/g, ' ').trim();
 }
 
 export function commitInlineTableEdit(target: HTMLElement): void {

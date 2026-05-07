@@ -36,8 +36,8 @@ turndown.addRule('hvy-short-annotation', {
   filter: (node) => node.nodeType === 1 && (node as Element).getAttribute('data-hvy-short') === 'true',
   replacement: (_content, node) => {
     const element = node as HTMLElement;
-    const full = element.querySelector<HTMLElement>('.hvy-short-full')?.textContent ?? '';
-    const value = element.querySelector<HTMLElement>('.hvy-short-value')?.textContent ?? '';
+    const full = (element.querySelector<HTMLElement>('.hvy-short-full')?.textContent ?? '').trim();
+    const value = (element.querySelector<HTMLElement>('.hvy-short-value')?.textContent ?? '').trim();
     if (full.length === 0) {
       return '';
     }

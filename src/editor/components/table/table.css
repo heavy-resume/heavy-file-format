@@ -31,7 +31,7 @@
 .table-editor-grid {
   width: 100%;
   border-collapse: collapse;
-  min-width: min(100%, 540px);
+  min-width: max(100%, calc(var(--hvy-table-editor-columns, 2) * 10rem + 4.5rem));
   table-layout: fixed;
 }
 
@@ -67,10 +67,25 @@
 }
 
 .table-column-head {
-  display: flex;
-  align-items: center;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 0.2rem;
   padding: 0.25rem 0.3rem;
+}
+
+.table-inline-toolbar {
+  grid-column: 2 / -1;
+  display: flex;
+  gap: 0.25rem;
+  justify-content: flex-start;
+  min-width: 0;
+}
+
+.table-inline-toolbar button {
+  padding: 0.12rem 0.28rem;
+  border-radius: 6px;
+  font-size: 0.72rem;
+  line-height: 1.1;
 }
 
 .table-drag-handle {
@@ -127,6 +142,7 @@
 
 .table-row-editor td {
   min-width: 140px;
+  max-width: 50vw;
 }
 
 .table-row-editor .table-row-utility,
@@ -239,6 +255,10 @@
   .table-editor-grid,
   .reader-table {
     min-width: 100%;
+  }
+
+  .table-editor-grid {
+    min-width: max(100%, calc(var(--hvy-table-editor-columns, 2) * 8.5rem + 4.5rem));
   }
 
 }

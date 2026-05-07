@@ -4,7 +4,8 @@ import { SCRIPTING_PLUGIN_VERSION } from '../../plugins/scripting/version';
 
 export function bindInputMisc(app: HTMLElement): void {
   app.addEventListener('input', (event) => {
-    const target = event.target as HTMLElement;
+    const rawTarget = event.target as HTMLElement;
+    const target = rawTarget.dataset.field ? rawTarget : rawTarget.closest<HTMLElement>('[data-field]') ?? rawTarget;
     if (handleTagEditorInput(target, tagStateHelpers)) {
       return;
     }

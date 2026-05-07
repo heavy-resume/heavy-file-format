@@ -74,7 +74,7 @@ component_defs:
             schema:
               component: table
               css: "margin: 0;  margin-top: -1px;"
-              tableColumns: ["YEAR", "ORGANIZATION", "TITLE"]
+              tableColumns: ["YEAR", "<!--hvy:short {\"to\":\"ORG\"}-->ORGANIZATION<!--/hvy:short-->", "TITLE"]
               tableShowHeader: false
               tableRows:
                 - cells: ["{% years %}", "{% organization %}", "{% role %}"]
@@ -472,7 +472,7 @@ component_defs:
  <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
   # History
 
- <!--hvy:table {"css":"margin: 0.5rem 0 0;","tags":"table-header","tableColumns":["YEAR","ORGANIZATION","TITLE"],"tableShowHeader":true,"tableRows":[],"lock":true,"description":"Header-only static table for the expandable history-record rows below. Leave tableRows empty; each visible data row comes from an expandable history-record stub table in the component-list. Keep history-records reverse chronological. If contiguous roles share an organization, use one expandable organization record."}-->
+ <!--hvy:table {"css":"margin: 0.5rem 0 0;","tags":"table-header","tableColumns":["YEAR","<!--hvy:short {\"to\":\"ORG\"}-->ORGANIZATION<!--/hvy:short-->","TITLE"],"tableShowHeader":true,"tableRows":[],"lock":true,"description":"Header-only static table for the expandable history-record rows below. Leave tableRows empty; each visible data row comes from an expandable history-record stub table in the component-list. Keep history-records reverse chronological. If contiguous roles share an organization, use one expandable organization record."}-->
 
  <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"history-record","componentListItemLabel":"history"}-->
 

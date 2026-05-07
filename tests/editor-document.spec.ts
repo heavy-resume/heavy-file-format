@@ -157,7 +157,7 @@ hvy_version: 0.1
 <!--hvy: {"id":"table-test"}-->
 #! Table Test
 
-<!--hvy:table {"id":"narrow-table","tableColumns":["Tool","Description","Status"],"tableShowHeader":true,"tableRows":[{"cells":["Heavy File Format","Responsive table text should wrap inside the phone preview instead of pushing the table wider than its container.","In progress"]}]}-->
+<!--hvy:table {"id":"narrow-table","tableColumns":["Tool","<!--hvy:short {\\"to\\":\\"Desc\\"}-->Description<!--/hvy:short-->","Status"],"tableShowHeader":true,"tableRows":[{"cells":["Heavy File Format","Responsive table text should wrap inside the phone preview instead of pushing the table wider than its container.","In progress"]}]}-->
 `);
   await page.getByRole('button', { name: 'Apply' }).click();
   await page.getByRole('button', { name: 'Viewer' }).click();
@@ -171,9 +171,46 @@ hvy_version: 0.1
   await expect.poll(async () => Math.round((await frame.boundingBox())?.width ?? 0)).toBeLessThan(360);
   await expect.poll(async () => Math.round((await table.boundingBox())?.width ?? 0)).toBeLessThanOrEqual(Math.round((await frame.boundingBox())?.width ?? 0) + 1);
   await expect(table.locator('th').first()).toHaveAttribute('title', 'Tool');
+  await expect(table.locator('th').nth(1).locator('.hvy-short-full')).toBeHidden();
+  await expect(table.locator('th').nth(1).locator('.hvy-short-value')).toHaveText('Desc');
   await expect(table.locator('td').nth(1)).toHaveCSS('white-space', 'nowrap');
   await expect(table.locator('td').nth(1)).toHaveCSS('text-overflow', 'ellipsis');
   await expect(table.locator('td').nth(1)).toHaveAttribute('title', 'Responsive table text should wrap inside the phone preview instead of pushing the table wider than its container.');
+});
+
+test('table editor short toolbar writes inline table annotations', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"table-test"}-->
+#! Table Test
+
+<!--hvy:table {"id":"editable-table","tableColumns":["Organization","Status"],"tableShowHeader":true,"tableRows":[{"cells":["Northwind Labs","Active"]}]}-->
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+  await page.locator('.editor-block-passive', { hasText: 'Northwind Labs' }).click();
+
+  const column = page.locator('.table-column-name[data-column-index="0"]');
+  await column.evaluate((node) => {
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+  });
+  await page.locator('.table-inline-toolbar [data-rich-action="short"][data-rich-field="table-column"][data-column-index="0"]').click();
+  await column.locator('.hvy-short-value').evaluate((node) => {
+    node.textContent = 'Org';
+    node.dispatchEvent(new InputEvent('input', { bubbles: true }));
+  });
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await expect(page.locator('#rawEditor')).toContainText('<!--hvy:short {\\"to\\":\\"Org\\"}-->Organization<!--/hvy:short-->');
 });
 
 test('document ai context is editable metadata and keeps focus while typing', async ({ page }) => {

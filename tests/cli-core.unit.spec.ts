@@ -286,6 +286,32 @@ component_defs:
   );
 });
 
+test('cat prints only file contents without appended component context', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+component_defs:
+  - name: history-record
+    baseType: expandable
+    description: One expandable work-history role at one organization.
+---
+
+<!--hvy: {"id":"history","description":"Work history is reverse chronological."}-->
+#! History
+
+<!--hvy:component-list {"id":"history-list","componentListComponent":"history-record"}-->
+
+ <!--hvy:history-record {"id":"history-acme"}-->
+  <!--hvy:text {"id":"name"}-->
+   Acme
+`, '.hvy');
+  const session = createHvyCliSession();
+
+  const result = await executeHvyCliCommand(document, session, 'cat /body/history/name/text.txt');
+
+  expect(result.output).toBe('Acme');
+  expect(result.output).not.toContain('Component context:');
+});
+
 test('component hints tell agents to add component-list items blank before filling fields', async () => {
   const { buildChatCliComponentHints } = await import('../src/chat-cli/chat-cli-component-hints');
   const document = deserializeDocument(`---

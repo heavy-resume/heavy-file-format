@@ -15,7 +15,6 @@ import type { VisualBlock, VisualSection } from '../editor/types';
 import { getSectionId } from '../section-ops';
 import { getHvyCliPluginCommandRegistration } from './plugin-command-registry';
 import { fixHvyCliLintIssues, formatHvyCliLintIssues, runHvyCliLinter } from './document-linter';
-import { isBuiltinComponentName } from '../component-defs';
 import { serializeBlockFragment } from '../serialization';
 import { formatHvyRequestStructureForDirectory } from './request-structure';
 import { cloneReusableBlock } from '../document-factory';
@@ -1086,20 +1085,7 @@ function commandCat(ctx: HvyCliCommandContext, args: string[]): string {
   if (args.length === 0) {
     throw new Error('cat: missing file operand');
   }
-  return args.map((arg) => formatCatReadableOutput(ctx, arg)).join('\n');
-}
-
-function formatCatReadableOutput(ctx: HvyCliCommandContext, path: string): string {
-  const file = getReadableFile(ctx, path);
-  const componentDirectory = componentDirectoryForReadableTarget(ctx, path, file.path);
-  const componentName = componentDirectory ? inferComponentNameForDirectory(ctx.fs, componentDirectory) : '';
-  if (!componentDirectory || !componentName || isBuiltinComponentName(componentName)) {
-    return file.read();
-  }
-  return [
-    file.read(),
-    formatLsTargetDescription(ctx, componentDirectory),
-  ].filter((part) => part.trim().length > 0).join('\n\n');
+  return args.map((arg) => getReadableFile(ctx, arg).read()).join('\n');
 }
 
 function commandHvyPreview(ctx: HvyCliCommandContext, args: string[]): string {

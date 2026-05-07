@@ -131,6 +131,35 @@ hvy_version: 0.1
   await expect(page.locator('#rawEditor')).not.toContainText('"fillIn"');
 });
 
+test('unfilled text fill-in renders as an editor box and blank viewer text', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"header"}-->
+#! Header
+
+ <!--hvy:text {"id":"name","align":"center","placeholder":"Name","fillIn":true}-->
+  # <!-- value -->
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await expect(page.locator('#editorTree h1 .text-fill-in-box')).toBeVisible();
+  await expect(page.locator('#editorTree')).not.toContainText('<!-- value -->');
+
+  await page.getByRole('button', { name: 'AI' }).click();
+  await expect(page.locator('#aiReaderDocument h1 .text-fill-in-box')).toBeVisible();
+  await expect(page.locator('#aiReaderDocument')).not.toContainText('<!-- value -->');
+
+  await page.getByRole('button', { name: 'Viewer' }).click();
+  await expect(page.locator('#readerDocument')).not.toContainText('<!-- value -->');
+  await expect(page.locator('#readerDocument .text-fill-in-box')).toHaveCount(0);
+});
+
 test('editor pullout help balloon lists loaded sidebar sections', async ({ page }) => {
   await page.goto('/');
 

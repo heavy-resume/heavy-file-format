@@ -442,10 +442,10 @@ function renderApp(): void {
             <button type="button" class="${isViewerView ? 'secondary' : 'ghost'}" data-action="switch-view" data-view="viewer">Viewer</button>
             <button type="button" class="${isAiView ? 'secondary' : 'ghost'}" data-action="switch-view" data-view="ai">AI</button>
           </div>
+          ${canPreviewSurface ? renderResponsivePreviewControls() : '<div></div>'}
           ${
-            isEditorView || canPreviewSurface
+            isEditorView
               ? `<div class="editor-top-controls">
-                  ${canPreviewSurface ? renderResponsivePreviewControls() : ''}
                   ${
                     isEditorView
                       ? `<button type="button" class="${state.editorMode === 'basic' ? 'secondary' : 'ghost'}" data-action="set-editor-mode" data-editor-mode="basic">Basic</button>
@@ -460,7 +460,7 @@ function renderApp(): void {
                       : ''
                   }
                 </div>`
-              : ''
+              : '<div></div>'
           }
         </div>
         <div${renderResponsivePreviewFrameAttrs(`pane ${isEditorView ? 'editor-pane' : 'reader-pane'} full-pane`)}>

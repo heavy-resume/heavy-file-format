@@ -160,7 +160,7 @@ export const renderTableReader: ComponentReaderRenderer = (_section, block, help
     ${
       block.schema.tableShowHeader
         ? `<thead>
-      <tr>${columns.map((column) => `<th>${helpers.escapeHtml(column)}</th>`).join('')}</tr>
+      <tr>${columns.map((column) => `<th title="${helpers.escapeAttr(column)}">${helpers.escapeHtml(column)}</th>`).join('')}</tr>
     </thead>`
         : ''
     }
@@ -171,9 +171,10 @@ export const renderTableReader: ComponentReaderRenderer = (_section, block, help
             <tr class="table-main-row table-main-row-${getNextReaderTableStripeClass()}">
               ${columns.map((column, cellIndex) => {
                 const value = helpers.escapeHtml(row.cells[cellIndex] ?? '');
+                const title = helpers.escapeAttr(row.cells[cellIndex] ?? '');
                 const placeholder = helpers.escapeAttr(column || 'Cell value');
                 return value
-                  ? `<td>${value}</td>`
+                  ? `<td title="${title}">${value}</td>`
                   : `<td data-placeholder="${placeholder}"></td>`;
               }).join('')}
             </tr>

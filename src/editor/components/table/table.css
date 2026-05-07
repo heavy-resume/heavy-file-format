@@ -241,11 +241,6 @@
     min-width: 100%;
   }
 
-  .reader-table th,
-  .reader-table td {
-    white-space: normal;
-    text-overflow: clip;
-  }
 }
 
 @container hvy-surface (inline-size < 30rem) {

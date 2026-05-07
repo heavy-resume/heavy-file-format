@@ -152,7 +152,10 @@ hvy_version: 0.1
   await expect.poll(async () => Math.round((await pane.boundingBox())?.width ?? 0)).toBe(390);
   await expect.poll(async () => Math.round((await frame.boundingBox())?.width ?? 0)).toBeLessThan(360);
   await expect.poll(async () => Math.round((await table.boundingBox())?.width ?? 0)).toBeLessThanOrEqual(Math.round((await frame.boundingBox())?.width ?? 0) + 1);
-  await expect(table.locator('td').nth(1)).toHaveCSS('white-space', 'normal');
+  await expect(table.locator('th').first()).toHaveAttribute('title', 'Tool');
+  await expect(table.locator('td').nth(1)).toHaveCSS('white-space', 'nowrap');
+  await expect(table.locator('td').nth(1)).toHaveCSS('text-overflow', 'ellipsis');
+  await expect(table.locator('td').nth(1)).toHaveAttribute('title', 'Responsive table text should wrap inside the phone preview instead of pushing the table wider than its container.');
 });
 
 test('document ai context is editable metadata and keeps focus while typing', async ({ page }) => {

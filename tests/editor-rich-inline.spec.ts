@@ -40,6 +40,59 @@ test('inline toolbar buttons wrap and unwrap selected text', async ({ page }) =>
   }
 });
 
+test('short toolbar annotation round trips through raw hvy', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Phone 390' }).click();
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('.rich-editor').first();
+
+  await editor.evaluate((node) => {
+    node.innerHTML = '<p>Tools &amp; Technologies</p>';
+    const textNode = node.querySelector('p')?.firstChild;
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(textNode!);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+  });
+
+  await page.getByRole('button', { name: 'Short' }).first().click();
+  await expect(editor.locator('.hvy-short-value')).toBeVisible();
+  await page.keyboard.type('Tools & Tech');
+  await expect(editor.locator('.hvy-short-value')).toHaveText('Tools & Tech');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await expect(page.locator('#rawEditor')).toContainText(
+    '<!--hvy:short {"to":"Tools & Tech"}-->Tools & Technologies<!--/hvy:short-->'
+  );
+});
+
+test('nowrap toolbar annotation toggles selected text', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('.rich-editor').first();
+
+  await editor.evaluate((node) => {
+    node.innerHTML = '<p>Tools &amp; Technologies</p>';
+    const textNode = node.querySelector('p')?.firstChild;
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(textNode!);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+  });
+
+  await page.getByRole('button', { name: 'Nowrap' }).first().click();
+  await expect(editor.locator('.hvy-nowrap')).toContainText('Tools & Technologies');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await expect(page.locator('#rawEditor')).toContainText('<!--hvy:nowrap-->Tools & Technologies<!--/hvy:nowrap-->');
+});
+
 test('inline toolbar actions toggle typing mode at a collapsed caret', async ({ page }) => {
   await page.goto('/');
 

@@ -184,6 +184,12 @@
   min-height: 1ch;
 }
 
+.reader-table-frame {
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
 .reader-table th,
 .reader-table td {
   border: 1px solid var(--hvy-border);
@@ -223,4 +229,10 @@
 .reader-table-details-container {
   display: grid;
   gap: 0.3rem;
+}
+
+@container hvy-surface (inline-size < 48rem) {
+  .reader-table {
+    min-width: 36rem;
+  }
 }

@@ -32,11 +32,36 @@ turndown.addRule('inline-code-literal-text', {
   },
 });
 
+turndown.addRule('hvy-short-annotation', {
+  filter: (node) => node.nodeType === 1 && (node as Element).getAttribute('data-hvy-short') === 'true',
+  replacement: (_content, node) => {
+    const element = node as HTMLElement;
+    const full = element.querySelector<HTMLElement>('.hvy-short-full')?.textContent ?? '';
+    const value = element.querySelector<HTMLElement>('.hvy-short-value')?.textContent ?? '';
+    if (full.length === 0) {
+      return '';
+    }
+    if (value.trim().length === 0) {
+      return full;
+    }
+    return `<!--hvy:short ${JSON.stringify({ to: value })}-->${full}<!--/hvy:short-->`;
+  },
+});
+
+turndown.addRule('hvy-nowrap-annotation', {
+  filter: (node) => node.nodeType === 1 && (node as Element).getAttribute('data-hvy-nowrap') === 'true',
+  replacement: (content, node) => {
+    const text = (node.textContent ?? content).trim();
+    return text.length > 0 ? `<!--hvy:nowrap-->${text}<!--/hvy:nowrap-->` : '';
+  },
+});
+
 export function markdownToEditorHtml(markdown: string): string {
   const normalized = normalizeMarkdownIndentation(markdown || '');
-  const html = addExternalLinkTargets(DOMPurify.sanitize(marked.parse(applyUnderlineSyntax(escapeRawHtml(normalized))) as string));
+  const annotations = extractResponsiveAnnotations(normalized, { editable: true });
+  const html = addExternalLinkTargets(sanitizeHtml(marked.parse(applyUnderlineSyntax(escapeRawHtml(annotations.markdown))) as string));
   const template = document.createElement('template');
-  template.innerHTML = html;
+  template.innerHTML = restoreResponsiveAnnotationTokens(html, annotations.tokens);
   template.content.querySelectorAll<HTMLElement>('pre > code').forEach((code) => {
     const languageClass = Array.from(code.classList).find((className) => className.startsWith('language-'));
     const language = languageClass ? languageClass.slice('language-'.length) : code.dataset.language || 'text';
@@ -51,6 +76,63 @@ export function markdownToEditorHtml(markdown: string): string {
     checkbox.setAttribute('contenteditable', 'false');
   });
   return template.innerHTML;
+}
+
+export function markdownToReaderHtml(markdown: string): string {
+  const annotations = extractResponsiveAnnotations(markdown || '', { editable: false });
+  const html = sanitizeHtml(marked.parse(applyUnderlineSyntax(escapeRawHtml(annotations.markdown))) as string);
+  return restoreResponsiveAnnotationTokens(html, annotations.tokens);
+}
+
+function sanitizeHtml(html: string): string {
+  return typeof DOMPurify.sanitize === 'function' ? DOMPurify.sanitize(html) : html;
+}
+
+interface ResponsiveAnnotationToken {
+  token: string;
+  html: string;
+}
+
+function extractResponsiveAnnotations(markdown: string, options: { editable: boolean }): { markdown: string; tokens: ResponsiveAnnotationToken[] } {
+  const tokens: ResponsiveAnnotationToken[] = [];
+  const makeToken = (html: string): string => {
+    const token = `HVY_RESPONSIVE_ANNOTATION_${tokens.length}_TOKEN`;
+    tokens.push({ token, html });
+    return token;
+  };
+  const withShort = markdown.replace(/<!--hvy:short\s+(\{.*?\})-->([\s\S]*?)<!--\/hvy:short-->/g, (_match, rawJson, fullText) => {
+    const parsed = parseShortAnnotationPayload(rawJson);
+    if (!parsed) {
+      return fullText;
+    }
+    return makeToken(renderShortAnnotationHtml(fullText, parsed.to, options.editable));
+  });
+  const withNowrap = withShort.replace(/<!--hvy:nowrap-->([\s\S]*?)<!--\/hvy:nowrap-->/g, (_match, text) =>
+    makeToken(renderNowrapAnnotationHtml(text))
+  );
+  return { markdown: withNowrap, tokens };
+}
+
+function restoreResponsiveAnnotationTokens(html: string, tokens: ResponsiveAnnotationToken[]): string {
+  return tokens.reduce((result, token) => result.replaceAll(token.token, token.html), html);
+}
+
+function parseShortAnnotationPayload(rawJson: string): { to: string } | null {
+  try {
+    const parsed = JSON.parse(rawJson) as { to?: unknown };
+    return typeof parsed.to === 'string' ? { to: parsed.to } : null;
+  } catch {
+    return null;
+  }
+}
+
+function renderShortAnnotationHtml(fullText: string, shortText: string, editable: boolean): string {
+  const editableAttrs = editable ? ' contenteditable="true" spellcheck="false"' : '';
+  return `<span class="hvy-short" data-hvy-short="true"><span class="hvy-short-full">${escapeHtml(fullText)}</span><span class="hvy-short-value"${editableAttrs}>${escapeHtml(shortText)}</span></span>`;
+}
+
+function renderNowrapAnnotationHtml(text: string): string {
+  return `<span class="hvy-nowrap" data-hvy-nowrap="true">${escapeHtml(text)}</span>`;
 }
 
 export function normalizeEditorMarkdownWhitespace(markdown: string): string {
@@ -242,4 +324,13 @@ function hasFollowingInlineContent(textNode: Text): boolean {
     return true;
   }
   return false;
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
 }

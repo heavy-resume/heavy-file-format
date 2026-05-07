@@ -56,6 +56,7 @@ function createInitialState(document: ReturnType<typeof deserializeDocumentBytes
     filename: 'example.hvy',
     currentView: 'editor',
     editorMode: 'basic',
+    responsivePreview: 'full',
     chat: createDefaultChatState(),
     aiEdit: {
       sectionKey: null,
@@ -274,6 +275,9 @@ editorRenderer = createEditorRenderer(
     get currentView() {
       return state.currentView;
     },
+    get responsivePreview() {
+      return state.responsivePreview;
+    },
   },
   {
     escapeAttr,
@@ -348,6 +352,9 @@ readerRenderer = createReaderRenderer(
     get currentView() {
       return state.currentView;
     },
+    get responsivePreview() {
+      return state.responsivePreview;
+    },
     get readerExpandableState() {
       return state.readerExpandableState;
     },
@@ -400,6 +407,7 @@ function renderApp(): void {
   const isAdvancedEditor = state.editorMode === 'advanced';
   const isRawEditor = state.editorMode === 'raw';
   const isCliEditor = state.editorMode === 'cli';
+  const canPreviewSurface = !isRawEditor && !isCliEditor;
 
   stepStartedAt = performance.now();
   const templateFields = getTemplateFields(state.document.meta);
@@ -435,14 +443,19 @@ function renderApp(): void {
             <button type="button" class="${isAiView ? 'secondary' : 'ghost'}" data-action="switch-view" data-view="ai">AI</button>
           </div>
           ${
-            isEditorView
+            isEditorView || canPreviewSurface
               ? `<div class="editor-top-controls">
-                  <button type="button" class="${state.editorMode === 'basic' ? 'secondary' : 'ghost'}" data-action="set-editor-mode" data-editor-mode="basic">Basic</button>
+                  ${canPreviewSurface ? renderResponsivePreviewControls() : ''}
+                  ${
+                    isEditorView
+                      ? `<button type="button" class="${state.editorMode === 'basic' ? 'secondary' : 'ghost'}" data-action="set-editor-mode" data-editor-mode="basic">Basic</button>
                   <button type="button" class="${isAdvancedEditor ? 'secondary' : 'ghost'}" data-action="set-editor-mode" data-editor-mode="advanced">Advanced</button>
                   <button type="button" class="${isRawEditor ? 'secondary' : 'ghost'}" data-action="set-editor-mode" data-editor-mode="raw">Raw</button>
-                  <button type="button" class="${isCliEditor ? 'secondary' : 'ghost'}" data-action="set-editor-mode" data-editor-mode="cli">CLI</button>
+                  <button type="button" class="${isCliEditor ? 'secondary' : 'ghost'}" data-action="set-editor-mode" data-editor-mode="cli">CLI</button>`
+                      : ''
+                  }
                   ${
-                    isAdvancedEditor
+                    isEditorView && isAdvancedEditor
                       ? `<button type="button" class="${state.metaPanelOpen ? 'secondary' : 'ghost'}" data-action="toggle-document-meta">Document Meta</button>`
                       : ''
                   }
@@ -588,6 +601,22 @@ function renderApp(): void {
   });
 
   void runScriptingBlocksIfNeeded();
+}
+
+function renderResponsivePreviewControls(): string {
+  const options: Array<{ value: AppState['responsivePreview']; label: string }> = [
+    { value: 'full', label: 'Full' },
+    { value: 'phone', label: 'Phone 390' },
+    { value: 'tablet', label: 'Tablet 768' },
+    { value: 'desktop', label: 'Desktop' },
+  ];
+  return `<div class="responsive-preview-controls" role="group" aria-label="Document preview width">
+    ${options
+      .map(
+        (option) => `<button type="button" class="${state.responsivePreview === option.value ? 'secondary' : 'ghost'}" data-action="set-responsive-preview" data-responsive-preview="${escapeAttr(option.value)}">${escapeHtml(option.label)}</button>`
+      )
+      .join('')}
+  </div>`;
 }
 
 function refreshReaderPanels(): void {

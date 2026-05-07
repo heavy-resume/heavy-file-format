@@ -11,6 +11,7 @@ export function createTestState(document: VisualDocument): AppState {
     filename: 'test.hvy',
     currentView: 'editor',
     editorMode: 'basic',
+    responsivePreview: 'full',
     chat: createDefaultChatState(),
     aiEdit: {
       sectionKey: null,

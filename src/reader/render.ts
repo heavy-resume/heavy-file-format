@@ -44,6 +44,7 @@ interface ReaderRenderState {
   themeModalOpen: boolean;
   theme: ThemeConfig;
   currentView: 'editor' | 'viewer' | 'ai';
+  responsivePreview: 'full' | 'phone' | 'tablet' | 'desktop';
   readerExpandableState: Record<string, boolean>;
 }
 
@@ -107,7 +108,22 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     }
     const maxWidth = typeof state.documentMeta.reader_max_width === 'string' ? state.documentMeta.reader_max_width.trim() : '';
     const bodyStyle = maxWidth.length > 0 ? ` style="max-width: ${deps.escapeAttr(maxWidth)};"` : '';
-    return `<div class="reader-document-body"${bodyStyle}>${realSections.map((section) => renderReaderSection(section)).join('')}</div>`;
+    const surfaceAttrs = renderResponsiveSurfaceAttrs(maxWidth);
+    return `<div${surfaceAttrs}><div class="reader-document-body"${bodyStyle}>${realSections.map((section) => renderReaderSection(section)).join('')}</div></div>`;
+  }
+
+  function renderResponsiveSurfaceAttrs(documentMaxWidth: string): string {
+    const preview = state.responsivePreview;
+    const width =
+      preview === 'phone'
+        ? '390px'
+        : preview === 'tablet'
+        ? '768px'
+        : preview === 'desktop'
+        ? documentMaxWidth || '960px'
+        : '';
+    const style = width ? ` style="width: ${deps.escapeAttr(width)};"` : '';
+    return ` class="hvy-surface hvy-surface-${deps.escapeAttr(preview)}"${style}`;
   }
 
   function renderSidebarSections(sections: VisualSection[]): string {

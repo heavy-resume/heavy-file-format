@@ -1,5 +1,4 @@
 import './editor.css';
-import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import hljs from 'highlight.js/lib/core';
 import type { ComponentRenderHelpers } from './component-helpers';
@@ -17,7 +16,7 @@ import { getComponentListAddLabel, getComponentListEditLabel, hasComponentListIt
 import { renderTagEditor } from './tag-editor';
 import { getTemplateFields, renderTemplateGhosts } from './template';
 import type { Align, BlockSchema, VisualBlock, VisualSection } from './types';
-import { applyUnderlineSyntax, escapeRawHtml, normalizeMarkdownIndentation, normalizeMarkdownLists } from '../markdown';
+import { markdownToReaderHtml, normalizeMarkdownIndentation, normalizeMarkdownLists } from '../markdown';
 import bash from 'highlight.js/lib/languages/bash';
 import css from 'highlight.js/lib/languages/css';
 import javascript from 'highlight.js/lib/languages/javascript';
@@ -79,6 +78,7 @@ interface EditorRenderState {
   expandableEditorPanels: Record<string, { stubOpen: boolean; expandedOpen: boolean }>;
   editorSidebarHelpDismissed: boolean;
   currentView: 'editor' | 'viewer' | 'ai';
+  responsivePreview: 'full' | 'phone' | 'tablet' | 'desktop';
 }
 
 interface EditorRenderDeps {
@@ -174,24 +174,41 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const flatSections = deps.flattenSections(sections);
     const maxWidth = typeof state.documentMeta.reader_max_width === 'string' ? state.documentMeta.reader_max_width.trim() : '';
     const bodyStyle = maxWidth.length > 0 ? ` style="max-width: ${deps.escapeAttr(maxWidth)};"` : '';
+    const surfaceAttrs = renderResponsiveSurfaceAttrs(maxWidth);
     return `
-      <div class="editor-tree-body"${bodyStyle}>
-        ${state.showAdvancedEditor
-          ? renderTemplateGhosts(getTemplateFields(state.documentMeta), flatSections, { escapeAttr: deps.escapeAttr, escapeHtml: deps.escapeHtml })
-          : ''
-        }
-        ${sectionCards}
-        <article class="ghost-section-card add-ghost reusable-section-ghost" data-action="add-top-level-section" data-section-key="__top_level__">
-          <div class="ghost-plus-big"><span>+</span></div>
-          <div class="ghost-label">Add Section</div>
-          <label class="ghost-component-picker">
-            <select data-field="reusable-section-type" data-section-key="__top_level__" aria-label="Section type">
-              ${deps.renderReusableSectionOptions(state.addComponentBySection.__top_level__ ?? 'blank')}
-            </select>
-          </label>
-        </article>
+      <div${surfaceAttrs}>
+        <div class="editor-tree-body"${bodyStyle}>
+          ${state.showAdvancedEditor
+            ? renderTemplateGhosts(getTemplateFields(state.documentMeta), flatSections, { escapeAttr: deps.escapeAttr, escapeHtml: deps.escapeHtml })
+            : ''
+          }
+          ${sectionCards}
+          <article class="ghost-section-card add-ghost reusable-section-ghost" data-action="add-top-level-section" data-section-key="__top_level__">
+            <div class="ghost-plus-big"><span>+</span></div>
+            <div class="ghost-label">Add Section</div>
+            <label class="ghost-component-picker">
+              <select data-field="reusable-section-type" data-section-key="__top_level__" aria-label="Section type">
+                ${deps.renderReusableSectionOptions(state.addComponentBySection.__top_level__ ?? 'blank')}
+              </select>
+            </label>
+          </article>
+        </div>
       </div>
     `;
+  }
+
+  function renderResponsiveSurfaceAttrs(documentMaxWidth: string): string {
+    const preview = state.responsivePreview;
+    const width =
+      preview === 'phone'
+        ? '390px'
+        : preview === 'tablet'
+        ? '768px'
+        : preview === 'desktop'
+        ? documentMaxWidth || '960px'
+        : '';
+    const style = width ? ` style="width: ${deps.escapeAttr(width)};"` : '';
+    return ` class="hvy-surface hvy-surface-${deps.escapeAttr(preview)}"${style}`;
   }
 
   function renderEditorSection(section: VisualSection, rootSections: VisualSection[], isSubsection = false): string {
@@ -629,6 +646,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         )}" data-block-id="${deps.escapeAttr(blockId)}" aria-label="Align right" title="Align right"><span class="toolbar-icon align-right-icon" aria-hidden="true"></span></button>
           </div>`
         : '';
+    const shortEnabled = state.responsivePreview === 'phone' || state.responsivePreview === 'tablet';
     return `
       <div class="rich-toolbar">
         <div class="toolbar-segment block-style-buttons" role="group" aria-label="Block style">
@@ -649,6 +667,8 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           <button type="button" class="icon-button${selectedClass(blockStyle === 'list')}" data-rich-action="list" ${richButtonAttrs} aria-label="List" title="Bullet List"><span class="toolbar-icon list-icon" aria-hidden="true"></span></button>
           <button type="button" class="icon-button${selectedClass(blockStyle === 'checklist')}" data-rich-action="checklist" ${richButtonAttrs} aria-label="Checkbox" title="Checkbox"><span class="toolbar-icon checkbox-icon" aria-hidden="true">☑</span></button>
           <button type="button" class="icon-button ghost" data-rich-action="link" ${richButtonAttrs} aria-label="Link" title="Link (${hotkeyModifier}+K)"><span class="toolbar-icon link-icon" aria-hidden="true"></span></button>
+          <button type="button" class="ghost" data-rich-action="short" ${richButtonAttrs} ${shortEnabled ? '' : 'disabled'} title="Short text">Short</button>
+          <button type="button" class="ghost" data-rich-action="nowrap" ${richButtonAttrs} title="No wrap">Nowrap</button>
         </div>
       </div>
     `;
@@ -974,8 +994,8 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
   }
 
   function renderTextFragment(content: string): string {
-    const normalized = applyUnderlineSyntax(escapeRawHtml(normalizeMarkdownIndentation(normalizeMarkdownLists(content))));
-    return unwrapSingleParagraph(decorateMarkdownCodeBlocks(addExternalLinkTargets(DOMPurify.sanitize(marked.parse(normalized) as string)), deps.escapeHtml));
+    const normalized = normalizeMarkdownIndentation(normalizeMarkdownLists(content));
+    return unwrapSingleParagraph(decorateMarkdownCodeBlocks(addExternalLinkTargets(markdownToReaderHtml(normalized)), deps.escapeHtml));
   }
 
   function renderComponentFragment(componentName: string, content: string, block: VisualBlock): string {

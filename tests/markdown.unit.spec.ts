@@ -1,7 +1,7 @@
 import { expect, test } from 'vitest';
 
 import { convertMarkdownToHvyDocument } from '../src/markdown-import';
-import { applyUnderlineSyntax, escapeRawHtml, normalizeMarkdownIndentation, normalizeMarkdownLists, turndown } from '../src/markdown';
+import { applyUnderlineSyntax, escapeRawHtml, markdownToReaderHtml, normalizeMarkdownIndentation, normalizeMarkdownLists, turndown } from '../src/markdown';
 import { deserializeDocument, serializeDocument } from '../src/serialization';
 
 test('normalizes fully indented text so indentation alone does not imply code', () => {
@@ -49,6 +49,38 @@ test('serializes editor inline code with markdown backticks', () => {
 
 test('serializes editor inline code with literal angle brackets', () => {
   expect(turndown.turndown('<p>Use <code>&lt;tag&gt;</code> now</p>')).toBe('Use `<tag>` now');
+});
+
+test('renders hvy short annotations as responsive spans', () => {
+  const html = markdownToReaderHtml('Use <!--hvy:short {"to":"Tools & Tech"}-->Tools & Technologies<!--/hvy:short--> daily.');
+  expect(html).toContain('data-hvy-short="true"');
+  expect(html).toContain('<span class="hvy-short-full">Tools &amp; Technologies</span>');
+  expect(html).toContain('<span class="hvy-short-value">Tools &amp; Tech</span>');
+});
+
+test('serializes editor short annotations back to hvy comments', () => {
+  expect(
+    turndown.turndown(
+      '<p><span class="hvy-short" data-hvy-short="true"><span class="hvy-short-full">Tools &amp; Technologies</span><span class="hvy-short-value">Tools &amp; Tech</span></span></p>'
+    )
+  ).toBe('<!--hvy:short {"to":"Tools & Tech"}-->Tools & Technologies<!--/hvy:short-->');
+});
+
+test('blank editor short annotation serializes as original full text', () => {
+  expect(
+    turndown.turndown(
+      '<p><span class="hvy-short" data-hvy-short="true"><span class="hvy-short-full">Tools &amp; Technologies</span><span class="hvy-short-value"></span></span></p>'
+    )
+  ).toBe('Tools & Technologies');
+});
+
+test('renders and serializes hvy nowrap annotations', () => {
+  const html = markdownToReaderHtml('Use <!--hvy:nowrap-->Tools & Technologies<!--/hvy:nowrap--> daily.');
+  expect(html).toContain('data-hvy-nowrap="true"');
+  expect(html).toContain('Tools &amp; Technologies');
+  expect(turndown.turndown('<p><span class="hvy-nowrap" data-hvy-nowrap="true">Tools &amp; Technologies</span></p>')).toBe(
+    '<!--hvy:nowrap-->Tools & Technologies<!--/hvy:nowrap-->'
+  );
 });
 
 test('converts markdown headings into HVY section hierarchy', () => {

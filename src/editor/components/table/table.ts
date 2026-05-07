@@ -156,7 +156,7 @@ export const renderTableReader: ComponentReaderRenderer = (_section, block, help
     resetReaderTableStripeSequence();
   }
   const columns = helpers.getTableColumns(block.schema);
-  return `<table class="reader-table">
+  return `<div class="reader-table-frame"><table class="reader-table">
     ${
       block.schema.tableShowHeader
         ? `<thead>
@@ -181,5 +181,5 @@ export const renderTableReader: ComponentReaderRenderer = (_section, block, help
         )
         .join('')}
     </tbody>
-  </table>`;
+  </table></div>`;
 };

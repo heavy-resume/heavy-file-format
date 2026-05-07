@@ -180,6 +180,13 @@ button.tiny {
   align-items: center;
 }
 
+.responsive-preview-controls {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
 .full-pane {
   min-height: 0;
   height: 100%;
@@ -241,6 +248,20 @@ button.tiny {
   display: grid;
   gap: 0.95rem;
   scrollbar-gutter: 0.5rem;
+}
+
+.hvy-surface {
+  container: hvy-surface / inline-size;
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  margin-inline: auto;
+}
+
+.hvy-surface-phone,
+.hvy-surface-tablet,
+.hvy-surface-desktop {
+  flex: 0 0 auto;
 }
 
 .viewer-shell {

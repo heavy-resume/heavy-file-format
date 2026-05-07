@@ -54,6 +54,41 @@ test('reader max width keeps focus while typing', async ({ page }) => {
   await expect(readerMaxWidth).toHaveValue('60rem');
 });
 
+test('responsive preview controls resize only the document surface', async ({ page }) => {
+  await page.goto('/');
+
+  const surface = page.locator('.hvy-surface').first();
+  const pane = page.locator('.full-pane').first();
+  const initialPaneWidth = (await pane.boundingBox())?.width ?? 0;
+
+  await page.getByRole('button', { name: 'Phone 390' }).click();
+  await expect.poll(async () => Math.round((await surface.boundingBox())?.width ?? 0)).toBe(390);
+  expect(Math.round((await pane.boundingBox())?.width ?? 0)).toBe(Math.round(initialPaneWidth));
+
+  await page.getByRole('button', { name: 'Tablet 768' }).click();
+  await expect.poll(async () => Math.round((await surface.boundingBox())?.width ?? 0)).toBe(768);
+  expect(Math.round((await pane.boundingBox())?.width ?? 0)).toBe(Math.round(initialPaneWidth));
+});
+
+test('responsive preview applies container query defaults', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('.rich-editor').first();
+  await editor.evaluate((node) => {
+    node.innerHTML =
+      '<p><span class="hvy-short" data-hvy-short="true"><span class="hvy-short-full">Tools &amp; Technologies</span><span class="hvy-short-value">Tools &amp; Tech</span></span></p>';
+    node.dispatchEvent(new InputEvent('input', { bubbles: true }));
+  });
+
+  await expect(editor.locator('.hvy-short-full')).toBeVisible();
+  await expect(editor.locator('.hvy-short-value')).toBeHidden();
+
+  await page.getByRole('button', { name: 'Phone 390' }).click();
+  await expect(editor.locator('.hvy-short-full')).toBeHidden();
+  await expect(editor.locator('.hvy-short-value')).toBeVisible();
+});
+
 test('document ai context is editable metadata and keeps focus while typing', async ({ page }) => {
   await page.goto('/');
 

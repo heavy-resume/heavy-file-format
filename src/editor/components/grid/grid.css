@@ -86,3 +86,14 @@
 .reader-grid-body {
   margin-top: 0.45rem;
 }
+
+@container hvy-surface (inline-size < 48rem) {
+  .reader-grid-layout,
+  .grid-fields {
+    grid-template-columns: 1fr !important;
+  }
+
+  .reader-grid-cell {
+    grid-column: 1 / -1 !important;
+  }
+}

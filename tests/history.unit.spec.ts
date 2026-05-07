@@ -16,6 +16,7 @@ function createHistoryTestState(): AppState {
     filename: 'test.hvy',
     currentView: 'editor',
     editorMode: 'raw',
+    responsivePreview: 'full',
     chat: createDefaultChatState(),
     aiEdit: {
       sectionKey: null,

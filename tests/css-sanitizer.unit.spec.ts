@@ -73,6 +73,13 @@ describe('sanitizeInlineCss', () => {
     const before = 'background: url("https://example.com/x");';
     expect(sanitizeInlineCss(before, { allowExternal: true })).toBe(before);
   });
+
+  test('drops media and container at-rules from inline css fields', () => {
+    const result = sanitizeInlineCss('margin: 0; @media (width < 40rem) { color: red; }; @container hvy-surface (inline-size < 48rem) { padding: 0; }; color: blue;');
+    expect(result).not.toMatch(/@media|@container/i);
+    expect(result).toContain('margin: 0');
+    expect(result).toContain('color: blue');
+  });
 });
 
 describe('sanitizeCssBlock', () => {

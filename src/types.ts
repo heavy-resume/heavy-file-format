@@ -188,6 +188,7 @@ export interface AppState {
   filename: string;
   currentView: 'editor' | 'viewer' | 'ai';
   editorMode: 'basic' | 'advanced' | 'raw' | 'cli';
+  responsivePreview: 'full' | 'phone' | 'tablet' | 'desktop';
   chat: ChatState;
   aiEdit: AiEditState;
   paneScroll: PaneScrollState;

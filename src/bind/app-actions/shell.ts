@@ -86,6 +86,15 @@ const toggleChatPanel: AppActionHandler = () => {
   getRenderApp()();
 };
 
+const setResponsivePreview: AppActionHandler = ({ actionButton }) => {
+  const preview = actionButton.dataset.responsivePreview;
+  state.responsivePreview =
+    preview === 'phone' || preview === 'tablet' || preview === 'desktop'
+      ? preview
+      : 'full';
+  getRenderApp()();
+};
+
 export const shellActions: Record<string, AppActionHandler> = {
   undo,
   redo,
@@ -96,4 +105,5 @@ export const shellActions: Record<string, AppActionHandler> = {
   'toggle-viewer-sidebar': toggleViewerSidebar,
   'toggle-editor-sidebar': toggleEditorSidebar,
   'toggle-chat-panel': toggleChatPanel,
+  'set-responsive-preview': setResponsivePreview,
 };

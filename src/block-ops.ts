@@ -701,11 +701,88 @@ export function applyRichAction(action: string, editable: HTMLElement, value?: s
       return;
     }
     applyInlineRichAction(editable, 'a', 'link', url);
+  } else if (action === 'short') {
+    toggleShortAnnotation(editable);
+  } else if (action === 'nowrap') {
+    toggleNowrapAnnotation(editable);
   }
 
   updateRichToolbarState(editable);
   const inputEvent = new InputEvent('input', { bubbles: true });
   editable.dispatchEvent(inputEvent);
+}
+
+function toggleShortAnnotation(editable: HTMLElement): void {
+  const range = getEditableSelectionRange(editable);
+  if (!range) {
+    return;
+  }
+  const existing = getAnnotationAncestor(range, 'hvyShort');
+  if (existing) {
+    unwrapShortAnnotation(existing);
+    return;
+  }
+  if (range.collapsed || range.toString().length === 0) {
+    return;
+  }
+  const selectionText = range.toString();
+  const wrapper = document.createElement('span');
+  wrapper.className = 'hvy-short';
+  wrapper.dataset.hvyShort = 'true';
+  const full = document.createElement('span');
+  full.className = 'hvy-short-full';
+  full.textContent = selectionText;
+  const short = document.createElement('span');
+  short.className = 'hvy-short-value';
+  short.contentEditable = 'true';
+  short.spellcheck = false;
+  short.textContent = selectionText;
+  wrapper.append(full, short);
+  range.deleteContents();
+  range.insertNode(wrapper);
+  selectElementContents(short);
+}
+
+function toggleNowrapAnnotation(editable: HTMLElement): void {
+  const range = getEditableSelectionRange(editable);
+  if (!range) {
+    return;
+  }
+  const existing = getAnnotationAncestor(range, 'hvyNowrap');
+  if (existing) {
+    unwrapInlineElement(existing);
+    return;
+  }
+  if (range.collapsed || range.toString().length === 0) {
+    return;
+  }
+  const wrapper = document.createElement('span');
+  wrapper.className = 'hvy-nowrap';
+  wrapper.dataset.hvyNowrap = 'true';
+  const fragment = range.extractContents();
+  wrapper.appendChild(fragment);
+  range.insertNode(wrapper);
+  selectElementContents(wrapper);
+}
+
+function unwrapShortAnnotation(element: HTMLElement): void {
+  const fullText = element.querySelector<HTMLElement>('.hvy-short-full')?.textContent ?? element.textContent ?? '';
+  const replacement = document.createTextNode(fullText);
+  element.replaceWith(replacement);
+  const range = document.createRange();
+  range.selectNodeContents(replacement);
+  const selection = window.getSelection();
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+}
+
+function selectElementContents(element: HTMLElement): void {
+  const range = document.createRange();
+  range.selectNodeContents(element);
+  const selection = window.getSelection();
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+  element.focus();
 }
 
 function applyInlineRichAction(editable: HTMLElement, tagName: InlineRichTag, action: InlineRichAction, href?: string): void {
@@ -832,6 +909,19 @@ function getInlineAncestor(range: Range, editable: HTMLElement, tagName: string)
     const element = node instanceof Element ? node : node.parentElement;
     const match = element?.closest(tagName);
     if (match instanceof HTMLElement && editable.contains(match)) {
+      return match;
+    }
+  }
+  return null;
+}
+
+function getAnnotationAncestor(range: Range, annotationKey: 'hvyShort' | 'hvyNowrap'): HTMLElement | null {
+  const selector = annotationKey === 'hvyShort' ? '[data-hvy-short="true"]' : '[data-hvy-nowrap="true"]';
+  const candidates = [range.startContainer, range.endContainer, range.commonAncestorContainer];
+  for (const node of candidates) {
+    const element = node instanceof Element ? node : node.parentElement;
+    const match = element?.closest(selector);
+    if (match instanceof HTMLElement) {
       return match;
     }
   }
@@ -973,8 +1063,19 @@ function updateRichToolbarState(editable: HTMLElement): void {
   }
   const selectedStyle = getSelectedRichBlockStyle(editable);
   const selectedInlineActions = getSelectedInlineRichActions(editable);
+  const range = getEditableSelectionRange(editable);
   toolbar.querySelectorAll<HTMLButtonElement>('[data-rich-action]').forEach((button) => {
     const action = button.dataset.richAction ?? '';
+    if (action === 'short' || action === 'nowrap') {
+      const selected =
+        action === 'short'
+          ? Boolean(range && getAnnotationAncestor(range, 'hvyShort'))
+          : Boolean(range && getAnnotationAncestor(range, 'hvyNowrap'));
+      button.classList.toggle('secondary', selected);
+      button.classList.toggle('is-selected', selected);
+      button.classList.toggle('ghost', !selected);
+      return;
+    }
     const selected =
       action === selectedStyle ||
       (selectedStyle === 'paragraph' && action === 'paragraph') ||
@@ -1849,7 +1950,7 @@ export function syncEditableTaskListMarkup(editable: HTMLElement, markdown: stri
 }
 
 function hasRawCheckboxMarkerText(editable: HTMLElement): boolean {
-  const text = editable.textContent ?? '';
+  const text = (editable.textContent ?? '').replace(/\u00a0/g, ' ');
   return /(^|[^\\])\[( |x|X)\]/.test(text);
 }
 

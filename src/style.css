@@ -264,6 +264,24 @@ button.tiny {
   flex: 0 0 auto;
 }
 
+.hvy-preview-frame {
+  width: 100%;
+  max-width: none;
+  margin-inline: auto;
+}
+
+.hvy-preview-frame-phone,
+.hvy-preview-frame-tablet,
+.hvy-preview-frame-desktop {
+  flex: 0 0 auto;
+}
+
+.pane.hvy-preview-frame-phone,
+.pane.hvy-preview-frame-tablet,
+.pane.hvy-preview-frame-desktop {
+  padding: 0;
+}
+
 .viewer-shell {
   position: relative;
   height: 100%;

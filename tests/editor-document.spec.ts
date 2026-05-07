@@ -54,20 +54,32 @@ test('reader max width keeps focus while typing', async ({ page }) => {
   await expect(readerMaxWidth).toHaveValue('60rem');
 });
 
-test('responsive preview controls resize only the document surface', async ({ page }) => {
+test('responsive preview controls resize document frame without resizing app chrome', async ({ page }) => {
   await page.goto('/');
 
   const surface = page.locator('.hvy-surface').first();
+  const previewFrame = page.locator('.editor-shell').first();
   const pane = page.locator('.full-pane').first();
+  const workspace = page.locator('.workspace-shell').first();
+  const initialWorkspaceWidth = (await workspace.boundingBox())?.width ?? 0;
   const initialPaneWidth = (await pane.boundingBox())?.width ?? 0;
+  expect(initialPaneWidth).toBeGreaterThan(768);
 
   await page.getByRole('button', { name: 'Phone 390' }).click();
+  await expect.poll(async () => Math.round((await pane.boundingBox())?.width ?? 0)).toBe(390);
+  await expect.poll(async () => Math.round((await previewFrame.boundingBox())?.width ?? 0)).toBe(390);
   await expect.poll(async () => Math.round((await surface.boundingBox())?.width ?? 0)).toBe(390);
-  expect(Math.round((await pane.boundingBox())?.width ?? 0)).toBe(Math.round(initialPaneWidth));
+  expect(Math.round((await workspace.boundingBox())?.width ?? 0)).toBe(Math.round(initialWorkspaceWidth));
 
   await page.getByRole('button', { name: 'Tablet 768' }).click();
+  await expect.poll(async () => Math.round((await pane.boundingBox())?.width ?? 0)).toBe(768);
+  await expect.poll(async () => Math.round((await previewFrame.boundingBox())?.width ?? 0)).toBe(768);
   await expect.poll(async () => Math.round((await surface.boundingBox())?.width ?? 0)).toBe(768);
-  expect(Math.round((await pane.boundingBox())?.width ?? 0)).toBe(Math.round(initialPaneWidth));
+  expect(Math.round((await workspace.boundingBox())?.width ?? 0)).toBe(Math.round(initialWorkspaceWidth));
+
+  await page.getByRole('button', { name: 'Full' }).click();
+  await expect.poll(async () => Math.round((await pane.boundingBox())?.width ?? 0)).toBe(Math.round(initialPaneWidth));
+  await expect.poll(async () => Math.round((await previewFrame.boundingBox())?.width ?? 0)).toBeGreaterThan(768);
 });
 
 test('responsive preview applies to pullout document surfaces', async ({ page }) => {
@@ -77,10 +89,14 @@ test('responsive preview applies to pullout document surfaces', async ({ page })
   await page.getByRole('button', { name: 'Phone 390' }).click();
 
   await page.locator('.editor-sidebar-tab').click();
+  await expect.poll(async () => Math.round((await page.locator('.editor-pane').boundingBox())?.width ?? 0)).toBe(390);
+  await expect.poll(async () => Math.round((await page.locator('.editor-shell').boundingBox())?.width ?? 0)).toBe(390);
   await expect.poll(async () => Math.round((await page.locator('.editor-sidebar-panel .hvy-surface').boundingBox())?.width ?? 0)).toBe(390);
 
   await page.getByRole('button', { name: 'Viewer' }).click();
   await page.locator('.viewer-sidebar-tab').click();
+  await expect.poll(async () => Math.round((await page.locator('.reader-pane').boundingBox())?.width ?? 0)).toBe(390);
+  await expect.poll(async () => Math.round((await page.locator('.viewer-shell').boundingBox())?.width ?? 0)).toBe(390);
   await expect.poll(async () => Math.round((await page.locator('.viewer-sidebar-panel .hvy-surface').boundingBox())?.width ?? 0)).toBe(390);
 });
 

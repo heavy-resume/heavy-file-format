@@ -463,7 +463,7 @@ function renderApp(): void {
               : ''
           }
         </div>
-        <div class="pane ${isEditorView ? 'editor-pane' : 'reader-pane'} full-pane">
+        <div${renderResponsivePreviewFrameAttrs(`pane ${isEditorView ? 'editor-pane' : 'reader-pane'} full-pane`)}>
           ${
             isEditorView
               ? `${isRawEditor
@@ -506,7 +506,7 @@ function renderApp(): void {
                     })
                   : `${isAdvancedEditor ? renderTemplatePanel(templateFields, state.templateValues, { escapeAttr, escapeHtml }) : ''}
                 ${isAdvancedEditor && state.metaPanelOpen ? editorRenderer.renderMetaPanel() : ''}
-                <div class="editor-shell ${state.editorSidebarOpen ? 'is-sidebar-open' : 'is-sidebar-closed'}">
+                <div${renderResponsivePreviewFrameAttrs(`editor-shell ${state.editorSidebarOpen ? 'is-sidebar-open' : 'is-sidebar-closed'}`)}>
                   <div class="editor-sidebar-backdrop" data-action="toggle-editor-sidebar"></div>
                   <aside class="editor-sidebar">
                     <button type="button" class="editor-sidebar-tab" data-action="toggle-editor-sidebar" aria-expanded="${state.editorSidebarOpen ? 'true' : 'false'}" aria-label="Toggle sidebar">☰</button>
@@ -517,7 +517,7 @@ function renderApp(): void {
                   </aside>
                   <div id="editorTree" class="editor-tree">${editorRenderer.renderSectionEditorTree(state.document.sections)}</div>
                 </div>`}`
-              : `<div class="viewer-shell ${isAiView ? 'ai-view-shell ' : ''}${state.viewerSidebarOpen ? 'is-sidebar-open' : 'is-sidebar-closed'}">
+              : `<div${renderResponsivePreviewFrameAttrs(`viewer-shell ${isAiView ? 'ai-view-shell ' : ''}${state.viewerSidebarOpen ? 'is-sidebar-open' : 'is-sidebar-closed'}`)}>
                    <div class="viewer-sidebar-backdrop" data-action="toggle-viewer-sidebar"></div>
                    <aside class="viewer-sidebar">
                      <button type="button" class="viewer-sidebar-tab" data-action="toggle-viewer-sidebar" aria-expanded="${state.viewerSidebarOpen ? 'true' : 'false'}" aria-label="Toggle navigation">${escapeHtml(String(state.document.meta.sidebar_label || '☰'))}</button>
@@ -617,6 +617,21 @@ function renderResponsivePreviewControls(): string {
       )
       .join('')}
   </div>`;
+}
+
+function renderResponsivePreviewFrameAttrs(baseClass: string): string {
+  const maxWidth = typeof state.document.meta.reader_max_width === 'string' ? state.document.meta.reader_max_width.trim() : '';
+  const width =
+    state.responsivePreview === 'phone'
+      ? '390px'
+      : state.responsivePreview === 'tablet'
+      ? '768px'
+      : state.responsivePreview === 'desktop'
+      ? maxWidth || '960px'
+      : '';
+  const className = `${baseClass} hvy-preview-frame hvy-preview-frame-${state.responsivePreview}`;
+  const style = width ? ` style="width: ${escapeAttr(width)};"` : '';
+  return ` class="${escapeAttr(className)}"${style}`;
 }
 
 function refreshReaderPanels(): void {

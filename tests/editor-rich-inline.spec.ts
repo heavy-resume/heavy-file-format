@@ -65,15 +65,47 @@ test('mobile adjustment mode writes text edits as short annotations', async ({ p
   await expect(page.locator('.ghost-label', { hasText: 'Add Text' })).toHaveCount(0);
 
   const mobileEditor = page.locator('.rich-editor').first();
-  await mobileEditor.evaluate((node) => {
+  await mobileEditor.locator('p').first().evaluate((node) => {
     node.textContent = 'Tools & Tech';
-    node.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    node.closest('.rich-editor')?.dispatchEvent(new InputEvent('input', { bubbles: true }));
   });
+  await expect(mobileEditor).toHaveText('Tools & Tech');
 
   await page.getByRole('button', { name: 'Raw' }).click();
   await expect(page.locator('#rawEditor')).toContainText(
     '<!--hvy:short {"to":"Tools & Tech"}-->Tools & Technologies<!--/hvy:short-->'
   );
+});
+
+test('mobile adjustment mode keeps heading syntax outside short annotations', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Phone 390' }).click();
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('.rich-editor').first();
+
+  await editor.evaluate((node) => {
+    node.innerHTML = '<h2>Summary</h2>';
+    node.dispatchEvent(new InputEvent('input', { bubbles: true }));
+  });
+
+  await page.getByRole('button', { name: 'Mobile Adjustment' }).click();
+  const mobileEditor = page.locator('.rich-editor').first();
+  await expect(mobileEditor.locator('h2')).toHaveText('Summary');
+
+  await mobileEditor.locator('h2').evaluate((node) => {
+    node.textContent = 'Sum';
+    node.closest('.rich-editor')?.dispatchEvent(new InputEvent('input', { bubbles: true }));
+  });
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await expect(page.locator('#rawEditor')).toContainText(
+    '## <!--hvy:short {"to":"Sum"}-->Summary<!--/hvy:short-->'
+  );
+
+  await page.getByRole('button', { name: 'Basic' }).click();
+  await expect(page.locator('.rich-editor h2').first()).toContainText('Summary');
+  await expect(page.locator('.rich-editor').first()).not.toContainText('## Summary');
 });
 
 test('mobile adjustment mode removes short annotation when text matches full value', async ({ page }) => {

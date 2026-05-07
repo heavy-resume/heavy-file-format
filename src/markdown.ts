@@ -131,7 +131,29 @@ export function applyMobileShortAdjustment(fullMarkdown: string, mobileMarkdown:
   if (full.length === 0 || mobile.length === 0 || mobile === full) {
     return full;
   }
-  return `<!--hvy:short ${JSON.stringify({ to: mobile })}-->${full}<!--/hvy:short-->`;
+  const fullHeading = parseSimpleAtxHeading(full);
+  if (fullHeading) {
+    const mobileHeading = parseSimpleAtxHeading(mobile);
+    const mobileText = mobileHeading?.text ?? mobile;
+    if (mobileText.length === 0 || mobileText === fullHeading.text) {
+      return full;
+    }
+    return `${fullHeading.prefix}${formatShortAnnotation(fullHeading.text, mobileText)}`;
+  }
+  return formatShortAnnotation(full, mobile);
+}
+
+function formatShortAnnotation(fullText: string, shortText: string): string {
+  return `<!--hvy:short ${JSON.stringify({ to: shortText })}-->${fullText}<!--/hvy:short-->`;
+}
+
+function parseSimpleAtxHeading(markdown: string): { prefix: string; text: string } | null {
+  const match = markdown.match(/^(#{1,6})([ \t]+)(.*?)(?:[ \t]+#+[ \t]*)?$/);
+  if (!match) {
+    return null;
+  }
+  const text = match[3]?.trim() ?? '';
+  return text.length > 0 ? { prefix: `${match[1]}${match[2]}`, text } : null;
 }
 
 function replaceShortAnnotations(markdown: string, replacement: (rawJson: string, fullText: string) => string): string {

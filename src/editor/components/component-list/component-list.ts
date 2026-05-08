@@ -113,9 +113,9 @@ export const renderComponentListReader: ComponentReaderRenderer = (section, bloc
               helpers
             )
           ),
-          ...resolved.missingBlocks.map((innerBlock) => helpers.renderReaderBlock(section, innerBlock)),
+          helpers.renderReaderBlocks(section, resolved.missingBlocks),
         ].join('')
-      : resolved.blocks.map((innerBlock) => helpers.renderReaderBlock(section, innerBlock)).join('');
+      : helpers.renderReaderBlocks(section, resolved.blocks);
   const listClass = resolved.kind === 'groups' ? 'reader-component-list is-grouped-view' : 'reader-component-list';
   return `${controls}<div class="${helpers.escapeAttr(listClass)}">${body}</div>`;
 };

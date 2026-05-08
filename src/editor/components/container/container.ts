@@ -74,7 +74,7 @@ function renderContainerReaderBody(options: {
   virtualKey: string;
   helpers: Parameters<ComponentReaderRenderer>[2];
 }): string {
-  const body = options.blocks.map((innerBlock) => options.helpers.renderReaderBlock(options.section, innerBlock)).join('');
+  const body = options.helpers.renderReaderBlocks(options.section, options.blocks);
   if (!body && !options.title.trim()) {
     return '';
   }

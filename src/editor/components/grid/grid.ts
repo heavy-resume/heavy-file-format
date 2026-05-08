@@ -82,14 +82,14 @@ export const renderGridEditor: ComponentEditorRenderer = (sectionKey, block, hel
 export const renderGridReader: ComponentReaderRenderer = (_section, block, helpers) => {
   const columns = Math.max(1, Math.min(6, block.schema.gridColumns));
   const gridStyle = `grid-template-columns: repeat(${columns}, minmax(0, 1fr));`;
-  const cells = block.schema.gridItems
+  const visibleCells = helpers.orderReaderBlocks(block.schema.gridItems.map((item) => item.block))
+    .map((item) => ({ html: helpers.renderReaderBlock(_section, item) }))
+    .filter((item) => item.html.trim().length > 0);
+  const cells = visibleCells
     .map((item, index) => {
       const columnIndex = columns <= 1 ? 1 : (index % columns) + 1;
       const gridColumn = columns <= 1 ? '1 / -1' : `${columnIndex} / span 1`;
-      return `<div class="reader-grid-cell" style="grid-column: ${helpers.escapeAttr(gridColumn)};">${helpers.renderReaderBlock(
-        _section,
-        item.block
-      )}</div>`;
+      return `<div class="reader-grid-cell" style="grid-column: ${helpers.escapeAttr(gridColumn)};">${item.html}</div>`;
     })
     .join('');
   return `<div class="reader-grid-layout" style="${helpers.escapeAttr(gridStyle)}">${cells}</div>`;

@@ -170,6 +170,9 @@ export interface ThemeConfig {
   colors: Record<string, string>;
 }
 
+export type ReaderViewModifier = 'highlight' | 'collapse' | 'dimmed' | 'hidden';
+export type ReaderViewFilter = Record<string, ReaderViewModifier[]>;
+
 export interface ComponentDefinition {
   name: string;
   baseType: string;
@@ -225,6 +228,8 @@ export interface AppState {
   expandableEditorPanels: Record<string, { stubOpen: boolean; expandedOpen: boolean }>;
   readerExpandableState: Record<string, boolean>;
   readerContainerState: Record<string, boolean>;
+  readerView: ReaderViewFilter;
+  readerViewActivatedTargets: Set<string>;
   componentListReaderViews: Record<string, string>;
   viewerSidebarOpen: boolean;
   editorSidebarOpen: boolean;

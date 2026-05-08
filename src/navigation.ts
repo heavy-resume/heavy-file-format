@@ -278,6 +278,8 @@ export function resetTransientUiState(): void {
   state.gridAddComponentByBlock = {};
   state.readerExpandableState = {};
   state.readerContainerState = {};
+  state.readerView = {};
+  state.readerViewActivatedTargets = new Set<string>();
   state.componentListReaderViews = {};
   state.viewerSidebarHelpDismissed = false;
   state.editorSidebarHelpDismissed = false;

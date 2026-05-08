@@ -933,6 +933,8 @@ function getChatReaderHelpers(documentMeta: VisualDocument['meta']): ComponentRe
     renderEditorBlock: () => '',
     renderPassiveEditorBlock: () => '',
     renderReaderBlock: (_section: VisualSection, block: VisualBlock) => renderChatHvyBlock(block, documentMeta),
+    renderReaderBlocks: (_section: VisualSection, blocks: VisualBlock[]) => blocks.map((block) => renderChatHvyBlock(block, documentMeta)).join(''),
+    orderReaderBlocks: (blocks: VisualBlock[]) => blocks,
     renderComponentFragment: (_componentName: string, content: string) => markdownToEditorHtml(normalizeMarkdownLists(content)),
     renderComponentOptions: () => '',
     renderAddComponentPicker: () => '',

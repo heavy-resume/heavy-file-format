@@ -84,6 +84,7 @@ test('blank template values clear empty markdown scaffolds so placeholders rende
     schema: {
       ...defaultBlockSchema('expandable'),
       expandableStubBlocks: {
+        lock: false,
         children: [
           {
             id: 'stub-title',

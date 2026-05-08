@@ -107,6 +107,8 @@ function createInitialState(document: ReturnType<typeof deserializeDocumentBytes
     expandableEditorPanels: {},
     readerExpandableState: {},
     readerContainerState: {},
+    readerView: {},
+    readerViewActivatedTargets: new Set<string>(),
     componentListReaderViews: {},
     viewerSidebarOpen: false,
     editorSidebarOpen: false,
@@ -371,6 +373,12 @@ readerRenderer = createReaderRenderer(
     get readerContainerState() {
       return state.readerContainerState;
     },
+    get readerView() {
+      return state.readerView;
+    },
+    get readerViewActivatedTargets() {
+      return state.readerViewActivatedTargets;
+    },
     get componentListReaderViews() {
       return state.componentListReaderViews;
     },
@@ -446,6 +454,9 @@ function renderApp(): void {
           <button id="crmExampleBtn" type="button">CRM Example</button>
           <button id="resumeTemplateBtn" type="button">Resume Template</button>
           <button id="resumeExampleBtn" type="button">Resume Example</button>
+          <button id="typescriptResumeViewBtn" type="button" class="${Object.keys(state.readerView).length > 0 ? 'ghost' : ''}">TypeScript View</button>
+          <button id="llmEngineerResumeViewBtn" type="button" class="${Object.keys(state.readerView).length > 0 ? 'ghost' : ''}">LLM Engineer View</button>
+          <button id="clearReaderViewBtn" type="button" class="ghost">Clear View</button>
           <label class="file-picker">
             Select File
             <input id="fileInput" type="file" accept=".hvy,.thvy,.md,.markdown,text/markdown,text/plain" />

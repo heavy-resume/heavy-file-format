@@ -32,6 +32,8 @@ function createHelpers(): ComponentRenderHelpers {
     renderEditorBlock: () => '',
     renderPassiveEditorBlock: () => '',
     renderReaderBlock: () => '',
+    renderReaderBlocks: () => '',
+    orderReaderBlocks: (blocks) => blocks,
     renderComponentFragment: (_componentName, content) => content,
     renderComponentOptions: () => '',
     renderAddComponentPicker: () => '',

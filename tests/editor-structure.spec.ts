@@ -1111,6 +1111,39 @@ test('editing the second resume project does not duplicate it after done', async
   expect(raw.match(/<!--hvy:project-record/g) ?? []).toHaveLength(2);
 });
 
+test('resume reader view buttons apply filters without changing edit mode', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Resume Example' }).click();
+  await page.getByRole('button', { name: 'TypeScript View' }).click();
+
+  await expect(page.locator('#readerDocument')).toBeVisible();
+  await expect(page.locator('#tool-typescript')).toHaveClass(/is-highlighted/);
+  await expect(page.locator('#project-autonomous-agent-hackathon')).toHaveClass(/is-reader-view-dimmed/);
+  await expect(page.locator('#project-autonomous-agent-hackathon')).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.locator('#locations')).toHaveCount(0);
+
+  const projectIdsBefore = await page.locator('#readerDocument [id]').evaluateAll((nodes) => nodes.map((node) => node.id));
+  await page.locator('#project-autonomous-agent-hackathon').click();
+  const projectIdsAfter = await page.locator('#readerDocument [id]').evaluateAll((nodes) => nodes.map((node) => node.id));
+
+  await expect(page.locator('#project-autonomous-agent-hackathon')).not.toHaveClass(/is-reader-view-dimmed/);
+  expect(projectIdsAfter).toEqual(projectIdsBefore);
+
+  await page.getByRole('button', { name: 'LLM Engineer View' }).click();
+  await expect(page.locator('#tool-openai-api')).toHaveClass(/is-highlighted/);
+  await expect(page.locator('#tool-typescript')).toHaveClass(/is-reader-view-dimmed/);
+
+  await page.getByRole('button', { name: 'Editor' }).click();
+  await expect(page.locator('#editorTree .is-reader-view-dimmed')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await expect(page.locator('#rawEditor')).toContainText('"id":"locations"');
+
+  await page.getByRole('button', { name: 'Viewer' }).click();
+  await page.getByRole('button', { name: 'Clear View' }).click();
+  await expect(page.locator('#project-autonomous-agent-hackathon')).not.toHaveClass(/is-reader-view-dimmed/);
+});
+
 test('populated component-list hides the list component type dropdown', async ({ page }) => {
   await page.goto('/');
 

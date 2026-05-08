@@ -1,0 +1,24 @@
+{
+  "typescript": {
+    "tool-typescript": ["highlight"],
+    "project-heavy-stack": ["highlight"],
+    "history-northwind-labs-senior-software-engineer": ["highlight"],
+    "tool-openai-api": ["dimmed"],
+    "tool-superagi": ["dimmed"],
+    "skill-llm-prompt-engineering": ["dimmed"],
+    "project-autonomous-agent-hackathon": ["dimmed", "collapse"],
+    "/body/education": ["collapse"],
+    "/body/locations": ["hidden"]
+  },
+  "llm-engineer": {
+    "tool-openai-api": ["highlight"],
+    "tool-superagi": ["highlight"],
+    "skill-llm-prompt-engineering": ["highlight"],
+    "project-autonomous-agent-hackathon": ["highlight"],
+    "project-heavy-stack": ["dimmed", "collapse"],
+    "tool-typescript": ["dimmed"],
+    "tool-c-cpp": ["dimmed"],
+    "/body/education": ["collapse"],
+    "/body/locations": ["hidden"]
+  }
+}

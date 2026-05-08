@@ -1,0 +1,242 @@
+import { expect, test, vi } from 'vitest';
+
+import { createReaderRenderer } from '../src/reader/render';
+import { createReaderViewContext, getBlockReaderViewTargetKey, getReaderViewModifiers, getSectionReaderViewTargetKey, orderReaderViewTargets } from '../src/reader/view-filter';
+import { deserializeDocument } from '../src/serialization';
+import { defaultBlockSchema } from '../src/document-factory';
+import type { ComponentRenderHelpers } from '../src/editor/component-helpers';
+import type { VisualBlock, VisualSection } from '../src/editor/types';
+import type { ReaderViewFilter } from '../src/types';
+
+function createReaderViewTestDocument() {
+  return deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {"id":"intro"}-->
+ Intro
+
+<!--hvy:text {"id":"shared"}-->
+ First shared
+
+<!--hvy: {"id":"details"}-->
+#! Details
+
+<!--hvy:text {"id":"shared"}-->
+ Second shared
+`, '.hvy');
+}
+
+function createTextBlock(id: string, text: string): VisualBlock {
+  return {
+    id: `block-${id}`,
+    text,
+    schemaMode: false,
+    schema: {
+      ...defaultBlockSchema('text'),
+      id,
+    },
+  };
+}
+
+function createSection(id: string, blocks: VisualBlock[] = []): VisualSection {
+  return {
+    key: `section-${id}`,
+    customId: id,
+    contained: true,
+    lock: false,
+    idEditorOpen: false,
+    isGhost: false,
+    title: id,
+    level: 1,
+    expanded: true,
+    highlight: false,
+    css: '',
+    tags: '',
+    description: '',
+    location: 'main',
+    blocks,
+    children: [],
+  };
+}
+
+test('reader view resolves IDs and CLI virtual paths', () => {
+  const document = createReaderViewTestDocument();
+  const expectedResult = createReaderViewContext(document, {
+    summary: ['highlight'],
+    '/body/summary/intro': ['collapse'],
+  });
+
+  const summary = document.sections[0];
+  const intro = summary?.blocks[0];
+
+  expect(summary).toBeTruthy();
+  expect(intro).toBeTruthy();
+  expect(getReaderViewModifiers(expectedResult, getSectionReaderViewTargetKey(summary as VisualSection)).has('highlight')).toBe(true);
+  expect(getReaderViewModifiers(expectedResult, getBlockReaderViewTargetKey(intro as VisualBlock)).has('collapse')).toBe(true);
+});
+
+test('reader view warns for invalid targets', () => {
+  const document = createReaderViewTestDocument();
+  const warn = vi.fn();
+
+  createReaderViewContext(document, { '/body/missing': ['hidden'] }, warn);
+
+  expect(warn).toHaveBeenCalledWith('[hvy:reader-view] Unknown reader view target: /body/missing');
+});
+
+test('reader view applies duplicate ID matches consistently', () => {
+  const document = createReaderViewTestDocument();
+  const expectedResult = createReaderViewContext(document, { shared: ['dimmed'] });
+
+  const firstShared = document.sections[0]?.blocks[1];
+  const secondShared = document.sections[1]?.blocks[0];
+
+  expect(getReaderViewModifiers(expectedResult, getBlockReaderViewTargetKey(firstShared as VisualBlock)).has('dimmed')).toBe(true);
+  expect(getReaderViewModifiers(expectedResult, getBlockReaderViewTargetKey(secondShared as VisualBlock)).has('dimmed')).toBe(true);
+});
+
+test('reader view ordering hides hidden blocks and moves dimmed blocks behind siblings', () => {
+  const first = createTextBlock('first', 'First');
+  const second = createTextBlock('second', 'Second');
+  const third = createTextBlock('third', 'Third');
+  const document = {
+    meta: {},
+    extension: '.hvy' as const,
+    attachments: [],
+    sections: [createSection('summary', [first, second, third])],
+  };
+  const context = createReaderViewContext(document, {
+    first: ['dimmed'],
+    second: ['hidden'],
+    third: ['dimmed'],
+  });
+
+  const expectedResult = orderReaderViewTargets([first, second, third], context, getBlockReaderViewTargetKey, new Set<string>());
+
+  expect(expectedResult.map((block) => block.schema.id)).toEqual(['first', 'third']);
+});
+
+test('reader view keeps activated dimmed targets in their dimmed order', () => {
+  const first = createTextBlock('first', 'First');
+  const second = createTextBlock('second', 'Second');
+  const third = createTextBlock('third', 'Third');
+  const document = {
+    meta: {},
+    extension: '.hvy' as const,
+    attachments: [],
+    sections: [createSection('summary', [first, second, third])],
+  };
+  const context = createReaderViewContext(document, {
+    first: ['dimmed'],
+  });
+  const activatedTargets = new Set<string>([getBlockReaderViewTargetKey(first)]);
+
+  const expectedResult = orderReaderViewTargets([first, second, third], context, getBlockReaderViewTargetKey, activatedTargets);
+
+  expect(expectedResult.map((block) => block.schema.id)).toEqual(['second', 'third', 'first']);
+});
+
+test('reader view rendering applies hidden, dimmed, highlight, and generic collapse wrappers', () => {
+  const first = createTextBlock('first', 'First');
+  const second = createTextBlock('second', 'Second');
+  const third = createTextBlock('third', 'Third');
+  const document = {
+    meta: {},
+    extension: '.hvy' as const,
+    attachments: [],
+    sections: [createSection('summary', [first, second, third])],
+  };
+  const state = {
+    documentMeta: document.meta,
+    documentSections: document.sections,
+    addComponentBySection: {},
+    tempHighlights: new Set<string>(),
+    aiEditTarget: { sectionKey: null, blockId: null },
+    modalSectionKey: null,
+    sqliteRowComponentModal: null,
+    dbTableQueryModal: null,
+    reusableSaveModal: null,
+    reusableTemplateModal: null,
+    componentMetaModal: null,
+    themeModalOpen: false,
+    theme: { colors: {} },
+    currentView: 'viewer' as const,
+    responsivePreview: 'full' as const,
+    readerExpandableState: {},
+    readerContainerState: {},
+    readerView: {
+      first: ['dimmed'],
+      second: ['hidden'],
+      third: ['highlight', 'collapse'],
+    } satisfies ReaderViewFilter,
+    readerViewActivatedTargets: new Set<string>(),
+    componentListReaderViews: {},
+    viewerSidebarHelpDismissed: true,
+  };
+  const renderer = createReaderRenderer(state, {
+    escapeAttr: escapeHtml,
+    escapeHtml,
+    flattenSections: (sections) => sections,
+    findDuplicateSectionIds: () => [],
+    findSectionByKey: () => null,
+    findBlockByIds: () => null,
+    getSectionId: (section) => section.customId,
+    formatSectionTitle: (title) => title,
+    resolveBaseComponent: (componentName) => componentName,
+    ensureExpandableBlocks: () => {},
+    ensureGridItems: () => {},
+    getComponentRenderHelpers: () => helpers,
+    renderEditorBlock: () => '',
+    renderBlockContentEditor: () => '',
+    renderComponentOptions: () => '',
+    renderBlockMetaFields: () => '',
+  });
+  const helpers = {
+    escapeAttr: escapeHtml,
+    escapeHtml,
+    markdownToEditorHtml: escapeHtml,
+    renderRichToolbar: () => '',
+    renderEditorBlock: () => '',
+    renderPassiveEditorBlock: () => '',
+    renderReaderBlock: renderer.renderReaderBlock,
+    renderReaderBlocks: renderer.renderReaderBlocks,
+    orderReaderBlocks: renderer.orderReaderBlocks,
+    renderComponentFragment: (_componentName: string, content: string) => escapeHtml(content),
+    renderComponentOptions: () => '',
+    renderAddComponentPicker: () => '',
+    renderComponentPlacementTarget: () => '',
+    renderOption: () => '',
+    getDocumentComponentCss: () => '',
+    getXrefTargetOptions: () => [],
+    isXrefTargetValid: () => true,
+    getTableColumns: () => [],
+    ensureContainerBlocks: () => {},
+    ensureComponentListBlocks: () => {},
+    getSelectedAddComponent: (_key: string, fallback: string) => fallback,
+    getComponentListReaderViewId: () => '',
+    getReaderContainerExpanded: (_key: string, fallback: boolean) => fallback,
+    isExpandableEditorPanelOpen: (_sectionKey: string, _blockId: string, _panel: 'stub' | 'expanded', fallback: boolean) => fallback,
+    isAdvancedEditorMode: () => false,
+    isMobileAdjustmentMode: () => false,
+  } satisfies ComponentRenderHelpers;
+
+  const expectedResult = renderer.renderReaderSections(document.sections);
+
+  expect(expectedResult).toContain('data-reader-view-dimmed="true"');
+  expect(expectedResult).toContain('is-highlighted');
+  expect(expectedResult).toContain('reader-view-collapse-wrapper');
+  expect(expectedResult).toContain('First');
+  expect(expectedResult).not.toContain('Second');
+});
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}

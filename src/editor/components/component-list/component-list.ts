@@ -4,7 +4,7 @@ import type { ComponentListView, VisualBlock } from '../../types';
 import { getComponentListAddLabel } from './component-list-labels';
 import { plusIcon } from '../../../icons';
 import { renderVirtualContainerReader } from '../container/container';
-import { getComponentListActiveView, resolveComponentListItems } from './component-list-view';
+import { getComponentListActiveView, parseComponentListRuntimeView, resolveComponentListItems } from './component-list-view';
 
 export const renderComponentListEditor: ComponentEditorRenderer = (sectionKey, block, helpers) => {
   helpers.ensureComponentListBlocks(block);
@@ -42,17 +42,30 @@ export const renderComponentListEditor: ComponentEditorRenderer = (sectionKey, b
 export const renderComponentListReader: ComponentReaderRenderer = (section, block, helpers) => {
   helpers.ensureComponentListBlocks(block);
   const activeViewId = helpers.getComponentListReaderViewId(section.key, block.id);
+  const runtimeView = parseComponentListRuntimeView(activeViewId);
   const activeView = getComponentListActiveView(block, activeViewId);
   const controls =
-    block.schema.componentListViews.length > 1
-      ? `<label class="component-list-view-picker">
-          <span>View</span>
-          <select data-field="component-list-reader-view" data-section-key="${helpers.escapeAttr(section.key)}" data-block-id="${helpers.escapeAttr(block.id)}">
+    block.schema.componentListViews.length > 0
+      ? `<div class="component-list-reader-controls" data-component-list-reader-controls="true">
+          <label class="component-list-view-picker">
+            <span>View</span>
+            <select data-field="component-list-reader-view" data-section-key="${helpers.escapeAttr(section.key)}" data-block-id="${helpers.escapeAttr(block.id)}">
             ${block.schema.componentListViews
-              .map((view) => `<option value="${helpers.escapeAttr(view.id)}"${view.id === activeView?.id ? ' selected' : ''}>${helpers.escapeHtml(view.label)}</option>`)
+              .map((view) => `<option value="${helpers.escapeAttr(view.id)}"${view.id === (runtimeView.viewId || activeView?.id) ? ' selected' : ''}>${helpers.escapeHtml(view.label)}</option>`)
               .join('')}
-          </select>
-        </label>`
+            </select>
+          </label>
+          <button
+            type="button"
+            class="component-list-reverse-button${runtimeView.reversed ? ' is-active' : ''}"
+            data-reader-action="toggle-component-list-reverse"
+            data-section-key="${helpers.escapeAttr(section.key)}"
+            data-block-id="${helpers.escapeAttr(block.id)}"
+            data-view-id="${helpers.escapeAttr(runtimeView.viewId || activeView?.id || '')}"
+            aria-pressed="${runtimeView.reversed ? 'true' : 'false'}"
+            title="Reverse order"
+          >⇅</button>
+        </div>`
       : '';
   const resolved = resolveComponentListItems(block, activeView?.id ?? '');
   const body =

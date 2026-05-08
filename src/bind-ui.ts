@@ -16,6 +16,7 @@ import { bindImageDragAndDrop } from './editor/components/image/image';
 import { bindAppEvents } from './bind/app-events';
 import { scheduleSidebarHelpAutoClose } from './bind/handlers/click-misc';
 import { saveResumeState } from './state-persistence';
+import { encodeComponentListRuntimeView, parseComponentListRuntimeView } from './editor/components/component-list/component-list-view';
 
 export function bindUi(app: HTMLElement): void {
   const newBtn = app.querySelector<HTMLButtonElement>('#newBtn');
@@ -131,6 +132,51 @@ export function bindUi(app: HTMLElement): void {
       event.preventDefault();
       const id = anchor.getAttribute('href')?.slice(1) ?? '';
       navigateToSection(id, app);
+      return;
+    }
+
+    const listControls = target.closest<HTMLElement>('[data-component-list-reader-controls="true"]');
+    if (listControls) {
+      const collapsedSection = listControls.closest<HTMLElement>('.reader-section.is-collapsed-preview');
+      const sectionKey = listControls.querySelector<HTMLElement>('[data-section-key]')?.dataset.sectionKey;
+      if (collapsedSection && sectionKey) {
+        const section = findSectionByKey(state.document.sections, sectionKey);
+        if (section && !section.expanded) {
+          event.stopPropagation();
+          section.expanded = true;
+          getRefreshReaderPanels()();
+          const select = target.closest<HTMLSelectElement>('select');
+          if (select) {
+            const blockId = select.dataset.blockId ?? '';
+            window.setTimeout(() => {
+              const nextSelect = app.querySelector<HTMLSelectElement>(
+                `[data-field="component-list-reader-view"][data-section-key="${CSS.escape(sectionKey)}"][data-block-id="${CSS.escape(blockId)}"]`
+              );
+              nextSelect?.focus();
+              (nextSelect as (HTMLSelectElement & { showPicker?: () => void }) | null)?.showPicker?.();
+            }, 0);
+          }
+          return;
+        }
+      }
+    }
+
+    const reverseList = target.closest<HTMLElement>('[data-reader-action="toggle-component-list-reverse"]');
+    if (reverseList) {
+      event.stopPropagation();
+      const sectionKey = reverseList.dataset.sectionKey;
+      const blockId = reverseList.dataset.blockId;
+      const viewId = reverseList.dataset.viewId;
+      if (!sectionKey || !blockId || !viewId) {
+        return;
+      }
+      const key = `${sectionKey}:${blockId}`;
+      const current = parseComponentListRuntimeView(state.componentListReaderViews[key] ?? viewId);
+      state.componentListReaderViews[key] = encodeComponentListRuntimeView({
+        viewId: current.viewId || viewId,
+        reversed: !current.reversed,
+      });
+      getRefreshReaderPanels()();
       return;
     }
 

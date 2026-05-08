@@ -68,3 +68,27 @@ test('component-list grouped view creates sorted virtual groups', () => {
     expect(expectedResult.groups[1]?.blocks.map((block) => block.text)).toEqual(['sqlite', 'postgres']);
   }
 });
+
+test('component-list runtime view can reverse the selected order', () => {
+  const list: VisualBlock = {
+    id: 'skills',
+    text: '',
+    schemaMode: false,
+    schema: {
+      ...defaultBlockSchema('component-list'),
+      componentListBlocks: [
+        textItem('middle', { Strength: 20 }),
+        textItem('top', { Strength: 90 }),
+      ],
+      componentListViews: [{ id: 'strength', label: 'Strength', sortKey: 'Strength', direction: 'desc', groupKey: '', groupDirection: 'desc', groupCollapsedPreviewRem: 3 }],
+      componentListDefaultView: 'strength',
+    },
+  };
+
+  const expectedResult = resolveComponentListItems(list, 'strength::reversed');
+
+  expect(expectedResult.kind).toBe('items');
+  if (expectedResult.kind === 'items') {
+    expect(expectedResult.blocks.map((block) => block.text)).toEqual(['middle', 'top']);
+  }
+});

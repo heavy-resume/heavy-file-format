@@ -1,4 +1,5 @@
 import { state, getRenderApp, getRefreshReaderPanels, recordHistory, materializeDbTableDraftRow, renameDbTableColumn, syncSqliteColumnNameInDom, updateDbTableCell, handleImageUpload, resolveBlockContext, syncReusableTemplateForBlock } from './_imports';
+import { encodeComponentListRuntimeView, parseComponentListRuntimeView } from '../../editor/components/component-list/component-list-view';
 import { dropDbTableColumn } from '../../plugins/db-table';
 
 export function bindChangeControls(app: HTMLElement): void {
@@ -55,7 +56,11 @@ export function bindChangeControls(app: HTMLElement): void {
       if (!sectionKey || !blockId) {
         return;
       }
-      state.componentListReaderViews[`${sectionKey}:${blockId}`] = target.value;
+      const current = parseComponentListRuntimeView(state.componentListReaderViews[`${sectionKey}:${blockId}`] ?? '');
+      state.componentListReaderViews[`${sectionKey}:${blockId}`] = encodeComponentListRuntimeView({
+        viewId: target.value,
+        reversed: current.reversed,
+      });
       getRefreshReaderPanels()();
       return;
     }

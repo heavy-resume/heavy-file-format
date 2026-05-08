@@ -163,6 +163,11 @@
   user-select: none;
 }
 
+.reader-section.is-collapsed-preview .component-list-reader-controls {
+  pointer-events: auto;
+  user-select: auto;
+}
+
 .reader-section.is-collapsed-preview:hover {
   border-color: var(--hvy-text-muted);
   box-shadow: 0 0 0 3px var(--hvy-shadow);

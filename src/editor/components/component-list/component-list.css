@@ -6,18 +6,57 @@
   gap: 0.5rem;
 }
 
+.component-list-reader-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  justify-self: start;
+  margin: 0 0 0.5rem;
+  padding: 0.22rem;
+  border: 1px solid var(--hvy-border-input);
+  border-radius: 999px;
+  background: var(--hvy-surface-alt);
+  box-shadow: 0 2px 8px var(--hvy-shadow);
+  pointer-events: auto;
+  position: relative;
+  z-index: 2;
+}
+
 .component-list-view-picker {
   display: inline-flex;
   align-items: center;
-  gap: 0.45rem;
-  margin: 0 0 0.45rem;
+  gap: 0.35rem;
+  margin: 0;
   color: var(--hvy-text-muted);
   font-size: 0.85rem;
 }
 
 .component-list-view-picker select {
-  min-width: 8rem;
+  min-width: 9rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--hvy-surface);
   font-size: 0.85rem;
+  padding-block: 0.28rem;
+}
+
+.component-list-reverse-button {
+  display: inline-grid;
+  place-items: center;
+  width: 1.85rem;
+  height: 1.85rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--hvy-text-muted);
+  cursor: pointer;
+}
+
+.component-list-reverse-button:hover,
+.component-list-reverse-button.is-active {
+  border-color: var(--hvy-border-alt);
+  background: var(--hvy-xref-card-hover-bg);
+  color: var(--hvy-text);
 }
 
 .component-list-type-summary {

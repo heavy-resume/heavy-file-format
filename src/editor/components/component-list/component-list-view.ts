@@ -11,13 +11,32 @@ export type ComponentListResolvedItems =
   | { kind: 'items'; view: ComponentListView | null; blocks: VisualBlock[] }
   | { kind: 'groups'; view: ComponentListView; groups: ComponentListResolvedGroup[]; missingBlocks: VisualBlock[] };
 
+export interface ComponentListRuntimeViewState {
+  viewId: string;
+  reversed: boolean;
+}
+
+const REVERSED_VIEW_SUFFIX = '::reversed';
+
+export function encodeComponentListRuntimeView(state: ComponentListRuntimeViewState): string {
+  return `${state.viewId}${state.reversed ? REVERSED_VIEW_SUFFIX : ''}`;
+}
+
+export function parseComponentListRuntimeView(value = ''): ComponentListRuntimeViewState {
+  return value.endsWith(REVERSED_VIEW_SUFFIX)
+    ? { viewId: value.slice(0, -REVERSED_VIEW_SUFFIX.length), reversed: true }
+    : { viewId: value, reversed: false };
+}
+
 export function getComponentListActiveView(block: VisualBlock, runtimeViewId = ''): ComponentListView | null {
   const views = block.schema.componentListViews;
   if (views.length === 0) {
     return null;
   }
-  const selected = runtimeViewId.trim() || block.schema.componentListDefaultView.trim();
-  return views.find((view) => view.id === selected) ?? views[0] ?? null;
+  const runtime = parseComponentListRuntimeView(runtimeViewId.trim());
+  const selected = runtime.viewId || block.schema.componentListDefaultView.trim();
+  const view = views.find((candidate) => candidate.id === selected) ?? views[0] ?? null;
+  return view && runtime.reversed ? reverseComponentListView(view) : view;
 }
 
 export function resolveComponentListItems(block: VisualBlock, runtimeViewId = ''): ComponentListResolvedItems {
@@ -110,4 +129,17 @@ function compareSortValues(left: SortKeyValue, right: SortKeyValue, direction: '
     return (left - right) * multiplier;
   }
   return String(left).localeCompare(String(right), undefined, { numeric: true, sensitivity: 'base' }) * multiplier;
+}
+
+function reverseComponentListView(view: ComponentListView): ComponentListView {
+  const direction = reverseDirection(view.direction);
+  return {
+    ...view,
+    direction,
+    groupDirection: reverseDirection(view.groupDirection || view.direction),
+  };
+}
+
+function reverseDirection(direction: 'asc' | 'desc'): 'asc' | 'desc' {
+  return direction === 'asc' ? 'desc' : 'asc';
 }

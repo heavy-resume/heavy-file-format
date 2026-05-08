@@ -1,5 +1,7 @@
 import { state, getRenderApp, closeAiEditPopover, completePendingRichAnnotation, handleRichEditorClick } from './_imports';
 
+let editorSidebarHelpDismissTimer: number | null = null;
+
 export function bindClickMisc(app: HTMLElement): void {
   app.addEventListener('mouseup', (event) => {
     const richTarget = getRichTarget(event.target as HTMLElement);
@@ -58,8 +60,7 @@ export function bindClickMisc(app: HTMLElement): void {
       closeOtherComponentPickers(app);
     }
     if (target.closest('.editor-sidebar-help-balloon')) {
-      state.editorSidebarHelpDismissed = true;
-      getRenderApp()();
+      dismissEditorSidebarHelpBalloon(app);
       return;
     }
     if (!state.aiEdit.sectionKey || !state.aiEdit.blockId) {
@@ -71,6 +72,38 @@ export function bindClickMisc(app: HTMLElement): void {
     closeAiEditPopover();
     getRenderApp()();
   });
+}
+
+export function scheduleEditorSidebarHelpAutoClose(app: HTMLElement): void {
+  if (editorSidebarHelpDismissTimer !== null) {
+    window.clearTimeout(editorSidebarHelpDismissTimer);
+    editorSidebarHelpDismissTimer = null;
+  }
+  if (state.editorSidebarHelpDismissed || !app.querySelector('.editor-sidebar-help-balloon')) {
+    return;
+  }
+  editorSidebarHelpDismissTimer = window.setTimeout(() => {
+    editorSidebarHelpDismissTimer = null;
+    dismissEditorSidebarHelpBalloon(app);
+  }, 5000);
+}
+
+function dismissEditorSidebarHelpBalloon(app: HTMLElement): void {
+  if (editorSidebarHelpDismissTimer !== null) {
+    window.clearTimeout(editorSidebarHelpDismissTimer);
+    editorSidebarHelpDismissTimer = null;
+  }
+  const balloon = app.querySelector<HTMLElement>('.editor-sidebar-help-balloon');
+  if (!balloon || balloon.classList.contains('is-closing')) {
+    state.editorSidebarHelpDismissed = true;
+    getRenderApp()();
+    return;
+  }
+  balloon.classList.add('is-closing');
+  window.setTimeout(() => {
+    state.editorSidebarHelpDismissed = true;
+    getRenderApp()();
+  }, 180);
 }
 
 function getRichTarget(target: HTMLElement): HTMLElement | null {

@@ -175,6 +175,7 @@
   box-shadow: 0 12px 28px var(--hvy-shadow-md);
   pointer-events: auto;
   z-index: 21;
+  transform-origin: top left;
 }
 
 .editor-sidebar-help-balloon::before {
@@ -192,6 +193,23 @@
 
 .editor-shell.is-sidebar-open .editor-sidebar-help-balloon {
   display: none;
+}
+
+.editor-sidebar-help-balloon.is-closing {
+  animation: editor-sidebar-help-close 180ms ease-in forwards;
+  pointer-events: none;
+}
+
+@keyframes editor-sidebar-help-close {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: scale(0.08);
+  }
 }
 
 .editor-sidebar-help-title {

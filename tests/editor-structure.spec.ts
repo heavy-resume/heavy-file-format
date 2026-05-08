@@ -222,7 +222,12 @@ test('editor pullout help balloon lists loaded sidebar sections', async ({ page 
   await expect(balloon).toHaveCSS('overflow', 'auto');
 
   await balloon.click();
+  await expect(balloon).toHaveClass(/is-closing/);
   await expect(balloon).toBeHidden();
+
+  await page.getByRole('button', { name: 'Resume Template' }).click();
+  await expect(balloon).toBeVisible();
+  await expect(balloon).toBeHidden({ timeout: 7000 });
 
   await page.getByRole('button', { name: 'Resume Template' }).click();
   await expect(balloon).toBeVisible();

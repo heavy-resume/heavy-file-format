@@ -14,6 +14,7 @@ import { restoreDbTableFrameScroll } from './plugins/db-table';
 import { bindChatThreadUi } from './chat/chat-thread-ui';
 import { bindImageDragAndDrop } from './editor/components/image/image';
 import { bindAppEvents } from './bind/app-events';
+import { scheduleEditorSidebarHelpAutoClose } from './bind/handlers/click-misc';
 import { saveResumeState } from './state-persistence';
 
 export function bindUi(app: HTMLElement): void {
@@ -36,6 +37,7 @@ export function bindUi(app: HTMLElement): void {
 
   bindChatThreadUi(chatThread, chatScrollContainer, chatScrollBottomButton);
   bindImageDragAndDrop(app);
+  scheduleEditorSidebarHelpAutoClose(app);
 
   newBtn.addEventListener('click', () => {
     resetToBlankDocument();

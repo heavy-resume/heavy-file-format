@@ -15,7 +15,19 @@ function getNextReaderTableStripeClass(): 'even' | 'odd' {
 }
 
 function renderTableInlineEditorHtml(value: string, helpers: Parameters<ComponentEditorRenderer>[2]): string {
-  return helpers.markdownToEditorHtml(value).replace(/^<p>([\s\S]*)<\/p>$/i, '$1');
+  return unwrapTableParagraphs(helpers.markdownToEditorHtml(value));
+}
+
+function unwrapTableParagraphs(html: string): string {
+  const trimmed = html.trim();
+  if (!/<\/?p\b/i.test(trimmed)) {
+    return html;
+  }
+  const paragraphsOnly = trimmed.replace(/<p\b[^>]*>[\s\S]*?<\/p>/gi, '').trim().length === 0;
+  if (paragraphsOnly) {
+    return Array.from(trimmed.matchAll(/<p\b[^>]*>([\s\S]*?)<\/p>/gi), (match) => match[1] ?? '').join('<br>');
+  }
+  return trimmed.replace(/<\/p>\s*<p\b[^>]*>/gi, '<br>').replace(/<p\b[^>]*>/gi, '').replace(/<\/p>/gi, '');
 }
 
 function renderTableInlineReaderHtml(value: string, block: Parameters<ComponentReaderRenderer>[1], helpers: Parameters<ComponentReaderRenderer>[2]): string {

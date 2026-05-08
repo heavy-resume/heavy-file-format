@@ -1115,9 +1115,12 @@ test('resume reader view buttons apply filters without changing edit mode', asyn
   await page.goto('/');
 
   await page.getByRole('button', { name: 'Resume Example' }).click();
+  await expect(page.getByRole('button', { name: 'No View' })).toHaveAttribute('aria-pressed', 'true');
   await page.getByRole('button', { name: 'TypeScript View' }).click();
 
   await expect(page.locator('#readerDocument')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'No View' })).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.getByRole('button', { name: 'TypeScript View' })).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('#tool-typescript')).toHaveClass(/is-highlighted/);
   await expect(page.locator('#top-skills-tools-technologies')).not.toContainText('LLM Prompt Engineering');
   await expect(page.locator('#top-skills-tools-technologies')).toContainText('TypeScript');
@@ -1133,6 +1136,8 @@ test('resume reader view buttons apply filters without changing edit mode', asyn
   expect(projectIdsAfter).toEqual(projectIdsBefore);
 
   await page.getByRole('button', { name: 'LLM Engineer View' }).click();
+  await expect(page.getByRole('button', { name: 'TypeScript View' })).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.getByRole('button', { name: 'LLM Engineer View' })).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('#tool-openai-api')).toHaveClass(/is-highlighted/);
   await expect(page.locator('#tool-typescript')).toHaveClass(/is-reader-view-dimmed/);
   await expect(page.locator('#top-skills-tools-technologies')).not.toContainText('TypeScript');
@@ -1152,7 +1157,8 @@ test('resume reader view buttons apply filters without changing edit mode', asyn
   await expect(page.locator('#rawEditor')).toContainText('"id":"locations"');
 
   await page.getByRole('button', { name: 'Viewer' }).click();
-  await page.getByRole('button', { name: 'Clear View' }).click();
+  await page.getByRole('button', { name: 'No View' }).click();
+  await expect(page.getByRole('button', { name: 'No View' })).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('#project-autonomous-agent-hackathon')).not.toHaveClass(/is-reader-view-dimmed/);
 });
 

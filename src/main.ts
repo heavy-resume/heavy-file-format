@@ -3,6 +3,7 @@ import './style.css';
 import './state-tracker.css';
 import 'highlight.js/styles/github.css';
 import bundledExampleHvyUrl from '../examples/example.hvy?url';
+import bundledResumeViews from '../examples/resume-views.json';
 
 import { createEditorRenderer, type EditorRenderer } from './editor/render';
 import { createReaderRenderer, type ReaderRenderer } from './reader/render';
@@ -10,7 +11,7 @@ import { getTemplateFields, renderTemplatePanel } from './editor/template';
 import { renderCliView } from './cli-ui/render';
 
 import { state, initState, initCallbacks, incrementRenderCount, incrementRefreshReaderCount } from './state';
-import type { AppState } from './types';
+import type { AppState, ReaderViewFilter } from './types';
 import { escapeAttr, escapeHtml } from './utils';
 import { applyTheme, getThemeConfig, initColorModeSync } from './theme';
 import { flattenSections, findSectionByKey, findDuplicateSectionIds, getSectionId, formatSectionTitle, isDefaultUntitledSectionTitle, buildSectionRenderSequence } from './section-ops';
@@ -657,12 +658,32 @@ function renderPreviewControlStack(): string {
 }
 
 function renderReaderViewControls(): string {
-  const hasReaderView = Object.keys(state.readerView).length > 0;
+  const selectedView = getSelectedReaderViewId();
+  const renderButton = (id: string, label: string, selected: boolean): string =>
+    `<button id="${escapeAttr(id)}" type="button" class="${selected ? 'secondary' : 'ghost'}" aria-pressed="${selected ? 'true' : 'false'}">${escapeHtml(label)}</button>`;
   return `<div class="reader-view-controls" role="group" aria-label="Resume reader views">
-    <button id="typescriptResumeViewBtn" type="button" class="${hasReaderView ? 'ghost' : ''}">TypeScript View</button>
-    <button id="llmEngineerResumeViewBtn" type="button" class="${hasReaderView ? 'ghost' : ''}">LLM Engineer View</button>
-    <button id="clearReaderViewBtn" type="button" class="ghost">Clear View</button>
+    ${renderButton('clearReaderViewBtn', 'No View', selectedView === 'none')}
+    ${renderButton('typescriptResumeViewBtn', 'TypeScript View', selectedView === 'typescript')}
+    ${renderButton('llmEngineerResumeViewBtn', 'LLM Engineer View', selectedView === 'llm-engineer')}
   </div>`;
+}
+
+function getSelectedReaderViewId(): 'none' | 'typescript' | 'llm-engineer' | 'custom' {
+  if (Object.keys(state.readerView).length === 0) {
+    return 'none';
+  }
+  const resumeViews = bundledResumeViews as Record<string, ReaderViewFilter>;
+  if (isSameReaderView(state.readerView, resumeViews.typescript ?? {})) {
+    return 'typescript';
+  }
+  if (isSameReaderView(state.readerView, resumeViews['llm-engineer'] ?? {})) {
+    return 'llm-engineer';
+  }
+  return 'custom';
+}
+
+function isSameReaderView(left: ReaderViewFilter, right: ReaderViewFilter): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
 }
 
 function renderResponsivePreviewFrameAttrs(baseClass: string): string {

@@ -327,20 +327,17 @@
 }
 
 .reader-section.is-highlighted {
+  border-radius: 0;
   box-shadow:
-    0 0 0 1px color-mix(in srgb, var(--hvy-highlight-glow) 54%, transparent),
-    0 0 0.85rem color-mix(in srgb, var(--hvy-highlight-glow) 70%, transparent),
-    0 0 1.7rem color-mix(in srgb, var(--hvy-focus-glow) 52%, transparent);
-  background: color-mix(in srgb, var(--hvy-highlight-bg) 78%, transparent);
+    0 0 0.62rem rgba(255, 218, 46, 0.72),
+    0 0 1.25rem rgba(255, 198, 20, 0.44);
 }
 
 .reader-block.is-highlighted {
-  border-radius: 8px;
+  border-radius: 0;
   box-shadow:
-    0 0 0 1px color-mix(in srgb, var(--hvy-highlight-glow) 54%, transparent),
-    0 0 0.85rem color-mix(in srgb, var(--hvy-highlight-glow) 70%, transparent),
-    0 0 1.7rem color-mix(in srgb, var(--hvy-focus-glow) 52%, transparent);
-  background: color-mix(in srgb, var(--hvy-highlight-bg) 78%, transparent);
+    0 0 0.62rem rgba(255, 218, 46, 0.72),
+    0 0 1.25rem rgba(255, 198, 20, 0.44);
 }
 
 .reader-section.is-reader-view-dimmed,

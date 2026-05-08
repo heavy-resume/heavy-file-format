@@ -48,7 +48,7 @@ export const renderComponentListReader: ComponentReaderRenderer = (section, bloc
   const activeViewId = helpers.getComponentListReaderViewId(section.key, block.id);
   const runtimeView = parseComponentListRuntimeView(activeViewId);
   const activeDisplay = getComponentListDisplayState(block, activeViewId);
-  const selectedSortKey = runtimeView.sortKey || activeDisplay.sortKey;
+  const selectedSortKey = runtimeView.sortKeyOverride ? runtimeView.sortKey : activeDisplay.sortKey;
   const selectedGroupKey = typeof runtimeView.groupKey === 'string' ? runtimeView.groupKey : activeDisplay.groupKey;
   const sortKeys = getAvailableSortKeys(block);
   const groupKeys = getAvailableGroupKeys(block);
@@ -60,7 +60,7 @@ export const renderComponentListReader: ComponentReaderRenderer = (section, bloc
     ? `<label class="component-list-view-picker">
             <span>Sort</span>
             <select data-field="component-list-reader-view" data-section-key="${helpers.escapeAttr(section.key)}" data-block-id="${helpers.escapeAttr(block.id)}">
-              <option value=""${selectedSortKey ? '' : ' selected'}>None</option>
+              ${selectedSortKey ? '' : '<option value="" selected>None</option>'}
               ${sortKeys.map((key) => `<option value="${helpers.escapeAttr(key)}"${key === selectedSortKey ? ' selected' : ''}>${helpers.escapeHtml(key)}</option>`).join('')}
             </select>
           </label>`

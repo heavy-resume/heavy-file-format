@@ -59,6 +59,7 @@ export function bindChangeControls(app: HTMLElement): void {
       const current = parseComponentListRuntimeView(state.componentListReaderViews[`${sectionKey}:${blockId}`] ?? '');
       state.componentListReaderViews[`${sectionKey}:${blockId}`] = encodeComponentListRuntimeView({
         sortKey: target.value,
+        sortKeyOverride: true,
         reversed: current.reversed,
         groupKey: current.groupKey,
       });
@@ -74,7 +75,8 @@ export function bindChangeControls(app: HTMLElement): void {
       }
       const current = parseComponentListRuntimeView(state.componentListReaderViews[`${sectionKey}:${blockId}`] ?? '');
       state.componentListReaderViews[`${sectionKey}:${blockId}`] = encodeComponentListRuntimeView({
-        sortKey: current.sortKey || target.dataset.viewId || '',
+        sortKey: current.sortKeyOverride ? current.sortKey : target.dataset.viewId || '',
+        sortKeyOverride: current.sortKeyOverride || !!target.dataset.viewId,
         reversed: current.reversed,
         groupKey: target.value,
       });

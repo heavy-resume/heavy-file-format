@@ -340,6 +340,7 @@ hvy_version: 0.1
   const controls = page.locator('.component-list-reader-controls');
   await expect(controls).toHaveCount(1);
   await expect(controls.first().locator('[data-field="component-list-reader-view"]')).toBeVisible();
+  await expect(controls.first().locator('[data-field="component-list-reader-view"] option[value=""]')).toHaveCount(0);
   await expect(controls.first().locator('[data-field="component-list-reader-group"]')).toHaveCount(0);
   await expect(controls.first().locator('[data-reader-action="toggle-component-list-reverse"]')).toBeVisible();
 });

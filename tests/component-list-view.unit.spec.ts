@@ -1,7 +1,7 @@
 import { expect, test } from 'vitest';
 
 import { defaultBlockSchema } from '../src/document-factory';
-import { resolveComponentListItems } from '../src/editor/components/component-list/component-list-view';
+import { encodeComponentListRuntimeView, resolveComponentListItems } from '../src/editor/components/component-list/component-list-view';
 import type { VisualBlock } from '../src/editor/types';
 
 function textItem(label: string, sortKeys: VisualBlock['schema']['sortKeys'] = {}): VisualBlock {
@@ -139,5 +139,33 @@ test('component-list groups sort alphabetically when no sort key is selected', (
   expect(expectedResult.kind).toBe('groups');
   if (expectedResult.kind === 'groups') {
     expect(expectedResult.groups.map((group) => group.label)).toEqual(['Cloud', 'Database', 'Language']);
+  }
+});
+
+test('component-list runtime sort none overrides a stored default sort', () => {
+  const list: VisualBlock = {
+    id: 'skills',
+    text: '',
+    schemaMode: false,
+    schema: {
+      ...defaultBlockSchema('component-list'),
+      componentListBlocks: [
+        textItem('first', { Strength: 1 }),
+        textItem('second', { Strength: 9 }),
+      ],
+      componentListDefaultSortKey: 'Strength',
+      componentListDefaultSortDirection: 'desc',
+    },
+  };
+
+  const expectedResult = resolveComponentListItems(list, encodeComponentListRuntimeView({
+    sortKey: '',
+    sortKeyOverride: true,
+    reversed: false,
+  }));
+
+  expect(expectedResult.kind).toBe('items');
+  if (expectedResult.kind === 'items') {
+    expect(expectedResult.blocks.map((block) => block.text)).toEqual(['first', 'second']);
   }
 });

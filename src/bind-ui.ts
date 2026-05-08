@@ -134,7 +134,8 @@ export function bindUi(app: HTMLElement): void {
     const key = `${sectionKey}:${blockId}`;
     const current = parseComponentListRuntimeView(state.componentListReaderViews[key] ?? viewId);
     state.componentListReaderViews[key] = encodeComponentListRuntimeView({
-      sortKey: current.sortKey || viewId,
+      sortKey: current.sortKeyOverride ? current.sortKey : viewId,
+      sortKeyOverride: current.sortKeyOverride || !!viewId,
       reversed: !current.reversed,
       groupKey: current.groupKey,
     });

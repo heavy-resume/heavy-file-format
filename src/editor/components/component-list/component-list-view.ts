@@ -20,15 +20,17 @@ export type ComponentListResolvedItems =
 
 export interface ComponentListRuntimeViewState {
   sortKey: string;
+  sortKeyOverride: boolean;
   reversed: boolean;
   groupKey?: string;
 }
 
+const SORT_VIEW_MARKER = '::sort=';
 const REVERSED_VIEW_SUFFIX = '::reversed';
 const GROUP_VIEW_MARKER = '::group=';
 
 export function encodeComponentListRuntimeView(state: ComponentListRuntimeViewState): string {
-  return `${encodeURIComponent(state.sortKey)}${state.reversed ? REVERSED_VIEW_SUFFIX : ''}${
+  return `${SORT_VIEW_MARKER}${encodeURIComponent(state.sortKey)}${state.reversed ? REVERSED_VIEW_SUFFIX : ''}${
     typeof state.groupKey === 'string' ? `${GROUP_VIEW_MARKER}${encodeURIComponent(state.groupKey)}` : ''
   }`;
 }
@@ -37,16 +39,18 @@ export function parseComponentListRuntimeView(value = ''): ComponentListRuntimeV
   const groupIndex = value.indexOf(GROUP_VIEW_MARKER);
   const withoutGroup = groupIndex >= 0 ? value.slice(0, groupIndex) : value;
   const groupKey = groupIndex >= 0 ? decodeURIComponent(value.slice(groupIndex + GROUP_VIEW_MARKER.length)) : undefined;
-  const reversed = withoutGroup.endsWith(REVERSED_VIEW_SUFFIX);
-  const sortKeyRaw = reversed ? withoutGroup.slice(0, -REVERSED_VIEW_SUFFIX.length) : withoutGroup;
-  return { sortKey: decodeURIComponent(sortKeyRaw), reversed, groupKey };
+  const withSortMarker = withoutGroup.startsWith(SORT_VIEW_MARKER);
+  const withoutSortMarker = withSortMarker ? withoutGroup.slice(SORT_VIEW_MARKER.length) : withoutGroup;
+  const reversed = withoutSortMarker.endsWith(REVERSED_VIEW_SUFFIX);
+  const sortKeyRaw = reversed ? withoutSortMarker.slice(0, -REVERSED_VIEW_SUFFIX.length) : withoutSortMarker;
+  return { sortKey: decodeURIComponent(sortKeyRaw), sortKeyOverride: withSortMarker || sortKeyRaw.length > 0, reversed, groupKey };
 }
 
 export function getComponentListDisplayState(block: VisualBlock, runtimeViewId = ''): ComponentListDisplayState {
   const runtime = parseComponentListRuntimeView(runtimeViewId.trim());
   const direction = runtime.reversed ? reverseDirection(block.schema.componentListDefaultSortDirection) : block.schema.componentListDefaultSortDirection;
   return {
-    sortKey: runtime.sortKey || block.schema.componentListDefaultSortKey.trim(),
+    sortKey: runtime.sortKeyOverride ? runtime.sortKey : block.schema.componentListDefaultSortKey.trim(),
     direction,
     groupKey: typeof runtime.groupKey === 'string' ? runtime.groupKey : block.schema.componentListDefaultGroupKey.trim(),
     groupCollapsedPreviewRem: block.schema.componentListGroupCollapsedPreviewRem,

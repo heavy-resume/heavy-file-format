@@ -421,14 +421,20 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           </div>
           <div class="editor-actions">
             ${state.mobileAdjustmentMode ? '' : isActiveSelf ? placementActions : ''}
-            <button type="button" class="ghost" data-action="deactivate-block" data-section-key="${deps.escapeAttr(
-      sectionKey
-    )}" data-block-id="${deps.escapeAttr(block.id)}">Done</button>
             ${state.mobileAdjustmentMode ? '' : removeButton}
           </div>
         </div>
 
         ${contentEditor}
+        ${
+          isActiveSelf
+            ? `<div class="editor-block-done-row">
+                <button type="button" class="ghost editor-block-done-button" data-action="deactivate-block" data-section-key="${deps.escapeAttr(
+                  sectionKey
+                )}" data-block-id="${deps.escapeAttr(block.id)}">Done</button>
+              </div>`
+            : ''
+        }
       </div>
     `;
   }

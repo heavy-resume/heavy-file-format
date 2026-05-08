@@ -934,6 +934,19 @@
   gap: 0.35rem;
 }
 
+.editor-block-done-row {
+  display: flex;
+  justify-content: center;
+  margin-top: 0.55rem;
+}
+
+.editor-block-done-button {
+  width: 4rem;
+  min-width: 4rem;
+  padding-inline: 0;
+  text-align: center;
+}
+
 .editor-block-context-actions {
   position: absolute;
   top: 0;

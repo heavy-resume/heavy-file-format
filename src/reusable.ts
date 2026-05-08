@@ -64,6 +64,12 @@ export function syncReusableTemplateForBlock(sectionKey: string, blockId: string
     log();
     return;
   }
+  const reusableName = getReusableNameFromSectionKey(sectionKey);
+  if (!reusableName) {
+    skipped = 'document-instance';
+    log();
+    return;
+  }
   let stepStartedAt = performance.now();
   const owner = findReusableOwner(sectionKey, blockId);
   ownerMs = performance.now() - stepStartedAt;
@@ -79,7 +85,6 @@ export function syncReusableTemplateForBlock(sectionKey: string, blockId: string
     log();
     return;
   }
-  const reusableName = getReusableNameFromSectionKey(sectionKey);
   stepStartedAt = performance.now();
   if (reusableName === def.name) {
     def.template = owner;
@@ -93,7 +98,7 @@ export function syncReusableTemplateForBlock(sectionKey: string, blockId: string
   state.document.meta.component_defs = defs;
   cloneMs = performance.now() - stepStartedAt;
   stepStartedAt = performance.now();
-  applyReusableTemplateToDocument(def.name, def.template, reusableName === def.name ? null : owner.id);
+  applyReusableTemplateToDocument(def.name, def.template, null);
   applyMs = performance.now() - stepStartedAt;
   log();
 }

@@ -206,6 +206,24 @@ test('section highlight control lives in section meta next to contained', async 
   await expect(page.locator('#rawEditor')).toContainText('"highlight":true');
 });
 
+test('active component done button is centered below the editor body', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const activeBlock = page.locator('.editor-block[data-active-editor-block="true"]').first();
+  const doneButton = activeBlock.locator('.editor-block-done-button');
+
+  await expect(activeBlock.locator('.editor-block-head').getByRole('button', { name: 'Done' })).toHaveCount(0);
+  await expect(doneButton).toBeVisible();
+  await expect(doneButton).toHaveCSS('width', '64px');
+
+  const blockBox = await activeBlock.boundingBox();
+  const buttonBox = await doneButton.boundingBox();
+  expect(blockBox).not.toBeNull();
+  expect(buttonBox).not.toBeNull();
+  expect(Math.abs(((buttonBox?.x ?? 0) + (buttonBox?.width ?? 0) / 2) - ((blockBox?.x ?? 0) + (blockBox?.width ?? 0) / 2))).toBeLessThan(4);
+});
+
 test('unfilled text fill-in renders as an editor box and blank viewer text', async ({ page }) => {
   await page.goto('/');
 

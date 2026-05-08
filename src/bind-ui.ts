@@ -140,6 +140,32 @@ export function bindUi(app: HTMLElement): void {
     });
   };
 
+  const handleCollapsedListControlPointerDown = (event: Event) => {
+    const target = event.target as HTMLElement;
+    const select = target.closest<HTMLSelectElement>('select');
+    const listControls = select?.closest<HTMLElement>('[data-component-list-reader-controls="true"]');
+    const collapsedSection = listControls?.closest<HTMLElement>('.reader-section.is-collapsed-preview');
+    const sectionKey = select?.dataset.sectionKey;
+    const blockId = select?.dataset.blockId ?? '';
+    if (!select || !listControls || !collapsedSection || !sectionKey) {
+      return;
+    }
+    const section = findSectionByKey(state.document.sections, sectionKey);
+    if (!section || section.expanded) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    section.expanded = true;
+    const field = select.dataset.field ?? 'component-list-reader-view';
+    getRefreshReaderPanels()();
+    const nextSelect = app.querySelector<HTMLSelectElement>(
+      `[data-field="${CSS.escape(field)}"][data-section-key="${CSS.escape(sectionKey)}"][data-block-id="${CSS.escape(blockId)}"]`
+    );
+    nextSelect?.focus();
+    (nextSelect as (HTMLSelectElement & { showPicker?: () => void }) | null)?.showPicker?.();
+  };
+
   const handleReaderAreaClick = (event: Event) => {
     const target = event.target as HTMLElement;
 
@@ -251,6 +277,11 @@ export function bindUi(app: HTMLElement): void {
       getRefreshReaderPanels()();
     }
   };
+
+  readerDocument?.addEventListener('pointerdown', handleCollapsedListControlPointerDown);
+  readerSidebarSections?.addEventListener('pointerdown', handleCollapsedListControlPointerDown);
+  aiReaderDocument?.addEventListener('pointerdown', handleCollapsedListControlPointerDown);
+  aiSidebarSections?.addEventListener('pointerdown', handleCollapsedListControlPointerDown);
 
   readerDocument?.addEventListener('click', handleReaderAreaClick);
   readerSidebarSections?.addEventListener('click', handleReaderAreaClick);

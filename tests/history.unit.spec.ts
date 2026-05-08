@@ -67,6 +67,7 @@ function createHistoryTestState(): AppState {
     readerExpandableState: {},
     viewerSidebarOpen: false,
     editorSidebarOpen: false,
+    viewerSidebarHelpDismissed: false,
     editorSidebarHelpDismissed: false,
     lastHistoryGroup: null,
     lastHistoryAt: 0,

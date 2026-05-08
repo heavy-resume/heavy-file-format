@@ -62,6 +62,7 @@ export function createTestState(document: VisualDocument): AppState {
     readerExpandableState: {},
     viewerSidebarOpen: false,
     editorSidebarOpen: false,
+    viewerSidebarHelpDismissed: false,
     editorSidebarHelpDismissed: false,
     lastHistoryGroup: null,
     lastHistoryAt: 0,

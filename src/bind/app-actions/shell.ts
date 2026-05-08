@@ -78,6 +78,7 @@ const toggleDocumentMeta: AppActionHandler = () => {
 };
 
 const toggleViewerSidebar: AppActionHandler = ({ app }) => {
+  state.viewerSidebarHelpDismissed = true;
   setSidebarOpen(app, !state.viewerSidebarOpen);
 };
 

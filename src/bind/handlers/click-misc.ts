@@ -1,6 +1,9 @@
 import { state, getRenderApp, closeAiEditPopover, completePendingRichAnnotation, handleRichEditorClick } from './_imports';
 
-let editorSidebarHelpDismissTimer: number | null = null;
+const sidebarHelpDismissTimers: Record<'editor' | 'viewer', number | null> = {
+  editor: null,
+  viewer: null,
+};
 
 export function bindClickMisc(app: HTMLElement): void {
   app.addEventListener('mouseup', (event) => {
@@ -60,7 +63,11 @@ export function bindClickMisc(app: HTMLElement): void {
       closeOtherComponentPickers(app);
     }
     if (target.closest('.editor-sidebar-help-balloon')) {
-      dismissEditorSidebarHelpBalloon(app);
+      dismissSidebarHelpBalloon(app, 'editor');
+      return;
+    }
+    if (target.closest('.viewer-sidebar-help-balloon')) {
+      dismissSidebarHelpBalloon(app, 'viewer');
       return;
     }
     if (!state.aiEdit.sectionKey || !state.aiEdit.blockId) {
@@ -74,36 +81,57 @@ export function bindClickMisc(app: HTMLElement): void {
   });
 }
 
-export function scheduleEditorSidebarHelpAutoClose(app: HTMLElement): void {
-  if (editorSidebarHelpDismissTimer !== null) {
-    window.clearTimeout(editorSidebarHelpDismissTimer);
-    editorSidebarHelpDismissTimer = null;
+export function scheduleSidebarHelpAutoClose(app: HTMLElement): void {
+  scheduleSidebarHelpAutoCloseFor(app, 'editor');
+  scheduleSidebarHelpAutoCloseFor(app, 'viewer');
+}
+
+function scheduleSidebarHelpAutoCloseFor(app: HTMLElement, kind: 'editor' | 'viewer'): void {
+  if (sidebarHelpDismissTimers[kind] !== null) {
+    window.clearTimeout(sidebarHelpDismissTimers[kind]!);
+    sidebarHelpDismissTimers[kind] = null;
   }
-  if (state.editorSidebarHelpDismissed || !app.querySelector('.editor-sidebar-help-balloon')) {
+  if (getSidebarHelpDismissed(kind) || !app.querySelector(getSidebarHelpSelector(kind))) {
     return;
   }
-  editorSidebarHelpDismissTimer = window.setTimeout(() => {
-    editorSidebarHelpDismissTimer = null;
-    dismissEditorSidebarHelpBalloon(app);
+  sidebarHelpDismissTimers[kind] = window.setTimeout(() => {
+    sidebarHelpDismissTimers[kind] = null;
+    dismissSidebarHelpBalloon(app, kind);
   }, 5000);
 }
 
-function dismissEditorSidebarHelpBalloon(app: HTMLElement): void {
-  if (editorSidebarHelpDismissTimer !== null) {
-    window.clearTimeout(editorSidebarHelpDismissTimer);
-    editorSidebarHelpDismissTimer = null;
+function dismissSidebarHelpBalloon(app: HTMLElement, kind: 'editor' | 'viewer'): void {
+  if (sidebarHelpDismissTimers[kind] !== null) {
+    window.clearTimeout(sidebarHelpDismissTimers[kind]!);
+    sidebarHelpDismissTimers[kind] = null;
   }
-  const balloon = app.querySelector<HTMLElement>('.editor-sidebar-help-balloon');
+  const balloon = app.querySelector<HTMLElement>(getSidebarHelpSelector(kind));
   if (!balloon || balloon.classList.contains('is-closing')) {
-    state.editorSidebarHelpDismissed = true;
+    setSidebarHelpDismissed(kind);
     getRenderApp()();
     return;
   }
   balloon.classList.add('is-closing');
   window.setTimeout(() => {
-    state.editorSidebarHelpDismissed = true;
+    setSidebarHelpDismissed(kind);
     getRenderApp()();
   }, 180);
+}
+
+function getSidebarHelpSelector(kind: 'editor' | 'viewer'): string {
+  return kind === 'editor' ? '.editor-sidebar-help-balloon' : '.viewer-sidebar-help-balloon';
+}
+
+function getSidebarHelpDismissed(kind: 'editor' | 'viewer'): boolean {
+  return kind === 'editor' ? state.editorSidebarHelpDismissed : state.viewerSidebarHelpDismissed;
+}
+
+function setSidebarHelpDismissed(kind: 'editor' | 'viewer'): void {
+  if (kind === 'editor') {
+    state.editorSidebarHelpDismissed = true;
+  } else {
+    state.viewerSidebarHelpDismissed = true;
+  }
 }
 
 function getRichTarget(target: HTMLElement): HTMLElement | null {

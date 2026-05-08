@@ -107,6 +107,7 @@ function createInitialState(document: ReturnType<typeof deserializeDocumentBytes
     readerExpandableState: {},
     viewerSidebarOpen: false,
     editorSidebarOpen: false,
+    viewerSidebarHelpDismissed: false,
     editorSidebarHelpDismissed: false,
     lastHistoryGroup: null,
     lastHistoryAt: 0,
@@ -361,6 +362,9 @@ readerRenderer = createReaderRenderer(
     get readerExpandableState() {
       return state.readerExpandableState;
     },
+    get viewerSidebarHelpDismissed() {
+      return state.viewerSidebarHelpDismissed;
+    },
   },
   {
     escapeAttr,
@@ -526,6 +530,7 @@ function renderApp(): void {
                    <div class="viewer-sidebar-backdrop" data-action="toggle-viewer-sidebar"></div>
                    <aside class="viewer-sidebar">
                      <button type="button" class="viewer-sidebar-tab" data-action="toggle-viewer-sidebar" aria-expanded="${state.viewerSidebarOpen ? 'true' : 'false'}" aria-label="Toggle navigation">${renderSidebarTabLabel()}</button>
+                     ${readerRenderer.renderSidebarHelpBalloon(state.document.sections)}
                      <div class="viewer-sidebar-panel">
                        <div id="readerWarnings" class="reader-warnings">${readerRenderer.renderWarnings()}</div>
                        <!-- TODO: Need to figure out what to do with navigation in the sidebar -->

@@ -66,3 +66,82 @@
 .viewer-shell.is-sidebar-closed .viewer-sidebar-panel {
   overflow: hidden;
 }
+
+.viewer-sidebar-help-balloon {
+  position: absolute;
+  left: calc(100% + 0.65rem);
+  top: 4.25rem;
+  width: max-content;
+  max-width: min(18rem, calc(100vw - 5rem));
+  max-height: min(18rem, calc(100vh - 8rem));
+  overflow: auto;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid var(--hvy-border-alt);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--hvy-surface) 94%, var(--hvy-surface-tint) 6%);
+  color: var(--hvy-text);
+  box-shadow: 0 12px 28px var(--hvy-shadow-md);
+  pointer-events: auto;
+  transform-origin: top left;
+  z-index: 21;
+}
+
+.viewer-sidebar-help-balloon::before {
+  content: "";
+  position: absolute;
+  left: -0.45rem;
+  top: 0.8rem;
+  width: 0.75rem;
+  height: 0.75rem;
+  border-left: 1px solid var(--hvy-border-alt);
+  border-bottom: 1px solid var(--hvy-border-alt);
+  background: inherit;
+  transform: rotate(45deg);
+}
+
+.viewer-shell.is-sidebar-open .viewer-sidebar-help-balloon {
+  display: none;
+}
+
+.viewer-sidebar-help-balloon.is-closing {
+  animation: viewer-sidebar-help-close 180ms ease-in forwards;
+  pointer-events: none;
+}
+
+.viewer-sidebar-help-title {
+  margin-bottom: 0.35rem;
+  color: var(--hvy-text-alt);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.viewer-sidebar-help-balloon ul {
+  display: grid;
+  gap: 0.22rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.viewer-sidebar-help-balloon li {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--hvy-text);
+  font-size: 0.86rem;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@keyframes viewer-sidebar-help-close {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: scale(0.08);
+  }
+}

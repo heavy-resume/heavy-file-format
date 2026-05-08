@@ -224,6 +224,7 @@ export interface AppState {
   readerExpandableState: Record<string, boolean>;
   viewerSidebarOpen: boolean;
   editorSidebarOpen: boolean;
+  viewerSidebarHelpDismissed: boolean;
   editorSidebarHelpDismissed: boolean;
   lastHistoryGroup: string | null;
   lastHistoryAt: number;

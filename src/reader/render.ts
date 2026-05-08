@@ -46,6 +46,7 @@ interface ReaderRenderState {
   currentView: 'editor' | 'viewer' | 'ai';
   responsivePreview: 'full' | 'phone' | 'tablet' | 'desktop';
   readerExpandableState: Record<string, boolean>;
+  viewerSidebarHelpDismissed: boolean;
 }
 
 interface ReaderRenderDeps {
@@ -71,6 +72,7 @@ export interface ReaderRenderer {
   renderNavigation: (sections: VisualSection[]) => string;
   renderReaderSections: (sections: VisualSection[]) => string;
   renderSidebarSections: (sections: VisualSection[]) => string;
+  renderSidebarHelpBalloon: (sections: VisualSection[]) => string;
   renderReaderSection: (section: VisualSection) => string;
   renderReaderBlock: (section: VisualSection, block: VisualBlock) => string;
   renderModal: () => string;
@@ -125,6 +127,24 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     }
     const surfaceAttrs = renderResponsiveSurfaceAttrs('');
     return `<div${surfaceAttrs}><div class="reader-sidebar-surface-body">${sidebarSections.map((section) => renderReaderSection(section)).join('')}</div></div>`;
+  }
+
+  function renderSidebarHelpBalloon(sections: VisualSection[]): string {
+    if (state.viewerSidebarHelpDismissed) {
+      return '';
+    }
+    const sidebarSections = sections.filter((section) => !section.isGhost && section.location === 'sidebar');
+    if (sidebarSections.length === 0) {
+      return '';
+    }
+    return `<div class="viewer-sidebar-help-balloon" role="note" aria-label="Sections in pullout">
+      <div class="viewer-sidebar-help-title">Contains</div>
+      <ul>
+        ${sidebarSections
+          .map((section) => `<li title="${deps.escapeAttr(deps.formatSectionTitle(section.title))}">${deps.escapeHtml(deps.formatSectionTitle(section.title))}</li>`)
+          .join('')}
+      </ul>
+    </div>`;
   }
 
   function renderReaderSection(section: VisualSection): string {
@@ -750,6 +770,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     renderNavigation,
     renderReaderSections,
     renderSidebarSections,
+    renderSidebarHelpBalloon,
     renderReaderSection,
     renderReaderBlock,
     renderModal,

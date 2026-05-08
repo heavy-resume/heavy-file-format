@@ -235,6 +235,28 @@ test('editor pullout help balloon lists loaded sidebar sections', async ({ page 
   await expect(balloon).toBeHidden();
 });
 
+test('viewer pullout help balloon lists loaded sidebar sections', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Resume Template' }).click();
+  await page.getByRole('button', { name: 'Viewer' }).click();
+
+  const balloon = page.locator('.viewer-sidebar-help-balloon');
+  await expect(balloon).toBeVisible();
+  await expect(balloon.locator('li')).toContainText(['Skills', 'Tools & Technologies']);
+  await expect(balloon).toHaveCSS('overflow', 'auto');
+
+  await balloon.click();
+  await expect(balloon).toHaveClass(/is-closing/);
+  await expect(balloon).toBeHidden();
+
+  await page.getByRole('button', { name: 'Resume Template' }).click();
+  await page.getByRole('button', { name: 'Viewer' }).click();
+  await expect(balloon).toBeVisible();
+  await page.locator('.viewer-sidebar-tab').click();
+  await expect(balloon).toBeHidden();
+});
+
 test('unlocking a section schema allows removing locked child fields', async ({ page }) => {
   await page.goto('/');
 

@@ -125,6 +125,7 @@ export interface EditorRenderer {
       gridItemId?: string;
       rowIndex?: number;
       includeAlign?: boolean;
+      includeFillIn?: boolean;
       align?: Align;
       currentMarkdown?: string;
     }
@@ -431,7 +432,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         ${
           isActiveSelf
             ? `<div class="editor-block-done-row">
-                <button type="button" class="ghost editor-block-cancel-button" data-action="deactivate-block" data-section-key="${deps.escapeAttr(
+                <button type="button" class="ghost editor-block-cancel-button" data-action="cancel-block-edit" data-section-key="${deps.escapeAttr(
                   sectionKey
                 )}" data-block-id="${deps.escapeAttr(block.id)}">Cancel</button>
                 <button type="button" class="ghost editor-block-done-button" data-action="deactivate-block" data-section-key="${deps.escapeAttr(
@@ -627,6 +628,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       gridItemId?: string;
       rowIndex?: number;
       includeAlign?: boolean;
+      includeFillIn?: boolean;
       align?: Align;
       currentMarkdown?: string;
     }
@@ -912,11 +914,6 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           />
         </label>
         ${
-          component === 'text'
-            ? renderTextFillInControls(sectionKey, block)
-            : ''
-        }
-        ${
           component === 'component-list'
             ? `<label>
           <span>List Item Label</span>
@@ -944,33 +941,6 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           >${deps.escapeHtml(block.schema.description)}</textarea>
         </label>
         ${scriptingVersionField}
-      </div>
-    `;
-  }
-
-  function renderTextFillInControls(sectionKey: string, block: VisualBlock): string {
-    const hasMarker = hasTextFillInMarker(block.text);
-    return `
-      <div class="block-meta-field">
-        <span>Fill-in Placeholder</span>
-        <div class="toolbar-segment">
-          <button
-            type="button"
-            class="${hasMarker ? 'ghost' : 'secondary'}"
-            data-action="set-text-fill-in"
-            data-section-key="${deps.escapeAttr(sectionKey)}"
-            data-block-id="${deps.escapeAttr(block.id)}"
-            ${hasMarker ? 'disabled' : ''}
-          >Set</button>
-          <button
-            type="button"
-            class="${hasMarker ? 'secondary' : 'ghost'}"
-            data-action="remove-text-fill-in"
-            data-section-key="${deps.escapeAttr(sectionKey)}"
-            data-block-id="${deps.escapeAttr(block.id)}"
-            ${hasMarker ? '' : 'disabled'}
-          >Remove</button>
-        </div>
       </div>
     `;
   }

@@ -1,6 +1,6 @@
 import { state, getRenderApp, getRefreshReaderPanels } from '../../state';
 import { findSectionByKey, isDefaultUntitledSectionTitle } from '../../section-ops';
-import { findBlockByIds, setActiveEditorBlock, deactivateEditorBlock } from '../../block-ops';
+import { findBlockByIds, setActiveEditorBlock, deactivateEditorBlock, cancelEditorBlockEdit } from '../../block-ops';
 import { recordHistory } from '../../history';
 import type { AppActionHandler } from './types';
 
@@ -30,6 +30,16 @@ const deactivateBlock: AppActionHandler = ({ event, sectionKey, blockId }) => {
   }
   event.stopPropagation();
   deactivateEditorBlock(sectionKey, blockId);
+  getRenderApp()();
+};
+
+const cancelBlockEdit: AppActionHandler = ({ event, sectionKey, blockId }) => {
+  if (!blockId) {
+    return;
+  }
+  event.stopPropagation();
+  cancelEditorBlockEdit(sectionKey, blockId);
+  getRefreshReaderPanels()();
   getRenderApp()();
 };
 
@@ -126,6 +136,7 @@ export const editorStateActions: Record<string, AppActionHandler> = {
   'activate-block': activateBlock,
   'activate-section-title': activateSectionTitle,
   'deactivate-block': deactivateBlock,
+  'cancel-block-edit': cancelBlockEdit,
   'toggle-editor-expandable': toggleEditorExpandable,
   'toggle-expandable-editor-panel': toggleExpandableEditorPanel,
   'focus-schema-component': focusSchemaComponent,

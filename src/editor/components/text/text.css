@@ -12,6 +12,29 @@
   cursor: text;
 }
 
+.text-editor-shell {
+  position: relative;
+}
+
+.text-fill-in-selection-button {
+  position: absolute;
+  top: -0.95rem;
+  right: 0.65rem;
+  z-index: 4;
+  display: none;
+  min-height: 1.85rem;
+  padding: 0.22rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.76rem;
+  line-height: 1;
+  box-shadow: 0 6px 14px var(--hvy-shadow);
+}
+
+.text-editor-shell.has-fill-in-selection .text-fill-in-selection-button {
+  display: inline-flex;
+  align-items: center;
+}
+
 .text-fill-in-box {
   display: inline-block;
   min-width: 7ch;

@@ -38,6 +38,7 @@ export function createTestState(document: VisualDocument): AppState {
     cliSession: { cwd: '/' },
     cliHistory: [],
     activeEditorBlock: null,
+    activeEditorBlockSnapshot: null,
     componentPlacement: null,
     pendingEditorActivation: null,
     activeEditorSectionTitleKey: null,

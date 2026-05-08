@@ -5,6 +5,7 @@ export interface RichToolbarOptions {
   gridItemId?: string;
   rowIndex?: number;
   includeAlign?: boolean;
+  includeFillIn?: boolean;
   align?: Align;
   currentMarkdown?: string;
 }

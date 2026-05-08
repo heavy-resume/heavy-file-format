@@ -1,6 +1,7 @@
 import type { TableRow, VisualBlock } from './editor/types';
 import type { ComponentRenderHelpers } from './editor/component-helpers';
 import type { TagRenderOptions } from './editor/tag-editor';
+import type { AppState } from './types';
 import { parseTags, serializeTags } from './editor/tag-editor';
 import { state, getRefreshReaderPanels, getRenderApp } from './state';
 import { getReusableNameFromSectionKey, getComponentDefs, renderComponentOptions, resolveBaseComponent } from './component-defs';
@@ -17,7 +18,7 @@ import { recordHistory } from './history';
 import { getDocumentComponentDefaultCss } from './document-component-defaults';
 import { resetDbTableViewState } from './plugins/db-table';
 import { handleInlineCheckboxBackspace } from './editor/inline-checkbox';
-import { hasTextFillInMarker } from './text-fill-in';
+import { TEXT_FILL_IN_MARKER, hasTextFillInMarker } from './text-fill-in';
 
 export function findBlockByIds(sectionKey: string, blockId: string): VisualBlock | null {
   const sqliteRowComponentBlock = findSqliteRowComponentBlock(sectionKey, blockId);
@@ -521,10 +522,23 @@ export function setActiveEditorBlock(sectionKey: string, blockId: string): void 
     : null;
   const nextPath = getEditorBlockPathIds(sectionKey, blockId);
   state.activeEditorBlock = { sectionKey, blockId };
+  state.activeEditorBlockSnapshot =
+    currentActiveBlock?.sectionKey === sectionKey && currentActiveBlock.blockId === blockId
+      ? state.activeEditorBlockSnapshot
+      : createEditorBlockSnapshot(sectionKey, blockId);
   openExpandableEditorPanelsToBlock(sectionKey, blockId);
   state.pendingEditorActivation = shouldRevealEditorActivationPath(currentPath, nextPath)
     ? { sectionKey, blockId }
     : null;
+}
+
+function createEditorBlockSnapshot(sectionKey: string, blockId: string): AppState['activeEditorBlockSnapshot'] {
+  const block = findBlockByIds(sectionKey, blockId);
+  return block ? { sectionKey, blockId, block: cloneVisualBlock(block) } : null;
+}
+
+function cloneVisualBlock(block: VisualBlock): VisualBlock {
+  return JSON.parse(JSON.stringify(block)) as VisualBlock;
 }
 
 function openExpandableEditorPanelsToBlock(sectionKey: string, blockId: string): void {
@@ -606,6 +620,7 @@ export function clearActiveEditorBlock(blockId?: string): void {
   }
   if (!blockId || state.activeEditorBlock.blockId === blockId) {
     state.activeEditorBlock = null;
+    state.activeEditorBlockSnapshot = null;
   }
 }
 
@@ -616,6 +631,7 @@ export function deactivateEditorBlock(sectionKey: string, blockId: string): void
   }
   if (activeBlockId === blockId) {
     state.activeEditorBlock = null;
+    state.activeEditorBlockSnapshot = null;
     return;
   }
   const clickedBlock = findBlockByIds(sectionKey, blockId);
@@ -625,6 +641,22 @@ export function deactivateEditorBlock(sectionKey: string, blockId: string): void
     return;
   }
   state.activeEditorBlock = null;
+  state.activeEditorBlockSnapshot = null;
+}
+
+export function cancelEditorBlockEdit(sectionKey: string, blockId: string): void {
+  const snapshot = state.activeEditorBlockSnapshot;
+  if (snapshot?.sectionKey === sectionKey && snapshot.blockId === blockId) {
+    const block = findBlockByIds(sectionKey, blockId);
+    if (block) {
+      const restored = cloneVisualBlock(snapshot.block);
+      block.text = restored.text;
+      block.schema = restored.schema;
+      block.schemaMode = restored.schemaMode;
+    }
+  }
+  state.activeEditorBlock = null;
+  state.activeEditorBlockSnapshot = null;
 }
 
 export function blockContainsBlockId(block: VisualBlock, blockId: string): boolean {
@@ -676,6 +708,10 @@ export function getComponentRenderHelpers(editorRenderer: {
 }
 
 export function applyRichAction(action: string, editable: HTMLElement, value?: string): void {
+  if (action === 'fill-in') {
+    applyTextFillInSlot(editable);
+    return;
+  }
   if ((action === 'short' || action === 'nowrap') && toggleExistingTableAnnotationPreview(action, editable)) {
     updateRichToolbarState(editable);
     return;
@@ -729,6 +765,36 @@ export function applyRichAction(action: string, editable: HTMLElement, value?: s
   updateRichToolbarState(editable);
   const inputEvent = new InputEvent('input', { bubbles: true });
   editable.dispatchEvent(inputEvent);
+}
+
+function applyTextFillInSlot(editable: HTMLElement): void {
+  if (editable.dataset.field !== 'block-rich') {
+    return;
+  }
+  const context = resolveBlockContext(editable);
+  const block = context?.block ?? null;
+  const sectionKey = editable.dataset.sectionKey ?? '';
+  if (!block || hasTextFillInMarker(block.text)) {
+    return;
+  }
+  const range = getEditableSelectionRange(editable);
+  const selectedText = range && !range.collapsed ? range.toString().trim() : '';
+  recordHistory(`text:${block.id}:fill-in:set`);
+  if (selectedText && block.text.includes(selectedText)) {
+    block.text = block.text.replace(selectedText, TEXT_FILL_IN_MARKER);
+    if (!block.schema.placeholder.trim()) {
+      block.schema.placeholder = selectedText;
+    }
+  } else if (block.text.trim().length === 0) {
+    block.text = TEXT_FILL_IN_MARKER;
+  } else {
+    const separator = /\s$/.test(block.text) ? '' : ' ';
+    block.text = `${block.text}${separator}${TEXT_FILL_IN_MARKER}`;
+  }
+  block.schema.fillIn = true;
+  syncReusableTemplateForBlock(sectionKey, block.id);
+  getRefreshReaderPanels()();
+  getRenderApp()();
 }
 
 function toggleExistingTableAnnotationPreview(action: string, editable: HTMLElement): boolean {
@@ -1149,6 +1215,12 @@ export function handleRichEditorClick(event: MouseEvent, editable: HTMLElement):
 }
 
 function updateRichToolbarState(editable: HTMLElement): void {
+  const range = getEditableSelectionRange(editable);
+  const textEditorShell = editable.closest<HTMLElement>('.text-editor-shell');
+  textEditorShell?.classList.toggle(
+    'has-fill-in-selection',
+    editable.dataset.field === 'block-rich' && Boolean(range && !range.collapsed && range.toString().trim().length > 0)
+  );
   const toolbars = [
     editable.closest('.table-inline-edit-shell')?.querySelector<HTMLElement>('.table-inline-toolbar') ?? null,
     editable.closest('.editor-block')?.querySelector<HTMLElement>('.rich-toolbar') ?? null,
@@ -1158,7 +1230,6 @@ function updateRichToolbarState(editable: HTMLElement): void {
   }
   const selectedStyle = getSelectedRichBlockStyle(editable);
   const selectedInlineActions = getSelectedInlineRichActions(editable);
-  const range = getEditableSelectionRange(editable);
   toolbars.forEach((toolbar) => {
     toolbar.querySelectorAll<HTMLButtonElement>('[data-rich-action]').forEach((button) => {
       const action = button.dataset.richAction ?? '';

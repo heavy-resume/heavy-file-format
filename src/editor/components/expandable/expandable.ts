@@ -36,7 +36,7 @@ export const renderExpandableEditor: ComponentEditorRenderer = (sectionKey, bloc
       <span>Always show</span>
     </label>
     <label class="expandable-pane-css-field">
-      <span>Stub CSS</span>
+      <span>CSS</span>
       <textarea
         rows="2"
         data-section-key="${helpers.escapeAttr(sectionKey)}"
@@ -53,7 +53,7 @@ export const renderExpandableEditor: ComponentEditorRenderer = (sectionKey, bloc
     block.id,
     helpers,
     `<label class="expandable-pane-css-field">
-      <span>Expanded CSS</span>
+      <span>CSS</span>
       <textarea
         rows="2"
         data-section-key="${helpers.escapeAttr(sectionKey)}"
@@ -152,9 +152,9 @@ function renderExpandablePaneMeta(
   body: string
 ): string {
   return `<details class="expandable-pane-meta">
-    <summary class="ghost expandable-pane-meta-button" aria-label="${pane === 'stub' ? 'Stub' : 'Expanded'} meta">Meta</summary>
+    <summary class="expandable-pane-meta-button" aria-label="${pane === 'stub' ? 'Stub Meta' : 'Expanded Meta'}">${pane === 'stub' ? 'Stub Meta' : 'Expanded Meta'}</summary>
     <div class="expandable-pane-meta-body" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(blockId)}">
-      <div class="expandable-pane-meta-title">${pane === 'stub' ? 'Stub' : 'Expanded'} meta</div>
+      <div class="expandable-pane-meta-title">${pane === 'stub' ? 'Stub Meta' : 'Expanded Meta'}</div>
       ${body}
     </div>
   </details>`;

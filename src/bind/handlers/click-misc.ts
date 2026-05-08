@@ -1,4 +1,4 @@
-import { state, getRenderApp, closeAiEditPopover, completePendingRichAnnotation, handleRichEditorClick } from './_imports';
+import { state, getRenderApp, closeAiEditPopover, completePendingRichAnnotation, handleRichEditorClick, refreshRichToolbarState } from './_imports';
 
 const sidebarHelpDismissTimers: Record<'editor' | 'viewer', number | null> = {
   editor: null,
@@ -10,6 +10,7 @@ export function bindClickMisc(app: HTMLElement): void {
     const richTarget = getRichTarget(event.target as HTMLElement);
     if (richTarget) {
       completePendingRichAnnotation(richTarget);
+      refreshRichToolbarState(richTarget);
     }
   });
 

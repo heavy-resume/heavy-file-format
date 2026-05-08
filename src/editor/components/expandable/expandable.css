@@ -94,7 +94,8 @@
   padding: 0.22rem 0.48rem;
   border: 1px solid var(--hvy-border-alt);
   border-radius: 999px;
-  color: var(--hvy-text-alt);
+  background: var(--hvy-surface);
+  color: var(--hvy-text);
   font-size: 0.72rem;
   font-weight: 700;
   cursor: pointer;

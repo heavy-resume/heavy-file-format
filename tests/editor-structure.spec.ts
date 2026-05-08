@@ -233,7 +233,7 @@ hvy_version: 0.1
   await expect(page.locator('#editorTree')).not.toContainText('Expanded detail');
 });
 
-test('advanced text fill-in controls constrain basic editing to the value marker', async ({ page }) => {
+test('text toolbar fill-in converts selected text to a fill-in slot', async ({ page }) => {
   await page.goto('/');
 
   await page.getByRole('button', { name: 'Raw' }).click();
@@ -249,13 +249,22 @@ hvy_version: 0.1
 `);
   await page.getByRole('button', { name: 'Apply' }).click();
   await page.getByRole('button', { name: 'Basic' }).click();
-  await page.getByRole('button', { name: 'Advanced' }).click();
 
   await page.locator('.editor-block-passive', { has: page.locator('#name') }).click();
-  await expect(page.locator('[data-action="open-component-meta"][data-block-id]')).toBeVisible();
-  await page.locator('[data-action="open-component-meta"][data-block-id]').click();
-  await page.locator('[data-action="set-text-fill-in"]').click();
-  await page.getByRole('button', { name: 'Close' }).click();
+  await page.locator('.rich-editor').evaluate((editable) => {
+    const textNode = document.createTreeWalker(editable, NodeFilter.SHOW_TEXT).nextNode();
+    if (!textNode?.textContent) return;
+    const start = textNode.textContent.indexOf('Name');
+    const range = document.createRange();
+    range.setStart(textNode, start);
+    range.setEnd(textNode, start + 'Name'.length);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+  });
+  await page.locator('.rich-editor').dispatchEvent('keyup');
+  await expect(page.getByRole('button', { name: 'Convert to Fill-in' })).toBeVisible();
+  await page.getByRole('button', { name: 'Convert to Fill-in' }).click();
 
   await expect(page.locator('[data-field="text-fill-in-value"]')).toBeVisible();
   await expect(page.locator('#editorTree h1 .text-fill-in-box')).toBeVisible();
@@ -265,6 +274,74 @@ hvy_version: 0.1
   await expect(page.locator('#editorTree h1')).toHaveText('Ada Lovelace');
   await page.getByRole('button', { name: 'Raw' }).click();
   await expect(page.locator('#rawEditor')).toContainText('# Ada Lovelace');
+  await expect(page.locator('#rawEditor')).not.toContainText('<!-- value -->');
+  await expect(page.locator('#rawEditor')).not.toContainText('"fillIn"');
+});
+
+test('cancel restores text edits made after component activation', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"header"}-->
+#! Header
+
+ <!--hvy:text {"id":"name","align":"center","placeholder":"Name"}-->
+  # Name
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('.editor-block-passive', { has: page.locator('#name') }).click();
+  await page.locator('.rich-editor').evaluate((editable) => {
+    const textNode = document.createTreeWalker(editable, NodeFilter.SHOW_TEXT).nextNode();
+    if (!textNode?.textContent) return;
+    const start = textNode.textContent.indexOf('Name');
+    const range = document.createRange();
+    range.setStart(textNode, start);
+    range.setEnd(textNode, start + 'Name'.length);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+  });
+  await page.locator('.rich-editor').dispatchEvent('keyup');
+  await page.getByRole('button', { name: 'Convert to Fill-in' }).click();
+  await expect(page.locator('[data-field="text-fill-in-value"]')).toBeVisible();
+
+  await page.getByRole('button', { name: 'Cancel' }).click();
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await expect(page.locator('#rawEditor')).toContainText('# Name');
+  await expect(page.locator('#rawEditor')).not.toContainText('<!-- value -->');
+  await expect(page.locator('#rawEditor')).not.toContainText('"fillIn"');
+});
+
+test('removing text fill-in keeps placeholder metadata out of document text', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"header"}-->
+#! Header
+
+ <!--hvy:text {"id":"name","align":"center","placeholder":"Name","fillIn":true}-->
+  # <!-- value -->
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('.editor-block-passive', { has: page.locator('#name') }).click();
+  await page.getByRole('button', { name: 'Remove Fill-in' }).click();
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await expect(page.locator('#rawEditor')).toContainText('"placeholder":"Name"');
+  await expect(page.locator('#rawEditor')).toContainText('#');
+  await expect(page.locator('#rawEditor')).not.toContainText('# Name');
   await expect(page.locator('#rawEditor')).not.toContainText('<!-- value -->');
   await expect(page.locator('#rawEditor')).not.toContainText('"fillIn"');
 });

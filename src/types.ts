@@ -200,6 +200,7 @@ export interface AppState {
   cliSession: HvyCliSessionState;
   cliHistory: HvyCliHistoryEntry[];
   activeEditorBlock: { sectionKey: string; blockId: string } | null;
+  activeEditorBlockSnapshot: { sectionKey: string; blockId: string; block: VisualBlock } | null;
   componentPlacement: ComponentPlacementState | null;
   pendingEditorActivation: { sectionKey: string; blockId: string } | null;
   activeEditorSectionTitleKey: string | null;

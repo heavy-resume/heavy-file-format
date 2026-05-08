@@ -83,6 +83,7 @@ function createInitialState(document: ReturnType<typeof deserializeDocumentBytes
     cliSession: { cwd: '/' },
     cliHistory: [],
     activeEditorBlock: null,
+    activeEditorBlockSnapshot: null,
     componentPlacement: null,
     pendingEditorActivation: null,
     activeEditorSectionTitleKey: null,

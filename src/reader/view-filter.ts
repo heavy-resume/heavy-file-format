@@ -16,7 +16,6 @@ export function createReaderViewContext(
   warn: (message: string) => void = console.warn
 ): ReaderViewContext {
   const modifiersByTarget = new Map<ReaderViewTargetKey, Set<ReaderViewModifier>>();
-  const directPriorityRankByTarget = new Map<ReaderViewTargetKey, number>();
   const priorityRankByTarget = new Map<ReaderViewTargetKey, number>();
   const entries = Object.entries(filter);
   if (entries.length === 0) {
@@ -51,20 +50,13 @@ export function createReaderViewContext(
     if (modifiers.has('hidden')) {
       continue;
     }
-    const rank = modifiers.has('highlight') ? 2 : modifiers.has('priority') ? 1 : 0;
-    if (rank === 0) {
+    if (!modifiers.has('highlight') && !modifiers.has('priority')) {
       continue;
     }
-    directPriorityRankByTarget.set(targetKey, rank);
     let current: ReaderViewTargetKey | undefined = targetKey;
     while (current) {
-      priorityRankByTarget.set(current, Math.max(priorityRankByTarget.get(current) ?? 0, rank));
+      priorityRankByTarget.set(current, 1);
       current = parentByTarget.get(current);
-    }
-  }
-  for (const [targetKey, inheritedRank] of priorityRankByTarget) {
-    if (inheritedRank >= 2 && directPriorityRankByTarget.get(targetKey) === 1) {
-      priorityRankByTarget.set(targetKey, 3);
     }
   }
 
@@ -107,26 +99,20 @@ export function orderReaderViewTargets<T>(
 ): T[] {
   const prioritize = options.prioritize ?? true;
   const visible = items.filter((item) => !hasReaderViewModifier(context, getTargetKey(item), 'hidden'));
-  const boostedPriority: T[] = [];
-  const highlightedPriority: T[] = [];
-  const plainPriority: T[] = [];
+  const priority: T[] = [];
   const standard: T[] = [];
   const dimmed: T[] = [];
   for (const item of visible) {
     const targetKey = getTargetKey(item);
     if (hasReaderViewModifier(context, targetKey, 'dimmed')) {
       dimmed.push(item);
-    } else if (prioritize && getReaderViewPriorityRank(context, targetKey) >= 3) {
-      boostedPriority.push(item);
-    } else if (prioritize && getReaderViewPriorityRank(context, targetKey) >= 2) {
-      highlightedPriority.push(item);
     } else if (prioritize && getReaderViewPriorityRank(context, targetKey) > 0) {
-      plainPriority.push(item);
+      priority.push(item);
     } else {
       standard.push(item);
     }
   }
-  return [...boostedPriority, ...highlightedPriority, ...plainPriority, ...standard, ...dimmed];
+  return [...priority, ...standard, ...dimmed];
 }
 
 function normalizeReaderViewModifiers(rawModifiers: ReaderViewModifier[]): Set<ReaderViewModifier> {

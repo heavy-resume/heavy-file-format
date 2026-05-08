@@ -127,7 +127,7 @@ test('reader view ordering hides hidden blocks and moves dimmed blocks behind si
   expect(expectedResult.map((block) => block.schema.id)).toEqual(['first', 'third']);
 });
 
-test('reader view prioritizes highlighted ancestors ahead of plain priority targets', () => {
+test('reader view prioritizes highlighted ancestors and plain priority targets with stable order', () => {
   const highlightedChild = createTextBlock('highlighted-child', 'Highlighted child');
   const plainPriorityChild = createTextBlock('plain-priority-child', 'Plain priority child');
   const normalChild = createTextBlock('normal-child', 'Normal child');
@@ -152,8 +152,8 @@ test('reader view prioritizes highlighted ancestors ahead of plain priority targ
     new Set<string>()
   );
 
-  expect(expectedResult.map((section) => section.customId)).toEqual(['highlighted-parent', 'plain-priority-parent', 'normal-parent']);
-  expect(getReaderViewPriorityRank(context, getSectionReaderViewTargetKey(highlightedSection))).toBe(2);
+  expect(expectedResult.map((section) => section.customId)).toEqual(['plain-priority-parent', 'highlighted-parent', 'normal-parent']);
+  expect(getReaderViewPriorityRank(context, getSectionReaderViewTargetKey(highlightedSection))).toBe(1);
   expect(getReaderViewPriorityRank(context, getSectionReaderViewTargetKey(plainPrioritySection))).toBe(1);
 });
 
@@ -179,7 +179,7 @@ test('reader view can preserve non-list block order while keeping priority avail
   );
 
   expect(expectedResult.map((block) => block.schema.id)).toEqual(['header', 'highlighted']);
-  expect(getReaderViewPriorityRank(context, getBlockReaderViewTargetKey(highlighted))).toBe(2);
+  expect(getReaderViewPriorityRank(context, getBlockReaderViewTargetKey(highlighted))).toBe(1);
 });
 
 test('reader view keeps activated dimmed targets in their dimmed order', () => {

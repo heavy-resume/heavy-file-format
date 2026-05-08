@@ -1127,6 +1127,11 @@ test('resume reader view buttons apply filters without changing edit mode', asyn
   await expect(page.locator('#project-autonomous-agent-hackathon')).toHaveClass(/is-reader-view-dimmed/);
   await expect(page.locator('#project-autonomous-agent-hackathon')).toHaveAttribute('aria-expanded', 'false');
   await expect(page.locator('#locations')).toBeVisible();
+  await page.locator('#education .toggle-expand-button').click();
+  await expect(page.locator('#education')).not.toHaveClass(/is-collapsed-preview/);
+  await page.locator('#education-bs-computer-science').click();
+  await expect(page.locator('#education')).not.toHaveClass(/is-collapsed-preview/);
+  await expect(page.locator('#education-bs-computer-science')).toHaveAttribute('aria-expanded', 'true');
 
   const projectIdsBefore = await page.locator('#readerDocument [id]').evaluateAll((nodes) => nodes.map((node) => node.id));
   await page.locator('#project-autonomous-agent-hackathon').click();

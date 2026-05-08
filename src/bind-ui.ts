@@ -222,6 +222,7 @@ export function bindUi(app: HTMLElement): void {
 
   const handleReaderAreaClick = (event: Event) => {
     const target = event.target as HTMLElement;
+    const nearestReaderAction = target.closest<HTMLElement>('[data-reader-action]');
 
     const anchor = target.closest<HTMLAnchorElement>('a[href^="#"]');
     if (anchor) {
@@ -271,6 +272,9 @@ export function bindUi(app: HTMLElement): void {
 
     const viewCollapse = target.closest<HTMLElement>('[data-reader-action="toggle-view-collapse"]');
     if (viewCollapse) {
+      if (nearestReaderAction !== viewCollapse) {
+        // Let nested reader controls, such as expandables inside a collapsed view wrapper, handle the click.
+      } else {
       if (target.closest('a, input, select, textarea, [contenteditable="true"]')) {
         return;
       }
@@ -282,6 +286,7 @@ export function bindUi(app: HTMLElement): void {
       state.readerContainerState[key] = viewCollapse.getAttribute('aria-expanded') !== 'true';
       getRefreshReaderPanels()();
       return;
+      }
     }
 
     const dimmedTarget = target.closest<HTMLElement>('[data-reader-view-dimmed="true"][data-reader-view-target]');

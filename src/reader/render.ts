@@ -247,8 +247,9 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       state.readerViewActivatedTargets
     ).map((child) => renderReaderSection(child)).join('')}</div>`;
 
+    const viewCollapseAttrs = `data-reader-action="toggle-view-collapse" data-reader-view-target="${deps.escapeAttr(targetKey)}" data-reader-view-collapse-key="${deps.escapeAttr(viewCollapseKey)}" aria-expanded="${viewExpanded ? 'true' : 'false'}"`;
     const toggleAttrs = modifiers.has('collapse')
-      ? ` data-reader-action="toggle-view-collapse" data-reader-view-target="${deps.escapeAttr(targetKey)}" data-reader-view-collapse-key="${deps.escapeAttr(viewCollapseKey)}" aria-expanded="${viewExpanded ? 'true' : 'false'}"`
+      ? (sectionExpanded ? '' : ` ${viewCollapseAttrs}`)
       : section.contained && section.expanded
       ? ''
       : section.contained
@@ -260,7 +261,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
         <header class="reader-section-head" aria-label="Section controls">
           <div class="reader-head-actions">
             <button type="button" class="tiny toggle-expand-button" ${modifiers.has('collapse')
-              ? `data-reader-action="toggle-view-collapse" data-reader-view-target="${deps.escapeAttr(targetKey)}" data-reader-view-collapse-key="${deps.escapeAttr(viewCollapseKey)}"`
+              ? viewCollapseAttrs
               : `data-reader-action="toggle-expand" data-section-key="${deps.escapeAttr(section.key)}"`} aria-label="${
           sectionExpanded ? 'Collapse section' : 'Expand section'
         }">${sectionExpanded ? '+' : '-'}</button>

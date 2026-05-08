@@ -359,11 +359,11 @@ component_defs:
       css: "margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);"
       expandableStubBlocks:
         children:
-          - text: "{% skill %}"
+          - text: "### {% skill %}"
             schema:
               component: text
               css: "margin: 0;"
-              placeholder: "Skill name"
+              placeholder: "### Skill name"
       expandableContentBlocks:
         lock: false
         css: "padding: 0.5rem;"
@@ -506,7 +506,7 @@ component_defs:
     <!--hvy:expandable:stub {}-->
 
      <!--hvy:text {"css":"margin: 0;"}-->
-      Software Engineering
+      ### Software Engineering
 
     <!--hvy:expandable:content {}-->
 
@@ -574,7 +574,7 @@ component_defs:
     <!--hvy:expandable:stub {}-->
 
      <!--hvy:text {"css":"margin: 0;"}-->
-      Reverse Engineering
+      ### Reverse Engineering
 
     <!--hvy:expandable:content {}-->
 
@@ -616,7 +616,7 @@ component_defs:
     <!--hvy:expandable:stub {}-->
 
      <!--hvy:text {"css":"margin: 0;"}-->
-      Library Development
+      ### Library Development
 
     <!--hvy:expandable:content {}-->
 
@@ -658,7 +658,7 @@ component_defs:
     <!--hvy:expandable:stub {}-->
 
      <!--hvy:text {"css":"margin: 0;"}-->
-      LLM Prompt Engineering
+      ### LLM Prompt Engineering
 
     <!--hvy:expandable:content {}-->
 
@@ -700,7 +700,7 @@ component_defs:
     <!--hvy:expandable:stub {}-->
 
      <!--hvy:text {"css":"margin: 0;"}-->
-      Project Management
+      ### Project Management
 
     <!--hvy:expandable:content {}-->
 
@@ -750,7 +750,7 @@ component_defs:
     <!--hvy:expandable:stub {}-->
 
      <!--hvy:text {"css":"margin: 0;"}-->
-      TypeScript
+      ### TypeScript
 
     <!--hvy:expandable:content {}-->
 
@@ -792,7 +792,7 @@ component_defs:
     <!--hvy:expandable:stub {}-->
 
      <!--hvy:text {"css":"margin: 0;"}-->
-      Python
+      ### Python
 
     <!--hvy:expandable:content {}-->
 
@@ -851,7 +851,7 @@ component_defs:
     <!--hvy:expandable:stub {}-->
 
      <!--hvy:text {"css":"margin: 0;"}-->
-      C/C++
+      ### C/C++
 
     <!--hvy:expandable:content {}-->
 
@@ -893,7 +893,7 @@ component_defs:
     <!--hvy:expandable:stub {}-->
 
      <!--hvy:text {"css":"margin: 0;"}-->
-      Developer Containers
+      ### Developer Containers
 
     <!--hvy:expandable:content {}-->
 
@@ -939,7 +939,7 @@ component_defs:
     <!--hvy:expandable:stub {}-->
 
      <!--hvy:text {"css":"margin: 0;"}-->
-      OpenAI API
+      ### OpenAI API
 
     <!--hvy:expandable:content {}-->
 
@@ -981,7 +981,7 @@ component_defs:
     <!--hvy:expandable:stub {}-->
 
      <!--hvy:text {"css":"margin: 0;"}-->
-      GitHub Codespaces
+      ### GitHub Codespaces
 
     <!--hvy:expandable:content {}-->
 
@@ -1023,7 +1023,7 @@ component_defs:
     <!--hvy:expandable:stub {}-->
 
      <!--hvy:text {"css":"margin: 0;"}-->
-      SuperAGI
+      ### SuperAGI
 
     <!--hvy:expandable:content {}-->
 

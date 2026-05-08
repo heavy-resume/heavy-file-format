@@ -350,7 +350,7 @@
   gap: 0.3rem;
 }
 
-@container hvy-surface (inline-size < 48rem) {
+@container hvy-surface (inline-size <= 50rem) {
   .table-editor-grid,
   .reader-table {
     min-width: 100%;

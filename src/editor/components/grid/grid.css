@@ -87,7 +87,7 @@
   margin-top: 0.45rem;
 }
 
-@container hvy-surface (inline-size < 48rem) {
+@container hvy-surface (inline-size <= 50rem) {
   .reader-grid-layout,
   .grid-fields {
     grid-template-columns: 1fr !important;

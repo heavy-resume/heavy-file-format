@@ -328,16 +328,42 @@
 
 .reader-section.is-highlighted {
   border-radius: 0;
-  box-shadow:
-    0 0 0.62rem rgba(255, 218, 46, 0.72),
-    0 0 1.25rem rgba(255, 198, 20, 0.44);
 }
 
 .reader-block.is-highlighted {
   border-radius: 0;
-  box-shadow:
-    0 0 0.62rem rgba(255, 218, 46, 0.72),
-    0 0 1.25rem rgba(255, 198, 20, 0.44);
+}
+
+.reader-section.is-reader-view-highlight-glowing,
+.reader-block.is-reader-view-highlight-glowing {
+  animation: reader-view-highlight-glow 5s ease-in-out both;
+}
+
+@keyframes reader-view-highlight-glow {
+  0% {
+    box-shadow:
+      0 0 0 rgba(255, 218, 46, 0),
+      0 0 0 rgba(255, 198, 20, 0);
+  }
+
+  35% {
+    box-shadow:
+      0 0 0.62rem rgba(255, 218, 46, 0.72),
+      0 0 1.25rem rgba(255, 198, 20, 0.44);
+  }
+
+  100% {
+    box-shadow:
+      0 0 0 rgba(255, 218, 46, 0),
+      0 0 0 rgba(255, 198, 20, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reader-section.is-reader-view-highlight-glowing,
+  .reader-block.is-reader-view-highlight-glowing {
+    animation: none;
+  }
 }
 
 .reader-section.is-reader-view-dimmed,

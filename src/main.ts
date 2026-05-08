@@ -42,6 +42,8 @@ if (!appRoot) {
   throw new Error('App container not found.');
 }
 const app = appRoot;
+const READER_HIGHLIGHT_GLOW_MS = 5000;
+let readerHighlightGlowObserver: IntersectionObserver | null = null;
 
 app.innerHTML = '<main class="layout"><section class="pane full-pane"><p>Loading editor...</p></section></main>';
 
@@ -601,6 +603,7 @@ function renderApp(): void {
   stepStartedAt = performance.now();
   restorePaneScroll(state.paneScroll, app);
   restoreChatThreadScroll(app, chatScroll);
+  scheduleReaderHighlightGlow(app);
   restoreMs = performance.now() - stepStartedAt;
 
   stepStartedAt = performance.now();
@@ -744,6 +747,9 @@ function refreshReaderPanels(): void {
     reconcilePluginMounts(reader);
     readerMs = performance.now() - stepStartedAt;
   }
+  if (sidebarSections || reader) {
+    scheduleReaderHighlightGlow(app);
+  }
 
   const modalStartedAt = performance.now();
   refreshModalPreview();
@@ -772,6 +778,44 @@ function refreshModalPreview(): void {
   if (modalTitle) {
     modalTitle.innerHTML = `Meta: ${escapeHtml(formatSectionTitle(section.title))} <code>#${escapeHtml(getSectionId(section))}</code>`;
   }
+}
+
+function scheduleReaderHighlightGlow(root: ParentNode): void {
+  readerHighlightGlowObserver?.disconnect();
+  readerHighlightGlowObserver = null;
+
+  const highlighted = [...root.querySelectorAll<HTMLElement>('.reader-section.is-highlighted, .reader-block.is-highlighted')];
+  if (highlighted.length === 0) {
+    return;
+  }
+
+  const triggerGlow = (element: HTMLElement): void => {
+    element.classList.add('is-reader-view-highlight-glowing');
+    window.setTimeout(() => {
+      element.classList.remove('is-reader-view-highlight-glowing');
+    }, READER_HIGHLIGHT_GLOW_MS);
+  };
+
+  if (!('IntersectionObserver' in window)) {
+    highlighted.forEach(triggerGlow);
+    return;
+  }
+
+  const observer = new IntersectionObserver(
+    (entries) => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) {
+          continue;
+        }
+        const element = entry.target as HTMLElement;
+        triggerGlow(element);
+        observer.unobserve(element);
+      }
+    },
+    { threshold: 0.15 }
+  );
+  readerHighlightGlowObserver = observer;
+  highlighted.forEach((element) => observer.observe(element));
 }
 
 // Initialize late-bound callbacks so all modules can access renderApp/refreshReaderPanels

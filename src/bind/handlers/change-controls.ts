@@ -1,4 +1,4 @@
-import { state, getRenderApp, recordHistory, materializeDbTableDraftRow, renameDbTableColumn, syncSqliteColumnNameInDom, updateDbTableCell, handleImageUpload } from './_imports';
+import { state, getRenderApp, getRefreshReaderPanels, recordHistory, materializeDbTableDraftRow, renameDbTableColumn, syncSqliteColumnNameInDom, updateDbTableCell, handleImageUpload } from './_imports';
 import { dropDbTableColumn } from '../../plugins/db-table';
 
 export function bindChangeControls(app: HTMLElement): void {
@@ -46,6 +46,17 @@ export function bindChangeControls(app: HTMLElement): void {
       const file = target.files?.[0];
       if (!file) return;
       void handleImageUpload(target, file);
+      return;
+    }
+
+    if (field === 'component-list-reader-view' && target instanceof HTMLSelectElement) {
+      const sectionKey = target.dataset.sectionKey;
+      const blockId = target.dataset.blockId;
+      if (!sectionKey || !blockId) {
+        return;
+      }
+      state.componentListReaderViews[`${sectionKey}:${blockId}`] = target.value;
+      getRefreshReaderPanels()();
       return;
     }
 

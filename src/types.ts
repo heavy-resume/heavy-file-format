@@ -223,6 +223,8 @@ export interface AppState {
   gridAddComponentByBlock: Record<string, string>;
   expandableEditorPanels: Record<string, { stubOpen: boolean; expandedOpen: boolean }>;
   readerExpandableState: Record<string, boolean>;
+  readerContainerState: Record<string, boolean>;
+  componentListReaderViews: Record<string, string>;
   viewerSidebarOpen: boolean;
   editorSidebarOpen: boolean;
   viewerSidebarHelpDismissed: boolean;

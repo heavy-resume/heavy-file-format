@@ -1143,6 +1143,9 @@ function serializeBlockSchema(
   addIfChanged(payload, 'align', schema.align, defaults.align);
   addIfChanged(payload, 'slot', schema.slot, defaults.slot);
   addIfChanged(payload, 'css', schema.css, defaults.css);
+  if (Object.keys(schema.sortKeys).length > 0) {
+    payload.sortKeys = schema.sortKeys;
+  }
   addIfChanged(payload, 'tags', schema.tags, defaults.tags);
   addIfChanged(payload, 'description', schema.description, defaults.description);
   addIfChanged(payload, 'placeholder', schema.placeholder, defaults.placeholder);
@@ -1154,6 +1157,9 @@ function serializeBlockSchema(
     addIfChanged(payload, 'xrefTarget', schema.xrefTarget, defaults.xrefTarget);
   }
   if (component === 'container') {
+    addIfChanged(payload, 'containerTitle', schema.containerTitle, defaults.containerTitle);
+    addIfChanged(payload, 'containerExpanded', schema.containerExpanded, defaults.containerExpanded);
+    addIfChanged(payload, 'containerCollapsedPreviewRem', schema.containerCollapsedPreviewRem, defaults.containerCollapsedPreviewRem);
     if (!options.omitContainerBlocks) {
       addBlockArrayIfPresent(payload, 'containerBlocks', schema.containerBlocks, documentMeta);
     }
@@ -1161,6 +1167,10 @@ function serializeBlockSchema(
   if (component === 'component-list') {
     addIfChanged(payload, 'componentListComponent', schema.componentListComponent, defaults.componentListComponent);
     addIfChanged(payload, 'componentListItemLabel', schema.componentListItemLabel, defaults.componentListItemLabel);
+    if (schema.componentListViews.length > 0) {
+      payload.componentListViews = schema.componentListViews;
+    }
+    addIfChanged(payload, 'componentListDefaultView', schema.componentListDefaultView, defaults.componentListDefaultView);
     if (!options.omitComponentListBlocks) {
       addBlockArrayIfPresent(payload, 'componentListBlocks', schema.componentListBlocks, documentMeta);
     }

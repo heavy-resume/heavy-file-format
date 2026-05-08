@@ -47,6 +47,8 @@ interface ReaderRenderState {
   currentView: 'editor' | 'viewer' | 'ai';
   responsivePreview: 'full' | 'phone' | 'tablet' | 'desktop';
   readerExpandableState: Record<string, boolean>;
+  readerContainerState: Record<string, boolean>;
+  componentListReaderViews: Record<string, string>;
   viewerSidebarHelpDismissed: boolean;
 }
 

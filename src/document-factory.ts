@@ -1,4 +1,4 @@
-import type { Align, BlockSchema, ExpandablePart, Slot, TableRow, VisualBlock, VisualSection } from './editor/types';
+import type { Align, BlockSchema, ComponentListView, ExpandablePart, Slot, SortKeyValue, TableRow, VisualBlock, VisualSection } from './editor/types';
 import type { JsonObject } from './hvy/types';
 import type { ComponentDefinition, VisualDocument } from './types';
 import { makeId } from './utils';
@@ -20,11 +20,17 @@ export function defaultBlockSchema(component = 'text'): BlockSchema {
     css: 'margin: 0.5rem 0;',
     codeLanguage: 'ts',
     containerBlocks: [],
+    containerTitle: '',
+    containerExpanded: true,
+    containerCollapsedPreviewRem: 3,
     componentListComponent: 'text',
     componentListItemLabel: '',
     componentListBlocks: [],
+    componentListViews: [],
+    componentListDefaultView: '',
     gridColumns: 2,
     gridItems: [],
+    sortKeys: {},
     tags: '',
     description: '',
     placeholder: '',
@@ -143,6 +149,9 @@ export function schemaFromUnknown(value: unknown, seen = new WeakSet<object>()):
     containerBlocks: Array.isArray(candidate.containerBlocks)
       ? candidate.containerBlocks.map((block) => parseVisualBlock(block, seen))
       : [],
+    containerTitle: typeof candidate.containerTitle === 'string' ? candidate.containerTitle : defaults.containerTitle,
+    containerExpanded: candidate.containerExpanded !== false,
+    containerCollapsedPreviewRem: parsePositiveNumber(candidate.containerCollapsedPreviewRem, defaults.containerCollapsedPreviewRem),
     componentListComponent:
       typeof candidate.componentListComponent === 'string' ? candidate.componentListComponent : defaults.componentListComponent,
     componentListItemLabel:
@@ -150,8 +159,11 @@ export function schemaFromUnknown(value: unknown, seen = new WeakSet<object>()):
     componentListBlocks: Array.isArray(candidate.componentListBlocks)
       ? candidate.componentListBlocks.map((block) => parseVisualBlock(block, seen))
       : [],
+    componentListViews: parseComponentListViews(candidate.componentListViews),
+    componentListDefaultView: typeof candidate.componentListDefaultView === 'string' ? candidate.componentListDefaultView : defaults.componentListDefaultView,
     gridColumns,
     gridItems: parsedGridItems,
+    sortKeys: parseSortKeys(candidate.sortKeys),
     tags: typeof candidate.tags === 'string' ? candidate.tags : defaults.tags,
     description: typeof candidate.description === 'string' ? candidate.description : defaults.description,
     placeholder: typeof candidate.placeholder === 'string' ? candidate.placeholder : defaults.placeholder,
@@ -193,6 +205,57 @@ export function schemaFromUnknown(value: unknown, seen = new WeakSet<object>()):
     imageFile: typeof candidate.imageFile === 'string' ? candidate.imageFile : defaults.imageFile,
     imageAlt: typeof candidate.imageAlt === 'string' ? candidate.imageAlt : defaults.imageAlt,
   };
+}
+
+function parseSortKeys(raw: unknown): Record<string, SortKeyValue> {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return {};
+  }
+  const parsed: Record<string, SortKeyValue> = {};
+  for (const [key, value] of Object.entries(raw as JsonObject)) {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      parsed[key] = value;
+    } else if (typeof value === 'string') {
+      parsed[key] = value;
+    }
+  }
+  return parsed;
+}
+
+function parseComponentListViews(raw: unknown): ComponentListView[] {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  return raw
+    .map((item) => {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) {
+        return null;
+      }
+      const obj = item as JsonObject;
+      const id = typeof obj.id === 'string' ? obj.id.trim() : '';
+      const sortKey = typeof obj.sortKey === 'string' ? obj.sortKey : '';
+      if (!id || !sortKey) {
+        return null;
+      }
+      const direction = obj.direction === 'desc' ? 'desc' : 'asc';
+      return {
+        id,
+        label: typeof obj.label === 'string' && obj.label.trim() ? obj.label : id,
+        sortKey,
+        direction,
+        groupKey: typeof obj.groupKey === 'string' ? obj.groupKey : '',
+        groupDirection: obj.groupDirection === 'desc' || obj.groupDirection === 'asc' ? obj.groupDirection : direction,
+        groupCollapsedPreviewRem: parsePositiveNumber(obj.groupCollapsedPreviewRem, 3),
+      };
+    })
+    .filter((item): item is ComponentListView => item !== null);
+}
+
+function parsePositiveNumber(raw: unknown, fallback: number): number {
+  if (typeof raw !== 'number' || !Number.isFinite(raw) || raw <= 0) {
+    return fallback;
+  }
+  return raw;
 }
 
 function parseTableColumns(raw: unknown, fallback: string[]): string[] {

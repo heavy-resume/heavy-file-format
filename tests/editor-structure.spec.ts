@@ -233,6 +233,50 @@ hvy_version: 0.1
   await expect(page.locator('#editorTree')).not.toContainText('Expanded detail');
 });
 
+test('component-list reader views sort items into collapsed virtual groups', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"skills"}-->
+#! Skills
+
+<!--hvy:component-list {"id":"skill-list","componentListComponent":"text","componentListDefaultView":"job","componentListViews":[{"id":"job","label":"Job Match","sortKey":"Job Match","direction":"desc","groupKey":"Category","groupCollapsedPreviewRem":1}]}-->
+
+ <!--hvy:component-list:0 {}>
+
+  <!--hvy:text {"sortKeys":{"Job Match":80,"Category":"Database"}}-->
+   PostgreSQL
+
+ <!--hvy:component-list:1 {}>
+
+  <!--hvy:text {"sortKeys":{"Job Match":95,"Category":"Language"}}-->
+   TypeScript
+
+ <!--hvy:component-list:2 {}>
+
+  <!--hvy:text {"sortKeys":{"Job Match":90,"Category":"Database"}}-->
+   SQLite
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Viewer' }).click();
+
+  const groups = page.locator('.reader-container.is-virtual-group-container');
+  await expect(groups).toHaveCount(2);
+  await expect(groups.nth(0).locator('.reader-container-title')).toHaveText('Language');
+  await expect(groups.nth(1).locator('.reader-container-title')).toHaveText('Database');
+  await expect(groups.nth(0).locator('.reader-container-title')).toHaveAttribute('aria-expanded', 'false');
+
+  await groups.nth(1).locator('.reader-container-title').click();
+
+  await expect(groups.nth(1).locator('.reader-container-title')).toHaveAttribute('aria-expanded', 'true');
+  await expect(groups.nth(1)).toContainText('SQLite');
+  await expect(groups.nth(1)).toContainText('PostgreSQL');
+});
+
 test('text toolbar fill-in converts selected text to a fill-in slot', async ({ page }) => {
   await page.goto('/');
 

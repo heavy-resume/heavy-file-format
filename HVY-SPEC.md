@@ -210,6 +210,7 @@ Common block metadata fields include:
 - `lock`
 - `align`
 - `slot`
+- `sortKeys`
 - `tags`
 - `description`
 - `placeholder`
@@ -222,6 +223,7 @@ Inline `css` strings are declaration-only values equivalent to an HTML `style` a
 `placeholder` is an optional string. Display it as plain hint text when the block's content is empty, helping template authors communicate intent to document authors. It applies to text-based blocks and grid item blocks. It is not parsed as Markdown or HVY content.
 `fillIn` is an optional boolean for text blocks. When true, authoring tools SHOULD treat `<!-- value -->` in the text body as the only editable fill-in region in basic editing modes. Text outside the marker is scaffold text and SHOULD NOT be edited by constrained/basic editors. When the marker is filled or removed and no `<!-- value -->` marker remains, tools SHOULD treat the block like regular text again.
 `componentListItemLabel` is an optional human-readable singular label for items added to a `component-list`, such as `"skill"` or `"tool / tech"`. Authoring tools SHOULD use it in add/edit prompts. If omitted, tools SHOULD derive a readable fallback from `componentListComponent` by converting separators to spaces and dropping generic suffixes such as `record`, `entry`, or `item`.
+`sortKeys` is an optional object on any block. Keys are human-readable sort names and MAY contain spaces. Values MUST be strings or finite numbers. Component-list views use these values for sorting and grouping without changing canonical document order.
 
 Section metadata also includes optional presentation keys such as:
 - `expanded`
@@ -309,6 +311,18 @@ Here `## Skills` becomes `componentListBlocks[0]` (an implicit text block) and t
 
 For numbered component-list slots, the numeric suffix controls display order. Readers and editors MUST sort `hvy:component-list:N` children by `N` ascending, using file order only to break ties when multiple items use the same `N`.
 
+Component-list views are optional reader views over the same canonical child list:
+
+```markdown
+<!--hvy:component-list {"componentListComponent":"xref-card","componentListDefaultView":"job","componentListViews":[{"id":"job","label":"Job Match","sortKey":"Job Match","direction":"desc","groupKey":"Category","groupCollapsedPreviewRem":3}]}-->
+ <!--hvy:component-list:0 {}>
+  <!--hvy:xref-card {"xrefTitle":"Postgres","xrefTarget":"skill-postgres","sortKeys":{"Job Match":92,"Category":"Database"}}-->
+```
+
+`componentListViews` is an ordered array of view objects. A view has `id`, `label`, `sortKey`, `direction` (`"asc"` or `"desc"`), and optional `groupKey`, `groupDirection`, and `groupCollapsedPreviewRem`. `componentListDefaultView` names the view readers SHOULD use when no runtime reader view override is supplied.
+
+When a view is active, child blocks that have the selected `sortKey` render before child blocks that do not. Keyed children are sorted by the selected direction; missing-key children keep canonical order after keyed children. Ties keep canonical order. If `groupKey` is set, readers SHOULD create virtual container components for each group value. These virtual containers are reader-only and MUST NOT be serialized into `componentListBlocks`, slot directives, or child order files. Group containers are collapsed by default and reveal their members when activated. `groupCollapsedPreviewRem` controls the collapsed preview height in `rem` units and defaults to `3`.
+
 Cross-reference cards can be emitted as a block directive with all card data in metadata and no raw HTML body:
 
 ```markdown
@@ -353,10 +367,14 @@ Rules:
 
 Block metadata optionally includes component-specific fields. Common examples include:
 - `containerTitle`
+- `containerExpanded`
+- `containerCollapsedPreviewRem`
 - `containerBlocks`
 - `componentListComponent`
 - `componentListItemLabel`
 - `componentListBlocks`
+- `componentListViews`
+- `componentListDefaultView`
 - `gridColumns`
 - `gridItems`
 - `plugin`
@@ -377,6 +395,8 @@ Block metadata optionally includes component-specific fields. Common examples in
 - `imageAlt`
 
 Nested block arrays such as `containerBlocks` use a recursive block object shape:
+
+Container blocks MAY be collapsible in readers. `containerExpanded` stores the default expanded state and defaults to `true`. `containerCollapsedPreviewRem` stores the collapsed preview height in `rem` units and defaults to `3`. `containerTitle` is an optional label shown by readers as the collapse/expand control. Collapsed containers SHOULD render a non-editing preview of their first visible content up to the configured height.
 
 ```json
 {

@@ -913,6 +913,47 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
             value="${deps.escapeAttr(block.schema.placeholder)}"
           />
         </label>
+        <label>
+          <span>Sort Keys</span>
+          <div class="sort-key-editor">
+            ${renderSortKeyRows(sectionKey, block)}
+          </div>
+        </label>
+        ${
+          component === 'container'
+            ? `<label>
+          <span>Container Title</span>
+          <input
+            data-section-key="${deps.escapeAttr(sectionKey)}"
+            data-block-id="${deps.escapeAttr(block.id)}"
+            data-field="block-container-title"
+            value="${deps.escapeAttr(block.schema.containerTitle)}"
+          />
+        </label>
+        <label>
+          <span>Collapsed Preview Rem</span>
+          <input
+            type="number"
+            min="1"
+            step="0.25"
+            data-section-key="${deps.escapeAttr(sectionKey)}"
+            data-block-id="${deps.escapeAttr(block.id)}"
+            data-field="block-container-collapsed-preview-rem"
+            value="${deps.escapeAttr(String(block.schema.containerCollapsedPreviewRem))}"
+          />
+        </label>
+        <label class="checkbox-label">
+          <input
+            type="checkbox"
+            data-section-key="${deps.escapeAttr(sectionKey)}"
+            data-block-id="${deps.escapeAttr(block.id)}"
+            data-field="block-container-expanded"
+            ${block.schema.containerExpanded ? 'checked' : ''}
+          />
+          <span>Expanded by default</span>
+        </label>`
+            : ''
+        }
         ${
           component === 'component-list'
             ? `<label>
@@ -924,6 +965,25 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
             placeholder="${deps.escapeAttr(getComponentListAddLabel(block).replace(/^Add\s+/, ''))}"
             value="${deps.escapeAttr(block.schema.componentListItemLabel)}"
           />
+        </label>
+        <label>
+          <span>Default View</span>
+          <input
+            data-section-key="${deps.escapeAttr(sectionKey)}"
+            data-block-id="${deps.escapeAttr(block.id)}"
+            data-field="block-component-list-default-view"
+            value="${deps.escapeAttr(block.schema.componentListDefaultView)}"
+          />
+        </label>
+        <label>
+          <span>List Views</span>
+          <textarea
+            rows="5"
+            data-section-key="${deps.escapeAttr(sectionKey)}"
+            data-block-id="${deps.escapeAttr(block.id)}"
+            data-field="block-component-list-views"
+            placeholder='[{"id":"job","label":"Job Match","sortKey":"Job Match","direction":"desc","groupKey":"Category"}]'
+          >${deps.escapeHtml(JSON.stringify(block.schema.componentListViews, null, 2))}</textarea>
         </label>`
             : ''
         }
@@ -943,6 +1003,34 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         ${scriptingVersionField}
       </div>
     `;
+  }
+
+  function renderSortKeyRows(sectionKey: string, block: VisualBlock): string {
+    const entries = Object.entries(block.schema.sortKeys);
+    const rows = [...entries, ['', ''] as [string, string]];
+    return rows
+      .map(([name, value], index) => {
+        const existingName = entries[index]?.[0] ?? '';
+        return `<div class="sort-key-row">
+          <input
+            data-section-key="${deps.escapeAttr(sectionKey)}"
+            data-block-id="${deps.escapeAttr(block.id)}"
+            data-field="block-sort-key-name"
+            data-sort-key-name="${deps.escapeAttr(existingName)}"
+            placeholder="Sort name"
+            value="${deps.escapeAttr(name)}"
+          />
+          <input
+            data-section-key="${deps.escapeAttr(sectionKey)}"
+            data-block-id="${deps.escapeAttr(block.id)}"
+            data-field="block-sort-key-value"
+            data-sort-key-name="${deps.escapeAttr(name)}"
+            placeholder="Value"
+            value="${deps.escapeAttr(String(value))}"
+          />
+        </div>`;
+      })
+      .join('');
   }
 
   function renderTextFragment(content: string): string {

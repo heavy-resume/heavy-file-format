@@ -540,14 +540,22 @@ function blockSchemaToCliJson(schema: BlockSchema): JsonObject {
     lock: schema.lock,
     align: schema.align,
     slot: schema.slot,
+    sortKeys: schema.sortKeys,
     tags: schema.tags,
     description: schema.description,
     placeholder: schema.placeholder,
     fillIn: schema.fillIn,
   };
+  if (schema.component === 'container') {
+    value.containerTitle = schema.containerTitle;
+    value.containerExpanded = schema.containerExpanded;
+    value.containerCollapsedPreviewRem = schema.containerCollapsedPreviewRem;
+  }
   if (schema.component === 'component-list') {
     value.componentListComponent = schema.componentListComponent;
     value.componentListItemLabel = schema.componentListItemLabel;
+    value.componentListViews = schema.componentListViews;
+    value.componentListDefaultView = schema.componentListDefaultView;
   }
   if (schema.component === 'xref-card') {
     value.xrefTitle = schema.xrefTitle;
@@ -636,6 +644,9 @@ function applyBlockSchemaJson(schema: BlockSchema, component: string, value: Jso
   schema.component = component;
   if (typeof value.id === 'string') schema.id = value.id;
   if (typeof value.css === 'string') schema.css = value.css;
+  if (value.sortKeys && typeof value.sortKeys === 'object' && !Array.isArray(value.sortKeys)) {
+    schema.sortKeys = parseSortKeys(value.sortKeys);
+  }
   if (typeof value.lock === 'boolean') schema.lock = value.lock;
   if (value.align === 'left' || value.align === 'center' || value.align === 'right') schema.align = value.align;
   if (value.slot === 'left' || value.slot === 'center' || value.slot === 'right') schema.slot = value.slot;
@@ -643,8 +654,15 @@ function applyBlockSchemaJson(schema: BlockSchema, component: string, value: Jso
   if (typeof value.description === 'string') schema.description = value.description;
   if (typeof value.placeholder === 'string') schema.placeholder = value.placeholder;
   if (typeof value.fillIn === 'boolean') schema.fillIn = value.fillIn;
+  if (typeof value.containerTitle === 'string') schema.containerTitle = value.containerTitle;
+  if (typeof value.containerExpanded === 'boolean') schema.containerExpanded = value.containerExpanded;
+  if (typeof value.containerCollapsedPreviewRem === 'number' && Number.isFinite(value.containerCollapsedPreviewRem) && value.containerCollapsedPreviewRem > 0) {
+    schema.containerCollapsedPreviewRem = value.containerCollapsedPreviewRem;
+  }
   if (typeof value.componentListComponent === 'string') schema.componentListComponent = value.componentListComponent;
   if (typeof value.componentListItemLabel === 'string') schema.componentListItemLabel = value.componentListItemLabel;
+  if (Array.isArray(value.componentListViews)) schema.componentListViews = parseComponentListViews(value.componentListViews);
+  if (typeof value.componentListDefaultView === 'string') schema.componentListDefaultView = value.componentListDefaultView;
   if (typeof value.xrefTitle === 'string') schema.xrefTitle = value.xrefTitle;
   if (typeof value.xrefDetail === 'string') schema.xrefDetail = value.xrefDetail;
   if (typeof value.xrefTarget === 'string') schema.xrefTarget = value.xrefTarget;
@@ -759,6 +777,47 @@ function parseJsonTableRows(content: string, filename: string): BlockSchema['tab
 
 function parseStringList(value: unknown[]): string[] {
   return value.map((item) => String(item ?? ''));
+}
+
+function parseSortKeys(value: object): BlockSchema['sortKeys'] {
+  const sortKeys: BlockSchema['sortKeys'] = {};
+  for (const [key, raw] of Object.entries(value)) {
+    if (typeof raw === 'string') {
+      sortKeys[key] = raw;
+    } else if (typeof raw === 'number' && Number.isFinite(raw)) {
+      sortKeys[key] = raw;
+    }
+  }
+  return sortKeys;
+}
+
+function parseComponentListViews(value: unknown[]): BlockSchema['componentListViews'] {
+  return value
+    .map((raw) => {
+      if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+        return null;
+      }
+      const item = raw as JsonObject;
+      const id = typeof item.id === 'string' ? item.id.trim() : '';
+      const sortKey = typeof item.sortKey === 'string' ? item.sortKey : '';
+      if (!id || !sortKey) {
+        return null;
+      }
+      const direction = item.direction === 'desc' ? 'desc' : 'asc';
+      return {
+        id,
+        label: typeof item.label === 'string' && item.label.trim() ? item.label : id,
+        sortKey,
+        direction,
+        groupKey: typeof item.groupKey === 'string' ? item.groupKey : '',
+        groupDirection: item.groupDirection === 'asc' || item.groupDirection === 'desc' ? item.groupDirection : direction,
+        groupCollapsedPreviewRem:
+          typeof item.groupCollapsedPreviewRem === 'number' && Number.isFinite(item.groupCollapsedPreviewRem) && item.groupCollapsedPreviewRem > 0
+            ? item.groupCollapsedPreviewRem
+            : 3,
+      };
+    })
+    .filter((item): item is BlockSchema['componentListViews'][number] => item !== null);
 }
 
 function addFormScriptFiles(entries: Map<string, HvyVirtualEntry>, block: VisualBlock, blockPath: string): void {

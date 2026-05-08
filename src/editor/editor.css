@@ -1478,6 +1478,17 @@
   font: inherit;
 }
 
+.sort-key-editor {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.sort-key-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0.4rem;
+}
+
 .more-details-button {
   width: 100%;
   white-space: nowrap;

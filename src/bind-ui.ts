@@ -179,6 +179,21 @@ export function bindUi(app: HTMLElement): void {
         state.readerExpandableState[expandableStateKey] = true;
         getRefreshReaderPanels()();
       }
+      return;
+    }
+
+    const container = target.closest<HTMLElement>('[data-reader-action="toggle-container"]');
+    if (container) {
+      if (target.closest('a, input, select, textarea, [contenteditable="true"]')) {
+        return;
+      }
+      event.stopPropagation();
+      const key = container.dataset.containerKey;
+      if (!key) {
+        return;
+      }
+      state.readerContainerState[key] = container.getAttribute('aria-expanded') !== 'true';
+      getRefreshReaderPanels()();
     }
   };
 

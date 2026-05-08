@@ -11,6 +11,55 @@
   flex-wrap: wrap;
 }
 
+.reader-container {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.reader-container-title {
+  justify-self: start;
+  border: 0;
+  padding: 0.2rem 0;
+  background: transparent;
+  color: var(--hvy-text-alt);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.reader-container-title::before {
+  content: "-";
+  display: inline-block;
+  width: 1.2em;
+  color: var(--hvy-text-muted);
+}
+
+.reader-container.is-collapsed-preview .reader-container-title::before {
+  content: "+";
+}
+
 .reader-container-body {
   margin-top: 0.2rem;
+}
+
+.reader-container.is-collapsed-preview .reader-container-body {
+  position: relative;
+  max-height: var(--hvy-container-preview-rem, 3rem);
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.reader-container.is-collapsed-preview .reader-container-body::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0;
+  height: min(2.6rem, var(--hvy-container-preview-rem, 3rem));
+  pointer-events: none;
+  background: linear-gradient(to bottom, transparent, var(--hvy-surface));
+}
+
+.reader-container.is-virtual-group-container {
+  border: 1px solid var(--hvy-border);
+  border-radius: 8px;
+  padding: 0.55rem 0.7rem;
 }

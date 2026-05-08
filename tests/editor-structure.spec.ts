@@ -137,23 +137,58 @@ hvy_version: 0.1
   const activeBlock = page.locator('.editor-block', { has: page.locator('.expand-chooser-grid') }).first();
 
   await activeBlock.locator('[data-expandable-panel="stub"]').first().click();
-  await expect(activeBlock.locator('.expandable-header [data-field="block-expandable-always"]')).toHaveCount(0);
-  await activeBlock.locator('.expandable-part-stub .expandable-pane-meta').first().evaluate((node) => {
-    (node as HTMLDetailsElement).open = true;
-  });
+  await expect(activeBlock.locator('.expandable-part-body [data-field="block-expandable-always"]')).toHaveCount(0);
+  await expect(activeBlock.locator('.expandable-part-stub .expandable-header .expandable-pane-meta-button')).toBeVisible();
+  await activeBlock.locator('.expandable-part-stub .expandable-pane-meta-button').click();
   await activeBlock.locator('[data-field="block-expandable-always"]').uncheck();
   await activeBlock.locator('[data-field="block-expandable-stub-css"]').fill('padding: 0.25rem;');
 
   await activeBlock.locator('[data-expandable-panel="expanded"]').first().click();
-  await activeBlock.locator('.expandable-part-expanded .expandable-pane-meta').first().evaluate((node) => {
-    (node as HTMLDetailsElement).open = true;
-  });
+  await expect(activeBlock.locator('.expandable-part-expanded .expandable-header .expandable-pane-meta-button')).toBeVisible();
+  await activeBlock.locator('.expandable-part-expanded .expandable-pane-meta-button').click();
   await activeBlock.locator('[data-field="block-expandable-content-css"]').fill('padding: 0.5rem;');
 
   await page.getByRole('button', { name: 'Raw' }).click();
   await expect(page.locator('#rawEditor')).toContainText('"expandableAlwaysShowStub":false');
   await expect(page.locator('#rawEditor')).toContainText('<!--hvy:expandable:stub {"css":"padding: 0.25rem;"}-->');
   await expect(page.locator('#rawEditor')).toContainText('<!--hvy:expandable:content {"css":"padding: 0.5rem;"}-->');
+});
+
+test('expandable pane meta buttons only render in advanced mode', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ <!--hvy:expandable {"expandableExpanded":false}-->
+
+  <!--hvy:expandable:stub {}-->
+
+   <!--hvy:text {}-->
+    Summary
+
+  <!--hvy:expandable:content {}-->
+
+   <!--hvy:text {}-->
+    Expanded detail
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('.editor-block-passive', { has: page.locator('.expandable-reader') }).first().click();
+  let activeBlock = page.locator('.editor-block', { has: page.locator('.expand-chooser-grid') }).first();
+  await activeBlock.locator('[data-expandable-panel="stub"]').first().click();
+  await expect(activeBlock.locator('.expandable-pane-meta-button')).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Advanced' }).click();
+  activeBlock = page.locator('.editor-block', { has: page.locator('.expand-chooser-grid') }).first();
+  await expect(activeBlock.locator('.expandable-part-stub .expandable-header .expandable-pane-meta-button')).toBeVisible();
+  await expect(activeBlock.locator('.expandable-part-expanded .expandable-header .expandable-pane-meta-button')).toBeVisible();
 });
 
 test('expandable reader toggles from the styled outer block padding', async ({ page }) => {

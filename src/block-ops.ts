@@ -670,6 +670,7 @@ export function getComponentRenderHelpers(editorRenderer: {
     getSelectedAddComponent: (key: string, fallback: string) => state.addComponentBySection[key] ?? fallback,
     isExpandableEditorPanelOpen: (sectionKey, blockId, panel, fallback) =>
       state.expandableEditorPanels[`${sectionKey}:${blockId}`]?.[panel === 'stub' ? 'stubOpen' : 'expandedOpen'] ?? fallback,
+    isAdvancedEditorMode: () => state.showAdvancedEditor,
     isMobileAdjustmentMode: () => state.editorMode === 'mobile-adjustment',
   };
 }

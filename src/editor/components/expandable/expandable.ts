@@ -4,6 +4,7 @@ import { sanitizeInlineCss } from '../../../css-sanitizer';
 
 export const renderExpandableEditor: ComponentEditorRenderer = (sectionKey, block, helpers) => {
   const mobileAdjustment = helpers.isMobileAdjustmentMode();
+  const advanced = helpers.isAdvancedEditorMode();
   const stubAddKey = `expandable-stub:${sectionKey}:${block.id}`;
   const contentAddKey = `expandable-content:${sectionKey}:${block.id}`;
   const stub = block.schema.expandableStubBlocks;
@@ -23,7 +24,7 @@ export const renderExpandableEditor: ComponentEditorRenderer = (sectionKey, bloc
     .map((innerBlock) => helpers.renderPassiveEditorBlock(sectionKey, innerBlock))
     .join('');
   const disabledAttr = mobileAdjustment ? ' disabled' : '';
-  const stubMeta = renderExpandablePaneMeta(
+  const stubMeta = advanced ? renderExpandablePaneMeta(
     'stub',
     sectionKey,
     block.id,
@@ -45,8 +46,8 @@ export const renderExpandableEditor: ComponentEditorRenderer = (sectionKey, bloc
         ${disabledAttr}
       >${helpers.escapeHtml(block.schema.expandableStubCss)}</textarea>
     </label>`
-  );
-  const contentMeta = renderExpandablePaneMeta(
+  ) : '';
+  const contentMeta = advanced ? renderExpandablePaneMeta(
     'expanded',
     sectionKey,
     block.id,
@@ -62,7 +63,7 @@ export const renderExpandableEditor: ComponentEditorRenderer = (sectionKey, bloc
         ${disabledAttr}
       >${helpers.escapeHtml(block.schema.expandableContentCss)}</textarea>
     </label>`
-  );
+  ) : '';
   return `
     <div class="expand-chooser-grid">
       <section class="expandable-part expandable-part-stub${stubOpen ? ' is-open' : ' is-closed'}">
@@ -72,6 +73,7 @@ export const renderExpandableEditor: ComponentEditorRenderer = (sectionKey, bloc
           )}" data-block-id="${helpers.escapeAttr(block.id)}" data-expandable-panel="stub" aria-expanded="${stubOpen ? 'true' : 'false'}">
             <span class="expandable-label">Stub</span>
           </button>
+          ${stubMeta}
           <button type="button" class="expandable-summary expandable-summary-meta-button" data-action="toggle-expandable-editor-panel" data-section-key="${helpers.escapeAttr(
             sectionKey
           )}" data-block-id="${helpers.escapeAttr(block.id)}" data-expandable-panel="stub" aria-expanded="${stubOpen ? 'true' : 'false'}">
@@ -81,7 +83,6 @@ export const renderExpandableEditor: ComponentEditorRenderer = (sectionKey, bloc
         ${
           stubOpen
             ? `<div class="expandable-part-body">
-          ${stubMeta}
           <div class="container-inner-blocks">
             ${stubBlocks.map((innerBlock) => helpers.renderEditorBlock(sectionKey, innerBlock, false)).join('')}
           </div>
@@ -109,6 +110,7 @@ export const renderExpandableEditor: ComponentEditorRenderer = (sectionKey, bloc
           )}" data-block-id="${helpers.escapeAttr(block.id)}" data-expandable-panel="expanded" aria-expanded="${expandedOpen ? 'true' : 'false'}">
             <span class="expandable-label">Expanded</span>
           </button>
+          ${contentMeta}
           <button type="button" class="expandable-summary expandable-summary-meta-button" data-action="toggle-expandable-editor-panel" data-section-key="${helpers.escapeAttr(
             sectionKey
           )}" data-block-id="${helpers.escapeAttr(block.id)}" data-expandable-panel="expanded" aria-expanded="${expandedOpen ? 'true' : 'false'}">
@@ -118,7 +120,6 @@ export const renderExpandableEditor: ComponentEditorRenderer = (sectionKey, bloc
         ${
           expandedOpen
             ? `<div class="expandable-part-body">
-          ${contentMeta}
           <div class="container-inner-blocks">
             ${contentBlocks.map((innerBlock) => helpers.renderEditorBlock(sectionKey, innerBlock, false)).join('')}
           </div>
@@ -151,11 +152,9 @@ function renderExpandablePaneMeta(
   body: string
 ): string {
   return `<details class="expandable-pane-meta">
-    <summary>
-      <span>${pane === 'stub' ? 'Stub' : 'Expanded'} meta</span>
-      <span class="expandable-pane-meta-id">${helpers.escapeHtml(blockId)}</span>
-    </summary>
+    <summary class="ghost expandable-pane-meta-button" aria-label="${pane === 'stub' ? 'Stub' : 'Expanded'} meta">Meta</summary>
     <div class="expandable-pane-meta-body" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(blockId)}">
+      <div class="expandable-pane-meta-title">${pane === 'stub' ? 'Stub' : 'Expanded'} meta</div>
       ${body}
     </div>
   </details>`;

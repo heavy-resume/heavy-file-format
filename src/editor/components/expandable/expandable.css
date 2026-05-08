@@ -38,7 +38,8 @@
 }
 
 .expandable-part:has(.component-picker:focus-within),
-.expandable-part:has(.component-picker[data-open="true"]) {
+.expandable-part:has(.component-picker[data-open="true"]),
+.expandable-part:has(.expandable-pane-meta[open]) {
   overflow: visible;
 }
 
@@ -78,6 +79,35 @@
 
 .expandable-summary-label {
   flex: 0 0 auto;
+}
+
+.expandable-pane-meta {
+  position: relative;
+  flex: 0 0 auto;
+  align-self: center;
+}
+
+.expandable-pane-meta-button {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.75rem;
+  padding: 0.22rem 0.48rem;
+  border: 1px solid var(--hvy-border-alt);
+  border-radius: 999px;
+  color: var(--hvy-text-alt);
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+  list-style: none;
+}
+
+.expandable-pane-meta-button::-webkit-details-marker {
+  display: none;
+}
+
+.expandable-pane-meta[open] .expandable-pane-meta-button {
+  border-color: var(--hvy-focus);
+  box-shadow: 0 0 0 2px var(--hvy-focus-ring);
 }
 
 .expandable-summary-meta-button {
@@ -133,45 +163,31 @@
   border-color: var(--hvy-border-input);
 }
 
-.expandable-pane-meta {
-  min-width: 0;
+.expandable-pane-meta-body {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  left: 0;
+  z-index: 35;
+  display: grid;
+  gap: 0.5rem;
+  width: min(24rem, calc(100vw - 2rem));
+  min-width: min(18rem, calc(100vw - 2rem));
   border: 1px solid var(--hvy-border);
   border-radius: 8px;
   background: color-mix(in srgb, var(--hvy-surface) 86%, var(--hvy-surface-alt) 14%);
-}
-
-.expandable-pane-meta summary {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-  min-width: 0;
-  padding: 0.4rem 0.55rem;
-  cursor: pointer;
-  color: var(--hvy-text-alt);
-  font-size: 0.78rem;
-  font-weight: 700;
-}
-
-.expandable-pane-meta-id {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--hvy-text-muted);
-  font-size: 0.72rem;
-  font-weight: 500;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.expandable-pane-meta-body {
-  display: grid;
-  gap: 0.5rem;
-  padding: 0 0.55rem 0.55rem;
+  box-shadow: 0 12px 28px var(--hvy-shadow);
+  padding: 0.55rem;
 }
 
 .expandable-pane-meta-body .expandable-inline-toggle {
   width: fit-content;
   max-width: 100%;
+}
+
+.expandable-pane-meta-title {
+  color: var(--hvy-text-alt);
+  font-size: 0.78rem;
+  font-weight: 700;
 }
 
 .expandable-pane-css-field {

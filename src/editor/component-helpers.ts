@@ -35,6 +35,7 @@ export interface ComponentRenderHelpers {
   ensureComponentListBlocks: (block: VisualBlock) => void;
   getSelectedAddComponent: (key: string, fallback: string) => string;
   isExpandableEditorPanelOpen: (sectionKey: string, blockId: string, panel: 'stub' | 'expanded', fallback: boolean) => boolean;
+  isAdvancedEditorMode: () => boolean;
   isMobileAdjustmentMode: () => boolean;
 }
 

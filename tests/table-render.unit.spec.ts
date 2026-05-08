@@ -75,6 +75,7 @@ function createHelpers(): ComponentRenderHelpers {
     ensureComponentListBlocks: () => {},
     getSelectedAddComponent: (_key, fallback) => fallback,
     isExpandableEditorPanelOpen: () => false,
+    isAdvancedEditorMode: () => false,
     isMobileAdjustmentMode: () => false,
   };
 }

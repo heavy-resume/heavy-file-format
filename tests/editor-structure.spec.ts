@@ -451,7 +451,8 @@ test('editor pullout help balloon lists loaded sidebar sections', async ({ page 
   const balloon = page.locator('.editor-sidebar-help-balloon');
   await expect(balloon).toBeVisible();
   await expect(balloon.locator('li')).toContainText(['Skills', 'Tools & Technologies']);
-  await expect(balloon).toHaveCSS('overflow', 'auto');
+  await expect(balloon).toHaveCSS('overflow', 'visible');
+  await expect(balloon.locator('ul')).toHaveCSS('overflow', 'auto');
 
   await balloon.click();
   await expect(balloon).toHaveClass(/is-closing/);
@@ -476,7 +477,8 @@ test('viewer pullout help balloon lists loaded sidebar sections', async ({ page 
   const balloon = page.locator('.viewer-sidebar-help-balloon');
   await expect(balloon).toBeVisible();
   await expect(balloon.locator('li')).toContainText(['Skills', 'Tools & Technologies']);
-  await expect(balloon).toHaveCSS('overflow', 'auto');
+  await expect(balloon).toHaveCSS('overflow', 'visible');
+  await expect(balloon.locator('ul')).toHaveCSS('overflow', 'auto');
 
   await balloon.click();
   await expect(balloon).toHaveClass(/is-closing/);

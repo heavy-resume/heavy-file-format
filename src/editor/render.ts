@@ -264,14 +264,6 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           </div>
         </div>
 
-        ${state.showAdvancedEditor
-        ? `<div class="editor-row">
-                <label class="checkbox-label"><input type="checkbox" data-section-key="${deps.escapeAttr(section.key)}" data-field="section-highlight" ${section.highlight ? 'checked' : ''
-        } /> Highlight</label>
-              </div>`
-        : ''
-      }
-
         <div class="editor-blocks">
           ${renderEditorSectionItems(section, rootSections)}
           ${state.mobileAdjustmentMode || section.lock

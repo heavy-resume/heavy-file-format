@@ -182,6 +182,30 @@ hvy_version: 0.1
   await expect(page.locator('#rawEditor')).not.toContainText('"fillIn"');
 });
 
+test('section highlight control lives in section meta next to contained', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Advanced' }).click();
+
+  await expect(page.locator('#editorTree [data-field="section-highlight"]')).toHaveCount(0);
+  await page.locator('[data-action="focus-modal"]').first().click();
+
+  const metaModal = page.locator('.section-meta-modal');
+  await expect(metaModal.getByLabel('Contained')).toBeVisible();
+  await expect(metaModal.getByLabel('Highlight')).toBeVisible();
+
+  const containedBox = await metaModal.getByLabel('Contained').boundingBox();
+  const highlightBox = await metaModal.getByLabel('Highlight').boundingBox();
+  expect(containedBox).not.toBeNull();
+  expect(highlightBox).not.toBeNull();
+  expect(Math.abs((containedBox?.y ?? 0) - (highlightBox?.y ?? 0))).toBeLessThan(12);
+
+  await metaModal.getByLabel('Highlight').check();
+  await metaModal.getByRole('button', { name: 'Close' }).click();
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await expect(page.locator('#rawEditor')).toContainText('"highlight":true');
+});
+
 test('unfilled text fill-in renders as an editor box and blank viewer text', async ({ page }) => {
   await page.goto('/');
 

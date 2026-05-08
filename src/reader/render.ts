@@ -713,7 +713,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
                 data-field="section-description"
               >${deps.escapeHtml(section.description)}</textarea>
             </label>
-            <div style="display: flex;">
+            <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
               <label class="checkbox-label">
                 <input
                   type="checkbox"
@@ -722,6 +722,15 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
                   ${section.contained ? 'checked' : ''}
                 />
                 Contained
+              </label>
+              <label class="checkbox-label">
+                <input
+                  type="checkbox"
+                  data-section-key="${deps.escapeAttr(section.key)}"
+                  data-field="section-highlight"
+                  ${section.highlight ? 'checked' : ''}
+                />
+                Highlight
               </label>
             </div>
           </div>

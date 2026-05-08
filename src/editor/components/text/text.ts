@@ -44,7 +44,7 @@ export const renderTextEditor: ComponentEditorRenderer = (sectionKey, block, hel
     ? ''
     : `<button
         type="button"
-        class="secondary text-fill-in-selection-button"
+        class="text-fill-in-selection-button"
         data-rich-action="fill-in"
         data-section-key="${helpers.escapeAttr(sectionKey)}"
         data-block-id="${helpers.escapeAttr(block.id)}"

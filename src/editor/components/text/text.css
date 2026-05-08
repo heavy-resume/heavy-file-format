@@ -25,6 +25,8 @@
   min-height: 1.85rem;
   padding: 0.22rem 0.55rem;
   border-radius: 999px;
+  background: var(--hvy-surface-alt);
+  color: var(--hvy-text);
   font-size: 0.76rem;
   line-height: 1;
   box-shadow: 0 6px 14px var(--hvy-shadow);

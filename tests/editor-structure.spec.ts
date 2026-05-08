@@ -1119,6 +1119,8 @@ test('resume reader view buttons apply filters without changing edit mode', asyn
 
   await expect(page.locator('#readerDocument')).toBeVisible();
   await expect(page.locator('#tool-typescript')).toHaveClass(/is-highlighted/);
+  await expect(page.locator('#top-skills-tools-technologies')).not.toContainText('LLM Prompt Engineering');
+  await expect(page.locator('#top-skills-tools-technologies')).toContainText('TypeScript');
   await expect(page.locator('#project-autonomous-agent-hackathon')).toHaveClass(/is-reader-view-dimmed/);
   await expect(page.locator('#project-autonomous-agent-hackathon')).toHaveAttribute('aria-expanded', 'false');
   await expect(page.locator('#locations')).toHaveCount(0);
@@ -1133,6 +1135,9 @@ test('resume reader view buttons apply filters without changing edit mode', asyn
   await page.getByRole('button', { name: 'LLM Engineer View' }).click();
   await expect(page.locator('#tool-openai-api')).toHaveClass(/is-highlighted/);
   await expect(page.locator('#tool-typescript')).toHaveClass(/is-reader-view-dimmed/);
+  await expect(page.locator('#top-skills-tools-technologies')).not.toContainText('TypeScript');
+  await expect(page.locator('#top-skills-tools-technologies')).not.toContainText('Developer Containers');
+  await expect(page.locator('#top-skills-tools-technologies')).toContainText('LLM Prompt Engineering');
 
   await page.getByRole('button', { name: 'Editor' }).click();
   await expect(page.locator('#editorTree .is-reader-view-dimmed')).toHaveCount(0);

@@ -32,6 +32,10 @@
   font-size: 0.85rem;
 }
 
+.component-list-view-picker > span {
+  padding-left: 0.5rem;
+}
+
 .component-list-view-picker select,
 .component-list-group-picker select {
   min-width: 9rem;

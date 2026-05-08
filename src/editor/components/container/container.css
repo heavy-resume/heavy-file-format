@@ -55,7 +55,7 @@
   inset: auto 0 0;
   height: min(2.6rem, var(--hvy-container-preview-rem, 3rem));
   pointer-events: none;
-  background: linear-gradient(to bottom, transparent, var(--hvy-surface));
+  background: linear-gradient(to bottom, transparent, color-mix(in srgb, var(--hvy-surface) 72%, transparent));
 }
 
 .reader-container.is-virtual-group-container {

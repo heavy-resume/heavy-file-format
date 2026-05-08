@@ -278,7 +278,7 @@ hvy_version: 0.1
   await expect(readerControls).toContainText('Group');
   await expect(readerControls.locator('[data-field="component-list-reader-view"]')).toHaveValue('job');
   await expect(readerControls.locator('[data-field="component-list-reader-group"]')).toHaveValue('Category');
-  await expect(readerControls.locator('[data-reader-action="toggle-component-list-reverse"]')).toHaveText('↓');
+  await expect(readerControls.locator('[data-reader-action="toggle-component-list-reverse"]')).toHaveAttribute('aria-label', 'Sort descending');
 
   const groups = page.locator('.reader-container.is-virtual-group-container');
   await expect(groups).toHaveCount(2);
@@ -287,7 +287,7 @@ hvy_version: 0.1
   await expect(groups.nth(0).locator('.reader-container-title')).toHaveAttribute('aria-expanded', 'false');
 
   await readerControls.locator('[data-reader-action="toggle-component-list-reverse"]').click();
-  await expect(readerControls.locator('[data-reader-action="toggle-component-list-reverse"]')).toHaveText('↑');
+  await expect(readerControls.locator('[data-reader-action="toggle-component-list-reverse"]')).toHaveAttribute('aria-label', 'Sort ascending');
   await expect(groups.nth(0).locator('.reader-container-title')).toHaveText('Database');
   await expect(groups.nth(1).locator('.reader-container-title')).toHaveText('Language');
 

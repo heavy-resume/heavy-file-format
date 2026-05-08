@@ -2,7 +2,7 @@ import './component-list.css';
 import type { ComponentEditorRenderer, ComponentReaderRenderer } from '../../component-helpers';
 import type { ComponentListView, VisualBlock } from '../../types';
 import { getComponentListAddLabel } from './component-list-labels';
-import { plusIcon } from '../../../icons';
+import { arrowDownIcon, arrowUpIcon, plusIcon } from '../../../icons';
 import { renderVirtualContainerReader } from '../container/container';
 import { getComponentListActiveView, parseComponentListRuntimeView, resolveComponentListItems } from './component-list-view';
 
@@ -47,7 +47,7 @@ export const renderComponentListReader: ComponentReaderRenderer = (section, bloc
   const selectedViewId = runtimeView.viewId || activeView?.id || '';
   const selectedGroupKey = typeof runtimeView.groupKey === 'string' ? runtimeView.groupKey : activeView?.groupKey ?? '';
   const groupKeys = getAvailableGroupKeys(block);
-  const directionArrow = activeView?.direction === 'asc' ? '↑' : '↓';
+  const directionIcon = activeView?.direction === 'asc' ? arrowUpIcon() : arrowDownIcon();
   const reverseLabel = activeView?.direction === 'asc' ? 'Sort ascending' : 'Sort descending';
   const controls =
     block.schema.componentListViews.length > 0
@@ -77,7 +77,7 @@ export const renderComponentListReader: ComponentReaderRenderer = (section, bloc
             aria-pressed="${runtimeView.reversed ? 'true' : 'false'}"
             aria-label="${helpers.escapeAttr(reverseLabel)}"
             title="Reverse order"
-          ><span>${directionArrow}</span></button>
+          >${directionIcon}</button>
         </div>`
       : '';
   const resolved = resolveComponentListItems(block, activeViewId);

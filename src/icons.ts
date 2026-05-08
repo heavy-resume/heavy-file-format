@@ -9,3 +9,15 @@ export function closeIcon(): string {
     <path d="M6 6l12 12M18 6L6 18" />
   </svg>`;
 }
+
+export function arrowUpIcon(): string {
+  return `<svg class="hvy-ui-icon hvy-ui-icon-arrow-up" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+    <path d="M12 19V5M5 12l7-7 7 7" />
+  </svg>`;
+}
+
+export function arrowDownIcon(): string {
+  return `<svg class="hvy-ui-icon hvy-ui-icon-arrow-down" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+    <path d="M12 5v14M19 12l-7 7-7-7" />
+  </svg>`;
+}

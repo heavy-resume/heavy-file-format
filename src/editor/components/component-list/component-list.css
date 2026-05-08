@@ -65,8 +65,9 @@
   padding: 0;
 }
 
-.component-list-reverse-button > span {
-  transform: translateY(-0.06rem) translateX(0.02rem);
+.component-list-reverse-button .hvy-ui-icon {
+  width: 1rem;
+  height: 1rem;
 }
 
 .component-list-reverse-button:hover,

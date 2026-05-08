@@ -233,7 +233,7 @@ hvy_version: 0.1
   await expect(page.locator('#editorTree')).not.toContainText('Expanded detail');
 });
 
-test('component-list reader views sort items into collapsed virtual groups', async ({ page }) => {
+test('component-list display defaults sort items into collapsed virtual groups', async ({ page }) => {
   await page.goto('/');
 
   await page.getByRole('button', { name: 'Raw' }).click();
@@ -244,7 +244,7 @@ hvy_version: 0.1
 <!--hvy: {"id":"skills"}-->
 #! Skills
 
-<!--hvy:component-list {"id":"skill-list","componentListComponent":"text","componentListDefaultView":"job","componentListViews":[{"id":"job","label":"Job Match","sortKey":"Job Match","direction":"desc","groupKey":"Category","groupCollapsedPreviewRem":1}]}-->
+<!--hvy:component-list {"id":"skill-list","componentListComponent":"text","componentListDefaultSortKey":"Job Match","componentListDefaultSortDirection":"desc","componentListDefaultGroupKey":"Category","componentListGroupCollapsedPreviewRem":1}-->
 
  <!--hvy:component-list:0 {}-->
 
@@ -267,16 +267,16 @@ hvy_version: 0.1
   await page.locator('.editor-block-passive', { has: page.locator('.reader-component-list') }).first().click();
   const activeList = page.locator('.component-list-view-editor').first();
   await expect(activeList).toBeVisible();
-  await expect(activeList.locator('[data-field="component-list-default-view-select"]')).toHaveValue('job');
-  await expect(activeList.locator('[data-field="component-list-view-sort-key"]').first()).toHaveValue('Job Match');
-  await expect(activeList.locator('[data-field="component-list-view-group-key"]').first()).toHaveValue('Category');
+  await expect(activeList.locator('[data-field="component-list-default-sort-key"]')).toHaveValue('Job Match');
+  await expect(activeList.locator('[data-field="component-list-default-sort-direction"]')).toHaveValue('desc');
+  await expect(activeList.locator('[data-field="component-list-default-group-key"]')).toHaveValue('Category');
 
   await page.getByRole('button', { name: 'Viewer' }).click();
 
   const readerControls = page.locator('.component-list-reader-controls').first();
   await expect(readerControls).toContainText('Sort');
   await expect(readerControls).toContainText('Group');
-  await expect(readerControls.locator('[data-field="component-list-reader-view"]')).toHaveValue('job');
+  await expect(readerControls.locator('[data-field="component-list-reader-view"]')).toHaveValue('Job Match');
   await expect(readerControls.locator('[data-field="component-list-reader-group"]')).toHaveValue('Category');
   await expect(readerControls.locator('[data-reader-action="toggle-component-list-reverse"]')).toHaveAttribute('aria-label', 'Sort descending');
 
@@ -315,7 +315,7 @@ hvy_version: 0.1
 <!--hvy: {"id":"lists"}-->
 #! Lists
 
-<!--hvy:component-list {"id":"sorted-list","componentListComponent":"text","componentListDefaultView":"strength","componentListViews":[{"id":"strength","label":"Strength","sortKey":"Strength","direction":"desc"}]}-->
+<!--hvy:component-list {"id":"sorted-list","componentListComponent":"text","componentListDefaultSortKey":"Strength","componentListDefaultSortDirection":"desc"}-->
 
  <!--hvy:component-list:0 {}-->
 

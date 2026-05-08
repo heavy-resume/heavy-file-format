@@ -9,16 +9,6 @@ export interface TableRow {
 
 export type SortKeyValue = number | string;
 
-export interface ComponentListView {
-  id: string;
-  label: string;
-  sortKey: string;
-  direction: 'asc' | 'desc';
-  groupKey: string;
-  groupDirection: 'asc' | 'desc';
-  groupCollapsedPreviewRem: number;
-}
-
 export interface GridItem {
   id: string;
   block: VisualBlock;
@@ -44,8 +34,10 @@ export interface BlockSchema {
   componentListComponent: string;
   componentListItemLabel: string;
   componentListBlocks: VisualBlock[];
-  componentListViews: ComponentListView[];
-  componentListDefaultView: string;
+  componentListDefaultSortKey: string;
+  componentListDefaultSortDirection: 'asc' | 'desc';
+  componentListDefaultGroupKey: string;
+  componentListGroupCollapsedPreviewRem: number;
   gridColumns: number;
   gridItems: GridItem[];
   sortKeys: Record<string, SortKeyValue>;

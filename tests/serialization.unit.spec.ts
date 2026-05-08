@@ -77,7 +77,7 @@ hvy_version: 0.1
   expect(output).not.toMatch(/<!--hvy:component-list:\d+\s+\{[^\n>]*"component"/);
 });
 
-test('round-trips component-list views, sort keys, and container collapse fields', () => {
+test('round-trips component-list display defaults, sort keys, and container collapse fields', () => {
   const input = `---
 hvy_version: 0.1
 ---
@@ -85,7 +85,7 @@ hvy_version: 0.1
 <!--hvy: {"id":"skills"}-->
 #! Skills
 
-<!--hvy:component-list {"componentListComponent":"text","componentListDefaultView":"job","componentListViews":[{"id":"job","label":"Job Match","sortKey":"Job Match","direction":"desc","groupKey":"Category","groupDirection":"desc","groupCollapsedPreviewRem":4}]}-->
+<!--hvy:component-list {"componentListComponent":"text","componentListDefaultSortKey":"Job Match","componentListDefaultSortDirection":"desc","componentListDefaultGroupKey":"Category","componentListGroupCollapsedPreviewRem":4}-->
 
  <!--hvy:component-list:0 {}>
 
@@ -103,8 +103,10 @@ hvy_version: 0.1
   const document = deserializeDocument(input, '.hvy');
   const expectedResult = serializeWithState(document);
 
-  expect(expectedResult).toContain('"componentListDefaultView":"job"');
-  expect(expectedResult).toContain('"componentListViews":[{"id":"job","label":"Job Match","sortKey":"Job Match","direction":"desc","groupKey":"Category","groupDirection":"desc","groupCollapsedPreviewRem":4}]');
+  expect(expectedResult).toContain('"componentListDefaultSortKey":"Job Match"');
+  expect(expectedResult).toContain('"componentListDefaultSortDirection":"desc"');
+  expect(expectedResult).toContain('"componentListDefaultGroupKey":"Category"');
+  expect(expectedResult).toContain('"componentListGroupCollapsedPreviewRem":4');
   expect(expectedResult).toContain('"sortKeys":{"Job Match":92,"Category":"Database"}');
   expect(expectedResult).toContain('"containerTitle":"Details"');
   expect(expectedResult).toContain('"containerExpanded":false');

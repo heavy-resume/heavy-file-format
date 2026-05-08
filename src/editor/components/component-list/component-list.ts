@@ -1,15 +1,19 @@
 import './component-list.css';
 import type { ComponentEditorRenderer, ComponentReaderRenderer } from '../../component-helpers';
-import type { ComponentListView, VisualBlock } from '../../types';
+import type { VisualBlock } from '../../types';
 import { getComponentListAddLabel } from './component-list-labels';
 import { arrowDownIcon, arrowUpIcon, plusIcon } from '../../../icons';
 import { renderVirtualContainerReader } from '../container/container';
-import { getComponentListActiveView, parseComponentListRuntimeView, resolveComponentListItems } from './component-list-view';
+import { getComponentListDisplayState, parseComponentListRuntimeView, resolveComponentListItems } from './component-list-view';
 
 export const renderComponentListEditor: ComponentEditorRenderer = (sectionKey, block, helpers) => {
   helpers.ensureComponentListBlocks(block);
   const hasItems = (block.schema.componentListBlocks ?? []).length > 0;
   const listComponent = block.schema.componentListComponent || 'text';
+  const editorResolved = resolveComponentListItems(block);
+  const editorBlocks = editorResolved.kind === 'items'
+    ? editorResolved.blocks
+    : [...editorResolved.groups.flatMap((group) => group.blocks), ...editorResolved.missingBlocks];
   const addControl = block.schema.lock
     ? ''
     : `<article class="ghost-section-card add-ghost component-list-add-ghost" data-action="add-component-list-item" data-section-key="${helpers.escapeAttr(
@@ -31,9 +35,9 @@ export const renderComponentListEditor: ComponentEditorRenderer = (sectionKey, b
           </select>
         </label>`
     }
-    ${renderComponentListViewEditor(sectionKey, block, helpers)}
+    ${renderComponentListDefaultDisplayEditor(sectionKey, block, helpers)}
     <div class="container-inner-blocks">
-      ${(block.schema.componentListBlocks ?? []).map((innerBlock) => helpers.renderEditorBlock(sectionKey, innerBlock, block.schema.lock)).join('')}
+      ${editorBlocks.map((innerBlock) => helpers.renderEditorBlock(sectionKey, innerBlock, block.schema.lock)).join('')}
     </div>
     ${addControl}
   `;
@@ -43,29 +47,29 @@ export const renderComponentListReader: ComponentReaderRenderer = (section, bloc
   helpers.ensureComponentListBlocks(block);
   const activeViewId = helpers.getComponentListReaderViewId(section.key, block.id);
   const runtimeView = parseComponentListRuntimeView(activeViewId);
-  const activeView = getComponentListActiveView(block, activeViewId);
-  const selectedViewId = runtimeView.viewId || activeView?.id || '';
-  const selectedGroupKey = typeof runtimeView.groupKey === 'string' ? runtimeView.groupKey : activeView?.groupKey ?? '';
+  const activeDisplay = getComponentListDisplayState(block, activeViewId);
+  const selectedSortKey = runtimeView.sortKey || activeDisplay.sortKey;
+  const selectedGroupKey = typeof runtimeView.groupKey === 'string' ? runtimeView.groupKey : activeDisplay.groupKey;
+  const sortKeys = getAvailableSortKeys(block);
   const groupKeys = getAvailableGroupKeys(block);
-  const hasSortOptions = block.schema.componentListViews.length > 0;
+  const hasSortOptions = sortKeys.length > 0;
   const hasGroupOptions = groupKeys.length > 0;
-  const directionIcon = activeView?.direction === 'asc' ? arrowUpIcon() : arrowDownIcon();
-  const reverseLabel = activeView?.direction === 'asc' ? 'Sort ascending' : 'Sort descending';
+  const directionIcon = activeDisplay.direction === 'asc' ? arrowUpIcon() : arrowDownIcon();
+  const reverseLabel = activeDisplay.direction === 'asc' ? 'Sort ascending' : 'Sort descending';
   const sortControl = hasSortOptions
     ? `<label class="component-list-view-picker">
             <span>Sort</span>
             <select data-field="component-list-reader-view" data-section-key="${helpers.escapeAttr(section.key)}" data-block-id="${helpers.escapeAttr(block.id)}">
-            ${block.schema.componentListViews
-              .map((view) => `<option value="${helpers.escapeAttr(view.id)}"${view.id === selectedViewId ? ' selected' : ''}>${helpers.escapeHtml(view.label)}</option>`)
-              .join('')}
+              <option value=""${selectedSortKey ? '' : ' selected'}>None</option>
+              ${sortKeys.map((key) => `<option value="${helpers.escapeAttr(key)}"${key === selectedSortKey ? ' selected' : ''}>${helpers.escapeHtml(key)}</option>`).join('')}
             </select>
           </label>`
     : '';
   const groupControl = hasGroupOptions
     ? `<label class="component-list-group-picker">
             <span>Group</span>
-            <select data-field="component-list-reader-group" data-section-key="${helpers.escapeAttr(section.key)}" data-block-id="${helpers.escapeAttr(block.id)}" data-view-id="${helpers.escapeAttr(selectedViewId)}">
-              <option value=""${selectedGroupKey ? '' : ' selected'}>No grouping</option>
+            <select data-field="component-list-reader-group" data-section-key="${helpers.escapeAttr(section.key)}" data-block-id="${helpers.escapeAttr(block.id)}" data-view-id="${helpers.escapeAttr(selectedSortKey)}">
+              <option value=""${selectedGroupKey ? '' : ' selected'}>None</option>
               ${groupKeys.map((key) => `<option value="${helpers.escapeAttr(key)}"${key === selectedGroupKey ? ' selected' : ''}>${helpers.escapeHtml(key)}</option>`).join('')}
             </select>
           </label>`
@@ -77,7 +81,7 @@ export const renderComponentListReader: ComponentReaderRenderer = (section, bloc
             data-reader-action="toggle-component-list-reverse"
             data-section-key="${helpers.escapeAttr(section.key)}"
             data-block-id="${helpers.escapeAttr(block.id)}"
-            data-view-id="${helpers.escapeAttr(selectedViewId)}"
+            data-view-id="${helpers.escapeAttr(selectedSortKey)}"
             aria-pressed="${runtimeView.reversed ? 'true' : 'false'}"
             aria-label="${helpers.escapeAttr(reverseLabel)}"
             title="Reverse order"
@@ -100,11 +104,11 @@ export const renderComponentListReader: ComponentReaderRenderer = (section, bloc
               section,
               {
                 listBlockId: block.id,
-                viewId: resolved.view.id,
+                viewId: resolved.display.sortKey,
                 groupKey: group.key,
                 title: group.label,
                 blocks: group.blocks,
-                collapsedPreviewRem: resolved.view.groupCollapsedPreviewRem,
+                collapsedPreviewRem: resolved.display.groupCollapsedPreviewRem,
               },
               helpers
             )
@@ -116,93 +120,46 @@ export const renderComponentListReader: ComponentReaderRenderer = (section, bloc
   return `${controls}<div class="${helpers.escapeAttr(listClass)}">${body}</div>`;
 };
 
-function renderComponentListViewEditor(sectionKey: string, block: VisualBlock, helpers: Parameters<ComponentEditorRenderer>[2]): string {
-  const views = block.schema.componentListViews;
+function renderComponentListDefaultDisplayEditor(sectionKey: string, block: VisualBlock, helpers: Parameters<ComponentEditorRenderer>[2]): string {
   const sortKeys = getAvailableSortKeys(block);
-  const viewRows = [...views, createBlankView()];
-  const defaultOptions = [
-    `<option value=""${block.schema.componentListDefaultView ? '' : ' selected'}>Canonical order</option>`,
-    ...views.map((view) => `<option value="${helpers.escapeAttr(view.id)}"${view.id === block.schema.componentListDefaultView ? ' selected' : ''}>${helpers.escapeHtml(view.label || view.id)}</option>`),
-  ].join('');
-  return `<section class="component-list-view-editor" aria-label="List views">
+  const groupKeys = getAvailableGroupKeys(block);
+  return `<section class="component-list-view-editor" aria-label="Default list display">
     <div class="component-list-view-editor-head">
-      <strong>List Views</strong>
-      <label>
-        <span>Default</span>
-        <select data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}" data-field="component-list-default-view-select">
-          ${defaultOptions}
-        </select>
-      </label>
+      <strong>Default Display</strong>
     </div>
     <div class="component-list-view-rows">
-      ${viewRows.map((view, index) => renderViewRow(sectionKey, block, view, index, sortKeys, helpers)).join('')}
+      <label class="component-list-view-row-label">
+        <span>Sort</span>
+        ${renderKeySelect('component-list-default-sort-key', sectionKey, block.id, block.schema.componentListDefaultSortKey, sortKeys, helpers)}
+      </label>
+      <label class="component-list-view-row-label">
+        <span>Order</span>
+        <select data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}" data-field="component-list-default-sort-direction">
+          <option value="asc"${block.schema.componentListDefaultSortDirection === 'asc' ? ' selected' : ''}>A-Z / Low to high</option>
+          <option value="desc"${block.schema.componentListDefaultSortDirection === 'desc' ? ' selected' : ''}>Z-A / High to low</option>
+        </select>
+      </label>
+      <label class="component-list-view-row-label">
+        <span>Group</span>
+        ${renderKeySelect('component-list-default-group-key', sectionKey, block.id, block.schema.componentListDefaultGroupKey, groupKeys, helpers)}
+      </label>
     </div>
   </section>`;
 }
 
-function renderViewRow(
-  sectionKey: string,
-  block: VisualBlock,
-  view: ComponentListView,
-  index: number,
-  sortKeys: string[],
-  helpers: Parameters<ComponentEditorRenderer>[2]
-): string {
-  const isBlank = index >= block.schema.componentListViews.length;
-  const id = isBlank ? '' : view.id;
-  return `<div class="component-list-view-row">
-    <input
-      data-section-key="${helpers.escapeAttr(sectionKey)}"
-      data-block-id="${helpers.escapeAttr(block.id)}"
-      data-field="component-list-view-id"
-      data-view-index="${index}"
-      placeholder="view id"
-      value="${helpers.escapeAttr(id)}"
-    />
-    <input
-      data-section-key="${helpers.escapeAttr(sectionKey)}"
-      data-block-id="${helpers.escapeAttr(block.id)}"
-      data-field="component-list-view-label"
-      data-view-index="${index}"
-      placeholder="Label"
-      value="${helpers.escapeAttr(isBlank ? '' : view.label)}"
-    />
-    ${renderSortKeySelect('component-list-view-sort-key', sectionKey, block.id, index, view.sortKey, sortKeys, 'Sort by', helpers)}
-    <select data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}" data-field="component-list-view-direction" data-view-index="${index}" aria-label="Sort direction">
-      <option value="desc"${view.direction === 'desc' ? ' selected' : ''}>High to low</option>
-      <option value="asc"${view.direction === 'asc' ? ' selected' : ''}>Low to high</option>
-    </select>
-    ${renderSortKeySelect('component-list-view-group-key', sectionKey, block.id, index, view.groupKey, sortKeys, 'No group', helpers, true)}
-    <input
-      type="number"
-      min="1"
-      step="0.25"
-      data-section-key="${helpers.escapeAttr(sectionKey)}"
-      data-block-id="${helpers.escapeAttr(block.id)}"
-      data-field="component-list-view-preview-rem"
-      data-view-index="${index}"
-      aria-label="Group preview height"
-      value="${helpers.escapeAttr(String(view.groupCollapsedPreviewRem || 3))}"
-    />
-  </div>`;
-}
-
-function renderSortKeySelect(
+function renderKeySelect(
   field: string,
   sectionKey: string,
   blockId: string,
-  index: number,
   selected: string,
   sortKeys: string[],
-  emptyLabel: string,
-  helpers: Parameters<ComponentEditorRenderer>[2],
-  includeEmpty = false
+  helpers: Parameters<ComponentEditorRenderer>[2]
 ): string {
   const options = [
-    ...(includeEmpty ? [`<option value=""${selected ? '' : ' selected'}>${helpers.escapeHtml(emptyLabel)}</option>`] : []),
+    `<option value=""${selected ? '' : ' selected'}>None</option>`,
     ...sortKeys.map((key) => `<option value="${helpers.escapeAttr(key)}"${key === selected ? ' selected' : ''}>${helpers.escapeHtml(key)}</option>`),
   ].join('');
-  return `<select data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(blockId)}" data-field="${helpers.escapeAttr(field)}" data-view-index="${index}" aria-label="${helpers.escapeAttr(emptyLabel)}">${options}</select>`;
+  return `<select data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(blockId)}" data-field="${helpers.escapeAttr(field)}">${options}</select>`;
 }
 
 function getAvailableSortKeys(block: VisualBlock): string[] {
@@ -211,10 +168,6 @@ function getAvailableSortKeys(block: VisualBlock): string[] {
     for (const key of Object.keys(child.schema.sortKeys)) {
       keys.add(key);
     }
-  }
-  for (const view of block.schema.componentListViews) {
-    if (view.sortKey) keys.add(view.sortKey);
-    if (view.groupKey) keys.add(view.groupKey);
   }
   return [...keys].sort((left, right) => left.localeCompare(right, undefined, { sensitivity: 'base' }));
 }
@@ -239,20 +192,5 @@ function getAvailableGroupKeys(block: VisualBlock): string[] {
       keys.add(key);
     }
   }
-  for (const view of block.schema.componentListViews) {
-    if (view.groupKey) keys.add(view.groupKey);
-  }
   return [...keys].sort((left, right) => left.localeCompare(right, undefined, { sensitivity: 'base' }));
-}
-
-function createBlankView(): ComponentListView {
-  return {
-    id: '',
-    label: '',
-    sortKey: '',
-    direction: 'desc',
-    groupKey: '',
-    groupDirection: 'desc',
-    groupCollapsedPreviewRem: 3,
-  };
 }

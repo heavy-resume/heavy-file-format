@@ -175,60 +175,14 @@ export function bindInputMisc(app: HTMLElement): void {
       return;
     }
 
-    if (field === 'component-list-view-id' && target instanceof HTMLInputElement) {
+    if (field === 'component-list-group-preview-rem' && target instanceof HTMLInputElement) {
       const context = resolveBlockContext(target);
       if (!context) {
-        return;
-      }
-      const index = Number.parseInt(target.dataset.viewIndex ?? '', 10);
-      if (Number.isNaN(index)) {
-        return;
-      }
-      const view = ensureComponentListView(context.block, index);
-      const nextId = target.value.trim();
-      if (!nextId) {
-        context.block.schema.componentListViews.splice(index, 1);
-      } else {
-        view.id = nextId;
-        if (!view.label.trim()) {
-          view.label = nextId;
-        }
-        if (!view.sortKey.trim()) {
-          view.sortKey = firstComponentListSortKey(context.block) ?? '';
-        }
-      }
-      syncReusableTemplateForBlock(sectionKey, context.block.id);
-      getRefreshReaderPanels()();
-      return;
-    }
-
-    if (field === 'component-list-view-label' && target instanceof HTMLInputElement) {
-      const context = resolveBlockContext(target);
-      if (!context) {
-        return;
-      }
-      const view = getComponentListViewForTarget(context.block, target);
-      if (!view) {
-        return;
-      }
-      view.label = target.value;
-      syncReusableTemplateForBlock(sectionKey, context.block.id);
-      getRefreshReaderPanels()();
-      return;
-    }
-
-    if (field === 'component-list-view-preview-rem' && target instanceof HTMLInputElement) {
-      const context = resolveBlockContext(target);
-      if (!context) {
-        return;
-      }
-      const view = getComponentListViewForTarget(context.block, target);
-      if (!view) {
         return;
       }
       const value = Number.parseFloat(target.value);
       if (Number.isFinite(value) && value > 0) {
-        view.groupCollapsedPreviewRem = value;
+        context.block.schema.componentListGroupCollapsedPreviewRem = value;
         syncReusableTemplateForBlock(sectionKey, context.block.id);
         getRefreshReaderPanels()();
       }
@@ -334,57 +288,6 @@ export function bindInputMisc(app: HTMLElement): void {
       return;
     }
 
-    if (field === 'block-component-list-default-view' && target instanceof HTMLInputElement) {
-      const context = resolveBlockContext(target);
-      if (!context) {
-        return;
-      }
-      context.block.schema.componentListDefaultView = target.value.trim();
-      syncReusableTemplateForBlock(sectionKey, context.block.id);
-      getRefreshReaderPanels()();
-      return;
-    }
-
-    if (field === 'block-component-list-views' && target instanceof HTMLTextAreaElement) {
-      const context = resolveBlockContext(target);
-      if (!context) {
-        return;
-      }
-      const parsed = parseJsonArrayQuietly(target.value);
-      if (!parsed) {
-        return;
-      }
-      context.block.schema.componentListViews = parsed
-        .map((value) => {
-          if (!value || typeof value !== 'object' || Array.isArray(value)) {
-            return null;
-          }
-          const view = value as Record<string, unknown>;
-          const id = typeof view.id === 'string' ? view.id.trim() : '';
-          const sortKey = typeof view.sortKey === 'string' ? view.sortKey : '';
-          if (!id || !sortKey) {
-            return null;
-          }
-          const direction = view.direction === 'desc' ? 'desc' : 'asc';
-          return {
-            id,
-            label: typeof view.label === 'string' && view.label.trim() ? view.label : id,
-            sortKey,
-            direction,
-            groupKey: typeof view.groupKey === 'string' ? view.groupKey : '',
-            groupDirection: view.groupDirection === 'asc' || view.groupDirection === 'desc' ? view.groupDirection : direction,
-            groupCollapsedPreviewRem:
-              typeof view.groupCollapsedPreviewRem === 'number' && Number.isFinite(view.groupCollapsedPreviewRem) && view.groupCollapsedPreviewRem > 0
-                ? view.groupCollapsedPreviewRem
-                : 3,
-          };
-        })
-        .filter((view): view is typeof context.block.schema.componentListViews[number] => view !== null);
-      syncReusableTemplateForBlock(sectionKey, context.block.id);
-      getRefreshReaderPanels()();
-      return;
-    }
-
     if (field === 'block-description' && (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) {
       const context = resolveBlockContext(target);
       if (!context) {
@@ -479,15 +382,6 @@ function parseJsonObjectQuietly(value: string): Record<string, unknown> | null {
   }
 }
 
-function parseJsonArrayQuietly(value: string): unknown[] | null {
-  try {
-    const parsed = JSON.parse(value) as unknown;
-    return Array.isArray(parsed) ? parsed : null;
-  } catch {
-    return null;
-  }
-}
-
 function parseSortKeyValue(value: string): string | number {
   const trimmed = value.trim();
   if (trimmed.length > 0) {
@@ -508,37 +402,4 @@ function updateSortKeyRowName(target: HTMLInputElement, name: string): void {
   if (removeButton) {
     removeButton.dataset.sortKeyName = name;
   }
-}
-
-function ensureComponentListView(block: NonNullable<ReturnType<typeof resolveBlockContext>>['block'], index: number) {
-  while (block.schema.componentListViews.length <= index) {
-    block.schema.componentListViews.push({
-      id: '',
-      label: '',
-      sortKey: firstComponentListSortKey(block) ?? '',
-      direction: 'desc',
-      groupKey: '',
-      groupDirection: 'desc',
-      groupCollapsedPreviewRem: 3,
-    });
-  }
-  return block.schema.componentListViews[index];
-}
-
-function getComponentListViewForTarget(block: NonNullable<ReturnType<typeof resolveBlockContext>>['block'], target: HTMLElement) {
-  const index = Number.parseInt(target.dataset.viewIndex ?? '', 10);
-  if (Number.isNaN(index)) {
-    return null;
-  }
-  return block.schema.componentListViews[index] ?? null;
-}
-
-function firstComponentListSortKey(block: NonNullable<ReturnType<typeof resolveBlockContext>>['block']): string | null {
-  for (const child of block.schema.componentListBlocks ?? []) {
-    const first = Object.keys(child.schema.sortKeys)[0];
-    if (first) {
-      return first;
-    }
-  }
-  return null;
 }

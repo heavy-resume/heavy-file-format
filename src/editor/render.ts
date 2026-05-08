@@ -969,23 +969,16 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           />
         </label>
         <label>
-          <span>Default View</span>
+          <span>Group Preview Height</span>
           <input
+            type="number"
+            min="1"
+            step="0.25"
             data-section-key="${deps.escapeAttr(sectionKey)}"
             data-block-id="${deps.escapeAttr(block.id)}"
-            data-field="block-component-list-default-view"
-            value="${deps.escapeAttr(block.schema.componentListDefaultView)}"
+            data-field="component-list-group-preview-rem"
+            value="${deps.escapeAttr(String(block.schema.componentListGroupCollapsedPreviewRem))}"
           />
-        </label>
-        <label>
-          <span>List Views</span>
-          <textarea
-            rows="5"
-            data-section-key="${deps.escapeAttr(sectionKey)}"
-            data-block-id="${deps.escapeAttr(block.id)}"
-            data-field="block-component-list-views"
-            placeholder='[{"id":"job","label":"Job Match","sortKey":"Job Match","direction":"desc","groupKey":"Category"}]'
-          >${deps.escapeHtml(JSON.stringify(block.schema.componentListViews, null, 2))}</textarea>
         </label>`
             : ''
         }
@@ -1221,10 +1214,6 @@ function findDirectParentComponentList(blocks: VisualBlock[], targetBlockId: str
 function buildComponentListDisplayContext(listBlock: VisualBlock): ComponentListDisplayContext {
   const sortKeys = new Set<string>();
   const groupKeys = new Set<string>();
-  listBlock.schema.componentListViews.forEach((view) => {
-    if (view.sortKey) sortKeys.add(view.sortKey);
-    if (view.groupKey) groupKeys.add(view.groupKey);
-  });
   listBlock.schema.componentListBlocks.forEach((child) => {
     Object.entries(child.schema.sortKeys).forEach(([key, value]) => {
       if (!key.trim()) {

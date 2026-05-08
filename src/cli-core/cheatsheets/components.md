@@ -30,14 +30,14 @@ hvy insert 2 text /a-section middle-note
 hvy insert -2 text /a-section before-last
 ```
 
-Sort and group component-list items in reader views without changing canonical order:
+Sort and group component-list items in the reader without changing source order:
 
 ```shell
 cat /body/a-section/skills/skill-postgres/xref-card.json
 cat /body/a-section/skills/component-list.json
 ```
 
-Set item `sortKeys` on child component JSON, for example `{"Job Match":92,"Category":"Database"}`. Set `componentListViews` and `componentListDefaultView` on the component-list JSON. Grouped reader views create virtual collapsed containers only in the reader; `children-order.json` stays the canonical item order.
+Set item `sortKeys` on child component JSON, for example `{"Job Match":92,"Category":"Database"}`. Set `componentListDefaultSortKey`, `componentListDefaultSortDirection`, and `componentListDefaultGroupKey` on the component-list JSON. Grouped reader display creates virtual collapsed containers only in the reader; `children-order.json` stays the source item order.
 
 `hvy insert INDEX table` creates a blank static document table. Rows and columns are stored directly on the component in `tableColumns.json` and `tableRows.json`. Use `hvy insert INDEX plugin db-table` for dynamic data-backed rows.
 

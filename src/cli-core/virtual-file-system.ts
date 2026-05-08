@@ -554,8 +554,10 @@ function blockSchemaToCliJson(schema: BlockSchema): JsonObject {
   if (schema.component === 'component-list') {
     value.componentListComponent = schema.componentListComponent;
     value.componentListItemLabel = schema.componentListItemLabel;
-    value.componentListViews = schema.componentListViews;
-    value.componentListDefaultView = schema.componentListDefaultView;
+    value.componentListDefaultSortKey = schema.componentListDefaultSortKey;
+    value.componentListDefaultSortDirection = schema.componentListDefaultSortDirection;
+    value.componentListDefaultGroupKey = schema.componentListDefaultGroupKey;
+    value.componentListGroupCollapsedPreviewRem = schema.componentListGroupCollapsedPreviewRem;
   }
   if (schema.component === 'xref-card') {
     value.xrefTitle = schema.xrefTitle;
@@ -661,8 +663,14 @@ function applyBlockSchemaJson(schema: BlockSchema, component: string, value: Jso
   }
   if (typeof value.componentListComponent === 'string') schema.componentListComponent = value.componentListComponent;
   if (typeof value.componentListItemLabel === 'string') schema.componentListItemLabel = value.componentListItemLabel;
-  if (Array.isArray(value.componentListViews)) schema.componentListViews = parseComponentListViews(value.componentListViews);
-  if (typeof value.componentListDefaultView === 'string') schema.componentListDefaultView = value.componentListDefaultView;
+  if (typeof value.componentListDefaultSortKey === 'string') schema.componentListDefaultSortKey = value.componentListDefaultSortKey;
+  if (value.componentListDefaultSortDirection === 'asc' || value.componentListDefaultSortDirection === 'desc') {
+    schema.componentListDefaultSortDirection = value.componentListDefaultSortDirection;
+  }
+  if (typeof value.componentListDefaultGroupKey === 'string') schema.componentListDefaultGroupKey = value.componentListDefaultGroupKey;
+  if (typeof value.componentListGroupCollapsedPreviewRem === 'number' && Number.isFinite(value.componentListGroupCollapsedPreviewRem) && value.componentListGroupCollapsedPreviewRem > 0) {
+    schema.componentListGroupCollapsedPreviewRem = value.componentListGroupCollapsedPreviewRem;
+  }
   if (typeof value.xrefTitle === 'string') schema.xrefTitle = value.xrefTitle;
   if (typeof value.xrefDetail === 'string') schema.xrefDetail = value.xrefDetail;
   if (typeof value.xrefTarget === 'string') schema.xrefTarget = value.xrefTarget;
@@ -789,35 +797,6 @@ function parseSortKeys(value: object): BlockSchema['sortKeys'] {
     }
   }
   return sortKeys;
-}
-
-function parseComponentListViews(value: unknown[]): BlockSchema['componentListViews'] {
-  return value
-    .map((raw) => {
-      if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
-        return null;
-      }
-      const item = raw as JsonObject;
-      const id = typeof item.id === 'string' ? item.id.trim() : '';
-      const sortKey = typeof item.sortKey === 'string' ? item.sortKey : '';
-      if (!id || !sortKey) {
-        return null;
-      }
-      const direction = item.direction === 'desc' ? 'desc' : 'asc';
-      return {
-        id,
-        label: typeof item.label === 'string' && item.label.trim() ? item.label : id,
-        sortKey,
-        direction,
-        groupKey: typeof item.groupKey === 'string' ? item.groupKey : '',
-        groupDirection: item.groupDirection === 'asc' || item.groupDirection === 'desc' ? item.groupDirection : direction,
-        groupCollapsedPreviewRem:
-          typeof item.groupCollapsedPreviewRem === 'number' && Number.isFinite(item.groupCollapsedPreviewRem) && item.groupCollapsedPreviewRem > 0
-            ? item.groupCollapsedPreviewRem
-            : 3,
-      };
-    })
-    .filter((item): item is BlockSchema['componentListViews'][number] => item !== null);
 }
 
 function addFormScriptFiles(entries: Map<string, HvyVirtualEntry>, block: VisualBlock, blockPath: string): void {

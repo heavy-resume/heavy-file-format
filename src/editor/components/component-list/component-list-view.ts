@@ -1,4 +1,11 @@
-import type { ComponentListView, SortKeyValue, VisualBlock } from '../../types';
+import type { SortKeyValue, VisualBlock } from '../../types';
+
+export interface ComponentListDisplayState {
+  sortKey: string;
+  direction: 'asc' | 'desc';
+  groupKey: string;
+  groupCollapsedPreviewRem: number;
+}
 
 export interface ComponentListResolvedGroup {
   key: string;
@@ -8,11 +15,11 @@ export interface ComponentListResolvedGroup {
 }
 
 export type ComponentListResolvedItems =
-  | { kind: 'items'; view: ComponentListView | null; blocks: VisualBlock[] }
-  | { kind: 'groups'; view: ComponentListView; groups: ComponentListResolvedGroup[]; missingBlocks: VisualBlock[] };
+  | { kind: 'items'; display: ComponentListDisplayState; blocks: VisualBlock[] }
+  | { kind: 'groups'; display: ComponentListDisplayState; groups: ComponentListResolvedGroup[]; missingBlocks: VisualBlock[] };
 
 export interface ComponentListRuntimeViewState {
-  viewId: string;
+  sortKey: string;
   reversed: boolean;
   groupKey?: string;
 }
@@ -21,7 +28,7 @@ const REVERSED_VIEW_SUFFIX = '::reversed';
 const GROUP_VIEW_MARKER = '::group=';
 
 export function encodeComponentListRuntimeView(state: ComponentListRuntimeViewState): string {
-  return `${state.viewId}${state.reversed ? REVERSED_VIEW_SUFFIX : ''}${
+  return `${encodeURIComponent(state.sortKey)}${state.reversed ? REVERSED_VIEW_SUFFIX : ''}${
     typeof state.groupKey === 'string' ? `${GROUP_VIEW_MARKER}${encodeURIComponent(state.groupKey)}` : ''
   }`;
 }
@@ -30,43 +37,39 @@ export function parseComponentListRuntimeView(value = ''): ComponentListRuntimeV
   const groupIndex = value.indexOf(GROUP_VIEW_MARKER);
   const withoutGroup = groupIndex >= 0 ? value.slice(0, groupIndex) : value;
   const groupKey = groupIndex >= 0 ? decodeURIComponent(value.slice(groupIndex + GROUP_VIEW_MARKER.length)) : undefined;
-  return withoutGroup.endsWith(REVERSED_VIEW_SUFFIX)
-    ? { viewId: withoutGroup.slice(0, -REVERSED_VIEW_SUFFIX.length), reversed: true, groupKey }
-    : { viewId: withoutGroup, reversed: false, groupKey };
+  const reversed = withoutGroup.endsWith(REVERSED_VIEW_SUFFIX);
+  const sortKeyRaw = reversed ? withoutGroup.slice(0, -REVERSED_VIEW_SUFFIX.length) : withoutGroup;
+  return { sortKey: decodeURIComponent(sortKeyRaw), reversed, groupKey };
 }
 
-export function getComponentListActiveView(block: VisualBlock, runtimeViewId = ''): ComponentListView | null {
-  const views = block.schema.componentListViews;
-  if (views.length === 0) {
-    return null;
-  }
+export function getComponentListDisplayState(block: VisualBlock, runtimeViewId = ''): ComponentListDisplayState {
   const runtime = parseComponentListRuntimeView(runtimeViewId.trim());
-  const selected = runtime.viewId || block.schema.componentListDefaultView.trim();
-  const view = views.find((candidate) => candidate.id === selected) ?? views[0] ?? null;
-  const groupedView = view && typeof runtime.groupKey === 'string' ? { ...view, groupKey: runtime.groupKey } : view;
-  return groupedView && runtime.reversed ? reverseComponentListView(groupedView) : groupedView;
+  const direction = runtime.reversed ? reverseDirection(block.schema.componentListDefaultSortDirection) : block.schema.componentListDefaultSortDirection;
+  return {
+    sortKey: runtime.sortKey || block.schema.componentListDefaultSortKey.trim(),
+    direction,
+    groupKey: typeof runtime.groupKey === 'string' ? runtime.groupKey : block.schema.componentListDefaultGroupKey.trim(),
+    groupCollapsedPreviewRem: block.schema.componentListGroupCollapsedPreviewRem,
+  };
 }
 
 export function resolveComponentListItems(block: VisualBlock, runtimeViewId = ''): ComponentListResolvedItems {
-  const view = getComponentListActiveView(block, runtimeViewId);
+  const display = getComponentListDisplayState(block, runtimeViewId);
   const blocks = block.schema.componentListBlocks ?? [];
-  if (!view) {
-    return { kind: 'items', view, blocks };
-  }
-  const sortedBlocks = sortBlocksByKey(blocks, view.sortKey, view.direction);
-  if (!view.groupKey.trim()) {
-    return { kind: 'items', view, blocks: sortedBlocks };
+  const sortedBlocks = display.sortKey ? sortBlocksByKey(blocks, display.sortKey, display.direction) : blocks;
+  if (!display.groupKey.trim()) {
+    return { kind: 'items', display, blocks: sortedBlocks };
   }
   const groupsByKey = new Map<string, { blocks: VisualBlock[]; strongestValue: SortKeyValue; firstIndex: number }>();
   const missingBlocks: VisualBlock[] = [];
   blocks.forEach((item, index) => {
-    const groupValue = item.schema.sortKeys[view.groupKey];
+    const groupValue = item.schema.sortKeys[display.groupKey];
     if (typeof groupValue === 'undefined') {
       missingBlocks.push(item);
       return;
     }
     const groupKey = String(groupValue);
-    const sortValue = item.schema.sortKeys[view.sortKey];
+    const sortValue = display.sortKey ? item.schema.sortKeys[display.sortKey] : undefined;
     const existing = groupsByKey.get(groupKey);
     if (!existing) {
       groupsByKey.set(groupKey, {
@@ -77,8 +80,8 @@ export function resolveComponentListItems(block: VisualBlock, runtimeViewId = ''
       return;
     }
     existing.blocks.push(item);
-    if (isStronger(sortValue, existing.strongestValue, view.groupDirection)) {
-      existing.strongestValue = sortValue;
+    if (isStronger(sortValue, existing.strongestValue, display.direction)) {
+      existing.strongestValue = sortValue ?? existing.strongestValue;
     }
   });
   const groups = [...groupsByKey.entries()]
@@ -86,19 +89,22 @@ export function resolveComponentListItems(block: VisualBlock, runtimeViewId = ''
       key,
       label: key,
       strongestValue: group.strongestValue,
-      blocks: sortBlocksByKey(group.blocks, view.sortKey, view.direction),
+      blocks: display.sortKey ? sortBlocksByKey(group.blocks, display.sortKey, display.direction) : group.blocks,
       firstIndex: group.firstIndex,
     }))
     .sort((left, right) => {
-      const compared = compareSortValues(left.strongestValue, right.strongestValue, view.groupDirection);
+      if (!display.sortKey) {
+        return left.firstIndex - right.firstIndex;
+      }
+      const compared = compareSortValues(left.strongestValue, right.strongestValue, display.direction);
       return compared || left.firstIndex - right.firstIndex;
     })
     .map(({ firstIndex: _firstIndex, ...group }) => group);
   return {
     kind: 'groups',
-    view,
+    display,
     groups,
-    missingBlocks: sortBlocksByKey(missingBlocks, view.sortKey, view.direction),
+    missingBlocks: display.sortKey ? sortBlocksByKey(missingBlocks, display.sortKey, display.direction) : missingBlocks,
   };
 }
 
@@ -137,15 +143,6 @@ function compareSortValues(left: SortKeyValue, right: SortKeyValue, direction: '
     return (left - right) * multiplier;
   }
   return String(left).localeCompare(String(right), undefined, { numeric: true, sensitivity: 'base' }) * multiplier;
-}
-
-function reverseComponentListView(view: ComponentListView): ComponentListView {
-  const direction = reverseDirection(view.direction);
-  return {
-    ...view,
-    direction,
-    groupDirection: reverseDirection(view.groupDirection || view.direction),
-  };
 }
 
 function reverseDirection(direction: 'asc' | 'desc'): 'asc' | 'desc' {

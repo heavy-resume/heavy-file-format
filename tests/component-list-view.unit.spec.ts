@@ -16,7 +16,7 @@ function textItem(label: string, sortKeys: VisualBlock['schema']['sortKeys'] = {
   };
 }
 
-test('component-list view sorts keyed items before missing-key items', () => {
+test('component-list display default sorts keyed items before missing-key items', () => {
   const list: VisualBlock = {
     id: 'skills',
     text: '',
@@ -28,8 +28,8 @@ test('component-list view sorts keyed items before missing-key items', () => {
         textItem('middle', { 'Job Match': 20 }),
         textItem('top', { 'Job Match': 90 }),
       ],
-      componentListViews: [{ id: 'job', label: 'Job', sortKey: 'Job Match', direction: 'desc', groupKey: '', groupDirection: 'desc', groupCollapsedPreviewRem: 3 }],
-      componentListDefaultView: 'job',
+      componentListDefaultSortKey: 'Job Match',
+      componentListDefaultSortDirection: 'desc',
     },
   };
 
@@ -41,7 +41,7 @@ test('component-list view sorts keyed items before missing-key items', () => {
   }
 });
 
-test('component-list grouped view creates sorted virtual groups', () => {
+test('component-list default grouping creates sorted virtual groups', () => {
   const list: VisualBlock = {
     id: 'skills',
     text: '',
@@ -53,10 +53,9 @@ test('component-list grouped view creates sorted virtual groups', () => {
         textItem('typescript', { 'Job Match': 95, Category: 'Language' }),
         textItem('sqlite', { 'Job Match': 90, Category: 'Database' }),
       ],
-      componentListViews: [
-        { id: 'job', label: 'Job', sortKey: 'Job Match', direction: 'desc', groupKey: 'Category', groupDirection: 'desc', groupCollapsedPreviewRem: 3 },
-      ],
-      componentListDefaultView: 'job',
+      componentListDefaultSortKey: 'Job Match',
+      componentListDefaultSortDirection: 'desc',
+      componentListDefaultGroupKey: 'Category',
     },
   };
 
@@ -69,7 +68,7 @@ test('component-list grouped view creates sorted virtual groups', () => {
   }
 });
 
-test('component-list runtime view can reverse the selected order', () => {
+test('component-list runtime sort can reverse the selected order', () => {
   const list: VisualBlock = {
     id: 'skills',
     text: '',
@@ -80,12 +79,12 @@ test('component-list runtime view can reverse the selected order', () => {
         textItem('middle', { Strength: 20 }),
         textItem('top', { Strength: 90 }),
       ],
-      componentListViews: [{ id: 'strength', label: 'Strength', sortKey: 'Strength', direction: 'desc', groupKey: '', groupDirection: 'desc', groupCollapsedPreviewRem: 3 }],
-      componentListDefaultView: 'strength',
+      componentListDefaultSortKey: 'Strength',
+      componentListDefaultSortDirection: 'desc',
     },
   };
 
-  const expectedResult = resolveComponentListItems(list, 'strength::reversed');
+  const expectedResult = resolveComponentListItems(list, 'Strength::reversed');
 
   expect(expectedResult.kind).toBe('items');
   if (expectedResult.kind === 'items') {
@@ -93,7 +92,7 @@ test('component-list runtime view can reverse the selected order', () => {
   }
 });
 
-test('component-list runtime grouping can override the selected sort view', () => {
+test('component-list runtime grouping can override the selected group', () => {
   const list: VisualBlock = {
     id: 'skills',
     text: '',
@@ -105,12 +104,13 @@ test('component-list runtime grouping can override the selected sort view', () =
         textItem('typescript', { Strength: 95, Category: 'Language' }),
         textItem('sqlite', { Strength: 90, Category: 'Database' }),
       ],
-      componentListViews: [{ id: 'strength', label: 'Strength', sortKey: 'Strength', direction: 'desc', groupKey: 'Category', groupDirection: 'desc', groupCollapsedPreviewRem: 3 }],
-      componentListDefaultView: 'strength',
+      componentListDefaultSortKey: 'Strength',
+      componentListDefaultSortDirection: 'desc',
+      componentListDefaultGroupKey: 'Category',
     },
   };
 
-  const expectedResult = resolveComponentListItems(list, 'strength::group=');
+  const expectedResult = resolveComponentListItems(list, 'Strength::group=');
 
   expect(expectedResult.kind).toBe('items');
   if (expectedResult.kind === 'items') {

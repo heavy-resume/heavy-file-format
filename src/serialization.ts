@@ -1167,10 +1167,10 @@ function serializeBlockSchema(
   if (component === 'component-list') {
     addIfChanged(payload, 'componentListComponent', schema.componentListComponent, defaults.componentListComponent);
     addIfChanged(payload, 'componentListItemLabel', schema.componentListItemLabel, defaults.componentListItemLabel);
-    if (schema.componentListViews.length > 0) {
-      payload.componentListViews = schema.componentListViews;
-    }
-    addIfChanged(payload, 'componentListDefaultView', schema.componentListDefaultView, defaults.componentListDefaultView);
+    addIfChanged(payload, 'componentListDefaultSortKey', schema.componentListDefaultSortKey, defaults.componentListDefaultSortKey);
+    addIfChanged(payload, 'componentListDefaultSortDirection', schema.componentListDefaultSortDirection, defaults.componentListDefaultSortDirection);
+    addIfChanged(payload, 'componentListDefaultGroupKey', schema.componentListDefaultGroupKey, defaults.componentListDefaultGroupKey);
+    addIfChanged(payload, 'componentListGroupCollapsedPreviewRem', schema.componentListGroupCollapsedPreviewRem, defaults.componentListGroupCollapsedPreviewRem);
     if (!options.omitComponentListBlocks) {
       addBlockArrayIfPresent(payload, 'componentListBlocks', schema.componentListBlocks, documentMeta);
     }

@@ -311,17 +311,17 @@ Here `## Skills` becomes `componentListBlocks[0]` (an implicit text block) and t
 
 For numbered component-list slots, the numeric suffix controls display order. Readers and editors MUST sort `hvy:component-list:N` children by `N` ascending, using file order only to break ties when multiple items use the same `N`.
 
-Component-list views are optional reader views over the same canonical child list:
+Component-list display defaults are optional reader defaults over the same source child list:
 
 ```markdown
-<!--hvy:component-list {"componentListComponent":"xref-card","componentListDefaultView":"job","componentListViews":[{"id":"job","label":"Job Match","sortKey":"Job Match","direction":"desc","groupKey":"Category","groupCollapsedPreviewRem":3}]}-->
+<!--hvy:component-list {"componentListComponent":"xref-card","componentListDefaultSortKey":"Job Match","componentListDefaultSortDirection":"desc","componentListDefaultGroupKey":"Category","componentListGroupCollapsedPreviewRem":3}-->
  <!--hvy:component-list:0 {}>
   <!--hvy:xref-card {"xrefTitle":"Postgres","xrefTarget":"skill-postgres","sortKeys":{"Job Match":92,"Category":"Database"}}-->
 ```
 
-`componentListViews` is an ordered array of view objects. A view has `id`, `label`, `sortKey`, `direction` (`"asc"` or `"desc"`), and optional `groupKey`, `groupDirection`, and `groupCollapsedPreviewRem`. `componentListDefaultView` names the view readers SHOULD use when no runtime reader view override is supplied.
+`componentListDefaultSortKey` names the item-owned `sortKeys` key readers SHOULD sort by when no runtime reader override is supplied. Blank or omitted means `None`, so items render in source order. `componentListDefaultSortDirection` is `"asc"` or `"desc"` and defaults to `"asc"`. `componentListDefaultGroupKey` names the item-owned key readers SHOULD group by; blank or omitted means `None`. `componentListGroupCollapsedPreviewRem` controls grouped virtual container preview height in `rem` units and defaults to `3`.
 
-When a view is active, child blocks that have the selected `sortKey` render before child blocks that do not. Keyed children are sorted by the selected direction; missing-key children keep canonical order after keyed children. Ties keep canonical order. If `groupKey` is set, readers SHOULD create virtual container components for each group value. These virtual containers are reader-only and MUST NOT be serialized into `componentListBlocks`, slot directives, or child order files. Group containers are collapsed by default and reveal their members when activated. `groupCollapsedPreviewRem` controls the collapsed preview height in `rem` units and defaults to `3`.
+When sorting is active, child blocks that have the selected sort key render before child blocks that do not. Keyed children are sorted by the selected direction; missing-key children keep source order after keyed children. Ties keep source order. If grouping is active, readers SHOULD create virtual container components for each group value. These virtual containers are reader-only and MUST NOT be serialized into `componentListBlocks`, slot directives, or child order files. Group containers are collapsed by default and reveal their members when activated. Reader UI MAY offer runtime sort, direction, and group overrides derived from child item keys without rewriting the document.
 
 Cross-reference cards can be emitted as a block directive with all card data in metadata and no raw HTML body:
 
@@ -373,8 +373,10 @@ Block metadata optionally includes component-specific fields. Common examples in
 - `componentListComponent`
 - `componentListItemLabel`
 - `componentListBlocks`
-- `componentListViews`
-- `componentListDefaultView`
+- `componentListDefaultSortKey`
+- `componentListDefaultSortDirection`
+- `componentListDefaultGroupKey`
+- `componentListGroupCollapsedPreviewRem`
 - `gridColumns`
 - `gridItems`
 - `plugin`

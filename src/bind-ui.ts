@@ -127,14 +127,14 @@ export function bindUi(app: HTMLElement): void {
   const toggleComponentListReverse = (reverseList: HTMLElement): void => {
     const sectionKey = reverseList.dataset.sectionKey;
     const blockId = reverseList.dataset.blockId;
-    const viewId = reverseList.dataset.viewId;
-    if (!sectionKey || !blockId || !viewId) {
+    const viewId = reverseList.dataset.viewId ?? '';
+    if (!sectionKey || !blockId) {
       return;
     }
     const key = `${sectionKey}:${blockId}`;
     const current = parseComponentListRuntimeView(state.componentListReaderViews[key] ?? viewId);
     state.componentListReaderViews[key] = encodeComponentListRuntimeView({
-      viewId: current.viewId || viewId,
+      sortKey: current.sortKey || viewId,
       reversed: !current.reversed,
       groupKey: current.groupKey,
     });

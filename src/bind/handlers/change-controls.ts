@@ -58,7 +58,7 @@ export function bindChangeControls(app: HTMLElement): void {
       }
       const current = parseComponentListRuntimeView(state.componentListReaderViews[`${sectionKey}:${blockId}`] ?? '');
       state.componentListReaderViews[`${sectionKey}:${blockId}`] = encodeComponentListRuntimeView({
-        viewId: target.value,
+        sortKey: target.value,
         reversed: current.reversed,
         groupKey: current.groupKey,
       });
@@ -74,7 +74,7 @@ export function bindChangeControls(app: HTMLElement): void {
       }
       const current = parseComponentListRuntimeView(state.componentListReaderViews[`${sectionKey}:${blockId}`] ?? '');
       state.componentListReaderViews[`${sectionKey}:${blockId}`] = encodeComponentListRuntimeView({
-        viewId: current.viewId || target.dataset.viewId || '',
+        sortKey: current.sortKey || target.dataset.viewId || '',
         reversed: current.reversed,
         groupKey: target.value,
       });
@@ -82,25 +82,10 @@ export function bindChangeControls(app: HTMLElement): void {
       return;
     }
 
-    if (field === 'component-list-default-view-select' && target instanceof HTMLSelectElement) {
-      const sectionKey = target.dataset.sectionKey;
-      if (!sectionKey) {
-        return;
-      }
-      const context = resolveBlockContext(target);
-      if (!context) {
-        return;
-      }
-      context.block.schema.componentListDefaultView = target.value;
-      syncReusableTemplateForBlock(sectionKey, context.block.id);
-      getRefreshReaderPanels()();
-      return;
-    }
-
     if (
-      (field === 'component-list-view-sort-key'
-        || field === 'component-list-view-direction'
-        || field === 'component-list-view-group-key') && target instanceof HTMLSelectElement
+      (field === 'component-list-default-sort-key'
+        || field === 'component-list-default-sort-direction'
+        || field === 'component-list-default-group-key') && target instanceof HTMLSelectElement
     ) {
       const sectionKey = target.dataset.sectionKey;
       if (!sectionKey) {
@@ -110,18 +95,12 @@ export function bindChangeControls(app: HTMLElement): void {
       if (!context) {
         return;
       }
-      const index = Number.parseInt(target.dataset.viewIndex ?? '', 10);
-      const view = Number.isNaN(index) ? null : context.block.schema.componentListViews[index] ?? null;
-      if (!view) {
-        return;
-      }
-      if (field === 'component-list-view-sort-key') {
-        view.sortKey = target.value;
-      } else if (field === 'component-list-view-direction') {
-        view.direction = target.value === 'asc' ? 'asc' : 'desc';
-        view.groupDirection = view.direction;
+      if (field === 'component-list-default-sort-key') {
+        context.block.schema.componentListDefaultSortKey = target.value;
+      } else if (field === 'component-list-default-sort-direction') {
+        context.block.schema.componentListDefaultSortDirection = target.value === 'desc' ? 'desc' : 'asc';
       } else {
-        view.groupKey = target.value;
+        context.block.schema.componentListDefaultGroupKey = target.value;
       }
       syncReusableTemplateForBlock(sectionKey, context.block.id);
       getRefreshReaderPanels()();

@@ -1,4 +1,4 @@
-import type { Align, BlockSchema, ComponentListView, ExpandablePart, Slot, SortKeyValue, TableRow, VisualBlock, VisualSection } from './editor/types';
+import type { Align, BlockSchema, ExpandablePart, Slot, SortKeyValue, TableRow, VisualBlock, VisualSection } from './editor/types';
 import type { JsonObject } from './hvy/types';
 import type { ComponentDefinition, VisualDocument } from './types';
 import { makeId } from './utils';
@@ -26,8 +26,10 @@ export function defaultBlockSchema(component = 'text'): BlockSchema {
     componentListComponent: 'text',
     componentListItemLabel: '',
     componentListBlocks: [],
-    componentListViews: [],
-    componentListDefaultView: '',
+    componentListDefaultSortKey: '',
+    componentListDefaultSortDirection: 'asc',
+    componentListDefaultGroupKey: '',
+    componentListGroupCollapsedPreviewRem: 3,
     gridColumns: 2,
     gridItems: [],
     sortKeys: {},
@@ -159,8 +161,10 @@ export function schemaFromUnknown(value: unknown, seen = new WeakSet<object>()):
     componentListBlocks: Array.isArray(candidate.componentListBlocks)
       ? candidate.componentListBlocks.map((block) => parseVisualBlock(block, seen))
       : [],
-    componentListViews: parseComponentListViews(candidate.componentListViews),
-    componentListDefaultView: typeof candidate.componentListDefaultView === 'string' ? candidate.componentListDefaultView : defaults.componentListDefaultView,
+    componentListDefaultSortKey: typeof candidate.componentListDefaultSortKey === 'string' ? candidate.componentListDefaultSortKey : defaults.componentListDefaultSortKey,
+    componentListDefaultSortDirection: candidate.componentListDefaultSortDirection === 'desc' ? 'desc' : 'asc',
+    componentListDefaultGroupKey: typeof candidate.componentListDefaultGroupKey === 'string' ? candidate.componentListDefaultGroupKey : defaults.componentListDefaultGroupKey,
+    componentListGroupCollapsedPreviewRem: parsePositiveNumber(candidate.componentListGroupCollapsedPreviewRem, defaults.componentListGroupCollapsedPreviewRem),
     gridColumns,
     gridItems: parsedGridItems,
     sortKeys: parseSortKeys(candidate.sortKeys),
@@ -220,35 +224,6 @@ function parseSortKeys(raw: unknown): Record<string, SortKeyValue> {
     }
   }
   return parsed;
-}
-
-function parseComponentListViews(raw: unknown): ComponentListView[] {
-  if (!Array.isArray(raw)) {
-    return [];
-  }
-  return raw
-    .map((item) => {
-      if (!item || typeof item !== 'object' || Array.isArray(item)) {
-        return null;
-      }
-      const obj = item as JsonObject;
-      const id = typeof obj.id === 'string' ? obj.id.trim() : '';
-      const sortKey = typeof obj.sortKey === 'string' ? obj.sortKey : '';
-      if (!id || !sortKey) {
-        return null;
-      }
-      const direction = obj.direction === 'desc' ? 'desc' : 'asc';
-      return {
-        id,
-        label: typeof obj.label === 'string' && obj.label.trim() ? obj.label : id,
-        sortKey,
-        direction,
-        groupKey: typeof obj.groupKey === 'string' ? obj.groupKey : '',
-        groupDirection: obj.groupDirection === 'desc' || obj.groupDirection === 'asc' ? obj.groupDirection : direction,
-        groupCollapsedPreviewRem: parsePositiveNumber(obj.groupCollapsedPreviewRem, 3),
-      };
-    })
-    .filter((item): item is ComponentListView => item !== null);
 }
 
 function parsePositiveNumber(raw: unknown, fallback: number): number {

@@ -79,7 +79,7 @@ export function markdownToEditorHtml(markdown: string): string {
 }
 
 export function markdownToMobileAdjustmentEditorHtml(markdown: string): string {
-  return markdownToEditorHtml(renderShortAnnotationsAsMobileText(markdown));
+  return markdownToEditorHtml(markdown);
 }
 
 export function markdownToReaderHtml(markdown: string): string {
@@ -128,6 +128,9 @@ export function renderShortAnnotationsAsMobileText(markdown: string): string {
 export function applyMobileShortAdjustment(fullMarkdown: string, mobileMarkdown: string): string {
   const full = renderShortAnnotationsAsFullText(fullMarkdown).trim();
   const mobile = mobileMarkdown.trim();
+  if (hasShortAnnotation(mobile)) {
+    return removeRedundantShortAnnotations(mobile);
+  }
   if (full.length === 0 || mobile.length === 0 || mobile === full) {
     return full;
   }
@@ -138,13 +141,73 @@ export function applyMobileShortAdjustment(fullMarkdown: string, mobileMarkdown:
     if (mobileText.length === 0 || mobileText === fullHeading.text) {
       return full;
     }
-    return `${fullHeading.prefix}${formatShortAnnotation(fullHeading.text, mobileText)}`;
+    return `${fullHeading.prefix}${formatShortAdjustment(fullHeading.text, mobileText)}`;
   }
-  return formatShortAnnotation(full, mobile);
+  return formatShortAdjustment(full, mobile);
+}
+
+function hasShortAnnotation(markdown: string): boolean {
+  return /<!--hvy:short\s+\{.*?\}-->[\s\S]*?<!--\/hvy:short-->/.test(markdown);
+}
+
+function removeRedundantShortAnnotations(markdown: string): string {
+  return markdown.replace(/<!--hvy:short\s+(\{.*?\})-->([\s\S]*?)<!--\/hvy:short-->/g, (match, rawJson, fullText) => {
+    const shortText = parseShortAnnotationPayload(rawJson)?.to.trim() ?? '';
+    const normalizedFull = fullText.trim();
+    return shortText.length === 0 || shortText === normalizedFull ? fullText : match;
+  });
 }
 
 function formatShortAnnotation(fullText: string, shortText: string): string {
   return `<!--hvy:short ${JSON.stringify({ to: shortText })}-->${fullText}<!--/hvy:short-->`;
+}
+
+function formatShortAdjustment(fullText: string, shortText: string): string {
+  const diff = getWordExpandedDiff(fullText, shortText);
+  if (!diff) {
+    return fullText;
+  }
+  return `${diff.prefix}${formatShortAnnotation(diff.full, diff.short)}${diff.suffix}`;
+}
+
+function getWordExpandedDiff(fullText: string, shortText: string): { prefix: string; full: string; short: string; suffix: string } | null {
+  if (fullText === shortText) {
+    return null;
+  }
+  let start = 0;
+  while (start < fullText.length && start < shortText.length && fullText[start] === shortText[start]) {
+    start += 1;
+  }
+
+  let fullEnd = fullText.length;
+  let shortEnd = shortText.length;
+  while (fullEnd > start && shortEnd > start && fullText[fullEnd - 1] === shortText[shortEnd - 1]) {
+    fullEnd -= 1;
+    shortEnd -= 1;
+  }
+
+  while (start > 0 && !isShortDiffBoundary(fullText[start - 1])) {
+    start -= 1;
+  }
+  while (fullEnd < fullText.length && !isShortDiffBoundary(fullText[fullEnd])) {
+    fullEnd += 1;
+  }
+  while (shortEnd < shortText.length && !isShortDiffBoundary(shortText[shortEnd])) {
+    shortEnd += 1;
+  }
+
+  const prefix = fullText.slice(0, start);
+  const suffix = fullText.slice(fullEnd);
+  const full = fullText.slice(start, fullEnd).trim();
+  const short = shortText.slice(start, shortEnd).trim();
+  if (full.length === 0 || short.length === 0 || full === short) {
+    return null;
+  }
+  return { prefix, full, short, suffix };
+}
+
+function isShortDiffBoundary(char: string | undefined): boolean {
+  return !char || /\s/.test(char) || /[()[\]{}<>.,;:!?/\\|"'`~+=*&^%$#@-]/.test(char);
 }
 
 function parseSimpleAtxHeading(markdown: string): { prefix: string; text: string } | null {

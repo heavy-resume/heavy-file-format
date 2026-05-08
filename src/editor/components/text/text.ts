@@ -1,7 +1,6 @@
 import './text.css';
 import type { ComponentEditorRenderer, ComponentReaderRenderer } from '../../component-helpers';
 import { splitTextFillIn } from '../../../text-fill-in';
-import { markdownToMobileAdjustmentEditorHtml } from '../../../markdown';
 
 const FILL_IN_RENDER_TOKEN = 'HVY_FILL_IN_VALUE_TOKEN';
 
@@ -61,7 +60,7 @@ export const renderTextEditor: ComponentEditorRenderer = (sectionKey, block, hel
       data-field="block-rich"
       ${block.schema.align ? `style="text-align: ${helpers.escapeAttr(block.schema.align)};"` : ''}
       ${block.schema.placeholder ? `data-placeholder="${helpers.escapeAttr(block.schema.placeholder)}"` : ''}
-    >${mobileAdjustment ? markdownToMobileAdjustmentEditorHtml(block.text) : helpers.markdownToEditorHtml(block.text)}</div>
+    >${helpers.markdownToEditorHtml(block.text)}</div>
   </div>
 `;
 };

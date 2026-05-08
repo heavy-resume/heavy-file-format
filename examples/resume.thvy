@@ -462,7 +462,7 @@ component_defs:
 #! Tools & Technologies
 
  <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
-  # Tools & Technologies
+  # Tools & <!--hvy:short {"to":"Tech"}-->Technologies<!--/hvy:short-->
 
  <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"skill-record","componentListItemLabel":"tool / tech"}-->
 

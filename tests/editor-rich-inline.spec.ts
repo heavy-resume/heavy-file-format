@@ -73,7 +73,7 @@ test('mobile adjustment mode writes text edits as short annotations', async ({ p
 
   await page.getByRole('button', { name: 'Raw' }).click();
   await expect(page.locator('#rawEditor')).toContainText(
-    '<!--hvy:short {"to":"Tools & Tech"}-->Tools & Technologies<!--/hvy:short-->'
+    'Tools & <!--hvy:short {"to":"Tech"}-->Technologies<!--/hvy:short-->'
   );
 });
 
@@ -122,16 +122,105 @@ test('mobile adjustment mode removes short annotation when text matches full val
 
   await page.getByRole('button', { name: 'Mobile Adjustment' }).click();
   const mobileEditor = page.locator('.rich-editor').first();
-  await expect(mobileEditor).toHaveText('Tools & Tech');
+  await expect(mobileEditor.locator('.hvy-short-full')).toBeHidden();
+  await expect(mobileEditor.locator('.hvy-short-value')).toBeVisible();
+  await expect(mobileEditor.locator('.hvy-short-value')).toHaveText('Tools & Tech');
 
-  await mobileEditor.evaluate((node) => {
+  await mobileEditor.locator('.hvy-short-value').evaluate((node) => {
     node.textContent = 'Tools & Technologies';
-    node.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    node.closest('.rich-editor')?.dispatchEvent(new InputEvent('input', { bubbles: true }));
   });
 
   await page.getByRole('button', { name: 'Raw' }).click();
   await expect(page.locator('#rawEditor')).not.toContainText('<!--hvy:short');
   await expect(page.locator('#rawEditor')).toContainText('Tools & Technologies');
+});
+
+test('mobile adjustment preview width switches between full and short annotation text', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ <!--hvy:text {"id":"tools"}-->
+  ## Tools & <!--hvy:short {"to":"Tech"}-->Technologies<!--/hvy:short-->
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+  await page.getByRole('button', { name: 'Phone 390' }).click();
+  await page.getByRole('button', { name: 'Mobile Adjustment' }).click();
+  await page.locator('.editor-block-passive', { has: page.locator('#tools') }).click();
+  const editor = page.locator('.rich-editor').first();
+
+  await expect(editor.locator('.hvy-short-full')).toBeHidden();
+  await expect(editor.locator('.hvy-short-value')).toBeVisible();
+  await expect(editor.locator('.hvy-short-value')).toHaveText('Tech');
+
+  await page.getByRole('button', { name: 'Desktop' }).click();
+  await expect(editor.locator('.hvy-short-full')).toBeVisible();
+  await expect(editor.locator('.hvy-short-value')).toBeHidden();
+  await expect(editor.locator('h2')).toContainText('Tools & Technologies');
+});
+
+test('short annotations in sidebar switch with preview controls after mobile adjustment edit', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"tools-technologies","location":"sidebar"}-->
+#! Tools & Technologies
+
+ <!--hvy:text {}-->
+  # Tools & Technologies
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+  await page.getByRole('button', { name: 'Phone 390' }).click();
+  await page.getByRole('button', { name: 'Mobile Adjustment' }).click();
+  await page.locator('.editor-sidebar-tab').click();
+
+  await page.locator('.editor-sidebar-panel [data-action="activate-block"]').first().click();
+  const editor = page.locator('.editor-sidebar-panel .rich-editor').first();
+  await editor.locator('h1').evaluate((node) => {
+    node.textContent = 'Tools & Tech';
+    node.closest('.rich-editor')?.dispatchEvent(new InputEvent('input', { bubbles: true }));
+  });
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await expect(page.locator('#rawEditor')).toContainText(
+    '# Tools & <!--hvy:short {"to":"Tech"}-->Technologies<!--/hvy:short-->'
+  );
+
+  await page.getByRole('button', { name: 'Basic' }).click();
+  await page.locator('.editor-sidebar-tab').click();
+  await page.getByRole('button', { name: 'Phone 390' }).click();
+  await expect(page.locator('.editor-sidebar-panel .hvy-short-full').first()).toBeHidden();
+  await expect(page.locator('.editor-sidebar-panel .hvy-short-value').first()).toBeVisible();
+  await expect(page.locator('.editor-sidebar-panel h1').first()).toContainText('Tools & Tech');
+
+  await page.getByRole('button', { name: 'Desktop' }).click();
+  await page.locator('.editor-sidebar-tab').click();
+  await expect(page.locator('.editor-sidebar-panel .hvy-short-full').first()).toBeVisible();
+  await expect(page.locator('.editor-sidebar-panel .hvy-short-value').first()).toBeHidden();
+  await expect(page.locator('.editor-sidebar-panel h1').first()).toContainText('Tools & Technologies');
+
+  await page.getByRole('button', { name: 'Viewer' }).click();
+  await page.locator('.viewer-sidebar-tab').click();
+  await expect(page.locator('.viewer-sidebar-panel .hvy-short-full').first()).toBeVisible();
+  await expect(page.locator('.viewer-sidebar-panel .hvy-short-value').first()).toBeHidden();
+
+  await page.getByRole('button', { name: 'Phone 390' }).click();
+  await page.locator('.viewer-sidebar-tab').click();
+  await expect(page.locator('.viewer-sidebar-panel .hvy-short-full').first()).toBeHidden();
+  await expect(page.locator('.viewer-sidebar-panel .hvy-short-value').first()).toBeVisible();
 });
 
 test('inline toolbar actions toggle typing mode at a collapsed caret', async ({ page }) => {

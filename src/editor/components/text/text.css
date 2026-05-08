@@ -99,7 +99,25 @@
   white-space: nowrap;
 }
 
-@container hvy-surface (inline-size < 48rem) {
+.hvy-surface-phone .hvy-short-full,
+.hvy-surface-tablet .hvy-short-full {
+  display: none;
+}
+
+.hvy-surface-phone .hvy-short-value,
+.hvy-surface-tablet .hvy-short-value {
+  display: inline-block;
+}
+
+.hvy-surface-desktop .hvy-short-full {
+  display: inline;
+}
+
+.hvy-surface-desktop .hvy-short-value {
+  display: none;
+}
+
+@container hvy-surface (inline-size < 30rem) {
   .hvy-short-full {
     display: none;
   }

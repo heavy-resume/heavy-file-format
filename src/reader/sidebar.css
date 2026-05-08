@@ -1,8 +1,8 @@
 .viewer-sidebar {
   position: absolute;
   inset: 0 auto 0 0;
-  width: min(40rem, calc(100% - var(--hvy-sidebar-footprint)));
-  max-width: min(40rem, calc(100% - var(--hvy-sidebar-footprint)));
+  width: min(40rem, calc(100% - max(var(--hvy-sidebar-footprint), 0.65rem)));
+  max-width: min(40rem, calc(100% - max(var(--hvy-sidebar-footprint), 0.65rem)));
   transform: translateX(-100%);
   transition: transform 360ms ease, box-shadow 360ms ease;
   z-index: 20;
@@ -46,6 +46,29 @@
   justify-content: center;
   box-shadow: 0 10px 24px var(--hvy-shadow-md);
   pointer-events: auto;
+  transition: opacity 540ms ease, transform 540ms ease;
+}
+
+.hvy-preview-frame-phone.viewer-shell.is-sidebar-closed:not(.is-sidebar-tab-visible):not(:has(.viewer-sidebar-help-balloon)) .viewer-sidebar-tab,
+.hvy-preview-frame-tablet.viewer-shell.is-sidebar-closed:not(.is-sidebar-tab-visible):not(:has(.viewer-sidebar-help-balloon)) .viewer-sidebar-tab,
+.hvy-preview-frame-phone.viewer-shell.is-sidebar-closed.is-sidebar-tab-hidden .viewer-sidebar-tab,
+.hvy-preview-frame-tablet.viewer-shell.is-sidebar-closed.is-sidebar-tab-hidden .viewer-sidebar-tab {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-72%);
+}
+
+.hvy-preview-frame-phone.viewer-shell.is-sidebar-closed.is-sidebar-tab-visible .viewer-sidebar-tab,
+.hvy-preview-frame-tablet.viewer-shell.is-sidebar-closed.is-sidebar-tab-visible .viewer-sidebar-tab,
+.hvy-preview-frame-phone.viewer-shell:has(.viewer-sidebar-help-balloon) .viewer-sidebar-tab,
+.hvy-preview-frame-tablet.viewer-shell:has(.viewer-sidebar-help-balloon) .viewer-sidebar-tab {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.hvy-preview-frame-phone.viewer-shell.is-sidebar-closed.is-sidebar-tab-hidden .viewer-sidebar-help-balloon,
+.hvy-preview-frame-tablet.viewer-shell.is-sidebar-closed.is-sidebar-tab-hidden .viewer-sidebar-help-balloon {
+  display: none;
 }
 
 .viewer-sidebar-panel {

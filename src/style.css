@@ -304,6 +304,24 @@ button.tiny {
   --hvy-document-edge-gutter: 0.75rem;
 }
 
+.hvy-preview-frame-phone,
+.hvy-preview-frame-tablet {
+  --hvy-sidebar-footprint: 0rem;
+}
+
+.hvy-preview-frame-phone:not(.is-sidebar-open),
+.hvy-preview-frame-tablet:not(.is-sidebar-open) {
+  --hvy-sidebar-footprint: var(--hvy-document-edge-gutter);
+}
+
+.hvy-preview-frame-phone.is-sidebar-open {
+  --hvy-sidebar-footprint: 2.35rem;
+}
+
+.hvy-preview-frame-tablet.is-sidebar-open {
+  --hvy-sidebar-footprint: 2.8rem;
+}
+
 .pane.hvy-preview-frame-phone,
 .pane.hvy-preview-frame-tablet,
 .pane.hvy-preview-frame-desktop {
@@ -351,6 +369,11 @@ button.tiny {
   padding-left: var(--hvy-sidebar-footprint);
   padding-right: var(--hvy-document-edge-gutter);
   scrollbar-gutter: stable both-edges;
+}
+
+.hvy-preview-frame-phone.viewer-shell .reader-document,
+.hvy-preview-frame-tablet.viewer-shell .reader-document {
+  scrollbar-gutter: stable;
 }
 
 .reader-document-body {

@@ -127,6 +127,49 @@ test('responsive preview applies to pullout document surfaces', async ({ page })
   await expect.poll(async () => Math.round((await page.locator('.viewer-sidebar-panel .hvy-surface').boundingBox())?.width ?? 0)).toBeLessThan(390);
 });
 
+test('compact pullout tab overlays and reveals after scroll idle', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Resume Template' }).click();
+  await page.getByRole('button', { name: 'Phone 390' }).click();
+
+  const shell = page.locator('.editor-shell');
+  const tab = page.locator('.editor-sidebar-tab');
+  const tree = page.locator('.editor-tree');
+  const surface = page.locator('.editor-tree > .hvy-surface').first();
+
+  await expect.poll(async () => Math.round((await surface.boundingBox())?.x ?? 0) - Math.round((await tree.boundingBox())?.x ?? 0)).toBeGreaterThanOrEqual(8);
+  await expect.poll(async () => {
+    const surfaceBox = await surface.boundingBox();
+    const treeBox = await tree.boundingBox();
+    if (!surfaceBox || !treeBox) {
+      return 0;
+    }
+    return Math.round(treeBox.x + treeBox.width - (surfaceBox.x + surfaceBox.width));
+  }).toBeGreaterThanOrEqual(8);
+  await expect(tab).toBeVisible();
+
+  await page.locator('.editor-sidebar-tab').click();
+  const openTreeBox = await tree.boundingBox();
+  const openSurfaceBox = await surface.boundingBox();
+  expect(openTreeBox).not.toBeNull();
+  expect(openSurfaceBox).not.toBeNull();
+  expect(Math.round(openSurfaceBox!.x - openTreeBox!.x)).toBeGreaterThanOrEqual(30);
+
+  await page.locator('.editor-sidebar-tab').click();
+  await expect.poll(async () => Math.round((await surface.boundingBox())?.x ?? 0) - Math.round((await tree.boundingBox())?.x ?? 0)).toBeGreaterThanOrEqual(8);
+
+  await tree.evaluate((node) => {
+    node.scrollTop = 240;
+    node.dispatchEvent(new Event('scroll', { bubbles: true }));
+  });
+  await expect(page.locator('.editor-sidebar-help-balloon')).toHaveCount(0);
+  await expect(shell).toHaveClass(/is-sidebar-tab-hidden/);
+  await expect(tab).toHaveCSS('transition-duration', /0\.54s/);
+
+  await expect(shell).toHaveClass(/is-sidebar-tab-visible/, { timeout: 1500 });
+});
+
 test('responsive preview applies container query defaults', async ({ page }) => {
   await page.goto('/');
 

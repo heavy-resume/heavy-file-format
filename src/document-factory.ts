@@ -1,4 +1,4 @@
-import type { Align, BlockSchema, ExpandablePart, Slot, TableRow, VisualBlock, VisualSection } from './editor/types';
+import type { Align, BlockSchema, ExpandablePart, Slot, SortKeyValue, TableRow, VisualBlock, VisualSection } from './editor/types';
 import type { JsonObject } from './hvy/types';
 import type { ComponentDefinition, VisualDocument } from './types';
 import { makeId } from './utils';
@@ -20,11 +20,20 @@ export function defaultBlockSchema(component = 'text'): BlockSchema {
     css: 'margin: 0.5rem 0;',
     codeLanguage: 'ts',
     containerBlocks: [],
+    containerTitle: '',
+    containerExpanded: true,
+    containerCollapsedPreviewRem: 3,
     componentListComponent: 'text',
     componentListItemLabel: '',
     componentListBlocks: [],
+    componentListDefaultSortKey: '',
+    componentListDefaultSortDirection: 'asc',
+    componentListDefaultGroupKey: '',
+    componentListGroupCollapsedPreviewRem: 3,
     gridColumns: 2,
     gridItems: [],
+    sortKeys: {},
+    groupKeys: {},
     tags: '',
     description: '',
     placeholder: '',
@@ -143,6 +152,9 @@ export function schemaFromUnknown(value: unknown, seen = new WeakSet<object>()):
     containerBlocks: Array.isArray(candidate.containerBlocks)
       ? candidate.containerBlocks.map((block) => parseVisualBlock(block, seen))
       : [],
+    containerTitle: typeof candidate.containerTitle === 'string' ? candidate.containerTitle : defaults.containerTitle,
+    containerExpanded: candidate.containerExpanded !== false,
+    containerCollapsedPreviewRem: parsePositiveNumber(candidate.containerCollapsedPreviewRem, defaults.containerCollapsedPreviewRem),
     componentListComponent:
       typeof candidate.componentListComponent === 'string' ? candidate.componentListComponent : defaults.componentListComponent,
     componentListItemLabel:
@@ -150,8 +162,14 @@ export function schemaFromUnknown(value: unknown, seen = new WeakSet<object>()):
     componentListBlocks: Array.isArray(candidate.componentListBlocks)
       ? candidate.componentListBlocks.map((block) => parseVisualBlock(block, seen))
       : [],
+    componentListDefaultSortKey: typeof candidate.componentListDefaultSortKey === 'string' ? candidate.componentListDefaultSortKey : defaults.componentListDefaultSortKey,
+    componentListDefaultSortDirection: candidate.componentListDefaultSortDirection === 'desc' ? 'desc' : 'asc',
+    componentListDefaultGroupKey: typeof candidate.componentListDefaultGroupKey === 'string' ? candidate.componentListDefaultGroupKey : defaults.componentListDefaultGroupKey,
+    componentListGroupCollapsedPreviewRem: parsePositiveNumber(candidate.componentListGroupCollapsedPreviewRem, defaults.componentListGroupCollapsedPreviewRem),
     gridColumns,
     gridItems: parsedGridItems,
+    sortKeys: parseSortKeys(candidate.sortKeys),
+    groupKeys: parseGroupKeys(candidate.groupKeys),
     tags: typeof candidate.tags === 'string' ? candidate.tags : defaults.tags,
     description: typeof candidate.description === 'string' ? candidate.description : defaults.description,
     placeholder: typeof candidate.placeholder === 'string' ? candidate.placeholder : defaults.placeholder,
@@ -193,6 +211,41 @@ export function schemaFromUnknown(value: unknown, seen = new WeakSet<object>()):
     imageFile: typeof candidate.imageFile === 'string' ? candidate.imageFile : defaults.imageFile,
     imageAlt: typeof candidate.imageAlt === 'string' ? candidate.imageAlt : defaults.imageAlt,
   };
+}
+
+function parseSortKeys(raw: unknown): Record<string, SortKeyValue> {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return {};
+  }
+  const parsed: Record<string, SortKeyValue> = {};
+  for (const [key, value] of Object.entries(raw as JsonObject)) {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      parsed[key] = value;
+    } else if (typeof value === 'string') {
+      parsed[key] = value;
+    }
+  }
+  return parsed;
+}
+
+function parseGroupKeys(raw: unknown): Record<string, string> {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return {};
+  }
+  const parsed: Record<string, string> = {};
+  for (const [key, value] of Object.entries(raw as JsonObject)) {
+    if (typeof value === 'string') {
+      parsed[key] = value;
+    }
+  }
+  return parsed;
+}
+
+function parsePositiveNumber(raw: unknown, fallback: number): number {
+  if (typeof raw !== 'number' || !Number.isFinite(raw) || raw <= 0) {
+    return fallback;
+  }
+  return raw;
 }
 
 function parseTableColumns(raw: unknown, fallback: string[]): string[] {

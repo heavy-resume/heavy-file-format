@@ -540,14 +540,25 @@ function blockSchemaToCliJson(schema: BlockSchema): JsonObject {
     lock: schema.lock,
     align: schema.align,
     slot: schema.slot,
+    sortKeys: schema.sortKeys,
+    groupKeys: schema.groupKeys,
     tags: schema.tags,
     description: schema.description,
     placeholder: schema.placeholder,
     fillIn: schema.fillIn,
   };
+  if (schema.component === 'container') {
+    value.containerTitle = schema.containerTitle;
+    value.containerExpanded = schema.containerExpanded;
+    value.containerCollapsedPreviewRem = schema.containerCollapsedPreviewRem;
+  }
   if (schema.component === 'component-list') {
     value.componentListComponent = schema.componentListComponent;
     value.componentListItemLabel = schema.componentListItemLabel;
+    value.componentListDefaultSortKey = schema.componentListDefaultSortKey;
+    value.componentListDefaultSortDirection = schema.componentListDefaultSortDirection;
+    value.componentListDefaultGroupKey = schema.componentListDefaultGroupKey;
+    value.componentListGroupCollapsedPreviewRem = schema.componentListGroupCollapsedPreviewRem;
   }
   if (schema.component === 'xref-card') {
     value.xrefTitle = schema.xrefTitle;
@@ -636,6 +647,12 @@ function applyBlockSchemaJson(schema: BlockSchema, component: string, value: Jso
   schema.component = component;
   if (typeof value.id === 'string') schema.id = value.id;
   if (typeof value.css === 'string') schema.css = value.css;
+  if (value.sortKeys && typeof value.sortKeys === 'object' && !Array.isArray(value.sortKeys)) {
+    schema.sortKeys = parseSortKeys(value.sortKeys);
+  }
+  if (value.groupKeys && typeof value.groupKeys === 'object' && !Array.isArray(value.groupKeys)) {
+    schema.groupKeys = parseGroupKeys(value.groupKeys);
+  }
   if (typeof value.lock === 'boolean') schema.lock = value.lock;
   if (value.align === 'left' || value.align === 'center' || value.align === 'right') schema.align = value.align;
   if (value.slot === 'left' || value.slot === 'center' || value.slot === 'right') schema.slot = value.slot;
@@ -643,8 +660,21 @@ function applyBlockSchemaJson(schema: BlockSchema, component: string, value: Jso
   if (typeof value.description === 'string') schema.description = value.description;
   if (typeof value.placeholder === 'string') schema.placeholder = value.placeholder;
   if (typeof value.fillIn === 'boolean') schema.fillIn = value.fillIn;
+  if (typeof value.containerTitle === 'string') schema.containerTitle = value.containerTitle;
+  if (typeof value.containerExpanded === 'boolean') schema.containerExpanded = value.containerExpanded;
+  if (typeof value.containerCollapsedPreviewRem === 'number' && Number.isFinite(value.containerCollapsedPreviewRem) && value.containerCollapsedPreviewRem > 0) {
+    schema.containerCollapsedPreviewRem = value.containerCollapsedPreviewRem;
+  }
   if (typeof value.componentListComponent === 'string') schema.componentListComponent = value.componentListComponent;
   if (typeof value.componentListItemLabel === 'string') schema.componentListItemLabel = value.componentListItemLabel;
+  if (typeof value.componentListDefaultSortKey === 'string') schema.componentListDefaultSortKey = value.componentListDefaultSortKey;
+  if (value.componentListDefaultSortDirection === 'asc' || value.componentListDefaultSortDirection === 'desc') {
+    schema.componentListDefaultSortDirection = value.componentListDefaultSortDirection;
+  }
+  if (typeof value.componentListDefaultGroupKey === 'string') schema.componentListDefaultGroupKey = value.componentListDefaultGroupKey;
+  if (typeof value.componentListGroupCollapsedPreviewRem === 'number' && Number.isFinite(value.componentListGroupCollapsedPreviewRem) && value.componentListGroupCollapsedPreviewRem > 0) {
+    schema.componentListGroupCollapsedPreviewRem = value.componentListGroupCollapsedPreviewRem;
+  }
   if (typeof value.xrefTitle === 'string') schema.xrefTitle = value.xrefTitle;
   if (typeof value.xrefDetail === 'string') schema.xrefDetail = value.xrefDetail;
   if (typeof value.xrefTarget === 'string') schema.xrefTarget = value.xrefTarget;
@@ -759,6 +789,28 @@ function parseJsonTableRows(content: string, filename: string): BlockSchema['tab
 
 function parseStringList(value: unknown[]): string[] {
   return value.map((item) => String(item ?? ''));
+}
+
+function parseSortKeys(value: object): BlockSchema['sortKeys'] {
+  const sortKeys: BlockSchema['sortKeys'] = {};
+  for (const [key, raw] of Object.entries(value)) {
+    if (typeof raw === 'string') {
+      sortKeys[key] = raw;
+    } else if (typeof raw === 'number' && Number.isFinite(raw)) {
+      sortKeys[key] = raw;
+    }
+  }
+  return sortKeys;
+}
+
+function parseGroupKeys(value: object): BlockSchema['groupKeys'] {
+  const groupKeys: BlockSchema['groupKeys'] = {};
+  Object.entries(value).forEach(([key, raw]) => {
+    if (typeof raw === 'string') {
+      groupKeys[key] = raw;
+    }
+  });
+  return groupKeys;
 }
 
 function addFormScriptFiles(entries: Map<string, HvyVirtualEntry>, block: VisualBlock, blockPath: string): void {

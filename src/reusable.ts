@@ -134,14 +134,16 @@ export function saveReusableFromModal(
     findBlockByIds: (sectionKey: string, blockId: string) => VisualBlock | null;
     recordHistory: (group?: string) => void;
     closeModal: () => void;
-  }
+  },
+  options: { mode?: 'save-as-new' | 'update-existing' } = {}
 ): void {
   const modal = state.reusableSaveModal;
   if (!modal) {
     return;
   }
+  const updateExisting = options.mode === 'update-existing' && modal.kind === 'component' && !!modal.existingName;
   const input = app.querySelector<HTMLInputElement>('#reusableNameInput');
-  const draftName = (input?.value ?? modal.draftName).trim();
+  const draftName = (updateExisting ? modal.existingName ?? '' : input?.value ?? modal.draftName).trim();
   if (!draftName) {
     input?.focus();
     return;

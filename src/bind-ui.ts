@@ -16,6 +16,7 @@ import { bindImageDragAndDrop } from './editor/components/image/image';
 import { bindAppEvents } from './bind/app-events';
 import { scheduleSidebarHelpAutoClose } from './bind/handlers/click-misc';
 import { saveResumeState } from './state-persistence';
+import { encodeComponentListRuntimeView, parseComponentListRuntimeView } from './editor/components/component-list/component-list-view';
 
 export function bindUi(app: HTMLElement): void {
   const newBtn = app.querySelector<HTMLButtonElement>('#newBtn');
@@ -123,6 +124,49 @@ export function bindUi(app: HTMLElement): void {
 
   bindAppEvents(app);
 
+  const toggleComponentListReverse = (reverseList: HTMLElement): void => {
+    const sectionKey = reverseList.dataset.sectionKey;
+    const blockId = reverseList.dataset.blockId;
+    const viewId = reverseList.dataset.viewId ?? '';
+    if (!sectionKey || !blockId) {
+      return;
+    }
+    const key = `${sectionKey}:${blockId}`;
+    const current = parseComponentListRuntimeView(state.componentListReaderViews[key] ?? viewId);
+    state.componentListReaderViews[key] = encodeComponentListRuntimeView({
+      sortKey: current.sortKeyOverride ? current.sortKey : viewId,
+      sortKeyOverride: current.sortKeyOverride || !!viewId,
+      reversed: !current.reversed,
+      groupKey: current.groupKey,
+    });
+  };
+
+  const handleCollapsedListControlPointerDown = (event: Event) => {
+    const target = event.target as HTMLElement;
+    const select = target.closest<HTMLSelectElement>('select');
+    const listControls = select?.closest<HTMLElement>('[data-component-list-reader-controls="true"]');
+    const collapsedSection = listControls?.closest<HTMLElement>('.reader-section.is-collapsed-preview');
+    const sectionKey = select?.dataset.sectionKey;
+    const blockId = select?.dataset.blockId ?? '';
+    if (!select || !listControls || !collapsedSection || !sectionKey) {
+      return;
+    }
+    const section = findSectionByKey(state.document.sections, sectionKey);
+    if (!section || section.expanded) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    section.expanded = true;
+    const field = select.dataset.field ?? 'component-list-reader-view';
+    getRefreshReaderPanels()();
+    const nextSelect = app.querySelector<HTMLSelectElement>(
+      `[data-field="${CSS.escape(field)}"][data-section-key="${CSS.escape(sectionKey)}"][data-block-id="${CSS.escape(blockId)}"]`
+    );
+    nextSelect?.focus();
+    (nextSelect as (HTMLSelectElement & { showPicker?: () => void }) | null)?.showPicker?.();
+  };
+
   const handleReaderAreaClick = (event: Event) => {
     const target = event.target as HTMLElement;
 
@@ -131,6 +175,44 @@ export function bindUi(app: HTMLElement): void {
       event.preventDefault();
       const id = anchor.getAttribute('href')?.slice(1) ?? '';
       navigateToSection(id, app);
+      return;
+    }
+
+    const listControls = target.closest<HTMLElement>('[data-component-list-reader-controls="true"]');
+    if (listControls) {
+      const collapsedSection = listControls.closest<HTMLElement>('.reader-section.is-collapsed-preview');
+      const sectionKey = listControls.querySelector<HTMLElement>('[data-section-key]')?.dataset.sectionKey;
+      if (collapsedSection && sectionKey) {
+        const section = findSectionByKey(state.document.sections, sectionKey);
+        if (section && !section.expanded) {
+          event.stopPropagation();
+          section.expanded = true;
+          const reverseList = target.closest<HTMLElement>('[data-reader-action="toggle-component-list-reverse"]');
+          if (reverseList) {
+            toggleComponentListReverse(reverseList);
+          }
+          getRefreshReaderPanels()();
+          const select = target.closest<HTMLSelectElement>('select');
+          if (select) {
+            const blockId = select.dataset.blockId ?? '';
+            window.setTimeout(() => {
+              const nextSelect = app.querySelector<HTMLSelectElement>(
+                `[data-field="${CSS.escape(select.dataset.field ?? 'component-list-reader-view')}"][data-section-key="${CSS.escape(sectionKey)}"][data-block-id="${CSS.escape(blockId)}"]`
+              );
+              nextSelect?.focus();
+              (nextSelect as (HTMLSelectElement & { showPicker?: () => void }) | null)?.showPicker?.();
+            }, 0);
+          }
+          return;
+        }
+      }
+    }
+
+    const reverseList = target.closest<HTMLElement>('[data-reader-action="toggle-component-list-reverse"]');
+    if (reverseList) {
+      event.stopPropagation();
+      toggleComponentListReverse(reverseList);
+      getRefreshReaderPanels()();
       return;
     }
 
@@ -179,8 +261,28 @@ export function bindUi(app: HTMLElement): void {
         state.readerExpandableState[expandableStateKey] = true;
         getRefreshReaderPanels()();
       }
+      return;
+    }
+
+    const container = target.closest<HTMLElement>('[data-reader-action="toggle-container"]');
+    if (container) {
+      if (target.closest('a, input, select, textarea, [contenteditable="true"]')) {
+        return;
+      }
+      event.stopPropagation();
+      const key = container.dataset.containerKey;
+      if (!key) {
+        return;
+      }
+      state.readerContainerState[key] = container.getAttribute('aria-expanded') !== 'true';
+      getRefreshReaderPanels()();
     }
   };
+
+  readerDocument?.addEventListener('pointerdown', handleCollapsedListControlPointerDown);
+  readerSidebarSections?.addEventListener('pointerdown', handleCollapsedListControlPointerDown);
+  aiReaderDocument?.addEventListener('pointerdown', handleCollapsedListControlPointerDown);
+  aiSidebarSections?.addEventListener('pointerdown', handleCollapsedListControlPointerDown);
 
   readerDocument?.addEventListener('click', handleReaderAreaClick);
   readerSidebarSections?.addEventListener('click', handleReaderAreaClick);

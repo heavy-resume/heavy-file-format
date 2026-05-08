@@ -3,6 +3,7 @@ import { expect, test } from 'vitest';
 import { renderTableEditor, renderTableReader, resetReaderTableStripeSequence } from '../src/editor/components/table/table';
 import type { ComponentRenderHelpers } from '../src/editor/component-helpers';
 import type { VisualBlock, VisualSection } from '../src/editor/types';
+import { defaultBlockSchema } from '../src/document-factory';
 
 function createTableBlock(rows: string[][], options?: { showHeader?: boolean }): VisualBlock {
   return {
@@ -10,45 +11,14 @@ function createTableBlock(rows: string[][], options?: { showHeader?: boolean }):
     text: '',
     schemaMode: false,
     schema: {
-      id: '',
-      component: 'table',
-      lock: false,
-      align: 'left',
+      ...defaultBlockSchema('table'),
       slot: 'left',
       css: '',
-      codeLanguage: '',
-      containerBlocks: [],
-      componentListComponent: 'text',
-      componentListItemLabel: '',
-      componentListBlocks: [],
-      gridColumns: 2,
-      gridItems: [],
-      tags: '',
-      description: '',
-      placeholder: '',
-      fillIn: false,
-      metaOpen: false,
-      xrefTitle: '',
-      xrefDetail: '',
-      xrefTarget: '',
-      plugin: '',
-      pluginConfig: {},
-      expandableStubComponent: 'container',
-      expandableContentComponent: 'container',
-      expandableStub: '',
-      expandableStubCss: '',
-      expandableStubBlocks: { lock: false, children: [] },
-      expandableAlwaysShowStub: true,
-      expandableExpanded: false,
-      expandableContentCss: '',
-      expandableContentBlocks: { lock: false, children: [] },
       tableColumns: ['Role', 'Scope'],
       tableShowHeader: options?.showHeader ?? false,
       tableRows: rows.map((cells) => ({
         cells,
       })),
-      imageFile: '',
-      imageAlt: '',
     },
   };
 }
@@ -74,6 +44,8 @@ function createHelpers(): ComponentRenderHelpers {
     ensureContainerBlocks: () => {},
     ensureComponentListBlocks: () => {},
     getSelectedAddComponent: (_key, fallback) => fallback,
+    getComponentListReaderViewId: () => '',
+    getReaderContainerExpanded: (_key, fallback) => fallback,
     isExpandableEditorPanelOpen: () => false,
     isAdvancedEditorMode: () => false,
     isMobileAdjustmentMode: () => false,

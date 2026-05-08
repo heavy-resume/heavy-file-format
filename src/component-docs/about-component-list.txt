@@ -5,5 +5,10 @@ Use children-order.json to reorder list items.
 componentListComponent describes what kind of item the list is expected to contain.
 componentListItemLabel is a human-friendly singular label for add/edit prompts.
 componentListBlocks holds the ordered child blocks.
+componentListDefaultSortKey, componentListDefaultSortDirection, and componentListDefaultGroupKey define the default reader display.
+componentListGroupCollapsedPreviewRem controls grouped virtual container preview height.
+Child item sortKeys are human-readable sort name/value pairs. Values may be strings or numbers.
+Child item groupKeys are human-readable group name/value pairs. Values are strings.
 Numbered component-list slots are sorted by numeric suffix, with file order only breaking ties.
 Plain Markdown before the first numbered slot is treated as the first implicit child block.
+Grouped reader display renders virtual collapsed container components; they are not serialized and do not appear in children-order.json.

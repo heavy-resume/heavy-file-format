@@ -515,7 +515,7 @@
   }
 }
 
-@media (max-width: 760px) {
+@media (max-width: 800px) {
   .chat-dock {
     right: 0.5rem;
     bottom: 0.5rem;

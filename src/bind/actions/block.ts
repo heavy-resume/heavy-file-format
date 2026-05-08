@@ -127,6 +127,33 @@ const removeTextFillIn: ActionHandler = ({ actionButton, sectionKey }) => {
   getRenderApp()();
 };
 
+const addBlockDisplayKey: ActionHandler = ({ actionButton, sectionKey }) => {
+  const block = resolveBlockContext(actionButton)?.block ?? null;
+  if (!block) {
+    return;
+  }
+  const kind = actionButton.dataset.displayKeyKind === 'group' ? 'group' : 'sort';
+  const keyMap = kind === 'group' ? block.schema.groupKeys : block.schema.sortKeys;
+  const name = getNextDisplayKeyName(keyMap, kind === 'group' ? 'Grouping Key' : 'Sort Key');
+  recordHistory(`display-key:${block.id}:add`);
+  keyMap[name] = kind === 'group' ? '' : 0;
+  syncReusableTemplateForBlock(sectionKey, block.id);
+  getRenderApp()();
+};
+
+const removeBlockDisplayKey: ActionHandler = ({ actionButton, sectionKey }) => {
+  const block = resolveBlockContext(actionButton)?.block ?? null;
+  const name = actionButton.dataset.sortKeyName ?? '';
+  const keyMap = actionButton.dataset.displayKeyKind === 'group' ? block?.schema.groupKeys : block?.schema.sortKeys;
+  if (!block || !keyMap || !name || !Object.prototype.hasOwnProperty.call(keyMap, name)) {
+    return;
+  }
+  recordHistory(`display-key:${block.id}:remove`);
+  delete keyMap[name];
+  syncReusableTemplateForBlock(sectionKey, block.id);
+  getRenderApp()();
+};
+
 const removeBlock: ActionHandler = ({ section, sectionKey, blockId, reusableName }) => {
   if (!blockId) {
     return;
@@ -332,6 +359,8 @@ export const blockActions: Record<string, ActionHandler> = {
   'set-block-align': setBlockAlign,
   'set-text-fill-in': setTextFillIn,
   'remove-text-fill-in': removeTextFillIn,
+  'add-block-display-key': addBlockDisplayKey,
+  'remove-block-display-key': removeBlockDisplayKey,
   'remove-block': removeBlock,
   'move-block-up': moveBlock(-1),
   'move-block-down': moveBlock(1),
@@ -426,6 +455,17 @@ function reassignBlockIds(block: VisualBlock): void {
     item.id = makeId('griditem');
     reassignBlockIds(item.block);
   });
+}
+
+function getNextDisplayKeyName(keyMap: Record<string, unknown>, baseName: string): string {
+  if (!Object.prototype.hasOwnProperty.call(keyMap, baseName)) {
+    return baseName;
+  }
+  let index = 2;
+  while (Object.prototype.hasOwnProperty.call(keyMap, `${baseName} ${index}`)) {
+    index += 1;
+  }
+  return `${baseName} ${index}`;
 }
 
 function centerPlacementSourceAfterRender(): void {

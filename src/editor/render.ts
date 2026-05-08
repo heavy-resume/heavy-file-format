@@ -15,7 +15,7 @@ import { renderXrefCardEditor } from './components/xref-card/xref-card';
 import { getComponentListAddLabel, getComponentListEditLabel, hasComponentListItems } from './components/component-list/component-list-labels';
 import { renderTagEditor } from './tag-editor';
 import { getTemplateFields, renderTemplateGhosts } from './template';
-import type { Align, BlockSchema, VisualBlock, VisualSection } from './types';
+import type { Align, BlockSchema, SortKeyValue, VisualBlock, VisualSection } from './types';
 import { markdownToReaderHtml, normalizeMarkdownIndentation, normalizeMarkdownLists } from '../markdown';
 import bash from 'highlight.js/lib/languages/bash';
 import css from 'highlight.js/lib/languages/css';
@@ -69,8 +69,14 @@ interface SectionDef {
   name: string;
 }
 
+interface ComponentListDisplayContext {
+  sortKeys: string[];
+  groupKeys: string[];
+}
+
 interface EditorRenderState {
   documentMeta: Record<string, unknown>;
+  documentSections: VisualSection[];
   showAdvancedEditor: boolean;
   addComponentBySection: Record<string, string>;
   activeEditorBlock: { sectionKey: string; blockId: string } | null;
@@ -394,7 +400,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         : `<button type="button" class="ghost" data-action="start-component-move" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}">Move</button>
            <button type="button" class="ghost" data-action="start-component-copy" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}">Copy</button>`
       : '';
-    const componentMetaActions = state.showAdvancedEditor && isActiveSelf
+    const componentMetaActions = state.showAdvancedEditor && isActive
       ? `<div class="editor-block-context-actions" aria-label="Component options">
           <button type="button" class="ghost" data-action="open-save-component-def" data-section-key="${deps.escapeAttr(
         sectionKey
@@ -855,6 +861,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
 
   function renderBlockMetaFields(sectionKey: string, block: VisualBlock): string {
     const component = deps.resolveBaseComponent(block.schema.component);
+    const listDisplayContext = getComponentListDisplayContext(sectionKey, block.id);
     const scriptingVersionField =
       component === 'plugin' && block.schema.plugin === SCRIPTING_PLUGIN_ID
         ? `<label>
@@ -913,6 +920,42 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
             value="${deps.escapeAttr(block.schema.placeholder)}"
           />
         </label>
+        ${listDisplayContext ? renderComponentListDisplayFields(sectionKey, block, listDisplayContext) : ''}
+        ${
+          component === 'container'
+            ? `<label>
+          <span>Container Title</span>
+          <input
+            data-section-key="${deps.escapeAttr(sectionKey)}"
+            data-block-id="${deps.escapeAttr(block.id)}"
+            data-field="block-container-title"
+            value="${deps.escapeAttr(block.schema.containerTitle)}"
+          />
+        </label>
+        <label>
+          <span>Collapsed Preview Rem</span>
+          <input
+            type="number"
+            min="1"
+            step="0.25"
+            data-section-key="${deps.escapeAttr(sectionKey)}"
+            data-block-id="${deps.escapeAttr(block.id)}"
+            data-field="block-container-collapsed-preview-rem"
+            value="${deps.escapeAttr(String(block.schema.containerCollapsedPreviewRem))}"
+          />
+        </label>
+        <label class="checkbox-label">
+          <input
+            type="checkbox"
+            data-section-key="${deps.escapeAttr(sectionKey)}"
+            data-block-id="${deps.escapeAttr(block.id)}"
+            data-field="block-container-expanded"
+            ${block.schema.containerExpanded ? 'checked' : ''}
+          />
+          <span>Expanded by default</span>
+        </label>`
+            : ''
+        }
         ${
           component === 'component-list'
             ? `<label>
@@ -923,6 +966,18 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
             data-field="block-component-list-item-label"
             placeholder="${deps.escapeAttr(getComponentListAddLabel(block).replace(/^Add\s+/, ''))}"
             value="${deps.escapeAttr(block.schema.componentListItemLabel)}"
+          />
+        </label>
+        <label>
+          <span>Group Preview Height</span>
+          <input
+            type="number"
+            min="1"
+            step="0.25"
+            data-section-key="${deps.escapeAttr(sectionKey)}"
+            data-block-id="${deps.escapeAttr(block.id)}"
+            data-field="component-list-group-preview-rem"
+            value="${deps.escapeAttr(String(block.schema.componentListGroupCollapsedPreviewRem))}"
           />
         </label>`
             : ''
@@ -943,6 +998,110 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         ${scriptingVersionField}
       </div>
     `;
+  }
+
+  function renderComponentListDisplayFields(sectionKey: string, block: VisualBlock, context: ComponentListDisplayContext): string {
+    return `<section class="component-list-display-editor" aria-label="Component list display">
+      <strong>Component List Display</strong>
+      ${renderDisplayKeyEditor('Sort Keys', 'sort', sectionKey, block, context.sortKeys, block.schema.sortKeys)}
+      ${renderDisplayKeyEditor('Grouping Keys', 'group', sectionKey, block, context.groupKeys, block.schema.groupKeys)}
+    </section>`;
+  }
+
+  function renderDisplayKeyEditor(
+    label: string,
+    kind: 'sort' | 'group',
+    sectionKey: string,
+    block: VisualBlock,
+    suggestedKeys: string[],
+    ownKeyValues: Record<string, SortKeyValue> | Record<string, string>
+  ): string {
+    const keys = mergeDisplayKeys(ownKeyValues, suggestedKeys);
+    const datalistId = `${block.id}-${kind}-display-keys`;
+    const options = keys.map((key) => `<option value="${deps.escapeAttr(key)}"></option>`).join('');
+    return `<div class="sort-key-editor" data-display-key-kind="${kind}">
+      <div class="sort-key-editor-head">
+        <span>${label}</span>
+        <button
+          type="button"
+          class="ghost"
+          data-action="add-block-display-key"
+          data-display-key-kind="${kind}"
+          data-section-key="${deps.escapeAttr(sectionKey)}"
+          data-block-id="${deps.escapeAttr(block.id)}"
+        >Add ${kind === 'sort' ? 'Sort Key' : 'Grouping Key'}</button>
+      </div>
+      <datalist id="${deps.escapeAttr(datalistId)}">${options}</datalist>
+      ${renderDisplayKeyRows(sectionKey, block, keys, datalistId, kind, ownKeyValues, kind === 'sort' ? 'Sort Key' : 'Grouping Key')}
+    </div>`;
+  }
+
+  function renderDisplayKeyRows(
+    sectionKey: string,
+    block: VisualBlock,
+    keys: string[],
+    datalistId: string,
+    kind: 'sort' | 'group',
+    ownKeyValues: Record<string, SortKeyValue> | Record<string, string>,
+    keyPlaceholder: string
+  ): string {
+    if (keys.length === 0) {
+      return '<p class="muted sort-key-empty">No display keys yet.</p>';
+    }
+    return keys
+      .map((name) => {
+        const hasOwnKey = Object.prototype.hasOwnProperty.call(ownKeyValues, name);
+        const value = hasOwnKey ? ownKeyValues[name] ?? '' : '';
+        return `<div class="sort-key-row">
+          <input
+            data-section-key="${deps.escapeAttr(sectionKey)}"
+            data-block-id="${deps.escapeAttr(block.id)}"
+            data-field="block-sort-key-name"
+            data-display-key-kind="${kind}"
+            data-sort-key-name="${deps.escapeAttr(name)}"
+            data-sort-key-present="${hasOwnKey ? 'true' : 'false'}"
+            list="${deps.escapeAttr(datalistId)}"
+            placeholder="${deps.escapeAttr(keyPlaceholder)}"
+            value="${deps.escapeAttr(name)}"
+          />
+          <input
+            data-section-key="${deps.escapeAttr(sectionKey)}"
+            data-block-id="${deps.escapeAttr(block.id)}"
+            data-field="block-sort-key-value"
+            data-display-key-kind="${kind}"
+            data-sort-key-name="${deps.escapeAttr(name)}"
+            placeholder="Value"
+            value="${deps.escapeAttr(String(value))}"
+          />
+          ${hasOwnKey
+            ? `<button
+                type="button"
+                class="ghost remove-x"
+                data-action="remove-block-display-key"
+                data-section-key="${deps.escapeAttr(sectionKey)}"
+                data-block-id="${deps.escapeAttr(block.id)}"
+                data-sort-key-name="${deps.escapeAttr(name)}"
+                data-display-key-kind="${kind}"
+                aria-label="Remove ${deps.escapeAttr(name)}"
+              >${closeIcon()}</button>`
+            : '<span class="sort-key-row-spacer"></span>'}
+        </div>`;
+      })
+      .join('');
+  }
+
+  function mergeDisplayKeys(ownKeyValues: Record<string, SortKeyValue> | Record<string, string>, suggestedKeys: string[]): string[] {
+    const ownKeys = Object.keys(ownKeyValues).filter((key) => key.length > 0);
+    return [...new Set([...suggestedKeys, ...ownKeys])].sort((left, right) => left.localeCompare(right, undefined, { sensitivity: 'base' }));
+  }
+
+  function getComponentListDisplayContext(sectionKey: string, blockId: string): ComponentListDisplayContext | null {
+    const section = findSectionForRenderKey(state.documentSections, sectionKey);
+    if (!section) {
+      return null;
+    }
+    const listBlock = findDirectParentComponentList(section.blocks, blockId);
+    return listBlock ? buildComponentListDisplayContext(listBlock) : null;
   }
 
   function renderTextFragment(content: string): string {
@@ -1026,6 +1185,68 @@ function findBlockPathIds(blocks: VisualBlock[], targetBlockId: string): string[
     }
   }
   return null;
+}
+
+function findSectionForRenderKey(sections: VisualSection[], sectionKey: string): VisualSection | null {
+  for (const section of sections) {
+    if (section.key === sectionKey) {
+      return section;
+    }
+    const nested = findSectionForRenderKey(section.children, sectionKey);
+    if (nested) {
+      return nested;
+    }
+  }
+  return null;
+}
+
+function findDirectParentComponentList(blocks: VisualBlock[], targetBlockId: string, seen = new Set<VisualBlock>()): VisualBlock | null {
+  for (const block of blocks) {
+    if (seen.has(block)) {
+      continue;
+    }
+    seen.add(block);
+    if ((block.schema.componentListBlocks ?? []).some((child) => child.id === targetBlockId)) {
+      return block;
+    }
+    const nested =
+      findDirectParentComponentList(block.schema.containerBlocks ?? [], targetBlockId, seen)
+      ?? findDirectParentComponentList(block.schema.componentListBlocks ?? [], targetBlockId, seen)
+      ?? findDirectParentComponentList((block.schema.gridItems ?? []).map((item) => item.block), targetBlockId, seen)
+      ?? findDirectParentComponentList(block.schema.expandableStubBlocks?.children ?? [], targetBlockId, seen)
+      ?? findDirectParentComponentList(block.schema.expandableContentBlocks?.children ?? [], targetBlockId, seen);
+    if (nested) {
+      return nested;
+    }
+  }
+  return null;
+}
+
+function buildComponentListDisplayContext(listBlock: VisualBlock): ComponentListDisplayContext {
+  const sortKeys = new Set<string>();
+  const groupKeys = new Set<string>();
+  listBlock.schema.componentListBlocks.forEach((child) => {
+    Object.keys(child.schema.sortKeys).forEach((key) => {
+      if (!key.trim()) {
+        return;
+      }
+      sortKeys.add(key);
+    });
+    Object.keys(child.schema.groupKeys).forEach((key) => {
+      if (!key.trim()) {
+        return;
+      }
+      groupKeys.add(key);
+    });
+  });
+  return {
+    sortKeys: sortDisplayKeys(sortKeys),
+    groupKeys: sortDisplayKeys(groupKeys),
+  };
+}
+
+function sortDisplayKeys(keys: Set<string>): string[] {
+  return [...keys].sort((left, right) => left.localeCompare(right, undefined, { sensitivity: 'base' }));
 }
 
 function findBlockLocation(

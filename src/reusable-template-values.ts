@@ -62,6 +62,7 @@ export function validateReusableTemplateValues(
 
 export function applyReusableTemplateValues(block: VisualBlock, values: Record<string, string>): VisualBlock {
   replaceTemplateStrings(block, values);
+  normalizeTemplatePlaceholderTextBlocks(block);
   return block;
 }
 
@@ -133,4 +134,30 @@ function replaceTemplateStrings(value: unknown, values: Record<string, string>, 
     (value as Record<string, unknown>)[key] = replaceTemplateStrings(item, values, seen);
   });
   return value;
+}
+
+function normalizeTemplatePlaceholderTextBlocks(block: VisualBlock): void {
+  if (block.schema.placeholder.trim() && !hasVisibleMarkdownText(block.text)) {
+    block.text = '';
+  }
+  block.schema.containerBlocks?.forEach(normalizeTemplatePlaceholderTextBlocks);
+  block.schema.componentListBlocks?.forEach(normalizeTemplatePlaceholderTextBlocks);
+  block.schema.gridItems?.forEach((item) => normalizeTemplatePlaceholderTextBlocks(item.block));
+  block.schema.expandableStubBlocks?.children.forEach(normalizeTemplatePlaceholderTextBlocks);
+  block.schema.expandableContentBlocks?.children.forEach(normalizeTemplatePlaceholderTextBlocks);
+}
+
+function hasVisibleMarkdownText(text: string): boolean {
+  return text
+    .split(/\r?\n/)
+    .some((line) => stripMarkdownScaffold(line).trim().length > 0);
+}
+
+function stripMarkdownScaffold(line: string): string {
+  return line
+    .replace(/^\s{0,3}#{1,6}\s*/, '')
+    .replace(/^\s{0,3}>\s?/, '')
+    .replace(/^\s*(?:[-*+]|\d+[.)])\s+/, '')
+    .replace(/^\s*[-*_]{3,}\s*$/, '')
+    .replace(/[\\`*_~#[\]()!>-]/g, '');
 }

@@ -127,7 +127,7 @@
   }
 }
 
-@container hvy-surface (inline-size < 48rem) {
+@container hvy-surface (inline-size <= 50rem) {
   .hvy-nowrap {
     font-size: 0.94em;
   }

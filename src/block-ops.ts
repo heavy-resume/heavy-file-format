@@ -700,6 +700,8 @@ export function getComponentRenderHelpers(editorRenderer: {
     ensureContainerBlocks,
     ensureComponentListBlocks,
     getSelectedAddComponent: (key: string, fallback: string) => state.addComponentBySection[key] ?? fallback,
+    getComponentListReaderViewId: (sectionKey, blockId) => state.componentListReaderViews[`${sectionKey}:${blockId}`] ?? '',
+    getReaderContainerExpanded: (key, fallback) => state.readerContainerState[key] ?? fallback,
     isExpandableEditorPanelOpen: (sectionKey, blockId, panel, fallback) =>
       state.expandableEditorPanels[`${sectionKey}:${blockId}`]?.[panel === 'stub' ? 'stubOpen' : 'expandedOpen'] ?? fallback,
     isAdvancedEditorMode: () => state.showAdvancedEditor,

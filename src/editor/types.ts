@@ -7,6 +7,8 @@ export interface TableRow {
   cells: string[];
 }
 
+export type SortKeyValue = number | string;
+
 export interface GridItem {
   id: string;
   block: VisualBlock;
@@ -26,11 +28,20 @@ export interface BlockSchema {
   css: string;
   codeLanguage: string;
   containerBlocks: VisualBlock[];
+  containerTitle: string;
+  containerExpanded: boolean;
+  containerCollapsedPreviewRem: number;
   componentListComponent: string;
   componentListItemLabel: string;
   componentListBlocks: VisualBlock[];
+  componentListDefaultSortKey: string;
+  componentListDefaultSortDirection: 'asc' | 'desc';
+  componentListDefaultGroupKey: string;
+  componentListGroupCollapsedPreviewRem: number;
   gridColumns: number;
   gridItems: GridItem[];
+  sortKeys: Record<string, SortKeyValue>;
+  groupKeys: Record<string, string>;
   tags: string;
   description: string;
   placeholder: string;

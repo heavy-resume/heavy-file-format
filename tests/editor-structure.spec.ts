@@ -233,6 +233,168 @@ hvy_version: 0.1
   await expect(page.locator('#editorTree')).not.toContainText('Expanded detail');
 });
 
+test('component-list display defaults sort items into collapsed virtual groups', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"skills"}-->
+#! Skills
+
+<!--hvy:component-list {"id":"skill-list","componentListComponent":"text","componentListDefaultSortKey":"Job Match","componentListDefaultSortDirection":"desc","componentListDefaultGroupKey":"Category","componentListGroupCollapsedPreviewRem":1}-->
+
+ <!--hvy:component-list:0 {}-->
+
+  <!--hvy:text {"sortKeys":{"Job Match":80},"groupKeys":{"Category":"Database"}}-->
+   PostgreSQL
+
+ <!--hvy:component-list:1 {}-->
+
+  <!--hvy:text {"sortKeys":{"Job Match":95},"groupKeys":{"Category":"Language"}}-->
+   TypeScript
+
+ <!--hvy:component-list:2 {}-->
+
+  <!--hvy:text {"sortKeys":{"Job Match":90},"groupKeys":{"Category":"Database"}}-->
+   SQLite
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('.editor-block-passive', { has: page.locator('.reader-component-list') }).first().click();
+  const activeList = page.locator('.component-list-view-editor').first();
+  await expect(activeList).toBeVisible();
+  await expect(activeList.locator('[data-field="component-list-default-sort-key"]')).toHaveValue('Job Match');
+  await expect(activeList.locator('[data-field="component-list-default-sort-direction"]')).toHaveValue('desc');
+  await expect(activeList.locator('[data-field="component-list-default-group-key"]')).toHaveValue('Category');
+
+  await page.getByRole('button', { name: 'Viewer' }).click();
+
+  const readerControls = page.locator('.component-list-reader-controls').first();
+  await expect(readerControls).toContainText('Sort');
+  await expect(readerControls).toContainText('Group');
+  await expect(readerControls.locator('[data-field="component-list-reader-view"]')).toHaveValue('Job Match');
+  await expect(readerControls.locator('[data-field="component-list-reader-view"] option', { hasText: 'Category' })).toHaveCount(0);
+  await expect(readerControls.locator('[data-field="component-list-reader-group"]')).toHaveValue('Category');
+  await expect(readerControls.locator('[data-reader-action="toggle-component-list-reverse"]')).toHaveAttribute('aria-label', 'Sort descending');
+
+  const groups = page.locator('.reader-container.is-virtual-group-container');
+  await expect(groups).toHaveCount(2);
+  await expect(groups.nth(0).locator('.reader-container-title')).toHaveText('Language');
+  await expect(groups.nth(1).locator('.reader-container-title')).toHaveText('Database');
+  await expect(groups.nth(0).locator('.reader-container-title')).toHaveAttribute('aria-expanded', 'false');
+
+  await readerControls.locator('[data-reader-action="toggle-component-list-reverse"]').click();
+  await expect(readerControls.locator('[data-reader-action="toggle-component-list-reverse"]')).toHaveAttribute('aria-label', 'Sort ascending');
+  await expect(groups.nth(0).locator('.reader-container-title')).toHaveText('Database');
+  await expect(groups.nth(1).locator('.reader-container-title')).toHaveText('Language');
+
+  await readerControls.locator('[data-field="component-list-reader-group"]').selectOption('');
+  await expect(page.locator('.reader-container.is-virtual-group-container')).toHaveCount(0);
+  await expect(page.locator('.reader-component-list')).toContainText('PostgreSQL');
+
+  await readerControls.locator('[data-field="component-list-reader-group"]').selectOption('Category');
+
+  await groups.nth(0).locator('.reader-container-title').click();
+
+  await expect(groups.nth(0).locator('.reader-container-title')).toHaveAttribute('aria-expanded', 'true');
+  await expect(groups.nth(0)).toContainText('PostgreSQL');
+  await expect(groups.nth(0)).toContainText('SQLite');
+});
+
+test('component-list reader controls hide unavailable sort and group controls', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"lists"}-->
+#! Lists
+
+<!--hvy:component-list {"id":"sorted-list","componentListComponent":"text","componentListDefaultSortKey":"Strength","componentListDefaultSortDirection":"desc"}-->
+
+ <!--hvy:component-list:0 {}-->
+
+  <!--hvy:text {"sortKeys":{"Strength":2}}-->
+   Two
+
+ <!--hvy:component-list:1 {}-->
+
+  <!--hvy:text {"sortKeys":{"Strength":1}}-->
+   One
+
+<!--hvy:component-list {"id":"plain-list","componentListComponent":"text"}-->
+
+ <!--hvy:component-list:0 {}-->
+
+  <!--hvy:text {}-->
+   Plain
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Viewer' }).click();
+
+  const controls = page.locator('.component-list-reader-controls');
+  await expect(controls).toHaveCount(1);
+  await expect(controls.first().locator('[data-field="component-list-reader-view"]')).toBeVisible();
+  await expect(controls.first().locator('[data-field="component-list-reader-view"] option[value=""]')).toHaveCount(0);
+  await expect(controls.first().locator('[data-field="component-list-reader-group"]')).toHaveCount(0);
+  await expect(controls.first().locator('[data-reader-action="toggle-component-list-reverse"]')).toBeVisible();
+});
+
+test('component-list default display editor hides unavailable controls', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"lists"}-->
+#! Lists
+
+<!--hvy:component-list {"id":"plain-list","componentListComponent":"text"}-->
+
+ <!--hvy:component-list:0 {}-->
+
+  <!--hvy:text {}-->
+   Plain
+
+<!--hvy:component-list {"id":"group-list","componentListComponent":"text"}-->
+
+ <!--hvy:component-list:0 {}-->
+
+  <!--hvy:text {"groupKeys":{"Category":"Database"}}-->
+   PostgreSQL
+
+ <!--hvy:component-list:1 {}-->
+
+  <!--hvy:text {"groupKeys":{"Category":"Language"}}-->
+   TypeScript
+
+ <!--hvy:component-list:2 {}-->
+
+  <!--hvy:text {"groupKeys":{"Category":"Database"}}-->
+   SQLite
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('.editor-block-passive', { hasText: 'Plain' }).first().click();
+  await expect(page.locator('.component-list-view-editor')).toHaveCount(0);
+
+  await page.locator('.editor-block-passive', { hasText: 'PostgreSQL' }).first().click();
+  const editor = page.locator('.component-list-view-editor');
+  await expect(editor).toBeVisible();
+  await expect(editor.locator('[data-field="component-list-default-sort-key"]')).toHaveCount(0);
+  await expect(editor.locator('[data-field="component-list-default-sort-direction"]')).toHaveCount(0);
+  await expect(editor.locator('[data-field="component-list-default-group-key"]')).toBeVisible();
+});
+
 test('text toolbar fill-in converts selected text to a fill-in slot', async ({ page }) => {
   await page.goto('/');
 
@@ -412,6 +574,154 @@ test('active component remove button is anchored to the editor frame corner', as
   expect(buttonBox).not.toBeNull();
   expect(buttonBox?.x ?? 0).toBeGreaterThan((blockBox?.x ?? 0) + (blockBox?.width ?? 0) - (buttonBox?.width ?? 0) - 8);
   expect(buttonBox?.y ?? 0).toBeLessThan(blockBox?.y ?? 0);
+});
+
+test('ancestor component exposes meta actions while editing descendants', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"skills"}-->
+#! Skills
+
+<!--hvy:container {"id":"skill-software-engineering","sortKeys":{"Strength":98}}-->
+
+ <!--hvy:container:0 {}-->
+
+  <!--hvy:text {}-->
+   ### Software Engineering
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Advanced' }).click();
+
+  await page.locator('.reader-container-body > .editor-block-passive', { hasText: 'Software Engineering' }).click();
+
+  expect(await page.locator('.editor-block-context-actions [data-action="open-component-meta"]').count()).toBeGreaterThan(1);
+});
+
+test('reusable component modal offers update existing or save as new', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+component_defs:
+  - name: skill-card
+    baseType: text
+    schema:
+      placeholder: Skill
+---
+
+<!--hvy: {"id":"skills"}-->
+#! Skills
+
+<!--hvy:skill-card {"id":"skill-card-1"}-->
+ Software Engineering
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Advanced' }).click();
+
+  await page.locator('.editor-block-passive', { hasText: 'Software Engineering' }).click();
+  await page.getByLabel('Component options').getByRole('button', { name: 'Reusable' }).click();
+
+  const modal = page.locator('.component-meta-modal', { hasText: 'Update Reusable Component' });
+  await expect(modal).toBeVisible();
+  await expect(modal.locator('.reusable-existing-option strong')).toHaveText('skill-card');
+  await expect(modal.getByRole('button', { name: 'Update Existing' })).toBeVisible();
+  await expect(modal.getByRole('button', { name: 'Save As New' })).toBeVisible();
+  await expect(modal.locator('#reusableNameInput')).toHaveValue('skill-card-copy');
+
+  await modal.locator('#reusableNameInput').fill('skill-card-alt');
+  await modal.getByRole('button', { name: 'Update Existing' }).click();
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await expect(page.locator('#rawEditor')).toHaveValue(/name: skill-card/);
+  await expect(page.locator('#rawEditor')).not.toHaveValue(/skill-card-alt/);
+  await expect(page.locator('#rawEditor')).toHaveValue(/<!--hvy:skill-card \{"id":"skill-card-1"\}-->/);
+});
+
+test('advanced placeholder input keeps focus while typing', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"overview"}-->
+#! Overview
+
+<!--hvy:text {"id":"summary"}-->
+ Summary
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Advanced' }).click();
+
+  await page.locator('.editor-block-passive', { hasText: 'Summary' }).click();
+  await page.getByLabel('Component options').getByRole('button', { name: 'Meta' }).click();
+  const placeholderInput = page.locator('[data-field="block-placeholder"]');
+
+  await placeholderInput.fill('Skill name');
+  await expect(placeholderInput).toBeFocused();
+  await expect(placeholderInput).toHaveValue('Skill name');
+});
+
+test('component list display keys are explicit and shared across list items', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"skills"}-->
+#! Skills
+
+<!--hvy:text {"id":"intro"}-->
+ Outside list
+
+<!--hvy:component-list {"id":"skill-list","componentListComponent":"text"}-->
+
+ <!--hvy:text {"id":"first","sortKeys":{"Self Rating":9},"groupKeys":{"Category":"Engineering"}}-->
+  First
+
+ <!--hvy:text {"id":"second"}-->
+  Second
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Advanced' }).click();
+
+  await page.locator('.editor-block-passive', { hasText: 'Outside list' }).click();
+  await page.getByLabel('Component options').getByRole('button', { name: 'Meta' }).click();
+  await expect(page.locator('.component-list-display-editor')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Close' }).click();
+
+  await page.locator('.reader-component-list > .editor-block-passive', { hasText: 'Second' }).click();
+  await page.locator('.editor-block[data-active-editor-block="true"]').getByRole('button', { name: 'Meta' }).click();
+
+  const display = page.locator('.component-list-display-editor');
+  await expect(display).toBeVisible();
+  await expect(display.getByText('Sort Keys')).toBeVisible();
+  await expect(display.getByText('Grouping Keys')).toBeVisible();
+  await expect(display.locator('[data-field="block-sort-key-name"][value="Self Rating"]')).toBeVisible();
+  await expect(display.locator('[data-field="block-sort-key-name"][value="Category"]').last()).toBeVisible();
+
+  const selfRatingName = display.locator('[data-field="block-sort-key-name"][value="Self Rating"]');
+  await selfRatingName.locator('xpath=following-sibling::input[@data-field="block-sort-key-value"]').fill('7');
+
+  await display.getByRole('button', { name: 'Add Sort Key' }).click();
+  const addedName = display.locator('[data-field="block-sort-key-name"][value="Sort Key"]');
+  await addedName.fill('Confidence');
+  await addedName.locator('xpath=following-sibling::input[@data-field="block-sort-key-value"]').fill('8');
+  await addedName.locator('xpath=following-sibling::button[@data-action="remove-block-display-key"]').click();
+
+  await page.getByRole('button', { name: 'Close' }).click();
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await expect(page.locator('#rawEditor')).toHaveValue(/"second","sortKeys":\{"Self Rating":7\}/);
+  await expect(page.locator('#rawEditor')).not.toHaveValue(/Confidence/);
 });
 
 test('unfilled text fill-in renders as an editor box and blank viewer text', async ({ page }) => {

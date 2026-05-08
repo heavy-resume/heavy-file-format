@@ -106,6 +106,8 @@ function createInitialState(document: ReturnType<typeof deserializeDocumentBytes
     gridAddComponentByBlock: {},
     expandableEditorPanels: {},
     readerExpandableState: {},
+    readerContainerState: {},
+    componentListReaderViews: {},
     viewerSidebarOpen: false,
     editorSidebarOpen: false,
     viewerSidebarHelpDismissed: false,
@@ -244,6 +246,9 @@ editorRenderer = createEditorRenderer(
     get documentMeta() {
       return state.document.meta as Record<string, unknown>;
     },
+    get documentSections() {
+      return state.document.sections;
+    },
     get showAdvancedEditor() {
       const rowModal = state.sqliteRowComponentModal;
       if (rowModal && !rowModal.readOnly) {
@@ -362,6 +367,12 @@ readerRenderer = createReaderRenderer(
     },
     get readerExpandableState() {
       return state.readerExpandableState;
+    },
+    get readerContainerState() {
+      return state.readerContainerState;
+    },
+    get componentListReaderViews() {
+      return state.componentListReaderViews;
     },
     get viewerSidebarHelpDismissed() {
       return state.viewerSidebarHelpDismissed;

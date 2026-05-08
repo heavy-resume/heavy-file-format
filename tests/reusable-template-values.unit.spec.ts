@@ -77,6 +77,36 @@ test('substitutes reusable template values recursively and preserves placeholder
   expect(block.schema.tableRows).toEqual([{ cells: ['', 'Line one\nLine two'] }]);
 });
 
+test('blank template values clear empty markdown scaffolds so placeholders render', () => {
+  const block = {
+    id: 'block-1',
+    text: '',
+    schema: {
+      ...defaultBlockSchema('expandable'),
+      expandableStubBlocks: {
+        children: [
+          {
+            id: 'stub-title',
+            text: '### {% skill %}',
+            schema: {
+              ...defaultBlockSchema('text'),
+              css: 'margin: 0;',
+              placeholder: '### Skill name',
+            },
+            schemaMode: false,
+          },
+        ],
+      },
+    },
+    schemaMode: false,
+  };
+
+  applyReusableTemplateValues(block, { skill: '' });
+
+  expect(block.schema.expandableStubBlocks.children[0]?.text).toBe('');
+  expect(block.schema.expandableStubBlocks.children[0]?.schema.placeholder).toBe('### Skill name');
+});
+
 test('validates exact template value keys and text newlines', () => {
   const variables = [
     { name: 'title', type: 'text' as const },

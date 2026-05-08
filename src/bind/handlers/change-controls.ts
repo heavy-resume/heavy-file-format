@@ -1,4 +1,5 @@
-import { state, getRenderApp, recordHistory, materializeDbTableDraftRow, renameDbTableColumn, syncSqliteColumnNameInDom, updateDbTableCell, handleImageUpload } from './_imports';
+import { state, getRenderApp, getRefreshReaderPanels, recordHistory, materializeDbTableDraftRow, renameDbTableColumn, syncSqliteColumnNameInDom, updateDbTableCell, handleImageUpload, resolveBlockContext, syncReusableTemplateForBlock } from './_imports';
+import { encodeComponentListRuntimeView, parseComponentListRuntimeView } from '../../editor/components/component-list/component-list-view';
 import { dropDbTableColumn } from '../../plugins/db-table';
 
 export function bindChangeControls(app: HTMLElement): void {
@@ -46,6 +47,65 @@ export function bindChangeControls(app: HTMLElement): void {
       const file = target.files?.[0];
       if (!file) return;
       void handleImageUpload(target, file);
+      return;
+    }
+
+    if (field === 'component-list-reader-view' && target instanceof HTMLSelectElement) {
+      const sectionKey = target.dataset.sectionKey;
+      const blockId = target.dataset.blockId;
+      if (!sectionKey || !blockId) {
+        return;
+      }
+      const current = parseComponentListRuntimeView(state.componentListReaderViews[`${sectionKey}:${blockId}`] ?? '');
+      state.componentListReaderViews[`${sectionKey}:${blockId}`] = encodeComponentListRuntimeView({
+        sortKey: target.value,
+        sortKeyOverride: true,
+        reversed: current.reversed,
+        groupKey: current.groupKey,
+      });
+      getRefreshReaderPanels()();
+      return;
+    }
+
+    if (field === 'component-list-reader-group' && target instanceof HTMLSelectElement) {
+      const sectionKey = target.dataset.sectionKey;
+      const blockId = target.dataset.blockId;
+      if (!sectionKey || !blockId) {
+        return;
+      }
+      const current = parseComponentListRuntimeView(state.componentListReaderViews[`${sectionKey}:${blockId}`] ?? '');
+      state.componentListReaderViews[`${sectionKey}:${blockId}`] = encodeComponentListRuntimeView({
+        sortKey: current.sortKeyOverride ? current.sortKey : target.dataset.viewId || '',
+        sortKeyOverride: current.sortKeyOverride || !!target.dataset.viewId,
+        reversed: current.reversed,
+        groupKey: target.value,
+      });
+      getRefreshReaderPanels()();
+      return;
+    }
+
+    if (
+      (field === 'component-list-default-sort-key'
+        || field === 'component-list-default-sort-direction'
+        || field === 'component-list-default-group-key') && target instanceof HTMLSelectElement
+    ) {
+      const sectionKey = target.dataset.sectionKey;
+      if (!sectionKey) {
+        return;
+      }
+      const context = resolveBlockContext(target);
+      if (!context) {
+        return;
+      }
+      if (field === 'component-list-default-sort-key') {
+        context.block.schema.componentListDefaultSortKey = target.value;
+      } else if (field === 'component-list-default-sort-direction') {
+        context.block.schema.componentListDefaultSortDirection = target.value === 'desc' ? 'desc' : 'asc';
+      } else {
+        context.block.schema.componentListDefaultGroupKey = target.value;
+      }
+      syncReusableTemplateForBlock(sectionKey, context.block.id);
+      getRefreshReaderPanels()();
       return;
     }
 

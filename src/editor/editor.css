@@ -1478,6 +1478,46 @@
   font: inherit;
 }
 
+.sort-key-editor {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.component-list-display-editor {
+  display: grid;
+  gap: 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.65rem;
+}
+
+.sort-key-editor-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.sort-key-editor-head span {
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.sort-key-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.sort-key-row-spacer {
+  width: 1.9rem;
+}
+
+.sort-key-empty {
+  margin: 0;
+}
+
 .more-details-button {
   width: 100%;
   white-space: nowrap;

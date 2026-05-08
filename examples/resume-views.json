@@ -1,6 +1,8 @@
 {
   "typescript": {
     "/body/header": ["priority"],
+    "/body/summary": ["priority"],
+    "/body/top-skills-tools-technologies": ["priority"],
     "tool-typescript": ["highlight"],
     "/body/tools-technologies": ["priority"],
     "project-heavy-stack": ["highlight"],
@@ -15,6 +17,8 @@
   },
   "llm-engineer": {
     "/body/header": ["priority"],
+    "/body/summary": ["priority"],
+    "/body/top-skills-tools-technologies": ["priority"],
     "tool-openai-api": ["highlight"],
     "/body/tools-technologies": ["priority"],
     "tool-superagi": ["highlight"],

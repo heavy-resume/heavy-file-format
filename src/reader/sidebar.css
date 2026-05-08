@@ -84,6 +84,7 @@
   pointer-events: auto;
   transform-origin: top left;
   z-index: 21;
+  opacity: 90%;
 }
 
 .viewer-sidebar-help-balloon::before {

@@ -153,6 +153,8 @@
   height: 1.9rem;
   border-radius: 999px;
   padding: 0;
+  display: inline-grid;
+  place-items: center;
 }
 
 .inline-editable {
@@ -262,6 +264,13 @@
   background: var(--hvy-surface-alt);
   text-align: center;
   padding: 0.4rem;
+}
+
+.table-add-row-line button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
 }
 
 .table-details-editor {

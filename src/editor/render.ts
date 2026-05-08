@@ -32,6 +32,7 @@ import { SCRIPTING_PLUGIN_ID } from '../plugins/registry';
 import { getScriptingPluginVersion } from '../plugins/scripting/version';
 import { renderAddComponentPicker } from './component-picker';
 import { TEXT_FILL_IN_MARKER, hasTextFillInMarker } from '../text-fill-in';
+import { closeIcon, plusIcon } from '../icons';
 
 hljs.registerLanguage('bash', bash);
 hljs.registerLanguage('sh', bash);
@@ -186,7 +187,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           }
           ${sectionCards}
           ${state.mobileAdjustmentMode ? '' : `<article class="ghost-section-card add-ghost reusable-section-ghost" data-action="add-top-level-section" data-section-key="__top_level__">
-            <div class="ghost-plus-big"><span>+</span></div>
+            <div class="ghost-plus-big">${plusIcon()}</div>
             <div class="ghost-label">Add Section</div>
             <label class="ghost-component-picker">
               <select data-field="reusable-section-type" data-section-key="__top_level__" aria-label="Section type">
@@ -271,7 +272,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         : isNamedEmptySection
           ? `<article class="ghost-section-card add-ghost empty-section-heading-ghost" data-action="add-empty-section-heading" data-section-key="${deps.escapeAttr(section.key)}">
                   <div class="empty-section-heading-watermark">${deps.escapeHtml(visibleTitle)}</div>
-                  <div class="ghost-plus-big"><span>+</span></div>
+                  <div class="ghost-plus-big">${plusIcon()}</div>
                   <div class="ghost-label">${deps.escapeHtml(visibleTitle)}</div>
                   <label class="ghost-component-picker">
                     <select aria-label="Heading level" data-field="empty-section-heading-level" data-section-key="${deps.escapeAttr(section.key)}">
@@ -405,7 +406,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const removeButton = canRemove
       ? `<button type="button" class="danger remove-x editor-block-remove-button" data-action="remove-block" data-section-key="${deps.escapeAttr(
         sectionKey
-      )}" data-block-id="${deps.escapeAttr(block.id)}" aria-label="Remove ${deps.escapeAttr(componentLabel)}">×</button>`
+      )}" data-block-id="${deps.escapeAttr(block.id)}" aria-label="Remove ${deps.escapeAttr(componentLabel)}">${closeIcon()}</button>`
       : '';
 
     return `
@@ -562,13 +563,13 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         sectionKey
       )}" data-block-id="${deps.escapeAttr(block.id)}"`;
       const addControl = `<div class="ghost-section-card add-ghost component-list-add-ghost passive-list-add-ghost"${actionAttr}>
-        <div class="ghost-plus-big"><span>+</span></div>
+        <div class="ghost-plus-big">${plusIcon()}</div>
         <div class="ghost-label">${deps.escapeHtml(actionLabel)}</div>
       </div>`;
       if (!hasComponentListItems(block)) {
         const existingContent = block.schema.componentListBlocks.length > 0 ? deps.renderReaderBlock(section, block) : '';
         return `${existingContent}<div class="ghost-section-card add-ghost passive-empty-list-ghost"${actionAttr}>
-          <div class="ghost-plus-big"><span>+</span></div>
+          <div class="ghost-plus-big">${plusIcon()}</div>
           <div class="ghost-label">${deps.escapeHtml(actionLabel)}</div>
         </div>`;
       }
@@ -883,30 +884,6 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
             placeholder="margin: 0.5rem 0;"
           >${deps.escapeHtml(block.schema.css)}</textarea>
         </label>
-        ${
-          component === 'expandable'
-            ? `<label>
-          <span>Expandable Stub CSS</span>
-          <textarea
-            rows="2"
-            data-section-key="${deps.escapeAttr(sectionKey)}"
-            data-block-id="${deps.escapeAttr(block.id)}"
-            data-field="block-expandable-stub-css"
-            placeholder="padding: 0.35rem 0;"
-          >${deps.escapeHtml(block.schema.expandableStubCss)}</textarea>
-        </label>
-        <label>
-          <span>Expandable Content CSS</span>
-          <textarea
-            rows="2"
-            data-section-key="${deps.escapeAttr(sectionKey)}"
-            data-block-id="${deps.escapeAttr(block.id)}"
-            data-field="block-expandable-content-css"
-            placeholder="padding-top: 0.35rem;"
-          >${deps.escapeHtml(block.schema.expandableContentCss)}</textarea>
-        </label>`
-            : ''
-        }
         <label>
           <span>Tags</span>
           ${renderTagEditor(

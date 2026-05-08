@@ -60,6 +60,7 @@
   align-items: stretch;
   gap: 0.55rem;
   padding: 0.45rem 0.55rem 0 0.55rem;
+  min-width: 0;
 }
 
 .expandable-summary {
@@ -80,6 +81,7 @@
 }
 
 .expandable-summary-meta-button {
+  min-width: 0;
   flex: 1 1 auto;
   justify-content: flex-end;
   margin-left: auto;
@@ -100,12 +102,16 @@
 }
 
 .expandable-summary-meta {
+  min-width: 0;
+  overflow: hidden;
   font-size: 0.76rem;
   color: var(--hvy-text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .expandable-inline-toggle {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;
@@ -125,6 +131,68 @@
 .expandable-inline-toggle:hover {
   background: linear-gradient(180deg, var(--hvy-surface-alt) 0%, var(--hvy-surface-tint) 100%);
   border-color: var(--hvy-border-input);
+}
+
+.expandable-pane-meta {
+  min-width: 0;
+  border: 1px solid var(--hvy-border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--hvy-surface) 86%, var(--hvy-surface-alt) 14%);
+}
+
+.expandable-pane-meta summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  min-width: 0;
+  padding: 0.4rem 0.55rem;
+  cursor: pointer;
+  color: var(--hvy-text-alt);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.expandable-pane-meta-id {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--hvy-text-muted);
+  font-size: 0.72rem;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.expandable-pane-meta-body {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0 0.55rem 0.55rem;
+}
+
+.expandable-pane-meta-body .expandable-inline-toggle {
+  width: fit-content;
+  max-width: 100%;
+}
+
+.expandable-pane-css-field {
+  display: grid;
+  gap: 0.25rem;
+  min-width: 0;
+  color: var(--hvy-text-alt);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.expandable-pane-css-field textarea {
+  min-width: 0;
+  width: 100%;
+  border: 1px solid var(--hvy-border-input);
+  border-radius: 7px;
+  padding: 0.44rem;
+  background: var(--hvy-surface);
+  color: var(--hvy-text);
+  font: inherit;
+  resize: vertical;
 }
 
 .expandable-part-body {

@@ -139,6 +139,18 @@ button.danger {
   border-color: var(--hvy-danger);
 }
 
+.hvy-ui-icon {
+  width: 1em;
+  height: 1em;
+  display: block;
+  flex: 0 0 auto;
+  stroke: currentColor;
+  stroke-width: 2.35;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+}
+
 button.tiny {
   font-size: 0.78rem;
   padding: 0.2rem 0.42rem;

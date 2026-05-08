@@ -2,6 +2,7 @@ import { areTablesEnabled } from '../reference-config';
 import type { ComponentDefinition } from '../types';
 import type { AddComponentPickerOptions } from './component-helpers';
 import { getHostPlugins } from '../plugins/registry';
+import { plusIcon } from '../icons';
 
 interface RenderDeps {
   escapeAttr: (value: string) => string;
@@ -36,7 +37,7 @@ export function renderAddComponentPicker(options: AddComponentPickerOptions, dep
         aria-label="${deps.escapeAttr(options.label ?? 'Add component')}"
         aria-haspopup="dialog"
       >
-        <span>+</span>
+        ${plusIcon()}
       </button>
       <div class="component-picker-popover" role="dialog" aria-label="${deps.escapeAttr(options.label ?? 'Add component')}">
         <div class="component-picker-viewport">

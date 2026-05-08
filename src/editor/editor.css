@@ -510,11 +510,9 @@
   background: var(--hvy-surface);
 }
 
-.ghost-plus-big span {
-  display: grid;
-  place-items: center;
-  font-size: 2.1rem;
-  line-height: 1;
+.ghost-plus-big .hvy-ui-icon {
+  width: 2.1rem;
+  height: 2.1rem;
 }
 
 .ghost-label {
@@ -546,9 +544,9 @@
   flex: 0 0 auto;
 }
 
-.compact-add-component-ghost .ghost-plus-big span {
-  font-size: 1.1rem;
-  line-height: 1;
+.compact-add-component-ghost .ghost-plus-big .hvy-ui-icon {
+  width: 1.1rem;
+  height: 1.1rem;
 }
 
 .compact-add-component-ghost .ghost-label {
@@ -625,10 +623,9 @@
   cursor: pointer;
 }
 
-.component-picker-trigger span {
-  display: grid;
-  place-items: center;
-  line-height: 1;
+.component-picker-trigger .hvy-ui-icon {
+  width: 1.15rem;
+  height: 1.15rem;
 }
 
 .component-picker-trigger:hover,
@@ -1430,6 +1427,11 @@
   display: grid;
   place-items: center;
   border-radius: 999px;
+}
+
+.tag-pill-remove .hvy-ui-icon {
+  width: 0.78rem;
+  height: 0.78rem;
 }
 
 .tag-editor-input {

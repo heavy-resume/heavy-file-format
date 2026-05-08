@@ -15,6 +15,7 @@ import { getDocumentComponentDefaultCss } from '../document-component-defaults';
 import { wrapChatResponseAsDocument } from './chat-response-document';
 import { getDocumentAiContext } from '../document-ai-context';
 import type { ProviderToolCall, ProviderToolDefinition, ProviderToolState } from './provider-tools';
+import { closeIcon } from '../icons';
 
 const CHAT_STORAGE_KEY = 'hvy-chat-settings';
 const DEFAULT_OPENAI_MODEL = 'gpt-5-mini';
@@ -251,7 +252,7 @@ export function renderChatPanel(
                    }
                    <button type="button" class="ghost" data-action="clear-chat-history"${chat.messages.length === 0 ? ' disabled' : ''}>Clear</button>
                  </div>
-                 <button type="button" class="danger chat-panel-close" data-action="toggle-chat-panel" aria-label="Close chat">×</button>
+                 <button type="button" class="danger chat-panel-close" data-action="toggle-chat-panel" aria-label="Close chat">${closeIcon()}</button>
                </div>
                <div class="chat-panel-body" data-chat-scroll-container>
                  <div class="chat-settings">

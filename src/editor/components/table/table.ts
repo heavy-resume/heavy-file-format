@@ -1,6 +1,7 @@
 import './table.css';
 import type { ComponentEditorRenderer, ComponentReaderRenderer } from '../../component-helpers';
 import type { TableRow } from '../../types';
+import { closeIcon, plusIcon } from '../../../icons';
 
 let readerTableStripeIndex = 0;
 
@@ -91,7 +92,7 @@ function renderTableRowEditor(
       <td class="table-row-utility table-row-remove-cell">
         <button type="button" class="danger remove-x" data-action="remove-table-row" data-section-key="${helpers.escapeAttr(
           sectionKey
-        )}" data-block-id="${helpers.escapeAttr(blockId)}" data-row-index="${rowIndex}" title="Remove row">×</button>
+        )}" data-block-id="${helpers.escapeAttr(blockId)}" data-row-index="${rowIndex}" title="Remove row">${closeIcon()}</button>
       </td>
     </tr>
   `;
@@ -154,7 +155,7 @@ export const renderTableEditor: ComponentEditorRenderer = (sectionKey, block, he
                             ? ''
                             : `<button type="button" class="danger remove-x" data-action="remove-table-column" data-section-key="${helpers.escapeAttr(
                                 sectionKey
-                              )}" data-block-id="${helpers.escapeAttr(block.id)}" data-column-index="${columnIndex}" title="Remove column">×</button>`
+                              )}" data-block-id="${helpers.escapeAttr(block.id)}" data-column-index="${columnIndex}" title="Remove column">${closeIcon()}</button>`
                         }
                       </div>
                     </th>`
@@ -166,7 +167,7 @@ export const renderTableEditor: ComponentEditorRenderer = (sectionKey, block, he
                     ? ''
                     : `<button type="button" class="ghost table-add-button" data-action="add-table-column" data-section-key="${helpers.escapeAttr(
                         sectionKey
-                      )}" data-block-id="${helpers.escapeAttr(block.id)}" title="Add column">+</button>`
+                      )}" data-block-id="${helpers.escapeAttr(block.id)}" title="Add column" aria-label="Add column">${plusIcon()}</button>`
                 }
               </th>
             </tr>
@@ -177,7 +178,7 @@ export const renderTableEditor: ComponentEditorRenderer = (sectionKey, block, he
               <td colspan="${columns.length + 2}">
                 <button type="button" class="ghost" data-action="add-table-row" data-section-key="${helpers.escapeAttr(
                   sectionKey
-                )}" data-block-id="${helpers.escapeAttr(block.id)}">+ Add Row</button>
+                )}" data-block-id="${helpers.escapeAttr(block.id)}">${plusIcon()} Add Row</button>
               </td>
             </tr>
           </tbody>

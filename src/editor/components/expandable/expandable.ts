@@ -22,6 +22,47 @@ export const renderExpandableEditor: ComponentEditorRenderer = (sectionKey, bloc
     .slice(0, 2)
     .map((innerBlock) => helpers.renderPassiveEditorBlock(sectionKey, innerBlock))
     .join('');
+  const disabledAttr = mobileAdjustment ? ' disabled' : '';
+  const stubMeta = renderExpandablePaneMeta(
+    'stub',
+    sectionKey,
+    block.id,
+    helpers,
+    `<label class="expandable-inline-toggle">
+      <input type="checkbox" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(
+        block.id
+      )}" data-field="block-expandable-always" ${block.schema.expandableAlwaysShowStub ? 'checked' : ''}${disabledAttr} />
+      <span>Always show</span>
+    </label>
+    <label class="expandable-pane-css-field">
+      <span>Stub CSS</span>
+      <textarea
+        rows="2"
+        data-section-key="${helpers.escapeAttr(sectionKey)}"
+        data-block-id="${helpers.escapeAttr(block.id)}"
+        data-field="block-expandable-stub-css"
+        placeholder="padding: 0.35rem 0;"
+        ${disabledAttr}
+      >${helpers.escapeHtml(block.schema.expandableStubCss)}</textarea>
+    </label>`
+  );
+  const contentMeta = renderExpandablePaneMeta(
+    'expanded',
+    sectionKey,
+    block.id,
+    helpers,
+    `<label class="expandable-pane-css-field">
+      <span>Expanded CSS</span>
+      <textarea
+        rows="2"
+        data-section-key="${helpers.escapeAttr(sectionKey)}"
+        data-block-id="${helpers.escapeAttr(block.id)}"
+        data-field="block-expandable-content-css"
+        placeholder="padding-top: 0.35rem;"
+        ${disabledAttr}
+      >${helpers.escapeHtml(block.schema.expandableContentCss)}</textarea>
+    </label>`
+  );
   return `
     <div class="expand-chooser-grid">
       <section class="expandable-part expandable-part-stub${stubOpen ? ' is-open' : ' is-closed'}">
@@ -31,12 +72,6 @@ export const renderExpandableEditor: ComponentEditorRenderer = (sectionKey, bloc
           )}" data-block-id="${helpers.escapeAttr(block.id)}" data-expandable-panel="stub" aria-expanded="${stubOpen ? 'true' : 'false'}">
             <span class="expandable-label">Stub</span>
           </button>
-          <label class="expandable-inline-toggle">
-            <input type="checkbox" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(
-              block.id
-            )}" data-field="block-expandable-always" ${block.schema.expandableAlwaysShowStub ? 'checked' : ''} ${mobileAdjustment ? 'disabled' : ''} />
-            <span>Always show</span>
-          </label>
           <button type="button" class="expandable-summary expandable-summary-meta-button" data-action="toggle-expandable-editor-panel" data-section-key="${helpers.escapeAttr(
             sectionKey
           )}" data-block-id="${helpers.escapeAttr(block.id)}" data-expandable-panel="stub" aria-expanded="${stubOpen ? 'true' : 'false'}">
@@ -46,6 +81,7 @@ export const renderExpandableEditor: ComponentEditorRenderer = (sectionKey, bloc
         ${
           stubOpen
             ? `<div class="expandable-part-body">
+          ${stubMeta}
           <div class="container-inner-blocks">
             ${stubBlocks.map((innerBlock) => helpers.renderEditorBlock(sectionKey, innerBlock, false)).join('')}
           </div>
@@ -82,6 +118,7 @@ export const renderExpandableEditor: ComponentEditorRenderer = (sectionKey, bloc
         ${
           expandedOpen
             ? `<div class="expandable-part-body">
+          ${contentMeta}
           <div class="container-inner-blocks">
             ${contentBlocks.map((innerBlock) => helpers.renderEditorBlock(sectionKey, innerBlock, false)).join('')}
           </div>
@@ -105,6 +142,24 @@ export const renderExpandableEditor: ComponentEditorRenderer = (sectionKey, bloc
     </div>
   `;
 };
+
+function renderExpandablePaneMeta(
+  pane: 'stub' | 'expanded',
+  sectionKey: string,
+  blockId: string,
+  helpers: Parameters<ComponentEditorRenderer>[2],
+  body: string
+): string {
+  return `<details class="expandable-pane-meta">
+    <summary>
+      <span>${pane === 'stub' ? 'Stub' : 'Expanded'} meta</span>
+      <span class="expandable-pane-meta-id">${helpers.escapeHtml(blockId)}</span>
+    </summary>
+    <div class="expandable-pane-meta-body" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(blockId)}">
+      ${body}
+    </div>
+  </details>`;
+}
 
 export const renderExpandableReader: ComponentReaderRenderer = (section, block, helpers) => {
   const stubHtml = block.schema.expandableStubBlocks.children.map((innerBlock) => helpers.renderReaderBlock(section, innerBlock)).join('');

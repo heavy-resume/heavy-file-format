@@ -23,6 +23,7 @@ import { parseAttachedComponentBlocks } from '../plugins/db-table';
 import { SCRIPTING_PLUGIN_ID } from '../plugins/registry';
 import { getComponentDefsFromMeta } from '../component-defs';
 import { extractReusableTemplateVariablesFromDefinition } from '../reusable-template-values';
+import { plusIcon } from '../icons';
 
 interface ReaderRenderState {
   documentMeta: VisualDocument['meta'];
@@ -589,7 +590,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
                   <article class="ghost-section-card add-ghost sqlite-row-component-ghost" data-action="sqlite-row-component-add-block" data-section-key="${deps.escapeAttr(
                     rowModal.sectionKey
                   )}">
-                    <div class="ghost-plus-big"><span>+</span></div>
+                    <div class="ghost-plus-big">${plusIcon()}</div>
                     <div class="ghost-label">Add Component</div>
                     <label class="ghost-component-picker">
                       <select
@@ -610,7 +611,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
                 : `<article class="ghost-section-card add-ghost sqlite-row-component-ghost" data-action="sqlite-row-component-add-block" data-section-key="${deps.escapeAttr(
                     state.sqliteRowComponentModal.sectionKey
                   )}">
-                    <div class="ghost-plus-big"><span>+</span></div>
+                    <div class="ghost-plus-big">${plusIcon()}</div>
                     <div class="ghost-label">Add Component</div>
                     <label class="ghost-component-picker">
                       <select

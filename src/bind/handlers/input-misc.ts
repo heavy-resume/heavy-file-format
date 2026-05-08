@@ -160,7 +160,7 @@ export function bindInputMisc(app: HTMLElement): void {
       }
       context.block.schema.placeholder = target.value;
       syncReusableTemplateForBlock(sectionKey, context.block.id);
-      getRenderApp()();
+      getRefreshReaderPanels()();
       return;
     }
 

@@ -52,3 +52,5 @@ For CLI/API design, avoid one-off special cases that look like a broader convent
 When creating new input components, always jazz it up. Anything default browser UI won't work.
 
 Animations, colors, highlights, etc all have examples. Use them!
+
+Make sure stuff isn't losing focus after each keystroke. This is a common, reoccuring problem!

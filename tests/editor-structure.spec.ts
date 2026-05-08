@@ -592,6 +592,32 @@ component_defs:
   await expect(page.locator('#rawEditor')).toHaveValue(/<!--hvy:skill-card \{"id":"skill-card-1"\}-->/);
 });
 
+test('advanced placeholder input keeps focus while typing', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"overview"}-->
+#! Overview
+
+<!--hvy:text {"id":"summary"}-->
+ Summary
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Advanced' }).click();
+
+  await page.locator('.editor-block-passive', { hasText: 'Summary' }).click();
+  await page.getByLabel('Component options').getByRole('button', { name: 'Meta' }).click();
+  const placeholderInput = page.locator('[data-field="block-placeholder"]');
+
+  await placeholderInput.fill('Skill name');
+  await expect(placeholderInput).toBeFocused();
+  await expect(placeholderInput).toHaveValue('Skill name');
+});
+
 test('unfilled text fill-in renders as an editor box and blank viewer text', async ({ page }) => {
   await page.goto('/');
 

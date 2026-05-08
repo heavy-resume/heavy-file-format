@@ -246,22 +246,31 @@ hvy_version: 0.1
 
 <!--hvy:component-list {"id":"skill-list","componentListComponent":"text","componentListDefaultView":"job","componentListViews":[{"id":"job","label":"Job Match","sortKey":"Job Match","direction":"desc","groupKey":"Category","groupCollapsedPreviewRem":1}]}-->
 
- <!--hvy:component-list:0 {}>
+ <!--hvy:component-list:0 {}-->
 
   <!--hvy:text {"sortKeys":{"Job Match":80,"Category":"Database"}}-->
    PostgreSQL
 
- <!--hvy:component-list:1 {}>
+ <!--hvy:component-list:1 {}-->
 
   <!--hvy:text {"sortKeys":{"Job Match":95,"Category":"Language"}}-->
    TypeScript
 
- <!--hvy:component-list:2 {}>
+ <!--hvy:component-list:2 {}-->
 
   <!--hvy:text {"sortKeys":{"Job Match":90,"Category":"Database"}}-->
    SQLite
 `);
   await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('.editor-block-passive', { has: page.locator('.reader-component-list') }).first().click();
+  const activeList = page.locator('.component-list-view-editor').first();
+  await expect(activeList).toBeVisible();
+  await expect(activeList.locator('[data-field="component-list-default-view-select"]')).toHaveValue('job');
+  await expect(activeList.locator('[data-field="component-list-view-sort-key"]').first()).toHaveValue('Job Match');
+  await expect(activeList.locator('[data-field="component-list-view-group-key"]').first()).toHaveValue('Category');
+
   await page.getByRole('button', { name: 'Viewer' }).click();
 
   const groups = page.locator('.reader-container.is-virtual-group-container');

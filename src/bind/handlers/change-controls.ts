@@ -1,4 +1,4 @@
-import { state, getRenderApp, getRefreshReaderPanels, recordHistory, materializeDbTableDraftRow, renameDbTableColumn, syncSqliteColumnNameInDom, updateDbTableCell, handleImageUpload } from './_imports';
+import { state, getRenderApp, getRefreshReaderPanels, recordHistory, materializeDbTableDraftRow, renameDbTableColumn, syncSqliteColumnNameInDom, updateDbTableCell, handleImageUpload, resolveBlockContext, syncReusableTemplateForBlock } from './_imports';
 import { dropDbTableColumn } from '../../plugins/db-table';
 
 export function bindChangeControls(app: HTMLElement): void {
@@ -56,6 +56,52 @@ export function bindChangeControls(app: HTMLElement): void {
         return;
       }
       state.componentListReaderViews[`${sectionKey}:${blockId}`] = target.value;
+      getRefreshReaderPanels()();
+      return;
+    }
+
+    if (field === 'component-list-default-view-select' && target instanceof HTMLSelectElement) {
+      const sectionKey = target.dataset.sectionKey;
+      if (!sectionKey) {
+        return;
+      }
+      const context = resolveBlockContext(target);
+      if (!context) {
+        return;
+      }
+      context.block.schema.componentListDefaultView = target.value;
+      syncReusableTemplateForBlock(sectionKey, context.block.id);
+      getRefreshReaderPanels()();
+      return;
+    }
+
+    if (
+      (field === 'component-list-view-sort-key'
+        || field === 'component-list-view-direction'
+        || field === 'component-list-view-group-key') && target instanceof HTMLSelectElement
+    ) {
+      const sectionKey = target.dataset.sectionKey;
+      if (!sectionKey) {
+        return;
+      }
+      const context = resolveBlockContext(target);
+      if (!context) {
+        return;
+      }
+      const index = Number.parseInt(target.dataset.viewIndex ?? '', 10);
+      const view = Number.isNaN(index) ? null : context.block.schema.componentListViews[index] ?? null;
+      if (!view) {
+        return;
+      }
+      if (field === 'component-list-view-sort-key') {
+        view.sortKey = target.value;
+      } else if (field === 'component-list-view-direction') {
+        view.direction = target.value === 'asc' ? 'asc' : 'desc';
+        view.groupDirection = view.direction;
+      } else {
+        view.groupKey = target.value;
+      }
+      syncReusableTemplateForBlock(sectionKey, context.block.id);
       getRefreshReaderPanels()();
       return;
     }

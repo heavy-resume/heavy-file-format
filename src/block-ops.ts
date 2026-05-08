@@ -366,6 +366,10 @@ export function handleBlockFieldInput(target: HTMLElement): boolean {
   }
 
   if (field === 'block-expandable-always' && target instanceof HTMLInputElement) {
+    if (state.editorMode === 'mobile-adjustment') {
+      target.checked = block.schema.expandableAlwaysShowStub;
+      return true;
+    }
     block.schema.expandableAlwaysShowStub = target.checked;
     syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
     getRefreshReaderPanels()();

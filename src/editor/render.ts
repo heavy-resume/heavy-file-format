@@ -628,6 +628,9 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       currentMarkdown?: string;
     }
   ): string {
+    if (state.mobileAdjustmentMode) {
+      return '';
+    }
     const fieldAttr = options?.field ? ` data-rich-field="${deps.escapeAttr(options.field)}"` : '';
     const gridAttr = options?.gridItemId ? ` data-grid-item-id="${deps.escapeAttr(options.gridItemId)}"` : '';
     const rowAttr = typeof options?.rowIndex === 'number' ? ` data-row-index="${options.rowIndex}"` : '';

@@ -258,22 +258,48 @@ test('section highlight control lives in section meta next to contained', async 
   await expect(page.locator('#rawEditor')).toContainText('"highlight":true');
 });
 
-test('active component done button is centered below the editor body', async ({ page }) => {
+test('active component done and cancel buttons are centered below the editor body', async ({ page }) => {
   await page.goto('/');
 
   await page.locator('[data-action="activate-block"]').first().click();
   const activeBlock = page.locator('.editor-block[data-active-editor-block="true"]').first();
+  const cancelButton = activeBlock.locator('.editor-block-cancel-button');
   const doneButton = activeBlock.locator('.editor-block-done-button');
 
   await expect(activeBlock.locator('.editor-block-head').getByRole('button', { name: 'Done' })).toHaveCount(0);
+  await expect(activeBlock.locator('.editor-block-head').getByRole('button', { name: 'Cancel' })).toHaveCount(0);
+  await expect(cancelButton).toBeVisible();
   await expect(doneButton).toBeVisible();
+  await expect(cancelButton).toHaveCSS('width', '64px');
   await expect(doneButton).toHaveCSS('width', '64px');
 
   const blockBox = await activeBlock.boundingBox();
-  const buttonBox = await doneButton.boundingBox();
+  const cancelBox = await cancelButton.boundingBox();
+  const doneBox = await doneButton.boundingBox();
+  expect(blockBox).not.toBeNull();
+  expect(cancelBox).not.toBeNull();
+  expect(doneBox).not.toBeNull();
+  const actionGroupLeft = cancelBox?.x ?? 0;
+  const actionGroupRight = (doneBox?.x ?? 0) + (doneBox?.width ?? 0);
+  expect(Math.abs((actionGroupLeft + (actionGroupRight - actionGroupLeft) / 2) - ((blockBox?.x ?? 0) + (blockBox?.width ?? 0) / 2))).toBeLessThan(4);
+});
+
+test('active component remove button is anchored to the editor frame corner', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const activeBlock = page.locator('.editor-block[data-active-editor-block="true"]').first();
+  const removeButton = activeBlock.locator('.editor-block-remove-button');
+
+  await expect(removeButton).toBeVisible();
+  await expect(activeBlock.locator('.editor-block-head .editor-block-remove-button')).toHaveCount(0);
+
+  const blockBox = await activeBlock.boundingBox();
+  const buttonBox = await removeButton.boundingBox();
   expect(blockBox).not.toBeNull();
   expect(buttonBox).not.toBeNull();
-  expect(Math.abs(((buttonBox?.x ?? 0) + (buttonBox?.width ?? 0) / 2) - ((blockBox?.x ?? 0) + (blockBox?.width ?? 0) / 2))).toBeLessThan(4);
+  expect(buttonBox?.x ?? 0).toBeGreaterThan((blockBox?.x ?? 0) + (blockBox?.width ?? 0) - (buttonBox?.width ?? 0) - 8);
+  expect(buttonBox?.y ?? 0).toBeLessThan(blockBox?.y ?? 0);
 });
 
 test('unfilled text fill-in renders as an editor box and blank viewer text', async ({ page }) => {

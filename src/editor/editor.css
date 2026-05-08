@@ -614,6 +614,7 @@
   height: 2rem;
   display: grid;
   place-items: center;
+  padding: 0;
   border: 1px solid var(--hvy-border-alt);
   border-radius: 999px;
   background: var(--hvy-surface);
@@ -922,7 +923,7 @@
 
 .editor-block-head {
   position: relative;
-  padding-right: 2.75rem;
+  padding-right: 0.2rem;
 }
 
 .editor-actions {
@@ -934,10 +935,13 @@
 .editor-block-done-row {
   display: flex;
   justify-content: center;
+  align-items: center;
+  gap: 0.45rem;
   margin-top: 0.55rem;
 }
 
-.editor-block-done-button {
+.editor-block-done-button,
+.editor-block-cancel-button {
   width: 4rem;
   min-width: 4rem;
   padding-inline: 0;
@@ -947,7 +951,7 @@
 .editor-block-context-actions {
   position: absolute;
   top: 0;
-  right: 2.45rem;
+  right: 1.85rem;
   z-index: 2;
   display: flex;
   gap: 0.25rem;
@@ -967,9 +971,10 @@
 
 .editor-block-remove-button {
   position: absolute;
-  top: 0.3rem;
-  right: 0.3rem;
+  top: -0.85rem;
+  right: -0.55rem;
   z-index: 3;
+  box-shadow: 0 6px 14px var(--hvy-shadow);
 }
 
 .component-placement-target {

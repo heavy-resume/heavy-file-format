@@ -408,10 +408,12 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         sectionKey
       )}" data-block-id="${deps.escapeAttr(block.id)}" aria-label="Remove ${deps.escapeAttr(componentLabel)}">${closeIcon()}</button>`
       : '';
+    const frameRemoveButton = state.mobileAdjustmentMode ? '' : removeButton;
 
     return `
       <div class="editor-block${isActivatingPath ? ' is-activating-path' : ''}${isPlacementSource ? ' is-placement-source' : ''}"${activationStyle}${activationAttrs}>
         ${componentMetaActions}
+        ${frameRemoveButton}
         <div class="editor-block-head">
           <div class="section-drag-title">
             <div class="editor-order-controls">
@@ -422,7 +424,6 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           </div>
           <div class="editor-actions">
             ${state.mobileAdjustmentMode ? '' : isActiveSelf ? placementActions : ''}
-            ${state.mobileAdjustmentMode ? '' : removeButton}
           </div>
         </div>
 
@@ -430,6 +431,9 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         ${
           isActiveSelf
             ? `<div class="editor-block-done-row">
+                <button type="button" class="ghost editor-block-cancel-button" data-action="deactivate-block" data-section-key="${deps.escapeAttr(
+                  sectionKey
+                )}" data-block-id="${deps.escapeAttr(block.id)}">Cancel</button>
                 <button type="button" class="ghost editor-block-done-button" data-action="deactivate-block" data-section-key="${deps.escapeAttr(
                   sectionKey
                 )}" data-block-id="${deps.escapeAttr(block.id)}">Done</button>

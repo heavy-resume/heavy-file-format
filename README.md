@@ -70,6 +70,15 @@ Reference app feature flags:
 - Set `window.HVY_REFERENCE_CONFIG = { features: { tables: false } }` before the bundle loads to disable table authoring/rendering in an embedded host.
 - When present, DB table tail payloads are now preserved on open/download for `.hvy` files.
 
+Reference app reader view filters are implementation-only and are not serialized into `.hvy` / `.thvy` files. A filter is a JSON object mapping section/component IDs, or CLI-style virtual paths such as `/body/tools-technologies`, to modifiers:
+- `highlight`: adds reader highlight styling, expands/prioritizes parent containers, and moves prioritized items ahead of non-prioritized siblings.
+- `priority`: expands/prioritizes the target and its parent containers without adding the visual highlight.
+- `collapse`: forces a collapsed reader preview where practical.
+- `dimmed`: visually dims the target and moves it after non-dimmed siblings while preserving dimmed relative order; clicking/tapping activates the target visually without moving it.
+- `hidden`: omits the target and wins over visible modifiers.
+
+Invalid reader-view targets warn in the console. The resume reference app includes two faux role filters in [`examples/resume-views.json`](examples/resume-views.json), exposed by `TypeScript View`, `LLM Engineer View`, and `Clear View` buttons next to the reader preview controls.
+
 ### Run
 
 ```bash
@@ -78,6 +87,12 @@ npm run dev
 ```
 
 Open the local Vite URL shown in terminal.
+
+The CLI harness can load any HVY document for node-based inspection:
+
+```bash
+node scripts/hvy-cli.mjs --file examples/resume.hvy -- "find /body/tools-technologies"
+```
 
 For AI document chat in local development, configure provider credentials in `.env` for the local proxy:
 

@@ -935,6 +935,7 @@ function getChatReaderHelpers(documentMeta: VisualDocument['meta']): ComponentRe
     renderReaderBlock: (_section: VisualSection, block: VisualBlock) => renderChatHvyBlock(block, documentMeta),
     renderReaderBlocks: (_section: VisualSection, blocks: VisualBlock[]) => blocks.map((block) => renderChatHvyBlock(block, documentMeta)).join(''),
     orderReaderBlocks: (blocks: VisualBlock[]) => blocks,
+    isReaderViewPrioritizedBlock: () => false,
     renderComponentFragment: (_componentName: string, content: string) => markdownToEditorHtml(normalizeMarkdownLists(content)),
     renderComponentOptions: () => '',
     renderAddComponentPicker: () => '',

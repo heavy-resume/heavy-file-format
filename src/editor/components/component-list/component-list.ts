@@ -99,8 +99,9 @@ export const renderComponentListReader: ComponentReaderRenderer = (section, bloc
   const body =
     resolved.kind === 'groups'
       ? [
-          ...resolved.groups.map((group) =>
-            renderVirtualContainerReader(
+          ...orderComponentListGroups(resolved.groups, (group) => group.blocks.some(helpers.isReaderViewPrioritizedBlock)).map((group) => {
+            const prioritized = group.blocks.some(helpers.isReaderViewPrioritizedBlock);
+            return renderVirtualContainerReader(
               section,
               {
                 listBlockId: block.id,
@@ -109,10 +110,11 @@ export const renderComponentListReader: ComponentReaderRenderer = (section, bloc
                 title: group.label,
                 blocks: group.blocks,
                 collapsedPreviewRem: resolved.display.groupCollapsedPreviewRem,
+                expanded: prioritized,
               },
               helpers
-            )
-          ),
+            );
+          }),
           helpers.renderReaderBlocks(section, resolved.missingBlocks),
         ].join('')
       : helpers.renderReaderBlocks(section, resolved.blocks);
@@ -156,6 +158,19 @@ function renderComponentListDefaultDisplayEditor(sectionKey: string, block: Visu
       ${groupControl}
     </div>
   </section>`;
+}
+
+function orderComponentListGroups<T>(groups: T[], isPrioritized: (group: T) => boolean): T[] {
+  const priorityGroups: T[] = [];
+  const standardGroups: T[] = [];
+  for (const group of groups) {
+    if (isPrioritized(group)) {
+      priorityGroups.push(group);
+    } else {
+      standardGroups.push(group);
+    }
+  }
+  return [...priorityGroups, ...standardGroups];
 }
 
 function renderKeySelect(

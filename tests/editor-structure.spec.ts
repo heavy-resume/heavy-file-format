@@ -1123,7 +1123,7 @@ test('resume reader view buttons apply filters without changing edit mode', asyn
   await expect(page.locator('#top-skills-tools-technologies')).toContainText('TypeScript');
   await expect(page.locator('#project-autonomous-agent-hackathon')).toHaveClass(/is-reader-view-dimmed/);
   await expect(page.locator('#project-autonomous-agent-hackathon')).toHaveAttribute('aria-expanded', 'false');
-  await expect(page.locator('#locations')).toHaveCount(0);
+  await expect(page.locator('#locations')).toBeVisible();
 
   const projectIdsBefore = await page.locator('#readerDocument [id]').evaluateAll((nodes) => nodes.map((node) => node.id));
   await page.locator('#project-autonomous-agent-hackathon').click();
@@ -1138,6 +1138,13 @@ test('resume reader view buttons apply filters without changing edit mode', asyn
   await expect(page.locator('#top-skills-tools-technologies')).not.toContainText('TypeScript');
   await expect(page.locator('#top-skills-tools-technologies')).not.toContainText('Developer Containers');
   await expect(page.locator('#top-skills-tools-technologies')).toContainText('LLM Prompt Engineering');
+  await expect(page.locator('#tools-technologies')).not.toHaveClass(/is-collapsed-preview/);
+  await expect(
+    page.locator('#tools-technologies .reader-container', { has: page.getByRole('button', { name: 'AI / Agent Tooling' }) }).first()
+  ).toHaveClass(/is-expanded/);
+  const sidebarSectionIds = await page.locator('#readerSidebarSections section[id]').evaluateAll((nodes) => nodes.map((node) => node.id));
+  expect(sidebarSectionIds.indexOf('tools-technologies')).toBeLessThan(sidebarSectionIds.indexOf('skills'));
+  expect(sidebarSectionIds.indexOf('tools-technologies')).toBeLessThan(sidebarSectionIds.indexOf('locations'));
 
   await page.getByRole('button', { name: 'Editor' }).click();
   await expect(page.locator('#editorTree .is-reader-view-dimmed')).toHaveCount(0);

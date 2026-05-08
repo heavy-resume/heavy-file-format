@@ -200,7 +200,19 @@ button.tiny {
   flex-wrap: wrap;
   align-items: center;
   justify-content: center;
+}
+
+.preview-control-stack {
+  display: grid;
+  gap: 0.4rem;
   justify-self: center;
+}
+
+.reader-view-controls {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  justify-content: center;
 }
 
 .full-pane {
@@ -388,7 +400,7 @@ button.tiny {
   }
 
   .view-tabs,
-  .responsive-preview-controls {
+  .preview-control-stack {
     justify-self: center;
   }
 

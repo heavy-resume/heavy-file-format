@@ -1,7 +1,14 @@
 import { expect, test, vi } from 'vitest';
 
 import { createReaderRenderer } from '../src/reader/render';
-import { createReaderViewContext, getBlockReaderViewTargetKey, getReaderViewModifiers, getSectionReaderViewTargetKey, orderReaderViewTargets } from '../src/reader/view-filter';
+import {
+  createReaderViewContext,
+  getBlockReaderViewTargetKey,
+  getReaderViewModifiers,
+  getReaderViewPriorityRank,
+  getSectionReaderViewTargetKey,
+  orderReaderViewTargets,
+} from '../src/reader/view-filter';
 import { deserializeDocument } from '../src/serialization';
 import { defaultBlockSchema } from '../src/document-factory';
 import type { ComponentRenderHelpers } from '../src/editor/component-helpers';
@@ -120,6 +127,36 @@ test('reader view ordering hides hidden blocks and moves dimmed blocks behind si
   expect(expectedResult.map((block) => block.schema.id)).toEqual(['first', 'third']);
 });
 
+test('reader view prioritizes highlighted ancestors ahead of plain priority targets', () => {
+  const highlightedChild = createTextBlock('highlighted-child', 'Highlighted child');
+  const plainPriorityChild = createTextBlock('plain-priority-child', 'Plain priority child');
+  const normalChild = createTextBlock('normal-child', 'Normal child');
+  const highlightedSection = createSection('highlighted-parent', [highlightedChild]);
+  const plainPrioritySection = createSection('plain-priority-parent', [plainPriorityChild]);
+  const normalSection = createSection('normal-parent', [normalChild]);
+  const document = {
+    meta: {},
+    extension: '.hvy' as const,
+    attachments: [],
+    sections: [plainPrioritySection, normalSection, highlightedSection],
+  };
+  const context = createReaderViewContext(document, {
+    'highlighted-child': ['highlight'],
+    'plain-priority-parent': ['priority'],
+  });
+
+  const expectedResult = orderReaderViewTargets(
+    [plainPrioritySection, normalSection, highlightedSection],
+    context,
+    getSectionReaderViewTargetKey,
+    new Set<string>()
+  );
+
+  expect(expectedResult.map((section) => section.customId)).toEqual(['highlighted-parent', 'plain-priority-parent', 'normal-parent']);
+  expect(getReaderViewPriorityRank(context, getSectionReaderViewTargetKey(highlightedSection))).toBe(2);
+  expect(getReaderViewPriorityRank(context, getSectionReaderViewTargetKey(plainPrioritySection))).toBe(1);
+});
+
 test('reader view keeps activated dimmed targets in their dimmed order', () => {
   const first = createTextBlock('first', 'First');
   const second = createTextBlock('second', 'Second');
@@ -144,11 +181,14 @@ test('reader view rendering applies hidden, dimmed, highlight, and generic colla
   const first = createTextBlock('first', 'First');
   const second = createTextBlock('second', 'Second');
   const third = createTextBlock('third', 'Third');
+  const priorityChild = createTextBlock('priority-child', 'Priority child');
+  const prioritySection = createSection('collapsed-priority', [priorityChild]);
+  prioritySection.expanded = false;
   const document = {
     meta: {},
     extension: '.hvy' as const,
     attachments: [],
-    sections: [createSection('summary', [first, second, third])],
+    sections: [createSection('summary', [first, second, third]), prioritySection],
   };
   const state = {
     documentMeta: document.meta,
@@ -172,6 +212,7 @@ test('reader view rendering applies hidden, dimmed, highlight, and generic colla
       first: ['dimmed'],
       second: ['hidden'],
       third: ['highlight', 'collapse'],
+      'priority-child': ['highlight'],
     } satisfies ReaderViewFilter,
     readerViewActivatedTargets: new Set<string>(),
     componentListReaderViews: {},
@@ -205,6 +246,7 @@ test('reader view rendering applies hidden, dimmed, highlight, and generic colla
     renderReaderBlock: renderer.renderReaderBlock,
     renderReaderBlocks: renderer.renderReaderBlocks,
     orderReaderBlocks: renderer.orderReaderBlocks,
+    isReaderViewPrioritizedBlock: () => false,
     renderComponentFragment: (_componentName: string, content: string) => escapeHtml(content),
     renderComponentOptions: () => '',
     renderAddComponentPicker: () => '',
@@ -229,6 +271,8 @@ test('reader view rendering applies hidden, dimmed, highlight, and generic colla
   expect(expectedResult).toContain('data-reader-view-dimmed="true"');
   expect(expectedResult).toContain('is-highlighted');
   expect(expectedResult).toContain('reader-view-collapse-wrapper');
+  expect(expectedResult).toContain('id="collapsed-priority" class="reader-section');
+  expect(expectedResult).not.toContain('id="collapsed-priority" class="reader-section is-collapsed-preview');
   expect(expectedResult).toContain('First');
   expect(expectedResult).not.toContain('Second');
 });

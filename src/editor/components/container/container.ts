@@ -48,6 +48,7 @@ export function renderVirtualContainerReader(
     title: string;
     blocks: VisualBlock[];
     collapsedPreviewRem: number;
+    expanded?: boolean;
   },
   helpers: Parameters<ComponentReaderRenderer>[2]
 ): string {
@@ -57,7 +58,7 @@ export function renderVirtualContainerReader(
     blockId: options.listBlockId,
     title: options.title,
     blocks: options.blocks,
-    expanded: helpers.getReaderContainerExpanded(virtualKey, false),
+    expanded: helpers.getReaderContainerExpanded(virtualKey, options.expanded ?? false),
     collapsedPreviewRem: options.collapsedPreviewRem,
     virtualKey,
     helpers,

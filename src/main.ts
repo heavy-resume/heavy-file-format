@@ -454,9 +454,6 @@ function renderApp(): void {
           <button id="crmExampleBtn" type="button">CRM Example</button>
           <button id="resumeTemplateBtn" type="button">Resume Template</button>
           <button id="resumeExampleBtn" type="button">Resume Example</button>
-          <button id="typescriptResumeViewBtn" type="button" class="${Object.keys(state.readerView).length > 0 ? 'ghost' : ''}">TypeScript View</button>
-          <button id="llmEngineerResumeViewBtn" type="button" class="${Object.keys(state.readerView).length > 0 ? 'ghost' : ''}">LLM Engineer View</button>
-          <button id="clearReaderViewBtn" type="button" class="ghost">Clear View</button>
           <label class="file-picker">
             Select File
             <input id="fileInput" type="file" accept=".hvy,.thvy,.md,.markdown,text/markdown,text/plain" />
@@ -473,7 +470,7 @@ function renderApp(): void {
             <button type="button" class="${isViewerView ? 'secondary' : 'ghost'}" data-action="switch-view" data-view="viewer">Viewer</button>
             <button type="button" class="${isAiView ? 'secondary' : 'ghost'}" data-action="switch-view" data-view="ai">AI</button>
           </div>
-          ${canPreviewSurface ? renderResponsivePreviewControls() : '<div></div>'}
+          ${canPreviewSurface ? renderPreviewControlStack() : '<div></div>'}
           ${
             isEditorView
               ? `<div class="editor-top-controls">
@@ -649,6 +646,22 @@ function renderResponsivePreviewControls(): string {
         (option) => `<button type="button" class="${state.responsivePreview === option.value ? 'secondary' : 'ghost'}" data-action="set-responsive-preview" data-responsive-preview="${escapeAttr(option.value)}">${escapeHtml(option.label)}</button>`
       )
       .join('')}
+  </div>`;
+}
+
+function renderPreviewControlStack(): string {
+  return `<div class="preview-control-stack">
+    ${renderResponsivePreviewControls()}
+    ${renderReaderViewControls()}
+  </div>`;
+}
+
+function renderReaderViewControls(): string {
+  const hasReaderView = Object.keys(state.readerView).length > 0;
+  return `<div class="reader-view-controls" role="group" aria-label="Resume reader views">
+    <button id="typescriptResumeViewBtn" type="button" class="${hasReaderView ? 'ghost' : ''}">TypeScript View</button>
+    <button id="llmEngineerResumeViewBtn" type="button" class="${hasReaderView ? 'ghost' : ''}">LLM Engineer View</button>
+    <button id="clearReaderViewBtn" type="button" class="ghost">Clear View</button>
   </div>`;
 }
 

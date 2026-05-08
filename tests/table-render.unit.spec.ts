@@ -34,6 +34,7 @@ function createHelpers(): ComponentRenderHelpers {
     renderReaderBlock: () => '',
     renderReaderBlocks: () => '',
     orderReaderBlocks: (blocks) => blocks,
+    isReaderViewPrioritizedBlock: () => false,
     renderComponentFragment: (_componentName, content) => content,
     renderComponentOptions: () => '',
     renderAddComponentPicker: () => '',

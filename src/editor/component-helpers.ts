@@ -25,6 +25,7 @@ export interface ComponentRenderHelpers {
   renderReaderBlock: (section: VisualSection, block: VisualBlock) => string;
   renderReaderBlocks: (section: VisualSection, blocks: VisualBlock[]) => string;
   orderReaderBlocks: (blocks: VisualBlock[]) => VisualBlock[];
+  isReaderViewPrioritizedBlock: (block: VisualBlock) => boolean;
   renderComponentFragment: (componentName: string, content: string, block: VisualBlock) => string;
   renderComponentOptions: (selected: string) => string;
   renderAddComponentPicker: (options: AddComponentPickerOptions) => string;

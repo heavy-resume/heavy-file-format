@@ -683,6 +683,7 @@ export function getComponentRenderHelpers(editorRenderer: {
   renderReaderBlock: ComponentRenderHelpers['renderReaderBlock'];
   renderReaderBlocks: ComponentRenderHelpers['renderReaderBlocks'];
   orderReaderBlocks: ComponentRenderHelpers['orderReaderBlocks'];
+  isReaderViewPrioritizedBlock: ComponentRenderHelpers['isReaderViewPrioritizedBlock'];
 }): ComponentRenderHelpers {
   return {
     escapeAttr,
@@ -694,6 +695,7 @@ export function getComponentRenderHelpers(editorRenderer: {
     renderReaderBlock: readerRenderer.renderReaderBlock,
     renderReaderBlocks: readerRenderer.renderReaderBlocks,
     orderReaderBlocks: readerRenderer.orderReaderBlocks,
+    isReaderViewPrioritizedBlock: readerRenderer.isReaderViewPrioritizedBlock,
     renderComponentFragment: editorRenderer.renderComponentFragment,
     renderComponentOptions,
     renderAddComponentPicker: (options) => renderAddComponentPicker(options, { escapeAttr, escapeHtml, getComponentDefs }),

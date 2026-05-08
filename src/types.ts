@@ -170,7 +170,7 @@ export interface ThemeConfig {
   colors: Record<string, string>;
 }
 
-export type ReaderViewModifier = 'highlight' | 'collapse' | 'dimmed' | 'hidden';
+export type ReaderViewModifier = 'highlight' | 'priority' | 'collapse' | 'dimmed' | 'hidden';
 export type ReaderViewFilter = Record<string, ReaderViewModifier[]>;
 
 export interface ComponentDefinition {

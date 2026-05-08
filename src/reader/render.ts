@@ -28,6 +28,7 @@ import {
   createReaderViewContext,
   getBlockReaderViewTargetKey,
   getReaderViewModifiers,
+  isReaderViewPrioritized,
   getSectionReaderViewTargetKey,
   hasReaderViewModifier,
   orderReaderViewTargets,
@@ -87,6 +88,7 @@ export interface ReaderRenderer {
   renderReaderBlock: (section: VisualSection, block: VisualBlock) => string;
   renderReaderBlocks: (section: VisualSection, blocks: VisualBlock[]) => string;
   orderReaderBlocks: (blocks: VisualBlock[]) => VisualBlock[];
+  isReaderViewPrioritizedBlock: (block: VisualBlock) => boolean;
   renderModal: () => string;
   renderLinkInlineModal: () => string;
   renderWarnings: () => string;
@@ -216,9 +218,10 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     const temp = state.tempHighlights.has(effectiveId);
     const modifiers = getReaderViewModifiers(viewContext, targetKey);
     const dimmed = modifiers.has('dimmed') && !state.readerViewActivatedTargets.has(targetKey);
+    const prioritized = isReaderViewPrioritized(viewContext, targetKey);
     const viewCollapseKey = `reader-view-collapse:${targetKey}`;
     const viewExpanded = state.readerContainerState[viewCollapseKey] ?? !modifiers.has('collapse');
-    const sectionExpanded = modifiers.has('collapse') ? viewExpanded : section.expanded;
+    const sectionExpanded = modifiers.has('collapse') ? viewExpanded : prioritized ? true : section.expanded;
     const classList = [
       'reader-section',
       section.contained ? '' : 'is-uncontained',
@@ -281,8 +284,9 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     }
     const base = deps.resolveBaseComponent(block.schema.component);
     const modifiers = getReaderViewModifiers(viewContext, targetKey);
+    const prioritized = isReaderViewPrioritized(viewContext, targetKey);
     const readerExpanded = base === 'expandable'
-      ? getReaderExpandableExpanded(section.key, block, modifiers.has('collapse') ? false : block.schema.expandableExpanded)
+      ? getReaderExpandableExpanded(section.key, block, modifiers.has('collapse') ? false : prioritized ? true : block.schema.expandableExpanded)
       : block.schema.expandableExpanded;
     const blockDomId = getBlockDomId(block);
     const idAttr = blockDomId ? ` id="${deps.escapeAttr(blockDomId)}"` : '';
@@ -339,6 +343,8 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     if (base === 'container') {
       const readerBlock = modifiers.has('collapse')
         ? { ...block, schema: { ...block.schema, containerExpanded: false } } as VisualBlock
+        : prioritized
+        ? { ...block, schema: { ...block.schema, containerExpanded: true } } as VisualBlock
         : block;
       return renderBlockShell(renderContainerReader(section, readerBlock, helpers));
     }
@@ -386,6 +392,10 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       getBlockReaderViewTargetKey,
       state.readerViewActivatedTargets
     );
+  }
+
+  function isReaderViewPrioritizedBlock(block: VisualBlock): boolean {
+    return isReaderViewPrioritized(getActiveReaderViewContext(), getBlockReaderViewTargetKey(block));
   }
 
   function renderReaderViewTargetAttrs(targetKey: ReaderViewTargetKey, dimmed: boolean): string {
@@ -931,6 +941,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     renderReaderBlock,
     renderReaderBlocks,
     orderReaderBlocks,
+    isReaderViewPrioritizedBlock,
     renderModal,
     renderLinkInlineModal,
     renderWarnings,

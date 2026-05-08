@@ -1,6 +1,7 @@
 {
   "typescript": {
     "tool-typescript": ["highlight"],
+    "/body/tools-technologies": ["priority"],
     "project-heavy-stack": ["highlight"],
     "history-northwind-labs-senior-software-engineer": ["highlight"],
     "tool-openai-api": ["dimmed"],
@@ -9,10 +10,11 @@
     "/body/top-skills-tools-technologies/grid-0/grid/component-list-0/xref-card-3": ["hidden"],
     "project-autonomous-agent-hackathon": ["dimmed", "collapse"],
     "/body/education": ["collapse"],
-    "/body/locations": ["hidden"]
+    "/body/locations": ["priority"]
   },
   "llm-engineer": {
     "tool-openai-api": ["highlight"],
+    "/body/tools-technologies": ["priority"],
     "tool-superagi": ["highlight"],
     "skill-llm-prompt-engineering": ["highlight"],
     "project-autonomous-agent-hackathon": ["highlight"],
@@ -24,6 +26,6 @@
     "/body/top-skills-tools-technologies/grid-0/grid/component-list-1/xref-card-1": ["hidden"],
     "/body/top-skills-tools-technologies/grid-0/grid/component-list-1/xref-card-3": ["hidden"],
     "/body/education": ["collapse"],
-    "/body/locations": ["hidden"]
+    "/body/locations": ["priority"]
   }
 }

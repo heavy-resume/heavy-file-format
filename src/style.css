@@ -2,6 +2,9 @@
   font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
   color: var(--hvy-text);
   background: radial-gradient(circle at 10% 20%, var(--hvy-bg), var(--hvy-bg-alt) 48%, var(--hvy-bg-alt));
+  --hvy-sidebar-tab-size: 2.9rem;
+  --hvy-sidebar-footprint: 3.25rem;
+  --hvy-document-edge-gutter: 0.9rem;
 }
 
 * {
@@ -136,6 +139,18 @@ button.danger {
   border-color: var(--hvy-danger);
 }
 
+.hvy-ui-icon {
+  width: 1em;
+  height: 1em;
+  display: block;
+  flex: 0 0 auto;
+  stroke: currentColor;
+  stroke-width: 2.35;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+}
+
 button.tiny {
   font-size: 0.78rem;
   padding: 0.2rem 0.42rem;
@@ -150,11 +165,10 @@ button.tiny {
 }
 
 .workspace-head {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: start;
   gap: 0.75rem;
-  flex-wrap: wrap;
 }
 
 .view-tabs {
@@ -177,6 +191,16 @@ button.tiny {
   gap: 0.45rem;
   flex-wrap: wrap;
   align-items: center;
+  justify-content: flex-end;
+}
+
+.responsive-preview-controls {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  justify-self: center;
 }
 
 .full-pane {
@@ -242,6 +266,97 @@ button.tiny {
   scrollbar-gutter: 0.5rem;
 }
 
+.hvy-surface {
+  container: hvy-surface / inline-size;
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  margin-inline: auto;
+}
+
+.hvy-surface-phone,
+.hvy-surface-tablet,
+.hvy-surface-desktop {
+  flex: 0 0 auto;
+}
+
+.hvy-preview-frame {
+  width: 100%;
+  max-width: none;
+  margin-inline: auto;
+}
+
+.hvy-preview-frame-phone,
+.hvy-preview-frame-tablet,
+.hvy-preview-frame-desktop {
+  flex: 0 0 auto;
+}
+
+.hvy-preview-frame-phone {
+  --hvy-sidebar-tab-size: 2.15rem;
+  --hvy-sidebar-footprint: 2.35rem;
+  --hvy-document-edge-gutter: 0.55rem;
+}
+
+.hvy-preview-frame-tablet {
+  --hvy-sidebar-tab-size: 2.55rem;
+  --hvy-sidebar-footprint: 2.8rem;
+  --hvy-document-edge-gutter: 0.75rem;
+}
+
+.hvy-preview-frame-phone,
+.hvy-preview-frame-tablet {
+  --hvy-sidebar-footprint: 0rem;
+}
+
+.hvy-preview-frame-phone:not(.is-sidebar-open),
+.hvy-preview-frame-tablet:not(.is-sidebar-open) {
+  --hvy-sidebar-footprint: var(--hvy-document-edge-gutter);
+}
+
+.hvy-preview-frame-phone.is-sidebar-open {
+  --hvy-sidebar-footprint: 2.35rem;
+}
+
+.hvy-preview-frame-tablet.is-sidebar-open {
+  --hvy-sidebar-footprint: 2.8rem;
+}
+
+.pane.hvy-preview-frame-phone,
+.pane.hvy-preview-frame-tablet,
+.pane.hvy-preview-frame-desktop {
+  padding: 0;
+}
+
+.sidebar-tab-hamburger {
+  position: relative;
+  display: block;
+  width: clamp(0.82rem, calc(var(--hvy-sidebar-tab-size) * 0.38), 1.05rem);
+  height: clamp(0.56rem, calc(var(--hvy-sidebar-tab-size) * 0.29), 0.74rem);
+  color: currentColor;
+}
+
+.sidebar-tab-hamburger::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 100%;
+  height: 2px;
+  border-radius: 999px;
+  background: currentColor;
+  box-shadow:
+    0 calc(clamp(0.56rem, calc(var(--hvy-sidebar-tab-size) * 0.29), 0.74rem) * -0.5) 0 currentColor,
+    0 calc(clamp(0.56rem, calc(var(--hvy-sidebar-tab-size) * 0.29), 0.74rem) * 0.5) 0 currentColor;
+  transform: translateY(-50%);
+}
+
+.sidebar-tab-label {
+  display: block;
+  line-height: 1;
+  text-align: center;
+}
+
 .viewer-shell {
   position: relative;
   height: 100%;
@@ -251,7 +366,13 @@ button.tiny {
 .viewer-shell .reader-document {
   height: 100%;
   overflow: auto;
-  padding-left: 3.25rem;
+  padding-left: var(--hvy-sidebar-footprint);
+  padding-right: var(--hvy-document-edge-gutter);
+  scrollbar-gutter: stable both-edges;
+}
+
+.hvy-preview-frame-phone.viewer-shell .reader-document,
+.hvy-preview-frame-tablet.viewer-shell .reader-document {
   scrollbar-gutter: stable;
 }
 
@@ -262,10 +383,17 @@ button.tiny {
 
 @media (max-width: 980px) {
   .workspace-head {
+    grid-template-columns: 1fr;
     align-items: stretch;
   }
 
+  .view-tabs,
+  .responsive-preview-controls {
+    justify-self: center;
+  }
+
   .editor-top-controls {
+    justify-content: center;
     width: 100%;
   }
 

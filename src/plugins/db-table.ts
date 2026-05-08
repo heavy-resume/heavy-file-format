@@ -11,6 +11,7 @@ import { DB_ATTACHMENT_ID, getAttachment, setAttachment } from '../attachments';
 import { DB_TABLE_PLUGIN_ID } from './registry';
 import { validateDbTableObjectName } from './db-table-identifiers';
 import type { ScriptingDbApi } from './scripting/runtime';
+import { closeIcon, plusIcon } from '../icons';
 
 import './db-table.css';
 
@@ -362,7 +363,7 @@ function renderEditableTable(
                           aria-label="Delete column ${helpers.escapeAttr(column)}"
                           title="Delete column ${helpers.escapeAttr(column)}"
                           ${readOnlySource || snapshot.columns.length <= 1 ? 'disabled' : ''}
-                        >×</button>
+                        >${closeIcon()}</button>
                       </div>
                     </th>`
                 )
@@ -377,7 +378,7 @@ function renderEditableTable(
                   data-table-name="${helpers.escapeAttr(tableName)}"
                   title="Add column"
                   ${tableDisabledAttr}
-                >+</button>
+                >${plusIcon()}</button>
               </th>
             </tr>
           </thead>
@@ -395,7 +396,7 @@ function renderEditableTable(
                   data-block-id="${helpers.escapeAttr(blockId)}"
                   data-table-name="${helpers.escapeAttr(tableName)}"
                   ${tableDisabledAttr}
-                >+ Add Row</button>
+                >${plusIcon()} Add Row</button>
               </td>
             </tr>
           </tbody>

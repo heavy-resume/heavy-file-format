@@ -16,6 +16,7 @@ function createHistoryTestState(): AppState {
     filename: 'test.hvy',
     currentView: 'editor',
     editorMode: 'raw',
+    responsivePreview: 'full',
     chat: createDefaultChatState(),
     aiEdit: {
       sectionKey: null,
@@ -42,6 +43,7 @@ function createHistoryTestState(): AppState {
     cliSession: { cwd: '/' },
     cliHistory: [],
     activeEditorBlock: null,
+    activeEditorBlockSnapshot: null,
     componentPlacement: null,
     pendingEditorActivation: null,
     activeEditorSectionTitleKey: null,
@@ -66,6 +68,7 @@ function createHistoryTestState(): AppState {
     readerExpandableState: {},
     viewerSidebarOpen: false,
     editorSidebarOpen: false,
+    viewerSidebarHelpDismissed: false,
     editorSidebarHelpDismissed: false,
     lastHistoryGroup: null,
     lastHistoryAt: 0,

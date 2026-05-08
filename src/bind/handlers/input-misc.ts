@@ -4,7 +4,8 @@ import { SCRIPTING_PLUGIN_VERSION } from '../../plugins/scripting/version';
 
 export function bindInputMisc(app: HTMLElement): void {
   app.addEventListener('input', (event) => {
-    const target = event.target as HTMLElement;
+    const rawTarget = event.target as HTMLElement;
+    const target = rawTarget.dataset.field ? rawTarget : rawTarget.closest<HTMLElement>('[data-field]') ?? rawTarget;
     if (handleTagEditorInput(target, tagStateHelpers)) {
       return;
     }
@@ -249,7 +250,7 @@ export function bindInputMisc(app: HTMLElement): void {
     }
 
     if (handleBlockFieldInput(target)) {
-      if (field === 'block-rich' || field === 'block-grid-rich' || field === 'table-details-rich') {
+      if (field === 'block-rich' || field === 'block-grid-rich' || field === 'table-details-rich' || field === 'table-cell' || field === 'table-column') {
         refreshRichToolbarState(target);
       }
       console.debug('[hvy:perf] input:end', { eventId, field, elapsedMs: Number((performance.now() - startedAt).toFixed(2)), handledBy: 'block-field' });

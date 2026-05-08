@@ -1,6 +1,6 @@
 .table-editor {
   display: grid;
-  gap: 0.6rem;
+  gap: 0.4rem;
 }
 
 .table-editor-head {
@@ -21,6 +21,7 @@
 }
 
 .table-editor-frame {
+  max-width: 100%;
   overflow: auto;
   border: 1px solid var(--hvy-border);
   border-radius: 12px;
@@ -30,16 +31,26 @@
 .table-editor-grid {
   width: 100%;
   border-collapse: collapse;
-  min-width: 540px;
+  min-width: max(100%, calc(var(--hvy-table-editor-columns, 2) * 10rem + 4.5rem));
   table-layout: fixed;
 }
 
 .table-editor-grid th,
 .table-editor-grid td {
+  position: relative;
   border: 1px solid var(--hvy-border-input);
   vertical-align: top;
   background: var(--hvy-table-row-bg-1);
-  overflow: hidden;
+  overflow: visible;
+}
+
+.table-editor-grid th:has(.table-inline-edit-shell:hover),
+.table-editor-grid th:has(.table-inline-edit-shell:focus-within),
+.table-editor-grid td:has(.table-inline-edit-shell:hover),
+.table-editor-grid td:has(.table-inline-edit-shell:focus-within),
+.table-editor-grid th:has(.table-inline-toolbar .is-selected),
+.table-editor-grid td:has(.table-inline-toolbar .is-selected) {
+  z-index: 20;
 }
 
 .table-editor-grid th {
@@ -66,10 +77,61 @@
 }
 
 .table-column-head {
-  display: flex;
-  align-items: center;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
   gap: 0.2rem;
-  padding: 0.25rem 0.3rem;
+  padding: 0.05rem 0.08rem;
+}
+
+.table-inline-edit-shell {
+  position: relative;
+  min-width: 0;
+}
+
+.table-inline-toolbar {
+  position: absolute;
+  top: calc(100% + 0.15rem);
+  right: 0;
+  z-index: 30;
+  display: none;
+  gap: 0.25rem;
+  justify-content: flex-end;
+  min-width: 0;
+  width: fit-content;
+  height: auto;
+  padding: 0.18rem;
+  border: 1px solid var(--hvy-border-translucent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--hvy-surface) 96%, transparent);
+  box-shadow: 0 8px 18px var(--hvy-shadow);
+  margin: 0;
+  opacity: 1;
+  pointer-events: auto;
+  transform: none;
+}
+
+.table-inline-edit-shell:focus-within .table-inline-toolbar,
+.table-inline-edit-shell:hover .table-inline-toolbar,
+.table-inline-toolbar:has(.is-selected) {
+  display: flex;
+}
+
+.table-inline-toolbar button {
+  padding: 0.12rem 0.28rem;
+  border-radius: 6px;
+  font-size: 0.72rem;
+  line-height: 1.1;
+  background: transparent;
+}
+
+.hvy-surface-phone .table-inline-edit-shell:not(.is-previewing-full):has([data-hvy-alt="true"]) .table-inline-toolbar [data-rich-action="alt"],
+.hvy-surface-tablet .table-inline-edit-shell:not(.is-previewing-full):has([data-hvy-alt="true"]) .table-inline-toolbar [data-rich-action="alt"],
+.table-inline-edit-shell.is-previewing-compact .table-inline-toolbar [data-rich-action="alt"],
+.table-inline-edit-shell.is-previewing-nowrap .table-inline-toolbar [data-rich-action="nowrap"] {
+  background: var(--hvy-button-bg);
+  border-color: var(--hvy-button-bg);
+  color: var(--hvy-button-text);
 }
 
 .table-drag-handle {
@@ -91,6 +153,8 @@
   height: 1.9rem;
   border-radius: 999px;
   padding: 0;
+  display: inline-grid;
+  place-items: center;
 }
 
 .inline-editable {
@@ -107,11 +171,55 @@
 
 .table-inline-text {
   width: 100%;
-  padding: 0.42rem 0.5rem;
+  padding: 0.26rem 0.38rem;
   border-radius: 8px;
   overflow: hidden;
+  line-height: 1.25;
   white-space: pre-wrap;
   overflow-wrap: break-word;
+}
+
+.table-inline-text .hvy-alt-full {
+  display: inline;
+}
+
+.table-inline-text .hvy-alt-compact {
+  display: none;
+}
+
+.table-inline-edit-shell.is-previewing-compact .hvy-alt-full {
+  display: none;
+}
+
+.table-inline-edit-shell.is-previewing-compact .hvy-alt-compact {
+  display: inline-block;
+}
+
+.hvy-surface-phone .table-inline-edit-shell:not(.is-previewing-full) .hvy-alt-full,
+.hvy-surface-tablet .table-inline-edit-shell:not(.is-previewing-full) .hvy-alt-full {
+  display: none;
+}
+
+.hvy-surface-phone .table-inline-edit-shell:not(.is-previewing-full) .hvy-alt-compact,
+.hvy-surface-tablet .table-inline-edit-shell:not(.is-previewing-full) .hvy-alt-compact {
+  display: inline-block;
+}
+
+.table-inline-text .hvy-nowrap {
+  display: inline;
+  max-width: none;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: inherit;
+}
+
+.table-inline-edit-shell.is-previewing-nowrap .hvy-nowrap {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+  white-space: nowrap;
 }
 
 .table-inline-text:focus {
@@ -126,6 +234,7 @@
 
 .table-row-editor td {
   min-width: 140px;
+  max-width: 50vw;
 }
 
 .table-row-editor .table-row-utility,
@@ -157,6 +266,13 @@
   padding: 0.4rem;
 }
 
+.table-add-row-line button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+}
+
 .table-details-editor {
   border: 1px dashed var(--hvy-border-input);
   border-radius: 8px;
@@ -179,9 +295,17 @@
 
 .reader-table {
   width: 100%;
+  max-width: 100%;
   border-collapse: collapse;
   table-layout: fixed;
   min-height: 1ch;
+}
+
+.reader-table-frame {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .reader-table th,
@@ -191,6 +315,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  overflow-wrap: anywhere;
   min-height: 1ch;
 }
 
@@ -223,4 +348,31 @@
 .reader-table-details-container {
   display: grid;
   gap: 0.3rem;
+}
+
+@container hvy-surface (inline-size < 48rem) {
+  .table-editor-grid,
+  .reader-table {
+    min-width: 100%;
+  }
+
+  .table-editor-grid {
+    min-width: max(100%, calc(var(--hvy-table-editor-columns, 2) * 8.5rem + 4.5rem));
+  }
+
+}
+
+@container hvy-surface (inline-size < 30rem) {
+  .table-editor-grid {
+    font-size: 0.84rem;
+  }
+
+  .reader-table {
+    font-size: 0.86rem;
+  }
+
+  .reader-table th,
+  .reader-table td {
+    padding: 0.28rem 0.35rem;
+  }
 }

@@ -277,6 +277,7 @@ export function resetTransientUiState(): void {
   state.templateValues = {};
   state.gridAddComponentByBlock = {};
   state.readerExpandableState = {};
+  state.viewerSidebarHelpDismissed = false;
   state.editorSidebarHelpDismissed = false;
   state.lastHistoryGroup = null;
   state.lastHistoryAt = 0;

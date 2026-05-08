@@ -93,6 +93,13 @@
     border-radius: 999px;
     border: 1px solid transparent;
     color: var(--hvy-danger, var(--reader-muted));
+    display: inline-grid;
+    place-items: center;
+}
+
+.db-table-delete-column-button .hvy-ui-icon {
+    width: 0.9rem;
+    height: 0.9rem;
 }
 
 .db-table-sort-button:hover:not(:disabled),

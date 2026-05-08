@@ -1,5 +1,6 @@
 import './grid.css';
 import type { ComponentEditorRenderer, ComponentReaderRenderer } from '../../component-helpers';
+import { closeIcon } from '../../../icons';
 
 export const renderGridEditor: ComponentEditorRenderer = (sectionKey, block, helpers) => {
   const firstPlacementTarget = helpers.renderComponentPlacementTarget({
@@ -39,7 +40,7 @@ export const renderGridEditor: ComponentEditorRenderer = (sectionKey, block, hel
             </div>
             <button type="button" class="danger remove-x" data-action="remove-grid-item" data-section-key="${helpers.escapeAttr(
               sectionKey
-            )}" data-block-id="${helpers.escapeAttr(block.id)}" data-grid-item-id="${helpers.escapeAttr(item.id)}">×</button>
+            )}" data-block-id="${helpers.escapeAttr(block.id)}" data-grid-item-id="${helpers.escapeAttr(item.id)}">${closeIcon()}</button>
           </div>
           <div class="grid-item-controls">
             <select class="compact-select" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(

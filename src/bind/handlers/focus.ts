@@ -1,4 +1,4 @@
-import { state, getRenderApp, commitTagEditorDraft, findSectionByKey, commitInlineTableEdit, recordHistory, tagStateHelpers } from './_imports';
+import { state, getRenderApp, commitTagEditorDraft, findSectionByKey, commitInlineTableEdit, recordHistory, refreshRichToolbarState, tagStateHelpers } from './_imports';
 
 export function bindFocus(app: HTMLElement): void {
   app.addEventListener('focusin', (event) => {
@@ -12,10 +12,12 @@ export function bindFocus(app: HTMLElement): void {
     const cellIndex = target.dataset.cellIndex ?? '';
     const columnIndex = target.dataset.columnIndex ?? '';
     recordHistory(`table-edit:${sectionKey}:${blockId}:${rowIndex}:${cellIndex}:${columnIndex}`);
+    requestAnimationFrame(() => refreshRichToolbarState(target));
   });
 
   app.addEventListener('focusout', (event) => {
-    const target = event.target as HTMLElement;
+    const rawTarget = event.target as HTMLElement;
+    const target = rawTarget.dataset.field ? rawTarget : rawTarget.closest<HTMLElement>('[data-field]') ?? rawTarget;
     if (target.dataset.field === 'table-cell' || target.dataset.field === 'table-column') {
       commitInlineTableEdit(target);
     }

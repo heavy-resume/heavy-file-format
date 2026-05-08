@@ -1,5 +1,10 @@
 /// <reference types="vite/client" />
 
+declare module 'virtual:hvy-brython-minimal-vfs' {
+  const source: string;
+  export default source;
+}
+
 interface ImportMetaEnv {
   readonly VITE_HVY_CHAT_PROVIDER?: 'openai' | 'anthropic' | 'qwen';
   readonly VITE_HVY_CHAT_MODEL?: string;

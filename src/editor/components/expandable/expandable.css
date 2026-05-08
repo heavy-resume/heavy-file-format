@@ -38,7 +38,8 @@
 }
 
 .expandable-part:has(.component-picker:focus-within),
-.expandable-part:has(.component-picker[data-open="true"]) {
+.expandable-part:has(.component-picker[data-open="true"]),
+.expandable-part:has(.expandable-pane-meta[open]) {
   overflow: visible;
 }
 
@@ -60,6 +61,7 @@
   align-items: stretch;
   gap: 0.55rem;
   padding: 0.45rem 0.55rem 0 0.55rem;
+  min-width: 0;
 }
 
 .expandable-summary {
@@ -79,7 +81,38 @@
   flex: 0 0 auto;
 }
 
+.expandable-pane-meta {
+  position: relative;
+  flex: 0 0 auto;
+  align-self: center;
+}
+
+.expandable-pane-meta-button {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.75rem;
+  padding: 0.22rem 0.48rem;
+  border: 1px solid var(--hvy-border-alt);
+  border-radius: 999px;
+  background: var(--hvy-surface);
+  color: var(--hvy-text);
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+  list-style: none;
+}
+
+.expandable-pane-meta-button::-webkit-details-marker {
+  display: none;
+}
+
+.expandable-pane-meta[open] .expandable-pane-meta-button {
+  border-color: var(--hvy-focus);
+  box-shadow: 0 0 0 2px var(--hvy-focus-ring);
+}
+
 .expandable-summary-meta-button {
+  min-width: 0;
   flex: 1 1 auto;
   justify-content: flex-end;
   margin-left: auto;
@@ -100,12 +133,16 @@
 }
 
 .expandable-summary-meta {
+  min-width: 0;
+  overflow: hidden;
   font-size: 0.76rem;
   color: var(--hvy-text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .expandable-inline-toggle {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;
@@ -125,6 +162,54 @@
 .expandable-inline-toggle:hover {
   background: linear-gradient(180deg, var(--hvy-surface-alt) 0%, var(--hvy-surface-tint) 100%);
   border-color: var(--hvy-border-input);
+}
+
+.expandable-pane-meta-body {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  left: 0;
+  z-index: 35;
+  display: grid;
+  gap: 0.5rem;
+  width: min(24rem, calc(100vw - 2rem));
+  min-width: min(18rem, calc(100vw - 2rem));
+  border: 1px solid var(--hvy-border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--hvy-surface) 86%, var(--hvy-surface-alt) 14%);
+  box-shadow: 0 12px 28px var(--hvy-shadow);
+  padding: 0.55rem;
+}
+
+.expandable-pane-meta-body .expandable-inline-toggle {
+  width: fit-content;
+  max-width: 100%;
+}
+
+.expandable-pane-meta-title {
+  color: var(--hvy-text-alt);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.expandable-pane-css-field {
+  display: grid;
+  gap: 0.25rem;
+  min-width: 0;
+  color: var(--hvy-text-alt);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.expandable-pane-css-field textarea {
+  min-width: 0;
+  width: 100%;
+  border: 1px solid var(--hvy-border-input);
+  border-radius: 7px;
+  padding: 0.44rem;
+  background: var(--hvy-surface);
+  color: var(--hvy-text);
+  font: inherit;
+  resize: vertical;
 }
 
 .expandable-part-body {

@@ -12,6 +12,31 @@
   cursor: text;
 }
 
+.text-editor-shell {
+  position: relative;
+}
+
+.text-fill-in-selection-button {
+  position: absolute;
+  top: -0.95rem;
+  right: 0.65rem;
+  z-index: 4;
+  display: none;
+  min-height: 1.85rem;
+  padding: 0.22rem 0.55rem;
+  border-radius: 999px;
+  background: var(--hvy-surface-alt);
+  color: var(--hvy-text);
+  font-size: 0.76rem;
+  line-height: 1;
+  box-shadow: 0 6px 14px var(--hvy-shadow);
+}
+
+.text-editor-shell.has-fill-in-selection .text-fill-in-selection-button {
+  display: inline-flex;
+  align-items: center;
+}
+
 .text-fill-in-box {
   display: inline-block;
   min-width: 7ch;
@@ -35,6 +60,83 @@
 .text-fill-in-box:focus {
   border-style: solid;
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--hvy-focus-ring, #2563eb) 20%, transparent);
+}
+
+.hvy-alt {
+  display: inline;
+}
+
+.hvy-alt-compact {
+  display: none;
+  min-width: 3ch;
+  outline: none;
+}
+
+.rich-editor .hvy-alt-compact,
+.table-inline-text .hvy-alt-compact {
+  padding: 0 0.22em;
+  border: 1px dashed currentColor;
+  border-radius: 0.2em;
+}
+
+.hvy-alt-compact:empty::before {
+  content: "compact";
+  color: var(--hvy-text-muted);
+  opacity: 0.72;
+}
+
+.hvy-alt-compact:focus {
+  border-style: solid;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--hvy-focus-ring, #2563eb) 20%, transparent);
+}
+
+.hvy-nowrap {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+  white-space: nowrap;
+}
+
+.hvy-surface-phone .hvy-alt-full,
+.hvy-surface-tablet .hvy-alt-full {
+  display: none;
+}
+
+.hvy-surface-phone .hvy-alt-compact,
+.hvy-surface-tablet .hvy-alt-compact {
+  display: inline-block;
+}
+
+.hvy-surface-desktop .hvy-alt-full {
+  display: inline;
+}
+
+.hvy-surface-desktop .hvy-alt-compact {
+  display: none;
+}
+
+@container hvy-surface (inline-size < 30rem) {
+  .hvy-alt-full {
+    display: none;
+  }
+
+  .hvy-alt-compact {
+    display: inline-block;
+  }
+}
+
+@container hvy-surface (inline-size < 48rem) {
+  .hvy-nowrap {
+    font-size: 0.94em;
+  }
+}
+
+@container hvy-surface (inline-size < 30rem) {
+  .hvy-nowrap {
+    font-size: 0.88em;
+  }
 }
 
 .editor-block-title {
@@ -88,6 +190,11 @@
 
 .format-buttons {
   align-items: center;
+}
+
+.responsive-format-buttons {
+  width: 100%;
+  justify-content: flex-end;
 }
 
 .align-buttons {
@@ -287,6 +394,26 @@
 .rich-editor p {
   min-width: 0;
   margin: 0 0 0.45rem;
+}
+
+.rich-editor > :first-child,
+.editor-block-passive .reader-block > :first-child {
+  margin-top: 0;
+}
+
+.rich-editor > :last-child,
+.editor-block-passive .reader-block > :last-child {
+  margin-bottom: 0;
+}
+
+.rich-editor h1,
+.rich-editor h2,
+.rich-editor h3,
+.rich-editor h4,
+.rich-editor h5,
+.rich-editor h6 {
+  margin: 0.2rem 0 0.15rem;
+  line-height: 1.15;
 }
 
 .rich-editor code:not(pre code) {

@@ -122,6 +122,16 @@ Presentation keys in document metadata include:
 - `sidebar_label`: optional string. Use it as the label for the sidebar toggle control. Defaults to a client-defined fallback (e.g. `☰`) if absent.
 - `reader_max_width`: optional CSS width value applied to the main reader document column, for example `60rem` or `72ch`.
 
+Responsive rendering SHOULD be based on the rendered document container's inline size, not only the browser viewport. Renderers that support responsive behavior SHOULD establish a named CSS query container around the document surface, for example:
+
+```css
+.hvy-surface {
+  container: hvy-surface / inline-size;
+}
+```
+
+This lets the same responsive rules work when a document is rendered inside a smaller editor pane, iframe, embedded frame, or preview surface. Width presets in authoring tools are editor/client state and MUST NOT be serialized into the `.hvy` file.
+
 ### 5.2 Section boundaries
 
 Top-level sections are defined by `<!--hvy: {...}-->` directives.
@@ -207,6 +217,7 @@ Common block metadata fields include:
 - `css`
 
 `css` is an optional inline CSS style string applied to that block's rendered wrapper. Authoring tools expose this for layout and presentation adjustments such as collapsing spacing between adjacent blocks.
+Inline `css` strings are declaration-only values equivalent to an HTML `style` attribute. They MUST NOT contain selectors, `@media`, `@container`, or other at-rules. Responsive author CSS belongs in fenced HVY CSS blocks.
 `lock` is an optional boolean. Use it to prevent structural additions inside that block, such as nested child blocks or table-column changes.
 `placeholder` is an optional string. Display it as plain hint text when the block's content is empty, helping template authors communicate intent to document authors. It applies to text-based blocks and grid item blocks. It is not parsed as Markdown or HVY content.
 `fillIn` is an optional boolean for text blocks. When true, authoring tools SHOULD treat `<!-- value -->` in the text body as the only editable fill-in region in basic editing modes. Text outside the marker is scaffold text and SHOULD NOT be edited by constrained/basic editors. When the marker is filled or removed and no `<!-- value -->` marker remains, tools SHOULD treat the block like regular text again.
@@ -221,6 +232,7 @@ Section metadata also includes optional presentation keys such as:
 - `location`
 
 `css` is an optional inline CSS style string applied to the rendered section wrapper.
+Inline section `css` follows the same declaration-only rule as block `css`. Use CSS blocks for media queries, container queries, selectors, and other stylesheet-level constructs.
 `lock` is an optional boolean. Use it to prevent adding new blocks or child sections inside that section.
 `contained` is an optional boolean. When `true` (default), render the section as the normal bordered card/container and allow collapse/expand UI. When `false`, render the section edge-to-edge without the section border/background wrapper and without the section expander/collapser.
 `location` is an optional string. Use it to route a section to a named layout zone in the viewer. Defined values are `"main"` (default) and `"sidebar"`. Unknown values SHOULD be treated as `"main"`.
@@ -237,6 +249,21 @@ Authoring tools emit block-scoped metadata comments directly in section content:
 The directive name after `hvy:` can be a component name. In that form, `component` is implied by the directive name. For compatibility, tools also support the legacy `hvy:block` directive with an explicit `component` field.
 
 Block content indentation is structural and MUST NOT be interpreted as Markdown code. Renderers MUST render code from fenced Markdown code blocks using triple backticks (or standard Markdown fences) inside text content.
+
+### 5.7.1 Inline responsive annotations
+
+Text content MAY include paired HVY comment annotations for explicit responsive hints:
+
+```markdown
+<!--hvy:alt {"compact":"Tools & Tech"}-->Tools & Technologies<!--/hvy:alt-->
+<!--hvy:nowrap-->Tools & Technologies<!--/hvy:nowrap-->
+```
+
+`alt` marks a full phrase and an explicit compact replacement for constrained layouts. The payload MUST be a JSON object with string field `compact`. Renderers that support responsive text SHOULD display the full phrase in unconstrained containers and the `compact` value in constrained containers. The reference implementation treats tablet-or-narrower document containers as constrained.
+
+`nowrap` marks a phrase that SHOULD stay on one line when the renderer supports it. Renderers MAY shrink, clip, or ellipsize the phrase according to their own CSS defaults.
+
+These annotations are semantic hints, not raw HTML. Renderers SHOULD convert them into implementation-specific inline elements and MUST NOT leak the marker comments into visible output.
 
 Expandable blocks can be emitted with specialized directives so their stub and expanded content remain normal Markdown blocks:
 

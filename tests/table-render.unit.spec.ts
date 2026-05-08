@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
 
-import { renderTableReader, resetReaderTableStripeSequence } from '../src/editor/components/table/table';
+import { renderTableEditor, renderTableReader, resetReaderTableStripeSequence } from '../src/editor/components/table/table';
 import type { ComponentRenderHelpers } from '../src/editor/component-helpers';
 import type { VisualBlock, VisualSection } from '../src/editor/types';
 
@@ -75,6 +75,8 @@ function createHelpers(): ComponentRenderHelpers {
     ensureComponentListBlocks: () => {},
     getSelectedAddComponent: (_key, fallback) => fallback,
     isExpandableEditorPanelOpen: () => false,
+    isAdvancedEditorMode: () => false,
+    isMobileAdjustmentMode: () => false,
   };
 }
 
@@ -121,4 +123,21 @@ test('reader table striping continues across headerless continuation tables and 
   expect(continuedTable.indexOf('table-main-row-odd')).toBeLessThan(continuedTable.indexOf('table-main-row-even'));
   expect(restartedTable).toContain('table-main-row-even');
   expect(restartedTable).not.toContain('table-main-row-odd');
+});
+
+test('table editor renders inline cell content without paragraph wrappers', () => {
+  const helpers = createHelpers();
+  const html = renderTableEditor(
+    section.key,
+    createTableBlock([['Staff Engineer', '<!--hvy:alt {"compact":"Tech"}-->Technologies<!--/hvy:alt-->']]),
+    {
+      ...helpers,
+      markdownToEditorHtml: (markdown) => `<p>${markdown}</p>\n`,
+    }
+  );
+
+  expect(html).not.toContain('<p>');
+  expect(html).not.toContain('</p>');
+  expect(html).toContain('Staff Engineer');
+  expect(html).toContain('<!--hvy:alt {"compact":"Tech"}-->Technologies<!--/hvy:alt-->');
 });

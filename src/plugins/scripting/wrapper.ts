@@ -416,8 +416,7 @@ try:
         __hvy_entrypoint__()
     __hvy_runtime__.doc.rerender()
 except Exception as __hvy_err__:
-    import traceback as __hvy_tb__
-    __hvy_globals__.errors['${runtimeId}'] = __hvy_tb__.format_exc()
+    __hvy_globals__.errors['${runtimeId}'] = __hvy_window__.__BRYTHON__.error_trace(__hvy_err__)
 finally:
     if __hvy_trace_enabled__:
         try:

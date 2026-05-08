@@ -23,6 +23,7 @@ import { parseAttachedComponentBlocks } from '../plugins/db-table';
 import { SCRIPTING_PLUGIN_ID } from '../plugins/registry';
 import { getComponentDefsFromMeta } from '../component-defs';
 import { extractReusableTemplateVariablesFromDefinition } from '../reusable-template-values';
+import { plusIcon } from '../icons';
 
 interface ReaderRenderState {
   documentMeta: VisualDocument['meta'];
@@ -44,7 +45,9 @@ interface ReaderRenderState {
   themeModalOpen: boolean;
   theme: ThemeConfig;
   currentView: 'editor' | 'viewer' | 'ai';
+  responsivePreview: 'full' | 'phone' | 'tablet' | 'desktop';
   readerExpandableState: Record<string, boolean>;
+  viewerSidebarHelpDismissed: boolean;
 }
 
 interface ReaderRenderDeps {
@@ -70,6 +73,7 @@ export interface ReaderRenderer {
   renderNavigation: (sections: VisualSection[]) => string;
   renderReaderSections: (sections: VisualSection[]) => string;
   renderSidebarSections: (sections: VisualSection[]) => string;
+  renderSidebarHelpBalloon: (sections: VisualSection[]) => string;
   renderReaderSection: (section: VisualSection) => string;
   renderReaderBlock: (section: VisualSection, block: VisualBlock) => string;
   renderModal: () => string;
@@ -107,13 +111,41 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     }
     const maxWidth = typeof state.documentMeta.reader_max_width === 'string' ? state.documentMeta.reader_max_width.trim() : '';
     const bodyStyle = maxWidth.length > 0 ? ` style="max-width: ${deps.escapeAttr(maxWidth)};"` : '';
-    return `<div class="reader-document-body"${bodyStyle}>${realSections.map((section) => renderReaderSection(section)).join('')}</div>`;
+    const surfaceAttrs = renderResponsiveSurfaceAttrs(maxWidth);
+    return `<div${surfaceAttrs}><div class="reader-document-body"${bodyStyle}>${realSections.map((section) => renderReaderSection(section)).join('')}</div></div>`;
+  }
+
+  function renderResponsiveSurfaceAttrs(_documentMaxWidth: string): string {
+    const preview = state.responsivePreview;
+    return ` class="hvy-surface hvy-surface-${deps.escapeAttr(preview)}"`;
   }
 
   function renderSidebarSections(sections: VisualSection[]): string {
     resetReaderTableStripeSequence();
     const sidebarSections = sections.filter((section) => !section.isGhost && section.location === 'sidebar');
-    return sidebarSections.map((section) => renderReaderSection(section)).join('');
+    if (sidebarSections.length === 0) {
+      return '';
+    }
+    const surfaceAttrs = renderResponsiveSurfaceAttrs('');
+    return `<div${surfaceAttrs}><div class="reader-sidebar-surface-body">${sidebarSections.map((section) => renderReaderSection(section)).join('')}</div></div>`;
+  }
+
+  function renderSidebarHelpBalloon(sections: VisualSection[]): string {
+    if (state.viewerSidebarHelpDismissed) {
+      return '';
+    }
+    const sidebarSections = sections.filter((section) => !section.isGhost && section.location === 'sidebar');
+    if (sidebarSections.length === 0) {
+      return '';
+    }
+    return `<div class="viewer-sidebar-help-balloon" role="note" aria-label="Sections in pullout">
+      <div class="viewer-sidebar-help-title">Contains</div>
+      <ul>
+        ${sidebarSections
+          .map((section) => `<li title="${deps.escapeAttr(deps.formatSectionTitle(section.title))}">${deps.escapeHtml(deps.formatSectionTitle(section.title))}</li>`)
+          .join('')}
+      </ul>
+    </div>`;
   }
 
   function renderReaderSection(section: VisualSection): string {
@@ -558,7 +590,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
                   <article class="ghost-section-card add-ghost sqlite-row-component-ghost" data-action="sqlite-row-component-add-block" data-section-key="${deps.escapeAttr(
                     rowModal.sectionKey
                   )}">
-                    <div class="ghost-plus-big"><span>+</span></div>
+                    <div class="ghost-plus-big">${plusIcon()}</div>
                     <div class="ghost-label">Add Component</div>
                     <label class="ghost-component-picker">
                       <select
@@ -579,7 +611,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
                 : `<article class="ghost-section-card add-ghost sqlite-row-component-ghost" data-action="sqlite-row-component-add-block" data-section-key="${deps.escapeAttr(
                     state.sqliteRowComponentModal.sectionKey
                   )}">
-                    <div class="ghost-plus-big"><span>+</span></div>
+                    <div class="ghost-plus-big">${plusIcon()}</div>
                     <div class="ghost-label">Add Component</div>
                     <label class="ghost-component-picker">
                       <select
@@ -682,7 +714,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
                 data-field="section-description"
               >${deps.escapeHtml(section.description)}</textarea>
             </label>
-            <div style="display: flex;">
+            <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
               <label class="checkbox-label">
                 <input
                   type="checkbox"
@@ -691,6 +723,15 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
                   ${section.contained ? 'checked' : ''}
                 />
                 Contained
+              </label>
+              <label class="checkbox-label">
+                <input
+                  type="checkbox"
+                  data-section-key="${deps.escapeAttr(section.key)}"
+                  data-field="section-highlight"
+                  ${section.highlight ? 'checked' : ''}
+                />
+                Highlight
               </label>
             </div>
           </div>
@@ -739,6 +780,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     renderNavigation,
     renderReaderSections,
     renderSidebarSections,
+    renderSidebarHelpBalloon,
     renderReaderSection,
     renderReaderBlock,
     renderModal,

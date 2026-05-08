@@ -1,5 +1,6 @@
 import type { JsonObject } from '../hvy/types';
 import type { VisualSection } from './types';
+import { plusIcon } from '../icons';
 
 interface TemplateRenderHelpers {
   escapeAttr: (value: string) => string;
@@ -40,7 +41,7 @@ export function renderTemplateGhosts(
     .map(
       (field) => `
       <article class="ghost-section-card template-ghost" data-action="add-template-field" data-template-field="${helpers.escapeAttr(field)}">
-        <div class="ghost-plus-big"><span>+</span></div>
+        <div class="ghost-plus-big">${plusIcon()}</div>
         <div class="ghost-label">Add Template Field: ${helpers.escapeHtml(field)}</div>
       </article>
     `

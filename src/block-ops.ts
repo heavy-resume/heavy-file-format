@@ -1,6 +1,7 @@
 import type { TableRow, VisualBlock } from './editor/types';
 import type { ComponentRenderHelpers } from './editor/component-helpers';
 import type { TagRenderOptions } from './editor/tag-editor';
+import type { AppState } from './types';
 import { parseTags, serializeTags } from './editor/tag-editor';
 import { state, getRefreshReaderPanels, getRenderApp } from './state';
 import { getReusableNameFromSectionKey, getComponentDefs, renderComponentOptions, resolveBaseComponent } from './component-defs';
@@ -10,14 +11,14 @@ import { syncReusableTemplateForBlock } from './reusable';
 import { normalizeXrefTarget, getXrefTargetOptions, isXrefTargetValid } from './xref-ops';
 import { getTableColumns, setTableColumns } from './table-ops';
 import { coerceGridColumns } from './grid-ops';
-import { normalizeEditorMarkdownWhitespace, normalizeMarkdownLists, markdownToEditorHtml, turndown } from './markdown';
+import { applyMobileAltAdjustment, normalizeEditorMarkdownWhitespace, normalizeMarkdownLists, markdownToEditorHtml, turndown } from './markdown';
 import { renderAddComponentPicker } from './editor/component-picker';
 import { escapeAttr, escapeHtml, getInlineEditableText, renderOption } from './utils';
 import { recordHistory } from './history';
 import { getDocumentComponentDefaultCss } from './document-component-defaults';
 import { resetDbTableViewState } from './plugins/db-table';
 import { handleInlineCheckboxBackspace } from './editor/inline-checkbox';
-import { hasTextFillInMarker } from './text-fill-in';
+import { TEXT_FILL_IN_MARKER, hasTextFillInMarker } from './text-fill-in';
 
 export function findBlockByIds(sectionKey: string, blockId: string): VisualBlock | null {
   const sqliteRowComponentBlock = findSqliteRowComponentBlock(sectionKey, blockId);
@@ -180,7 +181,8 @@ export function handleBlockFieldInput(target: HTMLElement): boolean {
     let refreshMs = 0;
     let stepStartedAt = performance.now();
     normalizeEditableListDom(target);
-    block.text = normalizeMarkdownLists(normalizeEditorMarkdownWhitespace(turndown.turndown(target.innerHTML)));
+    const editedMarkdown = normalizeMarkdownLists(normalizeEditorMarkdownWhitespace(turndown.turndown(target.innerHTML)));
+    block.text = state.editorMode === 'mobile-adjustment' ? applyMobileAltAdjustment(block.text, editedMarkdown) : editedMarkdown;
     turndownMs = performance.now() - stepStartedAt;
     syncEditableTaskListMarkup(target, block.text);
     stepStartedAt = performance.now();
@@ -365,6 +367,10 @@ export function handleBlockFieldInput(target: HTMLElement): boolean {
   }
 
   if (field === 'block-expandable-always' && target instanceof HTMLInputElement) {
+    if (state.editorMode === 'mobile-adjustment') {
+      target.checked = block.schema.expandableAlwaysShowStub;
+      return true;
+    }
     block.schema.expandableAlwaysShowStub = target.checked;
     syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
     getRefreshReaderPanels()();
@@ -381,7 +387,7 @@ export function handleBlockFieldInput(target: HTMLElement): boolean {
     const columnIndex = Number.parseInt(target.dataset.columnIndex ?? '', 10);
     if (!Number.isNaN(columnIndex)) {
       const columns = getTableColumns(block.schema);
-      columns[columnIndex] = getInlineEditableText(target);
+      columns[columnIndex] = getInlineEditableMarkdown(target);
       setTableColumns(block.schema, columns);
     }
     console.debug('[hvy:perf] handleBlockFieldInput', {
@@ -397,7 +403,7 @@ export function handleBlockFieldInput(target: HTMLElement): boolean {
     const cellIndex = Number.parseInt(target.dataset.cellIndex ?? '', 10);
     const row = block.schema.tableRows[rowIndex];
     if (row && !Number.isNaN(cellIndex)) {
-      row.cells[cellIndex] = getInlineEditableText(target);
+      row.cells[cellIndex] = getInlineEditableMarkdown(target);
     }
     console.debug('[hvy:perf] handleBlockFieldInput', {
       field,
@@ -423,6 +429,10 @@ export function handleBlockFieldInput(target: HTMLElement): boolean {
   }
 
   return false;
+}
+
+function getInlineEditableMarkdown(target: HTMLElement): string {
+  return normalizeEditorMarkdownWhitespace(turndown.turndown(target)).replace(/\s*\n+\s*/g, ' ').trim();
 }
 
 export function commitInlineTableEdit(target: HTMLElement): void {
@@ -512,10 +522,23 @@ export function setActiveEditorBlock(sectionKey: string, blockId: string): void 
     : null;
   const nextPath = getEditorBlockPathIds(sectionKey, blockId);
   state.activeEditorBlock = { sectionKey, blockId };
+  state.activeEditorBlockSnapshot =
+    currentActiveBlock?.sectionKey === sectionKey && currentActiveBlock.blockId === blockId
+      ? state.activeEditorBlockSnapshot
+      : createEditorBlockSnapshot(sectionKey, blockId);
   openExpandableEditorPanelsToBlock(sectionKey, blockId);
   state.pendingEditorActivation = shouldRevealEditorActivationPath(currentPath, nextPath)
     ? { sectionKey, blockId }
     : null;
+}
+
+function createEditorBlockSnapshot(sectionKey: string, blockId: string): AppState['activeEditorBlockSnapshot'] {
+  const block = findBlockByIds(sectionKey, blockId);
+  return block ? { sectionKey, blockId, block: cloneVisualBlock(block) } : null;
+}
+
+function cloneVisualBlock(block: VisualBlock): VisualBlock {
+  return JSON.parse(JSON.stringify(block)) as VisualBlock;
 }
 
 function openExpandableEditorPanelsToBlock(sectionKey: string, blockId: string): void {
@@ -597,6 +620,7 @@ export function clearActiveEditorBlock(blockId?: string): void {
   }
   if (!blockId || state.activeEditorBlock.blockId === blockId) {
     state.activeEditorBlock = null;
+    state.activeEditorBlockSnapshot = null;
   }
 }
 
@@ -607,6 +631,7 @@ export function deactivateEditorBlock(sectionKey: string, blockId: string): void
   }
   if (activeBlockId === blockId) {
     state.activeEditorBlock = null;
+    state.activeEditorBlockSnapshot = null;
     return;
   }
   const clickedBlock = findBlockByIds(sectionKey, blockId);
@@ -616,6 +641,22 @@ export function deactivateEditorBlock(sectionKey: string, blockId: string): void
     return;
   }
   state.activeEditorBlock = null;
+  state.activeEditorBlockSnapshot = null;
+}
+
+export function cancelEditorBlockEdit(sectionKey: string, blockId: string): void {
+  const snapshot = state.activeEditorBlockSnapshot;
+  if (snapshot?.sectionKey === sectionKey && snapshot.blockId === blockId) {
+    const block = findBlockByIds(sectionKey, blockId);
+    if (block) {
+      const restored = cloneVisualBlock(snapshot.block);
+      block.text = restored.text;
+      block.schema = restored.schema;
+      block.schemaMode = restored.schemaMode;
+    }
+  }
+  state.activeEditorBlock = null;
+  state.activeEditorBlockSnapshot = null;
 }
 
 export function blockContainsBlockId(block: VisualBlock, blockId: string): boolean {
@@ -661,10 +702,29 @@ export function getComponentRenderHelpers(editorRenderer: {
     getSelectedAddComponent: (key: string, fallback: string) => state.addComponentBySection[key] ?? fallback,
     isExpandableEditorPanelOpen: (sectionKey, blockId, panel, fallback) =>
       state.expandableEditorPanels[`${sectionKey}:${blockId}`]?.[panel === 'stub' ? 'stubOpen' : 'expandedOpen'] ?? fallback,
+    isAdvancedEditorMode: () => state.showAdvancedEditor,
+    isMobileAdjustmentMode: () => state.editorMode === 'mobile-adjustment',
   };
 }
 
 export function applyRichAction(action: string, editable: HTMLElement, value?: string): void {
+  if (action === 'fill-in') {
+    applyTextFillInSlot(editable);
+    return;
+  }
+  const annotationAction = normalizeAnnotationAction(action);
+  if (annotationAction && toggleExistingTableAnnotationPreview(annotationAction, editable)) {
+    updateRichToolbarState(editable);
+    return;
+  }
+  if (annotationAction) {
+    const changed = toggleAnnotationAction(editable, annotationAction);
+    updateRichToolbarState(editable);
+    if (changed) {
+      editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    }
+    return;
+  }
   if (action === 'bold') {
     applyInlineRichAction(editable, 'strong', 'bold');
   } else if (action === 'italic') {
@@ -706,6 +766,189 @@ export function applyRichAction(action: string, editable: HTMLElement, value?: s
   updateRichToolbarState(editable);
   const inputEvent = new InputEvent('input', { bubbles: true });
   editable.dispatchEvent(inputEvent);
+}
+
+function applyTextFillInSlot(editable: HTMLElement): void {
+  if (editable.dataset.field !== 'block-rich') {
+    return;
+  }
+  const context = resolveBlockContext(editable);
+  const block = context?.block ?? null;
+  const sectionKey = editable.dataset.sectionKey ?? '';
+  if (!block || hasTextFillInMarker(block.text)) {
+    return;
+  }
+  const range = getEditableSelectionRange(editable);
+  const selectedText = range && !range.collapsed ? range.toString().trim() : '';
+  recordHistory(`text:${block.id}:fill-in:set`);
+  if (selectedText && block.text.includes(selectedText)) {
+    block.text = block.text.replace(selectedText, TEXT_FILL_IN_MARKER);
+    if (!block.schema.placeholder.trim()) {
+      block.schema.placeholder = selectedText;
+    }
+  } else if (block.text.trim().length === 0) {
+    block.text = TEXT_FILL_IN_MARKER;
+  } else {
+    const separator = /\s$/.test(block.text) ? '' : ' ';
+    block.text = `${block.text}${separator}${TEXT_FILL_IN_MARKER}`;
+  }
+  block.schema.fillIn = true;
+  syncReusableTemplateForBlock(sectionKey, block.id);
+  getRefreshReaderPanels()();
+  getRenderApp()();
+}
+
+function toggleExistingTableAnnotationPreview(action: string, editable: HTMLElement): boolean {
+  if (editable.dataset.field !== 'table-column' && editable.dataset.field !== 'table-cell') {
+    return false;
+  }
+  const shell = editable.closest<HTMLElement>('.table-inline-edit-shell');
+  if (!shell) {
+    return false;
+  }
+  if (action === 'alt' && editable.querySelector('[data-hvy-alt="true"]')) {
+    if (isTableAltPreviewSelected(shell, editable)) {
+      shell.classList.remove('is-previewing-compact');
+      shell.classList.add('is-previewing-full');
+    } else {
+      shell.classList.add('is-previewing-compact');
+      shell.classList.remove('is-previewing-full');
+    }
+    return true;
+  }
+  if (action === 'nowrap' && editable.querySelector('[data-hvy-nowrap="true"]')) {
+    shell.classList.toggle('is-previewing-nowrap');
+    return true;
+  }
+  if (editable.isContentEditable) {
+    return false;
+  }
+  return true;
+}
+
+type AnnotationAction = 'alt' | 'nowrap';
+
+function normalizeAnnotationAction(action: string): AnnotationAction | null {
+  if (action === 'alt') {
+    return 'alt';
+  }
+  return action === 'nowrap' ? 'nowrap' : null;
+}
+
+function toggleAnnotationAction(editable: HTMLElement, action: AnnotationAction): boolean {
+  const range = getEditableSelectionRange(editable);
+  const annotationKey = action === 'alt' ? 'hvyAlt' : 'hvyNowrap';
+  const existing = range ? getAnnotationAncestor(range, annotationKey) : null;
+  if (existing) {
+    clearPendingAnnotationAction(editable);
+    if (action === 'alt') {
+      unwrapAltAnnotation(existing);
+    } else {
+      unwrapInlineElement(existing);
+    }
+    return true;
+  }
+  if (!range || range.collapsed || range.toString().length === 0) {
+    togglePendingAnnotationAction(editable, action);
+    return false;
+  }
+  clearPendingAnnotationAction(editable);
+  return action === 'alt' ? wrapAltAnnotation(range) : wrapNowrapAnnotation(range);
+}
+
+export function completePendingRichAnnotation(editable: HTMLElement): boolean {
+  const action = getPendingAnnotationAction(editable);
+  if (!action) {
+    refreshRichToolbarState(editable);
+    return false;
+  }
+  const range = getEditableSelectionRange(editable);
+  if (!range || range.collapsed || range.toString().length === 0) {
+    refreshRichToolbarState(editable);
+    return false;
+  }
+  clearPendingAnnotationAction(editable);
+  const changed = action === 'alt' ? wrapAltAnnotation(range) : wrapNowrapAnnotation(range);
+  updateRichToolbarState(editable);
+  if (changed) {
+    editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
+  }
+  return changed;
+}
+
+function getPendingAnnotationAction(editable: HTMLElement): AnnotationAction | null {
+  return editable.dataset.pendingAnnotationAction === 'alt' || editable.dataset.pendingAnnotationAction === 'nowrap'
+    ? editable.dataset.pendingAnnotationAction
+    : null;
+}
+
+function togglePendingAnnotationAction(editable: HTMLElement, action: AnnotationAction): void {
+  if (getPendingAnnotationAction(editable) === action) {
+    clearPendingAnnotationAction(editable);
+  } else {
+    editable.dataset.pendingAnnotationAction = action;
+  }
+}
+
+function clearPendingAnnotationAction(editable: HTMLElement): void {
+  delete editable.dataset.pendingAnnotationAction;
+}
+
+function wrapAltAnnotation(range: Range): boolean {
+  if (range.collapsed || range.toString().length === 0) {
+    return false;
+  }
+  const selectionText = range.toString();
+  const wrapper = document.createElement('span');
+  wrapper.className = 'hvy-alt';
+  wrapper.dataset.hvyAlt = 'true';
+  const full = document.createElement('span');
+  full.className = 'hvy-alt-full';
+  full.textContent = selectionText;
+  const compact = document.createElement('span');
+  compact.className = 'hvy-alt-compact';
+  compact.contentEditable = 'true';
+  compact.spellcheck = false;
+  compact.textContent = selectionText;
+  wrapper.append(full, compact);
+  range.deleteContents();
+  range.insertNode(wrapper);
+  selectElementContents(compact);
+  return true;
+}
+
+function wrapNowrapAnnotation(range: Range): boolean {
+  if (range.collapsed || range.toString().length === 0) {
+    return false;
+  }
+  const wrapper = document.createElement('span');
+  wrapper.className = 'hvy-nowrap';
+  wrapper.dataset.hvyNowrap = 'true';
+  const fragment = range.extractContents();
+  wrapper.appendChild(fragment);
+  range.insertNode(wrapper);
+  selectElementContents(wrapper);
+  return true;
+}
+
+function unwrapAltAnnotation(element: HTMLElement): void {
+  const fullText = element.querySelector<HTMLElement>('.hvy-alt-full')?.textContent ?? element.textContent ?? '';
+  const replacement = document.createTextNode(fullText);
+  element.replaceWith(replacement);
+  const range = document.createRange();
+  range.selectNodeContents(replacement);
+  const selection = window.getSelection();
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+}
+
+function selectElementContents(element: HTMLElement): void {
+  const range = document.createRange();
+  range.selectNodeContents(element);
+  const selection = window.getSelection();
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+  element.focus();
 }
 
 function applyInlineRichAction(editable: HTMLElement, tagName: InlineRichTag, action: InlineRichAction, href?: string): void {
@@ -832,6 +1075,19 @@ function getInlineAncestor(range: Range, editable: HTMLElement, tagName: string)
     const element = node instanceof Element ? node : node.parentElement;
     const match = element?.closest(tagName);
     if (match instanceof HTMLElement && editable.contains(match)) {
+      return match;
+    }
+  }
+  return null;
+}
+
+function getAnnotationAncestor(range: Range, annotationKey: 'hvyAlt' | 'hvyNowrap'): HTMLElement | null {
+  const selector = annotationKey === 'hvyAlt' ? '[data-hvy-alt="true"]' : '[data-hvy-nowrap="true"]';
+  const candidates = [range.startContainer, range.endContainer, range.commonAncestorContainer];
+  for (const node of candidates) {
+    const element = node instanceof Element ? node : node.parentElement;
+    const match = element?.closest(selector);
+    if (match instanceof HTMLElement) {
       return match;
     }
   }
@@ -967,25 +1223,65 @@ export function handleRichEditorClick(event: MouseEvent, editable: HTMLElement):
 }
 
 function updateRichToolbarState(editable: HTMLElement): void {
-  const toolbar = editable.closest('.editor-block')?.querySelector<HTMLElement>('.rich-toolbar');
-  if (!toolbar) {
+  const range = getEditableSelectionRange(editable);
+  const textEditorShell = editable.closest<HTMLElement>('.text-editor-shell');
+  textEditorShell?.classList.toggle(
+    'has-fill-in-selection',
+    editable.dataset.field === 'block-rich' && Boolean(range && !range.collapsed && range.toString().trim().length > 0)
+  );
+  const toolbars = [
+    editable.closest('.table-inline-edit-shell')?.querySelector<HTMLElement>('.table-inline-toolbar') ?? null,
+    editable.closest('.editor-block')?.querySelector<HTMLElement>('.rich-toolbar') ?? null,
+  ].filter((toolbar): toolbar is HTMLElement => Boolean(toolbar));
+  if (toolbars.length === 0) {
     return;
   }
   const selectedStyle = getSelectedRichBlockStyle(editable);
   const selectedInlineActions = getSelectedInlineRichActions(editable);
-  toolbar.querySelectorAll<HTMLButtonElement>('[data-rich-action]').forEach((button) => {
-    const action = button.dataset.richAction ?? '';
-    const selected =
-      action === selectedStyle ||
-      (selectedStyle === 'paragraph' && action === 'paragraph') ||
-      (isInlineRichAction(action) && selectedInlineActions.has(action));
-    if (!/^(paragraph|heading-[1-4]|quote|code-block|list|checklist)$/.test(action) && !isInlineRichAction(action)) {
-      return;
-    }
-    button.classList.toggle('secondary', selected);
-    button.classList.toggle('is-selected', selected);
-    button.classList.toggle('ghost', !selected);
+  toolbars.forEach((toolbar) => {
+    toolbar.querySelectorAll<HTMLButtonElement>('[data-rich-action]').forEach((button) => {
+      const action = button.dataset.richAction ?? '';
+      const annotationAction = normalizeAnnotationAction(action);
+      if (annotationAction) {
+        const shell = toolbar.closest<HTMLElement>('.table-inline-edit-shell');
+        const selected =
+          shell && annotationAction === 'alt'
+            ? isTableAltPreviewSelected(shell, editable)
+            : shell && annotationAction === 'nowrap'
+            ? shell.classList.contains('is-previewing-nowrap')
+            : annotationAction === 'alt'
+            ? getPendingAnnotationAction(editable) === 'alt' || Boolean(range && getAnnotationAncestor(range, 'hvyAlt'))
+            : getPendingAnnotationAction(editable) === 'nowrap' || Boolean(range && getAnnotationAncestor(range, 'hvyNowrap'));
+        button.classList.toggle('secondary', selected);
+        button.classList.toggle('is-selected', selected);
+        button.classList.toggle('ghost', !selected);
+        return;
+      }
+      const selected =
+        action === selectedStyle ||
+        (selectedStyle === 'paragraph' && action === 'paragraph') ||
+        (isInlineRichAction(action) && selectedInlineActions.has(action));
+      if (!/^(paragraph|heading-[1-4]|quote|code-block|list|checklist)$/.test(action) && !isInlineRichAction(action)) {
+        return;
+      }
+      button.classList.toggle('secondary', selected);
+      button.classList.toggle('is-selected', selected);
+      button.classList.toggle('ghost', !selected);
+    });
   });
+}
+
+function isTableAltPreviewSelected(shell: HTMLElement, editable: HTMLElement): boolean {
+  if (!editable.querySelector('[data-hvy-alt="true"]')) {
+    return false;
+  }
+  if (shell.classList.contains('is-previewing-full')) {
+    return false;
+  }
+  if (shell.classList.contains('is-previewing-compact')) {
+    return true;
+  }
+  return Boolean(editable.closest('.hvy-surface-phone, .hvy-surface-tablet'));
 }
 
 function getSelectedInlineRichActions(editable: HTMLElement): Set<InlineRichAction> {
@@ -1091,7 +1387,7 @@ export function handleRichEditorKeydown(event: KeyboardEvent, editable: HTMLElem
     return false;
   }
 
-  if (event.key === ' ' && convertMarkdownQuoteShortcut(editable)) {
+  if (event.key === ' ' && convertMarkdownQuoteAltcut(editable)) {
     event.preventDefault();
     editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
     return true;
@@ -1105,7 +1401,7 @@ export function handleRichEditorKeydown(event: KeyboardEvent, editable: HTMLElem
       return true;
     }
 
-    const codeLanguage = getCurrentLineShortcut(editable, /^```([\w-]*)$/);
+    const codeLanguage = getCurrentLineAltcut(editable, /^```([\w-]*)$/);
     if (codeLanguage !== null) {
       event.preventDefault();
       replaceCurrentLineWithCodeBlock(editable, codeLanguage);
@@ -1113,7 +1409,7 @@ export function handleRichEditorKeydown(event: KeyboardEvent, editable: HTMLElem
       return true;
     }
 
-    if (convertMarkdownQuoteShortcut(editable)) {
+    if (convertMarkdownQuoteAltcut(editable)) {
       event.preventDefault();
       editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
       return true;
@@ -1142,7 +1438,7 @@ export function handleRichEditorBeforeInput(event: InputEvent, editable: HTMLEle
     return true;
   }
 
-  if (event.data === '`' && convertInlineCodeShortcut(editable)) {
+  if (event.data === '`' && convertInlineCodeAltcut(editable)) {
     editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
     updateRichToolbarState(editable);
     return true;
@@ -1319,8 +1615,8 @@ function getSelectionListItem(editable: HTMLElement): HTMLLIElement | null {
   return item instanceof HTMLLIElement && editable.contains(item) ? item : null;
 }
 
-function convertMarkdownQuoteShortcut(editable: HTMLElement): boolean {
-  if (getCurrentLineShortcut(editable, /^>$/) === null) {
+function convertMarkdownQuoteAltcut(editable: HTMLElement): boolean {
+  if (getCurrentLineAltcut(editable, /^>$/) === null) {
     return false;
   }
   replaceCurrentLineText(editable, '');
@@ -1328,7 +1624,7 @@ function convertMarkdownQuoteShortcut(editable: HTMLElement): boolean {
   return true;
 }
 
-function convertInlineCodeShortcut(editable: HTMLElement): boolean {
+function convertInlineCodeAltcut(editable: HTMLElement): boolean {
   const range = getEditableSelectionRange(editable);
   if (!range || !range.collapsed) {
     return false;
@@ -1468,7 +1764,7 @@ function exitEmptyQuoteAtSelection(editable: HTMLElement): boolean {
   return true;
 }
 
-function getCurrentLineShortcut(editable: HTMLElement, pattern: RegExp): string | null {
+function getCurrentLineAltcut(editable: HTMLElement, pattern: RegExp): string | null {
   const block = getSelectionBlockElement(editable);
   const text = (block?.textContent ?? '').trim();
   const match = text.match(pattern);
@@ -1849,7 +2145,7 @@ export function syncEditableTaskListMarkup(editable: HTMLElement, markdown: stri
 }
 
 function hasRawCheckboxMarkerText(editable: HTMLElement): boolean {
-  const text = editable.textContent ?? '';
+  const text = (editable.textContent ?? '').replace(/\u00a0/g, ' ');
   return /(^|[^\\])\[( |x|X)\]/.test(text);
 }
 

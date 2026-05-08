@@ -11,6 +11,7 @@ export function createTestState(document: VisualDocument): AppState {
     filename: 'test.hvy',
     currentView: 'editor',
     editorMode: 'basic',
+    responsivePreview: 'full',
     chat: createDefaultChatState(),
     aiEdit: {
       sectionKey: null,
@@ -37,6 +38,7 @@ export function createTestState(document: VisualDocument): AppState {
     cliSession: { cwd: '/' },
     cliHistory: [],
     activeEditorBlock: null,
+    activeEditorBlockSnapshot: null,
     componentPlacement: null,
     pendingEditorActivation: null,
     activeEditorSectionTitleKey: null,
@@ -61,6 +63,7 @@ export function createTestState(document: VisualDocument): AppState {
     readerExpandableState: {},
     viewerSidebarOpen: false,
     editorSidebarOpen: false,
+    viewerSidebarHelpDismissed: false,
     editorSidebarHelpDismissed: false,
     lastHistoryGroup: null,
     lastHistoryAt: 0,

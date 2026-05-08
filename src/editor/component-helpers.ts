@@ -5,6 +5,7 @@ export interface RichToolbarOptions {
   gridItemId?: string;
   rowIndex?: number;
   includeAlign?: boolean;
+  includeFillIn?: boolean;
   align?: Align;
   currentMarkdown?: string;
 }
@@ -35,6 +36,8 @@ export interface ComponentRenderHelpers {
   ensureComponentListBlocks: (block: VisualBlock) => void;
   getSelectedAddComponent: (key: string, fallback: string) => string;
   isExpandableEditorPanelOpen: (sectionKey: string, blockId: string, panel: 'stub' | 'expanded', fallback: boolean) => boolean;
+  isAdvancedEditorMode: () => boolean;
+  isMobileAdjustmentMode: () => boolean;
 }
 
 export interface AddComponentPickerOptions {

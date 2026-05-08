@@ -54,6 +54,174 @@ test('reader max width keeps focus while typing', async ({ page }) => {
   await expect(readerMaxWidth).toHaveValue('60rem');
 });
 
+test('responsive preview controls resize document frame without resizing app chrome', async ({ page }) => {
+  await page.goto('/');
+
+  const surface = page.locator('.hvy-surface').first();
+  const previewFrame = page.locator('.editor-shell').first();
+  const pane = page.locator('.full-pane').first();
+  const workspace = page.locator('.workspace-shell').first();
+  const initialWorkspaceWidth = (await workspace.boundingBox())?.width ?? 0;
+  const initialPaneWidth = (await pane.boundingBox())?.width ?? 0;
+  expect(initialPaneWidth).toBeGreaterThan(768);
+
+  await page.getByRole('button', { name: 'Phone 390' }).click();
+  await expect.poll(async () => Math.round((await pane.boundingBox())?.width ?? 0)).toBe(390);
+  await expect.poll(async () => Math.round((await previewFrame.boundingBox())?.width ?? 0)).toBe(390);
+  await expect.poll(async () => Math.round((await surface.boundingBox())?.width ?? 0)).toBeGreaterThan(320);
+  expect(Math.round((await surface.boundingBox())?.width ?? 0)).toBeLessThan(390);
+  const phonePaneBox = await pane.boundingBox();
+  const phoneSurfaceBox = await surface.boundingBox();
+  expect(phonePaneBox).not.toBeNull();
+  expect(phoneSurfaceBox).not.toBeNull();
+  expect(Math.round(phonePaneBox!.x + phonePaneBox!.width - (phoneSurfaceBox!.x + phoneSurfaceBox!.width))).toBeGreaterThanOrEqual(8);
+  expect(Math.round((await workspace.boundingBox())?.width ?? 0)).toBe(Math.round(initialWorkspaceWidth));
+
+  await page.getByRole('button', { name: 'Tablet 768' }).click();
+  await expect.poll(async () => Math.round((await pane.boundingBox())?.width ?? 0)).toBe(768);
+  await expect.poll(async () => Math.round((await previewFrame.boundingBox())?.width ?? 0)).toBe(768);
+  await expect.poll(async () => Math.round((await surface.boundingBox())?.width ?? 0)).toBeGreaterThan(700);
+  expect(Math.round((await surface.boundingBox())?.width ?? 0)).toBeLessThan(768);
+  const tabletPaneBox = await pane.boundingBox();
+  const tabletSurfaceBox = await surface.boundingBox();
+  expect(tabletPaneBox).not.toBeNull();
+  expect(tabletSurfaceBox).not.toBeNull();
+  expect(Math.round(tabletPaneBox!.x + tabletPaneBox!.width - (tabletSurfaceBox!.x + tabletSurfaceBox!.width))).toBeGreaterThanOrEqual(10);
+  expect(Math.round((await workspace.boundingBox())?.width ?? 0)).toBe(Math.round(initialWorkspaceWidth));
+
+  await page.getByRole('button', { name: 'Full' }).click();
+  await expect.poll(async () => Math.round((await pane.boundingBox())?.width ?? 0)).toBe(Math.round(initialPaneWidth));
+  await expect.poll(async () => Math.round((await previewFrame.boundingBox())?.width ?? 0)).toBeGreaterThan(768);
+  const fullPaneBox = await pane.boundingBox();
+  const fullSurfaceBox = await surface.boundingBox();
+  expect(fullPaneBox).not.toBeNull();
+  expect(fullSurfaceBox).not.toBeNull();
+  expect(Math.round(fullPaneBox!.x + fullPaneBox!.width - (fullSurfaceBox!.x + fullSurfaceBox!.width))).toBeGreaterThanOrEqual(12);
+
+  await page.getByRole('button', { name: 'Desktop' }).click();
+  await expect.poll(async () => Math.round((await pane.boundingBox())?.width ?? 0)).toBeGreaterThan(768);
+  const desktopPaneBox = await pane.boundingBox();
+  const desktopSurfaceBox = await surface.boundingBox();
+  expect(desktopPaneBox).not.toBeNull();
+  expect(desktopSurfaceBox).not.toBeNull();
+  expect(Math.round(desktopPaneBox!.x + desktopPaneBox!.width - (desktopSurfaceBox!.x + desktopSurfaceBox!.width))).toBeGreaterThanOrEqual(12);
+});
+
+test('responsive preview applies to pullout document surfaces', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Resume Template' }).click();
+  await page.getByRole('button', { name: 'Phone 390' }).click();
+
+  await page.locator('.editor-sidebar-tab').click();
+  await expect.poll(async () => Math.round((await page.locator('.editor-pane').boundingBox())?.width ?? 0)).toBe(390);
+  await expect.poll(async () => Math.round((await page.locator('.editor-shell').boundingBox())?.width ?? 0)).toBe(390);
+  await expect.poll(async () => Math.round((await page.locator('.editor-sidebar').boundingBox())?.width ?? 0)).toBeLessThan(390);
+  await expect.poll(async () => Math.round((await page.locator('.editor-sidebar-panel .hvy-surface').boundingBox())?.width ?? 0)).toBeLessThan(390);
+
+  await page.getByRole('button', { name: 'Viewer' }).click();
+  await page.locator('.viewer-sidebar-tab').click();
+  await expect.poll(async () => Math.round((await page.locator('.reader-pane').boundingBox())?.width ?? 0)).toBe(390);
+  await expect.poll(async () => Math.round((await page.locator('.viewer-shell').boundingBox())?.width ?? 0)).toBe(390);
+  await expect.poll(async () => Math.round((await page.locator('.viewer-sidebar').boundingBox())?.width ?? 0)).toBeLessThan(390);
+  await expect.poll(async () => Math.round((await page.locator('.viewer-sidebar-panel .hvy-surface').boundingBox())?.width ?? 0)).toBeLessThan(390);
+});
+
+test('compact pullout tab overlays and reveals after scroll idle', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Resume Template' }).click();
+  await page.getByRole('button', { name: 'Phone 390' }).click();
+
+  const shell = page.locator('.editor-shell');
+  const tab = page.locator('.editor-sidebar-tab');
+  const tree = page.locator('.editor-tree');
+  const surface = page.locator('.editor-tree > .hvy-surface').first();
+
+  await expect.poll(async () => Math.round((await surface.boundingBox())?.x ?? 0) - Math.round((await tree.boundingBox())?.x ?? 0)).toBeGreaterThanOrEqual(8);
+  await expect.poll(async () => {
+    const surfaceBox = await surface.boundingBox();
+    const treeBox = await tree.boundingBox();
+    if (!surfaceBox || !treeBox) {
+      return 0;
+    }
+    return Math.round(treeBox.x + treeBox.width - (surfaceBox.x + surfaceBox.width));
+  }).toBeGreaterThanOrEqual(8);
+  await expect(tab).toBeVisible();
+
+  await page.locator('.editor-sidebar-tab').click();
+  const openTreeBox = await tree.boundingBox();
+  const openSurfaceBox = await surface.boundingBox();
+  expect(openTreeBox).not.toBeNull();
+  expect(openSurfaceBox).not.toBeNull();
+  expect(Math.round(openSurfaceBox!.x - openTreeBox!.x)).toBeGreaterThanOrEqual(30);
+
+  await page.locator('.editor-sidebar-tab').click();
+  await expect.poll(async () => Math.round((await surface.boundingBox())?.x ?? 0) - Math.round((await tree.boundingBox())?.x ?? 0)).toBeGreaterThanOrEqual(8);
+
+  await tree.evaluate((node) => {
+    node.scrollTop = 240;
+    node.dispatchEvent(new Event('scroll', { bubbles: true }));
+  });
+  await expect(page.locator('.editor-sidebar-help-balloon')).toHaveCount(0);
+  await expect(shell).toHaveClass(/is-sidebar-tab-hidden/);
+  await expect(tab).toHaveCSS('transition-duration', /0\.54s/);
+
+  await expect(shell).toHaveClass(/is-sidebar-tab-visible/, { timeout: 1500 });
+});
+
+test('responsive preview applies container query defaults', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('.rich-editor').first();
+  await editor.evaluate((node) => {
+    node.innerHTML =
+      '<p><span class="hvy-alt" data-hvy-alt="true"><span class="hvy-alt-full">Tools &amp; Technologies</span><span class="hvy-alt-compact">Tools &amp; Tech</span></span></p>';
+    node.dispatchEvent(new InputEvent('input', { bubbles: true }));
+  });
+
+  await expect(editor.locator('.hvy-alt-full')).toBeVisible();
+  await expect(editor.locator('.hvy-alt-compact')).toBeHidden();
+
+  await page.getByRole('button', { name: 'Phone 390' }).click();
+  await expect(editor.locator('.hvy-alt-full')).toBeHidden();
+  await expect(editor.locator('.hvy-alt-compact')).toBeVisible();
+});
+
+test('tables resize inside narrow responsive preview containers', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"table-test"}-->
+#! Table Test
+
+<!--hvy:table {"id":"narrow-table","tableColumns":["Tool","<!--hvy:alt {\\"compact\\":\\"Desc\\"}-->Description<!--/hvy:alt-->","Status"],"tableShowHeader":true,"tableRows":[{"cells":["Heavy File Format","Responsive table text should wrap inside the phone preview instead of pushing the table wider than its container.","In progress"]}]}-->
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Viewer' }).click();
+  await page.getByRole('button', { name: 'Phone 390' }).click();
+
+  const pane = page.locator('.reader-pane');
+  const frame = page.locator('.reader-table-frame');
+  const table = page.locator('.reader-table');
+
+  await expect.poll(async () => Math.round((await pane.boundingBox())?.width ?? 0)).toBe(390);
+  await expect.poll(async () => Math.round((await frame.boundingBox())?.width ?? 0)).toBeLessThan(360);
+  await expect.poll(async () => Math.round((await table.boundingBox())?.width ?? 0)).toBeLessThanOrEqual(Math.round((await frame.boundingBox())?.width ?? 0) + 1);
+  await expect(table.locator('th').first()).toHaveAttribute('title', 'Tool');
+  await expect(table.locator('th').nth(1).locator('.hvy-alt-full')).toBeHidden();
+  await expect(table.locator('th').nth(1).locator('.hvy-alt-compact')).toHaveText('Desc');
+  await expect(table.locator('th').nth(1).locator('.hvy-alt-compact')).toHaveCSS('border-style', 'none');
+  await expect(table.locator('td').nth(1)).toHaveCSS('white-space', 'nowrap');
+  await expect(table.locator('td').nth(1)).toHaveCSS('text-overflow', 'ellipsis');
+  await expect(table.locator('td').nth(1)).toHaveAttribute('title', 'Responsive table text should wrap inside the phone preview instead of pushing the table wider than its container.');
+});
+
 test('document ai context is editable metadata and keeps focus while typing', async ({ page }) => {
   await page.goto('/');
 

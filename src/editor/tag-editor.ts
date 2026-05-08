@@ -1,3 +1,5 @@
+import { closeIcon } from '../icons';
+
 export type TagField = 'block-tags' | 'def-tags' | 'section-tags';
 
 export interface TagRenderOptions {
@@ -66,7 +68,7 @@ export function renderTagPills(
         <span>${helpers.escapeHtml(tag)}</span>
         <button type="button" class="tag-pill-remove" data-action="remove-tag" data-tag-field="${helpers.escapeAttr(
           field
-        )}" data-tag-index="${String(index)}" ${contextAttrs} aria-label="Remove ${helpers.escapeAttr(tag)}">×</button>
+        )}" data-tag-index="${String(index)}" ${contextAttrs} aria-label="Remove ${helpers.escapeAttr(tag)}">${closeIcon()}</button>
       </span>`;
     })
     .join('');

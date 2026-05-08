@@ -146,8 +146,14 @@ function getRichEditableForButton(app: HTMLElement, richButton: HTMLElement): HT
   const richField = richButton.dataset.richField ?? 'block-rich';
   const gridItemId = richButton.dataset.gridItemId;
   const rowIndex = richButton.dataset.rowIndex;
+  const columnIndex = richButton.dataset.columnIndex;
+  const cellIndex = richButton.dataset.cellIndex;
   const selectorBase = `[data-section-key="${sectionKey}"][data-block-id="${blockId}"][data-field="${richField}"]`;
-  return rowIndex
+  return richField === 'table-column' && columnIndex !== undefined
+    ? app.querySelector<HTMLElement>(`${selectorBase}[data-column-index="${columnIndex}"]`)
+    : richField === 'table-cell' && rowIndex !== undefined && cellIndex !== undefined
+    ? app.querySelector<HTMLElement>(`${selectorBase}[data-row-index="${rowIndex}"][data-cell-index="${cellIndex}"]`)
+    : rowIndex
     ? app.querySelector<HTMLElement>(`${selectorBase}[data-row-index="${rowIndex}"]`)
     : gridItemId
     ? app.querySelector<HTMLElement>(`${selectorBase}[data-grid-item-id="${gridItemId}"]`)

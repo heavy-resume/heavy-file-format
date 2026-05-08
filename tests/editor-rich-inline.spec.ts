@@ -40,6 +40,189 @@ test('inline toolbar buttons wrap and unwrap selected text', async ({ page }) =>
   }
 });
 
+test('mobile adjustment mode writes text edits as alt annotations', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Phone 390' }).click();
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('.rich-editor').first();
+
+  await editor.evaluate((node) => {
+    node.innerHTML = '<p>Tools &amp; Technologies</p>';
+    const textNode = node.querySelector('p')?.firstChild;
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(textNode!);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+    node.dispatchEvent(new InputEvent('input', { bubbles: true }));
+  });
+
+  await page.getByRole('button', { name: 'Mobile Adjustment' }).click();
+  await expect(page.getByRole('button', { name: 'Mobile Adjustment' })).toHaveClass(/secondary/);
+  await expect(page.getByRole('button', { name: 'Alt' })).toHaveCount(0);
+  await expect(page.locator('.ghost-label', { hasText: 'Add Text' })).toHaveCount(0);
+
+  const mobileEditor = page.locator('.rich-editor').first();
+  await mobileEditor.locator('p').first().evaluate((node) => {
+    node.textContent = 'Tools & Tech';
+    node.closest('.rich-editor')?.dispatchEvent(new InputEvent('input', { bubbles: true }));
+  });
+  await expect(mobileEditor).toHaveText('Tools & Tech');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await expect(page.locator('#rawEditor')).toContainText(
+    'Tools & <!--hvy:alt {"compact":"Tech"}-->Technologies<!--/hvy:alt-->'
+  );
+});
+
+test('mobile adjustment mode keeps heading syntax outside alt annotations', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Phone 390' }).click();
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('.rich-editor').first();
+
+  await editor.evaluate((node) => {
+    node.innerHTML = '<h2>Summary</h2>';
+    node.dispatchEvent(new InputEvent('input', { bubbles: true }));
+  });
+
+  await page.getByRole('button', { name: 'Mobile Adjustment' }).click();
+  const mobileEditor = page.locator('.rich-editor').first();
+  await expect(mobileEditor.locator('h2')).toHaveText('Summary');
+
+  await mobileEditor.locator('h2').evaluate((node) => {
+    node.textContent = 'Sum';
+    node.closest('.rich-editor')?.dispatchEvent(new InputEvent('input', { bubbles: true }));
+  });
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await expect(page.locator('#rawEditor')).toContainText(
+    '## <!--hvy:alt {"compact":"Sum"}-->Summary<!--/hvy:alt-->'
+  );
+
+  await page.getByRole('button', { name: 'Basic' }).click();
+  await expect(page.locator('.rich-editor h2').first()).toContainText('Summary');
+  await expect(page.locator('.rich-editor').first()).not.toContainText('## Summary');
+});
+
+test('mobile adjustment mode removes alt annotation when text matches full value', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Phone 390' }).click();
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('.rich-editor').first();
+  await editor.evaluate((node) => {
+    node.innerHTML =
+      '<p><span class="hvy-alt" data-hvy-alt="true"><span class="hvy-alt-full">Tools &amp; Technologies</span><span class="hvy-alt-compact">Tools &amp; Tech</span></span></p>';
+    node.dispatchEvent(new InputEvent('input', { bubbles: true }));
+  });
+
+  await page.getByRole('button', { name: 'Mobile Adjustment' }).click();
+  const mobileEditor = page.locator('.rich-editor').first();
+  await expect(mobileEditor.locator('.hvy-alt-full')).toBeHidden();
+  await expect(mobileEditor.locator('.hvy-alt-compact')).toBeVisible();
+  await expect(mobileEditor.locator('.hvy-alt-compact')).toHaveText('Tools & Tech');
+
+  await mobileEditor.locator('.hvy-alt-compact').evaluate((node) => {
+    node.textContent = 'Tools & Technologies';
+    node.closest('.rich-editor')?.dispatchEvent(new InputEvent('input', { bubbles: true }));
+  });
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await expect(page.locator('#rawEditor')).not.toContainText('<!--hvy:alt');
+  await expect(page.locator('#rawEditor')).toContainText('Tools & Technologies');
+});
+
+test('mobile adjustment preview width switches between full and alt annotation text', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ <!--hvy:text {"id":"tools"}-->
+  ## Tools & <!--hvy:alt {"compact":"Tech"}-->Technologies<!--/hvy:alt-->
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+  await page.getByRole('button', { name: 'Phone 390' }).click();
+  await page.getByRole('button', { name: 'Mobile Adjustment' }).click();
+  await page.locator('.editor-block-passive', { has: page.locator('#tools') }).click();
+  const editor = page.locator('.rich-editor').first();
+
+  await expect(editor.locator('.hvy-alt-full')).toBeHidden();
+  await expect(editor.locator('.hvy-alt-compact')).toBeVisible();
+  await expect(editor.locator('.hvy-alt-compact')).toHaveText('Tech');
+
+  await page.getByRole('button', { name: 'Desktop' }).click();
+  await expect(editor.locator('.hvy-alt-full')).toBeVisible();
+  await expect(editor.locator('.hvy-alt-compact')).toBeHidden();
+  await expect(editor.locator('h2')).toContainText('Tools & Technologies');
+});
+
+test('alt annotations in sidebar switch with preview controls after mobile adjustment edit', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"tools-technologies","location":"sidebar"}-->
+#! Tools & Technologies
+
+ <!--hvy:text {}-->
+  # Tools & Technologies
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+  await page.getByRole('button', { name: 'Phone 390' }).click();
+  await page.getByRole('button', { name: 'Mobile Adjustment' }).click();
+  await page.locator('.editor-sidebar-tab').click();
+
+  await page.locator('.editor-sidebar-panel [data-action="activate-block"]').first().click();
+  const editor = page.locator('.editor-sidebar-panel .rich-editor').first();
+  await editor.locator('h1').evaluate((node) => {
+    node.textContent = 'Tools & Tech';
+    node.closest('.rich-editor')?.dispatchEvent(new InputEvent('input', { bubbles: true }));
+  });
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await expect(page.locator('#rawEditor')).toContainText(
+    '# Tools & <!--hvy:alt {"compact":"Tech"}-->Technologies<!--/hvy:alt-->'
+  );
+
+  await page.getByRole('button', { name: 'Basic' }).click();
+  await page.locator('.editor-sidebar-tab').click();
+  await page.getByRole('button', { name: 'Phone 390' }).click();
+  await expect(page.locator('.editor-sidebar-panel .hvy-alt-full').first()).toBeHidden();
+  await expect(page.locator('.editor-sidebar-panel .hvy-alt-compact').first()).toBeVisible();
+  await expect(page.locator('.editor-sidebar-panel h1').first()).toContainText('Tools & Tech');
+
+  await page.getByRole('button', { name: 'Desktop' }).click();
+  await page.locator('.editor-sidebar-tab').click();
+  await expect(page.locator('.editor-sidebar-panel .hvy-alt-full').first()).toBeVisible();
+  await expect(page.locator('.editor-sidebar-panel .hvy-alt-compact').first()).toBeHidden();
+  await expect(page.locator('.editor-sidebar-panel h1').first()).toContainText('Tools & Technologies');
+
+  await page.getByRole('button', { name: 'Viewer' }).click();
+  await page.locator('.viewer-sidebar-tab').click();
+  await expect(page.locator('.viewer-sidebar-panel .hvy-alt-full').first()).toBeVisible();
+  await expect(page.locator('.viewer-sidebar-panel .hvy-alt-compact').first()).toBeHidden();
+
+  await page.getByRole('button', { name: 'Phone 390' }).click();
+  await page.locator('.viewer-sidebar-tab').click();
+  await expect(page.locator('.viewer-sidebar-panel .hvy-alt-full').first()).toBeHidden();
+  await expect(page.locator('.viewer-sidebar-panel .hvy-alt-compact').first()).toBeVisible();
+});
+
 test('inline toolbar actions toggle typing mode at a collapsed caret', async ({ page }) => {
   await page.goto('/');
 
@@ -295,7 +478,7 @@ test('link toolbar button and keyboard shortcut open the link modal and apply li
   await expect(editor.locator('a[href="https://example.com"]')).toContainText('Link me');
 
   await editor.evaluate((node) => {
-    node.innerHTML = '<p>Shortcut link</p>';
+    node.innerHTML = '<p>Altcut link</p>';
     const textNode = node.querySelector('p')?.firstChild;
     const selection = window.getSelection();
     const range = document.createRange();
@@ -310,7 +493,7 @@ test('link toolbar button and keyboard shortcut open the link modal and apply li
   await page.locator('#linkInlineInput').fill('#section-id');
   await page.keyboard.press('Enter');
 
-  await expect(editor.locator('a[href="#section-id"]')).toContainText('Shortcut link');
+  await expect(editor.locator('a[href="#section-id"]')).toContainText('Altcut link');
 });
 
 test('markdown editor auto-upgrades raw task markers', async ({ page }) => {

@@ -1,6 +1,7 @@
 import './table.css';
 import type { ComponentEditorRenderer, ComponentReaderRenderer } from '../../component-helpers';
 import type { TableRow } from '../../types';
+import { closeIcon, plusIcon } from '../../../icons';
 
 let readerTableStripeIndex = 0;
 
@@ -12,6 +13,36 @@ function getNextReaderTableStripeClass(): 'even' | 'odd' {
   const stripe = readerTableStripeIndex % 2 === 0 ? 'even' : 'odd';
   readerTableStripeIndex += 1;
   return stripe;
+}
+
+function renderTableInlineEditorHtml(value: string, helpers: Parameters<ComponentEditorRenderer>[2]): string {
+  return unwrapTableParagraphs(helpers.markdownToEditorHtml(value));
+}
+
+function unwrapTableParagraphs(html: string): string {
+  const trimmed = html.trim();
+  if (!/<\/?p\b/i.test(trimmed)) {
+    return html;
+  }
+  const paragraphsOnly = trimmed.replace(/<p\b[^>]*>[\s\S]*?<\/p>/gi, '').trim().length === 0;
+  if (paragraphsOnly) {
+    return Array.from(trimmed.matchAll(/<p\b[^>]*>([\s\S]*?)<\/p>/gi), (match) => match[1] ?? '').join('<br>');
+  }
+  return trimmed.replace(/<\/p>\s*<p\b[^>]*>/gi, '<br>').replace(/<p\b[^>]*>/gi, '').replace(/<\/p>/gi, '');
+}
+
+function renderTableInlineReaderHtml(value: string, block: Parameters<ComponentReaderRenderer>[1], helpers: Parameters<ComponentReaderRenderer>[2]): string {
+  return helpers.renderComponentFragment('text', value, block);
+}
+
+function renderTableInlineToolbar(
+  _sectionKey: string,
+  _blockId: string,
+  _field: 'table-column' | 'table-cell',
+  _helpers: Parameters<ComponentEditorRenderer>[2],
+  _indices: { columnIndex?: number; rowIndex?: number; cellIndex?: number }
+): string {
+  return '';
 }
 
 function renderTableRowEditor(
@@ -40,25 +71,28 @@ function renderTableRowEditor(
       ${safeColumns
         .map(
           (_column, cellIndex) => `<td>
-            <div
-              class="inline-editable table-inline-text"
-              contenteditable="true"
-              spellcheck="false"
-              data-inline-text="true"
-              data-section-key="${helpers.escapeAttr(sectionKey)}"
-              data-block-id="${helpers.escapeAttr(blockId)}"
-              data-row-index="${rowIndex}"
-              data-cell-index="${cellIndex}"
-              data-field="table-cell"
-              data-placeholder="${helpers.escapeAttr(safeColumns[cellIndex] || 'Cell value')}"
-            >${helpers.escapeHtml(row.cells[cellIndex] ?? '')}</div>
+            <div class="table-inline-edit-shell">
+              <div
+                class="inline-editable table-inline-text"
+                contenteditable="true"
+                spellcheck="false"
+                data-inline-text="true"
+                data-section-key="${helpers.escapeAttr(sectionKey)}"
+                data-block-id="${helpers.escapeAttr(blockId)}"
+                data-row-index="${rowIndex}"
+                data-cell-index="${cellIndex}"
+                data-field="table-cell"
+                data-placeholder="${helpers.escapeAttr(safeColumns[cellIndex] || 'Cell value')}"
+              >${renderTableInlineEditorHtml(row.cells[cellIndex] ?? '', helpers)}</div>
+              ${renderTableInlineToolbar(sectionKey, blockId, 'table-cell', helpers, { rowIndex, cellIndex })}
+            </div>
           </td>`
         )
         .join('')}
       <td class="table-row-utility table-row-remove-cell">
         <button type="button" class="danger remove-x" data-action="remove-table-row" data-section-key="${helpers.escapeAttr(
           sectionKey
-        )}" data-block-id="${helpers.escapeAttr(blockId)}" data-row-index="${rowIndex}" title="Remove row">×</button>
+        )}" data-block-id="${helpers.escapeAttr(blockId)}" data-row-index="${rowIndex}" title="Remove row">${closeIcon()}</button>
       </td>
     </tr>
   `;
@@ -83,7 +117,7 @@ export const renderTableEditor: ComponentEditorRenderer = (sectionKey, block, he
         Show header row
       </label>
       <div class="table-editor-frame">
-        <table class="table-editor-grid">
+        <table class="table-editor-grid" style="--hvy-table-editor-columns: ${Math.max(columns.length, 1)};">
           <thead>
             <tr>
               <th class="table-utility-cell"></th>
@@ -103,22 +137,25 @@ export const renderTableEditor: ComponentEditorRenderer = (sectionKey, block, he
                           data-column-index="${columnIndex}"
                           title="Drag to reorder column"
                         >::</button>
-                        <div
-                          class="inline-editable table-inline-text table-column-name"
-                          contenteditable="${block.schema.lock ? 'false' : 'true'}"
-                          spellcheck="false"
-                          data-inline-text="true"
-                          data-section-key="${helpers.escapeAttr(sectionKey)}"
-                          data-block-id="${helpers.escapeAttr(block.id)}"
-                          data-column-index="${columnIndex}"
-                          data-field="table-column"
-                        >${helpers.escapeHtml(column)}</div>
+                        <div class="table-inline-edit-shell">
+                          <div
+                            class="inline-editable table-inline-text table-column-name"
+                            contenteditable="${block.schema.lock ? 'false' : 'true'}"
+                            spellcheck="false"
+                            data-inline-text="true"
+                            data-section-key="${helpers.escapeAttr(sectionKey)}"
+                            data-block-id="${helpers.escapeAttr(block.id)}"
+                            data-column-index="${columnIndex}"
+                            data-field="table-column"
+                          >${renderTableInlineEditorHtml(column, helpers)}</div>
+                          ${renderTableInlineToolbar(sectionKey, block.id, 'table-column', helpers, { columnIndex })}
+                        </div>
                         ${
                           block.schema.lock
                             ? ''
                             : `<button type="button" class="danger remove-x" data-action="remove-table-column" data-section-key="${helpers.escapeAttr(
                                 sectionKey
-                              )}" data-block-id="${helpers.escapeAttr(block.id)}" data-column-index="${columnIndex}" title="Remove column">×</button>`
+                              )}" data-block-id="${helpers.escapeAttr(block.id)}" data-column-index="${columnIndex}" title="Remove column">${closeIcon()}</button>`
                         }
                       </div>
                     </th>`
@@ -130,7 +167,7 @@ export const renderTableEditor: ComponentEditorRenderer = (sectionKey, block, he
                     ? ''
                     : `<button type="button" class="ghost table-add-button" data-action="add-table-column" data-section-key="${helpers.escapeAttr(
                         sectionKey
-                      )}" data-block-id="${helpers.escapeAttr(block.id)}" title="Add column">+</button>`
+                      )}" data-block-id="${helpers.escapeAttr(block.id)}" title="Add column" aria-label="Add column">${plusIcon()}</button>`
                 }
               </th>
             </tr>
@@ -141,7 +178,7 @@ export const renderTableEditor: ComponentEditorRenderer = (sectionKey, block, he
               <td colspan="${columns.length + 2}">
                 <button type="button" class="ghost" data-action="add-table-row" data-section-key="${helpers.escapeAttr(
                   sectionKey
-                )}" data-block-id="${helpers.escapeAttr(block.id)}">+ Add Row</button>
+                )}" data-block-id="${helpers.escapeAttr(block.id)}">${plusIcon()} Add Row</button>
               </td>
             </tr>
           </tbody>
@@ -156,11 +193,11 @@ export const renderTableReader: ComponentReaderRenderer = (_section, block, help
     resetReaderTableStripeSequence();
   }
   const columns = helpers.getTableColumns(block.schema);
-  return `<table class="reader-table">
+  return `<div class="reader-table-frame"><table class="reader-table">
     ${
       block.schema.tableShowHeader
         ? `<thead>
-      <tr>${columns.map((column) => `<th>${helpers.escapeHtml(column)}</th>`).join('')}</tr>
+      <tr>${columns.map((column) => `<th title="${helpers.escapeAttr(column)}">${renderTableInlineReaderHtml(column, block, helpers)}</th>`).join('')}</tr>
     </thead>`
         : ''
     }
@@ -171,9 +208,10 @@ export const renderTableReader: ComponentReaderRenderer = (_section, block, help
             <tr class="table-main-row table-main-row-${getNextReaderTableStripeClass()}">
               ${columns.map((column, cellIndex) => {
                 const value = helpers.escapeHtml(row.cells[cellIndex] ?? '');
+                const title = helpers.escapeAttr(row.cells[cellIndex] ?? '');
                 const placeholder = helpers.escapeAttr(column || 'Cell value');
                 return value
-                  ? `<td>${value}</td>`
+                  ? `<td title="${title}">${renderTableInlineReaderHtml(row.cells[cellIndex] ?? '', block, helpers)}</td>`
                   : `<td data-placeholder="${placeholder}"></td>`;
               }).join('')}
             </tr>
@@ -181,5 +219,5 @@ export const renderTableReader: ComponentReaderRenderer = (_section, block, help
         )
         .join('')}
     </tbody>
-  </table>`;
+  </table></div>`;
 };

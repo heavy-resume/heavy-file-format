@@ -1,5 +1,4 @@
 import './editor.css';
-import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import hljs from 'highlight.js/lib/core';
 import type { ComponentRenderHelpers } from './component-helpers';
@@ -17,7 +16,7 @@ import { getComponentListAddLabel, getComponentListEditLabel, hasComponentListIt
 import { renderTagEditor } from './tag-editor';
 import { getTemplateFields, renderTemplateGhosts } from './template';
 import type { Align, BlockSchema, VisualBlock, VisualSection } from './types';
-import { applyUnderlineSyntax, escapeRawHtml, normalizeMarkdownIndentation, normalizeMarkdownLists } from '../markdown';
+import { markdownToReaderHtml, normalizeMarkdownIndentation, normalizeMarkdownLists } from '../markdown';
 import bash from 'highlight.js/lib/languages/bash';
 import css from 'highlight.js/lib/languages/css';
 import javascript from 'highlight.js/lib/languages/javascript';
@@ -33,6 +32,7 @@ import { SCRIPTING_PLUGIN_ID } from '../plugins/registry';
 import { getScriptingPluginVersion } from '../plugins/scripting/version';
 import { renderAddComponentPicker } from './component-picker';
 import { TEXT_FILL_IN_MARKER, hasTextFillInMarker } from '../text-fill-in';
+import { closeIcon, plusIcon } from '../icons';
 
 hljs.registerLanguage('bash', bash);
 hljs.registerLanguage('sh', bash);
@@ -79,6 +79,8 @@ interface EditorRenderState {
   expandableEditorPanels: Record<string, { stubOpen: boolean; expandedOpen: boolean }>;
   editorSidebarHelpDismissed: boolean;
   currentView: 'editor' | 'viewer' | 'ai';
+  responsivePreview: 'full' | 'phone' | 'tablet' | 'desktop';
+  mobileAdjustmentMode: boolean;
 }
 
 interface EditorRenderDeps {
@@ -123,6 +125,7 @@ export interface EditorRenderer {
       gridItemId?: string;
       rowIndex?: number;
       includeAlign?: boolean;
+      includeFillIn?: boolean;
       align?: Align;
       currentMarkdown?: string;
     }
@@ -139,7 +142,8 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     if (sidebarSections.length === 0) {
       return '<div class="muted editor-sidebar-empty">Move sections here using the sidebar button.</div>';
     }
-    return sidebarSections.map((section) => renderEditorSection(section, sections)).join('');
+    const surfaceAttrs = renderResponsiveSurfaceAttrs('');
+    return `<div${surfaceAttrs}><div class="editor-tree-body editor-sidebar-tree-body">${sidebarSections.map((section) => renderEditorSection(section, sections)).join('')}</div></div>`;
   }
 
   function renderSidebarHelpBalloon(sections: VisualSection[]): string {
@@ -174,24 +178,32 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const flatSections = deps.flattenSections(sections);
     const maxWidth = typeof state.documentMeta.reader_max_width === 'string' ? state.documentMeta.reader_max_width.trim() : '';
     const bodyStyle = maxWidth.length > 0 ? ` style="max-width: ${deps.escapeAttr(maxWidth)};"` : '';
+    const surfaceAttrs = renderResponsiveSurfaceAttrs(maxWidth);
     return `
-      <div class="editor-tree-body"${bodyStyle}>
-        ${state.showAdvancedEditor
-          ? renderTemplateGhosts(getTemplateFields(state.documentMeta), flatSections, { escapeAttr: deps.escapeAttr, escapeHtml: deps.escapeHtml })
-          : ''
-        }
-        ${sectionCards}
-        <article class="ghost-section-card add-ghost reusable-section-ghost" data-action="add-top-level-section" data-section-key="__top_level__">
-          <div class="ghost-plus-big"><span>+</span></div>
-          <div class="ghost-label">Add Section</div>
-          <label class="ghost-component-picker">
-            <select data-field="reusable-section-type" data-section-key="__top_level__" aria-label="Section type">
-              ${deps.renderReusableSectionOptions(state.addComponentBySection.__top_level__ ?? 'blank')}
-            </select>
-          </label>
-        </article>
+      <div${surfaceAttrs}>
+        <div class="editor-tree-body"${bodyStyle}>
+          ${state.showAdvancedEditor
+            ? renderTemplateGhosts(getTemplateFields(state.documentMeta), flatSections, { escapeAttr: deps.escapeAttr, escapeHtml: deps.escapeHtml })
+            : ''
+          }
+          ${sectionCards}
+          ${state.mobileAdjustmentMode ? '' : `<article class="ghost-section-card add-ghost reusable-section-ghost" data-action="add-top-level-section" data-section-key="__top_level__">
+            <div class="ghost-plus-big">${plusIcon()}</div>
+            <div class="ghost-label">Add Section</div>
+            <label class="ghost-component-picker">
+              <select data-field="reusable-section-type" data-section-key="__top_level__" aria-label="Section type">
+                ${deps.renderReusableSectionOptions(state.addComponentBySection.__top_level__ ?? 'blank')}
+              </select>
+            </label>
+          </article>`}
+        </div>
       </div>
     `;
+  }
+
+  function renderResponsiveSurfaceAttrs(_documentMaxWidth: string): string {
+    const preview = state.responsivePreview;
+    return ` class="hvy-surface hvy-surface-${deps.escapeAttr(preview)}"`;
   }
 
   function renderEditorSection(section: VisualSection, rootSections: VisualSection[], isSubsection = false): string {
@@ -219,7 +231,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const subsectionToggle = isSubsection && !hasActiveBlockInSelfOrDescendants(section)
       ? `<button type="button" class="section-nest-toggle" data-action="remove-subsection" data-section-key="${deps.escapeAttr(section.key)}" aria-label="Remove subsection" title="Remove subsection">‹</button>`
       : '';
-    const addComponentGhost = state.componentPlacement
+    const addComponentGhost = state.componentPlacement || state.mobileAdjustmentMode
       ? ''
       : `<article class="ghost-section-card add-ghost compact-add-component-ghost">
                   ${renderComponentPicker({
@@ -254,22 +266,14 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           </div>
         </div>
 
-        ${state.showAdvancedEditor
-        ? `<div class="editor-row">
-                <label class="checkbox-label"><input type="checkbox" data-section-key="${deps.escapeAttr(section.key)}" data-field="section-highlight" ${section.highlight ? 'checked' : ''
-        } /> Highlight</label>
-              </div>`
-        : ''
-      }
-
         <div class="editor-blocks">
           ${renderEditorSectionItems(section, rootSections)}
-          ${section.lock
+          ${state.mobileAdjustmentMode || section.lock
         ? ''
         : isNamedEmptySection
           ? `<article class="ghost-section-card add-ghost empty-section-heading-ghost" data-action="add-empty-section-heading" data-section-key="${deps.escapeAttr(section.key)}">
                   <div class="empty-section-heading-watermark">${deps.escapeHtml(visibleTitle)}</div>
-                  <div class="ghost-plus-big"><span>+</span></div>
+                  <div class="ghost-plus-big">${plusIcon()}</div>
                   <div class="ghost-label">${deps.escapeHtml(visibleTitle)}</div>
                   <label class="ghost-component-picker">
                     <select aria-label="Heading level" data-field="empty-section-heading-level" data-section-key="${deps.escapeAttr(section.key)}">
@@ -390,9 +394,27 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         : `<button type="button" class="ghost" data-action="start-component-move" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}">Move</button>
            <button type="button" class="ghost" data-action="start-component-copy" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}">Copy</button>`
       : '';
+    const componentMetaActions = state.showAdvancedEditor && isActiveSelf
+      ? `<div class="editor-block-context-actions" aria-label="Component options">
+          <button type="button" class="ghost" data-action="open-save-component-def" data-section-key="${deps.escapeAttr(
+        sectionKey
+      )}" data-block-id="${deps.escapeAttr(block.id)}">Reusable</button>
+          <button type="button" class="ghost" data-action="open-component-meta" data-section-key="${deps.escapeAttr(
+        sectionKey
+      )}" data-block-id="${deps.escapeAttr(block.id)}">Meta</button>
+        </div>`
+      : '';
+    const removeButton = canRemove
+      ? `<button type="button" class="danger remove-x editor-block-remove-button" data-action="remove-block" data-section-key="${deps.escapeAttr(
+        sectionKey
+      )}" data-block-id="${deps.escapeAttr(block.id)}" aria-label="Remove ${deps.escapeAttr(componentLabel)}">${closeIcon()}</button>`
+      : '';
+    const frameRemoveButton = state.mobileAdjustmentMode ? '' : removeButton;
 
     return `
       <div class="editor-block${isActivatingPath ? ' is-activating-path' : ''}${isPlacementSource ? ' is-placement-source' : ''}"${activationStyle}${activationAttrs}>
+        ${componentMetaActions}
+        ${frameRemoveButton}
         <div class="editor-block-head">
           <div class="section-drag-title">
             <div class="editor-order-controls">
@@ -402,26 +424,23 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
             <strong class="editor-block-title">${deps.escapeHtml(componentLabel)}</strong>
           </div>
           <div class="editor-actions">
-            ${isActiveSelf ? placementActions : ''}
-            <button type="button" class="ghost" data-action="deactivate-block" data-section-key="${deps.escapeAttr(
-      sectionKey
-    )}" data-block-id="${deps.escapeAttr(block.id)}">Done</button>
-            ${state.showAdvancedEditor && isActiveSelf
-        ? `<button type="button" class="ghost" data-action="open-save-component-def" data-section-key="${deps.escapeAttr(
-          sectionKey
-        )}" data-block-id="${deps.escapeAttr(block.id)}">Reusable</button>
-                   <button type="button" class="ghost" data-action="open-component-meta" data-section-key="${deps.escapeAttr(
-          sectionKey
-        )}" data-block-id="${deps.escapeAttr(block.id)}">Meta</button>`
-        : ''
-      }
-            ${canRemove ? `<button type="button" class="danger remove-x" data-action="remove-block" data-section-key="${deps.escapeAttr(
-        sectionKey
-      )}" data-block-id="${deps.escapeAttr(block.id)}">×</button>` : ''}
+            ${state.mobileAdjustmentMode ? '' : isActiveSelf ? placementActions : ''}
           </div>
         </div>
 
         ${contentEditor}
+        ${
+          isActiveSelf
+            ? `<div class="editor-block-done-row">
+                <button type="button" class="ghost editor-block-cancel-button" data-action="cancel-block-edit" data-section-key="${deps.escapeAttr(
+                  sectionKey
+                )}" data-block-id="${deps.escapeAttr(block.id)}">Cancel</button>
+                <button type="button" class="ghost editor-block-done-button" data-action="deactivate-block" data-section-key="${deps.escapeAttr(
+                  sectionKey
+                )}" data-block-id="${deps.escapeAttr(block.id)}">Done</button>
+              </div>`
+            : ''
+        }
       </div>
     `;
   }
@@ -539,18 +558,23 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
 
     if (base === 'component-list') {
       deps.ensureComponentListBlocks(block);
+      if (state.mobileAdjustmentMode) {
+        return `<div class="reader-component-list">${(block.schema.componentListBlocks ?? [])
+          .map((innerBlock) => renderPassiveEditorBlock(sectionKey, innerBlock, rootSections))
+          .join('')}</div>`;
+      }
       const actionLabel = block.schema.lock ? getComponentListEditLabel(block) : getComponentListAddLabel(block);
       const actionAttr = block.schema.lock ? '' : ` data-action="add-component-list-item" data-section-key="${deps.escapeAttr(
         sectionKey
       )}" data-block-id="${deps.escapeAttr(block.id)}"`;
       const addControl = `<div class="ghost-section-card add-ghost component-list-add-ghost passive-list-add-ghost"${actionAttr}>
-        <div class="ghost-plus-big"><span>+</span></div>
+        <div class="ghost-plus-big">${plusIcon()}</div>
         <div class="ghost-label">${deps.escapeHtml(actionLabel)}</div>
       </div>`;
       if (!hasComponentListItems(block)) {
         const existingContent = block.schema.componentListBlocks.length > 0 ? deps.renderReaderBlock(section, block) : '';
         return `${existingContent}<div class="ghost-section-card add-ghost passive-empty-list-ghost"${actionAttr}>
-          <div class="ghost-plus-big"><span>+</span></div>
+          <div class="ghost-plus-big">${plusIcon()}</div>
           <div class="ghost-label">${deps.escapeHtml(actionLabel)}</div>
         </div>`;
       }
@@ -604,10 +628,14 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       gridItemId?: string;
       rowIndex?: number;
       includeAlign?: boolean;
+      includeFillIn?: boolean;
       align?: Align;
       currentMarkdown?: string;
     }
   ): string {
+    if (state.mobileAdjustmentMode) {
+      return '';
+    }
     const fieldAttr = options?.field ? ` data-rich-field="${deps.escapeAttr(options.field)}"` : '';
     const gridAttr = options?.gridItemId ? ` data-grid-item-id="${deps.escapeAttr(options.gridItemId)}"` : '';
     const rowAttr = typeof options?.rowIndex === 'number' ? ` data-row-index="${options.rowIndex}"` : '';
@@ -862,30 +890,6 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
             placeholder="margin: 0.5rem 0;"
           >${deps.escapeHtml(block.schema.css)}</textarea>
         </label>
-        ${
-          component === 'expandable'
-            ? `<label>
-          <span>Expandable Stub CSS</span>
-          <textarea
-            rows="2"
-            data-section-key="${deps.escapeAttr(sectionKey)}"
-            data-block-id="${deps.escapeAttr(block.id)}"
-            data-field="block-expandable-stub-css"
-            placeholder="padding: 0.35rem 0;"
-          >${deps.escapeHtml(block.schema.expandableStubCss)}</textarea>
-        </label>
-        <label>
-          <span>Expandable Content CSS</span>
-          <textarea
-            rows="2"
-            data-section-key="${deps.escapeAttr(sectionKey)}"
-            data-block-id="${deps.escapeAttr(block.id)}"
-            data-field="block-expandable-content-css"
-            placeholder="padding-top: 0.35rem;"
-          >${deps.escapeHtml(block.schema.expandableContentCss)}</textarea>
-        </label>`
-            : ''
-        }
         <label>
           <span>Tags</span>
           ${renderTagEditor(
@@ -909,11 +913,6 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
             value="${deps.escapeAttr(block.schema.placeholder)}"
           />
         </label>
-        ${
-          component === 'text'
-            ? renderTextFillInControls(sectionKey, block)
-            : ''
-        }
         ${
           component === 'component-list'
             ? `<label>
@@ -946,36 +945,9 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     `;
   }
 
-  function renderTextFillInControls(sectionKey: string, block: VisualBlock): string {
-    const hasMarker = hasTextFillInMarker(block.text);
-    return `
-      <div class="block-meta-field">
-        <span>Fill-in Placeholder</span>
-        <div class="toolbar-segment">
-          <button
-            type="button"
-            class="${hasMarker ? 'ghost' : 'secondary'}"
-            data-action="set-text-fill-in"
-            data-section-key="${deps.escapeAttr(sectionKey)}"
-            data-block-id="${deps.escapeAttr(block.id)}"
-            ${hasMarker ? 'disabled' : ''}
-          >Set</button>
-          <button
-            type="button"
-            class="${hasMarker ? 'secondary' : 'ghost'}"
-            data-action="remove-text-fill-in"
-            data-section-key="${deps.escapeAttr(sectionKey)}"
-            data-block-id="${deps.escapeAttr(block.id)}"
-            ${hasMarker ? '' : 'disabled'}
-          >Remove</button>
-        </div>
-      </div>
-    `;
-  }
-
   function renderTextFragment(content: string): string {
-    const normalized = applyUnderlineSyntax(escapeRawHtml(normalizeMarkdownIndentation(normalizeMarkdownLists(content))));
-    return unwrapSingleParagraph(decorateMarkdownCodeBlocks(addExternalLinkTargets(DOMPurify.sanitize(marked.parse(normalized) as string)), deps.escapeHtml));
+    const normalized = normalizeMarkdownIndentation(normalizeMarkdownLists(content));
+    return unwrapSingleParagraph(decorateMarkdownCodeBlocks(addExternalLinkTargets(markdownToReaderHtml(normalized)), deps.escapeHtml));
   }
 
   function renderComponentFragment(componentName: string, content: string, block: VisualBlock): string {

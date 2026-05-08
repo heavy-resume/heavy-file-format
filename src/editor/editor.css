@@ -10,7 +10,13 @@
   min-width: 0;
   height: 100%;
   overflow: auto;
-  padding-left: 3.25rem;
+  padding-left: var(--hvy-sidebar-footprint);
+  padding-right: var(--hvy-document-edge-gutter);
+  scrollbar-gutter: stable both-edges;
+}
+
+.hvy-preview-frame-phone.editor-shell .editor-tree,
+.hvy-preview-frame-tablet.editor-shell .editor-tree {
   scrollbar-gutter: stable;
 }
 
@@ -22,8 +28,8 @@
 .editor-sidebar {
   position: absolute;
   inset: 0 auto 0 0;
-  width: min(40rem, 80vw);
-  max-width: min(40rem, 80vw);
+  width: min(40rem, calc(100% - max(var(--hvy-sidebar-footprint), 0.65rem)));
+  max-width: min(40rem, calc(100% - max(var(--hvy-sidebar-footprint), 0.65rem)));
   transform: translateX(-100%);
   transition: transform 360ms ease, box-shadow 360ms ease;
   z-index: 20;
@@ -142,8 +148,8 @@
   position: absolute;
   left: 100%;
   top: 1rem;
-  width: 2.9rem;
-  height: 2.9rem;
+  width: var(--hvy-sidebar-tab-size);
+  height: var(--hvy-sidebar-tab-size);
   padding: 0;
   border-radius: 0 10px 10px 0;
   border: 1px solid var(--hvy-border-alt);
@@ -156,6 +162,29 @@
   justify-content: center;
   box-shadow: 0 10px 24px var(--hvy-shadow-md);
   pointer-events: auto;
+  transition: opacity 540ms ease, transform 540ms ease;
+}
+
+.hvy-preview-frame-phone.editor-shell.is-sidebar-closed:not(.is-sidebar-tab-visible):not(:has(.editor-sidebar-help-balloon)) .editor-sidebar-tab,
+.hvy-preview-frame-tablet.editor-shell.is-sidebar-closed:not(.is-sidebar-tab-visible):not(:has(.editor-sidebar-help-balloon)) .editor-sidebar-tab,
+.hvy-preview-frame-phone.editor-shell.is-sidebar-closed.is-sidebar-tab-hidden .editor-sidebar-tab,
+.hvy-preview-frame-tablet.editor-shell.is-sidebar-closed.is-sidebar-tab-hidden .editor-sidebar-tab {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-72%);
+}
+
+.hvy-preview-frame-phone.editor-shell.is-sidebar-closed.is-sidebar-tab-visible .editor-sidebar-tab,
+.hvy-preview-frame-tablet.editor-shell.is-sidebar-closed.is-sidebar-tab-visible .editor-sidebar-tab,
+.hvy-preview-frame-phone.editor-shell:has(.editor-sidebar-help-balloon) .editor-sidebar-tab,
+.hvy-preview-frame-tablet.editor-shell:has(.editor-sidebar-help-balloon) .editor-sidebar-tab {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.hvy-preview-frame-phone.editor-shell.is-sidebar-closed.is-sidebar-tab-hidden .editor-sidebar-help-balloon,
+.hvy-preview-frame-tablet.editor-shell.is-sidebar-closed.is-sidebar-tab-hidden .editor-sidebar-help-balloon {
+  display: none;
 }
 
 .editor-sidebar-help-balloon {
@@ -164,8 +193,7 @@
   top: 4.25rem;
   width: max-content;
   max-width: min(18rem, calc(100vw - 5rem));
-  max-height: min(18rem, calc(100vh - 8rem));
-  overflow: auto;
+  overflow: visible;
   padding: 0.6rem 0.7rem;
   border: 1px solid var(--hvy-border-alt);
   border-radius: 10px;
@@ -174,23 +202,41 @@
   box-shadow: 0 12px 28px var(--hvy-shadow-md);
   pointer-events: auto;
   z-index: 21;
+  transform-origin: top left;
 }
 
 .editor-sidebar-help-balloon::before {
   content: "";
   position: absolute;
-  left: -0.45rem;
-  top: 0.8rem;
-  width: 0.75rem;
-  height: 0.75rem;
-  border-left: 1px solid var(--hvy-border-alt);
-  border-bottom: 1px solid var(--hvy-border-alt);
-  background: inherit;
-  transform: rotate(45deg);
+  left: -0.72rem;
+  top: 0.55rem;
+  width: 0;
+  height: 0;
+  border-top: 0.55rem solid transparent;
+  border-bottom: 0.55rem solid transparent;
+  border-right: 0.72rem solid color-mix(in srgb, var(--hvy-surface) 94%, var(--hvy-surface-tint) 6%);
+  filter: drop-shadow(-1px 0 0 var(--hvy-border-alt));
 }
 
 .editor-shell.is-sidebar-open .editor-sidebar-help-balloon {
   display: none;
+}
+
+.editor-sidebar-help-balloon.is-closing {
+  animation: editor-sidebar-help-close 180ms ease-in forwards;
+  pointer-events: none;
+}
+
+@keyframes editor-sidebar-help-close {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: scale(0.08);
+  }
 }
 
 .editor-sidebar-help-title {
@@ -204,6 +250,8 @@
 .editor-sidebar-help-balloon ul {
   display: grid;
   gap: 0.22rem;
+  max-height: min(15rem, calc(100vh - 10rem));
+  overflow: auto;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -491,10 +539,9 @@
   background: var(--hvy-surface);
 }
 
-.ghost-plus-big span {
-  font-size: 2.1rem;
-  line-height: 0.8;
-  transform: translateY(-3px);
+.ghost-plus-big .hvy-ui-icon {
+  width: 2.1rem;
+  height: 2.1rem;
 }
 
 .ghost-label {
@@ -526,10 +573,9 @@
   flex: 0 0 auto;
 }
 
-.compact-add-component-ghost .ghost-plus-big span {
-  font-size: 1.1rem;
-  line-height: 1;
-  transform: translateY(-1px);
+.compact-add-component-ghost .ghost-plus-big .hvy-ui-icon {
+  width: 1.1rem;
+  height: 1.1rem;
 }
 
 .compact-add-component-ghost .ghost-label {
@@ -597,6 +643,7 @@
   height: 2rem;
   display: grid;
   place-items: center;
+  padding: 0;
   border: 1px solid var(--hvy-border-alt);
   border-radius: 999px;
   background: var(--hvy-surface);
@@ -604,6 +651,11 @@
   font-size: 1.15rem;
   line-height: 1;
   cursor: pointer;
+}
+
+.component-picker-trigger .hvy-ui-icon {
+  width: 1.15rem;
+  height: 1.15rem;
 }
 
 .component-picker-trigger:hover,
@@ -900,12 +952,58 @@
 
 .editor-block-head {
   position: relative;
+  padding-right: 0.2rem;
 }
 
 .editor-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 0.35rem;
+}
+
+.editor-block-done-row {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.45rem;
+  margin-top: 0.55rem;
+}
+
+.editor-block-done-button,
+.editor-block-cancel-button {
+  width: 4rem;
+  min-width: 4rem;
+  padding-inline: 0;
+  text-align: center;
+}
+
+.editor-block-context-actions {
+  position: absolute;
+  top: 0;
+  right: 1.85rem;
+  z-index: 2;
+  display: flex;
+  gap: 0.25rem;
+  max-width: calc(100% - 6.2rem);
+  padding: 0 0.3rem;
+  border-radius: 999px;
+  background: var(--hvy-surface);
+  transform: translateY(-50%);
+}
+
+.editor-block-context-actions button {
+  min-height: 1.45rem;
+  padding: 0.12rem 0.35rem;
+  font-size: 0.72rem;
+  line-height: 1;
+}
+
+.editor-block-remove-button {
+  position: absolute;
+  top: -0.85rem;
+  right: -0.55rem;
+  z-index: 3;
+  box-shadow: 0 6px 14px var(--hvy-shadow);
 }
 
 .component-placement-target {
@@ -1363,6 +1461,11 @@
   display: grid;
   place-items: center;
   border-radius: 999px;
+}
+
+.tag-pill-remove .hvy-ui-icon {
+  width: 0.78rem;
+  height: 0.78rem;
 }
 
 .tag-editor-input {

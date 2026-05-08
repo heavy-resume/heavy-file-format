@@ -187,7 +187,8 @@ export interface AppState {
   document: VisualDocument;
   filename: string;
   currentView: 'editor' | 'viewer' | 'ai';
-  editorMode: 'basic' | 'advanced' | 'raw' | 'cli';
+  editorMode: 'basic' | 'mobile-adjustment' | 'advanced' | 'raw' | 'cli';
+  responsivePreview: 'full' | 'phone' | 'tablet' | 'desktop';
   chat: ChatState;
   aiEdit: AiEditState;
   paneScroll: PaneScrollState;
@@ -199,6 +200,7 @@ export interface AppState {
   cliSession: HvyCliSessionState;
   cliHistory: HvyCliHistoryEntry[];
   activeEditorBlock: { sectionKey: string; blockId: string } | null;
+  activeEditorBlockSnapshot: { sectionKey: string; blockId: string; block: VisualBlock } | null;
   componentPlacement: ComponentPlacementState | null;
   pendingEditorActivation: { sectionKey: string; blockId: string } | null;
   activeEditorSectionTitleKey: string | null;
@@ -223,6 +225,7 @@ export interface AppState {
   readerExpandableState: Record<string, boolean>;
   viewerSidebarOpen: boolean;
   editorSidebarOpen: boolean;
+  viewerSidebarHelpDismissed: boolean;
   editorSidebarHelpDismissed: boolean;
   lastHistoryGroup: string | null;
   lastHistoryAt: number;

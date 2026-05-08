@@ -89,7 +89,8 @@ function renderContainerReaderBody(options: {
   const titleLabel = options.title.trim() || (options.virtualKey ? 'Group' : 'Container');
   const title = `<button type="button" class="reader-container-title" ${collapsibleAttrs}>${options.helpers.escapeHtml(titleLabel)}</button>`;
   const bodyAttrs = expanded ? '' : ` ${collapsibleAttrs}`;
-  return `<div class="${options.helpers.escapeAttr(className)}" style="--hvy-container-preview-rem: ${previewRem}rem;">
+  const rootAttrs = options.virtualKey && !expanded ? ` ${collapsibleAttrs}` : '';
+  return `<div class="${options.helpers.escapeAttr(className)}" style="--hvy-container-preview-rem: ${previewRem}rem;"${rootAttrs}>
     ${title}
     <div class="reader-container-body"${bodyAttrs}>${body}</div>
   </div>`;

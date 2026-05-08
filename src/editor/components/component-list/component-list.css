@@ -11,8 +11,8 @@
   align-items: center;
   gap: 0.35rem;
   justify-self: start;
-  margin: 0 0 0.5rem;
-  padding: 0.22rem;
+  margin: 0 0 0.5rem 0.35rem;
+  padding: 0.25rem 0.3rem;
   border: 1px solid var(--hvy-border-input);
   border-radius: 999px;
   background: var(--hvy-surface-alt);
@@ -22,7 +22,8 @@
   z-index: 2;
 }
 
-.component-list-view-picker {
+.component-list-view-picker,
+.component-list-group-picker {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
@@ -31,13 +32,18 @@
   font-size: 0.85rem;
 }
 
-.component-list-view-picker select {
+.component-list-view-picker select,
+.component-list-group-picker select {
   min-width: 9rem;
   border: 0;
   border-radius: 999px;
   background: var(--hvy-surface);
   font-size: 0.85rem;
   padding-block: 0.28rem;
+}
+
+.component-list-group-picker select {
+  min-width: 8rem;
 }
 
 .component-list-reverse-button {
@@ -50,6 +56,9 @@
   background: transparent;
   color: var(--hvy-text-muted);
   cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0;
 }
 
 .component-list-reverse-button:hover,

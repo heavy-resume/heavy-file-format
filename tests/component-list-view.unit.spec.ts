@@ -92,3 +92,28 @@ test('component-list runtime view can reverse the selected order', () => {
     expect(expectedResult.blocks.map((block) => block.text)).toEqual(['middle', 'top']);
   }
 });
+
+test('component-list runtime grouping can override the selected sort view', () => {
+  const list: VisualBlock = {
+    id: 'skills',
+    text: '',
+    schemaMode: false,
+    schema: {
+      ...defaultBlockSchema('component-list'),
+      componentListBlocks: [
+        textItem('postgres', { Strength: 80, Category: 'Database' }),
+        textItem('typescript', { Strength: 95, Category: 'Language' }),
+        textItem('sqlite', { Strength: 90, Category: 'Database' }),
+      ],
+      componentListViews: [{ id: 'strength', label: 'Strength', sortKey: 'Strength', direction: 'desc', groupKey: 'Category', groupDirection: 'desc', groupCollapsedPreviewRem: 3 }],
+      componentListDefaultView: 'strength',
+    },
+  };
+
+  const expectedResult = resolveComponentListItems(list, 'strength::group=');
+
+  expect(expectedResult.kind).toBe('items');
+  if (expectedResult.kind === 'items') {
+    expect(expectedResult.blocks.map((block) => block.text)).toEqual(['typescript', 'sqlite', 'postgres']);
+  }
+});

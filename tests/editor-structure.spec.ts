@@ -273,17 +273,35 @@ hvy_version: 0.1
 
   await page.getByRole('button', { name: 'Viewer' }).click();
 
+  const readerControls = page.locator('.component-list-reader-controls').first();
+  await expect(readerControls).toContainText('Sort');
+  await expect(readerControls).toContainText('Group');
+  await expect(readerControls.locator('[data-field="component-list-reader-view"]')).toHaveValue('job');
+  await expect(readerControls.locator('[data-field="component-list-reader-group"]')).toHaveValue('Category');
+  await expect(readerControls.locator('[data-reader-action="toggle-component-list-reverse"]')).toHaveText('↓');
+
   const groups = page.locator('.reader-container.is-virtual-group-container');
   await expect(groups).toHaveCount(2);
   await expect(groups.nth(0).locator('.reader-container-title')).toHaveText('Language');
   await expect(groups.nth(1).locator('.reader-container-title')).toHaveText('Database');
   await expect(groups.nth(0).locator('.reader-container-title')).toHaveAttribute('aria-expanded', 'false');
 
-  await groups.nth(1).locator('.reader-container-title').click();
+  await readerControls.locator('[data-reader-action="toggle-component-list-reverse"]').click();
+  await expect(readerControls.locator('[data-reader-action="toggle-component-list-reverse"]')).toHaveText('↑');
+  await expect(groups.nth(0).locator('.reader-container-title')).toHaveText('Database');
+  await expect(groups.nth(1).locator('.reader-container-title')).toHaveText('Language');
 
-  await expect(groups.nth(1).locator('.reader-container-title')).toHaveAttribute('aria-expanded', 'true');
-  await expect(groups.nth(1)).toContainText('SQLite');
-  await expect(groups.nth(1)).toContainText('PostgreSQL');
+  await readerControls.locator('[data-field="component-list-reader-group"]').selectOption('');
+  await expect(page.locator('.reader-container.is-virtual-group-container')).toHaveCount(0);
+  await expect(page.locator('.reader-component-list')).toContainText('PostgreSQL');
+
+  await readerControls.locator('[data-field="component-list-reader-group"]').selectOption('Category');
+
+  await groups.nth(0).locator('.reader-container-title').click();
+
+  await expect(groups.nth(0).locator('.reader-container-title')).toHaveAttribute('aria-expanded', 'true');
+  await expect(groups.nth(0)).toContainText('PostgreSQL');
+  await expect(groups.nth(0)).toContainText('SQLite');
 });
 
 test('text toolbar fill-in converts selected text to a fill-in slot', async ({ page }) => {

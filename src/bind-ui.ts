@@ -150,7 +150,7 @@ export function bindUi(app: HTMLElement): void {
             const blockId = select.dataset.blockId ?? '';
             window.setTimeout(() => {
               const nextSelect = app.querySelector<HTMLSelectElement>(
-                `[data-field="component-list-reader-view"][data-section-key="${CSS.escape(sectionKey)}"][data-block-id="${CSS.escape(blockId)}"]`
+                `[data-field="${CSS.escape(select.dataset.field ?? 'component-list-reader-view')}"][data-section-key="${CSS.escape(sectionKey)}"][data-block-id="${CSS.escape(blockId)}"]`
               );
               nextSelect?.focus();
               (nextSelect as (HTMLSelectElement & { showPicker?: () => void }) | null)?.showPicker?.();
@@ -175,6 +175,7 @@ export function bindUi(app: HTMLElement): void {
       state.componentListReaderViews[key] = encodeComponentListRuntimeView({
         viewId: current.viewId || viewId,
         reversed: !current.reversed,
+        groupKey: current.groupKey,
       });
       getRefreshReaderPanels()();
       return;

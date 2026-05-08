@@ -50,3 +50,5 @@ Do not alter logging in any form without permission.
 For CLI/API design, avoid one-off special cases that look like a broader convention. Prefer APIs and more long term facing over APIs that merely solve the immediate example. Don't spend effort writing something limited when something much more capable is basically the same work.
 
 When creating new input components, always jazz it up. Anything default browser UI won't work.
+
+Animations, colors, highlights, etc all have examples. Use them!

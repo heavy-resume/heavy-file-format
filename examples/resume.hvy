@@ -497,11 +497,11 @@ component_defs:
  <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
   # Skills
 
- <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"skill-record","componentListItemLabel":"skill","componentListDefaultView":"strength","componentListViews":[{"id":"strength","label":"Strongest First","sortKey":"Strength","direction":"desc"},{"id":"name","label":"Name A-Z","sortKey":"Name","direction":"asc"}]}-->
+ <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"skill-record","componentListItemLabel":"skill","componentListDefaultView":"strength","componentListViews":[{"id":"strength","label":"Strongest First","sortKey":"Strength","direction":"desc","groupKey":"Category","groupDirection":"desc","groupCollapsedPreviewRem":3},{"id":"name","label":"Name A-Z","sortKey":"Name","direction":"asc","groupKey":"Category","groupDirection":"asc","groupCollapsedPreviewRem":3}]}-->
 
   <!--hvy:component-list:0 {}-->
 
-   <!--hvy:skill-record {"id":"skill-software-engineering","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"Software Engineering","Strength":98},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+   <!--hvy:skill-record {"id":"skill-software-engineering","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"Software Engineering","Strength":98,"Category":"Engineering"},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
     <!--hvy:expandable:stub {}-->
 
@@ -569,7 +569,7 @@ component_defs:
 
   <!--hvy:component-list:1 {}-->
 
-   <!--hvy:skill-record {"id":"skill-reverse-engineering","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"Reverse Engineering","Strength":87},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+   <!--hvy:skill-record {"id":"skill-reverse-engineering","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"Reverse Engineering","Strength":87,"Category":"Engineering"},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
     <!--hvy:expandable:stub {}-->
 
@@ -611,7 +611,7 @@ component_defs:
 
   <!--hvy:component-list:2 {}-->
 
-   <!--hvy:skill-record {"id":"skill-library-development","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"Library Development","Strength":93},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+   <!--hvy:skill-record {"id":"skill-library-development","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"Library Development","Strength":93,"Category":"Engineering"},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
     <!--hvy:expandable:stub {}-->
 
@@ -653,7 +653,7 @@ component_defs:
 
   <!--hvy:component-list:3 {}-->
 
-   <!--hvy:skill-record {"id":"skill-llm-prompt-engineering","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"LLM Prompt Engineering","Strength":91},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+   <!--hvy:skill-record {"id":"skill-llm-prompt-engineering","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"LLM Prompt Engineering","Strength":91,"Category":"Engineering"},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
     <!--hvy:expandable:stub {}-->
 

@@ -44,15 +44,27 @@ export const renderComponentListReader: ComponentReaderRenderer = (section, bloc
   const activeViewId = helpers.getComponentListReaderViewId(section.key, block.id);
   const runtimeView = parseComponentListRuntimeView(activeViewId);
   const activeView = getComponentListActiveView(block, activeViewId);
+  const selectedViewId = runtimeView.viewId || activeView?.id || '';
+  const selectedGroupKey = typeof runtimeView.groupKey === 'string' ? runtimeView.groupKey : activeView?.groupKey ?? '';
+  const groupKeys = getAvailableGroupKeys(block);
+  const directionArrow = activeView?.direction === 'asc' ? '↑' : '↓';
+  const reverseLabel = activeView?.direction === 'asc' ? 'Sort ascending' : 'Sort descending';
   const controls =
     block.schema.componentListViews.length > 0
       ? `<div class="component-list-reader-controls" data-component-list-reader-controls="true">
           <label class="component-list-view-picker">
-            <span>View</span>
+            <span>Sort</span>
             <select data-field="component-list-reader-view" data-section-key="${helpers.escapeAttr(section.key)}" data-block-id="${helpers.escapeAttr(block.id)}">
             ${block.schema.componentListViews
-              .map((view) => `<option value="${helpers.escapeAttr(view.id)}"${view.id === (runtimeView.viewId || activeView?.id) ? ' selected' : ''}>${helpers.escapeHtml(view.label)}</option>`)
+              .map((view) => `<option value="${helpers.escapeAttr(view.id)}"${view.id === selectedViewId ? ' selected' : ''}>${helpers.escapeHtml(view.label)}</option>`)
               .join('')}
+            </select>
+          </label>
+          <label class="component-list-group-picker">
+            <span>Group</span>
+            <select data-field="component-list-reader-group" data-section-key="${helpers.escapeAttr(section.key)}" data-block-id="${helpers.escapeAttr(block.id)}" data-view-id="${helpers.escapeAttr(selectedViewId)}">
+              <option value=""${selectedGroupKey ? '' : ' selected'}>No grouping</option>
+              ${groupKeys.map((key) => `<option value="${helpers.escapeAttr(key)}"${key === selectedGroupKey ? ' selected' : ''}>${helpers.escapeHtml(key)}</option>`).join('')}
             </select>
           </label>
           <button
@@ -61,13 +73,14 @@ export const renderComponentListReader: ComponentReaderRenderer = (section, bloc
             data-reader-action="toggle-component-list-reverse"
             data-section-key="${helpers.escapeAttr(section.key)}"
             data-block-id="${helpers.escapeAttr(block.id)}"
-            data-view-id="${helpers.escapeAttr(runtimeView.viewId || activeView?.id || '')}"
+            data-view-id="${helpers.escapeAttr(selectedViewId)}"
             aria-pressed="${runtimeView.reversed ? 'true' : 'false'}"
+            aria-label="${helpers.escapeAttr(reverseLabel)}"
             title="Reverse order"
-          >⇅</button>
+          >${directionArrow}</button>
         </div>`
       : '';
-  const resolved = resolveComponentListItems(block, activeView?.id ?? '');
+  const resolved = resolveComponentListItems(block, activeViewId);
   const body =
     resolved.kind === 'groups'
       ? [
@@ -190,6 +203,32 @@ function getAvailableSortKeys(block: VisualBlock): string[] {
   }
   for (const view of block.schema.componentListViews) {
     if (view.sortKey) keys.add(view.sortKey);
+    if (view.groupKey) keys.add(view.groupKey);
+  }
+  return [...keys].sort((left, right) => left.localeCompare(right, undefined, { sensitivity: 'base' }));
+}
+
+function getAvailableGroupKeys(block: VisualBlock): string[] {
+  const keys = new Set<string>();
+  const valuesByKey = new Map<string, Set<string>>();
+  const countsByKey = new Map<string, number>();
+  for (const child of block.schema.componentListBlocks ?? []) {
+    for (const [key, value] of Object.entries(child.schema.sortKeys)) {
+      if (typeof value === 'undefined' || String(value).trim().length === 0) {
+        continue;
+      }
+      valuesByKey.set(key, valuesByKey.get(key) ?? new Set<string>());
+      valuesByKey.get(key)?.add(String(value));
+      countsByKey.set(key, (countsByKey.get(key) ?? 0) + 1);
+    }
+  }
+  for (const [key, values] of valuesByKey) {
+    const count = countsByKey.get(key) ?? 0;
+    if (count > values.size) {
+      keys.add(key);
+    }
+  }
+  for (const view of block.schema.componentListViews) {
     if (view.groupKey) keys.add(view.groupKey);
   }
   return [...keys].sort((left, right) => left.localeCompare(right, undefined, { sensitivity: 'base' }));

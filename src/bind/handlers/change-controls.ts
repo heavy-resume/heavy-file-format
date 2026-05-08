@@ -60,6 +60,23 @@ export function bindChangeControls(app: HTMLElement): void {
       state.componentListReaderViews[`${sectionKey}:${blockId}`] = encodeComponentListRuntimeView({
         viewId: target.value,
         reversed: current.reversed,
+        groupKey: current.groupKey,
+      });
+      getRefreshReaderPanels()();
+      return;
+    }
+
+    if (field === 'component-list-reader-group' && target instanceof HTMLSelectElement) {
+      const sectionKey = target.dataset.sectionKey;
+      const blockId = target.dataset.blockId;
+      if (!sectionKey || !blockId) {
+        return;
+      }
+      const current = parseComponentListRuntimeView(state.componentListReaderViews[`${sectionKey}:${blockId}`] ?? '');
+      state.componentListReaderViews[`${sectionKey}:${blockId}`] = encodeComponentListRuntimeView({
+        viewId: current.viewId || target.dataset.viewId || '',
+        reversed: current.reversed,
+        groupKey: target.value,
       });
       getRefreshReaderPanels()();
       return;

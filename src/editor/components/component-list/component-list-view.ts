@@ -14,18 +14,25 @@ export type ComponentListResolvedItems =
 export interface ComponentListRuntimeViewState {
   viewId: string;
   reversed: boolean;
+  groupKey?: string;
 }
 
 const REVERSED_VIEW_SUFFIX = '::reversed';
+const GROUP_VIEW_MARKER = '::group=';
 
 export function encodeComponentListRuntimeView(state: ComponentListRuntimeViewState): string {
-  return `${state.viewId}${state.reversed ? REVERSED_VIEW_SUFFIX : ''}`;
+  return `${state.viewId}${state.reversed ? REVERSED_VIEW_SUFFIX : ''}${
+    typeof state.groupKey === 'string' ? `${GROUP_VIEW_MARKER}${encodeURIComponent(state.groupKey)}` : ''
+  }`;
 }
 
 export function parseComponentListRuntimeView(value = ''): ComponentListRuntimeViewState {
-  return value.endsWith(REVERSED_VIEW_SUFFIX)
-    ? { viewId: value.slice(0, -REVERSED_VIEW_SUFFIX.length), reversed: true }
-    : { viewId: value, reversed: false };
+  const groupIndex = value.indexOf(GROUP_VIEW_MARKER);
+  const withoutGroup = groupIndex >= 0 ? value.slice(0, groupIndex) : value;
+  const groupKey = groupIndex >= 0 ? decodeURIComponent(value.slice(groupIndex + GROUP_VIEW_MARKER.length)) : undefined;
+  return withoutGroup.endsWith(REVERSED_VIEW_SUFFIX)
+    ? { viewId: withoutGroup.slice(0, -REVERSED_VIEW_SUFFIX.length), reversed: true, groupKey }
+    : { viewId: withoutGroup, reversed: false, groupKey };
 }
 
 export function getComponentListActiveView(block: VisualBlock, runtimeViewId = ''): ComponentListView | null {
@@ -36,7 +43,8 @@ export function getComponentListActiveView(block: VisualBlock, runtimeViewId = '
   const runtime = parseComponentListRuntimeView(runtimeViewId.trim());
   const selected = runtime.viewId || block.schema.componentListDefaultView.trim();
   const view = views.find((candidate) => candidate.id === selected) ?? views[0] ?? null;
-  return view && runtime.reversed ? reverseComponentListView(view) : view;
+  const groupedView = view && typeof runtime.groupKey === 'string' ? { ...view, groupKey: runtime.groupKey } : view;
+  return groupedView && runtime.reversed ? reverseComponentListView(groupedView) : groupedView;
 }
 
 export function resolveComponentListItems(block: VisualBlock, runtimeViewId = ''): ComponentListResolvedItems {

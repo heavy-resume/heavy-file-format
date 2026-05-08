@@ -51,25 +51,25 @@ test('serializes editor inline code with literal angle brackets', () => {
   expect(turndown.turndown('<p>Use <code>&lt;tag&gt;</code> now</p>')).toBe('Use `<tag>` now');
 });
 
-test('renders hvy short annotations as responsive spans', () => {
-  const html = markdownToReaderHtml('Use <!--hvy:short {"to":"Tools & Tech"}-->Tools & Technologies<!--/hvy:short--> daily.');
-  expect(html).toContain('data-hvy-short="true"');
-  expect(html).toContain('<span class="hvy-short-full">Tools &amp; Technologies</span>');
-  expect(html).toContain('<span class="hvy-short-value">Tools &amp; Tech</span>');
+test('renders hvy alt annotations as responsive spans', () => {
+  const html = markdownToReaderHtml('Use <!--hvy:alt {"compact":"Tools & Tech"}-->Tools & Technologies<!--/hvy:alt--> daily.');
+  expect(html).toContain('data-hvy-alt="true"');
+  expect(html).toContain('<span class="hvy-alt-full">Tools &amp; Technologies</span>');
+  expect(html).toContain('<span class="hvy-alt-compact">Tools &amp; Tech</span>');
 });
 
-test('serializes editor short annotations back to hvy comments', () => {
+test('serializes editor alt annotations back to hvy comments', () => {
   expect(
     turndown.turndown(
-      '<p><span class="hvy-short" data-hvy-short="true"><span class="hvy-short-full">Tools &amp; Technologies</span><span class="hvy-short-value">Tools &amp; Tech</span></span></p>'
+      '<p><span class="hvy-alt" data-hvy-alt="true"><span class="hvy-alt-full">Tools &amp; Technologies</span><span class="hvy-alt-compact">Tools &amp; Tech</span></span></p>'
     )
-  ).toBe('<!--hvy:short {"to":"Tools & Tech"}-->Tools & Technologies<!--/hvy:short-->');
+  ).toBe('<!--hvy:alt {"compact":"Tools & Tech"}-->Tools & Technologies<!--/hvy:alt-->');
 });
 
-test('blank editor short annotation serializes as original full text', () => {
+test('blank editor alt annotation serializes as original full text', () => {
   expect(
     turndown.turndown(
-      '<p><span class="hvy-short" data-hvy-short="true"><span class="hvy-short-full">Tools &amp; Technologies</span><span class="hvy-short-value"></span></span></p>'
+      '<p><span class="hvy-alt" data-hvy-alt="true"><span class="hvy-alt-full">Tools &amp; Technologies</span><span class="hvy-alt-compact"></span></span></p>'
     )
   ).toBe('Tools & Technologies');
 });

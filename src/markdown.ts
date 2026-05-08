@@ -32,19 +32,19 @@ turndown.addRule('inline-code-literal-text', {
   },
 });
 
-turndown.addRule('hvy-short-annotation', {
-  filter: (node) => node.nodeType === 1 && (node as Element).getAttribute('data-hvy-short') === 'true',
+turndown.addRule('hvy-alt-annotation', {
+  filter: (node) => node.nodeType === 1 && (node as Element).getAttribute('data-hvy-alt') === 'true',
   replacement: (_content, node) => {
     const element = node as HTMLElement;
-    const full = (element.querySelector<HTMLElement>('.hvy-short-full')?.textContent ?? '').trim();
-    const value = (element.querySelector<HTMLElement>('.hvy-short-value')?.textContent ?? '').trim();
+    const full = (element.querySelector<HTMLElement>('.hvy-alt-full')?.textContent ?? '').trim();
+    const compact = (element.querySelector<HTMLElement>('.hvy-alt-compact')?.textContent ?? '').trim();
     if (full.length === 0) {
       return '';
     }
-    if (value.trim().length === 0) {
+    if (compact.trim().length === 0) {
       return full;
     }
-    return `<!--hvy:short ${JSON.stringify({ to: value })}-->${full}<!--/hvy:short-->`;
+    return `<!--hvy:alt ${JSON.stringify({ compact })}-->${full}<!--/hvy:alt-->`;
   },
 });
 
@@ -104,32 +104,32 @@ function extractResponsiveAnnotations(markdown: string, options: { editable: boo
     tokens.push({ token, html });
     return token;
   };
-  const withShort = markdown.replace(/<!--hvy:short\s+(\{.*?\})-->([\s\S]*?)<!--\/hvy:short-->/g, (_match, rawJson, fullText) => {
-    const parsed = parseShortAnnotationPayload(rawJson);
+  const withAlt = markdown.replace(/<!--hvy:alt\s+(\{.*?\})-->([\s\S]*?)<!--\/hvy:alt-->/g, (_match, rawJson, fullText) => {
+    const parsed = parseAltAnnotationPayload(rawJson);
     if (!parsed) {
       return fullText;
     }
-    return makeToken(renderShortAnnotationHtml(fullText, parsed.to, options.editable));
+    return makeToken(renderAltAnnotationHtml(fullText, parsed.compact, options.editable));
   });
-  const withNowrap = withShort.replace(/<!--hvy:nowrap-->([\s\S]*?)<!--\/hvy:nowrap-->/g, (_match, text) =>
+  const withNowrap = withAlt.replace(/<!--hvy:nowrap-->([\s\S]*?)<!--\/hvy:nowrap-->/g, (_match, text) =>
     makeToken(renderNowrapAnnotationHtml(text))
   );
   return { markdown: withNowrap, tokens };
 }
 
-export function renderShortAnnotationsAsFullText(markdown: string): string {
-  return replaceShortAnnotations(markdown, (_rawJson, fullText) => fullText);
+export function renderAltAnnotationsAsFullText(markdown: string): string {
+  return replaceAltAnnotations(markdown, (_rawJson, fullText) => fullText);
 }
 
-export function renderShortAnnotationsAsMobileText(markdown: string): string {
-  return replaceShortAnnotations(markdown, (rawJson, fullText) => parseShortAnnotationPayload(rawJson)?.to ?? fullText);
+export function renderAltAnnotationsAsMobileText(markdown: string): string {
+  return replaceAltAnnotations(markdown, (rawJson, fullText) => parseAltAnnotationPayload(rawJson)?.compact ?? fullText);
 }
 
-export function applyMobileShortAdjustment(fullMarkdown: string, mobileMarkdown: string): string {
-  const full = renderShortAnnotationsAsFullText(fullMarkdown).trim();
+export function applyMobileAltAdjustment(fullMarkdown: string, mobileMarkdown: string): string {
+  const full = renderAltAnnotationsAsFullText(fullMarkdown).trim();
   const mobile = mobileMarkdown.trim();
-  if (hasShortAnnotation(mobile)) {
-    return removeRedundantShortAnnotations(mobile);
+  if (hasAltAnnotation(mobile)) {
+    return removeRedundantAltAnnotations(mobile);
   }
   if (full.length === 0 || mobile.length === 0 || mobile === full) {
     return full;
@@ -141,72 +141,72 @@ export function applyMobileShortAdjustment(fullMarkdown: string, mobileMarkdown:
     if (mobileText.length === 0 || mobileText === fullHeading.text) {
       return full;
     }
-    return `${fullHeading.prefix}${formatShortAdjustment(fullHeading.text, mobileText)}`;
+    return `${fullHeading.prefix}${formatAltAdjustment(fullHeading.text, mobileText)}`;
   }
-  return formatShortAdjustment(full, mobile);
+  return formatAltAdjustment(full, mobile);
 }
 
-function hasShortAnnotation(markdown: string): boolean {
-  return /<!--hvy:short\s+\{.*?\}-->[\s\S]*?<!--\/hvy:short-->/.test(markdown);
+function hasAltAnnotation(markdown: string): boolean {
+  return /<!--hvy:alt\s+\{.*?\}-->[\s\S]*?<!--\/hvy:alt-->/.test(markdown);
 }
 
-function removeRedundantShortAnnotations(markdown: string): string {
-  return markdown.replace(/<!--hvy:short\s+(\{.*?\})-->([\s\S]*?)<!--\/hvy:short-->/g, (match, rawJson, fullText) => {
-    const shortText = parseShortAnnotationPayload(rawJson)?.to.trim() ?? '';
+function removeRedundantAltAnnotations(markdown: string): string {
+  return markdown.replace(/<!--hvy:alt\s+(\{.*?\})-->([\s\S]*?)<!--\/hvy:alt-->/g, (match, rawJson, fullText) => {
+    const compactText = parseAltAnnotationPayload(rawJson)?.compact.trim() ?? '';
     const normalizedFull = fullText.trim();
-    return shortText.length === 0 || shortText === normalizedFull ? fullText : match;
+    return compactText.length === 0 || compactText === normalizedFull ? fullText : match;
   });
 }
 
-function formatShortAnnotation(fullText: string, shortText: string): string {
-  return `<!--hvy:short ${JSON.stringify({ to: shortText })}-->${fullText}<!--/hvy:short-->`;
+function formatAltAnnotation(fullText: string, compactText: string): string {
+  return `<!--hvy:alt ${JSON.stringify({ compact: compactText })}-->${fullText}<!--/hvy:alt-->`;
 }
 
-function formatShortAdjustment(fullText: string, shortText: string): string {
-  const diff = getWordExpandedDiff(fullText, shortText);
+function formatAltAdjustment(fullText: string, compactText: string): string {
+  const diff = getWordExpandedDiff(fullText, compactText);
   if (!diff) {
     return fullText;
   }
-  return `${diff.prefix}${formatShortAnnotation(diff.full, diff.short)}${diff.suffix}`;
+  return `${diff.prefix}${formatAltAnnotation(diff.full, diff.compact)}${diff.suffix}`;
 }
 
-function getWordExpandedDiff(fullText: string, shortText: string): { prefix: string; full: string; short: string; suffix: string } | null {
-  if (fullText === shortText) {
+function getWordExpandedDiff(fullText: string, compactText: string): { prefix: string; full: string; compact: string; suffix: string } | null {
+  if (fullText === compactText) {
     return null;
   }
   let start = 0;
-  while (start < fullText.length && start < shortText.length && fullText[start] === shortText[start]) {
+  while (start < fullText.length && start < compactText.length && fullText[start] === compactText[start]) {
     start += 1;
   }
 
   let fullEnd = fullText.length;
-  let shortEnd = shortText.length;
-  while (fullEnd > start && shortEnd > start && fullText[fullEnd - 1] === shortText[shortEnd - 1]) {
+  let compactEnd = compactText.length;
+  while (fullEnd > start && compactEnd > start && fullText[fullEnd - 1] === compactText[compactEnd - 1]) {
     fullEnd -= 1;
-    shortEnd -= 1;
+    compactEnd -= 1;
   }
 
-  while (start > 0 && !isShortDiffBoundary(fullText[start - 1])) {
+  while (start > 0 && !isAltDiffBoundary(fullText[start - 1])) {
     start -= 1;
   }
-  while (fullEnd < fullText.length && !isShortDiffBoundary(fullText[fullEnd])) {
+  while (fullEnd < fullText.length && !isAltDiffBoundary(fullText[fullEnd])) {
     fullEnd += 1;
   }
-  while (shortEnd < shortText.length && !isShortDiffBoundary(shortText[shortEnd])) {
-    shortEnd += 1;
+  while (compactEnd < compactText.length && !isAltDiffBoundary(compactText[compactEnd])) {
+    compactEnd += 1;
   }
 
   const prefix = fullText.slice(0, start);
   const suffix = fullText.slice(fullEnd);
   const full = fullText.slice(start, fullEnd).trim();
-  const short = shortText.slice(start, shortEnd).trim();
-  if (full.length === 0 || short.length === 0 || full === short) {
+  const compact = compactText.slice(start, compactEnd).trim();
+  if (full.length === 0 || compact.length === 0 || full === compact) {
     return null;
   }
-  return { prefix, full, short, suffix };
+  return { prefix, full, compact, suffix };
 }
 
-function isShortDiffBoundary(char: string | undefined): boolean {
+function isAltDiffBoundary(char: string | undefined): boolean {
   return !char || /\s/.test(char) || /[()[\]{}<>.,;:!?/\\|"'`~+=*&^%$#@-]/.test(char);
 }
 
@@ -219,8 +219,8 @@ function parseSimpleAtxHeading(markdown: string): { prefix: string; text: string
   return text.length > 0 ? { prefix: `${match[1]}${match[2]}`, text } : null;
 }
 
-function replaceShortAnnotations(markdown: string, replacement: (rawJson: string, fullText: string) => string): string {
-  return (markdown || '').replace(/<!--hvy:short\s+(\{.*?\})-->([\s\S]*?)<!--\/hvy:short-->/g, (_match, rawJson, fullText) =>
+function replaceAltAnnotations(markdown: string, replacement: (rawJson: string, fullText: string) => string): string {
+  return (markdown || '').replace(/<!--hvy:alt\s+(\{.*?\})-->([\s\S]*?)<!--\/hvy:alt-->/g, (_match, rawJson, fullText) =>
     replacement(rawJson, fullText)
   );
 }
@@ -229,18 +229,18 @@ function restoreResponsiveAnnotationTokens(html: string, tokens: ResponsiveAnnot
   return tokens.reduce((result, token) => result.replaceAll(token.token, token.html), html);
 }
 
-function parseShortAnnotationPayload(rawJson: string): { to: string } | null {
+function parseAltAnnotationPayload(rawJson: string): { compact: string } | null {
   try {
-    const parsed = JSON.parse(rawJson) as { to?: unknown };
-    return typeof parsed.to === 'string' ? { to: parsed.to } : null;
+    const parsed = JSON.parse(rawJson) as { compact?: unknown };
+    return typeof parsed.compact === 'string' ? { compact: parsed.compact } : null;
   } catch {
     return null;
   }
 }
 
-function renderShortAnnotationHtml(fullText: string, shortText: string, editable: boolean): string {
+function renderAltAnnotationHtml(fullText: string, compactText: string, editable: boolean): string {
   const editableAttrs = editable ? ' contenteditable="true" spellcheck="false"' : '';
-  return `<span class="hvy-short" data-hvy-short="true"><span class="hvy-short-full">${escapeHtml(fullText)}</span><span class="hvy-short-value"${editableAttrs}>${escapeHtml(shortText)}</span></span>`;
+  return `<span class="hvy-alt" data-hvy-alt="true"><span class="hvy-alt-full">${escapeHtml(fullText)}</span><span class="hvy-alt-compact"${editableAttrs}>${escapeHtml(compactText)}</span></span>`;
 }
 
 function renderNowrapAnnotationHtml(text: string): string {

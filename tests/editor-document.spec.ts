@@ -134,16 +134,16 @@ test('responsive preview applies container query defaults', async ({ page }) => 
   const editor = page.locator('.rich-editor').first();
   await editor.evaluate((node) => {
     node.innerHTML =
-      '<p><span class="hvy-short" data-hvy-short="true"><span class="hvy-short-full">Tools &amp; Technologies</span><span class="hvy-short-value">Tools &amp; Tech</span></span></p>';
+      '<p><span class="hvy-alt" data-hvy-alt="true"><span class="hvy-alt-full">Tools &amp; Technologies</span><span class="hvy-alt-compact">Tools &amp; Tech</span></span></p>';
     node.dispatchEvent(new InputEvent('input', { bubbles: true }));
   });
 
-  await expect(editor.locator('.hvy-short-full')).toBeVisible();
-  await expect(editor.locator('.hvy-short-value')).toBeHidden();
+  await expect(editor.locator('.hvy-alt-full')).toBeVisible();
+  await expect(editor.locator('.hvy-alt-compact')).toBeHidden();
 
   await page.getByRole('button', { name: 'Phone 390' }).click();
-  await expect(editor.locator('.hvy-short-full')).toBeHidden();
-  await expect(editor.locator('.hvy-short-value')).toBeVisible();
+  await expect(editor.locator('.hvy-alt-full')).toBeHidden();
+  await expect(editor.locator('.hvy-alt-compact')).toBeVisible();
 });
 
 test('tables resize inside narrow responsive preview containers', async ({ page }) => {
@@ -157,7 +157,7 @@ hvy_version: 0.1
 <!--hvy: {"id":"table-test"}-->
 #! Table Test
 
-<!--hvy:table {"id":"narrow-table","tableColumns":["Tool","<!--hvy:short {\\"to\\":\\"Desc\\"}-->Description<!--/hvy:short-->","Status"],"tableShowHeader":true,"tableRows":[{"cells":["Heavy File Format","Responsive table text should wrap inside the phone preview instead of pushing the table wider than its container.","In progress"]}]}-->
+<!--hvy:table {"id":"narrow-table","tableColumns":["Tool","<!--hvy:alt {\\"compact\\":\\"Desc\\"}-->Description<!--/hvy:alt-->","Status"],"tableShowHeader":true,"tableRows":[{"cells":["Heavy File Format","Responsive table text should wrap inside the phone preview instead of pushing the table wider than its container.","In progress"]}]}-->
 `);
   await page.getByRole('button', { name: 'Apply' }).click();
   await page.getByRole('button', { name: 'Viewer' }).click();
@@ -171,9 +171,9 @@ hvy_version: 0.1
   await expect.poll(async () => Math.round((await frame.boundingBox())?.width ?? 0)).toBeLessThan(360);
   await expect.poll(async () => Math.round((await table.boundingBox())?.width ?? 0)).toBeLessThanOrEqual(Math.round((await frame.boundingBox())?.width ?? 0) + 1);
   await expect(table.locator('th').first()).toHaveAttribute('title', 'Tool');
-  await expect(table.locator('th').nth(1).locator('.hvy-short-full')).toBeHidden();
-  await expect(table.locator('th').nth(1).locator('.hvy-short-value')).toHaveText('Desc');
-  await expect(table.locator('th').nth(1).locator('.hvy-short-value')).toHaveCSS('border-style', 'none');
+  await expect(table.locator('th').nth(1).locator('.hvy-alt-full')).toBeHidden();
+  await expect(table.locator('th').nth(1).locator('.hvy-alt-compact')).toHaveText('Desc');
+  await expect(table.locator('th').nth(1).locator('.hvy-alt-compact')).toHaveCSS('border-style', 'none');
   await expect(table.locator('td').nth(1)).toHaveCSS('white-space', 'nowrap');
   await expect(table.locator('td').nth(1)).toHaveCSS('text-overflow', 'ellipsis');
   await expect(table.locator('td').nth(1)).toHaveAttribute('title', 'Responsive table text should wrap inside the phone preview instead of pushing the table wider than its container.');

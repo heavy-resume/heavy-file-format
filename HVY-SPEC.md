@@ -255,11 +255,11 @@ Block content indentation is structural and MUST NOT be interpreted as Markdown 
 Text content MAY include paired HVY comment annotations for explicit responsive hints:
 
 ```markdown
-<!--hvy:short {"to":"Tools & Tech"}-->Tools & Technologies<!--/hvy:short-->
+<!--hvy:alt {"compact":"Tools & Tech"}-->Tools & Technologies<!--/hvy:alt-->
 <!--hvy:nowrap-->Tools & Technologies<!--/hvy:nowrap-->
 ```
 
-`short` marks a full phrase and an explicit shorter replacement for constrained layouts. The payload MUST be a JSON object with string field `to`. Renderers that support responsive text SHOULD display the full phrase in unconstrained containers and the `to` value in constrained containers. The reference implementation treats tablet-or-narrower document containers as constrained.
+`alt` marks a full phrase and an explicit compact replacement for constrained layouts. The payload MUST be a JSON object with string field `compact`. Renderers that support responsive text SHOULD display the full phrase in unconstrained containers and the `compact` value in constrained containers. The reference implementation treats tablet-or-narrower document containers as constrained.
 
 `nowrap` marks a phrase that SHOULD stay on one line when the renderer supports it. Renderers MAY shrink, clip, or ellipsize the phrase according to their own CSS defaults.
 

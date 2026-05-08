@@ -125,9 +125,9 @@
   background: transparent;
 }
 
-.hvy-surface-phone .table-inline-edit-shell:not(.is-previewing-full):has([data-hvy-short="true"]) .table-inline-toolbar [data-rich-action="short"],
-.hvy-surface-tablet .table-inline-edit-shell:not(.is-previewing-full):has([data-hvy-short="true"]) .table-inline-toolbar [data-rich-action="short"],
-.table-inline-edit-shell.is-previewing-short .table-inline-toolbar [data-rich-action="short"],
+.hvy-surface-phone .table-inline-edit-shell:not(.is-previewing-full):has([data-hvy-alt="true"]) .table-inline-toolbar [data-rich-action="alt"],
+.hvy-surface-tablet .table-inline-edit-shell:not(.is-previewing-full):has([data-hvy-alt="true"]) .table-inline-toolbar [data-rich-action="alt"],
+.table-inline-edit-shell.is-previewing-compact .table-inline-toolbar [data-rich-action="alt"],
 .table-inline-edit-shell.is-previewing-nowrap .table-inline-toolbar [data-rich-action="nowrap"] {
   background: var(--hvy-button-bg);
   border-color: var(--hvy-button-bg);
@@ -179,29 +179,29 @@
   overflow-wrap: break-word;
 }
 
-.table-inline-text .hvy-short-full {
+.table-inline-text .hvy-alt-full {
   display: inline;
 }
 
-.table-inline-text .hvy-short-value {
+.table-inline-text .hvy-alt-compact {
   display: none;
 }
 
-.table-inline-edit-shell.is-previewing-short .hvy-short-full {
+.table-inline-edit-shell.is-previewing-compact .hvy-alt-full {
   display: none;
 }
 
-.table-inline-edit-shell.is-previewing-short .hvy-short-value {
+.table-inline-edit-shell.is-previewing-compact .hvy-alt-compact {
   display: inline-block;
 }
 
-.hvy-surface-phone .table-inline-edit-shell:not(.is-previewing-full) .hvy-short-full,
-.hvy-surface-tablet .table-inline-edit-shell:not(.is-previewing-full) .hvy-short-full {
+.hvy-surface-phone .table-inline-edit-shell:not(.is-previewing-full) .hvy-alt-full,
+.hvy-surface-tablet .table-inline-edit-shell:not(.is-previewing-full) .hvy-alt-full {
   display: none;
 }
 
-.hvy-surface-phone .table-inline-edit-shell:not(.is-previewing-full) .hvy-short-value,
-.hvy-surface-tablet .table-inline-edit-shell:not(.is-previewing-full) .hvy-short-value {
+.hvy-surface-phone .table-inline-edit-shell:not(.is-previewing-full) .hvy-alt-compact,
+.hvy-surface-tablet .table-inline-edit-shell:not(.is-previewing-full) .hvy-alt-compact {
   display: inline-block;
 }
 

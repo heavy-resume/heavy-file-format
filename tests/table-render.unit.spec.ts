@@ -129,7 +129,7 @@ test('table editor renders inline cell content without paragraph wrappers', () =
   const helpers = createHelpers();
   const html = renderTableEditor(
     section.key,
-    createTableBlock([['Staff Engineer', '<!--hvy:short {"to":"Tech"}-->Technologies<!--/hvy:short-->']]),
+    createTableBlock([['Staff Engineer', '<!--hvy:alt {"compact":"Tech"}-->Technologies<!--/hvy:alt-->']]),
     {
       ...helpers,
       markdownToEditorHtml: (markdown) => `<p>${markdown}</p>\n`,
@@ -139,5 +139,5 @@ test('table editor renders inline cell content without paragraph wrappers', () =
   expect(html).not.toContain('<p>');
   expect(html).not.toContain('</p>');
   expect(html).toContain('Staff Engineer');
-  expect(html).toContain('<!--hvy:short {"to":"Tech"}-->Technologies<!--/hvy:short-->');
+  expect(html).toContain('<!--hvy:alt {"compact":"Tech"}-->Technologies<!--/hvy:alt-->');
 });

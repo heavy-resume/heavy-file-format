@@ -181,6 +181,18 @@
   padding-left: 0;
 }
 
+.reader-block > :first-child,
+.reader-section-content > :first-child,
+.reader-grid-cell > :first-child {
+  margin-top: 0;
+}
+
+.reader-block > :last-child,
+.reader-section-content > :last-child,
+.reader-grid-cell > :last-child {
+  margin-bottom: 0;
+}
+
 .reader-block.is-ai-target {
   position: relative;
   z-index: 4;
@@ -197,6 +209,12 @@
 
 .reader-block code {
   font-family: "JetBrains Mono", "Fira Code", monospace;
+}
+
+.reader-block p,
+.reader-block ul,
+.reader-block ol {
+  margin: 0 0 0.45rem;
 }
 
 .reader-block h1,

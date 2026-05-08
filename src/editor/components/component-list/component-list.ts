@@ -123,26 +123,37 @@ export const renderComponentListReader: ComponentReaderRenderer = (section, bloc
 function renderComponentListDefaultDisplayEditor(sectionKey: string, block: VisualBlock, helpers: Parameters<ComponentEditorRenderer>[2]): string {
   const sortKeys = getAvailableSortKeys(block);
   const groupKeys = getAvailableGroupKeys(block);
+  const sortControls = sortKeys.length > 0
+    ? `<label class="component-list-view-row-label">
+        <span>Sort</span>
+        ${renderKeySelect('component-list-default-sort-key', sectionKey, block.id, block.schema.componentListDefaultSortKey, sortKeys, helpers)}
+      </label>
+      ${block.schema.componentListDefaultSortKey.trim()
+        ? `<label class="component-list-view-row-label">
+        <span>Order</span>
+        <select data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}" data-field="component-list-default-sort-direction">
+          <option value="asc"${block.schema.componentListDefaultSortDirection === 'asc' ? ' selected' : ''}>Ascending</option>
+          <option value="desc"${block.schema.componentListDefaultSortDirection === 'desc' ? ' selected' : ''}>Descending</option>
+        </select>
+      </label>`
+        : ''}`
+    : '';
+  const groupControl = groupKeys.length > 0
+    ? `<label class="component-list-view-row-label">
+        <span>Group</span>
+        ${renderKeySelect('component-list-default-group-key', sectionKey, block.id, block.schema.componentListDefaultGroupKey, groupKeys, helpers)}
+      </label>`
+    : '';
+  if (!sortControls && !groupControl) {
+    return '';
+  }
   return `<section class="component-list-view-editor" aria-label="Default list display">
     <div class="component-list-view-editor-head">
       <strong>Default Display</strong>
     </div>
     <div class="component-list-view-rows">
-      <label class="component-list-view-row-label">
-        <span>Sort</span>
-        ${renderKeySelect('component-list-default-sort-key', sectionKey, block.id, block.schema.componentListDefaultSortKey, sortKeys, helpers)}
-      </label>
-      <label class="component-list-view-row-label">
-        <span>Order</span>
-        <select data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}" data-field="component-list-default-sort-direction">
-          <option value="asc"${block.schema.componentListDefaultSortDirection === 'asc' ? ' selected' : ''}>A-Z / Low to high</option>
-          <option value="desc"${block.schema.componentListDefaultSortDirection === 'desc' ? ' selected' : ''}>Z-A / High to low</option>
-        </select>
-      </label>
-      <label class="component-list-view-row-label">
-        <span>Group</span>
-        ${renderKeySelect('component-list-default-group-key', sectionKey, block.id, block.schema.componentListDefaultGroupKey, groupKeys, helpers)}
-      </label>
+      ${sortControls}
+      ${groupControl}
     </div>
   </section>`;
 }

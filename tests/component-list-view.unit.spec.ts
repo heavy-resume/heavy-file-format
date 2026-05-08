@@ -117,3 +117,27 @@ test('component-list runtime grouping can override the selected group', () => {
     expect(expectedResult.blocks.map((block) => block.text)).toEqual(['typescript', 'sqlite', 'postgres']);
   }
 });
+
+test('component-list groups sort alphabetically when no sort key is selected', () => {
+  const list: VisualBlock = {
+    id: 'skills',
+    text: '',
+    schemaMode: false,
+    schema: {
+      ...defaultBlockSchema('component-list'),
+      componentListBlocks: [
+        textItem('postgres', { Category: 'Database' }),
+        textItem('typescript', { Category: 'Language' }),
+        textItem('aws', { Category: 'Cloud' }),
+      ],
+      componentListDefaultGroupKey: 'Category',
+    },
+  };
+
+  const expectedResult = resolveComponentListItems(list);
+
+  expect(expectedResult.kind).toBe('groups');
+  if (expectedResult.kind === 'groups') {
+    expect(expectedResult.groups.map((group) => group.label)).toEqual(['Cloud', 'Database', 'Language']);
+  }
+});

@@ -94,7 +94,7 @@ export function resolveComponentListItems(block: VisualBlock, runtimeViewId = ''
     }))
     .sort((left, right) => {
       if (!display.sortKey) {
-        return left.firstIndex - right.firstIndex;
+        return left.label.localeCompare(right.label, undefined, { numeric: true, sensitivity: 'base' }) || left.firstIndex - right.firstIndex;
       }
       const compared = compareSortValues(left.strongestValue, right.strongestValue, display.direction);
       return compared || left.firstIndex - right.firstIndex;

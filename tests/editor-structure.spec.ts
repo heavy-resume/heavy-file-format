@@ -344,6 +344,55 @@ hvy_version: 0.1
   await expect(controls.first().locator('[data-reader-action="toggle-component-list-reverse"]')).toBeVisible();
 });
 
+test('component-list default display editor hides unavailable controls', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"lists"}-->
+#! Lists
+
+<!--hvy:component-list {"id":"plain-list","componentListComponent":"text"}-->
+
+ <!--hvy:component-list:0 {}-->
+
+  <!--hvy:text {}-->
+   Plain
+
+<!--hvy:component-list {"id":"group-list","componentListComponent":"text"}-->
+
+ <!--hvy:component-list:0 {}-->
+
+  <!--hvy:text {"sortKeys":{"Category":"Database"}}-->
+   PostgreSQL
+
+ <!--hvy:component-list:1 {}-->
+
+  <!--hvy:text {"sortKeys":{"Category":"Language"}}-->
+   TypeScript
+
+ <!--hvy:component-list:2 {}-->
+
+  <!--hvy:text {"sortKeys":{"Category":"Database"}}-->
+   SQLite
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('.editor-block-passive', { hasText: 'Plain' }).first().click();
+  await expect(page.locator('.component-list-view-editor')).toHaveCount(0);
+
+  await page.locator('.editor-block-passive', { hasText: 'PostgreSQL' }).first().click();
+  const editor = page.locator('.component-list-view-editor');
+  await expect(editor).toBeVisible();
+  await expect(editor.locator('[data-field="component-list-default-sort-key"]')).toBeVisible();
+  await expect(editor.locator('[data-field="component-list-default-sort-direction"]')).toHaveCount(0);
+  await expect(editor.locator('[data-field="component-list-default-group-key"]')).toBeVisible();
+});
+
 test('text toolbar fill-in converts selected text to a fill-in slot', async ({ page }) => {
   await page.goto('/');
 

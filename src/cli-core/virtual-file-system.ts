@@ -541,6 +541,7 @@ function blockSchemaToCliJson(schema: BlockSchema): JsonObject {
     align: schema.align,
     slot: schema.slot,
     sortKeys: schema.sortKeys,
+    groupKeys: schema.groupKeys,
     tags: schema.tags,
     description: schema.description,
     placeholder: schema.placeholder,
@@ -648,6 +649,9 @@ function applyBlockSchemaJson(schema: BlockSchema, component: string, value: Jso
   if (typeof value.css === 'string') schema.css = value.css;
   if (value.sortKeys && typeof value.sortKeys === 'object' && !Array.isArray(value.sortKeys)) {
     schema.sortKeys = parseSortKeys(value.sortKeys);
+  }
+  if (value.groupKeys && typeof value.groupKeys === 'object' && !Array.isArray(value.groupKeys)) {
+    schema.groupKeys = parseGroupKeys(value.groupKeys);
   }
   if (typeof value.lock === 'boolean') schema.lock = value.lock;
   if (value.align === 'left' || value.align === 'center' || value.align === 'right') schema.align = value.align;
@@ -797,6 +801,16 @@ function parseSortKeys(value: object): BlockSchema['sortKeys'] {
     }
   }
   return sortKeys;
+}
+
+function parseGroupKeys(value: object): BlockSchema['groupKeys'] {
+  const groupKeys: BlockSchema['groupKeys'] = {};
+  Object.entries(value).forEach(([key, raw]) => {
+    if (typeof raw === 'string') {
+      groupKeys[key] = raw;
+    }
+  });
+  return groupKeys;
 }
 
 function addFormScriptFiles(entries: Map<string, HvyVirtualEntry>, block: VisualBlock, blockPath: string): void {

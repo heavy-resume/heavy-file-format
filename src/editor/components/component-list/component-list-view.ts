@@ -67,7 +67,7 @@ export function resolveComponentListItems(block: VisualBlock, runtimeViewId = ''
   const groupsByKey = new Map<string, { blocks: VisualBlock[]; strongestValue: SortKeyValue; firstIndex: number }>();
   const missingBlocks: VisualBlock[] = [];
   blocks.forEach((item, index) => {
-    const groupValue = item.schema.sortKeys[display.groupKey];
+    const groupValue = item.schema.groupKeys[display.groupKey];
     if (typeof groupValue === 'undefined') {
       missingBlocks.push(item);
       return;

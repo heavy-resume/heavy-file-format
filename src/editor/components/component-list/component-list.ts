@@ -188,7 +188,7 @@ function getAvailableGroupKeys(block: VisualBlock): string[] {
   const valuesByKey = new Map<string, Set<string>>();
   const countsByKey = new Map<string, number>();
   for (const child of block.schema.componentListBlocks ?? []) {
-    for (const [key, value] of Object.entries(child.schema.sortKeys)) {
+    for (const [key, value] of Object.entries(child.schema.groupKeys)) {
       if (typeof value === 'undefined' || String(value).trim().length === 0) {
         continue;
       }

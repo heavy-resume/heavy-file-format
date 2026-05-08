@@ -41,6 +41,7 @@ export interface BlockSchema {
   gridColumns: number;
   gridItems: GridItem[];
   sortKeys: Record<string, SortKeyValue>;
+  groupKeys: Record<string, string>;
   tags: string;
   description: string;
   placeholder: string;

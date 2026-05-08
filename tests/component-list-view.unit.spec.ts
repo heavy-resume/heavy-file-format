@@ -4,7 +4,11 @@ import { defaultBlockSchema } from '../src/document-factory';
 import { encodeComponentListRuntimeView, resolveComponentListItems } from '../src/editor/components/component-list/component-list-view';
 import type { VisualBlock } from '../src/editor/types';
 
-function textItem(label: string, sortKeys: VisualBlock['schema']['sortKeys'] = {}): VisualBlock {
+function textItem(
+  label: string,
+  sortKeys: VisualBlock['schema']['sortKeys'] = {},
+  groupKeys: VisualBlock['schema']['groupKeys'] = {},
+): VisualBlock {
   return {
     id: `block-${label}`,
     text: label,
@@ -12,6 +16,7 @@ function textItem(label: string, sortKeys: VisualBlock['schema']['sortKeys'] = {
     schema: {
       ...defaultBlockSchema('text'),
       sortKeys,
+      groupKeys,
     },
   };
 }
@@ -49,9 +54,9 @@ test('component-list default grouping creates sorted virtual groups', () => {
     schema: {
       ...defaultBlockSchema('component-list'),
       componentListBlocks: [
-        textItem('postgres', { 'Job Match': 80, Category: 'Database' }),
-        textItem('typescript', { 'Job Match': 95, Category: 'Language' }),
-        textItem('sqlite', { 'Job Match': 90, Category: 'Database' }),
+        textItem('postgres', { 'Job Match': 80 }, { Category: 'Database' }),
+        textItem('typescript', { 'Job Match': 95 }, { Category: 'Language' }),
+        textItem('sqlite', { 'Job Match': 90 }, { Category: 'Database' }),
       ],
       componentListDefaultSortKey: 'Job Match',
       componentListDefaultSortDirection: 'desc',
@@ -100,9 +105,9 @@ test('component-list runtime grouping can override the selected group', () => {
     schema: {
       ...defaultBlockSchema('component-list'),
       componentListBlocks: [
-        textItem('postgres', { Strength: 80, Category: 'Database' }),
-        textItem('typescript', { Strength: 95, Category: 'Language' }),
-        textItem('sqlite', { Strength: 90, Category: 'Database' }),
+        textItem('postgres', { Strength: 80 }, { Category: 'Database' }),
+        textItem('typescript', { Strength: 95 }, { Category: 'Language' }),
+        textItem('sqlite', { Strength: 90 }, { Category: 'Database' }),
       ],
       componentListDefaultSortKey: 'Strength',
       componentListDefaultSortDirection: 'desc',
@@ -126,9 +131,9 @@ test('component-list groups sort alphabetically when no sort key is selected', (
     schema: {
       ...defaultBlockSchema('component-list'),
       componentListBlocks: [
-        textItem('postgres', { Category: 'Database' }),
-        textItem('typescript', { Category: 'Language' }),
-        textItem('aws', { Category: 'Cloud' }),
+        textItem('postgres', {}, { Category: 'Database' }),
+        textItem('typescript', {}, { Category: 'Language' }),
+        textItem('aws', {}, { Category: 'Cloud' }),
       ],
       componentListDefaultGroupKey: 'Category',
     },

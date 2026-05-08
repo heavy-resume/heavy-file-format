@@ -745,7 +745,7 @@ component_defs:
 
   <!--hvy:component-list:0 {}-->
 
-   <!--hvy:skill-record {"id":"tool-typescript","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"TypeScript","Strength":96,"Category":"Programming Languages"},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+   <!--hvy:skill-record {"id":"tool-typescript","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"TypeScript","Strength":96},"groupKeys":{"Category":"Programming Languages"},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
     <!--hvy:expandable:stub {}-->
 
@@ -787,7 +787,7 @@ component_defs:
 
   <!--hvy:component-list:1 {}-->
 
-   <!--hvy:skill-record {"id":"tool-python","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"Python","Strength":91,"Category":"Programming Languages"},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+   <!--hvy:skill-record {"id":"tool-python","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"Python","Strength":91},"groupKeys":{"Category":"Programming Languages"},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
     <!--hvy:expandable:stub {}-->
 
@@ -846,7 +846,7 @@ component_defs:
 
   <!--hvy:component-list:2 {}-->
 
-   <!--hvy:skill-record {"id":"tool-c-cpp","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"C/C++","Strength":72,"Category":"Programming Languages"},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+   <!--hvy:skill-record {"id":"tool-c-cpp","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"C/C++","Strength":72},"groupKeys":{"Category":"Programming Languages"},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
     <!--hvy:expandable:stub {}-->
 
@@ -888,7 +888,7 @@ component_defs:
 
   <!--hvy:component-list:3 {}-->
 
-   <!--hvy:skill-record {"id":"tool-developer-containers","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"Developer Containers","Strength":89,"Category":"Development Environments"},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+   <!--hvy:skill-record {"id":"tool-developer-containers","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"Developer Containers","Strength":89},"groupKeys":{"Category":"Development Environments"},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
     <!--hvy:expandable:stub {}-->
 
@@ -934,7 +934,7 @@ component_defs:
 
   <!--hvy:component-list:4 {}-->
 
-   <!--hvy:skill-record {"id":"tool-openai-api","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"OpenAI API","Strength":86,"Category":"AI / Agent Tooling"},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+   <!--hvy:skill-record {"id":"tool-openai-api","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"OpenAI API","Strength":86},"groupKeys":{"Category":"AI / Agent Tooling"},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
     <!--hvy:expandable:stub {}-->
 
@@ -976,7 +976,7 @@ component_defs:
 
   <!--hvy:component-list:5 {}-->
 
-   <!--hvy:skill-record {"id":"tool-github-codespaces","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"GitHub Codespaces","Strength":82,"Category":"Development Environments"},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+   <!--hvy:skill-record {"id":"tool-github-codespaces","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"GitHub Codespaces","Strength":82},"groupKeys":{"Category":"Development Environments"},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
     <!--hvy:expandable:stub {}-->
 
@@ -1018,7 +1018,7 @@ component_defs:
 
   <!--hvy:component-list:6 {}-->
 
-   <!--hvy:skill-record {"id":"tool-superagi","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"SuperAGI","Strength":76,"Category":"AI / Agent Tooling"},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+   <!--hvy:skill-record {"id":"tool-superagi","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"SuperAGI","Strength":76},"groupKeys":{"Category":"AI / Agent Tooling"},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
     <!--hvy:expandable:stub {}-->
 

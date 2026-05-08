@@ -214,13 +214,14 @@ export function bindInputMisc(app: HTMLElement): void {
       if (!context) {
         return;
       }
+      const keyMap = target.dataset.displayKeyKind === 'group' ? context.block.schema.groupKeys : context.block.schema.sortKeys;
       const oldName = target.dataset.sortKeyName ?? '';
       const newName = target.value.trim();
-      const hasOldKey = oldName && Object.prototype.hasOwnProperty.call(context.block.schema.sortKeys, oldName);
+      const hasOldKey = oldName && Object.prototype.hasOwnProperty.call(keyMap, oldName);
       if (hasOldKey && newName && oldName !== newName) {
-        const oldValue = context.block.schema.sortKeys[oldName];
-        delete context.block.schema.sortKeys[oldName];
-        context.block.schema.sortKeys[newName] = oldValue ?? '';
+        const oldValue = keyMap[oldName];
+        delete keyMap[oldName];
+        keyMap[newName] = oldValue ?? '';
         target.dataset.sortKeyName = newName;
         target.dataset.sortKeyPresent = 'true';
         updateSortKeyRowName(target, newName);
@@ -238,11 +239,13 @@ export function bindInputMisc(app: HTMLElement): void {
       if (!context) {
         return;
       }
+      const isGroupKey = target.dataset.displayKeyKind === 'group';
+      const keyMap = isGroupKey ? context.block.schema.groupKeys : context.block.schema.sortKeys;
       const name = target.dataset.sortKeyName ?? '';
       if (!name) {
         return;
       }
-      context.block.schema.sortKeys[name] = parseSortKeyValue(target.value);
+      keyMap[name] = isGroupKey ? target.value : parseSortKeyValue(target.value);
       const nameInput = target.parentElement?.querySelector<HTMLInputElement>('[data-field="block-sort-key-name"]');
       if (nameInput) {
         nameInput.dataset.sortKeyPresent = 'true';

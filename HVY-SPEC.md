@@ -211,6 +211,7 @@ Common block metadata fields include:
 - `align`
 - `slot`
 - `sortKeys`
+- `groupKeys`
 - `tags`
 - `description`
 - `placeholder`
@@ -223,7 +224,8 @@ Inline `css` strings are declaration-only values equivalent to an HTML `style` a
 `placeholder` is an optional string. Display it as plain hint text when the block's content is empty, helping template authors communicate intent to document authors. It applies to text-based blocks and grid item blocks. It is not parsed as Markdown or HVY content.
 `fillIn` is an optional boolean for text blocks. When true, authoring tools SHOULD treat `<!-- value -->` in the text body as the only editable fill-in region in basic editing modes. Text outside the marker is scaffold text and SHOULD NOT be edited by constrained/basic editors. When the marker is filled or removed and no `<!-- value -->` marker remains, tools SHOULD treat the block like regular text again.
 `componentListItemLabel` is an optional human-readable singular label for items added to a `component-list`, such as `"skill"` or `"tool / tech"`. Authoring tools SHOULD use it in add/edit prompts. If omitted, tools SHOULD derive a readable fallback from `componentListComponent` by converting separators to spaces and dropping generic suffixes such as `record`, `entry`, or `item`.
-`sortKeys` is an optional object on any block. Keys are human-readable sort names and MAY contain spaces. Values MUST be strings or finite numbers. Component-list views use these values for sorting and grouping without changing canonical document order.
+`sortKeys` is an optional object on any block. Keys are human-readable sort names and MAY contain spaces. Values MUST be strings or finite numbers. Component-list views use these values for sorting without changing source document order.
+`groupKeys` is an optional object on any block. Keys are human-readable grouping names and MAY contain spaces. Values MUST be strings. Component-list views use these values to create reader-only grouped displays.
 
 Section metadata also includes optional presentation keys such as:
 - `expanded`
@@ -316,12 +318,12 @@ Component-list display defaults are optional reader defaults over the same sourc
 ```markdown
 <!--hvy:component-list {"componentListComponent":"xref-card","componentListDefaultSortKey":"Job Match","componentListDefaultSortDirection":"desc","componentListDefaultGroupKey":"Category","componentListGroupCollapsedPreviewRem":3}-->
  <!--hvy:component-list:0 {}>
-  <!--hvy:xref-card {"xrefTitle":"Postgres","xrefTarget":"skill-postgres","sortKeys":{"Job Match":92,"Category":"Database"}}-->
+  <!--hvy:xref-card {"xrefTitle":"Postgres","xrefTarget":"skill-postgres","sortKeys":{"Job Match":92},"groupKeys":{"Category":"Database"}}-->
 ```
 
-`componentListDefaultSortKey` names the item-owned `sortKeys` key readers SHOULD sort by when no runtime reader override is supplied. Blank or omitted means `None`, so items render in source order. `componentListDefaultSortDirection` is `"asc"` or `"desc"` and defaults to `"asc"`. `componentListDefaultGroupKey` names the item-owned key readers SHOULD group by; blank or omitted means `None`. `componentListGroupCollapsedPreviewRem` controls grouped virtual container preview height in `rem` units and defaults to `3`.
+`componentListDefaultSortKey` names the item-owned `sortKeys` key readers SHOULD sort by when no runtime reader override is supplied. Blank or omitted means `None`, so items render in source order. `componentListDefaultSortDirection` is `"asc"` or `"desc"` and defaults to `"asc"`. `componentListDefaultGroupKey` names the item-owned `groupKeys` key readers SHOULD group by; blank or omitted means `None`. `componentListGroupCollapsedPreviewRem` controls grouped virtual container preview height in `rem` units and defaults to `3`.
 
-When sorting is active, child blocks that have the selected sort key render before child blocks that do not. Keyed children are sorted by the selected direction; missing-key children keep source order after keyed children. Ties keep source order. If grouping is active, readers SHOULD create virtual container components for each group value. These virtual containers are reader-only and MUST NOT be serialized into `componentListBlocks`, slot directives, or child order files. Group containers are collapsed by default and reveal their members when activated. Reader UI MAY offer runtime sort, direction, and group overrides derived from child item keys without rewriting the document.
+When sorting is active, child blocks that have the selected sort key render before child blocks that do not. Keyed children are sorted by the selected direction; missing-key children keep source order after keyed children. Ties keep source order. If grouping is active, readers SHOULD create virtual container components for each group value. If grouping is active without sorting, group containers SHOULD be ordered alphabetically by group value. These virtual containers are reader-only and MUST NOT be serialized into `componentListBlocks`, slot directives, or child order files. Group containers are collapsed by default and reveal their members when activated. Reader UI MAY offer runtime sort, direction, and group selections derived from child item keys without rewriting the document.
 
 Cross-reference cards can be emitted as a block directive with all card data in metadata and no raw HTML body:
 
@@ -377,6 +379,7 @@ Block metadata optionally includes component-specific fields. Common examples in
 - `componentListDefaultSortDirection`
 - `componentListDefaultGroupKey`
 - `componentListGroupCollapsedPreviewRem`
+- `groupKeys`
 - `gridColumns`
 - `gridItems`
 - `plugin`

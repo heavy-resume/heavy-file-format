@@ -133,9 +133,10 @@ const addBlockDisplayKey: ActionHandler = ({ actionButton, sectionKey }) => {
     return;
   }
   const kind = actionButton.dataset.displayKeyKind === 'group' ? 'group' : 'sort';
-  const name = getNextDisplayKeyName(block, kind === 'group' ? 'Grouping Key' : 'Sort Key');
+  const keyMap = kind === 'group' ? block.schema.groupKeys : block.schema.sortKeys;
+  const name = getNextDisplayKeyName(keyMap, kind === 'group' ? 'Grouping Key' : 'Sort Key');
   recordHistory(`display-key:${block.id}:add`);
-  block.schema.sortKeys[name] = kind === 'group' ? '' : 0;
+  keyMap[name] = kind === 'group' ? '' : 0;
   syncReusableTemplateForBlock(sectionKey, block.id);
   getRenderApp()();
 };
@@ -143,11 +144,12 @@ const addBlockDisplayKey: ActionHandler = ({ actionButton, sectionKey }) => {
 const removeBlockDisplayKey: ActionHandler = ({ actionButton, sectionKey }) => {
   const block = resolveBlockContext(actionButton)?.block ?? null;
   const name = actionButton.dataset.sortKeyName ?? '';
-  if (!block || !name || !Object.prototype.hasOwnProperty.call(block.schema.sortKeys, name)) {
+  const keyMap = actionButton.dataset.displayKeyKind === 'group' ? block?.schema.groupKeys : block?.schema.sortKeys;
+  if (!block || !keyMap || !name || !Object.prototype.hasOwnProperty.call(keyMap, name)) {
     return;
   }
   recordHistory(`display-key:${block.id}:remove`);
-  delete block.schema.sortKeys[name];
+  delete keyMap[name];
   syncReusableTemplateForBlock(sectionKey, block.id);
   getRenderApp()();
 };
@@ -455,12 +457,12 @@ function reassignBlockIds(block: VisualBlock): void {
   });
 }
 
-function getNextDisplayKeyName(block: VisualBlock, baseName: string): string {
-  if (!Object.prototype.hasOwnProperty.call(block.schema.sortKeys, baseName)) {
+function getNextDisplayKeyName(keyMap: Record<string, unknown>, baseName: string): string {
+  if (!Object.prototype.hasOwnProperty.call(keyMap, baseName)) {
     return baseName;
   }
   let index = 2;
-  while (Object.prototype.hasOwnProperty.call(block.schema.sortKeys, `${baseName} ${index}`)) {
+  while (Object.prototype.hasOwnProperty.call(keyMap, `${baseName} ${index}`)) {
     index += 1;
   }
   return `${baseName} ${index}`;

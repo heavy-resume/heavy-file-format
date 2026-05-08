@@ -248,17 +248,17 @@ hvy_version: 0.1
 
  <!--hvy:component-list:0 {}-->
 
-  <!--hvy:text {"sortKeys":{"Job Match":80,"Category":"Database"}}-->
+  <!--hvy:text {"sortKeys":{"Job Match":80},"groupKeys":{"Category":"Database"}}-->
    PostgreSQL
 
  <!--hvy:component-list:1 {}-->
 
-  <!--hvy:text {"sortKeys":{"Job Match":95,"Category":"Language"}}-->
+  <!--hvy:text {"sortKeys":{"Job Match":95},"groupKeys":{"Category":"Language"}}-->
    TypeScript
 
  <!--hvy:component-list:2 {}-->
 
-  <!--hvy:text {"sortKeys":{"Job Match":90,"Category":"Database"}}-->
+  <!--hvy:text {"sortKeys":{"Job Match":90},"groupKeys":{"Category":"Database"}}-->
    SQLite
 `);
   await page.getByRole('button', { name: 'Apply' }).click();
@@ -277,6 +277,7 @@ hvy_version: 0.1
   await expect(readerControls).toContainText('Sort');
   await expect(readerControls).toContainText('Group');
   await expect(readerControls.locator('[data-field="component-list-reader-view"]')).toHaveValue('Job Match');
+  await expect(readerControls.locator('[data-field="component-list-reader-view"] option', { hasText: 'Category' })).toHaveCount(0);
   await expect(readerControls.locator('[data-field="component-list-reader-group"]')).toHaveValue('Category');
   await expect(readerControls.locator('[data-reader-action="toggle-component-list-reverse"]')).toHaveAttribute('aria-label', 'Sort descending');
 
@@ -367,17 +368,17 @@ hvy_version: 0.1
 
  <!--hvy:component-list:0 {}-->
 
-  <!--hvy:text {"sortKeys":{"Category":"Database"}}-->
+  <!--hvy:text {"groupKeys":{"Category":"Database"}}-->
    PostgreSQL
 
  <!--hvy:component-list:1 {}-->
 
-  <!--hvy:text {"sortKeys":{"Category":"Language"}}-->
+  <!--hvy:text {"groupKeys":{"Category":"Language"}}-->
    TypeScript
 
  <!--hvy:component-list:2 {}-->
 
-  <!--hvy:text {"sortKeys":{"Category":"Database"}}-->
+  <!--hvy:text {"groupKeys":{"Category":"Database"}}-->
    SQLite
 `);
   await page.getByRole('button', { name: 'Apply' }).click();
@@ -389,7 +390,7 @@ hvy_version: 0.1
   await page.locator('.editor-block-passive', { hasText: 'PostgreSQL' }).first().click();
   const editor = page.locator('.component-list-view-editor');
   await expect(editor).toBeVisible();
-  await expect(editor.locator('[data-field="component-list-default-sort-key"]')).toBeVisible();
+  await expect(editor.locator('[data-field="component-list-default-sort-key"]')).toHaveCount(0);
   await expect(editor.locator('[data-field="component-list-default-sort-direction"]')).toHaveCount(0);
   await expect(editor.locator('[data-field="component-list-default-group-key"]')).toBeVisible();
 });
@@ -684,7 +685,7 @@ hvy_version: 0.1
 
 <!--hvy:component-list {"id":"skill-list","componentListComponent":"text"}-->
 
- <!--hvy:text {"id":"first","sortKeys":{"Self Rating":9,"Category":"Engineering"}}-->
+ <!--hvy:text {"id":"first","sortKeys":{"Self Rating":9},"groupKeys":{"Category":"Engineering"}}-->
   First
 
  <!--hvy:text {"id":"second"}-->

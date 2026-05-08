@@ -33,6 +33,7 @@ export function defaultBlockSchema(component = 'text'): BlockSchema {
     gridColumns: 2,
     gridItems: [],
     sortKeys: {},
+    groupKeys: {},
     tags: '',
     description: '',
     placeholder: '',
@@ -168,6 +169,7 @@ export function schemaFromUnknown(value: unknown, seen = new WeakSet<object>()):
     gridColumns,
     gridItems: parsedGridItems,
     sortKeys: parseSortKeys(candidate.sortKeys),
+    groupKeys: parseGroupKeys(candidate.groupKeys),
     tags: typeof candidate.tags === 'string' ? candidate.tags : defaults.tags,
     description: typeof candidate.description === 'string' ? candidate.description : defaults.description,
     placeholder: typeof candidate.placeholder === 'string' ? candidate.placeholder : defaults.placeholder,
@@ -220,6 +222,19 @@ function parseSortKeys(raw: unknown): Record<string, SortKeyValue> {
     if (typeof value === 'number' && Number.isFinite(value)) {
       parsed[key] = value;
     } else if (typeof value === 'string') {
+      parsed[key] = value;
+    }
+  }
+  return parsed;
+}
+
+function parseGroupKeys(raw: unknown): Record<string, string> {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return {};
+  }
+  const parsed: Record<string, string> = {};
+  for (const [key, value] of Object.entries(raw as JsonObject)) {
+    if (typeof value === 'string') {
       parsed[key] = value;
     }
   }

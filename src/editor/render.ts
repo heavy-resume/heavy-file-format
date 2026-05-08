@@ -1003,13 +1003,20 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
   function renderComponentListDisplayFields(sectionKey: string, block: VisualBlock, context: ComponentListDisplayContext): string {
     return `<section class="component-list-display-editor" aria-label="Component list display">
       <strong>Component List Display</strong>
-      ${renderDisplayKeyEditor('Sort Keys', 'sort', sectionKey, block, context.sortKeys)}
-      ${renderDisplayKeyEditor('Grouping Keys', 'group', sectionKey, block, context.groupKeys)}
+      ${renderDisplayKeyEditor('Sort Keys', 'sort', sectionKey, block, context.sortKeys, block.schema.sortKeys)}
+      ${renderDisplayKeyEditor('Grouping Keys', 'group', sectionKey, block, context.groupKeys, block.schema.groupKeys)}
     </section>`;
   }
 
-  function renderDisplayKeyEditor(label: string, kind: 'sort' | 'group', sectionKey: string, block: VisualBlock, suggestedKeys: string[]): string {
-    const keys = mergeDisplayKeys(block, suggestedKeys, kind);
+  function renderDisplayKeyEditor(
+    label: string,
+    kind: 'sort' | 'group',
+    sectionKey: string,
+    block: VisualBlock,
+    suggestedKeys: string[],
+    ownKeyValues: Record<string, SortKeyValue> | Record<string, string>
+  ): string {
+    const keys = mergeDisplayKeys(ownKeyValues, suggestedKeys);
     const datalistId = `${block.id}-${kind}-display-keys`;
     const options = keys.map((key) => `<option value="${deps.escapeAttr(key)}"></option>`).join('');
     return `<div class="sort-key-editor" data-display-key-kind="${kind}">
@@ -1025,23 +1032,32 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         >Add ${kind === 'sort' ? 'Sort Key' : 'Grouping Key'}</button>
       </div>
       <datalist id="${deps.escapeAttr(datalistId)}">${options}</datalist>
-      ${renderDisplayKeyRows(sectionKey, block, keys, datalistId, kind === 'sort' ? 'Sort Key' : 'Grouping Key')}
+      ${renderDisplayKeyRows(sectionKey, block, keys, datalistId, kind, ownKeyValues, kind === 'sort' ? 'Sort Key' : 'Grouping Key')}
     </div>`;
   }
 
-  function renderDisplayKeyRows(sectionKey: string, block: VisualBlock, keys: string[], datalistId: string, keyPlaceholder: string): string {
+  function renderDisplayKeyRows(
+    sectionKey: string,
+    block: VisualBlock,
+    keys: string[],
+    datalistId: string,
+    kind: 'sort' | 'group',
+    ownKeyValues: Record<string, SortKeyValue> | Record<string, string>,
+    keyPlaceholder: string
+  ): string {
     if (keys.length === 0) {
       return '<p class="muted sort-key-empty">No display keys yet.</p>';
     }
     return keys
       .map((name) => {
-        const hasOwnKey = Object.prototype.hasOwnProperty.call(block.schema.sortKeys, name);
-        const value = hasOwnKey ? block.schema.sortKeys[name] ?? '' : '';
+        const hasOwnKey = Object.prototype.hasOwnProperty.call(ownKeyValues, name);
+        const value = hasOwnKey ? ownKeyValues[name] ?? '' : '';
         return `<div class="sort-key-row">
           <input
             data-section-key="${deps.escapeAttr(sectionKey)}"
             data-block-id="${deps.escapeAttr(block.id)}"
             data-field="block-sort-key-name"
+            data-display-key-kind="${kind}"
             data-sort-key-name="${deps.escapeAttr(name)}"
             data-sort-key-present="${hasOwnKey ? 'true' : 'false'}"
             list="${deps.escapeAttr(datalistId)}"
@@ -1052,6 +1068,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
             data-section-key="${deps.escapeAttr(sectionKey)}"
             data-block-id="${deps.escapeAttr(block.id)}"
             data-field="block-sort-key-value"
+            data-display-key-kind="${kind}"
             data-sort-key-name="${deps.escapeAttr(name)}"
             placeholder="Value"
             value="${deps.escapeAttr(String(value))}"
@@ -1064,6 +1081,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
                 data-section-key="${deps.escapeAttr(sectionKey)}"
                 data-block-id="${deps.escapeAttr(block.id)}"
                 data-sort-key-name="${deps.escapeAttr(name)}"
+                data-display-key-kind="${kind}"
                 aria-label="Remove ${deps.escapeAttr(name)}"
               >${closeIcon()}</button>`
             : '<span class="sort-key-row-spacer"></span>'}
@@ -1072,16 +1090,9 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       .join('');
   }
 
-  function mergeDisplayKeys(block: VisualBlock, suggestedKeys: string[], kind: 'sort' | 'group'): string[] {
-    const ownKeys = Object.keys(block.schema.sortKeys).filter((key) => key.length > 0);
-    const matchingOwnKeys = ownKeys.filter((key) => {
-      if (suggestedKeys.includes(key)) {
-        return true;
-      }
-      const value = block.schema.sortKeys[key];
-      return kind === 'sort' ? typeof value === 'number' : typeof value === 'string';
-    });
-    return [...new Set([...suggestedKeys, ...matchingOwnKeys])].sort((left, right) => left.localeCompare(right, undefined, { sensitivity: 'base' }));
+  function mergeDisplayKeys(ownKeyValues: Record<string, SortKeyValue> | Record<string, string>, suggestedKeys: string[]): string[] {
+    const ownKeys = Object.keys(ownKeyValues).filter((key) => key.length > 0);
+    return [...new Set([...suggestedKeys, ...ownKeys])].sort((left, right) => left.localeCompare(right, undefined, { sensitivity: 'base' }));
   }
 
   function getComponentListDisplayContext(sectionKey: string, blockId: string): ComponentListDisplayContext | null {
@@ -1215,24 +1226,23 @@ function buildComponentListDisplayContext(listBlock: VisualBlock): ComponentList
   const sortKeys = new Set<string>();
   const groupKeys = new Set<string>();
   listBlock.schema.componentListBlocks.forEach((child) => {
-    Object.entries(child.schema.sortKeys).forEach(([key, value]) => {
+    Object.keys(child.schema.sortKeys).forEach((key) => {
       if (!key.trim()) {
         return;
       }
       sortKeys.add(key);
-      if (isLikelyGroupingKey(value)) {
-        groupKeys.add(key);
+    });
+    Object.keys(child.schema.groupKeys).forEach((key) => {
+      if (!key.trim()) {
+        return;
       }
+      groupKeys.add(key);
     });
   });
   return {
     sortKeys: sortDisplayKeys(sortKeys),
     groupKeys: sortDisplayKeys(groupKeys),
   };
-}
-
-function isLikelyGroupingKey(value: SortKeyValue): boolean {
-  return typeof value === 'string';
 }
 
 function sortDisplayKeys(keys: Set<string>): string[] {

@@ -1146,6 +1146,9 @@ function serializeBlockSchema(
   if (Object.keys(schema.sortKeys).length > 0) {
     payload.sortKeys = schema.sortKeys;
   }
+  if (Object.keys(schema.groupKeys).length > 0) {
+    payload.groupKeys = schema.groupKeys;
+  }
   addIfChanged(payload, 'tags', schema.tags, defaults.tags);
   addIfChanged(payload, 'description', schema.description, defaults.description);
   addIfChanged(payload, 'placeholder', schema.placeholder, defaults.placeholder);

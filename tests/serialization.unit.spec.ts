@@ -89,7 +89,7 @@ hvy_version: 0.1
 
  <!--hvy:component-list:0 {}>
 
-  <!--hvy:text {"sortKeys":{"Job Match":92,"Category":"Database"}}-->
+  <!--hvy:text {"sortKeys":{"Job Match":92},"groupKeys":{"Category":"Database"}}-->
    PostgreSQL
 
 <!--hvy:container {"containerTitle":"Details","containerExpanded":false,"containerCollapsedPreviewRem":2.5}-->
@@ -107,7 +107,8 @@ hvy_version: 0.1
   expect(expectedResult).toContain('"componentListDefaultSortDirection":"desc"');
   expect(expectedResult).toContain('"componentListDefaultGroupKey":"Category"');
   expect(expectedResult).toContain('"componentListGroupCollapsedPreviewRem":4');
-  expect(expectedResult).toContain('"sortKeys":{"Job Match":92,"Category":"Database"}');
+  expect(expectedResult).toContain('"sortKeys":{"Job Match":92}');
+  expect(expectedResult).toContain('"groupKeys":{"Category":"Database"}');
   expect(expectedResult).toContain('"containerTitle":"Details"');
   expect(expectedResult).toContain('"containerExpanded":false');
   expect(expectedResult).toContain('"containerCollapsedPreviewRem":2.5');

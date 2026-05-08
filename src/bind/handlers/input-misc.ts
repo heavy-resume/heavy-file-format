@@ -262,23 +262,17 @@ export function bindInputMisc(app: HTMLElement): void {
       }
       const oldName = target.dataset.sortKeyName ?? '';
       const newName = target.value.trim();
-      if (oldName && oldName !== newName) {
+      const hasOldKey = oldName && Object.prototype.hasOwnProperty.call(context.block.schema.sortKeys, oldName);
+      if (hasOldKey && newName && oldName !== newName) {
         const oldValue = context.block.schema.sortKeys[oldName];
         delete context.block.schema.sortKeys[oldName];
-        if (newName) {
-          context.block.schema.sortKeys[newName] = oldValue ?? '';
-        }
+        context.block.schema.sortKeys[newName] = oldValue ?? '';
         target.dataset.sortKeyName = newName;
-      } else if (!oldName && newName) {
-        context.block.schema.sortKeys[newName] = '';
+        target.dataset.sortKeyPresent = 'true';
+        updateSortKeyRowName(target, newName);
+      } else if (!hasOldKey && newName) {
         target.dataset.sortKeyName = newName;
-        const valueInput = target.parentElement?.querySelector<HTMLInputElement>('[data-field="block-sort-key-value"]');
-        if (valueInput) {
-          valueInput.dataset.sortKeyName = newName;
-        }
-      } else if (oldName && !newName) {
-        delete context.block.schema.sortKeys[oldName];
-        target.dataset.sortKeyName = '';
+        updateSortKeyRowName(target, newName);
       }
       syncReusableTemplateForBlock(sectionKey, context.block.id);
       getRefreshReaderPanels()();
@@ -295,6 +289,10 @@ export function bindInputMisc(app: HTMLElement): void {
         return;
       }
       context.block.schema.sortKeys[name] = parseSortKeyValue(target.value);
+      const nameInput = target.parentElement?.querySelector<HTMLInputElement>('[data-field="block-sort-key-name"]');
+      if (nameInput) {
+        nameInput.dataset.sortKeyPresent = 'true';
+      }
       syncReusableTemplateForBlock(sectionKey, context.block.id);
       getRefreshReaderPanels()();
       return;
@@ -499,6 +497,17 @@ function parseSortKeyValue(value: string): string | number {
     }
   }
   return value;
+}
+
+function updateSortKeyRowName(target: HTMLInputElement, name: string): void {
+  const valueInput = target.parentElement?.querySelector<HTMLInputElement>('[data-field="block-sort-key-value"]');
+  if (valueInput) {
+    valueInput.dataset.sortKeyName = name;
+  }
+  const removeButton = target.parentElement?.querySelector<HTMLElement>('[data-action="remove-block-display-key"]');
+  if (removeButton) {
+    removeButton.dataset.sortKeyName = name;
+  }
 }
 
 function ensureComponentListView(block: NonNullable<ReturnType<typeof resolveBlockContext>>['block'], index: number) {

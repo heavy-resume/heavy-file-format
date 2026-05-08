@@ -246,6 +246,9 @@ editorRenderer = createEditorRenderer(
     get documentMeta() {
       return state.document.meta as Record<string, unknown>;
     },
+    get documentSections() {
+      return state.document.sections;
+    },
     get showAdvancedEditor() {
       const rowModal = state.sqliteRowComponentModal;
       if (rowModal && !rowModal.readOnly) {

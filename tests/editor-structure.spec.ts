@@ -618,6 +618,61 @@ hvy_version: 0.1
   await expect(placeholderInput).toHaveValue('Skill name');
 });
 
+test('component list display keys are explicit and shared across list items', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"skills"}-->
+#! Skills
+
+<!--hvy:text {"id":"intro"}-->
+ Outside list
+
+<!--hvy:component-list {"id":"skill-list","componentListComponent":"text"}-->
+
+ <!--hvy:text {"id":"first","sortKeys":{"Self Rating":9,"Category":"Engineering"}}-->
+  First
+
+ <!--hvy:text {"id":"second"}-->
+  Second
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Advanced' }).click();
+
+  await page.locator('.editor-block-passive', { hasText: 'Outside list' }).click();
+  await page.getByLabel('Component options').getByRole('button', { name: 'Meta' }).click();
+  await expect(page.locator('.component-list-display-editor')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Close' }).click();
+
+  await page.locator('.reader-component-list > .editor-block-passive', { hasText: 'Second' }).click();
+  await page.locator('.editor-block[data-active-editor-block="true"]').getByRole('button', { name: 'Meta' }).click();
+
+  const display = page.locator('.component-list-display-editor');
+  await expect(display).toBeVisible();
+  await expect(display.getByText('Sort Keys')).toBeVisible();
+  await expect(display.getByText('Grouping Keys')).toBeVisible();
+  await expect(display.locator('[data-field="block-sort-key-name"][value="Self Rating"]')).toBeVisible();
+  await expect(display.locator('[data-field="block-sort-key-name"][value="Category"]').last()).toBeVisible();
+
+  const selfRatingName = display.locator('[data-field="block-sort-key-name"][value="Self Rating"]');
+  await selfRatingName.locator('xpath=following-sibling::input[@data-field="block-sort-key-value"]').fill('7');
+
+  await display.getByRole('button', { name: 'Add Sort Key' }).click();
+  const addedName = display.locator('[data-field="block-sort-key-name"][value="Sort Key"]');
+  await addedName.fill('Confidence');
+  await addedName.locator('xpath=following-sibling::input[@data-field="block-sort-key-value"]').fill('8');
+  await addedName.locator('xpath=following-sibling::button[@data-action="remove-block-display-key"]').click();
+
+  await page.getByRole('button', { name: 'Close' }).click();
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await expect(page.locator('#rawEditor')).toHaveValue(/"second","sortKeys":\{"Self Rating":7\}/);
+  await expect(page.locator('#rawEditor')).not.toHaveValue(/Confidence/);
+});
+
 test('unfilled text fill-in renders as an editor box and blank viewer text', async ({ page }) => {
   await page.goto('/');
 

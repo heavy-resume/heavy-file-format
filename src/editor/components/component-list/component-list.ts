@@ -77,7 +77,7 @@ export const renderComponentListReader: ComponentReaderRenderer = (section, bloc
             aria-pressed="${runtimeView.reversed ? 'true' : 'false'}"
             aria-label="${helpers.escapeAttr(reverseLabel)}"
             title="Reverse order"
-          >${directionArrow}</button>
+          ><span>${directionArrow}</span></button>
         </div>`
       : '';
   const resolved = resolveComponentListItems(block, activeViewId);

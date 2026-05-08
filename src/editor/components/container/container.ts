@@ -35,6 +35,7 @@ export const renderContainerReader: ComponentReaderRenderer = (section, block, h
     expanded: helpers.getReaderContainerExpanded(`${section.key}:${block.id}`, block.schema.containerExpanded),
     collapsedPreviewRem: block.schema.containerCollapsedPreviewRem,
     virtualKey: '',
+    useListOrdering: false,
     helpers,
   });
 };
@@ -49,6 +50,7 @@ export function renderVirtualContainerReader(
     blocks: VisualBlock[];
     collapsedPreviewRem: number;
     expanded?: boolean;
+    useListOrdering?: boolean;
   },
   helpers: Parameters<ComponentReaderRenderer>[2]
 ): string {
@@ -61,6 +63,7 @@ export function renderVirtualContainerReader(
     expanded: helpers.getReaderContainerExpanded(virtualKey, options.expanded ?? false),
     collapsedPreviewRem: options.collapsedPreviewRem,
     virtualKey,
+    useListOrdering: options.useListOrdering ?? false,
     helpers,
   });
 };
@@ -73,9 +76,12 @@ function renderContainerReaderBody(options: {
   expanded: boolean;
   collapsedPreviewRem: number;
   virtualKey: string;
+  useListOrdering: boolean;
   helpers: Parameters<ComponentReaderRenderer>[2];
 }): string {
-  const body = options.helpers.renderReaderBlocks(options.section, options.blocks);
+  const body = options.useListOrdering
+    ? options.helpers.renderReaderListBlocks(options.section, options.blocks)
+    : options.helpers.renderReaderBlocks(options.section, options.blocks);
   if (!body && !options.title.trim()) {
     return '';
   }

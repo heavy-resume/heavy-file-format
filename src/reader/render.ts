@@ -87,7 +87,9 @@ export interface ReaderRenderer {
   renderReaderSection: (section: VisualSection) => string;
   renderReaderBlock: (section: VisualSection, block: VisualBlock) => string;
   renderReaderBlocks: (section: VisualSection, blocks: VisualBlock[]) => string;
+  renderReaderListBlocks: (section: VisualSection, blocks: VisualBlock[]) => string;
   orderReaderBlocks: (blocks: VisualBlock[]) => VisualBlock[];
+  orderReaderListBlocks: (blocks: VisualBlock[]) => VisualBlock[];
   isReaderViewPrioritizedBlock: (block: VisualBlock) => boolean;
   renderModal: () => string;
   renderLinkInlineModal: () => string;
@@ -385,12 +387,27 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     return orderReaderBlocks(blocks).map((block) => renderReaderBlock(section, block)).join('');
   }
 
+  function renderReaderListBlocks(section: VisualSection, blocks: VisualBlock[]): string {
+    return orderReaderListBlocks(blocks).map((block) => renderReaderBlock(section, block)).join('');
+  }
+
   function orderReaderBlocks(blocks: VisualBlock[]): VisualBlock[] {
     return orderReaderViewTargets(
       blocks,
       getActiveReaderViewContext(),
       getBlockReaderViewTargetKey,
-      state.readerViewActivatedTargets
+      state.readerViewActivatedTargets,
+      { prioritize: false }
+    );
+  }
+
+  function orderReaderListBlocks(blocks: VisualBlock[]): VisualBlock[] {
+    return orderReaderViewTargets(
+      blocks,
+      getActiveReaderViewContext(),
+      getBlockReaderViewTargetKey,
+      state.readerViewActivatedTargets,
+      { prioritize: true }
     );
   }
 
@@ -940,7 +957,9 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     renderReaderSection,
     renderReaderBlock,
     renderReaderBlocks,
+    renderReaderListBlocks,
     orderReaderBlocks,
+    orderReaderListBlocks,
     isReaderViewPrioritizedBlock,
     renderModal,
     renderLinkInlineModal,

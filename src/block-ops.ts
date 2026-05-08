@@ -682,7 +682,9 @@ export function getComponentRenderHelpers(editorRenderer: {
 }, readerRenderer: {
   renderReaderBlock: ComponentRenderHelpers['renderReaderBlock'];
   renderReaderBlocks: ComponentRenderHelpers['renderReaderBlocks'];
+  renderReaderListBlocks: ComponentRenderHelpers['renderReaderListBlocks'];
   orderReaderBlocks: ComponentRenderHelpers['orderReaderBlocks'];
+  orderReaderListBlocks: ComponentRenderHelpers['orderReaderListBlocks'];
   isReaderViewPrioritizedBlock: ComponentRenderHelpers['isReaderViewPrioritizedBlock'];
 }): ComponentRenderHelpers {
   return {
@@ -694,7 +696,9 @@ export function getComponentRenderHelpers(editorRenderer: {
     renderPassiveEditorBlock: (sectionKey, block) => editorRenderer.renderPassiveEditorBlock(sectionKey, block, state.document.sections),
     renderReaderBlock: readerRenderer.renderReaderBlock,
     renderReaderBlocks: readerRenderer.renderReaderBlocks,
+    renderReaderListBlocks: readerRenderer.renderReaderListBlocks,
     orderReaderBlocks: readerRenderer.orderReaderBlocks,
+    orderReaderListBlocks: readerRenderer.orderReaderListBlocks,
     isReaderViewPrioritizedBlock: readerRenderer.isReaderViewPrioritizedBlock,
     renderComponentFragment: editorRenderer.renderComponentFragment,
     renderComponentOptions,

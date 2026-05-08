@@ -102,8 +102,10 @@ export function orderReaderViewTargets<T>(
   items: T[],
   context: ReaderViewContext,
   getTargetKey: (item: T) => ReaderViewTargetKey,
-  _activatedTargets: Set<string>
+  _activatedTargets: Set<string>,
+  options: { prioritize?: boolean } = {}
 ): T[] {
+  const prioritize = options.prioritize ?? true;
   const visible = items.filter((item) => !hasReaderViewModifier(context, getTargetKey(item), 'hidden'));
   const boostedPriority: T[] = [];
   const highlightedPriority: T[] = [];
@@ -114,11 +116,11 @@ export function orderReaderViewTargets<T>(
     const targetKey = getTargetKey(item);
     if (hasReaderViewModifier(context, targetKey, 'dimmed')) {
       dimmed.push(item);
-    } else if (getReaderViewPriorityRank(context, targetKey) >= 3) {
+    } else if (prioritize && getReaderViewPriorityRank(context, targetKey) >= 3) {
       boostedPriority.push(item);
-    } else if (getReaderViewPriorityRank(context, targetKey) >= 2) {
+    } else if (prioritize && getReaderViewPriorityRank(context, targetKey) >= 2) {
       highlightedPriority.push(item);
-    } else if (getReaderViewPriorityRank(context, targetKey) > 0) {
+    } else if (prioritize && getReaderViewPriorityRank(context, targetKey) > 0) {
       plainPriority.push(item);
     } else {
       standard.push(item);

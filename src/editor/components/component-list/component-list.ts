@@ -111,13 +111,14 @@ export const renderComponentListReader: ComponentReaderRenderer = (section, bloc
                 blocks: group.blocks,
                 collapsedPreviewRem: resolved.display.groupCollapsedPreviewRem,
                 expanded: prioritized,
+                useListOrdering: true,
               },
               helpers
             );
           }),
-          helpers.renderReaderBlocks(section, resolved.missingBlocks),
+          helpers.renderReaderListBlocks(section, resolved.missingBlocks),
         ].join('')
-      : helpers.renderReaderBlocks(section, resolved.blocks);
+      : helpers.renderReaderListBlocks(section, resolved.blocks);
   const listClass = resolved.kind === 'groups' ? 'reader-component-list is-grouped-view' : 'reader-component-list';
   return `${controls}<div class="${helpers.escapeAttr(listClass)}">${body}</div>`;
 };

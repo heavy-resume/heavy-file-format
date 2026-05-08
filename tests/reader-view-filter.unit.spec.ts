@@ -157,6 +157,31 @@ test('reader view prioritizes highlighted ancestors ahead of plain priority targ
   expect(getReaderViewPriorityRank(context, getSectionReaderViewTargetKey(plainPrioritySection))).toBe(1);
 });
 
+test('reader view can preserve non-list block order while keeping priority available', () => {
+  const header = createTextBlock('header', 'Header');
+  const highlighted = createTextBlock('highlighted', 'Highlighted');
+  const document = {
+    meta: {},
+    extension: '.hvy' as const,
+    attachments: [],
+    sections: [createSection('summary', [header, highlighted])],
+  };
+  const context = createReaderViewContext(document, {
+    highlighted: ['highlight'],
+  });
+
+  const expectedResult = orderReaderViewTargets(
+    [header, highlighted],
+    context,
+    getBlockReaderViewTargetKey,
+    new Set<string>(),
+    { prioritize: false }
+  );
+
+  expect(expectedResult.map((block) => block.schema.id)).toEqual(['header', 'highlighted']);
+  expect(getReaderViewPriorityRank(context, getBlockReaderViewTargetKey(highlighted))).toBe(2);
+});
+
 test('reader view keeps activated dimmed targets in their dimmed order', () => {
   const first = createTextBlock('first', 'First');
   const second = createTextBlock('second', 'Second');
@@ -245,7 +270,9 @@ test('reader view rendering applies hidden, dimmed, highlight, and generic colla
     renderPassiveEditorBlock: () => '',
     renderReaderBlock: renderer.renderReaderBlock,
     renderReaderBlocks: renderer.renderReaderBlocks,
+    renderReaderListBlocks: renderer.renderReaderListBlocks,
     orderReaderBlocks: renderer.orderReaderBlocks,
+    orderReaderListBlocks: renderer.orderReaderListBlocks,
     isReaderViewPrioritizedBlock: () => false,
     renderComponentFragment: (_componentName: string, content: string) => escapeHtml(content),
     renderComponentOptions: () => '',

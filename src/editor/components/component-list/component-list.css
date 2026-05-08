@@ -39,11 +39,13 @@
 .component-list-view-picker select,
 .component-list-group-picker select {
   min-width: 9rem;
-  border: 0;
+  border: 1px solid transparent;
   border-radius: 999px;
   background: var(--hvy-surface);
+  color: var(--hvy-text);
   font-size: 0.85rem;
   padding-block: 0.28rem;
+  cursor: pointer;
 }
 
 .component-list-group-picker select {
@@ -72,6 +74,15 @@
 
 .component-list-reverse-button:hover,
 .component-list-reverse-button.is-active {
+  border-color: var(--hvy-border-alt);
+  background: var(--hvy-xref-card-hover-bg);
+  color: var(--hvy-text);
+}
+
+.component-list-view-picker select:hover,
+.component-list-group-picker select:hover,
+.component-list-view-picker select:focus-visible,
+.component-list-group-picker select:focus-visible {
   border-color: var(--hvy-border-alt);
   background: var(--hvy-xref-card-hover-bg);
   color: var(--hvy-text);

@@ -144,18 +144,30 @@
   position: relative;
 }
 
+.reader-section-preview::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  background: color-mix(in srgb, var(--hvy-surface) 16%, transparent);
+  backdrop-filter: saturate(82%) blur(0.35px);
+}
+
 .reader-section-preview::after {
   content: "";
   position: absolute;
   inset: auto 0 0;
   height: 2.6rem;
   pointer-events: none;
-  background: linear-gradient(to bottom, transparent, var(--hvy-surface));
+  z-index: 2;
+  background: linear-gradient(to bottom, transparent, color-mix(in srgb, var(--hvy-surface) 72%, transparent));
 }
 
 .reader-section.is-collapsed-preview {
   cursor: pointer;
-  transition: border-color 240ms ease, box-shadow 240ms ease;
+  z-index: 0;
+  transition: background-color 140ms ease, box-shadow 140ms ease;
 }
 
 .reader-section.is-collapsed-preview .reader-section-content {
@@ -169,8 +181,20 @@
 }
 
 .reader-section.is-collapsed-preview:hover {
-  border-color: var(--hvy-text-muted);
-  box-shadow: 0 0 0 3px var(--hvy-shadow);
+  background-color: color-mix(in srgb, var(--hvy-surface) 92%, var(--hvy-surface-tint) 8%);
+  box-shadow: 0 0 0 1px var(--hvy-focus-ring), 0 0 14px var(--hvy-focus-glow);
+  z-index: 3;
+}
+
+.reader-section.is-collapsed-preview:hover::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  display: block;
+  pointer-events: none;
+  z-index: 3;
+  background: transparent;
+  box-shadow: 0 0 1px 2px var(--hvy-focus-ring), 0 0 14px var(--hvy-focus-glow);
 }
 
 .reader-section.is-uncontained.is-collapsed-preview {
@@ -180,6 +204,10 @@
 .reader-section.is-uncontained.is-collapsed-preview:hover {
   border-color: transparent;
   box-shadow: none;
+}
+
+.reader-section.is-uncontained.is-collapsed-preview:hover::after {
+  content: none;
 }
 
 .reader-block {

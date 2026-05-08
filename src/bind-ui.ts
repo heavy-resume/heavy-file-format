@@ -124,6 +124,22 @@ export function bindUi(app: HTMLElement): void {
 
   bindAppEvents(app);
 
+  const toggleComponentListReverse = (reverseList: HTMLElement): void => {
+    const sectionKey = reverseList.dataset.sectionKey;
+    const blockId = reverseList.dataset.blockId;
+    const viewId = reverseList.dataset.viewId;
+    if (!sectionKey || !blockId || !viewId) {
+      return;
+    }
+    const key = `${sectionKey}:${blockId}`;
+    const current = parseComponentListRuntimeView(state.componentListReaderViews[key] ?? viewId);
+    state.componentListReaderViews[key] = encodeComponentListRuntimeView({
+      viewId: current.viewId || viewId,
+      reversed: !current.reversed,
+      groupKey: current.groupKey,
+    });
+  };
+
   const handleReaderAreaClick = (event: Event) => {
     const target = event.target as HTMLElement;
 
@@ -144,6 +160,10 @@ export function bindUi(app: HTMLElement): void {
         if (section && !section.expanded) {
           event.stopPropagation();
           section.expanded = true;
+          const reverseList = target.closest<HTMLElement>('[data-reader-action="toggle-component-list-reverse"]');
+          if (reverseList) {
+            toggleComponentListReverse(reverseList);
+          }
           getRefreshReaderPanels()();
           const select = target.closest<HTMLSelectElement>('select');
           if (select) {
@@ -164,19 +184,7 @@ export function bindUi(app: HTMLElement): void {
     const reverseList = target.closest<HTMLElement>('[data-reader-action="toggle-component-list-reverse"]');
     if (reverseList) {
       event.stopPropagation();
-      const sectionKey = reverseList.dataset.sectionKey;
-      const blockId = reverseList.dataset.blockId;
-      const viewId = reverseList.dataset.viewId;
-      if (!sectionKey || !blockId || !viewId) {
-        return;
-      }
-      const key = `${sectionKey}:${blockId}`;
-      const current = parseComponentListRuntimeView(state.componentListReaderViews[key] ?? viewId);
-      state.componentListReaderViews[key] = encodeComponentListRuntimeView({
-        viewId: current.viewId || viewId,
-        reversed: !current.reversed,
-        groupKey: current.groupKey,
-      });
+      toggleComponentListReverse(reverseList);
       getRefreshReaderPanels()();
       return;
     }

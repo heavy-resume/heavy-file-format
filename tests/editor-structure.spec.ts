@@ -304,6 +304,46 @@ hvy_version: 0.1
   await expect(groups.nth(0)).toContainText('SQLite');
 });
 
+test('component-list reader controls hide unavailable sort and group controls', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"lists"}-->
+#! Lists
+
+<!--hvy:component-list {"id":"sorted-list","componentListComponent":"text","componentListDefaultView":"strength","componentListViews":[{"id":"strength","label":"Strength","sortKey":"Strength","direction":"desc"}]}-->
+
+ <!--hvy:component-list:0 {}-->
+
+  <!--hvy:text {"sortKeys":{"Strength":2}}-->
+   Two
+
+ <!--hvy:component-list:1 {}-->
+
+  <!--hvy:text {"sortKeys":{"Strength":1}}-->
+   One
+
+<!--hvy:component-list {"id":"plain-list","componentListComponent":"text"}-->
+
+ <!--hvy:component-list:0 {}-->
+
+  <!--hvy:text {}-->
+   Plain
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Viewer' }).click();
+
+  const controls = page.locator('.component-list-reader-controls');
+  await expect(controls).toHaveCount(1);
+  await expect(controls.first().locator('[data-field="component-list-reader-view"]')).toBeVisible();
+  await expect(controls.first().locator('[data-field="component-list-reader-group"]')).toHaveCount(0);
+  await expect(controls.first().locator('[data-reader-action="toggle-component-list-reverse"]')).toBeVisible();
+});
+
 test('text toolbar fill-in converts selected text to a fill-in slot', async ({ page }) => {
   await page.goto('/');
 

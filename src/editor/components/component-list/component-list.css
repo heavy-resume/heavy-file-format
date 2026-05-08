@@ -8,7 +8,7 @@
 
 .component-list-reader-controls {
   display: grid;
-  grid-template-columns: auto auto auto;
+  grid-template-columns: auto auto;
   align-items: center;
   gap: 0.35rem 0.4rem;
   justify-self: start;
@@ -21,6 +21,10 @@
   pointer-events: auto;
   position: relative;
   z-index: 2;
+}
+
+.component-list-reader-controls.has-sort-options.has-group-options {
+  grid-template-columns: auto auto auto;
 }
 
 .component-list-view-picker,
@@ -169,23 +173,50 @@
 
 @container hvy-surface (inline-size <= 50rem) {
   .component-list-reader-controls {
-    grid-template-columns: minmax(0, 1fr) auto;
-    justify-self: stretch;
+    grid-template-columns: 4.1rem minmax(0, 1fr) 1.85rem;
+    justify-self: center;
+    width: min(100%, 28rem);
+  }
+
+  .component-list-reader-controls.has-sort-options.has-group-options {
+    grid-template-columns: 4.1rem minmax(0, 1fr) 1.85rem;
   }
 
   .component-list-view-picker,
   .component-list-group-picker {
-    display: grid;
-    grid-template-columns: 3.2rem minmax(0, 1fr);
+    display: contents;
   }
 
-  .component-list-group-picker {
+  .component-list-view-picker > span {
     grid-column: 1;
+    grid-row: 1;
+    align-self: center;
+  }
+
+  .component-list-view-picker select {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .component-list-group-picker > span {
+    grid-column: 1;
+    grid-row: 2;
+    align-self: center;
+  }
+
+  .component-list-group-picker select {
+    grid-column: 2;
+    grid-row: 2;
   }
 
   .component-list-reverse-button {
-    grid-column: 2;
-    grid-row: 1 / 3;
+    grid-column: 3;
+    grid-row: 1;
+    justify-self: end;
+  }
+
+  .component-list-reader-controls.has-group-options:not(.has-sort-options) {
+    grid-template-columns: 4.1rem minmax(0, 1fr);
   }
 
   .component-list-view-picker select,

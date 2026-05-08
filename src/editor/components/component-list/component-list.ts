@@ -47,27 +47,31 @@ export const renderComponentListReader: ComponentReaderRenderer = (section, bloc
   const selectedViewId = runtimeView.viewId || activeView?.id || '';
   const selectedGroupKey = typeof runtimeView.groupKey === 'string' ? runtimeView.groupKey : activeView?.groupKey ?? '';
   const groupKeys = getAvailableGroupKeys(block);
+  const hasSortOptions = block.schema.componentListViews.length > 0;
+  const hasGroupOptions = groupKeys.length > 0;
   const directionIcon = activeView?.direction === 'asc' ? arrowUpIcon() : arrowDownIcon();
   const reverseLabel = activeView?.direction === 'asc' ? 'Sort ascending' : 'Sort descending';
-  const controls =
-    block.schema.componentListViews.length > 0
-      ? `<div class="component-list-reader-controls" data-component-list-reader-controls="true">
-          <label class="component-list-view-picker">
+  const sortControl = hasSortOptions
+    ? `<label class="component-list-view-picker">
             <span>Sort</span>
             <select data-field="component-list-reader-view" data-section-key="${helpers.escapeAttr(section.key)}" data-block-id="${helpers.escapeAttr(block.id)}">
             ${block.schema.componentListViews
               .map((view) => `<option value="${helpers.escapeAttr(view.id)}"${view.id === selectedViewId ? ' selected' : ''}>${helpers.escapeHtml(view.label)}</option>`)
               .join('')}
             </select>
-          </label>
-          <label class="component-list-group-picker">
+          </label>`
+    : '';
+  const groupControl = hasGroupOptions
+    ? `<label class="component-list-group-picker">
             <span>Group</span>
             <select data-field="component-list-reader-group" data-section-key="${helpers.escapeAttr(section.key)}" data-block-id="${helpers.escapeAttr(block.id)}" data-view-id="${helpers.escapeAttr(selectedViewId)}">
               <option value=""${selectedGroupKey ? '' : ' selected'}>No grouping</option>
               ${groupKeys.map((key) => `<option value="${helpers.escapeAttr(key)}"${key === selectedGroupKey ? ' selected' : ''}>${helpers.escapeHtml(key)}</option>`).join('')}
             </select>
-          </label>
-          <button
+          </label>`
+    : '';
+  const reverseControl = hasSortOptions
+    ? `<button
             type="button"
             class="component-list-reverse-button${runtimeView.reversed ? ' is-active' : ''}"
             data-reader-action="toggle-component-list-reverse"
@@ -77,7 +81,14 @@ export const renderComponentListReader: ComponentReaderRenderer = (section, bloc
             aria-pressed="${runtimeView.reversed ? 'true' : 'false'}"
             aria-label="${helpers.escapeAttr(reverseLabel)}"
             title="Reverse order"
-          >${directionIcon}</button>
+          >${directionIcon}</button>`
+    : '';
+  const controls =
+    hasSortOptions || hasGroupOptions
+      ? `<div class="component-list-reader-controls${hasSortOptions ? ' has-sort-options' : ''}${hasGroupOptions ? ' has-group-options' : ''}" data-component-list-reader-controls="true">
+          ${sortControl}
+          ${groupControl}
+          ${reverseControl}
         </div>`
       : '';
   const resolved = resolveComponentListItems(block, activeViewId);

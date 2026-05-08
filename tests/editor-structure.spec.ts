@@ -525,6 +525,73 @@ test('active component remove button is anchored to the editor frame corner', as
   expect(buttonBox?.y ?? 0).toBeLessThan(blockBox?.y ?? 0);
 });
 
+test('ancestor component exposes meta actions while editing descendants', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"skills"}-->
+#! Skills
+
+<!--hvy:container {"id":"skill-software-engineering","sortKeys":{"Strength":98}}-->
+
+ <!--hvy:container:0 {}-->
+
+  <!--hvy:text {}-->
+   ### Software Engineering
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Advanced' }).click();
+
+  await page.locator('.reader-container-body > .editor-block-passive', { hasText: 'Software Engineering' }).click();
+
+  expect(await page.locator('.editor-block-context-actions [data-action="open-component-meta"]').count()).toBeGreaterThan(1);
+});
+
+test('reusable component modal offers update existing or save as new', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+component_defs:
+  - name: skill-card
+    baseType: text
+    schema:
+      placeholder: Skill
+---
+
+<!--hvy: {"id":"skills"}-->
+#! Skills
+
+<!--hvy:skill-card {"id":"skill-card-1"}-->
+ Software Engineering
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Advanced' }).click();
+
+  await page.locator('.editor-block-passive', { hasText: 'Software Engineering' }).click();
+  await page.getByLabel('Component options').getByRole('button', { name: 'Reusable' }).click();
+
+  const modal = page.locator('.component-meta-modal', { hasText: 'Update Reusable Component' });
+  await expect(modal).toBeVisible();
+  await expect(modal.locator('.reusable-existing-option strong')).toHaveText('skill-card');
+  await expect(modal.getByRole('button', { name: 'Update Existing' })).toBeVisible();
+  await expect(modal.getByRole('button', { name: 'Save As New' })).toBeVisible();
+  await expect(modal.locator('#reusableNameInput')).toHaveValue('skill-card-copy');
+
+  await modal.locator('#reusableNameInput').fill('skill-card-alt');
+  await modal.getByRole('button', { name: 'Update Existing' }).click();
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await expect(page.locator('#rawEditor')).toHaveValue(/name: skill-card/);
+  await expect(page.locator('#rawEditor')).not.toHaveValue(/skill-card-alt/);
+  await expect(page.locator('#rawEditor')).toHaveValue(/<!--hvy:skill-card \{"id":"skill-card-1"\}-->/);
+});
+
 test('unfilled text fill-in renders as an editor box and blank viewer text', async ({ page }) => {
   await page.goto('/');
 

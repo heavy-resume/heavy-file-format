@@ -101,6 +101,7 @@ export interface ReusableSaveModalState {
   sectionKey: string;
   blockId?: string;
   draftName: string;
+  existingName?: string;
 }
 
 export interface ReusableTemplateModalState {

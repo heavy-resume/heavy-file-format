@@ -15,7 +15,7 @@ import type { BlockSchema, VisualBlock, VisualSection } from '../editor/types';
 import { renderTagEditor } from '../editor/tag-editor';
 import { colorValueToPickerHex, getResolvedThemeColor, getThemeColorLabel, THEME_COLOR_NAMES } from '../theme';
 import type { ThemeConfig } from '../theme';
-import type { DbTableQueryModalState, SqliteRowComponentModalState, VisualDocument } from '../types';
+import type { DbTableQueryModalState, ReusableSaveModalState, SqliteRowComponentModalState, VisualDocument } from '../types';
 import { getDocumentSectionDefaultCss, mergeDocumentCss } from '../document-section-defaults';
 import { sanitizeInlineCss } from '../css-sanitizer';
 import { areTablesEnabled } from '../reference-config';
@@ -34,12 +34,7 @@ interface ReaderRenderState {
   modalSectionKey: string | null;
   sqliteRowComponentModal: SqliteRowComponentModalState | null;
   dbTableQueryModal: DbTableQueryModalState | null;
-  reusableSaveModal: {
-    kind: 'component' | 'section';
-    sectionKey: string;
-    blockId?: string;
-    draftName: string;
-  } | null;
+  reusableSaveModal: ReusableSaveModalState | null;
   reusableTemplateModal: import('../types').ReusableTemplateModalState | null;
   componentMetaModal: { sectionKey: string; blockId: string } | null;
   themeModalOpen: boolean;
@@ -386,11 +381,18 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       return renderThemeModal();
     }
     if (state.reusableSaveModal) {
-      const title = state.reusableSaveModal.kind === 'section' ? 'Save As Reusable Section' : 'Save As Reusable Component';
+      const existingName = state.reusableSaveModal.kind === 'component' ? state.reusableSaveModal.existingName : undefined;
+      const title = existingName
+        ? 'Update Reusable Component'
+        : state.reusableSaveModal.kind === 'section'
+          ? 'Save As Reusable Section'
+          : 'Save As Reusable Component';
       const help =
-        state.reusableSaveModal.kind === 'section'
-          ? 'This saves a cloned section template, including its current blocks and nested subsections.'
-          : 'This saves a cloned component template, including pre-filled values and nested children.';
+        existingName
+          ? `This component already uses "${deps.escapeHtml(existingName)}". Update that reusable definition or save this component as a new reusable definition.`
+          : state.reusableSaveModal.kind === 'section'
+            ? 'This saves a cloned section template, including its current blocks and nested subsections.'
+            : 'This saves a cloned component template, including pre-filled values and nested children.';
       return `
         <div id="modalRoot" class="modal-root">
           <div class="modal-overlay" data-modal-action="close-overlay"></div>
@@ -400,13 +402,22 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
               <button type="button" data-modal-action="close">Close</button>
             </div>
             <p class="muted">${help}</p>
+            ${existingName
+              ? `<div class="reusable-existing-option">
+                  <div>
+                    <strong>${deps.escapeHtml(existingName)}</strong>
+                    <span>Update the existing reusable component definition.</span>
+                  </div>
+                  <button type="button" class="secondary" data-modal-action="update-reusable">Update Existing</button>
+                </div>`
+              : ''}
             <label>
-              <span>Name</span>
+              <span>${existingName ? 'New Name' : 'Name'}</span>
               <input id="reusableNameInput" value="${deps.escapeAttr(state.reusableSaveModal.draftName)}" placeholder="Callout, Pricing Table, FAQ Section..." autofocus />
             </label>
             <div class="link-inline-actions reusable-save-actions">
               <button type="button" class="ghost" data-modal-action="close">Cancel</button>
-              <button type="button" class="secondary" data-modal-action="save-reusable">Save Reusable</button>
+              <button type="button" class="${existingName ? 'ghost' : 'secondary'}" data-modal-action="save-reusable">${existingName ? 'Save As New' : 'Save Reusable'}</button>
             </div>
           </section>
         </div>
@@ -437,7 +448,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
               <h3>${deps.escapeHtml(state.reusableTemplateModal.component)}</h3>
               <button type="button" data-modal-action="close">Close</button>
             </div>
-            <p class="muted">Fill reusable component template values. Blank values are allowed.</p>
+            <p class="muted">Create reusable component</p>
             <div class="modal-field-stack">
               ${fields}
             </div>

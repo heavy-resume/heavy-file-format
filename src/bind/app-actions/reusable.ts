@@ -70,14 +70,34 @@ const openSaveComponentDef: AppActionHandler = ({ actionButton }) => {
   if (!block) {
     return;
   }
+  const existingName =
+    !isBuiltinComponent(block.schema.component) && getComponentDefs().some((def) => def.name === block.schema.component)
+      ? block.schema.component
+      : '';
   state.reusableSaveModal = {
     kind: 'component',
     sectionKey,
     blockId,
-    draftName: isBuiltinComponent(block.schema.component) ? '' : block.schema.component,
+    draftName: existingName
+      ? getReusableCopyName(existingName)
+      : isBuiltinComponent(block.schema.component)
+        ? ''
+        : block.schema.component,
+    existingName: existingName || undefined,
   };
   getRenderApp()();
 };
+
+function getReusableCopyName(name: string): string {
+  const names = new Set(getComponentDefs().map((def) => def.name));
+  let candidate = `${name}-copy`;
+  let index = 2;
+  while (names.has(candidate)) {
+    candidate = `${name}-copy-${index}`;
+    index += 1;
+  }
+  return candidate;
+}
 
 const openSaveSectionDef: AppActionHandler = ({ actionButton }) => {
   const sectionKey = actionButton.dataset.sectionKey;

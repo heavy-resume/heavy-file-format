@@ -43,6 +43,20 @@ export function bindModal(app: HTMLElement): void {
       return;
     }
 
+    const updateReusableBtn = target.closest<HTMLElement>('[data-modal-action="update-reusable"]');
+    if (updateReusableBtn) {
+      saveReusableFromModal(
+        app,
+        {
+          findBlockByIds,
+          recordHistory,
+          closeModal,
+        },
+        { mode: 'update-existing' }
+      );
+      return;
+    }
+
     const insertReusableTemplateBtn = target.closest<HTMLElement>('[data-modal-action="insert-reusable-template"]');
     if (insertReusableTemplateBtn && state.reusableTemplateModal) {
       insertReusableTemplateFromModal(modalRoot);
@@ -203,11 +217,15 @@ export function bindModal(app: HTMLElement): void {
     reusableNameInput.addEventListener('keydown', (event) => {
       if (event.key === 'Enter') {
         event.preventDefault();
-        saveReusableFromModal(app, {
-          findBlockByIds,
-          recordHistory,
-          closeModal,
-        });
+        saveReusableFromModal(
+          app,
+          {
+            findBlockByIds,
+            recordHistory,
+            closeModal,
+          },
+          { mode: 'save-as-new' }
+        );
         return;
       }
       if (event.key === 'Escape') {

@@ -3,7 +3,7 @@ import { findSectionByKey, isDefaultUntitledSectionTitle } from '../../section-o
 import { findBlockByIds, setActiveEditorBlock, deactivateEditorBlock, cancelEditorBlockEdit } from '../../block-ops';
 import { recordHistory } from '../../history';
 import type { AppActionHandler } from './types';
-import { buildDescriptionRequest, generateDescription } from '../../descriptions/provider';
+import { buildBlockDescriptionParentTree, buildDescriptionRequest, generateDescription } from '../../descriptions/provider';
 
 const activateBlock: AppActionHandler = ({ event, sectionKey, blockId }) => {
   if (!blockId) {
@@ -125,6 +125,7 @@ async function generateBlockDescriptionAsync(actionButton: HTMLElement, sectionK
       block,
       kind: 'block',
       parentTrail: [section.title],
+      parentTree: buildBlockDescriptionParentTree(section, block),
     }));
     getRefreshReaderPanels()();
     updateDescriptionFieldDom(actionButton, block.schema.description);
@@ -159,6 +160,7 @@ async function generateExpandablePaneDescriptionAsync(actionButton: HTMLElement,
       block,
       kind: pane === 'stub' ? 'expandable-stub' : 'expandable-content',
       parentTrail: [section.title],
+      parentTree: buildBlockDescriptionParentTree(section, block),
     }));
     if (pane === 'stub') {
       block.schema.expandableStubDescription = description;

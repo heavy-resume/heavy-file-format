@@ -79,6 +79,43 @@ hvy_version: 0.1
   expect(block.schema.expandableContentBlocks.children[0]!.schema.description).toBe('generated block');
 });
 
+test('populateMissingDescriptions sends populated parent descriptions in the parent tree', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"history","description":"Work history section"}-->
+#! History
+
+<!--hvy:expandable {"id":"northwind","description":"Northwind Labs history record"}-->
+
+ <!--hvy:expandable:content {}-->
+
+  <!--hvy:component-list {"id":"northwind-skills"}-->
+
+   <!--hvy:component-list:0 {}-->
+
+    <!--hvy:text {}-->
+     Skill reference
+`, '.hvy');
+  const parentTrees: string[][] = [];
+  setReferenceAppConfig({
+    descriptionProvider: (request) => {
+      if (request.block?.schema.id === 'northwind-skills') {
+        parentTrees.push(request.parentTree.map((entry) => `${entry.label}: ${entry.description ?? ''}`));
+      }
+      return { description: `generated ${request.kind}` };
+    },
+  });
+
+  await populateMissingDescriptions(document);
+
+  expect(parentTrees).toEqual([[
+    'History: Work history section',
+    'Northwind Labs history record: Northwind Labs history record',
+  ]]);
+});
+
 test('openAiDescriptionProvider sends the app proxy payload with reasoning disabled', async () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1

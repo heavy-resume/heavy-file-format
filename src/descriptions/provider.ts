@@ -1,7 +1,7 @@
 import { getReferenceAppConfig } from '../reference-config';
 import type { VisualBlock, VisualSection } from '../editor/types';
 import type { VisualDocument } from '../types';
-import type { HvyDescriptionProvider, HvyDescriptionRequest, HvyDescriptionResponse, HvyDescriptionTargetKind } from './types';
+import type { HvyDescriptionParentContext, HvyDescriptionProvider, HvyDescriptionRequest, HvyDescriptionResponse, HvyDescriptionTargetKind } from './types';
 
 const DEFAULT_DESCRIPTION_MODEL = 'gpt-5.4-nano';
 const MAX_CONTENT_CHARS = 1400;
@@ -56,17 +56,29 @@ export function buildDescriptionRequest(params: {
   block?: VisualBlock;
   kind: HvyDescriptionTargetKind;
   parentTrail?: string[];
+  parentTree?: HvyDescriptionParentContext[];
   signal?: AbortSignal;
 }): HvyDescriptionRequest {
+  const parentTrail = params.parentTrail ?? [];
   return {
     document: params.document,
     section: params.section,
     block: params.block,
     kind: params.kind,
-    parentTrail: params.parentTrail ?? [],
+    parentTrail,
+    parentTree: params.parentTree ?? parentTrail.map((label) => ({ label })),
     contentSummary: summarizeTargetContent(params.kind, params.section, params.block),
     signal: params.signal,
   };
+}
+
+export function buildBlockDescriptionParentTree(section: VisualSection, targetBlock: VisualBlock): HvyDescriptionParentContext[] {
+  const sectionLabel = section.title.trim() || section.customId.trim();
+  const root = sectionLabel
+    ? [{ label: sectionLabel, ...(section.description.trim() ? { description: section.description.trim() } : {}) }]
+    : [];
+  const blockPath = findBlockParentPath(section.blocks, targetBlock.id);
+  return [...root, ...(blockPath ?? []).map(getParentContextForBlock).filter((entry): entry is HvyDescriptionParentContext => entry !== null)];
 }
 
 export async function generateDescription(request: HvyDescriptionRequest): Promise<string> {
@@ -94,12 +106,23 @@ function buildDescriptionPrompt(request: HvyDescriptionRequest): string {
     '',
     `Target kind: ${request.kind}`,
     `Section: ${request.section.title || request.section.customId || 'Untitled section'}`,
-    request.parentTrail.length ? `Parent context: ${request.parentTrail.join(' / ')}` : '',
+    request.parentTree.length ? `Parent tree:\n${formatParentTree(request.parentTree)}` : request.parentTrail.length ? `Parent context: ${request.parentTrail.join(' / ')}` : '',
     request.block ? `Visible label: ${getBlockLabel(request.block)}` : '',
     '',
     'Content:',
     request.contentSummary || '(no visible text)',
   ].filter(Boolean).join('\n');
+}
+
+function formatParentTree(parentTree: HvyDescriptionParentContext[]): string {
+  return parentTree
+    .map((entry, index) => {
+      const label = entry.label.trim();
+      const description = entry.description?.trim();
+      const prefix = `${index + 1}. ${label || 'Untitled parent'}`;
+      return description ? `${prefix} - ${description}` : prefix;
+    })
+    .join('\n');
 }
 
 function buildLocalDescription(request: HvyDescriptionRequest): string {
@@ -146,6 +169,44 @@ function summarizeBlock(block: VisualBlock): string {
     block.schema.gridItems.map((item) => summarizeBlock(item.block)).join('\n'),
   ];
   return values.filter(Boolean).join('\n').replace(/\s+/g, ' ').trim();
+}
+
+function findBlockParentPath(blocks: VisualBlock[], targetBlockId: string): VisualBlock[] | null {
+  for (const block of blocks) {
+    if (block.id === targetBlockId) {
+      return [];
+    }
+    const childLists = [
+      block.schema.containerBlocks,
+      block.schema.componentListBlocks,
+      block.schema.expandableStubBlocks.children,
+      block.schema.expandableContentBlocks.children,
+      block.schema.gridItems.map((item) => item.block),
+    ];
+    for (const children of childLists) {
+      const childPath = findBlockParentPath(children, targetBlockId);
+      if (childPath) {
+        return [block, ...childPath];
+      }
+    }
+  }
+  return null;
+}
+
+function getParentContextForBlock(block: VisualBlock): HvyDescriptionParentContext | null {
+  const label = getBlockLabel(block)
+    || block.schema.description.trim()
+    || block.schema.componentListItemLabel.trim()
+    || block.schema.componentListComponent.trim()
+    || block.schema.component.trim();
+  const description = block.schema.description.trim();
+  if (!label && !description) {
+    return null;
+  }
+  return {
+    label: label || 'Untitled parent',
+    ...(description ? { description } : {}),
+  };
 }
 
 function getBlockLabel(block: VisualBlock): string {

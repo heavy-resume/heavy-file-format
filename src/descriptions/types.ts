@@ -3,12 +3,18 @@ import type { VisualDocument } from '../types';
 
 export type HvyDescriptionTargetKind = 'section' | 'block' | 'expandable-stub' | 'expandable-content';
 
+export interface HvyDescriptionParentContext {
+  label: string;
+  description?: string;
+}
+
 export interface HvyDescriptionRequest {
   document: VisualDocument;
   section: VisualSection;
   block?: VisualBlock;
   kind: HvyDescriptionTargetKind;
   parentTrail: string[];
+  parentTree: HvyDescriptionParentContext[];
   contentSummary: string;
   signal?: AbortSignal;
 }

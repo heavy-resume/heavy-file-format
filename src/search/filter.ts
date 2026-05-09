@@ -3,6 +3,7 @@ import type { SearchState } from './types';
 
 export interface SearchFilterContext {
   active: boolean;
+  filtering: boolean;
   matchedSections: Set<string>;
   matchedBlocks: Set<string>;
   visibleSections: Set<string>;
@@ -16,10 +17,12 @@ export function createSearchFilterContext(sections: VisualSection[], search: Sea
   const matchedBlocks = new Set<string>();
   const visibleSections = new Set<string>();
   const visibleBlocks = new Set<string>();
-  const active = search.filterEnabled && search.submittedQuery.trim().length > 0;
+  const active = search.submittedQuery.trim().length > 0;
+  const filtering = search.filterEnabled && active;
   if (!active) {
     return {
       active: false,
+      filtering: false,
       matchedSections,
       matchedBlocks,
       visibleSections,
@@ -83,6 +86,7 @@ export function createSearchFilterContext(sections: VisualSection[], search: Sea
   sections.forEach((section) => visitSection(section, []));
   return {
     active,
+    filtering,
     matchedSections,
     matchedBlocks,
     visibleSections,
@@ -93,11 +97,11 @@ export function createSearchFilterContext(sections: VisualSection[], search: Sea
 }
 
 export function isSectionSearchVisible(context: SearchFilterContext, section: VisualSection): boolean {
-  return !context.active || context.visibleSections.has(section.key);
+  return !context.filtering || context.visibleSections.has(section.key);
 }
 
 export function isBlockSearchVisible(context: SearchFilterContext, block: VisualBlock): boolean {
-  return !context.active || context.visibleBlocks.has(block.id);
+  return !context.filtering || context.visibleBlocks.has(block.id);
 }
 
 export function isSectionSearchMatch(context: SearchFilterContext, section: VisualSection): boolean {

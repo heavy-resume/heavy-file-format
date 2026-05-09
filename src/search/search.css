@@ -38,6 +38,39 @@
   backdrop-filter: blur(4px);
 }
 
+.search-collapsed-bar {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.55rem;
+  width: min(34rem, calc(100vw - 2rem));
+  min-height: 2.75rem;
+  padding: 0.55rem 0.8rem;
+  border: 1px solid var(--hvy-border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--hvy-surface) 98%, transparent);
+  color: var(--hvy-text);
+  box-shadow: 0 18px 40px var(--hvy-shadow);
+  text-align: left;
+}
+
+.search-inline-row {
+  display: flex;
+  justify-content: center;
+  min-height: 0;
+}
+
+.search-collapsed-bar > span:not(.search-collapsed-count) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search-collapsed-count {
+  color: var(--hvy-text-alt);
+  font-size: 0.82rem;
+}
+
 .search-palette {
   position: relative;
   z-index: 1;

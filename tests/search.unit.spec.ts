@@ -107,6 +107,7 @@ hvy_version: 0.1
     caseSensitive: false,
     categories: { tags: true, contents: true, description: true },
     filterEnabled: true,
+    resultsCollapsed: false,
     activeResultId: null,
     isLoading: false,
     error: null,

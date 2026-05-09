@@ -173,7 +173,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
         state.readerViewActivatedTargets
       );
       if (realSections.length === 0) {
-        return getActiveSearchFilterContext().active
+        return getActiveSearchFilterContext().filtering
           ? '<div class="reader-search-empty"><div>No matches in this filtered view.</div></div>'
           : '<div class="muted">No content to display yet.</div>';
       }

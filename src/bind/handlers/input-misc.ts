@@ -9,6 +9,7 @@ export function bindInputMisc(app: HTMLElement): void {
     const target = rawTarget.dataset.field ? rawTarget : rawTarget.closest<HTMLElement>('[data-field]') ?? rawTarget;
     if (target.dataset.field === 'search-query' && target instanceof HTMLInputElement) {
       state.search.queryDraft = target.value;
+      state.search.resultsCollapsed = false;
       return;
     }
     if (handleTagEditorInput(target, tagStateHelpers)) {

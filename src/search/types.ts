@@ -38,6 +38,7 @@ export interface SearchState {
   caseSensitive: boolean;
   categories: Record<SearchCategory, boolean>;
   filterEnabled: boolean;
+  resultsCollapsed: boolean;
   activeResultId: string | null;
   isLoading: boolean;
   error: string | null;

@@ -12,6 +12,7 @@ export function createDefaultSearchState(): SearchState {
       description: true,
     },
     filterEnabled: false,
+    resultsCollapsed: false,
     activeResultId: null,
     isLoading: false,
     error: null,

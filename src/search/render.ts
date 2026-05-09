@@ -34,6 +34,9 @@ export function renderSearchPalette(search: SearchState, document: VisualDocumen
   if (!search.open) {
     return '';
   }
+  if (search.resultsCollapsed) {
+    return '';
+  }
   const categories: SearchCategory[] = ['contents', 'tags', 'description'];
   const count = search.results.length;
   const status = search.isLoading
@@ -79,6 +82,19 @@ export function renderSearchPalette(search: SearchState, document: VisualDocumen
       ${renderSearchResults(search, document, deps)}
     </form>
   </section>`;
+}
+
+export function renderCollapsedSearchBar(search: SearchState, deps: Pick<SearchRenderDeps, 'escapeHtml'>): string {
+  if (!search.open || !search.resultsCollapsed) {
+    return '';
+  }
+  return `<div class="search-inline-row">
+    <button type="button" class="search-collapsed-bar" data-action="expand-search-results" aria-label="Show search results">
+      ${magnifyingGlassIcon()}
+      <span>${deps.escapeHtml(search.submittedQuery || search.queryDraft || 'Search')}</span>
+      <span class="search-collapsed-count">${deps.escapeHtml(`${search.results.length} result${search.results.length === 1 ? '' : 's'}`)}</span>
+    </button>
+  </div>`;
 }
 
 export function focusSearchInput(app: ParentNode): void {

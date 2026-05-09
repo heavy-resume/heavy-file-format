@@ -36,7 +36,7 @@ import { scriptingPluginRegistration, setScriptingResult } from './plugins/scrip
 import { runUserScript } from './plugins/scripting/wrapper';
 import { getScriptingPluginVersion } from './plugins/scripting/version';
 import { visitBlocksInList } from './section-ops';
-import { centerSearchResultLenses, renderSearchLauncher, renderSearchPalette } from './search/render';
+import { centerSearchResultLenses, renderCollapsedSearchBar, renderSearchLauncher, renderSearchPalette } from './search/render';
 import { createDefaultSearchState } from './search/state';
 
 const appRoot = document.querySelector<HTMLDivElement>('#app');
@@ -508,6 +508,7 @@ function renderApp(): void {
               : '<div></div>'
           }
         </div>
+        ${renderCollapsedSearchBar(state.search, { escapeHtml })}
         <div${renderResponsivePreviewFrameAttrs(`pane ${isEditorView ? 'editor-pane' : 'reader-pane'} full-pane`)}>
           ${
             isEditorView

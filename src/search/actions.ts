@@ -9,13 +9,22 @@ const CATEGORY_ORDER: SearchCategory[] = ['tags', 'contents', 'description'];
 
 export function openSearch(app: HTMLElement): void {
   state.search.open = true;
+  state.search.resultsCollapsed = false;
   state.search.error = null;
+  getRenderApp()();
+  focusSearchInput(app);
+}
+
+export function expandSearchResults(app: HTMLElement): void {
+  state.search.open = true;
+  state.search.resultsCollapsed = false;
   getRenderApp()();
   focusSearchInput(app);
 }
 
 export function closeSearch(): void {
   state.search.open = false;
+  state.search.resultsCollapsed = false;
   state.search.abortController?.abort();
   state.search.abortController = null;
   state.search.isLoading = false;
@@ -26,6 +35,7 @@ export async function submitSearch(): Promise<void> {
   const query = state.search.queryDraft.trim();
   state.search.submittedQuery = query;
   state.search.activeResultId = null;
+  state.search.resultsCollapsed = false;
   state.search.error = null;
   state.search.abortController?.abort();
 
@@ -91,22 +101,38 @@ export function selectSearchResult(app: HTMLElement, resultId: string): void {
     return;
   }
   state.search.activeResultId = result.id;
+  state.search.open = true;
+  state.search.resultsCollapsed = true;
   const targetId = result.targetId.trim();
   if (targetId) {
     navigateToSection(targetId, app);
     state.search.open = true;
-    getRenderApp()();
+    state.search.resultsCollapsed = true;
+    window.setTimeout(() => {
+      const target = findRenderedSearchTarget(app, result);
+      target?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      target?.classList.add('is-temp-highlighted');
+      window.setTimeout(() => target?.classList.remove('is-temp-highlighted'), 1400);
+    }, 30);
     return;
   }
   state.currentView = state.currentView === 'editor' ? 'viewer' : state.currentView;
   getRenderApp()();
   window.setTimeout(() => {
-    const selector = `[data-section-key="${cssEscape(result.sectionKey)}"]${result.blockId ? `[data-block-id="${cssEscape(result.blockId)}"]` : ''}`;
-    const target = app.querySelector<HTMLElement>(selector);
+    const target = findRenderedSearchTarget(app, result);
     target?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     target?.classList.add('is-temp-highlighted');
     window.setTimeout(() => target?.classList.remove('is-temp-highlighted'), 1400);
   }, 20);
+}
+
+function findRenderedSearchTarget(app: HTMLElement, result: HvySearchResult): HTMLElement | null {
+  if (result.targetId.trim()) {
+    return app.querySelector<HTMLElement>(`#${cssEscape(result.targetId.trim())}`);
+  }
+  const surfaces = ['#readerDocument', '#readerSidebarSections', '#aiReaderDocument', '#aiSidebarSections', '#editorTree'].join(', ');
+  const selector = `[data-section-key="${cssEscape(result.sectionKey)}"]${result.blockId ? `[data-block-id="${cssEscape(result.blockId)}"]` : ''}`;
+  return app.querySelector<HTMLElement>(`${surfaces} ${selector}`) ?? app.querySelector<HTMLElement>(selector);
 }
 
 export function setSearchFilterEnabled(enabled: boolean): void {

@@ -172,6 +172,57 @@ hvy_version: 0.1
   expect(expectedResult.visibleSections.has(document.sections[1]!.key)).toBe(false);
 });
 
+test('search filter context keeps expandable stub context for expanded-content matches', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"work"}-->
+#! Work
+
+<!--hvy:expandable {"id":"role","expandableExpanded":false}-->
+  <!--hvy:expandable:stub {}-->
+   <!--hvy:text {"id":"role-summary"}-->
+    Northwind Labs
+
+  <!--hvy:expandable:content {}-->
+   <!--hvy:text {"id":"role-detail"}-->
+    Built TypeScript tools
+`, '.hvy');
+  const expectedResults = await builtInSearchProvider({
+    document,
+    query: 'TypeScript',
+    caseSensitive: false,
+    categories: ['contents'],
+  });
+  const expandable = document.sections[0]!.blocks[0]!;
+  const stubText = expandable.schema.expandableStubBlocks.children[0]!;
+  const detailText = expandable.schema.expandableContentBlocks.children[0]!;
+
+  const expectedContext = createSearchFilterContext(document.sections, {
+    open: false,
+    queryDraft: 'TypeScript',
+    submittedQuery: 'TypeScript',
+    caseSensitive: false,
+    categories: { tags: true, contents: true, description: true },
+    activeTab: 'filter',
+    filterEnabled: true,
+    filterMode: 'hide',
+    resultsCollapsed: false,
+    activeResultId: null,
+    isLoading: false,
+    error: null,
+    results: expectedResults,
+    navigationResultIds: expectedResults.map((result) => result.id),
+    requestNonce: 1,
+    abortController: null,
+  });
+
+  expect(expectedContext.visibleBlocks.has(expandable.id)).toBe(true);
+  expect(expectedContext.visibleBlocks.has(stubText.id)).toBe(true);
+  expect(expectedContext.visibleBlocks.has(detailText.id)).toBe(true);
+});
+
 test('search highlighting escapes plain text before marking matches', () => {
   const expectedResult = highlightPlainText('<script>needle</script>', 'needle', false, escapeHtml);
 

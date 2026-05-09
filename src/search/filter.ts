@@ -54,28 +54,55 @@ export function createSearchFilterContext(sections: VisualSection[], search: Sea
     if (visible) {
       visibleSections.add(section.key);
       ancestors.forEach((ancestor) => visibleSections.add(ancestor.key));
+      if (!sectionMatched && filtering) {
+        section.blocks.forEach(markBlockContextVisible);
+      }
     }
     return visible;
   };
 
   const visitBlock = (block: VisualBlock, forceVisible = false): boolean => {
     let visible = forceVisible || matchedBlocks.has(block.id);
-    const nestedLists = [
-      block.schema.containerBlocks ?? [],
-      block.schema.componentListBlocks ?? [],
-      block.schema.expandableStubBlocks?.children ?? [],
-      block.schema.expandableContentBlocks?.children ?? [],
-      (block.schema.gridItems ?? []).map((item) => item.block),
-    ];
-    for (const nested of nestedLists) {
-      for (const child of nested) {
-        visible = visitBlock(child, forceVisible) || visible;
+    for (const child of block.schema.containerBlocks ?? []) {
+      visible = visitBlock(child, forceVisible) || visible;
+    }
+    for (const child of block.schema.componentListBlocks ?? []) {
+      visible = visitBlock(child, forceVisible) || visible;
+    }
+    for (const child of block.schema.expandableStubBlocks?.children ?? []) {
+      visible = visitBlock(child, forceVisible) || visible;
+    }
+    let expandedContentVisible = false;
+    for (const child of block.schema.expandableContentBlocks?.children ?? []) {
+      const childVisible = visitBlock(child, forceVisible);
+      expandedContentVisible = childVisible || expandedContentVisible;
+      visible = childVisible || visible;
+    }
+    for (const item of block.schema.gridItems ?? []) {
+      visible = visitBlock(item.block, forceVisible) || visible;
+    }
+    if (expandedContentVisible && !forceVisible) {
+      for (const child of block.schema.expandableStubBlocks?.children ?? []) {
+        markBlockTreeVisible(child);
       }
     }
     if (visible) {
       visibleBlocks.add(block.id);
     }
     return visible;
+  };
+
+  const markBlockTreeVisible = (block: VisualBlock): void => {
+    visibleBlocks.add(block.id);
+    block.schema.containerBlocks.forEach(markBlockTreeVisible);
+    block.schema.componentListBlocks.forEach(markBlockTreeVisible);
+    block.schema.expandableStubBlocks.children.forEach(markBlockTreeVisible);
+    block.schema.expandableContentBlocks.children.forEach(markBlockTreeVisible);
+    block.schema.gridItems.forEach((item) => markBlockTreeVisible(item.block));
+  };
+
+  const markBlockContextVisible = (block: VisualBlock): void => {
+    visibleBlocks.add(block.id);
   };
 
   const markSectionTreeVisible = (section: VisualSection): boolean => {

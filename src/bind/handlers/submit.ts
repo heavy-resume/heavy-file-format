@@ -1,11 +1,15 @@
 import { state, getRenderApp, getRefreshReaderPanels, recordHistory, serializeDocument, appendUserChatMessage, buildDocumentEditCliSimRequest, requestChatTurn, requestDocumentEditChatTurn, saveResumeState, submitAiEditRequest, submitCliCommand, restoreCliViewAfterRender } from './_imports';
-import { submitSearch } from '../../search/actions';
+import { applySearchFilter, submitSearch } from '../../search/actions';
 
 export function bindSubmit(app: HTMLElement): void {
   app.addEventListener('submit', async (event) => {
     const form = event.target as HTMLElement | null;
     if (form?.id === 'searchComposer') {
       event.preventDefault();
+      if (state.search.activeTab === 'filter') {
+        await applySearchFilter({ enabled: true });
+        return;
+      }
       await submitSearch();
       return;
     }

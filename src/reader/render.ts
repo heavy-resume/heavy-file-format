@@ -404,6 +404,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
         schema: {
           ...block.schema,
           expandableExpanded: readerExpanded,
+          expandableAlwaysShowStub: forceSearchExpanded ? true : block.schema.expandableAlwaysShowStub,
         },
       } as VisualBlock;
       return renderBlockShell(renderExpandableReader(section, readerBlock, helpers));

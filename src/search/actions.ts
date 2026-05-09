@@ -165,8 +165,9 @@ export function setSearchFilterMode(mode: typeof state.search.filterMode): void 
   getRenderApp()();
 }
 
-export async function applySearchFilter(): Promise<void> {
-  if (state.search.filterEnabled) {
+export async function applySearchFilter(options: { enabled?: boolean } = {}): Promise<void> {
+  const enabled = options.enabled ?? !state.search.filterEnabled;
+  if (!enabled) {
     state.search.filterEnabled = false;
     state.search.submittedQuery = '';
     state.search.activeResultId = null;

@@ -100,18 +100,32 @@ function buildDescriptionPrompt(request: HvyDescriptionRequest): string {
     '- Describe what function this location serves in the document.',
     '- Do not summarize, restate, or describe the specific contents found here.',
     '- Write a location label such as "skills list for this role", "project details area", or "contact metadata section".',
+    '- Prefer the most specific named parent or visible label over generic section names.',
+    '- If a concrete owner appears in the parent tree or visible label, include that owner in the description.',
+    '- Treat parent descriptions as disambiguation only; do not repeat generic policy phrases like ordering, chronology, or overview.',
     '- Use the content only to infer the location function.',
     '- Prefer headings, labels, and parent context over individual values.',
     '- Do not mention HVY, JSON, schema, block ids, or component type unless the visible content requires it.',
     '',
     `Target kind: ${request.kind}`,
     `Section: ${request.section.title || request.section.customId || 'Untitled section'}`,
+    request.parentTree.length ? `Most specific parent: ${formatMostSpecificParent(request.parentTree)}` : '',
     request.parentTree.length ? `Parent tree:\n${formatParentTree(request.parentTree)}` : request.parentTrail.length ? `Parent context: ${request.parentTrail.join(' / ')}` : '',
     request.block ? `Visible label: ${getBlockLabel(request.block)}` : '',
     '',
     'Content:',
     request.contentSummary || '(no visible text)',
   ].filter(Boolean).join('\n');
+}
+
+function formatMostSpecificParent(parentTree: HvyDescriptionParentContext[]): string {
+  const parent = [...parentTree].reverse().find((entry) => entry.label.trim() || entry.description?.trim());
+  if (!parent) {
+    return '';
+  }
+  const label = parent.label.trim();
+  const description = parent.description?.trim();
+  return description && description !== label ? `${label || description} - ${description}` : label || description || '';
 }
 
 function formatParentTree(parentTree: HvyDescriptionParentContext[]): string {
@@ -214,7 +228,53 @@ function getBlockLabel(block: VisualBlock): string {
     || block.schema.containerTitle.trim()
     || firstLine(block.text)
     || block.schema.imageAlt.trim()
-    || block.schema.id.trim();
+    || getTableRowLabel(block)
+    || getNestedHeadingLabel(block, new Set([block]))
+    || '';
+}
+
+function getTableRowLabel(block: VisualBlock): string {
+  if (block.schema.component !== 'table') {
+    return '';
+  }
+  return firstLine(block.schema.tableRows[0]?.cells.join(' ') ?? '');
+}
+
+function getNestedHeadingLabel(block: VisualBlock, seen = new Set<VisualBlock>()): string {
+  const nestedBlocks = [
+    ...(block.schema.expandableContentBlocks.children ?? []),
+    ...(block.schema.expandableStubBlocks.children ?? []),
+    ...(block.schema.containerBlocks ?? []),
+    ...(block.schema.componentListBlocks ?? []),
+    ...(block.schema.gridItems ?? []).map((item) => item.block),
+  ];
+  for (const child of nestedBlocks) {
+    if (seen.has(child)) {
+      continue;
+    }
+    seen.add(child);
+    const direct = firstHeadingLine(child.text);
+    if (direct) {
+      return direct;
+    }
+    const nested = getNestedHeadingLabel(child, seen);
+    if (nested) {
+      return nested;
+    }
+    const table = getTableRowLabel(child);
+    if (table) {
+      return table;
+    }
+  }
+  return '';
+}
+
+function firstHeadingLine(value: string): string {
+  const heading = value
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find((line) => /^#{1,6}\s+/.test(line));
+  return heading ? firstLine(heading.replace(/^#{1,6}\s+/, '')) : '';
 }
 
 function firstLine(value: string): string {

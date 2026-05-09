@@ -87,7 +87,12 @@ hvy_version: 0.1
 <!--hvy: {"id":"history","description":"Work history section"}-->
 #! History
 
-<!--hvy:expandable {"id":"northwind","description":"Northwind Labs history record"}-->
+<!--hvy:expandable {"id":"northwind","description":"history role entry"}-->
+
+ <!--hvy:expandable:content {}-->
+
+  <!--hvy:text {}-->
+   ### Northwind Labs
 
  <!--hvy:expandable:content {}-->
 
@@ -112,7 +117,7 @@ hvy_version: 0.1
 
   expect(parentTrees).toEqual([[
     'History: Work history section',
-    'Northwind Labs history record: Northwind Labs history record',
+    'Northwind Labs: history role entry',
   ]]);
 });
 
@@ -154,5 +159,6 @@ hvy_version: 0.1
   expect(payload.context).toContain('Generate one concise search location description');
   expect(payload.context).toContain('Describe what function this location serves in the document.');
   expect(payload.context).toContain('Do not summarize, restate, or describe the specific contents found here.');
+  expect(payload.context).toContain('If a concrete owner appears in the parent tree or visible label, include that owner in the description.');
   expect(payload).not.toHaveProperty('input');
 });

@@ -119,18 +119,12 @@ async function populateBlockDescriptions(
 }
 
 function appendBlockTrail(parentTrail: string[], block: VisualBlock): string[] {
-  const label = block.schema.xrefTitle.trim()
-    || block.schema.containerTitle.trim()
-    || block.text.replace(/\s+/g, ' ').trim().slice(0, 80)
-    || block.schema.imageAlt.trim();
+  const label = getBlockLocationLabel(block);
   return label ? [...parentTrail, label] : parentTrail;
 }
 
 function appendBlockParentTree(parentTree: HvyDescriptionParentContext[], block: VisualBlock): HvyDescriptionParentContext[] {
-  const label = block.schema.xrefTitle.trim()
-    || block.schema.containerTitle.trim()
-    || block.text.replace(/\s+/g, ' ').trim().slice(0, 80)
-    || block.schema.imageAlt.trim()
+  const label = getBlockLocationLabel(block)
     || block.schema.description.trim()
     || block.schema.componentListItemLabel.trim()
     || block.schema.componentListComponent.trim()
@@ -143,4 +137,62 @@ function appendBlockParentTree(parentTree: HvyDescriptionParentContext[], block:
     label: label || 'Untitled parent',
     ...(description ? { description } : {}),
   }];
+}
+
+function getBlockLocationLabel(block: VisualBlock): string {
+  return block.schema.xrefTitle.trim()
+    || block.schema.containerTitle.trim()
+    || firstLine(block.text)
+    || block.schema.imageAlt.trim()
+    || getTableRowLabel(block)
+    || getNestedHeadingLabel(block, new Set([block]));
+}
+
+function getTableRowLabel(block: VisualBlock): string {
+  if (block.schema.component !== 'table') {
+    return '';
+  }
+  return firstLine(block.schema.tableRows[0]?.cells.join(' ') ?? '');
+}
+
+function getNestedHeadingLabel(block: VisualBlock, seen = new Set<VisualBlock>()): string {
+  const nestedBlocks = [
+    ...(block.schema.expandableContentBlocks.children ?? []),
+    ...(block.schema.expandableStubBlocks.children ?? []),
+    ...(block.schema.containerBlocks ?? []),
+    ...(block.schema.componentListBlocks ?? []),
+    ...(block.schema.gridItems ?? []).map((item) => item.block),
+  ];
+  for (const child of nestedBlocks) {
+    if (seen.has(child)) {
+      continue;
+    }
+    seen.add(child);
+    const direct = firstHeadingLine(child.text);
+    if (direct) {
+      return direct;
+    }
+    const nested = getNestedHeadingLabel(child, seen);
+    if (nested) {
+      return nested;
+    }
+    const table = getTableRowLabel(child);
+    if (table) {
+      return table;
+    }
+  }
+  return '';
+}
+
+function firstHeadingLine(value: string): string {
+  const heading = value
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find((line) => /^#{1,6}\s+/.test(line));
+  return heading ? firstLine(heading.replace(/^#{1,6}\s+/, '')) : '';
+}
+
+function firstLine(value: string): string {
+  const line = value.replace(/\s+/g, ' ').trim();
+  return line.length > 80 ? `${line.slice(0, 79).trim()}...` : line;
 }

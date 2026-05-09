@@ -154,9 +154,8 @@ function renderSearchResult(result: HvySearchResult, search: SearchState, docume
   const target = resolveResultTarget(result, document);
   const description = getResultDescription(result, target);
   const context = result.contextLabel || result.sourceFile || '';
-  const fields = result.matches?.length
-    ? result.matches.map((match) => match.label).filter((label, index, labels) => labels.indexOf(label) === index)
-    : [result.sourceField].filter(Boolean);
+  const fields = getResultFields(result);
+  const visibleDescription = shouldShowResultDescription(description, result) ? description : '';
   return `<button
     type="button"
     class="search-result${active ? ' is-active' : ''}"
@@ -166,11 +165,45 @@ function renderSearchResult(result: HvySearchResult, search: SearchState, docume
     <span class="search-result-main">
       <span class="search-result-title">${deps.escapeHtml(result.label)}</span>
       ${context ? `<span class="search-result-context">${deps.escapeHtml(context)}</span>` : ''}
-      <span class="search-result-fields">${fields.map((field) => `<span>${deps.escapeHtml(field)}</span>`).join('')}</span>
-      ${description ? `<span class="search-result-description">${highlightPlainText(description, search.submittedQuery, search.caseSensitive, deps.escapeHtml)}</span>` : ''}
-      ${renderResultMatchSnippets(result, search, deps)}
+      ${fields.length ? `<span class="search-result-fields">${fields.map((field) => `<span>${deps.escapeHtml(field)}</span>`).join('')}</span>` : ''}
+      ${visibleDescription ? `<span class="search-result-description">${highlightPlainText(visibleDescription, search.submittedQuery, search.caseSensitive, deps.escapeHtml)}</span>` : ''}
+      ${visibleDescription ? '' : renderResultMatchSnippets(result, search, deps)}
     </span>
   </button>`;
+}
+
+function getResultFields(result: HvySearchResult): string[] {
+  const fields = result.matches?.length
+    ? result.matches.map((match) => match.label).filter((label, index, labels) => labels.indexOf(label) === index)
+    : [result.sourceField].filter(Boolean);
+  if (result.category === 'contents' && fields.length === 1 && (fields[0] === 'Text' || fields[0] === 'Title')) {
+    return [];
+  }
+  return fields;
+}
+
+function shouldShowResultDescription(description: string, result: HvySearchResult): boolean {
+  const normalizedDescription = normalizeResultText(description);
+  if (!normalizedDescription) {
+    return false;
+  }
+  const normalizedLabel = normalizeResultText(result.label);
+  const normalizedPreview = normalizeResultText(result.preview);
+  if (normalizedDescription === normalizedLabel || normalizedDescription === normalizedPreview) {
+    return false;
+  }
+  if (normalizedDescription.length <= normalizedLabel.length + 4 && normalizedDescription.includes(normalizedLabel)) {
+    return false;
+  }
+  return true;
+}
+
+function normalizeResultText(value: string): string {
+  return value
+    .replace(/[#*_`~>\-[\](){}:]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLocaleLowerCase();
 }
 
 function renderResultMatchSnippets(result: HvySearchResult, search: SearchState, deps: SearchRenderDeps): string {

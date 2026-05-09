@@ -24,6 +24,7 @@ export function setSidebarOpen(app: HTMLElement, open: boolean): void {
   if (tab) {
     tab.setAttribute('aria-expanded', open ? 'true' : 'false');
   }
+  window.dispatchEvent(new CustomEvent('hvy:viewer-sidebar-open-changed'));
 }
 
 export function setEditorSidebarOpen(app: HTMLElement, open: boolean): void {

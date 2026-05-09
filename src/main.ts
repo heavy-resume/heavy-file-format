@@ -42,8 +42,13 @@ if (!appRoot) {
   throw new Error('App container not found.');
 }
 const app = appRoot;
-const READER_HIGHLIGHT_GLOW_MS = 5000;
+const READER_HIGHLIGHT_GLOW_MS = 6000;
 let readerHighlightGlowObserver: IntersectionObserver | null = null;
+let readerHighlightGlowSignature = '';
+let readerHighlightGlowSeenTargets = new Set<string>();
+window.addEventListener('hvy:viewer-sidebar-open-changed', () => {
+  window.requestAnimationFrame(() => scheduleReaderHighlightGlow(app));
+});
 
 app.innerHTML = '<main class="layout"><section class="pane full-pane"><p>Loading editor...</p></section></main>';
 
@@ -781,15 +786,24 @@ function refreshModalPreview(): void {
 }
 
 function scheduleReaderHighlightGlow(root: ParentNode): void {
+  const signature = JSON.stringify(state.readerView);
+  if (signature !== readerHighlightGlowSignature) {
+    readerHighlightGlowSignature = signature;
+    readerHighlightGlowSeenTargets = new Set<string>();
+  }
+
   readerHighlightGlowObserver?.disconnect();
   readerHighlightGlowObserver = null;
 
-  const highlighted = [...root.querySelectorAll<HTMLElement>('.reader-section.is-highlighted, .reader-block.is-highlighted')];
+  const highlighted = getReaderHighlightGlowRoots(root)
+    .flatMap((surface) => [...surface.querySelectorAll<HTMLElement>('.reader-section.is-highlighted, .reader-block.is-highlighted')])
+    .filter((element) => !readerHighlightGlowSeenTargets.has(getReaderHighlightGlowKey(element)));
   if (highlighted.length === 0) {
     return;
   }
 
   const triggerGlow = (element: HTMLElement): void => {
+    readerHighlightGlowSeenTargets.add(getReaderHighlightGlowKey(element));
     element.classList.add('is-reader-view-highlight-glowing');
     window.setTimeout(() => {
       element.classList.remove('is-reader-view-highlight-glowing');
@@ -816,6 +830,28 @@ function scheduleReaderHighlightGlow(root: ParentNode): void {
   );
   readerHighlightGlowObserver = observer;
   highlighted.forEach((element) => observer.observe(element));
+}
+
+function getReaderHighlightGlowKey(element: HTMLElement): string {
+  const surface = element.closest('#readerSidebarSections, #aiSidebarSections')
+    ? 'sidebar'
+    : element.closest('#readerDocument, #aiReaderDocument')
+    ? 'reader'
+    : 'unknown';
+  return `${surface}:${element.dataset.readerViewTarget || element.id || element.dataset.blockId || ''}`;
+}
+
+function getReaderHighlightGlowRoots(root: ParentNode): HTMLElement[] {
+  const sidebar =
+    root.querySelector<HTMLElement>('#readerSidebarSections') ??
+    root.querySelector<HTMLElement>('#aiSidebarSections');
+  const reader =
+    root.querySelector<HTMLElement>('#readerDocument') ??
+    root.querySelector<HTMLElement>('#aiReaderDocument');
+  if (state.viewerSidebarOpen && sidebar) {
+    return [sidebar];
+  }
+  return reader ? [reader] : sidebar ? [sidebar] : [];
 }
 
 // Initialize late-bound callbacks so all modules can access renderApp/refreshReaderPanels

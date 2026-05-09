@@ -159,6 +159,17 @@ export function toggleChatPanelOpen(chat: ChatState): void {
   chat.panelOpen = true;
 }
 
+export function focusChatPanel(app: ParentNode): void {
+  window.setTimeout(() => {
+    const prompt = app.querySelector<HTMLTextAreaElement>('[data-field="chat-input"]');
+    if (prompt) {
+      prompt.focus();
+      return;
+    }
+    app.querySelector<HTMLElement>('.chat-panel')?.focus();
+  }, 0);
+}
+
 export function persistChatSettings(settings: ChatSettings): void {
   if (typeof window === 'undefined' || !window.localStorage) {
     return;
@@ -272,7 +283,7 @@ export function renderChatPanel(
     <div class="chat-dock ${chat.panelOpen ? 'is-open' : 'is-closed'}" aria-label="Document chat">
       ${
         chat.panelOpen
-          ? `<aside class="chat-panel">
+          ? `<aside class="chat-panel" tabindex="-1">
                <div class="chat-panel-head">
                  <div>
                    <h2>${title}</h2>

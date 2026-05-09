@@ -2,7 +2,7 @@ import { state, getRenderApp } from '../../state';
 import { undoState, redoState } from '../../history';
 import { setSidebarOpen, setEditorSidebarOpen } from '../../navigation';
 import { serializeDocument } from '../../serialization';
-import { clearChatConversation, toggleChatPanelOpen } from '../../chat/chat';
+import { clearChatConversation, focusChatPanel, toggleChatPanelOpen } from '../../chat/chat';
 import { closeAiEditPopover } from '../../ai-edit-popover';
 import { restoreCliViewAfterRender } from '../../cli-ui/focus';
 import type { AppActionHandler } from './types';
@@ -87,9 +87,12 @@ const toggleEditorSidebar: AppActionHandler = ({ app }) => {
   setEditorSidebarOpen(app, !state.editorSidebarOpen);
 };
 
-const toggleChatPanel: AppActionHandler = () => {
+const toggleChatPanel: AppActionHandler = ({ app }) => {
   toggleChatPanelOpen(state.chat);
   getRenderApp()();
+  if (state.chat.panelOpen) {
+    focusChatPanel(app);
+  }
 };
 
 const setResponsivePreview: AppActionHandler = ({ actionButton }) => {

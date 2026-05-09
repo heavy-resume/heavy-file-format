@@ -1,6 +1,8 @@
 import type { VisualBlock, VisualSection } from '../editor/types';
 import type { SearchState } from './types';
 
+const FILTER_CONTEXT_DEPTH = 2;
+
 export interface SearchFilterContext {
   active: boolean;
   filtering: boolean;
@@ -55,7 +57,7 @@ export function createSearchFilterContext(sections: VisualSection[], search: Sea
       visibleSections.add(section.key);
       ancestors.forEach((ancestor) => visibleSections.add(ancestor.key));
       if (!sectionMatched && filtering) {
-        section.blocks.forEach(markBlockContextVisible);
+        section.blocks.forEach((block) => markBlockContextVisible(block, FILTER_CONTEXT_DEPTH));
       }
     }
     return visible;
@@ -101,8 +103,16 @@ export function createSearchFilterContext(sections: VisualSection[], search: Sea
     block.schema.gridItems.forEach((item) => markBlockTreeVisible(item.block));
   };
 
-  const markBlockContextVisible = (block: VisualBlock): void => {
+  const markBlockContextVisible = (block: VisualBlock, depth: number): void => {
     visibleBlocks.add(block.id);
+    if (depth <= 0) {
+      return;
+    }
+    block.schema.containerBlocks.forEach((child) => markBlockContextVisible(child, depth - 1));
+    block.schema.componentListBlocks.forEach((child) => markBlockContextVisible(child, depth - 1));
+    block.schema.expandableStubBlocks.children.forEach((child) => markBlockContextVisible(child, depth - 1));
+    block.schema.expandableContentBlocks.children.forEach((child) => markBlockContextVisible(child, depth - 1));
+    block.schema.gridItems.forEach((item) => markBlockContextVisible(item.block, depth - 1));
   };
 
   const markSectionTreeVisible = (section: VisualSection): boolean => {

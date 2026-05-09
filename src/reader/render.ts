@@ -356,6 +356,9 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       }
       return renderBlockShell(renderReaderViewCollapseWrapper(targetKey, block, body));
     };
+    const renderNonEmptyBlockShell = (body: string): string => body.trim() ? renderBlockShell(body) : '';
+    const renderNonEmptyMaybeCollapsedBlockShell = (body: string): string =>
+      body.trim() ? renderMaybeCollapsedBlockShell(body) : '';
 
     if (base === 'plugin') {
       if (block.schema.plugin === SCRIPTING_PLUGIN_ID) {
@@ -388,14 +391,14 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
         : prioritized
         ? { ...block, schema: { ...block.schema, containerExpanded: true } } as VisualBlock
         : block;
-      return renderBlockShell(renderContainerReader(section, readerBlock, helpers));
+      return renderNonEmptyBlockShell(renderContainerReader(section, readerBlock, helpers));
     }
     if (base === 'component-list') {
-      return renderMaybeCollapsedBlockShell(renderComponentListReader(section, block, helpers));
+      return renderNonEmptyMaybeCollapsedBlockShell(renderComponentListReader(section, block, helpers));
     }
     if (base === 'grid') {
       deps.ensureGridItems(block.schema);
-      return renderMaybeCollapsedBlockShell(renderGridReader(section, block, helpers));
+      return renderNonEmptyMaybeCollapsedBlockShell(renderGridReader(section, block, helpers));
     }
     if (base === 'expandable') {
       deps.ensureExpandableBlocks(block);
@@ -407,7 +410,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
           expandableAlwaysShowStub: forceSearchExpanded ? true : block.schema.expandableAlwaysShowStub,
         },
       } as VisualBlock;
-      return renderBlockShell(renderExpandableReader(section, readerBlock, helpers));
+      return renderNonEmptyBlockShell(renderExpandableReader(section, readerBlock, helpers));
     }
     if (base === 'table') {
       if (!areTablesEnabled()) {

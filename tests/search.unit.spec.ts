@@ -223,6 +223,63 @@ hvy_version: 0.1
   expect(expectedContext.visibleBlocks.has(detailText.id)).toBe(true);
 });
 
+test('search filter context keeps two levels of top-component context', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"skills"}-->
+#! Skills
+
+<!--hvy:grid {"id":"skill-grid"}-->
+  <!--hvy:grid:0 {"id":"tools-cell"}-->
+   <!--hvy:container {"id":"tools-container"}-->
+    <!--hvy:container:0 {}-->
+     <!--hvy:text {"id":"tools-heading"}-->
+      Tools & Technologies
+    <!--hvy:container:1 {}-->
+     <!--hvy:component-list {"id":"tools-list"}-->
+      <!--hvy:component-list:0 {}-->
+       <!--hvy:xref-card {"id":"typescript","xrefTitle":"TypeScript","xrefDetail":"Primary language","xrefTarget":"typescript"}-->
+`, '.hvy');
+  const expectedResults = await builtInSearchProvider({
+    document,
+    query: 'TypeScript',
+    caseSensitive: false,
+    categories: ['contents'],
+  });
+  const grid = document.sections[0]!.blocks[0]!;
+  const container = grid.schema.gridItems[0]!.block;
+  const heading = container.schema.containerBlocks[0]!;
+  const list = container.schema.containerBlocks[1]!;
+  const xref = list.schema.componentListBlocks[0]!;
+
+  const expectedContext = createSearchFilterContext(document.sections, {
+    open: false,
+    queryDraft: 'TypeScript',
+    submittedQuery: 'TypeScript',
+    caseSensitive: false,
+    categories: { tags: true, contents: true, description: true },
+    activeTab: 'filter',
+    filterEnabled: true,
+    filterMode: 'hide',
+    resultsCollapsed: false,
+    activeResultId: null,
+    isLoading: false,
+    error: null,
+    results: expectedResults,
+    navigationResultIds: expectedResults.map((result) => result.id),
+    requestNonce: 1,
+    abortController: null,
+  });
+
+  expect(expectedContext.visibleBlocks.has(grid.id)).toBe(true);
+  expect(expectedContext.visibleBlocks.has(container.id)).toBe(true);
+  expect(expectedContext.visibleBlocks.has(heading.id)).toBe(true);
+  expect(expectedContext.visibleBlocks.has(list.id)).toBe(true);
+  expect(expectedContext.visibleBlocks.has(xref.id)).toBe(true);
+});
+
 test('search highlighting escapes plain text before marking matches', () => {
   const expectedResult = highlightPlainText('<script>needle</script>', 'needle', false, escapeHtml);
 

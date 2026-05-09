@@ -157,6 +157,8 @@ hvy_version: 0.1
     messages: [{ role: 'user', content: 'Write the description now.' }],
   });
   expect(payload.context).toContain('Generate one concise search location description');
+  expect(payload.context).toContain('Write a shorthand label, not a sentence.');
+  expect(payload.context).toContain('Keep it under 8 words when possible.');
   expect(payload.context).toContain('Describe what function this location serves in the document.');
   expect(payload.context).toContain('Do not summarize, restate, or describe the specific contents found here.');
   expect(payload.context).toContain('Combine the owning context with the local function when both are available.');

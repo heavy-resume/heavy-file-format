@@ -23,12 +23,15 @@ export function expandSearchResults(app: HTMLElement): void {
 }
 
 export function closeSearch(): void {
+  const keepFilter = state.search.filterEnabled && state.search.submittedQuery.trim().length > 0;
   state.search.open = false;
   state.search.resultsCollapsed = false;
-  state.search.submittedQuery = '';
-  state.search.activeResultId = null;
-  state.search.navigationResultIds = [];
-  state.search.filterEnabled = false;
+  if (!keepFilter) {
+    state.search.submittedQuery = '';
+    state.search.activeResultId = null;
+    state.search.navigationResultIds = [];
+    state.search.filterEnabled = false;
+  }
   state.search.abortController?.abort();
   state.search.abortController = null;
   state.search.requestNonce += 1;
@@ -162,10 +165,28 @@ export function setSearchFilterMode(mode: typeof state.search.filterMode): void 
   getRenderApp()();
 }
 
-export function applySearchFilter(): void {
-  setSearchFilterEnabled(!state.search.filterEnabled);
-  state.search.open = true;
-  state.search.resultsCollapsed = true;
+export async function applySearchFilter(): Promise<void> {
+  if (state.search.filterEnabled) {
+    state.search.filterEnabled = false;
+    state.search.submittedQuery = '';
+    state.search.activeResultId = null;
+    state.search.navigationResultIds = [];
+    state.search.open = false;
+    state.search.resultsCollapsed = false;
+    getRefreshReaderPanels()();
+    getRenderApp()();
+    return;
+  }
+  if (state.search.queryDraft.trim() !== state.search.submittedQuery.trim()) {
+    await submitSearch();
+  }
+  state.search.filterEnabled = true;
+  if (state.currentView === 'editor') {
+    state.currentView = 'viewer';
+  }
+  state.search.open = false;
+  state.search.resultsCollapsed = false;
+  getRefreshReaderPanels()();
   getRenderApp()();
 }
 

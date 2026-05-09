@@ -118,3 +118,17 @@ test('table editor renders inline cell content without paragraph wrappers', () =
   expect(html).toContain('Staff Engineer');
   expect(html).toContain('<!--hvy:alt {"compact":"Tech"}-->Technologies<!--/hvy:alt-->');
 });
+
+test('reader table header title uses alt full text instead of raw annotation', () => {
+  const helpers = {
+    ...createHelpers(),
+    getTableColumns: (schema: VisualBlock['schema']) => schema.tableColumns,
+  };
+  const block = createTableBlock([], { showHeader: true });
+  block.schema.tableColumns = ['YEAR', '<!--hvy:alt {"compact":"ORG"}-->ORGANIZATION<!--/hvy:alt-->', 'TITLE'];
+
+  const html = renderTableReader(section, block, helpers);
+
+  expect(html).toContain('title="ORGANIZATION"');
+  expect(html).not.toContain('title="<!--hvy:alt');
+});

@@ -51,7 +51,7 @@ const setSearchFilterModeAction: AppActionHandler = ({ actionButton }) => {
 };
 
 const applySearchFilterAction: AppActionHandler = () => {
-  applySearchFilter();
+  void applySearchFilter();
 };
 
 export const searchActions: Record<string, AppActionHandler> = {

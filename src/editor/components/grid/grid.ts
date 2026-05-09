@@ -92,5 +92,8 @@ export const renderGridReader: ComponentReaderRenderer = (_section, block, helpe
       return `<div class="reader-grid-cell" style="grid-column: ${helpers.escapeAttr(gridColumn)};">${item.html}</div>`;
     })
     .join('');
+  if (!cells.trim()) {
+    return '';
+  }
   return `<div class="reader-grid-layout" style="${helpers.escapeAttr(gridStyle)}">${cells}</div>`;
 };

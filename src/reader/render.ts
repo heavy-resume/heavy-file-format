@@ -340,7 +340,10 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       : '';
     const blockAttrs = `${idAttr} class="${blockClass}" data-component="${deps.escapeAttr(block.schema.component)}" data-section-key="${deps.escapeAttr(section.key)}" data-block-id="${deps.escapeAttr(block.id)}"${expandableAttrs} style="${deps.escapeAttr(sanitizeInlineCss(block.schema.css))}"`;
     const helpers = deps.getComponentRenderHelpers();
-    const renderBlockShell = (body: string): string => `<div ${blockAttrs}${renderReaderViewTargetAttrs(targetKey, dimmed)}>${highlightSearchHtml(body, searchContext.query, searchContext.caseSensitive)}</div>`;
+    const renderBlockShell = (body: string): string => {
+      const query = searchContext.filtering ? '' : searchContext.query;
+      return `<div ${blockAttrs}${renderReaderViewTargetAttrs(targetKey, dimmed)}>${highlightSearchHtml(body, query, searchContext.caseSensitive)}</div>`;
+    };
     const renderMaybeCollapsedBlockShell = (body: string): string => {
       if (!modifiers.has('collapse') || base === 'container' || base === 'expandable') {
         return renderBlockShell(body);

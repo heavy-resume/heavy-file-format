@@ -196,8 +196,24 @@ export async function applySearchFilter(options: { enabled?: boolean } = {}): Pr
     getRenderApp()();
     return;
   }
+  const queryChanged = state.search.queryDraft.trim() !== state.search.submittedQuery.trim();
+  if (queryChanged) {
+    state.search.filterEnabled = false;
+    getRefreshReaderPanels()();
+  }
   if (state.search.queryDraft.trim() !== state.search.submittedQuery.trim()) {
     await submitSearch();
+  }
+  if (!state.search.submittedQuery.trim() || state.search.error || state.search.results.length === 0) {
+    state.search.filterEnabled = false;
+    state.search.open = true;
+    state.search.resultsCollapsed = false;
+    if (!state.search.error && state.search.submittedQuery.trim()) {
+      state.search.error = 'No matches. Try another term.';
+    }
+    getRefreshReaderPanels()();
+    getRenderApp()();
+    return;
   }
   state.search.filterEnabled = true;
   if (state.currentView === 'editor') {

@@ -191,8 +191,16 @@ function renderSearchInput(search: SearchState, deps: SearchRenderDeps, options:
 
 function renderFilterTab(search: SearchState, deps: SearchRenderDeps): string {
   const applied = search.filterEnabled && search.queryDraft.trim() === search.submittedQuery.trim();
+  const status = search.isLoading
+    ? 'Searching...'
+    : search.error
+    ? search.error
+    : search.submittedQuery.trim().length > 0 && search.results.length === 0
+    ? 'No matches. Try another term.'
+    : '';
   return `<section class="search-filter-panel" role="tabpanel" aria-label="Filter search results">
     ${renderSearchInput(search, deps, { icon: funnelIcon(), label: 'Filter document', placeholder: 'Filter document' })}
+    ${status ? `<div class="search-status${search.error ? ' is-error' : ''}" role="status">${deps.escapeHtml(status)}</div>` : ''}
     <div class="search-filter-box">
       <div class="search-filter-box-head">
         ${funnelIcon()}

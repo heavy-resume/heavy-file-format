@@ -7,6 +7,7 @@ import { getRenderApp } from './state';
 import { clearChatConversation } from './chat/chat';
 import { serializeDocument } from './serialization';
 import { saveResumeState } from './state-persistence';
+import { createDefaultSearchState } from './search/state';
 
 /**
  * Directly update the sidebar open/closed state on the DOM without a full re-render,
@@ -281,6 +282,8 @@ export function resetTransientUiState(): void {
   state.readerContainerState = {};
   state.readerView = {};
   state.readerViewActivatedTargets = new Set<string>();
+  state.search.abortController?.abort();
+  state.search = createDefaultSearchState();
   state.componentListReaderViews = {};
   state.viewerSidebarHelpDismissed = false;
   state.editorSidebarHelpDismissed = false;

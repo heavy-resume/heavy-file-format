@@ -36,6 +36,8 @@ import { scriptingPluginRegistration, setScriptingResult } from './plugins/scrip
 import { runUserScript } from './plugins/scripting/wrapper';
 import { getScriptingPluginVersion } from './plugins/scripting/version';
 import { visitBlocksInList } from './section-ops';
+import { centerSearchResultLenses, renderSearchLauncher, renderSearchPalette } from './search/render';
+import { createDefaultSearchState } from './search/state';
 
 const appRoot = document.querySelector<HTMLDivElement>('#app');
 if (!appRoot) {
@@ -67,6 +69,7 @@ function createInitialState(document: ReturnType<typeof deserializeDocumentBytes
     editorMode: 'basic',
     responsivePreview: 'full',
     chat: createDefaultChatState(),
+    search: createDefaultSearchState(),
     aiEdit: {
       sectionKey: null,
       blockId: null,
@@ -389,6 +392,9 @@ readerRenderer = createReaderRenderer(
     get readerViewActivatedTargets() {
       return state.readerViewActivatedTargets;
     },
+    get search() {
+      return state.search;
+    },
     get componentListReaderViews() {
       return state.componentListReaderViews;
     },
@@ -590,6 +596,8 @@ function renderApp(): void {
               state.currentView === 'editor' || state.currentView === 'ai'
             )
       }
+      ${isCliEditor ? '' : renderSearchLauncher(state.search)}
+      ${renderSearchPalette(state.search, state.document, { escapeAttr, escapeHtml, readerRenderer })}
       ${readerRenderer.renderModal()}
       ${readerRenderer.renderLinkInlineModal()}
     </main>
@@ -610,6 +618,7 @@ function renderApp(): void {
   stepStartedAt = performance.now();
   restorePaneScroll(state.paneScroll, app);
   restoreChatThreadScroll(app, chatScroll);
+  centerSearchResultLenses(app);
   scheduleReaderHighlightGlow(app);
   restoreMs = performance.now() - stepStartedAt;
 

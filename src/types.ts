@@ -1,5 +1,6 @@
 import type { BlockSchema, VisualBlock, VisualSection } from './editor/types';
 import type { JsonObject } from './hvy/types';
+import type { SearchState } from './search/types';
 
 export interface DocumentAttachment {
   id: string;
@@ -197,6 +198,7 @@ export interface AppState {
   responsivePreview: 'full' | 'phone' | 'tablet' | 'desktop';
   chat: ChatState;
   aiEdit: AiEditState;
+  search: SearchState;
   paneScroll: PaneScrollState;
   showAdvancedEditor: boolean;
   rawEditorText: string;

@@ -1,8 +1,15 @@
 import { state, getRenderApp, getRefreshReaderPanels, recordHistory, serializeDocument, appendUserChatMessage, buildDocumentEditCliSimRequest, requestChatTurn, requestDocumentEditChatTurn, saveResumeState, submitAiEditRequest, submitCliCommand, restoreCliViewAfterRender } from './_imports';
+import { submitSearch } from '../../search/actions';
 
 export function bindSubmit(app: HTMLElement): void {
   app.addEventListener('submit', async (event) => {
     const form = event.target as HTMLElement | null;
+    if (form?.id === 'searchComposer') {
+      event.preventDefault();
+      await submitSearch();
+      return;
+    }
+
     if (form?.id === 'chatComposer') {
       event.preventDefault();
       console.debug('[hvy:chat-submit] submit event', {

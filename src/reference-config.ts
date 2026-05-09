@@ -1,3 +1,5 @@
+import type { HvySearchProvider } from './search/types';
+
 export interface ReferenceAppFeatures {
   tables: boolean;
   allowExternalCss: boolean;
@@ -5,6 +7,7 @@ export interface ReferenceAppFeatures {
 
 export interface ReferenceAppConfig {
   features: ReferenceAppFeatures;
+  searchProvider?: HvySearchProvider | null;
 }
 
 declare global {
@@ -43,6 +46,11 @@ export function getReferenceAppConfig(): ReferenceAppConfig {
         globalConfig?.features?.allowExternalCss ??
         defaultConfig.features.allowExternalCss,
     },
+    searchProvider:
+      runtimeOverride?.searchProvider ??
+      globalConfig?.searchProvider ??
+      defaultConfig.searchProvider ??
+      null,
   };
 }
 

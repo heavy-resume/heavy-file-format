@@ -1,4 +1,5 @@
 import { shortcutsBound, setShortcutsBound, undoState, redoState } from './_imports';
+import { openSearch } from '../../search/actions';
 
 export function bindShortcuts(_app: HTMLElement): void {
   if (!shortcutsBound) {
@@ -11,6 +12,11 @@ export function bindShortcuts(_app: HTMLElement): void {
         return;
       }
       const key = event.key.toLowerCase();
+      if (key === 'f' && !event.shiftKey) {
+        event.preventDefault();
+        openSearch(_app);
+        return;
+      }
       if (key === 'z' && !event.shiftKey) {
         event.preventDefault();
         undoState();

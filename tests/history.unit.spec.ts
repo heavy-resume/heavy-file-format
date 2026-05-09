@@ -2,6 +2,7 @@ import { expect, test } from 'vitest';
 
 import { initCallbacks, initState, state } from '../src/state';
 import { createDefaultChatState } from '../src/chat/chat';
+import { createDefaultSearchState } from '../src/search/state';
 import { undoState, redoState } from '../src/history';
 import type { AppState } from '../src/types';
 
@@ -18,6 +19,7 @@ function createHistoryTestState(): AppState {
     editorMode: 'raw',
     responsivePreview: 'full',
     chat: createDefaultChatState(),
+    search: createDefaultSearchState(),
     aiEdit: {
       sectionKey: null,
       blockId: null,

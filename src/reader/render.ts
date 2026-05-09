@@ -16,6 +16,9 @@ import { renderTagEditor } from '../editor/tag-editor';
 import { colorValueToPickerHex, getResolvedThemeColor, getThemeColorLabel, THEME_COLOR_NAMES } from '../theme';
 import type { ThemeConfig } from '../theme';
 import type { DbTableQueryModalState, ReaderViewFilter, ReusableSaveModalState, SqliteRowComponentModalState, VisualDocument } from '../types';
+import type { SearchState } from '../search/types';
+import { createSearchFilterContext, isBlockSearchMatch, isBlockSearchVisible, isSectionSearchMatch, isSectionSearchVisible, type SearchFilterContext } from '../search/filter';
+import { highlightSearchHtml } from '../search/highlight';
 import { getDocumentSectionDefaultCss, mergeDocumentCss } from '../document-section-defaults';
 import { sanitizeInlineCss } from '../css-sanitizer';
 import { areTablesEnabled } from '../reference-config';
@@ -56,6 +59,7 @@ interface ReaderRenderState {
   readerContainerState: Record<string, boolean>;
   readerView: ReaderViewFilter;
   readerViewActivatedTargets: Set<string>;
+  search: SearchState;
   componentListReaderViews: Record<string, string>;
   viewerSidebarHelpDismissed: boolean;
 }
@@ -98,17 +102,21 @@ export interface ReaderRenderer {
 
 export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRenderDeps): ReaderRenderer {
   let activeReaderViewContext: ReaderViewContext | null = null;
+  let activeSearchFilterContext: SearchFilterContext | null = null;
 
   function withReaderViewContext(render: () => string): string {
     const previous = activeReaderViewContext;
+    const previousSearch = activeSearchFilterContext;
     activeReaderViewContext = createReaderViewContext(
       { meta: state.documentMeta, extension: '.hvy', sections: state.documentSections, attachments: [] },
       state.readerView
     );
+    activeSearchFilterContext = createSearchFilterContext(state.documentSections, state.search);
     try {
       return render();
     } finally {
       activeReaderViewContext = previous;
+      activeSearchFilterContext = previousSearch;
     }
   }
 
@@ -120,6 +128,10 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       );
     }
     return activeReaderViewContext;
+  }
+
+  function getActiveSearchFilterContext(): SearchFilterContext {
+    return activeSearchFilterContext ?? createSearchFilterContext(state.documentSections, state.search);
   }
 
   function renderNavigation(sections: VisualSection[]): string {
@@ -155,13 +167,15 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     return withReaderViewContext(() => {
       resetReaderTableStripeSequence();
       const realSections = orderReaderViewTargets(
-        sections.filter((section) => !section.isGhost && section.location !== 'sidebar'),
+        sections.filter((section) => !section.isGhost && section.location !== 'sidebar' && isSectionSearchVisible(getActiveSearchFilterContext(), section)),
         getActiveReaderViewContext(),
         getSectionReaderViewTargetKey,
         state.readerViewActivatedTargets
       );
       if (realSections.length === 0) {
-        return '<div class="muted">No content to display yet.</div>';
+        return getActiveSearchFilterContext().active
+          ? '<div class="reader-search-empty"><div>No matches in this filtered view.</div></div>'
+          : '<div class="muted">No content to display yet.</div>';
       }
       const maxWidth = typeof state.documentMeta.reader_max_width === 'string' ? state.documentMeta.reader_max_width.trim() : '';
       const bodyStyle = maxWidth.length > 0 ? ` style="max-width: ${deps.escapeAttr(maxWidth)};"` : '';
@@ -179,7 +193,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     return withReaderViewContext(() => {
       resetReaderTableStripeSequence();
       const sidebarSections = orderReaderViewTargets(
-        sections.filter((section) => !section.isGhost && section.location === 'sidebar'),
+        sections.filter((section) => !section.isGhost && section.location === 'sidebar' && isSectionSearchVisible(getActiveSearchFilterContext(), section)),
         getActiveReaderViewContext(),
         getSectionReaderViewTargetKey,
         state.readerViewActivatedTargets
@@ -216,6 +230,10 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     if (hasReaderViewModifier(viewContext, targetKey, 'hidden')) {
       return '';
     }
+    const searchContext = getActiveSearchFilterContext();
+    if (!isSectionSearchVisible(searchContext, section)) {
+      return '';
+    }
     const effectiveId = deps.getSectionId(section);
     const temp = state.tempHighlights.has(effectiveId);
     const modifiers = getReaderViewModifiers(viewContext, targetKey);
@@ -231,6 +249,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
         ? (sectionExpanded ? '' : 'is-collapsed-preview')
         : (!section.contained || sectionExpanded ? '' : 'is-collapsed-preview'),
       section.highlight || modifiers.has('highlight') ? 'is-highlighted' : '',
+      isSectionSearchMatch(searchContext, section) ? 'is-search-match' : '',
       dimmed ? 'is-reader-view-dimmed' : '',
       temp ? 'is-temp-highlighted' : '',
     ]
@@ -281,8 +300,12 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
 
   function renderReaderBlock(section: VisualSection, block: VisualBlock): string {
     const viewContext = getActiveReaderViewContext();
+    const searchContext = getActiveSearchFilterContext();
     const targetKey = getBlockReaderViewTargetKey(block);
     if (hasReaderViewModifier(viewContext, targetKey, 'hidden')) {
+      return '';
+    }
+    if (!isBlockSearchVisible(searchContext, block)) {
       return '';
     }
     const base = deps.resolveBaseComponent(block.schema.component);
@@ -301,6 +324,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       `slot-${block.schema.slot}`,
       state.aiEditTarget.sectionKey === section.key && state.aiEditTarget.blockId === block.id ? 'is-ai-target' : '',
       modifiers.has('highlight') ? 'is-highlighted' : '',
+      isBlockSearchMatch(searchContext, block) ? 'is-search-match' : '',
       dimmed ? 'is-reader-view-dimmed' : '',
       blockDomId && state.tempHighlights.has(blockDomId) ? 'is-temp-highlighted' : '',
     ]
@@ -312,7 +336,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       : '';
     const blockAttrs = `${idAttr} class="${blockClass}" data-component="${deps.escapeAttr(block.schema.component)}" data-section-key="${deps.escapeAttr(section.key)}" data-block-id="${deps.escapeAttr(block.id)}"${expandableAttrs} style="${deps.escapeAttr(sanitizeInlineCss(block.schema.css))}"`;
     const helpers = deps.getComponentRenderHelpers();
-    const renderBlockShell = (body: string): string => `<div ${blockAttrs}${renderReaderViewTargetAttrs(targetKey, dimmed)}>${body}</div>`;
+    const renderBlockShell = (body: string): string => `<div ${blockAttrs}${renderReaderViewTargetAttrs(targetKey, dimmed)}>${highlightSearchHtml(body, searchContext.query, searchContext.caseSensitive)}</div>`;
     const renderMaybeCollapsedBlockShell = (body: string): string => {
       if (!modifiers.has('collapse') || base === 'container' || base === 'expandable') {
         return renderBlockShell(body);
@@ -399,6 +423,8 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       getBlockReaderViewTargetKey,
       state.readerViewActivatedTargets,
       { prioritize: false }
+    ).filter((block) =>
+      isBlockSearchVisible(getActiveSearchFilterContext(), block)
     );
   }
 
@@ -409,6 +435,8 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       getBlockReaderViewTargetKey,
       state.readerViewActivatedTargets,
       { prioritize: true }
+    ).filter((block) =>
+      isBlockSearchVisible(getActiveSearchFilterContext(), block)
     );
   }
 

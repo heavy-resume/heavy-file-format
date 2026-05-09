@@ -11,6 +11,7 @@ import {
 } from '../src/reader/view-filter';
 import { deserializeDocument } from '../src/serialization';
 import { defaultBlockSchema } from '../src/document-factory';
+import { createDefaultSearchState } from '../src/search/state';
 import type { ComponentRenderHelpers } from '../src/editor/component-helpers';
 import type { VisualBlock, VisualSection } from '../src/editor/types';
 import type { ReaderViewFilter } from '../src/types';
@@ -239,6 +240,7 @@ test('reader view rendering applies hidden, dimmed, highlight, and generic colla
       third: ['highlight', 'collapse'],
       'priority-child': ['highlight'],
     } satisfies ReaderViewFilter,
+    search: createDefaultSearchState(),
     readerViewActivatedTargets: new Set<string>(),
     componentListReaderViews: {},
     viewerSidebarHelpDismissed: true,

@@ -59,6 +59,7 @@
   z-index: 75;
   display: flex;
   justify-content: center;
+  transform: translateY(4rem);
   min-height: 0;
 }
 

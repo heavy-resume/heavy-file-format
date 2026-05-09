@@ -107,32 +107,41 @@ const setResponsivePreview: AppActionHandler = ({ actionButton }) => {
   getRenderApp()();
 };
 
-const clearTargetFiltering: AppActionHandler = () => {
+const clearTargetFiltering: AppActionHandler = ({ app, event }) => {
+  event.preventDefault();
+  event.stopImmediatePropagation();
   const menu = state.contextMenu;
   if (!menu) {
     return;
   }
   clearFilteringForTarget(menu.sectionKey, menu.blockId);
   state.contextMenu = null;
+  app.querySelector('.hvy-context-popover')?.remove();
   getRenderApp()();
 };
 
-const requestContextComponentChanges: AppActionHandler = () => {
+const requestContextComponentChanges: AppActionHandler = ({ app, event }) => {
+  event.preventDefault();
+  event.stopImmediatePropagation();
   const menu = state.contextMenu;
   if (!menu?.blockId) {
     return;
   }
   state.contextMenu = null;
+  app.querySelector('.hvy-context-popover')?.remove();
   openAiEditPopover(menu.sectionKey, menu.blockId, menu.x, menu.y);
   getRenderApp()();
 };
 
-const editContextComponent: AppActionHandler = () => {
+const editContextComponent: AppActionHandler = ({ app, event }) => {
+  event.preventDefault();
+  event.stopImmediatePropagation();
   const menu = state.contextMenu;
   if (!menu?.blockId) {
     return;
   }
   state.contextMenu = null;
+  app.querySelector('.hvy-context-popover')?.remove();
   setActiveEditorBlock(menu.sectionKey, menu.blockId);
   getRenderApp()();
 };

@@ -1,4 +1,4 @@
-import { state, getRenderApp, openLinkInlineModal } from './_imports';
+import { state, openLinkInlineModal } from './_imports';
 
 export function bindContextmenu(app: HTMLElement): void {
   app.addEventListener('contextmenu', (event) => {
@@ -40,13 +40,49 @@ export function bindContextmenu(app: HTMLElement): void {
       return;
     }
     event.preventDefault();
+    const fallbackRect = (blockElement ?? sectionElement)?.getBoundingClientRect();
+    const x = Number.isFinite(event.clientX) ? event.clientX : fallbackRect ? fallbackRect.left + 16 : 16;
+    const y = Number.isFinite(event.clientY) ? event.clientY : fallbackRect ? fallbackRect.top + 16 : 16;
     state.contextMenu = {
       kind: state.currentView === 'ai' ? 'ai' : 'filter',
       sectionKey,
       ...(blockId ? { blockId } : {}),
-      x: event.clientX,
-      y: event.clientY,
+      x,
+      y,
     };
-    getRenderApp()();
+    renderContextMenuElement(app);
   });
+}
+
+function renderContextMenuElement(app: HTMLElement): void {
+  app.querySelector('.hvy-context-popover')?.remove();
+  const menu = state.contextMenu;
+  if (!menu) {
+    return;
+  }
+  const filtering = state.search.filterEnabled && state.search.submittedQuery.trim().length > 0;
+  const popover = document.createElement('section');
+  popover.className = 'hvy-context-popover';
+  popover.setAttribute('aria-label', menu.kind === 'ai' ? 'Component options' : 'Filter options');
+  popover.style.left = `${menu.x}px`;
+  popover.style.top = `${menu.y}px`;
+
+  const addButton = (label: string, action: string): void => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.dataset.action = action;
+    button.textContent = label;
+    popover.append(button);
+  };
+
+  if (menu.kind === 'ai') {
+    addButton('Edit component', 'edit-context-component');
+    addButton('Request changes', 'request-context-component-changes');
+    if (filtering) {
+      addButton('Clear filtering', 'clear-target-filtering');
+    }
+  } else {
+    addButton('Clear filtering', 'clear-target-filtering');
+  }
+  app.append(popover);
 }

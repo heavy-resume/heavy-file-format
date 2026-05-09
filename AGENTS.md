@@ -60,3 +60,5 @@ Animations, colors, highlights, etc all have examples. Use them!
 Make sure stuff isn't losing focus after each keystroke. This is a common, reoccuring problem!
 
 If the instructions say "on the mobile layout ..." it really means "on smaller screens or using the phone emulator" and media selectors should always use container, or not use a media selector at all.
+
+When running any sort of tests don't interfere with port 5173 which is the dev server port doing hot reloading.

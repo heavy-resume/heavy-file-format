@@ -189,7 +189,9 @@ export function handleBlockFieldInput(target: HTMLElement): boolean {
     syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
     syncMs = performance.now() - stepStartedAt;
     stepStartedAt = performance.now();
-    getRefreshReaderPanels()();
+    if (!target.closest('#aiReaderDocument')) {
+      getRefreshReaderPanels()();
+    }
     refreshMs = performance.now() - stepStartedAt;
     console.debug('[hvy:perf] handleBlockFieldInput', {
       field,

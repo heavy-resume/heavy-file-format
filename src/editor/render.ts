@@ -87,6 +87,7 @@ interface EditorRenderState {
   currentView: 'editor' | 'viewer' | 'ai';
   responsivePreview: 'full' | 'phone' | 'tablet' | 'desktop';
   mobileAdjustmentMode: boolean;
+  descriptionPopulate?: { isRunning: boolean; status: string | null };
 }
 
 interface EditorRenderDeps {
@@ -715,6 +716,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const theme = deps.getThemeConfig();
     const colorCount = Object.keys(theme.colors).length;
     const tableBaseTypeOption = areTablesEnabled() || defs.some((def) => def.baseType === 'table');
+    const descriptionPopulate = state.descriptionPopulate ?? { isRunning: false, status: null };
     return `
       <section class="meta-panel">
         <div class="meta-panel-head">
@@ -740,6 +742,19 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
             placeholder="Tell the AI how this document is organized and what intent to preserve."
           >${deps.escapeHtml(String(state.documentMeta['ai-context'] ?? ''))}</textarea>
         </label>
+        <div class="editor-grid">
+          <label>
+            <span>Search Descriptions</span>
+            <button
+              type="button"
+              class="ghost"
+              data-action="populate-missing-descriptions"
+              aria-label="Populate Missing"
+              ${descriptionPopulate.isRunning ? 'disabled' : ''}
+            >${descriptionPopulate.isRunning ? 'Generating...' : 'Populate Missing'}</button>
+          </label>
+        </div>
+        ${descriptionPopulate.status ? `<div class="muted">${deps.escapeHtml(descriptionPopulate.status)}</div>` : ''}
         <label class="checkbox-label">
           <span>Tables Enabled</span>
           <input type="checkbox" ${areTablesEnabled() ? 'checked' : ''} disabled />

@@ -290,6 +290,46 @@ hvy_version: 0.1
   await expect(page.locator('.component-meta-modal', { hasText: 'Component Meta: text' }).locator('[data-action="generate-block-description"]')).toHaveCount(0);
 });
 
+test('document meta populates missing descriptions parent first', async ({ page }) => {
+  const contexts: string[] = [];
+  await page.route('**/api/chat', async (route) => {
+    const payload = route.request().postDataJSON() as { context?: string };
+    contexts.push(payload.context ?? '');
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        output: contexts.length === 1 ? 'Profile area' : 'Profile summary block',
+      }),
+    });
+  });
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"profile"}-->
+#! Profile
+
+<!--hvy:text {"id":"summary"}-->
+ Summary body
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Advanced' }).click();
+  await page.getByRole('button', { name: 'Document Meta' }).click();
+
+  await page.getByRole('button', { name: 'Populate Missing' }).click();
+
+  await expect(page.locator('.meta-panel')).toContainText('Generated 2 missing descriptions.');
+  expect(contexts).toHaveLength(2);
+  expect(contexts[1]).toContain('Profile - Profile area');
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await expect(page.locator('#rawEditor')).toContainText('"description":"Profile area"');
+  await expect(page.locator('#rawEditor')).toContainText('"description":"Profile summary block"');
+});
+
 test('resume template shows friendly empty component-list add prompts before activation', async ({ page }) => {
   await page.goto('/');
 

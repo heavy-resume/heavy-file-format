@@ -107,6 +107,7 @@ function createInitialState(document: ReturnType<typeof deserializeDocumentBytes
     tempHighlights: new Set<string>(),
     addComponentBySection: {},
     metaPanelOpen: false,
+    descriptionPopulate: { isRunning: false, status: null },
     selectedReusableComponentName: null,
     templateValues: {},
     history: [],
@@ -326,6 +327,9 @@ editorRenderer = createEditorRenderer(
     },
     get mobileAdjustmentMode() {
       return state.editorMode === 'mobile-adjustment';
+    },
+    get descriptionPopulate() {
+      return state.descriptionPopulate;
     },
   },
   {

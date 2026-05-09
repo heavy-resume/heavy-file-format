@@ -4,6 +4,7 @@ import { findBlockByIds, setActiveEditorBlock, deactivateEditorBlock, cancelEdit
 import { recordHistory } from '../../history';
 import type { AppActionHandler } from './types';
 import { buildBlockDescriptionParentTree, buildDescriptionRequest, generateDescription } from '../../descriptions/provider';
+import { populateMissingDescriptions } from '../../descriptions/populate';
 
 const activateBlock: AppActionHandler = ({ event, sectionKey, blockId }) => {
   if (!blockId) {
@@ -81,6 +82,37 @@ const focusSchemaComponent: AppActionHandler = ({ actionButton, target }) => {
   select?.focus();
   select?.click();
 };
+
+const populateMissingDocumentDescriptions: AppActionHandler = () => {
+  void populateMissingDocumentDescriptionsAsync();
+};
+
+async function populateMissingDocumentDescriptionsAsync(): Promise<void> {
+  if (state.descriptionPopulate?.isRunning) {
+    return;
+  }
+  state.descriptionPopulate = {
+    isRunning: true,
+    status: 'Generating missing descriptions parent-first...',
+  };
+  getRenderApp()();
+  try {
+    recordHistory('document:descriptions:populate-missing');
+    const result = await populateMissingDescriptions(state.document);
+    state.descriptionPopulate = {
+      isRunning: false,
+      status: result.updated === 0 ? 'No missing descriptions.' : `Generated ${result.updated} missing description${result.updated === 1 ? '' : 's'}.`,
+    };
+    getRefreshReaderPanels()();
+    getRenderApp()();
+  } catch (error) {
+    state.descriptionPopulate = {
+      isRunning: false,
+      status: error instanceof Error ? `Description generation failed: ${error.message}` : 'Description generation failed.',
+    };
+    getRenderApp()();
+  }
+}
 
 const generateSectionDescription: AppActionHandler = ({ actionButton, sectionKey }) => {
   void generateSectionDescriptionAsync(actionButton, sectionKey);
@@ -203,6 +235,7 @@ export const editorStateActions: Record<string, AppActionHandler> = {
   'toggle-editor-expandable': toggleEditorExpandable,
   'toggle-expandable-editor-panel': toggleExpandableEditorPanel,
   'focus-schema-component': focusSchemaComponent,
+  'populate-missing-descriptions': populateMissingDocumentDescriptions,
   'generate-section-description': generateSectionDescription,
   'generate-block-description': generateBlockDescription,
   'generate-expandable-pane-description': generateExpandablePaneDescription,

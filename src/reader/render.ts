@@ -261,12 +261,17 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     const contentClass = modifiers.has('collapse') || section.contained
       ? (sectionExpanded ? 'reader-section-content' : 'reader-section-content reader-section-preview')
       : 'reader-section-content';
-    const content = `<div class="${contentClass}">${renderReaderBlocks(section, section.blocks)}${orderReaderViewTargets(
+    const blocksHtml = renderReaderBlocks(section, section.blocks);
+    const childrenHtml = orderReaderViewTargets(
       section.children.filter((child) => !child.isGhost),
       viewContext,
       getSectionReaderViewTargetKey,
       state.readerViewActivatedTargets
-    ).map((child) => renderReaderSection(child)).join('')}</div>`;
+    ).map((child) => renderReaderSection(child)).join('');
+    if (!blocksHtml.trim() && !childrenHtml.trim() && !isSectionSearchMatch(searchContext, section)) {
+      return '';
+    }
+    const content = `<div class="${contentClass}">${blocksHtml}${childrenHtml}</div>`;
 
     const viewCollapseAttrs = `data-reader-action="toggle-view-collapse" data-reader-view-target="${deps.escapeAttr(targetKey)}" data-reader-view-collapse-key="${deps.escapeAttr(viewCollapseKey)}" aria-expanded="${viewExpanded ? 'true' : 'false'}"`;
     const toggleAttrs = modifiers.has('collapse')
@@ -313,13 +318,14 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     const base = deps.resolveBaseComponent(block.schema.component);
     const modifiers = getReaderViewModifiers(viewContext, targetKey);
     const prioritized = isReaderViewPrioritized(viewContext, targetKey);
+    const searchDimmed = isBlockSearchDeprioritized(searchContext, block);
+    const forceSearchExpanded = searchContext.filtering && searchContext.filterMode === 'hide' && !searchDimmed;
     const readerExpanded = base === 'expandable'
-      ? getReaderExpandableExpanded(section.key, block, modifiers.has('collapse') ? false : prioritized ? true : block.schema.expandableExpanded)
+      ? getReaderExpandableExpanded(section.key, block, forceSearchExpanded ? true : modifiers.has('collapse') ? false : prioritized ? true : block.schema.expandableExpanded)
       : block.schema.expandableExpanded;
     const blockDomId = getBlockDomId(block);
     const idAttr = blockDomId ? ` id="${deps.escapeAttr(blockDomId)}"` : '';
     const dimmed = modifiers.has('dimmed') && !state.readerViewActivatedTargets.has(targetKey);
-    const searchDimmed = isBlockSearchDeprioritized(searchContext, block);
     const blockClass = [
       'reader-block',
       `reader-block-${base}`,
@@ -377,6 +383,8 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     if (base === 'container') {
       const readerBlock = modifiers.has('collapse')
         ? { ...block, schema: { ...block.schema, containerExpanded: false } } as VisualBlock
+        : forceSearchExpanded
+        ? { ...block, schema: { ...block.schema, containerExpanded: true } } as VisualBlock
         : prioritized
         ? { ...block, schema: { ...block.schema, containerExpanded: true } } as VisualBlock
         : block;

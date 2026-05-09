@@ -87,7 +87,15 @@ interface EditorRenderState {
   currentView: 'editor' | 'viewer' | 'ai';
   responsivePreview: 'full' | 'phone' | 'tablet' | 'desktop';
   mobileAdjustmentMode: boolean;
-  descriptionPopulate?: { isRunning: boolean; status: string | null };
+  descriptionPopulate?: {
+    isRunning: boolean;
+    status: string | null;
+    completed: number;
+    total: number;
+    current: string;
+    skippedLeaves: number;
+    lastGenerated: string;
+  };
 }
 
 interface EditorRenderDeps {
@@ -716,7 +724,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const theme = deps.getThemeConfig();
     const colorCount = Object.keys(theme.colors).length;
     const tableBaseTypeOption = areTablesEnabled() || defs.some((def) => def.baseType === 'table');
-    const descriptionPopulate = state.descriptionPopulate ?? { isRunning: false, status: null };
+    const descriptionPopulate = state.descriptionPopulate ?? { isRunning: false, status: null, completed: 0, total: 0, current: '', skippedLeaves: 0, lastGenerated: '' };
     return `
       <section class="meta-panel">
         <div class="meta-panel-head">
@@ -755,6 +763,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           </label>
         </div>
         ${descriptionPopulate.status ? `<div class="muted">${deps.escapeHtml(descriptionPopulate.status)}</div>` : ''}
+        ${descriptionPopulate.skippedLeaves > 0 ? `<div class="muted">${deps.escapeHtml(`${descriptionPopulate.skippedLeaves} component${descriptionPopulate.skippedLeaves === 1 ? '' : 's'} skipped.`)}</div>` : ''}
         <label class="checkbox-label">
           <span>Tables Enabled</span>
           <input type="checkbox" ${areTablesEnabled() ? 'checked' : ''} disabled />

@@ -4,7 +4,7 @@ import type { VisualDocument } from '../types';
 import type { HvyDescriptionParentContext, HvyDescriptionProvider, HvyDescriptionRequest, HvyDescriptionResponse, HvyDescriptionTargetKind } from './types';
 
 const DEFAULT_DESCRIPTION_MODEL = 'gpt-5.4-nano';
-const MAX_CONTENT_CHARS = 1400;
+const MAX_CONTENT_CHARS = 600;
 
 export const localDescriptionProvider: HvyDescriptionProvider = (request) => ({
   description: buildLocalDescription(request),

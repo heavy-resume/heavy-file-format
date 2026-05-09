@@ -295,11 +295,12 @@ test('document meta populates missing descriptions parent first', async ({ page 
   await page.route('**/api/chat', async (route) => {
     const payload = route.request().postDataJSON() as { context?: string };
     contexts.push(payload.context ?? '');
+    await new Promise((resolve) => setTimeout(resolve, 80));
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
-        output: contexts.length === 1 ? 'Profile area' : 'Profile summary block',
+        output: contexts.length === 1 ? 'Profile area' : 'Profile summary list',
       }),
     });
   });
@@ -313,8 +314,12 @@ hvy_version: 0.1
 <!--hvy: {"id":"profile"}-->
 #! Profile
 
-<!--hvy:text {"id":"summary"}-->
- Summary body
+<!--hvy:component-list {"id":"summary-list"}-->
+
+ <!--hvy:component-list:0 {}-->
+
+  <!--hvy:text {"id":"summary"}-->
+   Summary body
 `);
   await page.getByRole('button', { name: 'Apply' }).click();
   await page.getByRole('button', { name: 'Advanced' }).click();
@@ -326,12 +331,18 @@ hvy_version: 0.1
   await expect(page.getByRole('button', { name: 'Open search' })).toHaveCount(0);
   await page.getByRole('button', { name: 'Populate Missing' }).click();
 
+  await expect(page.locator('.description-progress-modal')).toBeVisible();
+  await expect(page.locator('.description-progress-modal')).toContainText(/0 of 2|1 of 2|2 of 2/);
+  await expect(page.locator('.description-progress-modal')).toContainText('Last generated');
+  await expect(page.locator('.description-progress-modal')).toContainText('Profile area');
+  await expect(page.locator('.description-progress-modal')).toContainText('1 component skipped');
   await expect(page.locator('.meta-panel')).toContainText('Generated 2 missing descriptions.');
   expect(contexts).toHaveLength(2);
   expect(contexts[1]).toContain('Profile - Profile area');
   await page.getByRole('button', { name: 'Raw' }).click();
   await expect(page.locator('#rawEditor')).toContainText('"description":"Profile area"');
-  await expect(page.locator('#rawEditor')).toContainText('"description":"Profile summary block"');
+  await expect(page.locator('#rawEditor')).toContainText('"description":"Profile summary list"');
+  await expect(page.locator('#rawEditor')).not.toContainText('Summary body","description"');
 });
 
 test('resume template shows friendly empty component-list add prompts before activation', async ({ page }) => {

@@ -6,6 +6,8 @@ import type { AppActionHandler } from './types';
 import { buildBlockDescriptionParentTree, buildDescriptionRequest, generateDescription } from '../../descriptions/provider';
 import { populateMissingDescriptions } from '../../descriptions/populate';
 
+let descriptionPopulateAbortController: AbortController | null = null;
+
 const activateBlock: AppActionHandler = ({ event, sectionKey, blockId }) => {
   if (!blockId) {
     return;
@@ -91,28 +93,69 @@ async function populateMissingDocumentDescriptionsAsync(): Promise<void> {
   if (state.descriptionPopulate?.isRunning) {
     return;
   }
+  descriptionPopulateAbortController = new AbortController();
   state.descriptionPopulate = {
     isRunning: true,
-    status: 'Generating missing descriptions parent-first...',
+    status: 'Generating structural descriptions parent-first...',
+    completed: 0,
+    total: 0,
+    current: 'Preparing descriptions...',
+    skippedLeaves: 0,
+    lastGenerated: '',
   };
   getRenderApp()();
   try {
     recordHistory('document:descriptions:populate-missing');
-    const result = await populateMissingDescriptions(state.document);
+    const result = await populateMissingDescriptions(state.document, {
+      signal: descriptionPopulateAbortController.signal,
+      onProgress: (progress) => {
+        state.descriptionPopulate = {
+          isRunning: true,
+          status: progress.total === 0
+            ? 'No missing structural descriptions.'
+            : `Generated ${progress.updated} of ${progress.total} structural description${progress.total === 1 ? '' : 's'}.`,
+          completed: progress.completed,
+          total: progress.total,
+          current: progress.current,
+          skippedLeaves: progress.skippedLeaves,
+          lastGenerated: progress.lastGenerated,
+        };
+        getRenderApp()();
+      },
+    });
+    descriptionPopulateAbortController = null;
     state.descriptionPopulate = {
       isRunning: false,
       status: result.updated === 0 ? 'No missing descriptions.' : `Generated ${result.updated} missing description${result.updated === 1 ? '' : 's'}.`,
+      completed: result.completed,
+      total: result.total,
+      current: '',
+      skippedLeaves: result.skippedLeaves,
+      lastGenerated: result.lastGenerated,
     };
     getRefreshReaderPanels()();
     getRenderApp()();
   } catch (error) {
+    const aborted = descriptionPopulateAbortController?.signal.aborted || error instanceof DOMException && error.name === 'AbortError';
+    descriptionPopulateAbortController = null;
     state.descriptionPopulate = {
       isRunning: false,
-      status: error instanceof Error ? `Description generation failed: ${error.message}` : 'Description generation failed.',
+      status: aborted
+        ? 'Description generation stopped.'
+        : error instanceof Error ? `Description generation failed: ${error.message}` : 'Description generation failed.',
+      completed: state.descriptionPopulate?.completed ?? 0,
+      total: state.descriptionPopulate?.total ?? 0,
+      current: '',
+      skippedLeaves: state.descriptionPopulate?.skippedLeaves ?? 0,
+      lastGenerated: state.descriptionPopulate?.lastGenerated ?? '',
     };
     getRenderApp()();
   }
 }
+
+const stopPopulateMissingDescriptions: AppActionHandler = () => {
+  descriptionPopulateAbortController?.abort();
+};
 
 const generateSectionDescription: AppActionHandler = ({ actionButton, sectionKey }) => {
   void generateSectionDescriptionAsync(actionButton, sectionKey);
@@ -236,6 +279,7 @@ export const editorStateActions: Record<string, AppActionHandler> = {
   'toggle-expandable-editor-panel': toggleExpandableEditorPanel,
   'focus-schema-component': focusSchemaComponent,
   'populate-missing-descriptions': populateMissingDocumentDescriptions,
+  'stop-populate-missing-descriptions': stopPopulateMissingDescriptions,
   'generate-section-description': generateSectionDescription,
   'generate-block-description': generateBlockDescription,
   'generate-expandable-pane-description': generateExpandablePaneDescription,

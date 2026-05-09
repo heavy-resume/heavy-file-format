@@ -13,7 +13,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-test('populateMissingDescriptions fills only missing component descriptions through the configured provider', async () => {
+test('populateMissingDescriptions fills only structural descriptions through the configured provider', async () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
 ---
@@ -24,8 +24,12 @@ hvy_version: 0.1
 <!--hvy:text {"id":"northwind","description":"Existing description"}-->
  Northwind Labs
 
-<!--hvy:text {"id":"heavy-stack"}-->
- Heavy Stack
+<!--hvy:component-list {"id":"history-skills"}-->
+
+ <!--hvy:component-list:0 {}-->
+
+  <!--hvy:text {"id":"heavy-stack"}-->
+   Heavy Stack
 `, '.hvy');
   const requestedKinds: string[] = [];
   setReferenceAppConfig({
@@ -38,10 +42,53 @@ hvy_version: 0.1
   const expectedResult = await populateMissingDescriptions(document);
 
   expect(expectedResult.updated).toBe(2);
+  expect(expectedResult.skippedLeaves).toBe(1);
   expect(requestedKinds).toEqual(['section', 'block']);
   expect(document.sections[0]!.description).toBe('section: History Northwind La');
   expect(document.sections[0]!.blocks[0]!.schema.description).toBe('Existing description');
   expect(document.sections[0]!.blocks[1]!.schema.description).toBe('block: Heavy Stack');
+  expect(document.sections[0]!.blocks[1]!.schema.componentListBlocks[0]!.schema.description).toBe('');
+});
+
+test('populateMissingDescriptions skips plain layout containers without title or border', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"layout-test","description":"Layout test section"}-->
+#! Layout Test
+
+<!--hvy:container {"id":"layout-wrapper"}-->
+
+<!--hvy:container {"id":"titled-panel","containerTitle":"Details"}-->
+
+<!--hvy:container {"id":"bordered-panel","css":"border: 1px solid var(--hvy-border);"}-->
+
+<!--hvy:grid {"id":"layout-grid"}-->
+
+ <!--hvy:grid:0 {"id":"grid-cell"}-->
+
+  <!--hvy:text {"id":"grid-text"}-->
+   Grid content
+`, '.hvy');
+  const requestedIds: string[] = [];
+  setReferenceAppConfig({
+    descriptionProvider: (request) => {
+      requestedIds.push(request.block?.schema.id ?? request.section?.customId ?? request.kind);
+      return { description: `generated ${request.block?.schema.id ?? request.kind}` };
+    },
+  });
+
+  const expectedResult = await populateMissingDescriptions(document);
+
+  expect(expectedResult.updated).toBe(2);
+  expect(expectedResult.skippedLeaves).toBe(3);
+  expect(requestedIds).toEqual(['titled-panel', 'bordered-panel']);
+  expect(document.sections[0]!.blocks[0]!.schema.description).toBe('');
+  expect(document.sections[0]!.blocks[1]!.schema.description).toBe('generated titled-panel');
+  expect(document.sections[0]!.blocks[2]!.schema.description).toBe('generated bordered-panel');
+  expect(document.sections[0]!.blocks[3]!.schema.description).toBe('');
+  expect(document.sections[0]!.blocks[3]!.schema.gridItems[0]!.block.schema.description).toBe('');
 });
 
 test('populateMissingDescriptions includes expandable stub and expanded pane descriptions', async () => {
@@ -71,12 +118,13 @@ hvy_version: 0.1
   const expectedResult = await populateMissingDescriptions(document);
   const block = document.sections[0]!.blocks[0]!;
 
-  expect(expectedResult.updated).toBe(4);
+  expect(expectedResult.updated).toBe(2);
+  expect(expectedResult.skippedLeaves).toBe(2);
   expect(block.schema.description).toBe('Project record');
   expect(block.schema.expandableStubDescription).toBe('generated expandable-stub');
   expect(block.schema.expandableContentDescription).toBe('generated expandable-content');
-  expect(block.schema.expandableStubBlocks.children[0]!.schema.description).toBe('generated block');
-  expect(block.schema.expandableContentBlocks.children[0]!.schema.description).toBe('generated block');
+  expect(block.schema.expandableStubBlocks.children[0]!.schema.description).toBe('');
+  expect(block.schema.expandableContentBlocks.children[0]!.schema.description).toBe('');
 });
 
 test('populateMissingDescriptions sends populated parent descriptions in the parent tree', async () => {

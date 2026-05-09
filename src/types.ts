@@ -220,7 +220,15 @@ export interface AppState {
   tempHighlights: Set<string>;
   addComponentBySection: Record<string, string>;
   metaPanelOpen: boolean;
-  descriptionPopulate?: { isRunning: boolean; status: string | null };
+  descriptionPopulate?: {
+    isRunning: boolean;
+    status: string | null;
+    completed: number;
+    total: number;
+    current: string;
+    skippedLeaves: number;
+    lastGenerated: string;
+  };
   selectedReusableComponentName: string | null;
   templateValues: Record<string, string>;
   history: string[];

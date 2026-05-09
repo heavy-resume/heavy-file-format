@@ -41,6 +41,76 @@
   padding: 1rem;
 }
 
+.description-progress-modal-root {
+  z-index: 140;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+}
+
+.description-progress-modal {
+  width: min(430px, calc(100vw - 2rem));
+  max-height: none;
+  margin: 0;
+  display: grid;
+  gap: 0.85rem;
+}
+
+.description-progress-modal .modal-head {
+  align-items: start;
+}
+
+.description-progress-modal h3,
+.description-progress-modal p {
+  margin: 0;
+}
+
+.description-progress-track {
+  height: 0.7rem;
+  overflow: hidden;
+  border: 1px solid var(--hvy-border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--hvy-surface-alt) 85%, var(--hvy-border));
+}
+
+.description-progress-fill {
+  height: 100%;
+  min-width: 0.25rem;
+  border-radius: inherit;
+  background: var(--hvy-button-bg);
+  transition: width 160ms ease;
+}
+
+.description-progress-meta {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.description-progress-meta span {
+  color: var(--hvy-text-alt);
+  font-size: 0.9rem;
+}
+
+.description-progress-last {
+  display: grid;
+  gap: 0.25rem;
+  border: 1px solid var(--hvy-border);
+  border-radius: 8px;
+  padding: 0.55rem;
+  background: color-mix(in srgb, var(--hvy-surface-alt) 78%, transparent);
+}
+
+.description-progress-last span {
+  color: var(--hvy-text-alt);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.description-progress-last strong {
+  font-size: 0.95rem;
+}
+
 .remove-confirmation-modal .modal-head {
   justify-content: center;
 }

@@ -107,7 +107,7 @@ function createInitialState(document: ReturnType<typeof deserializeDocumentBytes
     tempHighlights: new Set<string>(),
     addComponentBySection: {},
     metaPanelOpen: false,
-    descriptionPopulate: { isRunning: false, status: null },
+    descriptionPopulate: { isRunning: false, status: null, completed: 0, total: 0, current: '', skippedLeaves: 0, lastGenerated: '' },
     selectedReusableComponentName: null,
     templateValues: {},
     history: [],
@@ -271,6 +271,53 @@ function renderContextMenu(): string {
       <button type="button" data-action="request-context-component-changes">Request changes</button>
       ${filtering ? '<button type="button" data-action="clear-target-filtering">Clear filtering</button>' : ''}
     </section>
+  `;
+}
+
+function renderDescriptionPopulateModal(): string {
+  const progress = state.descriptionPopulate;
+  if (!progress?.isRunning) {
+    return '';
+  }
+  const total = Math.max(0, progress.total);
+  const completed = Math.min(progress.completed, total);
+  const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
+  const progressText = total > 0 ? `${completed} of ${total}` : 'Preparing...';
+  return `
+    <div class="modal-root description-progress-modal-root">
+      <div class="modal-overlay"></div>
+      <section class="modal-panel description-progress-modal" role="dialog" aria-modal="true" aria-labelledby="descriptionProgressTitle">
+        <div class="modal-head">
+          <div>
+            <h3 id="descriptionProgressTitle">Populating Descriptions</h3>
+            <p class="muted">Generating structural location labels parent-first.</p>
+          </div>
+          <div class="modal-head-actions">
+            <button type="button" class="danger" data-action="stop-populate-missing-descriptions">Stop</button>
+          </div>
+        </div>
+        <div class="description-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="${escapeAttr(String(total))}" aria-valuenow="${escapeAttr(String(completed))}">
+          <div class="description-progress-fill" style="width: ${escapeAttr(String(percent))}%"></div>
+        </div>
+        <div class="description-progress-meta">
+          <strong>${escapeHtml(progressText)}</strong>
+          ${progress.current ? `<span>${escapeHtml(progress.current)}</span>` : ''}
+        </div>
+        ${
+          progress.lastGenerated
+            ? `<div class="description-progress-last">
+                 <span>Last generated</span>
+                 <strong>${escapeHtml(progress.lastGenerated)}</strong>
+               </div>`
+            : ''
+        }
+        ${
+          progress.skippedLeaves > 0
+            ? `<p class="muted">${escapeHtml(`${progress.skippedLeaves} component${progress.skippedLeaves === 1 ? '' : 's'} skipped to avoid duplicating content or layout wrappers.`)}</p>`
+            : ''
+        }
+      </section>
+    </div>
   `;
 }
 
@@ -635,6 +682,7 @@ function renderApp(): void {
 
       ${readerRenderer.renderModal()}
       ${readerRenderer.renderLinkInlineModal()}
+      ${renderDescriptionPopulateModal()}
     </main>
   `;
   markupMs = performance.now() - stepStartedAt;

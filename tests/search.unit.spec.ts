@@ -73,6 +73,29 @@ hvy_version: 0.1
   expect(expectedResult.some((result) => result.targetId === 'inner-text')).toBe(true);
 });
 
+test('built-in search groups multiple field matches within one component', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"alpha"}-->
+#! Alpha
+
+<!--hvy:xref {"id":"reference","xrefTitle":"needle title","xrefDetail":"needle detail"}-->
+`, '.hvy');
+
+  const expectedResult = await builtInSearchProvider({
+    document,
+    query: 'needle',
+    caseSensitive: false,
+    categories: ['contents'],
+  });
+
+  expect(expectedResult).toHaveLength(1);
+  expect(expectedResult[0]!.sourceField).toBe('2 matches in Title + Detail');
+  expect(expectedResult[0]!.matches?.map((match) => match.label)).toEqual(['Title', 'Detail']);
+});
+
 test('search filter context keeps matches and required ancestors visible', async () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1

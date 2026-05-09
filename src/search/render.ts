@@ -149,6 +149,10 @@ function renderSearchResult(result: HvySearchResult, search: SearchState, docume
     ? renderLensPreview(result, search, target, deps)
     : `<div class="search-result-text-preview">${highlightPlainText(result.preview, search.submittedQuery, search.caseSensitive, deps.escapeHtml)}</div>`;
   const active = search.activeResultId === result.id;
+  const context = result.contextLabel || result.sourceFile || '';
+  const fields = result.matches?.length
+    ? result.matches.map((match) => match.label).filter((label, index, labels) => labels.indexOf(label) === index)
+    : [result.sourceField].filter(Boolean);
   return `<button
     type="button"
     class="search-result${active ? ' is-active' : ''}"
@@ -157,11 +161,29 @@ function renderSearchResult(result: HvySearchResult, search: SearchState, docume
   >
     <span class="search-result-main">
       <span class="search-result-title">${deps.escapeHtml(result.label)}</span>
-      <span class="search-result-meta">${deps.escapeHtml(result.sourceFile ? `${result.sourceField} · ${result.sourceFile}` : result.sourceField)}</span>
-      ${result.category === 'contents' ? '' : `<span class="search-result-chip">${highlightPlainText(result.preview, search.submittedQuery, search.caseSensitive, deps.escapeHtml)}</span>`}
+      ${context ? `<span class="search-result-context">${deps.escapeHtml(context)}</span>` : ''}
+      <span class="search-result-fields">${fields.map((field) => `<span>${deps.escapeHtml(field)}</span>`).join('')}</span>
+      ${renderResultMatchSnippets(result, search, deps)}
     </span>
     ${preview}
   </button>`;
+}
+
+function renderResultMatchSnippets(result: HvySearchResult, search: SearchState, deps: SearchRenderDeps): string {
+  const matches = result.matches?.length
+    ? result.matches
+    : [{ label: result.sourceField, preview: result.preview, matchedText: result.matchedText, field: result.sourceField }];
+  if (result.category === 'contents' && matches.length === 1) {
+    return '';
+  }
+  return `<span class="search-result-snippets">
+    ${matches.slice(0, 3).map((match) => `
+      <span class="search-result-snippet">
+        <span class="search-result-snippet-label">${deps.escapeHtml(match.label)}</span>
+        <span>${highlightPlainText(match.preview, search.submittedQuery, search.caseSensitive, deps.escapeHtml)}</span>
+      </span>
+    `).join('')}
+  </span>`;
 }
 
 function renderLensPreview(

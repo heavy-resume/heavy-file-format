@@ -24,9 +24,18 @@ export interface HvySearchResult {
   preview: string;
   matchedText: string;
   sourceField: string;
+  contextLabel?: string;
+  matches?: HvySearchMatch[];
   sourceFile?: string;
   workspaceId?: string;
   score?: number;
+}
+
+export interface HvySearchMatch {
+  field: string;
+  label: string;
+  preview: string;
+  matchedText: string;
 }
 
 export type HvySearchProvider = (request: HvySearchRequest) => Promise<HvySearchResult[]> | HvySearchResult[];

@@ -108,7 +108,7 @@ function getCollapsedSearchPosition(search: SearchState): string {
   if (search.results.length === 0) {
     return '0 results';
   }
-  const orderedResults = [...search.results].sort((left, right) => (left.documentOrder ?? 0) - (right.documentOrder ?? 0));
+  const orderedResults = getSearchNavigationResults(search);
   const activeIndex = search.activeResultId
     ? orderedResults.findIndex((result) => result.id === search.activeResultId)
     : -1;
@@ -116,6 +116,15 @@ function getCollapsedSearchPosition(search: SearchState): string {
     return `${activeIndex + 1} of ${orderedResults.length}`;
   }
   return `${orderedResults.length} result${orderedResults.length === 1 ? '' : 's'}`;
+}
+
+function getSearchNavigationResults(search: SearchState): HvySearchResult[] {
+  const byId = new Map(search.results.map((result) => [result.id, result]));
+  const ordered = search.navigationResultIds.map((id) => byId.get(id)).filter((result): result is HvySearchResult => Boolean(result));
+  if (ordered.length === search.results.length) {
+    return ordered;
+  }
+  return [...search.results].sort((left, right) => (left.documentOrder ?? 0) - (right.documentOrder ?? 0));
 }
 
 export function focusSearchInput(app: ParentNode): void {

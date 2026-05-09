@@ -27,6 +27,7 @@ export function closeSearch(): void {
   state.search.resultsCollapsed = false;
   state.search.submittedQuery = '';
   state.search.activeResultId = null;
+  state.search.navigationResultIds = [];
   state.search.filterEnabled = false;
   state.search.abortController?.abort();
   state.search.abortController = null;
@@ -44,6 +45,7 @@ export async function submitSearch(): Promise<void> {
 
   if (!query) {
     state.search.results = [];
+    state.search.navigationResultIds = [];
     state.search.isLoading = false;
     getRenderApp()();
     return;
@@ -52,6 +54,7 @@ export async function submitSearch(): Promise<void> {
   const categories = getEnabledSearchCategories();
   if (categories.length === 0) {
     state.search.results = [];
+    state.search.navigationResultIds = [];
     state.search.error = 'Choose at least one category.';
     state.search.isLoading = false;
     getRenderApp()();
@@ -78,6 +81,7 @@ export async function submitSearch(): Promise<void> {
       return;
     }
     state.search.results = normalizeSearchResults(results);
+    state.search.navigationResultIds = getDocumentOrderSearchResults(state.search.results).map((result) => result.id);
     if (state.search.filterEnabled && state.currentView === 'editor') {
       state.currentView = 'viewer';
     }
@@ -87,6 +91,7 @@ export async function submitSearch(): Promise<void> {
       return;
     }
     state.search.results = [];
+    state.search.navigationResultIds = [];
     state.search.error = error instanceof Error ? error.message : 'Search failed.';
   } finally {
     if (state.search.requestNonce !== requestNonce) {
@@ -103,6 +108,7 @@ export function selectSearchResult(app: HTMLElement, resultId: string): void {
   if (!result) {
     return;
   }
+  state.search.navigationResultIds = getSearchNavigationResults(app).map((candidate) => candidate.id);
   state.search.activeResultId = result.id;
   state.search.open = true;
   state.search.resultsCollapsed = true;
@@ -122,6 +128,7 @@ export function selectAdjacentSearchResult(app: HTMLElement, direction: 1 | -1):
     return;
   }
   const orderedResults = getSearchNavigationResults(app);
+  state.search.navigationResultIds = orderedResults.map((result) => result.id);
   const currentIndex = state.search.activeResultId
     ? orderedResults.findIndex((result) => result.id === state.search.activeResultId)
     : -1;
@@ -158,6 +165,9 @@ function normalizeSearchResults(results: HvySearchResult[]): HvySearchResult[] {
 }
 
 function getSearchNavigationResults(app: HTMLElement): HvySearchResult[] {
+  if (!shouldUseRenderedSearchOrder()) {
+    return getDocumentOrderSearchResults(state.search.results);
+  }
   const viewOrder = getRenderedSearchTargetOrder(app);
   return [...state.search.results].sort((left, right) => {
     const leftKey = getSearchResultTargetKey(left);
@@ -169,6 +179,16 @@ function getSearchNavigationResults(app: HTMLElement): HvySearchResult[] {
     }
     return (left.documentOrder ?? 0) - (right.documentOrder ?? 0);
   });
+}
+
+function getDocumentOrderSearchResults(results: HvySearchResult[]): HvySearchResult[] {
+  return [...results].sort((left, right) => (left.documentOrder ?? 0) - (right.documentOrder ?? 0));
+}
+
+function shouldUseRenderedSearchOrder(): boolean {
+  return state.search.filterEnabled
+    || Object.keys(state.readerView).length > 0
+    || Object.keys(state.componentListReaderViews).length > 0;
 }
 
 function getRenderedSearchTargetOrder(app: HTMLElement): Map<string, number> {

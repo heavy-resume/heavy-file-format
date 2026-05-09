@@ -53,6 +53,7 @@ export interface SearchState {
   isLoading: boolean;
   error: string | null;
   results: HvySearchResult[];
+  navigationResultIds: string[];
   requestNonce: number;
   abortController: AbortController | null;
 }

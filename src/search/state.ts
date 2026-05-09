@@ -17,6 +17,7 @@ export function createDefaultSearchState(): SearchState {
     isLoading: false,
     error: null,
     results: [],
+    navigationResultIds: [],
     requestNonce: 0,
     abortController: null,
   };

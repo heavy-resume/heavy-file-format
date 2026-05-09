@@ -161,6 +161,7 @@ hvy_version: 0.1
     isLoading: false,
     error: null,
     results: [result!],
+    navigationResultIds: [result!.id],
     requestNonce: 1,
     abortController: null,
   });

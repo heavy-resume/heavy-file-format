@@ -25,6 +25,9 @@ export function expandSearchResults(app: HTMLElement): void {
 export function closeSearch(): void {
   state.search.open = false;
   state.search.resultsCollapsed = false;
+  state.search.submittedQuery = '';
+  state.search.activeResultId = null;
+  state.search.filterEnabled = false;
   state.search.abortController?.abort();
   state.search.abortController = null;
   state.search.isLoading = false;
@@ -103,11 +106,15 @@ export function selectSearchResult(app: HTMLElement, resultId: string): void {
   state.search.activeResultId = result.id;
   state.search.open = true;
   state.search.resultsCollapsed = true;
-  navigateToReaderTarget({
-    targetId: result.targetId,
-    sectionKey: result.sectionKey,
-    blockId: result.blockId,
-  }, app);
+  getRenderApp()();
+  window.setTimeout(() => {
+    navigateToReaderTarget({
+      targetId: result.targetId,
+      sectionKey: result.sectionKey,
+      blockId: result.blockId,
+      matchText: result.matchedText,
+    }, app);
+  }, 0);
 }
 
 export function setSearchFilterEnabled(enabled: boolean): void {

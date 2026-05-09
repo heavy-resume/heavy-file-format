@@ -50,7 +50,7 @@ export function navigateToSection(sectionId: string, app: HTMLElement): void {
 }
 
 export function navigateToReaderTarget(
-  target: { targetId?: string; sectionKey?: string; blockId?: string },
+  target: { targetId?: string; sectionKey?: string; blockId?: string; matchText?: string },
   app: HTMLElement
 ): void {
   const targetId = target.targetId?.trim() ?? '';
@@ -124,7 +124,7 @@ export function getReaderTargetIds(app: HTMLElement): string[] {
 
 function requestTargetHighlight(
   app: HTMLElement,
-  target: { targetId?: string; sectionKey?: string; blockId?: string },
+  target: { targetId?: string; sectionKey?: string; blockId?: string; matchText?: string },
   context: { sectionFound: boolean; blockFound: boolean },
   attempt = 0
 ): void {
@@ -146,36 +146,147 @@ function requestTargetHighlight(
       return;
     }
 
+    alignSidebarToResolvedTarget(app, element);
+    const wantsSearchMarker = state.search.submittedQuery.trim().length > 0;
+    const marker = findSearchMarkerInTarget(element, target.matchText);
+    if (wantsSearchMarker && !marker && attempt < 8) {
+      requestTargetHighlight(app, target, context, attempt + 1);
+      return;
+    }
+
+    const scrollTarget = marker ?? element;
     element.classList.add('is-temp-highlighted');
-    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    revealReaderAncestors(scrollTarget);
+    scrollReaderTargetIntoView(scrollTarget);
     window.setTimeout(() => {
       element.classList.remove('is-temp-highlighted');
     }, 1400);
-  }, 5);
+  }, 60);
+}
+
+function alignSidebarToResolvedTarget(app: HTMLElement, element: HTMLElement): void {
+  if (state.currentView !== 'viewer') {
+    return;
+  }
+  if (element.closest('#readerSidebarSections')) {
+    if (!state.viewerSidebarOpen) {
+      setSidebarOpen(app, true);
+    }
+    return;
+  }
+  if (element.closest('#readerDocument') && state.viewerSidebarOpen) {
+    setSidebarOpen(app, false);
+  }
+}
+
+function scrollReaderTargetIntoView(target: HTMLElement): void {
+  const scroll = () => {
+    const container = findScrollableReaderAncestor(target);
+    if (container) {
+      const targetRect = target.getBoundingClientRect();
+      const containerRect = container.getBoundingClientRect();
+      const targetCenter = targetRect.top + targetRect.height / 2;
+      const containerCenter = containerRect.top + containerRect.height / 2;
+      container.scrollTo({
+        top: Math.max(0, container.scrollTop + targetCenter - containerCenter),
+        behavior: 'smooth',
+      });
+      return;
+    }
+    target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
+  window.requestAnimationFrame(() => {
+    window.requestAnimationFrame(scroll);
+  });
+  window.setTimeout(scroll, 180);
+}
+
+function revealReaderAncestors(target: HTMLElement): void {
+  let ancestor = target.parentElement;
+  while (ancestor) {
+    if (!ancestor.classList.contains('is-collapsed-preview')) {
+      ancestor = ancestor.parentElement;
+      continue;
+    }
+    const containerKey = ancestor.dataset.containerKey;
+    if (containerKey) {
+      state.readerContainerState[containerKey] = true;
+    }
+    const viewCollapseKey = ancestor.dataset.readerViewCollapseKey;
+    if (viewCollapseKey) {
+      state.readerContainerState[viewCollapseKey] = true;
+    }
+    ancestor.classList.remove('is-collapsed-preview');
+    ancestor.classList.add('is-expanded');
+    ancestor.setAttribute('aria-expanded', 'true');
+    ancestor.querySelector<HTMLElement>('.reader-section-preview')?.classList.remove('reader-section-preview');
+    ancestor.querySelectorAll<HTMLElement>('[aria-expanded="false"]').forEach((child) => {
+      if (child.dataset.containerKey === containerKey || child.dataset.readerViewCollapseKey === viewCollapseKey) {
+        child.setAttribute('aria-expanded', 'true');
+      }
+    });
+    ancestor = ancestor.parentElement;
+  }
+}
+
+function findScrollableReaderAncestor(target: HTMLElement): HTMLElement | null {
+  let element = target.parentElement;
+  while (element) {
+    const style = window.getComputedStyle(element);
+    const canScroll = /(auto|scroll)/.test(style.overflowY) && element.scrollHeight > element.clientHeight;
+    if (canScroll) {
+      return element;
+    }
+    element = element.parentElement;
+  }
+  return null;
 }
 
 function findReaderTargetElement(app: HTMLElement, target: { targetId?: string; sectionKey?: string; blockId?: string }): HTMLElement | null {
   const targetId = target.targetId?.trim() ?? '';
-  const surfaces = '#readerDocument, #readerSidebarSections, #aiReaderDocument, #aiSidebarSections';
+  const surfaces = getReaderSurfaces(app);
+  if (target.sectionKey && target.blockId) {
+    const blockSelector = `[data-section-key="${CSS.escape(target.sectionKey)}"][data-block-id="${CSS.escape(target.blockId)}"]`;
+    const byBlock = surfaces.map((surface) => surface.querySelector<HTMLElement>(blockSelector)).find(Boolean) ?? null;
+    if (byBlock) {
+      return byBlock;
+    }
+  }
   if (targetId) {
-    const byId = app.querySelector<HTMLElement>(`${surfaces} #${CSS.escape(targetId)}`);
+    const idSelector = `#${CSS.escape(targetId)}`;
+    const byId = surfaces.map((surface) => surface.querySelector<HTMLElement>(idSelector)).find(Boolean) ?? null;
     if (byId) {
       return byId;
     }
   }
   if (target.sectionKey) {
-    const section = target.blockId
-      ? ''
-      : `[data-section-key="${CSS.escape(target.sectionKey)}"]`;
-    const block = target.blockId
-      ? `[data-section-key="${CSS.escape(target.sectionKey)}"][data-block-id="${CSS.escape(target.blockId)}"]`
-      : '';
-    const selector = block || section;
+    const selector = `[data-section-key="${CSS.escape(target.sectionKey)}"]`;
     if (selector) {
-      return app.querySelector<HTMLElement>(`${surfaces} ${selector}`) ?? app.querySelector<HTMLElement>(selector);
+      return surfaces.map((surface) => surface.querySelector<HTMLElement>(selector)).find(Boolean) ?? app.querySelector<HTMLElement>(selector);
     }
   }
   return null;
+}
+
+function getReaderSurfaces(app: HTMLElement): HTMLElement[] {
+  return [
+    app.querySelector<HTMLElement>('#readerDocument'),
+    app.querySelector<HTMLElement>('#readerSidebarSections'),
+    app.querySelector<HTMLElement>('#aiReaderDocument'),
+    app.querySelector<HTMLElement>('#aiSidebarSections'),
+  ].filter((surface): surface is HTMLElement => Boolean(surface));
+}
+
+function findSearchMarkerInTarget(element: HTMLElement, matchText?: string): HTMLElement | null {
+  const markers = [...element.querySelectorAll<HTMLElement>('.search-match-marker')];
+  if (markers.length === 0) {
+    return null;
+  }
+  const normalized = matchText?.trim().toLocaleLowerCase();
+  if (!normalized) {
+    return markers[0] ?? null;
+  }
+  return markers.find((marker) => marker.textContent?.trim().toLocaleLowerCase() === normalized) ?? markers[0] ?? null;
 }
 
 interface ExpandResult {

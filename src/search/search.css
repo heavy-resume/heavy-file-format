@@ -55,9 +55,16 @@
 }
 
 .search-inline-row {
+  position: relative;
+  z-index: 75;
   display: flex;
   justify-content: center;
   min-height: 0;
+}
+
+.search-inline-row .search-collapsed-bar {
+  position: relative;
+  z-index: 1;
 }
 
 .search-collapsed-bar > span:not(.search-collapsed-count) {

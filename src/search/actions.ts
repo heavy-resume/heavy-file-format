@@ -1,6 +1,6 @@
 import { builtInSearchProvider } from './search-provider';
 import { getReferenceAppConfig } from '../reference-config';
-import { navigateToSection } from '../navigation';
+import { navigateToReaderTarget } from '../navigation';
 import { state, getRenderApp, getRefreshReaderPanels } from '../state';
 import type { HvySearchResult, SearchCategory } from './types';
 import { focusSearchInput } from './render';
@@ -103,36 +103,11 @@ export function selectSearchResult(app: HTMLElement, resultId: string): void {
   state.search.activeResultId = result.id;
   state.search.open = true;
   state.search.resultsCollapsed = true;
-  const targetId = result.targetId.trim();
-  if (targetId) {
-    navigateToSection(targetId, app);
-    state.search.open = true;
-    state.search.resultsCollapsed = true;
-    window.setTimeout(() => {
-      const target = findRenderedSearchTarget(app, result);
-      target?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      target?.classList.add('is-temp-highlighted');
-      window.setTimeout(() => target?.classList.remove('is-temp-highlighted'), 1400);
-    }, 30);
-    return;
-  }
-  state.currentView = state.currentView === 'editor' ? 'viewer' : state.currentView;
-  getRenderApp()();
-  window.setTimeout(() => {
-    const target = findRenderedSearchTarget(app, result);
-    target?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    target?.classList.add('is-temp-highlighted');
-    window.setTimeout(() => target?.classList.remove('is-temp-highlighted'), 1400);
-  }, 20);
-}
-
-function findRenderedSearchTarget(app: HTMLElement, result: HvySearchResult): HTMLElement | null {
-  if (result.targetId.trim()) {
-    return app.querySelector<HTMLElement>(`#${cssEscape(result.targetId.trim())}`);
-  }
-  const surfaces = ['#readerDocument', '#readerSidebarSections', '#aiReaderDocument', '#aiSidebarSections', '#editorTree'].join(', ');
-  const selector = `[data-section-key="${cssEscape(result.sectionKey)}"]${result.blockId ? `[data-block-id="${cssEscape(result.blockId)}"]` : ''}`;
-  return app.querySelector<HTMLElement>(`${surfaces} ${selector}`) ?? app.querySelector<HTMLElement>(selector);
+  navigateToReaderTarget({
+    targetId: result.targetId,
+    sectionKey: result.sectionKey,
+    blockId: result.blockId,
+  }, app);
 }
 
 export function setSearchFilterEnabled(enabled: boolean): void {
@@ -159,8 +134,4 @@ function normalizeSearchResults(results: HvySearchResult[]): HvySearchResult[] {
     ...result,
     id: result.id.trim() || `search-${index + 1}`,
   }));
-}
-
-function cssEscape(value: string): string {
-  return typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(value) : value.replace(/(["\\])/g, '\\$1');
 }

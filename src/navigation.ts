@@ -46,6 +46,17 @@ export function navigateToSection(sectionId: string, app: HTMLElement): void {
   if (!sectionId) {
     return;
   }
+  navigateToReaderTarget({ targetId: sectionId }, app);
+}
+
+export function navigateToReaderTarget(
+  target: { targetId?: string; sectionKey?: string; blockId?: string },
+  app: HTMLElement
+): void {
+  const targetId = target.targetId?.trim() ?? '';
+  if (!targetId && !target.sectionKey && !target.blockId) {
+    return;
+  }
   closeModal();
 
   let requiresFullRender = false;
@@ -55,7 +66,7 @@ export function navigateToSection(sectionId: string, app: HTMLElement): void {
     requiresFullRender = true;
   }
 
-  if (sectionId === 'readerNav' || sectionId === 'navigation') {
+  if (targetId === 'readerNav' || targetId === 'navigation') {
     if (requiresFullRender) {
       state.viewerSidebarOpen = true;
       getRenderApp()();
@@ -65,11 +76,20 @@ export function navigateToSection(sectionId: string, app: HTMLElement): void {
     return;
   }
 
-  const sectionRes = expandSectionPathById(state.document.sections, sectionId);
-  const blockRes = expandBlockPathBySchemaId(state.document.sections, sectionId);
+  const sectionByIdRes = targetId ? expandSectionPathById(state.document.sections, targetId) : emptyExpandResult();
+  const blockBySchemaRes = targetId ? expandBlockPathBySchemaId(state.document.sections, targetId) : emptyExpandResult();
+  const sectionByKeyRes = target.sectionKey ? expandSectionPathByKey(state.document.sections, target.sectionKey) : emptyExpandResult();
+  const blockByBlockIdRes = target.blockId
+    ? expandBlockPathByBlockId(state.document.sections, target.blockId, target.sectionKey)
+    : emptyExpandResult();
 
-  const loc = sectionRes.found ? sectionRes.location : (blockRes.found ? blockRes.location : null);
-  const expandChanged = sectionRes.changed || blockRes.changed;
+  const loc =
+    sectionByIdRes.found ? sectionByIdRes.location
+    : blockBySchemaRes.found ? blockBySchemaRes.location
+    : blockByBlockIdRes.found ? blockByBlockIdRes.location
+    : sectionByKeyRes.found ? sectionByKeyRes.location
+    : null;
+  const expandChanged = sectionByIdRes.changed || blockBySchemaRes.changed || sectionByKeyRes.changed || blockByBlockIdRes.changed;
 
   if (loc === 'sidebar' && !state.viewerSidebarOpen) {
     if (requiresFullRender) {
@@ -92,9 +112,9 @@ export function navigateToSection(sectionId: string, app: HTMLElement): void {
     getRenderApp()();
   }
 
-  requestTargetHighlight(app, sectionId, {
-    sectionFound: sectionRes.found,
-    blockFound: blockRes.found,
+  requestTargetHighlight(app, target, {
+    sectionFound: sectionByIdRes.found || sectionByKeyRes.found,
+    blockFound: blockBySchemaRes.found || blockByBlockIdRes.found,
   });
 }
 
@@ -104,19 +124,21 @@ export function getReaderTargetIds(app: HTMLElement): string[] {
 
 function requestTargetHighlight(
   app: HTMLElement,
-  sectionId: string,
+  target: { targetId?: string; sectionKey?: string; blockId?: string },
   context: { sectionFound: boolean; blockFound: boolean },
   attempt = 0
 ): void {
   window.setTimeout(() => {
-    const target = app.querySelector<HTMLElement>(`#${CSS.escape(sectionId)}`);
-    if (!target) {
+    const element = findReaderTargetElement(app, target);
+    if (!element) {
       if (attempt < 3) {
-        requestTargetHighlight(app, sectionId, context, attempt + 1);
+        requestTargetHighlight(app, target, context, attempt + 1);
         return;
       }
       console.error('[hvy:navigation] Unable to find reader target for internal link.', {
-        targetId: sectionId,
+        targetId: target.targetId ?? '',
+        sectionKey: target.sectionKey ?? '',
+        blockId: target.blockId ?? '',
         sectionFound: context.sectionFound,
         blockFound: context.blockFound,
         availableReaderIds: getReaderTargetIds(app),
@@ -124,12 +146,36 @@ function requestTargetHighlight(
       return;
     }
 
-    target.classList.add('is-temp-highlighted');
-    target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    element.classList.add('is-temp-highlighted');
+    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
     window.setTimeout(() => {
-      target.classList.remove('is-temp-highlighted');
+      element.classList.remove('is-temp-highlighted');
     }, 1400);
   }, 5);
+}
+
+function findReaderTargetElement(app: HTMLElement, target: { targetId?: string; sectionKey?: string; blockId?: string }): HTMLElement | null {
+  const targetId = target.targetId?.trim() ?? '';
+  const surfaces = '#readerDocument, #readerSidebarSections, #aiReaderDocument, #aiSidebarSections';
+  if (targetId) {
+    const byId = app.querySelector<HTMLElement>(`${surfaces} #${CSS.escape(targetId)}`);
+    if (byId) {
+      return byId;
+    }
+  }
+  if (target.sectionKey) {
+    const section = target.blockId
+      ? ''
+      : `[data-section-key="${CSS.escape(target.sectionKey)}"]`;
+    const block = target.blockId
+      ? `[data-section-key="${CSS.escape(target.sectionKey)}"][data-block-id="${CSS.escape(target.blockId)}"]`
+      : '';
+    const selector = block || section;
+    if (selector) {
+      return app.querySelector<HTMLElement>(`${surfaces} ${selector}`) ?? app.querySelector<HTMLElement>(selector);
+    }
+  }
+  return null;
 }
 
 interface ExpandResult {
@@ -155,9 +201,26 @@ export function expandSectionPathById(sections: VisualSection[], sectionId: stri
   return { found: false, changed: false, location: null };
 }
 
+export function expandSectionPathByKey(sections: VisualSection[], sectionKey: string): ExpandResult {
+  for (const section of sections) {
+    if (section.key === sectionKey) {
+      const changed = !section.expanded;
+      section.expanded = true;
+      return { found: true, changed, location: section.location };
+    }
+    const childRes = expandSectionPathByKey(section.children, sectionKey);
+    if (childRes.found) {
+      const changed = childRes.changed || !section.expanded;
+      section.expanded = true;
+      return { found: true, changed, location: childRes.location };
+    }
+  }
+  return emptyExpandResult();
+}
+
 export function expandBlockPathBySchemaId(sections: VisualSection[], schemaId: string): ExpandResult {
   for (const section of sections) {
-    const blockRes = expandBlockPathInList(section.blocks, schemaId);
+    const blockRes = expandBlockPathInList(section.blocks, schemaId, section.key);
     if (blockRes.found) {
       const changed = blockRes.changed || !section.expanded;
       section.expanded = true;
@@ -173,28 +236,70 @@ export function expandBlockPathBySchemaId(sections: VisualSection[], schemaId: s
   return { found: false, changed: false, location: null };
 }
 
-function expandBlockPathInList(blocks: VisualBlock[], schemaId: string): { found: boolean, changed: boolean } {
+export function expandBlockPathByBlockId(sections: VisualSection[], blockId: string, sectionKey?: string): ExpandResult {
+  for (const section of sections) {
+    if (sectionKey && section.key !== sectionKey && !sectionContainsBlock(section, blockId)) {
+      const childRes = expandBlockPathByBlockId(section.children, blockId, sectionKey);
+      if (childRes.found) {
+        const changed = childRes.changed || !section.expanded;
+        section.expanded = true;
+        return { found: true, changed, location: childRes.location };
+      }
+      continue;
+    }
+    const blockRes = expandBlockPathInList(section.blocks, blockId, section.key, 'block-id');
+    if (blockRes.found) {
+      const changed = blockRes.changed || !section.expanded;
+      section.expanded = true;
+      return { found: true, changed, location: section.location };
+    }
+    const childRes = expandBlockPathByBlockId(section.children, blockId, sectionKey);
+    if (childRes.found) {
+      const changed = childRes.changed || !section.expanded;
+      section.expanded = true;
+      return { found: true, changed, location: childRes.location };
+    }
+  }
+  return emptyExpandResult();
+}
+
+function expandBlockPathInList(blocks: VisualBlock[], id: string, sectionKey: string, mode: 'schema-id' | 'block-id' = 'schema-id'): { found: boolean, changed: boolean } {
   for (const block of blocks) {
-    const isTarget = block.schema.id === schemaId;
+    const isTarget = mode === 'schema-id' ? block.schema.id === id : block.id === id;
 
     if (isTarget && resolveBaseComponent(block.schema.component) === 'expandable') {
-      const changed = !block.schema.expandableExpanded;
-      block.schema.expandableExpanded = true;
+      const key = `${sectionKey}:${block.id}`;
+      const changed = state.readerExpandableState[key] !== true;
+      state.readerExpandableState[key] = true;
+      return { found: true, changed };
+    }
+    if (isTarget && resolveBaseComponent(block.schema.component) === 'container') {
+      const key = `${sectionKey}:${block.id}`;
+      const changed = state.readerContainerState[key] !== true;
+      state.readerContainerState[key] = true;
       return { found: true, changed };
     }
 
-    let nestedRes = expandBlockPathInList(block.schema.containerBlocks ?? [], schemaId);
-    if (!nestedRes.found) nestedRes = expandBlockPathInList(block.schema.componentListBlocks ?? [], schemaId);
+    let nestedRes = expandBlockPathInList(block.schema.containerBlocks ?? [], id, sectionKey, mode);
+    if (!nestedRes.found) nestedRes = expandBlockPathInList(block.schema.componentListBlocks ?? [], id, sectionKey, mode);
     if (!nestedRes.found && block.schema.gridItems) {
-      nestedRes = expandBlockPathInList(block.schema.gridItems.map((item) => item.block), schemaId);
+      nestedRes = expandBlockPathInList(block.schema.gridItems.map((item) => item.block), id, sectionKey, mode);
     }
-    if (!nestedRes.found) nestedRes = expandBlockPathInList(block.schema.expandableStubBlocks?.children ?? [], schemaId);
-    if (!nestedRes.found) nestedRes = expandBlockPathInList(block.schema.expandableContentBlocks?.children ?? [], schemaId);
+    if (!nestedRes.found) nestedRes = expandBlockPathInList(block.schema.expandableStubBlocks?.children ?? [], id, sectionKey, mode);
+    if (!nestedRes.found) nestedRes = expandBlockPathInList(block.schema.expandableContentBlocks?.children ?? [], id, sectionKey, mode);
     if (nestedRes.found) {
       let changed = nestedRes.changed;
       if (resolveBaseComponent(block.schema.component) === 'expandable') {
-        if (!block.schema.expandableExpanded) {
-          block.schema.expandableExpanded = true;
+        const key = `${sectionKey}:${block.id}`;
+        if (state.readerExpandableState[key] !== true) {
+          state.readerExpandableState[key] = true;
+          changed = true;
+        }
+      }
+      if (resolveBaseComponent(block.schema.component) === 'container') {
+        const key = `${sectionKey}:${block.id}`;
+        if (state.readerContainerState[key] !== true) {
+          state.readerContainerState[key] = true;
           changed = true;
         }
       }
@@ -206,6 +311,14 @@ function expandBlockPathInList(blocks: VisualBlock[], schemaId: string): { found
     }
   }
   return { found: false, changed: false };
+}
+
+function sectionContainsBlock(section: VisualSection, blockId: string): boolean {
+  return section.blocks.some((block) => findBlockInSectionById(block, blockId)) || section.children.some((child) => sectionContainsBlock(child, blockId));
+}
+
+function emptyExpandResult(): ExpandResult {
+  return { found: false, changed: false, location: null };
 }
 
 export function closeModal(): void {

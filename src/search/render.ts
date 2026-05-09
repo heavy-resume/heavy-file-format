@@ -2,7 +2,7 @@ import './search.css';
 import type { ReaderRenderer } from '../reader/render';
 import type { VisualDocument } from '../types';
 import type { HvySearchResult, SearchCategory, SearchState } from './types';
-import { highlightPlainText, highlightSearchHtml } from './highlight';
+import { highlightPlainText } from './highlight';
 import { findSectionByKey } from '../section-ops';
 import { findBlockByIds } from '../block-ops';
 import { closeIcon, magnifyingGlassIcon } from '../icons';
@@ -78,7 +78,13 @@ export function renderSearchPalette(search: SearchState, document: VisualDocumen
         </label>
         <button type="submit" class="secondary search-submit-button">Search</button>
       </div>
-      <div class="search-status${search.error ? ' is-error' : ''}" role="status">${deps.escapeHtml(status)}</div>
+      <div class="search-status-row">
+        <div class="search-status${search.error ? ' is-error' : ''}" role="status">${deps.escapeHtml(status)}</div>
+        <div class="search-nav-buttons" aria-label="Search result navigation">
+          <button type="button" class="tiny" data-action="previous-search-result" ${search.results.length ? '' : 'disabled'}>Prev</button>
+          <button type="button" class="tiny" data-action="next-search-result" ${search.results.length ? '' : 'disabled'}>Next</button>
+        </div>
+      </div>
       ${renderSearchResults(search, document, deps)}
     </form>
   </section>`;
@@ -144,11 +150,9 @@ function renderSearchResults(search: SearchState, document: VisualDocument, deps
 }
 
 function renderSearchResult(result: HvySearchResult, search: SearchState, document: VisualDocument, deps: SearchRenderDeps): string {
-  const target = resolveResultTarget(result, document);
-  const preview = target
-    ? renderLensPreview(result, search, target, deps)
-    : `<div class="search-result-text-preview">${highlightPlainText(result.preview, search.submittedQuery, search.caseSensitive, deps.escapeHtml)}</div>`;
   const active = search.activeResultId === result.id;
+  const target = resolveResultTarget(result, document);
+  const description = getResultDescription(result, target);
   const context = result.contextLabel || result.sourceFile || '';
   const fields = result.matches?.length
     ? result.matches.map((match) => match.label).filter((label, index, labels) => labels.indexOf(label) === index)
@@ -163,9 +167,9 @@ function renderSearchResult(result: HvySearchResult, search: SearchState, docume
       <span class="search-result-title">${deps.escapeHtml(result.label)}</span>
       ${context ? `<span class="search-result-context">${deps.escapeHtml(context)}</span>` : ''}
       <span class="search-result-fields">${fields.map((field) => `<span>${deps.escapeHtml(field)}</span>`).join('')}</span>
+      ${description ? `<span class="search-result-description">${highlightPlainText(description, search.submittedQuery, search.caseSensitive, deps.escapeHtml)}</span>` : ''}
       ${renderResultMatchSnippets(result, search, deps)}
     </span>
-    ${preview}
   </button>`;
 }
 
@@ -186,18 +190,24 @@ function renderResultMatchSnippets(result: HvySearchResult, search: SearchState,
   </span>`;
 }
 
-function renderLensPreview(
-  _result: HvySearchResult,
-  search: SearchState,
-  target: { section: NonNullable<ReturnType<typeof findSectionByKey>>; block?: NonNullable<ReturnType<typeof findBlockByIds>> },
-  deps: SearchRenderDeps
+function getResultDescription(
+  result: HvySearchResult,
+  target: { section: NonNullable<ReturnType<typeof findSectionByKey>>; block?: NonNullable<ReturnType<typeof findBlockByIds>> } | null
 ): string {
-  const raw = target.block
-    ? deps.readerRenderer.renderReaderBlock(target.section, target.block)
-    : deps.readerRenderer.renderReaderSection(target.section);
-  return `<span class="search-result-lens" data-search-lens="true">
-    <span class="search-result-lens-surface">${highlightSearchHtml(raw, search.submittedQuery, search.caseSensitive)}</span>
-  </span>`;
+  if (!target) {
+    return result.preview;
+  }
+  if (!target.block) {
+    return target.section.description.trim() || result.preview;
+  }
+  const block = target.block;
+  if (result.sourceField.includes('Stub')) {
+    return block.schema.expandableStubDescription.trim() || block.schema.description.trim() || result.preview;
+  }
+  if (result.sourceField.includes('Expanded')) {
+    return block.schema.expandableContentDescription.trim() || block.schema.description.trim() || result.preview;
+  }
+  return block.schema.description.trim() || result.preview;
 }
 
 function resolveResultTarget(result: HvySearchResult, document: VisualDocument): { section: NonNullable<ReturnType<typeof findSectionByKey>>; block?: NonNullable<ReturnType<typeof findBlockByIds>> } | null {

@@ -117,6 +117,19 @@ export function selectSearchResult(app: HTMLElement, resultId: string): void {
   }, 0);
 }
 
+export function selectAdjacentSearchResult(app: HTMLElement, direction: 1 | -1): void {
+  if (!state.search.open || state.search.results.length === 0) {
+    return;
+  }
+  const currentIndex = state.search.activeResultId
+    ? state.search.results.findIndex((result) => result.id === state.search.activeResultId)
+    : -1;
+  const nextIndex = currentIndex < 0
+    ? direction > 0 ? 0 : state.search.results.length - 1
+    : (currentIndex + direction + state.search.results.length) % state.search.results.length;
+  selectSearchResult(app, state.search.results[nextIndex]!.id);
+}
+
 export function setSearchFilterEnabled(enabled: boolean): void {
   state.search.filterEnabled = enabled;
   if (enabled && state.currentView === 'editor') {

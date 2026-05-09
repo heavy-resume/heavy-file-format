@@ -36,7 +36,11 @@ export const renderExpandableEditor: ComponentEditorRenderer = (sectionKey, bloc
       <span>Always show</span>
     </label>
     <label class="expandable-pane-css-field">
-      <span>Description</span>
+      <span class="description-label-with-action">Description${
+        block.schema.expandableStubDescription.trim()
+          ? ''
+          : ` <button type="button" class="ghost inline-generate-description" data-action="generate-expandable-pane-description" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}" data-expandable-pane="stub">Generate</button>`
+      }</span>
       <textarea
         rows="2"
         data-section-key="${helpers.escapeAttr(sectionKey)}"
@@ -63,7 +67,11 @@ export const renderExpandableEditor: ComponentEditorRenderer = (sectionKey, bloc
     block.id,
     helpers,
     `<label class="expandable-pane-css-field">
-      <span>Description</span>
+      <span class="description-label-with-action">Description${
+        block.schema.expandableContentDescription.trim()
+          ? ''
+          : ` <button type="button" class="ghost inline-generate-description" data-action="generate-expandable-pane-description" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}" data-expandable-pane="expanded">Generate</button>`
+      }</span>
       <textarea
         rows="2"
         data-section-key="${helpers.escapeAttr(sectionKey)}"

@@ -3,6 +3,7 @@ import { findSectionByKey, isDefaultUntitledSectionTitle } from '../../section-o
 import { findBlockByIds, setActiveEditorBlock, deactivateEditorBlock, cancelEditorBlockEdit } from '../../block-ops';
 import { recordHistory } from '../../history';
 import type { AppActionHandler } from './types';
+import { buildDescriptionRequest, generateDescription } from '../../descriptions/provider';
 
 const activateBlock: AppActionHandler = ({ event, sectionKey, blockId }) => {
   if (!blockId) {
@@ -82,38 +83,82 @@ const focusSchemaComponent: AppActionHandler = ({ actionButton, target }) => {
 };
 
 const generateSectionDescription: AppActionHandler = ({ actionButton, sectionKey }) => {
+  void generateSectionDescriptionAsync(actionButton, sectionKey);
+};
+
+async function generateSectionDescriptionAsync(actionButton: HTMLElement, sectionKey: string): Promise<void> {
   const section = findSectionByKey(state.document.sections, sectionKey);
   if (!section || section.description.trim()) {
     return;
   }
+  setGenerateButtonBusy(actionButton, true);
   recordHistory(`section:${sectionKey}:description:generate`);
-  section.description = generateDescriptionText([
-    section.title,
-    section.customId,
-    `${section.blocks.length} top-level components`,
-    `${section.children.length} child sections`,
-  ], 'Document section for related content.');
+  section.description = await generateDescription(buildDescriptionRequest({
+    document: state.document,
+    section,
+    kind: 'section',
+  }));
   getRefreshReaderPanels()();
   updateDescriptionFieldDom(actionButton, section.description);
-};
+}
 
 const generateBlockDescription: AppActionHandler = ({ actionButton, sectionKey, blockId }) => {
+  void generateBlockDescriptionAsync(actionButton, sectionKey, blockId);
+};
+
+async function generateBlockDescriptionAsync(actionButton: HTMLElement, sectionKey: string, blockId: string): Promise<void> {
+  const section = findSectionByKey(state.document.sections, sectionKey);
   const block = findBlockByIds(sectionKey, blockId);
-  if (!block || block.schema.description.trim()) {
+  if (!section || !block || block.schema.description.trim()) {
     return;
   }
+  setGenerateButtonBusy(actionButton, true);
   recordHistory(`block:${blockId}:description:generate`);
-  block.schema.description = generateDescriptionText([
-    block.schema.id,
-    block.schema.component,
-    block.schema.componentListComponent ? `list of ${block.schema.componentListComponent}` : '',
-    block.schema.xrefTarget ? `links to ${block.schema.xrefTarget}` : '',
-    block.schema.xrefTitle,
-    block.text,
-  ], `${block.schema.component} component.`);
+  block.schema.description = await generateDescription(buildDescriptionRequest({
+    document: state.document,
+    section,
+    block,
+    kind: 'block',
+    parentTrail: [section.title],
+  }));
   getRefreshReaderPanels()();
   updateDescriptionFieldDom(actionButton, block.schema.description);
+}
+
+const generateExpandablePaneDescription: AppActionHandler = ({ actionButton, sectionKey, blockId }) => {
+  void generateExpandablePaneDescriptionAsync(actionButton, sectionKey, blockId);
 };
+
+async function generateExpandablePaneDescriptionAsync(actionButton: HTMLElement, sectionKey: string, blockId: string): Promise<void> {
+  const section = findSectionByKey(state.document.sections, sectionKey);
+  const block = findBlockByIds(sectionKey, blockId);
+  const pane = actionButton.dataset.expandablePane === 'expanded' ? 'expanded' : 'stub';
+  if (!section || !block) {
+    return;
+  }
+  if (pane === 'stub' && block.schema.expandableStubDescription.trim()) {
+    return;
+  }
+  if (pane === 'expanded' && block.schema.expandableContentDescription.trim()) {
+    return;
+  }
+  setGenerateButtonBusy(actionButton, true);
+  recordHistory(`block:${blockId}:expandable-${pane}:description:generate`);
+  const description = await generateDescription(buildDescriptionRequest({
+    document: state.document,
+    section,
+    block,
+    kind: pane === 'stub' ? 'expandable-stub' : 'expandable-content',
+    parentTrail: [section.title],
+  }));
+  if (pane === 'stub') {
+    block.schema.expandableStubDescription = description;
+  } else {
+    block.schema.expandableContentDescription = description;
+  }
+  getRefreshReaderPanels()();
+  updateDescriptionFieldDom(actionButton, description);
+}
 
 function updateDescriptionFieldDom(actionButton: HTMLElement, description: string): void {
   const label = actionButton.closest('label');
@@ -124,12 +169,9 @@ function updateDescriptionFieldDom(actionButton: HTMLElement, description: strin
   actionButton.remove();
 }
 
-function generateDescriptionText(values: string[], fallback: string): string {
-  const text = values.map((value) => value.trim()).filter(Boolean).join(' - ').replace(/\s+/g, ' ');
-  if (!text) {
-    return fallback;
-  }
-  return text.length <= 160 ? text : `${text.slice(0, 159).trimEnd()}...`;
+function setGenerateButtonBusy(actionButton: HTMLElement, busy: boolean): void {
+  actionButton.toggleAttribute('disabled', busy);
+  actionButton.textContent = busy ? 'Generating...' : 'Generate';
 }
 
 export const editorStateActions: Record<string, AppActionHandler> = {
@@ -142,4 +184,5 @@ export const editorStateActions: Record<string, AppActionHandler> = {
   'focus-schema-component': focusSchemaComponent,
   'generate-section-description': generateSectionDescription,
   'generate-block-description': generateBlockDescription,
+  'generate-expandable-pane-description': generateExpandablePaneDescription,
 };

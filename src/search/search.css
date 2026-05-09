@@ -187,6 +187,18 @@
   font-size: 0.86rem;
 }
 
+.search-status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.search-nav-buttons {
+  display: inline-flex;
+  gap: 0.35rem;
+}
+
 .search-status.is-error {
   color: var(--hvy-danger);
 }
@@ -226,7 +238,6 @@
 
 .search-result {
   display: grid;
-  grid-template-columns: minmax(12rem, 0.68fr) minmax(14rem, 1fr);
   gap: 0.7rem;
   min-width: 0;
   padding: 0.7rem;
@@ -260,6 +271,7 @@
 
 .search-result-context,
 .search-result-snippet,
+.search-result-description,
 .search-result-fields {
   color: var(--hvy-text-alt);
   font-size: 0.82rem;
@@ -293,6 +305,11 @@
 .search-result-snippets {
   display: grid;
   gap: 0.28rem;
+}
+
+.search-result-description {
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 .search-result-snippet {
@@ -349,11 +366,6 @@
   .search-launcher {
     right: 5.2rem;
     bottom: 1.5rem;
-  }
-
-  .search-result {
-    grid-template-columns: 1fr;
-    gap: 0.5rem;
   }
 
   .search-result-title,

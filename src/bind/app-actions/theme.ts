@@ -1,6 +1,7 @@
 import { state, getRenderApp } from '../../state';
 import { recordHistory } from '../../history';
 import { getThemeConfig, applyTheme, writeThemeConfig } from '../../theme';
+import { getPaletteById } from '../../palettes/palette-registry';
 import type { AppActionHandler } from './types';
 
 const openThemeModal: AppActionHandler = () => {
@@ -34,9 +35,26 @@ const themeRemoveOrResetColor = (label: string): AppActionHandler => ({ actionBu
   getRenderApp()();
 };
 
+const themeApplyPalette: AppActionHandler = ({ actionButton }) => {
+  const paletteId = actionButton.dataset.paletteId ?? '';
+  const palette = getPaletteById(paletteId);
+  if (!palette) return;
+  recordHistory(`meta:theme-palette:${palette.id}`);
+  const theme = getThemeConfig();
+  writeThemeConfig({
+    colors: {
+      ...theme.colors,
+      ...palette.colors,
+    },
+  });
+  applyTheme();
+  getRenderApp()();
+};
+
 export const themeActions: Record<string, AppActionHandler> = {
   'open-theme-modal': openThemeModal,
   'theme-add-color': themeAddColor,
   'theme-remove-color': themeRemoveOrResetColor('remove'),
   'theme-reset-color': themeRemoveOrResetColor('reset'),
+  'theme-apply-palette': themeApplyPalette,
 };

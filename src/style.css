@@ -171,6 +171,13 @@ button.tiny {
   gap: 0.75rem;
 }
 
+.workspace-view-tools {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
 .view-tabs {
   display: flex;
   gap: 0.45rem;
@@ -183,6 +190,13 @@ button.tiny {
   border-radius: 999px;
   background: color-mix(in srgb, var(--hvy-surface) 90%, transparent);
   backdrop-filter: blur(10px);
+  box-shadow: 0 10px 24px var(--hvy-shadow);
+}
+
+.palette-open-button {
+  min-height: 2.35rem;
+  border-color: var(--hvy-border-translucent);
+  background: color-mix(in srgb, var(--hvy-surface) 88%, transparent);
   box-shadow: 0 10px 24px var(--hvy-shadow);
 }
 
@@ -398,6 +412,11 @@ button.tiny {
   .workspace-head {
     grid-template-columns: 1fr;
     align-items: stretch;
+  }
+
+  .workspace-view-tools {
+    justify-content: center;
+    flex-wrap: wrap;
   }
 
   .view-tabs,

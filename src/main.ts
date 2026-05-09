@@ -560,10 +560,13 @@ function renderApp(): void {
 
       <section class="workspace-shell">
         <div class="workspace-head">
-          <div class="view-tabs" role="tablist" aria-label="Workspace view">
-            <button type="button" class="${isEditorView ? 'secondary' : 'ghost'}" data-action="switch-view" data-view="editor">Editor</button>
-            <button type="button" class="${isViewerView ? 'secondary' : 'ghost'}" data-action="switch-view" data-view="viewer">Viewer</button>
-            <button type="button" class="${isAiView ? 'secondary' : 'ghost'}" data-action="switch-view" data-view="ai">AI</button>
+          <div class="workspace-view-tools">
+            <div class="view-tabs" role="tablist" aria-label="Workspace view">
+              <button type="button" class="${isEditorView ? 'secondary' : 'ghost'}" data-action="switch-view" data-view="editor">Editor</button>
+              <button type="button" class="${isViewerView ? 'secondary' : 'ghost'}" data-action="switch-view" data-view="viewer">Viewer</button>
+              <button type="button" class="${isAiView ? 'secondary' : 'ghost'}" data-action="switch-view" data-view="ai">AI</button>
+            </div>
+            <button type="button" class="palette-open-button ghost" data-action="open-theme-modal">Palettes</button>
           </div>
           ${canPreviewSurface ? renderPreviewControlStack() : '<div></div>'}
           ${

@@ -24,6 +24,7 @@ export function setSidebarOpen(app: HTMLElement, open: boolean): void {
   if (tab) {
     tab.setAttribute('aria-expanded', open ? 'true' : 'false');
   }
+  window.dispatchEvent(new CustomEvent('hvy:viewer-sidebar-open-changed'));
 }
 
 export function setEditorSidebarOpen(app: HTMLElement, open: boolean): void {
@@ -278,6 +279,8 @@ export function resetTransientUiState(): void {
   state.gridAddComponentByBlock = {};
   state.readerExpandableState = {};
   state.readerContainerState = {};
+  state.readerView = {};
+  state.readerViewActivatedTargets = new Set<string>();
   state.componentListReaderViews = {};
   state.viewerSidebarHelpDismissed = false;
   state.editorSidebarHelpDismissed = false;
@@ -309,6 +312,7 @@ export function resetToBlankDocument(): void {
   state.rawEditorError = null;
   state.rawEditorDiagnostics = [];
   state.filename = 'untitled.hvy';
+  state.selectedExample = 'blank';
   state.history = [];
   state.future = [];
   clearChatConversation(state.chat);

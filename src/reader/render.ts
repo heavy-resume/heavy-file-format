@@ -15,7 +15,7 @@ import type { BlockSchema, VisualBlock, VisualSection } from '../editor/types';
 import { renderTagEditor } from '../editor/tag-editor';
 import { colorValueToPickerHex, getResolvedThemeColor, getThemeColorLabel, THEME_COLOR_NAMES } from '../theme';
 import type { ThemeConfig } from '../theme';
-import type { DbTableQueryModalState, ReusableSaveModalState, SqliteRowComponentModalState, VisualDocument } from '../types';
+import type { DbTableQueryModalState, ReaderViewFilter, ReusableSaveModalState, SqliteRowComponentModalState, VisualDocument } from '../types';
 import { getDocumentSectionDefaultCss, mergeDocumentCss } from '../document-section-defaults';
 import { sanitizeInlineCss } from '../css-sanitizer';
 import { areTablesEnabled } from '../reference-config';
@@ -24,6 +24,17 @@ import { SCRIPTING_PLUGIN_ID } from '../plugins/registry';
 import { getComponentDefsFromMeta } from '../component-defs';
 import { extractReusableTemplateVariablesFromDefinition } from '../reusable-template-values';
 import { plusIcon } from '../icons';
+import {
+  createReaderViewContext,
+  getBlockReaderViewTargetKey,
+  getReaderViewModifiers,
+  isReaderViewPrioritized,
+  getSectionReaderViewTargetKey,
+  hasReaderViewModifier,
+  orderReaderViewTargets,
+  type ReaderViewContext,
+  type ReaderViewTargetKey,
+} from './view-filter';
 
 interface ReaderRenderState {
   documentMeta: VisualDocument['meta'];
@@ -43,6 +54,8 @@ interface ReaderRenderState {
   responsivePreview: 'full' | 'phone' | 'tablet' | 'desktop';
   readerExpandableState: Record<string, boolean>;
   readerContainerState: Record<string, boolean>;
+  readerView: ReaderViewFilter;
+  readerViewActivatedTargets: Set<string>;
   componentListReaderViews: Record<string, string>;
   viewerSidebarHelpDismissed: boolean;
 }
@@ -73,43 +86,88 @@ export interface ReaderRenderer {
   renderSidebarHelpBalloon: (sections: VisualSection[]) => string;
   renderReaderSection: (section: VisualSection) => string;
   renderReaderBlock: (section: VisualSection, block: VisualBlock) => string;
+  renderReaderBlocks: (section: VisualSection, blocks: VisualBlock[]) => string;
+  renderReaderListBlocks: (section: VisualSection, blocks: VisualBlock[]) => string;
+  orderReaderBlocks: (blocks: VisualBlock[]) => VisualBlock[];
+  orderReaderListBlocks: (blocks: VisualBlock[]) => VisualBlock[];
+  isReaderViewPrioritizedBlock: (block: VisualBlock) => boolean;
   renderModal: () => string;
   renderLinkInlineModal: () => string;
   renderWarnings: () => string;
 }
 
 export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRenderDeps): ReaderRenderer {
-  function renderNavigation(sections: VisualSection[]): string {
-    const items = deps.flattenSections(sections).filter((section) => !section.isGhost && section.location !== 'sidebar');
-    if (items.length === 0) {
-      return '<div class="muted">Navigation will appear when sections exist.</div>';
-    }
+  let activeReaderViewContext: ReaderViewContext | null = null;
 
-    return `
-      <div class="nav-title">Navigation</div>
-      <div class="nav-list">
-        ${items
-          .map(
-            (section) =>
-              `<button type="button" class="nav-item" data-nav-id="${deps.escapeAttr(deps.getSectionId(section))}" data-level="${section.level}">${deps.escapeHtml(
-                deps.formatSectionTitle(section.title)
-              )}</button>`
-          )
-          .join('')}
-      </div>
-    `;
+  function withReaderViewContext(render: () => string): string {
+    const previous = activeReaderViewContext;
+    activeReaderViewContext = createReaderViewContext(
+      { meta: state.documentMeta, extension: '.hvy', sections: state.documentSections, attachments: [] },
+      state.readerView
+    );
+    try {
+      return render();
+    } finally {
+      activeReaderViewContext = previous;
+    }
+  }
+
+  function getActiveReaderViewContext(): ReaderViewContext {
+    if (!activeReaderViewContext) {
+      return createReaderViewContext(
+        { meta: state.documentMeta, extension: '.hvy', sections: state.documentSections, attachments: [] },
+        state.readerView
+      );
+    }
+    return activeReaderViewContext;
+  }
+
+  function renderNavigation(sections: VisualSection[]): string {
+    return withReaderViewContext(() => {
+      const viewContext = getActiveReaderViewContext();
+      const items = deps.flattenSections(sections).filter((section) => {
+        if (section.isGhost || section.location === 'sidebar') {
+          return false;
+        }
+        return !hasReaderViewModifier(viewContext, getSectionReaderViewTargetKey(section), 'hidden');
+      });
+      if (items.length === 0) {
+        return '<div class="muted">Navigation will appear when sections exist.</div>';
+      }
+
+      return `
+        <div class="nav-title">Navigation</div>
+        <div class="nav-list">
+          ${items
+            .map(
+              (section) =>
+                `<button type="button" class="nav-item" data-nav-id="${deps.escapeAttr(deps.getSectionId(section))}" data-level="${section.level}">${deps.escapeHtml(
+                  deps.formatSectionTitle(section.title)
+                )}</button>`
+            )
+            .join('')}
+        </div>
+      `;
+    });
   }
 
   function renderReaderSections(sections: VisualSection[]): string {
-    resetReaderTableStripeSequence();
-    const realSections = sections.filter((section) => !section.isGhost && section.location !== 'sidebar');
-    if (realSections.length === 0) {
-      return '<div class="muted">No content to display yet.</div>';
-    }
-    const maxWidth = typeof state.documentMeta.reader_max_width === 'string' ? state.documentMeta.reader_max_width.trim() : '';
-    const bodyStyle = maxWidth.length > 0 ? ` style="max-width: ${deps.escapeAttr(maxWidth)};"` : '';
-    const surfaceAttrs = renderResponsiveSurfaceAttrs(maxWidth);
-    return `<div${surfaceAttrs}><div class="reader-document-body"${bodyStyle}>${realSections.map((section) => renderReaderSection(section)).join('')}</div></div>`;
+    return withReaderViewContext(() => {
+      resetReaderTableStripeSequence();
+      const realSections = orderReaderViewTargets(
+        sections.filter((section) => !section.isGhost && section.location !== 'sidebar'),
+        getActiveReaderViewContext(),
+        getSectionReaderViewTargetKey,
+        state.readerViewActivatedTargets
+      );
+      if (realSections.length === 0) {
+        return '<div class="muted">No content to display yet.</div>';
+      }
+      const maxWidth = typeof state.documentMeta.reader_max_width === 'string' ? state.documentMeta.reader_max_width.trim() : '';
+      const bodyStyle = maxWidth.length > 0 ? ` style="max-width: ${deps.escapeAttr(maxWidth)};"` : '';
+      const surfaceAttrs = renderResponsiveSurfaceAttrs(maxWidth);
+      return `<div${surfaceAttrs}><div class="reader-document-body"${bodyStyle}>${realSections.map((section) => renderReaderSection(section)).join('')}</div></div>`;
+    });
   }
 
   function renderResponsiveSurfaceAttrs(_documentMaxWidth: string): string {
@@ -118,13 +176,20 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
   }
 
   function renderSidebarSections(sections: VisualSection[]): string {
-    resetReaderTableStripeSequence();
-    const sidebarSections = sections.filter((section) => !section.isGhost && section.location === 'sidebar');
-    if (sidebarSections.length === 0) {
-      return '';
-    }
-    const surfaceAttrs = renderResponsiveSurfaceAttrs('');
-    return `<div${surfaceAttrs}><div class="reader-sidebar-surface-body">${sidebarSections.map((section) => renderReaderSection(section)).join('')}</div></div>`;
+    return withReaderViewContext(() => {
+      resetReaderTableStripeSequence();
+      const sidebarSections = orderReaderViewTargets(
+        sections.filter((section) => !section.isGhost && section.location === 'sidebar'),
+        getActiveReaderViewContext(),
+        getSectionReaderViewTargetKey,
+        state.readerViewActivatedTargets
+      );
+      if (sidebarSections.length === 0) {
+        return '';
+      }
+      const surfaceAttrs = renderResponsiveSurfaceAttrs('');
+      return `<div${surfaceAttrs}><div class="reader-sidebar-surface-body">${sidebarSections.map((section) => renderReaderSection(section)).join('')}</div></div>`;
+    });
   }
 
   function renderSidebarHelpBalloon(sections: VisualSection[]): string {
@@ -146,36 +211,60 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
   }
 
   function renderReaderSection(section: VisualSection): string {
+    const viewContext = getActiveReaderViewContext();
+    const targetKey = getSectionReaderViewTargetKey(section);
+    if (hasReaderViewModifier(viewContext, targetKey, 'hidden')) {
+      return '';
+    }
     const effectiveId = deps.getSectionId(section);
     const temp = state.tempHighlights.has(effectiveId);
+    const modifiers = getReaderViewModifiers(viewContext, targetKey);
+    const dimmed = modifiers.has('dimmed') && !state.readerViewActivatedTargets.has(targetKey);
+    const prioritized = isReaderViewPrioritized(viewContext, targetKey);
+    const viewCollapseKey = `reader-view-collapse:${targetKey}`;
+    const viewExpanded = state.readerContainerState[viewCollapseKey] ?? !modifiers.has('collapse');
+    const sectionExpanded = modifiers.has('collapse') ? viewExpanded : prioritized ? true : section.expanded;
     const classList = [
       'reader-section',
       section.contained ? '' : 'is-uncontained',
-      !section.contained || section.expanded ? '' : 'is-collapsed-preview',
-      section.highlight ? 'is-highlighted' : '',
+      modifiers.has('collapse')
+        ? (sectionExpanded ? '' : 'is-collapsed-preview')
+        : (!section.contained || sectionExpanded ? '' : 'is-collapsed-preview'),
+      section.highlight || modifiers.has('highlight') ? 'is-highlighted' : '',
+      dimmed ? 'is-reader-view-dimmed' : '',
       temp ? 'is-temp-highlighted' : '',
     ]
       .filter(Boolean)
       .join(' ');
 
-    const contentClass = !section.contained || section.expanded ? 'reader-section-content' : 'reader-section-content reader-section-preview';
-    const content = `<div class="${contentClass}">${section.blocks
-      .map((block) => renderReaderBlock(section, block))
-      .join('')}${section.children.filter((child) => !child.isGhost).map((child) => renderReaderSection(child)).join('')}</div>`;
+    const contentClass = modifiers.has('collapse') || section.contained
+      ? (sectionExpanded ? 'reader-section-content' : 'reader-section-content reader-section-preview')
+      : 'reader-section-content';
+    const content = `<div class="${contentClass}">${renderReaderBlocks(section, section.blocks)}${orderReaderViewTargets(
+      section.children.filter((child) => !child.isGhost),
+      viewContext,
+      getSectionReaderViewTargetKey,
+      state.readerViewActivatedTargets
+    ).map((child) => renderReaderSection(child)).join('')}</div>`;
 
-    const toggleAttrs = section.contained && section.expanded
+    const viewCollapseAttrs = `data-reader-action="toggle-view-collapse" data-reader-view-target="${deps.escapeAttr(targetKey)}" data-reader-view-collapse-key="${deps.escapeAttr(viewCollapseKey)}" aria-expanded="${viewExpanded ? 'true' : 'false'}"`;
+    const toggleAttrs = modifiers.has('collapse')
+      ? (sectionExpanded ? '' : ` ${viewCollapseAttrs}`)
+      : section.contained && section.expanded
       ? ''
       : section.contained
       ? ` data-reader-action="toggle-expand" data-section-key="${deps.escapeAttr(section.key)}"`
       : '';
 
-    const header = section.contained
+    const header = section.contained || modifiers.has('collapse')
       ? `
         <header class="reader-section-head" aria-label="Section controls">
           <div class="reader-head-actions">
-            <button type="button" class="tiny toggle-expand-button" data-reader-action="toggle-expand" data-section-key="${deps.escapeAttr(section.key)}" aria-label="${
-          section.expanded ? 'Collapse section' : 'Expand section'
-        }">${section.expanded ? '+' : '-'}</button>
+            <button type="button" class="tiny toggle-expand-button" ${modifiers.has('collapse')
+              ? viewCollapseAttrs
+              : `data-reader-action="toggle-expand" data-section-key="${deps.escapeAttr(section.key)}"`} aria-label="${
+          sectionExpanded ? 'Collapse section' : 'Expand section'
+        }">${sectionExpanded ? '-' : '+'}</button>
           </div>
         </header>
       `
@@ -183,7 +272,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     const sectionStyle = mergeDocumentCss(getDocumentSectionDefaultCss(state.documentMeta), section.css);
 
     return `
-      <section id="${deps.escapeAttr(effectiveId)}" class="${classList}" style="${deps.escapeAttr(sectionStyle)}"${toggleAttrs}>
+      <section id="${deps.escapeAttr(effectiveId)}" class="${classList}" style="${deps.escapeAttr(sectionStyle)}"${renderReaderViewTargetAttrs(targetKey, dimmed)}${toggleAttrs}>
         ${header}
         ${content}
       </section>
@@ -191,16 +280,28 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
   }
 
   function renderReaderBlock(section: VisualSection, block: VisualBlock): string {
+    const viewContext = getActiveReaderViewContext();
+    const targetKey = getBlockReaderViewTargetKey(block);
+    if (hasReaderViewModifier(viewContext, targetKey, 'hidden')) {
+      return '';
+    }
     const base = deps.resolveBaseComponent(block.schema.component);
-    const readerExpanded = base === 'expandable' ? getReaderExpandableExpanded(section.key, block) : block.schema.expandableExpanded;
+    const modifiers = getReaderViewModifiers(viewContext, targetKey);
+    const prioritized = isReaderViewPrioritized(viewContext, targetKey);
+    const readerExpanded = base === 'expandable'
+      ? getReaderExpandableExpanded(section.key, block, modifiers.has('collapse') ? false : prioritized ? true : block.schema.expandableExpanded)
+      : block.schema.expandableExpanded;
     const blockDomId = getBlockDomId(block);
     const idAttr = blockDomId ? ` id="${deps.escapeAttr(blockDomId)}"` : '';
+    const dimmed = modifiers.has('dimmed') && !state.readerViewActivatedTargets.has(targetKey);
     const blockClass = [
       'reader-block',
       `reader-block-${base}`,
       `align-${block.schema.align}`,
       `slot-${block.schema.slot}`,
       state.aiEditTarget.sectionKey === section.key && state.aiEditTarget.blockId === block.id ? 'is-ai-target' : '',
+      modifiers.has('highlight') ? 'is-highlighted' : '',
+      dimmed ? 'is-reader-view-dimmed' : '',
       blockDomId && state.tempHighlights.has(blockDomId) ? 'is-temp-highlighted' : '',
     ]
       .filter(Boolean)
@@ -211,39 +312,51 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       : '';
     const blockAttrs = `${idAttr} class="${blockClass}" data-component="${deps.escapeAttr(block.schema.component)}" data-section-key="${deps.escapeAttr(section.key)}" data-block-id="${deps.escapeAttr(block.id)}"${expandableAttrs} style="${deps.escapeAttr(sanitizeInlineCss(block.schema.css))}"`;
     const helpers = deps.getComponentRenderHelpers();
+    const renderBlockShell = (body: string): string => `<div ${blockAttrs}${renderReaderViewTargetAttrs(targetKey, dimmed)}>${body}</div>`;
+    const renderMaybeCollapsedBlockShell = (body: string): string => {
+      if (!modifiers.has('collapse') || base === 'container' || base === 'expandable') {
+        return renderBlockShell(body);
+      }
+      return renderBlockShell(renderReaderViewCollapseWrapper(targetKey, block, body));
+    };
 
     if (base === 'plugin') {
       if (block.schema.plugin === SCRIPTING_PLUGIN_ID) {
         if (state.currentView === 'viewer') {
-          return `<div ${blockAttrs}>${renderPluginReader(section, block, helpers)}</div>`;
+          return renderMaybeCollapsedBlockShell(renderPluginReader(section, block, helpers));
         }
         if (state.currentView === 'ai') {
           if (block.text.trim().length === 0) {
-            return `<div ${blockAttrs}>${renderPluginReader(section, block, helpers)}</div>`;
+            return renderMaybeCollapsedBlockShell(renderPluginReader(section, block, helpers));
           }
           const codeReader = renderCodeReader(
             section,
             { ...block, schema: { ...block.schema, codeLanguage: 'python' } } as VisualBlock,
             helpers
           );
-          return `<div ${blockAttrs}>${codeReader}${renderPluginReader(section, block, helpers)}</div>`;
+          return renderMaybeCollapsedBlockShell(`${codeReader}${renderPluginReader(section, block, helpers)}`);
         }
         if (block.text.trim().length === 0) {
-          return `<div ${blockAttrs}><div class="plugin-placeholder">Empty script...</div></div>`;
+          return renderMaybeCollapsedBlockShell('<div class="plugin-placeholder">Empty script...</div>');
         }
-        return `<div ${blockAttrs}>${renderCodeReader(section, { ...block, schema: { ...block.schema, codeLanguage: 'python' } } as VisualBlock, helpers)}</div>`;
+        return renderMaybeCollapsedBlockShell(renderCodeReader(section, { ...block, schema: { ...block.schema, codeLanguage: 'python' } } as VisualBlock, helpers));
       }
-      return `<div ${blockAttrs}>${renderPluginReader(section, block, helpers)}</div>`;
+      return renderMaybeCollapsedBlockShell(renderPluginReader(section, block, helpers));
     }
     if (base === 'container') {
-      return `<div ${blockAttrs}>${renderContainerReader(section, block, helpers)}</div>`;
+      const readerBlock = modifiers.has('collapse')
+        ? { ...block, schema: { ...block.schema, containerExpanded: false } } as VisualBlock
+        : prioritized
+        ? { ...block, schema: { ...block.schema, containerExpanded: true } } as VisualBlock
+        : block;
+      return renderBlockShell(renderContainerReader(section, readerBlock, helpers));
     }
     if (base === 'component-list') {
-      return `<div ${blockAttrs}>${renderComponentListReader(section, block, helpers)}</div>`;
+      return renderMaybeCollapsedBlockShell(renderComponentListReader(section, block, helpers));
     }
     if (base === 'grid') {
       deps.ensureGridItems(block.schema);
-      return `<div ${blockAttrs}>${renderGridReader(section, block, helpers)}</div>`;
+      return renderMaybeCollapsedBlockShell(renderGridReader(section, block, helpers));
     }
     if (base === 'expandable') {
       deps.ensureExpandableBlocks(block);
@@ -254,30 +367,83 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
           expandableExpanded: readerExpanded,
         },
       } as VisualBlock;
-      return `<div ${blockAttrs}>${renderExpandableReader(section, readerBlock, helpers)}</div>`;
+      return renderBlockShell(renderExpandableReader(section, readerBlock, helpers));
     }
     if (base === 'table') {
       if (!areTablesEnabled()) {
-        return `<div ${blockAttrs}><div class="plugin-placeholder">Table rendering is disabled in this reference implementation.</div></div>`;
+        return renderMaybeCollapsedBlockShell('<div class="plugin-placeholder">Table rendering is disabled in this reference implementation.</div>');
       }
-      return `<div ${blockAttrs}>${renderTableReader(section, block, helpers)}</div>`;
+      return renderMaybeCollapsedBlockShell(renderTableReader(section, block, helpers));
     }
     if (base === 'xref-card') {
-      return `<div ${blockAttrs}>${renderXrefCardReader(section, block, helpers)}</div>`;
+      return renderMaybeCollapsedBlockShell(renderXrefCardReader(section, block, helpers));
     }
     if (base === 'image') {
-      return `<div ${blockAttrs}>${renderImageReader(section, block, helpers)}</div>`;
+      return renderMaybeCollapsedBlockShell(renderImageReader(section, block, helpers));
     }
-    return `<div ${blockAttrs}>${renderTextReader(section, block, helpers)}</div>`;
+    return renderMaybeCollapsedBlockShell(renderTextReader(section, block, helpers));
+  }
+
+  function renderReaderBlocks(section: VisualSection, blocks: VisualBlock[]): string {
+    return orderReaderBlocks(blocks).map((block) => renderReaderBlock(section, block)).join('');
+  }
+
+  function renderReaderListBlocks(section: VisualSection, blocks: VisualBlock[]): string {
+    return orderReaderListBlocks(blocks).map((block) => renderReaderBlock(section, block)).join('');
+  }
+
+  function orderReaderBlocks(blocks: VisualBlock[]): VisualBlock[] {
+    return orderReaderViewTargets(
+      blocks,
+      getActiveReaderViewContext(),
+      getBlockReaderViewTargetKey,
+      state.readerViewActivatedTargets,
+      { prioritize: false }
+    );
+  }
+
+  function orderReaderListBlocks(blocks: VisualBlock[]): VisualBlock[] {
+    return orderReaderViewTargets(
+      blocks,
+      getActiveReaderViewContext(),
+      getBlockReaderViewTargetKey,
+      state.readerViewActivatedTargets,
+      { prioritize: true }
+    );
+  }
+
+  function isReaderViewPrioritizedBlock(block: VisualBlock): boolean {
+    return isReaderViewPrioritized(getActiveReaderViewContext(), getBlockReaderViewTargetKey(block));
+  }
+
+  function renderReaderViewTargetAttrs(targetKey: ReaderViewTargetKey, dimmed: boolean): string {
+    return ` data-reader-view-target="${deps.escapeAttr(targetKey)}"${dimmed ? ' data-reader-view-dimmed="true"' : ''}`;
+  }
+
+  function renderReaderViewCollapseWrapper(targetKey: ReaderViewTargetKey, block: VisualBlock, body: string): string {
+    const key = `reader-view-collapse:${targetKey}`;
+    const expanded = state.readerContainerState[key] ?? false;
+    const className = `reader-container reader-view-collapse-wrapper is-collapsible ${expanded ? 'is-expanded' : 'is-collapsed-preview'}`;
+    const title = block.schema.id.trim() || block.schema.xrefTitle.trim() || block.schema.containerTitle.trim() || block.schema.component;
+    const attrs = `data-reader-action="toggle-view-collapse" data-reader-view-target="${deps.escapeAttr(targetKey)}" data-reader-view-collapse-key="${deps.escapeAttr(key)}" aria-expanded="${expanded ? 'true' : 'false'}"`;
+    return `<div class="${deps.escapeAttr(className)}" style="--hvy-container-preview-rem: 3rem;">
+      <header class="reader-container-head">
+        <div class="reader-container-title">${deps.escapeHtml(title)}</div>
+        <div class="reader-container-actions">
+          <button type="button" class="tiny toggle-expand-button reader-container-toggle" ${attrs} aria-label="${expanded ? 'Collapse component' : 'Expand component'}">${expanded ? '-' : '+'}</button>
+        </div>
+      </header>
+      <div class="reader-container-body" ${expanded ? '' : attrs}>${body}</div>
+    </div>`;
   }
 
   function getBlockDomId(block: VisualBlock): string {
     return block.schema.id.trim();
   }
 
-  function getReaderExpandableExpanded(sectionKey: string, block: VisualBlock): boolean {
+  function getReaderExpandableExpanded(sectionKey: string, block: VisualBlock, fallback = block.schema.expandableExpanded): boolean {
     const key = `${sectionKey}:${block.id}`;
-    return state.readerExpandableState[key] ?? block.schema.expandableExpanded;
+    return state.readerExpandableState[key] ?? fallback;
   }
 
   function renderThemeModal(): string {
@@ -796,6 +962,11 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     renderSidebarHelpBalloon,
     renderReaderSection,
     renderReaderBlock,
+    renderReaderBlocks,
+    renderReaderListBlocks,
+    orderReaderBlocks,
+    orderReaderListBlocks,
+    isReaderViewPrioritizedBlock,
     renderModal,
     renderLinkInlineModal,
     renderWarnings,

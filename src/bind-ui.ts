@@ -1,6 +1,7 @@
 import bundledResumeThvy from '../examples/resume.thvy?raw';
 import bundledResumeHvy from '../examples/resume.hvy?raw';
 import bundledCrmHvy from '../examples/crm.hvy?raw';
+import bundledResumeViews from '../examples/resume-views.json';
 import { state, getRenderApp, getRefreshReaderPanels } from './state';
 import { findSectionByKey } from './section-ops';
 import { findBlockByIds } from './block-ops';
@@ -17,6 +18,9 @@ import { bindAppEvents } from './bind/app-events';
 import { scheduleSidebarHelpAutoClose } from './bind/handlers/click-misc';
 import { saveResumeState } from './state-persistence';
 import { encodeComponentListRuntimeView, parseComponentListRuntimeView } from './editor/components/component-list/component-list-view';
+import type { ReaderViewFilter } from './types';
+
+const resumeViews = bundledResumeViews as Record<string, ReaderViewFilter>;
 
 export function bindUi(app: HTMLElement): void {
   const newBtn = app.querySelector<HTMLButtonElement>('#newBtn');
@@ -51,6 +55,7 @@ export function bindUi(app: HTMLElement): void {
     state.rawEditorError = null;
     state.rawEditorDiagnostics = [];
     state.filename = 'crm.hvy';
+    state.selectedExample = 'crm';
     state.history = [];
     state.future = [];
     clearChatConversation(state.chat);
@@ -66,6 +71,7 @@ export function bindUi(app: HTMLElement): void {
     state.rawEditorError = null;
     state.rawEditorDiagnostics = [];
     state.filename = 'resume.thvy';
+    state.selectedExample = 'resume-template';
     state.history = [];
     state.future = [];
     clearChatConversation(state.chat);
@@ -81,10 +87,44 @@ export function bindUi(app: HTMLElement): void {
     state.rawEditorError = null;
     state.rawEditorDiagnostics = [];
     state.filename = 'resume.hvy';
+    state.selectedExample = 'resume-example';
     state.history = [];
     state.future = [];
     clearChatConversation(state.chat);
     resetTransientUiState();
+    saveResumeState(state);
+    getRenderApp()();
+  });
+
+  const applyReaderView = (view: ReaderViewFilter): void => {
+    state.readerView = view;
+    state.readerViewActivatedTargets = new Set<string>();
+    state.readerContainerState = {};
+    state.readerExpandableState = {};
+    state.currentView = state.currentView === 'editor' ? 'viewer' : state.currentView;
+    saveResumeState(state);
+    getRenderApp()();
+  };
+
+  app.querySelector<HTMLButtonElement>('#typescriptResumeViewBtn')?.addEventListener('click', () => {
+    if (state.selectedExample !== 'resume-example') {
+      return;
+    }
+    applyReaderView(resumeViews.typescript ?? {});
+  });
+
+  app.querySelector<HTMLButtonElement>('#llmEngineerResumeViewBtn')?.addEventListener('click', () => {
+    if (state.selectedExample !== 'resume-example') {
+      return;
+    }
+    applyReaderView(resumeViews['llm-engineer'] ?? {});
+  });
+
+  app.querySelector<HTMLButtonElement>('#clearReaderViewBtn')?.addEventListener('click', () => {
+    state.readerView = {};
+    state.readerViewActivatedTargets = new Set<string>();
+    state.readerContainerState = {};
+    state.readerExpandableState = {};
     saveResumeState(state);
     getRenderApp()();
   });
@@ -98,6 +138,7 @@ export function bindUi(app: HTMLElement): void {
     const text = new TextDecoder().decode(bytes);
     const extension = detectExtension(file.name, text);
     state.filename = extension === '.md' ? normalizeMarkdownImportFilename(file.name) : file.name;
+    state.selectedExample = 'custom';
     state.document = deserializeDocumentBytes(bytes, extension);
     state.rawEditorText = serializeDocument(state.document);
     state.rawEditorError = null;
@@ -169,6 +210,7 @@ export function bindUi(app: HTMLElement): void {
 
   const handleReaderAreaClick = (event: Event) => {
     const target = event.target as HTMLElement;
+    const nearestReaderAction = target.closest<HTMLElement>('[data-reader-action]');
 
     const anchor = target.closest<HTMLAnchorElement>('a[href^="#"]');
     if (anchor) {
@@ -214,6 +256,35 @@ export function bindUi(app: HTMLElement): void {
       toggleComponentListReverse(reverseList);
       getRefreshReaderPanels()();
       return;
+    }
+
+    const viewCollapse = target.closest<HTMLElement>('[data-reader-action="toggle-view-collapse"]');
+    if (viewCollapse) {
+      if (nearestReaderAction !== viewCollapse) {
+        // Let nested reader controls, such as expandables inside a collapsed view wrapper, handle the click.
+      } else {
+      if (target.closest('a, input, select, textarea, [contenteditable="true"]')) {
+        return;
+      }
+      event.stopPropagation();
+      const key = viewCollapse.dataset.readerViewCollapseKey;
+      if (!key) {
+        return;
+      }
+      state.readerContainerState[key] = viewCollapse.getAttribute('aria-expanded') !== 'true';
+      getRefreshReaderPanels()();
+      return;
+      }
+    }
+
+    const dimmedTarget = target.closest<HTMLElement>('[data-reader-view-dimmed="true"][data-reader-view-target]');
+    if (dimmedTarget) {
+      const targetKey = dimmedTarget.dataset.readerViewTarget;
+      if (targetKey) {
+        state.readerViewActivatedTargets.add(targetKey);
+        getRefreshReaderPanels()();
+        return;
+      }
     }
 
     const toggle = target.closest<HTMLElement>('[data-reader-action="toggle-expand"]');

@@ -1,0 +1,38 @@
+{
+  "typescript": {
+    "/id/header": ["priority"],
+    "/id/summary": ["priority"],
+    "/id/top-skills-tools-technologies": ["priority"],
+    "tool-typescript": ["highlight"],
+    "/id/tools-technologies": ["priority"],
+    "/id/history-tools-technologies-list/xref-card-0": ["highlight"],
+    "/id/project-tools-technologies-list/xref-card-0": ["highlight"],
+    "tool-openai-api": ["dimmed"],
+    "tool-superagi": ["dimmed"],
+    "skill-llm-prompt-engineering": ["dimmed"],
+    "/id/top-skills-list/xref-card-2": ["hidden"],
+    "project-autonomous-agent-hackathon": ["dimmed", "collapse"],
+    "/id/education": ["collapse"],
+    "/id/locations": ["priority"]
+  },
+  "llm-engineer": {
+    "/id/header": ["priority"],
+    "/id/summary": ["priority"],
+    "/id/top-skills-tools-technologies": ["priority"],
+    "tool-openai-api": ["highlight"],
+    "/id/tools-technologies": ["priority"],
+    "tool-superagi": ["highlight"],
+    "skill-llm-prompt-engineering": ["highlight"],
+    "/id/project-relevant-skills-hackathon-list/xref-card-0": ["highlight"],
+    "/id/project-tools-technologies-hackathon-list/xref-card-1": ["highlight"],
+    "project-heavy-stack": ["dimmed", "collapse"],
+    "tool-typescript": ["dimmed"],
+    "tool-c-cpp": ["dimmed"],
+    "/id/top-skills-list/xref-card-0": ["hidden"],
+    "/id/top-skills-list/xref-card-1": ["hidden"],
+    "/id/top-tools-technologies-list/xref-card-0": ["hidden"],
+    "/id/top-tools-technologies-list/xref-card-2": ["hidden"],
+    "/id/education": ["collapse"],
+    "/id/locations": ["priority"]
+  }
+}

@@ -679,7 +679,14 @@ export function getComponentRenderHelpers(editorRenderer: {
   renderPassiveEditorBlock: (sectionKey: string, block: VisualBlock, sections: import('./editor/types').VisualSection[]) => string;
   renderComponentFragment: ComponentRenderHelpers['renderComponentFragment'];
   renderComponentPlacementTarget: ComponentRenderHelpers['renderComponentPlacementTarget'];
-}, readerRenderer: { renderReaderBlock: ComponentRenderHelpers['renderReaderBlock'] }): ComponentRenderHelpers {
+}, readerRenderer: {
+  renderReaderBlock: ComponentRenderHelpers['renderReaderBlock'];
+  renderReaderBlocks: ComponentRenderHelpers['renderReaderBlocks'];
+  renderReaderListBlocks: ComponentRenderHelpers['renderReaderListBlocks'];
+  orderReaderBlocks: ComponentRenderHelpers['orderReaderBlocks'];
+  orderReaderListBlocks: ComponentRenderHelpers['orderReaderListBlocks'];
+  isReaderViewPrioritizedBlock: ComponentRenderHelpers['isReaderViewPrioritizedBlock'];
+}): ComponentRenderHelpers {
   return {
     escapeAttr,
     escapeHtml,
@@ -688,6 +695,11 @@ export function getComponentRenderHelpers(editorRenderer: {
     renderEditorBlock: (sectionKey, block, parentLocked) => editorRenderer.renderEditorBlock(sectionKey, block, state.document.sections, parentLocked),
     renderPassiveEditorBlock: (sectionKey, block) => editorRenderer.renderPassiveEditorBlock(sectionKey, block, state.document.sections),
     renderReaderBlock: readerRenderer.renderReaderBlock,
+    renderReaderBlocks: readerRenderer.renderReaderBlocks,
+    renderReaderListBlocks: readerRenderer.renderReaderListBlocks,
+    orderReaderBlocks: readerRenderer.orderReaderBlocks,
+    orderReaderListBlocks: readerRenderer.orderReaderListBlocks,
+    isReaderViewPrioritizedBlock: readerRenderer.isReaderViewPrioritizedBlock,
     renderComponentFragment: editorRenderer.renderComponentFragment,
     renderComponentOptions,
     renderAddComponentPicker: (options) => renderAddComponentPicker(options, { escapeAttr, escapeHtml, getComponentDefs }),

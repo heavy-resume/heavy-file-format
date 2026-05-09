@@ -140,29 +140,39 @@ component_defs:
           block:
             text: ""
             schema:
-              component: component-list
-              componentListComponent: xref-card
-              componentListItemLabel: skill
+              component: container
               css: "margin: 0;"
-              componentListBlocks:
+              containerBlocks:
                 - text: "#### Relevant Skills"
                   schema:
                     component: text
                     css: "margin: 0 0 0.25rem;"
+                - text: ""
+                  schema:
+                    component: component-list
+                    componentListComponent: xref-card
+                    componentListItemLabel: skill
+                    css: "margin: 0;"
+                    componentListBlocks: []
         - id: tools-technologies
           align: center
           block:
             text: ""
             schema:
-              component: component-list
-              componentListComponent: xref-card
-              componentListItemLabel: tool / tech
+              component: container
               css: "margin: 0;"
-              componentListBlocks:
+              containerBlocks:
                 - text: "#### Tools and Technologies"
                   schema:
                     component: text
                     css: "margin: 0 0 0.25rem;"
+                - text: ""
+                  schema:
+                    component: component-list
+                    componentListComponent: xref-card
+                    componentListItemLabel: tool / tech
+                    css: "margin: 0;"
+                    componentListBlocks: []
   - name: education-record
     baseType: expandable
     description: One expandable education entry for a degree or program; stub table summarizes degree, institution, and location, while expanded content holds details, description, classes, and supporting skill/tool xrefs.
@@ -441,14 +451,16 @@ component_defs:
  <!--hvy:grid {"css":"margin: 0.5rem 0; gap: 0.75rem;","gridColumns":2,"lock":true}-->
   <!--hvy:grid:0 {"id":"top-skills"}-->
 
-   <!--hvy:component-list {"componentListComponent":"xref-card","componentListItemLabel":"skill","css":"margin: 0;","align":"center"}-->
+   <!--hvy:container {"css":"margin: 0;","align":"center"}-->
     <!--hvy:text {"align":"center","css":"margin: 0 0 0.35rem;"}-->
      ## Skills
+    <!--hvy:component-list {"id":"top-skills-list","componentListComponent":"xref-card","componentListItemLabel":"skill","css":"margin: 0;","align":"center"}-->
   <!--hvy:grid:1 {"id":"top-tools-technologies"}-->
 
-   <!--hvy:component-list {"componentListComponent":"xref-card","componentListItemLabel":"tool / tech","css":"margin: 0;","align":"center"}-->
+   <!--hvy:container {"css":"margin: 0;","align":"center"}-->
     <!--hvy:text {"align":"center","css":"margin: 0 0 0.35rem;"}-->
      ## Tools & Technologies
+    <!--hvy:component-list {"id":"top-tools-technologies-list","componentListComponent":"xref-card","componentListItemLabel":"tool / tech","css":"margin: 0;","align":"center"}-->
 
 <!--hvy: {"id":"skills","lock":true,"expanded":false,"location":"sidebar","tags":"sidebar, skills-library, canonical-records","description":"Main reusable skills library containing canonical skill-record expandables. Add new skills here before adding featured or local xrefs."}-->
 #! Skills

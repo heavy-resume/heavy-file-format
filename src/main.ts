@@ -3,6 +3,7 @@ import './style.css';
 import './state-tracker.css';
 import 'highlight.js/styles/github.css';
 import bundledExampleHvyUrl from '../examples/example.hvy?url';
+import bundledResumeViews from '../examples/resume-views.json';
 
 import { createEditorRenderer, type EditorRenderer } from './editor/render';
 import { createReaderRenderer, type ReaderRenderer } from './reader/render';
@@ -10,7 +11,7 @@ import { getTemplateFields, renderTemplatePanel } from './editor/template';
 import { renderCliView } from './cli-ui/render';
 
 import { state, initState, initCallbacks, incrementRenderCount, incrementRefreshReaderCount } from './state';
-import type { AppState } from './types';
+import type { AppState, ReaderViewFilter } from './types';
 import { escapeAttr, escapeHtml } from './utils';
 import { applyTheme, getThemeConfig, initColorModeSync } from './theme';
 import { flattenSections, findSectionByKey, findDuplicateSectionIds, getSectionId, formatSectionTitle, isDefaultUntitledSectionTitle, buildSectionRenderSequence } from './section-ops';
@@ -41,6 +42,13 @@ if (!appRoot) {
   throw new Error('App container not found.');
 }
 const app = appRoot;
+const READER_HIGHLIGHT_GLOW_MS = 6000;
+let readerHighlightGlowObserver: IntersectionObserver | null = null;
+let readerHighlightGlowSignature = '';
+let readerHighlightGlowSeenTargets = new Set<string>();
+window.addEventListener('hvy:viewer-sidebar-open-changed', () => {
+  window.requestAnimationFrame(() => scheduleReaderHighlightGlow(app));
+});
 
 app.innerHTML = '<main class="layout"><section class="pane full-pane"><p>Loading editor...</p></section></main>';
 
@@ -54,6 +62,7 @@ function createInitialState(document: ReturnType<typeof deserializeDocumentBytes
   return {
     document,
     filename: 'example.hvy',
+    selectedExample: 'default',
     currentView: 'editor',
     editorMode: 'basic',
     responsivePreview: 'full',
@@ -107,6 +116,8 @@ function createInitialState(document: ReturnType<typeof deserializeDocumentBytes
     expandableEditorPanels: {},
     readerExpandableState: {},
     readerContainerState: {},
+    readerView: {},
+    readerViewActivatedTargets: new Set<string>(),
     componentListReaderViews: {},
     viewerSidebarOpen: false,
     editorSidebarOpen: false,
@@ -126,6 +137,7 @@ function applyResumeState(initial: AppState, resume: ReturnType<typeof loadResum
     ...initial,
     document: resume.document,
     filename: resume.filename,
+    selectedExample: resume.selectedExample,
     currentView: resume.currentView,
     editorMode: resume.editorMode,
     showAdvancedEditor: resume.showAdvancedEditor,
@@ -371,6 +383,12 @@ readerRenderer = createReaderRenderer(
     get readerContainerState() {
       return state.readerContainerState;
     },
+    get readerView() {
+      return state.readerView;
+    },
+    get readerViewActivatedTargets() {
+      return state.readerViewActivatedTargets;
+    },
     get componentListReaderViews() {
       return state.componentListReaderViews;
     },
@@ -462,7 +480,7 @@ function renderApp(): void {
             <button type="button" class="${isViewerView ? 'secondary' : 'ghost'}" data-action="switch-view" data-view="viewer">Viewer</button>
             <button type="button" class="${isAiView ? 'secondary' : 'ghost'}" data-action="switch-view" data-view="ai">AI</button>
           </div>
-          ${canPreviewSurface ? renderResponsivePreviewControls() : '<div></div>'}
+          ${canPreviewSurface ? renderPreviewControlStack() : '<div></div>'}
           ${
             isEditorView
               ? `<div class="editor-top-controls">
@@ -592,6 +610,7 @@ function renderApp(): void {
   stepStartedAt = performance.now();
   restorePaneScroll(state.paneScroll, app);
   restoreChatThreadScroll(app, chatScroll);
+  scheduleReaderHighlightGlow(app);
   restoreMs = performance.now() - stepStartedAt;
 
   stepStartedAt = performance.now();
@@ -639,6 +658,45 @@ function renderResponsivePreviewControls(): string {
       )
       .join('')}
   </div>`;
+}
+
+function renderPreviewControlStack(): string {
+  return `<div class="preview-control-stack">
+    ${renderResponsivePreviewControls()}
+    ${renderReaderViewControls()}
+  </div>`;
+}
+
+function renderReaderViewControls(): string {
+  if (state.selectedExample !== 'resume-example') {
+    return '';
+  }
+  const selectedView = getSelectedReaderViewId();
+  const renderButton = (id: string, label: string, selected: boolean): string =>
+    `<button id="${escapeAttr(id)}" type="button" class="${selected ? 'secondary' : 'ghost'}" aria-pressed="${selected ? 'true' : 'false'}">${escapeHtml(label)}</button>`;
+  return `<div class="reader-view-controls" role="group" aria-label="Resume reader views">
+    ${renderButton('clearReaderViewBtn', 'No View', selectedView === 'none')}
+    ${renderButton('typescriptResumeViewBtn', 'TypeScript View', selectedView === 'typescript')}
+    ${renderButton('llmEngineerResumeViewBtn', 'LLM Engineer View', selectedView === 'llm-engineer')}
+  </div>`;
+}
+
+function getSelectedReaderViewId(): 'none' | 'typescript' | 'llm-engineer' | 'custom' {
+  if (Object.keys(state.readerView).length === 0) {
+    return 'none';
+  }
+  const resumeViews = bundledResumeViews as Record<string, ReaderViewFilter>;
+  if (isSameReaderView(state.readerView, resumeViews.typescript ?? {})) {
+    return 'typescript';
+  }
+  if (isSameReaderView(state.readerView, resumeViews['llm-engineer'] ?? {})) {
+    return 'llm-engineer';
+  }
+  return 'custom';
+}
+
+function isSameReaderView(left: ReaderViewFilter, right: ReaderViewFilter): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
 }
 
 function renderResponsivePreviewFrameAttrs(baseClass: string): string {
@@ -699,6 +757,9 @@ function refreshReaderPanels(): void {
     reconcilePluginMounts(reader);
     readerMs = performance.now() - stepStartedAt;
   }
+  if (sidebarSections || reader) {
+    scheduleReaderHighlightGlow(app);
+  }
 
   const modalStartedAt = performance.now();
   refreshModalPreview();
@@ -727,6 +788,75 @@ function refreshModalPreview(): void {
   if (modalTitle) {
     modalTitle.innerHTML = `Meta: ${escapeHtml(formatSectionTitle(section.title))} <code>#${escapeHtml(getSectionId(section))}</code>`;
   }
+}
+
+function scheduleReaderHighlightGlow(root: ParentNode): void {
+  const signature = JSON.stringify(state.readerView);
+  if (signature !== readerHighlightGlowSignature) {
+    readerHighlightGlowSignature = signature;
+    readerHighlightGlowSeenTargets = new Set<string>();
+  }
+
+  readerHighlightGlowObserver?.disconnect();
+  readerHighlightGlowObserver = null;
+
+  const highlighted = getReaderHighlightGlowRoots(root)
+    .flatMap((surface) => [...surface.querySelectorAll<HTMLElement>('.reader-section.is-highlighted, .reader-block.is-highlighted')])
+    .filter((element) => !readerHighlightGlowSeenTargets.has(getReaderHighlightGlowKey(element)));
+  if (highlighted.length === 0) {
+    return;
+  }
+
+  const triggerGlow = (element: HTMLElement): void => {
+    readerHighlightGlowSeenTargets.add(getReaderHighlightGlowKey(element));
+    element.classList.add('is-reader-view-highlight-glowing');
+    window.setTimeout(() => {
+      element.classList.remove('is-reader-view-highlight-glowing');
+    }, READER_HIGHLIGHT_GLOW_MS);
+  };
+
+  if (!('IntersectionObserver' in window)) {
+    highlighted.forEach(triggerGlow);
+    return;
+  }
+
+  const observer = new IntersectionObserver(
+    (entries) => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) {
+          continue;
+        }
+        const element = entry.target as HTMLElement;
+        triggerGlow(element);
+        observer.unobserve(element);
+      }
+    },
+    { threshold: 0.15 }
+  );
+  readerHighlightGlowObserver = observer;
+  highlighted.forEach((element) => observer.observe(element));
+}
+
+function getReaderHighlightGlowKey(element: HTMLElement): string {
+  const surface = element.closest('#readerSidebarSections, #aiSidebarSections')
+    ? 'sidebar'
+    : element.closest('#readerDocument, #aiReaderDocument')
+    ? 'reader'
+    : 'unknown';
+  return `${surface}:${element.dataset.readerViewTarget || element.id || element.dataset.blockId || ''}`;
+}
+
+function getReaderHighlightGlowRoots(root: ParentNode): HTMLElement[] {
+  const sidebar =
+    root.querySelector<HTMLElement>('#readerSidebarSections') ??
+    root.querySelector<HTMLElement>('#aiSidebarSections');
+  const reader =
+    root.querySelector<HTMLElement>('#readerDocument') ??
+    root.querySelector<HTMLElement>('#aiReaderDocument');
+  if (state.viewerSidebarOpen && sidebar) {
+    return [sidebar];
+  }
+  return reader ? [reader] : sidebar ? [sidebar] : [];
 }
 
 // Initialize late-bound callbacks so all modules can access renderApp/refreshReaderPanels

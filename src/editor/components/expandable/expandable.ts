@@ -161,8 +161,8 @@ function renderExpandablePaneMeta(
 }
 
 export const renderExpandableReader: ComponentReaderRenderer = (section, block, helpers) => {
-  const stubHtml = block.schema.expandableStubBlocks.children.map((innerBlock) => helpers.renderReaderBlock(section, innerBlock)).join('');
-  const contentHtml = block.schema.expandableContentBlocks.children.map((innerBlock) => helpers.renderReaderBlock(section, innerBlock)).join('');
+  const stubHtml = helpers.renderReaderBlocks(section, block.schema.expandableStubBlocks.children);
+  const contentHtml = helpers.renderReaderBlocks(section, block.schema.expandableContentBlocks.children);
   const expanded = block.schema.expandableExpanded;
   const alwaysShowStub = block.schema.expandableAlwaysShowStub;
   const stubPaneStyle = helpers.escapeAttr(sanitizeInlineCss(block.schema.expandableStubCss));

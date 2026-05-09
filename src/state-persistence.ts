@@ -1,5 +1,5 @@
 import { deserializeDocumentBytes, serializeDocumentBytes } from './serialization';
-import type { AppState, ChatMessage, ChatSettings, HvyCliHistoryEntry, HvyCliSessionState, VisualDocument } from './types';
+import type { AppState, ChatMessage, ChatSettings, HvyCliHistoryEntry, HvyCliSessionState, SelectedExample, VisualDocument } from './types';
 
 const RESUME_STORAGE_KEY = 'hvy-editor-resume-state-v1';
 const DEFAULT_SAVED_CHAT_SETTINGS: ChatSettings = {
@@ -13,6 +13,7 @@ interface ResumeStatePayload {
   version: 1;
   savedAt: string;
   filename: string;
+  selectedExample?: SelectedExample;
   currentView: AppState['currentView'];
   editorMode: AppState['editorMode'];
   showAdvancedEditor: boolean;
@@ -35,6 +36,7 @@ interface ResumeStatePayload {
 export interface LoadedResumeState {
   document: VisualDocument;
   filename: string;
+  selectedExample?: SelectedExample;
   currentView: AppState['currentView'];
   editorMode: AppState['editorMode'];
   showAdvancedEditor: boolean;
@@ -61,6 +63,7 @@ export function loadResumeState(): LoadedResumeState | null {
     return {
       document,
       filename: typeof parsed.filename === 'string' && parsed.filename.trim() ? parsed.filename : 'document.hvy',
+      selectedExample: isSelectedExample(parsed.selectedExample) ? parsed.selectedExample : undefined,
       currentView: isCurrentView(parsed.currentView) ? parsed.currentView : 'editor',
       editorMode: isEditorMode(parsed.editorMode) ? parsed.editorMode : 'basic',
       showAdvancedEditor: Boolean(parsed.showAdvancedEditor),
@@ -97,6 +100,7 @@ export function saveResumeState(state: AppState): void {
       version: 1,
       savedAt: new Date().toISOString(),
       filename: state.filename,
+      selectedExample: state.selectedExample,
       currentView: state.currentView,
       editorMode: state.editorMode,
       showAdvancedEditor: state.showAdvancedEditor,
@@ -152,6 +156,17 @@ function base64ToBytes(value: string): Uint8Array {
 
 function isCurrentView(value: unknown): value is AppState['currentView'] {
   return value === 'editor' || value === 'viewer' || value === 'ai';
+}
+
+function isSelectedExample(value: unknown): value is SelectedExample {
+  return (
+    value === 'default'
+    || value === 'blank'
+    || value === 'crm'
+    || value === 'resume-template'
+    || value === 'resume-example'
+    || value === 'custom'
+  );
 }
 
 function isEditorMode(value: unknown): value is AppState['editorMode'] {

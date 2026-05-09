@@ -1,13 +1,54 @@
 import './container.css';
 import type { ComponentEditorRenderer, ComponentReaderRenderer } from '../../component-helpers';
 import type { VisualBlock, VisualSection } from '../../types';
+import { hasContainerBorderCss } from './container-css';
 
 export const renderContainerEditor: ComponentEditorRenderer = (sectionKey, block, helpers) => {
   helpers.ensureContainerBlocks(block);
   const addKey = `container:${sectionKey}:${block.id}`;
+  const bordered = hasContainerBorderCss(block.schema.css);
+  const innerBlocks = block.schema.containerBlocks
+    .map((innerBlock) => helpers.renderEditorBlock(sectionKey, innerBlock, block.schema.lock))
+    .join('');
   return `
+    <div class="container-config-row">
+      <span class="container-title-editor-label">Container Title</span>
+      <input
+        class="container-title-editor-input"
+        data-section-key="${helpers.escapeAttr(sectionKey)}"
+        data-block-id="${helpers.escapeAttr(block.id)}"
+        data-field="block-container-title"
+        placeholder="Title"
+        value="${helpers.escapeAttr(block.schema.containerTitle)}"
+      />
+      <div class="container-config-actions">
+        <div class="container-toggle-group">
+          <label class="checkbox-label container-border-toggle">
+            <input
+              type="checkbox"
+              data-section-key="${helpers.escapeAttr(sectionKey)}"
+              data-block-id="${helpers.escapeAttr(block.id)}"
+              data-field="block-container-border"
+              ${bordered ? 'checked' : ''}
+            />
+            <span>Border</span>
+          </label>
+          <label class="checkbox-label container-expanded-toggle">
+            <input
+              type="checkbox"
+              data-section-key="${helpers.escapeAttr(sectionKey)}"
+              data-block-id="${helpers.escapeAttr(block.id)}"
+              data-field="block-container-expanded"
+              ${bordered && block.schema.containerExpanded ? 'checked' : ''}
+              ${bordered ? '' : 'disabled'}
+            />
+            <span>Expanded by default</span>
+          </label>
+        </div>
+      </div>
+    </div>
     <div class="container-inner-blocks">
-      ${block.schema.containerBlocks.map((innerBlock) => helpers.renderEditorBlock(sectionKey, innerBlock, block.schema.lock)).join('')}
+      ${innerBlocks}
     </div>
     ${
       block.schema.lock
@@ -34,7 +75,9 @@ export const renderContainerReader: ComponentReaderRenderer = (section, block, h
     blocks: block.schema.containerBlocks,
     expanded: helpers.getReaderContainerExpanded(`${section.key}:${block.id}`, block.schema.containerExpanded),
     collapsedPreviewRem: block.schema.containerCollapsedPreviewRem,
+    bordered: hasContainerBorderCss(block.schema.css),
     virtualKey: '',
+    useListOrdering: false,
     helpers,
   });
 };
@@ -48,6 +91,8 @@ export function renderVirtualContainerReader(
     title: string;
     blocks: VisualBlock[];
     collapsedPreviewRem: number;
+    expanded?: boolean;
+    useListOrdering?: boolean;
   },
   helpers: Parameters<ComponentReaderRenderer>[2]
 ): string {
@@ -57,9 +102,11 @@ export function renderVirtualContainerReader(
     blockId: options.listBlockId,
     title: options.title,
     blocks: options.blocks,
-    expanded: helpers.getReaderContainerExpanded(virtualKey, false),
+    expanded: helpers.getReaderContainerExpanded(virtualKey, options.expanded ?? false),
     collapsedPreviewRem: options.collapsedPreviewRem,
+    bordered: true,
     virtualKey,
+    useListOrdering: options.useListOrdering ?? false,
     helpers,
   });
 };
@@ -71,27 +118,44 @@ function renderContainerReaderBody(options: {
   blocks: VisualBlock[];
   expanded: boolean;
   collapsedPreviewRem: number;
+  bordered: boolean;
   virtualKey: string;
+  useListOrdering: boolean;
   helpers: Parameters<ComponentReaderRenderer>[2];
 }): string {
-  const body = options.blocks.map((innerBlock) => options.helpers.renderReaderBlock(options.section, innerBlock)).join('');
+  const body = options.useListOrdering
+    ? options.helpers.renderReaderListBlocks(options.section, options.blocks)
+    : options.helpers.renderReaderBlocks(options.section, options.blocks);
   if (!body && !options.title.trim()) {
     return '';
   }
-  const expanded = options.expanded;
+  const canCollapse = options.bordered || Boolean(options.virtualKey);
+  const expanded = canCollapse ? options.expanded : true;
   const previewRem = Number.isFinite(options.collapsedPreviewRem) && options.collapsedPreviewRem > 0 ? options.collapsedPreviewRem : 3;
   const collapsibleAttrs = `data-reader-action="toggle-container" data-section-key="${options.helpers.escapeAttr(options.section.key)}" data-block-id="${options.helpers.escapeAttr(
     options.blockId
   )}" data-container-key="${options.helpers.escapeAttr(options.virtualKey || `${options.section.key}:${options.blockId}`)}" aria-expanded="${expanded ? 'true' : 'false'}"`;
-  const className = ['reader-container', expanded ? 'is-expanded' : 'is-collapsed-preview', options.virtualKey ? 'is-virtual-group-container' : '']
+  const className = [
+    'reader-container',
+    canCollapse ? 'is-collapsible' : '',
+    canCollapse && !expanded ? 'is-collapsed-preview' : 'is-expanded',
+    options.bordered ? 'is-bordered' : '',
+    options.virtualKey ? 'is-virtual-group-container' : '',
+  ]
     .filter(Boolean)
     .join(' ');
-  const titleLabel = options.title.trim() || (options.virtualKey ? 'Group' : 'Container');
-  const title = `<button type="button" class="reader-container-title" ${collapsibleAttrs}>${options.helpers.escapeHtml(titleLabel)}</button>`;
-  const bodyAttrs = expanded ? '' : ` ${collapsibleAttrs}`;
-  const rootAttrs = options.virtualKey && !expanded ? ` ${collapsibleAttrs}` : '';
+  const titleLabel = options.title.trim() || (options.virtualKey ? 'Group' : '');
+  const title = titleLabel ? `<div class="reader-container-title">${options.helpers.escapeHtml(titleLabel)}</div>` : '';
+  const toggle = canCollapse
+    ? `<button type="button" class="tiny toggle-expand-button reader-container-toggle" ${collapsibleAttrs} aria-label="${
+        expanded ? 'Collapse container' : 'Expand container'
+      }">${expanded ? '-' : '+'}</button>`
+    : '';
+  const header = title || toggle ? `<header class="reader-container-head">${title}<div class="reader-container-actions">${toggle}</div></header>` : '';
+  const bodyAttrs = canCollapse && !expanded ? ` ${collapsibleAttrs}` : '';
+  const rootAttrs = canCollapse && options.virtualKey && !expanded ? ` ${collapsibleAttrs}` : '';
   return `<div class="${options.helpers.escapeAttr(className)}" style="--hvy-container-preview-rem: ${previewRem}rem;"${rootAttrs}>
-    ${title}
+    ${header}
     <div class="reader-container-body"${bodyAttrs}>${body}</div>
   </div>`;
 }

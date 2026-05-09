@@ -139,29 +139,39 @@ component_defs:
           block:
             text: ""
             schema:
-              component: component-list
-              componentListComponent: xref-card
-              componentListItemLabel: skill
+              component: container
               css: "margin: 0;"
-              componentListBlocks:
+              containerBlocks:
                 - text: "#### Relevant Skills"
                   schema:
                     component: text
                     css: "margin: 0 0 0.25rem;"
+                - text: ""
+                  schema:
+                    component: component-list
+                    componentListComponent: xref-card
+                    componentListItemLabel: skill
+                    css: "margin: 0;"
+                    componentListBlocks: []
         - id: tools-technologies
           align: center
           block:
             text: ""
             schema:
-              component: component-list
-              componentListComponent: xref-card
-              componentListItemLabel: tool / tech
+              component: container
               css: "margin: 0;"
-              componentListBlocks:
+              containerBlocks:
                 - text: "#### Tools and Technologies"
                   schema:
                     component: text
                     css: "margin: 0 0 0.25rem;"
+                - text: ""
+                  schema:
+                    component: component-list
+                    componentListComponent: xref-card
+                    componentListItemLabel: tool / tech
+                    css: "margin: 0;"
+                    componentListBlocks: []
   - name: education-record
     baseType: expandable
     description: One expandable education entry for a degree or program; stub table summarizes degree, institution, and location, while expanded content holds details, description, classes, and supporting skill/tool xrefs.
@@ -451,45 +461,53 @@ component_defs:
 
   <!--hvy:grid:0 {"id":"top-skills"}-->
 
-   <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
+   <!--hvy:container {"css":"margin: 0;","align":"center"}-->
 
-    <!--hvy:component-list:0 {}-->
+    <!--hvy:container:0 {}-->
 
      <!--hvy:text {"align":"center","css":"margin: 0 0 0.35rem;"}-->
       ## Skills
 
-    <!--hvy:component-list:1 {}-->
+    <!--hvy:container:1 {}-->
 
-     <!--hvy:xref-card {"css":"margin: 0.35rem 0;","xrefTitle":"Software Engineering","xrefDetail":"Core strength","xrefTarget":"skill-software-engineering"}-->
+     <!--hvy:component-list {"id":"top-skills-list","componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
 
-    <!--hvy:component-list:2 {}-->
+      <!--hvy:component-list:0 {}-->
 
-     <!--hvy:xref-card {"css":"margin: 0.35rem 0;","xrefTitle":"Library Development","xrefDetail":"Reusable systems","xrefTarget":"skill-library-development"}-->
+       <!--hvy:xref-card {"css":"margin: 0.35rem 0;","xrefTitle":"Software Engineering","xrefDetail":"Core strength","xrefTarget":"skill-software-engineering"}-->
 
-    <!--hvy:component-list:3 {}-->
+      <!--hvy:component-list:1 {}-->
 
-     <!--hvy:xref-card {"css":"margin: 0.35rem 0;","xrefTitle":"LLM Prompt Engineering","xrefDetail":"Product workflow design","xrefTarget":"skill-llm-prompt-engineering"}-->
+       <!--hvy:xref-card {"css":"margin: 0.35rem 0;","xrefTitle":"Library Development","xrefDetail":"Reusable systems","xrefTarget":"skill-library-development"}-->
+
+      <!--hvy:component-list:2 {}-->
+
+       <!--hvy:xref-card {"css":"margin: 0.35rem 0;","xrefTitle":"LLM Prompt Engineering","xrefDetail":"Product workflow design","xrefTarget":"skill-llm-prompt-engineering"}-->
 
   <!--hvy:grid:1 {"id":"top-tools-technologies"}-->
 
-   <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
+   <!--hvy:container {"css":"margin: 0;","align":"center"}-->
 
-    <!--hvy:component-list:0 {}-->
+    <!--hvy:container:0 {}-->
 
      <!--hvy:text {"align":"center","css":"margin: 0 0 0.35rem;"}-->
       ## Tools & Technologies
 
-    <!--hvy:component-list:1 {}-->
+    <!--hvy:container:1 {}-->
 
-     <!--hvy:xref-card {"css":"margin: 0.35rem 0;","xrefTitle":"TypeScript","xrefDetail":"Primary application language","xrefTarget":"tool-typescript"}-->
+     <!--hvy:component-list {"id":"top-tools-technologies-list","componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
 
-    <!--hvy:component-list:2 {}-->
+      <!--hvy:component-list:0 {}-->
 
-     <!--hvy:xref-card {"css":"margin: 0.35rem 0;","xrefTitle":"Python","xrefDetail":"Automation and prototyping","xrefTarget":"tool-python"}-->
+       <!--hvy:xref-card {"css":"margin: 0.35rem 0;","xrefTitle":"TypeScript","xrefDetail":"Primary application language","xrefTarget":"tool-typescript"}-->
 
-    <!--hvy:component-list:3 {}-->
+      <!--hvy:component-list:1 {}-->
 
-     <!--hvy:xref-card {"css":"margin: 0.35rem 0;","xrefTitle":"Developer Containers","xrefDetail":"Reproducible local environments","xrefTarget":"tool-developer-containers"}-->
+       <!--hvy:xref-card {"css":"margin: 0.35rem 0;","xrefTitle":"Python","xrefDetail":"Automation and prototyping","xrefTarget":"tool-python"}-->
+
+      <!--hvy:component-list:2 {}-->
+
+       <!--hvy:xref-card {"css":"margin: 0.35rem 0;","xrefTitle":"Developer Containers","xrefDetail":"Reproducible local environments","xrefTarget":"tool-developer-containers"}-->
 
 <!--hvy: {"id":"skills","lock":true,"expanded":false,"location":"sidebar","tags":"sidebar, skills-library, canonical-records","description":"Main reusable skills library containing canonical skill-record expandables. Add new skills here before adding featured or local xrefs."}-->
 #! Skills
@@ -1123,45 +1141,53 @@ component_defs:
 
       <!--hvy:grid:0 {"id":"history-skills"}-->
 
-       <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
+       <!--hvy:container {"css":"margin: 0;","align":"center"}-->
 
-        <!--hvy:component-list:0 {}-->
+        <!--hvy:container:0 {}-->
 
          <!--hvy:text {"css":"margin: 0 0 0.25rem;"}-->
           #### Skills
 
-        <!--hvy:component-list:1 {}-->
+        <!--hvy:container:1 {}-->
 
-         <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Software Engineering","xrefTarget":"skill-software-engineering"}-->
+         <!--hvy:component-list {"id":"history-skills-list","componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
 
-        <!--hvy:component-list:2 {}-->
+          <!--hvy:component-list:0 {}-->
 
-         <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Library Development","xrefTarget":"skill-library-development"}-->
+           <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Software Engineering","xrefTarget":"skill-software-engineering"}-->
 
-        <!--hvy:component-list:3 {}-->
+          <!--hvy:component-list:1 {}-->
 
-         <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Project Management","xrefTarget":"skill-project-management"}-->
+           <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Library Development","xrefTarget":"skill-library-development"}-->
+
+          <!--hvy:component-list:2 {}-->
+
+           <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Project Management","xrefTarget":"skill-project-management"}-->
 
       <!--hvy:grid:1 {"id":"history-tools-technologies"}-->
 
-       <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
+       <!--hvy:container {"css":"margin: 0;","align":"center"}-->
 
-        <!--hvy:component-list:0 {}-->
+        <!--hvy:container:0 {}-->
 
          <!--hvy:text {"css":"margin: 0 0 0.25rem;"}-->
           #### Tools & Technologies
 
-        <!--hvy:component-list:1 {}-->
+        <!--hvy:container:1 {}-->
 
-         <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"TypeScript","xrefTarget":"tool-typescript"}-->
+         <!--hvy:component-list {"id":"history-tools-technologies-list","componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
 
-        <!--hvy:component-list:2 {}-->
+          <!--hvy:component-list:0 {}-->
 
-         <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Python","xrefTarget":"tool-python"}-->
+           <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"TypeScript","xrefTarget":"tool-typescript"}-->
 
-        <!--hvy:component-list:3 {}-->
+          <!--hvy:component-list:1 {}-->
 
-         <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Developer Containers","xrefTarget":"tool-developer-containers"}-->
+           <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Python","xrefTarget":"tool-python"}-->
+
+          <!--hvy:component-list:2 {}-->
+
+           <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Developer Containers","xrefTarget":"tool-developer-containers"}-->
 
 <!--hvy: {"id":"projects","lock":true,"tags":"projects, portfolio, reverse-chronological","description":"Project portfolio section. The static table is only the visible column header for the expandable project-record rows in the following component-list; do not add data rows to that table. Keep the header table and project-record component-list in reverse chronological order with newest projects first; each project is one expandable project-record."}-->
 #! Projects
@@ -1205,41 +1231,49 @@ component_defs:
 
       <!--hvy:grid:0 {"id":"project-relevant-skills"}-->
 
-       <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
+       <!--hvy:container {"css":"margin: 0;","align":"center"}-->
 
-        <!--hvy:component-list:0 {}-->
+        <!--hvy:container:0 {}-->
 
          <!--hvy:text {"css":"margin: 0 0 0.25rem;"}-->
           #### Relevant Skills
 
-        <!--hvy:component-list:1 {}-->
+        <!--hvy:container:1 {}-->
 
-         <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Reverse Engineering","xrefTarget":"skill-reverse-engineering"}-->
+         <!--hvy:component-list {"id":"project-relevant-skills-list","componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
 
-        <!--hvy:component-list:2 {}-->
+          <!--hvy:component-list:0 {}-->
 
-         <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Library Development","xrefTarget":"skill-library-development"}-->
+           <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Reverse Engineering","xrefTarget":"skill-reverse-engineering"}-->
+
+          <!--hvy:component-list:1 {}-->
+
+           <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Library Development","xrefTarget":"skill-library-development"}-->
 
       <!--hvy:grid:1 {"id":"project-tools-technologies"}-->
 
-       <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
+       <!--hvy:container {"css":"margin: 0;","align":"center"}-->
 
-        <!--hvy:component-list:0 {}-->
+        <!--hvy:container:0 {}-->
 
          <!--hvy:text {"css":"margin: 0 0 0.25rem;"}-->
           #### Tools and Technologies
 
-        <!--hvy:component-list:1 {}-->
+        <!--hvy:container:1 {}-->
 
-         <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"TypeScript","xrefTarget":"tool-typescript"}-->
+         <!--hvy:component-list {"id":"project-tools-technologies-list","componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
 
-        <!--hvy:component-list:2 {}-->
+          <!--hvy:component-list:0 {}-->
 
-         <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Python","xrefTarget":"tool-python"}-->
+           <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"TypeScript","xrefTarget":"tool-typescript"}-->
 
-        <!--hvy:component-list:3 {}-->
+          <!--hvy:component-list:1 {}-->
 
-         <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Developer Containers","xrefTarget":"tool-developer-containers"}-->
+           <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Python","xrefTarget":"tool-python"}-->
+
+          <!--hvy:component-list:2 {}-->
+
+           <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Developer Containers","xrefTarget":"tool-developer-containers"}-->
 
   <!--hvy:component-list:1 {}-->
 
@@ -1273,49 +1307,57 @@ component_defs:
 
       <!--hvy:grid:0 {"id":"project-relevant-skills-hackathon"}-->
 
-       <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
+       <!--hvy:container {"css":"margin: 0;","align":"center"}-->
 
-        <!--hvy:component-list:0 {}-->
+        <!--hvy:container:0 {}-->
 
          <!--hvy:text {"css":"margin: 0 0 0.25rem;"}-->
           #### Relevant Skills
 
-        <!--hvy:component-list:1 {}-->
+        <!--hvy:container:1 {}-->
 
-         <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"LLM Prompt Engineering","xrefTarget":"skill-llm-prompt-engineering"}-->
+         <!--hvy:component-list {"id":"project-relevant-skills-hackathon-list","componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
 
-        <!--hvy:component-list:2 {}-->
+          <!--hvy:component-list:0 {}-->
 
-         <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Project Management","xrefTarget":"skill-project-management"}-->
+           <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"LLM Prompt Engineering","xrefTarget":"skill-llm-prompt-engineering"}-->
+
+          <!--hvy:component-list:1 {}-->
+
+           <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Project Management","xrefTarget":"skill-project-management"}-->
 
       <!--hvy:grid:1 {"id":"project-tools-technologies-hackathon"}-->
 
-       <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
+       <!--hvy:container {"css":"margin: 0;","align":"center"}-->
 
-        <!--hvy:component-list:0 {}-->
+        <!--hvy:container:0 {}-->
 
          <!--hvy:text {"css":"margin: 0 0 0.25rem;"}-->
           #### Tools and Technologies
 
-        <!--hvy:component-list:1 {}-->
+        <!--hvy:container:1 {}-->
 
-         <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Developer Containers","xrefTarget":"tool-developer-containers"}-->
+         <!--hvy:component-list {"id":"project-tools-technologies-hackathon-list","componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
 
-        <!--hvy:component-list:2 {}-->
+          <!--hvy:component-list:0 {}-->
 
-         <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"OpenAI API","xrefTarget":"tool-openai-api"}-->
+           <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Developer Containers","xrefTarget":"tool-developer-containers"}-->
 
-        <!--hvy:component-list:3 {}-->
+          <!--hvy:component-list:1 {}-->
 
-          <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Python","xrefTarget":"tool-python"}-->
+           <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"OpenAI API","xrefTarget":"tool-openai-api"}-->
 
-        <!--hvy:component-list:4 {}-->
+          <!--hvy:component-list:2 {}-->
 
-          <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"GitHub Codespaces","xrefTarget":"tool-github-codespaces"}-->
+            <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Python","xrefTarget":"tool-python"}-->
 
-        <!--hvy:component-list:5 {}-->
+          <!--hvy:component-list:3 {}-->
 
-          <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"SuperAGI","xrefTarget":"tool-superagi"}-->
+            <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"GitHub Codespaces","xrefTarget":"tool-github-codespaces"}-->
+
+          <!--hvy:component-list:4 {}-->
+
+            <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"SuperAGI","xrefTarget":"tool-superagi"}-->
 
 <!--hvy: {"id":"education","lock":true,"tags":"education, credentials, reverse-chronological","description":"Education section. The static table is only the visible column header for the expandable education-record rows in the following component-list; do not add data rows to that table. Keep the header table and education-record component-list in reverse chronological order when multiple entries exist; each degree/program is one expandable education-record."}-->
 #! Education
@@ -1375,33 +1417,41 @@ component_defs:
 
       <!--hvy:grid:0 {"id":"education-relevant-skills"}-->
 
-       <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
+       <!--hvy:container {"css":"margin: 0;","align":"center"}-->
 
-        <!--hvy:component-list:0 {}-->
+        <!--hvy:container:0 {}-->
 
          <!--hvy:text {"css":"margin: 0 0 0.25rem;"}-->
           #### Relevant Skills
 
-        <!--hvy:component-list:1 {}-->
+        <!--hvy:container:1 {}-->
 
-         <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Software Engineering","xrefTarget":"skill-software-engineering"}-->
+         <!--hvy:component-list {"id":"education-relevant-skills-list","componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
+
+          <!--hvy:component-list:0 {}-->
+
+           <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Software Engineering","xrefTarget":"skill-software-engineering"}-->
 
       <!--hvy:grid:1 {"id":"education-tools-technologies"}-->
 
-       <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
+       <!--hvy:container {"css":"margin: 0;","align":"center"}-->
 
-        <!--hvy:component-list:0 {}-->
+        <!--hvy:container:0 {}-->
 
          <!--hvy:text {"css":"margin: 0 0 0.25rem;"}-->
           #### Tools and Technologies
 
-        <!--hvy:component-list:1 {}-->
+        <!--hvy:container:1 {}-->
 
-         <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Python","xrefTarget":"tool-python"}-->
+         <!--hvy:component-list {"id":"education-tools-technologies-list","componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
 
-        <!--hvy:component-list:2 {}-->
+          <!--hvy:component-list:0 {}-->
 
-         <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"C/C++","xrefTarget":"tool-c-cpp"}-->
+           <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Python","xrefTarget":"tool-python"}-->
+
+          <!--hvy:component-list:1 {}-->
+
+           <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"C/C++","xrefTarget":"tool-c-cpp"}-->
 
      <!--hvy:text {"css":"margin: 0.5rem 0 0.25rem;"}-->
       #### Classes

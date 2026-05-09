@@ -530,7 +530,9 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     if (base === 'container') {
       deps.ensureContainerBlocks(block);
       const body = block.schema.containerBlocks.map((innerBlock) => renderPassiveEditorBlock(sectionKey, innerBlock, rootSections)).join('');
-      return body ? `<div class="reader-container-body">${body}</div>` : '';
+      return body
+        ? `<div class="reader-container-body">${body}</div>`
+        : '<div class="container-inner-blocks is-empty is-passive-empty"><div class="container-empty-placeholder">Empty container</div></div>';
     }
 
     if (base === 'expandable') {
@@ -924,16 +926,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         ${
           component === 'container'
             ? `<label>
-          <span>Container Title</span>
-          <input
-            data-section-key="${deps.escapeAttr(sectionKey)}"
-            data-block-id="${deps.escapeAttr(block.id)}"
-            data-field="block-container-title"
-            value="${deps.escapeAttr(block.schema.containerTitle)}"
-          />
-        </label>
-        <label>
-          <span>Collapsed Preview Rem</span>
+          <span>Preview Height (CSS units)</span>
           <input
             type="number"
             min="1"
@@ -943,16 +936,6 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
             data-field="block-container-collapsed-preview-rem"
             value="${deps.escapeAttr(String(block.schema.containerCollapsedPreviewRem))}"
           />
-        </label>
-        <label class="checkbox-label">
-          <input
-            type="checkbox"
-            data-section-key="${deps.escapeAttr(sectionKey)}"
-            data-block-id="${deps.escapeAttr(block.id)}"
-            data-field="block-container-expanded"
-            ${block.schema.containerExpanded ? 'checked' : ''}
-          />
-          <span>Expanded by default</span>
         </label>`
             : ''
         }

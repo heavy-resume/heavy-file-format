@@ -23,6 +23,11 @@ export interface ComponentRenderHelpers {
   renderEditorBlock: (sectionKey: string, block: VisualBlock, parentLocked?: boolean) => string;
   renderPassiveEditorBlock: (sectionKey: string, block: VisualBlock) => string;
   renderReaderBlock: (section: VisualSection, block: VisualBlock) => string;
+  renderReaderBlocks: (section: VisualSection, blocks: VisualBlock[]) => string;
+  renderReaderListBlocks: (section: VisualSection, blocks: VisualBlock[]) => string;
+  orderReaderBlocks: (blocks: VisualBlock[]) => VisualBlock[];
+  orderReaderListBlocks: (blocks: VisualBlock[]) => VisualBlock[];
+  isReaderViewPrioritizedBlock: (block: VisualBlock) => boolean;
   renderComponentFragment: (componentName: string, content: string, block: VisualBlock) => string;
   renderComponentOptions: (selected: string) => string;
   renderAddComponentPicker: (options: AddComponentPickerOptions) => string;

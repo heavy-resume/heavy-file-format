@@ -285,7 +285,7 @@ hvy_version: 0.1
   await expect(groups).toHaveCount(2);
   await expect(groups.nth(0).locator('.reader-container-title')).toHaveText('Language');
   await expect(groups.nth(1).locator('.reader-container-title')).toHaveText('Database');
-  await expect(groups.nth(0).locator('.reader-container-title')).toHaveAttribute('aria-expanded', 'false');
+  await expect(groups.nth(0).locator('.reader-container-toggle')).toHaveAttribute('aria-expanded', 'false');
 
   await readerControls.locator('[data-reader-action="toggle-component-list-reverse"]').click();
   await expect(readerControls.locator('[data-reader-action="toggle-component-list-reverse"]')).toHaveAttribute('aria-label', 'Sort ascending');
@@ -298,9 +298,9 @@ hvy_version: 0.1
 
   await readerControls.locator('[data-field="component-list-reader-group"]').selectOption('Category');
 
-  await groups.nth(0).locator('.reader-container-title').click();
+  await groups.nth(0).locator('.reader-container-toggle').click();
 
-  await expect(groups.nth(0).locator('.reader-container-title')).toHaveAttribute('aria-expanded', 'true');
+  await expect(groups.nth(0).locator('.reader-container-toggle')).toHaveAttribute('aria-expanded', 'true');
   await expect(groups.nth(0)).toContainText('PostgreSQL');
   await expect(groups.nth(0)).toContainText('SQLite');
 });
@@ -1109,6 +1109,70 @@ test('editing the second resume project does not duplicate it after done', async
   await page.getByRole('button', { name: 'Raw' }).click();
   const raw = await page.locator('#rawEditor').inputValue();
   expect(raw.match(/<!--hvy:project-record/g) ?? []).toHaveLength(2);
+});
+
+test('resume reader view buttons apply filters without changing edit mode', async ({ page }) => {
+  await page.goto('/');
+
+  await expect(page.getByRole('button', { name: 'No View' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'TypeScript View' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'LLM Engineer View' })).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Resume Example' }).click();
+  await expect(page.getByRole('button', { name: 'No View' })).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('button', { name: 'TypeScript View' }).click();
+
+  await expect(page.locator('#readerDocument')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'No View' })).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.getByRole('button', { name: 'TypeScript View' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#tool-typescript')).toHaveClass(/is-highlighted/);
+  await expect(page.locator('#top-skills-tools-technologies')).not.toContainText('LLM Prompt Engineering');
+  await expect(page.locator('#top-skills-tools-technologies')).toContainText('TypeScript');
+  await expect(page.locator('#project-autonomous-agent-hackathon')).toHaveClass(/is-reader-view-dimmed/);
+  await expect(page.locator('#project-autonomous-agent-hackathon')).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.locator('#locations')).toBeVisible();
+  await page.locator('#education .toggle-expand-button').click();
+  await expect(page.locator('#education')).not.toHaveClass(/is-collapsed-preview/);
+  await page.locator('#education-bs-computer-science').click();
+  await expect(page.locator('#education')).not.toHaveClass(/is-collapsed-preview/);
+  await expect(page.locator('#education-bs-computer-science')).toHaveAttribute('aria-expanded', 'true');
+
+  const projectIdsBefore = await page.locator('#readerDocument [id]').evaluateAll((nodes) => nodes.map((node) => node.id));
+  await page.locator('#project-autonomous-agent-hackathon').click();
+  const projectIdsAfter = await page.locator('#readerDocument [id]').evaluateAll((nodes) => nodes.map((node) => node.id));
+
+  await expect(page.locator('#project-autonomous-agent-hackathon')).not.toHaveClass(/is-reader-view-dimmed/);
+  expect(projectIdsAfter).toEqual(projectIdsBefore);
+
+  await page.getByRole('button', { name: 'LLM Engineer View' }).click();
+  await expect(page.getByRole('button', { name: 'TypeScript View' })).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.getByRole('button', { name: 'LLM Engineer View' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#tool-openai-api')).toHaveClass(/is-highlighted/);
+  await expect(page.locator('#tool-typescript')).toHaveClass(/is-reader-view-dimmed/);
+  await expect(page.locator('#top-skills-tools-technologies')).not.toContainText('TypeScript');
+  await expect(page.locator('#top-skills-tools-technologies')).not.toContainText('Developer Containers');
+  await expect(page.locator('#top-skills-tools-technologies')).toContainText('LLM Prompt Engineering');
+  await expect(page.locator('#tools-technologies')).not.toHaveClass(/is-collapsed-preview/);
+  await expect(
+    page.locator('#tools-technologies .reader-container', { hasText: 'AI / Agent Tooling' }).first()
+  ).toHaveClass(/is-expanded/);
+  const sidebarSectionIds = await page.locator('#readerSidebarSections section[id]').evaluateAll((nodes) => nodes.map((node) => node.id));
+  expect(sidebarSectionIds).toEqual(['locations', 'skills', 'tools-technologies']);
+
+  await page.getByRole('button', { name: 'Editor' }).click();
+  await expect(page.locator('#editorTree .is-reader-view-dimmed')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await expect(page.locator('#rawEditor')).toContainText('"id":"locations"');
+
+  await page.getByRole('button', { name: 'Viewer' }).click();
+  await page.getByRole('button', { name: 'No View' }).click();
+  await expect(page.getByRole('button', { name: 'No View' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#project-autonomous-agent-hackathon')).not.toHaveClass(/is-reader-view-dimmed/);
+
+  await page.getByRole('button', { name: 'CRM Example' }).click();
+  await expect(page.getByRole('button', { name: 'No View' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'TypeScript View' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'LLM Engineer View' })).toHaveCount(0);
 });
 
 test('populated component-list hides the list component type dropdown', async ({ page }) => {

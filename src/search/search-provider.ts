@@ -202,14 +202,14 @@ function findMatchIndex(value: string, query: string, caseSensitive: boolean): n
 }
 
 function createPreview(value: string, matchIndex: number, length: number): string {
-  const normalized = value.replace(/\s+/g, ' ').trim();
+  const normalized = cleanSearchResultText(value);
   if (normalized.length <= 220) {
     return normalized;
   }
   const rawStart = Math.max(0, matchIndex - 80);
   const start = rawStart > 0 ? rawStart : 0;
   const end = Math.min(value.length, matchIndex + length + 120);
-  return `${start > 0 ? '...' : ''}${value.slice(start, end).replace(/\s+/g, ' ').trim()}${end < value.length ? '...' : ''}`;
+  return `${start > 0 ? '...' : ''}${cleanSearchResultText(value.slice(start, end))}${end < value.length ? '...' : ''}`;
 }
 
 function getSectionCandidates(section: VisualSection, category: SearchCategory): Array<{ field: string; label: string; value: string }> {
@@ -277,8 +277,17 @@ function appendContextLabel(contextTrail: string[], label: string): string[] {
 }
 
 function firstLine(value: string): string {
-  const line = value.replace(/\s+/g, ' ').trim();
+  const line = cleanSearchResultText(value);
   return line.length > 82 ? `${line.slice(0, 81).trim()}...` : line;
+}
+
+function cleanSearchResultText(value: string): string {
+  return value
+    .split(/\r?\n/)
+    .map((line) => line.trim().replace(/^#{1,6}\s+/, ''))
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function summarizeMatches(matches: HvySearchMatch[], category: SearchCategory): string {

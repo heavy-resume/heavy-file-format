@@ -123,6 +123,31 @@ hvy_version: 0.1
   expect(expectedResult.map((result) => result.documentOrder)).toEqual([1, 2]);
 });
 
+test('built-in search strips markdown heading markers from result labels and previews', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"skills"}-->
+#! Skills
+
+<!--hvy:text {"id":"typescript"}-->
+ ### TypeScript
+`, '.hvy');
+
+  const expectedResult = await builtInSearchProvider({
+    document,
+    query: 'TypeScript',
+    caseSensitive: false,
+    categories: ['contents'],
+  });
+
+  expect(expectedResult).toHaveLength(1);
+  expect(expectedResult[0]!.label).toBe('TypeScript');
+  expect(expectedResult[0]!.preview).toBe('TypeScript');
+  expect(expectedResult[0]!.matches?.[0]?.preview).toBe('TypeScript');
+});
+
 test('search results use location descriptions as primary labels with match snippets as evidence', async () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1

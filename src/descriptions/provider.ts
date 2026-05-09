@@ -81,14 +81,15 @@ export async function generateDescription(request: HvyDescriptionRequest): Promi
 
 function buildDescriptionPrompt(request: HvyDescriptionRequest): string {
   return [
-    'Generate one concise search description for this HVY document component.',
+    'Generate one concise search location description for this document component or section.',
     'Rules:',
     '- Return only the description text.',
     '- Keep it under 24 words.',
-    '- Describe the structural purpose of this location, not the specific values inside it.',
-    '- Prefer phrases like "list of skills", "project role details", or "contact metadata".',
-    '- Do not enumerate examples from the content unless the visible label itself is the purpose.',
-    '- Prefer labels and context from parent sections/components.',
+    '- Describe what function this location serves in the document.',
+    '- Do not summarize, restate, or describe the specific contents found here.',
+    '- Write a location label such as "skills list for this role", "project details area", or "contact metadata section".',
+    '- Use the content only to infer the location function.',
+    '- Prefer headings, labels, and parent context over individual values.',
     '- Do not mention HVY, JSON, schema, block ids, or component type unless the visible content requires it.',
     '',
     `Target kind: ${request.kind}`,

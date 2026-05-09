@@ -110,6 +110,9 @@ export function bindInputMisc(app: HTMLElement): void {
         return;
       }
       section.description = target.value;
+      syncGenerateDescriptionButton(target, 'generate-section-description', {
+        sectionKey,
+      });
       getRefreshReaderPanels()();
       return;
     }
@@ -346,6 +349,10 @@ export function bindInputMisc(app: HTMLElement): void {
       const block = context.block;
       block.schema.description = target.value;
       syncReusableTemplateForBlock(sectionKey, block.id);
+      syncGenerateDescriptionButton(target, 'generate-block-description', {
+        sectionKey,
+        blockId: block.id,
+      });
       getRefreshReaderPanels()();
       return;
     }
@@ -397,6 +404,11 @@ export function bindInputMisc(app: HTMLElement): void {
       }
       context.block.schema.expandableStubDescription = target.value;
       syncReusableTemplateForBlock(sectionKey, context.block.id);
+      syncGenerateDescriptionButton(target, 'generate-expandable-pane-description', {
+        sectionKey,
+        blockId: context.block.id,
+        expandablePane: 'stub',
+      });
       return;
     }
 
@@ -418,6 +430,11 @@ export function bindInputMisc(app: HTMLElement): void {
       }
       context.block.schema.expandableContentDescription = target.value;
       syncReusableTemplateForBlock(sectionKey, context.block.id);
+      syncGenerateDescriptionButton(target, 'generate-expandable-pane-description', {
+        sectionKey,
+        blockId: context.block.id,
+        expandablePane: 'expanded',
+      });
       return;
     }
 
@@ -441,6 +458,43 @@ export function bindInputMisc(app: HTMLElement): void {
     }
     console.debug('[hvy:perf] input:end', { eventId, field, elapsedMs: Number((performance.now() - startedAt).toFixed(2)), handledBy: 'none' });
   });
+}
+
+function syncGenerateDescriptionButton(
+  input: HTMLInputElement | HTMLTextAreaElement,
+  action: string,
+  dataset: { sectionKey: string; blockId?: string; expandablePane?: string }
+): void {
+  const label = input.closest('label');
+  const labelText = label?.querySelector<HTMLElement>('.description-label-with-action');
+  if (!labelText) {
+    return;
+  }
+  const existingButton = labelText.querySelector<HTMLButtonElement>('.inline-generate-description');
+  if (input.value.trim()) {
+    existingButton?.remove();
+    return;
+  }
+  if (existingButton) {
+    existingButton.textContent = 'Generate';
+    existingButton.disabled = false;
+    existingButton.removeAttribute('title');
+    return;
+  }
+  labelText.append(' ');
+  const button = input.ownerDocument.createElement('button');
+  button.type = 'button';
+  button.className = 'ghost inline-generate-description';
+  button.dataset.action = action;
+  button.dataset.sectionKey = dataset.sectionKey;
+  if (dataset.blockId) {
+    button.dataset.blockId = dataset.blockId;
+  }
+  if (dataset.expandablePane) {
+    button.dataset.expandablePane = dataset.expandablePane;
+  }
+  button.textContent = 'Generate';
+  labelText.append(button);
 }
 
 function parseJsonObjectQuietly(value: string): Record<string, unknown> | null {

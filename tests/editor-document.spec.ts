@@ -279,6 +279,9 @@ hvy_version: 0.1
   await expect(metaModal.locator('[data-action="generate-block-description"]')).toHaveCount(0);
   await expect(metaModal.locator('[data-field="block-description"]')).toHaveValue('AI description from gpt-5.4-nano with reasoning none');
   await expect(activeBlock).toHaveAttribute('data-active-editor-block', 'true');
+  await metaModal.locator('[data-field="block-description"]').fill('');
+  await expect(metaModal.locator('[data-action="generate-block-description"]')).toBeVisible();
+  await expect(metaModal.locator('[data-field="block-description"]')).toBeFocused();
 
   await page.getByRole('button', { name: 'Close' }).click();
   await activeBlock.getByRole('button', { name: 'Done' }).click();

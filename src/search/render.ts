@@ -68,7 +68,7 @@ export function renderSearchPalette(search: SearchState, document: VisualDocumen
           role="tab"
           aria-selected="${isFilterTab ? 'true' : 'false'}"
         >${funnelIcon()}<span>Filter</span></button>
-        <button type="button" class="search-close-button danger" data-action="stop-search" aria-label="Stop search">${closeIcon()}</button>
+        <button type="button" class="search-close-button remove-x danger" data-action="stop-search" aria-label="Stop search">${closeIcon()}</button>
       </div>
       ${
         isFilterTab

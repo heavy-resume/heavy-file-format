@@ -17,9 +17,9 @@
   --hvy-button-text: #202020;
   --hvy-highlight-1: rgba(0, 0, 255, 0.16);
   --hvy-highlight-2: rgba(250, 212, 0, 0.32);
-  --hvy-border: #707070;
-  --hvy-border-alt: rgb(225, 225, 225);
-  --hvy-border-input: rgba(0, 0, 0, 0.2);
+  --hvy-border: #5d608f;
+  --hvy-border-alt: #335099;
+  --hvy-border-input: rgba(51, 80, 153, 0.58);
   --hvy-border-translucent: rgba(22, 22, 22, 0.68);
   --hvy-xref-card-bg: #aeafda;
   --hvy-xref-card-hover-bg: rgba(0, 255, 255, 0.863);

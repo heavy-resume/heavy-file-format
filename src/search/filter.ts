@@ -112,7 +112,6 @@ export function createSearchFilterContext(sections: VisualSection[], search: Sea
       return;
     }
     block.schema.containerBlocks.forEach((child) => markBlockContextVisible(child, depth - 1));
-    block.schema.componentListBlocks.forEach((child) => markBlockContextVisible(child, depth - 1));
     block.schema.gridItems.forEach((item) => markBlockContextVisible(item.block, depth - 1));
   };
 

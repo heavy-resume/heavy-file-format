@@ -329,7 +329,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     const blockClass = [
       'reader-block',
       `reader-block-${base}`,
-      `align-${block.schema.align}`,
+      block.schema.align === 'left' ? '' : `align-${block.schema.align}`,
       `slot-${block.schema.slot}`,
       state.aiEditTarget.sectionKey === section.key && state.aiEditTarget.blockId === block.id ? 'is-ai-target' : '',
       modifiers.has('highlight') ? 'is-highlighted' : '',

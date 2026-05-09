@@ -1,7 +1,7 @@
 import { state, getRenderApp, handleTagEditorKeydown, applyRichAction, handleRichEditorKeydown, refreshRichToolbarState, openLinkInlineModal, closeAiEditPopover, submitAiEditRequest, handleInlineCheckboxBackspace, tagStateHelpers, findSectionByKey, createEmptyBlock, setActiveEditorBlock, recordHistory } from './_imports';
 import { completeCliInput } from '../../cli-ui/completion';
-import { closeSearch, selectAdjacentSearchResult } from '../../search/actions';
-import { closeChatPanel } from '../../chat/chat';
+import { selectAdjacentSearchResult } from '../../search/actions';
+import { handleEscapeKey } from './escape';
 
 export function bindKeydown(app: HTMLElement): void {
   app.addEventListener('keyup', (event) => {
@@ -14,9 +14,7 @@ export function bindKeydown(app: HTMLElement): void {
 
   app.addEventListener('keydown', (event) => {
     const target = event.target as HTMLElement;
-    if (event.key === 'Escape' && state.search.open) {
-      event.preventDefault();
-      closeSearch();
+    if (handleEscapeKey(app, event)) {
       return;
     }
     if (state.search.open && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
@@ -27,12 +25,6 @@ export function bindKeydown(app: HTMLElement): void {
     if (state.search.open && (event.key === 'Enter') && (event.metaKey || event.ctrlKey)) {
       event.preventDefault();
       selectAdjacentSearchResult(app, event.shiftKey ? -1 : 1);
-      return;
-    }
-    if (event.key === 'Escape' && state.chat.panelOpen) {
-      event.preventDefault();
-      closeChatPanel(state.chat);
-      getRenderApp()();
       return;
     }
     if (event.key === 'Escape' && state.aiEdit.sectionKey && state.aiEdit.blockId && !state.aiEdit.isSending) {

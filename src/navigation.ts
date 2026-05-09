@@ -42,6 +42,21 @@ export function setEditorSidebarOpen(app: HTMLElement, open: boolean): void {
   }
 }
 
+export function closeActiveSidebar(app: HTMLElement): boolean {
+  if (state.currentView === 'editor') {
+    if (!state.editorSidebarOpen) {
+      return false;
+    }
+    setEditorSidebarOpen(app, false);
+    return true;
+  }
+  if (!state.viewerSidebarOpen) {
+    return false;
+  }
+  setSidebarOpen(app, false);
+  return true;
+}
+
 export function navigateToSection(sectionId: string, app: HTMLElement): void {
   if (!sectionId) {
     return;

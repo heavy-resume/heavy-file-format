@@ -229,6 +229,7 @@ button.tiny {
 }
 
 .pane {
+  position: relative;
   border: 1px solid var(--hvy-border);
   border-radius: 12px;
   background: color-mix(in srgb, var(--hvy-surface) 92%, transparent);

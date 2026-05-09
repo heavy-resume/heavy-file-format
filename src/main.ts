@@ -508,8 +508,8 @@ function renderApp(): void {
               : '<div></div>'
           }
         </div>
-        ${renderCollapsedSearchBar(state.search, { escapeHtml })}
         <div${renderResponsivePreviewFrameAttrs(`pane ${isEditorView ? 'editor-pane' : 'reader-pane'} full-pane`)}>
+          ${isCliEditor ? '' : renderCollapsedSearchBar(state.search, { escapeHtml })}
           ${
             isEditorView
               ? `${isRawEditor
@@ -583,22 +583,22 @@ function renderApp(): void {
                    }
                  </div>`
           }
+          ${
+            isCliEditor
+              ? ''
+              : `${renderChatPanel(
+                  state.chat,
+                  state.document,
+                  { escapeAttr, escapeHtml },
+                  isViewerView ? 'qa' : 'document-edit',
+                  state.currentView === 'editor' || state.currentView === 'ai'
+                )}
+                ${renderSearchLauncher(state.search)}
+                ${renderSearchPalette(state.search, state.document, { escapeAttr, escapeHtml, readerRenderer })}`
+          }
         </div>
       </section>
 
-      ${
-        isCliEditor
-          ? ''
-          : renderChatPanel(
-              state.chat,
-              state.document,
-              { escapeAttr, escapeHtml },
-              isViewerView ? 'qa' : 'document-edit',
-              state.currentView === 'editor' || state.currentView === 'ai'
-            )
-      }
-      ${isCliEditor ? '' : renderSearchLauncher(state.search)}
-      ${renderSearchPalette(state.search, state.document, { escapeAttr, escapeHtml, readerRenderer })}
       ${readerRenderer.renderModal()}
       ${readerRenderer.renderLinkInlineModal()}
     </main>

@@ -4,6 +4,7 @@ import type { SearchState } from './types';
 export interface SearchFilterContext {
   active: boolean;
   filtering: boolean;
+  filterMode: SearchState['filterMode'];
   matchedSections: Set<string>;
   matchedBlocks: Set<string>;
   visibleSections: Set<string>;
@@ -23,6 +24,7 @@ export function createSearchFilterContext(sections: VisualSection[], search: Sea
     return {
       active: false,
       filtering: false,
+      filterMode: search.filterMode,
       matchedSections,
       matchedBlocks,
       visibleSections,
@@ -87,6 +89,7 @@ export function createSearchFilterContext(sections: VisualSection[], search: Sea
   return {
     active,
     filtering,
+    filterMode: search.filterMode,
     matchedSections,
     matchedBlocks,
     visibleSections,
@@ -97,11 +100,11 @@ export function createSearchFilterContext(sections: VisualSection[], search: Sea
 }
 
 export function isSectionSearchVisible(context: SearchFilterContext, section: VisualSection): boolean {
-  return !context.filtering || context.visibleSections.has(section.key);
+  return !context.filtering || context.filterMode !== 'hide' || context.visibleSections.has(section.key);
 }
 
 export function isBlockSearchVisible(context: SearchFilterContext, block: VisualBlock): boolean {
-  return !context.filtering || context.visibleBlocks.has(block.id);
+  return !context.filtering || context.filterMode !== 'hide' || context.visibleBlocks.has(block.id);
 }
 
 export function isSectionSearchMatch(context: SearchFilterContext, section: VisualSection): boolean {
@@ -110,4 +113,12 @@ export function isSectionSearchMatch(context: SearchFilterContext, section: Visu
 
 export function isBlockSearchMatch(context: SearchFilterContext, block: VisualBlock): boolean {
   return context.active && context.matchedBlocks.has(block.id);
+}
+
+export function isSectionSearchDeprioritized(context: SearchFilterContext, section: VisualSection): boolean {
+  return context.filtering && context.filterMode === 'deprioritize' && !context.visibleSections.has(section.key);
+}
+
+export function isBlockSearchDeprioritized(context: SearchFilterContext, block: VisualBlock): boolean {
+  return context.filtering && context.filterMode === 'deprioritize' && !context.visibleBlocks.has(block.id);
 }

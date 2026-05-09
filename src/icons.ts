@@ -17,6 +17,12 @@ export function magnifyingGlassIcon(): string {
   </svg>`;
 }
 
+export function funnelIcon(): string {
+  return `<svg class="hvy-ui-icon hvy-ui-icon-funnel" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+    <path d="M4 5h16l-6.25 7.25V19l-3.5 1.5v-8.25L4 5Z" />
+  </svg>`;
+}
+
 export function arrowUpIcon(): string {
   return `<svg class="hvy-ui-icon hvy-ui-icon-arrow-up" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
     <path d="M12 19V5M5 12l7-7 7 7" />

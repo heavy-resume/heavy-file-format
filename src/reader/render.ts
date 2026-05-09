@@ -17,7 +17,7 @@ import { colorValueToPickerHex, getResolvedThemeColor, getThemeColorLabel, THEME
 import type { ThemeConfig } from '../theme';
 import type { DbTableQueryModalState, ReaderViewFilter, ReusableSaveModalState, SqliteRowComponentModalState, VisualDocument } from '../types';
 import type { SearchState } from '../search/types';
-import { createSearchFilterContext, isBlockSearchMatch, isBlockSearchVisible, isSectionSearchMatch, isSectionSearchVisible, type SearchFilterContext } from '../search/filter';
+import { createSearchFilterContext, isBlockSearchDeprioritized, isBlockSearchMatch, isBlockSearchVisible, isSectionSearchDeprioritized, isSectionSearchMatch, isSectionSearchVisible, type SearchFilterContext } from '../search/filter';
 import { highlightSearchHtml } from '../search/highlight';
 import { getDocumentSectionDefaultCss, mergeDocumentCss } from '../document-section-defaults';
 import { sanitizeInlineCss } from '../css-sanitizer';
@@ -238,6 +238,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     const temp = state.tempHighlights.has(effectiveId);
     const modifiers = getReaderViewModifiers(viewContext, targetKey);
     const dimmed = modifiers.has('dimmed') && !state.readerViewActivatedTargets.has(targetKey);
+    const searchDimmed = isSectionSearchDeprioritized(searchContext, section);
     const prioritized = isReaderViewPrioritized(viewContext, targetKey);
     const viewCollapseKey = `reader-view-collapse:${targetKey}`;
     const viewExpanded = state.readerContainerState[viewCollapseKey] ?? !modifiers.has('collapse');
@@ -251,6 +252,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       section.highlight || modifiers.has('highlight') ? 'is-highlighted' : '',
       isSectionSearchMatch(searchContext, section) ? 'is-search-match' : '',
       dimmed ? 'is-reader-view-dimmed' : '',
+      searchDimmed ? 'is-search-deprioritized' : '',
       temp ? 'is-temp-highlighted' : '',
     ]
       .filter(Boolean)
@@ -317,6 +319,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     const blockDomId = getBlockDomId(block);
     const idAttr = blockDomId ? ` id="${deps.escapeAttr(blockDomId)}"` : '';
     const dimmed = modifiers.has('dimmed') && !state.readerViewActivatedTargets.has(targetKey);
+    const searchDimmed = isBlockSearchDeprioritized(searchContext, block);
     const blockClass = [
       'reader-block',
       `reader-block-${base}`,
@@ -326,6 +329,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       modifiers.has('highlight') ? 'is-highlighted' : '',
       isBlockSearchMatch(searchContext, block) ? 'is-search-match' : '',
       dimmed ? 'is-reader-view-dimmed' : '',
+      searchDimmed ? 'is-search-deprioritized' : '',
       blockDomId && state.tempHighlights.has(blockDomId) ? 'is-temp-highlighted' : '',
     ]
       .filter(Boolean)

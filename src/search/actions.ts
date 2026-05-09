@@ -145,13 +145,28 @@ export function setSearchFilterEnabled(enabled: boolean): void {
     state.currentView = 'viewer';
   }
   getRefreshReaderPanels()();
-  if (enabled) {
-    getRenderApp()();
-  }
+  getRenderApp()();
 }
 
 export function setSearchCategory(category: SearchCategory, enabled: boolean): void {
   state.search.categories[category] = enabled;
+}
+
+export function setSearchTab(tab: typeof state.search.activeTab): void {
+  state.search.activeTab = tab;
+  getRenderApp()();
+}
+
+export function setSearchFilterMode(mode: typeof state.search.filterMode): void {
+  state.search.filterMode = mode;
+  getRenderApp()();
+}
+
+export function applySearchFilter(): void {
+  setSearchFilterEnabled(!state.search.filterEnabled);
+  state.search.open = true;
+  state.search.resultsCollapsed = true;
+  getRenderApp()();
 }
 
 export function getEnabledSearchCategories(): SearchCategory[] {

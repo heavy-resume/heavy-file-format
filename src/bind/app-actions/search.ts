@@ -1,5 +1,7 @@
 import type { AppActionHandler } from './types';
-import { closeSearch, expandSearchResults, openSearch, selectAdjacentSearchResult, selectSearchResult } from '../../search/actions';
+import { applySearchFilter, closeSearch, expandSearchResults, openSearch, selectAdjacentSearchResult, selectSearchResult, setSearchCategory, setSearchFilterMode, setSearchTab } from '../../search/actions';
+import type { SearchCategory, SearchFilterMode, SearchPaletteTab } from '../../search/types';
+import { getRenderApp, state } from '../../state';
 
 const openSearchAction: AppActionHandler = ({ app }) => {
   openSearch(app);
@@ -25,6 +27,33 @@ const nextSearchResultAction: AppActionHandler = ({ app }) => {
   selectAdjacentSearchResult(app, 1);
 };
 
+const toggleSearchCategoryAction: AppActionHandler = ({ actionButton }) => {
+  const category = actionButton.dataset.searchCategory as SearchCategory | undefined;
+  if (category !== 'tags' && category !== 'contents' && category !== 'description') {
+    return;
+  }
+  setSearchCategory(category, !state.search.categories[category]);
+  getRenderApp()();
+};
+
+const setSearchTabAction: AppActionHandler = ({ actionButton }) => {
+  const tab = actionButton.dataset.searchTab as SearchPaletteTab | undefined;
+  if (tab === 'search' || tab === 'filter') {
+    setSearchTab(tab);
+  }
+};
+
+const setSearchFilterModeAction: AppActionHandler = ({ actionButton }) => {
+  const mode = actionButton.dataset.searchFilterMode as SearchFilterMode | undefined;
+  if (mode === 'deprioritize' || mode === 'hide') {
+    setSearchFilterMode(mode);
+  }
+};
+
+const applySearchFilterAction: AppActionHandler = () => {
+  applySearchFilter();
+};
+
 export const searchActions: Record<string, AppActionHandler> = {
   'open-search': openSearchAction,
   'close-search': closeSearchAction,
@@ -32,4 +61,8 @@ export const searchActions: Record<string, AppActionHandler> = {
   'select-search-result': selectSearchResultAction,
   'previous-search-result': previousSearchResultAction,
   'next-search-result': nextSearchResultAction,
+  'toggle-search-category': toggleSearchCategoryAction,
+  'set-search-tab': setSearchTabAction,
+  'set-search-filter-mode': setSearchFilterModeAction,
+  'apply-search-filter': applySearchFilterAction,
 };

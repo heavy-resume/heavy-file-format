@@ -5,7 +5,7 @@ import type { HvySearchResult, SearchCategory, SearchState } from './types';
 import { highlightPlainText } from './highlight';
 import { findSectionByKey } from '../section-ops';
 import { findBlockByIds } from '../block-ops';
-import { closeIcon, magnifyingGlassIcon } from '../icons';
+import { closeIcon, funnelIcon, magnifyingGlassIcon } from '../icons';
 
 interface SearchRenderDeps {
   escapeAttr: (value: string) => string;
@@ -46,12 +46,35 @@ export function renderSearchPalette(search: SearchState, document: VisualDocumen
     : search.submittedQuery.trim().length === 0
     ? 'Press Enter to search'
     : `${count} result${count === 1 ? '' : 's'}`;
+  const isFilterTab = search.activeTab === 'filter';
   return `<section class="search-overlay" aria-label="Document search">
     <div class="search-backdrop" data-action="close-search"></div>
     <form id="searchComposer" class="search-palette" role="dialog" aria-modal="true" aria-label="Search document">
-      <div class="search-head">
+      <div class="search-tabbar" role="tablist" aria-label="Search mode">
+        <button
+          type="button"
+          class="search-tab${isFilterTab ? '' : ' is-active'}"
+          data-action="set-search-tab"
+          data-search-tab="search"
+          role="tab"
+          aria-selected="${isFilterTab ? 'false' : 'true'}"
+        >${magnifyingGlassIcon()}<span>Search</span></button>
+        <button
+          type="button"
+          class="search-tab${isFilterTab ? ' is-active' : ''}"
+          data-action="set-search-tab"
+          data-search-tab="filter"
+          role="tab"
+          aria-selected="${isFilterTab ? 'true' : 'false'}"
+        >${funnelIcon()}<span>Filter</span></button>
+        <button type="button" class="search-close-button danger" data-action="close-search" aria-label="Close search">${closeIcon()}</button>
+      </div>
+      ${
+        isFilterTab
+          ? renderFilterTab(search, deps)
+          : `<div class="search-head">
         <div class="search-input-shell">
-          ${magnifyingGlassIcon()}
+          <button type="submit" class="search-input-icon-button" aria-label="Search">${magnifyingGlassIcon()}</button>
           <input
             class="search-input"
             data-field="search-query"
@@ -62,24 +85,19 @@ export function renderSearchPalette(search: SearchState, document: VisualDocumen
             autofocus
           />
         </div>
-        <button type="button" class="search-close-button danger" data-action="close-search" aria-label="Close search">${closeIcon()}</button>
       </div>
       <div class="search-options">
-        <div class="search-toggle-group" role="group" aria-label="Search categories">
+        <div class="search-category-group" role="group" aria-label="Search categories">
           ${categories.map((category) => renderCategoryToggle(category, search, deps)).join('')}
         </div>
         <label class="search-switch">
           <input type="checkbox" data-field="search-case-sensitive" ${search.caseSensitive ? 'checked' : ''} />
           <span>Match Case</span>
         </label>
-        <label class="search-switch">
-          <input type="checkbox" data-field="search-filter" ${search.filterEnabled ? 'checked' : ''} />
-          <span>Filter</span>
-        </label>
-        <button type="submit" class="secondary search-submit-button">Search</button>
       </div>
       <div class="search-status${search.error ? ' is-error' : ''}" role="status">${deps.escapeHtml(status)}</div>
-      ${renderSearchResults(search, document, deps)}
+      ${renderSearchResults(search, document, deps)}`
+      }
     </form>
   </section>`;
 }
@@ -150,10 +168,46 @@ export function centerSearchResultLenses(app: ParentNode): void {
 }
 
 function renderCategoryToggle(category: SearchCategory, search: SearchState, deps: SearchRenderDeps): string {
-  return `<label class="search-category-toggle${search.categories[category] ? ' is-active' : ''}">
-    <input type="checkbox" data-field="search-category" data-search-category="${deps.escapeAttr(category)}" ${search.categories[category] ? 'checked' : ''} />
-    <span>${deps.escapeHtml(CATEGORY_LABELS[category])}</span>
-  </label>`;
+  const active = search.categories[category];
+  return `<button
+    type="button"
+    class="search-category-toggle${active ? ' is-active' : ''}"
+    data-action="toggle-search-category"
+    data-search-category="${deps.escapeAttr(category)}"
+    aria-pressed="${active ? 'true' : 'false'}"
+  >${deps.escapeHtml(CATEGORY_LABELS[category])}</button>`;
+}
+
+function renderFilterTab(search: SearchState, deps: SearchRenderDeps): string {
+  return `<section class="search-filter-panel" role="tabpanel" aria-label="Filter search results">
+    <div class="search-filter-box">
+      <div class="search-filter-box-head">
+        ${funnelIcon()}
+        <span>Filter matches</span>
+      </div>
+      <div class="search-filter-mode-group" role="group" aria-label="Filter behavior">
+        ${renderFilterModeButton('deprioritize', 'Deprioritize', search, deps)}
+        ${renderFilterModeButton('hide', 'Hide', search, deps)}
+      </div>
+    </div>
+    <button
+      type="button"
+      class="secondary search-apply-filter-button${search.filterEnabled ? ' is-active' : ''}"
+      data-action="apply-search-filter"
+      aria-pressed="${search.filterEnabled ? 'true' : 'false'}"
+    >${search.filterEnabled ? 'Turn Off Filter' : 'Filter'}</button>
+  </section>`;
+}
+
+function renderFilterModeButton(mode: SearchState['filterMode'], label: string, search: SearchState, deps: SearchRenderDeps): string {
+  const active = search.filterMode === mode;
+  return `<button
+    type="button"
+    class="search-filter-mode${active ? ' is-active' : ''}"
+    data-action="set-search-filter-mode"
+    data-search-filter-mode="${deps.escapeAttr(mode)}"
+    aria-pressed="${active ? 'true' : 'false'}"
+  >${deps.escapeHtml(label)}</button>`;
 }
 
 function renderSearchResults(search: SearchState, document: VisualDocument, deps: SearchRenderDeps): string {

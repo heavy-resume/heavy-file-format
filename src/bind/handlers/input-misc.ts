@@ -2,8 +2,25 @@ import { state, incrementInputEventCount, getRenderApp, getRefreshReaderPanels, 
 import { SCRIPTING_PLUGIN_ID } from '../../plugins/registry';
 import { SCRIPTING_PLUGIN_VERSION } from '../../plugins/scripting/version';
 import { addDefaultContainerBorderCss, removeDefaultContainerBorderCss } from '../../editor/components/container/container-css';
+import { submitSearch } from '../../search/actions';
 
 export function bindInputMisc(app: HTMLElement): void {
+  app.addEventListener('focusout', (event) => {
+    const target = event.target as HTMLElement;
+    if (target.dataset.field !== 'search-query' || !(target instanceof HTMLInputElement)) {
+      return;
+    }
+    window.setTimeout(() => {
+      if (!state.search.open || state.search.resultsCollapsed) {
+        return;
+      }
+      if (state.search.queryDraft.trim() === state.search.submittedQuery.trim()) {
+        return;
+      }
+      void submitSearch();
+    }, 120);
+  });
+
   app.addEventListener('input', (event) => {
     const rawTarget = event.target as HTMLElement;
     const target = rawTarget.dataset.field ? rawTarget : rawTarget.closest<HTMLElement>('[data-field]') ?? rawTarget;

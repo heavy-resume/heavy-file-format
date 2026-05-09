@@ -2,6 +2,8 @@ import type { VisualBlock, VisualSection } from '../editor/types';
 import type { VisualDocument } from '../types';
 
 export type SearchCategory = 'tags' | 'contents' | 'description';
+export type SearchPaletteTab = 'search' | 'filter';
+export type SearchFilterMode = 'deprioritize' | 'hide';
 export type SearchTargetKind = 'section' | 'block';
 
 export interface HvySearchRequest {
@@ -47,7 +49,9 @@ export interface SearchState {
   submittedQuery: string;
   caseSensitive: boolean;
   categories: Record<SearchCategory, boolean>;
+  activeTab: SearchPaletteTab;
   filterEnabled: boolean;
+  filterMode: SearchFilterMode;
   resultsCollapsed: boolean;
   activeResultId: string | null;
   isLoading: boolean;

@@ -23,6 +23,7 @@ export interface HvySearchResult {
   targetId: string;
   targetPath?: string;
   label: string;
+  locationLabel?: string;
   preview: string;
   matchedText: string;
   sourceField: string;

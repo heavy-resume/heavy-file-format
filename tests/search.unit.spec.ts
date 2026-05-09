@@ -4,6 +4,7 @@ import { deserializeDocument } from '../src/serialization';
 import { builtInSearchProvider } from '../src/search/search-provider';
 import { createSearchFilterContext } from '../src/search/filter';
 import { highlightPlainText } from '../src/search/highlight';
+import { renderSearchPalette } from '../src/search/render';
 
 test('built-in search returns tags, contents, then description matches', async () => {
   const document = deserializeDocument(`---
@@ -120,6 +121,104 @@ hvy_version: 0.1
 
   expect(expectedResult.map((result) => result.targetId)).toEqual(['first', 'second']);
   expect(expectedResult.map((result) => result.documentOrder)).toEqual([1, 2]);
+});
+
+test('search results use location descriptions as primary labels with match snippets as evidence', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"history"}-->
+#! History
+
+<!--hvy: {"id":"skills","description":"Northwind Labs skills list"}-->
+#! TypeScript
+`, '.hvy');
+  const expectedResults = await builtInSearchProvider({
+    document,
+    query: 'TypeScript',
+    caseSensitive: false,
+    categories: ['contents'],
+  });
+
+  const expectedMarkup = renderSearchPalette({
+    open: true,
+    queryDraft: 'TypeScript',
+    submittedQuery: 'TypeScript',
+    caseSensitive: false,
+    categories: { tags: true, contents: true, description: true },
+    activeTab: 'search',
+    filterEnabled: false,
+    filterMode: 'hide',
+    resultsCollapsed: false,
+    activeResultId: null,
+    isLoading: false,
+    error: null,
+    results: expectedResults,
+    navigationResultIds: expectedResults.map((result) => result.id),
+    requestNonce: 1,
+    abortController: null,
+  }, document, {
+    escapeAttr: escapeHtml,
+    escapeHtml,
+    readerRenderer: null as never,
+  });
+
+  expect(expectedMarkup).toContain('<span class="search-result-title">Northwind Labs skills list</span>');
+  expect(expectedMarkup).toContain('<span class="search-result-snippet-label">Title</span>');
+  expect(expectedMarkup).toContain('<mark class="search-match-marker">TypeScript</mark>');
+  expect(expectedMarkup.indexOf('Northwind Labs skills list')).toBeLessThan(expectedMarkup.indexOf('search-result-snippet-label'));
+});
+
+test('built-in search uses nearest described ancestor as child match location', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"history"}-->
+#! History
+
+<!--hvy:component-list {"id":"history-tools-technologies-list","description":"Northwind Labs work history Tools & Technologies","componentListComponent":"xref-card"}-->
+ <!--hvy:component-list:0 {}-->
+  <!--hvy:xref-card {"id":"tool-typescript","xrefTitle":"TypeScript","xrefTarget":"tool-typescript"}-->
+`, '.hvy');
+  const expectedResults = await builtInSearchProvider({
+    document,
+    query: 'TypeScript',
+    caseSensitive: false,
+    categories: ['contents'],
+  });
+
+  expect(expectedResults).toHaveLength(1);
+  expect(expectedResults[0]!.targetId).toBe('tool-typescript');
+  expect(expectedResults[0]!.label).toBe('TypeScript');
+  expect(expectedResults[0]!.locationLabel).toBe('Northwind Labs work history Tools & Technologies');
+
+  const expectedMarkup = renderSearchPalette({
+    open: true,
+    queryDraft: 'TypeScript',
+    submittedQuery: 'TypeScript',
+    caseSensitive: false,
+    categories: { tags: true, contents: true, description: true },
+    activeTab: 'search',
+    filterEnabled: false,
+    filterMode: 'hide',
+    resultsCollapsed: false,
+    activeResultId: null,
+    isLoading: false,
+    error: null,
+    results: expectedResults,
+    navigationResultIds: expectedResults.map((result) => result.id),
+    requestNonce: 1,
+    abortController: null,
+  }, document, {
+    escapeAttr: escapeHtml,
+    escapeHtml,
+    readerRenderer: null as never,
+  });
+
+  expect(expectedMarkup).toContain('Northwind Labs work history Tools &amp; Technologies');
+  expect(expectedMarkup).not.toContain('<span class="search-result-title">History</span>');
 });
 
 test('search filter context keeps matches and required ancestors visible', async () => {

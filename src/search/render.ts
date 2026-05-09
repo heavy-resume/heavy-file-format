@@ -250,11 +250,10 @@ function renderSearchResults(search: SearchState, document: VisualDocument, deps
 
 function renderSearchResult(result: HvySearchResult, search: SearchState, document: VisualDocument, deps: SearchRenderDeps): string {
   const active = search.activeResultId === result.id;
-  const target = resolveResultTarget(result, document);
-  const description = getResultDescription(result, target);
+  const target = result.locationLabel?.trim() ? null : resolveResultTarget(result, document);
+  const locationLabel = getResultLocationLabel(result, target);
   const context = result.contextLabel || result.sourceFile || '';
   const fields = getResultFields(result);
-  const visibleDescription = shouldShowResultDescription(description, result) ? description : '';
   return `<button
     type="button"
     class="search-result${active ? ' is-active' : ''}"
@@ -262,11 +261,10 @@ function renderSearchResult(result: HvySearchResult, search: SearchState, docume
     data-search-result-id="${deps.escapeAttr(result.id)}"
   >
     <span class="search-result-main">
-      <span class="search-result-title">${deps.escapeHtml(result.label)}</span>
+      <span class="search-result-title">${highlightPlainText(locationLabel, search.submittedQuery, search.caseSensitive, deps.escapeHtml)}</span>
       ${context ? `<span class="search-result-context">${deps.escapeHtml(context)}</span>` : ''}
       ${fields.length ? `<span class="search-result-fields">${fields.map((field) => `<span>${deps.escapeHtml(field)}</span>`).join('')}</span>` : ''}
-      ${visibleDescription ? `<span class="search-result-description">${highlightPlainText(visibleDescription, search.submittedQuery, search.caseSensitive, deps.escapeHtml)}</span>` : ''}
-      ${visibleDescription ? '' : renderResultMatchSnippets(result, search, deps)}
+      ${renderResultMatchSnippets(result, search, deps, locationLabel)}
     </span>
   </button>`;
 }
@@ -281,7 +279,7 @@ function getResultFields(result: HvySearchResult): string[] {
   return fields;
 }
 
-function shouldShowResultDescription(description: string, result: HvySearchResult): boolean {
+function shouldUseDescriptionAsLocation(description: string, result: HvySearchResult): boolean {
   const normalizedDescription = normalizeResultText(description);
   if (!normalizedDescription) {
     return false;
@@ -305,15 +303,18 @@ function normalizeResultText(value: string): string {
     .toLocaleLowerCase();
 }
 
-function renderResultMatchSnippets(result: HvySearchResult, search: SearchState, deps: SearchRenderDeps): string {
+function renderResultMatchSnippets(result: HvySearchResult, search: SearchState, deps: SearchRenderDeps, locationLabel: string): string {
   const matches = result.matches?.length
     ? result.matches
     : [{ label: result.sourceField, preview: result.preview, matchedText: result.matchedText, field: result.sourceField }];
-  if (result.category === 'contents' && matches.length === 1) {
+  const visibleMatches = matches
+    .filter((match) => normalizeResultText(match.preview) !== normalizeResultText(locationLabel))
+    .slice(0, 3);
+  if (visibleMatches.length === 0) {
     return '';
   }
   return `<span class="search-result-snippets">
-    ${matches.slice(0, 3).map((match) => `
+    ${visibleMatches.map((match) => `
       <span class="search-result-snippet">
         <span class="search-result-snippet-label">${deps.escapeHtml(match.label)}</span>
         <span>${highlightPlainText(match.preview, search.submittedQuery, search.caseSensitive, deps.escapeHtml)}</span>
@@ -322,24 +323,38 @@ function renderResultMatchSnippets(result: HvySearchResult, search: SearchState,
   </span>`;
 }
 
-function getResultDescription(
+function getResultLocationLabel(
+  result: HvySearchResult,
+  target: { section: NonNullable<ReturnType<typeof findSectionByKey>>; block?: NonNullable<ReturnType<typeof findBlockByIds>> } | null
+): string {
+  if (result.locationLabel?.trim()) {
+    return result.locationLabel.trim();
+  }
+  const description = getTargetDescription(result, target);
+  if (shouldUseDescriptionAsLocation(description, result)) {
+    return description;
+  }
+  return result.label || result.preview || 'Search result';
+}
+
+function getTargetDescription(
   result: HvySearchResult,
   target: { section: NonNullable<ReturnType<typeof findSectionByKey>>; block?: NonNullable<ReturnType<typeof findBlockByIds>> } | null
 ): string {
   if (!target) {
-    return result.preview;
+    return '';
   }
   if (!target.block) {
-    return target.section.description.trim() || result.preview;
+    return target.section.description.trim();
   }
   const block = target.block;
   if (result.sourceField.includes('Stub')) {
-    return block.schema.expandableStubDescription.trim() || block.schema.description.trim() || result.preview;
+    return block.schema.expandableStubDescription.trim() || block.schema.description.trim();
   }
   if (result.sourceField.includes('Expanded')) {
-    return block.schema.expandableContentDescription.trim() || block.schema.description.trim() || result.preview;
+    return block.schema.expandableContentDescription.trim() || block.schema.description.trim();
   }
-  return block.schema.description.trim() || result.preview;
+  return block.schema.description.trim();
 }
 
 function resolveResultTarget(result: HvySearchResult, document: VisualDocument): { section: NonNullable<ReturnType<typeof findSectionByKey>>; block?: NonNullable<ReturnType<typeof findBlockByIds>> } | null {

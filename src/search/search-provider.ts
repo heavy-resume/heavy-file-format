@@ -51,7 +51,17 @@ export const builtInSearchProvider: HvySearchProvider = (request) => {
         candidates,
       });
     }
-    documentOrder = visitBlocks(request, section, section.blocks, results, seen, categories, [getSectionLabel(section)], documentOrder);
+    documentOrder = visitBlocks(
+      request,
+      section,
+      section.blocks,
+      results,
+      seen,
+      categories,
+      [getSectionLabel(section)],
+      documentOrder,
+      section.description.trim()
+    );
     section.children.forEach(visitSection);
   };
 
@@ -73,12 +83,14 @@ function visitBlocks(
   seen: Set<string>,
   categories: SearchCategory[],
   contextTrail: string[],
-  documentOrder: number
+  documentOrder: number,
+  nearestLocationLabel: string
 ): number {
   for (const block of blocks) {
     const blockOrder = documentOrder;
     documentOrder += 1;
     const label = getBlockLabel(block, section);
+    const blockLocationLabel = getBlockLocationLabel(block) || nearestLocationLabel;
     for (const category of categories) {
       const candidates = getBlockCandidates(block, category);
       addMatches({
@@ -92,17 +104,18 @@ function visitBlocks(
         targetId: block.schema.id.trim(),
         targetPath: findVirtualDirectoryForBlock(request.document, block) ?? undefined,
         label,
+        locationLabel: blockLocationLabel,
         contextLabel: getContextLabel(contextTrail, label),
         documentOrder: blockOrder,
         candidates,
       });
     }
     const childTrail = appendContextLabel(contextTrail, getBlockContextLabel(block));
-    documentOrder = visitBlocks(request, section, block.schema.containerBlocks ?? [], results, seen, categories, childTrail, documentOrder);
-    documentOrder = visitBlocks(request, section, block.schema.componentListBlocks ?? [], results, seen, categories, childTrail, documentOrder);
-    documentOrder = visitBlocks(request, section, block.schema.expandableStubBlocks?.children ?? [], results, seen, categories, childTrail, documentOrder);
-    documentOrder = visitBlocks(request, section, block.schema.expandableContentBlocks?.children ?? [], results, seen, categories, childTrail, documentOrder);
-    documentOrder = visitBlocks(request, section, (block.schema.gridItems ?? []).map((item) => item.block), results, seen, categories, childTrail, documentOrder);
+    documentOrder = visitBlocks(request, section, block.schema.containerBlocks ?? [], results, seen, categories, childTrail, documentOrder, blockLocationLabel);
+    documentOrder = visitBlocks(request, section, block.schema.componentListBlocks ?? [], results, seen, categories, childTrail, documentOrder, blockLocationLabel);
+    documentOrder = visitBlocks(request, section, block.schema.expandableStubBlocks?.children ?? [], results, seen, categories, childTrail, documentOrder, getExpandableLocationLabel(block, 'stub') || blockLocationLabel);
+    documentOrder = visitBlocks(request, section, block.schema.expandableContentBlocks?.children ?? [], results, seen, categories, childTrail, documentOrder, getExpandableLocationLabel(block, 'expanded') || blockLocationLabel);
+    documentOrder = visitBlocks(request, section, (block.schema.gridItems ?? []).map((item) => item.block), results, seen, categories, childTrail, documentOrder, blockLocationLabel);
   }
   return documentOrder;
 }
@@ -118,6 +131,7 @@ function addMatches(options: {
   targetId: string;
   targetPath?: string;
   label: string;
+  locationLabel?: string;
   contextLabel: string;
   documentOrder: number;
   candidates: Array<{ field: string; label: string; value: string }>;
@@ -163,6 +177,7 @@ function addMatches(options: {
     targetId: options.targetId,
     ...(options.targetPath ? { targetPath: options.targetPath } : {}),
     label: options.label,
+    ...(options.locationLabel?.trim() ? { locationLabel: options.locationLabel.trim() } : {}),
     contextLabel: options.contextLabel,
     preview: firstMatch.preview,
     matchedText: firstMatch.matchedText,
@@ -170,6 +185,16 @@ function addMatches(options: {
     matches,
     documentOrder: options.documentOrder,
   });
+}
+
+function getBlockLocationLabel(block: VisualBlock): string {
+  return block.schema.description.trim();
+}
+
+function getExpandableLocationLabel(block: VisualBlock, pane: 'stub' | 'expanded'): string {
+  return pane === 'stub'
+    ? block.schema.expandableStubDescription.trim()
+    : block.schema.expandableContentDescription.trim();
 }
 
 function findMatchIndex(value: string, query: string, caseSensitive: boolean): number {

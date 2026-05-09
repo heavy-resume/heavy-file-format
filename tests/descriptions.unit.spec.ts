@@ -114,5 +114,7 @@ hvy_version: 0.1
     openAiReasoningEffort: 'none',
     messages: [{ role: 'user', content: 'Write the description now.' }],
   });
+  expect(payload.context).toContain('Describe the structural purpose of this location, not the specific values inside it.');
+  expect(payload.context).toContain('Do not enumerate examples from the content');
   expect(payload).not.toHaveProperty('input');
 });

@@ -284,6 +284,78 @@ hvy_version: 0.1
   expect(expectedContext.visibleBlocks.has(siblingXref.id)).toBe(false);
 });
 
+test('search filter context treats expandable content layout wrappers as transparent context', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"history"}-->
+#! History
+
+<!--hvy:expandable {"id":"role","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+  <!--hvy:expandable:stub {}-->
+   <!--hvy:text {"id":"role-summary"}-->
+    Northwind Labs
+
+  <!--hvy:expandable:content {}-->
+   <!--hvy:text {"id":"role-heading"}-->
+    Northwind Labs
+
+   <!--hvy:grid {"id":"role-meta"}-->
+    <!--hvy:grid:0 {"id":"role-location"}-->
+     <!--hvy:text {"id":"location"}-->
+      Seattle, WA
+    <!--hvy:grid:1 {"id":"role-date"}-->
+     <!--hvy:text {"id":"date"}-->
+      05/2024 - present
+
+   <!--hvy:component-list {"id":"accomplishments","componentListComponent":"text"}-->
+    <!--hvy:component-list:0 {}-->
+     <!--hvy:text {"id":"typescript-work"}-->
+      Built a shared TypeScript package.
+`, '.hvy');
+  const expectedResults = await builtInSearchProvider({
+    document,
+    query: 'TypeScript',
+    caseSensitive: false,
+    categories: ['contents'],
+  });
+  const expandable = document.sections[0]!.blocks[0]!;
+  const roleHeading = expandable.schema.expandableContentBlocks.children[0]!;
+  const metaGrid = expandable.schema.expandableContentBlocks.children[1]!;
+  const location = metaGrid.schema.gridItems[0]!.block;
+  const date = metaGrid.schema.gridItems[1]!.block;
+  const accomplishments = expandable.schema.expandableContentBlocks.children[2]!;
+  const matchedText = accomplishments.schema.componentListBlocks[0]!;
+
+  const expectedContext = createSearchFilterContext(document.sections, {
+    open: false,
+    queryDraft: 'TypeScript',
+    submittedQuery: 'TypeScript',
+    caseSensitive: false,
+    categories: { tags: true, contents: true, description: true },
+    activeTab: 'filter',
+    filterEnabled: true,
+    filterMode: 'hide',
+    resultsCollapsed: false,
+    activeResultId: null,
+    isLoading: false,
+    error: null,
+    results: expectedResults,
+    navigationResultIds: expectedResults.map((result) => result.id),
+    requestNonce: 1,
+    abortController: null,
+  });
+
+  expect(expectedContext.visibleBlocks.has(expandable.id)).toBe(true);
+  expect(expectedContext.visibleBlocks.has(roleHeading.id)).toBe(true);
+  expect(expectedContext.visibleBlocks.has(accomplishments.id)).toBe(true);
+  expect(expectedContext.visibleBlocks.has(matchedText.id)).toBe(true);
+  expect(expectedContext.visibleBlocks.has(metaGrid.id)).toBe(true);
+  expect(expectedContext.visibleBlocks.has(location.id)).toBe(true);
+  expect(expectedContext.visibleBlocks.has(date.id)).toBe(true);
+});
+
 test('search highlighting escapes plain text before marking matches', () => {
   const expectedResult = highlightPlainText('<script>needle</script>', 'needle', false, escapeHtml);
 

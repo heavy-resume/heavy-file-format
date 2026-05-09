@@ -113,17 +113,48 @@ export function createSearchFilterContext(sections: VisualSection[], search: Sea
     }
     block.schema.containerBlocks.forEach((child) => markBlockContextVisible(child, depth - 1));
     block.schema.componentListBlocks.forEach((child) => markBlockContextVisible(child, depth - 1));
-    block.schema.expandableStubBlocks.children.forEach((child) => markBlockContextVisible(child, depth - 1));
-    block.schema.expandableContentBlocks.children.forEach((child) => markBlockContextVisible(child, depth - 1));
     block.schema.gridItems.forEach((item) => markBlockContextVisible(item.block, depth - 1));
   };
 
   const markBlockStructuralContextVisible = (block: VisualBlock): void => {
     block.schema.containerBlocks.forEach((child) => visibleBlocks.add(child.id));
-    block.schema.expandableStubBlocks.children.forEach((child) => visibleBlocks.add(child.id));
-    block.schema.expandableContentBlocks.children.forEach((child) => visibleBlocks.add(child.id));
+    block.schema.expandableStubBlocks.children.forEach(markExpandableContextChildVisible);
+    block.schema.expandableContentBlocks.children.forEach(markExpandableContextChildVisible);
     block.schema.gridItems.forEach((item) => visibleBlocks.add(item.block.id));
   };
+
+  const markExpandableContextChildVisible = (block: VisualBlock): void => {
+    if (isTransparentLayoutBlock(block)) {
+      markTransparentLayoutContextVisible(block);
+      return;
+    }
+    visibleBlocks.add(block.id);
+  };
+
+  const markTransparentLayoutContextVisible = (block: VisualBlock): void => {
+    visibleBlocks.add(block.id);
+    block.schema.containerBlocks.forEach((child) => {
+      if (isTransparentLayoutBlock(child)) {
+        markTransparentLayoutContextVisible(child);
+        return;
+      }
+      visibleBlocks.add(child.id);
+    });
+    block.schema.gridItems.forEach((item) => {
+      if (isTransparentLayoutBlock(item.block)) {
+        markTransparentLayoutContextVisible(item.block);
+        return;
+      }
+      visibleBlocks.add(item.block.id);
+    });
+  };
+
+  const isTransparentLayoutBlock = (block: VisualBlock): boolean =>
+    block.schema.component === 'grid'
+    || block.schema.component === 'container'
+    || block.schema.component === 'component-list'
+    || block.schema.gridItems.length > 0
+    || block.schema.containerBlocks.length > 0;
 
   const markSectionTreeVisible = (section: VisualSection): boolean => {
     visibleSections.add(section.key);

@@ -36,6 +36,8 @@ import { scriptingPluginRegistration, setScriptingResult } from './plugins/scrip
 import { runUserScript } from './plugins/scripting/wrapper';
 import { getScriptingPluginVersion } from './plugins/scripting/version';
 import { visitBlocksInList } from './section-ops';
+import { centerSearchResultLenses, renderCollapsedSearchBar, renderSearchLauncher, renderSearchPalette } from './search/render';
+import { createDefaultSearchState } from './search/state';
 
 const appRoot = document.querySelector<HTMLDivElement>('#app');
 if (!appRoot) {
@@ -67,6 +69,8 @@ function createInitialState(document: ReturnType<typeof deserializeDocumentBytes
     editorMode: 'basic',
     responsivePreview: 'full',
     chat: createDefaultChatState(),
+    search: createDefaultSearchState(),
+    contextMenu: null,
     aiEdit: {
       sectionKey: null,
       blockId: null,
@@ -103,6 +107,7 @@ function createInitialState(document: ReturnType<typeof deserializeDocumentBytes
     tempHighlights: new Set<string>(),
     addComponentBySection: {},
     metaPanelOpen: false,
+    descriptionPopulate: { isRunning: false, status: null, completed: 0, total: 0, current: '', skippedLeaves: 0, lastGenerated: '' },
     selectedReusableComponentName: null,
     templateValues: {},
     history: [],
@@ -246,6 +251,76 @@ function renderAiEditPopover(): string {
   `;
 }
 
+function renderContextMenu(): string {
+  const menu = state.contextMenu;
+  if (!menu) {
+    return '';
+  }
+  const popupStyle = `left: ${menu.x}px; top: ${menu.y}px;`;
+  const filtering = state.search.filterEnabled && state.search.submittedQuery.trim().length > 0;
+  if (menu.kind === 'filter') {
+    return `
+      <section class="hvy-context-popover" style="${escapeAttr(popupStyle)}" aria-label="Filter options">
+        <button type="button" data-action="clear-target-filtering">Clear filtering</button>
+      </section>
+    `;
+  }
+  return `
+    <section class="hvy-context-popover" style="${escapeAttr(popupStyle)}" aria-label="Component options">
+      <button type="button" data-action="edit-context-component">Edit component</button>
+      <button type="button" data-action="request-context-component-changes">Request changes</button>
+      ${filtering ? '<button type="button" data-action="clear-target-filtering">Clear filtering</button>' : ''}
+    </section>
+  `;
+}
+
+function renderDescriptionPopulateModal(): string {
+  const progress = state.descriptionPopulate;
+  if (!progress?.isRunning) {
+    return '';
+  }
+  const total = Math.max(0, progress.total);
+  const completed = Math.min(progress.completed, total);
+  const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
+  const progressText = total > 0 ? `${completed} of ${total}` : 'Preparing...';
+  return `
+    <div class="modal-root description-progress-modal-root">
+      <div class="modal-overlay"></div>
+      <section class="modal-panel description-progress-modal" role="dialog" aria-modal="true" aria-labelledby="descriptionProgressTitle">
+        <div class="modal-head">
+          <div>
+            <h3 id="descriptionProgressTitle">Populating Descriptions</h3>
+            <p class="muted">Generating structural location labels parent-first.</p>
+          </div>
+          <div class="modal-head-actions">
+            <button type="button" class="danger" data-action="stop-populate-missing-descriptions">Stop</button>
+          </div>
+        </div>
+        <div class="description-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="${escapeAttr(String(total))}" aria-valuenow="${escapeAttr(String(completed))}">
+          <div class="description-progress-fill" style="width: ${escapeAttr(String(percent))}%"></div>
+        </div>
+        <div class="description-progress-meta">
+          <strong>${escapeHtml(progressText)}</strong>
+          ${progress.current ? `<span>${escapeHtml(progress.current)}</span>` : ''}
+        </div>
+        ${
+          progress.lastGenerated
+            ? `<div class="description-progress-last">
+                 <span>Last generated</span>
+                 <strong>${escapeHtml(progress.lastGenerated)}</strong>
+               </div>`
+            : ''
+        }
+        ${
+          progress.skippedLeaves > 0
+            ? `<p class="muted">${escapeHtml(`${progress.skippedLeaves} component${progress.skippedLeaves === 1 ? '' : 's'} skipped to avoid duplicating content or layout wrappers.`)}</p>`
+            : ''
+        }
+      </section>
+    </div>
+  `;
+}
+
 let editorRenderer: EditorRenderer;
 let readerRenderer: ReaderRenderer;
 
@@ -300,6 +375,9 @@ editorRenderer = createEditorRenderer(
     get mobileAdjustmentMode() {
       return state.editorMode === 'mobile-adjustment';
     },
+    get descriptionPopulate() {
+      return state.descriptionPopulate;
+    },
   },
   {
     escapeAttr,
@@ -347,6 +425,9 @@ readerRenderer = createReaderRenderer(
         blockId: state.aiEdit.blockId,
       };
     },
+    get activeEditorBlock() {
+      return state.activeEditorBlock;
+    },
     get modalSectionKey() {
       return state.modalSectionKey;
     },
@@ -388,6 +469,9 @@ readerRenderer = createReaderRenderer(
     },
     get readerViewActivatedTargets() {
       return state.readerViewActivatedTargets;
+    },
+    get search() {
+      return state.search;
     },
     get componentListReaderViews() {
       return state.componentListReaderViews;
@@ -445,6 +529,7 @@ function renderApp(): void {
   const isMobileAdjustmentEditor = state.editorMode === 'mobile-adjustment';
   const isRawEditor = state.editorMode === 'raw';
   const isCliEditor = state.editorMode === 'cli';
+  const isDocumentMetaView = isEditorView && isAdvancedEditor && state.metaPanelOpen;
   const canPreviewSurface = !isEditorView || (!isRawEditor && !isCliEditor);
 
   stepStartedAt = performance.now();
@@ -503,6 +588,7 @@ function renderApp(): void {
           }
         </div>
         <div${renderResponsivePreviewFrameAttrs(`pane ${isEditorView ? 'editor-pane' : 'reader-pane'} full-pane`)}>
+          ${isCliEditor || isDocumentMetaView ? '' : renderCollapsedSearchBar(state.search, { escapeHtml })}
           ${
             isEditorView
               ? `${isRawEditor
@@ -543,8 +629,9 @@ function renderApp(): void {
                       escapeHtml,
                       escapeAttr,
                     })
+                  : isDocumentMetaView
+                  ? `<div class="document-meta-view">${editorRenderer.renderMetaPanel()}</div>`
                   : `${isAdvancedEditor ? renderTemplatePanel(templateFields, state.templateValues, { escapeAttr, escapeHtml }) : ''}
-                ${isAdvancedEditor && state.metaPanelOpen ? editorRenderer.renderMetaPanel() : ''}
                 <div${renderResponsivePreviewFrameAttrs(`editor-shell ${state.editorSidebarOpen ? 'is-sidebar-open' : 'is-sidebar-closed'}`)}>
                   <div class="editor-sidebar-backdrop" data-action="toggle-editor-sidebar"></div>
                   <aside class="editor-sidebar">
@@ -576,22 +663,26 @@ function renderApp(): void {
                    }
                  </div>`
           }
+          ${
+            isCliEditor || isDocumentMetaView
+              ? ''
+              : `${renderChatPanel(
+                  state.chat,
+                  state.document,
+                  { escapeAttr, escapeHtml },
+                  isViewerView ? 'qa' : 'document-edit',
+                  state.currentView === 'editor' || state.currentView === 'ai'
+                )}
+                ${renderContextMenu()}
+                ${renderSearchLauncher(state.search)}
+                ${renderSearchPalette(state.search, state.document, { escapeAttr, escapeHtml, readerRenderer })}`
+          }
         </div>
       </section>
 
-      ${
-        isCliEditor
-          ? ''
-          : renderChatPanel(
-              state.chat,
-              state.document,
-              { escapeAttr, escapeHtml },
-              isViewerView ? 'qa' : 'document-edit',
-              state.currentView === 'editor' || state.currentView === 'ai'
-            )
-      }
       ${readerRenderer.renderModal()}
       ${readerRenderer.renderLinkInlineModal()}
+      ${renderDescriptionPopulateModal()}
     </main>
   `;
   markupMs = performance.now() - stepStartedAt;
@@ -610,6 +701,7 @@ function renderApp(): void {
   stepStartedAt = performance.now();
   restorePaneScroll(state.paneScroll, app);
   restoreChatThreadScroll(app, chatScroll);
+  centerSearchResultLenses(app);
   scheduleReaderHighlightGlow(app);
   restoreMs = performance.now() - stepStartedAt;
 

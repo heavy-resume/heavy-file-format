@@ -2,6 +2,7 @@ import './table.css';
 import type { ComponentEditorRenderer, ComponentReaderRenderer } from '../../component-helpers';
 import type { TableRow } from '../../types';
 import { closeIcon, plusIcon } from '../../../icons';
+import { renderAltAnnotationsAsFullText } from '../../../markdown';
 
 let readerTableStripeIndex = 0;
 
@@ -197,7 +198,7 @@ export const renderTableReader: ComponentReaderRenderer = (_section, block, help
     ${
       block.schema.tableShowHeader
         ? `<thead>
-      <tr>${columns.map((column) => `<th title="${helpers.escapeAttr(column)}">${renderTableInlineReaderHtml(column, block, helpers)}</th>`).join('')}</tr>
+      <tr>${columns.map((column) => `<th title="${helpers.escapeAttr(renderAltAnnotationsAsFullText(column))}">${renderTableInlineReaderHtml(column, block, helpers)}</th>`).join('')}</tr>
     </thead>`
         : ''
     }

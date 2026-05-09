@@ -140,7 +140,7 @@ test('round-trips trailing spaces in text block lines', () => {
   expect(expectedResult.endsWith('  **Target Location(s):** \n')).toBe(true);
 });
 
-test('serializes expandable stub and content css fields on the expandable slot markers', () => {
+test('serializes expandable stub and content meta fields on the expandable slot markers', () => {
   const input = `---
 hvy_version: 0.1
 ---
@@ -150,12 +150,12 @@ hvy_version: 0.1
 
  <!--hvy:expandable {"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
-  <!--hvy:expandable:stub {"css":"padding: 0.25rem 0;"}-->
+  <!--hvy:expandable:stub {"css":"padding: 0.25rem 0;","description":"Collapsed summary row"}-->
 
    <!--hvy:text {}-->
     Stub
 
-  <!--hvy:expandable:content {"css":"margin-top: 0.5rem;"}-->
+  <!--hvy:expandable:content {"css":"margin-top: 0.5rem;","description":"Detailed body"}-->
 
    <!--hvy:text {}-->
     Content
@@ -164,10 +164,12 @@ hvy_version: 0.1
   const document = deserializeDocument(input, '.hvy');
   const output = serializeWithState(document);
 
-  expect(output).toContain('<!--hvy:expandable:stub {"css":"padding: 0.25rem 0;"}-->');
-  expect(output).toContain('<!--hvy:expandable:content {"css":"margin-top: 0.5rem;"}-->');
+  expect(output).toContain('<!--hvy:expandable:stub {"css":"padding: 0.25rem 0;","description":"Collapsed summary row"}-->');
+  expect(output).toContain('<!--hvy:expandable:content {"css":"margin-top: 0.5rem;","description":"Detailed body"}-->');
   expect(output).not.toContain('"expandableStubCss"');
   expect(output).not.toContain('"expandableContentCss"');
+  expect(output).not.toContain('"expandableStubDescription"');
+  expect(output).not.toContain('"expandableContentDescription"');
 });
 
 test('preserves reader_max_width in document front matter on round-trip', () => {

@@ -240,6 +240,16 @@ test('document ai context is editable metadata and keeps focus while typing', as
 });
 
 test('description generate button appears only for empty component descriptions', async ({ page }) => {
+  await page.route('**/api/chat', async (route) => {
+    const payload = route.request().postDataJSON() as { model?: string; openAiReasoningEffort?: string };
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        output: `AI description from ${payload.model} with reasoning ${payload.openAiReasoningEffort}`,
+      }),
+    });
+  });
   await page.goto('/');
 
   await page.getByRole('button', { name: 'Raw' }).click();
@@ -267,14 +277,72 @@ hvy_version: 0.1
 
   await metaModal.locator('[data-action="generate-block-description"]').click();
   await expect(metaModal.locator('[data-action="generate-block-description"]')).toHaveCount(0);
-  await expect(metaModal.locator('[data-field="block-description"]')).toHaveValue(/empty-description - text .* Empty description body/);
+  await expect(metaModal.locator('[data-field="block-description"]')).toHaveValue('AI description from gpt-5.4-nano with reasoning none');
   await expect(activeBlock).toHaveAttribute('data-active-editor-block', 'true');
+  await metaModal.locator('[data-field="block-description"]').fill('');
+  await expect(metaModal.locator('[data-action="generate-block-description"]')).toBeVisible();
+  await expect(metaModal.locator('[data-field="block-description"]')).toBeFocused();
 
   await page.getByRole('button', { name: 'Close' }).click();
   await activeBlock.getByRole('button', { name: 'Done' }).click();
   await page.locator('.editor-block-passive', { hasText: 'Filled description body' }).click();
   await page.locator('.editor-block[data-active-editor-block="true"]').getByRole('button', { name: 'Meta' }).click();
   await expect(page.locator('.component-meta-modal', { hasText: 'Component Meta: text' }).locator('[data-action="generate-block-description"]')).toHaveCount(0);
+});
+
+test('document meta populates missing descriptions parent first', async ({ page }) => {
+  const contexts: string[] = [];
+  await page.route('**/api/chat', async (route) => {
+    const payload = route.request().postDataJSON() as { context?: string };
+    contexts.push(payload.context ?? '');
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        output: contexts.length === 1 ? 'Profile area' : 'Profile summary list',
+      }),
+    });
+  });
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"profile"}-->
+#! Profile
+
+<!--hvy:component-list {"id":"summary-list"}-->
+
+ <!--hvy:component-list:0 {}-->
+
+  <!--hvy:text {"id":"summary"}-->
+   Summary body
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Advanced' }).click();
+  await page.getByRole('button', { name: 'Document Meta' }).click();
+
+  await expect(page.locator('.document-meta-view')).toBeVisible();
+  await expect(page.locator('#editorTree')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Open chat' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Open search' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Populate Missing' }).click();
+
+  await expect(page.locator('.description-progress-modal')).toBeVisible();
+  await expect(page.locator('.description-progress-modal')).toContainText(/0 of 2|1 of 2|2 of 2/);
+  await expect(page.locator('.description-progress-modal')).toContainText('Last generated');
+  await expect(page.locator('.description-progress-modal')).toContainText('Profile area');
+  await expect(page.locator('.description-progress-modal')).toContainText('1 component skipped');
+  await expect(page.locator('.meta-panel')).toContainText('Generated 2 missing descriptions.');
+  expect(contexts).toHaveLength(2);
+  expect(contexts[1]).toContain('Profile - Profile area');
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await expect(page.locator('#rawEditor')).toContainText('"description":"Profile area"');
+  await expect(page.locator('#rawEditor')).toContainText('"description":"Profile summary list"');
+  await expect(page.locator('#rawEditor')).not.toContainText('Summary body","description"');
 });
 
 test('resume template shows friendly empty component-list add prompts before activation', async ({ page }) => {

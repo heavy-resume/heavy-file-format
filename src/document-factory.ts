@@ -48,10 +48,12 @@ export function defaultBlockSchema(component = 'text'): BlockSchema {
     expandableContentComponent: 'container',
     expandableStub: '',
     expandableStubCss: '',
+    expandableStubDescription: '',
     expandableStubBlocks: { lock: false, children: [] },
     expandableAlwaysShowStub: true,
     expandableExpanded: false,
     expandableContentCss: '',
+    expandableContentDescription: '',
     expandableContentBlocks: { lock: false, children: [] },
     tableColumns: ['Column 1', 'Column 2'],
     tableShowHeader: true,
@@ -82,11 +84,19 @@ export function parseExpandablePart(raw: unknown, seen = new WeakSet<object>()):
 }
 
 function readExpandablePartCss(raw: unknown): string {
+  return readExpandablePartString(raw, 'css');
+}
+
+function readExpandablePartDescription(raw: unknown): string {
+  return readExpandablePartString(raw, 'description');
+}
+
+function readExpandablePartString(raw: unknown, key: string): string {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
     return '';
   }
   const obj = raw as JsonObject;
-  return typeof obj.css === 'string' ? obj.css : '';
+  return typeof obj[key] === 'string' ? obj[key] : '';
 }
 
 export function coerceAlign(value: string): Align {
@@ -192,6 +202,10 @@ export function schemaFromUnknown(value: unknown, seen = new WeakSet<object>()):
       typeof candidate.expandableStubCss === 'string'
         ? candidate.expandableStubCss
         : readExpandablePartCss(candidate.expandableStubBlocks) || defaults.expandableStubCss,
+    expandableStubDescription:
+      typeof candidate.expandableStubDescription === 'string'
+        ? candidate.expandableStubDescription
+        : readExpandablePartDescription(candidate.expandableStubBlocks) || defaults.expandableStubDescription,
     expandableStubBlocks: parseExpandablePart(candidate.expandableStubBlocks, seen),
     expandableAlwaysShowStub: candidate.expandableAlwaysShowStub !== false,
     expandableExpanded: candidate.expandableExpanded === true,
@@ -199,6 +213,10 @@ export function schemaFromUnknown(value: unknown, seen = new WeakSet<object>()):
       typeof candidate.expandableContentCss === 'string'
         ? candidate.expandableContentCss
         : readExpandablePartCss(candidate.expandableContentBlocks) || defaults.expandableContentCss,
+    expandableContentDescription:
+      typeof candidate.expandableContentDescription === 'string'
+        ? candidate.expandableContentDescription
+        : readExpandablePartDescription(candidate.expandableContentBlocks) || defaults.expandableContentDescription,
     expandableContentBlocks: parseExpandablePart(candidate.expandableContentBlocks, seen),
     tableColumns: parseTableColumns(candidate.tableColumns, defaults.tableColumns),
     tableShowHeader: candidate.tableShowHeader !== false,

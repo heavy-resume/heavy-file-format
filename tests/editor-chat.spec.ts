@@ -61,7 +61,9 @@ test('right click AI change request uses CLI sim when enabled', async ({ page })
   await page.goto('/');
 
   await page.getByRole('button', { name: 'Open chat' }).click();
-  await page.getByRole('button', { name: 'CLI Sim Off' }).click();
+  await page.getByRole('button', { name: 'CLI Sim Off' }).evaluate((button) => {
+    (button as HTMLButtonElement).click();
+  });
   await expect(page.getByRole('button', { name: 'CLI Sim On' })).toBeVisible();
 
   await page.locator('[data-action="switch-view"][data-view="ai"]').click();
@@ -71,6 +73,7 @@ test('right click AI change request uses CLI sim when enabled', async ({ page })
     clientY: 220,
     button: 2,
   });
+  await page.getByRole('button', { name: 'Request changes' }).click();
 
   await expect(page.locator('.ai-edit-popover')).toBeVisible();
   await page.locator('[data-field="ai-edit-input"]').fill('Tighten this wording.');

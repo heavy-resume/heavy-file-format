@@ -126,6 +126,9 @@ function renderContainerReaderBody(options: {
   const body = options.useListOrdering
     ? options.helpers.renderReaderListBlocks(options.section, options.blocks)
     : options.helpers.renderReaderBlocks(options.section, options.blocks);
+  if (options.virtualKey && !body.trim()) {
+    return '';
+  }
   if (!body && !options.title.trim()) {
     return '';
   }

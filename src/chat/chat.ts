@@ -125,6 +125,51 @@ export function clearChatConversation(chat: ChatState): void {
   chat.requestNonce += 1;
 }
 
+export function stopChatRequest(chat: ChatState): boolean {
+  if (!chat.isSending) {
+    return false;
+  }
+  chat.abortController?.abort();
+  chat.abortController = null;
+  chat.isSending = false;
+  chat.requestNonce += 1;
+  chat.error = null;
+  chat.messages = [
+    ...chat.messages,
+    {
+      id: crypto.randomUUID(),
+      role: 'assistant',
+      content: 'Stopped.',
+      progress: true,
+    },
+  ];
+  return true;
+}
+
+export function closeChatPanel(chat: ChatState): void {
+  stopChatRequest(chat);
+  chat.panelOpen = false;
+}
+
+export function toggleChatPanelOpen(chat: ChatState): void {
+  if (chat.panelOpen) {
+    closeChatPanel(chat);
+    return;
+  }
+  chat.panelOpen = true;
+}
+
+export function focusChatPanel(app: ParentNode): void {
+  window.setTimeout(() => {
+    const prompt = app.querySelector<HTMLTextAreaElement>('[data-field="chat-input"]');
+    if (prompt) {
+      prompt.focus();
+      return;
+    }
+    app.querySelector<HTMLElement>('.chat-panel')?.focus();
+  }, 0);
+}
+
 export function persistChatSettings(settings: ChatSettings): void {
   if (typeof window === 'undefined' || !window.localStorage) {
     return;
@@ -238,7 +283,7 @@ export function renderChatPanel(
     <div class="chat-dock ${chat.panelOpen ? 'is-open' : 'is-closed'}" aria-label="Document chat">
       ${
         chat.panelOpen
-          ? `<aside class="chat-panel">
+          ? `<aside class="chat-panel" tabindex="-1">
                <div class="chat-panel-head">
                  <div>
                    <h2>${title}</h2>

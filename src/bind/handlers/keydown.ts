@@ -1,5 +1,7 @@
 import { state, getRenderApp, handleTagEditorKeydown, applyRichAction, handleRichEditorKeydown, refreshRichToolbarState, openLinkInlineModal, closeAiEditPopover, submitAiEditRequest, handleInlineCheckboxBackspace, tagStateHelpers, findSectionByKey, createEmptyBlock, setActiveEditorBlock, recordHistory } from './_imports';
 import { completeCliInput } from '../../cli-ui/completion';
+import { selectAdjacentSearchResult } from '../../search/actions';
+import { handleEscapeKey } from './escape';
 
 export function bindKeydown(app: HTMLElement): void {
   app.addEventListener('keyup', (event) => {
@@ -12,6 +14,19 @@ export function bindKeydown(app: HTMLElement): void {
 
   app.addEventListener('keydown', (event) => {
     const target = event.target as HTMLElement;
+    if (handleEscapeKey(app, event)) {
+      return;
+    }
+    if (state.search.open && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
+      event.preventDefault();
+      selectAdjacentSearchResult(app, event.key === 'ArrowDown' ? 1 : -1);
+      return;
+    }
+    if (state.search.open && (event.key === 'Enter') && (event.metaKey || event.ctrlKey)) {
+      event.preventDefault();
+      selectAdjacentSearchResult(app, event.shiftKey ? -1 : 1);
+      return;
+    }
     if (event.key === 'Escape' && state.aiEdit.sectionKey && state.aiEdit.blockId && !state.aiEdit.isSending) {
       closeAiEditPopover();
       getRenderApp()();

@@ -2,9 +2,12 @@ import { state, getRenderApp } from '../../state';
 import { undoState, redoState } from '../../history';
 import { setSidebarOpen, setEditorSidebarOpen } from '../../navigation';
 import { serializeDocument } from '../../serialization';
-import { clearChatConversation } from '../../chat/chat';
+import { clearChatConversation, focusChatPanel, toggleChatPanelOpen } from '../../chat/chat';
 import { closeAiEditPopover } from '../../ai-edit-popover';
+import { openAiEditPopover } from '../../ai-edit-popover';
 import { restoreCliViewAfterRender } from '../../cli-ui/focus';
+import { clearFilteringForTarget } from '../../search/actions';
+import { setActiveEditorBlock } from '../../block-ops';
 import type { AppActionHandler } from './types';
 
 const undo: AppActionHandler = () => {
@@ -87,9 +90,12 @@ const toggleEditorSidebar: AppActionHandler = ({ app }) => {
   setEditorSidebarOpen(app, !state.editorSidebarOpen);
 };
 
-const toggleChatPanel: AppActionHandler = () => {
-  state.chat.panelOpen = !state.chat.panelOpen;
+const toggleChatPanel: AppActionHandler = ({ app }) => {
+  toggleChatPanelOpen(state.chat);
   getRenderApp()();
+  if (state.chat.panelOpen) {
+    focusChatPanel(app);
+  }
 };
 
 const setResponsivePreview: AppActionHandler = ({ actionButton }) => {
@@ -98,6 +104,45 @@ const setResponsivePreview: AppActionHandler = ({ actionButton }) => {
     preview === 'phone' || preview === 'tablet' || preview === 'desktop'
       ? preview
       : 'full';
+  getRenderApp()();
+};
+
+const clearTargetFiltering: AppActionHandler = ({ app, event }) => {
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  const menu = state.contextMenu;
+  if (!menu) {
+    return;
+  }
+  clearFilteringForTarget(menu.sectionKey, menu.blockId);
+  state.contextMenu = null;
+  app.querySelector('.hvy-context-popover')?.remove();
+  getRenderApp()();
+};
+
+const requestContextComponentChanges: AppActionHandler = ({ app, event }) => {
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  const menu = state.contextMenu;
+  if (!menu?.blockId) {
+    return;
+  }
+  state.contextMenu = null;
+  app.querySelector('.hvy-context-popover')?.remove();
+  openAiEditPopover(menu.sectionKey, menu.blockId, menu.x, menu.y);
+  getRenderApp()();
+};
+
+const editContextComponent: AppActionHandler = ({ app, event }) => {
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  const menu = state.contextMenu;
+  if (!menu?.blockId) {
+    return;
+  }
+  state.contextMenu = null;
+  app.querySelector('.hvy-context-popover')?.remove();
+  setActiveEditorBlock(menu.sectionKey, menu.blockId);
   getRenderApp()();
 };
 
@@ -112,4 +157,7 @@ export const shellActions: Record<string, AppActionHandler> = {
   'toggle-editor-sidebar': toggleEditorSidebar,
   'toggle-chat-panel': toggleChatPanel,
   'set-responsive-preview': setResponsivePreview,
+  'clear-target-filtering': clearTargetFiltering,
+  'request-context-component-changes': requestContextComponentChanges,
+  'edit-context-component': editContextComponent,
 };

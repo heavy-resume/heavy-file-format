@@ -274,7 +274,7 @@ section_defaults:
   });
 });
 
-test('deserializes expandable stub and content css fields', () => {
+test('deserializes expandable stub and content meta fields', () => {
   const input = `---
 hvy_version: 0.1
 ---
@@ -284,12 +284,12 @@ hvy_version: 0.1
 
  <!--hvy:expandable {"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
-  <!--hvy:expandable:stub {"css":"padding: 0.25rem 0;"}-->
+  <!--hvy:expandable:stub {"css":"padding: 0.25rem 0;","description":"Collapsed summary row"}-->
 
    <!--hvy:text {}-->
     Stub
 
-  <!--hvy:expandable:content {"css":"margin-top: 0.5rem;"}-->
+  <!--hvy:expandable:content {"css":"margin-top: 0.5rem;","description":"Detailed body"}-->
 
    <!--hvy:text {}-->
     Content
@@ -299,7 +299,9 @@ hvy_version: 0.1
   const block = document.sections[0]?.blocks[0];
 
   expect(block.schema.expandableStubCss).toBe('padding: 0.25rem 0;');
+  expect(block.schema.expandableStubDescription).toBe('Collapsed summary row');
   expect(block.schema.expandableContentCss).toBe('margin-top: 0.5rem;');
+  expect(block.schema.expandableContentDescription).toBe('Detailed body');
 });
 
 test('deserializes uncontained section metadata', () => {

@@ -1,4 +1,4 @@
-import { state, getRenderApp, openLinkInlineModal, openAiEditPopover } from './_imports';
+import { state, openLinkInlineModal } from './_imports';
 
 export function bindContextmenu(app: HTMLElement): void {
   app.addEventListener('contextmenu', (event) => {
@@ -16,23 +16,73 @@ export function bindContextmenu(app: HTMLElement): void {
       return;
     }
 
-    if (state.currentView !== 'ai') {
+    const filtering = state.search.filterEnabled && state.search.submittedQuery.trim().length > 0;
+    if (state.currentView !== 'viewer' && state.currentView !== 'ai') {
       return;
     }
 
     const blockElement = target.closest<HTMLElement>('.reader-block[data-section-key][data-block-id]');
-    if (!blockElement) {
+    const sectionElement = target.closest<HTMLElement>('.reader-section[data-section-key]');
+    if (!blockElement && !sectionElement) {
       return;
     }
 
-    const sectionKey = blockElement.dataset.sectionKey ?? '';
-    const blockId = blockElement.dataset.blockId ?? '';
-    if (!sectionKey || !blockId) {
+    const sectionKey = blockElement?.dataset.sectionKey ?? sectionElement?.dataset.sectionKey ?? '';
+    const blockId = blockElement?.dataset.blockId ?? '';
+    if (!sectionKey) {
       return;
     }
 
+    if (state.currentView === 'viewer' && !filtering) {
+      return;
+    }
+    if (state.currentView === 'ai' && !blockId) {
+      return;
+    }
     event.preventDefault();
-    openAiEditPopover(sectionKey, blockId, event.clientX, event.clientY);
-    getRenderApp()();
+    const fallbackRect = (blockElement ?? sectionElement)?.getBoundingClientRect();
+    const x = Number.isFinite(event.clientX) ? event.clientX : fallbackRect ? fallbackRect.left + 16 : 16;
+    const y = Number.isFinite(event.clientY) ? event.clientY : fallbackRect ? fallbackRect.top + 16 : 16;
+    state.contextMenu = {
+      kind: state.currentView === 'ai' ? 'ai' : 'filter',
+      sectionKey,
+      ...(blockId ? { blockId } : {}),
+      x,
+      y,
+    };
+    renderContextMenuElement(app);
   });
+}
+
+function renderContextMenuElement(app: HTMLElement): void {
+  app.querySelector('.hvy-context-popover')?.remove();
+  const menu = state.contextMenu;
+  if (!menu) {
+    return;
+  }
+  const filtering = state.search.filterEnabled && state.search.submittedQuery.trim().length > 0;
+  const popover = document.createElement('section');
+  popover.className = 'hvy-context-popover';
+  popover.setAttribute('aria-label', menu.kind === 'ai' ? 'Component options' : 'Filter options');
+  popover.style.left = `${menu.x}px`;
+  popover.style.top = `${menu.y}px`;
+
+  const addButton = (label: string, action: string): void => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.dataset.action = action;
+    button.textContent = label;
+    popover.append(button);
+  };
+
+  if (menu.kind === 'ai') {
+    addButton('Edit component', 'edit-context-component');
+    addButton('Request changes', 'request-context-component-changes');
+    if (filtering) {
+      addButton('Clear filtering', 'clear-target-filtering');
+    }
+  } else {
+    addButton('Clear filtering', 'clear-target-filtering');
+  }
+  app.append(popover);
 }

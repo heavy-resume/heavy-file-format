@@ -2,11 +2,40 @@ import { state, incrementInputEventCount, getRenderApp, getRefreshReaderPanels, 
 import { SCRIPTING_PLUGIN_ID } from '../../plugins/registry';
 import { SCRIPTING_PLUGIN_VERSION } from '../../plugins/scripting/version';
 import { addDefaultContainerBorderCss, removeDefaultContainerBorderCss } from '../../editor/components/container/container-css';
+import { submitSearch } from '../../search/actions';
 
 export function bindInputMisc(app: HTMLElement): void {
+  app.addEventListener('focusout', (event) => {
+    const target = event.target as HTMLElement;
+    if (target.dataset.field !== 'search-query' || !(target instanceof HTMLInputElement)) {
+      return;
+    }
+    window.setTimeout(() => {
+      if (!state.search.open || state.search.resultsCollapsed) {
+        return;
+      }
+      if (state.search.queryDraft.trim() === state.search.submittedQuery.trim()) {
+        return;
+      }
+      void submitSearch();
+    }, 120);
+  });
+
   app.addEventListener('input', (event) => {
     const rawTarget = event.target as HTMLElement;
     const target = rawTarget.dataset.field ? rawTarget : rawTarget.closest<HTMLElement>('[data-field]') ?? rawTarget;
+    if (target.dataset.field === 'search-query' && target instanceof HTMLInputElement) {
+      state.search.queryDraft = target.value;
+      state.search.resultsCollapsed = false;
+      const filterButton = app.querySelector<HTMLButtonElement>('[data-action="apply-search-filter"]');
+      if (filterButton) {
+        const applied = state.search.filterEnabled && state.search.queryDraft.trim() === state.search.submittedQuery.trim();
+        filterButton.classList.toggle('is-active', applied);
+        filterButton.setAttribute('aria-pressed', applied ? 'true' : 'false');
+        filterButton.textContent = applied ? 'Turn Off Filter' : 'Filter';
+      }
+      return;
+    }
     if (handleTagEditorInput(target, tagStateHelpers)) {
       return;
     }
@@ -81,6 +110,9 @@ export function bindInputMisc(app: HTMLElement): void {
         return;
       }
       section.description = target.value;
+      syncGenerateDescriptionButton(target, 'generate-section-description', {
+        sectionKey,
+      });
       getRefreshReaderPanels()();
       return;
     }
@@ -317,6 +349,10 @@ export function bindInputMisc(app: HTMLElement): void {
       const block = context.block;
       block.schema.description = target.value;
       syncReusableTemplateForBlock(sectionKey, block.id);
+      syncGenerateDescriptionButton(target, 'generate-block-description', {
+        sectionKey,
+        blockId: block.id,
+      });
       getRefreshReaderPanels()();
       return;
     }
@@ -361,6 +397,21 @@ export function bindInputMisc(app: HTMLElement): void {
       return;
     }
 
+    if (field === 'block-expandable-stub-description' && (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) {
+      const context = resolveBlockContext(target);
+      if (!context) {
+        return;
+      }
+      context.block.schema.expandableStubDescription = target.value;
+      syncReusableTemplateForBlock(sectionKey, context.block.id);
+      syncGenerateDescriptionButton(target, 'generate-expandable-pane-description', {
+        sectionKey,
+        blockId: context.block.id,
+        expandablePane: 'stub',
+      });
+      return;
+    }
+
     if (field === 'block-expandable-content-css' && (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) {
       const context = resolveBlockContext(target);
       if (!context) {
@@ -369,6 +420,21 @@ export function bindInputMisc(app: HTMLElement): void {
       context.block.schema.expandableContentCss = target.value;
       syncReusableTemplateForBlock(sectionKey, context.block.id);
       getRefreshReaderPanels()();
+      return;
+    }
+
+    if (field === 'block-expandable-content-description' && (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) {
+      const context = resolveBlockContext(target);
+      if (!context) {
+        return;
+      }
+      context.block.schema.expandableContentDescription = target.value;
+      syncReusableTemplateForBlock(sectionKey, context.block.id);
+      syncGenerateDescriptionButton(target, 'generate-expandable-pane-description', {
+        sectionKey,
+        blockId: context.block.id,
+        expandablePane: 'expanded',
+      });
       return;
     }
 
@@ -392,6 +458,43 @@ export function bindInputMisc(app: HTMLElement): void {
     }
     console.debug('[hvy:perf] input:end', { eventId, field, elapsedMs: Number((performance.now() - startedAt).toFixed(2)), handledBy: 'none' });
   });
+}
+
+function syncGenerateDescriptionButton(
+  input: HTMLInputElement | HTMLTextAreaElement,
+  action: string,
+  dataset: { sectionKey: string; blockId?: string; expandablePane?: string }
+): void {
+  const label = input.closest('label');
+  const labelText = label?.querySelector<HTMLElement>('.description-label-with-action');
+  if (!labelText) {
+    return;
+  }
+  const existingButton = labelText.querySelector<HTMLButtonElement>('.inline-generate-description');
+  if (input.value.trim()) {
+    existingButton?.remove();
+    return;
+  }
+  if (existingButton) {
+    existingButton.textContent = 'Generate';
+    existingButton.disabled = false;
+    existingButton.removeAttribute('title');
+    return;
+  }
+  labelText.append(' ');
+  const button = input.ownerDocument.createElement('button');
+  button.type = 'button';
+  button.className = 'ghost inline-generate-description';
+  button.dataset.action = action;
+  button.dataset.sectionKey = dataset.sectionKey;
+  if (dataset.blockId) {
+    button.dataset.blockId = dataset.blockId;
+  }
+  if (dataset.expandablePane) {
+    button.dataset.expandablePane = dataset.expandablePane;
+  }
+  button.textContent = 'Generate';
+  labelText.append(button);
 }
 
 function parseJsonObjectQuietly(value: string): Record<string, unknown> | null {

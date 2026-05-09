@@ -352,7 +352,7 @@ Rules:
 - The payload MUST be valid JSON object.
 - The directive applies to the immediately following content block.
 - `hvy:expandable` starts an expandable block. Its payload is the expandable block schema, with `component:"expandable"` implied.
-- `hvy:expandable:stub` and `hvy:expandable:content` are slot markers. Their payload may be empty or include only slot styling metadata such as `css`.
+- `hvy:expandable:stub` and `hvy:expandable:content` are slot markers. Their payload may be empty or include only pane metadata such as `css` and `description`.
 - The child block for an expandable slot is declared one indentation level deeper as its own directive.
 - Multiple `hvy:expandable:stub` or `hvy:expandable:content` directives can be used for a single expandable block.
 - Each `expandable` block MUST include at least one stub child and at least one content child. Missing either side is malformed.
@@ -425,6 +425,7 @@ This is equivalent to `{ schema: { component: "my-custom-component" } }`. The fu
 
 ```yaml
 expandableStubBlocks:
+  description: "Collapsed summary row"
   children:        # array of recursive block objects
     - text: ""
       schema:
@@ -450,23 +451,23 @@ Each `tableRows` entry contains only:
 
 Static tables do not have intrinsic row expansion, row click behavior, or row-attached detail blocks in HVY v0.1. Use an enclosing `expandable` when the table should reveal additional information.
 
-For inline HVY serialization, stub-pane and content-pane CSS belong on the slot markers themselves:
+For inline HVY serialization, stub-pane and content-pane CSS/description metadata belong on the slot markers themselves:
 
 ```markdown
 <!--hvy:expandable {"css":"margin: 0.5rem 0;"}-->
 
- <!--hvy:expandable:stub {"css":"padding: 0.5rem;"}-->
+ <!--hvy:expandable:stub {"css":"padding: 0.5rem;","description":"Collapsed summary row"}-->
 
   <!--hvy:text {}-->
    Stub content
 
- <!--hvy:expandable:content {"css":"padding: 0.5rem;"}-->
+ <!--hvy:expandable:content {"css":"padding: 0.5rem;","description":"Detailed body"}-->
 
   <!--hvy:text {}-->
    Expanded content
 ```
 
-In the in-memory/schema form used by `component_defs`, these pane-level styles are stored as `expandableStubCss` and `expandableContentCss`. The expandable block's own `css` still applies to the outer expandable component wrapper.
+In the in-memory/schema form used by `component_defs`, these pane-level styles and descriptions are stored as `expandableStubCss`, `expandableContentCss`, `expandableStubDescription`, and `expandableContentDescription`. The expandable block's own `css` and `description` still apply to the outer expandable component wrapper.
 
 Serialized block objects SHOULD contain document data only. Editor-only UI state, such as whether a schema editor is open for a block, MUST NOT be emitted.
 

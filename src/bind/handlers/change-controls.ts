@@ -1,12 +1,32 @@
 import { state, getRenderApp, getRefreshReaderPanels, recordHistory, materializeDbTableDraftRow, renameDbTableColumn, syncSqliteColumnNameInDom, updateDbTableCell, handleImageUpload, resolveBlockContext, syncReusableTemplateForBlock } from './_imports';
 import { encodeComponentListRuntimeView, parseComponentListRuntimeView } from '../../editor/components/component-list/component-list-view';
 import { dropDbTableColumn } from '../../plugins/db-table';
+import { setSearchCategory, setSearchFilterEnabled } from '../../search/actions';
+import type { SearchCategory } from '../../search/types';
 
 export function bindChangeControls(app: HTMLElement): void {
   app.addEventListener('change', (event) => {
     const target = event.target as HTMLElement;
     const field = target.dataset.field;
     if (!field) {
+      return;
+    }
+
+    if (field === 'search-case-sensitive' && target instanceof HTMLInputElement) {
+      state.search.caseSensitive = target.checked;
+      return;
+    }
+
+    if (field === 'search-filter' && target instanceof HTMLInputElement) {
+      setSearchFilterEnabled(target.checked);
+      return;
+    }
+
+    if (field === 'search-category' && target instanceof HTMLInputElement) {
+      const category = target.dataset.searchCategory as SearchCategory | undefined;
+      if (category === 'tags' || category === 'contents' || category === 'description') {
+        setSearchCategory(category, target.checked);
+      }
       return;
     }
 

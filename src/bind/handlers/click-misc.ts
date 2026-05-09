@@ -63,6 +63,15 @@ export function bindClickMisc(app: HTMLElement): void {
     if (!target.closest('.component-picker')) {
       closeOtherComponentPickers(app);
     }
+    if (target.closest('.hvy-context-popover')) {
+      return;
+    }
+    if (state.contextMenu && !target.closest('.hvy-context-popover')) {
+      state.contextMenu = null;
+      app.querySelector('.hvy-context-popover')?.remove();
+      getRenderApp()();
+      return;
+    }
     if (target.closest('.editor-sidebar-help-balloon')) {
       dismissSidebarHelpBalloon(app, 'editor');
       return;

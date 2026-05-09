@@ -4,6 +4,7 @@ import { serializeDocument } from '../src/serialization';
 import { initCallbacks, initState, state } from '../src/state';
 import type { AppState, VisualDocument } from '../src/types';
 import { createDefaultChatState } from '../src/chat/chat';
+import { createDefaultSearchState } from '../src/search/state';
 
 export function createTestState(document: VisualDocument): AppState {
   return {
@@ -13,6 +14,7 @@ export function createTestState(document: VisualDocument): AppState {
     editorMode: 'basic',
     responsivePreview: 'full',
     chat: createDefaultChatState(),
+    search: createDefaultSearchState(),
     aiEdit: {
       sectionKey: null,
       blockId: null,

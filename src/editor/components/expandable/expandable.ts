@@ -36,6 +36,20 @@ export const renderExpandableEditor: ComponentEditorRenderer = (sectionKey, bloc
       <span>Always show</span>
     </label>
     <label class="expandable-pane-css-field">
+      <span class="description-label-with-action">Description${
+        block.schema.expandableStubDescription.trim()
+          ? ''
+          : ` <button type="button" class="ghost inline-generate-description" data-action="generate-expandable-pane-description" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}" data-expandable-pane="stub">Generate</button>`
+      }</span>
+      <textarea
+        rows="2"
+        data-section-key="${helpers.escapeAttr(sectionKey)}"
+        data-block-id="${helpers.escapeAttr(block.id)}"
+        data-field="block-expandable-stub-description"
+        ${disabledAttr}
+      >${helpers.escapeHtml(block.schema.expandableStubDescription)}</textarea>
+    </label>
+    <label class="expandable-pane-css-field">
       <span>CSS</span>
       <textarea
         rows="2"
@@ -53,6 +67,20 @@ export const renderExpandableEditor: ComponentEditorRenderer = (sectionKey, bloc
     block.id,
     helpers,
     `<label class="expandable-pane-css-field">
+      <span class="description-label-with-action">Description${
+        block.schema.expandableContentDescription.trim()
+          ? ''
+          : ` <button type="button" class="ghost inline-generate-description" data-action="generate-expandable-pane-description" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}" data-expandable-pane="expanded">Generate</button>`
+      }</span>
+      <textarea
+        rows="2"
+        data-section-key="${helpers.escapeAttr(sectionKey)}"
+        data-block-id="${helpers.escapeAttr(block.id)}"
+        data-field="block-expandable-content-description"
+        ${disabledAttr}
+      >${helpers.escapeHtml(block.schema.expandableContentDescription)}</textarea>
+    </label>
+    <label class="expandable-pane-css-field">
       <span>CSS</span>
       <textarea
         rows="2"
@@ -163,6 +191,9 @@ function renderExpandablePaneMeta(
 export const renderExpandableReader: ComponentReaderRenderer = (section, block, helpers) => {
   const stubHtml = helpers.renderReaderBlocks(section, block.schema.expandableStubBlocks.children);
   const contentHtml = helpers.renderReaderBlocks(section, block.schema.expandableContentBlocks.children);
+  if (!stubHtml.trim() && !contentHtml.trim()) {
+    return '';
+  }
   const expanded = block.schema.expandableExpanded;
   const alwaysShowStub = block.schema.expandableAlwaysShowStub;
   const stubPaneStyle = helpers.escapeAttr(sanitizeInlineCss(block.schema.expandableStubCss));

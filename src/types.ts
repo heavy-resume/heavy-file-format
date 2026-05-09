@@ -1,5 +1,6 @@
 import type { BlockSchema, VisualBlock, VisualSection } from './editor/types';
 import type { JsonObject } from './hvy/types';
+import type { SearchState } from './search/types';
 
 export interface DocumentAttachment {
   id: string;
@@ -197,6 +198,8 @@ export interface AppState {
   responsivePreview: 'full' | 'phone' | 'tablet' | 'desktop';
   chat: ChatState;
   aiEdit: AiEditState;
+  contextMenu?: ContextMenuState | null;
+  search: SearchState;
   paneScroll: PaneScrollState;
   showAdvancedEditor: boolean;
   rawEditorText: string;
@@ -217,6 +220,15 @@ export interface AppState {
   tempHighlights: Set<string>;
   addComponentBySection: Record<string, string>;
   metaPanelOpen: boolean;
+  descriptionPopulate?: {
+    isRunning: boolean;
+    status: string | null;
+    completed: number;
+    total: number;
+    current: string;
+    skippedLeaves: number;
+    lastGenerated: string;
+  };
   selectedReusableComponentName: string | null;
   templateValues: Record<string, string>;
   history: string[];
@@ -240,4 +252,12 @@ export interface AppState {
   lastHistoryGroup: string | null;
   lastHistoryAt: number;
   pendingEditorCenterSectionKey: string | null;
+}
+
+export interface ContextMenuState {
+  kind: 'filter' | 'ai';
+  sectionKey: string;
+  blockId?: string;
+  x: number;
+  y: number;
 }

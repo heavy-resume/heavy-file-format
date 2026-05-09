@@ -13,7 +13,7 @@
   --hvy-accent-1-text: #202020;
   --hvy-accent-2: rgb(75, 78, 226);
   --hvy-accent-2-alt: #5f4dec;
-  --hvy-button-bg: rgb(24, 192, 156);
+  --hvy-button-bg: #63c59b;
   --hvy-button-text: #202020;
   --hvy-highlight-1: rgba(0, 255, 0, 0.18);
   --hvy-highlight-2: rgba(255, 221, 26, 0.35);
@@ -22,7 +22,7 @@
   --hvy-border-input: rgba(0, 0, 0, 0.2);
   --hvy-border-translucent: rgba(22, 22, 22, 0.68);
   --hvy-xref-card-bg: #c5dacf;
-  --hvy-xref-card-hover-bg: rgba(0, 255, 200, 0.28);
+  --hvy-xref-card-hover-bg: rgba(0, 255, 200, 0.6);
   --hvy-table-header: #a3ccb6;
   --hvy-table-row-bg-1: #d9dfe2;
   --hvy-table-row-bg-2: #c5dacf;

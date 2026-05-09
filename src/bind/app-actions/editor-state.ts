@@ -92,14 +92,18 @@ async function generateSectionDescriptionAsync(actionButton: HTMLElement, sectio
     return;
   }
   setGenerateButtonBusy(actionButton, true);
-  recordHistory(`section:${sectionKey}:description:generate`);
-  section.description = await generateDescription(buildDescriptionRequest({
-    document: state.document,
-    section,
-    kind: 'section',
-  }));
-  getRefreshReaderPanels()();
-  updateDescriptionFieldDom(actionButton, section.description);
+  try {
+    recordHistory(`section:${sectionKey}:description:generate`);
+    section.description = await generateDescription(buildDescriptionRequest({
+      document: state.document,
+      section,
+      kind: 'section',
+    }));
+    getRefreshReaderPanels()();
+    updateDescriptionFieldDom(actionButton, section.description);
+  } catch (error) {
+    setGenerateButtonError(actionButton, error);
+  }
 }
 
 const generateBlockDescription: AppActionHandler = ({ actionButton, sectionKey, blockId }) => {
@@ -113,16 +117,20 @@ async function generateBlockDescriptionAsync(actionButton: HTMLElement, sectionK
     return;
   }
   setGenerateButtonBusy(actionButton, true);
-  recordHistory(`block:${blockId}:description:generate`);
-  block.schema.description = await generateDescription(buildDescriptionRequest({
-    document: state.document,
-    section,
-    block,
-    kind: 'block',
-    parentTrail: [section.title],
-  }));
-  getRefreshReaderPanels()();
-  updateDescriptionFieldDom(actionButton, block.schema.description);
+  try {
+    recordHistory(`block:${blockId}:description:generate`);
+    block.schema.description = await generateDescription(buildDescriptionRequest({
+      document: state.document,
+      section,
+      block,
+      kind: 'block',
+      parentTrail: [section.title],
+    }));
+    getRefreshReaderPanels()();
+    updateDescriptionFieldDom(actionButton, block.schema.description);
+  } catch (error) {
+    setGenerateButtonError(actionButton, error);
+  }
 }
 
 const generateExpandablePaneDescription: AppActionHandler = ({ actionButton, sectionKey, blockId }) => {
@@ -143,21 +151,25 @@ async function generateExpandablePaneDescriptionAsync(actionButton: HTMLElement,
     return;
   }
   setGenerateButtonBusy(actionButton, true);
-  recordHistory(`block:${blockId}:expandable-${pane}:description:generate`);
-  const description = await generateDescription(buildDescriptionRequest({
-    document: state.document,
-    section,
-    block,
-    kind: pane === 'stub' ? 'expandable-stub' : 'expandable-content',
-    parentTrail: [section.title],
-  }));
-  if (pane === 'stub') {
-    block.schema.expandableStubDescription = description;
-  } else {
-    block.schema.expandableContentDescription = description;
+  try {
+    recordHistory(`block:${blockId}:expandable-${pane}:description:generate`);
+    const description = await generateDescription(buildDescriptionRequest({
+      document: state.document,
+      section,
+      block,
+      kind: pane === 'stub' ? 'expandable-stub' : 'expandable-content',
+      parentTrail: [section.title],
+    }));
+    if (pane === 'stub') {
+      block.schema.expandableStubDescription = description;
+    } else {
+      block.schema.expandableContentDescription = description;
+    }
+    getRefreshReaderPanels()();
+    updateDescriptionFieldDom(actionButton, description);
+  } catch (error) {
+    setGenerateButtonError(actionButton, error);
   }
-  getRefreshReaderPanels()();
-  updateDescriptionFieldDom(actionButton, description);
 }
 
 function updateDescriptionFieldDom(actionButton: HTMLElement, description: string): void {
@@ -172,6 +184,13 @@ function updateDescriptionFieldDom(actionButton: HTMLElement, description: strin
 function setGenerateButtonBusy(actionButton: HTMLElement, busy: boolean): void {
   actionButton.toggleAttribute('disabled', busy);
   actionButton.textContent = busy ? 'Generating...' : 'Generate';
+  actionButton.removeAttribute('title');
+}
+
+function setGenerateButtonError(actionButton: HTMLElement, error: unknown): void {
+  actionButton.toggleAttribute('disabled', false);
+  actionButton.textContent = 'Generate failed';
+  actionButton.title = error instanceof Error ? error.message : 'Description generation failed.';
 }
 
 export const editorStateActions: Record<string, AppActionHandler> = {

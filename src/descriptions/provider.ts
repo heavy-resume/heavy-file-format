@@ -1,5 +1,4 @@
 import { getReferenceAppConfig } from '../reference-config';
-import { buildProviderProxyRequest } from '../chat/chat-provider-payload';
 import type { VisualBlock, VisualSection } from '../editor/types';
 import type { VisualDocument } from '../types';
 import type { HvyDescriptionProvider, HvyDescriptionRequest, HvyDescriptionResponse, HvyDescriptionTargetKind } from './types';
@@ -13,14 +12,14 @@ export const localDescriptionProvider: HvyDescriptionProvider = (request) => ({
 
 export const openAiDescriptionProvider: HvyDescriptionProvider = async (request) => {
   if (typeof fetch !== 'function') {
-    return localDescriptionProvider(request);
+    throw new Error('Description generation requires the local chat proxy.');
   }
   const response = await fetch('/api/chat', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify(buildProviderProxyRequest({
+    body: JSON.stringify({
       provider: 'openai',
       model: DEFAULT_DESCRIPTION_MODEL,
       mode: 'qa',
@@ -30,15 +29,21 @@ export const openAiDescriptionProvider: HvyDescriptionProvider = async (request)
         role: 'user',
         content: 'Write the description now.',
       }],
-    })),
+    }),
     signal: request.signal,
   });
   const payload = await response.json().catch(() => null) as { output?: unknown; error?: unknown } | null;
   if (!response.ok || typeof payload?.output !== 'string') {
-    return localDescriptionProvider(request);
+    const message = typeof payload?.error === 'string' && payload.error.trim()
+      ? payload.error.trim()
+      : 'Description generation failed.';
+    throw new Error(message);
   }
   const description = cleanDescription(payload.output);
-  return { description: description || buildLocalDescription(request) };
+  if (!description) {
+    throw new Error('Description generation returned no text.');
+  }
+  return { description };
 };
 
 export function getDescriptionProvider(): HvyDescriptionProvider {
@@ -67,7 +72,11 @@ export function buildDescriptionRequest(params: {
 export async function generateDescription(request: HvyDescriptionRequest): Promise<string> {
   const provider = getDescriptionProvider();
   const response: HvyDescriptionResponse = await provider(request);
-  return cleanDescription(response.description) || buildLocalDescription(request);
+  const description = cleanDescription(response.description);
+  if (!description) {
+    throw new Error('Description generation returned no text.');
+  }
+  return description;
 }
 
 function buildDescriptionPrompt(request: HvyDescriptionRequest): string {

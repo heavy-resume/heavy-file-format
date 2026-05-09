@@ -6,6 +6,7 @@ import {
   buildAnthropicProxyRequest,
   buildOpenAiProxyRequest,
   buildQwenProxyRequest,
+  type OpenAiReasoningEffort,
 } from '../src/chat/chat-provider-payload';
 import {
   buildInitialProviderToolState,
@@ -62,6 +63,7 @@ interface ProxyChatRequest {
   }>;
   traceRunId?: string;
   context: string;
+  openAiReasoningEffort?: OpenAiReasoningEffort;
   tools?: ProviderToolDefinition[];
   toolState?: ProviderToolState;
 }
@@ -686,6 +688,14 @@ function validateProxyChatRequest(payload: unknown): ProxyChatRequest {
     context: record.context,
     messages,
   };
+  if (
+    record.openAiReasoningEffort === 'none'
+    || record.openAiReasoningEffort === 'low'
+    || record.openAiReasoningEffort === 'medium'
+    || record.openAiReasoningEffort === 'high'
+  ) {
+    request.openAiReasoningEffort = record.openAiReasoningEffort;
+  }
   if (Array.isArray(record.tools)) {
     request.tools = validateProviderToolDefinitions(record.tools);
   }

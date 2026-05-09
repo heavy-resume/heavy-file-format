@@ -240,6 +240,16 @@ test('document ai context is editable metadata and keeps focus while typing', as
 });
 
 test('description generate button appears only for empty component descriptions', async ({ page }) => {
+  await page.route('**/api/chat', async (route) => {
+    const payload = route.request().postDataJSON() as { model?: string; openAiReasoningEffort?: string };
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        output: `AI description from ${payload.model} with reasoning ${payload.openAiReasoningEffort}`,
+      }),
+    });
+  });
   await page.goto('/');
 
   await page.getByRole('button', { name: 'Raw' }).click();
@@ -267,7 +277,7 @@ hvy_version: 0.1
 
   await metaModal.locator('[data-action="generate-block-description"]').click();
   await expect(metaModal.locator('[data-action="generate-block-description"]')).toHaveCount(0);
-  await expect(metaModal.locator('[data-field="block-description"]')).toHaveValue(/empty-description - text .* Empty description body/);
+  await expect(metaModal.locator('[data-field="block-description"]')).toHaveValue('AI description from gpt-5.4-nano with reasoning none');
   await expect(activeBlock).toHaveAttribute('data-active-editor-block', 'true');
 
   await page.getByRole('button', { name: 'Close' }).click();

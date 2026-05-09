@@ -1,11 +1,16 @@
-import { afterEach, expect, test } from 'vitest';
+import { afterEach, expect, test, vi } from 'vitest';
 
 import { setReferenceAppConfig } from '../src/reference-config';
 import { deserializeDocument } from '../src/serialization';
 import { populateMissingDescriptions } from '../src/descriptions/populate';
+import { buildDescriptionRequest, openAiDescriptionProvider } from '../src/descriptions/provider';
+
+const originalFetch = globalThis.fetch;
 
 afterEach(() => {
   setReferenceAppConfig(null);
+  globalThis.fetch = originalFetch;
+  vi.restoreAllMocks();
 });
 
 test('populateMissingDescriptions fills only missing component descriptions through the configured provider', async () => {
@@ -72,4 +77,42 @@ hvy_version: 0.1
   expect(block.schema.expandableContentDescription).toBe('generated expandable-content');
   expect(block.schema.expandableStubBlocks.children[0]!.schema.description).toBe('generated block');
   expect(block.schema.expandableContentBlocks.children[0]!.schema.description).toBe('generated block');
+});
+
+test('openAiDescriptionProvider sends the app proxy payload with reasoning disabled', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"skills"}-->
+#! Skills
+
+<!--hvy:text {"id":"typescript"}-->
+ TypeScript
+`, '.hvy');
+  globalThis.fetch = vi.fn(async () => new Response(JSON.stringify({ output: 'TypeScript skill summary' }), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  })) as typeof fetch;
+
+  const expectedResult = await openAiDescriptionProvider(buildDescriptionRequest({
+    document,
+    section: document.sections[0]!,
+    block: document.sections[0]!.blocks[0]!,
+    kind: 'block',
+    parentTrail: ['Skills'],
+  }));
+
+  expect(expectedResult.description).toBe('TypeScript skill summary');
+  expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+  const [, init] = vi.mocked(globalThis.fetch).mock.calls[0]!;
+  const payload = JSON.parse(String(init?.body));
+  expect(payload).toMatchObject({
+    provider: 'openai',
+    model: 'gpt-5.4-nano',
+    mode: 'qa',
+    openAiReasoningEffort: 'none',
+    messages: [{ role: 'user', content: 'Write the description now.' }],
+  });
+  expect(payload).not.toHaveProperty('input');
 });

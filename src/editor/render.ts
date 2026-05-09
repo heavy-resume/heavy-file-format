@@ -744,7 +744,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         </label>
         <div class="editor-grid">
           <label>
-            <span>Search Descriptions</span>
+            <span>Empty Descriptions</span>
             <button
               type="button"
               class="ghost"

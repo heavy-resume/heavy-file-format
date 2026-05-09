@@ -1348,6 +1348,16 @@
   gap: 0.65rem;
 }
 
+.document-meta-view {
+  min-height: 100%;
+  max-width: 58rem;
+  margin: 0 auto;
+}
+
+.document-meta-view .meta-panel {
+  margin-bottom: 0;
+}
+
 .template-title {
   font-weight: 700;
   margin-bottom: 0.5rem;

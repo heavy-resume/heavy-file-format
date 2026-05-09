@@ -320,6 +320,10 @@ hvy_version: 0.1
   await page.getByRole('button', { name: 'Advanced' }).click();
   await page.getByRole('button', { name: 'Document Meta' }).click();
 
+  await expect(page.locator('.document-meta-view')).toBeVisible();
+  await expect(page.locator('#editorTree')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Open chat' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Open search' })).toHaveCount(0);
   await page.getByRole('button', { name: 'Populate Missing' }).click();
 
   await expect(page.locator('.meta-panel')).toContainText('Generated 2 missing descriptions.');

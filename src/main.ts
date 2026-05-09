@@ -482,6 +482,7 @@ function renderApp(): void {
   const isMobileAdjustmentEditor = state.editorMode === 'mobile-adjustment';
   const isRawEditor = state.editorMode === 'raw';
   const isCliEditor = state.editorMode === 'cli';
+  const isDocumentMetaView = isEditorView && isAdvancedEditor && state.metaPanelOpen;
   const canPreviewSurface = !isEditorView || (!isRawEditor && !isCliEditor);
 
   stepStartedAt = performance.now();
@@ -540,7 +541,7 @@ function renderApp(): void {
           }
         </div>
         <div${renderResponsivePreviewFrameAttrs(`pane ${isEditorView ? 'editor-pane' : 'reader-pane'} full-pane`)}>
-          ${isCliEditor ? '' : renderCollapsedSearchBar(state.search, { escapeHtml })}
+          ${isCliEditor || isDocumentMetaView ? '' : renderCollapsedSearchBar(state.search, { escapeHtml })}
           ${
             isEditorView
               ? `${isRawEditor
@@ -581,8 +582,9 @@ function renderApp(): void {
                       escapeHtml,
                       escapeAttr,
                     })
+                  : isDocumentMetaView
+                  ? `<div class="document-meta-view">${editorRenderer.renderMetaPanel()}</div>`
                   : `${isAdvancedEditor ? renderTemplatePanel(templateFields, state.templateValues, { escapeAttr, escapeHtml }) : ''}
-                ${isAdvancedEditor && state.metaPanelOpen ? editorRenderer.renderMetaPanel() : ''}
                 <div${renderResponsivePreviewFrameAttrs(`editor-shell ${state.editorSidebarOpen ? 'is-sidebar-open' : 'is-sidebar-closed'}`)}>
                   <div class="editor-sidebar-backdrop" data-action="toggle-editor-sidebar"></div>
                   <aside class="editor-sidebar">
@@ -615,7 +617,7 @@ function renderApp(): void {
                  </div>`
           }
           ${
-            isCliEditor
+            isCliEditor || isDocumentMetaView
               ? ''
               : `${renderChatPanel(
                   state.chat,

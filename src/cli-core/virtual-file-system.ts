@@ -783,6 +783,8 @@ function applyBlockSchemaJson(schema: BlockSchema, component: string, value: Jso
   if (value.pluginConfig && typeof value.pluginConfig === 'object' && !Array.isArray(value.pluginConfig)) {
     schema.pluginConfig = value.pluginConfig as JsonObject;
   }
+  if (typeof value.expandableStubDescription === 'string') schema.expandableStubDescription = value.expandableStubDescription;
+  if (typeof value.expandableContentDescription === 'string') schema.expandableContentDescription = value.expandableContentDescription;
 }
 
 function readBlockBodyText(block: VisualBlock): string {

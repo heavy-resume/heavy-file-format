@@ -468,15 +468,18 @@ function parseBlocks(
         );
         const part: 0 | 1 = rawParts[0] === 'stub' ? 0 : 1;
         const keys = Object.keys(parsed);
-        const slotMetadataOnly = keys.every((key) => key === 'lock' || key === 'css');
+        const slotMetadataOnly = keys.every((key) => key === 'lock' || key === 'css' || key === 'description');
         if (!slotMetadataOnly) {
           return;
         }
         const slotCss = typeof parsed.css === 'string' ? parsed.css : '';
+        const slotDescription = typeof parsed.description === 'string' ? parsed.description : '';
         if (part === 0) {
           parent.schema.expandableStubCss = slotCss;
+          parent.schema.expandableStubDescription = slotDescription;
         } else {
           parent.schema.expandableContentCss = slotCss;
+          parent.schema.expandableContentDescription = slotDescription;
         }
         frames.push({
           kind: 'slot-expandable',
@@ -1269,8 +1272,12 @@ function serializeSlotWithChild(name: string, schema: JsonObject, child: VisualB
 function buildExpandablePartPayload(expandableBlock: VisualBlock, part: 0 | 1): JsonObject {
   const payload: JsonObject = {};
   const css = part === 0 ? expandableBlock.schema.expandableStubCss : expandableBlock.schema.expandableContentCss;
+  const description = part === 0 ? expandableBlock.schema.expandableStubDescription : expandableBlock.schema.expandableContentDescription;
   if (css.trim().length > 0) {
     payload.css = css;
+  }
+  if (description.trim().length > 0) {
+    payload.description = description;
   }
   return payload;
 }

@@ -56,10 +56,12 @@ export interface BlockSchema {
   expandableContentComponent: string;
   expandableStub: string;
   expandableStubCss: string;
+  expandableStubDescription: string;
   expandableStubBlocks: ExpandablePart;
   expandableAlwaysShowStub: boolean;
   expandableExpanded: boolean;
   expandableContentCss: string;
+  expandableContentDescription: string;
   expandableContentBlocks: ExpandablePart;
   tableColumns: string[];
   tableShowHeader: boolean;

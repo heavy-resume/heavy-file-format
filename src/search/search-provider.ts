@@ -188,7 +188,11 @@ function getBlockCandidates(block: VisualBlock, category: SearchCategory): Array
     return [{ field: 'tags', label: FIELD_LABELS.tags, value: block.schema.tags }];
   }
   if (category === 'description') {
-    return [{ field: 'description', label: FIELD_LABELS.description, value: block.schema.description }];
+    return [
+      { field: 'description', label: FIELD_LABELS.description, value: block.schema.description },
+      { field: 'expandableStubDescription', label: 'Stub description', value: block.schema.expandableStubDescription },
+      { field: 'expandableContentDescription', label: 'Expanded description', value: block.schema.expandableContentDescription },
+    ];
   }
   return [
     { field: 'text', label: FIELD_LABELS.text, value: block.text },

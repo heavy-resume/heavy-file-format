@@ -366,6 +366,16 @@ export function bindInputMisc(app: HTMLElement): void {
       return;
     }
 
+    if (field === 'block-expandable-stub-description' && (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) {
+      const context = resolveBlockContext(target);
+      if (!context) {
+        return;
+      }
+      context.block.schema.expandableStubDescription = target.value;
+      syncReusableTemplateForBlock(sectionKey, context.block.id);
+      return;
+    }
+
     if (field === 'block-expandable-content-css' && (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) {
       const context = resolveBlockContext(target);
       if (!context) {
@@ -374,6 +384,16 @@ export function bindInputMisc(app: HTMLElement): void {
       context.block.schema.expandableContentCss = target.value;
       syncReusableTemplateForBlock(sectionKey, context.block.id);
       getRefreshReaderPanels()();
+      return;
+    }
+
+    if (field === 'block-expandable-content-description' && (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) {
+      const context = resolveBlockContext(target);
+      if (!context) {
+        return;
+      }
+      context.block.schema.expandableContentDescription = target.value;
+      syncReusableTemplateForBlock(sectionKey, context.block.id);
       return;
     }
 

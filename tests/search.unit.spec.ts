@@ -165,9 +165,9 @@ hvy_version: 0.1
   });
 
   expect(expectedMarkup).toContain('<span class="search-result-title">Northwind Labs skills list</span>');
-  expect(expectedMarkup).toContain('<span class="search-result-snippet-label">Title</span>');
+  expect(expectedMarkup).not.toContain('<span class="search-result-snippet-label">Title</span>');
   expect(expectedMarkup).toContain('<mark class="search-match-marker">TypeScript</mark>');
-  expect(expectedMarkup.indexOf('Northwind Labs skills list')).toBeLessThan(expectedMarkup.indexOf('search-result-snippet-label'));
+  expect(expectedMarkup.indexOf('Northwind Labs skills list')).toBeLessThan(expectedMarkup.indexOf('<mark class="search-match-marker">TypeScript</mark>'));
 });
 
 test('built-in search uses nearest described ancestor as child match location', async () => {

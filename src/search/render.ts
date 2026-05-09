@@ -273,10 +273,7 @@ function getResultFields(result: HvySearchResult): string[] {
   const fields = result.matches?.length
     ? result.matches.map((match) => match.label).filter((label, index, labels) => labels.indexOf(label) === index)
     : [result.sourceField].filter(Boolean);
-  if (result.category === 'contents' && fields.length === 1 && (fields[0] === 'Text' || fields[0] === 'Title')) {
-    return [];
-  }
-  return fields;
+  return fields.filter((field) => !isLowValueContentField(result, field));
 }
 
 function shouldUseDescriptionAsLocation(description: string, result: HvySearchResult): boolean {
@@ -316,11 +313,15 @@ function renderResultMatchSnippets(result: HvySearchResult, search: SearchState,
   return `<span class="search-result-snippets">
     ${visibleMatches.map((match) => `
       <span class="search-result-snippet">
-        <span class="search-result-snippet-label">${deps.escapeHtml(match.label)}</span>
+        ${isLowValueContentField(result, match.label) ? '' : `<span class="search-result-snippet-label">${deps.escapeHtml(match.label)}</span>`}
         <span>${highlightPlainText(match.preview, search.submittedQuery, search.caseSensitive, deps.escapeHtml)}</span>
       </span>
     `).join('')}
   </span>`;
+}
+
+function isLowValueContentField(result: HvySearchResult, field: string): boolean {
+  return result.category === 'contents' && (field === 'Text' || field === 'Title');
 }
 
 function getResultLocationLabel(

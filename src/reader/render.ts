@@ -264,7 +264,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
               ? viewCollapseAttrs
               : `data-reader-action="toggle-expand" data-section-key="${deps.escapeAttr(section.key)}"`} aria-label="${
           sectionExpanded ? 'Collapse section' : 'Expand section'
-        }">${sectionExpanded ? '+' : '-'}</button>
+        }">${sectionExpanded ? '-' : '+'}</button>
           </div>
         </header>
       `
@@ -423,11 +423,16 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
   function renderReaderViewCollapseWrapper(targetKey: ReaderViewTargetKey, block: VisualBlock, body: string): string {
     const key = `reader-view-collapse:${targetKey}`;
     const expanded = state.readerContainerState[key] ?? false;
-    const className = `reader-container reader-view-collapse-wrapper ${expanded ? 'is-expanded' : 'is-collapsed-preview'}`;
+    const className = `reader-container reader-view-collapse-wrapper is-collapsible ${expanded ? 'is-expanded' : 'is-collapsed-preview'}`;
     const title = block.schema.id.trim() || block.schema.xrefTitle.trim() || block.schema.containerTitle.trim() || block.schema.component;
     const attrs = `data-reader-action="toggle-view-collapse" data-reader-view-target="${deps.escapeAttr(targetKey)}" data-reader-view-collapse-key="${deps.escapeAttr(key)}" aria-expanded="${expanded ? 'true' : 'false'}"`;
     return `<div class="${deps.escapeAttr(className)}" style="--hvy-container-preview-rem: 3rem;">
-      <button type="button" class="reader-container-title" ${attrs}>${deps.escapeHtml(title)}</button>
+      <header class="reader-container-head">
+        <div class="reader-container-title">${deps.escapeHtml(title)}</div>
+        <div class="reader-container-actions">
+          <button type="button" class="tiny toggle-expand-button reader-container-toggle" ${attrs} aria-label="${expanded ? 'Collapse component' : 'Expand component'}">${expanded ? '-' : '+'}</button>
+        </div>
+      </header>
       <div class="reader-container-body" ${expanded ? '' : attrs}>${body}</div>
     </div>`;
   }

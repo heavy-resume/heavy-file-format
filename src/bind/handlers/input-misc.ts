@@ -1,6 +1,7 @@
 import { state, incrementInputEventCount, getRenderApp, getRefreshReaderPanels, handleTagEditorInput, findSectionByKey, getReusableNameFromSectionKey, resolveBlockContext, handleBlockFieldInput, refreshRichToolbarState, recordHistory, syncReusableTemplateForBlock, sanitizeOptionalId, tagStateHelpers } from './_imports';
 import { SCRIPTING_PLUGIN_ID } from '../../plugins/registry';
 import { SCRIPTING_PLUGIN_VERSION } from '../../plugins/scripting/version';
+import { addDefaultContainerBorderCss, removeDefaultContainerBorderCss } from '../../editor/components/container/container-css';
 
 export function bindInputMisc(app: HTMLElement): void {
   app.addEventListener('input', (event) => {
@@ -263,6 +264,23 @@ export function bindInputMisc(app: HTMLElement): void {
       context.block.schema.containerTitle = target.value;
       syncReusableTemplateForBlock(sectionKey, context.block.id);
       getRefreshReaderPanels()();
+      return;
+    }
+
+    if (field === 'block-container-border' && target instanceof HTMLInputElement) {
+      const context = resolveBlockContext(target);
+      if (!context) {
+        return;
+      }
+      context.block.schema.css = target.checked
+        ? addDefaultContainerBorderCss(context.block.schema.css)
+        : removeDefaultContainerBorderCss(context.block.schema.css);
+      if (!target.checked) {
+        context.block.schema.containerExpanded = false;
+      }
+      syncReusableTemplateForBlock(sectionKey, context.block.id);
+      getRefreshReaderPanels()();
+      getRenderApp()();
       return;
     }
 

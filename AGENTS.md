@@ -58,3 +58,5 @@ When creating new input components, always jazz it up. Anything default browser 
 Animations, colors, highlights, etc all have examples. Use them!
 
 Make sure stuff isn't losing focus after each keystroke. This is a common, reoccuring problem!
+
+If the instructions say "on the mobile layout ..." it really means "on smaller screens or using the phone emulator" and media selectors should always use container, or not use a media selector at all.

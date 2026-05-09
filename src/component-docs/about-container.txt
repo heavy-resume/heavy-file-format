@@ -2,8 +2,10 @@
 Groups nested HVY components.
 Use children-order.json to reorder container children.
 containerBlocks holds the child block array.
-containerTitle is an optional reader label for the collapse/expand control.
-containerExpanded stores the default expanded state.
+containerTitle is an optional reader label.
+Reader collapse/expand controls are shown when the container has a border.
+The reference editor's Border toggle writes sane default border CSS to css.
+containerExpanded stores the default expanded state for bordered containers.
 containerCollapsedPreviewRem controls the collapsed preview height in rem units and defaults to 3.
 Plain Markdown before the first numbered container slot is treated as the first implicit child block.
 Numbered container slots order children by their numeric suffix; slot markers carry only slot metadata.

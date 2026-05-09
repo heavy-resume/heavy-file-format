@@ -285,7 +285,7 @@ hvy_version: 0.1
   await expect(groups).toHaveCount(2);
   await expect(groups.nth(0).locator('.reader-container-title')).toHaveText('Language');
   await expect(groups.nth(1).locator('.reader-container-title')).toHaveText('Database');
-  await expect(groups.nth(0).locator('.reader-container-title')).toHaveAttribute('aria-expanded', 'false');
+  await expect(groups.nth(0).locator('.reader-container-toggle')).toHaveAttribute('aria-expanded', 'false');
 
   await readerControls.locator('[data-reader-action="toggle-component-list-reverse"]').click();
   await expect(readerControls.locator('[data-reader-action="toggle-component-list-reverse"]')).toHaveAttribute('aria-label', 'Sort ascending');
@@ -298,9 +298,9 @@ hvy_version: 0.1
 
   await readerControls.locator('[data-field="component-list-reader-group"]').selectOption('Category');
 
-  await groups.nth(0).locator('.reader-container-title').click();
+  await groups.nth(0).locator('.reader-container-toggle').click();
 
-  await expect(groups.nth(0).locator('.reader-container-title')).toHaveAttribute('aria-expanded', 'true');
+  await expect(groups.nth(0).locator('.reader-container-toggle')).toHaveAttribute('aria-expanded', 'true');
   await expect(groups.nth(0)).toContainText('PostgreSQL');
   await expect(groups.nth(0)).toContainText('SQLite');
 });
@@ -1150,7 +1150,7 @@ test('resume reader view buttons apply filters without changing edit mode', asyn
   await expect(page.locator('#top-skills-tools-technologies')).toContainText('LLM Prompt Engineering');
   await expect(page.locator('#tools-technologies')).not.toHaveClass(/is-collapsed-preview/);
   await expect(
-    page.locator('#tools-technologies .reader-container', { has: page.getByRole('button', { name: 'AI / Agent Tooling' }) }).first()
+    page.locator('#tools-technologies .reader-container', { hasText: 'AI / Agent Tooling' }).first()
   ).toHaveClass(/is-expanded/);
   const sidebarSectionIds = await page.locator('#readerSidebarSections section[id]').evaluateAll((nodes) => nodes.map((node) => node.id));
   expect(sidebarSectionIds).toEqual(['locations', 'skills', 'tools-technologies']);

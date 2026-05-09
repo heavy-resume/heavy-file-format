@@ -55,6 +55,7 @@ export function bindUi(app: HTMLElement): void {
     state.rawEditorError = null;
     state.rawEditorDiagnostics = [];
     state.filename = 'crm.hvy';
+    state.selectedExample = 'crm';
     state.history = [];
     state.future = [];
     clearChatConversation(state.chat);
@@ -70,6 +71,7 @@ export function bindUi(app: HTMLElement): void {
     state.rawEditorError = null;
     state.rawEditorDiagnostics = [];
     state.filename = 'resume.thvy';
+    state.selectedExample = 'resume-template';
     state.history = [];
     state.future = [];
     clearChatConversation(state.chat);
@@ -85,6 +87,7 @@ export function bindUi(app: HTMLElement): void {
     state.rawEditorError = null;
     state.rawEditorDiagnostics = [];
     state.filename = 'resume.hvy';
+    state.selectedExample = 'resume-example';
     state.history = [];
     state.future = [];
     clearChatConversation(state.chat);
@@ -104,31 +107,15 @@ export function bindUi(app: HTMLElement): void {
   };
 
   app.querySelector<HTMLButtonElement>('#typescriptResumeViewBtn')?.addEventListener('click', () => {
-    if (state.filename !== 'resume.hvy') {
-      state.document = deserializeDocument(bundledResumeHvy, '.hvy');
-      state.rawEditorText = serializeDocument(state.document);
-      state.rawEditorError = null;
-      state.rawEditorDiagnostics = [];
-      state.filename = 'resume.hvy';
-      state.history = [];
-      state.future = [];
-      clearChatConversation(state.chat);
-      resetTransientUiState();
+    if (state.selectedExample !== 'resume-example') {
+      return;
     }
     applyReaderView(resumeViews.typescript ?? {});
   });
 
   app.querySelector<HTMLButtonElement>('#llmEngineerResumeViewBtn')?.addEventListener('click', () => {
-    if (state.filename !== 'resume.hvy') {
-      state.document = deserializeDocument(bundledResumeHvy, '.hvy');
-      state.rawEditorText = serializeDocument(state.document);
-      state.rawEditorError = null;
-      state.rawEditorDiagnostics = [];
-      state.filename = 'resume.hvy';
-      state.history = [];
-      state.future = [];
-      clearChatConversation(state.chat);
-      resetTransientUiState();
+    if (state.selectedExample !== 'resume-example') {
+      return;
     }
     applyReaderView(resumeViews['llm-engineer'] ?? {});
   });
@@ -151,6 +138,7 @@ export function bindUi(app: HTMLElement): void {
     const text = new TextDecoder().decode(bytes);
     const extension = detectExtension(file.name, text);
     state.filename = extension === '.md' ? normalizeMarkdownImportFilename(file.name) : file.name;
+    state.selectedExample = 'custom';
     state.document = deserializeDocumentBytes(bytes, extension);
     state.rawEditorText = serializeDocument(state.document);
     state.rawEditorError = null;

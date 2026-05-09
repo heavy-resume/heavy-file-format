@@ -312,6 +312,7 @@ export function resetToBlankDocument(): void {
   state.rawEditorError = null;
   state.rawEditorDiagnostics = [];
   state.filename = 'untitled.hvy';
+  state.selectedExample = 'blank';
   state.history = [];
   state.future = [];
   clearChatConversation(state.chat);

@@ -31,6 +31,7 @@ hvy_version: 0.1
   saveResumeState({
     document,
     filename: 'saved.hvy',
+    selectedExample: 'resume-example',
     currentView: 'ai',
     editorMode: 'raw',
     showAdvancedEditor: true,
@@ -78,6 +79,7 @@ hvy_version: 0.1
   const resumed = loadResumeState();
 
   expect(resumed?.filename).toBe('saved.hvy');
+  expect(resumed?.selectedExample).toBe('resume-example');
   expect(resumed?.currentView).toBe('ai');
   expect(resumed?.editorMode).toBe('raw');
   expect(resumed?.showAdvancedEditor).toBe(true);

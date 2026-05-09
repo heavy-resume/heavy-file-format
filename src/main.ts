@@ -62,6 +62,7 @@ function createInitialState(document: ReturnType<typeof deserializeDocumentBytes
   return {
     document,
     filename: 'example.hvy',
+    selectedExample: 'default',
     currentView: 'editor',
     editorMode: 'basic',
     responsivePreview: 'full',
@@ -136,6 +137,7 @@ function applyResumeState(initial: AppState, resume: ReturnType<typeof loadResum
     ...initial,
     document: resume.document,
     filename: resume.filename,
+    selectedExample: resume.selectedExample,
     currentView: resume.currentView,
     editorMode: resume.editorMode,
     showAdvancedEditor: resume.showAdvancedEditor,
@@ -666,6 +668,9 @@ function renderPreviewControlStack(): string {
 }
 
 function renderReaderViewControls(): string {
+  if (state.selectedExample !== 'resume-example') {
+    return '';
+  }
   const selectedView = getSelectedReaderViewId();
   const renderButton = (id: string, label: string, selected: boolean): string =>
     `<button id="${escapeAttr(id)}" type="button" class="${selected ? 'secondary' : 'ghost'}" aria-pressed="${selected ? 'true' : 'false'}">${escapeHtml(label)}</button>`;

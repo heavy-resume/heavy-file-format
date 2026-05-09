@@ -172,6 +172,7 @@ export interface ThemeConfig {
 
 export type ReaderViewModifier = 'highlight' | 'priority' | 'collapse' | 'dimmed' | 'hidden';
 export type ReaderViewFilter = Record<string, ReaderViewModifier[]>;
+export type SelectedExample = 'default' | 'blank' | 'crm' | 'resume-template' | 'resume-example' | 'custom';
 
 export interface ComponentDefinition {
   name: string;
@@ -190,6 +191,7 @@ export interface SectionDefinition {
 export interface AppState {
   document: VisualDocument;
   filename: string;
+  selectedExample?: SelectedExample;
   currentView: 'editor' | 'viewer' | 'ai';
   editorMode: 'basic' | 'mobile-adjustment' | 'advanced' | 'raw' | 'cli';
   responsivePreview: 'full' | 'phone' | 'tablet' | 'desktop';

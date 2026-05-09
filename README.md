@@ -77,7 +77,7 @@ Reference app reader view filters are implementation-only and are not serialized
 - `dimmed`: visually dims the target and moves it after non-dimmed siblings while preserving dimmed relative order; clicking/tapping activates the target visually without moving it.
 - `hidden`: omits the target and wins over visible modifiers.
 
-Priority affects ordering only for sections and component-list items, preserving the authored order of ordinary block containers so headers and context stay with their content. Invalid reader-view targets warn in the console. The resume reference app includes two faux role filters in [`examples/resume-views.json`](examples/resume-views.json), exposed by `TypeScript View`, `LLM Engineer View`, and `Clear View` buttons next to the reader preview controls.
+Priority affects ordering only for sections and component-list items, preserving the authored order of ordinary block containers so headers and context stay with their content. Invalid reader-view targets warn in the console. The resume reference app includes two faux role filters in [`examples/resume-views.json`](examples/resume-views.json), exposed by `TypeScript View`, `LLM Engineer View`, and `No View` buttons next to the reader preview controls when the Resume Example is selected.
 
 ### Run
 

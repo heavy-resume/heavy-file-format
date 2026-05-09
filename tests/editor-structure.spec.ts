@@ -1114,6 +1114,10 @@ test('editing the second resume project does not duplicate it after done', async
 test('resume reader view buttons apply filters without changing edit mode', async ({ page }) => {
   await page.goto('/');
 
+  await expect(page.getByRole('button', { name: 'No View' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'TypeScript View' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'LLM Engineer View' })).toHaveCount(0);
+
   await page.getByRole('button', { name: 'Resume Example' }).click();
   await expect(page.getByRole('button', { name: 'No View' })).toHaveAttribute('aria-pressed', 'true');
   await page.getByRole('button', { name: 'TypeScript View' }).click();
@@ -1164,6 +1168,11 @@ test('resume reader view buttons apply filters without changing edit mode', asyn
   await page.getByRole('button', { name: 'No View' }).click();
   await expect(page.getByRole('button', { name: 'No View' })).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('#project-autonomous-agent-hackathon')).not.toHaveClass(/is-reader-view-dimmed/);
+
+  await page.getByRole('button', { name: 'CRM Example' }).click();
+  await expect(page.getByRole('button', { name: 'No View' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'TypeScript View' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'LLM Engineer View' })).toHaveCount(0);
 });
 
 test('populated component-list hides the list component type dropdown', async ({ page }) => {

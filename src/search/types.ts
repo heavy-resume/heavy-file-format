@@ -26,6 +26,7 @@ export interface HvySearchResult {
   sourceField: string;
   contextLabel?: string;
   matches?: HvySearchMatch[];
+  documentOrder?: number;
   sourceFile?: string;
   workspaceId?: string;
   score?: number;

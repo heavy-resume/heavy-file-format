@@ -121,13 +121,14 @@ export function selectAdjacentSearchResult(app: HTMLElement, direction: 1 | -1):
   if (!state.search.open || state.search.results.length === 0) {
     return;
   }
+  const orderedResults = getSearchNavigationResults(app);
   const currentIndex = state.search.activeResultId
-    ? state.search.results.findIndex((result) => result.id === state.search.activeResultId)
+    ? orderedResults.findIndex((result) => result.id === state.search.activeResultId)
     : -1;
   const nextIndex = currentIndex < 0
-    ? direction > 0 ? 0 : state.search.results.length - 1
-    : (currentIndex + direction + state.search.results.length) % state.search.results.length;
-  selectSearchResult(app, state.search.results[nextIndex]!.id);
+    ? direction > 0 ? 0 : orderedResults.length - 1
+    : (currentIndex + direction + orderedResults.length) % orderedResults.length;
+  selectSearchResult(app, orderedResults[nextIndex]!.id);
 }
 
 export function setSearchFilterEnabled(enabled: boolean): void {
@@ -154,4 +155,45 @@ function normalizeSearchResults(results: HvySearchResult[]): HvySearchResult[] {
     ...result,
     id: result.id.trim() || `search-${index + 1}`,
   }));
+}
+
+function getSearchNavigationResults(app: HTMLElement): HvySearchResult[] {
+  const viewOrder = getRenderedSearchTargetOrder(app);
+  return [...state.search.results].sort((left, right) => {
+    const leftKey = getSearchResultTargetKey(left);
+    const rightKey = getSearchResultTargetKey(right);
+    const leftViewOrder = viewOrder.get(leftKey);
+    const rightViewOrder = viewOrder.get(rightKey);
+    if (leftViewOrder !== undefined || rightViewOrder !== undefined) {
+      return (leftViewOrder ?? Number.MAX_SAFE_INTEGER) - (rightViewOrder ?? Number.MAX_SAFE_INTEGER);
+    }
+    return (left.documentOrder ?? 0) - (right.documentOrder ?? 0);
+  });
+}
+
+function getRenderedSearchTargetOrder(app: HTMLElement): Map<string, number> {
+  const order = new Map<string, number>();
+  const selector = [
+    '#readerDocument [data-section-key]',
+    '#readerSidebarSections [data-section-key]',
+    '#aiReaderDocument [data-section-key]',
+    '#aiSidebarSections [data-section-key]',
+  ].join(', ');
+  app.querySelectorAll<HTMLElement>(selector).forEach((element) => {
+    const sectionKey = element.dataset.sectionKey;
+    if (!sectionKey) {
+      return;
+    }
+    const key = element.dataset.blockId
+      ? `block:${sectionKey}:${element.dataset.blockId}`
+      : `section:${sectionKey}`;
+    if (!order.has(key)) {
+      order.set(key, order.size);
+    }
+  });
+  return order;
+}
+
+function getSearchResultTargetKey(result: HvySearchResult): string {
+  return result.blockId ? `block:${result.sectionKey}:${result.blockId}` : `section:${result.sectionKey}`;
 }

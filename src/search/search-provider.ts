@@ -27,11 +27,14 @@ export const builtInSearchProvider: HvySearchProvider = (request) => {
   const categories = CATEGORY_ORDER.filter((category) => request.categories.includes(category));
   const results: HvySearchResult[] = [];
   const seen = new Set<string>();
+  let documentOrder = 0;
 
   const visitSection = (section: VisualSection): void => {
     if (section.isGhost) {
       return;
     }
+    const sectionOrder = documentOrder;
+    documentOrder += 1;
     for (const category of categories) {
       const candidates = getSectionCandidates(section, category);
       addMatches({
@@ -44,17 +47,21 @@ export const builtInSearchProvider: HvySearchProvider = (request) => {
         targetId: getSectionId(section),
         label: getSectionLabel(section),
         contextLabel: 'Section',
+        documentOrder: sectionOrder,
         candidates,
       });
     }
-    visitBlocks(request, section, section.blocks, results, seen, categories, [getSectionLabel(section)]);
+    documentOrder = visitBlocks(request, section, section.blocks, results, seen, categories, [getSectionLabel(section)], documentOrder);
     section.children.forEach(visitSection);
   };
 
   request.document.sections.forEach(visitSection);
   return results.sort((left, right) => {
     const categoryOrder = CATEGORY_ORDER.indexOf(left.category) - CATEGORY_ORDER.indexOf(right.category);
-    return categoryOrder !== 0 ? categoryOrder : left.label.localeCompare(right.label, undefined, { sensitivity: 'base' });
+    if (categoryOrder !== 0) {
+      return categoryOrder;
+    }
+    return (left.documentOrder ?? 0) - (right.documentOrder ?? 0);
   });
 };
 
@@ -65,9 +72,12 @@ function visitBlocks(
   results: HvySearchResult[],
   seen: Set<string>,
   categories: SearchCategory[],
-  contextTrail: string[]
-): void {
+  contextTrail: string[],
+  documentOrder: number
+): number {
   for (const block of blocks) {
+    const blockOrder = documentOrder;
+    documentOrder += 1;
     const label = getBlockLabel(block, section);
     for (const category of categories) {
       const candidates = getBlockCandidates(block, category);
@@ -83,16 +93,18 @@ function visitBlocks(
         targetPath: findVirtualDirectoryForBlock(request.document, block) ?? undefined,
         label,
         contextLabel: getContextLabel(contextTrail, label),
+        documentOrder: blockOrder,
         candidates,
       });
     }
     const childTrail = appendContextLabel(contextTrail, getBlockContextLabel(block));
-    visitBlocks(request, section, block.schema.containerBlocks ?? [], results, seen, categories, childTrail);
-    visitBlocks(request, section, block.schema.componentListBlocks ?? [], results, seen, categories, childTrail);
-    visitBlocks(request, section, block.schema.expandableStubBlocks?.children ?? [], results, seen, categories, childTrail);
-    visitBlocks(request, section, block.schema.expandableContentBlocks?.children ?? [], results, seen, categories, childTrail);
-    visitBlocks(request, section, (block.schema.gridItems ?? []).map((item) => item.block), results, seen, categories, childTrail);
+    documentOrder = visitBlocks(request, section, block.schema.containerBlocks ?? [], results, seen, categories, childTrail, documentOrder);
+    documentOrder = visitBlocks(request, section, block.schema.componentListBlocks ?? [], results, seen, categories, childTrail, documentOrder);
+    documentOrder = visitBlocks(request, section, block.schema.expandableStubBlocks?.children ?? [], results, seen, categories, childTrail, documentOrder);
+    documentOrder = visitBlocks(request, section, block.schema.expandableContentBlocks?.children ?? [], results, seen, categories, childTrail, documentOrder);
+    documentOrder = visitBlocks(request, section, (block.schema.gridItems ?? []).map((item) => item.block), results, seen, categories, childTrail, documentOrder);
   }
+  return documentOrder;
 }
 
 function addMatches(options: {
@@ -107,6 +119,7 @@ function addMatches(options: {
   targetPath?: string;
   label: string;
   contextLabel: string;
+  documentOrder: number;
   candidates: Array<{ field: string; label: string; value: string }>;
 }): void {
   const query = options.request.query.trim();
@@ -155,6 +168,7 @@ function addMatches(options: {
     matchedText: firstMatch.matchedText,
     sourceField: summarizeMatches(matches, options.category),
     matches,
+    documentOrder: options.documentOrder,
   });
 }
 

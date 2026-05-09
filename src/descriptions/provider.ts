@@ -24,6 +24,7 @@ export const openAiDescriptionProvider: HvyDescriptionProvider = async (request)
       provider: 'openai',
       model: DEFAULT_DESCRIPTION_MODEL,
       mode: 'qa',
+      openAiReasoningEffort: 'none',
       context: buildDescriptionPrompt(request),
       messages: [{
         role: 'user',

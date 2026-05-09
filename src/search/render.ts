@@ -78,13 +78,7 @@ export function renderSearchPalette(search: SearchState, document: VisualDocumen
         </label>
         <button type="submit" class="secondary search-submit-button">Search</button>
       </div>
-      <div class="search-status-row">
-        <div class="search-status${search.error ? ' is-error' : ''}" role="status">${deps.escapeHtml(status)}</div>
-        <div class="search-nav-buttons" aria-label="Search result navigation">
-          <button type="button" class="tiny" data-action="previous-search-result" ${search.results.length ? '' : 'disabled'}>Prev</button>
-          <button type="button" class="tiny" data-action="next-search-result" ${search.results.length ? '' : 'disabled'}>Next</button>
-        </div>
-      </div>
+      <div class="search-status${search.error ? ' is-error' : ''}" role="status">${deps.escapeHtml(status)}</div>
       ${renderSearchResults(search, document, deps)}
     </form>
   </section>`;
@@ -94,13 +88,34 @@ export function renderCollapsedSearchBar(search: SearchState, deps: Pick<SearchR
   if (!search.open || !search.resultsCollapsed) {
     return '';
   }
+  const position = getCollapsedSearchPosition(search);
   return `<div class="search-inline-row">
-    <button type="button" class="search-collapsed-bar" data-action="expand-search-results" aria-label="Show search results">
-      ${magnifyingGlassIcon()}
-      <span>${deps.escapeHtml(search.submittedQuery || search.queryDraft || 'Search')}</span>
-      <span class="search-collapsed-count">${deps.escapeHtml(`${search.results.length} result${search.results.length === 1 ? '' : 's'}`)}</span>
-    </button>
+    <div class="search-collapsed-bar">
+      <button type="button" class="search-collapsed-main" data-action="expand-search-results" aria-label="Show search results">
+        ${magnifyingGlassIcon()}
+        <span>${deps.escapeHtml(search.submittedQuery || search.queryDraft || 'Search')}</span>
+        <span class="search-collapsed-count">${deps.escapeHtml(position)}</span>
+      </button>
+      <div class="search-nav-buttons" aria-label="Search result navigation">
+        <button type="button" class="tiny" data-action="previous-search-result" ${search.results.length ? '' : 'disabled'}>Prev</button>
+        <button type="button" class="tiny" data-action="next-search-result" ${search.results.length ? '' : 'disabled'}>Next</button>
+      </div>
+    </div>
   </div>`;
+}
+
+function getCollapsedSearchPosition(search: SearchState): string {
+  if (search.results.length === 0) {
+    return '0 results';
+  }
+  const orderedResults = [...search.results].sort((left, right) => (left.documentOrder ?? 0) - (right.documentOrder ?? 0));
+  const activeIndex = search.activeResultId
+    ? orderedResults.findIndex((result) => result.id === search.activeResultId)
+    : -1;
+  if (activeIndex >= 0) {
+    return `${activeIndex + 1} of ${orderedResults.length}`;
+  }
+  return `${orderedResults.length} result${orderedResults.length === 1 ? '' : 's'}`;
 }
 
 export function focusSearchInput(app: ParentNode): void {

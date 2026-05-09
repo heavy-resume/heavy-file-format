@@ -1,4 +1,5 @@
 const OPENAI_REASONING_EFFORT = 'low';
+export type OpenAiReasoningEffort = 'none' | 'low' | 'medium' | 'high';
 
 export interface ProviderProxyChatRequest {
   provider: 'openai' | 'anthropic' | 'qwen';
@@ -12,6 +13,7 @@ export interface ProviderProxyChatRequest {
   }>;
   context: string;
   traceRunId?: string;
+  openAiReasoningEffort?: OpenAiReasoningEffort;
 }
 
 export function buildProviderProxyRequest(body: ProviderProxyChatRequest): Record<string, unknown> {
@@ -27,7 +29,7 @@ export function buildOpenAiProxyRequest(body: ProviderProxyChatRequest): Record<
   return {
     model: body.model,
     reasoning: {
-      effort: OPENAI_REASONING_EFFORT,
+      effort: body.openAiReasoningEffort ?? OPENAI_REASONING_EFFORT,
       summary: 'auto',
     },
     input: [

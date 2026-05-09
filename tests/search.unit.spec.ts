@@ -96,6 +96,32 @@ hvy_version: 0.1
   expect(expectedResult[0]!.matches?.map((match) => match.label)).toEqual(['Title', 'Detail']);
 });
 
+test('built-in search preserves document order within each category', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"alpha"}-->
+#! Alpha
+
+<!--hvy:text {"id":"first"}-->
+ needle first
+
+<!--hvy:text {"id":"second"}-->
+ needle second
+`, '.hvy');
+
+  const expectedResult = await builtInSearchProvider({
+    document,
+    query: 'needle',
+    caseSensitive: false,
+    categories: ['contents'],
+  });
+
+  expect(expectedResult.map((result) => result.targetId)).toEqual(['first', 'second']);
+  expect(expectedResult.map((result) => result.documentOrder)).toEqual([1, 2]);
+});
+
 test('search filter context keeps matches and required ancestors visible', async () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1

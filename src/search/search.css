@@ -490,6 +490,11 @@
   filter: saturate(0.6);
 }
 
+.reader-container.is-virtual-group-container:has(.is-search-deprioritized):not(:has(.is-search-match)) > .reader-container-head {
+  opacity: 0.38;
+  filter: saturate(0.6);
+}
+
 @media (max-width: 720px) {
   .search-launcher {
     right: 4.7rem;

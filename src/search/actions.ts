@@ -3,6 +3,7 @@ import { getReferenceAppConfig } from '../reference-config';
 import { navigateToReaderTarget } from '../navigation';
 import { state, getRenderApp, getRefreshReaderPanels } from '../state';
 import type { HvySearchResult, SearchCategory } from './types';
+import type { VisualBlock, VisualSection } from '../editor/types';
 import { focusSearchInput } from './render';
 
 const CATEGORY_ORDER: SearchCategory[] = ['tags', 'contents', 'description'];
@@ -235,13 +236,72 @@ export function clearFilteringForTarget(sectionKey: string, blockId?: string): v
   if (!state.search.filterEnabled || !state.search.submittedQuery.trim()) {
     return;
   }
-  if (blockId) {
-    state.search.clearedBlockIds = [...new Set([...(state.search.clearedBlockIds ?? []), blockId])];
+  const clearBlockId = blockId ? getFilterClearBlockTarget(sectionKey, blockId) : null;
+  if (clearBlockId) {
+    state.search.clearedBlockIds = [...new Set([...(state.search.clearedBlockIds ?? []), clearBlockId])];
   } else {
     state.search.clearedSectionKeys = [...new Set([...(state.search.clearedSectionKeys ?? []), sectionKey])];
   }
   getRefreshReaderPanels()();
   getRenderApp()();
+}
+
+function getFilterClearBlockTarget(sectionKey: string, blockId: string): string | null {
+  const section = findSectionByKeyDeep(state.document.sections, sectionKey);
+  if (!section) {
+    return blockId;
+  }
+  for (const block of section.blocks) {
+    const path = findBlockPath(block, blockId);
+    if (!path) {
+      continue;
+    }
+    const semanticAncestor = path.find((candidate) => !isLayoutOnlyBlock(candidate));
+    return semanticAncestor?.id ?? blockId;
+  }
+  return blockId;
+}
+
+function findSectionByKeyDeep(sections: VisualSection[], sectionKey: string): VisualSection | null {
+  for (const section of sections) {
+    if (section.key === sectionKey) {
+      return section;
+    }
+    const child = findSectionByKeyDeep(section.children, sectionKey);
+    if (child) {
+      return child;
+    }
+  }
+  return null;
+}
+
+function findBlockPath(block: VisualBlock, blockId: string): VisualBlock[] | null {
+  if (block.id === blockId) {
+    return [block];
+  }
+  const children = [
+    ...block.schema.containerBlocks,
+    ...block.schema.componentListBlocks,
+    ...block.schema.expandableStubBlocks.children,
+    ...block.schema.expandableContentBlocks.children,
+    ...block.schema.gridItems.map((item) => item.block),
+  ];
+  for (const child of children) {
+    const path = findBlockPath(child, blockId);
+    if (path) {
+      return [block, ...path];
+    }
+  }
+  return null;
+}
+
+function isLayoutOnlyBlock(block: VisualBlock): boolean {
+  return block.schema.component === 'grid'
+    || block.schema.component === 'container'
+    || block.schema.component === 'component-list'
+    || block.schema.gridItems.length > 0
+    || block.schema.containerBlocks.length > 0
+    || block.schema.componentListBlocks.length > 0;
 }
 
 export function getEnabledSearchCategories(): SearchCategory[] {

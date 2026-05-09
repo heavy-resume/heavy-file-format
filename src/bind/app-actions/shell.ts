@@ -133,7 +133,6 @@ const editContextComponent: AppActionHandler = () => {
     return;
   }
   state.contextMenu = null;
-  state.currentView = 'editor';
   setActiveEditorBlock(menu.sectionKey, menu.blockId);
   getRenderApp()();
 };

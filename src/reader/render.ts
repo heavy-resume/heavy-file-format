@@ -45,6 +45,7 @@ interface ReaderRenderState {
   addComponentBySection: Record<string, string>;
   tempHighlights: Set<string>;
   aiEditTarget: { sectionKey: string | null; blockId: string | null };
+  activeEditorBlock?: { sectionKey: string; blockId: string } | null;
   modalSectionKey: string | null;
   sqliteRowComponentModal: SqliteRowComponentModalState | null;
   dbTableQueryModal: DbTableQueryModalState | null;
@@ -316,6 +317,9 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       return '';
     }
     const base = deps.resolveBaseComponent(block.schema.component);
+    if (state.currentView === 'ai' && state.activeEditorBlock?.sectionKey === section.key && state.activeEditorBlock.blockId === block.id) {
+      return deps.renderEditorBlock(section.key, block);
+    }
     const modifiers = getReaderViewModifiers(viewContext, targetKey);
     const prioritized = isReaderViewPrioritized(viewContext, targetKey);
     const searchDimmed = isBlockSearchDeprioritized(searchContext, block);

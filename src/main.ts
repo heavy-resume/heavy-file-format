@@ -374,6 +374,9 @@ readerRenderer = createReaderRenderer(
         blockId: state.aiEdit.blockId,
       };
     },
+    get activeEditorBlock() {
+      return state.activeEditorBlock;
+    },
     get modalSectionKey() {
       return state.modalSectionKey;
     },

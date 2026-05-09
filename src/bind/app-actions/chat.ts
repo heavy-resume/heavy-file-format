@@ -1,7 +1,7 @@
 import { state, getRenderApp } from '../../state';
 import { recordHistory } from '../../history';
 import { serializeDocument } from '../../serialization';
-import { clearChatConversation } from '../../chat/chat';
+import { clearChatConversation, stopChatRequest } from '../../chat/chat';
 import { advanceDocumentEditCliSimStep, copyChatMessageToHvySection, runDocumentEditCliSimStep, type DocumentEditCliSimRequest } from '../../chat/chat-session';
 import type { AppActionHandler } from './types';
 
@@ -31,24 +31,9 @@ const copyChatResponseToHvy: AppActionHandler = ({ actionButton }) => {
 };
 
 const cancelChatRequest: AppActionHandler = () => {
-  if (!state.chat.isSending) {
-    return;
+  if (stopChatRequest(state.chat)) {
+    getRenderApp()();
   }
-  state.chat.abortController?.abort();
-  state.chat.abortController = null;
-  state.chat.isSending = false;
-  state.chat.requestNonce += 1;
-  state.chat.error = null;
-  state.chat.messages = [
-    ...state.chat.messages,
-    {
-      id: crypto.randomUUID(),
-      role: 'assistant',
-      content: 'Stopped.',
-      progress: true,
-    },
-  ];
-  getRenderApp()();
 };
 
 const toggleChatCliSim: AppActionHandler = () => {

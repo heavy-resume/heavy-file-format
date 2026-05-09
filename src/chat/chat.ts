@@ -125,6 +125,40 @@ export function clearChatConversation(chat: ChatState): void {
   chat.requestNonce += 1;
 }
 
+export function stopChatRequest(chat: ChatState): boolean {
+  if (!chat.isSending) {
+    return false;
+  }
+  chat.abortController?.abort();
+  chat.abortController = null;
+  chat.isSending = false;
+  chat.requestNonce += 1;
+  chat.error = null;
+  chat.messages = [
+    ...chat.messages,
+    {
+      id: crypto.randomUUID(),
+      role: 'assistant',
+      content: 'Stopped.',
+      progress: true,
+    },
+  ];
+  return true;
+}
+
+export function closeChatPanel(chat: ChatState): void {
+  stopChatRequest(chat);
+  chat.panelOpen = false;
+}
+
+export function toggleChatPanelOpen(chat: ChatState): void {
+  if (chat.panelOpen) {
+    closeChatPanel(chat);
+    return;
+  }
+  chat.panelOpen = true;
+}
+
 export function persistChatSettings(settings: ChatSettings): void {
   if (typeof window === 'undefined' || !window.localStorage) {
     return;

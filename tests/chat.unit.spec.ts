@@ -3,9 +3,13 @@ import { expect, test } from 'vitest';
 import {
   buildChatDocumentContext,
   buildProxyChatRequest,
+  closeChatPanel,
+  createDefaultChatState,
   getEnvChatSettings,
   mergeChatSettings,
+  stopChatRequest,
   stripDocumentHeaderAndComments,
+  toggleChatPanelOpen,
 } from '../src/chat/chat';
 import { wrapChatResponseAsDocument } from '../src/chat/chat-response-document';
 import { getDocumentComponentDefaultCss } from '../src/document-component-defaults';
@@ -199,6 +203,54 @@ test('mergeChatSettings keeps env defaults when localStorage values are empty st
     compactionProvider: 'openai',
     compactionModel: 'gpt-5.4-nano',
   });
+});
+
+test('stopChatRequest aborts the current question and records the stop', () => {
+  const chat = createDefaultChatState();
+  const abortController = new AbortController();
+  chat.isSending = true;
+  chat.abortController = abortController;
+  chat.error = 'Still working';
+
+  expect(stopChatRequest(chat)).toBe(true);
+
+  expect(abortController.signal.aborted).toBe(true);
+  expect(chat.isSending).toBe(false);
+  expect(chat.abortController).toBe(null);
+  expect(chat.error).toBe(null);
+  expect(chat.requestNonce).toBe(1);
+  expect(chat.messages.at(-1)).toMatchObject({
+    role: 'assistant',
+    content: 'Stopped.',
+    progress: true,
+  });
+});
+
+test('closing the chat panel stops an in-flight question', () => {
+  const chat = createDefaultChatState();
+  const abortController = new AbortController();
+  chat.panelOpen = true;
+  chat.isSending = true;
+  chat.abortController = abortController;
+
+  closeChatPanel(chat);
+
+  expect(chat.panelOpen).toBe(false);
+  expect(abortController.signal.aborted).toBe(true);
+  expect(chat.isSending).toBe(false);
+});
+
+test('toggling an open chat panel closes and stops the request', () => {
+  const chat = createDefaultChatState();
+  const abortController = new AbortController();
+  chat.panelOpen = true;
+  chat.isSending = true;
+  chat.abortController = abortController;
+
+  toggleChatPanelOpen(chat);
+
+  expect(chat.panelOpen).toBe(false);
+  expect(abortController.signal.aborted).toBe(true);
 });
 
 test('wrapChatResponseAsDocument injects chat response component defaults into front matter', () => {

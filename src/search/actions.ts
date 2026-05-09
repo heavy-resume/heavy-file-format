@@ -31,6 +31,7 @@ export function closeSearch(): void {
   state.search.filterEnabled = false;
   state.search.abortController?.abort();
   state.search.abortController = null;
+  state.search.requestNonce += 1;
   state.search.isLoading = false;
   getRenderApp()();
 }

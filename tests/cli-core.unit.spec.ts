@@ -103,6 +103,22 @@ test('cli can navigate and read virtual component files', async () => {
   expect((await executeHvyCliCommand(document, session, 'man ls')).output).toContain('stable entries include pipe-delimited descriptions.');
 });
 
+test('cli exposes id aliases for sections and components', async () => {
+  const document = createResumeCliTestDocument();
+  const session = createHvyCliSession();
+
+  const aliases = await executeHvyCliCommand(document, session, 'ls /id');
+  expect(aliases.output).toContain('dir  top-skills | component-list component');
+  expect(aliases.output).toContain('dir  history-tools-technologies | component-list component');
+
+  expect((await executeHvyCliCommand(document, session, 'cat /id/top-skills/xref-card-3/xref-card.json')).output).toContain(
+    '"xrefTitle": "LLM Prompt Engineering"'
+  );
+  expect((await executeHvyCliCommand(document, session, 'cat /id/history-tools-technologies/xref-card-1/xref-card.json')).output).toContain(
+    '"xrefTitle": "TypeScript"'
+  );
+});
+
 test('about-section includes the section metadata description when present', async () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1

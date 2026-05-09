@@ -74,7 +74,7 @@ test('reader view resolves IDs and CLI virtual paths', () => {
   const document = createReaderViewTestDocument();
   const expectedResult = createReaderViewContext(document, {
     summary: ['highlight'],
-    '/body/summary/intro': ['collapse'],
+    '/id/summary/intro': ['collapse'],
   });
 
   const summary = document.sections[0];

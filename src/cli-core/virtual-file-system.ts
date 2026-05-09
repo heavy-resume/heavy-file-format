@@ -60,6 +60,7 @@ export function buildHvyVirtualFileSystem(document: VisualDocument): HvyVirtualF
   );
 
   addSectionList(entries, document.meta, document.sections.filter((section) => !section.isGhost), '/body');
+  addIdAliasEntries(entries, collectCanonicalIdAliases(document));
 
   document.attachments.forEach((attachment, index) => {
     const filename = uniqueName(`${sanitizePathSegment(attachment.id) || `attachment-${index}`}.json`, entries, '/attachments');
@@ -72,7 +73,7 @@ export function buildHvyVirtualFileSystem(document: VisualDocument): HvyVirtualF
 }
 
 export function findBlockForVirtualDirectory(document: VisualDocument, path: string): VisualBlock | null {
-  const normalized = normalizeVirtualPath('/', path);
+  const normalized = resolveIdAliasPath(document, normalizeVirtualPath('/', path));
   const entries = new Map<string, HvyVirtualEntry>();
   const blocks = new Map<string, VisualBlock>();
   entries.set('/', { kind: 'dir', path: '/' });
@@ -84,7 +85,7 @@ export function findBlockForVirtualDirectory(document: VisualDocument, path: str
 }
 
 export function findSectionForVirtualDirectory(document: VisualDocument, path: string): VisualSection | null {
-  const normalized = normalizeVirtualPath('/', path);
+  const normalized = resolveIdAliasPath(document, normalizeVirtualPath('/', path));
   const entries = new Map<string, HvyVirtualEntry>();
   const sections = new Map<string, VisualSection>();
   entries.set('/', { kind: 'dir', path: '/' });
@@ -284,6 +285,103 @@ function addGridItems(entries: Map<string, HvyVirtualEntry>, meta: JsonObject, g
     addBlock(entries, meta, item.block, `${directoryPath}/${key}`);
   });
   addOrderFile(entries, `${directoryPath}/children-order.json`, keys, (nextKeys) => reorderByKeys(gridItems, keys, nextKeys));
+}
+
+interface VirtualIdAlias {
+  id: string;
+  sourcePath: string;
+}
+
+function collectCanonicalIdAliases(document: VisualDocument): VirtualIdAlias[] {
+  const aliases: VirtualIdAlias[] = [];
+  const aliasKeys = new Set<string>();
+  const entries = new Map<string, HvyVirtualEntry>();
+  entries.set('/', { kind: 'dir', path: '/' });
+  entries.set('/body', { kind: 'dir', path: '/body' });
+
+  const addAlias = (id: string, sourcePath: string): void => {
+    const normalized = sanitizePathSegment(id);
+    if (!normalized) {
+      return;
+    }
+    const aliasKey = `${normalized}\0${sourcePath}`;
+    if (aliasKeys.has(aliasKey)) {
+      return;
+    }
+    aliasKeys.add(aliasKey);
+    aliases.push({ id: normalized, sourcePath });
+  };
+  const visitBlockAtPath = (block: VisualBlock, blockPath: string): void => {
+    entries.set(blockPath, { kind: 'dir', path: blockPath });
+    addAlias(block.schema.id, blockPath);
+    visitBlocks(block.schema.containerBlocks ?? [], `${blockPath}/container`);
+    if (block.schema.component === 'component-list') {
+      visitBlocks(block.schema.componentListBlocks ?? [], blockPath);
+    }
+    visitBlocks(block.schema.expandableStubBlocks?.children ?? [], `${blockPath}/expandable-stub`);
+    visitBlocks(block.schema.expandableContentBlocks?.children ?? [], `${blockPath}/expandable-content`);
+    const gridDirectory = `${blockPath}/grid`;
+    if ((block.schema.gridItems ?? []).length > 0) {
+      entries.set(gridDirectory, { kind: 'dir', path: gridDirectory });
+      block.schema.gridItems.forEach((item, gridIndex) => {
+        const itemPath = `${gridDirectory}/${uniqueName(blockDirectoryName(item.block, gridIndex), entries, gridDirectory)}`;
+        addAlias(item.id, itemPath);
+        visitBlockAtPath(item.block, itemPath);
+      });
+    }
+  };
+  const visitBlocks = (blocks: VisualBlock[], parentPath: string): void => {
+    blocks.forEach((block, index) => {
+      const blockPath = `${parentPath}/${uniqueName(blockDirectoryName(block, index), entries, parentPath)}`;
+      visitBlockAtPath(block, blockPath);
+    });
+  };
+  const visitSections = (sections: VisualSection[], parentPath: string): void => {
+    sections
+      .filter((section) => !section.isGhost)
+      .forEach((section, index) => {
+        const sectionPath = `${parentPath}/${uniqueName(sectionDirectoryName(section, index), entries, parentPath)}`;
+        entries.set(sectionPath, { kind: 'dir', path: sectionPath });
+        addAlias(getSectionId(section), sectionPath);
+        visitBlocks(section.blocks, sectionPath);
+        visitSections(section.children, sectionPath);
+      });
+  };
+  visitSections(document.sections, '/body');
+  return aliases;
+}
+
+function addIdAliasEntries(entries: Map<string, HvyVirtualEntry>, aliases: VirtualIdAlias[]): void {
+  entries.set('/id', { kind: 'dir', path: '/id' });
+  const canonicalEntries = [...entries.entries()];
+  for (const alias of aliases) {
+    const aliasRoot = `/id/${uniqueName(alias.id, entries, '/id')}`;
+    for (const [sourcePath, entry] of canonicalEntries) {
+      if (sourcePath !== alias.sourcePath && !sourcePath.startsWith(`${alias.sourcePath}/`)) {
+        continue;
+      }
+      const aliasPath = `${aliasRoot}${sourcePath.slice(alias.sourcePath.length)}`;
+      entries.set(aliasPath, { ...entry, path: aliasPath });
+    }
+  }
+}
+
+function resolveIdAliasPath(document: VisualDocument, normalizedPath: string): string {
+  if (normalizedPath === '/id' || !normalizedPath.startsWith('/id/')) {
+    return normalizedPath;
+  }
+  const entries = new Map<string, HvyVirtualEntry>();
+  entries.set('/id', { kind: 'dir', path: '/id' });
+  const aliasToSource = new Map<string, string>();
+  for (const alias of collectCanonicalIdAliases(document)) {
+    const aliasRoot = `/id/${uniqueName(alias.id, entries, '/id')}`;
+    entries.set(aliasRoot, { kind: 'dir', path: aliasRoot });
+    aliasToSource.set(aliasRoot, alias.sourcePath);
+  }
+  const match = [...aliasToSource.keys()]
+    .filter((aliasRoot) => normalizedPath === aliasRoot || normalizedPath.startsWith(`${aliasRoot}/`))
+    .sort((left, right) => right.length - left.length)[0];
+  return match ? `${aliasToSource.get(match)}${normalizedPath.slice(match.length)}` : normalizedPath;
 }
 
 function addPluginDocumentationFile(entries: Map<string, HvyVirtualEntry>, block: VisualBlock, blockPath: string): void {

@@ -163,6 +163,22 @@ export function createSearchFilterContext(sections: VisualSection[], search: Sea
   };
 
   sections.forEach((section) => visitSection(section, []));
+  (search.clearedSectionKeys ?? []).forEach((sectionKey) => {
+    const section = findSectionByKey(sections, sectionKey);
+    if (section) {
+      markSectionTreeVisible(section);
+    }
+  });
+  (search.clearedBlockIds ?? []).forEach((blockId) => {
+    for (const section of sections) {
+      const block = findBlockInSection(section, blockId);
+      if (block) {
+        markBlockTreeVisible(block);
+        visibleSections.add(section.key);
+        return;
+      }
+    }
+  });
   return {
     active,
     filtering,
@@ -174,6 +190,54 @@ export function createSearchFilterContext(sections: VisualSection[], search: Sea
     query: search.submittedQuery,
     caseSensitive: search.caseSensitive,
   };
+}
+
+function findSectionByKey(sections: VisualSection[], sectionKey: string): VisualSection | null {
+  for (const section of sections) {
+    if (section.key === sectionKey) {
+      return section;
+    }
+    const child = findSectionByKey(section.children, sectionKey);
+    if (child) {
+      return child;
+    }
+  }
+  return null;
+}
+
+function findBlockInSection(section: VisualSection, blockId: string): VisualBlock | null {
+  for (const block of section.blocks) {
+    const found = findBlockInTree(block, blockId);
+    if (found) {
+      return found;
+    }
+  }
+  for (const child of section.children) {
+    const found = findBlockInSection(child, blockId);
+    if (found) {
+      return found;
+    }
+  }
+  return null;
+}
+
+function findBlockInTree(block: VisualBlock, blockId: string): VisualBlock | null {
+  if (block.id === blockId) {
+    return block;
+  }
+  for (const child of [
+    ...block.schema.containerBlocks,
+    ...block.schema.componentListBlocks,
+    ...block.schema.expandableStubBlocks.children,
+    ...block.schema.expandableContentBlocks.children,
+    ...block.schema.gridItems.map((item) => item.block),
+  ]) {
+    const found = findBlockInTree(child, blockId);
+    if (found) {
+      return found;
+    }
+  }
+  return null;
 }
 
 export function isSectionSearchVisible(context: SearchFilterContext, section: VisualSection): boolean {

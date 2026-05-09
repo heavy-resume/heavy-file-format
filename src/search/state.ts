@@ -20,6 +20,8 @@ export function createDefaultSearchState(): SearchState {
     error: null,
     results: [],
     navigationResultIds: [],
+    clearedSectionKeys: [],
+    clearedBlockIds: [],
     requestNonce: 0,
     abortController: null,
   };

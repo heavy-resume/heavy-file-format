@@ -58,6 +58,8 @@ export interface SearchState {
   error: string | null;
   results: HvySearchResult[];
   navigationResultIds: string[];
+  clearedSectionKeys?: string[];
+  clearedBlockIds?: string[];
   requestNonce: number;
   abortController: AbortController | null;
 }

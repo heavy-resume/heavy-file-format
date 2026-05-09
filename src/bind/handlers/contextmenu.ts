@@ -1,4 +1,4 @@
-import { state, getRenderApp, openLinkInlineModal, openAiEditPopover } from './_imports';
+import { state, getRenderApp, openLinkInlineModal } from './_imports';
 
 export function bindContextmenu(app: HTMLElement): void {
   app.addEventListener('contextmenu', (event) => {
@@ -16,23 +16,37 @@ export function bindContextmenu(app: HTMLElement): void {
       return;
     }
 
-    if (state.currentView !== 'ai') {
+    const filtering = state.search.filterEnabled && state.search.submittedQuery.trim().length > 0;
+    if (state.currentView !== 'viewer' && state.currentView !== 'ai') {
       return;
     }
 
     const blockElement = target.closest<HTMLElement>('.reader-block[data-section-key][data-block-id]');
-    if (!blockElement) {
+    const sectionElement = target.closest<HTMLElement>('.reader-section[data-section-key]');
+    if (!blockElement && !sectionElement) {
       return;
     }
 
-    const sectionKey = blockElement.dataset.sectionKey ?? '';
-    const blockId = blockElement.dataset.blockId ?? '';
-    if (!sectionKey || !blockId) {
+    const sectionKey = blockElement?.dataset.sectionKey ?? sectionElement?.dataset.sectionKey ?? '';
+    const blockId = blockElement?.dataset.blockId ?? '';
+    if (!sectionKey) {
       return;
     }
 
+    if (state.currentView === 'viewer' && !filtering) {
+      return;
+    }
+    if (state.currentView === 'ai' && !blockId) {
+      return;
+    }
     event.preventDefault();
-    openAiEditPopover(sectionKey, blockId, event.clientX, event.clientY);
+    state.contextMenu = {
+      kind: state.currentView === 'ai' ? 'ai' : 'filter',
+      sectionKey,
+      ...(blockId ? { blockId } : {}),
+      x: event.clientX,
+      y: event.clientY,
+    };
     getRenderApp()();
   });
 }

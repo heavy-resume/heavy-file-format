@@ -198,6 +198,7 @@ export interface AppState {
   responsivePreview: 'full' | 'phone' | 'tablet' | 'desktop';
   chat: ChatState;
   aiEdit: AiEditState;
+  contextMenu?: ContextMenuState | null;
   search: SearchState;
   paneScroll: PaneScrollState;
   showAdvancedEditor: boolean;
@@ -242,4 +243,12 @@ export interface AppState {
   lastHistoryGroup: string | null;
   lastHistoryAt: number;
   pendingEditorCenterSectionKey: string | null;
+}
+
+export interface ContextMenuState {
+  kind: 'filter' | 'ai';
+  sectionKey: string;
+  blockId?: string;
+  x: number;
+  y: number;
 }

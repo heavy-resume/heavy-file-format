@@ -70,6 +70,7 @@ function createInitialState(document: ReturnType<typeof deserializeDocumentBytes
     responsivePreview: 'full',
     chat: createDefaultChatState(),
     search: createDefaultSearchState(),
+    contextMenu: null,
     aiEdit: {
       sectionKey: null,
       blockId: null,
@@ -245,6 +246,29 @@ function renderAiEditPopover(): string {
           <button type="submit" class="secondary">Send</button>
         </div>
       </form>
+    </section>
+  `;
+}
+
+function renderContextMenu(): string {
+  const menu = state.contextMenu;
+  if (!menu) {
+    return '';
+  }
+  const popupStyle = `left: ${menu.x}px; top: ${menu.y}px;`;
+  const filtering = state.search.filterEnabled && state.search.submittedQuery.trim().length > 0;
+  if (menu.kind === 'filter') {
+    return `
+      <section class="hvy-context-popover" style="${escapeAttr(popupStyle)}" aria-label="Filter options">
+        <button type="button" data-action="clear-target-filtering">Clear filtering</button>
+      </section>
+    `;
+  }
+  return `
+    <section class="hvy-context-popover" style="${escapeAttr(popupStyle)}" aria-label="Component options">
+      <button type="button" data-action="edit-context-component">Edit component</button>
+      <button type="button" data-action="request-context-component-changes">Request changes</button>
+      ${filtering ? '<button type="button" data-action="clear-target-filtering">Clear filtering</button>' : ''}
     </section>
   `;
 }
@@ -593,6 +617,7 @@ function renderApp(): void {
                   isViewerView ? 'qa' : 'document-edit',
                   state.currentView === 'editor' || state.currentView === 'ai'
                 )}
+                ${renderContextMenu()}
                 ${renderSearchLauncher(state.search)}
                 ${renderSearchPalette(state.search, state.document, { escapeAttr, escapeHtml, readerRenderer })}`
           }

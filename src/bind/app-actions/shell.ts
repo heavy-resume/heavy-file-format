@@ -4,7 +4,10 @@ import { setSidebarOpen, setEditorSidebarOpen } from '../../navigation';
 import { serializeDocument } from '../../serialization';
 import { clearChatConversation, focusChatPanel, toggleChatPanelOpen } from '../../chat/chat';
 import { closeAiEditPopover } from '../../ai-edit-popover';
+import { openAiEditPopover } from '../../ai-edit-popover';
 import { restoreCliViewAfterRender } from '../../cli-ui/focus';
+import { clearFilteringForTarget } from '../../search/actions';
+import { setActiveEditorBlock } from '../../block-ops';
 import type { AppActionHandler } from './types';
 
 const undo: AppActionHandler = () => {
@@ -104,6 +107,37 @@ const setResponsivePreview: AppActionHandler = ({ actionButton }) => {
   getRenderApp()();
 };
 
+const clearTargetFiltering: AppActionHandler = () => {
+  const menu = state.contextMenu;
+  if (!menu) {
+    return;
+  }
+  clearFilteringForTarget(menu.sectionKey, menu.blockId);
+  state.contextMenu = null;
+  getRenderApp()();
+};
+
+const requestContextComponentChanges: AppActionHandler = () => {
+  const menu = state.contextMenu;
+  if (!menu?.blockId) {
+    return;
+  }
+  state.contextMenu = null;
+  openAiEditPopover(menu.sectionKey, menu.blockId, menu.x, menu.y);
+  getRenderApp()();
+};
+
+const editContextComponent: AppActionHandler = () => {
+  const menu = state.contextMenu;
+  if (!menu?.blockId) {
+    return;
+  }
+  state.contextMenu = null;
+  state.currentView = 'editor';
+  setActiveEditorBlock(menu.sectionKey, menu.blockId);
+  getRenderApp()();
+};
+
 export const shellActions: Record<string, AppActionHandler> = {
   undo,
   redo,
@@ -115,4 +149,7 @@ export const shellActions: Record<string, AppActionHandler> = {
   'toggle-editor-sidebar': toggleEditorSidebar,
   'toggle-chat-panel': toggleChatPanel,
   'set-responsive-preview': setResponsivePreview,
+  'clear-target-filtering': clearTargetFiltering,
+  'request-context-component-changes': requestContextComponentChanges,
+  'edit-context-component': editContextComponent,
 };

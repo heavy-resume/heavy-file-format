@@ -15,6 +15,14 @@
   box-shadow: 0 18px 40px var(--hvy-shadow-lg);
 }
 
+.search-launcher.is-filtering {
+  border-color: color-mix(in srgb, var(--hvy-button-bg) 78%, var(--hvy-border));
+  background: color-mix(in srgb, var(--hvy-button-bg) 94%, var(--hvy-surface));
+  box-shadow:
+    0 18px 40px var(--hvy-shadow-lg),
+    0 0 0 4px color-mix(in srgb, var(--hvy-button-bg) 22%, transparent);
+}
+
 .search-launcher .hvy-ui-icon {
   width: 1.35rem;
   height: 1.35rem;
@@ -493,13 +501,56 @@
 }
 
 .is-search-deprioritized {
+  opacity: 1;
+  filter: none;
+}
+
+.reader-document .reader-section.is-search-deprioritized,
+.reader-document .reader-section:not(.is-search-deprioritized) .reader-block.is-search-deprioritized {
   opacity: 0.38;
   filter: saturate(0.6);
+}
+
+.reader-document .reader-section.is-search-deprioritized .reader-block.is-search-deprioritized,
+.reader-document .reader-block.is-search-deprioritized .reader-block.is-search-deprioritized {
+  opacity: 1;
+  filter: none;
 }
 
 .reader-container.is-virtual-group-container:has(.is-search-deprioritized):not(:has(.is-search-match)) > .reader-container-head {
   opacity: 0.38;
   filter: saturate(0.6);
+}
+
+.hvy-context-popover {
+  position: fixed;
+  z-index: 130;
+  display: grid;
+  gap: 0.25rem;
+  min-width: 12rem;
+  padding: 0.35rem;
+  border: 1px solid var(--hvy-border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--hvy-surface) 98%, transparent);
+  box-shadow: 0 18px 40px var(--hvy-shadow-lg);
+  backdrop-filter: blur(12px);
+}
+
+.hvy-context-popover button {
+  justify-content: flex-start;
+  min-height: 2.25rem;
+  padding: 0.45rem 0.6rem;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--hvy-text);
+  box-shadow: none;
+  text-align: left;
+}
+
+.hvy-context-popover button:hover,
+.hvy-context-popover button:focus-visible {
+  background: color-mix(in srgb, var(--hvy-button-bg) 14%, transparent);
 }
 
 @media (max-width: 720px) {

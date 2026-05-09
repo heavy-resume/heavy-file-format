@@ -48,6 +48,8 @@ export function stopSearch(): void {
   state.search.navigationResultIds = [];
   state.search.filterEnabled = false;
   state.search.results = [];
+  state.search.clearedSectionKeys = [];
+  state.search.clearedBlockIds = [];
   state.search.error = null;
   state.search.abortController?.abort();
   state.search.abortController = null;
@@ -64,6 +66,8 @@ export async function submitSearch(): Promise<void> {
   state.search.resultsCollapsed = false;
   state.search.error = null;
   state.search.abortController?.abort();
+  state.search.clearedSectionKeys = [];
+  state.search.clearedBlockIds = [];
 
   if (!query) {
     state.search.results = [];
@@ -215,12 +219,27 @@ export async function applySearchFilter(options: { enabled?: boolean } = {}): Pr
     getRenderApp()();
     return;
   }
+  state.search.clearedSectionKeys = [];
+  state.search.clearedBlockIds = [];
   state.search.filterEnabled = true;
   if (state.currentView === 'editor') {
     state.currentView = 'viewer';
   }
   state.search.open = false;
   state.search.resultsCollapsed = false;
+  getRefreshReaderPanels()();
+  getRenderApp()();
+}
+
+export function clearFilteringForTarget(sectionKey: string, blockId?: string): void {
+  if (!state.search.filterEnabled || !state.search.submittedQuery.trim()) {
+    return;
+  }
+  if (blockId) {
+    state.search.clearedBlockIds = [...new Set([...(state.search.clearedBlockIds ?? []), blockId])];
+  } else {
+    state.search.clearedSectionKeys = [...new Set([...(state.search.clearedSectionKeys ?? []), sectionKey])];
+  }
   getRefreshReaderPanels()();
   getRenderApp()();
 }

@@ -223,7 +223,7 @@ hvy_version: 0.1
   expect(expectedContext.visibleBlocks.has(detailText.id)).toBe(true);
 });
 
-test('search filter context keeps two levels of top-component context', async () => {
+test('search filter context keeps structural sibling labels around nested matches', async () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
 ---
@@ -241,6 +241,8 @@ hvy_version: 0.1
      <!--hvy:component-list {"id":"tools-list"}-->
       <!--hvy:component-list:0 {}-->
        <!--hvy:xref-card {"id":"typescript","xrefTitle":"TypeScript","xrefDetail":"Primary language","xrefTarget":"typescript"}-->
+      <!--hvy:component-list:1 {}-->
+       <!--hvy:xref-card {"id":"python","xrefTitle":"Python","xrefDetail":"Automation","xrefTarget":"python"}-->
 `, '.hvy');
   const expectedResults = await builtInSearchProvider({
     document,
@@ -253,6 +255,7 @@ hvy_version: 0.1
   const heading = container.schema.containerBlocks[0]!;
   const list = container.schema.containerBlocks[1]!;
   const xref = list.schema.componentListBlocks[0]!;
+  const siblingXref = list.schema.componentListBlocks[1]!;
 
   const expectedContext = createSearchFilterContext(document.sections, {
     open: false,
@@ -278,6 +281,7 @@ hvy_version: 0.1
   expect(expectedContext.visibleBlocks.has(heading.id)).toBe(true);
   expect(expectedContext.visibleBlocks.has(list.id)).toBe(true);
   expect(expectedContext.visibleBlocks.has(xref.id)).toBe(true);
+  expect(expectedContext.visibleBlocks.has(siblingXref.id)).toBe(false);
 });
 
 test('search highlighting escapes plain text before marking matches', () => {

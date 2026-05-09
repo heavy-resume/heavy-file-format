@@ -35,6 +35,10 @@ Avoid letting files get over 1k in length. Consider breaking things up at that p
 
 Use dev-traces to debug stuff the user reports as issues with the LLM based chat. The cli logs are only for the cli.
 
+Agents can inspect HVY files through the Node CLI harness when a browser is unnecessary. Use `node scripts/hvy-cli.mjs --file examples/resume.hvy -- "ls /body"` or pass another HVY path with `--file`; this exercises the same CLI virtual file system paths used by the reference implementation.
+
+The reference app's faux resume reader views live in `examples/resume-views.json`. Keep those implementation-only view filters in sync with `examples/resume.hvy` / `examples/resume.thvy`, and prefer stable `/id/<id>/<subpath>` targets there over full `/body/...` paths when possible.
+
 Refrain from the temptation to solve things with laser "if" conditionals and always consider the long term reusable solution - if we had different plugins, different extra features, would this idea work? Don't go out and chase LLM mistakes by muddying up the interface.
 
 When assessing mistakes LLMs show in the chat interface, refrain from solving things with aliases without asking first.

@@ -334,6 +334,10 @@
   border-radius: 0;
 }
 
+.reader-block-xref-card.is-highlighted {
+  border-radius: 8px;
+}
+
 .reader-section.is-reader-view-highlight-glowing,
 .reader-block.is-reader-view-highlight-glowing {
   animation: reader-view-highlight-glow 6s ease-in-out both;

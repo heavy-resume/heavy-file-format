@@ -108,13 +108,13 @@ test('cli exposes id aliases for sections and components', async () => {
   const session = createHvyCliSession();
 
   const aliases = await executeHvyCliCommand(document, session, 'ls /id');
-  expect(aliases.output).toContain('dir  top-skills | component-list component');
-  expect(aliases.output).toContain('dir  history-tools-technologies | component-list component');
+  expect(aliases.output).toContain('dir  top-skills-list | component-list component');
+  expect(aliases.output).toContain('dir  history-tools-technologies-list | component-list component');
 
-  expect((await executeHvyCliCommand(document, session, 'cat /id/top-skills/xref-card-3/xref-card.json')).output).toContain(
+  expect((await executeHvyCliCommand(document, session, 'cat /id/top-skills-list/xref-card-2/xref-card.json')).output).toContain(
     '"xrefTitle": "LLM Prompt Engineering"'
   );
-  expect((await executeHvyCliCommand(document, session, 'cat /id/history-tools-technologies/xref-card-1/xref-card.json')).output).toContain(
+  expect((await executeHvyCliCommand(document, session, 'cat /id/history-tools-technologies-list/xref-card-0/xref-card.json')).output).toContain(
     '"xrefTitle": "TypeScript"'
   );
 });

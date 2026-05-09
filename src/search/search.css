@@ -314,7 +314,11 @@
 }
 
 .search-apply-filter-button {
-  width: fit-content;
+  justify-self: center;
+  min-width: 10rem;
+  min-height: 2.65rem;
+  padding-inline: 1.35rem;
+  font-size: 0.96rem;
 }
 
 .search-apply-filter-button.is-active {

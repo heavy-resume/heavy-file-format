@@ -20,14 +20,15 @@ const CATEGORY_LABELS: Record<SearchCategory, string> = {
 };
 
 export function renderSearchLauncher(search: SearchState): string {
+  const filtering = search.filterEnabled && search.submittedQuery.trim().length > 0;
   return `<button
     type="button"
     class="search-launcher${search.open ? ' is-active' : ''}"
     data-action="open-search"
     aria-expanded="${search.open ? 'true' : 'false'}"
-    aria-label="Open search"
-    title="Search"
-  >${magnifyingGlassIcon()}</button>`;
+    aria-label="${filtering ? 'Open filter' : 'Open search'}"
+    title="${filtering ? 'Filter' : 'Search'}"
+  >${filtering ? funnelIcon() : magnifyingGlassIcon()}</button>`;
 }
 
 export function renderSearchPalette(search: SearchState, document: VisualDocument, deps: SearchRenderDeps): string {
@@ -72,20 +73,7 @@ export function renderSearchPalette(search: SearchState, document: VisualDocumen
       ${
         isFilterTab
           ? renderFilterTab(search, deps)
-          : `<div class="search-head">
-        <div class="search-input-shell">
-          <button type="submit" class="search-input-icon-button" aria-label="Search">${magnifyingGlassIcon()}</button>
-          <input
-            class="search-input"
-            data-field="search-query"
-            value="${deps.escapeAttr(search.queryDraft)}"
-            placeholder="Find in document..."
-            autocomplete="off"
-            spellcheck="false"
-            autofocus
-          />
-        </div>
-      </div>
+          : `${renderSearchInput(search, deps, { icon: magnifyingGlassIcon(), label: 'Search', placeholder: 'Find in document...' })}
       <div class="search-options">
         <div class="search-category-group" role="group" aria-label="Search categories">
           ${categories.map((category) => renderCategoryToggle(category, search, deps)).join('')}
@@ -178,8 +166,26 @@ function renderCategoryToggle(category: SearchCategory, search: SearchState, dep
   >${deps.escapeHtml(CATEGORY_LABELS[category])}</button>`;
 }
 
+function renderSearchInput(search: SearchState, deps: SearchRenderDeps, options: { icon: string; label: string; placeholder: string }): string {
+  return `<div class="search-head">
+    <div class="search-input-shell">
+      <button type="submit" class="search-input-icon-button" aria-label="${deps.escapeAttr(options.label)}">${options.icon}</button>
+      <input
+        class="search-input"
+        data-field="search-query"
+        value="${deps.escapeAttr(search.queryDraft)}"
+        placeholder="${deps.escapeAttr(options.placeholder)}"
+        autocomplete="off"
+        spellcheck="false"
+        autofocus
+      />
+    </div>
+  </div>`;
+}
+
 function renderFilterTab(search: SearchState, deps: SearchRenderDeps): string {
   return `<section class="search-filter-panel" role="tabpanel" aria-label="Filter search results">
+    ${renderSearchInput(search, deps, { icon: funnelIcon(), label: 'Filter document', placeholder: 'Filter document' })}
     <div class="search-filter-box">
       <div class="search-filter-box-head">
         ${funnelIcon()}

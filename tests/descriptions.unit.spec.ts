@@ -159,6 +159,7 @@ hvy_version: 0.1
   expect(payload.context).toContain('Generate one concise search location description');
   expect(payload.context).toContain('Describe what function this location serves in the document.');
   expect(payload.context).toContain('Do not summarize, restate, or describe the specific contents found here.');
-  expect(payload.context).toContain('If a concrete owner appears in the parent tree or visible label, include that owner in the description.');
+  expect(payload.context).toContain('Combine the owning context with the local function when both are available.');
+  expect(payload.context).toContain('If an owning context is provided, include it in the description.');
   expect(payload).not.toHaveProperty('input');
 });

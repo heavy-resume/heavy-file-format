@@ -100,16 +100,18 @@ function buildDescriptionPrompt(request: HvyDescriptionRequest): string {
     '- Describe what function this location serves in the document.',
     '- Do not summarize, restate, or describe the specific contents found here.',
     '- Write a location label such as "skills list for this role", "project details area", or "contact metadata section".',
-    '- Prefer the most specific named parent or visible label over generic section names.',
-    '- If a concrete owner appears in the parent tree or visible label, include that owner in the description.',
+    '- Combine the owning context with the local function when both are available.',
+    '- Prefer the owning context over generic section names and over individual content values.',
+    '- If an owning context is provided, include it in the description.',
+    '- Use the local label/function for the kind of place this is, not as the owner.',
     '- Treat parent descriptions as disambiguation only; do not repeat generic policy phrases like ordering, chronology, or overview.',
-    '- Use the content only to infer the location function.',
-    '- Prefer headings, labels, and parent context over individual values.',
+    '- Ignore individual content examples unless they are needed to infer the local function.',
     '- Do not mention HVY, JSON, schema, block ids, or component type unless the visible content requires it.',
     '',
     `Target kind: ${request.kind}`,
     `Section: ${request.section.title || request.section.customId || 'Untitled section'}`,
-    request.parentTree.length ? `Most specific parent: ${formatMostSpecificParent(request.parentTree)}` : '',
+    request.parentTree.length ? `Owning context: ${formatOwningContext(request.parentTree)}` : '',
+    request.parentTree.length ? `Local context: ${formatLocalContext(request.parentTree)}` : '',
     request.parentTree.length ? `Parent tree:\n${formatParentTree(request.parentTree)}` : request.parentTrail.length ? `Parent context: ${request.parentTrail.join(' / ')}` : '',
     request.block ? `Visible label: ${getBlockLabel(request.block)}` : '',
     '',
@@ -118,7 +120,19 @@ function buildDescriptionPrompt(request: HvyDescriptionRequest): string {
   ].filter(Boolean).join('\n');
 }
 
-function formatMostSpecificParent(parentTree: HvyDescriptionParentContext[]): string {
+function formatOwningContext(parentTree: HvyDescriptionParentContext[]): string {
+  const parent = parentTree.find((entry, index) =>
+    index > 0 && (entry.description?.trim() || entry.label.trim())
+  );
+  if (!parent) {
+    return '';
+  }
+  const label = parent.label.trim();
+  const description = parent.description?.trim();
+  return description && description !== label ? `${label || description} - ${description}` : label || description || '';
+}
+
+function formatLocalContext(parentTree: HvyDescriptionParentContext[]): string {
   const parent = [...parentTree].reverse().find((entry) => entry.label.trim() || entry.description?.trim());
   if (!parent) {
     return '';

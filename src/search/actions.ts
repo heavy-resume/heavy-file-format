@@ -39,6 +39,24 @@ export function closeSearch(): void {
   getRenderApp()();
 }
 
+export function stopSearch(): void {
+  state.search.open = false;
+  state.search.resultsCollapsed = false;
+  state.search.queryDraft = '';
+  state.search.submittedQuery = '';
+  state.search.activeResultId = null;
+  state.search.navigationResultIds = [];
+  state.search.filterEnabled = false;
+  state.search.results = [];
+  state.search.error = null;
+  state.search.abortController?.abort();
+  state.search.abortController = null;
+  state.search.requestNonce += 1;
+  state.search.isLoading = false;
+  getRefreshReaderPanels()();
+  getRenderApp()();
+}
+
 export async function submitSearch(): Promise<void> {
   const query = state.search.queryDraft.trim();
   state.search.submittedQuery = query;

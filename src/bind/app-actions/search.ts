@@ -1,5 +1,5 @@
 import type { AppActionHandler } from './types';
-import { applySearchFilter, closeSearch, expandSearchResults, openSearch, selectAdjacentSearchResult, selectSearchResult, setSearchCategory, setSearchFilterMode, setSearchTab } from '../../search/actions';
+import { applySearchFilter, closeSearch, expandSearchResults, openSearch, selectAdjacentSearchResult, selectSearchResult, setSearchCategory, setSearchFilterMode, setSearchTab, stopSearch } from '../../search/actions';
 import type { SearchCategory, SearchFilterMode, SearchPaletteTab } from '../../search/types';
 import { getRenderApp, state } from '../../state';
 
@@ -9,6 +9,10 @@ const openSearchAction: AppActionHandler = ({ app }) => {
 
 const closeSearchAction: AppActionHandler = () => {
   closeSearch();
+};
+
+const stopSearchAction: AppActionHandler = () => {
+  stopSearch();
 };
 
 const expandSearchResultsAction: AppActionHandler = ({ app }) => {
@@ -51,12 +55,14 @@ const setSearchFilterModeAction: AppActionHandler = ({ actionButton }) => {
 };
 
 const applySearchFilterAction: AppActionHandler = () => {
-  void applySearchFilter();
+  const applied = state.search.filterEnabled && state.search.queryDraft.trim() === state.search.submittedQuery.trim();
+  void applySearchFilter({ enabled: !applied });
 };
 
 export const searchActions: Record<string, AppActionHandler> = {
   'open-search': openSearchAction,
   'close-search': closeSearchAction,
+  'stop-search': stopSearchAction,
   'expand-search-results': expandSearchResultsAction,
   'select-search-result': selectSearchResultAction,
   'previous-search-result': previousSearchResultAction,

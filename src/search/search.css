@@ -322,8 +322,15 @@
 }
 
 .search-apply-filter-button.is-active {
-  background: var(--hvy-button-bg);
-  color: var(--hvy-button-text);
+  border-color: color-mix(in srgb, var(--hvy-danger) 72%, var(--hvy-border));
+  background: color-mix(in srgb, var(--hvy-danger) 18%, var(--hvy-surface));
+  color: var(--hvy-danger);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--hvy-danger) 18%, transparent);
+}
+
+.search-apply-filter-button.is-active:hover,
+.search-apply-filter-button.is-active:focus-visible {
+  background: color-mix(in srgb, var(--hvy-danger) 28%, var(--hvy-surface));
 }
 
 .search-results {

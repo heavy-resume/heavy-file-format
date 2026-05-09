@@ -68,7 +68,7 @@ export function renderSearchPalette(search: SearchState, document: VisualDocumen
           role="tab"
           aria-selected="${isFilterTab ? 'true' : 'false'}"
         >${funnelIcon()}<span>Filter</span></button>
-        <button type="button" class="search-close-button danger" data-action="close-search" aria-label="Close search">${closeIcon()}</button>
+        <button type="button" class="search-close-button danger" data-action="stop-search" aria-label="Stop search">${closeIcon()}</button>
       </div>
       ${
         isFilterTab
@@ -135,7 +135,13 @@ function getSearchNavigationResults(search: SearchState): HvySearchResult[] {
 
 export function focusSearchInput(app: ParentNode): void {
   window.setTimeout(() => {
-    app.querySelector<HTMLInputElement>('[data-field="search-query"]')?.focus();
+    const input = app.querySelector<HTMLInputElement>('[data-field="search-query"]');
+    if (!input) {
+      return;
+    }
+    input.focus();
+    const end = input.value.length;
+    input.setSelectionRange(end, end);
   }, 0);
 }
 
@@ -184,24 +190,25 @@ function renderSearchInput(search: SearchState, deps: SearchRenderDeps, options:
 }
 
 function renderFilterTab(search: SearchState, deps: SearchRenderDeps): string {
+  const applied = search.filterEnabled && search.queryDraft.trim() === search.submittedQuery.trim();
   return `<section class="search-filter-panel" role="tabpanel" aria-label="Filter search results">
     ${renderSearchInput(search, deps, { icon: funnelIcon(), label: 'Filter document', placeholder: 'Filter document' })}
     <div class="search-filter-box">
       <div class="search-filter-box-head">
         ${funnelIcon()}
-        <span>Filter matches</span>
+        <span>Filter Technique</span>
       </div>
       <div class="search-filter-mode-group" role="group" aria-label="Filter behavior">
-        ${renderFilterModeButton('deprioritize', 'Deprioritize', search, deps)}
+        ${renderFilterModeButton('deprioritize', 'Shade', search, deps)}
         ${renderFilterModeButton('hide', 'Hide', search, deps)}
       </div>
     </div>
     <button
       type="button"
-      class="secondary search-apply-filter-button${search.filterEnabled ? ' is-active' : ''}"
+      class="secondary search-apply-filter-button${applied ? ' is-active' : ''}"
       data-action="apply-search-filter"
-      aria-pressed="${search.filterEnabled ? 'true' : 'false'}"
-    >${search.filterEnabled ? 'Turn Off Filter' : 'Filter'}</button>
+      aria-pressed="${applied ? 'true' : 'false'}"
+    >${applied ? 'Turn Off Filter' : 'Filter'}</button>
   </section>`;
 }
 

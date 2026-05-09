@@ -27,6 +27,13 @@ export function bindInputMisc(app: HTMLElement): void {
     if (target.dataset.field === 'search-query' && target instanceof HTMLInputElement) {
       state.search.queryDraft = target.value;
       state.search.resultsCollapsed = false;
+      const filterButton = app.querySelector<HTMLButtonElement>('[data-action="apply-search-filter"]');
+      if (filterButton) {
+        const applied = state.search.filterEnabled && state.search.queryDraft.trim() === state.search.submittedQuery.trim();
+        filterButton.classList.toggle('is-active', applied);
+        filterButton.setAttribute('aria-pressed', applied ? 'true' : 'false');
+        filterButton.textContent = applied ? 'Turn Off Filter' : 'Filter';
+      }
       return;
     }
     if (handleTagEditorInput(target, tagStateHelpers)) {

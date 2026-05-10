@@ -54,6 +54,7 @@ interface ReaderRenderState {
   reusableTemplateModal: import('../types').ReusableTemplateModalState | null;
   componentMetaModal: { sectionKey: string; blockId: string } | null;
   themeModalOpen: boolean;
+  paletteOverrideId: string | null;
   theme: ThemeConfig;
   currentView: 'editor' | 'viewer' | 'ai';
   responsivePreview: 'full' | 'phone' | 'tablet' | 'desktop';
@@ -501,7 +502,27 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
   function renderThemeModal(): string {
     const theme = state.theme;
     const overrideNames = new Set(Object.keys(theme.colors));
-    const matchedPaletteId = getMatchedPaletteId(theme.colors);
+    const matchedPaletteId = state.paletteOverrideId ?? getMatchedPaletteId(theme.colors);
+    const documentThemeSelected = state.paletteOverrideId === null;
+    const documentPaletteCard = `
+        <article class="theme-palette-card${documentThemeSelected ? ' is-selected' : ''}">
+          <div class="theme-palette-preview theme-palette-preview-document" aria-hidden="true">
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+          <div class="theme-palette-copy">
+            <strong>Document Theme</strong>
+            <span>Use the theme stored in the current HVY file.</span>
+          </div>
+          <button
+            type="button"
+            class="${documentThemeSelected ? 'secondary' : 'ghost'}"
+            data-action="theme-clear-palette-override"
+            aria-pressed="${documentThemeSelected ? 'true' : 'false'}"
+          >${documentThemeSelected ? 'Applied' : 'Apply'}</button>
+        </article>
+      `;
     const paletteCards = HVY_PALETTES.map((palette) => {
       const isSelected = matchedPaletteId === palette.id;
       const previewStyle = [
@@ -603,6 +624,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
             Overrides are saved with the document.
           </p>
           <div class="theme-palette-grid" aria-label="Theme palettes">
+            ${documentPaletteCard}
             ${paletteCards}
           </div>
           <div class="theme-color-list">

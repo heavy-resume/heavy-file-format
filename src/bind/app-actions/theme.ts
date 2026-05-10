@@ -2,6 +2,7 @@ import { state, getRenderApp } from '../../state';
 import { recordHistory } from '../../history';
 import { getThemeConfig, applyTheme, writeThemeConfig } from '../../theme';
 import { getPaletteById } from '../../palettes/palette-registry';
+import { savePaletteOverrideId } from '../../palettes/palette-preferences';
 import type { AppActionHandler } from './types';
 
 const openThemeModal: AppActionHandler = () => {
@@ -39,14 +40,15 @@ const themeApplyPalette: AppActionHandler = ({ actionButton }) => {
   const paletteId = actionButton.dataset.paletteId ?? '';
   const palette = getPaletteById(paletteId);
   if (!palette) return;
-  recordHistory(`meta:theme-palette:${palette.id}`);
-  const theme = getThemeConfig();
-  writeThemeConfig({
-    colors: {
-      ...theme.colors,
-      ...palette.colors,
-    },
-  });
+  state.paletteOverrideId = palette.id;
+  savePaletteOverrideId(palette.id);
+  applyTheme();
+  getRenderApp()();
+};
+
+const themeClearPaletteOverride: AppActionHandler = () => {
+  state.paletteOverrideId = null;
+  savePaletteOverrideId(null);
   applyTheme();
   getRenderApp()();
 };
@@ -57,4 +59,5 @@ export const themeActions: Record<string, AppActionHandler> = {
   'theme-remove-color': themeRemoveOrResetColor('remove'),
   'theme-reset-color': themeRemoveOrResetColor('reset'),
   'theme-apply-palette': themeApplyPalette,
+  'theme-clear-palette-override': themeClearPaletteOverride,
 };

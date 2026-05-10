@@ -38,6 +38,7 @@ import { getScriptingPluginVersion } from './plugins/scripting/version';
 import { visitBlocksInList } from './section-ops';
 import { centerSearchResultLenses, renderCollapsedSearchBar, renderSearchLauncher, renderSearchPalette } from './search/render';
 import { createDefaultSearchState } from './search/state';
+import { loadPaletteOverrideId } from './palettes/palette-preferences';
 
 const appRoot = document.querySelector<HTMLDivElement>('#app');
 if (!appRoot) {
@@ -117,6 +118,7 @@ function createInitialState(document: ReturnType<typeof deserializeDocumentBytes
     sqliteRowComponentModal: null,
     dbTableQueryModal: null,
     themeModalOpen: false,
+    paletteOverrideId: loadPaletteOverrideId(),
     gridAddComponentByBlock: {},
     expandableEditorPanels: {},
     readerExpandableState: {},
@@ -448,6 +450,9 @@ readerRenderer = createReaderRenderer(
     },
     get themeModalOpen() {
       return state.themeModalOpen;
+    },
+    get paletteOverrideId() {
+      return state.paletteOverrideId;
     },
     get theme() {
       return getThemeConfig();

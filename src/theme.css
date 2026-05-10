@@ -46,6 +46,22 @@
   background: linear-gradient(90deg, var(--palette-preview-text), var(--palette-preview-accent-2));
 }
 
+.theme-modal .theme-palette-preview-document {
+  background: var(--hvy-bg);
+}
+
+.theme-modal .theme-palette-preview-document span:nth-child(1) {
+  background: var(--hvy-surface);
+}
+
+.theme-modal .theme-palette-preview-document span:nth-child(2) {
+  background: var(--hvy-button-bg);
+}
+
+.theme-modal .theme-palette-preview-document span:nth-child(3) {
+  background: linear-gradient(90deg, var(--hvy-text), var(--hvy-accent-2));
+}
+
 .theme-modal .theme-palette-copy {
   display: grid;
   gap: 0.12rem;

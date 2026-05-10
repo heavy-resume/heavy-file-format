@@ -4,6 +4,7 @@ import type { ThemeConfig } from './types';
 import type { JsonObject } from './hvy/types';
 import { cssFragmentTriggersNetwork } from './css-sanitizer';
 import { isExternalCssAllowed } from './reference-config';
+import { getPaletteById } from './palettes/palette-registry';
 
 export type { ThemeConfig };
 export type ColorMode = 'light' | 'dark';
@@ -162,13 +163,25 @@ export function applyTheme(): void {
   stale.forEach((prop) => root.style.removeProperty(prop));
 
   root.classList.add('no-transitions');
-  // Apply only user-specified overrides verbatim (key IS the CSS property name).
+  // Layer 1: document-specified theme overrides from the HVY/THVY file.
   const allowExternal = isExternalCssAllowed();
   for (const [key, value] of Object.entries(theme.colors)) {
     if (!allowExternal && cssFragmentTriggersNetwork(value)) {
       continue;
     }
     root.style.setProperty(key, value);
+  }
+
+  // Layer 2: local user palette override. This is intentionally not serialized
+  // into the document, so it survives file switches and refreshes separately.
+  const palette = state.paletteOverrideId ? getPaletteById(state.paletteOverrideId) : null;
+  if (palette) {
+    for (const [key, value] of Object.entries(palette.colors)) {
+      if (!allowExternal && cssFragmentTriggersNetwork(value)) {
+        continue;
+      }
+      root.style.setProperty(key, value);
+    }
   }
   // Force a reflow so changes take effect before re-enabling transitions.
   void root.offsetHeight;

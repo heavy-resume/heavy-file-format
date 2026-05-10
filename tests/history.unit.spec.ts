@@ -65,6 +65,7 @@ function createHistoryTestState(): AppState {
     sqliteRowComponentModal: null,
     dbTableQueryModal: null,
     themeModalOpen: false,
+    paletteOverrideId: null,
     gridAddComponentByBlock: {},
     expandableEditorPanels: {},
     readerExpandableState: {},

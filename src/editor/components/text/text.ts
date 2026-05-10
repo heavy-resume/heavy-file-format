@@ -10,6 +10,7 @@ export const renderTextEditor: ComponentEditorRenderer = (sectionKey, block, hel
     const fillInBox = `<span
       class="text-fill-in-box"
       contenteditable="true"
+      spellcheck="true"
       data-section-key="${helpers.escapeAttr(sectionKey)}"
       data-block-id="${helpers.escapeAttr(block.id)}"
       data-field="text-fill-in-value"
@@ -55,6 +56,7 @@ export const renderTextEditor: ComponentEditorRenderer = (sectionKey, block, hel
     <div
       class="rich-editor${mobileAdjustment ? ' mobile-adjustment-editor' : ''}"
       contenteditable="true"
+      spellcheck="true"
       data-section-key="${helpers.escapeAttr(sectionKey)}"
       data-block-id="${helpers.escapeAttr(block.id)}"
       data-field="block-rich"

@@ -5,6 +5,7 @@ export const renderXrefCardEditor: ComponentEditorRenderer = (sectionKey, block,
   <div class="xref-card-editor editor-xref-card ${helpers.isXrefTargetValid(block.schema.xrefTarget) ? '' : 'is-invalid-target'}">
     <strong
       contenteditable="true"
+      spellcheck="true"
       data-inline-text="true"
       data-section-key="${helpers.escapeAttr(sectionKey)}"
       data-block-id="${helpers.escapeAttr(block.id)}"
@@ -12,6 +13,7 @@ export const renderXrefCardEditor: ComponentEditorRenderer = (sectionKey, block,
     >${helpers.escapeHtml(block.schema.xrefTitle || 'Untitled')}</strong>
     <span
       contenteditable="true"
+      spellcheck="true"
       data-inline-text="true"
       data-section-key="${helpers.escapeAttr(sectionKey)}"
       data-block-id="${helpers.escapeAttr(block.id)}"

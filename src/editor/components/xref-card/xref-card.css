@@ -88,7 +88,7 @@
 
 .editor-xref-card span,
 .reader-xref-card span {
-  color: var(--hvy-text-muted);
+  color: var(--hvy-text-alt);
   font-size: 0.82rem;
   line-height: 1.2;
 }

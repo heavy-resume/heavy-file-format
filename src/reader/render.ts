@@ -15,6 +15,7 @@ import type { BlockSchema, VisualBlock, VisualSection } from '../editor/types';
 import { renderTagEditor } from '../editor/tag-editor';
 import { colorValueToPickerHex, getResolvedThemeColor, getThemeColorLabel, THEME_COLOR_NAMES } from '../theme';
 import type { ThemeConfig } from '../theme';
+import { getMatchedPaletteId, HVY_PALETTES } from '../palettes/palette-registry';
 import type { DbTableQueryModalState, ReaderViewFilter, ReusableSaveModalState, SqliteRowComponentModalState, VisualDocument } from '../types';
 import type { SearchState } from '../search/types';
 import { createSearchFilterContext, isBlockSearchDeprioritized, isBlockSearchMatch, isBlockSearchVisible, isSectionSearchDeprioritized, isSectionSearchMatch, isSectionSearchVisible, type SearchFilterContext } from '../search/filter';
@@ -500,6 +501,37 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
   function renderThemeModal(): string {
     const theme = state.theme;
     const overrideNames = new Set(Object.keys(theme.colors));
+    const matchedPaletteId = getMatchedPaletteId(theme.colors);
+    const paletteCards = HVY_PALETTES.map((palette) => {
+      const isSelected = matchedPaletteId === palette.id;
+      const previewStyle = [
+        `--palette-preview-bg: ${palette.colors['--hvy-bg'] ?? 'transparent'}`,
+        `--palette-preview-surface: ${palette.colors['--hvy-surface'] ?? 'transparent'}`,
+        `--palette-preview-text: ${palette.colors['--hvy-text'] ?? 'currentColor'}`,
+        `--palette-preview-accent: ${palette.colors['--hvy-accent-1'] ?? 'currentColor'}`,
+        `--palette-preview-accent-2: ${palette.colors['--hvy-accent-2'] ?? 'currentColor'}`,
+      ].join('; ');
+      return `
+        <article class="theme-palette-card${isSelected ? ' is-selected' : ''}" style="${deps.escapeAttr(previewStyle)}">
+          <div class="theme-palette-preview" aria-hidden="true">
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+          <div class="theme-palette-copy">
+            <strong>${deps.escapeHtml(palette.name)}</strong>
+            <span>${deps.escapeHtml(palette.description)}</span>
+          </div>
+          <button
+            type="button"
+            class="${isSelected ? 'secondary' : 'ghost'}"
+            data-action="theme-apply-palette"
+            data-palette-id="${deps.escapeAttr(palette.id)}"
+            aria-pressed="${isSelected ? 'true' : 'false'}"
+          >${isSelected ? 'Applied' : 'Apply'}</button>
+        </article>
+      `;
+    }).join('');
     const rows = THEME_COLOR_NAMES.map((name) => {
       const isOverridden = overrideNames.has(name);
       const value = isOverridden ? theme.colors[name] : getResolvedThemeColor(name);
@@ -570,6 +602,9 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
             Adjust the document theme with a color picker or by typing any valid CSS color value.
             Overrides are saved with the document.
           </p>
+          <div class="theme-palette-grid" aria-label="Theme palettes">
+            ${paletteCards}
+          </div>
           <div class="theme-color-list">
             ${rows}
           </div>

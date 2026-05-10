@@ -214,12 +214,6 @@
   position: absolute;
   top: 0.85rem;
   right: 0.85rem;
-  display: inline-grid;
-  place-items: center;
-  width: 2.45rem;
-  height: 2.45rem;
-  padding: 0;
-  border-radius: 999px;
 }
 
 .search-options {

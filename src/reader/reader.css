@@ -410,7 +410,7 @@
 
 @keyframes flash {
   0% {
-    background: var(--hvy-warning-bg);
+    background: var(--hvy-button-bg);
   }
 
   100% {

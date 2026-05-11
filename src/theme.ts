@@ -163,18 +163,17 @@ export function applyTheme(): void {
   stale.forEach((prop) => root.style.removeProperty(prop));
 
   root.classList.add('no-transitions');
-  // Layer 1: document-specified theme overrides from the HVY/THVY file.
   const allowExternal = isExternalCssAllowed();
-  for (const [key, value] of Object.entries(theme.colors)) {
-    if (!allowExternal && cssFragmentTriggersNetwork(value)) {
-      continue;
-    }
-    root.style.setProperty(key, value);
-  }
 
-  // Layer 2: local user palette override. This is intentionally not serialized
+  // Layer 1: local user palette override. This is intentionally not serialized
   // into the document, so it survives file switches and refreshes separately.
   const palette = state.paletteOverrideId ? getPaletteById(state.paletteOverrideId) : null;
+  if (palette && hasFullConventionalThemeOverride(theme.colors)) {
+    for (const name of THEME_COLOR_NAMES) {
+      delete theme.colors[name];
+    }
+    writeThemeConfig(theme);
+  }
   if (palette) {
     for (const [key, value] of Object.entries(palette.colors)) {
       if (!allowExternal && cssFragmentTriggersNetwork(value)) {
@@ -183,9 +182,29 @@ export function applyTheme(): void {
       root.style.setProperty(key, value);
     }
   }
+
+  // Layer 2: document-specified theme overrides from the HVY/THVY file.
+  // These sit above palette presets so values edited in the theme modal are
+  // represented immediately in the reader/editor/viewer.
+  for (const [key, value] of Object.entries(theme.colors)) {
+    if (!allowExternal && cssFragmentTriggersNetwork(value)) {
+      continue;
+    }
+    root.style.setProperty(key, value);
+  }
   // Force a reflow so changes take effect before re-enabling transitions.
   void root.offsetHeight;
   root.classList.remove('no-transitions');
+}
+
+function hasFullConventionalThemeOverride(colors: Record<string, string>): boolean {
+  let conventionalCount = 0;
+  for (const name of THEME_COLOR_NAMES) {
+    if (colors[name]) {
+      conventionalCount += 1;
+    }
+  }
+  return conventionalCount >= Math.floor(THEME_COLOR_NAMES.length * 0.8);
 }
 
 export function getThemeConfig(): ThemeConfig {
@@ -223,6 +242,26 @@ export function getResolvedThemeColor(name: string): string {
     return getThemeConfig().colors[name] ?? '';
   }
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || getThemeConfig().colors[name] || '';
+}
+
+export function getThemeResetColor(name: string): string {
+  const palette = state.paletteOverrideId ? getPaletteById(state.paletteOverrideId) : null;
+  const paletteValue = palette?.colors[name];
+  if (paletteValue) {
+    return paletteValue;
+  }
+  if (typeof window === 'undefined') {
+    return '';
+  }
+  const root = document.documentElement;
+  const currentInline = root.style.getPropertyValue(name);
+  const currentPriority = root.style.getPropertyPriority(name);
+  root.style.removeProperty(name);
+  const value = getComputedStyle(root).getPropertyValue(name).trim();
+  if (currentInline) {
+    root.style.setProperty(name, currentInline, currentPriority);
+  }
+  return value;
 }
 
 export function colorValueToPickerHex(value: string): string {

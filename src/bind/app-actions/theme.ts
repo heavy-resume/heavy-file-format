@@ -1,6 +1,6 @@
 import { state, getRenderApp } from '../../state';
 import { recordHistory } from '../../history';
-import { getThemeConfig, applyTheme, writeThemeConfig } from '../../theme';
+import { getThemeConfig, applyTheme, writeThemeConfig, colorValueToPickerHex, getResolvedThemeColor, THEME_COLOR_NAMES } from '../../theme';
 import { getPaletteById } from '../../palettes/palette-registry';
 import { savePaletteOverrideId } from '../../palettes/palette-preferences';
 import { setThemeModalFilter } from '../../theme-modal-filter';
@@ -34,6 +34,10 @@ const themeRemoveOrResetColor = (label: string): AppActionHandler => ({ actionBu
   delete theme.colors[name];
   writeThemeConfig(theme);
   applyTheme();
+  if (label === 'reset') {
+    updateResetThemeRow(actionButton, name);
+    return;
+  }
   getRenderApp()();
 };
 
@@ -41,6 +45,11 @@ const themeApplyPalette: AppActionHandler = ({ actionButton }) => {
   const paletteId = actionButton.dataset.paletteId ?? '';
   const palette = getPaletteById(paletteId);
   if (!palette) return;
+  const theme = getThemeConfig();
+  for (const name of THEME_COLOR_NAMES) {
+    delete theme.colors[name];
+  }
+  writeThemeConfig(theme);
   state.paletteOverrideId = palette.id;
   savePaletteOverrideId(palette.id);
   applyTheme();
@@ -81,6 +90,26 @@ const themePreviewSetState: AppActionHandler = ({ app, actionButton, event }) =>
   });
   setThemeModalFilter(app, actionButton.dataset.themeFilter ?? '');
 };
+
+function updateResetThemeRow(actionButton: HTMLElement, name: string): void {
+  const row = actionButton.closest<HTMLElement>('.theme-color-row');
+  if (!row) return;
+  const value = getResolvedThemeColor(name);
+  row.classList.remove('theme-color-row--override');
+  row.dataset.themeSearch = `${name} ${row.querySelector('strong')?.textContent ?? ''} ${value}`;
+  const valueInput = row.querySelector<HTMLInputElement>('[data-field="theme-color-value"]');
+  const pickerInput = row.querySelector<HTMLInputElement>('[data-field="theme-color-picker"]');
+  if (valueInput) {
+    valueInput.value = value;
+  }
+  if (pickerInput) {
+    pickerInput.value = colorValueToPickerHex(value);
+  }
+  const resetGroup = actionButton.closest<HTMLElement>('.theme-color-reset-group');
+  if (resetGroup) {
+    resetGroup.outerHTML = '<span class="theme-color-action theme-color-default muted">default</span>';
+  }
+}
 
 export const themeActions: Record<string, AppActionHandler> = {
   'open-theme-modal': openThemeModal,

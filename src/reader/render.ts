@@ -13,7 +13,7 @@ import { renderXrefCardReader } from '../editor/components/xref-card/xref-card';
 import type { ComponentRenderHelpers } from '../editor/component-helpers';
 import type { BlockSchema, VisualBlock, VisualSection } from '../editor/types';
 import { renderTagEditor } from '../editor/tag-editor';
-import { colorValueToPickerHex, getResolvedThemeColor, getThemeColorLabel, THEME_COLOR_NAMES } from '../theme';
+import { colorValueToPickerHex, getResolvedThemeColor, getThemeColorLabel, getThemeResetColor, THEME_COLOR_NAMES } from '../theme';
 import type { ThemeConfig } from '../theme';
 import { getMatchedPaletteId, HVY_PALETTES } from '../palettes/palette-registry';
 import type { DbTableQueryModalState, ReaderViewFilter, ReusableSaveModalState, SqliteRowComponentModalState, VisualDocument } from '../types';
@@ -861,6 +861,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     const rows = THEME_COLOR_NAMES.map((name) => {
       const isOverridden = overrideNames.has(name);
       const value = isOverridden ? theme.colors[name] : getResolvedThemeColor(name);
+      const resetValue = isOverridden ? getThemeResetColor(name) : '';
       const pickerValue = colorValueToPickerHex(value);
       return `
         <div class="theme-color-row${isOverridden ? ' theme-color-row--override' : ''}" data-theme-color-name="${deps.escapeAttr(name)}" data-theme-search="${deps.escapeAttr(`${name} ${getThemeColorLabel(name)} ${value}`)}">
@@ -884,9 +885,11 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
             placeholder="CSS color"
             aria-label="${deps.escapeAttr(getThemeColorLabel(name))} color value"
           />
-          <span class="theme-color-swatch" style="${value ? `background: ${deps.escapeAttr(value)};` : ''}" aria-hidden="true"></span>
           ${isOverridden
-            ? `<button type="button" class="ghost theme-color-action" data-action="theme-reset-color" data-color-name="${deps.escapeAttr(name)}" title="Reset to default">Reset</button>`
+            ? `<span class="theme-color-reset-group">
+                <button type="button" class="ghost theme-color-action" data-action="theme-reset-color" data-color-name="${deps.escapeAttr(name)}" title="Reset to default">Reset</button>
+                <span class="theme-color-reset-swatch" style="${resetValue ? `background: ${deps.escapeAttr(resetValue)};` : ''}" title="${deps.escapeAttr(`Reset value: ${resetValue}`)}" aria-hidden="true"></span>
+              </span>`
             : '<span class="theme-color-action theme-color-default muted">default</span>'}
         </div>
       `;

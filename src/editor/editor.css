@@ -439,6 +439,7 @@
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
+  min-width: 0;
 }
 
 .editor-order-controls {
@@ -968,7 +969,24 @@
 .editor-actions {
   display: flex;
   flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
   gap: 0.35rem;
+  margin-left: auto;
+  min-width: 0;
+}
+
+.hvy-preview-frame-phone.editor-shell .editor-section-head .editor-actions,
+.hvy-preview-frame-tablet.editor-shell .editor-section-head .editor-actions {
+  gap: 0.25rem;
+}
+
+.hvy-preview-frame-phone.editor-shell .editor-section-head .editor-actions button:not(.editor-section-remove-button),
+.hvy-preview-frame-tablet.editor-shell .editor-section-head .editor-actions button:not(.editor-section-remove-button) {
+  min-height: 1.75rem;
+  padding: 0.24rem 0.42rem;
+  font-size: 0.78rem;
+  line-height: 1.05;
 }
 
 .editor-block-done-row {

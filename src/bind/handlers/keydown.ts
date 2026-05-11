@@ -98,6 +98,17 @@ export function bindKeydown(app: HTMLElement): void {
       return;
     }
 
+    if (target instanceof HTMLElement && target.dataset.field === 'text-fill-in-value' && event.key === 'Enter') {
+      event.preventDefault();
+      if (event.metaKey || event.ctrlKey) {
+        insertFillInLineBreak(target);
+        target.dispatchEvent(new InputEvent('input', { bubbles: true }));
+      } else {
+        target.blur();
+      }
+      return;
+    }
+
     const richTarget = getRichTarget(target);
 
     if (!richTarget) {
@@ -143,6 +154,21 @@ export function bindKeydown(app: HTMLElement): void {
       openLinkInlineModal(app, richTarget);
     }
   });
+}
+
+function insertFillInLineBreak(editable: HTMLElement): void {
+  editable.textContent = `${(editable.textContent ?? '').replaceAll('\u200b', '')}\n\u200b`;
+  const selection = window.getSelection();
+  const range = document.createRange();
+  const textNode = editable.firstChild;
+  if (textNode?.nodeType === Node.TEXT_NODE) {
+    range.setStart(textNode, Math.max(0, (textNode.textContent ?? '').length - 1));
+  } else {
+    range.selectNodeContents(editable);
+  }
+  range.collapse(false);
+  selection.removeAllRanges();
+  selection.addRange(range);
 }
 
 function getRichTarget(target: HTMLElement): HTMLElement | null {

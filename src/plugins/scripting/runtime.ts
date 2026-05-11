@@ -4,6 +4,7 @@ import { getAttachment, removeAttachment, setAttachment } from '../../attachment
 import { executeDocumentEditToolByName } from '../../ai-document-edit';
 import { executeHvyCliCommandSync } from '../../cli-core/commands';
 import { state, getRefreshReaderPanels, getRenderApp } from '../../state';
+import { hasTextFillInMarker } from '../../text-fill-in';
 
 // JS-side `doc` runtime exposed to the user's Python script. Every method is
 // synchronous from Python's point of view; mutations on the visual document
@@ -150,6 +151,7 @@ export function createScriptingRuntime(options: ScriptingRuntimeOptions): Script
           throw new Error(`Component "${String(id ?? '')}" was not found.`);
         }
         block.text = String(text ?? '');
+        block.schema.fillIn = hasTextFillInMarker(block.text);
         mutated = true;
       },
       is_empty: (id) => {

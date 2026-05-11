@@ -988,16 +988,6 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
             placeholder="margin: 0.5rem 0;"
           >${deps.escapeHtml(block.schema.css)}</textarea>
         </label>
-        <label class="checkbox-label">
-          <span>Editor Only</span>
-          <input
-            type="checkbox"
-            data-section-key="${deps.escapeAttr(sectionKey)}"
-            data-block-id="${deps.escapeAttr(block.id)}"
-            data-field="block-editor-only"
-            ${block.schema.editorOnly ? 'checked' : ''}
-          />
-        </label>
         <label>
           <span>Tags</span>
           ${renderTagEditor(
@@ -1083,6 +1073,16 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           >${deps.escapeHtml(block.schema.description)}</textarea>
         </label>
         ${scriptingVersionField}
+        <label class="checkbox-label">
+          <span>Editor Only</span>
+          <input
+            type="checkbox"
+            data-section-key="${deps.escapeAttr(sectionKey)}"
+            data-block-id="${deps.escapeAttr(block.id)}"
+            data-field="block-editor-only"
+            ${block.schema.editorOnly ? 'checked' : ''}
+          />
+        </label>
       </div>
     `;
   }

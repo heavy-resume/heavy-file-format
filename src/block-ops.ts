@@ -452,7 +452,7 @@ function buildTextFromFillInEditor(target: HTMLElement): string {
       if (index >= fillIns.length) {
         return part;
       }
-      const value = fillIns[index]?.textContent ?? '';
+      const value = (fillIns[index]?.textContent ?? '').replaceAll('\u200b', '');
       return `${part}${value.length > 0 ? value : TEXT_FILL_IN_MARKER}`;
     })
     .join('');
@@ -820,13 +820,13 @@ function applyTextFillInSlot(editable: HTMLElement): void {
     return;
   }
   const range = getEditableSelectionRange(editable);
-  const selectedText = range && !range.collapsed ? range.toString().trim() : '';
+  const selectedText = range && !range.collapsed
+    ? range.toString().trim()
+    : editable.dataset.fillInSelectionText?.trim() ?? '';
   recordHistory(`text:${block.id}:fill-in:set`);
   if (selectedText && block.text.includes(selectedText)) {
     block.text = block.text.replace(selectedText, TEXT_FILL_IN_MARKER);
-    if (!block.schema.placeholder.trim()) {
-      block.schema.placeholder = selectedText;
-    }
+    block.schema.placeholder = selectedText;
   } else if (block.text.trim().length === 0) {
     block.text = TEXT_FILL_IN_MARKER;
   } else {
@@ -1270,6 +1270,11 @@ function updateRichToolbarState(editable: HTMLElement): void {
     'has-fill-in-selection',
     editable.dataset.field === 'block-rich' && Boolean(range && !range.collapsed && range.toString().trim().length > 0)
   );
+  if (editable.dataset.field === 'block-rich' && range && !range.collapsed && range.toString().trim().length > 0) {
+    editable.dataset.fillInSelectionText = range.toString().trim();
+  } else {
+    delete editable.dataset.fillInSelectionText;
+  }
   const toolbars = [
     editable.closest('.table-inline-edit-shell')?.querySelector<HTMLElement>('.table-inline-toolbar') ?? null,
     editable.closest('.editor-block')?.querySelector<HTMLElement>('.rich-toolbar') ?? null,

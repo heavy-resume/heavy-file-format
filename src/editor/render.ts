@@ -286,7 +286,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
             ${isSubsection ? '' : `<button type="button" class="${section.location === 'sidebar' ? 'secondary' : 'ghost'}" data-action="toggle-section-location" data-section-key="${deps.escapeAttr(section.key)}">${section.location === 'sidebar' ? 'main \u2192' : '\u2190 sidebar'}</button>`}
             <button type="button" class="danger remove-x editor-section-remove-button" data-action="remove-section" data-section-key="${deps.escapeAttr(
               section.key
-            )}" aria-label="Remove ${deps.escapeAttr(visibleTitle)} section">${closeIcon()}</button>
+            )}" aria-label="Remove ${deps.escapeAttr(visibleTitle)} section" title="Delete section" data-tooltip="Delete section">${closeIcon()}</button>
           </div>
         </div>
 
@@ -431,7 +431,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const removeButton = canRemove
       ? `<button type="button" class="danger remove-x editor-block-remove-button" data-action="remove-block" data-section-key="${deps.escapeAttr(
         sectionKey
-      )}" data-block-id="${deps.escapeAttr(block.id)}" aria-label="Remove ${deps.escapeAttr(componentLabel)}">${closeIcon()}</button>`
+      )}" data-block-id="${deps.escapeAttr(block.id)}" aria-label="Remove ${deps.escapeAttr(componentLabel)}" title="Delete component" data-tooltip="Delete component">${closeIcon()}</button>`
       : '';
     const frameRemoveButton = state.mobileAdjustmentMode ? '' : removeButton;
 

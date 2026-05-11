@@ -1,0 +1,58 @@
+.hvy-button-component {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  max-width: 100%;
+}
+
+.hvy-button-component-button {
+  border: 1px solid var(--hvy-border-input);
+  border-radius: 999px;
+  padding: 0.35rem 0.7rem;
+  color: var(--hvy-button-text, #ffffff);
+  background: var(--hvy-button-bg, #2d6a8a);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.16);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.hvy-button-component-button:hover {
+  filter: brightness(1.04);
+}
+
+.hvy-button-component-button:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.hvy-button-status {
+  font-size: 0.78rem;
+  color: var(--hvy-muted);
+}
+
+.hvy-button-status.is-error {
+  color: #b42318;
+}
+
+.hvy-button-overlay-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  pointer-events: none;
+}
+
+.hvy-button-overlay-layer .hvy-button-component,
+.hvy-button-overlay-layer .hvy-button-component-button {
+  pointer-events: auto;
+}
+
+.hvy-button-position-anchor {
+  position: relative;
+}
+
+.hvy-button-component[data-visible-state="pending"],
+.hvy-button-component[data-visible-state="hidden"] {
+  display: none;
+}

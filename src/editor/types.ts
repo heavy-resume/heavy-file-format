@@ -22,6 +22,7 @@ export interface ExpandablePart {
 export interface BlockSchema {
   id: string;
   component: string;
+  editorOnly: boolean;
   lock: boolean;
   align: Align;
   slot: Slot;
@@ -68,6 +69,16 @@ export interface BlockSchema {
   tableRows: TableRow[];
   imageFile: string;
   imageAlt: string;
+  buttonLabel: string;
+  buttonAction: 'ai-generate';
+  buttonVisibleScript: string;
+  buttonSourceScript: string;
+  buttonPrompt: string;
+  buttonTargetScript: string;
+  buttonInputCharLimit: number;
+  buttonOutputCharLimit: number;
+  buttonPositionTargetId: string;
+  buttonCss: string;
 }
 
 export interface VisualBlock {
@@ -83,6 +94,7 @@ export interface VisualSection {
   key: string;
   customId: string;
   contained: boolean;
+  editorOnly: boolean;
   lock: boolean;
   idEditorOpen: boolean;
   isGhost: boolean;

@@ -13,6 +13,7 @@ interface HvyScriptingGlobal {
   sources: Record<string, string>;
   instrumentedSources: Record<string, string>;
   errors: Record<string, string | null>;
+  results: Record<string, unknown>;
   callbacks: Record<string, () => void>;
 }
 
@@ -27,13 +28,16 @@ function getScriptingGlobal(): HvyScriptingGlobal {
     throw new Error('Scripting runtime requires a browser environment.');
   }
   if (!window.__HVY_SCRIPTING__) {
-    window.__HVY_SCRIPTING__ = { runtimes: {}, sources: {}, instrumentedSources: {}, errors: {}, callbacks: {} };
+    window.__HVY_SCRIPTING__ = { runtimes: {}, sources: {}, instrumentedSources: {}, errors: {}, results: {}, callbacks: {} };
   }
   if (!window.__HVY_SCRIPTING__.callbacks) {
     window.__HVY_SCRIPTING__.callbacks = {};
   }
   if (!window.__HVY_SCRIPTING__.instrumentedSources) {
     window.__HVY_SCRIPTING__.instrumentedSources = {};
+  }
+  if (!window.__HVY_SCRIPTING__.results) {
+    window.__HVY_SCRIPTING__.results = {};
   }
   return window.__HVY_SCRIPTING__;
 }
@@ -325,8 +329,12 @@ export function cleanScriptingErrorDetail(rawError: string): string {
 // source out of the shared JS global, prefers sys.settrace() for line
 // counting, and falls back to a JS-side source rewrite if tracing is
 // unavailable in the current Brython build.
-export function buildPythonProgram(runtimeId: string, componentId?: string): string {
+export function buildPythonProgram(runtimeId: string, componentId?: string, injectedGlobals: Record<string, unknown> = {}): string {
   const traceLabel = getScriptingTraceLabel(componentId);
+  const injectedAssignments = Object.entries(injectedGlobals)
+    .filter(([name]) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(name))
+    .map(([name, value]) => `    __hvy_user_globals__[${JSON.stringify(name)}] = ${toPythonLiteral(value)}`)
+    .join('\n');
   return `
 from browser import window as __hvy_window__
 
@@ -408,12 +416,13 @@ try:
         'globals': __hvy_safe_globals__,
         '__name__': '__hvy_script__',
     }
+${injectedAssignments}
     __hvy_sanitize_user_globals__()
     exec(__hvy_code__, __hvy_user_globals__)
     __hvy_entrypoint__ = __hvy_user_globals__.get('__hvy_user_main__')
     __hvy_sanitize_user_globals__()
     if __hvy_entrypoint__ is not None:
-        __hvy_entrypoint__()
+        __hvy_globals__.results['${runtimeId}'] = __hvy_entrypoint__()
     __hvy_runtime__.doc.rerender()
 except Exception as __hvy_err__:
     __hvy_globals__.errors['${runtimeId}'] = __hvy_window__.__BRYTHON__.error_trace(__hvy_err__)
@@ -427,12 +436,26 @@ finally:
 `;
 }
 
+function toPythonLiteral(value: unknown): string {
+  if (value === null || typeof value === 'undefined') {
+    return 'None';
+  }
+  if (typeof value === 'boolean') {
+    return value ? 'True' : 'False';
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return String(value);
+  }
+  return JSON.stringify(String(value));
+}
+
 export interface ScriptingRunResult {
   ok: boolean;
   error?: string;
   errorDetail?: string;
   linesExecuted: number;
   toolCalls: number;
+  returnValue?: unknown;
 }
 
 export interface RunUserScriptOptions {
@@ -442,6 +465,7 @@ export interface RunUserScriptOptions {
   pluginVersion?: string;
   maxLines?: number;
   form?: ScriptingFormApi;
+  injectedGlobals?: Record<string, unknown>;
 }
 
 export async function runUserScript(options: RunUserScriptOptions): Promise<ScriptingRunResult> {
@@ -503,13 +527,14 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
   scripting.sources[runtimeId] = wrapPythonSourceInFunction(sanitizedSource);
   scripting.instrumentedSources[runtimeId] = wrapPythonSourceInFunction(instrumentPythonSource(sanitizedSource));
   scripting.errors[runtimeId] = null;
+  scripting.results[runtimeId] = undefined;
 
   // Do not append this to the DOM or use type="text/python", otherwise 
   // Brython 3.14+ will detect the DOM mutation and run the script automatically 
   // in addition to the manual run_script call below, causing a double-execution.
   const scriptElement = document.createElement('script');
   scriptElement.id = `hvy-script-${runtimeId}`;
-  scriptElement.textContent = buildPythonProgram(runtimeId, options.componentId);
+  scriptElement.textContent = buildPythonProgram(runtimeId, options.componentId, options.injectedGlobals ?? {});
 
   return new Promise((resolve) => {
     scripting.callbacks[runtimeId] = () => {
@@ -526,12 +551,14 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
             ok: true,
             linesExecuted: runtime.stats.linesExecuted,
             toolCalls: runtime.stats.toolCalls,
+            returnValue: scripting.results[runtimeId],
           };
 
       delete scripting.runtimes[runtimeId];
       delete scripting.sources[runtimeId];
       delete scripting.instrumentedSources[runtimeId];
       delete scripting.errors[runtimeId];
+      delete scripting.results[runtimeId];
       delete scripting.callbacks[runtimeId];
       scriptingDb.dispose();
       if (dbMutated) {

@@ -170,6 +170,7 @@ function mapParsedSection(section: HvySection, documentMeta: JsonObject, diagnos
     key: makeId('section'),
     customId,
     contained: sectionMeta.contained !== false,
+    editorOnly: sectionMeta.editorOnly === true,
     lock: sectionMeta.lock === true,
     idEditorOpen: false,
     isGhost: false,
@@ -1096,6 +1097,9 @@ function serializeSection(section: VisualSection, level: number, documentMeta: J
   if (!section.contained) {
     meta.contained = false;
   }
+  if (section.editorOnly) {
+    meta.editorOnly = true;
+  }
   if (section.css.trim().length > 0) {
     meta.css = section.css;
   }
@@ -1142,6 +1146,7 @@ function serializeBlockSchema(
   if (!options.omitComponent) {
     payload.component = schema.component;
   }
+  addIfChanged(payload, 'editorOnly', schema.editorOnly, defaults.editorOnly);
   addIfChanged(payload, 'lock', schema.lock, defaults.lock);
   addIfChanged(payload, 'align', schema.align, defaults.align);
   addIfChanged(payload, 'slot', schema.slot, defaults.slot);
@@ -1211,6 +1216,18 @@ function serializeBlockSchema(
   if (component === 'image') {
     addIfChanged(payload, 'imageFile', schema.imageFile, defaults.imageFile);
     addIfChanged(payload, 'imageAlt', schema.imageAlt, defaults.imageAlt);
+  }
+  if (component === 'button') {
+    addIfChanged(payload, 'buttonLabel', schema.buttonLabel, defaults.buttonLabel);
+    addIfChanged(payload, 'buttonAction', schema.buttonAction, defaults.buttonAction);
+    addIfChanged(payload, 'buttonVisibleScript', schema.buttonVisibleScript, defaults.buttonVisibleScript);
+    addIfChanged(payload, 'buttonSourceScript', schema.buttonSourceScript, defaults.buttonSourceScript);
+    addIfChanged(payload, 'buttonPrompt', schema.buttonPrompt, defaults.buttonPrompt);
+    addIfChanged(payload, 'buttonTargetScript', schema.buttonTargetScript, defaults.buttonTargetScript);
+    addIfChanged(payload, 'buttonInputCharLimit', schema.buttonInputCharLimit, defaults.buttonInputCharLimit);
+    addIfChanged(payload, 'buttonOutputCharLimit', schema.buttonOutputCharLimit, defaults.buttonOutputCharLimit);
+    addIfChanged(payload, 'buttonPositionTargetId', schema.buttonPositionTargetId, defaults.buttonPositionTargetId);
+    addIfChanged(payload, 'buttonCss', schema.buttonCss, defaults.buttonCss);
   }
 
   return payload;

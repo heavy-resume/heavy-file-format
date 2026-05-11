@@ -14,6 +14,7 @@ export function defaultBlockSchema(component = 'text'): BlockSchema {
   return {
     id: '',
     component,
+    editorOnly: false,
     lock: false,
     align: 'left',
     slot: 'center',
@@ -60,6 +61,16 @@ export function defaultBlockSchema(component = 'text'): BlockSchema {
     tableRows: [],
     imageFile: '',
     imageAlt: '',
+    buttonLabel: 'Generate',
+    buttonAction: 'ai-generate',
+    buttonVisibleScript: '',
+    buttonSourceScript: '',
+    buttonPrompt: '',
+    buttonTargetScript: '',
+    buttonInputCharLimit: 4000,
+    buttonOutputCharLimit: 1000,
+    buttonPositionTargetId: '',
+    buttonCss: '',
   };
 }
 
@@ -154,6 +165,7 @@ export function schemaFromUnknown(value: unknown, seen = new WeakSet<object>()):
   return {
     component,
     id: typeof candidate.id === 'string' ? candidate.id : defaults.id,
+    editorOnly: candidate.editorOnly === true,
     lock: candidate.lock === true,
     align: coerceAlign(typeof candidate.align === 'string' ? candidate.align : 'left'),
     slot: coerceSlot(typeof candidate.slot === 'string' ? candidate.slot : 'center'),
@@ -228,6 +240,16 @@ export function schemaFromUnknown(value: unknown, seen = new WeakSet<object>()):
     }),
     imageFile: typeof candidate.imageFile === 'string' ? candidate.imageFile : defaults.imageFile,
     imageAlt: typeof candidate.imageAlt === 'string' ? candidate.imageAlt : defaults.imageAlt,
+    buttonLabel: typeof candidate.buttonLabel === 'string' ? candidate.buttonLabel : defaults.buttonLabel,
+    buttonAction: 'ai-generate',
+    buttonVisibleScript: typeof candidate.buttonVisibleScript === 'string' ? candidate.buttonVisibleScript : defaults.buttonVisibleScript,
+    buttonSourceScript: typeof candidate.buttonSourceScript === 'string' ? candidate.buttonSourceScript : defaults.buttonSourceScript,
+    buttonPrompt: typeof candidate.buttonPrompt === 'string' ? candidate.buttonPrompt : defaults.buttonPrompt,
+    buttonTargetScript: typeof candidate.buttonTargetScript === 'string' ? candidate.buttonTargetScript : defaults.buttonTargetScript,
+    buttonInputCharLimit: parsePositiveNumber(candidate.buttonInputCharLimit, defaults.buttonInputCharLimit),
+    buttonOutputCharLimit: parsePositiveNumber(candidate.buttonOutputCharLimit, defaults.buttonOutputCharLimit),
+    buttonPositionTargetId: typeof candidate.buttonPositionTargetId === 'string' ? candidate.buttonPositionTargetId : defaults.buttonPositionTargetId,
+    buttonCss: typeof candidate.buttonCss === 'string' ? candidate.buttonCss : defaults.buttonCss,
   };
 }
 
@@ -306,6 +328,7 @@ export function createEmptySection(level: number, component = 'container', isGho
     key: makeId('section'),
     customId: '',
     contained: true,
+    editorOnly: false,
     lock: false,
     idEditorOpen: false,
     isGhost,
@@ -378,6 +401,7 @@ function cloneReusableSectionWithDelta(section: VisualSection, levelDelta: numbe
     key: makeId('section'),
     customId: '',
     contained: section.contained !== false,
+    editorOnly: section.editorOnly === true,
     idEditorOpen: false,
     isGhost: false,
     title: section.title,

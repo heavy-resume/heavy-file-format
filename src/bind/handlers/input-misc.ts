@@ -1,6 +1,7 @@
 import { state, incrementInputEventCount, getRenderApp, getRefreshReaderPanels, handleTagEditorInput, findSectionByKey, getReusableNameFromSectionKey, resolveBlockContext, handleBlockFieldInput, refreshRichToolbarState, recordHistory, syncReusableTemplateForBlock, sanitizeOptionalId, tagStateHelpers } from './_imports';
 import { SCRIPTING_PLUGIN_ID } from '../../plugins/registry';
 import { SCRIPTING_PLUGIN_VERSION } from '../../plugins/scripting/version';
+import { runButtonVisibilityScripts } from '../../editor/components/button/button-actions';
 import { addDefaultContainerBorderCss, removeDefaultContainerBorderCss } from '../../editor/components/container/container-css';
 import { submitSearch } from '../../search/actions';
 
@@ -141,6 +142,16 @@ export function bindInputMisc(app: HTMLElement): void {
       }
       section.highlight = target.checked;
       getRefreshReaderPanels()();
+      return;
+    }
+
+    if (field === 'section-editor-only' && target instanceof HTMLInputElement) {
+      if (!section) {
+        return;
+      }
+      section.editorOnly = target.checked;
+      getRefreshReaderPanels()();
+      getRenderApp()();
       return;
     }
 
@@ -386,6 +397,49 @@ export function bindInputMisc(app: HTMLElement): void {
       return;
     }
 
+    if (field === 'block-editor-only' && target instanceof HTMLInputElement) {
+      const context = resolveBlockContext(target);
+      if (!context) {
+        return;
+      }
+      context.block.schema.editorOnly = target.checked;
+      syncReusableTemplateForBlock(sectionKey, context.block.id);
+      getRefreshReaderPanels()();
+      getRenderApp()();
+      return;
+    }
+
+    if (field?.startsWith('block-button-') && (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) {
+      const context = resolveBlockContext(target);
+      if (!context) {
+        return;
+      }
+      const block = context.block;
+      if (field === 'block-button-label') block.schema.buttonLabel = target.value;
+      if (field === 'block-button-position-target-id') block.schema.buttonPositionTargetId = target.value;
+      if (field === 'block-button-css') block.schema.buttonCss = target.value;
+      if (field === 'block-button-visible-script') block.schema.buttonVisibleScript = target.value;
+      if (field === 'block-button-source-script') block.schema.buttonSourceScript = target.value;
+      if (field === 'block-button-prompt') block.schema.buttonPrompt = target.value;
+      if (field === 'block-button-target-script') block.schema.buttonTargetScript = target.value;
+      if (field === 'block-button-input-char-limit') {
+        const value = Number.parseInt(target.value, 10);
+        if (Number.isFinite(value) && value > 0) block.schema.buttonInputCharLimit = value;
+      }
+      if (field === 'block-button-output-char-limit') {
+        const value = Number.parseInt(target.value, 10);
+        if (Number.isFinite(value) && value > 0) block.schema.buttonOutputCharLimit = value;
+      }
+      syncReusableTemplateForBlock(sectionKey, block.id);
+      getRefreshReaderPanels()();
+      if (field === 'block-button-position-target-id') {
+        getRenderApp()();
+      } else {
+        void runButtonVisibilityScripts(app);
+      }
+      return;
+    }
+
     if (field === 'block-expandable-stub-css' && (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) {
       const context = resolveBlockContext(target);
       if (!context) {
@@ -453,6 +507,7 @@ export function bindInputMisc(app: HTMLElement): void {
       if (field === 'block-rich' || field === 'block-grid-rich' || field === 'table-details-rich' || field === 'table-cell' || field === 'table-column') {
         refreshRichToolbarState(target);
       }
+      void runButtonVisibilityScripts(app);
       console.debug('[hvy:perf] input:end', { eventId, field, elapsedMs: Number((performance.now() - startedAt).toFixed(2)), handledBy: 'block-field' });
       return;
     }

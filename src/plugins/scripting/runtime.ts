@@ -27,12 +27,19 @@ export interface ScriptingRuntime {
 
 interface ScriptingDocApi {
   tool: (name: string, args?: Record<string, unknown>) => string;
+  component: ScriptingComponentApi;
   header: ScriptingHeaderApi;
   attachments: ScriptingAttachmentsApi;
   form: ScriptingFormApi;
   db: ScriptingDbApi;
   cli: ScriptingCliApi;
   rerender: () => void;
+}
+
+interface ScriptingComponentApi {
+  get_text(id: string): string;
+  set_text(id: string, text: string): void;
+  is_empty(id: string): boolean;
 }
 
 interface ScriptingHeaderApi {
@@ -135,6 +142,21 @@ export function createScriptingRuntime(options: ScriptingRuntimeOptions): Script
       const result = executeDocumentEditToolByName(name, args ?? {}, options.document, onMutation);
       return result;
     },
+    component: {
+      get_text: (id) => findComponentBySchemaId(options.document, String(id ?? ''))?.text ?? '',
+      set_text: (id, text) => {
+        const block = findComponentBySchemaId(options.document, String(id ?? ''));
+        if (!block) {
+          throw new Error(`Component "${String(id ?? '')}" was not found.`);
+        }
+        block.text = String(text ?? '');
+        mutated = true;
+      },
+      is_empty: (id) => {
+        const block = findComponentBySchemaId(options.document, String(id ?? ''));
+        return !block || block.text.trim().length === 0 || /<!--\s*value\s*-->/.test(block.text);
+      },
+    },
     header: {
       get: (key) => options.document.meta[key],
       set: (key, value) => {
@@ -215,4 +237,46 @@ export function createScriptingRuntime(options: ScriptingRuntimeOptions): Script
       lineBudget = Math.max(1, Math.floor(maxLines));
     },
   };
+}
+
+function findComponentBySchemaId(document: VisualDocument, id: string): import('../../editor/types').VisualBlock | null {
+  const targetId = id.trim();
+  if (!targetId) {
+    return null;
+  }
+  for (const section of document.sections) {
+    const found = findComponentBySchemaIdInBlocks(section.blocks, targetId);
+    if (found) {
+      return found;
+    }
+  }
+  return null;
+}
+
+function findComponentBySchemaIdInBlocks(
+  blocks: import('../../editor/types').VisualBlock[],
+  id: string,
+  seen = new Set<import('../../editor/types').VisualBlock>()
+): import('../../editor/types').VisualBlock | null {
+  for (const block of blocks) {
+    if (seen.has(block)) {
+      continue;
+    }
+    seen.add(block);
+    if (block.schema.id.trim() === id) {
+      return block;
+    }
+    const nested = [
+      ...(block.schema.containerBlocks ?? []),
+      ...(block.schema.componentListBlocks ?? []),
+      ...((block.schema.gridItems ?? []).map((item) => item.block)),
+      ...(block.schema.expandableStubBlocks?.children ?? []),
+      ...(block.schema.expandableContentBlocks?.children ?? []),
+    ];
+    const found = findComponentBySchemaIdInBlocks(nested, id, seen);
+    if (found) {
+      return found;
+    }
+  }
+  return null;
 }

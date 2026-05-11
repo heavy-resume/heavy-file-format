@@ -1,6 +1,7 @@
 import './reader.css';
 import './sidebar.css';
 import { renderCodeReader } from '../editor/components/code/code';
+import { renderButtonReader } from '../editor/components/button/button';
 import { renderComponentListReader } from '../editor/components/component-list/component-list';
 import { renderContainerReader } from '../editor/components/container/container';
 import { renderExpandableReader } from '../editor/components/expandable/expandable';
@@ -142,7 +143,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     return withReaderViewContext(() => {
       const viewContext = getActiveReaderViewContext();
       const items = deps.flattenSections(sections).filter((section) => {
-        if (section.isGhost || section.location === 'sidebar') {
+        if (section.isGhost || section.location === 'sidebar' || isViewerHiddenSection(section)) {
           return false;
         }
         return !hasReaderViewModifier(viewContext, getSectionReaderViewTargetKey(section), 'hidden');
@@ -171,7 +172,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     return withReaderViewContext(() => {
       resetReaderTableStripeSequence();
       const realSections = orderReaderViewTargets(
-        sections.filter((section) => !section.isGhost && section.location !== 'sidebar' && isSectionSearchVisible(getActiveSearchFilterContext(), section)),
+        sections.filter((section) => !section.isGhost && section.location !== 'sidebar' && !isViewerHiddenSection(section) && isSectionSearchVisible(getActiveSearchFilterContext(), section)),
         getActiveReaderViewContext(),
         getSectionReaderViewTargetKey,
         state.readerViewActivatedTargets
@@ -197,7 +198,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     return withReaderViewContext(() => {
       resetReaderTableStripeSequence();
       const sidebarSections = orderReaderViewTargets(
-        sections.filter((section) => !section.isGhost && section.location === 'sidebar' && isSectionSearchVisible(getActiveSearchFilterContext(), section)),
+        sections.filter((section) => !section.isGhost && section.location === 'sidebar' && !isViewerHiddenSection(section) && isSectionSearchVisible(getActiveSearchFilterContext(), section)),
         getActiveReaderViewContext(),
         getSectionReaderViewTargetKey,
         state.readerViewActivatedTargets
@@ -214,7 +215,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     if (state.viewerSidebarHelpDismissed) {
       return '';
     }
-    const sidebarSections = sections.filter((section) => !section.isGhost && section.location === 'sidebar');
+    const sidebarSections = sections.filter((section) => !section.isGhost && section.location === 'sidebar' && !isViewerHiddenSection(section));
     if (sidebarSections.length === 0) {
       return '';
     }
@@ -229,6 +230,9 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
   }
 
   function renderReaderSection(section: VisualSection): string {
+    if (isViewerHiddenSection(section)) {
+      return '';
+    }
     const viewContext = getActiveReaderViewContext();
     const targetKey = getSectionReaderViewTargetKey(section);
     if (hasReaderViewModifier(viewContext, targetKey, 'hidden')) {
@@ -267,7 +271,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       : 'reader-section-content';
     const blocksHtml = renderReaderBlocks(section, section.blocks);
     const childrenHtml = orderReaderViewTargets(
-      section.children.filter((child) => !child.isGhost),
+      section.children.filter((child) => !child.isGhost && !isViewerHiddenSection(child)),
       viewContext,
       getSectionReaderViewTargetKey,
       state.readerViewActivatedTargets
@@ -310,6 +314,9 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
   }
 
   function renderReaderBlock(section: VisualSection, block: VisualBlock): string {
+    if (isViewerHiddenBlock(block)) {
+      return '';
+    }
     const viewContext = getActiveReaderViewContext();
     const searchContext = getActiveSearchFilterContext();
     const targetKey = getBlockReaderViewTargetKey(block);
@@ -351,11 +358,12 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     const expandableAttrs = base === 'expandable'
       ? ` data-reader-action="toggle-expandable" aria-expanded="${readerExpanded ? 'true' : 'false'}"`
       : '';
-    const blockAttrs = `${idAttr} class="${blockClass}" data-component="${deps.escapeAttr(block.schema.component)}" data-section-key="${deps.escapeAttr(section.key)}" data-block-id="${deps.escapeAttr(block.id)}"${expandableAttrs} style="${deps.escapeAttr(sanitizeInlineCss(block.schema.css))}"`;
+    const anchor = getReaderButtonAnchor(section, block);
+    const blockAttrs = `${idAttr} class="${blockClass}${anchor.className}" data-component="${deps.escapeAttr(block.schema.component)}" data-section-key="${deps.escapeAttr(section.key)}" data-block-id="${deps.escapeAttr(block.id)}"${blockDomId ? ` data-component-id="${deps.escapeAttr(blockDomId)}"` : ''}${anchor.attrs}${expandableAttrs} style="${deps.escapeAttr(sanitizeInlineCss(block.schema.css))}"`;
     const helpers = deps.getComponentRenderHelpers();
     const renderBlockShell = (body: string): string => {
       const query = searchContext.filtering ? '' : searchContext.query;
-      return `<div ${blockAttrs}${renderReaderViewTargetAttrs(targetKey, dimmed)}>${highlightSearchHtml(body, query, searchContext.caseSensitive)}</div>`;
+      return `<div ${blockAttrs}${renderReaderViewTargetAttrs(targetKey, dimmed)}>${highlightSearchHtml(body, query, searchContext.caseSensitive)}${anchor.overlay}</div>`;
     };
     const renderMaybeCollapsedBlockShell = (body: string): string => {
       if (!modifiers.has('collapse') || base === 'container' || base === 'expandable') {
@@ -389,6 +397,9 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
         return renderMaybeCollapsedBlockShell(renderCodeReader(section, { ...block, schema: { ...block.schema, codeLanguage: 'python' } } as VisualBlock, helpers));
       }
       return renderMaybeCollapsedBlockShell(renderPluginReader(section, block, helpers));
+    }
+    if (base === 'button') {
+      return renderMaybeCollapsedBlockShell(renderButtonReader(section, block, helpers));
     }
     if (base === 'container') {
       const readerBlock = modifiers.has('collapse')
@@ -435,7 +446,10 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
   }
 
   function renderReaderBlocks(section: VisualSection, blocks: VisualBlock[]): string {
-    return orderReaderBlocks(blocks).map((block) => renderReaderBlock(section, block)).join('');
+    return orderReaderBlocks(blocks)
+      .filter((block) => !isAnchoredReaderButton(section, block))
+      .map((block) => renderReaderBlock(section, block))
+      .join('');
   }
 
   function renderReaderListBlocks(section: VisualSection, blocks: VisualBlock[]): string {
@@ -449,9 +463,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       getBlockReaderViewTargetKey,
       state.readerViewActivatedTargets,
       { prioritize: false }
-    ).filter((block) =>
-      isBlockSearchVisible(getActiveSearchFilterContext(), block)
-    );
+    ).filter((block) => isBlockSearchVisible(getActiveSearchFilterContext(), block));
   }
 
   function orderReaderListBlocks(blocks: VisualBlock[]): VisualBlock[] {
@@ -464,6 +476,44 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     ).filter((block) =>
       isBlockSearchVisible(getActiveSearchFilterContext(), block)
     );
+  }
+
+  function isViewerHiddenSection(section: VisualSection): boolean {
+    return state.currentView === 'viewer' && section.editorOnly;
+  }
+
+  function isViewerHiddenBlock(block: VisualBlock): boolean {
+    return state.currentView === 'viewer' && block.schema.editorOnly;
+  }
+
+  function isAnchoredReaderButton(section: VisualSection | null, block: VisualBlock): boolean {
+    if (!section || state.currentView !== 'ai' || deps.resolveBaseComponent(block.schema.component) !== 'button') {
+      return false;
+    }
+    const targetId = block.schema.buttonPositionTargetId.trim();
+    return !!targetId && section.blocks.some((candidate) => candidate !== block && candidate.schema.id.trim() === targetId);
+  }
+
+  function getReaderButtonAnchor(section: VisualSection, block: VisualBlock): { className: string; attrs: string; overlay: string } {
+    if (state.currentView !== 'ai') {
+      return { className: '', attrs: '', overlay: '' };
+    }
+    const componentId = block.schema.id.trim();
+    const buttons = componentId
+      ? section.blocks.filter((candidate) =>
+          deps.resolveBaseComponent(candidate.schema.component) === 'button'
+          && candidate.schema.buttonPositionTargetId.trim() === componentId
+        )
+      : [];
+    if (buttons.length === 0) {
+      return { className: '', attrs: '', overlay: '' };
+    }
+    const helpers = deps.getComponentRenderHelpers();
+    return {
+      className: ' hvy-button-position-anchor',
+      attrs: ' data-hvy-button-anchor="true"',
+      overlay: `<div class="hvy-button-overlay-layer">${buttons.map((button) => renderButtonReader(section, button, helpers)).join('')}</div>`,
+    };
   }
 
   function isReaderViewPrioritizedBlock(block: VisualBlock): boolean {
@@ -508,6 +558,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       key: 'theme-preview-section',
       customId: '',
       contained: true,
+      editorOnly: false,
       lock: true,
       idEditorOpen: false,
       isGhost: false,
@@ -1359,6 +1410,15 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
                   ${section.highlight ? 'checked' : ''}
                 />
                 Highlight
+              </label>
+              <label class="checkbox-label">
+                <input
+                  type="checkbox"
+                  data-section-key="${deps.escapeAttr(section.key)}"
+                  data-field="section-editor-only"
+                  ${section.editorOnly ? 'checked' : ''}
+                />
+                Editor Only
               </label>
             </div>
           </div>

@@ -35,6 +35,7 @@ import { progressBarPluginRegistration } from './plugins/progress-bar';
 import { scriptingPluginRegistration, setScriptingResult } from './plugins/scripting/scripting';
 import { runUserScript } from './plugins/scripting/wrapper';
 import { getScriptingPluginVersion } from './plugins/scripting/version';
+import { runButtonVisibilityScripts } from './editor/components/button/button-actions';
 import { visitBlocksInList } from './section-ops';
 import { centerSearchResultLenses, renderCollapsedSearchBar, renderSearchLauncher, renderSearchPalette } from './search/render';
 import { createDefaultSearchState } from './search/state';
@@ -708,6 +709,7 @@ function renderApp(): void {
   stepStartedAt = performance.now();
   bindUi(app);
   reconcilePluginMounts(app);
+  void runButtonVisibilityScripts(app);
   bindMs = performance.now() - stepStartedAt;
 
   stepStartedAt = performance.now();
@@ -859,6 +861,7 @@ function refreshReaderPanels(): void {
     capturePluginFocus();
     reader.innerHTML = readerRenderer.renderReaderSections(state.document.sections);
     reconcilePluginMounts(reader);
+    void runButtonVisibilityScripts(reader);
     readerMs = performance.now() - stepStartedAt;
   }
   if (sidebarSections || reader) {

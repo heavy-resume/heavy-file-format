@@ -960,6 +960,7 @@ function getChatReaderSection(): VisualSection {
     level: 1,
     expanded: true,
     highlight: false,
+    editorOnly: false,
     css: '',
     tags: '',
     description: '',

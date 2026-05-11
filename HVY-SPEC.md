@@ -207,6 +207,7 @@ Section metadata optionally includes a `blocks` array describing per-block rende
 
 Common block metadata fields include:
 - `component`
+- `editorOnly`
 - `lock`
 - `align`
 - `slot`
@@ -220,6 +221,7 @@ Common block metadata fields include:
 
 `css` is an optional inline CSS style string applied to that block's rendered wrapper. Authoring tools expose this for layout and presentation adjustments such as collapsing spacing between adjacent blocks.
 Inline `css` strings are declaration-only values equivalent to an HTML `style` attribute. They MUST NOT contain selectors, `@media`, `@container`, or other at-rules. Responsive author CSS belongs in fenced HVY CSS blocks.
+`editorOnly` is an optional boolean on sections and blocks. When true, the section or block exists in editor surfaces and document AI editing mode, but MUST NOT be rendered in the viewer, viewer navigation/sidebar, or viewer-oriented reader views/search results. Use it for authoring controls such as generation buttons that should not become part of the finished document.
 `lock` is an optional boolean. Use it to prevent structural additions inside that block, such as nested child blocks or table-column changes.
 `placeholder` is an optional string. Display it as plain hint text when the block's content is empty, helping template authors communicate intent to document authors. It applies to text-based blocks and grid item blocks. It is not parsed as Markdown or HVY content.
 `fillIn` is an optional boolean for text blocks. When true, authoring tools SHOULD treat each `<!-- value -->` marker in the text body as an editable fill-in region in basic editing modes. Text outside the markers is scaffold text and SHOULD NOT be edited by constrained/basic editors. When all markers are filled or removed and no `<!-- value -->` marker remains, tools SHOULD treat the block like regular text again.
@@ -231,6 +233,7 @@ Section metadata also includes optional presentation keys such as:
 - `expanded`
 - `highlight`
 - `lock`
+- `editorOnly`
 - `contained`
 - `css`
 - `location`
@@ -238,6 +241,7 @@ Section metadata also includes optional presentation keys such as:
 `css` is an optional inline CSS style string applied to the rendered section wrapper.
 Inline section `css` follows the same declaration-only rule as block `css`. Use CSS blocks for media queries, container queries, selectors, and other stylesheet-level constructs.
 `lock` is an optional boolean. Use it to prevent adding new blocks or child sections inside that section.
+`editorOnly` follows the same visibility rule as block `editorOnly`.
 `contained` is an optional boolean. When `true` (default), render the section as the normal bordered card/container and allow collapse/expand UI. When `false`, render the section edge-to-edge without the section border/background wrapper and without the section expander/collapser.
 `location` is an optional string. Use it to route a section to a named layout zone in the viewer. Defined values are `"main"` (default) and `"sidebar"`. Unknown values SHOULD be treated as `"main"`.
 
@@ -347,6 +351,25 @@ Image block fields:
 
 Common web image media types SHOULD be supported, including `image/png`, `image/jpeg`, `image/gif`, `image/webp`, `image/svg+xml`, `image/avif`, and `image/bmp`. Clients MUST treat tail bytes as untrusted (see §8) and SHOULD render the image inline when the attachment is present, or surface a warning when it is missing.
 
+Button blocks define authoring controls. They are usually `editorOnly` and SHOULD be omitted from finished viewer output:
+
+```markdown
+<!--hvy:button {"editorOnly":true,"buttonLabel":"Generate","buttonAction":"ai-generate","buttonPositionTargetId":"target-component-id","buttonCss":"position: absolute; top: 0.25rem; right: 0.25rem;"}-->
+```
+
+Button block fields:
+- `buttonLabel`: visible button text. Defaults to `"Generate"`.
+- `buttonAction`: supported value `"ai-generate"`.
+- `buttonVisibleScript`: optional Python source evaluated in the existing Brython scripting sandbox to decide whether the button should be visible in editor/AI mode.
+- `buttonSourceScript`: Python source evaluated on click in the same sandbox; its return value becomes the generation input.
+- `buttonPrompt`: model instruction used by the host for the generation call.
+- `buttonTargetScript`: Python source evaluated after generation with injected `response` and `source` values. It applies the raw model response back to the document.
+- `buttonInputCharLimit` and `buttonOutputCharLimit`: positive integer safety limits for generation input and output.
+- `buttonPositionTargetId`: optional component id whose rendered wrapper becomes the relative positioning anchor for the button.
+- `buttonCss`: optional declaration-only inline CSS for the button wrapper. When anchored, authors can use absolute positioning such as `position: absolute; top: 0.25rem; right: 0.25rem;`.
+
+General scripting blocks MUST NOT receive direct chat or LLM APIs. For `ai-generate` buttons, the host performs the model call and the Brython scripts only prepare input and apply output.
+
 Rules:
 - The directive MUST be on a single line.
 - The payload MUST be valid JSON object.
@@ -398,6 +421,16 @@ Block metadata optionally includes component-specific fields. Common examples in
 - `tableRows`
 - `imageFile`
 - `imageAlt`
+- `buttonLabel`
+- `buttonAction`
+- `buttonVisibleScript`
+- `buttonSourceScript`
+- `buttonPrompt`
+- `buttonTargetScript`
+- `buttonInputCharLimit`
+- `buttonOutputCharLimit`
+- `buttonPositionTargetId`
+- `buttonCss`
 
 Nested block arrays such as `containerBlocks` use a recursive block object shape:
 

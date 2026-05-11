@@ -756,6 +756,7 @@ function createSection(id: string, title: string, level: number): VisualSection 
     level,
     expanded: true,
     highlight: false,
+    editorOnly: false,
     css: '',
     tags: '',
     description: '',

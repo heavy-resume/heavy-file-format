@@ -310,7 +310,7 @@ test('requestDocumentEditChatTurn runs the CLI edit loop for document chat', asy
     expect.objectContaining({ role: 'user', content: expect.stringContaining('Recipes:\n- db-and-form\n- form-backed-table\n- populate-form-options-from-db\n- scripting') }),
     expect.objectContaining({ role: 'assistant', content: expect.stringContaining('```shell\nhvy request_structure --collapse\n```') }),
     expect.objectContaining({ role: 'user', content: expect.stringContaining('Components:') }),
-    expect.objectContaining({ role: 'assistant', content: expect.stringContaining('```shell\nhvy find-intent "Add a chore section." --max 5\n```') }),
+    expect.objectContaining({ role: 'assistant', content: expect.stringContaining('```shell\nhvy search "Add a chore section." --max 5\n```') }),
     expect.objectContaining({ role: 'user', content: expect.stringContaining('Next response: Write one concise What / Why / Unsure note block') }),
   ]);
   expect(firstMessages?.at(-1)?.role).toBe('user');
@@ -338,8 +338,8 @@ test('requestDocumentEditChatTurn runs the CLI edit loop for document chat', asy
   ]);
   expect(writeChatCliCommandTraceMock.mock.calls[3]).toEqual([
     'chat-cli-test',
-    'hvy find-intent "Add a chore section." --max 5',
-    expect.stringContaining('No intent matches found'),
+    'hvy search "Add a chore section." --max 5',
+    expect.stringContaining('No search results found'),
     undefined,
   ]);
   expect(result.messages.at(-1)).toEqual(expect.objectContaining({
@@ -557,8 +557,8 @@ test('buildDocumentEditCliSimRequest exposes the exact provider-facing CLI reque
     expect.objectContaining({ type: 'function_call_output', call_id: 'startup_call_2', output: expect.stringContaining('hvy insert INDEX section PARENT_PATH ID TITLE') }),
     { type: 'function_call', call_id: 'startup_call_3', name: 'run_hvy_cli', arguments: '{"command":"hvy request_structure --collapse"}' },
     expect.objectContaining({ type: 'function_call_output', call_id: 'startup_call_3', output: expect.stringContaining('Components:') }),
-    { type: 'function_call', call_id: 'startup_call_4', name: 'run_hvy_cli', arguments: '{"command":"hvy find-intent \\"Add a chore section.\\" --max 5"}' },
-    expect.objectContaining({ type: 'function_call_output', call_id: 'startup_call_4', output: expect.stringContaining('No intent matches found') }),
+    { type: 'function_call', call_id: 'startup_call_4', name: 'run_hvy_cli', arguments: '{"command":"hvy search \\"Add a chore section.\\" --max 5"}' },
+    expect.objectContaining({ type: 'function_call_output', call_id: 'startup_call_4', output: expect.stringContaining('No search results found') }),
   ]);
   expect(result.requestJson).not.toContain('### CMD RESULT ###');
   expect(result.requestJson).not.toContain('```shell\\nls /\\n```');
@@ -1337,7 +1337,7 @@ cat /header.yaml
 hvy lint
 hvy --help
 hvy request_structure --collapse
-hvy find-intent "summary" --max 5
+hvy search "summary" --max 5
 find /body -maxdepth 2
 rg "Summary" /body
 cat /scratchpad.txt
@@ -1373,7 +1373,7 @@ true
     'ls /',
     'hvy --help',
     'hvy request_structure --collapse',
-    'hvy find-intent "Try too many commands." --max 5',
+    'hvy search "Try too many commands." --max 5',
     'pwd\nls /\ncat /header.yaml\nhvy lint',
   ]);
 });
@@ -1797,8 +1797,8 @@ test('requestDocumentEditChatTurn treats continue as chronological context inste
   expect(context).toContain('Current request:\ncontinue');
   expect(context).not.toContain('Use the chronological chat messages and terminal results to infer the active task.');
   expect(context).not.toContain('Task goal:');
-  expect(writeChatCliCommandTraceMock.mock.calls.map((call) => call[1])).toContain('hvy find-intent "continue" --max 5');
-  expect(writeChatCliCommandTraceMock.mock.calls.map((call) => call[1])).not.toContain('hvy find-intent "Create a chore chart with forms and a leaderboard\ncontinue" --max 5');
+  expect(writeChatCliCommandTraceMock.mock.calls.map((call) => call[1])).toContain('hvy search "continue" --max 5');
+  expect(writeChatCliCommandTraceMock.mock.calls.map((call) => call[1])).not.toContain('hvy search "Create a chore chart with forms and a leaderboard\ncontinue" --max 5');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages.slice(0, 3)).toEqual([
     expect.objectContaining({ role: 'user', content: 'Create a chore chart with forms and a leaderboard' }),
     expect.objectContaining({ role: 'assistant', content: 'Unclosed quote in command.', error: true }),
@@ -1827,7 +1827,7 @@ test('requestDocumentEditChatTurn treats prose and dangling fences as retryable 
   expect(onProgress).not.toHaveBeenCalled();
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content).toContain('Expected concise notes plus fenced ```shell commands');
   expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.messages.at(-1)?.content).toContain('Expected concise notes plus fenced ```shell commands');
-  expect(writeChatCliCommandTraceMock.mock.calls.map((call) => call[1])).toEqual(['ls /', 'hvy --help', 'hvy request_structure --collapse', 'hvy find-intent "Use command format." --max 5']);
+  expect(writeChatCliCommandTraceMock.mock.calls.map((call) => call[1])).toEqual(['ls /', 'hvy --help', 'hvy request_structure --collapse', 'hvy search "Use command format." --max 5']);
 });
 
 test('requestDocumentEditChatTurn preserves multiline quoted shell commands', async () => {
@@ -1874,7 +1874,7 @@ test('requestDocumentEditChatTurn lets the cli edit loop retry after command err
 
   expect(result.error).toBeNull();
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content).toContain(
-    'CMD: hvy\n### CMD RESULT ###\nhvy: expected request_structure, find-intent, cheatsheet, recipe, lint, insert, plugin, remove, prune-xref, preview, or help\n### END CMD RESULT ###'
+    'CMD: hvy\n### CMD RESULT ###\nhvy: expected request_structure, search, cheatsheet, recipe, lint, insert, plugin, remove, prune-xref, preview, or help\n### END CMD RESULT ###'
   );
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content).toContain(
     '### BEGIN your urgency ###\nscore=0\nprioritize planning and understanding'
@@ -1882,9 +1882,9 @@ test('requestDocumentEditChatTurn lets the cli edit loop retry after command err
   expect(writeChatCliCommandTraceMock).toHaveBeenCalledWith(
     'chat-cli-test',
     'hvy',
-    'hvy: expected request_structure, find-intent, cheatsheet, recipe, lint, insert, plugin, remove, prune-xref, preview, or help',
+    'hvy: expected request_structure, search, cheatsheet, recipe, lint, insert, plugin, remove, prune-xref, preview, or help',
     undefined,
-    expect.stringContaining('CMD: hvy\n### CMD RESULT ###\nhvy: expected request_structure, find-intent, cheatsheet, recipe, lint, insert, plugin, remove, prune-xref, preview, or help\n### END CMD RESULT ###')
+    expect.stringContaining('CMD: hvy\n### CMD RESULT ###\nhvy: expected request_structure, search, cheatsheet, recipe, lint, insert, plugin, remove, prune-xref, preview, or help\n### END CMD RESULT ###')
   );
 });
 
@@ -1967,7 +1967,7 @@ test('requestDocumentEditChatTurn stops after repeated cli command errors', asyn
     expect.stringContaining('Components:'),
     expect.any(String),
     'Unknown command "not-a-command". Try "help".',
-    'hvy: expected request_structure, find-intent, cheatsheet, recipe, lint, insert, plugin, remove, prune-xref, preview, or help',
+    'hvy: expected request_structure, search, cheatsheet, recipe, lint, insert, plugin, remove, prune-xref, preview, or help',
     expect.stringContaining('No such file: /missing.txt'),
   ]);
 });
@@ -2000,7 +2000,7 @@ test('requestDocumentEditChatTurn warns when scratchpad writes exceed the note l
     'ls /',
     'hvy --help',
     'hvy request_structure --collapse',
-    `hvy find-intent "Use a very long scratchpad." --max 5`,
+    `hvy search "Use a very long scratchpad." --max 5`,
     `echo "${'x'.repeat(900)}" > scratchpad.txt`,
     'pwd',
     'echo "short notes" > scratchpad.txt',

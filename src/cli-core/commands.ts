@@ -3290,7 +3290,7 @@ function helpFor(topic = ''): string {
     hvy: hvyDocumentCommandHelp(),
     'hvy insert': hvyDocumentCommandHelp('insert'),
     'hvy request_structure': hvyDocumentCommandHelp('request_structure'),
-    'hvy find-intent': hvyDocumentCommandHelp('find-intent'),
+    'hvy search': hvyDocumentCommandHelp('search'),
     'hvy cheatsheet': hvyDocumentCommandHelp('cheatsheet'),
     'hvy recipe': hvyDocumentCommandHelp('recipe'),
     'hvy lint': formatCommandHelp('hvy lint [--fix]', 'Check the document for likely component issues. --fix repairs safe structural issues such as plugin id aliases.'),

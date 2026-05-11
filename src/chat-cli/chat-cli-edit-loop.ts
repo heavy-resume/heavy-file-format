@@ -686,9 +686,9 @@ async function buildChatCliInitialTurnRequest(params: {
     'hvy request_structure --collapse'
   );
   const diagnostics = await collectHvyCliDiagnostics(params.document);
-  const initialIntent = await runInitialCommand(
+  const initialSearch = await runInitialCommand(
     'I am searching for the most likely locations related to the user request so I can avoid blind grep-and-edit behavior.',
-    `hvy find-intent ${quoteChatCliShellArg(params.request)} --max 5`
+    `hvy search ${quoteChatCliShellArg(params.request)} --max 5`
   );
   const initialSelectedPreview = params.selectedComponent?.path
     ? await runInitialCommand(
@@ -701,7 +701,7 @@ async function buildChatCliInitialTurnRequest(params: {
     initialRootListing,
     initialHvyHelp,
     initialStructure,
-    initialIntent,
+    initialSearch,
     ...(initialSelectedPreview ? [initialSelectedPreview] : []),
   ];
   const messages: ChatMessage[] = [

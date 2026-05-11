@@ -29,7 +29,7 @@ import {
   getHvyRecipeNames,
 } from './reference-library';
 import { formatHvyRequestStructure, formatHvyRequestStructureForDirectory } from './request-structure';
-import { formatHvyFindIntent } from './intent-search';
+import { formatHvySearch } from './intent-search';
 import {
   buildHvyVirtualFileSystem,
   findBlockForVirtualDirectory,
@@ -59,8 +59,8 @@ export function executeHvyDocumentCommand(ctx: HvyDocumentCommandContext, args: 
   if (resource === 'request_structure') {
     return { output: formatHvyRequestStructure(ctx.document, ctx.fs, resolveRequestStructureOptions(ctx, parseRequestStructureArgs([action ?? '', ...rest].filter(Boolean)))), mutated: false };
   }
-  if (resource === 'find-intent') {
-    return { output: formatHvyFindIntent(ctx.document, ctx.fs, decodeCliText(action ?? ''), parseFindIntentArgs(rest)), mutated: false };
+  if (resource === 'search') {
+    return { output: formatHvySearch(ctx.document, ctx.fs, decodeCliText(action ?? ''), parseSearchArgs(rest)), mutated: false };
   }
   if (resource === 'cheatsheet') {
     return { output: formatCheatsheet(action ?? ''), mutated: false };
@@ -77,7 +77,7 @@ export function executeHvyDocumentCommand(ctx: HvyDocumentCommandContext, args: 
   if (resource === 'plugin' && action && rest.length === 0 && getHvyCliPluginCommandRegistration(action)) {
     return { output: hvyDocumentCommandHelp(`plugin ${action}`), mutated: false };
   }
-  throw new Error('hvy: expected request_structure, find-intent, cheatsheet, recipe, lint, insert, plugin, remove, prune-xref, preview, or help');
+  throw new Error('hvy: expected request_structure, search, cheatsheet, recipe, lint, insert, plugin, remove, prune-xref, preview, or help');
 }
 
 export function hvyDocumentCommandHelp(topic = ''): string {
@@ -105,7 +105,7 @@ export function hvyDocumentCommandHelp(topic = ''): string {
       formatCommandHelp('hvy prune-xref TARGET_ID', 'Remove xref-card components pointing to TARGET_ID.'),
       formatCommandHelp('hvy preview PATH', 'Show the raw HVY preview for a component, capped at 100 lines.'),
       formatCommandHelp('hvy request_structure [COMPONENT_ID] [--collapse] [--describe]', 'Show the component directory map for the current document.'),
-      formatCommandHelp('hvy find-intent QUERY [--max N] [--json]', 'Find likely edit locations for an intent.'),
+      formatCommandHelp('hvy search QUERY [--max N] [--json]', 'Search semantic section/component metadata, paths, roles, and previews for likely edit locations.'),
       formatCommandHelp('hvy cheatsheet [NAME]', 'List or show concise command examples from file-backed cheatsheets.'),
       formatCommandHelp('hvy recipe [NAME]', 'List or show file-backed HVY recipes for composed document patterns.'),
       formatCommandHelp('hvy lint [--fix]', 'Check the document for likely component issues. --fix repairs safe structural issues such as plugin id aliases.'),
@@ -138,7 +138,7 @@ export function hvyDocumentCommandHelp(topic = ''): string {
     text: formatCommandHelp('hvy insert INDEX text PARENT_PATH [ID|--id ID]', 'Insert a blank text block. Edit text.txt after creation. INDEX is zero-based and supports Python-style negative indexes; 0 is the front, -1 is the back.'),
     table: formatCommandHelp('hvy insert INDEX table PARENT_PATH [ID|--id ID]', 'Insert a blank static table block. Edit tableColumns.json and tableRows.json after creation. INDEX is zero-based and supports Python-style negative indexes; 0 is the front, -1 is the back.'),
     request_structure: formatCommandHelp('hvy request_structure [COMPONENT_ID] [--collapse] [--describe]', 'Show the component directory map, optionally scoped to one component id. --collapse compacts anonymous leaf components. --describe includes non-empty descriptions.'),
-    'find-intent': formatCommandHelp('hvy find-intent QUERY [--max N] [--json]', 'Search semantic section/component descriptions, ids, paths, roles, and previews for likely edit locations.'),
+    'search': formatCommandHelp('hvy search QUERY [--max N] [--json]', 'Search semantic section/component descriptions, ids, paths, roles, and previews for likely edit locations.'),
     cheatsheet: [
       formatCommandHelp('hvy cheatsheet [NAME]', 'List available cheatsheets or show one by name. Cheatsheets are discovered from src/cli-core/cheatsheets/*.md.'),
       formatHvyCheatsheetList(),
@@ -286,7 +286,7 @@ function resolveRequestStructureOptions(
   return options;
 }
 
-function parseFindIntentArgs(args: string[]): { max?: number; json?: boolean } {
+function parseSearchArgs(args: string[]): { max?: number; json?: boolean } {
   let max: number | undefined;
   let json = false;
   for (let index = 0; index < args.length; index += 1) {
@@ -298,7 +298,7 @@ function parseFindIntentArgs(args: string[]): { max?: number; json?: boolean } {
     if (arg === '--max') {
       const value = Number(args[index + 1] ?? '');
       if (!Number.isFinite(value) || value < 1) {
-        throw new Error('hvy find-intent: --max must be a positive number');
+        throw new Error('hvy search: --max must be a positive number');
       }
       max = Math.floor(value);
       index += 1;
@@ -307,15 +307,15 @@ function parseFindIntentArgs(args: string[]): { max?: number; json?: boolean } {
     if (arg.startsWith('--max=')) {
       const value = Number(arg.slice('--max='.length));
       if (!Number.isFinite(value) || value < 1) {
-        throw new Error('hvy find-intent: --max must be a positive number');
+        throw new Error('hvy search: --max must be a positive number');
       }
       max = Math.floor(value);
       continue;
     }
     if (arg.startsWith('-')) {
-      throw new Error(`hvy find-intent: unsupported option ${arg}`);
+      throw new Error(`hvy search: unsupported option ${arg}`);
     }
-    throw new Error(`hvy find-intent: unexpected argument ${arg}`);
+    throw new Error(`hvy search: unexpected argument ${arg}`);
   }
   return {
     ...(max ? { max } : {}),

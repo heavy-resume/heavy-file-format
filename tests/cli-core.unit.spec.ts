@@ -2063,7 +2063,7 @@ test('collapsed request_structure keeps the example resume under 100 lines', asy
   expect(result.output).toContain('(+');
 });
 
-test('hvy find-intent ranks global skill library and top skills above local skill lists', async () => {
+test('hvy search ranks global skill library and top skills above local skill lists', async () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
 component_defs:
@@ -2102,7 +2102,7 @@ Software Engineering
 `, '.hvy');
   const session = createHvyCliSession();
 
-  const result = await executeHvyCliCommand(document, session, 'hvy find-intent "add baking as a top skill" --max 5');
+  const result = await executeHvyCliCommand(document, session, 'hvy search "add baking as a top skill" --max 5');
 
   const skillListIndex = result.output.indexOf('/body/skills/skill-list');
   const topGridIndex = result.output.indexOf('/body/top-skills-tools-technologies/top-grid');
@@ -2117,7 +2117,7 @@ Software Engineering
   expect(result.output).toContain('description: Featured top skills/tools grid.');
 });
 
-test('hvy find-intent includes descriptions and supports json output', async () => {
+test('hvy search includes descriptions and supports json output', async () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
 ---
@@ -2130,8 +2130,8 @@ Milestones
 `, '.hvy');
   const session = createHvyCliSession();
 
-  const text = await executeHvyCliCommand(document, session, 'hvy find-intent roadmap --max 1');
-  const json = await executeHvyCliCommand(document, session, 'hvy find-intent roadmap --max 1 --json');
+  const text = await executeHvyCliCommand(document, session, 'hvy search roadmap --max 1');
+  const json = await executeHvyCliCommand(document, session, 'hvy search roadmap --max 1 --json');
 
   expect(text.output).toContain('description: Quarterly roadmap notes.');
   expect(JSON.parse(json.output)).toEqual([
@@ -2145,7 +2145,7 @@ Milestones
   ]);
 });
 
-test('hvy find-intent boosts tags as explicit metadata', async () => {
+test('hvy search boosts tags as explicit metadata', async () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
 ---
@@ -2161,7 +2161,7 @@ Tagged
 `, '.hvy');
   const session = createHvyCliSession();
 
-  const result = await executeHvyCliCommand(document, session, 'hvy find-intent roadmap --max 2');
+  const result = await executeHvyCliCommand(document, session, 'hvy search roadmap --max 2');
 
   expect(result.output.indexOf('/body/notes/tagged')).toBeGreaterThan(-1);
   expect(result.output.indexOf('/body/notes/general') === -1 || result.output.indexOf('/body/notes/tagged') < result.output.indexOf('/body/notes/general')).toBe(true);

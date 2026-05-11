@@ -21,37 +21,53 @@ export function bindContextmenu(app: HTMLElement): void {
       return;
     }
 
-    const blockElement = target.closest<HTMLElement>('.reader-block[data-section-key][data-block-id]');
-    const sectionElement = target.closest<HTMLElement>('.reader-section[data-section-key]');
-    if (!blockElement && !sectionElement) {
-      return;
-    }
-
-    const sectionKey = blockElement?.dataset.sectionKey ?? sectionElement?.dataset.sectionKey ?? '';
-    const blockId = blockElement?.dataset.blockId ?? '';
-    if (!sectionKey) {
-      return;
-    }
-
-    if (state.currentView === 'viewer' && !filtering) {
-      return;
-    }
-    if (state.currentView === 'ai' && !blockId) {
-      return;
-    }
-    event.preventDefault();
-    const fallbackRect = (blockElement ?? sectionElement)?.getBoundingClientRect();
-    const x = Number.isFinite(event.clientX) ? event.clientX : fallbackRect ? fallbackRect.left + 16 : 16;
-    const y = Number.isFinite(event.clientY) ? event.clientY : fallbackRect ? fallbackRect.top + 16 : 16;
-    state.contextMenu = {
-      kind: state.currentView === 'ai' ? 'ai' : 'filter',
-      sectionKey,
-      ...(blockId ? { blockId } : {}),
-      x,
-      y,
-    };
-    renderContextMenuElement(app);
+    openReaderContextPopover(app, event, filtering);
   });
+
+  app.addEventListener('dblclick', (event) => {
+    if (state.currentView !== 'ai') {
+      return;
+    }
+    const target = event.target as HTMLElement;
+    if (target.closest('button, input, textarea, select, a, [contenteditable="true"], .hvy-context-popover, .ai-edit-popover')) {
+      return;
+    }
+    openReaderContextPopover(app, event, false);
+  });
+}
+
+function openReaderContextPopover(app: HTMLElement, event: MouseEvent, filtering: boolean): void {
+  const target = event.target as HTMLElement;
+  const blockElement = target.closest<HTMLElement>('.reader-block[data-section-key][data-block-id]');
+  const sectionElement = target.closest<HTMLElement>('.reader-section[data-section-key]');
+  if (!blockElement && !sectionElement) {
+    return;
+  }
+
+  const sectionKey = blockElement?.dataset.sectionKey ?? sectionElement?.dataset.sectionKey ?? '';
+  const blockId = blockElement?.dataset.blockId ?? '';
+  if (!sectionKey) {
+    return;
+  }
+
+  if (state.currentView === 'viewer' && !filtering) {
+    return;
+  }
+  if (state.currentView === 'ai' && !blockId) {
+    return;
+  }
+  event.preventDefault();
+  const fallbackRect = (blockElement ?? sectionElement)?.getBoundingClientRect();
+  const x = Number.isFinite(event.clientX) ? event.clientX : fallbackRect ? fallbackRect.left + 16 : 16;
+  const y = Number.isFinite(event.clientY) ? event.clientY : fallbackRect ? fallbackRect.top + 16 : 16;
+  state.contextMenu = {
+    kind: state.currentView === 'ai' ? 'ai' : 'filter',
+    sectionKey,
+    ...(blockId ? { blockId } : {}),
+    x,
+    y,
+  };
+  renderContextMenuElement(app);
 }
 
 function renderContextMenuElement(app: HTMLElement): void {

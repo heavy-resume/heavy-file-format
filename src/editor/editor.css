@@ -336,7 +336,7 @@
   position: relative;
   border: 1px solid var(--hvy-border-input);
   border-radius: 10px;
-  background: var(--hvy-surface-alt);
+  background: var(--hvy-surface);
   padding: 0.65rem;
   display: grid;
   gap: 0.55rem;
@@ -1449,6 +1449,10 @@
   display: flex;
   flex-wrap: wrap;
   gap: 0.35rem;
+}
+
+.tag-pill-list:not(:empty) + .tag-editor-input {
+  margin-left: 0.55rem;
 }
 
 .tag-pill {

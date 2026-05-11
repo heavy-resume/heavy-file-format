@@ -1,26 +1,31 @@
 import './text.css';
 import type { ComponentEditorRenderer, ComponentReaderRenderer } from '../../component-helpers';
-import { splitTextFillIn } from '../../../text-fill-in';
+import { getTextFillInPlaceholder, splitTextFillIns } from '../../../text-fill-in';
 
-const FILL_IN_RENDER_TOKEN = 'HVY_FILL_IN_VALUE_TOKEN';
+const FILL_IN_RENDER_TOKEN_PREFIX = 'HVY_FILL_IN_VALUE_TOKEN_';
 
 export const renderTextEditor: ComponentEditorRenderer = (sectionKey, block, helpers) => {
-  const fillIn = block.schema.fillIn ? splitTextFillIn(block.text) : null;
-  if (fillIn) {
-    const fillInBox = `<span
-      class="text-fill-in-box"
-      contenteditable="true"
-      data-section-key="${helpers.escapeAttr(sectionKey)}"
-      data-block-id="${helpers.escapeAttr(block.id)}"
-      data-field="text-fill-in-value"
-      data-fill-before="${helpers.escapeAttr(fillIn.before)}"
-      data-fill-after="${helpers.escapeAttr(fillIn.after)}"
-      data-placeholder="${helpers.escapeAttr(block.schema.placeholder || 'value')}"
-    ></span>`;
-    const html = helpers.markdownToEditorHtml(`${fillIn.before}${FILL_IN_RENDER_TOKEN}${fillIn.after}`).replace(
-      FILL_IN_RENDER_TOKEN,
-      fillInBox
-    );
+  const fillInParts = block.schema.fillIn ? splitTextFillIns(block.text) : [];
+  if (fillInParts.length > 1) {
+    const fillInSource = fillInParts
+      .map((part, index) => (index < fillInParts.length - 1 ? `${part}${FILL_IN_RENDER_TOKEN_PREFIX}${index}` : part))
+      .join('');
+    let html = helpers.markdownToEditorHtml(fillInSource);
+    for (let index = 0; index < fillInParts.length - 1; index += 1) {
+      html = html.replace(
+        `${FILL_IN_RENDER_TOKEN_PREFIX}${index}`,
+        `<span
+          class="text-fill-in-box"
+          contenteditable="true"
+          spellcheck="true"
+          data-section-key="${helpers.escapeAttr(sectionKey)}"
+          data-block-id="${helpers.escapeAttr(block.id)}"
+          data-field="text-fill-in-value"
+          data-fill-index="${String(index)}"
+          data-placeholder="${helpers.escapeAttr(getTextFillInPlaceholder(block.schema.placeholder, index))}"
+        ></span>`
+      );
+    }
     return `
       <div class="rich-toolbar text-fill-in-toolbar">
         <div class="toolbar-segment" role="group" aria-label="Fill-in slot">
@@ -33,7 +38,7 @@ export const renderTextEditor: ComponentEditorRenderer = (sectionKey, block, hel
           >Remove Fill-in</button>
         </div>
       </div>
-      <div class="rich-editor text-fill-in-editor" style="text-align: ${helpers.escapeAttr(block.schema.align)};">
+      <div class="rich-editor text-fill-in-editor" data-fill-parts="${helpers.escapeAttr(JSON.stringify(fillInParts))}" style="text-align: ${helpers.escapeAttr(block.schema.align)};">
         ${html}
       </div>
     `;
@@ -55,6 +60,7 @@ export const renderTextEditor: ComponentEditorRenderer = (sectionKey, block, hel
     <div
       class="rich-editor${mobileAdjustment ? ' mobile-adjustment-editor' : ''}"
       contenteditable="true"
+      spellcheck="true"
       data-section-key="${helpers.escapeAttr(sectionKey)}"
       data-block-id="${helpers.escapeAttr(block.id)}"
       data-field="block-rich"

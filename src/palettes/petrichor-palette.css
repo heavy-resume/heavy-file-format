@@ -19,7 +19,7 @@
   --hvy-highlight-2: rgba(250, 212, 0, 0.32);
   --hvy-border: #5d608f;
   --hvy-border-alt: #335099;
-  --hvy-border-input: rgba(51, 80, 153, 0.58);
+  --hvy-border-input: #7a5f98;
   --hvy-border-translucent: rgba(22, 22, 22, 0.68);
   --hvy-xref-card-bg: #aeafda;
   --hvy-xref-card-hover-bg: rgba(0, 255, 255, 0.863);
@@ -36,7 +36,7 @@
   --hvy-overlay: rgba(50, 50, 50, 0.25);
   --hvy-danger: rgb(200, 20, 0);
   --hvy-warning: #e5e900;
-  --hvy-warning-bg: #340057;
+  --hvy-warning-bg: rgba(250, 212, 0, 0.22);
   --hvy-warning-border: #e5e900;
   --hvy-warning-text: #e5e900;
   --hvy-success: rgb(16, 241, 141);

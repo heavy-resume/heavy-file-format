@@ -1,4 +1,5 @@
-import { state, getRefreshReaderPanels, getThemeConfig, applyTheme, writeThemeConfig, colorValueToPickerHex, getComponentDefs, getSectionDefs, resolveBlockContext, recordHistory, persistChatSettings, getRawEditorDiagnostics } from './_imports';
+import { state, getRefreshReaderPanels, getThemeConfig, applyTheme, writeThemeConfig, colorValueToAlpha, colorValueToPickerHex, getThemeResetColor, mergeAlphaIntoCssColor, getComponentDefs, getSectionDefs, resolveBlockContext, recordHistory, persistChatSettings, getRawEditorDiagnostics } from './_imports';
+import { applyThemeModalFilter } from '../../theme-modal-filter';
 
 export function bindInputBlock(app: HTMLElement): void {
     app.addEventListener('input', (event) => {
@@ -101,19 +102,24 @@ export function bindInputBlock(app: HTMLElement): void {
       const name = target.dataset.colorName ?? '';
       if (!name) return;
       recordHistory(`meta:theme-color:${name}`);
+      const resetValue = getThemeResetColor(name);
       const theme = getThemeConfig();
-      theme.colors[name] = target.value;
+      const nextValue = mergePickerHexIntoCssColor(target.value, theme.colors[name] ?? '');
+      theme.colors[name] = nextValue;
       writeThemeConfig(theme);
       applyTheme();
       const row = target.closest<HTMLElement>('.theme-color-row');
       const valueInput = row?.querySelector<HTMLInputElement>('.theme-color-value');
-      const swatch = row?.querySelector<HTMLElement>('.theme-color-swatch');
       if (valueInput) {
-        valueInput.value = target.value;
+        valueInput.value = nextValue;
       }
-      if (swatch) {
-        swatch.style.background = target.value;
-      }
+      syncThemeAlphaControl(row, nextValue);
+      markThemeRowOverridden(row, name, resetValue);
+      return;
+    }
+
+    if (field === 'theme-color-filter' && target instanceof HTMLInputElement) {
+      applyThemeModalFilter(app, target.value);
       return;
     }
 
@@ -121,19 +127,39 @@ export function bindInputBlock(app: HTMLElement): void {
       const name = target.dataset.colorName ?? '';
       if (!name) return;
       recordHistory(`meta:theme-color:${name}`);
+      const resetValue = getThemeResetColor(name);
       const theme = getThemeConfig();
       theme.colors[name] = target.value;
       writeThemeConfig(theme);
       applyTheme();
       const row = target.closest<HTMLElement>('.theme-color-row');
       const pickerInput = row?.querySelector<HTMLInputElement>('.theme-color-picker');
-      const swatch = row?.querySelector<HTMLElement>('.theme-color-swatch');
       if (pickerInput) {
         pickerInput.value = colorValueToPickerHex(target.value);
       }
-      if (swatch) {
-        swatch.style.background = target.value;
+      syncThemeAlphaControl(row, target.value);
+      markThemeRowOverridden(row, name, resetValue);
+      return;
+    }
+
+    if (field === 'theme-color-alpha' && target instanceof HTMLInputElement) {
+      const name = target.dataset.colorName ?? '';
+      if (!name) return;
+      recordHistory(`meta:theme-color:${name}:alpha`);
+      const resetValue = getThemeResetColor(name);
+      const row = target.closest<HTMLElement>('.theme-color-row');
+      const valueInput = row?.querySelector<HTMLInputElement>('.theme-color-value');
+      const currentValue = valueInput?.value ?? getThemeConfig().colors[name] ?? '';
+      const nextValue = mergeAlphaIntoCssColor(currentValue, Number.parseFloat(target.value));
+      const theme = getThemeConfig();
+      theme.colors[name] = nextValue;
+      writeThemeConfig(theme);
+      applyTheme();
+      if (valueInput) {
+        valueInput.value = nextValue;
       }
+      syncThemeAlphaControl(row, nextValue);
+      markThemeRowOverridden(row, name, resetValue);
       return;
     }
 
@@ -277,4 +303,63 @@ export function bindInputBlock(app: HTMLElement): void {
       return;
     }
   });
+}
+
+function mergePickerHexIntoCssColor(hex: string, currentValue: string): string {
+  const rgb = hexToRgb(hex);
+  if (!rgb) {
+    return hex;
+  }
+  const alpha = extractCssAlpha(currentValue);
+  if (alpha === null) {
+    return hex;
+  }
+  return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})`;
+}
+
+function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
+  const match = hex.trim().match(/^#([0-9a-f]{6})$/i);
+  if (!match) {
+    return null;
+  }
+  const value = match[1];
+  return {
+    r: Number.parseInt(value.slice(0, 2), 16),
+    g: Number.parseInt(value.slice(2, 4), 16),
+    b: Number.parseInt(value.slice(4, 6), 16),
+  };
+}
+
+function extractCssAlpha(value: string): string | null {
+  const match = value.trim().match(/^rgba?\(\s*(?:\d{1,3})\s*[,\s]\s*(?:\d{1,3})\s*[,\s]\s*(?:\d{1,3})(?:\s*[,/]\s*([\d.]+)\s*)\)$/i);
+  return match?.[1] ?? null;
+}
+
+function markThemeRowOverridden(row: HTMLElement | null | undefined, name: string, resetValue: string): void {
+  if (!row) return;
+  row.classList.add('theme-color-row--override');
+  const defaultLabel = row.querySelector<HTMLElement>('.theme-color-default');
+  if (!defaultLabel) return;
+  defaultLabel.outerHTML = `<span class="theme-color-reset-group">
+    <button type="button" class="ghost theme-color-action" data-action="theme-reset-color" data-color-name="${escapeAttr(name)}" title="Reset to default">Reset</button>
+    <span class="theme-color-reset-swatch" style="${resetValue ? `background: ${escapeAttr(resetValue)};` : ''}" title="${escapeAttr(`Reset value: ${resetValue}`)}" aria-hidden="true"></span>
+  </span>`;
+}
+
+function syncThemeAlphaControl(row: HTMLElement | null | undefined, value: string): void {
+  if (!row) return;
+  const alpha = colorValueToAlpha(value);
+  const alphaInput = row.querySelector<HTMLInputElement>('[data-field="theme-color-alpha"]');
+  const alphaOutput = row.querySelector<HTMLOutputElement>('.theme-alpha-control output');
+  if (alphaInput) {
+    alphaInput.value = String(alpha);
+  }
+  if (alphaOutput) {
+    alphaOutput.value = String(Math.round(alpha * 100));
+    alphaOutput.textContent = alphaOutput.value;
+  }
+}
+
+function escapeAttr(value: string): string {
+  return value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 }

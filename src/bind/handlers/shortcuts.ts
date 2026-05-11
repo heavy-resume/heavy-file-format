@@ -13,6 +13,9 @@ export function bindShortcuts(_app: HTMLElement): void {
       }
       const key = event.key.toLowerCase();
       if (key === 'f' && !event.shiftKey) {
+        if (isModalOpen()) {
+          return;
+        }
         event.preventDefault();
         openSearch(_app);
         return;
@@ -29,6 +32,10 @@ export function bindShortcuts(_app: HTMLElement): void {
     });
     setShortcutsBound(true);
   }
+}
+
+function isModalOpen(): boolean {
+  return Boolean(document.querySelector('.modal-root'));
 }
 
 export function isNativeUndoTarget(target: EventTarget | null): boolean {

@@ -31,7 +31,7 @@ import { sanitizeInlineCss } from '../css-sanitizer';
 import { SCRIPTING_PLUGIN_ID } from '../plugins/registry';
 import { getScriptingPluginVersion } from '../plugins/scripting/version';
 import { renderAddComponentPicker } from './component-picker';
-import { TEXT_FILL_IN_MARKER, hasTextFillInMarker } from '../text-fill-in';
+import { TEXT_FILL_IN_MARKER, getTextFillInPlaceholder, hasTextFillInMarker, splitTextFillIns } from '../text-fill-in';
 import { closeIcon, plusIcon } from '../icons';
 
 hljs.registerLanguage('bash', bash);
@@ -81,7 +81,14 @@ interface EditorRenderState {
   addComponentBySection: Record<string, string>;
   activeEditorBlock: { sectionKey: string; blockId: string } | null;
   componentPlacement: ComponentPlacementState | null;
-  pendingEditorActivation: { sectionKey: string; blockId: string } | null;
+  pendingEditorActivation: {
+    sectionKey: string;
+    blockId: string;
+    anchorTop?: number;
+    clientX?: number;
+    clientY?: number;
+    preferTextFocus?: boolean;
+  } | null;
   expandableEditorPanels: Record<string, { stubOpen: boolean; expandedOpen: boolean }>;
   editorSidebarHelpDismissed: boolean;
   currentView: 'editor' | 'viewer' | 'ai';
@@ -277,7 +284,9 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         : ''
       }
             ${isSubsection ? '' : `<button type="button" class="${section.location === 'sidebar' ? 'secondary' : 'ghost'}" data-action="toggle-section-location" data-section-key="${deps.escapeAttr(section.key)}">${section.location === 'sidebar' ? 'main \u2192' : '\u2190 sidebar'}</button>`}
-            <button type="button" class="danger" data-action="remove-section" data-section-key="${deps.escapeAttr(section.key)}">Remove</button>
+            <button type="button" class="danger remove-x editor-section-remove-button" data-action="remove-section" data-section-key="${deps.escapeAttr(
+              section.key
+            )}" aria-label="Remove ${deps.escapeAttr(visibleTitle)} section" title="Delete section" data-tooltip="Delete section">${closeIcon()}</button>
           </div>
         </div>
 
@@ -422,7 +431,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const removeButton = canRemove
       ? `<button type="button" class="danger remove-x editor-block-remove-button" data-action="remove-block" data-section-key="${deps.escapeAttr(
         sectionKey
-      )}" data-block-id="${deps.escapeAttr(block.id)}" aria-label="Remove ${deps.escapeAttr(componentLabel)}">${closeIcon()}</button>`
+      )}" data-block-id="${deps.escapeAttr(block.id)}" aria-label="Remove ${deps.escapeAttr(componentLabel)}" title="Delete component" data-tooltip="Delete component">${closeIcon()}</button>`
       : '';
     const frameRemoveButton = state.mobileAdjustmentMode ? '' : removeButton;
 
@@ -1124,11 +1133,18 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       if (state.currentView === 'viewer') {
         return renderTextFragment(content.replaceAll(TEXT_FILL_IN_MARKER, ''));
       }
-      const token = 'HVY_FILL_IN_VALUE_TOKEN';
-      return renderTextFragment(content.replace(TEXT_FILL_IN_MARKER, token)).replace(
-        token,
-        `<span class="text-fill-in-box" data-placeholder="${deps.escapeAttr(block.schema.placeholder || 'value')}"></span>`
+      const parts = splitTextFillIns(content);
+      const tokenPrefix = 'HVY_FILL_IN_VALUE_TOKEN_';
+      let html = renderTextFragment(
+        parts.map((part, index) => (index < parts.length - 1 ? `${part}${tokenPrefix}${index}` : part)).join('')
       );
+      for (let index = 0; index < parts.length - 1; index += 1) {
+        html = html.replace(
+          `${tokenPrefix}${index}`,
+          `<span class="text-fill-in-box" data-placeholder="${deps.escapeAttr(getTextFillInPlaceholder(block.schema.placeholder, index))}"></span>`
+        );
+      }
+      return html;
     }
     return renderTextFragment(content);
   }

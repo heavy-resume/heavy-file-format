@@ -210,8 +210,17 @@ export interface AppState {
   cliHistory: HvyCliHistoryEntry[];
   activeEditorBlock: { sectionKey: string; blockId: string } | null;
   activeEditorBlockSnapshot: { sectionKey: string; blockId: string; block: VisualBlock } | null;
+  activeEditorBlockReturnScroll: PaneScrollState | null;
+  pendingPaneScrollRestore: PaneScrollState | null;
   componentPlacement: ComponentPlacementState | null;
-  pendingEditorActivation: { sectionKey: string; blockId: string } | null;
+  pendingEditorActivation: {
+    sectionKey: string;
+    blockId: string;
+    anchorTop?: number;
+    clientX?: number;
+    clientY?: number;
+    preferTextFocus?: boolean;
+  } | null;
   activeEditorSectionTitleKey: string | null;
   clearSectionTitleOnFocusKey: string | null;
   modalSectionKey: string | null;
@@ -238,6 +247,7 @@ export interface AppState {
   sqliteRowComponentModal: SqliteRowComponentModalState | null;
   dbTableQueryModal: DbTableQueryModalState | null;
   themeModalOpen: boolean;
+  paletteOverrideId: string | null;
   gridAddComponentByBlock: Record<string, string>;
   expandableEditorPanels: Record<string, { stubOpen: boolean; expandedOpen: boolean }>;
   readerExpandableState: Record<string, boolean>;

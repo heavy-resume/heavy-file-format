@@ -205,9 +205,7 @@ export function handleBlockFieldInput(target: HTMLElement): boolean {
   }
 
   if (field === 'text-fill-in-value') {
-    const before = target.dataset.fillBefore ?? '';
-    const after = target.dataset.fillAfter ?? '';
-    block.text = `${before}${target.textContent ?? ''}${after}`;
+    block.text = buildTextFromFillInEditor(target);
     block.schema.fillIn = hasTextFillInMarker(block.text);
     syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
     getRefreshReaderPanels()();
@@ -431,6 +429,33 @@ export function handleBlockFieldInput(target: HTMLElement): boolean {
   }
 
   return false;
+}
+
+function buildTextFromFillInEditor(target: HTMLElement): string {
+  const editor = target.closest<HTMLElement>('.text-fill-in-editor');
+  if (!editor) {
+    return target.textContent ?? '';
+  }
+  let parts: string[];
+  try {
+    const parsed = JSON.parse(editor.dataset.fillParts ?? '[]') as unknown;
+    parts = Array.isArray(parsed) && parsed.every((part) => typeof part === 'string') ? parsed : [];
+  } catch {
+    parts = [];
+  }
+  const fillIns = Array.from(editor.querySelectorAll<HTMLElement>('[data-field="text-fill-in-value"]'));
+  if (parts.length !== fillIns.length + 1) {
+    return target.textContent ?? '';
+  }
+  return parts
+    .map((part, index) => {
+      if (index >= fillIns.length) {
+        return part;
+      }
+      const value = fillIns[index]?.textContent ?? '';
+      return `${part}${value.length > 0 ? value : TEXT_FILL_IN_MARKER}`;
+    })
+    .join('');
 }
 
 function getInlineEditableMarkdown(target: HTMLElement): string {

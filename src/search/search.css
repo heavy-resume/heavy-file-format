@@ -548,7 +548,7 @@
 
 .hvy-context-popover button:hover,
 .hvy-context-popover button:focus-visible {
-  background: color-mix(in srgb, var(--hvy-button-bg) 14%, transparent);
+  background: var(--hvy-xref-card-hover-bg);
 }
 
 @media (max-width: 720px) {

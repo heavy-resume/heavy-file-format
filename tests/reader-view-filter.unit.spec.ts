@@ -229,6 +229,7 @@ test('reader view rendering applies hidden, dimmed, highlight, and generic colla
     reusableTemplateModal: null,
     componentMetaModal: null,
     themeModalOpen: false,
+    paletteOverrideId: null,
     theme: { colors: {} },
     currentView: 'viewer' as const,
     responsivePreview: 'full' as const,

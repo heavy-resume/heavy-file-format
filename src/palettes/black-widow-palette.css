@@ -36,7 +36,7 @@
   --hvy-overlay: rgba(0, 0, 0, 0.75);
   --hvy-danger: rgb(255, 140, 0);
   --hvy-warning: #e5e900;
-  --hvy-warning-bg: #340057;
+  --hvy-warning-bg: rgba(255, 219, 88, 0.16);
   --hvy-warning-border: #ffdb58;
   --hvy-warning-text: #e5e900;
   --hvy-success: rgb(16, 241, 141);

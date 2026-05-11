@@ -1,7 +1,9 @@
 import { state, getRenderApp } from '../../state';
 import { recordHistory } from '../../history';
-import { getThemeConfig, applyTheme, writeThemeConfig } from '../../theme';
+import { getThemeConfig, applyTheme, writeThemeConfig, colorValueToPickerHex, getResolvedThemeColor, THEME_COLOR_NAMES } from '../../theme';
 import { getPaletteById } from '../../palettes/palette-registry';
+import { savePaletteOverrideId } from '../../palettes/palette-preferences';
+import { setThemeModalFilter } from '../../theme-modal-filter';
 import type { AppActionHandler } from './types';
 
 const openThemeModal: AppActionHandler = () => {
@@ -32,6 +34,10 @@ const themeRemoveOrResetColor = (label: string): AppActionHandler => ({ actionBu
   delete theme.colors[name];
   writeThemeConfig(theme);
   applyTheme();
+  if (label === 'reset') {
+    updateResetThemeRow(actionButton, name);
+    return;
+  }
   getRenderApp()();
 };
 
@@ -39,17 +45,71 @@ const themeApplyPalette: AppActionHandler = ({ actionButton }) => {
   const paletteId = actionButton.dataset.paletteId ?? '';
   const palette = getPaletteById(paletteId);
   if (!palette) return;
-  recordHistory(`meta:theme-palette:${palette.id}`);
   const theme = getThemeConfig();
-  writeThemeConfig({
-    colors: {
-      ...theme.colors,
-      ...palette.colors,
-    },
-  });
+  for (const name of THEME_COLOR_NAMES) {
+    delete theme.colors[name];
+  }
+  writeThemeConfig(theme);
+  state.paletteOverrideId = palette.id;
+  savePaletteOverrideId(palette.id);
   applyTheme();
   getRenderApp()();
 };
+
+const themeClearPaletteOverride: AppActionHandler = () => {
+  state.paletteOverrideId = null;
+  savePaletteOverrideId(null);
+  applyTheme();
+  getRenderApp()();
+};
+
+const themeFilterToColors: AppActionHandler = ({ app, actionButton, event }) => {
+  event.preventDefault();
+  setThemeModalFilter(app, actionButton.dataset.themeFilter ?? '');
+};
+
+const themePreviewSelectComponent: AppActionHandler = ({ app, actionButton }) => {
+  const component = actionButton.dataset.themeComponent ?? '';
+  if (!component) return;
+  app.querySelectorAll<HTMLElement>('.theme-component-picker-button').forEach((button) => {
+    button.classList.toggle('is-active', button === actionButton);
+  });
+  app.querySelectorAll<HTMLElement>('[data-theme-preview-component]').forEach((preview) => {
+    preview.classList.toggle('is-active', preview.dataset.themePreviewComponent === component);
+  });
+};
+
+const themePreviewSetState: AppActionHandler = ({ app, actionButton, event }) => {
+  event.preventDefault();
+  const preview = actionButton.closest<HTMLElement>('[data-theme-preview-component]');
+  const stateName = actionButton.dataset.themeState ?? '';
+  if (!preview || !stateName) return;
+  preview.dataset.themePreviewState = stateName;
+  preview.querySelectorAll<HTMLElement>('.theme-preview-state-button').forEach((button) => {
+    button.classList.toggle('is-active', button === actionButton);
+  });
+  setThemeModalFilter(app, actionButton.dataset.themeFilter ?? '');
+};
+
+function updateResetThemeRow(actionButton: HTMLElement, name: string): void {
+  const row = actionButton.closest<HTMLElement>('.theme-color-row');
+  if (!row) return;
+  const value = getResolvedThemeColor(name);
+  row.classList.remove('theme-color-row--override');
+  row.dataset.themeSearch = `${name} ${row.querySelector('strong')?.textContent ?? ''} ${value}`;
+  const valueInput = row.querySelector<HTMLInputElement>('[data-field="theme-color-value"]');
+  const pickerInput = row.querySelector<HTMLInputElement>('[data-field="theme-color-picker"]');
+  if (valueInput) {
+    valueInput.value = value;
+  }
+  if (pickerInput) {
+    pickerInput.value = colorValueToPickerHex(value);
+  }
+  const resetGroup = actionButton.closest<HTMLElement>('.theme-color-reset-group');
+  if (resetGroup) {
+    resetGroup.outerHTML = '<span class="theme-color-action theme-color-default muted">default</span>';
+  }
+}
 
 export const themeActions: Record<string, AppActionHandler> = {
   'open-theme-modal': openThemeModal,
@@ -57,4 +117,8 @@ export const themeActions: Record<string, AppActionHandler> = {
   'theme-remove-color': themeRemoveOrResetColor('remove'),
   'theme-reset-color': themeRemoveOrResetColor('reset'),
   'theme-apply-palette': themeApplyPalette,
+  'theme-clear-palette-override': themeClearPaletteOverride,
+  'theme-filter-to-colors': themeFilterToColors,
+  'theme-preview-select-component': themePreviewSelectComponent,
+  'theme-preview-set-state': themePreviewSetState,
 };

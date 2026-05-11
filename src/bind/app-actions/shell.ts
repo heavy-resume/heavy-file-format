@@ -7,7 +7,7 @@ import { closeAiEditPopover } from '../../ai-edit-popover';
 import { openAiEditPopover } from '../../ai-edit-popover';
 import { restoreCliViewAfterRender } from '../../cli-ui/focus';
 import { clearFilteringForTarget } from '../../search/actions';
-import { setActiveEditorBlock } from '../../block-ops';
+import { clearActiveEditorBlock, setActiveEditorBlock } from '../../block-ops';
 import type { AppActionHandler } from './types';
 
 const undo: AppActionHandler = () => {
@@ -27,10 +27,8 @@ const switchView: AppActionHandler = ({ actionButton }) => {
     clearChatConversation(state.chat);
   }
   if (crossingEditorBoundary) {
-    state.activeEditorBlock = null;
+    commitActiveEditorSession();
     state.pendingEditorActivation = null;
-    state.activeEditorSectionTitleKey = null;
-    state.clearSectionTitleOnFocusKey = null;
     state.componentPlacement = null;
   }
   state.currentView = view;
@@ -39,6 +37,13 @@ const switchView: AppActionHandler = ({ actionButton }) => {
   }
   getRenderApp()();
 };
+
+function commitActiveEditorSession(): void {
+  clearActiveEditorBlock();
+  state.activeEditorSectionTitleKey = null;
+  state.clearSectionTitleOnFocusKey = null;
+  state.activeEditorBlockReturnScroll = null;
+}
 
 const closeAiEdit: AppActionHandler = () => {
   closeAiEditPopover();

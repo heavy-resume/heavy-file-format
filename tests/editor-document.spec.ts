@@ -40,6 +40,34 @@ test('section remove requires confirmation', async ({ page }) => {
   await expect.poll(async () => sections.count()).toBeLessThan(initialCount + 1);
 });
 
+test('switching to viewer commits the active component edit', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"profile"}-->
+#! Profile
+
+  Original text
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('.editor-block-passive', { hasText: 'Original text' }).click();
+  await page.locator('.rich-editor').fill('Committed by view switch');
+  await page.getByRole('button', { name: 'Viewer' }).click();
+
+  await expect(page.locator('#readerDocument')).toContainText('Committed by view switch');
+  await expect(page.locator('#readerDocument')).not.toContainText('Original text');
+
+  await page.getByRole('button', { name: 'Editor' }).click();
+  await expect(page.locator('[data-active-editor-block="true"]')).toHaveCount(0);
+  await expect(page.locator('.editor-block-passive', { hasText: 'Committed by view switch' })).toBeVisible();
+});
+
 test('reader max width keeps focus while typing', async ({ page }) => {
   await page.goto('/');
 

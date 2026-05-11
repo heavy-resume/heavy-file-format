@@ -195,9 +195,18 @@ button.tiny {
 
 .palette-open-button {
   min-height: 2.35rem;
-  border-color: var(--hvy-border-translucent);
-  background: color-mix(in srgb, var(--hvy-surface) 88%, transparent);
-  box-shadow: 0 10px 24px var(--hvy-shadow);
+  border-color: var(--hvy-border-alt);
+  background: color-mix(in srgb, var(--hvy-button-bg) 16%, var(--hvy-surface));
+  color: var(--hvy-text);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--hvy-button-bg) 18%, transparent),
+    0 10px 24px var(--hvy-shadow);
+}
+
+.palette-open-button:hover,
+.palette-open-button:focus-visible {
+  border-color: var(--hvy-border-alt);
+  background: color-mix(in srgb, var(--hvy-button-bg) 24%, var(--hvy-surface));
 }
 
 .editor-top-controls {

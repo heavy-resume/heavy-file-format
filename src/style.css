@@ -123,6 +123,7 @@ button {
   border-radius: 8px;
   padding: 0.38rem 0.58rem;
   background: var(--hvy-surface);
+  cursor: pointer;
 }
 
 button.secondary {

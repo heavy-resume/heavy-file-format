@@ -53,6 +53,41 @@ hvy_version: 0.1
   await expect(activeBlock.getByRole('button', { name: 'Expandable content component type' })).toBeVisible();
 });
 
+test('text editing inside expandable uses text cursor while buttons use pointer cursor', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ <!--hvy:expandable {"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+
+  <!--hvy:expandable:stub {}-->
+
+   <!--hvy:text {}-->
+    ## Summary
+
+  <!--hvy:expandable:content {}-->
+
+   <!--hvy:text {}-->
+    Expanded detail
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('.editor-block-passive', { has: page.locator('.expandable-reader') }).first().click();
+  const expandableEditor = page.locator('.editor-block', { has: page.locator('.expand-chooser-grid') }).first();
+  await expandableEditor.locator('[data-expandable-panel="stub"]').first().click();
+
+  await expandableEditor.locator('.expandable-part-stub .editor-block-passive').first().click();
+  await expect(expandableEditor.locator('.expandable-part-stub .rich-editor')).toHaveCSS('cursor', 'text');
+  await expect(page.getByRole('button', { name: 'Done' }).first()).toHaveCSS('cursor', 'pointer');
+});
+
 test('passive empty expandable shows stub and expanded placeholders', async ({ page }) => {
   await page.goto('/');
 

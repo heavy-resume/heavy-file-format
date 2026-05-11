@@ -372,6 +372,7 @@
   min-height: 96px;
   min-width: 0;
   max-width: 100%;
+  cursor: text;
   overflow-wrap: anywhere;
   word-break: normal;
   border: 1px solid var(--hvy-border-input);

@@ -47,6 +47,8 @@ When updating UI, strongly consider how scrolling would happen and whether thing
 
 When the user asks to investigate a problem don't jump into a solution.
 
+When publishing or pushing a branch, the local branch name and upstream branch name should match unless the user explicitly asks for a different remote branch. If they do not match, stop and fix the upstream before pushing; do not silently push a local branch to an older or differently named remote branch.
+
 Under no circumstance should a log have its own code path that would deviate from what it is supposed to be logging (except, strictly, for readability mutations.) Logs should be "raw data" first. Do not ever try to reconstruct what you think should show up in point A by having log code reconstruct in point B. Restructure the code if that isn't simple and obvious.
 
 Do not alter logging in any form without permission.
@@ -72,4 +74,3 @@ When creating new inputs, etc make sure they use the HVY theme variables includi
 Right now as of version 0.1 of the spec there's no "older" stuff to worry about so don't waste effort on backwards compatibility.
 
 When adding new colors or adjusting the CSS variables that are color related be sure to update the theme editor. Make sure new states are editable.
-

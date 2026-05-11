@@ -1174,9 +1174,9 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
                   data-section-key="${deps.escapeAttr(state.componentMetaModal.sectionKey)}"
                   data-block-id="${deps.escapeAttr(state.componentMetaModal.blockId)}"
                   aria-pressed="${block.schema.lock ? 'true' : 'false'}"
-                  title="${block.schema.lock ? 'Locked' : 'Unlocked'}"
-                  aria-label="${block.schema.lock ? 'Locked' : 'Unlock'}"
-                >${block.schema.lock ? '🔒 Locked' : '🔓 Unlock'}</button>
+                  title="${block.schema.lock ? 'Unlock' : 'Lock'}"
+                  aria-label="${block.schema.lock ? 'Unlock' : 'Lock'}"
+                >${block.schema.lock ? '🔓 Unlock' : '🔒 Lock'}</button>
                 <button type="button" data-modal-action="close">Close</button>
               </div>
             </div>
@@ -1381,7 +1381,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
                 aria-pressed="${section.lock ? 'true' : 'false'}"
                 title="${section.lock ? 'Unlock' : 'Lock'}"
                 aria-label="${section.lock ? 'Unlock' : 'Lock'}"
-              >${section.lock ? '🔒 Unlock' : '🔓 Lock'}</button>
+              >${section.lock ? '🔓 Unlock' : '🔒 Lock'}</button>
               <button type="button" data-modal-action="close">Close</button>
             </div>
           </div>

@@ -69,8 +69,26 @@ export function bindClickDispatch(app: HTMLElement): void {
       return;
     }
 
+    if (isComponentPickerAction(actionButton)) {
+      console.log('[hvy:component-picker]', {
+        stage: 'dispatch:click',
+        action: actionButton.dataset.action ?? '',
+        component: actionButton.dataset.component ?? '',
+        pluginId: actionButton.dataset.pluginId ?? '',
+        sectionKey: actionButton.dataset.sectionKey ?? '',
+        blockId: actionButton.dataset.blockId ?? '',
+        insertPlacement: actionButton.dataset.insertPlacement ?? '',
+        targetBlockId: actionButton.dataset.targetBlockId ?? '',
+        pickerOpen: actionButton.closest<HTMLElement>('.component-picker')?.dataset.open ?? '',
+        pickerPane: actionButton.closest<HTMLElement>('.component-picker')?.dataset.activePane ?? '',
+      });
+    }
     executeActionButton(app, actionButton);
   });
+}
+
+function isComponentPickerAction(actionButton: HTMLElement): boolean {
+  return actionButton.classList.contains('component-picker-row') || actionButton.closest('.component-picker') !== null;
 }
 
 function isPlacementModeAction(action: string): boolean {
@@ -93,7 +111,7 @@ function executeActionButton(app: HTMLElement, actionButton: HTMLElement, confir
     return;
   }
 
-  const sectionKey = actionButton.dataset.sectionKey ?? '';
+  const sectionKey = getActionSectionKey(actionButton);
   const blockId = actionButton.dataset.blockId ?? '';
 
   if (action === 'add-top-level-section') {
@@ -102,16 +120,52 @@ function executeActionButton(app: HTMLElement, actionButton: HTMLElement, confir
   }
 
   if (sectionKey.length === 0) {
+    if (isComponentPickerAction(actionButton)) {
+      console.log('[hvy:component-picker]', {
+        stage: 'dispatch:bail',
+        reason: 'missing-section-key',
+        action,
+        component: actionButton.dataset.component ?? '',
+      });
+    }
     return;
   }
 
   const reusableName = getReusableNameFromSectionKey(sectionKey);
   const section = reusableName ? null : findSectionByKey(state.document.sections, sectionKey);
   if (!section && !reusableName) {
+    if (isComponentPickerAction(actionButton)) {
+      console.log('[hvy:component-picker]', {
+        stage: 'dispatch:bail',
+        reason: 'section-not-found',
+        action,
+        component: actionButton.dataset.component ?? '',
+        sectionKey,
+      });
+    }
     return;
   }
 
   handler({ app, actionButton, sectionKey, blockId, section, reusableName });
+}
+
+function getActionSectionKey(actionButton: HTMLElement): string {
+  const declaredSectionKey = actionButton.dataset.sectionKey ?? '';
+  if (actionButton.dataset.action === 'add-block' && actionButton.dataset.insertPlacement) {
+    const nearestEditorSection = actionButton.closest<HTMLElement>('[data-editor-section]')?.dataset.editorSection ?? '';
+    if (nearestEditorSection && nearestEditorSection !== declaredSectionKey) {
+      console.log('[hvy:component-picker]', {
+        stage: 'dispatch:section-key-corrected',
+        declaredSectionKey,
+        nearestEditorSection,
+        component: actionButton.dataset.component ?? '',
+        insertPlacement: actionButton.dataset.insertPlacement ?? '',
+        targetBlockId: actionButton.dataset.targetBlockId ?? '',
+      });
+      return nearestEditorSection;
+    }
+  }
+  return declaredSectionKey;
 }
 
 function hasSelectionInside(editable: HTMLElement): boolean {

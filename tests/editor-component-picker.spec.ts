@@ -6,7 +6,7 @@ test('section add component affordance is a compact single row', async ({ page }
   const addComponent = page.locator('.compact-add-component-ghost').first();
   const box = await addComponent.boundingBox();
 
-  await expect(addComponent).toContainText('+');
+  await expect(addComponent.getByRole('button', { name: 'Section component type' })).toBeVisible();
   await expect(addComponent.locator('select')).toHaveCount(0);
   expect(box?.height ?? 0).toBeLessThanOrEqual(46);
 });
@@ -59,4 +59,65 @@ test('component picker adds a selected plugin directly', async ({ page }) => {
 
   await expect(page.locator('.editor-block-title', { hasText: 'DB Table' }).first()).toBeVisible();
   await expect(page.getByRole('button', { name: 'Use Plugin' })).toHaveCount(0);
+});
+
+test('selected component shows insert above and below component affordances', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('.editor-block-passive').first().click();
+
+  await expect(page.locator('.active-component-insert-ghost-before')).toBeVisible();
+  await expect(page.locator('.active-component-insert-ghost-before')).toContainText('Insert Above');
+  await expect(page.locator('.active-component-insert-ghost-before').getByRole('button', { name: 'Insert component above' })).toBeVisible();
+  await expect(page.locator('.active-component-insert-ghost-after')).toBeVisible();
+  await expect(page.locator('.active-component-insert-ghost-after')).toContainText('Insert Below');
+  await expect(page.locator('.active-component-insert-ghost-after').getByRole('button', { name: 'Insert component below' })).toBeVisible();
+});
+
+test('selected component insert below adds picked components', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('.editor-block-passive').first().click();
+  await page.locator('.active-component-insert-label', { hasText: 'Insert Below' }).click();
+  await page.locator('.active-component-insert-ghost-after .component-picker-row-direct[data-component="text"]').click();
+
+  await expect(page.locator('.active-component-insert-ghost-after .component-picker[data-open="true"]')).toHaveCount(0);
+  await expect(page.locator('.editor-block .rich-editor').first()).toBeVisible();
+
+  await page.locator('.editor-block-passive').first().click();
+  await page.locator('.active-component-insert-ghost-after').getByRole('button', { name: 'Insert component below' }).click();
+  await page.locator('.active-component-insert-ghost-after .component-picker-row-category', { hasText: 'Plugin' }).click();
+  await page.locator('.active-component-insert-ghost-after [data-picker-pane="plugins"] .component-picker-row-leaf', { hasText: 'DB Table' }).click();
+
+  await expect(page.locator('.active-component-insert-ghost-after .component-picker[data-open="true"]')).toHaveCount(0);
+  await expect(page.locator('.editor-block-title', { hasText: 'DB Table' }).first()).toBeVisible();
+});
+
+test('selected component insert picker remains clickable after trigger loses focus', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('.editor-block-passive').first().click();
+  await page.locator('.active-component-insert-ghost-after').getByRole('button', { name: 'Insert component below' }).click();
+  await page.locator('.active-component-insert-ghost-after .component-picker-trigger').evaluate((button) => {
+    if (button instanceof HTMLElement) {
+      button.blur();
+    }
+  });
+  await expect(page.locator('.active-component-insert-ghost-after .component-picker[data-open="true"]')).toHaveCount(1);
+  await expect(page.locator('.active-component-insert-ghost-after .component-picker-popover')).toBeVisible();
+
+  await page.locator('.active-component-insert-ghost-after .component-picker-row-direct[data-component="text"]').click();
+
+  await expect(page.locator('.active-component-insert-ghost-after .component-picker[data-open="true"]')).toHaveCount(0);
+  await expect(page.locator('.editor-block .rich-editor').first()).toBeVisible();
+});
+
+test('locked sections do not show selected component insert affordances', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Resume Template' }).click();
+  await page.locator('.editor-block-passive:visible').first().click();
+
+  await expect(page.locator('.active-component-insert-ghost-before')).toHaveCount(0);
+  await expect(page.locator('.active-component-insert-ghost-after')).toHaveCount(0);
 });

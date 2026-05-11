@@ -13,17 +13,66 @@ import type { ActionHandler } from './types';
 import type { GridItem, VisualBlock } from '../../editor/types';
 
 const addBlock: ActionHandler = ({ actionButton, section }) => {
-  if (!section || section.lock) {
+  const insertPlacement = actionButton.dataset.insertPlacement === 'before' || actionButton.dataset.insertPlacement === 'after'
+    ? actionButton.dataset.insertPlacement
+    : null;
+  const targetBlockId = actionButton.dataset.targetBlockId ?? '';
+  if (!section || (section.lock && (!insertPlacement || !targetBlockId))) {
+    console.log('[hvy:component-picker]', {
+      stage: 'add-block:bail',
+      reason: !section ? 'missing-section' : 'locked-section-append',
+      action: actionButton.dataset.action ?? '',
+      component: actionButton.dataset.component ?? '',
+      sectionKey: actionButton.dataset.sectionKey ?? '',
+    });
     return;
   }
   const component = (actionButton.dataset.component ?? state.addComponentBySection[section.key] ?? 'text').trim() || 'text';
+  console.log('[hvy:component-picker]', {
+    stage: 'add-block:start',
+    component,
+    pluginId: actionButton.dataset.pluginId ?? '',
+    sectionKey: section.key,
+    insertPlacement: actionButton.dataset.insertPlacement ?? '',
+    targetBlockId: actionButton.dataset.targetBlockId ?? '',
+  });
   if (openReusableTemplateModalIfNeeded(component, { kind: 'section', sectionKey: section.key })) {
+    console.log('[hvy:component-picker]', {
+      stage: 'add-block:template-modal',
+      component,
+      sectionKey: section.key,
+    });
     return;
   }
   recordHistory();
   const newBlock = createEmptyBlock(component);
   if (component === 'plugin' && actionButton.dataset.pluginId) {
     configurePluginBlock(newBlock, actionButton.dataset.pluginId);
+  }
+  if (insertPlacement && targetBlockId && insertBlockRelativeToTarget(section.blocks, targetBlockId, newBlock, insertPlacement, !section.lock)) {
+    console.log('[hvy:component-picker]', {
+      stage: 'add-block:inserted-relative',
+      component,
+      newBlockId: newBlock.id,
+      sectionKey: section.key,
+      insertPlacement,
+      targetBlockId,
+    });
+    setActiveEditorBlock(section.key, newBlock.id);
+    getRenderApp()();
+    return;
+  }
+  if (insertPlacement || targetBlockId) {
+    console.log('[hvy:component-picker]', {
+      stage: 'add-block:relative-fallback',
+      component,
+      sectionKey: section.key,
+      insertPlacement: insertPlacement ?? '',
+      targetBlockId,
+    });
+    if (section.lock) {
+      return;
+    }
   }
   const previousLastBlockId = section.blocks.length > 0 ? section.blocks[section.blocks.length - 1].id : '';
   for (const child of section.children) {
@@ -32,6 +81,12 @@ const addBlock: ActionHandler = ({ actionButton, section }) => {
     }
   }
   section.blocks.push(newBlock);
+  console.log('[hvy:component-picker]', {
+    stage: 'add-block:appended',
+    component,
+    newBlockId: newBlock.id,
+    sectionKey: section.key,
+  });
   setActiveEditorBlock(section.key, newBlock.id);
   getRenderApp()();
 };
@@ -392,6 +447,94 @@ function getGridPlacementInsertIndex(items: GridItem[], placement: 'before' | 'a
     return items.length;
   }
   return placement === 'before' ? targetIndex : targetIndex + 1;
+}
+
+function insertBlockRelativeToTarget(
+  blocks: VisualBlock[],
+  targetBlockId: string,
+  newBlock: VisualBlock,
+  placement: 'before' | 'after',
+  canInsertInCurrentList = true
+): boolean {
+  const targetIndex = blocks.findIndex((block) => block.id === targetBlockId);
+  if (targetIndex >= 0) {
+    if (!canInsertInCurrentList) {
+      return false;
+    }
+    blocks.splice(placement === 'before' ? targetIndex : targetIndex + 1, 0, newBlock);
+    return true;
+  }
+  for (const block of blocks) {
+    const blockAllowsChildren = block.schema.lock !== true;
+    if (insertBlockRelativeToTarget(block.schema.containerBlocks ?? [], targetBlockId, newBlock, placement, blockAllowsChildren)) {
+      return true;
+    }
+    if (insertBlockRelativeToTarget(block.schema.componentListBlocks ?? [], targetBlockId, newBlock, placement, blockAllowsChildren)) {
+      return true;
+    }
+    if (insertBlockRelativeToTarget(
+      block.schema.expandableStubBlocks?.children ?? [],
+      targetBlockId,
+      newBlock,
+      placement,
+      blockAllowsChildren && block.schema.expandableStubBlocks?.lock !== true
+    )) {
+      return true;
+    }
+    if (insertBlockRelativeToTarget(
+      block.schema.expandableContentBlocks?.children ?? [],
+      targetBlockId,
+      newBlock,
+      placement,
+      blockAllowsChildren && block.schema.expandableContentBlocks?.lock !== true
+    )) {
+      return true;
+    }
+    const gridItems = block.schema.gridItems ?? [];
+    const targetGridIndex = gridItems.findIndex((item) => item.block.id === targetBlockId);
+    if (targetGridIndex >= 0) {
+      if (!blockAllowsChildren) {
+        return false;
+      }
+      gridItems.splice(placement === 'before' ? targetGridIndex : targetGridIndex + 1, 0, {
+        id: makeId('griditem'),
+        block: newBlock,
+      });
+      return true;
+    }
+    for (const item of gridItems) {
+      if (insertBlockInsideBlock(item.block, targetBlockId, newBlock, placement)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function insertBlockInsideBlock(
+  block: VisualBlock,
+  targetBlockId: string,
+  newBlock: VisualBlock,
+  placement: 'before' | 'after'
+): boolean {
+  const blockAllowsChildren = block.schema.lock !== true;
+  return insertBlockRelativeToTarget(block.schema.containerBlocks ?? [], targetBlockId, newBlock, placement, blockAllowsChildren)
+    || insertBlockRelativeToTarget(block.schema.componentListBlocks ?? [], targetBlockId, newBlock, placement, blockAllowsChildren)
+    || insertBlockRelativeToTarget(
+      block.schema.expandableStubBlocks?.children ?? [],
+      targetBlockId,
+      newBlock,
+      placement,
+      blockAllowsChildren && block.schema.expandableStubBlocks?.lock !== true
+    )
+    || insertBlockRelativeToTarget(
+      block.schema.expandableContentBlocks?.children ?? [],
+      targetBlockId,
+      newBlock,
+      placement,
+      blockAllowsChildren && block.schema.expandableContentBlocks?.lock !== true
+    )
+    || (block.schema.gridItems ?? []).some((item) => insertBlockInsideBlock(item.block, targetBlockId, newBlock, placement));
 }
 
 function getGridItemBlockId(sectionKey: string, gridBlockId: string, gridItemId: string): string | null {

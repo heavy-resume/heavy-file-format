@@ -157,7 +157,7 @@ function getEditorActivationTarget(
 function focusEditorActivationTarget(target: HTMLElement, clientX?: number, clientY?: number): void {
   target.focus({ preventScroll: true });
   if (!target.isContentEditable) {
-    if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
+    if (target instanceof HTMLTextAreaElement || isTextSelectionInput(target)) {
       const length = target.value.length;
       target.setSelectionRange(length, length);
     }
@@ -180,6 +180,13 @@ function focusEditorActivationTarget(target: HTMLElement, clientX?: number, clie
   range.collapse(false);
   selection.removeAllRanges();
   selection.addRange(range);
+}
+
+function isTextSelectionInput(target: HTMLElement): target is HTMLInputElement {
+  if (!(target instanceof HTMLInputElement)) {
+    return false;
+  }
+  return ['email', 'number', 'password', 'search', 'tel', 'text', 'url'].includes(target.type);
 }
 
 function getCaretRangeFromPoint(clientX: number, clientY: number): Range | null {

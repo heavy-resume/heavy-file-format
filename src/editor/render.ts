@@ -416,10 +416,13 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const activationStyle = isActivatingPath ? ` style="--editor-activation-delay: ${activationPathIndex * 150}ms;"` : '';
     const activationAttrs = isActiveSelf ? ` data-active-editor-block="true" data-active-block-id="${deps.escapeAttr(block.id)}"` : '';
     const anchorAttrs = renderButtonAnchorAttrs(sectionKey, block, rootSections ?? []);
+    const owningSection = deps.findSectionByKey(rootSections ?? [], sectionKey);
+    const isDirectSectionBlock = owningSection?.blocks.some((candidate) => candidate === block) === true;
+    const structurallyLocked = parentLocked || (isDirectSectionBlock && owningSection?.lock === true);
     const blockMove = isActiveSelf
       ? getBlockMoveAvailability(sectionKey, block.id, rootSections ?? [])
       : { canMoveUp: false, canMoveDown: false };
-    const canRemove = isActive && !parentLocked;
+    const canRemove = isActive && !structurallyLocked;
     const placement = state.componentPlacement;
     const isPlacementSource = placement?.sectionKey === sectionKey && placement.blockId === block.id;
     const placementActions = canRemove
@@ -444,8 +447,15 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       )}" data-block-id="${deps.escapeAttr(block.id)}" aria-label="Remove ${deps.escapeAttr(componentLabel)}" title="Delete component" data-tooltip="Delete component">${closeIcon()}</button>`
       : '';
     const frameRemoveButton = state.mobileAdjustmentMode ? '' : removeButton;
+    const insertAboveGhost = canRenderActiveComponentInsertGhost(isActiveSelf, structurallyLocked)
+      ? renderActiveComponentInsertGhost(sectionKey, block, 'before')
+      : '';
+    const insertBelowGhost = canRenderActiveComponentInsertGhost(isActiveSelf, structurallyLocked)
+      ? renderActiveComponentInsertGhost(sectionKey, block, 'after')
+      : '';
 
     return `
+      ${insertAboveGhost}
       <div class="editor-block${isActivatingPath ? ' is-activating-path' : ''}${isPlacementSource ? ' is-placement-source' : ''}"${activationStyle}${activationAttrs}>
         ${componentMetaActions}
         ${frameRemoveButton}
@@ -479,7 +489,28 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
             : ''
         }
       </div>
+      ${insertBelowGhost}
     `;
+  }
+
+  function canRenderActiveComponentInsertGhost(isActiveSelf: boolean, structurallyLocked: boolean): boolean {
+    return isActiveSelf && !structurallyLocked && !state.componentPlacement && !state.mobileAdjustmentMode;
+  }
+
+  function renderActiveComponentInsertGhost(sectionKey: string, block: VisualBlock, placement: 'before' | 'after'): string {
+    return `<article class="ghost-section-card add-ghost compact-add-component-ghost active-component-insert-ghost active-component-insert-ghost-${placement}">
+      <span class="active-component-insert-label">Insert ${placement === 'before' ? 'Above' : 'Below'}</span>
+      ${renderComponentPicker({
+        id: `block:${block.id}:${placement}`,
+        action: 'add-block',
+        sectionKey,
+        label: `Insert component ${placement === 'before' ? 'above' : 'below'}`,
+        extraAttrs: {
+          'data-insert-placement': placement,
+          'data-target-block-id': block.id,
+        },
+      })}
+    </article>`;
   }
 
   function renderPassiveEditorBlock(sectionKey: string, block: VisualBlock, rootSections: VisualSection[]): string {

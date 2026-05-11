@@ -74,3 +74,5 @@ When creating new inputs, etc make sure they use the HVY theme variables includi
 Right now as of version 0.1 of the spec there's no "older" stuff to worry about so don't waste effort on backwards compatibility.
 
 When adding new colors or adjusting the CSS variables that are color related be sure to update the theme editor. Make sure new states are editable.
+
+The lock logic is not intended to inherit. A locked section doesn't automatically lock the interior components.

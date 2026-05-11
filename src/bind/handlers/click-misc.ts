@@ -4,8 +4,38 @@ const sidebarHelpDismissTimers: Record<'editor' | 'viewer', number | null> = {
   editor: null,
   viewer: null,
 };
+const pointerHandledPickerTriggers = new WeakSet<HTMLElement>();
 
 export function bindClickMisc(app: HTMLElement): void {
+  app.addEventListener('mousedown', (event) => {
+    const target = event.target as HTMLElement;
+    const pickerTrigger = target.closest<HTMLElement>('.component-picker-trigger');
+    if (!pickerTrigger) {
+      const activeInsertGhost = target.closest<HTMLElement>('.active-component-insert-ghost');
+      if (activeInsertGhost && !target.closest('.component-picker')) {
+        const ghostPickerTrigger = activeInsertGhost.querySelector<HTMLElement>('.component-picker-trigger');
+        if (ghostPickerTrigger) {
+          event.preventDefault();
+          pointerHandledPickerTriggers.add(ghostPickerTrigger);
+          console.log('[hvy:component-picker]', {
+            stage: 'open:pointer-ghost',
+            placement: activeInsertGhost.classList.contains('active-component-insert-ghost-before') ? 'before' : 'after',
+            targetText: target.textContent?.replace(/\s+/g, ' ').trim().slice(0, 80) ?? '',
+          });
+          toggleComponentPicker(app, ghostPickerTrigger);
+        }
+      }
+      return;
+    }
+    event.preventDefault();
+    pointerHandledPickerTriggers.add(pickerTrigger);
+    console.log('[hvy:component-picker]', {
+      stage: 'open:pointer-trigger',
+      label: pickerTrigger.getAttribute('aria-label') ?? '',
+    });
+    toggleComponentPicker(app, pickerTrigger);
+  });
+
   app.addEventListener('mouseup', (event) => {
     const richTarget = getRichTarget(event.target as HTMLElement);
     if (richTarget) {
@@ -22,21 +52,11 @@ export function bindClickMisc(app: HTMLElement): void {
     }
     const pickerTrigger = target.closest<HTMLElement>('.component-picker-trigger');
     if (pickerTrigger) {
-      const picker = pickerTrigger.closest<HTMLElement>('.component-picker');
-      if (picker) {
-        if (picker.dataset.open === 'true' && picker.dataset.activePane === 'root') {
-          delete picker.dataset.open;
-          picker.dataset.activePane = 'root';
-          picker.style.removeProperty('--component-picker-shift');
-          pickerTrigger.blur();
-          return;
-        }
-        closeOtherComponentPickers(app, picker);
-        picker.dataset.open = 'true';
-        picker.dataset.activePane = 'root';
-        placeComponentPicker(picker);
-        revealComponentPicker(picker);
+      if (pointerHandledPickerTriggers.has(pickerTrigger)) {
+        pointerHandledPickerTriggers.delete(pickerTrigger);
+        return;
       }
+      toggleComponentPicker(app, pickerTrigger);
       return;
     }
     const pickerPaneButton = target.closest<HTMLElement>('[data-component-picker-pane]');
@@ -46,6 +66,11 @@ export function bindClickMisc(app: HTMLElement): void {
       if (picker) {
         picker.dataset.open = 'true';
         picker.dataset.activePane = pickerPaneButton.dataset.componentPickerPane ?? 'root';
+        console.log('[hvy:component-picker]', {
+          stage: 'pane',
+          pane: picker.dataset.activePane,
+          pickerOpen: picker.dataset.open ?? '',
+        });
         revealComponentPicker(picker);
       }
       return;
@@ -58,6 +83,13 @@ export function bindClickMisc(app: HTMLElement): void {
         picker.dataset.activePane = 'root';
         picker.style.removeProperty('--component-picker-shift');
       }
+      return;
+    }
+    if (target.closest('.active-component-insert-ghost') && !target.closest('.component-picker')) {
+      console.log('[hvy:component-picker]', {
+        stage: 'ghost-click-kept-open',
+        targetText: target.textContent?.replace(/\s+/g, ' ').trim().slice(0, 80) ?? '',
+      });
       return;
     }
     if (!target.closest('.component-picker')) {
@@ -90,6 +122,39 @@ export function bindClickMisc(app: HTMLElement): void {
     closeAiEditPopover();
     getRenderApp()();
   });
+}
+
+function toggleComponentPicker(app: HTMLElement, pickerTrigger: HTMLElement): void {
+  const picker = pickerTrigger.closest<HTMLElement>('.component-picker');
+  if (!picker) {
+    console.log('[hvy:component-picker]', {
+      stage: 'toggle:bail',
+      reason: 'picker-not-found',
+    });
+    return;
+  }
+  if (picker.dataset.open === 'true' && picker.dataset.activePane === 'root') {
+    delete picker.dataset.open;
+    picker.dataset.activePane = 'root';
+    picker.style.removeProperty('--component-picker-shift');
+    pickerTrigger.blur();
+    console.log('[hvy:component-picker]', {
+      stage: 'toggle:closed',
+      label: pickerTrigger.getAttribute('aria-label') ?? '',
+    });
+    return;
+  }
+  closeOtherComponentPickers(app, picker);
+  picker.dataset.open = 'true';
+  picker.dataset.activePane = 'root';
+  console.log('[hvy:component-picker]', {
+    stage: 'toggle:opened',
+    label: pickerTrigger.getAttribute('aria-label') ?? '',
+    pickerOpen: picker.dataset.open ?? '',
+    activePane: picker.dataset.activePane ?? '',
+  });
+  placeComponentPicker(picker);
+  revealComponentPicker(picker);
 }
 
 export function scheduleSidebarHelpAutoClose(app: HTMLElement): void {

@@ -277,7 +277,12 @@
 }
 
 .editor-sidebar-panel {
+  box-sizing: border-box;
+  width: 100%;
   height: 100%;
+  max-height: 100%;
+  min-width: 0;
+  min-height: 0;
   padding: 0.9rem;
   border-right: 1px solid var(--hvy-border);
   border-radius: 0 12px 12px 0;
@@ -286,7 +291,9 @@
   display: grid;
   align-content: start;
   gap: 0.8rem;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
   pointer-events: none;
 }
 
@@ -540,7 +547,8 @@
   border-color: var(--hvy-focus);
 } */
 
-.ghost-section-card:focus-within {
+.ghost-section-card:focus-within,
+.ghost-section-card:has(.component-picker[data-open="true"]) {
   position: relative;
   z-index: 9999;
 }
@@ -607,6 +615,32 @@
 .compact-add-component-ghost .ghost-label {
   font-size: 0.9rem;
   line-height: 1;
+}
+
+.active-component-insert-ghost {
+  min-height: 0;
+  height: 2rem;
+  margin: 0.25rem 0;
+  padding: 0.25rem 0.6rem;
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--hvy-border-alt) 72%, transparent);
+  background: color-mix(in srgb, var(--hvy-surface-alt) 82%, transparent);
+}
+
+.active-component-insert-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--hvy-text-muted);
+  text-transform: uppercase;
+}
+
+.active-component-insert-ghost .component-picker {
+  width: auto;
+}
+
+.active-component-insert-ghost .component-picker-trigger {
+  width: 1.65rem;
+  height: 1.65rem;
 }
 
 .empty-section-heading-ghost {

@@ -9,18 +9,15 @@ import {
 import type { ChatMessage, ChatSettings, VisualDocument } from './types';
 import {
   buildDocumentEditFormatInstructions,
-  buildHeaderEditFormatInstructions,
   buildInitialDocumentEditPrompt,
-  buildInitialHeaderEditPrompt,
   buildToolResult,
   DOCUMENT_EDIT_MAX_TOOL_STEPS,
 } from './ai-document-edit-instructions';
-import { inferEditPathFromRequest, isLikelyInformationalAnswerRequest, parseDocumentEditToolRequest, parseHeaderEditToolRequest } from './ai-document-tool-parsing';
-import { summarizeDocumentStructure, summarizeHeaderStructure } from './ai-document-structure';
-import { autoUpdatePlanAndWorkNote, buildLoopRecoveryChatMessage, compactToolLoopConversation, createInitialWorkNote, createLoopHealthState, describeDocumentToolProgress, describeHeaderToolProgress, describeLedgerAction, formatDocumentToolFailure, formatDocumentToolFailureForProgress, formatLatestToolResultForContext, formatPlanState, formatWorkNote, getDocumentToolIntent, getLoopStallThreshold, getToolActionKey, isAbortError, isDocumentInformationTool, isHeaderInformationTool, isPlanComplete, isToolResultFailure, markPlanStepDone, normalizePlanSteps, recordToolExecutionOutcome, recordWorkLedgerItem, recordWorkNoteCaution, recordWorkNoteDone, rewardLoopHealthForPlanCreated, rewardLoopHealthForPlanStepDone, summarizeDocumentLoopProgress, summarizeHeaderLoopProgress, summarizeToolFailureMessage, summarizeToolResultForConversation, throwIfAborted, updateLoopHealthForAction, updateLoopHealthForInvalid, updateWorkNoteRemaining } from './ai-document-loop-state';
+import { isLikelyInformationalAnswerRequest, parseDocumentEditToolRequest } from './ai-document-tool-parsing';
+import { summarizeDocumentStructure } from './ai-document-structure';
+import { autoUpdatePlanAndWorkNote, buildLoopRecoveryChatMessage, compactToolLoopConversation, createInitialWorkNote, createLoopHealthState, describeDocumentToolProgress, describeLedgerAction, formatDocumentToolFailure, formatDocumentToolFailureForProgress, formatLatestToolResultForContext, formatPlanState, formatWorkNote, getDocumentToolIntent, getLoopStallThreshold, getToolActionKey, isAbortError, isDocumentInformationTool, isPlanComplete, isToolResultFailure, markPlanStepDone, normalizePlanSteps, recordToolExecutionOutcome, recordWorkLedgerItem, recordWorkNoteCaution, recordWorkNoteDone, rewardLoopHealthForPlanCreated, rewardLoopHealthForPlanStepDone, summarizeDocumentLoopProgress, summarizeToolFailureMessage, summarizeToolResultForConversation, throwIfAborted, updateLoopHealthForAction, updateLoopHealthForInvalid, updateWorkNoteRemaining } from './ai-document-loop-state';
 export { summarizeDocumentStructure, summarizeHeaderStructure } from './ai-document-structure';
 import { buildDocumentWalkChunks, logDocumentWalkChunks, requestAiDocumentNotes } from './ai-document-notes';
-import { executeGrepHeaderTool, executePatchHeaderTool, executeViewHeaderTool } from './ai-header-edit-tools';
 import {
   buildIntentRecall,
   executeCreateComponentTool,
@@ -196,15 +193,10 @@ async function runDocumentEditLoop(params: {
   traceRunId?: string;
   signal?: AbortSignal;
 }): Promise<{ summary: string }> {
-  const path = inferEditPathFromRequest(params.request);
   console.debug('[hvy:ai-document-edit] selected edit path', {
     likelyInformational: isLikelyInformationalAnswerRequest(params.request),
-    path,
+    path: 'document',
   });
-  if (path === 'header') {
-    params.onProgress?.('Using header edit tools.');
-    return runHeaderEditToolLoop(params);
-  }
   return runDocumentEditToolLoop(params);
 }
 
@@ -720,164 +712,6 @@ async function runDocumentEditToolLoop(params: {
 
   return {
     summary: `Stopped after ${DOCUMENT_EDIT_MAX_TOOL_STEPS} steps. The AI can continue if you send another request.`,
-  };
-}
-
-async function runHeaderEditToolLoop(params: {
-  settings: ChatSettings;
-  document: VisualDocument;
-  request: string;
-  onMutation?: (group?: string) => void;
-  onProgress?: (content: string) => void;
-  traceRunId?: string;
-  signal?: AbortSignal;
-}): Promise<{ summary: string }> {
-  let snapshot = summarizeHeaderStructure(params.document);
-  let contextSummary = snapshot.summary;
-  let plan: EditPlanState | null = null;
-  let latestToolResult: string | null = null;
-  const health = createLoopHealthState();
-  let conversation: ChatMessage[] = [
-    {
-      id: crypto.randomUUID(),
-      role: 'user',
-      content: buildInitialHeaderEditPrompt(params.request),
-    },
-  ];
-
-  for (let iteration = 0; iteration < DOCUMENT_EDIT_MAX_TOOL_STEPS; iteration += 1) {
-    throwIfAborted(params.signal);
-    conversation = compactToolLoopConversation({
-      conversation,
-      goal: params.request,
-      document: params.document,
-      plan,
-      path: 'header',
-    });
-    const response = await requestProxyCompletion({
-      settings: params.settings,
-      messages: conversation,
-      context: buildLoopContext(contextSummary, plan, null, undefined, undefined, undefined, latestToolResult),
-      responseInstructions: buildHeaderEditFormatInstructions({ planActive: plan !== null }),
-      mode: 'document-edit',
-      debugLabel: `ai-header-edit:${iteration + 1}`,
-      traceRunId: params.traceRunId,
-      signal: params.signal,
-    });
-
-    const parsed = parseHeaderEditToolRequest(response);
-    if (parsed.ok === false) {
-      const recovery = updateLoopHealthForInvalid(health, getLoopStallThreshold(params.request, plan));
-      if (health.invalidResponses >= 10 || recovery === 'stop') {
-        return { summary: 'Stopped because the AI header edit loop was not producing valid tool calls. Try a narrower request or ask it to continue from the current document.' };
-      }
-      conversation = [
-        ...pruneTransientRecoveryMessages(conversation),
-        {
-          id: crypto.randomUUID(),
-          role: 'user',
-          content: `Return one valid header tool JSON object using the documented shapes. ${parsed.message}`,
-        },
-        ...(recovery === 'recover' ? [buildLoopRecoveryChatMessage()] : []),
-      ];
-      continue;
-    }
-
-    if (parsed.value.tool === 'done') {
-      params.onProgress?.('Finished header edit loop.');
-      return {
-        summary: parsed.value.summary?.trim() || `Finished header edit after ${iteration + 1} step${iteration === 0 ? '' : 's'}.`,
-      };
-    }
-    if (parsed.value.tool === 'answer') {
-      params.onProgress?.('Answered without changing the header.');
-      return {
-        summary: parsed.value.answer.trim(),
-      };
-    }
-
-    if (parsed.value.tool !== 'plan' && parsed.value.tool !== 'mark_step_done') {
-      params.onProgress?.(describeHeaderToolProgress(parsed.value));
-    }
-    const actionKey = getToolActionKey(parsed.value);
-    const beforeProgress = summarizeHeaderLoopProgress(params.document, plan);
-    const newInformationProgress = isHeaderInformationTool(parsed.value.tool) && !health.seenActionKeys.has(actionKey);
-    let toolResult = '';
-    if (parsed.value.tool === 'plan') {
-      if (plan) {
-        toolResult = buildToolResult('plan', [
-          'A plan already exists and the `plan` tool is no longer available for this request.',
-          'Continue by executing the next unfinished step and use `mark_step_done` when it is complete.',
-          '',
-          formatPlanState(plan),
-        ].join('\n'));
-      } else {
-        plan = { steps: parsed.value.steps.map((step) => ({ text: step, done: false })) };
-        rewardLoopHealthForPlanCreated(health, plan);
-        toolResult = buildToolResult('plan', formatPlanState(plan));
-        params.onProgress?.(formatPlanState(plan));
-      }
-    } else if (parsed.value.tool === 'mark_step_done') {
-      const result = markPlanStepDone(plan, parsed.value.step, parsed.value.summary);
-      if (result.changed) {
-        if (plan) {
-          params.onProgress?.(formatPlanState(plan));
-        }
-        rewardLoopHealthForPlanStepDone(health);
-      }
-      toolResult = buildToolResult('mark_step_done', result.message);
-      if (result.changed && isPlanComplete(plan)) {
-        params.onProgress?.('Completed all header plan steps.');
-        return {
-          summary: result.summary || 'Completed all header plan steps.',
-        };
-      }
-    } else if (parsed.value.tool === 'request_header') {
-      snapshot = summarizeHeaderStructure(params.document);
-      toolResult = buildToolResult('request_header', snapshot.summary);
-      contextSummary = SENT_STRUCTURE_CONTEXT;
-    } else if (parsed.value.tool === 'grep_header') {
-      toolResult = buildToolResult('grep_header', executeGrepHeaderTool(parsed.value, params.document));
-      contextSummary = SENT_STRUCTURE_CONTEXT;
-    } else if (parsed.value.tool === 'view_header') {
-      toolResult = buildToolResult('view_header', executeViewHeaderTool(parsed.value, params.document));
-      contextSummary = SENT_STRUCTURE_CONTEXT;
-    } else if (parsed.value.tool === 'patch_header') {
-      toolResult = buildToolResult('patch_header', executePatchHeaderTool(parsed.value, params.document, params.onMutation));
-      snapshot = summarizeHeaderStructure(params.document);
-      contextSummary = SENT_STRUCTURE_CONTEXT;
-    }
-
-    const afterProgress = summarizeHeaderLoopProgress(params.document, plan);
-    const recovery = updateLoopHealthForAction(
-      health,
-      actionKey,
-      beforeProgress !== afterProgress || newInformationProgress,
-      getLoopStallThreshold(params.request, plan)
-    );
-    if (recovery === 'stop') {
-      return { summary: 'Stopped because the AI header edit loop appeared stuck repeating actions without making progress. The AI can continue if you send another request.' };
-    }
-
-    conversation = [
-      ...conversation,
-      {
-        id: crypto.randomUUID(),
-        role: 'assistant',
-        content: response,
-      },
-      {
-        id: crypto.randomUUID(),
-        role: 'user',
-        content: summarizeToolResultForConversation(toolResult),
-      },
-      ...(recovery === 'recover' ? [buildLoopRecoveryChatMessage()] : []),
-    ];
-    latestToolResult = toolResult;
-  }
-
-  return {
-    summary: `Stopped after ${DOCUMENT_EDIT_MAX_TOOL_STEPS} header steps. The AI can continue if you send another request.`,
   };
 }
 

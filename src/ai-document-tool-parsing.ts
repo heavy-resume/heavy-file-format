@@ -3,7 +3,6 @@ import type {
   CssPropertyMap,
   DocumentEditBatchToolRequest,
   DocumentEditToolRequest,
-  EditPathSelection,
   HeaderEditToolRequest,
 } from './ai-document-edit-types';
 
@@ -532,14 +531,6 @@ function parsePatchEdits(source: unknown[]): { ok: true; value: ComponentPatchEd
     return { ok: false, message: 'patch edits must use replace, delete, insert_before, or insert_after with valid line numbers.' };
   }
   return { ok: true, value: edits };
-}
-
-export function inferEditPathFromRequest(request: string): EditPathSelection {
-  return /\b(header|front matter|frontmatter|metadata|meta|component_defs|component defs|section_defs|section defs|reusable|theme|reader_max_width|sidebar_label|template|schema|plugin)\b/i.test(
-    request
-  )
-    ? 'header'
-    : 'document';
 }
 
 export function isLikelyInformationalAnswerRequest(request: string): boolean {

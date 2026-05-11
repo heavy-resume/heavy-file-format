@@ -2472,7 +2472,7 @@ test('hvy help lists registered plugin add and operation commands as quick-refer
 
   expect(help).toContain('hvy cheatsheet [NAME]');
   expect(help).toContain('hvy recipe [NAME]');
-  expect(help).toContain('Cheatsheets:\n- components\n- db-table\n- forms\n- scripting');
+  expect(help).toContain('Cheatsheets:\n- common-patterns\n- components\n- db-table\n- forms\n- header\n- reusable-component\n- scripting\n- styling');
   expect(help).toContain('Recipes:\n- db-and-form\n- form-backed-table\n- populate-form-options-from-db\n- scripting');
   expect(help).toContain('hvy insert INDEX plugin form SECTION_PATH ID');
   expect(help).toContain('hvy insert INDEX plugin db-table SECTION_PATH ID');
@@ -2498,7 +2498,7 @@ test('hvy cheatsheets are discovered from markdown files', async () => {
   expect(dbTable).toContain('plugin.txt` stores optional read-only `SELECT` or `WITH` SQL');
   expect(dbTable).toContain('Do not search the document for `CREATE TABLE`');
   expect(dbTable).toContain('hvy plugin db-table exec');
-  expect(unknown).toContain('Unknown cheatsheet "missing". Available cheatsheets: components, db-table, forms, scripting');
+  expect(unknown).toContain('Unknown cheatsheet "missing". Available cheatsheets: common-patterns, components, db-table, forms, header, reusable-component, scripting, styling');
 });
 
 test('hvy recipes are discovered from hvy files', async () => {

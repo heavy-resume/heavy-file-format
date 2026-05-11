@@ -10,17 +10,17 @@ Dynamic table components have two separate parts:
 Create or change tables and views:
 
 ```shell
-hvy plugin db-table exec "CREATE TABLE items (id INTEGER PRIMARY KEY, title TEXT NOT NULL, assigned_to TEXT, completed_at TEXT)"
-hvy plugin db-table exec "CREATE VIEW weekly_item_leaders AS SELECT assigned_to, COUNT(*) AS completed_count FROM items WHERE completed_at >= datetime('now', '-7 days') GROUP BY assigned_to"
+hvy plugin db-table exec "CREATE TABLE fake_widgets (id INTEGER PRIMARY KEY, label TEXT NOT NULL, zone TEXT, archived_at TEXT)"
+hvy plugin db-table exec "CREATE VIEW fake_widget_zone_totals AS SELECT zone, COUNT(*) AS widget_count FROM fake_widgets WHERE archived_at IS NULL GROUP BY zone"
 ```
 
 Inspect the current backend:
 
 ```shell
 hvy plugin db-table tables
-hvy plugin db-table schema items
+hvy plugin db-table schema fake_widgets
 hvy plugin db-table schema
-hvy plugin db-table query "SELECT * FROM items"
+hvy plugin db-table query "SELECT * FROM fake_widgets"
 ```
 
 Use `hvy plugin db-table tables` and `hvy plugin db-table schema` to inspect the current backend. Do not search the document for `CREATE TABLE`; that can find examples, recipes, scratchpad notes, or stale setup scripts instead of the live backend schema.
@@ -28,22 +28,22 @@ Use `hvy plugin db-table tables` and `hvy plugin db-table schema` to inspect the
 Display rows in the document:
 
 ```shell
-hvy insert 0 plugin db-table /a-section active-items
-echo '{"id":"active-items","plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"items","queryLimit":10}}' > /body/a-section/active-items/plugin.json
-echo 'SELECT title, assigned_to FROM items WHERE completed_at IS NULL' > /body/a-section/active-items/plugin.txt
-hvy insert -1 plugin db-table /a-section weekly-leaders
-echo '{"id":"weekly-leaders","plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"weekly_item_leaders","queryLimit":10}}' > /body/a-section/weekly-leaders/plugin.json
-echo 'SELECT assigned_to, completed_count FROM weekly_item_leaders' > /body/a-section/weekly-leaders/plugin.txt
+hvy insert 0 plugin db-table /demo-area visible-widgets
+echo '{"id":"visible-widgets","plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"fake_widgets","queryLimit":10}}' > /body/demo-area/visible-widgets/plugin.json
+echo 'SELECT label, zone FROM fake_widgets WHERE archived_at IS NULL' > /body/demo-area/visible-widgets/plugin.txt
+hvy insert -1 plugin db-table /demo-area widget-zone-totals
+echo '{"id":"widget-zone-totals","plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"fake_widget_zone_totals","queryLimit":10}}' > /body/demo-area/widget-zone-totals/plugin.json
+echo 'SELECT zone, widget_count FROM fake_widget_zone_totals' > /body/demo-area/widget-zone-totals/plugin.txt
 ```
 
 Fix an existing DB Table component:
 
 ```shell
-cat /body/a-section/active-items/plugin.json
-cat /body/a-section/active-items/plugin.txt
+cat /body/demo-area/visible-widgets/plugin.json
+cat /body/demo-area/visible-widgets/plugin.txt
 hvy plugin db-table tables
-hvy plugin db-table exec "CREATE VIEW active_items AS SELECT title, assigned_to FROM items WHERE completed_at IS NULL"
-echo '{"id":"active-items","css":"","plugin":"dev.heavy.db-table","pluginConfig":{"table":"active_items"}}' > /body/a-section/active-items/plugin.json
-echo 'SELECT title, assigned_to FROM active_items' > /body/a-section/active-items/plugin.txt
+hvy plugin db-table exec "CREATE VIEW fake_visible_widgets AS SELECT label, zone FROM fake_widgets WHERE archived_at IS NULL"
+echo '{"id":"visible-widgets","css":"","plugin":"dev.heavy.db-table","pluginConfig":{"table":"fake_visible_widgets"}}' > /body/demo-area/visible-widgets/plugin.json
+echo 'SELECT label, zone FROM fake_visible_widgets' > /body/demo-area/visible-widgets/plugin.txt
 hvy lint
 ```

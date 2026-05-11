@@ -3,8 +3,8 @@
 Create a scripting plugin:
 
 ```shell
-hvy insert 0 plugin /a-section setup dev.heavy.scripting
-echo "doc.header.set('status', 'ready')" > /body/a-section/setup/script.py
+hvy insert 0 plugin /demo-area widget-script dev.heavy.scripting
+echo "doc.header.set('fake_widget_status', 'ready')" > /body/demo-area/widget-script/script.py
 ```
 
 Scripts are sandboxed Brython/Python with one injected global:
@@ -18,8 +18,8 @@ Useful APIs:
 ```python
 doc.header.get("key")
 doc.header.set("key", "value")
-doc.db.query("SELECT * FROM items")
-doc.db.execute("INSERT INTO items (title) VALUES (?)", ["Example"])
+doc.db.query("SELECT * FROM fake_widgets")
+doc.db.execute("INSERT INTO fake_widgets (label) VALUES (?)", ["Orbital Widget"])
 doc.cli.run("hvy request_structure --collapse")
 doc.tool("request_structure", {})
 ```

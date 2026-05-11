@@ -291,7 +291,8 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       ? ` data-reader-action="toggle-expand" data-section-key="${deps.escapeAttr(section.key)}"`
       : '';
 
-    const header = section.contained || modifiers.has('collapse')
+    const suppressSectionToggle = state.currentView === 'ai' && state.activeEditorBlock?.sectionKey === section.key;
+    const header = !suppressSectionToggle && (section.contained || modifiers.has('collapse'))
       ? `
         <header class="reader-section-head" aria-label="Section controls">
           <div class="reader-head-actions">

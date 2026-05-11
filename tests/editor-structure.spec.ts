@@ -177,8 +177,10 @@ hvy_version: 0.1
   await page.getByRole('button', { name: 'Apply' }).click();
   await page.getByRole('button', { name: 'AI' }).click();
 
+  await expect(page.locator('#aiReaderDocument #summary > .reader-section-head .toggle-expand-button')).toBeVisible();
   await page.locator('#aiReaderDocument .reader-block', { hasText: 'Original' }).click({ button: 'right' });
   await page.getByRole('button', { name: 'Edit component' }).click();
+  await expect(page.locator('#aiReaderDocument #summary > .reader-section-head .toggle-expand-button')).toHaveCount(0);
   await page.keyboard.type('X');
 
   const editor = page.locator('#aiReaderDocument [data-field="block-rich"]');

@@ -826,7 +826,7 @@
   width: min(11rem, 78%);
   min-height: 4.8rem;
   border-color: var(--hvy-focus);
-  background: color-mix(in srgb, var(--hvy-surface-tint) 72%, var(--hvy-surface) 28%);
+  background: linear-gradient(180deg, var(--hvy-surface-alt), var(--hvy-surface));
   box-shadow: 0 16px 34px var(--hvy-shadow-md), 0 0 0 2px var(--hvy-focus-ring);
 }
 

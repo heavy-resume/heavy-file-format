@@ -254,6 +254,9 @@ function normalizeCliSession(value: unknown): HvyCliSessionState {
     ...(typeof raw.rawWipContent === 'string' ? { rawWipContent: raw.rawWipContent } : {}),
     ...(isStringRecord(raw.rawWipContentByPath) ? { rawWipContentByPath: raw.rawWipContentByPath } : {}),
     ...(isStringRecord(raw.rawSectionWipContentByPath) ? { rawSectionWipContentByPath: raw.rawSectionWipContentByPath } : {}),
+    ...(raw.virtualPathNaming && typeof raw.virtualPathNaming === 'object' && isStringRecord(raw.virtualPathNaming.anonymousBlockNamesById)
+      ? { virtualPathNaming: { anonymousBlockNamesById: raw.virtualPathNaming.anonymousBlockNamesById } }
+      : {}),
   };
 }
 

@@ -165,6 +165,9 @@ export interface HvyCliSessionState {
   rawWipContent?: string;
   rawWipContentByPath?: Record<string, string>;
   rawSectionWipContentByPath?: Record<string, string>;
+  virtualPathNaming?: {
+    anonymousBlockNamesById?: Record<string, string>;
+  };
 }
 
 export interface ThemeConfig {

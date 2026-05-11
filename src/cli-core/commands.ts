@@ -8,6 +8,7 @@ import {
   resolveVirtualPath,
   type HvyVirtualEntry,
   type HvyVirtualFile,
+  type HvyVirtualPathNamingState,
 } from './virtual-file-system';
 import { executeHvyDocumentCommand, hvyDocumentCommandHelp } from './hvy-document-commands';
 import { createScriptingDbRuntime, formatQueryResultTable, getDocumentDbTableObjectNames } from '../plugins/db-table';
@@ -41,6 +42,7 @@ export interface HvyCliSession {
   rawWipContent?: string;
   rawWipContentByPath?: Record<string, string>;
   rawSectionWipContentByPath?: Record<string, string>;
+  virtualPathNaming?: HvyVirtualPathNamingState;
   now?: Date;
 }
 
@@ -54,6 +56,7 @@ type HvyCliCommandContext = {
   document: VisualDocument;
   fs: ReturnType<typeof buildHvyVirtualFileSystem>;
   cwd: string;
+  pathNaming?: HvyVirtualPathNamingState;
 };
 
 type HvyMiniShellPipeline = {
@@ -71,7 +74,13 @@ type HvyMiniShellProcess = {
 };
 
 export function createHvyCliSession(): HvyCliSession {
-  return { cwd: '/', scratchpadContent: defaultScratchpadContent() };
+  return { cwd: '/', scratchpadContent: defaultScratchpadContent(), virtualPathNaming: { anonymousBlockNamesById: {} } };
+}
+
+function buildSessionVirtualFileSystem(document: VisualDocument, session: HvyCliSession): ReturnType<typeof buildHvyVirtualFileSystem> {
+  session.virtualPathNaming ??= { anonymousBlockNamesById: {} };
+  session.virtualPathNaming.anonymousBlockNamesById ??= {};
+  return buildHvyVirtualFileSystem(document, session.virtualPathNaming);
 }
 
 export function getHvyCliCommandSummary(): string {
@@ -94,7 +103,7 @@ export async function executeHvyCliCommand(document: VisualDocument, session: Hv
     let mutated = false;
     let scratchpadTouched = false;
     for (const heredoc of heredocs) {
-      const fs = buildHvyVirtualFileSystem(document);
+      const fs = buildSessionVirtualFileSystem(document, session);
       addSessionFiles(fs, document, session);
       const result = writeVirtualFile({ fs, cwd: session.cwd }, heredoc.path, heredoc.content, false, 'cat');
       enforceScratchpadHardCap(session);
@@ -130,10 +139,10 @@ export async function executeHvyCliCommand(document: VisualDocument, session: Hv
       continue;
     }
 
-    const fs = buildHvyVirtualFileSystem(document);
+    const fs = buildSessionVirtualFileSystem(document, session);
     addSessionFiles(fs, document, session);
     enforceScratchpadHardCap(session);
-    lastProcess = await executeMiniShellPipeline({ document, fs, cwd: session.cwd }, pipeline.commands);
+    lastProcess = await executeMiniShellPipeline({ document, fs, cwd: session.cwd, pathNaming: session.virtualPathNaming }, pipeline.commands);
     enforceScratchpadHardCap(session);
     session.cwd = lastProcess.cwd;
     mutated = mutated || lastProcess.mutated;
@@ -759,7 +768,7 @@ function addSessionRawSectionFiles(fs: ReturnType<typeof buildHvyVirtualFileSyst
     if (entry.kind !== 'dir' || !fs.entries.has(`${entry.path}/section.json`)) {
       continue;
     }
-    const section = findSectionForVirtualDirectory(document, entry.path);
+    const section = findSectionForVirtualDirectory(document, entry.path, session.virtualPathNaming);
     if (!section) {
       continue;
     }
@@ -840,7 +849,7 @@ function addSessionRawComponentFiles(fs: ReturnType<typeof buildHvyVirtualFileSy
     if (entry.kind !== 'dir' || entry.path === '/' || entry.path === '/body' || entry.path === '/attachments') {
       continue;
     }
-    const block = findBlockForVirtualDirectory(document, entry.path);
+    const block = findBlockForVirtualDirectory(document, entry.path, session.virtualPathNaming);
     if (!block) {
       continue;
     }
@@ -1192,7 +1201,7 @@ function findComponentDirectoryAtOrAbove(fs: ReturnType<typeof buildHvyVirtualFi
 }
 
 function formatComponentRawPreview(ctx: HvyCliCommandContext, directoryPath: string): string {
-  const block = findBlockForVirtualDirectory(ctx.document, directoryPath);
+  const block = findBlockForVirtualDirectory(ctx.document, directoryPath, ctx.pathNaming);
   if (!block) {
     return '';
   }
@@ -1448,7 +1457,7 @@ function copyVirtualFile(ctx: HvyCliCommandContext, sourcePath: string, destinat
 }
 
 function copyVirtualComponentDirectory(ctx: HvyCliCommandContext, sourcePath: string, destination: string): string {
-  const sourceBlock = findBlockForVirtualDirectory(ctx.document, sourcePath);
+  const sourceBlock = findBlockForVirtualDirectory(ctx.document, sourcePath, ctx.pathNaming);
   if (!sourceBlock) {
     throw new Error(`cp: can only copy component directories: ${sourcePath}`);
   }
@@ -1461,7 +1470,7 @@ function copyVirtualComponentDirectory(ctx: HvyCliCommandContext, sourcePath: st
     throw new Error(`cp: destination already exists: ${finalPath}`);
   }
   const parentPath = finalPath.replace(/\/[^/]+$/, '') || '/';
-  const target = findBlockInsertionTargetForVirtualDirectory(ctx.document, parentPath);
+  const target = findBlockInsertionTargetForVirtualDirectory(ctx.document, parentPath, ctx.pathNaming);
   if (!target) {
     throw new Error(formatMissingPathMessage(ctx.fs, ctx.cwd, parentPath, `cp: no writable component container: ${parentPath}`, 'dir'));
   }

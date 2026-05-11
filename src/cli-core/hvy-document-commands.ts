@@ -37,12 +37,14 @@ import {
   listDirectory,
   resolveVirtualPath,
   type HvyVirtualFileSystem,
+  type HvyVirtualPathNamingState,
 } from './virtual-file-system';
 
 export interface HvyDocumentCommandContext {
   document: VisualDocument;
   fs: HvyVirtualFileSystem;
   cwd: string;
+  pathNaming?: HvyVirtualPathNamingState;
 }
 
 export interface HvyDocumentCommandResult {
@@ -446,8 +448,8 @@ function addComponentToPath(ctx: HvyDocumentCommandContext, params: {
   const resolvedParentPath = resolveVirtualPath(ctx.fs, ctx.cwd, params.parentPath);
   const id = params.id || generateStableCliComponentId(ctx.fs, resolvedParentPath, params.component);
   const block = createCliComponentBlock(ctx.document, params.component, id, params.templateValues ?? null);
-  const parentBlock = findBlockForVirtualDirectory(ctx.document, resolvedParentPath);
-  const target = findBlockInsertionTargetForVirtualDirectory(ctx.document, resolvedParentPath)
+  const parentBlock = findBlockForVirtualDirectory(ctx.document, resolvedParentPath, ctx.pathNaming);
+  const target = findBlockInsertionTargetForVirtualDirectory(ctx.document, resolvedParentPath, ctx.pathNaming)
     ?? findDirectBlockInsertionTarget(ctx, resolvedParentPath);
   if (!target) {
     throw new Error(`${params.commandName}: no component insertion target: ${params.parentPath}`);
@@ -459,7 +461,7 @@ function addComponentToPath(ctx: HvyDocumentCommandContext, params: {
       returnAboutTxtOnCreation: params.returnAboutTxtOnCreation,
       returnOrderOnCreation: params.returnOrderOnCreation,
       returnStructureOnCreation: params.returnStructureOnCreation,
-    }),
+    }, ctx.pathNaming),
     mutated: true,
     cwd: path,
   };
@@ -485,7 +487,7 @@ function findDirectBlockInsertionTarget(
   ctx: HvyDocumentCommandContext,
   resolvedParentPath: string
 ): { kind: 'blocks' | 'grid'; insert: (block: VisualBlock, index?: HvyInsertIndex) => void } | null {
-  const parentBlock = findBlockForVirtualDirectory(ctx.document, resolvedParentPath);
+  const parentBlock = findBlockForVirtualDirectory(ctx.document, resolvedParentPath, ctx.pathNaming);
   if (!parentBlock) {
     return null;
   }
@@ -532,9 +534,10 @@ function formatCreatedComponentDirectory(
     returnAboutTxtOnCreation?: boolean;
     returnOrderOnCreation?: boolean;
     returnStructureOnCreation?: boolean;
-  } = {}
+  } = {},
+  pathNaming?: HvyVirtualPathNamingState
 ): string {
-  const fs = buildHvyVirtualFileSystem(document);
+  const fs = buildHvyVirtualFileSystem(document, pathNaming);
   const normalizedComponentPath = fs.entries.has(componentPath)
     ? componentPath
     : componentPath.startsWith('/body/')
@@ -547,7 +550,7 @@ function formatCreatedComponentDirectory(
   const children = listDirectory(fs, normalizedComponentPath)
     .map((child) => `${child.kind === 'dir' ? 'dir ' : 'file'} ${child.path.split('/').pop() ?? child.path}`)
     .join('\n');
-  const component = findBlockForVirtualDirectory(document, normalizedComponentPath);
+  const component = findBlockForVirtualDirectory(document, normalizedComponentPath, pathNaming);
   const componentName = component?.schema.component ?? '';
   const structureDisplay = componentName && options.returnStructureOnCreation
     ? formatCreatedComponentStructureDisplay(document, fs, normalizedComponentPath)
@@ -736,7 +739,7 @@ function findSectionById(sections: VisualSection[], id: string): VisualSection |
 function findNearestComponentPath(ctx: HvyDocumentCommandContext, resolvedPath: string): string {
   let candidate = resolvedPath;
   while (candidate !== '/' && candidate !== '/body') {
-    if (findBlockForVirtualDirectory(ctx.document, candidate)) {
+    if (findBlockForVirtualDirectory(ctx.document, candidate, ctx.pathNaming)) {
       return candidate;
     }
     candidate = candidate.split('/').slice(0, -1).join('/') || '/';

@@ -115,6 +115,20 @@ test('cli ls expands virtual path globs', async () => {
   expect(result.output).not.toContain('no such file or directory');
 });
 
+test('cli keeps anonymous component paths stable within a session after inserts', async () => {
+  const document = createResumeCliTestDocument();
+  const session = createHvyCliSession();
+  const parent = '/body/tools-technologies/component-list-1/tool-typescript/expandable-content';
+
+  expect((await executeHvyCliCommand(document, session, `cat ${parent}/text-3/text.txt`)).output).toContain('Primary application language');
+
+  await executeHvyCliCommand(document, session, `hvy insert 3 text ${parent}`);
+  await executeHvyCliCommand(document, session, `hvy insert 4 text ${parent}`);
+
+  expect((await executeHvyCliCommand(document, session, `cat ${parent}/text-3/text.txt`)).output).toContain('Primary application language');
+  expect((await executeHvyCliCommand(document, session, `cat ${parent}/children-order.json`)).output).toContain('"text-3"');
+});
+
 test('cli exposes id aliases for sections and components', async () => {
   const document = createResumeCliTestDocument();
   const session = createHvyCliSession();

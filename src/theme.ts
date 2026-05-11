@@ -190,13 +190,15 @@ export function applyTheme(): void {
   }
 
   // Layer 2: document-specified theme overrides from the HVY/THVY file.
-  // These sit above palette presets so values edited in the theme modal are
-  // represented immediately in the reader/editor/viewer.
-  for (const [key, value] of Object.entries(theme.colors)) {
-    if (!allowExternal && cssFragmentTriggersNetwork(value)) {
-      continue;
+  // Document theme colors should only affect the app when the local palette
+  // override is cleared via "Document Theme".
+  if (!palette) {
+    for (const [key, value] of Object.entries(theme.colors)) {
+      if (!allowExternal && cssFragmentTriggersNetwork(value)) {
+        continue;
+      }
+      root.style.setProperty(key, value);
     }
-    root.style.setProperty(key, value);
   }
   // Force a reflow so changes take effect before re-enabling transitions.
   void root.offsetHeight;

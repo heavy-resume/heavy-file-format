@@ -1,6 +1,6 @@
 import { beforeAll, beforeEach, expect, test } from 'vitest';
 
-import { setActiveEditorBlock } from '../src/block-ops';
+import { deactivateEditorBlock, setActiveEditorBlock } from '../src/block-ops';
 import { deserializeDocument } from '../src/serialization';
 import { initCallbacks, initState, state } from '../src/state';
 import type { VisualBlock } from '../src/editor/types';
@@ -61,6 +61,29 @@ test('setActiveEditorBlock opens stub panels when the target is in expandable st
 
   expect(state.activeEditorBlock).toEqual({ sectionKey, blockId: stubText.id });
   expect(state.expandableEditorPanels[`${sectionKey}:${details.id}`]).toEqual(expect.objectContaining({ stubOpen: true }));
+});
+
+test('deactivating nested active block promotes focus to parent component', () => {
+  const nested = findBlockBySchemaId('nested');
+  const deepText = findBlockBySchemaId('deep-text');
+  const sectionKey = state.document.sections[0]?.key ?? '';
+
+  setActiveEditorBlock(sectionKey, deepText.id);
+  const result = deactivateEditorBlock(sectionKey, deepText.id);
+
+  expect(result).toBe('promoted');
+  expect(state.activeEditorBlock).toEqual({ sectionKey, blockId: nested.id });
+});
+
+test('deactivating top-level active block clears editor focus', () => {
+  const details = findBlockBySchemaId('details');
+  const sectionKey = state.document.sections[0]?.key ?? '';
+
+  setActiveEditorBlock(sectionKey, details.id);
+  const result = deactivateEditorBlock(sectionKey, details.id);
+
+  expect(result).toBe('cleared');
+  expect(state.activeEditorBlock).toBeNull();
 });
 
 function findBlockBySchemaId(schemaId: string): VisualBlock {

@@ -47,8 +47,10 @@ const deactivateBlock: AppActionHandler = ({ event, sectionKey, blockId }) => {
     return;
   }
   event.stopPropagation();
-  deactivateEditorBlock(sectionKey, blockId);
-  queueEditorReturnScroll();
+  const result = deactivateEditorBlock(sectionKey, blockId);
+  if (result === 'cleared') {
+    queueEditorReturnScroll();
+  }
   getRenderApp()();
 };
 

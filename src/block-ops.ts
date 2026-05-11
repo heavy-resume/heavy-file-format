@@ -5,7 +5,7 @@ import type { AppState } from './types';
 import { parseTags, serializeTags } from './editor/tag-editor';
 import { state, getRefreshReaderPanels, getRenderApp } from './state';
 import { getReusableNameFromSectionKey, getComponentDefs, renderComponentOptions, resolveBaseComponent } from './component-defs';
-import { findSectionByKey, findBlockContainerById, moveBlockInVisualSequence } from './section-ops';
+import { findSectionByKey, findBlockContainerById, findBlockContainerInList, moveBlockInVisualSequence } from './section-ops';
 import { getReusableTemplateByName, ensureContainerBlocks, ensureComponentListBlocks, ensureGridItems, applyComponentDefaults, instantiateReusableBlock, coerceAlign, coerceSlot } from './document-factory';
 import { syncReusableTemplateForBlock } from './reusable';
 import { normalizeXrefTarget, getXrefTargetOptions, isXrefTargetValid } from './xref-ops';
@@ -659,24 +659,39 @@ export function clearActiveEditorBlock(blockId?: string): void {
   }
 }
 
-export function deactivateEditorBlock(sectionKey: string, blockId: string): void {
+export function deactivateEditorBlock(sectionKey: string, blockId: string): 'cleared' | 'promoted' | 'unchanged' {
   const activeBlockId = state.activeEditorBlock?.blockId ?? null;
   if (!activeBlockId) {
-    return;
+    return 'unchanged';
   }
   if (activeBlockId === blockId) {
+    const parentBlockId = findEditorParentBlockId(sectionKey, blockId);
+    if (parentBlockId) {
+      setActiveEditorBlock(sectionKey, parentBlockId);
+      return 'promoted';
+    }
     state.activeEditorBlock = null;
     state.activeEditorBlockSnapshot = null;
-    return;
+    return 'cleared';
   }
   const clickedBlock = findBlockByIds(sectionKey, blockId);
   const shouldDeactivate =
     clickedBlock ? blockContainsBlockId(clickedBlock, activeBlockId) : false;
   if (!shouldDeactivate) {
-    return;
+    return 'unchanged';
   }
   state.activeEditorBlock = null;
   state.activeEditorBlockSnapshot = null;
+  return 'cleared';
+}
+
+function findEditorParentBlockId(sectionKey: string, blockId: string): string | null {
+  const sqliteRowComponentModal = state.sqliteRowComponentModal;
+  if (sqliteRowComponentModal?.sectionKey === sectionKey) {
+    return findBlockContainerInList(sqliteRowComponentModal.blocks, blockId, null)?.ownerBlockId ?? null;
+  }
+  const rootBlocks = getEditorRootBlocks(sectionKey);
+  return rootBlocks ? findBlockContainerInList(rootBlocks, blockId, null)?.ownerBlockId ?? null : null;
 }
 
 export function cancelEditorBlockEdit(sectionKey: string, blockId: string): void {

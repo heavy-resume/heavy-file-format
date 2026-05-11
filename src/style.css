@@ -28,6 +28,14 @@ body {
 
 a {
   color: var(--hvy-link-color);
+  transition:
+    color 140ms ease,
+    text-shadow 140ms ease;
+}
+
+a:hover {
+  color: var(--hvy-link-hover-color, var(--hvy-link-color));
+  text-shadow: 0 0 0.35rem color-mix(in srgb, var(--hvy-link-hover-color, var(--hvy-link-color)) 35%, transparent);
 }
 
 button,
@@ -122,6 +130,20 @@ button {
   border-radius: 8px;
   padding: 0.38rem 0.58rem;
   background: var(--hvy-surface);
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease,
+    color 140ms ease,
+    transform 140ms ease;
+}
+
+button:not(:disabled):hover {
+  color: var(--hvy-button-hover-text, var(--hvy-button-text));
+  border-color: var(--hvy-focus);
+  background: color-mix(in srgb, var(--hvy-surface) 72%, var(--hvy-button-hover-bg, var(--hvy-button-bg)) 28%);
+  box-shadow: 0 6px 16px var(--hvy-shadow);
+  transform: translateY(-1px);
 }
 
 button.secondary {
@@ -130,12 +152,31 @@ button.secondary {
   color: var(--hvy-button-text);
 }
 
+button.secondary:not(:disabled):hover,
+.toolbar-primary-button:not(:disabled):hover,
+.file-picker:hover {
+  color: var(--hvy-button-hover-text, var(--hvy-button-text));
+  border-color: var(--hvy-focus);
+  background: var(--hvy-button-hover-bg, var(--hvy-button-bg));
+  box-shadow: 0 8px 18px var(--hvy-shadow-md);
+  transform: translateY(-1px);
+}
+
 button.ghost {
   background: transparent;
 }
 
+button.ghost:not(:disabled):hover {
+  background: color-mix(in srgb, var(--hvy-surface) 68%, var(--hvy-button-hover-bg, var(--hvy-button-bg)) 32%);
+}
+
 button.danger {
   background: var(--hvy-danger);
+  border-color: var(--hvy-danger);
+}
+
+button.danger:not(:disabled):hover {
+  background: color-mix(in srgb, var(--hvy-danger) 86%, var(--hvy-surface) 14%);
   border-color: var(--hvy-danger);
 }
 

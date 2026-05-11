@@ -8,13 +8,16 @@
   --hvy-text-alt: #ffffff;
   --hvy-text-muted: #b0b0b0;
   --hvy-link-color: #e0e0e0;
+  --hvy-link-hover-color: #ffff99;
   --hvy-accent-1: rgb(14, 160, 56);
   --hvy-accent-1-alt: #10ca45;
   --hvy-accent-1-text: #f0f0f0;
   --hvy-accent-2: rgb(16, 241, 141);
   --hvy-accent-2-alt: #37c871;
   --hvy-button-bg: #1b6949;
+  --hvy-button-hover-bg: rgba(0, 255, 200, 0.6);
   --hvy-button-text: #f0f0f0;
+  --hvy-button-hover-text: #ffff99;
   --hvy-highlight-1: rgba(0, 255, 0, 0.1);
   --hvy-highlight-2: rgba(229, 233, 0, 0.25);
   --hvy-border: #c0c0c0;

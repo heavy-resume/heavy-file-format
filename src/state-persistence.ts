@@ -1,7 +1,8 @@
 import { deserializeDocumentBytes, serializeDocumentBytes } from './serialization';
 import type { AppState, ChatMessage, ChatSettings, HvyCliHistoryEntry, HvyCliSessionState, SelectedExample, VisualDocument } from './types';
 
-const RESUME_STORAGE_KEY = 'hvy-editor-resume-state-v1';
+const RESUME_STORAGE_KEY = 'hvy-editor-resume-state-v2';
+const LEGACY_RESUME_STORAGE_KEY = 'hvy-editor-resume-state-v1';
 const DEFAULT_SAVED_CHAT_SETTINGS: ChatSettings = {
   provider: 'openai',
   model: 'gpt-5-mini',
@@ -47,11 +48,11 @@ export interface LoadedResumeState {
 }
 
 export function loadResumeState(): LoadedResumeState | null {
-  if (typeof window === 'undefined' || !window.localStorage) {
+  if (typeof window === 'undefined' || !window.sessionStorage) {
     return null;
   }
   try {
-    const raw = window.localStorage.getItem(RESUME_STORAGE_KEY);
+    const raw = window.sessionStorage.getItem(RESUME_STORAGE_KEY);
     if (!raw) {
       return null;
     }
@@ -92,7 +93,7 @@ export function loadResumeState(): LoadedResumeState | null {
 }
 
 export function saveResumeState(state: AppState): void {
-  if (typeof window === 'undefined' || !window.localStorage) {
+  if (typeof window === 'undefined' || !window.sessionStorage) {
     return;
   }
   try {
@@ -119,18 +120,20 @@ export function saveResumeState(state: AppState): void {
       },
       documentBase64: bytesToBase64(serializeDocumentBytes(state.document)),
     };
-    window.localStorage.setItem(RESUME_STORAGE_KEY, JSON.stringify(payload));
+    window.sessionStorage.setItem(RESUME_STORAGE_KEY, JSON.stringify(payload));
+    window.localStorage?.removeItem(LEGACY_RESUME_STORAGE_KEY);
   } catch (error) {
     console.warn('[hvy:resume] failed to save state', error);
   }
 }
 
 export function clearResumeState(): void {
-  if (typeof window === 'undefined' || !window.localStorage) {
+  if (typeof window === 'undefined') {
     return;
   }
   try {
-    window.localStorage.removeItem(RESUME_STORAGE_KEY);
+    window.sessionStorage?.removeItem(RESUME_STORAGE_KEY);
+    window.localStorage?.removeItem(LEGACY_RESUME_STORAGE_KEY);
   } catch {
     // Ignore storage failures.
   }

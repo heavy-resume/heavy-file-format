@@ -9,11 +9,17 @@ afterEach(() => {
 
 test('saveResumeState and loadResumeState round trip the working document and lightweight UI state', () => {
   const storage = new Map<string, string>();
+  const legacyStorage = new Map<string, string>([['hvy-editor-resume-state-v1', 'stale shared tab state']]);
   vi.stubGlobal('window', {
-    localStorage: {
+    sessionStorage: {
       getItem: (key: string) => storage.get(key) ?? null,
       setItem: (key: string, value: string) => storage.set(key, value),
       removeItem: (key: string) => storage.delete(key),
+    },
+    localStorage: {
+      getItem: (key: string) => legacyStorage.get(key) ?? null,
+      setItem: (key: string, value: string) => legacyStorage.set(key, value),
+      removeItem: (key: string) => legacyStorage.delete(key),
     },
   });
 
@@ -119,4 +125,37 @@ hvy_version: 0.1
   ]);
   expect(resumed?.document.sections[0]?.title).toBe('Summary');
   expect(resumed?.document.sections[0]?.blocks[0]?.text).toBe('Saved work');
+  expect(storage.has('hvy-editor-resume-state-v2')).toBe(true);
+  expect(legacyStorage.has('hvy-editor-resume-state-v1')).toBe(false);
+});
+
+test('loadResumeState ignores legacy shared localStorage state from other tabs', () => {
+  const sessionStorage = new Map<string, string>();
+  const localStorage = new Map<string, string>([['hvy-editor-resume-state-v1', JSON.stringify({
+    version: 1,
+    savedAt: new Date().toISOString(),
+    filename: 'other-tab.hvy',
+    currentView: 'editor',
+    editorMode: 'basic',
+    showAdvancedEditor: false,
+    rawEditorText: '',
+    templateValues: {},
+    chat: { settings: { provider: 'openai', model: 'gpt-5-mini' }, draft: '', messages: [], panelOpen: false },
+    cli: { draft: '', session: { cwd: '/' }, history: [] },
+    documentBase64: '',
+  })]]);
+  vi.stubGlobal('window', {
+    sessionStorage: {
+      getItem: (key: string) => sessionStorage.get(key) ?? null,
+      setItem: (key: string, value: string) => sessionStorage.set(key, value),
+      removeItem: (key: string) => sessionStorage.delete(key),
+    },
+    localStorage: {
+      getItem: (key: string) => localStorage.get(key) ?? null,
+      setItem: (key: string, value: string) => localStorage.set(key, value),
+      removeItem: (key: string) => localStorage.delete(key),
+    },
+  });
+
+  expect(loadResumeState()).toBeNull();
 });

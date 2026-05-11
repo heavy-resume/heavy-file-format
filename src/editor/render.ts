@@ -90,6 +90,7 @@ interface EditorRenderState {
     clientX?: number;
     clientY?: number;
     preferTextFocus?: boolean;
+    immediateFocus?: boolean;
   } | null;
   expandableEditorPanels: Record<string, { stubOpen: boolean; expandedOpen: boolean }>;
   editorSidebarHelpDismissed: boolean;

@@ -221,6 +221,7 @@ export interface AppState {
     clientX?: number;
     clientY?: number;
     preferTextFocus?: boolean;
+    immediateFocus?: boolean;
   } | null;
   activeEditorSectionTitleKey: string | null;
   clearSectionTitleOnFocusKey: string | null;

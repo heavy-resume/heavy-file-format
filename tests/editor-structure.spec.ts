@@ -147,6 +147,32 @@ hvy_version: 0.1
   await expect(toggle).toHaveAttribute('aria-expanded', 'true');
 });
 
+test('ai context edit focuses text before the first keystroke', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ <!--hvy:text {"id":"summary-text"}-->
+  Original
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'AI' }).click();
+
+  await page.locator('#aiReaderDocument .reader-block', { hasText: 'Original' }).click({ button: 'right' });
+  await page.getByRole('button', { name: 'Edit component' }).click();
+  await page.keyboard.type('X');
+
+  const editor = page.locator('#aiReaderDocument [data-field="block-rich"]');
+  await expect(editor).toBeFocused();
+  await expect(editor).toContainText('OriginalX');
+});
+
 test('mobile adjustment hides text formatting and keeps expandable options read-only', async ({ page }) => {
   await page.goto('/');
 
@@ -608,6 +634,29 @@ hvy_version: 0.1
   await expect(page.locator('#rawEditor')).toContainText('**Target Location(s):** Greater Seattle area');
   await expect(page.locator('#rawEditor')).not.toContainText('<!-- value -->');
   await expect(page.locator('#rawEditor')).not.toContainText('"fillIn"');
+});
+
+test('single-line text fill-in keeps a compact editor height', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ <!--hvy:text {"id":"name","placeholder":"name","fillIn":true}-->
+  <!-- value -->
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('.editor-block-passive .editor-block-content[data-component-id="name"] .text-fill-in-box').click();
+
+  const fillInEditorHeight = await page.locator('.text-fill-in-editor').evaluate((node) => node.getBoundingClientRect().height);
+  expect(fillInEditorHeight).toBeLessThan(60);
 });
 
 test('clicking another passive fill-in enters the new fill-in while editing one', async ({ page }) => {

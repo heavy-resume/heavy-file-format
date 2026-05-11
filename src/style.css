@@ -131,6 +131,7 @@ button {
   border-radius: 8px;
   padding: 0.38rem 0.58rem;
   background: var(--hvy-surface);
+  cursor: pointer;
   transition:
     background-color 140ms ease,
     border-color 140ms ease,

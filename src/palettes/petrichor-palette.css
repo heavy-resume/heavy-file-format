@@ -27,8 +27,8 @@
   --hvy-xref-card-bg: #aeafda;
   --hvy-xref-card-hover-bg: rgba(0, 255, 255, 0.863);
   --hvy-table-header: #aeafda;
-  --hvy-table-row-bg-1: #e2d9df;
-  --hvy-table-row-bg-2: rgba(239, 203, 255, 0.36);
+  --hvy-table-row-bg-1: rgba(239, 203, 255, 0.36);
+  --hvy-table-row-bg-2: #e2d9df;
   --hvy-icon-muted: rgba(12, 11, 29, 0.42);
   --hvy-focus: #1a32eb;
   --hvy-focus-ring: rgba(26, 50, 235, 0.55);

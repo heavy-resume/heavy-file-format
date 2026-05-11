@@ -610,6 +610,40 @@ hvy_version: 0.1
   await expect(page.locator('#rawEditor')).not.toContainText('"fillIn"');
 });
 
+test('clicking another passive fill-in enters the new fill-in while editing one', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ <!--hvy:text {"id":"first","placeholder":"first","fillIn":true}-->
+  <!-- value -->
+
+ <!--hvy:text {"id":"second","placeholder":"second","fillIn":true}-->
+  <!-- value -->
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('.editor-block-passive .editor-block-content[data-component-id="first"] .text-fill-in-box').click();
+  await expect(page.locator('.editor-block:has(.editor-block-content[data-component-id="first"]) [data-field="text-fill-in-value"]')).toBeFocused();
+  await page.keyboard.type('first value');
+
+  await page.locator('.editor-block-passive .editor-block-content[data-component-id="second"] .text-fill-in-box').click();
+  const secondFillIn = page.locator('.editor-block:has(.editor-block-content[data-component-id="second"]) [data-field="text-fill-in-value"]');
+  await expect(secondFillIn).toBeFocused();
+  await page.keyboard.type('second value');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await expect(page.locator('#rawEditor')).toContainText('first value');
+  await expect(page.locator('#rawEditor')).toContainText('second value');
+});
+
 test('text fill-in enter exits and modifier-enter adds a newline', async ({ page }) => {
   await page.goto('/');
 

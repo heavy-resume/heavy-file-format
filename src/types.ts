@@ -216,6 +216,7 @@ export interface AppState {
   pendingEditorActivation: {
     sectionKey: string;
     blockId: string;
+    revealPath?: boolean;
     anchorTop?: number;
     clientX?: number;
     clientY?: number;

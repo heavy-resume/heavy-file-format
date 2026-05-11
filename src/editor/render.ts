@@ -85,6 +85,7 @@ interface EditorRenderState {
   pendingEditorActivation: {
     sectionKey: string;
     blockId: string;
+    revealPath?: boolean;
     anchorTop?: number;
     clientX?: number;
     clientY?: number;
@@ -408,7 +409,9 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const contentEditor = renderBlockContentEditor(sectionKey, block);
     const activationPath = getActivationPathIds(sectionKey, rootSections ?? []);
     const activationPathIndex = activationPath.indexOf(block.id);
-    const isActivatingPath = state.pendingEditorActivation?.sectionKey === sectionKey && activationPathIndex >= 0;
+    const isActivatingPath = state.pendingEditorActivation?.sectionKey === sectionKey
+      && state.pendingEditorActivation.revealPath !== false
+      && activationPathIndex >= 0;
     const activationStyle = isActivatingPath ? ` style="--editor-activation-delay: ${activationPathIndex * 150}ms;"` : '';
     const activationAttrs = isActiveSelf ? ` data-active-editor-block="true" data-active-block-id="${deps.escapeAttr(block.id)}"` : '';
     const anchorAttrs = renderButtonAnchorAttrs(sectionKey, block, rootSections ?? []);

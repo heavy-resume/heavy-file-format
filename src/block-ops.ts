@@ -554,9 +554,11 @@ export function setActiveEditorBlock(sectionKey: string, blockId: string): void 
       ? state.activeEditorBlockSnapshot
       : createEditorBlockSnapshot(sectionKey, blockId);
   openExpandableEditorPanelsToBlock(sectionKey, blockId);
-  state.pendingEditorActivation = shouldRevealEditorActivationPath(currentPath, nextPath)
-    ? { sectionKey, blockId }
-    : null;
+  state.pendingEditorActivation = {
+    sectionKey,
+    blockId,
+    revealPath: shouldRevealEditorActivationPath(currentPath, nextPath),
+  };
 }
 
 function createEditorBlockSnapshot(sectionKey: string, blockId: string): AppState['activeEditorBlockSnapshot'] {

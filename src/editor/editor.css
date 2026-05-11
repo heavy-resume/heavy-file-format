@@ -10,6 +10,7 @@
   min-width: 0;
   height: 100%;
   overflow: auto;
+  padding-top: 2rem;
   padding-left: var(--hvy-sidebar-footprint);
   padding-right: var(--hvy-document-edge-gutter);
   scrollbar-gutter: stable both-edges;
@@ -18,7 +19,7 @@
 .hvy-preview-frame-phone.editor-shell .editor-tree,
 .hvy-preview-frame-tablet.editor-shell .editor-tree,
 .hvy-preview-frame-desktop.editor-shell .editor-tree {
-  padding-top: var(--hvy-document-edge-gutter);
+  padding-top: 2rem;
 }
 
 .hvy-preview-frame-phone.editor-shell .editor-tree,

@@ -1,7 +1,7 @@
 import { afterEach, expect, test } from 'vitest';
 
 import { getComponentOptions } from '../src/component-defs';
-import { setReferenceAppConfig } from '../src/reference-config';
+import { getAiEditorDoubleClickDelayMs, setReferenceAppConfig } from '../src/reference-config';
 import { registerSerializationTestState } from './serialization-test-helpers';
 
 registerSerializationTestState();
@@ -30,4 +30,28 @@ test('component options include tables when the reference app enables them', () 
   });
 
   expect(getComponentOptions()).toContain('table');
+});
+
+test('ai editor double click delay defaults to the reader action delay', () => {
+  expect(getAiEditorDoubleClickDelayMs()).toBe(400);
+});
+
+test('ai editor double click delay can be tuned by embedded hosts', () => {
+  setReferenceAppConfig({
+    aiEditor: {
+      doubleClickDelayMs: 250.6,
+    },
+  });
+
+  expect(getAiEditorDoubleClickDelayMs()).toBe(251);
+});
+
+test('ai editor double click delay does not go below zero', () => {
+  setReferenceAppConfig({
+    aiEditor: {
+      doubleClickDelayMs: -25,
+    },
+  });
+
+  expect(getAiEditorDoubleClickDelayMs()).toBe(0);
 });

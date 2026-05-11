@@ -262,6 +262,18 @@
   padding: 0.15rem 0;
 }
 
+.expandable-passive-empty-ghost {
+  min-height: 2.4rem;
+  display: grid;
+  place-items: center;
+  border: 1px dashed var(--hvy-border-input);
+  border-radius: 8px;
+  background: var(--hvy-surface-alt);
+  color: var(--hvy-text-muted);
+  font-size: 0.84rem;
+  font-weight: 600;
+}
+
 .wysiwyg-preview {
   border: 1px solid var(--hvy-border-input);
   border-radius: 10px;

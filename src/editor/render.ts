@@ -201,6 +201,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const maxWidth = typeof state.documentMeta.reader_max_width === 'string' ? state.documentMeta.reader_max_width.trim() : '';
     const bodyStyle = maxWidth.length > 0 ? ` style="max-width: ${deps.escapeAttr(maxWidth)};"` : '';
     const surfaceAttrs = renderResponsiveSurfaceAttrs(maxWidth);
+    const hasReusableSectionOptions = deps.getSectionDefs().length > 0;
     return `
       <div${surfaceAttrs}>
         <div class="editor-tree-body"${bodyStyle}>
@@ -212,11 +213,11 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           ${state.mobileAdjustmentMode ? '' : `<article class="ghost-section-card add-ghost reusable-section-ghost" data-action="add-top-level-section" data-section-key="__top_level__">
             <div class="ghost-plus-big">${plusIcon()}</div>
             <div class="ghost-label">Add Section</div>
-            <label class="ghost-component-picker">
+            ${hasReusableSectionOptions ? `<label class="ghost-component-picker">
               <select data-field="reusable-section-type" data-section-key="__top_level__" aria-label="Section type">
                 ${deps.renderReusableSectionOptions(state.addComponentBySection.__top_level__ ?? 'blank')}
               </select>
-            </label>
+            </label>` : ''}
           </article>`}
         </div>
       </div>
@@ -565,11 +566,17 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       const contentHtml = block.schema.expandableContentBlocks.children
         .map((innerBlock) => renderPassiveEditorBlock(sectionKey, innerBlock, rootSections))
         .join('');
+      const hasStubContent = stubHtml.trim().length > 0;
+      const hasExpandedContent = contentHtml.trim().length > 0;
+      const stubBody = hasStubContent ? stubHtml : '<div class="expandable-passive-empty-ghost">Empty stub</div>';
+      const contentBody = hasExpandedContent ? contentHtml : '<div class="expandable-passive-empty-ghost">Empty expanded content</div>';
       const stubToggle = `<div class="expandable-pane expandable-pane-stub"><div class="expand-stub-toggle" style="${stubPaneStyle}" data-action="toggle-editor-expandable" data-section-key="${deps.escapeAttr(
         sectionKey
-      )}" data-block-id="${deps.escapeAttr(block.id)}" aria-expanded="${expanded ? 'true' : 'false'}"><div class="expand-stub">${stubHtml}</div></div></div>`;
-      const expandedPanel = `<div class="expandable-pane expandable-pane-expanded"><div class="expand-content" style="${contentPaneStyle}">${contentHtml}</div></div>`;
-      const body = expanded
+      )}" data-block-id="${deps.escapeAttr(block.id)}" aria-expanded="${expanded ? 'true' : 'false'}"><div class="expand-stub">${stubBody}</div></div></div>`;
+      const expandedPanel = `<div class="expandable-pane expandable-pane-expanded"><div class="expand-content" style="${contentPaneStyle}">${contentBody}</div></div>`;
+      const body = !hasStubContent && !hasExpandedContent
+        ? `${stubToggle}${expandedPanel}`
+        : expanded
         ? alwaysShowStub
           ? `${stubToggle}${expandedPanel}`
           : `${expandedPanel}<div class="expand-collapse-strip" data-action="toggle-editor-expandable" data-section-key="${deps.escapeAttr(

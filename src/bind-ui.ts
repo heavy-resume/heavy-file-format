@@ -18,6 +18,7 @@ import { bindAppEvents } from './bind/app-events';
 import { scheduleSidebarHelpAutoClose } from './bind/handlers/click-misc';
 import { saveResumeState } from './state-persistence';
 import { encodeComponentListRuntimeView, parseComponentListRuntimeView } from './editor/components/component-list/component-list-view';
+import { getAiEditorDoubleClickDelayMs } from './reference-config';
 import type { ReaderViewFilter } from './types';
 
 const resumeViews = bundledResumeViews as Record<string, ReaderViewFilter>;
@@ -35,6 +36,29 @@ export function bindUi(app: HTMLElement): void {
   const chatThread = app.querySelector<HTMLDivElement>('.chat-thread');
   const chatScrollContainer = app.querySelector<HTMLDivElement>('[data-chat-scroll-container]');
   const chatScrollBottomButton = app.querySelector<HTMLButtonElement>('[data-action="chat-scroll-bottom"]');
+  let pendingAiReaderAction: number | null = null;
+
+  const clearPendingAiReaderAction = (): void => {
+    if (pendingAiReaderAction !== null) {
+      window.clearTimeout(pendingAiReaderAction);
+      pendingAiReaderAction = null;
+    }
+  };
+
+  const runReaderAction = (event: Event, action: () => void): void => {
+    clearPendingAiReaderAction();
+    if (state.currentView !== 'ai') {
+      action();
+      return;
+    }
+    if (event instanceof MouseEvent && event.detail > 1) {
+      return;
+    }
+    pendingAiReaderAction = window.setTimeout(() => {
+      pendingAiReaderAction = null;
+      action();
+    }, getAiEditorDoubleClickDelayMs());
+  };
 
   if (!newBtn || !fileInput || !downloadBtn || !downloadName) {
     throw new Error('Missing UI elements for binding.');
@@ -216,7 +240,7 @@ export function bindUi(app: HTMLElement): void {
     if (anchor) {
       event.preventDefault();
       const id = anchor.getAttribute('href')?.slice(1) ?? '';
-      navigateToSection(id, app);
+      runReaderAction(event, () => navigateToSection(id, app));
       return;
     }
 
@@ -253,8 +277,10 @@ export function bindUi(app: HTMLElement): void {
     const reverseList = target.closest<HTMLElement>('[data-reader-action="toggle-component-list-reverse"]');
     if (reverseList) {
       event.stopPropagation();
-      toggleComponentListReverse(reverseList);
-      getRefreshReaderPanels()();
+      runReaderAction(event, () => {
+        toggleComponentListReverse(reverseList);
+        getRefreshReaderPanels()();
+      });
       return;
     }
 
@@ -271,8 +297,10 @@ export function bindUi(app: HTMLElement): void {
       if (!key) {
         return;
       }
-      state.readerContainerState[key] = viewCollapse.getAttribute('aria-expanded') !== 'true';
-      getRefreshReaderPanels()();
+      runReaderAction(event, () => {
+        state.readerContainerState[key] = viewCollapse.getAttribute('aria-expanded') !== 'true';
+        getRefreshReaderPanels()();
+      });
       return;
       }
     }
@@ -281,8 +309,10 @@ export function bindUi(app: HTMLElement): void {
     if (dimmedTarget) {
       const targetKey = dimmedTarget.dataset.readerViewTarget;
       if (targetKey) {
-        state.readerViewActivatedTargets.add(targetKey);
-        getRefreshReaderPanels()();
+        runReaderAction(event, () => {
+          state.readerViewActivatedTargets.add(targetKey);
+          getRefreshReaderPanels()();
+        });
         return;
       }
     }
@@ -298,8 +328,10 @@ export function bindUi(app: HTMLElement): void {
       if (!section) {
         return;
       }
-      section.expanded = !section.expanded;
-      getRefreshReaderPanels()();
+      runReaderAction(event, () => {
+        section.expanded = !section.expanded;
+        getRefreshReaderPanels()();
+      });
       return;
     }
 
@@ -318,20 +350,22 @@ export function bindUi(app: HTMLElement): void {
       if (!block) {
         return;
       }
-      const expandableStateKey = `${sectionKey}:${blockId}`;
-      const willCollapse = state.readerExpandableState[expandableStateKey] ?? block.schema.expandableExpanded;
-      if (willCollapse) {
-        // Animate collapse before re-rendering
-        const readerEl = app.querySelector<HTMLElement>(`[data-expandable-id="${CSS.escape(blockId)}"]`);
-        readerEl?.classList.add('is-collapsing');
-        window.setTimeout(() => {
-          state.readerExpandableState[expandableStateKey] = false;
+      runReaderAction(event, () => {
+        const expandableStateKey = `${sectionKey}:${blockId}`;
+        const willCollapse = state.readerExpandableState[expandableStateKey] ?? block.schema.expandableExpanded;
+        if (willCollapse) {
+          // Animate collapse before re-rendering
+          const readerEl = app.querySelector<HTMLElement>(`[data-expandable-id="${CSS.escape(blockId)}"]`);
+          readerEl?.classList.add('is-collapsing');
+          window.setTimeout(() => {
+            state.readerExpandableState[expandableStateKey] = false;
+            getRefreshReaderPanels()();
+          }, 160);
+        } else {
+          state.readerExpandableState[expandableStateKey] = true;
           getRefreshReaderPanels()();
-        }, 160);
-      } else {
-        state.readerExpandableState[expandableStateKey] = true;
-        getRefreshReaderPanels()();
-      }
+        }
+      });
       return;
     }
 
@@ -345,8 +379,10 @@ export function bindUi(app: HTMLElement): void {
       if (!key) {
         return;
       }
-      state.readerContainerState[key] = container.getAttribute('aria-expanded') !== 'true';
-      getRefreshReaderPanels()();
+      runReaderAction(event, () => {
+        state.readerContainerState[key] = container.getAttribute('aria-expanded') !== 'true';
+        getRefreshReaderPanels()();
+      });
     }
   };
 
@@ -359,6 +395,8 @@ export function bindUi(app: HTMLElement): void {
   readerSidebarSections?.addEventListener('click', handleReaderAreaClick);
   aiReaderDocument?.addEventListener('click', handleReaderAreaClick);
   aiSidebarSections?.addEventListener('click', handleReaderAreaClick);
+  aiReaderDocument?.addEventListener('dblclick', clearPendingAiReaderAction);
+  aiSidebarSections?.addEventListener('dblclick', clearPendingAiReaderAction);
 
   chatThread?.addEventListener('click', (event) => {
     const target = event.target as HTMLElement;

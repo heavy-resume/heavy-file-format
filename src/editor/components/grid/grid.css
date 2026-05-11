@@ -35,6 +35,20 @@
   min-width: 0;
 }
 
+.grid-item-component-label {
+  min-height: 1.9rem;
+  display: inline-flex;
+  align-items: center;
+  padding: 0.22rem 0.55rem;
+  border: 1px solid var(--hvy-border);
+  border-radius: 999px;
+  background: var(--hvy-surface);
+  color: var(--hvy-text-alt);
+  font-size: 0.82rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
 .grid-columns-input {
   width: 5rem;
   max-width: 5rem;
@@ -50,7 +64,9 @@
 }
 
 .grid-add-ghost {
-  margin-top: 0.25rem;
+  min-height: 100%;
+  margin: 0;
+  align-self: stretch;
 }
 
 .reader-grid-layout {

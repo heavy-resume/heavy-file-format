@@ -53,6 +53,100 @@ hvy_version: 0.1
   await expect(activeBlock.getByRole('button', { name: 'Expandable content component type' })).toBeVisible();
 });
 
+test('passive empty expandable shows stub and expanded placeholders', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+  await page.locator('[data-action="add-block"][data-component="expandable"]').first().evaluate((node) => {
+    (node as HTMLElement).click();
+  });
+  await page.locator('[data-action="deactivate-block"]').first().click();
+
+  const passiveExpandable = page.locator('.editor-block-passive', { has: page.locator('.expandable-reader') }).first();
+  await expect(passiveExpandable.locator('.expandable-passive-empty-ghost', { hasText: 'Empty stub' })).toBeVisible();
+  await expect(passiveExpandable.locator('.expandable-passive-empty-ghost', { hasText: 'Empty expanded content' })).toBeVisible();
+});
+
+test('ai xref click waits for double click edit gesture', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ <!--hvy:xref-card {"xrefTitle":"Target","xrefTarget":"target"}-->
+
+<!--hvy: {"id":"target"}-->
+#! Target
+
+ Target details
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'AI' }).click();
+
+  const xref = page.locator('#aiReaderDocument .reader-xref-card', { hasText: 'Target' }).first();
+  const targetSection = page.locator('#aiReaderDocument #target').first();
+  await xref.click();
+  await page.waitForTimeout(180);
+  await expect(targetSection).not.toHaveClass(/is-temp-highlighted/);
+  await expect(targetSection).toHaveClass(/is-temp-highlighted/, { timeout: 800 });
+
+  await xref.dblclick();
+  await expect(page.locator('.hvy-context-popover')).toContainText('Request changes');
+});
+
+test('ai expandable click waits for double click edit gesture', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ <!--hvy:expandable {"expandableExpanded":false}-->
+
+  <!--hvy:expandable:stub {}-->
+
+   <!--hvy:text {}-->
+    Open details
+
+  <!--hvy:expandable:content {}-->
+
+   <!--hvy:text {}-->
+    Hidden details
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'AI' }).click();
+
+  const toggle = page.locator('#aiReaderDocument [data-reader-action="toggle-expandable"]').first();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await toggle.click();
+  await page.waitForTimeout(180);
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true', { timeout: 800 });
+
+  await toggle.dblclick();
+  await expect(page.locator('.hvy-context-popover')).toContainText('Request changes');
+  await page.waitForTimeout(500);
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+});
+
 test('mobile adjustment hides text formatting and keeps expandable options read-only', async ({ page }) => {
   await page.goto('/');
 

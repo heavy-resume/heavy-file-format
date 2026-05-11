@@ -29,7 +29,12 @@ export function bindContextmenu(app: HTMLElement): void {
       return;
     }
     const target = event.target as HTMLElement;
-    if (target.closest('button, input, textarea, select, a, [contenteditable="true"], .hvy-context-popover, .ai-edit-popover')) {
+    const anchor = target.closest<HTMLAnchorElement>('a');
+    const readerAction = target.closest<HTMLElement>('[data-reader-action]');
+    if (
+      (target.closest('button, input, textarea, select, [contenteditable="true"], .hvy-context-popover, .ai-edit-popover') && !readerAction) ||
+      (anchor && !anchor.classList.contains('reader-xref-card'))
+    ) {
       return;
     }
     openReaderContextPopover(app, event, false);

@@ -1,6 +1,6 @@
 :root {
   --hvy-bg: #a3ccb6;
-  --hvy-bg-alt: #c5dacf;
+  --hvy-bg-alt: rgb(75, 78, 226);
   --hvy-surface: #d9dfe2;
   --hvy-surface-alt: #c5dacf;
   --hvy-surface-tint: rgba(203, 238, 255, 0.34);

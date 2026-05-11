@@ -908,6 +908,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       const isSelected = matchedPaletteId === palette.id;
       const previewStyle = [
         `--palette-preview-bg: ${palette.colors['--hvy-bg'] ?? 'transparent'}`,
+        `--palette-preview-bg-alt: ${palette.colors['--hvy-bg-alt'] ?? palette.colors['--hvy-bg'] ?? 'transparent'}`,
         `--palette-preview-surface: ${palette.colors['--hvy-surface'] ?? 'transparent'}`,
         `--palette-preview-text: ${palette.colors['--hvy-text'] ?? 'currentColor'}`,
         `--palette-preview-accent: ${palette.colors['--hvy-accent-1'] ?? 'currentColor'}`,

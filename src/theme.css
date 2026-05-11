@@ -421,7 +421,7 @@
   overflow: hidden;
   border: 1px solid var(--hvy-border-translucent);
   border-radius: 7px;
-  background: var(--palette-preview-bg);
+  background: linear-gradient(135deg, var(--palette-preview-bg), var(--palette-preview-bg-alt));
 }
 
 .theme-modal .theme-palette-preview span:nth-child(1) {
@@ -438,7 +438,7 @@
 }
 
 .theme-modal .theme-palette-preview-document {
-  background: var(--hvy-bg);
+  background: linear-gradient(135deg, var(--hvy-bg), var(--hvy-bg-alt));
 }
 
 .theme-modal .theme-palette-preview-document span:nth-child(1) {

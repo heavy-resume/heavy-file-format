@@ -1,7 +1,7 @@
 :root {
   font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
   color: var(--hvy-text);
-  background: radial-gradient(circle at 10% 20%, var(--hvy-bg), var(--hvy-bg-alt) 48%, var(--hvy-bg-alt));
+  background: linear-gradient(135deg, var(--hvy-bg), var(--hvy-bg-alt));
   --hvy-sidebar-tab-size: 2.9rem;
   --hvy-sidebar-footprint: 3.25rem;
   --hvy-document-edge-gutter: 0.9rem;
@@ -302,6 +302,13 @@ button.tiny {
   min-height: 0;
 }
 
+.pane.full-pane:has(.editor-shell),
+.pane.full-pane:has(.viewer-shell) {
+  padding: 0;
+  overflow: hidden;
+  background: linear-gradient(135deg, var(--hvy-bg), var(--hvy-bg-alt));
+}
+
 .pane-title-row {
   display: flex;
   justify-content: space-between;
@@ -435,6 +442,7 @@ button.tiny {
 }
 
 .viewer-shell {
+  background: linear-gradient(135deg, var(--hvy-bg), var(--hvy-bg-alt));
   position: relative;
   height: 100%;
   min-height: 0;

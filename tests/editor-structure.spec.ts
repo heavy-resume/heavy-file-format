@@ -108,6 +108,27 @@ hvy_version: 0.1
   await expect(page.locator('.hvy-context-popover')).toContainText('Request changes');
 });
 
+test('ai double click opens component menu without leaving text selected', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ Selectable summary words
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'AI' }).click();
+
+  await page.locator('#aiReaderDocument .reader-block', { hasText: 'Selectable summary words' }).dblclick();
+  await expect(page.locator('.hvy-context-popover')).toContainText('Request changes');
+  await expect.poll(() => page.evaluate(() => window.getSelection()?.toString() ?? '')).toBe('');
+});
+
 test('ai expandable click waits for double click edit gesture', async ({ page }) => {
   await page.goto('/');
 

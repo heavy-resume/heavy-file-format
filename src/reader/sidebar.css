@@ -83,7 +83,23 @@
   align-content: start;
   gap: 0.8rem;
   overflow: auto;
+  pointer-events: none;
+}
+
+.viewer-shell.is-sidebar-open .viewer-sidebar-panel {
   pointer-events: auto;
+}
+
+.viewer-sidebar-panel > * {
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 180ms ease, visibility 0s linear 180ms;
+}
+
+.viewer-shell.is-sidebar-open .viewer-sidebar-panel > * {
+  opacity: 1;
+  visibility: visible;
+  transition-delay: 90ms, 0s;
 }
 
 .viewer-shell.is-sidebar-closed .viewer-sidebar-panel {

@@ -284,7 +284,23 @@
   align-content: start;
   gap: 0.8rem;
   overflow: auto;
+  pointer-events: none;
+}
+
+.editor-shell.is-sidebar-open .editor-sidebar-panel {
   pointer-events: auto;
+}
+
+.editor-sidebar-panel > * {
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 180ms ease, visibility 0s linear 180ms;
+}
+
+.editor-shell.is-sidebar-open .editor-sidebar-panel > * {
+  opacity: 1;
+  visibility: visible;
+  transition-delay: 90ms, 0s;
 }
 
 .editor-shell.is-sidebar-closed .editor-sidebar-panel {

@@ -29,7 +29,7 @@ export function bindShortcuts(_app: HTMLElement): void {
         event.preventDefault();
         redoState();
       }
-    });
+    }, { capture: true });
     setShortcutsBound(true);
   }
 }
@@ -40,6 +40,9 @@ function isModalOpen(): boolean {
 
 export function isNativeUndoTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+  if (target.closest('.theme-modal')) {
     return false;
   }
   if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement) {

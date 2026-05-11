@@ -11,6 +11,7 @@
   --hvy-text-alt: #4b5c67;
   --hvy-text-muted: #6b8fa0;
   --hvy-link-color: #162f3d;
+  --hvy-link-hover-color: #2c5e78;
 
   --hvy-accent-1: #2c5e78;
   --hvy-accent-1-alt: #1f4f63;
@@ -19,7 +20,9 @@
   --hvy-accent-2-alt: #244355;
 
   --hvy-button-bg: #4a8fab;
+  --hvy-button-hover-bg: rgba(74, 143, 171, 0.22);
   --hvy-button-text: #000000;
+  --hvy-button-hover-text: #2c5e78;
 
   --hvy-highlight-1: rgba(31, 122, 140, 0.15);
   --hvy-highlight-2: rgba(255, 214, 102, 0.35);
@@ -91,6 +94,7 @@
   --hvy-text-alt: #a3adbf;
   --hvy-text-muted: #6b8fa0;
   --hvy-link-color: #7bc0e8;
+  --hvy-link-hover-color: #a8dcf4;
 
   --hvy-accent-1: #7db3d0;
   --hvy-accent-1-alt: #5a8da8;
@@ -99,7 +103,9 @@
   --hvy-accent-2-alt: #2d5d68;
 
   --hvy-button-bg: #2d6a8a;
+  --hvy-button-hover-bg: rgba(123, 192, 232, 0.14);
   --hvy-button-text: #ffffff;
+  --hvy-button-hover-text: #a8dcf4;
 
   --hvy-highlight-1: rgba(125, 179, 208, 0.20);
   --hvy-highlight-2: rgba(255, 214, 102, 0.25);

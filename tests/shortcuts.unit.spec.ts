@@ -21,6 +21,11 @@ vi.mock('../src/bind/handlers/_imports', () => {
 
 class TestHTMLElement extends EventTarget {
   isContentEditable = false;
+  themeModalAncestor = false;
+
+  closest(selector: string) {
+    return selector === '.theme-modal' && this.themeModalAncestor ? this : null;
+  }
 }
 
 class TestInputElement extends TestHTMLElement {}
@@ -46,6 +51,15 @@ test('native undo targets keep browser undo behavior', async () => {
   const editable = new TestHTMLElement();
   editable.isContentEditable = true;
   expect(isNativeUndoTarget(editable)).toBe(true);
+});
+
+test('theme modal controls use document undo behavior', async () => {
+  const { isNativeUndoTarget } = await import('../src/bind/handlers/shortcuts');
+
+  const input = new TestInputElement();
+  input.themeModalAncestor = true;
+
+  expect(isNativeUndoTarget(input)).toBe(false);
 });
 
 test('global undo shortcut does not intercept textarea native undo', async () => {
@@ -105,6 +119,43 @@ test('global undo shortcut still handles document-level undo', async () => {
   let prevented = false;
   listener?.({
     target: new TestHTMLElement(),
+    metaKey: false,
+    ctrlKey: true,
+    key: 'z',
+    shiftKey: false,
+    preventDefault: () => {
+      prevented = true;
+    },
+  });
+
+  expect(prevented).toBe(true);
+  expect(undoStateMock).toHaveBeenCalledTimes(1);
+});
+
+test('global undo shortcut handles theme modal inputs', async () => {
+  let listener: ((event: {
+    target: EventTarget | null;
+    metaKey: boolean;
+    ctrlKey: boolean;
+    key: string;
+    shiftKey: boolean;
+    preventDefault: () => void;
+  }) => void) | null = null;
+  vi.stubGlobal('window', {
+    addEventListener: (_type: string, handler: typeof listener) => {
+      listener = handler;
+    },
+  });
+  const { bindShortcuts } = await import('../src/bind/handlers/shortcuts');
+  const { setShortcutsBound } = await import('../src/bind/handlers/_imports');
+  setShortcutsBound(false);
+  bindShortcuts(new TestHTMLElement() as HTMLElement);
+
+  const input = new TestInputElement();
+  input.themeModalAncestor = true;
+  let prevented = false;
+  listener?.({
+    target: input,
     metaKey: false,
     ctrlKey: true,
     key: 'z',

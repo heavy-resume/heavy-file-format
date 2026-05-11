@@ -1,6 +1,6 @@
 :root {
   --hvy-bg: #a3ccb6;
-  --hvy-bg-alt: #c5dacf;
+  --hvy-bg-alt: rgb(75, 78, 226);
   --hvy-surface: #d9dfe2;
   --hvy-surface-alt: #c5dacf;
   --hvy-surface-tint: rgba(203, 238, 255, 0.34);
@@ -8,13 +8,16 @@
   --hvy-text-alt: #000000;
   --hvy-text-muted: #707070;
   --hvy-link-color: #202020;
+  --hvy-link-hover-color: rgb(233, 233, 11);
   --hvy-accent-1: rgb(24, 192, 156);
   --hvy-accent-1-alt: rgb(104, 223, 197);
   --hvy-accent-1-text: #202020;
   --hvy-accent-2: rgb(75, 78, 226);
   --hvy-accent-2-alt: #5f4dec;
   --hvy-button-bg: #63c59b;
+  --hvy-button-hover-bg: rgba(0, 255, 200, 0.6);
   --hvy-button-text: #202020;
+  --hvy-button-hover-text: rgb(233, 233, 11);
   --hvy-highlight-1: rgba(0, 255, 0, 0.18);
   --hvy-highlight-2: rgba(255, 221, 26, 0.35);
   --hvy-border: #527267;
@@ -24,8 +27,8 @@
   --hvy-xref-card-bg: #c5dacf;
   --hvy-xref-card-hover-bg: rgba(0, 255, 200, 0.6);
   --hvy-table-header: #a3ccb6;
-  --hvy-table-row-bg-1: #d9dfe2;
-  --hvy-table-row-bg-2: #c5dacf;
+  --hvy-table-row-bg-1: #c5dacf;
+  --hvy-table-row-bg-2: #d9dfe2;
   --hvy-icon-muted: rgba(11, 29, 12, 0.42);
   --hvy-focus: #158a44;
   --hvy-focus-ring: rgba(21, 138, 68, 0.58);

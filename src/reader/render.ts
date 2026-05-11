@@ -584,6 +584,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       schemaMode: false,
     });
     const previewTextBlock = makePreviewBlock('theme-preview-text', 'text', 'Paragraph with *alternate text* and a fill-in.');
+    const previewButtonBlock = makePreviewBlock('theme-preview-button', 'button', '', { buttonLabel: 'Generate' });
     const previewFillInBlock = makePreviewBlock('theme-preview-fill-in', 'text', 'The answer is [____].', { fillIn: true });
     const previewXrefTarget = state.documentSections[0] ? `#${deps.getSectionId(state.documentSections[0])}` : '#';
     const previewXrefBlock = makePreviewBlock('theme-preview-xref', 'xref-card', '', {
@@ -668,6 +669,18 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       '--hvy-text --hvy-text-alt --hvy-text-muted',
       'theme-demo-rich-text'
     );
+    const buttonRestPreview = renderDemoWrapper(
+      renderButtonReader(previewSection, previewButtonBlock, helpers),
+      'rest',
+      '--hvy-button-bg --hvy-button-text --hvy-border-alt',
+      'theme-demo-button-stack'
+    );
+    const buttonHoverPreview = renderDemoWrapper(
+      renderButtonReader(previewSection, previewButtonBlock, helpers),
+      'hover',
+      '--hvy-button-hover-bg --hvy-button-hover-text --hvy-focus --hvy-shadow-md',
+      'theme-demo-button-stack'
+    );
     const fillInPreview = renderDemoSurface(
       renderTextReader(previewSection, previewFillInBlock, helpers),
       'fill-in',
@@ -734,6 +747,18 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
           { id: 'hover', label: 'Hover', variables: ['--hvy-xref-card-hover-bg', '--hvy-border-alt', '--hvy-text'] },
         ],
         html: `${componentListPreview}${componentListHoverPreview}`,
+      },
+      {
+        id: 'button',
+        label: 'Button',
+        detail: 'Primary button rest and hover states',
+        className: 'theme-preview-button-card',
+        variables: ['--hvy-button-bg', '--hvy-button-text', '--hvy-button-hover-bg', '--hvy-button-hover-text', '--hvy-border-alt', '--hvy-focus', '--hvy-shadow-md'],
+        states: [
+          { id: 'rest', label: 'Rest', variables: ['--hvy-button-bg', '--hvy-button-text', '--hvy-border-alt'] },
+          { id: 'hover', label: 'Hover', variables: ['--hvy-button-hover-bg', '--hvy-button-hover-text', '--hvy-focus', '--hvy-shadow-md'] },
+        ],
+        html: `${buttonRestPreview}${buttonHoverPreview}`,
       },
       {
         id: 'text',
@@ -883,6 +908,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       const isSelected = matchedPaletteId === palette.id;
       const previewStyle = [
         `--palette-preview-bg: ${palette.colors['--hvy-bg'] ?? 'transparent'}`,
+        `--palette-preview-bg-alt: ${palette.colors['--hvy-bg-alt'] ?? palette.colors['--hvy-bg'] ?? 'transparent'}`,
         `--palette-preview-surface: ${palette.colors['--hvy-surface'] ?? 'transparent'}`,
         `--palette-preview-text: ${palette.colors['--hvy-text'] ?? 'currentColor'}`,
         `--palette-preview-accent: ${palette.colors['--hvy-accent-1'] ?? 'currentColor'}`,

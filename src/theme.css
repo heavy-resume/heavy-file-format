@@ -171,6 +171,7 @@
 
 .theme-demo-component-list,
 .theme-demo-text,
+.theme-demo-button-stack,
 .theme-demo-xref-stack,
 .theme-demo-diagnostics {
   display: grid;
@@ -244,17 +245,35 @@
   box-shadow: 0 0 0 1px var(--hvy-focus-ring), 0 0 16px var(--hvy-focus-glow);
 }
 
-.theme-demo-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+.theme-preview-button-card .hvy-button-component {
   justify-self: start;
-  min-height: 2.15rem;
-  padding: 0.42rem 0.85rem;
-  border: 1px solid var(--hvy-button-bg);
-  border-radius: 8px;
-  background: var(--hvy-button-bg);
-  color: var(--hvy-button-text);
+}
+
+.theme-preview-button-card[data-theme-preview-state="hover"] .hvy-button-component {
+  border-color: color-mix(in srgb, var(--hvy-focus) 45%, var(--hvy-border-translucent));
+  background: color-mix(in srgb, var(--hvy-button-hover-bg) 38%, var(--hvy-surface));
+  box-shadow: 0 10px 24px var(--hvy-shadow-md);
+}
+
+.theme-preview-button-card[data-theme-preview-state="hover"] .hvy-button-component-button {
+  border-color: var(--hvy-focus) !important;
+  background: var(--hvy-button-hover-bg) !important;
+  color: var(--hvy-button-hover-text) !important;
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--hvy-focus) 30%, transparent),
+    0 8px 18px var(--hvy-shadow-md);
+  transform: translateY(-1px);
+}
+
+.theme-modal .theme-preview-button-card[data-theme-preview-state="hover"] .theme-preview-all {
+  border-color: var(--hvy-focus) !important;
+  background: var(--hvy-button-hover-bg) !important;
+  background-color: var(--hvy-button-hover-bg) !important;
+  background-image: none !important;
+  color: var(--hvy-button-hover-text) !important;
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--hvy-focus) 30%, transparent),
+    0 8px 18px var(--hvy-shadow-md);
 }
 
 .theme-demo-input {
@@ -402,7 +421,7 @@
   overflow: hidden;
   border: 1px solid var(--hvy-border-translucent);
   border-radius: 7px;
-  background: var(--palette-preview-bg);
+  background: linear-gradient(135deg, var(--palette-preview-bg), var(--palette-preview-bg-alt));
 }
 
 .theme-modal .theme-palette-preview span:nth-child(1) {
@@ -419,7 +438,7 @@
 }
 
 .theme-modal .theme-palette-preview-document {
-  background: var(--hvy-bg);
+  background: linear-gradient(135deg, var(--hvy-bg), var(--hvy-bg-alt));
 }
 
 .theme-modal .theme-palette-preview-document span:nth-child(1) {

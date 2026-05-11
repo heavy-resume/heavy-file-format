@@ -37,6 +37,7 @@ export function bindContextmenu(app: HTMLElement): void {
     ) {
       return;
     }
+    window.getSelection()?.removeAllRanges();
     openReaderContextPopover(app, event, false);
   });
 }

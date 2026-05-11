@@ -189,7 +189,7 @@ export function handleBlockFieldInput(target: HTMLElement): boolean {
     syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
     syncMs = performance.now() - stepStartedAt;
     stepStartedAt = performance.now();
-    if (!target.closest('#aiReaderDocument')) {
+    if (shouldRefreshReaderPanelsAfterRichInput(target)) {
       getRefreshReaderPanels()();
     }
     refreshMs = performance.now() - stepStartedAt;
@@ -340,7 +340,9 @@ export function handleBlockFieldInput(target: HTMLElement): boolean {
     syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
     syncMs = performance.now() - stepStartedAt;
     stepStartedAt = performance.now();
-    getRefreshReaderPanels()();
+    if (shouldRefreshReaderPanelsAfterRichInput(target)) {
+      getRefreshReaderPanels()();
+    }
     refreshMs = performance.now() - stepStartedAt;
     console.debug('[hvy:perf] handleBlockFieldInput', {
       field,
@@ -429,6 +431,10 @@ export function handleBlockFieldInput(target: HTMLElement): boolean {
   }
 
   return false;
+}
+
+function shouldRefreshReaderPanelsAfterRichInput(target: HTMLElement): boolean {
+  return !target.closest('.editor-tree, #aiReaderDocument');
 }
 
 function buildTextFromFillInEditor(target: HTMLElement): string {

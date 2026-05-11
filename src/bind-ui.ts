@@ -364,6 +364,11 @@ export function bindUi(app: HTMLElement): void {
         } else {
           state.readerExpandableState[expandableStateKey] = true;
           getRefreshReaderPanels()();
+          const readerEl = app.querySelector<HTMLElement>(`[data-expandable-id="${CSS.escape(blockId)}"]`);
+          readerEl?.classList.add('is-expanding');
+          window.setTimeout(() => {
+            readerEl?.classList.remove('is-expanding');
+          }, 360);
         }
       });
       return;

@@ -394,6 +394,9 @@
   margin-top: 0.3rem;
   margin-bottom: 0.3rem;
   cursor: pointer;
+}
+
+.expandable-reader.is-expanding .expand-content {
   animation: expandContentIn 360ms ease both;
 }
 

@@ -88,6 +88,53 @@ hvy_version: 0.1
   await expect(page.getByRole('button', { name: 'Done' }).first()).toHaveCSS('cursor', 'pointer');
 });
 
+test('typing in expandable nested text preserves focus without reader refresh', async ({ page }) => {
+  const perfMessages: string[] = [];
+  page.on('console', (message) => {
+    const text = message.text();
+    if (text.includes('[hvy:perf] refreshReaderPanels')) {
+      perfMessages.push(text);
+    }
+  });
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ <!--hvy:expandable {"expandableAlwaysShowStub":true,"expandableExpanded":true}-->
+
+  <!--hvy:expandable:stub {}-->
+
+   <!--hvy:text {}-->
+    Stub
+
+  <!--hvy:expandable:content {}-->
+
+   <!--hvy:text {}-->
+    Expanded detail
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Advanced' }).click();
+
+  await page.locator('.editor-block-passive', { has: page.locator('.expandable-reader') }).first().click();
+  await page.locator('[data-expandable-panel="expanded"]').last().click();
+  await page.locator('.editor-block-passive', { hasText: 'Expanded detail' }).last().click();
+
+  const editor = page.locator('.editor-block[data-active-editor-block="true"] .rich-editor');
+  await editor.click();
+  perfMessages.length = 0;
+  await page.keyboard.type(' stays focused');
+
+  await expect(editor).toBeFocused();
+  await expect(editor).toContainText('Expanded detail stays focused');
+  expect(perfMessages).toHaveLength(0);
+});
+
 test('passive empty expandable shows stub and expanded placeholders', async ({ page }) => {
   await page.goto('/');
 
@@ -422,6 +469,39 @@ hvy_version: 0.1
   await page.getByRole('button', { name: 'Basic' }).click();
 
   await expect(page.locator('#editorTree')).not.toContainText('Expanded detail');
+});
+
+test('expandable reader expansion animation does not persist after expanding', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ <!--hvy:expandable {"id":"padded-card","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+
+  <!--hvy:expandable:stub {}-->
+
+   <!--hvy:text {}-->
+    Clickable Stub
+
+  <!--hvy:expandable:content {}-->
+
+   <!--hvy:text {}-->
+    Expanded detail
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Viewer' }).click();
+
+  await page.locator('#padded-card').click();
+  const expandable = page.locator('[data-expandable-id]').first();
+  await expect(expandable).toHaveClass(/is-expanding/);
+  await expect(expandable).not.toHaveClass(/is-expanding/, { timeout: 1000 });
+  await expect(page.locator('.expand-content')).toHaveCSS('animation-name', 'none');
 });
 
 test('component-list display defaults sort items into collapsed virtual groups', async ({ page }) => {

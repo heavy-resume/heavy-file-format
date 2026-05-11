@@ -28,6 +28,7 @@ const AGENT_LOOP_TRACE_FILE = path.join(DEV_TRACE_DIR, 'agent-loop.ndjson');
 const AGENT_LOOP_TEXT_TRACE_FILE = path.join(DEV_TRACE_DIR, 'agent-loop.txt');
 const AI_CLI_LOG_FILE = path.join(DEV_TRACE_DIR, 'ai_cli_log.txt');
 const AI_CLI_MESSAGES_LOG_FILE = path.join(DEV_TRACE_DIR, 'ai_cli_messages.txt');
+const FAILED_CLI_COMMANDS_LOG_FILE = path.join(DEV_TRACE_DIR, 'failed-cli-commands');
 const AGENT_LOOP_TRACE_MAX_LINES = 500;
 const AGENT_LOOP_TRACE_PRUNE_LINES = 100;
 const AI_CLI_LOG_MAX_LINES = 2000;
@@ -878,10 +879,33 @@ function writeTrace(event: TraceEvent): void {
           await fs.writeFile(AI_CLI_MESSAGES_LOG_FILE, prunedAiCliMessagesLogContents, 'utf8');
         }
       }
+      const failedCliCommandEntry = formatFailedCliCommandLogEvent(event);
+      if (failedCliCommandEntry) {
+        await fs.appendFile(FAILED_CLI_COMMANDS_LOG_FILE, failedCliCommandEntry, 'utf8');
+        const failedCliCommandContents = await fs.readFile(FAILED_CLI_COMMANDS_LOG_FILE, 'utf8');
+        const prunedFailedCliCommandContents = pruneTraceLines(failedCliCommandContents, AI_CLI_LOG_MAX_LINES, AI_CLI_LOG_PRUNE_LINES);
+        if (prunedFailedCliCommandContents.length !== failedCliCommandContents.length) {
+          await fs.writeFile(FAILED_CLI_COMMANDS_LOG_FILE, prunedFailedCliCommandContents, 'utf8');
+        }
+      }
     })
     .catch((error: unknown) => {
       console.warn('[hvy:chat-proxy] failed to write dev trace', error);
     });
+}
+
+export function formatFailedCliCommandLogEvent(event: TraceEvent): string {
+  if (!event.runId.startsWith('chat-cli-')) {
+    return '';
+  }
+  if (event.type !== 'client_event' || event.payload.event !== 'ai_cli_failed_command') {
+    return '';
+  }
+  return formatAiCliLogBlock([
+    `run: ${event.runId}`,
+    `CMD: ${String(event.payload.command ?? '').trim()}`,
+    String(event.payload.error ?? '').trimEnd(),
+  ]);
 }
 
 export function formatAiCliLogEvent(event: TraceEvent): string {

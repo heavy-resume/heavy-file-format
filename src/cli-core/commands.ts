@@ -1844,6 +1844,9 @@ function commandSed(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd
 
 function applySedEditExpression(input: string, expression: string): string {
   const parsed = parseSedExpression(expression);
+  if (parsed.kind === 'append' || parsed.kind === 'insert' || parsed.kind === 'change') {
+    return applySedAddressedTextCommand(input, parsed);
+  }
   if (parsed.lineNumber != null) {
     const lines = input.split(/\r?\n/);
     const index = parsed.lineNumber - 1;
@@ -1868,6 +1871,9 @@ function applySedEditExpression(input: string, expression: string): string {
     return applySedSubstitution(input, parsed);
   }
   if (parsed.kind === 'delete') {
+    if (parsed.address) {
+      return applySedAddressedDelete(input, parsed);
+    }
     if (parsed.pattern == null) {
       throw new Error('sed: expected sed s/search/replace/[g] path or sed /pattern/d path');
     }
@@ -1878,6 +1884,43 @@ function applySedEditExpression(input: string, expression: string): string {
       .join('\n');
   }
   throw new Error('sed: expected sed s/search/replace/[g] path or sed /pattern/d path');
+}
+
+function applySedAddressedTextCommand(
+  input: string,
+  parsed: Extract<SedExpression, { kind: 'append' | 'insert' | 'change' }>
+): string {
+  const lines = input.split(/\r?\n/);
+  const range = resolveSedAddressRange(lines, parsed.address, parsed.endAddress);
+  if (!range) {
+    return input;
+  }
+  const replacementLines = normalizeSedTextPayload(parsed.text).split('\n');
+  if (parsed.kind === 'append') {
+    lines.splice(range.end + 1, 0, ...replacementLines);
+  } else if (parsed.kind === 'insert') {
+    lines.splice(range.start, 0, ...replacementLines);
+  } else {
+    lines.splice(range.start, range.end - range.start + 1, ...replacementLines);
+  }
+  return lines.join('\n');
+}
+
+function applySedAddressedDelete(input: string, parsed: Extract<SedExpression, { kind: 'delete' }>): string {
+  if (parsed.address?.kind === 'pattern' && !parsed.endAddress) {
+    const regex = new RegExp(parsed.address.pattern, parsed.flags.toLowerCase().includes('i') ? 'i' : '');
+    return input
+      .split(/\r?\n/)
+      .filter((line) => !regex.test(line))
+      .join('\n');
+  }
+  const lines = input.split(/\r?\n/);
+  const range = resolveSedAddressRange(lines, parsed.address, parsed.endAddress);
+  if (!range) {
+    return input;
+  }
+  lines.splice(range.start, range.end - range.start + 1);
+  return lines.join('\n');
 }
 
 function applySedSubstitution(input: string, parsed: Extract<SedExpression, { kind: 'substitute' }>): string {
@@ -1893,9 +1936,19 @@ function normalizeSedReplacement(replacement: string): string {
 
 type SedExpression =
   | { kind: 'substitute'; pattern: string; replacement: string; flags: string; lineNumber?: number }
-  | { kind: 'delete'; pattern?: string; flags: string; lineNumber?: number };
+  | { kind: 'delete'; pattern?: string; flags: string; lineNumber?: number; address?: SedAddress; endAddress?: SedAddress }
+  | { kind: 'append' | 'insert' | 'change'; address: SedAddress; endAddress?: SedAddress; text: string };
+
+type SedAddress =
+  | { kind: 'line'; lineNumber: number }
+  | { kind: 'last' }
+  | { kind: 'pattern'; pattern: string };
 
 function parseSedExpression(expression: string): SedExpression {
+  const addressed = parseAddressedSedExpression(expression);
+  if (addressed) {
+    return addressed;
+  }
   const address = expression.match(/^(\d+)(.*)$/);
   if (address) {
     const lineNumber = Number.parseInt(address[1] ?? '', 10);
@@ -1935,6 +1988,99 @@ function parseSedExpression(expression: string): SedExpression {
     pattern: pattern.value,
     flags: parseSedFlags(suffix.replace(/[dD]/g, ''), 'delete'),
   };
+}
+
+function parseAddressedSedExpression(expression: string): SedExpression | null {
+  const first = readSedAddress(expression, 0);
+  if (!first) {
+    return null;
+  }
+  let index = first.nextIndex;
+  let endAddress: SedAddress | undefined;
+  if (expression[index] === ',') {
+    const second = readSedAddress(expression, index + 1);
+    if (!second) {
+      throw new Error('sed: expected second address after comma');
+    }
+    endAddress = second.address;
+    index = second.nextIndex;
+  }
+  const command = expression[index] ?? '';
+  const rest = expression.slice(index + 1);
+  if (command.toLowerCase() === 'd') {
+    const flags = parseSedFlags(rest, 'delete');
+    return { kind: 'delete', flags, address: first.address, ...(endAddress ? { endAddress } : {}) };
+  }
+  if (command === 'a' || command === 'i' || command === 'c') {
+    return {
+      kind: command === 'a' ? 'append' : command === 'i' ? 'insert' : 'change',
+      address: first.address,
+      ...(endAddress ? { endAddress } : {}),
+      text: rest,
+    };
+  }
+  return null;
+}
+
+function readSedAddress(expression: string, startIndex: number): { address: SedAddress; nextIndex: number } | null {
+  const first = expression[startIndex] ?? '';
+  if (first === '$') {
+    return { address: { kind: 'last' }, nextIndex: startIndex + 1 };
+  }
+  const number = expression.slice(startIndex).match(/^\d+/);
+  if (number) {
+    return {
+      address: { kind: 'line', lineNumber: Number.parseInt(number[0], 10) },
+      nextIndex: startIndex + number[0].length,
+    };
+  }
+  if (first && !/[A-Za-z0-9\\]/.test(first)) {
+    const pattern = readDelimitedSegment(expression, startIndex + 1, first);
+    return { address: { kind: 'pattern', pattern: pattern.value }, nextIndex: pattern.nextIndex };
+  }
+  return null;
+}
+
+function resolveSedAddressRange(
+  lines: string[],
+  startAddress?: SedAddress,
+  endAddress?: SedAddress
+): { start: number; end: number } | null {
+  if (!startAddress) {
+    return null;
+  }
+  const start = resolveSedAddressIndex(lines, startAddress, 0);
+  if (start < 0) {
+    return null;
+  }
+  const end = endAddress ? resolveSedAddressIndex(lines, endAddress, start) : start;
+  if (end < 0) {
+    return null;
+  }
+  return {
+    start: Math.min(start, end),
+    end: Math.max(start, end),
+  };
+}
+
+function resolveSedAddressIndex(lines: string[], address: SedAddress, startIndex: number): number {
+  if (address.kind === 'line') {
+    const index = address.lineNumber - 1;
+    return index >= 0 && index < lines.length ? index : -1;
+  }
+  if (address.kind === 'last') {
+    return Math.max(0, lines.length - 1);
+  }
+  const regex = new RegExp(address.pattern);
+  return lines.findIndex((line, index) => index >= startIndex && regex.test(line));
+}
+
+function normalizeSedTextPayload(text: string): string {
+  const withoutLeadingSlash = text.startsWith('\\') ? text.slice(1) : text;
+  return withoutLeadingSlash
+    .replace(/^\r?\n/, '')
+    .replaceAll('\\n', '\n')
+    .replaceAll('\\t', '\t');
 }
 
 function parseSedFlags(flags: string, kind: SedExpression['kind']): string {
@@ -3283,7 +3429,7 @@ function helpFor(topic = ''): string {
     rm: formatCommandHelp('rm -r|-rf PATH...', 'Remove section or component directories from the virtual document body. -f ignores missing paths. Alias: hvy remove PATH.'),
     printf: formatCommandHelp('printf FORMAT [ARG...] [> FILE|>> FILE]', 'Print formatted text without adding a newline, replace a writable file, or append to a writable file. Supports common escapes and %s, %b, %d, %i, and %%.'),
     echo: formatCommandHelp('echo TEXT [> FILE|>> FILE]', 'Print text, replace a writable file, or append to a writable file.'),
-    sed: formatCommandHelp('sed -n START,ENDp FILE...\nsed [-i] [-E] s/search/replace/[gI] FILE...', 'Print selected line ranges, or update writable virtual files with search/replace or /pattern/d deletion.'),
+    sed: formatCommandHelp('sed -n START,ENDp FILE...\nsed [-i] [-E] s/search/replace/[gI] FILE...\nsed -i ADDRESS[,ADDRESS]c\\TEXT FILE\nsed -i ADDRESSa\\TEXT FILE\nsed -i ADDRESSi\\TEXT FILE', 'Print line ranges, replace text, delete addressed lines, or insert/append/change addressed text. ADDRESS can be a line number, $, or /pattern/.'),
     true: formatCommandHelp('true', 'Succeed without output. Useful in command chains such as COMMAND || true.'),
     ask: formatCommandHelp('ask QUESTION', 'Pause the AI CLI edit loop and ask the user for clarification.'),
     done: formatCommandHelp('done MESSAGE_TO_USER', 'Finish the AI CLI edit loop with the message to show the user.'),

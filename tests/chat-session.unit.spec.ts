@@ -4,12 +4,13 @@ import { advanceDocumentEditCliSimStep, appendUserChatMessage, buildDocumentEdit
 import { deserializeDocument, serializeDocument } from '../src/serialization';
 import type { ChatMessage, ChatSettings } from '../src/types';
 
-const { requestChatCompletionMock, requestProxyCompletionMock, requestProxyToolTurnMock, runQaToolLoopMock, writeChatCliCommandTraceMock, writeChatCliUserQueryTraceMock } = vi.hoisted(() => ({
+const { requestChatCompletionMock, requestProxyCompletionMock, requestProxyToolTurnMock, runQaToolLoopMock, writeChatCliCommandTraceMock, writeChatCliFailedCommandTraceMock, writeChatCliUserQueryTraceMock } = vi.hoisted(() => ({
   requestChatCompletionMock: vi.fn(),
   requestProxyCompletionMock: vi.fn(),
   requestProxyToolTurnMock: vi.fn(),
   runQaToolLoopMock: vi.fn(),
   writeChatCliCommandTraceMock: vi.fn(),
+  writeChatCliFailedCommandTraceMock: vi.fn(),
   writeChatCliUserQueryTraceMock: vi.fn(),
 }));
 
@@ -43,6 +44,7 @@ vi.mock('../src/chat-cli/chat-cli-dev-trace', () => ({
   createChatCliTraceRunId: () => 'chat-cli-test',
   writeChatCliUserQueryTrace: writeChatCliUserQueryTraceMock,
   writeChatCliCommandTrace: writeChatCliCommandTraceMock,
+  writeChatCliFailedCommandTrace: writeChatCliFailedCommandTraceMock,
 }));
 
 beforeEach(() => {
@@ -62,6 +64,7 @@ beforeEach(() => {
   }));
   runQaToolLoopMock.mockReset();
   writeChatCliCommandTraceMock.mockReset();
+  writeChatCliFailedCommandTraceMock.mockReset();
   writeChatCliUserQueryTraceMock.mockReset();
 });
 
@@ -778,7 +781,7 @@ Hello world
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Component context:');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('description: Summary section guidance.');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('description: Opening paragraph.');
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('currently in the directory representing the component to change');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('The current directory starts at the selected component.');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages).toEqual(expect.arrayContaining([
     expect.objectContaining({ role: 'assistant', content: expect.stringContaining('```shell\nhvy preview "/body/summary/intro"\n```') }),
     expect.objectContaining({ role: 'user', content: expect.stringContaining('Component preview (raw HVY, first 100 lines):') }),
@@ -788,7 +791,7 @@ Hello world
   expect(writeChatCliCommandTraceMock.mock.calls.map((call) => call[1])).toContain('hvy preview "/body/summary/intro"');
 });
 
-test('requestDocumentEditChatTurn treats selected components as examples for add requests', async () => {
+test('requestDocumentEditChatTurn keeps selected component focus neutral for add requests', async () => {
   requestProxyCompletionMock.mockResolvedValueOnce('done Added a sibling list item.');
   const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
   const document = deserializeDocument(`---
@@ -819,9 +822,9 @@ hvy_version: 0.1
 
   expect(result.error).toBeNull();
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Parent path: /body/summary/items');
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('This request appears to add a new item.');
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Do not overwrite the selected component.');
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages.at(-1)?.content).toContain('Current directory: /body/summary/items');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('decide whether the request should edit this component, add nested content, or add a sibling nearby.');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).not.toContain('Do not overwrite the selected component.');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages.at(-1)?.content).toContain('Current directory: /body/summary/items/existing');
 });
 
 test('requestDocumentEditChatTurn compacts old cli conversation after high provider input tokens', async () => {
@@ -1886,6 +1889,12 @@ test('requestDocumentEditChatTurn lets the cli edit loop retry after command err
     undefined,
     expect.stringContaining('CMD: hvy\n### CMD RESULT ###\nhvy: expected request_structure, search, cheatsheet, recipe, lint, insert, plugin, remove, prune-xref, preview, or help\n### END CMD RESULT ###')
   );
+  expect(writeChatCliFailedCommandTraceMock).toHaveBeenCalledWith(
+    'chat-cli-test',
+    'hvy',
+    'hvy: expected request_structure, search, cheatsheet, recipe, lint, insert, plugin, remove, prune-xref, preview, or help',
+    undefined
+  );
 });
 
 test('requestDocumentEditChatTurn counts a failed command batch as one retry attempt', async () => {
@@ -1916,6 +1925,7 @@ cat missing.txt
     'No such file: /missing.txt'
   );
   expect(writeChatCliCommandTraceMock.mock.calls.map((call) => call[1])).toContain('not-a-command\nhvy\ncat missing.txt');
+  expect(writeChatCliFailedCommandTraceMock.mock.calls.map((call) => call[1])).toEqual(['not-a-command', 'hvy', 'cat missing.txt']);
 });
 
 test('requestDocumentEditChatTurn treats unclosed shell quotes as retryable command errors', async () => {

@@ -9,7 +9,7 @@ import { getDocumentAiContext } from '../document-ai-context';
 import { buildHvyVirtualFileSystem } from '../cli-core/virtual-file-system';
 import { formatHvyComponentDescriptionHistory } from '../cli-core/component-description-history';
 import { buildChatCliComponentHints } from './chat-cli-component-hints';
-import { createChatCliTraceRunId, writeChatCliCommandTrace, writeChatCliUserQueryTrace } from './chat-cli-dev-trace';
+import { createChatCliTraceRunId, writeChatCliCommandTrace, writeChatCliFailedCommandTrace, writeChatCliUserQueryTrace } from './chat-cli-dev-trace';
 import { createChatCliInterface } from './chat-cli-interface';
 import { buildChatCliPersistentInstructions } from './chat-cli-instructions';
 import { getHvyCliPreferredCommandSummary, type HvyCliSession } from '../cli-core/commands';
@@ -348,6 +348,7 @@ async function advanceChatCliNativeToolTurnState(params: {
       commandOutputs.push({ command, output: stderr });
       if (params.writeTrace && params.traceRunId) {
         await writeChatCliCommandTrace(params.traceRunId, command, stderr, params.signal);
+        await writeChatCliFailedCommandTrace(params.traceRunId, command, stderr, params.signal);
       }
     }
     results.push({
@@ -533,6 +534,9 @@ async function advanceChatCliTurnState(params: {
       batchHadError = true;
       lastFailedCommand = command;
       lastCommandError = error instanceof Error ? error.message : String(error);
+      if (params.writeTrace && params.traceRunId) {
+        await writeChatCliFailedCommandTrace(params.traceRunId, command, lastCommandError, params.signal);
+      }
       result = {
         command,
         cwd: cli.session.cwd,
@@ -660,11 +664,7 @@ async function buildChatCliInitialTurnRequest(params: {
 }> {
   const cli = createChatCliInterface(params.document);
   if (params.selectedComponent?.path) {
-    cli.session.cwd = selectInitialCwdForSelectedComponent(
-      buildHvyVirtualFileSystem(params.document),
-      params.selectedComponent.path,
-      params.request
-    );
+    cli.session.cwd = params.selectedComponent.path;
   }
   const runInitialCommand = async (explanation: string, command: string) => {
     const output = await cli.run(command);
@@ -873,36 +873,8 @@ function formatSelectedComponentFocus(focus: ChatCliSelectedComponentFocus, requ
     `Base component: ${focus.baseComponent}`,
     `Schema ID: ${focus.schemaId || '(none)'}`,
     ...(focus.guidance?.trim() ? ['Component guidance:', focus.guidance.trim()] : []),
-    'You are currently in the directory representing the component to change, or possibly next to or near the component to change, or an example of a component you would add.',
-    isAddLikeSelectedComponentRequest(request)
-      ? 'This request appears to add a new item. Do not overwrite the selected component. Inspect the parent path and add a sibling or nearby child in the appropriate container.'
-      : 'Prefer editing this component only when the request is asking to change, remove, or refine the selected component itself.',
+    'The current directory starts at the selected component. Use the selected path, parent path, previews, and request_structure output to decide whether the request should edit this component, add nested content, or add a sibling nearby.',
   ].join('\n');
-}
-
-function selectInitialCwdForSelectedComponent(
-  fs: ReturnType<typeof buildHvyVirtualFileSystem>,
-  selectedPath: string,
-  request: string
-): string {
-  if (!isAddLikeSelectedComponentRequest(request)) {
-    return selectedPath;
-  }
-  const componentListParent = nearestComponentListParent(fs, selectedPath);
-  return componentListParent || selectedPath;
-}
-
-function nearestComponentListParent(fs: ReturnType<typeof buildHvyVirtualFileSystem>, selectedPath: string): string {
-  let current = selectedPath.replace(/\/+$/, '');
-  while (current.startsWith('/body/')) {
-    const entry = fs.entries.get(`${current}/component-list.json`);
-    if (entry?.kind === 'file') {
-      return current;
-    }
-    const parent = getParentVirtualPath(current);
-    current = parent;
-  }
-  return '';
 }
 
 function getParentVirtualPath(path: string): string {
@@ -912,11 +884,6 @@ function getParentVirtualPath(path: string): string {
     return '/';
   }
   return normalized.slice(0, index);
-}
-
-function isAddLikeSelectedComponentRequest(request: string): boolean {
-  return /\b(add|create|insert|append|new|another|additional)\b/i.test(request)
-    && !/\b(replace|rewrite|rename|change this|update this|modify this|remove this|delete this)\b/i.test(request);
 }
 
 function formatInitialChatCliCommandMessages(

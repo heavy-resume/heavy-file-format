@@ -825,6 +825,41 @@ drop me
   expect(document.sections[0]?.blocks[0]?.text).toBe('keep\ndoc.db.execute("CREATE TABLE chores (id INTEGER)")');
 });
 
+test('cli sed supports append insert change ranges and last-line delete', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {"id":"intro"}-->
+ one
+two
+three
+four
+`, '.hvy');
+  const session = createHvyCliSession();
+
+  const changed = await executeHvyCliCommand(document, session, `sed -i '2,3c\\replacement A\\nreplacement B' /body/summary/intro/text.txt`);
+  expect(changed.output).toBe('/body/summary/intro/text.txt: updated');
+  expect(document.sections[0]?.blocks[0]?.text).toBe('one\nreplacement A\nreplacement B\nfour');
+
+  const appended = await executeHvyCliCommand(document, session, `sed -i '/replacement B/a\\after B' /body/summary/intro/text.txt`);
+  expect(appended.output).toBe('/body/summary/intro/text.txt: updated');
+  expect(document.sections[0]?.blocks[0]?.text).toBe('one\nreplacement A\nreplacement B\nafter B\nfour');
+
+  const inserted = await executeHvyCliCommand(document, session, `sed -i '$i\\before last' /body/summary/intro/text.txt`);
+  expect(inserted.output).toBe('/body/summary/intro/text.txt: updated');
+  expect(document.sections[0]?.blocks[0]?.text).toBe('one\nreplacement A\nreplacement B\nafter B\nbefore last\nfour');
+
+  const deleted = await executeHvyCliCommand(document, session, `sed -i '$d' /body/summary/intro/text.txt`);
+  expect(deleted.output).toBe('/body/summary/intro/text.txt: updated');
+  expect(document.sections[0]?.blocks[0]?.text).toBe('one\nreplacement A\nreplacement B\nafter B\nbefore last');
+
+  expect((await executeHvyCliCommand(document, session, 'man sed')).output).toContain('sed -i ADDRESS[,ADDRESS]c\\TEXT FILE');
+});
+
 test('cli sed rejects malformed substitute flags before mutating', async () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1

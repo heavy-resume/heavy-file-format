@@ -272,4 +272,10 @@ export interface ContextMenuState {
   blockId?: string;
   x: number;
   y: number;
+  targetRect?: {
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+  };
 }

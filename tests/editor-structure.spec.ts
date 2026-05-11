@@ -130,6 +130,9 @@ hvy_version: 0.1
 
    <!--hvy:text {}-->
     Hidden details
+
+ <!--hvy:text {}-->
+  Another block
 `);
   await page.getByRole('button', { name: 'Apply' }).click();
   await page.getByRole('button', { name: 'AI' }).click();
@@ -143,6 +146,12 @@ hvy_version: 0.1
 
   await toggle.dblclick();
   await expect(page.locator('.hvy-context-popover')).toContainText('Request changes');
+  await expect(page.locator('.hvy-context-popover-backdrop')).toBeVisible();
+  await expect(page.locator('.hvy-context-popover-backdrop-top')).toHaveCSS('backdrop-filter', /blur/);
+  await expect(page.locator('.reader-block.is-context-menu-target')).toHaveCSS('visibility', 'hidden');
+  await expect(page.locator('.hvy-context-popover-clone')).toBeVisible();
+  await page.locator('.hvy-context-popover-backdrop-target').click({ position: { x: 12, y: 12 } });
+  await expect(page.locator('.hvy-context-popover')).toHaveCount(0);
   await page.waitForTimeout(500);
   await expect(toggle).toHaveAttribute('aria-expanded', 'true');
 });

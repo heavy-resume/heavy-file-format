@@ -262,21 +262,64 @@ function renderContextMenu(): string {
     return '';
   }
   const popupStyle = `left: ${menu.x}px; top: ${menu.y}px;`;
+  const backdropStyle = menu.targetRect
+    ? [
+        `--hvy-context-target-left: ${menu.targetRect.left}px`,
+        `--hvy-context-target-top: ${menu.targetRect.top}px`,
+        `--hvy-context-target-width: ${menu.targetRect.width}px`,
+        `--hvy-context-target-height: ${menu.targetRect.height}px`,
+      ].join('; ')
+    : '';
+  const target = menu.blockId
+    ? document.querySelector<HTMLElement>(`.viewer-shell .reader-block[data-section-key="${cssEscape(menu.sectionKey)}"][data-block-id="${cssEscape(menu.blockId)}"]`)
+    : null;
+  const clone = target && menu.targetRect ? renderContextMenuTargetClone(target, menu.targetRect) : '';
+  const backdrop = menu.targetRect
+    ? `<div class="hvy-context-popover-backdrop" style="${escapeAttr(backdropStyle)}" aria-hidden="true">
+        <div class="hvy-context-popover-backdrop-top"></div>
+        <div class="hvy-context-popover-backdrop-left"></div>
+        <div class="hvy-context-popover-backdrop-right"></div>
+        <div class="hvy-context-popover-backdrop-bottom"></div>
+        <div class="hvy-context-popover-backdrop-target"></div>
+      </div>`
+    : '<div class="hvy-context-popover-backdrop" aria-hidden="true"></div>';
   const filtering = state.search.filterEnabled && state.search.submittedQuery.trim().length > 0;
   if (menu.kind === 'filter') {
     return `
+      ${backdrop}
+      ${clone}
       <section class="hvy-context-popover" style="${escapeAttr(popupStyle)}" aria-label="Filter options">
         <button type="button" data-action="clear-target-filtering">Clear filtering</button>
       </section>
     `;
   }
   return `
+    ${backdrop}
+    ${clone}
     <section class="hvy-context-popover" style="${escapeAttr(popupStyle)}" aria-label="Component options">
       <button type="button" data-action="edit-context-component">Edit component</button>
       <button type="button" data-action="request-context-component-changes">Request changes</button>
       ${filtering ? '<button type="button" data-action="clear-target-filtering">Clear filtering</button>' : ''}
     </section>
   `;
+}
+
+function renderContextMenuTargetClone(target: HTMLElement, rect: NonNullable<NonNullable<typeof state.contextMenu>['targetRect']>): string {
+  const clone = target.cloneNode(true) as HTMLElement;
+  clone.classList.add('hvy-context-popover-clone');
+  clone.classList.remove('is-context-menu-target');
+  clone.setAttribute('aria-hidden', 'true');
+  clone.removeAttribute('id');
+  clone.querySelectorAll('[id]').forEach((element) => {
+    element.removeAttribute('id');
+  });
+  clone.querySelectorAll('input, textarea, select, button, a, [tabindex]').forEach((element) => {
+    element.setAttribute('tabindex', '-1');
+  });
+  clone.style.left = `${rect.left}px`;
+  clone.style.top = `${rect.top}px`;
+  clone.style.width = `${rect.width}px`;
+  return clone.outerHTML;
 }
 
 function renderDescriptionPopulateModal(): string {
@@ -429,6 +472,9 @@ readerRenderer = createReaderRenderer(
         sectionKey: state.aiEdit.sectionKey,
         blockId: state.aiEdit.blockId,
       };
+    },
+    get contextMenu() {
+      return state.contextMenu ?? null;
     },
     get activeEditorBlock() {
       return state.activeEditorBlock;
@@ -656,7 +702,7 @@ function renderApp(): void {
                   </aside>
                   <div id="editorTree" class="editor-tree">${editorRenderer.renderSectionEditorTree(state.document.sections)}</div>
                 </div>`}`
-              : `<div${renderResponsivePreviewFrameAttrs(`viewer-shell ${isAiView ? 'ai-view-shell ' : ''}${state.viewerSidebarOpen ? 'is-sidebar-open' : 'is-sidebar-closed'}`)}>
+              : `<div${renderResponsivePreviewFrameAttrs(`viewer-shell ${isAiView ? 'ai-view-shell ' : ''}${state.contextMenu ? 'is-context-menu-open ' : ''}${state.viewerSidebarOpen ? 'is-sidebar-open' : 'is-sidebar-closed'}`)}>
                    <div class="viewer-sidebar-backdrop" data-action="toggle-viewer-sidebar"></div>
                    <aside class="viewer-sidebar">
                      <button type="button" class="viewer-sidebar-tab" data-action="toggle-viewer-sidebar" aria-expanded="${state.viewerSidebarOpen ? 'true' : 'false'}" aria-label="Toggle navigation">${renderSidebarTabLabel()}</button>
@@ -669,6 +715,7 @@ function renderApp(): void {
                      </div>
                    </aside>
                    <div id="${isAiView ? 'aiReaderDocument' : 'readerDocument'}" class="reader-document">${readerRenderer.renderReaderSections(state.document.sections)}</div>
+                   ${renderContextMenu()}
                    ${
                      isAiView
                        ? `${renderAiEditPopover()}`
@@ -686,7 +733,6 @@ function renderApp(): void {
                   isViewerView ? 'qa' : 'document-edit',
                   state.currentView === 'editor' || state.currentView === 'ai'
                 )}
-                ${renderContextMenu()}
                 ${renderSearchLauncher(state.search)}
                 ${renderSearchPalette(state.search, state.document, { escapeAttr, escapeHtml, readerRenderer })}`
           }

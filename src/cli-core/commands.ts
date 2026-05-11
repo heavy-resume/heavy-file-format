@@ -3095,6 +3095,9 @@ function formatFileEntryDescription(fs: ReturnType<typeof buildHvyVirtualFileSys
   if (componentName && filename === `${componentName}.json`) {
     return `${componentName} component config`;
   }
+  if (componentName && filename === `${componentName}.css`) {
+    return `${componentName} component CSS mirrored from config`;
+  }
   if (componentName && filename === `${componentName}.txt`) {
     const bodyEntry = fs.entries.get(path);
     if (componentName === 'table' || bodyEntry?.kind === 'file' && bodyEntry.writable === false) {

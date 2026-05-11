@@ -244,6 +244,15 @@ function addBlock(entries: Map<string, HvyVirtualEntry>, meta: JsonObject, block
     read: () => `${JSON.stringify(blockSchemaToCliJson(block.schema), null, 2)}\n`,
     write: (content) => applyBlockSchemaJson(block.schema, componentNameFromPath(componentFile), parseJsonObject(content, componentFile)),
   });
+  const componentName = sanitizePathSegment(block.schema.component) || 'component';
+  entries.set(`${blockPath}/${componentName}.css`, {
+    kind: 'file',
+    path: `${blockPath}/${componentName}.css`,
+    read: () => block.schema.css,
+    write: (content) => {
+      block.schema.css = content.trim();
+    },
+  });
   const bodyTextFile = `${blockPath}/${bodyFileNameForBlock(block)}`;
   entries.set(bodyTextFile, {
     kind: 'file',
@@ -254,7 +263,6 @@ function addBlock(entries: Map<string, HvyVirtualEntry>, meta: JsonObject, block
       writeBlockBodyText(block, content);
     },
   });
-  const componentName = sanitizePathSegment(block.schema.component) || 'component';
   entries.set(`${blockPath}/about-${componentName}.txt`, {
     kind: 'file',
     path: `${blockPath}/about-${componentName}.txt`,
@@ -717,6 +725,7 @@ function formatComponentDirectoryMapping(component: string, baseComponent: strin
   const lines = [
     `- /${sanitizePathSegment(component) || 'component'} contains one ${component} component instance.`,
     `- ${configFile} is writable instance configuration for this component.`,
+    `- ${component}.css is writable instance CSS mirrored from ${configFile}.`,
     `- ${bodyFile} is the body/preview file for this component when the base type exposes text content.`,
   ];
   if (baseComponent === 'expandable') {

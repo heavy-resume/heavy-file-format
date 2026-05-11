@@ -69,6 +69,7 @@ export function bindClickMisc(app: HTMLElement): void {
     if (state.contextMenu && !target.closest('.hvy-context-popover')) {
       state.contextMenu = null;
       app.querySelector('.hvy-context-popover')?.remove();
+      app.querySelector('.hvy-context-popover-backdrop')?.remove();
       getRenderApp()();
       return;
     }

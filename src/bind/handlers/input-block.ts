@@ -1,4 +1,5 @@
 import { state, getRefreshReaderPanels, getThemeConfig, applyTheme, writeThemeConfig, colorValueToPickerHex, getComponentDefs, getSectionDefs, resolveBlockContext, recordHistory, persistChatSettings, getRawEditorDiagnostics } from './_imports';
+import { applyThemeModalFilter } from '../../theme-modal-filter';
 
 export function bindInputBlock(app: HTMLElement): void {
     app.addEventListener('input', (event) => {
@@ -114,6 +115,11 @@ export function bindInputBlock(app: HTMLElement): void {
       if (swatch) {
         swatch.style.background = target.value;
       }
+      return;
+    }
+
+    if (field === 'theme-color-filter' && target instanceof HTMLInputElement) {
+      applyThemeModalFilter(app, target.value);
       return;
     }
 

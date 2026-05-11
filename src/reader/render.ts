@@ -502,6 +502,80 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
   function renderThemeModal(): string {
     const theme = state.theme;
     const overrideNames = new Set(Object.keys(theme.colors));
+    const previewItems: Array<{ label: string; detail: string; className: string; variables: string[]; html: string }> = [
+      {
+        label: 'Document Surface',
+        detail: 'Background, cards, and body text',
+        className: 'theme-preview-surface-card',
+        variables: ['--hvy-bg', '--hvy-bg-alt', '--hvy-surface', '--hvy-surface-alt', '--hvy-text', '--hvy-text-alt', '--hvy-border'],
+        html: '<div class="theme-demo-surface"><strong>Section title</strong><span>Readable supporting copy</span></div>',
+      },
+      {
+        label: 'Buttons',
+        detail: 'Primary action and text contrast',
+        className: 'theme-preview-button-card',
+        variables: ['--hvy-button-bg', '--hvy-button-text', '--hvy-focus', '--hvy-focus-ring'],
+        html: '<span class="theme-demo-button">Apply</span>',
+      },
+      {
+        label: 'Inputs',
+        detail: 'Form fields and editor controls',
+        className: 'theme-preview-input-card',
+        variables: ['--hvy-surface', '--hvy-border-input', '--hvy-text', '--hvy-focus', '--hvy-focus-glow'],
+        html: '<div class="theme-demo-input"><span>Field value</span></div>',
+      },
+      {
+        label: 'Xref Card',
+        detail: 'Reference card rest and hover colors',
+        className: 'theme-preview-xref-card',
+        variables: ['--hvy-xref-card-bg', '--hvy-xref-card-hover-bg', '--hvy-border', '--hvy-text', '--hvy-text-alt', '--hvy-shadow'],
+        html: '<div class="theme-demo-xref"><strong>TypeScript</strong><span>Primary language</span></div>',
+      },
+      {
+        label: 'Highlights',
+        detail: 'Inline marks and xref jump flash',
+        className: 'theme-preview-highlight-card',
+        variables: ['--hvy-highlight-1', '--hvy-highlight-2', '--hvy-button-bg', '--hvy-surface'],
+        html: '<div class="theme-demo-highlight"><span>Filtered match</span><mark>active result</mark></div>',
+      },
+      {
+        label: 'Table',
+        detail: 'Header and alternating rows',
+        className: 'theme-preview-table-card',
+        variables: ['--hvy-table-header', '--hvy-table-row-bg-1', '--hvy-table-row-bg-2', '--hvy-border-input', '--hvy-text'],
+        html: '<div class="theme-demo-table"><span>Header</span><span>Row one</span><span>Row two</span></div>',
+      },
+      {
+        label: 'Status',
+        detail: 'Warning, success, and danger states',
+        className: 'theme-preview-status-card',
+        variables: ['--hvy-warning', '--hvy-warning-bg', '--hvy-warning-border', '--hvy-warning-text', '--hvy-success', '--hvy-success-bg', '--hvy-success-border', '--hvy-danger'],
+        html: '<div class="theme-demo-status"><span>Warning</span><span>Success</span><span>Danger</span></div>',
+      },
+      {
+        label: 'Code',
+        detail: 'Code block and syntax colors',
+        className: 'theme-preview-code-card',
+        variables: ['--hvy-code-bg', '--hvy-code-text', '--hvy-code-muted', '--hvy-code-string', '--hvy-code-builtin', '--hvy-code-keyword', '--hvy-code-function', '--hvy-code-number'],
+        html: '<code class="theme-demo-code"><span>const</span> value = <b>"HVY"</b></code>',
+      },
+    ];
+    const previewCards = previewItems.map((item) => {
+      const filter = item.variables.join(' ');
+      return `<button
+        type="button"
+        class="theme-preview-card ${deps.escapeAttr(item.className)}"
+        data-action="theme-filter-to-colors"
+        data-theme-filter="${deps.escapeAttr(filter)}"
+        title="${deps.escapeAttr(`Filter to ${item.label} colors`)}"
+      >
+        <span class="theme-preview-card-copy">
+          <strong>${deps.escapeHtml(item.label)}</strong>
+          <span>${deps.escapeHtml(item.detail)}</span>
+        </span>
+        ${item.html}
+      </button>`;
+    }).join('');
     const matchedPaletteId = state.paletteOverrideId ?? getMatchedPaletteId(theme.colors);
     const documentThemeSelected = state.paletteOverrideId === null;
     const documentPaletteCard = `
@@ -558,7 +632,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       const value = isOverridden ? theme.colors[name] : getResolvedThemeColor(name);
       const pickerValue = colorValueToPickerHex(value);
       return `
-        <div class="theme-color-row${isOverridden ? ' theme-color-row--override' : ''}">
+        <div class="theme-color-row${isOverridden ? ' theme-color-row--override' : ''}" data-theme-color-name="${deps.escapeAttr(name)}" data-theme-search="${deps.escapeAttr(`${name} ${getThemeColorLabel(name)} ${value}`)}">
           <div class="theme-color-meta">
             <strong>${deps.escapeHtml(getThemeColorLabel(name))}</strong>
             <span class="theme-color-var">${deps.escapeHtml(name)}</span>
@@ -590,7 +664,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     const customRows = customNames.map((name) => {
       const value = theme.colors[name] ?? '';
       return `
-        <div class="theme-color-row theme-color-row--override">
+        <div class="theme-color-row theme-color-row--override" data-theme-color-name="${deps.escapeAttr(name)}" data-theme-search="${deps.escapeAttr(`${name} ${getThemeColorLabel(name)} ${value} custom`)}">
           <input
             class="theme-color-name"
             data-field="theme-color-name"
@@ -623,6 +697,19 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
             Adjust the document theme with a color picker or by typing any valid CSS color value.
             Overrides are saved with the document.
           </p>
+          <label class="theme-filter-shell">
+            <span>Filter Colors</span>
+            <input
+              type="search"
+              data-field="theme-color-filter"
+              placeholder="Type a token, role, component, or click a preview..."
+              autocomplete="off"
+              spellcheck="false"
+            />
+          </label>
+          <div class="theme-preview-grid" aria-label="Theme component preview">
+            ${previewCards}
+          </div>
           <div class="theme-palette-grid" aria-label="Theme palettes">
             ${documentPaletteCard}
             ${paletteCards}
@@ -630,6 +717,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
           <div class="theme-color-list">
             ${rows}
           </div>
+          <div class="theme-filter-empty muted" hidden>No matching theme colors.</div>
           ${customRows
             ? `<div class="theme-custom-section">
                 <div class="theme-custom-head">

@@ -3,6 +3,7 @@ import { recordHistory } from '../../history';
 import { getThemeConfig, applyTheme, writeThemeConfig } from '../../theme';
 import { getPaletteById } from '../../palettes/palette-registry';
 import { savePaletteOverrideId } from '../../palettes/palette-preferences';
+import { setThemeModalFilter } from '../../theme-modal-filter';
 import type { AppActionHandler } from './types';
 
 const openThemeModal: AppActionHandler = () => {
@@ -53,6 +54,10 @@ const themeClearPaletteOverride: AppActionHandler = () => {
   getRenderApp()();
 };
 
+const themeFilterToColors: AppActionHandler = ({ app, actionButton }) => {
+  setThemeModalFilter(app, actionButton.dataset.themeFilter ?? '');
+};
+
 export const themeActions: Record<string, AppActionHandler> = {
   'open-theme-modal': openThemeModal,
   'theme-add-color': themeAddColor,
@@ -60,4 +65,5 @@ export const themeActions: Record<string, AppActionHandler> = {
   'theme-reset-color': themeRemoveOrResetColor('reset'),
   'theme-apply-palette': themeApplyPalette,
   'theme-clear-palette-override': themeClearPaletteOverride,
+  'theme-filter-to-colors': themeFilterToColors,
 };

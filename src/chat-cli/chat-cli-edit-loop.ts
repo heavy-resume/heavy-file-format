@@ -33,7 +33,7 @@ const CHAT_CLI_MODEL_OUTPUT_MAX_LINES = 200;
 const CHAT_CLI_MODEL_OUTPUT_MAX_LINE_WIDTH = 400;
 const CHAT_CLI_RECOMMENDED_BATCH_COMMANDS = 4;
 const CHAT_CLI_BATCH_GUIDANCE = `Use one command per \`\`\`shell block and at most ${CHAT_CLI_RECOMMENDED_BATCH_COMMANDS} \`\`\`shell blocks per response.`;
-const CHAT_CLI_COMMAND_NAMES = new Set(['cd', 'pwd', 'ls', 'cat', 'head', 'tail', 'nl', 'find', 'rg', 'grep', 'sort', 'uniq', 'wc', 'tr', 'xargs', 'cp', 'rm', 'echo', 'sed', 'true', 'hvy', 'db-table', 'form', 'ask']);
+const CHAT_CLI_COMMAND_NAMES = new Set(['cd', 'pwd', 'ls', 'cat', 'head', 'tail', 'nl', 'find', 'rg', 'grep', 'sort', 'uniq', 'wc', 'tr', 'xargs', 'cp', 'mv', 'rm', 'echo', 'sed', 'true', 'hvy', 'db-table', 'form', 'ask']);
 const CHAT_CLI_NATIVE_TOOL_COMMAND_NAMES = getHvyCliPreferredCommandSummary()
   .replace(/^Commands:\s*/, '')
   .replace(/\.\s*Ask:.*$/, '');

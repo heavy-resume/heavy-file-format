@@ -1702,6 +1702,37 @@ test('cli cp -r copies component directories with the destination id', async () 
   expect((await executeHvyCliCommand(document, session, 'man cp')).output).toContain('cp [-r] SOURCE DEST');
 });
 
+test('cli mv moves component directories between ordered children', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"quality"}-->
+#! Quality
+
+<!--hvy:component-list {"id":"items","componentListComponent":"text"}-->
+
+ <!--hvy:text {"id":"banana"}-->
+ Banana
+
+ <!--hvy:text {"id":"apple"}-->
+ Apple
+
+ <!--hvy:text {"id":"cherry"}-->
+ Cherry
+`, '.hvy');
+  const session = createHvyCliSession();
+
+  const result = await executeHvyCliCommand(document, session, 'mv /body/quality/items/banana /body/quality/items');
+
+  expect(result.output).toBe('/body/quality/items/banana -> /body/quality/items/banana: moved');
+  expect(result.mutated).toBe(true);
+  expect((await executeHvyCliCommand(document, session, 'cat /body/quality/items/children-order.json')).output).toBe(
+    '[\n  "apple",\n  "cherry",\n  "banana"\n]\n'
+  );
+  expect((await executeHvyCliCommand(document, session, 'man mv')).output).toContain('mv SOURCE DEST');
+});
+
 test('cli treats rg || true before a pipe as an xargs-friendly fallback idiom', async () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1

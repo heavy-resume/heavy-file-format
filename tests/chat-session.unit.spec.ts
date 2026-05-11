@@ -292,7 +292,7 @@ test('requestDocumentEditChatTurn runs the CLI edit loop for document chat', asy
       mode: 'document-edit',
       debugLabel: 'chat-cli-edit:1',
       context: expect.stringContaining('Current request:\nAdd a chore section.'),
-      systemInstructions: expect.stringContaining('Valid commands (in order of preference):\nCommands: hvy, nl, rg, find, sed, printf, echo, cat, ls, pwd, cd, cp, rm, grep, sort, uniq, wc, tr, xargs, head, tail, true. Ask: use ask_user tool. Finish: use finish_task tool.'),
+      systemInstructions: expect.stringContaining('Valid commands (in order of preference):\nCommands: hvy, nl, rg, find, sed, printf, echo, cat, ls, pwd, cd, cp, mv, rm, grep, sort, uniq, wc, tr, xargs, head, tail, true. Ask: use ask_user tool. Finish: use finish_task tool.'),
     })
   );
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.systemInstructions).toContain('Response instructions:\nUse the provided tools instead of writing terminal commands as text.');
@@ -330,7 +330,7 @@ test('requestDocumentEditChatTurn runs the CLI edit loop for document chat', asy
   expect(writeChatCliCommandTraceMock.mock.calls[1]).toEqual([
     'chat-cli-test',
     'hvy --help',
-    expect.stringContaining('Cheatsheets:\n- components\n- db-table\n- forms\n- scripting'),
+    expect.stringContaining('Cheatsheets:\n- common-patterns\n- components\n- db-table\n- forms\n- header\n- reusable-component\n- scripting\n- styling'),
     undefined,
   ]);
   expect(writeChatCliCommandTraceMock.mock.calls[2]).toEqual([
@@ -548,8 +548,8 @@ test('buildDocumentEditCliSimRequest exposes the exact provider-facing CLI reque
   expect(payload).not.toHaveProperty('responseInstructions');
   expect(payload).not.toHaveProperty('systemInstructions');
   expect(payload.tools?.map((tool) => tool.name)).toEqual(['run_hvy_cli', 'finish_task', 'ask_user']);
-  expect(payload.tools?.[0]?.description).toContain('Valid command names: hvy, nl, rg, find, sed, printf, echo, cat, ls, pwd, cd, cp, rm, grep, sort, uniq, wc, tr, xargs, head, tail, true.');
-  expect(payload.tools?.[0]?.parameters?.properties?.command?.description).toContain('Start with one of: hvy, nl, rg, find, sed, printf, echo, cat, ls, pwd, cd, cp, rm, grep, sort, uniq, wc, tr, xargs, head, tail, true.');
+  expect(payload.tools?.[0]?.description).toContain('Valid command names: hvy, nl, rg, find, sed, printf, echo, cat, ls, pwd, cd, cp, mv, rm, grep, sort, uniq, wc, tr, xargs, head, tail, true.');
+  expect(payload.tools?.[0]?.parameters?.properties?.command?.description).toContain('Start with one of: hvy, nl, rg, find, sed, printf, echo, cat, ls, pwd, cd, cp, mv, rm, grep, sort, uniq, wc, tr, xargs, head, tail, true.');
   expect(payload.input).toEqual([
     expect.objectContaining({ role: 'system', content: [expect.objectContaining({ text: expect.stringContaining('Response instructions:\nUse the provided tools instead of writing terminal commands as text.') })] }),
     expect.objectContaining({ role: 'user', content: [expect.objectContaining({ text: expect.stringContaining('Request context:\n\nCurrent request:\nAdd a chore section.') })] }),
@@ -878,7 +878,7 @@ test('requestDocumentEditChatTurn compacts old cli conversation after high provi
   expect(JSON.stringify(requestProxyCompletionMock.mock.calls[5]?.[0]?.messages)).not.toContain('x'.repeat(12000));
   expect(JSON.stringify(requestProxyCompletionMock.mock.calls[5]?.[0]?.messages)).not.toContain('... truncated ...');
   expect(requestProxyCompletionMock.mock.calls[5]?.[0]?.systemInstructions).toContain(
-    'Valid commands (in order of preference):\nCommands: hvy, nl, rg, find, sed, printf, echo, cat, ls, pwd, cd, cp, rm, grep, sort, uniq, wc, tr, xargs, head, tail, true. Ask: use ask_user tool. Finish: use finish_task tool.'
+    'Valid commands (in order of preference):\nCommands: hvy, nl, rg, find, sed, printf, echo, cat, ls, pwd, cd, cp, mv, rm, grep, sort, uniq, wc, tr, xargs, head, tail, true. Ask: use ask_user tool. Finish: use finish_task tool.'
   );
   expect(requestProxyCompletionMock.mock.calls[5]?.[0]?.context).toContain('Current request:\nCheck the document with several commands.');
   expect(requestProxyCompletionMock.mock.calls[5]?.[0]?.context).not.toContain('scratchpad.txt:');

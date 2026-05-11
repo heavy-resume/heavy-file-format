@@ -13,7 +13,19 @@ const activateBlock: AppActionHandler = ({ event, sectionKey, blockId }) => {
     return;
   }
   event.stopPropagation();
+  const targetElement = event.target as HTMLElement | null;
+  const passiveBlock = targetElement?.closest<HTMLElement>('.editor-block-passive');
+  const anchorTop = passiveBlock ? targetElement?.getBoundingClientRect().top : undefined;
   setActiveEditorBlock(sectionKey, blockId);
+  if (typeof anchorTop === 'number' && state.pendingEditorActivation) {
+    state.pendingEditorActivation = {
+      ...state.pendingEditorActivation,
+      anchorTop,
+      clientX: event.clientX,
+      clientY: event.clientY,
+      preferTextFocus: true,
+    };
+  }
   getRenderApp()();
 };
 

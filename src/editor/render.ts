@@ -81,7 +81,14 @@ interface EditorRenderState {
   addComponentBySection: Record<string, string>;
   activeEditorBlock: { sectionKey: string; blockId: string } | null;
   componentPlacement: ComponentPlacementState | null;
-  pendingEditorActivation: { sectionKey: string; blockId: string } | null;
+  pendingEditorActivation: {
+    sectionKey: string;
+    blockId: string;
+    anchorTop?: number;
+    clientX?: number;
+    clientY?: number;
+    preferTextFocus?: boolean;
+  } | null;
   expandableEditorPanels: Record<string, { stubOpen: boolean; expandedOpen: boolean }>;
   editorSidebarHelpDismissed: boolean;
   currentView: 'editor' | 'viewer' | 'ai';

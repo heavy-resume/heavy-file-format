@@ -211,7 +211,14 @@ export interface AppState {
   activeEditorBlock: { sectionKey: string; blockId: string } | null;
   activeEditorBlockSnapshot: { sectionKey: string; blockId: string; block: VisualBlock } | null;
   componentPlacement: ComponentPlacementState | null;
-  pendingEditorActivation: { sectionKey: string; blockId: string } | null;
+  pendingEditorActivation: {
+    sectionKey: string;
+    blockId: string;
+    anchorTop?: number;
+    clientX?: number;
+    clientY?: number;
+    preferTextFocus?: boolean;
+  } | null;
   activeEditorSectionTitleKey: string | null;
   clearSectionTitleOnFocusKey: string | null;
   modalSectionKey: string | null;

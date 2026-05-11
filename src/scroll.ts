@@ -92,9 +92,8 @@ export function scrollPendingEditorActivation(app: HTMLElement): void {
   if (!pending) {
     return;
   }
-  const pathLength = app.querySelectorAll<HTMLElement>('.editor-block.is-activating-path').length;
-  const delayMs = Math.max(0, (pathLength - 1) * 150 + 190);
-  window.setTimeout(() => {
+  window.requestAnimationFrame(() => {
+    window.requestAnimationFrame(() => {
     const current = state.pendingEditorActivation;
     if (!current || current.sectionKey !== pending.sectionKey || current.blockId !== pending.blockId) {
       return;
@@ -103,13 +102,67 @@ export function scrollPendingEditorActivation(app: HTMLElement): void {
       `.editor-block[data-active-editor-block="true"][data-active-block-id="${CSS.escape(pending.blockId)}"]`
     );
     const target = block?.querySelector<HTMLElement>(
-      '[contenteditable="true"], textarea, input:not([type="hidden"]), select, button'
+      '[contenteditable="true"], textarea, input:not([type="hidden"]), select'
     ) ?? block;
     if (!target) {
       state.pendingEditorActivation = null;
       return;
     }
-    target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if (typeof pending.anchorTop === 'number') {
+      const editorTree = app.querySelector<HTMLDivElement>('.editor-shell .editor-tree');
+      if (editorTree) {
+        const nextTop = target.getBoundingClientRect().top;
+        editorTree.scrollTop += nextTop - pending.anchorTop;
+      }
+    }
+    focusEditorActivationTarget(target, pending.clientX, pending.clientY);
     state.pendingEditorActivation = null;
-  }, delayMs);
+    });
+  });
+}
+
+function focusEditorActivationTarget(target: HTMLElement, clientX?: number, clientY?: number): void {
+  target.focus({ preventScroll: true });
+  if (!target.isContentEditable) {
+    if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
+      const length = target.value.length;
+      target.setSelectionRange(length, length);
+    }
+    return;
+  }
+  const selection = window.getSelection();
+  if (!selection) {
+    return;
+  }
+  if (typeof clientX === 'number' && typeof clientY === 'number') {
+    const range = getCaretRangeFromPoint(clientX, clientY);
+    if (range && target.contains(range.startContainer)) {
+      selection.removeAllRanges();
+      selection.addRange(range);
+      return;
+    }
+  }
+  const range = document.createRange();
+  range.selectNodeContents(target);
+  range.collapse(false);
+  selection.removeAllRanges();
+  selection.addRange(range);
+}
+
+function getCaretRangeFromPoint(clientX: number, clientY: number): Range | null {
+  const doc = document as Document & {
+    caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node; offset: number } | null;
+    caretRangeFromPoint?: (x: number, y: number) => Range | null;
+  };
+  if (doc.caretPositionFromPoint) {
+    const position = doc.caretPositionFromPoint(clientX, clientY);
+    if (!position) {
+      return null;
+    }
+    const range = document.createRange();
+    range.setStart(position.offsetNode, position.offset);
+    range.collapse(true);
+    return range;
+  }
+  return doc.caretRangeFromPoint?.(clientX, clientY) ?? null;
 }

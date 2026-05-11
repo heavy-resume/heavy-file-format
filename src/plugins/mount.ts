@@ -32,6 +32,13 @@ interface MountedPlugin {
 const MOUNT_KEY_PREFIX = 'hvy-plugin-mount';
 const mounted = new Map<string, MountedPlugin>();
 
+function getPluginEditorDetailLevel(mode: 'editor' | 'reader'): number {
+  if (mode !== 'editor') {
+    return 0;
+  }
+  return state.showAdvancedEditor ? 2 : 1;
+}
+
 function mountKey(pluginId: string, mode: 'editor' | 'reader', sectionKey: string, blockId: string): string {
   return `${MOUNT_KEY_PREFIX}|${pluginId}|${mode}|${sectionKey}|${blockId}`;
 }
@@ -88,8 +95,11 @@ function buildContext(
 
   return {
     mode,
-    get advanced() {
-      return state.showAdvancedEditor;
+    get editor() {
+      return {
+        mode: mode === 'editor' ? 'edit' : 'view',
+        detailLevel: getPluginEditorDetailLevel(mode),
+      };
     },
     sectionKey,
     block,

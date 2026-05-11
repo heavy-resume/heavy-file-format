@@ -444,6 +444,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
   function renderEditor(): void {
     const { spec, error } = parseCurrent();
     const scriptNames = Object.keys(spec.scripts);
+    const showAdvancedControls = ctx.editor.mode === 'edit' && ctx.editor.detailLevel >= 2;
     root.innerHTML = '';
 
     if (error) {
@@ -476,7 +477,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
           <span>
             <button type="button" class="ghost" data-form-action="move-field-up" data-form-field-index="${index}">Up</button>
             <button type="button" class="ghost" data-form-action="move-field-down" data-form-field-index="${index}">Down</button>
-            ${ctx.advanced ? `<button type="button" class="ghost" data-form-action="toggle-field-meta" data-form-field-index="${index}">Meta</button>` : ''}
+            ${showAdvancedControls ? `<button type="button" class="ghost" data-form-action="toggle-field-meta" data-form-field-index="${index}">Meta</button>` : ''}
             <button type="button" class="danger" data-form-action="remove-field" data-form-field-index="${index}">Remove</button>
           </span>
         </div>
@@ -497,7 +498,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
     });
 
     root.appendChild(fieldSection);
-    if (ctx.advanced && openFieldMetaLabel) {
+    if (showAdvancedControls && openFieldMetaLabel) {
       const fieldIndex = spec.fields.findIndex((field) => field.label === openFieldMetaLabel);
       const field = spec.fields[fieldIndex];
       if (field) {

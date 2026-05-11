@@ -351,25 +351,6 @@ Image block fields:
 
 Common web image media types SHOULD be supported, including `image/png`, `image/jpeg`, `image/gif`, `image/webp`, `image/svg+xml`, `image/avif`, and `image/bmp`. Clients MUST treat tail bytes as untrusted (see §8) and SHOULD render the image inline when the attachment is present, or surface a warning when it is missing.
 
-Button blocks define authoring controls. They are usually `editorOnly` and SHOULD be omitted from finished viewer output:
-
-```markdown
-<!--hvy:button {"editorOnly":true,"buttonLabel":"Generate","buttonAction":"ai-generate","buttonPositionTargetId":"target-component-id","buttonCss":"position: absolute; top: 0.25rem; right: 0.25rem;"}-->
-```
-
-Button block fields:
-- `buttonLabel`: visible button text. Defaults to `"Generate"`.
-- `buttonAction`: supported value `"ai-generate"`.
-- `buttonVisibleScript`: optional Python source evaluated in the existing Brython scripting sandbox to decide whether the button should be visible in editor/AI mode.
-- `buttonSourceScript`: Python source evaluated on click in the same sandbox; its return value becomes the generation input.
-- `buttonPrompt`: model instruction used by the host for the generation call.
-- `buttonTargetScript`: Python source evaluated after generation with injected `response` and `source` values. It applies the raw model response back to the document.
-- `buttonInputCharLimit` and `buttonOutputCharLimit`: positive integer safety limits for generation input and output.
-- `buttonPositionTargetId`: optional component id whose rendered wrapper becomes the relative positioning anchor for the button.
-- `buttonCss`: optional declaration-only inline CSS for the button wrapper. When anchored, authors can use absolute positioning such as `position: absolute; top: 0.25rem; right: 0.25rem;`.
-
-General scripting blocks MUST NOT receive direct chat or LLM APIs. For `ai-generate` buttons, the host performs the model call and the Brython scripts only prepare input and apply output.
-
 Rules:
 - The directive MUST be on a single line.
 - The payload MUST be valid JSON object.
@@ -421,16 +402,6 @@ Block metadata optionally includes component-specific fields. Common examples in
 - `tableRows`
 - `imageFile`
 - `imageAlt`
-- `buttonLabel`
-- `buttonAction`
-- `buttonVisibleScript`
-- `buttonSourceScript`
-- `buttonPrompt`
-- `buttonTargetScript`
-- `buttonInputCharLimit`
-- `buttonOutputCharLimit`
-- `buttonPositionTargetId`
-- `buttonCss`
 
 Nested block arrays such as `containerBlocks` use a recursive block object shape:
 
@@ -894,6 +865,25 @@ framework MUST be usable so long as it returns a DOM element.
 
 Plugins SHOULD style themselves using the document's standard CSS theme
 variables. This is convention, not requirement.
+
+When rendering a plugin for editing, hosts SHOULD pass an editor context object
+to the plugin. The editor context MUST include:
+
+- `mode`: `"view"` or `"edit"`.
+- `detailLevel`: a number indicating how much editing UI the host is asking the
+  plugin to show.
+
+The conventional `detailLevel` meanings are:
+
+- `0`: hidden, compact, or out-of-the-way plugin UI. This is reserved for
+  minimized or low-presence editing displays.
+- `1`: basic editing UI. Plugins SHOULD show normal user-facing controls here.
+- `2`: advanced editing UI. Plugins SHOULD show configuration, wiring, scripts,
+  ids, host-action settings, and other expert controls here.
+
+Hosts and plugins SHOULD rely only on levels `0`, `1`, and `2` for now. Other
+numbers are reserved; plugins receiving an unknown level SHOULD fall back to the
+nearest supported behavior.
 
 When a `plugin` component block has no `plugin` value, editors MUST present a
 selector populated from the host's installed plugins and MUST NOT render any

@@ -27,9 +27,15 @@ export interface HvyPluginHeaderApi {
   set(key: string, value: unknown): void;
 }
 
+export interface HvyPluginEditorContext {
+  mode: 'view' | 'edit';
+  // Conventional levels: 0 = hidden/compact, 1 = basic, 2 = advanced.
+  detailLevel: number;
+}
+
 export interface HvyPluginContext {
   mode: 'editor' | 'reader';
-  advanced: boolean;
+  editor: HvyPluginEditorContext;
   sectionKey: string;
   block: VisualBlock;
   document: HvyPluginDocumentApi;

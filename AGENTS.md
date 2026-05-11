@@ -68,3 +68,5 @@ When running any sort of tests don't interfere with port 5173 which is the dev s
 For ad-hoc browser verification, use the stable browser harness commands instead of one-off `node -e` Playwright scripts or direct `kill` commands. Start the local browser test server with `npm run browser:start`, edit `scratch/browser-smoke.mjs` for the current Playwright scenario, run it with `npm run browser:smoke`, and stop the server with `npm run browser:stop`. The harness uses port 5174 and keeps scratch files ignored so repeated browser tests and stop commands can be approved once.
 
 When creating new inputs, etc make sure they use the HVY theme variables including backgrounds. Script components should use the script rendering.
+
+Right now as of version 0.1 of the spec there's no "older" stuff to worry about so don't waste effort on backwards compatibility.

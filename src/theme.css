@@ -515,7 +515,7 @@
 
 .theme-modal .theme-alpha-control {
   display: grid;
-  grid-template-columns: auto minmax(4.5rem, 1fr) 2.2rem;
+  grid-template-columns: auto minmax(5.5rem, 1fr);
   align-items: center;
   gap: 0.34rem;
   margin: 0;
@@ -525,12 +525,54 @@
 }
 
 .theme-modal .theme-alpha-control input {
+  grid-column: 2;
   width: 100%;
+  margin: 0;
   min-height: 1.65rem;
+  appearance: none;
+  background: transparent;
   accent-color: var(--hvy-button-bg);
+  overflow: visible;
+}
+
+.theme-modal .theme-alpha-control input::-webkit-slider-runnable-track {
+  height: 0.44rem;
+  border: 1px solid var(--hvy-border-input);
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, var(--hvy-button-bg));
+}
+
+.theme-modal .theme-alpha-control input::-webkit-slider-thumb {
+  appearance: none;
+  width: 1rem;
+  height: 1rem;
+  margin-top: -0.34rem;
+  border: 2px solid var(--hvy-button-bg);
+  border-radius: 999px;
+  background: var(--hvy-surface);
+  box-shadow: 0 2px 7px var(--hvy-shadow-md);
+}
+
+.theme-modal .theme-alpha-control input::-moz-range-track {
+  height: 0.44rem;
+  border: 1px solid var(--hvy-border-input);
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, var(--hvy-button-bg));
+}
+
+.theme-modal .theme-alpha-control input::-moz-range-thumb {
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid var(--hvy-button-bg);
+  border-radius: 999px;
+  background: var(--hvy-surface);
+  box-shadow: 0 2px 7px var(--hvy-shadow-md);
 }
 
 .theme-modal .theme-alpha-control output {
+  grid-column: 2;
+  justify-self: end;
+  margin-top: -0.28rem;
   color: var(--hvy-text);
   font-variant-numeric: tabular-nums;
   text-align: right;

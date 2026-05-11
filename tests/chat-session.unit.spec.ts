@@ -517,7 +517,17 @@ test('buildDocumentEditCliSimRequest exposes the exact provider-facing CLI reque
   });
   const payload = JSON.parse(result.requestJson) as {
     model: string;
-    tools?: Array<{ name: string }>;
+    tools?: Array<{
+      name: string;
+      description?: string;
+      parameters?: {
+        properties?: {
+          command?: {
+            description?: string;
+          };
+        };
+      };
+    }>;
     input: Array<
       | { role: string; content: Array<{ text: string; type: string }> }
       | { type: 'function_call'; call_id: string; name: string; arguments: string }
@@ -535,6 +545,8 @@ test('buildDocumentEditCliSimRequest exposes the exact provider-facing CLI reque
   expect(payload).not.toHaveProperty('responseInstructions');
   expect(payload).not.toHaveProperty('systemInstructions');
   expect(payload.tools?.map((tool) => tool.name)).toEqual(['run_hvy_cli', 'finish_task', 'ask_user']);
+  expect(payload.tools?.[0]?.description).toContain('Valid command names: hvy, nl, rg, find, sed, printf, echo, cat, ls, pwd, cd, cp, rm, grep, sort, uniq, wc, tr, xargs, head, tail, true.');
+  expect(payload.tools?.[0]?.parameters?.properties?.command?.description).toContain('Start with one of: hvy, nl, rg, find, sed, printf, echo, cat, ls, pwd, cd, cp, rm, grep, sort, uniq, wc, tr, xargs, head, tail, true.');
   expect(payload.input).toEqual([
     expect.objectContaining({ role: 'system', content: [expect.objectContaining({ text: expect.stringContaining('Response instructions:\nUse the provided tools instead of writing terminal commands as text.') })] }),
     expect.objectContaining({ role: 'user', content: [expect.objectContaining({ text: expect.stringContaining('Request context:\n\nCurrent request:\nAdd a chore section.') })] }),

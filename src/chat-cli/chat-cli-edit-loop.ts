@@ -12,7 +12,7 @@ import { buildChatCliComponentHints } from './chat-cli-component-hints';
 import { createChatCliTraceRunId, writeChatCliCommandTrace, writeChatCliUserQueryTrace } from './chat-cli-dev-trace';
 import { createChatCliInterface } from './chat-cli-interface';
 import { buildChatCliPersistentInstructions } from './chat-cli-instructions';
-import type { HvyCliSession } from '../cli-core/commands';
+import { getHvyCliPreferredCommandSummary, type HvyCliSession } from '../cli-core/commands';
 import {
   appendProviderToolResultsToState,
   buildInitialProviderToolState,
@@ -34,6 +34,9 @@ const CHAT_CLI_MODEL_OUTPUT_MAX_LINE_WIDTH = 400;
 const CHAT_CLI_RECOMMENDED_BATCH_COMMANDS = 4;
 const CHAT_CLI_BATCH_GUIDANCE = `Use one command per \`\`\`shell block and at most ${CHAT_CLI_RECOMMENDED_BATCH_COMMANDS} \`\`\`shell blocks per response.`;
 const CHAT_CLI_COMMAND_NAMES = new Set(['cd', 'pwd', 'ls', 'cat', 'head', 'tail', 'nl', 'find', 'rg', 'grep', 'sort', 'uniq', 'wc', 'tr', 'xargs', 'cp', 'rm', 'echo', 'sed', 'true', 'hvy', 'db-table', 'form', 'ask']);
+const CHAT_CLI_NATIVE_TOOL_COMMAND_NAMES = getHvyCliPreferredCommandSummary()
+  .replace(/^Commands:\s*/, '')
+  .replace(/\.\s*Ask:.*$/, '');
 const introducedDiagnosticsByDocument = new WeakMap<VisualDocument, Map<string, HvyCliDiagnosticIssue>>();
 
 export interface ChatCliEditTurnResult {
@@ -1026,14 +1029,14 @@ export function buildChatCliNativeToolDefinitions(): ProviderToolDefinition[] {
   return [
     {
       name: 'run_hvy_cli',
-      description: 'Run exactly one command in the limited HVY virtual CLI. This is not the host OS shell.',
+      description: `Run exactly one command in the limited HVY virtual CLI. This is not the host OS shell. Valid command names: ${CHAT_CLI_NATIVE_TOOL_COMMAND_NAMES}. Use ask_user and finish_task instead of ask or done.`,
       strict: true,
       inputSchema: {
         type: 'object',
         properties: {
           command: {
             type: 'string',
-            description: 'One HVY virtual CLI command with no markdown fence.',
+            description: `One HVY virtual CLI command with no markdown fence. Start with one of: ${CHAT_CLI_NATIVE_TOOL_COMMAND_NAMES}. Do not use an unlisted command.`,
           },
         },
         required: ['command'],

@@ -98,6 +98,8 @@ function createInitialState(document: ReturnType<typeof deserializeDocumentBytes
     cliHistory: [],
     activeEditorBlock: null,
     activeEditorBlockSnapshot: null,
+    activeEditorBlockReturnScroll: null,
+    pendingPaneScrollRestore: null,
     componentPlacement: null,
     pendingEditorActivation: null,
     activeEditorSectionTitleKey: null,
@@ -519,7 +521,9 @@ function renderApp(): void {
   let focusMs = 0;
 
   let stepStartedAt = performance.now();
-  state.paneScroll = capturePaneScroll(state.paneScroll, app);
+  const pendingPaneScrollRestore = state.pendingPaneScrollRestore;
+  state.paneScroll = pendingPaneScrollRestore ?? capturePaneScroll(state.paneScroll, app);
+  state.pendingPaneScrollRestore = null;
   const chatScroll = captureChatThreadScroll(app);
   captureMs = performance.now() - stepStartedAt;
 

@@ -2,13 +2,14 @@ import { state, getRenderApp, getRefreshReaderPanels } from '../../state';
 import { findSectionByKey, isDefaultUntitledSectionTitle } from '../../section-ops';
 import { findBlockByIds, setActiveEditorBlock, deactivateEditorBlock, cancelEditorBlockEdit } from '../../block-ops';
 import { recordHistory } from '../../history';
+import { capturePaneScroll } from '../../scroll';
 import type { AppActionHandler } from './types';
 import { buildBlockDescriptionParentTree, buildDescriptionRequest, generateDescription } from '../../descriptions/provider';
 import { populateMissingDescriptions } from '../../descriptions/populate';
 
 let descriptionPopulateAbortController: AbortController | null = null;
 
-const activateBlock: AppActionHandler = ({ event, sectionKey, blockId }) => {
+const activateBlock: AppActionHandler = ({ app, event, sectionKey, blockId }) => {
   if (!blockId) {
     return;
   }
@@ -16,6 +17,7 @@ const activateBlock: AppActionHandler = ({ event, sectionKey, blockId }) => {
   const targetElement = event.target as HTMLElement | null;
   const passiveBlock = targetElement?.closest<HTMLElement>('.editor-block-passive');
   const anchorTop = passiveBlock ? targetElement?.getBoundingClientRect().top : undefined;
+  state.activeEditorBlockReturnScroll = capturePaneScroll(state.paneScroll, app);
   setActiveEditorBlock(sectionKey, blockId);
   if (typeof anchorTop === 'number' && state.pendingEditorActivation) {
     state.pendingEditorActivation = {
@@ -46,6 +48,7 @@ const deactivateBlock: AppActionHandler = ({ event, sectionKey, blockId }) => {
   }
   event.stopPropagation();
   deactivateEditorBlock(sectionKey, blockId);
+  queueEditorReturnScroll();
   getRenderApp()();
 };
 
@@ -55,9 +58,18 @@ const cancelBlockEdit: AppActionHandler = ({ event, sectionKey, blockId }) => {
   }
   event.stopPropagation();
   cancelEditorBlockEdit(sectionKey, blockId);
+  queueEditorReturnScroll();
   getRefreshReaderPanels()();
   getRenderApp()();
 };
+
+function queueEditorReturnScroll(): void {
+  if (!state.activeEditorBlockReturnScroll) {
+    return;
+  }
+  state.pendingPaneScrollRestore = state.activeEditorBlockReturnScroll;
+  state.activeEditorBlockReturnScroll = null;
+}
 
 const toggleEditorExpandable: AppActionHandler = ({ event, sectionKey, blockId }) => {
   if (!sectionKey || !blockId) {

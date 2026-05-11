@@ -284,7 +284,9 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         : ''
       }
             ${isSubsection ? '' : `<button type="button" class="${section.location === 'sidebar' ? 'secondary' : 'ghost'}" data-action="toggle-section-location" data-section-key="${deps.escapeAttr(section.key)}">${section.location === 'sidebar' ? 'main \u2192' : '\u2190 sidebar'}</button>`}
-            <button type="button" class="danger" data-action="remove-section" data-section-key="${deps.escapeAttr(section.key)}">Remove</button>
+            <button type="button" class="danger remove-x editor-section-remove-button" data-action="remove-section" data-section-key="${deps.escapeAttr(
+              section.key
+            )}" aria-label="Remove ${deps.escapeAttr(visibleTitle)} section">${closeIcon()}</button>
           </div>
         </div>
 

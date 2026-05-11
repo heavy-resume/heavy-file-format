@@ -111,6 +111,11 @@ export function scrollPendingEditorActivation(app: HTMLElement): void {
     if (typeof pending.anchorTop === 'number') {
       const editorTree = app.querySelector<HTMLDivElement>('.editor-shell .editor-tree');
       if (editorTree) {
+        state.activeEditorBlockReturnScroll = {
+          ...state.paneScroll,
+          editorTop: editorTree.scrollTop,
+          windowTop: window.scrollY,
+        };
         const nextTop = target.getBoundingClientRect().top;
         editorTree.scrollTop += nextTop - pending.anchorTop;
       }

@@ -440,6 +440,43 @@ hvy_version: 0.1
   await expect(page.locator('#rawEditor')).not.toContainText('"fillIn"');
 });
 
+test('text fill-in preserves multiple slots while typing', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"locations"}-->
+#! Locations
+
+ <!--hvy:text {"id":"location-details","placeholder":"location, target location","fillIn":true}-->
+  **Location:** <!-- value -->
+
+  **Target Location(s):** <!-- value -->
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('.editor-block-passive', { hasText: 'Location:' }).click();
+  const fillIns = page.locator('[data-field="text-fill-in-value"]');
+  await expect(fillIns).toHaveCount(2);
+
+  await fillIns.nth(0).fill('Seattle, WA');
+  await fillIns.nth(1).fill('Greater Seattle area');
+
+  const editor = page.locator('.text-fill-in-editor');
+  await expect(editor).toContainText('Location: Seattle, WA');
+  await expect(editor).toContainText('Target Location(s): Greater Seattle area');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await expect(page.locator('#rawEditor')).toContainText('**Location:** Seattle, WA');
+  await expect(page.locator('#rawEditor')).toContainText('**Target Location(s):** Greater Seattle area');
+  await expect(page.locator('#rawEditor')).not.toContainText('<!-- value -->');
+  await expect(page.locator('#rawEditor')).not.toContainText('"fillIn"');
+});
+
 test('cancel restores text edits made after component activation', async ({ page }) => {
   await page.goto('/');
 

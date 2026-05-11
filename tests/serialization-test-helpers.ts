@@ -41,6 +41,8 @@ export function createTestState(document: VisualDocument): AppState {
     cliHistory: [],
     activeEditorBlock: null,
     activeEditorBlockSnapshot: null,
+    activeEditorBlockReturnScroll: null,
+    pendingPaneScrollRestore: null,
     componentPlacement: null,
     pendingEditorActivation: null,
     activeEditorSectionTitleKey: null,

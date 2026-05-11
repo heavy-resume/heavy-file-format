@@ -38,7 +38,7 @@ export const renderTextEditor: ComponentEditorRenderer = (sectionKey, block, hel
           >Remove Fill-in</button>
         </div>
       </div>
-      <div class="rich-editor text-fill-in-editor" style="text-align: ${helpers.escapeAttr(block.schema.align)};">
+      <div class="rich-editor text-fill-in-editor" data-fill-parts="${helpers.escapeAttr(JSON.stringify(fillInParts))}" style="text-align: ${helpers.escapeAttr(block.schema.align)};">
         ${html}
       </div>
     `;

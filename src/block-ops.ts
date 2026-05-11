@@ -18,7 +18,7 @@ import { recordHistory } from './history';
 import { getDocumentComponentDefaultCss } from './document-component-defaults';
 import { resetDbTableViewState } from './plugins/db-table';
 import { handleInlineCheckboxBackspace } from './editor/inline-checkbox';
-import { TEXT_FILL_IN_MARKER, applyTextFillInValueAtIndex, hasTextFillInMarker } from './text-fill-in';
+import { TEXT_FILL_IN_MARKER, hasTextFillInMarker } from './text-fill-in';
 
 export function findBlockByIds(sectionKey: string, blockId: string): VisualBlock | null {
   const sqliteRowComponentBlock = findSqliteRowComponentBlock(sectionKey, blockId);
@@ -205,8 +205,7 @@ export function handleBlockFieldInput(target: HTMLElement): boolean {
   }
 
   if (field === 'text-fill-in-value') {
-    const fillIndex = Number.parseInt(target.dataset.fillIndex ?? '0', 10);
-    block.text = applyTextFillInValueAtIndex(block.text, Number.isFinite(fillIndex) ? fillIndex : 0, target.textContent ?? '');
+    block.text = buildTextFromFillInEditor(target);
     block.schema.fillIn = hasTextFillInMarker(block.text);
     syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
     getRefreshReaderPanels()();
@@ -430,6 +429,33 @@ export function handleBlockFieldInput(target: HTMLElement): boolean {
   }
 
   return false;
+}
+
+function buildTextFromFillInEditor(target: HTMLElement): string {
+  const editor = target.closest<HTMLElement>('.text-fill-in-editor');
+  if (!editor) {
+    return target.textContent ?? '';
+  }
+  let parts: string[];
+  try {
+    const parsed = JSON.parse(editor.dataset.fillParts ?? '[]') as unknown;
+    parts = Array.isArray(parsed) && parsed.every((part) => typeof part === 'string') ? parsed : [];
+  } catch {
+    parts = [];
+  }
+  const fillIns = Array.from(editor.querySelectorAll<HTMLElement>('[data-field="text-fill-in-value"]'));
+  if (parts.length !== fillIns.length + 1) {
+    return target.textContent ?? '';
+  }
+  return parts
+    .map((part, index) => {
+      if (index >= fillIns.length) {
+        return part;
+      }
+      const value = fillIns[index]?.textContent ?? '';
+      return `${part}${value.length > 0 ? value : TEXT_FILL_IN_MARKER}`;
+    })
+    .join('');
 }
 
 function getInlineEditableMarkdown(target: HTMLElement): string {

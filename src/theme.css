@@ -461,7 +461,7 @@
 
 .theme-modal .theme-color-row {
   display: grid;
-  grid-template-columns: minmax(12rem, 1.2fr) auto minmax(12rem, 1fr) minmax(6.4rem, auto);
+  grid-template-columns: minmax(12rem, 1.2fr) auto minmax(12rem, 1fr) minmax(8rem, 0.75fr) minmax(6.4rem, auto);
   align-items: center;
   gap: 0.5rem;
   padding: 0.45rem 0.55rem;
@@ -511,6 +511,29 @@
   height: 2.1rem;
   padding: 0.18rem;
   border-radius: 8px;
+}
+
+.theme-modal .theme-alpha-control {
+  display: grid;
+  grid-template-columns: auto minmax(4.5rem, 1fr) 2.2rem;
+  align-items: center;
+  gap: 0.34rem;
+  margin: 0;
+  color: var(--hvy-text-alt);
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.theme-modal .theme-alpha-control input {
+  width: 100%;
+  min-height: 1.65rem;
+  accent-color: var(--hvy-button-bg);
+}
+
+.theme-modal .theme-alpha-control output {
+  color: var(--hvy-text);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
 }
 
 .theme-modal .theme-color-name {
@@ -579,7 +602,8 @@
   }
 
   .theme-modal .theme-color-value,
-  .theme-modal .theme-color-name {
+  .theme-modal .theme-color-name,
+  .theme-modal .theme-alpha-control {
     grid-column: 1 / -1;
   }
 

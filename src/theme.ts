@@ -288,3 +288,55 @@ export function colorValueToPickerHex(value: string): string {
   }
   return '#000000';
 }
+
+export function colorValueToAlpha(value: string): number {
+  const alpha = extractCssAlpha(value);
+  return alpha === null ? 1 : alpha;
+}
+
+export function mergeAlphaIntoCssColor(value: string, alpha: number): string {
+  const clampedAlpha = Math.max(0, Math.min(1, alpha));
+  const rgb = parseCssRgb(value) ?? parseHexRgb(colorValueToPickerHex(value));
+  if (!rgb) {
+    return value;
+  }
+  if (clampedAlpha >= 1) {
+    return `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})`;
+  }
+  return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${formatAlpha(clampedAlpha)})`;
+}
+
+function extractCssAlpha(value: string): number | null {
+  const match = value.trim().match(/^rgba?\(\s*(?:\d{1,3})\s*[,\s]\s*(?:\d{1,3})\s*[,\s]\s*(?:\d{1,3})(?:\s*[,/]\s*([\d.]+)\s*)\)$/i);
+  if (!match?.[1]) {
+    return null;
+  }
+  const alpha = Number.parseFloat(match[1]);
+  return Number.isFinite(alpha) ? Math.max(0, Math.min(1, alpha)) : null;
+}
+
+function parseCssRgb(value: string): { r: number; g: number; b: number } | null {
+  const match = value.trim().match(/^rgba?\(\s*(\d{1,3})\s*[,\s]\s*(\d{1,3})\s*[,\s]\s*(\d{1,3})(?:\s*[,/]\s*[\d.]+\s*)?\)$/i);
+  if (!match) {
+    return null;
+  }
+  const [r, g, b] = match.slice(1, 4).map((part) => Math.max(0, Math.min(255, Number.parseInt(part, 10))));
+  return { r, g, b };
+}
+
+function parseHexRgb(value: string): { r: number; g: number; b: number } | null {
+  const match = value.trim().match(/^#([0-9a-f]{6})$/i);
+  if (!match) {
+    return null;
+  }
+  const hex = match[1];
+  return {
+    r: Number.parseInt(hex.slice(0, 2), 16),
+    g: Number.parseInt(hex.slice(2, 4), 16),
+    b: Number.parseInt(hex.slice(4, 6), 16),
+  };
+}
+
+function formatAlpha(alpha: number): string {
+  return alpha.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
+}

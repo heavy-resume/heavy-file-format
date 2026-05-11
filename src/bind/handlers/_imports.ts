@@ -1,6 +1,6 @@
 export { state, appEventsBound, setAppEventsBound, shortcutsBound, setShortcutsBound, setDraggedSectionKey, setDraggedTableItem, draggedSectionKey, draggedTableItem, incrementInputEventCount, getRenderApp, getRefreshReaderPanels } from '../../state';
 export { commitTagEditorDraft, handleRemoveTag, handleTagEditorInput, handleTagEditorKeydown } from '../../editor/tag-editor';
-export { getThemeConfig, applyTheme, writeThemeConfig, colorValueToPickerHex, getResolvedThemeColor, getThemeResetColor } from '../../theme';
+export { getThemeConfig, applyTheme, writeThemeConfig, colorValueToAlpha, colorValueToPickerHex, getResolvedThemeColor, getThemeResetColor, mergeAlphaIntoCssColor } from '../../theme';
 export { findSectionByKey, getSectionId, isDefaultUntitledSectionTitle, moveSectionRelative, moveSectionByOffset, removeSectionByKey, findBlockContainerById, findBlockContainerInList, makeBlockSubsection, removeSubsection } from '../../section-ops';
 export { getComponentDefs, getSectionDefs, getReusableNameFromSectionKey, isBuiltinComponent } from '../../component-defs';
 export { findBlockByIds, resolveBlockContext, handleBlockFieldInput, commitInlineTableEdit, setActiveEditorBlock, clearActiveEditorBlock, deactivateEditorBlock, cancelEditorBlockEdit, applyRichAction, completePendingRichAnnotation, handleRichEditorClick, handleRichEditorKeydown, handleRichEditorBeforeInput, refreshRichToolbarState, moveBlockByOffset, getTagState, setTagState, getTagRenderOptions, removeBlockFromList, findBlockInList } from '../../block-ops';

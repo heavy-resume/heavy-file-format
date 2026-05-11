@@ -1,4 +1,4 @@
-import { state, getRefreshReaderPanels, getThemeConfig, applyTheme, writeThemeConfig, colorValueToPickerHex, getThemeResetColor, getComponentDefs, getSectionDefs, resolveBlockContext, recordHistory, persistChatSettings, getRawEditorDiagnostics } from './_imports';
+import { state, getRefreshReaderPanels, getThemeConfig, applyTheme, writeThemeConfig, colorValueToAlpha, colorValueToPickerHex, getThemeResetColor, mergeAlphaIntoCssColor, getComponentDefs, getSectionDefs, resolveBlockContext, recordHistory, persistChatSettings, getRawEditorDiagnostics } from './_imports';
 import { applyThemeModalFilter } from '../../theme-modal-filter';
 
 export function bindInputBlock(app: HTMLElement): void {
@@ -113,6 +113,7 @@ export function bindInputBlock(app: HTMLElement): void {
       if (valueInput) {
         valueInput.value = nextValue;
       }
+      syncThemeAlphaControl(row, nextValue);
       markThemeRowOverridden(row, name, resetValue);
       return;
     }
@@ -136,6 +137,28 @@ export function bindInputBlock(app: HTMLElement): void {
       if (pickerInput) {
         pickerInput.value = colorValueToPickerHex(target.value);
       }
+      syncThemeAlphaControl(row, target.value);
+      markThemeRowOverridden(row, name, resetValue);
+      return;
+    }
+
+    if (field === 'theme-color-alpha' && target instanceof HTMLInputElement) {
+      const name = target.dataset.colorName ?? '';
+      if (!name) return;
+      recordHistory(`meta:theme-color:${name}:alpha`);
+      const resetValue = getThemeResetColor(name);
+      const row = target.closest<HTMLElement>('.theme-color-row');
+      const valueInput = row?.querySelector<HTMLInputElement>('.theme-color-value');
+      const currentValue = valueInput?.value ?? getThemeConfig().colors[name] ?? '';
+      const nextValue = mergeAlphaIntoCssColor(currentValue, Number.parseFloat(target.value));
+      const theme = getThemeConfig();
+      theme.colors[name] = nextValue;
+      writeThemeConfig(theme);
+      applyTheme();
+      if (valueInput) {
+        valueInput.value = nextValue;
+      }
+      syncThemeAlphaControl(row, nextValue);
       markThemeRowOverridden(row, name, resetValue);
       return;
     }
@@ -321,6 +344,20 @@ function markThemeRowOverridden(row: HTMLElement | null | undefined, name: strin
     <button type="button" class="ghost theme-color-action" data-action="theme-reset-color" data-color-name="${escapeAttr(name)}" title="Reset to default">Reset</button>
     <span class="theme-color-reset-swatch" style="${resetValue ? `background: ${escapeAttr(resetValue)};` : ''}" title="${escapeAttr(`Reset value: ${resetValue}`)}" aria-hidden="true"></span>
   </span>`;
+}
+
+function syncThemeAlphaControl(row: HTMLElement | null | undefined, value: string): void {
+  if (!row) return;
+  const alpha = colorValueToAlpha(value);
+  const alphaInput = row.querySelector<HTMLInputElement>('[data-field="theme-color-alpha"]');
+  const alphaOutput = row.querySelector<HTMLOutputElement>('.theme-alpha-control output');
+  if (alphaInput) {
+    alphaInput.value = String(alpha);
+  }
+  if (alphaOutput) {
+    alphaOutput.value = String(Math.round(alpha * 100));
+    alphaOutput.textContent = alphaOutput.value;
+  }
 }
 
 function escapeAttr(value: string): string {

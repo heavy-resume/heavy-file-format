@@ -13,7 +13,7 @@ import { renderXrefCardReader } from '../editor/components/xref-card/xref-card';
 import type { ComponentRenderHelpers } from '../editor/component-helpers';
 import type { BlockSchema, VisualBlock, VisualSection } from '../editor/types';
 import { renderTagEditor } from '../editor/tag-editor';
-import { colorValueToPickerHex, getResolvedThemeColor, getThemeColorLabel, getThemeResetColor, THEME_COLOR_NAMES } from '../theme';
+import { colorValueToAlpha, colorValueToPickerHex, getResolvedThemeColor, getThemeColorLabel, getThemeResetColor, THEME_COLOR_NAMES } from '../theme';
 import type { ThemeConfig } from '../theme';
 import { getMatchedPaletteId, HVY_PALETTES } from '../palettes/palette-registry';
 import type { DbTableQueryModalState, ReaderViewFilter, ReusableSaveModalState, SqliteRowComponentModalState, VisualDocument } from '../types';
@@ -863,6 +863,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       const value = isOverridden ? theme.colors[name] : getResolvedThemeColor(name);
       const resetValue = isOverridden ? getThemeResetColor(name) : '';
       const pickerValue = colorValueToPickerHex(value);
+      const alphaValue = colorValueToAlpha(value);
       return `
         <div class="theme-color-row${isOverridden ? ' theme-color-row--override' : ''}" data-theme-color-name="${deps.escapeAttr(name)}" data-theme-search="${deps.escapeAttr(`${name} ${getThemeColorLabel(name)} ${value}`)}">
           <div class="theme-color-meta">
@@ -885,6 +886,20 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
             placeholder="CSS color"
             aria-label="${deps.escapeAttr(getThemeColorLabel(name))} color value"
           />
+          <label class="theme-alpha-control" title="Alpha">
+            <span>A</span>
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.01"
+              data-field="theme-color-alpha"
+              data-color-name="${deps.escapeAttr(name)}"
+              value="${deps.escapeAttr(String(alphaValue))}"
+              aria-label="${deps.escapeAttr(getThemeColorLabel(name))} alpha"
+            />
+            <output>${deps.escapeHtml(String(Math.round(alphaValue * 100)))}</output>
+          </label>
           ${isOverridden
             ? `<span class="theme-color-reset-group">
                 <button type="button" class="ghost theme-color-action" data-action="theme-reset-color" data-color-name="${deps.escapeAttr(name)}" title="Reset to default">Reset</button>

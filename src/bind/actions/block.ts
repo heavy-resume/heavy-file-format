@@ -12,6 +12,8 @@ import { prepareTextFillIn, removeTextFillInMarkers } from '../../text-fill-in';
 import type { ActionHandler } from './types';
 import type { GridItem, VisualBlock } from '../../editor/types';
 
+type ComponentPlacementContainer = 'section' | 'grid' | 'container' | 'component-list' | 'expandable-stub' | 'expandable-content';
+
 const addBlock: ActionHandler = ({ actionButton, section }) => {
   const insertPlacement = actionButton.dataset.insertPlacement === 'before' || actionButton.dataset.insertPlacement === 'after'
     ? actionButton.dataset.insertPlacement
@@ -350,12 +352,22 @@ const placeComponent: ActionHandler = ({ actionButton, sectionKey }) => {
   const targetBlockId = actionButton.dataset.targetBlockId ?? '';
   const targetGridItemId = actionButton.dataset.targetGridItemId ?? '';
   const parentBlockId = actionButton.dataset.parentBlockId ?? '';
-  const placementContainer = actionButton.dataset.placementContainer === 'grid' ? 'grid' : 'section';
+  const placementContainer = normalizePlacementContainer(actionButton.dataset.placementContainer);
   const targetPlacement = actionButton.dataset.placement === 'before' || actionButton.dataset.placement === 'after'
     ? actionButton.dataset.placement
     : 'end';
   const gridBlock = placementContainer === 'grid' && parentBlockId ? findBlockByIds(sectionKey, parentBlockId) : null;
   if (placementContainer === 'grid' && (!gridBlock || gridBlock.schema.component !== 'grid')) {
+    state.componentPlacement = null;
+    getRenderApp()();
+    return;
+  }
+  const targetBlockList = placementContainer === 'section'
+    ? targetSection.blocks
+    : placementContainer === 'grid'
+      ? null
+      : getPlacementBlockList(sectionKey, parentBlockId, placementContainer);
+  if (placementContainer !== 'grid' && !targetBlockList) {
     state.componentPlacement = null;
     getRenderApp()();
     return;
@@ -396,9 +408,9 @@ const placeComponent: ActionHandler = ({ actionButton, sectionKey }) => {
     }
     const insertIndex = getGridPlacementInsertIndex(gridBlock.schema.gridItems, targetPlacement, targetGridItemId);
     gridBlock.schema.gridItems.splice(insertIndex, 0, { id: makeId('griditem'), block: placedBlock });
-  } else {
-    const insertIndex = getPlacementInsertIndex(targetSection.blocks, targetPlacement, targetBlockId);
-    targetSection.blocks.splice(insertIndex, 0, placedBlock);
+  } else if (targetBlockList) {
+    const insertIndex = getPlacementInsertIndex(targetBlockList, targetPlacement, targetBlockId);
+    targetBlockList.splice(insertIndex, 0, placedBlock);
   }
   syncReusableTemplateForBlock(sectionKey, placedBlock.id);
   state.componentPlacement = null;
@@ -436,6 +448,40 @@ function getPlacementInsertIndex(blocks: VisualBlock[], placement: 'before' | 'a
     return blocks.length;
   }
   return placement === 'before' ? targetIndex : targetIndex + 1;
+}
+
+function normalizePlacementContainer(value: string | undefined): ComponentPlacementContainer {
+  if (
+    value === 'grid'
+    || value === 'container'
+    || value === 'component-list'
+    || value === 'expandable-stub'
+    || value === 'expandable-content'
+  ) {
+    return value;
+  }
+  return 'section';
+}
+
+function getPlacementBlockList(
+  sectionKey: string,
+  parentBlockId: string,
+  placementContainer: Exclude<ComponentPlacementContainer, 'section' | 'grid'>
+): VisualBlock[] | null {
+  const parentBlock = parentBlockId ? findBlockByIds(sectionKey, parentBlockId) : null;
+  if (!parentBlock || parentBlock.schema.lock) {
+    return null;
+  }
+  if (placementContainer === 'container') {
+    return parentBlock.schema.containerBlocks;
+  }
+  if (placementContainer === 'component-list') {
+    return parentBlock.schema.componentListBlocks;
+  }
+  if (placementContainer === 'expandable-stub') {
+    return parentBlock.schema.expandableStubBlocks.lock ? null : parentBlock.schema.expandableStubBlocks.children;
+  }
+  return parentBlock.schema.expandableContentBlocks.lock ? null : parentBlock.schema.expandableContentBlocks.children;
 }
 
 function getGridPlacementInsertIndex(items: GridItem[], placement: 'before' | 'after' | 'end', targetGridItemId: string): number {

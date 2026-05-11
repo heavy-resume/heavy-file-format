@@ -14,7 +14,10 @@ export const renderComponentListEditor: ComponentEditorRenderer = (sectionKey, b
   const editorBlocks = editorResolved.kind === 'items'
     ? editorResolved.blocks
     : [...editorResolved.groups.flatMap((group) => group.blocks), ...editorResolved.missingBlocks];
+  const editorBlockList = renderComponentListPlacementBlockList(sectionKey, block, editorBlocks, helpers);
+  const placementMode = editorBlockList.length > 0 && editorBlockList.includes('component-placement-target');
   const addControl = block.schema.lock
+    || placementMode
     ? ''
     : `<article class="ghost-section-card add-ghost component-list-add-ghost" data-action="add-component-list-item" data-section-key="${helpers.escapeAttr(
         sectionKey
@@ -37,11 +40,50 @@ export const renderComponentListEditor: ComponentEditorRenderer = (sectionKey, b
     }
     ${renderComponentListDefaultDisplayEditor(sectionKey, block, helpers)}
     <div class="container-inner-blocks">
-      ${editorBlocks.map((innerBlock) => helpers.renderEditorBlock(sectionKey, innerBlock, block.schema.lock)).join('')}
+      ${editorBlockList}
     </div>
     ${addControl}
   `;
 };
+
+function renderComponentListPlacementBlockList(
+  sectionKey: string,
+  block: VisualBlock,
+  blocks: VisualBlock[],
+  helpers: Parameters<ComponentEditorRenderer>[2]
+): string {
+  const output: string[] = [];
+  if (!block.schema.lock && blocks.length > 0) {
+    output.push(helpers.renderComponentPlacementTarget({
+      container: 'component-list',
+      sectionKey,
+      parentBlockId: block.id,
+      placement: 'before',
+      targetBlockId: blocks[0]?.id,
+    }));
+  }
+  for (const innerBlock of blocks) {
+    output.push(helpers.renderEditorBlock(sectionKey, innerBlock, block.schema.lock));
+    if (!block.schema.lock) {
+      output.push(helpers.renderComponentPlacementTarget({
+        container: 'component-list',
+        sectionKey,
+        parentBlockId: block.id,
+        placement: 'after',
+        targetBlockId: innerBlock.id,
+      }));
+    }
+  }
+  if (!block.schema.lock && blocks.length === 0) {
+    output.push(helpers.renderComponentPlacementTarget({
+      container: 'component-list',
+      sectionKey,
+      parentBlockId: block.id,
+      placement: 'end',
+    }));
+  }
+  return output.join('');
+}
 
 export const renderComponentListReader: ComponentReaderRenderer = (section, block, helpers) => {
   helpers.ensureComponentListBlocks(block);

@@ -57,7 +57,7 @@ export interface AddComponentPickerOptions {
 }
 
 export interface ComponentPlacementTargetOptions {
-  container: 'section' | 'grid';
+  container: 'section' | 'grid' | 'container' | 'component-list' | 'expandable-stub' | 'expandable-content';
   sectionKey: string;
   placement: 'before' | 'after' | 'end';
   targetBlockId?: string;

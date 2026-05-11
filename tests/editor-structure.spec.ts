@@ -1724,6 +1724,50 @@ hvy_version: 0.1
   expect(raw.indexOf('One')).toBeLessThan(raw.indexOf('Two'));
 });
 
+test('component placement supports expandable stub and content children', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ <!--hvy:expandable {"id":"skill","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+
+  <!--hvy:expandable:stub {}-->
+
+   <!--hvy:text {"id":"name"}-->
+    Skill name
+
+  <!--hvy:expandable:content {}-->
+
+   <!--hvy:text {"id":"details"}-->
+    Skill details
+
+   <!--hvy:text {"id":"notes"}-->
+    Skill notes
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('.editor-block-passive', { hasText: 'Skill name' }).first().click();
+  await page.locator('[data-action="toggle-expandable-editor-panel"][data-expandable-panel="expanded"]').first().click();
+  await page.locator('.editor-block-passive', { hasText: 'Skill details' }).click();
+  await page.locator('.editor-block[data-active-editor-block="true"] [data-action="start-component-copy"]').click();
+
+  await expect(page.locator('[data-placement-container="expandable-stub"]')).toHaveCount(2);
+  await expect(page.locator('[data-placement-container="expandable-content"]')).toHaveCount(3);
+  await page.locator('[data-placement-container="expandable-content"][data-placement="after"]').first().click();
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  const raw = await page.locator('#rawEditor').inputValue();
+  expect(raw.match(/Skill details/g)).toHaveLength(2);
+  expect(raw.indexOf('Skill details')).toBeLessThan(raw.indexOf('Skill notes'));
+});
+
 test('move arrows only render when there is an adjacent target', async ({ page }) => {
   await page.goto('/');
 

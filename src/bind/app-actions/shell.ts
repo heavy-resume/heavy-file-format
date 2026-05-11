@@ -21,6 +21,11 @@ const redo: AppActionHandler = () => {
 const switchView: AppActionHandler = ({ actionButton }) => {
   const requestedView = actionButton.dataset.view;
   const view = requestedView === 'viewer' ? 'viewer' : requestedView === 'ai' ? 'ai' : 'editor';
+  const nextEditorMode = requestedView === 'cli'
+    ? 'cli'
+    : requestedView === 'editor' && state.editorMode === 'cli'
+    ? 'basic'
+    : state.editorMode;
   const crossingChatModeBoundary = (state.currentView === 'viewer') !== (view === 'viewer');
   const crossingEditorBoundary = (state.currentView === 'editor') !== (view === 'editor');
   if (crossingChatModeBoundary) {
@@ -32,10 +37,15 @@ const switchView: AppActionHandler = ({ actionButton }) => {
     state.componentPlacement = null;
   }
   state.currentView = view;
+  state.editorMode = nextEditorMode;
+  state.showAdvancedEditor = state.editorMode === 'advanced';
   if (view !== 'ai') {
     closeAiEditPopover();
   }
   getRenderApp()();
+  if (state.editorMode === 'cli') {
+    restoreCliViewAfterRender();
+  }
 };
 
 function commitActiveEditorSession(): void {

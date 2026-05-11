@@ -558,7 +558,15 @@ async function commandDbTable(document: VisualDocument, args: string[]): Promise
 function commandLs(ctx: HvyCliCommandContext, args: string[]): string {
   const recursive = args.some((arg) => arg === '-R' || arg === '--recursive');
   const warnings = warnUnknownOptions('ls', args, ['-R', '--recursive']);
-  const target = resolveVirtualPath(ctx.fs, ctx.cwd, args.find((arg) => !arg.startsWith('-')) ?? '.');
+  const rawTarget = args.find((arg) => !arg.startsWith('-')) ?? '.';
+  const target = resolveVirtualPath(ctx.fs, ctx.cwd, rawTarget);
+  if (hasGlobPattern(rawTarget)) {
+    const matches = expandVirtualPathGlob(ctx.fs, target);
+    if (matches.length === 0) {
+      throw new Error(formatMissingPathMessage(ctx.fs, ctx.cwd, target, `ls: no such file or directory: ${target}`));
+    }
+    return withWarnings(matches.map((entry) => formatEntry(ctx.fs, entry)).join('\n'), warnings);
+  }
   const entry = ctx.fs.entries.get(target);
   if (!entry) {
     throw new Error(formatMissingPathMessage(ctx.fs, ctx.cwd, target, `ls: no such file or directory: ${target}`));
@@ -583,6 +591,22 @@ function commandLs(ctx: HvyCliCommandContext, args: string[]): string {
     ].filter((part) => part.trim().length > 0).join('\n\n'),
     warnings
   );
+}
+
+function hasGlobPattern(path: string): boolean {
+  return path.includes('*') || path.includes('?');
+}
+
+function expandVirtualPathGlob(fs: ReturnType<typeof buildHvyVirtualFileSystem>, normalizedPattern: string): HvyVirtualEntry[] {
+  const regex = globToPathRegExp(normalizedPattern);
+  return [...fs.entries.values()]
+    .filter((entry) => regex.test(entry.path))
+    .sort((left, right) => left.path.localeCompare(right.path));
+}
+
+function globToPathRegExp(glob: string): RegExp {
+  const escaped = glob.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '[^/]*').replace(/\?/g, '[^/]');
+  return new RegExp(`^${escaped}$`);
 }
 
 function formatLsTargetDescription(ctx: HvyCliCommandContext, directoryPath: string): string {
@@ -1142,14 +1166,29 @@ function commandHvyPreview(ctx: HvyCliCommandContext, args: string[]): string {
 function componentDirectoryForReadableTarget(ctx: HvyCliCommandContext, path: string, readablePath?: string): string {
   const normalized = resolveVirtualPath(ctx.fs, ctx.cwd, path);
   const entry = ctx.fs.entries.get(normalized);
-  if (entry?.kind === 'dir' && inferComponentNameForDirectory(ctx.fs, normalized)) {
-    return normalized;
+  if (entry?.kind === 'dir') {
+    return findComponentDirectoryAtOrAbove(ctx.fs, normalized);
   }
   const filePath = readablePath ?? resolveReadablePath(ctx.fs, ctx.cwd, path);
+  const owningComponentDirectory = findComponentDirectoryAtOrAbove(ctx.fs, filePath.replace(/\/[^/]+$/, '') || '/');
+  if (owningComponentDirectory) {
+    return owningComponentDirectory;
+  }
   const parent = filePath.replace(/\/[^/]+$/, '') || '/';
   const componentName = inferComponentNameForDirectory(ctx.fs, parent);
   const fileName = filePath.split('/').pop() ?? '';
   return componentName && fileName === `${componentName}.txt` ? parent : '';
+}
+
+function findComponentDirectoryAtOrAbove(fs: ReturnType<typeof buildHvyVirtualFileSystem>, path: string): string {
+  let current = path;
+  while (current && current !== '/' && current !== '/body' && current !== '/attachments') {
+    if (fs.entries.get(current)?.kind === 'dir' && inferComponentNameForDirectory(fs, current)) {
+      return current;
+    }
+    current = current.replace(/\/[^/]+$/, '') || '/';
+  }
+  return '';
 }
 
 function formatComponentRawPreview(ctx: HvyCliCommandContext, directoryPath: string): string {

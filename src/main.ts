@@ -579,13 +579,14 @@ function renderApp(): void {
   applyTheme();
   themeMs = performance.now() - stepStartedAt;
 
+  const isCliEditor = state.editorMode === 'cli';
   const isEditorView = state.currentView === 'editor';
+  const isEditorTabActive = isEditorView && !isCliEditor;
   const isViewerView = state.currentView === 'viewer';
   const isAiView = state.currentView === 'ai';
   const isAdvancedEditor = state.editorMode === 'advanced';
   const isMobileAdjustmentEditor = state.editorMode === 'mobile-adjustment';
   const isRawEditor = state.editorMode === 'raw';
-  const isCliEditor = state.editorMode === 'cli';
   const isDocumentMetaView = isEditorView && isAdvancedEditor && state.metaPanelOpen;
   const canPreviewSurface = !isEditorView || (!isRawEditor && !isCliEditor);
 
@@ -619,9 +620,10 @@ function renderApp(): void {
         <div class="workspace-head">
           <div class="workspace-view-tools">
             <div class="view-tabs" role="tablist" aria-label="Workspace view">
-              <button type="button" class="${isEditorView ? 'secondary' : 'ghost'}" data-action="switch-view" data-view="editor">Editor</button>
+              <button type="button" class="${isEditorTabActive ? 'secondary' : 'ghost'}" data-action="switch-view" data-view="editor">Editor</button>
               <button type="button" class="${isViewerView ? 'secondary' : 'ghost'}" data-action="switch-view" data-view="viewer">Viewer</button>
               <button type="button" class="${isAiView ? 'secondary' : 'ghost'}" data-action="switch-view" data-view="ai">AI</button>
+              <button type="button" class="${isCliEditor ? 'secondary' : 'ghost'}" data-action="switch-view" data-view="cli">CLI</button>
             </div>
             <button type="button" class="palette-open-button ghost" data-action="open-theme-modal">Palettes</button>
           </div>
@@ -634,8 +636,7 @@ function renderApp(): void {
                       ? `<button type="button" class="${state.editorMode === 'basic' ? 'secondary' : 'ghost'}" data-action="set-editor-mode" data-editor-mode="basic">Basic</button>
                   <button type="button" class="${isMobileAdjustmentEditor ? 'secondary' : 'ghost'}" data-action="set-editor-mode" data-editor-mode="mobile-adjustment">Mobile Adjustment</button>
                   <button type="button" class="${isAdvancedEditor ? 'secondary' : 'ghost'}" data-action="set-editor-mode" data-editor-mode="advanced">Advanced</button>
-                  <button type="button" class="${isRawEditor ? 'secondary' : 'ghost'}" data-action="set-editor-mode" data-editor-mode="raw">Raw</button>
-                  <button type="button" class="${isCliEditor ? 'secondary' : 'ghost'}" data-action="set-editor-mode" data-editor-mode="cli">CLI</button>`
+                  <button type="button" class="${isRawEditor ? 'secondary' : 'ghost'}" data-action="set-editor-mode" data-editor-mode="raw">Raw</button>`
                       : ''
                   }
                   ${

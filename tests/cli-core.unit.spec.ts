@@ -103,6 +103,18 @@ test('cli can navigate and read virtual component files', async () => {
   expect((await executeHvyCliCommand(document, session, 'man ls')).output).toContain('stable entries include pipe-delimited descriptions.');
 });
 
+test('cli ls expands virtual path globs', async () => {
+  const document = createResumeCliTestDocument();
+  const session = createHvyCliSession();
+
+  await executeHvyCliCommand(document, session, 'cd /body/tools-technologies/component-list-1/tool-typescript');
+  const result = await executeHvyCliCommand(document, session, 'ls ../tool-python/*.css');
+
+  expect(result.output).toContain('file skill-record.css [w] | skill-record component CSS mirrored from config');
+  expect(result.output).not.toContain('file text.css');
+  expect(result.output).not.toContain('no such file or directory');
+});
+
 test('cli exposes id aliases for sections and components', async () => {
   const document = createResumeCliTestDocument();
   const session = createHvyCliSession();
@@ -731,6 +743,18 @@ test('hvy preview shows short raw fragments and the command used', async () => {
   expect(result.output).toContain('Preview command: hvy preview /body/summary/intro');
   expect(result.output).toContain('Component preview (raw HVY, first 100 lines):');
   expect(result.output).toContain('<!--hvy:text {"id":"intro"}-->');
+});
+
+test('hvy preview accepts structural directories inside a component', async () => {
+  const document = createResumeCliTestDocument();
+  const session = createHvyCliSession();
+
+  const result = await executeHvyCliCommand(document, session, 'hvy preview /body/tools-technologies/component-list-1/tool-typescript/expandable-content');
+
+  expect(result.output).toContain('Preview command: hvy preview /body/tools-technologies/component-list-1/tool-typescript');
+  expect(result.output).toContain('<!--hvy:skill-record');
+  expect(result.output).toContain('#### Description');
+  expect(result.output).toContain('#### Notes');
 });
 
 test('cli supports cat heredoc writes to writable virtual files', async () => {
@@ -2059,7 +2083,7 @@ component_defs:
   expect(result.output).toContain('Components:');
   expect(result.output).toContain('/body\n  /summary tags=[overview, canonical]');
   expect(result.output).toContain('/intro\n      text.txt id=intro tags=[lead-in]');
-  expect(result.output).toMatch(/\/component-list-\d+\n      component-list\.txt id=C\d+\n      \/text-\d+\n        text\.txt id=C\d+/);
+  expect(result.output).toMatch(/\/component-list-\d+\n      component-list\.txt id=C\d+ \| Nested anonymous text\.\.\.\n      \/text-\d+\n        text\.txt id=C\d+ \| Nested anonymous text/);
   expect(result.output).toContain('/typescript-card\n      xref-card.txt id=typescript-card');
   expect(result.output).toMatch(/\/xref-card-\d+\n      xref-card\.txt id=C\d+/);
   expect(result.output).toContain('/library-card\n      skill-card.txt id=library-card');
@@ -2221,7 +2245,7 @@ Milestones
   const result = await executeHvyCliCommand(document, session, 'hvy request_structure --describe');
 
   expect(result.output).toContain('/planning tags=[planning, roadmap] - Roadmap and planning notes.');
-  expect(result.output).toContain('text.txt id=roadmap tags=[quarterly] placeholder="Roadmap details" - Quarterly roadmap notes.');
+  expect(result.output).toContain('text.txt id=roadmap tags=[quarterly] placeholder="Roadmap details" css="margin: 0.5rem 0;" - Quarterly roadmap notes. | Milestones');
 });
 
 test('hvy lint reports core component and plugin issues', async () => {

@@ -215,3 +215,8 @@ dev-traces/
 # Playwright
 playwright-report/
 test-results/
+
+# Local browser smoke harness scratch files
+scratch/browser-smoke.mjs
+scratch/browser-harness.pid
+scratch/browser-harness.log

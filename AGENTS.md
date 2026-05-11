@@ -62,3 +62,5 @@ Make sure stuff isn't losing focus after each keystroke. This is a common, reocc
 If the instructions say "on the mobile layout ..." it really means "on smaller screens or using the phone emulator" and media selectors should always use container, or not use a media selector at all.
 
 When running any sort of tests don't interfere with port 5173 which is the dev server port doing hot reloading.
+
+For ad-hoc browser verification, use the stable browser harness commands instead of one-off `node -e` Playwright scripts or direct `kill` commands. Start the local browser test server with `npm run browser:start`, edit `scratch/browser-smoke.mjs` for the current Playwright scenario, run it with `npm run browser:smoke`, and stop the server with `npm run browser:stop`. The harness uses port 5174 and keeps scratch files ignored so repeated browser tests and stop commands can be approved once.

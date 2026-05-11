@@ -23,6 +23,7 @@ import { highlightSearchHtml } from '../search/highlight';
 import { getDocumentSectionDefaultCss, mergeDocumentCss } from '../document-section-defaults';
 import { sanitizeInlineCss } from '../css-sanitizer';
 import { areTablesEnabled } from '../reference-config';
+import { defaultBlockSchema } from '../document-factory';
 import { parseAttachedComponentBlocks } from '../plugins/db-table';
 import { SCRIPTING_PLUGIN_ID } from '../plugins/registry';
 import { getComponentDefsFromMeta } from '../component-defs';
@@ -502,79 +503,309 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
   function renderThemeModal(): string {
     const theme = state.theme;
     const overrideNames = new Set(Object.keys(theme.colors));
-    const previewItems: Array<{ label: string; detail: string; className: string; variables: string[]; html: string }> = [
+    const helpers = deps.getComponentRenderHelpers();
+    const previewSection: VisualSection = {
+      key: 'theme-preview-section',
+      customId: '',
+      contained: true,
+      lock: true,
+      idEditorOpen: false,
+      isGhost: false,
+      title: 'Theme Preview',
+      level: 1,
+      expanded: true,
+      highlight: false,
+      css: '',
+      tags: '',
+      description: '',
+      location: 'main',
+      blocks: [],
+      children: [],
+    };
+    const makePreviewBlock = (id: string, component: string, text: string, schema: Partial<BlockSchema> = {}): VisualBlock => ({
+      id,
+      text,
+      schema: {
+        ...defaultBlockSchema(component),
+        id,
+        ...schema,
+      },
+      schemaMode: false,
+    });
+    const previewTextBlock = makePreviewBlock('theme-preview-text', 'text', 'Paragraph with *alternate text* and a fill-in.');
+    const previewFillInBlock = makePreviewBlock('theme-preview-fill-in', 'text', 'The answer is [____].', { fillIn: true });
+    const previewXrefTarget = state.documentSections[0] ? `#${deps.getSectionId(state.documentSections[0])}` : '#';
+    const previewXrefBlock = makePreviewBlock('theme-preview-xref', 'xref-card', '', {
+      xrefTitle: 'TypeScript',
+      xrefDetail: 'Primary language',
+      xrefTarget: previewXrefTarget,
+    });
+    const previewInvalidXrefBlock = makePreviewBlock('theme-preview-xref-invalid', 'xref-card', '', {
+      xrefTitle: 'Missing target',
+      xrefDetail: 'Invalid reference',
+      xrefTarget: '#missing-theme-preview-target',
+    });
+    const previewTableBlock = makePreviewBlock('theme-preview-table', 'table', '', {
+      tableColumns: ['Name', 'Role'],
+      tableShowHeader: true,
+      tableRows: [{ cells: ['Ada', 'Engineer'] }, { cells: ['Grace', 'Compiler'] }],
+    });
+    const previewCodeBlock = makePreviewBlock('theme-preview-code', 'code', 'const value = "HVY";', { codeLanguage: 'ts' });
+    const previewContainerBlock = makePreviewBlock('theme-preview-container', 'container', '', {
+      css: 'margin: 0.5rem 0; border: 1px solid var(--hvy-border);',
+      containerTitle: 'Container',
+      containerExpanded: false,
+      containerCollapsedPreviewRem: 3,
+      containerBlocks: [previewTextBlock],
+    });
+    const previewComponentListBlock = makePreviewBlock('theme-preview-component-list', 'component-list', '', {
+      componentListComponent: 'text',
+      componentListBlocks: [
+        makePreviewBlock('theme-preview-list-one', 'text', 'First grouped item', { sortKeys: { order: 1 }, groupKeys: { type: 'Examples' } }),
+        makePreviewBlock('theme-preview-list-two', 'text', 'Second grouped item', { sortKeys: { order: 2 }, groupKeys: { type: 'Examples' } }),
+      ],
+      componentListDefaultSortKey: 'order',
+      componentListDefaultGroupKey: 'type',
+      componentListGroupCollapsedPreviewRem: 3,
+    });
+    const addPreviewAttrs = (html: string, attrs: Record<string, string>): string => {
+      const extraClass = attrs.class;
+      const restAttrs = Object.entries(attrs)
+        .filter(([name]) => name !== 'class')
+        .map(([name, value]) => `${name}="${deps.escapeAttr(value)}"`)
+        .join(' ');
+      return html.replace(/<([a-z][\w:-]*)([^>]*)>/i, (_match, tagName: string, rawAttrs: string) => {
+        const attrsWithClass = extraClass
+          ? /\sclass="/i.test(rawAttrs)
+            ? rawAttrs.replace(/\sclass="([^"]*)"/i, (_classMatch, classValue: string) => ` class="${deps.escapeAttr(`${classValue} ${extraClass}`.trim())}"`)
+            : ` class="${deps.escapeAttr(extraClass)}"${rawAttrs}`
+          : rawAttrs;
+        const joiner = restAttrs ? ' ' : '';
+        return `<${tagName}${attrsWithClass}${joiner}${restAttrs}>`;
+      });
+    };
+    const renderDemoSurface = (html: string, stateName: string, filter: string, className = '') => addPreviewAttrs(html, {
+      class: `theme-demo-target ${className}`.trim(),
+      'data-theme-demo-state': stateName,
+      'data-action': 'theme-filter-to-colors',
+      'data-theme-filter': filter,
+    });
+    const renderDemoWrapper = (html: string, stateName: string, filter: string, className = '') => `
+      <div
+        class="theme-demo-target ${deps.escapeAttr(className)}"
+        data-theme-demo-state="${deps.escapeAttr(stateName)}"
+        data-action="theme-filter-to-colors"
+        data-theme-filter="${deps.escapeAttr(filter)}"
+      >${html}</div>`;
+    const containerPreview = renderDemoSurface(
+      renderContainerReader(previewSection, previewContainerBlock, helpers),
+      'collapsed',
+      '--hvy-surface --hvy-surface-alt --hvy-text-alt'
+    );
+    const componentListPreview = renderDemoWrapper(
+      renderComponentListReader(previewSection, previewComponentListBlock, helpers),
+      'controls',
+      '--hvy-surface-alt --hvy-border-input --hvy-shadow --hvy-text-muted',
+      'theme-demo-component-list'
+    );
+    const componentListHoverPreview = componentListPreview
+      .replace('data-theme-demo-state="controls"', 'data-theme-demo-state="hover"')
+      .replace('--hvy-surface-alt --hvy-border-input --hvy-shadow --hvy-text-muted', '--hvy-xref-card-hover-bg --hvy-border-alt --hvy-text');
+    const textPreview = renderDemoSurface(
+      renderTextReader(previewSection, previewTextBlock, helpers),
+      'rest',
+      '--hvy-text --hvy-text-alt --hvy-text-muted',
+      'theme-demo-rich-text'
+    );
+    const fillInPreview = renderDemoSurface(
+      renderTextReader(previewSection, previewFillInBlock, helpers),
+      'fill-in',
+      '--hvy-text --hvy-text-muted --hvy-focus-ring'
+    );
+    const xrefPreview = renderDemoSurface(
+      renderXrefCardReader(previewSection, previewXrefBlock, helpers),
+      'rest',
+      '--hvy-xref-card-bg --hvy-border --hvy-text --hvy-text-alt --hvy-shadow'
+    );
+    const xrefHoverPreview = renderDemoSurface(
+      renderXrefCardReader(previewSection, previewXrefBlock, helpers),
+      'hover',
+      '--hvy-xref-card-hover-bg --hvy-focus --hvy-shadow-md'
+    );
+    const xrefInvalidPreview = renderDemoSurface(
+      renderXrefCardReader(previewSection, previewInvalidXrefBlock, helpers),
+      'invalid',
+      '--hvy-xref-card-bg --hvy-border-alt --hvy-text-muted'
+    );
+    resetReaderTableStripeSequence();
+    const tablePreview = renderDemoSurface(
+      renderTableReader(previewSection, previewTableBlock, helpers),
+      'header',
+      '--hvy-table-header --hvy-table-row-bg-1 --hvy-table-row-bg-2 --hvy-border-input --hvy-text'
+    );
+    const tableRowOnePreview = tablePreview.replace('data-theme-demo-state="header"', 'data-theme-demo-state="row-1"');
+    const tableRowTwoPreview = tablePreview.replace('data-theme-demo-state="header"', 'data-theme-demo-state="row-2"');
+    const codePreview = renderDemoSurface(
+      renderCodeReader(previewSection, previewCodeBlock, helpers),
+      'block',
+      '--hvy-code-bg --hvy-code-text --hvy-code-muted --hvy-code-string --hvy-code-builtin --hvy-code-keyword --hvy-code-function --hvy-code-number --hvy-border-input'
+    );
+    const codeSyntaxPreview = codePreview.replace('data-theme-demo-state="block"', 'data-theme-demo-state="syntax"');
+    const previewItems: Array<{
+      id: string;
+      label: string;
+      detail: string;
+      className: string;
+      variables: string[];
+      states: Array<{ id: string; label: string; variables: string[] }>;
+      html: string;
+    }> = [
       {
-        label: 'Document Surface',
-        detail: 'Background, cards, and body text',
-        className: 'theme-preview-surface-card',
-        variables: ['--hvy-bg', '--hvy-bg-alt', '--hvy-surface', '--hvy-surface-alt', '--hvy-text', '--hvy-text-alt', '--hvy-border'],
-        html: '<div class="theme-demo-surface"><strong>Section title</strong><span>Readable supporting copy</span></div>',
+        id: 'container',
+        label: 'Container',
+        detail: 'Reader container shell, title, collapsed preview',
+        className: 'theme-preview-container-card',
+        variables: ['--hvy-surface', '--hvy-surface-alt', '--hvy-surface-tint', '--hvy-border', '--hvy-text', '--hvy-text-alt', '--hvy-focus-ring', '--hvy-focus-glow'],
+        states: [
+          { id: 'collapsed', label: 'Collapsed', variables: ['--hvy-surface', '--hvy-surface-alt', '--hvy-text-alt'] },
+          { id: 'target', label: 'Target', variables: ['--hvy-surface', '--hvy-surface-tint', '--hvy-focus-ring', '--hvy-focus-glow'] },
+        ],
+        html: containerPreview,
       },
       {
-        label: 'Buttons',
-        detail: 'Primary action and text contrast',
-        className: 'theme-preview-button-card',
-        variables: ['--hvy-button-bg', '--hvy-button-text', '--hvy-focus', '--hvy-focus-ring'],
-        html: '<span class="theme-demo-button">Apply</span>',
+        id: 'component-list',
+        label: 'Component List',
+        detail: 'Reader sort/group controls and hover state',
+        className: 'theme-preview-component-list-card',
+        variables: ['--hvy-surface', '--hvy-surface-alt', '--hvy-border-input', '--hvy-border-alt', '--hvy-text', '--hvy-text-muted', '--hvy-xref-card-hover-bg', '--hvy-shadow'],
+        states: [
+          { id: 'controls', label: 'Controls', variables: ['--hvy-surface-alt', '--hvy-border-input', '--hvy-shadow', '--hvy-text-muted'] },
+          { id: 'hover', label: 'Hover', variables: ['--hvy-xref-card-hover-bg', '--hvy-border-alt', '--hvy-text'] },
+        ],
+        html: `${componentListPreview}${componentListHoverPreview}`,
       },
       {
-        label: 'Inputs',
-        detail: 'Form fields and editor controls',
-        className: 'theme-preview-input-card',
-        variables: ['--hvy-surface', '--hvy-border-input', '--hvy-text', '--hvy-focus', '--hvy-focus-glow'],
-        html: '<div class="theme-demo-input"><span>Field value</span></div>',
+        id: 'text',
+        label: 'Text',
+        detail: 'Rich text, fill-ins, quotes, and AI target state',
+        className: 'theme-preview-text-card',
+        variables: ['--hvy-text', '--hvy-text-alt', '--hvy-text-muted', '--hvy-surface', '--hvy-surface-alt', '--hvy-surface-tint', '--hvy-border-alt', '--hvy-focus-ring', '--hvy-focus-glow'],
+        states: [
+          { id: 'rest', label: 'Rest', variables: ['--hvy-text', '--hvy-text-alt', '--hvy-text-muted'] },
+          { id: 'fill-in', label: 'Fill-in', variables: ['--hvy-text', '--hvy-text-muted', '--hvy-focus-ring'] },
+          { id: 'target', label: 'Target', variables: ['--hvy-surface', '--hvy-surface-tint', '--hvy-focus-ring', '--hvy-focus-glow'] },
+        ],
+        html: `<div class="theme-demo-text">
+          ${textPreview}
+          ${fillInPreview}
+          <button type="button" class="theme-demo-target theme-demo-ai-target" data-theme-demo-state="target" data-action="theme-filter-to-colors" data-theme-filter="--hvy-surface --hvy-surface-tint --hvy-focus-ring --hvy-focus-glow" title="Filter to highlighted text target colors">AI target</button>
+        </div>`,
       },
       {
+        id: 'xref',
         label: 'Xref Card',
-        detail: 'Reference card rest and hover colors',
+        detail: 'Reference card rest, invalid, and hover colors',
         className: 'theme-preview-xref-card',
-        variables: ['--hvy-xref-card-bg', '--hvy-xref-card-hover-bg', '--hvy-border', '--hvy-text', '--hvy-text-alt', '--hvy-shadow'],
-        html: '<div class="theme-demo-xref"><strong>TypeScript</strong><span>Primary language</span></div>',
+        variables: ['--hvy-xref-card-bg', '--hvy-xref-card-hover-bg', '--hvy-border', '--hvy-border-alt', '--hvy-focus', '--hvy-text', '--hvy-text-alt', '--hvy-text-muted', '--hvy-shadow', '--hvy-shadow-md'],
+        states: [
+          { id: 'rest', label: 'Rest', variables: ['--hvy-xref-card-bg', '--hvy-border', '--hvy-text', '--hvy-text-alt', '--hvy-shadow'] },
+          { id: 'hover', label: 'Hover', variables: ['--hvy-xref-card-hover-bg', '--hvy-focus', '--hvy-shadow-md'] },
+          { id: 'invalid', label: 'Invalid', variables: ['--hvy-xref-card-bg', '--hvy-border-alt', '--hvy-text-muted'] },
+        ],
+        html: `<div class="theme-demo-xref-stack">${xrefPreview}${xrefHoverPreview}${xrefInvalidPreview}</div>`,
       },
       {
+        id: 'highlights',
         label: 'Highlights',
-        detail: 'Inline marks and xref jump flash',
+        detail: 'Search result and xref jump states',
         className: 'theme-preview-highlight-card',
         variables: ['--hvy-highlight-1', '--hvy-highlight-2', '--hvy-button-bg', '--hvy-surface'],
-        html: '<div class="theme-demo-highlight"><span>Filtered match</span><mark>active result</mark></div>',
+        states: [
+          { id: 'search', label: 'Search', variables: ['--hvy-highlight-1'] },
+          { id: 'active', label: 'Active', variables: ['--hvy-highlight-2'] },
+          { id: 'jump', label: 'Xref Jump', variables: ['--hvy-button-bg', '--hvy-surface'] },
+        ],
+        html: `<div class="theme-demo-highlight">
+          <button type="button" class="theme-demo-target" data-theme-demo-state="search" data-action="theme-filter-to-colors" data-theme-filter="--hvy-highlight-1" title="Filter to inline highlight colors">Filtered match</button>
+          <button type="button" class="theme-demo-target theme-demo-highlight-active" data-theme-demo-state="active" data-action="theme-filter-to-colors" data-theme-filter="--hvy-highlight-2" title="Filter to active search result colors">active result</button>
+          <button type="button" class="theme-demo-target theme-demo-highlight-jump" data-theme-demo-state="jump" data-action="theme-filter-to-colors" data-theme-filter="--hvy-button-bg --hvy-surface" title="Filter to xref jump flash colors">xref jump</button>
+        </div>`,
       },
       {
+        id: 'table',
         label: 'Table',
         detail: 'Header and alternating rows',
         className: 'theme-preview-table-card',
         variables: ['--hvy-table-header', '--hvy-table-row-bg-1', '--hvy-table-row-bg-2', '--hvy-border-input', '--hvy-text'],
-        html: '<div class="theme-demo-table"><span>Header</span><span>Row one</span><span>Row two</span></div>',
+        states: [
+          { id: 'header', label: 'Header', variables: ['--hvy-table-header', '--hvy-text', '--hvy-border-input'] },
+          { id: 'row-1', label: 'Row 1', variables: ['--hvy-table-row-bg-1', '--hvy-text', '--hvy-border-input'] },
+          { id: 'row-2', label: 'Row 2', variables: ['--hvy-table-row-bg-2', '--hvy-text', '--hvy-border-input'] },
+        ],
+        html: `<div class="theme-demo-table-stack">${tablePreview}${tableRowOnePreview}${tableRowTwoPreview}</div>`,
       },
       {
-        label: 'Status',
-        detail: 'Warning, success, and danger states',
-        className: 'theme-preview-status-card',
-        variables: ['--hvy-warning', '--hvy-warning-bg', '--hvy-warning-border', '--hvy-warning-text', '--hvy-success', '--hvy-success-bg', '--hvy-success-border', '--hvy-danger'],
-        html: '<div class="theme-demo-status"><span>Warning</span><span>Success</span><span>Danger</span></div>',
+        id: 'diagnostics',
+        label: 'Diagnostics',
+        detail: 'Reader warnings and raw editor errors',
+        className: 'theme-preview-diagnostics-card',
+        variables: ['--hvy-warning-bg', '--hvy-warning-border', '--hvy-warning-text', '--hvy-danger', '--hvy-surface', '--hvy-border', '--hvy-text-alt'],
+        states: [
+          { id: 'warning', label: 'Warning', variables: ['--hvy-warning-bg', '--hvy-warning-border', '--hvy-warning-text'] },
+          { id: 'error', label: 'Error', variables: ['--hvy-danger', '--hvy-surface', '--hvy-border'] },
+        ],
+        html: `<div class="theme-demo-diagnostics">
+          <button type="button" class="theme-demo-target theme-demo-warning" data-theme-demo-state="warning" data-action="theme-filter-to-colors" data-theme-filter="--hvy-warning-bg --hvy-warning-border --hvy-warning-text" title="Filter to reader warning colors">Warning</button>
+          <button type="button" class="theme-demo-target theme-demo-error" data-theme-demo-state="error" data-action="theme-filter-to-colors" data-theme-filter="--hvy-danger --hvy-surface --hvy-border" title="Filter to raw editor error colors">Error</button>
+        </div>`,
       },
       {
+        id: 'code',
         label: 'Code',
-        detail: 'Code block and syntax colors',
+        detail: 'Text code block and syntax colors',
         className: 'theme-preview-code-card',
         variables: ['--hvy-code-bg', '--hvy-code-text', '--hvy-code-muted', '--hvy-code-string', '--hvy-code-builtin', '--hvy-code-keyword', '--hvy-code-function', '--hvy-code-number'],
-        html: '<code class="theme-demo-code"><span>const</span> value = <b>"HVY"</b></code>',
+        states: [
+          { id: 'block', label: 'Block', variables: ['--hvy-code-bg', '--hvy-code-text', '--hvy-code-muted', '--hvy-border-input'] },
+          { id: 'syntax', label: 'Syntax', variables: ['--hvy-code-string', '--hvy-code-builtin', '--hvy-code-keyword', '--hvy-code-function', '--hvy-code-number'] },
+        ],
+        html: `${codePreview}${codeSyntaxPreview}`,
       },
     ];
-    const previewCards = previewItems.map((item) => {
+    const previewPicker = previewItems.map((item, index) => `<button
+      type="button"
+      class="theme-component-picker-button${index === 0 ? ' is-active' : ''}"
+      data-action="theme-preview-select-component"
+      data-theme-component="${deps.escapeAttr(item.id)}"
+    >${deps.escapeHtml(item.label)}</button>`).join('');
+    const previewCards = previewItems.map((item, index) => {
       const filter = item.variables.join(' ');
-      return `<button
+      const stateButtons = item.states.map((previewState, stateIndex) => `<button
         type="button"
-        class="theme-preview-card ${deps.escapeAttr(item.className)}"
-        data-action="theme-filter-to-colors"
-        data-theme-filter="${deps.escapeAttr(filter)}"
-        title="${deps.escapeAttr(`Filter to ${item.label} colors`)}"
+        class="theme-preview-state-button${stateIndex === 0 ? ' is-active' : ''}"
+        data-action="theme-preview-set-state"
+        data-theme-state="${deps.escapeAttr(previewState.id)}"
+        data-theme-filter="${deps.escapeAttr(previewState.variables.join(' '))}"
+      >${deps.escapeHtml(previewState.label)}</button>`).join('');
+      return `<article
+        class="theme-preview-card ${deps.escapeAttr(item.className)}${index === 0 ? ' is-active' : ''}"
+        data-theme-preview-component="${deps.escapeAttr(item.id)}"
+        data-theme-preview-state="${deps.escapeAttr(item.states[0]?.id ?? 'rest')}"
       >
         <span class="theme-preview-card-copy">
           <strong>${deps.escapeHtml(item.label)}</strong>
           <span>${deps.escapeHtml(item.detail)}</span>
         </span>
+        <span class="theme-preview-state-row">${stateButtons}</span>
         ${item.html}
-      </button>`;
+        <button
+          type="button"
+          class="theme-preview-all"
+          data-action="theme-filter-to-colors"
+          data-theme-filter="${deps.escapeAttr(filter)}"
+          title="${deps.escapeAttr(`Filter to all ${item.label} colors`)}"
+        >All ${deps.escapeHtml(item.label)} colors</button>
+      </article>`;
     }).join('');
     const matchedPaletteId = state.paletteOverrideId ?? getMatchedPaletteId(theme.colors);
     const documentThemeSelected = state.paletteOverrideId === null;
@@ -655,8 +886,8 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
           />
           <span class="theme-color-swatch" style="${value ? `background: ${deps.escapeAttr(value)};` : ''}" aria-hidden="true"></span>
           ${isOverridden
-            ? `<button type="button" class="ghost" data-action="theme-reset-color" data-color-name="${deps.escapeAttr(name)}" title="Reset to default">Reset</button>`
-            : '<span class="theme-color-default muted">default</span>'}
+            ? `<button type="button" class="ghost theme-color-action" data-action="theme-reset-color" data-color-name="${deps.escapeAttr(name)}" title="Reset to default">Reset</button>`
+            : '<span class="theme-color-action theme-color-default muted">default</span>'}
         </div>
       `;
     }).join('');
@@ -697,6 +928,16 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
             Adjust the document theme with a color picker or by typing any valid CSS color value.
             Overrides are saved with the document.
           </p>
+          <div class="theme-palette-grid" aria-label="Theme palettes">
+            ${documentPaletteCard}
+            ${paletteCards}
+          </div>
+          <div class="theme-component-preview-picker" aria-label="Theme component preview picker">
+            ${previewPicker}
+          </div>
+          <div class="theme-preview-grid" aria-label="Theme component preview">
+            ${previewCards}
+          </div>
           <label class="theme-filter-shell">
             <span>Filter Colors</span>
             <input
@@ -707,13 +948,6 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
               spellcheck="false"
             />
           </label>
-          <div class="theme-preview-grid" aria-label="Theme component preview">
-            ${previewCards}
-          </div>
-          <div class="theme-palette-grid" aria-label="Theme palettes">
-            ${documentPaletteCard}
-            ${paletteCards}
-          </div>
           <div class="theme-color-list">
             ${rows}
           </div>

@@ -54,7 +54,31 @@ const themeClearPaletteOverride: AppActionHandler = () => {
   getRenderApp()();
 };
 
-const themeFilterToColors: AppActionHandler = ({ app, actionButton }) => {
+const themeFilterToColors: AppActionHandler = ({ app, actionButton, event }) => {
+  event.preventDefault();
+  setThemeModalFilter(app, actionButton.dataset.themeFilter ?? '');
+};
+
+const themePreviewSelectComponent: AppActionHandler = ({ app, actionButton }) => {
+  const component = actionButton.dataset.themeComponent ?? '';
+  if (!component) return;
+  app.querySelectorAll<HTMLElement>('.theme-component-picker-button').forEach((button) => {
+    button.classList.toggle('is-active', button === actionButton);
+  });
+  app.querySelectorAll<HTMLElement>('[data-theme-preview-component]').forEach((preview) => {
+    preview.classList.toggle('is-active', preview.dataset.themePreviewComponent === component);
+  });
+};
+
+const themePreviewSetState: AppActionHandler = ({ app, actionButton, event }) => {
+  event.preventDefault();
+  const preview = actionButton.closest<HTMLElement>('[data-theme-preview-component]');
+  const stateName = actionButton.dataset.themeState ?? '';
+  if (!preview || !stateName) return;
+  preview.dataset.themePreviewState = stateName;
+  preview.querySelectorAll<HTMLElement>('.theme-preview-state-button').forEach((button) => {
+    button.classList.toggle('is-active', button === actionButton);
+  });
   setThemeModalFilter(app, actionButton.dataset.themeFilter ?? '');
 };
 
@@ -66,4 +90,6 @@ export const themeActions: Record<string, AppActionHandler> = {
   'theme-apply-palette': themeApplyPalette,
   'theme-clear-palette-override': themeClearPaletteOverride,
   'theme-filter-to-colors': themeFilterToColors,
+  'theme-preview-select-component': themePreviewSelectComponent,
+  'theme-preview-set-state': themePreviewSetState,
 };

@@ -249,14 +249,31 @@
   justify-self: start;
 }
 
+.theme-preview-button-card[data-theme-preview-state="hover"] .hvy-button-component {
+  border-color: color-mix(in srgb, var(--hvy-focus) 45%, var(--hvy-border-translucent));
+  background: color-mix(in srgb, var(--hvy-button-hover-bg) 38%, var(--hvy-surface));
+  box-shadow: 0 10px 24px var(--hvy-shadow-md);
+}
+
 .theme-preview-button-card[data-theme-preview-state="hover"] .hvy-button-component-button {
-  border-color: var(--hvy-focus);
-  background: var(--hvy-button-hover-bg);
-  color: var(--hvy-button-hover-text);
+  border-color: var(--hvy-focus) !important;
+  background: var(--hvy-button-hover-bg) !important;
+  color: var(--hvy-button-hover-text) !important;
   box-shadow:
     inset 0 0 0 1px color-mix(in srgb, var(--hvy-focus) 30%, transparent),
     0 8px 18px var(--hvy-shadow-md);
   transform: translateY(-1px);
+}
+
+.theme-modal .theme-preview-button-card[data-theme-preview-state="hover"] .theme-preview-all {
+  border-color: var(--hvy-focus) !important;
+  background: var(--hvy-button-hover-bg) !important;
+  background-color: var(--hvy-button-hover-bg) !important;
+  background-image: none !important;
+  color: var(--hvy-button-hover-text) !important;
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--hvy-focus) 30%, transparent),
+    0 8px 18px var(--hvy-shadow-md);
 }
 
 .theme-demo-input {

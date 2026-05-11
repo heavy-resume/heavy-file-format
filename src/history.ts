@@ -2,6 +2,8 @@ import { state, HISTORY_GROUP_WINDOW_MS, incrementHistorySnapshotCount, incremen
 import { debugMeasure } from './utils';
 import type { VisualDocument } from './types';
 import { saveResumeState } from './state-persistence';
+import { applyTheme } from './theme';
+import { savePaletteOverrideId } from './palettes/palette-preferences';
 
 export function snapshotState(): string {
   return JSON.stringify(
@@ -14,6 +16,7 @@ export function snapshotState(): string {
       rawEditorText: state.rawEditorText,
       rawEditorError: state.rawEditorError,
       rawEditorDiagnostics: state.rawEditorDiagnostics,
+      paletteOverrideId: state.paletteOverrideId,
     },
     null,
     2
@@ -104,6 +107,7 @@ export function recordHistory(group?: string): void {
 
 export function undoState(): void {
   ensureHistoryInitialized();
+  const modalScroll = captureModalScroll();
   const current = snapshotState();
   const last = state.history[state.history.length - 1];
   if (last !== current) {
@@ -125,10 +129,12 @@ export function undoState(): void {
   state.lastHistoryAt = 0;
   state.isRestoring = false;
   getRenderApp()();
+  restoreModalScroll(modalScroll);
 }
 
 export function redoState(): void {
   ensureHistoryInitialized();
+  const modalScroll = captureModalScroll();
   const next = state.future.pop();
   if (!next) {
     return;
@@ -140,6 +146,37 @@ export function redoState(): void {
   state.lastHistoryAt = 0;
   state.isRestoring = false;
   getRenderApp()();
+  restoreModalScroll(modalScroll);
+}
+
+function captureModalScroll(): { selector: string; scrollTop: number } | null {
+  if (typeof document === 'undefined') {
+    return null;
+  }
+  const panel = document.querySelector<HTMLElement>('.modal-panel');
+  if (!panel) {
+    return null;
+  }
+  const selector = panel.classList.contains('theme-modal')
+    ? '.modal-panel.theme-modal'
+    : '.modal-panel';
+  return { selector, scrollTop: panel.scrollTop };
+}
+
+function restoreModalScroll(scroll: { selector: string; scrollTop: number } | null): void {
+  if (!scroll || typeof document === 'undefined') {
+    return;
+  }
+  const restore = () => {
+    const panel = document.querySelector<HTMLElement>(scroll.selector);
+    if (panel) {
+      panel.scrollTop = scroll.scrollTop;
+    }
+  };
+  restore();
+  if (typeof requestAnimationFrame === 'function') {
+    requestAnimationFrame(restore);
+  }
 }
 
 function restoreFromSnapshot(snapshot: string): void {
@@ -153,6 +190,7 @@ function restoreFromSnapshot(snapshot: string): void {
       rawEditorText?: string;
       rawEditorError?: string | null;
       rawEditorDiagnostics?: typeof state.rawEditorDiagnostics;
+      paletteOverrideId?: string | null;
     };
     state.document = parsed.document;
     state.templateValues = parsed.templateValues ?? {};
@@ -162,7 +200,12 @@ function restoreFromSnapshot(snapshot: string): void {
     state.rawEditorText = parsed.rawEditorText ?? '';
     state.rawEditorError = parsed.rawEditorError ?? null;
     state.rawEditorDiagnostics = parsed.rawEditorDiagnostics ?? [];
+    state.paletteOverrideId = parsed.paletteOverrideId ?? null;
+    savePaletteOverrideId(state.paletteOverrideId);
     state.componentPlacement = null;
+    if (typeof document !== 'undefined') {
+      applyTheme();
+    }
   } catch {
     // no-op
   }

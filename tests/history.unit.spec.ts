@@ -116,3 +116,39 @@ test('undo and redo restore grouped raw editor text snapshots', () => {
   redoState();
   expect(state.rawEditorText).toBe('#! Third');
 });
+
+test('undo and redo restore document theme snapshots', () => {
+  initCallbacks({
+    renderApp: () => {},
+    refreshReaderPanels: () => {},
+    refreshModalPreview: () => {},
+    componentRenderHelpers: null,
+    readerRenderer: null,
+  });
+  initState(createHistoryTestState());
+  state.document.meta.theme = { colors: { '--hvy-button-bg': '#111111' } };
+  state.history.push(
+    JSON.stringify({
+      document: state.document,
+      templateValues: state.templateValues,
+      filename: state.filename,
+      editorMode: 'raw',
+      showAdvancedEditor: false,
+      rawEditorText: '#! First',
+      rawEditorError: null,
+      rawEditorDiagnostics: [],
+      paletteOverrideId: 'paper',
+    })
+  );
+
+  state.document.meta.theme = { colors: { '--hvy-button-bg': '#222222' } };
+  state.paletteOverrideId = 'ufo';
+
+  undoState();
+  expect(state.document.meta.theme).toEqual({ colors: { '--hvy-button-bg': '#111111' } });
+  expect(state.paletteOverrideId).toBe('paper');
+
+  redoState();
+  expect(state.document.meta.theme).toEqual({ colors: { '--hvy-button-bg': '#222222' } });
+  expect(state.paletteOverrideId).toBe('ufo');
+});

@@ -1299,9 +1299,9 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
                 data-modal-action="toggle-section-lock"
                 data-section-key="${deps.escapeAttr(section.key)}"
                 aria-pressed="${section.lock ? 'true' : 'false'}"
-                title="${section.lock ? 'Unlock schema' : 'Lock schema'}"
-                aria-label="${section.lock ? 'Unlock schema' : 'Lock schema'}"
-              >${section.lock ? '🔒 Unlock Schema' : '🔓 Lock Schema'}</button>
+                title="${section.lock ? 'Unlock' : 'Lock'}"
+                aria-label="${section.lock ? 'Unlock' : 'Lock'}"
+              >${section.lock ? '🔒 Unlock' : '🔓 Lock'}</button>
               <button type="button" data-modal-action="close">Close</button>
             </div>
           </div>

@@ -1451,6 +1451,10 @@
   gap: 0.35rem;
 }
 
+.tag-pill-list:not(:empty) + .tag-editor-input {
+  margin-left: 0.55rem;
+}
+
 .tag-pill {
   display: inline-flex;
   align-items: center;

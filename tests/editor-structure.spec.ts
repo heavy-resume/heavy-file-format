@@ -823,7 +823,7 @@ hvy_version: 0.1
   await expect(activeBlock.locator('[data-action="remove-block"]')).toHaveCount(0);
 
   await page.locator('.editor-section-head [data-action="focus-modal"]').click();
-  await page.getByRole('button', { name: 'Unlock Schema' }).click();
+  await page.getByRole('button', { name: 'Unlock' }).click();
   await page.getByRole('button', { name: 'Close' }).click();
 
   activeBlock = page.locator('.editor-block[data-active-editor-block="true"]');

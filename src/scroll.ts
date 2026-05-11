@@ -92,38 +92,66 @@ export function scrollPendingEditorActivation(app: HTMLElement): void {
   if (!pending) {
     return;
   }
+  if (pending.immediateFocus) {
+    focusPendingEditorActivation(app, pending);
+    return;
+  }
   window.requestAnimationFrame(() => {
     window.requestAnimationFrame(() => {
-    const current = state.pendingEditorActivation;
-    if (!current || current.sectionKey !== pending.sectionKey || current.blockId !== pending.blockId) {
-      return;
-    }
-    const block = app.querySelector<HTMLElement>(
-      `.editor-block[data-active-editor-block="true"][data-active-block-id="${CSS.escape(pending.blockId)}"]`
-    );
-    const target = block?.querySelector<HTMLElement>(
-      '[contenteditable="true"], textarea, input:not([type="hidden"]), select'
-    ) ?? block;
-    if (!target) {
-      state.pendingEditorActivation = null;
-      return;
-    }
-    if (typeof pending.anchorTop === 'number') {
-      const editorTree = app.querySelector<HTMLDivElement>('.editor-shell .editor-tree');
-      if (editorTree) {
-        state.activeEditorBlockReturnScroll = {
-          ...state.paneScroll,
-          editorTop: editorTree.scrollTop,
-          windowTop: window.scrollY,
-        };
-        const nextTop = target.getBoundingClientRect().top;
-        editorTree.scrollTop += nextTop - pending.anchorTop;
+      const current = state.pendingEditorActivation;
+      if (!current || current.sectionKey !== pending.sectionKey || current.blockId !== pending.blockId) {
+        return;
       }
-    }
-    focusEditorActivationTarget(target, pending.clientX, pending.clientY);
-    state.pendingEditorActivation = null;
+      focusPendingEditorActivation(app, pending);
     });
   });
+}
+
+function focusPendingEditorActivation(
+  app: HTMLElement,
+  pending: NonNullable<typeof state.pendingEditorActivation>
+): void {
+  const block = app.querySelector<HTMLElement>(
+    `.editor-block[data-active-editor-block="true"][data-active-block-id="${CSS.escape(pending.blockId)}"]`
+  );
+  if (!block) {
+    state.pendingEditorActivation = null;
+    return;
+  }
+  const fallbackTarget = block.querySelector<HTMLElement>(
+    '[contenteditable="true"], textarea, input:not([type="hidden"]), select'
+  ) ?? block;
+  if (typeof pending.anchorTop === 'number') {
+    const editorTree = app.querySelector<HTMLDivElement>('.editor-shell .editor-tree');
+    if (editorTree) {
+      state.activeEditorBlockReturnScroll = {
+        ...state.paneScroll,
+        editorTop: editorTree.scrollTop,
+        windowTop: window.scrollY,
+      };
+      const nextTop = fallbackTarget.getBoundingClientRect().top;
+      editorTree.scrollTop += nextTop - pending.anchorTop;
+    }
+  }
+  const target = getEditorActivationTarget(block, fallbackTarget, pending.clientX, pending.clientY);
+  focusEditorActivationTarget(target, pending.clientX, pending.clientY);
+  state.pendingEditorActivation = null;
+}
+
+function getEditorActivationTarget(
+  block: HTMLElement,
+  fallbackTarget: HTMLElement,
+  clientX?: number,
+  clientY?: number
+): HTMLElement {
+  if (typeof clientX !== 'number' || typeof clientY !== 'number') {
+    return fallbackTarget;
+  }
+  const pointed = document.elementFromPoint(clientX, clientY);
+  const pointedEditable = pointed instanceof HTMLElement
+    ? pointed.closest<HTMLElement>('[contenteditable="true"], textarea, input:not([type="hidden"]), select')
+    : null;
+  return pointedEditable && block.contains(pointedEditable) ? pointedEditable : fallbackTarget;
 }
 
 function focusEditorActivationTarget(target: HTMLElement, clientX?: number, clientY?: number): void {

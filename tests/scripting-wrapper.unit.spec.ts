@@ -257,6 +257,25 @@ test('createScriptingRuntime exposes a supplied form API', () => {
   expect(runtime.doc.form.get_options('Food')).toEqual([{ label: 'Soup', value: 'soup' }]);
 });
 
+test('createScriptingRuntime component set_text clears stale fill-in state', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"header"}-->
+#! Header
+
+<!--hvy:text {"id":"pronunciation","placeholder":"pronunciation","fillIn":true}-->
+[<!-- value -->]
+`, '.hvy');
+  const runtime = createScriptingRuntime({ document });
+
+  runtime.doc.component.set_text('pronunciation', '[AY-vuh-ree HART]');
+
+  expect(document.sections[0]?.blocks[0]?.text).toBe('[AY-vuh-ree HART]');
+  expect(document.sections[0]?.blocks[0]?.schema.fillIn).toBe(false);
+});
+
 test('createScriptingRuntime exposes a supplied database API', () => {
   const runtime = createScriptingRuntime({
     document: { meta: {}, extension: '.hvy', sections: [], attachments: [] },

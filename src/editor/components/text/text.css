@@ -8,10 +8,6 @@
   display: block;
 }
 
-.text-fill-in-editor {
-  cursor: text;
-}
-
 .text-editor-shell {
   position: relative;
 }
@@ -384,6 +380,12 @@
   padding: 0.48rem;
   margin-bottom: 0.45rem;
   line-height: 1.4;
+}
+
+.rich-editor.text-fill-in-editor {
+  cursor: text;
+  min-height: 0;
+  padding-block: 0.24rem;
 }
 
 .rich-editor:focus {

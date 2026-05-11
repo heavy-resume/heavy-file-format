@@ -210,6 +210,34 @@ plugins:
   expect(output).not.toContain('"pluginUrl"');
 });
 
+test('round-trips editor-only button fields', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"header","editorOnly":true}-->
+#! Header Tools
+
+<!--hvy:button {"id":"generate-pronunciation-button","editorOnly":true,"buttonLabel":"Generate","buttonAction":"ai-generate","buttonPositionTargetId":"resume-pronunciation","buttonCss":"position: absolute; top: 0.25rem; right: 0.25rem;","buttonInputCharLimit":120,"buttonOutputCharLimit":80,"buttonVisibleScript":"return True","buttonSourceScript":"return doc.component.get_text('resume-name')","buttonPrompt":"Return pronunciation only.","buttonTargetScript":"doc.component.set_text('resume-pronunciation', response)"}-->
+`, '.hvy');
+
+  const section = document.sections[0];
+  const button = section?.blocks[0];
+
+  expect(section?.editorOnly).toBe(true);
+  expect(button?.schema.component).toBe('button');
+  expect(button?.schema.editorOnly).toBe(true);
+  expect(button?.schema.buttonLabel).toBe('Generate');
+  expect(button?.schema.buttonAction).toBe('ai-generate');
+  expect(button?.schema.buttonPositionTargetId).toBe('resume-pronunciation');
+
+  const expectedResult = serializeWithState(document);
+  expect(expectedResult).toContain('<!--hvy: {"id":"header","lock":false,"expanded":true,"highlight":false,"editorOnly":true}-->');
+  expect(expectedResult).toContain('<!--hvy:button {"id":"generate-pronunciation-button","editorOnly":true');
+  expect(expectedResult).toContain('"buttonVisibleScript":"return True"');
+  expect(expectedResult).toContain('"buttonTargetScript":"doc.component.set_text');
+});
+
 test('serializes db-table query text in the plugin block body', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1

@@ -5,6 +5,7 @@ import { chatActions } from './chat';
 import { editorStateActions } from './editor-state';
 import { reusableActions } from './reusable';
 import { searchActions } from './search';
+import { buttonActions } from './button';
 import type { AppActionHandler } from './types';
 
 export const appActionRegistry: Record<string, AppActionHandler> = {
@@ -15,4 +16,5 @@ export const appActionRegistry: Record<string, AppActionHandler> = {
   ...editorStateActions,
   ...reusableActions,
   ...searchActions,
+  ...buttonActions,
 };

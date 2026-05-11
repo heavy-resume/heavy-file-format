@@ -143,6 +143,9 @@ const editContextComponent: AppActionHandler = ({ app, event }) => {
   state.contextMenu = null;
   app.querySelector('.hvy-context-popover')?.remove();
   setActiveEditorBlock(menu.sectionKey, menu.blockId);
+  if (state.pendingEditorActivation) {
+    state.pendingEditorActivation.immediateFocus = true;
+  }
   getRenderApp()();
 };
 

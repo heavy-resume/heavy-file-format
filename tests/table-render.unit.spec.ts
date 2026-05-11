@@ -61,6 +61,7 @@ const section: VisualSection = {
   key: 'section',
   customId: '',
   contained: true,
+  editorOnly: false,
   lock: false,
   idEditorOpen: false,
   isGhost: false,

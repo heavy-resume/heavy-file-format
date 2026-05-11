@@ -1269,6 +1269,7 @@
 .editor-grid input:not([type='checkbox']),
 .editor-grid select,
 .modal-panel input:not([type='checkbox']),
+.editor-block input:not([type='checkbox']),
 .editor-block textarea,
 .modal-panel textarea,
 .component-def input:not([type='checkbox']),
@@ -1553,8 +1554,9 @@
 .component-list-display-editor {
   display: grid;
   gap: 0.65rem;
-  border: 1px solid var(--line);
+  border: 1px solid var(--hvy-border);
   border-radius: 8px;
+  background: var(--hvy-surface-alt);
   padding: 0.65rem;
 }
 

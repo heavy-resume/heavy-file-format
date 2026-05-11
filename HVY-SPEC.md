@@ -207,6 +207,7 @@ Section metadata optionally includes a `blocks` array describing per-block rende
 
 Common block metadata fields include:
 - `component`
+- `editorOnly`
 - `lock`
 - `align`
 - `slot`
@@ -220,6 +221,7 @@ Common block metadata fields include:
 
 `css` is an optional inline CSS style string applied to that block's rendered wrapper. Authoring tools expose this for layout and presentation adjustments such as collapsing spacing between adjacent blocks.
 Inline `css` strings are declaration-only values equivalent to an HTML `style` attribute. They MUST NOT contain selectors, `@media`, `@container`, or other at-rules. Responsive author CSS belongs in fenced HVY CSS blocks.
+`editorOnly` is an optional boolean on sections and blocks. When true, the section or block exists in editor surfaces and document AI editing mode, but MUST NOT be rendered in the viewer, viewer navigation/sidebar, or viewer-oriented reader views/search results. Use it for authoring controls such as generation buttons that should not become part of the finished document.
 `lock` is an optional boolean. Use it to prevent structural additions inside that block, such as nested child blocks or table-column changes.
 `placeholder` is an optional string. Display it as plain hint text when the block's content is empty, helping template authors communicate intent to document authors. It applies to text-based blocks and grid item blocks. It is not parsed as Markdown or HVY content.
 `fillIn` is an optional boolean for text blocks. When true, authoring tools SHOULD treat each `<!-- value -->` marker in the text body as an editable fill-in region in basic editing modes. Text outside the markers is scaffold text and SHOULD NOT be edited by constrained/basic editors. When all markers are filled or removed and no `<!-- value -->` marker remains, tools SHOULD treat the block like regular text again.
@@ -231,6 +233,7 @@ Section metadata also includes optional presentation keys such as:
 - `expanded`
 - `highlight`
 - `lock`
+- `editorOnly`
 - `contained`
 - `css`
 - `location`
@@ -238,6 +241,7 @@ Section metadata also includes optional presentation keys such as:
 `css` is an optional inline CSS style string applied to the rendered section wrapper.
 Inline section `css` follows the same declaration-only rule as block `css`. Use CSS blocks for media queries, container queries, selectors, and other stylesheet-level constructs.
 `lock` is an optional boolean. Use it to prevent adding new blocks or child sections inside that section.
+`editorOnly` follows the same visibility rule as block `editorOnly`.
 `contained` is an optional boolean. When `true` (default), render the section as the normal bordered card/container and allow collapse/expand UI. When `false`, render the section edge-to-edge without the section border/background wrapper and without the section expander/collapser.
 `location` is an optional string. Use it to route a section to a named layout zone in the viewer. Defined values are `"main"` (default) and `"sidebar"`. Unknown values SHOULD be treated as `"main"`.
 
@@ -861,6 +865,25 @@ framework MUST be usable so long as it returns a DOM element.
 
 Plugins SHOULD style themselves using the document's standard CSS theme
 variables. This is convention, not requirement.
+
+When rendering a plugin for editing, hosts SHOULD pass an editor context object
+to the plugin. The editor context MUST include:
+
+- `mode`: `"view"` or `"edit"`.
+- `detailLevel`: a number indicating how much editing UI the host is asking the
+  plugin to show.
+
+The conventional `detailLevel` meanings are:
+
+- `0`: hidden, compact, or out-of-the-way plugin UI. This is reserved for
+  minimized or low-presence editing displays.
+- `1`: basic editing UI. Plugins SHOULD show normal user-facing controls here.
+- `2`: advanced editing UI. Plugins SHOULD show configuration, wiring, scripts,
+  ids, host-action settings, and other expert controls here.
+
+Hosts and plugins SHOULD rely only on levels `0`, `1`, and `2` for now. Other
+numbers are reserved; plugins receiving an unknown level SHOULD fall back to the
+nearest supported behavior.
 
 When a `plugin` component block has no `plugin` value, editors MUST present a
 selector populated from the host's installed plugins and MUST NOT render any

@@ -147,6 +147,32 @@ hvy_version: 0.1
   await expect(toggle).toHaveAttribute('aria-expanded', 'true');
 });
 
+test('ai context edit focuses text before the first keystroke', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ <!--hvy:text {"id":"summary-text"}-->
+  Original
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'AI' }).click();
+
+  await page.locator('#aiReaderDocument .reader-block', { hasText: 'Original' }).click({ button: 'right' });
+  await page.getByRole('button', { name: 'Edit component' }).click();
+  await page.keyboard.type('X');
+
+  const editor = page.locator('#aiReaderDocument [data-field="block-rich"]');
+  await expect(editor).toBeFocused();
+  await expect(editor).toContainText('OriginalX');
+});
+
 test('mobile adjustment hides text formatting and keeps expandable options read-only', async ({ page }) => {
   await page.goto('/');
 
@@ -534,6 +560,45 @@ hvy_version: 0.1
   await expect(page.locator('#rawEditor')).not.toContainText('"fillIn"');
 });
 
+test('text toolbar fill-in uses selected text instead of stale placeholder', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"header"}-->
+#! Header
+
+ <!--hvy:text {"id":"pronunciation","placeholder":"pronunciation"}-->
+  [FILL ME IN]
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('.editor-block-passive', { has: page.locator('#pronunciation') }).click();
+  await page.locator('.rich-editor').evaluate((editable) => {
+    const textNode = document.createTreeWalker(editable, NodeFilter.SHOW_TEXT).nextNode();
+    if (!textNode?.textContent) return;
+    const start = textNode.textContent.indexOf('FILL ME IN');
+    const range = document.createRange();
+    range.setStart(textNode, start);
+    range.setEnd(textNode, start + 'FILL ME IN'.length);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+  });
+  await page.locator('.rich-editor').dispatchEvent('keyup');
+  await page.getByRole('button', { name: 'Convert to Fill-in' }).click();
+
+  await expect(page.locator('[data-field="text-fill-in-value"]')).toBeVisible();
+  await expect(page.locator('[data-field="text-fill-in-value"]')).toHaveAttribute('data-placeholder', 'FILL ME IN');
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await expect(page.locator('#rawEditor')).toContainText('"placeholder":"FILL ME IN"');
+  await expect(page.locator('#rawEditor')).not.toContainText('"placeholder":"pronunciation"');
+});
+
 test('text fill-in preserves multiple slots while typing', async ({ page }) => {
   await page.goto('/');
 
@@ -569,6 +634,94 @@ hvy_version: 0.1
   await expect(page.locator('#rawEditor')).toContainText('**Target Location(s):** Greater Seattle area');
   await expect(page.locator('#rawEditor')).not.toContainText('<!-- value -->');
   await expect(page.locator('#rawEditor')).not.toContainText('"fillIn"');
+});
+
+test('single-line text fill-in keeps a compact editor height', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ <!--hvy:text {"id":"name","placeholder":"name","fillIn":true}-->
+  <!-- value -->
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('.editor-block-passive .editor-block-content[data-component-id="name"] .text-fill-in-box').click();
+
+  const fillInEditorHeight = await page.locator('.text-fill-in-editor').evaluate((node) => node.getBoundingClientRect().height);
+  expect(fillInEditorHeight).toBeLessThan(60);
+});
+
+test('clicking another passive fill-in enters the new fill-in while editing one', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ <!--hvy:text {"id":"first","placeholder":"first","fillIn":true}-->
+  <!-- value -->
+
+ <!--hvy:text {"id":"second","placeholder":"second","fillIn":true}-->
+  <!-- value -->
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('.editor-block-passive .editor-block-content[data-component-id="first"] .text-fill-in-box').click();
+  await expect(page.locator('.editor-block:has(.editor-block-content[data-component-id="first"]) [data-field="text-fill-in-value"]')).toBeFocused();
+  await page.keyboard.type('first value');
+
+  await page.locator('.editor-block-passive .editor-block-content[data-component-id="second"] .text-fill-in-box').click();
+  const secondFillIn = page.locator('.editor-block:has(.editor-block-content[data-component-id="second"]) [data-field="text-fill-in-value"]');
+  await expect(secondFillIn).toBeFocused();
+  await page.keyboard.type('second value');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await expect(page.locator('#rawEditor')).toContainText('first value');
+  await expect(page.locator('#rawEditor')).toContainText('second value');
+});
+
+test('text fill-in enter exits and modifier-enter adds a newline', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"header"}-->
+#! Header
+
+ <!--hvy:text {"id":"pronunciation","placeholder":"pronunciation","fillIn":true}-->
+  [<!-- value -->]
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('.editor-block-passive', { has: page.locator('#pronunciation') }).click();
+  const fillIn = page.locator('[data-field="text-fill-in-value"]');
+  await fillIn.fill('Line one');
+  await fillIn.focus();
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Enter' : 'Control+Enter');
+  await page.keyboard.type('Line two');
+  await expect(fillIn).toContainText(/Line one\s+Line two/);
+  await page.keyboard.press('Enter');
+  await expect(fillIn).not.toBeFocused();
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await expect(page.locator('#rawEditor')).toContainText('Line one\nLine two');
 });
 
 test('cancel restores text edits made after component activation', async ({ page }) => {

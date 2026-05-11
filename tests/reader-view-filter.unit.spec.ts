@@ -55,6 +55,7 @@ function createSection(id: string, blocks: VisualBlock[] = []): VisualSection {
     key: `section-${id}`,
     customId: id,
     contained: true,
+    editorOnly: false,
     lock: false,
     idEditorOpen: false,
     isGhost: false,

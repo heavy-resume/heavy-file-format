@@ -336,7 +336,7 @@
   position: relative;
   border: 1px solid var(--hvy-border-input);
   border-radius: 10px;
-  background: var(--hvy-surface-alt);
+  background: var(--hvy-surface);
   padding: 0.65rem;
   display: grid;
   gap: 0.55rem;

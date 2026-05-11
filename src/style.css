@@ -361,6 +361,7 @@ button.tiny {
 .pane.hvy-preview-frame-phone,
 .pane.hvy-preview-frame-tablet,
 .pane.hvy-preview-frame-desktop {
+  overflow: clip;
   padding: 0;
 }
 

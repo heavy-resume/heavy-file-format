@@ -190,5 +190,6 @@ function cloneContextMenuTarget(target: HTMLElement, rect: NonNullable<typeof st
   clone.style.left = `${rect.left}px`;
   clone.style.top = `${rect.top}px`;
   clone.style.width = `${rect.width}px`;
+  clone.style.margin = '0';
   return clone;
 }

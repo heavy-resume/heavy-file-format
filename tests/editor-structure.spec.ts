@@ -150,6 +150,10 @@ hvy_version: 0.1
   await expect(page.locator('.hvy-context-popover-backdrop-top')).toHaveCSS('backdrop-filter', /blur/);
   await expect(page.locator('.reader-block.is-context-menu-target')).toHaveCSS('visibility', 'hidden');
   await expect(page.locator('.hvy-context-popover-clone')).toBeVisible();
+  const targetBox = await page.locator('.reader-block.is-context-menu-target').boundingBox();
+  const cloneBox = await page.locator('.hvy-context-popover-clone').boundingBox();
+  expect(Math.abs((targetBox?.top ?? 0) - (cloneBox?.top ?? 0))).toBeLessThan(1);
+  expect(Math.abs((targetBox?.left ?? 0) - (cloneBox?.left ?? 0))).toBeLessThan(1);
   await page.locator('.hvy-context-popover-backdrop-target').click({ position: { x: 12, y: 12 } });
   await expect(page.locator('.hvy-context-popover')).toHaveCount(0);
   await page.waitForTimeout(500);

@@ -33,7 +33,7 @@ test('component options include tables when the reference app enables them', () 
 });
 
 test('ai editor double click delay defaults to the reader action delay', () => {
-  expect(getAiEditorDoubleClickDelayMs()).toBe(400);
+  expect(getAiEditorDoubleClickDelayMs()).toBe(300);
 });
 
 test('ai editor double click delay can be tuned by embedded hosts', () => {

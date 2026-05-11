@@ -29,7 +29,7 @@ const defaultConfig: ReferenceAppConfig = {
     allowExternalCss: false,
   },
   aiEditor: {
-    doubleClickDelayMs: 400,
+    doubleClickDelayMs: 300,
   },
 };
 

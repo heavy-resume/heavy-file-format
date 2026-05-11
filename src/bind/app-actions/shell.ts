@@ -117,6 +117,7 @@ const clearTargetFiltering: AppActionHandler = ({ app, event }) => {
   clearFilteringForTarget(menu.sectionKey, menu.blockId);
   state.contextMenu = null;
   app.querySelector('.hvy-context-popover')?.remove();
+  app.querySelector('.hvy-context-popover-backdrop')?.remove();
   getRenderApp()();
 };
 
@@ -129,6 +130,7 @@ const requestContextComponentChanges: AppActionHandler = ({ app, event }) => {
   }
   state.contextMenu = null;
   app.querySelector('.hvy-context-popover')?.remove();
+  app.querySelector('.hvy-context-popover-backdrop')?.remove();
   openAiEditPopover(menu.sectionKey, menu.blockId, menu.x, menu.y);
   getRenderApp()();
 };
@@ -142,6 +144,7 @@ const editContextComponent: AppActionHandler = ({ app, event }) => {
   }
   state.contextMenu = null;
   app.querySelector('.hvy-context-popover')?.remove();
+  app.querySelector('.hvy-context-popover-backdrop')?.remove();
   setActiveEditorBlock(menu.sectionKey, menu.blockId);
   if (state.pendingEditorActivation) {
     state.pendingEditorActivation.immediateFocus = true;

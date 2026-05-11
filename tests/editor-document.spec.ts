@@ -127,6 +127,35 @@ test('responsive preview applies to pullout document surfaces', async ({ page })
   await expect.poll(async () => Math.round((await page.locator('.viewer-sidebar-panel .hvy-surface').boundingBox())?.width ?? 0)).toBeLessThan(390);
 });
 
+test('responsive preview frame clips its own overflow while document surfaces scroll', async ({ page }) => {
+  await page.goto('/');
+
+  for (const preview of ['Phone 390', 'Tablet 768', 'Desktop']) {
+    await page.getByRole('button', { name: preview }).click();
+    await expect(page.locator('.pane.hvy-preview-frame')).toHaveCSS('overflow-x', 'clip');
+    await expect(page.locator('.pane.hvy-preview-frame')).toHaveCSS('overflow-y', 'clip');
+    await expect(page.locator('.editor-tree')).toHaveCSS('overflow-y', 'auto');
+  }
+
+  await page.getByRole('button', { name: 'Viewer' }).click();
+
+  for (const preview of ['Phone 390', 'Tablet 768', 'Desktop']) {
+    await page.getByRole('button', { name: preview }).click();
+    await expect(page.locator('.pane.hvy-preview-frame')).toHaveCSS('overflow-x', 'clip');
+    await expect(page.locator('.pane.hvy-preview-frame')).toHaveCSS('overflow-y', 'clip');
+    await expect(page.locator('.reader-document')).toHaveCSS('overflow-y', 'auto');
+  }
+});
+
+test('document scrollers reserve bottom room for floating launch buttons', async ({ page }) => {
+  await page.goto('/');
+
+  await expect(page.locator('.editor-tree')).toHaveCSS('padding-bottom', '105.6px');
+
+  await page.getByRole('button', { name: 'Viewer' }).click();
+  await expect(page.locator('.reader-document')).toHaveCSS('padding-bottom', '105.6px');
+});
+
 test('compact pullout tab overlays and reveals after scroll idle', async ({ page }) => {
   await page.goto('/');
 

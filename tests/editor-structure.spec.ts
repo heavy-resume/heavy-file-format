@@ -151,6 +151,9 @@ hvy_version: 0.1
 
    <!--hvy:text {}-->
     Hidden details
+
+ <!--hvy:text {}-->
+  Another block
 `);
   await page.getByRole('button', { name: 'Apply' }).click();
   await page.getByRole('button', { name: 'AI' }).click();
@@ -164,6 +167,16 @@ hvy_version: 0.1
 
   await toggle.dblclick();
   await expect(page.locator('.hvy-context-popover')).toContainText('Request changes');
+  await expect(page.locator('.hvy-context-popover-backdrop')).toBeVisible();
+  await expect(page.locator('.hvy-context-popover-backdrop-top')).toHaveCSS('backdrop-filter', /blur/);
+  await expect(page.locator('.reader-block.is-context-menu-target')).toHaveCSS('visibility', 'hidden');
+  await expect(page.locator('.hvy-context-popover-clone')).toBeVisible();
+  const targetBox = await page.locator('.reader-block.is-context-menu-target').boundingBox();
+  const cloneBox = await page.locator('.hvy-context-popover-clone').boundingBox();
+  expect(Math.abs((targetBox?.top ?? 0) - (cloneBox?.top ?? 0))).toBeLessThan(1);
+  expect(Math.abs((targetBox?.left ?? 0) - (cloneBox?.left ?? 0))).toBeLessThan(1);
+  await page.locator('.hvy-context-popover-backdrop-target').click({ position: { x: 12, y: 12 } });
+  await expect(page.locator('.hvy-context-popover')).toHaveCount(0);
   await page.waitForTimeout(500);
   await expect(toggle).toHaveAttribute('aria-expanded', 'true');
 });
@@ -185,8 +198,10 @@ hvy_version: 0.1
   await page.getByRole('button', { name: 'Apply' }).click();
   await page.getByRole('button', { name: 'AI' }).click();
 
+  await expect(page.locator('#aiReaderDocument #summary > .reader-section-head .toggle-expand-button')).toBeVisible();
   await page.locator('#aiReaderDocument .reader-block', { hasText: 'Original' }).click({ button: 'right' });
   await page.getByRole('button', { name: 'Edit component' }).click();
+  await expect(page.locator('#aiReaderDocument #summary > .reader-section-head .toggle-expand-button')).toHaveCount(0);
   await page.keyboard.type('X');
 
   const editor = page.locator('#aiReaderDocument [data-field="block-rich"]');

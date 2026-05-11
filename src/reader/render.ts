@@ -48,6 +48,7 @@ interface ReaderRenderState {
   addComponentBySection: Record<string, string>;
   tempHighlights: Set<string>;
   aiEditTarget: { sectionKey: string | null; blockId: string | null };
+  contextMenu?: { sectionKey: string; blockId?: string } | null;
   activeEditorBlock?: { sectionKey: string; blockId: string } | null;
   modalSectionKey: string | null;
   sqliteRowComponentModal: SqliteRowComponentModalState | null;
@@ -290,7 +291,8 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       ? ` data-reader-action="toggle-expand" data-section-key="${deps.escapeAttr(section.key)}"`
       : '';
 
-    const header = section.contained || modifiers.has('collapse')
+    const suppressSectionToggle = state.currentView === 'ai' && state.activeEditorBlock?.sectionKey === section.key;
+    const header = !suppressSectionToggle && (section.contained || modifiers.has('collapse'))
       ? `
         <header class="reader-section-head" aria-label="Section controls">
           <div class="reader-head-actions">
@@ -346,6 +348,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       block.schema.align === 'left' ? '' : `align-${block.schema.align}`,
       `slot-${block.schema.slot}`,
       state.aiEditTarget.sectionKey === section.key && state.aiEditTarget.blockId === block.id ? 'is-ai-target' : '',
+      state.contextMenu?.sectionKey === section.key && state.contextMenu.blockId === block.id ? 'is-context-menu-target' : '',
       modifiers.has('highlight') ? 'is-highlighted' : '',
       isBlockSearchMatch(searchContext, block) ? 'is-search-match' : '',
       dimmed ? 'is-reader-view-dimmed' : '',

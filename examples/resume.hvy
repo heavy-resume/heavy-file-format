@@ -449,10 +449,10 @@ component_defs:
 <!--hvy: {"id":"locations","lock":true,"contained":true,"location":"sidebar","tags":"sidebar, location, preferences","description":"Location preferences"}-->
 #! Locations
 
- <!--hvy:text {"css":"margin: 0.5rem 0; line-height: 1.5;","placeholder":"Location and target location","lock":true}-->
-  **Location:** Seattle, WA
+ <!--hvy:text {"css":"margin: 0.5rem 0; line-height: 1.5;","placeholder":"location, target location","fillIn":true,"lock":true}-->
+  **Location:** <!-- value -->
 
-  **Target Location(s):** Remote, Seattle, San Francisco
+  **Target Location(s):** <!-- value -->
 
 <!--hvy: {"id":"top-skills-tools-technologies","lock":true,"tags":"featured, top-skills, xrefs","description":"Featured skills and tools & technology experience"}-->
 #! Featured Skills, Tools, and Technologies

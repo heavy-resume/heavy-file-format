@@ -18,7 +18,7 @@ import { recordHistory } from './history';
 import { getDocumentComponentDefaultCss } from './document-component-defaults';
 import { resetDbTableViewState } from './plugins/db-table';
 import { handleInlineCheckboxBackspace } from './editor/inline-checkbox';
-import { TEXT_FILL_IN_MARKER, hasTextFillInMarker } from './text-fill-in';
+import { TEXT_FILL_IN_MARKER, applyTextFillInValueAtIndex, hasTextFillInMarker } from './text-fill-in';
 
 export function findBlockByIds(sectionKey: string, blockId: string): VisualBlock | null {
   const sqliteRowComponentBlock = findSqliteRowComponentBlock(sectionKey, blockId);
@@ -205,9 +205,8 @@ export function handleBlockFieldInput(target: HTMLElement): boolean {
   }
 
   if (field === 'text-fill-in-value') {
-    const before = target.dataset.fillBefore ?? '';
-    const after = target.dataset.fillAfter ?? '';
-    block.text = `${before}${target.textContent ?? ''}${after}`;
+    const fillIndex = Number.parseInt(target.dataset.fillIndex ?? '0', 10);
+    block.text = applyTextFillInValueAtIndex(block.text, Number.isFinite(fillIndex) ? fillIndex : 0, target.textContent ?? '');
     block.schema.fillIn = hasTextFillInMarker(block.text);
     syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
     getRefreshReaderPanels()();

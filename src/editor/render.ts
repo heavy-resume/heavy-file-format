@@ -31,7 +31,7 @@ import { sanitizeInlineCss } from '../css-sanitizer';
 import { SCRIPTING_PLUGIN_ID } from '../plugins/registry';
 import { getScriptingPluginVersion } from '../plugins/scripting/version';
 import { renderAddComponentPicker } from './component-picker';
-import { TEXT_FILL_IN_MARKER, hasTextFillInMarker } from '../text-fill-in';
+import { TEXT_FILL_IN_MARKER, getTextFillInPlaceholder, hasTextFillInMarker, splitTextFillIns } from '../text-fill-in';
 import { closeIcon, plusIcon } from '../icons';
 
 hljs.registerLanguage('bash', bash);
@@ -1131,11 +1131,18 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       if (state.currentView === 'viewer') {
         return renderTextFragment(content.replaceAll(TEXT_FILL_IN_MARKER, ''));
       }
-      const token = 'HVY_FILL_IN_VALUE_TOKEN';
-      return renderTextFragment(content.replace(TEXT_FILL_IN_MARKER, token)).replace(
-        token,
-        `<span class="text-fill-in-box" data-placeholder="${deps.escapeAttr(block.schema.placeholder || 'value')}"></span>`
+      const parts = splitTextFillIns(content);
+      const tokenPrefix = 'HVY_FILL_IN_VALUE_TOKEN_';
+      let html = renderTextFragment(
+        parts.map((part, index) => (index < parts.length - 1 ? `${part}${tokenPrefix}${index}` : part)).join('')
       );
+      for (let index = 0; index < parts.length - 1; index += 1) {
+        html = html.replace(
+          `${tokenPrefix}${index}`,
+          `<span class="text-fill-in-box" data-placeholder="${deps.escapeAttr(getTextFillInPlaceholder(block.schema.placeholder, index))}"></span>`
+        );
+      }
+      return html;
     }
     return renderTextFragment(content);
   }

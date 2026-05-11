@@ -31,6 +31,11 @@ export function applyTextFillInValue(text: string, value: string): string {
   return text.replace(TEXT_FILL_IN_MARKER, value);
 }
 
+export function applyTextFillInValueAtIndex(text: string, index: number, value: string): string {
+  let currentIndex = 0;
+  return text.replaceAll(TEXT_FILL_IN_MARKER, () => (currentIndex++ === index ? value : TEXT_FILL_IN_MARKER));
+}
+
 export function splitTextFillIn(text: string): { before: string; after: string } | null {
   const index = text.indexOf(TEXT_FILL_IN_MARKER);
   if (index < 0) {
@@ -40,4 +45,13 @@ export function splitTextFillIn(text: string): { before: string; after: string }
     before: text.slice(0, index),
     after: text.slice(index + TEXT_FILL_IN_MARKER.length),
   };
+}
+
+export function splitTextFillIns(text: string): string[] {
+  return text.split(TEXT_FILL_IN_MARKER);
+}
+
+export function getTextFillInPlaceholder(placeholder: string, index: number): string {
+  const placeholders = placeholder.split(',').map((value) => value.trim()).filter(Boolean);
+  return placeholders[index] ?? placeholders[0] ?? 'value';
 }

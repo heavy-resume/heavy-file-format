@@ -30,7 +30,7 @@ function buildEditorDom(ctx: HvyPluginContext): { root: HTMLDivElement; handles:
 
   const title = document.createElement('strong');
   title.className = 'hvy-scripting-title';
-  title.textContent = 'Python (Brython)';
+  title.textContent = 'Python';
 
   const helpButton = document.createElement('button');
   helpButton.type = 'button';

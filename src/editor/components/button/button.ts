@@ -9,9 +9,10 @@ function renderButton(sectionKey: string, block: VisualBlock, helpers: Component
   const visibleState = block.schema.buttonVisibleScript.trim() ? 'pending' : 'visible';
   const statusId = `${block.id}-button-status`;
   return `<div
-    class="hvy-button-component"
-    data-hvy-button="true"
-    data-visible-state="${helpers.escapeAttr(visibleState)}"
+	    class="hvy-button-component"
+	    data-hvy-button="true"
+	    data-busy-state="idle"
+	    data-visible-state="${helpers.escapeAttr(visibleState)}"
     data-section-key="${helpers.escapeAttr(sectionKey)}"
     data-block-id="${helpers.escapeAttr(block.id)}"
     style="${helpers.escapeAttr(style)}"

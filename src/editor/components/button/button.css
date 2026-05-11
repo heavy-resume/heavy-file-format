@@ -3,15 +3,21 @@
   align-items: center;
   gap: 0.4rem;
   max-width: 100%;
+  border: 1px solid var(--hvy-border-translucent, rgba(206, 217, 226, 0.92));
+  border-radius: 999px;
+  padding: 0.16rem;
+  background: color-mix(in srgb, var(--hvy-surface, #ffffff) 94%, transparent);
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.16);
+  backdrop-filter: blur(6px);
 }
 
 .hvy-button-component-button {
-  border: 1px solid var(--hvy-border-input);
+  border: 1px solid transparent;
   border-radius: 999px;
   padding: 0.35rem 0.7rem;
   color: var(--hvy-button-text, #ffffff);
   background: var(--hvy-button-bg, #2d6a8a);
-  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.16);
+  box-shadow: none;
   font: inherit;
   font-size: 0.82rem;
   font-weight: 700;
@@ -28,12 +34,28 @@
 }
 
 .hvy-button-status {
+  display: none;
+  border-radius: 999px;
+  padding: 0.35rem 0.7rem;
   font-size: 0.78rem;
-  color: var(--hvy-muted);
+  font-weight: 700;
+  color: var(--hvy-text, #1a2530);
+  background: var(--hvy-surface, #ffffff);
+  white-space: nowrap;
 }
 
 .hvy-button-status.is-error {
   color: #b42318;
+}
+
+.hvy-button-component[data-busy-state="busy"] .hvy-button-component-button {
+  display: none;
+}
+
+.hvy-button-component[data-busy-state="busy"] .hvy-button-status,
+.hvy-button-status.is-error {
+  display: inline-flex;
+  align-items: center;
 }
 
 .hvy-button-overlay-layer {
@@ -41,10 +63,12 @@
   inset: 0;
   z-index: 8;
   pointer-events: none;
+  overflow: visible;
 }
 
 .hvy-button-overlay-layer .hvy-button-component,
-.hvy-button-overlay-layer .hvy-button-component-button {
+.hvy-button-overlay-layer .hvy-button-component-button,
+.hvy-button-overlay-layer .hvy-button-status {
   pointer-events: auto;
 }
 

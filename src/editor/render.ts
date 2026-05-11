@@ -442,7 +442,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const frameRemoveButton = state.mobileAdjustmentMode ? '' : removeButton;
 
     return `
-      <div class="editor-block${isActivatingPath ? ' is-activating-path' : ''}${isPlacementSource ? ' is-placement-source' : ''}${anchorAttrs.className}"${activationStyle}${activationAttrs}${anchorAttrs.attrs}>
+      <div class="editor-block${isActivatingPath ? ' is-activating-path' : ''}${isPlacementSource ? ' is-placement-source' : ''}"${activationStyle}${activationAttrs}>
         ${componentMetaActions}
         ${frameRemoveButton}
         <div class="editor-block-head">
@@ -458,8 +458,10 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           </div>
         </div>
 
-        ${contentEditor}
-        ${anchorAttrs.overlay}
+        <div class="editor-block-content${anchorAttrs.className}"${anchorAttrs.attrs}>
+          ${contentEditor}
+          ${anchorAttrs.overlay}
+        </div>
         ${
           isActiveSelf
             ? `<div class="editor-block-done-row">
@@ -483,16 +485,21 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     }
     const anchorAttrs = renderButtonAnchorAttrs(sectionKey, block, rootSections);
     return `
-      <div class="editor-block-passive${anchorAttrs.className}" data-action="activate-block" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(
+      <div class="editor-block-passive" data-action="activate-block" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(
       block.id
-    )}"${anchorAttrs.attrs}>
-        ${renderPassiveEditorBlockContent(sectionKey, section, block, rootSections)}
-        ${anchorAttrs.overlay}
+    )}">
+        <div class="editor-block-content${anchorAttrs.className}"${anchorAttrs.attrs}>
+          ${renderPassiveEditorBlockContent(sectionKey, section, block, rootSections)}
+          ${anchorAttrs.overlay}
+        </div>
       </div>
     `;
   }
 
   function isAnchoredButtonInSection(section: VisualSection, block: VisualBlock): boolean {
+    if (state.showAdvancedEditor) {
+      return false;
+    }
     if (deps.resolveBaseComponent(block.schema.component) !== 'button') {
       return false;
     }
@@ -684,6 +691,12 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         return `<div class="editor-passive-empty-text">Empty script...</div>`;
       }
       return renderSyntaxHighlightedCode(block.text, 'python');
+    }
+
+    if (base === 'button') {
+      const targetId = block.schema.buttonPositionTargetId.trim();
+      const targetSummary = targetId ? ` anchored to ${targetId}` : ' inline';
+      return `<div class="editor-passive-empty-text">Button: ${deps.escapeHtml(block.schema.buttonLabel || 'Generate')}${deps.escapeHtml(targetSummary)}</div>`;
     }
 
     if (base === 'text' && block.text.trim().length === 0) {
@@ -918,7 +931,9 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       return renderPluginEditor(sectionKey, block, helpers);
     }
     if (component === 'button') {
-      return renderButtonEditor(sectionKey, block, helpers);
+      return state.showAdvancedEditor
+        ? renderButtonAdvancedEditor(sectionKey, block)
+        : renderButtonEditor(sectionKey, block, helpers);
     }
     if (component === 'container') {
       return renderContainerEditor(sectionKey, block, helpers);
@@ -1012,11 +1027,6 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           />
         </label>
         ${listDisplayContext ? renderComponentListDisplayFields(sectionKey, block, listDisplayContext) : ''}
-        ${
-          component === 'button'
-            ? renderButtonMetaFields(sectionKey, block)
-            : ''
-        }
         ${
           component === 'container'
             ? `<label>
@@ -1127,7 +1137,21 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         <span>Target Script</span>
         <textarea rows="5" spellcheck="false" ${attr} data-field="block-button-target-script">${deps.escapeHtml(block.schema.buttonTargetScript)}</textarea>
       </label>
-    </section>`;
+	    </section>`;
+  }
+
+  function renderButtonAdvancedEditor(sectionKey: string, block: VisualBlock): string {
+    const label = block.schema.buttonLabel.trim() || 'Generate';
+    const buttonStyle = deps.escapeAttr(sanitizeInlineCss(block.schema.buttonCss));
+    return `<div class="button-component-editor">
+      <section class="component-list-display-editor" aria-label="Button preview">
+        <strong>Button Preview</strong>
+        <div class="hvy-button-component" style="${buttonStyle}">
+          <button type="button" class="hvy-button-component-button" disabled>${deps.escapeHtml(label)}</button>
+        </div>
+      </section>
+      ${renderButtonMetaFields(sectionKey, block)}
+    </div>`;
   }
 
   function renderComponentListDisplayFields(sectionKey: string, block: VisualBlock, context: ComponentListDisplayContext): string {

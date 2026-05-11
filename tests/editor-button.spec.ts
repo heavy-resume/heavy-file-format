@@ -30,6 +30,8 @@ test('editor-only generate button applies pronunciation and stays out of viewer'
   await expect(generateButton.locator('xpath=ancestor::*[contains(@class, "hvy-button-overlay-layer")]')).toHaveCount(1);
 
   await generateButton.click();
+  await expect(page.locator('[data-hvy-button-status="true"]').filter({ hasText: 'Generating...' })).toBeVisible();
+  await expect(generateButton).toBeHidden();
 
   await expect(page.locator('#editorTree')).toContainText('[AY-vuh-ree HART]');
   await expect(generateButton).toBeHidden({ timeout: 10000 });
@@ -86,4 +88,21 @@ test('generated pronunciation can be converted back into a clean fill-in', async
   await expect(page.locator('#rawEditor')).toContainText('\\[<!-- value -->\\]');
   await expect(page.locator('#rawEditor')).toContainText('"placeholder":"FILL ME IN"');
   await expect(page.locator('#rawEditor')).not.toContainText('"placeholder":"pronunciation"');
+});
+
+test('advanced editor exposes anchored button configuration as a component card', async ({ page }) => {
+  await page.goto('/');
+  await page.evaluate(() => localStorage.clear());
+  await page.reload({ waitUntil: 'networkidle' });
+  await page.getByRole('button', { name: 'Resume Template' }).click();
+  await page.getByRole('button', { name: 'Advanced' }).click();
+
+  const buttonCard = page.locator('.editor-block-passive', { hasText: 'Button: Generate anchored to resume-pronunciation' });
+  await expect(buttonCard).toBeVisible();
+  await buttonCard.click();
+
+  await expect(page.locator('[aria-label="Button preview"]')).toBeVisible();
+  await expect(page.locator('[aria-label="Button settings"]')).toBeVisible();
+  await expect(page.locator('[data-field="block-button-position-target-id"]')).toHaveValue('resume-pronunciation');
+  await expect(page.locator('[data-field="block-button-prompt"]')).toContainText('Generate a concise pronunciation guide');
 });

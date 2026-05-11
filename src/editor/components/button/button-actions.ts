@@ -89,6 +89,9 @@ export async function runButtonAiGenerate(app: HTMLElement, actionButton: HTMLEl
   };
 
   runningButtons.add(key);
+  if (root) {
+    root.dataset.busyState = 'busy';
+  }
   actionButton.setAttribute('disabled', 'true');
   setStatus('Preparing...');
   try {
@@ -149,6 +152,9 @@ export async function runButtonAiGenerate(app: HTMLElement, actionButton: HTMLEl
     setStatus(error instanceof Error ? error.message : 'Generation failed.', true);
   } finally {
     runningButtons.delete(key);
+    if (root) {
+      root.dataset.busyState = 'idle';
+    }
     actionButton.removeAttribute('disabled');
     void runButtonVisibilityScripts(app);
   }

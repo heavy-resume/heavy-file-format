@@ -147,6 +147,15 @@ test('responsive preview frame clips its own overflow while document surfaces sc
   }
 });
 
+test('document scrollers reserve bottom room for floating launch buttons', async ({ page }) => {
+  await page.goto('/');
+
+  await expect(page.locator('.editor-tree')).toHaveCSS('padding-bottom', '105.6px');
+
+  await page.getByRole('button', { name: 'Viewer' }).click();
+  await expect(page.locator('.reader-document')).toHaveCSS('padding-bottom', '105.6px');
+});
+
 test('compact pullout tab overlays and reveals after scroll idle', async ({ page }) => {
   await page.goto('/');
 

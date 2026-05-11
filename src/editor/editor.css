@@ -13,6 +13,7 @@
   padding-top: 2rem;
   padding-left: var(--hvy-sidebar-footprint);
   padding-right: var(--hvy-document-edge-gutter);
+  padding-bottom: var(--hvy-floating-controls-clearance);
   scrollbar-gutter: stable both-edges;
 }
 

@@ -5,6 +5,7 @@
   --hvy-sidebar-tab-size: 2.9rem;
   --hvy-sidebar-footprint: 3.25rem;
   --hvy-document-edge-gutter: 0.9rem;
+  --hvy-floating-controls-clearance: 6.6rem;
 }
 
 * {
@@ -405,6 +406,7 @@ button.tiny {
   overflow: auto;
   padding-left: var(--hvy-sidebar-footprint);
   padding-right: var(--hvy-document-edge-gutter);
+  padding-bottom: var(--hvy-floating-controls-clearance);
   scrollbar-gutter: stable both-edges;
 }
 

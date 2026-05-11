@@ -32,8 +32,8 @@ export function createGridItem(
 
 export function parseGridItems(
   candidate: JsonObject,
-  columns: number,
-  component: string,
+  _columns: number,
+  _component: string,
   createBlock: (component: string, skip: boolean) => VisualBlock,
   parseBlock: (raw: unknown) => VisualBlock
 ): GridItem[] {
@@ -95,8 +95,5 @@ export function parseGridItems(
     });
   });
 
-  if (items.length === 0 && component === 'grid') {
-    return [createGridItem(0, columns, createBlock), createGridItem(1, columns, createBlock)];
-  }
   return items;
 }

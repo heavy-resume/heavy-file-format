@@ -410,7 +410,7 @@ button.tiny {
 .hvy-preview-frame-phone.viewer-shell .reader-document,
 .hvy-preview-frame-tablet.viewer-shell .reader-document,
 .hvy-preview-frame-desktop.viewer-shell .reader-document {
-  padding-top: var(--hvy-document-edge-gutter);
+  padding-top: 0.8rem;
 }
 
 .hvy-preview-frame-phone.viewer-shell .reader-document,

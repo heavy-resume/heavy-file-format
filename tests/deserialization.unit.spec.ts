@@ -96,6 +96,24 @@ hvy_version: 0.1
   expect(grid?.schema.gridItems[1]?.block.text).toBe('05/2024 - present');
 });
 
+test('empty grids do not automatically create text items', () => {
+  const input = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"layout"}-->
+#! Layout
+
+ <!--hvy:grid {"gridColumns":2}-->
+`;
+
+  const document = deserializeDocument(input, '.hvy');
+  const grid = document.sections[0]?.blocks[0];
+
+  expect(grid?.schema.component).toBe('grid');
+  expect(grid?.schema.gridItems).toHaveLength(0);
+});
+
 test('deserializes fenced code while removing outer structural indentation', () => {
   const input = `---
 hvy_version: 0.1

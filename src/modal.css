@@ -217,7 +217,7 @@
   height: 1.05rem;
 }
 
-.remove-x[data-tooltip]:not(.editor-block-remove-button) {
+.remove-x[data-tooltip]:not(.editor-block-remove-button):not(.editor-section-remove-button) {
   position: relative;
 }
 

@@ -956,6 +956,10 @@
   padding: 0 0.2rem;
 }
 
+.editor-section-head {
+  padding-right: 1.6rem;
+}
+
 .editor-block-head {
   position: relative;
   padding-right: 0.2rem;
@@ -1005,6 +1009,14 @@
 }
 
 .editor-block-remove-button {
+  position: absolute;
+  top: -0.85rem;
+  right: -0.55rem;
+  z-index: 3;
+  box-shadow: 0 6px 14px var(--hvy-shadow);
+}
+
+.editor-section-card .editor-section-head .editor-section-remove-button {
   position: absolute;
   top: -0.85rem;
   right: -0.55rem;

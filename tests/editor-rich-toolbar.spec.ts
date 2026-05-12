@@ -273,10 +273,12 @@ test('paragraph style toolbar compacts inside phone preview', async ({ page }) =
 
   await toolbar.getByRole('button', { name: 'Normal' }).click();
   await expect(toolbar.locator('.paragraph-style-modal')).toBeVisible();
+  await expect(toolbar.locator('.paragraph-style-modal-list').getByRole('button', { name: 'Normal' })).toBeVisible();
   await toolbar.getByRole('button', { name: 'Gamma Note' }).click();
   await expect(toolbar.locator('> [data-rich-action="text-line-style"]:visible, > .paragraph-style-recent > [data-rich-action="text-line-style"]:visible')).toHaveText('Gamma Note');
 
   await toolbar.getByRole('button', { name: 'Gamma Note' }).first().click();
+  await expect(toolbar.locator('.paragraph-style-modal-list').getByRole('button', { name: 'Normal' })).toBeVisible();
   const modalBox = await toolbar.locator('.paragraph-style-modal').boundingBox();
   const shellBox = await page.locator('.editor-shell').boundingBox();
   expect(modalBox).not.toBeNull();
@@ -366,6 +368,40 @@ test('normal after enter from paragraph style keeps the previous line styled', a
   await expect(editor.locator('[data-hvy-text-line-style="role"]')).toContainText('Styled line');
   await expect(editor.locator('[data-hvy-text-line-style="role"]')).toHaveCount(1);
   await expect(editor.locator('p').last()).toContainText('Normal');
+});
+
+test('enter keeps paragraph style active on the new line', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Advanced' }).click();
+  await page.getByRole('button', { name: 'Document Meta' }).click();
+  await page.getByRole('button', { name: 'Add Style' }).click();
+  await page.locator('[data-field="text-line-style-name"]').fill('role');
+  await page.locator('[data-field="text-line-style-label"]').fill('Role heading');
+  await page.locator('[data-field="text-line-style-css"]').fill('font-weight: 700;');
+  await page.getByRole('button', { name: 'Document Meta' }).click();
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('[data-field="block-rich"]').first();
+  await editor.evaluate((node) => {
+    node.innerHTML = '<p>Styled line</p>';
+    const text = node.querySelector('p')?.firstChild;
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.setStart(text!, text!.textContent!.length);
+    range.collapse(true);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+  });
+
+  await page.getByRole('button', { name: 'Role heading' }).first().click();
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('Still styled');
+
+  await expect(editor.locator('[data-hvy-text-line-style="role"]')).toHaveCount(2);
+  await expect(editor.locator('[data-hvy-text-line-style="role"]').last()).toContainText('Still styled');
+  await expect(page.getByRole('button', { name: 'Role heading' }).first()).toHaveClass(/is-selected/);
 });
 
 test('heading enter exits to normal text and updates toolbar state', async ({ page }) => {

@@ -432,7 +432,7 @@
     grid-row: 1;
   }
 
-  .paragraph-style-toolbar:has(.paragraph-style-recent button[data-rich-action="text-line-style"].is-selected) .text-line-style-clear {
+  .paragraph-style-toolbar:has(.paragraph-style-recent button[data-rich-action="text-line-style"].is-selected) > .text-line-style-clear {
     display: none;
   }
 

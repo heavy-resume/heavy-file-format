@@ -918,18 +918,25 @@ function setTextLineStyleBlock(block: HTMLElement, editable: HTMLElement, styleN
     }
     return;
   }
-  const wrapper = editable.ownerDocument.createElement('div');
-  wrapper.className = 'hvy-text-line-style';
-  wrapper.dataset.hvyTextLineStyle = styleName;
-  wrapper.dataset.hvyTextLineStyleLabel = label;
-  wrapper.setAttribute('style', css);
-  wrapper.classList.toggle('is-unknown', !style);
-  wrapper.appendChild(createTextLineStyleMarker(styleName));
+  const wrapper = createTextLineStyleWrapper(styleName, editable.ownerDocument);
   block.replaceWith(wrapper);
   wrapper.appendChild(block);
   if (selectionOffsets && selectionOffsets.start !== null && selectionOffsets.end !== null) {
     restoreSelectionByTextOffsets(block, selectionOffsets.start, selectionOffsets.end);
   }
+}
+
+function createTextLineStyleWrapper(styleName: string, ownerDocument: Document): HTMLElement {
+  const styles = getTextLineStylesFromMeta(state.document.meta);
+  const style = styles[styleName];
+  const wrapper = ownerDocument.createElement('div');
+  wrapper.className = 'hvy-text-line-style';
+  wrapper.dataset.hvyTextLineStyle = styleName;
+  wrapper.dataset.hvyTextLineStyleLabel = style?.label.trim() || styleName;
+  wrapper.setAttribute('style', style ? sanitizeTextLineStyleCss(style.css) : '');
+  wrapper.classList.toggle('is-unknown', !style);
+  wrapper.appendChild(createTextLineStyleMarker(styleName));
+  return wrapper;
 }
 
 function createTextLineStyleMarker(styleName: string): HTMLElement {
@@ -2023,9 +2030,15 @@ function exitTextLineStyleAtSelection(editable: HTMLElement): boolean {
   if (!styled || styled === editable || !isCollapsedSelectionAtEndOf(styled)) {
     return false;
   }
+  const styleName = styled.dataset.hvyTextLineStyle ?? '';
+  if (!styleName) {
+    return false;
+  }
+  const wrapper = createTextLineStyleWrapper(styleName, editable.ownerDocument);
   const paragraph = document.createElement('p');
   paragraph.appendChild(document.createTextNode('\u200b'));
-  styled.parentNode?.insertBefore(paragraph, styled.nextSibling);
+  wrapper.appendChild(paragraph);
+  styled.parentNode?.insertBefore(wrapper, styled.nextSibling);
   placeCaretAtEnd(paragraph);
   return true;
 }

@@ -39,7 +39,9 @@
 
 .expandable-part:has(.component-picker:focus-within),
 .expandable-part:has(.component-picker[data-open="true"]),
-.expandable-part:has(.expandable-pane-meta[open]) {
+.expandable-part:has(.expandable-pane-meta[open]),
+.expandable-part:has(.paragraph-style-toolbar.is-picker-open),
+.expandable-part:has(.paragraph-style-toolbar.is-style-edit-open) {
   overflow: visible;
 }
 

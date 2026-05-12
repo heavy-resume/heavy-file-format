@@ -279,10 +279,16 @@
 .paragraph-style-edit-modal {
   display: none;
   position: absolute;
-  z-index: 25;
+  z-index: 10050;
   right: 0;
   top: calc(100% + 0.45rem);
   width: min(28rem, 100cqw);
+}
+
+.editor-block:has(.paragraph-style-toolbar.is-picker-open),
+.editor-block:has(.paragraph-style-toolbar.is-style-edit-open) {
+  position: relative;
+  z-index: 10040;
 }
 
 .paragraph-style-toolbar.is-picker-open .paragraph-style-modal,

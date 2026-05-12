@@ -337,6 +337,30 @@ section_defaults:
   expect(output).toContain('css: "margin: 0.5rem 0;"');
 });
 
+test('preserves text_line_styles in document front matter on round-trip', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+text_line_styles:
+  role:
+    label: Role heading
+    css: "font-weight: 700;"
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {}-->
+ ^role^ #### Foo
+`, '.hvy');
+
+  const output = serializeWithState(document);
+
+  expect(output).toContain('text_line_styles:');
+  expect(output).toContain('role:');
+  expect(output).toContain('label: Role heading');
+  expect(output).toContain('^role^ #### Foo');
+});
+
 test('wrapHvyFragmentAsDocument includes optional front matter metadata', () => {
   const wrapped = wrapHvyFragmentAsDocument('<!--hvy:text {}-->\n Hello', {
     meta: {

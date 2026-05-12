@@ -5,6 +5,7 @@ import { getTextFillInPlaceholder, splitTextFillIns } from '../../../text-fill-i
 const FILL_IN_RENDER_TOKEN_PREFIX = 'HVY_FILL_IN_VALUE_TOKEN_';
 
 export const renderTextEditor: ComponentEditorRenderer = (sectionKey, block, helpers) => {
+  const textLineStyles = helpers.getTextLineStyles?.() ?? {};
   const fillInParts = block.schema.fillIn ? splitTextFillIns(block.text) : [];
   if (fillInParts.length > 1) {
     const fillInSource = fillInParts
@@ -54,7 +55,7 @@ export const renderTextEditor: ComponentEditorRenderer = (sectionKey, block, hel
         data-block-id="${helpers.escapeAttr(block.id)}"
       >Convert to Fill-in</button>`;
   return `
-    ${mobileAdjustment ? '' : helpers.renderRichToolbar(sectionKey, block.id, { includeAlign: true, includeFillIn: true, align: block.schema.align, currentMarkdown: block.text })}
+    ${mobileAdjustment ? '' : helpers.renderRichToolbar(sectionKey, block.id, { includeAlign: true, includeFillIn: true, align: block.schema.align, currentMarkdown: block.text, textLineStyles })}
   <div class="text-editor-shell">
     ${fillInSelectionButton}
     <div

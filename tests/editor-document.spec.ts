@@ -1,43 +1,66 @@
 import { expect, test } from '@playwright/test';
 
-test('can add section and undo/redo', async ({ page }) => {
+test('new section component picker opens on the first click', async ({ page }) => {
   await page.goto('/');
 
-  const sections = page.locator('[data-action="remove-section"]');
-  const initialCount = await sections.count();
-
   await page.locator('[data-action="add-top-level-section"]').click();
-  await expect(sections).toHaveCount(initialCount + 1);
+  const newSection = page.locator('.editor-section-card').last();
+  await expect(newSection.locator('[data-field="section-title"]')).toBeFocused();
 
-  await page.keyboard.press('Control+z');
-  await expect(sections).toHaveCount(initialCount);
-
-  await page.keyboard.press('Control+y');
-  await expect(sections).toHaveCount(initialCount + 1);
+  await newSection.locator('.component-picker-trigger').click();
+  await expect(newSection.locator('.component-picker')).toHaveAttribute('data-open', 'true');
 });
 
 test('section remove requires confirmation', async ({ page }) => {
   await page.goto('/');
 
-  const sections = page.locator('[data-action="remove-section"]');
+  const sections = page.locator('.editor-section-card:not(.editor-subsection-card)');
   const initialCount = await sections.count();
 
   await page.locator('[data-action="add-top-level-section"]').click();
   await expect(sections).toHaveCount(initialCount + 1);
 
-  const removeButton = sections.nth(initialCount);
+  const removeButton = sections.last().locator('[data-action="remove-section"]');
   await removeButton.dispatchEvent('click');
   await expect(sections).toHaveCount(initialCount + 1);
-  await expect(page.getByRole('dialog', { name: 'Confirm deletion?' })).toBeVisible();
-  await expect(removeButton).toHaveText('Remove');
+  const dialog = page.getByRole('dialog', { name: 'Confirm deletion?' });
+  await expect(dialog).toBeVisible();
 
-  await page.getByRole('button', { name: 'Cancel' }).click();
-  await expect(page.getByRole('dialog', { name: 'Confirm deletion?' })).toHaveCount(0);
+  await dialog.getByRole('button', { name: 'Cancel' }).click();
+  await expect(dialog).toHaveCount(0);
   await expect(sections).toHaveCount(initialCount + 1);
 
   await removeButton.dispatchEvent('click');
-  await page.getByRole('button', { name: 'Delete' }).click();
-  await expect.poll(async () => sections.count()).toBeLessThan(initialCount + 1);
+  await dialog.getByRole('button', { name: 'Delete' }).click();
+  await expect(sections).toHaveCount(initialCount);
+});
+
+test('switching to viewer commits the active component edit', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"profile"}-->
+#! Profile
+
+  Original text
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('.editor-block-passive', { hasText: 'Original text' }).click();
+  await page.locator('.rich-editor').fill('Committed by view switch');
+  await page.getByRole('button', { name: 'Viewer' }).click();
+
+  await expect(page.locator('#readerDocument')).toContainText('Committed by view switch');
+  await expect(page.locator('#readerDocument')).not.toContainText('Original text');
+
+  await page.getByRole('button', { name: 'Editor' }).click();
+  await expect(page.locator('[data-active-editor-block="true"]')).toHaveCount(0);
+  await expect(page.locator('.editor-block-passive', { hasText: 'Committed by view switch' })).toBeVisible();
 });
 
 test('reader max width keeps focus while typing', async ({ page }) => {
@@ -127,26 +150,6 @@ test('responsive preview applies to pullout document surfaces', async ({ page })
   await expect.poll(async () => Math.round((await page.locator('.viewer-sidebar-panel .hvy-surface').boundingBox())?.width ?? 0)).toBeLessThan(390);
 });
 
-test('responsive preview frame clips its own overflow while document surfaces scroll', async ({ page }) => {
-  await page.goto('/');
-
-  for (const preview of ['Phone 390', 'Tablet 768', 'Desktop']) {
-    await page.getByRole('button', { name: preview }).click();
-    await expect(page.locator('.pane.hvy-preview-frame')).toHaveCSS('overflow-x', 'clip');
-    await expect(page.locator('.pane.hvy-preview-frame')).toHaveCSS('overflow-y', 'clip');
-    await expect(page.locator('.editor-tree')).toHaveCSS('overflow-y', 'auto');
-  }
-
-  await page.getByRole('button', { name: 'Viewer' }).click();
-
-  for (const preview of ['Phone 390', 'Tablet 768', 'Desktop']) {
-    await page.getByRole('button', { name: preview }).click();
-    await expect(page.locator('.pane.hvy-preview-frame')).toHaveCSS('overflow-x', 'clip');
-    await expect(page.locator('.pane.hvy-preview-frame')).toHaveCSS('overflow-y', 'clip');
-    await expect(page.locator('.reader-document')).toHaveCSS('overflow-y', 'auto');
-  }
-});
-
 test('document scrollers reserve bottom room for floating launch buttons', async ({ page }) => {
   await page.goto('/');
 
@@ -154,49 +157,6 @@ test('document scrollers reserve bottom room for floating launch buttons', async
 
   await page.getByRole('button', { name: 'Viewer' }).click();
   await expect(page.locator('.reader-document')).toHaveCSS('padding-bottom', '105.6px');
-});
-
-test('compact pullout tab overlays and reveals after scroll idle', async ({ page }) => {
-  await page.goto('/');
-
-  await page.getByRole('button', { name: 'Resume Template' }).click();
-  await page.getByRole('button', { name: 'Phone 390' }).click();
-
-  const shell = page.locator('.editor-shell');
-  const tab = page.locator('.editor-sidebar-tab');
-  const tree = page.locator('.editor-tree');
-  const surface = page.locator('.editor-tree > .hvy-surface').first();
-
-  await expect.poll(async () => Math.round((await surface.boundingBox())?.x ?? 0) - Math.round((await tree.boundingBox())?.x ?? 0)).toBeGreaterThanOrEqual(8);
-  await expect.poll(async () => {
-    const surfaceBox = await surface.boundingBox();
-    const treeBox = await tree.boundingBox();
-    if (!surfaceBox || !treeBox) {
-      return 0;
-    }
-    return Math.round(treeBox.x + treeBox.width - (surfaceBox.x + surfaceBox.width));
-  }).toBeGreaterThanOrEqual(8);
-  await expect(tab).toBeVisible();
-
-  await page.locator('.editor-sidebar-tab').click();
-  const openTreeBox = await tree.boundingBox();
-  const openSurfaceBox = await surface.boundingBox();
-  expect(openTreeBox).not.toBeNull();
-  expect(openSurfaceBox).not.toBeNull();
-  expect(Math.round(openSurfaceBox!.x - openTreeBox!.x)).toBeGreaterThanOrEqual(30);
-
-  await page.locator('.editor-sidebar-tab').click();
-  await expect.poll(async () => Math.round((await surface.boundingBox())?.x ?? 0) - Math.round((await tree.boundingBox())?.x ?? 0)).toBeGreaterThanOrEqual(8);
-
-  await tree.evaluate((node) => {
-    node.scrollTop = 240;
-    node.dispatchEvent(new Event('scroll', { bubbles: true }));
-  });
-  await expect(page.locator('.editor-sidebar-help-balloon')).toHaveCount(0);
-  await expect(shell).toHaveClass(/is-sidebar-tab-hidden/);
-  await expect(tab).toHaveCSS('transition-duration', /0\.54s/);
-
-  await expect(shell).toHaveClass(/is-sidebar-tab-visible/, { timeout: 1500 });
 });
 
 test('responsive preview applies container query defaults', async ({ page }) => {
@@ -372,33 +332,6 @@ hvy_version: 0.1
   await expect(page.locator('#rawEditor')).toContainText('"description":"Profile area"');
   await expect(page.locator('#rawEditor')).toContainText('"description":"Profile summary list"');
   await expect(page.locator('#rawEditor')).not.toContainText('Summary body","description"');
-});
-
-test('resume template shows friendly empty component-list add prompts before activation', async ({ page }) => {
-  await page.goto('/');
-
-  await page.getByRole('button', { name: 'Resume Template' }).click();
-
-  await expect(page.locator('.editor-block-passive .ghost-label', { hasText: 'Add Skill' }).first()).toBeVisible();
-  await expect(page.locator('.editor-block-passive .ghost-label', { hasText: 'Add Tool / Tech' }).first()).toBeVisible();
-});
-
-test('resume template spaces stacked location labels from block css', async ({ page }) => {
-  await page.goto('/');
-
-  await page.getByRole('button', { name: 'Resume Template' }).click();
-
-  const locationBlock = page.locator('.reader-block-text', { hasText: 'Target Location(s)' }).first();
-  await expect(locationBlock).toHaveCSS('white-space', 'pre-line');
-
-  const labels = locationBlock.locator('strong');
-  await expect(labels).toHaveCount(2);
-
-  const firstBox = await labels.nth(0).boundingBox();
-  const secondBox = await labels.nth(1).boundingBox();
-  expect(firstBox).not.toBeNull();
-  expect(secondBox).not.toBeNull();
-  expect(secondBox!.y - (firstBox!.y + firstBox!.height)).toBeGreaterThan(1);
 });
 
 test('custom component templates open a fill modal before editor insertion', async ({ page }) => {

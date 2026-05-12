@@ -5,12 +5,37 @@ import { openRemoveConfirmationModal } from './remove-confirmation-modal';
 const richToolbarSelections = new WeakMap<HTMLElement, Range>();
 
 export function bindClickDispatch(app: HTMLElement): void {
+  app.addEventListener('contextmenu', (event) => {
+    const target = event.target as HTMLElement;
+    const styleButton = target.closest<HTMLElement>('.paragraph-style-card[data-rich-action="text-line-style"][data-text-line-style-name]');
+    const styleName = styleButton?.dataset.textLineStyleName ?? '';
+    if (!styleButton || !styleName) {
+      return;
+    }
+    event.preventDefault();
+    const toolbar = styleButton.closest<HTMLElement>('.paragraph-style-toolbar');
+    openParagraphStyleEditor(toolbar, styleName);
+  });
+
   app.addEventListener('mousedown', (event) => {
     const target = event.target as HTMLElement;
     const actionButton = target.closest<HTMLElement>('[data-action]');
     const richButton = target.closest<HTMLElement>('[data-rich-action]');
     if (richButton) {
       const editable = getRichEditableForButton(app, richButton);
+      const selection = window.getSelection();
+      if (editable && selection?.rangeCount) {
+        const range = selection.getRangeAt(0);
+        if (isRangeInside(editable, range)) {
+          richToolbarSelections.set(editable, range.cloneRange());
+        }
+      }
+      event.preventDefault();
+      return;
+    }
+    if (actionButton && isParagraphStyleToolbarAction(actionButton.dataset.action ?? '')) {
+      const toolbar = actionButton.closest<HTMLElement>('.paragraph-style-toolbar');
+      const editable = toolbar ? getRichEditableForButton(app, toolbar) : null;
       const selection = window.getSelection();
       if (editable && selection?.rangeCount) {
         const range = selection.getRangeAt(0);
@@ -45,13 +70,22 @@ export function bindClickDispatch(app: HTMLElement): void {
     const richButton = target.closest<HTMLElement>('[data-rich-action]');
     if (richButton) {
       event.preventDefault();
+      const paragraphStyleToolbar = richButton.closest<HTMLElement>('.paragraph-style-toolbar');
+      if (paragraphStyleToolbar && isCompactParagraphStylePickerButton(richButton, paragraphStyleToolbar)) {
+        openParagraphStylePicker(paragraphStyleToolbar);
+        return;
+      }
+      paragraphStyleToolbar?.classList.remove('is-picker-open');
+      paragraphStyleToolbar?.querySelector<HTMLButtonElement>('[data-action="open-paragraph-style-picker"]')?.setAttribute('aria-expanded', 'false');
       const sectionKey = richButton.dataset.sectionKey;
       const blockId = richButton.dataset.blockId;
       const action = richButton.dataset.richAction;
       if (sectionKey && blockId && action) {
         const editable = getRichEditableForButton(app, richButton);
         if (editable) {
-          restoreRichToolbarSelection(editable);
+          if (!hasSelectionInside(editable)) {
+            restoreRichToolbarSelection(editable);
+          }
           if (action === 'link') {
             openLinkInlineModal(app, editable);
             return;
@@ -59,7 +93,9 @@ export function bindClickDispatch(app: HTMLElement): void {
           if (!editable.contains(document.activeElement) && !hasSelectionInside(editable)) {
             editable.focus();
           }
-          applyRichAction(action, editable);
+          applyRichAction(action, editable, richButton.dataset.textLineStyleName);
+          editable.focus({ preventScroll: true });
+          richToolbarSelections.delete(editable);
         }
       }
       return;
@@ -69,7 +105,74 @@ export function bindClickDispatch(app: HTMLElement): void {
       return;
     }
 
+    if (actionButton.dataset.action === 'open-paragraph-style-picker') {
+      event.preventDefault();
+      const toolbar = actionButton.closest<HTMLElement>('.paragraph-style-toolbar');
+      if (toolbar?.classList.contains('is-picker-open')) {
+        closeParagraphStylePicker(toolbar);
+      } else if (toolbar) {
+        openParagraphStylePicker(toolbar);
+      }
+      return;
+    }
+
+    if (actionButton.dataset.action === 'close-paragraph-style-picker') {
+      event.preventDefault();
+      const toolbar = actionButton.closest<HTMLElement>('.paragraph-style-toolbar');
+      if (toolbar) {
+        closeParagraphStylePicker(toolbar);
+      }
+      return;
+    }
+
+    if (actionButton.dataset.action === 'close-paragraph-style-edit') {
+      event.preventDefault();
+      const toolbar = actionButton.closest<HTMLElement>('.paragraph-style-toolbar');
+      toolbar?.classList.remove('is-style-edit-open');
+      toolbar?.querySelectorAll<HTMLElement>('.paragraph-style-edit-panel').forEach((panel) => {
+        panel.hidden = true;
+      });
+      return;
+    }
+
     executeActionButton(app, actionButton);
+  });
+}
+
+function isParagraphStyleToolbarAction(action: string): boolean {
+  return action === 'open-paragraph-style-picker' || action === 'close-paragraph-style-picker' || action === 'close-paragraph-style-edit';
+}
+
+function isCompactParagraphStylePickerButton(richButton: HTMLElement, toolbar: HTMLElement): boolean {
+  if (richButton.closest('.paragraph-style-modal, .paragraph-style-edit-modal')) {
+    return false;
+  }
+  if (richButton.dataset.richAction !== 'text-line-style') {
+    return false;
+  }
+  const label = toolbar.querySelector<HTMLElement>('.text-line-style-toolbar-label');
+  return Boolean(label && getComputedStyle(label).display === 'none');
+}
+
+function openParagraphStylePicker(toolbar: HTMLElement): void {
+  toolbar.classList.add('is-picker-open');
+  toolbar.querySelector<HTMLButtonElement>('[data-action="open-paragraph-style-picker"]')?.setAttribute('aria-expanded', 'true');
+}
+
+function closeParagraphStylePicker(toolbar: HTMLElement): void {
+  toolbar.classList.remove('is-picker-open');
+  toolbar.querySelector<HTMLButtonElement>('[data-action="open-paragraph-style-picker"]')?.setAttribute('aria-expanded', 'false');
+}
+
+function openParagraphStyleEditor(toolbar: HTMLElement | null, styleName: string): void {
+  if (!toolbar) {
+    return;
+  }
+  toolbar.classList.remove('is-picker-open');
+  toolbar.classList.add('is-style-edit-open');
+  toolbar.querySelector<HTMLButtonElement>('[data-action="open-paragraph-style-picker"]')?.setAttribute('aria-expanded', 'false');
+  toolbar.querySelectorAll<HTMLElement>('.paragraph-style-edit-panel').forEach((panel) => {
+    panel.hidden = panel.dataset.editStyleName !== styleName;
   });
 }
 
@@ -93,7 +196,7 @@ function executeActionButton(app: HTMLElement, actionButton: HTMLElement, confir
     return;
   }
 
-  const sectionKey = actionButton.dataset.sectionKey ?? '';
+  const sectionKey = getActionSectionKey(actionButton);
   const blockId = actionButton.dataset.blockId ?? '';
 
   if (action === 'add-top-level-section') {
@@ -112,6 +215,17 @@ function executeActionButton(app: HTMLElement, actionButton: HTMLElement, confir
   }
 
   handler({ app, actionButton, sectionKey, blockId, section, reusableName });
+}
+
+function getActionSectionKey(actionButton: HTMLElement): string {
+  const declaredSectionKey = actionButton.dataset.sectionKey ?? '';
+  if (actionButton.dataset.action === 'add-block' && actionButton.dataset.insertPlacement) {
+    const nearestEditorSection = actionButton.closest<HTMLElement>('[data-editor-section]')?.dataset.editorSection ?? '';
+    if (nearestEditorSection && nearestEditorSection !== declaredSectionKey) {
+      return nearestEditorSection;
+    }
+  }
+  return declaredSectionKey;
 }
 
 function hasSelectionInside(editable: HTMLElement): boolean {

@@ -165,6 +165,9 @@ export interface HvyCliSessionState {
   rawWipContent?: string;
   rawWipContentByPath?: Record<string, string>;
   rawSectionWipContentByPath?: Record<string, string>;
+  virtualPathNaming?: {
+    anonymousBlockNamesById?: Record<string, string>;
+  };
 }
 
 export interface ThemeConfig {
@@ -209,10 +212,19 @@ export interface AppState {
   cliSession: HvyCliSessionState;
   cliHistory: HvyCliHistoryEntry[];
   activeEditorBlock: { sectionKey: string; blockId: string } | null;
+  activeEditorBlockPath: { sectionKey: string; blockId: string }[];
   activeEditorBlockSnapshot: { sectionKey: string; blockId: string; block: VisualBlock } | null;
+  activeEditorBlockSnapshots: { sectionKey: string; blockId: string; block: VisualBlock }[];
   activeEditorBlockReturnScroll: PaneScrollState | null;
   pendingPaneScrollRestore: PaneScrollState | null;
   componentPlacement: ComponentPlacementState | null;
+  pendingEditorDeactivation: {
+    sectionKey: string;
+    blockId: string;
+    anchorTop: number;
+    editableTag: string;
+    editableClass: string;
+  } | null;
   pendingEditorActivation: {
     sectionKey: string;
     blockId: string;

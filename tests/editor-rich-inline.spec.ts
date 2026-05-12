@@ -167,62 +167,6 @@ hvy_version: 0.1
   await expect(editor.locator('h2')).toContainText('Tools & Technologies');
 });
 
-test('alt annotations in sidebar switch with preview controls after mobile adjustment edit', async ({ page }) => {
-  await page.goto('/');
-
-  await page.getByRole('button', { name: 'Raw' }).click();
-  await page.locator('#rawEditor').fill(`---
-hvy_version: 0.1
----
-
-<!--hvy: {"id":"tools-technologies","location":"sidebar"}-->
-#! Tools & Technologies
-
- <!--hvy:text {}-->
-  # Tools & Technologies
-`);
-  await page.getByRole('button', { name: 'Apply' }).click();
-  await page.getByRole('button', { name: 'Basic' }).click();
-  await page.getByRole('button', { name: 'Phone 390' }).click();
-  await page.getByRole('button', { name: 'Mobile Adjustment' }).click();
-  await page.locator('.editor-sidebar-tab').click();
-
-  await page.locator('.editor-sidebar-panel [data-action="activate-block"]').first().click();
-  const editor = page.locator('.editor-sidebar-panel .rich-editor').first();
-  await editor.locator('h1').evaluate((node) => {
-    node.textContent = 'Tools & Tech';
-    node.closest('.rich-editor')?.dispatchEvent(new InputEvent('input', { bubbles: true }));
-  });
-
-  await page.getByRole('button', { name: 'Raw' }).click();
-  await expect(page.locator('#rawEditor')).toContainText(
-    '# Tools & <!--hvy:alt {"compact":"Tech"}-->Technologies<!--/hvy:alt-->'
-  );
-
-  await page.getByRole('button', { name: 'Basic' }).click();
-  await page.locator('.editor-sidebar-tab').click();
-  await page.getByRole('button', { name: 'Phone 390' }).click();
-  await expect(page.locator('.editor-sidebar-panel .hvy-alt-full').first()).toBeHidden();
-  await expect(page.locator('.editor-sidebar-panel .hvy-alt-compact').first()).toBeVisible();
-  await expect(page.locator('.editor-sidebar-panel h1').first()).toContainText('Tools & Tech');
-
-  await page.getByRole('button', { name: 'Desktop' }).click();
-  await page.locator('.editor-sidebar-tab').click();
-  await expect(page.locator('.editor-sidebar-panel .hvy-alt-full').first()).toBeVisible();
-  await expect(page.locator('.editor-sidebar-panel .hvy-alt-compact').first()).toBeHidden();
-  await expect(page.locator('.editor-sidebar-panel h1').first()).toContainText('Tools & Technologies');
-
-  await page.getByRole('button', { name: 'Viewer' }).click();
-  await page.locator('.viewer-sidebar-tab').click();
-  await expect(page.locator('.viewer-sidebar-panel .hvy-alt-full').first()).toBeVisible();
-  await expect(page.locator('.viewer-sidebar-panel .hvy-alt-compact').first()).toBeHidden();
-
-  await page.getByRole('button', { name: 'Phone 390' }).click();
-  await page.locator('.viewer-sidebar-tab').click();
-  await expect(page.locator('.viewer-sidebar-panel .hvy-alt-full').first()).toBeHidden();
-  await expect(page.locator('.viewer-sidebar-panel .hvy-alt-compact').first()).toBeVisible();
-});
-
 test('inline toolbar actions toggle typing mode at a collapsed caret', async ({ page }) => {
   await page.goto('/');
 

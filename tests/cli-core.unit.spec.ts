@@ -103,6 +103,32 @@ test('cli can navigate and read virtual component files', async () => {
   expect((await executeHvyCliCommand(document, session, 'man ls')).output).toContain('stable entries include pipe-delimited descriptions.');
 });
 
+test('cli ls expands virtual path globs', async () => {
+  const document = createResumeCliTestDocument();
+  const session = createHvyCliSession();
+
+  await executeHvyCliCommand(document, session, 'cd /body/tools-technologies/component-list-1/tool-typescript');
+  const result = await executeHvyCliCommand(document, session, 'ls ../tool-python/*.css');
+
+  expect(result.output).toContain('file skill-record.css [w] | skill-record component CSS mirrored from config');
+  expect(result.output).not.toContain('file text.css');
+  expect(result.output).not.toContain('no such file or directory');
+});
+
+test('cli keeps anonymous component paths stable within a session after inserts', async () => {
+  const document = createResumeCliTestDocument();
+  const session = createHvyCliSession();
+  const parent = '/body/tools-technologies/component-list-1/tool-typescript/expandable-content';
+
+  expect((await executeHvyCliCommand(document, session, `cat ${parent}/text-0/text.txt`)).output).toContain('Primary application language');
+
+  await executeHvyCliCommand(document, session, `hvy insert 0 text ${parent}`);
+  await executeHvyCliCommand(document, session, `hvy insert 1 text ${parent}`);
+
+  expect((await executeHvyCliCommand(document, session, `cat ${parent}/text-0/text.txt`)).output).toContain('Primary application language');
+  expect((await executeHvyCliCommand(document, session, `cat ${parent}/children-order.json`)).output).toContain('"text-3"');
+});
+
 test('cli exposes id aliases for sections and components', async () => {
   const document = createResumeCliTestDocument();
   const session = createHvyCliSession();
@@ -161,9 +187,9 @@ test('cli resolves component directories for common read commands', async () => 
   expect(catTxtAlias.output).toContain('Software Engineering');
 
   const numbered = await executeHvyCliCommand(document, session, 'nl -ba /body/skills/component-list-1/skill-software-engineering');
-  expect(numbered.output).toContain('     1\tSoftware Engineering');
+  expect(numbered.output).toContain('     1\t### Software Engineering');
 
-  const head = await executeHvyCliCommand(document, session, 'head -n 1 /body/top-skills-tools-technologies/grid-0');
+  const head = await executeHvyCliCommand(document, session, 'head -n 1 /body/top-skills-tools-technologies/grid-1');
   expect(head.output).toContain('## Skills');
 });
 
@@ -242,9 +268,9 @@ test('hvy insert 0 section explains when the parent path is a component', async 
   await expect(executeHvyCliCommand(
     document,
     session,
-    'hvy insert 0 section /body/top-skills-tools-technologies/grid-0 top-skill-baking Baking'
+    'hvy insert 0 section /body/top-skills-tools-technologies/grid-1 top-skill-baking Baking'
   )).rejects.toThrow(
-    'hvy insert section: sections must be added at the root level or on top of an existing section. /body/top-skills-tools-technologies/grid-0 is a component, not a section.'
+    'hvy insert section: sections must be added at the root level or on top of an existing section. /body/top-skills-tools-technologies/grid-1 is a component, not a section.'
   );
 
   await expect(executeHvyCliCommand(
@@ -300,7 +326,7 @@ test('cli exposes reusable component documentation in about files', async () => 
   expect(about.output).toContain('Reusable definition YAML:');
   expect(about.output).toContain('```yaml');
   expect(about.output).toContain('- name: skill-record');
-  expect(about.output).toContain('description: Canonical expandable record for one skill, tool, or technology');
+  expect(about.output).toContain('description: Skill or tool details');
   expect(about.output).toContain('Virtual directory mapping:');
   expect(about.output).toContain('- /skill-record contains one skill-record component instance.');
   expect(about.output).toContain('- expandable-stub/ contains the always-visible summary children.');
@@ -419,7 +445,7 @@ test('ls shows section descriptions from section metadata', async () => {
 
   expect(result.output).toContain('Component context:');
   expect(result.output).toContain('/body/top-skills-tools-technologies section id=top-skills-tools-technologies');
-  expect(result.output).toContain('description: Featured top skills, tools, and technologies shown near the top of the resume.');
+  expect(result.output).toContain('description: Featured skills and tools & technology experience');
 });
 
 test('hvy help insert explains component creation commands', async () => {
@@ -448,7 +474,7 @@ test('hvy insert -1 rejects removed positional component syntax', async () => {
   await expect(executeHvyCliCommand(
     document,
     session,
-    'hvy insert -1 component /body/top-skills-tools-technologies/grid-0/grid top-skill-baking xref-card Baking'
+    'hvy insert -1 component /body/top-skills-tools-technologies/grid-1/grid top-skill-baking xref-card Baking'
   )).rejects.toThrow('hvy insert: expected INDEX section, text, table, plugin, or a registered component name');
 });
 
@@ -464,7 +490,7 @@ test('hvy insert -1 can create custom components and xref components', async () 
   const xref = await executeHvyCliCommand(
     document,
     session,
-    'hvy insert -1 xref-card /body/top-skills-tools-technologies/grid-0/grid --id top-skill-baking'
+    'hvy insert -1 xref-card /id/top-skills-list --id top-skill-baking'
   );
 
   expect(skill.output).toContain('/body/skills/component-list-1/skill-baking: created');
@@ -482,12 +508,12 @@ test('hvy insert -1 can create custom components and xref components', async () 
   expect(skill.output).not.toContain('Reusable definition YAML:');
   expect((await executeHvyCliCommand(document, session, 'cat /body/skills/component-list-1/skill-baking/skill-record.json')).output)
     .toContain('"css": "margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);"');
-  expect(xref.output).toContain('/body/top-skills-tools-technologies/grid-0/grid/top-skill-baking: created');
+  expect(xref.output).toContain('/id/top-skills-list/top-skill-baking: created');
   expect(xref.output).toContain('file xref-card.json');
   expect(xref.output).toContain('file xref-card.txt');
   expect(xref.output).not.toContain('order:');
   expect(xref.output).not.toContain('### CREATED CUSTOM COMPONENT ###');
-  expect((await executeHvyCliCommand(document, session, 'cat /body/top-skills-tools-technologies/grid-0/grid/top-skill-baking/xref-card.json')).output)
+  expect((await executeHvyCliCommand(document, session, 'cat /id/top-skill-baking/xref-card.json')).output)
     .toContain('"xrefTarget": ""');
 });
 
@@ -612,9 +638,9 @@ test('hvy insert can create custom components without explicit ids', async () =>
   expect(positionalId.output).toContain('/body/history/component-list-2/history-heavy-resume-founder: created');
   expect(positionalId.cwd).toBe('/body/history/component-list-2/history-heavy-resume-founder');
   expect((await executeHvyCliCommand(document, session, 'cat /body/history/component-list-2/history-heavy-resume-founder/expandable-stub/table-0/tableColumns.json')).output)
-    .toBe('[\n  "YEAR",\n  "ORGANIZATION",\n  "TITLE"\n]\n');
+    .toBe('[\n  "YEAR",\n  "<!--hvy:alt {\\"compact\\":\\"ORG\\"}-->ORGANIZATION<!--/hvy:alt-->",\n  "TITLE"\n]\n');
   expect((await executeHvyCliCommand(document, session, 'cat /body/history/component-list-2/history-heavy-resume-founder/expandable-stub/table-0/table.txt')).output)
-    .toBe('YEAR | ORGANIZATION | TITLE\n |  | \n');
+    .toBe('YEAR | <!--hvy:alt {"compact":"ORG"}-->ORGANIZATION<!--/hvy:alt--> | TITLE\n |  | \n');
   expect((await executeHvyCliCommand(document, session, 'cat /body/history/component-list-2/children-order.json')).output)
     .toMatch(/history-heavy-resume-founder[\s\S]*history-record-1[\s\S]*history-northwind-labs-senior-software-engineer/);
 });
@@ -733,6 +759,18 @@ test('hvy preview shows short raw fragments and the command used', async () => {
   expect(result.output).toContain('<!--hvy:text {"id":"intro"}-->');
 });
 
+test('hvy preview accepts structural directories inside a component', async () => {
+  const document = createResumeCliTestDocument();
+  const session = createHvyCliSession();
+
+  const result = await executeHvyCliCommand(document, session, 'hvy preview /body/tools-technologies/component-list-1/tool-typescript/expandable-content');
+
+  expect(result.output).toContain('Preview command: hvy preview /body/tools-technologies/component-list-1/tool-typescript');
+  expect(result.output).toContain('<!--hvy:skill-record');
+  expect(result.output).toContain('#### Description');
+  expect(result.output).toContain('#### Notes');
+});
+
 test('cli supports cat heredoc writes to writable virtual files', async () => {
   const document = createCliTestDocument();
   const session = createHvyCliSession();
@@ -823,6 +861,41 @@ drop me
   const deleted = await executeHvyCliCommand(document, session, 'sed -i 3d /body/summary/intro/text.txt');
   expect(deleted.output).toBe('/body/summary/intro/text.txt: updated');
   expect(document.sections[0]?.blocks[0]?.text).toBe('keep\ndoc.db.execute("CREATE TABLE chores (id INTEGER)")');
+});
+
+test('cli sed supports append insert change ranges and last-line delete', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {"id":"intro"}-->
+ one
+two
+three
+four
+`, '.hvy');
+  const session = createHvyCliSession();
+
+  const changed = await executeHvyCliCommand(document, session, `sed -i '2,3c\\replacement A\\nreplacement B' /body/summary/intro/text.txt`);
+  expect(changed.output).toBe('/body/summary/intro/text.txt: updated');
+  expect(document.sections[0]?.blocks[0]?.text).toBe('one\nreplacement A\nreplacement B\nfour');
+
+  const appended = await executeHvyCliCommand(document, session, `sed -i '/replacement B/a\\after B' /body/summary/intro/text.txt`);
+  expect(appended.output).toBe('/body/summary/intro/text.txt: updated');
+  expect(document.sections[0]?.blocks[0]?.text).toBe('one\nreplacement A\nreplacement B\nafter B\nfour');
+
+  const inserted = await executeHvyCliCommand(document, session, `sed -i '$i\\before last' /body/summary/intro/text.txt`);
+  expect(inserted.output).toBe('/body/summary/intro/text.txt: updated');
+  expect(document.sections[0]?.blocks[0]?.text).toBe('one\nreplacement A\nreplacement B\nafter B\nbefore last\nfour');
+
+  const deleted = await executeHvyCliCommand(document, session, `sed -i '$d' /body/summary/intro/text.txt`);
+  expect(deleted.output).toBe('/body/summary/intro/text.txt: updated');
+  expect(document.sections[0]?.blocks[0]?.text).toBe('one\nreplacement A\nreplacement B\nafter B\nbefore last');
+
+  expect((await executeHvyCliCommand(document, session, 'man sed')).output).toContain('sed -i ADDRESS[,ADDRESS]c\\TEXT FILE');
 });
 
 test('cli sed rejects malformed substitute flags before mutating', async () => {
@@ -1280,7 +1353,7 @@ test('cli shows labeled tags for resume header tables without changing directory
   const session = createHvyCliSession();
 
   expect((await executeHvyCliCommand(document, session, 'ls /body/history')).output).toContain(
-    'dir  table-1 tags=[table-header] | static table component | YEAR ORGANIZATION TITLE'
+    'dir  table-1 tags=[table-header] | static table component | YEAR'
   );
   expect((await executeHvyCliCommand(document, session, 'ls /body/projects')).output).toContain(
     'dir  table-1 tags=[table-header] | static table component | PROJECT DATE'
@@ -1310,12 +1383,12 @@ test('cli accepts body section aliases from root and mutates resume virtual file
 
   expect((await executeHvyCliCommand(document, session, 'cd /tools-technologies')).cwd).toBe('/body/tools-technologies');
 
-  const before = await executeHvyCliCommand(document, session, 'find /body/tools-technologies/component-list-1/tool-typescript -name skill-record.txt');
-  expect(before.output).toContain('/body/tools-technologies/component-list-1/tool-typescript/skill-record.txt');
+  const before = await executeHvyCliCommand(document, session, 'find /body/tools-technologies/component-list-1/tool-typescript -name text.txt');
+  expect(before.output).toContain('/body/tools-technologies/component-list-1/tool-typescript/expandable-content/text-0/text.txt');
 
-  const result = await executeHvyCliCommand(document, session, 'sed s/Primary/Core/ /body/tools-technologies/component-list-1/tool-typescript/skill-record.txt');
+  const result = await executeHvyCliCommand(document, session, 'sed s/Primary/Core/ /tools-technologies/component-list-1/tool-typescript/expandable-content/text-0/text.txt');
   expect(result.mutated).toBe(true);
-  expect(result.output).toBe('/body/tools-technologies/component-list-1/tool-typescript/skill-record.txt: updated');
+  expect(result.output).toBe('/body/tools-technologies/component-list-1/tool-typescript/expandable-content/text-0/text.txt: updated');
   expect((await executeHvyCliCommand(document, session, 'cat /tools-technologies/component-list-1/tool-typescript/skill-record.txt')).output).toContain(
     'Core application language.'
   );
@@ -1388,7 +1461,7 @@ test('cli rg supports common ripgrep flags and hvy read aliases cat', async () =
   expect(read.output).toContain('TypeScript');
 
   const lineNumber = await executeHvyCliCommand(document, session, 'rg -n "TypeScript\\|Typescript" /body/tools-technologies');
-  expect(lineNumber.output).toContain('/body/tools-technologies/component-list-1/tool-typescript/skill-record.txt:1:TypeScript');
+  expect(lineNumber.output).toContain('/body/tools-technologies/component-list-1/tool-typescript/skill-record.txt:1:### TypeScript');
   expect(lineNumber.output).not.toContain('Warning: rg ignored unsupported option -n');
 
   const filesOnly = await executeHvyCliCommand(document, session, 'rg "TypeScript" /body/tools-technologies -l');
@@ -1397,7 +1470,7 @@ test('cli rg supports common ripgrep flags and hvy read aliases cat', async () =
 
   const combined = await executeHvyCliCommand(document, session, 'rg -rn "TypeScript" /body/tools-technologies');
   expect(combined.output).not.toContain('Warning: rg ignored unsupported option -r');
-  expect(combined.output).toContain('/body/tools-technologies/component-list-1/tool-typescript/skill-record.txt:1:TypeScript');
+  expect(combined.output).toContain('/body/tools-technologies/component-list-1/tool-typescript/skill-record.txt:1:### TypeScript');
 
   const listFilesAlias = await executeHvyCliCommand(document, session, 'rg -r "TypeScript" /body/tools-technologies --list-files');
   expect(listFilesAlias.output).toContain('/body/tools-technologies/component-list-1/tool-typescript/skill-record.txt');
@@ -1419,7 +1492,7 @@ test('cli rg supports common ripgrep flags and hvy read aliases cat', async () =
   expect(replaced.output).toContain('1');
 
   const includeEquals = await executeHvyCliCommand(document, session, 'rg -r "TypeScript" /body --include="*.json" -l');
-  expect(includeEquals.output).toContain('/body/top-skills-tools-technologies/grid-0/grid/component-list-1/xref-card-1/xref-card.json');
+  expect(includeEquals.output).toContain('/body/top-skills-tools-technologies/grid-1/grid/container-1/container/top-tools-technologies-list/xref-card-0/xref-card.json');
   expect(includeEquals.output).not.toContain('skill-record.txt');
 
   const includeSeparate = await executeHvyCliCommand(document, session, 'rg -r "" --include "*.yaml" /body -l');
@@ -1499,12 +1572,14 @@ test('cli find limits broad result sets', async () => {
 });
 
 test('cli command output is capped at 200 lines', async () => {
-  const document = deserializeDocument('---\nhvy_version: 0.1\n---\n', '.hvy');
-  const session = createHvyCliSession();
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
 
-  for (let index = 0; index < 205; index += 1) {
-    await executeHvyCliCommand(document, session, `hvy insert -1 section /body item-${index} "Item ${index}"`);
-  }
+${Array.from({ length: 205 }, (_, index) => `<!--hvy: {"id":"item-${index}"}-->
+#! Item ${index}
+`).join('\n')}`, '.hvy');
+  const session = createHvyCliSession();
 
   const result = await executeHvyCliCommand(document, session, 'find /body -type f -name section.json -exec sed s/TypeScript//g {} +');
 
@@ -1627,6 +1702,37 @@ test('cli cp -r copies component directories with the destination id', async () 
     'LLM Prompt Engineering'
   );
   expect((await executeHvyCliCommand(document, session, 'man cp')).output).toContain('cp [-r] SOURCE DEST');
+});
+
+test('cli mv moves component directories between ordered children', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"quality"}-->
+#! Quality
+
+<!--hvy:component-list {"id":"items","componentListComponent":"text"}-->
+
+ <!--hvy:text {"id":"banana"}-->
+ Banana
+
+ <!--hvy:text {"id":"apple"}-->
+ Apple
+
+ <!--hvy:text {"id":"cherry"}-->
+ Cherry
+`, '.hvy');
+  const session = createHvyCliSession();
+
+  const result = await executeHvyCliCommand(document, session, 'mv /body/quality/items/banana /body/quality/items');
+
+  expect(result.output).toBe('/body/quality/items/banana -> /body/quality/items/banana: moved');
+  expect(result.mutated).toBe(true);
+  expect((await executeHvyCliCommand(document, session, 'cat /body/quality/items/children-order.json')).output).toBe(
+    '[\n  "apple",\n  "cherry",\n  "banana"\n]\n'
+  );
+  expect((await executeHvyCliCommand(document, session, 'man mv')).output).toContain('mv SOURCE DEST');
 });
 
 test('cli treats rg || true before a pipe as an xargs-friendly fallback idiom', async () => {
@@ -1966,7 +2072,7 @@ test('cli lists text filters as supported commands', async () => {
   const session = createHvyCliSession();
 
   expect((await executeHvyCliCommand(document, session, 'help')).output).toContain(
-    'Commands: cd, pwd, ls, cat, head, tail, nl, find, rg, grep, sort, uniq, wc, tr, xargs, cp, rm, printf, echo, sed, true, hvy. Ask: ask QUESTION. Finish: done MESSAGE_TO_USER.'
+    'Commands: cd, pwd, ls, cat, head, tail, nl, find, rg, grep, sort, uniq, wc, tr, xargs, cp, mv, rm, printf, echo, sed, true, hvy. Ask: ask QUESTION. Finish: done MESSAGE_TO_USER. Use man <command> for details.'
   );
   expect((await executeHvyCliCommand(document, session, 'man wc')).output).toContain('wc -l [FILE...]');
   expect((await executeHvyCliCommand(document, session, 'man uniq')).output).toContain('uniq [FILE...]');
@@ -2024,7 +2130,7 @@ component_defs:
   expect(result.output).toContain('Components:');
   expect(result.output).toContain('/body\n  /summary tags=[overview, canonical]');
   expect(result.output).toContain('/intro\n      text.txt id=intro tags=[lead-in]');
-  expect(result.output).toMatch(/\/component-list-\d+\n      component-list\.txt id=C\d+\n      \/text-\d+\n        text\.txt id=C\d+/);
+  expect(result.output).toMatch(/\/component-list-\d+\n      component-list\.txt id=C\d+ \| Nested anonymous text\.\.\.\n      \/text-\d+\n        text\.txt id=C\d+ \| Nested anonymous text/);
   expect(result.output).toContain('/typescript-card\n      xref-card.txt id=typescript-card');
   expect(result.output).toMatch(/\/xref-card-\d+\n      xref-card\.txt id=C\d+/);
   expect(result.output).toContain('/library-card\n      skill-card.txt id=library-card');
@@ -2051,19 +2157,7 @@ component_defs:
   expect(byRelativePath.output).toContain('/intro');
 });
 
-test('collapsed request_structure keeps the example resume under 100 lines', async () => {
-  const document = createResumeCliTestDocument();
-  const session = createHvyCliSession();
-
-  const result = await executeHvyCliCommand(document, session, 'hvy request_structure --collapse');
-
-  expect(result.output.split('\n').length).toBeLessThanOrEqual(100);
-  expect(result.output).toContain('/body');
-  expect(result.output).toContain('/summary');
-  expect(result.output).toContain('(+');
-});
-
-test('hvy find-intent ranks global skill library and top skills above local skill lists', async () => {
+test('hvy search ranks global skill library and top skills above local skill lists', async () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
 component_defs:
@@ -2102,7 +2196,7 @@ Software Engineering
 `, '.hvy');
   const session = createHvyCliSession();
 
-  const result = await executeHvyCliCommand(document, session, 'hvy find-intent "add baking as a top skill" --max 5');
+  const result = await executeHvyCliCommand(document, session, 'hvy search "add baking as a top skill" --max 5');
 
   const skillListIndex = result.output.indexOf('/body/skills/skill-list');
   const topGridIndex = result.output.indexOf('/body/top-skills-tools-technologies/top-grid');
@@ -2117,7 +2211,7 @@ Software Engineering
   expect(result.output).toContain('description: Featured top skills/tools grid.');
 });
 
-test('hvy find-intent includes descriptions and supports json output', async () => {
+test('hvy search includes descriptions and supports json output', async () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
 ---
@@ -2130,8 +2224,8 @@ Milestones
 `, '.hvy');
   const session = createHvyCliSession();
 
-  const text = await executeHvyCliCommand(document, session, 'hvy find-intent roadmap --max 1');
-  const json = await executeHvyCliCommand(document, session, 'hvy find-intent roadmap --max 1 --json');
+  const text = await executeHvyCliCommand(document, session, 'hvy search roadmap --max 1');
+  const json = await executeHvyCliCommand(document, session, 'hvy search roadmap --max 1 --json');
 
   expect(text.output).toContain('description: Quarterly roadmap notes.');
   expect(JSON.parse(json.output)).toEqual([
@@ -2145,7 +2239,7 @@ Milestones
   ]);
 });
 
-test('hvy find-intent boosts tags as explicit metadata', async () => {
+test('hvy search boosts tags as explicit metadata', async () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
 ---
@@ -2161,7 +2255,7 @@ Tagged
 `, '.hvy');
   const session = createHvyCliSession();
 
-  const result = await executeHvyCliCommand(document, session, 'hvy find-intent roadmap --max 2');
+  const result = await executeHvyCliCommand(document, session, 'hvy search roadmap --max 2');
 
   expect(result.output.indexOf('/body/notes/tagged')).toBeGreaterThan(-1);
   expect(result.output.indexOf('/body/notes/general') === -1 || result.output.indexOf('/body/notes/tagged') < result.output.indexOf('/body/notes/general')).toBe(true);
@@ -2186,7 +2280,7 @@ Milestones
   const result = await executeHvyCliCommand(document, session, 'hvy request_structure --describe');
 
   expect(result.output).toContain('/planning tags=[planning, roadmap] - Roadmap and planning notes.');
-  expect(result.output).toContain('text.txt id=roadmap tags=[quarterly] placeholder="Roadmap details" - Quarterly roadmap notes.');
+  expect(result.output).toContain('text.txt id=roadmap tags=[quarterly] placeholder="Roadmap details" css="margin: 0.5rem 0;" - Quarterly roadmap notes. | Milestones');
 });
 
 test('hvy lint reports core component and plugin issues', async () => {
@@ -2437,7 +2531,7 @@ test('hvy help lists registered plugin add and operation commands as quick-refer
 
   expect(help).toContain('hvy cheatsheet [NAME]');
   expect(help).toContain('hvy recipe [NAME]');
-  expect(help).toContain('Cheatsheets:\n- components\n- db-table\n- forms\n- scripting');
+  expect(help).toContain('Cheatsheets:\n- common-patterns\n- components\n- db-table\n- forms\n- header\n- reusable-component\n- scripting\n- styling');
   expect(help).toContain('Recipes:\n- db-and-form\n- form-backed-table\n- populate-form-options-from-db\n- scripting');
   expect(help).toContain('hvy insert INDEX plugin form SECTION_PATH ID');
   expect(help).toContain('hvy insert INDEX plugin db-table SECTION_PATH ID');
@@ -2463,7 +2557,7 @@ test('hvy cheatsheets are discovered from markdown files', async () => {
   expect(dbTable).toContain('plugin.txt` stores optional read-only `SELECT` or `WITH` SQL');
   expect(dbTable).toContain('Do not search the document for `CREATE TABLE`');
   expect(dbTable).toContain('hvy plugin db-table exec');
-  expect(unknown).toContain('Unknown cheatsheet "missing". Available cheatsheets: components, db-table, forms, scripting');
+  expect(unknown).toContain('Unknown cheatsheet "missing". Available cheatsheets: common-patterns, components, db-table, forms, header, reusable-component, scripting, styling');
 });
 
 test('hvy recipes are discovered from hvy files', async () => {

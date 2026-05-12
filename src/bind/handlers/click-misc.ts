@@ -1,11 +1,33 @@
 import { state, getRenderApp, closeAiEditPopover, completePendingRichAnnotation, handleRichEditorClick, refreshRichToolbarState } from './_imports';
+import { shouldAutoDismissSidebarHelp } from '../../sidebar-help';
 
 const sidebarHelpDismissTimers: Record<'editor' | 'viewer', number | null> = {
   editor: null,
   viewer: null,
 };
+const pointerHandledPickerTriggers = new WeakSet<HTMLElement>();
 
 export function bindClickMisc(app: HTMLElement): void {
+  app.addEventListener('mousedown', (event) => {
+    const target = event.target as HTMLElement;
+    const pickerTrigger = target.closest<HTMLElement>('.component-picker-trigger');
+    if (!pickerTrigger) {
+      const activeInsertGhost = target.closest<HTMLElement>('.active-component-insert-ghost');
+      if (activeInsertGhost && !target.closest('.component-picker')) {
+        const ghostPickerTrigger = activeInsertGhost.querySelector<HTMLElement>('.component-picker-trigger');
+        if (ghostPickerTrigger) {
+          event.preventDefault();
+          pointerHandledPickerTriggers.add(ghostPickerTrigger);
+          toggleComponentPicker(app, ghostPickerTrigger);
+        }
+      }
+      return;
+    }
+    event.preventDefault();
+    pointerHandledPickerTriggers.add(pickerTrigger);
+    toggleComponentPicker(app, pickerTrigger);
+  });
+
   app.addEventListener('mouseup', (event) => {
     const richTarget = getRichTarget(event.target as HTMLElement);
     if (richTarget) {
@@ -22,21 +44,11 @@ export function bindClickMisc(app: HTMLElement): void {
     }
     const pickerTrigger = target.closest<HTMLElement>('.component-picker-trigger');
     if (pickerTrigger) {
-      const picker = pickerTrigger.closest<HTMLElement>('.component-picker');
-      if (picker) {
-        if (picker.dataset.open === 'true' && picker.dataset.activePane === 'root') {
-          delete picker.dataset.open;
-          picker.dataset.activePane = 'root';
-          picker.style.removeProperty('--component-picker-shift');
-          pickerTrigger.blur();
-          return;
-        }
-        closeOtherComponentPickers(app, picker);
-        picker.dataset.open = 'true';
-        picker.dataset.activePane = 'root';
-        placeComponentPicker(picker);
-        revealComponentPicker(picker);
+      if (pointerHandledPickerTriggers.has(pickerTrigger)) {
+        pointerHandledPickerTriggers.delete(pickerTrigger);
+        return;
       }
+      toggleComponentPicker(app, pickerTrigger);
       return;
     }
     const pickerPaneButton = target.closest<HTMLElement>('[data-component-picker-pane]');
@@ -58,6 +70,9 @@ export function bindClickMisc(app: HTMLElement): void {
         picker.dataset.activePane = 'root';
         picker.style.removeProperty('--component-picker-shift');
       }
+      return;
+    }
+    if (target.closest('.active-component-insert-ghost') && !target.closest('.component-picker')) {
       return;
     }
     if (!target.closest('.component-picker')) {
@@ -92,6 +107,25 @@ export function bindClickMisc(app: HTMLElement): void {
   });
 }
 
+function toggleComponentPicker(app: HTMLElement, pickerTrigger: HTMLElement): void {
+  const picker = pickerTrigger.closest<HTMLElement>('.component-picker');
+  if (!picker) {
+    return;
+  }
+  if (picker.dataset.open === 'true' && picker.dataset.activePane === 'root') {
+    delete picker.dataset.open;
+    picker.dataset.activePane = 'root';
+    picker.style.removeProperty('--component-picker-shift');
+    pickerTrigger.blur();
+    return;
+  }
+  closeOtherComponentPickers(app, picker);
+  picker.dataset.open = 'true';
+  picker.dataset.activePane = 'root';
+  placeComponentPicker(picker);
+  revealComponentPicker(picker);
+}
+
 export function scheduleSidebarHelpAutoClose(app: HTMLElement): void {
   scheduleSidebarHelpAutoCloseFor(app, 'editor');
   scheduleSidebarHelpAutoCloseFor(app, 'viewer');
@@ -107,6 +141,10 @@ function scheduleSidebarHelpAutoCloseFor(app: HTMLElement, kind: 'editor' | 'vie
   }
   sidebarHelpDismissTimers[kind] = window.setTimeout(() => {
     sidebarHelpDismissTimers[kind] = null;
+    const shell = app.querySelector<HTMLElement>(kind === 'editor' ? '.editor-shell' : '.viewer-shell');
+    if (!shouldAutoDismissSidebarHelp(shell, kind)) {
+      return;
+    }
     dismissSidebarHelpBalloon(app, kind);
   }, 5000);
 }

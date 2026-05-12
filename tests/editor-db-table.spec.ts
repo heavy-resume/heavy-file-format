@@ -19,13 +19,14 @@ test('db table editor deletes columns with confirmation', async ({ page }) => {
   const deleteButtons = page.locator('[data-action="sqlite-drop-column"]');
   await expect(deleteButtons.first()).toBeVisible();
   await deleteButtons.first().click();
-  await expect(page.getByRole('dialog', { name: 'Confirm deletion?' })).toBeVisible();
+  const dialog = page.getByRole('dialog', { name: 'Confirm deletion?' });
+  await expect(dialog).toBeVisible();
 
-  await page.getByRole('button', { name: 'Cancel' }).click();
+  await dialog.getByRole('button', { name: 'Cancel' }).click();
   await expect(columnInputs).toHaveCount(initialColumnCount);
 
   await deleteButtons.first().click();
-  await page.getByRole('button', { name: 'Delete', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Delete', exact: true }).click();
   await expect(columnInputs).toHaveCount(initialColumnCount - 1);
 });
 

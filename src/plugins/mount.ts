@@ -97,7 +97,7 @@ function buildContext(
     mode,
     get editor() {
       return {
-        mode: mode === 'editor' ? 'edit' : 'view',
+        mode: mode === 'editor' ? 'edit' as const : 'view' as const,
         detailLevel: getPluginEditorDetailLevel(mode),
       };
     },

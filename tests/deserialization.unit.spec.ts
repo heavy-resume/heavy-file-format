@@ -481,7 +481,8 @@ test('resume education record keeps C/C++ inside the education tools list', asyn
   expect(skillsToolsBlock).toBeTruthy();
   expect(skillsToolsBlock!.schema.gridItems).toHaveLength(2);
 
-  const toolsList = skillsToolsBlock!.schema.gridItems[1]?.block;
+  const toolsContainer = skillsToolsBlock!.schema.gridItems[1]?.block;
+  const toolsList = toolsContainer?.schema.containerBlocks?.find((block) => block.schema.component === 'component-list');
   expect(toolsList?.schema.component).toBe('component-list');
 
   const toolTitles = toolsList!.schema.componentListBlocks

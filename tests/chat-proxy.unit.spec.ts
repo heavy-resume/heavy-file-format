@@ -11,6 +11,7 @@ import {
   extractOpenAiText,
   formatAiCliLogEvent,
   formatAiCliMessagesLogEvent,
+  formatFailedCliCommandLogEvent,
   formatTraceEvent,
   formatTraceTextEvent,
   pruneTraceLines,
@@ -603,6 +604,22 @@ test('formatAiCliLogEvent writes clean chat cli trace entries only for chat cli 
 
   expect(formatAiCliLogEvent({
     runId: 'run-1',
+    phase: 'document-edit',
+    type: 'client_event',
+    payload: { event: 'ai_cli_command', command: 'pwd', output: '/' },
+  })).toBe('');
+});
+
+test('formatFailedCliCommandLogEvent writes only failed chat cli commands', () => {
+  expect(formatFailedCliCommandLogEvent({
+    runId: 'chat-cli-run-1',
+    phase: 'document-edit',
+    type: 'client_event',
+    payload: { event: 'ai_cli_failed_command', command: 'sed -i bad file.txt', error: 'sed: unsupported command' },
+  })).toBe('--------\nrun: chat-cli-run-1\nCMD: sed -i bad file.txt\nsed: unsupported command\n');
+
+  expect(formatFailedCliCommandLogEvent({
+    runId: 'chat-cli-run-1',
     phase: 'document-edit',
     type: 'client_event',
     payload: { event: 'ai_cli_command', command: 'pwd', output: '/' },

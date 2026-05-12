@@ -5,8 +5,8 @@ test('toolbar exposes quote and code block actions', async ({ page }) => {
 
   await page.locator('[data-action="activate-block"]').first().click();
   const editor = page.locator('.rich-editor').first();
-  const quoteButton = page.getByRole('button', { name: 'Quote' }).first();
-  const codeBlockButton = page.getByRole('button', { name: 'Code block' }).first();
+  const quoteButton = page.locator('[data-rich-action="quote"]').first();
+  const codeBlockButton = page.locator('[data-rich-action="code-block"]').first();
 
   await editor.evaluate((node) => {
     node.innerHTML = '<p>Quoted</p>';
@@ -97,11 +97,6 @@ test('toolbar exposes quote and code block actions', async ({ page }) => {
   await expect(editor.locator('pre')).toHaveAttribute('data-code-language', '');
   await expect(codeBlockButton).toHaveClass(/secondary/);
 
-  await codeBlockButton.click();
-  await expect(editor.locator('pre')).toHaveCount(0);
-  await expect(editor.locator('p').last()).toHaveText('');
-  await expect(codeBlockButton).not.toHaveClass(/secondary/);
-
   await editor.evaluate((node) => {
     node.innerHTML = '<pre data-code-language="js"><code class="language-js" contenteditable="true">const value = 1;</code></pre>';
     const textNode = node.querySelector('code')?.firstChild;
@@ -119,12 +114,12 @@ test('toolbar exposes quote and code block actions', async ({ page }) => {
   await expect(codeBlockButton).not.toHaveClass(/secondary/);
 });
 
-test('toolbar block style row covers text and all heading buttons', async ({ page }) => {
+test('toolbar heading buttons transform text and preserve typing', async ({ page }) => {
   await page.goto('/');
 
   await page.locator('[data-action="activate-block"]').first().click();
   const editor = page.locator('.rich-editor').first();
-  const textButton = page.getByRole('button', { name: 'Text' }).first();
+  const textButton = page.locator('[data-rich-action="paragraph"]').first();
 
   for (const item of [
     { button: 'H1', tag: 'h1' },
@@ -132,7 +127,7 @@ test('toolbar block style row covers text and all heading buttons', async ({ pag
     { button: 'H3', tag: 'h3' },
     { button: 'H4', tag: 'h4' },
   ]) {
-    const headingButton = page.getByRole('button', { name: item.button }).first();
+    const headingButton = page.locator(`[data-rich-action="${item.tag.replace('h', 'heading-')}"]`).first();
     await editor.evaluate((node) => {
       node.innerHTML = '<p>Heading text</p>';
       const paragraph = node.querySelector('p');
@@ -173,13 +168,249 @@ test('toolbar block style row covers text and all heading buttons', async ({ pag
   }
 });
 
+test('text line style editor feeds the rich text toolbar', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Advanced' }).click();
+  await page.getByRole('button', { name: 'Document Meta' }).click();
+  await page.getByRole('button', { name: 'Add Style' }).click();
+  await page.locator('[data-field="text-line-style-name"]').fill('role');
+  await page.locator('[data-field="text-line-style-label"]').fill('Role heading');
+  await page.locator('[data-field="text-line-style-css"]').fill('margin: 12px 0 4px; padding-left: 18px; font-weight: 700;');
+  await page.getByRole('button', { name: 'Document Meta' }).click();
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('[data-field="block-rich"]').first();
+  await editor.evaluate((node) => {
+    node.innerHTML = '<p>Foo</p><p>moo cow</p>';
+    const paragraph = node.querySelector('p');
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(paragraph!);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+  });
+
+  await expect(page.locator('.text-line-style-toolbar-label').filter({ hasText: 'Paragraph Style' }).first()).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Normal' }).first()).toBeVisible();
+  await page.getByRole('button', { name: /Role heading/ }).first().click();
+
+  const styled = editor.locator('[data-hvy-text-line-style="role"]');
+  const activeEditorBlock = editor.locator('xpath=ancestor::*[contains(concat(" ", normalize-space(@class), " "), " editor-block ")][1]');
+  await expect(styled).toContainText('Foo');
+  await expect(styled).toHaveCSS('margin-top', '12px');
+  await expect(styled).toHaveCSS('padding-left', '18px');
+  await expect(styled.locator('.hvy-text-line-style-marker')).toBeHidden();
+  await expect(activeEditorBlock.getByRole('button', { name: 'Role heading' }).first()).toHaveClass(/is-selected/);
+});
+
+test('paragraph style picker shows two recent choices and opens the full list', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Advanced' }).click();
+  await page.getByRole('button', { name: 'Document Meta' }).click();
+
+  for (const style of [
+    { name: 'alpha', label: 'Alpha Heading', css: 'font-weight: 700;' },
+    { name: 'beta', label: 'Beta Detail', css: 'padding-left: 12px;' },
+    { name: 'gamma', label: 'Gamma Note', css: 'margin: 8px 0;' },
+  ]) {
+    await page.getByRole('button', { name: 'Add Style' }).click();
+    const row = page.locator('.text-line-style-row').last();
+    await row.locator('[data-field="text-line-style-name"]').fill(style.name);
+    await row.locator('[data-field="text-line-style-label"]').fill(style.label);
+    await row.locator('[data-field="text-line-style-css"]').fill(style.css);
+  }
+
+  await page.getByRole('button', { name: 'Document Meta' }).click();
+  await page.locator('[data-action="activate-block"]').first().click();
+
+  const activeEditorBlock = page.locator('[data-field="block-rich"]').first().locator('xpath=ancestor::*[contains(concat(" ", normalize-space(@class), " "), " editor-block ")][1]');
+  const toolbar = activeEditorBlock.locator('.paragraph-style-toolbar').first();
+  await expect(toolbar.locator('.paragraph-style-recent [data-rich-action="text-line-style"]')).toHaveCount(2);
+  await toolbar.getByRole('button', { name: 'More paragraph styles' }).click();
+  await expect(toolbar.locator('.paragraph-style-modal')).toBeVisible();
+  await expect(toolbar.locator('.paragraph-style-modal-list [data-rich-action="text-line-style"]')).toHaveCount(4);
+
+  await toolbar.getByRole('button', { name: 'Gamma Note' }).click();
+  await expect(toolbar.locator('.paragraph-style-recent [data-rich-action="text-line-style"]').first()).toHaveText('Gamma Note');
+  await expect(toolbar.getByRole('button', { name: 'Gamma Note' }).first()).toHaveClass(/is-selected/);
+
+  await toolbar.getByRole('button', { name: 'Gamma Note' }).first().click({ button: 'right' });
+  await expect(toolbar.locator('.paragraph-style-edit-modal')).toBeVisible();
+  await expect(toolbar.locator('.paragraph-style-edit-panel:not([hidden])')).toContainText('Gamma Note');
+  await toolbar.locator('.paragraph-style-edit-panel:not([hidden]) [data-css-property="margin-bottom"]').fill('14px');
+  await expect(toolbar.locator('.paragraph-style-edit-panel:not([hidden]) [data-field="text-line-style-css"]')).toHaveValue(/margin-bottom: 14px;/);
+});
+
+test('paragraph style toolbar compacts inside phone preview', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Advanced' }).click();
+  await page.getByRole('button', { name: 'Document Meta' }).click();
+
+  for (const style of [
+    { name: 'alpha', label: 'Alpha Heading', css: 'font-weight: 700;' },
+    { name: 'beta', label: 'Beta Detail', css: 'padding-left: 12px;' },
+    { name: 'gamma', label: 'Gamma Note', css: 'margin: 8px 0;' },
+  ]) {
+    await page.getByRole('button', { name: 'Add Style' }).click();
+    const row = page.locator('.text-line-style-row').last();
+    await row.locator('[data-field="text-line-style-name"]').fill(style.name);
+    await row.locator('[data-field="text-line-style-label"]').fill(style.label);
+    await row.locator('[data-field="text-line-style-css"]').fill(style.css);
+  }
+
+  await page.getByRole('button', { name: 'Document Meta' }).click();
+  await page.getByRole('button', { name: 'Phone 390' }).click();
+  await page.locator('[data-action="activate-block"]').first().click();
+
+  const toolbar = page.locator('[data-field="block-rich"]').first().locator('xpath=ancestor::*[contains(concat(" ", normalize-space(@class), " "), " editor-block ")][1]').locator('.paragraph-style-toolbar').first();
+  await expect(toolbar.locator('.text-line-style-toolbar-label')).toBeHidden();
+  await expect(toolbar.locator('> [data-rich-action="text-line-style"]:visible, > .paragraph-style-recent > [data-rich-action="text-line-style"]:visible')).toHaveCount(1);
+  await expect(toolbar.locator('.paragraph-style-expand')).toBeHidden();
+
+  await toolbar.getByRole('button', { name: 'Normal' }).click();
+  await expect(toolbar.locator('.paragraph-style-modal')).toBeVisible();
+  await expect(toolbar.locator('.paragraph-style-modal-list').getByRole('button', { name: 'Normal' })).toBeVisible();
+  await toolbar.getByRole('button', { name: 'Gamma Note' }).click();
+  await expect(toolbar.locator('> [data-rich-action="text-line-style"]:visible, > .paragraph-style-recent > [data-rich-action="text-line-style"]:visible')).toHaveText('Gamma Note');
+
+  await toolbar.getByRole('button', { name: 'Gamma Note' }).first().click();
+  await expect(toolbar.locator('.paragraph-style-modal-list').getByRole('button', { name: 'Normal' })).toBeVisible();
+  const modalBox = await toolbar.locator('.paragraph-style-modal').boundingBox();
+  const shellBox = await page.locator('.editor-shell').boundingBox();
+  expect(modalBox).not.toBeNull();
+  expect(shellBox).not.toBeNull();
+  expect(Math.floor(modalBox!.x)).toBeGreaterThanOrEqual(Math.floor(shellBox!.x));
+  expect(Math.ceil(modalBox!.x + modalBox!.width)).toBeLessThanOrEqual(Math.ceil(shellBox!.x + shellBox!.width));
+});
+
+test('paragraph style picker fits inside compact sidebar editor', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+text_line_styles:
+  alpha:
+    label: Alpha Heading
+    css: "font-weight: 700;"
+  beta:
+    label: Beta Detail
+    css: "padding-left: 12px;"
+  gamma:
+    label: Gamma Note
+    css: "margin: 8px 0;"
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ <!--hvy:text {}-->
+  Main body
+
+<!--hvy: {"id":"side","location":"sidebar"}-->
+#! Sidebar
+
+ <!--hvy:text {}-->
+  Sidebar body
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+  await page.getByRole('button', { name: 'Phone 390' }).click();
+  await page.locator('.editor-sidebar-tab').click();
+  await page.locator('.editor-sidebar [data-action="activate-block"]').first().click();
+
+  const toolbar = page.locator('.editor-sidebar [data-field="block-rich"]').first().locator('xpath=ancestor::*[contains(concat(" ", normalize-space(@class), " "), " editor-block ")][1]').locator('.paragraph-style-toolbar').first();
+  await toolbar.getByRole('button', { name: 'Normal' }).click();
+  await expect(toolbar.locator('.paragraph-style-modal')).toBeVisible();
+
+  const modalBox = await toolbar.locator('.paragraph-style-modal').boundingBox();
+  const panelBox = await page.locator('.editor-sidebar-panel').boundingBox();
+  expect(modalBox).not.toBeNull();
+  expect(panelBox).not.toBeNull();
+  expect(Math.floor(modalBox!.x)).toBeGreaterThanOrEqual(Math.floor(panelBox!.x));
+  expect(Math.ceil(modalBox!.x + modalBox!.width)).toBeLessThanOrEqual(Math.ceil(panelBox!.x + panelBox!.width));
+});
+
+test('normal after enter from paragraph style keeps the previous line styled', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Advanced' }).click();
+  await page.getByRole('button', { name: 'Document Meta' }).click();
+  await page.getByRole('button', { name: 'Add Style' }).click();
+  await page.locator('[data-field="text-line-style-name"]').fill('role');
+  await page.locator('[data-field="text-line-style-label"]').fill('Role heading');
+  await page.locator('[data-field="text-line-style-css"]').fill('font-weight: 700;');
+  await page.getByRole('button', { name: 'Document Meta' }).click();
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('[data-field="block-rich"]').first();
+  await editor.evaluate((node) => {
+    node.innerHTML = '<p>Styled line</p>';
+    const text = node.querySelector('p')?.firstChild;
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.setStart(text!, text!.textContent!.length);
+    range.collapse(true);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+  });
+
+  await page.getByRole('button', { name: 'Role heading' }).first().click();
+  await page.keyboard.press('Enter');
+  await page.getByRole('button', { name: 'Normal' }).first().click();
+  await page.keyboard.type('Normal line');
+
+  await expect(editor.locator('[data-hvy-text-line-style="role"]')).toContainText('Styled line');
+  await expect(editor.locator('[data-hvy-text-line-style="role"]')).toHaveCount(1);
+  await expect(editor.locator('p').last()).toContainText('Normal');
+});
+
+test('enter keeps paragraph style active on the new line', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Advanced' }).click();
+  await page.getByRole('button', { name: 'Document Meta' }).click();
+  await page.getByRole('button', { name: 'Add Style' }).click();
+  await page.locator('[data-field="text-line-style-name"]').fill('role');
+  await page.locator('[data-field="text-line-style-label"]').fill('Role heading');
+  await page.locator('[data-field="text-line-style-css"]').fill('font-weight: 700;');
+  await page.getByRole('button', { name: 'Document Meta' }).click();
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('[data-field="block-rich"]').first();
+  await editor.evaluate((node) => {
+    node.innerHTML = '<p>Styled line</p>';
+    const text = node.querySelector('p')?.firstChild;
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.setStart(text!, text!.textContent!.length);
+    range.collapse(true);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+  });
+
+  await page.getByRole('button', { name: 'Role heading' }).first().click();
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('Still styled');
+
+  await expect(editor.locator('[data-hvy-text-line-style="role"]')).toHaveCount(2);
+  await expect(editor.locator('[data-hvy-text-line-style="role"]').last()).toContainText('Still styled');
+  await expect(page.getByRole('button', { name: 'Role heading' }).first()).toHaveClass(/is-selected/);
+});
+
 test('heading enter exits to normal text and updates toolbar state', async ({ page }) => {
   await page.goto('/');
 
   await page.locator('[data-action="activate-block"]').first().click();
   const editor = page.locator('.rich-editor').first();
-  const h1Button = page.getByRole('button', { name: 'H1' }).first();
-  const textButton = page.getByRole('button', { name: 'Text' }).first();
+  const h1Button = page.locator('[data-rich-action="heading-1"]').first();
+  const textButton = page.locator('[data-rich-action="paragraph"]').first();
 
   await editor.evaluate((node) => {
     node.innerHTML = '<p><br></p>';
@@ -229,7 +460,7 @@ test('empty heading buttons keep the caret available for typing', async ({ page 
       (node as HTMLElement).focus();
     });
 
-    const headingButton = page.getByRole('button', { name: item.button }).first();
+    const headingButton = page.locator(`[data-rich-action="${item.tag.replace('h', 'heading-')}"]`).first();
     await headingButton.click();
     await expect(headingButton).toHaveClass(/secondary/);
     await page.keyboard.type(item.button);

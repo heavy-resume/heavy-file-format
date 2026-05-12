@@ -11,6 +11,8 @@ type ComponentStructureEntry = {
   type: string;
   textPath: string;
   jsonPath: string;
+  css?: string;
+  preview?: string;
   description?: string;
   placeholder?: string;
   tags?: string;
@@ -43,6 +45,7 @@ const COMPONENT_TYPE_CODES: Record<string, string> = {
   expandable: 'e',
   'xref-card': 'r',
 };
+const STRUCTURE_PREVIEW_MAX_CHARS = 40;
 
 export function formatHvyRequestStructure(document: VisualDocument, fs: HvyVirtualFileSystem, options: HvyRequestStructureOptions = {}): string {
   const entries = collectComponentStructureEntries(document, fs).map((entry, index) => withStableId(entry, index));
@@ -133,6 +136,8 @@ function componentEntryFromJsonFile(document: VisualDocument, fs: HvyVirtualFile
   }
   const config = readJsonFile(fs, jsonPath);
   const baseType = resolveBaseComponentFromMeta(type, document.meta);
+  const bodyEntry = fs.entries.get(textPath);
+  const cssEntry = fs.entries.get(`${directory}/${type}.css`);
   return {
     code: COMPONENT_TYPE_CODES[baseType] ?? '?',
     directory,
@@ -141,6 +146,8 @@ function componentEntryFromJsonFile(document: VisualDocument, fs: HvyVirtualFile
     type,
     textPath,
     jsonPath,
+    css: cssEntry?.kind === 'file' ? compactInlineValue(cssEntry.read()) : undefined,
+    preview: bodyEntry?.kind === 'file' ? compactStructurePreview(bodyEntry.read()) : undefined,
     description: typeof config.description === 'string' && config.description.trim() ? config.description.trim() : undefined,
     placeholder: typeof config.placeholder === 'string' && config.placeholder.trim() ? config.placeholder.trim() : undefined,
     tags: typeof config.tags === 'string' && config.tags.trim() ? config.tags.trim() : undefined,
@@ -198,7 +205,7 @@ function formatCustomComponentDefinitions(document: VisualDocument): string[] {
 }
 
 function formatComponentStructureLine(entry: ComponentStructureEntry, options: { describe?: boolean } = {}): string {
-  return `${entry.textPath.split('/').pop() ?? entry.textPath} id=${entry.id}${formatTagsSuffix(entry.tags)}${formatPlaceholderSuffix(entry.placeholder, options.describe ?? false)}`;
+  return `${entry.textPath.split('/').pop() ?? entry.textPath} id=${entry.id}${formatTagsSuffix(entry.tags)}${formatPlaceholderSuffix(entry.placeholder, options.describe ?? false)}${formatCssSuffix(entry.css, options.describe ?? false)}`;
 }
 
 function formatSearchStructureLine(entry: ComponentStructureEntry): string {
@@ -249,7 +256,7 @@ function formatComponentTreeNode(node: ComponentTreeNode, depth: number, options
   }
   const sectionMeta = options.sectionMeta.get(node.path);
   const label = node.entry
-    ? `${formatComponentStructureLine(node.entry, { describe: options.describe })}${formatDescriptionSuffix(node.entry.description, options.describe)}`
+    ? `${formatComponentStructureLine(node.entry, { describe: options.describe })}${formatDescriptionSuffix(node.entry.description, options.describe)}${formatPreviewSuffix(node.entry.preview)}`
     : `/${node.name}${formatTagsSuffix(sectionMeta?.tags)}${formatDescriptionSuffix(sectionMeta?.description, options.describe)}`;
   return [
     `${'  '.repeat(depth)}${label}`,
@@ -346,6 +353,32 @@ function formatAnonymousLeafRun(run: ComponentTreeNode[], depth: number): string
   const firstEntry = anonymousLeafEntry(first)!;
   const lastEntry = anonymousLeafEntry(last)!;
   return `${'  '.repeat(depth)}/${first.name}..${last.name} ${firstEntry.textPath.split('/').pop() ?? firstEntry.textPath} ids=${firstEntry.id}-${lastEntry.id}${formatTagsSuffix(firstEntry.tags)}`;
+}
+
+function formatPreviewSuffix(preview: string | undefined): string {
+  return preview ? ` | ${preview}` : '';
+}
+
+function compactStructurePreview(value: string): string {
+  const lines = value.split('\n').map(compactInlineValue);
+  const firstContentIndex = lines.findIndex((line) => line.length > 0);
+  if (firstContentIndex < 0) {
+    return '';
+  }
+  const firstContentLine = lines[firstContentIndex] ?? '';
+  const hasMoreContent = lines.slice(firstContentIndex + 1).some((line) => line.length > 0);
+  if (firstContentLine.length > STRUCTURE_PREVIEW_MAX_CHARS) {
+    return `${firstContentLine.slice(0, STRUCTURE_PREVIEW_MAX_CHARS)}...`;
+  }
+  return hasMoreContent ? `${firstContentLine}...` : firstContentLine;
+}
+
+function formatCssSuffix(css: string | undefined, enabled: boolean): string {
+  return enabled && css ? ` css="${css}"` : '';
+}
+
+function compactInlineValue(value: string): string {
+  return value.replace(/\s+/g, ' ').trim();
 }
 
 function withStableId(entry: ComponentStructureEntry, index: number): ComponentStructureEntry {

@@ -7,7 +7,7 @@ import { closeAiEditPopover } from '../../ai-edit-popover';
 import { openAiEditPopover } from '../../ai-edit-popover';
 import { restoreCliViewAfterRender } from '../../cli-ui/focus';
 import { clearFilteringForTarget } from '../../search/actions';
-import { setActiveEditorBlock } from '../../block-ops';
+import { clearActiveEditorBlock, setActiveEditorBlock } from '../../block-ops';
 import type { AppActionHandler } from './types';
 
 const undo: AppActionHandler = () => {
@@ -21,24 +21,39 @@ const redo: AppActionHandler = () => {
 const switchView: AppActionHandler = ({ actionButton }) => {
   const requestedView = actionButton.dataset.view;
   const view = requestedView === 'viewer' ? 'viewer' : requestedView === 'ai' ? 'ai' : 'editor';
+  const nextEditorMode = requestedView === 'cli'
+    ? 'cli'
+    : requestedView === 'editor' && state.editorMode === 'cli'
+    ? 'basic'
+    : state.editorMode;
   const crossingChatModeBoundary = (state.currentView === 'viewer') !== (view === 'viewer');
   const crossingEditorBoundary = (state.currentView === 'editor') !== (view === 'editor');
   if (crossingChatModeBoundary) {
     clearChatConversation(state.chat);
   }
   if (crossingEditorBoundary) {
-    state.activeEditorBlock = null;
+    commitActiveEditorSession();
     state.pendingEditorActivation = null;
-    state.activeEditorSectionTitleKey = null;
-    state.clearSectionTitleOnFocusKey = null;
     state.componentPlacement = null;
   }
   state.currentView = view;
+  state.editorMode = nextEditorMode;
+  state.showAdvancedEditor = state.editorMode === 'advanced';
   if (view !== 'ai') {
     closeAiEditPopover();
   }
   getRenderApp()();
+  if (state.editorMode === 'cli') {
+    restoreCliViewAfterRender();
+  }
 };
+
+function commitActiveEditorSession(): void {
+  clearActiveEditorBlock();
+  state.activeEditorSectionTitleKey = null;
+  state.clearSectionTitleOnFocusKey = null;
+  state.activeEditorBlockReturnScroll = null;
+}
 
 const closeAiEdit: AppActionHandler = () => {
   closeAiEditPopover();
@@ -145,7 +160,7 @@ const editContextComponent: AppActionHandler = ({ app, event }) => {
   state.contextMenu = null;
   app.querySelector('.hvy-context-popover')?.remove();
   app.querySelector('.hvy-context-popover-backdrop')?.remove();
-  setActiveEditorBlock(menu.sectionKey, menu.blockId);
+  setActiveEditorBlock(menu.sectionKey, menu.blockId, { targetOnly: true });
   if (state.pendingEditorActivation) {
     state.pendingEditorActivation.immediateFocus = true;
   }

@@ -596,12 +596,18 @@
   box-sizing: border-box;
 }
 
+.hvy-context-popover-clone [data-hvy-text-line-style]:first-child {
+  margin-top: 0 !important;
+}
+
 .hvy-context-popover {
-  position: fixed;
+  position: absolute;
   z-index: 130;
   display: grid;
   gap: 0.25rem;
-  min-width: 12rem;
+  box-sizing: border-box;
+  min-width: min(12rem, calc(100% - 1rem));
+  max-width: calc(100% - 1rem);
   padding: 0.35rem;
   border: 1px solid var(--hvy-border);
   border-radius: 12px;

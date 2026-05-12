@@ -31,6 +31,10 @@ export function bindFocus(app: HTMLElement): void {
         }
         state.activeEditorSectionTitleKey = null;
         state.clearSectionTitleOnFocusKey = null;
+        const nextTarget = event.relatedTarget instanceof HTMLElement ? event.relatedTarget : null;
+        if (nextTarget?.closest('.component-picker, [data-action="add-block"]')) {
+          return;
+        }
         getRenderApp()();
       }
     }

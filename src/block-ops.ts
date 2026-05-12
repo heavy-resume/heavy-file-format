@@ -11,7 +11,7 @@ import { syncReusableTemplateForBlock } from './reusable';
 import { normalizeXrefTarget, getXrefTargetOptions, isXrefTargetValid } from './xref-ops';
 import { getTableColumns, setTableColumns } from './table-ops';
 import { coerceGridColumns } from './grid-ops';
-import { applyMobileAltAdjustment, normalizeEditorMarkdownWhitespace, normalizeMarkdownLists, markdownToEditorHtml, turndown } from './markdown';
+import { applyMobileAltAdjustment, normalizeEditorMarkdownWhitespace, normalizeMarkdownLists, markdownToEditorHtml as renderMarkdownToEditorHtml, turndown } from './markdown';
 import { renderAddComponentPicker } from './editor/component-picker';
 import { escapeAttr, escapeHtml, getInlineEditableText, renderOption } from './utils';
 import { recordHistory } from './history';
@@ -19,6 +19,7 @@ import { getDocumentComponentDefaultCss } from './document-component-defaults';
 import { resetDbTableViewState } from './plugins/db-table';
 import { handleInlineCheckboxBackspace } from './editor/inline-checkbox';
 import { TEXT_FILL_IN_MARKER, hasTextFillInMarker } from './text-fill-in';
+import { getTextLineStylesFromMeta, sanitizeTextLineStyleCss } from './text-line-styles';
 
 export function findBlockByIds(sectionKey: string, blockId: string): VisualBlock | null {
   const sqliteRowComponentBlock = findSqliteRowComponentBlock(sectionKey, blockId);
@@ -98,20 +99,6 @@ function findBlockPathInList(blocks: VisualBlock[], blockId: string): string[] |
     }
   }
   return null;
-}
-
-function getEditorBlockPathIds(sectionKey: string, blockId: string): string[] | null {
-  const sqliteRowComponentModal = state.sqliteRowComponentModal;
-  if (sqliteRowComponentModal?.sectionKey === sectionKey) {
-    return findBlockPathInList(sqliteRowComponentModal.blocks, blockId);
-  }
-  const reusableName = getReusableNameFromSectionKey(sectionKey);
-  if (reusableName) {
-    const template = getReusableTemplateByName(reusableName);
-    return template ? findBlockPathInList([template], blockId) : null;
-  }
-  const section = findSectionByKey(state.document.sections, sectionKey);
-  return section ? findBlockPathInList(section.blocks, blockId) : null;
 }
 
 export function removeBlockFromList(blocks: VisualBlock[], blockId: string, seen = new Set<VisualBlock>()): boolean {
@@ -545,26 +532,43 @@ export function getTagRenderOptions(target: HTMLElement): Omit<TagRenderOptions,
 }
 
 export function isActiveEditorBlock(sectionKey: string, blockId: string): boolean {
+  return state.activeEditorBlockPath.some((active) => active.sectionKey === sectionKey && active.blockId === blockId);
+}
+
+export function isActiveEditorLeafBlock(sectionKey: string, blockId: string): boolean {
   return state.activeEditorBlock?.sectionKey === sectionKey && state.activeEditorBlock.blockId === blockId;
 }
 
-export function setActiveEditorBlock(sectionKey: string, blockId: string): void {
-  const currentActiveBlock = state.activeEditorBlock;
-  const currentPath = currentActiveBlock?.sectionKey === sectionKey
-    ? getEditorBlockPathIds(sectionKey, currentActiveBlock.blockId)
-    : null;
-  const nextPath = getEditorBlockPathIds(sectionKey, blockId);
+type SetActiveEditorBlockOptions = {
+  targetOnly?: boolean;
+};
+
+export function setActiveEditorBlock(sectionKey: string, blockId: string, options: SetActiveEditorBlockOptions = {}): void {
+  const pathIds = options.targetOnly ? [blockId] : getEditorBlockPathIds(sectionKey, blockId) ?? [blockId];
+  state.activeEditorBlockPath = pathIds.map((pathBlockId) => ({ sectionKey, blockId: pathBlockId }));
   state.activeEditorBlock = { sectionKey, blockId };
+  state.activeEditorBlockSnapshots = state.activeEditorBlockPath
+    .map((active) => {
+      const existing = state.activeEditorBlockSnapshots.find(
+        (snapshot) => snapshot.sectionKey === active.sectionKey && snapshot.blockId === active.blockId
+      );
+      return existing ?? createEditorBlockSnapshot(active.sectionKey, active.blockId);
+    })
+    .filter((snapshot): snapshot is NonNullable<AppState['activeEditorBlockSnapshot']> => Boolean(snapshot));
   state.activeEditorBlockSnapshot =
-    currentActiveBlock?.sectionKey === sectionKey && currentActiveBlock.blockId === blockId
-      ? state.activeEditorBlockSnapshot
-      : createEditorBlockSnapshot(sectionKey, blockId);
+    state.activeEditorBlockSnapshots.find((snapshot) => snapshot.sectionKey === sectionKey && snapshot.blockId === blockId)
+    ?? null;
   openExpandableEditorPanelsToBlock(sectionKey, blockId);
   state.pendingEditorActivation = {
     sectionKey,
     blockId,
-    revealPath: shouldRevealEditorActivationPath(currentPath, nextPath),
+    revealPath: false,
   };
+}
+
+function getEditorBlockPathIds(sectionKey: string, blockId: string): string[] | null {
+  const rootBlocks = getEditorRootBlocks(sectionKey);
+  return rootBlocks ? findBlockPathInList(rootBlocks, blockId) : null;
 }
 
 function createEditorBlockSnapshot(sectionKey: string, blockId: string): AppState['activeEditorBlockSnapshot'] {
@@ -637,51 +641,46 @@ function setExpandableEditorPanelOpen(sectionKey: string, blockId: string, panel
   };
 }
 
-function shouldRevealEditorActivationPath(currentPath: string[] | null, nextPath: string[] | null): boolean {
-  if (!nextPath) {
-    return true;
-  }
-  if (!currentPath) {
-    return true;
-  }
-  const sharedPathLength = nextPath.findIndex((blockId, index) => currentPath[index] !== blockId);
-  const commonLength = sharedPathLength === -1 ? Math.min(currentPath.length, nextPath.length) : sharedPathLength;
-  return commonLength < nextPath.length - 1;
-}
 
 export function clearActiveEditorBlock(blockId?: string): void {
   if (!state.activeEditorBlock) {
     return;
   }
-  if (!blockId || state.activeEditorBlock.blockId === blockId) {
+  if (!blockId) {
     state.activeEditorBlock = null;
     state.activeEditorBlockSnapshot = null;
+    state.activeEditorBlockPath = [];
+    state.activeEditorBlockSnapshots = [];
+    return;
+  }
+  const index = state.activeEditorBlockPath.findIndex((active) => active.blockId === blockId);
+  if (index >= 0) {
+    closeActiveEditorPathFromIndex(index);
   }
 }
 
-export function deactivateEditorBlock(sectionKey: string, blockId: string): void {
-  const activeBlockId = state.activeEditorBlock?.blockId ?? null;
-  if (!activeBlockId) {
-    return;
+export function deactivateEditorBlock(sectionKey: string, blockId: string): 'closed' | 'unchanged' {
+  const index = state.activeEditorBlockPath.findIndex(
+    (active) => active.sectionKey === sectionKey && active.blockId === blockId
+  );
+  if (index < 0) {
+    return 'unchanged';
   }
-  if (activeBlockId === blockId) {
-    state.activeEditorBlock = null;
-    state.activeEditorBlockSnapshot = null;
-    return;
-  }
-  const clickedBlock = findBlockByIds(sectionKey, blockId);
-  const shouldDeactivate =
-    clickedBlock ? blockContainsBlockId(clickedBlock, activeBlockId) : false;
-  if (!shouldDeactivate) {
-    return;
-  }
-  state.activeEditorBlock = null;
-  state.activeEditorBlockSnapshot = null;
+  closeActiveEditorPathFromIndex(index);
+  return 'closed';
 }
 
-export function cancelEditorBlockEdit(sectionKey: string, blockId: string): void {
-  const snapshot = state.activeEditorBlockSnapshot;
-  if (snapshot?.sectionKey === sectionKey && snapshot.blockId === blockId) {
+export function cancelEditorBlockEdit(sectionKey: string, blockId: string): 'closed' | 'unchanged' {
+  const index = state.activeEditorBlockPath.findIndex(
+    (active) => active.sectionKey === sectionKey && active.blockId === blockId
+  );
+  if (index < 0) {
+    return 'unchanged';
+  }
+  const snapshot = state.activeEditorBlockSnapshots.find(
+    (candidate) => candidate.sectionKey === sectionKey && candidate.blockId === blockId
+  );
+  if (snapshot) {
     const block = findBlockByIds(sectionKey, blockId);
     if (block) {
       const restored = cloneVisualBlock(snapshot.block);
@@ -690,8 +689,20 @@ export function cancelEditorBlockEdit(sectionKey: string, blockId: string): void
       block.schemaMode = restored.schemaMode;
     }
   }
-  state.activeEditorBlock = null;
-  state.activeEditorBlockSnapshot = null;
+  closeActiveEditorPathFromIndex(index);
+  return 'closed';
+}
+
+function closeActiveEditorPathFromIndex(index: number): void {
+  state.activeEditorBlockPath = state.activeEditorBlockPath.slice(0, index);
+  state.activeEditorBlockSnapshots = state.activeEditorBlockSnapshots.filter((snapshot) =>
+    state.activeEditorBlockPath.some((active) => active.sectionKey === snapshot.sectionKey && active.blockId === snapshot.blockId)
+  );
+  const leaf = state.activeEditorBlockPath[state.activeEditorBlockPath.length - 1] ?? null;
+  state.activeEditorBlock = leaf ? { ...leaf } : null;
+  state.activeEditorBlockSnapshot = leaf
+    ? state.activeEditorBlockSnapshots.find((snapshot) => snapshot.sectionKey === leaf.sectionKey && snapshot.blockId === leaf.blockId) ?? null
+    : null;
 }
 
 export function blockContainsBlockId(block: VisualBlock, blockId: string): boolean {
@@ -725,7 +736,10 @@ export function getComponentRenderHelpers(editorRenderer: {
   return {
     escapeAttr,
     escapeHtml,
-    markdownToEditorHtml,
+    markdownToEditorHtml: (markdown) => renderMarkdownToEditorHtml(markdown, {
+      textLineStyles: getTextLineStylesFromMeta(state.document.meta),
+      textLineStyleMode: 'editor',
+    }),
     renderRichToolbar: editorRenderer.renderRichToolbar,
     renderEditorBlock: (sectionKey, block, parentLocked) => editorRenderer.renderEditorBlock(sectionKey, block, state.document.sections, parentLocked),
     renderPassiveEditorBlock: (sectionKey, block) => editorRenderer.renderPassiveEditorBlock(sectionKey, block, state.document.sections),
@@ -753,12 +767,21 @@ export function getComponentRenderHelpers(editorRenderer: {
       state.expandableEditorPanels[`${sectionKey}:${blockId}`]?.[panel === 'stub' ? 'stubOpen' : 'expandedOpen'] ?? fallback,
     isAdvancedEditorMode: () => state.showAdvancedEditor,
     isMobileAdjustmentMode: () => state.editorMode === 'mobile-adjustment',
+    getTextLineStyles: () => getTextLineStylesFromMeta(state.document.meta),
   };
 }
 
 export function applyRichAction(action: string, editable: HTMLElement, value?: string): void {
   if (action === 'fill-in') {
     applyTextFillInSlot(editable);
+    return;
+  }
+  if (action === 'text-line-style') {
+    const styleName = value ?? '';
+    applyTextLineStyleToSelection(editable, styleName);
+    updateRichToolbarState(editable, styleName);
+    editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    updateRichToolbarState(editable, styleName);
     return;
   }
   const annotationAction = normalizeAnnotationAction(action);
@@ -815,6 +838,139 @@ export function applyRichAction(action: string, editable: HTMLElement, value?: s
   updateRichToolbarState(editable);
   const inputEvent = new InputEvent('input', { bubbles: true });
   editable.dispatchEvent(inputEvent);
+}
+
+function applyTextLineStyleToSelection(editable: HTMLElement, styleName: string): void {
+  if (editable.dataset.field !== 'block-rich') {
+    return;
+  }
+  const range = getEditableSelectionRange(editable);
+  const targets = getSelectedTextLineStyleBlocks(editable, range);
+  for (const target of targets) {
+    setTextLineStyleBlock(target, editable, styleName);
+  }
+}
+
+function getSelectedTextLineStyleBlocks(editable: HTMLElement, range: Range | null): HTMLElement[] {
+  if (!range) {
+    const block = getSelectionTextLineStyleBlock(editable);
+    return block ? [block] : [];
+  }
+  if (range.collapsed) {
+    const block = getSelectionTextLineStyleBlock(editable);
+    return block ? [block] : [];
+  }
+  const blocks = Array.from(editable.children).filter((child): child is HTMLElement => child instanceof HTMLElement);
+  const selected = blocks.filter((block) => range.intersectsNode(block));
+  if (selected.length > 0) {
+    return selected;
+  }
+  const block = getSelectionTextLineStyleBlock(editable);
+  return block ? [block] : [];
+}
+
+function getSelectionTextLineStyleBlock(editable: HTMLElement): HTMLElement | null {
+  const range = getEditableSelectionRange(editable);
+  if (!range) {
+    return null;
+  }
+  const styled = getAncestorElement(range.startContainer, editable, '[data-hvy-text-line-style]');
+  if (styled) {
+    return styled;
+  }
+  const block = getSelectionBlockElement(editable);
+  if (!block || block === editable) {
+    return null;
+  }
+  const direct = getDirectEditableChild(block, editable);
+  return direct ?? block;
+}
+
+function setTextLineStyleBlock(block: HTMLElement, editable: HTMLElement, styleName: string): void {
+  const current = block.matches('[data-hvy-text-line-style]') ? block : null;
+  const styles = getTextLineStylesFromMeta(state.document.meta);
+  const style = styles[styleName];
+  const css = style ? sanitizeTextLineStyleCss(style.css) : '';
+  const label = style?.label.trim() || styleName;
+  const range = getEditableSelectionRange(editable);
+  const selectionOffsets = range && isRangeInsideElement(block, range)
+    ? {
+        start: getTextOffset(block, range.startContainer, range.startOffset),
+        end: getTextOffset(block, range.endContainer, range.endOffset),
+      }
+    : null;
+  if (!styleName) {
+    if (current) {
+      unwrapTextLineStyleBlock(current);
+    }
+    return;
+  }
+  if (current) {
+    current.dataset.hvyTextLineStyle = styleName;
+    current.dataset.hvyTextLineStyleLabel = label;
+    current.setAttribute('style', css);
+    current.classList.toggle('is-unknown', !style);
+    const marker = current.querySelector<HTMLElement>(':scope > .hvy-text-line-style-marker');
+    if (marker) {
+      marker.textContent = `^${styleName}^`;
+    } else {
+      current.prepend(createTextLineStyleMarker(styleName));
+    }
+    return;
+  }
+  const wrapper = createTextLineStyleWrapper(styleName, editable.ownerDocument);
+  block.replaceWith(wrapper);
+  wrapper.appendChild(block);
+  if (selectionOffsets && selectionOffsets.start !== null && selectionOffsets.end !== null) {
+    restoreSelectionByTextOffsets(block, selectionOffsets.start, selectionOffsets.end);
+  }
+}
+
+function createTextLineStyleWrapper(styleName: string, ownerDocument: Document): HTMLElement {
+  const styles = getTextLineStylesFromMeta(state.document.meta);
+  const style = styles[styleName];
+  const wrapper = ownerDocument.createElement('div');
+  wrapper.className = 'hvy-text-line-style';
+  wrapper.dataset.hvyTextLineStyle = styleName;
+  wrapper.dataset.hvyTextLineStyleLabel = style?.label.trim() || styleName;
+  wrapper.setAttribute('style', style ? sanitizeTextLineStyleCss(style.css) : '');
+  wrapper.classList.toggle('is-unknown', !style);
+  wrapper.appendChild(createTextLineStyleMarker(styleName));
+  return wrapper;
+}
+
+function createTextLineStyleMarker(styleName: string): HTMLElement {
+  const marker = document.createElement('span');
+  marker.className = 'hvy-text-line-style-marker';
+  marker.contentEditable = 'false';
+  marker.textContent = `^${styleName}^`;
+  return marker;
+}
+
+function unwrapTextLineStyleBlock(wrapper: HTMLElement): void {
+  wrapper.querySelector(':scope > .hvy-text-line-style-marker')?.remove();
+  const parent = wrapper.parentNode;
+  if (!parent) {
+    return;
+  }
+  while (wrapper.firstChild) {
+    parent.insertBefore(wrapper.firstChild, wrapper);
+  }
+  wrapper.remove();
+}
+
+function getDirectEditableChild(element: HTMLElement, editable: HTMLElement): HTMLElement | null {
+  let current: HTMLElement | null = element;
+  while (current?.parentElement && current.parentElement !== editable) {
+    current = current.parentElement;
+  }
+  return current && current.parentElement === editable ? current : null;
+}
+
+function getAncestorElement(node: Node, boundary: HTMLElement, selector: string): HTMLElement | null {
+  const element = node instanceof HTMLElement ? node : node.parentElement;
+  const match = element?.closest<HTMLElement>(selector) ?? null;
+  return match && boundary.contains(match) ? match : null;
 }
 
 function applyTextFillInSlot(editable: HTMLElement): void {
@@ -1271,7 +1427,7 @@ export function handleRichEditorClick(event: MouseEvent, editable: HTMLElement):
   return true;
 }
 
-function updateRichToolbarState(editable: HTMLElement): void {
+function updateRichToolbarState(editable: HTMLElement, textLineStyleOverride?: string): void {
   const range = getEditableSelectionRange(editable);
   const textEditorShell = editable.closest<HTMLElement>('.text-editor-shell');
   textEditorShell?.classList.toggle(
@@ -1291,8 +1447,10 @@ function updateRichToolbarState(editable: HTMLElement): void {
     return;
   }
   const selectedStyle = getSelectedRichBlockStyle(editable);
+  const selectedTextLineStyle = textLineStyleOverride ?? getSelectedTextLineStyleName(editable);
   const selectedInlineActions = getSelectedInlineRichActions(editable);
   toolbars.forEach((toolbar) => {
+    updateParagraphStyleToolbarState(toolbar, selectedTextLineStyle);
     toolbar.querySelectorAll<HTMLButtonElement>('[data-rich-action]').forEach((button) => {
       const action = button.dataset.richAction ?? '';
       const annotationAction = normalizeAnnotationAction(action);
@@ -1315,6 +1473,13 @@ function updateRichToolbarState(editable: HTMLElement): void {
         action === selectedStyle ||
         (selectedStyle === 'paragraph' && action === 'paragraph') ||
         (isInlineRichAction(action) && selectedInlineActions.has(action));
+      if (action === 'text-line-style') {
+        const selected = (button.dataset.textLineStyleName ?? '') === selectedTextLineStyle;
+        button.classList.toggle('secondary', selected);
+        button.classList.toggle('is-selected', selected);
+        button.classList.toggle('ghost', !selected);
+        return;
+      }
       if (!/^(paragraph|heading-[1-4]|quote|code-block|list|checklist)$/.test(action) && !isInlineRichAction(action)) {
         return;
       }
@@ -1323,6 +1488,49 @@ function updateRichToolbarState(editable: HTMLElement): void {
       button.classList.toggle('ghost', !selected);
     });
   });
+}
+
+function getSelectedTextLineStyleName(editable: HTMLElement): string {
+  const block = getSelectionTextLineStyleBlock(editable);
+  const styled = block?.matches('[data-hvy-text-line-style]')
+    ? block
+    : block?.closest<HTMLElement>('[data-hvy-text-line-style]');
+  return styled?.dataset.hvyTextLineStyle ?? '';
+}
+
+function updateParagraphStyleToolbarState(toolbar: HTMLElement, selectedStyleName: string): void {
+  const styleToolbar = toolbar.querySelector<HTMLElement>('.paragraph-style-toolbar');
+  if (!styleToolbar) {
+    return;
+  }
+  const selectedButton = styleToolbar.querySelector<HTMLButtonElement>(
+    `.paragraph-style-modal-list [data-rich-action="text-line-style"][data-text-line-style-name="${cssEscapeForSelector(selectedStyleName)}"]`
+  );
+  if (!selectedStyleName || !selectedButton) {
+    return;
+  }
+  const recent = styleToolbar.querySelector<HTMLElement>('.paragraph-style-recent');
+  if (!recent) {
+    return;
+  }
+  recent
+    .querySelectorAll<HTMLButtonElement>('[data-rich-action="text-line-style"]')
+    .forEach((button) => {
+      if ((button.dataset.textLineStyleName ?? '') === selectedStyleName) {
+        button.remove();
+      }
+    });
+  const clone = selectedButton.cloneNode(true) as HTMLButtonElement;
+  clone.classList.remove('paragraph-style-modal-option');
+  recent.prepend(clone);
+  Array.from(recent.querySelectorAll<HTMLButtonElement>('[data-rich-action="text-line-style"]')).slice(2).forEach((button) => button.remove());
+}
+
+function cssEscapeForSelector(value: string): string {
+  if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function') {
+    return CSS.escape(value);
+  }
+  return value.replace(/["\\]/g, '\\$&');
 }
 
 function isTableAltPreviewSelected(shell: HTMLElement, editable: HTMLElement): boolean {
@@ -1448,6 +1656,13 @@ export function handleRichEditorKeydown(event: KeyboardEvent, editable: HTMLElem
   }
 
   if (event.key === 'Enter') {
+    if (exitTextLineStyleAtSelection(editable)) {
+      event.preventDefault();
+      editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
+      updateRichToolbarState(editable);
+      return true;
+    }
+
     if (exitBlockStyleAtSelection(editable)) {
       event.preventDefault();
       editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
@@ -1802,6 +2017,28 @@ function exitBlockStyleAtSelection(editable: HTMLElement): boolean {
   const paragraph = document.createElement('p');
   paragraph.appendChild(document.createTextNode('\u200b'));
   block.parentNode?.insertBefore(paragraph, block.nextSibling);
+  placeCaretAtEnd(paragraph);
+  return true;
+}
+
+function exitTextLineStyleAtSelection(editable: HTMLElement): boolean {
+  const range = getEditableSelectionRange(editable);
+  if (!range?.collapsed) {
+    return false;
+  }
+  const styled = getAncestorElement(range.startContainer, editable, '[data-hvy-text-line-style]');
+  if (!styled || styled === editable || !isCollapsedSelectionAtEndOf(styled)) {
+    return false;
+  }
+  const styleName = styled.dataset.hvyTextLineStyle ?? '';
+  if (!styleName) {
+    return false;
+  }
+  const wrapper = createTextLineStyleWrapper(styleName, editable.ownerDocument);
+  const paragraph = document.createElement('p');
+  paragraph.appendChild(document.createTextNode('\u200b'));
+  wrapper.appendChild(paragraph);
+  styled.parentNode?.insertBefore(wrapper, styled.nextSibling);
   placeCaretAtEnd(paragraph);
   return true;
 }
@@ -2194,7 +2431,10 @@ export function syncEditableTaskListMarkup(editable: HTMLElement, markdown: stri
     return;
   }
 
-  editable.innerHTML = markdownToEditorHtml(markdown);
+  editable.innerHTML = renderMarkdownToEditorHtml(markdown, {
+    textLineStyles: getTextLineStylesFromMeta(state.document.meta),
+    textLineStyleMode: 'editor',
+  });
   placeCaretAtEnd(editable);
 }
 

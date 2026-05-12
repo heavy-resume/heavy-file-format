@@ -79,7 +79,7 @@ test('global undo shortcut does not intercept textarea native undo', async () =>
   const { bindShortcuts } = await import('../src/bind/handlers/shortcuts');
   const { setShortcutsBound } = await import('../src/bind/handlers/_imports');
   setShortcutsBound(false);
-  bindShortcuts(new TestHTMLElement() as HTMLElement);
+  bindShortcuts(new TestHTMLElement() as unknown as HTMLElement);
 
   let prevented = false;
   listener?.({
@@ -114,7 +114,7 @@ test('global undo shortcut still handles document-level undo', async () => {
   const { bindShortcuts } = await import('../src/bind/handlers/shortcuts');
   const { setShortcutsBound } = await import('../src/bind/handlers/_imports');
   setShortcutsBound(false);
-  bindShortcuts(new TestHTMLElement() as HTMLElement);
+  bindShortcuts(new TestHTMLElement() as unknown as HTMLElement);
 
   let prevented = false;
   listener?.({
@@ -149,7 +149,7 @@ test('global undo shortcut handles theme modal inputs', async () => {
   const { bindShortcuts } = await import('../src/bind/handlers/shortcuts');
   const { setShortcutsBound } = await import('../src/bind/handlers/_imports');
   setShortcutsBound(false);
-  bindShortcuts(new TestHTMLElement() as HTMLElement);
+  bindShortcuts(new TestHTMLElement() as unknown as HTMLElement);
 
   const input = new TestInputElement();
   input.themeModalAncestor = true;

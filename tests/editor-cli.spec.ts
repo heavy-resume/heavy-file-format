@@ -6,7 +6,8 @@ test('cli view can navigate and edit virtual component text files', async ({ pag
 
   await expect(page.locator('.chat-launcher')).toHaveCount(0);
   await expect(page.getByLabel('Allowed CLI commands')).toContainText('cd, pwd, ls, cat');
-  await expect(page.getByLabel('Allowed CLI commands')).toContainText('sed, hvy');
+  await expect(page.getByLabel('Allowed CLI commands')).toContainText('sed');
+  await expect(page.getByLabel('Allowed CLI commands')).toContainText('hvy');
   await expect(page.locator('#cliInput')).toBeFocused();
 
   await page.locator('#cliInput').fill('ls /');

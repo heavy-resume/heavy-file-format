@@ -2,7 +2,7 @@ import { state, getRenderApp, getRefreshReaderPanels } from '../../state';
 import { findSectionByKey, isDefaultUntitledSectionTitle } from '../../section-ops';
 import { findBlockByIds, setActiveEditorBlock, deactivateEditorBlock, cancelEditorBlockEdit } from '../../block-ops';
 import { recordHistory } from '../../history';
-import { capturePaneScroll } from '../../scroll';
+import { captureEditorDeactivationAnchor, capturePaneScroll } from '../../scroll';
 import type { AppActionHandler } from './types';
 import { buildBlockDescriptionParentTree, buildDescriptionRequest, generateDescription } from '../../descriptions/provider';
 import { populateMissingDescriptions } from '../../descriptions/populate';
@@ -16,13 +16,14 @@ const activateBlock: AppActionHandler = ({ app, event, sectionKey, blockId }) =>
   event.stopPropagation();
   const targetElement = event.target as HTMLElement | null;
   const passiveBlock = targetElement?.closest<HTMLElement>('.editor-block-passive');
-  const anchorTop = passiveBlock ? targetElement?.getBoundingClientRect().top : undefined;
+  const passiveContent = targetElement?.closest<HTMLElement>('.reader-block') ?? passiveBlock?.querySelector<HTMLElement>('.reader-block');
+  const anchor = passiveBlock ? getPassiveTextAnchor(passiveContent, targetElement) : undefined;
   state.activeEditorBlockReturnScroll = capturePaneScroll(state.paneScroll, app);
   setActiveEditorBlock(sectionKey, blockId);
-  if (typeof anchorTop === 'number' && state.pendingEditorActivation) {
+  if (typeof anchor?.top === 'number' && state.pendingEditorActivation) {
     state.pendingEditorActivation = {
       ...state.pendingEditorActivation,
-      anchorTop,
+      anchorTop: anchor.top,
       clientX: event.clientX,
       clientY: event.clientY,
       preferTextFocus: true,
@@ -30,6 +31,50 @@ const activateBlock: AppActionHandler = ({ app, event, sectionKey, blockId }) =>
   }
   getRenderApp()();
 };
+
+type PassiveTextAnchor = {
+  top: number;
+  parentTag: string | null;
+  parentClass: string | null;
+  textPreview: string;
+};
+
+function getPassiveTextAnchor(passiveContent: HTMLElement | null | undefined, targetElement: HTMLElement | null): PassiveTextAnchor | undefined {
+  if (!passiveContent) {
+    return targetElement ? getFirstTextAnchor(targetElement) : undefined;
+  }
+  if (targetElement && targetElement !== passiveContent && passiveContent.contains(targetElement)) {
+    return getFirstTextAnchor(targetElement);
+  }
+  return getFirstTextAnchor(passiveContent);
+}
+
+function getFirstTextAnchor(root: HTMLElement): PassiveTextAnchor | undefined {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  let node = walker.nextNode();
+  while (node) {
+    const text = node.textContent ?? '';
+    const firstTextIndex = text.search(/\S/);
+    if (firstTextIndex >= 0) {
+      const range = document.createRange();
+      range.setStart(node, firstTextIndex);
+      range.setEnd(node, text.length);
+      const rect = range.getClientRects()[0];
+      range.detach();
+      if (rect) {
+        const parent = node.parentElement;
+        return {
+          top: rect.top,
+          parentTag: parent?.tagName.toLowerCase() ?? null,
+          parentClass: parent?.className ?? null,
+          textPreview: text.slice(firstTextIndex).replace(/\s+/g, ' ').trim().slice(0, 80),
+        };
+      }
+    }
+    node = walker.nextNode();
+  }
+  return undefined;
+}
 
 const activateSectionTitle: AppActionHandler = ({ event, sectionKey }) => {
   if (!sectionKey) {
@@ -42,34 +87,34 @@ const activateSectionTitle: AppActionHandler = ({ event, sectionKey }) => {
   getRenderApp()();
 };
 
-const deactivateBlock: AppActionHandler = ({ event, sectionKey, blockId }) => {
+const deactivateBlock: AppActionHandler = ({ app, event, sectionKey, blockId }) => {
   if (!blockId) {
     return;
   }
   event.stopPropagation();
-  deactivateEditorBlock(sectionKey, blockId);
-  queueEditorReturnScroll();
+  const deactivationAnchor = captureEditorDeactivationAnchor(app, sectionKey, blockId);
+  const result = deactivateEditorBlock(sectionKey, blockId);
+  if (result === 'closed') {
+    state.pendingEditorDeactivation = deactivationAnchor;
+    state.activeEditorBlockReturnScroll = null;
+  }
   getRenderApp()();
 };
 
-const cancelBlockEdit: AppActionHandler = ({ event, sectionKey, blockId }) => {
+const cancelBlockEdit: AppActionHandler = ({ app, event, sectionKey, blockId }) => {
   if (!blockId) {
     return;
   }
   event.stopPropagation();
-  cancelEditorBlockEdit(sectionKey, blockId);
-  queueEditorReturnScroll();
+  const deactivationAnchor = captureEditorDeactivationAnchor(app, sectionKey, blockId);
+  const result = cancelEditorBlockEdit(sectionKey, blockId);
+  if (result === 'closed') {
+    state.pendingEditorDeactivation = deactivationAnchor;
+    state.activeEditorBlockReturnScroll = null;
+  }
   getRefreshReaderPanels()();
   getRenderApp()();
 };
-
-function queueEditorReturnScroll(): void {
-  if (!state.activeEditorBlockReturnScroll) {
-    return;
-  }
-  state.pendingPaneScrollRestore = state.activeEditorBlockReturnScroll;
-  state.activeEditorBlockReturnScroll = null;
-}
 
 const toggleEditorExpandable: AppActionHandler = ({ event, sectionKey, blockId }) => {
   if (!sectionKey || !blockId) {

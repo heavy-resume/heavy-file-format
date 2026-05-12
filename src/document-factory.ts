@@ -30,7 +30,7 @@ export function defaultBlockSchema(component = 'text'): BlockSchema {
     componentListDefaultSortKey: '',
     componentListDefaultSortDirection: 'asc',
     componentListDefaultGroupKey: '',
-    componentListGroupCollapsedPreviewRem: 3,
+    componentListGroupCollapsedPreviewRem: 5,
     gridColumns: 2,
     gridItems: [],
     sortKeys: {},

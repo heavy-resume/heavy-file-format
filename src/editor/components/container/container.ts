@@ -7,9 +7,8 @@ export const renderContainerEditor: ComponentEditorRenderer = (sectionKey, block
   helpers.ensureContainerBlocks(block);
   const addKey = `container:${sectionKey}:${block.id}`;
   const bordered = hasContainerBorderCss(block.schema.css);
-  const innerBlocks = block.schema.containerBlocks
-    .map((innerBlock) => helpers.renderEditorBlock(sectionKey, innerBlock, block.schema.lock))
-    .join('');
+  const innerBlocks = renderContainerPlacementBlockList(sectionKey, block, helpers);
+  const placementMode = innerBlocks.length > 0 && innerBlocks.includes('component-placement-target');
   return `
     <div class="container-config-row">
       <span class="container-title-editor-label">Container Title</span>
@@ -51,7 +50,7 @@ export const renderContainerEditor: ComponentEditorRenderer = (sectionKey, block
       ${innerBlocks}
     </div>
     ${
-      block.schema.lock
+      block.schema.lock || placementMode
         ? ''
         : `<article class="ghost-section-card add-ghost container-add-ghost">
             ${helpers.renderAddComponentPicker({
@@ -65,6 +64,45 @@ export const renderContainerEditor: ComponentEditorRenderer = (sectionKey, block
     }
   `;
 };
+
+function renderContainerPlacementBlockList(
+  sectionKey: string,
+  block: VisualBlock,
+  helpers: Parameters<ComponentEditorRenderer>[2]
+): string {
+  const blocks = block.schema.containerBlocks;
+  const output: string[] = [];
+  if (!block.schema.lock && blocks.length > 0) {
+    output.push(helpers.renderComponentPlacementTarget({
+      container: 'container',
+      sectionKey,
+      parentBlockId: block.id,
+      placement: 'before',
+      targetBlockId: blocks[0]?.id,
+    }));
+  }
+  for (const innerBlock of blocks) {
+    output.push(helpers.renderEditorBlock(sectionKey, innerBlock, block.schema.lock));
+    if (!block.schema.lock) {
+      output.push(helpers.renderComponentPlacementTarget({
+        container: 'container',
+        sectionKey,
+        parentBlockId: block.id,
+        placement: 'after',
+        targetBlockId: innerBlock.id,
+      }));
+    }
+  }
+  if (!block.schema.lock && blocks.length === 0) {
+    output.push(helpers.renderComponentPlacementTarget({
+      container: 'container',
+      sectionKey,
+      parentBlockId: block.id,
+      placement: 'end',
+    }));
+  }
+  return output.join('');
+}
 
 export const renderContainerReader: ComponentReaderRenderer = (section, block, helpers) => {
   helpers.ensureContainerBlocks(block);
@@ -134,7 +172,7 @@ function renderContainerReaderBody(options: {
   }
   const canCollapse = options.bordered || Boolean(options.virtualKey);
   const expanded = canCollapse ? options.expanded : true;
-  const previewRem = Number.isFinite(options.collapsedPreviewRem) && options.collapsedPreviewRem > 0 ? options.collapsedPreviewRem : 3;
+  const previewRem = Number.isFinite(options.collapsedPreviewRem) && options.collapsedPreviewRem > 0 ? options.collapsedPreviewRem : 5;
   const collapsibleAttrs = `data-reader-action="toggle-container" data-section-key="${options.helpers.escapeAttr(options.section.key)}" data-block-id="${options.helpers.escapeAttr(
     options.blockId
   )}" data-container-key="${options.helpers.escapeAttr(options.virtualKey || `${options.section.key}:${options.blockId}`)}" aria-expanded="${expanded ? 'true' : 'false'}"`;

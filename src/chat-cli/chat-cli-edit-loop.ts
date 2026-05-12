@@ -9,7 +9,7 @@ import { getDocumentAiContext } from '../document-ai-context';
 import { buildHvyVirtualFileSystem } from '../cli-core/virtual-file-system';
 import { formatHvyComponentDescriptionHistory } from '../cli-core/component-description-history';
 import { buildChatCliComponentHints } from './chat-cli-component-hints';
-import { createChatCliTraceRunId, writeChatCliCommandTrace, writeChatCliUserQueryTrace } from './chat-cli-dev-trace';
+import { createChatCliTraceRunId, writeChatCliCommandTrace, writeChatCliFailedCommandTrace, writeChatCliUserQueryTrace } from './chat-cli-dev-trace';
 import { createChatCliInterface } from './chat-cli-interface';
 import { buildChatCliPersistentInstructions } from './chat-cli-instructions';
 import { getHvyCliPreferredCommandSummary, type HvyCliSession } from '../cli-core/commands';
@@ -33,7 +33,7 @@ const CHAT_CLI_MODEL_OUTPUT_MAX_LINES = 200;
 const CHAT_CLI_MODEL_OUTPUT_MAX_LINE_WIDTH = 400;
 const CHAT_CLI_RECOMMENDED_BATCH_COMMANDS = 4;
 const CHAT_CLI_BATCH_GUIDANCE = `Use one command per \`\`\`shell block and at most ${CHAT_CLI_RECOMMENDED_BATCH_COMMANDS} \`\`\`shell blocks per response.`;
-const CHAT_CLI_COMMAND_NAMES = new Set(['cd', 'pwd', 'ls', 'cat', 'head', 'tail', 'nl', 'find', 'rg', 'grep', 'sort', 'uniq', 'wc', 'tr', 'xargs', 'cp', 'rm', 'echo', 'sed', 'true', 'hvy', 'db-table', 'form', 'ask']);
+const CHAT_CLI_COMMAND_NAMES = new Set(['cd', 'pwd', 'ls', 'cat', 'head', 'tail', 'nl', 'find', 'rg', 'grep', 'sort', 'uniq', 'wc', 'tr', 'xargs', 'cp', 'mv', 'rm', 'echo', 'sed', 'true', 'hvy', 'db-table', 'form', 'ask']);
 const CHAT_CLI_NATIVE_TOOL_COMMAND_NAMES = getHvyCliPreferredCommandSummary()
   .replace(/^Commands:\s*/, '')
   .replace(/\.\s*Ask:.*$/, '');
@@ -348,6 +348,7 @@ async function advanceChatCliNativeToolTurnState(params: {
       commandOutputs.push({ command, output: stderr });
       if (params.writeTrace && params.traceRunId) {
         await writeChatCliCommandTrace(params.traceRunId, command, stderr, params.signal);
+        await writeChatCliFailedCommandTrace(params.traceRunId, command, stderr, params.signal);
       }
     }
     results.push({
@@ -533,6 +534,9 @@ async function advanceChatCliTurnState(params: {
       batchHadError = true;
       lastFailedCommand = command;
       lastCommandError = error instanceof Error ? error.message : String(error);
+      if (params.writeTrace && params.traceRunId) {
+        await writeChatCliFailedCommandTrace(params.traceRunId, command, lastCommandError, params.signal);
+      }
       result = {
         command,
         cwd: cli.session.cwd,
@@ -660,11 +664,7 @@ async function buildChatCliInitialTurnRequest(params: {
 }> {
   const cli = createChatCliInterface(params.document);
   if (params.selectedComponent?.path) {
-    cli.session.cwd = selectInitialCwdForSelectedComponent(
-      buildHvyVirtualFileSystem(params.document),
-      params.selectedComponent.path,
-      params.request
-    );
+    cli.session.cwd = params.selectedComponent.path;
   }
   const runInitialCommand = async (explanation: string, command: string) => {
     const output = await cli.run(command);
@@ -686,9 +686,9 @@ async function buildChatCliInitialTurnRequest(params: {
     'hvy request_structure --collapse'
   );
   const diagnostics = await collectHvyCliDiagnostics(params.document);
-  const initialIntent = await runInitialCommand(
+  const initialSearch = await runInitialCommand(
     'I am searching for the most likely locations related to the user request so I can avoid blind grep-and-edit behavior.',
-    `hvy find-intent ${quoteChatCliShellArg(params.request)} --max 5`
+    `hvy search ${quoteChatCliShellArg(params.request)} --max 5`
   );
   const initialSelectedPreview = params.selectedComponent?.path
     ? await runInitialCommand(
@@ -701,7 +701,7 @@ async function buildChatCliInitialTurnRequest(params: {
     initialRootListing,
     initialHvyHelp,
     initialStructure,
-    initialIntent,
+    initialSearch,
     ...(initialSelectedPreview ? [initialSelectedPreview] : []),
   ];
   const messages: ChatMessage[] = [
@@ -858,12 +858,12 @@ function buildChatCliLoopContext(
     request,
     ...(documentAiContext ? ['', 'Document context:', documentAiContext] : []),
     ...(omittedMessageCount > 0 ? ['', `Earlier chat omitted: ${omittedMessageCount} message${omittedMessageCount === 1 ? '' : 's'}.`] : []),
-    ...(selectedComponent ? ['', 'Selected component focus:', formatSelectedComponentFocus(selectedComponent, request)] : []),
+    ...(selectedComponent ? ['', 'Selected component focus:', formatSelectedComponentFocus(selectedComponent)] : []),
     ...(cwdComponentContext ? ['', cwdComponentContext] : []),
   ].join('\n');
 }
 
-function formatSelectedComponentFocus(focus: ChatCliSelectedComponentFocus, request: string): string {
+function formatSelectedComponentFocus(focus: ChatCliSelectedComponentFocus): string {
   const parentPath = getParentVirtualPath(focus.path);
   return [
     `Path: ${focus.path}`,
@@ -873,36 +873,8 @@ function formatSelectedComponentFocus(focus: ChatCliSelectedComponentFocus, requ
     `Base component: ${focus.baseComponent}`,
     `Schema ID: ${focus.schemaId || '(none)'}`,
     ...(focus.guidance?.trim() ? ['Component guidance:', focus.guidance.trim()] : []),
-    'You are currently in the directory representing the component to change, or possibly next to or near the component to change, or an example of a component you would add.',
-    isAddLikeSelectedComponentRequest(request)
-      ? 'This request appears to add a new item. Do not overwrite the selected component. Inspect the parent path and add a sibling or nearby child in the appropriate container.'
-      : 'Prefer editing this component only when the request is asking to change, remove, or refine the selected component itself.',
+    'The current directory starts at the selected component. Use the selected path, parent path, previews, and request_structure output to decide whether the request should edit this component, add nested content, or add a sibling nearby.',
   ].join('\n');
-}
-
-function selectInitialCwdForSelectedComponent(
-  fs: ReturnType<typeof buildHvyVirtualFileSystem>,
-  selectedPath: string,
-  request: string
-): string {
-  if (!isAddLikeSelectedComponentRequest(request)) {
-    return selectedPath;
-  }
-  const componentListParent = nearestComponentListParent(fs, selectedPath);
-  return componentListParent || selectedPath;
-}
-
-function nearestComponentListParent(fs: ReturnType<typeof buildHvyVirtualFileSystem>, selectedPath: string): string {
-  let current = selectedPath.replace(/\/+$/, '');
-  while (current.startsWith('/body/')) {
-    const entry = fs.entries.get(`${current}/component-list.json`);
-    if (entry?.kind === 'file') {
-      return current;
-    }
-    const parent = getParentVirtualPath(current);
-    current = parent;
-  }
-  return '';
 }
 
 function getParentVirtualPath(path: string): string {
@@ -912,11 +884,6 @@ function getParentVirtualPath(path: string): string {
     return '/';
   }
   return normalized.slice(0, index);
-}
-
-function isAddLikeSelectedComponentRequest(request: string): boolean {
-  return /\b(add|create|insert|append|new|another|additional)\b/i.test(request)
-    && !/\b(replace|rewrite|rename|change this|update this|modify this|remove this|delete this)\b/i.test(request);
 }
 
 function formatInitialChatCliCommandMessages(

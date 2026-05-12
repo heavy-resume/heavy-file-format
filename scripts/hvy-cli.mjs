@@ -88,6 +88,10 @@ const result = await build({
           path: new URL(args.path.replace(/\?raw$/, ''), pathToFileURL(`${args.resolveDir}/`)).pathname,
           namespace: 'raw-query',
         }));
+        buildApi.onResolve({ filter: /\?inline$/ }, (args) => ({
+          path: new URL(args.path.replace(/\?inline$/, ''), pathToFileURL(`${args.resolveDir}/`)).pathname,
+          namespace: 'raw-query',
+        }));
         buildApi.onResolve({ filter: /\?url$/ }, (args) => ({
           path: new URL(args.path.replace(/\?url$/, ''), pathToFileURL(`${args.resolveDir}/`)).pathname,
           namespace: 'url-query',

@@ -8,6 +8,7 @@ import {
   resolveVirtualPath,
   type HvyVirtualEntry,
   type HvyVirtualFile,
+  type HvyVirtualPathNamingState,
 } from './virtual-file-system';
 import { executeHvyDocumentCommand, hvyDocumentCommandHelp } from './hvy-document-commands';
 import { createScriptingDbRuntime, formatQueryResultTable, getDocumentDbTableObjectNames } from '../plugins/db-table';
@@ -41,6 +42,7 @@ export interface HvyCliSession {
   rawWipContent?: string;
   rawWipContentByPath?: Record<string, string>;
   rawSectionWipContentByPath?: Record<string, string>;
+  virtualPathNaming?: HvyVirtualPathNamingState;
   now?: Date;
 }
 
@@ -54,6 +56,7 @@ type HvyCliCommandContext = {
   document: VisualDocument;
   fs: ReturnType<typeof buildHvyVirtualFileSystem>;
   cwd: string;
+  pathNaming?: HvyVirtualPathNamingState;
 };
 
 type HvyMiniShellPipeline = {
@@ -71,7 +74,13 @@ type HvyMiniShellProcess = {
 };
 
 export function createHvyCliSession(): HvyCliSession {
-  return { cwd: '/', scratchpadContent: defaultScratchpadContent() };
+  return { cwd: '/', scratchpadContent: defaultScratchpadContent(), virtualPathNaming: { anonymousBlockNamesById: {} } };
+}
+
+function buildSessionVirtualFileSystem(document: VisualDocument, session: HvyCliSession): ReturnType<typeof buildHvyVirtualFileSystem> {
+  session.virtualPathNaming ??= { anonymousBlockNamesById: {} };
+  session.virtualPathNaming.anonymousBlockNamesById ??= {};
+  return buildHvyVirtualFileSystem(document, session.virtualPathNaming);
 }
 
 export function getHvyCliCommandSummary(): string {
@@ -79,7 +88,7 @@ export function getHvyCliCommandSummary(): string {
 }
 
 export function getHvyCliPreferredCommandSummary(): string {
-  return 'Commands: hvy, nl, rg, find, sed, printf, echo, cat, ls, pwd, cd, cp, rm, grep, sort, uniq, wc, tr, xargs, head, tail, true. Ask: ask QUESTION. Finish: done MESSAGE_TO_USER. Use man <command> for details.';
+  return 'Commands: hvy, nl, rg, find, sed, printf, echo, cat, ls, pwd, cd, cp, mv, rm, grep, sort, uniq, wc, tr, xargs, head, tail, true. Ask: ask QUESTION. Finish: done MESSAGE_TO_USER. Use man <command> for details.';
 }
 
 export async function executeHvyCliCommand(document: VisualDocument, session: HvyCliSession, input: string): Promise<HvyCliExecution> {
@@ -94,7 +103,7 @@ export async function executeHvyCliCommand(document: VisualDocument, session: Hv
     let mutated = false;
     let scratchpadTouched = false;
     for (const heredoc of heredocs) {
-      const fs = buildHvyVirtualFileSystem(document);
+      const fs = buildSessionVirtualFileSystem(document, session);
       addSessionFiles(fs, document, session);
       const result = writeVirtualFile({ fs, cwd: session.cwd }, heredoc.path, heredoc.content, false, 'cat');
       enforceScratchpadHardCap(session);
@@ -130,10 +139,10 @@ export async function executeHvyCliCommand(document: VisualDocument, session: Hv
       continue;
     }
 
-    const fs = buildHvyVirtualFileSystem(document);
+    const fs = buildSessionVirtualFileSystem(document, session);
     addSessionFiles(fs, document, session);
     enforceScratchpadHardCap(session);
-    lastProcess = await executeMiniShellPipeline({ document, fs, cwd: session.cwd }, pipeline.commands);
+    lastProcess = await executeMiniShellPipeline({ document, fs, cwd: session.cwd, pathNaming: session.virtualPathNaming }, pipeline.commands);
     enforceScratchpadHardCap(session);
     session.cwd = lastProcess.cwd;
     mutated = mutated || lastProcess.mutated;
@@ -217,6 +226,9 @@ export function executeHvyCliCommandSync(document: VisualDocument, input: string
   }
   if (command === 'cp') {
     return { cwd, output: commandCp(ctx, rest), mutated: true };
+  }
+  if (command === 'mv') {
+    return { cwd, output: commandMv(ctx, rest), mutated: true };
   }
   if (command === 'echo') {
     const result = commandEcho(ctx, rest);
@@ -336,6 +348,9 @@ async function runCommand(ctx: HvyCliCommandContext, command: string, args: stri
   if (command === 'cp') {
     return { cwd: ctx.cwd, output: commandCp(ctx, args), mutated: true };
   }
+  if (command === 'mv') {
+    return { cwd: ctx.cwd, output: commandMv(ctx, args), mutated: true };
+  }
   if (command === 'echo') {
     const result = commandEcho(ctx, args);
     return { cwd: ctx.cwd, output: result.output, mutated: result.mutated };
@@ -417,6 +432,7 @@ function isHvyShellAliasCommand(command: string): boolean {
     'rg',
     'rm',
     'cp',
+    'mv',
     'echo',
     'printf',
     'sed',
@@ -470,6 +486,9 @@ function executeHvyShellAliasCommandSync(ctx: HvyCliCommandContext, command: str
   }
   if (command === 'cp') {
     return { cwd: ctx.cwd, output: commandCp(ctx, args), mutated: true };
+  }
+  if (command === 'mv') {
+    return { cwd: ctx.cwd, output: commandMv(ctx, args), mutated: true };
   }
   if (command === 'sed') {
     const result = commandSed(ctx, args);
@@ -558,7 +577,15 @@ async function commandDbTable(document: VisualDocument, args: string[]): Promise
 function commandLs(ctx: HvyCliCommandContext, args: string[]): string {
   const recursive = args.some((arg) => arg === '-R' || arg === '--recursive');
   const warnings = warnUnknownOptions('ls', args, ['-R', '--recursive']);
-  const target = resolveVirtualPath(ctx.fs, ctx.cwd, args.find((arg) => !arg.startsWith('-')) ?? '.');
+  const rawTarget = args.find((arg) => !arg.startsWith('-')) ?? '.';
+  const target = resolveVirtualPath(ctx.fs, ctx.cwd, rawTarget);
+  if (hasGlobPattern(rawTarget)) {
+    const matches = expandVirtualPathGlob(ctx.fs, target);
+    if (matches.length === 0) {
+      throw new Error(formatMissingPathMessage(ctx.fs, ctx.cwd, target, `ls: no such file or directory: ${target}`));
+    }
+    return withWarnings(matches.map((entry) => formatEntry(ctx.fs, entry)).join('\n'), warnings);
+  }
   const entry = ctx.fs.entries.get(target);
   if (!entry) {
     throw new Error(formatMissingPathMessage(ctx.fs, ctx.cwd, target, `ls: no such file or directory: ${target}`));
@@ -583,6 +610,22 @@ function commandLs(ctx: HvyCliCommandContext, args: string[]): string {
     ].filter((part) => part.trim().length > 0).join('\n\n'),
     warnings
   );
+}
+
+function hasGlobPattern(path: string): boolean {
+  return path.includes('*') || path.includes('?');
+}
+
+function expandVirtualPathGlob(fs: ReturnType<typeof buildHvyVirtualFileSystem>, normalizedPattern: string): HvyVirtualEntry[] {
+  const regex = globToPathRegExp(normalizedPattern);
+  return [...fs.entries.values()]
+    .filter((entry) => regex.test(entry.path))
+    .sort((left, right) => left.path.localeCompare(right.path));
+}
+
+function globToPathRegExp(glob: string): RegExp {
+  const escaped = glob.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '[^/]*').replace(/\?/g, '[^/]');
+  return new RegExp(`^${escaped}$`);
 }
 
 function formatLsTargetDescription(ctx: HvyCliCommandContext, directoryPath: string): string {
@@ -735,7 +778,7 @@ function addSessionRawSectionFiles(fs: ReturnType<typeof buildHvyVirtualFileSyst
     if (entry.kind !== 'dir' || !fs.entries.has(`${entry.path}/section.json`)) {
       continue;
     }
-    const section = findSectionForVirtualDirectory(document, entry.path);
+    const section = findSectionForVirtualDirectory(document, entry.path, session.virtualPathNaming);
     if (!section) {
       continue;
     }
@@ -816,7 +859,7 @@ function addSessionRawComponentFiles(fs: ReturnType<typeof buildHvyVirtualFileSy
     if (entry.kind !== 'dir' || entry.path === '/' || entry.path === '/body' || entry.path === '/attachments') {
       continue;
     }
-    const block = findBlockForVirtualDirectory(document, entry.path);
+    const block = findBlockForVirtualDirectory(document, entry.path, session.virtualPathNaming);
     if (!block) {
       continue;
     }
@@ -1142,18 +1185,33 @@ function commandHvyPreview(ctx: HvyCliCommandContext, args: string[]): string {
 function componentDirectoryForReadableTarget(ctx: HvyCliCommandContext, path: string, readablePath?: string): string {
   const normalized = resolveVirtualPath(ctx.fs, ctx.cwd, path);
   const entry = ctx.fs.entries.get(normalized);
-  if (entry?.kind === 'dir' && inferComponentNameForDirectory(ctx.fs, normalized)) {
-    return normalized;
+  if (entry?.kind === 'dir') {
+    return findComponentDirectoryAtOrAbove(ctx.fs, normalized);
   }
   const filePath = readablePath ?? resolveReadablePath(ctx.fs, ctx.cwd, path);
+  const owningComponentDirectory = findComponentDirectoryAtOrAbove(ctx.fs, filePath.replace(/\/[^/]+$/, '') || '/');
+  if (owningComponentDirectory) {
+    return owningComponentDirectory;
+  }
   const parent = filePath.replace(/\/[^/]+$/, '') || '/';
   const componentName = inferComponentNameForDirectory(ctx.fs, parent);
   const fileName = filePath.split('/').pop() ?? '';
   return componentName && fileName === `${componentName}.txt` ? parent : '';
 }
 
+function findComponentDirectoryAtOrAbove(fs: ReturnType<typeof buildHvyVirtualFileSystem>, path: string): string {
+  let current = path;
+  while (current && current !== '/' && current !== '/body' && current !== '/attachments') {
+    if (fs.entries.get(current)?.kind === 'dir' && inferComponentNameForDirectory(fs, current)) {
+      return current;
+    }
+    current = current.replace(/\/[^/]+$/, '') || '/';
+  }
+  return '';
+}
+
 function formatComponentRawPreview(ctx: HvyCliCommandContext, directoryPath: string): string {
-  const block = findBlockForVirtualDirectory(ctx.document, directoryPath);
+  const block = findBlockForVirtualDirectory(ctx.document, directoryPath, ctx.pathNaming);
   if (!block) {
     return '';
   }
@@ -1331,7 +1389,7 @@ function commandRg(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd:
   return withWarnings((parsed.filesWithMatches ? [...matchingFiles] : lines).join('\n'), parsed.warnings);
 }
 
-function commandRm(ctx: { document: VisualDocument; fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd: string }, args: string[]): string {
+function commandRm(ctx: HvyCliCommandContext, args: string[]): string {
   const parsed = parseCliFlags(args, {
     command: 'rm',
     booleanShort: ['r', 'R', 'f'],
@@ -1359,7 +1417,7 @@ function commandRm(ctx: { document: VisualDocument; fs: ReturnType<typeof buildH
       if (!recursive) {
         throw new Error(`rm: ${resolved} is a directory; use -r`);
       }
-      removeDocumentDirectory(ctx.document, resolved);
+      removeDocumentDirectory(ctx.document, resolved, ctx.pathNaming);
       const targetId = resolved.split('/').filter(Boolean).at(-1) ?? '';
       const xrefHint = pruneXrefHint(ctx.document, targetId, parsed.flags.has('prune-xref'));
       return [`${resolved}: removed`, xrefHint].filter(Boolean).join('\n');
@@ -1409,7 +1467,7 @@ function copyVirtualFile(ctx: HvyCliCommandContext, sourcePath: string, destinat
 }
 
 function copyVirtualComponentDirectory(ctx: HvyCliCommandContext, sourcePath: string, destination: string): string {
-  const sourceBlock = findBlockForVirtualDirectory(ctx.document, sourcePath);
+  const sourceBlock = findBlockForVirtualDirectory(ctx.document, sourcePath, ctx.pathNaming);
   if (!sourceBlock) {
     throw new Error(`cp: can only copy component directories: ${sourcePath}`);
   }
@@ -1422,7 +1480,7 @@ function copyVirtualComponentDirectory(ctx: HvyCliCommandContext, sourcePath: st
     throw new Error(`cp: destination already exists: ${finalPath}`);
   }
   const parentPath = finalPath.replace(/\/[^/]+$/, '') || '/';
-  const target = findBlockInsertionTargetForVirtualDirectory(ctx.document, parentPath);
+  const target = findBlockInsertionTargetForVirtualDirectory(ctx.document, parentPath, ctx.pathNaming);
   if (!target) {
     throw new Error(formatMissingPathMessage(ctx.fs, ctx.cwd, parentPath, `cp: no writable component container: ${parentPath}`, 'dir'));
   }
@@ -1431,6 +1489,45 @@ function copyVirtualComponentDirectory(ctx: HvyCliCommandContext, sourcePath: st
   clonedBlock.schema.id = destinationId;
   target.insert(clonedBlock);
   return `${sourcePath} -> ${finalPath}: copied`;
+}
+
+function commandMv(ctx: HvyCliCommandContext, args: string[]): string {
+  if (args.length !== 2) {
+    throw new Error('mv: expected SOURCE DEST');
+  }
+  const [source = '', destination = ''] = args;
+  const sourcePath = resolveVirtualPath(ctx.fs, ctx.cwd, source);
+  const sourceEntry = ctx.fs.entries.get(sourcePath);
+  if (!sourceEntry) {
+    throw new Error(formatMissingPathMessage(ctx.fs, ctx.cwd, source, `mv: no such file or directory: ${source}`, 'dir'));
+  }
+  if (sourceEntry.kind === 'file') {
+    throw new Error(`mv: cannot move virtual file directly: ${sourcePath}`);
+  }
+  const sourceBlock = findBlockForVirtualDirectory(ctx.document, sourcePath, ctx.pathNaming);
+  if (!sourceBlock) {
+    throw new Error(`mv: can only move component directories: ${sourcePath}`);
+  }
+  const destinationPath = resolveVirtualPath(ctx.fs, ctx.cwd, destination);
+  const destinationEntry = ctx.fs.entries.get(destinationPath);
+  const finalPath = destinationEntry?.kind === 'dir'
+    ? `${destinationPath}/${sourcePath.split('/').pop() ?? 'moved'}`
+    : destinationPath;
+  if (ctx.fs.entries.has(finalPath) && finalPath !== sourcePath) {
+    throw new Error(`mv: destination already exists: ${finalPath}`);
+  }
+  const parentPath = finalPath.replace(/\/[^/]+$/, '') || '/';
+  const target = findBlockInsertionTargetForVirtualDirectory(ctx.document, parentPath, ctx.pathNaming);
+  if (!target) {
+    throw new Error(formatMissingPathMessage(ctx.fs, ctx.cwd, parentPath, `mv: no writable component container: ${parentPath}`, 'dir'));
+  }
+  const removedBlock = removeDocumentBlockDirectory(ctx.document, sourcePath, ctx.pathNaming);
+  const destinationId = finalPath.split('/').pop() ?? '';
+  if (destinationId && destinationId !== sourcePath.split('/').pop()) {
+    removedBlock.schema.id = destinationId;
+  }
+  target.insert(removedBlock);
+  return `${sourcePath} -> ${finalPath}: moved`;
 }
 
 function commandPruneXref(document: VisualDocument, args: string[]): string {
@@ -1494,6 +1591,7 @@ function collectXrefVirtualPaths(document: VisualDocument, targetId: string): st
   const fs = buildHvyVirtualFileSystem(document);
   return [...fs.entries.values()]
     .filter((entry): entry is HvyVirtualFile => entry.kind === 'file' && entry.path.endsWith('/xref-card.json'))
+    .filter((entry) => !entry.path.startsWith('/id/'))
     .filter((entry) => {
       try {
         const value = JSON.parse(entry.read()) as { xrefTarget?: unknown };
@@ -1505,113 +1603,130 @@ function collectXrefVirtualPaths(document: VisualDocument, targetId: string): st
     .map((entry) => entry.path.replace(/\/xref-card\.json$/, ''));
 }
 
-function removeDocumentDirectory(document: VisualDocument, path: string): void {
+function removeDocumentDirectory(document: VisualDocument, path: string, pathNaming?: HvyVirtualPathNamingState): void {
+  removeDocumentDirectoryInternal(document, path, pathNaming);
+}
+
+function removeDocumentBlockDirectory(document: VisualDocument, path: string, pathNaming?: HvyVirtualPathNamingState): VisualBlock {
+  const block = findBlockForVirtualDirectory(document, path, pathNaming);
+  if (!block) {
+    throw new Error(`mv: can only move component directories: ${path}`);
+  }
+  const removed = removeDocumentDirectoryInternal(document, path, pathNaming);
+  if (removed !== block) {
+    throw new Error(`mv: could not remove component directory: ${path}`);
+  }
+  return block;
+}
+
+function removeDocumentDirectoryInternal(document: VisualDocument, path: string, pathNaming?: HvyVirtualPathNamingState): VisualBlock | VisualSection {
   if (path === '/' || path === '/body' || path === '/attachments') {
     throw new Error(`rm: refusing to remove protected directory: ${path}`);
   }
   if (!path.startsWith('/body/')) {
     throw new Error(`rm: can only remove document body directories: ${path}`);
   }
-  const targetBlock = findBlockForVirtualDirectory(document, path);
+  const targetBlock = findBlockForVirtualDirectory(document, path, pathNaming);
   if (targetBlock && removeBlockReferenceFromSections(document.sections, targetBlock)) {
-    return;
+    return targetBlock;
   }
   const parts = path.split('/').filter(Boolean).slice(1);
-  if (!removeBodyPath(document.sections, parts)) {
+  const removed = removeBodyPath(document.sections, parts);
+  if (!removed) {
     throw new Error(`rm: cannot map virtual path to document node: ${path}`);
   }
+  return removed;
 }
 
-function removeBlockReferenceFromSections(sections: VisualSection[], target: VisualBlock): boolean {
+function removeBlockReferenceFromSections(sections: VisualSection[], target: VisualBlock): VisualBlock | null {
   for (const section of sections) {
-    if (removeBlockReferenceFromList(section.blocks, target)) {
-      return true;
+    const removed = removeBlockReferenceFromList(section.blocks, target);
+    if (removed) {
+      return removed;
     }
-    if (removeBlockReferenceFromSections(section.children, target)) {
-      return true;
+    const childRemoved = removeBlockReferenceFromSections(section.children, target);
+    if (childRemoved) {
+      return childRemoved;
     }
   }
-  return false;
+  return null;
 }
 
-function removeBlockReferenceFromList(blocks: VisualBlock[], target: VisualBlock): boolean {
+function removeBlockReferenceFromList(blocks: VisualBlock[], target: VisualBlock): VisualBlock | null {
   const index = blocks.indexOf(target);
   if (index >= 0) {
-    blocks.splice(index, 1);
-    return true;
+    return blocks.splice(index, 1)[0] ?? null;
   }
   for (const block of blocks) {
-    if (removeBlockReferenceFromList(block.schema.containerBlocks ?? [], target)) {
-      return true;
+    const containerRemoved = removeBlockReferenceFromList(block.schema.containerBlocks ?? [], target);
+    if (containerRemoved) {
+      return containerRemoved;
     }
-    if (removeBlockReferenceFromList(block.schema.componentListBlocks ?? [], target)) {
-      return true;
+    const listRemoved = removeBlockReferenceFromList(block.schema.componentListBlocks ?? [], target);
+    if (listRemoved) {
+      return listRemoved;
     }
-    if (removeBlockReferenceFromList(block.schema.expandableStubBlocks?.children ?? [], target)) {
-      return true;
+    const stubRemoved = removeBlockReferenceFromList(block.schema.expandableStubBlocks?.children ?? [], target);
+    if (stubRemoved) {
+      return stubRemoved;
     }
-    if (removeBlockReferenceFromList(block.schema.expandableContentBlocks?.children ?? [], target)) {
-      return true;
+    const contentRemoved = removeBlockReferenceFromList(block.schema.expandableContentBlocks?.children ?? [], target);
+    if (contentRemoved) {
+      return contentRemoved;
     }
     const gridIndex = (block.schema.gridItems ?? []).findIndex((item) => item.block === target);
     if (gridIndex >= 0) {
-      block.schema.gridItems.splice(gridIndex, 1);
-      return true;
+      return block.schema.gridItems.splice(gridIndex, 1)[0]?.block ?? null;
     }
     for (const item of block.schema.gridItems ?? []) {
-      if (removeBlockReferenceFromList([item.block], target)) {
-        return true;
+      const gridRemoved = removeBlockReferenceFromList([item.block], target);
+      if (gridRemoved) {
+        return gridRemoved;
       }
     }
   }
-  return false;
+  return null;
 }
 
-function removeBodyPath(sections: VisualSection[], parts: string[]): boolean {
+function removeBodyPath(sections: VisualSection[], parts: string[]): VisualSection | VisualBlock | null {
   if (parts.length === 0) {
-    return false;
+    return null;
   }
   const [head = '', ...tail] = parts;
   const sectionIndex = sections.findIndex((section) => pathSegmentForId(getSectionId(section)) === head);
   if (sectionIndex >= 0) {
     const section = sections[sectionIndex];
     if (!section) {
-      return false;
+      return null;
     }
     if (tail.length === 0) {
-      sections.splice(sectionIndex, 1);
-      return true;
+      return sections.splice(sectionIndex, 1)[0] ?? null;
     }
     return removeFromSection(section, tail);
   }
-  return false;
+  return null;
 }
 
-function removeFromSection(section: VisualSection, parts: string[]): boolean {
+function removeFromSection(section: VisualSection, parts: string[]): VisualSection | VisualBlock | null {
   if (parts.length === 0) {
-    return false;
+    return null;
   }
   const [head = '', ...tail] = parts;
   const childSectionIndex = section.children.findIndex((child) => pathSegmentForId(getSectionId(child)) === head);
   if (childSectionIndex >= 0) {
     const child = section.children[childSectionIndex];
     if (!child) {
-      return false;
+      return null;
     }
     if (tail.length === 0) {
-      section.children.splice(childSectionIndex, 1);
-      return true;
+      return section.children.splice(childSectionIndex, 1)[0] ?? null;
     }
     return removeFromSection(child, tail);
   }
-  const blockRemoved = removeBlockPath(section.blocks, [head, ...tail]);
-  if (blockRemoved) {
-    return true;
-  }
-  return false;
+  return removeBlockPath(section.blocks, [head, ...tail]);
 }
 
-function removeBlockPath(blocks: VisualBlock[], parts: string[]): boolean {
+function removeBlockPath(blocks: VisualBlock[], parts: string[]): VisualBlock | null {
   const [head = '', ...tail] = parts;
   for (let index = 0; index < blocks.length; index += 1) {
     const block = blocks[index];
@@ -1620,21 +1735,21 @@ function removeBlockPath(blocks: VisualBlock[], parts: string[]): boolean {
     }
     if (pathSegmentForId(block.schema.id) === head) {
       if (tail.length === 0) {
-        blocks.splice(index, 1);
-        return true;
+        return blocks.splice(index, 1)[0] ?? null;
       }
       return removeFromBlock(block, tail);
     }
     for (const nestedBlocks of getNestedBlockLists(block)) {
-      if (removeBlockPath(nestedBlocks, parts)) {
-        return true;
+      const removed = removeBlockPath(nestedBlocks, parts);
+      if (removed) {
+        return removed;
       }
     }
   }
-  return false;
+  return null;
 }
 
-function removeFromBlock(block: VisualBlock, parts: string[]): boolean {
+function removeFromBlock(block: VisualBlock, parts: string[]): VisualBlock | null {
   const [head = '', ...tail] = parts;
   const nestedLists = getNestedBlockLists(block);
   for (const nestedBlocks of nestedLists) {
@@ -1645,14 +1760,13 @@ function removeFromBlock(block: VisualBlock, parts: string[]): boolean {
       }
       if (pathSegmentForId(child.schema.id) === head) {
         if (tail.length === 0) {
-          nestedBlocks.splice(index, 1);
-          return true;
+          return nestedBlocks.splice(index, 1)[0] ?? null;
         }
         return removeFromBlock(child, tail);
       }
     }
   }
-  return false;
+  return null;
 }
 
 function getNestedBlockLists(block: VisualBlock): VisualBlock[][] {
@@ -1844,7 +1958,10 @@ function commandSed(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd
 
 function applySedEditExpression(input: string, expression: string): string {
   const parsed = parseSedExpression(expression);
-  if (parsed.lineNumber != null) {
+  if (parsed.kind === 'append' || parsed.kind === 'insert' || parsed.kind === 'change') {
+    return applySedAddressedTextCommand(input, parsed);
+  }
+  if ('lineNumber' in parsed && parsed.lineNumber != null) {
     const lines = input.split(/\r?\n/);
     const index = parsed.lineNumber - 1;
     if (index < 0 || index >= lines.length) {
@@ -1854,13 +1971,16 @@ function applySedEditExpression(input: string, expression: string): string {
       lines[index] = applySedSubstitution(lines[index] ?? '', parsed);
       return lines.join('\n');
     }
-    if (parsed.pattern == null) {
+    if (parsed.kind === 'delete' && parsed.pattern == null) {
       lines.splice(index, 1);
       return lines.join('\n');
     }
-    const regex = new RegExp(parsed.pattern, parsed.flags.toLowerCase().includes('i') ? 'i' : '');
-    if (regex.test(lines[index] ?? '')) {
-      lines.splice(index, 1);
+    if (parsed.kind === 'delete') {
+      const pattern = parsed.pattern ?? '';
+      const regex = new RegExp(pattern, parsed.flags.toLowerCase().includes('i') ? 'i' : '');
+      if (regex.test(lines[index] ?? '')) {
+        lines.splice(index, 1);
+      }
     }
     return lines.join('\n');
   }
@@ -1868,6 +1988,9 @@ function applySedEditExpression(input: string, expression: string): string {
     return applySedSubstitution(input, parsed);
   }
   if (parsed.kind === 'delete') {
+    if (parsed.address) {
+      return applySedAddressedDelete(input, parsed);
+    }
     if (parsed.pattern == null) {
       throw new Error('sed: expected sed s/search/replace/[g] path or sed /pattern/d path');
     }
@@ -1878,6 +2001,43 @@ function applySedEditExpression(input: string, expression: string): string {
       .join('\n');
   }
   throw new Error('sed: expected sed s/search/replace/[g] path or sed /pattern/d path');
+}
+
+function applySedAddressedTextCommand(
+  input: string,
+  parsed: Extract<SedExpression, { kind: 'append' | 'insert' | 'change' }>
+): string {
+  const lines = input.split(/\r?\n/);
+  const range = resolveSedAddressRange(lines, parsed.address, parsed.endAddress);
+  if (!range) {
+    return input;
+  }
+  const replacementLines = normalizeSedTextPayload(parsed.text).split('\n');
+  if (parsed.kind === 'append') {
+    lines.splice(range.end + 1, 0, ...replacementLines);
+  } else if (parsed.kind === 'insert') {
+    lines.splice(range.start, 0, ...replacementLines);
+  } else {
+    lines.splice(range.start, range.end - range.start + 1, ...replacementLines);
+  }
+  return lines.join('\n');
+}
+
+function applySedAddressedDelete(input: string, parsed: Extract<SedExpression, { kind: 'delete' }>): string {
+  if (parsed.address?.kind === 'pattern' && !parsed.endAddress) {
+    const regex = new RegExp(parsed.address.pattern, parsed.flags.toLowerCase().includes('i') ? 'i' : '');
+    return input
+      .split(/\r?\n/)
+      .filter((line) => !regex.test(line))
+      .join('\n');
+  }
+  const lines = input.split(/\r?\n/);
+  const range = resolveSedAddressRange(lines, parsed.address, parsed.endAddress);
+  if (!range) {
+    return input;
+  }
+  lines.splice(range.start, range.end - range.start + 1);
+  return lines.join('\n');
 }
 
 function applySedSubstitution(input: string, parsed: Extract<SedExpression, { kind: 'substitute' }>): string {
@@ -1893,9 +2053,19 @@ function normalizeSedReplacement(replacement: string): string {
 
 type SedExpression =
   | { kind: 'substitute'; pattern: string; replacement: string; flags: string; lineNumber?: number }
-  | { kind: 'delete'; pattern?: string; flags: string; lineNumber?: number };
+  | { kind: 'delete'; pattern?: string; flags: string; lineNumber?: number; address?: SedAddress; endAddress?: SedAddress }
+  | { kind: 'append' | 'insert' | 'change'; address: SedAddress; endAddress?: SedAddress; text: string };
+
+type SedAddress =
+  | { kind: 'line'; lineNumber: number }
+  | { kind: 'last' }
+  | { kind: 'pattern'; pattern: string };
 
 function parseSedExpression(expression: string): SedExpression {
+  const addressed = parseAddressedSedExpression(expression);
+  if (addressed) {
+    return addressed;
+  }
   const address = expression.match(/^(\d+)(.*)$/);
   if (address) {
     const lineNumber = Number.parseInt(address[1] ?? '', 10);
@@ -1906,7 +2076,14 @@ function parseSedExpression(expression: string): SedExpression {
     if (rest.toLowerCase() === 'd') {
       return { kind: 'delete', flags: '', lineNumber };
     }
-    return { ...parseSedExpression(rest), lineNumber };
+    const parsedRest = parseSedExpression(rest);
+    if (parsedRest.kind === 'substitute') {
+      return { ...parsedRest, lineNumber };
+    }
+    if (parsedRest.kind === 'delete') {
+      return { ...parsedRest, lineNumber };
+    }
+    throw new Error('sed: expected sed s/search/replace/[g] path or sed /pattern/d path');
   }
 
   if (expression.startsWith('s') && expression.length >= 2) {
@@ -1935,6 +2112,99 @@ function parseSedExpression(expression: string): SedExpression {
     pattern: pattern.value,
     flags: parseSedFlags(suffix.replace(/[dD]/g, ''), 'delete'),
   };
+}
+
+function parseAddressedSedExpression(expression: string): SedExpression | null {
+  const first = readSedAddress(expression, 0);
+  if (!first) {
+    return null;
+  }
+  let index = first.nextIndex;
+  let endAddress: SedAddress | undefined;
+  if (expression[index] === ',') {
+    const second = readSedAddress(expression, index + 1);
+    if (!second) {
+      throw new Error('sed: expected second address after comma');
+    }
+    endAddress = second.address;
+    index = second.nextIndex;
+  }
+  const command = expression[index] ?? '';
+  const rest = expression.slice(index + 1);
+  if (command.toLowerCase() === 'd') {
+    const flags = parseSedFlags(rest, 'delete');
+    return { kind: 'delete', flags, address: first.address, ...(endAddress ? { endAddress } : {}) };
+  }
+  if (command === 'a' || command === 'i' || command === 'c') {
+    return {
+      kind: command === 'a' ? 'append' : command === 'i' ? 'insert' : 'change',
+      address: first.address,
+      ...(endAddress ? { endAddress } : {}),
+      text: rest,
+    };
+  }
+  return null;
+}
+
+function readSedAddress(expression: string, startIndex: number): { address: SedAddress; nextIndex: number } | null {
+  const first = expression[startIndex] ?? '';
+  if (first === '$') {
+    return { address: { kind: 'last' }, nextIndex: startIndex + 1 };
+  }
+  const number = expression.slice(startIndex).match(/^\d+/);
+  if (number) {
+    return {
+      address: { kind: 'line', lineNumber: Number.parseInt(number[0], 10) },
+      nextIndex: startIndex + number[0].length,
+    };
+  }
+  if (first && !/[A-Za-z0-9\\]/.test(first)) {
+    const pattern = readDelimitedSegment(expression, startIndex + 1, first);
+    return { address: { kind: 'pattern', pattern: pattern.value }, nextIndex: pattern.nextIndex };
+  }
+  return null;
+}
+
+function resolveSedAddressRange(
+  lines: string[],
+  startAddress?: SedAddress,
+  endAddress?: SedAddress
+): { start: number; end: number } | null {
+  if (!startAddress) {
+    return null;
+  }
+  const start = resolveSedAddressIndex(lines, startAddress, 0);
+  if (start < 0) {
+    return null;
+  }
+  const end = endAddress ? resolveSedAddressIndex(lines, endAddress, start) : start;
+  if (end < 0) {
+    return null;
+  }
+  return {
+    start: Math.min(start, end),
+    end: Math.max(start, end),
+  };
+}
+
+function resolveSedAddressIndex(lines: string[], address: SedAddress, startIndex: number): number {
+  if (address.kind === 'line') {
+    const index = address.lineNumber - 1;
+    return index >= 0 && index < lines.length ? index : -1;
+  }
+  if (address.kind === 'last') {
+    return Math.max(0, lines.length - 1);
+  }
+  const regex = new RegExp(address.pattern);
+  return lines.findIndex((line, index) => index >= startIndex && regex.test(line));
+}
+
+function normalizeSedTextPayload(text: string): string {
+  const withoutLeadingSlash = text.startsWith('\\') ? text.slice(1) : text;
+  return withoutLeadingSlash
+    .replace(/^\r?\n/, '')
+    .replaceAll('\\n', '\n')
+    .replaceAll('\\t', '\t');
 }
 
 function parseSedFlags(flags: string, kind: SedExpression['kind']): string {
@@ -2465,6 +2735,9 @@ function commandGrep(ctx: HvyCliCommandContext, args: string[]): string {
 }
 
 function isSearchVisibleFile(path: string, root: string): boolean {
+  if (path.startsWith('/id/') && root !== '/id' && !root.startsWith('/id/')) {
+    return false;
+  }
   if (!isRawHvyFile(path)) {
     return true;
   }
@@ -3263,7 +3536,7 @@ function helpFor(topic = ''): string {
   }
 
   const help: Record<string, string> = {
-    '': 'Commands: cd, pwd, ls, cat, head, tail, nl, find, rg, grep, sort, uniq, wc, tr, xargs, cp, rm, printf, echo, sed, true, hvy. Ask: ask QUESTION. Finish: done MESSAGE_TO_USER. Use man <command> for details.',
+    '': 'Commands: cd, pwd, ls, cat, head, tail, nl, find, rg, grep, sort, uniq, wc, tr, xargs, cp, mv, rm, printf, echo, sed, true, hvy. Ask: ask QUESTION. Finish: done MESSAGE_TO_USER. Use man <command> for details.',
     cd: formatCommandHelp('cd PATH', 'Change the current virtual directory.'),
     pwd: formatCommandHelp('pwd', 'Print the current virtual directory.'),
     ls: formatCommandHelp('ls [PATH]', 'List files and directories. Files are marked [w] writable or [ro] read-only; stable entries include pipe-delimited descriptions.'),
@@ -3280,17 +3553,18 @@ function helpFor(topic = ''): string {
     tr: formatCommandHelp('tr SET1 SET2', 'Translate characters from stdin, including escaped \\n, \\t, and \\0.'),
     xargs: formatCommandHelp('COMMAND | xargs [-0] [-r] [-I TOKEN] COMMAND ARG...', 'Run a supported CLI command with piped items appended, or once per item with -I replacement.'),
     cp: formatCommandHelp('cp [-r] SOURCE DEST', 'Copy a writable file into an existing writable file, or copy a component directory with -r. Component copies get the destination path id.'),
+    mv: formatCommandHelp('mv SOURCE DEST', 'Move a component directory to another writable component container or path. Moving to a new path renames the component id.'),
     rm: formatCommandHelp('rm -r|-rf PATH...', 'Remove section or component directories from the virtual document body. -f ignores missing paths. Alias: hvy remove PATH.'),
     printf: formatCommandHelp('printf FORMAT [ARG...] [> FILE|>> FILE]', 'Print formatted text without adding a newline, replace a writable file, or append to a writable file. Supports common escapes and %s, %b, %d, %i, and %%.'),
     echo: formatCommandHelp('echo TEXT [> FILE|>> FILE]', 'Print text, replace a writable file, or append to a writable file.'),
-    sed: formatCommandHelp('sed -n START,ENDp FILE...\nsed [-i] [-E] s/search/replace/[gI] FILE...', 'Print selected line ranges, or update writable virtual files with search/replace or /pattern/d deletion.'),
+    sed: formatCommandHelp('sed -n START,ENDp FILE...\nsed [-i] [-E] s/search/replace/[gI] FILE...\nsed -i ADDRESS[,ADDRESS]c\\TEXT FILE\nsed -i ADDRESSa\\TEXT FILE\nsed -i ADDRESSi\\TEXT FILE', 'Print line ranges, replace text, delete addressed lines, or insert/append/change addressed text. ADDRESS can be a line number, $, or /pattern/.'),
     true: formatCommandHelp('true', 'Succeed without output. Useful in command chains such as COMMAND || true.'),
     ask: formatCommandHelp('ask QUESTION', 'Pause the AI CLI edit loop and ask the user for clarification.'),
     done: formatCommandHelp('done MESSAGE_TO_USER', 'Finish the AI CLI edit loop with the message to show the user.'),
     hvy: hvyDocumentCommandHelp(),
     'hvy insert': hvyDocumentCommandHelp('insert'),
     'hvy request_structure': hvyDocumentCommandHelp('request_structure'),
-    'hvy find-intent': hvyDocumentCommandHelp('find-intent'),
+    'hvy search': hvyDocumentCommandHelp('search'),
     'hvy cheatsheet': hvyDocumentCommandHelp('cheatsheet'),
     'hvy recipe': hvyDocumentCommandHelp('recipe'),
     'hvy lint': formatCommandHelp('hvy lint [--fix]', 'Check the document for likely component issues. --fix repairs safe structural issues such as plugin id aliases.'),

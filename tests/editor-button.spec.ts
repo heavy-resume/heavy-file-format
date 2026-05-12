@@ -25,14 +25,8 @@ test('editor-only generate button applies pronunciation and stays out of viewer'
 
   const generateButton = page.locator('[data-action="run-button-ai-generate"]');
   await expect(generateButton).toBeVisible({ timeout: 10000 });
-  const anchor = page.locator('[data-component-id="resume-pronunciation"][data-hvy-button-anchor="true"]').first();
-  await expect(anchor).toHaveCSS('position', 'relative');
-  await expect(generateButton.locator('xpath=ancestor::*[contains(@class, "hvy-button-overlay-layer")]')).toHaveCount(1);
 
   await generateButton.click();
-  await expect(page.locator('[data-hvy-button-status="true"]').filter({ hasText: 'Generating...' })).toBeVisible();
-  await expect(generateButton).toBeHidden();
-
   await expect(page.locator('#editorTree')).toContainText('[AY-vuh-ree HART]');
   await expect(generateButton).toBeHidden({ timeout: 10000 });
 

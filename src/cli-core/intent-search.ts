@@ -34,17 +34,17 @@ interface SemanticRecord {
 
 const STOP_WORDS = new Set(['the', 'a', 'an', 'and', 'or', 'to', 'of', 'in', 'for', 'with', 'this', 'that', 'as']);
 
-export function formatHvyFindIntent(document: VisualDocument, fs: HvyVirtualFileSystem, query: string, options: { max?: number; json?: boolean } = {}): string {
+export function formatHvySearch(document: VisualDocument, fs: HvyVirtualFileSystem, query: string, options: { max?: number; json?: boolean } = {}): string {
   const max = Math.max(1, Math.min(20, options.max ?? 5));
   const results = searchHvyIntent(document, fs, query, max);
   if (options.json) {
     return `${JSON.stringify(results, null, 2)}\n`;
   }
   if (results.length === 0) {
-    return `No intent matches found for "${query}".`;
+    return `No search results found for "${query}".`;
   }
   return [
-    `Location results for: "${query}":`,
+    `Search results for: "${query}":`,
     ...results.map((result, index) => [
       `${index + 1}. ${result.path} id=${result.id} kind=${result.kind} type=${result.type} score=${result.score}`,
       ...(result.description ? [`   description: ${result.description}`] : []),

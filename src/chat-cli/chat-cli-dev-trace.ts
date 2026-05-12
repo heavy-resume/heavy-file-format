@@ -16,6 +16,15 @@ export async function writeChatCliCommandTrace(
   await writeChatCliTraceEvent(runId, { event: 'ai_cli_command', command, output, modelMessage }, signal);
 }
 
+export async function writeChatCliFailedCommandTrace(
+  runId: string,
+  command: string,
+  error: string,
+  signal?: AbortSignal
+): Promise<void> {
+  await writeChatCliTraceEvent(runId, { event: 'ai_cli_failed_command', command, error }, signal);
+}
+
 async function writeChatCliTraceEvent(runId: string, payload: Record<string, unknown>, signal?: AbortSignal): Promise<void> {
   if (typeof window === 'undefined' || typeof fetch === 'undefined') {
     return;

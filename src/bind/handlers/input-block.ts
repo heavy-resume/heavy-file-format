@@ -1,5 +1,17 @@
-import { state, getRefreshReaderPanels, getThemeConfig, applyTheme, writeThemeConfig, colorValueToAlpha, colorValueToPickerHex, getThemeResetColor, mergeAlphaIntoCssColor, getComponentDefs, getSectionDefs, resolveBlockContext, recordHistory, persistChatSettings, getRawEditorDiagnostics } from './_imports';
+import { state, getRenderApp, getRefreshReaderPanels, getThemeConfig, applyTheme, writeThemeConfig, colorValueToAlpha, colorValueToPickerHex, getThemeResetColor, mergeAlphaIntoCssColor, getComponentDefs, getSectionDefs, resolveBlockContext, recordHistory, persistChatSettings, getRawEditorDiagnostics } from './_imports';
 import { applyThemeModalFilter } from '../../theme-modal-filter';
+import {
+  TEXT_LINE_STYLE_NAME_PATTERN,
+  formatTextLineStyleCssLines,
+  getTextLineStylePreviewCss,
+  getTextLineStyleSpacing,
+  getTextLineStylesFromMeta,
+  replaceTextLineStyleMarkerName,
+  sanitizeTextLineStyleCss,
+  updateTextLineStyleSpacingCss,
+  writeTextLineStylesToMeta,
+} from '../../text-line-styles';
+import { visitBlocks } from '../../section-ops';
 
 export function bindInputBlock(app: HTMLElement): void {
     app.addEventListener('input', (event) => {
@@ -95,6 +107,62 @@ export function bindInputBlock(app: HTMLElement): void {
       } else {
         delete state.document.meta['ai-context'];
       }
+      return;
+    }
+
+    if (field === 'text-line-style-name' && target instanceof HTMLInputElement) {
+      const oldName = target.dataset.styleName ?? '';
+      const newName = target.value.trim();
+      if (!oldName || !newName || oldName === newName || !TEXT_LINE_STYLE_NAME_PATTERN.test(newName)) return;
+      const styles = getTextLineStylesFromMeta(state.document.meta);
+      if (styles[newName]) return;
+      recordHistory(`meta:text-line-style:rename:${oldName}`);
+      styles[newName] = styles[oldName] ?? { label: '', css: '' };
+      delete styles[oldName];
+      writeTextLineStylesToMeta(state.document.meta, styles);
+      visitBlocks(state.document.sections, (block) => {
+        block.text = replaceTextLineStyleMarkerName(block.text, oldName, newName);
+      });
+      target.dataset.styleName = newName;
+      getRefreshReaderPanels()();
+      getRenderApp()();
+      return;
+    }
+
+    if (field === 'text-line-style-label' && target instanceof HTMLInputElement) {
+      const name = target.dataset.styleName ?? '';
+      if (!name) return;
+      recordHistory(`meta:text-line-style:label:${name}`);
+      const styles = getTextLineStylesFromMeta(state.document.meta);
+      styles[name] = { ...(styles[name] ?? { label: '', css: '' }), label: target.value };
+      writeTextLineStylesToMeta(state.document.meta, styles);
+      getRefreshReaderPanels()();
+      return;
+    }
+
+    if (field === 'text-line-style-css' && target instanceof HTMLTextAreaElement) {
+      const name = target.dataset.styleName ?? '';
+      if (!name) return;
+      recordHistory(`meta:text-line-style:css:${name}`);
+      const styles = getTextLineStylesFromMeta(state.document.meta);
+      styles[name] = { ...(styles[name] ?? { label: '', css: '' }), css: sanitizeTextLineStyleCss(target.value) };
+      writeTextLineStylesToMeta(state.document.meta, styles);
+      refreshTextLineStyleEditingUi(app, name, styles[name]?.css ?? '');
+      getRefreshReaderPanels()();
+      return;
+    }
+
+    if (field === 'text-line-style-spacing' && target instanceof HTMLInputElement) {
+      const name = target.dataset.styleName ?? '';
+      const property = target.dataset.cssProperty ?? '';
+      if (!name || !property) return;
+      recordHistory(`meta:text-line-style:spacing:${name}:${property}`);
+      const styles = getTextLineStylesFromMeta(state.document.meta);
+      const nextCss = updateTextLineStyleSpacingCss(styles[name]?.css ?? '', property, target.value);
+      styles[name] = { ...(styles[name] ?? { label: '', css: '' }), css: nextCss };
+      writeTextLineStylesToMeta(state.document.meta, styles);
+      refreshTextLineStyleEditingUi(app, name, nextCss);
+      getRefreshReaderPanels()();
       return;
     }
 
@@ -358,6 +426,33 @@ function syncThemeAlphaControl(row: HTMLElement | null | undefined, value: strin
     alphaOutput.value = String(Math.round(alpha * 100));
     alphaOutput.textContent = alphaOutput.value;
   }
+}
+
+function refreshTextLineStyleEditingUi(app: HTMLElement, name: string, css: string): void {
+  const previewCss = getTextLineStylePreviewCss(css);
+  const spacing = getTextLineStyleSpacing(css);
+  app.querySelectorAll<HTMLElement>(`[data-text-line-style-name="${cssEscape(name)}"] .text-line-style-sample`).forEach((sample) => {
+    sample.setAttribute('style', previewCss);
+  });
+  app.querySelectorAll<HTMLElement>(`[data-text-line-style-name="${cssEscape(name)}"] .text-line-style-pill-sample`).forEach((sample) => {
+    sample.setAttribute('style', previewCss);
+  });
+  app.querySelectorAll<HTMLTextAreaElement>(`textarea[data-field="text-line-style-css"][data-style-name="${cssEscape(name)}"]`).forEach((textarea) => {
+    if (document.activeElement !== textarea) {
+      textarea.value = formatTextLineStyleCssLines(css);
+    }
+  });
+  Object.entries(spacing).forEach(([property, value]) => {
+    app.querySelectorAll<HTMLInputElement>(`input[data-field="text-line-style-spacing"][data-style-name="${cssEscape(name)}"][data-css-property="${cssEscape(property)}"]`).forEach((input) => {
+      if (document.activeElement !== input) {
+        input.value = value;
+      }
+    });
+  });
+}
+
+function cssEscape(value: string): string {
+  return window.CSS?.escape ? window.CSS.escape(value) : value.replace(/["\\]/g, '\\$&');
 }
 
 function escapeAttr(value: string): string {

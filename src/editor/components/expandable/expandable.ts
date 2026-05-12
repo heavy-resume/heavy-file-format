@@ -1,5 +1,6 @@
 import './expandable.css';
 import type { ComponentEditorRenderer, ComponentReaderRenderer } from '../../component-helpers';
+import type { VisualBlock } from '../../types';
 import { sanitizeInlineCss } from '../../../css-sanitizer';
 
 export const renderExpandableEditor: ComponentEditorRenderer = (sectionKey, block, helpers) => {
@@ -15,6 +16,10 @@ export const renderExpandableEditor: ComponentEditorRenderer = (sectionKey, bloc
   const contentCount = contentBlocks.length;
   const stubOpen = helpers.isExpandableEditorPanelOpen(sectionKey, block.id, 'stub', false);
   const expandedOpen = helpers.isExpandableEditorPanelOpen(sectionKey, block.id, 'expanded', false);
+  const stubPlacementTargets = renderExpandablePlacementBlockList(sectionKey, block.id, 'expandable-stub', stubBlocks, helpers, block.schema.lock || stub.lock);
+  const contentPlacementTargets = renderExpandablePlacementBlockList(sectionKey, block.id, 'expandable-content', contentBlocks, helpers, block.schema.lock || content.lock);
+  const stubPlacementMode = stubPlacementTargets.includes('component-placement-target');
+  const contentPlacementMode = contentPlacementTargets.includes('component-placement-target');
   const stubPreview = stubBlocks
     .slice(0, 2)
     .map((innerBlock) => helpers.renderPassiveEditorBlock(sectionKey, innerBlock))
@@ -112,9 +117,9 @@ export const renderExpandableEditor: ComponentEditorRenderer = (sectionKey, bloc
           stubOpen
             ? `<div class="expandable-part-body">
           <div class="container-inner-blocks">
-            ${stubBlocks.map((innerBlock) => helpers.renderEditorBlock(sectionKey, innerBlock, false)).join('')}
+            ${stubPlacementTargets}
           </div>
-          ${mobileAdjustment ? '' : `<article class="ghost-section-card add-ghost compact-add-component-ghost">
+          ${mobileAdjustment || stubPlacementMode ? '' : `<article class="ghost-section-card add-ghost compact-add-component-ghost">
                   ${helpers.renderAddComponentPicker({
                     id: stubAddKey,
                     action: 'add-expandable-stub-block',
@@ -149,9 +154,9 @@ export const renderExpandableEditor: ComponentEditorRenderer = (sectionKey, bloc
           expandedOpen
             ? `<div class="expandable-part-body">
           <div class="container-inner-blocks">
-            ${contentBlocks.map((innerBlock) => helpers.renderEditorBlock(sectionKey, innerBlock, false)).join('')}
+            ${contentPlacementTargets}
           </div>
-          ${mobileAdjustment ? '' : `<article class="ghost-section-card add-ghost compact-add-component-ghost">
+          ${mobileAdjustment || contentPlacementMode ? '' : `<article class="ghost-section-card add-ghost compact-add-component-ghost">
                   ${helpers.renderAddComponentPicker({
                     id: contentAddKey,
                     action: 'add-expandable-content-block',
@@ -171,6 +176,47 @@ export const renderExpandableEditor: ComponentEditorRenderer = (sectionKey, bloc
     </div>
   `;
 };
+
+function renderExpandablePlacementBlockList(
+  sectionKey: string,
+  parentBlockId: string,
+  container: 'expandable-stub' | 'expandable-content',
+  blocks: VisualBlock[],
+  helpers: Parameters<ComponentEditorRenderer>[2],
+  locked: boolean
+): string {
+  const output: string[] = [];
+  if (!locked && blocks.length > 0) {
+    output.push(helpers.renderComponentPlacementTarget({
+      container,
+      sectionKey,
+      parentBlockId,
+      placement: 'before',
+      targetBlockId: blocks[0]?.id,
+    }));
+  }
+  for (const innerBlock of blocks) {
+    output.push(helpers.renderEditorBlock(sectionKey, innerBlock, locked));
+    if (!locked) {
+      output.push(helpers.renderComponentPlacementTarget({
+        container,
+        sectionKey,
+        parentBlockId,
+        placement: 'after',
+        targetBlockId: innerBlock.id,
+      }));
+    }
+  }
+  if (!locked && blocks.length === 0) {
+    output.push(helpers.renderComponentPlacementTarget({
+      container,
+      sectionKey,
+      parentBlockId,
+      placement: 'end',
+    }));
+  }
+  return output.join('');
+}
 
 function renderExpandablePaneMeta(
   pane: 'stub' | 'expanded',

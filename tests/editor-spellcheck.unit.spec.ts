@@ -41,7 +41,11 @@ test('text fill-in editor opt into native spellcheck', () => {
     },
   } as unknown as VisualBlock;
 
-  expect(renderTextEditor('summary', block, helpers as never)).toContain('class="text-fill-in-box"\n      contenteditable="true"\n      spellcheck="true"');
+  const html = renderTextEditor('summary', block, helpers as never);
+
+  expect(html).toContain('class="text-fill-in-box"');
+  expect(html).toContain('contenteditable="true"');
+  expect(html).toContain('spellcheck="true"');
 });
 
 test('xref title and detail editors opt into native spellcheck', () => {

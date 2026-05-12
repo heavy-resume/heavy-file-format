@@ -30,6 +30,7 @@ export function summarizeHeaderStructure(document: VisualDocument): HeaderStruct
   lines.push(`theme.colors set: ${describeHeaderObjectKeys((meta.theme as JsonObject | undefined)?.colors)}`);
   lines.push(`component_defaults: ${describeHeaderObjectKeys(meta.component_defaults as JsonObject | undefined)}`);
   lines.push(`section_defaults: ${describeHeaderObjectKeys(meta.section_defaults as JsonObject | undefined)}`);
+  lines.push(`text_line_styles: ${describeHeaderObjectKeys(meta.text_line_styles as JsonObject | undefined)}`);
   lines.push(`plugins: ${Array.isArray(meta.plugins) ? meta.plugins.length : 0}`);
   lines.push(`schema: ${meta.schema && typeof meta.schema === 'object' ? 'present' : '(none)'}`);
   lines.push('');

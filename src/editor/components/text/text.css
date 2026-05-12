@@ -215,6 +215,261 @@
   line-height: 1;
 }
 
+.text-line-style-toolbar {
+  padding: 0.28rem;
+  border: 1px solid var(--hvy-border-translucent);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--hvy-surface-alt) 78%, transparent);
+  position: relative;
+}
+
+.text-line-style-toolbar-label {
+  color: var(--hvy-text-muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.paragraph-style-toolbar {
+  display: inline-grid;
+  grid-template-columns: auto minmax(12rem, 1fr) auto;
+  align-items: stretch;
+  gap: 0.35rem;
+  min-width: min(100%, 19rem);
+}
+
+.paragraph-style-toolbar .text-line-style-toolbar-label {
+  grid-column: 1 / -1;
+}
+
+.paragraph-style-recent {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.rich-toolbar button.text-line-style-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+  max-width: 100%;
+  padding: 0.28rem 0.48rem;
+}
+
+.rich-toolbar button.paragraph-style-card {
+  min-height: 2.2rem;
+  border-style: solid;
+  background: color-mix(in srgb, var(--hvy-surface) 88%, transparent);
+  justify-content: center;
+}
+
+.rich-toolbar button.paragraph-style-card.is-selected {
+  box-shadow: inset 0 0 0 1px var(--hvy-accent-1);
+}
+
+.paragraph-style-expand {
+  width: 2.15rem;
+  min-width: 2.15rem;
+}
+
+.paragraph-style-modal,
+.paragraph-style-edit-modal {
+  display: none;
+  position: absolute;
+  z-index: 10050;
+  right: 0;
+  top: calc(100% + 0.45rem);
+  width: min(28rem, calc(100cqw - 1rem));
+  max-width: calc(100cqw - 1rem);
+}
+
+.editor-block:has(.paragraph-style-toolbar.is-picker-open),
+.editor-block:has(.paragraph-style-toolbar.is-style-edit-open) {
+  position: relative;
+  z-index: 10040;
+}
+
+.paragraph-style-toolbar.is-picker-open .paragraph-style-modal,
+.paragraph-style-toolbar.is-style-edit-open .paragraph-style-edit-modal {
+  display: block;
+}
+
+.paragraph-style-modal-card,
+.paragraph-style-edit-card {
+  border: 1px solid var(--hvy-border);
+  border-radius: 8px;
+  background: var(--hvy-surface);
+  box-shadow: 0 18px 45px var(--hvy-shadow);
+  padding: 0.55rem;
+}
+
+.paragraph-style-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0 0 0.45rem;
+}
+
+.paragraph-style-modal-list {
+  display: grid;
+  gap: 0.4rem;
+  max-height: min(22rem, 58vh);
+  overflow: auto;
+  padding-right: 0.15rem;
+}
+
+.paragraph-style-modal-list .paragraph-style-card {
+  justify-content: flex-start;
+  width: 100%;
+}
+
+.paragraph-style-edit-card {
+  max-height: min(28rem, 68vh);
+  overflow: auto;
+}
+
+.paragraph-style-edit-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.65rem;
+  margin-bottom: 0.55rem;
+}
+
+.paragraph-style-edit-title span {
+  font-weight: 800;
+}
+
+.paragraph-style-edit-title code {
+  color: var(--hvy-text-muted);
+}
+
+.paragraph-style-spacing-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.paragraph-style-spacing-group {
+  border: 1px solid var(--hvy-border-translucent);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--hvy-surface-alt) 62%, transparent);
+  padding: 0.5rem;
+}
+
+.paragraph-style-spacing-group strong {
+  display: block;
+  margin-bottom: 0.4rem;
+}
+
+.paragraph-style-box-controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.4rem;
+}
+
+.paragraph-style-box-controls label {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.paragraph-style-box-controls span,
+.paragraph-style-css-lines span {
+  color: var(--hvy-text-muted);
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.paragraph-style-box-controls input {
+  min-width: 0;
+}
+
+.paragraph-style-css-lines {
+  display: grid;
+  gap: 0.3rem;
+  margin-top: 0.55rem;
+}
+
+.hvy-text-line-style-marker {
+  display: none;
+}
+
+.text-line-style-pill-sample {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin: 0 !important;
+  padding: 0 !important;
+  line-height: 1.2;
+}
+
+@container hvy-surface (inline-size <= 50rem) {
+  .paragraph-style-toolbar {
+    grid-template-columns: minmax(0, 1fr) auto;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .paragraph-style-toolbar .text-line-style-toolbar-label {
+    display: none;
+  }
+
+  .paragraph-style-recent {
+    display: contents;
+  }
+
+  .rich-toolbar .paragraph-style-recent button[data-rich-action="text-line-style"] {
+    display: none;
+  }
+
+  .rich-toolbar .paragraph-style-recent button[data-rich-action="text-line-style"].is-selected {
+    display: inline-flex;
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .paragraph-style-toolbar:has(.paragraph-style-recent button[data-rich-action="text-line-style"].is-selected) > .text-line-style-clear {
+    display: none;
+  }
+
+  .paragraph-style-toolbar .text-line-style-clear {
+    grid-column: 1;
+    grid-row: 1;
+    min-width: 0;
+  }
+
+  .rich-toolbar .paragraph-style-toolbar > button.text-line-style-clear.secondary,
+  .rich-toolbar .paragraph-style-recent button[data-rich-action="text-line-style"].is-selected.secondary {
+    background: color-mix(in srgb, var(--hvy-surface) 88%, transparent);
+    border-color: var(--hvy-border-input);
+    color: var(--hvy-button-text);
+    box-shadow: none;
+  }
+
+  .rich-toolbar .paragraph-style-expand {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+    display: none;
+  }
+
+  .paragraph-style-modal,
+  .paragraph-style-edit-modal {
+    left: 0;
+    right: auto;
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .paragraph-style-spacing-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .align-left-icon,
 .align-center-icon,
 .align-right-icon {
@@ -397,6 +652,31 @@
 .rich-editor p {
   min-width: 0;
   margin: 0 0 0.45rem;
+}
+
+.hvy-text-line-style {
+  min-width: 0;
+}
+
+.rich-editor .hvy-text-line-style {
+  position: relative;
+  padding-top: 0.05rem;
+}
+
+.rich-editor .hvy-text-line-style > .hvy-text-line-style-marker {
+  display: none;
+}
+
+.rich-editor .hvy-text-line-style.is-unknown {
+  box-shadow: inset 3px 0 0 var(--hvy-warning-border);
+}
+
+.rich-editor .hvy-text-line-style.is-unknown > .hvy-text-line-style-marker {
+  display: none;
+}
+
+.hvy-text-line-style > :last-child {
+  margin-bottom: 0;
 }
 
 .rich-editor > :first-child,

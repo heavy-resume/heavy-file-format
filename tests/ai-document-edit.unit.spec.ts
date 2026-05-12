@@ -30,6 +30,7 @@ import {
 import { autoUpdatePlanAndWorkNote, createInitialWorkNote, findAutoCompletedPlanStep, recordWorkLedgerItem } from '../src/ai-document-loop-state';
 import { getDocumentEditPhaseTools } from '../src/ai-document-edit-phases';
 import { parseDocumentEditToolRequest } from '../src/ai-document-tool-parsing';
+import { executePatchHeaderTool } from '../src/ai-header-edit-tools';
 import { deserializeDocument, serializeDocument } from '../src/serialization';
 import { initCallbacks, initState } from '../src/state';
 import type { ChatMessage, ChatSettings } from '../src/types';
@@ -1597,13 +1598,8 @@ hvy_version: 0.1
   expect(document.sections[0]?.blocks[0]?.schema.css).toBe('margin: 0; padding: 1rem;');
 });
 
-test('requestAiDocumentEditTurn routes header requests to header tools', async () => {
-  requestProxyCompletionMock
-    .mockResolvedValueOnce('{"tool":"grep_header","query":"skill-card","before":2,"after":4,"max_count":1}')
-    .mockResolvedValueOnce('{"tool":"view_header","start_line":1,"end_line":20}')
-    .mockResolvedValueOnce('{"tool":"patch_header","edits":[{"op":"replace","start_line":2,"end_line":2,"text":"title: New Resume"}]}')
-    .mockResolvedValueOnce('{"tool":"done","summary":"Updated the document title."}');
-
+test('requestAiDocumentEditTurn does not route metadata wording to header tools', async () => {
+  queueAiToolResponses('{"tool":"done","summary":"Stayed on the document edit path."}');
   const document = deserializeDocument(`---
 hvy_version: 0.1
 title: Old Resume
@@ -1630,7 +1626,7 @@ component_defs:
   });
 
   expect(result.error).toBeNull();
-  expect(document.meta.title).toBe('New Resume');
+  expect(document.meta.title).toBe('Old Resume');
   expect(document.meta.component_defs).toEqual([
     {
       name: 'skill-card',
@@ -1638,27 +1634,20 @@ component_defs:
       description: 'Skill card',
     },
   ]);
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Header outline and properties');
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('component_defs:');
-  const headerGrep = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content ?? '';
-  expect(headerGrep).toContain('Tool result for grep_header:');
-  expect(headerGrep).toContain('Header match 1 of 1');
-  expect(headerGrep).toContain('name: skill-card');
-  const headerView = lastToolResultBeforeCall(1);
-  expect(headerView).toContain('Header YAML with 1-based line numbers:');
-  expect(headerView).toContain('  2 | title: Old Resume');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.debugLabel).toBe('ai-document-notes');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.debugLabel).toBe('ai-document-edit:1');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('AI-generated document notes:');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('Reduced component/section index:');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).not.toContain('Header outline and properties');
   expect(result.messages.at(-1)).toEqual(
     expect.objectContaining({
       role: 'assistant',
-      content: 'Updated the document title.',
+      content: 'Stayed on the document edit path.',
     })
   );
 });
 
-test('requestAiDocumentEditTurn rejects invented section default fields', async () => {
-  requestProxyCompletionMock
-    .mockResolvedValueOnce('{"tool":"patch_header","edits":[{"op":"replace","start_line":3,"end_line":4,"text":"section_defaults:\\n  wrapper_style: \\"margin-bottom: 24px;\\""}]}');
-
+test('executePatchHeaderTool rejects invented section default fields', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
 title: Existing
@@ -1671,17 +1660,12 @@ title: Existing
  Existing content
 `, '.hvy');
   seedStateForDocument(document);
-  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
 
-  const result = await requestAiDocumentEditTurn({
-    settings,
-    document,
-    messages: [],
-    request: 'Patch the header section_defaults with vertical margin.',
-  });
-
-  expect(result.error).toBe('section_defaults only supports the "css" field. Unsupported field: wrapper_style.');
-  expect(document.meta.section_defaults).toEqual({ css: 'margin: 0.5rem 0;' });
+  expect(() => executePatchHeaderTool({
+    tool: 'patch_header',
+    edits: [{ op: 'replace', start_line: 3, end_line: 4, text: 'section_defaults:\n  wrapper_style: "margin-bottom: 24px;"' }],
+  }, document)).toThrow('section_defaults only supports the "css" field. Unsupported field: wrapper_style.');
+  expect(document.meta.section_defaults).toEqual({ css: 'margin: 0 0 0.5rem;' });
   expect(document.meta.title).toBe('Existing');
 });
 
@@ -1722,7 +1706,7 @@ hvy_version: 0.1
 hvy_version: 0.1
 reader_max_width: 60rem
 section_defaults:
-  css: "margin: 0.5rem 0;"
+  css: "margin: 0 0 0.5rem;"
 ---
 
 <!--hvy: {"id":"summary","lock":false,"expanded":true,"highlight":false}-->

@@ -12,8 +12,14 @@ import { prepareTextFillIn, removeTextFillInMarkers } from '../../text-fill-in';
 import type { ActionHandler } from './types';
 import type { GridItem, VisualBlock } from '../../editor/types';
 
+type ComponentPlacementContainer = 'section' | 'grid' | 'container' | 'component-list' | 'expandable-stub' | 'expandable-content';
+
 const addBlock: ActionHandler = ({ actionButton, section }) => {
-  if (!section || section.lock) {
+  const insertPlacement = actionButton.dataset.insertPlacement === 'before' || actionButton.dataset.insertPlacement === 'after'
+    ? actionButton.dataset.insertPlacement
+    : null;
+  const targetBlockId = actionButton.dataset.targetBlockId ?? '';
+  if (!section || (section.lock && (!insertPlacement || !targetBlockId))) {
     return;
   }
   const component = (actionButton.dataset.component ?? state.addComponentBySection[section.key] ?? 'text').trim() || 'text';
@@ -24,6 +30,16 @@ const addBlock: ActionHandler = ({ actionButton, section }) => {
   const newBlock = createEmptyBlock(component);
   if (component === 'plugin' && actionButton.dataset.pluginId) {
     configurePluginBlock(newBlock, actionButton.dataset.pluginId);
+  }
+  if (insertPlacement && targetBlockId && insertBlockRelativeToTarget(section.blocks, targetBlockId, newBlock, insertPlacement, !section.lock)) {
+    setActiveEditorBlock(section.key, newBlock.id);
+    getRenderApp()();
+    return;
+  }
+  if (insertPlacement || targetBlockId) {
+    if (section.lock) {
+      return;
+    }
   }
   const previousLastBlockId = section.blocks.length > 0 ? section.blocks[section.blocks.length - 1].id : '';
   for (const child of section.children) {
@@ -283,7 +299,7 @@ const placeComponent: ActionHandler = ({ actionButton, sectionKey }) => {
     return;
   }
   const targetSection = findSectionByKey(state.document.sections, sectionKey);
-  if (!targetSection || targetSection.lock) {
+  if (!targetSection) {
     return;
   }
   const sourceBlock = findBlockByIds(placement.sectionKey, placement.blockId);
@@ -295,12 +311,25 @@ const placeComponent: ActionHandler = ({ actionButton, sectionKey }) => {
   const targetBlockId = actionButton.dataset.targetBlockId ?? '';
   const targetGridItemId = actionButton.dataset.targetGridItemId ?? '';
   const parentBlockId = actionButton.dataset.parentBlockId ?? '';
-  const placementContainer = actionButton.dataset.placementContainer === 'grid' ? 'grid' : 'section';
+  const placementContainer = normalizePlacementContainer(actionButton.dataset.placementContainer);
+  if (placementContainer === 'section' && targetSection.lock) {
+    return;
+  }
   const targetPlacement = actionButton.dataset.placement === 'before' || actionButton.dataset.placement === 'after'
     ? actionButton.dataset.placement
     : 'end';
   const gridBlock = placementContainer === 'grid' && parentBlockId ? findBlockByIds(sectionKey, parentBlockId) : null;
   if (placementContainer === 'grid' && (!gridBlock || gridBlock.schema.component !== 'grid')) {
+    state.componentPlacement = null;
+    getRenderApp()();
+    return;
+  }
+  const targetBlockList = placementContainer === 'section'
+    ? targetSection.blocks
+    : placementContainer === 'grid'
+      ? null
+      : getPlacementBlockList(sectionKey, parentBlockId, placementContainer);
+  if (placementContainer !== 'grid' && !targetBlockList) {
     state.componentPlacement = null;
     getRenderApp()();
     return;
@@ -341,9 +370,9 @@ const placeComponent: ActionHandler = ({ actionButton, sectionKey }) => {
     }
     const insertIndex = getGridPlacementInsertIndex(gridBlock.schema.gridItems, targetPlacement, targetGridItemId);
     gridBlock.schema.gridItems.splice(insertIndex, 0, { id: makeId('griditem'), block: placedBlock });
-  } else {
-    const insertIndex = getPlacementInsertIndex(targetSection.blocks, targetPlacement, targetBlockId);
-    targetSection.blocks.splice(insertIndex, 0, placedBlock);
+  } else if (targetBlockList) {
+    const insertIndex = getPlacementInsertIndex(targetBlockList, targetPlacement, targetBlockId);
+    targetBlockList.splice(insertIndex, 0, placedBlock);
   }
   syncReusableTemplateForBlock(sectionKey, placedBlock.id);
   state.componentPlacement = null;
@@ -383,6 +412,40 @@ function getPlacementInsertIndex(blocks: VisualBlock[], placement: 'before' | 'a
   return placement === 'before' ? targetIndex : targetIndex + 1;
 }
 
+function normalizePlacementContainer(value: string | undefined): ComponentPlacementContainer {
+  if (
+    value === 'grid'
+    || value === 'container'
+    || value === 'component-list'
+    || value === 'expandable-stub'
+    || value === 'expandable-content'
+  ) {
+    return value;
+  }
+  return 'section';
+}
+
+function getPlacementBlockList(
+  sectionKey: string,
+  parentBlockId: string,
+  placementContainer: Exclude<ComponentPlacementContainer, 'section' | 'grid'>
+): VisualBlock[] | null {
+  const parentBlock = parentBlockId ? findBlockByIds(sectionKey, parentBlockId) : null;
+  if (!parentBlock || parentBlock.schema.lock) {
+    return null;
+  }
+  if (placementContainer === 'container') {
+    return parentBlock.schema.containerBlocks;
+  }
+  if (placementContainer === 'component-list') {
+    return parentBlock.schema.componentListBlocks;
+  }
+  if (placementContainer === 'expandable-stub') {
+    return parentBlock.schema.expandableStubBlocks.lock ? null : parentBlock.schema.expandableStubBlocks.children;
+  }
+  return parentBlock.schema.expandableContentBlocks.lock ? null : parentBlock.schema.expandableContentBlocks.children;
+}
+
 function getGridPlacementInsertIndex(items: GridItem[], placement: 'before' | 'after' | 'end', targetGridItemId: string): number {
   if (placement === 'end' || targetGridItemId.length === 0) {
     return items.length;
@@ -392,6 +455,94 @@ function getGridPlacementInsertIndex(items: GridItem[], placement: 'before' | 'a
     return items.length;
   }
   return placement === 'before' ? targetIndex : targetIndex + 1;
+}
+
+function insertBlockRelativeToTarget(
+  blocks: VisualBlock[],
+  targetBlockId: string,
+  newBlock: VisualBlock,
+  placement: 'before' | 'after',
+  canInsertInCurrentList = true
+): boolean {
+  const targetIndex = blocks.findIndex((block) => block.id === targetBlockId);
+  if (targetIndex >= 0) {
+    if (!canInsertInCurrentList) {
+      return false;
+    }
+    blocks.splice(placement === 'before' ? targetIndex : targetIndex + 1, 0, newBlock);
+    return true;
+  }
+  for (const block of blocks) {
+    const blockAllowsChildren = block.schema.lock !== true;
+    if (insertBlockRelativeToTarget(block.schema.containerBlocks ?? [], targetBlockId, newBlock, placement, blockAllowsChildren)) {
+      return true;
+    }
+    if (insertBlockRelativeToTarget(block.schema.componentListBlocks ?? [], targetBlockId, newBlock, placement, blockAllowsChildren)) {
+      return true;
+    }
+    if (insertBlockRelativeToTarget(
+      block.schema.expandableStubBlocks?.children ?? [],
+      targetBlockId,
+      newBlock,
+      placement,
+      blockAllowsChildren && block.schema.expandableStubBlocks?.lock !== true
+    )) {
+      return true;
+    }
+    if (insertBlockRelativeToTarget(
+      block.schema.expandableContentBlocks?.children ?? [],
+      targetBlockId,
+      newBlock,
+      placement,
+      blockAllowsChildren && block.schema.expandableContentBlocks?.lock !== true
+    )) {
+      return true;
+    }
+    const gridItems = block.schema.gridItems ?? [];
+    const targetGridIndex = gridItems.findIndex((item) => item.block.id === targetBlockId);
+    if (targetGridIndex >= 0) {
+      if (!blockAllowsChildren) {
+        return false;
+      }
+      gridItems.splice(placement === 'before' ? targetGridIndex : targetGridIndex + 1, 0, {
+        id: makeId('griditem'),
+        block: newBlock,
+      });
+      return true;
+    }
+    for (const item of gridItems) {
+      if (insertBlockInsideBlock(item.block, targetBlockId, newBlock, placement)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function insertBlockInsideBlock(
+  block: VisualBlock,
+  targetBlockId: string,
+  newBlock: VisualBlock,
+  placement: 'before' | 'after'
+): boolean {
+  const blockAllowsChildren = block.schema.lock !== true;
+  return insertBlockRelativeToTarget(block.schema.containerBlocks ?? [], targetBlockId, newBlock, placement, blockAllowsChildren)
+    || insertBlockRelativeToTarget(block.schema.componentListBlocks ?? [], targetBlockId, newBlock, placement, blockAllowsChildren)
+    || insertBlockRelativeToTarget(
+      block.schema.expandableStubBlocks?.children ?? [],
+      targetBlockId,
+      newBlock,
+      placement,
+      blockAllowsChildren && block.schema.expandableStubBlocks?.lock !== true
+    )
+    || insertBlockRelativeToTarget(
+      block.schema.expandableContentBlocks?.children ?? [],
+      targetBlockId,
+      newBlock,
+      placement,
+      blockAllowsChildren && block.schema.expandableContentBlocks?.lock !== true
+    )
+    || (block.schema.gridItems ?? []).some((item) => insertBlockInsideBlock(item.block, targetBlockId, newBlock, placement));
 }
 
 function getGridItemBlockId(sectionKey: string, gridBlockId: string, gridItemId: string): string | null {

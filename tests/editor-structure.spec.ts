@@ -291,6 +291,42 @@ hvy_version: 0.1
   await expect(editor).toContainText('OriginalX');
 });
 
+test('ai context editing collapsed expandable stub cancels in one step', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ <!--hvy:expandable {"id":"details","expandableExpanded":false}-->
+
+  <!--hvy:expandable:stub {}-->
+
+   <!--hvy:text {"id":"stub-copy"}-->
+    Stub summary
+
+  <!--hvy:expandable:content {}-->
+
+   <!--hvy:text {"id":"expanded-copy"}-->
+    Expanded details
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'AI' }).click();
+
+  await page.locator('#aiReaderDocument .reader-block-text', { hasText: 'Stub summary' }).click({ button: 'right' });
+  await page.getByRole('button', { name: 'Edit component' }).click();
+  const activeEditor = page.locator('#aiReaderDocument .editor-block[data-active-editor-block="true"]');
+  await expect(activeEditor.locator('.rich-editor')).toContainText('Stub summary');
+
+  await activeEditor.getByRole('button', { name: 'Cancel' }).click();
+  await expect(page.locator('#aiReaderDocument .editor-block[data-active-editor-block="true"]')).toHaveCount(0);
+  await expect(page.locator('#aiReaderDocument .reader-block-text', { hasText: 'Stub summary' })).toBeVisible();
+});
+
 test('ai context clone trims only leading paragraph style margin', async ({ page }) => {
   await page.goto('/');
 
@@ -1479,25 +1515,6 @@ hvy_version: 0.1
   for (const ghostWidth of insertGhostWidths) {
     expect(Math.abs(activeBlockWidth - ghostWidth)).toBeLessThanOrEqual(2);
   }
-  await page.locator('.editor-tree').evaluate((tree) => {
-    const block = tree.querySelector<HTMLElement>('.editor-block[data-active-editor-block="true"]');
-    const ghosts = Array.from(tree.querySelectorAll<HTMLElement>('.active-component-insert-ghost'));
-    return {
-      blockWidth: block?.getBoundingClientRect().width ?? 0,
-      ghostWidths: ghosts.map((ghost) => ghost.getBoundingClientRect().width),
-    };
-  });
-  const insertGhostMetrics = await page.locator('.editor-tree').evaluate((tree) => {
-    const blockWidth = block.getBoundingClientRect().width;
-    return Array.from(tree.querySelectorAll<HTMLElement>('.active-component-insert-ghost')).map((ghost) => ({
-      blockWidth,
-      ghostWidth: ghost.getBoundingClientRect().width,
-    }));
-  });
-  expect(insertGhostMetrics).toHaveLength(2);
-  for (const { blockWidth, ghostWidth } of insertGhostMetrics) {
-    expect(Math.abs(blockWidth - ghostWidth)).toBeLessThanOrEqual(2);
-  }
 });
 
 test('clicking a scrolled accomplishment opens editor in place', async ({ page }) => {
@@ -1557,7 +1574,7 @@ hvy_version: 0.1
   expect(beforeTextTop).not.toBeNull();
 
   await accomplishment.click();
-  const activeBlock = page.locator('.editor-block[data-active-editor-block="true"]', { hasText: 'Introduced reproducible developer containers' });
+  const activeBlock = page.locator('.editor-block[data-active-editor-block="true"]', { hasText: 'Introduced reproducible developer containers' }).last();
   await expect(activeBlock.locator('.rich-editor')).toBeVisible();
   await expect.poll(async () => {
     const afterBox = await activeBlock.locator('.rich-editor').boundingBox();
@@ -1601,7 +1618,7 @@ hvy_version: 0.1
   expect(afterDoneScrollTop).toBeLessThanOrEqual(afterScrollTop);
 });
 
-test('nested accomplishment cancel returns to parent editor', async ({ page }) => {
+test('nested accomplishment cancel returns to the parent editor', async ({ page }) => {
   await page.goto('/');
 
   await page.getByRole('button', { name: 'Raw' }).click();
@@ -1629,13 +1646,14 @@ hvy_version: 0.1
 
   const accomplishment = page.locator('.editor-block-passive', { hasText: 'Introduced reproducible developer containers' }).last();
   await accomplishment.click();
-  const activeAccomplishment = page.locator('.editor-block[data-active-editor-block="true"]', { hasText: 'Introduced reproducible developer containers' });
+  const activeAccomplishment = page.locator('.editor-block[data-active-editor-block="true"]', { hasText: 'Introduced reproducible developer containers' }).last();
   await expect(activeAccomplishment.locator('.rich-editor')).toBeVisible();
 
   await activeAccomplishment.getByRole('button', { name: 'Cancel' }).click();
-  const activeList = page.locator('.editor-block[data-active-editor-block="true"]', { hasText: 'Northwind Labs' });
-  await expect(activeList).toBeVisible();
-  await expect(activeList).toContainText('Introduced reproducible developer containers');
+  await expect(page.locator('.editor-block[data-active-editor-block="true"]')).toHaveCount(1);
+  const activeParent = page.locator('.editor-block[data-active-editor-block="true"]', { hasText: 'Northwind Labs' });
+  await expect(activeParent).toBeVisible();
+  await expect(activeParent).toContainText('Introduced reproducible developer containers');
 });
 
 test('clicking an already revealed nested item skips activation reveal animation', async ({ page }) => {

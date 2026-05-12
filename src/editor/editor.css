@@ -622,6 +622,9 @@
 .active-component-insert-ghost {
   min-height: 0;
   height: 2rem;
+  width: 100%;
+  align-self: stretch;
+  grid-column: 1 / -1;
   margin: 0.25rem 0;
   padding: 0.25rem 0.6rem;
   border-style: dashed;

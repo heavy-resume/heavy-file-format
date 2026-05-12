@@ -5,7 +5,7 @@ import type { AppState } from './types';
 import { parseTags, serializeTags } from './editor/tag-editor';
 import { state, getRefreshReaderPanels, getRenderApp } from './state';
 import { getReusableNameFromSectionKey, getComponentDefs, renderComponentOptions, resolveBaseComponent } from './component-defs';
-import { findSectionByKey, findBlockContainerById, findBlockContainerInList, moveBlockInVisualSequence } from './section-ops';
+import { findSectionByKey, findBlockContainerById, moveBlockInVisualSequence } from './section-ops';
 import { getReusableTemplateByName, ensureContainerBlocks, ensureComponentListBlocks, ensureGridItems, applyComponentDefaults, instantiateReusableBlock, coerceAlign, coerceSlot } from './document-factory';
 import { syncReusableTemplateForBlock } from './reusable';
 import { normalizeXrefTarget, getXrefTargetOptions, isXrefTargetValid } from './xref-ops';
@@ -76,6 +76,26 @@ export function findBlockInList(blocks: VisualBlock[], blockId: string, seen = n
       if (nestedGridBlock) {
         return nestedGridBlock;
       }
+    }
+  }
+  return null;
+}
+
+function findBlockPathInList(blocks: VisualBlock[], blockId: string): string[] | null {
+  for (const block of blocks) {
+    if (block.id === blockId) {
+      return [block.id];
+    }
+    const nestedBlocks = [
+      ...(block.schema.containerBlocks ?? []),
+      ...(block.schema.componentListBlocks ?? []),
+      ...((block.schema.gridItems ?? []).map((item) => item.block)),
+      ...(block.schema.expandableStubBlocks?.children ?? []),
+      ...(block.schema.expandableContentBlocks?.children ?? []),
+    ];
+    const nestedPath = findBlockPathInList(nestedBlocks, blockId);
+    if (nestedPath) {
+      return [block.id, ...nestedPath];
     }
   }
   return null;
@@ -512,21 +532,43 @@ export function getTagRenderOptions(target: HTMLElement): Omit<TagRenderOptions,
 }
 
 export function isActiveEditorBlock(sectionKey: string, blockId: string): boolean {
+  return state.activeEditorBlockPath.some((active) => active.sectionKey === sectionKey && active.blockId === blockId);
+}
+
+export function isActiveEditorLeafBlock(sectionKey: string, blockId: string): boolean {
   return state.activeEditorBlock?.sectionKey === sectionKey && state.activeEditorBlock.blockId === blockId;
 }
 
-export function setActiveEditorBlock(sectionKey: string, blockId: string): void {
+type SetActiveEditorBlockOptions = {
+  targetOnly?: boolean;
+};
+
+export function setActiveEditorBlock(sectionKey: string, blockId: string, options: SetActiveEditorBlockOptions = {}): void {
+  const pathIds = options.targetOnly ? [blockId] : getEditorBlockPathIds(sectionKey, blockId) ?? [blockId];
+  state.activeEditorBlockPath = pathIds.map((pathBlockId) => ({ sectionKey, blockId: pathBlockId }));
   state.activeEditorBlock = { sectionKey, blockId };
+  state.activeEditorBlockSnapshots = state.activeEditorBlockPath
+    .map((active) => {
+      const existing = state.activeEditorBlockSnapshots.find(
+        (snapshot) => snapshot.sectionKey === active.sectionKey && snapshot.blockId === active.blockId
+      );
+      return existing ?? createEditorBlockSnapshot(active.sectionKey, active.blockId);
+    })
+    .filter((snapshot): snapshot is NonNullable<AppState['activeEditorBlockSnapshot']> => Boolean(snapshot));
   state.activeEditorBlockSnapshot =
-    state.activeEditorBlockSnapshot?.sectionKey === sectionKey && state.activeEditorBlockSnapshot.blockId === blockId
-      ? state.activeEditorBlockSnapshot
-      : createEditorBlockSnapshot(sectionKey, blockId);
+    state.activeEditorBlockSnapshots.find((snapshot) => snapshot.sectionKey === sectionKey && snapshot.blockId === blockId)
+    ?? null;
   openExpandableEditorPanelsToBlock(sectionKey, blockId);
   state.pendingEditorActivation = {
     sectionKey,
     blockId,
     revealPath: false,
   };
+}
+
+function getEditorBlockPathIds(sectionKey: string, blockId: string): string[] | null {
+  const rootBlocks = getEditorRootBlocks(sectionKey);
+  return rootBlocks ? findBlockPathInList(rootBlocks, blockId) : null;
 }
 
 function createEditorBlockSnapshot(sectionKey: string, blockId: string): AppState['activeEditorBlockSnapshot'] {
@@ -604,50 +646,41 @@ export function clearActiveEditorBlock(blockId?: string): void {
   if (!state.activeEditorBlock) {
     return;
   }
-  if (!blockId || state.activeEditorBlock.blockId === blockId) {
+  if (!blockId) {
     state.activeEditorBlock = null;
     state.activeEditorBlockSnapshot = null;
+    state.activeEditorBlockPath = [];
+    state.activeEditorBlockSnapshots = [];
+    return;
+  }
+  const index = state.activeEditorBlockPath.findIndex((active) => active.blockId === blockId);
+  if (index >= 0) {
+    closeActiveEditorPathFromIndex(index);
   }
 }
 
-export function deactivateEditorBlock(sectionKey: string, blockId: string): 'cleared' | 'promoted' | 'unchanged' {
-  const activeBlockId = state.activeEditorBlock?.blockId ?? null;
-  if (!activeBlockId) {
+export function deactivateEditorBlock(sectionKey: string, blockId: string): 'closed' | 'unchanged' {
+  const index = state.activeEditorBlockPath.findIndex(
+    (active) => active.sectionKey === sectionKey && active.blockId === blockId
+  );
+  if (index < 0) {
     return 'unchanged';
   }
-  if (activeBlockId === blockId) {
-    const parentBlockId = findEditorParentBlockId(sectionKey, blockId);
-    if (parentBlockId) {
-      setActiveEditorBlock(sectionKey, parentBlockId);
-      return 'promoted';
-    }
-    state.activeEditorBlock = null;
-    state.activeEditorBlockSnapshot = null;
-    return 'cleared';
-  }
-  const clickedBlock = findBlockByIds(sectionKey, blockId);
-  const shouldDeactivate =
-    clickedBlock ? blockContainsBlockId(clickedBlock, activeBlockId) : false;
-  if (!shouldDeactivate) {
+  closeActiveEditorPathFromIndex(index);
+  return 'closed';
+}
+
+export function cancelEditorBlockEdit(sectionKey: string, blockId: string): 'closed' | 'unchanged' {
+  const index = state.activeEditorBlockPath.findIndex(
+    (active) => active.sectionKey === sectionKey && active.blockId === blockId
+  );
+  if (index < 0) {
     return 'unchanged';
   }
-  state.activeEditorBlock = null;
-  state.activeEditorBlockSnapshot = null;
-  return 'cleared';
-}
-
-function findEditorParentBlockId(sectionKey: string, blockId: string): string | null {
-  const sqliteRowComponentModal = state.sqliteRowComponentModal;
-  if (sqliteRowComponentModal?.sectionKey === sectionKey) {
-    return findBlockContainerInList(sqliteRowComponentModal.blocks, blockId, null)?.ownerBlockId ?? null;
-  }
-  const rootBlocks = getEditorRootBlocks(sectionKey);
-  return rootBlocks ? findBlockContainerInList(rootBlocks, blockId, null)?.ownerBlockId ?? null : null;
-}
-
-export function cancelEditorBlockEdit(sectionKey: string, blockId: string): 'cleared' | 'promoted' {
-  const snapshot = state.activeEditorBlockSnapshot;
-  if (snapshot?.sectionKey === sectionKey && snapshot.blockId === blockId) {
+  const snapshot = state.activeEditorBlockSnapshots.find(
+    (candidate) => candidate.sectionKey === sectionKey && candidate.blockId === blockId
+  );
+  if (snapshot) {
     const block = findBlockByIds(sectionKey, blockId);
     if (block) {
       const restored = cloneVisualBlock(snapshot.block);
@@ -656,14 +689,20 @@ export function cancelEditorBlockEdit(sectionKey: string, blockId: string): 'cle
       block.schemaMode = restored.schemaMode;
     }
   }
-  const parentBlockId = findEditorParentBlockId(sectionKey, blockId);
-  if (parentBlockId) {
-    setActiveEditorBlock(sectionKey, parentBlockId);
-    return 'promoted';
-  }
-  state.activeEditorBlock = null;
-  state.activeEditorBlockSnapshot = null;
-  return 'cleared';
+  closeActiveEditorPathFromIndex(index);
+  return 'closed';
+}
+
+function closeActiveEditorPathFromIndex(index: number): void {
+  state.activeEditorBlockPath = state.activeEditorBlockPath.slice(0, index);
+  state.activeEditorBlockSnapshots = state.activeEditorBlockSnapshots.filter((snapshot) =>
+    state.activeEditorBlockPath.some((active) => active.sectionKey === snapshot.sectionKey && active.blockId === snapshot.blockId)
+  );
+  const leaf = state.activeEditorBlockPath[state.activeEditorBlockPath.length - 1] ?? null;
+  state.activeEditorBlock = leaf ? { ...leaf } : null;
+  state.activeEditorBlockSnapshot = leaf
+    ? state.activeEditorBlockSnapshots.find((snapshot) => snapshot.sectionKey === leaf.sectionKey && snapshot.blockId === leaf.blockId) ?? null
+    : null;
 }
 
 export function blockContainsBlockId(block: VisualBlock, blockId: string): boolean {

@@ -408,9 +408,9 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
   function renderEditorBlock(sectionKey: string, block: VisualBlock, rootSections?: VisualSection[], parentLocked = false): string {
     const component = block.schema.component || 'text';
     const componentLabel = component === 'plugin' ? getPluginBlockHeaderLabel(block) : component;
-    const isActiveSelf = deps.isActiveEditorBlock(sectionKey, block.id);
+    const isActiveFrame = deps.isActiveEditorBlock(sectionKey, block.id);
     const isActiveDescendant = state.activeEditorBlock?.sectionKey === sectionKey && isDescendantActive(block, state.activeEditorBlock.blockId);
-    const isActive = isActiveSelf || isActiveDescendant;
+    const isActive = isActiveFrame || isActiveDescendant;
 
     if (!isActive) {
       return renderPassiveEditorBlock(sectionKey, block, rootSections ?? []);
@@ -423,12 +423,12 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       && state.pendingEditorActivation.revealPath !== false
       && activationPathIndex >= 0;
     const activationStyle = isActivatingPath ? ` style="--editor-activation-delay: ${activationPathIndex * 150}ms;"` : '';
-    const activationAttrs = isActiveSelf ? ` data-active-editor-block="true" data-active-block-id="${deps.escapeAttr(block.id)}"` : '';
+    const activationAttrs = isActiveFrame ? ` data-active-editor-block="true" data-active-block-id="${deps.escapeAttr(block.id)}"` : '';
     const anchorAttrs = renderButtonAnchorAttrs(sectionKey, block, rootSections ?? []);
     const owningSection = deps.findSectionByKey(rootSections ?? [], sectionKey);
     const isDirectSectionBlock = owningSection?.blocks.some((candidate) => candidate === block) === true;
     const structurallyLocked = parentLocked || (isDirectSectionBlock && owningSection?.lock === true);
-    const blockMove = isActiveSelf
+    const blockMove = isActiveFrame
       ? getBlockMoveAvailability(sectionKey, block.id, rootSections ?? [])
       : { canMoveUp: false, canMoveDown: false };
     const canRemove = isActive && !structurallyLocked;
@@ -456,10 +456,10 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       )}" data-block-id="${deps.escapeAttr(block.id)}" aria-label="Remove ${deps.escapeAttr(componentLabel)}" title="Delete component" data-tooltip="Delete component">${closeIcon()}</button>`
       : '';
     const frameRemoveButton = state.mobileAdjustmentMode ? '' : removeButton;
-    const insertAboveGhost = canRenderActiveComponentInsertGhost(isActiveSelf, structurallyLocked)
+    const insertAboveGhost = canRenderActiveComponentInsertGhost(isActiveFrame, structurallyLocked)
       ? renderActiveComponentInsertGhost(sectionKey, block, 'before')
       : '';
-    const insertBelowGhost = canRenderActiveComponentInsertGhost(isActiveSelf, structurallyLocked)
+    const insertBelowGhost = canRenderActiveComponentInsertGhost(isActiveFrame, structurallyLocked)
       ? renderActiveComponentInsertGhost(sectionKey, block, 'after')
       : '';
 
@@ -477,7 +477,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
             <strong class="editor-block-title">${deps.escapeHtml(componentLabel)}</strong>
           </div>
           <div class="editor-actions">
-            ${state.mobileAdjustmentMode ? '' : isActiveSelf ? placementActions : ''}
+            ${state.mobileAdjustmentMode ? '' : isActiveFrame ? placementActions : ''}
           </div>
         </div>
 
@@ -486,7 +486,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           ${anchorAttrs.overlay}
         </div>
         ${
-          isActiveSelf
+          isActiveFrame
             ? `<div class="editor-block-done-row">
                 <button type="button" class="ghost editor-block-cancel-button" data-action="cancel-block-edit" data-section-key="${deps.escapeAttr(
                   sectionKey

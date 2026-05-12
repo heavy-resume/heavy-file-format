@@ -782,9 +782,11 @@ export function applyRichAction(action: string, editable: HTMLElement, value?: s
     return;
   }
   if (action === 'text-line-style') {
-    applyTextLineStyleToSelection(editable, value ?? '');
-    updateRichToolbarState(editable);
+    const styleName = value ?? '';
+    applyTextLineStyleToSelection(editable, styleName);
+    updateRichToolbarState(editable, styleName);
     editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    updateRichToolbarState(editable, styleName);
     return;
   }
   const annotationAction = normalizeAnnotationAction(action);
@@ -1413,7 +1415,7 @@ export function handleRichEditorClick(event: MouseEvent, editable: HTMLElement):
   return true;
 }
 
-function updateRichToolbarState(editable: HTMLElement): void {
+function updateRichToolbarState(editable: HTMLElement, textLineStyleOverride?: string): void {
   const range = getEditableSelectionRange(editable);
   const textEditorShell = editable.closest<HTMLElement>('.text-editor-shell');
   textEditorShell?.classList.toggle(
@@ -1433,8 +1435,10 @@ function updateRichToolbarState(editable: HTMLElement): void {
     return;
   }
   const selectedStyle = getSelectedRichBlockStyle(editable);
+  const selectedTextLineStyle = textLineStyleOverride ?? getSelectedTextLineStyleName(editable);
   const selectedInlineActions = getSelectedInlineRichActions(editable);
   toolbars.forEach((toolbar) => {
+    updateParagraphStyleToolbarState(toolbar, selectedTextLineStyle);
     toolbar.querySelectorAll<HTMLButtonElement>('[data-rich-action]').forEach((button) => {
       const action = button.dataset.richAction ?? '';
       const annotationAction = normalizeAnnotationAction(action);
@@ -1457,6 +1461,13 @@ function updateRichToolbarState(editable: HTMLElement): void {
         action === selectedStyle ||
         (selectedStyle === 'paragraph' && action === 'paragraph') ||
         (isInlineRichAction(action) && selectedInlineActions.has(action));
+      if (action === 'text-line-style') {
+        const selected = (button.dataset.textLineStyleName ?? '') === selectedTextLineStyle;
+        button.classList.toggle('secondary', selected);
+        button.classList.toggle('is-selected', selected);
+        button.classList.toggle('ghost', !selected);
+        return;
+      }
       if (!/^(paragraph|heading-[1-4]|quote|code-block|list|checklist)$/.test(action) && !isInlineRichAction(action)) {
         return;
       }
@@ -1465,6 +1476,53 @@ function updateRichToolbarState(editable: HTMLElement): void {
       button.classList.toggle('ghost', !selected);
     });
   });
+}
+
+function getSelectedTextLineStyleName(editable: HTMLElement): string {
+  const block = getSelectionTextLineStyleBlock(editable);
+  const styled = block?.matches('[data-hvy-text-line-style]')
+    ? block
+    : block?.closest<HTMLElement>('[data-hvy-text-line-style]');
+  return styled?.dataset.hvyTextLineStyle ?? '';
+}
+
+function updateParagraphStyleToolbarState(toolbar: HTMLElement, selectedStyleName: string): void {
+  const styleToolbar = toolbar.querySelector<HTMLElement>('.paragraph-style-toolbar');
+  if (!styleToolbar) {
+    return;
+  }
+  const current = styleToolbar.querySelector<HTMLElement>('[data-paragraph-style-current]');
+  const selectedButton = styleToolbar.querySelector<HTMLButtonElement>(
+    `.paragraph-style-modal-list [data-rich-action="text-line-style"][data-text-line-style-name="${cssEscapeForSelector(selectedStyleName)}"]`
+  );
+  if (current) {
+    current.textContent = selectedButton?.textContent?.trim() || 'Normal';
+  }
+  if (!selectedStyleName || !selectedButton) {
+    return;
+  }
+  const recent = styleToolbar.querySelector<HTMLElement>('.paragraph-style-recent');
+  if (!recent) {
+    return;
+  }
+  recent
+    .querySelectorAll<HTMLButtonElement>('[data-rich-action="text-line-style"]')
+    .forEach((button) => {
+      if ((button.dataset.textLineStyleName ?? '') === selectedStyleName) {
+        button.remove();
+      }
+    });
+  const clone = selectedButton.cloneNode(true) as HTMLButtonElement;
+  clone.classList.remove('paragraph-style-modal-option');
+  recent.prepend(clone);
+  Array.from(recent.querySelectorAll<HTMLButtonElement>('[data-rich-action="text-line-style"]')).slice(2).forEach((button) => button.remove());
+}
+
+function cssEscapeForSelector(value: string): string {
+  if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function') {
+    return CSS.escape(value);
+  }
+  return value.replace(/["\\]/g, '\\$&');
 }
 
 function isTableAltPreviewSelected(shell: HTMLElement, editable: HTMLElement): boolean {

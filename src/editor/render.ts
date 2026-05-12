@@ -787,7 +787,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           </div>`
         : '';
     const textLineStyles = options?.textLineStyles ?? {};
-    const textLineStyleControls = renderTextLineStyleToolbar(textLineStyles, richButtonAttrs);
+    const textLineStyleControls = renderTextLineStyleToolbar(textLineStyles, richButtonAttrs, sectionKey, blockId);
     return `
       <div class="rich-toolbar">
         <div class="toolbar-segment block-style-buttons" role="group" aria-label="Block style">
@@ -814,34 +814,69 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     `;
   }
 
-  function renderTextLineStyleToolbar(styles: TextLineStyles, richButtonAttrs: string): string {
+  function renderTextLineStyleToolbar(styles: TextLineStyles, richButtonAttrs: string, sectionKey: string, blockId: string): string {
     const names = Object.keys(styles).sort((left, right) => left.localeCompare(right, undefined, { sensitivity: 'base' }));
     if (names.length === 0) {
       return '';
     }
-    return `<div class="toolbar-segment text-line-style-toolbar" role="group" aria-label="Text line styles">
-      <span class="text-line-style-toolbar-label">Line</span>
+    const visibleNames = names.slice(0, 2);
+    const pickerId = `paragraph-style-picker-${sectionKey}-${blockId}`.replace(/[^a-zA-Z0-9_-]/g, '-');
+    const renderStyleButton = (name: string, extraClass = ''): string => {
+      const style = styles[name];
+      const label = getTextLineStyleLabel(name, style);
+      const css = sanitizeTextLineStyleCss(style.css);
+      return `<button
+        type="button"
+        class="ghost text-line-style-pill paragraph-style-card${extraClass}"
+        data-rich-action="text-line-style"
+        data-text-line-style-name="${deps.escapeAttr(name)}"
+        ${richButtonAttrs}
+        title="${deps.escapeAttr(`Apply ${label}`)}"
+      ><span class="text-line-style-pill-sample" style="${deps.escapeAttr(css)}">${deps.escapeHtml(label)}</span></button>`;
+    };
+    return `<div class="toolbar-segment text-line-style-toolbar paragraph-style-toolbar" role="group" aria-label="Paragraph style">
+      <span class="text-line-style-toolbar-label">Paragraph Style</span>
       <button
         type="button"
-        class="ghost text-line-style-pill text-line-style-clear"
+        class="ghost text-line-style-pill paragraph-style-card text-line-style-clear"
         data-rich-action="text-line-style"
         data-text-line-style-name=""
         ${richButtonAttrs}
-        title="Clear text line style"
-      >Clear</button>
-      ${names.map((name) => {
-        const style = styles[name];
-        const label = getTextLineStyleLabel(name, style);
-        const css = sanitizeTextLineStyleCss(style.css);
-        return `<button
+        title="Use normal paragraph style"
+      ><span class="text-line-style-pill-sample">Normal</span></button>
+      <span class="paragraph-style-current" data-paragraph-style-current>Normal</span>
+      <span class="paragraph-style-recent">
+        ${visibleNames.map((name) => renderStyleButton(name)).join('')}
+      </span>
+      ${names.length > 2 ? `<button
           type="button"
-          class="ghost text-line-style-pill"
-          data-rich-action="text-line-style"
-          data-text-line-style-name="${deps.escapeAttr(name)}"
+          class="ghost icon-button paragraph-style-expand"
+          data-action="open-paragraph-style-picker"
           ${richButtonAttrs}
-          title="${deps.escapeAttr(`Apply ${label}`)}"
-        ><span class="text-line-style-pill-mark">^${deps.escapeHtml(name)}^</span><span class="text-line-style-pill-sample" style="${deps.escapeAttr(css)}">${deps.escapeHtml(label)}</span></button>`;
-      }).join('')}
+          aria-expanded="false"
+          aria-controls="${deps.escapeAttr(pickerId)}"
+          aria-label="More paragraph styles"
+          title="More paragraph styles"
+        >…</button>` : ''}
+      <div class="paragraph-style-modal" id="${deps.escapeAttr(pickerId)}" role="dialog" aria-label="Paragraph styles" aria-modal="false">
+        <div class="paragraph-style-modal-card">
+          <div class="paragraph-style-modal-head">
+            <strong>Paragraph Style</strong>
+            <button type="button" class="ghost icon-button" data-action="close-paragraph-style-picker" ${richButtonAttrs} aria-label="Close paragraph styles">×</button>
+          </div>
+          <div class="paragraph-style-modal-list">
+            <button
+              type="button"
+              class="ghost text-line-style-pill paragraph-style-card text-line-style-clear"
+              data-rich-action="text-line-style"
+              data-text-line-style-name=""
+              ${richButtonAttrs}
+              title="Use normal paragraph style"
+            ><span class="text-line-style-pill-sample">Normal</span></button>
+            ${names.map((name) => renderStyleButton(name, ' paragraph-style-modal-option')).join('')}
+          </div>
+        </div>
+      </div>
     </div>`;
   }
 

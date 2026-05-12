@@ -197,13 +197,50 @@ test('text line style editor feeds the rich text toolbar', async ({ page }) => {
     (node as HTMLElement).focus();
   });
 
-  await page.getByRole('button', { name: /Role heading/ }).click();
+  await expect(page.locator('.text-line-style-toolbar-label').filter({ hasText: 'Paragraph Style' }).first()).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Normal' }).first()).toBeVisible();
+  await page.getByRole('button', { name: /Role heading/ }).first().click();
 
   const styled = editor.locator('[data-hvy-text-line-style="role"]');
+  const activeEditorBlock = editor.locator('xpath=ancestor::*[contains(concat(" ", normalize-space(@class), " "), " editor-block ")][1]');
   await expect(styled).toContainText('Foo');
   await expect(styled).toHaveCSS('margin-top', '12px');
   await expect(styled).toHaveCSS('padding-left', '18px');
-  await expect(styled.locator('.hvy-text-line-style-marker')).toHaveText('^role^');
+  await expect(styled.locator('.hvy-text-line-style-marker')).toBeHidden();
+  await expect(activeEditorBlock.locator('[data-paragraph-style-current]').first()).toHaveText('Role heading');
+});
+
+test('paragraph style picker shows two recent choices and opens the full list', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Advanced' }).click();
+  await page.getByRole('button', { name: 'Document Meta' }).click();
+
+  for (const style of [
+    { name: 'alpha', label: 'Alpha Heading', css: 'font-weight: 700;' },
+    { name: 'beta', label: 'Beta Detail', css: 'padding-left: 12px;' },
+    { name: 'gamma', label: 'Gamma Note', css: 'margin: 8px 0;' },
+  ]) {
+    await page.getByRole('button', { name: 'Add Style' }).click();
+    const row = page.locator('.text-line-style-row').last();
+    await row.locator('[data-field="text-line-style-name"]').fill(style.name);
+    await row.locator('[data-field="text-line-style-label"]').fill(style.label);
+    await row.locator('[data-field="text-line-style-css"]').fill(style.css);
+  }
+
+  await page.getByRole('button', { name: 'Document Meta' }).click();
+  await page.locator('[data-action="activate-block"]').first().click();
+
+  const activeEditorBlock = page.locator('[data-field="block-rich"]').first().locator('xpath=ancestor::*[contains(concat(" ", normalize-space(@class), " "), " editor-block ")][1]');
+  const toolbar = activeEditorBlock.locator('.paragraph-style-toolbar').first();
+  await expect(toolbar.locator('.paragraph-style-recent [data-rich-action="text-line-style"]')).toHaveCount(2);
+  await toolbar.getByRole('button', { name: 'More paragraph styles' }).click();
+  await expect(toolbar.locator('.paragraph-style-modal')).toBeVisible();
+  await expect(toolbar.locator('.paragraph-style-modal-list [data-rich-action="text-line-style"]')).toHaveCount(4);
+
+  await toolbar.getByRole('button', { name: 'Gamma Note' }).click();
+  await expect(toolbar.locator('[data-paragraph-style-current]')).toHaveText('Gamma Note');
+  await expect(toolbar.locator('.paragraph-style-recent [data-rich-action="text-line-style"]').first()).toHaveText('Gamma Note');
 });
 
 test('heading enter exits to normal text and updates toolbar state', async ({ page }) => {

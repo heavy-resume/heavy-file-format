@@ -21,6 +21,19 @@ export function bindClickDispatch(app: HTMLElement): void {
       event.preventDefault();
       return;
     }
+    if (actionButton && isParagraphStylePickerAction(actionButton.dataset.action ?? '')) {
+      const toolbar = actionButton.closest<HTMLElement>('.paragraph-style-toolbar');
+      const editable = toolbar ? getRichEditableForButton(app, toolbar) : null;
+      const selection = window.getSelection();
+      if (editable && selection?.rangeCount) {
+        const range = selection.getRangeAt(0);
+        if (isRangeInside(editable, range)) {
+          richToolbarSelections.set(editable, range.cloneRange());
+        }
+      }
+      event.preventDefault();
+      return;
+    }
     if (actionButton?.dataset.action === 'set-block-align') {
       event.preventDefault();
     }
@@ -45,6 +58,8 @@ export function bindClickDispatch(app: HTMLElement): void {
     const richButton = target.closest<HTMLElement>('[data-rich-action]');
     if (richButton) {
       event.preventDefault();
+      richButton.closest<HTMLElement>('.paragraph-style-toolbar')?.classList.remove('is-picker-open');
+      richButton.closest<HTMLElement>('.paragraph-style-toolbar')?.querySelector<HTMLButtonElement>('[data-action="open-paragraph-style-picker"]')?.setAttribute('aria-expanded', 'false');
       const sectionKey = richButton.dataset.sectionKey;
       const blockId = richButton.dataset.blockId;
       const action = richButton.dataset.richAction;
@@ -69,6 +84,22 @@ export function bindClickDispatch(app: HTMLElement): void {
       return;
     }
 
+    if (actionButton.dataset.action === 'open-paragraph-style-picker') {
+      event.preventDefault();
+      const toolbar = actionButton.closest<HTMLElement>('.paragraph-style-toolbar');
+      const isOpen = toolbar?.classList.toggle('is-picker-open') ?? false;
+      actionButton.setAttribute('aria-expanded', String(isOpen));
+      return;
+    }
+
+    if (actionButton.dataset.action === 'close-paragraph-style-picker') {
+      event.preventDefault();
+      const toolbar = actionButton.closest<HTMLElement>('.paragraph-style-toolbar');
+      toolbar?.classList.remove('is-picker-open');
+      toolbar?.querySelector<HTMLButtonElement>('[data-action="open-paragraph-style-picker"]')?.setAttribute('aria-expanded', 'false');
+      return;
+    }
+
     if (isComponentPickerAction(actionButton)) {
       console.log('[hvy:component-picker]', {
         stage: 'dispatch:click',
@@ -85,6 +116,10 @@ export function bindClickDispatch(app: HTMLElement): void {
     }
     executeActionButton(app, actionButton);
   });
+}
+
+function isParagraphStylePickerAction(action: string): boolean {
+  return action === 'open-paragraph-style-picker' || action === 'close-paragraph-style-picker';
 }
 
 function isComponentPickerAction(actionButton: HTMLElement): boolean {

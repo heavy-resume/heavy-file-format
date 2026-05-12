@@ -16,6 +16,17 @@ test('can add section and undo/redo', async ({ page }) => {
   await expect(sections).toHaveCount(initialCount + 1);
 });
 
+test('new section component picker opens on the first click', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('[data-action="add-top-level-section"]').click();
+  const newSection = page.locator('.editor-section-card').last();
+  await expect(newSection.locator('[data-field="section-title"]')).toBeFocused();
+
+  await newSection.locator('.component-picker-trigger').click();
+  await expect(newSection.locator('.component-picker')).toHaveAttribute('data-open', 'true');
+});
+
 test('section remove requires confirmation', async ({ page }) => {
   await page.goto('/');
 

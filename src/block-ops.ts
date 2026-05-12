@@ -897,6 +897,13 @@ function setTextLineStyleBlock(block: HTMLElement, editable: HTMLElement, styleN
   const style = styles[styleName];
   const css = style ? sanitizeTextLineStyleCss(style.css) : '';
   const label = style?.label.trim() || styleName;
+  const range = getEditableSelectionRange(editable);
+  const selectionOffsets = range && isRangeInsideElement(block, range)
+    ? {
+        start: getTextOffset(block, range.startContainer, range.startOffset),
+        end: getTextOffset(block, range.endContainer, range.endOffset),
+      }
+    : null;
   if (!styleName) {
     if (current) {
       unwrapTextLineStyleBlock(current);
@@ -925,6 +932,9 @@ function setTextLineStyleBlock(block: HTMLElement, editable: HTMLElement, styleN
   wrapper.appendChild(createTextLineStyleMarker(styleName));
   block.replaceWith(wrapper);
   wrapper.appendChild(block);
+  if (selectionOffsets && selectionOffsets.start !== null && selectionOffsets.end !== null) {
+    restoreSelectionByTextOffsets(block, selectionOffsets.start, selectionOffsets.end);
+  }
 }
 
 function createTextLineStyleMarker(styleName: string): HTMLElement {
@@ -1644,6 +1654,13 @@ export function handleRichEditorKeydown(event: KeyboardEvent, editable: HTMLElem
   }
 
   if (event.key === 'Enter') {
+    if (exitTextLineStyleAtSelection(editable)) {
+      event.preventDefault();
+      editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
+      updateRichToolbarState(editable);
+      return true;
+    }
+
     if (exitBlockStyleAtSelection(editable)) {
       event.preventDefault();
       editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
@@ -1998,6 +2015,22 @@ function exitBlockStyleAtSelection(editable: HTMLElement): boolean {
   const paragraph = document.createElement('p');
   paragraph.appendChild(document.createTextNode('\u200b'));
   block.parentNode?.insertBefore(paragraph, block.nextSibling);
+  placeCaretAtEnd(paragraph);
+  return true;
+}
+
+function exitTextLineStyleAtSelection(editable: HTMLElement): boolean {
+  const range = getEditableSelectionRange(editable);
+  if (!range?.collapsed) {
+    return false;
+  }
+  const styled = getAncestorElement(range.startContainer, editable, '[data-hvy-text-line-style]');
+  if (!styled || styled === editable || !isCollapsedSelectionAtEndOf(styled)) {
+    return false;
+  }
+  const paragraph = document.createElement('p');
+  paragraph.appendChild(document.createTextNode('\u200b'));
+  styled.parentNode?.insertBefore(paragraph, styled.nextSibling);
   placeCaretAtEnd(paragraph);
   return true;
 }

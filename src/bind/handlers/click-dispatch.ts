@@ -78,7 +78,9 @@ export function bindClickDispatch(app: HTMLElement): void {
       if (sectionKey && blockId && action) {
         const editable = getRichEditableForButton(app, richButton);
         if (editable) {
-          restoreRichToolbarSelection(editable);
+          if (!hasSelectionInside(editable)) {
+            restoreRichToolbarSelection(editable);
+          }
           if (action === 'link') {
             openLinkInlineModal(app, editable);
             return;
@@ -87,6 +89,8 @@ export function bindClickDispatch(app: HTMLElement): void {
             editable.focus();
           }
           applyRichAction(action, editable, richButton.dataset.textLineStyleName);
+          editable.focus({ preventScroll: true });
+          richToolbarSelections.delete(editable);
         }
       }
       return;

@@ -249,6 +249,41 @@ test('paragraph style picker shows two recent choices and opens the full list', 
   await expect(toolbar.locator('.paragraph-style-edit-panel:not([hidden]) [data-field="text-line-style-css"]')).toHaveValue(/margin-bottom: 14px;/);
 });
 
+test('normal after enter from paragraph style keeps the previous line styled', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Advanced' }).click();
+  await page.getByRole('button', { name: 'Document Meta' }).click();
+  await page.getByRole('button', { name: 'Add Style' }).click();
+  await page.locator('[data-field="text-line-style-name"]').fill('role');
+  await page.locator('[data-field="text-line-style-label"]').fill('Role heading');
+  await page.locator('[data-field="text-line-style-css"]').fill('font-weight: 700;');
+  await page.getByRole('button', { name: 'Document Meta' }).click();
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('[data-field="block-rich"]').first();
+  await editor.evaluate((node) => {
+    node.innerHTML = '<p>Styled line</p>';
+    const text = node.querySelector('p')?.firstChild;
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.setStart(text!, text!.textContent!.length);
+    range.collapse(true);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+  });
+
+  await page.getByRole('button', { name: 'Role heading' }).first().click();
+  await page.keyboard.press('Enter');
+  await page.getByRole('button', { name: 'Normal' }).first().click();
+  await page.keyboard.type('Normal line');
+
+  await expect(editor.locator('[data-hvy-text-line-style="role"]')).toContainText('Styled line');
+  await expect(editor.locator('[data-hvy-text-line-style="role"]')).toHaveCount(1);
+  await expect(editor.locator('p').last()).toContainText('Normal');
+});
+
 test('heading enter exits to normal text and updates toolbar state', async ({ page }) => {
   await page.goto('/');
 

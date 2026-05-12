@@ -596,6 +596,10 @@
   box-sizing: border-box;
 }
 
+.hvy-context-popover-clone [data-hvy-text-line-style]:first-child {
+  margin-top: 0 !important;
+}
+
 .hvy-context-popover {
   position: fixed;
   z-index: 130;

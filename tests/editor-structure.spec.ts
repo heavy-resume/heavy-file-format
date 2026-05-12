@@ -291,6 +291,42 @@ hvy_version: 0.1
   await expect(editor).toContainText('OriginalX');
 });
 
+test('ai context clone trims only leading paragraph style margin', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+text_line_styles:
+  pushed:
+    label: Pushed
+    css: "margin: 32px 0 0; padding-left: 18px; font-weight: 700;"
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ <!--hvy:text {}-->
+  ^pushed^ Overlay line
+  ^pushed^ Follow-up line
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'AI' }).click();
+
+  await page.locator('#aiReaderDocument .reader-block', { hasText: 'Overlay line' }).click({ button: 'right' });
+  await expect(page.locator('.hvy-context-popover-clone')).toBeVisible();
+  await expect(page.locator('.hvy-context-popover-clone [data-hvy-text-line-style="pushed"]').first()).toHaveCSS('margin-top', '0px');
+  await expect(page.locator('.hvy-context-popover-clone [data-hvy-text-line-style="pushed"]').nth(1)).toHaveCSS('margin-top', '32px');
+  await expect.poll(async () => {
+    const cloneBox = await page.locator('.hvy-context-popover-clone').boundingBox();
+    const styledBox = await page.locator('.hvy-context-popover-clone [data-hvy-text-line-style="pushed"]').first().boundingBox();
+    if (!cloneBox || !styledBox) {
+      return 999;
+    }
+    return Math.round(styledBox.y - cloneBox.y);
+  }).toBeLessThan(2);
+});
+
 test('mobile adjustment hides text formatting and keeps expandable options read-only', async ({ page }) => {
   await page.goto('/');
 

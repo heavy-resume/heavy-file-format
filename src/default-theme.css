@@ -1,4 +1,16 @@
 /* Light mode defaults */
+:root,
+.hvy-document {
+  color-scheme: light;
+}
+
+/* Dark mode defaults */
+:root.theme-dark,
+.hvy-document.theme-dark {
+  color-scheme: dark;
+}
+
+/* Light mode colors */
 :root {
   --hvy-bg: #f5f9ff;
   --hvy-bg-alt: #eef3fa;

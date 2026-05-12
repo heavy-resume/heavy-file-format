@@ -1,5 +1,101 @@
 import { expect, test } from '@playwright/test';
 
+test('reference app uses embedded runtime boundary for themed controls', async ({ page }) => {
+  await page.goto('/');
+
+  await expect(page.locator('#app')).toHaveClass(/hvy-document/);
+  await expect(page.locator('main.layout')).toHaveClass(/hvy-embed-layout/);
+  await expect.poll(() => page.evaluate(() => getComputedStyle(document.body).margin)).toBe('0px');
+
+  const editorButton = page.getByRole('button', { name: 'Editor' });
+  await expect.poll(async () => editorButton.evaluate((button) => getComputedStyle(button).backgroundColor)).toBe(
+    await page.locator('#app').evaluate((root) => {
+      const probe = document.createElement('span');
+      probe.style.color = getComputedStyle(root).getPropertyValue('--hvy-button-bg');
+      root.append(probe);
+      const color = getComputedStyle(probe).color;
+      probe.remove();
+      return color;
+    })
+  );
+  await expect.poll(async () => editorButton.evaluate((button) => getComputedStyle(button).color)).toBe(
+    await page.locator('#app').evaluate((root) => {
+      const probe = document.createElement('span');
+      probe.style.color = getComputedStyle(root).getPropertyValue('--hvy-button-text');
+      root.append(probe);
+      const color = getComputedStyle(probe).color;
+      probe.remove();
+      return color;
+    })
+  );
+
+  const viewerButton = page.getByRole('button', { name: 'Viewer' });
+  await expect(viewerButton).toHaveCSS('border-top-style', 'solid');
+  await expect(viewerButton).not.toHaveCSS('border-top-color', 'rgb(0, 0, 0)');
+
+  const addSection = page.locator('[data-action="add-top-level-section"]');
+  const addSectionBox = await addSection.boundingBox();
+  const editorBodyBox = await page.locator('.editor-tree-body').boundingBox();
+  expect(addSectionBox).not.toBeNull();
+  expect(editorBodyBox).not.toBeNull();
+  expect(addSectionBox!.width).toBeLessThanOrEqual(editorBodyBox!.width + 1);
+
+  await page.locator('.editor-sidebar-tab').click();
+  await expect(page.locator('.editor-sidebar-panel')).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+});
+
+test('embedded runtime keeps host button and link styles outside the mounted document', async ({ page }) => {
+  await page.goto('/');
+
+  const result = await page.evaluate(async () => {
+    document.body.innerHTML = '<div id="mount"></div>';
+    const modulePath = '/src/embed.ts';
+    const { deserializeDocumentBytes, mountHvyViewer } = await import(/* @vite-ignore */ modulePath);
+    const source = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ [Example link](https://example.com)
+`;
+    const documentBytes = new TextEncoder().encode(source);
+    const root = document.querySelector<HTMLElement>('#mount');
+    if (!root) {
+      throw new Error('Mount root missing.');
+    }
+    mountHvyViewer({ root, document: deserializeDocumentBytes(documentBytes, '.hvy') });
+    const style = document.createElement('style');
+    style.textContent = `
+      body { background: rgb(255, 255, 255); }
+      button { color: rgb(255, 0, 0); background: rgb(255, 255, 255); border-color: rgb(255, 0, 0); }
+      a { color: rgb(255, 0, 0); }
+    `;
+    document.head.append(style);
+    const button = root.querySelector<HTMLElement>('.viewer-sidebar-tab');
+    const link = root.querySelector<HTMLElement>('.reader-block a');
+    if (!button || !link) {
+      throw new Error('Expected embedded controls missing.');
+    }
+    const buttonStyle = getComputedStyle(button);
+    const linkStyle = getComputedStyle(link);
+    return {
+      hasBoundary: root.classList.contains('hvy-document'),
+      hasLayout: Boolean(root.querySelector('.hvy-embed-layout')),
+      buttonColor: buttonStyle.color,
+      buttonBackground: buttonStyle.backgroundColor,
+      linkColor: linkStyle.color,
+    };
+  });
+
+  expect(result.hasBoundary).toBe(true);
+  expect(result.hasLayout).toBe(true);
+  expect(result.buttonColor).not.toBe('rgb(255, 0, 0)');
+  expect(result.buttonBackground).not.toBe('rgb(255, 255, 255)');
+  expect(result.linkColor).not.toBe('rgb(255, 0, 0)');
+});
+
 test('new section component picker opens on the first click', async ({ page }) => {
   await page.goto('/');
 

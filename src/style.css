@@ -5,6 +5,17 @@
   --hvy-floating-controls-clearance: 6.6rem;
 }
 
+html,
+body,
+#app {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  overflow: hidden;
+}
+
 .hvy-embed-layout,
 .hvy-embed-layout * {
   box-sizing: border-box;

@@ -13,7 +13,7 @@ import { renderCliView } from './cli-ui/render';
 import { state, initState, initCallbacks, incrementRenderCount, incrementRefreshReaderCount } from './state';
 import type { AppState, ReaderViewFilter } from './types';
 import { escapeAttr, escapeHtml } from './utils';
-import { applyTheme, getThemeConfig, initColorModeSync } from './theme';
+import { applyTheme, getThemeConfig, initColorModeSync, setThemeRoot } from './theme';
 import { flattenSections, findSectionByKey, findDuplicateSectionIds, getSectionId, formatSectionTitle, isDefaultUntitledSectionTitle, buildSectionRenderSequence } from './section-ops';
 import { renderComponentOptions, renderReusableSectionOptions, getComponentDefs, getSectionDefs, isBuiltinComponent } from './component-defs';
 import { renderOption } from './utils';
@@ -46,6 +46,8 @@ if (!appRoot) {
   throw new Error('App container not found.');
 }
 const app = appRoot;
+app.classList.add('hvy-document');
+setThemeRoot(app);
 const READER_HIGHLIGHT_GLOW_MS = 6000;
 let readerHighlightGlowObserver: IntersectionObserver | null = null;
 let readerHighlightGlowSignature = '';
@@ -54,7 +56,7 @@ window.addEventListener('hvy:viewer-sidebar-open-changed', () => {
   window.requestAnimationFrame(() => scheduleReaderHighlightGlow(app));
 });
 
-app.innerHTML = '<main class="layout"><section class="pane full-pane"><p>Loading editor...</p></section></main>';
+app.innerHTML = '<main class="layout hvy-embed-layout"><section class="pane full-pane"><p>Loading editor...</p></section></main>';
 
 async function createDefaultDocument() {
   const response = await fetch(bundledExampleHvyUrl);
@@ -603,7 +605,7 @@ function renderApp(): void {
 
   stepStartedAt = performance.now();
   const markup = `
-    <main class="layout">
+    <main class="layout hvy-embed-layout">
       <header class="topbar">
         <div class="title-block">
           <h1>HVY Reference Implementation</h1>
@@ -1123,7 +1125,7 @@ async function bootstrap(): Promise<void> {
 bootstrap().catch((error) => {
   const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
   app.innerHTML = `
-    <main class="layout">
+    <main class="layout hvy-embed-layout">
       <section class="pane full-pane">
         <h2>Startup Problem</h2>
         <p>The app failed before the first render.</p>

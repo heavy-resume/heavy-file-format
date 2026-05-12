@@ -1447,6 +1447,59 @@ hvy_version: 0.1
   await expect(activeBlock.locator('.rich-editor')).not.toContainText('TypeScript');
 });
 
+test('active insert above and below controls span the editor block width', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"notes"}-->
+#! Notes
+
+ <!--hvy:text {}-->
+  Alpha note
+
+ <!--hvy:text {}-->
+  Beta note
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('.editor-block-passive', { hasText: 'Alpha note' }).click();
+  const activeBlock = page.locator('.editor-block[data-active-editor-block="true"]', { hasText: 'Alpha note' });
+  await expect(activeBlock.locator('.rich-editor')).toBeVisible();
+
+  const activeBlockWidth = await activeBlock.evaluate((block) => block.getBoundingClientRect().width);
+  const insertGhostWidths = await page.locator('.active-component-insert-ghost').evaluateAll((ghosts) => {
+    return ghosts.map((ghost) => ghost.getBoundingClientRect().width);
+  });
+  expect(insertGhostWidths).toHaveLength(2);
+  for (const ghostWidth of insertGhostWidths) {
+    expect(Math.abs(activeBlockWidth - ghostWidth)).toBeLessThanOrEqual(2);
+  }
+  await page.locator('.editor-tree').evaluate((tree) => {
+    const block = tree.querySelector<HTMLElement>('.editor-block[data-active-editor-block="true"]');
+    const ghosts = Array.from(tree.querySelectorAll<HTMLElement>('.active-component-insert-ghost'));
+    return {
+      blockWidth: block?.getBoundingClientRect().width ?? 0,
+      ghostWidths: ghosts.map((ghost) => ghost.getBoundingClientRect().width),
+    };
+  });
+  const insertGhostMetrics = await page.locator('.editor-tree').evaluate((tree) => {
+    const blockWidth = block.getBoundingClientRect().width;
+    return Array.from(tree.querySelectorAll<HTMLElement>('.active-component-insert-ghost')).map((ghost) => ({
+      blockWidth,
+      ghostWidth: ghost.getBoundingClientRect().width,
+    }));
+  });
+  expect(insertGhostMetrics).toHaveLength(2);
+  for (const { blockWidth, ghostWidth } of insertGhostMetrics) {
+    expect(Math.abs(blockWidth - ghostWidth)).toBeLessThanOrEqual(2);
+  }
+});
+
 test('clicking a scrolled accomplishment opens editor in place', async ({ page }) => {
   await page.goto('/');
 

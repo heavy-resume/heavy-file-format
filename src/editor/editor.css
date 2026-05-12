@@ -593,8 +593,10 @@
 .compact-add-component-ghost {
   min-height: 0;
   height: 2.25rem;
+  width: 100%;
+  box-sizing: border-box;
   padding: 1.25rem 0.55rem;
-  display: inline-flex;
+  display: flex;
   justify-content: center;
   align-items: center;
   gap: 0.5rem;

@@ -17,13 +17,33 @@ const activateBlock: AppActionHandler = ({ app, event, sectionKey, blockId }) =>
   const targetElement = event.target as HTMLElement | null;
   const passiveBlock = targetElement?.closest<HTMLElement>('.editor-block-passive');
   const passiveContent = targetElement?.closest<HTMLElement>('.reader-block') ?? passiveBlock?.querySelector<HTMLElement>('.reader-block');
-  const anchorTop = passiveBlock ? (passiveContent ?? targetElement)?.getBoundingClientRect().top : undefined;
-  state.activeEditorBlockReturnScroll = capturePaneScroll(state.paneScroll, app);
+  const anchor = passiveBlock ? getPassiveTextAnchor(passiveContent, targetElement) : undefined;
+  const capturedScroll = capturePaneScroll(state.paneScroll, app);
+  console.info('[hvy:editor-activation-scroll]', {
+    stage: 'capture',
+    sectionKey,
+    blockId,
+    eventClientX: event.clientX,
+    eventClientY: event.clientY,
+    targetTag: targetElement?.tagName.toLowerCase() ?? null,
+    targetClass: targetElement?.className ?? null,
+    passiveBlockFound: Boolean(passiveBlock),
+    passiveContentFound: Boolean(passiveContent),
+    passiveContentTag: passiveContent?.tagName.toLowerCase() ?? null,
+    passiveContentClass: passiveContent?.className ?? null,
+    textAnchorTop: anchor?.top ?? null,
+    textAnchorParentTag: anchor?.parentTag ?? null,
+    textAnchorParentClass: anchor?.parentClass ?? null,
+    textAnchorPreview: anchor?.textPreview ?? null,
+    editorScrollTop: capturedScroll.editorTop,
+    windowScrollTop: capturedScroll.windowTop,
+  });
+  state.activeEditorBlockReturnScroll = capturedScroll;
   setActiveEditorBlock(sectionKey, blockId);
-  if (typeof anchorTop === 'number' && state.pendingEditorActivation) {
+  if (typeof anchor?.top === 'number' && state.pendingEditorActivation) {
     state.pendingEditorActivation = {
       ...state.pendingEditorActivation,
-      anchorTop,
+      anchorTop: anchor.top,
       clientX: event.clientX,
       clientY: event.clientY,
       preferTextFocus: true,
@@ -31,6 +51,50 @@ const activateBlock: AppActionHandler = ({ app, event, sectionKey, blockId }) =>
   }
   getRenderApp()();
 };
+
+type PassiveTextAnchor = {
+  top: number;
+  parentTag: string | null;
+  parentClass: string | null;
+  textPreview: string;
+};
+
+function getPassiveTextAnchor(passiveContent: HTMLElement | null | undefined, targetElement: HTMLElement | null): PassiveTextAnchor | undefined {
+  if (!passiveContent) {
+    return targetElement ? getFirstTextAnchor(targetElement) : undefined;
+  }
+  if (targetElement && targetElement !== passiveContent && passiveContent.contains(targetElement)) {
+    return getFirstTextAnchor(targetElement);
+  }
+  return getFirstTextAnchor(passiveContent);
+}
+
+function getFirstTextAnchor(root: HTMLElement): PassiveTextAnchor | undefined {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  let node = walker.nextNode();
+  while (node) {
+    const text = node.textContent ?? '';
+    const firstTextIndex = text.search(/\S/);
+    if (firstTextIndex >= 0) {
+      const range = document.createRange();
+      range.setStart(node, firstTextIndex);
+      range.setEnd(node, text.length);
+      const rect = range.getClientRects()[0];
+      range.detach();
+      if (rect) {
+        const parent = node.parentElement;
+        return {
+          top: rect.top,
+          parentTag: parent?.tagName.toLowerCase() ?? null,
+          parentClass: parent?.className ?? null,
+          textPreview: text.slice(firstTextIndex).replace(/\s+/g, ' ').trim().slice(0, 80),
+        };
+      }
+    }
+    node = walker.nextNode();
+  }
+  return undefined;
+}
 
 const activateSectionTitle: AppActionHandler = ({ event, sectionKey }) => {
   if (!sectionKey) {

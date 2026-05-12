@@ -135,20 +135,6 @@ export function bindClickDispatch(app: HTMLElement): void {
       return;
     }
 
-    if (isComponentPickerAction(actionButton)) {
-      console.log('[hvy:component-picker]', {
-        stage: 'dispatch:click',
-        action: actionButton.dataset.action ?? '',
-        component: actionButton.dataset.component ?? '',
-        pluginId: actionButton.dataset.pluginId ?? '',
-        sectionKey: actionButton.dataset.sectionKey ?? '',
-        blockId: actionButton.dataset.blockId ?? '',
-        insertPlacement: actionButton.dataset.insertPlacement ?? '',
-        targetBlockId: actionButton.dataset.targetBlockId ?? '',
-        pickerOpen: actionButton.closest<HTMLElement>('.component-picker')?.dataset.open ?? '',
-        pickerPane: actionButton.closest<HTMLElement>('.component-picker')?.dataset.activePane ?? '',
-      });
-    }
     executeActionButton(app, actionButton);
   });
 }
@@ -223,29 +209,12 @@ function executeActionButton(app: HTMLElement, actionButton: HTMLElement, confir
   }
 
   if (sectionKey.length === 0) {
-    if (isComponentPickerAction(actionButton)) {
-      console.log('[hvy:component-picker]', {
-        stage: 'dispatch:bail',
-        reason: 'missing-section-key',
-        action,
-        component: actionButton.dataset.component ?? '',
-      });
-    }
     return;
   }
 
   const reusableName = getReusableNameFromSectionKey(sectionKey);
   const section = reusableName ? null : findSectionByKey(state.document.sections, sectionKey);
   if (!section && !reusableName) {
-    if (isComponentPickerAction(actionButton)) {
-      console.log('[hvy:component-picker]', {
-        stage: 'dispatch:bail',
-        reason: 'section-not-found',
-        action,
-        component: actionButton.dataset.component ?? '',
-        sectionKey,
-      });
-    }
     return;
   }
 
@@ -257,14 +226,6 @@ function getActionSectionKey(actionButton: HTMLElement): string {
   if (actionButton.dataset.action === 'add-block' && actionButton.dataset.insertPlacement) {
     const nearestEditorSection = actionButton.closest<HTMLElement>('[data-editor-section]')?.dataset.editorSection ?? '';
     if (nearestEditorSection && nearestEditorSection !== declaredSectionKey) {
-      console.log('[hvy:component-picker]', {
-        stage: 'dispatch:section-key-corrected',
-        declaredSectionKey,
-        nearestEditorSection,
-        component: actionButton.dataset.component ?? '',
-        insertPlacement: actionButton.dataset.insertPlacement ?? '',
-        targetBlockId: actionButton.dataset.targetBlockId ?? '',
-      });
       return nearestEditorSection;
     }
   }

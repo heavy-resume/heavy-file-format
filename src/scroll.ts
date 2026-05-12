@@ -115,34 +115,56 @@ function focusPendingEditorActivation(
     `.editor-block[data-active-editor-block="true"][data-active-block-id="${CSS.escape(pending.blockId)}"]`
   );
   if (!block) {
+    console.info('[hvy:editor-activation-scroll]', {
+      stage: 'apply',
+      sectionKey: pending.sectionKey,
+      blockId: pending.blockId,
+      skipped: true,
+      skipReason: 'active-block-not-found',
+      textAnchorTop: pending.anchorTop ?? null,
+    });
     state.pendingEditorActivation = null;
     return;
   }
-  const fallbackTarget = block.querySelector<HTMLElement>(
-    '[contenteditable="true"], textarea, input:not([type="hidden"]), select'
-  ) ?? block;
+  const fallbackTarget = getPrimaryEditorActivationTarget(block) ?? block;
   if (typeof pending.anchorTop === 'number') {
     const editorTree = app.querySelector<HTMLDivElement>('.editor-shell .editor-tree');
-    if (editorTree) {
-      state.activeEditorBlockReturnScroll = {
-        ...state.paneScroll,
-        editorTop: editorTree.scrollTop,
-        windowTop: window.scrollY,
-      };
-      const nextTop = getEditorActivationAnchorTop(fallbackTarget);
-      editorTree.scrollTop += nextTop - pending.anchorTop;
+    const editorTopBefore = editorTree?.scrollTop ?? null;
+    const editableTop = fallbackTarget.getBoundingClientRect().top;
+    const pushedDownBy = editableTop - pending.anchorTop;
+    if (editorTree && pushedDownBy > 0) {
+      editorTree.scrollTop += pushedDownBy;
     }
+    console.info('[hvy:editor-activation-scroll]', {
+      stage: 'apply',
+      sectionKey: pending.sectionKey,
+      blockId: pending.blockId,
+      skipped: !editorTree || pushedDownBy <= 0,
+      skipReason: !editorTree ? 'editor-tree-not-found' : pushedDownBy <= 0 ? 'editable-not-below-text-anchor' : null,
+      textAnchorTop: pending.anchorTop,
+      editableTop,
+      pushedDownBy,
+      editorScrollTopBefore: editorTopBefore,
+      editorScrollTopAfter: editorTree?.scrollTop ?? null,
+      editableTag: fallbackTarget.tagName.toLowerCase(),
+      editableClass: fallbackTarget.className,
+    });
+  } else {
+    console.info('[hvy:editor-activation-scroll]', {
+      stage: 'apply',
+      sectionKey: pending.sectionKey,
+      blockId: pending.blockId,
+      skipped: true,
+      skipReason: 'text-anchor-not-found',
+      textAnchorTop: null,
+      editableTop: fallbackTarget.getBoundingClientRect().top,
+      editableTag: fallbackTarget.tagName.toLowerCase(),
+      editableClass: fallbackTarget.className,
+    });
   }
   const target = getEditorActivationTarget(block, fallbackTarget, pending.clientX, pending.clientY);
   focusEditorActivationTarget(target, pending.clientX, pending.clientY);
   state.pendingEditorActivation = null;
-}
-
-function getEditorActivationAnchorTop(target: HTMLElement): number {
-  if (target.isContentEditable && target.firstElementChild instanceof HTMLElement) {
-    return target.firstElementChild.getBoundingClientRect().top;
-  }
-  return target.getBoundingClientRect().top;
 }
 
 function getEditorActivationTarget(
@@ -158,7 +180,41 @@ function getEditorActivationTarget(
   const pointedEditable = pointed instanceof HTMLElement
     ? pointed.closest<HTMLElement>('[contenteditable="true"], textarea, input:not([type="hidden"]), select')
     : null;
-  return pointedEditable && block.contains(pointedEditable) ? pointedEditable : fallbackTarget;
+  return pointedEditable && block.contains(pointedEditable) && isUsableEditorActivationTarget(pointedEditable)
+    ? pointedEditable
+    : fallbackTarget;
+}
+
+function getPrimaryEditorActivationTarget(block: HTMLElement): HTMLElement | null {
+  const selectors = [
+    '.rich-editor[data-field="block-rich"]',
+    '.rich-editor.text-fill-in-editor',
+    '[data-field="block-grid-rich"]',
+    '[data-field="table-details-rich"]',
+    '.rich-editor[contenteditable="true"]',
+    '[contenteditable="true"]',
+    'textarea',
+    'input:not([type="hidden"])',
+    'select',
+  ];
+  for (const selector of selectors) {
+    const target = Array.from(block.querySelectorAll<HTMLElement>(selector)).find(isUsableEditorActivationTarget);
+    if (target) {
+      return target;
+    }
+  }
+  return null;
+}
+
+function isUsableEditorActivationTarget(target: HTMLElement): boolean {
+  if (target instanceof HTMLInputElement && (target.type === 'hidden' || target.disabled)) {
+    return false;
+  }
+  if ((target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement) && target.disabled) {
+    return false;
+  }
+  const rect = target.getBoundingClientRect();
+  return rect.width > 0 && rect.height > 0;
 }
 
 function focusEditorActivationTarget(target: HTMLElement, clientX?: number, clientY?: number): void {

@@ -1482,19 +1482,39 @@ hvy_version: 0.1
     node.scrollTop += 180;
   });
   await accomplishment.scrollIntoViewIfNeeded();
-  const beforeBox = await accomplishment.locator('.reader-block').boundingBox();
-  expect(beforeBox).not.toBeNull();
+  const beforeScrollTop = await tree.evaluate((node) => node.scrollTop);
+  const beforeTextTop = await accomplishment.locator('.reader-block').evaluate((root) => {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    let node = walker.nextNode();
+    while (node) {
+      const text = node.textContent ?? '';
+      const firstTextIndex = text.search(/\S/);
+      if (firstTextIndex >= 0) {
+        const range = document.createRange();
+        range.setStart(node, firstTextIndex);
+        range.setEnd(node, text.length);
+        const rect = range.getClientRects()[0];
+        range.detach();
+        return rect?.top ?? null;
+      }
+      node = walker.nextNode();
+    }
+    return null;
+  });
+  expect(beforeTextTop).not.toBeNull();
 
   await accomplishment.click();
   const activeBlock = page.locator('.editor-block[data-active-editor-block="true"]', { hasText: 'Introduced reproducible developer containers' });
   await expect(activeBlock.locator('.rich-editor')).toBeVisible();
   await expect.poll(async () => {
     const afterBox = await activeBlock.locator('.rich-editor').boundingBox();
-    if (!afterBox || !beforeBox) {
+    if (!afterBox || beforeTextTop === null) {
       return 999;
     }
-    return Math.abs(Math.round(afterBox.y - beforeBox.y));
+    return Math.abs(Math.round(afterBox.y - beforeTextTop));
   }).toBeLessThanOrEqual(3);
+  const afterScrollTop = await tree.evaluate((node) => node.scrollTop);
+  expect(afterScrollTop).toBeGreaterThanOrEqual(beforeScrollTop);
 });
 
 test('nested accomplishment cancel returns to parent editor', async ({ page }) => {

@@ -20,30 +20,10 @@ const addBlock: ActionHandler = ({ actionButton, section }) => {
     : null;
   const targetBlockId = actionButton.dataset.targetBlockId ?? '';
   if (!section || (section.lock && (!insertPlacement || !targetBlockId))) {
-    console.log('[hvy:component-picker]', {
-      stage: 'add-block:bail',
-      reason: !section ? 'missing-section' : 'locked-section-append',
-      action: actionButton.dataset.action ?? '',
-      component: actionButton.dataset.component ?? '',
-      sectionKey: actionButton.dataset.sectionKey ?? '',
-    });
     return;
   }
   const component = (actionButton.dataset.component ?? state.addComponentBySection[section.key] ?? 'text').trim() || 'text';
-  console.log('[hvy:component-picker]', {
-    stage: 'add-block:start',
-    component,
-    pluginId: actionButton.dataset.pluginId ?? '',
-    sectionKey: section.key,
-    insertPlacement: actionButton.dataset.insertPlacement ?? '',
-    targetBlockId: actionButton.dataset.targetBlockId ?? '',
-  });
   if (openReusableTemplateModalIfNeeded(component, { kind: 'section', sectionKey: section.key })) {
-    console.log('[hvy:component-picker]', {
-      stage: 'add-block:template-modal',
-      component,
-      sectionKey: section.key,
-    });
     return;
   }
   recordHistory();
@@ -52,26 +32,11 @@ const addBlock: ActionHandler = ({ actionButton, section }) => {
     configurePluginBlock(newBlock, actionButton.dataset.pluginId);
   }
   if (insertPlacement && targetBlockId && insertBlockRelativeToTarget(section.blocks, targetBlockId, newBlock, insertPlacement, !section.lock)) {
-    console.log('[hvy:component-picker]', {
-      stage: 'add-block:inserted-relative',
-      component,
-      newBlockId: newBlock.id,
-      sectionKey: section.key,
-      insertPlacement,
-      targetBlockId,
-    });
     setActiveEditorBlock(section.key, newBlock.id);
     getRenderApp()();
     return;
   }
   if (insertPlacement || targetBlockId) {
-    console.log('[hvy:component-picker]', {
-      stage: 'add-block:relative-fallback',
-      component,
-      sectionKey: section.key,
-      insertPlacement: insertPlacement ?? '',
-      targetBlockId,
-    });
     if (section.lock) {
       return;
     }
@@ -83,12 +48,6 @@ const addBlock: ActionHandler = ({ actionButton, section }) => {
     }
   }
   section.blocks.push(newBlock);
-  console.log('[hvy:component-picker]', {
-    stage: 'add-block:appended',
-    component,
-    newBlockId: newBlock.id,
-    sectionKey: section.key,
-  });
   setActiveEditorBlock(section.key, newBlock.id);
   getRenderApp()();
 };

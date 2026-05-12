@@ -18,11 +18,6 @@ export function bindClickMisc(app: HTMLElement): void {
         if (ghostPickerTrigger) {
           event.preventDefault();
           pointerHandledPickerTriggers.add(ghostPickerTrigger);
-          console.log('[hvy:component-picker]', {
-            stage: 'open:pointer-ghost',
-            placement: activeInsertGhost.classList.contains('active-component-insert-ghost-before') ? 'before' : 'after',
-            targetText: target.textContent?.replace(/\s+/g, ' ').trim().slice(0, 80) ?? '',
-          });
           toggleComponentPicker(app, ghostPickerTrigger);
         }
       }
@@ -30,10 +25,6 @@ export function bindClickMisc(app: HTMLElement): void {
     }
     event.preventDefault();
     pointerHandledPickerTriggers.add(pickerTrigger);
-    console.log('[hvy:component-picker]', {
-      stage: 'open:pointer-trigger',
-      label: pickerTrigger.getAttribute('aria-label') ?? '',
-    });
     toggleComponentPicker(app, pickerTrigger);
   });
 
@@ -67,11 +58,6 @@ export function bindClickMisc(app: HTMLElement): void {
       if (picker) {
         picker.dataset.open = 'true';
         picker.dataset.activePane = pickerPaneButton.dataset.componentPickerPane ?? 'root';
-        console.log('[hvy:component-picker]', {
-          stage: 'pane',
-          pane: picker.dataset.activePane,
-          pickerOpen: picker.dataset.open ?? '',
-        });
         revealComponentPicker(picker);
       }
       return;
@@ -87,10 +73,6 @@ export function bindClickMisc(app: HTMLElement): void {
       return;
     }
     if (target.closest('.active-component-insert-ghost') && !target.closest('.component-picker')) {
-      console.log('[hvy:component-picker]', {
-        stage: 'ghost-click-kept-open',
-        targetText: target.textContent?.replace(/\s+/g, ' ').trim().slice(0, 80) ?? '',
-      });
       return;
     }
     if (!target.closest('.component-picker')) {
@@ -128,10 +110,6 @@ export function bindClickMisc(app: HTMLElement): void {
 function toggleComponentPicker(app: HTMLElement, pickerTrigger: HTMLElement): void {
   const picker = pickerTrigger.closest<HTMLElement>('.component-picker');
   if (!picker) {
-    console.log('[hvy:component-picker]', {
-      stage: 'toggle:bail',
-      reason: 'picker-not-found',
-    });
     return;
   }
   if (picker.dataset.open === 'true' && picker.dataset.activePane === 'root') {
@@ -139,21 +117,11 @@ function toggleComponentPicker(app: HTMLElement, pickerTrigger: HTMLElement): vo
     picker.dataset.activePane = 'root';
     picker.style.removeProperty('--component-picker-shift');
     pickerTrigger.blur();
-    console.log('[hvy:component-picker]', {
-      stage: 'toggle:closed',
-      label: pickerTrigger.getAttribute('aria-label') ?? '',
-    });
     return;
   }
   closeOtherComponentPickers(app, picker);
   picker.dataset.open = 'true';
   picker.dataset.activePane = 'root';
-  console.log('[hvy:component-picker]', {
-    stage: 'toggle:opened',
-    label: pickerTrigger.getAttribute('aria-label') ?? '',
-    pickerOpen: picker.dataset.open ?? '',
-    activePane: picker.dataset.activePane ?? '',
-  });
   placeComponentPicker(picker);
   revealComponentPicker(picker);
 }

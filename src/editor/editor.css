@@ -1457,7 +1457,7 @@
 .component-defs,
 .text-line-style-editor {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
   gap: 0.5rem;
 }
 
@@ -1491,6 +1491,10 @@
   border-radius: 7px;
   background: var(--hvy-surface);
   padding: 0.45rem;
+}
+
+.text-line-style-row .paragraph-style-spacing-grid {
+  margin-top: 0.1rem;
 }
 
 .text-line-style-empty {

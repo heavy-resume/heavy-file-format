@@ -207,7 +207,7 @@ test('text line style editor feeds the rich text toolbar', async ({ page }) => {
   await expect(styled).toHaveCSS('margin-top', '12px');
   await expect(styled).toHaveCSS('padding-left', '18px');
   await expect(styled.locator('.hvy-text-line-style-marker')).toBeHidden();
-  await expect(activeEditorBlock.locator('[data-paragraph-style-current]').first()).toHaveText('Role heading');
+  await expect(activeEditorBlock.getByRole('button', { name: 'Role heading' }).first()).toHaveClass(/is-selected/);
 });
 
 test('paragraph style picker shows two recent choices and opens the full list', async ({ page }) => {
@@ -239,8 +239,14 @@ test('paragraph style picker shows two recent choices and opens the full list', 
   await expect(toolbar.locator('.paragraph-style-modal-list [data-rich-action="text-line-style"]')).toHaveCount(4);
 
   await toolbar.getByRole('button', { name: 'Gamma Note' }).click();
-  await expect(toolbar.locator('[data-paragraph-style-current]')).toHaveText('Gamma Note');
   await expect(toolbar.locator('.paragraph-style-recent [data-rich-action="text-line-style"]').first()).toHaveText('Gamma Note');
+  await expect(toolbar.getByRole('button', { name: 'Gamma Note' }).first()).toHaveClass(/is-selected/);
+
+  await toolbar.getByRole('button', { name: 'Gamma Note' }).first().click({ button: 'right' });
+  await expect(toolbar.locator('.paragraph-style-edit-modal')).toBeVisible();
+  await expect(toolbar.locator('.paragraph-style-edit-panel:not([hidden])')).toContainText('Gamma Note');
+  await toolbar.locator('.paragraph-style-edit-panel:not([hidden]) [data-css-property="margin-bottom"]').fill('14px');
+  await expect(toolbar.locator('.paragraph-style-edit-panel:not([hidden]) [data-field="text-line-style-css"]')).toHaveValue(/margin-bottom: 14px;/);
 });
 
 test('heading enter exits to normal text and updates toolbar state', async ({ page }) => {

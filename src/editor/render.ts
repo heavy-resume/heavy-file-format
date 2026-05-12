@@ -34,7 +34,14 @@ import { getScriptingPluginVersion } from '../plugins/scripting/version';
 import { renderAddComponentPicker } from './component-picker';
 import { TEXT_FILL_IN_MARKER, getTextFillInPlaceholder, hasTextFillInMarker, splitTextFillIns } from '../text-fill-in';
 import { closeIcon, plusIcon } from '../icons';
-import { getTextLineStyleLabel, getTextLineStylesFromMeta, sanitizeTextLineStyleCss, type TextLineStyles } from '../text-line-styles';
+import {
+  formatTextLineStyleCssLines,
+  getTextLineStyleLabel,
+  getTextLineStylePreviewCss,
+  getTextLineStyleSpacing,
+  getTextLineStylesFromMeta,
+  type TextLineStyles,
+} from '../text-line-styles';
 
 hljs.registerLanguage('bash', bash);
 hljs.registerLanguage('sh', bash);
@@ -824,7 +831,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const renderStyleButton = (name: string, extraClass = ''): string => {
       const style = styles[name];
       const label = getTextLineStyleLabel(name, style);
-      const css = sanitizeTextLineStyleCss(style.css);
+      const css = getTextLineStylePreviewCss(style.css);
       return `<button
         type="button"
         class="ghost text-line-style-pill paragraph-style-card${extraClass}"
@@ -844,7 +851,6 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         ${richButtonAttrs}
         title="Use normal paragraph style"
       ><span class="text-line-style-pill-sample">Normal</span></button>
-      <span class="paragraph-style-current" data-paragraph-style-current>Normal</span>
       <span class="paragraph-style-recent">
         ${visibleNames.map((name) => renderStyleButton(name)).join('')}
       </span>
@@ -877,6 +883,55 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           </div>
         </div>
       </div>
+      <div class="paragraph-style-edit-modal" role="dialog" aria-label="Edit paragraph style" aria-modal="false">
+        <div class="paragraph-style-edit-card">
+          <div class="paragraph-style-modal-head">
+            <strong>Edit Paragraph Style</strong>
+            <button type="button" class="ghost icon-button" data-action="close-paragraph-style-edit" ${richButtonAttrs} aria-label="Close paragraph style editor">×</button>
+          </div>
+          ${names.map((name) => renderParagraphStyleEditPanel(name, styles[name])).join('')}
+        </div>
+      </div>
+    </div>`;
+  }
+
+  function renderParagraphStyleEditPanel(name: string, style: TextLineStyles[string]): string {
+    const label = getTextLineStyleLabel(name, style);
+    const spacing = getTextLineStyleSpacing(style.css);
+    const rawCss = formatTextLineStyleCssLines(style.css);
+    const renderSpacingInput = (property: string, shortLabel: string): string => `<label>
+      <span>${shortLabel}</span>
+      <input data-field="text-line-style-spacing" data-style-name="${deps.escapeAttr(name)}" data-css-property="${deps.escapeAttr(property)}" value="${deps.escapeAttr(spacing[property] ?? '')}" placeholder="0" />
+    </label>`;
+    return `<div class="paragraph-style-edit-panel" data-edit-style-name="${deps.escapeAttr(name)}" hidden>
+      <div class="paragraph-style-edit-title">
+        <span>${deps.escapeHtml(label)}</span>
+        <code>${deps.escapeHtml(name)}</code>
+      </div>
+      <div class="paragraph-style-spacing-grid" aria-label="${deps.escapeAttr(`${label} spacing`)}">
+        <div class="paragraph-style-spacing-group">
+          <strong>Margin</strong>
+          <div class="paragraph-style-box-controls">
+            ${renderSpacingInput('margin-top', 'Top')}
+            ${renderSpacingInput('margin-right', 'Right')}
+            ${renderSpacingInput('margin-bottom', 'Bottom')}
+            ${renderSpacingInput('margin-left', 'Left')}
+          </div>
+        </div>
+        <div class="paragraph-style-spacing-group">
+          <strong>Padding</strong>
+          <div class="paragraph-style-box-controls">
+            ${renderSpacingInput('padding-top', 'Top')}
+            ${renderSpacingInput('padding-right', 'Right')}
+            ${renderSpacingInput('padding-bottom', 'Bottom')}
+            ${renderSpacingInput('padding-left', 'Left')}
+          </div>
+        </div>
+      </div>
+      <label class="paragraph-style-css-lines">
+        <span>CSS declarations</span>
+        <textarea rows="5" data-field="text-line-style-css" data-style-name="${deps.escapeAttr(name)}" spellcheck="false">${deps.escapeHtml(rawCss)}</textarea>
+      </label>
     </div>`;
   }
 
@@ -1041,12 +1096,18 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
   function renderTextLineStyleEditorRows(styles: TextLineStyles): string {
     const names = Object.keys(styles).sort((left, right) => left.localeCompare(right, undefined, { sensitivity: 'base' }));
     if (names.length === 0) {
-      return '<div class="muted text-line-style-empty">No text line styles yet. Add one to use ^name^ prefixes inside text blocks.</div>';
+      return '<div class="muted text-line-style-empty">No paragraph styles yet. Add one to format repeated lines inside text blocks.</div>';
     }
     return names.map((name) => {
       const style = styles[name];
       const label = getTextLineStyleLabel(name, style);
-      const css = sanitizeTextLineStyleCss(style.css);
+      const css = getTextLineStylePreviewCss(style.css);
+      const rawCss = formatTextLineStyleCssLines(style.css);
+      const spacing = getTextLineStyleSpacing(style.css);
+      const renderSpacingInput = (property: string, shortLabel: string): string => `<label>
+        <span>${shortLabel}</span>
+        <input data-field="text-line-style-spacing" data-style-name="${deps.escapeAttr(name)}" data-css-property="${deps.escapeAttr(property)}" value="${deps.escapeAttr(spacing[property] ?? '')}" placeholder="0" />
+      </label>`;
       return `<article class="text-line-style-row" data-text-line-style-name="${deps.escapeAttr(name)}">
         <div class="text-line-style-row-head">
           <label>
@@ -1059,12 +1120,31 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           <span>Label</span>
           <input data-field="text-line-style-label" data-style-name="${deps.escapeAttr(name)}" value="${deps.escapeAttr(style.label)}" placeholder="${deps.escapeAttr(name)}" />
         </label>
-        <label>
-          <span>CSS</span>
-          <textarea rows="2" data-field="text-line-style-css" data-style-name="${deps.escapeAttr(name)}" placeholder="margin: 0.5rem 0; padding-left: 1rem;">${deps.escapeHtml(style.css)}</textarea>
+        <div class="paragraph-style-spacing-grid">
+          <div class="paragraph-style-spacing-group">
+            <strong>Margin</strong>
+            <div class="paragraph-style-box-controls">
+              ${renderSpacingInput('margin-top', 'Top')}
+              ${renderSpacingInput('margin-right', 'Right')}
+              ${renderSpacingInput('margin-bottom', 'Bottom')}
+              ${renderSpacingInput('margin-left', 'Left')}
+            </div>
+          </div>
+          <div class="paragraph-style-spacing-group">
+            <strong>Padding</strong>
+            <div class="paragraph-style-box-controls">
+              ${renderSpacingInput('padding-top', 'Top')}
+              ${renderSpacingInput('padding-right', 'Right')}
+              ${renderSpacingInput('padding-bottom', 'Bottom')}
+              ${renderSpacingInput('padding-left', 'Left')}
+            </div>
+          </div>
+        </div>
+        <label class="paragraph-style-css-lines">
+          <span>CSS declarations</span>
+          <textarea rows="5" data-field="text-line-style-css" data-style-name="${deps.escapeAttr(name)}" spellcheck="false" placeholder="font-weight: 700;">${deps.escapeHtml(rawCss)}</textarea>
         </label>
         <div class="text-line-style-sample" style="${deps.escapeAttr(css)}">
-          <span class="text-line-style-sample-marker">^${deps.escapeHtml(name)}^</span>
           <span>${deps.escapeHtml(label)}</span>
         </div>
       </article>`;

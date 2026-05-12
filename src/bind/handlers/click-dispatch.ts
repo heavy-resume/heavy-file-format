@@ -5,6 +5,18 @@ import { openRemoveConfirmationModal } from './remove-confirmation-modal';
 const richToolbarSelections = new WeakMap<HTMLElement, Range>();
 
 export function bindClickDispatch(app: HTMLElement): void {
+  app.addEventListener('contextmenu', (event) => {
+    const target = event.target as HTMLElement;
+    const styleButton = target.closest<HTMLElement>('.paragraph-style-card[data-rich-action="text-line-style"][data-text-line-style-name]');
+    const styleName = styleButton?.dataset.textLineStyleName ?? '';
+    if (!styleButton || !styleName) {
+      return;
+    }
+    event.preventDefault();
+    const toolbar = styleButton.closest<HTMLElement>('.paragraph-style-toolbar');
+    openParagraphStyleEditor(toolbar, styleName);
+  });
+
   app.addEventListener('mousedown', (event) => {
     const target = event.target as HTMLElement;
     const actionButton = target.closest<HTMLElement>('[data-action]');
@@ -21,7 +33,7 @@ export function bindClickDispatch(app: HTMLElement): void {
       event.preventDefault();
       return;
     }
-    if (actionButton && isParagraphStylePickerAction(actionButton.dataset.action ?? '')) {
+    if (actionButton && isParagraphStyleToolbarAction(actionButton.dataset.action ?? '')) {
       const toolbar = actionButton.closest<HTMLElement>('.paragraph-style-toolbar');
       const editable = toolbar ? getRichEditableForButton(app, toolbar) : null;
       const selection = window.getSelection();
@@ -100,6 +112,16 @@ export function bindClickDispatch(app: HTMLElement): void {
       return;
     }
 
+    if (actionButton.dataset.action === 'close-paragraph-style-edit') {
+      event.preventDefault();
+      const toolbar = actionButton.closest<HTMLElement>('.paragraph-style-toolbar');
+      toolbar?.classList.remove('is-style-edit-open');
+      toolbar?.querySelectorAll<HTMLElement>('.paragraph-style-edit-panel').forEach((panel) => {
+        panel.hidden = true;
+      });
+      return;
+    }
+
     if (isComponentPickerAction(actionButton)) {
       console.log('[hvy:component-picker]', {
         stage: 'dispatch:click',
@@ -118,8 +140,20 @@ export function bindClickDispatch(app: HTMLElement): void {
   });
 }
 
-function isParagraphStylePickerAction(action: string): boolean {
-  return action === 'open-paragraph-style-picker' || action === 'close-paragraph-style-picker';
+function isParagraphStyleToolbarAction(action: string): boolean {
+  return action === 'open-paragraph-style-picker' || action === 'close-paragraph-style-picker' || action === 'close-paragraph-style-edit';
+}
+
+function openParagraphStyleEditor(toolbar: HTMLElement | null, styleName: string): void {
+  if (!toolbar) {
+    return;
+  }
+  toolbar.classList.remove('is-picker-open');
+  toolbar.classList.add('is-style-edit-open');
+  toolbar.querySelector<HTMLButtonElement>('[data-action="open-paragraph-style-picker"]')?.setAttribute('aria-expanded', 'false');
+  toolbar.querySelectorAll<HTMLElement>('.paragraph-style-edit-panel').forEach((panel) => {
+    panel.hidden = panel.dataset.editStyleName !== styleName;
+  });
 }
 
 function isComponentPickerAction(actionButton: HTMLElement): boolean {

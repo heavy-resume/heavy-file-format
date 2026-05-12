@@ -1491,13 +1491,9 @@ function updateParagraphStyleToolbarState(toolbar: HTMLElement, selectedStyleNam
   if (!styleToolbar) {
     return;
   }
-  const current = styleToolbar.querySelector<HTMLElement>('[data-paragraph-style-current]');
   const selectedButton = styleToolbar.querySelector<HTMLButtonElement>(
     `.paragraph-style-modal-list [data-rich-action="text-line-style"][data-text-line-style-name="${cssEscapeForSelector(selectedStyleName)}"]`
   );
-  if (current) {
-    current.textContent = selectedButton?.textContent?.trim() || 'Normal';
-  }
   if (!selectedStyleName || !selectedButton) {
     return;
   }

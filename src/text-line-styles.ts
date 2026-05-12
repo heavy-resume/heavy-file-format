@@ -51,6 +51,61 @@ export function sanitizeTextLineStyleCss(css: string): string {
   return sanitizeInlineCss(css);
 }
 
+export function getTextLineStylePreviewCss(css: string): string {
+  return serializeCssDeclarations(
+    parseCssDeclarations(sanitizeTextLineStyleCss(css)).filter(
+      ({ property }) => !/^(margin|padding)(-|$)/.test(property)
+    )
+  );
+}
+
+export function formatTextLineStyleCssLines(css: string): string {
+  return parseCssDeclarations(sanitizeTextLineStyleCss(css))
+    .map(({ property, value }) => `${property}: ${value};`)
+    .join('\n');
+}
+
+export function getTextLineStyleSpacing(css: string): Record<string, string> {
+  const declarations = parseCssDeclarations(sanitizeTextLineStyleCss(css));
+  const spacing: Record<string, string> = {
+    'margin-top': '',
+    'margin-right': '',
+    'margin-bottom': '',
+    'margin-left': '',
+    'padding-top': '',
+    'padding-right': '',
+    'padding-bottom': '',
+    'padding-left': '',
+  };
+  for (const { property, value } of declarations) {
+    if (property === 'margin' || property === 'padding') {
+      const [top, right, bottom, left] = expandBoxValue(value);
+      spacing[`${property}-top`] = top;
+      spacing[`${property}-right`] = right;
+      spacing[`${property}-bottom`] = bottom;
+      spacing[`${property}-left`] = left;
+    } else if (property in spacing) {
+      spacing[property] = value;
+    }
+  }
+  return spacing;
+}
+
+export function updateTextLineStyleSpacingCss(css: string, property: string, value: string): string {
+  const spacing = getTextLineStyleSpacing(css);
+  if (!(property in spacing)) {
+    return sanitizeTextLineStyleCss(css);
+  }
+  spacing[property] = value.trim();
+  const preserved = parseCssDeclarations(sanitizeTextLineStyleCss(css)).filter(
+    (declaration) => !/^(margin|padding)(-|$)/.test(declaration.property)
+  );
+  const spacingDeclarations = Object.entries(spacing)
+    .filter(([, spacingValue]) => spacingValue.length > 0)
+    .map(([spacingProperty, spacingValue]) => ({ property: spacingProperty, value: spacingValue }));
+  return sanitizeTextLineStyleCss(serializeCssDeclarations([...spacingDeclarations, ...preserved]));
+}
+
 export function getTextLineStyleLabel(name: string, style: TextLineStyle | undefined): string {
   const label = style?.label.trim() ?? '';
   return label.length > 0 ? label : name;
@@ -89,4 +144,34 @@ function parseFenceLine(line: string): { marker: '`' | '~'; length: number } | n
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function parseCssDeclarations(css: string): Array<{ property: string; value: string }> {
+  return css
+    .split(';')
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0)
+    .map((part) => {
+      const separator = part.indexOf(':');
+      if (separator === -1) {
+        return null;
+      }
+      const property = part.slice(0, separator).trim().toLowerCase();
+      const value = part.slice(separator + 1).trim();
+      return property && value ? { property, value } : null;
+    })
+    .filter((declaration): declaration is { property: string; value: string } => Boolean(declaration));
+}
+
+function serializeCssDeclarations(declarations: Array<{ property: string; value: string }>): string {
+  return declarations.map(({ property, value }) => `${property}: ${value};`).join(' ');
+}
+
+function expandBoxValue(value: string): [string, string, string, string] {
+  const parts = value.trim().split(/\s+/).filter(Boolean);
+  const top = parts[0] ?? '';
+  const right = parts[1] ?? top;
+  const bottom = parts[2] ?? top;
+  const left = parts[3] ?? right;
+  return [top, right, bottom, left];
 }

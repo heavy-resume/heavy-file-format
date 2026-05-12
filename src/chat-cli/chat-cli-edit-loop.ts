@@ -858,12 +858,12 @@ function buildChatCliLoopContext(
     request,
     ...(documentAiContext ? ['', 'Document context:', documentAiContext] : []),
     ...(omittedMessageCount > 0 ? ['', `Earlier chat omitted: ${omittedMessageCount} message${omittedMessageCount === 1 ? '' : 's'}.`] : []),
-    ...(selectedComponent ? ['', 'Selected component focus:', formatSelectedComponentFocus(selectedComponent, request)] : []),
+    ...(selectedComponent ? ['', 'Selected component focus:', formatSelectedComponentFocus(selectedComponent)] : []),
     ...(cwdComponentContext ? ['', cwdComponentContext] : []),
   ].join('\n');
 }
 
-function formatSelectedComponentFocus(focus: ChatCliSelectedComponentFocus, request: string): string {
+function formatSelectedComponentFocus(focus: ChatCliSelectedComponentFocus): string {
   const parentPath = getParentVirtualPath(focus.path);
   return [
     `Path: ${focus.path}`,

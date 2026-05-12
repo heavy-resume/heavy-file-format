@@ -159,6 +159,9 @@ export function bindKeydown(app: HTMLElement): void {
 function insertFillInLineBreak(editable: HTMLElement): void {
   editable.textContent = `${(editable.textContent ?? '').replaceAll('\u200b', '')}\n\u200b`;
   const selection = window.getSelection();
+  if (!selection) {
+    return;
+  }
   const range = document.createRange();
   const textNode = editable.firstChild;
   if (textNode?.nodeType === Node.TEXT_NODE) {

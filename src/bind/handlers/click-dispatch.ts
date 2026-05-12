@@ -176,10 +176,6 @@ function openParagraphStyleEditor(toolbar: HTMLElement | null, styleName: string
   });
 }
 
-function isComponentPickerAction(actionButton: HTMLElement): boolean {
-  return actionButton.classList.contains('component-picker-row') || actionButton.closest('.component-picker') !== null;
-}
-
 function isPlacementModeAction(action: string): boolean {
   return action === 'place-component' || action === 'cancel-component-placement';
 }

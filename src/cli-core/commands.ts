@@ -1960,7 +1960,7 @@ function applySedEditExpression(input: string, expression: string): string {
   if (parsed.kind === 'append' || parsed.kind === 'insert' || parsed.kind === 'change') {
     return applySedAddressedTextCommand(input, parsed);
   }
-  if (parsed.lineNumber != null) {
+  if ('lineNumber' in parsed && parsed.lineNumber != null) {
     const lines = input.split(/\r?\n/);
     const index = parsed.lineNumber - 1;
     if (index < 0 || index >= lines.length) {
@@ -1970,13 +1970,16 @@ function applySedEditExpression(input: string, expression: string): string {
       lines[index] = applySedSubstitution(lines[index] ?? '', parsed);
       return lines.join('\n');
     }
-    if (parsed.pattern == null) {
+    if (parsed.kind === 'delete' && parsed.pattern == null) {
       lines.splice(index, 1);
       return lines.join('\n');
     }
-    const regex = new RegExp(parsed.pattern, parsed.flags.toLowerCase().includes('i') ? 'i' : '');
-    if (regex.test(lines[index] ?? '')) {
-      lines.splice(index, 1);
+    if (parsed.kind === 'delete') {
+      const pattern = parsed.pattern ?? '';
+      const regex = new RegExp(pattern, parsed.flags.toLowerCase().includes('i') ? 'i' : '');
+      if (regex.test(lines[index] ?? '')) {
+        lines.splice(index, 1);
+      }
     }
     return lines.join('\n');
   }
@@ -2072,7 +2075,14 @@ function parseSedExpression(expression: string): SedExpression {
     if (rest.toLowerCase() === 'd') {
       return { kind: 'delete', flags: '', lineNumber };
     }
-    return { ...parseSedExpression(rest), lineNumber };
+    const parsedRest = parseSedExpression(rest);
+    if (parsedRest.kind === 'substitute') {
+      return { ...parsedRest, lineNumber };
+    }
+    if (parsedRest.kind === 'delete') {
+      return { ...parsedRest, lineNumber };
+    }
+    throw new Error('sed: expected sed s/search/replace/[g] path or sed /pattern/d path');
   }
 
   if (expression.startsWith('s') && expression.length >= 2) {

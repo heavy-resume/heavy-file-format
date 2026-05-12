@@ -533,7 +533,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     const className = `reader-container reader-view-collapse-wrapper is-collapsible ${expanded ? 'is-expanded' : 'is-collapsed-preview'}`;
     const title = block.schema.id.trim() || block.schema.xrefTitle.trim() || block.schema.containerTitle.trim() || block.schema.component;
     const attrs = `data-reader-action="toggle-view-collapse" data-reader-view-target="${deps.escapeAttr(targetKey)}" data-reader-view-collapse-key="${deps.escapeAttr(key)}" aria-expanded="${expanded ? 'true' : 'false'}"`;
-    return `<div class="${deps.escapeAttr(className)}" style="--hvy-container-preview-rem: 3rem;">
+    return `<div class="${deps.escapeAttr(className)}" style="--hvy-container-preview-rem: 5rem;">
       <header class="reader-container-head">
         <div class="reader-container-title">${deps.escapeHtml(title)}</div>
         <div class="reader-container-actions">
@@ -621,7 +621,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       ],
       componentListDefaultSortKey: 'order',
       componentListDefaultGroupKey: 'type',
-      componentListGroupCollapsedPreviewRem: 3,
+      componentListGroupCollapsedPreviewRem: 5,
     });
     const addPreviewAttrs = (html: string, attrs: Record<string, string>): string => {
       const extraClass = attrs.class;

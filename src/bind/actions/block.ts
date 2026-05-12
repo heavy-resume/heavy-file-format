@@ -340,7 +340,7 @@ const placeComponent: ActionHandler = ({ actionButton, sectionKey }) => {
     return;
   }
   const targetSection = findSectionByKey(state.document.sections, sectionKey);
-  if (!targetSection || targetSection.lock) {
+  if (!targetSection) {
     return;
   }
   const sourceBlock = findBlockByIds(placement.sectionKey, placement.blockId);
@@ -353,6 +353,9 @@ const placeComponent: ActionHandler = ({ actionButton, sectionKey }) => {
   const targetGridItemId = actionButton.dataset.targetGridItemId ?? '';
   const parentBlockId = actionButton.dataset.parentBlockId ?? '';
   const placementContainer = normalizePlacementContainer(actionButton.dataset.placementContainer);
+  if (placementContainer === 'section' && targetSection.lock) {
+    return;
+  }
   const targetPlacement = actionButton.dataset.placement === 'before' || actionButton.dataset.placement === 'after'
     ? actionButton.dataset.placement
     : 'end';

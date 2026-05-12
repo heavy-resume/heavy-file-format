@@ -25,8 +25,12 @@ export function bindResize(app: HTMLElement): void {
     const startPopupY = state.aiEdit.popupY;
 
     const clamp = (x: number, y: number): { x: number; y: number } => {
-      const maxX = Math.max(0, window.innerWidth - popover.offsetWidth);
-      const maxY = Math.max(0, window.innerHeight - popover.offsetHeight);
+      const shell = popover.closest<HTMLElement>('.viewer-shell') ?? app.querySelector<HTMLElement>('.viewer-shell');
+      const shellRect = shell?.getBoundingClientRect();
+      const frameWidth = shell?.clientWidth || shellRect?.width || window.innerWidth;
+      const frameHeight = shell?.clientHeight || shellRect?.height || window.innerHeight;
+      const maxX = Math.max(0, frameWidth - popover.offsetWidth);
+      const maxY = Math.max(0, frameHeight - popover.offsetHeight);
       return {
         x: Math.min(Math.max(x, 0), maxX),
         y: Math.min(Math.max(y, 0), maxY),

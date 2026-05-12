@@ -211,6 +211,49 @@ hvy_version: 0.1
   await expect.poll(() => page.evaluate(() => window.getSelection()?.toString() ?? '')).toBe('');
 });
 
+test('ai context menu stays inside phone preview when opened near the edge', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ Edge-aware summary words
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'AI' }).click();
+  await page.getByRole('button', { name: 'Phone 390' }).click();
+
+  const shell = page.locator('.viewer-shell').first();
+  await expect.poll(async () => Math.round((await shell.boundingBox())?.width ?? 0)).toBe(390);
+  const shellBox = await shell.boundingBox();
+  expect(shellBox).not.toBeNull();
+
+  await page.locator('#aiReaderDocument .reader-block', { hasText: 'Edge-aware summary words' }).dispatchEvent('contextmenu', {
+    clientX: (shellBox?.x ?? 0) + (shellBox?.width ?? 0) - 4,
+    clientY: (shellBox?.y ?? 0) + 80,
+    button: 2,
+  });
+  await expect(page.locator('.hvy-context-popover')).toContainText('Request changes');
+
+  const menuBox = await page.locator('.hvy-context-popover').boundingBox();
+  expect(menuBox).not.toBeNull();
+  expect((menuBox?.x ?? 0) + (menuBox?.width ?? 0)).toBeLessThanOrEqual((shellBox?.x ?? 0) + (shellBox?.width ?? 0) + 1);
+  expect(menuBox?.x ?? 0).toBeGreaterThanOrEqual((shellBox?.x ?? 0) - 1);
+  expect(Math.abs(((menuBox?.x ?? 0) + (menuBox?.width ?? 0) / 2) - ((shellBox?.x ?? 0) + (shellBox?.width ?? 0) / 2))).toBeLessThanOrEqual(2);
+
+  await page.locator('.hvy-context-popover button', { hasText: 'Request changes' }).click();
+  await expect(page.locator('.ai-edit-popover')).toBeVisible();
+  const requestBox = await page.locator('.ai-edit-popover').boundingBox();
+  expect(requestBox).not.toBeNull();
+  expect((requestBox?.x ?? 0) + (requestBox?.width ?? 0)).toBeLessThanOrEqual((shellBox?.x ?? 0) + (shellBox?.width ?? 0) + 1);
+  expect(requestBox?.x ?? 0).toBeGreaterThanOrEqual((shellBox?.x ?? 0) - 1);
+});
+
 test('ai expandable click waits for double click edit gesture', async ({ page }) => {
   await page.goto('/');
 

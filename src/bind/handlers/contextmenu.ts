@@ -78,8 +78,8 @@ function openReaderContextPopover(app: HTMLElement, event: MouseEvent, filtering
         height: fallbackRect.height,
       }
     : undefined;
-  const x = Number.isFinite(event.clientX) ? event.clientX : fallbackRect ? fallbackRect.left + 16 : 16;
-  const y = Number.isFinite(event.clientY) ? event.clientY : fallbackRect ? fallbackRect.top + 16 : 16;
+  const x = Number.isFinite(event.clientX) ? event.clientX - shellRect.left : fallbackRect ? fallbackRect.left - shellRect.left + 16 : 16;
+  const y = Number.isFinite(event.clientY) ? event.clientY - shellRect.top : fallbackRect ? fallbackRect.top - shellRect.top + 16 : 16;
   state.contextMenu = {
     kind: state.currentView === 'ai' ? 'ai' : 'filter',
     sectionKey,
@@ -144,6 +144,9 @@ function renderContextMenuElement(app: HTMLElement): void {
     addButton('Clear filtering', 'clear-target-filtering');
   }
   root.append(backdrop, ...(clone ? [clone] : []), popover);
+  const position = placeContextMenuPopover(root, popover, menu.x, menu.y);
+  menu.x = position.x;
+  menu.y = position.y;
 }
 
 function closeReaderContextPopover(app: HTMLElement, clearState = true): void {
@@ -171,6 +174,24 @@ function applyBackdropTargetRect(backdrop: HTMLElement, rect: NonNullable<typeof
   backdrop.style.setProperty('--hvy-context-target-top', `${rect.top}px`);
   backdrop.style.setProperty('--hvy-context-target-width', `${rect.width}px`);
   backdrop.style.setProperty('--hvy-context-target-height', `${rect.height}px`);
+}
+
+function placeContextMenuPopover(root: HTMLElement, popover: HTMLElement, x: number, y: number): { x: number; y: number } {
+  const margin = 8;
+  const rootRect = root.getBoundingClientRect();
+  const popoverRect = popover.getBoundingClientRect();
+  const rootWidth = root.clientWidth || rootRect.width;
+  const rootHeight = root.clientHeight || rootRect.height;
+  const popoverWidth = popoverRect.width;
+  const popoverHeight = popoverRect.height;
+  const tightHorizontalSpace = rootWidth <= 520 || popoverWidth + margin * 2 > rootWidth;
+  const maxX = Math.max(margin, rootWidth - popoverWidth - margin);
+  const maxY = Math.max(margin, rootHeight - popoverHeight - margin);
+  const nextX = tightHorizontalSpace ? Math.max(margin, (rootWidth - popoverWidth) / 2) : Math.min(Math.max(x, margin), maxX);
+  const nextY = popoverHeight + margin * 2 > rootHeight ? Math.max(margin, (rootHeight - popoverHeight) / 2) : Math.min(Math.max(y, margin), maxY);
+  popover.style.left = `${Math.round(nextX)}px`;
+  popover.style.top = `${Math.round(nextY)}px`;
+  return { x: Math.round(nextX), y: Math.round(nextY) };
 }
 
 function cloneContextMenuTarget(target: HTMLElement, rect: NonNullable<typeof state.contextMenu>['targetRect']): HTMLElement | null {

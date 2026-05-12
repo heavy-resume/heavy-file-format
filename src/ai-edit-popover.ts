@@ -9,8 +9,8 @@ import { findVirtualDirectoryForBlock } from './cli-core/virtual-file-system';
 import { getAiEditComponentGuidance } from './ai-edit-guidance';
 import type { ChatMessage } from './types';
 
-export function openAiEditPopover(sectionKey: string, blockId: string, clientX: number, clientY: number): void {
-  const { x, y } = clampAiEditPopoverPosition(clientX, clientY);
+export function openAiEditPopover(sectionKey: string, blockId: string, frameX: number, frameY: number): void {
+  const { x, y } = clampAiEditPopoverPosition(frameX, frameY);
   state.aiEdit = {
     sectionKey,
     blockId,
@@ -37,15 +37,20 @@ export function closeAiEditPopover(): void {
   };
 }
 
-function clampAiEditPopoverPosition(clientX: number, clientY: number): { x: number; y: number } {
-  const width = 420;
-  const height = 420;
+function clampAiEditPopoverPosition(frameX: number, frameY: number): { x: number; y: number } {
+  const shell = document.querySelector<HTMLElement>('.viewer-shell');
+  const shellRect = shell?.getBoundingClientRect();
+  const frameWidth = shell?.clientWidth || shellRect?.width || window.innerWidth;
+  const frameHeight = shell?.clientHeight || shellRect?.height || window.innerHeight;
   const margin = 16;
-  const maxX = Math.max(margin, window.innerWidth - width - margin);
-  const maxY = Math.max(margin, window.innerHeight - height - margin);
+  const width = Math.min(420, Math.max(0, frameWidth - margin * 2));
+  const height = 420;
+  const maxX = Math.max(margin, frameWidth - width - margin);
+  const maxY = Math.max(margin, frameHeight - height - margin);
+  const centeredX = Math.max(margin, (frameWidth - width) / 2);
   return {
-    x: Math.min(Math.max(clientX, margin), maxX),
-    y: Math.min(Math.max(clientY, margin), maxY),
+    x: frameWidth <= 520 ? Math.round(centeredX) : Math.min(Math.max(frameX, margin), maxX),
+    y: Math.min(Math.max(frameY, margin), maxY),
   };
 }
 

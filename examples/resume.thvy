@@ -18,6 +18,19 @@ ai-context: >-
   be treated as the main libraries.
 section_defaults:
   css: "margin: 0.5rem 0;"
+text_line_styles:
+  panel-heading:
+    label: Panel heading
+    css: "margin: 0 0 0.25rem;"
+  section-heading:
+    label: Section heading
+    css: "margin: 0.5rem 0 0.25rem;"
+  detail-heading:
+    label: Detail heading
+    css: "margin: 0.4rem 0 0.1rem;"
+  detail-body:
+    label: Detail body
+    css: "margin: 0 0 0.35rem; margin-left: 0.5rem;"
 theme:
   colors:
     --hvy-bg: "#f5f9ff"
@@ -116,10 +129,10 @@ component_defs:
               component: text
               placeholder: description
               css: "margin: 0.35rem 0;"
-          - text: "#### Accomplishments"
+          - text: "^section-heading^ #### Accomplishments"
             schema:
               component: text
-              css: "margin: 0.5rem 0 0.25rem;"
+              css: "margin: 0;"
           - text: ""
             schema:
               component: component-list
@@ -143,10 +156,10 @@ component_defs:
               component: container
               css: "margin: 0;"
               containerBlocks:
-                - text: "#### Relevant Skills"
+                - text: "^panel-heading^ #### Relevant Skills"
                   schema:
                     component: text
-                    css: "margin: 0 0 0.25rem;"
+                    css: "margin: 0;"
                 - text: ""
                   schema:
                     component: component-list
@@ -162,10 +175,10 @@ component_defs:
               component: container
               css: "margin: 0;"
               containerBlocks:
-                - text: "#### Tools and Technologies"
+                - text: "^panel-heading^ #### Tools and Technologies"
                   schema:
                     component: text
-                    css: "margin: 0 0 0.25rem;"
+                    css: "margin: 0;"
                 - text: ""
                   schema:
                     component: component-list
@@ -234,10 +247,10 @@ component_defs:
               css: "margin: 0.5rem 0;"
               placeholder: "Description"
           - component: skills-and-tools-tech-list
-          - text: "#### Classes"
+          - text: "^section-heading^ #### Classes"
             schema:
               component: text
-              css: "margin: 0.5rem 0 0.25rem;"
+              css: "margin: 0;"
           - text: ""
             schema:
               component: component-list
@@ -303,10 +316,10 @@ component_defs:
       css: "margin: 0;"
 
       containerBlocks:
-        - text: "#### Experience"
+        - text: "^detail-heading^ #### Experience"
           schema:
             component: text
-            css: "margin: 0.4rem 0 0.1rem;"
+            css: "margin: 0;"
         - text: ""
           schema:
             component: component-list
@@ -321,10 +334,10 @@ component_defs:
       css: "margin: 0;"
 
       containerBlocks:
-        - text: "#### Education"
+        - text: "^detail-heading^ #### Education"
           schema:
             component: text
-            css: "margin: 0.4rem 0 0.1rem;"
+            css: "margin: 0;"
         - text: ""
           schema:
             component: component-list
@@ -339,10 +352,10 @@ component_defs:
       css: "margin: 0;"
 
       containerBlocks:
-        - text: "#### Projects"
+        - text: "^detail-heading^ #### Projects"
           schema:
             component: text
-            css: "margin: 0.4rem 0 0.1rem;"
+            css: "margin: 0;"
         - text: ""
           schema:
             component: component-list
@@ -356,10 +369,10 @@ component_defs:
     schema:
       css: "margin: 0;"
       containerBlocks:
-        - text: "{% section_title %}"
+        - text: "^detail-heading^ {% section_title %}"
           schema:
             component: text
-            css: "margin: 0.4rem 0 0.1rem;"
+            css: "margin: 0;"
             placeholder: "#### Section title"
         - text: ""
           schema:
@@ -383,25 +396,15 @@ component_defs:
       expandableContentBlocks:
         lock: false
         children:
-          - text: "#### Description"
+          - text: |-
+              ^detail-heading^ #### Description
+              ^detail-body^ {% description | block %}
+              ^detail-heading^ #### Notes
+              ^detail-body^ {% notes | block %}
             schema:
               component: text
-              css: "margin: 0.4rem 0 0.1rem;"
-          - text: "{% description | block %}"
-            css: "margin-left: 0.5rem;"
-            schema:
-              component: text
-              css: "margin: 0 0 0.35rem; margin-left: 0.5rem;"
-              placeholder: "What is it?"
-          - text: "#### Notes"
-            schema:
-              component: text
-              css: "margin: 0.4rem 0 0.1rem;"
-          - text: "{% notes | block %}"
-            schema:
-              component: text
-              css: "margin: 0 0 0.35rem; margin-left: 0.5rem;"
-              placeholder: "Notes"
+              css: "margin: 0;"
+              placeholder: "Description and notes"
           - component: skill-record-experience-section
           - component: skill-record-education-section
           - component: skill-record-projects-section

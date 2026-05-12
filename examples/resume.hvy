@@ -17,6 +17,19 @@ ai-context: >-
   be treated as the main libraries.
 section_defaults:
   css: "margin: 0.5rem 0;"
+text_line_styles:
+  panel-heading:
+    label: Panel heading
+    css: "margin: 0 0 0.25rem;"
+  section-heading:
+    label: Section heading
+    css: "margin: 0.5rem 0 0.25rem;"
+  detail-heading:
+    label: Detail heading
+    css: "margin: 0.4rem 0 0.1rem;"
+  detail-body:
+    label: Detail body
+    css: "margin: 0 0 0.35rem; margin-left: 0.5rem;"
 theme:
   colors:
     --hvy-bg: "#0f1720"
@@ -115,10 +128,10 @@ component_defs:
               component: text
               placeholder: description
               css: "margin: 0.35rem 0;"
-          - text: "#### Accomplishments"
+          - text: "^section-heading^ #### Accomplishments"
             schema:
               component: text
-              css: "margin: 0.5rem 0 0.25rem;"
+              css: "margin: 0;"
           - text: ""
             schema:
               component: component-list
@@ -142,10 +155,10 @@ component_defs:
               component: container
               css: "margin: 0;"
               containerBlocks:
-                - text: "#### Relevant Skills"
+                - text: "^panel-heading^ #### Relevant Skills"
                   schema:
                     component: text
-                    css: "margin: 0 0 0.25rem;"
+                    css: "margin: 0;"
                 - text: ""
                   schema:
                     component: component-list
@@ -161,10 +174,10 @@ component_defs:
               component: container
               css: "margin: 0;"
               containerBlocks:
-                - text: "#### Tools and Technologies"
+                - text: "^panel-heading^ #### Tools and Technologies"
                   schema:
                     component: text
-                    css: "margin: 0 0 0.25rem;"
+                    css: "margin: 0;"
                 - text: ""
                   schema:
                     component: component-list
@@ -233,10 +246,10 @@ component_defs:
               css: "margin: 0.5rem 0;"
               placeholder: "Description"
           - component: skills-and-tools-tech-list
-          - text: "#### Classes"
+          - text: "^section-heading^ #### Classes"
             schema:
               component: text
-              css: "margin: 0.5rem 0 0.25rem;"
+              css: "margin: 0;"
           - text: ""
             schema:
               component: component-list
@@ -301,10 +314,10 @@ component_defs:
       css: "margin: 0;"
 
       containerBlocks:
-        - text: "#### Experience"
+        - text: "^detail-heading^ #### Experience"
           schema:
             component: text
-            css: "margin: 0.4rem 0 0.1rem;"
+            css: "margin: 0;"
         - text: ""
           schema:
             component: component-list
@@ -318,10 +331,10 @@ component_defs:
       css: "margin: 0;"
 
       containerBlocks:
-        - text: "#### Education"
+        - text: "^detail-heading^ #### Education"
           schema:
             component: text
-            css: "margin: 0.4rem 0 0.1rem;"
+            css: "margin: 0;"
         - text: ""
           schema:
             component: component-list
@@ -335,10 +348,10 @@ component_defs:
       css: "margin: 0;"
 
       containerBlocks:
-        - text: "#### Projects"
+        - text: "^detail-heading^ #### Projects"
           schema:
             component: text
-            css: "margin: 0.4rem 0 0.1rem;"
+            css: "margin: 0;"
         - text: ""
           schema:
             component: component-list
@@ -351,10 +364,10 @@ component_defs:
     schema:
       css: "margin: 0;"
       containerBlocks:
-        - text: "{% section_title %}"
+        - text: "^detail-heading^ {% section_title %}"
           schema:
             component: text
-            css: "margin: 0.4rem 0 0.1rem;"
+            css: "margin: 0;"
             placeholder: "#### Section title"
         - text: ""
           schema:
@@ -378,25 +391,15 @@ component_defs:
         lock: false
         css: "padding: 0.5rem;"
         children:
-          - text: "#### Description"
+          - text: |-
+              ^detail-heading^ #### Description
+              ^detail-body^ {% description | block %}
+              ^detail-heading^ #### Notes
+              ^detail-body^ {% notes | block %}
             schema:
               component: text
-              css: "margin: 0.4rem 0 0.1rem;"
-          - text: "{% description | block %}"
-            css: "margin-left: 0.5rem;"
-            schema:
-              component: text
-              css: "margin: 0 0 0.35rem; margin-left: 0.5rem;"
-              placeholder: "What is it?"
-          - text: "#### Notes"
-            schema:
-              component: text
-              css: "margin: 0.4rem 0 0.1rem;"
-          - text: "{% notes | block %}"
-            schema:
-              component: text
-              css: "margin: 0 0 0.35rem; margin-left: 0.5rem;"
-              placeholder: "Notes"
+              css: "margin: 0;"
+              placeholder: "Description and notes"
           - component: skill-record-experience-section
           - component: skill-record-education-section
           - component: skill-record-projects-section
@@ -531,28 +534,16 @@ component_defs:
 
     <!--hvy:expandable:content {}-->
 
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Description
+     <!--hvy:text {"css":"margin: 0;"}-->
+      ^detail-heading^ #### Description
+      ^detail-body^ Designing, building, and maintaining software systems with a focus on reliability, maintainability, and developer experience.
+      ^detail-heading^ #### Notes
+      ^detail-body^ Core strength. Approaches engineering as a systems discipline — prioritizing clear APIs, testable boundaries, and incremental delivery over clever solutions.
 
     <!--hvy:expandable:content {}-->
 
-     <!--hvy:text {"css":"margin: 0 0 0.35rem; margin-left: 0.5rem;"}-->
-      Designing, building, and maintaining software systems with a focus on reliability, maintainability, and developer experience.
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Notes
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0 0 0.35rem; margin-left: 0.5rem;"}-->
-      Core strength. Approaches engineering as a systems discipline — prioritizing clear APIs, testable boundaries, and incremental delivery over clever solutions.
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Experience
+     <!--hvy:text {"css":"margin: 0;"}-->
+      ^detail-heading^ #### Experience
 
     <!--hvy:expandable:content {}-->
 
@@ -564,8 +555,8 @@ component_defs:
 
     <!--hvy:expandable:content {}-->
 
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Education
+     <!--hvy:text {"css":"margin: 0;"}-->
+      ^detail-heading^ #### Education
 
     <!--hvy:expandable:content {}-->
 
@@ -577,8 +568,8 @@ component_defs:
 
     <!--hvy:expandable:content {}-->
 
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Projects
+     <!--hvy:text {"css":"margin: 0;"}-->
+      ^detail-heading^ #### Projects
 
     <!--hvy:expandable:content {}-->
 
@@ -599,28 +590,16 @@ component_defs:
 
     <!--hvy:expandable:content {}-->
 
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Description
+     <!--hvy:text {"css":"margin: 0;"}-->
+      ^detail-heading^ #### Description
+      ^detail-body^ Analyzing existing systems, file formats, or tool internals to understand structure and behavior without access to original specifications.
+      ^detail-heading^ #### Notes
+      ^detail-body^ Applied primarily to understand undocumented formats and third-party tool internals for building compatible tooling.
 
     <!--hvy:expandable:content {}-->
 
-     <!--hvy:text {"css":"margin: 0 0 0.35rem; margin-left: 0.5rem;"}-->
-      Analyzing existing systems, file formats, or tool internals to understand structure and behavior without access to original specifications.
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Notes
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0 0 0.35rem; margin-left: 0.5rem;"}-->
-      Applied primarily to understand undocumented formats and third-party tool internals for building compatible tooling.
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Projects
+     <!--hvy:text {"css":"margin: 0;"}-->
+      ^detail-heading^ #### Projects
 
     <!--hvy:expandable:content {}-->
 
@@ -641,28 +620,16 @@ component_defs:
 
     <!--hvy:expandable:content {}-->
 
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Description
+     <!--hvy:text {"css":"margin: 0;"}-->
+      ^detail-heading^ #### Description
+      ^detail-body^ Designing and maintaining reusable software packages intended for use across multiple applications or by other developers.
+      ^detail-heading^ #### Notes
+      ^detail-body^ Built shared TypeScript platform packages that reduced duplicated code across products and improved consistency of internal tooling.
 
     <!--hvy:expandable:content {}-->
 
-     <!--hvy:text {"css":"margin: 0 0 0.35rem; margin-left: 0.5rem;"}-->
-      Designing and maintaining reusable software packages intended for use across multiple applications or by other developers.
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Notes
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0 0 0.35rem; margin-left: 0.5rem;"}-->
-      Built shared TypeScript platform packages that reduced duplicated code across products and improved consistency of internal tooling.
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Projects
+     <!--hvy:text {"css":"margin: 0;"}-->
+      ^detail-heading^ #### Projects
 
     <!--hvy:expandable:content {}-->
 
@@ -683,28 +650,16 @@ component_defs:
 
     <!--hvy:expandable:content {}-->
 
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Description
+     <!--hvy:text {"css":"margin: 0;"}-->
+      ^detail-heading^ #### Description
+      ^detail-body^ Designing and iterating on prompts and workflows that direct large language model behavior toward reliable, useful outputs in product contexts.
+      ^detail-heading^ #### Notes
+      ^detail-body^ Used to design AI-assisted editor workflows and autonomous agent pipelines. Focuses on structured output, fallback handling, and iterative refinement.
 
     <!--hvy:expandable:content {}-->
 
-     <!--hvy:text {"css":"margin: 0 0 0.35rem; margin-left: 0.5rem;"}-->
-      Designing and iterating on prompts and workflows that direct large language model behavior toward reliable, useful outputs in product contexts.
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Notes
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0 0 0.35rem; margin-left: 0.5rem;"}-->
-      Used to design AI-assisted editor workflows and autonomous agent pipelines. Focuses on structured output, fallback handling, and iterative refinement.
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Projects
+     <!--hvy:text {"css":"margin: 0;"}-->
+      ^detail-heading^ #### Projects
 
     <!--hvy:expandable:content {}-->
 
@@ -725,28 +680,16 @@ component_defs:
 
     <!--hvy:expandable:content {}-->
 
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Description
+     <!--hvy:text {"css":"margin: 0;"}-->
+      ^detail-heading^ #### Description
+      ^detail-body^ Coordinating people, timelines, and deliverables to move work from idea to shipped with clear ownership and minimal ceremony.
+      ^detail-heading^ #### Notes
+      ^detail-body^ Lightweight approach — async-first communication and clear ownership over process overhead. Comfortable leading small cross-functional efforts.
 
     <!--hvy:expandable:content {}-->
 
-     <!--hvy:text {"css":"margin: 0 0 0.35rem; margin-left: 0.5rem;"}-->
-      Coordinating people, timelines, and deliverables to move work from idea to shipped with clear ownership and minimal ceremony.
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Notes
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0 0 0.35rem; margin-left: 0.5rem;"}-->
-      Lightweight approach — async-first communication and clear ownership over process overhead. Comfortable leading small cross-functional efforts.
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Projects
+     <!--hvy:text {"css":"margin: 0;"}-->
+      ^detail-heading^ #### Projects
 
     <!--hvy:expandable:content {}-->
 
@@ -775,28 +718,16 @@ component_defs:
 
     <!--hvy:expandable:content {}-->
 
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Description
+     <!--hvy:text {"css":"margin: 0;"}-->
+      ^detail-heading^ #### Description
+      ^detail-body^ Statically typed superset of JavaScript used for large-scale web applications, tooling, and shared platform packages.
+      ^detail-heading^ #### Notes
+      ^detail-body^ Primary application language. Uses strict mode throughout with explicit types at API boundaries. Comfortable with both frontend and Node.js contexts.
 
     <!--hvy:expandable:content {}-->
 
-     <!--hvy:text {"css":"margin: 0 0 0.35rem; margin-left: 0.5rem;"}-->
-      Statically typed superset of JavaScript used for large-scale web applications, tooling, and shared platform packages.
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Notes
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0 0 0.35rem; margin-left: 0.5rem;"}-->
-      Primary application language. Uses strict mode throughout with explicit types at API boundaries. Comfortable with both frontend and Node.js contexts.
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Projects
+     <!--hvy:text {"css":"margin: 0;"}-->
+      ^detail-heading^ #### Projects
 
     <!--hvy:expandable:content {}-->
 
@@ -817,28 +748,16 @@ component_defs:
 
     <!--hvy:expandable:content {}-->
 
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Description
+     <!--hvy:text {"css":"margin: 0;"}-->
+      ^detail-heading^ #### Description
+      ^detail-body^ High-level dynamically typed language commonly used for scripting, automation, data processing, and AI/ML integrations.
+      ^detail-heading^ #### Notes
+      ^detail-body^ Used for automation scripts, prototyping, and AI API integrations. Comfortable with async patterns and CLI tooling.
 
     <!--hvy:expandable:content {}-->
 
-     <!--hvy:text {"css":"margin: 0 0 0.35rem; margin-left: 0.5rem;"}-->
-      High-level dynamically typed language commonly used for scripting, automation, data processing, and AI/ML integrations.
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Notes
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0 0 0.35rem; margin-left: 0.5rem;"}-->
-      Used for automation scripts, prototyping, and AI API integrations. Comfortable with async patterns and CLI tooling.
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Projects
+     <!--hvy:text {"css":"margin: 0;"}-->
+      ^detail-heading^ #### Projects
 
     <!--hvy:expandable:content {}-->
 
@@ -854,8 +773,8 @@ component_defs:
 
     <!--hvy:expandable:content {}-->
 
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Education
+     <!--hvy:text {"css":"margin: 0;"}-->
+      ^detail-heading^ #### Education
 
     <!--hvy:expandable:content {}-->
 
@@ -876,28 +795,16 @@ component_defs:
 
     <!--hvy:expandable:content {}-->
 
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Description
+     <!--hvy:text {"css":"margin: 0;"}-->
+      ^detail-heading^ #### Description
+      ^detail-body^ Systems programming languages used for performance-critical software, operating systems, compilers, and graphics work.
+      ^detail-heading^ #### Notes
+      ^detail-body^ Background from coursework in operating systems, compilers, and computer graphics. Applied in academic projects; not a current primary language.
 
     <!--hvy:expandable:content {}-->
 
-     <!--hvy:text {"css":"margin: 0 0 0.35rem; margin-left: 0.5rem;"}-->
-      Systems programming languages used for performance-critical software, operating systems, compilers, and graphics work.
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Notes
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0 0 0.35rem; margin-left: 0.5rem;"}-->
-      Background from coursework in operating systems, compilers, and computer graphics. Applied in academic projects; not a current primary language.
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Education
+     <!--hvy:text {"css":"margin: 0;"}-->
+      ^detail-heading^ #### Education
 
     <!--hvy:expandable:content {}-->
 
@@ -918,28 +825,16 @@ component_defs:
 
     <!--hvy:expandable:content {}-->
 
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Description
+     <!--hvy:text {"css":"margin: 0;"}-->
+      ^detail-heading^ #### Description
+      ^detail-body^ Docker-based development environments defined as code, providing reproducible and portable local setups with all dependencies pre-configured.
+      ^detail-heading^ #### Notes
+      ^detail-body^ Built and maintained dev containers for multiple projects. Cut onboarding time from days to hours and ensured test parity with CI environments.
 
     <!--hvy:expandable:content {}-->
 
-     <!--hvy:text {"css":"margin: 0 0 0.35rem; margin-left: 0.5rem;"}-->
-      Docker-based development environments defined as code, providing reproducible and portable local setups with all dependencies pre-configured.
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Notes
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0 0 0.35rem; margin-left: 0.5rem;"}-->
-      Built and maintained dev containers for multiple projects. Cut onboarding time from days to hours and ensured test parity with CI environments.
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Projects
+     <!--hvy:text {"css":"margin: 0;"}-->
+      ^detail-heading^ #### Projects
 
     <!--hvy:expandable:content {}-->
 
@@ -964,28 +859,16 @@ component_defs:
 
     <!--hvy:expandable:content {}-->
 
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Description
+     <!--hvy:text {"css":"margin: 0;"}-->
+      ^detail-heading^ #### Description
+      ^detail-body^ REST API providing access to OpenAI's language and embedding models for integration into applications and agent workflows.
+      ^detail-heading^ #### Notes
+      ^detail-body^ Used to power a deep research agent during a hackathon. Familiar with prompt construction, streaming, and managing token budgets.
 
     <!--hvy:expandable:content {}-->
 
-     <!--hvy:text {"css":"margin: 0 0 0.35rem; margin-left: 0.5rem;"}-->
-      REST API providing access to OpenAI's language and embedding models for integration into applications and agent workflows.
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Notes
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0 0 0.35rem; margin-left: 0.5rem;"}-->
-      Used to power a deep research agent during a hackathon. Familiar with prompt construction, streaming, and managing token budgets.
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Projects
+     <!--hvy:text {"css":"margin: 0;"}-->
+      ^detail-heading^ #### Projects
 
     <!--hvy:expandable:content {}-->
 
@@ -1006,28 +889,16 @@ component_defs:
 
     <!--hvy:expandable:content {}-->
 
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Description
+     <!--hvy:text {"css":"margin: 0;"}-->
+      ^detail-heading^ #### Description
+      ^detail-body^ Cloud-hosted development environments that run VS Code in the browser backed by a remote container, eliminating local setup requirements.
+      ^detail-heading^ #### Notes
+      ^detail-body^ Used as the hosting target for the Autonomous Agent Hackathon, allowing teammates to run the agent without any local environment setup.
 
     <!--hvy:expandable:content {}-->
 
-     <!--hvy:text {"css":"margin: 0 0 0.35rem; margin-left: 0.5rem;"}-->
-      Cloud-hosted development environments that run VS Code in the browser backed by a remote container, eliminating local setup requirements.
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Notes
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0 0 0.35rem; margin-left: 0.5rem;"}-->
-      Used as the hosting target for the Autonomous Agent Hackathon, allowing teammates to run the agent without any local environment setup.
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Projects
+     <!--hvy:text {"css":"margin: 0;"}-->
+      ^detail-heading^ #### Projects
 
     <!--hvy:expandable:content {}-->
 
@@ -1048,28 +919,16 @@ component_defs:
 
     <!--hvy:expandable:content {}-->
 
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Description
+     <!--hvy:text {"css":"margin: 0;"}-->
+      ^detail-heading^ #### Description
+      ^detail-body^ Open-source autonomous agent framework that orchestrates multi-step AI tasks using tools, memory, and goal-driven loops.
+      ^detail-heading^ #### Notes
+      ^detail-body^ Core technology used in the Autonomous Agent Hackathon. Designed the agent architecture and wrote all integration code connecting it to the research task pipeline.
 
     <!--hvy:expandable:content {}-->
 
-     <!--hvy:text {"css":"margin: 0 0 0.35rem; margin-left: 0.5rem;"}-->
-      Open-source autonomous agent framework that orchestrates multi-step AI tasks using tools, memory, and goal-driven loops.
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Notes
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0 0 0.35rem; margin-left: 0.5rem;"}-->
-      Core technology used in the Autonomous Agent Hackathon. Designed the agent architecture and wrote all integration code connecting it to the research task pipeline.
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Projects
+     <!--hvy:text {"css":"margin: 0;"}-->
+      ^detail-heading^ #### Projects
 
     <!--hvy:expandable:content {}-->
 
@@ -1120,8 +979,8 @@ component_defs:
      <!--hvy:text {"css":"margin: 0.35rem 0;"}-->
       Led the developer platform for an AI-enabled product line, improving local setup, internal tooling, and release confidence across a fast-moving engineering team.
 
-     <!--hvy:text {"css":"margin: 0.5rem 0 0.25rem;"}-->
-      #### Accomplishments
+     <!--hvy:text {"css":"margin: 0;"}-->
+      ^section-heading^ #### Accomplishments
 
      <!--hvy:component-list {"componentListComponent":"text","css":"margin: 0;"}-->
 
@@ -1238,8 +1097,8 @@ component_defs:
 
         <!--hvy:container:0 {}-->
 
-         <!--hvy:text {"css":"margin: 0 0 0.25rem;"}-->
-          #### Relevant Skills
+         <!--hvy:text {"css":"margin: 0;"}-->
+          ^panel-heading^ #### Relevant Skills
 
         <!--hvy:container:1 {}-->
 
@@ -1259,8 +1118,8 @@ component_defs:
 
         <!--hvy:container:0 {}-->
 
-         <!--hvy:text {"css":"margin: 0 0 0.25rem;"}-->
-          #### Tools and Technologies
+         <!--hvy:text {"css":"margin: 0;"}-->
+          ^panel-heading^ #### Tools and Technologies
 
         <!--hvy:container:1 {}-->
 
@@ -1314,8 +1173,8 @@ component_defs:
 
         <!--hvy:container:0 {}-->
 
-         <!--hvy:text {"css":"margin: 0 0 0.25rem;"}-->
-          #### Relevant Skills
+         <!--hvy:text {"css":"margin: 0;"}-->
+          ^panel-heading^ #### Relevant Skills
 
         <!--hvy:container:1 {}-->
 
@@ -1335,8 +1194,8 @@ component_defs:
 
         <!--hvy:container:0 {}-->
 
-         <!--hvy:text {"css":"margin: 0 0 0.25rem;"}-->
-          #### Tools and Technologies
+         <!--hvy:text {"css":"margin: 0;"}-->
+          ^panel-heading^ #### Tools and Technologies
 
         <!--hvy:container:1 {}-->
 
@@ -1424,8 +1283,8 @@ component_defs:
 
         <!--hvy:container:0 {}-->
 
-         <!--hvy:text {"css":"margin: 0 0 0.25rem;"}-->
-          #### Relevant Skills
+         <!--hvy:text {"css":"margin: 0;"}-->
+          ^panel-heading^ #### Relevant Skills
 
         <!--hvy:container:1 {}-->
 
@@ -1441,8 +1300,8 @@ component_defs:
 
         <!--hvy:container:0 {}-->
 
-         <!--hvy:text {"css":"margin: 0 0 0.25rem;"}-->
-          #### Tools and Technologies
+         <!--hvy:text {"css":"margin: 0;"}-->
+          ^panel-heading^ #### Tools and Technologies
 
         <!--hvy:container:1 {}-->
 
@@ -1456,8 +1315,8 @@ component_defs:
 
            <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"C/C++","xrefTarget":"tool-c-cpp"}-->
 
-     <!--hvy:text {"css":"margin: 0.5rem 0 0.25rem;"}-->
-      #### Classes
+     <!--hvy:text {"css":"margin: 0;"}-->
+      ^section-heading^ #### Classes
 
      <!--hvy:component-list {"componentListComponent":"text","css":"margin: 0;"}-->
 

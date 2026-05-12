@@ -1,6 +1,6 @@
 import { beforeAll, beforeEach, expect, test } from 'vitest';
 
-import { deactivateEditorBlock, setActiveEditorBlock } from '../src/block-ops';
+import { cancelEditorBlockEdit, deactivateEditorBlock, setActiveEditorBlock } from '../src/block-ops';
 import { deserializeDocument } from '../src/serialization';
 import { initCallbacks, initState, state } from '../src/state';
 import type { VisualBlock } from '../src/editor/types';
@@ -84,6 +84,18 @@ test('deactivating top-level active block clears editor focus', () => {
 
   expect(result).toBe('cleared');
   expect(state.activeEditorBlock).toBeNull();
+});
+
+test('canceling nested active block promotes focus to parent component', () => {
+  const nested = findBlockBySchemaId('nested');
+  const deepText = findBlockBySchemaId('deep-text');
+  const sectionKey = state.document.sections[0]?.key ?? '';
+
+  setActiveEditorBlock(sectionKey, deepText.id);
+  const result = cancelEditorBlockEdit(sectionKey, deepText.id);
+
+  expect(result).toBe('promoted');
+  expect(state.activeEditorBlock).toEqual({ sectionKey, blockId: nested.id });
 });
 
 function findBlockBySchemaId(schemaId: string): VisualBlock {

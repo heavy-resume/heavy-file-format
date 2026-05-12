@@ -16,7 +16,8 @@ const activateBlock: AppActionHandler = ({ app, event, sectionKey, blockId }) =>
   event.stopPropagation();
   const targetElement = event.target as HTMLElement | null;
   const passiveBlock = targetElement?.closest<HTMLElement>('.editor-block-passive');
-  const anchorTop = passiveBlock ? targetElement?.getBoundingClientRect().top : undefined;
+  const passiveContent = targetElement?.closest<HTMLElement>('.reader-block') ?? passiveBlock?.querySelector<HTMLElement>('.reader-block');
+  const anchorTop = passiveBlock ? (passiveContent ?? targetElement)?.getBoundingClientRect().top : undefined;
   state.activeEditorBlockReturnScroll = capturePaneScroll(state.paneScroll, app);
   setActiveEditorBlock(sectionKey, blockId);
   if (typeof anchorTop === 'number' && state.pendingEditorActivation) {
@@ -59,8 +60,10 @@ const cancelBlockEdit: AppActionHandler = ({ event, sectionKey, blockId }) => {
     return;
   }
   event.stopPropagation();
-  cancelEditorBlockEdit(sectionKey, blockId);
-  queueEditorReturnScroll();
+  const result = cancelEditorBlockEdit(sectionKey, blockId);
+  if (result === 'cleared') {
+    queueEditorReturnScroll();
+  }
   getRefreshReaderPanels()();
   getRenderApp()();
 };

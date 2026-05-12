@@ -129,13 +129,20 @@ function focusPendingEditorActivation(
         editorTop: editorTree.scrollTop,
         windowTop: window.scrollY,
       };
-      const nextTop = fallbackTarget.getBoundingClientRect().top;
+      const nextTop = getEditorActivationAnchorTop(fallbackTarget);
       editorTree.scrollTop += nextTop - pending.anchorTop;
     }
   }
   const target = getEditorActivationTarget(block, fallbackTarget, pending.clientX, pending.clientY);
   focusEditorActivationTarget(target, pending.clientX, pending.clientY);
   state.pendingEditorActivation = null;
+}
+
+function getEditorActivationAnchorTop(target: HTMLElement): number {
+  if (target.isContentEditable && target.firstElementChild instanceof HTMLElement) {
+    return target.firstElementChild.getBoundingClientRect().top;
+  }
+  return target.getBoundingClientRect().top;
 }
 
 function getEditorActivationTarget(

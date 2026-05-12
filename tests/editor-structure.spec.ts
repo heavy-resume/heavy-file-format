@@ -1447,6 +1447,93 @@ hvy_version: 0.1
   await expect(activeBlock.locator('.rich-editor')).not.toContainText('TypeScript');
 });
 
+test('clicking a scrolled accomplishment opens editor in place', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"history"}-->
+#! History
+
+ <!--hvy:text {}-->
+  ${Array.from({ length: 36 }, (_, index) => `Spacer ${index + 1}`).join('\n  \n  ')}
+
+ <!--hvy:component-list {"componentListComponent":"text","componentListItemLabel":"accomplishment"}-->
+
+  <!--hvy:component-list:0 {}-->
+
+   <!--hvy:text {}-->
+    Built a shared TypeScript platform package.
+
+  <!--hvy:component-list:1 {}-->
+
+   <!--hvy:text {}-->
+    Introduced reproducible developer containers and test workflows.
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+  const tree = page.locator('.editor-tree');
+  const accomplishment = page.locator('.editor-block-passive', { hasText: 'Introduced reproducible developer containers' }).last();
+  await accomplishment.scrollIntoViewIfNeeded();
+  await tree.evaluate((node) => {
+    node.scrollTop += 180;
+  });
+  await accomplishment.scrollIntoViewIfNeeded();
+  const beforeBox = await accomplishment.locator('.reader-block').boundingBox();
+  expect(beforeBox).not.toBeNull();
+
+  await accomplishment.click();
+  const activeBlock = page.locator('.editor-block[data-active-editor-block="true"]', { hasText: 'Introduced reproducible developer containers' });
+  await expect(activeBlock.locator('.rich-editor')).toBeVisible();
+  await expect.poll(async () => {
+    const afterBox = await activeBlock.locator('.rich-editor').boundingBox();
+    if (!afterBox || !beforeBox) {
+      return 999;
+    }
+    return Math.abs(Math.round(afterBox.y - beforeBox.y));
+  }).toBeLessThanOrEqual(3);
+});
+
+test('nested accomplishment cancel returns to parent editor', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"history"}-->
+#! History
+
+ <!--hvy:component-list {"componentListComponent":"text","componentListItemLabel":"accomplishment"}-->
+
+  <!--hvy:component-list:0 {}-->
+
+   <!--hvy:text {}-->
+    Northwind Labs
+
+  <!--hvy:component-list:1 {}-->
+
+   <!--hvy:text {}-->
+    Introduced reproducible developer containers and test workflows.
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  const accomplishment = page.locator('.editor-block-passive', { hasText: 'Introduced reproducible developer containers' }).last();
+  await accomplishment.click();
+  const activeAccomplishment = page.locator('.editor-block[data-active-editor-block="true"]', { hasText: 'Introduced reproducible developer containers' });
+  await expect(activeAccomplishment.locator('.rich-editor')).toBeVisible();
+
+  await activeAccomplishment.getByRole('button', { name: 'Cancel' }).click();
+  const activeList = page.locator('.editor-block[data-active-editor-block="true"]', { hasText: 'Northwind Labs' });
+  await expect(activeList).toBeVisible();
+  await expect(activeList).toContainText('Introduced reproducible developer containers');
+});
+
 test('clicking an already revealed nested item skips activation reveal animation', async ({ page }) => {
   await page.goto('/');
 

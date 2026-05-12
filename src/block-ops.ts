@@ -695,7 +695,7 @@ function findEditorParentBlockId(sectionKey: string, blockId: string): string | 
   return rootBlocks ? findBlockContainerInList(rootBlocks, blockId, null)?.ownerBlockId ?? null : null;
 }
 
-export function cancelEditorBlockEdit(sectionKey: string, blockId: string): void {
+export function cancelEditorBlockEdit(sectionKey: string, blockId: string): 'cleared' | 'promoted' {
   const snapshot = state.activeEditorBlockSnapshot;
   if (snapshot?.sectionKey === sectionKey && snapshot.blockId === blockId) {
     const block = findBlockByIds(sectionKey, blockId);
@@ -706,8 +706,14 @@ export function cancelEditorBlockEdit(sectionKey: string, blockId: string): void
       block.schemaMode = restored.schemaMode;
     }
   }
+  const parentBlockId = findEditorParentBlockId(sectionKey, blockId);
+  if (parentBlockId) {
+    setActiveEditorBlock(sectionKey, parentBlockId);
+    return 'promoted';
+  }
   state.activeEditorBlock = null;
   state.activeEditorBlockSnapshot = null;
+  return 'cleared';
 }
 
 export function blockContainsBlockId(block: VisualBlock, blockId: string): boolean {

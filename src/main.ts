@@ -21,7 +21,7 @@ import { resolveBaseComponent } from './component-defs';
 import { ensureContainerBlocks, ensureComponentListBlocks, ensureExpandableBlocks, ensureGridItems } from './document-factory';
 import { isActiveEditorSectionTitle, isActiveEditorBlock, getComponentRenderHelpers, findBlockByIds } from './block-ops';
 import { commitHistorySnapshot } from './history';
-import { capturePaneScroll, restorePaneScroll, centerPendingEditorSection, focusPendingSectionTitleEditor, scrollPendingEditorActivation } from './scroll';
+import { capturePaneScroll, restorePaneScroll, centerPendingEditorSection, focusPendingSectionTitleEditor, scrollPendingEditorActivation, scrollPendingEditorDeactivation } from './scroll';
 import { bindUi } from './bind-ui';
 import { deserializeDocumentBytes, serializeDocument } from './serialization';
 import { DEFAULT_OPENAI_COMPACTION_MODEL, createDefaultChatState, renderChatPanel } from './chat/chat';
@@ -102,6 +102,7 @@ function createInitialState(document: ReturnType<typeof deserializeDocumentBytes
     activeEditorBlockReturnScroll: null,
     pendingPaneScrollRestore: null,
     componentPlacement: null,
+    pendingEditorDeactivation: null,
     pendingEditorActivation: null,
     activeEditorSectionTitleKey: null,
     clearSectionTitleOnFocusKey: null,
@@ -775,6 +776,7 @@ function renderApp(): void {
   focusPendingSectionTitleEditor(app);
   centerPendingEditorSection(app);
   scrollPendingEditorActivation(app);
+  scrollPendingEditorDeactivation(app);
   focusMs = performance.now() - stepStartedAt;
 
   console.debug('[hvy:perf] renderApp', {

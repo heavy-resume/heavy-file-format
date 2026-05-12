@@ -107,6 +107,63 @@ export function scrollPendingEditorActivation(app: HTMLElement): void {
   });
 }
 
+export function captureEditorDeactivationAnchor(
+  app: HTMLElement,
+  sectionKey: string,
+  blockId: string
+): NonNullable<typeof state.pendingEditorDeactivation> | null {
+  const block = app.querySelector<HTMLElement>(
+    `.editor-block[data-active-editor-block="true"][data-active-block-id="${CSS.escape(blockId)}"]`
+  );
+  const target = block ? getPrimaryEditorActivationTarget(block) : null;
+  if (!target) {
+    return null;
+  }
+  return {
+    sectionKey,
+    blockId,
+    anchorTop: target.getBoundingClientRect().top,
+    editableTag: target.tagName.toLowerCase(),
+    editableClass: target.className,
+  };
+}
+
+export function scrollPendingEditorDeactivation(app: HTMLElement): void {
+  const pending = state.pendingEditorDeactivation;
+  if (!pending) {
+    return;
+  }
+  window.requestAnimationFrame(() => {
+    window.requestAnimationFrame(() => {
+      const current = state.pendingEditorDeactivation;
+      if (!current || current.sectionKey !== pending.sectionKey || current.blockId !== pending.blockId) {
+        return;
+      }
+      applyPendingEditorDeactivationScroll(app, pending);
+    });
+  });
+}
+
+function applyPendingEditorDeactivationScroll(
+  app: HTMLElement,
+  pending: NonNullable<typeof state.pendingEditorDeactivation>
+): void {
+  state.pendingEditorDeactivation = null;
+  const editorTree = app.querySelector<HTMLDivElement>('.editor-shell .editor-tree');
+  const passiveBlock = app.querySelector<HTMLElement>(
+    `.editor-block-passive[data-section-key="${CSS.escape(pending.sectionKey)}"][data-block-id="${CSS.escape(pending.blockId)}"]`
+  );
+  const passiveContent = passiveBlock?.querySelector<HTMLElement>('.reader-block') ?? null;
+  const passiveAnchor = passiveContent ? getFirstTextAnchor(passiveContent) : null;
+  if (!editorTree || !passiveBlock || !passiveAnchor) {
+    return;
+  }
+  const pulledUpBy = pending.anchorTop - passiveAnchor.top;
+  if (pulledUpBy > 0) {
+    editorTree.scrollTop = Math.max(0, editorTree.scrollTop - pulledUpBy);
+  }
+}
+
 function focusPendingEditorActivation(
   app: HTMLElement,
   pending: NonNullable<typeof state.pendingEditorActivation>
@@ -115,52 +172,17 @@ function focusPendingEditorActivation(
     `.editor-block[data-active-editor-block="true"][data-active-block-id="${CSS.escape(pending.blockId)}"]`
   );
   if (!block) {
-    console.info('[hvy:editor-activation-scroll]', {
-      stage: 'apply',
-      sectionKey: pending.sectionKey,
-      blockId: pending.blockId,
-      skipped: true,
-      skipReason: 'active-block-not-found',
-      textAnchorTop: pending.anchorTop ?? null,
-    });
     state.pendingEditorActivation = null;
     return;
   }
   const fallbackTarget = getPrimaryEditorActivationTarget(block) ?? block;
   if (typeof pending.anchorTop === 'number') {
     const editorTree = app.querySelector<HTMLDivElement>('.editor-shell .editor-tree');
-    const editorTopBefore = editorTree?.scrollTop ?? null;
     const editableTop = fallbackTarget.getBoundingClientRect().top;
     const pushedDownBy = editableTop - pending.anchorTop;
     if (editorTree && pushedDownBy > 0) {
       editorTree.scrollTop += pushedDownBy;
     }
-    console.info('[hvy:editor-activation-scroll]', {
-      stage: 'apply',
-      sectionKey: pending.sectionKey,
-      blockId: pending.blockId,
-      skipped: !editorTree || pushedDownBy <= 0,
-      skipReason: !editorTree ? 'editor-tree-not-found' : pushedDownBy <= 0 ? 'editable-not-below-text-anchor' : null,
-      textAnchorTop: pending.anchorTop,
-      editableTop,
-      pushedDownBy,
-      editorScrollTopBefore: editorTopBefore,
-      editorScrollTopAfter: editorTree?.scrollTop ?? null,
-      editableTag: fallbackTarget.tagName.toLowerCase(),
-      editableClass: fallbackTarget.className,
-    });
-  } else {
-    console.info('[hvy:editor-activation-scroll]', {
-      stage: 'apply',
-      sectionKey: pending.sectionKey,
-      blockId: pending.blockId,
-      skipped: true,
-      skipReason: 'text-anchor-not-found',
-      textAnchorTop: null,
-      editableTop: fallbackTarget.getBoundingClientRect().top,
-      editableTag: fallbackTarget.tagName.toLowerCase(),
-      editableClass: fallbackTarget.className,
-    });
   }
   const target = getEditorActivationTarget(block, fallbackTarget, pending.clientX, pending.clientY);
   focusEditorActivationTarget(target, pending.clientX, pending.clientY);
@@ -215,6 +237,40 @@ function isUsableEditorActivationTarget(target: HTMLElement): boolean {
   }
   const rect = target.getBoundingClientRect();
   return rect.width > 0 && rect.height > 0;
+}
+
+type TextAnchor = {
+  top: number;
+  parentTag: string | null;
+  parentClass: string | null;
+  textPreview: string;
+};
+
+function getFirstTextAnchor(root: HTMLElement): TextAnchor | null {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  let node = walker.nextNode();
+  while (node) {
+    const text = node.textContent ?? '';
+    const firstTextIndex = text.search(/\S/);
+    if (firstTextIndex >= 0) {
+      const range = document.createRange();
+      range.setStart(node, firstTextIndex);
+      range.setEnd(node, text.length);
+      const rect = range.getClientRects()[0];
+      range.detach();
+      if (rect) {
+        const parent = node.parentElement;
+        return {
+          top: rect.top,
+          parentTag: parent?.tagName.toLowerCase() ?? null,
+          parentClass: parent?.className ?? null,
+          textPreview: text.slice(firstTextIndex).replace(/\s+/g, ' ').trim().slice(0, 80),
+        };
+      }
+    }
+    node = walker.nextNode();
+  }
+  return null;
 }
 
 function focusEditorActivationTarget(target: HTMLElement, clientX?: number, clientY?: number): void {

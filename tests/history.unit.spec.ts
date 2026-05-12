@@ -49,6 +49,7 @@ function createHistoryTestState(): AppState {
     activeEditorBlockReturnScroll: null,
     pendingPaneScrollRestore: null,
     componentPlacement: null,
+    pendingEditorDeactivation: null,
     pendingEditorActivation: null,
     activeEditorSectionTitleKey: null,
     clearSectionTitleOnFocusKey: null,

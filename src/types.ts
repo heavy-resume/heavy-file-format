@@ -216,6 +216,13 @@ export interface AppState {
   activeEditorBlockReturnScroll: PaneScrollState | null;
   pendingPaneScrollRestore: PaneScrollState | null;
   componentPlacement: ComponentPlacementState | null;
+  pendingEditorDeactivation: {
+    sectionKey: string;
+    blockId: string;
+    anchorTop: number;
+    editableTag: string;
+    editableClass: string;
+  } | null;
   pendingEditorActivation: {
     sectionKey: string;
     blockId: string;

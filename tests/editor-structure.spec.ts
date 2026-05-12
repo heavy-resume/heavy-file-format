@@ -1515,6 +1515,37 @@ hvy_version: 0.1
   }).toBeLessThanOrEqual(3);
   const afterScrollTop = await tree.evaluate((node) => node.scrollTop);
   expect(afterScrollTop).toBeGreaterThanOrEqual(beforeScrollTop);
+
+  const activeEditorTop = await activeBlock.locator('.rich-editor').evaluate((editor) => editor.getBoundingClientRect().top);
+  await activeBlock.getByRole('button', { name: 'Done' }).dispatchEvent('click');
+  const passiveAfter = page.locator('.editor-block-passive', { hasText: 'Introduced reproducible developer containers' }).last();
+  await expect(passiveAfter).toBeVisible();
+  await expect.poll(async () => {
+    const passiveTextTop = await passiveAfter.locator('.reader-block').evaluate((root) => {
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+      let node = walker.nextNode();
+      while (node) {
+        const text = node.textContent ?? '';
+        const firstTextIndex = text.search(/\S/);
+        if (firstTextIndex >= 0) {
+          const range = document.createRange();
+          range.setStart(node, firstTextIndex);
+          range.setEnd(node, text.length);
+          const rect = range.getClientRects()[0];
+          range.detach();
+          return rect?.top ?? null;
+        }
+        node = walker.nextNode();
+      }
+      return null;
+    });
+    if (passiveTextTop === null) {
+      return 999;
+    }
+    return Math.abs(Math.round(passiveTextTop - activeEditorTop));
+  }).toBeLessThanOrEqual(3);
+  const afterDoneScrollTop = await tree.evaluate((node) => node.scrollTop);
+  expect(afterDoneScrollTop).toBeLessThanOrEqual(afterScrollTop);
 });
 
 test('nested accomplishment cancel returns to parent editor', async ({ page }) => {

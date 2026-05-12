@@ -2,7 +2,7 @@ import { state, getRenderApp, getRefreshReaderPanels } from '../../state';
 import { findSectionByKey, isDefaultUntitledSectionTitle } from '../../section-ops';
 import { findBlockByIds, setActiveEditorBlock, deactivateEditorBlock, cancelEditorBlockEdit } from '../../block-ops';
 import { recordHistory } from '../../history';
-import { capturePaneScroll } from '../../scroll';
+import { captureEditorDeactivationAnchor, capturePaneScroll } from '../../scroll';
 import type { AppActionHandler } from './types';
 import { buildBlockDescriptionParentTree, buildDescriptionRequest, generateDescription } from '../../descriptions/provider';
 import { populateMissingDescriptions } from '../../descriptions/populate';
@@ -18,27 +18,7 @@ const activateBlock: AppActionHandler = ({ app, event, sectionKey, blockId }) =>
   const passiveBlock = targetElement?.closest<HTMLElement>('.editor-block-passive');
   const passiveContent = targetElement?.closest<HTMLElement>('.reader-block') ?? passiveBlock?.querySelector<HTMLElement>('.reader-block');
   const anchor = passiveBlock ? getPassiveTextAnchor(passiveContent, targetElement) : undefined;
-  const capturedScroll = capturePaneScroll(state.paneScroll, app);
-  console.info('[hvy:editor-activation-scroll]', {
-    stage: 'capture',
-    sectionKey,
-    blockId,
-    eventClientX: event.clientX,
-    eventClientY: event.clientY,
-    targetTag: targetElement?.tagName.toLowerCase() ?? null,
-    targetClass: targetElement?.className ?? null,
-    passiveBlockFound: Boolean(passiveBlock),
-    passiveContentFound: Boolean(passiveContent),
-    passiveContentTag: passiveContent?.tagName.toLowerCase() ?? null,
-    passiveContentClass: passiveContent?.className ?? null,
-    textAnchorTop: anchor?.top ?? null,
-    textAnchorParentTag: anchor?.parentTag ?? null,
-    textAnchorParentClass: anchor?.parentClass ?? null,
-    textAnchorPreview: anchor?.textPreview ?? null,
-    editorScrollTop: capturedScroll.editorTop,
-    windowScrollTop: capturedScroll.windowTop,
-  });
-  state.activeEditorBlockReturnScroll = capturedScroll;
+  state.activeEditorBlockReturnScroll = capturePaneScroll(state.paneScroll, app);
   setActiveEditorBlock(sectionKey, blockId);
   if (typeof anchor?.top === 'number' && state.pendingEditorActivation) {
     state.pendingEditorActivation = {
@@ -107,38 +87,34 @@ const activateSectionTitle: AppActionHandler = ({ event, sectionKey }) => {
   getRenderApp()();
 };
 
-const deactivateBlock: AppActionHandler = ({ event, sectionKey, blockId }) => {
+const deactivateBlock: AppActionHandler = ({ app, event, sectionKey, blockId }) => {
   if (!blockId) {
     return;
   }
   event.stopPropagation();
+  const deactivationAnchor = captureEditorDeactivationAnchor(app, sectionKey, blockId);
   const result = deactivateEditorBlock(sectionKey, blockId);
-  if (result === 'cleared') {
-    queueEditorReturnScroll();
+  if (result === 'cleared' || result === 'promoted') {
+    state.pendingEditorDeactivation = deactivationAnchor;
+    state.activeEditorBlockReturnScroll = null;
   }
   getRenderApp()();
 };
 
-const cancelBlockEdit: AppActionHandler = ({ event, sectionKey, blockId }) => {
+const cancelBlockEdit: AppActionHandler = ({ app, event, sectionKey, blockId }) => {
   if (!blockId) {
     return;
   }
   event.stopPropagation();
+  const deactivationAnchor = captureEditorDeactivationAnchor(app, sectionKey, blockId);
   const result = cancelEditorBlockEdit(sectionKey, blockId);
-  if (result === 'cleared') {
-    queueEditorReturnScroll();
+  if (result === 'cleared' || result === 'promoted') {
+    state.pendingEditorDeactivation = deactivationAnchor;
+    state.activeEditorBlockReturnScroll = null;
   }
   getRefreshReaderPanels()();
   getRenderApp()();
 };
-
-function queueEditorReturnScroll(): void {
-  if (!state.activeEditorBlockReturnScroll) {
-    return;
-  }
-  state.pendingPaneScrollRestore = state.activeEditorBlockReturnScroll;
-  state.activeEditorBlockReturnScroll = null;
-}
 
 const toggleEditorExpandable: AppActionHandler = ({ event, sectionKey, blockId }) => {
   if (!sectionKey || !blockId) {

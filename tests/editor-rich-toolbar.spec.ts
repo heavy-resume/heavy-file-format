@@ -249,6 +249,95 @@ test('paragraph style picker shows two recent choices and opens the full list', 
   await expect(toolbar.locator('.paragraph-style-edit-panel:not([hidden]) [data-field="text-line-style-css"]')).toHaveValue(/margin-bottom: 14px;/);
 });
 
+test('paragraph style toolbar compacts inside phone preview', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Advanced' }).click();
+  await page.getByRole('button', { name: 'Document Meta' }).click();
+
+  for (const style of [
+    { name: 'alpha', label: 'Alpha Heading', css: 'font-weight: 700;' },
+    { name: 'beta', label: 'Beta Detail', css: 'padding-left: 12px;' },
+    { name: 'gamma', label: 'Gamma Note', css: 'margin: 8px 0;' },
+  ]) {
+    await page.getByRole('button', { name: 'Add Style' }).click();
+    const row = page.locator('.text-line-style-row').last();
+    await row.locator('[data-field="text-line-style-name"]').fill(style.name);
+    await row.locator('[data-field="text-line-style-label"]').fill(style.label);
+    await row.locator('[data-field="text-line-style-css"]').fill(style.css);
+  }
+
+  await page.getByRole('button', { name: 'Document Meta' }).click();
+  await page.getByRole('button', { name: 'Phone 390' }).click();
+  await page.locator('[data-action="activate-block"]').first().click();
+
+  const toolbar = page.locator('[data-field="block-rich"]').first().locator('xpath=ancestor::*[contains(concat(" ", normalize-space(@class), " "), " editor-block ")][1]').locator('.paragraph-style-toolbar').first();
+  await expect(toolbar.locator('.text-line-style-toolbar-label')).toBeHidden();
+  await expect(toolbar.locator('> [data-rich-action="text-line-style"]:visible, > .paragraph-style-recent > [data-rich-action="text-line-style"]:visible')).toHaveCount(1);
+  await expect(toolbar.locator('.paragraph-style-expand')).toBeHidden();
+
+  await toolbar.getByRole('button', { name: 'Normal' }).click();
+  await expect(toolbar.locator('.paragraph-style-modal')).toBeVisible();
+  await toolbar.getByRole('button', { name: 'Gamma Note' }).click();
+  await expect(toolbar.locator('> [data-rich-action="text-line-style"]:visible, > .paragraph-style-recent > [data-rich-action="text-line-style"]:visible')).toHaveText('Gamma Note');
+
+  await toolbar.getByRole('button', { name: 'Gamma Note' }).first().click();
+  const modalBox = await toolbar.locator('.paragraph-style-modal').boundingBox();
+  const shellBox = await page.locator('.editor-shell').boundingBox();
+  expect(modalBox).not.toBeNull();
+  expect(shellBox).not.toBeNull();
+  expect(Math.floor(modalBox!.x)).toBeGreaterThanOrEqual(Math.floor(shellBox!.x));
+  expect(Math.ceil(modalBox!.x + modalBox!.width)).toBeLessThanOrEqual(Math.ceil(shellBox!.x + shellBox!.width));
+});
+
+test('paragraph style picker fits inside compact sidebar editor', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+text_line_styles:
+  alpha:
+    label: Alpha Heading
+    css: "font-weight: 700;"
+  beta:
+    label: Beta Detail
+    css: "padding-left: 12px;"
+  gamma:
+    label: Gamma Note
+    css: "margin: 8px 0;"
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ <!--hvy:text {}-->
+  Main body
+
+<!--hvy: {"id":"side","location":"sidebar"}-->
+#! Sidebar
+
+ <!--hvy:text {}-->
+  Sidebar body
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+  await page.getByRole('button', { name: 'Phone 390' }).click();
+  await page.locator('.editor-sidebar-tab').click();
+  await page.locator('.editor-sidebar [data-action="activate-block"]').first().click();
+
+  const toolbar = page.locator('.editor-sidebar [data-field="block-rich"]').first().locator('xpath=ancestor::*[contains(concat(" ", normalize-space(@class), " "), " editor-block ")][1]').locator('.paragraph-style-toolbar').first();
+  await toolbar.getByRole('button', { name: 'Normal' }).click();
+  await expect(toolbar.locator('.paragraph-style-modal')).toBeVisible();
+
+  const modalBox = await toolbar.locator('.paragraph-style-modal').boundingBox();
+  const panelBox = await page.locator('.editor-sidebar-panel').boundingBox();
+  expect(modalBox).not.toBeNull();
+  expect(panelBox).not.toBeNull();
+  expect(Math.floor(modalBox!.x)).toBeGreaterThanOrEqual(Math.floor(panelBox!.x));
+  expect(Math.ceil(modalBox!.x + modalBox!.width)).toBeLessThanOrEqual(Math.ceil(panelBox!.x + panelBox!.width));
+});
+
 test('normal after enter from paragraph style keeps the previous line styled', async ({ page }) => {
   await page.goto('/');
 

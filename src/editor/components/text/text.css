@@ -282,7 +282,8 @@
   z-index: 10050;
   right: 0;
   top: calc(100% + 0.45rem);
-  width: min(28rem, 100cqw);
+  width: min(28rem, calc(100cqw - 1rem));
+  max-width: calc(100cqw - 1rem);
 }
 
 .editor-block:has(.paragraph-style-toolbar.is-picker-open),
@@ -406,26 +407,62 @@
   line-height: 1.2;
 }
 
-@container hvy-surface (inline-size < 30rem) {
+@container hvy-surface (inline-size <= 50rem) {
   .paragraph-style-toolbar {
     grid-template-columns: minmax(0, 1fr) auto;
     width: 100%;
+    min-width: 0;
   }
 
-  .paragraph-style-toolbar .text-line-style-clear,
+  .paragraph-style-toolbar .text-line-style-toolbar-label {
+    display: none;
+  }
+
   .paragraph-style-recent {
-    grid-column: 1 / -1;
+    display: contents;
   }
 
-  .paragraph-style-recent {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
+  .rich-toolbar .paragraph-style-recent button[data-rich-action="text-line-style"] {
+    display: none;
   }
 
-  .paragraph-style-expand {
+  .rich-toolbar .paragraph-style-recent button[data-rich-action="text-line-style"].is-selected {
+    display: inline-flex;
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .paragraph-style-toolbar:has(.paragraph-style-recent button[data-rich-action="text-line-style"].is-selected) .text-line-style-clear {
+    display: none;
+  }
+
+  .paragraph-style-toolbar .text-line-style-clear {
+    grid-column: 1;
+    grid-row: 1;
+    min-width: 0;
+  }
+
+  .rich-toolbar .paragraph-style-toolbar > button.text-line-style-clear.secondary,
+  .rich-toolbar .paragraph-style-recent button[data-rich-action="text-line-style"].is-selected.secondary {
+    background: color-mix(in srgb, var(--hvy-surface) 88%, transparent);
+    border-color: var(--hvy-border-input);
+    color: var(--hvy-button-text);
+    box-shadow: none;
+  }
+
+  .rich-toolbar .paragraph-style-expand {
     grid-column: 2;
-    grid-row: 2;
+    grid-row: 1;
     justify-self: end;
+    display: none;
+  }
+
+  .paragraph-style-modal,
+  .paragraph-style-edit-modal {
+    left: 0;
+    right: auto;
+    width: 100%;
+    max-width: 100%;
   }
 
   .paragraph-style-spacing-grid {

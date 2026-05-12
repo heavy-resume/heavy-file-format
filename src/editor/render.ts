@@ -854,7 +854,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       <span class="paragraph-style-recent">
         ${visibleNames.map((name) => renderStyleButton(name)).join('')}
       </span>
-      ${names.length > 2 ? `<button
+      <button
           type="button"
           class="ghost icon-button paragraph-style-expand"
           data-action="open-paragraph-style-picker"
@@ -863,7 +863,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           aria-controls="${deps.escapeAttr(pickerId)}"
           aria-label="More paragraph styles"
           title="More paragraph styles"
-        >…</button>` : ''}
+        >…</button>
       <div class="paragraph-style-modal" id="${deps.escapeAttr(pickerId)}" role="dialog" aria-label="Paragraph styles" aria-modal="false">
         <div class="paragraph-style-modal-card">
           <div class="paragraph-style-modal-head">

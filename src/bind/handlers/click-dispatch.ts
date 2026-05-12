@@ -70,8 +70,13 @@ export function bindClickDispatch(app: HTMLElement): void {
     const richButton = target.closest<HTMLElement>('[data-rich-action]');
     if (richButton) {
       event.preventDefault();
-      richButton.closest<HTMLElement>('.paragraph-style-toolbar')?.classList.remove('is-picker-open');
-      richButton.closest<HTMLElement>('.paragraph-style-toolbar')?.querySelector<HTMLButtonElement>('[data-action="open-paragraph-style-picker"]')?.setAttribute('aria-expanded', 'false');
+      const paragraphStyleToolbar = richButton.closest<HTMLElement>('.paragraph-style-toolbar');
+      if (paragraphStyleToolbar && isCompactParagraphStylePickerButton(richButton, paragraphStyleToolbar)) {
+        openParagraphStylePicker(paragraphStyleToolbar);
+        return;
+      }
+      paragraphStyleToolbar?.classList.remove('is-picker-open');
+      paragraphStyleToolbar?.querySelector<HTMLButtonElement>('[data-action="open-paragraph-style-picker"]')?.setAttribute('aria-expanded', 'false');
       const sectionKey = richButton.dataset.sectionKey;
       const blockId = richButton.dataset.blockId;
       const action = richButton.dataset.richAction;
@@ -103,16 +108,20 @@ export function bindClickDispatch(app: HTMLElement): void {
     if (actionButton.dataset.action === 'open-paragraph-style-picker') {
       event.preventDefault();
       const toolbar = actionButton.closest<HTMLElement>('.paragraph-style-toolbar');
-      const isOpen = toolbar?.classList.toggle('is-picker-open') ?? false;
-      actionButton.setAttribute('aria-expanded', String(isOpen));
+      if (toolbar?.classList.contains('is-picker-open')) {
+        closeParagraphStylePicker(toolbar);
+      } else if (toolbar) {
+        openParagraphStylePicker(toolbar);
+      }
       return;
     }
 
     if (actionButton.dataset.action === 'close-paragraph-style-picker') {
       event.preventDefault();
       const toolbar = actionButton.closest<HTMLElement>('.paragraph-style-toolbar');
-      toolbar?.classList.remove('is-picker-open');
-      toolbar?.querySelector<HTMLButtonElement>('[data-action="open-paragraph-style-picker"]')?.setAttribute('aria-expanded', 'false');
+      if (toolbar) {
+        closeParagraphStylePicker(toolbar);
+      }
       return;
     }
 
@@ -146,6 +155,27 @@ export function bindClickDispatch(app: HTMLElement): void {
 
 function isParagraphStyleToolbarAction(action: string): boolean {
   return action === 'open-paragraph-style-picker' || action === 'close-paragraph-style-picker' || action === 'close-paragraph-style-edit';
+}
+
+function isCompactParagraphStylePickerButton(richButton: HTMLElement, toolbar: HTMLElement): boolean {
+  if (richButton.closest('.paragraph-style-modal, .paragraph-style-edit-modal')) {
+    return false;
+  }
+  if (richButton.dataset.richAction !== 'text-line-style') {
+    return false;
+  }
+  const label = toolbar.querySelector<HTMLElement>('.text-line-style-toolbar-label');
+  return Boolean(label && getComputedStyle(label).display === 'none');
+}
+
+function openParagraphStylePicker(toolbar: HTMLElement): void {
+  toolbar.classList.add('is-picker-open');
+  toolbar.querySelector<HTMLButtonElement>('[data-action="open-paragraph-style-picker"]')?.setAttribute('aria-expanded', 'true');
+}
+
+function closeParagraphStylePicker(toolbar: HTMLElement): void {
+  toolbar.classList.remove('is-picker-open');
+  toolbar.querySelector<HTMLButtonElement>('[data-action="open-paragraph-style-picker"]')?.setAttribute('aria-expanded', 'false');
 }
 
 function openParagraphStyleEditor(toolbar: HTMLElement | null, styleName: string): void {

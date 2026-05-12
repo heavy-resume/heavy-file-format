@@ -1,4 +1,5 @@
 import { state } from './state';
+import { shouldAutoDismissSidebarHelp } from './sidebar-help';
 
 type SidebarKind = 'editor' | 'viewer';
 
@@ -55,7 +56,9 @@ function handleSidebarScrollable(kind: SidebarKind, scrollable: HTMLElement, she
   }
 
   if (delta > 2) {
-    dismissSidebarHelp(kind, shell);
+    if (shouldAutoDismissSidebarHelp(shell, kind)) {
+      dismissSidebarHelp(kind, shell);
+    }
     hideSidebarTab(kind, shell);
   }
 

@@ -1213,6 +1213,47 @@ test('editor pullout help balloon lists loaded sidebar sections', async ({ page 
   await expect(balloon).toBeHidden();
 });
 
+test('editor pullout help balloon stays when it fits beside the document body', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+reader_max_width: 12rem
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ <!--hvy:text {}-->
+  Main body
+
+<!--hvy: {"id":"side","location":"sidebar"}-->
+#! Sidebar
+
+ <!--hvy:text {}-->
+  Pullout body
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  const balloon = page.locator('.editor-sidebar-help-balloon');
+  await expect(balloon).toBeVisible();
+  await expect.poll(async () => {
+    const balloonBox = await balloon.boundingBox();
+    const bodyBox = await page.locator('.editor-tree > .hvy-surface > .editor-tree-body').boundingBox();
+    if (!balloonBox || !bodyBox) {
+      return true;
+    }
+    return balloonBox.x < bodyBox.x + bodyBox.width
+      && balloonBox.x + balloonBox.width > bodyBox.x
+      && balloonBox.y < bodyBox.y + bodyBox.height
+      && balloonBox.y + balloonBox.height > bodyBox.y;
+  }).toBe(false);
+  await page.waitForTimeout(5500);
+  await expect(balloon).toBeVisible();
+});
+
 test('viewer pullout help balloon lists loaded sidebar sections', async ({ page }) => {
   await page.goto('/');
 

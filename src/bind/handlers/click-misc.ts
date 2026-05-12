@@ -1,4 +1,5 @@
 import { state, getRenderApp, closeAiEditPopover, completePendingRichAnnotation, handleRichEditorClick, refreshRichToolbarState } from './_imports';
+import { shouldAutoDismissSidebarHelp } from '../../sidebar-help';
 
 const sidebarHelpDismissTimers: Record<'editor' | 'viewer', number | null> = {
   editor: null,
@@ -172,6 +173,10 @@ function scheduleSidebarHelpAutoCloseFor(app: HTMLElement, kind: 'editor' | 'vie
   }
   sidebarHelpDismissTimers[kind] = window.setTimeout(() => {
     sidebarHelpDismissTimers[kind] = null;
+    const shell = app.querySelector<HTMLElement>(kind === 'editor' ? '.editor-shell' : '.viewer-shell');
+    if (!shouldAutoDismissSidebarHelp(shell, kind)) {
+      return;
+    }
     dismissSidebarHelpBalloon(app, kind);
   }, 5000);
 }

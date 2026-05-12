@@ -192,14 +192,14 @@ test('mergeChatSettings keeps env defaults when localStorage values are empty st
       },
       {
         provider: 'openai',
-        model: 'gpt-5-mini',
+        model: 'gpt-5.4-mini',
         compactionProvider: 'openai',
         compactionModel: 'gpt-5.4-nano',
       }
     )
   ).toEqual({
     provider: 'openai',
-    model: 'gpt-5-mini',
+    model: 'gpt-5.4-mini',
     compactionProvider: 'openai',
     compactionModel: 'gpt-5.4-nano',
   });

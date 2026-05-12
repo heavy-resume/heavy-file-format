@@ -19,7 +19,7 @@ import type { ProviderToolCall, ProviderToolDefinition, ProviderToolState } from
 import { closeIcon } from '../icons';
 
 const CHAT_STORAGE_KEY = 'hvy-chat-settings';
-const DEFAULT_OPENAI_MODEL = 'gpt-5-mini';
+const DEFAULT_OPENAI_MODEL = 'gpt-5.4-mini';
 const DEFAULT_ANTHROPIC_MODEL = 'claude-sonnet-4-6';
 const DEFAULT_QWEN_MODEL = 'qwen-plus';
 export const DEFAULT_OPENAI_COMPACTION_MODEL = 'gpt-5.4-nano';
@@ -60,6 +60,25 @@ interface ProxyChatResponse {
   toolCalls?: ProviderToolCall[];
   nativeMessages?: unknown[];
   toolState?: ProviderToolState;
+}
+
+export interface HostChatClient {
+  complete(request: ProxyChatRequest, options?: { signal?: AbortSignal; debugLabel?: string }): Promise<ProxyChatResponse>;
+  toolTurn?(request: ProxyChatRequest, options?: { signal?: AbortSignal; debugLabel?: string }): Promise<ProxyChatResponse>;
+}
+
+let hostChatClient: HostChatClient | null = null;
+
+export function setHostChatClient(client: HostChatClient | null): void {
+  hostChatClient = client;
+}
+
+export function getHostChatClient(): HostChatClient | null {
+  return hostChatClient;
+}
+
+export function hasHostChatClient(): boolean {
+  return hostChatClient !== null;
 }
 
 export interface ProxyCompletionParams {
@@ -232,8 +251,9 @@ export function renderChatPanel(
   const context = buildChatDocumentContext(document);
   const hasDraft = chat.draft.trim().length > 0;
   const missingModel = chat.settings.model.trim().length === 0;
+  const hostManagedChat = hasHostChatClient();
   const isDocumentEdit = mode === 'document-edit';
-  const canSend = !chat.isSending && !missingModel && (isDocumentEdit || context.trim().length > 0);
+  const canSend = !chat.isSending && (hostManagedChat || !missingModel) && (isDocumentEdit || context.trim().length > 0);
   const latestTokenUsage = getLatestChatTokenUsage(chat.messages);
   console.debug('[hvy:chat-render] composer state', {
     panelOpen: chat.panelOpen,
@@ -270,7 +290,11 @@ export function renderChatPanel(
          <div class="chat-composer-actions">
            <span class="chat-composer-status">
              ${
-              missingModel
+              hostManagedChat
+                 ? !hasDraft
+                   ? latestTokenUsage ? `Last ${formatChatTokenUsage(latestTokenUsage).toLowerCase()}` : 'Type your prompt'
+                   : latestTokenUsage ? `Ready · last ${formatChatTokenUsage(latestTokenUsage).toLowerCase()}` : 'Ready'
+                 : missingModel
                  ? 'Choose a model before sending.'
                  : !hasDraft
                  ? latestTokenUsage ? `Last ${formatChatTokenUsage(latestTokenUsage).toLowerCase()}` : 'Type your prompt'
@@ -301,7 +325,7 @@ export function renderChatPanel(
                  <button type="button" class="danger chat-panel-close" data-action="toggle-chat-panel" aria-label="Close chat">${closeIcon()}</button>
                </div>
                <div class="chat-panel-body" data-chat-scroll-container>
-                 <div class="chat-settings">
+                 ${hostManagedChat ? '' : `<div class="chat-settings">
                    <label class="chat-setting">
                      <span>Provider</span>
                      <select data-field="chat-provider" aria-label="Chat provider" ${chat.isSending ? 'disabled' : ''}>
@@ -348,7 +372,7 @@ export function renderChatPanel(
                        ${chat.isSending ? 'disabled' : ''}
                      />
                    </label>
-                 </div>
+                 </div>`}
 
                  ${chat.error ? `<div class="chat-error" role="alert">${deps.escapeHtml(chat.error)}</div>` : ''}
                  ${chat.cliSim ? renderChatCliSimHtml(chat.cliSim, deps) : ''}
@@ -468,13 +492,35 @@ export async function requestProxyCompletion(params: ProxyCompletionParams): Pro
     traceRunId: params.traceRunId,
   });
   const debugLabel = params.debugLabel?.trim() || 'chat';
+  const hostClient = getHostChatClient();
 
   console.debug(`[hvy:${debugLabel}] client request`, {
     provider: requestPayload.provider,
     model: requestPayload.model,
     messages: requestPayload.messages,
     contextLength: requestPayload.context.length,
+    hostManaged: !!hostClient,
   });
+
+  if (hostClient) {
+    const payload = await hostClient.complete(requestPayload, {
+      signal: params.signal,
+      debugLabel,
+    });
+    if (typeof payload.output !== 'string' || payload.output.trim().length === 0) {
+      throw new Error('Host chat client returned no assistant text.');
+    }
+    const output = payload.output.trim();
+    const reasoningSummary = typeof payload.reasoningSummary === 'string' ? payload.reasoningSummary.trim() : '';
+    if (reasoningSummary) {
+      params.onReasoningSummary?.(reasoningSummary);
+    }
+    const usage = normalizeProxyTokenUsage(payload.usage);
+    if (usage) {
+      params.onTokenUsage?.(usage);
+    }
+    return output;
+  }
 
   const response = await fetch('/api/chat', {
     method: 'POST',
@@ -527,13 +573,39 @@ export async function requestProxyToolTurn(params: ProxyToolTurnParams): Promise
     toolState: params.toolState,
   });
   const debugLabel = params.debugLabel?.trim() || 'chat-tools';
+  const hostClient = getHostChatClient();
 
   console.debug(`[hvy:${debugLabel}] client native tool request`, {
     provider: requestPayload.provider,
     model: requestPayload.model,
     toolCount: params.tools.length,
     hasToolState: !!params.toolState,
+    hostManaged: !!hostClient,
   });
+
+  if (hostClient) {
+    const payload = hostClient.toolTurn
+      ? await hostClient.toolTurn(requestPayload, { signal: params.signal, debugLabel })
+      : await hostClient.complete(requestPayload, { signal: params.signal, debugLabel });
+    const typed = payload as ProxyChatResponse | null;
+    const output = typeof typed?.output === 'string' ? typed.output.trim() : '';
+    const reasoningSummary = typeof typed?.reasoningSummary === 'string' ? typed.reasoningSummary.trim() : '';
+    if (reasoningSummary) {
+      params.onReasoningSummary?.(reasoningSummary);
+    }
+    const usage = normalizeProxyTokenUsage(typed?.usage);
+    if (usage) {
+      params.onTokenUsage?.(usage);
+    }
+    return {
+      output,
+      reasoningSummary,
+      ...(usage ? { usage } : {}),
+      toolCalls: Array.isArray(typed?.toolCalls) ? typed.toolCalls : [],
+      nativeMessages: Array.isArray(typed?.nativeMessages) ? typed.nativeMessages : [],
+      toolState: typed?.toolState ?? createEmptyHostToolState(requestPayload.provider),
+    };
+  }
 
   const response = await fetch('/api/chat', {
     method: 'POST',
@@ -575,6 +647,16 @@ export async function requestProxyToolTurn(params: ProxyToolTurnParams): Promise
     nativeMessages: typed.nativeMessages,
     toolState: typed.toolState,
   };
+}
+
+function createEmptyHostToolState(provider: ChatSettings['provider']): ProviderToolState {
+  if (provider === 'anthropic') {
+    return { provider, system: '', messages: [] };
+  }
+  if (provider === 'qwen') {
+    return { provider, messages: [] };
+  }
+  return { provider: 'openai', input: [] };
 }
 
 function normalizeProxyTokenUsage(value: unknown): ChatTokenUsage | null {

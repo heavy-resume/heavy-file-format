@@ -7,7 +7,7 @@ const require = createRequire(import.meta.url);
 const BRYTHON_MINIMAL_VFS_ID = 'virtual:hvy-brython-minimal-vfs';
 const BRYTHON_MINIMAL_VFS_RESOLVED_ID = `\0${BRYTHON_MINIMAL_VFS_ID}`;
 
-function createBrythonMinimalVfsPlugin(): Plugin {
+export function createBrythonMinimalVfsPlugin(): Plugin {
   return {
     name: 'hvy-brython-minimal-vfs',
     resolveId(id) {

@@ -28,17 +28,17 @@
   color: var(--hvy-warning-text);
 }
 
-.nav-title {
+.hvy-nav-title {
   font-weight: 700;
   margin-bottom: 0.35rem;
 }
 
-.nav-list {
+.hvy-nav-list {
   display: grid;
   gap: 0.3rem;
 }
 
-.nav-item {
+.hvy-nav-item {
   width: 100%;
   text-align: left;
   border: 1px solid var(--hvy-border);
@@ -49,27 +49,27 @@
   cursor: pointer;
 }
 
-.nav-item[data-level="1"] {
+.hvy-nav-item[data-level="1"] {
   --nav-level: 1;
 }
 
-.nav-item[data-level="2"] {
+.hvy-nav-item[data-level="2"] {
   --nav-level: 2;
 }
 
-.nav-item[data-level="3"] {
+.hvy-nav-item[data-level="3"] {
   --nav-level: 3;
 }
 
-.nav-item[data-level="4"] {
+.hvy-nav-item[data-level="4"] {
   --nav-level: 4;
 }
 
-.nav-item[data-level="5"] {
+.hvy-nav-item[data-level="5"] {
   --nav-level: 5;
 }
 
-.nav-item[data-level="6"] {
+.hvy-nav-item[data-level="6"] {
   --nav-level: 6;
 }
 
@@ -258,6 +258,10 @@
 .reader-block h6 {
   margin: 0.2rem 0 0.15rem;
   line-height: 1.15;
+}
+
+.reader-block h1 {
+  font-size: 2rem;
 }
 
 .reader-block p+h1,

@@ -212,6 +212,7 @@
   pointer-events: auto;
   z-index: 21;
   transform-origin: top left;
+  text-align: left;
 }
 
 .editor-sidebar-help-balloon::before {
@@ -253,6 +254,8 @@
   color: var(--hvy-text-alt);
   font-size: 0.78rem;
   font-weight: 700;
+  line-height: 1.2;
+  text-align: left;
   text-transform: uppercase;
 }
 
@@ -264,6 +267,7 @@
   margin: 0;
   padding: 0;
   list-style: none;
+  text-align: left;
 }
 
 .editor-sidebar-help-balloon li {
@@ -272,6 +276,7 @@
   color: var(--hvy-text);
   font-size: 0.86rem;
   line-height: 1.25;
+  text-align: left;
   text-overflow: ellipsis;
   white-space: nowrap;
 }

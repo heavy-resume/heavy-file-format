@@ -699,6 +699,10 @@
   line-height: 1.15;
 }
 
+.rich-editor h1 {
+  font-size: 2rem;
+}
+
 .rich-editor code:not(pre code) {
   white-space: pre-wrap;
   overflow-wrap: anywhere;

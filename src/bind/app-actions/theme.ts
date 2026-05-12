@@ -8,6 +8,7 @@ import type { AppActionHandler } from './types';
 
 const openThemeModal: AppActionHandler = () => {
   state.themeModalOpen = true;
+  state.themeModalMode = 'full';
   getRenderApp()();
 };
 

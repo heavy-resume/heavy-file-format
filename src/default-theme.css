@@ -1,6 +1,5 @@
 /* Light mode defaults */
 :root {
-  color-scheme: light;
   --hvy-bg: #f5f9ff;
   --hvy-bg-alt: #eef3fa;
   --hvy-surface: #ffffff;
@@ -83,7 +82,6 @@
 
 /* Dark mode overrides */
 :root.theme-dark {
-  color-scheme: dark;
   --hvy-bg: #0f1720;
   --hvy-bg-alt: #161b22;
   --hvy-surface: #17222d;

@@ -124,6 +124,7 @@ function createInitialState(document: ReturnType<typeof deserializeDocumentBytes
     sqliteRowComponentModal: null,
     dbTableQueryModal: null,
     themeModalOpen: false,
+    themeModalMode: 'full',
     paletteOverrideId: loadPaletteOverrideId(),
     gridAddComponentByBlock: {},
     expandableEditorPanels: {},
@@ -214,7 +215,7 @@ function renderAiEditPopover(): string {
             type="text"
             data-field="ai-model"
             value="${escapeAttr(state.chat.settings.model)}"
-            placeholder="${escapeAttr(providerLabel === 'OpenAI' ? 'gpt-5-mini' : providerLabel === 'Qwen' ? 'qwen-plus' : 'claude-sonnet-4-6')}"
+            placeholder="${escapeAttr(providerLabel === 'OpenAI' ? 'gpt-5.4-mini' : providerLabel === 'Qwen' ? 'qwen-plus' : 'claude-sonnet-4-6')}"
             autocapitalize="off"
             autocomplete="off"
             spellcheck="false"
@@ -503,6 +504,9 @@ readerRenderer = createReaderRenderer(
     },
     get themeModalOpen() {
       return state.themeModalOpen;
+    },
+    get themeModalMode() {
+      return state.themeModalMode;
     },
     get paletteOverrideId() {
       return state.paletteOverrideId;

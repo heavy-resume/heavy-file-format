@@ -1,54 +1,42 @@
 :root {
-  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
-  color: var(--hvy-text);
-  background: linear-gradient(135deg, var(--hvy-bg), var(--hvy-bg-alt));
   --hvy-sidebar-tab-size: 2.9rem;
   --hvy-sidebar-footprint: 3.25rem;
   --hvy-document-edge-gutter: 0.9rem;
   --hvy-floating-controls-clearance: 6.6rem;
 }
 
-* {
+.hvy-embed-layout,
+.hvy-embed-layout * {
   box-sizing: border-box;
 }
 
-.no-transitions * {
+.no-transitions .hvy-embed-layout *,
+.hvy-embed-layout.no-transitions * {
   transition: none !important;
 }
 
-html,
-body,
-#app {
-  height: 100%;
-}
-
-body {
-  margin: 0;
-  overflow: hidden;
-}
-
-a {
+.hvy-embed-layout a {
   color: var(--hvy-link-color);
   transition:
     color 140ms ease,
     text-shadow 140ms ease;
 }
 
-a:hover {
+.hvy-embed-layout a:hover {
   color: var(--hvy-link-hover-color, var(--hvy-link-color));
   text-shadow: 0 0 0.35rem color-mix(in srgb, var(--hvy-link-hover-color, var(--hvy-link-color)) 35%, transparent);
 }
 
-button,
-input,
-select,
-textarea {
+.hvy-embed-layout :where(button),
+.hvy-embed-layout :where(input),
+.hvy-embed-layout :where(select),
+.hvy-embed-layout :where(textarea) {
   color: var(--hvy-button-text);
 }
 
-input:disabled,
-select:disabled,
-textarea:disabled {
+.hvy-embed-layout :where(input:disabled),
+.hvy-embed-layout :where(select:disabled),
+.hvy-embed-layout :where(textarea:disabled) {
   opacity: 1;
   color: var(--hvy-text);
   background: color-mix(in srgb, var(--hvy-surface) 88%, var(--hvy-surface-alt));
@@ -57,6 +45,7 @@ textarea:disabled {
 }
 
 .layout {
+  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
   height: 100%;
   min-height: 100%;
   display: grid;
@@ -65,6 +54,7 @@ textarea:disabled {
   padding: 1rem;
   overflow: hidden;
   color: var(--hvy-text);
+  background: linear-gradient(135deg, var(--hvy-bg), var(--hvy-bg-alt));
 }
 
 .topbar {
@@ -126,7 +116,7 @@ textarea:disabled {
 
 .toolbar input[type='text'],
 .toolbar button,
-button {
+.hvy-embed-layout :where(button) {
   border: 1px solid var(--hvy-border-alt);
   border-radius: 8px;
   padding: 0.38rem 0.58rem;
@@ -140,7 +130,7 @@ button {
     transform 140ms ease;
 }
 
-button:not(:disabled):hover {
+.hvy-embed-layout :where(button:not(:disabled):hover) {
   color: var(--hvy-button-hover-text, var(--hvy-button-text));
   border-color: var(--hvy-focus);
   background: color-mix(in srgb, var(--hvy-surface) 72%, var(--hvy-button-hover-bg, var(--hvy-button-bg)) 28%);
@@ -148,13 +138,13 @@ button:not(:disabled):hover {
   transform: translateY(-1px);
 }
 
-button.secondary {
+.hvy-embed-layout :where(button.secondary) {
   background: var(--hvy-button-bg);
   border-color: var(--hvy-button-bg);
   color: var(--hvy-button-text);
 }
 
-button.secondary:not(:disabled):hover,
+.hvy-embed-layout :where(button.secondary:not(:disabled):hover),
 .toolbar-primary-button:not(:disabled):hover,
 .file-picker:hover {
   color: var(--hvy-button-hover-text, var(--hvy-button-text));
@@ -164,20 +154,20 @@ button.secondary:not(:disabled):hover,
   transform: translateY(-1px);
 }
 
-button.ghost {
+.hvy-embed-layout :where(button.ghost) {
   background: transparent;
 }
 
-button.ghost:not(:disabled):hover {
+.hvy-embed-layout :where(button.ghost:not(:disabled):hover) {
   background: color-mix(in srgb, var(--hvy-surface) 68%, var(--hvy-button-hover-bg, var(--hvy-button-bg)) 32%);
 }
 
-button.danger {
+.hvy-embed-layout :where(button.danger) {
   background: var(--hvy-danger);
   border-color: var(--hvy-danger);
 }
 
-button.danger:not(:disabled):hover {
+.hvy-embed-layout :where(button.danger:not(:disabled):hover) {
   background: color-mix(in srgb, var(--hvy-danger) 86%, var(--hvy-surface) 14%);
   border-color: var(--hvy-danger);
 }
@@ -194,7 +184,7 @@ button.danger:not(:disabled):hover {
   fill: none;
 }
 
-button.tiny {
+.hvy-embed-layout :where(button.tiny) {
   font-size: 0.78rem;
   padding: 0.2rem 0.42rem;
 }
@@ -282,6 +272,7 @@ button.tiny {
 }
 
 .full-pane {
+  position: relative;
   min-height: 0;
   height: 100%;
   display: block;

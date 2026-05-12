@@ -125,6 +125,15 @@ const THEME_COLOR_LABELS: Record<string, string> = {
 
 let colorModeMediaQuery: MediaQueryList | null = null;
 let colorModeListener: ((event: MediaQueryListEvent) => void) | null = null;
+let themeRoot: HTMLElement | null = null;
+
+export function setThemeRoot(root: HTMLElement | null): void {
+  themeRoot = root;
+}
+
+function getThemeRoot(): HTMLElement {
+  return themeRoot ?? document.documentElement;
+}
 
 export function getPreferredColorMode(): ColorMode {
   if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
@@ -134,7 +143,7 @@ export function getPreferredColorMode(): ColorMode {
 }
 
 export function applyColorMode(mode: ColorMode = getPreferredColorMode()): void {
-  document.documentElement.classList.toggle('theme-dark', mode === 'dark');
+  getThemeRoot().classList.toggle('theme-dark', mode === 'dark');
 }
 
 export function initColorModeSync(): void {
@@ -154,7 +163,7 @@ export function initColorModeSync(): void {
 
 export function applyTheme(): void {
   const theme = getThemeConfig();
-  const root = document.documentElement;
+  const root = getThemeRoot();
 
   applyColorMode();
 
@@ -249,7 +258,7 @@ export function getResolvedThemeColor(name: string): string {
   if (typeof window === 'undefined') {
     return getThemeConfig().colors[name] ?? '';
   }
-  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || getThemeConfig().colors[name] || '';
+  return getComputedStyle(getThemeRoot()).getPropertyValue(name).trim() || getThemeConfig().colors[name] || '';
 }
 
 export function getThemeResetColor(name: string): string {
@@ -261,7 +270,7 @@ export function getThemeResetColor(name: string): string {
   if (typeof window === 'undefined') {
     return '';
   }
-  const root = document.documentElement;
+  const root = getThemeRoot();
   const currentInline = root.style.getPropertyValue(name);
   const currentPriority = root.style.getPropertyPriority(name);
   root.style.removeProperty(name);

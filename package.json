@@ -9,6 +9,7 @@
     "install:devcontainer": "bash ./scripts/install-devcontainer.sh",
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:embed": "tsc -b && vite build --config vite.embed.config.ts",
     "preview": "vite preview",
     "browser:start": "node scripts/browser-harness.mjs start",
     "browser:smoke": "node scripts/browser-harness.mjs smoke",

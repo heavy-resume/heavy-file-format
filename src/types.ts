@@ -261,6 +261,7 @@ export interface AppState {
   sqliteRowComponentModal: SqliteRowComponentModalState | null;
   dbTableQueryModal: DbTableQueryModalState | null;
   themeModalOpen: boolean;
+  themeModalMode: 'full' | 'advanced';
   paletteOverrideId: string | null;
   gridAddComponentByBlock: Record<string, string>;
   expandableEditorPanels: Record<string, { stubOpen: boolean; expandedOpen: boolean }>;

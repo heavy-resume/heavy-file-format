@@ -96,6 +96,10 @@
   display: grid;
 }
 
+.theme-modal--advanced .theme-palette-grid {
+  display: none;
+}
+
 .theme-modal .theme-preview-card:hover,
 .theme-modal .theme-preview-card:focus-visible {
   border-color: var(--hvy-focus);

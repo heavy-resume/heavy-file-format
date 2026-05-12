@@ -5,7 +5,7 @@ const RESUME_STORAGE_KEY = 'hvy-editor-resume-state-v2';
 const LEGACY_RESUME_STORAGE_KEY = 'hvy-editor-resume-state-v1';
 const DEFAULT_SAVED_CHAT_SETTINGS: ChatSettings = {
   provider: 'openai',
-  model: 'gpt-5-mini',
+  model: 'gpt-5.4-mini',
   compactionProvider: 'openai',
   compactionModel: 'gpt-5.4-nano',
 };

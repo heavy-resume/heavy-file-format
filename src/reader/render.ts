@@ -57,6 +57,7 @@ interface ReaderRenderState {
   reusableTemplateModal: import('../types').ReusableTemplateModalState | null;
   componentMetaModal: { sectionKey: string; blockId: string } | null;
   themeModalOpen: boolean;
+  themeModalMode: 'full' | 'advanced';
   paletteOverrideId: string | null;
   theme: ThemeConfig;
   currentView: 'editor' | 'viewer' | 'ai';
@@ -101,6 +102,7 @@ export interface ReaderRenderer {
   orderReaderBlocks: (blocks: VisualBlock[]) => VisualBlock[];
   orderReaderListBlocks: (blocks: VisualBlock[]) => VisualBlock[];
   isReaderViewPrioritizedBlock: (block: VisualBlock) => boolean;
+  renderThemeEditor: (options?: { advanced?: boolean; includePalettePicker?: boolean; includeModalActions?: boolean }) => string;
   renderModal: () => string;
   renderLinkInlineModal: () => string;
   renderWarnings: () => string;
@@ -154,12 +156,12 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       }
 
       return `
-        <div class="nav-title">Navigation</div>
-        <div class="nav-list">
+        <div class="hvy-nav-title">Navigation</div>
+        <div class="hvy-nav-list">
           ${items
             .map(
               (section) =>
-                `<button type="button" class="nav-item" data-nav-id="${deps.escapeAttr(deps.getSectionId(section))}" data-level="${section.level}">${deps.escapeHtml(
+                `<button type="button" class="hvy-nav-item" data-nav-id="${deps.escapeAttr(deps.getSectionId(section))}" data-level="${section.level}">${deps.escapeHtml(
                   deps.formatSectionTitle(section.title)
                 )}</button>`
             )
@@ -553,7 +555,9 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     return state.readerExpandableState[key] ?? fallback;
   }
 
-  function renderThemeModal(): string {
+  function renderThemeEditor(options: { advanced?: boolean; includePalettePicker?: boolean; includeModalActions?: boolean } = {}): string {
+    const includePalettePicker = options.includePalettePicker ?? true;
+    const includeModalActions = options.includeModalActions ?? true;
     const theme = state.theme;
     const overrideNames = new Set(Object.keys(theme.colors));
     const helpers = deps.getComponentRenderHelpers();
@@ -1015,21 +1019,21 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       `;
     }).join('');
     return `
-      <div id="modalRoot" class="modal-root">
-        <div class="modal-overlay" data-modal-action="close-overlay"></div>
-        <section class="modal-panel theme-modal">
+        <section class="theme-modal${options.advanced ? ' theme-modal--advanced' : ''}">
           <div class="modal-head">
             <h3>Theme Colors</h3>
-            <button type="button" data-modal-action="close">Close</button>
+            ${includeModalActions ? '<button type="button" data-modal-action="close">Close</button>' : ''}
           </div>
           <p class="muted">
             Adjust the document theme with a color picker or by typing any valid CSS color value.
             Overrides are saved with the document.
           </p>
-          <div class="theme-palette-grid" aria-label="Theme palettes">
-            ${documentPaletteCard}
-            ${paletteCards}
-          </div>
+          ${includePalettePicker
+            ? `<div class="theme-palette-grid" aria-label="Theme palettes">
+                ${documentPaletteCard}
+                ${paletteCards}
+              </div>`
+            : ''}
           <div class="theme-component-preview-picker" aria-label="Theme component preview picker">
             ${previewPicker}
           </div>
@@ -1063,8 +1067,22 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
             : ''}
           <div class="link-inline-actions">
             <button type="button" class="ghost" data-action="theme-add-color">Add Color</button>
-            <button type="button" class="secondary" data-modal-action="close">Done</button>
+            ${includeModalActions ? '<button type="button" class="secondary" data-modal-action="close">Done</button>' : ''}
           </div>
+        </section>
+    `;
+  }
+
+  function renderThemeModal(): string {
+    return `
+      <div id="modalRoot" class="modal-root">
+        <div class="modal-overlay" data-modal-action="close-overlay"></div>
+        <section class="modal-panel">
+          ${renderThemeEditor({
+            advanced: state.themeModalMode === 'advanced',
+            includePalettePicker: true,
+            includeModalActions: true,
+          })}
         </section>
       </div>
     `;
@@ -1504,6 +1522,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     orderReaderBlocks,
     orderReaderListBlocks,
     isReaderViewPrioritizedBlock,
+    renderThemeEditor,
     renderModal,
     renderLinkInlineModal,
     renderWarnings,

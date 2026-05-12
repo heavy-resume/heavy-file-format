@@ -134,11 +134,9 @@ component_defs:
               css: "margin: 0;"
           - text: ""
             schema:
-              component: component-list
-              componentListComponent: text
-              componentListItemLabel: accomplishment
+              component: text
+              placeholder: accomplishments
               css: "margin: 0;"
-              componentListBlocks: []
           - component: skills-and-tools-tech-list
   - name: skills-and-tools-tech-list
     baseType: grid
@@ -252,10 +250,9 @@ component_defs:
               css: "margin: 0;"
           - text: ""
             schema:
-              component: component-list
-              componentListComponent: text
+              component: text
+              placeholder: classes
               css: "margin: 0;"
-              componentListBlocks: []
   - name: project-record
     baseType: expandable
     description: Project entry
@@ -432,22 +429,10 @@ component_defs:
 
   <!--hvy:expandable:content {}-->
 
-   <!--hvy:component-list {"componentListComponent":"text","css":"margin: 0;"}-->
-
-    <!--hvy:component-list:0 {}-->
-
-     <!--hvy:text {"css":"margin: 0;"}-->
-      Builds polished internal tools that reduce friction for engineers and product teams.
-
-    <!--hvy:component-list:1 {}-->
-
-     <!--hvy:text {"css":"margin: 0;"}-->
-      Comfortable moving between frontend UX, platform design, and AI-assisted workflows.
-
-    <!--hvy:component-list:2 {}-->
-
-     <!--hvy:text {"css":"margin: 0;"}-->
-      Enjoys turning messy, high-context problems into repeatable systems and clear documentation.
+   <!--hvy:text {"css":"margin: 0;"}-->
+    ^detail-body^ Builds polished internal tools that reduce friction for engineers and product teams.
+    ^detail-body^ Comfortable moving between frontend UX, platform design, and AI-assisted workflows.
+    ^detail-body^ Enjoys turning messy, high-context problems into repeatable systems and clear documentation.
 
 <!--hvy: {"id":"locations","lock":true,"contained":true,"location":"sidebar","tags":"sidebar, location, preferences","description":"Location preferences"}-->
 #! Locations
@@ -982,22 +967,10 @@ component_defs:
      <!--hvy:text {"css":"margin: 0;"}-->
       ^section-heading^ #### Accomplishments
 
-     <!--hvy:component-list {"componentListComponent":"text","css":"margin: 0;"}-->
-
-      <!--hvy:component-list:0 {}-->
-
-       <!--hvy:text {"css":"margin: 0.25rem 0;"}-->
-        Built a shared TypeScript platform package that reduced duplicated application code across three products.
-
-      <!--hvy:component-list:1 {}-->
-
-       <!--hvy:text {"css":"margin: 0.25rem 0;"}-->
-        Introduced reproducible developer containers and test workflows that cut onboarding time from days to hours.
-
-      <!--hvy:component-list:2 {}-->
-
-       <!--hvy:text {"css":"margin: 0.25rem 0;"}-->
-        Partnered with design and product to ship AI-assisted editor workflows with measurable adoption.
+     <!--hvy:text {"css":"margin: 0;"}-->
+      ^detail-body^ Built a shared TypeScript platform package that reduced duplicated application code across three products.
+      ^detail-body^ Introduced reproducible developer containers and test workflows that cut onboarding time from days to hours.
+      ^detail-body^ Partnered with design and product to ship AI-assisted editor workflows with measurable adoption.
 
      <!--hvy:skills-and-tools-tech-list {}-->
 
@@ -1245,27 +1218,11 @@ component_defs:
 
       <!--hvy:grid:0 {"id":"education-institution-details"}-->
 
-       <!--hvy:component-list {"componentListComponent":"text","css":"margin: 0;"}-->
-
-        <!--hvy:component-list:0 {}-->
-
-         <!--hvy:text {"css":"margin: 0 0 0.25rem;"}-->
-          ### B.S. Computer Science
-
-        <!--hvy:component-list:1 {}-->
-
-         <!--hvy:text {"css":"margin: 0;"}-->
-          University of Washington
-
-        <!--hvy:component-list:2 {}-->
-
-         <!--hvy:text {"css":"margin: 0.15rem 0 0;"}-->
-          Seattle, WA
-
-        <!--hvy:component-list:3 {}-->
-
-         <!--hvy:text {"css":"margin: 0.15rem 0 0;"}-->
-          GPA: 3.8 / 4.0
+       <!--hvy:text {"css":"margin: 0;"}-->
+        ^section-heading^ ### B.S. Computer Science
+        ^detail-body^ University of Washington
+        ^detail-body^ Seattle, WA
+        ^detail-body^ GPA: 3.8 / 4.0
 
       <!--hvy:grid:1 {"id":"education-date-range"}-->
 
@@ -1318,34 +1275,10 @@ component_defs:
      <!--hvy:text {"css":"margin: 0;"}-->
       ^section-heading^ #### Classes
 
-     <!--hvy:component-list {"componentListComponent":"text","css":"margin: 0;"}-->
-
-      <!--hvy:component-list:0 {}-->
-
-       <!--hvy:text {"css":"margin: 0.25rem 0;"}-->
-        Distributed Systems
-
-      <!--hvy:component-list:1 {}-->
-
-       <!--hvy:text {"css":"margin: 0.25rem 0;"}-->
-        Operating Systems
-
-      <!--hvy:component-list:2 {}-->
-
-       <!--hvy:text {"css":"margin: 0.25rem 0;"}-->
-        Compilers
-
-      <!--hvy:component-list:3 {}-->
-
-       <!--hvy:text {"css":"margin: 0.25rem 0;"}-->
-        Machine Learning
-
-      <!--hvy:component-list:4 {}-->
-
-       <!--hvy:text {"css":"margin: 0.25rem 0;"}-->
-        Computer Graphics
-
-      <!--hvy:component-list:5 {}-->
-
-       <!--hvy:text {"css":"margin: 0.25rem 0;"}-->
-        Human-Computer Interaction
+     <!--hvy:text {"css":"margin: 0;"}-->
+      ^detail-body^ Distributed Systems
+      ^detail-body^ Operating Systems
+      ^detail-body^ Compilers
+      ^detail-body^ Machine Learning
+      ^detail-body^ Computer Graphics
+      ^detail-body^ Human-Computer Interaction

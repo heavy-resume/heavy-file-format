@@ -135,11 +135,9 @@ component_defs:
               css: "margin: 0;"
           - text: ""
             schema:
-              component: component-list
-              componentListComponent: text
-              componentListItemLabel: accomplishment
+              component: text
+              placeholder: accomplishments
               css: "margin: 0;"
-              componentListBlocks: []
           - component: skills-and-tools-tech-list
   - name: skills-and-tools-tech-list
     baseType: grid
@@ -253,11 +251,9 @@ component_defs:
               css: "margin: 0;"
           - text: ""
             schema:
-              component: component-list
-              componentListComponent: text
-              componentListItemLabel: class
+              component: text
+              placeholder: classes
               css: "margin: 0;"
-              componentListBlocks: []
   - name: project-record
     baseType: expandable
     description: Project entry
@@ -440,7 +436,7 @@ component_defs:
 
   <!--hvy:expandable:content {}-->
 
-   <!--hvy:component-list {"componentListComponent":"text","css":"margin: 0;"}-->
+   <!--hvy:text {"css":"margin: 0;","placeholder":"Add expanded summary details"}-->
 
 <!--hvy: {"id":"locations","lock":true,"contained":true,"location":"sidebar","tags":"sidebar, location, preferences","description":"Location preferences"}-->
 #! Locations

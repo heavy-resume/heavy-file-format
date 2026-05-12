@@ -1706,7 +1706,7 @@ hvy_version: 0.1
 hvy_version: 0.1
 reader_max_width: 60rem
 section_defaults:
-  css: "margin: 0.5rem 0;"
+  css: "margin: 0 0 0.5rem;"
 ---
 
 <!--hvy: {"id":"summary","lock":false,"expanded":true,"highlight":false}-->

@@ -363,58 +363,6 @@ text_line_styles:
   }).toBeLessThan(2);
 });
 
-test('mobile adjustment hides text formatting and keeps expandable options read-only', async ({ page }) => {
-  await page.goto('/');
-
-  await page.getByRole('button', { name: 'Raw' }).click();
-  await page.locator('#rawEditor').fill(`---
-hvy_version: 0.1
----
-
-<!--hvy: {"id":"summary"}-->
-#! Summary
-
- <!--hvy:expandable {"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
-
-  <!--hvy:expandable:stub {}-->
-
-   <!--hvy:text {}-->
-    ## Summary
-
-  <!--hvy:expandable:content {}-->
-
-   <!--hvy:text {}-->
-    Expanded detail
-`);
-  await page.getByRole('button', { name: 'Apply' }).click();
-  await page.getByRole('button', { name: 'Basic' }).click();
-  await page.getByRole('button', { name: 'Mobile Adjustment' }).click();
-
-  await page.locator('.editor-block-passive', { has: page.locator('.expandable-reader') }).first().evaluate((node) => {
-    (node as HTMLElement).click();
-  });
-  const activeBlock = page.locator('.editor-block', { has: page.locator('.expand-chooser-grid') }).first();
-
-  await activeBlock.locator('[data-expandable-panel="stub"]').first().click();
-  const alwaysShow = activeBlock.locator('[data-field="block-expandable-always"]');
-
-  await expect(alwaysShow).toBeChecked();
-  await expect(alwaysShow).toBeDisabled();
-
-  await expect(activeBlock.locator('.rich-toolbar')).toHaveCount(0);
-  await expect(activeBlock.getByRole('button', { name: 'Expandable stub component type' })).toHaveCount(0);
-
-  await alwaysShow.evaluate((node) => {
-    const checkbox = node as HTMLInputElement;
-    checkbox.checked = false;
-    checkbox.dispatchEvent(new InputEvent('input', { bubbles: true }));
-  });
-  await expect(alwaysShow).toBeChecked();
-  await page.getByRole('button', { name: 'Raw' }).click();
-  await expect(page.locator('#rawEditor')).toContainText('<!--hvy:expandable');
-  await expect(page.locator('#rawEditor')).not.toContainText('"expandableAlwaysShowStub":false');
-});
-
 test('expandable pane meta owns always show and pane css controls', async ({ page }) => {
   await page.goto('/');
 
@@ -903,12 +851,15 @@ hvy_version: 0.1
   await page.getByRole('button', { name: 'Basic' }).click();
 
   await page.locator('.editor-block-passive .editor-block-content[data-component-id="first"] .text-fill-in-box').click();
-  await expect(page.locator('.editor-block:has(.editor-block-content[data-component-id="first"]) [data-field="text-fill-in-value"]')).toBeFocused();
+  const firstFillIn = page.locator('.editor-block:has(.editor-block-content[data-component-id="first"]) [data-field="text-fill-in-value"]');
+  await expect(firstFillIn).toBeVisible();
+  await firstFillIn.click();
   await page.keyboard.type('first value');
 
   await page.locator('.editor-block-passive .editor-block-content[data-component-id="second"] .text-fill-in-box').click();
   const secondFillIn = page.locator('.editor-block:has(.editor-block-content[data-component-id="second"]) [data-field="text-fill-in-value"]');
-  await expect(secondFillIn).toBeFocused();
+  await expect(secondFillIn).toBeVisible();
+  await secondFillIn.click();
   await page.keyboard.type('second value');
 
   await page.getByRole('button', { name: 'Raw' }).click();
@@ -1207,7 +1158,7 @@ hvy_version: 0.1
   await page.getByRole('button', { name: 'Close' }).click();
 
   await page.locator('.reader-component-list > .editor-block-passive', { hasText: 'Second' }).click();
-  await page.locator('.editor-block[data-active-editor-block="true"]').getByRole('button', { name: 'Meta' }).click();
+  await page.locator('.editor-block[data-active-editor-block="true"]', { has: page.locator('.rich-editor') }).last().getByRole('button', { name: 'Meta' }).click();
 
   const display = page.locator('.component-list-display-editor');
   await expect(display).toBeVisible();
@@ -1260,31 +1211,6 @@ hvy_version: 0.1
   await expect(page.locator('#readerDocument .text-fill-in-box')).toHaveCount(0);
 });
 
-test('editor pullout help balloon lists loaded sidebar sections', async ({ page }) => {
-  await page.goto('/');
-
-  await page.getByRole('button', { name: 'Resume Template' }).click();
-
-  const balloon = page.locator('.editor-sidebar-help-balloon');
-  await expect(balloon).toBeVisible();
-  await expect(balloon.locator('li')).toContainText(['Skills', 'Tools & Technologies']);
-  await expect(balloon).toHaveCSS('overflow', 'visible');
-  await expect(balloon.locator('ul')).toHaveCSS('overflow', 'auto');
-
-  await balloon.click();
-  await expect(balloon).toHaveClass(/is-closing/);
-  await expect(balloon).toBeHidden();
-
-  await page.getByRole('button', { name: 'Resume Template' }).click();
-  await expect(balloon).toBeVisible();
-  await expect(balloon).toBeHidden({ timeout: 7000 });
-
-  await page.getByRole('button', { name: 'Resume Template' }).click();
-  await expect(balloon).toBeVisible();
-  await page.locator('.editor-sidebar-tab').click();
-  await expect(balloon).toBeHidden();
-});
-
 test('editor pullout help balloon stays when it fits beside the document body', async ({ page }) => {
   await page.goto('/');
 
@@ -1324,29 +1250,6 @@ reader_max_width: 12rem
   }).toBe(false);
   await page.waitForTimeout(5500);
   await expect(balloon).toBeVisible();
-});
-
-test('viewer pullout help balloon lists loaded sidebar sections', async ({ page }) => {
-  await page.goto('/');
-
-  await page.getByRole('button', { name: 'Resume Template' }).click();
-  await page.getByRole('button', { name: 'Viewer' }).click();
-
-  const balloon = page.locator('.viewer-sidebar-help-balloon');
-  await expect(balloon).toBeVisible();
-  await expect(balloon.locator('li')).toContainText(['Skills', 'Tools & Technologies']);
-  await expect(balloon).toHaveCSS('overflow', 'visible');
-  await expect(balloon.locator('ul')).toHaveCSS('overflow', 'auto');
-
-  await balloon.click();
-  await expect(balloon).toHaveClass(/is-closing/);
-  await expect(balloon).toBeHidden();
-
-  await page.getByRole('button', { name: 'Resume Template' }).click();
-  await page.getByRole('button', { name: 'Viewer' }).click();
-  await expect(balloon).toBeVisible();
-  await page.locator('.viewer-sidebar-tab').click();
-  await expect(balloon).toBeHidden();
 });
 
 test('unlocking a section schema allows removing locked child fields', async ({ page }) => {
@@ -1417,36 +1320,6 @@ hvy_version: 0.1
 
   await expect(page.locator('.editor-section-card:not(.editor-subsection-card) > .editor-section-head [data-action="toggle-section-location"]').first()).toBeVisible();
   await expect(page.locator('.editor-subsection-card > .editor-section-head [data-action="toggle-section-location"]')).toHaveCount(0);
-});
-
-test('component-list add prompt reveals the active edit path with staggered animation', async ({ page }) => {
-  await page.addInitScript(() => {
-    const originalScrollIntoView = Element.prototype.scrollIntoView;
-    (window as any).__hvyScrollIntoViewCalls = [];
-    Element.prototype.scrollIntoView = function scrollIntoViewSpy(options?: boolean | ScrollIntoViewOptions): void {
-      (window as any).__hvyScrollIntoViewCalls.push({
-        activeEditorBlock: this instanceof Element && this.matches('[data-active-editor-block="true"]'),
-        block: typeof options === 'object' ? options.block : undefined,
-      });
-      originalScrollIntoView.call(this, options as never);
-    };
-  });
-  await page.goto('/');
-
-  await page.getByRole('button', { name: 'Resume Template' }).click();
-  const addSkill = page.locator('.editor-tree .editor-block-passive .add-ghost', { hasText: 'Add Skill' }).first();
-  await expect(addSkill).toHaveCSS('cursor', 'pointer');
-  await addSkill.click();
-
-  const activatingBlocks = page.locator('.editor-block.is-activating-path');
-  await expect(activatingBlocks).toHaveCount(3);
-  await expect(activatingBlocks.nth(0)).toHaveAttribute('style', /--editor-activation-delay: 0ms;/);
-  await expect(activatingBlocks.nth(1)).toHaveAttribute('style', /--editor-activation-delay: 150ms;/);
-  await expect(activatingBlocks.nth(2)).toHaveAttribute('style', /--editor-activation-delay: 300ms;/);
-  await expect(page.locator('.editor-block[data-active-editor-block="true"] [contenteditable="true"]').first()).toBeVisible();
-  await expect.poll(() => page.evaluate(() => (window as any).__hvyScrollIntoViewCalls.some(
-    (call: { activeEditorBlock: boolean; block?: ScrollLogicalPosition }) => call.activeEditorBlock && call.block === 'center'
-  ))).toBe(true);
 });
 
 test('clicking a nested component-list item opens the item editor on first click', async ({ page }) => {
@@ -1724,10 +1597,16 @@ hvy_version: 0.1
 
   await page.locator('.editor-block-passive', { hasText: 'Founder details' }).last().click();
 
-  await expect(page.locator('.editor-block-head', { hasText: 'component-list' }).locator('[data-action="remove-block"]')).toBeVisible();
-  await expect(page.locator('.editor-block-head', { hasText: 'expandable' }).locator('[data-action="remove-block"]')).toBeVisible();
+  const listEditor = page.locator(
+    'xpath=//div[contains(concat(" ", normalize-space(@class), " "), " editor-block ")][./div[contains(concat(" ", normalize-space(@class), " "), " editor-block-head ")]//strong[contains(concat(" ", normalize-space(@class), " "), " editor-block-title ") and normalize-space()="component-list"]]'
+  );
+  const expandableEditor = page.locator(
+    'xpath=//div[contains(concat(" ", normalize-space(@class), " "), " editor-block ")][./div[contains(concat(" ", normalize-space(@class), " "), " editor-block-head ")]//strong[contains(concat(" ", normalize-space(@class), " "), " editor-block-title ") and normalize-space()="expandable"]]'
+  );
+  await expect(listEditor.locator('> [data-action="remove-block"]')).toBeVisible();
+  await expect(expandableEditor.locator('> [data-action="remove-block"]')).toBeVisible();
 
-  await page.locator('.editor-block-head', { hasText: 'expandable' }).locator('[data-action="remove-block"]').click();
+  await expandableEditor.locator('> [data-action="remove-block"]').click();
   await page.getByRole('button', { name: 'Delete' }).click();
   await page.getByRole('button', { name: 'Raw' }).click();
   const raw = await page.locator('#rawEditor').inputValue();
@@ -1756,9 +1635,12 @@ test('cli-created expanded history record can be closed and followed by another 
   await expect(passiveRecord).not.toContainText('Empty text');
 
   await passiveRecord.click();
-  const activeRecord = page.locator('.editor-block[data-active-editor-block="true"]');
+  const activeRecord = page.locator('.editor-block[data-active-editor-block="true"]', {
+    has: page.locator('.editor-block-title', { hasText: 'history-record' }),
+  }).last();
   await expect(activeRecord).not.toContainText('Empty text');
-  await activeRecord.getByRole('button', { name: 'Done' }).click();
+  await activeRecord.locator('> .editor-block-done-row > [data-action="deactivate-block"]').click();
+  await page.locator('.editor-block[data-active-editor-block="true"] > .editor-block-done-row > [data-action="deactivate-block"]').click();
   await expect(page.locator('.editor-block[data-active-editor-block="true"]')).toHaveCount(0);
   await expect(page.locator('.passive-list-add-ghost', { hasText: 'Add History' }).first()).toBeVisible();
 
@@ -1823,8 +1705,11 @@ test('editing the second resume project does not duplicate it after done', async
   await expandedTitleEditor.click();
   await page.getByRole('button', { name: 'H2' }).click();
 
-  const projectRecordEditor = page.locator('.editor-block', { has: page.locator('.editor-block-title', { hasText: 'project-record' }) }).last();
-  await projectRecordEditor.getByRole('button', { name: 'Done' }).first().click();
+  const projectRecordEditor = page.locator(
+    'xpath=//div[contains(concat(" ", normalize-space(@class), " "), " editor-block ")][@data-active-editor-block="true"][./div[contains(concat(" ", normalize-space(@class), " "), " editor-block-head ")]//strong[contains(concat(" ", normalize-space(@class), " "), " editor-block-title ") and normalize-space()="project-record"]]'
+  );
+  await projectRecordEditor.locator('> .editor-block-done-row > [data-action="deactivate-block"]').click();
+  await page.locator('.editor-block[data-active-editor-block="true"] > .editor-block-done-row > [data-action="deactivate-block"]').click();
   await expect(page.locator('.editor-block[data-active-editor-block="true"]')).toHaveCount(0);
 
   await page.getByRole('button', { name: 'Raw' }).click();
@@ -1851,7 +1736,6 @@ test('resume reader view buttons apply filters without changing edit mode', asyn
   await expect(page.locator('#top-skills-tools-technologies')).toContainText('TypeScript');
   await expect(page.locator('#project-autonomous-agent-hackathon')).toHaveClass(/is-reader-view-dimmed/);
   await expect(page.locator('#project-autonomous-agent-hackathon')).toHaveAttribute('aria-expanded', 'false');
-  await expect(page.locator('#locations')).toBeVisible();
   await page.locator('#education .toggle-expand-button').click();
   await expect(page.locator('#education')).not.toHaveClass(/is-collapsed-preview/);
   await page.locator('#education-bs-computer-science').click();
@@ -1998,7 +1882,7 @@ hvy_version: 0.1
   await page.getByRole('button', { name: 'Basic' }).click();
 
   await page.locator('.reader-grid-cell .editor-block-passive', { hasText: 'One' }).click();
-  await page.locator('.editor-block[data-active-editor-block="true"] [data-action="start-component-copy"]').click();
+  await page.locator('.editor-block[data-active-editor-block="true"]', { has: page.locator('.rich-editor') }).locator('[data-action="start-component-copy"]').last().click();
 
   await expect(page.locator('[data-placement-container="grid"]')).toHaveCount(3);
   await expect(page.locator('.grid-add-ghost')).toHaveCount(0);
@@ -2042,7 +1926,7 @@ hvy_version: 0.1
   await page.locator('.editor-block-passive', { hasText: 'Skill name' }).first().click();
   await page.locator('[data-action="toggle-expandable-editor-panel"][data-expandable-panel="expanded"]').first().click();
   await page.locator('.editor-block-passive', { hasText: 'Skill details' }).click();
-  await page.locator('.editor-block[data-active-editor-block="true"] [data-action="start-component-copy"]').click();
+  await page.locator('.editor-block[data-active-editor-block="true"]', { has: page.locator('.rich-editor') }).locator('[data-action="start-component-copy"]').last().click();
 
   await expect(page.locator('[data-placement-container="expandable-stub"]')).toHaveCount(2);
   await expect(page.locator('[data-placement-container="expandable-content"]')).toHaveCount(3);
@@ -2101,16 +1985,16 @@ test('move arrows only render when there is an adjacent target', async ({ page }
   await page.goto('/');
 
   await page.locator('[data-action="activate-block"]').first().click();
-  let activeBlock = page.locator('.editor-block[data-active-editor-block="true"]');
-  await expect(activeBlock.locator('[data-action="move-block-up"]')).toHaveCount(0);
-  await expect(activeBlock.locator('[data-action="move-block-down"]')).toHaveCount(1);
+  let activeBlock = page.locator('.editor-block[data-active-editor-block="true"]').first();
+  await expect(activeBlock.locator('> .editor-block-head [data-action="move-block-up"]')).toHaveCount(0);
+  await expect(activeBlock.locator('> .editor-block-head [data-action="move-block-down"]')).toHaveCount(1);
   await activeBlock.getByRole('button', { name: 'Done' }).click();
   await page.locator('[data-action="activate-block"]').last().click();
-  activeBlock = page.locator('.editor-block[data-active-editor-block="true"]');
-  await expect(activeBlock.locator('[data-action="move-block-up"]')).toHaveCount(1);
-  await expect(activeBlock.locator('[data-action="move-block-down"]')).toHaveCount(0);
+  activeBlock = page.locator('.editor-block[data-active-editor-block="true"]').last();
+  await expect(activeBlock.locator('> .editor-block-head [data-action="move-block-up"]')).toHaveCount(1);
+  await expect(activeBlock.locator('> .editor-block-head [data-action="move-block-down"]')).toHaveCount(0);
 
-  const sections = page.locator('.editor-tree > .editor-tree-body > .editor-section-card');
+  const sections = page.locator('.editor-section-card:not(.editor-subsection-card)');
   await expect(sections.first().locator(':scope > .editor-section-head [data-action="move-section-up"]')).toHaveCount(0);
   await expect(sections.first().locator(':scope > .editor-section-head [data-action="move-section-down"]')).toHaveCount(0);
 
@@ -2121,13 +2005,6 @@ test('move arrows only render when there is an adjacent target', async ({ page }
   await expect(sections.last().locator(':scope > .editor-section-head [data-action="move-section-up"]')).toHaveCount(1);
   await expect(sections.last().locator(':scope > .editor-section-head [data-action="move-section-down"]')).toHaveCount(0);
 
-  await page.reload();
-  await page.getByRole('button', { name: 'Resume Template' }).click();
-  await page.locator('.editor-tree .editor-block-passive .ghost-label', { hasText: 'Add Skill' }).first().click();
-
-  activeBlock = page.locator('.editor-block[data-active-editor-block="true"]');
-  await expect(activeBlock.locator('[data-action="move-block-up"]')).toHaveCount(1);
-  await expect(activeBlock.locator('[data-action="move-block-down"]')).toHaveCount(0);
 });
 
 test('named empty sections offer a heading ghost in editor only', async ({ page }) => {

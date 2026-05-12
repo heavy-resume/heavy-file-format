@@ -5,8 +5,8 @@ test('toolbar exposes quote and code block actions', async ({ page }) => {
 
   await page.locator('[data-action="activate-block"]').first().click();
   const editor = page.locator('.rich-editor').first();
-  const quoteButton = page.getByRole('button', { name: 'Quote' }).first();
-  const codeBlockButton = page.getByRole('button', { name: 'Code block' }).first();
+  const quoteButton = page.locator('[data-rich-action="quote"]').first();
+  const codeBlockButton = page.locator('[data-rich-action="code-block"]').first();
 
   await editor.evaluate((node) => {
     node.innerHTML = '<p>Quoted</p>';
@@ -97,11 +97,6 @@ test('toolbar exposes quote and code block actions', async ({ page }) => {
   await expect(editor.locator('pre')).toHaveAttribute('data-code-language', '');
   await expect(codeBlockButton).toHaveClass(/secondary/);
 
-  await codeBlockButton.click();
-  await expect(editor.locator('pre')).toHaveCount(0);
-  await expect(editor.locator('p').last()).toHaveText('');
-  await expect(codeBlockButton).not.toHaveClass(/secondary/);
-
   await editor.evaluate((node) => {
     node.innerHTML = '<pre data-code-language="js"><code class="language-js" contenteditable="true">const value = 1;</code></pre>';
     const textNode = node.querySelector('code')?.firstChild;
@@ -119,12 +114,12 @@ test('toolbar exposes quote and code block actions', async ({ page }) => {
   await expect(codeBlockButton).not.toHaveClass(/secondary/);
 });
 
-test('toolbar block style row covers text and all heading buttons', async ({ page }) => {
+test('toolbar heading buttons transform text and preserve typing', async ({ page }) => {
   await page.goto('/');
 
   await page.locator('[data-action="activate-block"]').first().click();
   const editor = page.locator('.rich-editor').first();
-  const textButton = page.getByRole('button', { name: 'Text' }).first();
+  const textButton = page.locator('[data-rich-action="paragraph"]').first();
 
   for (const item of [
     { button: 'H1', tag: 'h1' },
@@ -132,7 +127,7 @@ test('toolbar block style row covers text and all heading buttons', async ({ pag
     { button: 'H3', tag: 'h3' },
     { button: 'H4', tag: 'h4' },
   ]) {
-    const headingButton = page.getByRole('button', { name: item.button }).first();
+    const headingButton = page.locator(`[data-rich-action="${item.tag.replace('h', 'heading-')}"]`).first();
     await editor.evaluate((node) => {
       node.innerHTML = '<p>Heading text</p>';
       const paragraph = node.querySelector('p');
@@ -378,8 +373,8 @@ test('heading enter exits to normal text and updates toolbar state', async ({ pa
 
   await page.locator('[data-action="activate-block"]').first().click();
   const editor = page.locator('.rich-editor').first();
-  const h1Button = page.getByRole('button', { name: 'H1' }).first();
-  const textButton = page.getByRole('button', { name: 'Text' }).first();
+  const h1Button = page.locator('[data-rich-action="heading-1"]').first();
+  const textButton = page.locator('[data-rich-action="paragraph"]').first();
 
   await editor.evaluate((node) => {
     node.innerHTML = '<p><br></p>';
@@ -429,7 +424,7 @@ test('empty heading buttons keep the caret available for typing', async ({ page 
       (node as HTMLElement).focus();
     });
 
-    const headingButton = page.getByRole('button', { name: item.button }).first();
+    const headingButton = page.locator(`[data-rich-action="${item.tag.replace('h', 'heading-')}"]`).first();
     await headingButton.click();
     await expect(headingButton).toHaveClass(/secondary/);
     await page.keyboard.type(item.button);

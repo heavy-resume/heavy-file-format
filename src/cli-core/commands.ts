@@ -1591,6 +1591,7 @@ function collectXrefVirtualPaths(document: VisualDocument, targetId: string): st
   const fs = buildHvyVirtualFileSystem(document);
   return [...fs.entries.values()]
     .filter((entry): entry is HvyVirtualFile => entry.kind === 'file' && entry.path.endsWith('/xref-card.json'))
+    .filter((entry) => !entry.path.startsWith('/id/'))
     .filter((entry) => {
       try {
         const value = JSON.parse(entry.read()) as { xrefTarget?: unknown };
@@ -2734,6 +2735,9 @@ function commandGrep(ctx: HvyCliCommandContext, args: string[]): string {
 }
 
 function isSearchVisibleFile(path: string, root: string): boolean {
+  if (path.startsWith('/id/') && root !== '/id' && !root.startsWith('/id/')) {
+    return false;
+  }
   if (!isRawHvyFile(path)) {
     return true;
   }

@@ -729,6 +729,39 @@ Rules:
 - Unknown fields under `section_defaults` MUST be ignored.
 - Plain Markdown renderers ignore `section_defaults`.
 
+### 5.15 Document-level text line styles
+
+A `.hvy` or `.thvy` file MAY declare named text line styles in front matter under `text_line_styles`. Text line styles are source-visible markers for styling individual Markdown lines inside `text` components without splitting the content into multiple HVY components.
+
+#### Front matter shape
+
+```yaml
+text_line_styles:
+  role:
+    label: Role heading
+    css: "margin: 0.5rem 0 0.1rem; font-weight: 700;"
+  detail:
+    label: Detail line
+    css: "margin: 0 0 0.4rem; padding-left: 1.5rem;"
+```
+
+#### Marker syntax
+
+```markdown
+^role^ #### Foo
+^detail^ moo cow
+```
+
+Rules:
+- A marker has the form `^name^` at the start of a Markdown line. `name` MUST contain only ASCII letters, digits, `_`, or `-`.
+- The marker is source-only. Renderers that support `text_line_styles` MUST remove the marker from visible output and apply the referenced style to that rendered line.
+- `\^name^` escapes the marker and renders literal text.
+- Markers inside fenced code blocks MUST remain literal.
+- Unknown style names SHOULD render the line content normally. Authoring tools SHOULD show an editor warning so authors can catch typos.
+- `css` is an optional inline CSS declaration string and MUST be sanitized using the same rules as other document-supplied inline CSS.
+- Text line styles do not create HVY components, sections, component defaults, or component-level CSS. Component-level `css` continues to persist independently.
+- Plain Markdown renderers display the marker as plain text.
+
 ## 6. Template & Schema (`.thvy`)
 
 A `.thvy` file is a `.hvy` file. The only distinction is `template: true` in front matter.
@@ -1057,7 +1090,7 @@ Normative behavior:
 - Remote resource fetches MUST be gated behind user network permission.
 - Plugin installation MUST show `id` and `source` before trust is granted.
 - Clients MUST treat tail payload bytes as untrusted input and only hand them to the declared plugin after normal trust checks.
-- Renderers MUST sanitize document-supplied CSS (inline `css` fields, fenced `~~~css` blocks, `hvy:css` directives, `theme.colors` values, `component_defaults.*.css`, `section_defaults.css`, and section/block `css`) so it cannot trigger network fetches unless the user has explicitly enabled external CSS resources. Specifically, renderers MUST drop or neutralize `url(...)`, `image-set(...)`, `src(...)`, `src:` declarations, and the at-rules `@import`, `@font-face`, `@namespace`, and `@property`. Sanitization MUST decode CSS character escapes (e.g. `u\72l(...)` and `\55RL(...)`) before pattern matching so obfuscated forms are also blocked.
+- Renderers MUST sanitize document-supplied CSS (inline `css` fields, fenced `~~~css` blocks, `hvy:css` directives, `theme.colors` values, `component_defaults.*.css`, `section_defaults.css`, `text_line_styles.*.css`, and section/block `css`) so it cannot trigger network fetches unless the user has explicitly enabled external CSS resources. Specifically, renderers MUST drop or neutralize `url(...)`, `image-set(...)`, `src(...)`, `src:` declarations, and the at-rules `@import`, `@font-face`, `@namespace`, and `@property`. Sanitization MUST decode CSS character escapes (e.g. `u\72l(...)` and `\55RL(...)`) before pattern matching so obfuscated forms are also blocked.
 
 ## 9. Parsing Rules (Normative)
 

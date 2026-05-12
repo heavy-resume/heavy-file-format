@@ -24,6 +24,7 @@ const KNOWN_HEADER_METADATA_KEYS = new Set([
   'section_defs',
   'component_defaults',
   'section_defaults',
+  'text_line_styles',
   'plugins',
 ]);
 const DATABASE_SCHEMA_HEADER_KEYS = new Set(['tables', 'database', 'schema', 'columns']);

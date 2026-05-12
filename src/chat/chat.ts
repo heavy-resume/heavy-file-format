@@ -12,6 +12,7 @@ import { renderGridReader } from '../editor/components/grid/grid';
 import { ensureComponentListBlocks, ensureExpandableBlocks, ensureGridItems } from '../document-factory';
 import { isXrefTargetValid } from '../xref-ops';
 import { getDocumentComponentDefaultCss } from '../document-component-defaults';
+import { getTextLineStylesFromMeta } from '../text-line-styles';
 import { wrapChatResponseAsDocument } from './chat-response-document';
 import { getDocumentAiContext } from '../document-ai-context';
 import type { ProviderToolCall, ProviderToolDefinition, ProviderToolState } from './provider-tools';
@@ -1001,6 +1002,7 @@ function getChatReaderHelpers(documentMeta: VisualDocument['meta']): ComponentRe
     isExpandableEditorPanelOpen: () => false,
     isAdvancedEditorMode: () => false,
     isMobileAdjustmentMode: () => false,
+    getTextLineStyles: () => getTextLineStylesFromMeta(documentMeta),
   };
 }
 

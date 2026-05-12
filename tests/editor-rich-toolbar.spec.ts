@@ -173,6 +173,39 @@ test('toolbar block style row covers text and all heading buttons', async ({ pag
   }
 });
 
+test('text line style editor feeds the rich text toolbar', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Advanced' }).click();
+  await page.getByRole('button', { name: 'Document Meta' }).click();
+  await page.getByRole('button', { name: 'Add Style' }).click();
+  await page.locator('[data-field="text-line-style-name"]').fill('role');
+  await page.locator('[data-field="text-line-style-label"]').fill('Role heading');
+  await page.locator('[data-field="text-line-style-css"]').fill('margin: 12px 0 4px; padding-left: 18px; font-weight: 700;');
+  await page.getByRole('button', { name: 'Document Meta' }).click();
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('[data-field="block-rich"]').first();
+  await editor.evaluate((node) => {
+    node.innerHTML = '<p>Foo</p><p>moo cow</p>';
+    const paragraph = node.querySelector('p');
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(paragraph!);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+  });
+
+  await page.getByRole('button', { name: /Role heading/ }).click();
+
+  const styled = editor.locator('[data-hvy-text-line-style="role"]');
+  await expect(styled).toContainText('Foo');
+  await expect(styled).toHaveCSS('margin-top', '12px');
+  await expect(styled).toHaveCSS('padding-left', '18px');
+  await expect(styled.locator('.hvy-text-line-style-marker')).toHaveText('^role^');
+});
+
 test('heading enter exits to normal text and updates toolbar state', async ({ page }) => {
   await page.goto('/');
 

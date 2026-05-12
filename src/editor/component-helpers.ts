@@ -1,4 +1,5 @@
 import type { Align, BlockSchema, TableRow, VisualBlock, VisualSection } from './types';
+import type { TextLineStyles } from '../text-line-styles';
 
 export interface RichToolbarOptions {
   field?: string;
@@ -8,6 +9,7 @@ export interface RichToolbarOptions {
   includeFillIn?: boolean;
   align?: Align;
   currentMarkdown?: string;
+  textLineStyles?: TextLineStyles;
 }
 
 export interface XrefTargetOption {
@@ -45,6 +47,7 @@ export interface ComponentRenderHelpers {
   isExpandableEditorPanelOpen: (sectionKey: string, blockId: string, panel: 'stub' | 'expanded', fallback: boolean) => boolean;
   isAdvancedEditorMode: () => boolean;
   isMobileAdjustmentMode: () => boolean;
+  getTextLineStyles?: () => TextLineStyles;
 }
 
 export interface AddComponentPickerOptions {

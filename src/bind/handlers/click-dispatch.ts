@@ -59,7 +59,7 @@ export function bindClickDispatch(app: HTMLElement): void {
           if (!editable.contains(document.activeElement) && !hasSelectionInside(editable)) {
             editable.focus();
           }
-          applyRichAction(action, editable);
+          applyRichAction(action, editable, richButton.dataset.textLineStyleName);
         }
       }
       return;

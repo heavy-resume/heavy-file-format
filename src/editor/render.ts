@@ -34,6 +34,7 @@ import { getScriptingPluginVersion } from '../plugins/scripting/version';
 import { renderAddComponentPicker } from './component-picker';
 import { TEXT_FILL_IN_MARKER, getTextFillInPlaceholder, hasTextFillInMarker, splitTextFillIns } from '../text-fill-in';
 import { closeIcon, plusIcon } from '../icons';
+import { getTextLineStyleLabel, getTextLineStylesFromMeta, sanitizeTextLineStyleCss, type TextLineStyles } from '../text-line-styles';
 
 hljs.registerLanguage('bash', bash);
 hljs.registerLanguage('sh', bash);
@@ -153,6 +154,7 @@ export interface EditorRenderer {
       includeFillIn?: boolean;
       align?: Align;
       currentMarkdown?: string;
+      textLineStyles?: TextLineStyles;
     }
   ) => string;
   renderMetaPanel: () => string;
@@ -757,6 +759,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       includeFillIn?: boolean;
       align?: Align;
       currentMarkdown?: string;
+      textLineStyles?: TextLineStyles;
     }
   ): string {
     if (state.mobileAdjustmentMode) {
@@ -783,6 +786,8 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         )}" data-block-id="${deps.escapeAttr(blockId)}" aria-label="Align right" title="Align right"><span class="toolbar-icon align-right-icon" aria-hidden="true"></span></button>
           </div>`
         : '';
+    const textLineStyles = options?.textLineStyles ?? {};
+    const textLineStyleControls = renderTextLineStyleToolbar(textLineStyles, richButtonAttrs);
     return `
       <div class="rich-toolbar">
         <div class="toolbar-segment block-style-buttons" role="group" aria-label="Block style">
@@ -804,8 +809,40 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           <button type="button" class="icon-button${selectedClass(blockStyle === 'checklist')}" data-rich-action="checklist" ${richButtonAttrs} aria-label="Checkbox" title="Checkbox"><span class="toolbar-icon checkbox-icon" aria-hidden="true">☑</span></button>
           <button type="button" class="icon-button ghost" data-rich-action="link" ${richButtonAttrs} aria-label="Link" title="Link (${hotkeyModifier}+K)"><span class="toolbar-icon link-icon" aria-hidden="true"></span></button>
         </div>
+        ${textLineStyleControls}
       </div>
     `;
+  }
+
+  function renderTextLineStyleToolbar(styles: TextLineStyles, richButtonAttrs: string): string {
+    const names = Object.keys(styles).sort((left, right) => left.localeCompare(right, undefined, { sensitivity: 'base' }));
+    if (names.length === 0) {
+      return '';
+    }
+    return `<div class="toolbar-segment text-line-style-toolbar" role="group" aria-label="Text line styles">
+      <span class="text-line-style-toolbar-label">Line</span>
+      <button
+        type="button"
+        class="ghost text-line-style-pill text-line-style-clear"
+        data-rich-action="text-line-style"
+        data-text-line-style-name=""
+        ${richButtonAttrs}
+        title="Clear text line style"
+      >Clear</button>
+      ${names.map((name) => {
+        const style = styles[name];
+        const label = getTextLineStyleLabel(name, style);
+        const css = sanitizeTextLineStyleCss(style.css);
+        return `<button
+          type="button"
+          class="ghost text-line-style-pill"
+          data-rich-action="text-line-style"
+          data-text-line-style-name="${deps.escapeAttr(name)}"
+          ${richButtonAttrs}
+          title="${deps.escapeAttr(`Apply ${label}`)}"
+        ><span class="text-line-style-pill-mark">^${deps.escapeHtml(name)}^</span><span class="text-line-style-pill-sample" style="${deps.escapeAttr(css)}">${deps.escapeHtml(label)}</span></button>`;
+      }).join('')}
+    </div>`;
   }
 
   function getMarkdownBlockStyle(markdown: string): string {
@@ -832,6 +869,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const sectionDefs = deps.getSectionDefs();
     const theme = deps.getThemeConfig();
     const colorCount = Object.keys(theme.colors).length;
+    const textLineStyles = getTextLineStylesFromMeta(state.documentMeta);
     const tableBaseTypeOption = areTablesEnabled() || defs.some((def) => def.baseType === 'table');
     const descriptionPopulate = state.descriptionPopulate ?? { isRunning: false, status: null, completed: 0, total: 0, current: '', skippedLeaves: 0, lastGenerated: '' };
     return `
@@ -885,6 +923,13 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
               Edit Colors${colorCount > 0 ? ` (${colorCount} override${colorCount === 1 ? '' : 's'})` : ''}
             </button>
           </label>
+        </div>
+        <div class="meta-panel-head">
+          <strong>Text Line Styles</strong>
+          <button type="button" class="ghost" data-action="add-text-line-style">Add Style</button>
+        </div>
+        <div class="text-line-style-editor">
+          ${renderTextLineStyleEditorRows(textLineStyles)}
         </div>
         <div class="meta-panel-head">
           <strong>Component Definitions</strong>
@@ -956,6 +1001,39 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         </div>
       </section>
     `;
+  }
+
+  function renderTextLineStyleEditorRows(styles: TextLineStyles): string {
+    const names = Object.keys(styles).sort((left, right) => left.localeCompare(right, undefined, { sensitivity: 'base' }));
+    if (names.length === 0) {
+      return '<div class="muted text-line-style-empty">No text line styles yet. Add one to use ^name^ prefixes inside text blocks.</div>';
+    }
+    return names.map((name) => {
+      const style = styles[name];
+      const label = getTextLineStyleLabel(name, style);
+      const css = sanitizeTextLineStyleCss(style.css);
+      return `<article class="text-line-style-row" data-text-line-style-name="${deps.escapeAttr(name)}">
+        <div class="text-line-style-row-head">
+          <label>
+            <span>Name</span>
+            <input data-field="text-line-style-name" data-style-name="${deps.escapeAttr(name)}" value="${deps.escapeAttr(name)}" spellcheck="false" />
+          </label>
+          <button type="button" class="danger remove-x" data-action="remove-text-line-style" data-style-name="${deps.escapeAttr(name)}" aria-label="Remove ${deps.escapeAttr(name)}">${closeIcon()}</button>
+        </div>
+        <label>
+          <span>Label</span>
+          <input data-field="text-line-style-label" data-style-name="${deps.escapeAttr(name)}" value="${deps.escapeAttr(style.label)}" placeholder="${deps.escapeAttr(name)}" />
+        </label>
+        <label>
+          <span>CSS</span>
+          <textarea rows="2" data-field="text-line-style-css" data-style-name="${deps.escapeAttr(name)}" placeholder="margin: 0.5rem 0; padding-left: 1rem;">${deps.escapeHtml(style.css)}</textarea>
+        </label>
+        <div class="text-line-style-sample" style="${deps.escapeAttr(css)}">
+          <span class="text-line-style-sample-marker">^${deps.escapeHtml(name)}^</span>
+          <span>${deps.escapeHtml(label)}</span>
+        </div>
+      </article>`;
+    }).join('');
   }
 
   function renderBlockContentEditor(sectionKey: string, block: VisualBlock): string {
@@ -1295,7 +1373,10 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
 
   function renderTextFragment(content: string): string {
     const normalized = normalizeMarkdownIndentation(normalizeMarkdownLists(content));
-    return unwrapSingleParagraph(decorateMarkdownCodeBlocks(addExternalLinkTargets(markdownToReaderHtml(normalized)), deps.escapeHtml));
+    return unwrapSingleParagraph(decorateMarkdownCodeBlocks(addExternalLinkTargets(markdownToReaderHtml(normalized, {
+      textLineStyles: getTextLineStylesFromMeta(state.documentMeta),
+      textLineStyleMode: state.currentView === 'editor' ? 'editor' : 'viewer',
+    })), deps.escapeHtml));
   }
 
   function renderComponentFragment(componentName: string, content: string, block: VisualBlock): string {

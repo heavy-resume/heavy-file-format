@@ -1,6 +1,7 @@
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import TurndownService from 'turndown';
+import { getTextLineStyleLabel, sanitizeTextLineStyleCss, type TextLineStyles } from './text-line-styles';
 
 marked.setOptions({ gfm: true, breaks: false });
 
@@ -56,12 +57,34 @@ turndown.addRule('hvy-nowrap-annotation', {
   },
 });
 
-export function markdownToEditorHtml(markdown: string): string {
+turndown.addRule('hvy-text-line-style-marker', {
+  filter: (node) => node.nodeType === 1 && (node as Element).classList.contains('hvy-text-line-style-marker'),
+  replacement: () => '',
+});
+
+turndown.addRule('hvy-text-line-style', {
+  filter: (node) => node.nodeType === 1 && (node as Element).getAttribute('data-hvy-text-line-style') !== null,
+  replacement: (content, node) => {
+    const name = (node as Element).getAttribute('data-hvy-text-line-style') ?? '';
+    const trimmed = content.replace(/\n{3,}/g, '\n\n').trim();
+    return name && trimmed ? `\n\n^${name}^ ${trimmed}\n\n` : `\n\n${trimmed}\n\n`;
+  },
+});
+
+export interface MarkdownRenderOptions {
+  textLineStyles?: TextLineStyles;
+  textLineStyleMode?: 'viewer' | 'editor';
+}
+
+export function markdownToEditorHtml(markdown: string, options: MarkdownRenderOptions = {}): string {
   const normalized = normalizeMarkdownIndentation(markdown || '');
   const annotations = extractResponsiveAnnotations(normalized, { editable: true });
-  const html = addExternalLinkTargets(sanitizeHtml(marked.parse(applyUnderlineSyntax(escapeRawHtml(annotations.markdown))) as string));
+  const html = renderMarkdownHtml(annotations.markdown, {
+    textLineStyles: options.textLineStyles ?? {},
+    textLineStyleMode: options.textLineStyleMode ?? 'editor',
+  });
   const template = document.createElement('template');
-  template.innerHTML = restoreResponsiveAnnotationTokens(html, annotations.tokens);
+  template.innerHTML = addExternalLinkTargets(restoreResponsiveAnnotationTokens(html, annotations.tokens));
   template.content.querySelectorAll<HTMLElement>('pre > code').forEach((code) => {
     const languageClass = Array.from(code.classList).find((className) => className.startsWith('language-'));
     const language = languageClass ? languageClass.slice('language-'.length) : code.dataset.language || 'text';
@@ -82,10 +105,103 @@ export function markdownToMobileAdjustmentEditorHtml(markdown: string): string {
   return markdownToEditorHtml(markdown);
 }
 
-export function markdownToReaderHtml(markdown: string): string {
+export function markdownToReaderHtml(markdown: string, options: MarkdownRenderOptions = {}): string {
   const annotations = extractResponsiveAnnotations(markdown || '', { editable: false });
-  const html = sanitizeHtml(marked.parse(applyUnderlineSyntax(escapeRawHtml(annotations.markdown))) as string);
+  const html = renderMarkdownHtml(annotations.markdown, {
+    textLineStyles: options.textLineStyles ?? {},
+    textLineStyleMode: options.textLineStyleMode ?? 'viewer',
+  });
   return restoreResponsiveAnnotationTokens(html, annotations.tokens);
+}
+
+function renderMarkdownHtml(markdown: string, options: Required<MarkdownRenderOptions>): string {
+  const segments = splitTextLineStyleSegments(markdown);
+  if (segments.length === 1 && segments[0]?.kind === 'markdown') {
+    return sanitizeHtml(marked.parse(applyUnderlineSyntax(escapeRawHtml(markdown))) as string);
+  }
+  return segments
+    .map((segment) => {
+      if (segment.kind === 'markdown') {
+        return sanitizeHtml(marked.parse(applyUnderlineSyntax(escapeRawHtml(segment.markdown))) as string);
+      }
+      const lineHtml = sanitizeHtml(marked.parse(applyUnderlineSyntax(escapeRawHtml(segment.markdown))) as string);
+      const style = options.textLineStyles[segment.name];
+      if (!style && options.textLineStyleMode !== 'editor') {
+        return lineHtml;
+      }
+      const marker = options.textLineStyleMode === 'editor'
+        ? `<span class="hvy-text-line-style-marker" contenteditable="false">^${escapeHtml(segment.name)}^</span>`
+        : '';
+      const unknown = !style ? ' is-unknown' : '';
+      const label = getTextLineStyleLabel(segment.name, style);
+      const css = style ? sanitizeTextLineStyleCss(style.css) : '';
+      return `<div class="hvy-text-line-style${unknown}" data-hvy-text-line-style="${escapeHtml(segment.name)}" data-hvy-text-line-style-label="${escapeHtml(label)}" style="${escapeHtml(css)}">${marker}${lineHtml}</div>`;
+    })
+    .join('');
+}
+
+type TextLineStyleSegment =
+  | { kind: 'markdown'; markdown: string }
+  | { kind: 'styled-line'; name: string; markdown: string };
+
+function splitTextLineStyleSegments(markdown: string): TextLineStyleSegment[] {
+  const lines = markdown.split(/\r?\n/);
+  const segments: TextLineStyleSegment[] = [];
+  const pending: string[] = [];
+  let fence: { marker: '`' | '~'; length: number } | null = null;
+
+  const flushPending = (): void => {
+    if (pending.length === 0) {
+      return;
+    }
+    segments.push({ kind: 'markdown', markdown: pending.join('\n') });
+    pending.length = 0;
+  };
+
+  for (const line of lines) {
+    const fenceLine = parseTextLineStyleFence(line);
+    if (fence) {
+      pending.push(line);
+      if (fenceLine && fenceLine.marker === fence.marker && fenceLine.length >= fence.length) {
+        fence = null;
+      }
+      continue;
+    }
+    if (fenceLine) {
+      fence = fenceLine;
+      pending.push(line);
+      continue;
+    }
+
+    const escaped = line.match(/^(\\\^)([a-z0-9_-]+)\^\s?(.*)$/i);
+    if (escaped) {
+      pending.push(`^${escaped[2]}^${escaped[3] ? ` ${escaped[3]}` : ''}`);
+      continue;
+    }
+
+    const match = line.match(/^\^([a-z0-9_-]+)\^\s?(.*)$/i);
+    if (!match) {
+      pending.push(line);
+      continue;
+    }
+    flushPending();
+    const name = match[1] ?? '';
+    const markdownLine = match[2] ?? '';
+    segments.push({ kind: 'styled-line', name, markdown: markdownLine });
+  }
+
+  flushPending();
+  return segments;
+}
+
+function parseTextLineStyleFence(line: string): { marker: '`' | '~'; length: number } | null {
+  const match = line.trim().match(/^([`~]{3,})(?:[\w-]+)?\s*$/);
+  if (!match) {
+    return null;
+  }
+  const fence = match[1] ?? '';
+  const marker = fence[0] as '`' | '~' | undefined;
+  return marker ? { marker, length: fence.length } : null;
 }
 
 function sanitizeHtml(html: string): string {

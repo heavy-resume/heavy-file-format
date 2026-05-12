@@ -11,7 +11,7 @@ import { syncReusableTemplateForBlock } from './reusable';
 import { normalizeXrefTarget, getXrefTargetOptions, isXrefTargetValid } from './xref-ops';
 import { getTableColumns, setTableColumns } from './table-ops';
 import { coerceGridColumns } from './grid-ops';
-import { applyMobileAltAdjustment, normalizeEditorMarkdownWhitespace, normalizeMarkdownLists, markdownToEditorHtml, turndown } from './markdown';
+import { applyMobileAltAdjustment, normalizeEditorMarkdownWhitespace, normalizeMarkdownLists, markdownToEditorHtml as renderMarkdownToEditorHtml, turndown } from './markdown';
 import { renderAddComponentPicker } from './editor/component-picker';
 import { escapeAttr, escapeHtml, getInlineEditableText, renderOption } from './utils';
 import { recordHistory } from './history';
@@ -19,6 +19,7 @@ import { getDocumentComponentDefaultCss } from './document-component-defaults';
 import { resetDbTableViewState } from './plugins/db-table';
 import { handleInlineCheckboxBackspace } from './editor/inline-checkbox';
 import { TEXT_FILL_IN_MARKER, hasTextFillInMarker } from './text-fill-in';
+import { getTextLineStylesFromMeta, sanitizeTextLineStyleCss } from './text-line-styles';
 
 export function findBlockByIds(sectionKey: string, blockId: string): VisualBlock | null {
   const sqliteRowComponentBlock = findSqliteRowComponentBlock(sectionKey, blockId);
@@ -740,7 +741,10 @@ export function getComponentRenderHelpers(editorRenderer: {
   return {
     escapeAttr,
     escapeHtml,
-    markdownToEditorHtml,
+    markdownToEditorHtml: (markdown) => renderMarkdownToEditorHtml(markdown, {
+      textLineStyles: getTextLineStylesFromMeta(state.document.meta),
+      textLineStyleMode: 'editor',
+    }),
     renderRichToolbar: editorRenderer.renderRichToolbar,
     renderEditorBlock: (sectionKey, block, parentLocked) => editorRenderer.renderEditorBlock(sectionKey, block, state.document.sections, parentLocked),
     renderPassiveEditorBlock: (sectionKey, block) => editorRenderer.renderPassiveEditorBlock(sectionKey, block, state.document.sections),
@@ -768,12 +772,19 @@ export function getComponentRenderHelpers(editorRenderer: {
       state.expandableEditorPanels[`${sectionKey}:${blockId}`]?.[panel === 'stub' ? 'stubOpen' : 'expandedOpen'] ?? fallback,
     isAdvancedEditorMode: () => state.showAdvancedEditor,
     isMobileAdjustmentMode: () => state.editorMode === 'mobile-adjustment',
+    getTextLineStyles: () => getTextLineStylesFromMeta(state.document.meta),
   };
 }
 
 export function applyRichAction(action: string, editable: HTMLElement, value?: string): void {
   if (action === 'fill-in') {
     applyTextFillInSlot(editable);
+    return;
+  }
+  if (action === 'text-line-style') {
+    applyTextLineStyleToSelection(editable, value ?? '');
+    updateRichToolbarState(editable);
+    editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
     return;
   }
   const annotationAction = normalizeAnnotationAction(action);
@@ -830,6 +841,122 @@ export function applyRichAction(action: string, editable: HTMLElement, value?: s
   updateRichToolbarState(editable);
   const inputEvent = new InputEvent('input', { bubbles: true });
   editable.dispatchEvent(inputEvent);
+}
+
+function applyTextLineStyleToSelection(editable: HTMLElement, styleName: string): void {
+  if (editable.dataset.field !== 'block-rich') {
+    return;
+  }
+  const range = getEditableSelectionRange(editable);
+  const targets = getSelectedTextLineStyleBlocks(editable, range);
+  for (const target of targets) {
+    setTextLineStyleBlock(target, editable, styleName);
+  }
+}
+
+function getSelectedTextLineStyleBlocks(editable: HTMLElement, range: Range | null): HTMLElement[] {
+  if (!range) {
+    const block = getSelectionTextLineStyleBlock(editable);
+    return block ? [block] : [];
+  }
+  if (range.collapsed) {
+    const block = getSelectionTextLineStyleBlock(editable);
+    return block ? [block] : [];
+  }
+  const blocks = Array.from(editable.children).filter((child): child is HTMLElement => child instanceof HTMLElement);
+  const selected = blocks.filter((block) => range.intersectsNode(block));
+  if (selected.length > 0) {
+    return selected;
+  }
+  const block = getSelectionTextLineStyleBlock(editable);
+  return block ? [block] : [];
+}
+
+function getSelectionTextLineStyleBlock(editable: HTMLElement): HTMLElement | null {
+  const range = getEditableSelectionRange(editable);
+  if (!range) {
+    return null;
+  }
+  const styled = getAncestorElement(range.startContainer, editable, '[data-hvy-text-line-style]');
+  if (styled) {
+    return styled;
+  }
+  const block = getSelectionBlockElement(editable);
+  if (!block || block === editable) {
+    return null;
+  }
+  const direct = getDirectEditableChild(block, editable);
+  return direct ?? block;
+}
+
+function setTextLineStyleBlock(block: HTMLElement, editable: HTMLElement, styleName: string): void {
+  const current = block.matches('[data-hvy-text-line-style]') ? block : null;
+  const styles = getTextLineStylesFromMeta(state.document.meta);
+  const style = styles[styleName];
+  const css = style ? sanitizeTextLineStyleCss(style.css) : '';
+  const label = style?.label.trim() || styleName;
+  if (!styleName) {
+    if (current) {
+      unwrapTextLineStyleBlock(current);
+    }
+    return;
+  }
+  if (current) {
+    current.dataset.hvyTextLineStyle = styleName;
+    current.dataset.hvyTextLineStyleLabel = label;
+    current.setAttribute('style', css);
+    current.classList.toggle('is-unknown', !style);
+    const marker = current.querySelector<HTMLElement>(':scope > .hvy-text-line-style-marker');
+    if (marker) {
+      marker.textContent = `^${styleName}^`;
+    } else {
+      current.prepend(createTextLineStyleMarker(styleName));
+    }
+    return;
+  }
+  const wrapper = editable.ownerDocument.createElement('div');
+  wrapper.className = 'hvy-text-line-style';
+  wrapper.dataset.hvyTextLineStyle = styleName;
+  wrapper.dataset.hvyTextLineStyleLabel = label;
+  wrapper.setAttribute('style', css);
+  wrapper.classList.toggle('is-unknown', !style);
+  wrapper.appendChild(createTextLineStyleMarker(styleName));
+  block.replaceWith(wrapper);
+  wrapper.appendChild(block);
+}
+
+function createTextLineStyleMarker(styleName: string): HTMLElement {
+  const marker = document.createElement('span');
+  marker.className = 'hvy-text-line-style-marker';
+  marker.contentEditable = 'false';
+  marker.textContent = `^${styleName}^`;
+  return marker;
+}
+
+function unwrapTextLineStyleBlock(wrapper: HTMLElement): void {
+  wrapper.querySelector(':scope > .hvy-text-line-style-marker')?.remove();
+  const parent = wrapper.parentNode;
+  if (!parent) {
+    return;
+  }
+  while (wrapper.firstChild) {
+    parent.insertBefore(wrapper.firstChild, wrapper);
+  }
+  wrapper.remove();
+}
+
+function getDirectEditableChild(element: HTMLElement, editable: HTMLElement): HTMLElement | null {
+  let current: HTMLElement | null = element;
+  while (current?.parentElement && current.parentElement !== editable) {
+    current = current.parentElement;
+  }
+  return current && current.parentElement === editable ? current : null;
+}
+
+function getAncestorElement(node: Node, boundary: HTMLElement, selector: string): HTMLElement | null {
+  const element = node instanceof HTMLElement ? node : node.parentElement;
+  const match = element?.closest<HTMLElement>(selector) ?? null;
+  return match && boundary.contains(match) ? match : null;
 }
 
 function applyTextFillInSlot(editable: HTMLElement): void {
@@ -2209,7 +2336,10 @@ export function syncEditableTaskListMarkup(editable: HTMLElement, markdown: stri
     return;
   }
 
-  editable.innerHTML = markdownToEditorHtml(markdown);
+  editable.innerHTML = renderMarkdownToEditorHtml(markdown, {
+    textLineStyles: getTextLineStylesFromMeta(state.document.meta),
+    textLineStyleMode: 'editor',
+  });
   placeCaretAtEnd(editable);
 }
 

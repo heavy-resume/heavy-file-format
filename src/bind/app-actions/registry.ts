@@ -6,6 +6,7 @@ import { editorStateActions } from './editor-state';
 import { reusableActions } from './reusable';
 import { searchActions } from './search';
 import { buttonActions } from './button';
+import { textLineStyleActions } from './text-line-style';
 import type { AppActionHandler } from './types';
 
 export const appActionRegistry: Record<string, AppActionHandler> = {
@@ -17,4 +18,5 @@ export const appActionRegistry: Record<string, AppActionHandler> = {
   ...reusableActions,
   ...searchActions,
   ...buttonActions,
+  ...textLineStyleActions,
 };

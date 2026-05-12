@@ -1454,19 +1454,47 @@
 }
 
 .template-grid,
-.component-defs {
+.component-defs,
+.text-line-style-editor {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 0.5rem;
 }
 
 .template-item,
-.component-def {
+.component-def,
+.text-line-style-row {
   border: 1px dashed var(--hvy-border-alt);
   border-radius: 8px;
   padding: 0.5rem;
   display: grid;
   gap: 0.4rem;
+}
+
+.text-line-style-row {
+  background: color-mix(in srgb, var(--hvy-surface) 82%, transparent);
+}
+
+.text-line-style-row-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.45rem;
+  align-items: end;
+}
+
+.text-line-style-sample {
+  display: flex;
+  align-items: baseline;
+  gap: 0.45rem;
+  min-width: 0;
+  border: 1px solid var(--hvy-border-translucent);
+  border-radius: 7px;
+  background: var(--hvy-surface);
+  padding: 0.45rem;
+}
+
+.text-line-style-empty {
+  grid-column: 1 / -1;
 }
 
 .meta-panel-head {

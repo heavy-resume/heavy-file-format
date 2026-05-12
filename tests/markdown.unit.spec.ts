@@ -83,6 +83,50 @@ test('renders and serializes hvy nowrap annotations', () => {
   );
 });
 
+test('renders text line style markers as styled source-only wrappers', () => {
+  const html = markdownToReaderHtml('^role^ #### Foo', {
+    textLineStyles: {
+      role: { label: 'Role heading', css: 'margin: 0.5rem 0; background-image: url("bad"); font-weight: 700;' },
+    },
+  });
+
+  expect(html).toContain('data-hvy-text-line-style="role"');
+  expect(html).toContain('font-weight: 700');
+  expect(html).not.toContain('url(');
+  expect(html).toContain('<h4>Foo</h4>');
+  expect(html).not.toContain('^role^');
+});
+
+test('renders unknown text line styles as normal viewer content', () => {
+  const html = markdownToReaderHtml('^missing^ #### Foo', { textLineStyles: {} });
+
+  expect(html).not.toContain('data-hvy-text-line-style');
+  expect(html).toContain('<h4>Foo</h4>');
+  expect(html).not.toContain('^missing^');
+});
+
+test('preserves escaped and fenced text line style markers as literal text', () => {
+  const escaped = markdownToReaderHtml('\\^role^ literal', {
+    textLineStyles: { role: { label: 'Role', css: 'font-weight: 700;' } },
+  });
+  const fenced = markdownToReaderHtml('```md\n^role^ literal\n```', {
+    textLineStyles: { role: { label: 'Role', css: 'font-weight: 700;' } },
+  });
+
+  expect(escaped).toContain('^role^ literal');
+  expect(escaped).not.toContain('data-hvy-text-line-style');
+  expect(fenced).toContain('^role^ literal');
+  expect(fenced).not.toContain('data-hvy-text-line-style');
+});
+
+test('serializes editor text line style wrappers back to markers', () => {
+  expect(
+    turndown.turndown(
+      '<div class="hvy-text-line-style" data-hvy-text-line-style="role"><span class="hvy-text-line-style-marker">^role^</span><h4>Foo</h4></div>'
+    )
+  ).toBe('^role^ #### Foo');
+});
+
 test('converts markdown headings into HVY section hierarchy', () => {
   const document = convertMarkdownToHvyDocument(`# Project Brief
 

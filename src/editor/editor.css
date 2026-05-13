@@ -1112,6 +1112,14 @@
   box-shadow: 0 6px 14px var(--hvy-shadow);
 }
 
+#aiReaderDocument .editor-block[data-active-editor-block="true"] {
+  z-index: 4;
+}
+
+#aiReaderDocument .editor-block[data-active-editor-block="true"] .editor-block-remove-button {
+  z-index: 5;
+}
+
 .editor-section-card .editor-section-head .editor-section-remove-button {
   position: absolute;
   top: -0.85rem;

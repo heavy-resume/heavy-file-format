@@ -520,6 +520,12 @@ hvy_version: 0.1
   await page.getByRole('button', { name: 'Edit component' }).click();
   const activeEditor = page.locator('#aiReaderDocument .editor-block[data-active-editor-block="true"]');
   await expect(activeEditor.locator('.rich-editor')).toContainText('Stub summary');
+  await page.locator('#aiReaderDocument .reader-block-expandable').hover();
+  const hoverBorderContent = await activeEditor.locator('.editor-block-remove-button').evaluate((button) => {
+    const expandable = button.closest('.reader-block-expandable') as HTMLElement;
+    return getComputedStyle(expandable, '::after').content;
+  });
+  expect(hoverBorderContent).toBe('none');
 
   await activeEditor.getByRole('button', { name: 'Cancel' }).click();
   await expect(page.locator('#aiReaderDocument .editor-block[data-active-editor-block="true"]')).toHaveCount(0);

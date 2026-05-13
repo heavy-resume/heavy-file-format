@@ -336,6 +336,10 @@
   z-index: 3;
 }
 
+#aiReaderDocument .reader-block-expandable[data-reader-action="toggle-expandable"]:has(.editor-block[data-active-editor-block="true"]):hover::after {
+  content: none;
+}
+
 .expandable-pane {
   padding-left: 0.7rem;
   border-left: 4px solid transparent;

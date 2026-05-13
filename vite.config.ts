@@ -27,6 +27,7 @@ interface HvyBuildPluginObjectConfig {
 
 interface HvyBuiltInPluginDefinition {
   id: HvyBuiltInPluginId;
+  key: string;
   exportName: string;
   modulePath: string;
 }
@@ -34,21 +35,25 @@ interface HvyBuiltInPluginDefinition {
 const HVY_BUILT_IN_PLUGIN_DEFINITIONS: HvyBuiltInPluginDefinition[] = [
   {
     id: 'dev.heavy.db-table',
+    key: 'dbTable',
     exportName: 'dbTablePluginRegistration',
     modulePath: 'src/plugins/db-table-plugin.ts',
   },
   {
     id: 'dev.heavy.form',
+    key: 'form',
     exportName: 'formPluginRegistration',
     modulePath: 'src/plugins/form.ts',
   },
   {
     id: 'dev.heavy.progress-bar',
+    key: 'progressBar',
     exportName: 'progressBarPluginRegistration',
     modulePath: 'src/plugins/progress-bar.ts',
   },
   {
     id: 'dev.heavy.scripting',
+    key: 'scripting',
     exportName: 'scriptingPluginRegistration',
     modulePath: 'src/plugins/scripting/scripting.ts',
   },
@@ -165,7 +170,6 @@ export function createHvyBuiltInPluginsPlugin(env: Record<string, string>): Plug
         const importPath = JSON.stringify(`/${resolve(process.cwd(), definition.modulePath)}`);
         return `import { ${definition.exportName} as plugin${index} } from ${importPath};`;
       });
-      const registerCalls = selected.map((_definition, index) => `  register(plugin${index});`);
       const scriptingEnabled = selectedIdSet.has('dev.heavy.scripting');
       const scriptingHelpers = scriptingEnabled
         ? [
@@ -182,10 +186,13 @@ export function createHvyBuiltInPluginsPlugin(env: Record<string, string>): Plug
       return [
         ...imports,
         `export const builtInPluginIds = ${JSON.stringify(selectedIds)};`,
-        `export function isBuiltInPluginEnabled(pluginId) { return builtInPluginIds.includes(pluginId); }`,
-        `export function registerBuiltInPlugins(register) {`,
-        ...registerCalls,
-        `}`,
+        `export const builtInPlugins = [${selected.map((_definition, index) => `plugin${index}`).join(', ')}];`,
+        `export const builtInPluginMap = Object.freeze({`,
+        ...selected.map((definition, index) => `  ${definition.key}: plugin${index},`),
+        `});`,
+        `export const builtInPluginById = Object.freeze({`,
+        ...selected.map((definition, index) => `  ${JSON.stringify(definition.id)}: plugin${index},`),
+        `});`,
         scriptingHelpers,
       ].join('\n');
     },

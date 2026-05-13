@@ -11,8 +11,14 @@ declare module 'virtual:hvy-built-in-plugins' {
   import type { VisualDocument } from './types';
 
   export const builtInPluginIds: string[];
-  export function isBuiltInPluginEnabled(pluginId: string): boolean;
-  export function registerBuiltInPlugins(register: (registration: HvyPluginRegistration) => void): void;
+  export const builtInPlugins: HvyPluginRegistration[];
+  export const builtInPluginMap: Readonly<{
+    dbTable?: HvyPluginRegistration;
+    form?: HvyPluginRegistration;
+    progressBar?: HvyPluginRegistration;
+    scripting?: HvyPluginRegistration;
+  }>;
+  export const builtInPluginById: Readonly<Record<string, HvyPluginRegistration | undefined>>;
   export function runBuiltInScriptingPlugin(params: {
     document: VisualDocument;
     source: string;

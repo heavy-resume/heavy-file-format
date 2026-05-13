@@ -133,8 +133,9 @@ npm run build
 npm run preview
 ```
 
-Built-in plugins are selected at build time from `hvy.build.json`. The default
-config includes every bundled plugin:
+Built-in plugin registration objects are selected at build time from
+`hvy.build.json`. The default config includes every bundled plugin in the output
+file, but plugins are not enabled automatically:
 
 ```json
 {
@@ -151,6 +152,27 @@ Use `HVY_BUILD_PLUGINS=dev.heavy.form,dev.heavy.progress-bar npm run build` for
 a one-off override, or `HVY_BUILD_CONFIG=path/to/config.json` to point at another
 config file. Config files may also use `include` and `exclude` arrays with the
 same plugin ids.
+
+Embedded hosts enable plugins per mount:
+
+```js
+HVY.mountHvy({
+  root,
+  document,
+  plugins: [HVY.plugins.progressBar],
+});
+```
+
+Third-party plugins use the same `HvyPluginRegistration` shape and can be mixed
+with bundled registrations:
+
+```js
+HVY.mountHvy({
+  root,
+  document,
+  plugins: [customPlugin, HVY.plugins.form],
+});
+```
 
 ## Notes
 

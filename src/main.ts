@@ -29,12 +29,10 @@ import { createDefaultChatState, renderChatPanel } from './chat/chat';
 import { renderAiEditPopover, renderAiModeHint } from './ai-mode-ui';
 import { captureChatThreadScroll, restoreChatThreadScroll } from './chat/chat-thread-ui';
 import { loadResumeState, saveResumeState } from './state-persistence';
-import { registerHostPlugin, SCRIPTING_PLUGIN_ID } from './plugins/registry';
+import { getHostPlugin, SCRIPTING_PLUGIN_ID } from './plugins/registry';
 import { reconcilePluginMounts, capturePluginFocus } from './plugins/mount';
 import {
   getBuiltInScriptingPluginVersion,
-  isBuiltInPluginEnabled,
-  registerBuiltInPlugins,
   runBuiltInScriptingPlugin,
   setBuiltInScriptingResult,
 } from 'virtual:hvy-built-in-plugins';
@@ -974,18 +972,13 @@ initCallbacks({
   readerRenderer,
 });
 
-// Register the reference-implementation built-in plugins. Hosts that embed
-// this codebase can call setHostPlugins / registerHostPlugin before first
-// render to add their own.
-registerBuiltInPlugins(registerHostPlugin);
-
 // Run scripting blocks once per loaded document. Re-runs whenever the
 // document reference or script source changes (file open, raw edit, new doc, etc.).
 let lastScriptedDocument: typeof state.document | null = null;
 let lastScriptedSignature = '';
 
 async function runScriptingBlocksIfNeeded(): Promise<void> {
-  if (!isBuiltInPluginEnabled(SCRIPTING_PLUGIN_ID)) {
+  if (!getHostPlugin(SCRIPTING_PLUGIN_ID)) {
     return;
   }
   if (state.currentView !== 'viewer' && state.currentView !== 'ai') {

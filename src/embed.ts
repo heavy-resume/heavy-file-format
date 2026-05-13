@@ -44,14 +44,15 @@ import { bindUi } from './bind-ui';
 import { bindClickActions } from './bind/handlers/click-actions';
 import { bindInputBlock } from './bind/handlers/input-block';
 import { capturePluginFocus, reconcilePluginMounts } from './plugins/mount';
-import { registerHostPlugin, SCRIPTING_PLUGIN_ID } from './plugins/registry';
+import { getHostPlugin, SCRIPTING_PLUGIN_ID, setHostPlugins } from './plugins/registry';
 import {
+  builtInPluginMap,
+  builtInPlugins,
   getBuiltInScriptingPluginVersion,
-  isBuiltInPluginEnabled,
-  registerBuiltInPlugins,
   runBuiltInScriptingPlugin,
   setBuiltInScriptingResult,
 } from 'virtual:hvy-built-in-plugins';
+import type { HvyPluginRegistration } from './plugins/types';
 import { runButtonVisibilityScripts } from './editor/components/button/button-actions';
 import { visitBlocksInList } from './section-ops';
 import { createDefaultChatState } from './chat/chat';
@@ -67,6 +68,7 @@ export interface HvyMountOptions {
   root: HTMLElement;
   document: VisualDocument;
   mode?: HvyEmbedMode;
+  plugins?: HvyPluginRegistration[];
   showAdvancedEditor?: boolean;
   chatClient?: HostChatClient | null;
   controls?: boolean;
@@ -398,7 +400,7 @@ function refreshReaderPanels(): void {
 function refreshModalPreview(): void {}
 
 async function runScriptingBlocksIfNeeded(): Promise<void> {
-  if (!isBuiltInPluginEnabled(SCRIPTING_PLUGIN_ID)) return;
+  if (!getHostPlugin(SCRIPTING_PLUGIN_ID)) return;
   if (state.currentView !== 'viewer' && state.currentView !== 'ai') return;
   const targets: Array<{ sectionKey: string; blockId: string; source: string; pluginVersion: string; componentId: string }> = [];
   for (const section of state.document.sections) {
@@ -448,7 +450,7 @@ function visitBlocksInSection(
   }
 }
 
-function ensureEmbedRuntime(): void {
+function ensureEmbedRuntime(plugins: HvyPluginRegistration[]): void {
   ensureRenderers();
   initCallbacks({
     renderApp,
@@ -457,7 +459,7 @@ function ensureEmbedRuntime(): void {
     componentRenderHelpers: localGetComponentRenderHelpers(),
     readerRenderer,
   });
-  registerBuiltInPlugins(registerHostPlugin);
+  setHostPlugins(plugins);
   initColorModeSync();
 }
 
@@ -470,12 +472,13 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
     state.paletteOverrideId = options.paletteId;
   }
   setHostChatClient(options.chatClient ?? window.HVY_CHAT_CLIENT ?? null);
-  ensureEmbedRuntime();
+  ensureEmbedRuntime(options.plugins ?? []);
   renderApp();
   return {
     destroy() {
       options.root.innerHTML = '';
       setHostChatClient(null);
+      setHostPlugins([]);
       if (currentRoot === options.root) {
         currentRoot = null;
         setThemeRoot(null);
@@ -494,7 +497,7 @@ export function mountHvyViewer(options: Omit<HvyMountOptions, 'mode'>): HvyMount
   return mountHvy({ ...options, mode: 'viewer' });
 }
 
-export { deserializeDocumentBytes, serializeDocument };
+export { builtInPluginMap as plugins, builtInPlugins, deserializeDocumentBytes, serializeDocument };
 
 declare global {
   interface Window {
@@ -503,6 +506,8 @@ declare global {
       serializeDocument: typeof serializeDocument;
       mountHvy: typeof mountHvy;
       mountHvyViewer: typeof mountHvyViewer;
+      plugins: typeof builtInPluginMap;
+      builtInPlugins: typeof builtInPlugins;
     };
     HVY_CHAT_CLIENT?: HostChatClient;
   }
@@ -513,4 +518,6 @@ window.HVY = {
   serializeDocument,
   mountHvy,
   mountHvyViewer,
+  plugins: builtInPluginMap,
+  builtInPlugins,
 };

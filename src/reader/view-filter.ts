@@ -1,6 +1,7 @@
 import type { VisualBlock, VisualSection } from '../editor/types';
 import type { ReaderViewFilter, ReaderViewModifier, VisualDocument } from '../types';
 import { findBlockForVirtualDirectory, findSectionForVirtualDirectory } from '../cli-core/virtual-file-system';
+import { isSectionHiddenByTemplateMarker } from '../template-hide';
 
 export type ReaderViewTargetKind = 'section' | 'block';
 export type ReaderViewTargetKey = `${ReaderViewTargetKind}:${string}`;
@@ -160,7 +161,7 @@ function collectReaderViewTargets(sections: VisualSection[]): {
     }
   };
   const visitSection = (section: VisualSection, parent?: ReaderViewTargetKey): void => {
-    if (section.isGhost) {
+    if (section.isGhost || isSectionHiddenByTemplateMarker(section)) {
       return;
     }
     const targetKey = getSectionReaderViewTargetKey(section);

@@ -764,6 +764,7 @@ function createSection(id: string, title: string, level: number): VisualSection 
     tags: '',
     description: '',
     location: 'main',
+    hideIfUnmodified: false,
     blocks: [],
     children: [],
   };

@@ -29,6 +29,7 @@ import { parseAttachedComponentBlocks } from '../plugins/db-table';
 import { SCRIPTING_PLUGIN_ID } from '../plugins/registry';
 import { getComponentDefsFromMeta } from '../component-defs';
 import { extractReusableTemplateVariablesFromDefinition } from '../reusable-template-values';
+import { filterTemplateVisibleSections, isSectionHiddenByTemplateMarker } from '../template-hide';
 import { plusIcon } from '../icons';
 import {
   createReaderViewContext,
@@ -115,11 +116,12 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
   function withReaderViewContext(render: () => string): string {
     const previous = activeReaderViewContext;
     const previousSearch = activeSearchFilterContext;
+    const sections = getViewerContextSections();
     activeReaderViewContext = createReaderViewContext(
-      { meta: state.documentMeta, extension: '.hvy', sections: state.documentSections, attachments: [] },
+      { meta: state.documentMeta, extension: '.hvy', sections, attachments: [] },
       state.readerView
     );
-    activeSearchFilterContext = createSearchFilterContext(state.documentSections, state.search);
+    activeSearchFilterContext = createSearchFilterContext(sections, state.search);
     try {
       return render();
     } finally {
@@ -131,7 +133,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
   function getActiveReaderViewContext(): ReaderViewContext {
     if (!activeReaderViewContext) {
       return createReaderViewContext(
-        { meta: state.documentMeta, extension: '.hvy', sections: state.documentSections, attachments: [] },
+        { meta: state.documentMeta, extension: '.hvy', sections: getViewerContextSections(), attachments: [] },
         state.readerView
       );
     }
@@ -139,7 +141,14 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
   }
 
   function getActiveSearchFilterContext(): SearchFilterContext {
-    return activeSearchFilterContext ?? createSearchFilterContext(state.documentSections, state.search);
+    return activeSearchFilterContext ?? createSearchFilterContext(getViewerContextSections(), state.search);
+  }
+
+  function getViewerContextSections(): VisualSection[] {
+    if (state.currentView !== 'viewer') {
+      return state.documentSections;
+    }
+    return filterTemplateVisibleSections(state.documentSections);
   }
 
   function renderNavigation(sections: VisualSection[]): string {
@@ -484,7 +493,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
   }
 
   function isViewerHiddenSection(section: VisualSection): boolean {
-    return state.currentView === 'viewer' && section.editorOnly;
+    return state.currentView === 'viewer' && (section.editorOnly || isSectionHiddenByTemplateMarker(section));
   }
 
   function isViewerHiddenBlock(block: VisualBlock): boolean {

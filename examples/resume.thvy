@@ -438,7 +438,7 @@ component_defs:
 
    <!--hvy:text {"css":"margin: 0;","placeholder":"Add expanded summary details"}-->
 
-<!--hvy: {"id":"locations","lock":true,"contained":true,"location":"sidebar","tags":"sidebar, location, preferences","description":"Location preferences"}-->
+<!--hvy: {"id":"locations","lock":true,"contained":true,"location":"sidebar","tags":"sidebar, location, preferences","description":"Location preferences","hideIfUnmodified":true}-->
 #! Locations
 
  <!--hvy:text {"css":"margin: 0.5rem 0; line-height: 1.5;","placeholder":"location, target location","fillIn":true,"lock":true}-->
@@ -446,7 +446,7 @@ component_defs:
 
   **Target Location(s):** <!-- value -->
 
-<!--hvy: {"id":"top-skills-tools-technologies","lock":true,"tags":"featured, top-skills, xrefs","description":"Featured skills and tools & technology experience"}-->
+<!--hvy: {"id":"top-skills-tools-technologies","lock":true,"tags":"featured, top-skills, xrefs","description":"Featured skills and tools & technology experience","hideIfUnmodified":true}-->
 #! Featured Skills, Tools, and Technologies
 
  <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
@@ -466,7 +466,7 @@ component_defs:
      ## Tools & Technologies
     <!--hvy:component-list {"id":"top-tools-technologies-list","componentListComponent":"xref-card","componentListItemLabel":"tool / tech","css":"margin: 0;","align":"center"}-->
 
-<!--hvy: {"id":"skills","lock":true,"expanded":false,"location":"sidebar","tags":"sidebar, skills-reference, skill-details","description":"Skills reference list"}-->
+<!--hvy: {"id":"skills","lock":true,"expanded":false,"location":"sidebar","tags":"sidebar, skills-reference, skill-details","description":"Skills reference list","hideIfUnmodified":true}-->
 #! Skills
 
  <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
@@ -474,7 +474,7 @@ component_defs:
 
  <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"skill-record","componentListItemLabel":"skill"}-->
 
-<!--hvy: {"id":"tools-technologies","lock":true,"expanded":false,"location":"sidebar","tags":"sidebar, tools-reference, technologies, tool-details","description":"Tools and technologies reference list"}-->
+<!--hvy: {"id":"tools-technologies","lock":true,"expanded":false,"location":"sidebar","tags":"sidebar, tools-reference, technologies, tool-details","description":"Tools and technologies reference list","hideIfUnmodified":true}-->
 #! Tools & Technologies
 
  <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
@@ -482,7 +482,7 @@ component_defs:
 
  <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"skill-record","componentListItemLabel":"tool / tech"}-->
 
-<!--hvy: {"id":"history","lock":true,"tags":"work-history, experience, reverse-chronological","description":"Work history"}-->
+<!--hvy: {"id":"history","lock":true,"tags":"work-history, experience, reverse-chronological","description":"Work history","hideIfUnmodified":true}-->
 #! History
 
  <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
@@ -492,7 +492,7 @@ component_defs:
 
  <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"history-record","componentListItemLabel":"history"}-->
 
-<!--hvy: {"id":"projects","lock":true,"tags":"projects, portfolio, reverse-chronological","description":"Project portfolio"}-->
+<!--hvy: {"id":"projects","lock":true,"tags":"projects, portfolio, reverse-chronological","description":"Project portfolio","hideIfUnmodified":true}-->
 #! Projects
 
  <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
@@ -502,7 +502,7 @@ component_defs:
 
  <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"project-record","componentListItemLabel":"project"}-->
 
-<!--hvy: {"id":"education","lock":true,"tags":"education, credentials, reverse-chronological","description":"Education"}-->
+<!--hvy: {"id":"education","lock":true,"tags":"education, credentials, reverse-chronological","description":"Education","hideIfUnmodified":true}-->
 #! Education
 
  <!--hvy:text {"css":"margin: 0.5rem 0;"}-->

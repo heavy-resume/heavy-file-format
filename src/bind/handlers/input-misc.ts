@@ -4,6 +4,7 @@ import { SCRIPTING_PLUGIN_VERSION } from '../../plugins/scripting/version';
 import { runButtonVisibilityScripts } from '../../editor/components/button/button-actions';
 import { addDefaultContainerBorderCss, removeDefaultContainerBorderCss } from '../../editor/components/container/container-css';
 import { submitSearch } from '../../search/actions';
+import { clearHideIfUnmodifiedForSectionPath } from '../../template-hide';
 
 export function bindInputMisc(app: HTMLElement): void {
   app.addEventListener('focusout', (event) => {
@@ -86,6 +87,7 @@ export function bindInputMisc(app: HTMLElement): void {
     const blockIdForHistory = target.dataset.blockId ?? '';
     if (field && field !== 'new-component-type' && field !== 'table-cell' && field !== 'table-column') {
       recordHistory(`input:${sectionKey}:${blockIdForHistory}:${field}`);
+      clearHideIfUnmodifiedForSectionPath(state.document.sections, sectionKey);
     }
 
     if (field === 'section-title' && target instanceof HTMLInputElement) {

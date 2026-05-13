@@ -235,6 +235,7 @@ Section metadata also includes optional presentation keys such as:
 - `lock`
 - `editorOnly`
 - `contained`
+- `hideIfUnmodified`
 - `css`
 - `location`
 
@@ -243,6 +244,7 @@ Inline section `css` follows the same declaration-only rule as block `css`. Use 
 `lock` is an optional boolean. Use it to prevent adding new blocks or child sections inside that section.
 `editorOnly` follows the same visibility rule as block `editorOnly`.
 `contained` is an optional boolean. When `true` (default), render the section as the normal bordered card/container and allow collapse/expand UI. When `false`, render the section edge-to-edge without the section border/background wrapper and without the section expander/collapser.
+`hideIfUnmodified` is an optional boolean for template-authored scaffold sections. When `true`, viewer-oriented renderers MUST hide the entire section subtree, including sidebar/navigation entries, search results, and reader-view targets. Editor surfaces and document AI editing mode MUST still render the section so users and agents can change it. Authoring tools SHOULD remove this flag from the section and any flagged ancestor section when structured editing changes that section subtree.
 `location` is an optional string. Use it to route a section to a named layout zone in the viewer. Defined values are `"main"` (default) and `"sidebar"`. Unknown values SHOULD be treated as `"main"`.
 
 ### 5.7 Block directives
@@ -547,7 +549,7 @@ section_defs:
 Notes:
 - `template` stores a full section subtree, including blocks and nested child sections.
 - Clone a `section_defs[*].template` when inserting a new section or subsection.
-- Reusable section templates preserve section-level presentation fields such as `contained`, `expanded`, `highlight`, `css`, and `location`.
+- Reusable section templates preserve section-level presentation fields such as `contained`, `expanded`, `highlight`, `css`, `location`, and `hideIfUnmodified`.
 - Implementations SHOULD assign fresh section keys, block IDs, and custom IDs when instantiating a reusable section.
 - Plain Markdown renderers ignore `section_defs`.
 
@@ -765,6 +767,10 @@ Rules:
 ## 6. Template & Schema (`.thvy`)
 
 A `.thvy` file is a `.hvy` file. The only distinction is `template: true` in front matter.
+
+Template sections that contain scaffold content but should not appear in a finished viewer until changed MAY set `hideIfUnmodified: true` in section metadata. Viewer-oriented surfaces hide a flagged section, its descendants, sidebar/navigation entries, search results, and reader-view targets while the flag is present. If a user, agent, or structured authoring tool edits that section, a child section, or any descendant block, the tool SHOULD remove `hideIfUnmodified` from the edited section and any flagged ancestor sections. After the flag is removed and saved, the section renders normally.
+
+This is not an emptiness test. A section can contain headers, placeholder rows, tables, or list scaffolds and still be hidden while the flag remains. Editor and AI modes always show flagged sections. Raw source editors MAY leave or remove the flag directly; no baseline comparison is required.
 
 ### 6.1 Template metadata
 

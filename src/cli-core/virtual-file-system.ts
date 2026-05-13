@@ -625,6 +625,7 @@ function sectionToCliJson(section: VisualSection): JsonObject {
     title: section.title,
     level: section.level,
     lock: section.lock,
+    editorOnly: section.editorOnly,
     expanded: section.expanded,
     highlight: section.highlight,
     contained: section.contained,
@@ -632,6 +633,7 @@ function sectionToCliJson(section: VisualSection): JsonObject {
     tags: section.tags,
     description: section.description,
     location: section.location,
+    hideIfUnmodified: section.hideIfUnmodified === true,
   };
 }
 
@@ -666,6 +668,7 @@ function applySectionJson(section: VisualSection, value: JsonObject): void {
   if (typeof value.title === 'string') section.title = value.title;
   if (typeof value.level === 'number') section.level = Math.max(1, Math.min(6, Math.floor(value.level)));
   if (typeof value.lock === 'boolean') section.lock = value.lock;
+  if (typeof value.editorOnly === 'boolean') section.editorOnly = value.editorOnly;
   if (typeof value.expanded === 'boolean') section.expanded = value.expanded;
   if (typeof value.highlight === 'boolean') section.highlight = value.highlight;
   if (typeof value.contained === 'boolean') section.contained = value.contained;
@@ -673,6 +676,7 @@ function applySectionJson(section: VisualSection, value: JsonObject): void {
   if (typeof value.tags === 'string') section.tags = validateTags(value.tags, 'section.json tags');
   if (typeof value.description === 'string') section.description = value.description;
   if (value.location === 'sidebar' || value.location === 'main') section.location = value.location;
+  if (typeof value.hideIfUnmodified === 'boolean') section.hideIfUnmodified = value.hideIfUnmodified;
 }
 
 function blockSchemaToCliJson(schema: BlockSchema): JsonObject {

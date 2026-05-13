@@ -159,6 +159,71 @@ hvy_version: 0.1
   await expect(page.locator('.editor-block-passive', { hasText: 'Committed by view switch' })).toBeVisible();
 });
 
+test('template-hidden sections hide in viewer and lose the marker after editing', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"optional-history","hideIfUnmodified":true}-->
+#! Optional History
+
+ <!--hvy:text {}-->
+  #### Scaffold role
+  Add accomplishments here
+
+<!--hvy: {"id":"always-visible"}-->
+#! Always Visible
+
+ <!--hvy:text {}-->
+  Baseline control
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+
+  await page.getByRole('button', { name: 'Viewer' }).click();
+  await expect(page.locator('#optional-history')).toHaveCount(0);
+  await expect(page.locator('#readerDocument')).toContainText('Baseline control');
+  await expect(page.locator('#readerDocument')).not.toContainText('Scaffold role');
+
+  await page.getByRole('button', { name: 'Editor' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+  await expect(page.locator('#editorTree')).toContainText('Optional History');
+  await expect(page.locator('#editorTree')).toContainText('Scaffold role');
+
+  await page.getByRole('button', { name: 'AI' }).click();
+  await expect(page.locator('#aiReaderDocument')).toContainText('Scaffold role');
+
+  await page.getByRole('button', { name: 'Editor' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+  await page.locator('.editor-block-passive', { hasText: 'Scaffold role' }).click();
+  await page.locator('.rich-editor').fill('#### Scaffold role\nChanged accomplishment');
+  await page.getByRole('button', { name: 'Viewer' }).click();
+  await expect(page.locator('#optional-history')).toBeVisible();
+  await expect(page.locator('#readerDocument')).toContainText('Changed accomplishment');
+
+  await page.getByRole('button', { name: 'Editor' }).click();
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await expect(page.locator('#rawEditor')).not.toContainText('"hideIfUnmodified":true');
+});
+
+test('resume template hides untouched scaffold sections only in viewer', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Resume Template' }).click();
+  await page.getByRole('button', { name: 'Viewer' }).click();
+  await expect(page.locator('#history')).toHaveCount(0);
+  await expect(page.locator('#projects')).toHaveCount(0);
+  await expect(page.locator('#education')).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Editor' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+  await expect(page.locator('#editorTree')).toContainText('History');
+  await expect(page.locator('#editorTree')).toContainText('Projects');
+  await expect(page.locator('#editorTree')).toContainText('Education');
+});
+
 test('reader max width keeps focus while typing', async ({ page }) => {
   await page.goto('/');
 

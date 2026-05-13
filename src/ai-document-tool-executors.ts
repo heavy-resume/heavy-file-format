@@ -15,6 +15,7 @@ import { applyComponentPatchEdits, buildDocumentNumberedLines, buildGrepRegex, b
 import { hasNestedSlotDiagnostics } from './ai-document-loop-state';
 import { DEFAULT_VIEW_END_LINE, DEFAULT_VIEW_START_LINE, HvyRepairToolError, type ComponentRefEntry, type DocumentEditToolRequest, type DocumentStructureSnapshot, type HeaderEditToolRequest } from './ai-document-edit-types';
 import { executeGrepHeaderTool, executePatchHeaderTool, executeViewHeaderTool } from './ai-header-edit-tools';
+import { clearHideIfUnmodifiedForSectionPath, clearHideIfUnmodifiedForSections, findSectionPath } from './template-hide';
 
 export function executeViewComponentTool(
   request: Extract<DocumentEditToolRequest, { tool: 'view_component' }>,
@@ -355,7 +356,7 @@ export function executeGrepTool(
 
 type CssTarget =
   | { kind: 'section'; ref: string; label: string; section: VisualSection }
-  | { kind: 'component'; ref: string; label: string; block: VisualBlock };
+  | { kind: 'component'; ref: string; label: string; sectionKey: string; block: VisualBlock };
 
 export function executeGetCssTool(
   request: Extract<DocumentEditToolRequest, { tool: 'get_css' }>,
@@ -418,6 +419,9 @@ export function executeSetPropertiesTool(
     setTargetCss(target, serializeCssDeclarations(declarations));
   }
   onMutation?.('ai-edit:css');
+  for (const target of targets) {
+    clearHideIfUnmodifiedForSectionPath(document.sections, target.kind === 'section' ? target.section.key : target.sectionKey);
+  }
   return `Updated ${properties.length} CSS propert${properties.length === 1 ? 'y' : 'ies'} on ${targets.length} target${targets.length === 1 ? '' : 's'}.`;
 }
 
@@ -447,6 +451,7 @@ export async function executeEditComponentTool(
   });
 
   onMutation?.('ai-edit:block');
+  clearHideIfUnmodifiedForSectionPath(document.sections, component.sectionKey);
   const originalSchemaId = block.schema.id;
   block.text = result.block.text;
   block.schema = result.block.schema;
@@ -501,6 +506,7 @@ export function executePatchComponentTool(
   }
 
   onMutation?.('ai-edit:block');
+  clearHideIfUnmodifiedForSectionPath(document.sections, component.sectionKey);
   const originalSchemaId = block.schema.id;
   block.text = parsed.block.text;
   block.schema = parsed.block.schema;
@@ -527,7 +533,11 @@ export function executeRemoveSectionTool(
     throw new Error(`Section "${request.section_ref}" could not be found.`);
   }
 
+  const templateHidePath = findSectionPath(document.sections, sectionEntry.key);
   onMutation?.('ai-edit:section');
+  if (templateHidePath) {
+    clearHideIfUnmodifiedForSections(templateHidePath);
+  }
   location.container.splice(location.index, 1);
   return `Removed section "${sectionEntry.title}" (${request.section_ref}).`;
 }
@@ -548,6 +558,7 @@ export function executeRemoveComponentTool(
   }
 
   onMutation?.('ai-edit:block');
+  clearHideIfUnmodifiedForSectionPath(document.sections, componentEntry.sectionKey);
   location.container.splice(location.index, 1);
   return `Removed component ${request.component_ref} (${componentEntry.component}${componentEntry.componentId ? ` id="${componentEntry.componentId}"` : ''}) from ${formatComponentLocation(componentEntry)}.`;
 }
@@ -583,6 +594,7 @@ export function executeCreateComponentTool(
     }
 
     onMutation?.('ai-edit:block');
+    clearHideIfUnmodifiedForSectionPath(document.sections, section.key);
     section.blocks.push(newBlock);
     return `Created ${newBlock.schema.component} component at the end of section "${section.title}" (${sectionRef}).`;
   }
@@ -601,6 +613,7 @@ export function executeCreateComponentTool(
   }
 
   onMutation?.('ai-edit:block');
+  clearHideIfUnmodifiedForSectionPath(document.sections, componentEntry.sectionKey);
   const insertIndex = request.position === 'before' ? location.index : location.index + 1;
   location.container.splice(insertIndex, 0, newBlock);
   return `Created ${newBlock.schema.component} component ${request.position} ${targetRef}.`;
@@ -633,6 +646,7 @@ export function executeCreateSectionTool(
       throw new Error(`Unknown parent section ref "${parentRef}".`);
     }
     onMutation?.('ai-edit:section');
+    clearHideIfUnmodifiedForSectionPath(document.sections, parent.key);
     insertSectionAtOptionalIndex(parent.children, newSection, request.new_position_index_from_0, `children of "${parent.title}"`);
     return `Created subsection "${title}" (${getSectionId(newSection)}) inside "${parent.title}".`;
   }
@@ -796,7 +810,7 @@ function resolveCssTargets(ids: string[], snapshot: DocumentStructureSnapshot, d
       const key = `component:${componentEntry.blockId}`;
       if (block && !seen.has(key)) {
         seen.add(key);
-        targets.push({ kind: 'component', ref: id, label: componentEntry.component, block });
+        targets.push({ kind: 'component', ref: id, label: componentEntry.component, sectionKey: componentEntry.sectionKey, block });
       }
       continue;
     }

@@ -106,6 +106,7 @@ export interface VisualSection {
   tags: string;
   description: string;
   location: SectionLocation;
+  hideIfUnmodified?: boolean;
   blocks: VisualBlock[];
   children: VisualSection[];
   /** Editor-only: marks a subsection auto-generated to hold trailing blocks when a

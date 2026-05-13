@@ -4,6 +4,7 @@ import { navigateToReaderTarget } from '../navigation';
 import { state, getRenderApp, getRefreshReaderPanels } from '../state';
 import type { HvySearchResult, SearchCategory } from './types';
 import type { VisualBlock, VisualSection } from '../editor/types';
+import { filterTemplateVisibleSections } from '../template-hide';
 import { focusSearchInput } from './render';
 
 const CATEGORY_ORDER: SearchCategory[] = ['tags', 'contents', 'description'];
@@ -97,8 +98,11 @@ export async function submitSearch(): Promise<void> {
 
   try {
     const provider = getReferenceAppConfig().searchProvider ?? builtInSearchProvider;
+    const searchDocument = state.currentView === 'viewer'
+      ? { ...state.document, sections: filterTemplateVisibleSections(state.document.sections) }
+      : state.document;
     const results = await provider({
-      document: state.document,
+      document: searchDocument,
       query,
       caseSensitive: state.search.caseSensitive,
       categories,

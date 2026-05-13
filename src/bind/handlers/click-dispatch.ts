@@ -1,6 +1,7 @@
 import { state, findSectionByKey, getReusableNameFromSectionKey, applyRichAction, openLinkInlineModal, getRenderApp } from './_imports';
 import { actionRegistry } from '../actions/registry';
 import { openRemoveConfirmationModal } from './remove-confirmation-modal';
+import { clearHideIfUnmodifiedForSectionPath, clearHideIfUnmodifiedForSections, findSectionPath } from '../../template-hide';
 
 const richToolbarSelections = new WeakMap<HTMLElement, Range>();
 
@@ -94,6 +95,7 @@ export function bindClickDispatch(app: HTMLElement): void {
             editable.focus();
           }
           applyRichAction(action, editable, richButton.dataset.textLineStyleName);
+          clearHideIfUnmodifiedForSectionPath(state.document.sections, sectionKey);
           editable.focus({ preventScroll: true });
           richToolbarSelections.delete(editable);
         }
@@ -214,7 +216,13 @@ function executeActionButton(app: HTMLElement, actionButton: HTMLElement, confir
     return;
   }
 
+  const templateHidePath = shouldClearTemplateHideForAction(action)
+    ? findSectionPath(state.document.sections, sectionKey)
+    : null;
   handler({ app, actionButton, sectionKey, blockId, section, reusableName });
+  if (templateHidePath && clearHideIfUnmodifiedForSections(templateHidePath)) {
+    getRenderApp()();
+  }
 }
 
 function getActionSectionKey(actionButton: HTMLElement): string {
@@ -226,6 +234,18 @@ function getActionSectionKey(actionButton: HTMLElement): string {
     }
   }
   return declaredSectionKey;
+}
+
+function shouldClearTemplateHideForAction(action: string): boolean {
+  return !new Set([
+    'focus-modal',
+    'open-component-meta',
+    'start-component-move',
+    'start-component-copy',
+    'cancel-component-placement',
+    'jump-to-reader',
+    'toggle-schema',
+  ]).has(action);
 }
 
 function hasSelectionInside(editable: HTMLElement): boolean {

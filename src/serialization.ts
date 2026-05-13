@@ -182,6 +182,7 @@ function mapParsedSection(section: HvySection, documentMeta: JsonObject, diagnos
     tags: typeof sectionMeta.tags === 'string' ? sectionMeta.tags : '',
     description: typeof sectionMeta.description === 'string' ? sectionMeta.description : '',
     location: sectionMeta.location === 'sidebar' ? 'sidebar' : 'main',
+    hideIfUnmodified: sectionMeta.hideIfUnmodified === true,
     blocks,
     children: section.children.map((child) => mapParsedSection(child, documentMeta, diagnostics)),
   };
@@ -1111,6 +1112,9 @@ function serializeSection(section: VisualSection, level: number, documentMeta: J
   }
   if (section.location === 'sidebar') {
     meta.location = 'sidebar';
+  }
+  if (section.hideIfUnmodified === true) {
+    meta.hideIfUnmodified = true;
   }
 
   const directive = `<!--hvy: ${JSON.stringify(meta)}-->`;

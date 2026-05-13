@@ -96,6 +96,59 @@ hvy_version: 0.1
   expect(result.linkColor).not.toBe('rgb(255, 0, 0)');
 });
 
+test('embedded runtime keeps HVY modal panels above host modal overlays', async ({ page }) => {
+  await page.goto('/');
+
+  const result = await page.evaluate(async () => {
+    document.body.innerHTML = '<div id="mount"></div>';
+    const style = document.createElement('style');
+    style.textContent = `
+      .modal-overlay { position: fixed; inset: 0; z-index: 9999; background: rgba(0, 0, 0, 0.9); }
+      .modal-panel { position: relative; z-index: 0; }
+    `;
+    document.head.append(style);
+    const modulePath = '/src/embed.ts';
+    const { deserializeDocumentBytes, mountHvy } = await import(/* @vite-ignore */ modulePath);
+    const source = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ Embedded modal stacking test.
+`;
+    const documentBytes = new TextEncoder().encode(source);
+    const root = document.querySelector<HTMLElement>('#mount');
+    if (!root) {
+      throw new Error('Mount root missing.');
+    }
+    root.style.setProperty('--hvy-modal-root-z', '2222');
+    root.style.setProperty('--hvy-modal-overlay-z', '4');
+    root.style.setProperty('--hvy-modal-panel-z', '8');
+    const mount = mountHvy({ root, document: deserializeDocumentBytes(documentBytes, '.hvy'), mode: 'editor' });
+    mount.openThemeEditor();
+    const modalRoot = root.querySelector<HTMLElement>('.modal-root');
+    const overlay = root.querySelector<HTMLElement>('.modal-overlay');
+    const panel = root.querySelector<HTMLElement>('.modal-panel');
+    if (!modalRoot || !overlay || !panel) {
+      throw new Error('Expected embedded modal missing.');
+    }
+    return {
+      modalRootIsolation: getComputedStyle(modalRoot).isolation,
+      modalRootZIndex: getComputedStyle(modalRoot).zIndex,
+      overlayZIndex: getComputedStyle(overlay).zIndex,
+      panelZIndex: getComputedStyle(panel).zIndex,
+    };
+  });
+
+  expect(result.modalRootIsolation).toBe('isolate');
+  expect(result.modalRootZIndex).toBe('2222');
+  expect(result.overlayZIndex).toBe('4');
+  expect(result.panelZIndex).toBe('8');
+  expect(Number(result.panelZIndex)).toBeGreaterThan(Number(result.overlayZIndex));
+});
+
 test('new section component picker opens on the first click', async ({ page }) => {
   await page.goto('/');
 

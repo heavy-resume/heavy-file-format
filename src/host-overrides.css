@@ -1,0 +1,5 @@
+.hvy-document {
+  --hvy-modal-root-z: 1200;
+  --hvy-modal-overlay-z: 0;
+  --hvy-modal-panel-z: 2;
+}

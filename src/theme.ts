@@ -67,6 +67,12 @@ export const THEME_COLOR_NAMES: readonly string[] = [
   '--hvy-code-number',
 ];
 
+const HOST_OVERRIDE_CSS_VARIABLES = new Set([
+  '--hvy-modal-root-z',
+  '--hvy-modal-overlay-z',
+  '--hvy-modal-panel-z',
+]);
+
 const THEME_COLOR_LABELS: Record<string, string> = {
   '--hvy-bg': 'Page Background',
   '--hvy-bg-alt': 'Page Background Gradient End',
@@ -173,7 +179,7 @@ export function applyTheme(): void {
   const stale: string[] = [];
   for (let i = 0; i < root.style.length; i++) {
     const prop = root.style.item(i);
-    if (prop.startsWith('--hvy-')) {
+    if (prop.startsWith('--hvy-') && !HOST_OVERRIDE_CSS_VARIABLES.has(prop)) {
       stale.push(prop);
     }
   }

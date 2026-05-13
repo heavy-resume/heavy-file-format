@@ -1,18 +1,23 @@
-.modal-root {
+.modal-root,
+.hvy-document .modal-root {
   position: fixed;
   inset: 0;
-  z-index: 1200;
+  z-index: var(--hvy-modal-root-z, 1200);
+  isolation: isolate;
 }
 
-.modal-overlay {
+.modal-overlay,
+.hvy-document .modal-overlay {
   position: absolute;
   inset: 0;
+  z-index: var(--hvy-modal-overlay-z, 0);
   background: var(--hvy-overlay);
 }
 
-.modal-panel {
+.modal-panel,
+.hvy-document .modal-panel {
   position: relative;
-  z-index: 1;
+  z-index: var(--hvy-modal-panel-z, 2);
   width: min(920px, 96vw);
   max-height: 88vh;
   overflow: auto;
@@ -34,7 +39,8 @@
   padding: 1rem;
 }
 
-.remove-confirmation-modal {
+.remove-confirmation-modal,
+.hvy-document .remove-confirmation-modal {
   width: min(320px, calc(100vw - 2rem));
   max-height: none;
   margin: 0;
@@ -42,13 +48,14 @@
 }
 
 .description-progress-modal-root {
-  z-index: 140;
+  z-index: var(--hvy-modal-root-z, 1200);
   display: grid;
   place-items: center;
   padding: 1rem;
 }
 
-.description-progress-modal {
+.description-progress-modal,
+.hvy-document .description-progress-modal {
   width: min(430px, calc(100vw - 2rem));
   max-height: none;
   margin: 0;

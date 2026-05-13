@@ -788,7 +788,7 @@ function createCliComponentBlock(document: VisualDocument, component: string, id
   block.schema.component = component;
   block.schema.id = id;
   if (templateValues) {
-    applyReusableTemplateValues(block, templateValues);
+    applyReusableTemplateValues(block, templateValues, variables);
     block.schema.component = component;
     block.schema.id = id;
   }

@@ -20,5 +20,5 @@ export function createBlockFromReusableTemplateValues(component: string, values:
   const definition = getComponentDefs().find((item) => item.name === component);
   const variables = extractReusableTemplateVariablesFromDefinition(definition);
   validateReusableTemplateValues(variables, values);
-  return applyReusableTemplateValues(createEmptyBlock(component), values);
+  return applyReusableTemplateValues(createEmptyBlock(component), values, variables);
 }

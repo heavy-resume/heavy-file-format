@@ -174,6 +174,50 @@ test('blank template values become fill-ins only in text block bodies', () => {
   expect(block.schema.containerBlocks[1]?.schema.tableRows).toEqual([{ cells: [''] }]);
 });
 
+test('blank template value fill-ins preserve the labels shown to the user', () => {
+  const block = {
+    id: 'block-1',
+    text: '',
+    schema: {
+      ...defaultBlockSchema('expandable'),
+      expandableContentBlocks: {
+        lock: false,
+        children: [
+          {
+            id: 'details-block',
+            text: [
+              '^detail-heading^ #### Description',
+              '^detail-body^ {% description | block %}',
+              '^detail-heading^ #### Notes',
+              '^detail-body^ {% notes | block %}',
+            ].join('\n'),
+            schema: {
+              ...defaultBlockSchema('text'),
+              placeholder: 'Description and notes',
+            },
+            schemaMode: false,
+          },
+        ],
+      },
+    },
+    schemaMode: false,
+  };
+
+  applyReusableTemplateValues(
+    block,
+    { description: '', notes: '' },
+    [
+      { name: 'description', type: 'block', label: 'Description' },
+      { name: 'notes', type: 'block', label: 'Notes' },
+    ]
+  );
+
+  const detailsBlock = block.schema.expandableContentBlocks.children[0];
+  expect(detailsBlock?.text).toContain('^detail-body^ <!-- value -->');
+  expect(detailsBlock?.schema.fillIn).toBe(true);
+  expect(detailsBlock?.schema.placeholder).toBe('Description, Notes');
+});
+
 test('validates exact template value keys and text newlines', () => {
   const variables = [
     { name: 'title', type: 'text' as const, label: 'Title' },

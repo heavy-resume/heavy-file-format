@@ -680,12 +680,11 @@ component_defs:
   await expect(modal.locator('textarea[data-template-variable="details"]')).toBeVisible();
 
   await modal.locator('input[data-template-variable="title"]').fill('Launch Notes');
-  await modal.locator('textarea[data-template-variable="details"]').fill('Line one\nLine two');
   await modal.getByRole('button', { name: 'Insert' }).click();
 
   const inserted = page.locator('.editor-block', { hasText: 'card-record' });
   await expect(inserted.locator('.editor-block-passive', { hasText: 'Launch Notes' })).toBeVisible();
-  await expect(inserted.locator('.editor-block-passive', { hasText: 'Line one' })).toBeVisible();
+  await expect(inserted.locator('.editor-block-passive [data-placeholder="Details"]')).toBeVisible();
 });
 
 test('AI view shows editor placeholders and empty list add affordances', async ({ page }) => {

@@ -372,7 +372,7 @@ Rules:
 - `hvy:expandable:stub` and `hvy:expandable:content` are slot markers. Their payload may be empty or include only pane metadata such as `css` and `description`.
 - The child block for an expandable slot is declared one indentation level deeper as its own directive.
 - Multiple `hvy:expandable:stub` or `hvy:expandable:content` directives can be used for a single expandable block.
-- Each `expandable` block MUST include at least one stub child and at least one content child. Missing either side is malformed.
+- Each `expandable` block MUST include at least one content child. The stub slot MAY be empty when the expandable is intended to use its content as the collapsed preview. Missing content is malformed.
 - `hvy:grid` starts a grid block. Its payload is the grid block schema, with `component:"grid"` implied.
 - `hvy:grid:N`, `hvy:component-list:N`, and `hvy:container:N` are slot markers. Their payload contains slot metadata only; the actual child block is declared one indentation level deeper as its own directive.
 - For `hvy:grid:N`, `N` determines the item's placement order. Readers and editors SHOULD tile items across `gridColumns` in slot order, wrapping to the next row as needed.
@@ -452,6 +452,8 @@ expandableStubBlocks:
 ```
 
 The `children` array uses the same recursive block object shape as other nested block arrays.
+
+An expandable with empty `expandableStubBlocks.children` and populated `expandableContentBlocks.children` uses the content pane as its collapsed preview. Readers SHOULD omit the empty stub pane entirely, render a non-editing clipped preview of the first visible content while collapsed, and expand/collapse when the expandable is activated. This differs from a collapsed container preview: activating an expandable toggles it open and closed, while container preview activation opens the container.
 
 The built-in `table` component is static document data stored in `tableColumns` and `tableRows`. Use a dynamic data-backed plugin such as `dev.heavy.db-table` when rows should come from a backend query.
 

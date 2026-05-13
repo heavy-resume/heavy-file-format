@@ -68,7 +68,7 @@ export function renderSearchPalette(search: SearchState, document: VisualDocumen
           role="tab"
           aria-selected="${isFilterTab ? 'true' : 'false'}"
         >${funnelIcon()}<span>Filter</span></button>
-        <button type="button" class="search-close-button remove-x danger" data-action="stop-search" aria-label="Stop search">${closeIcon()}</button>
+        <button type="button" class="search-close-button ghost remove-x" data-action="close-search" aria-label="Close search panel">${closeIcon()}</button>
       </div>
       ${
         isFilterTab
@@ -216,7 +216,7 @@ function renderFilterTab(search: SearchState, deps: SearchRenderDeps): string {
       class="secondary search-apply-filter-button${applied ? ' is-active' : ''}"
       data-action="apply-search-filter"
       aria-pressed="${applied ? 'true' : 'false'}"
-    >${applied ? 'Turn Off Filter' : 'Filter'}</button>
+    >${applied ? 'Turn off filter' : 'Filter'}</button>
   </section>`;
 }
 

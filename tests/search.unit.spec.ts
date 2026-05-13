@@ -246,6 +246,41 @@ hvy_version: 0.1
   expect(expectedMarkup).not.toContain('<span class="search-result-title">History</span>');
 });
 
+test('filter palette close control closes without stopping an active filter', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+`, '.hvy');
+
+  const expectedMarkup = renderSearchPalette({
+    open: true,
+    queryDraft: 'Python',
+    submittedQuery: 'Python',
+    caseSensitive: false,
+    categories: { tags: true, contents: true, description: true },
+    activeTab: 'filter',
+    filterEnabled: true,
+    filterMode: 'deprioritize',
+    resultsCollapsed: false,
+    activeResultId: null,
+    isLoading: false,
+    error: null,
+    results: [],
+    navigationResultIds: [],
+    requestNonce: 1,
+    abortController: null,
+  }, document, {
+    escapeAttr: escapeHtml,
+    escapeHtml,
+    readerRenderer: null as never,
+  });
+
+  expect(expectedMarkup).toContain('data-action="close-search"');
+  expect(expectedMarkup).toContain('class="search-close-button ghost remove-x"');
+  expect(expectedMarkup).toContain('Turn off filter');
+  expect(expectedMarkup).not.toContain('data-action="stop-search"');
+});
+
 test('search filter context keeps matches and required ancestors visible', async () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1

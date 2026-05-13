@@ -214,6 +214,7 @@
   position: absolute;
   top: 0.85rem;
   right: 0.85rem;
+  color: var(--hvy-text-alt);
 }
 
 .search-options {
@@ -329,14 +330,15 @@
 
 .search-apply-filter-button.is-active {
   border-color: color-mix(in srgb, var(--hvy-danger) 72%, var(--hvy-border));
-  background: color-mix(in srgb, var(--hvy-danger) 18%, var(--hvy-surface));
-  color: var(--hvy-danger);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--hvy-danger) 18%, transparent);
+  background: var(--hvy-danger);
+  color: #ffffff;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, #ffffff 28%, transparent);
 }
 
 .search-apply-filter-button.is-active:hover,
 .search-apply-filter-button.is-active:focus-visible {
-  background: color-mix(in srgb, var(--hvy-danger) 28%, var(--hvy-surface));
+  background: color-mix(in srgb, var(--hvy-danger) 86%, var(--hvy-surface) 14%);
+  color: #ffffff;
 }
 
 .search-results {
@@ -504,20 +506,53 @@
 }
 
 .reader-document .reader-section.is-search-deprioritized,
-.reader-document .reader-section:not(.is-search-deprioritized) .reader-block.is-search-deprioritized {
+.reader-document .reader-section:not(.is-search-deprioritized) .reader-block.is-search-deprioritized,
+.reader-sidebar-sections .reader-section.is-search-deprioritized,
+.reader-sidebar-sections .reader-section:not(.is-search-deprioritized) .reader-block.is-search-deprioritized {
   opacity: 0.38;
   filter: saturate(0.6);
 }
 
 .reader-document .reader-section.is-search-deprioritized .reader-block.is-search-deprioritized,
-.reader-document .reader-block.is-search-deprioritized .reader-block.is-search-deprioritized {
+.reader-document .reader-block.is-search-deprioritized .reader-block.is-search-deprioritized,
+.reader-sidebar-sections .reader-section.is-search-deprioritized .reader-block.is-search-deprioritized,
+.reader-sidebar-sections .reader-block.is-search-deprioritized .reader-block.is-search-deprioritized {
   opacity: 1;
   filter: none;
 }
 
 .reader-container.is-virtual-group-container:has(.is-search-deprioritized):not(:has(.is-search-match)) > .reader-container-head {
-  opacity: 0.38;
-  filter: saturate(0.6);
+  opacity: 1;
+  filter: none;
+}
+
+.reader-container.is-virtual-group-container:has(.is-search-deprioritized):not(:has(.is-search-match)) > .reader-container-head .reader-container-title {
+  color: color-mix(in srgb, var(--hvy-text) 38%, var(--hvy-surface));
+}
+
+.reader-container.is-virtual-group-container:has(.is-search-deprioritized):not(:has(.is-search-match)) > .reader-container-head .reader-container-actions {
+  opacity: 1;
+  filter: none;
+}
+
+.reader-container.is-virtual-group-container:has(.is-search-deprioritized):not(:has(.is-search-match)) > .reader-container-head .reader-container-toggle {
+  background: var(--hvy-surface);
+  color: color-mix(in srgb, var(--hvy-icon-muted) 38%, var(--hvy-surface));
+  border-color: transparent;
+}
+
+.reader-container.is-virtual-group-container:has(.is-search-deprioritized):not(:has(.is-search-match)) > .reader-container-head .reader-container-toggle:hover,
+.reader-container.is-virtual-group-container:has(.is-search-deprioritized):not(:has(.is-search-match)) > .reader-container-head .reader-container-toggle:focus-visible {
+  border-color: var(--hvy-border-alt);
+}
+
+.reader-container.is-virtual-group-container.is-bordered:has(.is-search-deprioritized):not(:has(.is-search-match)) {
+  border-color: color-mix(in srgb, var(--hvy-border) 38%, transparent);
+  box-shadow: none;
+}
+
+.reader-container.is-virtual-group-container.is-bordered:has(.is-search-deprioritized):not(:has(.is-search-match)) > .reader-container-head .reader-container-title {
+  background: var(--hvy-surface);
 }
 
 .hvy-context-popover-backdrop {

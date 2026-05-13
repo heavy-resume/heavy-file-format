@@ -34,7 +34,7 @@ export function bindInputMisc(app: HTMLElement): void {
         const applied = state.search.filterEnabled && state.search.queryDraft.trim() === state.search.submittedQuery.trim();
         filterButton.classList.toggle('is-active', applied);
         filterButton.setAttribute('aria-pressed', applied ? 'true' : 'false');
-        filterButton.textContent = applied ? 'Turn Off Filter' : 'Filter';
+        filterButton.textContent = applied ? 'Turn off filter' : 'Filter';
       }
       return;
     }

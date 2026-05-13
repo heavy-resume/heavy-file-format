@@ -25,7 +25,7 @@ export function bindClickActions(app: HTMLElement): void {
         const sectionKey = actionButton.dataset.sectionKey ?? '';
         const blockId = actionButton.dataset.blockId ?? '';
         handler({ app, actionButton, event, sectionKey, blockId, target });
-      });
+      }, app);
       return;
     }
 

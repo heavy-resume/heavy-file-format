@@ -1,6 +1,6 @@
 let pendingConfirmDeletion: (() => void) | null = null;
 
-export function openRemoveConfirmationModal(onConfirm: () => void): void {
+export function openRemoveConfirmationModal(onConfirm: () => void, root: HTMLElement = document.body): void {
   closeRemoveConfirmationModal(false);
   pendingConfirmDeletion = onConfirm;
   const modal = document.createElement('div');
@@ -33,7 +33,8 @@ export function openRemoveConfirmationModal(onConfirm: () => void): void {
     }
     closeRemoveConfirmationModal();
   });
-  document.body.appendChild(modal);
+  const mount = root.querySelector<HTMLElement>('.hvy-embed-layout') ?? root;
+  mount.appendChild(modal);
   modal.querySelector<HTMLButtonElement>('[data-remove-modal-action="cancel"]')?.focus();
 }
 

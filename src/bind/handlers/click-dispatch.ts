@@ -189,7 +189,7 @@ function executeActionButton(app: HTMLElement, actionButton: HTMLElement, confir
   }
 
   if (requiresRemoveConfirmation(action) && !confirmedRemoveReady) {
-    openRemoveConfirmationModal(() => executeActionButton(app, actionButton, true));
+    openRemoveConfirmationModal(() => executeActionButton(app, actionButton, true), app);
     return;
   }
 

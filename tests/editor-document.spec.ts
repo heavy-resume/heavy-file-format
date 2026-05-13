@@ -121,6 +121,29 @@ test('section remove requires confirmation', async ({ page }) => {
   await expect(sections).toHaveCount(initialCount + 1);
   const dialog = page.getByRole('dialog', { name: 'Confirm deletion?' });
   await expect(dialog).toBeVisible();
+  await expect(dialog).toHaveCSS('font-family', await page.locator('main.layout').evaluate((el) => getComputedStyle(el).fontFamily));
+  await expect(dialog.getByRole('button', { name: 'Cancel' })).toHaveCSS(
+    'color',
+    await page.locator('#app').evaluate((root) => {
+      const probe = document.createElement('span');
+      probe.style.color = getComputedStyle(root).getPropertyValue('--hvy-button-text');
+      root.append(probe);
+      const color = getComputedStyle(probe).color;
+      probe.remove();
+      return color;
+    })
+  );
+  await expect(dialog.getByRole('button', { name: 'Delete' })).toHaveCSS(
+    'background-color',
+    await page.locator('#app').evaluate((root) => {
+      const probe = document.createElement('span');
+      probe.style.color = getComputedStyle(root).getPropertyValue('--hvy-danger');
+      root.append(probe);
+      const color = getComputedStyle(probe).color;
+      probe.remove();
+      return color;
+    })
+  );
 
   await dialog.getByRole('button', { name: 'Cancel' }).click();
   await expect(dialog).toHaveCount(0);

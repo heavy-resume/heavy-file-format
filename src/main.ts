@@ -545,7 +545,7 @@ readerRenderer = createReaderRenderer(
       return state.readerContainerState;
     },
     get readerView() {
-      return state.readerView;
+      return getEffectiveReaderView();
     },
     get readerViewActivatedTargets() {
       return state.readerViewActivatedTargets;
@@ -877,6 +877,25 @@ function getSelectedReaderViewId(): 'none' | 'typescript' | 'llm-engineer' | 'cu
 
 function isSameReaderView(left: ReaderViewFilter, right: ReaderViewFilter): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function getEffectiveReaderView(): ReaderViewFilter {
+  if (state.selectedExample !== 'resume-example') {
+    return state.readerView;
+  }
+  const resumeViews = bundledResumeViews as Record<string, ReaderViewFilter>;
+  return mergeReaderViews(resumeViews.base ?? {}, state.readerView);
+}
+
+function mergeReaderViews(base: ReaderViewFilter, overlay: ReaderViewFilter): ReaderViewFilter {
+  const merged: ReaderViewFilter = {};
+  for (const [target, modifiers] of Object.entries(base)) {
+    merged[target] = [...modifiers];
+  }
+  for (const [target, modifiers] of Object.entries(overlay)) {
+    merged[target] = [...new Set([...(merged[target] ?? []), ...modifiers])];
+  }
+  return merged;
 }
 
 function renderResponsivePreviewFrameAttrs(baseClass: string): string {

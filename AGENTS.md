@@ -76,3 +76,5 @@ Right now as of version 0.1 of the spec there's no "older" stuff to worry about 
 When adding new colors or adjusting the CSS variables that are color related be sure to update the theme editor. Make sure new states are editable.
 
 The lock logic is not intended to inherit. A locked section doesn't automatically lock the interior components.
+
+Avoid the temptation to special case things and consider generic solutions. In some cases if something looks wrong in the example its because the example is wrong, not the code.

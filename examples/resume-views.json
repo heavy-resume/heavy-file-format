@@ -1,4 +1,9 @@
 {
+  "base": {
+    "/id/header": ["priority"],
+    "/id/summary": ["priority"],
+    "/id/top-skills-tools-technologies": ["priority"]
+  },
   "typescript": {
     "/id/header": ["priority"],
     "/id/summary": ["priority"],

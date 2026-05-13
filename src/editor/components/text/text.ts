@@ -72,5 +72,5 @@ export const renderTextEditor: ComponentEditorRenderer = (sectionKey, block, hel
 `;
 };
 
-export const renderTextReader: ComponentReaderRenderer = (_section, block, helpers) =>
-  helpers.renderComponentFragment('text', block.text, block);
+export const renderTextReader: ComponentReaderRenderer = (section, block, helpers) =>
+  helpers.renderComponentFragment('text', block.text, block, section.key);

@@ -209,6 +209,7 @@ function getEditorActivationTarget(
 
 function getPrimaryEditorActivationTarget(block: HTMLElement): HTMLElement | null {
   const selectors = [
+    '.text-fill-in-editor [data-field="text-fill-in-value"]',
     '.rich-editor[data-field="block-rich"]',
     '.rich-editor.text-fill-in-editor',
     '[data-field="block-grid-rich"]',

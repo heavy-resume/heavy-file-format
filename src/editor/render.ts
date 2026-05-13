@@ -165,7 +165,7 @@ export interface EditorRenderer {
     }
   ) => string;
   renderMetaPanel: () => string;
-  renderComponentFragment: (componentName: string, content: string, block: VisualBlock) => string;
+  renderComponentFragment: (componentName: string, content: string, block: VisualBlock, sectionKey?: string) => string;
   renderBlockMetaFields: (sectionKey: string, block: VisualBlock) => string;
   renderComponentPlacementTarget: ComponentRenderHelpers['renderComponentPlacementTarget'];
 }
@@ -1494,7 +1494,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     })), deps.escapeHtml));
   }
 
-  function renderComponentFragment(componentName: string, content: string, block: VisualBlock): string {
+  function renderComponentFragment(componentName: string, content: string, block: VisualBlock, sectionKey = ''): string {
     if (componentName === 'code') {
       return renderSyntaxHighlightedCode(content, block.schema.codeLanguage || 'text');
     }
@@ -1510,10 +1510,19 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       for (let index = 0; index < parts.length - 1; index += 1) {
         html = html.replace(
           `${tokenPrefix}${index}`,
-          `<span class="text-fill-in-box" data-placeholder="${deps.escapeAttr(getTextFillInPlaceholder(block.schema.placeholder, index))}"></span>`
+          `<span
+            class="text-fill-in-box"
+            contenteditable="true"
+            spellcheck="true"
+            data-section-key="${deps.escapeAttr(sectionKey)}"
+            data-block-id="${deps.escapeAttr(block.id)}"
+            data-field="text-fill-in-value"
+            data-fill-index="${String(index)}"
+            data-placeholder="${deps.escapeAttr(getTextFillInPlaceholder(block.schema.placeholder, index))}"
+          ></span>`
         );
       }
-      return html;
+      return `<div class="text-fill-in-editor text-fill-in-reader-editor" data-fill-parts="${deps.escapeAttr(JSON.stringify(parts))}">${html}</div>`;
     }
     return renderTextFragment(content);
   }

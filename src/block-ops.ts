@@ -195,7 +195,9 @@ export function handleBlockFieldInput(target: HTMLElement): boolean {
     block.text = buildTextFromFillInEditor(target);
     block.schema.fillIn = hasTextFillInMarker(block.text);
     syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
-    getRefreshReaderPanels()();
+    if (!target.closest('#aiReaderDocument')) {
+      getRefreshReaderPanels()();
+    }
     return true;
   }
 

@@ -1254,6 +1254,63 @@ hvy_version: 0.1
   await expect(page.locator('#readerDocument .text-fill-in-box')).toHaveCount(0);
 });
 
+test('editor fill-in focuses from passive click and accepts typing', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"header"}-->
+#! Header
+
+ <!--hvy:text {"id":"name","align":"center","placeholder":"Name","fillIn":true}-->
+  # <!-- value -->
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('.editor-block-passive .editor-block-content[data-component-id="name"] .text-fill-in-box').click();
+  const fillIn = page.locator('[data-field="text-fill-in-value"]');
+  await expect(fillIn).toBeFocused();
+  await page.keyboard.type('Ada Lovelace');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await expect(page.locator('#rawEditor')).toContainText('# Ada Lovelace');
+  await expect(page.locator('#rawEditor')).not.toContainText('"fillIn"');
+});
+
+test('ai fill-in accepts typing in place without leaving the reader surface', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"header"}-->
+#! Header
+
+ <!--hvy:text {"id":"name","align":"center","placeholder":"Name","fillIn":true}-->
+  # <!-- value -->
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'AI' }).click();
+
+  const fillIn = page.locator('#aiReaderDocument [data-field="text-fill-in-value"]');
+  await fillIn.click();
+  await expect(fillIn).toBeFocused();
+  await page.keyboard.type('Grace Hopper');
+  await expect(page.locator('#aiReaderDocument')).toContainText('Grace Hopper');
+  await expect(page.locator('#aiReaderDocument')).not.toContainText('<!-- value -->');
+
+  await page.getByRole('button', { name: 'Editor' }).click();
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await expect(page.locator('#rawEditor')).toContainText('# Grace Hopper');
+  await expect(page.locator('#rawEditor')).not.toContainText('"fillIn"');
+});
+
 test('editor pullout help balloon stays when it fits beside the document body', async ({ page }) => {
   await page.goto('/');
 

@@ -201,6 +201,7 @@ export interface AppState {
   responsivePreview: 'full' | 'phone' | 'tablet' | 'desktop';
   chat: ChatState;
   aiEdit: AiEditState;
+  aiModeTipDismissed: boolean;
   contextMenu?: ContextMenuState | null;
   search: SearchState;
   paneScroll: PaneScrollState;

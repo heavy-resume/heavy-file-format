@@ -3,6 +3,8 @@
   right: 1rem;
   top: 1rem;
   z-index: 6;
+  display: grid;
+  gap: 0.1rem;
   max-width: 20rem;
   padding: 0.45rem 0.7rem;
   border: 1px solid var(--hvy-border-translucent);
@@ -12,11 +14,40 @@
   box-shadow: 0 10px 24px var(--hvy-shadow);
   backdrop-filter: blur(10px);
   font-size: 0.84rem;
+  line-height: 1.25;
+  text-align: center;
+}
+
+.ai-view-hint:hover,
+.ai-view-hint:focus-visible {
+  color: var(--hvy-text);
+  border-color: var(--hvy-border-alt);
+  background: color-mix(in srgb, var(--hvy-surface) 98%, var(--hvy-surface-tint) 2%);
+}
+
+.ai-view-hint-touch {
+  display: none;
+}
+
+.hvy-preview-frame-phone .ai-view-hint,
+.hvy-preview-frame-tablet .ai-view-hint {
+  max-width: min(18rem, calc(100% - 2rem));
+  border-radius: 14px;
+}
+
+.hvy-preview-frame-phone .ai-view-hint-desktop,
+.hvy-preview-frame-tablet .ai-view-hint-desktop {
+  display: none;
+}
+
+.hvy-preview-frame-phone .ai-view-hint-touch,
+.hvy-preview-frame-tablet .ai-view-hint-touch {
+  display: inline;
 }
 
 .ai-edit-popover {
   position: absolute;
-  z-index: 40;
+  z-index: 130;
   width: min(26rem, calc(100% - 2rem));
   display: grid;
   gap: 0.8rem;
@@ -125,5 +156,13 @@
     right: 1rem;
     max-width: none;
     border-radius: 12px;
+  }
+
+  .ai-view-hint-desktop {
+    display: none;
+  }
+
+  .ai-view-hint-touch {
+    display: inline;
   }
 }

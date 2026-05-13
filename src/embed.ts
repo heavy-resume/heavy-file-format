@@ -55,6 +55,7 @@ import { runButtonVisibilityScripts } from './editor/components/button/button-ac
 import { visitBlocksInList } from './section-ops';
 import { createDefaultChatState } from './chat/chat';
 import { renderChatPanel, setHostChatClient, type HostChatClient } from './chat/chat';
+import { renderAiEditPopover, renderAiModeHint } from './ai-mode-ui';
 import { createDefaultSearchState } from './search/state';
 import { renderSearchLauncher, renderSearchPalette } from './search/render';
 import { loadPaletteOverrideId } from './palettes/palette-preferences';
@@ -94,6 +95,7 @@ function createEmbedState(document: VisualDocument, mode: HvyEmbedMode, showAdva
     editorMode: 'basic',
     responsivePreview: 'full',
     chat: createDefaultChatState(),
+    aiModeTipDismissed: false,
     search: createDefaultSearchState(),
     contextMenu: null,
     aiEdit: {
@@ -299,6 +301,7 @@ function renderApp(): void {
                     </div>
                   </aside>
                   <div id="${isAi ? 'aiReaderDocument' : 'readerDocument'}" class="reader-document">${readerRenderer.renderReaderSections(state.document.sections)}</div>
+                  ${isAi ? `${renderAiModeHint(state, { escapeAttr, escapeHtml })}${renderAiEditPopover(state, { escapeAttr, escapeHtml })}` : ''}
                 </div>`
           }
           ${renderChatPanel(

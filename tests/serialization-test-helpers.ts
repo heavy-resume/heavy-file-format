@@ -15,6 +15,7 @@ export function createTestState(document: VisualDocument): AppState {
     responsivePreview: 'full',
     chat: createDefaultChatState(),
     search: createDefaultSearchState(),
+    aiModeTipDismissed: false,
     aiEdit: {
       sectionKey: null,
       blockId: null,

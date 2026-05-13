@@ -122,6 +122,11 @@ const setResponsivePreview: AppActionHandler = ({ actionButton }) => {
   getRenderApp()();
 };
 
+const dismissAiModeTip: AppActionHandler = () => {
+  state.aiModeTipDismissed = true;
+  getRenderApp()();
+};
+
 const clearTargetFiltering: AppActionHandler = ({ app, event }) => {
   event.preventDefault();
   event.stopImmediatePropagation();
@@ -146,6 +151,7 @@ const requestContextComponentChanges: AppActionHandler = ({ app, event }) => {
   state.contextMenu = null;
   app.querySelector('.hvy-context-popover')?.remove();
   app.querySelector('.hvy-context-popover-backdrop')?.remove();
+  state.aiModeTipDismissed = true;
   openAiEditPopover(menu.sectionKey, menu.blockId, menu.x, menu.y);
   getRenderApp()();
 };
@@ -160,6 +166,7 @@ const editContextComponent: AppActionHandler = ({ app, event }) => {
   state.contextMenu = null;
   app.querySelector('.hvy-context-popover')?.remove();
   app.querySelector('.hvy-context-popover-backdrop')?.remove();
+  state.aiModeTipDismissed = true;
   setActiveEditorBlock(menu.sectionKey, menu.blockId, { targetOnly: true });
   if (state.pendingEditorActivation) {
     state.pendingEditorActivation.immediateFocus = true;
@@ -178,6 +185,7 @@ export const shellActions: Record<string, AppActionHandler> = {
   'toggle-editor-sidebar': toggleEditorSidebar,
   'toggle-chat-panel': toggleChatPanel,
   'set-responsive-preview': setResponsivePreview,
+  'dismiss-ai-mode-tip': dismissAiModeTip,
   'clear-target-filtering': clearTargetFiltering,
   'request-context-component-changes': requestContextComponentChanges,
   'edit-context-component': editContextComponent,

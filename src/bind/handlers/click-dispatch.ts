@@ -1,4 +1,4 @@
-import { state, findSectionByKey, getReusableNameFromSectionKey, applyRichAction, openLinkInlineModal, getRenderApp } from './_imports';
+import { state, findSectionByKey, getReusableNameFromSectionKey, applyRichAction, openLinkInlineModal, getRenderApp, setActiveEditorBlock } from './_imports';
 import { actionRegistry } from '../actions/registry';
 import { openRemoveConfirmationModal } from './remove-confirmation-modal';
 import { clearHideIfUnmodifiedForSectionPath, clearHideIfUnmodifiedForSections, findSectionPath } from '../../template-hide';
@@ -62,6 +62,22 @@ export function bindClickDispatch(app: HTMLElement): void {
       event.stopPropagation();
       getRenderApp()();
       return;
+    }
+
+    if (state.currentView === 'ai' && target.closest('.editor-passive-empty-text.has-placeholder')) {
+      const blockElement = target.closest<HTMLElement>('.reader-block[data-section-key][data-block-id]');
+      const sectionKey = blockElement?.dataset.sectionKey ?? '';
+      const blockId = blockElement?.dataset.blockId ?? '';
+      if (sectionKey && blockId) {
+        event.preventDefault();
+        state.aiModeTipDismissed = true;
+        setActiveEditorBlock(sectionKey, blockId, { targetOnly: true });
+        if (state.pendingEditorActivation) {
+          state.pendingEditorActivation.immediateFocus = true;
+        }
+        getRenderApp()();
+        return;
+      }
     }
 
     if (target.closest('select') || target.closest('input')) {

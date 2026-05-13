@@ -149,6 +149,43 @@ hvy_version: 0.1
   expect(Number(result.panelZIndex)).toBeGreaterThan(Number(result.overlayZIndex));
 });
 
+test('embedded AI mode renders the request changes popover', async ({ page }) => {
+  await page.goto('/');
+
+  await page.evaluate(async () => {
+    document.body.innerHTML = '<div id="mount"></div>';
+    const modulePath = '/src/embed.ts';
+    const { deserializeDocumentBytes, mountHvy } = await import(/* @vite-ignore */ modulePath);
+    const source = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ Embedded AI target
+`;
+    const root = document.querySelector<HTMLElement>('#mount');
+    if (!root) {
+      throw new Error('Mount root missing.');
+    }
+    mountHvy({
+      root,
+      document: deserializeDocumentBytes(new TextEncoder().encode(source), '.hvy'),
+      mode: 'ai',
+    });
+  });
+
+  await expect(page.locator('.ai-view-hint')).toBeVisible();
+  await page.locator('#aiReaderDocument .reader-block', { hasText: 'Embedded AI target' }).click({ button: 'right' });
+  await expect(page.locator('.hvy-context-popover')).toContainText('Request changes');
+  await expect(page.locator('.ai-view-hint')).toHaveCount(0);
+  await page.locator('.hvy-context-popover button', { hasText: 'Request changes' }).click();
+
+  await expect(page.locator('.ai-edit-popover')).toBeVisible();
+  await expect(page.locator('.ai-edit-popover')).toContainText('Request changes');
+});
+
 test('new section component picker opens on the first click', async ({ page }) => {
   await page.goto('/');
 
@@ -639,6 +676,11 @@ hvy_version: 0.1
 
   await expect(page.locator('#aiReaderDocument .editor-passive-empty-text', { hasText: 'Draft summary' })).toBeVisible();
   await expect(page.locator('#aiReaderDocument .ghost-label', { hasText: 'Add Todo' })).toBeVisible();
+
+  await page.locator('#aiReaderDocument .editor-passive-empty-text', { hasText: 'Draft summary' }).click();
+  await expect(page.locator('#aiReaderDocument .rich-editor')).toBeVisible();
+  await page.locator('#aiReaderDocument .rich-editor').fill('AI draft summary');
+  await expect(page.locator('#aiReaderDocument')).toContainText('AI draft summary');
 
   await page.locator('#aiReaderDocument .ghost-label', { hasText: 'Add Todo' }).click();
 

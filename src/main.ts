@@ -25,7 +25,8 @@ import { commitHistorySnapshot } from './history';
 import { capturePaneScroll, restorePaneScroll, centerPendingEditorSection, focusPendingSectionTitleEditor, scrollPendingEditorActivation, scrollPendingEditorDeactivation } from './scroll';
 import { bindUi } from './bind-ui';
 import { deserializeDocumentBytes, serializeDocument } from './serialization';
-import { DEFAULT_OPENAI_COMPACTION_MODEL, createDefaultChatState, renderChatPanel } from './chat/chat';
+import { createDefaultChatState, renderChatPanel } from './chat/chat';
+import { renderAiEditPopover, renderAiModeHint } from './ai-mode-ui';
 import { captureChatThreadScroll, restoreChatThreadScroll } from './chat/chat-thread-ui';
 import { loadResumeState, saveResumeState } from './state-persistence';
 import { registerHostPlugin, SCRIPTING_PLUGIN_ID } from './plugins/registry';
@@ -75,6 +76,7 @@ function createInitialState(document: ReturnType<typeof deserializeDocumentBytes
     editorMode: 'basic',
     responsivePreview: 'full',
     chat: createDefaultChatState(),
+    aiModeTipDismissed: false,
     search: createDefaultSearchState(),
     contextMenu: null,
     aiEdit: {
@@ -193,86 +195,6 @@ function bindResumePersistence(): void {
     }
   });
   window.addEventListener('pagehide', () => saveResumeState(state));
-}
-
-function renderAiEditPopover(): string {
-  if (!state.aiEdit.sectionKey || !state.aiEdit.blockId) {
-    return '';
-  }
-  if (state.aiEdit.isSending) {
-    return '';
-  }
-
-  const popupStyle = `left: ${state.aiEdit.popupX}px; top: ${state.aiEdit.popupY}px;`;
-  const providerLabel = state.chat.settings.provider === 'openai' ? 'OpenAI' : state.chat.settings.provider === 'qwen' ? 'Qwen' : 'Anthropic';
-
-  return `
-    <section class="ai-edit-popover" style="${escapeAttr(popupStyle)}" aria-label="Request AI component changes">
-      <div class="ai-edit-popover-head">
-        <div>
-          <h3>Request changes</h3>
-        </div>
-        <button type="button" class="ghost" data-action="close-ai-edit" aria-label="Close request changes">Close</button>
-      </div>
-      <div class="ai-edit-settings">
-        <label class="chat-setting">
-          <span>Provider</span>
-          <select data-field="ai-provider" aria-label="AI edit provider">
-            <option value="openai"${state.chat.settings.provider === 'openai' ? ' selected' : ''}>OpenAI</option>
-            <option value="anthropic"${state.chat.settings.provider === 'anthropic' ? ' selected' : ''}>Anthropic</option>
-            <option value="qwen"${state.chat.settings.provider === 'qwen' ? ' selected' : ''}>Qwen</option>
-          </select>
-        </label>
-
-        <label class="chat-setting">
-          <span>Model</span>
-          <input
-            type="text"
-            data-field="ai-model"
-            value="${escapeAttr(state.chat.settings.model)}"
-            placeholder="${escapeAttr(providerLabel === 'OpenAI' ? 'gpt-5.4-mini' : providerLabel === 'Qwen' ? 'qwen-plus' : 'claude-sonnet-4-6')}"
-            autocapitalize="off"
-            autocomplete="off"
-            spellcheck="false"
-            aria-label="AI edit model"
-          />
-        </label>
-
-        <label class="chat-setting">
-          <span>Compaction provider</span>
-          <select data-field="chat-compaction-provider" aria-label="AI edit compaction provider">
-            <option value="openai"${(state.chat.settings.compactionProvider ?? 'openai') === 'openai' ? ' selected' : ''}>OpenAI</option>
-            <option value="anthropic"${state.chat.settings.compactionProvider === 'anthropic' ? ' selected' : ''}>Anthropic</option>
-          </select>
-        </label>
-
-        <label class="chat-setting">
-          <span>Compaction model</span>
-          <input
-            type="text"
-            data-field="chat-compaction-model"
-            value="${escapeAttr(state.chat.settings.compactionModel ?? DEFAULT_OPENAI_COMPACTION_MODEL)}"
-            placeholder="${escapeAttr(DEFAULT_OPENAI_COMPACTION_MODEL)}"
-            autocapitalize="off"
-            autocomplete="off"
-            spellcheck="false"
-            aria-label="AI edit compaction model"
-          />
-        </label>
-      </div>
-      ${state.aiEdit.error ? `<div class="ai-edit-error" role="alert">${escapeHtml(state.aiEdit.error)}</div>` : ''}
-      <form id="aiEditComposer" class="ai-edit-composer">
-        <label class="chat-composer-field">
-          <span>Change request</span>
-          <textarea data-field="ai-edit-input" rows="5" placeholder="Describe what should change in this component...">${escapeHtml(state.aiEdit.draft)}</textarea>
-        </label>
-        <div class="chat-composer-actions">
-          <span class="chat-composer-status">Describe the change you want, then send.</span>
-          <button type="submit" class="secondary">Send</button>
-        </div>
-      </form>
-    </section>
-  `;
 }
 
 function renderContextMenu(): string {
@@ -743,10 +665,11 @@ function renderApp(): void {
                      </div>
                    </aside>
                    <div id="${isAiView ? 'aiReaderDocument' : 'readerDocument'}" class="reader-document">${readerRenderer.renderReaderSections(state.document.sections)}</div>
+                   ${isAiView ? renderAiModeHint(state, { escapeAttr, escapeHtml }) : ''}
                    ${renderContextMenu()}
                    ${
                      isAiView
-                       ? `${renderAiEditPopover()}`
+                       ? `${renderAiEditPopover(state, { escapeAttr, escapeHtml })}`
                        : ''
                    }
                  </div>`

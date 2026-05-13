@@ -2,9 +2,11 @@ import { state, openLinkInlineModal } from './_imports';
 import { getAiEditorDoubleClickDelayMs } from '../../reference-config';
 
 const AI_DOUBLE_TAP_DISTANCE_PX = 28;
+const AI_LONG_PRESS_MS = 560;
 
 let lastAiTap: { sectionKey: string; blockId: string; x: number; y: number; time: number } | null = null;
 let suppressNextAiContextClick = false;
+let aiLongPress: { pointerId: number; x: number; y: number; timer: number } | null = null;
 
 export function bindContextmenu(app: HTMLElement): void {
   app.addEventListener('click', (event) => {
@@ -42,6 +44,9 @@ export function bindContextmenu(app: HTMLElement): void {
     }
 
     openReaderContextPopover(app, event, filtering);
+    if (state.contextMenu?.kind === 'ai') {
+      dismissAiModeTip(app);
+    }
   });
 
   app.addEventListener('dblclick', (event) => {
@@ -54,9 +59,61 @@ export function bindContextmenu(app: HTMLElement): void {
     }
     window.getSelection()?.removeAllRanges();
     openReaderContextPopover(app, event, false);
+    if (state.contextMenu?.kind === 'ai') {
+      dismissAiModeTip(app);
+    }
+  });
+
+  app.addEventListener('pointerdown', (event) => {
+    if (state.currentView !== 'ai' || event.pointerType === 'mouse') {
+      return;
+    }
+    const target = event.target as HTMLElement;
+    if (shouldIgnoreAiContextGestureTarget(target)) {
+      clearAiLongPress();
+      return;
+    }
+    const blockElement = target.closest<HTMLElement>('.reader-block[data-section-key][data-block-id]');
+    if (!blockElement?.dataset.sectionKey || !blockElement.dataset.blockId) {
+      clearAiLongPress();
+      return;
+    }
+    clearAiLongPress();
+    aiLongPress = {
+      pointerId: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+      timer: window.setTimeout(() => {
+        const active = aiLongPress;
+        aiLongPress = null;
+        if (!active) {
+          return;
+        }
+        window.getSelection()?.removeAllRanges();
+        openReaderContextPopover(app, event, false);
+        if (state.contextMenu?.kind === 'ai') {
+          dismissAiModeTip(app);
+          suppressNextAiContextClick = true;
+        }
+      }, AI_LONG_PRESS_MS),
+    };
+  });
+
+  app.addEventListener('pointermove', (event) => {
+    if (!aiLongPress || aiLongPress.pointerId !== event.pointerId) {
+      return;
+    }
+    if (Math.hypot(event.clientX - aiLongPress.x, event.clientY - aiLongPress.y) > AI_DOUBLE_TAP_DISTANCE_PX) {
+      clearAiLongPress();
+    }
+  });
+
+  app.addEventListener('pointercancel', (event) => {
+    clearAiLongPress(event.pointerId);
   });
 
   app.addEventListener('pointerup', (event) => {
+    clearAiLongPress(event.pointerId);
     if (state.currentView !== 'ai' || event.pointerType === 'mouse') {
       return;
     }
@@ -90,9 +147,23 @@ export function bindContextmenu(app: HTMLElement): void {
     window.getSelection()?.removeAllRanges();
     openReaderContextPopover(app, event, false);
     if (state.contextMenu?.kind === 'ai') {
+      dismissAiModeTip(app);
       suppressNextAiContextClick = true;
     }
   });
+}
+
+function dismissAiModeTip(app: HTMLElement): void {
+  state.aiModeTipDismissed = true;
+  app.querySelector('.ai-view-hint')?.remove();
+}
+
+function clearAiLongPress(pointerId?: number): void {
+  if (!aiLongPress || (pointerId !== undefined && aiLongPress.pointerId !== pointerId)) {
+    return;
+  }
+  window.clearTimeout(aiLongPress.timer);
+  aiLongPress = null;
 }
 
 function shouldIgnoreAiContextGestureTarget(target: HTMLElement): boolean {

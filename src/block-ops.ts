@@ -709,7 +709,13 @@ export function deactivateEditorBlock(sectionKey: string, blockId: string): 'clo
   return 'closed';
 }
 
-export function cancelEditorBlockEdit(sectionKey: string, blockId: string): 'closed' | 'removed' | 'unchanged' {
+export type CancelEditorBlockEditResult = 'closed' | 'removed' | 'unchanged' | 'needs-confirmation';
+
+export function cancelEditorBlockEdit(
+  sectionKey: string,
+  blockId: string,
+  options: { confirmChangedNewBlock?: boolean } = {}
+): CancelEditorBlockEditResult {
   const index = state.activeEditorBlockPath.findIndex(
     (active) => active.sectionKey === sectionKey && active.blockId === blockId
   );
@@ -722,8 +728,8 @@ export function cancelEditorBlockEdit(sectionKey: string, blockId: string): 'clo
   const block = findBlockByIds(sectionKey, blockId);
   if (state.activeEditorNewBlockIds.has(blockId) && block) {
     const changed = snapshot ? !visualBlocksEqual(block, snapshot.block) : true;
-    if (changed && !(globalThis.confirm?.('Discard this new component?') ?? false)) {
-      return 'unchanged';
+    if (changed && !options.confirmChangedNewBlock) {
+      return 'needs-confirmation';
     }
     const rootBlocks = getEditorRootBlocks(sectionKey);
     if (rootBlocks && removeBlockFromList(rootBlocks, blockId)) {

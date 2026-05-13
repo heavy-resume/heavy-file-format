@@ -6,6 +6,7 @@ import { captureEditorDeactivationAnchor, capturePaneScroll } from '../../scroll
 import type { AppActionHandler } from './types';
 import { buildBlockDescriptionParentTree, buildDescriptionRequest, generateDescription } from '../../descriptions/provider';
 import { populateMissingDescriptions } from '../../descriptions/populate';
+import { openRemoveConfirmationModal } from '../handlers/remove-confirmation-modal';
 
 let descriptionPopulateAbortController: AbortController | null = null;
 
@@ -108,6 +109,18 @@ const cancelBlockEdit: AppActionHandler = ({ app, event, sectionKey, blockId }) 
   event.stopPropagation();
   const deactivationAnchor = captureEditorDeactivationAnchor(app, sectionKey, blockId);
   const result = cancelEditorBlockEdit(sectionKey, blockId);
+  if (result === 'needs-confirmation') {
+    openRemoveConfirmationModal(() => {
+      const confirmedResult = cancelEditorBlockEdit(sectionKey, blockId, { confirmChangedNewBlock: true });
+      if (confirmedResult === 'closed' || confirmedResult === 'removed') {
+        state.pendingEditorDeactivation = deactivationAnchor;
+        state.activeEditorBlockReturnScroll = null;
+      }
+      getRefreshReaderPanels()();
+      getRenderApp()();
+    }, app);
+    return;
+  }
   if (result === 'closed' || result === 'removed') {
     state.pendingEditorDeactivation = deactivationAnchor;
     state.activeEditorBlockReturnScroll = null;

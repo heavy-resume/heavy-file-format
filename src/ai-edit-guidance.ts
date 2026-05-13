@@ -119,6 +119,7 @@ export function getAiEditComponentGuidance(block: VisualBlock): string {
   if (base === 'xref-card') {
     return [
       '- Use `xrefTitle`, optional `xrefDetail`, and `xrefTarget`.',
+      '- Preserve `xrefTargetTagFilter` when a custom xref-card component uses it to constrain target picking.',
       '- Do not replace an xref-card with a plain markdown link.',
     ].join('\n');
   }

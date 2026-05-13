@@ -51,6 +51,7 @@ export interface BlockSchema {
   xrefTitle: string;
   xrefDetail: string;
   xrefTarget: string;
+  xrefTargetTagFilter: string;
   plugin: string;
   pluginConfig: JsonObject;
   expandableStubComponent: string;

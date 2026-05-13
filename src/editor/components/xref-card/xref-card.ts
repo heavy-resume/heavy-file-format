@@ -2,7 +2,7 @@ import './xref-card.css';
 import type { ComponentEditorRenderer, ComponentReaderRenderer, ComponentRenderHelpers } from '../../component-helpers';
 
 export const renderXrefCardEditor: ComponentEditorRenderer = (sectionKey, block, helpers) => `
-  <div class="xref-card-editor editor-xref-card ${helpers.isXrefTargetValid(block.schema.xrefTarget) ? '' : 'is-invalid-target'}">
+  <div class="xref-card-editor editor-xref-card ${helpers.isXrefTargetValid(block.schema.xrefTarget, block.schema.xrefTargetTagFilter) ? '' : 'is-invalid-target'}">
     <strong
       contenteditable="true"
       spellcheck="true"
@@ -30,7 +30,7 @@ export const renderXrefCardEditor: ComponentEditorRenderer = (sectionKey, block,
         placeholder="Start typing a target"
       />
       <datalist id="${helpers.escapeAttr(getDatalistId(block.id))}">
-        ${renderTargetOptions(helpers)}
+        ${renderTargetOptions(helpers, block.schema.xrefTargetTagFilter)}
       </datalist>
     </label>
   </div>
@@ -42,7 +42,7 @@ export const renderXrefCardReader: ComponentReaderRenderer = (_section, block, h
     block.schema.xrefDetail,
     block.schema.xrefTarget,
     helpers,
-    `reader-xref-card ${helpers.isXrefTargetValid(block.schema.xrefTarget) ? '' : 'is-invalid-target'}`
+    `reader-xref-card ${helpers.isXrefTargetValid(block.schema.xrefTarget, block.schema.xrefTargetTagFilter) ? '' : 'is-invalid-target'}`
   );
 
 function renderXrefCardPreview(
@@ -62,9 +62,9 @@ function renderXrefCardPreview(
   </a>`;
 }
 
-function renderTargetOptions(helpers: ComponentRenderHelpers): string {
+function renderTargetOptions(helpers: ComponentRenderHelpers, tagFilter: string): string {
   return helpers
-    .getXrefTargetOptions()
+    .getXrefTargetOptions(tagFilter)
     .map(
       (option) =>
         `<option value="${helpers.escapeAttr(option.value)}" label="${helpers.escapeAttr(option.label)}">${helpers.escapeHtml(option.label)}</option>`

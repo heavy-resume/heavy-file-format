@@ -26,7 +26,7 @@ Rule: Any valid `.md` file is valid `.hvy`.
 ### 3.1 Markdown compatibility
 
 If HVY-specific directives are absent, parse as Markdown only. `_I'm in italics_` is used for italics rather than `*`.
-HVY text also supports `___underlined___` as a constrained inline underline extension. This is not standard Markdown, but remains readable as plain text in Markdown renderers that do not implement the extension. The underline marker uses three underscores so language names such as `C++` remain plain text.
+HVY text also supports `___underlined___` as a constrained inline underline extension. The underline marker uses three underscores so language names such as `C++` remain plain text.
 
 When an authoring client imports a `.md` or `.markdown` file and converts it into an editable `.hvy` document, it SHOULD coerce Markdown into reusable HVY structure rather than a single opaque text blob:
 - ATX headings define section boundaries. A heading with greater depth becomes a child section of the nearest prior heading with lower depth. Markdown before the first heading goes into an "Imported Markdown" section.
@@ -340,6 +340,17 @@ Cross-reference cards can be emitted as a block directive with all card data in 
 Cross-reference card requirements:
 - `xrefTitle` is REQUIRED.
 - `xrefTarget` is RECOMMENDED. If omitted, implementations SHOULD preserve the card, treat it as disabled/non-navigable, and surface a warning to authors.
+- `xrefTargetTagFilter` is optional authoring metadata. When present, editors SHOULD filter target pickers to sections or components tagged with at least one listed tag. The value uses the same comma-separated tag syntax as `tags`; it does not affect rendering or link resolution.
+
+Reusable cross-reference card components can carry target picker filters:
+
+```yaml
+component_defs:
+  - name: skill-xref-card
+    baseType: xref-card
+    schema:
+      xrefTargetTagFilter: skill
+```
 
 Image blocks reference a binary attachment stored in the document tail:
 
@@ -393,6 +404,7 @@ Block metadata optionally includes component-specific fields. Common examples in
 - `xrefTitle`
 - `xrefDetail`
 - `xrefTarget`
+- `xrefTargetTagFilter`
 - `expandableAlwaysShowStub`
 - `expandableExpanded`
 - `expandableStubCss`
@@ -477,7 +489,7 @@ In the in-memory/schema form used by `component_defs`, these pane-level styles a
 
 Serialized block objects SHOULD contain document data only. Editor-only UI state, such as whether a schema editor is open for a block, MUST NOT be emitted.
 
-Preserve and round-trip these fields even if a plain Markdown renderer ignores them. When emitting new documents, prefer `hvy:expandable:stub` and `hvy:expandable:content` inline directives over `expandableStubBlocks`/`expandableContentBlocks`; the container object form is used in `component_defs` schemas where inline directives are not applicable.
+Preserve and round-trip these fields. When emitting new documents, prefer `hvy:expandable:stub` and `hvy:expandable:content` inline directives over `expandableStubBlocks`/`expandableContentBlocks`; the container object form is used in `component_defs` schemas where inline directives are not applicable.
 
 ### 5.9 Reusable component definitions
 
@@ -504,7 +516,6 @@ Notes:
 - A component definition name can be used anywhere a block `component` value is accepted, including block directives, nested block schemas, and `componentListComponent`.
 - When a nested block array (e.g. `containerBlocks`, `expandableContentBlocks`) places a custom component, the shorthand form `{ component: name }` SHOULD be used instead of the full `{ schema: { component: name, ... } }` form. The component's template provides all other properties at instantiation time.
 - Implementations SHOULD render custom components according to `baseType` and preserve the custom component name for editing and round-tripping.
-- Plain Markdown renderers ignore `component_defs`.
 
 Reusable component templates MAY include value tokens in any string field. Tokens use Markdown-safe text and are replaced only when an authoring tool creates a component instance from the reusable definition:
 
@@ -551,7 +562,6 @@ Notes:
 - Clone a `section_defs[*].template` when inserting a new section or subsection.
 - Reusable section templates preserve section-level presentation fields such as `contained`, `expanded`, `highlight`, `css`, `location`, and `hideIfUnmodified`.
 - Implementations SHOULD assign fresh section keys, block IDs, and custom IDs when instantiating a reusable section.
-- Plain Markdown renderers ignore `section_defs`.
 
 ### 5.11 Indentation
 
@@ -595,8 +605,6 @@ Example:
      <!--hvy:text {}-->
       Second item
 ```
-
-Plain Markdown renderers ignore leading whitespace on comment lines.
 
 ### 5.12 Color theme
 
@@ -690,7 +698,6 @@ Rules:
 - Values MUST be valid CSS color expressions (`#rrggbb`, `#rrggbbaa`, `rgb(...)`, `rgba(...)`, `hsl(...)`, named colors, etc.). Semi-transparent values are permitted.
 - The viewer applies these variables to the document root (typically `:root` or the document container) before any CSS blocks or inline component CSS is evaluated, so `var(--hvy-bg)` and similar expressions resolve everywhere.
 - When the viewer exposes a UI for editing theme colors, edits MUST be persisted back into `document.meta.theme.colors` so they round-trip through save.
-- Plain Markdown renderers ignore `theme`.
 
 ### 5.13 Document-level component defaults
 
@@ -711,7 +718,6 @@ Rules:
 - `css` is an optional inline CSS style string applied to the rendered root element of that component type.
 - Explicit block-level `css` remains valid and MAY be combined with or override document-level defaults in a viewer-specific way.
 - Unknown component names or unsupported default fields MUST be ignored.
-- Plain Markdown renderers ignore `component_defaults`.
 
 ### 5.14 Document-level section defaults
 
@@ -730,7 +736,6 @@ Rules:
 - `css` is an optional inline CSS style string applied to each rendered section wrapper.
 - Explicit section-level `css` remains valid and MAY be combined with or override document-level defaults in a viewer-specific way.
 - Unknown fields under `section_defaults` MUST be ignored.
-- Plain Markdown renderers ignore `section_defaults`.
 
 ### 5.15 Document-level text line styles
 
@@ -763,7 +768,6 @@ Rules:
 - Unknown style names SHOULD render the line content normally. Authoring tools SHOULD show an editor warning so authors can catch typos.
 - `css` is an optional inline CSS declaration string and MUST be sanitized using the same rules as other document-supplied inline CSS.
 - Text line styles do not create HVY components, sections, component defaults, or component-level CSS. Component-level `css` continues to persist independently.
-- Plain Markdown renderers display the marker as plain text.
 
 ## 6. Template & Schema (`.thvy`)
 

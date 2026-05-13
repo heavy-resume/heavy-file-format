@@ -75,6 +75,18 @@ theme:
     --hvy-success-bg: "#e7f9ee"
     --hvy-success-border: "#95d8a9"
 component_defs:
+  - name: skill-xref-card
+    baseType: xref-card
+    description: Skill cross-reference
+    schema:
+      xrefTargetTagFilter: skill
+      css: "margin: 0.25rem 0;"
+  - name: tool-tech-xref-card
+    baseType: xref-card
+    description: Tool / technology cross-reference
+    schema:
+      xrefTargetTagFilter: tool
+      css: "margin: 0.25rem 0;"
   - name: history-record
     baseType: expandable
     description: Work history organization entry
@@ -162,7 +174,7 @@ component_defs:
                 - text: ""
                   schema:
                     component: component-list
-                    componentListComponent: xref-card
+                    componentListComponent: skill-xref-card
                     componentListItemLabel: skill xref
                     css: "margin: 0;"
                     componentListBlocks: []
@@ -181,7 +193,7 @@ component_defs:
                 - text: ""
                   schema:
                     component: component-list
-                    componentListComponent: xref-card
+                    componentListComponent: tool-tech-xref-card
                     componentListItemLabel: tool / tech xref
                     css: "margin: 0;"
                     componentListBlocks: []
@@ -429,7 +441,7 @@ component_defs:
   <!--hvy:expandable:stub {}-->
 
    <!--hvy:text {"css":"margin-bottom: 0;"}-->
-     ## Summary
+     # Summary
 
   <!--hvy:expandable:stub {}-->
 
@@ -462,13 +474,13 @@ component_defs:
    <!--hvy:container {"css":"margin: 0;","align":"center"}-->
     <!--hvy:text {"align":"center","css":"margin: 0 0 0.35rem;"}-->
      ## Skills
-    <!--hvy:component-list {"id":"top-skills-list","componentListComponent":"xref-card","componentListItemLabel":"skill xref","css":"margin: 0;","align":"center"}-->
+    <!--hvy:component-list {"id":"top-skills-list","componentListComponent":"skill-xref-card","componentListItemLabel":"skill xref","css":"margin: 0;","align":"center"}-->
   <!--hvy:grid:1 {"id":"top-tools-technologies"}-->
 
    <!--hvy:container {"css":"margin: 0;","align":"center"}-->
     <!--hvy:text {"align":"center","css":"margin: 0 0 0.35rem;"}-->
      ## Tools & Technologies
-    <!--hvy:component-list {"id":"top-tools-technologies-list","componentListComponent":"xref-card","componentListItemLabel":"tool / tech xref","css":"margin: 0;","align":"center"}-->
+    <!--hvy:component-list {"id":"top-tools-technologies-list","componentListComponent":"tool-tech-xref-card","componentListItemLabel":"tool / tech xref","css":"margin: 0;","align":"center"}-->
 
 <!--hvy: {"id":"skills","lock":true,"expanded":false,"location":"sidebar","tags":"sidebar, skills-reference, skill-details","description":"Skills reference list","hideIfUnmodified":true}-->
 #! Skills
@@ -476,7 +488,7 @@ component_defs:
  <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
   # Skills
 
- <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"skill-record","componentListItemLabel":"skill"}-->
+ <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"skill-record","componentListItemLabel":"skill","tags":"skill"}-->
 
 <!--hvy: {"id":"tools-technologies","lock":true,"expanded":false,"location":"sidebar","tags":"sidebar, tools-reference, technologies, tool-details","description":"Tools and technologies reference list","hideIfUnmodified":true}-->
 #! Tools & Technologies
@@ -484,7 +496,7 @@ component_defs:
  <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
   # Tools & <!--hvy:alt {"compact":"Tech"}-->Technologies<!--/hvy:alt-->
 
- <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"skill-record","componentListItemLabel":"tool / tech"}-->
+ <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"skill-record","componentListItemLabel":"tool / tech","tags":"tool"}-->
 
 <!--hvy: {"id":"history","lock":true,"tags":"work-history, experience, reverse-chronological","description":"Work history","hideIfUnmodified":true}-->
 #! History

@@ -114,6 +114,36 @@ hvy_version: 0.1
   expect(expectedResult).toContain('"containerCollapsedPreviewRem":2.5');
 });
 
+test('round-trips reusable xref-card target tag filters', () => {
+  const input = `---
+hvy_version: 0.1
+component_defs:
+  - name: skill-xref-card
+    baseType: xref-card
+    schema:
+      xrefTargetTagFilter: skill
+---
+
+<!--hvy: {"id":"featured"}-->
+#! Featured
+
+ <!--hvy:component-list {"componentListComponent":"skill-xref-card"}-->
+
+  <!--hvy:component-list:0 {}-->
+
+   <!--hvy:skill-xref-card {"xrefTitle":"TypeScript","xrefTarget":"skill-typescript","xrefTargetTagFilter":"skill"}-->
+`;
+
+  const document = deserializeDocument(input, '.hvy');
+  const expectedResult = serializeWithState(document);
+
+  expect(document.meta.component_defs?.[0]?.schema).toMatchObject({ xrefTargetTagFilter: 'skill' });
+  expect(document.sections[0]?.blocks[0]?.schema.componentListComponent).toBe('skill-xref-card');
+  expect(document.sections[0]?.blocks[0]?.schema.componentListBlocks[0]?.schema.xrefTargetTagFilter).toBe('skill');
+  expect(expectedResult).toContain('xrefTargetTagFilter: skill');
+  expect(expectedResult).toContain('<!--hvy:skill-xref-card {"xrefTitle":"TypeScript","xrefTarget":"skill-typescript"}-->');
+});
+
 test('round-trips trailing spaces in text block lines', () => {
   const input = [
     '---',

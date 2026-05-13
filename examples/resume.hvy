@@ -74,6 +74,18 @@ theme:
     --hvy-success-bg: "#152b1e"
     --hvy-success-border: "#2e7a46"
 component_defs:
+  - name: skill-xref-card
+    baseType: xref-card
+    description: Skill cross-reference
+    schema:
+      xrefTargetTagFilter: skill
+      css: "margin: 0.25rem 0;"
+  - name: tool-tech-xref-card
+    baseType: xref-card
+    description: Tool / technology cross-reference
+    schema:
+      xrefTargetTagFilter: tool
+      css: "margin: 0.25rem 0;"
   - name: history-record
     baseType: expandable
     description: Work history organization entry
@@ -161,7 +173,7 @@ component_defs:
                 - text: ""
                   schema:
                     component: component-list
-                    componentListComponent: xref-card
+                    componentListComponent: skill-xref-card
                     componentListItemLabel: skill xref
                     css: "margin: 0;"
                     componentListBlocks: []
@@ -180,7 +192,7 @@ component_defs:
                 - text: ""
                   schema:
                     component: component-list
-                    componentListComponent: xref-card
+                    componentListComponent: tool-tech-xref-card
                     componentListItemLabel: tool / tech xref
                     css: "margin: 0;"
                     componentListBlocks: []
@@ -423,7 +435,7 @@ component_defs:
   <!--hvy:expandable:stub {}-->
 
    <!--hvy:text {"css":"margin-bottom: 0;","placeholder":"Add a short professional summary and elaborate in the expanded section"}-->
-    ## Summary
+    # Summary
 
    <!--hvy:text {"css":"margin-top: 0;"}-->
     Product-minded software engineer focused on developer tooling, AI workflows, and reusable systems that make complex products easier to ship and maintain.
@@ -462,19 +474,19 @@ component_defs:
 
     <!--hvy:container:1 {}-->
 
-     <!--hvy:component-list {"id":"top-skills-list","componentListComponent":"xref-card","componentListItemLabel":"skill xref","css":"margin: 0;","align":"center"}-->
+     <!--hvy:component-list {"id":"top-skills-list","componentListComponent":"skill-xref-card","componentListItemLabel":"skill xref","css":"margin: 0;","align":"center"}-->
 
       <!--hvy:component-list:0 {}-->
 
-       <!--hvy:xref-card {"css":"margin: 0.35rem 0;","xrefTitle":"Software Engineering","xrefDetail":"Core strength","xrefTarget":"skill-software-engineering"}-->
+       <!--hvy:skill-xref-card {"css":"margin: 0.35rem 0;","xrefTitle":"Software Engineering","xrefDetail":"Core strength","xrefTarget":"skill-software-engineering"}-->
 
       <!--hvy:component-list:1 {}-->
 
-       <!--hvy:xref-card {"css":"margin: 0.35rem 0;","xrefTitle":"Library Development","xrefDetail":"Reusable systems","xrefTarget":"skill-library-development"}-->
+       <!--hvy:skill-xref-card {"css":"margin: 0.35rem 0;","xrefTitle":"Library Development","xrefDetail":"Reusable systems","xrefTarget":"skill-library-development"}-->
 
       <!--hvy:component-list:2 {}-->
 
-       <!--hvy:xref-card {"css":"margin: 0.35rem 0;","xrefTitle":"LLM Prompt Engineering","xrefDetail":"Product workflow design","xrefTarget":"skill-llm-prompt-engineering"}-->
+       <!--hvy:skill-xref-card {"css":"margin: 0.35rem 0;","xrefTitle":"LLM Prompt Engineering","xrefDetail":"Product workflow design","xrefTarget":"skill-llm-prompt-engineering"}-->
 
   <!--hvy:grid:1 {"id":"top-tools-technologies"}-->
 
@@ -487,19 +499,19 @@ component_defs:
 
     <!--hvy:container:1 {}-->
 
-     <!--hvy:component-list {"id":"top-tools-technologies-list","componentListComponent":"xref-card","componentListItemLabel":"tool / tech xref","css":"margin: 0;","align":"center"}-->
+     <!--hvy:component-list {"id":"top-tools-technologies-list","componentListComponent":"tool-tech-xref-card","componentListItemLabel":"tool / tech xref","css":"margin: 0;","align":"center"}-->
 
       <!--hvy:component-list:0 {}-->
 
-       <!--hvy:xref-card {"css":"margin: 0.35rem 0;","xrefTitle":"TypeScript","xrefDetail":"Primary application language","xrefTarget":"tool-typescript"}-->
+       <!--hvy:tool-tech-xref-card {"css":"margin: 0.35rem 0;","xrefTitle":"TypeScript","xrefDetail":"Primary application language","xrefTarget":"tool-typescript"}-->
 
       <!--hvy:component-list:1 {}-->
 
-       <!--hvy:xref-card {"css":"margin: 0.35rem 0;","xrefTitle":"Python","xrefDetail":"Automation and prototyping","xrefTarget":"tool-python"}-->
+       <!--hvy:tool-tech-xref-card {"css":"margin: 0.35rem 0;","xrefTitle":"Python","xrefDetail":"Automation and prototyping","xrefTarget":"tool-python"}-->
 
       <!--hvy:component-list:2 {}-->
 
-       <!--hvy:xref-card {"css":"margin: 0.35rem 0;","xrefTitle":"Developer Containers","xrefDetail":"Reproducible local environments","xrefTarget":"tool-developer-containers"}-->
+       <!--hvy:tool-tech-xref-card {"css":"margin: 0.35rem 0;","xrefTitle":"Developer Containers","xrefDetail":"Reproducible local environments","xrefTarget":"tool-developer-containers"}-->
 
 <!--hvy: {"id":"skills","lock":true,"expanded":false,"location":"sidebar","tags":"sidebar, skills-reference, skill-details","description":"Skills reference list"}-->
 #! Skills
@@ -507,11 +519,11 @@ component_defs:
  <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
   # Skills
 
- <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"skill-record","componentListItemLabel":"skill","componentListDefaultSortKey":"Strength","componentListDefaultSortDirection":"desc"}-->
+ <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"skill-record","componentListItemLabel":"skill","tags":"skill","componentListDefaultSortKey":"Strength","componentListDefaultSortDirection":"desc"}-->
 
   <!--hvy:component-list:0 {}-->
 
-   <!--hvy:skill-record {"id":"skill-software-engineering","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"Software Engineering","Strength":98},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+   <!--hvy:skill-record {"id":"skill-software-engineering","tags":"skill","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"Software Engineering","Strength":98},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
     <!--hvy:expandable:stub {}-->
 
@@ -567,7 +579,7 @@ component_defs:
 
   <!--hvy:component-list:1 {}-->
 
-   <!--hvy:skill-record {"id":"skill-reverse-engineering","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"Reverse Engineering","Strength":87},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+   <!--hvy:skill-record {"id":"skill-reverse-engineering","tags":"skill","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"Reverse Engineering","Strength":87},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
     <!--hvy:expandable:stub {}-->
 
@@ -597,7 +609,7 @@ component_defs:
 
   <!--hvy:component-list:2 {}-->
 
-   <!--hvy:skill-record {"id":"skill-library-development","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"Library Development","Strength":93},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+   <!--hvy:skill-record {"id":"skill-library-development","tags":"skill","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"Library Development","Strength":93},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
     <!--hvy:expandable:stub {}-->
 
@@ -627,7 +639,7 @@ component_defs:
 
   <!--hvy:component-list:3 {}-->
 
-   <!--hvy:skill-record {"id":"skill-llm-prompt-engineering","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"LLM Prompt Engineering","Strength":91},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+   <!--hvy:skill-record {"id":"skill-llm-prompt-engineering","tags":"skill","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"LLM Prompt Engineering","Strength":91},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
     <!--hvy:expandable:stub {}-->
 
@@ -657,7 +669,7 @@ component_defs:
 
   <!--hvy:component-list:4 {}-->
 
-   <!--hvy:skill-record {"id":"skill-project-management","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"Project Management","Strength":84},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+   <!--hvy:skill-record {"id":"skill-project-management","tags":"skill","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"Project Management","Strength":84},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
     <!--hvy:expandable:stub {}-->
 
@@ -691,11 +703,11 @@ component_defs:
  <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
   # Tools & <!--hvy:alt {"compact":"Tech"}-->Technologies<!--/hvy:alt-->
 
- <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"skill-record","componentListItemLabel":"tool / tech","componentListDefaultSortKey":"Strength","componentListDefaultSortDirection":"desc","componentListDefaultGroupKey":"Category"}-->
+ <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"skill-record","componentListItemLabel":"tool / tech","tags":"tool","componentListDefaultSortKey":"Strength","componentListDefaultSortDirection":"desc","componentListDefaultGroupKey":"Category"}-->
 
   <!--hvy:component-list:0 {}-->
 
-   <!--hvy:skill-record {"id":"tool-typescript","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"TypeScript","Strength":96},"groupKeys":{"Category":"Programming Languages"},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+   <!--hvy:skill-record {"id":"tool-typescript","tags":"tool","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"TypeScript","Strength":96},"groupKeys":{"Category":"Programming Languages"},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
     <!--hvy:expandable:stub {}-->
 
@@ -725,7 +737,7 @@ component_defs:
 
   <!--hvy:component-list:1 {}-->
 
-   <!--hvy:skill-record {"id":"tool-python","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"Python","Strength":91},"groupKeys":{"Category":"Programming Languages"},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+   <!--hvy:skill-record {"id":"tool-python","tags":"tool","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"Python","Strength":91},"groupKeys":{"Category":"Programming Languages"},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
     <!--hvy:expandable:stub {}-->
 
@@ -772,7 +784,7 @@ component_defs:
 
   <!--hvy:component-list:2 {}-->
 
-   <!--hvy:skill-record {"id":"tool-c-cpp","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"C/C++","Strength":72},"groupKeys":{"Category":"Programming Languages"},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+   <!--hvy:skill-record {"id":"tool-c-cpp","tags":"tool","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"C/C++","Strength":72},"groupKeys":{"Category":"Programming Languages"},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
     <!--hvy:expandable:stub {}-->
 
@@ -802,7 +814,7 @@ component_defs:
 
   <!--hvy:component-list:3 {}-->
 
-   <!--hvy:skill-record {"id":"tool-developer-containers","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"Developer Containers","Strength":89},"groupKeys":{"Category":"Development Environments"},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+   <!--hvy:skill-record {"id":"tool-developer-containers","tags":"tool","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"Developer Containers","Strength":89},"groupKeys":{"Category":"Development Environments"},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
     <!--hvy:expandable:stub {}-->
 
@@ -836,7 +848,7 @@ component_defs:
 
   <!--hvy:component-list:4 {}-->
 
-   <!--hvy:skill-record {"id":"tool-openai-api","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"OpenAI API","Strength":86},"groupKeys":{"Category":"AI / Agent Tooling"},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+   <!--hvy:skill-record {"id":"tool-openai-api","tags":"tool","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"OpenAI API","Strength":86},"groupKeys":{"Category":"AI / Agent Tooling"},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
     <!--hvy:expandable:stub {}-->
 
@@ -866,7 +878,7 @@ component_defs:
 
   <!--hvy:component-list:5 {}-->
 
-   <!--hvy:skill-record {"id":"tool-github-codespaces","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"GitHub Codespaces","Strength":82},"groupKeys":{"Category":"Development Environments"},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+   <!--hvy:skill-record {"id":"tool-github-codespaces","tags":"tool","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"GitHub Codespaces","Strength":82},"groupKeys":{"Category":"Development Environments"},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
     <!--hvy:expandable:stub {}-->
 
@@ -896,7 +908,7 @@ component_defs:
 
   <!--hvy:component-list:6 {}-->
 
-   <!--hvy:skill-record {"id":"tool-superagi","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"SuperAGI","Strength":76},"groupKeys":{"Category":"AI / Agent Tooling"},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+   <!--hvy:skill-record {"id":"tool-superagi","tags":"tool","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"SuperAGI","Strength":76},"groupKeys":{"Category":"AI / Agent Tooling"},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
     <!--hvy:expandable:stub {}-->
 
@@ -986,19 +998,19 @@ component_defs:
 
         <!--hvy:container:1 {}-->
 
-         <!--hvy:component-list {"id":"history-skills-list","componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
+         <!--hvy:component-list {"id":"history-skills-list","componentListComponent":"skill-xref-card","css":"margin: 0;","align":"center"}-->
 
           <!--hvy:component-list:0 {}-->
 
-           <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Software Engineering","xrefTarget":"skill-software-engineering"}-->
+           <!--hvy:skill-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Software Engineering","xrefTarget":"skill-software-engineering"}-->
 
           <!--hvy:component-list:1 {}-->
 
-           <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Library Development","xrefTarget":"skill-library-development"}-->
+           <!--hvy:skill-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Library Development","xrefTarget":"skill-library-development"}-->
 
           <!--hvy:component-list:2 {}-->
 
-           <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Project Management","xrefTarget":"skill-project-management"}-->
+           <!--hvy:skill-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Project Management","xrefTarget":"skill-project-management"}-->
 
       <!--hvy:grid:1 {"id":"history-tools-technologies"}-->
 
@@ -1011,19 +1023,19 @@ component_defs:
 
         <!--hvy:container:1 {}-->
 
-         <!--hvy:component-list {"id":"history-tools-technologies-list","componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
+         <!--hvy:component-list {"id":"history-tools-technologies-list","componentListComponent":"tool-tech-xref-card","css":"margin: 0;","align":"center"}-->
 
           <!--hvy:component-list:0 {}-->
 
-           <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"TypeScript","xrefTarget":"tool-typescript"}-->
+           <!--hvy:tool-tech-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"TypeScript","xrefTarget":"tool-typescript"}-->
 
           <!--hvy:component-list:1 {}-->
 
-           <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Python","xrefTarget":"tool-python"}-->
+           <!--hvy:tool-tech-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Python","xrefTarget":"tool-python"}-->
 
           <!--hvy:component-list:2 {}-->
 
-           <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Developer Containers","xrefTarget":"tool-developer-containers"}-->
+           <!--hvy:tool-tech-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Developer Containers","xrefTarget":"tool-developer-containers"}-->
 
 <!--hvy: {"id":"projects","lock":true,"tags":"projects, portfolio, reverse-chronological","description":"Project portfolio"}-->
 #! Projects
@@ -1076,15 +1088,15 @@ component_defs:
 
         <!--hvy:container:1 {}-->
 
-         <!--hvy:component-list {"id":"project-relevant-skills-list","componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
+         <!--hvy:component-list {"id":"project-relevant-skills-list","componentListComponent":"skill-xref-card","css":"margin: 0;","align":"center"}-->
 
           <!--hvy:component-list:0 {}-->
 
-           <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Reverse Engineering","xrefTarget":"skill-reverse-engineering"}-->
+           <!--hvy:skill-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Reverse Engineering","xrefTarget":"skill-reverse-engineering"}-->
 
           <!--hvy:component-list:1 {}-->
 
-           <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Library Development","xrefTarget":"skill-library-development"}-->
+           <!--hvy:skill-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Library Development","xrefTarget":"skill-library-development"}-->
 
       <!--hvy:grid:1 {"id":"project-tools-technologies"}-->
 
@@ -1097,19 +1109,19 @@ component_defs:
 
         <!--hvy:container:1 {}-->
 
-         <!--hvy:component-list {"id":"project-tools-technologies-list","componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
+         <!--hvy:component-list {"id":"project-tools-technologies-list","componentListComponent":"tool-tech-xref-card","css":"margin: 0;","align":"center"}-->
 
           <!--hvy:component-list:0 {}-->
 
-           <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"TypeScript","xrefTarget":"tool-typescript"}-->
+           <!--hvy:tool-tech-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"TypeScript","xrefTarget":"tool-typescript"}-->
 
           <!--hvy:component-list:1 {}-->
 
-           <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Python","xrefTarget":"tool-python"}-->
+           <!--hvy:tool-tech-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Python","xrefTarget":"tool-python"}-->
 
           <!--hvy:component-list:2 {}-->
 
-           <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Developer Containers","xrefTarget":"tool-developer-containers"}-->
+           <!--hvy:tool-tech-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Developer Containers","xrefTarget":"tool-developer-containers"}-->
 
   <!--hvy:component-list:1 {}-->
 
@@ -1152,15 +1164,15 @@ component_defs:
 
         <!--hvy:container:1 {}-->
 
-         <!--hvy:component-list {"id":"project-relevant-skills-hackathon-list","componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
+         <!--hvy:component-list {"id":"project-relevant-skills-hackathon-list","componentListComponent":"skill-xref-card","css":"margin: 0;","align":"center"}-->
 
           <!--hvy:component-list:0 {}-->
 
-           <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"LLM Prompt Engineering","xrefTarget":"skill-llm-prompt-engineering"}-->
+           <!--hvy:skill-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"LLM Prompt Engineering","xrefTarget":"skill-llm-prompt-engineering"}-->
 
           <!--hvy:component-list:1 {}-->
 
-           <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Project Management","xrefTarget":"skill-project-management"}-->
+           <!--hvy:skill-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Project Management","xrefTarget":"skill-project-management"}-->
 
       <!--hvy:grid:1 {"id":"project-tools-technologies-hackathon"}-->
 
@@ -1173,27 +1185,27 @@ component_defs:
 
         <!--hvy:container:1 {}-->
 
-         <!--hvy:component-list {"id":"project-tools-technologies-hackathon-list","componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
+         <!--hvy:component-list {"id":"project-tools-technologies-hackathon-list","componentListComponent":"tool-tech-xref-card","css":"margin: 0;","align":"center"}-->
 
           <!--hvy:component-list:0 {}-->
 
-           <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Developer Containers","xrefTarget":"tool-developer-containers"}-->
+           <!--hvy:tool-tech-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Developer Containers","xrefTarget":"tool-developer-containers"}-->
 
           <!--hvy:component-list:1 {}-->
 
-           <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"OpenAI API","xrefTarget":"tool-openai-api"}-->
+           <!--hvy:tool-tech-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"OpenAI API","xrefTarget":"tool-openai-api"}-->
 
           <!--hvy:component-list:2 {}-->
 
-            <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Python","xrefTarget":"tool-python"}-->
+            <!--hvy:tool-tech-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Python","xrefTarget":"tool-python"}-->
 
           <!--hvy:component-list:3 {}-->
 
-            <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"GitHub Codespaces","xrefTarget":"tool-github-codespaces"}-->
+            <!--hvy:tool-tech-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"GitHub Codespaces","xrefTarget":"tool-github-codespaces"}-->
 
           <!--hvy:component-list:4 {}-->
 
-            <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"SuperAGI","xrefTarget":"tool-superagi"}-->
+            <!--hvy:tool-tech-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"SuperAGI","xrefTarget":"tool-superagi"}-->
 
 <!--hvy: {"id":"education","lock":true,"tags":"education, credentials, reverse-chronological","description":"Education"}-->
 #! Education
@@ -1246,11 +1258,11 @@ component_defs:
 
         <!--hvy:container:1 {}-->
 
-         <!--hvy:component-list {"id":"education-relevant-skills-list","componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
+         <!--hvy:component-list {"id":"education-relevant-skills-list","componentListComponent":"skill-xref-card","css":"margin: 0;","align":"center"}-->
 
           <!--hvy:component-list:0 {}-->
 
-           <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Software Engineering","xrefTarget":"skill-software-engineering"}-->
+           <!--hvy:skill-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Software Engineering","xrefTarget":"skill-software-engineering"}-->
 
       <!--hvy:grid:1 {"id":"education-tools-technologies"}-->
 
@@ -1263,15 +1275,15 @@ component_defs:
 
         <!--hvy:container:1 {}-->
 
-         <!--hvy:component-list {"id":"education-tools-technologies-list","componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
+         <!--hvy:component-list {"id":"education-tools-technologies-list","componentListComponent":"tool-tech-xref-card","css":"margin: 0;","align":"center"}-->
 
           <!--hvy:component-list:0 {}-->
 
-           <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Python","xrefTarget":"tool-python"}-->
+           <!--hvy:tool-tech-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Python","xrefTarget":"tool-python"}-->
 
           <!--hvy:component-list:1 {}-->
 
-           <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"C/C++","xrefTarget":"tool-c-cpp"}-->
+           <!--hvy:tool-tech-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"C/C++","xrefTarget":"tool-c-cpp"}-->
 
      <!--hvy:text {"css":"margin: 0;"}-->
       ^section-heading^ #### Classes

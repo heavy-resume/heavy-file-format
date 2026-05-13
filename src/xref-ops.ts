@@ -1,15 +1,16 @@
 import type { VisualBlock } from './editor/types';
 import { state } from './state';
-import { flattenSections, formatSectionTitle, getSectionId, visitBlocks } from './section-ops';
+import { flattenSections, formatSectionTitle, getSectionId } from './section-ops';
 
 export function normalizeXrefTarget(target: string): string {
   const trimmed = target.trim();
   return trimmed.startsWith('#') ? trimmed.slice(1) : trimmed;
 }
 
-export function getXrefTargetOptions(): Array<{ value: string; label: string }> {
+export function getXrefTargetOptions(tagFilter = ''): Array<{ value: string; label: string }> {
   const seen = new Set<string>();
   const options: Array<{ value: string; label: string }> = [];
+  const requestedTags = normalizeTagFilter(tagFilter);
   const add = (value: string, label: string): void => {
     const normalized = normalizeXrefTarget(value);
     if (!normalized || seen.has(normalized)) {
@@ -21,27 +22,22 @@ export function getXrefTargetOptions(): Array<{ value: string; label: string }> 
 
   flattenSections(state.document.sections)
     .filter((section) => !section.isGhost)
+    .filter((section) => matchesTagFilter(section.tags, requestedTags))
     .forEach((section) => {
       add(getSectionId(section), `${formatSectionTitle(section.title)} (${getSectionId(section)})`);
     });
 
-  visitBlocks(state.document.sections, (block) => {
-    const id = block.schema.id.trim();
-    if (id.length === 0) {
-      return;
-    }
-    add(id, `${describeBlockTarget(block)} (${id})`);
-  });
+  visitBlocksForXrefOptions(requestedTags, add);
 
   return options;
 }
 
-export function isXrefTargetValid(target: string): boolean {
+export function isXrefTargetValid(target: string, tagFilter = ''): boolean {
   const normalized = normalizeXrefTarget(target);
   if (normalized.length === 0 || /^[a-z][a-z0-9+.-]*:/i.test(normalized)) {
     return true;
   }
-  return getXrefTargetOptions().some((option) => option.value === normalized);
+  return getXrefTargetOptions(tagFilter).some((option) => option.value === normalized);
 }
 
 export function describeBlockTarget(block: VisualBlock): string {
@@ -57,4 +53,70 @@ export function describeBlockTarget(block: VisualBlock): string {
     return firstTableCell.trim();
   }
   return component;
+}
+
+function visitBlocksForXrefOptions(
+  requestedTags: string[],
+  add: (value: string, label: string) => void
+): void {
+  const seen = new Set<VisualBlock>();
+  const visitList = (blocks: VisualBlock[], inheritedTags: string): void => {
+    blocks.forEach((block) => {
+      if (seen.has(block)) {
+        return;
+      }
+      seen.add(block);
+      const combinedTags = combineTags(inheritedTags, block.schema.tags);
+      const id = block.schema.id.trim();
+      if (id.length > 0 && matchesTagFilter(combinedTags, requestedTags)) {
+        add(id, `${describeBlockTarget(block)} (${id})`);
+      }
+      visitList(block.schema.containerBlocks ?? [], combinedTags);
+      visitList(block.schema.componentListBlocks ?? [], combinedTags);
+      visitList((block.schema.gridItems ?? []).map((item) => item.block), combinedTags);
+      visitList(block.schema.expandableStubBlocks?.children ?? [], combinedTags);
+      visitList(block.schema.expandableContentBlocks?.children ?? [], combinedTags);
+    });
+  };
+
+  const visitSections = (sections: typeof state.document.sections, inheritedTags: string): void => {
+    sections.forEach((section) => {
+      const sectionTags = combineTags(inheritedTags, section.tags);
+      visitList(section.blocks, sectionTags);
+      visitSections(section.children, sectionTags);
+    });
+  };
+
+  visitSections(state.document.sections, '');
+}
+
+function matchesTagFilter(tags: string, requestedTags: string[]): boolean {
+  if (requestedTags.length === 0) {
+    return true;
+  }
+  const targetTags = new Set(parseTags(tags).map((tag) => tag.toLowerCase()));
+  return requestedTags.some((tag) => targetTags.has(tag));
+}
+
+function normalizeTagFilter(tagFilter: string): string[] {
+  return parseTags(tagFilter).map((tag) => tag.toLowerCase());
+}
+
+function combineTags(...values: string[]): string {
+  return values.filter((value) => value.trim().length > 0).join(', ');
+}
+
+function parseTags(value: string): string[] {
+  const seen = new Set<string>();
+  return value
+    .split(',')
+    .map((tag) => tag.trim())
+    .filter((tag) => {
+      const normalized = tag.toLowerCase();
+      if (!normalized || seen.has(normalized)) {
+        return false;
+      }
+      seen.add(normalized);
+      return true;
+    });
 }

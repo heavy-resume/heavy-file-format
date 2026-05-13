@@ -260,7 +260,12 @@ export function handleBlockFieldInput(target: HTMLElement): boolean {
     return true;
   }
 
-
+  if (field === 'block-xref-target-tag-filter' && target instanceof HTMLInputElement) {
+    block.schema.xrefTargetTagFilter = target.value;
+    syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
+    getRefreshReaderPanels()();
+    return true;
+  }
 
   if (field === 'block-component-list-component' && target instanceof HTMLSelectElement) {
     block.schema.componentListComponent = target.value;

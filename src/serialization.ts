@@ -232,6 +232,12 @@ function parseBlocks(
     const def = defs.find((item) => item && typeof item.name === 'string' && item.name === componentName);
     return typeof def?.baseType === 'string' ? def.baseType : 'text';
   };
+  const schemaFromDirectivePayload = (componentName: string, parsed: JsonObject): BlockSchema => {
+    const defs = Array.isArray(documentMeta.component_defs) ? (documentMeta.component_defs as JsonObject[]) : [];
+    const def = defs.find((item) => item && typeof item.name === 'string' && item.name === componentName);
+    const defSchema = def?.schema && typeof def.schema === 'object' && !Array.isArray(def.schema) ? (def.schema as JsonObject) : null;
+    return schemaFromUnknown({ ...(defSchema ?? {}), ...parsed, component: componentName });
+  };
 
   const flush = (): void => {
     if (!currentHasDirective && currentText.length === 0) {
@@ -560,9 +566,10 @@ function parseBlocks(
         });
       } else {
         if (directive === 'block') {
-          openOrQueueBlock(schemaFromUnknown(parsed), getCurrentAttach());
+          const componentName = typeof parsed.component === 'string' ? parsed.component : 'text';
+          openOrQueueBlock(schemaFromDirectivePayload(componentName, parsed), getCurrentAttach());
         } else {
-          openOrQueueBlock(schemaFromUnknown({ ...parsed, component: directive }), getCurrentAttach());
+          openOrQueueBlock(schemaFromDirectivePayload(directive, parsed), getCurrentAttach());
         }
       }
     } catch {
@@ -1143,7 +1150,7 @@ function serializeBlockSchema(
   documentMeta: JsonObject | null = null
 ): JsonObject {
   const component = resolveBaseComponentFromMeta(schema.component, documentMeta);
-  const defaults = defaultBlockSchema(component);
+  const defaults = getSerializationSchemaDefaults(schema.component, component, documentMeta);
   const payload: JsonObject = {};
 
   addIfChanged(payload, 'id', schema.id, defaults.id);
@@ -1170,6 +1177,7 @@ function serializeBlockSchema(
     addIfChanged(payload, 'xrefTitle', schema.xrefTitle, defaults.xrefTitle);
     addIfChanged(payload, 'xrefDetail', schema.xrefDetail, defaults.xrefDetail);
     addIfChanged(payload, 'xrefTarget', schema.xrefTarget, defaults.xrefTarget);
+    addIfChanged(payload, 'xrefTargetTagFilter', schema.xrefTargetTagFilter, defaults.xrefTargetTagFilter);
   }
   if (component === 'container') {
     addIfChanged(payload, 'containerTitle', schema.containerTitle, defaults.containerTitle);
@@ -1235,6 +1243,19 @@ function serializeBlockSchema(
   }
 
   return payload;
+}
+
+function getSerializationSchemaDefaults(componentName: string, baseComponent: string, documentMeta: JsonObject | null): BlockSchema {
+  const defaults = defaultBlockSchema(baseComponent);
+  if (!documentMeta || componentName === baseComponent) {
+    return defaults;
+  }
+  const defs = Array.isArray(documentMeta.component_defs) ? (documentMeta.component_defs as JsonObject[]) : [];
+  const def = defs.find((item) => item && typeof item.name === 'string' && item.name === componentName);
+  if (!def?.schema || typeof def.schema !== 'object' || Array.isArray(def.schema)) {
+    return defaults;
+  }
+  return schemaFromUnknown({ ...(def.schema as JsonObject), component: baseComponent });
 }
 
 function serializeBlock(

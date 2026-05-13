@@ -710,6 +710,7 @@ function blockSchemaToCliJson(schema: BlockSchema): JsonObject {
     value.xrefTitle = schema.xrefTitle;
     value.xrefDetail = schema.xrefDetail;
     value.xrefTarget = schema.xrefTarget;
+    value.xrefTargetTagFilter = schema.xrefTargetTagFilter;
   }
   if (schema.component === 'table') {
     value.tableShowHeader = schema.tableShowHeader;
@@ -825,6 +826,7 @@ function applyBlockSchemaJson(schema: BlockSchema, component: string, value: Jso
   if (typeof value.xrefTitle === 'string') schema.xrefTitle = value.xrefTitle;
   if (typeof value.xrefDetail === 'string') schema.xrefDetail = value.xrefDetail;
   if (typeof value.xrefTarget === 'string') schema.xrefTarget = value.xrefTarget;
+  if (typeof value.xrefTargetTagFilter === 'string') schema.xrefTargetTagFilter = value.xrefTargetTagFilter;
   if (Array.isArray(value.tableColumns)) schema.tableColumns = parseStringList(value.tableColumns);
   if (typeof value.tableShowHeader === 'boolean') schema.tableShowHeader = value.tableShowHeader;
   if (Array.isArray(value.tableRows)) schema.tableRows = value.tableRows as unknown as BlockSchema['tableRows'];

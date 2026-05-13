@@ -36,8 +36,8 @@ export interface ComponentRenderHelpers {
   renderComponentPlacementTarget: (options: ComponentPlacementTargetOptions) => string;
   renderOption: (value: string, selected: string) => string;
   getDocumentComponentCss: (componentName: string) => string;
-  getXrefTargetOptions: () => XrefTargetOption[];
-  isXrefTargetValid: (target: string) => boolean;
+  getXrefTargetOptions: (tagFilter?: string) => XrefTargetOption[];
+  isXrefTargetValid: (target: string, tagFilter?: string) => boolean;
   getTableColumns: (schema: BlockSchema) => string[];
   ensureContainerBlocks: (block: VisualBlock) => void;
   ensureComponentListBlocks: (block: VisualBlock) => void;

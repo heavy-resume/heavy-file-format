@@ -43,6 +43,7 @@ export function defaultBlockSchema(component = 'text'): BlockSchema {
     xrefTitle: '',
     xrefDetail: '',
     xrefTarget: '',
+    xrefTargetTagFilter: '',
     plugin: '',
     pluginConfig: {},
     expandableStubComponent: 'container',
@@ -200,6 +201,8 @@ export function schemaFromUnknown(value: unknown, seen = new WeakSet<object>()):
     xrefTitle: typeof candidate.xrefTitle === 'string' ? candidate.xrefTitle : defaults.xrefTitle,
     xrefDetail: typeof candidate.xrefDetail === 'string' ? candidate.xrefDetail : defaults.xrefDetail,
     xrefTarget: typeof candidate.xrefTarget === 'string' ? candidate.xrefTarget : defaults.xrefTarget,
+    xrefTargetTagFilter:
+      typeof candidate.xrefTargetTagFilter === 'string' ? candidate.xrefTargetTagFilter : defaults.xrefTargetTagFilter,
     plugin: typeof candidate.plugin === 'string' ? candidate.plugin : defaults.plugin,
     pluginConfig:
       candidate.pluginConfig && typeof candidate.pluginConfig === 'object' && !Array.isArray(candidate.pluginConfig)

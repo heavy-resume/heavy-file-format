@@ -217,9 +217,6 @@ export async function applySearchFilter(options: { enabled?: boolean } = {}): Pr
     state.search.filterEnabled = false;
     state.search.open = true;
     state.search.resultsCollapsed = false;
-    if (!state.search.error && state.search.submittedQuery.trim()) {
-      state.search.error = 'No matches. Try another term.';
-    }
     getRefreshReaderPanels()();
     getRenderApp()();
     return;

@@ -1,6 +1,6 @@
 import { state, openLinkInlineModal } from './_imports';
+import { getAiEditorDoubleClickDelayMs } from '../../reference-config';
 
-const AI_DOUBLE_TAP_MS = 450;
 const AI_DOUBLE_TAP_DISTANCE_PX = 28;
 
 let lastAiTap: { sectionKey: string; blockId: string; x: number; y: number; time: number } | null = null;
@@ -80,7 +80,7 @@ export function bindContextmenu(app: HTMLElement): void {
       !previous ||
       previous.sectionKey !== sectionKey ||
       previous.blockId !== blockId ||
-      time - previous.time > AI_DOUBLE_TAP_MS ||
+      time - previous.time > getAiEditorDoubleClickDelayMs() ||
       Math.hypot(event.clientX - previous.x, event.clientY - previous.y) > AI_DOUBLE_TAP_DISTANCE_PX
     ) {
       return;

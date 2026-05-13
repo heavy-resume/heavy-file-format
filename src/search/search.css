@@ -547,7 +547,7 @@
 }
 
 .reader-container.is-virtual-group-container.is-bordered:has(.is-search-deprioritized):not(:has(.is-search-match)) {
-  border-color: color-mix(in srgb, var(--hvy-border) 38%, transparent);
+  border-color: color-mix(in srgb, var(--hvy-highlight-2) 42%, var(--hvy-border));
   box-shadow: none;
 }
 

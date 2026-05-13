@@ -143,7 +143,7 @@ function requestTargetHighlight(
   context: { sectionFound: boolean; blockFound: boolean },
   attempt = 0
 ): void {
-  window.setTimeout(() => {
+  const run = () => {
     const element = findReaderTargetElement(app, target);
     if (!element) {
       if (attempt < 3) {
@@ -162,7 +162,7 @@ function requestTargetHighlight(
     }
 
     alignSidebarToResolvedTarget(app, element);
-    const wantsSearchMarker = state.search.submittedQuery.trim().length > 0;
+    const wantsSearchMarker = state.search.submittedQuery.trim().length > 0 && Boolean(target.matchText?.trim());
     const marker = findSearchMarkerInTarget(element, target.matchText);
     if (wantsSearchMarker && !marker && attempt < 8) {
       requestTargetHighlight(app, target, context, attempt + 1);
@@ -176,7 +176,14 @@ function requestTargetHighlight(
     window.setTimeout(() => {
       element.classList.remove('is-temp-highlighted');
     }, 1400);
-  }, 60);
+  };
+  if (attempt === 0) {
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(run);
+    });
+    return;
+  }
+  window.setTimeout(run, 60);
 }
 
 function alignSidebarToResolvedTarget(app: HTMLElement, element: HTMLElement): void {
@@ -213,7 +220,6 @@ function scrollReaderTargetIntoView(target: HTMLElement): void {
   window.requestAnimationFrame(() => {
     window.requestAnimationFrame(scroll);
   });
-  window.setTimeout(scroll, 180);
 }
 
 function revealReaderAncestors(target: HTMLElement): void {

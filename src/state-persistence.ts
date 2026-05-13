@@ -1,5 +1,7 @@
 import { deserializeDocumentBytes, serializeDocumentBytes } from './serialization';
 import type { AppState, ChatMessage, ChatSettings, HvyCliHistoryEntry, HvyCliSessionState, SelectedExample, VisualDocument } from './types';
+import { createDefaultSearchState } from './search/state';
+import type { HvySearchMatch, HvySearchResult, SearchCategory, SearchState } from './search/types';
 
 const RESUME_STORAGE_KEY = 'hvy-editor-resume-state-v2';
 const LEGACY_RESUME_STORAGE_KEY = 'hvy-editor-resume-state-v1';
@@ -26,6 +28,7 @@ interface ResumeStatePayload {
     messages: ChatMessage[];
     panelOpen: boolean;
   };
+  search?: SavedSearchState;
   cli: {
     draft: string;
     session: HvyCliSessionState;
@@ -33,6 +36,8 @@ interface ResumeStatePayload {
   };
   documentBase64: string;
 }
+
+type SavedSearchState = Omit<SearchState, 'isLoading' | 'error' | 'requestNonce' | 'abortController'>;
 
 export interface LoadedResumeState {
   document: VisualDocument;
@@ -44,6 +49,7 @@ export interface LoadedResumeState {
   rawEditorText: string;
   templateValues: Record<string, string>;
   chat: ResumeStatePayload['chat'];
+  search: SearchState;
   cli: ResumeStatePayload['cli'];
 }
 
@@ -78,6 +84,7 @@ export function loadResumeState(): LoadedResumeState | null {
           : [],
         panelOpen: Boolean(parsed.chat?.panelOpen),
       },
+      search: normalizeSearchState(parsed.search),
       cli: {
         draft: typeof parsed.cli?.draft === 'string' ? parsed.cli.draft : '',
         session: normalizeCliSession(parsed.cli?.session),
@@ -113,6 +120,7 @@ export function saveResumeState(state: AppState): void {
         messages: state.chat.messages,
         panelOpen: state.chat.panelOpen,
       },
+      search: serializeSearchState(state.search),
       cli: {
         draft: state.cliDraft,
         session: state.cliSession,
@@ -274,6 +282,131 @@ function normalizeCliHistoryEntry(value: unknown): HvyCliHistoryEntry | null {
     output: typeof raw.output === 'string' ? raw.output : '',
     error: Boolean(raw.error),
   };
+}
+
+function serializeSearchState(search: SearchState): SavedSearchState {
+  return {
+    open: search.open,
+    queryDraft: search.queryDraft,
+    submittedQuery: search.submittedQuery,
+    caseSensitive: search.caseSensitive,
+    categories: search.categories,
+    activeTab: search.activeTab,
+    filterEnabled: search.filterEnabled,
+    filterMode: search.filterMode,
+    resultsCollapsed: search.resultsCollapsed,
+    activeResultId: search.activeResultId,
+    results: search.results,
+    navigationResultIds: search.navigationResultIds,
+    clearedSectionKeys: search.clearedSectionKeys ?? [],
+    clearedBlockIds: search.clearedBlockIds ?? [],
+  };
+}
+
+function normalizeSearchState(value: unknown): SearchState {
+  const defaults = createDefaultSearchState();
+  if (!value || typeof value !== 'object') {
+    return defaults;
+  }
+  const raw = value as Partial<SavedSearchState>;
+  const submittedQuery = typeof raw.submittedQuery === 'string' ? raw.submittedQuery : '';
+  return {
+    ...defaults,
+    open: Boolean(raw.open),
+    queryDraft: typeof raw.queryDraft === 'string' ? raw.queryDraft : submittedQuery,
+    submittedQuery,
+    caseSensitive: Boolean(raw.caseSensitive),
+    categories: normalizeSearchCategories(raw.categories),
+    activeTab: raw.activeTab === 'filter' ? 'filter' : 'search',
+    filterEnabled: Boolean(raw.filterEnabled) && submittedQuery.trim().length > 0,
+    filterMode: raw.filterMode === 'hide' ? 'hide' : 'deprioritize',
+    resultsCollapsed: Boolean(raw.resultsCollapsed),
+    activeResultId: typeof raw.activeResultId === 'string' ? raw.activeResultId : null,
+    results: Array.isArray(raw.results)
+      ? raw.results.map(normalizeSearchResult).filter((result): result is HvySearchResult => Boolean(result))
+      : [],
+    navigationResultIds: Array.isArray(raw.navigationResultIds)
+      ? raw.navigationResultIds.filter((entry) => typeof entry === 'string')
+      : [],
+    clearedSectionKeys: Array.isArray(raw.clearedSectionKeys)
+      ? raw.clearedSectionKeys.filter((entry) => typeof entry === 'string')
+      : [],
+    clearedBlockIds: Array.isArray(raw.clearedBlockIds)
+      ? raw.clearedBlockIds.filter((entry) => typeof entry === 'string')
+      : [],
+    isLoading: false,
+    error: null,
+    requestNonce: 0,
+    abortController: null,
+  };
+}
+
+function normalizeSearchCategories(value: unknown): Record<SearchCategory, boolean> {
+  const defaults = createDefaultSearchState().categories;
+  if (!value || typeof value !== 'object') {
+    return defaults;
+  }
+  const raw = value as Partial<Record<SearchCategory, unknown>>;
+  return {
+    tags: typeof raw.tags === 'boolean' ? raw.tags : defaults.tags,
+    contents: typeof raw.contents === 'boolean' ? raw.contents : defaults.contents,
+    description: typeof raw.description === 'boolean' ? raw.description : defaults.description,
+  };
+}
+
+function normalizeSearchResult(value: unknown): HvySearchResult | null {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+  const raw = value as Partial<HvySearchResult>;
+  if (
+    typeof raw.id !== 'string' ||
+    !isSearchCategory(raw.category) ||
+    (raw.targetKind !== 'section' && raw.targetKind !== 'block') ||
+    typeof raw.sectionKey !== 'string' ||
+    typeof raw.targetId !== 'string' ||
+    typeof raw.label !== 'string' ||
+    typeof raw.preview !== 'string' ||
+    typeof raw.matchedText !== 'string' ||
+    typeof raw.sourceField !== 'string'
+  ) {
+    return null;
+  }
+  return {
+    id: raw.id,
+    category: raw.category,
+    targetKind: raw.targetKind,
+    sectionKey: raw.sectionKey,
+    ...(typeof raw.blockId === 'string' ? { blockId: raw.blockId } : {}),
+    targetId: raw.targetId,
+    ...(typeof raw.targetPath === 'string' ? { targetPath: raw.targetPath } : {}),
+    label: raw.label,
+    ...(typeof raw.locationLabel === 'string' ? { locationLabel: raw.locationLabel } : {}),
+    preview: raw.preview,
+    matchedText: raw.matchedText,
+    sourceField: raw.sourceField,
+    ...(typeof raw.contextLabel === 'string' ? { contextLabel: raw.contextLabel } : {}),
+    ...(Array.isArray(raw.matches) ? { matches: raw.matches.filter(isSearchMatch) } : {}),
+    ...(typeof raw.documentOrder === 'number' ? { documentOrder: raw.documentOrder } : {}),
+    ...(typeof raw.sourceFile === 'string' ? { sourceFile: raw.sourceFile } : {}),
+    ...(typeof raw.workspaceId === 'string' ? { workspaceId: raw.workspaceId } : {}),
+    ...(typeof raw.score === 'number' ? { score: raw.score } : {}),
+  };
+}
+
+function isSearchCategory(value: unknown): value is SearchCategory {
+  return value === 'tags' || value === 'contents' || value === 'description';
+}
+
+function isSearchMatch(value: unknown): value is HvySearchMatch {
+  return Boolean(
+    value &&
+    typeof value === 'object' &&
+    typeof (value as HvySearchMatch).field === 'string' &&
+    typeof (value as HvySearchMatch).label === 'string' &&
+    typeof (value as HvySearchMatch).preview === 'string' &&
+    typeof (value as HvySearchMatch).matchedText === 'string'
+  );
 }
 
 function normalizeChatWorkState(value: unknown): ChatMessage['work'] | undefined {

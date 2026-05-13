@@ -167,6 +167,7 @@ function applyResumeState(initial: AppState, resume: ReturnType<typeof loadResum
       messages: resume.chat.messages,
       panelOpen: resume.chat.panelOpen,
     },
+    search: resume.search,
     cliDraft: resume.cli.draft,
     cliSession: resume.cli.session,
     cliHistory: resume.cli.history,
@@ -280,7 +281,7 @@ function renderContextMenu(): string {
   const target = menu.blockId
     ? document.querySelector<HTMLElement>(`.viewer-shell .reader-block[data-section-key="${cssEscape(menu.sectionKey)}"][data-block-id="${cssEscape(menu.blockId)}"]`)
     : null;
-  const clone = target && menu.targetRect ? renderContextMenuTargetClone(target, menu.targetRect) : '';
+  const clone = menu.kind === 'ai' && target && menu.targetRect ? renderContextMenuTargetClone(target, menu.targetRect) : '';
   const backdrop = menu.targetRect
     ? `<div class="hvy-context-popover-backdrop" style="${escapeAttr(backdropStyle)}" aria-hidden="true">
         <div class="hvy-context-popover-backdrop-top"></div>
@@ -314,6 +315,7 @@ function renderContextMenu(): string {
 function renderContextMenuTargetClone(target: HTMLElement, rect: NonNullable<NonNullable<typeof state.contextMenu>['targetRect']>): string {
   const clone = target.cloneNode(true) as HTMLElement;
   clone.classList.add('hvy-context-popover-clone');
+  clone.classList.add('hvy-surface');
   clone.classList.remove('is-context-menu-target');
   clone.setAttribute('aria-hidden', 'true');
   clone.removeAttribute('id');

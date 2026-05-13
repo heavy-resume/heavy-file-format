@@ -100,7 +100,7 @@ function renderContextMenuElement(app: HTMLElement): void {
   const filtering = state.search.filterEnabled && state.search.submittedQuery.trim().length > 0;
   const root = app.querySelector<HTMLElement>('.viewer-shell') ?? app;
   root.classList.add('is-context-menu-open');
-  if (menu.blockId) {
+  if (menu.kind === 'ai' && menu.blockId) {
     const target = root
       .querySelector<HTMLElement>(`.reader-block[data-section-key="${cssEscape(menu.sectionKey)}"][data-block-id="${cssEscape(menu.blockId)}"]`)
     target?.classList.add('is-context-menu-target');
@@ -119,7 +119,7 @@ function renderContextMenuElement(app: HTMLElement): void {
   const target = menu.blockId
     ? root.querySelector<HTMLElement>(`.reader-block[data-section-key="${cssEscape(menu.sectionKey)}"][data-block-id="${cssEscape(menu.blockId)}"]`)
     : null;
-  const clone = target && menu.targetRect ? cloneContextMenuTarget(target, menu.targetRect) : null;
+  const clone = menu.kind === 'ai' && target && menu.targetRect ? cloneContextMenuTarget(target, menu.targetRect) : null;
   const popover = document.createElement('section');
   popover.className = 'hvy-context-popover';
   popover.setAttribute('aria-label', menu.kind === 'ai' ? 'Component options' : 'Filter options');
@@ -200,6 +200,7 @@ function cloneContextMenuTarget(target: HTMLElement, rect: NonNullable<typeof st
   }
   const clone = target.cloneNode(true) as HTMLElement;
   clone.classList.add('hvy-context-popover-clone');
+  clone.classList.add('hvy-surface');
   clone.classList.remove('is-context-menu-target');
   clone.setAttribute('aria-hidden', 'true');
   clone.removeAttribute('id');

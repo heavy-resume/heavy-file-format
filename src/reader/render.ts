@@ -50,7 +50,7 @@ interface ReaderRenderState {
   addComponentBySection: Record<string, string>;
   tempHighlights: Set<string>;
   aiEditTarget: { sectionKey: string | null; blockId: string | null };
-  contextMenu?: { sectionKey: string; blockId?: string } | null;
+  contextMenu?: { kind: 'filter' | 'ai'; sectionKey: string; blockId?: string } | null;
   activeEditorBlock?: { sectionKey: string; blockId: string } | null;
   modalSectionKey: string | null;
   sqliteRowComponentModal: SqliteRowComponentModalState | null;
@@ -364,7 +364,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       block.schema.align === 'left' ? '' : `align-${block.schema.align}`,
       `slot-${block.schema.slot}`,
       state.aiEditTarget.sectionKey === section.key && state.aiEditTarget.blockId === block.id ? 'is-ai-target' : '',
-      state.contextMenu?.sectionKey === section.key && state.contextMenu.blockId === block.id ? 'is-context-menu-target' : '',
+      state.contextMenu?.kind === 'ai' && state.contextMenu.sectionKey === section.key && state.contextMenu.blockId === block.id ? 'is-context-menu-target' : '',
       modifiers.has('highlight') ? 'is-highlighted' : '',
       isBlockSearchMatch(searchContext, block) ? 'is-search-match' : '',
       dimmed ? 'is-reader-view-dimmed' : '',

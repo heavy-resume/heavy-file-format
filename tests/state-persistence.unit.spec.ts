@@ -68,6 +68,40 @@ hvy_version: 0.1
       requestNonce: 12,
       abortController: new AbortController(),
     },
+    search: {
+      open: true,
+      queryDraft: 'Python',
+      submittedQuery: 'Python',
+      caseSensitive: true,
+      categories: { tags: false, contents: true, description: true },
+      activeTab: 'filter',
+      filterEnabled: true,
+      filterMode: 'deprioritize',
+      resultsCollapsed: false,
+      activeResultId: 'result-1',
+      isLoading: true,
+      error: 'old search error',
+      results: [
+        {
+          id: 'result-1',
+          category: 'contents',
+          targetKind: 'block',
+          sectionKey: document.sections[0]!.key,
+          blockId: document.sections[0]!.blocks[0]!.id,
+          targetId: '',
+          label: 'Summary',
+          preview: 'Python',
+          matchedText: 'Python',
+          sourceField: 'Text',
+          documentOrder: 1,
+        },
+      ],
+      navigationResultIds: ['result-1'],
+      clearedSectionKeys: ['section-cleared'],
+      clearedBlockIds: ['block-cleared'],
+      requestNonce: 99,
+      abortController: new AbortController(),
+    },
     cliDraft: 'ls /body',
     cliSession: {
       cwd: '/body/summary',
@@ -93,6 +127,33 @@ hvy_version: 0.1
   expect(resumed?.templateValues).toEqual({ name: 'Ada' });
   expect(resumed?.chat.draft).toBe('continue this');
   expect(resumed?.chat.panelOpen).toBe(true);
+  expect(resumed?.search).toMatchObject({
+    open: true,
+    queryDraft: 'Python',
+    submittedQuery: 'Python',
+    caseSensitive: true,
+    categories: { tags: false, contents: true, description: true },
+    activeTab: 'filter',
+    filterEnabled: true,
+    filterMode: 'deprioritize',
+    resultsCollapsed: false,
+    activeResultId: 'result-1',
+    results: [
+      expect.objectContaining({
+        id: 'result-1',
+        category: 'contents',
+        targetKind: 'block',
+        label: 'Summary',
+      }),
+    ],
+    navigationResultIds: ['result-1'],
+    clearedSectionKeys: ['section-cleared'],
+    clearedBlockIds: ['block-cleared'],
+    isLoading: false,
+    error: null,
+    requestNonce: 0,
+    abortController: null,
+  });
   expect(resumed?.cli).toEqual({
     draft: 'ls /body',
     session: {

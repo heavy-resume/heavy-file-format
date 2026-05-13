@@ -4,7 +4,7 @@ import bundledCrmHvy from '../examples/crm.hvy?raw';
 import bundledResumeViews from '../examples/resume-views.json';
 import { state, getRenderApp, getRefreshReaderPanels } from './state';
 import { findSectionByKey } from './section-ops';
-import { findBlockByIds } from './block-ops';
+import { findBlockByIds, setActiveEditorBlock } from './block-ops';
 import { navigateToSection, closeModal, resetTransientUiState, resetToBlankDocument } from './navigation';
 import { deserializeDocument, deserializeDocumentBytes, serializeDocument, serializeDocumentBytes } from './serialization';
 import { detectExtension, normalizeFilename, normalizeMarkdownImportFilename, downloadBinaryFile } from './utils';
@@ -338,21 +338,83 @@ export function bindUi(app: HTMLElement): void {
     const expandable = target.closest<HTMLElement>('[data-reader-action="toggle-expandable"]');
     if (expandable) {
       if (target.closest('a, button, input, select, textarea, [contenteditable="true"], [role="button"]')) {
+        if (state.currentView === 'ai') {
+          console.debug('[hvy:ai-reader-expandable-toggle]', {
+            stage: 'skip',
+            skipReason: 'interactive-target',
+            eventType: event.type,
+            defaultPrevented: event.defaultPrevented,
+            target: describeElementForReaderLog(target),
+            expandable: describeElementForReaderLog(expandable),
+            interactiveAncestor: describeElementForReaderLog(target.closest('a, button, input, select, textarea, [contenteditable="true"], [role="button"]')),
+          });
+        }
+        return;
+      }
+      if (state.currentView === 'ai' && activateAiExpandableTextTarget(target, expandable)) {
         return;
       }
       event.stopPropagation();
       const sectionKey = expandable.dataset.sectionKey;
       const blockId = expandable.dataset.blockId;
       if (!sectionKey || !blockId) {
+        if (state.currentView === 'ai') {
+          console.debug('[hvy:ai-reader-expandable-toggle]', {
+            stage: 'skip',
+            skipReason: 'missing-expandable-ids',
+            eventType: event.type,
+            defaultPrevented: event.defaultPrevented,
+            target: describeElementForReaderLog(target),
+            expandable: describeElementForReaderLog(expandable),
+            sectionKey,
+            blockId,
+          });
+        }
         return;
       }
       const block = findBlockByIds(sectionKey, blockId);
       if (!block) {
+        if (state.currentView === 'ai') {
+          console.debug('[hvy:ai-reader-expandable-toggle]', {
+            stage: 'skip',
+            skipReason: 'missing-block',
+            eventType: event.type,
+            defaultPrevented: event.defaultPrevented,
+            target: describeElementForReaderLog(target),
+            expandable: describeElementForReaderLog(expandable),
+            sectionKey,
+            blockId,
+          });
+        }
         return;
+      }
+      if (state.currentView === 'ai') {
+        console.debug('[hvy:ai-reader-expandable-toggle]', {
+          stage: 'schedule',
+          eventType: event.type,
+          defaultPrevented: event.defaultPrevented,
+          target: describeElementForReaderLog(target),
+          expandable: describeElementForReaderLog(expandable),
+          nearestReaderBlock: describeElementForReaderLog(target.closest('.reader-block')),
+          sectionKey,
+          blockId,
+          eventDetail: event instanceof MouseEvent ? event.detail : null,
+        });
       }
       runReaderAction(event, () => {
         const expandableStateKey = `${sectionKey}:${blockId}`;
         const willCollapse = state.readerExpandableState[expandableStateKey] ?? block.schema.expandableExpanded;
+        if (state.currentView === 'ai') {
+          console.debug('[hvy:ai-reader-expandable-toggle]', {
+            stage: 'run',
+            sectionKey,
+            blockId,
+            expandableStateKey,
+            willCollapse,
+            storedExpanded: state.readerExpandableState[expandableStateKey] ?? null,
+            schemaExpanded: block.schema.expandableExpanded,
+          });
+        }
         if (willCollapse) {
           // Animate collapse before re-rendering
           const readerEl = app.querySelector<HTMLElement>(`[data-expandable-id="${CSS.escape(blockId)}"]`);
@@ -465,4 +527,100 @@ export function bindUi(app: HTMLElement): void {
   bindModal(app);
   bindLinkInlineModal(app);
   restoreDbTableFrameScroll(app);
+}
+
+function activateAiExpandableTextTarget(target: HTMLElement, expandable: HTMLElement): boolean {
+  const expandableBlockElement = expandable.closest<HTMLElement>('.reader-block[data-component="expandable"][data-section-key][data-block-id]');
+  const expandableSectionKey = expandableBlockElement?.dataset.sectionKey ?? expandable.dataset.sectionKey ?? '';
+  const expandableBlockId = expandableBlockElement?.dataset.blockId ?? expandable.dataset.blockId ?? '';
+  const directTextBlock = target.closest<HTMLElement>('.reader-block[data-component="text"][data-section-key][data-block-id]');
+  const textBlock = directTextBlock && expandable.contains(directTextBlock)
+    ? directTextBlock
+    : findFirstPlaceholderTextBlock(expandableBlockElement ?? expandable);
+  const modelFallback = !textBlock && expandableSectionKey && expandableBlockId
+    ? findFirstPlaceholderTextBlockInExpandableModel(expandableSectionKey, expandableBlockId)
+    : null;
+  const sectionKey = textBlock?.dataset.sectionKey ?? modelFallback?.sectionKey ?? '';
+  const blockId = textBlock?.dataset.blockId ?? modelFallback?.blockId ?? '';
+  const block = modelFallback?.block ?? (sectionKey && blockId ? findBlockByIds(sectionKey, blockId) : null);
+  const hasPlaceholder = String(block?.schema.placeholder ?? '').trim().length > 0;
+  if ((!textBlock && !modelFallback) || block?.schema.component !== 'text' || !hasPlaceholder) {
+    console.debug('[hvy:ai-reader-expandable-toggle]', {
+      stage: 'text-activation-skip',
+      skipReason: !textBlock && !modelFallback ? 'no-placeholder-target' : block?.schema.component !== 'text' ? 'resolved-block-not-text' : 'text-without-placeholder',
+      target: describeElementForReaderLog(target),
+      expandable: describeElementForReaderLog(expandable),
+      expandableBlock: describeElementForReaderLog(expandableBlockElement),
+      textBlock: describeElementForReaderLog(textBlock),
+      modelFallback: modelFallback ? { sectionKey: modelFallback.sectionKey, blockId: modelFallback.blockId } : null,
+      resolvedComponent: block?.schema.component ?? null,
+      hasPlaceholder,
+    });
+    return false;
+  }
+  console.debug('[hvy:ai-reader-expandable-toggle]', {
+    stage: 'text-activation',
+    target: describeElementForReaderLog(target),
+    expandable: describeElementForReaderLog(expandable),
+    expandableBlock: describeElementForReaderLog(expandableBlockElement),
+    textBlock: describeElementForReaderLog(textBlock),
+    modelFallback: modelFallback ? { sectionKey: modelFallback.sectionKey, blockId: modelFallback.blockId } : null,
+    sectionKey,
+    blockId,
+    hasPlaceholder,
+  });
+  state.aiModeTipDismissed = true;
+  setActiveEditorBlock(sectionKey, blockId, { targetOnly: true });
+  if (state.pendingEditorActivation) {
+    state.pendingEditorActivation.immediateFocus = true;
+  }
+  getRenderApp()();
+  return true;
+}
+
+function findFirstPlaceholderTextBlockInExpandableModel(
+  sectionKey: string,
+  expandableBlockId: string
+): { sectionKey: string; blockId: string; block: NonNullable<ReturnType<typeof findBlockByIds>> } | null {
+  const expandableBlock = findBlockByIds(sectionKey, expandableBlockId);
+  if (expandableBlock?.schema.component !== 'expandable') {
+    return null;
+  }
+  const children = [
+    ...(expandableBlock.schema.expandableStubBlocks?.children ?? []),
+    ...(expandableBlock.schema.expandableContentBlocks?.children ?? []),
+  ];
+  const placeholder = children.find(
+    (child) => child.schema.component === 'text' && String(child.schema.placeholder ?? '').trim().length > 0
+  );
+  return placeholder ? { sectionKey, blockId: placeholder.id, block: placeholder } : null;
+}
+
+function findFirstPlaceholderTextBlock(expandable: HTMLElement): HTMLElement | null {
+  return Array.from(
+    expandable.querySelectorAll<HTMLElement>('.reader-block[data-component="text"][data-section-key][data-block-id]')
+  ).find((textBlock) => {
+    const sectionKey = textBlock.dataset.sectionKey ?? '';
+    const blockId = textBlock.dataset.blockId ?? '';
+    const block = sectionKey && blockId ? findBlockByIds(sectionKey, blockId) : null;
+    return block?.schema.component === 'text' && String(block.schema.placeholder ?? '').trim().length > 0;
+  }) ?? null;
+}
+
+function describeElementForReaderLog(element: Element | null | undefined): Record<string, string | null> | null {
+  if (!element) {
+    return null;
+  }
+  const htmlElement = element as HTMLElement;
+  return {
+    tag: element.tagName.toLowerCase(),
+    id: htmlElement.id || null,
+    className: typeof htmlElement.className === 'string' ? htmlElement.className : null,
+    component: htmlElement.dataset?.component ?? null,
+    sectionKey: htmlElement.dataset?.sectionKey ?? null,
+    blockId: htmlElement.dataset?.blockId ?? null,
+    action: htmlElement.dataset?.action ?? null,
+    readerAction: htmlElement.dataset?.readerAction ?? null,
+    text: htmlElement.textContent?.replace(/\s+/g, ' ').trim().slice(0, 120) ?? null,
+  };
 }

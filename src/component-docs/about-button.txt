@@ -11,6 +11,6 @@ Common fields:
 - buttonTargetScript: Brython Python source run after generation with injected response and source values.
 - buttonInputCharLimit and buttonOutputCharLimit: positive integer safety limits.
 - buttonPositionTargetId: component id whose wrapper should anchor the button.
-- buttonCss: declaration-only inline CSS. With buttonPositionTargetId, use absolute positioning such as position: absolute; top: 0.25rem; right: 0.25rem;.
+- buttonCss: declaration-only inline CSS. With buttonPositionTargetId, use absolute positioning such as position: absolute; top: 0.25rem; right: 0.25rem;. Use --hvy-button-content-padding to tune the shared padding for the button label and generation status.
 
 For targeting document components from scripts, use doc.component.get_text("component-id"), doc.component.set_text("component-id", text), and doc.component.is_empty("component-id").

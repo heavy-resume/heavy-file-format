@@ -423,7 +423,7 @@ component_defs:
  <!--hvy:text {"id":"resume-pronunciation","css":"margin-top: 0;","align":"center","placeholder":"pronunciation","fillIn":true}-->
   [<!-- value -->]
 
- <!--hvy:button {"id":"generate-pronunciation-button","editorOnly":true,"buttonLabel":"Generate","buttonPositionTargetId":"resume-pronunciation","buttonCss":"position: absolute; top: 50%; left: calc(50% + 3.75rem); transform: translateY(-50%);","buttonInputCharLimit":400,"buttonOutputCharLimit":120,"buttonVisibleScript":"name = doc.component.get_text(\"resume-name\").replace(\"#\", \"\").strip()\npronunciation = doc.component.get_text(\"resume-pronunciation\").replace(\"[\", \"\").replace(\"]\", \"\").replace(\"<!-- value -->\", \"\").strip()\nreturn len(name) > 0 and \"<!-- value -->\" not in name and len(pronunciation) == 0","buttonSourceScript":"name = doc.component.get_text(\"resume-name\").replace(\"#\", \"\").strip()\nif \"<!-- value -->\" in name:\n    return \"\"\nreturn name","buttonPrompt":"Generate a concise pronunciation guide for this resume name. Return only the pronunciation text, using simple uppercase/lowercase syllables and hyphens. Do not include brackets, labels, or explanation.","buttonTargetScript":"clean = response.strip()\nif clean.startswith(\"[\") and clean.endswith(\"]\"):\n    clean = clean[1:-1].strip()\ndoc.component.set_text(\"resume-pronunciation\", \"[\" + clean + \"]\")"}-->
+ <!--hvy:button {"id":"generate-pronunciation-button","editorOnly":true,"buttonLabel":"Generate","buttonPositionTargetId":"resume-pronunciation","buttonCss":"position: absolute; top: 50%; left: calc(50% + 3.75rem); transform: translateY(-50%); transform-origin: left center; padding: 0.08rem; --hvy-button-content-padding: 0.18rem 0.42rem;","buttonInputCharLimit":400,"buttonOutputCharLimit":120,"buttonVisibleScript":"name = doc.component.get_text(\"resume-name\").replace(\"#\", \"\").strip()\npronunciation = doc.component.get_text(\"resume-pronunciation\").replace(\"[\", \"\").replace(\"]\", \"\").replace(\"<!-- value -->\", \"\").strip()\nreturn len(name) > 0 and \"<!-- value -->\" not in name and len(pronunciation) == 0","buttonSourceScript":"name = doc.component.get_text(\"resume-name\").replace(\"#\", \"\").strip()\nif \"<!-- value -->\" in name:\n    return \"\"\nreturn name","buttonPrompt":"Generate a concise pronunciation guide for this resume name. Return only the pronunciation text, using simple uppercase/lowercase syllables and hyphens. Do not include brackets, labels, or explanation.","buttonTargetScript":"clean = response.strip()\nif clean.startswith(\"[\") and clean.endswith(\"]\"):\n    clean = clean[1:-1].strip()\ndoc.component.set_text(\"resume-pronunciation\", \"[\" + clean + \"]\")"}-->
 
  <!--hvy:text {"css":"margin: 0.5rem 0; margin-top: 1rem;","align":"center","placeholder":"title","fillIn":true}-->
   <!-- value -->
@@ -460,8 +460,8 @@ component_defs:
  <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
   # Featured
 
- <!--hvy:text {"id":"featured-xref-helper","editorOnly":true,"css":"margin: 0.35rem 0 0.5rem; color: var(--hvy-text-muted); font-style: italic;"}-->
-  Add a skill and tool / tech via the sidebar and link to them here
+ <!--hvy:text {"id":"featured-xref-helper","align":"center","editorOnly":true,"css":"margin: 0.35rem 0 0.5rem; color: var(--hvy-text-muted); font-style: italic;"}-->
+  Tip: Add a skill and tool / tech via the sidebar and link to them here
 
  <!--hvy:grid {"css":"margin: 0.5rem 0; gap: 0.75rem;","gridColumns":2,"lock":true}-->
   <!--hvy:grid:0 {"id":"top-skills"}-->

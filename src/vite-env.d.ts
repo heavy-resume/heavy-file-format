@@ -8,6 +8,7 @@ declare module 'virtual:hvy-brython-minimal-vfs' {
 interface ImportMetaEnv {
   readonly VITE_HVY_CHAT_PROVIDER?: 'openai' | 'anthropic' | 'qwen';
   readonly VITE_HVY_CHAT_MODEL?: string;
+  readonly VITE_HVY_ENABLE_CHAT_MODEL_PICKER?: string;
   readonly VITE_OPENAI_MODEL?: string;
   readonly VITE_ANTHROPIC_MODEL?: string;
   readonly VITE_QWEN_MODEL?: string;

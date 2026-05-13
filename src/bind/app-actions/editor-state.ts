@@ -19,8 +19,12 @@ const activateBlock: AppActionHandler = ({ app, event, sectionKey, blockId }) =>
   const passiveBlock = targetElement?.closest<HTMLElement>('.editor-block-passive');
   const passiveContent = targetElement?.closest<HTMLElement>('.reader-block') ?? passiveBlock?.querySelector<HTMLElement>('.reader-block');
   const anchor = passiveBlock ? getPassiveTextAnchor(passiveContent, targetElement) : undefined;
+  const aiPlaceholderActivation = state.currentView === 'ai' && Boolean(targetElement?.closest('.editor-passive-empty-text.has-placeholder'));
   state.activeEditorBlockReturnScroll = capturePaneScroll(state.paneScroll, app);
-  setActiveEditorBlock(sectionKey, blockId);
+  if (aiPlaceholderActivation) {
+    state.aiModeTipDismissed = true;
+  }
+  setActiveEditorBlock(sectionKey, blockId, { targetOnly: aiPlaceholderActivation });
   if (typeof anchor?.top === 'number' && state.pendingEditorActivation) {
     state.pendingEditorActivation = {
       ...state.pendingEditorActivation,
@@ -28,6 +32,7 @@ const activateBlock: AppActionHandler = ({ app, event, sectionKey, blockId }) =>
       clientX: event.clientX,
       clientY: event.clientY,
       preferTextFocus: true,
+      immediateFocus: aiPlaceholderActivation ? true : state.pendingEditorActivation.immediateFocus,
     };
   }
   getRenderApp()();

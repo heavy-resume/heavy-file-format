@@ -1,4 +1,13 @@
-import { state, findSectionByKey, getReusableNameFromSectionKey, applyRichAction, openLinkInlineModal, getRenderApp, setActiveEditorBlock } from './_imports';
+import {
+  state,
+  findSectionByKey,
+  getReusableNameFromSectionKey,
+  findBlockByIds,
+  setActiveEditorBlock,
+  applyRichAction,
+  openLinkInlineModal,
+  getRenderApp,
+} from './_imports';
 import { actionRegistry } from '../actions/registry';
 import { openRemoveConfirmationModal } from './remove-confirmation-modal';
 import { clearHideIfUnmodifiedForSectionPath, clearHideIfUnmodifiedForSections, findSectionPath } from '../../template-hide';
@@ -6,6 +15,10 @@ import { clearHideIfUnmodifiedForSectionPath, clearHideIfUnmodifiedForSections, 
 const richToolbarSelections = new WeakMap<HTMLElement, Range>();
 
 export function bindClickDispatch(app: HTMLElement): void {
+  app.addEventListener('click', (event) => {
+    handleAiReaderTextActivationClick(event);
+  }, true);
+
   app.addEventListener('contextmenu', (event) => {
     const target = event.target as HTMLElement;
     const styleButton = target.closest<HTMLElement>('.paragraph-style-card[data-rich-action="text-line-style"][data-text-line-style-name]');
@@ -62,22 +75,6 @@ export function bindClickDispatch(app: HTMLElement): void {
       event.stopPropagation();
       getRenderApp()();
       return;
-    }
-
-    if (state.currentView === 'ai' && target.closest('.editor-passive-empty-text.has-placeholder')) {
-      const blockElement = target.closest<HTMLElement>('.reader-block[data-section-key][data-block-id]');
-      const sectionKey = blockElement?.dataset.sectionKey ?? '';
-      const blockId = blockElement?.dataset.blockId ?? '';
-      if (sectionKey && blockId) {
-        event.preventDefault();
-        state.aiModeTipDismissed = true;
-        setActiveEditorBlock(sectionKey, blockId, { targetOnly: true });
-        if (state.pendingEditorActivation) {
-          state.pendingEditorActivation.immediateFocus = true;
-        }
-        getRenderApp()();
-        return;
-      }
     }
 
     if (target.closest('select') || target.closest('input')) {
@@ -155,6 +152,123 @@ export function bindClickDispatch(app: HTMLElement): void {
 
     executeActionButton(app, actionButton);
   });
+}
+
+function handleAiReaderTextActivationClick(event: MouseEvent): void {
+  if (state.currentView !== 'ai' || event.defaultPrevented) {
+    if (state.currentView === 'ai') {
+      logAiReaderTextActivation(event, 'skip', { skipReason: 'default-prevented-before-capture' });
+    }
+    return;
+  }
+  const target = event.target as HTMLElement | null;
+  if (!target || target.closest('a, button, input, select, textarea, [contenteditable="true"], [role="button"]')) {
+    logAiReaderTextActivation(event, 'skip', {
+      skipReason: target ? 'interactive-target' : 'missing-target',
+      interactiveAncestor: target ? describeElement(target.closest('a, button, input, select, textarea, [contenteditable="true"], [role="button"]')) : null,
+    });
+    return;
+  }
+  const textBlock = target.closest<HTMLElement>(
+    '.reader-block[data-component="text"][data-section-key][data-block-id]'
+  );
+  if (!textBlock) {
+    logAiReaderTextActivation(event, 'skip', { skipReason: 'no-reader-text-block' });
+    return;
+  }
+  const sectionKey = textBlock.dataset.sectionKey ?? '';
+  const blockId = textBlock.dataset.blockId ?? '';
+  if (!sectionKey || !blockId) {
+    logAiReaderTextActivation(event, 'skip', {
+      skipReason: 'missing-reader-text-ids',
+      textBlock: describeElement(textBlock),
+      sectionKey,
+      blockId,
+    });
+    return;
+  }
+  const block = findBlockByIds(sectionKey, blockId);
+  if (block?.schema.component !== 'text') {
+    logAiReaderTextActivation(event, 'skip', {
+      skipReason: 'resolved-block-not-text',
+      sectionKey,
+      blockId,
+      resolvedComponent: block?.schema.component ?? null,
+      textBlock: describeElement(textBlock),
+    });
+    return;
+  }
+  const hasPlaceholder = String(block.schema.placeholder ?? '').trim().length > 0;
+  const isInsideExpandableToggle = Boolean(textBlock.closest('[data-reader-action="toggle-expandable"]'));
+  if (!hasPlaceholder) {
+    logAiReaderTextActivation(event, 'skip', {
+      skipReason: 'text-without-placeholder',
+      sectionKey,
+      blockId,
+      hasPlaceholder,
+      isInsideExpandableToggle,
+      textBlock: describeElement(textBlock),
+    });
+    return;
+  }
+  logAiReaderTextActivation(event, 'activate', {
+    sectionKey,
+    blockId,
+    hasPlaceholder,
+    isInsideExpandableToggle,
+    textBlock: describeElement(textBlock),
+  });
+  event.preventDefault();
+  event.stopPropagation();
+  event.stopImmediatePropagation();
+  state.aiModeTipDismissed = true;
+  setActiveEditorBlock(sectionKey, blockId, { targetOnly: true });
+  if (state.pendingEditorActivation) {
+    state.pendingEditorActivation.immediateFocus = true;
+  }
+  getRenderApp()();
+}
+
+function logAiReaderTextActivation(event: MouseEvent, stage: 'skip' | 'activate', details: Record<string, unknown> = {}): void {
+  const target = event.target instanceof HTMLElement ? event.target : null;
+  console.debug('[hvy:ai-reader-text-activation]', {
+    stage,
+    currentView: state.currentView,
+    eventType: event.type,
+    eventPhase: event.eventPhase,
+    defaultPrevented: event.defaultPrevented,
+    clientX: event.clientX,
+    clientY: event.clientY,
+    target: describeElement(target),
+    nearestReaderBlock: describeElement(target?.closest('.reader-block')),
+    nearestReaderAction: describeElement(target?.closest('[data-reader-action]')),
+    composedPath: typeof event.composedPath === 'function'
+      ? event.composedPath().slice(0, 8).map((item) => describeEventPathItem(item))
+      : [],
+    ...details,
+  });
+}
+
+function describeEventPathItem(item: EventTarget): Record<string, string | null> | string | null {
+  return item instanceof HTMLElement ? describeElement(item) : Object.prototype.toString.call(item);
+}
+
+function describeElement(element: Element | null | undefined): Record<string, string | null> | null {
+  if (!element) {
+    return null;
+  }
+  const htmlElement = element as HTMLElement;
+  return {
+    tag: element.tagName.toLowerCase(),
+    id: htmlElement.id || null,
+    className: typeof htmlElement.className === 'string' ? htmlElement.className : null,
+    component: htmlElement.dataset?.component ?? null,
+    sectionKey: htmlElement.dataset?.sectionKey ?? null,
+    blockId: htmlElement.dataset?.blockId ?? null,
+    action: htmlElement.dataset?.action ?? null,
+    readerAction: htmlElement.dataset?.readerAction ?? null,
+    text: htmlElement.textContent?.replace(/\s+/g, ' ').trim().slice(0, 120) ?? null,
+  };
 }
 
 function isParagraphStyleToolbarAction(action: string): boolean {

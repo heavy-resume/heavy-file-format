@@ -12,7 +12,9 @@ vi.mock('../src/markdown', () => ({
 }));
 
 import { createDefaultChatState, renderChatPanel } from '../src/chat/chat';
+import { renderAiEditPopover } from '../src/ai-mode-ui';
 import { deserializeDocument } from '../src/serialization';
+import type { AppState } from '../src/types';
 
 const deps = {
   escapeAttr: (value: string) => value.replaceAll('"', '&quot;'),
@@ -101,6 +103,45 @@ hvy_version: 0.1
 
   expect(html).toContain('data-action="toggle-chat-cli-sim"');
   expect(html).toContain('<button type="button" class="ghost" data-action="toggle-chat-cli-sim">CLI Sim Off</button>');
+});
+
+test('renderChatPanel hides model picker debug controls unless the build enables them', () => {
+  const chat = createDefaultChatState();
+  chat.panelOpen = true;
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+`, '.hvy');
+
+  const html = renderChatPanel(chat, document, deps, 'document-edit');
+
+  expect(html).toContain('data-field="chat-provider"');
+  expect(html).toContain('data-field="chat-compaction-provider"');
+  expect(html).not.toContain('data-field="chat-model"');
+  expect(html).not.toContain('data-field="chat-compaction-model"');
+});
+
+test('renderAiEditPopover hides model picker debug controls unless the build enables them', () => {
+  const state = {
+    chat: createDefaultChatState(),
+    aiEdit: {
+      sectionKey: 'body',
+      blockId: 'summary',
+      draft: '',
+      isSending: false,
+      error: null,
+      popupX: 20,
+      popupY: 30,
+      requestNonce: 0,
+    },
+  } as unknown as AppState;
+
+  const html = renderAiEditPopover(state, deps);
+
+  expect(html).toContain('data-field="ai-provider"');
+  expect(html).toContain('data-field="chat-compaction-provider"');
+  expect(html).not.toContain('data-field="ai-model"');
+  expect(html).not.toContain('data-field="chat-compaction-model"');
 });
 
 test('renderChatPanel shows CLI sim request, response, and thinking summary', () => {

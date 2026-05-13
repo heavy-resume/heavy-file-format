@@ -9,6 +9,7 @@
   align-items: flex-end;
   justify-content: flex-end;
   gap: 0.75rem;
+  width: min(30rem, calc(100% - 4rem));
 }
 
 .chat-launcher,
@@ -38,7 +39,7 @@
   display: flex;
   flex-direction: column;
   gap: 0.8rem;
-  width: min(30rem, calc(100% - 2rem));
+  width: 100%;
   height: 34rem;
   max-height: calc(100% - 4rem);
   min-height: 0;
@@ -511,8 +512,12 @@
 }
 
 @media (max-width: 980px) {
+  .chat-dock {
+    width: min(28rem, calc(100% - 4rem));
+  }
+
   .chat-panel {
-    width: min(28rem, calc(100% - 1rem));
+    width: 100%;
     height: 32rem;
     max-height: calc(100% - 4rem);
   }
@@ -522,10 +527,11 @@
   .chat-dock {
     right: 1rem;
     bottom: 1rem;
+    width: calc(100% - 2rem);
   }
 
   .chat-panel {
-    width: calc(100% - 1rem);
+    width: 100%;
     height: 24rem;
     max-height: calc(100% - 5rem);
   }
@@ -539,14 +545,24 @@
   }
 }
 
+.pane.hvy-preview-frame-tablet .chat-dock {
+  width: min(28rem, calc(100% - 4rem));
+}
+
 .pane.hvy-preview-frame-tablet .chat-panel {
-  width: min(28rem, calc(100% - 1rem));
+  width: 100%;
   height: 32rem;
   max-height: calc(100% - 4rem);
 }
 
+.pane.hvy-preview-frame-phone .chat-dock {
+  right: 1rem;
+  bottom: 1rem;
+  width: calc(100% - 2rem);
+}
+
 .pane.hvy-preview-frame-phone .chat-panel {
-  width: calc(100% - 1rem);
+  width: 100%;
   height: 24rem;
   max-height: calc(100% - 5rem);
 }

@@ -211,6 +211,97 @@ hvy_version: 0.1
   await expect.poll(() => page.evaluate(() => window.getSelection()?.toString() ?? '')).toBe('');
 });
 
+test('ai placeholder text inside collapsed expandable opens that text editor', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ <!--hvy:expandable {"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+
+  <!--hvy:expandable:stub {}-->
+
+   <!--hvy:text {"id":"summary-short","placeholder":"Short professional summary"}-->
+    # Summary
+
+  <!--hvy:expandable:content {}-->
+
+   <!--hvy:text {"id":"summary-detail","placeholder":"Expanded professional summary"}-->
+    Expanded detail
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'AI' }).click();
+
+  await page.locator('#aiReaderDocument .reader-block-text[data-component-id="summary-short"]').click();
+
+  const activeTextEditor = page.locator('#aiReaderDocument .editor-block[data-active-editor-block="true"] .rich-editor');
+  await expect(activeTextEditor).toBeVisible();
+  await expect(activeTextEditor).toContainText('Summary');
+});
+
+test('ai resume summary placeholder opens text editor without expanding parent', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Resume Example' }).click();
+  await page.getByRole('button', { name: 'AI' }).click();
+
+  await page.locator('#aiReaderDocument .reader-block-text').filter({ has: page.locator('h1', { hasText: 'Summary' }) }).first().click();
+
+  await expect(page.locator('#aiReaderDocument .editor-block[data-active-editor-block="true"] .rich-editor')).toBeVisible();
+  await expect(page.locator('#aiReaderDocument .reader-block-expandable[aria-expanded="true"]')).toHaveCount(0);
+});
+
+test('ai resume summary placeholder margin opens text editor without expanding parent', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Resume Example' }).click();
+  await page.getByRole('button', { name: 'AI' }).click();
+
+  await page.locator('#aiReaderDocument .expand-stub-toggle').first().dispatchEvent('click', {
+    bubbles: true,
+    cancelable: true,
+  });
+
+  await expect(page.locator('#aiReaderDocument .editor-block[data-active-editor-block="true"] .rich-editor')).toBeVisible();
+  await expect(page.locator('#aiReaderDocument .reader-block-expandable[aria-expanded="true"]')).toHaveCount(0);
+});
+
+test('ai resume summary body text expands parent instead of opening text editor', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Resume Example' }).click();
+  await page.getByRole('button', { name: 'AI' }).click();
+
+  await page
+    .locator('#aiReaderDocument .reader-block-text', { hasText: 'Product-minded software engineer' })
+    .first()
+    .click();
+
+  await expect(page.locator('#aiReaderDocument .editor-block[data-active-editor-block="true"]')).toHaveCount(0);
+  await expect(page.locator('#aiReaderDocument .reader-block-expandable[aria-expanded="true"]')).toHaveCount(1);
+});
+
+test('canceling a newly added featured xref removes it without opening list editor', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Resume Example' }).click();
+
+  const topSkillsList = page.locator('[data-component-id="top-skills-list"]').first();
+  await topSkillsList.locator('[data-action="add-component-list-item"]').click();
+
+  const activeEditor = page.locator('.editor-block[data-active-editor-block="true"]');
+  await expect(activeEditor.locator('.editor-block-title').first()).toContainText('skill-xref-card');
+  await activeEditor.getByRole('button', { name: 'Cancel' }).click();
+
+  await expect(page.locator('[data-component-id="top-skills-list"]')).not.toContainText('Untitled');
+  await expect(page.locator('.editor-block[data-active-editor-block="true"]')).toHaveCount(0);
+});
+
 test('ai context menu stays inside phone preview when opened near the edge', async ({ page }) => {
   await page.goto('/');
 

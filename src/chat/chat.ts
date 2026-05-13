@@ -24,6 +24,7 @@ const DEFAULT_ANTHROPIC_MODEL = 'claude-sonnet-4-6';
 const DEFAULT_QWEN_MODEL = 'qwen-plus';
 export const DEFAULT_OPENAI_COMPACTION_MODEL = 'gpt-5.4-nano';
 export const HVY_AI_RESPONSE_FORMAT_INSTRUCTIONS = aiResponseFormatInstructions;
+export const ENABLE_CHAT_MODEL_DEBUG_CONTROLS = import.meta.env.VITE_HVY_ENABLE_CHAT_MODEL_PICKER === 'true';
 
 interface RenderChatPanelDeps {
   escapeAttr: (value: string) => string;
@@ -277,6 +278,37 @@ export function renderChatPanel(
   const promptPlaceholder = isDocumentEdit
     ? 'Describe how the document should change...'
     : 'Ask about the current HVY document...';
+  const modelDebugControlsHtml = ENABLE_CHAT_MODEL_DEBUG_CONTROLS
+    ? `<label class="chat-setting">
+         <span>Model</span>
+         <input
+           type="text"
+           data-field="chat-model"
+           value="${deps.escapeAttr(chat.settings.model)}"
+           placeholder="${deps.escapeAttr(getDefaultModelForProvider(chat.settings.provider))}"
+           autocapitalize="off"
+           autocomplete="off"
+           spellcheck="false"
+           aria-label="Chat model"
+           ${chat.isSending ? 'disabled' : ''}
+         />
+       </label>
+
+       <label class="chat-setting">
+         <span>Compaction model</span>
+         <input
+           type="text"
+           data-field="chat-compaction-model"
+           value="${deps.escapeAttr(chat.settings.compactionModel ?? DEFAULT_OPENAI_COMPACTION_MODEL)}"
+           placeholder="${deps.escapeAttr(DEFAULT_OPENAI_COMPACTION_MODEL)}"
+           autocapitalize="off"
+           autocomplete="off"
+           spellcheck="false"
+           aria-label="Chat compaction model"
+           ${chat.isSending ? 'disabled' : ''}
+         />
+       </label>`
+    : '';
   const composerHtml = chat.isSending
     ? `<div class="chat-busy-footer">
          <span class="chat-composer-status">Working through the request...</span>
@@ -322,7 +354,7 @@ export function renderChatPanel(
                    }
                    <button type="button" class="ghost" data-action="clear-chat-history"${chat.messages.length === 0 ? ' disabled' : ''}>Clear</button>
                  </div>
-                 <button type="button" class="danger chat-panel-close" data-action="toggle-chat-panel" aria-label="Close chat">${closeIcon()}</button>
+                 <button type="button" class="ghost chat-panel-close" data-action="toggle-chat-panel" aria-label="Close chat">${closeIcon()}</button>
                </div>
                <div class="chat-panel-body" data-chat-scroll-container>
                  ${hostManagedChat ? '' : `<div class="chat-settings">
@@ -336,21 +368,6 @@ export function renderChatPanel(
                    </label>
 
                    <label class="chat-setting">
-                     <span>Model</span>
-                     <input
-                       type="text"
-                       data-field="chat-model"
-                       value="${deps.escapeAttr(chat.settings.model)}"
-                       placeholder="${deps.escapeAttr(getDefaultModelForProvider(chat.settings.provider))}"
-                       autocapitalize="off"
-                       autocomplete="off"
-                       spellcheck="false"
-                       aria-label="Chat model"
-                       ${chat.isSending ? 'disabled' : ''}
-                     />
-                   </label>
-
-                   <label class="chat-setting">
                      <span>Compaction provider</span>
                      <select data-field="chat-compaction-provider" aria-label="Chat compaction provider" ${chat.isSending ? 'disabled' : ''}>
                        <option value="openai"${(chat.settings.compactionProvider ?? 'openai') === 'openai' ? ' selected' : ''}>OpenAI</option>
@@ -358,20 +375,7 @@ export function renderChatPanel(
                      </select>
                    </label>
 
-                   <label class="chat-setting">
-                     <span>Compaction model</span>
-                     <input
-                       type="text"
-                       data-field="chat-compaction-model"
-                       value="${deps.escapeAttr(chat.settings.compactionModel ?? DEFAULT_OPENAI_COMPACTION_MODEL)}"
-                       placeholder="${deps.escapeAttr(DEFAULT_OPENAI_COMPACTION_MODEL)}"
-                       autocapitalize="off"
-                       autocomplete="off"
-                       spellcheck="false"
-                       aria-label="Chat compaction model"
-                       ${chat.isSending ? 'disabled' : ''}
-                     />
-                   </label>
+                   ${modelDebugControlsHtml}
                  </div>`}
 
                  ${chat.error ? `<div class="chat-error" role="alert">${deps.escapeHtml(chat.error)}</div>` : ''}

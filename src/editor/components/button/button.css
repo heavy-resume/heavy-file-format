@@ -1,4 +1,6 @@
 .hvy-button-component {
+  --hvy-button-content-padding: 0.35rem 0.7rem;
+
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
@@ -14,7 +16,7 @@
 .hvy-button-component-button {
   border: 1px solid transparent;
   border-radius: 999px;
-  padding: 0.35rem 0.7rem;
+  padding: var(--hvy-button-content-padding);
   color: var(--hvy-button-text, #ffffff);
   background: var(--hvy-button-bg, #2d6a8a);
   box-shadow: none;
@@ -40,7 +42,7 @@
 .hvy-button-status {
   display: none;
   border-radius: 999px;
-  padding: 0.35rem 0.7rem;
+  padding: var(--hvy-button-content-padding);
   font-size: 0.78rem;
   font-weight: 700;
   color: var(--hvy-text, #1a2530);

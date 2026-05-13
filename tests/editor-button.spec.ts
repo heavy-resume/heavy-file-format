@@ -95,8 +95,24 @@ test('advanced editor exposes anchored button configuration as a component card'
   await expect(buttonCard).toBeVisible();
   await buttonCard.click();
 
-  await expect(page.locator('[aria-label="Button preview"]')).toBeVisible();
+  const preview = page.locator('[aria-label="Button preview"]');
+  const settings = page.locator('[aria-label="Button settings"]');
+  await expect(preview).toBeVisible();
   await expect(page.locator('[aria-label="Button settings"]')).toBeVisible();
   await expect(page.locator('[data-field="block-button-position-target-id"]')).toHaveValue('resume-pronunciation');
   await expect(page.locator('[data-field="block-button-prompt"]')).toContainText('Generate a concise pronunciation guide');
+
+  const previewButton = preview.locator('.hvy-button-component');
+  await expect(previewButton).toBeVisible();
+  await expect(preview.locator('.button-component-preview-stage')).toBeVisible();
+
+  const previewBox = await preview.boundingBox();
+  const buttonBox = await previewButton.boundingBox();
+  const visibleScriptBox = await settings.locator('[data-field="block-button-visible-script"]').boundingBox();
+
+  expect(previewBox).not.toBeNull();
+  expect(buttonBox).not.toBeNull();
+  expect(visibleScriptBox).not.toBeNull();
+  expect(buttonBox!.y + buttonBox!.height).toBeLessThan(visibleScriptBox!.y);
+  expect(buttonBox!.y).toBeGreaterThanOrEqual(previewBox!.y);
 });

@@ -1653,6 +1653,26 @@
   padding: 0.65rem;
 }
 
+.button-component-editor {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.button-script-lifecycle-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+
+.button-component-preview-stage {
+  position: relative;
+  min-height: 3.2rem;
+  overflow: hidden;
+  border-radius: 8px;
+  background: var(--hvy-surface);
+}
+
 .sort-key-editor-head {
   display: flex;
   align-items: center;

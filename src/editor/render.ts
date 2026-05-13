@@ -1362,6 +1362,8 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const attr = `data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}"`;
     return `<section class="component-list-display-editor" aria-label="Button settings">
       <strong>Button</strong>
+      <p class="button-script-lifecycle-note">
+        A button to get a response from an LLM and do something with it. Uses scripting.</p>
       <label>
         <span>Label</span>
         <input ${attr} data-field="block-button-label" value="${deps.escapeAttr(block.schema.buttonLabel)}" />
@@ -1383,11 +1385,15 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         <input type="number" min="1" step="1" ${attr} data-field="block-button-output-char-limit" value="${deps.escapeAttr(String(block.schema.buttonOutputCharLimit))}" />
       </label>
       <label>
-        <span>Visible Script</span>
+        <div>Visible When Function Body</div>
+        <div>Controls when the button is visible.</div>
+        <div>Returns boolean</div>
         <textarea rows="5" spellcheck="false" ${attr} data-field="block-button-visible-script">${deps.escapeHtml(block.schema.buttonVisibleScript)}</textarea>
       </label>
       <label>
-        <span>Source Script</span>
+        <div>Context Builder Function Body</div>
+        <div>This is provided to the LLM</div>
+        <div>Returns a string</div>
         <textarea rows="5" spellcheck="false" ${attr} data-field="block-button-source-script">${deps.escapeHtml(block.schema.buttonSourceScript)}</textarea>
       </label>
       <label>
@@ -1395,7 +1401,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         <textarea rows="4" ${attr} data-field="block-button-prompt">${deps.escapeHtml(block.schema.buttonPrompt)}</textarea>
       </label>
       <label>
-        <span>Target Script</span>
+        <span>AI Response Handler Script</span>
         <textarea rows="5" spellcheck="false" ${attr} data-field="block-button-target-script">${deps.escapeHtml(block.schema.buttonTargetScript)}</textarea>
       </label>
 	    </section>`;
@@ -1407,8 +1413,10 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     return `<div class="button-component-editor">
       <section class="component-list-display-editor" aria-label="Button preview">
         <strong>Button Preview</strong>
-        <div class="hvy-button-component" style="${buttonStyle}">
-          <button type="button" class="hvy-button-component-button" disabled>${deps.escapeHtml(label)}</button>
+        <div class="button-component-preview-stage">
+          <div class="hvy-button-component" style="${buttonStyle}">
+            <button type="button" class="hvy-button-component-button" disabled>${deps.escapeHtml(label)}</button>
+          </div>
         </div>
       </section>
       ${renderButtonMetaFields(sectionKey, block)}

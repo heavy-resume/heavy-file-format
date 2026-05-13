@@ -220,7 +220,7 @@ function formatScriptingToolHelp(toolName: string): string {
   return [
     formatCommandHelp(`hvy plugin scripting tool ${normalized}`, `Show doc.tool help for ${normalized}.`),
     '',
-    `Use from Brython as: doc.tool("${normalized}", args_dict)`,
+    `Use from Brython as: doc.tool.${normalized}(**tool_args)`,
     '',
     help,
   ].join('\n');

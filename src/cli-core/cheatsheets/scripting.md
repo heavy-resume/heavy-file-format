@@ -21,7 +21,7 @@ doc.header.set("key", "value")
 doc.db.query("SELECT * FROM fake_widgets")
 doc.db.execute("INSERT INTO fake_widgets (label) VALUES (?)", ["Orbital Widget"])
 doc.cli.run("hvy request_structure --collapse")
-doc.tool("request_structure", {})
+doc.tool.request_structure()
 ```
 
 `doc.cli.run(COMMAND)` runs one synchronous virtual CLI command and returns stdout. It supports document/file commands such as `hvy insert`, `hvy remove`, `hvy request_structure`, `cat`, `rg`, `find`, and `sed`. It does not run pipes, shell chains, redirection, `ask`, `done`, or db-table SQL commands; use `doc.db.query` and `doc.db.execute` for SQL.
@@ -43,10 +43,10 @@ man hvy plugin scripting tool execute_sql
 Common `doc.tool` examples:
 
 ```python
-summary = doc.tool("request_structure", {})
-hits = doc.tool("grep", {"query": "TODO", "flags": "i"})
-component = doc.tool("view_component", {"component_ref": "C3"})
-doc.tool("patch_component", {"component_ref": "C3", "edits": [{"op": "replace", "start_line": 2, "end_line": 2, "text": " New text"}]})
+summary = doc.tool.request_structure()
+hits = doc.tool.grep(query="TODO", flags="i")
+component = doc.tool.view_component(component_ref="C3")
+doc.tool.patch_component(component_ref="C3", edits=[{"op": "replace", "start_line": 2, "end_line": 2, "text": " New text"}])
 ```
 
 Form scripts also get:

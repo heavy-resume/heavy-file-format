@@ -195,7 +195,7 @@ export const scriptingPluginRegistration: HvyPluginRegistration = {
     `Use \`<!--hvy:plugin {"plugin":"${SCRIPTING_PLUGIN_ID}","pluginConfig":{"version":"0.1"}}-->\`.`,
     'Put executable script source in the component body.',
     'Scripts run as Python/Brython code wrapped in a generated function with a `doc` global, so `return` can stop the script early.',
-    'Use the `doc` API for host capabilities: document tools through `doc.tool(name, args)`, header helpers, attachment helpers, and plugin-provided APIs.',
+    'Use the `doc` API for host capabilities: document tools through `doc.tool.TOOL_NAME(**args)`, header helpers, attachment helpers, and plugin-provided APIs.',
     'Use this only when the user explicitly needs a script-backed component.',
   ].join(' '),
   create: scriptingPluginFactory,

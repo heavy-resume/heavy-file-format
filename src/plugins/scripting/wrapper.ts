@@ -392,6 +392,35 @@ def __hvy_safe_eval__(expression, globals=None, locals=None):
     return __hvy_builtin_eval__(expression, globals, locals)
 
 
+class __HvyToolProxy__:
+    def __init__(self, js_tool):
+        self.__js_tool = js_tool
+
+    def __call__(self, name, args=None, **kwargs):
+        if args is None:
+            merged = {}
+        elif isinstance(args, dict):
+            merged = dict(args)
+        else:
+            raise TypeError("doc.tool args must be a dict when provided")
+        merged.update(kwargs)
+        return self.__js_tool(name, merged)
+
+    def __getattr__(self, name):
+        def __hvy_named_tool__(args=None, **kwargs):
+            return self(name, args, **kwargs)
+        return __hvy_named_tool__
+
+
+class __HvyDocProxy__:
+    def __init__(self, js_doc):
+        self.__js_doc = js_doc
+        self.tool = __HvyToolProxy__(js_doc.tool)
+
+    def __getattr__(self, name):
+        return getattr(self.__js_doc, name)
+
+
 def __hvy_trace__(frame, event, arg):
     if event == 'line':
         __hvy_user_step__()
@@ -411,7 +440,7 @@ try:
     __hvy_code__ = compile(__hvy_compilable_source__, '<${traceLabel}>', 'exec')
     __hvy_user_globals__ = {
         '__hvy_step__': __hvy_user_step__,
-        'doc': __hvy_runtime__.doc,
+        'doc': __HvyDocProxy__(__hvy_runtime__.doc),
         'eval': __hvy_safe_eval__,
         'globals': __hvy_safe_globals__,
         '__name__': '__hvy_script__',

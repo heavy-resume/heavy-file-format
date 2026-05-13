@@ -19,7 +19,7 @@ import { deserializeDocument } from '../src/serialization';
 test('instrumentPythonSource adds step calls without rewriting compare expressions', () => {
   expect(
     instrumentPythonSource(
-      `output = doc.tool("view_component", {"component_ref": "script-value"})
+      `output = doc.tool.view_component(component_ref="script-value")
 for line in output.split('\\n'):
     if "Script test value:" in line:
         parts = line.split('|', 1)
@@ -29,7 +29,7 @@ for line in output.split('\\n'):
     )
   ).toBe(
     `__hvy_step__()
-output = doc.tool("view_component", {"component_ref": "script-value"})
+output = doc.tool.view_component(component_ref="script-value")
 __hvy_step__()
 for line in output.split('\\n'):
     __hvy_step__()
@@ -64,6 +64,17 @@ if (
     doc.header.set("result", "ok")
 `
   );
+});
+
+test('buildPythonProgram exposes doc.tool attributes with keyword arguments', () => {
+  const expectedResult = buildPythonProgram('runtime-keyword-test');
+
+  expect(expectedResult).toContain('class __HvyToolProxy__:');
+  expect(expectedResult).toContain('def __call__(self, name, args=None, **kwargs):');
+  expect(expectedResult).toContain('def __getattr__(self, name):');
+  expect(expectedResult).toContain('merged.update(kwargs)');
+  expect(expectedResult).toContain('self.tool = __HvyToolProxy__(js_doc.tool)');
+  expect(expectedResult).toContain("'doc': __HvyDocProxy__(__hvy_runtime__.doc)");
 });
 
 test('instrumentPythonSource skips blank lines and comments while preserving nested indentation', () => {

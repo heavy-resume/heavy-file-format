@@ -6,7 +6,7 @@ Use this recipe when a document needs load-time automation or when a form submit
 ```shell
 hvy insert 0 section / a-section "A Section"
 hvy insert 0 plugin /a-section summarize dev.heavy.scripting
-echo "summary = doc.tool('request_structure', {})\ndoc.header.set('script_summary', summary[:200])" > /body/a-section/summarize/script.py
+echo "summary = doc.tool.request_structure()\ndoc.header.set('script_summary', summary[:200])" > /body/a-section/summarize/script.py
 hvy preview /a-section/summarize
 hvy lint
 ```

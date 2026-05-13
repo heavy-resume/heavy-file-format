@@ -23,8 +23,8 @@ programmatically. Scripts cannot reach the network — they only see the
  Your script runs with one global injected: `doc`. Everything you can do
  flows through it.
 
- - `doc.tool(name, args)` — call a supported synchronous document tool by
-   name. Returns the tool's text result. Mutating tools update the document
+ - `doc.tool.TOOL_NAME(**args)` — call a supported synchronous document tool.
+   Returns the tool's text result. Mutating tools update the document
    immediately.
  - `doc.header.get(key)` / `doc.header.set(key, value)` /
    `doc.header.remove(key)` / `doc.header.keys()` — read and write the
@@ -48,15 +48,15 @@ programmatically. Scripts cannot reach the network — they only see the
 #! Available tools
 
 <!--hvy:text {}-->
- The scripting `doc.tool(name, args)` surface is a synchronous subset of the
- AI agent's document-edit tools. Pass `args` as a Python dict; argument names
- match the AI tool schema.
+ The scripting `doc.tool.TOOL_NAME(**args)` surface is a synchronous subset of
+ the AI agent's document-edit tools. Pass tool arguments as Python keyword
+ arguments; argument names match the AI tool schema.
 
  Document tools:
 
  - `request_structure` — get a structural summary.
- - `grep` — `{ "query": "...", "flags": "i" }`.
- - `view_component` — `{ "component_ref": "C3" }`.
+ - `grep` — `query="...", flags="i"`.
+ - `view_component` — `component_ref="C3"`.
  - `get_css` / `get_properties` / `set_properties`.
  - `patch_component` — `{ "component_ref": "C3", "edits": [...] }`.
  - `create_component` / `remove_component`.
@@ -67,7 +67,7 @@ programmatically. Scripts cannot reach the network — they only see the
  - `view_header`, `grep_header`, `patch_header`.
 
  `edit_component`, `view_rendered_component`, `query_db_table`, `execute_sql`,
- and other async tools are not exposed through `doc.tool(...)`.
+ and other async tools are not exposed through `doc.tool`.
 
 <!--hvy: {"id":"execution-model","expanded":false}-->
 #! Execution model
@@ -94,14 +94,14 @@ programmatically. Scripts cannot reach the network — they only see the
  Print the document's structural summary by writing it into the header:
 
  ```python
- summary = doc.tool("request_structure")
+ summary = doc.tool.request_structure()
  doc.header.set("script_summary", summary[:200])
  ```
 
  Tag every section that mentions "TODO":
 
  ```python
- hits = doc.tool("grep", { "query": "TODO", "flags": "i" })
+ hits = doc.tool.grep(query="TODO", flags="i")
  doc.header.set("todo_hits", hits)
  ```
 

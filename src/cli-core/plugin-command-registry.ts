@@ -108,15 +108,14 @@ function lintUnsupportedScriptDocToolCalls(body: string): HvyCliPluginLintIssue[
   const validToolNames = new Set(getHvyCliScriptingToolNames());
   const validToolList = getHvyCliScriptingToolNames().join(', ');
   const seen = new Set<string>();
-  for (const match of body.matchAll(/\bdoc\.tool\(\s*(['"])([^'"]+)\1/g)) {
-    const toolName = match[2] ?? '';
+  for (const toolName of extractScriptDocToolNames(body)) {
     if (!toolName || validToolNames.has(toolName) || seen.has(toolName)) {
       continue;
     }
     seen.add(toolName);
     issues.push({
       message: [
-        `script uses unknown doc.tool("${toolName}"). Valid doc.tool names: ${validToolList}.`,
+        `script uses unknown doc.tool.${toolName}. Valid doc.tool names: ${validToolList}.`,
         formatCommonDocToolMistakeHint(toolName),
       ].filter(Boolean).join(' '),
     });
@@ -124,11 +123,22 @@ function lintUnsupportedScriptDocToolCalls(body: string): HvyCliPluginLintIssue[
   return issues;
 }
 
+function extractScriptDocToolNames(body: string): string[] {
+  const names: string[] = [];
+  for (const match of body.matchAll(/\bdoc\.tool\(\s*(['"])([^'"]+)\1/g)) {
+    names.push(match[2] ?? '');
+  }
+  for (const match of body.matchAll(/\bdoc\.tool\.([A-Za-z_][A-Za-z0-9_]*)\s*\(/g)) {
+    names.push(match[1] ?? '');
+  }
+  return names;
+}
+
 function formatCommonDocToolMistakeHint(toolName: string): string {
-  if (toolName === 'db.query') {
+  if (toolName === 'db.query' || toolName === 'db_query') {
     return 'Use doc.db.query(sql, params) instead.';
   }
-  if (toolName === 'db.exec' || toolName === 'db.execute') {
+  if (toolName === 'db.exec' || toolName === 'db.execute' || toolName === 'db_exec' || toolName === 'db_execute') {
     return 'Use doc.db.execute(sql, params) instead.';
   }
   if (toolName === 'refresh') {
@@ -160,8 +170,8 @@ registerHvyCliPluginCommands({
     'Form scripts are Python/Brython snippets under scripts.NAME, wrapped in a generated function, and run through the sandboxed scripting runtime.',
     'When editing plugin.txt directly, write form scripts as literal YAML blocks with `|`, not folded blocks with `>`, so Python newlines and indentation are preserved.',
     'Form scripts receive doc plus doc.form. Use field labels with doc.form.get_value/get_values/set_value/set_options/set_error/clear_error.',
-    'Use doc.db.query(sql, params) and doc.db.execute(sql, params) for the current document SQL backend from form scripts; do not call doc.tool("db.query") or doc.tool("db.exec").',
-    'doc.tool(name, args) can call the synchronous document-edit tool subset; args are a Python dict matching the AI tool schema.',
+    'Use doc.db.query(sql, params) and doc.db.execute(sql, params) for the current document SQL backend from form scripts.',
+    'doc.tool.TOOL_NAME(**args) can call the synchronous document-edit tool subset; args are Python keyword arguments matching the AI tool schema.',
     'When changing submit behavior, look for named scripts and on-submit script settings before editing fields.',
     'For dynamic form options, run: hvy recipe populate-form-options-from-db.',
     'For form submit code examples, run: hvy cheatsheet scripting, hvy recipe scripting, or man hvy plugin scripting tool TOOL_NAME.',
@@ -392,7 +402,7 @@ registerHvyCliPluginCommands({
     'The component body is exposed as script.py. It is Python/Brython source wrapped in a generated function with one injected global: doc.',
     'Sandbox limits: imports, network, and DOM access are not allowed. Mutate the document through doc instead.',
     'Execution model: source is wrapped in a generated function, so return can stop the script early. Loops count against a 100,000-line budget.',
-    'doc.tool(name, args) calls a synchronous subset of document-edit tools. args is a Python dict matching the AI tool schema.',
+    'doc.tool.TOOL_NAME(**args) calls a synchronous subset of document-edit tools. args are Python keyword arguments matching the AI tool schema.',
     'Document tools: request_structure, grep, view_component, get_css, get_properties, set_properties, patch_component, create_component, remove_component, create_section, remove_section, reorder_section.',
     'Header tools: view_header, grep_header, patch_header.',
     'Not exposed through doc.tool: edit_component, view_rendered_component, query_db_table, execute_sql, and other async tools.',
@@ -402,8 +412,8 @@ registerHvyCliPluginCommands({
     'doc.cli.run(command) runs one synchronous virtual CLI command and returns stdout; use doc.db for SQL.',
     'doc.form exists only while running form plugin scripts. Use form plugin help for doc.form methods.',
     'doc.rerender() flushes pending rendering work, but scripts usually do not need it because the host rerenders after the script finishes.',
-    'Example: summary = doc.tool("request_structure"); doc.header.set("script_summary", summary[:200])',
-    'Example: hits = doc.tool("grep", {"query": "TODO", "flags": "i"}); doc.header.set("todo_hits", hits)',
+    'Example: summary = doc.tool.request_structure(); doc.header.set("script_summary", summary[:200])',
+    'Example: hits = doc.tool.grep(query="TODO", flags="i"); doc.header.set("todo_hits", hits)',
     'For a specific doc.tool shape, run: man hvy plugin scripting tool TOOL_NAME',
   ],
   addCommands: [

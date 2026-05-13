@@ -527,16 +527,16 @@ component_defs:
  <!--hvy:plugin {"id":"remove-featured-xref-helper","editorOnly":true,"plugin":"dev.heavy.scripting","pluginConfig":{"version":"0.1"}}-->
   def has_xref(list_id):
       try:
-          return "<!--hvy:xref-card" in doc.tool("view_component", {"component_ref": list_id})
+          return "<!--hvy:xref-card" in doc.tool.view_component(component_ref=list_id)
       except Exception:
           return False
 
   if has_xref("top-skills-list") and has_xref("top-tools-technologies-list"):
       try:
-          doc.tool("remove_component", {"component_ref": "featured-xref-helper"})
+          doc.tool.remove_component(component_ref="featured-xref-helper")
       except Exception:
           pass
       try:
-          doc.tool("remove_component", {"component_ref": "remove-featured-xref-helper"})
+          doc.tool.remove_component(component_ref="remove-featured-xref-helper")
       except Exception:
           pass

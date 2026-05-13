@@ -24,7 +24,7 @@ export interface ScriptingRuntimeStats {
 export interface ScriptingRuntime {
   doc: ScriptingDocApi;
   stats: ScriptingRuntimeStats;
-  step(): void;
+  step(): string | null;
   markMutated(): void;
   setLineBudget(maxLines: number): void;
 }
@@ -234,10 +234,9 @@ export function createScriptingRuntime(options: ScriptingRuntimeOptions): Script
     step: () => {
       stats.linesExecuted += 1;
       if (stats.linesExecuted > lineBudget) {
-        throw new Error(
-          `Scripting plugin exceeded its line budget (${lineBudget}). Add fewer steps or raise the budget.`
-        );
+        return `Scripting plugin exceeded its line budget (${lineBudget}). Add fewer steps or raise the budget.`;
       }
+      return null;
     },
     markMutated: onMutation,
     setLineBudget: (maxLines: number) => {

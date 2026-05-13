@@ -179,8 +179,9 @@ export function instrumentPythonSource(source: string): string {
   for (const line of lines) {
     const analysis = analyzePythonLine(line, bracketDepth, tripleQuote);
     const indentation = line.match(/^\s*/)?.[0] ?? '';
+    const trimmed = line.trimStart();
 
-    if (!analysis.isBlankOrComment && !statementOpen) {
+    if (!analysis.isBlankOrComment && !statementOpen && !isCompoundContinuationLine(trimmed)) {
       instrumented.push(`${indentation}__hvy_step__()`);
     }
 
@@ -195,6 +196,10 @@ export function instrumentPythonSource(source: string): string {
   }
 
   return instrumented.join('\n');
+}
+
+function isCompoundContinuationLine(trimmedLine: string): boolean {
+  return /^(elif|else|except|finally)\b/.test(trimmedLine);
 }
 
 export function wrapPythonSourceInFunction(source: string): string {
@@ -368,7 +373,9 @@ def __hvy_sanitize_user_globals__():
 
 
 def __hvy_user_step__():
-    __hvy_runtime__.step()
+    __hvy_step_error__ = __hvy_runtime__.step()
+    if __hvy_step_error__:
+        raise RuntimeError(__hvy_step_error__)
     __hvy_sanitize_user_globals__()
 
 
@@ -384,12 +391,45 @@ def __hvy_safe_globals__():
 def __hvy_safe_eval__(expression, globals=None, locals=None):
     if isinstance(expression, str) and expression.strip() in __hvy_forbidden_global_names__:
         raise NameError("name '" + expression.strip() + "' is not defined")
+    if globals is not None or locals is not None:
+        raise RuntimeError("Custom eval globals are not allowed in HVY scripts.")
     __hvy_sanitize_user_globals__()
-    if globals is None and locals is None:
-        return __hvy_builtin_eval__(expression, __hvy_user_globals__)
-    if locals is None:
-        return __hvy_builtin_eval__(expression, globals)
-    return __hvy_builtin_eval__(expression, globals, locals)
+    return __hvy_builtin_eval__(expression, __hvy_user_globals__, __hvy_user_globals__)
+
+
+def __hvy_blocked_import__(*args, **kwargs):
+    raise RuntimeError("Import statements are not allowed in HVY scripts.")
+
+
+__hvy_safe_builtins__ = {
+    'abs': abs,
+    'all': all,
+    'any': any,
+    'bool': bool,
+    'dict': dict,
+    'enumerate': enumerate,
+    'float': float,
+    'int': int,
+    'isinstance': isinstance,
+    'len': len,
+    'list': list,
+    'max': max,
+    'min': min,
+    'print': print,
+    'range': range,
+    'round': round,
+    'set': set,
+    'sorted': sorted,
+    'str': str,
+    'sum': sum,
+    'tuple': tuple,
+    'zip': zip,
+    'BaseException': BaseException,
+    'Exception': Exception,
+    'RuntimeError': RuntimeError,
+    'TypeError': TypeError,
+    'ValueError': ValueError,
+}
 
 
 class __HvyToolProxy__:
@@ -436,10 +476,12 @@ try:
     except Exception:
         __hvy_trace_enabled__ = False
 
-    __hvy_compilable_source__ = __hvy_source__ if __hvy_trace_enabled__ else __hvy_instrumented_source__
+    __hvy_compilable_source__ = __hvy_instrumented_source__
     __hvy_code__ = compile(__hvy_compilable_source__, '<${traceLabel}>', 'exec')
     __hvy_user_globals__ = {
         '__hvy_step__': __hvy_user_step__,
+        '__import__': __hvy_blocked_import__,
+        '__builtins__': __hvy_safe_builtins__,
         'doc': __HvyDocProxy__(__hvy_runtime__.doc),
         'eval': __hvy_safe_eval__,
         'globals': __hvy_safe_globals__,

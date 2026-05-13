@@ -99,11 +99,9 @@ try:
     # inside
     __hvy_step__()
     doc.header.set("phase", "start")
-__hvy_step__()
 except Exception:
     __hvy_step__()
     doc.header.set("phase", "error")
-__hvy_step__()
 finally:
     __hvy_step__()
     doc.header.set("phase", "done")
@@ -111,13 +109,22 @@ finally:
   );
 });
 
-test('buildPythonProgram prefers tracing and keeps instrumented fallback available', () => {
+test('buildPythonProgram uses instrumented source for deterministic line budgets', () => {
   const program = buildPythonProgram('r7');
   expect(program).toContain("import sys as __hvy_sys__");
   expect(program).toContain("__hvy_sys__.settrace(__hvy_trace__)");
-  expect(program).toContain("__hvy_compilable_source__ = __hvy_source__ if __hvy_trace_enabled__ else __hvy_instrumented_source__");
+  expect(program).toContain("__hvy_compilable_source__ = __hvy_instrumented_source__");
   expect(program).not.toContain('NodeTransformer');
   expect(program).not.toContain('visit_Compare');
+});
+
+test('buildPythonProgram executes user code with restricted builtins', () => {
+  const program = buildPythonProgram('r7');
+
+  expect(program).toContain('__hvy_safe_builtins__ = {');
+  expect(program).toContain("'__builtins__': __hvy_safe_builtins__");
+  expect(program).toContain("'__import__': __hvy_blocked_import__");
+  expect(program).toContain('raise RuntimeError("Custom eval globals are not allowed in HVY scripts.")');
 });
 
 test('wrapPythonSourceInFunction allows top-level return semantics', () => {
@@ -266,6 +273,18 @@ test('createScriptingRuntime exposes a supplied form API', () => {
   expect(runtime.doc.form.get_value('Food')).toBe('soup');
   expect(runtime.doc.form.get_values()).toEqual({ Food: 'soup' });
   expect(runtime.doc.form.get_options('Food')).toEqual([{ label: 'Soup', value: 'soup' }]);
+});
+
+test('createScriptingRuntime reports when the line budget is exceeded', () => {
+  const runtime = createScriptingRuntime({
+    document: { meta: {}, extension: '.hvy', sections: [], attachments: [] },
+    maxLines: 2,
+  });
+
+  expect(runtime.step()).toBeNull();
+  expect(runtime.step()).toBeNull();
+  expect(runtime.step()).toContain('line budget (2)');
+  expect(runtime.stats.linesExecuted).toBe(3);
 });
 
 test('createScriptingRuntime component set_text clears stale fill-in state', () => {

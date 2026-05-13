@@ -17,6 +17,13 @@ function writeFileCommand(path: string, content: string): string {
   return `echo ${JSON.stringify(content.trimEnd().replace(/\n/g, '\\n'))} > ${path}`;
 }
 
+async function waitForScriptingIdle(page: Page): Promise<void> {
+  await page.waitForFunction(() => {
+    const scripting = (window as unknown as { __HVY_SCRIPTING__?: { runtimes: Record<string, unknown> } }).__HVY_SCRIPTING__;
+    return Boolean(scripting) && Object.keys(scripting.runtimes).length === 0;
+  });
+}
+
 test('cli-created chore chart form and db-table plugins run end to end', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'CLI' }).click();
@@ -155,16 +162,83 @@ doc.header.set("sandbox_direct", ",".join(direct_leaked) or "clean")
 `);
   await page.getByRole('button', { name: 'Apply' }).click();
   await page.getByRole('button', { name: 'Viewer' }).click();
-  await page.waitForFunction(() => {
-    const scripting = (window as unknown as { __HVY_SCRIPTING__?: { runtimes: Record<string, unknown> } }).__HVY_SCRIPTING__;
-    return Boolean(scripting) && Object.keys(scripting.runtimes).length === 0;
-  });
+  await waitForScriptingIdle(page);
 
   await page.getByRole('button', { name: 'Editor' }).click();
   await page.getByRole('button', { name: 'Raw' }).click();
   await page.getByRole('button', { name: 'Reset' }).click();
   await expect(page.locator('#rawEditor')).toContainText('sandbox_globals: clean');
   await expect(page.locator('#rawEditor')).toContainText('sandbox_direct: clean');
+});
+
+test('scripting sandbox blocks dynamic imports eval globals and frame escapes', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"sandbox"}-->
+#! Sandbox
+
+<!--hvy:plugin {"id":"dynamic-check","plugin":"dev.heavy.scripting","pluginConfig":{"version":"0.1"}}-->
+results = []
+
+def record(label, action):
+    try:
+        action()
+        results.append(label + ":leaked")
+    except BaseException:
+        results.append(label + ":blocked")
+
+record("direct_import", lambda: __import__("browser"))
+record("eval_import", lambda: eval("__import__('browser')"))
+record("frame_import", lambda: eval("__import__('sys')._getframe(1).f_globals.get('__hvy_window__')"))
+record("custom_eval_globals", lambda: eval("window", {"window": "leaked"}))
+
+try:
+    builtins = eval("__builtins__")
+    import_present = "__import__" in builtins
+except BaseException:
+    import_present = False
+
+doc.header.set("sandbox_dynamic", ",".join(results))
+doc.header.set("sandbox_import_builtin", str(import_present))
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Viewer' }).click();
+  await waitForScriptingIdle(page);
+
+  await page.getByRole('button', { name: 'Editor' }).click();
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Reset' }).click();
+  await expect(page.locator('#rawEditor')).toContainText(
+    'sandbox_dynamic: direct_import:blocked,eval_import:blocked,frame_import:blocked,custom_eval_globals:blocked'
+  );
+  await expect(page.locator('#rawEditor')).toContainText('sandbox_import_builtin: "False"');
+});
+
+test('visibleScript uses the shared scripting sandbox', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"visibility"}-->
+#! Visibility
+
+<!--hvy:text {"id":"safe-visible","visibleScript":"return len('ok') == 2"}-->
+Safe visible text
+
+<!--hvy:text {"id":"blocked-visible","visibleScript":"try:\\n    __import__('browser')\\n    return True\\nexcept Exception:\\n    return False"}-->
+Blocked visible text
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await expect(page.locator('[data-component-id="safe-visible"]').first()).toBeVisible({ timeout: 10_000 });
+  await expect(page.locator('[data-component-id="blocked-visible"]').first()).toBeHidden({ timeout: 10_000 });
 });
 
 test('scripting and form scripts allow return to stop execution', async ({ page }) => {
@@ -194,10 +268,7 @@ scripts:
 `);
   await page.getByRole('button', { name: 'Apply' }).click();
   await page.getByRole('button', { name: 'Viewer' }).click();
-  await page.waitForFunction(() => {
-    const scripting = (window as unknown as { __HVY_SCRIPTING__?: { runtimes: Record<string, unknown> } }).__HVY_SCRIPTING__;
-    return Boolean(scripting) && Object.keys(scripting.runtimes).length === 0;
-  });
+  await waitForScriptingIdle(page);
 
   const form = page.locator('form').filter({ has: page.getByRole('button', { name: 'Submit' }) });
   await form.locator('input[name="Value"]').fill('before');

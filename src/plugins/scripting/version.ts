@@ -6,3 +6,11 @@ export function getScriptingPluginVersion(pluginConfig: JsonObject | null | unde
   const rawVersion = pluginConfig && typeof pluginConfig.version === 'string' ? pluginConfig.version.trim() : '';
   return rawVersion.length > 0 ? rawVersion : SCRIPTING_PLUGIN_VERSION;
 }
+
+export function getScriptingPluginMaxLines(pluginConfig: JsonObject | null | undefined): number | undefined {
+  const rawMaxLines = pluginConfig?.maxLines;
+  if (typeof rawMaxLines !== 'number' || !Number.isFinite(rawMaxLines) || rawMaxLines <= 0) {
+    return undefined;
+  }
+  return Math.floor(rawMaxLines);
+}

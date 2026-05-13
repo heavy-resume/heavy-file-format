@@ -7,9 +7,10 @@ import type {
 } from '../types';
 import { SCRIPTING_PLUGIN_ID } from '../registry';
 import { visitBlocksInList } from '../../section-ops';
+import type { JsonObject } from '../../hvy/types';
 import { openScriptingHelpModal } from './help-modal';
 import { runUserScript } from './wrapper';
-import { getScriptingPluginVersion } from './version';
+import { getScriptingPluginMaxLines, getScriptingPluginVersion } from './version';
 import scriptingDocumentation from './about-scripting.txt?raw';
 
 import './scripting.css';
@@ -205,6 +206,7 @@ interface ScriptingTarget {
   blockId: string;
   source: string;
   pluginVersion: string;
+  maxLines?: number;
   componentId: string;
 }
 
@@ -212,7 +214,7 @@ let lastScriptedDocument: HvyDocumentHookContext['document'] | null = null;
 let lastScriptedSignature = '';
 
 function visitBlocksInSection(
-  section: { key: string; blocks: Array<{ id: string; text: string; schema: { id?: string; component: string; plugin: string; pluginConfig?: unknown } }>; children: unknown[] },
+  section: { key: string; blocks: Array<{ id: string; text: string; schema: { id?: string; component: string; plugin: string; pluginConfig?: JsonObject } }>; children: unknown[] },
   sectionKey: string,
   out: ScriptingTarget[]
 ): void {
@@ -224,6 +226,7 @@ function visitBlocksInSection(
         source: block.text ?? '',
         componentId: typeof block.schema.id === 'string' ? block.schema.id : '',
         pluginVersion: getScriptingPluginVersion(block.schema.pluginConfig),
+        maxLines: getScriptingPluginMaxLines(block.schema.pluginConfig),
       });
     }
   });
@@ -258,6 +261,7 @@ async function runDocumentScripting(ctx: HvyDocumentHookContext): Promise<void> 
       source: target.source,
       componentId: target.componentId,
       pluginVersion: target.pluginVersion,
+      maxLines: target.maxLines,
     });
     if (!ctx.isCurrentDocument()) {
       return;

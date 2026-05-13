@@ -42,6 +42,7 @@
   --hvy-border-alt: #b8c8d3;
   --hvy-border-input: #c8d4dd;
   --hvy-border-translucent: rgba(206, 217, 226, 0.92);
+  --hvy-ghost-border: rgba(107, 143, 160, 0.38);
 
   --hvy-xref-card-bg: #f3f5f8;
   --hvy-xref-card-hover-bg: #eef8fb;
@@ -124,6 +125,7 @@
   --hvy-border-alt: #3d4756;
   --hvy-border-input: #334152;
   --hvy-border-translucent: rgba(42, 51, 64, 0.92);
+  --hvy-ghost-border: rgba(231, 238, 245, 0.22);
 
   --hvy-xref-card-bg: rgba(255, 255, 255, 0.04);
   --hvy-xref-card-hover-bg: rgba(255, 255, 255, 0.08);

@@ -189,6 +189,7 @@
 
 .theme-preview-card[data-theme-preview-state="controls"] [data-theme-demo-state="controls"],
 .theme-preview-card[data-theme-preview-state="hover"] [data-theme-demo-state="hover"],
+.theme-preview-card[data-theme-preview-state="ghost"] [data-theme-demo-state="ghost"],
 .theme-preview-card[data-theme-preview-state="rest"] [data-theme-demo-state="rest"],
 .theme-preview-card[data-theme-preview-state="fill-in"] [data-theme-demo-state="fill-in"],
 .theme-preview-card[data-theme-preview-state="target"] [data-theme-demo-state="target"],
@@ -218,6 +219,7 @@
 
 .theme-preview-card[data-theme-preview-state="controls"] .theme-demo-component-list[data-theme-demo-state="controls"],
 .theme-preview-card[data-theme-preview-state="hover"] .theme-demo-component-list[data-theme-demo-state="hover"],
+.theme-preview-card[data-theme-preview-state="ghost"] .theme-demo-ghost-input-wrap[data-theme-demo-state="ghost"],
 .theme-preview-card[data-theme-preview-state="header"] .reader-table-frame[data-theme-demo-state="header"],
 .theme-preview-card[data-theme-preview-state="row-1"] .reader-table-frame[data-theme-demo-state="row-1"],
 .theme-preview-card[data-theme-preview-state="row-2"] .reader-table-frame[data-theme-demo-state="row-2"],
@@ -228,6 +230,22 @@
 
 .theme-demo-component-list .reader-component-list {
   margin-top: 0.45rem;
+}
+
+.theme-demo-ghost-input-wrap {
+  width: min(100%, 18rem);
+}
+
+.theme-demo-ghost-input {
+  min-height: 3.2rem;
+  display: grid;
+  place-items: center;
+  border: 2px dashed var(--hvy-ghost-border, var(--hvy-border-input));
+  border-radius: 10px;
+  background: var(--hvy-surface-alt);
+  color: var(--hvy-text-muted);
+  font-size: 0.86rem;
+  font-weight: 700;
 }
 
 .theme-demo-rich-text {

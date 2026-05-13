@@ -54,6 +54,7 @@ theme:
     --hvy-border-alt: "#3d4756"
     --hvy-border-input: "#334152"
     --hvy-border-translucent: "rgba(42, 51, 64, 0.92)"
+    --hvy-ghost-border: "rgba(231, 238, 245, 0.22)"
     --hvy-xref-card-bg: "rgba(255, 255, 255, 0.04)"
     --hvy-xref-card-hover-bg: "rgba(255, 255, 255, 0.08)"
     --hvy-table-header: "#1f2a37"

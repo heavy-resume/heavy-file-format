@@ -1,5 +1,5 @@
 .plugin-placeholder {
-  border: 1px dashed var(--hvy-border-alt);
+  border: 1px dashed var(--hvy-ghost-border, var(--hvy-border-input));
   border-radius: 8px;
   background: var(--hvy-surface-alt);
   padding: 0.5rem;

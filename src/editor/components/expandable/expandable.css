@@ -268,7 +268,7 @@
   min-height: 2.4rem;
   display: grid;
   place-items: center;
-  border: 1px dashed var(--hvy-border-input);
+  border: 1px dashed var(--hvy-ghost-border, var(--hvy-border-input));
   border-radius: 8px;
   background: var(--hvy-surface-alt);
   color: var(--hvy-text-muted);

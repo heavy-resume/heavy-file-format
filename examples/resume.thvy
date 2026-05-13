@@ -55,6 +55,7 @@ theme:
     --hvy-border-alt: "#b8c8d3"
     --hvy-border-input: "#c8d4dd"
     --hvy-border-translucent: "rgba(206, 217, 226, 0.92)"
+    --hvy-ghost-border: "rgba(107, 143, 160, 0.38)"
     --hvy-xref-card-bg: "#f3f5f8"
     --hvy-xref-card-hover-bg: "#eef8fb"
     --hvy-table-header: "#e5e7eb"

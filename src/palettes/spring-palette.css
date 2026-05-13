@@ -24,6 +24,7 @@
   --hvy-border-alt: #2d6f5a;
   --hvy-border-input: #3f7868;
   --hvy-border-translucent: rgba(22, 22, 22, 0.68);
+  --hvy-ghost-border: rgba(11, 29, 12, 0.24);
   --hvy-xref-card-bg: #c5dacf;
   --hvy-xref-card-hover-bg: rgba(0, 255, 200, 0.6);
   --hvy-table-header: #a3ccb6;

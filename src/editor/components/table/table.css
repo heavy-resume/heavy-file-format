@@ -274,7 +274,7 @@
 }
 
 .table-details-editor {
-  border: 1px dashed var(--hvy-border-input);
+  border: 1px dashed var(--hvy-ghost-border, var(--hvy-border-input));
   border-radius: 8px;
   padding: 0.55rem;
   display: grid;

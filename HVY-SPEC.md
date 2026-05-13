@@ -645,6 +645,7 @@ Viewers SHOULD ship built-in defaults for the following conventional names so do
 | `--hvy-border-alt` | Emphasized border |
 | `--hvy-border-input` | Form field and table border |
 | `--hvy-border-translucent` | Floating toolbar border |
+| `--hvy-ghost-border` | Muted dashed border for editor ghost inputs |
 | `--hvy-xref-card-bg` | Cross-reference card background |
 | `--hvy-xref-card-hover-bg` | Cross-reference card hover background |
 | `--hvy-table-header` | Table header background |

@@ -12,7 +12,7 @@
 
 .image-dropzone {
   position: relative;
-  border: 2px dashed var(--hvy-border);
+  border: 2px dashed var(--hvy-ghost-border, var(--hvy-border));
   border-radius: 0.5rem;
   padding: 0.75rem;
   display: flex;

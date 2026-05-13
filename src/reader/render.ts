@@ -679,6 +679,12 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     const componentListHoverPreview = componentListPreview
       .replace('data-theme-demo-state="controls"', 'data-theme-demo-state="hover"')
       .replace('--hvy-surface-alt --hvy-border-input --hvy-shadow --hvy-text-muted', '--hvy-xref-card-hover-bg --hvy-border-alt --hvy-text');
+    const ghostInputPreview = renderDemoWrapper(
+      '<div class="theme-demo-ghost-input">Add component</div>',
+      'ghost',
+      '--hvy-surface-alt --hvy-ghost-border --hvy-text-muted',
+      'theme-demo-ghost-input-wrap'
+    );
     const textPreview = renderDemoSurface(
       renderTextReader(previewSection, previewTextBlock, helpers),
       'rest',
@@ -755,14 +761,15 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       {
         id: 'component-list',
         label: 'Component List',
-        detail: 'Reader sort/group controls and hover state',
+        detail: 'Reader controls, hover state, and editor ghost input',
         className: 'theme-preview-component-list-card',
-        variables: ['--hvy-surface', '--hvy-surface-alt', '--hvy-border-input', '--hvy-border-alt', '--hvy-text', '--hvy-text-muted', '--hvy-xref-card-hover-bg', '--hvy-shadow'],
+        variables: ['--hvy-surface', '--hvy-surface-alt', '--hvy-border-input', '--hvy-border-alt', '--hvy-ghost-border', '--hvy-text', '--hvy-text-muted', '--hvy-xref-card-hover-bg', '--hvy-shadow'],
         states: [
           { id: 'controls', label: 'Controls', variables: ['--hvy-surface-alt', '--hvy-border-input', '--hvy-shadow', '--hvy-text-muted'] },
           { id: 'hover', label: 'Hover', variables: ['--hvy-xref-card-hover-bg', '--hvy-border-alt', '--hvy-text'] },
+          { id: 'ghost', label: 'Ghost', variables: ['--hvy-surface-alt', '--hvy-ghost-border', '--hvy-text-muted'] },
         ],
-        html: `${componentListPreview}${componentListHoverPreview}`,
+        html: `${componentListPreview}${componentListHoverPreview}${ghostInputPreview}`,
       },
       {
         id: 'button',

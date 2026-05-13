@@ -57,7 +57,7 @@
 .container-inner-blocks.is-empty {
   min-height: 4.5rem;
   place-items: center;
-  border: 1px dashed var(--hvy-border-alt);
+  border: 1px dashed var(--hvy-ghost-border, var(--hvy-border-input));
   border-radius: 7px;
   background: color-mix(in srgb, var(--hvy-surface-alt) 58%, transparent);
 }

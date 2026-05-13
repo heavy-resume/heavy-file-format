@@ -35,10 +35,12 @@ test('hideIfUnmodified round-trips without a template baseline payload', () => {
 test('viewer filtering hides marked scaffold sections until the marker is cleared', () => {
   const document = deserializeDocument(scaffoldDocument, '.hvy');
   const section = document.sections[0]!;
+  section.expanded = false;
 
   expect(filterTemplateVisibleSections(document.sections)).toEqual([]);
   expect(clearHideIfUnmodifiedForSectionPath(document.sections, section.key)).toBe(true);
   expect(section.hideIfUnmodified).toBe(false);
+  expect(section.expanded).toBe(true);
   expect(filterTemplateVisibleSections(document.sections)).toHaveLength(1);
 });
 
@@ -54,9 +56,13 @@ test('clearing a child section also clears hidden template ancestors', () => {
 
   const parent = document.sections[0]!;
   const child = parent.children[0]!;
+  parent.expanded = false;
+  child.expanded = false;
   expect(clearHideIfUnmodifiedForSectionPath(document.sections, child.key)).toBe(true);
   expect(parent.hideIfUnmodified).toBe(false);
   expect(child.hideIfUnmodified).toBe(false);
+  expect(parent.expanded).toBe(true);
+  expect(child.expanded).toBe(true);
 });
 
 test('viewer search can use the filtered section tree for hidden template markers', async () => {

@@ -28,6 +28,10 @@ export function clearHideIfUnmodifiedForSections(sections: VisualSection[]): boo
       section.hideIfUnmodified = false;
       changed = true;
     }
+    if (!section.expanded) {
+      section.expanded = true;
+      changed = true;
+    }
   }
   return changed;
 }

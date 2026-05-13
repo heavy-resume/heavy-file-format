@@ -258,7 +258,8 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     const prioritized = isSectionReaderPriority(section, viewContext, targetKey);
     const viewCollapseKey = `reader-view-collapse:${targetKey}`;
     const viewExpanded = state.readerContainerState[viewCollapseKey] ?? !modifiers.has('collapse');
-    const sectionExpanded = modifiers.has('collapse') ? viewExpanded : prioritized ? true : section.expanded;
+    const autoExpanded = !modifiers.has('collapse') && !section.expanded && shouldAutoExpandAuthoringSection(section);
+    const sectionExpanded = modifiers.has('collapse') ? viewExpanded : prioritized || autoExpanded ? true : section.expanded;
     const classList = [
       'reader-section',
       section.contained ? '' : 'is-uncontained',
@@ -289,7 +290,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     const viewCollapseAttrs = `data-reader-action="toggle-view-collapse" data-reader-view-target="${deps.escapeAttr(targetKey)}" data-reader-view-collapse-key="${deps.escapeAttr(viewCollapseKey)}" aria-expanded="${viewExpanded ? 'true' : 'false'}"`;
     const toggleAttrs = modifiers.has('collapse')
       ? (sectionExpanded ? '' : ` ${viewCollapseAttrs}`)
-      : section.contained && section.expanded
+      : section.contained && sectionExpanded
       ? ''
       : section.contained
       ? ` data-reader-action="toggle-expand" data-section-key="${deps.escapeAttr(section.key)}"`
@@ -317,6 +318,16 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
         ${content}
       </section>
     `;
+  }
+
+  function shouldAutoExpandAuthoringSection(section: VisualSection): boolean {
+    if (state.currentView !== 'ai' || !section.contained || section.children.length > 0) {
+      return false;
+    }
+    return section.blocks.some((block) =>
+      deps.resolveBaseComponent(block.schema.component) === 'component-list'
+      && !hasComponentListItems(block)
+    );
   }
 
   function renderReaderBlock(section: VisualSection, block: VisualBlock): string {

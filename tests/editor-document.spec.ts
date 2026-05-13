@@ -280,7 +280,7 @@ test('template-hidden sections hide in viewer and lose the marker after editing'
 hvy_version: 0.1
 ---
 
-<!--hvy: {"id":"optional-history","hideIfUnmodified":true}-->
+<!--hvy: {"id":"optional-history","expanded":false,"hideIfUnmodified":true}-->
 #! Optional History
 
  <!--hvy:text {}-->
@@ -319,6 +319,7 @@ hvy_version: 0.1
   await page.getByRole('button', { name: 'Editor' }).click();
   await page.getByRole('button', { name: 'Raw' }).click();
   await expect(page.locator('#rawEditor')).not.toContainText('"hideIfUnmodified":true');
+  await expect(page.locator('#rawEditor')).not.toContainText('"expanded":false');
 });
 
 test('resume template hides untouched scaffold sections only in viewer', async ({ page }) => {
@@ -339,6 +340,32 @@ test('resume template hides untouched scaffold sections only in viewer', async (
   await expect(page.locator('#editorTree')).toContainText('History');
   await expect(page.locator('#editorTree')).toContainText('Projects');
   await expect(page.locator('#editorTree')).toContainText('Education');
+});
+
+test('resume template empty skill and tool sections show add controls directly in AI view', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Resume Template' }).click();
+  await page.locator('[data-action="switch-view"][data-view="ai"]').click();
+  await page.locator('.viewer-sidebar-tab').click();
+
+  const skills = page.locator('#aiSidebarSections #skills');
+  await expect(skills).toBeVisible();
+  await expect(skills).not.toHaveClass(/is-collapsed-preview/);
+  await skills.locator('.passive-empty-list-ghost', { hasText: 'Add Skill' }).click();
+  let modal = page.locator('.component-meta-modal', { hasText: 'skill-record' });
+  await expect(modal).toBeVisible();
+  await expect(modal.locator('label', { hasText: 'Skill' })).toBeVisible();
+  await expect(modal).not.toContainText('Skill / Tool');
+  await modal.getByRole('button', { name: 'Close' }).click();
+
+  const tools = page.locator('#aiSidebarSections #tools-technologies');
+  await expect(tools).toBeVisible();
+  await expect(tools).not.toHaveClass(/is-collapsed-preview/);
+  await tools.locator('.passive-empty-list-ghost', { hasText: 'Add Tool / Technology' }).click();
+  modal = page.locator('.component-meta-modal', { hasText: 'tool-tech-record' });
+  await expect(modal).toBeVisible();
+  await expect(modal.locator('label', { hasText: 'Tool / Technology' })).toBeVisible();
 });
 
 test('reader max width keeps focus while typing', async ({ page }) => {

@@ -199,7 +199,7 @@ component_defs:
                   schema:
                     component: component-list
                     componentListComponent: tool-tech-xref-card
-                    componentListItemLabel: tool / tech xref
+                    componentListItemLabel: tool / technology xref
                     css: "margin: 0;"
                     componentListBlocks: []
   - name: education-record
@@ -408,10 +408,10 @@ component_defs:
             componentListBlocks: []
   - name: skill-record
     baseType: expandable
-    description: Skill or tool details
+    description: Skill details
     templateVariables:
       skill:
-        label: Skill / Tool
+        label: Skill
     schema:
       css: "margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);"
       expandableStubBlocks:
@@ -421,6 +421,37 @@ component_defs:
               component: text
               css: "margin: 0;"
               placeholder: "### Skill name"
+      expandableContentBlocks:
+        lock: false
+        css: "padding: 0.5rem;"
+        children:
+          - text: |-
+              ^detail-heading^ #### Description
+              ^detail-body^ {% description | block %}
+              ^detail-heading^ #### Notes
+              ^detail-body^ {% notes | block %}
+            schema:
+              component: text
+              css: "margin: 0;"
+              placeholder: "Description and notes"
+          - component: skill-record-experience-section
+          - component: skill-record-education-section
+          - component: skill-record-projects-section
+  - name: tool-tech-record
+    baseType: expandable
+    description: Tool / technology details
+    templateVariables:
+      tool_technology:
+        label: Tool / Technology
+    schema:
+      css: "margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);"
+      expandableStubBlocks:
+        children:
+          - text: "### {% tool_technology %}"
+            schema:
+              component: text
+              css: "margin: 0;"
+              placeholder: "### Tool / technology name"
       expandableContentBlocks:
         lock: false
         css: "padding: 0.5rem;"
@@ -486,7 +517,7 @@ component_defs:
   # Featured
 
  <!--hvy:text {"id":"featured-xref-helper","align":"center","editorOnly":true,"css":"margin: 0.35rem 0 0.5rem; color: var(--hvy-text-muted); font-style: italic;"}-->
-  Tip: Add a skill and tool / tech via the sidebar and link to them here
+  Tip: Add a skill and tool / technology via the sidebar and link to them here
 
  <!--hvy:grid {"css":"margin: 0.5rem 0; gap: 0.75rem;","gridColumns":2,"lock":true}-->
   <!--hvy:grid:0 {"id":"top-skills"}-->
@@ -500,7 +531,7 @@ component_defs:
    <!--hvy:container {"css":"margin: 0;","align":"center"}-->
     <!--hvy:text {"align":"center","css":"margin: 0 0 0.35rem;"}-->
      ## Tools & Technologies
-    <!--hvy:component-list {"id":"top-tools-technologies-list","componentListComponent":"tool-tech-xref-card","componentListItemLabel":"tool / tech xref","css":"margin: 0;","align":"center"}-->
+    <!--hvy:component-list {"id":"top-tools-technologies-list","componentListComponent":"tool-tech-xref-card","componentListItemLabel":"tool / technology xref","css":"margin: 0;","align":"center"}-->
 
 <!--hvy: {"id":"skills","lock":true,"expanded":false,"location":"sidebar","description":"Skills reference list","hideIfUnmodified":true}-->
 #! Skills
@@ -516,7 +547,7 @@ component_defs:
  <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
   # Tools & <!--hvy:alt {"compact":"Tech"}-->Technologies<!--/hvy:alt-->
 
- <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"skill-record","componentListItemLabel":"tool / tech","tags":"tool"}-->
+ <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"tool-tech-record","componentListItemLabel":"tool / technology","tags":"tool"}-->
 
 <!--hvy: {"id":"history","lock":true,"description":"Work history","hideIfUnmodified":true}-->
 #! History

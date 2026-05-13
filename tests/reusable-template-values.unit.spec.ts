@@ -37,10 +37,36 @@ test('extracts reusable template variables in first-seen order with text as the 
   };
 
   expect(extractReusableTemplateVariables(schema)).toEqual([
-    { name: 'stable_id', type: 'text' },
-    { name: 'title', type: 'text' },
-    { name: 'placeholder', type: 'text' },
-    { name: 'details', type: 'block' },
+    { name: 'stable_id', type: 'text', label: 'Stable Id' },
+    { name: 'title', type: 'text', label: 'Title' },
+    { name: 'placeholder', type: 'text', label: 'Placeholder' },
+    { name: 'details', type: 'block', label: 'Details' },
+  ]);
+});
+
+test('uses configured labels and humanizes snake and kebab variable names', () => {
+  const definition: ComponentDefinition = {
+    name: 'history-record',
+    baseType: 'container',
+    templateVariables: {
+      date_range: { label: 'Dates' },
+    },
+    schema: {
+      ...defaultBlockSchema('container'),
+      containerBlocks: [
+        {
+          id: 'field-row',
+          text: '{% date_range %}\n{% project-link %}',
+          schema: defaultBlockSchema('text'),
+          schemaMode: false,
+        },
+      ],
+    },
+  };
+
+  expect(extractReusableTemplateVariablesFromDefinition(definition)).toEqual([
+    { name: 'date_range', type: 'text', label: 'Dates' },
+    { name: 'project-link', type: 'text', label: 'Project Link' },
   ]);
 });
 
@@ -110,8 +136,8 @@ test('blank template values clear empty markdown scaffolds so placeholders rende
 
 test('validates exact template value keys and text newlines', () => {
   const variables = [
-    { name: 'title', type: 'text' as const },
-    { name: 'details', type: 'block' as const },
+    { name: 'title', type: 'text' as const, label: 'Title' },
+    { name: 'details', type: 'block' as const, label: 'Details' },
   ];
 
   expect(() => validateReusableTemplateValues(variables, { title: 'Title' })).toThrow('Missing keys: details');
@@ -132,5 +158,5 @@ test('extracts reusable template variables from persisted schema definitions', (
     },
   };
 
-  expect(extractReusableTemplateVariablesFromDefinition(definition)).toEqual([{ name: 'description', type: 'block' }]);
+  expect(extractReusableTemplateVariablesFromDefinition(definition)).toEqual([{ name: 'description', type: 'block', label: 'Description' }]);
 });

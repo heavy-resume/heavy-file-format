@@ -6,19 +6,20 @@ export type ReusableTemplateVariableType = 'text' | 'block';
 export interface ReusableTemplateVariable {
   name: string;
   type: ReusableTemplateVariableType;
+  label: string;
 }
 
-const TEMPLATE_TOKEN_PATTERN = /{%\s*([A-Za-z_][A-Za-z0-9_]*)\s*(?:\|\s*(text|block)\s*)?%}/g;
+const TEMPLATE_TOKEN_PATTERN = /{%\s*([A-Za-z_][A-Za-z0-9_-]*)\s*(?:\|\s*(text|block)\s*)?%}/g;
 
 export function extractReusableTemplateVariablesFromDefinition(definition: ComponentDefinition | null | undefined): ReusableTemplateVariable[] {
   const source = definition?.template ?? definition?.schema;
   if (!source) {
     return [];
   }
-  return extractReusableTemplateVariables(source);
+  return extractReusableTemplateVariables(source, getReusableTemplateVariableLabels(definition));
 }
 
-export function extractReusableTemplateVariables(value: unknown): ReusableTemplateVariable[] {
+export function extractReusableTemplateVariables(value: unknown, labels: Record<string, string> = {}): ReusableTemplateVariable[] {
   const variables = new Map<string, ReusableTemplateVariableType>();
   visitTemplateStrings(value, (text) => {
     for (const match of text.matchAll(TEMPLATE_TOKEN_PATTERN)) {
@@ -33,7 +34,7 @@ export function extractReusableTemplateVariables(value: unknown): ReusableTempla
       }
     }
   });
-  return [...variables.entries()].map(([name, type]) => ({ name, type }));
+  return [...variables.entries()].map(([name, type]) => ({ name, type, label: labels[name] || humanizeTemplateVariableName(name) }));
 }
 
 export function validateReusableTemplateValues(
@@ -88,6 +89,34 @@ export function parseReusableTemplateJson(raw: string): Record<string, string> {
 
 export function formatTemplateKeys(keys: string[]): string {
   return keys.length > 0 ? keys.join(', ') : '(none)';
+}
+
+export function humanizeTemplateVariableName(name: string): string {
+  return name
+    .trim()
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase()
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function getReusableTemplateVariableLabels(definition: ComponentDefinition | null | undefined): Record<string, string> {
+  const config = definition?.templateVariables;
+  if (!config || typeof config !== 'object' || Array.isArray(config)) {
+    return {};
+  }
+  const labels: Record<string, string> = {};
+  Object.entries(config).forEach(([name, value]) => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      return;
+    }
+    const label = (value as { label?: unknown }).label;
+    if (typeof label === 'string' && label.trim()) {
+      labels[name] = label.trim();
+    }
+  });
+  return labels;
 }
 
 function normalizeTemplateVariableType(raw: string | undefined): ReusableTemplateVariableType {

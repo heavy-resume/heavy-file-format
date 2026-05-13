@@ -527,15 +527,17 @@ Reusable component templates MAY include value tokens in any string field. Token
 {% organization %}
 {% role | text %}
 {% description | block %}
+{% project-link %}
 ```
 
 Template value notes:
 - `{% name %}` is equivalent to `{% name | text %}`.
 - `text` values are single-line values; `block` values may contain multiple lines.
-- Variable names MUST be identifier-like strings: letters, numbers, and underscores, starting with a letter or underscore.
+- Variable names MUST be identifier-like strings: letters, numbers, underscores, and hyphens, starting with a letter or underscore.
 - Repeated variables use the same value; conflicting types for the same variable are invalid.
 - Blank values are allowed. Replacing a token with a blank value does not remove or change separate schema fields such as `placeholder`.
 - Authoring tools that accept explicit template values SHOULD require the provided keys to exactly match the expected variable names.
+- Reusable component definitions MAY include `templateVariables`, keyed by variable name. Each variable config MAY include `label`, a human-readable field label for authoring UIs. When `label` is omitted, authoring tools SHOULD derive one by converting snake_case or kebab-case separators to spaces and title-casing the result.
 
 ### 5.10 Reusable section definitions
 

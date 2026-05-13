@@ -1192,7 +1192,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       const variables = extractReusableTemplateVariablesFromDefinition(definition);
       const fields = variables.map((variable) => {
         const id = `reusableTemplateValue_${variable.name}`;
-        const label = deps.escapeHtml(variable.name);
+        const label = deps.escapeHtml(variable.label);
         return variable.type === 'block'
           ? `<label>
               <span>${label}</span>

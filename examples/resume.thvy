@@ -90,6 +90,11 @@ component_defs:
   - name: history-record
     baseType: expandable
     description: Work history organization entry
+    templateVariables:
+      role:
+        label: Role / Title
+      years:
+        label: Year(s)
     schema:
       css: "margin: 0;"
       expandableAlwaysShowStub: true
@@ -200,6 +205,13 @@ component_defs:
   - name: education-record
     baseType: expandable
     description: Education entry
+    templateVariables:
+      institution:
+        label: School / University
+      date_range:
+        label: Date range
+      gpa:
+        label: GPA
     schema:
       css: "margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);"
       expandableAlwaysShowStub: true
@@ -266,6 +278,13 @@ component_defs:
   - name: project-record
     baseType: expandable
     description: Project entry
+    templateVariables:
+      project:
+        label: Project name
+      date_range:
+        label: Date range
+      link:
+        label: Project link
     schema:
       css: "margin: 0;"
       expandableAlwaysShowStub: true
@@ -369,6 +388,9 @@ component_defs:
   - name: skill-record-section
     baseType: container
     description: Skill detail group
+    templateVariables:
+      section_title:
+        label: Section title
     schema:
       css: "margin: 0;"
       containerBlocks:
@@ -387,6 +409,9 @@ component_defs:
   - name: skill-record
     baseType: expandable
     description: Skill or tool details
+    templateVariables:
+      skill:
+        label: Skill / Tool
     schema:
       css: "margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);"
       expandableStubBlocks:

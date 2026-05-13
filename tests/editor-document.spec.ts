@@ -621,6 +621,9 @@ hvy_version: 0.1
 component_defs:
   - name: card-record
     baseType: container
+    templateVariables:
+      title:
+        label: Card title
     schema:
       containerBlocks:
         - text: "{% title %}"
@@ -644,6 +647,8 @@ component_defs:
   await page.locator('.ghost-label', { hasText: 'Add Card' }).click();
   const modal = page.locator('.component-meta-modal', { hasText: 'card-record' });
   await expect(modal).toBeVisible();
+  await expect(modal.locator('label', { hasText: 'Card title' })).toBeVisible();
+  await expect(modal.locator('label', { hasText: 'Details' })).toBeVisible();
   await expect(modal.locator('input[data-template-variable="title"]')).toBeVisible();
   await expect(modal.locator('textarea[data-template-variable="details"]')).toBeVisible();
 

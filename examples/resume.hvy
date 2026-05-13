@@ -201,7 +201,6 @@ component_defs:
     description: Education entry
     schema:
       css: "margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);"
-      containerTitle: "{% degree %}"
       containerExpanded: false
       containerCollapsedPreviewRem: 5
       containerBlocks:
@@ -1213,7 +1212,7 @@ component_defs:
 
   <!--hvy:component-list:0 {}-->
 
-   <!--hvy:education-record {"id":"education-bs-computer-science","containerTitle":"B.S. Computer Science","containerExpanded":false,"containerCollapsedPreviewRem":5}-->
+   <!--hvy:education-record {"id":"education-bs-computer-science","containerExpanded":false,"containerCollapsedPreviewRem":5}-->
 
     <!--hvy:container:0 {}-->
 

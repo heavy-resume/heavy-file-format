@@ -88,6 +88,10 @@
   position: relative;
 }
 
+.reader-container.is-bordered.has-title {
+  margin-top: var(--hvy-container-title-clearance, 0.5rem);
+}
+
 .reader-container-head {
   display: flex;
   justify-content: space-between;
@@ -125,6 +129,7 @@
 
 .reader-container.is-bordered.has-title > .reader-container-head .reader-container-actions {
   pointer-events: auto;
+  transform: translateY(0.25rem);
 }
 
 .reader-container-actions {

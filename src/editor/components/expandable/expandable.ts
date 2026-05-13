@@ -242,6 +242,7 @@ export const renderExpandableReader: ComponentReaderRenderer = (section, block, 
   }
   const expanded = block.schema.expandableExpanded;
   const alwaysShowStub = block.schema.expandableAlwaysShowStub;
+  const hasStubContent = stubHtml.trim().length > 0;
   const stubPaneStyle = helpers.escapeAttr(sanitizeInlineCss(block.schema.expandableStubCss));
   const contentPaneStyle = helpers.escapeAttr(sanitizeInlineCss(block.schema.expandableContentCss));
   const toggleAttrs = `data-reader-action="toggle-expandable" data-section-key="${helpers.escapeAttr(section.key)}" data-block-id="${helpers.escapeAttr(
@@ -253,12 +254,25 @@ export const renderExpandableReader: ComponentReaderRenderer = (section, block, 
     </div>
   </div>`;
   const contentToggleAttrs = `data-reader-action="toggle-expandable" data-expandable-content="true" data-section-key="${helpers.escapeAttr(section.key)}" data-block-id="${helpers.escapeAttr(block.id)}" aria-expanded="true"`;
+  const collapsedContentPreviewAttrs = `data-reader-action="toggle-expandable" data-expandable-content="true" data-section-key="${helpers.escapeAttr(section.key)}" data-block-id="${helpers.escapeAttr(block.id)}" aria-expanded="false"`;
+  const contentPane = `<div class="expandable-reader-pane expandable-reader-pane-expanded"><div class="expand-content" style="${contentPaneStyle}" ${contentToggleAttrs}>${contentHtml}</div></div>`;
+  const collapsedContentPreview = `<div class="expandable-reader-pane expandable-reader-pane-expanded expandable-reader-pane-content-preview"><div class="expand-content" style="${contentPaneStyle}" ${collapsedContentPreviewAttrs}>${contentHtml}</div></div>`;
   const body = expanded
-    ? alwaysShowStub
-      ? `${stubToggle}<div class="expandable-reader-pane expandable-reader-pane-expanded"><div class="expand-content" style="${contentPaneStyle}" ${contentToggleAttrs}>${contentHtml}</div></div>`
-      : `<div class="expandable-reader-pane expandable-reader-pane-expanded"><div class="expand-content" style="${contentPaneStyle}" ${contentToggleAttrs}>${contentHtml}</div></div>`
-    : stubToggle;
-  return `<div class="expandable-reader is-interactive" data-expandable-id="${helpers.escapeAttr(block.id)}">
+    ? alwaysShowStub && hasStubContent
+      ? `${stubToggle}${contentPane}`
+      : contentPane
+    : hasStubContent
+      ? stubToggle
+      : collapsedContentPreview;
+  const className = [
+    'expandable-reader',
+    'is-interactive',
+    expanded ? 'is-expanded' : 'is-collapsed',
+    hasStubContent ? '' : 'has-empty-stub',
+  ]
+    .filter(Boolean)
+    .join(' ');
+  return `<div class="${helpers.escapeAttr(className)}" data-expandable-id="${helpers.escapeAttr(block.id)}">
     <div class="expandable-reader-body">${body}</div>
   </div>`;
 };

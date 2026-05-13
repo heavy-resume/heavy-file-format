@@ -353,6 +353,25 @@
   min-width: 0;
 }
 
+.expandable-reader.has-empty-stub.is-collapsed .expandable-reader-body {
+  max-height: 5rem;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.expandable-reader.has-empty-stub.is-collapsed .expandable-reader-body::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0;
+  height: min(2.6rem, 5rem);
+  pointer-events: none;
+  background: linear-gradient(to bottom, transparent, color-mix(in srgb, var(--hvy-surface) 72%, transparent));
+}
+
+.expandable-reader.has-empty-stub .expandable-reader-pane-content-preview .expand-content {
+  margin-top: 0;
+}
+
 .expand-stub-toggle,
 .expand-collapse-strip {
   transition: box-shadow 240ms ease, background-color 240ms ease;

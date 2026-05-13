@@ -197,68 +197,71 @@ component_defs:
                     css: "margin: 0;"
                     componentListBlocks: []
   - name: education-record
-    baseType: container
+    baseType: expandable
     description: Education entry
     schema:
       css: "margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);"
-      containerExpanded: false
-      containerCollapsedPreviewRem: 5
-      containerBlocks:
-        - text: "^section-heading^ ### {% degree %}"
-          schema:
-            component: text
-            css: "margin: 0 0 0.25rem;"
-            placeholder: "Degree"
-        - text: ""
-          schema:
-            component: grid
-            css: "margin: 0.35rem 0;"
-            gridColumns: 2
-            gridItems:
-              - id: education-institution-details
-                block:
-                  text: ""
-                  schema:
-                    component: container
-                    css: "margin: 0;"
-                    containerBlocks:
-                      - text: "{% institution %}"
-                        schema:
-                          component: text
-                          css: "margin: 0 0 0.25rem;"
-                          placeholder: "School / University"
-                      - text: "{% location %}"
-                        schema:
-                          component: text
-                          css: "margin: 0 0 0.25rem;"
-                          placeholder: "Location"
-                      - text: "{% gpa %}"
-                        schema:
-                          component: text
-                          css: "margin: 0;"
-                          placeholder: "GPA"
-              - id: education-date-range
-                block:
-                  text: "{% date_range %}"
-                  schema:
-                    component: text
-                    css: "margin: 0; text-align: right;"
-                    placeholder: "Start Year - End Year"
-        - text: "{% description | block %}"
-          schema:
-            component: text
-            css: "margin: 0.5rem 0;"
-            placeholder: "Description"
-        - component: skills-and-tools-tech-list
-        - text: "^section-heading^ #### Classes"
-          schema:
-            component: text
-            css: "margin: 0;"
-        - text: ""
-          schema:
-            component: text
-            placeholder: classes
-            css: "margin: 0;"
+      expandableAlwaysShowStub: true
+      expandableExpanded: false
+      expandableStubBlocks:
+        children: []
+      expandableContentBlocks:
+        children:
+          - text: "^section-heading^ ### {% degree %}"
+            schema:
+              component: text
+              css: "margin: 0 0 0.25rem;"
+              placeholder: "Degree"
+          - text: ""
+            schema:
+              component: grid
+              css: "margin: 0.35rem 0;"
+              gridColumns: 2
+              gridItems:
+                - id: education-institution-details
+                  block:
+                    text: ""
+                    schema:
+                      component: container
+                      css: "margin: 0;"
+                      containerBlocks:
+                        - text: "{% institution %}"
+                          schema:
+                            component: text
+                            css: "margin: 0 0 0.25rem;"
+                            placeholder: "School / University"
+                        - text: "{% location %}"
+                          schema:
+                            component: text
+                            css: "margin: 0 0 0.25rem;"
+                            placeholder: "Location"
+                        - text: "{% gpa %}"
+                          schema:
+                            component: text
+                            css: "margin: 0;"
+                            placeholder: "GPA"
+                - id: education-date-range
+                  block:
+                    text: "{% date_range %}"
+                    schema:
+                      component: text
+                      css: "margin: 0; text-align: right;"
+                      placeholder: "Start Year - End Year"
+          - text: "{% description | block %}"
+            schema:
+              component: text
+              css: "margin: 0.5rem 0;"
+              placeholder: "Description"
+          - component: skills-and-tools-tech-list
+          - text: "^section-heading^ #### Classes"
+            schema:
+              component: text
+              css: "margin: 0;"
+          - text: ""
+            schema:
+              component: text
+              placeholder: classes
+              css: "margin: 0;"
   - name: project-record
     baseType: expandable
     description: Project entry
@@ -1212,14 +1215,16 @@ component_defs:
 
   <!--hvy:component-list:0 {}-->
 
-   <!--hvy:education-record {"id":"education-bs-computer-science","containerExpanded":false,"containerCollapsedPreviewRem":5}-->
+   <!--hvy:education-record {"id":"education-bs-computer-science","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
-    <!--hvy:container:0 {}-->
+    <!--hvy:expandable:stub {}-->
+
+    <!--hvy:expandable:content {}-->
 
      <!--hvy:text {"css":"margin: 0 0 0.25rem;"}-->
       ^section-heading^ ### B.S. Computer Science
 
-    <!--hvy:container:1 {}-->
+    <!--hvy:expandable:content {}-->
 
      <!--hvy:grid {"css":"margin: 0.35rem 0;","gridColumns":2}-->
 
@@ -1235,12 +1240,12 @@ component_defs:
        <!--hvy:text {"css":"margin: 0; text-align: right;"}-->
         09/2019 - 06/2023
 
-    <!--hvy:container:2 {}-->
+    <!--hvy:expandable:content {}-->
 
      <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
       Focused on systems programming, developer tooling, and human-computer interaction while building software for research and product-oriented team projects.
 
-    <!--hvy:container:3 {}-->
+    <!--hvy:expandable:content {}-->
 
      <!--hvy:skills-and-tools-tech-list {"css":"margin: 0.5rem 0 0;","gridColumns":2}-->
 
@@ -1282,12 +1287,12 @@ component_defs:
 
            <!--hvy:tool-tech-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"C/C++","xrefTarget":"tool-c-cpp"}-->
 
-    <!--hvy:container:4 {}-->
+    <!--hvy:expandable:content {}-->
 
      <!--hvy:text {"css":"margin: 0;"}-->
       ^section-heading^ #### Classes
 
-    <!--hvy:container:5 {}-->
+    <!--hvy:expandable:content {}-->
 
      <!--hvy:text {"css":"margin: 0;"}-->
       ^detail-body^ Distributed Systems

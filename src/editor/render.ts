@@ -686,17 +686,28 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         sectionKey
       )}" data-block-id="${deps.escapeAttr(block.id)}" aria-expanded="${expanded ? 'true' : 'false'}"><div class="expand-stub">${stubBody}</div></div></div>`;
       const expandedPanel = `<div class="expandable-pane expandable-pane-expanded"><div class="expand-content" style="${contentPaneStyle}">${contentBody}</div></div>`;
+      const collapsedContentPreview = `<div class="expandable-pane expandable-pane-expanded expandable-reader-pane-content-preview"><div class="expand-content" style="${contentPaneStyle}" data-action="toggle-editor-expandable" data-section-key="${deps.escapeAttr(
+        sectionKey
+      )}" data-block-id="${deps.escapeAttr(block.id)}" aria-expanded="false">${contentBody}</div></div>`;
       const body = !hasStubContent && !hasExpandedContent
         ? `${stubToggle}${expandedPanel}`
         : expanded
-        ? alwaysShowStub
+        ? alwaysShowStub && hasStubContent
           ? `${stubToggle}${expandedPanel}`
           : `${expandedPanel}<div class="expand-collapse-strip" data-action="toggle-editor-expandable" data-section-key="${deps.escapeAttr(
             sectionKey
           )}" data-block-id="${deps.escapeAttr(block.id)}" aria-expanded="true">Collapse</div>`
-        : stubToggle;
+        : hasStubContent
+          ? stubToggle
+          : collapsedContentPreview;
+      const className = [
+        'expandable-reader',
+        'is-interactive',
+        expanded ? 'is-expanded' : 'is-collapsed',
+        hasStubContent ? '' : 'has-empty-stub',
+      ].filter(Boolean).join(' ');
 
-      return `<div class="expandable-reader is-interactive">
+      return `<div class="${deps.escapeAttr(className)}">
         <div class="expandable-reader-body">${body}</div>
       </div>`;
     }

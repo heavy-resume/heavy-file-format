@@ -44,17 +44,14 @@ import { bindUi } from './bind-ui';
 import { bindClickActions } from './bind/handlers/click-actions';
 import { bindInputBlock } from './bind/handlers/input-block';
 import { capturePluginFocus, reconcilePluginMounts } from './plugins/mount';
-import { getHostPlugin, SCRIPTING_PLUGIN_ID, setHostPlugins } from './plugins/registry';
+import { setHostPlugins } from './plugins/registry';
+import { resetPluginDocumentHookState, runPluginDocumentHooks } from './plugins/hooks';
 import {
   builtInPluginMap,
   builtInPlugins,
-  getBuiltInScriptingPluginVersion,
-  runBuiltInScriptingPlugin,
-  setBuiltInScriptingResult,
 } from 'virtual:hvy-built-in-plugins';
-import type { HvyPluginRegistration } from './plugins/types';
+import type { HvyPlugin } from './plugins/types';
 import { runButtonVisibilityScripts } from './editor/components/button/button-actions';
-import { visitBlocksInList } from './section-ops';
 import { createDefaultChatState } from './chat/chat';
 import { renderChatPanel, setHostChatClient, type HostChatClient } from './chat/chat';
 import { renderAiEditPopover, renderAiModeHint } from './ai-mode-ui';
@@ -68,7 +65,7 @@ export interface HvyMountOptions {
   root: HTMLElement;
   document: VisualDocument;
   mode?: HvyEmbedMode;
-  plugins?: HvyPluginRegistration[];
+  plugins?: HvyPlugin[];
   showAdvancedEditor?: boolean;
   chatClient?: HostChatClient | null;
   controls?: boolean;
@@ -86,8 +83,6 @@ export interface HvyMount {
 let editorRenderer: EditorRenderer;
 let readerRenderer: ReaderRenderer;
 let currentRoot: HTMLElement | null = null;
-let lastScriptedDocument: VisualDocument | null = null;
-let lastScriptedSignature = '';
 
 function createEmbedState(document: VisualDocument, mode: HvyEmbedMode, showAdvancedEditor = false): AppState {
   return {
@@ -324,7 +319,7 @@ function renderApp(): void {
   bindUi(currentRoot);
   reconcilePluginMounts(currentRoot);
   void runButtonVisibilityScripts(currentRoot);
-  void runScriptingBlocksIfNeeded();
+  void runPluginDocumentHooks('unknown');
 }
 
 function renderSidebarTabLabel(): string {
@@ -395,62 +390,12 @@ function refreshReaderPanels(): void {
   reader.innerHTML = readerRenderer.renderReaderSections(state.document.sections);
   reconcilePluginMounts(reader);
   void runButtonVisibilityScripts(reader);
+  void runPluginDocumentHooks('unknown');
 }
 
 function refreshModalPreview(): void {}
 
-async function runScriptingBlocksIfNeeded(): Promise<void> {
-  if (!getHostPlugin(SCRIPTING_PLUGIN_ID)) return;
-  if (state.currentView !== 'viewer' && state.currentView !== 'ai') return;
-  const targets: Array<{ sectionKey: string; blockId: string; source: string; pluginVersion: string; componentId: string }> = [];
-  for (const section of state.document.sections) {
-    visitBlocksInSection(section as never, section.key, targets);
-  }
-  const signature = targets.map((target) => `${target.sectionKey}\u0000${target.blockId}\u0000${target.pluginVersion}\u0000${target.source}`).join('\u0001');
-  if (state.document === lastScriptedDocument && signature === lastScriptedSignature) return;
-  lastScriptedDocument = state.document;
-  lastScriptedSignature = signature;
-  for (const target of targets) {
-    const result = await runBuiltInScriptingPlugin({
-      document: state.document,
-      source: target.source,
-      componentId: target.componentId,
-      pluginVersion: target.pluginVersion,
-    });
-    if (!result) continue;
-    const mount = currentRoot?.querySelector<HTMLElement>(
-      `[data-scripting-mount="true"][data-scripting-section-key="${cssEscape(target.sectionKey)}"][data-scripting-block-id="${cssEscape(target.blockId)}"]`
-    );
-    if (mount) await setBuiltInScriptingResult(mount, result, target.source);
-  }
-}
-
-function cssEscape(value: string): string {
-  return typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(value) : value.replace(/(["\\])/g, '\\$1');
-}
-
-function visitBlocksInSection(
-  section: { key: string; blocks: Array<{ id: string; text: string; schema: { id?: string; component: string; plugin: string; pluginConfig?: unknown } }>; children: unknown[] },
-  sectionKey: string,
-  out: Array<{ sectionKey: string; blockId: string; source: string; pluginVersion: string; componentId: string }>
-): void {
-  visitBlocksInList(section.blocks as never, (block) => {
-    if (block.schema.component === 'plugin' && block.schema.plugin === SCRIPTING_PLUGIN_ID) {
-      out.push({
-        sectionKey,
-        blockId: block.id,
-        source: block.text ?? '',
-        componentId: typeof block.schema.id === 'string' ? block.schema.id : '',
-        pluginVersion: getBuiltInScriptingPluginVersion(block.schema.pluginConfig),
-      });
-    }
-  });
-  for (const child of section.children as Array<typeof section>) {
-    visitBlocksInSection(child, child.key, out);
-  }
-}
-
-function ensureEmbedRuntime(plugins: HvyPluginRegistration[]): void {
+function ensureEmbedRuntime(plugins: HvyPlugin[]): void {
   ensureRenderers();
   initCallbacks({
     renderApp,
@@ -460,6 +405,7 @@ function ensureEmbedRuntime(plugins: HvyPluginRegistration[]): void {
     readerRenderer,
   });
   setHostPlugins(plugins);
+  resetPluginDocumentHookState();
   initColorModeSync();
 }
 
@@ -479,6 +425,7 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
       options.root.innerHTML = '';
       setHostChatClient(null);
       setHostPlugins([]);
+      resetPluginDocumentHookState();
       if (currentRoot === options.root) {
         currentRoot = null;
         setThemeRoot(null);

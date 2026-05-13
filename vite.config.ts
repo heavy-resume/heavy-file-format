@@ -36,25 +36,25 @@ const HVY_BUILT_IN_PLUGIN_DEFINITIONS: HvyBuiltInPluginDefinition[] = [
   {
     id: 'dev.heavy.db-table',
     key: 'dbTable',
-    exportName: 'dbTablePluginRegistration',
+    exportName: 'dbTablePlugin',
     modulePath: 'src/plugins/db-table-plugin.ts',
   },
   {
     id: 'dev.heavy.form',
     key: 'form',
-    exportName: 'formPluginRegistration',
+    exportName: 'formPlugin',
     modulePath: 'src/plugins/form.ts',
   },
   {
     id: 'dev.heavy.progress-bar',
     key: 'progressBar',
-    exportName: 'progressBarPluginRegistration',
+    exportName: 'progressBarPlugin',
     modulePath: 'src/plugins/progress-bar.ts',
   },
   {
     id: 'dev.heavy.scripting',
     key: 'scripting',
-    exportName: 'scriptingPluginRegistration',
+    exportName: 'scriptingPlugin',
     modulePath: 'src/plugins/scripting/scripting.ts',
   },
 ];
@@ -120,6 +120,10 @@ function readHvyBuildConfig(env: Record<string, string>): unknown {
   return JSON.parse(readFileSync(configPath, 'utf8')) as unknown;
 }
 
+function toViteRootImportPath(modulePath: string): string {
+  return `/${modulePath.replace(/^\/+/, '')}`;
+}
+
 export function createBrythonMinimalVfsPlugin(): Plugin {
   return {
     name: 'hvy-brython-minimal-vfs',
@@ -155,8 +159,7 @@ export function createBrythonMinimalVfsPlugin(): Plugin {
 
 export function createHvyBuiltInPluginsPlugin(env: Record<string, string>): Plugin {
   const selectedIds = resolveBuiltInPluginIds(readHvyBuildConfig(env), env.HVY_BUILD_PLUGINS);
-  const selected = HVY_BUILT_IN_PLUGIN_DEFINITIONS.filter((definition) => selectedIds.includes(definition.id));
-  const selectedIdSet = new Set(selectedIds);
+  const source = createHvyBuiltInPluginsModuleSource(selectedIds);
   return {
     name: 'hvy-built-in-plugins',
     resolveId(id) {
@@ -166,37 +169,28 @@ export function createHvyBuiltInPluginsPlugin(env: Record<string, string>): Plug
       if (id !== BUILT_IN_PLUGINS_RESOLVED_ID) {
         return null;
       }
-      const imports = selected.map((definition, index) => {
-        const importPath = JSON.stringify(`/${resolve(process.cwd(), definition.modulePath)}`);
-        return `import { ${definition.exportName} as plugin${index} } from ${importPath};`;
-      });
-      const scriptingEnabled = selectedIdSet.has('dev.heavy.scripting');
-      const scriptingHelpers = scriptingEnabled
-        ? [
-            `import { runUserScript as runBuiltInScriptingPlugin } from ${JSON.stringify(`/${resolve(process.cwd(), 'src/plugins/scripting/wrapper.ts')}`)};`,
-            `import { setScriptingResult as setBuiltInScriptingResult } from ${JSON.stringify(`/${resolve(process.cwd(), 'src/plugins/scripting/scripting.ts')}`)};`,
-            `import { getScriptingPluginVersion as getBuiltInScriptingPluginVersion } from ${JSON.stringify(`/${resolve(process.cwd(), 'src/plugins/scripting/version.ts')}`)};`,
-            `export { runBuiltInScriptingPlugin, setBuiltInScriptingResult, getBuiltInScriptingPluginVersion };`,
-          ].join('\n')
-        : [
-            `export async function runBuiltInScriptingPlugin() { return null; }`,
-            `export async function setBuiltInScriptingResult() {}`,
-            `export function getBuiltInScriptingPluginVersion() { return ''; }`,
-          ].join('\n');
-      return [
-        ...imports,
-        `export const builtInPluginIds = ${JSON.stringify(selectedIds)};`,
-        `export const builtInPlugins = [${selected.map((_definition, index) => `plugin${index}`).join(', ')}];`,
-        `export const builtInPluginMap = Object.freeze({`,
-        ...selected.map((definition, index) => `  ${definition.key}: plugin${index},`),
-        `});`,
-        `export const builtInPluginById = Object.freeze({`,
-        ...selected.map((definition, index) => `  ${JSON.stringify(definition.id)}: plugin${index},`),
-        `});`,
-        scriptingHelpers,
-      ].join('\n');
+      return source;
     },
   };
+}
+
+export function createHvyBuiltInPluginsModuleSource(selectedIds: readonly HvyBuiltInPluginId[]): string {
+  const selected = HVY_BUILT_IN_PLUGIN_DEFINITIONS.filter((definition) => selectedIds.includes(definition.id));
+  const imports = selected.map((definition, index) => {
+    const importPath = JSON.stringify(toViteRootImportPath(definition.modulePath));
+    return `import { ${definition.exportName} as plugin${index} } from ${importPath};`;
+  });
+  return [
+    ...imports,
+    `export const builtInPluginIds = ${JSON.stringify(selectedIds)};`,
+    `export const builtInPlugins = [${selected.map((_definition, index) => `plugin${index}`).join(', ')}];`,
+    `export const builtInPluginMap = Object.freeze({`,
+    ...selected.map((definition, index) => `  ${definition.key}: plugin${index},`),
+    `});`,
+    `export const builtInPluginById = Object.freeze({`,
+    ...selected.map((definition, index) => `  ${JSON.stringify(definition.id)}: plugin${index},`),
+    `});`,
+  ].join('\n');
 }
 
 export default defineConfig(({ mode }) => {

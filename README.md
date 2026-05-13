@@ -133,9 +133,9 @@ npm run build
 npm run preview
 ```
 
-Built-in plugin registration objects are selected at build time from
-`hvy.build.json`. The default config includes every bundled plugin in the output
-file, but plugins are not enabled automatically:
+Built-in plugin objects are selected at build time from `hvy.build.json`. The
+default config includes every bundled plugin in the output file, but plugins are
+not enabled automatically:
 
 ```json
 {
@@ -163,8 +163,8 @@ HVY.mountHvy({
 });
 ```
 
-Third-party plugins use the same `HvyPluginRegistration` shape and can be mixed
-with bundled registrations:
+Third-party plugins use the same `HvyPlugin` shape and can be mixed with bundled
+plugins:
 
 ```js
 HVY.mountHvy({

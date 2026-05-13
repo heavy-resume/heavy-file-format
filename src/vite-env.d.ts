@@ -6,27 +6,17 @@ declare module 'virtual:hvy-brython-minimal-vfs' {
 }
 
 declare module 'virtual:hvy-built-in-plugins' {
-  import type { JsonObject } from './hvy/types';
-  import type { HvyPluginRegistration } from './plugins/types';
-  import type { VisualDocument } from './types';
+  import type { HvyPlugin } from './plugins/types';
 
   export const builtInPluginIds: string[];
-  export const builtInPlugins: HvyPluginRegistration[];
+  export const builtInPlugins: HvyPlugin[];
   export const builtInPluginMap: Readonly<{
-    dbTable?: HvyPluginRegistration;
-    form?: HvyPluginRegistration;
-    progressBar?: HvyPluginRegistration;
-    scripting?: HvyPluginRegistration;
+    dbTable?: HvyPlugin;
+    form?: HvyPlugin;
+    progressBar?: HvyPlugin;
+    scripting?: HvyPlugin;
   }>;
-  export const builtInPluginById: Readonly<Record<string, HvyPluginRegistration | undefined>>;
-  export function runBuiltInScriptingPlugin(params: {
-    document: VisualDocument;
-    source: string;
-    componentId?: string;
-    pluginVersion?: string;
-  }): Promise<unknown | null>;
-  export function setBuiltInScriptingResult(element: HTMLElement, result: unknown, source: string): void | Promise<void>;
-  export function getBuiltInScriptingPluginVersion(config: JsonObject | unknown): string;
+  export const builtInPluginById: Readonly<Record<string, HvyPlugin | undefined>>;
 }
 
 interface ImportMetaEnv {

@@ -1,5 +1,5 @@
 import { state } from '../state';
-import type { HvyPluginRegistration } from './types';
+import type { HvyPlugin } from './types';
 
 export interface DocumentPluginDefinition {
   id: string;
@@ -19,33 +19,32 @@ export function isDbTablePluginId(pluginId: string): boolean {
   return pluginId === DB_TABLE_PLUGIN_ID;
 }
 
-// Host-supplied plugin registrations. The reference embedding sets these at
-// startup; third-party hosts can append their own. Keep insertion order — it
-// drives the order shown in the selector.
-const hostPluginRegistrations: HvyPluginRegistration[] = [];
+// Host-supplied plugin objects. Keep insertion order — it drives the selector
+// order and hook tie-breaking.
+const hostPlugins: HvyPlugin[] = [];
 
-export function registerHostPlugin(registration: HvyPluginRegistration): void {
-  const existingIndex = hostPluginRegistrations.findIndex((entry) => entry.id === registration.id);
+export function registerHostPlugin(plugin: HvyPlugin): void {
+  const existingIndex = hostPlugins.findIndex((entry) => entry.id === plugin.id);
   if (existingIndex >= 0) {
-    hostPluginRegistrations[existingIndex] = registration;
+    hostPlugins[existingIndex] = plugin;
   } else {
-    hostPluginRegistrations.push(registration);
+    hostPlugins.push(plugin);
   }
 }
 
-export function setHostPlugins(registrations: HvyPluginRegistration[]): void {
-  hostPluginRegistrations.length = 0;
-  for (const registration of registrations) {
-    hostPluginRegistrations.push(registration);
+export function setHostPlugins(plugins: HvyPlugin[]): void {
+  hostPlugins.length = 0;
+  for (const plugin of plugins) {
+    hostPlugins.push(plugin);
   }
 }
 
-export function getHostPlugins(): HvyPluginRegistration[] {
-  return [...hostPluginRegistrations];
+export function getHostPlugins(): HvyPlugin[] {
+  return [...hostPlugins];
 }
 
-export function getHostPlugin(pluginId: string): HvyPluginRegistration | null {
-  return hostPluginRegistrations.find((entry) => entry.id === pluginId) ?? null;
+export function getHostPlugin(pluginId: string): HvyPlugin | null {
+  return hostPlugins.find((entry) => entry.id === pluginId) ?? null;
 }
 
 export function getAvailableDocumentPlugins(): DocumentPluginDefinition[] {
@@ -66,7 +65,7 @@ export function getAvailableDocumentPlugins(): DocumentPluginDefinition[] {
     .filter((candidate): candidate is DocumentPluginDefinition => candidate !== null);
 
   if (normalized.length === 0) {
-    return hostPluginRegistrations.map((entry) => ({
+    return hostPlugins.map((entry) => ({
       id: entry.id,
       source:
         entry.id === DB_TABLE_PLUGIN_ID

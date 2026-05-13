@@ -1,11 +1,15 @@
 import type {
+  HvyDocumentHookContext,
+  HvyPlugin,
   HvyPluginContext,
   HvyPluginFactory,
   HvyPluginInstance,
-  HvyPluginRegistration,
 } from '../types';
 import { SCRIPTING_PLUGIN_ID } from '../registry';
+import { visitBlocksInList } from '../../section-ops';
 import { openScriptingHelpModal } from './help-modal';
+import { runUserScript } from './wrapper';
+import { getScriptingPluginVersion } from './version';
 import scriptingDocumentation from './about-scripting.txt?raw';
 
 import './scripting.css';
@@ -96,6 +100,19 @@ function getScriptingResultCacheKey(sectionKey: string, blockId: string): string
   return `${sectionKey}|${blockId}`;
 }
 
+export function storeScriptingResult(
+  sectionKey: string,
+  blockId: string,
+  result: { ok: boolean; error?: string; errorDetail?: string; linesExecuted: number; toolCalls: number },
+  sourceSignature = ''
+): void {
+  scriptingResultCache.set(getScriptingResultCacheKey(sectionKey, blockId), { lastResult: result, sourceSignature });
+}
+
+export function clearScriptingResults(): void {
+  scriptingResultCache.clear();
+}
+
 export function setScriptingResult(
   element: HTMLElement,
   result: { ok: boolean; error?: string; errorDetail?: string; linesExecuted: number; toolCalls: number },
@@ -183,7 +200,79 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
 
 export const scriptingPluginFactory: HvyPluginFactory = build;
 
-export const scriptingPluginRegistration: HvyPluginRegistration = {
+interface ScriptingTarget {
+  sectionKey: string;
+  blockId: string;
+  source: string;
+  pluginVersion: string;
+  componentId: string;
+}
+
+let lastScriptedDocument: HvyDocumentHookContext['document'] | null = null;
+let lastScriptedSignature = '';
+
+function visitBlocksInSection(
+  section: { key: string; blocks: Array<{ id: string; text: string; schema: { id?: string; component: string; plugin: string; pluginConfig?: unknown } }>; children: unknown[] },
+  sectionKey: string,
+  out: ScriptingTarget[]
+): void {
+  visitBlocksInList(section.blocks as never, (block) => {
+    if (block.schema.component === 'plugin' && block.schema.plugin === SCRIPTING_PLUGIN_ID) {
+      out.push({
+        sectionKey,
+        blockId: block.id,
+        source: block.text ?? '',
+        componentId: typeof block.schema.id === 'string' ? block.schema.id : '',
+        pluginVersion: getScriptingPluginVersion(block.schema.pluginConfig),
+      });
+    }
+  });
+  for (const child of section.children as Array<typeof section>) {
+    visitBlocksInSection(child, child.key, out);
+  }
+}
+
+async function runDocumentScripting(ctx: HvyDocumentHookContext): Promise<void> {
+  if (ctx.changeReason === 'load') {
+    clearScriptingResults();
+    ctx.refreshPlugins(SCRIPTING_PLUGIN_ID);
+  }
+  const targets: ScriptingTarget[] = [];
+  for (const section of ctx.document.sections) {
+    visitBlocksInSection(section as never, section.key, targets);
+  }
+  const signature = targets
+    .map((target) => `${target.sectionKey}\u0000${target.blockId}\u0000${target.pluginVersion}\u0000${target.source}`)
+    .join('\u0001');
+  if (ctx.document === lastScriptedDocument && signature === lastScriptedSignature) {
+    return;
+  }
+  lastScriptedDocument = ctx.document;
+  lastScriptedSignature = signature;
+  for (const target of targets) {
+    if (!ctx.isCurrentDocument()) {
+      return;
+    }
+    const result = await runUserScript({
+      document: ctx.document,
+      source: target.source,
+      componentId: target.componentId,
+      pluginVersion: target.pluginVersion,
+    });
+    if (!ctx.isCurrentDocument()) {
+      return;
+    }
+    storeScriptingResult(target.sectionKey, target.blockId, result, target.source);
+  }
+  ctx.refreshPlugins(SCRIPTING_PLUGIN_ID);
+}
+
+const scriptingDocumentHook = {
+  priority: 0,
+  run: runDocumentScripting,
+};
+
+export const scriptingPlugin: HvyPlugin = {
   id: SCRIPTING_PLUGIN_ID,
   displayName: 'Scripting',
   documentation: {
@@ -199,7 +288,14 @@ export const scriptingPluginRegistration: HvyPluginRegistration = {
     'Use this only when the user explicitly needs a script-backed component.',
   ].join(' '),
   create: scriptingPluginFactory,
+  hooks: {
+    documentLoad: scriptingDocumentHook,
+    documentChange: scriptingDocumentHook,
+  },
 };
+
+/** @deprecated Use scriptingPlugin. */
+export const scriptingPluginRegistration = scriptingPlugin;
 
 function getFreshScriptingResult(
   element: HTMLElement,

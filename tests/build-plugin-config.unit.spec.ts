@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
 
-import { HVY_BUILT_IN_PLUGIN_IDS, resolveBuiltInPluginIds } from '../vite.config';
+import { createHvyBuiltInPluginsModuleSource, HVY_BUILT_IN_PLUGIN_IDS, resolveBuiltInPluginIds } from '../vite.config';
 
 test('resolveBuiltInPluginIds defaults to every built-in plugin', () => {
   expect(resolveBuiltInPluginIds(undefined)).toEqual([...HVY_BUILT_IN_PLUGIN_IDS]);
@@ -39,4 +39,13 @@ test('resolveBuiltInPluginIds rejects unknown plugin ids', () => {
       plugins: ['dev.heavy.form', 'dev.heavy.unknown'],
     })
   ).toThrow('Unknown HVY built-in plugin id');
+});
+
+test('createHvyBuiltInPluginsModuleSource uses Vite web-root imports', () => {
+  const expectedResult = createHvyBuiltInPluginsModuleSource(['dev.heavy.db-table', 'dev.heavy.scripting']);
+
+  expect(expectedResult).toContain('from "/src/plugins/db-table-plugin.ts"');
+  expect(expectedResult).toContain('from "/src/plugins/scripting/scripting.ts"');
+  expect(expectedResult).not.toContain('/Users/');
+  expect(expectedResult).not.toContain(process.cwd());
 });

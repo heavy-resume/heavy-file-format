@@ -8,7 +8,7 @@ import { getHostPlugin } from './registry';
 import type {
   HvyPluginContext,
   HvyPluginInstance,
-  HvyPluginRegistration,
+  HvyPlugin,
 } from './types';
 import type { JsonObject } from '../hvy/types';
 
@@ -61,7 +61,7 @@ export function renderPluginMountPlaceholder(
 }
 
 function buildContext(
-  registration: HvyPluginRegistration,
+  plugin: HvyPlugin,
   mode: 'editor' | 'reader',
   sectionKey: string,
   blockId: string
@@ -78,9 +78,9 @@ function buildContext(
     if (!current) return;
     current.schema.pluginConfig = { ...current.schema.pluginConfig, ...patch };
     syncReusableTemplateForBlock(sectionKey, blockId);
-    recordHistory(`plugin-config:${registration.id}:${sectionKey}:${blockId}`);
+    recordHistory(`plugin-config:${plugin.id}:${sectionKey}:${blockId}`);
     getRefreshReaderPanels()();
-    refreshMountedPlugins(registration.id, sectionKey, blockId);
+    refreshMountedPlugins(plugin.id, sectionKey, blockId);
   };
 
   const setText = (text: string) => {
@@ -88,9 +88,9 @@ function buildContext(
     if (!current) return;
     current.text = text;
     syncReusableTemplateForBlock(sectionKey, blockId);
-    recordHistory(`plugin-text:${registration.id}:${sectionKey}:${blockId}`);
+    recordHistory(`plugin-text:${plugin.id}:${sectionKey}:${blockId}`);
     getRefreshReaderPanels()();
-    refreshMountedPlugins(registration.id, sectionKey, blockId);
+    refreshMountedPlugins(plugin.id, sectionKey, blockId);
   };
 
   return {
@@ -125,9 +125,15 @@ function buildContext(
   };
 }
 
-function refreshMountedPlugins(pluginId: string, sectionKey: string, blockId: string): void {
+export function refreshMountedPlugins(pluginId?: string, sectionKey?: string, blockId?: string): void {
   for (const entry of mounted.values()) {
-    if (entry.pluginId !== pluginId || entry.sectionKey !== sectionKey || entry.blockId !== blockId) {
+    if (pluginId && entry.pluginId !== pluginId) {
+      continue;
+    }
+    if (sectionKey && entry.sectionKey !== sectionKey) {
+      continue;
+    }
+    if (blockId && entry.blockId !== blockId) {
       continue;
     }
     try {

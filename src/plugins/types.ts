@@ -73,7 +73,27 @@ export interface HvyPluginInstance {
 
 export type HvyPluginFactory = (ctx: HvyPluginContext) => HvyPluginInstance;
 
-export interface HvyPluginRegistration {
+export type HvyPluginHookChangeReason = 'load' | 'edit' | 'raw-edit' | 'ai-edit' | 'plugin-edit' | 'unknown';
+
+export interface HvyDocumentHookContext {
+  document: VisualDocument;
+  changeReason: HvyPluginHookChangeReason;
+  refreshPlugins(pluginId?: string): void;
+  requestRerender(): void;
+  isCurrentDocument(): boolean;
+}
+
+export interface HvyPluginHookHandler {
+  priority?: number;
+  run(ctx: HvyDocumentHookContext): void | Promise<void>;
+}
+
+export interface HvyPluginHooks {
+  documentLoad?: HvyPluginHookHandler | HvyPluginHookHandler[];
+  documentChange?: HvyPluginHookHandler | HvyPluginHookHandler[];
+}
+
+export interface HvyPlugin {
   // Stable identifier serialized into the document as block.schema.plugin.
   // Convention: reverse-DNS, e.g. 'dev.heavy.db-table'.
   id: string;
@@ -82,6 +102,9 @@ export interface HvyPluginRegistration {
   // Factory invoked once per mount. The host caches the returned instance per
   // (sectionKey, blockId) and reuses it across re-renders.
   create: HvyPluginFactory;
+  // Optional document lifecycle hooks. Handlers are ordered by per-handler
+  // priority, then by the host plugin list order.
+  hooks?: HvyPluginHooks;
   // Optional guidance included in the AI document outline for plugin blocks.
   // Keep this short and action-oriented; it helps the document-edit loop know
   // which serialized fields to patch when users report plugin-rendered errors.
@@ -97,3 +120,6 @@ export interface HvyPluginRegistration {
     text: string;
   };
 }
+
+/** @deprecated Use HvyPlugin. */
+export type HvyPluginRegistration = HvyPlugin;

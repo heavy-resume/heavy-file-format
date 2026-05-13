@@ -29,15 +29,11 @@ import { createDefaultChatState, renderChatPanel } from './chat/chat';
 import { renderAiEditPopover, renderAiModeHint } from './ai-mode-ui';
 import { captureChatThreadScroll, restoreChatThreadScroll } from './chat/chat-thread-ui';
 import { loadResumeState, saveResumeState } from './state-persistence';
-import { getHostPlugin, SCRIPTING_PLUGIN_ID } from './plugins/registry';
+import { setHostPlugins } from './plugins/registry';
 import { reconcilePluginMounts, capturePluginFocus } from './plugins/mount';
-import {
-  getBuiltInScriptingPluginVersion,
-  runBuiltInScriptingPlugin,
-  setBuiltInScriptingResult,
-} from 'virtual:hvy-built-in-plugins';
+import { resetPluginDocumentHookState, runPluginDocumentHooks } from './plugins/hooks';
+import { builtInPlugins } from 'virtual:hvy-built-in-plugins';
 import { runButtonVisibilityScripts } from './editor/components/button/button-actions';
-import { visitBlocksInList } from './section-ops';
 import { centerSearchResultLenses, renderCollapsedSearchBar, renderSearchLauncher, renderSearchPalette } from './search/render';
 import { createDefaultSearchState } from './search/state';
 import { applySearchFilter, submitSearch } from './search/actions';
@@ -262,6 +258,10 @@ function renderContextMenuTargetClone(target: HTMLElement, rect: NonNullable<Non
   clone.style.width = `${rect.width}px`;
   clone.style.margin = '0';
   return clone.outerHTML;
+}
+
+function cssEscape(value: string): string {
+  return typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(value) : value.replace(/(["\\])/g, '\\$1');
 }
 
 function renderDescriptionPopulateModal(): string {
@@ -744,7 +744,7 @@ function renderApp(): void {
     historyLength: state.history.length,
   });
 
-  void runScriptingBlocksIfNeeded();
+  void runPluginDocumentHooks('unknown');
 }
 
 function renderResponsivePreviewControls(): string {
@@ -876,6 +876,7 @@ function refreshReaderPanels(): void {
     readerMs: Number(readerMs.toFixed(2)),
     modalMs: Number(modalMs.toFixed(2)),
   });
+  void runPluginDocumentHooks('unknown');
 }
 
 function refreshModalPreview(): void {
@@ -972,87 +973,10 @@ initCallbacks({
   readerRenderer,
 });
 
-// Run scripting blocks once per loaded document. Re-runs whenever the
-// document reference or script source changes (file open, raw edit, new doc, etc.).
-let lastScriptedDocument: typeof state.document | null = null;
-let lastScriptedSignature = '';
-
-async function runScriptingBlocksIfNeeded(): Promise<void> {
-  if (!getHostPlugin(SCRIPTING_PLUGIN_ID)) {
-    return;
-  }
-  if (state.currentView !== 'viewer' && state.currentView !== 'ai') {
-    return;
-  }
-  const targets: Array<{ sectionKey: string; blockId: string; source: string; pluginVersion: string; componentId: string }> = [];
-  for (const section of state.document.sections) {
-    visitSectionForScripts(section, targets);
-  }
-  const signature = targets
-    .map((target) => `${target.sectionKey}\u0000${target.blockId}\u0000${target.pluginVersion}\u0000${target.source}`)
-    .join('\u0001');
-  if (state.document === lastScriptedDocument && signature === lastScriptedSignature) {
-    return;
-  }
-  lastScriptedDocument = state.document;
-  lastScriptedSignature = signature;
-
-  if (targets.length === 0) {
-    return;
-  }
-
-  for (const target of targets) {
-    const result = await runBuiltInScriptingPlugin({
-      document: state.document,
-      source: target.source,
-      componentId: target.componentId,
-      pluginVersion: target.pluginVersion,
-    });
-    if (!result) {
-      continue;
-    }
-    const mountSelector = `[data-scripting-mount="true"][data-scripting-section-key="${cssEscape(target.sectionKey)}"][data-scripting-block-id="${cssEscape(target.blockId)}"]`;
-    const mount = app.querySelector<HTMLElement>(mountSelector);
-    if (mount) {
-      await setBuiltInScriptingResult(mount, result, target.source);
-    }
-  }
-}
-
-function cssEscape(value: string): string {
-  return typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(value) : value.replace(/(["\\])/g, '\\$1');
-}
-
-function visitSectionForScripts(
-  section: { key: string; blocks: { id: string; text: string; schema: { id?: string; component: string; plugin: string; pluginConfig?: unknown } }[]; children: unknown[] },
-  out: Array<{ sectionKey: string; blockId: string; source: string; pluginVersion: string; componentId: string }>
-): void {
-  visitBlocksInSection(section, section.key, out);
-}
-
-function visitBlocksInSection(
-  section: { key: string; blocks: { id: string; text: string; schema: { id?: string; component: string; plugin: string; pluginConfig?: unknown } }[]; children: unknown[] },
-  sectionKey: string,
-  out: Array<{ sectionKey: string; blockId: string; source: string; pluginVersion: string; componentId: string }>
-): void {
-  visitBlocksInList(section.blocks as never, (block) => {
-    if (block.schema.component === 'plugin' && block.schema.plugin === SCRIPTING_PLUGIN_ID) {
-      out.push({
-        sectionKey,
-        blockId: block.id,
-        source: block.text ?? '',
-        componentId: typeof block.schema.id === 'string' ? block.schema.id : '',
-        pluginVersion: getBuiltInScriptingPluginVersion(block.schema.pluginConfig),
-      });
-    }
-  });
-  for (const child of section.children as Array<typeof section>) {
-    visitBlocksInSection(child, child.key, out);
-  }
-}
-
 async function bootstrap(): Promise<void> {
   const resume = loadResumeState();
+  setHostPlugins(builtInPlugins);
+  resetPluginDocumentHookState();
   initState(applyResumeState(createInitialState(await createDefaultDocument()), resume));
   bindResumePersistence();
   saveResumeState(state);

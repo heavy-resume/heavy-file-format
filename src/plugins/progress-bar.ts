@@ -1,8 +1,8 @@
 import type {
+  HvyPlugin,
   HvyPluginContext,
   HvyPluginFactory,
   HvyPluginInstance,
-  HvyPluginRegistration,
 } from './types';
 import { PROGRESS_BAR_PLUGIN_ID } from './registry';
 import { colorValueToPickerHex, getResolvedThemeColor } from '../theme';
@@ -280,7 +280,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
 
 export const progressBarPluginFactory: HvyPluginFactory = build;
 
-export const progressBarPluginRegistration: HvyPluginRegistration = {
+export const progressBarPlugin: HvyPlugin = {
   id: PROGRESS_BAR_PLUGIN_ID,
   displayName: 'Progress Bar',
   documentation: {
@@ -295,3 +295,6 @@ export const progressBarPluginRegistration: HvyPluginRegistration = {
   ].join(' '),
   create: progressBarPluginFactory,
 };
+
+/** @deprecated Use progressBarPlugin. */
+export const progressBarPluginRegistration = progressBarPlugin;

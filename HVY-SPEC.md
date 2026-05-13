@@ -897,8 +897,8 @@ string in the text body).
 A plugin is identified by a stable id (reverse-DNS RECOMMENDED) and is
 resolved by the host that embeds an HVY reader/editor, not by the document
 itself. Hosts install zero or more plugin implementations at startup; the
-reference reader/editor exposes this as a host-supplied list of plugin
-registrations. Each registration provides:
+reference reader/editor exposes this as a host-supplied list of plugin objects.
+Each plugin object provides:
 
 - the plugin `id` matching the value used in `block.plugin`;
 - a human-readable display name (used by editors to populate the plugin

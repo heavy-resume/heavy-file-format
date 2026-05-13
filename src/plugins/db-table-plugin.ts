@@ -1,8 +1,8 @@
 import type {
+  HvyPlugin,
   HvyPluginContext,
   HvyPluginFactory,
   HvyPluginInstance,
-  HvyPluginRegistration,
 } from './types';
 import {
   renderDbTablePluginEditor,
@@ -147,7 +147,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
 
 export const dbTablePluginFactory: HvyPluginFactory = build;
 
-export const dbTablePluginRegistration: HvyPluginRegistration = {
+export const dbTablePlugin: HvyPlugin = {
   id: DB_TABLE_PLUGIN_ID,
   displayName: 'DB Table',
   documentation: {
@@ -172,3 +172,6 @@ export const dbTablePluginRegistration: HvyPluginRegistration = {
   },
   create: dbTablePluginFactory,
 };
+
+/** @deprecated Use dbTablePlugin. */
+export const dbTablePluginRegistration = dbTablePlugin;

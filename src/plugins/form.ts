@@ -1,10 +1,10 @@
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 
 import type {
+  HvyPlugin,
   HvyPluginContext,
   HvyPluginFactory,
   HvyPluginInstance,
-  HvyPluginRegistration,
 } from './types';
 import { FORM_PLUGIN_ID } from './registry';
 import { runUserScript, type ScriptingRunResult } from './scripting/wrapper';
@@ -943,7 +943,7 @@ function escapeAttr(value: string): string {
 
 export const formPluginFactory: HvyPluginFactory = build;
 
-export const formPluginRegistration: HvyPluginRegistration = {
+export const formPlugin: HvyPlugin = {
   id: FORM_PLUGIN_ID,
   displayName: 'Form',
   documentation: {
@@ -964,3 +964,6 @@ export const formPluginRegistration: HvyPluginRegistration = {
   ].join(' '),
   create: formPluginFactory,
 };
+
+/** @deprecated Use formPlugin. */
+export const formPluginRegistration = formPlugin;

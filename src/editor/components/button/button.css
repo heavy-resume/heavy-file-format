@@ -1,5 +1,6 @@
 .hvy-button-component {
   --hvy-button-content-padding: 0.35rem 0.7rem;
+  --hvy-button-font-size: 0.82rem;
 
   display: inline-flex;
   align-items: center;
@@ -21,7 +22,7 @@
   background: var(--hvy-button-bg, #2d6a8a);
   box-shadow: none;
   font: inherit;
-  font-size: 0.82rem;
+  font-size: var(--hvy-button-font-size);
   font-weight: 700;
   cursor: pointer;
 }
@@ -43,7 +44,7 @@
   display: none;
   border-radius: 999px;
   padding: var(--hvy-button-content-padding);
-  font-size: 0.78rem;
+  font-size: var(--hvy-button-font-size);
   font-weight: 700;
   color: var(--hvy-text, #1a2530);
   background: var(--hvy-surface, #ffffff);

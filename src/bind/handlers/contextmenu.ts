@@ -206,7 +206,7 @@ function renderContextMenuElement(app: HTMLElement): void {
   menu.y = position.y;
 }
 
-function closeReaderContextPopover(app: HTMLElement, clearState = true): void {
+export function closeReaderContextPopover(app: HTMLElement, clearState = true): void {
   if (clearState) {
     state.contextMenu = null;
   }

@@ -306,6 +306,46 @@ hvy_version: 0.1
   await expect(toggle).toHaveAttribute('aria-expanded', 'true');
 });
 
+test('closing context popover does not remove an existing modal', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ Context popover target
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'AI' }).click();
+
+  await page.locator('#aiReaderDocument .reader-block', { hasText: 'Context popover target' }).dblclick();
+  await expect(page.locator('.hvy-context-popover')).toContainText('Request changes');
+  await page.locator('.hvy-embed-layout').evaluate((layout) => {
+    const modal = document.createElement('div');
+    modal.className = 'modal-root remove-confirmation-modal-root';
+    modal.innerHTML = `
+      <div class="modal-overlay"></div>
+      <section class="modal-panel remove-confirmation-modal" role="dialog" aria-modal="true" aria-label="Confirm deletion?">
+        <div class="modal-head"><h3>Confirm deletion?</h3></div>
+      </section>
+    `;
+    layout.append(modal);
+  });
+  await expect(page.getByRole('dialog', { name: 'Confirm deletion?' })).toBeVisible();
+
+  await page.locator('.hvy-context-popover-backdrop-target').dispatchEvent('click', {
+    bubbles: true,
+    cancelable: true,
+  });
+
+  await expect(page.locator('.hvy-context-popover')).toHaveCount(0);
+  await expect(page.getByRole('dialog', { name: 'Confirm deletion?' })).toBeVisible();
+});
+
 test('ai context edit focuses text before the first keystroke', async ({ page }) => {
   await page.goto('/');
 
@@ -1350,6 +1390,55 @@ reader_max_width: 12rem
   }).toBe(false);
   await page.waitForTimeout(5500);
   await expect(balloon).toBeVisible();
+});
+
+test('closing editor pullout help balloon does not remove an existing modal', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+reader_max_width: 12rem
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ <!--hvy:text {}-->
+  Main body
+
+<!--hvy: {"id":"side","location":"sidebar"}-->
+#! Sidebar
+
+ <!--hvy:text {}-->
+  Pullout body
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await expect(page.locator('.editor-sidebar-help-balloon')).toBeVisible();
+  await page.locator('.hvy-embed-layout').evaluate((layout) => {
+    const modal = document.createElement('div');
+    modal.className = 'modal-root remove-confirmation-modal-root';
+    modal.innerHTML = `
+      <div class="modal-overlay"></div>
+      <section class="modal-panel remove-confirmation-modal" role="dialog" aria-modal="true" aria-label="Confirm deletion?">
+        <div class="modal-head"><h3>Confirm deletion?</h3></div>
+      </section>
+    `;
+    layout.append(modal);
+  });
+  await expect(page.getByRole('dialog', { name: 'Confirm deletion?' })).toBeVisible();
+
+  await page.locator('.editor-sidebar-help-balloon').dispatchEvent('click', {
+    bubbles: true,
+    cancelable: true,
+  });
+  await expect(page.locator('.editor-sidebar-help-balloon')).toHaveClass(/is-closing/);
+  await page.waitForTimeout(220);
+
+  await expect(page.locator('.editor-sidebar-help-balloon')).toHaveCount(0);
+  await expect(page.getByRole('dialog', { name: 'Confirm deletion?' })).toBeVisible();
 });
 
 test('unlocking a section schema allows removing locked child fields', async ({ page }) => {

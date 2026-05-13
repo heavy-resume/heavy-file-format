@@ -1,5 +1,6 @@
 import { state, getRenderApp, closeAiEditPopover, completePendingRichAnnotation, handleRichEditorClick, refreshRichToolbarState } from './_imports';
 import { shouldAutoDismissSidebarHelp } from '../../sidebar-help';
+import { closeReaderContextPopover } from './contextmenu';
 
 const sidebarHelpDismissTimers: Record<'editor' | 'viewer', number | null> = {
   editor: null,
@@ -82,10 +83,9 @@ export function bindClickMisc(app: HTMLElement): void {
       return;
     }
     if (state.contextMenu && !target.closest('.hvy-context-popover')) {
-      state.contextMenu = null;
-      app.querySelector('.hvy-context-popover')?.remove();
-      app.querySelector('.hvy-context-popover-backdrop')?.remove();
-      getRenderApp()();
+      closeReaderContextPopover(app);
+      event.preventDefault();
+      event.stopPropagation();
       return;
     }
     if (target.closest('.editor-sidebar-help-balloon')) {
@@ -157,13 +157,12 @@ function dismissSidebarHelpBalloon(app: HTMLElement, kind: 'editor' | 'viewer'):
   const balloon = app.querySelector<HTMLElement>(getSidebarHelpSelector(kind));
   if (!balloon || balloon.classList.contains('is-closing')) {
     setSidebarHelpDismissed(kind);
-    getRenderApp()();
     return;
   }
   balloon.classList.add('is-closing');
   window.setTimeout(() => {
     setSidebarHelpDismissed(kind);
-    getRenderApp()();
+    balloon.remove();
   }, 180);
 }
 

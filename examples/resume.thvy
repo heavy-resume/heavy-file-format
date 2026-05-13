@@ -453,6 +453,9 @@ component_defs:
  <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
   # Featured
 
+ <!--hvy:text {"id":"featured-xref-helper","editorOnly":true,"css":"margin: 0.35rem 0 0.5rem; color: var(--hvy-text-muted); font-style: italic;"}-->
+  Add a skill and tool / tech via the sidebar and link to them here
+
  <!--hvy:grid {"css":"margin: 0.5rem 0; gap: 0.75rem;","gridColumns":2,"lock":true}-->
   <!--hvy:grid:0 {"id":"top-skills"}-->
 
@@ -512,3 +515,23 @@ component_defs:
  <!--hvy:table {"css":"margin: 0.5rem 0 0;","tags":"table-header","tableColumns":["DEGREE","INSTITUTION","LOCATION"],"tableShowHeader":true,"tableRows":[],"lock":true,"description":"Education table header"}-->
 
  <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"education-record","componentListItemLabel":"education record"}-->
+
+<!--hvy: {"id":"template-maintenance","editorOnly":true,"lock":true,"contained":true,"tags":"template, maintenance","description":"Template maintenance scripts"}-->
+#! Template Maintenance
+
+ <!--hvy:plugin {"id":"remove-featured-xref-helper","editorOnly":true,"plugin":"dev.heavy.scripting","pluginConfig":{"version":"0.1"}}-->
+  def has_xref(list_id):
+      try:
+          return "<!--hvy:xref-card" in doc.tool("view_component", {"component_ref": list_id})
+      except Exception:
+          return False
+
+  if has_xref("top-skills-list") and has_xref("top-tools-technologies-list"):
+      try:
+          doc.tool("remove_component", {"component_ref": "featured-xref-helper"})
+      except Exception:
+          pass
+      try:
+          doc.tool("remove_component", {"component_ref": "remove-featured-xref-helper"})
+      except Exception:
+          pass

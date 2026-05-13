@@ -213,12 +213,16 @@ test('resume template hides untouched scaffold sections only in viewer', async (
 
   await page.getByRole('button', { name: 'Resume Template' }).click();
   await page.getByRole('button', { name: 'Viewer' }).click();
+  await expect(page.locator('#header')).toHaveCount(0);
+  await expect(page.locator('#summary')).toHaveCount(0);
   await expect(page.locator('#history')).toHaveCount(0);
   await expect(page.locator('#projects')).toHaveCount(0);
   await expect(page.locator('#education')).toHaveCount(0);
 
   await page.getByRole('button', { name: 'Editor' }).click();
   await page.getByRole('button', { name: 'Basic' }).click();
+  await expect(page.locator('#editorTree')).toContainText('Info');
+  await expect(page.locator('#editorTree')).toContainText('Summary');
   await expect(page.locator('#editorTree')).toContainText('History');
   await expect(page.locator('#editorTree')).toContainText('Projects');
   await expect(page.locator('#editorTree')).toContainText('Education');

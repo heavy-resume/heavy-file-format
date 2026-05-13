@@ -192,7 +192,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       if (realSections.length === 0) {
         return getActiveSearchFilterContext().filtering
           ? '<div class="reader-search-empty"><div>No matches in this filtered view.</div></div>'
-          : '<div class="muted">No content to display yet.</div>';
+          : '<div class="reader-empty-state" role="status">No content to display yet.</div>';
       }
       const maxWidth = typeof state.documentMeta.reader_max_width === 'string' ? state.documentMeta.reader_max_width.trim() : '';
       const bodyStyle = maxWidth.length > 0 ? ` style="max-width: ${deps.escapeAttr(maxWidth)};"` : '';

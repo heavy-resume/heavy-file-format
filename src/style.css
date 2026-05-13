@@ -462,6 +462,23 @@ body {
   scrollbar-gutter: stable both-edges;
 }
 
+.viewer-shell .reader-empty-state {
+  align-self: center;
+  justify-self: center;
+  max-width: min(30rem, calc(100% - 2rem));
+  margin: min(22vh, 8rem) auto;
+  padding: 1rem 1.2rem;
+  border: 1px solid var(--hvy-border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--hvy-surface) 88%, transparent);
+  color: var(--hvy-text);
+  box-shadow: 0 14px 34px var(--hvy-shadow);
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.35;
+  text-align: center;
+}
+
 .hvy-preview-frame-phone.viewer-shell .reader-document,
 .hvy-preview-frame-tablet.viewer-shell .reader-document,
 .hvy-preview-frame-desktop.viewer-shell .reader-document {

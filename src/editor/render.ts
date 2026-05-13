@@ -701,7 +701,13 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         <div class="ghost-label">${deps.escapeHtml(actionLabel)}</div>
       </div>`;
       if (!hasComponentListItems(block)) {
-        const existingContent = block.schema.componentListBlocks.length > 0 ? deps.renderReaderBlock(section, block) : '';
+        const existingContent = block.schema.componentListBlocks.length > 0
+          ? state.currentView === 'ai'
+            ? `<div class="reader-component-list">${block.schema.componentListBlocks
+                .map((innerBlock) => renderPassiveEditorBlock(sectionKey, innerBlock, rootSections))
+                .join('')}</div>`
+            : deps.renderReaderBlock(section, block)
+          : '';
         return `${existingContent}<div class="ghost-section-card add-ghost passive-empty-list-ghost"${actionAttr}>
           <div class="ghost-plus-big">${plusIcon()}</div>
           <div class="ghost-label">${deps.escapeHtml(actionLabel)}</div>

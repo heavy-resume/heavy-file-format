@@ -3,6 +3,7 @@ import './sidebar.css';
 import { renderCodeReader } from '../editor/components/code/code';
 import { renderButtonReader } from '../editor/components/button/button';
 import { renderComponentListReader } from '../editor/components/component-list/component-list';
+import { hasComponentListItems } from '../editor/components/component-list/component-list-labels';
 import { renderContainerReader } from '../editor/components/container/container';
 import { renderExpandableReader } from '../editor/components/expandable/expandable';
 import { renderGridReader } from '../editor/components/grid/grid';
@@ -343,6 +344,9 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     if (state.currentView === 'ai' && state.activeEditorBlock?.sectionKey === section.key && state.activeEditorBlock.blockId === block.id) {
       return deps.renderEditorBlock(section.key, block);
     }
+    if (state.currentView === 'ai' && shouldRenderAiPassiveEditorAffordance(base, block)) {
+      return deps.renderEditorBlock(section.key, block);
+    }
     const modifiers = getReaderViewModifiers(viewContext, targetKey);
     const prioritized = isReaderViewPrioritized(viewContext, targetKey);
     const searchDimmed = isBlockSearchDeprioritized(searchContext, block);
@@ -457,6 +461,19 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       return renderMaybeCollapsedBlockShell(renderImageReader(section, block, helpers));
     }
     return renderMaybeCollapsedBlockShell(renderTextReader(section, block, helpers));
+  }
+
+  function shouldRenderAiPassiveEditorAffordance(base: string, block: VisualBlock): boolean {
+    if (base === 'text') {
+      return block.text.trim().length === 0;
+    }
+    if (base === 'component-list') {
+      if (!Array.isArray(block.schema.componentListBlocks)) {
+        block.schema.componentListBlocks = [];
+      }
+      return !hasComponentListItems(block);
+    }
+    return false;
   }
 
   function renderReaderBlocks(section: VisualSection, blocks: VisualBlock[]): string {

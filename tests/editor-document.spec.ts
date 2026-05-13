@@ -566,6 +566,32 @@ component_defs:
   await expect(inserted.locator('.editor-block-passive', { hasText: 'Line one' })).toBeVisible();
 });
 
+test('AI view shows editor placeholders and empty list add affordances', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"draft"}-->
+#! Draft
+
+<!--hvy:text {"id":"summary","placeholder":"Draft summary"}-->
+
+<!--hvy:component-list {"id":"todos","componentListComponent":"text","componentListItemLabel":"todo"}-->
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'AI' }).click();
+
+  await expect(page.locator('#aiReaderDocument .editor-passive-empty-text', { hasText: 'Draft summary' })).toBeVisible();
+  await expect(page.locator('#aiReaderDocument .ghost-label', { hasText: 'Add Todo' })).toBeVisible();
+
+  await page.locator('#aiReaderDocument .ghost-label', { hasText: 'Add Todo' }).click();
+
+  await expect(page.locator('#aiReaderDocument .editor-block .rich-editor')).toBeVisible();
+});
+
 test('custom component template modal cancel leaves the document unchanged', async ({ page }) => {
   await page.goto('/');
 

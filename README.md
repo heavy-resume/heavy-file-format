@@ -133,6 +133,25 @@ npm run build
 npm run preview
 ```
 
+Built-in plugins are selected at build time from `hvy.build.json`. The default
+config includes every bundled plugin:
+
+```json
+{
+  "plugins": [
+    "dev.heavy.db-table",
+    "dev.heavy.form",
+    "dev.heavy.progress-bar",
+    "dev.heavy.scripting"
+  ]
+}
+```
+
+Use `HVY_BUILD_PLUGINS=dev.heavy.form,dev.heavy.progress-bar npm run build` for
+a one-off override, or `HVY_BUILD_CONFIG=path/to/config.json` to point at another
+config file. Config files may also use `include` and `exclude` arrays with the
+same plugin ids.
+
 ## Notes
 
 - Markdown is treated as valid HVY.

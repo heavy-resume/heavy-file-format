@@ -45,12 +45,13 @@ import { bindClickActions } from './bind/handlers/click-actions';
 import { bindInputBlock } from './bind/handlers/input-block';
 import { capturePluginFocus, reconcilePluginMounts } from './plugins/mount';
 import { registerHostPlugin, SCRIPTING_PLUGIN_ID } from './plugins/registry';
-import { dbTablePluginRegistration } from './plugins/db-table-plugin';
-import { formPluginRegistration } from './plugins/form';
-import { progressBarPluginRegistration } from './plugins/progress-bar';
-import { scriptingPluginRegistration, setScriptingResult } from './plugins/scripting/scripting';
-import { runUserScript } from './plugins/scripting/wrapper';
-import { getScriptingPluginVersion } from './plugins/scripting/version';
+import {
+  getBuiltInScriptingPluginVersion,
+  isBuiltInPluginEnabled,
+  registerBuiltInPlugins,
+  runBuiltInScriptingPlugin,
+  setBuiltInScriptingResult,
+} from 'virtual:hvy-built-in-plugins';
 import { runButtonVisibilityScripts } from './editor/components/button/button-actions';
 import { visitBlocksInList } from './section-ops';
 import { createDefaultChatState } from './chat/chat';
@@ -397,6 +398,7 @@ function refreshReaderPanels(): void {
 function refreshModalPreview(): void {}
 
 async function runScriptingBlocksIfNeeded(): Promise<void> {
+  if (!isBuiltInPluginEnabled(SCRIPTING_PLUGIN_ID)) return;
   if (state.currentView !== 'viewer' && state.currentView !== 'ai') return;
   const targets: Array<{ sectionKey: string; blockId: string; source: string; pluginVersion: string; componentId: string }> = [];
   for (const section of state.document.sections) {
@@ -407,16 +409,17 @@ async function runScriptingBlocksIfNeeded(): Promise<void> {
   lastScriptedDocument = state.document;
   lastScriptedSignature = signature;
   for (const target of targets) {
-    const result = await runUserScript({
+    const result = await runBuiltInScriptingPlugin({
       document: state.document,
       source: target.source,
       componentId: target.componentId,
       pluginVersion: target.pluginVersion,
     });
+    if (!result) continue;
     const mount = currentRoot?.querySelector<HTMLElement>(
       `[data-scripting-mount="true"][data-scripting-section-key="${cssEscape(target.sectionKey)}"][data-scripting-block-id="${cssEscape(target.blockId)}"]`
     );
-    if (mount) setScriptingResult(mount, result, target.source);
+    if (mount) await setBuiltInScriptingResult(mount, result, target.source);
   }
 }
 
@@ -436,7 +439,7 @@ function visitBlocksInSection(
         blockId: block.id,
         source: block.text ?? '',
         componentId: typeof block.schema.id === 'string' ? block.schema.id : '',
-        pluginVersion: getScriptingPluginVersion(block.schema.pluginConfig),
+        pluginVersion: getBuiltInScriptingPluginVersion(block.schema.pluginConfig),
       });
     }
   });
@@ -454,10 +457,7 @@ function ensureEmbedRuntime(): void {
     componentRenderHelpers: localGetComponentRenderHelpers(),
     readerRenderer,
   });
-  registerHostPlugin(dbTablePluginRegistration);
-  registerHostPlugin(formPluginRegistration);
-  registerHostPlugin(progressBarPluginRegistration);
-  registerHostPlugin(scriptingPluginRegistration);
+  registerBuiltInPlugins(registerHostPlugin);
   initColorModeSync();
 }
 

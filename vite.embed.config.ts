@@ -1,6 +1,6 @@
 import postcss, { type Rule } from 'postcss';
-import { defineConfig, type Plugin } from 'vite';
-import { createBrythonMinimalVfsPlugin } from './vite.config';
+import { defineConfig, loadEnv, type Plugin } from 'vite';
+import { createBrythonMinimalVfsPlugin, createHvyBuiltInPluginsPlugin } from './vite.config';
 
 const EMBED_SCOPE = ':where(.hvy-document)';
 
@@ -93,16 +93,20 @@ function createEmbedCssScopePlugin(): Plugin {
   };
 }
 
-export default defineConfig({
-  plugins: [createBrythonMinimalVfsPlugin(), createEmbedCssScopePlugin()],
-  build: {
-    outDir: 'dist-embed',
-    emptyOutDir: true,
-    lib: {
-      entry: 'src/embed.ts',
-      name: 'HVY',
-      formats: ['iife'],
-      fileName: () => 'hvy-embed.js',
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, '.', '');
+
+  return {
+    plugins: [createBrythonMinimalVfsPlugin(), createHvyBuiltInPluginsPlugin(env), createEmbedCssScopePlugin()],
+    build: {
+      outDir: 'dist-embed',
+      emptyOutDir: true,
+      lib: {
+        entry: 'src/embed.ts',
+        name: 'HVY',
+        formats: ['iife'],
+        fileName: () => 'hvy-embed.js',
+      },
     },
-  },
+  };
 });

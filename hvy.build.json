@@ -1,0 +1,8 @@
+{
+  "plugins": [
+    "dev.heavy.db-table",
+    "dev.heavy.form",
+    "dev.heavy.progress-bar",
+    "dev.heavy.scripting"
+  ]
+}

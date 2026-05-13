@@ -31,12 +31,13 @@ import { captureChatThreadScroll, restoreChatThreadScroll } from './chat/chat-th
 import { loadResumeState, saveResumeState } from './state-persistence';
 import { registerHostPlugin, SCRIPTING_PLUGIN_ID } from './plugins/registry';
 import { reconcilePluginMounts, capturePluginFocus } from './plugins/mount';
-import { dbTablePluginRegistration } from './plugins/db-table-plugin';
-import { formPluginRegistration } from './plugins/form';
-import { progressBarPluginRegistration } from './plugins/progress-bar';
-import { scriptingPluginRegistration, setScriptingResult } from './plugins/scripting/scripting';
-import { runUserScript } from './plugins/scripting/wrapper';
-import { getScriptingPluginVersion } from './plugins/scripting/version';
+import {
+  getBuiltInScriptingPluginVersion,
+  isBuiltInPluginEnabled,
+  registerBuiltInPlugins,
+  runBuiltInScriptingPlugin,
+  setBuiltInScriptingResult,
+} from 'virtual:hvy-built-in-plugins';
 import { runButtonVisibilityScripts } from './editor/components/button/button-actions';
 import { visitBlocksInList } from './section-ops';
 import { centerSearchResultLenses, renderCollapsedSearchBar, renderSearchLauncher, renderSearchPalette } from './search/render';
@@ -976,10 +977,7 @@ initCallbacks({
 // Register the reference-implementation built-in plugins. Hosts that embed
 // this codebase can call setHostPlugins / registerHostPlugin before first
 // render to add their own.
-registerHostPlugin(dbTablePluginRegistration);
-registerHostPlugin(formPluginRegistration);
-registerHostPlugin(progressBarPluginRegistration);
-registerHostPlugin(scriptingPluginRegistration);
+registerBuiltInPlugins(registerHostPlugin);
 
 // Run scripting blocks once per loaded document. Re-runs whenever the
 // document reference or script source changes (file open, raw edit, new doc, etc.).
@@ -987,6 +985,9 @@ let lastScriptedDocument: typeof state.document | null = null;
 let lastScriptedSignature = '';
 
 async function runScriptingBlocksIfNeeded(): Promise<void> {
+  if (!isBuiltInPluginEnabled(SCRIPTING_PLUGIN_ID)) {
+    return;
+  }
   if (state.currentView !== 'viewer' && state.currentView !== 'ai') {
     return;
   }
@@ -1008,16 +1009,19 @@ async function runScriptingBlocksIfNeeded(): Promise<void> {
   }
 
   for (const target of targets) {
-    const result = await runUserScript({
+    const result = await runBuiltInScriptingPlugin({
       document: state.document,
       source: target.source,
       componentId: target.componentId,
       pluginVersion: target.pluginVersion,
     });
+    if (!result) {
+      continue;
+    }
     const mountSelector = `[data-scripting-mount="true"][data-scripting-section-key="${cssEscape(target.sectionKey)}"][data-scripting-block-id="${cssEscape(target.blockId)}"]`;
     const mount = app.querySelector<HTMLElement>(mountSelector);
     if (mount) {
-      setScriptingResult(mount, result, target.source);
+      await setBuiltInScriptingResult(mount, result, target.source);
     }
   }
 }
@@ -1027,14 +1031,14 @@ function cssEscape(value: string): string {
 }
 
 function visitSectionForScripts(
-  section: { key: string; blocks: { id: string; text: string; schema: { id?: string; component: string; plugin: string } }[]; children: unknown[] },
+  section: { key: string; blocks: { id: string; text: string; schema: { id?: string; component: string; plugin: string; pluginConfig?: unknown } }[]; children: unknown[] },
   out: Array<{ sectionKey: string; blockId: string; source: string; pluginVersion: string; componentId: string }>
 ): void {
   visitBlocksInSection(section, section.key, out);
 }
 
 function visitBlocksInSection(
-  section: { key: string; blocks: { id: string; text: string; schema: { id?: string; component: string; plugin: string } }[]; children: unknown[] },
+  section: { key: string; blocks: { id: string; text: string; schema: { id?: string; component: string; plugin: string; pluginConfig?: unknown } }[]; children: unknown[] },
   sectionKey: string,
   out: Array<{ sectionKey: string; blockId: string; source: string; pluginVersion: string; componentId: string }>
 ): void {
@@ -1045,7 +1049,7 @@ function visitBlocksInSection(
         blockId: block.id,
         source: block.text ?? '',
         componentId: typeof block.schema.id === 'string' ? block.schema.id : '',
-        pluginVersion: getScriptingPluginVersion(block.schema.pluginConfig),
+        pluginVersion: getBuiltInScriptingPluginVersion(block.schema.pluginConfig),
       });
     }
   });

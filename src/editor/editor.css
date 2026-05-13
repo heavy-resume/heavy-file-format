@@ -814,6 +814,7 @@
 .component-picker[data-active-pane="text"] [data-picker-pane="text"],
 .component-picker[data-active-pane="image"] [data-picker-pane="image"],
 .component-picker[data-active-pane="table"] [data-picker-pane="table"],
+.component-picker[data-active-pane="advanced"] [data-picker-pane="advanced"],
 .component-picker[data-active-pane="containers"] [data-picker-pane="containers"],
 .component-picker[data-active-pane="custom"] [data-picker-pane="custom"],
 .component-picker[data-active-pane="plugins"] [data-picker-pane="plugins"] {

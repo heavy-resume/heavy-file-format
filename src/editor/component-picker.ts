@@ -128,23 +128,24 @@ function getPickerGroups(componentDefs: ComponentDefinition[]): PickerGroup[] {
       direct: true,
       items: [{ value: 'image', label: 'Image', description: 'add an image' }],
     },
+    {
+      id: 'advanced',
+      label: 'Advanced',
+      description: 'tables and references',
+      position: 'bottom-left',
+      direct: false,
+      items: [
+        ...(areTablesEnabled() ? [{ value: 'table', label: 'Table', description: 'a static table of information' }] : []),
+        { value: 'xref-card', label: 'Xref', description: 'link to another document section' },
+      ],
+    },
   ];
-  if (areTablesEnabled()) {
-    groups.push({
-      id: 'table',
-      label: 'Table',
-      description: 'a static table of information',
-      position: 'top-right',
-      direct: true,
-      items: [{ value: 'table', label: 'Table', description: 'a static table of information' }],
-    });
-  }
   groups.push(
     {
       id: 'containers',
       label: 'Containers',
       description: 'lists, grids, and empty containers',
-      position: 'bottom-left',
+      position: 'top-right',
       direct: false,
       items: [
         { value: 'container', label: 'Container', description: 'group components together' },
@@ -160,7 +161,6 @@ function getPickerGroups(componentDefs: ComponentDefinition[]): PickerGroup[] {
       position: 'bottom',
       direct: false,
       items: [
-        { value: 'xref-card', label: 'Cross-reference card', description: 'link to another document section' },
         ...componentDefs
           .map((def) => def.name.trim())
           .filter((name) => name.length > 0)

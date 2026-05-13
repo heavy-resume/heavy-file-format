@@ -163,7 +163,7 @@ component_defs:
                   schema:
                     component: component-list
                     componentListComponent: xref-card
-                    componentListItemLabel: skill
+                    componentListItemLabel: skill xref
                     css: "margin: 0;"
                     componentListBlocks: []
         - id: tools-technologies
@@ -182,7 +182,7 @@ component_defs:
                   schema:
                     component: component-list
                     componentListComponent: xref-card
-                    componentListItemLabel: tool / tech
+                    componentListItemLabel: tool / tech xref
                     css: "margin: 0;"
                     componentListBlocks: []
   - name: education-record
@@ -459,13 +459,13 @@ component_defs:
    <!--hvy:container {"css":"margin: 0;","align":"center"}-->
     <!--hvy:text {"align":"center","css":"margin: 0 0 0.35rem;"}-->
      ## Skills
-    <!--hvy:component-list {"id":"top-skills-list","componentListComponent":"xref-card","componentListItemLabel":"skill","css":"margin: 0;","align":"center"}-->
+    <!--hvy:component-list {"id":"top-skills-list","componentListComponent":"xref-card","componentListItemLabel":"skill xref","css":"margin: 0;","align":"center"}-->
   <!--hvy:grid:1 {"id":"top-tools-technologies"}-->
 
    <!--hvy:container {"css":"margin: 0;","align":"center"}-->
     <!--hvy:text {"align":"center","css":"margin: 0 0 0.35rem;"}-->
      ## Tools & Technologies
-    <!--hvy:component-list {"id":"top-tools-technologies-list","componentListComponent":"xref-card","componentListItemLabel":"tool / tech","css":"margin: 0;","align":"center"}-->
+    <!--hvy:component-list {"id":"top-tools-technologies-list","componentListComponent":"xref-card","componentListItemLabel":"tool / tech xref","css":"margin: 0;","align":"center"}-->
 
 <!--hvy: {"id":"skills","lock":true,"expanded":false,"location":"sidebar","tags":"sidebar, skills-reference, skill-details","description":"Skills reference list","hideIfUnmodified":true}-->
 #! Skills
@@ -491,7 +491,7 @@ component_defs:
 
  <!--hvy:table {"css":"margin: 0.5rem 0 0;","tags":"table-header","tableColumns":["YEAR","<!--hvy:alt {\"compact\":\"ORG\"}-->ORGANIZATION<!--/hvy:alt-->","TITLE"],"tableShowHeader":true,"tableRows":[],"lock":true,"description":"History table header"}-->
 
- <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"history-record","componentListItemLabel":"history"}-->
+ <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"history-record","componentListItemLabel":"job"}-->
 
 <!--hvy: {"id":"projects","lock":true,"tags":"projects, portfolio, reverse-chronological","description":"Project portfolio","hideIfUnmodified":true}-->
 #! Projects
@@ -511,4 +511,4 @@ component_defs:
 
  <!--hvy:table {"css":"margin: 0.5rem 0 0;","tags":"table-header","tableColumns":["DEGREE","INSTITUTION","LOCATION"],"tableShowHeader":true,"tableRows":[],"lock":true,"description":"Education table header"}-->
 
- <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"education-record","componentListItemLabel":"education"}-->
+ <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"education-record","componentListItemLabel":"education record"}-->

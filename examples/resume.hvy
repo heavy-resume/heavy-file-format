@@ -162,7 +162,7 @@ component_defs:
                   schema:
                     component: component-list
                     componentListComponent: xref-card
-                    componentListItemLabel: skill
+                    componentListItemLabel: skill xref
                     css: "margin: 0;"
                     componentListBlocks: []
         - id: tools-technologies
@@ -181,7 +181,7 @@ component_defs:
                   schema:
                     component: component-list
                     componentListComponent: xref-card
-                    componentListItemLabel: tool / tech
+                    componentListItemLabel: tool / tech xref
                     css: "margin: 0;"
                     componentListBlocks: []
   - name: education-record
@@ -462,7 +462,7 @@ component_defs:
 
     <!--hvy:container:1 {}-->
 
-     <!--hvy:component-list {"id":"top-skills-list","componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
+     <!--hvy:component-list {"id":"top-skills-list","componentListComponent":"xref-card","componentListItemLabel":"skill xref","css":"margin: 0;","align":"center"}-->
 
       <!--hvy:component-list:0 {}-->
 
@@ -487,7 +487,7 @@ component_defs:
 
     <!--hvy:container:1 {}-->
 
-     <!--hvy:component-list {"id":"top-tools-technologies-list","componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
+     <!--hvy:component-list {"id":"top-tools-technologies-list","componentListComponent":"xref-card","componentListItemLabel":"tool / tech xref","css":"margin: 0;","align":"center"}-->
 
       <!--hvy:component-list:0 {}-->
 
@@ -932,7 +932,7 @@ component_defs:
 
  <!--hvy:table {"css":"margin: 0.5rem 0 0;","tags":"table-header","tableColumns":["YEAR","<!--hvy:alt {\"compact\":\"ORG\"}-->ORGANIZATION<!--/hvy:alt-->","TITLE"],"tableShowHeader":true,"tableRows":[],"lock":true,"description":"History table header"}-->
 
- <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"history-record"}-->
+ <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"history-record","componentListItemLabel":"job"}-->
 
   <!--hvy:component-list:0 {}-->
 
@@ -1203,7 +1203,7 @@ component_defs:
 
  <!--hvy:table {"css":"margin: 0.5rem 0 0;","tags":"table-header","tableColumns":["DEGREE","INSTITUTION","LOCATION"],"tableShowHeader":true,"tableRows":[],"lock":true,"description":"Education table header"}-->
 
- <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"education-record"}-->
+ <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"education-record","componentListItemLabel":"education record"}-->
 
   <!--hvy:component-list:0 {}-->
 

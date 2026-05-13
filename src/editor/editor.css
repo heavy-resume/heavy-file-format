@@ -174,8 +174,8 @@
   transition: opacity 540ms ease, transform 540ms ease;
 }
 
-.hvy-preview-frame-phone.editor-shell.is-sidebar-closed:not(.is-sidebar-tab-visible):not(:has(.editor-sidebar-help-balloon)) .editor-sidebar-tab,
-.hvy-preview-frame-tablet.editor-shell.is-sidebar-closed:not(.is-sidebar-tab-visible):not(:has(.editor-sidebar-help-balloon)) .editor-sidebar-tab,
+.hvy-preview-frame-phone.editor-shell.is-sidebar-closed:not(.is-sidebar-tab-visible):not(.is-sidebar-tab-peeking):not(:has(.editor-sidebar-help-balloon)) .editor-sidebar-tab,
+.hvy-preview-frame-tablet.editor-shell.is-sidebar-closed:not(.is-sidebar-tab-visible):not(.is-sidebar-tab-peeking):not(:has(.editor-sidebar-help-balloon)) .editor-sidebar-tab,
 .hvy-preview-frame-phone.editor-shell.is-sidebar-closed.is-sidebar-tab-hidden .editor-sidebar-tab,
 .hvy-preview-frame-tablet.editor-shell.is-sidebar-closed.is-sidebar-tab-hidden .editor-sidebar-tab {
   opacity: 0;
@@ -189,6 +189,20 @@
 .hvy-preview-frame-tablet.editor-shell:has(.editor-sidebar-help-balloon) .editor-sidebar-tab {
   opacity: 1;
   transform: translateX(0);
+}
+
+.hvy-preview-frame-phone.editor-shell.is-sidebar-closed.is-sidebar-tab-peeking .editor-sidebar-tab,
+.hvy-preview-frame-tablet.editor-shell.is-sidebar-closed.is-sidebar-tab-peeking .editor-sidebar-tab {
+  opacity: 0.48;
+  pointer-events: auto;
+  transform: translateX(0);
+}
+
+.hvy-preview-frame-phone.editor-shell.is-sidebar-closed.is-sidebar-tab-peeking .editor-sidebar-tab:hover,
+.hvy-preview-frame-tablet.editor-shell.is-sidebar-closed.is-sidebar-tab-peeking .editor-sidebar-tab:hover,
+.hvy-preview-frame-phone.editor-shell.is-sidebar-closed.is-sidebar-tab-peeking .editor-sidebar-tab:focus-visible,
+.hvy-preview-frame-tablet.editor-shell.is-sidebar-closed.is-sidebar-tab-peeking .editor-sidebar-tab:focus-visible {
+  opacity: 0.78;
 }
 
 .hvy-preview-frame-phone.editor-shell.is-sidebar-closed.is-sidebar-tab-hidden .editor-sidebar-help-balloon,

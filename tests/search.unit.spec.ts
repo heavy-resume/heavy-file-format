@@ -2,7 +2,7 @@ import { expect, test } from 'vitest';
 
 import { deserializeDocument } from '../src/serialization';
 import { builtInSearchProvider } from '../src/search/search-provider';
-import { createSearchFilterContext } from '../src/search/filter';
+import { createSearchFilterContext, orderSearchFilteredSections } from '../src/search/filter';
 import { highlightPlainText } from '../src/search/highlight';
 import { renderSearchPalette } from '../src/search/render';
 
@@ -329,6 +329,108 @@ hvy_version: 0.1
 
   expect(expectedResult.visibleSections.has(document.sections[0]!.key)).toBe(true);
   expect(expectedResult.visibleSections.has(document.sections[1]!.key)).toBe(false);
+});
+
+test('search filter ordering moves non-priority shaded sections below matches', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"alpha"}-->
+#! Alpha
+
+<!--hvy:text {"id":"alpha-text"}-->
+ other
+
+<!--hvy: {"id":"beta"}-->
+#! Beta
+
+<!--hvy:text {"id":"beta-text"}-->
+ needle
+
+<!--hvy: {"id":"gamma"}-->
+#! Gamma
+
+<!--hvy:text {"id":"gamma-text"}-->
+ other
+`, '.hvy');
+  const expectedResults = await builtInSearchProvider({
+    document,
+    query: 'needle',
+    caseSensitive: false,
+    categories: ['contents'],
+  });
+  const expectedContext = createSearchFilterContext(document.sections, {
+    open: false,
+    queryDraft: 'needle',
+    submittedQuery: 'needle',
+    caseSensitive: false,
+    categories: { tags: true, contents: true, description: true },
+    activeTab: 'filter',
+    filterEnabled: true,
+    filterMode: 'deprioritize',
+    resultsCollapsed: false,
+    activeResultId: null,
+    isLoading: false,
+    error: null,
+    results: expectedResults,
+    navigationResultIds: expectedResults.map((result) => result.id),
+    requestNonce: 1,
+    abortController: null,
+  });
+
+  const expectedResult = orderSearchFilteredSections(document.sections, expectedContext);
+
+  expect(expectedResult.map((section) => section.customId)).toEqual(['beta', 'alpha', 'gamma']);
+});
+
+test('search filter ordering keeps priority sections above matches', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"alpha"}-->
+#! Alpha
+
+<!--hvy:text {"id":"alpha-text"}-->
+ other
+
+<!--hvy: {"id":"beta"}-->
+#! Beta
+
+<!--hvy:text {"id":"beta-text"}-->
+ needle
+`, '.hvy');
+  const expectedResults = await builtInSearchProvider({
+    document,
+    query: 'needle',
+    caseSensitive: false,
+    categories: ['contents'],
+  });
+  const expectedContext = createSearchFilterContext(document.sections, {
+    open: false,
+    queryDraft: 'needle',
+    submittedQuery: 'needle',
+    caseSensitive: false,
+    categories: { tags: true, contents: true, description: true },
+    activeTab: 'filter',
+    filterEnabled: true,
+    filterMode: 'deprioritize',
+    resultsCollapsed: false,
+    activeResultId: null,
+    isLoading: false,
+    error: null,
+    results: expectedResults,
+    navigationResultIds: expectedResults.map((result) => result.id),
+    requestNonce: 1,
+    abortController: null,
+  });
+
+  const expectedResult = orderSearchFilteredSections(document.sections, expectedContext, {
+    isPriority: (section) => section.customId === 'alpha',
+  });
+
+  expect(expectedResult.map((section) => section.customId)).toEqual(['alpha', 'beta']);
 });
 
 test('search filter context keeps expandable stub context for expanded-content matches', async () => {

@@ -1,9 +1,13 @@
 import { getRenderApp, handleDbTableFrameScroll } from './_imports';
-import { handleResponsiveSidebarTabScroll, revealHiddenSidebarTabFromCorner } from '../../responsive-sidebar-tab';
+import { handleResponsiveSidebarTabScroll, peekHiddenSidebarTabFromCorner, revealHiddenSidebarTabFromCorner } from '../../responsive-sidebar-tab';
 
 export function bindScrollHandler(app: HTMLElement): void {
   app.addEventListener('pointerdown', (event) => {
     revealHiddenSidebarTabFromCorner(event.target as HTMLElement | null, event);
+  });
+
+  app.addEventListener('pointermove', (event) => {
+    peekHiddenSidebarTabFromCorner(event.target as HTMLElement | null, event);
   });
 
   app.addEventListener('scroll', (event) => {

@@ -49,8 +49,8 @@
   transition: opacity 540ms ease, transform 540ms ease;
 }
 
-.hvy-preview-frame-phone.viewer-shell.is-sidebar-closed:not(.is-sidebar-tab-visible):not(:has(.viewer-sidebar-help-balloon)) .viewer-sidebar-tab,
-.hvy-preview-frame-tablet.viewer-shell.is-sidebar-closed:not(.is-sidebar-tab-visible):not(:has(.viewer-sidebar-help-balloon)) .viewer-sidebar-tab,
+.hvy-preview-frame-phone.viewer-shell.is-sidebar-closed:not(.is-sidebar-tab-visible):not(.is-sidebar-tab-peeking):not(:has(.viewer-sidebar-help-balloon)) .viewer-sidebar-tab,
+.hvy-preview-frame-tablet.viewer-shell.is-sidebar-closed:not(.is-sidebar-tab-visible):not(.is-sidebar-tab-peeking):not(:has(.viewer-sidebar-help-balloon)) .viewer-sidebar-tab,
 .hvy-preview-frame-phone.viewer-shell.is-sidebar-closed.is-sidebar-tab-hidden .viewer-sidebar-tab,
 .hvy-preview-frame-tablet.viewer-shell.is-sidebar-closed.is-sidebar-tab-hidden .viewer-sidebar-tab {
   opacity: 0;
@@ -64,6 +64,20 @@
 .hvy-preview-frame-tablet.viewer-shell:has(.viewer-sidebar-help-balloon) .viewer-sidebar-tab {
   opacity: 1;
   transform: translateX(0);
+}
+
+.hvy-preview-frame-phone.viewer-shell.is-sidebar-closed.is-sidebar-tab-peeking .viewer-sidebar-tab,
+.hvy-preview-frame-tablet.viewer-shell.is-sidebar-closed.is-sidebar-tab-peeking .viewer-sidebar-tab {
+  opacity: 0.48;
+  pointer-events: auto;
+  transform: translateX(0);
+}
+
+.hvy-preview-frame-phone.viewer-shell.is-sidebar-closed.is-sidebar-tab-peeking .viewer-sidebar-tab:hover,
+.hvy-preview-frame-tablet.viewer-shell.is-sidebar-closed.is-sidebar-tab-peeking .viewer-sidebar-tab:hover,
+.hvy-preview-frame-phone.viewer-shell.is-sidebar-closed.is-sidebar-tab-peeking .viewer-sidebar-tab:focus-visible,
+.hvy-preview-frame-tablet.viewer-shell.is-sidebar-closed.is-sidebar-tab-peeking .viewer-sidebar-tab:focus-visible {
+  opacity: 0.78;
 }
 
 .hvy-preview-frame-phone.viewer-shell.is-sidebar-closed.is-sidebar-tab-hidden .viewer-sidebar-help-balloon,

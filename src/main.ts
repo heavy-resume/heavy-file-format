@@ -39,6 +39,7 @@ import { runButtonVisibilityScripts } from './editor/components/button/button-ac
 import { visitBlocksInList } from './section-ops';
 import { centerSearchResultLenses, renderCollapsedSearchBar, renderSearchLauncher, renderSearchPalette } from './search/render';
 import { createDefaultSearchState } from './search/state';
+import { applySearchFilter, submitSearch } from './search/actions';
 import { loadPaletteOverrideId } from './palettes/palette-preferences';
 
 const appRoot = document.querySelector<HTMLDivElement>('#app');
@@ -167,7 +168,16 @@ function applyResumeState(initial: AppState, resume: ReturnType<typeof loadResum
       messages: resume.chat.messages,
       panelOpen: resume.chat.panelOpen,
     },
-    search: resume.search,
+    search: resume.search.filterEnabled
+      ? {
+          ...resume.search,
+          filterEnabled: false,
+          results: [],
+          navigationResultIds: [],
+          activeResultId: null,
+          isLoading: Boolean(resume.search.submittedQuery.trim()),
+        }
+      : resume.search,
     cliDraft: resume.cli.draft,
     cliSession: resume.cli.session,
     cliHistory: resume.cli.history,
@@ -1121,11 +1131,27 @@ function visitBlocksInSection(
 }
 
 async function bootstrap(): Promise<void> {
-  initState(applyResumeState(createInitialState(await createDefaultDocument()), loadResumeState()));
+  const resume = loadResumeState();
+  initState(applyResumeState(createInitialState(await createDefaultDocument()), resume));
   bindResumePersistence();
   saveResumeState(state);
   initColorModeSync();
   renderApp();
+  void refreshRestoredSearch(resume);
+}
+
+async function refreshRestoredSearch(resume: ReturnType<typeof loadResumeState>): Promise<void> {
+  const savedSearch = resume?.search;
+  if (!savedSearch?.submittedQuery.trim()) {
+    return;
+  }
+  state.search.queryDraft = savedSearch.queryDraft || savedSearch.submittedQuery;
+  state.search.submittedQuery = '';
+  await submitSearch();
+  if (savedSearch.filterEnabled) {
+    await applySearchFilter({ enabled: true });
+  }
+  saveResumeState(state);
 }
 
 bootstrap().catch((error) => {

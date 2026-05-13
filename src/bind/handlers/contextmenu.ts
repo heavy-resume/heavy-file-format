@@ -1,6 +1,21 @@
 import { state, openLinkInlineModal } from './_imports';
 
+const AI_DOUBLE_TAP_MS = 450;
+const AI_DOUBLE_TAP_DISTANCE_PX = 28;
+
+let lastAiTap: { sectionKey: string; blockId: string; x: number; y: number; time: number } | null = null;
+let suppressNextAiContextClick = false;
+
 export function bindContextmenu(app: HTMLElement): void {
+  app.addEventListener('click', (event) => {
+    if (!suppressNextAiContextClick) {
+      return;
+    }
+    suppressNextAiContextClick = false;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  }, true);
+
   app.addEventListener('contextmenu', (event) => {
     const target = event.target as HTMLElement;
     if (target.closest('.hvy-context-popover-backdrop')) {
@@ -34,20 +49,62 @@ export function bindContextmenu(app: HTMLElement): void {
       return;
     }
     const target = event.target as HTMLElement;
-    const anchor = target.closest<HTMLAnchorElement>('a');
-    const readerAction = target.closest<HTMLElement>('[data-reader-action]');
-    if (
-      (target.closest('button, input, textarea, select, [contenteditable="true"], .hvy-context-popover, .ai-edit-popover') && !readerAction) ||
-      (anchor && !anchor.classList.contains('reader-xref-card'))
-    ) {
+    if (shouldIgnoreAiContextGestureTarget(target)) {
       return;
     }
     window.getSelection()?.removeAllRanges();
     openReaderContextPopover(app, event, false);
   });
+
+  app.addEventListener('pointerup', (event) => {
+    if (state.currentView !== 'ai' || event.pointerType === 'mouse') {
+      return;
+    }
+    const target = event.target as HTMLElement;
+    if (shouldIgnoreAiContextGestureTarget(target)) {
+      lastAiTap = null;
+      return;
+    }
+    const blockElement = target.closest<HTMLElement>('.reader-block[data-section-key][data-block-id]');
+    const sectionKey = blockElement?.dataset.sectionKey ?? '';
+    const blockId = blockElement?.dataset.blockId ?? '';
+    if (!sectionKey || !blockId) {
+      lastAiTap = null;
+      return;
+    }
+
+    const time = event.timeStamp || window.performance.now();
+    const previous = lastAiTap;
+    lastAiTap = { sectionKey, blockId, x: event.clientX, y: event.clientY, time };
+    if (
+      !previous ||
+      previous.sectionKey !== sectionKey ||
+      previous.blockId !== blockId ||
+      time - previous.time > AI_DOUBLE_TAP_MS ||
+      Math.hypot(event.clientX - previous.x, event.clientY - previous.y) > AI_DOUBLE_TAP_DISTANCE_PX
+    ) {
+      return;
+    }
+
+    lastAiTap = null;
+    window.getSelection()?.removeAllRanges();
+    openReaderContextPopover(app, event, false);
+    if (state.contextMenu?.kind === 'ai') {
+      suppressNextAiContextClick = true;
+    }
+  });
 }
 
-function openReaderContextPopover(app: HTMLElement, event: MouseEvent, filtering: boolean): void {
+function shouldIgnoreAiContextGestureTarget(target: HTMLElement): boolean {
+  const anchor = target.closest<HTMLAnchorElement>('a');
+  const readerAction = target.closest<HTMLElement>('[data-reader-action]');
+  return Boolean(
+    (target.closest('button, input, textarea, select, [contenteditable="true"], .hvy-context-popover, .ai-edit-popover') && !readerAction) ||
+    (anchor && !anchor.classList.contains('reader-xref-card'))
+  );
+}
+
+function openReaderContextPopover(app: HTMLElement, event: MouseEvent | PointerEvent, filtering: boolean): void {
   const target = event.target as HTMLElement;
   const blockElement = target.closest<HTMLElement>('.reader-block[data-section-key][data-block-id]');
   const sectionElement = target.closest<HTMLElement>('.reader-section[data-section-key]');

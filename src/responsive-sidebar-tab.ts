@@ -9,9 +9,7 @@ const sidebarTabTimers: Record<SidebarKind, { reveal: number | null; hide: numbe
 };
 
 export function revealHiddenSidebarTabFromCorner(target: HTMLElement | null, event: PointerEvent): void {
-  const shell =
-    target?.closest<HTMLElement>('.editor-shell')
-    ?? target?.closest<HTMLElement>('.viewer-shell');
+  const shell = getCompactSidebarShell(target, event);
   if (!shell || !isCompactPreviewShell(shell) || shell.classList.contains('is-sidebar-open')) {
     return;
   }
@@ -25,6 +23,29 @@ export function revealHiddenSidebarTabFromCorner(target: HTMLElement | null, eve
     return;
   }
   revealSidebarTab(shell.classList.contains('editor-shell') ? 'editor' : 'viewer', shell);
+}
+
+export function peekHiddenSidebarTabFromCorner(target: HTMLElement | null, event: PointerEvent): void {
+  if (event.pointerType && event.pointerType !== 'mouse') {
+    return;
+  }
+  const shell = getCompactSidebarShell(target, event);
+  if (!shell || !isCompactPreviewShell(shell) || shell.classList.contains('is-sidebar-open')) {
+    return;
+  }
+  const kind = shell.classList.contains('editor-shell') ? 'editor' : 'viewer';
+  const box = shell.getBoundingClientRect();
+  const inTopLeftCorner =
+    event.clientX >= box.left
+    && event.clientX <= box.left + 96
+    && event.clientY >= box.top
+    && event.clientY <= box.top + 96;
+  if (!inTopLeftCorner) {
+    shell.classList.remove('is-sidebar-tab-peeking');
+    return;
+  }
+  peekSidebarTab(kind, shell);
+  scheduleSidebarTabHide(kind, shell, 1800);
 }
 
 export function handleResponsiveSidebarTabScroll(target: HTMLElement | null): void {
@@ -69,9 +90,31 @@ function isCompactPreviewShell(shell: HTMLElement): boolean {
   return shell.classList.contains('hvy-preview-frame-phone') || shell.classList.contains('hvy-preview-frame-tablet');
 }
 
+function getCompactSidebarShell(target: HTMLElement | null, event: PointerEvent): HTMLElement | null {
+  const targetShell =
+    target?.closest<HTMLElement>('.editor-shell')
+    ?? target?.closest<HTMLElement>('.viewer-shell');
+  if (targetShell) {
+    return targetShell;
+  }
+  return document.elementsFromPoint(event.clientX, event.clientY)
+    .map((element) => element instanceof HTMLElement ? element.closest<HTMLElement>('.editor-shell, .viewer-shell') : null)
+    .find((shell): shell is HTMLElement => Boolean(shell)) ?? null;
+}
+
 function revealSidebarTab(kind: SidebarKind, shell: HTMLElement): void {
   clearSidebarTabTimer(sidebarTabTimers[kind], 'reveal');
   shell.classList.add('is-sidebar-tab-visible');
+  shell.classList.remove('is-sidebar-tab-hidden');
+  shell.classList.remove('is-sidebar-tab-peeking');
+}
+
+function peekSidebarTab(kind: SidebarKind, shell: HTMLElement): void {
+  clearSidebarTabTimer(sidebarTabTimers[kind], 'reveal');
+  if (shell.classList.contains('is-sidebar-tab-visible') || shell.querySelector('.editor-sidebar-help-balloon, .viewer-sidebar-help-balloon')) {
+    return;
+  }
+  shell.classList.add('is-sidebar-tab-peeking');
   shell.classList.remove('is-sidebar-tab-hidden');
 }
 
@@ -82,6 +125,7 @@ function hideSidebarTab(kind: SidebarKind, shell: HTMLElement): void {
   }
   shell.classList.add('is-sidebar-tab-hidden');
   shell.classList.remove('is-sidebar-tab-visible');
+  shell.classList.remove('is-sidebar-tab-peeking');
 }
 
 function dismissSidebarHelp(kind: SidebarKind, shell: HTMLElement): void {

@@ -263,3 +263,26 @@ export function isSectionSearchDeprioritized(context: SearchFilterContext, secti
 export function isBlockSearchDeprioritized(context: SearchFilterContext, block: VisualBlock): boolean {
   return context.filtering && context.filterMode === 'deprioritize' && !context.visibleBlocks.has(block.id);
 }
+
+export function orderSearchFilteredSections(
+  sections: VisualSection[],
+  context: SearchFilterContext,
+  options: { isPriority?: (section: VisualSection) => boolean } = {}
+): VisualSection[] {
+  if (!context.filtering || context.filterMode !== 'deprioritize') {
+    return sections;
+  }
+  const prioritySections: VisualSection[] = [];
+  const matchingSections: VisualSection[] = [];
+  const deprioritizedSections: VisualSection[] = [];
+  for (const section of sections) {
+    if (options.isPriority?.(section)) {
+      prioritySections.push(section);
+    } else if (context.visibleSections.has(section.key)) {
+      matchingSections.push(section);
+    } else {
+      deprioritizedSections.push(section);
+    }
+  }
+  return [...prioritySections, ...matchingSections, ...deprioritizedSections];
+}

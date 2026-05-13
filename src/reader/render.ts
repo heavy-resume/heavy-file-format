@@ -20,7 +20,7 @@ import type { ThemeConfig } from '../theme';
 import { getMatchedPaletteId, HVY_PALETTES } from '../palettes/palette-registry';
 import type { DbTableQueryModalState, ReaderViewFilter, ReusableSaveModalState, SqliteRowComponentModalState, VisualDocument } from '../types';
 import type { SearchState } from '../search/types';
-import { createSearchFilterContext, isBlockSearchDeprioritized, isBlockSearchMatch, isBlockSearchVisible, isSectionSearchDeprioritized, isSectionSearchMatch, isSectionSearchVisible, type SearchFilterContext } from '../search/filter';
+import { createSearchFilterContext, isBlockSearchDeprioritized, isBlockSearchMatch, isBlockSearchVisible, isSectionSearchDeprioritized, isSectionSearchMatch, isSectionSearchVisible, orderSearchFilteredSections, type SearchFilterContext } from '../search/filter';
 import { highlightSearchHtml } from '../search/highlight';
 import { getDocumentSectionDefaultCss, mergeDocumentCss } from '../document-section-defaults';
 import { sanitizeInlineCss } from '../css-sanitizer';
@@ -185,11 +185,8 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
   function renderReaderSections(sections: VisualSection[]): string {
     return withReaderViewContext(() => {
       resetReaderTableStripeSequence();
-      const realSections = orderReaderViewTargets(
-        sections.filter((section) => !section.isGhost && section.location !== 'sidebar' && !isViewerHiddenSection(section) && isSectionSearchVisible(getActiveSearchFilterContext(), section)),
-        getActiveReaderViewContext(),
-        getSectionReaderViewTargetKey,
-        state.readerViewActivatedTargets
+      const realSections = orderReaderSections(
+        sections.filter((section) => !section.isGhost && section.location !== 'sidebar' && !isViewerHiddenSection(section) && isSectionSearchVisible(getActiveSearchFilterContext(), section))
       );
       if (realSections.length === 0) {
         return getActiveSearchFilterContext().filtering
@@ -211,11 +208,8 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
   function renderSidebarSections(sections: VisualSection[]): string {
     return withReaderViewContext(() => {
       resetReaderTableStripeSequence();
-      const sidebarSections = orderReaderViewTargets(
-        sections.filter((section) => !section.isGhost && section.location === 'sidebar' && !isViewerHiddenSection(section) && isSectionSearchVisible(getActiveSearchFilterContext(), section)),
-        getActiveReaderViewContext(),
-        getSectionReaderViewTargetKey,
-        state.readerViewActivatedTargets
+      const sidebarSections = orderReaderSections(
+        sections.filter((section) => !section.isGhost && section.location === 'sidebar' && !isViewerHiddenSection(section) && isSectionSearchVisible(getActiveSearchFilterContext(), section))
       );
       if (sidebarSections.length === 0) {
         return '';
@@ -284,11 +278,8 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       ? (sectionExpanded ? 'reader-section-content' : 'reader-section-content reader-section-preview')
       : 'reader-section-content';
     const blocksHtml = renderReaderBlocks(section, section.blocks);
-    const childrenHtml = orderReaderViewTargets(
-      section.children.filter((child) => !child.isGhost && !isViewerHiddenSection(child)),
-      viewContext,
-      getSectionReaderViewTargetKey,
-      state.readerViewActivatedTargets
+    const childrenHtml = orderReaderSections(
+      section.children.filter((child) => !child.isGhost && !isViewerHiddenSection(child))
     ).map((child) => renderReaderSection(child)).join('');
     if (!blocksHtml.trim() && !childrenHtml.trim() && !isSectionSearchMatch(searchContext, section)) {
       return '';
@@ -486,6 +477,19 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
 
   function renderReaderListBlocks(section: VisualSection, blocks: VisualBlock[]): string {
     return orderReaderListBlocks(blocks).map((block) => renderReaderBlock(section, block)).join('');
+  }
+
+  function orderReaderSections(sections: VisualSection[]): VisualSection[] {
+    const viewContext = getActiveReaderViewContext();
+    const ordered = orderReaderViewTargets(
+      sections,
+      viewContext,
+      getSectionReaderViewTargetKey,
+      state.readerViewActivatedTargets
+    );
+    return orderSearchFilteredSections(ordered, getActiveSearchFilterContext(), {
+      isPriority: (section) => isReaderViewPrioritized(viewContext, getSectionReaderViewTargetKey(section)),
+    });
   }
 
   function orderReaderBlocks(blocks: VisualBlock[]): VisualBlock[] {

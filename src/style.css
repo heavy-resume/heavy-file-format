@@ -495,6 +495,11 @@ body {
   margin-inline: auto;
 }
 
+[data-hvy-dynamic-visibility="true"][data-visible-state="pending"],
+[data-hvy-dynamic-visibility="true"][data-visible-state="hidden"] {
+  display: none !important;
+}
+
 @media (max-width: 980px) {
   .workspace-head {
     grid-template-columns: 1fr;

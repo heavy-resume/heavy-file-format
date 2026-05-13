@@ -268,6 +268,25 @@ hvy_version: 0.1
   expect(expectedResult).toContain('"buttonTargetScript":"doc.component.set_text');
 });
 
+test('round-trips block visibility scripts', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"header"}-->
+#! Header
+
+<!--hvy:text {"id":"dependent","visibleScript":"return not doc.component.is_empty('name')"}-->
+Dependent text
+`, '.hvy');
+
+  const block = document.sections[0]?.blocks[0];
+  expect(block?.schema.visibleScript).toBe("return not doc.component.is_empty('name')");
+
+  const expectedResult = serializeWithState(document);
+  expect(expectedResult).toContain('"visibleScript":"return not doc.component.is_empty');
+});
+
 test('section priority round-trips as section metadata', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
@@ -709,10 +728,12 @@ test('resume template uses fill-in heading text for the default name', async () 
   const document = deserializeDocument(input, '.thvy');
   const header = document.sections.find((section) => section.customId === 'header');
   const name = header?.blocks[0];
+  const pronunciation = header?.blocks[1];
 
   expect(name?.text.trim()).toBe('# <!-- value -->');
   expect(name?.schema.placeholder).toBe('Name');
   expect(name?.schema.fillIn).toBe(true);
+  expect(pronunciation?.schema.visibleScript).toContain('doc.component.get_text("resume-name")');
 });
 
 test('serialize -> deserialize -> serialize stays stable for migrated examples', async () => {

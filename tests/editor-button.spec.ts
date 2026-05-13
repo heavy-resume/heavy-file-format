@@ -16,6 +16,10 @@ test('editor-only generate button applies pronunciation and stays out of viewer'
   await page.evaluate(() => localStorage.clear());
   await page.reload({ waitUntil: 'networkidle' });
   await page.getByRole('button', { name: 'Resume Template' }).click();
+
+  await expect(page.locator('[data-component-id="resume-pronunciation"]').first()).toBeHidden({ timeout: 10000 });
+  await expect(page.locator('[data-action="run-button-ai-generate"]')).toBeHidden();
+
   await page.getByRole('button', { name: 'Raw' }).click();
 
   const raw = page.locator('#rawEditor');
@@ -76,8 +80,9 @@ test('generated pronunciation can be converted back into a clean fill-in', async
   await page.locator('.rich-editor[data-field="block-rich"]').dispatchEvent('keyup');
   await page.getByRole('button', { name: 'Convert to Fill-in' }).click();
 
-  await expect(page.locator('[data-field="text-fill-in-value"]')).toHaveAttribute('data-placeholder', 'FILL ME IN');
-  await expect(page.locator('.text-fill-in-editor')).toHaveText('[]');
+  const pronunciationFillIn = page.locator('.editor-block:has(.editor-block-content[data-component-id="resume-pronunciation"]) [data-field="text-fill-in-value"]');
+  await expect(pronunciationFillIn).toHaveAttribute('data-placeholder', 'FILL ME IN');
+  await expect(page.locator('.editor-block:has(.editor-block-content[data-component-id="resume-pronunciation"]) .text-fill-in-editor')).toHaveText('[]');
   await page.getByRole('button', { name: 'Raw' }).click();
   await expect(page.locator('#rawEditor')).toContainText('\\[<!-- value -->\\]');
   await expect(page.locator('#rawEditor')).toContainText('"placeholder":"FILL ME IN"');

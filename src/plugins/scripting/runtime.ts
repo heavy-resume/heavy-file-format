@@ -1,10 +1,13 @@
 import type { JsonObject } from '../../hvy/types';
 import type { VisualDocument } from '../../types';
+import type { VisualSection } from '../../editor/types';
 import { getAttachment, removeAttachment, setAttachment } from '../../attachments';
 import { executeDocumentEditToolByName } from '../../ai-document-edit';
 import { executeHvyCliCommandSync } from '../../cli-core/commands';
 import { state, getRefreshReaderPanels, getRenderApp } from '../../state';
+import { clearHideIfUnmodifiedForSectionPath } from '../../template-hide';
 import { hasTextFillInMarker } from '../../text-fill-in';
+import type { VisualBlock } from '../../editor/types';
 
 // JS-side `doc` runtime exposed to the user's Python script. Every method is
 // synchronous from Python's point of view; mutations on the visual document
@@ -144,18 +147,20 @@ export function createScriptingRuntime(options: ScriptingRuntimeOptions): Script
       return result;
     },
     component: {
-      get_text: (id) => findComponentBySchemaId(options.document, String(id ?? ''))?.text ?? '',
+      get_text: (id) => findComponentBySchemaId(options.document, String(id ?? ''))?.block.text ?? '',
       set_text: (id, text) => {
-        const block = findComponentBySchemaId(options.document, String(id ?? ''));
-        if (!block) {
+        const entry = findComponentBySchemaId(options.document, String(id ?? ''));
+        if (!entry) {
           throw new Error(`Component "${String(id ?? '')}" was not found.`);
         }
+        const { block, sectionKey } = entry;
         block.text = String(text ?? '');
         block.schema.fillIn = hasTextFillInMarker(block.text);
+        clearHideIfUnmodifiedForSectionPath(options.document.sections, sectionKey);
         mutated = true;
       },
       is_empty: (id) => {
-        const block = findComponentBySchemaId(options.document, String(id ?? ''));
+        const block = findComponentBySchemaId(options.document, String(id ?? ''))?.block ?? null;
         return !block || block.text.trim().length === 0 || /<!--\s*value\s*-->/.test(block.text);
       },
     },
@@ -241,13 +246,18 @@ export function createScriptingRuntime(options: ScriptingRuntimeOptions): Script
   };
 }
 
-function findComponentBySchemaId(document: VisualDocument, id: string): import('../../editor/types').VisualBlock | null {
+interface ScriptingComponentEntry {
+  block: VisualBlock;
+  sectionKey: string;
+}
+
+function findComponentBySchemaId(document: VisualDocument, id: string): ScriptingComponentEntry | null {
   const targetId = id.trim();
   if (!targetId) {
     return null;
   }
   for (const section of document.sections) {
-    const found = findComponentBySchemaIdInBlocks(section.blocks, targetId);
+    const found = findComponentBySchemaIdInSection(section, targetId);
     if (found) {
       return found;
     }
@@ -255,11 +265,25 @@ function findComponentBySchemaId(document: VisualDocument, id: string): import('
   return null;
 }
 
+function findComponentBySchemaIdInSection(section: VisualSection, id: string): ScriptingComponentEntry | null {
+  const found = findComponentBySchemaIdInBlocks(section.blocks, id);
+  if (found) {
+    return { block: found, sectionKey: section.key };
+  }
+  for (const child of section.children) {
+    const childFound = findComponentBySchemaIdInSection(child, id);
+    if (childFound) {
+      return childFound;
+    }
+  }
+  return null;
+}
+
 function findComponentBySchemaIdInBlocks(
-  blocks: import('../../editor/types').VisualBlock[],
+  blocks: VisualBlock[],
   id: string,
-  seen = new Set<import('../../editor/types').VisualBlock>()
-): import('../../editor/types').VisualBlock | null {
+  seen = new Set<VisualBlock>()
+): VisualBlock | null {
   for (const block of blocks) {
     if (seen.has(block)) {
       continue;

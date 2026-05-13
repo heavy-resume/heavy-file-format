@@ -1,4 +1,4 @@
-import { state, getRenderApp, commitTagEditorDraft, findSectionByKey, commitInlineTableEdit, recordHistory, refreshRichToolbarState, tagStateHelpers } from './_imports';
+import { state, getRenderApp, getRefreshReaderPanels, commitTagEditorDraft, findSectionByKey, commitInlineTableEdit, recordHistory, refreshRichToolbarState, resolveBlockContext, deactivateEditorBlock, tagStateHelpers } from './_imports';
 
 export function bindFocus(app: HTMLElement): void {
   app.addEventListener('focusin', (event) => {
@@ -18,6 +18,22 @@ export function bindFocus(app: HTMLElement): void {
   app.addEventListener('focusout', (event) => {
     const rawTarget = event.target as HTMLElement;
     const target = rawTarget.dataset.field ? rawTarget : rawTarget.closest<HTMLElement>('[data-field]') ?? rawTarget;
+    if (target.dataset.field === 'text-fill-in-value') {
+      const editor = target.closest<HTMLElement>('.text-fill-in-editor');
+      const nextTarget = event.relatedTarget instanceof HTMLElement ? event.relatedTarget : null;
+      if (editor && nextTarget && editor.contains(nextTarget)) {
+        return;
+      }
+      const context = resolveBlockContext(target);
+      const sectionKey = target.dataset.sectionKey ?? '';
+      const blockId = target.dataset.blockId ?? '';
+      if (context && sectionKey && blockId && !context.block.schema.fillIn) {
+        deactivateEditorBlock(sectionKey, blockId);
+        getRefreshReaderPanels()();
+        getRenderApp()();
+      }
+      return;
+    }
     if (target.dataset.field === 'table-cell' || target.dataset.field === 'table-column') {
       commitInlineTableEdit(target);
     }

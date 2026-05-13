@@ -509,7 +509,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
   }
 
   function canRenderActiveComponentInsertGhost(isActiveSelf: boolean, structurallyLocked: boolean): boolean {
-    return isActiveSelf && !structurallyLocked && !state.componentPlacement && !state.mobileAdjustmentMode;
+    return isActiveSelf && state.currentView !== 'ai' && !structurallyLocked && !state.componentPlacement && !state.mobileAdjustmentMode;
   }
 
   function renderActiveComponentInsertGhost(sectionKey: string, block: VisualBlock, placement: 'before' | 'after'): string {
@@ -537,8 +537,9 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       return '';
     }
     const anchorAttrs = renderButtonAnchorAttrs(sectionKey, block, rootSections);
+    const visibleState = block.schema.visibleScript.trim() ? 'pending' : 'visible';
     return `
-      <div class="editor-block-passive" data-action="activate-block" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(
+      <div class="editor-block-passive" data-hvy-dynamic-visibility="true" data-visible-state="${deps.escapeAttr(visibleState)}" data-action="activate-block" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(
       block.id
     )}">
         <div class="editor-block-content${anchorAttrs.className}"${anchorAttrs.attrs}>
@@ -1286,6 +1287,17 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
             placeholder="Shown when block is empty"
             value="${deps.escapeAttr(block.schema.placeholder)}"
           />
+        </label>
+        <label>
+          <div>Visible When Function Body</div>
+          <div>Controls when this block is visible. Returns boolean.</div>
+          <textarea
+            rows="5"
+            spellcheck="false"
+            data-section-key="${deps.escapeAttr(sectionKey)}"
+            data-block-id="${deps.escapeAttr(block.id)}"
+            data-field="block-visible-script"
+          >${deps.escapeHtml(block.schema.visibleScript)}</textarea>
         </label>
         ${listDisplayContext ? renderComponentListDisplayFields(sectionKey, block, listDisplayContext) : ''}
         ${

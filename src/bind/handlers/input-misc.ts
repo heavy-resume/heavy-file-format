@@ -408,6 +408,18 @@ export function bindInputMisc(app: HTMLElement): void {
       return;
     }
 
+    if (field === 'block-visible-script' && target instanceof HTMLTextAreaElement) {
+      const context = resolveBlockContext(target);
+      if (!context) {
+        return;
+      }
+      context.block.schema.visibleScript = target.value;
+      syncReusableTemplateForBlock(sectionKey, context.block.id);
+      getRefreshReaderPanels()();
+      void runButtonVisibilityScripts(app);
+      return;
+    }
+
     if (field === 'block-editor-only' && target instanceof HTMLInputElement) {
       const context = resolveBlockContext(target);
       if (!context) {

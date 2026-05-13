@@ -45,6 +45,7 @@ export interface BlockSchema {
   groupKeys: Record<string, string>;
   tags: string;
   description: string;
+  visibleScript: string;
   placeholder: string;
   fillIn: boolean;
   metaOpen: boolean;

@@ -716,6 +716,8 @@ hvy_version: 0.1
   await page.locator('#aiReaderDocument .ghost-label', { hasText: 'Add Todo' }).click();
 
   await expect(page.locator('#aiReaderDocument .editor-block .rich-editor')).toBeVisible();
+  await expect(page.locator('#aiReaderDocument .ghost-label', { hasText: 'Add Todo' })).toBeVisible();
+  await expect(page.locator('#aiReaderDocument .active-component-insert-ghost')).toHaveCount(0);
 });
 
 test('custom component template modal cancel leaves the document unchanged', async ({ page }) => {

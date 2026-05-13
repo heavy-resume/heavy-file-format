@@ -273,7 +273,7 @@ test('createScriptingRuntime component set_text clears stale fill-in state', () 
 hvy_version: 0.1
 ---
 
-<!--hvy: {"id":"header"}-->
+<!--hvy: {"id":"header","hideIfUnmodified":true}-->
 #! Header
 
 <!--hvy:text {"id":"pronunciation","placeholder":"pronunciation","fillIn":true}-->
@@ -285,6 +285,7 @@ hvy_version: 0.1
 
   expect(document.sections[0]?.blocks[0]?.text).toBe('[AY-vuh-ree HART]');
   expect(document.sections[0]?.blocks[0]?.schema.fillIn).toBe(false);
+  expect(document.sections[0]?.hideIfUnmodified).toBe(false);
 });
 
 test('createScriptingRuntime exposes a supplied database API', () => {

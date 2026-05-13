@@ -169,8 +169,11 @@ function clearAiLongPress(pointerId?: number): void {
 function shouldIgnoreAiContextGestureTarget(target: HTMLElement): boolean {
   const anchor = target.closest<HTMLAnchorElement>('a');
   const readerAction = target.closest<HTMLElement>('[data-reader-action]');
+  if (target.closest('[contenteditable="true"]')) {
+    return true;
+  }
   return Boolean(
-    (target.closest('button, input, textarea, select, [contenteditable="true"], .hvy-context-popover, .ai-edit-popover') && !readerAction) ||
+    (target.closest('button, input, textarea, select, .hvy-context-popover, .ai-edit-popover') && !readerAction) ||
     (anchor && !anchor.classList.contains('reader-xref-card'))
   );
 }

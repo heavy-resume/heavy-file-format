@@ -3,7 +3,7 @@ import './sidebar.css';
 import { renderCodeReader } from '../editor/components/code/code';
 import { renderButtonReader } from '../editor/components/button/button';
 import { renderComponentListReader } from '../editor/components/component-list/component-list';
-import { hasComponentListItems } from '../editor/components/component-list/component-list-labels';
+import { getComponentListAddLabel, hasComponentListItems } from '../editor/components/component-list/component-list-labels';
 import { renderContainerReader } from '../editor/components/container/container';
 import { renderExpandableReader } from '../editor/components/expandable/expandable';
 import { renderGridReader } from '../editor/components/grid/grid';
@@ -380,7 +380,8 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       ? ` data-reader-action="toggle-expandable" aria-expanded="${readerExpanded ? 'true' : 'false'}"`
       : '';
     const anchor = getReaderButtonAnchor(section, block);
-    const blockAttrs = `${idAttr} class="${blockClass}${anchor.className}" data-component="${deps.escapeAttr(block.schema.component)}" data-section-key="${deps.escapeAttr(section.key)}" data-block-id="${deps.escapeAttr(block.id)}"${blockDomId ? ` data-component-id="${deps.escapeAttr(blockDomId)}"` : ''}${anchor.attrs}${expandableAttrs} style="${deps.escapeAttr(sanitizeInlineCss(block.schema.css))}"`;
+    const visibleState = block.schema.visibleScript.trim() ? 'pending' : 'visible';
+    const blockAttrs = `${idAttr} class="${blockClass}${anchor.className}" data-hvy-dynamic-visibility="true" data-visible-state="${deps.escapeAttr(visibleState)}" data-component="${deps.escapeAttr(block.schema.component)}" data-section-key="${deps.escapeAttr(section.key)}" data-block-id="${deps.escapeAttr(block.id)}"${blockDomId ? ` data-component-id="${deps.escapeAttr(blockDomId)}"` : ''}${anchor.attrs}${expandableAttrs} style="${deps.escapeAttr(sanitizeInlineCss(block.schema.css))}"`;
     const helpers = deps.getComponentRenderHelpers();
     const renderBlockShell = (body: string): string => {
       const query = searchContext.filtering ? '' : searchContext.query;
@@ -433,7 +434,9 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       return renderNonEmptyBlockShell(renderContainerReader(section, readerBlock, helpers));
     }
     if (base === 'component-list') {
-      return renderNonEmptyMaybeCollapsedBlockShell(renderComponentListReader(section, block, helpers));
+      const listHtml = renderComponentListReader(section, block, helpers);
+      const addAffordance = renderAiActiveComponentListAddAffordance(section, block);
+      return renderNonEmptyMaybeCollapsedBlockShell(`${listHtml}${addAffordance}`);
     }
     if (base === 'grid') {
       deps.ensureGridItems(block.schema);
@@ -464,6 +467,53 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       return renderMaybeCollapsedBlockShell(renderImageReader(section, block, helpers));
     }
     return renderMaybeCollapsedBlockShell(renderTextReader(section, block, helpers));
+  }
+
+  function renderAiActiveComponentListAddAffordance(section: VisualSection, block: VisualBlock): string {
+    if (
+      state.currentView !== 'ai' ||
+      block.schema.lock ||
+      !hasComponentListItems(block) ||
+      state.activeEditorBlock?.sectionKey !== section.key ||
+      !isDescendantActive(block, state.activeEditorBlock.blockId)
+    ) {
+      return '';
+    }
+    return `<article class="ghost-section-card add-ghost component-list-add-ghost" data-action="add-component-list-item" data-section-key="${deps.escapeAttr(
+      section.key
+    )}" data-block-id="${deps.escapeAttr(block.id)}">
+      <div class="ghost-plus-big">${plusIcon()}</div>
+      <div class="ghost-label">${deps.escapeHtml(getComponentListAddLabel(block))}</div>
+    </article>`;
+  }
+
+  function isDescendantActive(block: VisualBlock, targetBlockId: string): boolean {
+    if (Array.isArray(block.schema.containerBlocks)) {
+      for (const child of block.schema.containerBlocks) {
+        if (child.id === targetBlockId || isDescendantActive(child, targetBlockId)) return true;
+      }
+    }
+    if (Array.isArray(block.schema.componentListBlocks)) {
+      for (const child of block.schema.componentListBlocks) {
+        if (child.id === targetBlockId || isDescendantActive(child, targetBlockId)) return true;
+      }
+    }
+    if (Array.isArray(block.schema.expandableStubBlocks?.children)) {
+      for (const child of block.schema.expandableStubBlocks.children) {
+        if (child.id === targetBlockId || isDescendantActive(child, targetBlockId)) return true;
+      }
+    }
+    if (Array.isArray(block.schema.expandableContentBlocks?.children)) {
+      for (const child of block.schema.expandableContentBlocks.children) {
+        if (child.id === targetBlockId || isDescendantActive(child, targetBlockId)) return true;
+      }
+    }
+    if (Array.isArray(block.schema.gridItems)) {
+      for (const item of block.schema.gridItems) {
+        if (item.block.id === targetBlockId || isDescendantActive(item.block, targetBlockId)) return true;
+      }
+    }
+    return false;
   }
 
   function shouldRenderAiPassiveEditorAffordance(base: string, block: VisualBlock): boolean {

@@ -1511,9 +1511,15 @@ hvy_version: 0.1
   const fillIn = page.locator('#aiReaderDocument [data-field="text-fill-in-value"]');
   await fillIn.click();
   await expect(fillIn).toBeFocused();
+  await fillIn.click();
+  await expect(fillIn).toBeFocused();
+  await expect(page.locator('.hvy-context-popover')).toHaveCount(0);
   await page.keyboard.type('Grace Hopper');
   await expect(page.locator('#aiReaderDocument')).toContainText('Grace Hopper');
   await expect(page.locator('#aiReaderDocument')).not.toContainText('<!-- value -->');
+  await page.locator('#aiReaderDocument').click({ position: { x: 4, y: 4 } });
+  await expect(page.locator('#aiReaderDocument [data-field="text-fill-in-value"]')).toHaveCount(0);
+  await expect(page.locator('#aiReaderDocument .editor-block[data-active-editor-block="true"]')).toHaveCount(0);
 
   await page.getByRole('button', { name: 'Editor' }).click();
   await page.getByRole('button', { name: 'Raw' }).click();

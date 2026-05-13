@@ -33,6 +33,32 @@ function coerceReturnedBoolean(value: unknown): boolean {
 }
 
 export async function runButtonVisibilityScripts(root: ParentNode): Promise<void> {
+  const dynamicBlocks = Array.from(root.querySelectorAll<HTMLElement>('[data-hvy-dynamic-visibility="true"]'));
+  await Promise.all(dynamicBlocks.map(async (element) => {
+    const sectionKey = element.dataset.sectionKey ?? '';
+    const blockId = element.dataset.blockId ?? '';
+    const block = findBlockByIds(sectionKey, blockId);
+    if (!block) {
+      element.dataset.visibleState = 'hidden';
+      return;
+    }
+    const source = block.schema.visibleScript.trim();
+    if (!source) {
+      element.dataset.visibleState = 'visible';
+      return;
+    }
+    element.dataset.visibleState = 'pending';
+    const result = await runUserScript({
+      document: state.document,
+      source,
+      componentId: block.schema.id || block.id,
+    });
+    if (!element.isConnected) {
+      return;
+    }
+    element.dataset.visibleState = result.ok && coerceReturnedBoolean(result.returnValue) ? 'visible' : 'hidden';
+  }));
+
   const buttons = Array.from(root.querySelectorAll<HTMLElement>('[data-hvy-button="true"]'));
   await Promise.all(buttons.map(async (element) => {
     const sectionKey = element.dataset.sectionKey ?? '';

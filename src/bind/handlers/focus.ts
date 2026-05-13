@@ -1,4 +1,4 @@
-import { state, getRenderApp, getRefreshReaderPanels, commitTagEditorDraft, findSectionByKey, commitInlineTableEdit, recordHistory, refreshRichToolbarState, resolveBlockContext, deactivateEditorBlock, tagStateHelpers } from './_imports';
+import { state, getRenderApp, getRefreshReaderPanels, commitTagEditorDraft, findBlockByIds, findSectionByKey, commitInlineTableEdit, recordHistory, refreshRichToolbarState, resolveBlockContext, deactivateEditorBlock, tagStateHelpers } from './_imports';
 
 export function bindFocus(app: HTMLElement): void {
   app.addEventListener('focusin', (event) => {
@@ -28,9 +28,7 @@ export function bindFocus(app: HTMLElement): void {
       const sectionKey = target.dataset.sectionKey ?? '';
       const blockId = target.dataset.blockId ?? '';
       if (context && sectionKey && blockId && !context.block.schema.fillIn) {
-        deactivateEditorBlock(sectionKey, blockId);
-        getRefreshReaderPanels()();
-        getRenderApp()();
+        deferCompletedFillInDeactivation(sectionKey, blockId);
       }
       return;
     }
@@ -55,4 +53,18 @@ export function bindFocus(app: HTMLElement): void {
       }
     }
   });
+}
+
+function deferCompletedFillInDeactivation(sectionKey: string, blockId: string): void {
+  window.setTimeout(() => {
+    const block = findBlockByIds(sectionKey, blockId);
+    if (!block || block.schema.fillIn) {
+      return;
+    }
+    if (deactivateEditorBlock(sectionKey, blockId) === 'unchanged') {
+      return;
+    }
+    getRefreshReaderPanels()();
+    getRenderApp()();
+  }, 0);
 }

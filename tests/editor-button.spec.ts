@@ -39,6 +39,34 @@ test('editor-only generate button applies pronunciation and stays out of viewer'
   await expect(page.locator('#readerDocument')).toContainText('[AY-vuh-ree HART]');
 });
 
+test('generate button runs on the first click after completing a fill-in', async ({ page }) => {
+  await page.route('**/api/chat', async (route) => {
+    const payload = route.request().postDataJSON() as { context?: string };
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        output: payload.context?.includes('Avery Hart') ? 'AY-vuh-ree HART' : 'UNKNOWN',
+      }),
+    });
+  });
+
+  await page.goto('/');
+  await page.evaluate(() => localStorage.clear());
+  await page.reload({ waitUntil: 'networkidle' });
+  await page.getByRole('button', { name: 'Resume Template' }).click();
+
+  await page.locator('.editor-block-passive .editor-block-content[data-component-id="resume-name"] .text-fill-in-box').click();
+  const nameFillIn = page.locator('.editor-block:has(.editor-block-content[data-component-id="resume-name"]) [data-field="text-fill-in-value"]');
+  await nameFillIn.fill('Avery Hart');
+
+  const generateButton = page.locator('[data-action="run-button-ai-generate"]');
+  await expect(generateButton).toBeVisible({ timeout: 10000 });
+  await generateButton.click();
+
+  await expect(page.locator('#editorTree')).toContainText('[AY-vuh-ree HART]');
+});
+
 test('generated pronunciation can be converted back into a clean fill-in', async ({ page }) => {
   await page.route('**/api/chat', async (route) => {
     await route.fulfill({

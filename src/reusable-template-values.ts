@@ -1,4 +1,5 @@
 import type { VisualBlock } from './editor/types';
+import { TEXT_FILL_IN_MARKER } from './text-fill-in';
 import type { ComponentDefinition } from './types';
 
 export type ReusableTemplateVariableType = 'text' | 'block';
@@ -62,7 +63,7 @@ export function validateReusableTemplateValues(
 }
 
 export function applyReusableTemplateValues(block: VisualBlock, values: Record<string, string>): VisualBlock {
-  replaceTemplateStrings(block, values);
+  replaceTemplateStringsInBlock(block, values);
   normalizeTemplatePlaceholderTextBlocks(block);
   return block;
 }
@@ -142,7 +143,88 @@ function visitTemplateStrings(value: unknown, visit: (text: string) => void, see
   Object.values(value as Record<string, unknown>).forEach((item) => visitTemplateStrings(item, visit, seen));
 }
 
-function replaceTemplateStrings(value: unknown, values: Record<string, string>, seen = new WeakSet<object>()): unknown {
+function replaceTemplateStringsInBlock(block: VisualBlock, values: Record<string, string>, seen = new WeakSet<object>()): void {
+  if (seen.has(block)) {
+    return;
+  }
+  seen.add(block);
+
+  const textResult = replaceTemplateString(block.text, values, block.schema.component === 'text');
+  block.text = textResult.text;
+  if (textResult.fillIn) {
+    block.schema.fillIn = true;
+  }
+
+  replaceTemplateStringsInSchema(block.schema as unknown as Record<string, unknown>, values, seen);
+  block.schema.containerBlocks?.forEach((child) => replaceTemplateStringsInBlock(child, values, seen));
+  block.schema.componentListBlocks?.forEach((child) => replaceTemplateStringsInBlock(child, values, seen));
+  block.schema.gridItems?.forEach((item) => replaceTemplateStringsInBlock(item.block, values, seen));
+  block.schema.expandableStubBlocks?.children.forEach((child) => replaceTemplateStringsInBlock(child, values, seen));
+  block.schema.expandableContentBlocks?.children.forEach((child) => replaceTemplateStringsInBlock(child, values, seen));
+}
+
+function replaceTemplateStringsInSchema(schema: Record<string, unknown>, values: Record<string, string>, seen: WeakSet<object>): void {
+  Object.entries(schema).forEach(([key, item]) => {
+    if (key === 'containerBlocks' || key === 'componentListBlocks') {
+      return;
+    }
+    if (key === 'gridItems') {
+      replaceTemplateStringsInGridItems(item, values, seen);
+      return;
+    }
+    if (key === 'expandableStubBlocks' || key === 'expandableContentBlocks') {
+      replaceTemplateStringsInPane(item, values, seen);
+      return;
+    }
+    schema[key] = replaceTemplateStrings(item, values, seen);
+  });
+}
+
+function replaceTemplateStringsInGridItems(value: unknown, values: Record<string, string>, seen: WeakSet<object>): void {
+  if (!Array.isArray(value)) {
+    return;
+  }
+  value.forEach((item) => {
+    if (!item || typeof item !== 'object' || seen.has(item)) {
+      return;
+    }
+    seen.add(item);
+    Object.entries(item as Record<string, unknown>).forEach(([key, nested]) => {
+      if (key === 'block') {
+        return;
+      }
+      (item as Record<string, unknown>)[key] = replaceTemplateStrings(nested, values, seen);
+    });
+  });
+}
+
+function replaceTemplateStringsInPane(value: unknown, values: Record<string, string>, seen: WeakSet<object>): void {
+  if (!value || typeof value !== 'object' || Array.isArray(value) || seen.has(value)) {
+    return;
+  }
+  seen.add(value);
+  Object.entries(value as Record<string, unknown>).forEach(([key, item]) => {
+    if (key === 'children') {
+      return;
+    }
+    (value as Record<string, unknown>)[key] = replaceTemplateStrings(item, values, seen);
+  });
+}
+
+function replaceTemplateString(text: string, values: Record<string, string>, blankAsFillIn: boolean): { text: string; fillIn: boolean } {
+  let fillIn = false;
+  const replaced = text.replace(TEMPLATE_TOKEN_PATTERN, (_token, name: string) => {
+    const value = values[name] ?? '';
+    if (blankAsFillIn && value.length === 0) {
+      fillIn = true;
+      return TEXT_FILL_IN_MARKER;
+    }
+    return value;
+  });
+  return { text: replaced, fillIn };
+}
+
+function replaceTemplateStrings(value: unknown, values: Record<string, string>, seen: WeakSet<object>): unknown {
   if (typeof value === 'string') {
     return value.replace(TEMPLATE_TOKEN_PATTERN, (_token, name: string) => values[name] ?? '');
   }

@@ -211,7 +211,7 @@ hvy_version: 0.1
   await expect.poll(() => page.evaluate(() => window.getSelection()?.toString() ?? '')).toBe('');
 });
 
-test('ai placeholder text inside collapsed expandable opens that text editor', async ({ page }) => {
+test('ai placeholder text inside collapsed expandable expands before editing', async ({ page }) => {
   await page.goto('/');
 
   await page.getByRole('button', { name: 'Raw' }).click();
@@ -237,14 +237,19 @@ hvy_version: 0.1
   await page.getByRole('button', { name: 'Apply' }).click();
   await page.getByRole('button', { name: 'AI' }).click();
 
+  const expandable = page.locator('#aiReaderDocument .reader-block-expandable').first();
   await page.locator('#aiReaderDocument .reader-block-text[data-component-id="summary-short"]').click();
 
+  await expect(expandable).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.locator('#aiReaderDocument .editor-block[data-active-editor-block="true"]')).toHaveCount(0);
+
+  await page.locator('#aiReaderDocument .reader-block-text[data-component-id="summary-short"]').click();
   const activeTextEditor = page.locator('#aiReaderDocument .editor-block[data-active-editor-block="true"] .rich-editor');
   await expect(activeTextEditor).toBeVisible();
   await expect(activeTextEditor).toContainText('Summary');
 });
 
-test('ai resume summary placeholder opens text editor without expanding parent', async ({ page }) => {
+test('ai resume summary placeholder expands parent before editing', async ({ page }) => {
   await page.goto('/');
 
   await page.getByRole('button', { name: 'Resume Example' }).click();
@@ -252,11 +257,11 @@ test('ai resume summary placeholder opens text editor without expanding parent',
 
   await page.locator('#aiReaderDocument .reader-block-text').filter({ has: page.locator('h1', { hasText: 'Summary' }) }).first().click();
 
-  await expect(page.locator('#aiReaderDocument .editor-block[data-active-editor-block="true"] .rich-editor')).toBeVisible();
-  await expect(page.locator('#aiReaderDocument .reader-block-expandable[aria-expanded="true"]')).toHaveCount(0);
+  await expect(page.locator('#aiReaderDocument .reader-block-expandable[aria-expanded="true"]')).toHaveCount(1);
+  await expect(page.locator('#aiReaderDocument .editor-block[data-active-editor-block="true"]')).toHaveCount(0);
 });
 
-test('ai resume summary placeholder margin opens text editor without expanding parent', async ({ page }) => {
+test('ai resume summary placeholder margin expands parent before editing', async ({ page }) => {
   await page.goto('/');
 
   await page.getByRole('button', { name: 'Resume Example' }).click();
@@ -267,8 +272,8 @@ test('ai resume summary placeholder margin opens text editor without expanding p
     cancelable: true,
   });
 
-  await expect(page.locator('#aiReaderDocument .editor-block[data-active-editor-block="true"] .rich-editor')).toBeVisible();
-  await expect(page.locator('#aiReaderDocument .reader-block-expandable[aria-expanded="true"]')).toHaveCount(0);
+  await expect(page.locator('#aiReaderDocument .reader-block-expandable[aria-expanded="true"]')).toHaveCount(1);
+  await expect(page.locator('#aiReaderDocument .editor-block[data-active-editor-block="true"]')).toHaveCount(0);
 });
 
 test('ai resume summary body text expands parent instead of opening text editor', async ({ page }) => {
@@ -284,6 +289,26 @@ test('ai resume summary body text expands parent instead of opening text editor'
 
   await expect(page.locator('#aiReaderDocument .editor-block[data-active-editor-block="true"]')).toHaveCount(0);
   await expect(page.locator('#aiReaderDocument .reader-block-expandable[aria-expanded="true"]')).toHaveCount(1);
+});
+
+test('ai sidebar skill click expands collapsed record before editing', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Resume Example' }).click();
+  await page.getByRole('button', { name: 'AI' }).click();
+  await page.locator('.viewer-sidebar-tab').click();
+
+  const skillsSection = page.locator('#aiSidebarSections #skills');
+  await skillsSection.click();
+  await expect(skillsSection).not.toHaveClass(/is-collapsed-preview/);
+
+  const skillRecord = skillsSection.locator('.reader-block-expandable[data-component-id="skill-software-engineering"]').first();
+  await expect(skillRecord).toHaveAttribute('aria-expanded', 'false');
+
+  await skillRecord.locator('.reader-block-text', { hasText: 'Software Engineering' }).first().click();
+
+  await expect(skillRecord).toHaveAttribute('aria-expanded', 'true');
+  await expect(skillsSection.locator('.editor-block[data-active-editor-block="true"]')).toHaveCount(0);
 });
 
 test('canceling a newly added featured xref removes it without opening list editor', async ({ page }) => {
@@ -979,6 +1004,60 @@ hvy_version: 0.1
   await expect(page.locator('#rawEditor')).toContainText('**Target Location(s):** Greater Seattle area');
   await expect(page.locator('#rawEditor')).not.toContainText('<!-- value -->');
   await expect(page.locator('#rawEditor')).not.toContainText('"fillIn"');
+});
+
+test('location fill-ins keep focus while typing each value', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"locations"}-->
+#! Locations
+
+ <!--hvy:text {"id":"location-details","placeholder":"location, target location","fillIn":true}-->
+  **Location:** <!-- value -->
+
+  **Target Location(s):** <!-- value -->
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('.editor-block-passive .editor-block-content[data-component-id="location-details"] .text-fill-in-box').first().click();
+  const fillIns = page.locator('[data-field="text-fill-in-value"]');
+  await expect(fillIns).toHaveCount(2);
+
+  await fillIns.nth(0).click();
+  await page.keyboard.type('Seattle');
+  await expect(fillIns.nth(0)).toBeFocused();
+
+  await fillIns.nth(1).click();
+  await page.keyboard.type('Remote');
+  await expect(fillIns.nth(1)).toBeFocused();
+  await expect(page.locator('.text-fill-in-editor')).toContainText('Target Location(s): Remote');
+});
+
+test('resume template location fill-ins keep focus in AI view', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Resume Template' }).click();
+  await page.locator('[data-action="switch-view"][data-view="ai"]').click();
+  await page.locator('.viewer-sidebar-tab').click();
+
+  const locationBlock = page.locator('#aiSidebarSections #locations');
+  const fillIns = locationBlock.locator('[data-field="text-fill-in-value"]');
+  await expect(fillIns).toHaveCount(2);
+
+  await fillIns.nth(0).click();
+  await page.keyboard.type('Seattle');
+  await expect(fillIns.nth(0)).toBeFocused();
+
+  await fillIns.nth(1).click();
+  await page.keyboard.type('Remote');
+  await expect(fillIns.nth(1)).toBeFocused();
+  await expect(locationBlock).toContainText('Target Location(s): Remote');
 });
 
 test('single-line text fill-in keeps a compact editor height', async ({ page }) => {

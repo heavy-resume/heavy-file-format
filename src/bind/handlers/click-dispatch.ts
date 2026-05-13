@@ -200,6 +200,9 @@ function handleAiReaderTextActivationClick(event: MouseEvent): void {
   }
   const hasPlaceholder = String(block.schema.placeholder ?? '').trim().length > 0;
   const isInsideExpandableToggle = Boolean(textBlock.closest('[data-reader-action="toggle-expandable"]'));
+  if (hasPlaceholder && textBlock.closest('[data-reader-action="toggle-expandable"][aria-expanded="false"]')) {
+    return;
+  }
   if (!hasPlaceholder) {
     logAiReaderTextActivation(event, 'skip', {
       skipReason: 'text-without-placeholder',

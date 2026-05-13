@@ -130,8 +130,48 @@ test('blank template values clear empty markdown scaffolds so placeholders rende
 
   applyReusableTemplateValues(block, { skill: '' });
 
-  expect(block.schema.expandableStubBlocks.children[0]?.text).toBe('');
+  expect(block.schema.expandableStubBlocks.children[0]?.text).toBe('### <!-- value -->');
+  expect(block.schema.expandableStubBlocks.children[0]?.schema.fillIn).toBe(true);
   expect(block.schema.expandableStubBlocks.children[0]?.schema.placeholder).toBe('### Skill name');
+});
+
+test('blank template values become fill-ins only in text block bodies', () => {
+  const block = {
+    id: 'block-1',
+    text: '',
+    schema: {
+      ...defaultBlockSchema('container'),
+      containerBlocks: [
+        {
+          id: 'title-block',
+          text: '{% title %}',
+          schema: {
+            ...defaultBlockSchema('text'),
+            id: 'title-{% title %}',
+            placeholder: 'Title placeholder',
+          },
+          schemaMode: false,
+        },
+        {
+          id: 'table-block',
+          text: '',
+          schema: {
+            ...defaultBlockSchema('table'),
+            tableRows: [{ cells: ['{% title %}'] }],
+          },
+          schemaMode: false,
+        },
+      ],
+    },
+    schemaMode: false,
+  };
+
+  applyReusableTemplateValues(block, { title: '' });
+
+  expect(block.schema.containerBlocks[0]?.text).toBe('<!-- value -->');
+  expect(block.schema.containerBlocks[0]?.schema.fillIn).toBe(true);
+  expect(block.schema.containerBlocks[0]?.schema.id).toBe('title-');
+  expect(block.schema.containerBlocks[1]?.schema.tableRows).toEqual([{ cells: [''] }]);
 });
 
 test('validates exact template value keys and text newlines', () => {

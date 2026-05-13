@@ -530,6 +530,9 @@ export function bindUi(app: HTMLElement): void {
 }
 
 function activateAiExpandableTextTarget(target: HTMLElement, expandable: HTMLElement): boolean {
+  if (expandable.getAttribute('aria-expanded') === 'false') {
+    return false;
+  }
   const expandableBlockElement = expandable.closest<HTMLElement>('.reader-block[data-component="expandable"][data-section-key][data-block-id]');
   const expandableSectionKey = expandableBlockElement?.dataset.sectionKey ?? expandable.dataset.sectionKey ?? '';
   const expandableBlockId = expandableBlockElement?.dataset.blockId ?? expandable.dataset.blockId ?? '';

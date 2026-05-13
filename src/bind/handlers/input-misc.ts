@@ -147,6 +147,15 @@ export function bindInputMisc(app: HTMLElement): void {
       return;
     }
 
+    if (field === 'section-priority' && target instanceof HTMLInputElement) {
+      if (!section) {
+        return;
+      }
+      section.priority = target.checked;
+      getRefreshReaderPanels()();
+      return;
+    }
+
     if (field === 'section-editor-only' && target instanceof HTMLInputElement) {
       if (!section) {
         return;

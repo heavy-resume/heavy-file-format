@@ -413,7 +413,7 @@ component_defs:
           - component: skill-record-projects-section
 ---
 
-<!--hvy: {"id":"header","lock":true,"contained":false,"description":"Resume identity header"}-->
+<!--hvy: {"id":"header","lock":true,"contained":false,"description":"Resume identity header","priority":true}-->
 #! Info
 
  <!--hvy:text {"css":"margin-bottom: 0;","align":"center"}-->
@@ -425,7 +425,7 @@ component_defs:
  <!--hvy:text {"css":"margin: 0.5rem 0; margin-top: 1rem;","align":"center"}-->
   Senior Software Engineer
 
-<!--hvy: {"id":"summary","lock":true,"contained":true,"description":"Professional summary"}-->
+<!--hvy: {"id":"summary","lock":true,"contained":true,"description":"Professional summary","priority":true}-->
 #! Summary
 
  <!--hvy:expandable {"css":"padding:0.25rem;","expandableAlwaysShowStub":true,"expandableExpanded":false,"lock":true}-->
@@ -453,7 +453,7 @@ component_defs:
 
   **Target Location(s):** Greater Seattle Area, San Francisco
 
-<!--hvy: {"id":"top-skills-tools-technologies","lock":true,"description":"Featured skills and tools & technology experience"}-->
+<!--hvy: {"id":"top-skills-tools-technologies","lock":true,"description":"Featured skills and tools & technology experience","priority":true}-->
 #! Featured Skills, Tools, and Technologies
 
  <!--hvy:text {"css":"margin: 0.5rem 0;"}-->

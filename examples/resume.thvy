@@ -414,7 +414,7 @@ component_defs:
           - component: skill-record-projects-section
 ---
 
-<!--hvy: {"id":"header","lock":true,"contained":false,"description":"Resume identity header","hideIfUnmodified":true}-->
+<!--hvy: {"id":"header","lock":true,"contained":false,"description":"Resume identity header","hideIfUnmodified":true,"priority":true}-->
 #! Info
 
  <!--hvy:text {"id":"resume-name","css":"margin-bottom: 0;","align":"center","placeholder":"Name","fillIn":true}-->
@@ -428,7 +428,7 @@ component_defs:
  <!--hvy:text {"css":"margin: 0.5rem 0; margin-top: 1rem;","align":"center","placeholder":"title","fillIn":true}-->
   <!-- value -->
 
-<!--hvy: {"id":"summary","lock":true,"contained":true,"css":"padding: 0 0.35rem;","description":"Professional summary","hideIfUnmodified":true}-->
+<!--hvy: {"id":"summary","lock":true,"contained":true,"css":"padding: 0 0.35rem;","description":"Professional summary","hideIfUnmodified":true,"priority":true}-->
 #! Summary
 
  <!--hvy:expandable {"css":"margin: 0.5rem 0;","expandableAlwaysShowStub":true,"expandableExpanded":false,"lock":true}-->
@@ -454,7 +454,7 @@ component_defs:
 
   **Target Location(s):** <!-- value -->
 
-<!--hvy: {"id":"top-skills-tools-technologies","lock":true,"description":"Featured skills and tools & technology experience","hideIfUnmodified":true}-->
+<!--hvy: {"id":"top-skills-tools-technologies","lock":true,"description":"Featured skills and tools & technology experience","hideIfUnmodified":true,"priority":true}-->
 #! Featured Skills, Tools, and Technologies
 
  <!--hvy:text {"css":"margin: 0.5rem 0;"}-->

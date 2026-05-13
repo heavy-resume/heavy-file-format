@@ -103,6 +103,7 @@ export interface VisualSection {
   level: number;
   expanded: boolean;
   highlight: boolean;
+  priority?: boolean;
   css: string;
   tags: string;
   description: string;

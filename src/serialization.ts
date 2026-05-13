@@ -178,6 +178,7 @@ function mapParsedSection(section: HvySection, documentMeta: JsonObject, diagnos
     level: section.level,
     expanded: sectionMeta.expanded === false ? false : true,
     highlight: sectionMeta.highlight === true,
+    priority: sectionMeta.priority === true,
     css: typeof sectionMeta.css === 'string' ? sectionMeta.css : '',
     tags: typeof sectionMeta.tags === 'string' ? sectionMeta.tags : '',
     description: typeof sectionMeta.description === 'string' ? sectionMeta.description : '',
@@ -1107,6 +1108,9 @@ function serializeSection(section: VisualSection, level: number, documentMeta: J
   }
   if (section.editorOnly) {
     meta.editorOnly = true;
+  }
+  if (section.priority === true) {
+    meta.priority = true;
   }
   if (section.css.trim().length > 0) {
     meta.css = section.css;

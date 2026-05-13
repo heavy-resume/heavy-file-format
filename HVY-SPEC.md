@@ -232,6 +232,7 @@ Inline `css` strings are declaration-only values equivalent to an HTML `style` a
 Section metadata also includes optional presentation keys such as:
 - `expanded`
 - `highlight`
+- `priority`
 - `lock`
 - `editorOnly`
 - `contained`
@@ -241,6 +242,7 @@ Section metadata also includes optional presentation keys such as:
 
 `css` is an optional inline CSS style string applied to the rendered section wrapper.
 Inline section `css` follows the same declaration-only rule as block `css`. Use CSS blocks for media queries, container queries, selectors, and other stylesheet-level constructs.
+`priority` is an optional boolean for sections that should remain prominent in reader-oriented ordering. Readers SHOULD keep priority sections before non-priority sections when applying search/filter ordering or other relevance-based reordering. `priority` does not imply `highlight`; use `highlight` for visual emphasis.
 `lock` is an optional boolean. Use it to prevent adding new blocks or child sections inside that section.
 `editorOnly` follows the same visibility rule as block `editorOnly`.
 `contained` is an optional boolean. When `true` (default), render the section as the normal bordered card/container and allow collapse/expand UI. When `false`, render the section edge-to-edge without the section border/background wrapper and without the section expander/collapser.
@@ -562,7 +564,7 @@ section_defs:
 Notes:
 - `template` stores a full section subtree, including blocks and nested child sections.
 - Clone a `section_defs[*].template` when inserting a new section or subsection.
-- Reusable section templates preserve section-level presentation fields such as `contained`, `expanded`, `highlight`, `css`, `location`, and `hideIfUnmodified`.
+- Reusable section templates preserve section-level presentation fields such as `contained`, `expanded`, `highlight`, `priority`, `css`, `location`, and `hideIfUnmodified`.
 - Implementations SHOULD assign fresh section keys, block IDs, and custom IDs when instantiating a reusable section.
 
 ### 5.11 Indentation

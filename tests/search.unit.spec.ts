@@ -384,12 +384,12 @@ hvy_version: 0.1
   expect(expectedResult.map((section) => section.customId)).toEqual(['beta', 'alpha', 'gamma']);
 });
 
-test('search filter ordering keeps priority sections above matches', async () => {
+test('search filter ordering keeps document priority sections above matches', async () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
 ---
 
-<!--hvy: {"id":"alpha"}-->
+<!--hvy: {"id":"alpha","priority":true}-->
 #! Alpha
 
 <!--hvy:text {"id":"alpha-text"}-->
@@ -427,7 +427,7 @@ hvy_version: 0.1
   });
 
   const expectedResult = orderSearchFilteredSections(document.sections, expectedContext, {
-    isPriority: (section) => section.customId === 'alpha',
+    isPriority: (section) => section.priority === true,
   });
 
   expect(expectedResult.map((section) => section.customId)).toEqual(['alpha', 'beta']);

@@ -268,6 +268,23 @@ hvy_version: 0.1
   expect(expectedResult).toContain('"buttonTargetScript":"doc.component.set_text');
 });
 
+test('section priority round-trips as section metadata', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"header","priority":true}-->
+#! Header
+`, '.hvy');
+
+  expect(document.sections[0]?.priority).toBe(true);
+
+  const expectedResult = serializeWithState(document);
+
+  expect(expectedResult).toContain('"priority":true');
+  expect(deserializeDocument(expectedResult, '.hvy').sections[0]?.priority).toBe(true);
+});
+
 test('serializes db-table query text in the plugin block body', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1

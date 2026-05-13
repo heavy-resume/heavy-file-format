@@ -255,7 +255,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     const modifiers = getReaderViewModifiers(viewContext, targetKey);
     const dimmed = modifiers.has('dimmed') && !state.readerViewActivatedTargets.has(targetKey);
     const searchDimmed = isSectionSearchDeprioritized(searchContext, section);
-    const prioritized = isReaderViewPrioritized(viewContext, targetKey);
+    const prioritized = isSectionReaderPriority(section, viewContext, targetKey);
     const viewCollapseKey = `reader-view-collapse:${targetKey}`;
     const viewExpanded = state.readerContainerState[viewCollapseKey] ?? !modifiers.has('collapse');
     const sectionExpanded = modifiers.has('collapse') ? viewExpanded : prioritized ? true : section.expanded;
@@ -488,8 +488,12 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       state.readerViewActivatedTargets
     );
     return orderSearchFilteredSections(ordered, getActiveSearchFilterContext(), {
-      isPriority: (section) => isReaderViewPrioritized(viewContext, getSectionReaderViewTargetKey(section)),
+      isPriority: (section) => isSectionReaderPriority(section, viewContext, getSectionReaderViewTargetKey(section)),
     });
+  }
+
+  function isSectionReaderPriority(section: VisualSection, viewContext: ReaderViewContext, targetKey: ReaderViewTargetKey): boolean {
+    return section.priority === true || isReaderViewPrioritized(viewContext, targetKey);
   }
 
   function orderReaderBlocks(blocks: VisualBlock[]): VisualBlock[] {
@@ -1504,6 +1508,15 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
                   ${section.highlight ? 'checked' : ''}
                 />
                 Highlight
+              </label>
+              <label class="checkbox-label">
+                <input
+                  type="checkbox"
+                  data-section-key="${deps.escapeAttr(section.key)}"
+                  data-field="section-priority"
+                  ${section.priority ? 'checked' : ''}
+                />
+                Priority
               </label>
               <label class="checkbox-label">
                 <input

@@ -78,3 +78,5 @@ When adding new colors or adjusting the CSS variables that are color related be 
 The lock logic is not intended to inherit. A locked section doesn't automatically lock the interior components.
 
 Avoid the temptation to special case things and consider generic solutions. In some cases if something looks wrong in the example its because the example is wrong, not the code.
+
+When fixing a theme always review other themes for a similar issue unless instructed otherwise.

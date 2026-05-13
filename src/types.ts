@@ -215,6 +215,7 @@ export interface AppState {
   activeEditorBlockPath: { sectionKey: string; blockId: string }[];
   activeEditorBlockSnapshot: { sectionKey: string; blockId: string; block: VisualBlock } | null;
   activeEditorBlockSnapshots: { sectionKey: string; blockId: string; block: VisualBlock }[];
+  activeEditorNewBlockIds: Set<string>;
   activeEditorBlockReturnScroll: PaneScrollState | null;
   pendingPaneScrollRestore: PaneScrollState | null;
   componentPlacement: ComponentPlacementState | null;

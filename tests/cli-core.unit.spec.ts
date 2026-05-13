@@ -137,10 +137,13 @@ test('cli exposes id aliases for sections and components', async () => {
   expect(aliases.output).toContain('dir  top-skills-list | component-list component');
   expect(aliases.output).toContain('dir  history-tools-technologies-list | component-list component');
 
-  expect((await executeHvyCliCommand(document, session, 'cat /id/top-skills-list/xref-card-2/xref-card.json')).output).toContain(
+  expect((await executeHvyCliCommand(document, session, 'cat /id/top-skills-list/skill-xref-card-2/skill-xref-card.json')).output).toContain(
     '"xrefTitle": "LLM Prompt Engineering"'
   );
-  expect((await executeHvyCliCommand(document, session, 'cat /id/history-tools-technologies-list/xref-card-0/xref-card.json')).output).toContain(
+  expect((await executeHvyCliCommand(document, session, 'cat /id/top-skills-list/skill-xref-card-2/skill-xref-card.txt')).output).toContain(
+    'LLM Prompt Engineering'
+  );
+  expect((await executeHvyCliCommand(document, session, 'cat /id/history-tools-technologies-list/tool-tech-xref-card-0/tool-tech-xref-card.json')).output).toContain(
     '"xrefTitle": "TypeScript"'
   );
 });
@@ -638,9 +641,9 @@ test('hvy insert can create custom components without explicit ids', async () =>
   expect(positionalId.output).toContain('/body/history/component-list-2/history-heavy-resume-founder: created');
   expect(positionalId.cwd).toBe('/body/history/component-list-2/history-heavy-resume-founder');
   expect((await executeHvyCliCommand(document, session, 'cat /body/history/component-list-2/history-heavy-resume-founder/expandable-stub/table-0/tableColumns.json')).output)
-    .toBe('[\n  "YEAR",\n  "<!--hvy:alt {\\"compact\\":\\"ORG\\"}-->ORGANIZATION<!--/hvy:alt-->",\n  "TITLE"\n]\n');
+    .toBe('[\n  "TITLE",\n  "<!--hvy:alt {\\"compact\\":\\"ORG\\"}-->ORGANIZATION<!--/hvy:alt-->",\n  "YEAR(S)"\n]\n');
   expect((await executeHvyCliCommand(document, session, 'cat /body/history/component-list-2/history-heavy-resume-founder/expandable-stub/table-0/table.txt')).output)
-    .toBe('YEAR | <!--hvy:alt {"compact":"ORG"}-->ORGANIZATION<!--/hvy:alt--> | TITLE\n |  | \n');
+    .toBe('TITLE | <!--hvy:alt {"compact":"ORG"}-->ORGANIZATION<!--/hvy:alt--> | YEAR(S)\n |  | \n');
   expect((await executeHvyCliCommand(document, session, 'cat /body/history/component-list-2/children-order.json')).output)
     .toMatch(/history-heavy-resume-founder[\s\S]*history-record-1[\s\S]*history-northwind-labs-senior-software-engineer/);
 });
@@ -1353,13 +1356,10 @@ test('cli shows labeled tags for resume header tables without changing directory
   const session = createHvyCliSession();
 
   expect((await executeHvyCliCommand(document, session, 'ls /body/history')).output).toContain(
-    'dir  table-1 tags=[table-header] | static table component | YEAR'
+    'dir  table-1 tags=[table-header] | static table component | TITLE'
   );
   expect((await executeHvyCliCommand(document, session, 'ls /body/projects')).output).toContain(
-    'dir  table-1 tags=[table-header] | static table component | PROJECT DATE'
-  );
-  expect((await executeHvyCliCommand(document, session, 'ls /body/education')).output).toContain(
-    'dir  table-1 tags=[table-header] | static table component | DEGREE INSTITUTION LOCATION'
+    'dir  table-1 tags=[table-header] | static table component | PROJECT DATES'
   );
   expect((await executeHvyCliCommand(document, session, 'cat /body/history/table-1/table.json')).output).toContain('"id": ""');
 });
@@ -1492,7 +1492,7 @@ test('cli rg supports common ripgrep flags and hvy read aliases cat', async () =
   expect(replaced.output).toContain('1');
 
   const includeEquals = await executeHvyCliCommand(document, session, 'rg -r "TypeScript" /body --include="*.json" -l');
-  expect(includeEquals.output).toContain('/body/top-skills-tools-technologies/grid-1/grid/container-1/container/top-tools-technologies-list/xref-card-0/xref-card.json');
+  expect(includeEquals.output).toContain('/body/top-skills-tools-technologies/grid-1/grid/container-1/container/top-tools-technologies-list/tool-tech-xref-card-0/tool-tech-xref-card.json');
   expect(includeEquals.output).not.toContain('skill-record.txt');
 
   const includeSeparate = await executeHvyCliCommand(document, session, 'rg -r "" --include "*.yaml" /body -l');

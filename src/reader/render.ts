@@ -63,6 +63,7 @@ interface ReaderRenderState {
   paletteOverrideId: string | null;
   theme: ThemeConfig;
   currentView: 'editor' | 'viewer' | 'ai';
+  showAdvancedEditor: boolean;
   responsivePreview: 'full' | 'phone' | 'tablet' | 'desktop';
   readerExpandableState: Record<string, boolean>;
   readerContainerState: Record<string, boolean>;
@@ -513,8 +514,17 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     return state.currentView === 'viewer' && (section.editorOnly || isSectionHiddenByTemplateMarker(section));
   }
 
+  function isAdvancedOnlyScriptingBlock(block: VisualBlock): boolean {
+    return block.schema.editorOnly
+      && deps.resolveBaseComponent(block.schema.component) === 'plugin'
+      && block.schema.plugin === SCRIPTING_PLUGIN_ID;
+  }
+
   function isViewerHiddenBlock(block: VisualBlock): boolean {
-    return state.currentView === 'viewer' && block.schema.editorOnly;
+    if (state.currentView === 'viewer' && block.schema.editorOnly) {
+      return true;
+    }
+    return state.currentView === 'ai' && !state.showAdvancedEditor && isAdvancedOnlyScriptingBlock(block);
   }
 
   function isAnchoredReaderButton(section: VisualSection | null, block: VisualBlock): boolean {

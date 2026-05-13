@@ -1,5 +1,5 @@
 import { state, getRenderApp, getRefreshReaderPanels } from '../../state';
-import { blockContainsBlockId, findBlockByIds, resolveBlockContext, setActiveEditorBlock, clearActiveEditorBlock, moveBlockByOffset, removeBlockFromList, findBlockInList } from '../../block-ops';
+import { blockContainsBlockId, findBlockByIds, resolveBlockContext, setActiveEditorBlock, clearActiveEditorBlock, markActiveEditorBlockAsNew, moveBlockByOffset, removeBlockFromList, findBlockInList } from '../../block-ops';
 import { findBlockContainerById, findBlockContainerInList, findSectionByKey } from '../../section-ops';
 import { createEmptyBlock, coerceAlign, getReusableTemplateByName } from '../../document-factory';
 import { recordHistory } from '../../history';
@@ -33,6 +33,7 @@ const addBlock: ActionHandler = ({ actionButton, section }) => {
   }
   if (insertPlacement && targetBlockId && insertBlockRelativeToTarget(section.blocks, targetBlockId, newBlock, insertPlacement, !section.lock)) {
     setActiveEditorBlock(section.key, newBlock.id);
+    markActiveEditorBlockAsNew(newBlock.id);
     getRenderApp()();
     return;
   }
@@ -49,6 +50,7 @@ const addBlock: ActionHandler = ({ actionButton, section }) => {
   }
   section.blocks.push(newBlock);
   setActiveEditorBlock(section.key, newBlock.id);
+  markActiveEditorBlockAsNew(newBlock.id);
   getRenderApp()();
 };
 
@@ -62,6 +64,7 @@ const addEmptySectionHeading: ActionHandler = ({ section }) => {
   newBlock.text = `${'#'.repeat(headingLevel)} ${section.title.trim()}`;
   section.blocks.push(newBlock);
   setActiveEditorBlock(section.key, newBlock.id);
+  markActiveEditorBlockAsNew(newBlock.id);
   getRenderApp()();
 };
 

@@ -108,7 +108,7 @@ const cancelBlockEdit: AppActionHandler = ({ app, event, sectionKey, blockId }) 
   event.stopPropagation();
   const deactivationAnchor = captureEditorDeactivationAnchor(app, sectionKey, blockId);
   const result = cancelEditorBlockEdit(sectionKey, blockId);
-  if (result === 'closed') {
+  if (result === 'closed' || result === 'removed') {
     state.pendingEditorDeactivation = deactivationAnchor;
     state.activeEditorBlockReturnScroll = null;
   }

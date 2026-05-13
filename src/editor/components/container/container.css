@@ -84,6 +84,10 @@
   gap: 0.35rem;
 }
 
+.reader-container.is-bordered {
+  position: relative;
+}
+
 .reader-container-head {
   display: flex;
   justify-content: space-between;
@@ -97,6 +101,30 @@
   color: var(--hvy-text);
   font-weight: 700;
   overflow-wrap: anywhere;
+}
+
+.reader-container.is-bordered.has-title > .reader-container-head {
+  position: absolute;
+  left: 0.35rem;
+  right: 0.35rem;
+  top: -0.95rem;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.reader-container.is-bordered.has-title > .reader-container-head .reader-container-title {
+  max-width: min(100%, 28rem);
+  padding: 0 0.45rem;
+  border-radius: 999px;
+  background: var(--hvy-surface);
+  font-style: italic;
+  font-weight: 600;
+  line-height: 1.2;
+  box-decoration-break: clone;
+}
+
+.reader-container.is-bordered.has-title > .reader-container-head .reader-container-actions {
+  pointer-events: auto;
 }
 
 .reader-container-actions {

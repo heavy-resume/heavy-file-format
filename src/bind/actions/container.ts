@@ -1,5 +1,5 @@
 import { state, getRenderApp } from '../../state';
-import { findBlockByIds, setActiveEditorBlock } from '../../block-ops';
+import { findBlockByIds, markActiveEditorBlockAsNew, setActiveEditorBlock } from '../../block-ops';
 import { createEmptyBlock, ensureContainerBlocks, ensureComponentListBlocks, ensureExpandableBlocks } from '../../document-factory';
 import { recordHistory } from '../../history';
 import { syncReusableTemplateForBlock } from '../../reusable';
@@ -28,6 +28,7 @@ const addComponentListItem: ActionHandler = ({ actionButton, sectionKey, blockId
   block.schema.componentListBlocks.push(newBlock);
   syncReusableTemplateForBlock(sectionKey, block.id);
   setActiveEditorBlock(sectionKey, newBlock.id);
+  markActiveEditorBlockAsNew(newBlock.id);
   getRenderApp()();
   centerActiveEditorBlockAfterRender(newBlock.id);
 };
@@ -54,6 +55,7 @@ const addContainerBlock: ActionHandler = ({ actionButton, sectionKey, blockId })
   block.schema.containerBlocks.push(newBlock);
   syncReusableTemplateForBlock(sectionKey, block.id);
   setActiveEditorBlock(sectionKey, newBlock.id);
+  markActiveEditorBlockAsNew(newBlock.id);
   getRenderApp()();
 };
 
@@ -80,6 +82,7 @@ const addExpandableBlock = (kind: 'stub' | 'content'): ActionHandler => ({ actio
   target.children.push(newBlock);
   syncReusableTemplateForBlock(sectionKey, block.id);
   setActiveEditorBlock(sectionKey, newBlock.id);
+  markActiveEditorBlockAsNew(newBlock.id);
   getRenderApp()();
 };
 

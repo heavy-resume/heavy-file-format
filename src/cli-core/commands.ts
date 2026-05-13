@@ -22,6 +22,7 @@ import { cloneReusableBlock } from '../document-factory';
 import { formatHvyComponentDescriptionHistory } from './component-description-history';
 import { deserializeDocumentWithDiagnostics, serializeDocument, serializeSectionFragment } from '../serialization';
 import { parseAiBlockEditResponse } from '../ai-component-edit-common';
+import { resolveBaseComponentFromMeta } from '../component-defs';
 
 const SCRATCHPAD_SOFT_MAX_CHARS = 600;
 const SCRATCHPAD_HARD_MAX_CHARS = 800;
@@ -1561,28 +1562,28 @@ function pruneXrefHint(document: VisualDocument, targetId: string, prune: boolea
 }
 
 function pruneXrefs(document: VisualDocument, targetId: string): number {
-  return document.sections.reduce((total, section) => total + pruneXrefsFromSection(section, targetId), 0);
+  return document.sections.reduce((total, section) => total + pruneXrefsFromSection(document, section, targetId), 0);
 }
 
-function pruneXrefsFromSection(section: VisualSection, targetId: string): number {
-  return pruneXrefsFromBlocks(section.blocks, targetId)
-    + section.children.reduce((total, child) => total + pruneXrefsFromSection(child, targetId), 0);
+function pruneXrefsFromSection(document: VisualDocument, section: VisualSection, targetId: string): number {
+  return pruneXrefsFromBlocks(document, section.blocks, targetId)
+    + section.children.reduce((total, child) => total + pruneXrefsFromSection(document, child, targetId), 0);
 }
 
-function pruneXrefsFromBlocks(blocks: VisualBlock[], targetId: string): number {
+function pruneXrefsFromBlocks(document: VisualDocument, blocks: VisualBlock[], targetId: string): number {
   let removed = 0;
   for (let index = blocks.length - 1; index >= 0; index -= 1) {
     const block = blocks[index];
     if (!block) {
       continue;
     }
-    if (block.schema.component === 'xref-card' && block.schema.xrefTarget === targetId) {
+    if (resolveBaseComponentFromMeta(block.schema.component, document.meta) === 'xref-card' && block.schema.xrefTarget === targetId) {
       blocks.splice(index, 1);
       removed += 1;
       continue;
     }
     for (const nestedBlocks of getNestedBlockLists(block)) {
-      removed += pruneXrefsFromBlocks(nestedBlocks, targetId);
+      removed += pruneXrefsFromBlocks(document, nestedBlocks, targetId);
     }
   }
   return removed;
@@ -1591,7 +1592,7 @@ function pruneXrefsFromBlocks(blocks: VisualBlock[], targetId: string): number {
 function collectXrefVirtualPaths(document: VisualDocument, targetId: string): string[] {
   const fs = buildHvyVirtualFileSystem(document);
   return [...fs.entries.values()]
-    .filter((entry): entry is HvyVirtualFile => entry.kind === 'file' && entry.path.endsWith('/xref-card.json'))
+    .filter((entry): entry is HvyVirtualFile => entry.kind === 'file' && /\/[^/]+\.json$/.test(entry.path))
     .filter((entry) => !entry.path.startsWith('/id/'))
     .filter((entry) => {
       try {
@@ -1601,7 +1602,7 @@ function collectXrefVirtualPaths(document: VisualDocument, targetId: string): st
         return false;
       }
     })
-    .map((entry) => entry.path.replace(/\/xref-card\.json$/, ''));
+    .map((entry) => entry.path.replace(/\/[^/]+\.json$/, ''));
 }
 
 function removeDocumentDirectory(document: VisualDocument, path: string, pathNaming?: HvyVirtualPathNamingState): void {

@@ -176,8 +176,10 @@ function renderContainerReaderBody(options: {
   const collapsibleAttrs = `data-reader-action="toggle-container" data-section-key="${options.helpers.escapeAttr(options.section.key)}" data-block-id="${options.helpers.escapeAttr(
     options.blockId
   )}" data-container-key="${options.helpers.escapeAttr(options.virtualKey || `${options.section.key}:${options.blockId}`)}" aria-expanded="${expanded ? 'true' : 'false'}"`;
+  const titleLabel = options.title.trim() || (options.virtualKey ? 'Group' : '');
   const className = [
     'reader-container',
+    titleLabel ? 'has-title' : '',
     canCollapse ? 'is-collapsible' : '',
     canCollapse && !expanded ? 'is-collapsed-preview' : 'is-expanded',
     options.bordered ? 'is-bordered' : '',
@@ -185,14 +187,13 @@ function renderContainerReaderBody(options: {
   ]
     .filter(Boolean)
     .join(' ');
-  const titleLabel = options.title.trim() || (options.virtualKey ? 'Group' : '');
   const title = titleLabel ? `<div class="reader-container-title">${options.helpers.escapeHtml(titleLabel)}</div>` : '';
   const toggle = canCollapse
     ? `<button type="button" class="tiny toggle-expand-button reader-container-toggle" ${collapsibleAttrs} aria-label="${
         expanded ? 'Collapse container' : 'Expand container'
       }">${expanded ? '-' : '+'}</button>`
     : '';
-  const header = title || toggle ? `<header class="reader-container-head">${title}<div class="reader-container-actions">${toggle}</div></header>` : '';
+  const header = title ? `<header class="reader-container-head">${title}<div class="reader-container-actions">${toggle}</div></header>` : '';
   const bodyAttrs = canCollapse && !expanded ? ` ${collapsibleAttrs}` : '';
   const rootAttrs = canCollapse && options.virtualKey && !expanded ? ` ${collapsibleAttrs}` : '';
   return `<div class="${options.helpers.escapeAttr(className)}" style="--hvy-container-preview-rem: ${previewRem}rem;"${rootAttrs}>

@@ -48,6 +48,7 @@ function createHistoryTestState(): AppState {
     activeEditorBlockPath: [],
     activeEditorBlockSnapshot: null,
     activeEditorBlockSnapshots: [],
+    activeEditorNewBlockIds: new Set<string>(),
     activeEditorBlockReturnScroll: null,
     pendingPaneScrollRestore: null,
     componentPlacement: null,

@@ -98,11 +98,11 @@ component_defs:
           - text: ""
             schema:
               component: table
-              css: "margin: 0;  margin-top: -1px;"
-              tableColumns: ["YEAR", "<!--hvy:alt {\"compact\":\"ORG\"}-->ORGANIZATION<!--/hvy:alt-->", "TITLE"]
+              css: "margin: 0; margin-top: -1px;"
+              tableColumns: ["TITLE", "<!--hvy:alt {\"compact\":\"ORG\"}-->ORGANIZATION<!--/hvy:alt-->", "YEAR(S)"]
               tableShowHeader: false
               tableRows:
-                - cells: ["{% years %}", "{% organization %}", "{% role %}"]
+                - cells: ["{% role %}", "{% organization %}", "{% years %}"]
       expandableContentBlocks:
         css: "padding: 0.5rem;"
         children:
@@ -197,75 +197,69 @@ component_defs:
                     css: "margin: 0;"
                     componentListBlocks: []
   - name: education-record
-    baseType: expandable
+    baseType: container
     description: Education entry
     schema:
-      css: "margin: 0;"
-      expandableAlwaysShowStub: true
-      expandableExpanded: false
-      expandableStubBlocks:
-        children:
-          - text: ""
-            schema:
-              component: table
-              css: "margin: 0; margin-top: -1px;"
-              tableColumns: ["DEGREE", "INSTITUTION", "LOCATION"]
-              tableShowHeader: false
-              tableRows:
-                - cells: ["{% degree %}", "{% institution %}", "{% location %}"]
-      expandableContentBlocks:
-        css: "padding: 0.5rem;"
-        children:
-          - text: ""
-            schema:
-              component: grid
-              css: "margin: 0.35rem 0;"
-              gridColumns: 2
-              gridItems:
-                - id: education-institution-details
-                  block:
-                    text: ""
-                    schema:
-                      component: container
-                      css: "margin: 0;"
-                      containerBlocks:
-                        - text: "{% institution %}"
-                          schema:
-                            component: text
-                            css: "margin: 0 0 0.25rem;"
-                            placeholder: "School / University"
-                        - text: "{% location %}"
-                          schema:
-                            component: text
-                            css: "margin: 0 0 0.25rem;"
-                            placeholder: "Location"
-                        - text: "{% gpa %}"
-                          schema:
-                            component: text
-                            css: "margin: 0;"
-                            placeholder: "GPA"
-                - id: education-date-range
-                  block:
-                    text: "{% date_range %}"
-                    schema:
-                      component: text
-                      css: "margin: 0; text-align: right;"
-                      placeholder: "Start Year – End Year"
-          - text: "{% description | block %}"
-            schema:
-              component: text
-              css: "margin: 0.5rem 0;"
-              placeholder: "Description"
-          - component: skills-and-tools-tech-list
-          - text: "^section-heading^ #### Classes"
-            schema:
-              component: text
-              css: "margin: 0;"
-          - text: ""
-            schema:
-              component: text
-              placeholder: classes
-              css: "margin: 0;"
+      css: "margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);"
+      containerTitle: "{% degree %}"
+      containerExpanded: false
+      containerCollapsedPreviewRem: 5
+      containerBlocks:
+        - text: "^section-heading^ ### {% degree %}"
+          schema:
+            component: text
+            css: "margin: 0 0 0.25rem;"
+            placeholder: "Degree"
+        - text: ""
+          schema:
+            component: grid
+            css: "margin: 0.35rem 0;"
+            gridColumns: 2
+            gridItems:
+              - id: education-institution-details
+                block:
+                  text: ""
+                  schema:
+                    component: container
+                    css: "margin: 0;"
+                    containerBlocks:
+                      - text: "{% institution %}"
+                        schema:
+                          component: text
+                          css: "margin: 0 0 0.25rem;"
+                          placeholder: "School / University"
+                      - text: "{% location %}"
+                        schema:
+                          component: text
+                          css: "margin: 0 0 0.25rem;"
+                          placeholder: "Location"
+                      - text: "{% gpa %}"
+                        schema:
+                          component: text
+                          css: "margin: 0;"
+                          placeholder: "GPA"
+              - id: education-date-range
+                block:
+                  text: "{% date_range %}"
+                  schema:
+                    component: text
+                    css: "margin: 0; text-align: right;"
+                    placeholder: "Start Year - End Year"
+        - text: "{% description | block %}"
+          schema:
+            component: text
+            css: "margin: 0.5rem 0;"
+            placeholder: "Description"
+        - component: skills-and-tools-tech-list
+        - text: "^section-heading^ #### Classes"
+          schema:
+            component: text
+            css: "margin: 0;"
+        - text: ""
+          schema:
+            component: text
+            placeholder: classes
+            css: "margin: 0;"
   - name: project-record
     baseType: expandable
     description: Project entry
@@ -274,12 +268,13 @@ component_defs:
       expandableAlwaysShowStub: true
       expandableExpanded: false
       expandableStubBlocks:
+        css: "padding: 0.5rem;"
         children:
           - text: ""
             schema:
               component: table
-              css: "margin: 0;  margin-top: -1px;"
-              tableColumns: ["PROJECT", "DATE"]
+              css: "margin: 0;"
+              tableColumns: ["PROJECT", "DATES"]
               tableShowHeader: false
               tableRows:
                 - cells: ["{% project %}", "{% date_range %}"]
@@ -322,7 +317,6 @@ component_defs:
     description: Related work history
     schema:
       css: "margin: 0;"
-
       containerBlocks:
         - text: "^detail-heading^ #### Experience"
           schema:
@@ -333,13 +327,13 @@ component_defs:
             component: component-list
             css: "margin: 0;"
             componentListComponent: xref-card
+            componentListItemLabel: history reference
             componentListBlocks: []
   - name: skill-record-education-section
     baseType: container
     description: Related education
     schema:
       css: "margin: 0;"
-
       containerBlocks:
         - text: "^detail-heading^ #### Education"
           schema:
@@ -350,13 +344,13 @@ component_defs:
             component: component-list
             css: "margin: 0;"
             componentListComponent: xref-card
+            componentListItemLabel: education reference
             componentListBlocks: []
   - name: skill-record-projects-section
     baseType: container
     description: Related projects
     schema:
       css: "margin: 0;"
-
       containerBlocks:
         - text: "^detail-heading^ #### Projects"
           schema:
@@ -367,6 +361,7 @@ component_defs:
             component: component-list
             css: "margin: 0;"
             componentListComponent: xref-card
+            componentListItemLabel: project reference
             componentListBlocks: []
   - name: skill-record-section
     baseType: container
@@ -384,6 +379,7 @@ component_defs:
             component: component-list
             css: "margin: 0;"
             componentListComponent: skill-record-entry
+            componentListItemLabel: detail
             componentListBlocks: []
   - name: skill-record
     baseType: expandable
@@ -415,7 +411,7 @@ component_defs:
           - component: skill-record-projects-section
 ---
 
-<!--hvy: {"id":"header","lock":true,"contained":false,"tags":"identity, contact, title","description":"Resume identity header"}-->
+<!--hvy: {"id":"header","lock":true,"contained":false,"description":"Resume identity header"}-->
 #! Info
 
  <!--hvy:text {"css":"margin-bottom: 0;","align":"center"}-->
@@ -427,7 +423,7 @@ component_defs:
  <!--hvy:text {"css":"margin: 0.5rem 0; margin-top: 1rem;","align":"center"}-->
   Senior Software Engineer
 
-<!--hvy: {"id":"summary","lock":true,"contained":true,"tags":"summary, highlights, profile","description":"Professional summary"}-->
+<!--hvy: {"id":"summary","lock":true,"contained":true,"description":"Professional summary"}-->
 #! Summary
 
  <!--hvy:expandable {"css":"padding:0.25rem;","expandableAlwaysShowStub":true,"expandableExpanded":false,"lock":true}-->
@@ -447,7 +443,7 @@ component_defs:
     ^detail-body^ Comfortable moving between frontend UX, platform design, and AI-assisted workflows.
     ^detail-body^ Enjoys turning messy, high-context problems into repeatable systems and clear documentation.
 
-<!--hvy: {"id":"locations","lock":true,"contained":true,"location":"sidebar","tags":"sidebar, location, preferences","description":"Location preferences"}-->
+<!--hvy: {"id":"locations","lock":true,"contained":true,"location":"sidebar","description":"Location preferences"}-->
 #! Locations
 
  <!--hvy:text {"css":"margin: 0.5rem 0; line-height: 1.5;","placeholder":"location, target location","fillIn":true,"lock":true}-->
@@ -455,7 +451,7 @@ component_defs:
 
   **Target Location(s):** Greater Seattle Area, San Francisco
 
-<!--hvy: {"id":"top-skills-tools-technologies","lock":true,"tags":"featured, top-skills, xrefs","description":"Featured skills and tools & technology experience"}-->
+<!--hvy: {"id":"top-skills-tools-technologies","lock":true,"description":"Featured skills and tools & technology experience"}-->
 #! Featured Skills, Tools, and Technologies
 
  <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
@@ -513,7 +509,7 @@ component_defs:
 
        <!--hvy:tool-tech-xref-card {"css":"margin: 0.35rem 0;","xrefTitle":"Developer Containers","xrefDetail":"Reproducible local environments","xrefTarget":"tool-developer-containers"}-->
 
-<!--hvy: {"id":"skills","lock":true,"expanded":false,"location":"sidebar","tags":"sidebar, skills-reference, skill-details","description":"Skills reference list"}-->
+<!--hvy: {"id":"skills","lock":true,"expanded":false,"location":"sidebar","description":"Skills reference list"}-->
 #! Skills
 
  <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
@@ -697,7 +693,7 @@ component_defs:
 
        <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Autonomous Agent Hackathon","xrefDetail":"08/2023 - 08/2023","xrefTarget":"project-autonomous-agent-hackathon"}-->
 
-<!--hvy: {"id":"tools-technologies","lock":true,"expanded":false,"location":"sidebar","tags":"sidebar, tools-reference, technologies, tool-details","description":"Tools and technologies reference list"}-->
+<!--hvy: {"id":"tools-technologies","lock":true,"expanded":false,"location":"sidebar","description":"Tools and technologies reference list"}-->
 #! Tools & Technologies
 
  <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
@@ -936,13 +932,13 @@ component_defs:
 
        <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Autonomous Agent Hackathon","xrefDetail":"08/2023 - 08/2023","xrefTarget":"project-autonomous-agent-hackathon"}-->
 
-<!--hvy: {"id":"history","lock":true,"tags":"work-history, experience, reverse-chronological","description":"Work history"}-->
+<!--hvy: {"id":"history","lock":true,"description":"Work history"}-->
 #! History
 
  <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
   # Professional History
 
- <!--hvy:table {"css":"margin: 0.5rem 0 0;","tags":"table-header","tableColumns":["YEAR","<!--hvy:alt {\"compact\":\"ORG\"}-->ORGANIZATION<!--/hvy:alt-->","TITLE"],"tableShowHeader":true,"tableRows":[],"lock":true,"description":"History table header"}-->
+ <!--hvy:table {"css":"margin: 0.5rem 0 0;","tags":"table-header","tableColumns":["TITLE","<!--hvy:alt {\"compact\":\"ORG\"}-->ORGANIZATION<!--/hvy:alt-->","YEAR(S)"],"tableShowHeader":true,"tableRows":[],"lock":true,"description":"History table header"}-->
 
  <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"history-record","componentListItemLabel":"job"}-->
 
@@ -952,7 +948,7 @@ component_defs:
 
     <!--hvy:expandable:stub {}-->
 
-     <!--hvy:table {"css":"margin: 0;  margin-top: -1px;","tableColumns":["YEAR","<!--hvy:alt {\"compact\":\"ORG\"}-->ORGANIZATION<!--/hvy:alt-->","TITLE"],"tableShowHeader":false,"tableRows":[{"cells":["2024","Northwind Labs","Senior Software Engineer"]}]}-->
+     <!--hvy:table {"css":"margin: 0;  margin-top: -1px;","tableColumns":["TITLE","<!--hvy:alt {\"compact\":\"ORG\"}-->ORGANIZATION<!--/hvy:alt-->","YEAR(S)"],"tableShowHeader":false,"tableRows":[{"cells":["Senior Software Engineer","Northwind Labs","2024"]}]}-->
 
     <!--hvy:expandable:content {"css":"padding: 0.5rem;"}-->
 
@@ -1037,13 +1033,13 @@ component_defs:
 
            <!--hvy:tool-tech-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Developer Containers","xrefTarget":"tool-developer-containers"}-->
 
-<!--hvy: {"id":"projects","lock":true,"tags":"projects, portfolio, reverse-chronological","description":"Project portfolio"}-->
+<!--hvy: {"id":"projects","lock":true,"description":"Project portfolio"}-->
 #! Projects
 
  <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
   # Projects
 
- <!--hvy:table {"css":"margin: 0.5rem 0 0;","tags":"table-header","tableColumns":["PROJECT","DATE"],"tableShowHeader":true,"tableRows":[],"lock":true,"description":"Project table header"}-->
+ <!--hvy:table {"css":"margin: 0.5rem 0 0;","tags":"table-header","tableColumns":["PROJECT","DATES"],"tableShowHeader":true,"tableRows":[],"lock":true,"description":"Project table header"}-->
 
  <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"project-record"}-->
 
@@ -1053,7 +1049,7 @@ component_defs:
 
     <!--hvy:expandable:stub {}-->
 
-     <!--hvy:table {"css":"margin: 0;  margin-top: -1px;","tableColumns":["PROJECT","DATE"],"tableShowHeader":false,"tableRows":[{"cells":["Heavy Stack","05/2024 - present"]}]}-->
+     <!--hvy:table {"css":"margin: 0;  margin-top: -1px;","tableColumns":["PROJECT","DATES"],"tableShowHeader":false,"tableRows":[{"cells":["Heavy Stack","05/2024 - present"]}]}-->
 
     <!--hvy:expandable:content {"css":"padding:0.5rem"}-->
 
@@ -1129,7 +1125,7 @@ component_defs:
 
     <!--hvy:expandable:stub {}-->
 
-     <!--hvy:table {"css":"margin: 0; margin-top: -1px;","tableColumns":["PROJECT","DATE"],"tableShowHeader":false,"tableRows":[{"cells":["Autonomous Agent Hackathon","08/2023 - 08/2023"]}]}-->
+     <!--hvy:table {"css":"margin: 0; margin-top: -1px;","tableColumns":["PROJECT","DATES"],"tableShowHeader":false,"tableRows":[{"cells":["Autonomous Agent Hackathon","08/2023 - 08/2023"]}]}-->
 
     <!--hvy:expandable:content {"css": "padding: 0.5rem"}-->
 
@@ -1207,32 +1203,30 @@ component_defs:
 
             <!--hvy:tool-tech-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"SuperAGI","xrefTarget":"tool-superagi"}-->
 
-<!--hvy: {"id":"education","lock":true,"tags":"education, credentials, reverse-chronological","description":"Education"}-->
+<!--hvy: {"id":"education","lock":true,"description":"Education"}-->
 #! Education
 
  <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
   # Education
 
- <!--hvy:table {"css":"margin: 0.5rem 0 0;","tags":"table-header","tableColumns":["DEGREE","INSTITUTION","LOCATION"],"tableShowHeader":true,"tableRows":[],"lock":true,"description":"Education table header"}-->
-
  <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"education-record","componentListItemLabel":"education record"}-->
 
   <!--hvy:component-list:0 {}-->
 
-   <!--hvy:education-record {"id":"education-bs-computer-science","css":"margin: 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+   <!--hvy:education-record {"id":"education-bs-computer-science","containerTitle":"B.S. Computer Science","containerExpanded":false,"containerCollapsedPreviewRem":5}-->
 
-    <!--hvy:expandable:stub {}-->
+    <!--hvy:container:0 {}-->
 
-     <!--hvy:table {"css":"margin: 0; margin-top: -1px;","tableColumns":["DEGREE","INSTITUTION","LOCATION"],"tableShowHeader":false,"tableRows":[{"cells":["<!--hvy:alt {\"compact\":\"BS CS\"}-->B.S. Computer Science<!--/hvy:alt-->","<!--hvy:alt {\"compact\":\"UW\"}-->University of Washington<!--/hvy:alt-->","Seattle, WA"]}]}-->
+     <!--hvy:text {"css":"margin: 0 0 0.25rem;"}-->
+      ^section-heading^ ### B.S. Computer Science
 
-    <!--hvy:expandable:content {"css":"padding:0.5rem"}-->
+    <!--hvy:container:1 {}-->
 
      <!--hvy:grid {"css":"margin: 0.35rem 0;","gridColumns":2}-->
 
       <!--hvy:grid:0 {"id":"education-institution-details"}-->
 
        <!--hvy:text {"css":"margin: 0;"}-->
-        ^section-heading^ ### B.S. Computer Science
         ^detail-body^ University of Washington
         ^detail-body^ Seattle, WA
         ^detail-body^ GPA: 3.8 / 4.0
@@ -1242,8 +1236,12 @@ component_defs:
        <!--hvy:text {"css":"margin: 0; text-align: right;"}-->
         09/2019 - 06/2023
 
+    <!--hvy:container:2 {}-->
+
      <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
       Focused on systems programming, developer tooling, and human-computer interaction while building software for research and product-oriented team projects.
+
+    <!--hvy:container:3 {}-->
 
      <!--hvy:skills-and-tools-tech-list {"css":"margin: 0.5rem 0 0;","gridColumns":2}-->
 
@@ -1285,8 +1283,12 @@ component_defs:
 
            <!--hvy:tool-tech-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"C/C++","xrefTarget":"tool-c-cpp"}-->
 
+    <!--hvy:container:4 {}-->
+
      <!--hvy:text {"css":"margin: 0;"}-->
       ^section-heading^ #### Classes
+
+    <!--hvy:container:5 {}-->
 
      <!--hvy:text {"css":"margin: 0;"}-->
       ^detail-body^ Distributed Systems

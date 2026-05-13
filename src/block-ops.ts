@@ -124,13 +124,40 @@ export function removeBlockFromList(blocks: VisualBlock[], blockId: string, seen
     if (removeBlockFromList(block.schema.expandableContentBlocks?.children ?? [], blockId, seen)) {
       return true;
     }
-    for (const item of block.schema.gridItems ?? []) {
-      if (removeBlockFromList([item.block], blockId, seen)) {
+    const gridItems = block.schema.gridItems ?? [];
+    const gridIndex = gridItems.findIndex((item) => item.block.id === blockId);
+    if (gridIndex >= 0) {
+      gridItems.splice(gridIndex, 1);
+      return true;
+    }
+    for (const item of gridItems) {
+      if (removeBlockFromGridItem(item.block, blockId, seen)) {
         return true;
       }
     }
   }
   return false;
+}
+
+function removeBlockFromGridItem(block: VisualBlock, blockId: string, seen: Set<VisualBlock>): boolean {
+  if (seen.has(block)) {
+    return false;
+  }
+  seen.add(block);
+  return removeBlockFromList(block.schema.containerBlocks ?? [], blockId, seen)
+    || removeBlockFromList(block.schema.componentListBlocks ?? [], blockId, seen)
+    || removeBlockFromList(block.schema.expandableStubBlocks?.children ?? [], blockId, seen)
+    || removeBlockFromList(block.schema.expandableContentBlocks?.children ?? [], blockId, seen)
+    || removeBlockFromGridItems(block.schema.gridItems ?? [], blockId, seen);
+}
+
+function removeBlockFromGridItems(gridItems: NonNullable<VisualBlock['schema']['gridItems']>, blockId: string, seen: Set<VisualBlock>): boolean {
+  const gridIndex = gridItems.findIndex((item) => item.block.id === blockId);
+  if (gridIndex >= 0) {
+    gridItems.splice(gridIndex, 1);
+    return true;
+  }
+  return gridItems.some((item) => removeBlockFromGridItem(item.block, blockId, seen));
 }
 
 export function resolveBlockContext(target: HTMLElement): { block: VisualBlock; row: TableRow | null } | null {
@@ -573,6 +600,10 @@ export function setActiveEditorBlock(sectionKey: string, blockId: string, option
   };
 }
 
+export function markActiveEditorBlockAsNew(blockId: string): void {
+  state.activeEditorNewBlockIds.add(blockId);
+}
+
 function getEditorBlockPathIds(sectionKey: string, blockId: string): string[] | null {
   const rootBlocks = getEditorRootBlocks(sectionKey);
   return rootBlocks ? findBlockPathInList(rootBlocks, blockId) : null;
@@ -658,6 +689,7 @@ export function clearActiveEditorBlock(blockId?: string): void {
     state.activeEditorBlockSnapshot = null;
     state.activeEditorBlockPath = [];
     state.activeEditorBlockSnapshots = [];
+    state.activeEditorNewBlockIds.clear();
     return;
   }
   const index = state.activeEditorBlockPath.findIndex((active) => active.blockId === blockId);
@@ -677,7 +709,7 @@ export function deactivateEditorBlock(sectionKey: string, blockId: string): 'clo
   return 'closed';
 }
 
-export function cancelEditorBlockEdit(sectionKey: string, blockId: string): 'closed' | 'unchanged' {
+export function cancelEditorBlockEdit(sectionKey: string, blockId: string): 'closed' | 'removed' | 'unchanged' {
   const index = state.activeEditorBlockPath.findIndex(
     (active) => active.sectionKey === sectionKey && active.blockId === blockId
   );
@@ -687,8 +719,21 @@ export function cancelEditorBlockEdit(sectionKey: string, blockId: string): 'clo
   const snapshot = state.activeEditorBlockSnapshots.find(
     (candidate) => candidate.sectionKey === sectionKey && candidate.blockId === blockId
   );
+  const block = findBlockByIds(sectionKey, blockId);
+  if (state.activeEditorNewBlockIds.has(blockId) && block) {
+    const changed = snapshot ? !visualBlocksEqual(block, snapshot.block) : true;
+    if (changed && !(globalThis.confirm?.('Discard this new component?') ?? false)) {
+      return 'unchanged';
+    }
+    const rootBlocks = getEditorRootBlocks(sectionKey);
+    if (rootBlocks && removeBlockFromList(rootBlocks, blockId)) {
+      state.activeEditorNewBlockIds.delete(blockId);
+      syncReusableTemplateForBlock(sectionKey, blockId);
+      closeActiveEditorPathFromIndex(index);
+      return 'removed';
+    }
+  }
   if (snapshot) {
-    const block = findBlockByIds(sectionKey, blockId);
     if (block) {
       const restored = cloneVisualBlock(snapshot.block);
       block.text = restored.text;
@@ -701,15 +746,21 @@ export function cancelEditorBlockEdit(sectionKey: string, blockId: string): 'clo
 }
 
 function closeActiveEditorPathFromIndex(index: number): void {
+  const closing = state.activeEditorBlockPath.slice(index);
   state.activeEditorBlockPath = state.activeEditorBlockPath.slice(0, index);
   state.activeEditorBlockSnapshots = state.activeEditorBlockSnapshots.filter((snapshot) =>
     state.activeEditorBlockPath.some((active) => active.sectionKey === snapshot.sectionKey && active.blockId === snapshot.blockId)
   );
+  closing.forEach((active) => state.activeEditorNewBlockIds.delete(active.blockId));
   const leaf = state.activeEditorBlockPath[state.activeEditorBlockPath.length - 1] ?? null;
   state.activeEditorBlock = leaf ? { ...leaf } : null;
   state.activeEditorBlockSnapshot = leaf
     ? state.activeEditorBlockSnapshots.find((snapshot) => snapshot.sectionKey === leaf.sectionKey && snapshot.blockId === leaf.blockId) ?? null
     : null;
+}
+
+function visualBlocksEqual(left: VisualBlock, right: VisualBlock): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
 }
 
 export function blockContainsBlockId(block: VisualBlock, blockId: string): boolean {

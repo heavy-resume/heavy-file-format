@@ -84,7 +84,7 @@ export function findBlockForVirtualDirectory(document: VisualDocument, path: str
   entries.set('/body', { kind: 'dir', path: '/body' });
   document.sections
     .filter((section) => !section.isGhost)
-    .forEach((section, index) => addSectionBlockLookup(entries, blocks, section, `/body/${uniqueName(sectionDirectoryName(section, index), entries, '/body')}`, naming));
+    .forEach((section, index) => addSectionBlockLookup(document.meta, entries, blocks, section, `/body/${uniqueName(sectionDirectoryName(section, index), entries, '/body')}`, naming));
   return blocks.get(normalized) ?? null;
 }
 
@@ -107,7 +107,7 @@ export function findVirtualDirectoryForBlock(document: VisualDocument, targetBlo
   entries.set('/body', { kind: 'dir', path: '/body' });
   document.sections
     .filter((section) => !section.isGhost)
-    .forEach((section, index) => addSectionBlockLookup(entries, blocks, section, `/body/${uniqueName(sectionDirectoryName(section, index), entries, '/body')}`));
+    .forEach((section, index) => addSectionBlockLookup(document.meta, entries, blocks, section, `/body/${uniqueName(sectionDirectoryName(section, index), entries, '/body')}`));
   for (const [path, block] of blocks) {
     if (block === targetBlock) {
       return path;
@@ -139,7 +139,7 @@ export function findBlockInsertionTargetForVirtualDirectory(document: VisualDocu
   targets.set('/body', { kind: 'blocks', insert: () => {} });
   document.sections
     .filter((section) => !section.isGhost)
-    .forEach((section, index) => addSectionInsertionTargets(entries, targets, section, `/body/${uniqueName(sectionDirectoryName(section, index), entries, '/body')}`, naming));
+    .forEach((section, index) => addSectionInsertionTargets(document.meta, entries, targets, section, `/body/${uniqueName(sectionDirectoryName(section, index), entries, '/body')}`, naming));
   return targets.get(normalized) ?? null;
 }
 
@@ -242,11 +242,12 @@ function addBlockList(entries: Map<string, HvyVirtualEntry>, meta: JsonObject, b
 
 function addBlock(entries: Map<string, HvyVirtualEntry>, meta: JsonObject, block: VisualBlock, blockPath: string, naming?: HvyVirtualPathNamingState): void {
   entries.set(blockPath, { kind: 'dir', path: blockPath });
+  const baseComponent = getBlockBaseComponent(meta, block);
   const componentFile = `${blockPath}/${sanitizePathSegment(block.schema.component) || 'component'}.json`;
   entries.set(componentFile, {
     kind: 'file',
     path: componentFile,
-    read: () => `${JSON.stringify(blockSchemaToCliJson(block.schema), null, 2)}\n`,
+    read: () => `${JSON.stringify(blockSchemaToCliJson(block.schema, meta), null, 2)}\n`,
     write: (content) => applyBlockSchemaJson(block.schema, componentNameFromPath(componentFile), parseJsonObject(content, componentFile)),
   });
   const componentName = sanitizePathSegment(block.schema.component) || 'component';
@@ -258,14 +259,14 @@ function addBlock(entries: Map<string, HvyVirtualEntry>, meta: JsonObject, block
       block.schema.css = content.trim();
     },
   });
-  const bodyTextFile = `${blockPath}/${bodyFileNameForBlock(block)}`;
+  const bodyTextFile = `${blockPath}/${bodyFileNameForBlock(block, meta)}`;
   entries.set(bodyTextFile, {
     kind: 'file',
     path: bodyTextFile,
-    read: () => readBlockBodyText(block),
-    writable: block.schema.component === 'table' ? false : undefined,
+    read: () => readBlockBodyText(block, meta),
+    writable: baseComponent === 'table' ? false : undefined,
     write: (content) => {
-      writeBlockBodyText(block, content);
+      writeBlockBodyText(block, meta, content);
     },
   });
   entries.set(`${blockPath}/about-${componentName}.txt`, {
@@ -274,16 +275,16 @@ function addBlock(entries: Map<string, HvyVirtualEntry>, meta: JsonObject, block
     read: () => formatComponentAbout(meta, block.schema.component),
   });
   addPluginDocumentationFile(entries, block, blockPath);
-  addTableDataFiles(entries, block, blockPath);
+  addTableDataFiles(entries, meta, block, blockPath);
   addFormScriptFiles(entries, block, blockPath);
 
-  addNamedBlockChildren(entries, meta, block.schema.containerBlocks ?? [], `${blockPath}/container`, block.schema.component === 'container', naming);
-  if (block.schema.component === 'component-list') {
+  addNamedBlockChildren(entries, meta, block.schema.containerBlocks ?? [], `${blockPath}/container`, baseComponent === 'container', naming);
+  if (baseComponent === 'component-list') {
     addBlockList(entries, meta, block.schema.componentListBlocks ?? [], blockPath, naming);
   }
-  addNamedBlockChildren(entries, meta, block.schema.expandableStubBlocks?.children ?? [], `${blockPath}/expandable-stub`, block.schema.component === 'expandable', naming);
-  addNamedBlockChildren(entries, meta, block.schema.expandableContentBlocks?.children ?? [], `${blockPath}/expandable-content`, block.schema.component === 'expandable', naming);
-  addGridItems(entries, meta, block.schema.gridItems ?? [], `${blockPath}/grid`, block.schema.component === 'grid', naming);
+  addNamedBlockChildren(entries, meta, block.schema.expandableStubBlocks?.children ?? [], `${blockPath}/expandable-stub`, baseComponent === 'expandable', naming);
+  addNamedBlockChildren(entries, meta, block.schema.expandableContentBlocks?.children ?? [], `${blockPath}/expandable-content`, baseComponent === 'expandable', naming);
+  addGridItems(entries, meta, block.schema.gridItems ?? [], `${blockPath}/grid`, baseComponent === 'grid', naming);
 }
 
 function addGridItems(entries: Map<string, HvyVirtualEntry>, meta: JsonObject, gridItems: GridItem[], directoryPath: string, keepEmptyDirectory = false, naming?: HvyVirtualPathNamingState): void {
@@ -328,7 +329,7 @@ function collectCanonicalIdAliases(document: VisualDocument): VirtualIdAlias[] {
     entries.set(blockPath, { kind: 'dir', path: blockPath });
     addAlias(block.schema.id, blockPath);
     visitBlocks(block.schema.containerBlocks ?? [], `${blockPath}/container`);
-    if (block.schema.component === 'component-list') {
+    if (getBlockBaseComponent(document.meta, block) === 'component-list') {
       visitBlocks(block.schema.componentListBlocks ?? [], blockPath);
     }
     visitBlocks(block.schema.expandableStubBlocks?.children ?? [], `${blockPath}/expandable-stub`);
@@ -468,6 +469,7 @@ function reorderByKeys<T>(items: T[], currentKeys: string[], nextKeys: string[])
 }
 
 function addSectionBlockLookup(
+  meta: JsonObject,
   entries: Map<string, HvyVirtualEntry>,
   lookup: Map<string, VisualBlock>,
   section: VisualSection,
@@ -475,13 +477,14 @@ function addSectionBlockLookup(
   naming?: HvyVirtualPathNamingState
 ): void {
   entries.set(sectionPath, { kind: 'dir', path: sectionPath });
-  addBlockListLookup(entries, lookup, section.blocks, sectionPath, naming);
+  addBlockListLookup(meta, entries, lookup, section.blocks, sectionPath, naming);
   section.children
     .filter((child) => !child.isGhost)
-    .forEach((child, index) => addSectionBlockLookup(entries, lookup, child, `${sectionPath}/${uniqueName(sectionDirectoryName(child, index), entries, sectionPath)}`, naming));
+    .forEach((child, index) => addSectionBlockLookup(meta, entries, lookup, child, `${sectionPath}/${uniqueName(sectionDirectoryName(child, index), entries, sectionPath)}`, naming));
 }
 
 function addBlockListLookup(
+  meta: JsonObject,
   entries: Map<string, HvyVirtualEntry>,
   lookup: Map<string, VisualBlock>,
   blocks: VisualBlock[],
@@ -489,11 +492,12 @@ function addBlockListLookup(
   naming?: HvyVirtualPathNamingState
 ): void {
   blocks.forEach((block, index) => {
-    addBlockLookup(entries, lookup, block, `${parentPath}/${stableBlockDirectoryName(block, index, entries, parentPath, naming)}`, naming);
+    addBlockLookup(meta, entries, lookup, block, `${parentPath}/${stableBlockDirectoryName(block, index, entries, parentPath, naming)}`, naming);
   });
 }
 
 function addBlockLookup(
+  meta: JsonObject,
   entries: Map<string, HvyVirtualEntry>,
   lookup: Map<string, VisualBlock>,
   block: VisualBlock,
@@ -502,16 +506,17 @@ function addBlockLookup(
 ): void {
   entries.set(blockPath, { kind: 'dir', path: blockPath });
   lookup.set(blockPath, block);
-  addNamedBlockChildrenLookup(entries, lookup, block.schema.containerBlocks ?? [], `${blockPath}/container`, naming);
-  if (block.schema.component === 'component-list') {
-    addBlockListLookup(entries, lookup, block.schema.componentListBlocks ?? [], blockPath, naming);
+  addNamedBlockChildrenLookup(meta, entries, lookup, block.schema.containerBlocks ?? [], `${blockPath}/container`, naming);
+  if (getBlockBaseComponent(meta, block) === 'component-list') {
+    addBlockListLookup(meta, entries, lookup, block.schema.componentListBlocks ?? [], blockPath, naming);
   }
-  addNamedBlockChildrenLookup(entries, lookup, block.schema.expandableStubBlocks?.children ?? [], `${blockPath}/expandable-stub`, naming);
-  addNamedBlockChildrenLookup(entries, lookup, block.schema.expandableContentBlocks?.children ?? [], `${blockPath}/expandable-content`, naming);
-  addNamedBlockChildrenLookup(entries, lookup, (block.schema.gridItems ?? []).map((item) => item.block), `${blockPath}/grid`, naming);
+  addNamedBlockChildrenLookup(meta, entries, lookup, block.schema.expandableStubBlocks?.children ?? [], `${blockPath}/expandable-stub`, naming);
+  addNamedBlockChildrenLookup(meta, entries, lookup, block.schema.expandableContentBlocks?.children ?? [], `${blockPath}/expandable-content`, naming);
+  addNamedBlockChildrenLookup(meta, entries, lookup, (block.schema.gridItems ?? []).map((item) => item.block), `${blockPath}/grid`, naming);
 }
 
 function addNamedBlockChildrenLookup(
+  meta: JsonObject,
   entries: Map<string, HvyVirtualEntry>,
   lookup: Map<string, VisualBlock>,
   blocks: VisualBlock[],
@@ -522,10 +527,11 @@ function addNamedBlockChildrenLookup(
     return;
   }
   entries.set(directoryPath, { kind: 'dir', path: directoryPath });
-  addBlockListLookup(entries, lookup, blocks, directoryPath, naming);
+  addBlockListLookup(meta, entries, lookup, blocks, directoryPath, naming);
 }
 
 function addSectionInsertionTargets(
+  meta: JsonObject,
   entries: Map<string, HvyVirtualEntry>,
   targets: Map<string, HvyVirtualBlockInsertionTarget>,
   section: VisualSection,
@@ -534,13 +540,14 @@ function addSectionInsertionTargets(
 ): void {
   entries.set(sectionPath, { kind: 'dir', path: sectionPath });
   targets.set(sectionPath, { kind: 'blocks', insert: (block, index = -1) => insertBlock(section.blocks, block, index) });
-  addBlockListInsertionTargets(entries, targets, section.blocks, sectionPath, naming);
+  addBlockListInsertionTargets(meta, entries, targets, section.blocks, sectionPath, naming);
   section.children
     .filter((child) => !child.isGhost)
-    .forEach((child, index) => addSectionInsertionTargets(entries, targets, child, `${sectionPath}/${uniqueName(sectionDirectoryName(child, index), entries, sectionPath)}`, naming));
+    .forEach((child, index) => addSectionInsertionTargets(meta, entries, targets, child, `${sectionPath}/${uniqueName(sectionDirectoryName(child, index), entries, sectionPath)}`, naming));
 }
 
 function addBlockListInsertionTargets(
+  meta: JsonObject,
   entries: Map<string, HvyVirtualEntry>,
   targets: Map<string, HvyVirtualBlockInsertionTarget>,
   blocks: VisualBlock[],
@@ -548,11 +555,12 @@ function addBlockListInsertionTargets(
   naming?: HvyVirtualPathNamingState
 ): void {
   blocks.forEach((block, index) => {
-    addBlockInsertionTargets(entries, targets, block, `${parentPath}/${stableBlockDirectoryName(block, index, entries, parentPath, naming)}`, naming);
+    addBlockInsertionTargets(meta, entries, targets, block, `${parentPath}/${stableBlockDirectoryName(block, index, entries, parentPath, naming)}`, naming);
   });
 }
 
 function addBlockInsertionTargets(
+  meta: JsonObject,
   entries: Map<string, HvyVirtualEntry>,
   targets: Map<string, HvyVirtualBlockInsertionTarget>,
   block: VisualBlock,
@@ -560,17 +568,19 @@ function addBlockInsertionTargets(
   naming?: HvyVirtualPathNamingState
 ): void {
   entries.set(blockPath, { kind: 'dir', path: blockPath });
-  addNamedBlockChildrenInsertionTarget(entries, targets, block.schema.containerBlocks ?? [], `${blockPath}/container`, block.schema.component === 'container', naming);
-  if (block.schema.component === 'component-list') {
+  const baseComponent = getBlockBaseComponent(meta, block);
+  addNamedBlockChildrenInsertionTarget(meta, entries, targets, block.schema.containerBlocks ?? [], `${blockPath}/container`, baseComponent === 'container', naming);
+  if (baseComponent === 'component-list') {
     targets.set(blockPath, { kind: 'blocks', insert: (newBlock, index = -1) => insertBlock(block.schema.componentListBlocks, newBlock, index) });
-    addBlockListInsertionTargets(entries, targets, block.schema.componentListBlocks ?? [], blockPath, naming);
+    addBlockListInsertionTargets(meta, entries, targets, block.schema.componentListBlocks ?? [], blockPath, naming);
   }
-  addNamedBlockChildrenInsertionTarget(entries, targets, block.schema.expandableStubBlocks?.children ?? [], `${blockPath}/expandable-stub`, block.schema.component === 'expandable', naming);
-  addNamedBlockChildrenInsertionTarget(entries, targets, block.schema.expandableContentBlocks?.children ?? [], `${blockPath}/expandable-content`, block.schema.component === 'expandable', naming);
-  addGridInsertionTarget(entries, targets, block.schema.gridItems ?? [], `${blockPath}/grid`, block.schema.component === 'grid', naming);
+  addNamedBlockChildrenInsertionTarget(meta, entries, targets, block.schema.expandableStubBlocks?.children ?? [], `${blockPath}/expandable-stub`, baseComponent === 'expandable', naming);
+  addNamedBlockChildrenInsertionTarget(meta, entries, targets, block.schema.expandableContentBlocks?.children ?? [], `${blockPath}/expandable-content`, baseComponent === 'expandable', naming);
+  addGridInsertionTarget(meta, entries, targets, block.schema.gridItems ?? [], `${blockPath}/grid`, baseComponent === 'grid', naming);
 }
 
 function addNamedBlockChildrenInsertionTarget(
+  meta: JsonObject,
   entries: Map<string, HvyVirtualEntry>,
   targets: Map<string, HvyVirtualBlockInsertionTarget>,
   blocks: VisualBlock[],
@@ -583,10 +593,11 @@ function addNamedBlockChildrenInsertionTarget(
   }
   entries.set(directoryPath, { kind: 'dir', path: directoryPath });
   targets.set(directoryPath, { kind: 'blocks', insert: (block, index = -1) => insertBlock(blocks, block, index) });
-  addBlockListInsertionTargets(entries, targets, blocks, directoryPath, naming);
+  addBlockListInsertionTargets(meta, entries, targets, blocks, directoryPath, naming);
 }
 
 function addGridInsertionTarget(
+  meta: JsonObject,
   entries: Map<string, HvyVirtualEntry>,
   targets: Map<string, HvyVirtualBlockInsertionTarget>,
   gridItems: GridItem[],
@@ -599,7 +610,7 @@ function addGridInsertionTarget(
   }
   entries.set(directoryPath, { kind: 'dir', path: directoryPath });
   targets.set(directoryPath, { kind: 'grid', insert: (block, index = -1) => insertGridItem(gridItems, block, index) });
-  addBlockListInsertionTargets(entries, targets, gridItems.map((item) => item.block), directoryPath, naming);
+  addBlockListInsertionTargets(meta, entries, targets, gridItems.map((item) => item.block), directoryPath, naming);
 }
 
 function insertBlock(blocks: VisualBlock[], block: VisualBlock, index: number): void {
@@ -679,7 +690,8 @@ function applySectionJson(section: VisualSection, value: JsonObject): void {
   if (typeof value.hideIfUnmodified === 'boolean') section.hideIfUnmodified = value.hideIfUnmodified;
 }
 
-function blockSchemaToCliJson(schema: BlockSchema): JsonObject {
+function blockSchemaToCliJson(schema: BlockSchema, meta: JsonObject): JsonObject {
+  const baseComponent = resolveBaseComponentFromMeta(schema.component, meta);
   const value: JsonObject = {
     id: schema.id,
     css: schema.css,
@@ -693,12 +705,12 @@ function blockSchemaToCliJson(schema: BlockSchema): JsonObject {
     placeholder: schema.placeholder,
     fillIn: schema.fillIn,
   };
-  if (schema.component === 'container') {
+  if (baseComponent === 'container') {
     value.containerTitle = schema.containerTitle;
     value.containerExpanded = schema.containerExpanded;
     value.containerCollapsedPreviewRem = schema.containerCollapsedPreviewRem;
   }
-  if (schema.component === 'component-list') {
+  if (baseComponent === 'component-list') {
     value.componentListComponent = schema.componentListComponent;
     value.componentListItemLabel = schema.componentListItemLabel;
     value.componentListDefaultSortKey = schema.componentListDefaultSortKey;
@@ -706,16 +718,16 @@ function blockSchemaToCliJson(schema: BlockSchema): JsonObject {
     value.componentListDefaultGroupKey = schema.componentListDefaultGroupKey;
     value.componentListGroupCollapsedPreviewRem = schema.componentListGroupCollapsedPreviewRem;
   }
-  if (schema.component === 'xref-card') {
+  if (baseComponent === 'xref-card') {
     value.xrefTitle = schema.xrefTitle;
     value.xrefDetail = schema.xrefDetail;
     value.xrefTarget = schema.xrefTarget;
     value.xrefTargetTagFilter = schema.xrefTargetTagFilter;
   }
-  if (schema.component === 'table') {
+  if (baseComponent === 'table') {
     value.tableShowHeader = schema.tableShowHeader;
   }
-  if (schema.component === 'plugin') {
+  if (baseComponent === 'plugin') {
     value.plugin = schema.plugin;
     value.pluginConfig = schema.pluginConfig;
   }
@@ -838,9 +850,13 @@ function applyBlockSchemaJson(schema: BlockSchema, component: string, value: Jso
   if (typeof value.expandableContentDescription === 'string') schema.expandableContentDescription = value.expandableContentDescription;
 }
 
-function readBlockBodyText(block: VisualBlock): string {
-  if (block.schema.component === 'table') {
+function readBlockBodyText(block: VisualBlock, meta: JsonObject): string {
+  const baseComponent = getBlockBaseComponent(meta, block);
+  if (baseComponent === 'table') {
     return formatTableBodyText(block.schema);
+  }
+  if (baseComponent === 'xref-card') {
+    return formatXrefCardBodyText(block.schema);
   }
   if (block.text) {
     return block.text;
@@ -848,8 +864,8 @@ function readBlockBodyText(block: VisualBlock): string {
   return collectNestedTextBlocks(block).map((child) => child.text).join('\n');
 }
 
-function addTableDataFiles(entries: Map<string, HvyVirtualEntry>, block: VisualBlock, blockPath: string): void {
-  if (block.schema.component !== 'table') {
+function addTableDataFiles(entries: Map<string, HvyVirtualEntry>, meta: JsonObject, block: VisualBlock, blockPath: string): void {
+  if (getBlockBaseComponent(meta, block) !== 'table') {
     return;
   }
   entries.set(`${blockPath}/tableColumns.json`, {
@@ -870,15 +886,16 @@ function addTableDataFiles(entries: Map<string, HvyVirtualEntry>, block: VisualB
   });
 }
 
-function writeBlockBodyText(block: VisualBlock, content: string): void {
-  if (block.schema.component === 'table') {
+function writeBlockBodyText(block: VisualBlock, meta: JsonObject, content: string): void {
+  const baseComponent = getBlockBaseComponent(meta, block);
+  if (baseComponent === 'table') {
     throw new Error(
       'table.txt is a read-only preview for static table components. Edit tableColumns.json and tableRows.json instead.'
     );
   }
 
   const nestedTextBlocks = collectNestedTextBlocks(block);
-  if (block.schema.component === 'component-list' && nestedTextBlocks.length === 0) {
+  if (baseComponent === 'component-list' && nestedTextBlocks.length === 0) {
     throw new Error(
       'component-list.txt is a read-only preview until list items exist. component-list.json defines the item type and children-order.json controls item order.'
     );
@@ -905,6 +922,17 @@ function formatTableBodyText(schema: BlockSchema): string {
   const rows = schema.tableRows.map((row) => row.cells);
   const lines = [columns, ...rows].map((cells) => cells.map((cell) => cell.trim()).join(' | '));
   return `${lines.join('\n')}\n`;
+}
+
+function formatXrefCardBodyText(schema: BlockSchema): string {
+  const title = schema.xrefTitle.trim();
+  const detail = schema.xrefDetail.trim();
+  const target = schema.xrefTarget.trim();
+  if (!title && !detail && !target) {
+    return '';
+  }
+  const label = [title, detail].filter(Boolean).join(' - ') || title || target;
+  return target ? `${label} -> ${target}\n` : `${label}\n`;
 }
 
 function parseJsonStringArray(content: string, filename: string): string[] {
@@ -990,8 +1018,12 @@ function addFormScriptFiles(entries: Map<string, HvyVirtualEntry>, block: Visual
   }
 }
 
-function bodyFileNameForBlock(block: VisualBlock): string {
-  if (block.schema.component === 'plugin' && block.schema.plugin === SCRIPTING_PLUGIN_ID) {
+function getBlockBaseComponent(meta: JsonObject, block: VisualBlock): string {
+  return resolveBaseComponentFromMeta(block.schema.component, meta);
+}
+
+function bodyFileNameForBlock(block: VisualBlock, meta: JsonObject): string {
+  if (getBlockBaseComponent(meta, block) === 'plugin' && block.schema.plugin === SCRIPTING_PLUGIN_ID) {
     return 'script.py';
   }
   return `${sanitizePathSegment(block.schema.component) || 'component'}.txt`;

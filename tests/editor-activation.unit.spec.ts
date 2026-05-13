@@ -1,6 +1,7 @@
-import { beforeAll, beforeEach, expect, test } from 'vitest';
+import { beforeAll, beforeEach, expect, test, vi } from 'vitest';
 
-import { cancelEditorBlockEdit, deactivateEditorBlock, setActiveEditorBlock } from '../src/block-ops';
+import { cancelEditorBlockEdit, deactivateEditorBlock, markActiveEditorBlockAsNew, setActiveEditorBlock } from '../src/block-ops';
+import { createEmptyBlock } from '../src/document-factory';
 import { deserializeDocument } from '../src/serialization';
 import { initCallbacks, initState, state } from '../src/state';
 import type { VisualBlock } from '../src/editor/types';
@@ -148,6 +149,46 @@ test('canceling parent frame restores descendants and closes the edit path', () 
   expect(state.activeEditorBlock).toBeNull();
   expect(state.activeEditorBlockPath).toEqual([]);
   expect(findBlockBySchemaId('deep-text').text).toBe('Deep text');
+});
+
+test('canceling an unchanged newly added block removes it without prompting', () => {
+  const section = state.document.sections[0]!;
+  const newBlock = createEmptyBlock('text');
+  section.blocks.push(newBlock);
+  setActiveEditorBlock(section.key, newBlock.id);
+  markActiveEditorBlockAsNew(newBlock.id);
+  const confirmSpy = vi.fn();
+  vi.stubGlobal('confirm', confirmSpy);
+
+  const result = cancelEditorBlockEdit(section.key, newBlock.id);
+
+  expect(result).toBe('removed');
+  expect(section.blocks.some((block) => block.id === newBlock.id)).toBe(false);
+  expect(confirmSpy).not.toHaveBeenCalled();
+  vi.unstubAllGlobals();
+});
+
+test('canceling a changed newly added block asks before removing it', () => {
+  const section = state.document.sections[0]!;
+  const newBlock = createEmptyBlock('text');
+  section.blocks.push(newBlock);
+  setActiveEditorBlock(section.key, newBlock.id);
+  markActiveEditorBlockAsNew(newBlock.id);
+  newBlock.text = 'Draft';
+  const confirmSpy = vi.fn(() => false);
+  vi.stubGlobal('confirm', confirmSpy);
+
+  const keptResult = cancelEditorBlockEdit(section.key, newBlock.id);
+
+  expect(keptResult).toBe('unchanged');
+  expect(section.blocks.some((block) => block.id === newBlock.id)).toBe(true);
+
+  confirmSpy.mockReturnValue(true);
+  const removedResult = cancelEditorBlockEdit(section.key, newBlock.id);
+
+  expect(removedResult).toBe('removed');
+  expect(section.blocks.some((block) => block.id === newBlock.id)).toBe(false);
+  vi.unstubAllGlobals();
 });
 
 function findBlockBySchemaId(schemaId: string): VisualBlock {

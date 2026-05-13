@@ -234,6 +234,7 @@ test('reader view rendering applies hidden, dimmed, highlight, and generic colla
     paletteOverrideId: null,
     theme: { colors: {} },
     currentView: 'viewer' as const,
+    showAdvancedEditor: false,
     responsivePreview: 'full' as const,
     readerExpandableState: {},
     readerContainerState: {},
@@ -307,6 +308,100 @@ test('reader view rendering applies hidden, dimmed, highlight, and generic colla
   expect(expectedResult).not.toContain('id="collapsed-priority" class="reader-section is-collapsed-preview');
   expect(expectedResult).toContain('First');
   expect(expectedResult).not.toContain('Second');
+});
+
+test('AI reader hides editor-only scripting blocks outside advanced mode', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"maintenance"}-->
+#! Maintenance
+
+<!--hvy:plugin {"id":"cleanup","editorOnly":true,"plugin":"dev.heavy.scripting","pluginConfig":{"version":"0.1"}}-->
+print("maintenance script")
+`, '.hvy');
+  const state = {
+    documentMeta: document.meta,
+    documentSections: document.sections,
+    addComponentBySection: {},
+    tempHighlights: new Set<string>(),
+    aiEditTarget: { sectionKey: null, blockId: null },
+    modalSectionKey: null,
+    sqliteRowComponentModal: null,
+    dbTableQueryModal: null,
+    reusableSaveModal: null,
+    reusableTemplateModal: null,
+    componentMetaModal: null,
+    themeModalOpen: false,
+    themeModalMode: 'full' as const,
+    paletteOverrideId: null,
+    theme: { colors: {} },
+    currentView: 'ai' as const,
+    showAdvancedEditor: false,
+    responsivePreview: 'full' as const,
+    readerExpandableState: {},
+    readerContainerState: {},
+    readerView: {},
+    search: createDefaultSearchState(),
+    readerViewActivatedTargets: new Set<string>(),
+    componentListReaderViews: {},
+    viewerSidebarHelpDismissed: true,
+  };
+  const renderer = createReaderRenderer(state, {
+    escapeAttr: escapeHtml,
+    escapeHtml,
+    flattenSections: (sections) => sections,
+    findDuplicateSectionIds: () => [],
+    findSectionByKey: () => null,
+    findBlockByIds: () => null,
+    getSectionId: (section) => section.customId,
+    formatSectionTitle: (title) => title,
+    resolveBaseComponent: (componentName) => componentName,
+    ensureExpandableBlocks: () => {},
+    ensureGridItems: () => {},
+    getComponentRenderHelpers: () => helpers,
+    renderEditorBlock: () => '',
+    renderBlockContentEditor: () => '',
+    renderComponentOptions: () => '',
+    renderBlockMetaFields: () => '',
+  });
+  const helpers = {
+    escapeAttr: escapeHtml,
+    escapeHtml,
+    markdownToEditorHtml: escapeHtml,
+    renderRichToolbar: () => '',
+    renderEditorBlock: () => '',
+    renderPassiveEditorBlock: () => '',
+    renderReaderBlock: renderer.renderReaderBlock,
+    renderReaderBlocks: renderer.renderReaderBlocks,
+    renderReaderListBlocks: renderer.renderReaderListBlocks,
+    orderReaderBlocks: renderer.orderReaderBlocks,
+    orderReaderListBlocks: renderer.orderReaderListBlocks,
+    isReaderViewPrioritizedBlock: () => false,
+    renderComponentFragment: (_componentName: string, content: string) => escapeHtml(content),
+    renderComponentOptions: () => '',
+    renderAddComponentPicker: () => '',
+    renderComponentPlacementTarget: () => '',
+    renderOption: () => '',
+    getDocumentComponentCss: () => '',
+    getXrefTargetOptions: () => [],
+    isXrefTargetValid: () => true,
+    getTableColumns: () => [],
+    ensureContainerBlocks: () => {},
+    ensureComponentListBlocks: () => {},
+    getSelectedAddComponent: (_key: string, fallback: string) => fallback,
+    getComponentListReaderViewId: () => '',
+    getReaderContainerExpanded: (_key: string, fallback: boolean) => fallback,
+    isExpandableEditorPanelOpen: (_sectionKey: string, _blockId: string, _panel: 'stub' | 'expanded', fallback: boolean) => fallback,
+    isAdvancedEditorMode: () => state.showAdvancedEditor,
+    isMobileAdjustmentMode: () => false,
+  } satisfies ComponentRenderHelpers;
+
+  expect(renderer.renderReaderSections(document.sections)).not.toContain('maintenance script');
+
+  state.showAdvancedEditor = true;
+  expect(renderer.renderReaderSections(document.sections)).toContain('maintenance script');
 });
 
 function escapeHtml(value: string): string {

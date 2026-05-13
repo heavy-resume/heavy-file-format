@@ -103,6 +103,7 @@ function createInitialState(document: ReturnType<typeof deserializeDocumentBytes
     activeEditorBlockPath: [],
     activeEditorBlockSnapshot: null,
     activeEditorBlockSnapshots: [],
+    activeEditorNewBlockIds: new Set<string>(),
     activeEditorBlockReturnScroll: null,
     pendingPaneScrollRestore: null,
     componentPlacement: null,
@@ -518,6 +519,9 @@ readerRenderer = createReaderRenderer(
     },
     get currentView() {
       return state.currentView;
+    },
+    get showAdvancedEditor() {
+      return state.showAdvancedEditor;
     },
     get responsivePreview() {
       return state.responsivePreview;

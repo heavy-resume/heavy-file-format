@@ -1,5 +1,5 @@
 import { state, getRenderApp } from '../../state';
-import { resolveBlockContext } from '../../block-ops';
+import { markActiveEditorBlockAsNew, resolveBlockContext, setActiveEditorBlock } from '../../block-ops';
 import { createEmptyBlock, ensureGridItems } from '../../document-factory';
 import { createGridItem } from '../../grid-ops';
 import { recordHistory } from '../../history';
@@ -30,6 +30,8 @@ const addGridItem: ActionHandler = ({ actionButton, sectionKey, blockId }) => {
   }
   block.schema.gridItems.push(item);
   syncReusableTemplateForBlock(sectionKey, block.id);
+  setActiveEditorBlock(sectionKey, item.block.id);
+  markActiveEditorBlockAsNew(item.block.id);
   getRenderApp()();
 };
 

@@ -335,6 +335,9 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const canPlaceInSection = !section.lock;
     for (const item of items) {
       if (item.kind === 'block') {
+        if (isHiddenEditorOnlyScriptingBlock(item.block)) {
+          continue;
+        }
         if (isAnchoredButtonInSection(section, item.block)) {
           continue;
         }
@@ -406,6 +409,9 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
   }
 
   function renderEditorBlock(sectionKey: string, block: VisualBlock, rootSections?: VisualSection[], parentLocked = false): string {
+    if (isHiddenEditorOnlyScriptingBlock(block)) {
+      return '';
+    }
     const component = block.schema.component || 'text';
     const componentLabel = component === 'plugin' ? getPluginBlockHeaderLabel(block) : component;
     const isActiveFrame = deps.isActiveEditorBlock(sectionKey, block.id);
@@ -523,6 +529,9 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
   }
 
   function renderPassiveEditorBlock(sectionKey: string, block: VisualBlock, rootSections: VisualSection[]): string {
+    if (isHiddenEditorOnlyScriptingBlock(block)) {
+      return '';
+    }
     const section = deps.findSectionByKey(rootSections, sectionKey);
     if (!section) {
       return '';
@@ -552,6 +561,13 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       return false;
     }
     return section.blocks.some((candidate) => candidate !== block && candidate.schema.id.trim() === targetId);
+  }
+
+  function isHiddenEditorOnlyScriptingBlock(block: VisualBlock): boolean {
+    return !state.showAdvancedEditor
+      && block.schema.editorOnly
+      && deps.resolveBaseComponent(block.schema.component) === 'plugin'
+      && block.schema.plugin === SCRIPTING_PLUGIN_ID;
   }
 
   function renderButtonAnchorAttrs(

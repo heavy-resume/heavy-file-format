@@ -1,5 +1,5 @@
 import { state, getRenderApp } from '../../state';
-import { findBlockByIds, setActiveEditorBlock } from '../../block-ops';
+import { findBlockByIds, markActiveEditorBlockAsNew, setActiveEditorBlock } from '../../block-ops';
 import { createEmptyBlock } from '../../document-factory';
 import { recordHistory } from '../../history';
 import { addDbTableColumn, addDbTableRow, createDbTable, dropDbTableColumn, getSqliteRowComponent, parseAttachedComponentBlocks, toggleDbTableSort } from '../../plugins/db-table';
@@ -165,6 +165,7 @@ const sqliteRowComponentAddBlock: ActionHandler = () => {
     error: null,
   };
   setActiveEditorBlock(modal.sectionKey, newBlock.id);
+  markActiveEditorBlockAsNew(newBlock.id);
   getRenderApp()();
 };
 

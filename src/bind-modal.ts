@@ -3,7 +3,7 @@ import { state, getRenderApp, getRefreshReaderPanels, getRefreshModalPreview } f
 import { findSectionByKey } from './section-ops';
 import { closeModal } from './navigation';
 import { saveReusableFromModal } from './reusable';
-import { findBlockByIds, setActiveEditorBlock } from './block-ops';
+import { findBlockByIds, markActiveEditorBlockAsNew, setActiveEditorBlock } from './block-ops';
 import { recordHistory } from './history';
 import { parseAttachedComponentBlocks, resetDbTableViewState, setSqliteRowComponent } from './plugins/db-table';
 import { serializeBlockFragment } from './serialization';
@@ -365,6 +365,7 @@ function insertReusableTemplateFromModal(modalRoot: HTMLDivElement): void {
     syncReusableTemplateForBlock(target.sectionKey, target.blockId);
   }
   setActiveEditorBlock(target.sectionKey, newBlock.id);
+  markActiveEditorBlockAsNew(newBlock.id);
   closeModal();
   getRenderApp()();
 }

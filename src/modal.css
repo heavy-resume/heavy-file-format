@@ -33,9 +33,26 @@
   width: min(640px, 94vw);
 }
 
+.reusable-template-modal,
+.hvy-document .reusable-template-modal {
+  width: min(20rem, calc(100vw - 2rem));
+}
+
 .template-picker-modal,
 .hvy-document .template-picker-modal {
-  width: min(24rem, calc(100vw - 2rem));
+  width: min(20rem, calc(100vw - 2rem));
+}
+
+.modal-root:has(.reusable-template-modal),
+.hvy-document .modal-root:has(.reusable-template-modal) {
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+}
+
+.modal-root:has(.reusable-template-modal) .reusable-template-modal,
+.hvy-document .modal-root:has(.reusable-template-modal) .reusable-template-modal {
+  margin: 0;
 }
 
 .remove-confirmation-modal-root {

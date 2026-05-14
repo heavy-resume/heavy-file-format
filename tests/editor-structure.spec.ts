@@ -576,7 +576,7 @@ test('ai mode done on newly added skill closes without editing parent list', asy
   const modal = page.locator('.modal-root', { has: page.locator('input[data-template-variable="skill"]') });
   await expect(modal.locator('input[data-template-variable="skill"]')).toBeVisible();
   await modal.locator('input[data-template-variable="skill"]').fill('Programming');
-  await modal.getByRole('button', { name: 'Insert' }).click();
+  await modal.locator('[data-modal-action="insert-reusable-template"]').click();
 
   const activeEditor = page.locator('#aiSidebarSections .editor-block[data-active-editor-block="true"]');
   await expect(activeEditor.locator('.editor-block-title').first()).toContainText('skill-record');

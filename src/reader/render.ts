@@ -1242,6 +1242,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     if (state.reusableTemplateModal) {
       const definition = getComponentDefsFromMeta(state.documentMeta).find((item) => item.name === state.reusableTemplateModal?.component);
       const variables = extractReusableTemplateVariablesFromDefinition(definition);
+      const modalTitle = `Add ${humanizeComponentName(state.reusableTemplateModal.component)}`;
       let hasUnavailablePicker = false;
       let hasTargetPicker = false;
       const fields = variables.map((variable) => {
@@ -1284,7 +1285,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
           <div class="modal-overlay" data-modal-action="close-overlay"></div>
           <section class="modal-panel component-meta-modal reusable-template-modal ${hasTargetPicker ? 'template-picker-modal' : ''}">
             <div class="modal-head">
-              <h3>${deps.escapeHtml(state.reusableTemplateModal.component)}</h3>
+              <h3>${deps.escapeHtml(modalTitle)}</h3>
               <button type="button" data-modal-action="close">Close</button>
             </div>
             <div class="modal-field-stack">
@@ -1657,6 +1658,15 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
   function templateStringContainsVariable(value: string, variableName: string): boolean {
     const escaped = variableName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     return new RegExp(`{%\\s*${escaped}\\s*(?:\\|\\s*(?:text|block)\\s*)?%}`).test(value);
+  }
+
+  function humanizeComponentName(name: string): string {
+    return name
+      .replace(/[-_]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLowerCase()
+      .replace(/\b\w/g, (letter) => letter.toUpperCase());
   }
 
   return {

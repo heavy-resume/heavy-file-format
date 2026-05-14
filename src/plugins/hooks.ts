@@ -55,6 +55,7 @@ function getOrderedHandlers(hookName: DocumentHookName, plugins: HvyPlugin[]): O
 function createHookContext(document: VisualDocument, changeReason: HvyPluginHookChangeReason): HvyDocumentHookContext {
   return {
     document,
+    view: state.currentView,
     changeReason,
     refreshPlugins: (pluginId) => refreshMountedPlugins(pluginId),
     requestRerender: () => getRenderApp()(),

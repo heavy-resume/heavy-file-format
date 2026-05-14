@@ -42,6 +42,9 @@ export function bindContextmenu(app: HTMLElement): void {
     if (state.currentView !== 'viewer' && state.currentView !== 'ai') {
       return;
     }
+    if (state.currentView === 'ai' && isNativeContextMenuModifier(event)) {
+      return;
+    }
 
     openReaderContextPopover(app, event, filtering);
     if (state.contextMenu?.kind === 'ai') {
@@ -164,6 +167,10 @@ function clearAiLongPress(pointerId?: number): void {
   }
   window.clearTimeout(aiLongPress.timer);
   aiLongPress = null;
+}
+
+function isNativeContextMenuModifier(event: MouseEvent): boolean {
+  return event.metaKey || event.ctrlKey;
 }
 
 function shouldIgnoreAiContextGestureTarget(target: HTMLElement): boolean {

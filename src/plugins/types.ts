@@ -77,6 +77,7 @@ export type HvyPluginHookChangeReason = 'load' | 'edit' | 'raw-edit' | 'ai-edit'
 
 export interface HvyDocumentHookContext {
   document: VisualDocument;
+  view: 'editor' | 'viewer' | 'ai';
   changeReason: HvyPluginHookChangeReason;
   refreshPlugins(pluginId?: string): void;
   requestRerender(): void;

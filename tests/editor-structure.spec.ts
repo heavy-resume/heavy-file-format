@@ -781,6 +781,61 @@ hvy_version: 0.1
   expect(requestBox?.x ?? 0).toBeGreaterThanOrEqual((shellBox?.x ?? 0) - 1);
 });
 
+test('ai context menu allows native inspect gestures', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ Inspectable summary words
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'AI' }).click();
+
+  const block = page.locator('#aiReaderDocument .reader-block', { hasText: 'Inspectable summary words' });
+  await block.dispatchEvent('contextmenu', {
+    clientX: 160,
+    clientY: 160,
+    button: 2,
+  });
+  await expect(page.locator('.hvy-context-popover')).toContainText('Request changes');
+  await page.locator('.hvy-context-popover-backdrop-target').click({ position: { x: 12, y: 12 } });
+  await expect(page.locator('.hvy-context-popover')).toHaveCount(0);
+
+  await block.evaluate((element) => {
+    const expectedResult = element.dispatchEvent(new MouseEvent('contextmenu', {
+      bubbles: true,
+      cancelable: true,
+      button: 2,
+      clientX: 160,
+      clientY: 160,
+      ctrlKey: true,
+    }));
+    element.setAttribute('data-ctrl-contextmenu-allowed', String(expectedResult));
+  });
+  await expect(block).toHaveAttribute('data-ctrl-contextmenu-allowed', 'true');
+  await expect(page.locator('.hvy-context-popover')).toHaveCount(0);
+
+  await block.evaluate((element) => {
+    const expectedResult = element.dispatchEvent(new MouseEvent('contextmenu', {
+      bubbles: true,
+      cancelable: true,
+      button: 2,
+      clientX: 160,
+      clientY: 160,
+      metaKey: true,
+    }));
+    element.setAttribute('data-meta-contextmenu-allowed', String(expectedResult));
+  });
+  await expect(block).toHaveAttribute('data-meta-contextmenu-allowed', 'true');
+  await expect(page.locator('.hvy-context-popover')).toHaveCount(0);
+});
+
 test('ai expandable click waits for double click edit gesture', async ({ page }) => {
   await page.goto('/');
 

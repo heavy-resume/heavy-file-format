@@ -70,3 +70,24 @@ test('documentLoad runs for new document identity and documentChange runs for sa
 
   expect(expectedResult).toEqual(['load:load', 'before edit', 'change:edit', 'load:load']);
 });
+
+test('document hook context includes the current document view', async () => {
+  const expectedResult: string[] = [];
+  setHostPlugins([
+    createHookPlugin('view-plugin', {
+      documentLoad: { run: (ctx) => { expectedResult.push(ctx.view); } },
+      documentChange: { run: (ctx) => { expectedResult.push(ctx.view); } },
+    }),
+  ]);
+  bootstrap();
+
+  state.currentView = 'ai';
+  await runPluginDocumentHooks('load');
+  state.currentView = 'viewer';
+  const section = state.document.sections[0];
+  if (!section) throw new Error('Expected section');
+  section.title = 'Changed';
+  await runPluginDocumentHooks('edit');
+
+  expect(expectedResult).toEqual(['ai', 'viewer']);
+});

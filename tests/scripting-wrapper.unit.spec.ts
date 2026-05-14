@@ -14,6 +14,7 @@ import {
 } from '../src/plugins/scripting/wrapper';
 import { createScriptingRuntime } from '../src/plugins/scripting/runtime';
 import { SCRIPTING_PLUGIN_VERSION } from '../src/plugins/scripting/version';
+import { getRunnableScriptingTargetsForView } from '../src/plugins/scripting/scripting';
 import { deserializeDocument } from '../src/serialization';
 
 test('instrumentPythonSource adds step calls without rewriting compare expressions', () => {
@@ -346,4 +347,29 @@ test('createScriptingRuntime points db-table SQL callers at doc.db instead of cl
   expect(() => runtime.doc.cli.run('hvy plugin db-table exec "CREATE TABLE things (id INTEGER)"')).toThrow(
     'doc.cli.run cannot run db-table SQL commands. Use doc.db.query or doc.db.execute instead.'
   );
+});
+
+test('scripting hooks run editor-only scripts only in editor view', () => {
+  const targets = [
+    {
+      sectionKey: 'section',
+      blockId: 'editor-script',
+      source: 'print("editor")',
+      editorOnly: true,
+      pluginVersion: SCRIPTING_PLUGIN_VERSION,
+      componentId: '',
+    },
+    {
+      sectionKey: 'section',
+      blockId: 'document-script',
+      source: 'print("document")',
+      editorOnly: false,
+      pluginVersion: SCRIPTING_PLUGIN_VERSION,
+      componentId: '',
+    },
+  ];
+
+  expect(getRunnableScriptingTargetsForView(targets, 'editor').map((target) => target.blockId)).toEqual(['editor-script']);
+  expect(getRunnableScriptingTargetsForView(targets, 'viewer').map((target) => target.blockId)).toEqual(['document-script']);
+  expect(getRunnableScriptingTargetsForView(targets, 'ai').map((target) => target.blockId)).toEqual(['document-script']);
 });

@@ -11,7 +11,6 @@ import type { JsonObject } from '../../hvy/types';
 import { openScriptingHelpModal } from './help-modal';
 import { runUserScript } from './wrapper';
 import { getScriptingPluginMaxLines, getScriptingPluginVersion } from './version';
-import { serializeDocument } from '../../serialization';
 import scriptingDocumentation from './about-scripting.txt?raw';
 
 import './scripting.css';
@@ -206,6 +205,7 @@ interface ScriptingTarget {
   sectionKey: string;
   blockId: string;
   source: string;
+  editorOnly: boolean;
   pluginVersion: string;
   maxLines?: number;
   componentId: string;
@@ -225,6 +225,7 @@ function visitBlocksInSection(
         sectionKey,
         blockId: block.id,
         source: block.text ?? '',
+        editorOnly: block.schema.editorOnly === true,
         componentId: typeof block.schema.id === 'string' ? block.schema.id : '',
         pluginVersion: getScriptingPluginVersion(block.schema.pluginConfig),
         maxLines: getScriptingPluginMaxLines(block.schema.pluginConfig),
@@ -236,7 +237,17 @@ function visitBlocksInSection(
   }
 }
 
-async function runDocumentScripting(ctx: HvyDocumentHookContext): Promise<void> {
+export function getRunnableScriptingTargetsForView(
+  targets: ScriptingTarget[],
+  view: HvyDocumentHookContext['view']
+): ScriptingTarget[] {
+  if (view === 'editor') {
+    return targets.filter((target) => target.editorOnly);
+  }
+  return targets.filter((target) => !target.editorOnly);
+}
+
+async function runDocumentScriptingHooksForView(ctx: HvyDocumentHookContext): Promise<void> {
   if (ctx.changeReason === 'load') {
     clearScriptingResults();
     ctx.refreshPlugins(SCRIPTING_PLUGIN_ID);
@@ -245,16 +256,17 @@ async function runDocumentScripting(ctx: HvyDocumentHookContext): Promise<void> 
   for (const section of ctx.document.sections) {
     visitBlocksInSection(section as never, section.key, targets);
   }
+  const runnableTargets = getRunnableScriptingTargetsForView(targets, ctx.view);
   const scriptSignature = targets
-    .map((target) => `${target.sectionKey}\u0000${target.blockId}\u0000${target.pluginVersion}\u0000${target.source}`)
+    .map((target) => `${target.sectionKey}\u0000${target.blockId}\u0000${target.editorOnly ? 'editor' : 'document'}\u0000${target.pluginVersion}\u0000${target.source}`)
     .join('\u0001');
-  const signature = `${serializeDocument(ctx.document)}\u0002${scriptSignature}`;
+  const signature = `${ctx.view}\u0002${scriptSignature}`;
   if (ctx.document === lastScriptedDocument && signature === lastScriptedSignature) {
     return;
   }
   lastScriptedDocument = ctx.document;
   lastScriptedSignature = signature;
-  for (const target of targets) {
+  for (const target of runnableTargets) {
     if (!ctx.isCurrentDocument()) {
       return;
     }
@@ -286,7 +298,7 @@ async function runDocumentScripting(ctx: HvyDocumentHookContext): Promise<void> 
 
 const scriptingDocumentHook = {
   priority: 0,
-  run: runDocumentScripting,
+  run: runDocumentScriptingHooksForView,
 };
 
 export const scriptingPlugin: HvyPlugin = {

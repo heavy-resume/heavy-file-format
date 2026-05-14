@@ -657,7 +657,7 @@ component_defs:
   await expect(page.locator('#aiReaderDocument .editor-block[data-active-editor-block="true"] .editor-block-title').first()).toContainText('history-xref-card');
 });
 
-test('ai mode done on newly added skill closes without editing parent list', async ({ page }) => {
+test('ai mode template-created skill stays in passive reader mode', async ({ page }) => {
   await page.goto('/');
 
   await page.getByRole('button', { name: 'Resume Template' }).click();
@@ -669,10 +669,6 @@ test('ai mode done on newly added skill closes without editing parent list', asy
   await expect(modal.locator('input[data-template-variable="skill"]')).toBeVisible();
   await modal.locator('input[data-template-variable="skill"]').fill('Programming');
   await modal.locator('[data-modal-action="insert-reusable-template"]').click();
-
-  const activeEditor = page.locator('#aiSidebarSections .editor-block[data-active-editor-block="true"]');
-  await expect(activeEditor.locator('.editor-block-title').first()).toContainText('skill-record');
-  await activeEditor.getByRole('button', { name: 'Done' }).click();
 
   await expect(page.locator('#aiSidebarSections .editor-block[data-active-editor-block="true"]')).toHaveCount(0);
   await expect(page.locator('#aiSidebarSections .component-list-view-editor')).toHaveCount(0);
@@ -730,9 +726,7 @@ component_defs:
   await modal.locator('input[data-template-variable="project"]').fill('Heavy Stack');
   await modal.locator('[data-modal-action="insert-reusable-template"]').click();
 
-  const projectEditor = page.locator('#aiReaderDocument .editor-block[data-active-editor-block="true"]');
-  await expect(projectEditor.locator('.editor-block-title').first()).toContainText('project-record');
-  await projectEditor.getByRole('button', { name: 'Done' }).click();
+  await expect(page.locator('#aiReaderDocument .editor-block[data-active-editor-block="true"]')).toHaveCount(0);
   await expect(page.locator('#aiReaderDocument [data-component-id="project-heavy-stack"]')).toContainText('Heavy Stack');
 
   await page.locator('#aiReaderDocument #featured [data-action="add-component-list-item"]', { hasText: 'Add Project Reference' }).click();

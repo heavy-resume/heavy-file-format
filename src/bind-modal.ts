@@ -3,7 +3,7 @@ import { state, getRenderApp, getRefreshReaderPanels, getRefreshModalPreview } f
 import { findSectionByKey } from './section-ops';
 import { closeModal } from './navigation';
 import { saveReusableFromModal } from './reusable';
-import { findBlockByIds, markActiveEditorBlockAsNew, setActiveEditorBlock, setAiEditorHostBlock } from './block-ops';
+import { findBlockByIds, markActiveEditorBlockAsNew, setActiveEditorBlock } from './block-ops';
 import { recordHistory } from './history';
 import { parseAttachedComponentBlocks, resetDbTableViewState, setSqliteRowComponent } from './plugins/db-table';
 import { serializeBlockFragment } from './serialization';
@@ -369,16 +369,10 @@ function insertReusableTemplateFromModal(modalRoot: HTMLDivElement): void {
     }
     syncReusableTemplateForBlock(target.sectionKey, target.blockId);
   }
-  const aiHost = state.currentView === 'ai' ? state.aiEditorHostBlock : null;
-  if (target.kind !== 'section' && aiHost?.sectionKey === target.sectionKey) {
-    setActiveEditorBlock(target.sectionKey, newBlock.id, { pathBlockIds: [aiHost.blockId, newBlock.id] });
-  } else {
+  if (state.currentView !== 'ai') {
     setActiveEditorBlock(target.sectionKey, newBlock.id, { targetOnly: target.kind !== 'section' });
+    markActiveEditorBlockAsNew(newBlock.id);
   }
-  if (state.currentView === 'ai' && (target.kind === 'section' || !aiHost)) {
-    setAiEditorHostBlock(target.sectionKey, newBlock.id);
-  }
-  markActiveEditorBlockAsNew(newBlock.id);
   closeModal();
   getRenderApp()();
 }

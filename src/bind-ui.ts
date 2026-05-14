@@ -236,6 +236,11 @@ export function bindUi(app: HTMLElement): void {
   const handleReaderAreaClick = (event: Event) => {
     const target = event.target as HTMLElement;
     const nearestReaderAction = target.closest<HTMLElement>('[data-reader-action]');
+    blurActiveFillInWhenClickingOutside(target);
+    refreshCompletedFillInsOnReaderClick(target);
+    if (target.closest('[data-action]')) {
+      return;
+    }
 
     const anchor = target.closest<HTMLAnchorElement>('a[href^="#"]');
     if (anchor) {
@@ -536,6 +541,34 @@ export function bindUi(app: HTMLElement): void {
 
 function expandableContainsActiveEditor(expandable: HTMLElement): boolean {
   return Boolean(expandable.querySelector('.editor-block[data-active-editor-block="true"]'));
+}
+
+function blurActiveFillInWhenClickingOutside(target: HTMLElement): void {
+  const active = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  if (active?.dataset.field !== 'text-fill-in-value') {
+    return;
+  }
+  const activeEditor = active.closest<HTMLElement>('.text-fill-in-editor');
+  if (activeEditor && activeEditor.contains(target)) {
+    return;
+  }
+  active.blur();
+}
+
+function refreshCompletedFillInsOnReaderClick(target: HTMLElement): void {
+  const surface = target.closest<HTMLElement>('.hvy-ai-reader-surface');
+  if (!surface || target.closest('.text-fill-in-editor')) {
+    return;
+  }
+  const completed = Array.from(surface.querySelectorAll<HTMLElement>('.text-fill-in-reader-editor')).some((editor) => {
+    const sectionKey = editor.querySelector<HTMLElement>('[data-field="text-fill-in-value"]')?.dataset.sectionKey ?? '';
+    const blockId = editor.querySelector<HTMLElement>('[data-field="text-fill-in-value"]')?.dataset.blockId ?? '';
+    const block = sectionKey && blockId ? findBlockByIds(sectionKey, blockId) : null;
+    return Boolean(block && !block.schema.fillIn);
+  });
+  if (completed) {
+    getRefreshReaderPanels()();
+  }
 }
 
 function activateAiExpandableTextTarget(target: HTMLElement, expandable: HTMLElement): boolean {

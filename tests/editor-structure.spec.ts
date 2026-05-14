@@ -438,6 +438,60 @@ component_defs:
   await expect(page.locator('#aiReaderDocument .component-list-view-editor')).toHaveCount(0);
 });
 
+test('ai adding history reference inside expandable does not collapse expandable', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+component_defs:
+  - name: history-xref-card
+    baseType: xref-card
+    schema:
+      xrefTargetTagFilter: history
+      css: "margin: 0.25rem 0;"
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ <!--hvy:expandable {"id":"skill-record","expandableAlwaysShowStub":true,"expandableExpanded":true}-->
+
+  <!--hvy:expandable:stub {}-->
+
+   <!--hvy:text {}-->
+    ### Skill
+
+  <!--hvy:expandable:content {}-->
+
+   <!--hvy:component-list {"id":"history-refs","componentListComponent":"history-xref-card","componentListItemLabel":"history reference"}-->
+
+    <!--hvy:component-list:0 {}-->
+
+     <!--hvy:history-xref-card {"xrefTitle":"Existing History","xrefTarget":"history-existing"}-->
+
+<!--hvy: {"id":"history-existing","tags":"history"}-->
+#! Existing History
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'AI' }).click();
+
+  const expandable = page.locator('#aiReaderDocument .reader-block-expandable[data-component-id="skill-record"]');
+  await expect(expandable).toHaveAttribute('aria-expanded', 'true');
+  const addGhost = expandable.locator('[data-action="add-component-list-item"]', { hasText: 'Add History Reference' });
+  await addGhost.hover();
+  const hoverState = await expandable.evaluate((node) => ({
+    afterContent: getComputedStyle(node, '::after').content,
+    boxShadow: getComputedStyle(node).boxShadow,
+  }));
+  expect(hoverState.afterContent).toBe('none');
+  expect(hoverState.boxShadow).toBe('none');
+  await addGhost.click();
+
+  await expect(expandable).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.locator('#aiReaderDocument .editor-block[data-active-editor-block="true"] .editor-block-title').first()).toContainText('history-xref-card');
+});
+
 test('ai mode done on newly added skill closes without editing parent list', async ({ page }) => {
   await page.goto('/');
 
@@ -824,6 +878,47 @@ hvy_version: 0.1
   activeBlock = page.locator('.editor-block', { has: page.locator('.expand-chooser-grid') }).first();
   await expect(activeBlock.locator('.expandable-part-stub .expandable-header .expandable-pane-meta-button')).toBeVisible();
   await expect(activeBlock.locator('.expandable-part-expanded .expandable-header .expandable-pane-meta-button')).toBeVisible();
+});
+
+test('editor-only scripting maintenance section only renders in advanced mode', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"header"}-->
+#! Header
+
+ <!--hvy:button {"id":"generate-name","editorOnly":true,"buttonLabel":"Generate"}-->
+
+<!--hvy: {"id":"maintenance","editorOnly":true}-->
+#! Maintenance
+
+ <!--hvy:plugin {"id":"cleanup","editorOnly":true,"plugin":"dev.heavy.scripting","pluginConfig":{"version":"0.1"}}-->
+  print("maintenance script")
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await expect(page.locator('#editorTree')).toContainText('Generate');
+  await expect(page.locator('#editorTree')).not.toContainText('maintenance script');
+
+  await page.getByRole('button', { name: 'AI' }).click();
+  await expect(page.locator('#aiReaderDocument')).toContainText('Generate');
+  await expect(page.locator('#aiReaderDocument')).not.toContainText('maintenance script');
+
+  await page.getByRole('button', { name: 'Editor' }).click();
+  await page.getByRole('button', { name: 'Advanced' }).click();
+  await expect(page.locator('#editorTree')).toContainText('maintenance script');
+
+  await page.locator('[data-action="switch-view"][data-view="ai"]').click();
+  await expect(page.locator('#aiReaderDocument')).not.toContainText('maintenance script');
+
+  await page.locator('[data-action="switch-view"][data-view="editor"]').click();
+  await expect(page.getByRole('button', { name: 'Basic' })).toHaveClass(/secondary/);
+  await expect(page.locator('#editorTree')).not.toContainText('maintenance script');
 });
 
 test('expandable reader toggles from the styled outer block padding', async ({ page }) => {
@@ -1731,6 +1826,34 @@ hvy_version: 0.1
   await page.getByRole('button', { name: 'Raw' }).click();
   await expect(page.locator('#rawEditor')).toContainText('# Grace Hopper');
   await expect(page.locator('#rawEditor')).not.toContainText('"fillIn"');
+});
+
+test('ai fill-in text outside the slot does not activate the whole text block', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ <!--hvy:text {"id":"description-notes","placeholder":"Description and notes","fillIn":true}-->
+  ^detail-heading^ #### Description
+  ^detail-body^ <!-- value -->
+  ^detail-heading^ #### Notes
+  ^detail-body^ <!-- value -->
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'AI' }).click();
+
+  const block = page.locator('#aiReaderDocument .reader-block-text[data-component-id="description-notes"]');
+  await expect(block.locator('[data-field="text-fill-in-value"]')).toHaveCount(2);
+  await block.getByText('Description').click();
+
+  await expect(page.locator('#aiReaderDocument .editor-block[data-active-editor-block="true"]')).toHaveCount(0);
+  await expect(block.locator('[data-field="text-fill-in-value"]')).toHaveCount(2);
 });
 
 test('editor pullout help balloon stays when it fits beside the document body', async ({ page }) => {

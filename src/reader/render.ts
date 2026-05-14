@@ -551,13 +551,33 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
   }
 
   function isViewerHiddenSection(section: VisualSection): boolean {
-    return state.currentView === 'viewer' && (section.editorOnly || isSectionHiddenByTemplateMarker(section));
+    if (state.currentView === 'viewer') {
+      return section.editorOnly || isSectionHiddenByTemplateMarker(section);
+    }
+    return state.currentView === 'ai'
+      && !state.showAdvancedEditor
+      && section.editorOnly
+      && sectionContainsAdvancedOnlyScriptingBlock(section);
   }
 
   function isAdvancedOnlyScriptingBlock(block: VisualBlock): boolean {
     return block.schema.editorOnly
       && deps.resolveBaseComponent(block.schema.component) === 'plugin'
       && block.schema.plugin === SCRIPTING_PLUGIN_ID;
+  }
+
+  function sectionContainsAdvancedOnlyScriptingBlock(section: VisualSection): boolean {
+    return section.blocks.some(blockContainsAdvancedOnlyScriptingBlock)
+      || section.children.some(sectionContainsAdvancedOnlyScriptingBlock);
+  }
+
+  function blockContainsAdvancedOnlyScriptingBlock(block: VisualBlock): boolean {
+    return isAdvancedOnlyScriptingBlock(block)
+      || (block.schema.containerBlocks ?? []).some(blockContainsAdvancedOnlyScriptingBlock)
+      || (block.schema.componentListBlocks ?? []).some(blockContainsAdvancedOnlyScriptingBlock)
+      || (block.schema.gridItems ?? []).some((item) => blockContainsAdvancedOnlyScriptingBlock(item.block))
+      || (block.schema.expandableStubBlocks?.children ?? []).some(blockContainsAdvancedOnlyScriptingBlock)
+      || (block.schema.expandableContentBlocks?.children ?? []).some(blockContainsAdvancedOnlyScriptingBlock);
   }
 
   function isViewerHiddenBlock(block: VisualBlock): boolean {
@@ -1243,13 +1263,12 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
               <h3>${deps.escapeHtml(state.reusableTemplateModal.component)}</h3>
               <button type="button" data-modal-action="close">Close</button>
             </div>
-            <p class="muted">Create reusable component</p>
             <div class="modal-field-stack">
               ${fields}
             </div>
             <div class="link-inline-actions reusable-save-actions">
               <button type="button" class="ghost" data-modal-action="close">Cancel</button>
-              <button type="button" class="secondary" data-modal-action="insert-reusable-template">Insert</button>
+              <button type="button" class="secondary" data-modal-action="insert-reusable-template">Add</button>
             </div>
           </section>
         </div>

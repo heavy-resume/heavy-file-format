@@ -9,10 +9,10 @@ export function isAiEditablePlaceholderTextBlock(block: VisualBlock | null | und
   if (!placeholder) {
     return false;
   }
-  if (block.text.trim().length === 0 || block.text.includes(TEXT_FILL_IN_MARKER)) {
+  if (block.text.trim().length === 0) {
     return true;
   }
-  const visibleText = normalizePlaceholderText(block.text);
+  const visibleText = normalizePlaceholderText(block.text.replaceAll(TEXT_FILL_IN_MARKER, ''));
   return visibleText.length > 0 && placeholder.includes(visibleText);
 }
 

@@ -37,7 +37,7 @@ const switchView: AppActionHandler = ({ actionButton }) => {
     state.componentPlacement = null;
   }
   state.currentView = view;
-  state.editorMode = nextEditorMode;
+  state.editorMode = view === 'ai' && nextEditorMode === 'advanced' ? 'basic' : nextEditorMode;
   state.showAdvancedEditor = state.editorMode === 'advanced';
   if (view !== 'ai') {
     closeAiEditPopover();

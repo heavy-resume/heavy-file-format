@@ -207,7 +207,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
   }
 
   function renderSectionEditorTree(sections: VisualSection[]): string {
-    const mainSections = sections.filter((s) => s.location !== 'sidebar');
+    const mainSections = sections.filter((s) => s.location !== 'sidebar' && !isHiddenEditorOnlySection(s));
     const sectionCards = mainSections.map((section) => renderEditorSection(section, sections)).join('');
     const flatSections = deps.flattenSections(sections);
     const maxWidth = typeof state.documentMeta.reader_max_width === 'string' ? state.documentMeta.reader_max_width.trim() : '';
@@ -352,6 +352,9 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           output.push(renderComponentPlacementTarget({ container: 'section', sectionKey: section.key, placement: 'after', targetBlockId: item.block.id }));
         }
       } else {
+        if (isHiddenEditorOnlySection(item.child)) {
+          continue;
+        }
         output.push(renderEditorSection(item.child, rootSections, true));
       }
     }
@@ -569,6 +572,26 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       && block.schema.editorOnly
       && deps.resolveBaseComponent(block.schema.component) === 'plugin'
       && block.schema.plugin === SCRIPTING_PLUGIN_ID;
+  }
+
+  function isHiddenEditorOnlySection(section: VisualSection): boolean {
+    return !state.showAdvancedEditor
+      && section.editorOnly
+      && sectionContainsHiddenEditorOnlyScriptingBlock(section);
+  }
+
+  function sectionContainsHiddenEditorOnlyScriptingBlock(section: VisualSection): boolean {
+    return section.blocks.some(blockContainsHiddenEditorOnlyScriptingBlock)
+      || section.children.some(sectionContainsHiddenEditorOnlyScriptingBlock);
+  }
+
+  function blockContainsHiddenEditorOnlyScriptingBlock(block: VisualBlock): boolean {
+    return isHiddenEditorOnlyScriptingBlock(block)
+      || (block.schema.containerBlocks ?? []).some(blockContainsHiddenEditorOnlyScriptingBlock)
+      || (block.schema.componentListBlocks ?? []).some(blockContainsHiddenEditorOnlyScriptingBlock)
+      || (block.schema.gridItems ?? []).some((item) => blockContainsHiddenEditorOnlyScriptingBlock(item.block))
+      || (block.schema.expandableStubBlocks?.children ?? []).some(blockContainsHiddenEditorOnlyScriptingBlock)
+      || (block.schema.expandableContentBlocks?.children ?? []).some(blockContainsHiddenEditorOnlyScriptingBlock);
   }
 
   function renderButtonAnchorAttrs(

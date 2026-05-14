@@ -759,6 +759,93 @@ component_defs:
   await expect(inserted.locator('.editor-block-passive [data-placeholder="Details"]')).toBeVisible();
 });
 
+test('custom component template output generator fills a field from provided variables', async ({ page }) => {
+  let prompt = '';
+  await page.route('**/api/chat', async (route) => {
+    const payload = route.request().postDataJSON() as { messages?: Array<{ content?: string }>; context?: string };
+    prompt = payload.messages?.find((message) => message.content?.includes('TypeScript'))?.content ?? '';
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ output: 'Generated TypeScript description' }),
+    });
+  });
+
+  await page.goto('/');
+  await page.evaluate(async () => {
+    const registryPath = '/src/plugins/registry.ts';
+    const { setHostPlugins } = await import(/* @vite-ignore */ registryPath);
+    setHostPlugins([{
+      id: 'dev.heavy.resume',
+      displayName: 'Resume',
+      outputGenerators: [{
+        key: 'dev.heavy.resume.skill-description',
+        label: 'Generate',
+        requiredVariables: ['skill'],
+        generate: (request: { values: Record<string, string> }) => {
+          (window as unknown as { __generatorValues: Record<string, string> }).__generatorValues = request.values;
+          return {
+            prompt: `Write one sentence for ${request.values.skill}.`,
+            answer: 'Fallback skill description',
+          };
+        },
+      }],
+    }]);
+  });
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+component_defs:
+  - name: skill-record
+    baseType: container
+    templateVariables:
+      skill:
+        label: Skill
+      description:
+        label: Description
+        generator: dev.heavy.resume.skill-description
+        generatorLabel: Suggest
+    schema:
+      containerBlocks:
+        - text: "{% skill %}"
+          schema:
+            component: text
+            placeholder: Skill
+        - text: "{% description | block %}"
+          schema:
+            component: text
+            placeholder: Description
+---
+
+<!--hvy: {"id":"skills"}-->
+#! Skills
+
+<!--hvy:component-list {"id":"skill-list","componentListComponent":"skill-record","componentListItemLabel":"skill"}-->
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('.ghost-label', { hasText: 'Add Skill' }).click();
+  const modal = page.locator('.reusable-template-modal');
+  const skillInput = modal.locator('input[data-template-variable="skill"]');
+  const descriptionInput = modal.locator('textarea[data-template-variable="description"]');
+  const generatorButton = modal.locator('[data-modal-action="run-template-generator"]');
+
+  await expect(generatorButton).toBeDisabled();
+  await skillInput.fill('TypeScript');
+  await expect(generatorButton).toBeEnabled();
+  await generatorButton.click();
+
+  await expect(descriptionInput).toHaveValue('Generated TypeScript description');
+  expect(await page.evaluate(() => (window as unknown as { __generatorValues: Record<string, string> }).__generatorValues)).toEqual({ skill: 'TypeScript' });
+  expect(prompt).toBe('Write one sentence for TypeScript.');
+  await modal.locator('[data-modal-action="insert-reusable-template"]').click();
+
+  await expect(page.locator('#editorTree')).toContainText('TypeScript');
+  await expect(page.locator('#editorTree')).toContainText('Generated TypeScript description');
+});
+
 test('AI view shows editor placeholders and empty list add affordances', async ({ page }) => {
   await page.goto('/');
 

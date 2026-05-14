@@ -8,6 +8,8 @@ export interface ReusableTemplateVariable {
   name: string;
   type: ReusableTemplateVariableType;
   label: string;
+  generator?: string;
+  generatorLabel?: string;
 }
 
 const TEMPLATE_TOKEN_PATTERN = /{%\s*([A-Za-z_][A-Za-z0-9_-]*)\s*(?:\|\s*(text|block)\s*)?%}/g;
@@ -17,10 +19,10 @@ export function extractReusableTemplateVariablesFromDefinition(definition: Compo
   if (!source) {
     return [];
   }
-  return extractReusableTemplateVariables(source, getReusableTemplateVariableLabels(definition));
+  return extractReusableTemplateVariables(source, getReusableTemplateVariableConfig(definition));
 }
 
-export function extractReusableTemplateVariables(value: unknown, labels: Record<string, string> = {}): ReusableTemplateVariable[] {
+export function extractReusableTemplateVariables(value: unknown, config: Record<string, { label?: string; generator?: string; generatorLabel?: string }> = {}): ReusableTemplateVariable[] {
   const variables = new Map<string, ReusableTemplateVariableType>();
   visitTemplateStrings(value, (text) => {
     for (const match of text.matchAll(TEMPLATE_TOKEN_PATTERN)) {
@@ -35,7 +37,13 @@ export function extractReusableTemplateVariables(value: unknown, labels: Record<
       }
     }
   });
-  return [...variables.entries()].map(([name, type]) => ({ name, type, label: labels[name] || humanizeTemplateVariableName(name) }));
+  return [...variables.entries()].map(([name, type]) => ({
+    name,
+    type,
+    label: config[name]?.label || humanizeTemplateVariableName(name),
+    ...(config[name]?.generator ? { generator: config[name]?.generator } : {}),
+    ...(config[name]?.generatorLabel ? { generatorLabel: config[name]?.generatorLabel } : {}),
+  }));
 }
 
 export function validateReusableTemplateValues(
@@ -106,22 +114,32 @@ export function humanizeTemplateVariableName(name: string): string {
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-function getReusableTemplateVariableLabels(definition: ComponentDefinition | null | undefined): Record<string, string> {
+function getReusableTemplateVariableConfig(definition: ComponentDefinition | null | undefined): Record<string, { label?: string; generator?: string; generatorLabel?: string }> {
   const config = definition?.templateVariables;
   if (!config || typeof config !== 'object' || Array.isArray(config)) {
     return {};
   }
-  const labels: Record<string, string> = {};
+  const variables: Record<string, { label?: string; generator?: string; generatorLabel?: string }> = {};
   Object.entries(config).forEach(([name, value]) => {
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
       return;
     }
+    const next: { label?: string; generator?: string; generatorLabel?: string } = {};
     const label = (value as { label?: unknown }).label;
     if (typeof label === 'string' && label.trim()) {
-      labels[name] = label.trim();
+      next.label = label.trim();
     }
+    const generator = (value as { generator?: unknown }).generator;
+    if (typeof generator === 'string' && generator.trim()) {
+      next.generator = generator.trim();
+    }
+    const generatorLabel = (value as { generatorLabel?: unknown }).generatorLabel;
+    if (typeof generatorLabel === 'string' && generatorLabel.trim()) {
+      next.generatorLabel = generatorLabel.trim();
+    }
+    variables[name] = next;
   });
-  return labels;
+  return variables;
 }
 
 function getReusableTemplateVariableLabelMap(variables: ReusableTemplateVariable[]): Record<string, string> {

@@ -70,6 +70,47 @@ test('uses configured labels and humanizes snake and kebab variable names', () =
   ]);
 });
 
+test('preserves reusable template variable output generator metadata', () => {
+  const definition: ComponentDefinition = {
+    name: 'skill-record',
+    baseType: 'expandable',
+    templateVariables: {
+      skill: { label: 'Skill' },
+      description: {
+        label: 'Description',
+        generator: 'dev.heavy.resume.skill-description',
+        generatorLabel: 'Suggest',
+      },
+    },
+    schema: {
+      ...defaultBlockSchema('expandable'),
+      xrefTitle: '{% skill %}',
+      expandableContentBlocks: {
+        lock: false,
+        children: [
+          {
+            id: 'description',
+            text: '{% description | block %}',
+            schema: defaultBlockSchema('text'),
+            schemaMode: false,
+          },
+        ],
+      },
+    },
+  };
+
+  expect(extractReusableTemplateVariablesFromDefinition(definition)).toEqual([
+    { name: 'skill', type: 'text', label: 'Skill' },
+    {
+      name: 'description',
+      type: 'block',
+      label: 'Description',
+      generator: 'dev.heavy.resume.skill-description',
+      generatorLabel: 'Suggest',
+    },
+  ]);
+});
+
 test('detects conflicting reusable template variable types', () => {
   expect(() => extractReusableTemplateVariables('{% title | text %}\n{% title | block %}')).toThrow(
     'Template variable "title" uses conflicting types: text and block.'

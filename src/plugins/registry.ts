@@ -1,5 +1,5 @@
 import { state } from '../state';
-import type { HvyPlugin } from './types';
+import type { HvyOutputGenerator, HvyPlugin } from './types';
 
 export interface DocumentPluginDefinition {
   id: string;
@@ -24,6 +24,14 @@ export function isDbTablePluginId(pluginId: string): boolean {
 const hostPlugins: HvyPlugin[] = [];
 
 export function registerHostPlugin(plugin: HvyPlugin): void {
+  const nextPlugins = [...hostPlugins];
+  const nextExistingIndex = nextPlugins.findIndex((entry) => entry.id === plugin.id);
+  if (nextExistingIndex >= 0) {
+    nextPlugins[nextExistingIndex] = plugin;
+  } else {
+    nextPlugins.push(plugin);
+  }
+  assertUniqueOutputGeneratorKeys(nextPlugins);
   const existingIndex = hostPlugins.findIndex((entry) => entry.id === plugin.id);
   if (existingIndex >= 0) {
     hostPlugins[existingIndex] = plugin;
@@ -33,6 +41,7 @@ export function registerHostPlugin(plugin: HvyPlugin): void {
 }
 
 export function setHostPlugins(plugins: HvyPlugin[]): void {
+  assertUniqueOutputGeneratorKeys(plugins);
   hostPlugins.length = 0;
   for (const plugin of plugins) {
     hostPlugins.push(plugin);
@@ -45,6 +54,14 @@ export function getHostPlugins(): HvyPlugin[] {
 
 export function getHostPlugin(pluginId: string): HvyPlugin | null {
   return hostPlugins.find((entry) => entry.id === pluginId) ?? null;
+}
+
+export function getAvailableOutputGenerators(): HvyOutputGenerator[] {
+  return hostPlugins.flatMap((plugin) => plugin.outputGenerators ?? []);
+}
+
+export function getOutputGenerator(key: string): HvyOutputGenerator | null {
+  return getAvailableOutputGenerators().find((generator) => generator.key === key) ?? null;
 }
 
 export function getAvailableDocumentPlugins(): DocumentPluginDefinition[] {
@@ -95,4 +112,20 @@ export function getPluginDisplayName(pluginId: string): string {
     return 'Form';
   }
   return pluginId;
+}
+
+function assertUniqueOutputGeneratorKeys(plugins: HvyPlugin[]): void {
+  const seen = new Set<string>();
+  for (const plugin of plugins) {
+    for (const generator of plugin.outputGenerators ?? []) {
+      const key = generator.key.trim();
+      if (!key) {
+        throw new Error(`Output generator key for plugin "${plugin.id}" cannot be blank.`);
+      }
+      if (seen.has(key)) {
+        throw new Error(`Duplicate output generator key "${key}".`);
+      }
+      seen.add(key);
+    }
+  }
 }

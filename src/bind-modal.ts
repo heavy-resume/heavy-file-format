@@ -13,6 +13,10 @@ import { syncReusableTemplateForBlock } from './reusable';
 import { createBlockFromReusableTemplateValues } from './bind/actions/reusable-template';
 import { assignAutoBlockId } from './auto-block-id';
 import { applyXrefTargetDefaults } from './xref-ops';
+import { getOutputGenerator } from './plugins/registry';
+import { getComponentDefsFromMeta } from './component-defs';
+import { extractReusableTemplateVariablesFromDefinition } from './reusable-template-values';
+import { resolveOutputGeneratorResponse } from './template-output-generators';
 
 export function bindModal(app: HTMLElement): void {
   const modalRoot = app.querySelector<HTMLDivElement>('#modalRoot');
@@ -62,6 +66,12 @@ export function bindModal(app: HTMLElement): void {
     const insertReusableTemplateBtn = target.closest<HTMLElement>('[data-modal-action="insert-reusable-template"]');
     if (insertReusableTemplateBtn && state.reusableTemplateModal) {
       insertReusableTemplateFromModal(modalRoot);
+      return;
+    }
+
+    const templateGeneratorBtn = target.closest<HTMLButtonElement>('[data-modal-action="run-template-generator"]');
+    if (templateGeneratorBtn && state.reusableTemplateModal) {
+      void runReusableTemplateGenerator(modalRoot, templateGeneratorBtn);
       return;
     }
 
@@ -238,6 +248,8 @@ export function bindModal(app: HTMLElement): void {
     });
   }
 
+  setupReusableTemplateGeneratorControls(modalRoot);
+
   const cssInput = modalRoot.querySelector<HTMLTextAreaElement>('#modalCssInput');
   const sqliteRowComponentRawInput = modalRoot.querySelector<HTMLTextAreaElement>('#sqliteRowComponentRawInput');
   const dbTableQueryInput = modalRoot.querySelector<HTMLTextAreaElement>('#dbTableQueryInput');
@@ -311,6 +323,115 @@ export function bindModal(app: HTMLElement): void {
     getRefreshReaderPanels()();
     getRefreshModalPreview()();
   });
+}
+
+function setupReusableTemplateGeneratorControls(modalRoot: HTMLDivElement): void {
+  if (!state.reusableTemplateModal) {
+    return;
+  }
+  updateReusableTemplateGeneratorButtons(modalRoot);
+  modalRoot.addEventListener('input', (event) => {
+    const target = event.target as HTMLElement;
+    if (!target.dataset.templateVariable) {
+      return;
+    }
+    updateReusableTemplateGeneratorButtons(modalRoot);
+  });
+}
+
+function updateReusableTemplateGeneratorButtons(modalRoot: HTMLDivElement): void {
+  modalRoot.querySelectorAll<HTMLButtonElement>('[data-modal-action="run-template-generator"]').forEach((button) => {
+    const requiredVariables = parseRequiredVariables(button.dataset.requiredVariables ?? '');
+    button.disabled = requiredVariables.some((key) => getTemplateInputValue(modalRoot, key).trim().length === 0) || button.dataset.busyState === 'busy';
+  });
+}
+
+async function runReusableTemplateGenerator(modalRoot: HTMLDivElement, button: HTMLButtonElement): Promise<void> {
+  const modal = state.reusableTemplateModal;
+  const generatorKey = button.dataset.templateGenerator ?? '';
+  const targetVariable = button.dataset.templateVariableTarget ?? '';
+  const generator = getOutputGenerator(generatorKey);
+  if (!modal || !generator || !targetVariable || button.disabled) {
+    return;
+  }
+  const variable = extractReusableTemplateVariablesFromDefinition(
+    getComponentDefsFromMeta(state.document.meta).find((item) => item.name === modal.component)
+  ).find((item) => item.name === targetVariable);
+  const outputInput = getTemplateInput(modalRoot, targetVariable);
+  if (!variable || !outputInput) {
+    return;
+  }
+
+  const status = modalRoot.querySelector<HTMLElement>(`[data-template-generator-status="${cssEscape(targetVariable)}"]`);
+  const setStatus = (message: string, error = false) => {
+    if (!status) {
+      return;
+    }
+    status.textContent = message;
+    status.classList.toggle('is-error', error);
+  };
+
+  button.dataset.busyState = 'busy';
+  const idleLabel = button.textContent ?? 'Generate';
+  button.dataset.idleLabel = idleLabel;
+  button.textContent = 'Generating...';
+  button.disabled = true;
+  setStatus('Generating...');
+  try {
+    const response = await generator.generate({
+      document: state.document,
+      component: modal.component,
+      variable: variable.name,
+      variableType: variable.type,
+      label: variable.label,
+      values: collectProvidedTemplateValues(modalRoot),
+      target: modal.target,
+    });
+    const output = await resolveOutputGeneratorResponse({
+      response,
+      settings: state.chat.settings,
+    });
+    outputInput.value = output;
+    outputInput.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    setStatus('Done.');
+  } catch (error) {
+    setStatus(error instanceof Error ? error.message : 'Generation failed.', true);
+  } finally {
+    button.dataset.busyState = 'idle';
+    button.textContent = button.dataset.idleLabel ?? 'Generate';
+    delete button.dataset.idleLabel;
+    updateReusableTemplateGeneratorButtons(modalRoot);
+  }
+}
+
+function collectProvidedTemplateValues(modalRoot: HTMLDivElement): Record<string, string> {
+  const values: Record<string, string> = {};
+  modalRoot.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>('[data-template-variable]').forEach((input) => {
+    const key = input.dataset.templateVariable;
+    const value = input.value.trim();
+    if (key && value.length > 0) {
+      values[key] = value;
+    }
+  });
+  return values;
+}
+
+function getTemplateInput(modalRoot: HTMLDivElement, key: string): HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement | null {
+  return modalRoot.querySelector<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(`[data-template-variable="${cssEscape(key)}"]`);
+}
+
+function getTemplateInputValue(modalRoot: HTMLDivElement, key: string): string {
+  return getTemplateInput(modalRoot, key)?.value ?? '';
+}
+
+function parseRequiredVariables(raw: string): string[] {
+  return raw.split(',').map((item) => item.trim()).filter(Boolean);
+}
+
+function cssEscape(value: string): string {
+  return typeof CSS !== 'undefined' && typeof CSS.escape === 'function'
+    ? CSS.escape(value)
+    : value.replace(/["\\]/g, '\\$&');
 }
 
 function insertReusableTemplateFromModal(modalRoot: HTMLDivElement): void {

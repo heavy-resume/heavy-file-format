@@ -540,6 +540,8 @@ Template value notes:
 - Blank values are allowed. Replacing a token with a blank value does not remove or change separate schema fields such as `placeholder`.
 - Authoring tools that accept explicit template values SHOULD require the provided keys to exactly match the expected variable names.
 - Reusable component definitions MAY include `templateVariables`, keyed by variable name. Each variable config MAY include `label`, a human-readable field label for authoring UIs. When `label` is omitted, authoring tools SHOULD derive one by converting snake_case or kebab-case separators to spaces and title-casing the result.
+- A template variable config MAY include `generator`, a plugin-qualified output generator key such as `dev.heavy.resume.skill-description`. Authoring tools MAY expose this as a field-level generation action. Generator requests MUST include only template variables that the author has provided with non-empty values; missing or empty variables MUST be omitted. If the installed generator declares required variables, authoring tools SHOULD disable the action until all required variables are non-empty.
+- A template variable config MAY include `generatorLabel`, overriding the visible action label for that variable. If omitted, authoring tools SHOULD use the installed generator's label or a generic label such as `Generate`.
 
 ### 5.10 Reusable section definitions
 
@@ -902,12 +904,32 @@ A plugin is identified by a stable id (reverse-DNS RECOMMENDED) and is
 resolved by the host that embeds an HVY reader/editor, not by the document
 itself. Hosts install zero or more plugin implementations at startup; the
 reference reader/editor exposes this as a host-supplied list of plugin objects.
-Each plugin object provides:
+Each plugin object is a host-installed capability bundle. It MAY provide:
 
 - the plugin `id` matching the value used in `block.plugin`;
 - a human-readable display name (used by editors to populate the plugin
   selector for new `plugin` blocks);
-- a factory that produces a plugin instance bound to a specific block.
+- one or more renderable component factories that produce plugin instances bound to specific blocks;
+- one or more output generators that produce text directly or produce prompts for a host LLM/chat client.
+
+An output generator has a globally unique plugin-qualified key, an optional
+human-readable label, optional required template variable names, and a generate
+function. The generate function receives the current document, component name,
+target template variable, insertion target, and only the currently provided
+non-empty template variable values. It returns a response object with:
+
+- `answer`: optional direct text output;
+- `prompt`: optional prompt text for the host LLM/chat client;
+- `responseInstructions`: optional instructions for interpreting the prompt response;
+- `inputCharLimit`: optional maximum prompt length;
+- `outputCharLimit`: optional maximum generated text length.
+
+If `prompt` is present, the host SHOULD submit it through its configured
+LLM/chat path. If both `prompt` and `answer` are present, `answer` is a fallback
+used only when the LLM request fails or returns no text. If only `answer` is
+present, the host SHOULD insert that text directly. If neither path produces
+text, the authoring UI SHOULD show an error and preserve the user's existing
+field value.
 
 Plugins MUST own the rendered DOM for their block. Hosts MUST treat the
 returned element as opaque and MUST NOT mutate its children, except to remove

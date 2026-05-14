@@ -6,7 +6,9 @@ import {
   registerHostPlugin,
   setHostPlugins,
   getAvailableDocumentPlugins,
+  getAvailableOutputGenerators,
   getHostPlugins,
+  getOutputGenerator,
   getPluginDisplayName,
   DB_TABLE_PLUGIN_ID,
   FORM_PLUGIN_ID,
@@ -54,6 +56,30 @@ describe('plugin host registry', () => {
 
     const ids = getAvailableDocumentPlugins().map((entry) => entry.id);
     expect(ids).toEqual(['com.example.custom']);
+  });
+
+  test('output generators are registered by plugin-qualified key and reject duplicates', () => {
+    registerHostPlugin({
+      id: 'dev.heavy.resume',
+      displayName: 'Resume',
+      outputGenerators: [{
+        key: 'dev.heavy.resume.skill-description',
+        label: 'Generate description',
+        requiredVariables: ['skill'],
+        generate: () => ({ answer: 'Generated description' }),
+      }],
+    });
+
+    expect(getAvailableOutputGenerators().map((generator) => generator.key)).toEqual(['dev.heavy.resume.skill-description']);
+    expect(getOutputGenerator('dev.heavy.resume.skill-description')?.label).toBe('Generate description');
+    expect(() => registerHostPlugin({
+      id: 'dev.heavy.other',
+      displayName: 'Other',
+      outputGenerators: [{
+        key: 'dev.heavy.resume.skill-description',
+        generate: () => ({ answer: 'Duplicate' }),
+      }],
+    })).toThrow('Duplicate output generator key "dev.heavy.resume.skill-description".');
   });
 });
 

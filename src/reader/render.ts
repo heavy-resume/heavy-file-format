@@ -27,7 +27,7 @@ import { sanitizeInlineCss } from '../css-sanitizer';
 import { areTablesEnabled } from '../reference-config';
 import { defaultBlockSchema } from '../document-factory';
 import { parseAttachedComponentBlocks } from '../plugins/db-table';
-import { SCRIPTING_PLUGIN_ID } from '../plugins/registry';
+import { getOutputGenerator, SCRIPTING_PLUGIN_ID } from '../plugins/registry';
 import { getComponentDefsFromMeta } from '../component-defs';
 import { extractReusableTemplateVariablesFromDefinition } from '../reusable-template-values';
 import { filterTemplateVisibleSections, isSectionHiddenByTemplateMarker } from '../template-hide';
@@ -1259,6 +1259,23 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
         const id = `reusableTemplateValue_${variable.name}`;
         const label = deps.escapeHtml(variable.label);
         const xrefTargetTagFilter = getTemplateVariableXrefTargetTagFilter(definition, variable.name);
+        const outputGenerator = variable.generator ? getOutputGenerator(variable.generator) : null;
+        const generatorButton = outputGenerator
+          ? `<button
+              type="button"
+              class="ghost template-generator-button"
+              data-modal-action="run-template-generator"
+              data-template-generator="${deps.escapeAttr(outputGenerator.key)}"
+              data-template-variable-target="${deps.escapeAttr(variable.name)}"
+              data-required-variables="${deps.escapeAttr((outputGenerator.requiredVariables ?? []).join(','))}"
+              aria-label="${deps.escapeAttr(variable.generatorLabel || outputGenerator.label || 'Generate')}"
+              disabled
+            >${deps.escapeHtml(variable.generatorLabel || outputGenerator.label || 'Generate')}</button>`
+          : '';
+        const status = outputGenerator
+          ? `<span class="template-generator-status" data-template-generator-status="${deps.escapeAttr(variable.name)}"></span>`
+          : '';
+        const labelHead = `<span class="template-field-label-row"><span>${label}</span>${generatorButton}</span>`;
         if (xrefTargetTagFilter) {
           hasTargetPicker = true;
           const targetOptions = deps.getComponentRenderHelpers().getXrefTargetOptions(xrefTargetTagFilter);
@@ -1266,7 +1283,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
             hasUnavailablePicker = true;
           }
           return `<label class="template-target-picker">
-              <span>${label}</span>
+              ${labelHead}
               <input
                 id="${deps.escapeAttr(id)}"
                 data-template-variable="${deps.escapeAttr(variable.name)}"
@@ -1277,17 +1294,20 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
               <datalist id="${deps.escapeAttr(`${id}_targets`)}">
                 ${targetOptions.map((option) => `<option value="${deps.escapeAttr(option.value)}" label="${deps.escapeAttr(option.label)}">${deps.escapeHtml(option.label)}</option>`).join('')}
               </datalist>
+              ${status}
               ${targetOptions.length === 0 ? `<p class="template-picker-empty">No ${deps.escapeHtml(xrefTargetTagFilter)} targets available yet.</p>` : ''}
             </label>`;
         }
         return variable.type === 'block'
           ? `<label>
-              <span>${label}</span>
+              ${labelHead}
               <textarea id="${deps.escapeAttr(id)}" data-template-variable="${deps.escapeAttr(variable.name)}" rows="5"></textarea>
+              ${status}
             </label>`
           : `<label>
-              <span>${label}</span>
+              ${labelHead}
               <input id="${deps.escapeAttr(id)}" data-template-variable="${deps.escapeAttr(variable.name)}" />
+              ${status}
             </label>`;
       }).join('');
       return `

@@ -196,6 +196,12 @@ export function reconcilePluginMounts(root: ParentNode): void {
       return;
     }
 
+    if (!registration.create) {
+      placeholder.textContent = `Plugin "${pluginId}" does not provide a renderable component.`;
+      placeholder.classList.add('hvy-plugin-missing');
+      return;
+    }
+
     let instance: HvyPluginInstance;
     try {
       instance = registration.create(ctx);

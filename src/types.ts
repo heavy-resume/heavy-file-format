@@ -184,7 +184,7 @@ export interface ComponentDefinition {
   baseType: string;
   tags?: string;
   description?: string;
-  templateVariables?: Record<string, { label?: string }>;
+  templateVariables?: Record<string, { label?: string; generator?: string; generatorLabel?: string }>;
   schema?: BlockSchema;
   template?: VisualBlock;
 }

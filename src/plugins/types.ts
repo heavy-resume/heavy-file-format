@@ -1,6 +1,7 @@
 import type { JsonObject } from '../hvy/types';
 import type { VisualBlock } from '../editor/types';
-import type { DocumentAttachment, VisualDocument } from '../types';
+import type { DocumentAttachment, ReusableTemplateModalState, VisualDocument } from '../types';
+import type { ReusableTemplateVariableType } from '../reusable-template-values';
 
 // A plugin owns the DOM element it returns. The host treats it as opaque.
 // Plugins style themselves using the standard CSS theme variables; nothing is
@@ -73,6 +74,37 @@ export interface HvyPluginInstance {
 
 export type HvyPluginFactory = (ctx: HvyPluginContext) => HvyPluginInstance;
 
+export interface HvyPluginComponentDefinition {
+  id?: string;
+  displayName?: string;
+  create: HvyPluginFactory;
+}
+
+export interface HvyOutputGeneratorRequest {
+  document: VisualDocument;
+  component: string;
+  variable: string;
+  variableType: ReusableTemplateVariableType;
+  label: string;
+  values: Record<string, string>;
+  target: ReusableTemplateModalState['target'];
+}
+
+export interface HvyOutputGeneratorResponse {
+  answer?: string;
+  prompt?: string;
+  responseInstructions?: string;
+  inputCharLimit?: number;
+  outputCharLimit?: number;
+}
+
+export interface HvyOutputGenerator {
+  key: string;
+  label?: string;
+  requiredVariables?: string[];
+  generate(request: HvyOutputGeneratorRequest): Promise<HvyOutputGeneratorResponse> | HvyOutputGeneratorResponse;
+}
+
 export type HvyPluginHookChangeReason = 'load' | 'edit' | 'raw-edit' | 'ai-edit' | 'plugin-edit' | 'unknown';
 
 export interface HvyDocumentHookContext {
@@ -100,9 +132,14 @@ export interface HvyPlugin {
   id: string;
   // Human-readable name shown in the plugin selector.
   displayName: string;
-  // Factory invoked once per mount. The host caches the returned instance per
-  // (sectionKey, blockId) and reuses it across re-renders.
-  create: HvyPluginFactory;
+  // Optional capability list for renderable plugin components.
+  components?: HvyPluginComponentDefinition[];
+  // Optional output generators used by authoring UI such as reusable template forms.
+  outputGenerators?: HvyOutputGenerator[];
+  // Compatibility/default component factory invoked once per mount. The host
+  // caches the returned instance per (sectionKey, blockId) and reuses it across
+  // re-renders.
+  create?: HvyPluginFactory;
   // Optional document lifecycle hooks. Handlers are ordered by per-handler
   // priority, then by the host plugin list order.
   hooks?: HvyPluginHooks;

@@ -25,10 +25,10 @@ hvy_version: 0.1
 <!--hvy: {"id":"scripts"}-->
 #! Scripts
 
-<!--hvy:plugin {"id":"editor-script","editorOnly":true,"plugin":"dev.heavy.scripting","pluginConfig":{"version":"0.1"}}-->
+<!--hvy:plugin {"id":"editor-script","editorOnly":true,"plugin":"dev.hvy.scripting","pluginConfig":{"version":"0.1"}}-->
 print("editor")
 
-<!--hvy:plugin {"id":"document-script","plugin":"dev.heavy.scripting","pluginConfig":{"version":"0.1"}}-->
+<!--hvy:plugin {"id":"document-script","plugin":"dev.hvy.scripting","pluginConfig":{"version":"0.1"}}-->
 print("document")
 `, '.hvy');
 }

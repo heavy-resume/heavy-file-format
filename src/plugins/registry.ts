@@ -6,10 +6,10 @@ export interface DocumentPluginDefinition {
   source: string;
 }
 
-export const DB_TABLE_PLUGIN_ID = 'dev.heavy.db-table';
-export const FORM_PLUGIN_ID = 'dev.heavy.form';
-export const PROGRESS_BAR_PLUGIN_ID = 'dev.heavy.progress-bar';
-export const SCRIPTING_PLUGIN_ID = 'dev.heavy.scripting';
+export const DB_TABLE_PLUGIN_ID = 'dev.hvy.db-table';
+export const FORM_PLUGIN_ID = 'dev.hvy.form';
+export const PROGRESS_BAR_PLUGIN_ID = 'dev.hvy.progress-bar';
+export const SCRIPTING_PLUGIN_ID = 'dev.hvy.scripting';
 export const BUILTIN_DB_TABLE_PLUGIN_SOURCE = 'builtin://db-table';
 export const BUILTIN_FORM_PLUGIN_SOURCE = 'builtin://form';
 export const BUILTIN_PROGRESS_BAR_PLUGIN_SOURCE = 'builtin://progress-bar';

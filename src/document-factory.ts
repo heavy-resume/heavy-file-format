@@ -2,7 +2,7 @@ import type { Align, BlockSchema, ExpandablePart, Slot, SortKeyValue, TableRow, 
 import type { JsonObject } from './hvy/types';
 import type { ComponentDefinition, VisualDocument } from './types';
 import { makeId } from './utils';
-import { getComponentDefs, getSectionDefs, resolveBaseComponent } from './component-defs';
+import { getComponentDefs, getComponentDefsFromMeta, getSectionDefs, resolveBaseComponent, resolveBaseComponentFromMeta } from './component-defs';
 import { coerceGridColumns, parseGridItems as _parseGridItems } from './grid-ops';
 import { getTableColumns } from './table-ops';
 import { REUSABLE_SECTION_DEF_PREFIX } from './state';
@@ -76,7 +76,7 @@ export function defaultBlockSchema(component = 'text'): BlockSchema {
   };
 }
 
-export function parseExpandablePart(raw: unknown, seen = new WeakSet<object>()): ExpandablePart {
+export function parseExpandablePart(raw: unknown, seen = new WeakSet<object>(), documentMeta?: JsonObject | null): ExpandablePart {
   // New format: { lock: boolean, children: VisualBlock[] }
   if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
     if (seen.has(raw)) {
@@ -86,12 +86,12 @@ export function parseExpandablePart(raw: unknown, seen = new WeakSet<object>()):
     const obj = raw as JsonObject;
     return {
       lock: obj.lock === true,
-      children: Array.isArray(obj.children) ? obj.children.map((b) => parseVisualBlock(b, seen)) : [],
+      children: Array.isArray(obj.children) ? obj.children.map((b) => parseVisualBlock(b, seen, documentMeta)) : [],
     };
   }
   // Backward compat: old flat array format
   if (Array.isArray(raw)) {
-    return { lock: false, children: raw.map((b) => parseVisualBlock(b, seen)) };
+    return { lock: false, children: raw.map((b) => parseVisualBlock(b, seen, documentMeta)) };
   }
   return { lock: false, children: [] };
 }
@@ -126,21 +126,21 @@ export function coerceSlot(value: string): Slot {
   return 'center';
 }
 
-export function parseVisualBlock(candidate: unknown, seen = new WeakSet<object>()): VisualBlock {
+export function parseVisualBlock(candidate: unknown, seen = new WeakSet<object>(), documentMeta?: JsonObject | null): VisualBlock {
   if (!candidate || typeof candidate !== 'object') {
-    return createEmptyBlock('container', true);
+    return createEmptyBlock('container', true, documentMeta);
   }
   if (seen.has(candidate)) {
-    return createEmptyBlock('container', true);
+    return createEmptyBlock('container', true, documentMeta);
   }
   seen.add(candidate);
   const raw = candidate as JsonObject;
   // Shorthand: { component: 'name' } without a 'schema' wrapper.
   // Instantiate from the component def template so all nested content (titles, blocks, etc.) is populated.
   if (!raw.schema && typeof raw.component === 'string') {
-    return createEmptyBlock(raw.component);
+    return createEmptyBlock(raw.component, false, documentMeta);
   }
-  const schema = schemaFromUnknown(raw.schema, seen);
+  const schema = schemaFromUnknown(raw.schema, seen, documentMeta);
   return {
     id: typeof raw.id === 'string' ? raw.id : makeId('block'),
     text: typeof raw.text === 'string' ? raw.text : '',
@@ -149,7 +149,7 @@ export function parseVisualBlock(candidate: unknown, seen = new WeakSet<object>(
   };
 }
 
-export function schemaFromUnknown(value: unknown, seen = new WeakSet<object>()): BlockSchema {
+export function schemaFromUnknown(value: unknown, seen = new WeakSet<object>(), documentMeta?: JsonObject | null): BlockSchema {
   if (!value || typeof value !== 'object') {
     return defaultBlockSchema('text');
   }
@@ -162,7 +162,7 @@ export function schemaFromUnknown(value: unknown, seen = new WeakSet<object>()):
   const defaults = defaultBlockSchema(component);
   const rows = Array.isArray(candidate.tableRows) ? candidate.tableRows : [];
   const gridColumns = coerceGridColumns(candidate.gridColumns ?? candidate.gridTemplateColumns);
-  const parseNestedVisualBlock = (raw: unknown): VisualBlock => parseVisualBlock(raw, seen);
+  const parseNestedVisualBlock = (raw: unknown): VisualBlock => parseVisualBlock(raw, seen, documentMeta);
   const parsedGridItems = _parseGridItems(candidate, gridColumns, component, _createBlockSkip, parseNestedVisualBlock);
   return {
     component,
@@ -174,7 +174,7 @@ export function schemaFromUnknown(value: unknown, seen = new WeakSet<object>()):
     css: typeof candidate.css === 'string' ? candidate.css : defaults.css,
     codeLanguage: typeof candidate.codeLanguage === 'string' ? candidate.codeLanguage : defaults.codeLanguage,
     containerBlocks: Array.isArray(candidate.containerBlocks)
-      ? candidate.containerBlocks.map((block) => parseVisualBlock(block, seen))
+      ? candidate.containerBlocks.map((block) => parseVisualBlock(block, seen, documentMeta))
       : [],
     containerTitle: typeof candidate.containerTitle === 'string' ? candidate.containerTitle : defaults.containerTitle,
     containerExpanded: candidate.containerExpanded !== false,
@@ -184,7 +184,7 @@ export function schemaFromUnknown(value: unknown, seen = new WeakSet<object>()):
     componentListItemLabel:
       typeof candidate.componentListItemLabel === 'string' ? candidate.componentListItemLabel : defaults.componentListItemLabel,
     componentListBlocks: Array.isArray(candidate.componentListBlocks)
-      ? candidate.componentListBlocks.map((block) => parseVisualBlock(block, seen))
+      ? candidate.componentListBlocks.map((block) => parseVisualBlock(block, seen, documentMeta))
       : [],
     componentListDefaultSortKey: typeof candidate.componentListDefaultSortKey === 'string' ? candidate.componentListDefaultSortKey : defaults.componentListDefaultSortKey,
     componentListDefaultSortDirection: candidate.componentListDefaultSortDirection === 'desc' ? 'desc' : 'asc',
@@ -223,7 +223,7 @@ export function schemaFromUnknown(value: unknown, seen = new WeakSet<object>()):
       typeof candidate.expandableStubDescription === 'string'
         ? candidate.expandableStubDescription
         : readExpandablePartDescription(candidate.expandableStubBlocks) || defaults.expandableStubDescription,
-    expandableStubBlocks: parseExpandablePart(candidate.expandableStubBlocks, seen),
+    expandableStubBlocks: parseExpandablePart(candidate.expandableStubBlocks, seen, documentMeta),
     expandableAlwaysShowStub: candidate.expandableAlwaysShowStub !== false,
     expandableExpanded: candidate.expandableExpanded === true,
     expandableContentCss:
@@ -234,7 +234,7 @@ export function schemaFromUnknown(value: unknown, seen = new WeakSet<object>()):
       typeof candidate.expandableContentDescription === 'string'
         ? candidate.expandableContentDescription
         : readExpandablePartDescription(candidate.expandableContentBlocks) || defaults.expandableContentDescription,
-    expandableContentBlocks: parseExpandablePart(candidate.expandableContentBlocks, seen),
+    expandableContentBlocks: parseExpandablePart(candidate.expandableContentBlocks, seen, documentMeta),
     tableColumns: parseTableColumns(candidate.tableColumns, defaults.tableColumns),
     tableShowHeader: candidate.tableShowHeader !== false,
     tableRows: rows.map((row) => {
@@ -311,14 +311,16 @@ function _createBlockSkip(component: string, _skip: boolean): VisualBlock {
   };
 }
 
-export function createEmptyBlock(component = 'text', skipComponentDefaults = false): VisualBlock {
-  const reusableInstance = instantiateReusableBlock(component);
+export function createEmptyBlock(component = 'text', skipComponentDefaults = false, documentMeta?: JsonObject | null): VisualBlock {
+  const reusableInstance = documentMeta
+    ? instantiateReusableBlockFromMeta(component, documentMeta)
+    : instantiateReusableBlock(component);
   if (reusableInstance) {
     return reusableInstance;
   }
   const schema = defaultBlockSchema(component);
   if (!skipComponentDefaults) {
-    applyComponentDefaults(schema, component);
+    applyComponentDefaults(schema, component, documentMeta);
   }
   return {
     id: makeId('block'),
@@ -388,11 +390,34 @@ export function cloneReusableSchema(schema: BlockSchema, componentName = schema.
   return cloned;
 }
 
+function cloneReusableSchemaFromMeta(schema: BlockSchema, componentName: string, documentMeta: JsonObject): BlockSchema {
+  const cloned = schemaFromUnknown(JSON.parse(JSON.stringify(schema)) as JsonObject, new WeakSet<object>(), documentMeta);
+  cloned.component = componentName;
+  cloned.containerBlocks = cloned.containerBlocks.map((block) => cloneReusableBlockFromMeta(block, documentMeta));
+  cloned.componentListBlocks = cloned.componentListBlocks.map((block) => cloneReusableBlockFromMeta(block, documentMeta));
+  cloned.gridItems = cloned.gridItems.map((item) => ({
+    ...item,
+    block: cloneReusableBlockFromMeta(item.block, documentMeta),
+  }));
+  cloned.expandableStubBlocks.children = cloned.expandableStubBlocks.children.map((block) => cloneReusableBlockFromMeta(block, documentMeta));
+  cloned.expandableContentBlocks.children = cloned.expandableContentBlocks.children.map((block) => cloneReusableBlockFromMeta(block, documentMeta));
+  return cloned;
+}
+
 export function cloneReusableBlock(block: VisualBlock): VisualBlock {
   return {
     id: makeId('block'),
     text: block.text,
     schema: cloneReusableSchema(block.schema, block.schema.component),
+    schemaMode: false,
+  };
+}
+
+function cloneReusableBlockFromMeta(block: VisualBlock, documentMeta: JsonObject): VisualBlock {
+  return {
+    id: makeId('block'),
+    text: block.text,
+    schema: cloneReusableSchemaFromMeta(block.schema, block.schema.component, documentMeta),
     schemaMode: false,
   };
 }
@@ -456,6 +481,26 @@ export function instantiateReusableBlock(componentName: string): VisualBlock | n
   return instance;
 }
 
+function instantiateReusableBlockFromMeta(componentName: string, documentMeta: JsonObject): VisualBlock | null {
+  const def = getComponentDefsFromMeta(documentMeta).find((item) => item.name === componentName);
+  if (!def) {
+    return null;
+  }
+  const fallbackSchema = def.schema
+    ? cloneReusableSchemaFromMeta(schemaFromUnknown({ ...(def.schema as unknown as JsonObject), component: componentName }, new WeakSet<object>(), documentMeta), componentName, documentMeta)
+    : defaultBlockSchema(componentName);
+  const template = def.template ?? {
+    id: makeId('block'),
+    text: '',
+    schema: fallbackSchema,
+    schemaMode: true,
+  };
+  const instance = cloneReusableBlockFromMeta(template, documentMeta);
+  instance.schema.component = componentName;
+  instance.schemaMode = false;
+  return instance;
+}
+
 export function instantiateReusableSection(name: string, level: number): VisualSection | null {
   const normalizedName = name.startsWith(REUSABLE_SECTION_DEF_PREFIX) ? name.slice(REUSABLE_SECTION_DEF_PREFIX.length) : name;
   const def = getSectionDefs().find((item) => item.name === normalizedName);
@@ -465,16 +510,23 @@ export function instantiateReusableSection(name: string, level: number): VisualS
   return cloneReusableSection(def.template, level);
 }
 
-export function applyComponentDefaults(schema: BlockSchema, componentName: string): void {
-  const def = getComponentDefs().find((item) => item.name === componentName);
-  const base = resolveBaseComponent(componentName);
+export function applyComponentDefaults(schema: BlockSchema, componentName: string, documentMeta?: JsonObject | null): void {
+  const def = documentMeta
+    ? getComponentDefsFromMeta(documentMeta).find((item) => item.name === componentName)
+    : getComponentDefs().find((item) => item.name === componentName);
+  const base = documentMeta ? resolveBaseComponentFromMeta(componentName, documentMeta) : resolveBaseComponent(componentName);
   if (def?.template) {
-    const next = cloneReusableSchema(def.template.schema, componentName);
+    const next = documentMeta
+      ? cloneReusableSchemaFromMeta(def.template.schema, componentName, documentMeta)
+      : cloneReusableSchema(def.template.schema, componentName);
     Object.assign(schema, next);
     return;
   }
   if (def?.schema) {
-    Object.assign(schema, cloneReusableSchema(def.schema, componentName));
+    Object.assign(schema, documentMeta
+      ? cloneReusableSchemaFromMeta(schemaFromUnknown({ ...(def.schema as unknown as JsonObject), component: componentName }, new WeakSet<object>(), documentMeta), componentName, documentMeta)
+      : cloneReusableSchema(def.schema, componentName)
+    );
     return;
   }
   if (base === 'table' && schema.tableRows.length === 0) {

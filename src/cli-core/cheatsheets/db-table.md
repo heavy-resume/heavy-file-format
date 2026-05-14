@@ -29,10 +29,10 @@ Display rows in the document:
 
 ```shell
 hvy insert 0 plugin db-table /demo-area visible-widgets
-echo '{"id":"visible-widgets","plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"fake_widgets","queryLimit":10}}' > /body/demo-area/visible-widgets/plugin.json
+echo '{"id":"visible-widgets","plugin":"dev.hvy.db-table","pluginConfig":{"source":"with-file","table":"fake_widgets","queryLimit":10}}' > /body/demo-area/visible-widgets/plugin.json
 echo 'SELECT label, zone FROM fake_widgets WHERE archived_at IS NULL' > /body/demo-area/visible-widgets/plugin.txt
 hvy insert -1 plugin db-table /demo-area widget-zone-totals
-echo '{"id":"widget-zone-totals","plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"fake_widget_zone_totals","queryLimit":10}}' > /body/demo-area/widget-zone-totals/plugin.json
+echo '{"id":"widget-zone-totals","plugin":"dev.hvy.db-table","pluginConfig":{"source":"with-file","table":"fake_widget_zone_totals","queryLimit":10}}' > /body/demo-area/widget-zone-totals/plugin.json
 echo 'SELECT zone, widget_count FROM fake_widget_zone_totals' > /body/demo-area/widget-zone-totals/plugin.txt
 ```
 
@@ -43,7 +43,7 @@ cat /body/demo-area/visible-widgets/plugin.json
 cat /body/demo-area/visible-widgets/plugin.txt
 hvy plugin db-table tables
 hvy plugin db-table exec "CREATE VIEW fake_visible_widgets AS SELECT label, zone FROM fake_widgets WHERE archived_at IS NULL"
-echo '{"id":"visible-widgets","css":"","plugin":"dev.heavy.db-table","pluginConfig":{"table":"fake_visible_widgets"}}' > /body/demo-area/visible-widgets/plugin.json
+echo '{"id":"visible-widgets","css":"","plugin":"dev.hvy.db-table","pluginConfig":{"table":"fake_visible_widgets"}}' > /body/demo-area/visible-widgets/plugin.json
 echo 'SELECT label, zone FROM fake_visible_widgets' > /body/demo-area/visible-widgets/plugin.txt
 hvy lint
 ```

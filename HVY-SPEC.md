@@ -459,7 +459,7 @@ The `children` array uses the same recursive block object shape as other nested 
 
 An expandable with empty `expandableStubBlocks.children` and populated `expandableContentBlocks.children` uses the content pane as its collapsed preview. Readers SHOULD omit the empty stub pane entirely, render a non-editing clipped preview of the first visible content while collapsed, and expand/collapse when the expandable is activated. This differs from a collapsed container preview: activating an expandable toggles it open and closed, while container preview activation opens the container.
 
-The built-in `table` component is static document data stored in `tableColumns` and `tableRows`. Use a dynamic data-backed plugin such as `dev.heavy.db-table` when rows should come from a backend query.
+The built-in `table` component is static document data stored in `tableColumns` and `tableRows`. Use a dynamic data-backed plugin such as `dev.hvy.db-table` when rows should come from a backend query.
 
 For static tables, `tableColumns` is a JSON/YAML array of strings:
 
@@ -540,7 +540,7 @@ Template value notes:
 - Blank values are allowed. Replacing a token with a blank value does not remove or change separate schema fields such as `placeholder`.
 - Authoring tools that accept explicit template values SHOULD require the provided keys to exactly match the expected variable names.
 - Reusable component definitions MAY include `templateVariables`, keyed by variable name. Each variable config MAY include `label`, a human-readable field label for authoring UIs. When `label` is omitted, authoring tools SHOULD derive one by converting snake_case or kebab-case separators to spaces and title-casing the result.
-- A template variable config MAY include `generator`, a plugin-qualified output generator key such as `dev.heavy.resume.skill-description`. Authoring tools MAY expose this as a field-level generation action. Generator requests MUST include only template variables that the author has provided with non-empty values; missing or empty variables MUST be omitted. If the installed generator declares required variables, authoring tools SHOULD disable the action until all required variables are non-empty.
+- A template variable config MAY include `generator`, a plugin-qualified output generator key such as `dev.hvy.resume.skill-description`. Authoring tools MAY expose this as a field-level generation action. Generator requests MUST include only template variables that the author has provided with non-empty values; missing or empty variables MUST be omitted. If the installed generator declares required variables, authoring tools SHOULD disable the action until all required variables are non-empty.
 - A template variable config MAY include `generatorLabel`, overriding the visible action label for that variable. If omitted, authoring tools SHOULD use the installed generator's label or a generic label such as `Generate`.
 
 ### 5.10 Reusable section definitions
@@ -880,7 +880,7 @@ Sections can request plugin behavior with metadata:
 Use the `plugin` block when a document embeds a client-resolved plugin instance in normal content flow:
 
 ```markdown
-<!--hvy:plugin {"plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->
+<!--hvy:plugin {"plugin":"dev.hvy.db-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->
 ```
 
 Plugin block fields:
@@ -974,7 +974,7 @@ Tail format:
 1. The textual document body ends with one or more consecutive single-line tail directives, each describing one attachment:
 
 ```markdown
-<!--hvy:tail {"id":"db","plugin":"dev.heavy.db-table","mediaType":"application/vnd.sqlite3","encoding":"gzip","length":1234}-->
+<!--hvy:tail {"id":"db","plugin":"dev.hvy.db-table","mediaType":"application/vnd.sqlite3","encoding":"gzip","length":1234}-->
 <!--hvy:tail {"id":"image:hero.png","mediaType":"image/png","length":5678}-->
 ```
 
@@ -1001,20 +1001,20 @@ Rules:
 
 ### 7.6 DB table plugin contract
 
-The first standardized plugin contract is `dev.heavy.db-table`.
+The first standardized plugin contract is `dev.hvy.db-table`.
 
 Declaration example:
 
 ```yaml
 plugins:
-  - id: dev.heavy.db-table
+  - id: dev.hvy.db-table
     source: builtin://db-table
 ```
 
 Block example:
 
 ```markdown
-<!--hvy:plugin {"plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->
+<!--hvy:plugin {"plugin":"dev.hvy.db-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->
  SELECT company, url, status
  FROM work_items
  WHERE status != 'Rejected'
@@ -1043,7 +1043,7 @@ Recommended client behavior:
 
 ### 7.7 Form plugin contract
 
-The built-in form plugin is `dev.heavy.form`. A form is a plugin component, not
+The built-in form plugin is `dev.hvy.form`. A form is a plugin component, not
 a native HVY container. HVY stores the plugin block and a plugin-owned YAML text
 body; individual inputs are not separate HVY components.
 
@@ -1051,14 +1051,14 @@ Declaration example:
 
 ```yaml
 plugins:
-  - id: dev.heavy.form
+  - id: dev.hvy.form
     source: builtin://form
 ```
 
 Block example:
 
 ```markdown
-<!--hvy:plugin {"plugin":"dev.heavy.form","pluginConfig":{"version":"0.1","initialScript":"populate_food","submitScript":"submit_order","submitLabel":"Save order"}}-->
+<!--hvy:plugin {"plugin":"dev.hvy.form","pluginConfig":{"version":"0.1","initialScript":"populate_food","submitScript":"submit_order","submitLabel":"Save order"}}-->
 fields:
   - label: Food
     type: select

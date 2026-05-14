@@ -11,10 +11,10 @@ const BUILT_IN_PLUGINS_ID = 'virtual:hvy-built-in-plugins';
 const BUILT_IN_PLUGINS_RESOLVED_ID = `\0${BUILT_IN_PLUGINS_ID}`;
 
 export const HVY_BUILT_IN_PLUGIN_IDS = [
-  'dev.heavy.db-table',
-  'dev.heavy.form',
-  'dev.heavy.progress-bar',
-  'dev.heavy.scripting',
+  'dev.hvy.db-table',
+  'dev.hvy.form',
+  'dev.hvy.progress-bar',
+  'dev.hvy.scripting',
 ] as const;
 
 type HvyBuiltInPluginId = (typeof HVY_BUILT_IN_PLUGIN_IDS)[number];
@@ -34,25 +34,25 @@ interface HvyBuiltInPluginDefinition {
 
 const HVY_BUILT_IN_PLUGIN_DEFINITIONS: HvyBuiltInPluginDefinition[] = [
   {
-    id: 'dev.heavy.db-table',
+    id: 'dev.hvy.db-table',
     key: 'dbTable',
     exportName: 'dbTablePlugin',
     modulePath: 'src/plugins/db-table-plugin.ts',
   },
   {
-    id: 'dev.heavy.form',
+    id: 'dev.hvy.form',
     key: 'form',
     exportName: 'formPlugin',
     modulePath: 'src/plugins/form.ts',
   },
   {
-    id: 'dev.heavy.progress-bar',
+    id: 'dev.hvy.progress-bar',
     key: 'progressBar',
     exportName: 'progressBarPlugin',
     modulePath: 'src/plugins/progress-bar.ts',
   },
   {
-    id: 'dev.heavy.scripting',
+    id: 'dev.hvy.scripting',
     key: 'scripting',
     exportName: 'scriptingPlugin',
     modulePath: 'src/plugins/scripting/scripting.ts',

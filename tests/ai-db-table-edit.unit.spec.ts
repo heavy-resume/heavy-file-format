@@ -53,7 +53,7 @@ hvy_version: 0.1
 <!--hvy: {"id":"data"}-->
 #! Data
 
- <!--hvy:plugin {"plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->
+ <!--hvy:plugin {"plugin":"dev.hvy.db-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->
 `;
 
 function getDbTableBlock() {
@@ -83,7 +83,7 @@ const SUMMARY_FIXTURE: DbTableAiSummary = {
 test('getDocumentDbTableNames finds plugin blocks nested inside subsections', async () => {
   const { getDocumentDbTableNames } = await vi.importActual<typeof import('../src/plugins/db-table')>('../src/plugins/db-table');
   const nestedDoc = deserializeDocument(
-    `---\nhvy_version: 0.1\n---\n\n<!--hvy: {"id":"root"}-->\n#! Root\n\n <!--hvy:text {}-->\n  Intro\n\n<!--hvy:subsection {"id":"pipeline"}-->\n#! Pipeline\n\n <!--hvy:plugin {"plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"job_applications"}}-->\n`,
+    `---\nhvy_version: 0.1\n---\n\n<!--hvy: {"id":"root"}-->\n#! Root\n\n <!--hvy:text {}-->\n  Intro\n\n<!--hvy:subsection {"id":"pipeline"}-->\n#! Pipeline\n\n <!--hvy:plugin {"plugin":"dev.hvy.db-table","pluginConfig":{"source":"with-file","table":"job_applications"}}-->\n`,
     '.hvy'
   );
 
@@ -123,7 +123,7 @@ test('buildDbTableEditFormatInstructions names the table and lists all four tool
 test('buildDbTableEditContext embeds schema, sample rows, and the component fragment', () => {
   const context = buildDbTableEditContext({
     document: getDbTableBlock().document,
-    fragment: '<!--hvy:plugin {"plugin":"dev.heavy.db-table","pluginConfig":{"table":"work_items"}}-->',
+    fragment: '<!--hvy:plugin {"plugin":"dev.hvy.db-table","pluginConfig":{"table":"work_items"}}-->',
     summary: SUMMARY_FIXTURE,
   });
   expect(context).toContain('Table name: work_items');
@@ -178,7 +178,7 @@ test('requestAiDbTableEdit returns a replacement block when the model emits edit
 
   getDbTableAiSummaryMock.mockResolvedValue(SUMMARY_FIXTURE);
   const replacementFragment =
-    '<!--hvy:plugin {"plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"work_items","query":"SELECT * FROM work_items WHERE status != \'Rejected\'"}}-->';
+    '<!--hvy:plugin {"plugin":"dev.hvy.db-table","pluginConfig":{"source":"with-file","table":"work_items","query":"SELECT * FROM work_items WHERE status != \'Rejected\'"}}-->';
   requestProxyCompletionMock.mockResolvedValueOnce(
     JSON.stringify({ tool: 'edit_fragment', hvy: replacementFragment, summary: 'set query' })
   );
@@ -188,7 +188,7 @@ test('requestAiDbTableEdit returns a replacement block when the model emits edit
 
   expect(onBeforeMutation).toHaveBeenCalledTimes(1);
   expect(result.block).not.toBe(block);
-  expect(result.block.schema.plugin).toBe('dev.heavy.db-table');
+  expect(result.block.schema.plugin).toBe('dev.hvy.db-table');
   expect(result.block.schema.pluginConfig.query).toContain('Rejected');
   expect(executeDbTableWriteSqlMock).not.toHaveBeenCalled();
 });
@@ -216,7 +216,7 @@ test('requestAiDbTableEdit surfaces tool errors back to the model and keeps goin
 test('requestAiDbTableEdit rejects blocks without a configured table name', async () => {
   const { requestAiDbTableEdit } = await import('../src/ai-db-table-edit');
   const doc = deserializeDocument(
-    `---\nhvy_version: 0.1\n---\n\n#! S\n\n <!--hvy:plugin {"plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file"}}-->\n`,
+    `---\nhvy_version: 0.1\n---\n\n#! S\n\n <!--hvy:plugin {"plugin":"dev.hvy.db-table","pluginConfig":{"source":"with-file"}}-->\n`,
     '.hvy'
   );
   const block = doc.sections[0]!.blocks[0]!;

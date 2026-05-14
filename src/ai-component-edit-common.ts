@@ -32,7 +32,7 @@ export function sanitizeAiEditOutput(source: string): string {
 function unwrapFencedFormPluginYaml(source: string): string {
   const lines = source.split('\n');
   const directive = lines[0]?.trim() ?? '';
-  if (!/^<!--\s*hvy:plugin\b/i.test(directive) || !/"plugin"\s*:\s*"dev\.heavy\.form"/.test(directive)) {
+  if (!/^<!--\s*hvy:plugin\b/i.test(directive) || !/"plugin"\s*:\s*"dev\.hvy\.form"/.test(directive)) {
     return source;
   }
 

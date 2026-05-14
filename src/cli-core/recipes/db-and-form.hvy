@@ -9,14 +9,14 @@ There is no database component to add. Use `hvy plugin db-table exec` to create 
 hvy insert 0 section / a-section "A Section"
 hvy plugin db-table exec "CREATE TABLE items (id INTEGER PRIMARY KEY, title TEXT NOT NULL, notes TEXT, assigned_to TEXT, completed_at TEXT)"
 hvy insert 0 plugin db-table /a-section active-items
-echo '{"id":"active-items","plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"items","queryLimit":10}}' > /body/a-section/active-items/plugin.json
+echo '{"id":"active-items","plugin":"dev.hvy.db-table","pluginConfig":{"source":"with-file","table":"items","queryLimit":10}}' > /body/a-section/active-items/plugin.json
 echo 'SELECT id, title, notes, assigned_to FROM items WHERE completed_at IS NULL ORDER BY id' > /body/a-section/active-items/plugin.txt
 hvy insert 0 plugin form /a-section add-item
 hvy insert -1 plugin form /a-section assign-item
 hvy insert -1 plugin form /a-section complete-item
 hvy plugin db-table exec "CREATE VIEW weekly_item_leaders AS SELECT assigned_to, COUNT(*) AS completed_count FROM items WHERE completed_at IS NOT NULL AND completed_at >= datetime('now', '-7 days') GROUP BY assigned_to ORDER BY completed_count DESC"
 hvy insert -1 plugin db-table /a-section weekly-leaders
-echo '{"id":"weekly-leaders","plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"weekly_item_leaders","queryLimit":10}}' > /body/a-section/weekly-leaders/plugin.json
+echo '{"id":"weekly-leaders","plugin":"dev.hvy.db-table","pluginConfig":{"source":"with-file","table":"weekly_item_leaders","queryLimit":10}}' > /body/a-section/weekly-leaders/plugin.json
 echo 'SELECT assigned_to, completed_count FROM weekly_item_leaders' > /body/a-section/weekly-leaders/plugin.txt
 hvy lint
 ```

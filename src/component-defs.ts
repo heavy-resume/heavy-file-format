@@ -3,8 +3,6 @@ import { escapeAttr, escapeHtml, renderOption } from './utils';
 import type { ComponentDefinition, SectionDefinition } from './types';
 import { areTablesEnabled } from './reference-config';
 
-let warnedAboutMissingState = false;
-
 export function getComponentDefs(): ComponentDefinition[] {
   return getComponentDefsFromMeta(getDocumentMetaOrNull());
 }
@@ -89,11 +87,5 @@ function getDocumentMetaOrNull(): Record<string, unknown> | null {
     // Fall through to a single console warning below.
   }
 
-  if (!warnedAboutMissingState) {
-    warnedAboutMissingState = true;
-    console.error(
-      '[hvy:component-defs] state.document was unavailable while resolving component or section definitions. Falling back to built-in defaults.'
-    );
-  }
   return null;
 }

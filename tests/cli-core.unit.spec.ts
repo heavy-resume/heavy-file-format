@@ -204,10 +204,10 @@ hvy_version: 0.1
 <!--hvy: {"id":"automation"}-->
 #! Automation
 
-<!--hvy:plugin {"id":"startup","plugin":"dev.heavy.scripting","pluginConfig":{"version":"0.1"}}-->
+<!--hvy:plugin {"id":"startup","plugin":"dev.hvy.scripting","pluginConfig":{"version":"0.1"}}-->
 doc.header.set("started", True)
 
-<!--hvy:plugin {"id":"assign","plugin":"dev.heavy.form","pluginConfig":{"version":"0.1","initialScript":"load","submitScript":"submit"}}-->
+<!--hvy:plugin {"id":"assign","plugin":"dev.hvy.form","pluginConfig":{"version":"0.1","initialScript":"load","submitScript":"submit"}}-->
 fields:
   - label: Chore
     type: select
@@ -245,7 +245,7 @@ hvy_version: 0.1
 <!--hvy: {"id":"automation"}-->
 #! Automation
 
-<!--hvy:plugin {"id":"assign","plugin":"dev.heavy.form","pluginConfig":{"version":"0.1","submitLabel":"Assign"}}-->
+<!--hvy:plugin {"id":"assign","plugin":"dev.hvy.form","pluginConfig":{"version":"0.1","submitLabel":"Assign"}}-->
 fields:
   - label: Chore
     type: select
@@ -1847,7 +1847,7 @@ hvy_version: 0.1
 <!--hvy: {"id":"chore-chart"}-->
 #! Chore Chart
 
-<!--hvy:plugin {"id":"assign-chore","plugin":"dev.heavy.form","pluginConfig":{"version":"0.1","submitScript":"submit"}}-->
+<!--hvy:plugin {"id":"assign-chore","plugin":"dev.hvy.form","pluginConfig":{"version":"0.1","submitScript":"submit"}}-->
 fields:
   - label: Chore
     type: select
@@ -1873,7 +1873,7 @@ hvy_version: 0.1
 <!--hvy: {"id":"chore-chart"}-->
 #! Chore Chart
 
-<!--hvy:plugin {"id":"assign-chore","plugin":"dev.heavy.form","pluginConfig":{"version":"0.1","submitScript":"submit"}}-->
+<!--hvy:plugin {"id":"assign-chore","plugin":"dev.hvy.form","pluginConfig":{"version":"0.1","submitScript":"submit"}}-->
 fields:
   - label: Chore
     type: select
@@ -1899,7 +1899,7 @@ hvy_version: 0.1
 <!--hvy: {"id":"chore-chart"}-->
 #! Chore Chart
 
-<!--hvy:plugin {"id":"assign-chore","plugin":"dev.heavy.form","pluginConfig":{"version":"0.1","initialScript":"load","submitScript":"submit"}}-->
+<!--hvy:plugin {"id":"assign-chore","plugin":"dev.hvy.form","pluginConfig":{"version":"0.1","initialScript":"load","submitScript":"submit"}}-->
 fields:
   - label: Chore
     type: select
@@ -1925,7 +1925,7 @@ hvy_version: 0.1
 <!--hvy: {"id":"chore-chart"}-->
 #! Chore Chart
 
-<!--hvy:plugin {"id":"assign-chore","plugin":"dev.heavy.form","pluginConfig":{"version":"0.1","initialScript":"load","submitScript":"submit"}}-->
+<!--hvy:plugin {"id":"assign-chore","plugin":"dev.hvy.form","pluginConfig":{"version":"0.1","initialScript":"load","submitScript":"submit"}}-->
 fields:
   - label: Chore
     type: DROPDOWN
@@ -1955,7 +1955,7 @@ hvy_version: 0.1
 <!--hvy: {"id":"chore-chart"}-->
 #! Chore Chart
 
-<!--hvy:plugin {"id":"assign-chore","plugin":"dev.heavy.form","pluginConfig":{"version":"0.1","initialScript":"load","submitScript":"submit"}}-->
+<!--hvy:plugin {"id":"assign-chore","plugin":"dev.hvy.form","pluginConfig":{"version":"0.1","initialScript":"load","submitScript":"submit"}}-->
 fields:
   - label: Chore
     type: combobox
@@ -1980,7 +1980,7 @@ hvy_version: 0.1
 <!--hvy: {"id":"chore-chart"}-->
 #! Chore Chart
 
-<!--hvy:plugin {"id":"assign-chore","plugin":"dev.heavy.form","pluginConfig":{"version":"0.1"}}-->
+<!--hvy:plugin {"id":"assign-chore","plugin":"dev.hvy.form","pluginConfig":{"version":"0.1"}}-->
 fields:
   - label: Chore
     type: select
@@ -2005,7 +2005,7 @@ hvy_version: 0.1
 <!--hvy: {"id":"chore-chart"}-->
 #! Chore Chart
 
-<!--hvy:plugin {"id":"assign-chore","plugin":"dev.heavy.form","pluginConfig":{"version":"0.1","initialScript":"load","submitScript":"submit"}}-->
+<!--hvy:plugin {"id":"assign-chore","plugin":"dev.hvy.form","pluginConfig":{"version":"0.1","initialScript":"load","submitScript":"submit"}}-->
 fields:
   - label: Chore
     type: select
@@ -2307,13 +2307,13 @@ hvy_version: 0.1
 
 <!--hvy:component-list {"id":"empty-list","componentListComponent":"text"}-->
 
-<!--hvy:plugin {"id":"broken-db","plugin":"dev.heavy.db-table","pluginConfig":{}}-->
+<!--hvy:plugin {"id":"broken-db","plugin":"dev.hvy.db-table","pluginConfig":{}}-->
 
-<!--hvy:plugin {"id":"missing-db","plugin":"dev.heavy.db-table","pluginConfig":{"table":"missing_table"}}-->
+<!--hvy:plugin {"id":"missing-db","plugin":"dev.hvy.db-table","pluginConfig":{"table":"missing_table"}}-->
 
-<!--hvy:plugin {"id":"empty-script","plugin":"dev.heavy.scripting","pluginConfig":{"version":"0.1"}}-->
+<!--hvy:plugin {"id":"empty-script","plugin":"dev.hvy.scripting","pluginConfig":{"version":"0.1"}}-->
 
-<!--hvy:plugin {"id":"passive-form","plugin":"dev.heavy.form","pluginConfig":{"version":"0.1","submitLabel":"Add chore"}}-->
+<!--hvy:plugin {"id":"passive-form","plugin":"dev.hvy.form","pluginConfig":{"version":"0.1","submitLabel":"Add chore"}}-->
 fields:
   - label: Chore
     type: text
@@ -2423,16 +2423,16 @@ test('cli commands can create a chore chart with tables and form plugins', async
   await run('echo \'["Chore","Dad","Mom","Child"]\' > /chore-chart/active-chores/tableColumns.json');
   await run('echo \'[{"cells":["Dishes","","","Child"]},{"cells":["Trash","Dad","",""]},{"cells":["Laundry","","Mom",""]}]\' > /chore-chart/active-chores/tableRows.json');
   await run('hvy insert 0 plugin form /chore-chart add-chore-form');
-  await run('echo \'{"id":"add-chore-form","plugin":"dev.heavy.form","pluginConfig":{"version":"0.1","submitLabel":"Add chore","showSubmit":true}}\' > /chore-chart/add-chore-form/plugin.json');
+  await run('echo \'{"id":"add-chore-form","plugin":"dev.hvy.form","pluginConfig":{"version":"0.1","submitLabel":"Add chore","showSubmit":true}}\' > /chore-chart/add-chore-form/plugin.json');
   await run('echo "fields:\\n  - label: Description\\n    type: textarea\\n    required: true" > /chore-chart/add-chore-form/plugin.txt');
   await run('hvy insert -1 plugin form /chore-chart assign-chore-form');
-  await run('echo \'{"id":"assign-chore-form","plugin":"dev.heavy.form","pluginConfig":{"version":"0.1","submitLabel":"Assign chore","showSubmit":true,"initialScript":"load"}}\' > /chore-chart/assign-chore-form/plugin.json');
+  await run('echo \'{"id":"assign-chore-form","plugin":"dev.hvy.form","pluginConfig":{"version":"0.1","submitLabel":"Assign chore","showSubmit":true,"initialScript":"load"}}\' > /chore-chart/assign-chore-form/plugin.json');
   await run('echo "fields:\\n  - label: Chore\\n    type: select\\n    required: true\\n  - label: Assignee\\n    type: select\\n    required: true\\n    options:\\n      - Dad\\n      - Mom\\n      - Child\\nscripts:\\n  load: |\\n    rows = doc.db.query(\\\"SELECT id, description FROM chores ORDER BY id\\\")\\n    doc.form.set_options(\\\"Chore\\\", [{\\\"label\\\": row[\\\"description\\\"], \\\"value\\\": str(row[\\\"id\\\"])} for row in rows])" > /chore-chart/assign-chore-form/plugin.txt');
   await run('hvy insert -1 plugin form /chore-chart complete-chore-form');
-  await run('echo \'{"id":"complete-chore-form","plugin":"dev.heavy.form","pluginConfig":{"version":"0.1","submitLabel":"Complete chore","showSubmit":true}}\' > /chore-chart/complete-chore-form/plugin.json');
+  await run('echo \'{"id":"complete-chore-form","plugin":"dev.hvy.form","pluginConfig":{"version":"0.1","submitLabel":"Complete chore","showSubmit":true}}\' > /chore-chart/complete-chore-form/plugin.json');
   await run('echo "fields:\\n  - label: Chore\\n    type: text\\n    required: true\\n  - label: Completed by\\n    type: select\\n    required: true\\n    options:\\n      - Dad\\n      - Mom\\n      - Child" > /chore-chart/complete-chore-form/plugin.txt');
   await run('hvy insert -1 plugin db-table /chore-chart weekly-leaders');
-  await run('echo \'{"id":"weekly-leaders","plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"weekly_chore_leaders","queryLimit":10}}\' > /chore-chart/weekly-leaders/plugin.json');
+  await run('echo \'{"id":"weekly-leaders","plugin":"dev.hvy.db-table","pluginConfig":{"source":"with-file","table":"weekly_chore_leaders","queryLimit":10}}\' > /chore-chart/weekly-leaders/plugin.json');
   await run('echo "SELECT person, completed_count FROM weekly_chore_leaders ORDER BY completed_count DESC" > /chore-chart/weekly-leaders/plugin.txt');
 
   expect((await run('find /chore-chart -name plugin.txt')).output).toContain('/body/chore-chart/add-chore-form/plugin.txt');
@@ -2441,13 +2441,13 @@ test('cli commands can create a chore chart with tables and form plugins', async
   expect((await run('cat /chore-chart/assign-chore-form/plugin.json')).output).toContain('"submitLabel": "Assign chore"');
   expect((await run('cat /chore-chart/assign-chore-form/plugin.json')).output).toContain('"initialScript": "load"');
   expect((await run('cat /chore-chart/assign-chore-form/plugin.txt')).output).toContain('doc.form.set_options("Chore"');
-  expect((await run('cat /chore-chart/assign-chore-form/plugin.json')).output).toContain('"plugin": "dev.heavy.form"');
+  expect((await run('cat /chore-chart/assign-chore-form/plugin.json')).output).toContain('"plugin": "dev.hvy.form"');
   expect((await run('cat /chore-chart/weekly-leaders/plugin.json')).output).toContain('"table": "weekly_chore_leaders"');
-  expect((await run('cat /chore-chart/weekly-leaders/plugin.json')).output).toContain('"plugin": "dev.heavy.db-table"');
+  expect((await run('cat /chore-chart/weekly-leaders/plugin.json')).output).toContain('"plugin": "dev.hvy.db-table"');
 
   const serialized = serializeDocument(document);
-  expect(serialized).toContain('<!--hvy:plugin {"id":"assign-chore-form","plugin":"dev.heavy.form"');
-  expect(serialized).toContain('<!--hvy:plugin {"id":"weekly-leaders","plugin":"dev.heavy.db-table"');
+  expect(serialized).toContain('<!--hvy:plugin {"id":"assign-chore-form","plugin":"dev.hvy.form"');
+  expect(serialized).toContain('<!--hvy:plugin {"id":"weekly-leaders","plugin":"dev.hvy.db-table"');
   expect(serialized).toContain('"tableRows":[{"cells":["Dishes","","","Child"]}');
 });
 
@@ -2462,18 +2462,18 @@ hvy_version: 0.1
   const session = createHvyCliSession();
 
   await expect(executeHvyCliCommand(document, session, 'hvy insert -1 plugin /quality bad-db db-table')).rejects.toThrow(
-    'hvy plugin add: "db-table" is a CLI command alias, not a stored plugin id. Use "hvy insert INDEX plugin db-table SECTION_PATH ID" or plugin id "dev.heavy.db-table".'
+    'hvy plugin add: "db-table" is a CLI command alias, not a stored plugin id. Use "hvy insert INDEX plugin db-table SECTION_PATH ID" or plugin id "dev.hvy.db-table".'
   );
 
   const result = await executeHvyCliCommand(
     document,
     session,
-    'hvy insert -1 plugin /quality raw-scripting dev.heavy.scripting'
+    'hvy insert -1 plugin /quality raw-scripting dev.hvy.scripting'
   );
 
   expect(result.output).toContain('/body/quality/raw-scripting: created');
   expect((await executeHvyCliCommand(document, session, 'cat /body/quality/raw-scripting/plugin.json')).output)
-    .toContain('"plugin": "dev.heavy.scripting"');
+    .toContain('"plugin": "dev.hvy.scripting"');
 });
 
 test('hvy lint reports and fixes stored plugin command aliases', async () => {
@@ -2494,18 +2494,18 @@ fields:
   const session = createHvyCliSession();
 
   const before = await executeHvyCliCommand(document, session, 'hvy lint');
-  expect(before.output).toContain('[plugin] /body/quality/bad-db - plugin id "db-table" is a CLI command alias, not a stored plugin id. Run hvy lint --fix to change it to "dev.heavy.db-table".');
-  expect(before.output).toContain('[plugin] /body/quality/bad-form - plugin id "form" is a CLI command alias, not a stored plugin id. Run hvy lint --fix to change it to "dev.heavy.form".');
+  expect(before.output).toContain('[plugin] /body/quality/bad-db - plugin id "db-table" is a CLI command alias, not a stored plugin id. Run hvy lint --fix to change it to "dev.hvy.db-table".');
+  expect(before.output).toContain('[plugin] /body/quality/bad-form - plugin id "form" is a CLI command alias, not a stored plugin id. Run hvy lint --fix to change it to "dev.hvy.form".');
 
   const fix = await executeHvyCliCommand(document, session, 'hvy lint --fix');
   expect(fix.output).toContain('Applied lint fixes:');
-  expect(fix.output).toContain('- bad-db: db-table -> dev.heavy.db-table');
-  expect(fix.output).toContain('- bad-form: form -> dev.heavy.form');
+  expect(fix.output).toContain('- bad-db: db-table -> dev.hvy.db-table');
+  expect(fix.output).toContain('- bad-form: form -> dev.hvy.form');
   expect(fix.mutated).toBe(true);
 
   const serialized = serializeDocument(document);
-  expect(serialized).toContain('<!--hvy:plugin {"id":"bad-db","plugin":"dev.heavy.db-table"');
-  expect(serialized).toContain('<!--hvy:plugin {"id":"bad-form","plugin":"dev.heavy.form"');
+  expect(serialized).toContain('<!--hvy:plugin {"id":"bad-db","plugin":"dev.hvy.db-table"');
+  expect(serialized).toContain('<!--hvy:plugin {"id":"bad-form","plugin":"dev.hvy.form"');
   expect((await executeHvyCliCommand(document, session, 'hvy lint')).output).not.toContain('is a CLI command alias');
 });
 
@@ -2606,7 +2606,7 @@ hvy_version: 0.1
 <!--hvy: {"id":"forms"}-->
 #! Forms
 
-<!--hvy:plugin {"id":"bad-form","plugin":"dev.heavy.form","pluginConfig":{"version":"0.1","submitScript":"submit"}}-->
+<!--hvy:plugin {"id":"bad-form","plugin":"dev.hvy.form","pluginConfig":{"version":"0.1","submitScript":"submit"}}-->
 fields:
   - label: Chore
     type: text
@@ -2638,7 +2638,7 @@ test('registered plugin help topics work without special-case command handlers',
   const manHelp = (await executeHvyCliCommand(document, session, 'man hvy plugin scripting')).output;
   const directHelp = (await executeHvyCliCommand(document, session, 'hvy plugin scripting')).output;
 
-  expect(manHelp).toContain('hvy insert INDEX plugin SECTION_PATH ID dev.heavy.scripting');
+  expect(manHelp).toContain('hvy insert INDEX plugin SECTION_PATH ID dev.hvy.scripting');
   expect(manHelp).toContain('The component body is exposed as script.py. It is Python/Brython source wrapped in a generated function with one injected global: doc.');
   expect(manHelp).toContain('Document tools: request_structure, grep, view_component');
   expect(manHelp).toContain('Not exposed through doc.tool: edit_component, view_rendered_component, query_db_table, execute_sql');
@@ -2698,7 +2698,7 @@ hvy_version: 0.1
 
   await executeHvyCliCommand(document, session, 'hvy plugin db-table exec "CREATE TABLE chores (id INTEGER PRIMARY KEY, title TEXT NOT NULL)"');
   await executeHvyCliCommand(document, session, 'hvy insert -1 plugin db-table /quality broken-query');
-  await executeHvyCliCommand(document, session, 'echo \'{"id":"broken-query","plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"chores","queryLimit":10}}\' > /quality/broken-query/plugin.json');
+  await executeHvyCliCommand(document, session, 'echo \'{"id":"broken-query","plugin":"dev.hvy.db-table","pluginConfig":{"source":"with-file","table":"chores","queryLimit":10}}\' > /quality/broken-query/plugin.json');
   await executeHvyCliCommand(document, session, 'echo ":" > /quality/broken-query/plugin.txt');
 
   const result = await executeHvyCliCommand(document, session, 'hvy lint');
@@ -2715,7 +2715,7 @@ hvy_version: 0.1
 <!--hvy: {"id":"quality"}-->
 #! Quality
 
-<!--hvy:plugin {"id":"missing-view","plugin":"dev.heavy.db-table","pluginConfig":{"table":"active_chores_view"}}-->
+<!--hvy:plugin {"id":"missing-view","plugin":"dev.hvy.db-table","pluginConfig":{"table":"active_chores_view"}}-->
  SELECT title FROM active_chores_view
 `, '.hvy');
   const session = createHvyCliSession();
@@ -2737,7 +2737,7 @@ hvy_version: 0.1
 <!--hvy: {"id":"quality"}-->
 #! Quality
 
-<!--hvy:plugin {"id":"broken-table-name","plugin":"dev.heavy.db-table","pluginConfig":{"table":"SELECT id AS id, title AS Chore FROM chores ORDER BY id"}}-->
+<!--hvy:plugin {"id":"broken-table-name","plugin":"dev.hvy.db-table","pluginConfig":{"table":"SELECT id AS id, title AS Chore FROM chores ORDER BY id"}}-->
 `, '.hvy');
   const session = createHvyCliSession();
 
@@ -2755,7 +2755,7 @@ hvy_version: 0.1
 <!--hvy: {"id":"quality"}-->
 #! Quality
 
-<!--hvy:plugin {"id":"spaced-table","plugin":"dev.heavy.db-table","pluginConfig":{"table":"active chores"}}-->
+<!--hvy:plugin {"id":"spaced-table","plugin":"dev.hvy.db-table","pluginConfig":{"table":"active chores"}}-->
 `, '.hvy');
   const session = createHvyCliSession();
 
@@ -2773,7 +2773,7 @@ hvy_version: 0.1
 <!--hvy: {"id":"quality"}-->
 #! Quality
 
-<!--hvy:plugin {"id":"reserved-table","plugin":"dev.heavy.db-table","pluginConfig":{"table":"order"}}-->
+<!--hvy:plugin {"id":"reserved-table","plugin":"dev.hvy.db-table","pluginConfig":{"table":"order"}}-->
 `, '.hvy');
   const session = createHvyCliSession();
 

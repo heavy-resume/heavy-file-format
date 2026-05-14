@@ -8,41 +8,41 @@ test('resolveBuiltInPluginIds defaults to every built-in plugin', () => {
 
 test('resolveBuiltInPluginIds accepts an explicit plugin list', () => {
   const expectedResult = resolveBuiltInPluginIds({
-    plugins: ['dev.heavy.form', 'dev.heavy.progress-bar'],
+    plugins: ['dev.hvy.form', 'dev.hvy.progress-bar'],
   });
 
-  expect(expectedResult).toEqual(['dev.heavy.form', 'dev.heavy.progress-bar']);
+  expect(expectedResult).toEqual(['dev.hvy.form', 'dev.hvy.progress-bar']);
 });
 
 test('resolveBuiltInPluginIds supports include and exclude config', () => {
   const expectedResult = resolveBuiltInPluginIds({
-    plugins: ['dev.heavy.db-table', 'dev.heavy.form', 'dev.heavy.scripting'],
-    exclude: ['dev.heavy.form'],
-    include: ['dev.heavy.progress-bar'],
+    plugins: ['dev.hvy.db-table', 'dev.hvy.form', 'dev.hvy.scripting'],
+    exclude: ['dev.hvy.form'],
+    include: ['dev.hvy.progress-bar'],
   });
 
-  expect(expectedResult).toEqual(['dev.heavy.db-table', 'dev.heavy.scripting', 'dev.heavy.progress-bar']);
+  expect(expectedResult).toEqual(['dev.hvy.db-table', 'dev.hvy.scripting', 'dev.hvy.progress-bar']);
 });
 
 test('resolveBuiltInPluginIds lets HVY_BUILD_PLUGINS override file config', () => {
   const expectedResult = resolveBuiltInPluginIds(
-    { plugins: ['dev.heavy.db-table'] },
-    'dev.heavy.form, dev.heavy.scripting'
+    { plugins: ['dev.hvy.db-table'] },
+    'dev.hvy.form, dev.hvy.scripting'
   );
 
-  expect(expectedResult).toEqual(['dev.heavy.form', 'dev.heavy.scripting']);
+  expect(expectedResult).toEqual(['dev.hvy.form', 'dev.hvy.scripting']);
 });
 
 test('resolveBuiltInPluginIds rejects unknown plugin ids', () => {
   expect(() =>
     resolveBuiltInPluginIds({
-      plugins: ['dev.heavy.form', 'dev.heavy.unknown'],
+      plugins: ['dev.hvy.form', 'dev.hvy.unknown'],
     })
   ).toThrow('Unknown HVY built-in plugin id');
 });
 
 test('createHvyBuiltInPluginsModuleSource uses Vite web-root imports', () => {
-  const expectedResult = createHvyBuiltInPluginsModuleSource(['dev.heavy.db-table', 'dev.heavy.scripting']);
+  const expectedResult = createHvyBuiltInPluginsModuleSource(['dev.hvy.db-table', 'dev.hvy.scripting']);
 
   expect(expectedResult).toContain('from "/src/plugins/db-table-plugin.ts"');
   expect(expectedResult).toContain('from "/src/plugins/scripting/scripting.ts"');

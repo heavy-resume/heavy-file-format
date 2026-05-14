@@ -608,7 +608,7 @@ component_defs:
         label: Skill
       description:
         label: Description
-        generator: dev.heavy.resume.skill-description
+        generator: dev.hvy.resume.skill-description
         generatorLabel: Generate
     schema:
       xrefTitle: "{% skill %}"
@@ -644,7 +644,7 @@ component_defs:
         label: Tool / Technology
       description:
         label: Description
-        generator: dev.heavy.resume.tool-description
+        generator: dev.hvy.resume.tool-description
         generatorLabel: Generate
     schema:
       xrefTitle: "{% tool_technology %}"
@@ -804,7 +804,7 @@ component_defs:
 <!--hvy: {"id":"template-maintenance","editorOnly":true,"lock":true,"contained":true,"description":"Template maintenance scripts"}-->
 #! Template Maintenance
 
- <!--hvy:plugin {"id":"remove-featured-xref-helper","editorOnly":true,"plugin":"dev.heavy.scripting","pluginConfig":{"version":"0.1"}}-->
+ <!--hvy:plugin {"id":"remove-featured-xref-helper","editorOnly":true,"plugin":"dev.hvy.scripting","pluginConfig":{"version":"0.1"}}-->
   def has_xref(list_id):
       try:
           raw = doc.tool.view_component(component_ref=list_id)

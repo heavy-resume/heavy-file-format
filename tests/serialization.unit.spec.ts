@@ -224,19 +224,19 @@ test('serializes plugin blocks with plugin identity and config', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
 plugins:
-  - id: dev.heavy.db-table
+  - id: dev.hvy.db-table
     source: builtin://db-table
 ---
 
 <!--hvy: {"id":"data"}-->
 #! Data
 
-<!--hvy:plugin {"plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->
+<!--hvy:plugin {"plugin":"dev.hvy.db-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->
 `, '.hvy');
 
   const output = serializeWithState(document);
 
-  expect(output).toContain('<!--hvy:plugin {"plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->');
+  expect(output).toContain('<!--hvy:plugin {"plugin":"dev.hvy.db-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->');
   expect(output).not.toContain('"pluginUrl"');
 });
 
@@ -308,14 +308,14 @@ test('serializes db-table query text in the plugin block body', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
 plugins:
-  - id: dev.heavy.db-table
+  - id: dev.hvy.db-table
     source: builtin://db-table
 ---
 
 <!--hvy: {"id":"data"}-->
 #! Data
 
-<!--hvy:plugin {"plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->
+<!--hvy:plugin {"plugin":"dev.hvy.db-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->
  SELECT company, status
  FROM work_items
  WHERE status != 'Rejected'
@@ -323,7 +323,7 @@ plugins:
 
   const output = serializeWithState(document);
 
-  expect(output).toContain('<!--hvy:plugin {"plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->');
+  expect(output).toContain('<!--hvy:plugin {"plugin":"dev.hvy.db-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->');
   expect(output).toContain('SELECT company, status');
   expect(output).toContain("WHERE status != 'Rejected'");
 });
@@ -332,14 +332,14 @@ test('serializes db-table query window settings in plugin config', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
 plugins:
-  - id: dev.heavy.db-table
+  - id: dev.hvy.db-table
     source: builtin://db-table
 ---
 
 <!--hvy: {"id":"data"}-->
 #! Data
 
-<!--hvy:plugin {"plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"work_items","queryDynamicWindow":false,"queryLimit":25}}-->
+<!--hvy:plugin {"plugin":"dev.hvy.db-table","pluginConfig":{"source":"with-file","table":"work_items","queryDynamicWindow":false,"queryLimit":25}}-->
  SELECT company FROM work_items
 `, '.hvy');
 
@@ -357,14 +357,14 @@ hvy_version: 0.1
 <!--hvy: {"id":"data"}-->
 #! Data
 
-<!--hvy:plugin {"plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->
+<!--hvy:plugin {"plugin":"dev.hvy.db-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->
 `, '.hvy');
 
   document.attachments = [
     {
       id: 'db',
       meta: {
-        plugin: 'dev.heavy.db-table',
+        plugin: 'dev.hvy.db-table',
         mediaType: 'application/vnd.sqlite3',
         encoding: 'gzip',
       },
@@ -377,7 +377,7 @@ hvy_version: 0.1
   const tailLength = document.attachments[0].bytes.length;
   const serializedPrefix = new TextDecoder().decode(serializedBytes.slice(0, serializedBytes.length - tailLength));
 
-  expect(serializedText).toContain('<!--hvy:tail {"id":"db","plugin":"dev.heavy.db-table","mediaType":"application/vnd.sqlite3","encoding":"gzip","length":7}-->');
+  expect(serializedText).toContain('<!--hvy:tail {"id":"db","plugin":"dev.hvy.db-table","mediaType":"application/vnd.sqlite3","encoding":"gzip","length":7}-->');
   expect(serializedText).toContain(HVY_TAIL_SENTINEL);
   expect(serializedPrefix).toContain(HVY_TAIL_SENTINEL);
   expect(Array.from(serializedBytes.slice(-tailLength))).toEqual([31, 139, 8, 0, 72, 86, 89]);
@@ -793,7 +793,7 @@ hvy_version: 0.1
   document.attachments = [
     {
       id: 'db',
-      meta: { plugin: 'dev.heavy.db-table', mediaType: 'application/vnd.sqlite3', encoding: 'gzip' },
+      meta: { plugin: 'dev.hvy.db-table', mediaType: 'application/vnd.sqlite3', encoding: 'gzip' },
       bytes: new Uint8Array([1, 2, 3, 4]),
     },
     {

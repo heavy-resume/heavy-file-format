@@ -237,7 +237,7 @@ function parseBlocks(
     const defs = Array.isArray(documentMeta.component_defs) ? (documentMeta.component_defs as JsonObject[]) : [];
     const def = defs.find((item) => item && typeof item.name === 'string' && item.name === componentName);
     const defSchema = def?.schema && typeof def.schema === 'object' && !Array.isArray(def.schema) ? (def.schema as JsonObject) : null;
-    return schemaFromUnknown({ ...(defSchema ?? {}), ...parsed, component: componentName });
+    return schemaFromUnknown({ ...(defSchema ?? {}), ...parsed, component: componentName }, new WeakSet<object>(), documentMeta);
   };
 
   const flush = (): void => {
@@ -596,7 +596,7 @@ function parseBlocks(
 
   return blocks.map((block, index) => ({
     ...block,
-    schema: schemaFromUnknown(schemas[index] ?? block.schema),
+    schema: schemaFromUnknown(schemas[index] ?? block.schema, new WeakSet<object>(), documentMeta),
   }));
 }
 

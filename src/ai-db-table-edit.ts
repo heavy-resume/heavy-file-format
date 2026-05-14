@@ -42,7 +42,7 @@ export function buildDbTableEditFormatInstructions(tableName: string): string {
     'Tool shapes:',
     '{"tool":"query_db_table","query":"SELECT * FROM ' + tableName + ' WHERE status = \\"Open\\"","limit":10,"reason":"optional"}',
     '{"tool":"execute_sql","sql":"UPDATE ' + tableName + ' SET status = \'Done\' WHERE id = 3","reason":"optional"}',
-    '{"tool":"edit_fragment","hvy":"<!--hvy:plugin {\\"plugin\\":\\"dev.heavy.db-table\\",\\"pluginConfig\\":{...}}-->\\nSELECT * FROM ' + tableName + ' WHERE ...","summary":"Updated stored query"}',
+    '{"tool":"edit_fragment","hvy":"<!--hvy:plugin {\\"plugin\\":\\"dev.hvy.db-table\\",\\"pluginConfig\\":{...}}-->\\nSELECT * FROM ' + tableName + ' WHERE ...","summary":"Updated stored query"}',
     '{"tool":"done","summary":"Short summary of what changed."}',
   ].join('\n');
 }

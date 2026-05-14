@@ -429,7 +429,7 @@ test('resume template empty skill and tool sections show add controls directly i
   await expect(modal).toBeVisible();
   await expect(modal.locator('label', { hasText: 'Skill' })).toBeVisible();
   await expect(modal).not.toContainText('Skill / Tool');
-  const skillGenerator = modal.locator('[data-template-generator="dev.heavy.resume.skill-description"]');
+  const skillGenerator = modal.locator('[data-template-generator="dev.hvy.resume.skill-description"]');
   await expect(skillGenerator).toBeDisabled();
   await modal.locator('input[data-template-variable="skill"]').fill('Systems Design');
   await expect(skillGenerator).toBeEnabled();
@@ -442,7 +442,7 @@ test('resume template empty skill and tool sections show add controls directly i
   modal = page.locator('.reusable-template-modal');
   await expect(modal).toBeVisible();
   await expect(modal.locator('label', { hasText: 'Tool / Technology' })).toBeVisible();
-  const toolGenerator = modal.locator('[data-template-generator="dev.heavy.resume.tool-description"]');
+  const toolGenerator = modal.locator('[data-template-generator="dev.hvy.resume.tool-description"]');
   await expect(toolGenerator).toBeDisabled();
   await modal.locator('input[data-template-variable="tool_technology"]').fill('TypeScript');
   await expect(toolGenerator).toBeEnabled();
@@ -784,10 +784,10 @@ test('custom component template output generator fills a field from provided var
     const registryPath = '/src/plugins/registry.ts';
     const { setHostPlugins } = await import(/* @vite-ignore */ registryPath);
     setHostPlugins([{
-      id: 'dev.heavy.resume',
+      id: 'dev.hvy.resume',
       displayName: 'Resume',
       outputGenerators: [{
-        key: 'dev.heavy.resume.skill-description',
+        key: 'dev.hvy.resume.skill-description',
         label: 'Generate',
         requiredVariables: ['skill'],
         generate: (request: { values: Record<string, string> }) => {
@@ -812,7 +812,7 @@ component_defs:
         label: Skill
       description:
         label: Description
-        generator: dev.heavy.resume.skill-description
+        generator: dev.hvy.resume.skill-description
         generatorLabel: Suggest
     schema:
       containerBlocks:
@@ -873,10 +873,10 @@ test('custom component template output generator locks field while pending and h
     const registryPath = '/src/plugins/registry.ts';
     const { setHostPlugins } = await import(/* @vite-ignore */ registryPath);
     setHostPlugins([{
-      id: 'dev.heavy.resume',
+      id: 'dev.hvy.resume',
       displayName: 'Resume',
       outputGenerators: [{
-        key: 'dev.heavy.resume.skill-description',
+        key: 'dev.hvy.resume.skill-description',
         requiredVariables: ['skill'],
         generate: (request: { values: Record<string, string> }) => ({ prompt: `Write one sentence for ${request.values.skill}.` }),
       }],
@@ -894,7 +894,7 @@ component_defs:
         label: Skill
       description:
         label: Description
-        generator: dev.heavy.resume.skill-description
+        generator: dev.hvy.resume.skill-description
     schema:
       containerBlocks:
         - text: "{% skill %}"

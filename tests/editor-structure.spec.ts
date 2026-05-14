@@ -491,7 +491,7 @@ component_defs:
 <!--hvy: {"id":"template-maintenance","editorOnly":true}-->
 #! Template Maintenance
 
- <!--hvy:plugin {"id":"remove-featured-xref-helper","editorOnly":true,"plugin":"dev.heavy.scripting","pluginConfig":{"version":"0.1"}}-->
+ <!--hvy:plugin {"id":"remove-featured-xref-helper","editorOnly":true,"plugin":"dev.hvy.scripting","pluginConfig":{"version":"0.1"}}-->
   def has_xref(list_id):
       try:
           raw = doc.tool.view_component(component_ref=list_id)
@@ -1170,7 +1170,7 @@ hvy_version: 0.1
 <!--hvy: {"id":"maintenance","editorOnly":true}-->
 #! Maintenance
 
- <!--hvy:plugin {"id":"cleanup","editorOnly":true,"plugin":"dev.heavy.scripting","pluginConfig":{"version":"0.1"}}-->
+ <!--hvy:plugin {"id":"cleanup","editorOnly":true,"plugin":"dev.hvy.scripting","pluginConfig":{"version":"0.1"}}-->
   print("maintenance script")
 `);
   await page.getByRole('button', { name: 'Apply' }).click();

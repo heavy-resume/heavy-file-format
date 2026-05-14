@@ -126,7 +126,7 @@ hvy_version: 0.1
 <!--hvy: {"id":"chores"}-->
 #! Chores
 
-<!--hvy:plugin {"id":"chores-table","plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"chores"}}-->
+<!--hvy:plugin {"id":"chores-table","plugin":"dev.hvy.db-table","pluginConfig":{"source":"with-file","table":"chores"}}-->
  SELECT * FROM chores WHERE completed_by IS NULL
 `, '.hvy');
 
@@ -220,7 +220,7 @@ test('buildDocumentEditFormatInstructions documents the tool protocol', () => {
   expect(instructions).toContain('Return HVY only inside create/patch payload fields; never HTML/JSX/DOM.');
   expect(instructions).not.toContain('Available plugins for `<!--hvy:plugin ...-->` blocks:');
   expect(instructions).not.toContain('- Widget (dev.test.widget): Use widget YAML in the component body.');
-  expect(instructions).not.toContain('- Form (dev.heavy.form)');
+  expect(instructions).not.toContain('- Form (dev.hvy.form)');
   expect(instructions).not.toContain('Tool shapes:');
   expect(instructions).not.toContain('{"tool":"answer","answer":"Direct answer to the user."}');
   expect(instructions).toContain('Do not put `answer`, `done`, `plan`, `mark_step_done`, or another `batch` inside a batch.');
@@ -245,7 +245,7 @@ test('buildDocumentEditFormatInstructions documents the tool protocol', () => {
 
   const dbPluginInstructions = buildDocumentEditFormatInstructions({
     dbTableNames: ['work_items'],
-    pluginHints: [{ id: 'dev.heavy.db-table', displayName: 'DB Table', hint: 'Renders SQLite rows.' }],
+    pluginHints: [{ id: 'dev.hvy.db-table', displayName: 'DB Table', hint: 'Renders SQLite rows.' }],
     request: 'Create a db table viewer.',
   });
   expect(dbPluginInstructions).toContain('Current edit phase: database.');
@@ -257,7 +257,7 @@ test('buildDocumentEditFormatInstructions documents the tool protocol', () => {
 
   const explicitDbPhaseInstructions = buildDocumentEditFormatInstructions({
     dbTableNames: ['work_items'],
-    pluginHints: [{ id: 'dev.heavy.db-table', displayName: 'DB Table', hint: 'Renders SQLite rows.' }],
+    pluginHints: [{ id: 'dev.hvy.db-table', displayName: 'DB Table', hint: 'Renders SQLite rows.' }],
     request: 'Create a db table viewer.',
     phase: 'database',
   });
@@ -265,7 +265,7 @@ test('buildDocumentEditFormatInstructions documents the tool protocol', () => {
   expect(explicitDbPhaseInstructions).toContain('Valid tools for this phase are: `answer`, `plan`, `query_db_table`, `execute_sql`, `view_component`, `done`.');
 
   const dbPluginOnlyInstructions = buildDocumentEditFormatInstructions({
-    pluginHints: [{ id: 'dev.heavy.db-table', displayName: 'DB Table', hint: 'Renders SQLite rows.' }],
+    pluginHints: [{ id: 'dev.hvy.db-table', displayName: 'DB Table', hint: 'Renders SQLite rows.' }],
   });
   expect(dbPluginOnlyInstructions).not.toContain('`execute_sql`');
   expect(dbPluginOnlyInstructions).toContain(
@@ -2158,7 +2158,7 @@ test('requestAiDocumentEditTurn rejects invented hvy form components and asks fo
   setHostPlugins([formPluginRegistration]);
   queueAiToolResponses(
     '{"tool":"create_component","position":"append-to-section","section_ref":"summary","hvy":"<!--hvy:form {\\"id\\":\\"assign-form\\"}-->"}',
-    '{"tool":"create_component","position":"append-to-section","section_ref":"summary","hvy":"<!--hvy:plugin {\\"id\\":\\"assign-form\\",\\"plugin\\":\\"dev.heavy.form\\",\\"pluginConfig\\":{\\"version\\":\\"0.1\\",\\"submitLabel\\":\\"Assign\\"}}-->\\n```yaml\\nfields:\\n  - label: Chore\\n    type: text\\n```"}',
+    '{"tool":"create_component","position":"append-to-section","section_ref":"summary","hvy":"<!--hvy:plugin {\\"id\\":\\"assign-form\\",\\"plugin\\":\\"dev.hvy.form\\",\\"pluginConfig\\":{\\"version\\":\\"0.1\\",\\"submitLabel\\":\\"Assign\\"}}-->\\n```yaml\\nfields:\\n  - label: Chore\\n    type: text\\n```"}',
     '{"tool":"done","summary":"Created form plugin."}'
   );
 
@@ -2181,14 +2181,14 @@ hvy_version: 0.1
 
   expect(result.error).toBeNull();
   const firstToolInstructions = requestProxyCompletionMock.mock.calls[1]?.[0]?.responseInstructions ?? '';
-  expect(firstToolInstructions).toContain('Registered plugin ids: dev.heavy.form.');
+  expect(firstToolInstructions).toContain('Registered plugin ids: dev.hvy.form.');
   expect(firstToolInstructions).toContain('Use `get_help` only when it is listed for the current phase and exact syntax is missing from the notes or recent tool help.');
   expect(firstToolInstructions).not.toContain('Form UI. Fields and script hooks live in the YAML body.');
   const retryMessages = requestProxyCompletionMock.mock.calls[2]?.[0]?.messages.map((message: ChatMessage) => message.content).join('\n') ?? '';
   expect(retryMessages).toContain('unsupported `hvy:form` syntax');
   expect(retryMessages).toContain('Use a registered plugin id from the prompt');
   const serialized = serializeDocument(document);
-  expect(serialized).toContain('"plugin":"dev.heavy.form"');
+  expect(serialized).toContain('"plugin":"dev.hvy.form"');
   expect(serialized).toContain('"submitLabel":"Assign"');
   expect(serialized).not.toContain('```yaml');
   expect(serialized).not.toContain('hvy:form');
@@ -2197,7 +2197,7 @@ hvy_version: 0.1
 test('requestAiDocumentEditTurn can fetch detailed plugin help on demand', async () => {
   setHostPlugins([formPluginRegistration]);
   queueAiToolResponses(
-    '{"tool":"get_help","topic":"plugin:dev.heavy.form","reason":"Need exact form syntax."}',
+    '{"tool":"get_help","topic":"plugin:dev.hvy.form","reason":"Need exact form syntax."}',
     '{"tool":"done","summary":"Looked up form help."}'
   );
 
@@ -2221,7 +2221,7 @@ hvy_version: 0.1
   expect(result.error).toBeNull();
   const helpResult = lastToolResultBeforeCall(1);
   expect(helpResult).toContain('Tool result for get_help:');
-  expect(helpResult).toContain('Form (dev.heavy.form)');
+  expect(helpResult).toContain('Form (dev.hvy.form)');
   expect(helpResult).toContain('Supported form YAML keys include `fields`');
   expect(helpResult).toContain('Form-level behavior keys live in pluginConfig');
   expect(helpResult).toContain('Form scripts receive `doc` plus `doc.form`');
@@ -2229,7 +2229,7 @@ hvy_version: 0.1
   expect(helpResult).not.toContain('doc.db.query');
   const contextAfterHelp = requestProxyCompletionMock.mock.calls[2]?.[0]?.context ?? '';
   expect(contextAfterHelp).toContain('Recent tool help already fetched; reuse this before calling `get_help` again for the same syntax:');
-  expect(contextAfterHelp).toContain('Form (dev.heavy.form)');
+  expect(contextAfterHelp).toContain('Form (dev.hvy.form)');
   expect(contextAfterHelp).toContain('Supported form YAML keys include `fields`');
   expect(contextAfterHelp).toContain('Form scripts receive `doc` plus `doc.form`');
   expect(contextAfterHelp).not.toContain('doc.db.query');
@@ -2248,7 +2248,7 @@ hvy_version: 0.1
 <!--hvy: {"id":"chores"}-->
 #! Chores
 
-<!--hvy:plugin {"id":"add-chore-form","plugin":"dev.heavy.form","pluginConfig":{"version":"0.1","submitLabel":"Add Chore"}}-->
+<!--hvy:plugin {"id":"add-chore-form","plugin":"dev.hvy.form","pluginConfig":{"version":"0.1","submitLabel":"Add Chore"}}-->
  fields:
  - label: Chore Title
    type: text
@@ -2286,7 +2286,7 @@ hvy_version: 0.1
 <!--hvy: {"id":"data"}-->
 #! Data
 
-<!--hvy:plugin {"plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->
+<!--hvy:plugin {"plugin":"dev.hvy.db-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->
  SELECT * FROM work_items;
 `, '.hvy');
   seedStateForDocument(document);

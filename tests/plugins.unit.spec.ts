@@ -60,34 +60,34 @@ describe('plugin host registry', () => {
 
   test('output generators are registered by plugin-qualified key and reject duplicates', () => {
     registerHostPlugin({
-      id: 'dev.heavy.resume',
+      id: 'dev.hvy.resume',
       displayName: 'Resume',
       outputGenerators: [{
-        key: 'dev.heavy.resume.skill-description',
+        key: 'dev.hvy.resume.skill-description',
         label: 'Generate description',
         requiredVariables: ['skill'],
         generate: () => ({ answer: 'Generated description' }),
       }],
     });
 
-    expect(getAvailableOutputGenerators().map((generator) => generator.key)).toEqual(['dev.heavy.resume.skill-description']);
-    expect(getOutputGenerator('dev.heavy.resume.skill-description')?.label).toBe('Generate description');
+    expect(getAvailableOutputGenerators().map((generator) => generator.key)).toEqual(['dev.hvy.resume.skill-description']);
+    expect(getOutputGenerator('dev.hvy.resume.skill-description')?.label).toBe('Generate description');
     expect(() => registerHostPlugin({
-      id: 'dev.heavy.other',
+      id: 'dev.hvy.other',
       displayName: 'Other',
       outputGenerators: [{
-        key: 'dev.heavy.resume.skill-description',
+        key: 'dev.hvy.resume.skill-description',
         generate: () => ({ answer: 'Duplicate' }),
       }],
-    })).toThrow('Duplicate output generator key "dev.heavy.resume.skill-description".');
+    })).toThrow('Duplicate output generator key "dev.hvy.resume.skill-description".');
   });
 
   test('output-only plugins do not appear as document plugin components', () => {
     registerHostPlugin({
-      id: 'dev.heavy.resume-generators',
+      id: 'dev.hvy.resume-generators',
       displayName: 'Resume Generators',
       outputGenerators: [{
-        key: 'dev.heavy.resume.skill-description',
+        key: 'dev.hvy.resume.skill-description',
         generate: () => ({ answer: 'Generated description' }),
       }],
     });
@@ -104,7 +104,7 @@ describe('plugin host registry', () => {
 
 describe('progress-bar plugin block round-trip', () => {
   test('preserves pluginConfig and text body across serialize/deserialize', () => {
-    const input = `---\nhvy_version: 1.0\n---\n\n#! Status\n\n<!--hvy:plugin {"plugin":"dev.heavy.progress-bar","pluginConfig":{"min":0,"max":100,"value":42,"color":"#3b82f6"}}-->\n \`\${value}%\`\n`;
+    const input = `---\nhvy_version: 1.0\n---\n\n#! Status\n\n<!--hvy:plugin {"plugin":"dev.hvy.progress-bar","pluginConfig":{"min":0,"max":100,"value":42,"color":"#3b82f6"}}-->\n \`\${value}%\`\n`;
     const doc = deserializeDocument(input, '.hvy');
     const block = doc.sections[0]?.blocks.find((b) => b.schema.component === 'plugin');
     expect(block).toBeDefined();
@@ -113,7 +113,7 @@ describe('progress-bar plugin block round-trip', () => {
     expect(block?.text.trim()).toBe('`${value}%`');
 
     const reserialized = serializeDocument(doc);
-    expect(reserialized).toContain('"plugin":"dev.heavy.progress-bar"');
+    expect(reserialized).toContain('"plugin":"dev.hvy.progress-bar"');
     expect(reserialized).toContain('"value":42');
     expect(reserialized).toContain('${value}%');
   });
@@ -121,7 +121,7 @@ describe('progress-bar plugin block round-trip', () => {
 
 describe('scripting plugin block metadata', () => {
   test('preserves scripting plugin version in pluginConfig across serialize/deserialize', () => {
-    const input = `---\nhvy_version: 1.0\n---\n\n#! Script\n\n<!--hvy:plugin {"plugin":"dev.heavy.scripting","pluginConfig":{"version":"${SCRIPTING_PLUGIN_VERSION}"}}-->\nprint("hello")\n`;
+    const input = `---\nhvy_version: 1.0\n---\n\n#! Script\n\n<!--hvy:plugin {"plugin":"dev.hvy.scripting","pluginConfig":{"version":"${SCRIPTING_PLUGIN_VERSION}"}}-->\nprint("hello")\n`;
     const doc = deserializeDocument(input, '.hvy');
     const block = doc.sections[0]?.blocks.find((b) => b.schema.component === 'plugin');
     expect(block).toBeDefined();
@@ -129,7 +129,7 @@ describe('scripting plugin block metadata', () => {
     expect(block?.schema.pluginConfig).toMatchObject({ version: SCRIPTING_PLUGIN_VERSION });
 
     const reserialized = serializeDocument(doc);
-    expect(reserialized).toContain('"plugin":"dev.heavy.scripting"');
+    expect(reserialized).toContain('"plugin":"dev.hvy.scripting"');
     expect(reserialized).toContain(`"version":"${SCRIPTING_PLUGIN_VERSION}"`);
     expect(reserialized).toContain('print("hello")');
   });
@@ -137,7 +137,7 @@ describe('scripting plugin block metadata', () => {
 
 describe('form plugin block round-trip', () => {
   test('preserves form plugin config and YAML body across serialize/deserialize', () => {
-    const input = `---\nhvy_version: 1.0\n---\n\n#! Order\n\n<!--hvy:plugin {"plugin":"dev.heavy.form","pluginConfig":{"version":"0.1","submitScript":"submit_form"}}-->\n fields:\n   - label: Food\n     type: select\n     options:\n       - Apple\n       - label: Soup\n         value: soup\n scripts:\n   submit_form: |\n     doc.header.set("submitted", doc.form.get_values())\n`;
+    const input = `---\nhvy_version: 1.0\n---\n\n#! Order\n\n<!--hvy:plugin {"plugin":"dev.hvy.form","pluginConfig":{"version":"0.1","submitScript":"submit_form"}}-->\n fields:\n   - label: Food\n     type: select\n     options:\n       - Apple\n       - label: Soup\n         value: soup\n scripts:\n   submit_form: |\n     doc.header.set("submitted", doc.form.get_values())\n`;
     const doc = deserializeDocument(input, '.hvy');
     const block = doc.sections[0]?.blocks.find((b) => b.schema.component === 'plugin');
     expect(block).toBeDefined();
@@ -147,7 +147,7 @@ describe('form plugin block round-trip', () => {
     expect(block?.text).toContain('submit_form');
 
     const reserialized = serializeDocument(doc);
-    expect(reserialized).toContain('"plugin":"dev.heavy.form"');
+    expect(reserialized).toContain('"plugin":"dev.hvy.form"');
     expect(reserialized).toContain('"version":"0.1"');
     expect(reserialized).toContain('type: select');
     expect(reserialized).toContain('doc.form.get_values');
@@ -156,7 +156,7 @@ describe('form plugin block round-trip', () => {
 
 describe('plugin block selector swap', () => {
   test('swapping plugin id resets pluginConfig and text', () => {
-    const input = `---\nhvy_version: 1.0\n---\n\n#! Status\n\n<!--hvy:plugin {"plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"work"}}-->\n SELECT * FROM work\n`;
+    const input = `---\nhvy_version: 1.0\n---\n\n#! Status\n\n<!--hvy:plugin {"plugin":"dev.hvy.db-table","pluginConfig":{"source":"with-file","table":"work"}}-->\n SELECT * FROM work\n`;
     const doc = deserializeDocument(input, '.hvy');
     const block = doc.sections[0]?.blocks.find((b) => b.schema.component === 'plugin');
     expect(block).toBeDefined();
@@ -168,7 +168,7 @@ describe('plugin block selector swap', () => {
     block.text = '';
 
     const reserialized = serializeDocument(doc);
-    expect(reserialized).toContain('"plugin":"dev.heavy.progress-bar"');
+    expect(reserialized).toContain('"plugin":"dev.hvy.progress-bar"');
     expect(reserialized).not.toContain('SELECT * FROM work');
     expect(reserialized).not.toContain('"table":"work"');
   });

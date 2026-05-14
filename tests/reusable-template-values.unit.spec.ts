@@ -78,7 +78,7 @@ test('preserves reusable template variable output generator metadata', () => {
       skill: { label: 'Skill' },
       description: {
         label: 'Description',
-        generator: 'dev.heavy.resume.skill-description',
+        generator: 'dev.hvy.resume.skill-description',
         generatorLabel: 'Suggest',
       },
     },
@@ -105,7 +105,7 @@ test('preserves reusable template variable output generator metadata', () => {
       name: 'description',
       type: 'block',
       label: 'Description',
-      generator: 'dev.heavy.resume.skill-description',
+      generator: 'dev.hvy.resume.skill-description',
       generatorLabel: 'Suggest',
     },
   ]);

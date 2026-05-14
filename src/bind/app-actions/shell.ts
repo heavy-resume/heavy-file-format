@@ -7,7 +7,7 @@ import { closeAiEditPopover } from '../../ai-edit-popover';
 import { openAiEditPopover } from '../../ai-edit-popover';
 import { restoreCliViewAfterRender } from '../../cli-ui/focus';
 import { clearFilteringForTarget } from '../../search/actions';
-import { clearActiveEditorBlock, setActiveEditorBlock } from '../../block-ops';
+import { clearActiveEditorBlock, setActiveEditorBlock, setAiEditorHostBlock } from '../../block-ops';
 import type { AppActionHandler } from './types';
 
 const undo: AppActionHandler = () => {
@@ -41,6 +41,7 @@ const switchView: AppActionHandler = ({ actionButton }) => {
   state.showAdvancedEditor = state.editorMode === 'advanced';
   if (view !== 'ai') {
     closeAiEditPopover();
+    state.aiEditorHostBlock = null;
   }
   getRenderApp()();
   if (state.editorMode === 'cli') {
@@ -168,6 +169,7 @@ const editContextComponent: AppActionHandler = ({ app, event }) => {
   app.querySelector('.hvy-context-popover-backdrop')?.remove();
   state.aiModeTipDismissed = true;
   setActiveEditorBlock(menu.sectionKey, menu.blockId, { targetOnly: true });
+  setAiEditorHostBlock(menu.sectionKey, menu.blockId);
   if (state.pendingEditorActivation) {
     state.pendingEditorActivation.immediateFocus = true;
   }

@@ -1,6 +1,6 @@
 import { state, getRenderApp, getRefreshReaderPanels } from '../../state';
 import { findSectionByKey, isDefaultUntitledSectionTitle } from '../../section-ops';
-import { findBlockByIds, setActiveEditorBlock, deactivateEditorBlock, cancelEditorBlockEdit } from '../../block-ops';
+import { findBlockByIds, setActiveEditorBlock, setAiEditorHostBlock, deactivateEditorBlock, cancelEditorBlockEdit } from '../../block-ops';
 import { recordHistory } from '../../history';
 import { captureEditorDeactivationAnchor, capturePaneScroll } from '../../scroll';
 import type { AppActionHandler } from './types';
@@ -25,6 +25,9 @@ const activateBlock: AppActionHandler = ({ app, event, sectionKey, blockId }) =>
     state.aiModeTipDismissed = true;
   }
   setActiveEditorBlock(sectionKey, blockId, { targetOnly: aiPlaceholderActivation });
+  if (state.currentView === 'ai') {
+    setAiEditorHostBlock(sectionKey, blockId);
+  }
   if (typeof anchor?.top === 'number' && state.pendingEditorActivation) {
     state.pendingEditorActivation = {
       ...state.pendingEditorActivation,

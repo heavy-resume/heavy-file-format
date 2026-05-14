@@ -99,6 +99,7 @@ function createInitialState(document: ReturnType<typeof deserializeDocumentBytes
     cliSession: { cwd: '/' },
     cliHistory: [],
     activeEditorBlock: null,
+    aiEditorHostBlock: null,
     activeEditorBlockPath: [],
     activeEditorBlockSnapshot: null,
     activeEditorBlockSnapshots: [],
@@ -420,6 +421,9 @@ readerRenderer = createReaderRenderer(
     },
     get activeEditorBlock() {
       return state.activeEditorBlock;
+    },
+    get aiEditorHostBlock() {
+      return state.aiEditorHostBlock;
     },
     get modalSectionKey() {
       return state.modalSectionKey;

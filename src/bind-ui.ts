@@ -4,7 +4,7 @@ import bundledCrmHvy from '../examples/crm.hvy?raw';
 import bundledResumeViews from '../examples/resume-views.json';
 import { state, getRenderApp, getRefreshReaderPanels } from './state';
 import { findSectionByKey } from './section-ops';
-import { findBlockByIds, setActiveEditorBlock } from './block-ops';
+import { findBlockByIds, setActiveEditorBlock, setAiEditorHostBlock } from './block-ops';
 import { navigateToSection, closeModal, resetTransientUiState, resetToBlankDocument } from './navigation';
 import { deserializeDocument, deserializeDocumentBytes, serializeDocument, serializeDocumentBytes } from './serialization';
 import { detectExtension, normalizeFilename, normalizeMarkdownImportFilename, downloadBinaryFile } from './utils';
@@ -701,6 +701,7 @@ function activateAiExpandableTextTarget(target: HTMLElement, expandable: HTMLEle
   });
   state.aiModeTipDismissed = true;
   setActiveEditorBlock(sectionKey, blockId, { targetOnly: true });
+  setAiEditorHostBlock(expandableSectionKey || sectionKey, expandableBlockId || blockId);
   if (state.pendingEditorActivation) {
     state.pendingEditorActivation.immediateFocus = true;
   }

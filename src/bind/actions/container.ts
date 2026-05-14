@@ -1,5 +1,5 @@
 import { state, getRenderApp } from '../../state';
-import { findBlockByIds, markActiveEditorBlockAsNew, setActiveEditorBlock } from '../../block-ops';
+import { findBlockByIds, markActiveEditorBlockAsNew, setActiveEditorBlock, setAiEditorHostBlock } from '../../block-ops';
 import { createEmptyBlock, ensureContainerBlocks, ensureComponentListBlocks, ensureExpandableBlocks } from '../../document-factory';
 import { recordHistory } from '../../history';
 import { syncReusableTemplateForBlock } from '../../reusable';
@@ -30,6 +30,9 @@ const addComponentListItem: ActionHandler = ({ actionButton, sectionKey, blockId
   block.schema.componentListBlocks.push(newBlock);
   syncReusableTemplateForBlock(sectionKey, block.id);
   setActiveEditorBlock(sectionKey, newBlock.id, { targetOnly: true });
+  if (state.currentView === 'ai' && !actionButton.closest('.editor-block')) {
+    setAiEditorHostBlock(sectionKey, newBlock.id);
+  }
   markActiveEditorBlockAsNew(newBlock.id);
   getRenderApp()();
   centerActiveEditorBlockAfterRender(newBlock.id);

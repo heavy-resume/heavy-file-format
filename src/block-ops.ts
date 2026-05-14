@@ -637,6 +637,14 @@ export function setActiveEditorBlock(sectionKey: string, blockId: string, option
   };
 }
 
+export function setAiEditorHostBlock(sectionKey: string, blockId: string): void {
+  state.aiEditorHostBlock = { sectionKey, blockId };
+}
+
+export function clearAiEditorHostBlock(): void {
+  state.aiEditorHostBlock = null;
+}
+
 export function markActiveEditorBlockAsNew(blockId: string): void {
   state.activeEditorNewBlockIds.add(blockId);
 }
@@ -723,6 +731,7 @@ export function clearActiveEditorBlock(blockId?: string): void {
   }
   if (!blockId) {
     state.activeEditorBlock = null;
+    state.aiEditorHostBlock = null;
     state.activeEditorBlockSnapshot = null;
     state.activeEditorBlockPath = [];
     state.activeEditorBlockSnapshots = [];
@@ -808,6 +817,9 @@ function closeActiveEditorPathFromIndex(index: number): void {
   closing.forEach((active) => state.activeEditorNewBlockIds.delete(active.blockId));
   const leaf = state.activeEditorBlockPath[state.activeEditorBlockPath.length - 1] ?? null;
   state.activeEditorBlock = leaf ? { ...leaf } : null;
+  if (!state.activeEditorBlock) {
+    state.aiEditorHostBlock = null;
+  }
   state.activeEditorBlockSnapshot = leaf
     ? state.activeEditorBlockSnapshots.find((snapshot) => snapshot.sectionKey === leaf.sectionKey && snapshot.blockId === leaf.blockId) ?? null
     : null;

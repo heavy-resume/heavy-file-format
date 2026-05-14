@@ -4,6 +4,7 @@ import {
   getReusableNameFromSectionKey,
   findBlockByIds,
   setActiveEditorBlock,
+  setAiEditorHostBlock,
   applyRichAction,
   openLinkInlineModal,
   getRenderApp,
@@ -280,6 +281,7 @@ function handleAiReaderTextActivationClick(event: MouseEvent): void {
   event.stopImmediatePropagation();
   state.aiModeTipDismissed = true;
   setActiveEditorBlock(sectionKey, blockId, { targetOnly: true });
+  setAiEditorHostBlock(sectionKey, blockId);
   if (state.pendingEditorActivation) {
     state.pendingEditorActivation.immediateFocus = true;
   }

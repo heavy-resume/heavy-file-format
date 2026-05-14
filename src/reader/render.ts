@@ -53,6 +53,7 @@ interface ReaderRenderState {
   aiEditTarget: { sectionKey: string | null; blockId: string | null };
   contextMenu?: { kind: 'filter' | 'ai'; sectionKey: string; blockId?: string } | null;
   activeEditorBlock?: { sectionKey: string; blockId: string } | null;
+  aiEditorHostBlock?: { sectionKey: string; blockId: string } | null;
   modalSectionKey: string | null;
   sqliteRowComponentModal: SqliteRowComponentModalState | null;
   dbTableQueryModal: DbTableQueryModalState | null;
@@ -345,7 +346,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       return '';
     }
     const base = deps.resolveBaseComponent(block.schema.component);
-    if (state.currentView === 'ai' && state.activeEditorBlock?.sectionKey === section.key && state.activeEditorBlock.blockId === block.id) {
+    if (state.currentView === 'ai' && isAiEditorHostBlock(section.key, block.id)) {
       return deps.renderEditorBlock(section.key, block);
     }
     if (state.currentView === 'ai' && shouldRenderAiPassiveEditorAffordance(base, block)) {
@@ -469,6 +470,11 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       return renderMaybeCollapsedBlockShell(renderImageReader(section, block, helpers));
     }
     return renderMaybeCollapsedBlockShell(renderTextReader(section, block, helpers));
+  }
+
+  function isAiEditorHostBlock(sectionKey: string, blockId: string): boolean {
+    const host = state.aiEditorHostBlock ?? state.activeEditorBlock ?? null;
+    return host?.sectionKey === sectionKey && host.blockId === blockId;
   }
 
   function renderAiActiveComponentListAddAffordance(section: VisualSection, block: VisualBlock): string {

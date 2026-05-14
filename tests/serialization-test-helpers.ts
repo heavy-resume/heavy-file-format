@@ -41,6 +41,7 @@ export function createTestState(document: VisualDocument): AppState {
     cliSession: { cwd: '/' },
     cliHistory: [],
     activeEditorBlock: null,
+    aiEditorHostBlock: null,
     activeEditorBlockPath: [],
     activeEditorBlockSnapshot: null,
     activeEditorBlockSnapshots: [],

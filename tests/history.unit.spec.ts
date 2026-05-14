@@ -46,6 +46,7 @@ function createHistoryTestState(): AppState {
     cliSession: { cwd: '/' },
     cliHistory: [],
     activeEditorBlock: null,
+    aiEditorHostBlock: null,
     activeEditorBlockPath: [],
     activeEditorBlockSnapshot: null,
     activeEditorBlockSnapshots: [],

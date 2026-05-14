@@ -112,7 +112,7 @@
   left: 0.35rem;
   right: 0.35rem;
   top: -0.95rem;
-  z-index: 1;
+  z-index: 4;
   pointer-events: none;
 }
 
@@ -196,6 +196,7 @@
   display: block;
   pointer-events: none;
   z-index: 3;
+  border-radius: inherit;
   background: transparent;
   box-shadow: 0 0 1px 2px var(--hvy-focus-ring), 0 0 14px var(--hvy-focus-glow);
 }

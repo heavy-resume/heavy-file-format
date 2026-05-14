@@ -62,6 +62,25 @@
   color: var(--hvy-text);
 }
 
+.hvy-progress-bar-controls input[type="color"] {
+  width: 100%;
+  min-width: 3rem;
+  height: 1.95rem;
+  padding: 0.18rem;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.hvy-progress-bar-controls input[type="color"]::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.hvy-progress-bar-controls input[type="color"]::-webkit-color-swatch,
+.hvy-progress-bar-controls input[type="color"]::-moz-color-swatch {
+  border: 0;
+  border-radius: 6px;
+}
+
 .hvy-progress-bar-formatter {
   display: flex;
   flex-direction: column;

@@ -244,6 +244,9 @@ hvy_version: 0.1
   });
 
   await expect(page.locator('.ai-view-hint')).toBeVisible();
+  await expect(page.locator('.ai-view-hint')).toHaveCSS('left', '16px');
+  await expect(page.locator('.ai-view-hint')).toHaveCSS('bottom', '16px');
+  await expect(page.locator('.ai-view-hint')).toHaveCSS('background-color', 'rgb(255, 244, 199)');
   await page.locator('#aiReaderDocument .reader-block', { hasText: 'Embedded AI target' }).click({ button: 'right' });
   await expect(page.locator('.hvy-context-popover')).toContainText('Request changes');
   await expect(page.locator('.ai-view-hint')).toHaveCount(0);

@@ -17,6 +17,7 @@ test('theme color labels are human readable', () => {
   expect(getThemeColorLabel('--hvy-xref-card-bg')).toBe('Reference Card Background');
   expect(getThemeColorLabel('--hvy-table-row-bg-2')).toBe('Even Table Row Background');
   expect(getThemeColorLabel('--hvy-accent-1')).toBe('Primary Accent Fill');
+  expect(getThemeColorLabel('--hvy-ai-view-hint-bg')).toBe('AI Editing Hint Background');
 });
 
 test('picker colors normalize rgb and short hex values', () => {

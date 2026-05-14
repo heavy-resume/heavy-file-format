@@ -1,7 +1,7 @@
 .ai-view-hint {
   position: absolute;
-  right: 1rem;
-  top: 1rem;
+  left: 1rem;
+  bottom: 1rem;
   z-index: 6;
   display: grid;
   gap: 0.1rem;
@@ -9,9 +9,9 @@
   padding: 0.45rem 0.7rem;
   border: 1px solid var(--hvy-border-translucent);
   border-radius: 999px;
-  background: color-mix(in srgb, var(--hvy-surface) 94%, transparent);
-  color: var(--hvy-text-alt);
-  box-shadow: 0 10px 24px var(--hvy-shadow);
+  background: var(--hvy-ai-view-hint-bg);
+  color: var(--hvy-text);
+  box-shadow: 0 12px 28px var(--hvy-shadow-md);
   backdrop-filter: blur(10px);
   font-size: 0.84rem;
   line-height: 1.25;
@@ -22,7 +22,7 @@
 .ai-view-hint:focus-visible {
   color: var(--hvy-text);
   border-color: var(--hvy-border-alt);
-  background: color-mix(in srgb, var(--hvy-surface) 98%, var(--hvy-surface-tint) 2%);
+  background: color-mix(in srgb, var(--hvy-ai-view-hint-bg) 86%, var(--hvy-surface) 14%);
 }
 
 .ai-view-hint-touch {
@@ -154,6 +154,7 @@
   .ai-view-hint {
     left: 1rem;
     right: 1rem;
+    bottom: 1rem;
     max-width: none;
     border-radius: 12px;
   }

@@ -423,6 +423,60 @@ component_defs:
   await expect(activeEditor).toContainText('No skill targets available yet.');
 });
 
+test('featured xref helper script reruns after adding a featured xref', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+component_defs:
+  - name: skill-xref-card
+    baseType: xref-card
+    schema:
+      xrefTargetTagFilter: skill
+---
+
+<!--hvy: {"id":"top-skills-tools-technologies"}-->
+#! Featured
+
+ <!--hvy:text {"id":"featured-xref-helper","editorOnly":true}-->
+  Tip: Add a featured skill or tool / technology via the sidebar and link it here
+
+ <!--hvy:component-list {"id":"top-skills-list","componentListComponent":"skill-xref-card","componentListItemLabel":"skill xref"}-->
+
+<!--hvy: {"id":"skills","location":"sidebar"}-->
+#! Skills
+
+ <!--hvy:text {"id":"skill-foo","tags":"skill","xrefTitle":"Foo"}-->
+  Foo
+
+<!--hvy: {"id":"template-maintenance","editorOnly":true}-->
+#! Template Maintenance
+
+ <!--hvy:plugin {"id":"remove-featured-xref-helper","editorOnly":true,"plugin":"dev.heavy.scripting","pluginConfig":{"version":"0.1"}}-->
+  def has_xref(list_id):
+      try:
+          raw = doc.tool.view_component(component_ref=list_id)
+      except Exception:
+          return False
+      return '"xrefTarget":"' in raw or '"xrefTarget": "' in raw
+
+  if has_xref("top-skills-list"):
+      doc.tool.remove_component(component_ref="featured-xref-helper")
+      doc.tool.remove_component(component_ref="remove-featured-xref-helper")
+`);
+  await page.getByRole('button', { name: 'Apply' }).click({ force: true });
+  await page.getByRole('button', { name: 'AI' }).click();
+
+  await expect(page.locator('#aiReaderDocument')).toContainText('Tip: Add a featured skill');
+  await page.locator('#aiReaderDocument [data-action="add-component-list-item"]', { hasText: 'Add Skill Xref' }).click();
+  const activeEditor = page.locator('#aiReaderDocument .editor-block[data-active-editor-block="true"]');
+  await activeEditor.locator('[data-field="block-xref-target"]').fill('skill-foo');
+  await activeEditor.getByRole('button', { name: 'Done' }).click();
+
+  await expect(page.locator('#aiReaderDocument')).not.toContainText('Tip: Add a featured skill');
+});
+
 test('ai canceling a newly added education reference removes it without opening list editor', async ({ page }) => {
   await page.goto('/');
 

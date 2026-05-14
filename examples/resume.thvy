@@ -546,7 +546,7 @@ component_defs:
   # Featured
 
  <!--hvy:text {"id":"featured-xref-helper","align":"center","editorOnly":true,"css":"margin: 0.35rem 0 0.5rem; color: var(--hvy-text-muted); font-style: italic;"}-->
-  Tip: Add a skill and tool / technology via the sidebar and link to them here
+  Tip: Add a featured skill or tool / technology via the sidebar and link it here
 
  <!--hvy:grid {"css":"margin: 0.5rem 0; gap: 0.75rem;","gridColumns":2,"lock":true}-->
   <!--hvy:grid:0 {"id":"top-skills"}-->
@@ -612,11 +612,12 @@ component_defs:
  <!--hvy:plugin {"id":"remove-featured-xref-helper","editorOnly":true,"plugin":"dev.heavy.scripting","pluginConfig":{"version":"0.1"}}-->
   def has_xref(list_id):
       try:
-          return "<!--hvy:xref-card" in doc.tool.view_component(component_ref=list_id)
+          raw = doc.tool.view_component(component_ref=list_id)
       except Exception:
           return False
+      return '"xrefTarget":"' in raw or '"xrefTarget": "' in raw
 
-  if has_xref("top-skills-list") and has_xref("top-tools-technologies-list"):
+  if has_xref("top-skills-list") or has_xref("top-tools-technologies-list"):
       try:
           doc.tool.remove_component(component_ref="featured-xref-helper")
       except Exception:

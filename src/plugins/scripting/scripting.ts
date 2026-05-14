@@ -11,6 +11,7 @@ import type { JsonObject } from '../../hvy/types';
 import { openScriptingHelpModal } from './help-modal';
 import { runUserScript } from './wrapper';
 import { getScriptingPluginMaxLines, getScriptingPluginVersion } from './version';
+import { serializeDocument } from '../../serialization';
 import scriptingDocumentation from './about-scripting.txt?raw';
 
 import './scripting.css';
@@ -244,9 +245,10 @@ async function runDocumentScripting(ctx: HvyDocumentHookContext): Promise<void> 
   for (const section of ctx.document.sections) {
     visitBlocksInSection(section as never, section.key, targets);
   }
-  const signature = targets
+  const scriptSignature = targets
     .map((target) => `${target.sectionKey}\u0000${target.blockId}\u0000${target.pluginVersion}\u0000${target.source}`)
     .join('\u0001');
+  const signature = `${serializeDocument(ctx.document)}\u0002${scriptSignature}`;
   if (ctx.document === lastScriptedDocument && signature === lastScriptedSignature) {
     return;
   }
@@ -262,6 +264,17 @@ async function runDocumentScripting(ctx: HvyDocumentHookContext): Promise<void> 
       componentId: target.componentId,
       pluginVersion: target.pluginVersion,
       maxLines: target.maxLines,
+    });
+    console.debug('[hvy:scripting] script run', {
+      changeReason: ctx.changeReason,
+      sectionKey: target.sectionKey,
+      blockId: target.blockId,
+      componentId: target.componentId,
+      pluginVersion: target.pluginVersion,
+      ok: result.ok,
+      linesExecuted: result.linesExecuted,
+      toolCalls: result.toolCalls,
+      error: result.error,
     });
     if (!ctx.isCurrentDocument()) {
       return;

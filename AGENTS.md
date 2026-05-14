@@ -24,6 +24,8 @@ When asked to have something be HVY always use the reusable HVY rendering and no
 
 The default startup document should treat `examples/example.hvy` as the single source of truth. It contains a real HVY tail attachment, so do not load it as raw text; load it as bytes / asset URL and deserialize bytes so `--HVY-TAIL--` data does not leak into the visible document.
 
+Embedding is a common use case. The embedded client boundary lives in `src/embed.ts`; use `mountHvy` / `mountHvyViewer` from `window.HVY` and keep host-facing API types there. The README has the public embedding examples. Embedded hosts pass plugins through `plugins`, chat through `chatClient`, palettes through `paletteId`, and async link validation/rewrites through `linkObserver` / `mount.setLinkObserver(...)`; the link observer implementation is in `src/link-observer.ts`.
+
 Be careful with the app's view terminology. `AI` is a document view/editing mode that sits alongside `editor` and `viewer`; it is not the same thing as the chat panel itself. When a user refers to "AI mode", confirm whether they mean the document `AI` view versus the chat UI before making rendering or styling assumptions.
 
 Naming convention notes:

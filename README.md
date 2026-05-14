@@ -174,6 +174,29 @@ HVY.mountHvy({
 });
 ```
 
+Embedded hosts can observe rendered reader links asynchronously and return how
+the link should be rendered. Use this for URL validation, safe-link
+interstitials, previews, or host-specific routing:
+
+```js
+HVY.mountHvyViewer({
+  root,
+  document,
+  async linkObserver(link) {
+    if (!link.external) return null;
+    const safeUrl = `/safe-link?url=${encodeURIComponent(link.href)}`;
+    return {
+      href: safeUrl,
+      rel: 'noopener noreferrer',
+      attributes: { 'data-original-url': link.href },
+    };
+  },
+});
+```
+
+Return `{ html }` to replace the rendered link with sanitized HTML, or return
+`null` / `undefined` to keep the default rendering.
+
 ## Notes
 
 - Markdown is treated as valid HVY.

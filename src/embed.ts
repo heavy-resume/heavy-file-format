@@ -59,6 +59,7 @@ import { createDefaultSearchState } from './search/state';
 import { renderSearchLauncher, renderSearchPalette } from './search/render';
 import { loadPaletteOverrideId } from './palettes/palette-preferences';
 import { captureRenderScroll, restoreRenderScroll } from './render-scroll';
+import { observeRenderedLinks, resetObservedLinks, type HvyLinkObserver } from './link-observer';
 
 export type HvyEmbedMode = 'viewer' | 'editor' | 'ai';
 
@@ -69,6 +70,7 @@ export interface HvyMountOptions {
   plugins?: HvyPlugin[];
   showAdvancedEditor?: boolean;
   chatClient?: HostChatClient | null;
+  linkObserver?: HvyLinkObserver | null;
   controls?: boolean;
   paletteId?: string | null;
 }
@@ -76,6 +78,7 @@ export interface HvyMountOptions {
 export interface HvyMount {
   destroy(): void;
   getDocument(): VisualDocument;
+  setLinkObserver(observer: HvyLinkObserver | null): void;
   setPaletteOverrideId(id: string | null): void;
   openThemeEditor(options?: { advanced?: boolean }): void;
   mountThemeEditor(root: HTMLElement, options?: { advanced?: boolean; includePalettePicker?: boolean }): void;
@@ -84,6 +87,7 @@ export interface HvyMount {
 let editorRenderer: EditorRenderer;
 let readerRenderer: ReaderRenderer;
 let currentRoot: HTMLElement | null = null;
+let currentLinkObserver: HvyLinkObserver | null = null;
 
 function createEmbedState(document: VisualDocument, mode: HvyEmbedMode, showAdvancedEditor = false): AppState {
   return {
@@ -325,6 +329,7 @@ function renderApp(): void {
   bindUi(currentRoot);
   reconcilePluginMounts(currentRoot);
   restoreRenderScroll(currentRoot, capturedScroll);
+  observeRenderedLinks(currentRoot, currentLinkObserver);
   void runButtonVisibilityScripts(currentRoot);
   void runPluginDocumentHooks('unknown');
 }
@@ -396,8 +401,17 @@ function refreshReaderPanels(): void {
   capturePluginFocus();
   reader.innerHTML = readerRenderer.renderReaderSections(state.document.sections);
   reconcilePluginMounts(reader);
+  observeRenderedLinks(currentRoot, currentLinkObserver);
   void runButtonVisibilityScripts(reader);
   void runPluginDocumentHooks('unknown');
+}
+
+function setLinkObserver(observer: HvyLinkObserver | null): void {
+  currentLinkObserver = observer;
+  if (currentRoot) {
+    resetObservedLinks(currentRoot);
+    observeRenderedLinks(currentRoot, currentLinkObserver);
+  }
 }
 
 function refreshModalPreview(): void {}
@@ -421,6 +435,7 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
   options.root.classList.add('hvy-document');
   setThemeRoot(options.root);
   initState(createEmbedState(options.document, options.mode ?? 'viewer', options.showAdvancedEditor ?? false));
+  currentLinkObserver = options.linkObserver ?? null;
   if (options.paletteId && getPaletteById(options.paletteId)) {
     state.paletteOverrideId = options.paletteId;
   }
@@ -435,12 +450,14 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
       resetPluginDocumentHookState();
       if (currentRoot === options.root) {
         currentRoot = null;
+        currentLinkObserver = null;
         setThemeRoot(null);
       }
     },
     getDocument() {
       return state.document;
     },
+    setLinkObserver,
     setPaletteOverrideId,
     openThemeEditor,
     mountThemeEditor,
@@ -452,6 +469,7 @@ export function mountHvyViewer(options: Omit<HvyMountOptions, 'mode'>): HvyMount
 }
 
 export { builtInPluginMap as plugins, builtInPlugins, deserializeDocumentBytes, serializeDocument };
+export type { HvyLinkObserver, HvyLinkObserverRequest, HvyLinkObserverResponse } from './link-observer';
 
 declare global {
   interface Window {

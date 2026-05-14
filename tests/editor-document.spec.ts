@@ -96,6 +96,73 @@ hvy_version: 0.1
   expect(result.linkColor).not.toBe('rgb(255, 0, 0)');
 });
 
+test('embedded runtime lets hosts asynchronously rewrite rendered reader links', async ({ page }) => {
+  await page.goto('/');
+
+  const result = await page.evaluate(async () => {
+    document.body.innerHTML = '<div id="mount"></div>';
+    const modulePath = '/src/embed.ts';
+    const { deserializeDocumentBytes, mountHvyViewer } = await import(/* @vite-ignore */ modulePath);
+    const source = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ [Example link](https://example.com/report)
+ [Preview link](https://example.com/preview)
+`;
+    const root = document.querySelector<HTMLElement>('#mount');
+    if (!root) {
+      throw new Error('Mount root missing.');
+    }
+    const seen: string[] = [];
+    mountHvyViewer({
+      root,
+      document: deserializeDocumentBytes(new TextEncoder().encode(source), '.hvy'),
+      async linkObserver(link) {
+        seen.push(`${link.href}:${link.text.trim()}`);
+        await Promise.resolve();
+        if (link.href.endsWith('/preview')) {
+          return {
+            html: `<a class="safe-preview-link" href="/preview-card">Preview: ${link.text}</a><span class="safe-preview-label">Ready</span>`,
+          };
+        }
+        return {
+          href: `/safe-link?url=${encodeURIComponent(link.href)}`,
+          text: `Safe: ${link.text.trim()}`,
+          attributes: { 'data-link-reviewed': 'true' },
+        };
+      },
+    });
+    await new Promise((resolve) => window.setTimeout(resolve, 0));
+    const link = root.querySelector<HTMLAnchorElement>('.reader-block a');
+    const preview = root.querySelector<HTMLAnchorElement>('.safe-preview-link');
+    const previewLabel = root.querySelector<HTMLElement>('.safe-preview-label');
+    if (!link) {
+      throw new Error('Expected rendered link missing.');
+    }
+    return {
+      seen,
+      href: link.getAttribute('href'),
+      text: link.textContent,
+      reviewed: link.getAttribute('data-link-reviewed'),
+      previewHref: preview?.getAttribute('href') ?? '',
+      previewText: preview?.textContent ?? '',
+      previewLabel: previewLabel?.textContent ?? '',
+    };
+  });
+
+  expect(result.seen).toEqual(['https://example.com/report:Example link', 'https://example.com/preview:Preview link']);
+  expect(result.href).toBe('/safe-link?url=https%3A%2F%2Fexample.com%2Freport');
+  expect(result.text).toBe('Safe: Example link');
+  expect(result.reviewed).toBe('true');
+  expect(result.previewHref).toBe('/preview-card');
+  expect(result.previewText).toBe('Preview: Preview link');
+  expect(result.previewLabel).toBe('Ready');
+});
+
 test('embedded runtime keeps HVY modal panels above host modal overlays', async ({ page }) => {
   await page.goto('/');
 

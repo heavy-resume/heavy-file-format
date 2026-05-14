@@ -65,18 +65,20 @@
 .hvy-progress-bar-controls input[type="color"] {
   width: 100%;
   min-width: 3rem;
-  height: 1.95rem;
   padding: 0.18rem;
   border-radius: 8px;
   cursor: pointer;
+  height: 100%;
 }
 
 .hvy-progress-bar-controls input[type="color"]::-webkit-color-swatch-wrapper {
+  height: 100%;
   padding: 0;
 }
 
 .hvy-progress-bar-controls input[type="color"]::-webkit-color-swatch,
 .hvy-progress-bar-controls input[type="color"]::-moz-color-swatch {
+  height: 100%;
   border: 0;
   border-radius: 6px;
 }

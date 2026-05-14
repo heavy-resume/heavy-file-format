@@ -95,13 +95,17 @@ interface ReaderRenderDeps {
   renderBlockMetaFields: (sectionKey: string, block: VisualBlock) => string;
 }
 
+export interface ReaderBlockRenderOptions {
+  suppressAiEditorDelegation?: boolean;
+}
+
 export interface ReaderRenderer {
   renderNavigation: (sections: VisualSection[]) => string;
   renderReaderSections: (sections: VisualSection[]) => string;
   renderSidebarSections: (sections: VisualSection[]) => string;
   renderSidebarHelpBalloon: (sections: VisualSection[]) => string;
   renderReaderSection: (section: VisualSection) => string;
-  renderReaderBlock: (section: VisualSection, block: VisualBlock) => string;
+  renderReaderBlock: (section: VisualSection, block: VisualBlock, options?: ReaderBlockRenderOptions) => string;
   renderReaderBlocks: (section: VisualSection, blocks: VisualBlock[]) => string;
   renderReaderListBlocks: (section: VisualSection, blocks: VisualBlock[]) => string;
   orderReaderBlocks: (blocks: VisualBlock[]) => VisualBlock[];
@@ -332,7 +336,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     );
   }
 
-  function renderReaderBlock(section: VisualSection, block: VisualBlock): string {
+  function renderReaderBlock(section: VisualSection, block: VisualBlock, options: ReaderBlockRenderOptions = {}): string {
     if (isViewerHiddenBlock(block)) {
       return '';
     }
@@ -346,10 +350,10 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       return '';
     }
     const base = deps.resolveBaseComponent(block.schema.component);
-    if (state.currentView === 'ai' && isAiEditorHostBlock(section.key, block.id)) {
+    if (!options.suppressAiEditorDelegation && state.currentView === 'ai' && isAiEditorHostBlock(section.key, block.id)) {
       return deps.renderEditorBlock(section.key, block);
     }
-    if (state.currentView === 'ai' && shouldRenderAiPassiveEditorAffordance(base, block)) {
+    if (!options.suppressAiEditorDelegation && state.currentView === 'ai' && shouldRenderAiPassiveEditorAffordance(base, block)) {
       return deps.renderEditorBlock(section.key, block);
     }
     const modifiers = getReaderViewModifiers(viewContext, targetKey);

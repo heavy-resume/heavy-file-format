@@ -3,6 +3,7 @@ import DOMPurify from 'dompurify';
 import hljs from 'highlight.js/lib/core';
 import type { ComponentRenderHelpers } from './component-helpers';
 import type { ComponentPlacementState } from '../types';
+import type { ReaderBlockRenderOptions } from '../reader/render';
 import { renderComponentListEditor } from './components/component-list/component-list';
 import { renderButtonEditor } from './components/button/button';
 import { renderContainerEditor } from './components/container/container';
@@ -120,7 +121,7 @@ interface EditorRenderDeps {
   escapeAttr: (value: string) => string;
   escapeHtml: (value: string) => string;
   flattenSections: (sections: VisualSection[]) => VisualSection[];
-  renderReaderBlock: (section: VisualSection, block: VisualBlock) => string;
+  renderReaderBlock: (section: VisualSection, block: VisualBlock, options?: ReaderBlockRenderOptions) => string;
   renderReusableSectionOptions: (selected: string) => string;
   renderOption: (value: string, selected: string) => string;
   resolveBaseComponent: (componentName: string) => string;
@@ -809,7 +810,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       return `<div class="editor-passive-empty-text${block.schema.placeholder ? ' has-placeholder' : ''}"${alignStyle}>${content}</div>`;
     }
 
-    return deps.renderReaderBlock(section, block);
+    return deps.renderReaderBlock(section, block, { suppressAiEditorDelegation: true });
   }
 
   function renderRichToolbar(

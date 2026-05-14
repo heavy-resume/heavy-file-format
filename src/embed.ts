@@ -189,7 +189,7 @@ function ensureRenderers(): void {
       escapeAttr,
       escapeHtml,
       flattenSections,
-      renderReaderBlock: (section, block) => readerRenderer.renderReaderBlock(section, block),
+      renderReaderBlock: (section, block, options) => readerRenderer.renderReaderBlock(section, block, options),
       renderReusableSectionOptions,
       renderOption,
       resolveBaseComponent,

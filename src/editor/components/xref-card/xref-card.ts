@@ -11,18 +11,14 @@ export const renderXrefCardEditor: ComponentEditorRenderer = (sectionKey, block,
   <div class="xref-card-editor editor-xref-card ${helpers.isXrefTargetValid(block.schema.xrefTarget, block.schema.xrefTargetTagFilter) ? '' : 'is-invalid-target'} ${hasTarget ? '' : 'is-target-empty'}">
     <label class="xref-target-picker">
       <span>Target</span>
-      <input
-        list="${helpers.escapeAttr(getDatalistId(block.id))}"
+      <select
         data-section-key="${helpers.escapeAttr(sectionKey)}"
         data-block-id="${helpers.escapeAttr(block.id)}"
         data-field="block-xref-target"
-        value="${helpers.escapeAttr(normalizeTargetValue(block.schema.xrefTarget))}"
-        placeholder="${hasNoFilteredTargets ? 'No targets available' : 'Type or pick a target'}"
         ${hasNoFilteredTargets ? 'disabled' : ''}
-      />
-      <datalist id="${helpers.escapeAttr(getDatalistId(block.id))}">
-        ${renderTargetOptions(helpers, targetOptions)}
-      </datalist>
+      >
+        ${renderTargetOptions(helpers, targetOptions, normalizeTargetValue(block.schema.xrefTarget))}
+      </select>
       ${hasNoFilteredTargets ? `<p class="xref-target-empty">No ${helpers.escapeHtml(block.schema.xrefTargetTagFilter.trim())} targets available yet.</p>` : ''}
     </label>
     <span class="xref-override-label">Title override</span>
@@ -75,13 +71,22 @@ function renderXrefCardPreview(
   </a>`;
 }
 
-function renderTargetOptions(helpers: ComponentRenderHelpers, options: ReturnType<ComponentRenderHelpers['getXrefTargetOptions']>): string {
-  return options
-    .map(
-      (option) =>
-        `<option value="${helpers.escapeAttr(option.value)}" label="${helpers.escapeAttr(option.label)}">${helpers.escapeHtml(option.label)}</option>`
-    )
+function renderTargetOptions(
+  helpers: ComponentRenderHelpers,
+  options: ReturnType<ComponentRenderHelpers['getXrefTargetOptions']>,
+  selectedTarget: string
+): string {
+  const optionHtml = options
+    .map((option) => {
+      const selected = option.value === selectedTarget ? ' selected' : '';
+      return `<option value="${helpers.escapeAttr(option.value)}"${selected}>${helpers.escapeHtml(option.title)}</option>`;
+    })
     .join('');
+  const hasSelectedOption = !selectedTarget || options.some((option) => option.value === selectedTarget);
+  const missingSelectedOption = hasSelectedOption
+    ? ''
+    : `<option value="${helpers.escapeAttr(selectedTarget)}" selected>${helpers.escapeHtml(selectedTarget)}</option>`;
+  return `<option value="">Pick a target</option>${missingSelectedOption}${optionHtml}`;
 }
 
 function getDisplayTitle(block: Parameters<ComponentEditorRenderer>[1], helpers: ComponentRenderHelpers): string {
@@ -95,10 +100,6 @@ function getDisplayDetail(block: Parameters<ComponentEditorRenderer>[1], helpers
 function getTargetOption(block: Parameters<ComponentEditorRenderer>[1], helpers: ComponentRenderHelpers) {
   const target = normalizeTargetValue(block.schema.xrefTarget);
   return helpers.getXrefTargetOptions(block.schema.xrefTargetTagFilter).find((option) => option.value === target);
-}
-
-function getDatalistId(blockId: string): string {
-  return `xref-targets-${blockId}`;
 }
 
 function normalizeTargetValue(target: string): string {

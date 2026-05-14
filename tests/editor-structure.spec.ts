@@ -374,7 +374,7 @@ test('canceling a newly added featured xref removes it without opening list edit
 
   const activeEditor = page.locator('.editor-block[data-active-editor-block="true"]');
   await expect(activeEditor.locator('.editor-block-title').first()).toContainText('skill-xref-card');
-  await expect(activeEditor.locator('datalist option[value="skill-software-engineering"]')).toHaveCount(1);
+  await expect(activeEditor.locator('select[data-field="block-xref-target"] option[value="skill-software-engineering"]')).toHaveText('Software Engineering');
   await activeEditor.getByRole('button', { name: 'Cancel' }).click();
 
   await expect(page.locator('[data-component-id="top-skills-list"]')).not.toContainText('Untitled');
@@ -390,7 +390,7 @@ test('new featured xref populates title from target defaults', async ({ page }) 
   await topSkillsList.locator('[data-action="add-component-list-item"]').click();
 
   const activeEditor = page.locator('.editor-block[data-active-editor-block="true"]');
-  await activeEditor.locator('[data-field="block-xref-target"]').fill('skill-software-engineering');
+  await activeEditor.locator('[data-field="block-xref-target"]').selectOption('skill-software-engineering');
 
   await expect(activeEditor.locator('[data-field="block-xref-title"]')).toHaveText('Software Engineering');
 });
@@ -509,7 +509,7 @@ component_defs:
   await expect(page.locator('#aiReaderDocument')).toContainText('Tip: Add a featured skill');
   await page.locator('#aiReaderDocument [data-action="add-component-list-item"]', { hasText: 'Add Skill Xref' }).click();
   const activeEditor = page.locator('#aiReaderDocument .editor-block[data-active-editor-block="true"]');
-  await activeEditor.locator('[data-field="block-xref-target"]').fill('skill-foo');
+  await activeEditor.locator('[data-field="block-xref-target"]').selectOption('skill-foo');
   await activeEditor.getByRole('button', { name: 'Done' }).click();
 
   await expect(page.locator('#aiReaderDocument')).not.toContainText('Tip: Add a featured skill');
@@ -555,9 +555,9 @@ component_defs:
   await page.locator('#aiReaderDocument [data-action="add-component-list-item"]', { hasText: 'Add Education Reference' }).click();
   const activeEditor = page.locator('#aiReaderDocument .editor-block[data-active-editor-block="true"]');
   await expect(activeEditor.locator('.editor-block-title').first()).toContainText('education-xref-card');
-  await expect(activeEditor.locator('datalist option[value="education-target"]')).toHaveCount(1);
-  await expect(activeEditor.locator('datalist option[value="history-target"]')).toHaveCount(0);
-  await expect(activeEditor.locator('datalist option[value="project-target"]')).toHaveCount(0);
+  await expect(activeEditor.locator('select[data-field="block-xref-target"] option[value="education-target"]')).toHaveCount(1);
+  await expect(activeEditor.locator('select[data-field="block-xref-target"] option[value="history-target"]')).toHaveCount(0);
+  await expect(activeEditor.locator('select[data-field="block-xref-target"] option[value="project-target"]')).toHaveCount(0);
   await activeEditor.getByRole('button', { name: 'Cancel' }).click();
 
   await expect(page.locator('#aiReaderDocument')).not.toContainText('Untitled');
@@ -738,8 +738,8 @@ component_defs:
   await page.locator('#aiReaderDocument #featured [data-action="add-component-list-item"]', { hasText: 'Add Project Reference' }).click();
   const xrefEditor = page.locator('#aiReaderDocument .editor-block[data-active-editor-block="true"]');
   await expect(xrefEditor.locator('.editor-block-title').first()).toContainText('project-xref-card');
-  await expect(xrefEditor.locator('datalist option[value="project-heavy-stack"]')).toHaveCount(1);
-  await xrefEditor.locator('[data-field="block-xref-target"]').fill('project-heavy-stack');
+  await expect(xrefEditor.locator('select[data-field="block-xref-target"] option[value="project-heavy-stack"]')).toHaveText('Heavy Stack');
+  await xrefEditor.locator('[data-field="block-xref-target"]').selectOption('project-heavy-stack');
   await expect(xrefEditor.locator('[data-field="block-xref-target"]')).toHaveValue('project-heavy-stack');
   await expect(xrefEditor.locator('[data-field="block-xref-title"]')).toHaveText('Heavy Stack');
 });

@@ -473,9 +473,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     if (
       state.currentView !== 'ai' ||
       block.schema.lock ||
-      !hasComponentListItems(block) ||
-      state.activeEditorBlock?.sectionKey !== section.key ||
-      !isDescendantActive(block, state.activeEditorBlock.blockId)
+      !hasComponentListItems(block)
     ) {
       return '';
     }
@@ -485,35 +483,6 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       <div class="ghost-plus-big">${plusIcon()}</div>
       <div class="ghost-label">${deps.escapeHtml(getComponentListAddLabel(block))}</div>
     </article>`;
-  }
-
-  function isDescendantActive(block: VisualBlock, targetBlockId: string): boolean {
-    if (Array.isArray(block.schema.containerBlocks)) {
-      for (const child of block.schema.containerBlocks) {
-        if (child.id === targetBlockId || isDescendantActive(child, targetBlockId)) return true;
-      }
-    }
-    if (Array.isArray(block.schema.componentListBlocks)) {
-      for (const child of block.schema.componentListBlocks) {
-        if (child.id === targetBlockId || isDescendantActive(child, targetBlockId)) return true;
-      }
-    }
-    if (Array.isArray(block.schema.expandableStubBlocks?.children)) {
-      for (const child of block.schema.expandableStubBlocks.children) {
-        if (child.id === targetBlockId || isDescendantActive(child, targetBlockId)) return true;
-      }
-    }
-    if (Array.isArray(block.schema.expandableContentBlocks?.children)) {
-      for (const child of block.schema.expandableContentBlocks.children) {
-        if (child.id === targetBlockId || isDescendantActive(child, targetBlockId)) return true;
-      }
-    }
-    if (Array.isArray(block.schema.gridItems)) {
-      for (const item of block.schema.gridItems) {
-        if (item.block.id === targetBlockId || isDescendantActive(item.block, targetBlockId)) return true;
-      }
-    }
-    return false;
   }
 
   function shouldRenderAiPassiveEditorAffordance(base: string, block: VisualBlock): boolean {

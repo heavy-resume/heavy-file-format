@@ -221,6 +221,7 @@ export function handleBlockFieldInput(target: HTMLElement): boolean {
   if (field === 'text-fill-in-value') {
     block.text = buildTextFromFillInEditor(target);
     block.schema.fillIn = hasTextFillInMarker(block.text);
+    block.schema.placeholder = buildPlaceholderFromFillInEditor(target, block.schema.placeholder);
     syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
     if (!target.closest('#aiReaderDocument, #aiSidebarSections')) {
       getRefreshReaderPanels()();
@@ -483,6 +484,19 @@ function buildTextFromFillInEditor(target: HTMLElement): string {
       return `${part}${value.length > 0 ? value : TEXT_FILL_IN_MARKER}`;
     })
     .join('');
+}
+
+function buildPlaceholderFromFillInEditor(target: HTMLElement, currentPlaceholder: string): string {
+  const editor = target.closest<HTMLElement>('.text-fill-in-editor');
+  if (!editor) {
+    return currentPlaceholder;
+  }
+  const fillIns = Array.from(editor.querySelectorAll<HTMLElement>('[data-field="text-fill-in-value"]'));
+  const remainingLabels = fillIns
+    .filter((fillIn) => (fillIn.textContent ?? '').replaceAll('\u200b', '').length === 0)
+    .map((fillIn) => fillIn.dataset.placeholder?.trim() ?? '')
+    .filter(Boolean);
+  return remainingLabels.length > 0 ? remainingLabels.join(', ') : currentPlaceholder;
 }
 
 function getInlineEditableMarkdown(target: HTMLElement): string {

@@ -1112,11 +1112,13 @@
   box-shadow: 0 6px 14px var(--hvy-shadow);
 }
 
-#aiReaderDocument .editor-block[data-active-editor-block="true"] {
+#aiReaderDocument .editor-block[data-active-editor-block="true"],
+#aiSidebarSections .editor-block[data-active-editor-block="true"] {
   z-index: 4;
 }
 
-#aiReaderDocument .editor-block[data-active-editor-block="true"] .editor-block-remove-button {
+#aiReaderDocument .editor-block[data-active-editor-block="true"] .editor-block-remove-button,
+#aiSidebarSections .editor-block[data-active-editor-block="true"] .editor-block-remove-button {
   z-index: 5;
 }
 

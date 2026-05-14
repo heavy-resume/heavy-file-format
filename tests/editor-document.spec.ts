@@ -701,12 +701,17 @@ hvy_version: 0.1
 <!--hvy:text {"id":"summary","placeholder":"Draft summary"}-->
 
 <!--hvy:component-list {"id":"todos","componentListComponent":"text","componentListItemLabel":"todo"}-->
+
+ <!--hvy:component-list:0 {}-->
+
+  Existing todo
 `);
   await page.getByRole('button', { name: 'Apply' }).click();
   await page.getByRole('button', { name: 'AI' }).click();
 
   await expect(page.locator('#aiReaderDocument .editor-passive-empty-text', { hasText: 'Draft summary' })).toBeVisible();
   await expect(page.locator('#aiReaderDocument .ghost-label', { hasText: 'Add Todo' })).toBeVisible();
+  await expect(page.locator('#aiReaderDocument')).toContainText('Existing todo');
 
   await page.locator('#aiReaderDocument .editor-passive-empty-text', { hasText: 'Draft summary' }).click();
   await expect(page.locator('#aiReaderDocument .rich-editor')).toBeVisible();

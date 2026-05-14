@@ -364,7 +364,7 @@ function insertReusableTemplateFromModal(modalRoot: HTMLDivElement): void {
     }
     syncReusableTemplateForBlock(target.sectionKey, target.blockId);
   }
-  setActiveEditorBlock(target.sectionKey, newBlock.id, { targetOnly: target.kind !== 'section' && !(state.currentView === 'ai' && target.kind === 'component-list') });
+  setActiveEditorBlock(target.sectionKey, newBlock.id, { targetOnly: target.kind !== 'section' });
   markActiveEditorBlockAsNew(newBlock.id);
   closeModal();
   getRenderApp()();

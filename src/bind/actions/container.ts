@@ -27,7 +27,7 @@ const addComponentListItem: ActionHandler = ({ actionButton, sectionKey, blockId
   }
   block.schema.componentListBlocks.push(newBlock);
   syncReusableTemplateForBlock(sectionKey, block.id);
-  setActiveEditorBlock(sectionKey, newBlock.id, { targetOnly: state.currentView !== 'ai' });
+  setActiveEditorBlock(sectionKey, newBlock.id, { targetOnly: true });
   markActiveEditorBlockAsNew(newBlock.id);
   getRenderApp()();
   centerActiveEditorBlockAfterRender(newBlock.id);

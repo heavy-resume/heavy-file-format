@@ -311,6 +311,27 @@ test('ai sidebar skill click expands collapsed record before editing', async ({ 
   await expect(skillsSection.locator('.editor-block[data-active-editor-block="true"]')).toHaveCount(0);
 });
 
+test('ai filled placeholder text does not open inline editing on click', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ <!--hvy:text {"id":"skill-name","placeholder":"### Skill name"}-->
+  ### Programming
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'AI' }).click();
+
+  await page.locator('#aiReaderDocument .reader-block-text[data-component-id="skill-name"]', { hasText: 'Programming' }).click();
+  await expect(page.locator('#aiReaderDocument .editor-block[data-active-editor-block="true"]')).toHaveCount(0);
+});
+
 test('canceling a newly added featured xref removes it without opening list editor', async ({ page }) => {
   await page.goto('/');
 
@@ -325,6 +346,28 @@ test('canceling a newly added featured xref removes it without opening list edit
 
   await expect(page.locator('[data-component-id="top-skills-list"]')).not.toContainText('Untitled');
   await expect(page.locator('.editor-block[data-active-editor-block="true"]')).toHaveCount(0);
+});
+
+test('ai mode done on newly added skill closes without editing parent list', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Resume Template' }).click();
+  await page.locator('[data-action="switch-view"][data-view="ai"]').click();
+  await page.locator('.viewer-sidebar-tab').click();
+
+  await page.locator('#aiSidebarSections #skills [data-action="add-component-list-item"]', { hasText: 'Add Skill' }).click();
+  const modal = page.locator('.modal-root', { has: page.locator('input[data-template-variable="skill"]') });
+  await expect(modal.locator('input[data-template-variable="skill"]')).toBeVisible();
+  await modal.locator('input[data-template-variable="skill"]').fill('Programming');
+  await modal.getByRole('button', { name: 'Insert' }).click();
+
+  const activeEditor = page.locator('#aiSidebarSections .editor-block[data-active-editor-block="true"]');
+  await expect(activeEditor.locator('.editor-block-title').first()).toContainText('skill-record');
+  await activeEditor.getByRole('button', { name: 'Done' }).click();
+
+  await expect(page.locator('#aiSidebarSections .editor-block[data-active-editor-block="true"]')).toHaveCount(0);
+  await expect(page.locator('#aiSidebarSections .component-list-view-editor')).toHaveCount(0);
+  await expect(page.locator('#aiSidebarSections #skills')).toContainText('Programming');
 });
 
 test('ai context menu stays inside phone preview when opened near the edge', async ({ page }) => {
@@ -530,6 +573,29 @@ hvy_version: 0.1
   await activeEditor.getByRole('button', { name: 'Cancel' }).click();
   await expect(page.locator('#aiReaderDocument .editor-block[data-active-editor-block="true"]')).toHaveCount(0);
   await expect(page.locator('#aiReaderDocument .reader-block-text', { hasText: 'Stub summary' })).toBeVisible();
+});
+
+test('ai sidebar expandable hover does not cover active editor delete button', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Resume Example' }).click();
+  await page.locator('[data-action="switch-view"][data-view="ai"]').click();
+  await page.locator('.viewer-sidebar-tab').click();
+
+  const skillsSection = page.locator('#aiSidebarSections #skills');
+  await skillsSection.click();
+  const skillRecord = skillsSection.locator('.reader-block-expandable[data-component-id="skill-software-engineering"]').first();
+  await skillRecord.locator('.reader-block-text', { hasText: 'Software Engineering' }).first().click({ button: 'right' });
+  await page.getByRole('button', { name: 'Edit component' }).click();
+
+  const activeEditor = skillsSection.locator('.editor-block[data-active-editor-block="true"]');
+  await expect(activeEditor.locator('.rich-editor')).toContainText('Software Engineering');
+  await skillRecord.hover();
+  const hoverBorderContent = await activeEditor.locator('.editor-block-remove-button').evaluate((button) => {
+    const expandable = button.closest('.reader-block-expandable') as HTMLElement;
+    return getComputedStyle(expandable, '::after').content;
+  });
+  expect(hoverBorderContent).toBe('none');
 });
 
 test('ai context clone trims only leading paragraph style margin', async ({ page }) => {
@@ -999,6 +1065,7 @@ hvy_version: 0.1
   await expect(fillIns).toHaveCount(2);
 
   await fillIns.nth(0).fill('Seattle, WA');
+  await expect(fillIns.nth(1)).toHaveAttribute('data-placeholder', 'target location');
   await fillIns.nth(1).fill('Greater Seattle area');
 
   const editor = page.locator('.text-fill-in-editor');
@@ -1043,6 +1110,33 @@ hvy_version: 0.1
   await page.keyboard.type('Remote');
   await expect(fillIns.nth(1)).toBeFocused();
   await expect(page.locator('.text-fill-in-editor')).toContainText('Target Location(s): Remote');
+});
+
+test('completed fill-in slots prune placeholder labels for remaining slots', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"locations"}-->
+#! Locations
+
+ <!--hvy:text {"id":"location-details","placeholder":"location, target location","fillIn":true}-->
+  **Location:** <!-- value -->
+
+  **Target Location(s):** <!-- value -->
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('.editor-block-passive .editor-block-content[data-component-id="location-details"] .text-fill-in-box').first().click();
+  await page.locator('[data-field="text-fill-in-value"]').nth(0).fill('Seattle, WA');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await expect(page.locator('#rawEditor')).toContainText('"placeholder":"target location"');
+  await expect(page.locator('#rawEditor')).not.toContainText('"placeholder":"location, target location"');
 });
 
 test('resume template location fill-ins keep focus in AI view', async ({ page }) => {

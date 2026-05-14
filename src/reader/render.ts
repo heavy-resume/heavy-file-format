@@ -32,6 +32,7 @@ import { getComponentDefsFromMeta } from '../component-defs';
 import { extractReusableTemplateVariablesFromDefinition } from '../reusable-template-values';
 import { filterTemplateVisibleSections, isSectionHiddenByTemplateMarker } from '../template-hide';
 import { plusIcon } from '../icons';
+import { isAiEditablePlaceholderTextBlock } from '../ai-placeholder';
 import {
   createReaderViewContext,
   getBlockReaderViewTargetKey,
@@ -367,6 +368,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       `slot-${block.schema.slot}`,
       state.aiEditTarget.sectionKey === section.key && state.aiEditTarget.blockId === block.id ? 'is-ai-target' : '',
       state.contextMenu?.kind === 'ai' && state.contextMenu.sectionKey === section.key && state.contextMenu.blockId === block.id ? 'is-context-menu-target' : '',
+      state.currentView === 'ai' && base === 'text' && isAiEditablePlaceholderTextBlock(block) ? 'is-ai-editable-placeholder' : '',
       modifiers.has('highlight') ? 'is-highlighted' : '',
       isBlockSearchMatch(searchContext, block) ? 'is-search-match' : '',
       dimmed ? 'is-reader-view-dimmed' : '',

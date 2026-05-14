@@ -352,6 +352,10 @@ export function bindUi(app: HTMLElement): void {
         }
         return;
       }
+      if (state.currentView === 'ai' && expandableContainsActiveEditor(expandable)) {
+        event.stopPropagation();
+        return;
+      }
       if (state.currentView === 'ai' && activateAiExpandableTextTarget(target, expandable)) {
         return;
       }
@@ -528,6 +532,10 @@ export function bindUi(app: HTMLElement): void {
   bindModal(app);
   bindLinkInlineModal(app);
   restoreDbTableFrameScroll(app);
+}
+
+function expandableContainsActiveEditor(expandable: HTMLElement): boolean {
+  return Boolean(expandable.querySelector('.editor-block[data-active-editor-block="true"]'));
 }
 
 function activateAiExpandableTextTarget(target: HTMLElement, expandable: HTMLElement): boolean {

@@ -255,7 +255,9 @@ test('ai resume summary placeholder expands parent before editing', async ({ pag
   await page.getByRole('button', { name: 'Resume Example' }).click();
   await page.getByRole('button', { name: 'AI' }).click();
 
-  await page.locator('#aiReaderDocument .reader-block-text').filter({ has: page.locator('h1', { hasText: 'Summary' }) }).first().click();
+  const summaryPlaceholder = page.locator('#aiReaderDocument .reader-block-text').filter({ has: page.locator('h1', { hasText: 'Summary' }) }).first();
+  await expect(summaryPlaceholder).toHaveCSS('cursor', 'text');
+  await summaryPlaceholder.click();
 
   await expect(page.locator('#aiReaderDocument .reader-block-expandable[aria-expanded="true"]')).toHaveCount(1);
   await expect(page.locator('#aiReaderDocument .editor-block[data-active-editor-block="true"]')).toHaveCount(0);
@@ -346,6 +348,94 @@ test('canceling a newly added featured xref removes it without opening list edit
 
   await expect(page.locator('[data-component-id="top-skills-list"]')).not.toContainText('Untitled');
   await expect(page.locator('.editor-block[data-active-editor-block="true"]')).toHaveCount(0);
+});
+
+test('ai canceling a newly added education reference removes it without opening list editor', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+component_defs:
+  - name: education-xref-card
+    baseType: xref-card
+    schema:
+      xrefTargetTagFilter: education
+      css: "margin: 0.25rem 0;"
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ <!--hvy:component-list {"componentListComponent":"education-xref-card","componentListItemLabel":"education reference"}-->
+
+<!--hvy: {"id":"history-target","tags":"history"}-->
+#! History Target
+
+ History target
+
+<!--hvy: {"id":"education-target","tags":"education"}-->
+#! Education Target
+
+ Education target
+
+<!--hvy: {"id":"project-target","tags":"project"}-->
+#! Project Target
+
+ Project target
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'AI' }).click();
+
+  await page.locator('#aiReaderDocument [data-action="add-component-list-item"]', { hasText: 'Add Education Reference' }).click();
+  const activeEditor = page.locator('#aiReaderDocument .editor-block[data-active-editor-block="true"]');
+  await expect(activeEditor.locator('.editor-block-title').first()).toContainText('education-xref-card');
+  await expect(activeEditor.locator('datalist option[value="education-target"]')).toHaveCount(1);
+  await expect(activeEditor.locator('datalist option[value="history-target"]')).toHaveCount(0);
+  await expect(activeEditor.locator('datalist option[value="project-target"]')).toHaveCount(0);
+  await activeEditor.getByRole('button', { name: 'Cancel' }).click();
+
+  await expect(page.locator('#aiReaderDocument')).not.toContainText('Untitled');
+  await expect(page.locator('#aiReaderDocument .editor-block[data-active-editor-block="true"]')).toHaveCount(0);
+  await expect(page.locator('#aiReaderDocument .component-list-view-editor')).toHaveCount(0);
+});
+
+test('ai deleting an edited education reference does not open the parent list editor', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+component_defs:
+  - name: education-xref-card
+    baseType: xref-card
+    schema:
+      xrefTargetTagFilter: education
+      css: "margin: 0.25rem 0;"
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ <!--hvy:component-list {"componentListComponent":"education-xref-card","componentListItemLabel":"education reference"}-->
+
+  <!--hvy:component-list:0 {}-->
+
+   <!--hvy:education-xref-card {"xrefTitle":"B.S. Computer Science","xrefTarget":"education-bs-computer-science"}-->
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'AI' }).click();
+
+  await page.locator('#aiReaderDocument .reader-xref-card', { hasText: 'B.S. Computer Science' }).dblclick();
+  await page.locator('.hvy-context-popover button', { hasText: 'Edit component' }).click();
+  const activeEditor = page.locator('#aiReaderDocument .editor-block[data-active-editor-block="true"]');
+  await expect(activeEditor.locator('.editor-block-title').first()).toContainText('education-xref-card');
+  await activeEditor.locator('> [data-action="remove-block"]').click();
+  await page.getByRole('dialog', { name: 'Confirm deletion?' }).getByRole('button', { name: 'Delete' }).click();
+
+  await expect(page.locator('#aiReaderDocument')).not.toContainText('B.S. Computer Science');
+  await expect(page.locator('#aiReaderDocument .editor-block[data-active-editor-block="true"]')).toHaveCount(0);
+  await expect(page.locator('#aiReaderDocument .component-list-view-editor')).toHaveCount(0);
 });
 
 test('ai mode done on newly added skill closes without editing parent list', async ({ page }) => {
@@ -596,11 +686,22 @@ test('ai sidebar expandable hover does not cover active editor delete button', a
   const activeEditor = skillsSection.locator('.editor-block[data-active-editor-block="true"]');
   await expect(activeEditor.locator('.rich-editor')).toContainText('Software Engineering');
   await skillRecord.hover();
-  const hoverBorderContent = await activeEditor.locator('.editor-block-remove-button').evaluate((button) => {
+  const hoverState = await activeEditor.locator('.editor-block-remove-button').evaluate((button) => {
     const expandable = button.closest('.reader-block-expandable') as HTMLElement;
-    return getComputedStyle(expandable, '::after').content;
+    return {
+      afterContent: getComputedStyle(expandable, '::after').content,
+      boxShadow: getComputedStyle(expandable).boxShadow,
+      cursor: getComputedStyle(expandable).cursor,
+    };
   });
-  expect(hoverBorderContent).toBe('none');
+  expect(hoverState.afterContent).toBe('none');
+  expect(hoverState.boxShadow).toBe('none');
+  expect(hoverState.cursor).toBe('default');
+
+  const expandedBeforeClick = await skillRecord.getAttribute('aria-expanded');
+  await skillRecord.click({ position: { x: 8, y: 8 } });
+  await expect(skillRecord).toHaveAttribute('aria-expanded', expandedBeforeClick ?? '');
+  await expect(activeEditor.locator('.rich-editor')).toContainText('Software Engineering');
 });
 
 test('ai context clone trims only leading paragraph style margin', async ({ page }) => {

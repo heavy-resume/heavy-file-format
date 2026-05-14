@@ -184,6 +184,8 @@ hvy_version: 0.1
 
   await expect(page.locator('.ai-edit-popover')).toBeVisible();
   await expect(page.locator('.ai-edit-popover')).toContainText('Request changes');
+  await expect(page.locator('.ai-edit-popover [data-field="ai-provider"]')).toHaveCount(0);
+  await expect(page.locator('.ai-edit-popover [data-field="ai-model"]')).toHaveCount(0);
 });
 
 test('new section component picker opens on the first click', async ({ page }) => {

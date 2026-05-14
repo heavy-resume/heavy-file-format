@@ -1,10 +1,11 @@
 import './ai-edit.css';
-import { DEFAULT_OPENAI_COMPACTION_MODEL, ENABLE_CHAT_MODEL_DEBUG_CONTROLS, getDefaultModelForProvider } from './chat/chat';
+import { DEFAULT_OPENAI_COMPACTION_MODEL, getDefaultModelForProvider, shouldRenderChatProviderControls, type ChatControlSurface } from './chat/chat';
 import type { AppState } from './types';
 
 interface AiModeUiDeps {
   escapeAttr: (value: string) => string;
   escapeHtml: (value: string) => string;
+  surface?: ChatControlSurface;
 }
 
 export function renderAiModeHint(state: AppState, deps: AiModeUiDeps): string {
@@ -26,34 +27,54 @@ export function renderAiEditPopover(state: AppState, deps: AiModeUiDeps): string
   }
 
   const popupStyle = `left: ${state.aiEdit.popupX}px; top: ${state.aiEdit.popupY}px;`;
-  const modelDebugControlsHtml = ENABLE_CHAT_MODEL_DEBUG_CONTROLS
-    ? `<label class="chat-setting">
-         <span>Model</span>
-         <input
-           type="text"
-           data-field="ai-model"
-           value="${deps.escapeAttr(state.chat.settings.model)}"
-           placeholder="${deps.escapeAttr(getDefaultModelForProvider(state.chat.settings.provider))}"
-           autocapitalize="off"
-           autocomplete="off"
-           spellcheck="false"
-           aria-label="AI edit model"
-         />
-       </label>
+  const controlsSurface: ChatControlSurface = deps.surface ?? 'reference';
+  const providerControlsHtml = shouldRenderChatProviderControls(controlsSurface)
+    ? `<div class="ai-edit-settings">
+         <label class="chat-setting">
+           <span>Provider</span>
+           <select data-field="ai-provider" aria-label="AI edit provider">
+             <option value="openai"${state.chat.settings.provider === 'openai' ? ' selected' : ''}>OpenAI</option>
+             <option value="anthropic"${state.chat.settings.provider === 'anthropic' ? ' selected' : ''}>Anthropic</option>
+             <option value="qwen"${state.chat.settings.provider === 'qwen' ? ' selected' : ''}>Qwen</option>
+           </select>
+         </label>
 
-       <label class="chat-setting">
-         <span>Compaction model</span>
-         <input
-           type="text"
-           data-field="chat-compaction-model"
-           value="${deps.escapeAttr(state.chat.settings.compactionModel ?? DEFAULT_OPENAI_COMPACTION_MODEL)}"
-           placeholder="${deps.escapeAttr(DEFAULT_OPENAI_COMPACTION_MODEL)}"
-           autocapitalize="off"
-           autocomplete="off"
-           spellcheck="false"
-           aria-label="AI edit compaction model"
-         />
-       </label>`
+         <label class="chat-setting">
+           <span>Model</span>
+           <input
+             type="text"
+             data-field="ai-model"
+             value="${deps.escapeAttr(state.chat.settings.model)}"
+             placeholder="${deps.escapeAttr(getDefaultModelForProvider(state.chat.settings.provider))}"
+             autocapitalize="off"
+             autocomplete="off"
+             spellcheck="false"
+             aria-label="AI edit model"
+           />
+         </label>
+
+         <label class="chat-setting">
+           <span>Compaction provider</span>
+           <select data-field="chat-compaction-provider" aria-label="AI edit compaction provider">
+             <option value="openai"${(state.chat.settings.compactionProvider ?? 'openai') === 'openai' ? ' selected' : ''}>OpenAI</option>
+             <option value="anthropic"${state.chat.settings.compactionProvider === 'anthropic' ? ' selected' : ''}>Anthropic</option>
+           </select>
+         </label>
+
+         <label class="chat-setting">
+           <span>Compaction model</span>
+           <input
+             type="text"
+             data-field="chat-compaction-model"
+             value="${deps.escapeAttr(state.chat.settings.compactionModel ?? DEFAULT_OPENAI_COMPACTION_MODEL)}"
+             placeholder="${deps.escapeAttr(DEFAULT_OPENAI_COMPACTION_MODEL)}"
+             autocapitalize="off"
+             autocomplete="off"
+             spellcheck="false"
+             aria-label="AI edit compaction model"
+           />
+         </label>
+       </div>`
     : '';
 
   return `
@@ -64,26 +85,7 @@ export function renderAiEditPopover(state: AppState, deps: AiModeUiDeps): string
         </div>
         <button type="button" class="ghost" data-action="close-ai-edit" aria-label="Close request changes">Close</button>
       </div>
-      <div class="ai-edit-settings">
-        <label class="chat-setting">
-          <span>Provider</span>
-          <select data-field="ai-provider" aria-label="AI edit provider">
-            <option value="openai"${state.chat.settings.provider === 'openai' ? ' selected' : ''}>OpenAI</option>
-            <option value="anthropic"${state.chat.settings.provider === 'anthropic' ? ' selected' : ''}>Anthropic</option>
-            <option value="qwen"${state.chat.settings.provider === 'qwen' ? ' selected' : ''}>Qwen</option>
-          </select>
-        </label>
-
-        <label class="chat-setting">
-          <span>Compaction provider</span>
-          <select data-field="chat-compaction-provider" aria-label="AI edit compaction provider">
-            <option value="openai"${(state.chat.settings.compactionProvider ?? 'openai') === 'openai' ? ' selected' : ''}>OpenAI</option>
-            <option value="anthropic"${state.chat.settings.compactionProvider === 'anthropic' ? ' selected' : ''}>Anthropic</option>
-          </select>
-        </label>
-
-        ${modelDebugControlsHtml}
-      </div>
+      ${providerControlsHtml}
       ${state.aiEdit.error ? `<div class="ai-edit-error" role="alert">${deps.escapeHtml(state.aiEdit.error)}</div>` : ''}
       <form id="aiEditComposer" class="ai-edit-composer">
         <label class="chat-composer-field">

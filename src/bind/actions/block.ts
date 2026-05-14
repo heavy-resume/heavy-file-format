@@ -195,7 +195,7 @@ const removeBlock: ActionHandler = ({ section, sectionKey, blockId, reusableName
     if (activeIsAffected && activeBlockId) {
       clearActiveEditorBlock(activeBlockId);
     }
-    if (parentId) {
+    if (parentId && isActiveEditorPathStillOpen(sectionKey, parentId)) {
       setActiveEditorBlock(sectionKey, parentId);
     }
     state.sqliteRowComponentModal = {
@@ -230,11 +230,15 @@ const removeBlock: ActionHandler = ({ section, sectionKey, blockId, reusableName
   if (activeIsAffected && activeBlockId) {
     clearActiveEditorBlock(activeBlockId);
   }
-  if (parentId) {
+  if (parentId && isActiveEditorPathStillOpen(sectionKey, parentId)) {
     setActiveEditorBlock(sectionKey, parentId);
   }
   getRenderApp()();
 };
+
+function isActiveEditorPathStillOpen(sectionKey: string, blockId: string): boolean {
+  return state.activeEditorBlockPath.some((active) => active.sectionKey === sectionKey && active.blockId === blockId);
+}
 
 const moveBlock = (offset: -1 | 1): ActionHandler => ({ sectionKey, blockId }) => {
   if (!blockId) {

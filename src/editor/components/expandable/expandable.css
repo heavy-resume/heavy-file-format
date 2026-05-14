@@ -319,13 +319,29 @@
   cursor: pointer;
 }
 
-.reader-block-expandable[data-reader-action="toggle-expandable"]:hover {
+.hvy-ai-reader-surface .reader-block-expandable[data-reader-action="toggle-expandable"]:has(.editor-block[data-active-editor-block="true"]) {
+  cursor: default;
+}
+
+.hvy-ai-reader-surface .reader-block-expandable[data-reader-action="toggle-expandable"]:has(.editor-block[data-active-editor-block="true"]) .expandable-reader.is-interactive,
+.hvy-ai-reader-surface .reader-block-expandable[data-reader-action="toggle-expandable"]:has(.editor-block[data-active-editor-block="true"]) .expand-stub-toggle,
+.hvy-ai-reader-surface .reader-block-expandable[data-reader-action="toggle-expandable"]:has(.editor-block[data-active-editor-block="true"]) .expand-collapse-strip,
+.hvy-ai-reader-surface .reader-block-expandable[data-reader-action="toggle-expandable"]:has(.editor-block[data-active-editor-block="true"]) .expand-content[data-reader-action="toggle-expandable"] {
+  cursor: default;
+}
+
+.hvy-ai-reader-surface .reader-block.is-ai-editable-placeholder,
+.hvy-ai-reader-surface .reader-block.is-ai-editable-placeholder * {
+  cursor: text;
+}
+
+.reader-block-expandable[data-reader-action="toggle-expandable"]:not(:has(.editor-block[data-active-editor-block="true"])):hover {
   box-shadow: 0 0 0 1px var(--hvy-focus-ring), 0 0 14px var(--hvy-focus-glow);
   background-color: color-mix(in srgb, var(--hvy-surface) 92%, var(--hvy-surface-tint) 8%);
   z-index: 3;
 }
 
-.reader-block-expandable[data-reader-action="toggle-expandable"]:hover::after {
+.reader-block-expandable[data-reader-action="toggle-expandable"]:not(:has(.editor-block[data-active-editor-block="true"])):hover::after {
   content: '';
   box-shadow: 0 0 1px 2px var(--hvy-focus-ring), 0 0 14px var(--hvy-focus-glow);
   background: transparent;
@@ -334,10 +350,6 @@
   display: block;
   pointer-events: none;
   z-index: 3;
-}
-
-.hvy-ai-reader-surface .reader-block-expandable[data-reader-action="toggle-expandable"]:has(.editor-block[data-active-editor-block="true"]):hover::after {
-  content: none;
 }
 
 .expandable-pane {

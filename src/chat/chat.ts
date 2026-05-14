@@ -24,7 +24,8 @@ const DEFAULT_ANTHROPIC_MODEL = 'claude-sonnet-4-6';
 const DEFAULT_QWEN_MODEL = 'qwen-plus';
 export const DEFAULT_OPENAI_COMPACTION_MODEL = 'gpt-5.4-nano';
 export const HVY_AI_RESPONSE_FORMAT_INSTRUCTIONS = aiResponseFormatInstructions;
-export const ENABLE_CHAT_MODEL_DEBUG_CONTROLS = import.meta.env.VITE_HVY_ENABLE_CHAT_MODEL_PICKER === 'true';
+export const ENABLE_CHAT_MODEL_DEBUG_CONTROLS = import.meta.env?.DEV === true || import.meta.env?.VITE_HVY_ENABLE_CHAT_MODEL_PICKER === 'true';
+export type ChatControlSurface = 'reference' | 'embedded';
 
 interface RenderChatPanelDeps {
   escapeAttr: (value: string) => string;
@@ -80,6 +81,10 @@ export function getHostChatClient(): HostChatClient | null {
 
 export function hasHostChatClient(): boolean {
   return hostChatClient !== null;
+}
+
+export function shouldRenderChatProviderControls(surface: ChatControlSurface = 'reference'): boolean {
+  return surface === 'reference' && ENABLE_CHAT_MODEL_DEBUG_CONTROLS;
 }
 
 export interface ProxyCompletionParams {
@@ -247,12 +252,14 @@ export function renderChatPanel(
   document: VisualDocument,
   deps: RenderChatPanelDeps,
   mode: 'qa' | 'document-edit' = 'qa',
-  canCopyToHvy = false
+  canCopyToHvy = false,
+  surface: ChatControlSurface = 'reference'
 ): string {
   const context = buildChatDocumentContext(document);
   const hasDraft = chat.draft.trim().length > 0;
   const missingModel = chat.settings.model.trim().length === 0;
   const hostManagedChat = hasHostChatClient();
+  const showProviderControls = !hostManagedChat && shouldRenderChatProviderControls(surface);
   const isDocumentEdit = mode === 'document-edit';
   const canSend = !chat.isSending && (hostManagedChat || !missingModel) && (isDocumentEdit || context.trim().length > 0);
   const latestTokenUsage = getLatestChatTokenUsage(chat.messages);
@@ -278,36 +285,55 @@ export function renderChatPanel(
   const promptPlaceholder = isDocumentEdit
     ? 'Describe how the document should change...'
     : 'Ask about the current HVY document...';
-  const modelDebugControlsHtml = ENABLE_CHAT_MODEL_DEBUG_CONTROLS
-    ? `<label class="chat-setting">
-         <span>Model</span>
-         <input
-           type="text"
-           data-field="chat-model"
-           value="${deps.escapeAttr(chat.settings.model)}"
-           placeholder="${deps.escapeAttr(getDefaultModelForProvider(chat.settings.provider))}"
-           autocapitalize="off"
-           autocomplete="off"
-           spellcheck="false"
-           aria-label="Chat model"
-           ${chat.isSending ? 'disabled' : ''}
-         />
-       </label>
+  const providerControlsHtml = showProviderControls
+    ? `<div class="chat-settings">
+         <label class="chat-setting">
+           <span>Provider</span>
+           <select data-field="chat-provider" aria-label="Chat provider" ${chat.isSending ? 'disabled' : ''}>
+             <option value="openai"${chat.settings.provider === 'openai' ? ' selected' : ''}>OpenAI</option>
+             <option value="anthropic"${chat.settings.provider === 'anthropic' ? ' selected' : ''}>Anthropic</option>
+             <option value="qwen"${chat.settings.provider === 'qwen' ? ' selected' : ''}>Qwen</option>
+           </select>
+         </label>
 
-       <label class="chat-setting">
-         <span>Compaction model</span>
-         <input
-           type="text"
-           data-field="chat-compaction-model"
-           value="${deps.escapeAttr(chat.settings.compactionModel ?? DEFAULT_OPENAI_COMPACTION_MODEL)}"
-           placeholder="${deps.escapeAttr(DEFAULT_OPENAI_COMPACTION_MODEL)}"
-           autocapitalize="off"
-           autocomplete="off"
-           spellcheck="false"
-           aria-label="Chat compaction model"
-           ${chat.isSending ? 'disabled' : ''}
-         />
-       </label>`
+         <label class="chat-setting">
+           <span>Model</span>
+           <input
+             type="text"
+             data-field="chat-model"
+             value="${deps.escapeAttr(chat.settings.model)}"
+             placeholder="${deps.escapeAttr(getDefaultModelForProvider(chat.settings.provider))}"
+             autocapitalize="off"
+             autocomplete="off"
+             spellcheck="false"
+             aria-label="Chat model"
+             ${chat.isSending ? 'disabled' : ''}
+           />
+         </label>
+
+         <label class="chat-setting">
+           <span>Compaction provider</span>
+           <select data-field="chat-compaction-provider" aria-label="Chat compaction provider" ${chat.isSending ? 'disabled' : ''}>
+             <option value="openai"${(chat.settings.compactionProvider ?? 'openai') === 'openai' ? ' selected' : ''}>OpenAI</option>
+             <option value="anthropic"${chat.settings.compactionProvider === 'anthropic' ? ' selected' : ''}>Anthropic</option>
+           </select>
+         </label>
+
+         <label class="chat-setting">
+           <span>Compaction model</span>
+           <input
+             type="text"
+             data-field="chat-compaction-model"
+             value="${deps.escapeAttr(chat.settings.compactionModel ?? DEFAULT_OPENAI_COMPACTION_MODEL)}"
+             placeholder="${deps.escapeAttr(DEFAULT_OPENAI_COMPACTION_MODEL)}"
+             autocapitalize="off"
+             autocomplete="off"
+             spellcheck="false"
+             aria-label="Chat compaction model"
+             ${chat.isSending ? 'disabled' : ''}
+           />
+         </label>
+       </div>`
     : '';
   const composerHtml = chat.isSending
     ? `<div class="chat-busy-footer">
@@ -357,26 +383,7 @@ export function renderChatPanel(
                  <button type="button" class="ghost chat-panel-close" data-action="toggle-chat-panel" aria-label="Close chat">${closeIcon()}</button>
                </div>
                <div class="chat-panel-body" data-chat-scroll-container>
-                 ${hostManagedChat ? '' : `<div class="chat-settings">
-                   <label class="chat-setting">
-                     <span>Provider</span>
-                     <select data-field="chat-provider" aria-label="Chat provider" ${chat.isSending ? 'disabled' : ''}>
-                       <option value="openai"${chat.settings.provider === 'openai' ? ' selected' : ''}>OpenAI</option>
-                       <option value="anthropic"${chat.settings.provider === 'anthropic' ? ' selected' : ''}>Anthropic</option>
-                       <option value="qwen"${chat.settings.provider === 'qwen' ? ' selected' : ''}>Qwen</option>
-                     </select>
-                   </label>
-
-                   <label class="chat-setting">
-                     <span>Compaction provider</span>
-                     <select data-field="chat-compaction-provider" aria-label="Chat compaction provider" ${chat.isSending ? 'disabled' : ''}>
-                       <option value="openai"${(chat.settings.compactionProvider ?? 'openai') === 'openai' ? ' selected' : ''}>OpenAI</option>
-                       <option value="anthropic"${chat.settings.compactionProvider === 'anthropic' ? ' selected' : ''}>Anthropic</option>
-                     </select>
-                   </label>
-
-                   ${modelDebugControlsHtml}
-                 </div>`}
+                 ${providerControlsHtml}
 
                  ${chat.error ? `<div class="chat-error" role="alert">${deps.escapeHtml(chat.error)}</div>` : ''}
                  ${chat.cliSim ? renderChatCliSimHtml(chat.cliSim, deps) : ''}

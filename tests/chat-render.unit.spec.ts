@@ -105,7 +105,7 @@ hvy_version: 0.1
   expect(html).toContain('<button type="button" class="ghost" data-action="toggle-chat-cli-sim">CLI Sim Off</button>');
 });
 
-test('renderChatPanel hides model picker debug controls unless the build enables them', () => {
+test('renderChatPanel shows provider and model controls together in the reference surface', () => {
   const chat = createDefaultChatState();
   chat.panelOpen = true;
   const document = deserializeDocument(`---
@@ -116,12 +116,28 @@ hvy_version: 0.1
   const html = renderChatPanel(chat, document, deps, 'document-edit');
 
   expect(html).toContain('data-field="chat-provider"');
+  expect(html).toContain('data-field="chat-model"');
   expect(html).toContain('data-field="chat-compaction-provider"');
+  expect(html).toContain('data-field="chat-compaction-model"');
+});
+
+test('renderChatPanel hides provider and model controls together in the embedded surface', () => {
+  const chat = createDefaultChatState();
+  chat.panelOpen = true;
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+`, '.hvy');
+
+  const html = renderChatPanel(chat, document, deps, 'document-edit', false, 'embedded');
+
+  expect(html).not.toContain('data-field="chat-provider"');
   expect(html).not.toContain('data-field="chat-model"');
+  expect(html).not.toContain('data-field="chat-compaction-provider"');
   expect(html).not.toContain('data-field="chat-compaction-model"');
 });
 
-test('renderAiEditPopover hides model picker debug controls unless the build enables them', () => {
+test('renderAiEditPopover shows provider and model controls together in the reference surface', () => {
   const state = {
     chat: createDefaultChatState(),
     aiEdit: {
@@ -139,8 +155,31 @@ test('renderAiEditPopover hides model picker debug controls unless the build ena
   const html = renderAiEditPopover(state, deps);
 
   expect(html).toContain('data-field="ai-provider"');
+  expect(html).toContain('data-field="ai-model"');
   expect(html).toContain('data-field="chat-compaction-provider"');
+  expect(html).toContain('data-field="chat-compaction-model"');
+});
+
+test('renderAiEditPopover hides provider and model controls together in the embedded surface', () => {
+  const state = {
+    chat: createDefaultChatState(),
+    aiEdit: {
+      sectionKey: 'body',
+      blockId: 'summary',
+      draft: '',
+      isSending: false,
+      error: null,
+      popupX: 20,
+      popupY: 30,
+      requestNonce: 0,
+    },
+  } as unknown as AppState;
+
+  const html = renderAiEditPopover(state, { ...deps, surface: 'embedded' });
+
+  expect(html).not.toContain('data-field="ai-provider"');
   expect(html).not.toContain('data-field="ai-model"');
+  expect(html).not.toContain('data-field="chat-compaction-provider"');
   expect(html).not.toContain('data-field="chat-compaction-model"');
 });
 

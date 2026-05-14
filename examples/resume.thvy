@@ -87,6 +87,24 @@ component_defs:
     schema:
       xrefTargetTagFilter: tool
       css: "margin: 0.25rem 0;"
+  - name: history-xref-card
+    baseType: xref-card
+    description: Work history cross-reference
+    schema:
+      xrefTargetTagFilter: history
+      css: "margin: 0.25rem 0;"
+  - name: education-xref-card
+    baseType: xref-card
+    description: Education cross-reference
+    schema:
+      xrefTargetTagFilter: education
+      css: "margin: 0.25rem 0;"
+  - name: project-xref-card
+    baseType: xref-card
+    description: Project cross-reference
+    schema:
+      xrefTargetTagFilter: project
+      css: "margin: 0.25rem 0;"
   - name: history-record
     baseType: expandable
     description: Work history organization entry
@@ -96,6 +114,7 @@ component_defs:
       years:
         label: Year(s)
     schema:
+      tags: history
       css: "margin: 0;"
       expandableAlwaysShowStub: true
       expandableExpanded: false
@@ -213,6 +232,7 @@ component_defs:
       gpa:
         label: GPA
     schema:
+      tags: education
       css: "margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);"
       expandableAlwaysShowStub: true
       expandableExpanded: false
@@ -286,6 +306,7 @@ component_defs:
       link:
         label: Project link
     schema:
+      tags: project
       css: "margin: 0;"
       expandableAlwaysShowStub: true
       expandableExpanded: false
@@ -348,7 +369,7 @@ component_defs:
           schema:
             component: component-list
             css: "margin: 0;"
-            componentListComponent: xref-card
+            componentListComponent: history-xref-card
             componentListItemLabel: history reference
             componentListBlocks: []
   - name: skill-record-education-section
@@ -365,7 +386,7 @@ component_defs:
           schema:
             component: component-list
             css: "margin: 0;"
-            componentListComponent: xref-card
+            componentListComponent: education-xref-card
             componentListItemLabel: education reference
             componentListBlocks: []
   - name: skill-record-projects-section
@@ -382,7 +403,7 @@ component_defs:
           schema:
             component: component-list
             css: "margin: 0;"
-            componentListComponent: xref-card
+            componentListComponent: project-xref-card
             componentListItemLabel: project reference
             componentListBlocks: []
   - name: skill-record-section
@@ -557,7 +578,7 @@ component_defs:
 
  <!--hvy:table {"css":"margin: 0.5rem 0 0;","tags":"table-header","tableColumns":["TITLE","<!--hvy:alt {\"compact\":\"ORG\"}-->ORGANIZATION<!--/hvy:alt-->","YEAR(S)"],"tableShowHeader":true,"tableRows":[],"lock":true,"description":"History table header"}-->
 
- <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"history-record","componentListItemLabel":"job"}-->
+ <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"history-record","componentListItemLabel":"job","tags":"history"}-->
 
 <!--hvy: {"id":"projects","lock":true,"description":"Project portfolio","hideIfUnmodified":true}-->
 #! Projects
@@ -567,7 +588,7 @@ component_defs:
 
  <!--hvy:table {"css":"margin: 0.5rem 0 0;","tags":"table-header","tableColumns":["PROJECT","DATES"],"tableShowHeader":true,"tableRows":[],"lock":true,"description":"Project table header"}-->
 
- <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"project-record","componentListItemLabel":"project"}-->
+ <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"project-record","componentListItemLabel":"project","tags":"project"}-->
 
 <!--hvy: {"id":"education","lock":true,"description":"Education","hideIfUnmodified":true}-->
 #! Education
@@ -575,7 +596,7 @@ component_defs:
  <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
   # Education
 
- <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"education-record","componentListItemLabel":"education record"}-->
+ <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"education-record","componentListItemLabel":"education record","tags":"education"}-->
 
 <!--hvy: {"id":"template-maintenance","editorOnly":true,"lock":true,"contained":true,"description":"Template maintenance scripts"}-->
 #! Template Maintenance

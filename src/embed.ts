@@ -299,7 +299,7 @@ function renderApp(): void {
                     </div>
                   </aside>
                   <div id="${isAi ? 'aiReaderDocument' : 'readerDocument'}" class="reader-document hvy-reader-surface${isAi ? ' hvy-ai-reader-surface' : ''}">${readerRenderer.renderReaderSections(state.document.sections)}</div>
-                  ${isAi ? `${renderAiModeHint(state, { escapeAttr, escapeHtml })}${renderAiEditPopover(state, { escapeAttr, escapeHtml })}` : ''}
+                  ${isAi ? `${renderAiModeHint(state, { escapeAttr, escapeHtml })}${renderAiEditPopover(state, { escapeAttr, escapeHtml, surface: 'embedded' })}` : ''}
                 </div>`
           }
           ${renderChatPanel(
@@ -307,7 +307,8 @@ function renderApp(): void {
             state.document,
             { escapeAttr, escapeHtml },
             state.currentView === 'viewer' ? 'qa' : 'document-edit',
-            state.currentView === 'editor' || state.currentView === 'ai'
+            state.currentView === 'editor' || state.currentView === 'ai',
+            'embedded'
           )}
           ${renderSearchLauncher(state.search)}
           ${renderSearchPalette(state.search, state.document, { escapeAttr, escapeHtml, readerRenderer })}

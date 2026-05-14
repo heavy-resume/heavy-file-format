@@ -11,10 +11,11 @@ ai-context: >-
   with newest entries first. History should use one
   expandable record per organization when roles are contiguous; put promotions, title
   changes, or adjacent date ranges at the same organization inside that single expanded
-  record instead of creating duplicate organization rows. One project, certification,
-  degree, skill, or tool should usually be represented as one expandable reusable record.
-  Local skills/tools lists inside history, project, certification, and education records
-  are supporting xrefs and should not be treated as the main libraries.
+  record instead of creating duplicate organization rows. One project, publication,
+  certification, degree, skill, or tool should usually be represented as one expandable
+  reusable record. Local skills/tools lists inside history, project, publication,
+  certification, and education records are supporting xrefs and should not be treated as
+  the main libraries.
 section_defaults:
   css: "margin: 0.5rem 0;"
 text_line_styles:
@@ -103,6 +104,12 @@ component_defs:
     description: Certification cross-reference
     schema:
       xrefTargetTagFilter: certification
+      css: "margin: 0.25rem 0;"
+  - name: publication-xref-card
+    baseType: xref-card
+    description: Publication cross-reference
+    schema:
+      xrefTargetTagFilter: publication
       css: "margin: 0.25rem 0;"
   - name: project-xref-card
     baseType: xref-card
@@ -350,6 +357,80 @@ component_defs:
               component: text
               css: "margin: 0.5rem 0;"
               placeholder: "Description"
+          - component: skills-and-tools-tech-list
+  - name: publication-record
+    baseType: expandable
+    description: Publication entry
+    schema:
+      tags: publication
+      xrefTitle: "{% name %}"
+      xrefDetail: "{% publisher %}"
+      css: "margin: 0;"
+      expandableAlwaysShowStub: true
+      expandableExpanded: false
+      expandableStubBlocks:
+        children:
+          - text: ""
+            schema:
+              component: table
+              css: "margin: 0; margin-top: -1px;"
+              tableColumns: ["PUBLICATION", "PUBLISHER", "DATE"]
+              tableShowHeader: false
+              tableRows:
+                - cells: ["{% name %}", "{% publisher %}", "{% date %}"]
+      expandableContentBlocks:
+        css: "padding: 0.5rem;"
+        children:
+          - text: ""
+            schema:
+              component: grid
+              css: "margin: 0 0 0.35rem;"
+              gridColumns: 2
+              gridItems:
+                - id: publication-details
+                  block:
+                    text: ""
+                    schema:
+                      component: container
+                      css: "margin: 0;"
+                      containerBlocks:
+                        - text: "^section-heading^ ### {% name %}"
+                          schema:
+                            component: text
+                            css: "margin: 0 0 0.25rem;"
+                            placeholder: "Publication name"
+                        - text: "{% authors %}"
+                          schema:
+                            component: text
+                            css: "margin: 0 0 0.25rem;"
+                            placeholder: "Authors"
+                        - text: "{% publisher %}"
+                          schema:
+                            component: text
+                            css: "margin: 0 0 0.25rem;"
+                            placeholder: "Publisher"
+                        - text: "{% employer_short_name %}"
+                          schema:
+                            component: text
+                            css: "margin: 0;"
+                            placeholder: "Employer short name"
+                - id: publication-date
+                  block:
+                    text: "{% date %}"
+                    schema:
+                      component: text
+                      css: "margin: 0; text-align: right;"
+                      placeholder: "Publication date"
+          - text: "{% description | block %}"
+            schema:
+              component: text
+              css: "margin: 0.5rem 0;"
+              placeholder: "Description"
+          - text: "{% url %}"
+            schema:
+              component: text
+              css: "margin: 0.35rem 0;"
+              placeholder: "Publication URL"
           - component: skills-and-tools-tech-list
   - name: project-record
     baseType: expandable
@@ -1296,6 +1377,99 @@ component_defs:
           <!--hvy:component-list:4 {}-->
 
             <!--hvy:tool-tech-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"SuperAGI","xrefTarget":"tool-superagi"}-->
+
+<!--hvy: {"id":"publications","lock":true,"description":"Publications"}-->
+#! Publications
+
+ <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
+  # Publications
+
+ <!--hvy:table {"css":"margin: 0.5rem 0 0;","tags":"table-header","tableColumns":["PUBLICATION","PUBLISHER","DATE"],"tableShowHeader":true,"tableRows":[],"lock":true,"description":"Publication table header"}-->
+
+ <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"publication-record","componentListItemLabel":"publication","tags":"publication"}-->
+
+  <!--hvy:component-list:0 {}-->
+
+   <!--hvy:publication-record {"id":"publication-heavy-file-format-spec","xrefTitle":"Heavy File Format Specification","xrefDetail":"Heavy Resume","css":"margin: 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+
+    <!--hvy:expandable:stub {}-->
+
+     <!--hvy:table {"css":"margin: 0; margin-top: -1px;","tableColumns":["PUBLICATION","PUBLISHER","DATE"],"tableShowHeader":false,"tableRows":[{"cells":["Heavy File Format Specification","Heavy Resume","05/2024"]}]}-->
+
+    <!--hvy:expandable:content {"css":"padding: 0.5rem;"}-->
+
+     <!--hvy:grid {"css":"margin: 0 0 0.35rem;","gridColumns":2}-->
+
+      <!--hvy:grid:0 {"id":"publication-details-heavy-file-format-spec"}-->
+
+       <!--hvy:container {"css":"margin: 0;"}-->
+
+        <!--hvy:container:0 {}-->
+
+         <!--hvy:text {"css":"margin: 0 0 0.25rem;","placeholder":"Publication name"}-->
+          ^section-heading^ ### Heavy File Format Specification
+
+        <!--hvy:container:1 {}-->
+
+         <!--hvy:text {"css":"margin: 0 0 0.25rem;","placeholder":"Authors"}-->
+          J. Hutchison
+
+        <!--hvy:container:2 {}-->
+
+         <!--hvy:text {"css":"margin: 0 0 0.25rem;","placeholder":"Publisher"}-->
+          Heavy Resume
+
+        <!--hvy:container:3 {}-->
+
+         <!--hvy:text {"css":"margin: 0;","placeholder":"Employer short name"}-->
+          N/A
+
+      <!--hvy:grid:1 {"id":"publication-date-heavy-file-format-spec"}-->
+
+       <!--hvy:text {"css":"margin: 0; text-align: right;","placeholder":"Publication date"}-->
+        05/2024
+
+     <!--hvy:text {"css":"margin: 0.5rem 0;","placeholder":"Description"}-->
+      Defines a reusable document format for structured resumes, templates, reader views, and editable component records.
+
+     <!--hvy:text {"css":"margin: 0.35rem 0;","placeholder":"Publication URL"}-->
+      [Read publication](https://github.com/heavy-resume/heavy-file-format/HVY-SPEC.md) (github.com)
+
+     <!--hvy:skills-and-tools-tech-list {"css":"margin: 0.5rem 0 0;","gridColumns":2}-->
+
+      <!--hvy:grid:0 {"id":"publication-relevant-skills-heavy-file-format-spec"}-->
+
+       <!--hvy:container {"css":"margin: 0;","align":"center"}-->
+
+        <!--hvy:container:0 {}-->
+
+         <!--hvy:text {"css":"margin: 0;"}-->
+          ^panel-heading^ #### Relevant Skills
+
+        <!--hvy:container:1 {}-->
+
+         <!--hvy:component-list {"id":"publication-relevant-skills-heavy-file-format-spec-list","componentListComponent":"skill-xref-card","css":"margin: 0;","align":"center"}-->
+
+          <!--hvy:component-list:0 {}-->
+
+           <!--hvy:skill-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Library Development","xrefTarget":"skill-library-development"}-->
+
+      <!--hvy:grid:1 {"id":"publication-tools-technologies-heavy-file-format-spec"}-->
+
+       <!--hvy:container {"css":"margin: 0;","align":"center"}-->
+
+        <!--hvy:container:0 {}-->
+
+         <!--hvy:text {"css":"margin: 0;"}-->
+          ^panel-heading^ #### Tools and Technologies
+
+        <!--hvy:container:1 {}-->
+
+         <!--hvy:component-list {"id":"publication-tools-technologies-heavy-file-format-spec-list","componentListComponent":"tool-tech-xref-card","css":"margin: 0;","align":"center"}-->
+
+          <!--hvy:component-list:0 {}-->
+
+           <!--hvy:tool-tech-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"TypeScript","xrefTarget":"tool-typescript"}-->
 
 <!--hvy: {"id":"certifications","lock":true,"description":"Certifications"}-->
 #! Certifications

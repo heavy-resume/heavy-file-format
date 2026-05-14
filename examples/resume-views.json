@@ -12,6 +12,7 @@
     "skill-llm-prompt-engineering": ["dimmed"],
     "/id/top-skills-list/xref-card-2": ["hidden"],
     "project-autonomous-agent-hackathon": ["dimmed", "collapse"],
+    "/id/publications": ["collapse"],
     "/id/certifications": ["collapse"],
     "/id/education": ["collapse"],
     "/id/locations": ["priority"]
@@ -33,6 +34,7 @@
     "/id/top-skills-list/xref-card-1": ["hidden"],
     "/id/top-tools-technologies-list/xref-card-0": ["hidden"],
     "/id/top-tools-technologies-list/xref-card-2": ["hidden"],
+    "/id/publications": ["collapse"],
     "/id/certifications": ["collapse"],
     "/id/education": ["collapse"],
     "/id/locations": ["priority"]

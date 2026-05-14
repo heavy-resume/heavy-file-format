@@ -52,6 +52,10 @@ export function getHostPlugins(): HvyPlugin[] {
   return [...hostPlugins];
 }
 
+export function getRenderableHostPlugins(): HvyPlugin[] {
+  return hostPlugins.filter((plugin) => typeof plugin.create === 'function' || (plugin.components?.length ?? 0) > 0);
+}
+
 export function getHostPlugin(pluginId: string): HvyPlugin | null {
   return hostPlugins.find((entry) => entry.id === pluginId) ?? null;
 }
@@ -82,7 +86,7 @@ export function getAvailableDocumentPlugins(): DocumentPluginDefinition[] {
     .filter((candidate): candidate is DocumentPluginDefinition => candidate !== null);
 
   if (normalized.length === 0) {
-    return hostPlugins.map((entry) => ({
+    return getRenderableHostPlugins().map((entry) => ({
       id: entry.id,
       source:
         entry.id === DB_TABLE_PLUGIN_ID

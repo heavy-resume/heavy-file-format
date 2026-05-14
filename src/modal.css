@@ -194,6 +194,9 @@
 
 .template-generator-status.is-error {
   color: var(--hvy-danger, #b42318);
+  text-shadow:
+    0 1px 1px var(--hvy-surface),
+    0 0 3px color-mix(in srgb, var(--hvy-text) 54%, transparent);
 }
 
 .link-inline-modal {

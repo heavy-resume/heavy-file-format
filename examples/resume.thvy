@@ -606,6 +606,10 @@ component_defs:
     templateVariables:
       skill:
         label: Skill
+      description:
+        label: Description
+        generator: dev.heavy.resume.skill-description
+        generatorLabel: Generate
     schema:
       xrefTitle: "{% skill %}"
       css: "margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);"
@@ -638,6 +642,10 @@ component_defs:
     templateVariables:
       tool_technology:
         label: Tool / Technology
+      description:
+        label: Description
+        generator: dev.heavy.resume.tool-description
+        generatorLabel: Generate
     schema:
       xrefTitle: "{% tool_technology %}"
       css: "margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);"

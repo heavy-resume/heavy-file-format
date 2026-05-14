@@ -1,7 +1,7 @@
 import { areTablesEnabled } from '../reference-config';
 import type { ComponentDefinition } from '../types';
 import type { AddComponentPickerOptions } from './component-helpers';
-import { getHostPlugins } from '../plugins/registry';
+import { getRenderableHostPlugins } from '../plugins/registry';
 import { plusIcon } from '../icons';
 
 interface RenderDeps {
@@ -105,7 +105,7 @@ function renderComponentButton(
 }
 
 function getPickerGroups(componentDefs: ComponentDefinition[]): PickerGroup[] {
-  const pluginItems = getHostPlugins().map((entry) => ({
+  const pluginItems = getRenderableHostPlugins().map((entry) => ({
     value: 'plugin',
     label: entry.displayName,
     description: entry.id,

@@ -20,8 +20,8 @@ test('output generator response uses prompt completion before answer fallback', 
     response: { prompt: 'Write from TypeScript', answer: 'Fallback answer' },
     settings,
     requestCompletion: async (request) => {
-      expect(request.messages[0]?.content).toBe('Write from TypeScript');
-      expect(request.context).toBe('');
+      expect(request.messages[0]?.content).toBe('Generate the requested template field text.');
+      expect(request.context).toBe('Write from TypeScript');
       return 'LLM answer';
     },
   });

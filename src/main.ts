@@ -32,6 +32,7 @@ import { setHostPlugins } from './plugins/registry';
 import { reconcilePluginMounts, capturePluginFocus } from './plugins/mount';
 import { resetPluginDocumentHookState, runPluginDocumentHooks } from './plugins/hooks';
 import { builtInPlugins } from 'virtual:hvy-built-in-plugins';
+import { resumeOutputGeneratorsPlugin } from './plugins/resume-output-generators';
 import { runButtonVisibilityScripts } from './editor/components/button/button-actions';
 import { centerSearchResultLenses, renderCollapsedSearchBar, renderSearchLauncher, renderSearchPalette } from './search/render';
 import { createDefaultSearchState } from './search/state';
@@ -979,7 +980,7 @@ initCallbacks({
 
 async function bootstrap(): Promise<void> {
   const resume = loadResumeState();
-  setHostPlugins(builtInPlugins);
+  setHostPlugins([...builtInPlugins, resumeOutputGeneratorsPlugin]);
   resetPluginDocumentHookState();
   initState(applyResumeState(createInitialState(await createDefaultDocument()), resume));
   bindResumePersistence();

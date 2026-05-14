@@ -424,20 +424,28 @@ test('resume template empty skill and tool sections show add controls directly i
   const skills = page.locator('#aiSidebarSections #skills');
   await expect(skills).toBeVisible();
   await expect(skills).not.toHaveClass(/is-collapsed-preview/);
-  await skills.locator('.passive-empty-list-ghost', { hasText: 'Add Skill' }).click();
-  let modal = page.locator('.component-meta-modal', { hasText: 'skill-record' });
+  await skills.locator('.passive-empty-list-ghost', { hasText: 'Add Skill' }).evaluate((element: HTMLElement) => element.click());
+  let modal = page.locator('.reusable-template-modal');
   await expect(modal).toBeVisible();
   await expect(modal.locator('label', { hasText: 'Skill' })).toBeVisible();
   await expect(modal).not.toContainText('Skill / Tool');
-  await modal.getByRole('button', { name: 'Close' }).click();
+  const skillGenerator = modal.locator('[data-template-generator="dev.heavy.resume.skill-description"]');
+  await expect(skillGenerator).toBeDisabled();
+  await modal.locator('input[data-template-variable="skill"]').fill('Systems Design');
+  await expect(skillGenerator).toBeEnabled();
+  await modal.locator('[data-modal-action="close"]').first().click();
 
   const tools = page.locator('#aiSidebarSections #tools-technologies');
   await expect(tools).toBeVisible();
   await expect(tools).not.toHaveClass(/is-collapsed-preview/);
-  await tools.locator('.passive-empty-list-ghost', { hasText: 'Add Tool / Technology' }).click();
-  modal = page.locator('.component-meta-modal', { hasText: 'tool-tech-record' });
+  await tools.locator('.passive-empty-list-ghost', { hasText: 'Add Tool / Technology' }).evaluate((element: HTMLElement) => element.click());
+  modal = page.locator('.reusable-template-modal');
   await expect(modal).toBeVisible();
   await expect(modal.locator('label', { hasText: 'Tool / Technology' })).toBeVisible();
+  const toolGenerator = modal.locator('[data-template-generator="dev.heavy.resume.tool-description"]');
+  await expect(toolGenerator).toBeDisabled();
+  await modal.locator('input[data-template-variable="tool_technology"]').fill('TypeScript');
+  await expect(toolGenerator).toBeEnabled();
 });
 
 test('reader max width keeps focus while typing', async ({ page }) => {
@@ -763,7 +771,7 @@ test('custom component template output generator fills a field from provided var
   let prompt = '';
   await page.route('**/api/chat', async (route) => {
     const payload = route.request().postDataJSON() as { messages?: Array<{ content?: string }>; context?: string };
-    prompt = payload.messages?.find((message) => message.content?.includes('TypeScript'))?.content ?? '';
+    prompt = payload.context ?? '';
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -838,12 +846,91 @@ component_defs:
   await generatorButton.click();
 
   await expect(descriptionInput).toHaveValue('Generated TypeScript description');
+  await expect(generatorButton).toBeHidden();
   expect(await page.evaluate(() => (window as unknown as { __generatorValues: Record<string, string> }).__generatorValues)).toEqual({ skill: 'TypeScript' });
   expect(prompt).toBe('Write one sentence for TypeScript.');
   await modal.locator('[data-modal-action="insert-reusable-template"]').click();
 
   await expect(page.locator('#editorTree')).toContainText('TypeScript');
   await expect(page.locator('#editorTree')).toContainText('Generated TypeScript description');
+});
+
+test('custom component template output generator locks field while pending and hides for existing values', async ({ page }) => {
+  let releaseGeneration: (() => void) | null = null;
+  await page.route('**/api/chat', async (route) => {
+    await new Promise<void>((resolve) => {
+      releaseGeneration = resolve;
+    });
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ output: 'Generated TypeScript description' }),
+    });
+  });
+
+  await page.goto('/');
+  await page.evaluate(async () => {
+    const registryPath = '/src/plugins/registry.ts';
+    const { setHostPlugins } = await import(/* @vite-ignore */ registryPath);
+    setHostPlugins([{
+      id: 'dev.heavy.resume',
+      displayName: 'Resume',
+      outputGenerators: [{
+        key: 'dev.heavy.resume.skill-description',
+        requiredVariables: ['skill'],
+        generate: (request: { values: Record<string, string> }) => ({ prompt: `Write one sentence for ${request.values.skill}.` }),
+      }],
+    }]);
+  });
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+component_defs:
+  - name: skill-record
+    baseType: container
+    templateVariables:
+      skill:
+        label: Skill
+      description:
+        label: Description
+        generator: dev.heavy.resume.skill-description
+    schema:
+      containerBlocks:
+        - text: "{% skill %}"
+          schema:
+            component: text
+        - text: "{% description | block %}"
+          schema:
+            component: text
+---
+
+<!--hvy: {"id":"skills"}-->
+#! Skills
+
+<!--hvy:component-list {"id":"skill-list","componentListComponent":"skill-record","componentListItemLabel":"skill"}-->
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('.ghost-label', { hasText: 'Add Skill' }).click();
+  const modal = page.locator('.reusable-template-modal');
+  const descriptionInput = modal.locator('textarea[data-template-variable="description"]');
+  const generatorButton = modal.locator('[data-modal-action="run-template-generator"]');
+
+  await modal.locator('input[data-template-variable="skill"]').fill('TypeScript');
+  await expect(generatorButton).toBeVisible();
+  await descriptionInput.fill('Manual description');
+  await expect(generatorButton).toBeHidden();
+  await descriptionInput.fill('');
+  await expect(generatorButton).toBeVisible();
+
+  await generatorButton.click();
+  await expect(descriptionInput).toBeDisabled();
+  releaseGeneration?.();
+  await expect(descriptionInput).toHaveValue('Generated TypeScript description');
+  await expect(descriptionInput).toBeEnabled();
+  await expect(generatorButton).toBeHidden();
 });
 
 test('AI view shows editor placeholders and empty list add affordances', async ({ page }) => {

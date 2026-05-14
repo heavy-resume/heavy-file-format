@@ -341,8 +341,12 @@ function setupReusableTemplateGeneratorControls(modalRoot: HTMLDivElement): void
 
 function updateReusableTemplateGeneratorButtons(modalRoot: HTMLDivElement): void {
   modalRoot.querySelectorAll<HTMLButtonElement>('[data-modal-action="run-template-generator"]').forEach((button) => {
+    const targetVariable = button.dataset.templateVariableTarget ?? '';
+    const targetInput = targetVariable ? getTemplateInput(modalRoot, targetVariable) : null;
+    const hasTargetValue = (targetInput?.value ?? '').trim().length > 0;
+    button.hidden = hasTargetValue;
     const requiredVariables = parseRequiredVariables(button.dataset.requiredVariables ?? '');
-    button.disabled = requiredVariables.some((key) => getTemplateInputValue(modalRoot, key).trim().length === 0) || button.dataset.busyState === 'busy';
+    button.disabled = hasTargetValue || requiredVariables.some((key) => getTemplateInputValue(modalRoot, key).trim().length === 0) || button.dataset.busyState === 'busy';
   });
 }
 
@@ -376,6 +380,7 @@ async function runReusableTemplateGenerator(modalRoot: HTMLDivElement, button: H
   button.dataset.idleLabel = idleLabel;
   button.textContent = 'Generating...';
   button.disabled = true;
+  outputInput.disabled = true;
   setStatus('Generating...');
   try {
     const response = await generator.generate({
@@ -400,6 +405,7 @@ async function runReusableTemplateGenerator(modalRoot: HTMLDivElement, button: H
     button.dataset.busyState = 'idle';
     button.textContent = button.dataset.idleLabel ?? 'Generate';
     delete button.dataset.idleLabel;
+    outputInput.disabled = false;
     updateReusableTemplateGeneratorButtons(modalRoot);
   }
 }

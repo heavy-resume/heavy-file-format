@@ -81,6 +81,25 @@ describe('plugin host registry', () => {
       }],
     })).toThrow('Duplicate output generator key "dev.heavy.resume.skill-description".');
   });
+
+  test('output-only plugins do not appear as document plugin components', () => {
+    registerHostPlugin({
+      id: 'dev.heavy.resume-generators',
+      displayName: 'Resume Generators',
+      outputGenerators: [{
+        key: 'dev.heavy.resume.skill-description',
+        generate: () => ({ answer: 'Generated description' }),
+      }],
+    });
+    registerHostPlugin({
+      id: PROGRESS_BAR_PLUGIN_ID,
+      displayName: 'Progress Bar',
+      create: () => ({ element: document.createElement('div') }),
+    });
+    bootstrapState(`---\nhvy_version: 1.0\n---\n`);
+
+    expect(getAvailableDocumentPlugins().map((plugin) => plugin.id)).toEqual([PROGRESS_BAR_PLUGIN_ID]);
+  });
 });
 
 describe('progress-bar plugin block round-trip', () => {

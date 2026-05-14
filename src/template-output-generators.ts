@@ -19,8 +19,8 @@ export async function resolveOutputGeneratorResponse(params: ResolveOutputGenera
       }
       const completion = await (params.requestCompletion ?? requestProxyCompletion)({
         settings: params.settings,
-        messages: [createPromptMessage(prompt)],
-        context: '',
+        messages: [createPromptMessage('Generate the requested template field text.')],
+        context: prompt,
         responseInstructions: params.response.responseInstructions?.trim() || 'Return only the generated text. Do not include Markdown fences, explanations, or labels.',
         mode: 'qa',
         debugLabel: 'template-output-generator',

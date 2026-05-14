@@ -223,7 +223,7 @@ export function handleBlockFieldInput(target: HTMLElement): boolean {
     block.schema.fillIn = hasTextFillInMarker(block.text);
     block.schema.placeholder = buildPlaceholderFromFillInEditor(target, block.schema.placeholder);
     syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
-    if (!target.closest('#aiReaderDocument, #aiSidebarSections')) {
+    if (!target.closest('.hvy-ai-reader-surface')) {
       getRefreshReaderPanels()();
     }
     return true;
@@ -456,7 +456,7 @@ export function handleBlockFieldInput(target: HTMLElement): boolean {
 }
 
 function shouldRefreshReaderPanelsAfterRichInput(target: HTMLElement): boolean {
-  return !target.closest('.editor-tree, #aiReaderDocument');
+  return !target.closest('.editor-tree, .hvy-ai-reader-surface');
 }
 
 function buildTextFromFillInEditor(target: HTMLElement): string {

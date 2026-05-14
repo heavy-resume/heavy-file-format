@@ -19,6 +19,7 @@ import { scheduleSidebarHelpAutoClose } from './bind/handlers/click-misc';
 import { saveResumeState } from './state-persistence';
 import { encodeComponentListRuntimeView, parseComponentListRuntimeView } from './editor/components/component-list/component-list-view';
 import { getAiEditorDoubleClickDelayMs } from './reference-config';
+import { isAiEditablePlaceholderTextBlock } from './ai-placeholder';
 import type { ReaderViewFilter } from './types';
 
 const resumeViews = bundledResumeViews as Record<string, ReaderViewFilter>;
@@ -546,18 +547,25 @@ function activateAiExpandableTextTarget(target: HTMLElement, expandable: HTMLEle
   const sectionKey = textBlock?.dataset.sectionKey ?? modelFallback?.sectionKey ?? '';
   const blockId = textBlock?.dataset.blockId ?? modelFallback?.blockId ?? '';
   const block = modelFallback?.block ?? (sectionKey && blockId ? findBlockByIds(sectionKey, blockId) : null);
-  const hasPlaceholder = String(block?.schema.placeholder ?? '').trim().length > 0;
-  if ((!textBlock && !modelFallback) || block?.schema.component !== 'text' || !hasPlaceholder) {
+  const editablePlaceholder = isAiEditablePlaceholderTextBlock(block);
+  if ((!textBlock && !modelFallback) || block?.schema.component !== 'text' || !editablePlaceholder) {
     console.debug('[hvy:ai-reader-expandable-toggle]', {
       stage: 'text-activation-skip',
-      skipReason: !textBlock && !modelFallback ? 'no-placeholder-target' : block?.schema.component !== 'text' ? 'resolved-block-not-text' : 'text-without-placeholder',
+      skipReason: !textBlock && !modelFallback
+        ? 'no-placeholder-target'
+        : block?.schema.component !== 'text'
+        ? 'resolved-block-not-text'
+        : String(block?.schema.placeholder ?? '').trim().length === 0
+        ? 'text-without-placeholder'
+        : 'text-placeholder-already-filled',
       target: describeElementForReaderLog(target),
       expandable: describeElementForReaderLog(expandable),
       expandableBlock: describeElementForReaderLog(expandableBlockElement),
       textBlock: describeElementForReaderLog(textBlock),
       modelFallback: modelFallback ? { sectionKey: modelFallback.sectionKey, blockId: modelFallback.blockId } : null,
       resolvedComponent: block?.schema.component ?? null,
-      hasPlaceholder,
+      hasPlaceholder: String(block?.schema.placeholder ?? '').trim().length > 0,
+      editablePlaceholder,
     });
     return false;
   }
@@ -570,7 +578,7 @@ function activateAiExpandableTextTarget(target: HTMLElement, expandable: HTMLEle
     modelFallback: modelFallback ? { sectionKey: modelFallback.sectionKey, blockId: modelFallback.blockId } : null,
     sectionKey,
     blockId,
-    hasPlaceholder,
+    editablePlaceholder,
   });
   state.aiModeTipDismissed = true;
   setActiveEditorBlock(sectionKey, blockId, { targetOnly: true });
@@ -594,7 +602,7 @@ function findFirstPlaceholderTextBlockInExpandableModel(
     ...(expandableBlock.schema.expandableContentBlocks?.children ?? []),
   ];
   const placeholder = children.find(
-    (child) => child.schema.component === 'text' && String(child.schema.placeholder ?? '').trim().length > 0
+    (child) => isAiEditablePlaceholderTextBlock(child)
   );
   return placeholder ? { sectionKey, blockId: placeholder.id, block: placeholder } : null;
 }
@@ -606,7 +614,7 @@ function findFirstPlaceholderTextBlock(expandable: HTMLElement): HTMLElement | n
     const sectionKey = textBlock.dataset.sectionKey ?? '';
     const blockId = textBlock.dataset.blockId ?? '';
     const block = sectionKey && blockId ? findBlockByIds(sectionKey, blockId) : null;
-    return block?.schema.component === 'text' && String(block.schema.placeholder ?? '').trim().length > 0;
+    return isAiEditablePlaceholderTextBlock(block);
   }) ?? null;
 }
 

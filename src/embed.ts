@@ -295,10 +295,10 @@ function renderApp(): void {
                     ${readerRenderer.renderSidebarHelpBalloon(state.document.sections)}
                     <div class="viewer-sidebar-panel">
                       <div id="readerWarnings" class="reader-warnings">${readerRenderer.renderWarnings()}</div>
-                      <div id="${isAi ? 'aiSidebarSections' : 'readerSidebarSections'}" class="reader-sidebar-sections">${readerRenderer.renderSidebarSections(state.document.sections)}</div>
+                      <div id="${isAi ? 'aiSidebarSections' : 'readerSidebarSections'}" class="reader-sidebar-sections hvy-reader-surface${isAi ? ' hvy-ai-reader-surface' : ''}">${readerRenderer.renderSidebarSections(state.document.sections)}</div>
                     </div>
                   </aside>
-                  <div id="${isAi ? 'aiReaderDocument' : 'readerDocument'}" class="reader-document">${readerRenderer.renderReaderSections(state.document.sections)}</div>
+                  <div id="${isAi ? 'aiReaderDocument' : 'readerDocument'}" class="reader-document hvy-reader-surface${isAi ? ' hvy-ai-reader-surface' : ''}">${readerRenderer.renderReaderSections(state.document.sections)}</div>
                   ${isAi ? `${renderAiModeHint(state, { escapeAttr, escapeHtml })}${renderAiEditPopover(state, { escapeAttr, escapeHtml })}` : ''}
                 </div>`
           }

@@ -11,6 +11,7 @@ import {
 import { actionRegistry } from '../actions/registry';
 import { openRemoveConfirmationModal } from './remove-confirmation-modal';
 import { clearHideIfUnmodifiedForSectionPath, clearHideIfUnmodifiedForSections, findSectionPath } from '../../template-hide';
+import { isAiEditablePlaceholderTextBlock } from '../../ai-placeholder';
 
 const richToolbarSelections = new WeakMap<HTMLElement, Range>();
 
@@ -199,18 +200,18 @@ function handleAiReaderTextActivationClick(event: MouseEvent): void {
     return;
   }
   const hasPlaceholder = String(block.schema.placeholder ?? '').trim().length > 0;
-  const isUnfilledPlaceholder = block.text.trim().length === 0;
+  const editablePlaceholder = isAiEditablePlaceholderTextBlock(block);
   const isInsideExpandableToggle = Boolean(textBlock.closest('[data-reader-action="toggle-expandable"]'));
   if (hasPlaceholder && textBlock.closest('[data-reader-action="toggle-expandable"][aria-expanded="false"]')) {
     return;
   }
-  if (!hasPlaceholder || !isUnfilledPlaceholder) {
+  if (!editablePlaceholder) {
     logAiReaderTextActivation(event, 'skip', {
       skipReason: !hasPlaceholder ? 'text-without-placeholder' : 'text-placeholder-already-filled',
       sectionKey,
       blockId,
       hasPlaceholder,
-      isUnfilledPlaceholder,
+      editablePlaceholder,
       isInsideExpandableToggle,
       textBlock: describeElement(textBlock),
     });

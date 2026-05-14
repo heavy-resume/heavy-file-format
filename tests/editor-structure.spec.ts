@@ -368,6 +368,11 @@ test('ai mode done on newly added skill closes without editing parent list', asy
   await expect(page.locator('#aiSidebarSections .editor-block[data-active-editor-block="true"]')).toHaveCount(0);
   await expect(page.locator('#aiSidebarSections .component-list-view-editor')).toHaveCount(0);
   await expect(page.locator('#aiSidebarSections #skills')).toContainText('Programming');
+
+  const newSkill = page.locator('#aiSidebarSections #skills .reader-block-expandable', { hasText: 'Programming' }).first();
+  await newSkill.locator('.reader-block-text', { hasText: 'Programming' }).click();
+  await expect(page.locator('#aiSidebarSections .editor-block[data-active-editor-block="true"]')).toHaveCount(0);
+  await expect(newSkill).toHaveAttribute('aria-expanded', 'true');
 });
 
 test('ai context menu stays inside phone preview when opened near the edge', async ({ page }) => {

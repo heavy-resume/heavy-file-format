@@ -660,10 +660,10 @@ function renderApp(): void {
                        <div id="readerWarnings" class="reader-warnings">${readerRenderer.renderWarnings()}</div>
                        <!-- TODO: Need to figure out what to do with navigation in the sidebar -->
                        <!-- <div id="readerNav" class="reader-nav">${readerRenderer.renderNavigation(state.document.sections)}</div> -->
-                       <div id="${isAiView ? 'aiSidebarSections' : 'readerSidebarSections'}" class="reader-sidebar-sections">${readerRenderer.renderSidebarSections(state.document.sections)}</div>
+                       <div id="${isAiView ? 'aiSidebarSections' : 'readerSidebarSections'}" class="reader-sidebar-sections hvy-reader-surface${isAiView ? ' hvy-ai-reader-surface' : ''}">${readerRenderer.renderSidebarSections(state.document.sections)}</div>
                      </div>
                    </aside>
-                   <div id="${isAiView ? 'aiReaderDocument' : 'readerDocument'}" class="reader-document">${readerRenderer.renderReaderSections(state.document.sections)}</div>
+                   <div id="${isAiView ? 'aiReaderDocument' : 'readerDocument'}" class="reader-document hvy-reader-surface${isAiView ? ' hvy-ai-reader-surface' : ''}">${readerRenderer.renderReaderSections(state.document.sections)}</div>
                    ${isAiView ? renderAiModeHint(state, { escapeAttr, escapeHtml }) : ''}
                    ${renderContextMenu()}
                    ${

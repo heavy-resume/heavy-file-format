@@ -25,6 +25,7 @@ const DEFAULT_QWEN_MODEL = 'qwen-plus';
 export const DEFAULT_OPENAI_COMPACTION_MODEL = 'gpt-5.4-nano';
 export const HVY_AI_RESPONSE_FORMAT_INSTRUCTIONS = aiResponseFormatInstructions;
 export const ENABLE_CHAT_MODEL_DEBUG_CONTROLS = import.meta.env?.DEV === true || import.meta.env?.VITE_HVY_ENABLE_CHAT_MODEL_PICKER === 'true';
+export const ENABLE_CHAT_CLI_SIM = import.meta.env?.DEV === true;
 export type ChatControlSurface = 'reference' | 'embedded';
 
 interface RenderChatPanelDeps {
@@ -262,6 +263,8 @@ export function renderChatPanel(
   const showProviderControls = !hostManagedChat && shouldRenderChatProviderControls(surface);
   const isDocumentEdit = mode === 'document-edit';
   const canSend = !chat.isSending && (hostManagedChat || !missingModel) && (isDocumentEdit || context.trim().length > 0);
+  const showCliSimControls = isDocumentEdit && ENABLE_CHAT_CLI_SIM;
+  const cliSimHtml = showCliSimControls && chat.cliSim ? renderChatCliSimHtml(chat.cliSim, deps) : '';
   const latestTokenUsage = getLatestChatTokenUsage(chat.messages);
   console.debug('[hvy:chat-render] composer state', {
     panelOpen: chat.panelOpen,
@@ -363,10 +366,11 @@ export function renderChatPanel(
          </div>
        </form>`;
   return `
+    ${chat.panelOpen ? '<div class="chat-backdrop" data-action="toggle-chat-panel" aria-hidden="true"></div>' : ''}
     <div class="chat-dock ${chat.panelOpen ? 'is-open' : 'is-closed'}" aria-label="Document chat">
       ${
         chat.panelOpen
-          ? `<aside class="chat-panel" tabindex="-1">
+          ? `<aside class="chat-panel" tabindex="-1"${chat.isSending ? ' aria-busy="true"' : ''}>
                <div class="chat-panel-head">
                  <div>
                    <h2>${title}</h2>
@@ -374,7 +378,7 @@ export function renderChatPanel(
                  </div>
                  <div class="chat-panel-head-actions">
                    ${
-                    isDocumentEdit
+                    showCliSimControls
                       ? `<button type="button" class="${chat.cliSimEnabled ? 'secondary' : 'ghost'}" data-action="toggle-chat-cli-sim"${chat.isSending || missingModel ? ' disabled' : ''}>CLI Sim ${chat.cliSimEnabled ? 'On' : 'Off'}</button>`
                       : ''
                    }
@@ -386,7 +390,7 @@ export function renderChatPanel(
                  ${providerControlsHtml}
 
                  ${chat.error ? `<div class="chat-error" role="alert">${deps.escapeHtml(chat.error)}</div>` : ''}
-                 ${chat.cliSim ? renderChatCliSimHtml(chat.cliSim, deps) : ''}
+                 ${cliSimHtml}
 
                  <div class="chat-thread" aria-live="polite" role="log">
                    ${

@@ -1,4 +1,4 @@
-import { state, getRenderApp, getRefreshReaderPanels, recordHistory, serializeDocument, appendUserChatMessage, buildDocumentEditCliSimRequest, requestChatTurn, requestDocumentEditChatTurn, saveResumeState, submitAiEditRequest, submitCliCommand, restoreCliViewAfterRender } from './_imports';
+import { state, getRenderApp, getRefreshReaderPanels, recordHistory, serializeDocument, appendUserChatMessage, buildDocumentEditCliSimRequest, requestChatTurn, requestDocumentEditChatTurn, saveResumeState, submitAiEditRequest, submitCliCommand, restoreCliViewAfterRender, ENABLE_CHAT_CLI_SIM } from './_imports';
 import { applySearchFilter, submitSearch } from '../../search/actions';
 
 export function bindSubmit(app: HTMLElement): void {
@@ -43,7 +43,7 @@ export function bindSubmit(app: HTMLElement): void {
         return;
       }
 
-      if (state.currentView !== 'viewer' && state.chat.cliSimEnabled) {
+      if (state.currentView !== 'viewer' && state.chat.cliSimEnabled && ENABLE_CHAT_CLI_SIM) {
         state.chat.cliSim = {
           requestPayload: null,
           requestJson: 'Preparing...',

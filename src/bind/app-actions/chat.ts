@@ -1,7 +1,7 @@
 import { state, getRenderApp } from '../../state';
 import { recordHistory } from '../../history';
 import { serializeDocument } from '../../serialization';
-import { clearChatConversation, stopChatRequest } from '../../chat/chat';
+import { clearChatConversation, ENABLE_CHAT_CLI_SIM, stopChatRequest } from '../../chat/chat';
 import { advanceDocumentEditCliSimStep, copyChatMessageToHvySection, runDocumentEditCliSimStep, type DocumentEditCliSimRequest } from '../../chat/chat-session';
 import type { AppActionHandler } from './types';
 
@@ -37,6 +37,13 @@ const cancelChatRequest: AppActionHandler = () => {
 };
 
 const toggleChatCliSim: AppActionHandler = () => {
+  if (!ENABLE_CHAT_CLI_SIM) {
+    state.chat.cliSimEnabled = false;
+    state.chat.cliSim = null;
+    state.chat.error = null;
+    getRenderApp()();
+    return;
+  }
   state.chat.cliSimEnabled = !state.chat.cliSimEnabled;
   state.chat.error = null;
   if (!state.chat.cliSimEnabled) {
@@ -46,6 +53,13 @@ const toggleChatCliSim: AppActionHandler = () => {
 };
 
 const runChatCliSimStep: AppActionHandler = () => {
+  if (!ENABLE_CHAT_CLI_SIM) {
+    state.chat.cliSimEnabled = false;
+    state.chat.cliSim = null;
+    state.chat.error = null;
+    getRenderApp()();
+    return;
+  }
   const sim = state.chat.cliSim;
   if (!sim?.requestPayload && !sim?.responseOutput) {
     state.chat.error = 'Prepare CLI sim before requesting a response.';

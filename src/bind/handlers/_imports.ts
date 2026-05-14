@@ -14,7 +14,7 @@ export { addTableColumn, removeTableColumn, getTableColumns, moveTableColumn, mo
 export { createGridItem } from '../../grid-ops';
 export { detectExtension, sanitizeOptionalId, moveItem } from '../../utils';
 export { openLinkInlineModal } from '../../bind-link-modal';
-export { clearChatConversation, getDefaultModelForProvider, persistChatSettings } from '../../chat/chat';
+export { clearChatConversation, ENABLE_CHAT_CLI_SIM, getDefaultModelForProvider, persistChatSettings } from '../../chat/chat';
 export { appendUserChatMessage, buildDocumentEditCliSimRequest, copyChatMessageToHvySection, requestChatTurn, requestDocumentEditChatTurn } from '../../chat/chat-session';
 export { areTablesEnabled } from '../../reference-config';
 export { addDbTableColumn, addDbTableRow, getSqliteRowComponent, handleDbTableFrameScroll, materializeDbTableDraftRow, parseAttachedComponentBlocks, renameDbTableColumn, syncSqliteColumnNameInDom, toggleDbTableSort, updateDbTableCell } from '../../plugins/db-table';

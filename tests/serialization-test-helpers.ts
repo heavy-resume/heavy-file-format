@@ -31,6 +31,7 @@ export function createTestState(document: VisualDocument): AppState {
       editorSidebarTop: 0,
       viewerSidebarTop: 0,
       readerTop: 0,
+      windowLeft: 0,
       windowTop: 0,
     },
     showAdvancedEditor: false,

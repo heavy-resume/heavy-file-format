@@ -94,6 +94,7 @@ export interface PaneScrollState {
   editorSidebarTop: number;
   viewerSidebarTop: number;
   readerTop: number;
+  windowLeft: number;
   windowTop: number;
 }
 

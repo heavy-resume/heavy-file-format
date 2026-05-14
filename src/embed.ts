@@ -58,6 +58,7 @@ import { renderAiEditPopover, renderAiModeHint } from './ai-mode-ui';
 import { createDefaultSearchState } from './search/state';
 import { renderSearchLauncher, renderSearchPalette } from './search/render';
 import { loadPaletteOverrideId } from './palettes/palette-preferences';
+import { captureRenderScroll, restoreRenderScroll } from './render-scroll';
 
 export type HvyEmbedMode = 'viewer' | 'editor' | 'ai';
 
@@ -106,7 +107,7 @@ function createEmbedState(document: VisualDocument, mode: HvyEmbedMode, showAdva
       popupY: 0,
       requestNonce: 0,
     },
-    paneScroll: { editorTop: 0, editorSidebarTop: 0, viewerSidebarTop: 0, readerTop: 0, windowTop: 0 },
+    paneScroll: { editorTop: 0, editorSidebarTop: 0, viewerSidebarTop: 0, readerTop: 0, windowLeft: 0, windowTop: 0 },
     showAdvancedEditor,
     rawEditorText: serializeDocument(document),
     rawEditorError: null,
@@ -263,6 +264,8 @@ function ensureRenderers(): void {
 
 function renderApp(): void {
   if (!currentRoot) return;
+  const capturedScroll = captureRenderScroll(currentRoot, state.paneScroll);
+  state.paneScroll = capturedScroll.paneScroll;
   applyTheme();
   const isEditor = state.currentView === 'editor';
   const isAi = state.currentView === 'ai';
@@ -321,6 +324,7 @@ function renderApp(): void {
     </main>`;
   bindUi(currentRoot);
   reconcilePluginMounts(currentRoot);
+  restoreRenderScroll(currentRoot, capturedScroll);
   void runButtonVisibilityScripts(currentRoot);
   void runPluginDocumentHooks('unknown');
 }

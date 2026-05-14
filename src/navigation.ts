@@ -551,6 +551,7 @@ export function resetTransientUiState(): void {
     editorSidebarTop: 0,
     viewerSidebarTop: 0,
     readerTop: 0,
+    windowLeft: 0,
     windowTop: 0,
   };
 }

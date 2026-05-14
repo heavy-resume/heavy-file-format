@@ -22,12 +22,11 @@ import { resolveBaseComponent } from './component-defs';
 import { ensureContainerBlocks, ensureComponentListBlocks, ensureExpandableBlocks, ensureGridItems } from './document-factory';
 import { isActiveEditorSectionTitle, isActiveEditorBlock, getComponentRenderHelpers, findBlockByIds } from './block-ops';
 import { commitHistorySnapshot } from './history';
-import { capturePaneScroll, restorePaneScroll, centerPendingEditorSection, focusPendingSectionTitleEditor, scrollPendingEditorActivation, scrollPendingEditorDeactivation } from './scroll';
+import { centerPendingEditorSection, focusPendingSectionTitleEditor, scrollPendingEditorActivation, scrollPendingEditorDeactivation } from './scroll';
 import { bindUi } from './bind-ui';
 import { deserializeDocumentBytes, serializeDocument } from './serialization';
 import { createDefaultChatState, renderChatPanel } from './chat/chat';
 import { renderAiEditPopover, renderAiModeHint } from './ai-mode-ui';
-import { captureChatThreadScroll, restoreChatThreadScroll } from './chat/chat-thread-ui';
 import { loadResumeState, saveResumeState } from './state-persistence';
 import { setHostPlugins } from './plugins/registry';
 import { reconcilePluginMounts, capturePluginFocus } from './plugins/mount';
@@ -38,6 +37,7 @@ import { centerSearchResultLenses, renderCollapsedSearchBar, renderSearchLaunche
 import { createDefaultSearchState } from './search/state';
 import { applySearchFilter, submitSearch } from './search/actions';
 import { loadPaletteOverrideId } from './palettes/palette-preferences';
+import { captureRenderScroll, restoreRenderScroll } from './render-scroll';
 
 const appRoot = document.querySelector<HTMLDivElement>('#app');
 if (!appRoot) {
@@ -89,6 +89,7 @@ function createInitialState(document: ReturnType<typeof deserializeDocumentBytes
       editorSidebarTop: 0,
       viewerSidebarTop: 0,
       readerTop: 0,
+      windowLeft: 0,
       windowTop: 0,
     },
     showAdvancedEditor: false,
@@ -521,9 +522,9 @@ function renderApp(): void {
 
   let stepStartedAt = performance.now();
   const pendingPaneScrollRestore = state.pendingPaneScrollRestore;
-  state.paneScroll = pendingPaneScrollRestore ?? capturePaneScroll(state.paneScroll, app);
+  const capturedScroll = captureRenderScroll(app, state.paneScroll, pendingPaneScrollRestore);
+  state.paneScroll = capturedScroll.paneScroll;
   state.pendingPaneScrollRestore = null;
-  const chatScroll = captureChatThreadScroll(app);
   captureMs = performance.now() - stepStartedAt;
 
   stepStartedAt = performance.now();
@@ -713,8 +714,7 @@ function renderApp(): void {
   bindMs = performance.now() - stepStartedAt;
 
   stepStartedAt = performance.now();
-  restorePaneScroll(state.paneScroll, app);
-  restoreChatThreadScroll(app, chatScroll);
+  restoreRenderScroll(app, capturedScroll);
   centerSearchResultLenses(app);
   scheduleReaderHighlightGlow(app);
   restoreMs = performance.now() - stepStartedAt;

@@ -13,6 +13,7 @@ export function capturePaneScroll(previous: PaneScrollState, app: HTMLElement): 
     editorSidebarTop: editorSidebarPanel?.scrollTop ?? previous.editorSidebarTop,
     viewerSidebarTop: viewerSidebarPanel?.scrollTop ?? previous.viewerSidebarTop,
     readerTop: readerPane?.scrollTop ?? previous.readerTop,
+    windowLeft: window.scrollX,
     windowTop: window.scrollY,
   };
 }
@@ -40,7 +41,7 @@ export function restorePaneScroll(scroll: PaneScrollState | null, app: HTMLEleme
     if (readerPane) {
       readerPane.scrollTop = scroll.readerTop;
     }
-    window.scrollTo({ top: scroll.windowTop, left: 0, behavior: 'auto' });
+    window.scrollTo({ top: scroll.windowTop, left: scroll.windowLeft, behavior: 'auto' });
   };
   restore();
   window.requestAnimationFrame(() => {

@@ -84,3 +84,7 @@ When fixing a theme always review other themes for a similar issue unless instru
 Common UI bugs from stuff you write - check for this and look at what you did before:
 - Single character input then loses focus
 - Bad click handler, especially around overlapping clickable components
+
+Playwright test timeouts:
+- single action - no more than 1s
+- full test - no more than 5s

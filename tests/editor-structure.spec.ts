@@ -2118,7 +2118,7 @@ reader_max_width: 12rem
       && balloonBox.y < bodyBox.y + bodyBox.height
       && balloonBox.y + balloonBox.height > bodyBox.y;
   }).toBe(false);
-  await page.waitForTimeout(5500);
+  await page.waitForTimeout(1_000);
   await expect(balloon).toBeVisible();
 });
 

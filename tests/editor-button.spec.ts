@@ -17,7 +17,7 @@ test('editor-only generate button applies pronunciation and stays out of viewer'
   await page.reload({ waitUntil: 'networkidle' });
   await page.getByRole('button', { name: 'Resume Template' }).click();
 
-  await expect(page.locator('[data-component-id="resume-pronunciation"]').first()).toBeHidden({ timeout: 10000 });
+  await expect(page.locator('[data-component-id="resume-pronunciation"]').first()).toBeHidden({ timeout: 1_000 });
   await expect(page.locator('[data-action="run-button-ai-generate"]')).toBeHidden();
 
   await page.getByRole('button', { name: 'Raw' }).click();
@@ -28,11 +28,11 @@ test('editor-only generate button applies pronunciation and stays out of viewer'
   await page.getByRole('button', { name: 'Basic' }).click();
 
   const generateButton = page.locator('[data-action="run-button-ai-generate"]');
-  await expect(generateButton).toBeVisible({ timeout: 10000 });
+  await expect(generateButton).toBeVisible({ timeout: 1_000 });
 
   await generateButton.click();
   await expect(page.locator('#editorTree')).toContainText('[AY-vuh-ree HART]');
-  await expect(generateButton).toBeHidden({ timeout: 10000 });
+  await expect(generateButton).toBeHidden({ timeout: 1_000 });
 
   await page.getByRole('button', { name: 'Viewer' }).click();
   await expect(page.locator('[data-action="run-button-ai-generate"]')).toHaveCount(0);
@@ -61,7 +61,7 @@ test('generate button runs on the first click after completing a fill-in', async
   await nameFillIn.fill('Avery Hart');
 
   const generateButton = page.locator('[data-action="run-button-ai-generate"]');
-  await expect(generateButton).toBeVisible({ timeout: 10000 });
+  await expect(generateButton).toBeVisible({ timeout: 1_000 });
   await generateButton.click();
 
   await expect(page.locator('#editorTree')).toContainText('[AY-vuh-ree HART]');

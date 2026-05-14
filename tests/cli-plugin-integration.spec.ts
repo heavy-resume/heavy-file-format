@@ -1,5 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
 
+const PLUGIN_SETTLE_TIMEOUT_MS = 1_000;
+const SCRIPTING_IDLE_TIMEOUT_MS = 1_000;
+
 async function runCliCommand(page: Page, command: string): Promise<void> {
   const lineCount = await page.locator('#cliOutput .cli-line').count();
   const isPlaceholder = (await page.locator('#cliOutput').textContent())?.includes('/ $ man ls') ?? false;
@@ -21,7 +24,7 @@ async function waitForScriptingIdle(page: Page): Promise<void> {
   await page.waitForFunction(() => {
     const scripting = (window as unknown as { __HVY_SCRIPTING__?: { runtimes: Record<string, unknown> } }).__HVY_SCRIPTING__;
     return Boolean(scripting) && Object.keys(scripting.runtimes).length === 0;
-  });
+  }, undefined, { timeout: SCRIPTING_IDLE_TIMEOUT_MS });
 }
 
 test('cli-created chore chart form and db-table plugins run end to end', async ({ page }) => {
@@ -104,7 +107,9 @@ scripts:
   const addForm = page.locator('form').filter({ has: page.getByRole('button', { name: 'Add chore' }) });
   await addForm.locator('textarea[name="Description"]').fill('Dishes');
   await addForm.getByRole('button', { name: 'Add chore' }).click();
-  await expect(page.locator('.hvy-db-table-plugin-reader').filter({ hasText: 'Dishes' })).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator('.hvy-db-table-plugin-reader').filter({ hasText: 'Dishes' })).toBeVisible({
+    timeout: PLUGIN_SETTLE_TIMEOUT_MS,
+  });
 
   const assignForm = page.locator('form').filter({ has: page.getByRole('button', { name: 'Assign chore' }) });
   await assignForm.locator('input[name="Chore"]').fill('Dishes');
@@ -237,8 +242,12 @@ Blocked visible text
   await page.getByRole('button', { name: 'Apply' }).click();
   await page.getByRole('button', { name: 'Basic' }).click();
 
-  await expect(page.locator('[data-component-id="safe-visible"]').first()).toBeVisible({ timeout: 10_000 });
-  await expect(page.locator('[data-component-id="blocked-visible"]').first()).toBeHidden({ timeout: 10_000 });
+  await expect(page.locator('[data-component-id="safe-visible"]').first()).toBeVisible({
+    timeout: SCRIPTING_IDLE_TIMEOUT_MS,
+  });
+  await expect(page.locator('[data-component-id="blocked-visible"]').first()).toBeHidden({
+    timeout: SCRIPTING_IDLE_TIMEOUT_MS,
+  });
 });
 
 test('scripting and form scripts allow return to stop execution', async ({ page }) => {

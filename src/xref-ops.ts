@@ -42,25 +42,29 @@ export function isXrefTargetValid(target: string, tagFilter = ''): boolean {
 
 export function describeBlockTarget(block: VisualBlock): string {
   const component = block.schema.component;
-  if (block.schema.xrefTitle.trim().length > 0) {
-    return block.schema.xrefTitle.trim();
+  const xrefTitle = cleanXrefDisplayValue(block.schema.xrefTitle);
+  if (xrefTitle.length > 0) {
+    return xrefTitle;
   }
-  const firstTableCell = block.schema.expandableStubBlocks.children
-    .flatMap((stubBlock) => stubBlock.schema.tableRows)
-    .flatMap((row) => row.cells)
-    .find((cell) => cell.trim().length > 0);
-  if (firstTableCell) {
-    return firstTableCell.trim();
+  const visibleText = getFirstVisibleTargetText(block);
+  if (visibleText.length > 0) {
+    return visibleText;
+  }
+  const idTitle = humanizeTargetId(block.schema.id);
+  if (idTitle.length > 0) {
+    return idTitle;
   }
   return component;
 }
 
 export function describeBlockTargetDetail(block: VisualBlock): string {
-  if (block.schema.xrefDetail.trim().length > 0) {
-    return block.schema.xrefDetail.trim();
+  const xrefDetail = cleanXrefDisplayValue(block.schema.xrefDetail);
+  if (xrefDetail.length > 0) {
+    return xrefDetail;
   }
-  if (block.schema.description.trim().length > 0) {
-    return block.schema.description.trim();
+  const description = cleanXrefDisplayValue(block.schema.description);
+  if (description.length > 0) {
+    return description;
   }
   return '';
 }
@@ -151,4 +155,53 @@ function parseTags(value: string): string[] {
       seen.add(normalized);
       return true;
     });
+}
+
+function cleanXrefDisplayValue(value: string): string {
+  const trimmed = value.trim();
+  return trimmed.length > 0 && !hasTemplateToken(trimmed) ? trimmed : '';
+}
+
+function getFirstVisibleTargetText(block: VisualBlock): string {
+  const ownText = cleanMarkdownText(block.text);
+  if (ownText.length > 0) {
+    return ownText;
+  }
+  for (const row of block.schema.tableRows ?? []) {
+    const cell = row.cells.map(cleanMarkdownText).find((item) => item.length > 0);
+    if (cell) {
+      return cell;
+    }
+  }
+  return [
+    ...(block.schema.expandableStubBlocks?.children ?? []),
+    ...(block.schema.expandableContentBlocks?.children ?? []),
+    ...(block.schema.containerBlocks ?? []),
+    ...(block.schema.componentListBlocks ?? []),
+    ...(block.schema.gridItems ?? []).map((item) => item.block),
+  ].map(getFirstVisibleTargetText).find((item) => item.length > 0) ?? '';
+}
+
+function cleanMarkdownText(value: string): string {
+  const cleaned = value
+    .replace(/<!--[\s\S]*?-->/g, ' ')
+    .replace(/\^[a-z0-9_-]+\^/gi, ' ')
+    .replace(/^#{1,6}\s*/gm, ' ')
+    .replace(/[\\`*_~#[\]()!>-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return hasTemplateToken(cleaned) ? '' : cleaned;
+}
+
+function humanizeTargetId(value: string): string {
+  const stripped = normalizeXrefTarget(value)
+    .replace(/^(skill|tool|project|history|education)-/i, '')
+    .replace(/[-_]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return stripped.replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function hasTemplateToken(value: string): boolean {
+  return /{%\s*[A-Za-z_][A-Za-z0-9_-]*\s*(?:\|\s*(?:text|block)\s*)?%}/.test(value);
 }

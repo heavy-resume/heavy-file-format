@@ -102,3 +102,44 @@ component_defs:
   expect(newProject.schema.id).toBe('project-heavy-stack');
   expect(expectedResult).toContain('project-heavy-stack');
 });
+
+test('xref target options fall back from unresolved template labels to visible target text', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+component_defs:
+  - name: skill-xref-card
+    baseType: xref-card
+    schema:
+      xrefTargetTagFilter: skill
+---
+
+<!--hvy: {"id":"skills"}-->
+#! Skills
+
+ <!--hvy:expandable {"id":"skill-foo","tags":"skill","xrefTitle":"{% skill %}","xrefDetail":"{% description | block %}","expandableAlwaysShowStub":true}-->
+
+  <!--hvy:expandable:stub {}-->
+
+   <!--hvy:text {}-->
+    ### Foo
+
+  <!--hvy:expandable:content {}-->
+
+   <!--hvy:text {}-->
+    Useful real detail
+
+<!--hvy: {"id":"featured"}-->
+#! Featured
+
+ <!--hvy:skill-xref-card {"xrefTarget":"skill-foo"}-->
+`, '.hvy');
+
+  initState(createTestState(document));
+
+  const expectedResult = getXrefTargetOptions('skill').find((option) => option.value === 'skill-foo');
+
+  expect(expectedResult?.title).toBe('Foo');
+  expect(expectedResult?.detail).toBe('');
+  expect(expectedResult?.label).toBe('Foo (skill-foo)');
+  expect(expectedResult?.label).not.toContain('{% skill %}');
+});

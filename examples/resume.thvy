@@ -713,7 +713,7 @@ component_defs:
   # Featured
 
  <!--hvy:text {"id":"featured-xref-helper","align":"center","editorOnly":true,"css":"margin: 0.35rem 0 0.5rem; color: var(--hvy-text-muted); font-style: italic;"}-->
-  Tip: Add a featured skill or tool / technology via the sidebar and link it here
+  Tip: Add a featured skill or tool / technology via the sidebar and link to it here
 
  <!--hvy:grid {"css":"margin: 0.5rem 0; gap: 0.75rem;","gridColumns":2,"lock":true}-->
   <!--hvy:grid:0 {"id":"top-skills"}-->

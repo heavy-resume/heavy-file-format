@@ -15,6 +15,8 @@ export interface RichToolbarOptions {
 export interface XrefTargetOption {
   value: string;
   label: string;
+  title: string;
+  detail: string;
 }
 
 export interface ComponentRenderHelpers {

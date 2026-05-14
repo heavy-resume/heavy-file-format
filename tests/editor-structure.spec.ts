@@ -190,6 +190,36 @@ hvy_version: 0.1
   await expect(page.locator('.hvy-context-popover')).toContainText('Request changes');
 });
 
+test('typing an xref title in ai mode preserves focus', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ <!--hvy:xref-card {"xrefTitle":"Untitled","xrefTarget":"target"}-->
+
+<!--hvy: {"id":"target"}-->
+#! Target
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'AI' }).click();
+
+  await page.locator('#aiReaderDocument .reader-xref-card', { hasText: 'Untitled' }).dblclick();
+  await page.getByRole('button', { name: 'Edit component' }).click();
+  const title = page.locator('#aiReaderDocument .editor-block[data-active-editor-block="true"] [data-field="block-xref-title"]');
+  await title.click();
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
+  await page.keyboard.type('Heavy Stack');
+
+  await expect(title).toBeFocused();
+  await expect(title).toHaveText('Heavy Stack');
+});
+
 test('ai double click opens component menu without leaving text selected', async ({ page }) => {
   await page.goto('/');
 
@@ -344,10 +374,53 @@ test('canceling a newly added featured xref removes it without opening list edit
 
   const activeEditor = page.locator('.editor-block[data-active-editor-block="true"]');
   await expect(activeEditor.locator('.editor-block-title').first()).toContainText('skill-xref-card');
+  await expect(activeEditor.locator('datalist option[value="skill-software-engineering"]')).toHaveCount(1);
   await activeEditor.getByRole('button', { name: 'Cancel' }).click();
 
   await expect(page.locator('[data-component-id="top-skills-list"]')).not.toContainText('Untitled');
   await expect(page.locator('.editor-block[data-active-editor-block="true"]')).toHaveCount(0);
+});
+
+test('new featured xref populates title from target defaults', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Resume Example' }).click();
+
+  const topSkillsList = page.locator('[data-component-id="top-skills-list"]').first();
+  await topSkillsList.locator('[data-action="add-component-list-item"]').click();
+
+  const activeEditor = page.locator('.editor-block[data-active-editor-block="true"]');
+  await activeEditor.locator('[data-field="block-xref-target"]').fill('skill-software-engineering');
+
+  await expect(activeEditor.locator('[data-field="block-xref-title"]')).toHaveText('Software Engineering');
+});
+
+test('xref template picker explains when no tagged targets are available', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+component_defs:
+  - name: skill-xref-card
+    baseType: xref-card
+    schema:
+      xrefTargetTagFilter: skill
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ <!--hvy:component-list {"componentListComponent":"skill-xref-card","componentListItemLabel":"skill reference"}-->
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'AI' }).click();
+
+  await page.locator('#aiReaderDocument [data-action="add-component-list-item"]', { hasText: 'Add Skill Reference' }).click();
+  const activeEditor = page.locator('#aiReaderDocument .editor-block[data-active-editor-block="true"]');
+
+  await expect(activeEditor.locator('[data-field="block-xref-target"]')).toBeDisabled();
+  await expect(activeEditor).toContainText('No skill targets available yet.');
 });
 
 test('ai canceling a newly added education reference removes it without opening list editor', async ({ page }) => {
@@ -574,6 +647,9 @@ component_defs:
   const xrefEditor = page.locator('#aiReaderDocument .editor-block[data-active-editor-block="true"]');
   await expect(xrefEditor.locator('.editor-block-title').first()).toContainText('project-xref-card');
   await expect(xrefEditor.locator('datalist option[value="project-heavy-stack"]')).toHaveCount(1);
+  await xrefEditor.locator('[data-field="block-xref-target"]').fill('project-heavy-stack');
+  await expect(xrefEditor.locator('[data-field="block-xref-target"]')).toHaveValue('project-heavy-stack');
+  await expect(xrefEditor.locator('[data-field="block-xref-title"]')).toHaveText('Heavy Stack');
 });
 
 test('ai context menu stays inside phone preview when opened near the edge', async ({ page }) => {

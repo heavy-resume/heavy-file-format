@@ -18,7 +18,7 @@ import { renderTagEditor } from '../editor/tag-editor';
 import { colorValueToAlpha, colorValueToPickerHex, getResolvedThemeColor, getThemeColorLabel, getThemeResetColor, THEME_COLOR_NAMES } from '../theme';
 import type { ThemeConfig } from '../theme';
 import { getMatchedPaletteId, HVY_PALETTES } from '../palettes/palette-registry';
-import type { DbTableQueryModalState, ReaderViewFilter, ReusableSaveModalState, SqliteRowComponentModalState, VisualDocument } from '../types';
+import type { ComponentDefinition, DbTableQueryModalState, ReaderViewFilter, ReusableSaveModalState, SqliteRowComponentModalState, VisualDocument } from '../types';
 import type { SearchState } from '../search/types';
 import { createSearchFilterContext, isBlockSearchDeprioritized, isBlockSearchMatch, isBlockSearchVisible, isSectionSearchDeprioritized, isSectionSearchMatch, isSectionSearchVisible, orderSearchFilteredSections, type SearchFilterContext } from '../search/filter';
 import { highlightSearchHtml } from '../search/highlight';
@@ -1242,9 +1242,33 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     if (state.reusableTemplateModal) {
       const definition = getComponentDefsFromMeta(state.documentMeta).find((item) => item.name === state.reusableTemplateModal?.component);
       const variables = extractReusableTemplateVariablesFromDefinition(definition);
+      let hasUnavailablePicker = false;
+      let hasTargetPicker = false;
       const fields = variables.map((variable) => {
         const id = `reusableTemplateValue_${variable.name}`;
         const label = deps.escapeHtml(variable.label);
+        const xrefTargetTagFilter = getTemplateVariableXrefTargetTagFilter(definition, variable.name);
+        if (xrefTargetTagFilter) {
+          hasTargetPicker = true;
+          const targetOptions = deps.getComponentRenderHelpers().getXrefTargetOptions(xrefTargetTagFilter);
+          if (targetOptions.length === 0) {
+            hasUnavailablePicker = true;
+          }
+          return `<label class="template-target-picker">
+              <span>${label}</span>
+              <input
+                id="${deps.escapeAttr(id)}"
+                data-template-variable="${deps.escapeAttr(variable.name)}"
+                list="${deps.escapeAttr(`${id}_targets`)}"
+                placeholder="${targetOptions.length === 0 ? 'No targets available' : 'Type or pick a target'}"
+                ${targetOptions.length === 0 ? 'disabled' : ''}
+              />
+              <datalist id="${deps.escapeAttr(`${id}_targets`)}">
+                ${targetOptions.map((option) => `<option value="${deps.escapeAttr(option.value)}" label="${deps.escapeAttr(option.label)}">${deps.escapeHtml(option.label)}</option>`).join('')}
+              </datalist>
+              ${targetOptions.length === 0 ? `<p class="template-picker-empty">No ${deps.escapeHtml(xrefTargetTagFilter)} targets available yet.</p>` : ''}
+            </label>`;
+        }
         return variable.type === 'block'
           ? `<label>
               <span>${label}</span>
@@ -1258,7 +1282,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       return `
         <div id="modalRoot" class="modal-root">
           <div class="modal-overlay" data-modal-action="close-overlay"></div>
-          <section class="modal-panel component-meta-modal">
+          <section class="modal-panel component-meta-modal reusable-template-modal ${hasTargetPicker ? 'template-picker-modal' : ''}">
             <div class="modal-head">
               <h3>${deps.escapeHtml(state.reusableTemplateModal.component)}</h3>
               <button type="button" data-modal-action="close">Close</button>
@@ -1268,7 +1292,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
             </div>
             <div class="link-inline-actions reusable-save-actions">
               <button type="button" class="ghost" data-modal-action="close">Cancel</button>
-              <button type="button" class="secondary" data-modal-action="insert-reusable-template">Add</button>
+              <button type="button" class="secondary" data-modal-action="insert-reusable-template" ${hasUnavailablePicker ? 'disabled' : ''}>Add</button>
             </div>
           </section>
         </div>
@@ -1619,6 +1643,20 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     return duplicateIds
       .map((id) => `<div class="warn">Duplicate section id detected: <code>${deps.escapeHtml(id)}</code></div>`)
       .join('');
+  }
+
+  function getTemplateVariableXrefTargetTagFilter(definition: ComponentDefinition | undefined, variableName: string): string {
+    const schema = definition?.template?.schema ?? definition?.schema;
+    const target = schema?.xrefTarget ?? '';
+    if (!schema || !target || !templateStringContainsVariable(target, variableName)) {
+      return '';
+    }
+    return schema.xrefTargetTagFilter.trim();
+  }
+
+  function templateStringContainsVariable(value: string, variableName: string): boolean {
+    const escaped = variableName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`{%\\s*${escaped}\\s*(?:\\|\\s*(?:text|block)\\s*)?%}`).test(value);
   }
 
   return {

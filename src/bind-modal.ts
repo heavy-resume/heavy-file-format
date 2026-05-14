@@ -12,6 +12,7 @@ import { createGridItem } from './grid-ops';
 import { syncReusableTemplateForBlock } from './reusable';
 import { createBlockFromReusableTemplateValues } from './bind/actions/reusable-template';
 import { assignAutoBlockId } from './auto-block-id';
+import { applyXrefTargetDefaults } from './xref-ops';
 
 export function bindModal(app: HTMLElement): void {
   const modalRoot = app.querySelector<HTMLDivElement>('#modalRoot');
@@ -318,7 +319,7 @@ function insertReusableTemplateFromModal(modalRoot: HTMLDivElement): void {
     return;
   }
   const values: Record<string, string> = {};
-  modalRoot.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('[data-template-variable]').forEach((input) => {
+  modalRoot.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>('[data-template-variable]').forEach((input) => {
     const key = input.dataset.templateVariable;
     if (key) {
       values[key] = input.value;
@@ -327,6 +328,7 @@ function insertReusableTemplateFromModal(modalRoot: HTMLDivElement): void {
   let newBlock;
   try {
     newBlock = createBlockFromReusableTemplateValues(modal.component, values);
+    applyXrefTargetDefaults(newBlock);
   } catch (error) {
     console.error('[hvy:template] failed to insert reusable component from template modal', error);
     return;

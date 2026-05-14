@@ -17,7 +17,8 @@ export function assignAutoBlockId(block: VisualBlock, context: AutoBlockIdContex
   if (tags.length === 0) {
     return;
   }
-  const sourceSlug = getSourceSlug(block, context.sourceValues);
+  const sourceTitle = getSourceTitle(block, context.sourceValues);
+  const sourceSlug = sanitizeOptionalId(sourceTitle);
   if (!sourceSlug) {
     return;
   }
@@ -28,12 +29,14 @@ export function assignAutoBlockId(block: VisualBlock, context: AutoBlockIdContex
   if (!block.schema.tags.trim() && context.inheritedTags?.trim()) {
     block.schema.tags = context.inheritedTags.trim();
   }
+  if (!block.schema.xrefTitle.trim()) {
+    block.schema.xrefTitle = sourceTitle;
+  }
   block.schema.id = makeUniqueId(`${prefix}-${sourceSlug}`, context.document, block);
 }
 
-function getSourceSlug(block: VisualBlock, sourceValues: Record<string, string> | undefined): string {
-  const value = Object.values(sourceValues ?? {}).find((item) => item.trim().length > 0);
-  return sanitizeOptionalId(value ?? getFirstVisibleText(block));
+function getSourceTitle(block: VisualBlock, sourceValues: Record<string, string> | undefined): string {
+  return Object.values(sourceValues ?? {}).find((item) => item.trim().length > 0)?.trim() ?? getFirstVisibleText(block);
 }
 
 function getFirstVisibleText(block: VisualBlock): string {

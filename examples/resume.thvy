@@ -115,6 +115,8 @@ component_defs:
         label: Year(s)
     schema:
       tags: history
+      xrefTitle: "{% role %}"
+      xrefDetail: "{% organization %}"
       css: "margin: 0;"
       expandableAlwaysShowStub: true
       expandableExpanded: false
@@ -233,6 +235,8 @@ component_defs:
         label: GPA
     schema:
       tags: education
+      xrefTitle: "{% degree %}"
+      xrefDetail: "{% institution %}"
       css: "margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);"
       expandableAlwaysShowStub: true
       expandableExpanded: false
@@ -307,6 +311,8 @@ component_defs:
         label: Project link
     schema:
       tags: project
+      xrefTitle: "{% project %}"
+      xrefDetail: "{% date_range %}"
       css: "margin: 0;"
       expandableAlwaysShowStub: true
       expandableExpanded: false
@@ -434,6 +440,7 @@ component_defs:
       skill:
         label: Skill
     schema:
+      xrefTitle: "{% skill %}"
       css: "margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);"
       expandableStubBlocks:
         children:
@@ -465,6 +472,7 @@ component_defs:
       tool_technology:
         label: Tool / Technology
     schema:
+      xrefTitle: "{% tool_technology %}"
       css: "margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);"
       expandableStubBlocks:
         children:

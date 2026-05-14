@@ -8,7 +8,7 @@ import { getReusableNameFromSectionKey, getComponentDefs, renderComponentOptions
 import { findSectionByKey, findBlockContainerById, moveBlockInVisualSequence } from './section-ops';
 import { getReusableTemplateByName, ensureContainerBlocks, ensureComponentListBlocks, ensureGridItems, applyComponentDefaults, instantiateReusableBlock, coerceAlign, coerceSlot } from './document-factory';
 import { syncReusableTemplateForBlock } from './reusable';
-import { normalizeXrefTarget, getXrefTargetOptions, isXrefTargetValid } from './xref-ops';
+import { normalizeXrefTarget, getXrefTargetOptions, isXrefTargetValid, applyXrefTargetDefaults } from './xref-ops';
 import { getTableColumns, setTableColumns } from './table-ops';
 import { coerceGridColumns } from './grid-ops';
 import { applyMobileAltAdjustment, normalizeEditorMarkdownWhitespace, normalizeMarkdownLists, markdownToEditorHtml as renderMarkdownToEditorHtml, turndown } from './markdown';
@@ -270,21 +270,20 @@ export function handleBlockFieldInput(target: HTMLElement): boolean {
   if (field === 'block-xref-title') {
     block.schema.xrefTitle = target instanceof HTMLInputElement ? target.value : getInlineEditableText(target);
     syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
-    getRefreshReaderPanels()();
     return true;
   }
 
   if (field === 'block-xref-detail') {
     block.schema.xrefDetail = target instanceof HTMLInputElement ? target.value : getInlineEditableText(target);
     syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
-    getRefreshReaderPanels()();
     return true;
   }
 
   if (field === 'block-xref-target' && (target instanceof HTMLInputElement || target instanceof HTMLSelectElement)) {
     block.schema.xrefTarget = normalizeXrefTarget(target.value);
+    applyXrefTargetDefaults(block);
+    syncXrefEditorAfterTargetInput(target, block);
     syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
-    getRefreshReaderPanels()();
     return true;
   }
 
@@ -453,6 +452,30 @@ export function handleBlockFieldInput(target: HTMLElement): boolean {
   }
 
   return false;
+}
+
+function syncXrefEditorAfterTargetInput(target: HTMLElement, block: VisualBlock): void {
+  const editor = target.closest<HTMLElement>('.editor-xref-card');
+  if (!editor) {
+    return;
+  }
+  const hasTarget = normalizeXrefTarget(block.schema.xrefTarget).length > 0;
+  editor.classList.toggle('is-target-empty', !hasTarget);
+  editor.querySelectorAll<HTMLElement>('[data-field="block-xref-title"], [data-field="block-xref-detail"]').forEach((field) => {
+    if (hasTarget) {
+      field.removeAttribute('aria-disabled');
+    } else {
+      field.setAttribute('aria-disabled', 'true');
+    }
+  });
+  const title = editor.querySelector<HTMLElement>('[data-field="block-xref-title"]');
+  if (title) {
+    title.textContent = hasTarget ? block.schema.xrefTitle || 'Untitled' : 'Pick a target first';
+  }
+  const detail = editor.querySelector<HTMLElement>('[data-field="block-xref-detail"]');
+  if (detail) {
+    detail.textContent = hasTarget ? block.schema.xrefDetail : '';
+  }
 }
 
 function shouldRefreshReaderPanelsAfterRichInput(target: HTMLElement): boolean {

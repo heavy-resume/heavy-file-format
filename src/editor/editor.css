@@ -1337,6 +1337,7 @@
 .editor-grid input:not([type='checkbox']),
 .editor-grid select,
 .modal-panel input:not([type='checkbox']),
+.modal-panel select,
 .editor-block input:not([type='checkbox']),
 .editor-block textarea,
 .modal-panel textarea,

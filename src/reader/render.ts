@@ -31,7 +31,7 @@ import { SCRIPTING_PLUGIN_ID } from '../plugins/registry';
 import { getComponentDefsFromMeta } from '../component-defs';
 import { extractReusableTemplateVariablesFromDefinition } from '../reusable-template-values';
 import { filterTemplateVisibleSections, isSectionHiddenByTemplateMarker } from '../template-hide';
-import { plusIcon } from '../icons';
+import { closeIcon, plusIcon } from '../icons';
 import { isAiEditablePlaceholderTextBlock } from '../ai-placeholder';
 import {
   createReaderViewContext,
@@ -1296,7 +1296,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
           <section class="modal-panel component-meta-modal reusable-template-modal ${hasTargetPicker ? 'template-picker-modal' : ''}">
             <div class="modal-head">
               <h3>${deps.escapeHtml(modalTitle)}</h3>
-              <button type="button" data-modal-action="close">Close</button>
+              <button type="button" class="ghost remove-x" data-modal-action="close" aria-label="Close ${deps.escapeAttr(modalTitle)}" title="Close">${closeIcon()}</button>
             </div>
             <div class="modal-field-stack">
               ${fields}

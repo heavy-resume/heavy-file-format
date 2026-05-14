@@ -330,7 +330,7 @@ component_defs:
             schema:
               component: table
               css: "margin: 0; margin-top: -1px;"
-              tableColumns: ["CERTIFICATION", "ISSUER", "OBTAINED"]
+              tableColumns: ["<!--hvy:alt {\"compact\":\"CERT\"}-->CERTIFICATION<!--/hvy:alt-->", "ISSUER", "OBTAINED"]
               tableShowHeader: false
               tableRows:
                 - cells: ["{% name %}", "{% obtained_from %}", "{% obtained_month %}/{% obtained_year %}"]
@@ -677,7 +677,7 @@ component_defs:
  <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
   # Certifications
 
- <!--hvy:table {"css":"margin: 0.5rem 0 0;","tags":"table-header","tableColumns":["CERTIFICATION","ISSUER","OBTAINED"],"tableShowHeader":true,"tableRows":[],"lock":true,"description":"Certification table header"}-->
+ <!--hvy:table {"css":"margin: 0.5rem 0 0;","tags":"table-header","tableColumns":["<!--hvy:alt {\"compact\":\"CERT\"}-->CERTIFICATION<!--/hvy:alt-->","ISSUER","OBTAINED"],"tableShowHeader":true,"tableRows":[],"lock":true,"description":"Certification table header"}-->
 
  <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"certification-record","componentListItemLabel":"certification","tags":"certification"}-->
 

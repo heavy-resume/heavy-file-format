@@ -67,6 +67,43 @@ test('generate button runs on the first click after completing a fill-in', async
   await expect(page.locator('#editorTree')).toContainText('[AY-vuh-ree HART]');
 });
 
+test('generate button shows disabled busy state while pronunciation is generating', async ({ page }) => {
+  let releaseGeneration: (() => void) | null = null;
+  await page.route('**/api/chat', async (route) => {
+    await new Promise<void>((resolve) => {
+      releaseGeneration = resolve;
+    });
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ output: 'AY-vuh-ree HART' }),
+    });
+  });
+
+  await page.goto('/');
+  await page.evaluate(() => localStorage.clear());
+  await page.reload({ waitUntil: 'networkidle' });
+  await page.getByRole('button', { name: 'Resume Template' }).click();
+
+  await page.locator('.editor-block-passive .editor-block-content[data-component-id="resume-name"] .text-fill-in-box').click();
+  await page.locator('.editor-block:has(.editor-block-content[data-component-id="resume-name"]) [data-field="text-fill-in-value"]').fill('Avery Hart');
+
+  const generateButton = page.locator('[data-action="run-button-ai-generate"]');
+  await expect(generateButton).toBeVisible({ timeout: 1_000 });
+  await generateButton.click();
+
+  await expect(generateButton).toBeDisabled();
+  await expect(generateButton).toHaveText('Generating...');
+  await expect(generateButton).toHaveCSS('cursor', 'wait');
+  const busyButtonHost = generateButton.locator('xpath=ancestor::*[@data-hvy-button="true"][1]');
+  await expect(busyButtonHost).toHaveAttribute('data-busy-state', 'busy');
+  await expect(busyButtonHost).toHaveAttribute('aria-busy', 'true');
+  await expect(busyButtonHost).not.toHaveCSS('box-shadow', 'none');
+
+  releaseGeneration?.();
+  await expect(page.locator('#editorTree')).toContainText('[AY-vuh-ree HART]');
+});
+
 test('generated pronunciation can be converted back into a clean fill-in', async ({ page }) => {
   await page.route('**/api/chat', async (route) => {
     await route.fulfill({

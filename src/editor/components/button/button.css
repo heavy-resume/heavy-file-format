@@ -27,7 +27,7 @@
   cursor: pointer;
 }
 
-.hvy-button-component-button:hover {
+.hvy-button-component-button:hover:not(:disabled) {
   color: var(--hvy-button-hover-text, var(--hvy-button-text, #ffffff));
   background: var(--hvy-button-hover-bg, var(--hvy-button-bg, #2d6a8a));
   box-shadow:
@@ -37,7 +37,8 @@
 
 .hvy-button-component-button:disabled {
   cursor: wait;
-  opacity: 0.72;
+  box-shadow: none;
+  opacity: 1;
 }
 
 .hvy-button-status {
@@ -55,14 +56,60 @@
   color: #b42318;
 }
 
-.hvy-button-component[data-busy-state="busy"] .hvy-button-component-button {
-  display: none;
+.hvy-button-component[data-busy-state="busy"] {
+  border-color: color-mix(in srgb, var(--hvy-button-bg, #2d6a8a) 62%, var(--hvy-border-translucent, rgba(206, 217, 226, 0.92)) 38%);
+  background: color-mix(in srgb, var(--hvy-button-bg, #2d6a8a) 16%, var(--hvy-surface, #ffffff) 84%);
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--hvy-button-bg, #2d6a8a) 18%, transparent),
+    0 8px 22px var(--hvy-shadow-md, rgba(15, 23, 42, 0.2));
+  cursor: wait;
 }
 
-.hvy-button-component[data-busy-state="busy"] .hvy-button-status,
+.hvy-button-component[data-busy-state="busy"] .hvy-button-component-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--hvy-button-text, #ffffff);
+  background:
+    linear-gradient(
+      110deg,
+      var(--hvy-button-bg, #2d6a8a) 0%,
+      color-mix(in srgb, var(--hvy-button-bg, #2d6a8a) 74%, var(--hvy-surface, #ffffff) 26%) 44%,
+      var(--hvy-button-bg, #2d6a8a) 88%
+    );
+  background-size: 220% 100%;
+  animation: hvy-button-busy-sheen 1.05s linear infinite;
+}
+
+.hvy-button-component[data-busy-state="busy"] .hvy-button-component-button::before {
+  content: '';
+  width: 0.72em;
+  height: 0.72em;
+  border: 2px solid color-mix(in srgb, currentColor 32%, transparent);
+  border-top-color: currentColor;
+  border-radius: 999px;
+  animation: hvy-button-busy-spin 0.75s linear infinite;
+}
+
 .hvy-button-status.is-error {
   display: inline-flex;
   align-items: center;
+}
+
+@keyframes hvy-button-busy-sheen {
+  from {
+    background-position: 100% 0;
+  }
+
+  to {
+    background-position: -120% 0;
+  }
+}
+
+@keyframes hvy-button-busy-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .hvy-button-overlay-layer {

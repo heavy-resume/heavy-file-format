@@ -11,6 +11,10 @@ function buttonKey(sectionKey: string, blockId: string): string {
   return `${sectionKey}:${blockId}`;
 }
 
+export function isButtonAiGenerateRunning(sectionKey: string, blockId: string): boolean {
+  return runningButtons.has(buttonKey(sectionKey, blockId));
+}
+
 function coerceReturnedText(value: unknown): string {
   if (value === null || typeof value === 'undefined') {
     return '';
@@ -117,9 +121,15 @@ export async function runButtonAiGenerate(app: HTMLElement, actionButton: HTMLEl
   runningButtons.add(key);
   if (root) {
     root.dataset.busyState = 'busy';
+    root.setAttribute('aria-busy', 'true');
   }
+  const idleLabel = actionButton.textContent ?? 'Generate';
+  actionButton.dataset.idleLabel = idleLabel;
+  actionButton.textContent = 'Generating...';
   actionButton.setAttribute('disabled', 'true');
   setStatus('Preparing...');
+  getRefreshReaderPanels()();
+  getRenderApp()();
   try {
     const sourceResult = await runUserScript({
       document: state.document,
@@ -180,7 +190,10 @@ export async function runButtonAiGenerate(app: HTMLElement, actionButton: HTMLEl
     runningButtons.delete(key);
     if (root) {
       root.dataset.busyState = 'idle';
+      root.removeAttribute('aria-busy');
     }
+    actionButton.textContent = actionButton.dataset.idleLabel ?? 'Generate';
+    delete actionButton.dataset.idleLabel;
     actionButton.removeAttribute('disabled');
     void runButtonVisibilityScripts(app);
   }

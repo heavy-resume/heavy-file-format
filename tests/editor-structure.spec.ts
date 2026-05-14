@@ -519,6 +519,63 @@ test('ai mode done on newly added skill closes without editing parent list', asy
   await expect(newSkill).toHaveAttribute('aria-expanded', 'true');
 });
 
+test('new tagged reusable template record gets an auto id for xref options', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+component_defs:
+  - name: project-record
+    baseType: expandable
+    templateVariables:
+      project:
+        label: Project name
+    schema:
+      tags: project
+      expandableAlwaysShowStub: true
+      expandableStubBlocks:
+        children:
+          - text: "{% project %}"
+            schema:
+              component: text
+      expandableContentBlocks:
+        children: []
+  - name: project-xref-card
+    baseType: xref-card
+    schema:
+      xrefTargetTagFilter: project
+---
+
+<!--hvy: {"id":"projects"}-->
+#! Projects
+
+ <!--hvy:component-list {"id":"project-list","tags":"project","componentListComponent":"project-record","componentListItemLabel":"project"}-->
+
+<!--hvy: {"id":"featured"}-->
+#! Featured
+
+ <!--hvy:component-list {"id":"project-refs","componentListComponent":"project-xref-card","componentListItemLabel":"project reference"}-->
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'AI' }).click();
+
+  await page.locator('#aiReaderDocument #projects [data-action="add-component-list-item"]', { hasText: 'Add Project' }).click();
+  const modal = page.locator('.modal-root', { has: page.locator('input[data-template-variable="project"]') });
+  await modal.locator('input[data-template-variable="project"]').fill('Heavy Stack');
+  await modal.locator('[data-modal-action="insert-reusable-template"]').click();
+
+  const projectEditor = page.locator('#aiReaderDocument .editor-block[data-active-editor-block="true"]');
+  await expect(projectEditor.locator('.editor-block-title').first()).toContainText('project-record');
+  await projectEditor.getByRole('button', { name: 'Done' }).click();
+  await expect(page.locator('#aiReaderDocument [data-component-id="project-heavy-stack"]')).toContainText('Heavy Stack');
+
+  await page.locator('#aiReaderDocument #featured [data-action="add-component-list-item"]', { hasText: 'Add Project Reference' }).click();
+  const xrefEditor = page.locator('#aiReaderDocument .editor-block[data-active-editor-block="true"]');
+  await expect(xrefEditor.locator('.editor-block-title').first()).toContainText('project-xref-card');
+  await expect(xrefEditor.locator('datalist option[value="project-heavy-stack"]')).toHaveCount(1);
+});
+
 test('ai context menu stays inside phone preview when opened near the edge', async ({ page }) => {
   await page.goto('/');
 

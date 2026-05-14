@@ -11,6 +11,7 @@ import { ensureComponentListBlocks, ensureContainerBlocks, ensureExpandableBlock
 import { createGridItem } from './grid-ops';
 import { syncReusableTemplateForBlock } from './reusable';
 import { createBlockFromReusableTemplateValues } from './bind/actions/reusable-template';
+import { assignAutoBlockId } from './auto-block-id';
 
 export function bindModal(app: HTMLElement): void {
   const modalRoot = app.querySelector<HTMLDivElement>('#modalRoot');
@@ -340,6 +341,7 @@ function insertReusableTemplateFromModal(modalRoot: HTMLDivElement): void {
       getRenderApp()();
       return;
     }
+    assignAutoBlockId(newBlock, { document: state.document, inheritedTags: section.tags, sourceValues: values });
     section.blocks.push(newBlock);
   } else {
     const block = findBlockByIds(target.sectionKey, target.blockId);
@@ -348,6 +350,7 @@ function insertReusableTemplateFromModal(modalRoot: HTMLDivElement): void {
       getRenderApp()();
       return;
     }
+    assignAutoBlockId(newBlock, { document: state.document, inheritedTags: block.schema.tags, sourceValues: values });
     if (target.kind === 'component-list') {
       ensureComponentListBlocks(block);
       block.schema.componentListBlocks.push(newBlock);

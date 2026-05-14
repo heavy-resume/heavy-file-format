@@ -5,6 +5,7 @@ import { recordHistory } from '../../history';
 import { syncReusableTemplateForBlock } from '../../reusable';
 import { configurePluginBlock } from '../../plugins/plugin-block';
 import { openReusableTemplateModalIfNeeded } from './reusable-template';
+import { assignAutoBlockId } from '../../auto-block-id';
 import type { ActionHandler } from './types';
 
 const addComponentListItem: ActionHandler = ({ actionButton, sectionKey, blockId }) => {
@@ -25,6 +26,7 @@ const addComponentListItem: ActionHandler = ({ actionButton, sectionKey, blockId
   if (newBlock.schema.component === 'plugin' && actionButton.dataset.pluginId) {
     configurePluginBlock(newBlock, actionButton.dataset.pluginId);
   }
+  assignAutoBlockId(newBlock, { document: state.document, inheritedTags: block.schema.tags });
   block.schema.componentListBlocks.push(newBlock);
   syncReusableTemplateForBlock(sectionKey, block.id);
   setActiveEditorBlock(sectionKey, newBlock.id, { targetOnly: true });
@@ -52,6 +54,7 @@ const addContainerBlock: ActionHandler = ({ actionButton, sectionKey, blockId })
   if (newBlock.schema.component === 'plugin' && actionButton.dataset.pluginId) {
     configurePluginBlock(newBlock, actionButton.dataset.pluginId);
   }
+  assignAutoBlockId(newBlock, { document: state.document, inheritedTags: block.schema.tags });
   block.schema.containerBlocks.push(newBlock);
   syncReusableTemplateForBlock(sectionKey, block.id);
   setActiveEditorBlock(sectionKey, newBlock.id);
@@ -79,6 +82,7 @@ const addExpandableBlock = (kind: 'stub' | 'content'): ActionHandler => ({ actio
   if (newBlock.schema.component === 'plugin' && actionButton.dataset.pluginId) {
     configurePluginBlock(newBlock, actionButton.dataset.pluginId);
   }
+  assignAutoBlockId(newBlock, { document: state.document, inheritedTags: block.schema.tags });
   target.children.push(newBlock);
   syncReusableTemplateForBlock(sectionKey, block.id);
   setActiveEditorBlock(sectionKey, newBlock.id);

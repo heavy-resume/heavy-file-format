@@ -29,8 +29,14 @@ const addComponentListItem: ActionHandler = ({ actionButton, sectionKey, blockId
   assignAutoBlockId(newBlock, { document: state.document, inheritedTags: block.schema.tags });
   block.schema.componentListBlocks.push(newBlock);
   syncReusableTemplateForBlock(sectionKey, block.id);
-  setActiveEditorBlock(sectionKey, newBlock.id, { targetOnly: true });
-  if (state.currentView === 'ai' && !actionButton.closest('.editor-block')) {
+  const aiHost = state.currentView === 'ai' ? state.aiEditorHostBlock : null;
+  const isInsideEditor = Boolean(actionButton.closest('.editor-block'));
+  if (aiHost?.sectionKey === sectionKey && isInsideEditor) {
+    setActiveEditorBlock(sectionKey, newBlock.id, { pathBlockIds: [aiHost.blockId, newBlock.id] });
+  } else {
+    setActiveEditorBlock(sectionKey, newBlock.id, { targetOnly: true });
+  }
+  if (state.currentView === 'ai' && !isInsideEditor) {
     setAiEditorHostBlock(sectionKey, newBlock.id);
   }
   markActiveEditorBlockAsNew(newBlock.id);

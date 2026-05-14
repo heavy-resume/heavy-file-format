@@ -612,10 +612,11 @@ export function isActiveEditorLeafBlock(sectionKey: string, blockId: string): bo
 
 type SetActiveEditorBlockOptions = {
   targetOnly?: boolean;
+  pathBlockIds?: string[];
 };
 
 export function setActiveEditorBlock(sectionKey: string, blockId: string, options: SetActiveEditorBlockOptions = {}): void {
-  const pathIds = options.targetOnly ? [blockId] : getEditorBlockPathIds(sectionKey, blockId) ?? [blockId];
+  const pathIds = options.pathBlockIds ?? (options.targetOnly ? [blockId] : getEditorBlockPathIds(sectionKey, blockId) ?? [blockId]);
   state.activeEditorBlockPath = pathIds.map((pathBlockId) => ({ sectionKey, blockId: pathBlockId }));
   state.activeEditorBlock = { sectionKey, blockId };
   state.activeEditorBlockSnapshots = state.activeEditorBlockPath

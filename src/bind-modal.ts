@@ -369,8 +369,13 @@ function insertReusableTemplateFromModal(modalRoot: HTMLDivElement): void {
     }
     syncReusableTemplateForBlock(target.sectionKey, target.blockId);
   }
-  setActiveEditorBlock(target.sectionKey, newBlock.id, { targetOnly: target.kind !== 'section' });
-  if (state.currentView === 'ai' && (target.kind === 'section' || !state.aiEditorHostBlock)) {
+  const aiHost = state.currentView === 'ai' ? state.aiEditorHostBlock : null;
+  if (target.kind !== 'section' && aiHost?.sectionKey === target.sectionKey) {
+    setActiveEditorBlock(target.sectionKey, newBlock.id, { pathBlockIds: [aiHost.blockId, newBlock.id] });
+  } else {
+    setActiveEditorBlock(target.sectionKey, newBlock.id, { targetOnly: target.kind !== 'section' });
+  }
+  if (state.currentView === 'ai' && (target.kind === 'section' || !aiHost)) {
     setAiEditorHostBlock(target.sectionKey, newBlock.id);
   }
   markActiveEditorBlockAsNew(newBlock.id);

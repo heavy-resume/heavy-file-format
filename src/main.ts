@@ -54,7 +54,7 @@ window.addEventListener('hvy:viewer-sidebar-open-changed', () => {
   window.requestAnimationFrame(() => scheduleReaderHighlightGlow(app));
 });
 
-app.innerHTML = '<main class="layout hvy-embed-layout"><section class="pane full-pane"><p>Loading editor...</p></section></main>';
+app.innerHTML = '<main class="layout reference-layout hvy-embed-layout"><section class="pane full-pane"><p>Loading editor...</p></section></main>';
 
 async function createDefaultDocument() {
   const response = await fetch(bundledExampleHvyUrl);
@@ -548,7 +548,7 @@ function renderApp(): void {
 
   stepStartedAt = performance.now();
   const markup = `
-    <main class="layout hvy-embed-layout">
+    <main class="layout reference-layout hvy-embed-layout">
       <header class="topbar">
         <div class="title-block">
           <h1>HVY Reference Implementation</h1>
@@ -1006,7 +1006,7 @@ async function refreshRestoredSearch(resume: ReturnType<typeof loadResumeState>)
 bootstrap().catch((error) => {
   const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
   app.innerHTML = `
-    <main class="layout hvy-embed-layout">
+    <main class="layout reference-layout hvy-embed-layout">
       <section class="pane full-pane">
         <h2>Startup Problem</h2>
         <p>The app failed before the first render.</p>

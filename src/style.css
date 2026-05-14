@@ -62,10 +62,13 @@ body {
   display: grid;
   grid-template-rows: auto 1fr;
   gap: 0.9rem;
-  padding: 1rem;
   overflow: hidden;
   color: var(--hvy-text);
   background: linear-gradient(135deg, var(--hvy-bg), var(--hvy-bg-alt));
+}
+
+.reference-layout {
+  padding: 1rem;
 }
 
 .topbar {

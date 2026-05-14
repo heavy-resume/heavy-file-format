@@ -12,11 +12,15 @@ import { actionRegistry } from '../actions/registry';
 import { openRemoveConfirmationModal } from './remove-confirmation-modal';
 import { clearHideIfUnmodifiedForSectionPath, clearHideIfUnmodifiedForSections, findSectionPath } from '../../template-hide';
 import { isAiEditablePlaceholderTextBlock } from '../../ai-placeholder';
+import { logClickTrace } from '../click-trace';
 
 const richToolbarSelections = new WeakMap<HTMLElement, Range>();
 
 export function bindClickDispatch(app: HTMLElement): void {
   app.addEventListener('click', (event) => {
+    logClickTrace(event, 'click-dispatch:capture:enter', {
+      currentView: state.currentView,
+    });
     handleAiReaderTextActivationClick(event);
   }, true);
 
@@ -36,6 +40,10 @@ export function bindClickDispatch(app: HTMLElement): void {
     const target = event.target as HTMLElement;
     const actionButton = target.closest<HTMLElement>('[data-action]');
     const richButton = target.closest<HTMLElement>('[data-rich-action]');
+    logClickTrace(event, 'click-dispatch:mousedown:enter', {
+      action: actionButton?.dataset.action ?? null,
+      richAction: richButton?.dataset.richAction ?? null,
+    });
     if (richButton) {
       const editable = getRichEditableForButton(app, richButton);
       const selection = window.getSelection();
@@ -46,6 +54,9 @@ export function bindClickDispatch(app: HTMLElement): void {
         }
       }
       event.preventDefault();
+      logClickTrace(event, 'click-dispatch:mousedown:rich-selection-preserved', {
+        richAction: richButton.dataset.richAction ?? null,
+      });
       return;
     }
     if (actionButton && isParagraphStyleToolbarAction(actionButton.dataset.action ?? '')) {
@@ -59,18 +70,27 @@ export function bindClickDispatch(app: HTMLElement): void {
         }
       }
       event.preventDefault();
+      logClickTrace(event, 'click-dispatch:mousedown:paragraph-style-preserved', {
+        action: actionButton.dataset.action ?? null,
+      });
       return;
     }
     if (actionButton?.dataset.action === 'set-block-align') {
       event.preventDefault();
+      logClickTrace(event, 'click-dispatch:mousedown:set-block-align-prevent-default');
     }
   });
 
   app.addEventListener('click', (event) => {
     const target = event.target as HTMLElement;
     const actionButton = target.closest<HTMLElement>('[data-action]');
+    logClickTrace(event, 'click-dispatch:bubble:enter', {
+      action: actionButton?.dataset.action ?? null,
+      componentPlacement: Boolean(state.componentPlacement),
+    });
 
     if (state.componentPlacement && !isPlacementModeAction(actionButton?.dataset.action ?? '')) {
+      logClickTrace(event, 'click-dispatch:bubble:handled:cancel-component-placement');
       state.componentPlacement = null;
       event.preventDefault();
       event.stopPropagation();
@@ -79,12 +99,18 @@ export function bindClickDispatch(app: HTMLElement): void {
     }
 
     if (target.closest('select') || target.closest('input')) {
+      logClickTrace(event, 'click-dispatch:bubble:skip', {
+        skipReason: 'form-control-target',
+      });
       return;
     }
 
     const richButton = target.closest<HTMLElement>('[data-rich-action]');
     if (richButton) {
       event.preventDefault();
+      logClickTrace(event, 'click-dispatch:bubble:handled:rich-action', {
+        richAction: richButton.dataset.richAction ?? null,
+      });
       const paragraphStyleToolbar = richButton.closest<HTMLElement>('.paragraph-style-toolbar');
       if (paragraphStyleToolbar && isCompactParagraphStylePickerButton(richButton, paragraphStyleToolbar)) {
         openParagraphStylePicker(paragraphStyleToolbar);
@@ -118,11 +144,15 @@ export function bindClickDispatch(app: HTMLElement): void {
     }
 
     if (!actionButton) {
+      logClickTrace(event, 'click-dispatch:bubble:skip', {
+        skipReason: 'no-data-action',
+      });
       return;
     }
 
     if (actionButton.dataset.action === 'open-paragraph-style-picker') {
       event.preventDefault();
+      logClickTrace(event, 'click-dispatch:bubble:handled:open-paragraph-style-picker');
       const toolbar = actionButton.closest<HTMLElement>('.paragraph-style-toolbar');
       if (toolbar?.classList.contains('is-picker-open')) {
         closeParagraphStylePicker(toolbar);
@@ -134,6 +164,7 @@ export function bindClickDispatch(app: HTMLElement): void {
 
     if (actionButton.dataset.action === 'close-paragraph-style-picker') {
       event.preventDefault();
+      logClickTrace(event, 'click-dispatch:bubble:handled:close-paragraph-style-picker');
       const toolbar = actionButton.closest<HTMLElement>('.paragraph-style-toolbar');
       if (toolbar) {
         closeParagraphStylePicker(toolbar);
@@ -143,6 +174,7 @@ export function bindClickDispatch(app: HTMLElement): void {
 
     if (actionButton.dataset.action === 'close-paragraph-style-edit') {
       event.preventDefault();
+      logClickTrace(event, 'click-dispatch:bubble:handled:close-paragraph-style-edit');
       const toolbar = actionButton.closest<HTMLElement>('.paragraph-style-toolbar');
       toolbar?.classList.remove('is-style-edit-open');
       toolbar?.querySelectorAll<HTMLElement>('.paragraph-style-edit-panel').forEach((panel) => {
@@ -151,7 +183,26 @@ export function bindClickDispatch(app: HTMLElement): void {
       return;
     }
 
-    executeActionButton(app, actionButton);
+    logClickTrace(event, 'click-dispatch:bubble:execute-action:start', {
+      action: actionButton.dataset.action ?? null,
+      sectionKey: actionButton.dataset.sectionKey ?? null,
+      blockId: actionButton.dataset.blockId ?? null,
+    });
+    const handled = executeActionButton(app, actionButton, event);
+    if (handled) {
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+      logClickTrace(event, 'click-dispatch:bubble:execute-action:stopped', {
+        action: actionButton.dataset.action ?? null,
+      });
+    }
+    logClickTrace(event, 'click-dispatch:bubble:execute-action:end', {
+      action: actionButton.dataset.action ?? null,
+      defaultPreventedAfter: event.defaultPrevented,
+      cancelBubbleAfter: event.cancelBubble,
+      handled,
+    });
   });
 }
 
@@ -318,47 +369,88 @@ function isPlacementModeAction(action: string): boolean {
   return action === 'place-component' || action === 'cancel-component-placement';
 }
 
-function executeActionButton(app: HTMLElement, actionButton: HTMLElement, confirmedRemoveReady = false): void {
+function executeActionButton(app: HTMLElement, actionButton: HTMLElement, event: Event | null = null, confirmedRemoveReady = false): boolean {
   const action = actionButton.dataset.action;
   if (!action) {
-    return;
+    logActionExecution(event, 'click-dispatch:execute-action:skip', { skipReason: 'missing-action' });
+    return false;
   }
 
   if (requiresRemoveConfirmation(action) && !confirmedRemoveReady) {
-    openRemoveConfirmationModal(() => executeActionButton(app, actionButton, true), app);
-    return;
+    logActionExecution(event, 'click-dispatch:execute-action:confirm-required', { action });
+    openRemoveConfirmationModal(() => executeActionButton(app, actionButton, null, true), app);
+    return true;
   }
 
   const handler = actionRegistry[action];
   if (!handler) {
-    return;
+    logActionExecution(event, 'click-dispatch:execute-action:skip', {
+      skipReason: 'no-component-action-handler',
+      action,
+    });
+    return false;
   }
 
   const sectionKey = getActionSectionKey(actionButton);
   const blockId = actionButton.dataset.blockId ?? '';
 
   if (action === 'add-top-level-section') {
+    logActionExecution(event, 'click-dispatch:execute-action:handled', {
+      action,
+      sectionKey,
+      blockId,
+      targetKind: 'top-level-section',
+    });
     handler({ app, actionButton, sectionKey, blockId, section: null, reusableName: null });
-    return;
+    return true;
   }
 
   if (sectionKey.length === 0) {
-    return;
+    logActionExecution(event, 'click-dispatch:execute-action:skip', {
+      skipReason: 'missing-section-key',
+      action,
+      blockId,
+    });
+    return false;
   }
 
   const reusableName = getReusableNameFromSectionKey(sectionKey);
   const section = reusableName ? null : findSectionByKey(state.document.sections, sectionKey);
   if (!section && !reusableName) {
-    return;
+    logActionExecution(event, 'click-dispatch:execute-action:skip', {
+      skipReason: 'missing-section',
+      action,
+      sectionKey,
+      blockId,
+      reusableName,
+    });
+    return false;
   }
 
   const templateHidePath = shouldClearTemplateHideForAction(action)
     ? findSectionPath(state.document.sections, sectionKey)
     : null;
+  logActionExecution(event, 'click-dispatch:execute-action:handled', {
+    action,
+    sectionKey,
+    blockId,
+    reusableName,
+    hasSection: Boolean(section),
+    templateHidePathLength: templateHidePath?.length ?? null,
+  });
   handler({ app, actionButton, sectionKey, blockId, section, reusableName });
   if (templateHidePath && clearHideIfUnmodifiedForSections(templateHidePath)) {
     getRenderApp()();
   }
+  return true;
+}
+
+function logActionExecution(event: Event | null, stage: string, details: Record<string, unknown>): void {
+  if (event) {
+    logClickTrace(event, stage, details);
+    return;
+  }
+  console.debug('[hvy:click-trace]', { stage, ...details });
 }
 
 function getActionSectionKey(actionButton: HTMLElement): string {

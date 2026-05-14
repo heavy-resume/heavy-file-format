@@ -20,6 +20,7 @@ import { saveResumeState } from './state-persistence';
 import { encodeComponentListRuntimeView, parseComponentListRuntimeView } from './editor/components/component-list/component-list-view';
 import { getAiEditorDoubleClickDelayMs } from './reference-config';
 import { isAiEditablePlaceholderTextBlock } from './ai-placeholder';
+import { logClickTrace } from './bind/click-trace';
 import type { ReaderViewFilter } from './types';
 
 const resumeViews = bundledResumeViews as Record<string, ReaderViewFilter>;
@@ -236,15 +237,33 @@ export function bindUi(app: HTMLElement): void {
   const handleReaderAreaClick = (event: Event) => {
     const target = event.target as HTMLElement;
     const nearestReaderAction = target.closest<HTMLElement>('[data-reader-action]');
+    logClickTrace(event, 'reader-area:enter', {
+      currentView: state.currentView,
+      readerSurface: target.closest('#aiReaderDocument')
+        ? 'ai-document'
+        : target.closest('#aiSidebarSections')
+          ? 'ai-sidebar'
+          : target.closest('#readerDocument')
+            ? 'reader-document'
+            : target.closest('#readerSidebarSections')
+              ? 'reader-sidebar'
+              : null,
+    });
     blurActiveFillInWhenClickingOutside(target);
     refreshCompletedFillInsOnReaderClick(target);
     if (target.closest('[data-action]')) {
+      logClickTrace(event, 'reader-area:skip', {
+        skipReason: 'data-action-target',
+      });
       return;
     }
 
     const anchor = target.closest<HTMLAnchorElement>('a[href^="#"]');
     if (anchor) {
       event.preventDefault();
+      logClickTrace(event, 'reader-area:handled:anchor-navigation', {
+        href: anchor.getAttribute('href'),
+      });
       const id = anchor.getAttribute('href')?.slice(1) ?? '';
       runReaderAction(event, () => navigateToSection(id, app));
       return;
@@ -256,9 +275,12 @@ export function bindUi(app: HTMLElement): void {
       const sectionKey = listControls.querySelector<HTMLElement>('[data-section-key]')?.dataset.sectionKey;
       if (collapsedSection && sectionKey) {
         const section = findSectionByKey(state.document.sections, sectionKey);
-        if (section && !section.expanded) {
-          event.stopPropagation();
-          section.expanded = true;
+          if (section && !section.expanded) {
+            event.stopPropagation();
+            logClickTrace(event, 'reader-area:handled:collapsed-list-controls', {
+              sectionKey,
+            });
+            section.expanded = true;
           const reverseList = target.closest<HTMLElement>('[data-reader-action="toggle-component-list-reverse"]');
           if (reverseList) {
             toggleComponentListReverse(reverseList);
@@ -283,6 +305,7 @@ export function bindUi(app: HTMLElement): void {
     const reverseList = target.closest<HTMLElement>('[data-reader-action="toggle-component-list-reverse"]');
     if (reverseList) {
       event.stopPropagation();
+      logClickTrace(event, 'reader-area:handled:component-list-reverse');
       runReaderAction(event, () => {
         toggleComponentListReverse(reverseList);
         getRefreshReaderPanels()();
@@ -296,6 +319,9 @@ export function bindUi(app: HTMLElement): void {
         // Let nested reader controls, such as expandables inside a collapsed view wrapper, handle the click.
       } else {
       if (target.closest('a, input, select, textarea, [contenteditable="true"]')) {
+        logClickTrace(event, 'reader-area:skip', {
+          skipReason: 'view-collapse-interactive-target',
+        });
         return;
       }
       event.stopPropagation();
@@ -304,6 +330,9 @@ export function bindUi(app: HTMLElement): void {
         return;
       }
       runReaderAction(event, () => {
+        logClickTrace(event, 'reader-area:handled:view-collapse', {
+          key,
+        });
         state.readerContainerState[key] = viewCollapse.getAttribute('aria-expanded') !== 'true';
         getRefreshReaderPanels()();
       });
@@ -316,6 +345,9 @@ export function bindUi(app: HTMLElement): void {
       const targetKey = dimmedTarget.dataset.readerViewTarget;
       if (targetKey) {
         runReaderAction(event, () => {
+          logClickTrace(event, 'reader-area:handled:dimmed-target', {
+            targetKey,
+          });
           state.readerViewActivatedTargets.add(targetKey);
           getRefreshReaderPanels()();
         });
@@ -326,6 +358,9 @@ export function bindUi(app: HTMLElement): void {
     const toggle = target.closest<HTMLElement>('[data-reader-action="toggle-expand"]');
     if (toggle) {
       event.stopPropagation();
+      logClickTrace(event, 'reader-area:handled:section-toggle:start', {
+        sectionKey: toggle.dataset.sectionKey ?? null,
+      });
       const sectionKey = toggle.dataset.sectionKey;
       if (!sectionKey) {
         return;
@@ -335,6 +370,10 @@ export function bindUi(app: HTMLElement): void {
         return;
       }
       runReaderAction(event, () => {
+        logClickTrace(event, 'reader-area:handled:section-toggle:run', {
+          sectionKey,
+          willExpand: !section.expanded,
+        });
         section.expanded = !section.expanded;
         getRefreshReaderPanels()();
       });
@@ -343,7 +382,14 @@ export function bindUi(app: HTMLElement): void {
 
     const expandable = target.closest<HTMLElement>('[data-reader-action="toggle-expandable"]');
     if (expandable) {
+      logClickTrace(event, 'reader-area:expandable:candidate', {
+        sectionKey: expandable.dataset.sectionKey ?? null,
+        blockId: expandable.dataset.blockId ?? null,
+      });
       if (target.closest('a, button, input, select, textarea, [contenteditable="true"], [role="button"]')) {
+        logClickTrace(event, 'reader-area:skip', {
+          skipReason: 'expandable-interactive-target',
+        });
         if (state.currentView === 'ai') {
           console.debug('[hvy:ai-reader-expandable-toggle]', {
             stage: 'skip',
@@ -359,9 +405,13 @@ export function bindUi(app: HTMLElement): void {
       }
       if (state.currentView === 'ai' && expandableContainsActiveEditor(expandable)) {
         event.stopPropagation();
+        logClickTrace(event, 'reader-area:skip', {
+          skipReason: 'expandable-contains-active-editor',
+        });
         return;
       }
       if (state.currentView === 'ai' && activateAiExpandableTextTarget(target, expandable)) {
+        logClickTrace(event, 'reader-area:handled:ai-expandable-text-target');
         return;
       }
       event.stopPropagation();
@@ -380,6 +430,11 @@ export function bindUi(app: HTMLElement): void {
             blockId,
           });
         }
+        logClickTrace(event, 'reader-area:skip', {
+          skipReason: 'expandable-missing-ids',
+          sectionKey,
+          blockId,
+        });
         return;
       }
       const block = findBlockByIds(sectionKey, blockId);
@@ -396,6 +451,11 @@ export function bindUi(app: HTMLElement): void {
             blockId,
           });
         }
+        logClickTrace(event, 'reader-area:skip', {
+          skipReason: 'expandable-missing-block',
+          sectionKey,
+          blockId,
+        });
         return;
       }
       if (state.currentView === 'ai') {
@@ -414,6 +474,14 @@ export function bindUi(app: HTMLElement): void {
       runReaderAction(event, () => {
         const expandableStateKey = `${sectionKey}:${blockId}`;
         const willCollapse = state.readerExpandableState[expandableStateKey] ?? block.schema.expandableExpanded;
+        logClickTrace(event, 'reader-area:handled:expandable-toggle:run', {
+          sectionKey,
+          blockId,
+          expandableStateKey,
+          willCollapse,
+          storedExpanded: state.readerExpandableState[expandableStateKey] ?? null,
+          schemaExpanded: block.schema.expandableExpanded,
+        });
         if (state.currentView === 'ai') {
           console.debug('[hvy:ai-reader-expandable-toggle]', {
             stage: 'run',
@@ -449,14 +517,24 @@ export function bindUi(app: HTMLElement): void {
     const container = target.closest<HTMLElement>('[data-reader-action="toggle-container"]');
     if (container) {
       if (target.closest('a, input, select, textarea, [contenteditable="true"]')) {
+        logClickTrace(event, 'reader-area:skip', {
+          skipReason: 'container-interactive-target',
+        });
         return;
       }
       event.stopPropagation();
       const key = container.dataset.containerKey;
       if (!key) {
+        logClickTrace(event, 'reader-area:skip', {
+          skipReason: 'container-missing-key',
+        });
         return;
       }
       runReaderAction(event, () => {
+        logClickTrace(event, 'reader-area:handled:container-toggle', {
+          key,
+          willExpand: container.getAttribute('aria-expanded') !== 'true',
+        });
         state.readerContainerState[key] = container.getAttribute('aria-expanded') !== 'true';
         getRefreshReaderPanels()();
       });

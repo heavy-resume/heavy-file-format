@@ -1,6 +1,7 @@
 import { state, getRenderApp, closeAiEditPopover, completePendingRichAnnotation, handleRichEditorClick, refreshRichToolbarState } from './_imports';
 import { shouldAutoDismissSidebarHelp } from '../../sidebar-help';
 import { closeReaderContextPopover } from './contextmenu';
+import { logClickTrace } from '../click-trace';
 
 const sidebarHelpDismissTimers: Record<'editor' | 'viewer', number | null> = {
   editor: null,
@@ -39,22 +40,31 @@ export function bindClickMisc(app: HTMLElement): void {
 
   app.addEventListener('click', (event) => {
     const target = event.target as HTMLElement;
+    logClickTrace(event, 'click-misc:enter');
     const richTarget = getRichTarget(target);
     if (richTarget) {
+      logClickTrace(event, 'click-misc:handled:rich-editor-click');
       handleRichEditorClick(event, richTarget);
     }
     const pickerTrigger = target.closest<HTMLElement>('.component-picker-trigger');
     if (pickerTrigger) {
       if (pointerHandledPickerTriggers.has(pickerTrigger)) {
         pointerHandledPickerTriggers.delete(pickerTrigger);
+        logClickTrace(event, 'click-misc:skip', {
+          skipReason: 'picker-trigger-handled-by-mousedown',
+        });
         return;
       }
+      logClickTrace(event, 'click-misc:handled:component-picker-trigger');
       toggleComponentPicker(app, pickerTrigger);
       return;
     }
     const pickerPaneButton = target.closest<HTMLElement>('[data-component-picker-pane]');
     if (pickerPaneButton) {
       event.preventDefault();
+      logClickTrace(event, 'click-misc:handled:component-picker-pane', {
+        pane: pickerPaneButton.dataset.componentPickerPane ?? null,
+      });
       const picker = pickerPaneButton.closest<HTMLElement>('.component-picker');
       if (picker) {
         picker.dataset.open = 'true';
@@ -65,6 +75,7 @@ export function bindClickMisc(app: HTMLElement): void {
     }
     const pickerRootPane = target.closest<HTMLElement>('.component-picker-pane-root');
     if (pickerRootPane && target === pickerRootPane) {
+      logClickTrace(event, 'click-misc:handled:component-picker-root-pane');
       const picker = pickerRootPane.closest<HTMLElement>('.component-picker');
       if (picker) {
         delete picker.dataset.open;
@@ -74,34 +85,54 @@ export function bindClickMisc(app: HTMLElement): void {
       return;
     }
     if (target.closest('.active-component-insert-ghost') && !target.closest('.component-picker')) {
+      logClickTrace(event, 'click-misc:skip', {
+        skipReason: 'active-component-insert-ghost',
+      });
       return;
     }
     if (!target.closest('.component-picker')) {
+      logClickTrace(event, 'click-misc:cleanup:close-other-component-pickers');
       closeOtherComponentPickers(app);
     }
     if (target.closest('.hvy-context-popover')) {
+      logClickTrace(event, 'click-misc:skip', {
+        skipReason: 'inside-context-popover',
+      });
       return;
     }
     if (state.contextMenu && !target.closest('.hvy-context-popover')) {
+      logClickTrace(event, 'click-misc:handled:close-context-popover');
       closeReaderContextPopover(app);
       event.preventDefault();
       event.stopPropagation();
       return;
     }
     if (target.closest('.editor-sidebar-help-balloon')) {
+      logClickTrace(event, 'click-misc:handled:dismiss-editor-sidebar-help');
       dismissSidebarHelpBalloon(app, 'editor');
       return;
     }
     if (target.closest('.viewer-sidebar-help-balloon')) {
+      logClickTrace(event, 'click-misc:handled:dismiss-viewer-sidebar-help');
       dismissSidebarHelpBalloon(app, 'viewer');
       return;
     }
     if (!state.aiEdit.sectionKey || !state.aiEdit.blockId) {
+      logClickTrace(event, 'click-misc:skip', {
+        skipReason: 'no-ai-edit-popover',
+      });
       return;
     }
     if (target.closest('.ai-edit-popover')) {
+      logClickTrace(event, 'click-misc:skip', {
+        skipReason: 'inside-ai-edit-popover',
+      });
       return;
     }
+    logClickTrace(event, 'click-misc:handled:close-ai-edit-popover', {
+      sectionKey: state.aiEdit.sectionKey,
+      blockId: state.aiEdit.blockId,
+    });
     closeAiEditPopover();
     getRenderApp()();
   });

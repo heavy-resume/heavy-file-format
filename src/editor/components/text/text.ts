@@ -23,7 +23,7 @@ export const renderTextEditor: ComponentEditorRenderer = (sectionKey, block, hel
           data-block-id="${helpers.escapeAttr(block.id)}"
           data-field="text-fill-in-value"
           data-fill-index="${String(index)}"
-          data-placeholder="${helpers.escapeAttr(getTextFillInPlaceholder(block.schema.placeholder, index))}"
+          data-placeholder="${helpers.escapeAttr(getTextFillInPlaceholder(block.text, index))}"
         ></span>`
       );
     }

@@ -2,6 +2,7 @@ import { expect, test } from 'vitest';
 
 import { deserializeDocument, deserializeDocumentBytes, deserializeDocumentWithDiagnostics, getHvyDiagnosticUsageHint, getHvyResponseDiagnostics } from '../src/serialization';
 import { createEmptyBlock } from '../src/document-factory';
+import { resolveBaseComponentFromMeta } from '../src/component-defs';
 import { state } from '../src/state';
 import { registerSerializationTestState } from './serialization-test-helpers';
 
@@ -486,7 +487,7 @@ test('resume education record keeps C/C++ inside the education tools list', asyn
   expect(toolsList?.schema.component).toBe('component-list');
 
   const toolTitles = toolsList!.schema.componentListBlocks
-    .filter((block) => block.schema.component === 'xref-card')
+    .filter((block) => resolveBaseComponentFromMeta(block.schema.component, document.meta) === 'xref-card')
     .map((block) => block.schema.xrefTitle);
 
   expect(toolTitles).toContain('Python');

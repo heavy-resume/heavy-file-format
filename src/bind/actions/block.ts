@@ -127,9 +127,6 @@ const setTextFillIn: ActionHandler = ({ actionButton, sectionKey }) => {
   const prepared = prepareTextFillIn(block.text);
   block.text = prepared.text;
   block.schema.fillIn = true;
-  if (!block.schema.placeholder.trim() && prepared.placeholder) {
-    block.schema.placeholder = prepared.placeholder;
-  }
   syncReusableTemplateForBlock(sectionKey, block.id);
   getRenderApp()();
 };

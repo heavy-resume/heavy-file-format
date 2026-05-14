@@ -295,8 +295,8 @@ hvy_version: 0.1
 <!--hvy: {"id":"header","hideIfUnmodified":true}-->
 #! Header
 
-<!--hvy:text {"id":"pronunciation","placeholder":"pronunciation","fillIn":true}-->
-[<!-- value -->]
+<!--hvy:text {"id":"pronunciation","fillIn":true}-->
+[<!-- value {"placeholder":"pronunciation"} -->]
 `, '.hvy');
   const runtime = createScriptingRuntime({ document });
 

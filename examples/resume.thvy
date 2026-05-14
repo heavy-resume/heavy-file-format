@@ -501,16 +501,16 @@ component_defs:
 <!--hvy: {"id":"header","lock":true,"contained":false,"description":"Resume identity header","hideIfUnmodified":true,"priority":true}-->
 #! Info
 
- <!--hvy:text {"id":"resume-name","css":"margin-bottom: 0;","align":"center","placeholder":"Name","fillIn":true}-->
-  # <!-- value -->
+ <!--hvy:text {"id":"resume-name","css":"margin-bottom: 0;","align":"center","fillIn":true}-->
+  # <!-- value {"placeholder":"Name"} -->
 
- <!--hvy:text {"id":"resume-pronunciation","css":"margin-top: 0;","align":"center","placeholder":"pronunciation","fillIn":true,"visibleScript":"name = doc.component.get_text(\"resume-name\").replace(\"#\", \"\").strip()\nreturn len(name) > 0 and \"<!-- value -->\" not in name"}-->
-  [<!-- value -->]
+ <!--hvy:text {"id":"resume-pronunciation","css":"margin-top: 0;","align":"center","fillIn":true,"visibleScript":"name = doc.component.get_text(\"resume-name\").replace(\"#\", \"\").strip()\nreturn len(name) > 0 and \"<!-- value\" not in name"}-->
+  [<!-- value {"placeholder":"pronunciation"} -->]
 
- <!--hvy:button {"id":"generate-pronunciation-button","editorOnly":true,"buttonLabel":"Generate","buttonPositionTargetId":"resume-pronunciation","buttonCss":"position: absolute; top: 50%; right: calc(50% + 3.75rem); transform: translateY(-50%); transform-origin: right center; padding: 0.04rem; --hvy-button-content-padding: 0.1rem 0.28rem; --hvy-button-font-size: 0.68rem;","buttonInputCharLimit":400,"buttonOutputCharLimit":120,"buttonVisibleScript":"name = doc.component.get_text(\"resume-name\").replace(\"#\", \"\").strip()\npronunciation = doc.component.get_text(\"resume-pronunciation\").replace(\"[\", \"\").replace(\"]\", \"\").replace(\"<!-- value -->\", \"\").strip()\nreturn len(name) > 0 and \"<!-- value -->\" not in name and len(pronunciation) == 0","buttonSourceScript":"name = doc.component.get_text(\"resume-name\").replace(\"#\", \"\").strip()\nif \"<!-- value -->\" in name:\n    return \"\"\nreturn name","buttonPrompt":"Generate a concise pronunciation guide for this resume name. Return only the pronunciation text, using simple uppercase/lowercase syllables and hyphens. Do not include brackets, labels, or explanation.","buttonTargetScript":"clean = response.strip()\nif clean.startswith(\"[\") and clean.endswith(\"]\"):\n    clean = clean[1:-1].strip()\ndoc.component.set_text(\"resume-pronunciation\", \"[\" + clean + \"]\")"}-->
+ <!--hvy:button {"id":"generate-pronunciation-button","editorOnly":true,"buttonLabel":"Generate","buttonPositionTargetId":"resume-pronunciation","buttonCss":"position: absolute; top: 50%; right: calc(50% + 3.75rem); transform: translateY(-50%); transform-origin: right center; padding: 0.04rem; --hvy-button-content-padding: 0.1rem 0.28rem; --hvy-button-font-size: 0.68rem;","buttonInputCharLimit":400,"buttonOutputCharLimit":120,"buttonVisibleScript":"name = doc.component.get_text(\"resume-name\").replace(\"#\", \"\").strip()\npronunciation = doc.component.get_text(\"resume-pronunciation\").replace(\"[\", \"\").replace(\"]\", \"\").replace(\"<!-- value {\\\"placeholder\\\":\\\"pronunciation\\\"} -->\", \"\").strip()\nreturn len(name) > 0 and \"<!-- value\" not in name and len(pronunciation) == 0","buttonSourceScript":"name = doc.component.get_text(\"resume-name\").replace(\"#\", \"\").strip()\nif \"<!-- value\" in name:\n    return \"\"\nreturn name","buttonPrompt":"Generate a concise pronunciation guide for this resume name. Return only the pronunciation text, using simple uppercase/lowercase syllables and hyphens. Do not include brackets, labels, or explanation.","buttonTargetScript":"clean = response.strip()\nif clean.startswith(\"[\") and clean.endswith(\"]\"):\n    clean = clean[1:-1].strip()\ndoc.component.set_text(\"resume-pronunciation\", \"[\" + clean + \"]\")"}-->
 
- <!--hvy:text {"css":"margin: 0.5rem 0; margin-top: 1rem;","align":"center","placeholder":"title","fillIn":true}-->
-  <!-- value -->
+ <!--hvy:text {"css":"margin: 0.5rem 0; margin-top: 1rem;","align":"center","fillIn":true}-->
+  <!-- value {"placeholder":"title"} -->
 
 <!--hvy: {"id":"summary","lock":true,"contained":true,"css":"padding: 0 0.35rem;","description":"Professional summary","hideIfUnmodified":true,"priority":true}-->
 #! Summary
@@ -533,10 +533,10 @@ component_defs:
 <!--hvy: {"id":"locations","lock":true,"contained":true,"location":"sidebar","description":"Location preferences","hideIfUnmodified":true}-->
 #! Locations
 
- <!--hvy:text {"css":"margin: 0.5rem 0; line-height: 1.5;","placeholder":"location, target location","fillIn":true,"lock":true}-->
-  **Location:** <!-- value -->
+ <!--hvy:text {"css":"margin: 0.5rem 0; line-height: 1.5;","fillIn":true,"lock":true}-->
+  **Location:** <!-- value {"placeholder":"location"} -->
 
-  **Target Location(s):** <!-- value -->
+  **Target Location(s):** <!-- value {"placeholder":"target location"} -->
 
 <!--hvy: {"id":"top-skills-tools-technologies","lock":true,"description":"Featured skills and tools & technology experience","hideIfUnmodified":true,"priority":true}-->
 #! Featured Skills, Tools, and Technologies

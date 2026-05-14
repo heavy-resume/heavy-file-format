@@ -730,8 +730,8 @@ test('resume template uses fill-in heading text for the default name', async () 
   const name = header?.blocks[0];
   const pronunciation = header?.blocks[1];
 
-  expect(name?.text.trim()).toBe('# <!-- value -->');
-  expect(name?.schema.placeholder).toBe('Name');
+  expect(name?.text.trim()).toBe('# <!-- value {"placeholder":"Name"} -->');
+  expect(name?.schema.placeholder).toBe('');
   expect(name?.schema.fillIn).toBe(true);
   expect(pronunciation?.schema.visibleScript).toContain('doc.component.get_text("resume-name")');
 });

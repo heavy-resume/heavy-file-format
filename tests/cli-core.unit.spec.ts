@@ -1188,17 +1188,17 @@ test('component raw.hvy edits preserve omitted placeholders on unchanged empty t
 
   await executeHvyCliCommand(document, session, 'hvy insert 0 history-record /body/history/component-list-2 --id history-placeholder-repro --using-template \'{"years":"","organization":"","role":"","location":"","date_range":"","description":""}\'');
   const before = await executeHvyCliCommand(document, session, 'cat /body/history/component-list-2/history-placeholder-repro/raw.hvy');
-  expect(before.output).toContain('"placeholder":"description"');
+  expect(before.output).toContain('"placeholder":"Description"');
 
   await executeHvyCliCommand(document, session, `cat > /body/history/component-list-2/history-placeholder-repro/raw.hvy <<'EOF'
-${before.output.replace(',"placeholder":"description"', '')}
+${before.output.replace(',"placeholder":"Description"', '')}
 EOF`);
 
   const afterOmitted = await executeHvyCliCommand(document, session, 'cat /body/history/component-list-2/history-placeholder-repro/raw.hvy');
-  expect(afterOmitted.output).toContain('"placeholder":"description"');
+  expect(afterOmitted.output).toContain('"placeholder":"Description"');
 
   await executeHvyCliCommand(document, session, `cat > /body/history/component-list-2/history-placeholder-repro/raw.hvy <<'EOF'
-${afterOmitted.output.replace('"placeholder":"description"', '"placeholder":"alternate description"')}
+${afterOmitted.output.replace('"placeholder":"Description"', '"placeholder":"alternate description"')}
 EOF`);
 
   const afterChanged = await executeHvyCliCommand(document, session, 'cat /body/history/component-list-2/history-placeholder-repro/raw.hvy');

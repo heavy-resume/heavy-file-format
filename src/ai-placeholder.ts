@@ -1,5 +1,5 @@
 import type { VisualBlock } from './editor/types';
-import { TEXT_FILL_IN_MARKER } from './text-fill-in';
+import { removeTextFillInMarkers } from './text-fill-in';
 
 export function isAiEditablePlaceholderTextBlock(block: VisualBlock | null | undefined): boolean {
   if (!block || block.schema.component !== 'text') {
@@ -12,7 +12,7 @@ export function isAiEditablePlaceholderTextBlock(block: VisualBlock | null | und
   if (block.text.trim().length === 0) {
     return true;
   }
-  const visibleText = normalizePlaceholderText(block.text.replaceAll(TEXT_FILL_IN_MARKER, ''));
+  const visibleText = normalizePlaceholderText(removeTextFillInMarkers(block.text));
   return visibleText.length > 0 && placeholder.includes(visibleText);
 }
 

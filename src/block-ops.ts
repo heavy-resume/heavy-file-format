@@ -18,7 +18,7 @@ import { recordHistory } from './history';
 import { getDocumentComponentDefaultCss } from './document-component-defaults';
 import { resetDbTableViewState } from './plugins/db-table';
 import { handleInlineCheckboxBackspace } from './editor/inline-checkbox';
-import { TEXT_FILL_IN_MARKER, hasTextFillInMarker } from './text-fill-in';
+import { createTextFillInMarker, hasTextFillInMarker } from './text-fill-in';
 import { getTextLineStylesFromMeta, sanitizeTextLineStyleCss } from './text-line-styles';
 
 export function findBlockByIds(sectionKey: string, blockId: string): VisualBlock | null {
@@ -221,7 +221,6 @@ export function handleBlockFieldInput(target: HTMLElement): boolean {
   if (field === 'text-fill-in-value') {
     block.text = buildTextFromFillInEditor(target);
     block.schema.fillIn = hasTextFillInMarker(block.text);
-    block.schema.placeholder = buildPlaceholderFromFillInEditor(target, block.schema.placeholder);
     syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
     if (!target.closest('.hvy-ai-reader-surface')) {
       getRefreshReaderPanels()();
@@ -504,22 +503,9 @@ function buildTextFromFillInEditor(target: HTMLElement): string {
         return part;
       }
       const value = (fillIns[index]?.textContent ?? '').replaceAll('\u200b', '');
-      return `${part}${value.length > 0 ? value : TEXT_FILL_IN_MARKER}`;
+      return `${part}${value.length > 0 ? value : createTextFillInMarker(fillIns[index]?.dataset.placeholder ?? '')}`;
     })
     .join('');
-}
-
-function buildPlaceholderFromFillInEditor(target: HTMLElement, currentPlaceholder: string): string {
-  const editor = target.closest<HTMLElement>('.text-fill-in-editor');
-  if (!editor) {
-    return currentPlaceholder;
-  }
-  const fillIns = Array.from(editor.querySelectorAll<HTMLElement>('[data-field="text-fill-in-value"]'));
-  const remainingLabels = fillIns
-    .filter((fillIn) => (fillIn.textContent ?? '').replaceAll('\u200b', '').length === 0)
-    .map((fillIn) => fillIn.dataset.placeholder?.trim() ?? '')
-    .filter(Boolean);
-  return remainingLabels.length > 0 ? remainingLabels.join(', ') : currentPlaceholder;
 }
 
 function getInlineEditableMarkdown(target: HTMLElement): string {
@@ -1119,13 +1105,12 @@ function applyTextFillInSlot(editable: HTMLElement): void {
     : editable.dataset.fillInSelectionText?.trim() ?? '';
   recordHistory(`text:${block.id}:fill-in:set`);
   if (selectedText && block.text.includes(selectedText)) {
-    block.text = block.text.replace(selectedText, TEXT_FILL_IN_MARKER);
-    block.schema.placeholder = selectedText;
+    block.text = block.text.replace(selectedText, createTextFillInMarker(selectedText));
   } else if (block.text.trim().length === 0) {
-    block.text = TEXT_FILL_IN_MARKER;
+    block.text = createTextFillInMarker();
   } else {
     const separator = /\s$/.test(block.text) ? '' : ' ';
-    block.text = `${block.text}${separator}${TEXT_FILL_IN_MARKER}`;
+    block.text = `${block.text}${separator}${createTextFillInMarker()}`;
   }
   block.schema.fillIn = true;
   syncReusableTemplateForBlock(sectionKey, block.id);

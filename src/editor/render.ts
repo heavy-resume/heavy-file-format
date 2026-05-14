@@ -32,7 +32,7 @@ import { sanitizeInlineCss } from '../css-sanitizer';
 import { SCRIPTING_PLUGIN_ID } from '../plugins/registry';
 import { getScriptingPluginVersion } from '../plugins/scripting/version';
 import { renderAddComponentPicker } from './component-picker';
-import { TEXT_FILL_IN_MARKER, getTextFillInPlaceholder, hasTextFillInMarker, splitTextFillIns } from '../text-fill-in';
+import { getTextFillInPlaceholder, hasTextFillInMarker, removeTextFillInMarkers, splitTextFillIns } from '../text-fill-in';
 import { closeIcon, plusIcon } from '../icons';
 import {
   formatTextLineStyleCssLines,
@@ -1576,7 +1576,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     }
     if (componentName === 'text' && block.schema.fillIn && hasTextFillInMarker(content)) {
       if (state.currentView === 'viewer') {
-        return renderTextFragment(content.replaceAll(TEXT_FILL_IN_MARKER, ''));
+        return renderTextFragment(removeTextFillInMarkers(content));
       }
       const parts = splitTextFillIns(content);
       const tokenPrefix = 'HVY_FILL_IN_VALUE_TOKEN_';
@@ -1594,7 +1594,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
             data-block-id="${deps.escapeAttr(block.id)}"
             data-field="text-fill-in-value"
             data-fill-index="${String(index)}"
-            data-placeholder="${deps.escapeAttr(getTextFillInPlaceholder(block.schema.placeholder, index))}"
+            data-placeholder="${deps.escapeAttr(getTextFillInPlaceholder(content, index))}"
           ></span>`
         );
       }

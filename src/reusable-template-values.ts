@@ -1,5 +1,5 @@
 import type { VisualBlock } from './editor/types';
-import { TEXT_FILL_IN_MARKER } from './text-fill-in';
+import { createTextFillInMarker } from './text-fill-in';
 import type { ComponentDefinition } from './types';
 
 export type ReusableTemplateVariableType = 'text' | 'block';
@@ -174,9 +174,7 @@ function replaceTemplateStringsInBlock(
   replaceTemplateStringsInSchema(block.schema as unknown as Record<string, unknown>, values, seen);
   if (textResult.fillIn) {
     block.schema.fillIn = true;
-    if (textResult.labels.length > 0) {
-      block.schema.placeholder = textResult.labels.join(', ');
-    }
+    block.schema.placeholder = '';
   }
   block.schema.containerBlocks?.forEach((child) => replaceTemplateStringsInBlock(child, values, labels, seen));
   block.schema.componentListBlocks?.forEach((child) => replaceTemplateStringsInBlock(child, values, labels, seen));
@@ -238,21 +236,17 @@ function replaceTemplateString(
   values: Record<string, string>,
   labels: Record<string, string>,
   blankAsFillIn: boolean
-): { text: string; fillIn: boolean; labels: string[] } {
+): { text: string; fillIn: boolean } {
   let fillIn = false;
-  const fillInLabels: string[] = [];
   const replaced = text.replace(TEMPLATE_TOKEN_PATTERN, (_token, name: string) => {
     const value = values[name] ?? '';
     if (blankAsFillIn && value.length === 0) {
       fillIn = true;
-      if (Object.prototype.hasOwnProperty.call(labels, name)) {
-        fillInLabels.push(labels[name] || humanizeTemplateVariableName(name));
-      }
-      return TEXT_FILL_IN_MARKER;
+      return createTextFillInMarker(Object.prototype.hasOwnProperty.call(labels, name) ? labels[name] || humanizeTemplateVariableName(name) : humanizeTemplateVariableName(name));
     }
     return value;
   });
-  return { text: replaced, fillIn, labels: fillInLabels };
+  return { text: replaced, fillIn };
 }
 
 function replaceTemplateStrings(value: unknown, values: Record<string, string>, seen: WeakSet<object>): unknown {

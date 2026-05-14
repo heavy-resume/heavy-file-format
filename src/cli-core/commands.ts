@@ -23,6 +23,7 @@ import { formatHvyComponentDescriptionHistory } from './component-description-hi
 import { deserializeDocumentWithDiagnostics, serializeDocument, serializeSectionFragment } from '../serialization';
 import { parseAiBlockEditResponse } from '../ai-component-edit-common';
 import { resolveBaseComponentFromMeta } from '../component-defs';
+import { removeTextFillInMarkers } from '../text-fill-in';
 
 const SCRATCHPAD_SOFT_MAX_CHARS = 600;
 const SCRATCHPAD_HARD_MAX_CHARS = 800;
@@ -899,7 +900,7 @@ function addRawComponentFilesForBlock(
         if (tagIssue) {
           failRawComponentWrite(session, blockPath, content, [tagIssue]);
         }
-        preserveOmittedEmptyTextPlaceholders(block, parsed.block, content);
+        preserveOmittedEmptyTextPlaceholders(block, parsed.block, serializeBlockFragment(block, document.meta), content);
         replaceBlockContents(block, parsed.block);
         delete session.rawWipContentByPath?.[`${blockPath}/raw.wip.hvy`];
       },
@@ -1068,25 +1069,35 @@ function replaceBlockContents(target: VisualBlock, source: VisualBlock): void {
   target.schemaMode = source.schemaMode;
 }
 
-function preserveOmittedEmptyTextPlaceholders(previousBlock: VisualBlock, nextBlock: VisualBlock, rawFragment: string): void {
+function preserveOmittedEmptyTextPlaceholders(
+  previousBlock: VisualBlock,
+  nextBlock: VisualBlock,
+  previousRawFragment: string,
+  nextRawFragment: string
+): void {
   const previousTextBlocks = collectTextBlocks(previousBlock);
   const nextTextBlocks = collectTextBlocks(nextBlock);
-  const rawTextDirectives = collectRawTextDirectivePlaceholderPresence(rawFragment);
+  const previousRawTextDirectives = collectRawTextDirectivePlaceholderPresence(previousRawFragment);
+  const nextRawTextDirectives = collectRawTextDirectivePlaceholderPresence(nextRawFragment);
   nextTextBlocks.forEach((nextTextBlock, index) => {
     const previousTextBlock = previousTextBlocks[index];
-    const rawTextDirective = rawTextDirectives[index];
+    const previousRawTextDirective = previousRawTextDirectives[index];
+    const nextRawTextDirective = nextRawTextDirectives[index];
     if (
       !previousTextBlock ||
-      rawTextDirective?.hasPlaceholder ||
+      nextRawTextDirective?.hasPlaceholder ||
       !previousTextBlock.schema.placeholder.trim() ||
-      previousTextBlock.text.trim() ||
-      nextTextBlock.text.trim() ||
-      nextTextBlock.schema.placeholder.trim()
+      hasRawVisibleText(previousTextBlock.text) ||
+      hasRawVisibleText(nextTextBlock.text)
     ) {
       return;
     }
-    nextTextBlock.schema.placeholder = previousTextBlock.schema.placeholder;
+    nextTextBlock.schema.placeholder = previousRawTextDirective?.placeholder ?? previousTextBlock.schema.placeholder;
   });
+}
+
+function hasRawVisibleText(text: string): boolean {
+  return removeTextFillInMarkers(text).trim().length > 0;
 }
 
 function collectTextBlocks(block: VisualBlock): VisualBlock[] {
@@ -1099,12 +1110,19 @@ function collectTextBlocks(block: VisualBlock): VisualBlock[] {
   return blocks;
 }
 
-function collectRawTextDirectivePlaceholderPresence(rawFragment: string): Array<{ hasPlaceholder: boolean }> {
+function collectRawTextDirectivePlaceholderPresence(rawFragment: string): Array<{ hasPlaceholder: boolean; placeholder?: string }> {
   const matches = rawFragment.matchAll(/<!--\s*hvy:text\s+([\s\S]*?)\s*-->/gi);
   return [...matches].map((match) => {
     try {
       const parsed = JSON.parse(match[1] ?? '{}') as unknown;
-      return { hasPlaceholder: !!parsed && typeof parsed === 'object' && !Array.isArray(parsed) && Object.prototype.hasOwnProperty.call(parsed, 'placeholder') };
+      const hasPlaceholder = !!parsed
+        && typeof parsed === 'object'
+        && !Array.isArray(parsed)
+        && Object.prototype.hasOwnProperty.call(parsed, 'placeholder');
+      const placeholder = hasPlaceholder && typeof (parsed as { placeholder?: unknown }).placeholder === 'string'
+        ? (parsed as { placeholder: string }).placeholder
+        : undefined;
+      return { hasPlaceholder, placeholder };
     } catch {
       return { hasPlaceholder: false };
     }

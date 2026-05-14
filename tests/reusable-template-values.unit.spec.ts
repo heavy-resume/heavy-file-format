@@ -130,9 +130,9 @@ test('blank template values clear empty markdown scaffolds so placeholders rende
 
   applyReusableTemplateValues(block, { skill: '' });
 
-  expect(block.schema.expandableStubBlocks.children[0]?.text).toBe('### <!-- value -->');
+  expect(block.schema.expandableStubBlocks.children[0]?.text).toBe('### <!-- value {"placeholder":"Skill"} -->');
   expect(block.schema.expandableStubBlocks.children[0]?.schema.fillIn).toBe(true);
-  expect(block.schema.expandableStubBlocks.children[0]?.schema.placeholder).toBe('### Skill name');
+  expect(block.schema.expandableStubBlocks.children[0]?.schema.placeholder).toBe('');
 });
 
 test('blank template values become fill-ins only in text block bodies', () => {
@@ -168,8 +168,9 @@ test('blank template values become fill-ins only in text block bodies', () => {
 
   applyReusableTemplateValues(block, { title: '' });
 
-  expect(block.schema.containerBlocks[0]?.text).toBe('<!-- value -->');
+  expect(block.schema.containerBlocks[0]?.text).toBe('<!-- value {"placeholder":"Title"} -->');
   expect(block.schema.containerBlocks[0]?.schema.fillIn).toBe(true);
+  expect(block.schema.containerBlocks[0]?.schema.placeholder).toBe('');
   expect(block.schema.containerBlocks[0]?.schema.id).toBe('title-');
   expect(block.schema.containerBlocks[1]?.schema.tableRows).toEqual([{ cells: [''] }]);
 });
@@ -213,9 +214,10 @@ test('blank template value fill-ins preserve the labels shown to the user', () =
   );
 
   const detailsBlock = block.schema.expandableContentBlocks.children[0];
-  expect(detailsBlock?.text).toContain('^detail-body^ <!-- value -->');
+  expect(detailsBlock?.text).toContain('^detail-body^ <!-- value {"placeholder":"Description"} -->');
+  expect(detailsBlock?.text).toContain('^detail-body^ <!-- value {"placeholder":"Notes"} -->');
   expect(detailsBlock?.schema.fillIn).toBe(true);
-  expect(detailsBlock?.schema.placeholder).toBe('Description, Notes');
+  expect(detailsBlock?.schema.placeholder).toBe('');
 });
 
 test('validates exact template value keys and text newlines', () => {

@@ -100,9 +100,12 @@ const deactivateBlock: AppActionHandler = ({ app, event, sectionKey, blockId }) 
   event.stopPropagation();
   const deactivationAnchor = captureEditorDeactivationAnchor(app, sectionKey, blockId);
   const result = deactivateEditorBlock(sectionKey, blockId);
-  if (result === 'closed') {
+  if (result === 'closed' || result === 'removed') {
     state.pendingEditorDeactivation = deactivationAnchor;
     state.activeEditorBlockReturnScroll = null;
+  }
+  if (result === 'removed') {
+    getRefreshReaderPanels()();
   }
   getRenderApp()();
 };

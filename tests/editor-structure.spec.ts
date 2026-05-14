@@ -423,6 +423,44 @@ component_defs:
   await expect(activeEditor).toContainText('No skill targets available yet.');
 });
 
+test('ai done on an xref without a target removes the draft xref', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+component_defs:
+  - name: skill-xref-card
+    baseType: xref-card
+    schema:
+      xrefTargetTagFilter: skill
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ <!--hvy:component-list {"id":"top-skills-list","componentListComponent":"skill-xref-card","componentListItemLabel":"skill xref"}-->
+
+<!--hvy: {"id":"skills","location":"sidebar"}-->
+#! Skills
+
+ <!--hvy:text {"id":"skill-foo","tags":"skill","xrefTitle":"Foo"}-->
+  Foo
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'AI' }).click();
+
+  await page.locator('#aiReaderDocument [data-action="add-component-list-item"]', { hasText: 'Add Skill Xref' }).click();
+  const activeEditor = page.locator('#aiReaderDocument .editor-block[data-active-editor-block="true"]');
+  await expect(activeEditor.locator('[data-field="block-xref-target"]')).toHaveValue('');
+
+  await activeEditor.getByRole('button', { name: 'Done' }).click();
+
+  await expect(page.locator('#aiReaderDocument .editor-block[data-active-editor-block="true"]')).toHaveCount(0);
+  await expect(page.locator('#aiReaderDocument [data-component-id="top-skills-list"]')).not.toContainText('Untitled');
+  await expect(page.locator('#aiReaderDocument .reader-xref-card')).toHaveCount(0);
+});
+
 test('featured xref helper script reruns after adding a featured xref', async ({ page }) => {
   await page.goto('/');
 

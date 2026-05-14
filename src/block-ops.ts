@@ -735,12 +735,23 @@ export function clearActiveEditorBlock(blockId?: string): void {
   }
 }
 
-export function deactivateEditorBlock(sectionKey: string, blockId: string): 'closed' | 'unchanged' {
+export type DeactivateEditorBlockResult = 'closed' | 'removed' | 'unchanged';
+
+export function deactivateEditorBlock(sectionKey: string, blockId: string): DeactivateEditorBlockResult {
   const index = state.activeEditorBlockPath.findIndex(
     (active) => active.sectionKey === sectionKey && active.blockId === blockId
   );
   if (index < 0) {
     return 'unchanged';
+  }
+  const block = findBlockByIds(sectionKey, blockId);
+  if (block && shouldRemoveXrefOnEditorExit(block)) {
+    const rootBlocks = getEditorRootBlocks(sectionKey);
+    if (rootBlocks && removeBlockFromList(rootBlocks, blockId)) {
+      syncReusableTemplateForBlock(sectionKey, blockId);
+      closeActiveEditorPathFromIndex(index);
+      return 'removed';
+    }
   }
   closeActiveEditorPathFromIndex(index);
   return 'closed';
@@ -804,6 +815,11 @@ function closeActiveEditorPathFromIndex(index: number): void {
 
 function visualBlocksEqual(left: VisualBlock, right: VisualBlock): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function shouldRemoveXrefOnEditorExit(block: VisualBlock): boolean {
+  return resolveBaseComponent(block.schema.component) === 'xref-card'
+    && normalizeXrefTarget(block.schema.xrefTarget).length === 0;
 }
 
 export function blockContainsBlockId(block: VisualBlock, blockId: string): boolean {

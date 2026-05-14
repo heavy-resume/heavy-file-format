@@ -439,7 +439,7 @@ component_defs:
 <!--hvy: {"id":"summary"}-->
 #! Summary
 
- <!--hvy:component-list {"id":"top-skills-list","componentListComponent":"skill-xref-card","componentListItemLabel":"skill xref"}-->
+ <!--hvy:component-list {"id":"top-skills-list","componentListComponent":"skill-xref-card","componentListItemLabel":"skill reference"}-->
 
 <!--hvy: {"id":"skills","location":"sidebar"}-->
 #! Skills
@@ -450,7 +450,7 @@ component_defs:
   await page.getByRole('button', { name: 'Apply' }).click();
   await page.getByRole('button', { name: 'AI' }).click();
 
-  await page.locator('#aiReaderDocument [data-action="add-component-list-item"]', { hasText: 'Add Skill Xref' }).click();
+  await page.locator('#aiReaderDocument [data-action="add-component-list-item"]', { hasText: 'Add Skill Reference' }).click();
   const activeEditor = page.locator('#aiReaderDocument .editor-block[data-active-editor-block="true"]');
   await expect(activeEditor.locator('[data-field="block-xref-target"]')).toHaveValue('');
 
@@ -480,7 +480,7 @@ component_defs:
  <!--hvy:text {"id":"featured-xref-helper","editorOnly":true}-->
   Tip: Add a featured skill or tool / technology via the sidebar and link it here
 
- <!--hvy:component-list {"id":"top-skills-list","componentListComponent":"skill-xref-card","componentListItemLabel":"skill xref"}-->
+ <!--hvy:component-list {"id":"top-skills-list","componentListComponent":"skill-xref-card","componentListItemLabel":"skill reference"}-->
 
 <!--hvy: {"id":"skills","location":"sidebar"}-->
 #! Skills
@@ -507,7 +507,7 @@ component_defs:
   await page.getByRole('button', { name: 'AI' }).click();
 
   await expect(page.locator('#aiReaderDocument')).toContainText('Tip: Add a featured skill');
-  await page.locator('#aiReaderDocument [data-action="add-component-list-item"]', { hasText: 'Add Skill Xref' }).click();
+  await page.locator('#aiReaderDocument [data-action="add-component-list-item"]', { hasText: 'Add Skill Reference' }).click();
   const activeEditor = page.locator('#aiReaderDocument .editor-block[data-active-editor-block="true"]');
   await activeEditor.locator('[data-field="block-xref-target"]').selectOption('skill-foo');
   await activeEditor.getByRole('button', { name: 'Done' }).click();

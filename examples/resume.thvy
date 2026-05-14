@@ -5,7 +5,7 @@ title: Resume Template
 reader_max_width: 60rem
 ai-context: >-
   This is a resume template. Use the top-skills-tools-technologies section for featured
-  xref-card links only; the skills and tools-technologies sidebar sections are the main
+  reference cards only; the skills and tools-technologies sidebar sections are the main
   reusable libraries for detailed skill/tool records. History, projects, and education
   each have a static table used only as the visible column header for the expandable
   record rows in the following component-list; keep them in reverse chronological order
@@ -15,7 +15,7 @@ ai-context: >-
   record instead of creating duplicate organization rows. One project, publication,
   certification, degree, skill, or tool should usually be represented as one expandable
   reusable record. Local skills/tools lists inside history, project, publication,
-  certification, and education records are supporting xrefs and should not be treated as
+  certification, and education records are supporting references and should not be treated as
   the main libraries.
 section_defaults:
   css: "margin: 0.5rem 0;"
@@ -78,43 +78,43 @@ theme:
 component_defs:
   - name: skill-xref-card
     baseType: xref-card
-    description: Skill cross-reference
+    description: Skill reference
     schema:
       xrefTargetTagFilter: skill
       css: "margin: 0.25rem 0;"
   - name: tool-tech-xref-card
     baseType: xref-card
-    description: Tool / technology cross-reference
+    description: Tool / technology reference
     schema:
       xrefTargetTagFilter: tool
       css: "margin: 0.25rem 0;"
   - name: history-xref-card
     baseType: xref-card
-    description: Work history cross-reference
+    description: Work history reference
     schema:
       xrefTargetTagFilter: history
       css: "margin: 0.25rem 0;"
   - name: education-xref-card
     baseType: xref-card
-    description: Education cross-reference
+    description: Education reference
     schema:
       xrefTargetTagFilter: education
       css: "margin: 0.25rem 0;"
   - name: certification-xref-card
     baseType: xref-card
-    description: Certification cross-reference
+    description: Certification reference
     schema:
       xrefTargetTagFilter: certification
       css: "margin: 0.25rem 0;"
   - name: publication-xref-card
     baseType: xref-card
-    description: Publication cross-reference
+    description: Publication reference
     schema:
       xrefTargetTagFilter: publication
       css: "margin: 0.25rem 0;"
   - name: project-xref-card
     baseType: xref-card
-    description: Project cross-reference
+    description: Project reference
     schema:
       xrefTargetTagFilter: project
       css: "margin: 0.25rem 0;"
@@ -214,7 +214,7 @@ component_defs:
                   schema:
                     component: component-list
                     componentListComponent: skill-xref-card
-                    componentListItemLabel: skill xref
+                    componentListItemLabel: skill reference
                     css: "margin: 0;"
                     componentListBlocks: []
         - id: tools-technologies
@@ -233,7 +233,7 @@ component_defs:
                   schema:
                     component: component-list
                     componentListComponent: tool-tech-xref-card
-                    componentListItemLabel: tool / technology xref
+                    componentListItemLabel: tool / tech reference
                     css: "margin: 0;"
                     componentListBlocks: []
   - name: education-record
@@ -721,13 +721,13 @@ component_defs:
    <!--hvy:container {"css":"margin: 0;","align":"center"}-->
     <!--hvy:text {"align":"center","css":"margin: 0 0 0.35rem;"}-->
      ## Skills
-    <!--hvy:component-list {"id":"top-skills-list","componentListComponent":"skill-xref-card","componentListItemLabel":"skill xref","css":"margin: 0;","align":"center"}-->
+    <!--hvy:component-list {"id":"top-skills-list","componentListComponent":"skill-xref-card","componentListItemLabel":"skill reference","css":"margin: 0;","align":"center"}-->
   <!--hvy:grid:1 {"id":"top-tools-technologies"}-->
 
    <!--hvy:container {"css":"margin: 0;","align":"center"}-->
     <!--hvy:text {"align":"center","css":"margin: 0 0 0.35rem;"}-->
      ## Tools & Technologies
-    <!--hvy:component-list {"id":"top-tools-technologies-list","componentListComponent":"tool-tech-xref-card","componentListItemLabel":"tool / technology xref","css":"margin: 0;","align":"center"}-->
+    <!--hvy:component-list {"id":"top-tools-technologies-list","componentListComponent":"tool-tech-xref-card","componentListItemLabel":"tool / tech reference","css":"margin: 0;","align":"center"}-->
 
 <!--hvy: {"id":"skills","lock":true,"expanded":false,"location":"sidebar","description":"Skills reference list","hideIfUnmodified":true}-->
 #! Skills

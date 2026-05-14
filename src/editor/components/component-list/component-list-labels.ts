@@ -27,6 +27,8 @@ function humanizeComponentListComponent(componentName: string): string {
     .trim()
     .replace(TRAILING_ITEM_WORDS, '')
     .replace(/[-_]+/g, ' ')
+    .replace(/\bxref\b/gi, 'reference')
+    .replace(/\btool tech\b/gi, 'tool / tech')
     .replace(/\s+/g, ' ')
     .trim();
   return normalized.length > 0 ? normalized : 'item';

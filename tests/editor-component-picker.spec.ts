@@ -31,7 +31,7 @@ test('component picker opens categories and adds selected component', async ({ p
 
   await picker.locator('.component-picker-row-category', { hasText: 'Advanced' }).click();
   await expect(picker.locator('[data-picker-pane="advanced"] .component-picker-row-title', { hasText: 'Table' })).toBeVisible();
-  await expect(picker.locator('[data-picker-pane="advanced"] .component-picker-row-title', { hasText: 'Xref' })).toBeVisible();
+  await expect(picker.locator('[data-picker-pane="advanced"] .component-picker-row-title', { hasText: 'Reference' })).toBeVisible();
   await addComponent.getByRole('button', { name: 'Section component type' }).click();
   await expect(rootPane.locator('.component-picker-row-title', { hasText: 'Advanced' })).toBeVisible();
 

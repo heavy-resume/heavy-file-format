@@ -8,14 +8,14 @@ ai-context: >-
   xref-card links only; the skills and tools-technologies sidebar sections are the main
   reusable libraries for detailed skill/tool records. History, projects, and education
   each have a static table used only as the visible column header for the expandable
-  record rows in the following component-list; keep both in reverse chronological order
+  record rows in the following component-list; keep them in reverse chronological order
   with newest entries first. History should use one
   expandable record per organization when roles are contiguous; put promotions, title
   changes, or adjacent date ranges at the same organization inside that single expanded
-  record instead of creating duplicate organization rows. One project, degree, skill, or
-  tool should usually be represented as one expandable reusable record. Local skills/tools
-  lists inside history, project, and education records are supporting xrefs and should not
-  be treated as the main libraries.
+  record instead of creating duplicate organization rows. One project, certification,
+  degree, skill, or tool should usually be represented as one expandable reusable record.
+  Local skills/tools lists inside history, project, certification, and education records
+  are supporting xrefs and should not be treated as the main libraries.
 section_defaults:
   css: "margin: 0.5rem 0;"
 text_line_styles:
@@ -98,6 +98,12 @@ component_defs:
     description: Education cross-reference
     schema:
       xrefTargetTagFilter: education
+      css: "margin: 0.25rem 0;"
+  - name: certification-xref-card
+    baseType: xref-card
+    description: Certification cross-reference
+    schema:
+      xrefTargetTagFilter: certification
       css: "margin: 0.25rem 0;"
   - name: project-xref-card
     baseType: xref-card
@@ -299,6 +305,74 @@ component_defs:
               component: text
               placeholder: classes
               css: "margin: 0;"
+  - name: certification-record
+    baseType: expandable
+    description: Certification entry
+    templateVariables:
+      name:
+        label: Certification name
+      obtained_from:
+        label: Obtained from
+      obtained_month:
+        label: Obtained month
+      obtained_year:
+        label: Obtained year
+    schema:
+      tags: certification
+      xrefTitle: "{% name %}"
+      xrefDetail: "{% obtained_from %}"
+      css: "margin: 0;"
+      expandableAlwaysShowStub: true
+      expandableExpanded: false
+      expandableStubBlocks:
+        children:
+          - text: ""
+            schema:
+              component: table
+              css: "margin: 0; margin-top: -1px;"
+              tableColumns: ["CERTIFICATION", "ISSUER", "OBTAINED"]
+              tableShowHeader: false
+              tableRows:
+                - cells: ["{% name %}", "{% obtained_from %}", "{% obtained_month %}/{% obtained_year %}"]
+      expandableContentBlocks:
+        css: "padding: 0.5rem;"
+        children:
+          - text: ""
+            schema:
+              component: grid
+              css: "margin: 0 0 0.35rem;"
+              gridColumns: 2
+              gridItems:
+                - id: certification-details
+                  block:
+                    text: ""
+                    schema:
+                      component: container
+                      css: "margin: 0;"
+                      containerBlocks:
+                        - text: "^section-heading^ ### {% name %}"
+                          schema:
+                            component: text
+                            css: "margin: 0 0 0.25rem;"
+                            placeholder: "Certification name"
+                        - text: "{% obtained_from %}"
+                          schema:
+                            component: text
+                            css: "margin: 0;"
+                            placeholder: "Obtained from"
+                - id: certification-obtained-date
+                  block:
+                    text: "{% obtained_month %}/{% obtained_year %}"
+                    schema:
+                      component: text
+                      css: "margin: 0; text-align: right;"
+                      placeholder: "Obtained month / year"
+          - text: "{% description | block %}"
+            schema:
+              component: text
+              css: "margin: 0.5rem 0;"
+              placeholder: "Description"
+          - component: skills-and-tools-tech-list
   - name: project-record
     baseType: expandable
     description: Project entry
@@ -596,6 +670,16 @@ component_defs:
  <!--hvy:table {"css":"margin: 0.5rem 0 0;","tags":"table-header","tableColumns":["PROJECT","DATES"],"tableShowHeader":true,"tableRows":[],"lock":true,"description":"Project table header"}-->
 
  <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"project-record","componentListItemLabel":"project","tags":"project"}-->
+
+<!--hvy: {"id":"certifications","lock":true,"description":"Certifications","hideIfUnmodified":true}-->
+#! Certifications
+
+ <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
+  # Certifications
+
+ <!--hvy:table {"css":"margin: 0.5rem 0 0;","tags":"table-header","tableColumns":["CERTIFICATION","ISSUER","OBTAINED"],"tableShowHeader":true,"tableRows":[],"lock":true,"description":"Certification table header"}-->
+
+ <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"certification-record","componentListItemLabel":"certification","tags":"certification"}-->
 
 <!--hvy: {"id":"education","lock":true,"description":"Education","hideIfUnmodified":true}-->
 #! Education

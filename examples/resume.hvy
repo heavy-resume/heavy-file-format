@@ -7,14 +7,14 @@ ai-context: >-
   xref-card links only; the skills and tools-technologies sidebar sections are the main
   reusable libraries for detailed skill/tool records. History, projects, and education
   each have a static table used only as the visible column header for the expandable
-  record rows in the following component-list; keep both in reverse chronological order
+  record rows in the following component-list; keep them in reverse chronological order
   with newest entries first. History should use one
   expandable record per organization when roles are contiguous; put promotions, title
   changes, or adjacent date ranges at the same organization inside that single expanded
-  record instead of creating duplicate organization rows. One project, degree, skill, or
-  tool should usually be represented as one expandable reusable record. Local skills/tools
-  lists inside history, project, and education records are supporting xrefs and should not
-  be treated as the main libraries.
+  record instead of creating duplicate organization rows. One project, certification,
+  degree, skill, or tool should usually be represented as one expandable reusable record.
+  Local skills/tools lists inside history, project, certification, and education records
+  are supporting xrefs and should not be treated as the main libraries.
 section_defaults:
   css: "margin: 0.5rem 0;"
 text_line_styles:
@@ -97,6 +97,12 @@ component_defs:
     description: Education cross-reference
     schema:
       xrefTargetTagFilter: education
+      css: "margin: 0.25rem 0;"
+  - name: certification-xref-card
+    baseType: xref-card
+    description: Certification cross-reference
+    schema:
+      xrefTargetTagFilter: certification
       css: "margin: 0.25rem 0;"
   - name: project-xref-card
     baseType: xref-card
@@ -286,6 +292,65 @@ component_defs:
               component: text
               placeholder: classes
               css: "margin: 0;"
+  - name: certification-record
+    baseType: expandable
+    description: Certification entry
+    schema:
+      tags: certification
+      xrefTitle: "{% name %}"
+      xrefDetail: "{% obtained_from %}"
+      css: "margin: 0;"
+      expandableAlwaysShowStub: true
+      expandableExpanded: false
+      expandableStubBlocks:
+        children:
+          - text: ""
+            schema:
+              component: table
+              css: "margin: 0; margin-top: -1px;"
+              tableColumns: ["CERTIFICATION", "ISSUER", "OBTAINED"]
+              tableShowHeader: false
+              tableRows:
+                - cells: ["{% name %}", "{% obtained_from %}", "{% obtained_month %}/{% obtained_year %}"]
+      expandableContentBlocks:
+        css: "padding: 0.5rem;"
+        children:
+          - text: ""
+            schema:
+              component: grid
+              css: "margin: 0 0 0.35rem;"
+              gridColumns: 2
+              gridItems:
+                - id: certification-details
+                  block:
+                    text: ""
+                    schema:
+                      component: container
+                      css: "margin: 0;"
+                      containerBlocks:
+                        - text: "^section-heading^ ### {% name %}"
+                          schema:
+                            component: text
+                            css: "margin: 0 0 0.25rem;"
+                            placeholder: "Certification name"
+                        - text: "{% obtained_from %}"
+                          schema:
+                            component: text
+                            css: "margin: 0;"
+                            placeholder: "Obtained from"
+                - id: certification-obtained-date
+                  block:
+                    text: "{% obtained_month %}/{% obtained_year %}"
+                    schema:
+                      component: text
+                      css: "margin: 0; text-align: right;"
+                      placeholder: "Obtained month / year"
+          - text: "{% description | block %}"
+            schema:
+              component: text
+              css: "margin: 0.5rem 0;"
+              placeholder: "Description"
+          - component: skills-and-tools-tech-list
   - name: project-record
     baseType: expandable
     description: Project entry
@@ -1231,6 +1296,86 @@ component_defs:
           <!--hvy:component-list:4 {}-->
 
             <!--hvy:tool-tech-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"SuperAGI","xrefTarget":"tool-superagi"}-->
+
+<!--hvy: {"id":"certifications","lock":true,"description":"Certifications"}-->
+#! Certifications
+
+ <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
+  # Certifications
+
+ <!--hvy:table {"css":"margin: 0.5rem 0 0;","tags":"table-header","tableColumns":["CERTIFICATION","ISSUER","OBTAINED"],"tableShowHeader":true,"tableRows":[],"lock":true,"description":"Certification table header"}-->
+
+ <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"certification-record","componentListItemLabel":"certification","tags":"certification"}-->
+
+  <!--hvy:component-list:0 {}-->
+
+   <!--hvy:certification-record {"id":"certification-aws-certified-developer-associate","xrefTitle":"AWS Certified Developer - Associate","xrefDetail":"Amazon Web Services","css":"margin: 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+
+    <!--hvy:expandable:stub {}-->
+
+     <!--hvy:table {"css":"margin: 0; margin-top: -1px;","tableColumns":["CERTIFICATION","ISSUER","OBTAINED"],"tableShowHeader":false,"tableRows":[{"cells":["AWS Certified Developer - Associate","Amazon Web Services","04/2024"]}]}-->
+
+    <!--hvy:expandable:content {"css":"padding: 0.5rem;"}-->
+
+     <!--hvy:grid {"css":"margin: 0 0 0.35rem;","gridColumns":2}-->
+
+      <!--hvy:grid:0 {"id":"certification-details-aws-developer"}-->
+
+       <!--hvy:container {"css":"margin: 0;"}-->
+
+        <!--hvy:container:0 {}-->
+
+         <!--hvy:text {"css":"margin: 0 0 0.25rem;","placeholder":"Certification name"}-->
+          ^section-heading^ ### AWS Certified Developer - Associate
+
+        <!--hvy:container:1 {}-->
+
+         <!--hvy:text {"css":"margin: 0;","placeholder":"Obtained from"}-->
+          Amazon Web Services
+
+      <!--hvy:grid:1 {"id":"certification-obtained-date-aws-developer"}-->
+
+       <!--hvy:text {"css":"margin: 0; text-align: right;","placeholder":"Obtained month / year"}-->
+        04/2024
+
+     <!--hvy:text {"css":"margin: 0.5rem 0;","placeholder":"Description"}-->
+      Validates practical knowledge of cloud application development patterns, deployment workflows, and service integration fundamentals.
+
+     <!--hvy:skills-and-tools-tech-list {"css":"margin: 0.5rem 0 0;","gridColumns":2}-->
+
+      <!--hvy:grid:0 {"id":"certification-relevant-skills-aws-developer"}-->
+
+       <!--hvy:container {"css":"margin: 0;","align":"center"}-->
+
+        <!--hvy:container:0 {}-->
+
+         <!--hvy:text {"css":"margin: 0;"}-->
+          ^panel-heading^ #### Relevant Skills
+
+        <!--hvy:container:1 {}-->
+
+         <!--hvy:component-list {"id":"certification-relevant-skills-aws-developer-list","componentListComponent":"skill-xref-card","css":"margin: 0;","align":"center"}-->
+
+          <!--hvy:component-list:0 {}-->
+
+           <!--hvy:skill-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Software Engineering","xrefTarget":"skill-software-engineering"}-->
+
+      <!--hvy:grid:1 {"id":"certification-tools-technologies-aws-developer"}-->
+
+       <!--hvy:container {"css":"margin: 0;","align":"center"}-->
+
+        <!--hvy:container:0 {}-->
+
+         <!--hvy:text {"css":"margin: 0;"}-->
+          ^panel-heading^ #### Tools and Technologies
+
+        <!--hvy:container:1 {}-->
+
+         <!--hvy:component-list {"id":"certification-tools-technologies-aws-developer-list","componentListComponent":"tool-tech-xref-card","css":"margin: 0;","align":"center"}-->
+
+          <!--hvy:component-list:0 {}-->
+
+           <!--hvy:tool-tech-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Python","xrefTarget":"tool-python"}-->
 
 <!--hvy: {"id":"education","lock":true,"description":"Education"}-->
 #! Education

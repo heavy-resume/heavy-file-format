@@ -434,6 +434,13 @@ async function buildImportPlan(options: BuildImportPlanOptions): Promise<BuildIm
 }
 
 async function importFromText(options: ImportFromTextOptions): Promise<ImportFromTextResult> {
+  const refreshAfterImportMutation = async (): Promise<void> => {
+    await runPluginDocumentHooks('ai-edit');
+    state.rawEditorText = serializeDocument(state.document);
+    state.rawEditorError = null;
+    state.rawEditorDiagnostics = [];
+    renderApp();
+  };
   const result = await importTextIntoDocument(state.document, {
     ...options,
     llm: options.llm ?? { settings: state.chat.settings },
@@ -443,6 +450,7 @@ async function importFromText(options: ImportFromTextOptions): Promise<ImportFro
       }
     },
     onMutation: (group) => recordHistory(group ?? 'import:text'),
+    onSectionApplied: refreshAfterImportMutation,
   });
   if (result.status !== 'complete') {
     return result;
@@ -531,6 +539,10 @@ export type {
   HvyImportProgressPhase,
   ImportFromTextOptions,
   ImportFromTextResult,
+  ImportPlanStep,
+  ImportPlanStepInput,
+  ImportPlanTarget,
+  ImportPlanTargetKind,
 } from './ai-document-edit';
 export type { ToolLoopCompactionOptions } from './types';
 

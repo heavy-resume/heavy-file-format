@@ -109,6 +109,12 @@ export function runPluginDocumentHooks(changeReason: HvyPluginHookChangeReason =
   }
 
   const ctx = createHookContext(document, hookName === 'documentLoad' ? 'load' : changeReason);
-  hookRun = hookRun.then(() => runHookHandlers(hookName, ctx));
+  hookRun = hookRun.then(async () => {
+    await runHookHandlers(hookName, ctx);
+    if (ctx.isCurrentDocument()) {
+      lastHookDocument = document;
+      lastHookSignature = serializeDocument(document);
+    }
+  });
   return hookRun;
 }

@@ -99,6 +99,33 @@ test('document edits made during a hook do not enqueue a follow-up hook pass', a
   expect(expectedResult).toEqual(['load']);
 });
 
+test('document edits made by hooks update the lifecycle signature', async () => {
+  const expectedResult: string[] = [];
+  setHostPlugins([
+    createHookPlugin('script-like-plugin', {
+      documentLoad: { run: () => { expectedResult.push('load'); } },
+      documentChange: {
+        run: () => {
+          expectedResult.push('change');
+          const section = state.document.sections[0];
+          if (!section) throw new Error('Expected section');
+          section.title = 'Changed by hook';
+        },
+      },
+    }),
+  ]);
+  bootstrap();
+
+  await runPluginDocumentHooks('load');
+  const section = state.document.sections[0];
+  if (!section) throw new Error('Expected section');
+  section.title = 'Changed before hook';
+  await runPluginDocumentHooks('edit');
+  await runPluginDocumentHooks('unknown');
+
+  expect(expectedResult).toEqual(['load', 'change']);
+});
+
 test('document hook context includes the current document view', async () => {
   const expectedResult: string[] = [];
   setHostPlugins([

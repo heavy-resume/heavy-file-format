@@ -1,0 +1,62 @@
+---
+hvy_version: 0.1
+title: HVY Import Format Reference
+---
+
+<!--hvy: {"id":"hvy-format-reference","editorOnly":true}-->
+#! HVY Format Reference
+
+<!--hvy:text {"id":"hvy-format-return-contract"}-->
+ Return raw HVY for exactly one complete section. Do not return document front matter, Markdown fences, tool JSON, HTML, JSX, or explanatory prose.
+
+<!--hvy:text {"id":"hvy-format-core-rules"}-->
+ Core syntax rules:
+ - HVY directives are HTML comments: `<!--hvy:component-name {...json...}-->`.
+ - Directive payloads are single-line valid JSON objects.
+ - Indentation is structural. Child blocks are indented under the section or parent block.
+ - Section titles use `#!`; ordinary Markdown headings such as `##` are text content, not sections.
+ - Use stable, lowercase, hyphenated ids for sections and xref-worthy records.
+
+<!--hvy: {"id":"hvy-format-section-example","tags":"example"}-->
+#! Section Shape Example
+
+ <!--hvy:text {"id":"section-text"}-->
+  Markdown text for this section.
+
+<!--hvy: {"id":"hvy-format-components-example","tags":"example"}-->
+#! Component Shape Examples
+
+ <!--hvy:text {"id":"plain-text-example"}-->
+  Text block content is indented under `hvy:text`.
+
+ <!--hvy:container {"id":"container-example","containerTitle":"Container Example"}-->
+  <!--hvy:text {"id":"container-child-text"}-->
+   Containers hold child blocks one level deeper.
+
+ <!--hvy:component-list {"id":"xref-list-example","componentListComponent":"xref-card"}-->
+  <!--hvy:component-list:0 {}-->
+   <!--hvy:xref-card {"id":"xref-example","xrefTitle":"Visible title","xrefDetail":"Optional detail","xrefTarget":"target-id"}-->
+
+ <!--hvy:table {"id":"table-example","tableColumns":["A","B"],"tableRows":[{"cells":["a","b"]}]}-->
+
+ <!--hvy:expandable {"id":"expandable-example"}-->
+  <!--hvy:expandable:content {}-->
+   <!--hvy:text {"id":"expandable-content-text"}-->
+    Expandable content requires a content slot.
+
+<!--hvy: {"id":"hvy-format-template-rules"}-->
+#! Reusable Template Rules
+
+<!--hvy:text {"id":"template-rules-text"}-->
+ - Preserve useful component names from the matched template instead of replacing structured records with plain text.
+ - Preserve template fields like `sortKeys`, `groupKeys`, `tags`, and xref metadata when they fit the imported data.
+ - Remove filled template placeholder state such as `hideIfUnmodified` from generated sections that contain imported content.
+ - Custom components from the matched template use the same directive form, for example `<!--hvy:skill-record {...}-->` or `<!--hvy:history-record {...}-->`.
+
+<!--hvy: {"id":"hvy-format-xref-rules"}-->
+#! Xref Rules
+
+<!--hvy:text {"id":"xref-rules-text"}-->
+ - `xrefTitle` is required on xref-card.
+ - `xrefTarget` should be an exact id from the relationship inventory. Do not invent a target id just to make a link.
+ - Do not create reciprocal/generated xref cards by hand; document update scripts may generate those after the section is applied.

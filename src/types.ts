@@ -185,7 +185,7 @@ export interface ThemeConfig {
 
 export type ReaderViewModifier = 'highlight' | 'priority' | 'collapse' | 'dimmed' | 'hidden';
 export type ReaderViewFilter = Record<string, ReaderViewModifier[]>;
-export type SelectedExample = 'default' | 'blank' | 'crm' | 'resume-template' | 'resume-example' | 'custom';
+export type SelectedExample = 'default' | 'blank' | 'crm' | 'resume-template' | 'resume-example' | 'import-reference' | 'custom';
 
 export interface ComponentDefinition {
   name: string;

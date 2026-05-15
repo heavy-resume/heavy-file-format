@@ -35,6 +35,20 @@ test('escapes raw html before applying underline syntax', () => {
   );
 });
 
+test('does not double escape literal angle brackets inside markdown code', () => {
+  const html = markdownToReaderHtml('HVY directives are HTML comments: `<!--hvy:text {"id":"summary-text"}-->`.');
+
+  expect(html).toContain('<code>&lt;!--hvy:text {&quot;id&quot;:&quot;summary-text&quot;}--&gt;</code>');
+  expect(html).not.toContain('&amp;lt;!--');
+});
+
+test('keeps raw html escaped outside code while preserving fenced code literals', () => {
+  const escaped = escapeRawHtml('<script>bad()</script>\n```html\n<div>literal</div>\n```');
+
+  expect(escaped).toContain('&lt;script&gt;bad()&lt;/script&gt;');
+  expect(escaped).toContain('<div>literal</div>');
+});
+
 test('serializes editor underline with hvy underline syntax', () => {
   expect(turndown.turndown('<p><u>Important</u></p>')).toBe('___Important___');
 });

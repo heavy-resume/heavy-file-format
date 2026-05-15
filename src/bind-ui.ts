@@ -1,6 +1,7 @@
 import bundledResumeThvy from '../examples/resume.thvy?raw';
 import bundledResumeHvy from '../examples/resume.hvy?raw';
 import bundledCrmHvy from '../examples/crm.hvy?raw';
+import bundledImportReferenceHvy from './ai-import-hvy-format-reference.hvy?raw';
 import bundledResumeViews from '../examples/resume-views.json';
 import { state, getRenderApp, getRefreshReaderPanels } from './state';
 import { findSectionByKey } from './section-ops';
@@ -25,11 +26,92 @@ import type { ReaderViewFilter } from './types';
 
 const resumeViews = bundledResumeViews as Record<string, ReaderViewFilter>;
 
+interface HvyFileSystemFileHandle {
+  name: string;
+  getFile(): Promise<File>;
+  createWritable(): Promise<{
+    write(data: Uint8Array): Promise<void>;
+    close(): Promise<void>;
+  }>;
+}
+
+let currentFileHandle: HvyFileSystemFileHandle | null = null;
+
+function supportsFileSystemAccess(): boolean {
+  return typeof (window as unknown as { showOpenFilePicker?: unknown }).showOpenFilePicker === 'function';
+}
+
+function replaceLoadedDocument(raw: string | Uint8Array, filename: string, selectedExample: typeof state.selectedExample): void {
+  const textForExtension = typeof raw === 'string' ? raw : new TextDecoder().decode(raw);
+  const extension = detectExtension(filename, textForExtension);
+  const bytes = typeof raw === 'string' ? new TextEncoder().encode(raw) : raw;
+  state.selectedExample = selectedExample;
+  state.document = deserializeDocumentBytes(bytes, extension);
+  state.rawEditorText = serializeDocument(state.document);
+  state.rawEditorError = null;
+  state.rawEditorDiagnostics = [];
+  state.filename = extension === '.md'
+    ? normalizeMarkdownImportFilename(filename)
+    : normalizeFilename(filename);
+  state.history = [];
+  state.future = [];
+  clearChatConversation(state.chat);
+  resetTransientUiState();
+  saveResumeState(state);
+  getRenderApp()();
+}
+
+async function openLocalDocumentWithPicker(): Promise<void> {
+  const picker = (window as unknown as {
+    showOpenFilePicker?: (options?: unknown) => Promise<HvyFileSystemFileHandle[]>;
+  }).showOpenFilePicker;
+  if (!picker) {
+    return;
+  }
+  const [handle] = await picker({
+    multiple: false,
+    types: [
+      {
+        description: 'HVY documents',
+        accept: {
+          'text/plain': ['.hvy', '.thvy', '.md', '.markdown'],
+        },
+      },
+    ],
+  });
+  if (!handle) {
+    return;
+  }
+  const file = await handle.getFile();
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  replaceLoadedDocument(bytes, file.name, 'custom');
+  currentFileHandle = handle;
+}
+
+async function saveCurrentDocumentInPlace(downloadName: HTMLInputElement): Promise<void> {
+  const normalized = normalizeFilename(state.filename || 'document.hvy');
+  state.filename = normalized;
+  downloadName.value = normalized;
+  const bytes = serializeDocumentBytes(state.document);
+  if (!currentFileHandle) {
+    downloadBinaryFile(normalized, bytes);
+    getRenderApp()();
+    return;
+  }
+  const writable = await currentFileHandle.createWritable();
+  await writable.write(bytes);
+  await writable.close();
+  saveResumeState(state);
+  getRenderApp()();
+}
+
 export function bindUi(app: HTMLElement): void {
   const newBtn = app.querySelector<HTMLButtonElement>('#newBtn');
   const fileInput = app.querySelector<HTMLInputElement>('#fileInput');
   const downloadBtn = app.querySelector<HTMLButtonElement>('#downloadBtn');
   const downloadName = app.querySelector<HTMLInputElement>('#downloadName');
+  const openLocalFileBtn = app.querySelector<HTMLButtonElement>('#openLocalFileBtn');
+  const saveFileBtn = app.querySelector<HTMLButtonElement>('#saveFileBtn');
   const readerDocument = app.querySelector<HTMLDivElement>('#readerDocument');
   const readerSidebarSections = app.querySelector<HTMLDivElement>('#readerSidebarSections');
   const aiReaderDocument = app.querySelector<HTMLDivElement>('#aiReaderDocument');
@@ -71,6 +153,7 @@ export function bindUi(app: HTMLElement): void {
   scheduleSidebarHelpAutoClose(app);
 
   newBtn.addEventListener('click', () => {
+    currentFileHandle = null;
     resetToBlankDocument();
   });
 
@@ -86,6 +169,7 @@ export function bindUi(app: HTMLElement): void {
     state.future = [];
     clearChatConversation(state.chat);
     resetTransientUiState();
+    currentFileHandle = null;
     saveResumeState(state);
     getRenderApp()();
   });
@@ -102,6 +186,7 @@ export function bindUi(app: HTMLElement): void {
     state.future = [];
     clearChatConversation(state.chat);
     resetTransientUiState();
+    currentFileHandle = null;
     saveResumeState(state);
     getRenderApp()();
   });
@@ -118,8 +203,35 @@ export function bindUi(app: HTMLElement): void {
     state.future = [];
     clearChatConversation(state.chat);
     resetTransientUiState();
+    currentFileHandle = null;
     saveResumeState(state);
     getRenderApp()();
+  });
+
+  const importReferenceBtn = app.querySelector<HTMLButtonElement>('#importReferenceBtn');
+  importReferenceBtn?.addEventListener('click', () => {
+    currentFileHandle = null;
+    replaceLoadedDocument(bundledImportReferenceHvy, 'ai-import-hvy-format-reference.hvy', 'import-reference');
+  });
+
+  if (openLocalFileBtn) {
+    openLocalFileBtn.hidden = !supportsFileSystemAccess();
+    openLocalFileBtn.addEventListener('click', () => {
+      void openLocalDocumentWithPicker().catch((error: unknown) => {
+        if (error instanceof DOMException && error.name === 'AbortError') {
+          return;
+        }
+        state.rawEditorError = error instanceof Error ? error.message : 'Could not open the selected file.';
+        getRenderApp()();
+      });
+    });
+  }
+
+  saveFileBtn?.addEventListener('click', () => {
+    void saveCurrentDocumentInPlace(downloadName).catch((error: unknown) => {
+      state.rawEditorError = error instanceof Error ? error.message : 'Could not save the current document.';
+      getRenderApp()();
+    });
   });
 
   const applyReaderView = (view: ReaderViewFilter): void => {
@@ -160,6 +272,7 @@ export function bindUi(app: HTMLElement): void {
     if (!file) {
       return;
     }
+    currentFileHandle = null;
     const bytes = new Uint8Array(await file.arrayBuffer());
     const text = new TextDecoder().decode(bytes);
     const extension = detectExtension(file.name, text);

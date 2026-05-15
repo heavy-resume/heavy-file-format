@@ -334,10 +334,16 @@ test('parseDocumentEditToolRequest accepts table as a query_db_table table_name 
 
 test('buildImportPlanForDocument stops after mocked plan without mutating the document', async () => {
   requestProxyCompletionMock.mockResolvedValueOnce(
-    '{"steps":["Add an imported summary text component","Verify the imported summary appears"]}'
+    '{"steps":[{"section":"Summary","sectionId":"summary"}]}'
   );
   const document = deserializeDocument(`---
 hvy_version: 0.1
+section_defs:
+  - name: Details
+    template:
+      id: details-template
+      title: Details
+      blocks: []
 ---
 
 <!--hvy: {"id":"summary"}-->
@@ -345,6 +351,12 @@ hvy_version: 0.1
 
 <!--hvy:text {"id":"intro"}-->
  Existing content
+
+<!--hvy: {"id":"details"}-->
+#! Details
+
+<!--hvy:text {"id":"details-text"}-->
+ Other content
 `, '.hvy');
   const before = serializeDocument(document);
   const progress = vi.fn();
@@ -365,7 +377,18 @@ hvy_version: 0.1
 
   expect(result).toEqual({
     status: 'ready',
-    steps: ['Add an imported summary text component', 'Verify the imported summary appears'],
+    steps: [
+      {
+        sectionTitle: 'Summary',
+        instruction: 'Create the Summary section.',
+        target: {
+          kind: 'body',
+          id: 'summary',
+          title: 'Summary',
+          name: undefined,
+        },
+      },
+    ],
   });
   expect(serializeDocument(document)).toBe(before);
   expect(requestProxyCompletionMock).toHaveBeenCalledTimes(1);
@@ -375,18 +398,33 @@ hvy_version: 0.1
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages[0]?.content).toContain('Keep resume entries in reverse chronological order.');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages[0]?.content).not.toContain('Imported summary');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages[0]?.content).toContain('Do not use tools. Do not mutate anything.');
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages[0]?.content).toContain('Break the work down into execution-sized steps.');
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages[0]?.content).toContain('Create or reconcile the section structure first.');
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages[0]?.content).toContain('one step per high-level source item/component');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages[0]?.content).toContain('Plan section-sized work only.');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages[0]?.content).toContain('Use one step per final document section.');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages[0]?.content).toContain('matching existing body section by sectionId');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages[0]?.content).toContain('Do not copy specific source facts into the plan.');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages[0]?.content).toContain('Decide from the imported source text');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages[0]?.content).toContain('Do not write conditional');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages[0]?.content).toContain('Use only facts present in the imported source text');
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Current HVY template/scaffold:');
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Existing content');
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Imported source document:');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('=== BEGIN TEMPLATE SECTIONS ===');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Template section outline (section names only; no component content):');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('- body: Summary (id: summary)');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('- definition: Details (id: details-template, name: Details)');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).not.toContain('Existing content');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).not.toContain('```hvy');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('=== END TEMPLATE SECTIONS ===');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('=== BEGIN SOURCE DOCUMENT ===');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Imported summary');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('=== END SOURCE DOCUMENT ===');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.responseInstructions).toContain('Return exactly one JSON object and no prose.');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.responseInstructions).toContain('"sectionId":"header"');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.responseInstructions).toContain('"templateName":"Work History"');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.responseInstructions).toContain('Every step must be unconditional and source-backed.');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.responseInstructions).toContain('Do not include `instruction` unless');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.responseInstructions).toContain('Do not copy specific source facts into the plan');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.responseInstructions).toContain('Do not include steps containing conditional language');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.responseInstructions).toContain('Do not impose a step count limit.');
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.responseInstructions).toContain('section creation/reconciliation happens before adding high-level components');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.responseInstructions).toContain('split that into one step per section');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.responseInstructions).toContain('Do not include component-level steps');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.beforeRequest).toEqual(expect.any(Function));
   await requestProxyCompletionMock.mock.calls[0]?.[0]?.beforeRequest('ai-import-plan');
   expect(beforeLlmCall).toHaveBeenCalledTimes(1);
@@ -398,11 +436,39 @@ hvy_version: 0.1
   expect(progress.mock.calls.map((call) => call[0].phase)).toContain('thinking');
 });
 
+test('buildImportPlanForDocument rejects conditional plan steps', async () => {
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"steps":["Create any additional Resume Section entries only if a source-backed extra section is needed; otherwise leave the template scaffold unmodified"]}'
+  );
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+`, '.hvy');
+
+  const result = await buildImportPlanForDocument(document, {
+    sourceName: 'resume.txt',
+    sourceText: 'Awards\nBest Internal Tool 2024',
+    llm: {
+      settings: { provider: 'openai', model: 'gpt-5-mini' },
+      client: { complete: vi.fn() },
+    },
+  });
+
+  expect(result).toEqual({
+    status: 'error',
+    message: 'The import planner did not return a usable plan.',
+  });
+});
+
 test('importTextIntoDocument executes approved steps with mocked LLM tool calls', async () => {
-  queueAiToolResponses(
-    '{"tool":"create_component","position":"append-to-section","section_ref":"summary","hvy":"<!--hvy:text {\\"id\\":\\"imported-summary\\"}-->\\n Imported summary","reason":"Add the imported text."}',
-    '{"tool":"mark_step_done","step":1,"summary":"Added the imported summary."}',
-    '{"tool":"done","summary":"Imported notes.txt."}'
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"information":"Imported summary"}'
+  );
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"hvy":"<!--hvy: {\\"id\\":\\"imported-summary\\"}-->\\n#! Imported Summary\\n\\n <!--hvy:text {\\"id\\":\\"imported-summary-text\\"}-->\\n  Imported summary"}'
   );
   const document = deserializeDocument(`---
 hvy_version: 0.1
@@ -413,6 +479,12 @@ hvy_version: 0.1
 
 <!--hvy:text {"id":"intro"}-->
  Existing content
+
+<!--hvy: {"id":"details"}-->
+#! Details
+
+<!--hvy:text {"id":"details-text"}-->
+ Other content
 `, '.hvy');
   const onMutation = vi.fn();
   const progress = vi.fn();
@@ -420,13 +492,7 @@ hvy_version: 0.1
   const result = await importTextIntoDocument(document, {
     sourceName: 'notes.txt',
     sourceText: 'Imported summary',
-    steps: ['Add the imported summary text component', 'Verify the imported summary appears'],
-    toolLoopCompaction: {
-      compactAfterMessages: 2,
-      keepRecentMessages: 1,
-      latestToolResultContextChars: 80,
-      toolResultChatChars: 80,
-    },
+    steps: ['Create a Summary section from the imported summary'],
     llm: {
       settings: { provider: 'openai', model: 'gpt-5-mini' },
       client: { complete: vi.fn() },
@@ -438,16 +504,202 @@ hvy_version: 0.1
   expect(result.status).toBe('complete');
   expect(serializeDocument(document)).toContain('"id":"imported-summary"');
   expect(serializeDocument(document)).toContain('Imported summary');
-  expect(onMutation).toHaveBeenCalledWith('ai-edit:block');
-  const firstEditContext = requestProxyCompletionMock.mock.calls[1]?.[0]?.context ?? '';
-  expect(firstEditContext).toContain('Plan progress:');
-  expect(firstEditContext).toContain('1. [ ] Add the imported summary text component');
-  expect(firstEditContext).toContain('Import source context (stable across planning and execution turns');
-  expect(firstEditContext).toContain('Imported summary');
-  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.responseInstructions).not.toContain('Plan shape:');
-  const secondEditMessages = requestProxyCompletionMock.mock.calls[2]?.[0]?.messages ?? [];
-  expect(secondEditMessages.some((message: ChatMessage) => message.content.includes('Context summary for pruned older tool-loop history'))).toBe(true);
-  expect(progress.mock.calls.map((call) => call[0].phase)).toContain('tool_call');
+  expect(serializeDocument(document)).not.toContain('Existing content');
+  expect(serializeDocument(document)).toContain('Other content');
+  expect(onMutation).toHaveBeenCalledWith('ai-edit:section');
+  expect(requestProxyCompletionMock).toHaveBeenCalledTimes(2);
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.debugLabel).toBe('ai-import-section-data:1');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages[0]?.content).toContain('Extract source information');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages[0]?.content).toContain('This is not a tool loop.');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).not.toContain('=== BEGIN TEMPLATE SECTION STRUCTURE ===');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('=== BEGIN SECTION APPLICATION ===');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('=== BEGIN DOCUMENT RELATIONSHIPS ===');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('summary: Summary');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Existing xref-card references already present');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Application: replace existing body section.');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Matched section title: Summary');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('=== BEGIN MATCHED SECTION TEMPLATE ===');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Existing content');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).not.toContain('Other content');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('=== BEGIN SOURCE DOCUMENT ===');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('=== END SOURCE DOCUMENT ===');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('1. [current] Summary: Create a Summary section from the imported summary (body section: Summary (summary))');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.responseInstructions).toContain('`information` is a concise text document');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.debugLabel).toBe('ai-import-section-hvy:1');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages[0]?.content).toContain('Generate one complete HVY section');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('=== BEGIN SECTION APPLICATION ===');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('=== BEGIN DOCUMENT RELATIONSHIPS ===');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('summary: Summary');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('Application: replace existing body section.');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('Existing content');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('=== BEGIN SECTION INFORMATION ===');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('Imported summary');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('=== END SECTION INFORMATION ===');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).not.toContain('=== BEGIN SOURCE DOCUMENT ===');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('=== BEGIN HVY FORMAT REFERENCE ===');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('Directive payloads are single-line valid JSON objects.');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('Custom components from the matched template use the same directive form');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('`xrefTarget` should be an exact id from the relationship inventory');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.responseInstructions).toContain('`hvy` must be one complete valid HVY section');
+  expect(progress.mock.calls.map((call) => call[0].phase)).not.toContain('tool_call');
+  expect(progress.mock.calls.map((call) => call[0])).toContainEqual({
+    phase: 'thinking',
+    message: 'Applying section 1.',
+  });
+});
+
+test('importTextIntoDocument appends generated section when approved step matches only a template section', async () => {
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"information":"Imported details"}'
+  );
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"hvy":"<!--hvy: {\\"id\\":\\"imported-details\\"}-->\\n#! Details\\n\\n <!--hvy:text {\\"id\\":\\"imported-details-text\\"}-->\\n  Imported details"}'
+  );
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+section_defs:
+  - name: Details
+    template:
+      id: details-template
+      title: Details
+      blocks: []
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {"id":"intro"}-->
+ Existing content
+`, '.hvy');
+
+  const result = await importTextIntoDocument(document, {
+    sourceName: 'notes.txt',
+    sourceText: 'Imported details',
+    steps: ['Create the Details section from imported details'],
+    llm: {
+      settings: { provider: 'openai', model: 'gpt-5-mini' },
+      client: { complete: vi.fn() },
+    },
+  });
+
+  const serialized = serializeDocument(document);
+  expect(result.status).toBe('complete');
+  expect(serialized).toContain('"id":"summary"');
+  expect(serialized).toContain('Existing content');
+  expect(serialized).toContain('"id":"imported-details"');
+  expect(serialized.indexOf('"id":"summary"')).toBeLessThan(serialized.indexOf('"id":"imported-details"'));
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).not.toContain('<!-- Template section: Details -->');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('=== BEGIN SECTION INFORMATION ===');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).not.toContain('=== BEGIN SOURCE DOCUMENT ===');
+});
+
+test('importTextIntoDocument accepts model HVY responses with escaped directive brackets', async () => {
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"information":"Imported summary"}'
+  );
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"hvy":"&lt;!--hvy: {&quot;id&quot;:&quot;imported-summary&quot;}--&gt;\\n#! Imported Summary\\n\\n &lt;!--hvy:text {&quot;id&quot;:&quot;imported-summary-text&quot;}--&gt;\\n  Imported summary"}'
+  );
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {"id":"intro"}-->
+ Existing content
+`, '.hvy');
+
+  const result = await importTextIntoDocument(document, {
+    sourceName: 'notes.txt',
+    sourceText: 'Imported summary',
+    steps: [{ section: 'Summary', sectionId: 'summary' }],
+    llm: {
+      settings: { provider: 'openai', model: 'gpt-5-mini' },
+      client: { complete: vi.fn() },
+    },
+  });
+
+  const serialized = serializeDocument(document);
+  expect(result.status).toBe('complete');
+  expect(serialized).toContain('"id":"imported-summary"');
+  expect(serialized).toContain('<!--hvy:text {"id":"imported-summary-text"}-->');
+  expect(serialized).not.toContain('&lt;!--');
+});
+
+test('importTextIntoDocument treats explicit blank targets as binding even when text mentions an existing section', async () => {
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"information":"Imported summary"}'
+  );
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"hvy":"<!--hvy: {\\"id\\":\\"imported-blank-summary\\"}-->\\n#! Imported Summary\\n\\n <!--hvy:text {\\"id\\":\\"imported-blank-summary-text\\"}-->\\n  Imported summary"}'
+  );
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {"id":"intro"}-->
+ Existing content
+`, '.hvy');
+
+  const result = await importTextIntoDocument(document, {
+    sourceName: 'notes.txt',
+    sourceText: 'Imported summary',
+    steps: [
+      {
+        sectionTitle: 'Imported Summary',
+        instruction: 'Create a Summary section from imported summary as a new blank section',
+        target: { kind: 'blank', title: 'Imported Summary' },
+      },
+    ],
+    llm: {
+      settings: { provider: 'openai', model: 'gpt-5-mini' },
+      client: { complete: vi.fn() },
+    },
+  });
+
+  const serialized = serializeDocument(document);
+  expect(result.status).toBe('complete');
+  expect(serialized).toContain('"id":"summary"');
+  expect(serialized).toContain('Existing content');
+  expect(serialized).toContain('"id":"imported-blank-summary"');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Application: create an empty new section from scratch.');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).not.toContain('Application: replace existing body section.');
+});
+
+test('importTextIntoDocument errors when an explicit body target is missing', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+`, '.hvy');
+
+  const result = await importTextIntoDocument(document, {
+    sourceName: 'notes.txt',
+    sourceText: 'Imported summary',
+    steps: [
+      {
+        sectionTitle: 'Summary',
+        instruction: 'Create a Summary section from imported summary',
+        target: { kind: 'body', id: 'missing-summary', title: 'Summary' },
+      },
+    ],
+    llm: {
+      settings: { provider: 'openai', model: 'gpt-5-mini' },
+      client: { complete: vi.fn() },
+    },
+  });
+
+  expect(result.status).toBe('error');
+  expect(result.message).toContain('Import plan target was not found');
+  expect(result.message).toContain('missing-summary');
+  expect(requestProxyCompletionMock).not.toHaveBeenCalled();
 });
 
 test('importTextIntoDocument returns error for empty approved steps without calling the LLM', async () => {
@@ -490,7 +742,6 @@ test('buildImportPlanForDocument reports aborted status from an aborted signal',
 });
 
 test('importTextIntoDocument returns aborted status during execution abort', async () => {
-  requestProxyCompletionMock.mockResolvedValueOnce('AI note: reviewed the import target.');
   requestProxyCompletionMock.mockImplementationOnce(({ signal }: { signal?: AbortSignal }) => {
     signal?.dispatchEvent(new Event('abort'));
     throw new DOMException('The operation was aborted.', 'AbortError');

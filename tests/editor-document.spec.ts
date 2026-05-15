@@ -44,6 +44,21 @@ test('reference app uses embedded runtime boundary for themed controls', async (
   await expect(page.locator('.editor-sidebar-panel')).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 });
 
+test('reference app can load the import HVY reference document', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Import Reference' }).click();
+
+  await expect(page.locator('#downloadName')).toHaveValue('ai-import-hvy-format-reference.hvy');
+  await expect(page.locator('#editorTree')).toContainText('HVY Format Reference');
+  await expect(page.locator('#editorTree')).toContainText('Xref Rules');
+  await expect.poll(async () => page.locator('#editorTree').evaluate((element) => element.innerHTML)).not.toContain('&amp;lt;!--');
+  await expect(page.locator('#editorTree code', { hasText: '<!--hvy:component-name {...json...}-->' })).toBeVisible();
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await expect(page.locator('#rawEditor')).toContainText('<!--hvy: {"id":"hvy-format-reference"');
+  await expect(page.locator('#rawEditor')).not.toContainText('&lt;!--');
+});
+
 test('embedded runtime keeps host button and link styles outside the mounted document', async ({ page }) => {
   await page.goto('/');
 
@@ -282,9 +297,8 @@ hvy_version: 0.1
       throw new Error('Mount root missing.');
     }
     const responses = [
-      'AI note: use summary.',
-      '{"tool":"create_component","position":"append-to-section","section_ref":"summary","hvy":"<!--hvy:text {\\"id\\":\\"imported-after-diagnostic\\"}-->\\n Imported despite diagnostic","reason":"Mutate before diagnostics run."}',
-      '{"tool":"done","summary":"Imported text."}',
+      '{"information":"Bad card"}',
+      '{"hvy":"<!--hvy: {\\"id\\":\\"imported-after-diagnostic\\"}-->\\n#! Imported\\n\\n <!--hvy:text {\\"id\\":\\"imported-after-diagnostic-text\\"}-->\\n  Imported despite diagnostic"}',
     ];
     const calls: unknown[] = [];
     const progress: string[] = [];
@@ -328,6 +342,93 @@ hvy_version: 0.1
   expect(result.result.message).toContain('expandable block is missing');
   expect(result.html).toContain('Existing content');
   expect(result.html).toContain('Imported despite diagnostic');
+});
+
+test('embedded importFromText awaits document update hooks before diagnostics and render', async ({ page }) => {
+  await page.goto('/');
+
+  const result = await page.evaluate(async () => {
+    document.body.innerHTML = '<div id="mount"></div>';
+    const modulePath = '/src/embed.ts';
+    const { deserializeDocumentBytes, mountHvy, serializeDocument } = await import(/* @vite-ignore */ modulePath);
+    const source = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {"id":"intro"}-->
+ Existing content
+`;
+    const root = document.querySelector<HTMLElement>('#mount');
+    if (!root) {
+      throw new Error('Mount root missing.');
+    }
+    const hookReasons: string[] = [];
+    const progressSnapshots: string[] = [];
+    const responses = [
+      '{"information":"Imported summary"}',
+      '{"hvy":"<!--hvy: {\\"id\\":\\"imported-summary\\"}-->\\n#! Imported Summary\\n\\n <!--hvy:text {\\"id\\":\\"imported-summary-text\\"}-->\\n  Imported summary"}',
+    ];
+    const mount = mountHvy({
+      root,
+      document: deserializeDocumentBytes(new TextEncoder().encode(source), '.hvy'),
+      mode: 'editor',
+      plugins: [{
+        id: 'test.import-hook',
+        displayName: 'Import Hook',
+        create() {
+          return { element: document.createElement('div') };
+        },
+        hooks: {
+          documentChange: {
+            async run(ctx) {
+              hookReasons.push(ctx.changeReason);
+              await new Promise((resolve) => setTimeout(resolve, 0));
+              const imported = ctx.document.sections.find((section) => section.customId === 'imported-summary');
+              if (imported) {
+                imported.title = 'Hook Updated Import';
+              }
+            },
+          },
+        },
+      }],
+    });
+    const importResult = await mount.importFromText({
+      sourceName: 'summary.txt',
+      sourceText: 'Imported summary',
+      steps: [{ section: 'Summary', sectionId: 'summary' }],
+      llm: {
+        settings: { provider: 'openai', model: 'mock-import-model' },
+        client: {
+          async complete() {
+            const output = responses.shift();
+            if (!output) {
+              throw new Error('Unexpected import LLM call.');
+            }
+            return { output };
+          },
+        },
+      },
+      onProgress(event) {
+        progressSnapshots.push(`${event.phase}:${root.textContent?.includes('Hook Updated Import') ? 'rendered' : 'pending'}`);
+      },
+    });
+    return {
+      importResult,
+      hookReasons,
+      progressSnapshots,
+      html: root.textContent,
+      serialized: serializeDocument(mount.getDocument()),
+    };
+  });
+
+  expect(result.importResult.status).toBe('complete');
+  expect(result.hookReasons).toEqual(['ai-edit']);
+  expect(result.progressSnapshots).toContain('linting:rendered');
+  expect(result.html).toContain('Hook Updated Import');
+  expect(result.serialized).toContain('#! Hook Updated Import');
 });
 
 test('new section component picker opens on the first click', async ({ page }) => {

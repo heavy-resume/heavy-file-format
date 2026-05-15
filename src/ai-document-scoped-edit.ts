@@ -1,5 +1,4 @@
 import { requestProxyCompletion, traceAgentLoopEvent, type HostChatClient } from './chat/chat';
-import { serializeDocument } from './serialization';
 import { getRegisteredPluginAiHints } from './ai-plugin-hints';
 import {
   executeDbTableQueryTool,
@@ -174,134 +173,7 @@ export async function requestAiDocumentEditTurn(params: {
   }
 }
 
-export type HvyImportProgressPhase = 'starting' | 'thinking' | 'tool_call' | 'linting' | 'complete';
-
-export interface HvyImportProgressEvent {
-  phase: HvyImportProgressPhase;
-  message?: string;
-}
-
-export interface HvyImportLlmOptions {
-  settings: ChatSettings;
-  client?: HostChatClient | null;
-}
-
-export interface HvyImportLlmStepEvent {
-  callIndex: number;
-  debugLabel: string;
-  phase: HvyImportProgressPhase;
-}
-
-export interface BuildImportPlanOptions {
-  sourceName: string;
-  sourceText: string;
-  instructions?: string;
-  llm?: HvyImportLlmOptions;
-  beforeLlmCall?: (event: HvyImportLlmStepEvent) => Promise<void> | void;
-  onProgress?: (event: HvyImportProgressEvent) => void;
-  signal?: AbortSignal;
-}
-
-export interface BuildImportPlanResult {
-  status: 'ready' | 'aborted' | 'error';
-  steps?: string[];
-  message?: string;
-}
-
-export interface ImportFromTextOptions {
-  sourceName: string;
-  sourceText: string;
-  instructions?: string;
-  steps: string[];
-  llm?: HvyImportLlmOptions;
-  toolLoopCompaction?: ToolLoopCompactionOptions;
-  beforeLlmCall?: (event: HvyImportLlmStepEvent) => Promise<void> | void;
-  onProgress?: (event: HvyImportProgressEvent) => void;
-  signal?: AbortSignal;
-}
-
-export interface ImportFromTextResult {
-  status: 'complete' | 'aborted' | 'error';
-  message?: string;
-}
-
-export async function buildImportPlanForDocument(
-  document: VisualDocument,
-  options: BuildImportPlanOptions
-): Promise<BuildImportPlanResult> {
-  options.onProgress?.({ phase: 'starting', message: `Preparing import plan for ${options.sourceName}.` });
-  try {
-    const llm = requireImportLlm(options.llm);
-    throwIfAborted(options.signal);
-    options.onProgress?.({ phase: 'thinking', message: 'Reviewing the template and imported document.' });
-    const beforeLlmCall = createImportLlmStepper(options.beforeLlmCall, options.signal)?.('thinking');
-    const response = await requestProxyCompletion({
-      settings: llm.settings,
-      client: llm.client,
-      messages: [
-        {
-          id: crypto.randomUUID(),
-          role: 'user',
-          content: buildImportPlanPrompt(options.sourceName, options.instructions),
-        },
-      ],
-      context: buildImportPlanContext(document, options.sourceName, options.sourceText),
-      responseInstructions: buildImportPlanResponseInstructions(),
-      mode: 'document-edit',
-      debugLabel: 'ai-import-plan',
-      beforeRequest: beforeLlmCall,
-      signal: options.signal,
-    });
-    throwIfAborted(options.signal);
-    const steps = parseImportPlanSteps(response);
-    if (steps.length === 0) {
-      return { status: 'error', message: 'The import planner did not return a usable plan.' };
-    }
-    options.onProgress?.({ phase: 'complete', message: 'Import plan is ready.' });
-    return { status: 'ready', steps };
-  } catch (error) {
-    if (isAbortError(error)) {
-      return { status: 'aborted', message: 'Import planning was aborted.' };
-    }
-    return { status: 'error', message: error instanceof Error ? error.message : 'Import planning failed.' };
-  }
-}
-
-export async function importTextIntoDocument(
-  document: VisualDocument,
-  options: ImportFromTextOptions & { onMutation?: (group?: string) => void }
-): Promise<ImportFromTextResult> {
-  const steps = normalizePlanSteps(options.steps);
-  if (steps.length === 0) {
-    return { status: 'error', message: 'Import requires at least one approved plan step.' };
-  }
-  options.onProgress?.({ phase: 'starting', message: `Importing ${options.sourceName}.` });
-  try {
-    const llm = requireImportLlm(options.llm);
-    throwIfAborted(options.signal);
-    const result = await runDocumentEditToolLoop({
-      settings: llm.settings,
-      client: llm.client,
-      document,
-      request: buildImportRequest(options.sourceName, options.instructions),
-      stableContext: buildImportSourceContext(options.sourceName, options.sourceText),
-      mode: { kind: 'execute-approved-plan', steps },
-      createBeforeLlmCall: createImportLlmStepper(options.beforeLlmCall, options.signal),
-      toolLoopCompaction: options.toolLoopCompaction ?? llm.settings.toolLoopCompaction,
-      onMutation: options.onMutation,
-      onProgress: (content) => options.onProgress?.(mapImportLoopProgress(content)),
-      signal: options.signal,
-    });
-    throwIfAborted(options.signal);
-    options.onProgress?.({ phase: 'complete', message: result.summary || 'Import complete.' });
-    return { status: 'complete', message: result.summary || 'Import complete.' };
-  } catch (error) {
-    if (isAbortError(error)) {
-      return { status: 'aborted', message: 'Import was aborted.' };
-    }
-    return { status: 'error', message: error instanceof Error ? error.message : 'Import failed.' };
-  }
-}
+type DocumentEditLlmCallPhase = 'thinking' | 'tool_call';
 
 function appendChatMessage(messages: ChatMessage[], content: string): ChatMessage[] {
   return [
@@ -334,25 +206,19 @@ async function runDocumentEditLoop(params: {
   });
 }
 
-type DocumentEditLoopMode =
-  | { kind: 'normal' }
-  | { kind: 'execute-approved-plan'; steps: string[] };
-
 async function runDocumentEditToolLoop(params: {
   settings: ChatSettings;
   client?: HostChatClient | null;
   document: VisualDocument;
   request: string;
   stableContext?: string;
-  mode?: DocumentEditLoopMode;
-  createBeforeLlmCall?: (phase: HvyImportProgressPhase) => ((debugLabel: string) => Promise<void>) | undefined;
+  createBeforeLlmCall?: (phase: DocumentEditLlmCallPhase) => ((debugLabel: string) => Promise<void>) | undefined;
   toolLoopCompaction?: ToolLoopCompactionOptions;
   onMutation?: (group?: string) => void;
   onProgress?: (content: string) => void;
   traceRunId?: string;
   signal?: AbortSignal;
 }): Promise<{ summary: string }> {
-  const mode = params.mode ?? { kind: 'normal' };
   let snapshot = summarizeDocumentStructure(params.document);
   let configuredDbTableNames = getDocumentDbTableNames(params.document);
   let dbObjectNames = await getDocumentDbTableObjectNames(params.document);
@@ -399,9 +265,7 @@ async function runDocumentEditToolLoop(params: {
   let latestIntent = params.request;
   let workNote: WorkNoteState = createInitialWorkNote(params.request);
   let latestToolResult: string | null = null;
-  let plan: EditPlanState | null = mode.kind === 'execute-approved-plan'
-    ? { steps: normalizePlanSteps(mode.steps).map((step) => ({ text: step, done: false })) }
-    : null;
+  let plan: EditPlanState | null = null;
   const health = createLoopHealthState();
   let conversation: ChatMessage[] = [
     {
@@ -924,135 +788,6 @@ function isTransientRecoveryPrompt(content: string): boolean {
   return content.startsWith('Return one valid tool JSON object using the documented shapes.')
     || content.startsWith('Return one valid header tool JSON object using the documented shapes.')
     || content.startsWith('You appear to be stuck. Do not repeat the previous action.');
-}
-
-function buildImportPlanPrompt(sourceName: string, instructions?: string): string {
-  return [
-    `Build a granular import plan for creating a document from "${sourceName}".`,
-    '',
-    'You have the current HVY template/scaffold and the imported source document in context. Do not use tools. Do not mutate anything.',
-    'Treat the current document primarily as a starting template/scaffold for a new document.',
-    'Plan how to reconcile the source document into the template using reusable HVY structure and existing reusable definitions where they fit.',
-    'Break the work down into execution-sized steps. Do not combine multiple sections, roles, schools, projects, skills groups, or other source items into one step.',
-    'Create or reconcile the section structure first. After the sections exist, add high-level components or content items to those sections one item at a time.',
-    'Use one step per section and one step per high-level source item/component. For example, if the source has four work history entries, make four separate work-entry steps after the work section step.',
-    'Use only facts present in the imported source text or already present in the template. Do not invent dates, titles, employers, schools, credentials, metrics, skills, links, or other factual details.',
-    'Preserve exact source dates, names, titles, organization names, school names, skill names, and tool names unless the host instructions explicitly say to normalize them.',
-    instructions?.trim() ? ['Additional import instructions:', instructions.trim()].join('\n') : '',
-  ].filter(Boolean).join('\n');
-}
-
-function buildImportPlanContext(document: VisualDocument, sourceName: string, sourceText: string): string {
-  return [
-    'Current HVY template/scaffold:',
-    '```hvy',
-    serializeDocument(document),
-    '```',
-    '',
-    'Imported source document:',
-    `Source name: ${sourceName}`,
-    '```text',
-    sourceText,
-    '```',
-  ].join('\n');
-}
-
-function buildImportPlanResponseInstructions(): string {
-  return [
-    'Return exactly one JSON object and no prose.',
-    'Shape:',
-    '{"steps":["Short approved-action step","Another short approved-action step"]}',
-    '',
-    'Each step should be an imperative action that can be executed later against the imported source document and current template.',
-    'Do not impose a step count limit. Use as many steps as needed so each section and each high-level source item/component has its own step.',
-    'Order the steps so section creation/reconciliation happens before adding high-level components or content items inside those sections.',
-    'Do not write bundled steps such as "add Work, Education, Skills, and Projects sections"; split that into one step per section.',
-  ].join('\n');
-}
-
-function parseImportPlanSteps(response: string): string[] {
-  const trimmed = response.trim();
-  const fenced = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i)?.[1]?.trim();
-  const jsonText = fenced ?? trimmed;
-  try {
-    const parsed = JSON.parse(jsonText) as unknown;
-    if (!parsed || typeof parsed !== 'object') {
-      return [];
-    }
-    const maybePlan = parsed as { steps?: unknown; tool?: unknown };
-    if (maybePlan.tool !== undefined && maybePlan.tool !== 'plan') {
-      return [];
-    }
-    return normalizePlanSteps(Array.isArray(maybePlan.steps) ? maybePlan.steps : []);
-  } catch {
-    return [];
-  }
-}
-
-function buildImportRequest(sourceName: string, instructions?: string): string {
-  return [
-    `Import source "${sourceName}" into the currently loaded HVY document.`,
-    '',
-    'Treat the current document primarily as the starting template/scaffold for a new document unless the approved plan says to preserve specific existing content.',
-    'Reconcile the imported text with the existing document. Build reusable HVY structure and components rather than pasting the import as one opaque text blob.',
-    'Preserve relevant existing content unless the import clearly replaces it.',
-    'Use only facts present in the imported source text or already present in the current document. Do not invent dates, titles, employers, schools, credentials, metrics, skills, links, or other factual details.',
-    'Preserve exact source dates, names, titles, organization names, school names, skill names, and tool names unless the approved plan explicitly says to normalize them.',
-    'Prefer reusable HVY components and existing reusable definitions when the current document has matching structure.',
-    instructions?.trim() ? ['Additional import instructions:', instructions.trim()].join('\n') : '',
-  ].join('\n');
-}
-
-function buildImportSourceContext(sourceName: string, sourceText: string): string {
-  return [
-    'Import source context (stable across planning and execution turns; treat this as source-of-truth input for the import):',
-    `Source name: ${sourceName}`,
-    '',
-    'Imported source text:',
-    '```text',
-    sourceText,
-    '```',
-  ].join('\n');
-}
-
-function requireImportLlm(llm: HvyImportLlmOptions | undefined): HvyImportLlmOptions {
-  if (!llm) {
-    throw new Error('Import requires an LLM configuration.');
-  }
-  return llm;
-}
-
-function createImportLlmStepper(
-  beforeLlmCall: BuildImportPlanOptions['beforeLlmCall'] | undefined,
-  signal: AbortSignal | undefined
-): ((phase: HvyImportProgressPhase) => ((debugLabel: string) => Promise<void>) | undefined) | undefined {
-  if (!beforeLlmCall) {
-    return undefined;
-  }
-  let callIndex = 0;
-  return (phase) => async (debugLabel) => {
-    throwIfAborted(signal);
-    callIndex += 1;
-    await beforeLlmCall({
-      callIndex,
-      debugLabel,
-      phase,
-    });
-    throwIfAborted(signal);
-  };
-}
-
-function mapImportLoopProgress(content: string): HvyImportProgressEvent {
-  if (/^Plan:/i.test(content) || /\bplan step\b/i.test(content)) {
-    return { phase: 'thinking', message: content };
-  }
-  if (/\b(Running|Searching|Viewing|Creating|Removing|Patching|Updating|Executing|Querying|Fetching|Setting|Reordering)\b/i.test(content)) {
-    return { phase: 'tool_call', message: content };
-  }
-  if (/\bFinished|Completed all plan steps|Answered without changing/i.test(content)) {
-    return { phase: 'complete', message: content };
-  }
-  return { phase: 'thinking', message: content };
 }
 
 function buildLoopContext(

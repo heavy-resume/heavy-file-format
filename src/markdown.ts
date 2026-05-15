@@ -396,7 +396,60 @@ export function addExternalLinkTargets(html: string): string {
 }
 
 export function escapeRawHtml(markdown: string): string {
-  return markdown.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  let output = '';
+  let index = 0;
+  let fence: { marker: string; length: number } | null = null;
+  while (index < markdown.length) {
+    const lineEnd = markdown.indexOf('\n', index);
+    const nextLineIndex = lineEnd === -1 ? markdown.length : lineEnd + 1;
+    const line = markdown.slice(index, nextLineIndex);
+    const fenceMatch = line.match(/^( {0,3})(`{3,}|~{3,})/);
+    if (fence) {
+      output += line;
+      if (fenceMatch && fenceMatch[2]?.startsWith(fence.marker) && fenceMatch[2].length >= fence.length) {
+        fence = null;
+      }
+      index = nextLineIndex;
+      continue;
+    }
+    if (fenceMatch) {
+      const marker = fenceMatch[2]![0]!;
+      fence = { marker, length: fenceMatch[2]!.length };
+      output += line;
+      index = nextLineIndex;
+      continue;
+    }
+    output += escapeRawHtmlOutsideInlineCode(line);
+    index = nextLineIndex;
+  }
+  return output;
+}
+
+function escapeRawHtmlOutsideInlineCode(markdown: string): string {
+  let output = '';
+  let index = 0;
+  while (index < markdown.length) {
+    const char = markdown[index];
+    if (char === '`') {
+      const tickMatch = markdown.slice(index).match(/^`+/);
+      const ticks = tickMatch?.[0] ?? '`';
+      const close = markdown.indexOf(ticks, index + ticks.length);
+      if (close !== -1) {
+        output += markdown.slice(index, close + ticks.length);
+        index = close + ticks.length;
+        continue;
+      }
+    }
+    if (char === '<') {
+      output += '&lt;';
+    } else if (char === '>') {
+      output += '&gt;';
+    } else {
+      output += char;
+    }
+    index += 1;
+  }
+  return output;
 }
 
 export function applyUnderlineSyntax(markdown: string): string {

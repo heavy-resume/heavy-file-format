@@ -1,11 +1,12 @@
 import { builtInSearchProvider } from './search-provider';
 import { getReferenceAppConfig } from '../reference-config';
-import { navigateToReaderTarget } from '../navigation';
+import { navigateToReaderTarget, setEditorSidebarOpen } from '../navigation';
 import { state, getRenderApp, getRefreshReaderPanels } from '../state';
 import type { HvySearchResult, SearchCategory } from './types';
 import type { VisualBlock, VisualSection } from '../editor/types';
 import { filterTemplateVisibleSections } from '../template-hide';
 import { focusSearchInput } from './render';
+import { resolveBaseComponentFromMeta } from '../component-defs';
 
 const CATEGORY_ORDER: SearchCategory[] = ['tags', 'contents', 'description'];
 
@@ -33,6 +34,9 @@ export function closeSearch(): void {
     state.search.activeResultId = null;
     state.search.navigationResultIds = [];
     state.search.filterEnabled = false;
+    state.search.results = [];
+    state.search.clearedSectionKeys = [];
+    state.search.clearedBlockIds = [];
   }
   state.search.abortController?.abort();
   state.search.abortController = null;
@@ -143,15 +147,107 @@ export function selectSearchResult(app: HTMLElement, resultId: string): void {
   state.search.activeResultId = result.id;
   state.search.open = true;
   state.search.resultsCollapsed = true;
+  if (state.currentView === 'editor') {
+    revealEditorSearchTargetInState(result);
+  }
   getRenderApp()();
-  window.setTimeout(() => {
+  runAfterSearchResultRender(() => {
+    if (state.currentView === 'editor') {
+      navigateToEditorSearchTarget(result, app);
+      return;
+    }
     navigateToReaderTarget({
       targetId: result.targetId,
       sectionKey: result.sectionKey,
       blockId: result.blockId,
       matchText: result.matchedText,
     }, app);
-  }, 0);
+  });
+}
+
+function runAfterSearchResultRender(callback: () => void): void {
+  window.requestAnimationFrame(() => {
+    window.requestAnimationFrame(callback);
+  });
+}
+
+function navigateToEditorSearchTarget(result: HvySearchResult, app: HTMLElement): void {
+  alignEditorSidebarToSearchResult(result, app);
+  const target = findEditorSearchTarget(result, app);
+  if (!target) {
+    return;
+  }
+  scrollEditorSearchTargetIntoView(target);
+  target.classList.add('is-temp-highlighted');
+  window.setTimeout(() => {
+    target.classList.remove('is-temp-highlighted');
+  }, 1400);
+}
+
+function alignEditorSidebarToSearchResult(result: HvySearchResult, app: HTMLElement): void {
+  const section = findSectionByKeyDeep(state.document.sections, result.sectionKey);
+  if (section?.location === 'sidebar' && !state.editorSidebarOpen) {
+    setEditorSidebarOpen(app, true);
+    return;
+  }
+  if (section?.location !== 'sidebar' && state.editorSidebarOpen) {
+    setEditorSidebarOpen(app, false);
+  }
+}
+
+function revealEditorSearchTargetInState(result: HvySearchResult): void {
+  const section = findSectionByKeyDeep(state.document.sections, result.sectionKey);
+  if (!section) {
+    return;
+  }
+  state.editorSidebarOpen = section.location === 'sidebar';
+  if (!result.blockId) {
+    return;
+  }
+  const path = findBlockPathInList(section.blocks, result.blockId);
+  if (!path) {
+    return;
+  }
+  for (const block of path.slice(0, -1)) {
+    if (resolveBaseComponentFromMeta(block.schema.component, state.document.meta) !== 'expandable') {
+      continue;
+    }
+    const readerStateKey = `${section.key}:${block.id}`;
+    state.readerExpandableState[readerStateKey] = true;
+    const editorStateKey = `${section.key}:${block.id}`;
+    const current = state.expandableEditorPanels[editorStateKey] ?? { stubOpen: false, expandedOpen: false };
+    state.expandableEditorPanels[editorStateKey] = {
+      ...current,
+      stubOpen: true,
+      expandedOpen: true,
+    };
+  }
+}
+
+function findEditorSearchTarget(result: HvySearchResult, app: HTMLElement): HTMLElement | null {
+  if (result.blockId) {
+    const sectionKey = CSS.escape(result.sectionKey);
+    const blockId = CSS.escape(result.blockId);
+    return app.querySelector<HTMLElement>(
+      `.editor-shell .editor-block-passive[data-section-key="${sectionKey}"][data-block-id="${blockId}"], ` +
+      `.editor-shell .editor-block[data-active-block-id="${blockId}"]`
+    );
+  }
+  return app.querySelector<HTMLElement>(`.editor-shell [data-editor-section="${CSS.escape(result.sectionKey)}"]`);
+}
+
+function scrollEditorSearchTargetIntoView(target: HTMLElement): void {
+  const container = target.closest<HTMLElement>('.editor-tree, .editor-sidebar-panel');
+  if (container) {
+    const targetRect = target.getBoundingClientRect();
+    const containerRect = container.getBoundingClientRect();
+    container.scrollTo({
+      top: Math.max(0, container.scrollTop + targetRect.top - (containerRect.top + containerRect.height / 2)),
+      behavior: 'smooth',
+    });
+    return;
+  }
+  target.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
 export function selectAdjacentSearchResult(app: HTMLElement, direction: 1 | -1): void {
@@ -291,6 +387,16 @@ function findBlockPath(block: VisualBlock, blockId: string): VisualBlock[] | nul
     const path = findBlockPath(child, blockId);
     if (path) {
       return [block, ...path];
+    }
+  }
+  return null;
+}
+
+function findBlockPathInList(blocks: VisualBlock[], blockId: string): VisualBlock[] | null {
+  for (const block of blocks) {
+    const path = findBlockPath(block, blockId);
+    if (path) {
+      return path;
     }
   }
   return null;

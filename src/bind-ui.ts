@@ -1,7 +1,6 @@
 import bundledResumeThvy from '../examples/resume.thvy?raw';
 import bundledResumeHvy from '../examples/resume.hvy?raw';
 import bundledCrmHvy from '../examples/crm.hvy?raw';
-import bundledImportReferenceHvy from './ai-import-hvy-format-reference.hvy?raw';
 import bundledResumeViews from '../examples/resume-views.json';
 import { state, getRenderApp, getRefreshReaderPanels } from './state';
 import { findSectionByKey } from './section-ops';
@@ -25,6 +24,7 @@ import { logClickTrace } from './bind/click-trace';
 import type { ReaderViewFilter } from './types';
 
 const resumeViews = bundledResumeViews as Record<string, ReaderViewFilter>;
+const IMPORT_REFERENCE_API_PATH = '/api/import-reference-document';
 
 interface HvyFileSystemFileHandle {
   name: string;
@@ -88,11 +88,35 @@ async function openLocalDocumentWithPicker(): Promise<void> {
   currentFileHandle = handle;
 }
 
+async function loadImportReferenceDocumentFromServer(): Promise<void> {
+  const response = await fetch(IMPORT_REFERENCE_API_PATH, { cache: 'no-store' });
+  if (!response.ok) {
+    throw new Error(`Could not load import reference document: ${response.status} ${response.statusText}`);
+  }
+  currentFileHandle = null;
+  replaceLoadedDocument(await response.text(), 'ai-import-hvy-format-reference.hvy', 'import-reference');
+}
+
 async function saveCurrentDocumentInPlace(downloadName: HTMLInputElement): Promise<void> {
   const normalized = normalizeFilename(state.filename || 'document.hvy');
   state.filename = normalized;
   downloadName.value = normalized;
   const bytes = serializeDocumentBytes(state.document);
+  if (state.selectedExample === 'import-reference') {
+    const response = await fetch(IMPORT_REFERENCE_API_PATH, {
+      method: 'PUT',
+      headers: {
+        'content-type': 'text/plain; charset=utf-8',
+      },
+      body: new TextDecoder().decode(bytes),
+    });
+    if (!response.ok) {
+      throw new Error(`Could not save import reference document: ${response.status} ${response.statusText}`);
+    }
+    saveResumeState(state);
+    getRenderApp()();
+    return;
+  }
   if (!currentFileHandle) {
     downloadBinaryFile(normalized, bytes);
     getRenderApp()();
@@ -210,8 +234,10 @@ export function bindUi(app: HTMLElement): void {
 
   const importReferenceBtn = app.querySelector<HTMLButtonElement>('#importReferenceBtn');
   importReferenceBtn?.addEventListener('click', () => {
-    currentFileHandle = null;
-    replaceLoadedDocument(bundledImportReferenceHvy, 'ai-import-hvy-format-reference.hvy', 'import-reference');
+    void loadImportReferenceDocumentFromServer().catch((error: unknown) => {
+      state.rawEditorError = error instanceof Error ? error.message : 'Could not load the import reference document.';
+      getRenderApp()();
+    });
   });
 
   if (openLocalFileBtn) {

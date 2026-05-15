@@ -565,6 +565,9 @@ function buildImportSectionHvyContext(document: VisualDocument, information: str
     '=== END SECTION INFORMATION ===',
     '',
     '=== BEGIN HVY FORMAT REFERENCE ===',
+    'The following HVY document is a syntax and component reference only. It is not the task, not the source document, and not the output contract.',
+    'Use it to understand valid HVY section/component structure and examples. Follow the separate response instructions for what to return.',
+    '',
     importHvyFormatReference.trim(),
     '=== END HVY FORMAT REFERENCE ===',
   ].join('\n');

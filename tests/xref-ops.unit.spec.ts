@@ -53,6 +53,26 @@ component_defs:
   expect(isXrefTargetValid('tool-vite', 'skill')).toBe(false);
 });
 
+test('xref target options only include sections with an explicit id', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: { }-->
+#! Generated Key Only
+
+<!--hvy: {"id":"explicit-section"}-->
+#! Explicit Section
+`, '.hvy');
+
+  initState(createTestState(document));
+
+  const expectedResult = getXrefTargetOptions().map((option) => option.value);
+
+  expect(expectedResult).toContain('explicit-section');
+  expect(expectedResult).not.toContain(document.sections[0]?.key);
+});
+
 test('auto ids new tagged reusable template blocks for xref target options', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1

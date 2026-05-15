@@ -1,62 +1,277 @@
 ---
 hvy_version: 0.1
 title: HVY Import Format Reference
+reader_max_width: 60rem
+section_defaults:
+  css: "margin: 0 0 0.5rem;"
+theme:
+  colors: {}
 ---
 
-<!--hvy: {"id":"hvy-format-reference","editorOnly":true}-->
-#! HVY Format Reference
+<!--hvy: {"id":"hvy-syntax-rules","lock":false,"expanded":true,"highlight":false}-->
+#! Syntax Rules
 
-<!--hvy:text {"id":"hvy-format-return-contract"}-->
- Return raw HVY for exactly one complete section. Do not return document front matter, Markdown fences, tool JSON, HTML, JSX, or explanatory prose.
+ <!--hvy:text {}-->
+  # Syntax Rules
 
-<!--hvy:text {"id":"hvy-format-core-rules"}-->
- Core syntax rules:
- - HVY directives are HTML comments: `<!--hvy:component-name {...json...}-->`.
- - Directive payloads are single-line valid JSON objects.
- - Indentation is structural. Child blocks are indented under the section or parent block.
- - Section titles use `#!`; ordinary Markdown headings such as `##` are text content, not sections.
- - Use stable, lowercase, hyphenated ids for sections and xref-worthy records.
+ <!--hvy:text {}-->
+  - HVY directives are HTML comments: `<!--hvy:component-name {...json...}-->`.
+  - Directive payloads are single-line valid JSON objects.
+  - Indentation is structural. Child blocks are indented under the section or parent block.
+  - Section titles use `#!`; ordinary Markdown headings such as `##` are text content, not sections.
+  - Use stable, lowercase, hyphenated ids only for sections and records that should be available as explicit xref targets.
+  - Helper text, internal examples, generated reciprocal cards, and decorative blocks should usually omit `id`.
 
-<!--hvy: {"id":"hvy-format-section-example","tags":"example"}-->
-#! Section Shape Example
+ <!--hvy:text {}-->
+  Section shape:
+  - Start with a section directive like `<!--hvy: {"id":"section-id"}-->`.
+  - Follow it with a section heading like `#! Section Title`.
+  - Add child blocks below the section, for example `<!--hvy:text {"id":"section-text"}-->` followed by indented text.
+<!--hvy: {"id":"hvy-core-components","lock":false,"expanded":true,"highlight":false,"location":"sidebar"}-->
+#! Core Components
 
- <!--hvy:text {"id":"section-text"}-->
-  Markdown text for this section.
+ <!--hvy:text {}-->
+  # Core Components
 
-<!--hvy: {"id":"hvy-format-components-example","tags":"example"}-->
-#! Component Shape Examples
+ <!--hvy:expandable {"id":"component-text","tags":"component, core, text"}-->
+  <!--hvy:expandable:stub {"description":"Component name and quick example"}-->
 
- <!--hvy:text {"id":"plain-text-example"}-->
-  Text block content is indented under `hvy:text`.
+   <!--hvy:text {}-->
+    # text
+    
+    `<!--hvy:text {"id":"intro"}-->`
 
- <!--hvy:container {"id":"container-example","containerTitle":"Container Example"}-->
-  <!--hvy:text {"id":"container-child-text"}-->
-   Containers hold child blocks one level deeper.
+  <!--hvy:expandable:content {"description":"Text component description and example"}-->
 
- <!--hvy:component-list {"id":"xref-list-example","componentListComponent":"xref-card"}-->
-  <!--hvy:component-list:0 {}-->
-   <!--hvy:xref-card {"id":"xref-example","xrefTitle":"Visible title","xrefDetail":"Optional detail","xrefTarget":"target-id"}-->
+   <!--hvy:text {}-->
+    Use `text` for ordinary Markdown content. The block body is the text content, indented one level below the directive. Markdown headings, lists, emphasis, links, inline code, and fenced code belong in text blocks.
 
- <!--hvy:table {"id":"table-example","tableColumns":["A","B"],"tableRows":[{"cells":["a","b"]}]}-->
+   <!--hvy:text {}-->
+    Example:
+    - `<!--hvy:text {"id":"summary-text"}-->`
+    - ` Experienced software engineer with Python and TypeScript background.`
 
- <!--hvy:expandable {"id":"expandable-example"}-->
-  <!--hvy:expandable:content {}-->
-   <!--hvy:text {"id":"expandable-content-text"}-->
-    Expandable content requires a content slot.
+ <!--hvy:expandable {"id":"component-container","tags":"component, core, container, layout"}-->
+  <!--hvy:expandable:stub {"description":"Component name and quick example"}-->
 
-<!--hvy: {"id":"hvy-format-template-rules"}-->
-#! Reusable Template Rules
+   <!--hvy:text {}-->
+    # container
+    
+    `<!--hvy:container {"id":"panel","containerTitle":"Panel"}-->`
 
-<!--hvy:text {"id":"template-rules-text"}-->
- - Preserve useful component names from the matched template instead of replacing structured records with plain text.
- - Preserve template fields like `sortKeys`, `groupKeys`, `tags`, and xref metadata when they fit the imported data.
- - Remove filled template placeholder state such as `hideIfUnmodified` from generated sections that contain imported content.
- - Custom components from the matched template use the same directive form, for example `<!--hvy:skill-record {...}-->` or `<!--hvy:history-record {...}-->`.
+  <!--hvy:expandable:content {"description":"Container component description and example"}-->
 
-<!--hvy: {"id":"hvy-format-xref-rules"}-->
-#! Xref Rules
+   <!--hvy:text {}-->
+    ## container
 
-<!--hvy:text {"id":"xref-rules-text"}-->
- - `xrefTitle` is required on xref-card.
- - `xrefTarget` should be an exact id from the relationship inventory. Do not invent a target id just to make a link.
- - Do not create reciprocal/generated xref cards by hand; document update scripts may generate those after the section is applied.
+   <!--hvy:text {}-->
+    Use `container` to group nested blocks. Add child blocks under indexed container slots such as `<!--hvy:container:0 {}-->`. Preserve useful template containers instead of flattening structured content into plain text.
+
+   <!--hvy:text {}-->
+    Example:
+    - `<!--hvy:container {"id":"contact-panel","containerTitle":"Contact"}-->`
+    - `<!--hvy:container:0 {}-->`
+    - `<!--hvy:text {"id":"contact-email"}-->`
+
+ <!--hvy:expandable {"id":"component-grid","tags":"component, core, grid, layout"}-->
+  <!--hvy:expandable:stub {"description":"Component name and quick example"}-->
+
+   <!--hvy:text {}-->
+    # `grid`
+    
+    `<!--hvy:grid {"id":"two-column","gridColumns":2}-->`
+
+  <!--hvy:expandable:content {"description":"Grid component description and example"}-->
+
+   <!--hvy:text {}-->
+    ## grid
+
+   <!--hvy:text {}-->
+    Use `grid` for layout where separate child blocks belong in columns. Add items under indexed slots such as `<!--hvy:grid:0 {"id":"left"}-->` and `<!--hvy:grid:1 {"id":"right"}-->`. Do not use grid just to make a list.
+
+   <!--hvy:text {}-->
+    Example:
+    - `<!--hvy:grid {"id":"profile-grid","gridColumns":2}-->`
+    - `<!--hvy:grid:0 {"id":"profile-left"}-->`
+    - `<!--hvy:grid:1 {"id":"profile-right"}-->`
+
+ <!--hvy:expandable {"id":"component-component-list","tags":"component, core, component-list, repeated-records"}-->
+  <!--hvy:expandable:stub {"description":"Component name and quick example"}-->
+
+   <!--hvy:text {}-->
+    # component-list
+    
+    `<!--hvy:component-list {"id":"items","componentListComponent":"text"}-->`
+
+  <!--hvy:expandable:content {"description":"Component-list component description and example"}-->
+
+   <!--hvy:text {}-->
+    ## component-list
+
+   <!--hvy:text {}-->
+    Use `component-list` for repeated records. Add each item under `<!--hvy:component-list:0 {}-->`, `<!--hvy:component-list:1 {}-->`, and so on. Preserve `componentListComponent`, `sortKeys`, `groupKeys`, default sort/group fields, and custom record components from the matched template when they fit the imported data.
+
+   <!--hvy:text {}-->
+    Example:
+    - `<!--hvy:component-list {"id":"history-list","componentListComponent":"history-record"}-->`
+    - `<!--hvy:component-list:0 {}-->`
+    - `<!--hvy:history-record {"id":"history-acme"}-->`
+
+ <!--hvy:expandable {"id":"component-expandable","tags":"component, core, expandable, record"}-->
+  <!--hvy:expandable:stub {"description":"Component name and quick example"}-->
+
+   <!--hvy:text {}-->
+    # expandable
+    
+    `<!--hvy:expandable {"id":"record","expandableAlwaysShowStub":true}-->`
+
+  <!--hvy:expandable:content {"description":"Expandable component description and example"}-->
+
+   <!--hvy:text {}-->
+    ## expandable
+
+   <!--hvy:text {}-->
+    Use `expandable` for records with a collapsed summary and expanded details. Put summary blocks under `<!--hvy:expandable:stub {}-->` and detail blocks under `<!--hvy:expandable:content {}-->`. History, projects, education, skills, tools, publications, and certifications commonly use expandable records.
+
+   <!--hvy:text {}-->
+    Example:
+    - `<!--hvy:expandable {"id":"project-heavy","expandableAlwaysShowStub":true}-->`
+    - `<!--hvy:expandable:stub {}-->` for the collapsed project name.
+    - `<!--hvy:expandable:content {}-->` for the detailed project bullets.
+
+ <!--hvy:expandable {"id":"component-table","tags":"component, core, table, data"}-->
+  <!--hvy:expandable:stub {"description":"Component name and quick example"}-->
+
+   <!--hvy:text {}-->
+    # table
+    
+    `<!--hvy:table {"id":"summary-table","tableColumns":["A","B"],"tableRows":[{"cells":["a","b"]}]}-->`
+
+  <!--hvy:expandable:content {"description":"Table component description and example"}-->
+
+   <!--hvy:text {}-->
+    ## table
+
+   <!--hvy:text {}-->
+    Use `table` for static tabular document data. `tableColumns` is an array of column labels. `tableRows` is an array of rows whose `cells` match the columns. Tables do not contain nested detail blocks; wrap a table in an expandable if details need to be revealed.
+
+   <!--hvy:text {}-->
+    Example:
+    - `<!--hvy:table {"id":"education-table","tableColumns":["School","Degree"],"tableRows":[{"cells":["Example University","BS Computer Science"]}]}-->`
+
+ <!--hvy:expandable {"id":"component-image","tags":"component, core, image, media"}-->
+  <!--hvy:expandable:stub {"description":"Component name and quick example"}-->
+
+   <!--hvy:text {}-->
+    # image
+    
+    `<!--hvy:image {"id":"portrait","imageFile":"portrait.png","imageAlt":"Portrait"}-->`
+
+  <!--hvy:expandable:content {"description":"Image component description and example"}-->
+
+   <!--hvy:text {}-->
+    ## image
+
+   <!--hvy:text {}-->
+    Use `image` only when the referenced attachment exists or the host has provided a valid file reference. Always include useful `imageAlt`. Do not invent image filenames during text import.
+
+   <!--hvy:text {}-->
+    Example:
+    - `<!--hvy:image {"id":"headshot","imageFile":"headshot.png","imageAlt":"Headshot of the document owner"}-->`
+
+ <!--hvy:expandable {"id":"component-plugin","tags":"component, core, plugin, dynamic"}-->
+  <!--hvy:expandable:stub {"description":"Component name and quick example"}-->
+
+   <!--hvy:text {}-->
+    # plugin
+    
+    `<!--hvy:plugin {"id":"table-view","plugin":"dev.hvy.db-table","pluginConfig":{}}-->`
+
+  <!--hvy:expandable:content {"description":"Plugin component description and example"}-->
+
+   <!--hvy:text {}-->
+    ## plugin
+
+   <!--hvy:text {}-->
+    Use `plugin` only when the matched template already uses that plugin shape or host instructions explicitly ask for it. Preserve existing plugin ids and config shape from the template. Do not invent plugin ids or backend resources.
+
+   <!--hvy:text {}-->
+    Example:
+    - `<!--hvy:plugin {"id":"application-table","plugin":"dev.hvy.db-table","pluginConfig":{"source":"with-file","table":"applications"}}-->`
+
+ <!--hvy:expandable {"id":"component-button","tags":"component, core, button, action"}-->
+  <!--hvy:expandable:stub {"description":"Component name and quick example"}-->
+
+   <!--hvy:text {}-->
+    # button
+    
+    `<!--hvy:button {"id":"generate","buttonLabel":"Generate"}-->`
+
+  <!--hvy:expandable:content {"description":"Button component description and example"}-->
+
+   <!--hvy:text {}-->
+    ## button
+
+   <!--hvy:text {}-->
+    Use `button` for scripted or AI-assisted actions only when the matched template already has a button pattern. Text imports should usually preserve existing buttons from a template rather than create new actions.
+
+   <!--hvy:text {}-->
+    Example:
+    - `<!--hvy:button {"id":"generate-summary","buttonLabel":"Generate Summary","buttonAction":"ai-generate"}-->`
+<!--hvy: {"id":"hvy-import-template-instructions","lock":false,"expanded":true,"highlight":false}-->
+#! Import From Template Instructions
+
+ <!--hvy:text {}-->
+  # Import From Template Instructions
+
+ <!--hvy:text {}-->
+  - Treat the matched section as structural guidance, not as content to copy blindly.
+  - Preserve useful component names from the matched template instead of replacing structured records with plain text.
+  - Preserve template fields like `sortKeys`, `groupKeys`, `tags`, `description`, reusable record component names, and xref metadata when they fit the imported data.
+  - Remove filled template placeholder state such as `hideIfUnmodified` from generated sections that contain imported content.
+  - Custom components from the matched template use the same directive form, for example `<!--hvy:skill-record {...}-->` or `<!--hvy:history-record {...}-->`.
+  - Use only source-backed facts. Do not invent dates, titles, employers, schools, links, skills, tools, metrics, or bullets.
+  - Generate one complete section for the approved step. Do not add unrelated sections or leave conditional placeholders.
+<!--hvy: {"id":"hvy-links-crossreferences","lock":false,"expanded":true,"highlight":false}-->
+#! Links And Crossreferences
+
+ <!--hvy:text {}-->
+  # Links And Crossreferences
+
+ <!--hvy:text {}-->
+  Markdown links belong in text content when they point to external URLs or ordinary prose references.
+
+ <!--hvy:expandable {"id":"component-xref-card","tags":"component, core, xref-card, links, crossreference"}-->
+  <!--hvy:expandable:stub {"description":"Component name and quick example"}-->
+
+   <!--hvy:text {}-->
+    `xref-card` - `<!--hvy:xref-card {"id":"skill-link","xrefTitle":"Python","xrefTarget":"skill-python"}-->`
+
+  <!--hvy:expandable:content {"description":"Xref-card component description and example"}-->
+
+   <!--hvy:text {}-->
+    ## xref-card
+
+   <!--hvy:text {}-->
+    Use `xref-card` for internal document references to existing sections or reusable records. `xrefTitle` is required. `xrefTarget` should be an exact id from the relationship inventory. `xrefDetail` is optional. Do not invent a target id just to make a link.
+
+   <!--hvy:text {}-->
+    Example:
+    - `<!--hvy:xref-card {"id":"python-from-history","xrefTitle":"Python","xrefDetail":"Used in backend automation","xrefTarget":"skill-python"}-->`
+
+ <!--hvy:text {}-->
+  - Use exact existing ids from the relationship inventory for `xrefTarget`.
+  - The relationship inventory is intentionally built from explicit ids only; add an `id` only to sections and records that should be referenceable.
+  - When this section creates records that other sections may reference, give those records stable source-backed ids.
+  - Do not manually create reciprocal/generated xref cards; document update scripts may generate those after the section is applied.
+
+ <!--hvy:text {}-->
+  ## Reference Map
+
+ <!--hvy:xref-card {"xrefTitle":"Syntax Rules","xrefDetail":"Section and directive syntax","xrefTarget":"hvy-syntax-rules"}-->
+
+ <!--hvy:xref-card {"xrefTitle":"Core Components","xrefDetail":"Built-in component catalog","xrefTarget":"hvy-core-components"}-->
+
+ <!--hvy:xref-card {"xrefTitle":"Import From Template Instructions","xrefDetail":"Template reuse guidance","xrefTarget":"hvy-import-template-instructions"}-->
+
+ <!--hvy:xref-card {"xrefTitle":"Links And Crossreferences","xrefDetail":"Internal and external reference rules","xrefTarget":"hvy-links-crossreferences"}-->

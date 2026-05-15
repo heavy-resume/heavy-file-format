@@ -102,6 +102,7 @@ interface EditorRenderState {
     immediateFocus?: boolean;
   } | null;
   expandableEditorPanels: Record<string, { stubOpen: boolean; expandedOpen: boolean }>;
+  readerExpandableState: Record<string, boolean>;
   editorSidebarHelpDismissed: boolean;
   currentView: 'editor' | 'viewer' | 'ai';
   responsivePreview: 'full' | 'phone' | 'tablet' | 'desktop';
@@ -693,7 +694,8 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
 
     if (base === 'expandable') {
       deps.ensureExpandableBlocks(block);
-      const expanded = block.schema.expandableExpanded;
+      const expandableStateKey = `${sectionKey}:${block.id}`;
+      const expanded = state.readerExpandableState[expandableStateKey] ?? block.schema.expandableExpanded;
       const alwaysShowStub = block.schema.expandableAlwaysShowStub;
       const stubPaneStyle = deps.escapeAttr(sanitizeInlineCss(block.schema.expandableStubCss));
       const contentPaneStyle = deps.escapeAttr(sanitizeInlineCss(block.schema.expandableContentCss));

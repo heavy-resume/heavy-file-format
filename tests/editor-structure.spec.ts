@@ -190,6 +190,52 @@ hvy_version: 0.1
   await expect(page.locator('.hvy-context-popover')).toContainText('Request changes');
 });
 
+test('xref navigation aligns a tall target top near the reader center', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ <!--hvy:xref-card {"xrefTitle":"Large Target","xrefTarget":"target"}-->
+
+<!--hvy: {"id":"spacer"}-->
+#! Spacer
+
+ ${Array.from({ length: 70 }, (_item, index) => `Spacer line ${index + 1}.`).join('\n ')}
+
+<!--hvy: {"id":"target"}-->
+#! Large Target
+
+ ${Array.from({ length: 120 }, (_item, index) => `Target line ${index + 1}.`).join('\n ')}
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Viewer' }).click();
+
+  await page.locator('#readerDocument .reader-xref-card', { hasText: 'Large Target' }).click();
+
+  await expect.poll(async () =>
+    page.locator('#readerDocument #target').evaluate((target) => {
+      let container = target.parentElement;
+      while (container) {
+        const style = getComputedStyle(container);
+        if (/(auto|scroll)/.test(style.overflowY) && container.scrollHeight > container.clientHeight) {
+          const targetRect = target.getBoundingClientRect();
+          const containerRect = container.getBoundingClientRect();
+          return Math.abs(targetRect.top - (containerRect.top + containerRect.height / 2));
+        }
+        container = container.parentElement;
+      }
+      const targetRect = target.getBoundingClientRect();
+      return Math.abs(targetRect.top - window.innerHeight / 2);
+    })
+  ).toBeLessThan(80);
+});
+
 test('typing an xref title in ai mode preserves focus', async ({ page }) => {
   await page.goto('/');
 

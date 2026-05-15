@@ -50,13 +50,171 @@ test('reference app can load the import HVY reference document', async ({ page }
   await page.getByRole('button', { name: 'Import Reference' }).click();
 
   await expect(page.locator('#downloadName')).toHaveValue('ai-import-hvy-format-reference.hvy');
-  await expect(page.locator('#editorTree')).toContainText('HVY Format Reference');
-  await expect(page.locator('#editorTree')).toContainText('Xref Rules');
-  await expect.poll(async () => page.locator('#editorTree').evaluate((element) => element.innerHTML)).not.toContain('&amp;lt;!--');
-  await expect(page.locator('#editorTree code', { hasText: '<!--hvy:component-name {...json...}-->' })).toBeVisible();
+});
+
+test('reference app saves the import reference document through the server file endpoint', async ({ page }) => {
+  let savedBody = '';
+  let downloaded = false;
+  page.on('download', () => {
+    downloaded = true;
+  });
+  await page.route('**/api/import-reference-document', async (route) => {
+    if (route.request().method() === 'GET') {
+      await route.fulfill({
+        contentType: 'text/plain; charset=utf-8',
+        body: `---
+hvy_version: 0.1
+title: Import Reference Test
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+`,
+      });
+      return;
+    }
+    if (route.request().method() === 'PUT') {
+      savedBody = route.request().postData() ?? '';
+      await route.fulfill({
+        contentType: 'application/json',
+        body: '{"ok":true}',
+      });
+      return;
+    }
+    await route.fulfill({ status: 405, body: '{"error":"Method not allowed."}' });
+  });
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Import Reference' }).click();
+  await page.getByRole('button', { name: 'Save File' }).click();
+
+  await expect.poll(() => savedBody).toContain('hvy_version: 0.1');
+  expect(downloaded).toBe(false);
+});
+
+test('search result navigation stays in editor view', async ({ page }) => {
+  await page.goto('/');
   await page.getByRole('button', { name: 'Raw' }).click();
-  await expect(page.locator('#rawEditor')).toContainText('<!--hvy: {"id":"hvy-format-reference"');
-  await expect(page.locator('#rawEditor')).not.toContainText('&lt;!--');
+  const spacerSections = Array.from({ length: 14 }, (_item, index) => `
+<!--hvy: {"id":"spacer-${index + 1}"}-->
+#! Spacer ${index + 1}
+
+ ${Array.from({ length: 10 }, (_line, lineIndex) => `Spacer ${index + 1}.${lineIndex + 1}.`).join('\n ')}
+`).join('\n');
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ ${spacerSections}
+
+<!--hvy: {"id":"target"}-->
+#! Target
+
+ <!--hvy:text {"id":"intro"}-->
+  Find this editor-only needle.
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+F' : 'Control+F');
+  await page.locator('[data-field="search-query"]').fill('editor-only needle');
+  await page.keyboard.press('Enter');
+  await page.waitForSelector('.search-result');
+  await page.locator('.search-result').first().click();
+
+  await expect(page.locator('#editorTree')).toBeVisible();
+  await expect(page.locator('#readerDocument')).toHaveCount(0);
+  await expect(page.locator('#editorTree .is-temp-highlighted')).toContainText('editor-only needle', { timeout: 800 });
+  await expect.poll(async () =>
+    page.locator('#editorTree .is-temp-highlighted').evaluate((target) => {
+      const container = target.closest<HTMLElement>('.editor-tree');
+      if (!container) {
+        return Number.POSITIVE_INFINITY;
+      }
+      const targetRect = target.getBoundingClientRect();
+      const containerRect = container.getBoundingClientRect();
+      return Math.abs(targetRect.top - (containerRect.top + containerRect.height / 2));
+    })
+  ).toBeLessThan(140);
+  const editorScroll = await page.locator('#editorTree').evaluate((container) => container.scrollTop);
+  expect(editorScroll).toBeGreaterThan(200);
+
+  await page.locator('.search-collapsed-main').click();
+  await page.locator('[data-action="close-search"]').last().click();
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+F' : 'Control+F');
+
+  await expect(page.locator('.search-result')).toHaveCount(0);
+  await expect(page.locator('.search-results-empty')).toContainText('Search results will appear here.');
+});
+
+test('editor search opens sidebar for sidebar results', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ Main content.
+
+<!--hvy: {"id":"side","location":"sidebar"}-->
+#! Side
+
+ <!--hvy:text {"id":"side-note"}-->
+  Sidebar-only search needle.
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+  await expect(page.locator('.editor-shell')).toHaveClass(/is-sidebar-closed/);
+
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+F' : 'Control+F');
+  await page.locator('[data-field="search-query"]').fill('sidebar-only search needle');
+  await page.keyboard.press('Enter');
+  await page.waitForSelector('.search-result');
+  await page.locator('.search-result').first().click();
+
+  await expect(page.locator('.editor-shell')).toHaveClass(/is-sidebar-open/);
+  await expect(page.locator('.editor-sidebar-panel .is-temp-highlighted')).toContainText('Sidebar-only search needle', { timeout: 800 });
+  await expect(page.locator('#editorTree')).toBeVisible();
+  await expect(page.locator('#readerDocument')).toHaveCount(0);
+});
+
+test('editor search expands collapsed expandable ancestors', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ <!--hvy:expandable {"id":"record","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+  <!--hvy:expandable:stub {}-->
+   <!--hvy:text {"id":"record-title"}-->
+    Searchable record
+  <!--hvy:expandable:content {}-->
+   <!--hvy:text {"id":"record-detail"}-->
+    Hidden expandable editor needle.
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+  await expect(page.locator('#editorTree')).not.toContainText('Hidden expandable editor needle');
+
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+F' : 'Control+F');
+  await page.locator('[data-field="search-query"]').fill('hidden expandable editor needle');
+  await page.keyboard.press('Enter');
+  await page.waitForSelector('.search-result');
+  await page.locator('.search-result').first().click();
+
+  await expect(page.locator('#editorTree')).toBeVisible();
+  await expect(page.locator('#readerDocument')).toHaveCount(0);
+  await expect(page.locator('#editorTree .is-temp-highlighted')).toContainText('Hidden expandable editor needle', { timeout: 800 });
 });
 
 test('embedded runtime keeps host button and link styles outside the mounted document', async ({ page }) => {

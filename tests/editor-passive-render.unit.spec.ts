@@ -50,6 +50,7 @@ test('passive editor fallback renders plain reader content without re-entering A
     componentPlacement: null,
     pendingEditorActivation: null,
     expandableEditorPanels: {},
+    readerExpandableState: {},
     editorSidebarHelpDismissed: true,
     currentView: 'ai',
     responsivePreview: 'full',

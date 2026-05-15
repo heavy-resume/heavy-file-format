@@ -356,6 +356,9 @@ editorRenderer = createEditorRenderer(
     get expandableEditorPanels() {
       return state.expandableEditorPanels;
     },
+    get readerExpandableState() {
+      return state.readerExpandableState;
+    },
     get editorSidebarHelpDismissed() {
       return state.editorSidebarHelpDismissed;
     },

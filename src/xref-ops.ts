@@ -23,6 +23,7 @@ export function getXrefTargetOptions(tagFilter = ''): Array<{ value: string; lab
 
   flattenSections(state.document.sections)
     .filter((section) => !section.isGhost)
+    .filter((section) => section.customId.trim().length > 0)
     .filter((section) => matchesTagFilter(section.tags, requestedTags))
     .forEach((section) => {
       add(getSectionId(section), formatSectionTitle(section.title), section.description.trim());

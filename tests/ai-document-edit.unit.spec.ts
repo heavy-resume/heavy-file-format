@@ -537,9 +537,13 @@ hvy_version: 0.1
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('=== END SECTION INFORMATION ===');
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).not.toContain('=== BEGIN SOURCE DOCUMENT ===');
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('=== BEGIN HVY FORMAT REFERENCE ===');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('The following HVY document is a syntax and component reference only.');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).not.toContain('Return raw HVY for exactly one complete section.');
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('Directive payloads are single-line valid JSON objects.');
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('Custom components from the matched template use the same directive form');
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('`xrefTarget` should be an exact id from the relationship inventory');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages[0]?.content).toContain('Return exactly one top-level section.');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages[0]?.content).toContain('Return raw HVY only; do not call or describe tools.');
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.responseInstructions).toContain('`hvy` must be one complete valid HVY section');
   expect(progress.mock.calls.map((call) => call[0].phase)).not.toContain('tool_call');
   expect(progress.mock.calls.map((call) => call[0])).toContainEqual({

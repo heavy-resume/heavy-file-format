@@ -1,4 +1,5 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import type { IncomingMessage, ServerResponse } from 'node:http';
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
 import { defineConfig, loadEnv, type Plugin } from 'vite';
@@ -9,6 +10,8 @@ const BRYTHON_MINIMAL_VFS_ID = 'virtual:hvy-brython-minimal-vfs';
 const BRYTHON_MINIMAL_VFS_RESOLVED_ID = `\0${BRYTHON_MINIMAL_VFS_ID}`;
 const BUILT_IN_PLUGINS_ID = 'virtual:hvy-built-in-plugins';
 const BUILT_IN_PLUGINS_RESOLVED_ID = `\0${BUILT_IN_PLUGINS_ID}`;
+const IMPORT_REFERENCE_API_PATH = '/api/import-reference-document';
+const IMPORT_REFERENCE_FILE_PATH = resolve(process.cwd(), 'src/ai-import-hvy-format-reference.hvy');
 
 export const HVY_BUILT_IN_PLUGIN_IDS = [
   'dev.hvy.db-table',
@@ -174,6 +177,60 @@ export function createHvyBuiltInPluginsPlugin(env: Record<string, string>): Plug
   };
 }
 
+export function createImportReferenceDocumentPlugin(): Plugin {
+  return {
+    name: 'hvy-import-reference-document',
+    configureServer(server) {
+      server.middlewares.use(handleImportReferenceDocumentRequest);
+    },
+    configurePreviewServer(server) {
+      server.middlewares.use(handleImportReferenceDocumentRequest);
+    },
+  };
+}
+
+function handleImportReferenceDocumentRequest(req: IncomingMessage, res: ServerResponse, next: () => void): void {
+  if (!req.url?.startsWith(IMPORT_REFERENCE_API_PATH)) {
+    next();
+    return;
+  }
+  if (req.method === 'GET') {
+    res.statusCode = 200;
+    res.setHeader('content-type', 'text/plain; charset=utf-8');
+    res.end(readFileSync(IMPORT_REFERENCE_FILE_PATH, 'utf8'));
+    return;
+  }
+  if (req.method === 'PUT') {
+    void readRequestText(req)
+      .then((body) => {
+        writeFileSync(IMPORT_REFERENCE_FILE_PATH, body, 'utf8');
+        res.statusCode = 200;
+        res.setHeader('content-type', 'application/json; charset=utf-8');
+        res.end(JSON.stringify({ ok: true }));
+      })
+      .catch((error: unknown) => {
+        res.statusCode = 500;
+        res.setHeader('content-type', 'application/json; charset=utf-8');
+        res.end(JSON.stringify({ error: error instanceof Error ? error.message : 'Could not save import reference document.' }));
+      });
+    return;
+  }
+  res.statusCode = 405;
+  res.setHeader('content-type', 'application/json; charset=utf-8');
+  res.end(JSON.stringify({ error: 'Method not allowed.' }));
+}
+
+function readRequestText(req: NodeJS.ReadableStream): Promise<string> {
+  return new Promise((resolveText, reject) => {
+    const chunks: Buffer[] = [];
+    req.on('data', (chunk: Buffer | string) => {
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    });
+    req.on('end', () => resolveText(Buffer.concat(chunks).toString('utf8')));
+    req.on('error', reject);
+  });
+}
+
 export function createHvyBuiltInPluginsModuleSource(selectedIds: readonly HvyBuiltInPluginId[]): string {
   const selected = HVY_BUILT_IN_PLUGIN_DEFINITIONS.filter((definition) => selectedIds.includes(definition.id));
   const imports = selected.map((definition, index) => {
@@ -197,7 +254,12 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, '.', '');
 
   return {
-    plugins: [createChatProxyPlugin(env), createBrythonMinimalVfsPlugin(), createHvyBuiltInPluginsPlugin(env)],
+    plugins: [
+      createChatProxyPlugin(env),
+      createImportReferenceDocumentPlugin(),
+      createBrythonMinimalVfsPlugin(),
+      createHvyBuiltInPluginsPlugin(env),
+    ],
     build: {
       rollupOptions: {
         output: {

@@ -207,15 +207,18 @@ function scrollReaderTargetIntoView(target: HTMLElement): void {
     if (container) {
       const targetRect = target.getBoundingClientRect();
       const containerRect = container.getBoundingClientRect();
-      const targetCenter = targetRect.top + targetRect.height / 2;
       const containerCenter = containerRect.top + containerRect.height / 2;
       container.scrollTo({
-        top: Math.max(0, container.scrollTop + targetCenter - containerCenter),
+        top: Math.max(0, container.scrollTop + targetRect.top - containerCenter),
         behavior: 'smooth',
       });
       return;
     }
-    target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const targetRect = target.getBoundingClientRect();
+    window.scrollTo({
+      top: Math.max(0, window.scrollY + targetRect.top - window.innerHeight / 2),
+      behavior: 'smooth',
+    });
   };
   window.requestAnimationFrame(() => {
     window.requestAnimationFrame(scroll);

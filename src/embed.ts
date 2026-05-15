@@ -195,6 +195,7 @@ function ensureRenderers(): void {
       get componentPlacement() { return state.componentPlacement; },
       get pendingEditorActivation() { return state.pendingEditorActivation; },
       get expandableEditorPanels() { return state.expandableEditorPanels; },
+      get readerExpandableState() { return state.readerExpandableState; },
       get editorSidebarHelpDismissed() { return state.editorSidebarHelpDismissed; },
       get currentView() { return state.currentView; },
       get responsivePreview() { return state.responsivePreview; },

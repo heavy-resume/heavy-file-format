@@ -131,7 +131,7 @@ function addSectionLookup(
 }
 
 export function findBlockInsertionTargetForVirtualDirectory(document: VisualDocument, path: string, naming?: HvyVirtualPathNamingState): HvyVirtualBlockInsertionTarget | null {
-  const normalized = normalizeVirtualPath('/', path);
+  const normalized = resolveIdAliasPath(document, normalizeVirtualPath('/', path));
   const entries = new Map<string, HvyVirtualEntry>();
   const targets = new Map<string, HvyVirtualBlockInsertionTarget>();
   entries.set('/', { kind: 'dir', path: '/' });
@@ -645,6 +645,7 @@ function sectionToCliJson(section: VisualSection): JsonObject {
     description: section.description,
     location: section.location,
     hideIfUnmodified: section.hideIfUnmodified === true,
+    templateKey: section.templateKey ?? '',
   };
 }
 

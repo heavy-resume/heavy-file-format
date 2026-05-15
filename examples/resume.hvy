@@ -74,6 +74,139 @@ theme:
     --hvy-success: "#4cae68"
     --hvy-success-bg: "#152b1e"
     --hvy-success-border: "#2e7a46"
+section_defs:
+  - name: Projects
+    key: resume-projects
+    template:
+      id: projects
+      title: Projects
+      level: 1
+      lock: true
+      description: Project portfolio
+      hideIfUnmodified: true
+      tags: reciprocal-xref-source
+      blocks:
+        - text: "# Projects"
+          schema:
+            component: text
+            css: "margin: 0.5rem 0;"
+        - text: ""
+          schema:
+            component: table
+            css: "margin: 0.5rem 0 0;"
+            tags: table-header
+            tableColumns:
+              - PROJECT
+              - DATES
+            tableShowHeader: true
+            tableRows: []
+            lock: true
+            description: Project table header
+        - text: ""
+          schema:
+            component: component-list
+            css: "margin: 0;"
+            componentListComponent: project-record
+            componentListItemLabel: project
+            tags: project
+            componentListBlocks: []
+      children: []
+  - name: Publications
+    key: resume-publications
+    template:
+      id: publications
+      title: Publications
+      level: 1
+      lock: true
+      description: Publications
+      hideIfUnmodified: true
+      tags: reciprocal-xref-source
+      blocks:
+        - text: "# Publications"
+          schema:
+            component: text
+            css: "margin: 0.5rem 0;"
+        - text: ""
+          schema:
+            component: table
+            css: "margin: 0.5rem 0 0;"
+            tags: table-header
+            tableColumns:
+              - PUBLICATION
+              - PUBLISHER
+              - DATE
+            tableShowHeader: true
+            tableRows: []
+            lock: true
+            description: Publication table header
+        - text: ""
+          schema:
+            component: component-list
+            css: "margin: 0;"
+            componentListComponent: publication-record
+            componentListItemLabel: publication
+            tags: publication
+            componentListBlocks: []
+      children: []
+  - name: Certifications
+    key: resume-certifications
+    template:
+      id: certifications
+      title: Certifications
+      level: 1
+      lock: true
+      description: Certifications
+      hideIfUnmodified: true
+      tags: reciprocal-xref-source
+      blocks:
+        - text: "# Certifications"
+          schema:
+            component: text
+            css: "margin: 0.5rem 0;"
+        - text: ""
+          schema:
+            component: table
+            css: "margin: 0.5rem 0 0;"
+            tags: table-header
+            tableColumns:
+              - "<!--hvy:alt {\"compact\":\"CERT\"}-->CERTIFICATION<!--/hvy:alt-->"
+              - ISSUER
+              - OBTAINED
+            tableShowHeader: true
+            tableRows: []
+            lock: true
+            description: Certification table header
+        - text: ""
+          schema:
+            component: component-list
+            css: "margin: 0;"
+            componentListComponent: certification-record
+            componentListItemLabel: certification
+            tags: certification
+            componentListBlocks: []
+      children: []
+  - name: Resume Section
+    key: resume-section
+    repeatable: true
+    template:
+      title: Resume Section
+      level: 1
+      lock: true
+      description: Additional resume section
+      hideIfUnmodified: true
+      tags: reciprocal-xref-source
+      blocks:
+        - text: "# Resume Section"
+          schema:
+            component: text
+            css: "margin: 0.5rem 0;"
+            placeholder: "# Section title"
+        - text: ""
+          schema:
+            component: text
+            css: "margin: 0;"
+            placeholder: "Add section details, records, and any relevant skill or tool references."
+      children: []
 component_defs:
   - name: skill-xref-card
     baseType: xref-card
@@ -581,9 +714,6 @@ component_defs:
               component: text
               css: "margin: 0;"
               placeholder: "Description and notes"
-          - component: skill-record-experience-section
-          - component: skill-record-education-section
-          - component: skill-record-projects-section
 ---
 
 <!--hvy: {"id":"header","lock":true,"contained":false,"description":"Resume identity header","priority":true}-->
@@ -709,45 +839,6 @@ component_defs:
       ^detail-heading^ #### Notes
       ^detail-body^ Core strength. Approaches engineering as a systems discipline — prioritizing clear APIs, testable boundaries, and incremental delivery over clever solutions.
 
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0;"}-->
-      ^detail-heading^ #### Experience
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:component-list {"componentListComponent":"history-xref-card","css":"margin: 0;"}-->
-
-      <!--hvy:component-list:0 {}-->
-
-       <!--hvy:history-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Senior Software Engineer","xrefDetail":"Northwind Labs","xrefTarget":"history-northwind-labs-senior-software-engineer"}-->
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0;"}-->
-      ^detail-heading^ #### Education
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:component-list {"componentListComponent":"education-xref-card","css":"margin: 0;"}-->
-
-      <!--hvy:component-list:0 {}-->
-
-       <!--hvy:education-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"B.S. Computer Science","xrefDetail":"University of Washington","xrefTarget":"education-bs-computer-science"}-->
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0;"}-->
-      ^detail-heading^ #### Projects
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:component-list {"componentListComponent":"project-xref-card","css":"margin: 0;"}-->
-
-      <!--hvy:component-list:0 {}-->
-
-       <!--hvy:project-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Heavy Stack","xrefDetail":"05/2024 - present","xrefTarget":"project-heavy-stack"}-->
-
   <!--hvy:component-list:1 {}-->
 
    <!--hvy:skill-record {"id":"skill-reverse-engineering","xrefTitle":"Reverse Engineering","tags":"skill","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"Reverse Engineering","Strength":87},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
@@ -764,19 +855,6 @@ component_defs:
       ^detail-body^ Analyzing existing systems, file formats, or tool internals to understand structure and behavior without access to original specifications.
       ^detail-heading^ #### Notes
       ^detail-body^ Applied primarily to understand undocumented formats and third-party tool internals for building compatible tooling.
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0;"}-->
-      ^detail-heading^ #### Projects
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:component-list {"componentListComponent":"project-xref-card","css":"margin: 0;"}-->
-
-      <!--hvy:component-list:0 {}-->
-
-       <!--hvy:project-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Heavy Stack","xrefDetail":"05/2024 - present","xrefTarget":"project-heavy-stack"}-->
 
   <!--hvy:component-list:2 {}-->
 
@@ -795,19 +873,6 @@ component_defs:
       ^detail-heading^ #### Notes
       ^detail-body^ Built shared TypeScript platform packages that reduced duplicated code across products and improved consistency of internal tooling.
 
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0;"}-->
-      ^detail-heading^ #### Projects
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:component-list {"componentListComponent":"project-xref-card","css":"margin: 0;"}-->
-
-      <!--hvy:component-list:0 {}-->
-
-       <!--hvy:project-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Heavy Stack","xrefDetail":"05/2024 - present","xrefTarget":"project-heavy-stack"}-->
-
   <!--hvy:component-list:3 {}-->
 
    <!--hvy:skill-record {"id":"skill-llm-prompt-engineering","xrefTitle":"LLM Prompt Engineering","tags":"skill","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"LLM Prompt Engineering","Strength":91},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
@@ -825,19 +890,6 @@ component_defs:
       ^detail-heading^ #### Notes
       ^detail-body^ Used to design AI-assisted editor workflows and autonomous agent pipelines. Focuses on structured output, fallback handling, and iterative refinement.
 
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0;"}-->
-      ^detail-heading^ #### Projects
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:component-list {"componentListComponent":"project-xref-card","css":"margin: 0;"}-->
-
-      <!--hvy:component-list:0 {}-->
-
-       <!--hvy:project-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Autonomous Agent Hackathon","xrefDetail":"08/2023 - 08/2023","xrefTarget":"project-autonomous-agent-hackathon"}-->
-
   <!--hvy:component-list:4 {}-->
 
    <!--hvy:skill-record {"id":"skill-project-management","xrefTitle":"Project Management","tags":"skill","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"Project Management","Strength":84},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
@@ -854,19 +906,6 @@ component_defs:
       ^detail-body^ Coordinating people, timelines, and deliverables to move work from idea to shipped with clear ownership and minimal ceremony.
       ^detail-heading^ #### Notes
       ^detail-body^ Lightweight approach — async-first communication and clear ownership over process overhead. Comfortable leading small cross-functional efforts.
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0;"}-->
-      ^detail-heading^ #### Projects
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:component-list {"componentListComponent":"project-xref-card","css":"margin: 0;"}-->
-
-      <!--hvy:component-list:0 {}-->
-
-       <!--hvy:project-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Autonomous Agent Hackathon","xrefDetail":"08/2023 - 08/2023","xrefTarget":"project-autonomous-agent-hackathon"}-->
 
 <!--hvy: {"id":"tools-technologies","lock":true,"expanded":false,"location":"sidebar","description":"Tools and technologies reference list"}-->
 #! Tools & Technologies
@@ -893,19 +932,6 @@ component_defs:
       ^detail-heading^ #### Notes
       ^detail-body^ Primary application language. Uses strict mode throughout with explicit types at API boundaries. Comfortable with both frontend and Node.js contexts.
 
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0;"}-->
-      ^detail-heading^ #### Projects
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:component-list {"componentListComponent":"project-xref-card","css":"margin: 0;"}-->
-
-      <!--hvy:component-list:0 {}-->
-
-       <!--hvy:project-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Heavy Stack","xrefDetail":"05/2024 - present","xrefTarget":"project-heavy-stack"}-->
-
   <!--hvy:component-list:1 {}-->
 
    <!--hvy:skill-record {"id":"tool-python","xrefTitle":"Python","tags":"tool","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"Python","Strength":91},"groupKeys":{"Category":"Programming Languages"},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
@@ -922,36 +948,6 @@ component_defs:
       ^detail-body^ High-level dynamically typed language commonly used for scripting, automation, data processing, and AI/ML integrations.
       ^detail-heading^ #### Notes
       ^detail-body^ Used for automation scripts, prototyping, and AI API integrations. Comfortable with async patterns and CLI tooling.
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0;"}-->
-      ^detail-heading^ #### Projects
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:component-list {"componentListComponent":"project-xref-card","css":"margin: 0;"}-->
-
-      <!--hvy:component-list:0 {}-->
-
-       <!--hvy:project-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Heavy Stack","xrefDetail":"05/2024 - present","xrefTarget":"project-heavy-stack"}-->
-
-      <!--hvy:component-list:1 {}-->
-
-       <!--hvy:project-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Autonomous Agent Hackathon","xrefDetail":"08/2023 - 08/2023","xrefTarget":"project-autonomous-agent-hackathon"}-->
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0;"}-->
-      ^detail-heading^ #### Education
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:component-list {"componentListComponent":"education-xref-card","css":"margin: 0;"}-->
-
-      <!--hvy:component-list:0 {}-->
-
-       <!--hvy:education-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"B.S. Computer Science","xrefDetail":"University of Washington","xrefTarget":"education-bs-computer-science"}-->
 
   <!--hvy:component-list:2 {}-->
 
@@ -970,19 +966,6 @@ component_defs:
       ^detail-heading^ #### Notes
       ^detail-body^ Background from coursework in operating systems, compilers, and computer graphics. Applied in academic projects; not a current primary language.
 
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0;"}-->
-      ^detail-heading^ #### Education
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:component-list {"componentListComponent":"education-xref-card","css":"margin: 0;"}-->
-
-      <!--hvy:component-list:0 {}-->
-
-       <!--hvy:education-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"B.S. Computer Science","xrefDetail":"University of Washington","xrefTarget":"education-bs-computer-science"}-->
-
   <!--hvy:component-list:3 {}-->
 
    <!--hvy:skill-record {"id":"tool-developer-containers","xrefTitle":"Developer Containers","tags":"tool","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"Developer Containers","Strength":89},"groupKeys":{"Category":"Development Environments"},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
@@ -999,23 +982,6 @@ component_defs:
       ^detail-body^ Docker-based development environments defined as code, providing reproducible and portable local setups with all dependencies pre-configured.
       ^detail-heading^ #### Notes
       ^detail-body^ Built and maintained dev containers for multiple projects. Cut onboarding time from days to hours and ensured test parity with CI environments.
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0;"}-->
-      ^detail-heading^ #### Projects
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:component-list {"componentListComponent":"project-xref-card","css":"margin: 0;"}-->
-
-      <!--hvy:component-list:0 {}-->
-
-       <!--hvy:project-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Heavy Stack","xrefDetail":"05/2024 - present","xrefTarget":"project-heavy-stack"}-->
-
-      <!--hvy:component-list:1 {}-->
-
-       <!--hvy:project-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Autonomous Agent Hackathon","xrefDetail":"08/2023 - 08/2023","xrefTarget":"project-autonomous-agent-hackathon"}-->
 
   <!--hvy:component-list:4 {}-->
 
@@ -1034,19 +1000,6 @@ component_defs:
       ^detail-heading^ #### Notes
       ^detail-body^ Used to power a deep research agent during a hackathon. Familiar with prompt construction, streaming, and managing token budgets.
 
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0;"}-->
-      ^detail-heading^ #### Projects
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:component-list {"componentListComponent":"project-xref-card","css":"margin: 0;"}-->
-
-      <!--hvy:component-list:0 {}-->
-
-       <!--hvy:project-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Autonomous Agent Hackathon","xrefDetail":"08/2023 - 08/2023","xrefTarget":"project-autonomous-agent-hackathon"}-->
-
   <!--hvy:component-list:5 {}-->
 
    <!--hvy:skill-record {"id":"tool-github-codespaces","xrefTitle":"GitHub Codespaces","tags":"tool","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"GitHub Codespaces","Strength":82},"groupKeys":{"Category":"Development Environments"},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
@@ -1063,19 +1016,6 @@ component_defs:
       ^detail-body^ Cloud-hosted development environments that run VS Code in the browser backed by a remote container, eliminating local setup requirements.
       ^detail-heading^ #### Notes
       ^detail-body^ Used as the hosting target for the Autonomous Agent Hackathon, allowing teammates to run the agent without any local environment setup.
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0;"}-->
-      ^detail-heading^ #### Projects
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:component-list {"componentListComponent":"project-xref-card","css":"margin: 0;"}-->
-
-      <!--hvy:component-list:0 {}-->
-
-       <!--hvy:project-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Autonomous Agent Hackathon","xrefDetail":"08/2023 - 08/2023","xrefTarget":"project-autonomous-agent-hackathon"}-->
 
   <!--hvy:component-list:6 {}-->
 
@@ -1094,20 +1034,7 @@ component_defs:
       ^detail-heading^ #### Notes
       ^detail-body^ Core technology used in the Autonomous Agent Hackathon. Designed the agent architecture and wrote all integration code connecting it to the research task pipeline.
 
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0;"}-->
-      ^detail-heading^ #### Projects
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:component-list {"componentListComponent":"project-xref-card","css":"margin: 0;"}-->
-
-      <!--hvy:component-list:0 {}-->
-
-       <!--hvy:project-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Autonomous Agent Hackathon","xrefDetail":"08/2023 - 08/2023","xrefTarget":"project-autonomous-agent-hackathon"}-->
-
-<!--hvy: {"id":"history","lock":true,"description":"Work history"}-->
+<!--hvy: {"id":"history","lock":true,"description":"Work history","tags":"reciprocal-xref-source"}-->
 #! History
 
  <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
@@ -1208,7 +1135,7 @@ component_defs:
 
            <!--hvy:tool-tech-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Developer Containers","xrefTarget":"tool-developer-containers"}-->
 
-<!--hvy: {"id":"projects","lock":true,"description":"Project portfolio"}-->
+<!--hvy: {"id":"projects","lock":true,"description":"Project portfolio","tags":"reciprocal-xref-source","templateKey":"resume-projects"}-->
 #! Projects
 
  <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
@@ -1378,7 +1305,7 @@ component_defs:
 
             <!--hvy:tool-tech-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"SuperAGI","xrefTarget":"tool-superagi"}-->
 
-<!--hvy: {"id":"publications","lock":true,"description":"Publications"}-->
+<!--hvy: {"id":"publications","lock":true,"description":"Publications","tags":"reciprocal-xref-source","templateKey":"resume-publications"}-->
 #! Publications
 
  <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
@@ -1471,7 +1398,7 @@ component_defs:
 
            <!--hvy:tool-tech-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"TypeScript","xrefTarget":"tool-typescript"}-->
 
-<!--hvy: {"id":"certifications","lock":true,"description":"Certifications"}-->
+<!--hvy: {"id":"certifications","lock":true,"description":"Certifications","tags":"reciprocal-xref-source","templateKey":"resume-certifications"}-->
 #! Certifications
 
  <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
@@ -1551,7 +1478,7 @@ component_defs:
 
            <!--hvy:tool-tech-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Python","xrefTarget":"tool-python"}-->
 
-<!--hvy: {"id":"education","lock":true,"description":"Education"}-->
+<!--hvy: {"id":"education","lock":true,"description":"Education","tags":"reciprocal-xref-source"}-->
 #! Education
 
  <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
@@ -1647,3 +1574,300 @@ component_defs:
       ^detail-body^ Machine Learning
       ^detail-body^ Computer Graphics
       ^detail-body^ Human-Computer Interaction
+
+<!--hvy: {"id":"template-maintenance","editorOnly":true,"lock":true,"contained":true,"description":"Template maintenance scripts"}-->
+#! Template Maintenance
+
+ <!--hvy:plugin {"id":"sync-reciprocal-xrefs","editorOnly":true,"plugin":"dev.hvy.scripting","pluginConfig":{"version":"0.1","maxLines":200000}}-->
+  GENERATED_TAG = "reciprocal-xref-generated"
+  SOURCE_TAG = "reciprocal-xref-source"
+
+  def json_get(raw, key):
+      marker = '"' + key + '":'
+      start = raw.find(marker)
+      if start < 0:
+          return ""
+      pos = start + len(marker)
+      while pos < len(raw) and raw[pos] in " \n\t":
+          pos += 1
+      if pos >= len(raw) or raw[pos] != '"':
+          return ""
+      pos += 1
+      out = ""
+      escaped = False
+      while pos < len(raw):
+          ch = raw[pos]
+          if escaped:
+              out += ch
+              escaped = False
+          elif ch == "\\":
+              escaped = True
+          elif ch == '"':
+              return out
+          else:
+              out += ch
+          pos += 1
+      return out
+
+  def first_directive_json(raw):
+      first = raw.split("\n", 1)[0]
+      start = first.find("{")
+      end = first.rfind("}")
+      return first[start:end + 1] if start >= 0 and end > start else ""
+
+  def first_component(raw):
+      first = raw.split("\n", 1)[0].strip()
+      if not first.startswith("<!--hvy:"):
+          return ""
+      rest = first[len("<!--hvy:"):]
+      return rest.split(" ", 1)[0].strip()
+
+  def first_table_cells(raw):
+      marker = '"cells":['
+      start = raw.find(marker)
+      if start < 0:
+          return []
+      pos = start + len(marker)
+      cells = []
+      while pos < len(raw) and len(cells) < 4:
+          while pos < len(raw) and raw[pos] in " \n\t,":
+              pos += 1
+          if pos >= len(raw) or raw[pos] != '"':
+              break
+          pos += 1
+          cell = ""
+          escaped = False
+          while pos < len(raw):
+              ch = raw[pos]
+              if escaped:
+                  cell += ch
+                  escaped = False
+              elif ch == "\\":
+                  escaped = True
+              elif ch == '"':
+                  break
+              else:
+                  cell += ch
+              pos += 1
+          cells.append(cell)
+          pos += 1
+      return cells
+
+  def safe_id(value):
+      out = ""
+      for ch in value.lower():
+          if ("a" <= ch <= "z") or ("0" <= ch <= "9"):
+              out += ch
+          else:
+              out += "-"
+      while "--" in out:
+          out = out.replace("--", "-")
+      return out.strip("-") or "item"
+
+  def section_id_from_path(path):
+      parts = path.split("/")
+      return parts[2] if len(parts) > 2 and parts[1] == "body" else ""
+
+  def source_section(section_id):
+      try:
+          raw = doc.cli.run("cat /body/" + section_id + "/section.json")
+      except Exception:
+          return None
+      tags = json_get(raw, "tags")
+      if SOURCE_TAG not in tags.split():
+          return None
+      return {
+          "id": section_id,
+          "title": json_get(raw, "title") or section_id,
+      }
+
+  def source_record_for_path(path, section):
+      parts = path.split("/")[:-2]
+      while len(parts) > 2:
+          candidate = "/".join(parts)
+          try:
+              raw = doc.cli.run("cat " + candidate + "/raw.hvy")
+          except Exception:
+              raw = ""
+          component = first_component(raw)
+          directive = first_directive_json(raw)
+          record_id = json_get(directive, "id")
+          if record_id and component.endswith("-record") and component not in ["skill-record", "tool-tech-record"]:
+              cells = first_table_cells(raw)
+              title = json_get(directive, "xrefTitle") or (cells[0] if len(cells) > 0 else record_id)
+              detail = json_get(directive, "xrefDetail") or (cells[1] if len(cells) > 1 else "")
+              if component == "history-record" and len(cells) > 1:
+                  detail = cells[1]
+              return {
+                  "id": record_id,
+                  "component": component,
+                  "title": title,
+                  "detail": detail,
+                  "section_id": section["id"],
+                  "section_title": section["title"],
+              }
+          parts = parts[:-1]
+      return {
+          "id": section["id"],
+          "component": "section",
+          "title": section["title"],
+          "detail": "",
+          "section_id": section["id"],
+          "section_title": section["title"],
+      }
+
+  def group_label(source):
+      if source["section_id"] == "history":
+          return "Experience"
+      return source["section_title"]
+
+  def reciprocal_component(source):
+      mapping = {
+          "history-record": "history-xref-card",
+          "project-record": "project-xref-card",
+          "education-record": "education-xref-card",
+          "publication-record": "publication-xref-card",
+          "certification-record": "certification-xref-card",
+      }
+      return mapping[source["component"]] if source["component"] in mapping else "xref-card"
+
+  def cli_quote(value):
+      return "'" + value.replace("\\", "\\\\").replace("'", "\\'") + "'"
+
+  def json_string(value):
+      out = '"'
+      for ch in value:
+          if ch == "\\":
+              out += "\\\\"
+          elif ch == '"':
+              out += '\\"'
+          elif ch == "\n":
+              out += "\\n"
+          else:
+              out += ch
+      return out + '"'
+
+  def json_object(pairs):
+      lines = ["{"]
+      index = 0
+      for pair in pairs:
+          key = pair[0]
+          value = pair[1]
+          comma = "," if index < len(pairs) - 1 else ""
+          if isinstance(value, bool):
+              rendered = "true" if value else "false"
+          elif isinstance(value, int) or isinstance(value, float):
+              rendered = str(value)
+          else:
+              rendered = json_string(str(value))
+          lines.append("  " + json_string(key) + ": " + rendered + comma)
+          index += 1
+      lines.append("}")
+      return "\n".join(lines) + "\n"
+
+  def remove_generated_groups(target_id):
+      try:
+          found = doc.cli.run("find /id/" + target_id + "/expandable-content -type d -name '*reciprocal*'")
+      except Exception:
+          found = ""
+      paths = []
+      for path in found.split("\n"):
+          path = path.strip()
+          if path.endswith("-heading") or path.endswith("-list"):
+              paths.append(path)
+      paths.sort(key=len, reverse=True)
+      for path in paths:
+          try:
+              doc.cli.run("hvy remove " + cli_quote(path))
+          except Exception:
+              pass
+
+  def sync_target(target_id, groups):
+      remove_generated_groups(target_id)
+      for group_key in sorted(groups.keys()):
+          entries = groups[group_key]
+          if len(entries) == 0:
+              continue
+          source = entries[0]["source"]
+          component = reciprocal_component(source)
+          group_id = target_id + "-reciprocal-" + safe_id(group_key)
+          heading_id = group_id + "-heading"
+          list_id = group_id + "-list"
+          try:
+              doc.cli.run("hvy insert -1 text /id/" + target_id + " --id " + cli_quote(heading_id))
+              doc.cli.write("/id/" + heading_id + "/text.txt", "^detail-heading^ #### " + group_label(source) + "\n")
+              doc.cli.write("/id/" + heading_id + "/text.json", json_object([["tags", GENERATED_TAG], ["css", "margin: 0;"]]))
+              doc.cli.run("hvy insert -1 component-list /id/" + target_id + " --id " + cli_quote(list_id))
+              doc.cli.write("/id/" + list_id + "/component-list.json", json_object([
+                  ["tags", GENERATED_TAG],
+                  ["css", "margin: 0;"],
+                  ["componentListComponent", component],
+                  ["componentListItemLabel", "reciprocal reference"],
+              ]))
+          except Exception:
+              continue
+          seen = {}
+          for entry in entries:
+              dedupe = entry["source"]["id"]
+              if dedupe in seen:
+                  continue
+              seen[dedupe] = True
+              card_id = target_id + "-from-" + safe_id(dedupe)
+              try:
+                  doc.cli.run("hvy insert -1 " + component + " /id/" + list_id + " --id " + cli_quote(card_id))
+                  doc.cli.write("/id/" + card_id + "/" + component + ".json", json_object([
+                      ["tags", GENERATED_TAG],
+                      ["xrefTitle", entry["source"]["title"]],
+                      ["xrefDetail", entry["source"]["detail"]],
+                      ["xrefTarget", entry["source"]["id"]],
+                  ]))
+              except Exception:
+                  pass
+
+  links = {}
+  try:
+      found = doc.cli.run("find /body -name '*xref-card.json'")
+  except Exception:
+      found = ""
+  for path in found.split("\n"):
+      path = path.strip()
+      if not path:
+          continue
+      section = source_section(section_id_from_path(path))
+      if not section:
+          continue
+      try:
+          card = doc.cli.run("cat " + path)
+      except Exception:
+          continue
+      target = json_get(card, "xrefTarget")
+      if not (target.startswith("skill-") or target.startswith("tool-")):
+          continue
+      source = source_record_for_path(path, section)
+      group_key = source["section_id"]
+      if target not in links:
+          links[target] = {}
+      if group_key not in links[target]:
+          links[target][group_key] = []
+      links[target][group_key].append({"source": source})
+
+  all_targets = {}
+  for root in ["/body/skills", "/body/tools-technologies"]:
+      try:
+          target_files = doc.cli.run("find " + root + " -name 'skill-record.json'")
+      except Exception:
+          target_files = ""
+      for json_path in target_files.split("\n"):
+          json_path = json_path.strip()
+          if not json_path:
+              continue
+          try:
+              target_json = doc.cli.run("cat " + json_path)
+          except Exception:
+              continue
+          target_id = json_get(target_json, "id")
+          if target_id.startswith("skill-") or target_id.startswith("tool-"):
+              all_targets[target_id] = True
+
+  for target_id in all_targets:
+      sync_target(target_id, links[target_id] if target_id in links else {})

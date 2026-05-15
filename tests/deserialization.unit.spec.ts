@@ -41,6 +41,46 @@ hvy_version: 0.1
   expect(block.schema.expandableContentBlocks.children[0]?.text).toBe('Expanded detail');
 });
 
+test('deserializes reusable section definitions and section template keys', () => {
+  const input = `---
+hvy_version: 0.1
+section_defs:
+  - name: Projects
+    key: resume-projects
+    template:
+      id: projects
+      title: Projects
+      level: 1
+      tags: reciprocal-xref-source
+      blocks:
+        - text: "# Projects"
+          schema:
+            component: text
+            css: "margin: 0.5rem 0;"
+      children: []
+  - name: Resume Section
+    key: resume-section
+    repeatable: true
+    template:
+      title: Resume Section
+      level: 1
+      blocks: []
+      children: []
+---
+
+<!--hvy: {"id":"projects","templateKey":"resume-projects"}-->
+#! Projects
+`;
+
+  const document = deserializeDocument(input, '.hvy');
+
+  expect(document.sections[0]?.templateKey).toBe('resume-projects');
+  expect(document.meta.section_defs?.[0]?.key).toBe('resume-projects');
+  expect(document.meta.section_defs?.[0]?.template.customId).toBe('projects');
+  expect(document.meta.section_defs?.[0]?.template.blocks[0]?.text).toBe('# Projects');
+  expect(document.meta.section_defs?.[1]?.repeatable).toBe(true);
+});
+
 test('ignores expandable slot lock metadata', () => {
   const input = `---
 hvy_version: 0.1

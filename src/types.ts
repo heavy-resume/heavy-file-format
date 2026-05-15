@@ -191,6 +191,8 @@ export interface ComponentDefinition {
 
 export interface SectionDefinition {
   name: string;
+  key?: string;
+  repeatable?: boolean;
   template: VisualSection;
 }
 

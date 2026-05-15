@@ -40,6 +40,45 @@ hvy_version: 0.1
   expect(fragment).not.toContain('hvy_version:');
 });
 
+test('round-trips reusable section metadata and template keys', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+section_defs:
+  - name: Projects
+    key: resume-projects
+    template:
+      id: projects
+      title: Projects
+      level: 1
+      tags: reciprocal-xref-source
+      blocks:
+        - text: "# Projects"
+          schema:
+            component: text
+            css: "margin: 0.5rem 0;"
+      children: []
+  - name: Resume Section
+    key: resume-section
+    repeatable: true
+    template:
+      title: Resume Section
+      level: 1
+      blocks: []
+      children: []
+---
+
+<!--hvy: {"id":"projects","templateKey":"resume-projects"}-->
+#! Projects
+`, '.hvy');
+
+  const expectedResult = serializeWithState(document);
+
+  expect(expectedResult).toContain('key: resume-projects');
+  expect(expectedResult).toContain('repeatable: true');
+  expect(expectedResult).toContain('templateKey":"resume-projects');
+  expect(expectedResult).not.toContain('idEditorOpen');
+});
+
 test('serializes slot markers without child component payloads', () => {
   const input = `---
 hvy_version: 0.1

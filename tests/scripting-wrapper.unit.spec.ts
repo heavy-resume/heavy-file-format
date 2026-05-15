@@ -335,6 +335,28 @@ test('createScriptingRuntime exposes synchronous hvy cli commands', () => {
   expect(runtime.stats.toolCalls).toBe(3);
 });
 
+test('createScriptingRuntime exposes safe virtual file writes', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"notes"}-->
+#! Notes
+
+<!--hvy:text {"id":"note"}-->
+ Before
+`, '.hvy');
+  const runtime = createScriptingRuntime({ document });
+
+  expect(runtime.doc.cli.run('cat /id/note/raw.hvy')).toContain('Before');
+  expect(runtime.doc.cli.write('/id/note/text.json', '{ "css": "margin: 0;" }')).toBe('/id/note/text.json: written');
+  expect(() => runtime.doc.cli.write('/id/note/raw.hvy', '<!--hvy:text {"id":"note"}-->\n After')).toThrow(
+    'doc.cli.write does not write raw.hvy files.'
+  );
+
+  expect(runtime.doc.cli.run('cat /id/note/text.json')).toContain('"css": "margin: 0;"');
+});
+
 test('createScriptingRuntime points db-table SQL callers at doc.db instead of cli', () => {
   const runtime = createScriptingRuntime({
     document: { meta: {}, extension: '.hvy', sections: [], attachments: [] },

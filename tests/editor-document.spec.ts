@@ -410,8 +410,37 @@ test('resume template hides untouched scaffold sections only in viewer', async (
   await expect(page.locator('#editorTree')).toContainText('Info');
   await expect(page.locator('#editorTree')).toContainText('Summary');
   await expect(page.locator('#editorTree')).toContainText('History');
-  await expect(page.locator('#editorTree')).toContainText('Projects');
+  await expect(page.locator('.section-title-passive', { hasText: 'Projects' })).toHaveCount(0);
   await expect(page.locator('#editorTree')).toContainText('Education');
+});
+
+test('resume section templates hide already used non-repeatable sections', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Resume Template' }).click();
+  let options = await page.locator('[data-field="reusable-section-type"][data-section-key="__top_level__"] option').evaluateAll((items) =>
+    items.map((item) => item.textContent?.trim())
+  );
+  expect(options).toEqual(['Blank', 'Projects', 'Publications', 'Certifications', 'Resume Section']);
+
+  await page.getByRole('button', { name: 'Resume Example' }).click();
+  options = await page.locator('[data-field="reusable-section-type"][data-section-key="__top_level__"] option').evaluateAll((items) =>
+    items.map((item) => item.textContent?.trim())
+  );
+  expect(options).toEqual(['Blank', 'Resume Section']);
+});
+
+test('resume editor script rebuilds reciprocal skill and tool xrefs from tagged sections', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Resume Example' }).click();
+  await page.getByRole('button', { name: 'Raw' }).click();
+
+  const rawEditor = page.locator('#rawEditor');
+  await expect(rawEditor).toContainText('reciprocal-xref-generated', { timeout: 5000 });
+  await expect(rawEditor).toContainText('skill-software-engineering-from-history-northwind-labs-senior-software-engineer');
+  await expect(rawEditor).toContainText('tool-python-from-education-bs-computer-science');
+  await expect(rawEditor).not.toContainText('skill-software-engineering-from-top-skills-list');
 });
 
 test('resume template empty skill and tool sections show add controls directly in AI view', async ({ page }) => {

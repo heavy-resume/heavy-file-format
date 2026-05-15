@@ -3,7 +3,7 @@ import type { VisualDocument } from '../../types';
 import type { VisualSection } from '../../editor/types';
 import { getAttachment, removeAttachment, setAttachment } from '../../attachments';
 import { executeDocumentEditToolByName } from '../../ai-document-edit';
-import { executeHvyCliCommandSync } from '../../cli-core/commands';
+import { executeHvyCliCommandSync, writeHvyVirtualFileSync } from '../../cli-core/commands';
 import { state, getRefreshReaderPanels, getRenderApp } from '../../state';
 import { clearHideIfUnmodifiedForSectionPath } from '../../template-hide';
 import { hasTextFillInMarker } from '../../text-fill-in';
@@ -82,6 +82,7 @@ export interface ScriptingDbApi {
 
 export interface ScriptingCliApi {
   run(command: string): string;
+  write(path: string, content: string): string;
 }
 
 export interface ScriptingRuntimeOptions {
@@ -213,6 +214,14 @@ export function createScriptingRuntime(options: ScriptingRuntimeOptions): Script
       run: (command) => {
         stats.toolCalls += 1;
         const result = executeHvyCliCommandSync(options.document, command);
+        if (result.mutated) {
+          mutated = true;
+        }
+        return result.output;
+      },
+      write: (path, content) => {
+        stats.toolCalls += 1;
+        const result = writeHvyVirtualFileSync(options.document, String(path ?? ''), String(content ?? ''));
         if (result.mutated) {
           mutated = true;
         }

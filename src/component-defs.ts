@@ -23,6 +23,10 @@ export function getSectionDefs(): SectionDefinition[] {
   return defs.filter((item): item is SectionDefinition => !!item && typeof item === 'object' && 'name' in item && 'template' in item);
 }
 
+export function getSectionTemplateKey(def: SectionDefinition): string {
+  return (def.key?.trim() || def.name.trim());
+}
+
 export function getReusableNameFromSectionKey(sectionKey: string): string | null {
   const REUSABLE_SECTION_PREFIX = '__reusable__:';
   return sectionKey.startsWith(REUSABLE_SECTION_PREFIX) ? sectionKey.slice(REUSABLE_SECTION_PREFIX.length) : null;
@@ -56,14 +60,39 @@ export function renderComponentOptions(selected: string): string {
 }
 
 export function renderReusableSectionOptions(selected: string): string {
+  const usedTemplateKeys = getUsedSectionTemplateKeys();
   const options = [
     `<option value="blank"${selected === 'blank' ? ' selected' : ''}>Blank</option>`,
-    ...getSectionDefs().map((def) => {
+    ...getSectionDefs().filter((def) => {
+      if (def.repeatable === true) {
+        return true;
+      }
+      return !usedTemplateKeys.has(getSectionTemplateKey(def));
+    }).map((def) => {
       const value = `${REUSABLE_SECTION_DEF_PREFIX}${def.name}`;
       return `<option value="${escapeAttr(value)}"${value === selected ? ' selected' : ''}>${escapeHtml(def.name)}</option>`;
     }),
   ];
   return options.join('');
+}
+
+function getUsedSectionTemplateKeys(): Set<string> {
+  const used = new Set<string>();
+  try {
+    const sections = state?.document?.sections ?? [];
+    const visit = (items: typeof sections): void => {
+      for (const section of items) {
+        if (!section.isGhost && section.templateKey?.trim()) {
+          used.add(section.templateKey.trim());
+        }
+        visit(section.children);
+      }
+    };
+    visit(sections);
+  } catch {
+    // No active document during isolated render tests.
+  }
+  return used;
 }
 
 export function resolveBaseComponent(componentName: string): string {

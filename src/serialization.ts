@@ -13,6 +13,7 @@ import {
   defaultBlockSchema,
   schemaFromUnknown,
   createEmptyBlock,
+  normalizeReusableSectionDefinitions,
 } from './document-factory';
 
 export interface HvyDiagnostic {
@@ -59,6 +60,7 @@ export function deserializeDocumentWithDiagnostics(
   if (typeof meta.section_defaults === 'undefined') {
     meta.section_defaults = { css: DEFAULT_SECTION_CSS };
   }
+  normalizeReusableSectionDefinitions(meta);
 
   const diagnostics = parsed.errors.map((message) => mapParserErrorToDiagnostic(message));
   const document: VisualDocument = {
@@ -184,6 +186,7 @@ function mapParsedSection(section: HvySection, documentMeta: JsonObject, diagnos
     description: typeof sectionMeta.description === 'string' ? sectionMeta.description : '',
     location: sectionMeta.location === 'sidebar' ? 'sidebar' : 'main',
     hideIfUnmodified: sectionMeta.hideIfUnmodified === true,
+    templateKey: typeof sectionMeta.templateKey === 'string' ? sectionMeta.templateKey : undefined,
     blocks,
     children: section.children.map((child) => mapParsedSection(child, documentMeta, diagnostics)),
   };
@@ -897,11 +900,81 @@ export function serializeDocumentHeaderYaml(document: VisualDocument): string {
       .filter((def): def is JsonObject => !!def && typeof def === 'object')
       .map((def) => serializeComponentDef(def));
   }
+  if (Array.isArray(serializedMeta.section_defs)) {
+    serializedMeta.section_defs = (serializedMeta.section_defs as unknown[])
+      .filter((def): def is JsonObject => !!def && typeof def === 'object')
+      .map((def) => serializeSectionDef(def));
+  }
   const headerMeta = {
     ...serializedMeta,
     hvy_version: document.meta.hvy_version ?? 0.1,
   };
   return stringifyYaml(headerMeta).trim();
+}
+
+function serializeSectionDef(raw: JsonObject): JsonObject {
+  const result: JsonObject = {};
+  if (typeof raw.name === 'string') {
+    result.name = raw.name;
+  }
+  if (typeof raw.key === 'string' && raw.key.trim().length > 0) {
+    result.key = raw.key;
+  }
+  if (raw.repeatable === true) {
+    result.repeatable = true;
+  }
+  if (raw.template && typeof raw.template === 'object') {
+    result.template = cleanSectionTemplate(raw.template as Partial<VisualSection> & JsonObject);
+  }
+  return result;
+}
+
+function cleanSectionTemplate(section: Partial<VisualSection> & JsonObject): JsonObject {
+  const result: JsonObject = {};
+  const id = typeof section.customId === 'string' ? section.customId : typeof section.id === 'string' ? section.id : '';
+  if (id.trim().length > 0) {
+    result.id = id;
+  }
+  result.title = typeof section.title === 'string' ? section.title : 'Untitled Section';
+  result.level = typeof section.level === 'number' ? section.level : 1;
+  if (section.contained === false) {
+    result.contained = false;
+  }
+  if (section.editorOnly === true) {
+    result.editorOnly = true;
+  }
+  if (section.lock === true) {
+    result.lock = true;
+  }
+  if (section.expanded === false) {
+    result.expanded = false;
+  }
+  if (section.highlight === true) {
+    result.highlight = true;
+  }
+  if (section.priority === true) {
+    result.priority = true;
+  }
+  if (typeof section.css === 'string' && section.css.trim().length > 0) {
+    result.css = section.css;
+  }
+  if (typeof section.tags === 'string' && section.tags.trim().length > 0) {
+    result.tags = section.tags;
+  }
+  if (typeof section.description === 'string' && section.description.trim().length > 0) {
+    result.description = section.description;
+  }
+  if (section.location === 'sidebar') {
+    result.location = 'sidebar';
+  }
+  if (section.hideIfUnmodified === true) {
+    result.hideIfUnmodified = true;
+  }
+  result.blocks = Array.isArray(section.blocks) ? section.blocks.map((block) => cleanComponentDefBlock(block as unknown as JsonObject)) : [];
+  result.children = Array.isArray(section.children)
+    ? section.children.map((child) => cleanSectionTemplate(child as Partial<VisualSection> & JsonObject))
+    : [];
+  return result;
 }
 
 export function serializeBlockFragment(block: VisualBlock, documentMeta: JsonObject | null = null): string {
@@ -1126,6 +1199,9 @@ function serializeSection(section: VisualSection, level: number, documentMeta: J
   }
   if (section.hideIfUnmodified === true) {
     meta.hideIfUnmodified = true;
+  }
+  if (section.templateKey && section.templateKey.trim().length > 0) {
+    meta.templateKey = section.templateKey;
   }
 
   const directive = `<!--hvy: ${JSON.stringify(meta)}-->`;

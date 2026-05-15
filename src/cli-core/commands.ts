@@ -182,7 +182,10 @@ export function executeHvyCliCommandSync(document: VisualDocument, input: string
     throw new Error('doc.cli.run supports one command at a time without pipes, command chaining, or redirection.');
   }
   const [command = '', ...rest] = args;
-  const fs = buildHvyVirtualFileSystem(document);
+  const session = createHvyCliSession();
+  session.cwd = cwd;
+  const fs = buildSessionVirtualFileSystem(document, session);
+  addSessionFiles(fs, document, session);
   const ctx: HvyCliCommandContext = { document, fs, cwd };
   if (command === 'help' || command === 'man') {
     return { cwd, output: helpFor(rest.join(' ')), mutated: false };
@@ -270,6 +273,18 @@ export function executeHvyCliCommandSync(document: VisualDocument, input: string
     return { cwd: result.cwd ?? cwd, output: result.output, mutated: result.mutated };
   }
   throw new Error(`doc.cli.run does not support command "${command}".`);
+}
+
+export function writeHvyVirtualFileSync(document: VisualDocument, path: string, content: string, cwd = '/'): HvyCliExecution {
+  if (/(^|\/)raw\.hvy$/i.test(path.trim())) {
+    throw new Error('doc.cli.write does not write raw.hvy files. Use structured CLI commands and writable component files instead.');
+  }
+  const session = createHvyCliSession();
+  session.cwd = cwd;
+  const fs = buildSessionVirtualFileSystem(document, session);
+  addSessionFiles(fs, document, session);
+  const result = writeVirtualFile({ fs, cwd }, path, content, false, 'doc.cli.write');
+  return { cwd, output: result.output, mutated: result.mutated };
 }
 
 function truncateCliOutput(output: string, options: { preserveFindWarning?: boolean } = {}): string {

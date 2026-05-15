@@ -241,6 +241,7 @@ Section metadata also includes optional presentation keys such as:
 - `hideIfUnmodified`
 - `css`
 - `location`
+- `templateKey`
 
 `css` is an optional inline CSS style string applied to the rendered section wrapper.
 Inline section `css` follows the same declaration-only rule as block `css`. Use CSS blocks for media queries, container queries, selectors, and other stylesheet-level constructs.
@@ -250,6 +251,7 @@ Inline section `css` follows the same declaration-only rule as block `css`. Use 
 `contained` is an optional boolean. When `true` (default), render the section as the normal bordered card/container and allow collapse/expand UI. When `false`, render the section edge-to-edge without the section border/background wrapper and without the section expander/collapser.
 `hideIfUnmodified` is an optional boolean for template-authored scaffold sections. When `true`, viewer-oriented renderers MUST hide the entire section subtree, including sidebar/navigation entries, search results, and reader-view targets. Editor surfaces and document AI editing mode MUST still render the section so users and agents can change it. Authoring tools SHOULD remove this flag from the section and any flagged ancestor section when structured editing changes that section subtree.
 `location` is an optional string. Use it to route a section to a named layout zone in the viewer. Defined values are `"main"` (default) and `"sidebar"`. Unknown values SHOULD be treated as `"main"`.
+`templateKey` is optional authoring metadata identifying the reusable section definition that created the section. Authoring tools SHOULD use it to decide whether non-repeatable reusable section definitions have already been used.
 
 ### 5.7 Block directives
 
@@ -552,7 +554,10 @@ Example:
 ```yaml
 section_defs:
   - name: faq-section
+    key: faq
+    repeatable: false
     template:
+      id: faq
       title: FAQ
       level: 2
       contained: true
@@ -568,6 +573,9 @@ section_defs:
 ```
 
 Notes:
+- `key` is an optional stable template identity. When omitted, `name` is the template identity.
+- `repeatable` is optional and defaults to `false`. Authoring tools SHOULD hide a non-repeatable section template when the document already contains a section whose `templateKey` matches the definition's `key` or `name`.
+- Sections created from reusable section definitions SHOULD set `templateKey` to the definition's `key` or `name`. Manually created blank sections SHOULD omit `templateKey`.
 - `template` stores a full section subtree, including blocks and nested child sections.
 - Clone a `section_defs[*].template` when inserting a new section or subsection.
 - Reusable section templates preserve section-level presentation fields such as `contained`, `expanded`, `highlight`, `priority`, `css`, `location`, and `hideIfUnmodified`.

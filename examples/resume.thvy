@@ -75,6 +75,139 @@ theme:
     --hvy-success: "#1c6231"
     --hvy-success-bg: "#e7f9ee"
     --hvy-success-border: "#95d8a9"
+section_defs:
+  - name: Projects
+    key: resume-projects
+    template:
+      id: projects
+      title: Projects
+      level: 1
+      lock: true
+      description: Project portfolio
+      hideIfUnmodified: true
+      tags: reciprocal-xref-source
+      blocks:
+        - text: "# Projects"
+          schema:
+            component: text
+            css: "margin: 0.5rem 0;"
+        - text: ""
+          schema:
+            component: table
+            css: "margin: 0.5rem 0 0;"
+            tags: table-header
+            tableColumns:
+              - PROJECT
+              - DATES
+            tableShowHeader: true
+            tableRows: []
+            lock: true
+            description: Project table header
+        - text: ""
+          schema:
+            component: component-list
+            css: "margin: 0;"
+            componentListComponent: project-record
+            componentListItemLabel: project
+            tags: project
+            componentListBlocks: []
+      children: []
+  - name: Publications
+    key: resume-publications
+    template:
+      id: publications
+      title: Publications
+      level: 1
+      lock: true
+      description: Publications
+      hideIfUnmodified: true
+      tags: reciprocal-xref-source
+      blocks:
+        - text: "# Publications"
+          schema:
+            component: text
+            css: "margin: 0.5rem 0;"
+        - text: ""
+          schema:
+            component: table
+            css: "margin: 0.5rem 0 0;"
+            tags: table-header
+            tableColumns:
+              - PUBLICATION
+              - PUBLISHER
+              - DATE
+            tableShowHeader: true
+            tableRows: []
+            lock: true
+            description: Publication table header
+        - text: ""
+          schema:
+            component: component-list
+            css: "margin: 0;"
+            componentListComponent: publication-record
+            componentListItemLabel: publication
+            tags: publication
+            componentListBlocks: []
+      children: []
+  - name: Certifications
+    key: resume-certifications
+    template:
+      id: certifications
+      title: Certifications
+      level: 1
+      lock: true
+      description: Certifications
+      hideIfUnmodified: true
+      tags: reciprocal-xref-source
+      blocks:
+        - text: "# Certifications"
+          schema:
+            component: text
+            css: "margin: 0.5rem 0;"
+        - text: ""
+          schema:
+            component: table
+            css: "margin: 0.5rem 0 0;"
+            tags: table-header
+            tableColumns:
+              - "<!--hvy:alt {\"compact\":\"CERT\"}-->CERTIFICATION<!--/hvy:alt-->"
+              - ISSUER
+              - OBTAINED
+            tableShowHeader: true
+            tableRows: []
+            lock: true
+            description: Certification table header
+        - text: ""
+          schema:
+            component: component-list
+            css: "margin: 0;"
+            componentListComponent: certification-record
+            componentListItemLabel: certification
+            tags: certification
+            componentListBlocks: []
+      children: []
+  - name: Resume Section
+    key: resume-section
+    repeatable: true
+    template:
+      title: Resume Section
+      level: 1
+      lock: true
+      description: Additional resume section
+      hideIfUnmodified: true
+      tags: reciprocal-xref-source
+      blocks:
+        - text: "# Resume Section"
+          schema:
+            component: text
+            css: "margin: 0.5rem 0;"
+            placeholder: "# Section title"
+        - text: ""
+          schema:
+            component: text
+            css: "margin: 0;"
+            placeholder: "Add section details, records, and any relevant skill or tool references."
+      children: []
 component_defs:
   - name: skill-xref-card
     baseType: xref-card
@@ -633,9 +766,6 @@ component_defs:
               component: text
               css: "margin: 0;"
               placeholder: "Description and notes"
-          - component: skill-record-experience-section
-          - component: skill-record-education-section
-          - component: skill-record-projects-section
   - name: tool-tech-record
     baseType: expandable
     description: Tool / technology details
@@ -669,9 +799,6 @@ component_defs:
               component: text
               css: "margin: 0;"
               placeholder: "Description and notes"
-          - component: skill-record-experience-section
-          - component: skill-record-education-section
-          - component: skill-record-projects-section
 ---
 
 <!--hvy: {"id":"header","lock":true,"contained":false,"description":"Resume identity header","hideIfUnmodified":true,"priority":true}-->
@@ -753,7 +880,7 @@ component_defs:
 
  <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"tool-tech-record","componentListItemLabel":"tool / technology","tags":"tool"}-->
 
-<!--hvy: {"id":"history","lock":true,"description":"Work history","hideIfUnmodified":true}-->
+<!--hvy: {"id":"history","lock":true,"description":"Work history","hideIfUnmodified":true,"tags":"reciprocal-xref-source"}-->
 #! History
 
  <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
@@ -763,37 +890,7 @@ component_defs:
 
  <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"history-record","componentListItemLabel":"job","tags":"history"}-->
 
-<!--hvy: {"id":"projects","lock":true,"description":"Project portfolio","hideIfUnmodified":true}-->
-#! Projects
-
- <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
-  # Projects
-
- <!--hvy:table {"css":"margin: 0.5rem 0 0;","tags":"table-header","tableColumns":["PROJECT","DATES"],"tableShowHeader":true,"tableRows":[],"lock":true,"description":"Project table header"}-->
-
- <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"project-record","componentListItemLabel":"project","tags":"project"}-->
-
-<!--hvy: {"id":"publications","lock":true,"description":"Publications","hideIfUnmodified":true}-->
-#! Publications
-
- <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
-  # Publications
-
- <!--hvy:table {"css":"margin: 0.5rem 0 0;","tags":"table-header","tableColumns":["PUBLICATION","PUBLISHER","DATE"],"tableShowHeader":true,"tableRows":[],"lock":true,"description":"Publication table header"}-->
-
- <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"publication-record","componentListItemLabel":"publication","tags":"publication"}-->
-
-<!--hvy: {"id":"certifications","lock":true,"description":"Certifications","hideIfUnmodified":true}-->
-#! Certifications
-
- <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
-  # Certifications
-
- <!--hvy:table {"css":"margin: 0.5rem 0 0;","tags":"table-header","tableColumns":["<!--hvy:alt {\"compact\":\"CERT\"}-->CERTIFICATION<!--/hvy:alt-->","ISSUER","OBTAINED"],"tableShowHeader":true,"tableRows":[],"lock":true,"description":"Certification table header"}-->
-
- <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"certification-record","componentListItemLabel":"certification","tags":"certification"}-->
-
-<!--hvy: {"id":"education","lock":true,"description":"Education","hideIfUnmodified":true}-->
+<!--hvy: {"id":"education","lock":true,"description":"Education","hideIfUnmodified":true,"tags":"reciprocal-xref-source"}-->
 #! Education
 
  <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
@@ -821,3 +918,297 @@ component_defs:
           doc.tool.remove_component(component_ref="remove-featured-xref-helper")
       except Exception:
           pass
+
+ <!--hvy:plugin {"id":"sync-reciprocal-xrefs","editorOnly":true,"plugin":"dev.hvy.scripting","pluginConfig":{"version":"0.1","maxLines":200000}}-->
+  GENERATED_TAG = "reciprocal-xref-generated"
+  SOURCE_TAG = "reciprocal-xref-source"
+
+  def json_get(raw, key):
+      marker = '"' + key + '":'
+      start = raw.find(marker)
+      if start < 0:
+          return ""
+      pos = start + len(marker)
+      while pos < len(raw) and raw[pos] in " \n\t":
+          pos += 1
+      if pos >= len(raw) or raw[pos] != '"':
+          return ""
+      pos += 1
+      out = ""
+      escaped = False
+      while pos < len(raw):
+          ch = raw[pos]
+          if escaped:
+              out += ch
+              escaped = False
+          elif ch == "\\":
+              escaped = True
+          elif ch == '"':
+              return out
+          else:
+              out += ch
+          pos += 1
+      return out
+
+  def first_directive_json(raw):
+      first = raw.split("\n", 1)[0]
+      start = first.find("{")
+      end = first.rfind("}")
+      return first[start:end + 1] if start >= 0 and end > start else ""
+
+  def first_component(raw):
+      first = raw.split("\n", 1)[0].strip()
+      if not first.startswith("<!--hvy:"):
+          return ""
+      rest = first[len("<!--hvy:"):]
+      return rest.split(" ", 1)[0].strip()
+
+  def first_table_cells(raw):
+      marker = '"cells":['
+      start = raw.find(marker)
+      if start < 0:
+          return []
+      pos = start + len(marker)
+      cells = []
+      while pos < len(raw) and len(cells) < 4:
+          while pos < len(raw) and raw[pos] in " \n\t,":
+              pos += 1
+          if pos >= len(raw) or raw[pos] != '"':
+              break
+          pos += 1
+          cell = ""
+          escaped = False
+          while pos < len(raw):
+              ch = raw[pos]
+              if escaped:
+                  cell += ch
+                  escaped = False
+              elif ch == "\\":
+                  escaped = True
+              elif ch == '"':
+                  break
+              else:
+                  cell += ch
+              pos += 1
+          cells.append(cell)
+          pos += 1
+      return cells
+
+  def safe_id(value):
+      out = ""
+      for ch in value.lower():
+          if ("a" <= ch <= "z") or ("0" <= ch <= "9"):
+              out += ch
+          else:
+              out += "-"
+      while "--" in out:
+          out = out.replace("--", "-")
+      return out.strip("-") or "item"
+
+  def section_id_from_path(path):
+      parts = path.split("/")
+      return parts[2] if len(parts) > 2 and parts[1] == "body" else ""
+
+  def source_section(section_id):
+      try:
+          raw = doc.cli.run("cat /body/" + section_id + "/section.json")
+      except Exception:
+          return None
+      tags = json_get(raw, "tags")
+      if SOURCE_TAG not in tags.split():
+          return None
+      return {
+          "id": section_id,
+          "title": json_get(raw, "title") or section_id,
+      }
+
+  def source_record_for_path(path, section):
+      parts = path.split("/")[:-2]
+      while len(parts) > 2:
+          candidate = "/".join(parts)
+          try:
+              raw = doc.cli.run("cat " + candidate + "/raw.hvy")
+          except Exception:
+              raw = ""
+          component = first_component(raw)
+          directive = first_directive_json(raw)
+          record_id = json_get(directive, "id")
+          if record_id and component.endswith("-record") and component not in ["skill-record", "tool-tech-record"]:
+              cells = first_table_cells(raw)
+              title = json_get(directive, "xrefTitle") or (cells[0] if len(cells) > 0 else record_id)
+              detail = json_get(directive, "xrefDetail") or (cells[1] if len(cells) > 1 else "")
+              if component == "history-record" and len(cells) > 1:
+                  detail = cells[1]
+              return {
+                  "id": record_id,
+                  "component": component,
+                  "title": title,
+                  "detail": detail,
+                  "section_id": section["id"],
+                  "section_title": section["title"],
+              }
+          parts = parts[:-1]
+      return {
+          "id": section["id"],
+          "component": "section",
+          "title": section["title"],
+          "detail": "",
+          "section_id": section["id"],
+          "section_title": section["title"],
+      }
+
+  def group_label(source):
+      if source["section_id"] == "history":
+          return "Experience"
+      return source["section_title"]
+
+  def reciprocal_component(source):
+      mapping = {
+          "history-record": "history-xref-card",
+          "project-record": "project-xref-card",
+          "education-record": "education-xref-card",
+          "publication-record": "publication-xref-card",
+          "certification-record": "certification-xref-card",
+      }
+      return mapping[source["component"]] if source["component"] in mapping else "xref-card"
+
+  def cli_quote(value):
+      return "'" + value.replace("\\", "\\\\").replace("'", "\\'") + "'"
+
+  def json_string(value):
+      out = '"'
+      for ch in value:
+          if ch == "\\":
+              out += "\\\\"
+          elif ch == '"':
+              out += '\\"'
+          elif ch == "\n":
+              out += "\\n"
+          else:
+              out += ch
+      return out + '"'
+
+  def json_object(pairs):
+      lines = ["{"]
+      index = 0
+      for pair in pairs:
+          key = pair[0]
+          value = pair[1]
+          comma = "," if index < len(pairs) - 1 else ""
+          if isinstance(value, bool):
+              rendered = "true" if value else "false"
+          elif isinstance(value, int) or isinstance(value, float):
+              rendered = str(value)
+          else:
+              rendered = json_string(str(value))
+          lines.append("  " + json_string(key) + ": " + rendered + comma)
+          index += 1
+      lines.append("}")
+      return "\n".join(lines) + "\n"
+
+  def remove_generated_groups(target_id):
+      try:
+          found = doc.cli.run("find /id/" + target_id + "/expandable-content -type d -name '*reciprocal*'")
+      except Exception:
+          found = ""
+      paths = []
+      for path in found.split("\n"):
+          path = path.strip()
+          if path.endswith("-heading") or path.endswith("-list"):
+              paths.append(path)
+      paths.sort(key=len, reverse=True)
+      for path in paths:
+          try:
+              doc.cli.run("hvy remove " + cli_quote(path))
+          except Exception:
+              pass
+
+  def sync_target(target_id, groups):
+      remove_generated_groups(target_id)
+      for group_key in sorted(groups.keys()):
+          entries = groups[group_key]
+          if len(entries) == 0:
+              continue
+          source = entries[0]["source"]
+          component = reciprocal_component(source)
+          group_id = target_id + "-reciprocal-" + safe_id(group_key)
+          heading_id = group_id + "-heading"
+          list_id = group_id + "-list"
+          try:
+              doc.cli.run("hvy insert -1 text /id/" + target_id + " --id " + cli_quote(heading_id))
+              doc.cli.write("/id/" + heading_id + "/text.txt", "^detail-heading^ #### " + group_label(source) + "\n")
+              doc.cli.write("/id/" + heading_id + "/text.json", json_object([["tags", GENERATED_TAG], ["css", "margin: 0;"]]))
+              doc.cli.run("hvy insert -1 component-list /id/" + target_id + " --id " + cli_quote(list_id))
+              doc.cli.write("/id/" + list_id + "/component-list.json", json_object([
+                  ["tags", GENERATED_TAG],
+                  ["css", "margin: 0;"],
+                  ["componentListComponent", component],
+                  ["componentListItemLabel", "reciprocal reference"],
+              ]))
+          except Exception:
+              continue
+          seen = {}
+          for entry in entries:
+              dedupe = entry["source"]["id"]
+              if dedupe in seen:
+                  continue
+              seen[dedupe] = True
+              card_id = target_id + "-from-" + safe_id(dedupe)
+              try:
+                  doc.cli.run("hvy insert -1 " + component + " /id/" + list_id + " --id " + cli_quote(card_id))
+                  doc.cli.write("/id/" + card_id + "/" + component + ".json", json_object([
+                      ["tags", GENERATED_TAG],
+                      ["xrefTitle", entry["source"]["title"]],
+                      ["xrefDetail", entry["source"]["detail"]],
+                      ["xrefTarget", entry["source"]["id"]],
+                  ]))
+              except Exception:
+                  pass
+
+  links = {}
+  try:
+      found = doc.cli.run("find /body -name '*xref-card.json'")
+  except Exception:
+      found = ""
+  for path in found.split("\n"):
+      path = path.strip()
+      if not path:
+          continue
+      section = source_section(section_id_from_path(path))
+      if not section:
+          continue
+      try:
+          card = doc.cli.run("cat " + path)
+      except Exception:
+          continue
+      target = json_get(card, "xrefTarget")
+      if not (target.startswith("skill-") or target.startswith("tool-")):
+          continue
+      source = source_record_for_path(path, section)
+      group_key = source["section_id"]
+      if target not in links:
+          links[target] = {}
+      if group_key not in links[target]:
+          links[target][group_key] = []
+      links[target][group_key].append({"source": source})
+
+  all_targets = {}
+  for root in ["/body/skills", "/body/tools-technologies"]:
+      try:
+          target_files = doc.cli.run("find " + root + " -name 'skill-record.json'")
+      except Exception:
+          target_files = ""
+      for json_path in target_files.split("\n"):
+          json_path = json_path.strip()
+          if not json_path:
+              continue
+          try:
+              target_json = doc.cli.run("cat " + json_path)
+          except Exception:
+              continue
+          target_id = json_get(target_json, "id")
+          if target_id.startswith("skill-") or target_id.startswith("tool-"):
+              all_targets[target_id] = True
+
+  for target_id in all_targets:
+      sync_target(target_id, links[target_id] if target_id in links else {})

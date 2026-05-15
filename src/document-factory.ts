@@ -1,8 +1,8 @@
 import type { Align, BlockSchema, ExpandablePart, Slot, SortKeyValue, TableRow, VisualBlock, VisualSection } from './editor/types';
 import type { JsonObject } from './hvy/types';
 import type { ComponentDefinition, VisualDocument } from './types';
-import { makeId } from './utils';
-import { getComponentDefs, getComponentDefsFromMeta, getSectionDefs, resolveBaseComponent, resolveBaseComponentFromMeta } from './component-defs';
+import { makeId, sanitizeOptionalId } from './utils';
+import { getComponentDefs, getComponentDefsFromMeta, getSectionDefs, getSectionTemplateKey, resolveBaseComponent, resolveBaseComponentFromMeta } from './component-defs';
 import { coerceGridColumns, parseGridItems as _parseGridItems } from './grid-ops';
 import { getTableColumns } from './table-ops';
 import { REUSABLE_SECTION_DEF_PREFIX } from './state';
@@ -147,6 +147,60 @@ export function parseVisualBlock(candidate: unknown, seen = new WeakSet<object>(
     schema,
     schemaMode: raw.schemaMode === true,
   };
+}
+
+export function parseVisualSection(candidate: unknown, level = 1, seen = new WeakSet<object>(), documentMeta?: JsonObject | null): VisualSection {
+  if (!candidate || typeof candidate !== 'object' || seen.has(candidate)) {
+    return createEmptySection(level, '', false);
+  }
+  seen.add(candidate);
+  const raw = candidate as JsonObject;
+  const title = typeof raw.title === 'string' && raw.title.trim().length > 0 ? raw.title : 'Untitled Section';
+  const rawLevel = typeof raw.level === 'number' && Number.isFinite(raw.level) ? raw.level : level;
+  return {
+    key: makeId('section'),
+    customId: sanitizeOptionalId(typeof raw.customId === 'string' ? raw.customId : typeof raw.id === 'string' ? raw.id : ''),
+    contained: raw.contained !== false,
+    editorOnly: raw.editorOnly === true,
+    lock: raw.lock === true,
+    idEditorOpen: false,
+    isGhost: false,
+    title,
+    level: Math.max(1, Math.min(6, Math.floor(rawLevel))),
+    expanded: raw.expanded === false ? false : true,
+    highlight: raw.highlight === true,
+    priority: raw.priority === true,
+    css: typeof raw.css === 'string' ? raw.css : '',
+    tags: typeof raw.tags === 'string' ? raw.tags : '',
+    description: typeof raw.description === 'string' ? raw.description : '',
+    location: raw.location === 'sidebar' ? 'sidebar' : 'main',
+    hideIfUnmodified: raw.hideIfUnmodified === true,
+    templateKey: typeof raw.templateKey === 'string' ? raw.templateKey : undefined,
+    blocks: Array.isArray(raw.blocks) ? raw.blocks.map((block) => parseVisualBlock(block, seen, documentMeta)) : [],
+    children: Array.isArray(raw.children)
+      ? raw.children.map((child) => parseVisualSection(child, Math.min(Math.max(1, Math.floor(rawLevel)) + 1, 6), seen, documentMeta))
+      : [],
+  };
+}
+
+export function normalizeReusableSectionDefinitions(meta: JsonObject): void {
+  const defs = meta.section_defs;
+  if (!Array.isArray(defs)) {
+    return;
+  }
+  meta.section_defs = defs
+    .filter((item) => item && typeof item === 'object')
+    .map((item) => {
+      const raw = item as JsonObject;
+      return {
+        ...raw,
+        name: typeof raw.name === 'string' ? raw.name : '',
+        key: typeof raw.key === 'string' ? raw.key : undefined,
+        repeatable: raw.repeatable === true,
+        template: parseVisualSection(raw.template, 1, new WeakSet<object>(), meta),
+      };
+    })
+    .filter((item) => item.name.trim().length > 0);
 }
 
 export function schemaFromUnknown(value: unknown, seen = new WeakSet<object>(), documentMeta?: JsonObject | null): BlockSchema {
@@ -348,6 +402,7 @@ export function createEmptySection(level: number, component = 'container', isGho
     description: '',
     location: 'main',
     hideIfUnmodified: false,
+    templateKey: undefined,
     blocks: component ? [createEmptyBlock(component)] : [],
     children: [],
   };
@@ -445,6 +500,7 @@ function cloneReusableSectionWithDelta(section: VisualSection, levelDelta: numbe
     description: section.description,
     location: section.location ?? 'main',
     hideIfUnmodified: section.hideIfUnmodified === true,
+    templateKey: section.templateKey,
     blocks: section.blocks.map((block) => cloneReusableBlock(block)),
     children: section.children.map((child) => cloneReusableSectionWithDelta(child, levelDelta)),
   };
@@ -503,11 +559,13 @@ function instantiateReusableBlockFromMeta(componentName: string, documentMeta: J
 
 export function instantiateReusableSection(name: string, level: number): VisualSection | null {
   const normalizedName = name.startsWith(REUSABLE_SECTION_DEF_PREFIX) ? name.slice(REUSABLE_SECTION_DEF_PREFIX.length) : name;
-  const def = getSectionDefs().find((item) => item.name === normalizedName);
+  const def = getSectionDefs().find((item) => item.name === normalizedName || getSectionTemplateKey(item) === normalizedName);
   if (!def) {
     return null;
   }
-  return cloneReusableSection(def.template, level);
+  const section = cloneReusableSection(def.template, level);
+  section.templateKey = getSectionTemplateKey(def);
+  return section;
 }
 
 export function applyComponentDefaults(schema: BlockSchema, componentName: string, documentMeta?: JsonObject | null): void {

@@ -934,7 +934,6 @@ component_defs:
 
   targets = {}
   groups = {}
-  print("reciprocal-xrefs: start")
   for record in doc.tool.get_updated_components("skill-record"):
       is_target = False
       for tag in TARGET_TAGS:
@@ -943,7 +942,6 @@ component_defs:
       if is_target:
           targets[record.id] = record
           groups[record.id] = {}
-  print("reciprocal-xrefs: targets", len(targets))
 
   scanned_xrefs = 0
   matched_xrefs = 0
@@ -965,7 +963,6 @@ component_defs:
               seen = True
       if not seen:
           groups[target.id][group_key].append(source)
-  print("reciprocal-xrefs: scanned", scanned_xrefs, "matched", matched_xrefs)
 
   generated_cards = 0
   for target_id in sorted(targets.keys()):
@@ -996,4 +993,3 @@ component_defs:
               card.set("xrefDetail", source.get("xrefDetail") or source.first_table_cell(1) or "")
               card.set("xrefTarget", source.id)
               generated_cards += 1
-  print("reciprocal-xrefs: generated", generated_cards)

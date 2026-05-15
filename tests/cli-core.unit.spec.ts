@@ -25,6 +25,10 @@ function createResumeCliTestDocument() {
   return deserializeDocument(readFileSync(fileURLToPath(new URL('../examples/resume.hvy', import.meta.url)), 'utf8'), '.hvy');
 }
 
+function createResumeTemplateCliTestDocument() {
+  return deserializeDocument(readFileSync(fileURLToPath(new URL('../examples/resume.thvy', import.meta.url)), 'utf8'), '.thvy');
+}
+
 function createTemplatedCliTestDocument() {
   return deserializeDocument(`---
 hvy_version: 0.1
@@ -2157,6 +2161,16 @@ component_defs:
   expect(byRelativePath.output).toContain('/intro');
 });
 
+test('hvy request_structure lists reusable section templates with availability', async () => {
+  const document = createResumeTemplateCliTestDocument();
+  const session = createHvyCliSession();
+
+  const result = await executeHvyCliCommand(document, session, 'hvy request_structure --collapse');
+
+  expect(result.output).toContain('Reusable section templates:');
+  expect(result.output).toContain('- Certifications key=resume-certifications available - Certifications section template');
+});
+
 test('hvy search ranks global skill library and top skills above local skill lists', async () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
@@ -2264,6 +2278,16 @@ Tagged
   expect(result.output).not.toContain('matched tags');
 });
 
+test('hvy search finds reusable section templates before they exist in the body', async () => {
+  const document = createResumeTemplateCliTestDocument();
+  const session = createHvyCliSession();
+
+  const result = await executeHvyCliCommand(document, session, 'hvy search "add a Certifications section" --max 5');
+
+  expect(result.output).toContain('/section_defs/resume-certifications id=resume-certifications kind=section-template type=section-template');
+  expect(result.output).toContain('description: Certifications');
+});
+
 test('hvy request_structure --describe includes non-empty descriptions', async () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
@@ -2299,6 +2323,29 @@ hvy_version: 0.1
 
   expect(result.output).toContain('table.txt id=C2 | TITLE | ORGANIZATION | YEAR(S)');
   expect(result.output).not.toContain('hvy:alt');
+});
+
+test('hvy insert section can clone reusable section templates', async () => {
+  const document = createResumeTemplateCliTestDocument();
+  const session = createHvyCliSession();
+
+  const created = await executeHvyCliCommand(document, session, 'hvy insert -1 section /body --from-template resume-certifications');
+
+  expect(created.output).toBe('/body/certifications');
+  expect(created.cwd).toBe('/body/certifications');
+  expect((await executeHvyCliCommand(document, session, 'cat /body/certifications/section.json')).output).toContain('"templateKey": "resume-certifications"');
+  expect((await executeHvyCliCommand(document, session, 'cat /body/certifications/component-list-2/component-list.json')).output).toContain('"componentListComponent": "certification-record"');
+});
+
+test('hvy insert section rejects duplicate non-repeatable section templates', async () => {
+  const document = createResumeTemplateCliTestDocument();
+  const session = createHvyCliSession();
+
+  await executeHvyCliCommand(document, session, 'hvy insert -1 section /body --from-template resume-certifications');
+
+  await expect(
+    executeHvyCliCommand(document, session, 'hvy insert -1 section /body --from-template resume-certifications')
+  ).rejects.toThrow('hvy insert section: section template "resume-certifications" is non-repeatable and already used.');
 });
 
 test('hvy lint reports core component and plugin issues', async () => {

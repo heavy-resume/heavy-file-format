@@ -1,7 +1,7 @@
 import { resolveBaseComponentFromMeta } from '../component-defs';
 import type { JsonObject } from '../hvy/types';
 import { renderAltAnnotationsAsFullText } from '../markdown';
-import type { VisualDocument } from '../types';
+import type { SectionDefinition, VisualDocument } from '../types';
 import type { HvyVirtualEntry, HvyVirtualFileSystem } from './virtual-file-system';
 
 type ComponentStructureEntry = {
@@ -54,6 +54,9 @@ export function formatHvyRequestStructure(document: VisualDocument, fs: HvyVirtu
   return [
     'Custom component types:',
     ...formatCustomComponentDefinitions(document),
+    '',
+    'Reusable section templates:',
+    ...formatReusableSectionDefinitions(document),
     '',
     'Components:',
     ...formatComponentTree(scopedEntries, {
@@ -203,6 +206,46 @@ function formatCustomComponentDefinitions(document: VisualDocument): string[] {
     const description = typeof entry.description === 'string' && entry.description.trim() ? ` - ${entry.description.trim()}` : '';
     return `- ${name} baseType=${baseType}${description}`;
   });
+}
+
+function formatReusableSectionDefinitions(document: VisualDocument): string[] {
+  const definitions = getSectionDefinitionsFromDocument(document);
+  if (definitions.length === 0) {
+    return ['- (none)'];
+  }
+  const usedTemplateKeys = getUsedSectionTemplateKeys(document);
+  return definitions.map((definition) => {
+    const key = getReusableSectionTemplateKey(definition);
+    const description = definition.template.description.trim() || definition.name.trim();
+    const repeatable = definition.repeatable === true ? ' repeatable' : '';
+    const used = definition.repeatable === true ? '' : ` ${usedTemplateKeys.has(key) ? 'used' : 'available'}`;
+    return `- ${definition.name.trim()} key=${key}${repeatable}${used} - ${description} section template`;
+  });
+}
+
+function getSectionDefinitionsFromDocument(document: VisualDocument): SectionDefinition[] {
+  const definitions = document.meta.section_defs;
+  return Array.isArray(definitions)
+    ? definitions.filter((item): item is SectionDefinition => !!item && typeof item === 'object' && 'name' in item && 'template' in item)
+    : [];
+}
+
+function getReusableSectionTemplateKey(definition: SectionDefinition): string {
+  return definition.key?.trim() || definition.name.trim();
+}
+
+function getUsedSectionTemplateKeys(document: VisualDocument): Set<string> {
+  const used = new Set<string>();
+  const visit = (sections: VisualDocument['sections']): void => {
+    for (const section of sections) {
+      if (!section.isGhost && section.templateKey?.trim()) {
+        used.add(section.templateKey.trim());
+      }
+      visit(section.children);
+    }
+  };
+  visit(document.sections);
+  return used;
 }
 
 function formatComponentStructureLine(entry: ComponentStructureEntry, options: { describe?: boolean } = {}): string {

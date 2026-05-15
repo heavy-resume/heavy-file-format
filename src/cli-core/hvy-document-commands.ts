@@ -1,10 +1,10 @@
-import { defaultBlockSchema, schemaFromUnknown } from '../document-factory';
+import { cloneReusableSection, defaultBlockSchema, schemaFromUnknown } from '../document-factory';
 import type { BlockSchema, GridItem, VisualBlock, VisualSection } from '../editor/types';
 import { getComponentDefsFromMeta, isBuiltinComponentName, resolveBaseComponentFromMeta } from '../component-defs';
 import type { JsonObject } from '../hvy/types';
 import { DB_TABLE_PLUGIN_ID, FORM_PLUGIN_ID } from '../plugins/registry';
 import { getSectionId } from '../section-ops';
-import type { VisualDocument } from '../types';
+import type { SectionDefinition, VisualDocument } from '../types';
 import { makeId } from '../utils';
 import {
   applyReusableTemplateValues,
@@ -100,7 +100,8 @@ export function hvyDocumentCommandHelp(topic = ''): string {
   const help: Record<string, string> = {
     '': [
       formatCommandHelp('hvy insert INDEX COMPONENT PARENT_PATH [ID|--id ID] [--using-template JSON] [--return-order-on-creation] [--return-structure-on-creation] [--return-about-txt-on-creation]', 'Insert a blank builtin or custom component. Reusable components with template variables require exact JSON values with --using-template. Component ids are optional; use --id only when you need a stable id. INDEX is zero-based and supports Python-style negative indexes; 0 is the front, -1 is the back.'),
-      formatCommandHelp('hvy insert INDEX section PARENT_PATH ID TITLE', 'Create a section.'),
+      formatCommandHelp('hvy insert INDEX section PARENT_PATH ID TITLE', 'Create a blank section.'),
+      formatCommandHelp('hvy insert INDEX section PARENT_PATH --from-template TEMPLATE_KEY', 'Clone a reusable section template from section_defs, such as resume-certifications.'),
       formatCommandHelp('hvy insert INDEX text PARENT_PATH [ID|--id ID]', 'Create a blank text component. Edit text.txt after creation.'),
       formatCommandHelp('hvy insert INDEX table PARENT_PATH [ID|--id ID]', 'Create a blank static table component. Edit tableColumns.json and tableRows.json after creation.'),
       formatCommandHelp('hvy remove PATH [--prune-xref]', 'Remove a section or component directory. Alias: hvy delete PATH.'),
@@ -118,13 +119,15 @@ export function hvyDocumentCommandHelp(topic = ''): string {
     ].join('\n'),
     insert: [
       formatCommandHelp('hvy insert INDEX COMPONENT PARENT_PATH [ID|--id ID] [--using-template JSON] [--return-order-on-creation] [--return-structure-on-creation] [--return-about-txt-on-creation]', 'Insert a blank builtin or custom component to a section, component-list, grid, container, or expandable content path. Reusable components with template variables require --using-template with exact JSON keys. Edit generated body/config files after creation. Component ids are optional; use --id only when you need a stable id. INDEX is zero-based and supports Python-style negative indexes; 0 is the front, -1 is the back.'),
-      formatCommandHelp('hvy insert INDEX section PARENT_PATH ID TITLE', 'Add a section under /body or under another section.'),
+      formatCommandHelp('hvy insert INDEX section PARENT_PATH ID TITLE', 'Add a blank section under /body or under another section.'),
+      formatCommandHelp('hvy insert INDEX section PARENT_PATH --from-template TEMPLATE_KEY', 'Clone a reusable section template from section_defs. Non-repeatable templates can be inserted once.'),
       formatCommandHelp('hvy insert INDEX text PARENT_PATH [ID|--id ID]', 'Insert a blank text block.'),
       formatCommandHelp('hvy insert INDEX table PARENT_PATH [ID|--id ID]', 'Insert a blank static table block.'),
       formatCommandHelp('hvy insert INDEX plugin SECTION_PATH ID PLUGIN_ID', 'Insert a blank raw plugin block by canonical plugin id, such as dev.hvy.form or dev.hvy.db-table.'),
       '',
       'Examples:',
       '  hvy insert 0 section /body a-section "A Section"',
+      '  hvy insert -1 section /body --from-template resume-certifications',
       '  cd /a-section',
       '  hvy insert 0 text . intro',
       '  hvy insert -1 container . a-container',
@@ -136,7 +139,10 @@ export function hvyDocumentCommandHelp(topic = ''): string {
     component: [
       formatCommandHelp('hvy insert INDEX COMPONENT PARENT_PATH [ID|--id ID] [--using-template JSON] [--return-order-on-creation] [--return-structure-on-creation] [--return-about-txt-on-creation]', 'Insert a blank builtin or custom component to a section, component-list, grid, container, or expandable content path. Reusable components with template variables require --using-template with exact JSON keys. Edit generated body/config files after creation. Component ids are optional; use --id only when you need a stable id. INDEX is zero-based and supports Python-style negative indexes; 0 is the front, -1 is the back.'),
     ].join('\n'),
-    section: formatCommandHelp('hvy insert INDEX section PARENT_PATH ID TITLE', 'Add a section under /body or under another section. INDEX is zero-based and supports Python-style negative indexes; 0 is the front, -1 is the back.'),
+    section: [
+      formatCommandHelp('hvy insert INDEX section PARENT_PATH ID TITLE', 'Add a blank section under /body or under another section. INDEX is zero-based and supports Python-style negative indexes; 0 is the front, -1 is the back.'),
+      formatCommandHelp('hvy insert INDEX section PARENT_PATH --from-template TEMPLATE_KEY', 'Clone a reusable section template from section_defs. Lookup prefers exact key, then exact name. Non-repeatable templates can be inserted once.'),
+    ].join('\n'),
     text: formatCommandHelp('hvy insert INDEX text PARENT_PATH [ID|--id ID]', 'Insert a blank text block. Edit text.txt after creation. INDEX is zero-based and supports Python-style negative indexes; 0 is the front, -1 is the back.'),
     table: formatCommandHelp('hvy insert INDEX table PARENT_PATH [ID|--id ID]', 'Insert a blank static table block. Edit tableColumns.json and tableRows.json after creation. INDEX is zero-based and supports Python-style negative indexes; 0 is the front, -1 is the back.'),
     request_structure: formatCommandHelp('hvy request_structure [COMPONENT_ID] [--collapse] [--describe]', 'Show the component directory map, optionally scoped to one component id. --collapse compacts anonymous leaf components. --describe includes non-empty descriptions.'),
@@ -362,9 +368,12 @@ function parseInsertIndex(indexArg: string): HvyInsertIndex {
 }
 
 function addSection(ctx: HvyDocumentCommandContext, args: string[], index: HvyInsertIndex = -1): HvyDocumentCommandResult {
+  if (args.includes('--from-template')) {
+    return addSectionFromTemplate(ctx, args, index);
+  }
   const [parentPath = '', id = '', title = ''] = args;
   if (!parentPath || !id || !title) {
-    throw new Error('hvy insert section: expected PARENT_PATH ID TITLE');
+    throw new Error('hvy insert section: expected PARENT_PATH ID TITLE or PARENT_PATH --from-template TEMPLATE_KEY');
   }
   const parent = findSectionParent(ctx, parentPath);
   const section = createSection(id, decodeCliText(title), parent ? parent.level + 1 : 1);
@@ -373,6 +382,47 @@ function addSection(ctx: HvyDocumentCommandContext, args: string[], index: HvyIn
   } else {
     insertChild(ctx.document.sections, section, index);
   }
+  const resolvedParentPath = resolveVirtualPath(ctx.fs, ctx.cwd, parentPath);
+  const path = resolvedParentPath === '/' || resolvedParentPath === '/body'
+    ? `/body/${id}`
+    : `${resolvedParentPath.replace(/\/$/, '')}/${id}`;
+  return { output: path, mutated: true, cwd: path };
+}
+
+function addSectionFromTemplate(ctx: HvyDocumentCommandContext, args: string[], index: HvyInsertIndex): HvyDocumentCommandResult {
+  const [parentPath = '', ...rest] = args;
+  if (!parentPath) {
+    throw new Error('hvy insert section: expected PARENT_PATH --from-template TEMPLATE_KEY');
+  }
+  const templateKey = readOption(rest, '--from-template');
+  if (templateKey === null) {
+    throw new Error('hvy insert section: expected --from-template TEMPLATE_KEY');
+  }
+  if (!templateKey.trim()) {
+    throw new Error('hvy insert section: --from-template requires a template key or name.');
+  }
+  const optionRest = rest.filter((arg, argIndex) => arg !== '--from-template' && rest[argIndex - 1] !== '--from-template');
+  if (optionRest.length > 0) {
+    throw new Error(`hvy insert section: unsupported argument ${optionRest[0]}`);
+  }
+  const definition = findSectionDefinition(ctx.document, templateKey);
+  if (!definition) {
+    throw new Error(`hvy insert section: unknown section template "${templateKey}". Available templates: ${formatAvailableSectionTemplates(ctx.document)}`);
+  }
+  const key = getReusableSectionTemplateKey(definition);
+  if (definition.repeatable !== true && getUsedSectionTemplateKeys(ctx.document).has(key)) {
+    throw new Error(`hvy insert section: section template "${key}" is non-repeatable and already used.`);
+  }
+  const parent = findSectionParent(ctx, parentPath);
+  const section = cloneReusableSection(definition.template, parent ? parent.level + 1 : 1);
+  section.customId = definition.template.customId;
+  section.templateKey = key;
+  if (parent) {
+    insertChild(parent.children, section, index);
+  } else {
+    insertChild(ctx.document.sections, section, index);
+  }
+  const id = getSectionId(section);
   const resolvedParentPath = resolveVirtualPath(ctx.fs, ctx.cwd, parentPath);
   const path = resolvedParentPath === '/' || resolvedParentPath === '/body'
     ? `/body/${id}`
@@ -768,6 +818,44 @@ function createSection(id: string, title: string, level: number): VisualSection 
     blocks: [],
     children: [],
   };
+}
+
+function getSectionDefinitionsFromDocument(document: VisualDocument): SectionDefinition[] {
+  const definitions = document.meta.section_defs;
+  return Array.isArray(definitions)
+    ? definitions.filter((item): item is SectionDefinition => !!item && typeof item === 'object' && 'name' in item && 'template' in item)
+    : [];
+}
+
+function findSectionDefinition(document: VisualDocument, keyOrName: string): SectionDefinition | null {
+  const requested = keyOrName.trim();
+  const definitions = getSectionDefinitionsFromDocument(document);
+  return definitions.find((definition) => getReusableSectionTemplateKey(definition) === requested)
+    ?? definitions.find((definition) => definition.name.trim() === requested)
+    ?? null;
+}
+
+function getReusableSectionTemplateKey(definition: SectionDefinition): string {
+  return definition.key?.trim() || definition.name.trim();
+}
+
+function getUsedSectionTemplateKeys(document: VisualDocument): Set<string> {
+  const used = new Set<string>();
+  const visit = (sections: VisualDocument['sections']): void => {
+    for (const section of sections) {
+      if (!section.isGhost && section.templateKey?.trim()) {
+        used.add(section.templateKey.trim());
+      }
+      visit(section.children);
+    }
+  };
+  visit(document.sections);
+  return used;
+}
+
+function formatAvailableSectionTemplates(document: VisualDocument): string {
+  const names = getSectionDefinitionsFromDocument(document).map((definition) => getReusableSectionTemplateKey(definition));
+  return names.join(', ') || '(none)';
 }
 
 function createCliComponentBlock(document: VisualDocument, component: string, id: string, templateValues: Record<string, string> | null = null): VisualBlock {

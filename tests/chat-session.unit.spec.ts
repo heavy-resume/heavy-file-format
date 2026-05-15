@@ -569,6 +569,39 @@ test('buildDocumentEditCliSimRequest exposes the exact provider-facing CLI reque
   expect(writeChatCliUserQueryTraceMock).not.toHaveBeenCalled();
 });
 
+test('buildDocumentEditCliSimRequest startup output exposes reusable section templates', async () => {
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+section_defs:
+  - name: Certifications
+    key: resume-certifications
+    template:
+      id: certifications
+      title: Certifications
+      level: 1
+      description: Certifications
+      blocks: []
+      children: []
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+`, '.thvy');
+
+  const result = await buildDocumentEditCliSimRequest({
+    settings,
+    document,
+    messages: [],
+    request: 'Add a Certifications section.',
+  });
+
+  expect(result.requestJson).toContain('Reusable section templates:');
+  expect(result.requestJson).toContain('Certifications key=resume-certifications available - Certifications section template');
+  expect(result.requestJson).toContain('/section_defs/resume-certifications id=resume-certifications kind=section-template type=section-template');
+  expect(result.requestJson).toContain('hvy insert INDEX section PARENT_PATH --from-template TEMPLATE_KEY');
+});
+
 test('buildDocumentEditCliSimRequest displays the provider request derived from the same proxy payload it will send', async () => {
   const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
   const document = deserializeDocument('---\nhvy_version: 0.1\n---\n', '.hvy');

@@ -777,7 +777,7 @@ const EXPANDABLE_PART_KEYS = ['expandableStubBlocks', 'expandableContentBlocks']
 // - strips `component` from the root schema (redundant with `baseType`)
 // - strips `template` (runtime-only)
 // - uses { component: name } shorthand for custom component blocks in nested lists
-function serializeComponentDef(raw: JsonObject): JsonObject {
+export function serializeComponentDefinition(raw: JsonObject): JsonObject {
   const result: JsonObject = {};
   for (const [key, value] of Object.entries(raw)) {
     if (key === 'template') continue; // runtime-only; derived from schema
@@ -898,7 +898,7 @@ export function serializeDocumentHeaderYaml(document: VisualDocument): string {
   if (Array.isArray(serializedMeta.component_defs)) {
     serializedMeta.component_defs = (serializedMeta.component_defs as unknown[])
       .filter((def): def is JsonObject => !!def && typeof def === 'object')
-      .map((def) => serializeComponentDef(def));
+      .map((def) => serializeComponentDefinition(def));
   }
   if (Array.isArray(serializedMeta.section_defs)) {
     serializedMeta.section_defs = (serializedMeta.section_defs as unknown[])

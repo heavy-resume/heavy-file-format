@@ -1,8 +1,10 @@
+import { stringify as stringifyYaml } from 'yaml';
 import { requestProxyCompletion, type HostChatClient } from './chat/chat';
-import { deserializeDocumentWithDiagnostics, serializeSectionFragment } from './serialization';
+import { deserializeDocumentWithDiagnostics, serializeComponentDefinition, serializeSectionFragment } from './serialization';
 import type { VisualBlock, VisualSection } from './editor/types';
 import { findSectionContainer, formatSectionTitle, getSectionId, visitBlocks } from './section-ops';
-import type { ChatSettings, SectionDefinition, VisualDocument } from './types';
+import type { ChatSettings, ComponentDefinition, SectionDefinition, VisualDocument } from './types';
+import type { JsonObject } from './hvy/types';
 import { isAbortError, throwIfAborted } from './ai-document-loop-state';
 import { resolveBaseComponentFromMeta } from './component-defs';
 import importHvyFormatReference from './ai-import-hvy-format-reference.hvy?raw';
@@ -696,6 +698,7 @@ function buildImportSectionApplicationFrame(document: VisualDocument, applicatio
   const action = application.kind === 'replace'
     ? 'replace existing body section'
     : 'append new section from reusable/template section';
+  const reusableDefinitionFrame = buildImportReusableDefinitionFrame(document, application.target.section);
   return [
     '=== BEGIN SECTION APPLICATION ===',
     `Application: ${action}.`,
@@ -707,8 +710,88 @@ function buildImportSectionApplicationFrame(document: VisualDocument, applicatio
     '=== BEGIN MATCHED SECTION TEMPLATE ===',
     serializeSectionFragment(application.target.section, document.meta),
     '=== END MATCHED SECTION TEMPLATE ===',
+    reusableDefinitionFrame,
     '=== END SECTION APPLICATION ===',
   ].filter(Boolean).join('\n');
+}
+
+function buildImportReusableDefinitionFrame(document: VisualDocument, section: VisualSection): string {
+  const componentDefs = collectImportReferencedComponentDefinitions(document, section);
+  if (componentDefs.length === 0) {
+    return '';
+  }
+  return [
+    '=== BEGIN MATCHED REUSABLE DEFINITIONS ===',
+    'Reusable component definitions referenced by the matched section/template, including nested reusable components:',
+    stringifyYaml({
+      component_defs: componentDefs.map((def) => serializeComponentDefinition(def as unknown as JsonObject)),
+    }).trim(),
+    '=== END MATCHED REUSABLE DEFINITIONS ===',
+  ].join('\n');
+}
+
+function collectImportReferencedComponentDefinitions(document: VisualDocument, section: VisualSection): ComponentDefinition[] {
+  const defs = Array.isArray(document.meta?.component_defs) ? document.meta.component_defs : [];
+  const byName = new Map(defs.map((def) => [def.name, def]));
+  const seen = new Set<string>();
+  const referenced: ComponentDefinition[] = [];
+  const queue: string[] = [];
+
+  const enqueueFromValue = (value: unknown): void => {
+    collectImportComponentNamesFromValue(value).forEach((name) => {
+      if (byName.has(name) && !seen.has(name)) {
+        queue.push(name);
+      }
+    });
+  };
+
+  enqueueFromValue(section);
+  while (queue.length > 0) {
+    const name = queue.shift()!;
+    if (seen.has(name)) {
+      continue;
+    }
+    const def = byName.get(name);
+    if (!def) {
+      continue;
+    }
+    seen.add(name);
+    referenced.push(def);
+    enqueueFromValue(def.baseType);
+    enqueueFromValue(def.schema);
+    enqueueFromValue(def.template);
+  }
+
+  return referenced;
+}
+
+function collectImportComponentNamesFromValue(value: unknown): Set<string> {
+  const names = new Set<string>();
+  const visited = new WeakSet<object>();
+  const walk = (candidate: unknown, key?: string): void => {
+    if (typeof candidate === 'string') {
+      if (key === 'component' || key === 'baseType' || key === 'componentListComponent' || key === 'expandableStubComponent' || key === 'expandableContentComponent') {
+        names.add(candidate);
+      }
+      return;
+    }
+    if (!candidate || typeof candidate !== 'object') {
+      return;
+    }
+    if (visited.has(candidate)) {
+      return;
+    }
+    visited.add(candidate);
+    if (Array.isArray(candidate)) {
+      candidate.forEach((item) => walk(item));
+      return;
+    }
+    Object.entries(candidate as Record<string, unknown>).forEach(([entryKey, entryValue]) => {
+      walk(entryValue, entryKey);
+    });
+  };
+  walk(value);
+  return names;
 }
 
 function buildImportRelationshipFrame(document: VisualDocument): string {

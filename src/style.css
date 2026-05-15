@@ -21,6 +21,10 @@ body {
   box-sizing: border-box;
 }
 
+.hvy-embed-layout {
+  position: relative;
+}
+
 .no-transitions .hvy-embed-layout *,
 .hvy-embed-layout.no-transitions * {
   transition: none !important;

@@ -389,6 +389,55 @@ hvy_version: 0.1
   expect(Number(result.panelZIndex)).toBeGreaterThan(Number(result.overlayZIndex));
 });
 
+test('embedded component meta modal centers within the mounted app', async ({ page }) => {
+  await page.goto('/');
+
+  await page.evaluate(async () => {
+    document.body.innerHTML = '<div id="mount" style="width: 420px; height: 560px;"></div>';
+    const modulePath = '/src/embed.ts';
+    const { deserializeDocumentBytes, mountHvy } = await import(/* @vite-ignore */ modulePath);
+    const source = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ <!--hvy:text {"id":"summary-text"}-->
+  Embedded modal placement test.
+`;
+    const root = document.querySelector<HTMLElement>('#mount');
+    if (!root) {
+      throw new Error('Mount root missing.');
+    }
+    mountHvy({
+      root,
+      document: deserializeDocumentBytes(new TextEncoder().encode(source), '.hvy'),
+      mode: 'editor',
+      showAdvancedEditor: true,
+    });
+  });
+
+  const mount = page.locator('#mount');
+  await mount.locator('[data-action="activate-block"]').first().click();
+  await mount.locator('[data-action="open-component-meta"]').click();
+
+  const placement = await mount.locator('.component-meta-modal').evaluate((modal) => {
+    const root = modal.closest<HTMLElement>('#mount');
+    if (!root) {
+      throw new Error('Mount root missing.');
+    }
+    const rootRect = root.getBoundingClientRect();
+    const modalRect = modal.getBoundingClientRect();
+    return {
+      modalCenterY: modalRect.top + modalRect.height / 2,
+      rootCenterY: rootRect.top + rootRect.height / 2,
+    };
+  });
+
+  expect(Math.abs(placement.modalCenterY - placement.rootCenterY)).toBeLessThan(12);
+});
+
 test('embedded AI mode renders the request changes popover', async ({ page }) => {
   await page.goto('/');
 

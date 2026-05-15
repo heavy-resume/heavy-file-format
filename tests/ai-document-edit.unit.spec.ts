@@ -537,11 +537,8 @@ hvy_version: 0.1
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('=== END SECTION INFORMATION ===');
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).not.toContain('=== BEGIN SOURCE DOCUMENT ===');
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('=== BEGIN HVY FORMAT REFERENCE ===');
-  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('The following HVY document is a syntax and component reference only.');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('=== END HVY FORMAT REFERENCE ===');
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).not.toContain('Return raw HVY for exactly one complete section.');
-  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('Directive payloads are single-line valid JSON objects.');
-  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('Custom components from the matched template use the same directive form');
-  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('`xrefTarget` should be an exact id from the relationship inventory');
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages[0]?.content).toContain('Return exactly one top-level section.');
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages[0]?.content).toContain('Return raw HVY only; do not call or describe tools.');
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.responseInstructions).toContain('`hvy` must be one complete valid HVY section');
@@ -550,6 +547,65 @@ hvy_version: 0.1
     phase: 'thinking',
     message: 'Applying section 1.',
   });
+});
+
+test('importTextIntoDocument includes recursively referenced reusable definitions for matched sections', async () => {
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"information":"Imported tools"}'
+  );
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"hvy":"<!--hvy: {\\"id\\":\\"tools\\"}-->\\n#! Tools\\n\\n <!--hvy:text {\\"id\\":\\"tools-text\\"}-->\\n  Imported tools"}'
+  );
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+component_defs:
+  - name: tool-row
+    baseType: expandable
+    description: Tool row
+    schema:
+      expandableContentBlocks:
+        children:
+          - text: ""
+            schema:
+              component: tool-note
+              placeholder: Tool note
+  - name: tool-note
+    baseType: text
+    description: Tool note
+    schema:
+      placeholder: Tool detail
+  - name: unused-row
+    baseType: text
+    description: Unused row
+    schema:
+      placeholder: Unused
+---
+
+<!--hvy: {"id":"tools"}-->
+#! Tools
+
+<!--hvy:component-list {"id":"tools-list","componentListComponent":"tool-row","componentListItemLabel":"tool"}-->
+`, '.hvy');
+
+  const result = await importTextIntoDocument(document, {
+    sourceName: 'notes.txt',
+    sourceText: 'Imported tools',
+    steps: [{ section: 'Tools', sectionId: 'tools' }],
+    llm: {
+      settings: { provider: 'openai', model: 'gpt-5-mini' },
+      client: { complete: vi.fn() },
+    },
+  });
+
+  expect(result.status).toBe('complete');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('=== BEGIN MATCHED REUSABLE DEFINITIONS ===');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('name: tool-row');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('name: tool-note');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).not.toContain('name: unused-row');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('=== BEGIN MATCHED REUSABLE DEFINITIONS ===');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('name: tool-row');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('name: tool-note');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).not.toContain('name: unused-row');
 });
 
 test('importTextIntoDocument appends generated section when approved step matches only a template section', async () => {

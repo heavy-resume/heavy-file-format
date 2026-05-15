@@ -1,4 +1,4 @@
-import type { ChatMessage, VisualDocument } from './types';
+import type { ChatMessage, ToolLoopCompactionOptions, VisualDocument } from './types';
 import { summarizeDocumentStructure, summarizeHeaderStructure, truncatePreview } from './ai-document-structure';
 import { visitBlocks } from './section-ops';
 import { getDocumentDbTableNames } from './plugins/db-table';
@@ -410,20 +410,41 @@ export function getDocumentToolIntent(toolCall: DocumentEditToolRequest): string
   }
 }
 
-const COMPACT_LOOP_MESSAGES_AFTER = 8;
-const KEEP_RECENT_LOOP_MESSAGES = 4;
-const MAX_LATEST_TOOL_RESULT_CONTEXT_CHARS = 6000;
-const MAX_TOOL_RESULT_CHAT_CHARS = 700;
+export const DEFAULT_TOOL_LOOP_COMPACTION: Required<ToolLoopCompactionOptions> = {
+  compactAfterMessages: 8,
+  keepRecentMessages: 4,
+  latestToolResultContextChars: 6000,
+  toolResultChatChars: 700,
+};
 
-export function formatLatestToolResultForContext(toolResult: string): string {
+export function resolveToolLoopCompactionOptions(options?: ToolLoopCompactionOptions): Required<ToolLoopCompactionOptions> {
+  return {
+    compactAfterMessages: readPositiveInteger(options?.compactAfterMessages, DEFAULT_TOOL_LOOP_COMPACTION.compactAfterMessages),
+    keepRecentMessages: readNonNegativeInteger(options?.keepRecentMessages, DEFAULT_TOOL_LOOP_COMPACTION.keepRecentMessages),
+    latestToolResultContextChars: readPositiveInteger(options?.latestToolResultContextChars, DEFAULT_TOOL_LOOP_COMPACTION.latestToolResultContextChars),
+    toolResultChatChars: readPositiveInteger(options?.toolResultChatChars, DEFAULT_TOOL_LOOP_COMPACTION.toolResultChatChars),
+  };
+}
+
+function readPositiveInteger(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.floor(value) : fallback;
+}
+
+function readNonNegativeInteger(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? Math.floor(value) : fallback;
+}
+
+export function formatLatestToolResultForContext(toolResult: string, options?: ToolLoopCompactionOptions): string {
+  const compaction = resolveToolLoopCompactionOptions(options);
   return [
     'Latest tool result (exact recent observation; use this for the immediate next decision):',
-    truncatePreservingWhitespace(toolResult, MAX_LATEST_TOOL_RESULT_CONTEXT_CHARS),
+    truncatePreservingWhitespace(toolResult, compaction.latestToolResultContextChars),
     'End latest tool result.',
   ].join('\n');
 }
 
-export function summarizeToolResultForConversation(toolResult: string): string {
+export function summarizeToolResultForConversation(toolResult: string, options?: ToolLoopCompactionOptions): string {
+  const compaction = resolveToolLoopCompactionOptions(options);
   const lines = toolResult.split('\n');
   const heading = lines[0]?.trim() || 'Tool result';
   const actionableLines = lines
@@ -437,13 +458,13 @@ export function summarizeToolResultForConversation(toolResult: string): string {
       return /^(Created|Updated|Removed|Patched|Reordered|Executed|New section ref|New component ref|Rows|Columns|Call \d+:)/i.test(line);
     })
     .slice(0, 8);
-  const fallback = truncatePreview(toolResult.replace(/\s+/g, ' '), MAX_TOOL_RESULT_CHAT_CHARS);
+  const fallback = truncatePreview(toolResult.replace(/\s+/g, ' '), compaction.toolResultChatChars);
   const summary = actionableLines.length > 0
     ? [heading, ...actionableLines].join('\n')
     : fallback;
   return [
     'Tool observation summary:',
-    truncatePreview(summary, MAX_TOOL_RESULT_CHAT_CHARS),
+    truncatePreview(summary, compaction.toolResultChatChars),
     '',
     'The full latest tool result is in context, not repeated in chat history.',
   ].join('\n');
@@ -459,11 +480,13 @@ export function compactToolLoopConversation(params: {
   document: VisualDocument;
   plan: EditPlanState | null;
   path: EditPathSelection;
+  compaction?: ToolLoopCompactionOptions;
 }): ChatMessage[] {
+  const compaction = resolveToolLoopCompactionOptions(params.compaction);
   const hasPriorSummary = params.conversation.some((message) => message.content.includes('Context summary for pruned older tool-loop history'));
   if (
-    params.conversation.length <= COMPACT_LOOP_MESSAGES_AFTER &&
-    (!hasPriorSummary || params.conversation.length <= KEEP_RECENT_LOOP_MESSAGES + 2)
+    params.conversation.length <= compaction.compactAfterMessages &&
+    (!hasPriorSummary || params.conversation.length <= compaction.keepRecentMessages + 2)
   ) {
     return params.conversation;
   }
@@ -472,8 +495,8 @@ export function compactToolLoopConversation(params: {
   if (!initialMessage) {
     return params.conversation;
   }
-  const recentMessages = rest.slice(-KEEP_RECENT_LOOP_MESSAGES);
-  const compactedMessages = rest.slice(0, Math.max(0, rest.length - KEEP_RECENT_LOOP_MESSAGES));
+  const recentMessages = compaction.keepRecentMessages > 0 ? rest.slice(-compaction.keepRecentMessages) : [];
+  const compactedMessages = rest.slice(0, Math.max(0, rest.length - compaction.keepRecentMessages));
   return [
     initialMessage,
     {

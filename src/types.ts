@@ -44,6 +44,13 @@ export interface ChatWorkState {
   tokenUsage?: ChatTokenUsage;
 }
 
+export interface ToolLoopCompactionOptions {
+  compactAfterMessages?: number;
+  keepRecentMessages?: number;
+  latestToolResultContextChars?: number;
+  toolResultChatChars?: number;
+}
+
 export interface ChatCliSimState {
   requestPayload: unknown | null;
   requestJson: string;
@@ -63,6 +70,7 @@ export interface ChatSettings {
   model: string;
   compactionProvider?: ChatProvider;
   compactionModel?: string;
+  toolLoopCompaction?: ToolLoopCompactionOptions;
 }
 
 export interface ChatState {

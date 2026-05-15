@@ -532,6 +532,7 @@ export type {
   ImportFromTextOptions,
   ImportFromTextResult,
 } from './ai-document-edit';
+export type { ToolLoopCompactionOptions } from './types';
 
 declare global {
   interface Window {

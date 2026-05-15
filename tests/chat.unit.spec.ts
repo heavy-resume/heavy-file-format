@@ -158,6 +158,30 @@ test('getEnvChatSettings prepopulates provider and model from vite env vars', ()
   });
 });
 
+test('getEnvChatSettings exposes tool-loop compaction settings from vite env vars', () => {
+  expect(
+    getEnvChatSettings({
+      VITE_HVY_CHAT_PROVIDER: 'openai',
+      VITE_HVY_CHAT_MODEL: 'gpt-dev',
+      VITE_HVY_CHAT_TOOL_LOOP_COMPACT_AFTER_MESSAGES: '12',
+      VITE_HVY_CHAT_TOOL_LOOP_KEEP_RECENT_MESSAGES: '6',
+      VITE_HVY_CHAT_TOOL_LOOP_LATEST_TOOL_RESULT_CONTEXT_CHARS: '9000',
+      VITE_HVY_CHAT_TOOL_LOOP_TOOL_RESULT_CHAT_CHARS: '1200',
+    } as unknown as ImportMetaEnv)
+  ).toEqual({
+    provider: 'openai',
+    model: 'gpt-dev',
+    compactionProvider: 'openai',
+    compactionModel: 'gpt-5.4-nano',
+    toolLoopCompaction: {
+      compactAfterMessages: 12,
+      keepRecentMessages: 6,
+      latestToolResultContextChars: 9000,
+      toolResultChatChars: 1200,
+    },
+  });
+});
+
 test('getEnvChatSettings falls back to provider-specific model and then built-in default', () => {
   expect(
     getEnvChatSettings({

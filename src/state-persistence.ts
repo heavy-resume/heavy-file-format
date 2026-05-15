@@ -213,7 +213,18 @@ function normalizeChatSettings(value: unknown): ChatSettings {
     compactionModel: typeof value.compactionModel === 'string' && value.compactionModel.trim()
       ? value.compactionModel
       : DEFAULT_SAVED_CHAT_SETTINGS.compactionModel,
+    ...(isToolLoopCompactionOptions(value.toolLoopCompaction) ? { toolLoopCompaction: value.toolLoopCompaction } : {}),
   };
+}
+
+function isToolLoopCompactionOptions(value: unknown): value is NonNullable<ChatSettings['toolLoopCompaction']> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return false;
+  }
+  return ['compactAfterMessages', 'keepRecentMessages', 'latestToolResultContextChars', 'toolResultChatChars'].every((key) => {
+    const entry = (value as Record<string, unknown>)[key];
+    return entry === undefined || (typeof entry === 'number' && Number.isFinite(entry) && entry >= 0);
+  });
 }
 
 function isChatMessage(value: unknown): value is ChatMessage {

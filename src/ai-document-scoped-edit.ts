@@ -7,7 +7,7 @@ import {
   getDocumentDbTableObjectNames,
   getDocumentDbTableNames,
 } from './plugins/db-table';
-import type { ChatMessage, ChatSettings, VisualDocument } from './types';
+import type { ChatMessage, ChatSettings, ToolLoopCompactionOptions, VisualDocument } from './types';
 import {
   buildDocumentEditFormatInstructions,
   buildInitialDocumentEditPrompt,
@@ -214,6 +214,7 @@ export interface ImportFromTextOptions {
   instructions?: string;
   steps: string[];
   llm?: HvyImportLlmOptions;
+  toolLoopCompaction?: ToolLoopCompactionOptions;
   beforeLlmCall?: (event: HvyImportLlmStepEvent) => Promise<void> | void;
   onProgress?: (event: HvyImportProgressEvent) => void;
   signal?: AbortSignal;
@@ -286,6 +287,7 @@ export async function importTextIntoDocument(
       stableContext: buildImportSourceContext(options.sourceName, options.sourceText),
       mode: { kind: 'execute-approved-plan', steps },
       createBeforeLlmCall: createImportLlmStepper(options.beforeLlmCall, options.signal),
+      toolLoopCompaction: options.toolLoopCompaction ?? llm.settings.toolLoopCompaction,
       onMutation: options.onMutation,
       onProgress: (content) => options.onProgress?.(mapImportLoopProgress(content)),
       signal: options.signal,
@@ -326,7 +328,10 @@ async function runDocumentEditLoop(params: {
     likelyInformational: isLikelyInformationalAnswerRequest(params.request),
     path: 'document',
   });
-  return runDocumentEditToolLoop(params);
+  return runDocumentEditToolLoop({
+    ...params,
+    toolLoopCompaction: params.settings.toolLoopCompaction,
+  });
 }
 
 type DocumentEditLoopMode =
@@ -341,6 +346,7 @@ async function runDocumentEditToolLoop(params: {
   stableContext?: string;
   mode?: DocumentEditLoopMode;
   createBeforeLlmCall?: (phase: HvyImportProgressPhase) => ((debugLabel: string) => Promise<void>) | undefined;
+  toolLoopCompaction?: ToolLoopCompactionOptions;
   onMutation?: (group?: string) => void;
   onProgress?: (content: string) => void;
   traceRunId?: string;
@@ -413,6 +419,7 @@ async function runDocumentEditToolLoop(params: {
       document: params.document,
       plan,
       path: 'document',
+      compaction: params.toolLoopCompaction,
     });
     const phase = selectDocumentEditPhase({
       request: params.request,
@@ -423,7 +430,7 @@ async function runDocumentEditToolLoop(params: {
       settings: params.settings,
       client: params.client,
       messages: conversation,
-      context: buildLoopContext(contextSummary, plan, recentToolHelp, workLedger, buildIntentRecall(latestIntent, snapshot, params.document), workNote, latestToolResult),
+      context: buildLoopContext(contextSummary, plan, recentToolHelp, workLedger, buildIntentRecall(latestIntent, snapshot, params.document), workNote, latestToolResult, params.toolLoopCompaction),
       responseInstructions: buildDocumentEditFormatInstructions({
         dbTableNames: dbObjectNames,
         pluginHints,
@@ -854,7 +861,7 @@ async function runDocumentEditToolLoop(params: {
       {
         id: crypto.randomUUID(),
         role: 'user',
-        content: summarizeToolResultForConversation(toolResult),
+        content: summarizeToolResultForConversation(toolResult, params.toolLoopCompaction),
       },
       ...(recovery === 'recover' ? [buildLoopRecoveryChatMessage()] : []),
     ];
@@ -1055,11 +1062,12 @@ function buildLoopContext(
   workLedger?: WorkLedgerItem[],
   intentRecall?: string,
   workNote?: WorkNoteState,
-  latestToolResult?: string | null
+  latestToolResult?: string | null,
+  toolLoopCompaction?: ToolLoopCompactionOptions
 ): string {
   const parts = [baseContext];
   if (latestToolResult) {
-    parts.push('', formatLatestToolResultForContext(latestToolResult));
+    parts.push('', formatLatestToolResultForContext(latestToolResult, toolLoopCompaction));
   }
   if (workNote) {
     parts.push('', formatWorkNote(workNote));

@@ -755,12 +755,14 @@ export function getEnvChatSettings(env: ImportMetaEnv = import.meta.env): ChatSe
   const model = firstNonEmptyString(env.VITE_HVY_CHAT_MODEL, providerSpecificModel, providerDefaultModel);
   const compactionProvider = env.VITE_HVY_CHAT_COMPACTION_PROVIDER === 'anthropic' ? 'anthropic' : 'openai';
   const compactionModel = firstNonEmptyString(env.VITE_HVY_CHAT_COMPACTION_MODEL, DEFAULT_OPENAI_COMPACTION_MODEL);
+  const toolLoopCompaction = readEnvToolLoopCompaction(env);
 
   return {
     provider,
     model,
     compactionProvider,
     compactionModel,
+    ...(toolLoopCompaction ? { toolLoopCompaction } : {}),
   };
 }
 
@@ -780,6 +782,7 @@ function sanitizeChatSettings(settings: Partial<ChatSettings> | null | undefined
     compactionModel: typeof settings?.compactionModel === 'string' && settings.compactionModel.trim().length > 0
       ? settings.compactionModel
       : defaults.compactionModel ?? DEFAULT_OPENAI_COMPACTION_MODEL,
+    toolLoopCompaction: settings?.toolLoopCompaction ?? defaults.toolLoopCompaction,
   };
 }
 
@@ -792,7 +795,29 @@ export function mergeChatSettings(settings: Partial<ChatSettings> | null | undef
     compactionModel: sanitized.compactionModel?.trim()
       ? sanitized.compactionModel
       : defaults.compactionModel ?? DEFAULT_OPENAI_COMPACTION_MODEL,
+    ...(sanitized.toolLoopCompaction ? { toolLoopCompaction: sanitized.toolLoopCompaction } : {}),
   };
+}
+
+function readEnvToolLoopCompaction(env: ImportMetaEnv): ChatSettings['toolLoopCompaction'] | undefined {
+  const toolLoopCompaction = {
+    compactAfterMessages: readOptionalEnvInteger(env.VITE_HVY_CHAT_TOOL_LOOP_COMPACT_AFTER_MESSAGES),
+    keepRecentMessages: readOptionalEnvInteger(env.VITE_HVY_CHAT_TOOL_LOOP_KEEP_RECENT_MESSAGES),
+    latestToolResultContextChars: readOptionalEnvInteger(env.VITE_HVY_CHAT_TOOL_LOOP_LATEST_TOOL_RESULT_CONTEXT_CHARS),
+    toolResultChatChars: readOptionalEnvInteger(env.VITE_HVY_CHAT_TOOL_LOOP_TOOL_RESULT_CHAT_CHARS),
+  };
+  const filtered = Object.fromEntries(
+    Object.entries(toolLoopCompaction).filter(([, value]) => typeof value === 'number')
+  ) as NonNullable<ChatSettings['toolLoopCompaction']>;
+  return Object.keys(filtered).length > 0 ? filtered : undefined;
+}
+
+function readOptionalEnvInteger(value: unknown): number | undefined {
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    return undefined;
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : undefined;
 }
 
 async function readJsonResponse(response: Response): Promise<unknown> {

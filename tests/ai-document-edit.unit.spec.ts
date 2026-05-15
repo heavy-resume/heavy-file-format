@@ -420,7 +420,13 @@ hvy_version: 0.1
   const result = await importTextIntoDocument(document, {
     sourceName: 'notes.txt',
     sourceText: 'Imported summary',
-    steps: ['Add the imported summary text component'],
+    steps: ['Add the imported summary text component', 'Verify the imported summary appears'],
+    toolLoopCompaction: {
+      compactAfterMessages: 2,
+      keepRecentMessages: 1,
+      latestToolResultContextChars: 80,
+      toolResultChatChars: 80,
+    },
     llm: {
       settings: { provider: 'openai', model: 'gpt-5-mini' },
       client: { complete: vi.fn() },
@@ -439,6 +445,8 @@ hvy_version: 0.1
   expect(firstEditContext).toContain('Import source context (stable across planning and execution turns');
   expect(firstEditContext).toContain('Imported summary');
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.responseInstructions).not.toContain('Plan shape:');
+  const secondEditMessages = requestProxyCompletionMock.mock.calls[2]?.[0]?.messages ?? [];
+  expect(secondEditMessages.some((message: ChatMessage) => message.content.includes('Context summary for pruned older tool-loop history'))).toBe(true);
   expect(progress.mock.calls.map((call) => call[0].phase)).toContain('tool_call');
 });
 
@@ -1651,6 +1659,50 @@ hvy_version: 0.1
   expect(compactedSummary?.content).toContain('grep');
   expect(compactedSummary?.content).toContain('- Important refs/ids:');
   expect(lastModelCall?.messages.length).toBeLessThanOrEqual(22);
+});
+
+test('requestAiDocumentEditTurn uses chat tool-loop compaction settings', async () => {
+  queueAiToolResponses(
+    '{"tool":"grep","query":"Existing 1","max_count":1}',
+    '{"tool":"grep","query":"Existing 2","max_count":1}',
+    '{"tool":"done","summary":"Compaction settings checked."}'
+  );
+
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {"id":"summary-text"}-->
+ Existing content
+`, '.hvy');
+  seedStateForDocument(document);
+  const settings: ChatSettings = {
+    provider: 'openai',
+    model: 'gpt-5-mini',
+    toolLoopCompaction: {
+      compactAfterMessages: 2,
+      keepRecentMessages: 1,
+      latestToolResultContextChars: 80,
+      toolResultChatChars: 80,
+    },
+  };
+
+  const result = await requestAiDocumentEditTurn({
+    settings,
+    document,
+    messages: [],
+    request: 'Inspect with custom compaction.',
+  });
+
+  expect(result.error).toBeNull();
+  const secondToolCall = requestProxyCompletionMock.mock.calls[2]?.[0];
+  expect(secondToolCall?.messages.some((message: ChatMessage) => message.content.includes('Context summary for pruned older tool-loop history'))).toBe(true);
+  expect(secondToolCall?.messages.length).toBe(3);
+  expect(secondToolCall?.context).toContain('Latest tool result');
+  expect(secondToolCall?.context.length).toBeLessThan(1600);
 });
 
 test('requestAiDocumentEditTurn can answer informational questions without mutating the document', async () => {

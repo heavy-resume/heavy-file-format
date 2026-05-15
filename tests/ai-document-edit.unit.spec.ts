@@ -333,8 +333,8 @@ test('parseDocumentEditToolRequest accepts table as a query_db_table table_name 
 });
 
 test('buildImportPlanForDocument stops after mocked plan without mutating the document', async () => {
-  queueAiToolResponses(
-    '{"tool":"plan","steps":["Add an imported summary text component","Verify the imported summary appears"],"reason":"Plan the import before changing the document."}'
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"steps":["Add an imported summary text component","Verify the imported summary appears"]}'
   );
   const document = deserializeDocument(`---
 hvy_version: 0.1
@@ -368,29 +368,31 @@ hvy_version: 0.1
     steps: ['Add an imported summary text component', 'Verify the imported summary appears'],
   });
   expect(serializeDocument(document)).toBe(before);
-  expect(requestProxyCompletionMock).toHaveBeenCalledTimes(2);
+  expect(requestProxyCompletionMock).toHaveBeenCalledTimes(1);
   expect(requestProxyCompletionMock.mock.calls.every((call) => call[0]?.client === importClient)).toBe(true);
-  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages[0]?.content).toContain('Additional import instructions:');
-  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages[0]?.content).toContain('Keep resume entries in reverse chronological order.');
-  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages[0]?.content).not.toContain('Imported summary');
-  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages[0]?.content).toContain('Use only facts present in the imported source text');
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Import source context (stable across planning and execution turns');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.debugLabel).toBe('ai-import-plan');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages[0]?.content).toContain('Additional import instructions:');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages[0]?.content).toContain('Keep resume entries in reverse chronological order.');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages[0]?.content).not.toContain('Imported summary');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages[0]?.content).toContain('Do not use tools. Do not mutate anything.');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages[0]?.content).toContain('Break the work down into execution-sized steps.');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages[0]?.content).toContain('Create or reconcile the section structure first.');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages[0]?.content).toContain('one step per high-level source item/component');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages[0]?.content).toContain('Use only facts present in the imported source text');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Current HVY template/scaffold:');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Existing content');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Imported source document:');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Imported summary');
-  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('Import source context (stable across planning and execution turns');
-  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('Imported summary');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.responseInstructions).toContain('Return exactly one JSON object and no prose.');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.responseInstructions).toContain('Do not impose a step count limit.');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.responseInstructions).toContain('section creation/reconciliation happens before adding high-level components');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.responseInstructions).toContain('split that into one step per section');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.beforeRequest).toEqual(expect.any(Function));
-  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.beforeRequest).toEqual(expect.any(Function));
-  await requestProxyCompletionMock.mock.calls[0]?.[0]?.beforeRequest('ai-document-notes');
-  await requestProxyCompletionMock.mock.calls[1]?.[0]?.beforeRequest('ai-document-edit:1');
-  expect(beforeLlmCall).toHaveBeenCalledTimes(2);
+  await requestProxyCompletionMock.mock.calls[0]?.[0]?.beforeRequest('ai-import-plan');
+  expect(beforeLlmCall).toHaveBeenCalledTimes(1);
   expect(beforeLlmCall).toHaveBeenNthCalledWith(1, {
     callIndex: 1,
-    debugLabel: 'ai-document-notes',
-    phase: 'thinking',
-  });
-  expect(beforeLlmCall).toHaveBeenNthCalledWith(2, {
-    callIndex: 2,
-    debugLabel: 'ai-document-edit:1',
+    debugLabel: 'ai-import-plan',
     phase: 'thinking',
   });
   expect(progress.mock.calls.map((call) => call[0].phase)).toContain('thinking');

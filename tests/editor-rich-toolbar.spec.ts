@@ -38,9 +38,26 @@ test('toolbar exposes quote and code block actions', async ({ page }) => {
     (node as HTMLElement).focus();
   });
   await quoteButton.click();
+  await expect(editor).toBeFocused();
   await page.keyboard.type('Quote typing works');
   await expect(editor.locator('blockquote')).toContainText('Quote typing works');
   await expect(quoteButton).toHaveClass(/secondary/);
+
+  await editor.evaluate((node) => {
+    node.innerHTML = '<p>plain</p>';
+    const textNode = node.querySelector('p')?.firstChild;
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.setStart(textNode!, textNode!.textContent!.length);
+    range.collapse(true);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+  });
+  await quoteButton.click();
+  await expect(editor).toBeFocused();
+  await page.keyboard.type(' quote tail');
+  await expect(editor.locator('blockquote')).toContainText('plain quote tail');
 
   await editor.evaluate((node) => {
     node.innerHTML = '<blockquote></blockquote>';

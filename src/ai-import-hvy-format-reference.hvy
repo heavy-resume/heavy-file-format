@@ -9,23 +9,32 @@ theme:
 ---
 
 <!--hvy: {"id":"hvy-syntax-rules","lock":false,"expanded":true,"highlight":false}-->
-#! Syntax Rules
+#! HVY General Info
+
+ <!--hvy:text {}-->
+  # Background
+
+ <!--hvy:text {}-->
+  HVY is a multiple purpose file format built around information consumption. Sections and components define consumable portions of information. Sections define the root document, subsections can live in sections, and components can live things   in sections and subsections.
+  
+  This is being given in a HVY doc.
 
  <!--hvy:text {}-->
   # Syntax Rules
 
  <!--hvy:text {}-->
-  - HVY directives are HTML comments: `<!--hvy:component-name {...json...}-->`.
-  - Directive payloads are single-line valid JSON objects.
-  - Indentation is structural. Child blocks are indented under the section or parent block.
-  - Section titles use `#!`; ordinary Markdown headings such as `##` are text content, not sections.
-  - Use stable, lowercase, hyphenated ids only for sections and records that should be available as explicit xref targets.
+  - HVY directives are HTML comments: `<!--hvy:component-name {...attributes as json...}-->`.
+  - Whitespace indentation is structural and important like Python and Ruby. Child blocks are indented under the section or parent block.
+  - Section titles use `#!`; ordinary Markdown headings such as `##` are text content, not sections. For example, HVY General Info above is NOT visible in the viewer, but is visible in the editor.
+  - Xrefs only work on things with an explicit ID. Don't toss out IDs like candy, it should be something that someone would want to link to.
   - Helper text, internal examples, generated reciprocal cards, and decorative blocks should usually omit `id`.
 
  <!--hvy:text {}-->
   Section shape:
+  
   - Start with a section directive like `<!--hvy: {"id":"section-id"}-->`.
   - Follow it with a section heading like `#! Section Title`.
+  - Generally you add a header to a section but not always. The heading is an editor attribute.
   - Add child blocks below the section, for example `<!--hvy:text {"id":"section-text"}-->` followed by indented text.
 <!--hvy: {"id":"hvy-core-components","lock":false,"expanded":true,"highlight":false,"location":"sidebar"}-->
 #! Core Components

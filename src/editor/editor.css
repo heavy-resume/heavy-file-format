@@ -431,6 +431,11 @@
   min-width: 0;
 }
 
+.editor-block-content {
+  min-width: 0;
+  max-width: 100%;
+}
+
 .editor-block.is-activating-path {
   transform-origin: top center;
   animation: editor-block-reveal 180ms ease-out both;

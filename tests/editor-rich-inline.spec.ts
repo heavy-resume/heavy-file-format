@@ -40,6 +40,43 @@ test('inline toolbar buttons wrap and unwrap selected text', async ({ page }) =>
   }
 });
 
+test('active text editor wraps prose without widening the editor block', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Phone 390' }).click();
+  await page.locator('[data-action="activate-block"]').first().click();
+
+  const editor = page.locator('.editor-block[data-active-editor-block="true"] .rich-editor');
+  await editor.evaluate((node) => {
+    node.innerHTML = '<p>HVY is a multiple purpose file format built around information consumption.</p>';
+    const paragraph = node.querySelector('p');
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(paragraph!);
+    range.collapse(false);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+    node.dispatchEvent(new InputEvent('input', { bubbles: true }));
+  });
+  await page.keyboard.type(
+    ' Sections and components define consumable portions of information. Sections define the root document, subsections can live in sections, and components can live in sections and subsections.'
+  );
+
+  await expect.poll(async () =>
+    editor.evaluate((node) => {
+      const content = node.closest<HTMLElement>('.editor-block-content');
+      const tree = node.closest<HTMLElement>('.editor-tree');
+      return {
+        editorOverflow: node.scrollWidth - node.clientWidth,
+        contentOverflow: content ? content.scrollWidth - content.clientWidth : 0,
+        treeOverflow: tree ? tree.scrollWidth - tree.clientWidth : 0,
+      };
+    })
+  ).toEqual({ editorOverflow: 0, contentOverflow: 0, treeOverflow: 0 });
+  await expect.poll(async () => editor.locator('p').evaluate((node) => node.innerHTML)).not.toContain('&nbsp;Sections');
+  await expect.poll(async () => editor.locator('p').evaluate((node) => node.innerHTML)).not.toContain('sub&nbsp;sections');
+});
+
 test('mobile adjustment mode writes text edits as alt annotations', async ({ page }) => {
   await page.goto('/');
 
@@ -255,9 +292,17 @@ test('inline toolbar actions toggle typing mode at a collapsed caret', async ({ 
   await expect(strikethroughButton).toHaveClass(/secondary/);
   await page.keyboard.type(' strike');
   await expect(editor.locator('s, strike, del')).toContainText('strike');
+
+  await strikethroughButton.click();
+  await expect(strikethroughButton).not.toHaveClass(/secondary/);
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('plain next line');
+  await expect(editor.locator('s, strike, del')).toHaveText(/strike/);
+  await expect(editor.locator('p').last()).toHaveText('plain next line');
+  await expect(editor.locator('p').last().locator('s, strike, del')).toHaveCount(0);
 });
 
-test('rich toolbar preserves visible spaces while typing', async ({ page }) => {
+test('rich editor uses normal spaces while typing prose', async ({ page }) => {
   await page.goto('/');
 
   await page.locator('[data-action="activate-block"]').first().click();
@@ -281,6 +326,7 @@ test('rich toolbar preserves visible spaces while typing', async ({ page }) => {
 
   await page.keyboard.type('world');
   await expect(editor).toContainText('Hello world');
+  await expect(editor.locator('p')).toHaveJSProperty('innerHTML', 'Hello world');
 });
 
 test('rich editor wraps long text without expanding its block', async ({ page }) => {
@@ -308,7 +354,7 @@ test('rich editor wraps long text without expanding its block', async ({ page })
   const widthAfter = await block.evaluate((node) => node.getBoundingClientRect().width);
 
   expect(widthAfter).toBeLessThanOrEqual(widthBefore + 1);
-  await expect(editor.locator('p')).toHaveCSS('overflow-wrap', 'anywhere');
+  await expect(editor.locator('p')).toHaveCSS('overflow-wrap', 'normal');
 });
 
 test('inline code autoformats from backticks and escapes with arrow or click', async ({ page }) => {

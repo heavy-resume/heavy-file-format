@@ -10,6 +10,8 @@
 
 .text-editor-shell {
   position: relative;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .text-fill-in-selection-button {
@@ -638,7 +640,7 @@
   min-width: 0;
   max-width: 100%;
   cursor: text;
-  overflow-wrap: anywhere;
+  overflow-wrap: normal;
   word-break: normal;
   border: 1px solid var(--hvy-border-input);
   border-radius: 7px;
@@ -666,6 +668,9 @@
 .rich-editor p {
   min-width: 0;
   margin: 0 0 0.45rem;
+  overflow-wrap: normal;
+  word-break: normal;
+  white-space: normal;
 }
 
 .hvy-text-line-style {

@@ -8,6 +8,7 @@ import { createReaderRenderer, type ReaderRenderer } from './reader/render';
 import { state, initState, initCallbacks } from './state';
 import type { AppState, VisualDocument } from './types';
 import { deserializeDocumentBytes, serializeDocument } from './serialization';
+import { deserializeDocumentWithDiagnostics } from './serialization';
 import { escapeAttr, escapeHtml, renderOption } from './utils';
 import { applyTheme, getThemeConfig, initColorModeSync, setThemeRoot } from './theme';
 import { getPaletteById } from './palettes/palette-registry';
@@ -60,6 +61,15 @@ import { renderSearchLauncher, renderSearchPalette } from './search/render';
 import { loadPaletteOverrideId } from './palettes/palette-preferences';
 import { captureRenderScroll, restoreRenderScroll } from './render-scroll';
 import { observeRenderedLinks, resetObservedLinks, type HvyLinkObserver } from './link-observer';
+import { recordHistory } from './history';
+import {
+  buildImportPlanForDocument,
+  importTextIntoDocument,
+  type BuildImportPlanOptions,
+  type BuildImportPlanResult,
+  type ImportFromTextOptions,
+  type ImportFromTextResult,
+} from './ai-document-edit';
 
 export type HvyEmbedMode = 'viewer' | 'editor' | 'ai';
 
@@ -78,6 +88,8 @@ export interface HvyMountOptions {
 export interface HvyMount {
   destroy(): void;
   getDocument(): VisualDocument;
+  buildImportPlan(options: BuildImportPlanOptions): Promise<BuildImportPlanResult>;
+  importFromText(options: ImportFromTextOptions): Promise<ImportFromTextResult>;
   setLinkObserver(observer: HvyLinkObserver | null): void;
   setPaletteOverrideId(id: string | null): void;
   openThemeEditor(options?: { advanced?: boolean }): void;
@@ -414,6 +426,43 @@ function setLinkObserver(observer: HvyLinkObserver | null): void {
   }
 }
 
+async function buildImportPlan(options: BuildImportPlanOptions): Promise<BuildImportPlanResult> {
+  return buildImportPlanForDocument(state.document, {
+    ...options,
+    llm: options.llm ?? { settings: state.chat.settings },
+  });
+}
+
+async function importFromText(options: ImportFromTextOptions): Promise<ImportFromTextResult> {
+  const result = await importTextIntoDocument(state.document, {
+    ...options,
+    llm: options.llm ?? { settings: state.chat.settings },
+    onProgress: (event) => {
+      if (event.phase !== 'complete') {
+        options.onProgress?.(event);
+      }
+    },
+    onMutation: (group) => recordHistory(group ?? 'import:text'),
+  });
+  if (result.status !== 'complete') {
+    return result;
+  }
+  options.onProgress?.({ phase: 'linting', message: 'Checking imported HVY document.' });
+  const serialized = serializeDocument(state.document);
+  state.rawEditorText = serialized;
+  const diagnostics = deserializeDocumentWithDiagnostics(serialized, state.document.extension).diagnostics;
+  const errors = diagnostics.filter((diagnostic) => diagnostic.severity === 'error');
+  if (errors.length > 0) {
+    return {
+      status: 'error',
+      message: errors.map((diagnostic) => diagnostic.message).join(' '),
+    };
+  }
+  renderApp();
+  options.onProgress?.({ phase: 'complete', message: result.message ?? 'Import complete.' });
+  return result;
+}
+
 function refreshModalPreview(): void {}
 
 function ensureEmbedRuntime(plugins: HvyPlugin[]): void {
@@ -457,6 +506,8 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
     getDocument() {
       return state.document;
     },
+    buildImportPlan,
+    importFromText,
     setLinkObserver,
     setPaletteOverrideId,
     openThemeEditor,
@@ -470,6 +521,15 @@ export function mountHvyViewer(options: Omit<HvyMountOptions, 'mode'>): HvyMount
 
 export { builtInPluginMap as plugins, builtInPlugins, deserializeDocumentBytes, serializeDocument };
 export type { HvyLinkObserver, HvyLinkObserverRequest, HvyLinkObserverResponse } from './link-observer';
+export type {
+  BuildImportPlanOptions,
+  BuildImportPlanResult,
+  HvyImportLlmOptions,
+  HvyImportProgressEvent,
+  HvyImportProgressPhase,
+  ImportFromTextOptions,
+  ImportFromTextResult,
+} from './ai-document-edit';
 
 declare global {
   interface Window {

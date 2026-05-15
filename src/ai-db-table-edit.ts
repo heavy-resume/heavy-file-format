@@ -1,4 +1,4 @@
-import { requestProxyCompletion } from './chat/chat';
+import { requestProxyCompletion, type HostChatClient } from './chat/chat';
 import {
   DbTableAiSummary,
   executeDbTableQueryTool,
@@ -137,6 +137,7 @@ export async function requestAiDbTableEdit(params: {
   block: VisualBlock;
   request: string;
   onBeforeMutation?: () => void;
+  client?: HostChatClient | null;
 }): Promise<AiEditRequestResult> {
   const tableName = typeof params.block.schema.pluginConfig.table === 'string'
     ? params.block.schema.pluginConfig.table.trim()
@@ -186,6 +187,7 @@ export async function requestAiDbTableEdit(params: {
       responseInstructions,
       mode: 'component-edit',
       debugLabel: `ai-db-table-edit:${iteration + 1}`,
+      client: params.client,
     });
 
     const parsed = parseDbTableEditToolRequest(response);

@@ -20,7 +20,13 @@ vi.mock('../src/ai-component-edit', async (importOriginal) => {
   };
 });
 
-import { requestAiDocumentEditTurn, summarizeDocumentStructure, summarizeHeaderStructure } from '../src/ai-document-edit';
+import {
+  buildImportPlanForDocument,
+  importTextIntoDocument,
+  requestAiDocumentEditTurn,
+  summarizeDocumentStructure,
+  summarizeHeaderStructure,
+} from '../src/ai-document-edit';
 import {
   buildDocumentEditFormatInstructions,
   buildDocumentEditToolHelp,
@@ -324,6 +330,125 @@ test('parseDocumentEditToolRequest accepts table as a query_db_table table_name 
     expect(parsed.value.table_name).toBe('chores');
     expect(parsed.value.limit).toBe(3);
   }
+});
+
+test('buildImportPlanForDocument stops after mocked plan without mutating the document', async () => {
+  queueAiToolResponses(
+    '{"tool":"plan","steps":["Add an imported summary text component","Verify the imported summary appears"],"reason":"Plan the import before changing the document."}'
+  );
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {"id":"intro"}-->
+ Existing content
+`, '.hvy');
+  const before = serializeDocument(document);
+  const progress = vi.fn();
+  const importClient = { complete: vi.fn() };
+
+  const result = await buildImportPlanForDocument(document, {
+    sourceName: 'notes.txt',
+    sourceText: 'Imported summary',
+    llm: {
+      settings: { provider: 'openai', model: 'gpt-5-mini' },
+      client: importClient,
+    },
+    onProgress: progress,
+  });
+
+  expect(result).toEqual({
+    status: 'ready',
+    steps: ['Add an imported summary text component', 'Verify the imported summary appears'],
+  });
+  expect(serializeDocument(document)).toBe(before);
+  expect(requestProxyCompletionMock).toHaveBeenCalledTimes(2);
+  expect(requestProxyCompletionMock.mock.calls.every((call) => call[0]?.client === importClient)).toBe(true);
+  expect(progress.mock.calls.map((call) => call[0].phase)).toContain('thinking');
+});
+
+test('importTextIntoDocument executes approved steps with mocked LLM tool calls', async () => {
+  queueAiToolResponses(
+    '{"tool":"create_component","position":"append-to-section","section_ref":"summary","hvy":"<!--hvy:text {\\"id\\":\\"imported-summary\\"}-->\\n Imported summary","reason":"Add the imported text."}',
+    '{"tool":"mark_step_done","step":1,"summary":"Added the imported summary."}',
+    '{"tool":"done","summary":"Imported notes.txt."}'
+  );
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {"id":"intro"}-->
+ Existing content
+`, '.hvy');
+  const onMutation = vi.fn();
+  const progress = vi.fn();
+
+  const result = await importTextIntoDocument(document, {
+    sourceName: 'notes.txt',
+    sourceText: 'Imported summary',
+    steps: ['Add the imported summary text component'],
+    llm: {
+      settings: { provider: 'openai', model: 'gpt-5-mini' },
+      client: { complete: vi.fn() },
+    },
+    onMutation,
+    onProgress: progress,
+  });
+
+  expect(result.status).toBe('complete');
+  expect(serializeDocument(document)).toContain('"id":"imported-summary"');
+  expect(serializeDocument(document)).toContain('Imported summary');
+  expect(onMutation).toHaveBeenCalledWith('ai-edit:block');
+  const firstEditContext = requestProxyCompletionMock.mock.calls[1]?.[0]?.context ?? '';
+  expect(firstEditContext).toContain('Plan progress:');
+  expect(firstEditContext).toContain('1. [ ] Add the imported summary text component');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.responseInstructions).not.toContain('Plan shape:');
+  expect(progress.mock.calls.map((call) => call[0].phase)).toContain('tool_call');
+});
+
+test('importTextIntoDocument returns error for empty approved steps without calling the LLM', async () => {
+  const document = deserializeDocument('---\nhvy_version: 0.1\n---\n', '.hvy');
+
+  const result = await importTextIntoDocument(document, {
+    sourceName: 'notes.txt',
+    sourceText: 'Imported summary',
+    steps: [],
+    llm: {
+      settings: { provider: 'openai', model: 'gpt-5-mini' },
+      client: { complete: vi.fn() },
+    },
+  });
+
+  expect(result).toEqual({
+    status: 'error',
+    message: 'Import requires at least one approved plan step.',
+  });
+  expect(requestProxyCompletionMock).not.toHaveBeenCalled();
+});
+
+test('buildImportPlanForDocument reports aborted status from an aborted signal', async () => {
+  const document = deserializeDocument('---\nhvy_version: 0.1\n---\n', '.hvy');
+  const abortController = new AbortController();
+  abortController.abort();
+
+  const result = await buildImportPlanForDocument(document, {
+    sourceName: 'notes.txt',
+    sourceText: 'Imported summary',
+    llm: {
+      settings: { provider: 'openai', model: 'gpt-5-mini' },
+      client: { complete: vi.fn() },
+    },
+    signal: abortController.signal,
+  });
+
+  expect(result.status).toBe('aborted');
+  expect(requestProxyCompletionMock).not.toHaveBeenCalled();
 });
 
 test('requestAiDocumentEditTurn returns a compact schema summary after execute_sql writes', async () => {

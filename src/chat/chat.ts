@@ -101,6 +101,7 @@ export interface ProxyCompletionParams {
   onReasoningSummary?: (summary: string) => void;
   onTokenUsage?: (usage: ChatTokenUsage) => void;
   signal?: AbortSignal;
+  client?: HostChatClient | null;
 }
 
 export interface ProxyToolTurnParams extends Omit<ProxyCompletionParams, 'responseInstructions'> {
@@ -507,7 +508,7 @@ export async function requestProxyCompletion(params: ProxyCompletionParams): Pro
     traceRunId: params.traceRunId,
   });
   const debugLabel = params.debugLabel?.trim() || 'chat';
-  const hostClient = getHostChatClient();
+  const hostClient = params.client === undefined ? getHostChatClient() : params.client;
 
   console.debug(`[hvy:${debugLabel}] client request`, {
     provider: requestPayload.provider,
@@ -588,7 +589,7 @@ export async function requestProxyToolTurn(params: ProxyToolTurnParams): Promise
     toolState: params.toolState,
   });
   const debugLabel = params.debugLabel?.trim() || 'chat-tools';
-  const hostClient = getHostChatClient();
+  const hostClient = params.client === undefined ? getHostChatClient() : params.client;
 
   console.debug(`[hvy:${debugLabel}] client native tool request`, {
     provider: requestPayload.provider,

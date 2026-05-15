@@ -1,4 +1,4 @@
-import { requestProxyCompletion, traceAgentLoopEvent } from './chat/chat';
+import { requestProxyCompletion, traceAgentLoopEvent, type HostChatClient } from './chat/chat';
 import { serializeDocument } from './serialization';
 import type { ChatSettings, VisualDocument } from './types';
 import { buildDocumentNoteFormatInstructions, buildDocumentNotePrompt } from './ai-document-edit-instructions';
@@ -17,6 +17,7 @@ export async function requestAiDocumentNotes(params: {
   onProgress?: (content: string) => void;
   traceRunId?: string;
   signal?: AbortSignal;
+  client?: HostChatClient | null;
 }): Promise<string> {
   params.onProgress?.('Reviewing document chunks and taking section notes.');
   const notes = await requestProxyCompletion({
@@ -34,6 +35,7 @@ export async function requestAiDocumentNotes(params: {
     debugLabel: 'ai-document-notes',
     traceRunId: params.traceRunId,
     signal: params.signal,
+    client: params.client,
   });
   const trimmed = notes.trim();
   console.debug('[hvy:ai-document-edit] AI document notes', {

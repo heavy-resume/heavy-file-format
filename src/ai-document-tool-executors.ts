@@ -8,6 +8,7 @@ import { findBlockContainerById, findSectionByKey, findSectionContainer, getSect
 import { formatQueryResultTable, getDbTableRenderedText } from './plugins/db-table';
 import { renderAltAnnotationsAsFullText } from './markdown';
 import type { VisualBlock, VisualSection } from './editor/types';
+import type { HostChatClient } from './chat/chat';
 import type { ChatSettings, VisualDocument } from './types';
 import { buildDocumentEditToolHelp } from './ai-document-edit-instructions';
 import { DB_TABLE_PLUGIN_ID } from './plugins/registry';
@@ -431,7 +432,8 @@ export async function executeEditComponentTool(
   snapshot: DocumentStructureSnapshot,
   document: VisualDocument,
   settings: ChatSettings,
-  onMutation?: (group?: string) => void
+  onMutation?: (group?: string) => void,
+  client?: HostChatClient | null
 ): Promise<string> {
   const component = resolveComponentRef(snapshot, request.component_ref);
   if (!component) {
@@ -449,6 +451,7 @@ export async function executeEditComponentTool(
     sectionTitle: section.title,
     block,
     request: request.request,
+    client,
   });
 
   onMutation?.('ai-edit:block');

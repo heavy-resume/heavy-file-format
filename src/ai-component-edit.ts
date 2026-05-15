@@ -1,5 +1,5 @@
 import './ai-edit.css';
-import { requestProxyCompletion } from './chat/chat';
+import { requestProxyCompletion, type HostChatClient } from './chat/chat';
 import { serializeBlockFragment } from './serialization';
 import type { VisualBlock } from './editor/types';
 import type { ChatMessage, ChatSettings, VisualDocument } from './types';
@@ -19,6 +19,7 @@ export async function requestAiComponentEdit(params: {
   block: VisualBlock;
   request: string;
   onBeforeMutation?: () => void;
+  client?: HostChatClient | null;
 }): Promise<AiEditRequestResult> {
   const { isDbTablePluginBlock, requestAiDbTableEdit } = await import('./ai-db-table-edit');
   if (isDbTablePluginBlock(params.block)) {
@@ -28,6 +29,7 @@ export async function requestAiComponentEdit(params: {
       block: params.block,
       request: params.request,
       onBeforeMutation: params.onBeforeMutation,
+      client: params.client,
     });
   }
 
@@ -53,6 +55,7 @@ export async function requestAiComponentEdit(params: {
     responseInstructions: buildAiEditFormatInstructions(),
     mode: 'component-edit',
     debugLabel: 'ai-edit',
+    client: params.client,
   });
 
   let parsed = parseAiBlockEditResponse(response);
@@ -87,6 +90,7 @@ export async function requestAiComponentEdit(params: {
       responseInstructions: buildAiEditFormatInstructions(),
       mode: 'component-edit',
       debugLabel: 'ai-edit-repair',
+      client: params.client,
     });
     parsed = parseAiBlockEditResponse(response);
     if (!parsed.hasErrors && parsed.canonicalFragment.trim() === originalFragment.trim()) {

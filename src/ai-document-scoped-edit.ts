@@ -1,4 +1,4 @@
-import { requestProxyCompletion, traceAgentLoopEvent } from './chat/chat';
+import { requestProxyCompletion, traceAgentLoopEvent, type HostChatClient } from './chat/chat';
 import { getRegisteredPluginAiHints } from './ai-plugin-hints';
 import {
   executeDbTableQueryTool,
@@ -173,6 +173,110 @@ export async function requestAiDocumentEditTurn(params: {
   }
 }
 
+export type HvyImportProgressPhase = 'starting' | 'thinking' | 'tool_call' | 'linting' | 'complete';
+
+export interface HvyImportProgressEvent {
+  phase: HvyImportProgressPhase;
+  message?: string;
+}
+
+export interface HvyImportLlmOptions {
+  settings: ChatSettings;
+  client?: HostChatClient | null;
+}
+
+export interface BuildImportPlanOptions {
+  sourceName: string;
+  sourceText: string;
+  llm?: HvyImportLlmOptions;
+  onProgress?: (event: HvyImportProgressEvent) => void;
+  signal?: AbortSignal;
+}
+
+export interface BuildImportPlanResult {
+  status: 'ready' | 'aborted' | 'error';
+  steps?: string[];
+  message?: string;
+}
+
+export interface ImportFromTextOptions {
+  sourceName: string;
+  sourceText: string;
+  steps: string[];
+  llm?: HvyImportLlmOptions;
+  onProgress?: (event: HvyImportProgressEvent) => void;
+  signal?: AbortSignal;
+}
+
+export interface ImportFromTextResult {
+  status: 'complete' | 'aborted' | 'error';
+  message?: string;
+}
+
+export async function buildImportPlanForDocument(
+  document: VisualDocument,
+  options: BuildImportPlanOptions
+): Promise<BuildImportPlanResult> {
+  options.onProgress?.({ phase: 'starting', message: `Preparing import plan for ${options.sourceName}.` });
+  try {
+    const llm = requireImportLlm(options.llm);
+    throwIfAborted(options.signal);
+    const result = await runDocumentEditToolLoop({
+      settings: llm.settings,
+      client: llm.client,
+      document,
+      request: buildImportRequest(options.sourceName, options.sourceText),
+      mode: { kind: 'plan-only' },
+      onProgress: (content) => options.onProgress?.(mapImportLoopProgress(content)),
+      signal: options.signal,
+    });
+    throwIfAborted(options.signal);
+    if (!result.planSteps || result.planSteps.length === 0) {
+      return { status: 'error', message: result.summary || 'The import planner did not return a usable plan.' };
+    }
+    options.onProgress?.({ phase: 'complete', message: 'Import plan is ready.' });
+    return { status: 'ready', steps: result.planSteps };
+  } catch (error) {
+    if (isAbortError(error)) {
+      return { status: 'aborted', message: 'Import planning was aborted.' };
+    }
+    return { status: 'error', message: error instanceof Error ? error.message : 'Import planning failed.' };
+  }
+}
+
+export async function importTextIntoDocument(
+  document: VisualDocument,
+  options: ImportFromTextOptions & { onMutation?: (group?: string) => void }
+): Promise<ImportFromTextResult> {
+  const steps = normalizePlanSteps(options.steps);
+  if (steps.length === 0) {
+    return { status: 'error', message: 'Import requires at least one approved plan step.' };
+  }
+  options.onProgress?.({ phase: 'starting', message: `Importing ${options.sourceName}.` });
+  try {
+    const llm = requireImportLlm(options.llm);
+    throwIfAborted(options.signal);
+    const result = await runDocumentEditToolLoop({
+      settings: llm.settings,
+      client: llm.client,
+      document,
+      request: buildImportRequest(options.sourceName, options.sourceText),
+      mode: { kind: 'execute-approved-plan', steps },
+      onMutation: options.onMutation,
+      onProgress: (content) => options.onProgress?.(mapImportLoopProgress(content)),
+      signal: options.signal,
+    });
+    throwIfAborted(options.signal);
+    options.onProgress?.({ phase: 'complete', message: result.summary || 'Import complete.' });
+    return { status: 'complete', message: result.summary || 'Import complete.' };
+  } catch (error) {
+    if (isAbortError(error)) {
+      return { status: 'aborted', message: 'Import was aborted.' };
+    }
+    return { status: 'error', message: error instanceof Error ? error.message : 'Import failed.' };
+  }
+}
+
 function appendChatMessage(messages: ChatMessage[], content: string): ChatMessage[] {
   return [
     ...messages,
@@ -186,6 +290,7 @@ function appendChatMessage(messages: ChatMessage[], content: string): ChatMessag
 
 async function runDocumentEditLoop(params: {
   settings: ChatSettings;
+  client?: HostChatClient | null;
   document: VisualDocument;
   request: string;
   onMutation?: (group?: string) => void;
@@ -200,15 +305,23 @@ async function runDocumentEditLoop(params: {
   return runDocumentEditToolLoop(params);
 }
 
+type DocumentEditLoopMode =
+  | { kind: 'normal' }
+  | { kind: 'plan-only' }
+  | { kind: 'execute-approved-plan'; steps: string[] };
+
 async function runDocumentEditToolLoop(params: {
   settings: ChatSettings;
+  client?: HostChatClient | null;
   document: VisualDocument;
   request: string;
+  mode?: DocumentEditLoopMode;
   onMutation?: (group?: string) => void;
   onProgress?: (content: string) => void;
   traceRunId?: string;
   signal?: AbortSignal;
-}): Promise<{ summary: string }> {
+}): Promise<{ summary: string; planSteps?: string[] }> {
+  const mode = params.mode ?? { kind: 'normal' };
   let snapshot = summarizeDocumentStructure(params.document);
   let configuredDbTableNames = getDocumentDbTableNames(params.document);
   let dbObjectNames = await getDocumentDbTableObjectNames(params.document);
@@ -225,6 +338,7 @@ async function runDocumentEditToolLoop(params: {
     ? 'Skipped note-taking because the request appears informational.'
     : await requestAiDocumentNotes({
         settings: params.settings,
+        client: params.client,
         request: params.request,
         chunks: documentChunks,
         traceRunId: params.traceRunId,
@@ -246,7 +360,9 @@ async function runDocumentEditToolLoop(params: {
   let latestIntent = params.request;
   let workNote: WorkNoteState = createInitialWorkNote(params.request);
   let latestToolResult: string | null = null;
-  let plan: EditPlanState | null = null;
+  let plan: EditPlanState | null = mode.kind === 'execute-approved-plan'
+    ? { steps: normalizePlanSteps(mode.steps).map((step) => ({ text: step, done: false })) }
+    : null;
   const health = createLoopHealthState();
   let conversation: ChatMessage[] = [
     {
@@ -272,6 +388,7 @@ async function runDocumentEditToolLoop(params: {
     });
     const response = await requestProxyCompletion({
       settings: params.settings,
+      client: params.client,
       messages: conversation,
       context: buildLoopContext(contextSummary, plan, recentToolHelp, workLedger, buildIntentRecall(latestIntent, snapshot, params.document), workNote, latestToolResult),
       responseInstructions: buildDocumentEditFormatInstructions({
@@ -302,6 +419,18 @@ async function runDocumentEditToolLoop(params: {
           content: `Return one valid tool JSON object using the documented shapes. ${invalidMessage}`,
         },
         ...(recovery === 'recover' ? [buildLoopRecoveryChatMessage()] : []),
+      ];
+      continue;
+    }
+
+    if (mode.kind === 'plan-only' && !isReadOnlyPlanningTool(parsed.value.tool)) {
+      conversation = [
+        ...pruneTransientRecoveryMessages(conversation),
+        {
+          id: crypto.randomUUID(),
+          role: 'user',
+          content: 'For import planning, return a `plan` tool before any mutation. You may only inspect the document with read-only tools while planning.',
+        },
       ];
       continue;
     }
@@ -372,7 +501,7 @@ async function runDocumentEditToolLoop(params: {
             callResult = await executeViewRenderedComponentTool(call, snapshot, params.document);
             contextSummary = await refreshDbContext(SENT_STRUCTURE_CONTEXT);
           } else if (call.tool === 'edit_component') {
-            callResult = await executeEditComponentTool(call, snapshot, params.document, params.settings, params.onMutation);
+            callResult = await executeEditComponentTool(call, snapshot, params.document, params.settings, params.onMutation, params.client);
             snapshot = summarizeDocumentStructure(params.document);
             contextSummary = await refreshDbContext(SENT_STRUCTURE_CONTEXT);
           } else if (call.tool === 'patch_component') {
@@ -481,6 +610,9 @@ async function runDocumentEditToolLoop(params: {
         rewardLoopHealthForPlanCreated(health, plan);
         toolResult = buildToolResult('plan', formatPlanState(plan));
         params.onProgress?.(formatPlanState(plan));
+        if (mode.kind === 'plan-only') {
+          return { summary: 'Import plan is ready.', planSteps: plan.steps.map((step) => step.text) };
+        }
       }
     } else if (parsed.value.tool === 'mark_step_done') {
       const result = markPlanStepDone(plan, parsed.value.step, parsed.value.summary);
@@ -547,7 +679,7 @@ async function runDocumentEditToolLoop(params: {
       params.onProgress?.(describeDocumentToolProgress(parsed.value));
       toolResult = buildToolResult(
         'edit_component',
-        await executeEditComponentTool(parsed.value, snapshot, params.document, params.settings, params.onMutation)
+        await executeEditComponentTool(parsed.value, snapshot, params.document, params.settings, params.onMutation, params.client)
       );
       snapshot = summarizeDocumentStructure(params.document);
       contextSummary = await refreshDbContext(SENT_STRUCTURE_CONTEXT);
@@ -766,6 +898,56 @@ function isTransientRecoveryPrompt(content: string): boolean {
   return content.startsWith('Return one valid tool JSON object using the documented shapes.')
     || content.startsWith('Return one valid header tool JSON object using the documented shapes.')
     || content.startsWith('You appear to be stuck. Do not repeat the previous action.');
+}
+
+function isReadOnlyPlanningTool(tool: DocumentEditBatchToolRequest['tool'] | 'answer' | 'done' | 'plan' | 'mark_step_done' | 'batch'): boolean {
+  return tool === 'plan'
+    || tool === 'answer'
+    || tool === 'done'
+    || tool === 'request_structure'
+    || tool === 'request_rendered_structure'
+    || tool === 'get_help'
+    || tool === 'search_components'
+    || tool === 'view_component'
+    || tool === 'view_rendered_component'
+    || tool === 'grep'
+    || tool === 'get_css'
+    || tool === 'get_properties'
+    || tool === 'query_db_table';
+}
+
+function buildImportRequest(sourceName: string, sourceText: string): string {
+  return [
+    `Import source "${sourceName}" into the currently loaded HVY document.`,
+    '',
+    'Reconcile the imported text with the existing document. Build reusable HVY structure and components rather than pasting the import as one opaque text blob.',
+    'Preserve relevant existing content unless the import clearly replaces it.',
+    '',
+    'Imported source text:',
+    '```text',
+    sourceText,
+    '```',
+  ].join('\n');
+}
+
+function requireImportLlm(llm: HvyImportLlmOptions | undefined): HvyImportLlmOptions {
+  if (!llm) {
+    throw new Error('Import requires an LLM configuration.');
+  }
+  return llm;
+}
+
+function mapImportLoopProgress(content: string): HvyImportProgressEvent {
+  if (/^Plan:/i.test(content) || /\bplan step\b/i.test(content)) {
+    return { phase: 'thinking', message: content };
+  }
+  if (/\b(Running|Searching|Viewing|Creating|Removing|Patching|Updating|Executing|Querying|Fetching|Setting|Reordering)\b/i.test(content)) {
+    return { phase: 'tool_call', message: content };
+  }
+  if (/\bFinished|Completed all plan steps|Answered without changing/i.test(content)) {
+    return { phase: 'complete', message: content };
+  }
+  return { phase: 'thinking', message: content };
 }
 
 function buildLoopContext(

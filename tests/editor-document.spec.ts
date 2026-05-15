@@ -258,6 +258,76 @@ hvy_version: 0.1
   await expect(page.locator('.ai-edit-popover [data-field="ai-model"]')).toHaveCount(0);
 });
 
+test('embedded importFromText runs mocked LLM import and reports diagnostics', async ({ page }) => {
+  await page.goto('/');
+
+  const result = await page.evaluate(async () => {
+    document.body.innerHTML = '<div id="mount"></div>';
+    const modulePath = '/src/embed.ts';
+    const { deserializeDocumentBytes, mountHvy } = await import(/* @vite-ignore */ modulePath);
+    const source = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {"id":"intro"}-->
+ Existing content
+
+<!--hvy:expandable {"id":"bad-expandable"}-->
+`;
+    const root = document.querySelector<HTMLElement>('#mount');
+    if (!root) {
+      throw new Error('Mount root missing.');
+    }
+    const responses = [
+      'AI note: use summary.',
+      '{"tool":"done","summary":"Finished without additional changes."}',
+    ];
+    const calls: unknown[] = [];
+    const progress: string[] = [];
+    const mount = mountHvy({
+      root,
+      document: deserializeDocumentBytes(new TextEncoder().encode(source), '.hvy'),
+      mode: 'editor',
+    });
+    const importResult = await mount.importFromText({
+      sourceName: 'bad.txt',
+      sourceText: 'Bad card',
+      steps: ['Check the existing import target'],
+      llm: {
+        settings: { provider: 'openai', model: 'mock-import-model' },
+        client: {
+          async complete(request) {
+            calls.push(request);
+            const output = responses.shift();
+            if (!output) {
+              throw new Error('Unexpected import LLM call.');
+            }
+            return { output };
+          },
+        },
+      },
+      onProgress(event) {
+        progress.push(event.phase);
+      },
+    });
+    return {
+      result: importResult,
+      calls: calls.length,
+      progress,
+      html: root.textContent,
+    };
+  });
+
+  expect(result.calls).toBe(2);
+  expect(result.progress).toContain('linting');
+  expect(result.result.status).toBe('error');
+  expect(result.result.message).toContain('expandable block is missing');
+  expect(result.html).toContain('Existing content');
+});
+
 test('new section component picker opens on the first click', async ({ page }) => {
   await page.goto('/');
 

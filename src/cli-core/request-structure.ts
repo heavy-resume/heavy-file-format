@@ -1,5 +1,6 @@
 import { resolveBaseComponentFromMeta } from '../component-defs';
 import type { JsonObject } from '../hvy/types';
+import { renderAltAnnotationsAsFullText } from '../markdown';
 import type { VisualDocument } from '../types';
 import type { HvyVirtualEntry, HvyVirtualFileSystem } from './virtual-file-system';
 
@@ -378,7 +379,7 @@ function formatCssSuffix(css: string | undefined, enabled: boolean): string {
 }
 
 function compactInlineValue(value: string): string {
-  return value.replace(/\s+/g, ' ').trim();
+  return renderAltAnnotationsAsFullText(value).replace(/\s+/g, ' ').trim();
 }
 
 function withStableId(entry: ComponentStructureEntry, index: number): ComponentStructureEntry {

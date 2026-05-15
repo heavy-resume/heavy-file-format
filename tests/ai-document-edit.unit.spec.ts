@@ -117,6 +117,23 @@ hvy_version: 0.1
   expect(summary.componentRefs.get('skill-python-card')?.component).toBe('xref-card');
 });
 
+test('summarizeDocumentStructure describes table responsive annotations as visible text', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"history"}-->
+#! History
+
+<!--hvy:table {"id":"history-table","tableColumns":["TITLE","<!--hvy:alt {\\"compact\\":\\"ORG\\"}-->ORGANIZATION<!--/hvy:alt-->","YEAR(S)"],"tableRows":[]}-->
+`, '.hvy');
+
+  const summary = summarizeDocumentStructure(document).summary;
+
+  expect(summary).toContain('columns: TITLE, ORGANIZATION, YEAR(S)');
+  expect(summary).not.toContain('hvy:alt');
+});
+
 test('summarizeDocumentStructure includes plugin AI hints', () => {
   setHostPlugins([dbTablePluginRegistration]);
   const document = deserializeDocument(`---

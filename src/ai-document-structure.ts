@@ -4,6 +4,7 @@ import type { VisualDocument } from './types';
 import type { JsonObject } from './hvy/types';
 import { getThemeColorLabel, THEME_COLOR_NAMES } from './theme';
 import { getSectionId, visitBlocks } from './section-ops';
+import { renderAltAnnotationsAsFullText } from './markdown';
 import {
   MAX_TEXT_PREVIEW_LENGTH,
   type ComponentRefEntry,
@@ -381,7 +382,7 @@ function getBlockPreview(block: VisualBlock): string {
     return truncatePreview([block.schema.xrefTitle, block.schema.xrefDetail].filter((value) => value.trim().length > 0).join(' - '));
   }
   if (component === 'table') {
-    return truncatePreview(`columns: ${block.schema.tableColumns.join(', ')}`);
+    return truncatePreview(`columns: ${renderAltAnnotationsAsFullText(block.schema.tableColumns.join(', '))}`);
   }
   if (component === 'expandable') {
     const stubText = flattenBlockText(block.schema.expandableStubBlocks?.children ?? []);
@@ -472,7 +473,7 @@ function describeKnownThemeColors(meta: JsonObject): string[] {
 }
 
 export function truncatePreview(value: string, maxLength = MAX_TEXT_PREVIEW_LENGTH): string {
-  const collapsed = value.replace(/\s+/g, ' ').trim();
+  const collapsed = renderAltAnnotationsAsFullText(value).replace(/\s+/g, ' ').trim();
   if (collapsed.length <= maxLength) {
     return collapsed;
   }

@@ -2,7 +2,7 @@ import './table.css';
 import type { ComponentEditorRenderer, ComponentReaderRenderer } from '../../component-helpers';
 import type { TableRow } from '../../types';
 import { closeIcon, plusIcon } from '../../../icons';
-import { renderAltAnnotationsAsFullText } from '../../../markdown';
+import { renderAltAnnotationsAsFullText, renderAltAnnotationsAsMobileText } from '../../../markdown';
 
 let readerTableStripeIndex = 0;
 
@@ -71,7 +71,11 @@ function renderTableRowEditor(
       </td>
       ${safeColumns
         .map(
-          (_column, cellIndex) => `<td>
+          (_column, cellIndex) => {
+            const rawPlaceholder = safeColumns[cellIndex] || 'Cell value';
+            const placeholder = renderAltAnnotationsAsFullText(rawPlaceholder);
+            const compactPlaceholder = renderAltAnnotationsAsMobileText(rawPlaceholder);
+            return `<td>
             <div class="table-inline-edit-shell">
               <div
                 class="inline-editable table-inline-text"
@@ -83,11 +87,13 @@ function renderTableRowEditor(
                 data-row-index="${rowIndex}"
                 data-cell-index="${cellIndex}"
                 data-field="table-cell"
-                data-placeholder="${helpers.escapeAttr(safeColumns[cellIndex] || 'Cell value')}"
+                data-placeholder="${helpers.escapeAttr(placeholder)}"
+                data-placeholder-compact="${helpers.escapeAttr(compactPlaceholder)}"
               >${renderTableInlineEditorHtml(row.cells[cellIndex] ?? '', helpers)}</div>
               ${renderTableInlineToolbar(sectionKey, blockId, 'table-cell', helpers, { rowIndex, cellIndex })}
             </div>
-          </td>`
+          </td>`;
+          }
         )
         .join('')}
       <td class="table-row-utility table-row-remove-cell">
@@ -210,10 +216,12 @@ export const renderTableReader: ComponentReaderRenderer = (_section, block, help
               ${columns.map((column, cellIndex) => {
                 const value = helpers.escapeHtml(row.cells[cellIndex] ?? '');
                 const title = helpers.escapeAttr(row.cells[cellIndex] ?? '');
-                const placeholder = helpers.escapeAttr(column || 'Cell value');
+                const rawPlaceholder = column || 'Cell value';
+                const placeholder = helpers.escapeAttr(renderAltAnnotationsAsFullText(rawPlaceholder));
+                const compactPlaceholder = helpers.escapeAttr(renderAltAnnotationsAsMobileText(rawPlaceholder));
                 return value
                   ? `<td title="${title}">${renderTableInlineReaderHtml(row.cells[cellIndex] ?? '', block, helpers)}</td>`
-                  : `<td data-placeholder="${placeholder}"></td>`;
+                  : `<td data-placeholder="${placeholder}" data-placeholder-compact="${compactPlaceholder}"></td>`;
               }).join('')}
             </tr>
             `

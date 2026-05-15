@@ -133,3 +133,33 @@ test('reader table header title uses alt full text instead of raw annotation', (
   expect(html).toContain('title="ORGANIZATION"');
   expect(html).not.toContain('title="<!--hvy:alt');
 });
+
+test('table editor cell placeholders carry full and compact alt text', () => {
+  const helpers = {
+    ...createHelpers(),
+    getTableColumns: (schema: VisualBlock['schema']) => schema.tableColumns,
+  };
+  const block = createTableBlock([['', '', '']]);
+  block.schema.tableColumns = ['YEAR', '<!--hvy:alt {"compact":"ORG"}-->ORGANIZATION<!--/hvy:alt-->', 'TITLE'];
+
+  const html = renderTableEditor(section.key, block, helpers);
+
+  expect(html).toContain('data-placeholder="ORGANIZATION"');
+  expect(html).toContain('data-placeholder-compact="ORG"');
+  expect(html).not.toContain('data-placeholder="<!--hvy:alt');
+});
+
+test('reader table empty cell placeholders carry full and compact alt text', () => {
+  const helpers = {
+    ...createHelpers(),
+    getTableColumns: (schema: VisualBlock['schema']) => schema.tableColumns,
+  };
+  const block = createTableBlock([['', '', '']]);
+  block.schema.tableColumns = ['YEAR', '<!--hvy:alt {"compact":"ORG"}-->ORGANIZATION<!--/hvy:alt-->', 'TITLE'];
+
+  const html = renderTableReader(section, block, helpers);
+
+  expect(html).toContain('data-placeholder="ORGANIZATION"');
+  expect(html).toContain('data-placeholder-compact="ORG"');
+  expect(html).not.toContain('data-placeholder="<!--hvy:alt');
+});

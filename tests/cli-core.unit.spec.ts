@@ -2283,6 +2283,24 @@ Milestones
   expect(result.output).toContain('text.txt id=roadmap tags=[quarterly] placeholder="Roadmap details" css="margin: 0.5rem 0;" - Quarterly roadmap notes. | Milestones');
 });
 
+test('hvy request_structure previews inline responsive annotations as visible text', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"history"}-->
+#! History
+
+<!--hvy:table {"id":"history-table","tableColumns":["TITLE","<!--hvy:alt {\\"compact\\":\\"ORG\\"}-->ORGANIZATION<!--/hvy:alt-->","YEAR(S)"],"tableRows":[]}-->
+`, '.hvy');
+  const session = createHvyCliSession();
+
+  const result = await executeHvyCliCommand(document, session, 'hvy request_structure history-table');
+
+  expect(result.output).toContain('table.txt id=C2 | TITLE | ORGANIZATION | YEAR(S)');
+  expect(result.output).not.toContain('hvy:alt');
+});
+
 test('hvy lint reports core component and plugin issues', async () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1

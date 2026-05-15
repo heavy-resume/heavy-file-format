@@ -6,6 +6,7 @@ import { createEmptySection } from './document-factory';
 import { deserializeDocumentWithDiagnostics, serializeBlockFragment, serializeSectionFragment } from './serialization';
 import { findBlockContainerById, findSectionByKey, findSectionContainer, getSectionId, moveSectionRelative, moveSectionToSiblingIndex } from './section-ops';
 import { formatQueryResultTable, getDbTableRenderedText } from './plugins/db-table';
+import { renderAltAnnotationsAsFullText } from './markdown';
 import type { VisualBlock, VisualSection } from './editor/types';
 import type { ChatSettings, VisualDocument } from './types';
 import { buildDocumentEditToolHelp } from './ai-document-edit-instructions';
@@ -216,7 +217,7 @@ function searchComponentIndex(
         block.schema.plugin,
         block.schema.xrefTitle,
         block.schema.xrefDetail,
-        block.schema.tableColumns.join(' '),
+        renderAltAnnotationsAsFullText(block.schema.tableColumns.join(' ')),
         JSON.stringify(block.schema.pluginConfig ?? {}),
         block.text,
       ].filter((value): value is string => typeof value === 'string' && value.trim().length > 0).join(' ');
@@ -295,7 +296,7 @@ function getLocalRenderedComponentLines(block: VisualBlock): string[] {
     ];
   }
   if (component === 'table') {
-    const columns = block.schema.tableColumns.map((column) => column.trim()).filter(Boolean);
+    const columns = block.schema.tableColumns.map((column) => renderAltAnnotationsAsFullText(column).trim()).filter(Boolean);
     return [
       `Columns: ${columns.join(', ') || '(none)'}`,
       `Rows: ${block.schema.tableRows.length}`,

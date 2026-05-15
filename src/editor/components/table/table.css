@@ -169,6 +169,13 @@
   color: var(--hvy-text-muted);
 }
 
+.hvy-surface-phone .table-inline-text[data-placeholder-compact]:empty::before,
+.hvy-surface-phone .table-inline-text[data-placeholder-compact]:has(> br:only-child)::before,
+.hvy-surface-tablet .table-inline-text[data-placeholder-compact]:empty::before,
+.hvy-surface-tablet .table-inline-text[data-placeholder-compact]:has(> br:only-child)::before {
+  content: attr(data-placeholder-compact);
+}
+
 .table-inline-text {
   width: 100%;
   padding: 0.26rem 0.38rem;
@@ -327,6 +334,11 @@
   content: attr(data-placeholder);
   color: var(--hvy-text-muted);
   pointer-events: none;
+}
+
+.hvy-surface-phone .editor-block-passive .reader-table td[data-placeholder-compact]:empty::before,
+.hvy-surface-tablet .editor-block-passive .reader-table td[data-placeholder-compact]:empty::before {
+  content: attr(data-placeholder-compact);
 }
 
 .table-main-row {

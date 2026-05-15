@@ -1,5 +1,6 @@
 import { getReferenceAppConfig } from '../reference-config';
 import type { VisualBlock, VisualSection } from '../editor/types';
+import { renderAltAnnotationsAsFullText } from '../markdown';
 import type { VisualDocument } from '../types';
 import type { HvyDescriptionParentContext, HvyDescriptionProvider, HvyDescriptionRequest, HvyDescriptionResponse, HvyDescriptionTargetKind } from './types';
 
@@ -192,7 +193,7 @@ function summarizeBlock(block: VisualBlock): string {
     block.schema.containerTitle,
     block.schema.imageAlt,
     block.text,
-    block.schema.component === 'table' ? block.schema.tableColumns.join(' ') : '',
+    block.schema.component === 'table' ? renderAltAnnotationsAsFullText(block.schema.tableColumns.join(' ')) : '',
     block.schema.component === 'table' ? block.schema.tableRows.flatMap((row) => row.cells).join(' ') : '',
     block.schema.containerBlocks.map(summarizeBlock).join('\n'),
     block.schema.componentListBlocks.map(summarizeBlock).join('\n'),

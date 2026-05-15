@@ -50,6 +50,28 @@ hvy_version: 0.1
   expect(document.sections[0]!.blocks[1]!.schema.componentListBlocks[0]!.schema.description).toBe('');
 });
 
+test('buildDescriptionRequest summarizes table responsive annotations as visible text', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"history"}-->
+#! History
+
+<!--hvy:table {"id":"history-table","tableColumns":["TITLE","<!--hvy:alt {\\"compact\\":\\"ORG\\"}-->ORGANIZATION<!--/hvy:alt-->","YEAR(S)"],"tableRows":[]}-->
+`, '.hvy');
+
+  const expectedResult = buildDescriptionRequest({
+    document,
+    section: document.sections[0]!,
+    block: document.sections[0]!.blocks[0]!,
+    kind: 'block',
+  });
+
+  expect(expectedResult.contentSummary).toContain('TITLE ORGANIZATION YEAR(S)');
+  expect(expectedResult.contentSummary).not.toContain('hvy:alt');
+});
+
 test('populateMissingDescriptions skips plain layout containers without title or border', async () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1

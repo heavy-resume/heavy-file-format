@@ -61,6 +61,9 @@ section_defs:
   - name: Resume Section
     key: resume-section
     repeatable: true
+    templateVariables:
+      section_title:
+        label: Section title
     template:
       title: Resume Section
       level: 1
@@ -79,6 +82,7 @@ section_defs:
   expect(document.meta.section_defs?.[0]?.template.customId).toBe('projects');
   expect(document.meta.section_defs?.[0]?.template.blocks[0]?.text).toBe('# Projects');
   expect(document.meta.section_defs?.[1]?.repeatable).toBe(true);
+  expect(document.meta.section_defs?.[1]?.templateVariables?.section_title?.label).toBe('Section title');
 });
 
 test('ignores expandable slot lock metadata', () => {

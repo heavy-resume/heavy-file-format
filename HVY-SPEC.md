@@ -541,7 +541,7 @@ Template value notes:
 - Repeated variables use the same value; conflicting types for the same variable are invalid.
 - Blank values are allowed. Replacing a token with a blank value does not remove or change separate schema fields such as `placeholder`.
 - Authoring tools that accept explicit template values SHOULD require the provided keys to exactly match the expected variable names.
-- Reusable component definitions MAY include `templateVariables`, keyed by variable name. Each variable config MAY include `label`, a human-readable field label for authoring UIs. When `label` is omitted, authoring tools SHOULD derive one by converting snake_case or kebab-case separators to spaces and title-casing the result.
+- Reusable component definitions and reusable section definitions MAY include `templateVariables`, keyed by variable name. Each variable config MAY include `label`, a human-readable field label for authoring UIs. When `label` is omitted, authoring tools SHOULD derive one by converting snake_case or kebab-case separators to spaces and title-casing the result.
 - A template variable config MAY include `generator`, a plugin-qualified output generator key such as `dev.hvy.resume.skill-description`. Authoring tools MAY expose this as a field-level generation action. Generator requests MUST include only template variables that the author has provided with non-empty values; missing or empty variables MUST be omitted. If the installed generator declares required variables, authoring tools SHOULD disable the action until all required variables are non-empty.
 - A template variable config MAY include `generatorLabel`, overriding the visible action label for that variable. If omitted, authoring tools SHOULD use the installed generator's label or a generic label such as `Generate`.
 
@@ -556,16 +556,19 @@ section_defs:
   - name: faq-section
     key: faq
     repeatable: false
+    templateVariables:
+      section_title:
+        label: Section title
     template:
       id: faq
-      title: FAQ
+      title: "{% section_title %}"
       level: 2
       contained: true
       expanded: true
       highlight: false
       css: ""
       blocks:
-        - text: "## Frequently Asked Questions"
+        - text: "## {% section_title %}"
           schema:
             component: text
             css: "margin: 0.5rem 0;"
@@ -577,6 +580,7 @@ Notes:
 - `repeatable` is optional and defaults to `false`. Authoring tools SHOULD hide a non-repeatable section template when the document already contains a section whose `templateKey` matches the definition's `key` or `name`.
 - Sections created from reusable section definitions SHOULD set `templateKey` to the definition's `key` or `name`. Manually created blank sections SHOULD omit `templateKey`.
 - `template` stores a full section subtree, including blocks and nested child sections.
+- `templateVariables` follows the rules in section 5.9 and applies to tokens anywhere in the section template subtree, including section fields, block text, and nested block schema fields.
 - Clone a `section_defs[*].template` when inserting a new section or subsection.
 - Reusable section templates preserve section-level presentation fields such as `contained`, `expanded`, `highlight`, `priority`, `css`, `location`, and `hideIfUnmodified`.
 - Implementations SHOULD assign fresh section keys, block IDs, and custom IDs when instantiating a reusable section.

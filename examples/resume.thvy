@@ -189,6 +189,15 @@ section_defs:
   - name: Resume Section
     key: resume-section
     repeatable: true
+    templateVariables:
+      section_title:
+        label: Section title
+      row_label:
+        label: Row label
+      row_summary:
+        label: Row summary
+      row_details:
+        label: Row details
     template:
       title: Resume Section
       level: 1
@@ -197,18 +206,87 @@ section_defs:
       hideIfUnmodified: true
       tags: reciprocal-xref-source
       blocks:
-        - text: "# Resume Section"
+        - text: "# {% section_title %}"
           schema:
             component: text
             css: "margin: 0.5rem 0;"
             placeholder: "# Section title"
         - text: ""
           schema:
-            component: text
+            component: table
             css: "margin: 0;"
-            placeholder: "Add section details, records, and any relevant skill or tool references."
+            lock: true
+            tableColumns: ["ITEM", "SUMMARY"]
+            tableShowHeader: true
+            tableRows: []
+        - text: ""
+          schema:
+            component: component-list
+            css: "margin: 0;"
+            componentListComponent: resume-section-row
+            componentListItemLabel: row
+            componentListBlocks:
+              - text: ""
+                schema:
+                  component: expandable
+                  css: "margin: 0;"
+                  expandableAlwaysShowStub: true
+                  expandableExpanded: false
+                  expandableStubBlocks:
+                    children:
+                      - text: ""
+                        schema:
+                          component: table
+                          css: "margin: 0; margin-top: -1px;"
+                          tableColumns: ["ITEM", "SUMMARY"]
+                          tableShowHeader: false
+                          tableRows:
+                            - cells: ["{% row_label %}", "{% row_summary %}"]
+                  expandableContentBlocks:
+                    css: "padding: 0.5rem;"
+                    children:
+                      - text: "^section-heading^ ### {% row_label %}\n{% row_details | block %}"
+                        schema:
+                          component: text
+                          placeholder: "Row details"
+                          css: "margin: 0;"
+                      - text: "Delete this starter row if it is not needed."
+                        schema:
+                          component: text
+                          editorOnly: true
+                          css: "margin: 0.35rem 0 0; color: var(--hvy-text-muted); font-style: italic;"
       children: []
 component_defs:
+  - name: resume-section-row
+    baseType: expandable
+    description: Generic resume section table row
+    schema:
+      css: "margin: 0;"
+      expandableAlwaysShowStub: true
+      expandableExpanded: false
+      expandableStubBlocks:
+        children:
+          - text: ""
+            schema:
+              component: table
+              css: "margin: 0; margin-top: -1px;"
+              tableColumns: ["ITEM", "SUMMARY"]
+              tableShowHeader: false
+              tableRows:
+                - cells: ["", ""]
+      expandableContentBlocks:
+        css: "padding: 0.5rem;"
+        children:
+          - text: ""
+            schema:
+              component: text
+              placeholder: "Row details"
+              css: "margin: 0;"
+          - text: "Delete this starter row if it is not needed."
+            schema:
+              component: text
+              editorOnly: true
+              css: "margin: 0.35rem 0 0; color: var(--hvy-text-muted); font-style: italic;"
   - name: skill-xref-card
     baseType: xref-card
     description: Skill reference

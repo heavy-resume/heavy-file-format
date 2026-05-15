@@ -193,6 +193,7 @@ export interface SectionDefinition {
   name: string;
   key?: string;
   repeatable?: boolean;
+  templateVariables?: Record<string, { label?: string; generator?: string; generatorLabel?: string }>;
   template: VisualSection;
 }
 

@@ -4,6 +4,7 @@ import { resolveBaseComponentFromMeta } from '../component-defs';
 import type { JsonObject } from '../hvy/types';
 import { truncatePreview } from '../ai-document-structure';
 import type { SectionDefinition, VisualDocument } from '../types';
+import { extractReusableTemplateVariablesFromSectionDefinition, formatTemplateKeys } from '../reusable-template-values';
 import type { HvyVirtualFileSystem } from './virtual-file-system';
 
 export interface HvyIntentSearchResult {
@@ -143,6 +144,7 @@ function buildSectionTemplateRecords(document: VisualDocument): SemanticRecord[]
     const description = definition.template.description.trim() || `${definition.name.trim()} section template`;
     const tags = definition.template.tags.trim();
     const status = definition.repeatable === true ? 'repeatable' : usedTemplateKeys.has(key) ? 'used non-repeatable' : 'available non-repeatable';
+    const variables = extractReusableTemplateVariablesFromSectionDefinition(definition).map((variable) => variable.name);
     return makeRecord({
       key: `section-template:${key}`,
       path: `/section_defs/${key}`,
@@ -156,8 +158,9 @@ function buildSectionTemplateRecords(document: VisualDocument): SemanticRecord[]
       roleHints: [
         'reusable section template',
         'section_defs authoring template',
-        `insert with hvy insert -1 section /body --from-template ${key}`,
+        `insert with hvy insert -1 section /body --from-template ${key}${variables.length > 0 ? ` --using-template keys ${formatTemplateKeys(variables)}` : ''}`,
         status,
+        variables.length > 0 ? `template variables ${formatTemplateKeys(variables)}` : '',
       ],
       customTypeDescription: definition.name.trim(),
     });

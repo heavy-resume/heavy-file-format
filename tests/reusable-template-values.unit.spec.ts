@@ -2,12 +2,14 @@ import { expect, test } from 'vitest';
 
 import { defaultBlockSchema } from '../src/document-factory';
 import {
+  applyReusableSectionTemplateValues,
   applyReusableTemplateValues,
   extractReusableTemplateVariables,
+  extractReusableTemplateVariablesFromSectionDefinition,
   extractReusableTemplateVariablesFromDefinition,
   validateReusableTemplateValues,
 } from '../src/reusable-template-values';
-import type { ComponentDefinition } from '../src/types';
+import type { ComponentDefinition, SectionDefinition } from '../src/types';
 
 test('extracts reusable template variables in first-seen order with text as the default type', () => {
   const schema = {
@@ -142,6 +144,105 @@ test('substitutes reusable template values recursively and preserves placeholder
   expect(block.schema.placeholder).toBe('Title placeholder');
   expect(block.schema.tableColumns).toEqual(['Name', 'Notes']);
   expect(block.schema.tableRows).toEqual([{ cells: ['', 'Line one\nLine two'] }]);
+});
+
+test('substitutes reusable section template values through section fields and nested rows', () => {
+  const definition: SectionDefinition = {
+    name: 'Resume Section',
+    key: 'resume-section',
+    repeatable: true,
+    templateVariables: {
+      section_title: { label: 'Section title' },
+      row_label: { label: 'Row label' },
+      row_summary: { label: 'Row summary' },
+      row_details: { label: 'Row details' },
+    },
+    template: {
+      key: 'section-1',
+      customId: '',
+      contained: true,
+      editorOnly: false,
+      lock: true,
+      idEditorOpen: false,
+      isGhost: false,
+      title: 'Resume Section',
+      level: 1,
+      expanded: true,
+      highlight: false,
+      priority: false,
+      css: '',
+      tags: '',
+      description: '',
+      location: 'main',
+      hideIfUnmodified: true,
+      templateKey: undefined,
+      blocks: [
+        {
+          id: 'section-title',
+          text: '# {% section_title %}',
+          schema: defaultBlockSchema('text'),
+          schemaMode: false,
+        },
+        {
+          id: 'rows',
+          text: '',
+          schema: {
+            ...defaultBlockSchema('component-list'),
+            componentListBlocks: [
+              {
+                id: 'row',
+                text: '',
+                schema: {
+                  ...defaultBlockSchema('expandable'),
+                  expandableStubBlocks: {
+                    lock: false,
+                    children: [
+                      {
+                        id: 'stub',
+                        text: '',
+                        schema: {
+                          ...defaultBlockSchema('table'),
+                          tableRows: [{ cells: ['{% row_label %}', '{% row_summary %}'] }],
+                        },
+                        schemaMode: false,
+                      },
+                    ],
+                  },
+                  expandableContentBlocks: {
+                    lock: false,
+                    children: [
+                      {
+                        id: 'details',
+                        text: '{% row_details | block %}',
+                        schema: defaultBlockSchema('text'),
+                        schemaMode: false,
+                      },
+                    ],
+                  },
+                },
+                schemaMode: false,
+              },
+            ],
+          },
+          schemaMode: false,
+        },
+      ],
+      children: [],
+    },
+  };
+
+  const variables = extractReusableTemplateVariablesFromSectionDefinition(definition);
+  const section = applyReusableSectionTemplateValues(definition.template, {
+    section_title: 'Awards',
+    row_label: 'Best Paper',
+    row_summary: '2024',
+    row_details: 'Presented at the annual conference.',
+  }, variables);
+
+  expect(variables.map((variable) => variable.name)).toEqual(['section_title', 'row_label', 'row_summary', 'row_details']);
+  expect(section.blocks[0]?.text).toBe('# Awards');
+  expect(section.blocks[1]?.schema.componentListBlocks[0]?.schema.expandableStubBlocks.children[0]?.schema.tableRows[0]?.cells).toEqual(['Best Paper', '2024']);
+  expect(section.blocks[1]?.schema.componentListBlocks[0]?.schema.expandableContentBlocks.children[0]?.text).toBe('Presented at the annual conference.');
 });
 
 test('blank template values clear empty markdown scaffolds so placeholders render', () => {

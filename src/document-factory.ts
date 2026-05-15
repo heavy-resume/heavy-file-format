@@ -4,6 +4,7 @@ import type { ComponentDefinition, VisualDocument } from './types';
 import { makeId, sanitizeOptionalId } from './utils';
 import { getComponentDefs, getComponentDefsFromMeta, getSectionDefs, getSectionTemplateKey, resolveBaseComponent, resolveBaseComponentFromMeta } from './component-defs';
 import { coerceGridColumns, parseGridItems as _parseGridItems } from './grid-ops';
+import { applyReusableSectionTemplateValues, extractReusableTemplateVariablesFromSectionDefinition } from './reusable-template-values';
 import { getTableColumns } from './table-ops';
 import { REUSABLE_SECTION_DEF_PREFIX } from './state';
 
@@ -564,6 +565,10 @@ export function instantiateReusableSection(name: string, level: number): VisualS
     return null;
   }
   const section = cloneReusableSection(def.template, level);
+  const variables = extractReusableTemplateVariablesFromSectionDefinition(def);
+  if (variables.length > 0) {
+    applyReusableSectionTemplateValues(section, Object.fromEntries(variables.map((variable) => [variable.name, ''])), variables);
+  }
   section.templateKey = getSectionTemplateKey(def);
   return section;
 }

@@ -2169,6 +2169,7 @@ test('hvy request_structure lists reusable section templates with availability',
 
   expect(result.output).toContain('Reusable section templates:');
   expect(result.output).toContain('- Certifications key=resume-certifications available - Certifications section template');
+  expect(result.output).toContain('- Resume Section key=resume-section repeatable variables=section_title, row_label, row_summary, row_details - Additional resume section section template');
 });
 
 test('hvy search ranks global skill library and top skills above local skill lists', async () => {
@@ -2335,6 +2336,26 @@ test('hvy insert section can clone reusable section templates', async () => {
   expect(created.cwd).toBe('/body/certifications');
   expect((await executeHvyCliCommand(document, session, 'cat /body/certifications/section.json')).output).toContain('"templateKey": "resume-certifications"');
   expect((await executeHvyCliCommand(document, session, 'cat /body/certifications/component-list-2/component-list.json')).output).toContain('"componentListComponent": "certification-record"');
+});
+
+test('hvy insert section applies reusable section template variables', async () => {
+  const document = createResumeTemplateCliTestDocument();
+  const session = createHvyCliSession();
+
+  await expect(
+    executeHvyCliCommand(document, session, 'hvy insert -1 section /body --from-template resume-section')
+  ).rejects.toThrow('hvy insert section: section template "resume-section" requires --using-template with expected keys: section_title, row_label, row_summary, row_details');
+
+  const created = await executeHvyCliCommand(document, session, 'hvy insert -1 section /body --from-template resume-section --using-template \'{"section_title":"Awards","row_label":"Best Paper","row_summary":"2024","row_details":"Presented at the annual conference."}\'');
+  const expectedResult = (await executeHvyCliCommand(document, session, `cat ${created.output}/raw.hvy`)).output;
+
+  expect(expectedResult).toContain('# Awards');
+  expect((await executeHvyCliCommand(document, session, `cat ${created.output}/component-list-2/component-list.json`)).output).toContain('"componentListComponent": "resume-section-row"');
+  expect(expectedResult).toContain('"tableColumns":["ITEM","SUMMARY"]');
+  expect(expectedResult).toContain('"tableRows":[{"cells":["Best Paper","2024"]}]');
+  expect(expectedResult).toContain('Presented at the annual conference.');
+  expect(expectedResult).toContain('Delete this starter row if it is not needed.');
+  expect((await executeHvyCliCommand(document, session, `cat ${created.output}/section.json`)).output).toContain('"templateKey": "resume-section"');
 });
 
 test('hvy insert section rejects duplicate non-repeatable section templates', async () => {

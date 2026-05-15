@@ -1,6 +1,6 @@
-import type { VisualBlock } from './editor/types';
+import type { VisualBlock, VisualSection } from './editor/types';
 import { createTextFillInMarker } from './text-fill-in';
-import type { ComponentDefinition } from './types';
+import type { ComponentDefinition, SectionDefinition } from './types';
 
 export type ReusableTemplateVariableType = 'text' | 'block';
 
@@ -20,6 +20,13 @@ export function extractReusableTemplateVariablesFromDefinition(definition: Compo
     return [];
   }
   return extractReusableTemplateVariables(source, getReusableTemplateVariableConfig(definition));
+}
+
+export function extractReusableTemplateVariablesFromSectionDefinition(definition: SectionDefinition | null | undefined): ReusableTemplateVariable[] {
+  if (!definition?.template) {
+    return [];
+  }
+  return extractReusableTemplateVariables(definition.template, getReusableTemplateVariableConfig(definition));
 }
 
 export function extractReusableTemplateVariables(value: unknown, config: Record<string, { label?: string; generator?: string; generatorLabel?: string }> = {}): ReusableTemplateVariable[] {
@@ -80,6 +87,16 @@ export function applyReusableTemplateValues(
   return block;
 }
 
+export function applyReusableSectionTemplateValues(
+  section: VisualSection,
+  values: Record<string, string>,
+  variables: ReusableTemplateVariable[] = []
+): VisualSection {
+  replaceTemplateStringsInSection(section, values, getReusableTemplateVariableLabelMap(variables));
+  normalizeSectionTemplatePlaceholderTextBlocks(section);
+  return section;
+}
+
 export function parseReusableTemplateJson(raw: string): Record<string, string> {
   let parsed: unknown;
   try {
@@ -114,7 +131,7 @@ export function humanizeTemplateVariableName(name: string): string {
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-function getReusableTemplateVariableConfig(definition: ComponentDefinition | null | undefined): Record<string, { label?: string; generator?: string; generatorLabel?: string }> {
+function getReusableTemplateVariableConfig(definition: ComponentDefinition | SectionDefinition | null | undefined): Record<string, { label?: string; generator?: string; generatorLabel?: string }> {
   const config = definition?.templateVariables;
   if (!config || typeof config !== 'object' || Array.isArray(config)) {
     return {};
@@ -140,6 +157,28 @@ function getReusableTemplateVariableConfig(definition: ComponentDefinition | nul
     variables[name] = next;
   });
   return variables;
+}
+
+function replaceTemplateStringsInSection(
+  section: VisualSection,
+  values: Record<string, string>,
+  labels: Record<string, string>,
+  seen = new WeakSet<object>()
+): void {
+  if (seen.has(section)) {
+    return;
+  }
+  seen.add(section);
+  section.customId = replaceTemplateStrings(section.customId, values, seen) as string;
+  section.title = replaceTemplateStrings(section.title, values, seen) as string;
+  section.css = replaceTemplateStrings(section.css, values, seen) as string;
+  section.tags = replaceTemplateStrings(section.tags, values, seen) as string;
+  section.description = replaceTemplateStrings(section.description, values, seen) as string;
+  section.templateKey = typeof section.templateKey === 'string'
+    ? replaceTemplateStrings(section.templateKey, values, seen) as string
+    : section.templateKey;
+  section.blocks.forEach((block) => replaceTemplateStringsInBlock(block, values, labels, seen));
+  section.children.forEach((child) => replaceTemplateStringsInSection(child, values, labels, seen));
 }
 
 function getReusableTemplateVariableLabelMap(variables: ReusableTemplateVariable[]): Record<string, string> {
@@ -299,6 +338,11 @@ function normalizeTemplatePlaceholderTextBlocks(block: VisualBlock): void {
   block.schema.gridItems?.forEach((item) => normalizeTemplatePlaceholderTextBlocks(item.block));
   block.schema.expandableStubBlocks?.children.forEach(normalizeTemplatePlaceholderTextBlocks);
   block.schema.expandableContentBlocks?.children.forEach(normalizeTemplatePlaceholderTextBlocks);
+}
+
+function normalizeSectionTemplatePlaceholderTextBlocks(section: VisualSection): void {
+  section.blocks.forEach(normalizeTemplatePlaceholderTextBlocks);
+  section.children.forEach(normalizeSectionTemplatePlaceholderTextBlocks);
 }
 
 function hasVisibleMarkdownText(text: string): boolean {

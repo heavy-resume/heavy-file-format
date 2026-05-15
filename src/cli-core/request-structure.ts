@@ -1,6 +1,7 @@
 import { resolveBaseComponentFromMeta } from '../component-defs';
 import type { JsonObject } from '../hvy/types';
 import { renderAltAnnotationsAsFullText } from '../markdown';
+import { extractReusableTemplateVariablesFromSectionDefinition, formatTemplateKeys } from '../reusable-template-values';
 import type { SectionDefinition, VisualDocument } from '../types';
 import type { HvyVirtualEntry, HvyVirtualFileSystem } from './virtual-file-system';
 
@@ -219,7 +220,9 @@ function formatReusableSectionDefinitions(document: VisualDocument): string[] {
     const description = definition.template.description.trim() || definition.name.trim();
     const repeatable = definition.repeatable === true ? ' repeatable' : '';
     const used = definition.repeatable === true ? '' : ` ${usedTemplateKeys.has(key) ? 'used' : 'available'}`;
-    return `- ${definition.name.trim()} key=${key}${repeatable}${used} - ${description} section template`;
+    const variables = extractReusableTemplateVariablesFromSectionDefinition(definition).map((variable) => variable.name);
+    const variableSummary = variables.length > 0 ? ` variables=${formatTemplateKeys(variables)}` : '';
+    return `- ${definition.name.trim()} key=${key}${repeatable}${used}${variableSummary} - ${description} section template`;
   });
 }
 

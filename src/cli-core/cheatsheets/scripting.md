@@ -50,7 +50,13 @@ summary = doc.tool.request_structure()
 hits = doc.tool.grep(query="TODO", flags="i")
 component = doc.tool.view_component(component_ref="C3")
 doc.tool.patch_component(component_ref="C3", edits=[{"op": "replace", "start_line": 2, "end_line": 2, "text": " New text"}])
+for xref in doc.tool.get_updated_components("xref"):
+    source = xref.get_parent_by_tag("reciprocal-xref-source")
 ```
+
+`get_updated_components` returns nothing during initial document load. Use
+`doc.tool.get_components("xref")` only when the script intentionally needs a
+full scan.
 
 Form scripts also get:
 

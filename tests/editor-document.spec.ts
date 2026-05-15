@@ -430,16 +430,16 @@ test('resume section templates hide already used non-repeatable sections', async
   expect(options).toEqual(['Blank', 'Resume Section']);
 });
 
-test('resume editor script rebuilds reciprocal skill and tool xrefs from tagged sections', async ({ page }) => {
+test('resume editor script does not scan changed reciprocal xrefs on load', async ({ page }) => {
   await page.goto('/');
 
   await page.getByRole('button', { name: 'Resume Example' }).click();
   await page.getByRole('button', { name: 'Raw' }).click();
 
   const rawEditor = page.locator('#rawEditor');
-  await expect(rawEditor).toContainText('reciprocal-xref-generated', { timeout: 5000 });
-  await expect(rawEditor).toContainText('skill-software-engineering-from-history-northwind-labs-senior-software-engineer');
-  await expect(rawEditor).toContainText('tool-python-from-education-bs-computer-science');
+  await expect(rawEditor).toContainText('reciprocal-xrefs: targets", len(targets)');
+  await expect(rawEditor).not.toContainText('skill-software-engineering-from-history-northwind-labs-senior-software-engineer');
+  await expect(rawEditor).not.toContainText('tool-python-from-education-bs-computer-science');
   await expect(rawEditor).not.toContainText('skill-software-engineering-from-top-skills-list');
 });
 

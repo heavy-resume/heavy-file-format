@@ -71,6 +71,34 @@ test('documentLoad runs for new document identity and documentChange runs for sa
   expect(expectedResult).toEqual(['load:load', 'before edit', 'change:edit', 'load:load']);
 });
 
+test('document edits made during a hook do not enqueue a follow-up hook pass', async () => {
+  const expectedResult: string[] = [];
+  setHostPlugins([
+    createHookPlugin('script-like-plugin', {
+      documentLoad: {
+        run: async () => {
+          expectedResult.push('load');
+          const section = state.document.sections[0];
+          if (!section) throw new Error('Expected section');
+          section.title = 'Changed by hook';
+          await runPluginDocumentHooks('plugin-edit');
+        },
+      },
+      documentChange: {
+        run: () => {
+          expectedResult.push('change');
+        },
+      },
+    }),
+  ]);
+  bootstrap();
+
+  await runPluginDocumentHooks('load');
+  await runPluginDocumentHooks('unknown');
+
+  expect(expectedResult).toEqual(['load']);
+});
+
 test('document hook context includes the current document view', async () => {
   const expectedResult: string[] = [];
   setHostPlugins([

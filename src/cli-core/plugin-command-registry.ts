@@ -50,6 +50,7 @@ const SCRIPTING_DOC_TOOL_NAMES = [
   'patch_component',
   'create_component',
   'remove_component',
+  'get_updated_components',
   'create_section',
   'remove_section',
   'reorder_section',
@@ -59,6 +60,7 @@ const SCRIPTING_DOC_TOOL_NAMES = [
 ];
 
 const SCRIPTING_HEADER_TOOL_HELP: Record<string, string> = {
+  get_updated_components: 'doc.tool.get_updated_components("xref") returns script component handles after document updates; on initial load it returns none. Use doc.tool.get_components("xref") for an explicit full scan. Handles include get(name), set(name, value), has_tag(tag), get_parent_by_tag(tag), get_ancestor_record(excluded_tags), remove_children_by_tag(tag), and append_child(component, config, text, slot).',
   view_header: '{"tool":"view_header","start_line":1,"end_line":120,"reason":"optional"}',
   grep_header: '{"tool":"grep_header","query":"component_defs|skill-card","flags":"i","before":2,"after":8,"max_count":3,"reason":"optional"}',
   patch_header: '{"tool":"patch_header","edits":[{"op":"replace","start_line":2,"end_line":2,"text":"title: New title"}],"reason":"optional"}',

@@ -1,6 +1,7 @@
 import { loadBrython, getBrython } from './brython-loader';
 import { createScriptingRuntime, type ScriptingFormApi, type ScriptingRuntime } from './runtime';
 import type { VisualDocument } from '../../types';
+import type { HvyPluginHookChangeReason } from '../types';
 import { getScriptingPluginVersion, SCRIPTING_PLUGIN_VERSION } from './version';
 import { createScriptingDbRuntime } from '../db-table';
 
@@ -401,6 +402,15 @@ def __hvy_blocked_import__(*args, **kwargs):
     raise RuntimeError("Import statements are not allowed in HVY scripts.")
 
 
+def __hvy_print__(*values, sep=' ', end='\\n', file=None, flush=False):
+    if file is not None:
+        raise RuntimeError("print(file=...) is not supported in HVY scripts.")
+    text = str(sep).join([str(value) for value in values]) + str(end)
+    if text.endswith('\\n'):
+        text = text[:-1]
+    __hvy_runtime__.doc.log_json(__hvy_to_json__([text]))
+
+
 __hvy_safe_builtins__ = {
     'abs': abs,
     'all': all,
@@ -415,7 +425,7 @@ __hvy_safe_builtins__ = {
     'list': list,
     'max': max,
     'min': min,
-    'print': print,
+    'print': __hvy_print__,
     'range': range,
     'round': round,
     'set': set,
@@ -432,9 +442,48 @@ __hvy_safe_builtins__ = {
 }
 
 
+def __hvy_json_escape__(value):
+    out = '"'
+    for ch in str(value):
+        if ch == '\\\\':
+            out += '\\\\\\\\'
+        elif ch == '"':
+            out += '\\\\"'
+        elif ch == '\\n':
+            out += '\\\\n'
+        elif ch == '\\r':
+            out += '\\\\r'
+        elif ch == '\\t':
+            out += '\\\\t'
+        else:
+            out += ch
+    return out + '"'
+
+
+def __hvy_to_json__(value):
+    if value is None:
+        return 'null'
+    if value is True:
+        return 'true'
+    if value is False:
+        return 'false'
+    if isinstance(value, (int, float)):
+        return str(value)
+    if isinstance(value, str):
+        return __hvy_json_escape__(value)
+    if isinstance(value, (list, tuple)):
+        return '[' + ','.join([__hvy_to_json__(item) for item in value]) + ']'
+    if isinstance(value, dict):
+        parts = []
+        for key, item in value.items():
+            parts.append(__hvy_json_escape__(key) + ':' + __hvy_to_json__(item))
+        return '{' + ','.join(parts) + '}'
+    return __hvy_json_escape__(value)
+
+
 class __HvyToolProxy__:
-    def __init__(self, js_tool):
-        self.__js_tool = js_tool
+    def __init__(self, js_doc):
+        self.__js_doc = js_doc
 
     def __call__(self, name, args=None, **kwargs):
         if args is None:
@@ -444,24 +493,34 @@ class __HvyToolProxy__:
         else:
             raise TypeError("doc.tool args must be a dict when provided")
         merged.update(kwargs)
-        return self.__js_tool(name, merged)
+        return self.__js_doc.tool_json(name, __hvy_to_json__(merged))
 
     def __getattr__(self, name):
-        def __hvy_named_tool__(args=None, **kwargs):
-            return self(name, args, **kwargs)
+        def __hvy_named_tool__(*args, **kwargs):
+            if len(args) == 0:
+                return self(name, None, **kwargs)
+            if len(args) == 1:
+                if name in ("get_updated_components", "get_components") and not isinstance(args[0], dict):
+                    merged = {"component": args[0]}
+                    merged.update(kwargs)
+                    return self(name, merged)
+                return self(name, args[0], **kwargs)
+            raise TypeError("doc.tool.NAME accepts at most one positional args dict")
         return __hvy_named_tool__
 
 
 class __HvyDocProxy__:
     def __init__(self, js_doc):
         self.__js_doc = js_doc
-        self.tool = __HvyToolProxy__(js_doc.tool)
+        self.tool = __HvyToolProxy__(js_doc)
 
     def __getattr__(self, name):
         return getattr(self.__js_doc, name)
 
 
 def __hvy_trace__(frame, event, arg):
+    if frame.f_code.co_filename != '<${traceLabel}>':
+        return None
     if event == 'line':
         __hvy_user_step__()
     return __hvy_trace__
@@ -476,7 +535,7 @@ try:
     except Exception:
         __hvy_trace_enabled__ = False
 
-    __hvy_compilable_source__ = __hvy_instrumented_source__
+    __hvy_compilable_source__ = __hvy_source__ if __hvy_trace_enabled__ else __hvy_instrumented_source__
     __hvy_code__ = compile(__hvy_compilable_source__, '<${traceLabel}>', 'exec')
     __hvy_user_globals__ = {
         '__hvy_step__': __hvy_user_step__,
@@ -526,6 +585,7 @@ export interface ScriptingRunResult {
   errorDetail?: string;
   linesExecuted: number;
   toolCalls: number;
+  logs?: string[];
   returnValue?: unknown;
 }
 
@@ -535,6 +595,7 @@ export interface RunUserScriptOptions {
   componentId?: string;
   pluginVersion?: string;
   maxLines?: number;
+  changeReason?: HvyPluginHookChangeReason;
   form?: ScriptingFormApi;
   injectedGlobals?: Record<string, unknown>;
 }
@@ -588,6 +649,7 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
   runtime = createScriptingRuntime({
     document: options.document,
     maxLines: options.maxLines,
+    changeReason: options.changeReason,
     form: options.form,
     db: scriptingDb.api,
   });
@@ -617,12 +679,14 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
             errorDetail: cleanScriptingErrorDetail(error),
             linesExecuted: runtime.stats.linesExecuted,
             toolCalls: runtime.stats.toolCalls,
+            logs: [...runtime.stats.logs],
           }
         : {
             ok: true,
             linesExecuted: runtime.stats.linesExecuted,
             toolCalls: runtime.stats.toolCalls,
             returnValue: scripting.results[runtimeId],
+            logs: [...runtime.stats.logs],
           };
 
       delete scripting.runtimes[runtimeId];

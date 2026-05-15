@@ -22,6 +22,7 @@ interface OrderedHookHandler {
 let lastHookDocument: VisualDocument | null = null;
 let lastHookSignature = '';
 let hookRun = Promise.resolve();
+let hookRunDepth = 0;
 
 function normalizeHandlers(value: HvyPluginHookHandler | HvyPluginHookHandler[] | undefined): HvyPluginHookHandler[] {
   if (!value) {
@@ -64,15 +65,20 @@ function createHookContext(document: VisualDocument, changeReason: HvyPluginHook
 }
 
 async function runHookHandlers(hookName: DocumentHookName, ctx: HvyDocumentHookContext): Promise<void> {
-  for (const { handler } of getOrderedHandlers(hookName, getHostPlugins())) {
-    if (!ctx.isCurrentDocument()) {
-      return;
+  hookRunDepth += 1;
+  try {
+    for (const { handler } of getOrderedHandlers(hookName, getHostPlugins())) {
+      if (!ctx.isCurrentDocument()) {
+        return;
+      }
+      try {
+        await handler.run(ctx);
+      } catch {
+        // A plugin hook should not prevent later document lifecycle handling.
+      }
     }
-    try {
-      await handler.run(ctx);
-    } catch {
-      // A plugin hook should not prevent later document lifecycle handling.
-    }
+  } finally {
+    hookRunDepth = Math.max(0, hookRunDepth - 1);
   }
 }
 
@@ -93,6 +99,10 @@ export function runPluginDocumentHooks(changeReason: HvyPluginHookChangeReason =
 
   lastHookDocument = document;
   lastHookSignature = signature;
+
+  if (hookRunDepth > 0) {
+    return Promise.resolve();
+  }
 
   if (!hookName) {
     return hookRun;

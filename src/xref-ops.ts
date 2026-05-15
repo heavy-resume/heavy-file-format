@@ -1,6 +1,7 @@
 import type { VisualBlock } from './editor/types';
 import { state } from './state';
 import { flattenSections, formatSectionTitle, getSectionId } from './section-ops';
+import { resolveBaseComponentFromMeta } from './component-defs';
 
 export function normalizeXrefTarget(target: string): string {
   const trimmed = target.trim();
@@ -102,11 +103,12 @@ function visitBlocksForXrefOptions(
       if (id.length > 0 && matchesTagFilter(combinedTags, requestedTags)) {
         add(id, describeBlockTarget(block), describeBlockTargetDetail(block));
       }
-      visitList(block.schema.containerBlocks ?? [], combinedTags);
-      visitList(block.schema.componentListBlocks ?? [], combinedTags);
-      visitList((block.schema.gridItems ?? []).map((item) => item.block), combinedTags);
-      visitList(block.schema.expandableStubBlocks?.children ?? [], combinedTags);
-      visitList(block.schema.expandableContentBlocks?.children ?? [], combinedTags);
+      const childTags = shouldPropagateXrefTargetTags(block) ? combinedTags : inheritedTags;
+      visitList(block.schema.containerBlocks ?? [], childTags);
+      visitList(block.schema.componentListBlocks ?? [], childTags);
+      visitList((block.schema.gridItems ?? []).map((item) => item.block), childTags);
+      visitList(block.schema.expandableStubBlocks?.children ?? [], childTags);
+      visitList(block.schema.expandableContentBlocks?.children ?? [], childTags);
     });
   };
 
@@ -119,6 +121,13 @@ function visitBlocksForXrefOptions(
   };
 
   visitSections(state.document.sections, '');
+}
+
+function shouldPropagateXrefTargetTags(block: VisualBlock): boolean {
+  const baseComponent = resolveBaseComponentFromMeta(block.schema.component, state.document.meta);
+  return baseComponent === 'component-list'
+    || baseComponent === 'container'
+    || baseComponent === 'grid';
 }
 
 function matchesTagFilter(tags: string, requestedTags: string[]): boolean {

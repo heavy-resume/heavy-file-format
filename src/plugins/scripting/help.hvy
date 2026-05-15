@@ -46,6 +46,8 @@ programmatically. Scripts cannot reach the network — they only see the
    is available. Use the relevant plugin's help for that API.
  - `doc.rerender()` — flush any pending re-render now (usually unnecessary;
    the host re-renders automatically when the script finishes).
+ - `print(...)` — write a line to the script run log shown below the script
+   in the editor. On failure, printed lines are shown above the traceback.
 
 <!--hvy: {"id":"tools","expanded":false}-->
 #! Available tools
@@ -63,6 +65,8 @@ programmatically. Scripts cannot reach the network — they only see the
  - `get_css` / `get_properties` / `set_properties`.
  - `patch_component` — `{ "component_ref": "C3", "edits": [...] }`.
  - `create_component` / `remove_component`.
+ - `get_updated_components` — return script component handles for local traversal/mutation after document updates. On initial document load, this returns no components.
+ - `get_components` — return all matching script component handles when a script explicitly needs a full scan.
  - `create_section` / `remove_section` / `reorder_section`.
 
  Header tools:

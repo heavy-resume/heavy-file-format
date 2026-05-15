@@ -143,3 +143,35 @@ component_defs:
   expect(expectedResult?.label).toBe('Foo (skill-foo)');
   expect(expectedResult?.label).not.toContain('{% skill %}');
 });
+
+test('xref target options do not inherit record tags into generated reciprocal children', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+component_defs:
+  - name: skill-xref-card
+    baseType: xref-card
+    schema:
+      xrefTargetTagFilter: skill
+---
+
+<!--hvy: {"id":"skills"}-->
+#! Skills
+
+ <!--hvy:skill-record {"id":"skill-python","tags":"skill","xrefTitle":"Python"}-->
+
+  <!--hvy:expandable:content {}-->
+
+   <!--hvy:text {"id":"skill-python-reciprocal-history-heading","tags":"reciprocal-xref-generated"}-->
+    #### Experience
+
+   <!--hvy:xref-card {"id":"skill-python-from-history-acme","tags":"reciprocal-xref-generated","xrefTitle":"{% role %}","xrefDetail":"{% organization %}","xrefTarget":"history-acme"}-->
+`, '.hvy');
+
+  initState(createTestState(document));
+
+  const expectedResult = getXrefTargetOptions('skill');
+
+  expect(expectedResult.map((option) => option.value)).toEqual(['skill-python']);
+  expect(expectedResult.map((option) => option.label).join('\n')).not.toContain('{% role %}');
+  expect(expectedResult.map((option) => option.label).join('\n')).not.toContain('{% organization %}');
+});

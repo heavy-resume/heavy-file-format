@@ -74,7 +74,8 @@ test('buildPythonProgram exposes doc.tool attributes with keyword arguments', ()
   expect(expectedResult).toContain('def __call__(self, name, args=None, **kwargs):');
   expect(expectedResult).toContain('def __getattr__(self, name):');
   expect(expectedResult).toContain('merged.update(kwargs)');
-  expect(expectedResult).toContain('self.tool = __HvyToolProxy__(js_doc.tool)');
+  expect(expectedResult).toContain('return self.__js_doc.tool_json(name, __hvy_to_json__(merged))');
+  expect(expectedResult).toContain('self.tool = __HvyToolProxy__(js_doc)');
   expect(expectedResult).toContain("'doc': __HvyDocProxy__(__hvy_runtime__.doc)");
 });
 
@@ -110,11 +111,12 @@ finally:
   );
 });
 
-test('buildPythonProgram uses instrumented source for deterministic line budgets', () => {
+test('buildPythonProgram traces user frames and falls back to instrumented source', () => {
   const program = buildPythonProgram('r7');
   expect(program).toContain("import sys as __hvy_sys__");
   expect(program).toContain("__hvy_sys__.settrace(__hvy_trace__)");
-  expect(program).toContain("__hvy_compilable_source__ = __hvy_instrumented_source__");
+  expect(program).toContain("if frame.f_code.co_filename != '<hvy-script>':");
+  expect(program).toContain("__hvy_compilable_source__ = __hvy_source__ if __hvy_trace_enabled__ else __hvy_instrumented_source__");
   expect(program).not.toContain('NodeTransformer');
   expect(program).not.toContain('visit_Compare');
 });
@@ -125,6 +127,8 @@ test('buildPythonProgram executes user code with restricted builtins', () => {
   expect(program).toContain('__hvy_safe_builtins__ = {');
   expect(program).toContain("'__builtins__': __hvy_safe_builtins__");
   expect(program).toContain("'__import__': __hvy_blocked_import__");
+  expect(program).toContain("'print': __hvy_print__");
+  expect(program).toContain('__hvy_runtime__.doc.log_json(__hvy_to_json__([text]))');
   expect(program).toContain('raise RuntimeError("Custom eval globals are not allowed in HVY scripts.")');
 });
 
@@ -288,6 +292,16 @@ test('createScriptingRuntime reports when the line budget is exceeded', () => {
   expect(runtime.stats.linesExecuted).toBe(3);
 });
 
+test('createScriptingRuntime stores script logs', () => {
+  const runtime = createScriptingRuntime({
+    document: { meta: {}, extension: '.hvy', sections: [], attachments: [] },
+  });
+
+  runtime.doc.log_json('["before",{"count":2}]');
+
+  expect(runtime.stats.logs).toEqual(['before {"count":2}']);
+});
+
 test('createScriptingRuntime component set_text clears stale fill-in state', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
@@ -357,6 +371,56 @@ hvy_version: 0.1
   expect(runtime.doc.cli.run('cat /id/note/text.json')).toContain('"css": "margin: 0;"');
 });
 
+test('createScriptingRuntime exposes component handles for reciprocal xref scripts after updates', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"history","tags":"reciprocal-xref-source"}-->
+#! Experience
+
+ <!--hvy:history-record {"id":"history-acme","xrefTitle":"Acme Platform","xrefDetail":"Staff Engineer"}-->
+
+  <!--hvy:xref-card {"id":"history-acme-python","xrefTarget":"skill-python"}-->
+
+<!--hvy: {"id":"skills"}-->
+#! Skills
+
+ <!--hvy:skill-record {"id":"skill-python","tags":"skill"}-->
+  Python
+
+  <!--hvy:expandable:content {}-->
+`, '.hvy');
+  const runtime = createScriptingRuntime({ document, changeReason: 'edit' });
+  const xref = runtime.doc.tool('get_updated_components', { component: 'xref' }) as Array<{
+    get(name: string): unknown;
+    get_parent_by_tag(tag: string): { section_id: string } | null;
+  }>;
+
+  expect(xref[0]?.get('xrefTarget')).toBe('skill-python');
+  expect(xref[0]?.get_parent_by_tag('reciprocal-xref-source')?.section_id).toBe('history');
+  expect(runtime.stats.toolCalls).toBe(1);
+});
+
+test('createScriptingRuntime returns no updated components during document load', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"history","tags":"reciprocal-xref-source"}-->
+#! Experience
+
+ <!--hvy:xref-card {"id":"history-acme-python","xrefTarget":"skill-python"}-->
+`, '.hvy');
+  const runtime = createScriptingRuntime({ document, changeReason: 'load' });
+
+  const updated = runtime.doc.tool('get_updated_components', { component: 'xref' }) as unknown[];
+  const all = runtime.doc.tool('get_components', { component: 'xref' }) as unknown[];
+
+  expect(updated).toEqual([]);
+  expect(all).toHaveLength(1);
+});
+
 test('createScriptingRuntime points db-table SQL callers at doc.db instead of cli', () => {
   const runtime = createScriptingRuntime({
     document: { meta: {}, extension: '.hvy', sections: [], attachments: [] },
@@ -371,7 +435,7 @@ test('createScriptingRuntime points db-table SQL callers at doc.db instead of cl
   );
 });
 
-test('scripting hooks run editor-only scripts only in editor view', () => {
+test('scripting hooks run editor-only scripts in editor and AI views', () => {
   const targets = [
     {
       sectionKey: 'section',
@@ -393,5 +457,5 @@ test('scripting hooks run editor-only scripts only in editor view', () => {
 
   expect(getRunnableScriptingTargetsForView(targets, 'editor').map((target) => target.blockId)).toEqual(['editor-script']);
   expect(getRunnableScriptingTargetsForView(targets, 'viewer').map((target) => target.blockId)).toEqual(['document-script']);
-  expect(getRunnableScriptingTargetsForView(targets, 'ai').map((target) => target.blockId)).toEqual(['document-script']);
+  expect(getRunnableScriptingTargetsForView(targets, 'ai').map((target) => target.blockId)).toEqual(['editor-script']);
 });

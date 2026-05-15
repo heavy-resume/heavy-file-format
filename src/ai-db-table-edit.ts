@@ -138,6 +138,7 @@ export async function requestAiDbTableEdit(params: {
   request: string;
   onBeforeMutation?: () => void;
   client?: HostChatClient | null;
+  beforeLlmCall?: (debugLabel: string) => Promise<void> | void;
 }): Promise<AiEditRequestResult> {
   const tableName = typeof params.block.schema.pluginConfig.table === 'string'
     ? params.block.schema.pluginConfig.table.trim()
@@ -188,6 +189,7 @@ export async function requestAiDbTableEdit(params: {
       mode: 'component-edit',
       debugLabel: `ai-db-table-edit:${iteration + 1}`,
       client: params.client,
+      beforeRequest: params.beforeLlmCall,
     });
 
     const parsed = parseDbTableEditToolRequest(response);

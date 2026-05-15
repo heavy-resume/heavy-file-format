@@ -433,7 +433,8 @@ export async function executeEditComponentTool(
   document: VisualDocument,
   settings: ChatSettings,
   onMutation?: (group?: string) => void,
-  client?: HostChatClient | null
+  client?: HostChatClient | null,
+  beforeLlmCall?: (debugLabel: string) => Promise<void> | void
 ): Promise<string> {
   const component = resolveComponentRef(snapshot, request.component_ref);
   if (!component) {
@@ -452,6 +453,7 @@ export async function executeEditComponentTool(
     block,
     request: request.request,
     client,
+    beforeLlmCall,
   });
 
   onMutation?.('ai-edit:block');

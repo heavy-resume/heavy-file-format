@@ -283,7 +283,8 @@ hvy_version: 0.1
     }
     const responses = [
       'AI note: use summary.',
-      '{"tool":"done","summary":"Finished without additional changes."}',
+      '{"tool":"create_component","position":"append-to-section","section_ref":"summary","hvy":"<!--hvy:text {\\"id\\":\\"imported-after-diagnostic\\"}-->\\n Imported despite diagnostic","reason":"Mutate before diagnostics run."}',
+      '{"tool":"done","summary":"Imported text."}',
     ];
     const calls: unknown[] = [];
     const progress: string[] = [];
@@ -295,7 +296,7 @@ hvy_version: 0.1
     const importResult = await mount.importFromText({
       sourceName: 'bad.txt',
       sourceText: 'Bad card',
-      steps: ['Check the existing import target'],
+      steps: ['Add imported text'],
       llm: {
         settings: { provider: 'openai', model: 'mock-import-model' },
         client: {
@@ -326,6 +327,7 @@ hvy_version: 0.1
   expect(result.result.status).toBe('error');
   expect(result.result.message).toContain('expandable block is missing');
   expect(result.html).toContain('Existing content');
+  expect(result.html).toContain('Imported despite diagnostic');
 });
 
 test('new section component picker opens on the first click', async ({ page }) => {

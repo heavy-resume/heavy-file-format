@@ -18,6 +18,7 @@ export async function requestAiDocumentNotes(params: {
   traceRunId?: string;
   signal?: AbortSignal;
   client?: HostChatClient | null;
+  beforeLlmCall?: (debugLabel: string) => Promise<void> | void;
 }): Promise<string> {
   params.onProgress?.('Reviewing document chunks and taking section notes.');
   const notes = await requestProxyCompletion({
@@ -36,6 +37,7 @@ export async function requestAiDocumentNotes(params: {
     traceRunId: params.traceRunId,
     signal: params.signal,
     client: params.client,
+    beforeRequest: params.beforeLlmCall,
   });
   const trimmed = notes.trim();
   console.debug('[hvy:ai-document-edit] AI document notes', {

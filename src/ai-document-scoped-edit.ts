@@ -185,10 +185,18 @@ export interface HvyImportLlmOptions {
   client?: HostChatClient | null;
 }
 
+export interface HvyImportLlmStepEvent {
+  callIndex: number;
+  debugLabel: string;
+  phase: HvyImportProgressPhase;
+}
+
 export interface BuildImportPlanOptions {
   sourceName: string;
   sourceText: string;
+  instructions?: string;
   llm?: HvyImportLlmOptions;
+  beforeLlmCall?: (event: HvyImportLlmStepEvent) => Promise<void> | void;
   onProgress?: (event: HvyImportProgressEvent) => void;
   signal?: AbortSignal;
 }
@@ -202,8 +210,10 @@ export interface BuildImportPlanResult {
 export interface ImportFromTextOptions {
   sourceName: string;
   sourceText: string;
+  instructions?: string;
   steps: string[];
   llm?: HvyImportLlmOptions;
+  beforeLlmCall?: (event: HvyImportLlmStepEvent) => Promise<void> | void;
   onProgress?: (event: HvyImportProgressEvent) => void;
   signal?: AbortSignal;
 }
@@ -225,8 +235,10 @@ export async function buildImportPlanForDocument(
       settings: llm.settings,
       client: llm.client,
       document,
-      request: buildImportRequest(options.sourceName, options.sourceText),
+      request: buildImportRequest(options.sourceName, options.instructions),
+      stableContext: buildImportSourceContext(options.sourceName, options.sourceText),
       mode: { kind: 'plan-only' },
+      createBeforeLlmCall: createImportLlmStepper(options.beforeLlmCall, options.signal),
       onProgress: (content) => options.onProgress?.(mapImportLoopProgress(content)),
       signal: options.signal,
     });
@@ -260,8 +272,10 @@ export async function importTextIntoDocument(
       settings: llm.settings,
       client: llm.client,
       document,
-      request: buildImportRequest(options.sourceName, options.sourceText),
+      request: buildImportRequest(options.sourceName, options.instructions),
+      stableContext: buildImportSourceContext(options.sourceName, options.sourceText),
       mode: { kind: 'execute-approved-plan', steps },
+      createBeforeLlmCall: createImportLlmStepper(options.beforeLlmCall, options.signal),
       onMutation: options.onMutation,
       onProgress: (content) => options.onProgress?.(mapImportLoopProgress(content)),
       signal: options.signal,
@@ -315,7 +329,9 @@ async function runDocumentEditToolLoop(params: {
   client?: HostChatClient | null;
   document: VisualDocument;
   request: string;
+  stableContext?: string;
   mode?: DocumentEditLoopMode;
+  createBeforeLlmCall?: (phase: HvyImportProgressPhase) => ((debugLabel: string) => Promise<void>) | undefined;
   onMutation?: (group?: string) => void;
   onProgress?: (content: string) => void;
   traceRunId?: string;
@@ -334,18 +350,26 @@ async function runDocumentEditToolLoop(params: {
   console.debug('[hvy:ai-document-edit] preparing document chunks for note-taking');
   const documentChunks = buildDocumentWalkChunks(params.document, snapshot);
   logDocumentWalkChunks(documentChunks, params.traceRunId, params.signal);
+  const noteChunks = params.stableContext?.trim()
+    ? {
+        text: [documentChunks.text, params.stableContext.trim()].join('\n\n'),
+        chunkCount: documentChunks.chunkCount,
+      }
+    : documentChunks;
   const aiDocumentNotes = isLikelyInformationalAnswerRequest(params.request)
     ? 'Skipped note-taking because the request appears informational.'
     : await requestAiDocumentNotes({
         settings: params.settings,
         client: params.client,
         request: params.request,
-        chunks: documentChunks,
+        chunks: noteChunks,
+        beforeLlmCall: params.createBeforeLlmCall?.('thinking'),
         traceRunId: params.traceRunId,
         signal: params.signal,
       });
   let contextSummary = buildDocumentEditContextSummary(
     [
+      ...(params.stableContext?.trim() ? [params.stableContext.trim(), ''] : []),
       'AI-generated document notes:',
       aiDocumentNotes,
       '',
@@ -402,6 +426,7 @@ async function runDocumentEditToolLoop(params: {
       debugLabel: `ai-document-edit:${iteration + 1}`,
       traceRunId: params.traceRunId,
       signal: params.signal,
+      beforeRequest: params.createBeforeLlmCall?.('thinking'),
     });
 
     const parsed = parseDocumentEditToolRequest(response);
@@ -501,7 +526,7 @@ async function runDocumentEditToolLoop(params: {
             callResult = await executeViewRenderedComponentTool(call, snapshot, params.document);
             contextSummary = await refreshDbContext(SENT_STRUCTURE_CONTEXT);
           } else if (call.tool === 'edit_component') {
-            callResult = await executeEditComponentTool(call, snapshot, params.document, params.settings, params.onMutation, params.client);
+            callResult = await executeEditComponentTool(call, snapshot, params.document, params.settings, params.onMutation, params.client, params.createBeforeLlmCall?.('tool_call'));
             snapshot = summarizeDocumentStructure(params.document);
             contextSummary = await refreshDbContext(SENT_STRUCTURE_CONTEXT);
           } else if (call.tool === 'patch_component') {
@@ -679,7 +704,7 @@ async function runDocumentEditToolLoop(params: {
       params.onProgress?.(describeDocumentToolProgress(parsed.value));
       toolResult = buildToolResult(
         'edit_component',
-        await executeEditComponentTool(parsed.value, snapshot, params.document, params.settings, params.onMutation, params.client)
+        await executeEditComponentTool(parsed.value, snapshot, params.document, params.settings, params.onMutation, params.client, params.createBeforeLlmCall?.('tool_call'))
       );
       snapshot = summarizeDocumentStructure(params.document);
       contextSummary = await refreshDbContext(SENT_STRUCTURE_CONTEXT);
@@ -916,12 +941,24 @@ function isReadOnlyPlanningTool(tool: DocumentEditBatchToolRequest['tool'] | 'an
     || tool === 'query_db_table';
 }
 
-function buildImportRequest(sourceName: string, sourceText: string): string {
+function buildImportRequest(sourceName: string, instructions?: string): string {
   return [
     `Import source "${sourceName}" into the currently loaded HVY document.`,
     '',
+    'Treat the current document primarily as the starting template/scaffold for a new document unless the approved plan says to preserve specific existing content.',
     'Reconcile the imported text with the existing document. Build reusable HVY structure and components rather than pasting the import as one opaque text blob.',
     'Preserve relevant existing content unless the import clearly replaces it.',
+    'Use only facts present in the imported source text or already present in the current document. Do not invent dates, titles, employers, schools, credentials, metrics, skills, links, or other factual details.',
+    'Preserve exact source dates, names, titles, organization names, school names, skill names, and tool names unless the approved plan explicitly says to normalize them.',
+    'Prefer reusable HVY components and existing reusable definitions when the current document has matching structure.',
+    instructions?.trim() ? ['Additional import instructions:', instructions.trim()].join('\n') : '',
+  ].join('\n');
+}
+
+function buildImportSourceContext(sourceName: string, sourceText: string): string {
+  return [
+    'Import source context (stable across planning and execution turns; treat this as source-of-truth input for the import):',
+    `Source name: ${sourceName}`,
     '',
     'Imported source text:',
     '```text',
@@ -935,6 +972,26 @@ function requireImportLlm(llm: HvyImportLlmOptions | undefined): HvyImportLlmOpt
     throw new Error('Import requires an LLM configuration.');
   }
   return llm;
+}
+
+function createImportLlmStepper(
+  beforeLlmCall: BuildImportPlanOptions['beforeLlmCall'] | undefined,
+  signal: AbortSignal | undefined
+): ((phase: HvyImportProgressPhase) => ((debugLabel: string) => Promise<void>) | undefined) | undefined {
+  if (!beforeLlmCall) {
+    return undefined;
+  }
+  let callIndex = 0;
+  return (phase) => async (debugLabel) => {
+    throwIfAborted(signal);
+    callIndex += 1;
+    await beforeLlmCall({
+      callIndex,
+      debugLabel,
+      phase,
+    });
+    throwIfAborted(signal);
+  };
 }
 
 function mapImportLoopProgress(content: string): HvyImportProgressEvent {

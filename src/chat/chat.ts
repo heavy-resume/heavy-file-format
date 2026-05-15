@@ -102,6 +102,7 @@ export interface ProxyCompletionParams {
   onTokenUsage?: (usage: ChatTokenUsage) => void;
   signal?: AbortSignal;
   client?: HostChatClient | null;
+  beforeRequest?: (debugLabel: string) => Promise<void> | void;
 }
 
 export interface ProxyToolTurnParams extends Omit<ProxyCompletionParams, 'responseInstructions'> {
@@ -517,6 +518,7 @@ export async function requestProxyCompletion(params: ProxyCompletionParams): Pro
     contextLength: requestPayload.context.length,
     hostManaged: !!hostClient,
   });
+  await params.beforeRequest?.(debugLabel);
 
   if (hostClient) {
     const payload = await hostClient.complete(requestPayload, {
@@ -598,6 +600,7 @@ export async function requestProxyToolTurn(params: ProxyToolTurnParams): Promise
     hasToolState: !!params.toolState,
     hostManaged: !!hostClient,
   });
+  await params.beforeRequest?.(debugLabel);
 
   if (hostClient) {
     const payload = hostClient.toolTurn

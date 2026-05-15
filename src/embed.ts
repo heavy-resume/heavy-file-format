@@ -453,6 +453,7 @@ async function importFromText(options: ImportFromTextOptions): Promise<ImportFro
   const diagnostics = deserializeDocumentWithDiagnostics(serialized, state.document.extension).diagnostics;
   const errors = diagnostics.filter((diagnostic) => diagnostic.severity === 'error');
   if (errors.length > 0) {
+    renderApp();
     return {
       status: 'error',
       message: errors.map((diagnostic) => diagnostic.message).join(' '),
@@ -524,6 +525,7 @@ export type { HvyLinkObserver, HvyLinkObserverRequest, HvyLinkObserverResponse }
 export type {
   BuildImportPlanOptions,
   BuildImportPlanResult,
+  HvyImportLlmStepEvent,
   HvyImportLlmOptions,
   HvyImportProgressEvent,
   HvyImportProgressPhase,

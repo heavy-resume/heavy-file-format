@@ -20,6 +20,7 @@ export async function requestAiComponentEdit(params: {
   request: string;
   onBeforeMutation?: () => void;
   client?: HostChatClient | null;
+  beforeLlmCall?: (debugLabel: string) => Promise<void> | void;
 }): Promise<AiEditRequestResult> {
   const { isDbTablePluginBlock, requestAiDbTableEdit } = await import('./ai-db-table-edit');
   if (isDbTablePluginBlock(params.block)) {
@@ -30,6 +31,7 @@ export async function requestAiComponentEdit(params: {
       request: params.request,
       onBeforeMutation: params.onBeforeMutation,
       client: params.client,
+      beforeLlmCall: params.beforeLlmCall,
     });
   }
 
@@ -56,6 +58,7 @@ export async function requestAiComponentEdit(params: {
     mode: 'component-edit',
     debugLabel: 'ai-edit',
     client: params.client,
+    beforeRequest: params.beforeLlmCall,
   });
 
   let parsed = parseAiBlockEditResponse(response);
@@ -91,6 +94,7 @@ export async function requestAiComponentEdit(params: {
       mode: 'component-edit',
       debugLabel: 'ai-edit-repair',
       client: params.client,
+      beforeRequest: params.beforeLlmCall,
     });
     parsed = parseAiBlockEditResponse(response);
     if (!parsed.hasErrors && parsed.canonicalFragment.trim() === originalFragment.trim()) {

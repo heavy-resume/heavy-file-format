@@ -348,15 +348,18 @@ hvy_version: 0.1
 `, '.hvy');
   const before = serializeDocument(document);
   const progress = vi.fn();
+  const beforeLlmCall = vi.fn();
   const importClient = { complete: vi.fn() };
 
   const result = await buildImportPlanForDocument(document, {
     sourceName: 'notes.txt',
     sourceText: 'Imported summary',
+    instructions: 'Keep resume entries in reverse chronological order.',
     llm: {
       settings: { provider: 'openai', model: 'gpt-5-mini' },
       client: importClient,
     },
+    beforeLlmCall,
     onProgress: progress,
   });
 
@@ -367,6 +370,29 @@ hvy_version: 0.1
   expect(serializeDocument(document)).toBe(before);
   expect(requestProxyCompletionMock).toHaveBeenCalledTimes(2);
   expect(requestProxyCompletionMock.mock.calls.every((call) => call[0]?.client === importClient)).toBe(true);
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages[0]?.content).toContain('Additional import instructions:');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages[0]?.content).toContain('Keep resume entries in reverse chronological order.');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages[0]?.content).not.toContain('Imported summary');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages[0]?.content).toContain('Use only facts present in the imported source text');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Import source context (stable across planning and execution turns');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Imported summary');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('Import source context (stable across planning and execution turns');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('Imported summary');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.beforeRequest).toEqual(expect.any(Function));
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.beforeRequest).toEqual(expect.any(Function));
+  await requestProxyCompletionMock.mock.calls[0]?.[0]?.beforeRequest('ai-document-notes');
+  await requestProxyCompletionMock.mock.calls[1]?.[0]?.beforeRequest('ai-document-edit:1');
+  expect(beforeLlmCall).toHaveBeenCalledTimes(2);
+  expect(beforeLlmCall).toHaveBeenNthCalledWith(1, {
+    callIndex: 1,
+    debugLabel: 'ai-document-notes',
+    phase: 'thinking',
+  });
+  expect(beforeLlmCall).toHaveBeenNthCalledWith(2, {
+    callIndex: 2,
+    debugLabel: 'ai-document-edit:1',
+    phase: 'thinking',
+  });
   expect(progress.mock.calls.map((call) => call[0].phase)).toContain('thinking');
 });
 
@@ -408,6 +434,8 @@ hvy_version: 0.1
   const firstEditContext = requestProxyCompletionMock.mock.calls[1]?.[0]?.context ?? '';
   expect(firstEditContext).toContain('Plan progress:');
   expect(firstEditContext).toContain('1. [ ] Add the imported summary text component');
+  expect(firstEditContext).toContain('Import source context (stable across planning and execution turns');
+  expect(firstEditContext).toContain('Imported summary');
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.responseInstructions).not.toContain('Plan shape:');
   expect(progress.mock.calls.map((call) => call[0].phase)).toContain('tool_call');
 });
@@ -449,6 +477,35 @@ test('buildImportPlanForDocument reports aborted status from an aborted signal',
 
   expect(result.status).toBe('aborted');
   expect(requestProxyCompletionMock).not.toHaveBeenCalled();
+});
+
+test('importTextIntoDocument returns aborted status during execution abort', async () => {
+  requestProxyCompletionMock.mockResolvedValueOnce('AI note: reviewed the import target.');
+  requestProxyCompletionMock.mockImplementationOnce(({ signal }: { signal?: AbortSignal }) => {
+    signal?.dispatchEvent(new Event('abort'));
+    throw new DOMException('The operation was aborted.', 'AbortError');
+  });
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+`, '.hvy');
+  const abortController = new AbortController();
+
+  const result = await importTextIntoDocument(document, {
+    sourceName: 'notes.txt',
+    sourceText: 'Imported summary',
+    steps: ['Add imported summary'],
+    llm: {
+      settings: { provider: 'openai', model: 'gpt-5-mini' },
+      client: { complete: vi.fn() },
+    },
+    signal: abortController.signal,
+  });
+
+  expect(result.status).toBe('aborted');
 });
 
 test('requestAiDocumentEditTurn returns a compact schema summary after execute_sql writes', async () => {

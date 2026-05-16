@@ -39,6 +39,7 @@ import { createDefaultSearchState } from './search/state';
 import { applySearchFilter, submitSearch } from './search/actions';
 import { loadPaletteOverrideId } from './palettes/palette-preferences';
 import { captureRenderScroll, restoreRenderScroll } from './render-scroll';
+import { refreshReaderSurfaces } from './reader/refresh-surfaces';
 
 const appRoot = document.querySelector<HTMLDivElement>('#app');
 if (!appRoot) {
@@ -838,41 +839,17 @@ function renderSidebarTabLabel(): string {
 function refreshReaderPanels(): void {
   const refreshId = incrementRefreshReaderCount();
   const startedAt = performance.now();
-  let warningsMs = 0;
-  let navMs = 0;
-  let readerMs = 0;
   let modalMs = 0;
-  const warnings = app.querySelector<HTMLDivElement>('#readerWarnings');
-  const nav = app.querySelector<HTMLDivElement>('#readerNav');
-  const sidebarSections =
-    app.querySelector<HTMLDivElement>('#readerSidebarSections') ??
-    app.querySelector<HTMLDivElement>('#aiSidebarSections');
-  const reader =
-    app.querySelector<HTMLDivElement>('#readerDocument') ??
-    app.querySelector<HTMLDivElement>('#aiReaderDocument');
-
-  if (warnings) {
-    const stepStartedAt = performance.now();
-    warnings.innerHTML = readerRenderer.renderWarnings();
-    warningsMs = performance.now() - stepStartedAt;
-  }
-  if (nav) {
-    const stepStartedAt = performance.now();
-    nav.innerHTML = readerRenderer.renderNavigation(state.document.sections);
-    navMs = performance.now() - stepStartedAt;
-  }
-  if (sidebarSections) {
-    sidebarSections.innerHTML = readerRenderer.renderSidebarSections(state.document.sections);
-  }
-  if (reader) {
-    const stepStartedAt = performance.now();
-    capturePluginFocus();
-    reader.innerHTML = readerRenderer.renderReaderSections(state.document.sections);
-    reconcilePluginMounts(reader);
-    void runButtonVisibilityScripts(reader);
-    readerMs = performance.now() - stepStartedAt;
-  }
-  if (sidebarSections || reader) {
+  const surfaceRefresh = refreshReaderSurfaces({
+    root: app,
+    readerRenderer,
+    sections: state.document.sections,
+    refreshNavigation: true,
+    capturePluginFocus,
+    reconcilePluginMounts,
+    runButtonVisibilityScripts,
+  });
+  if (surfaceRefresh.refreshedSidebar || surfaceRefresh.refreshedReader) {
     scheduleReaderHighlightGlow(app);
   }
 
@@ -882,9 +859,9 @@ function refreshReaderPanels(): void {
   console.debug('[hvy:perf] refreshReaderPanels', {
     refreshId,
     elapsedMs: Number((performance.now() - startedAt).toFixed(2)),
-    warningsMs: Number(warningsMs.toFixed(2)),
-    navMs: Number(navMs.toFixed(2)),
-    readerMs: Number(readerMs.toFixed(2)),
+    warningsMs: Number(surfaceRefresh.warningsMs.toFixed(2)),
+    navMs: Number(surfaceRefresh.navMs.toFixed(2)),
+    readerMs: Number(surfaceRefresh.readerMs.toFixed(2)),
     modalMs: Number(modalMs.toFixed(2)),
   });
   void runPluginDocumentHooks('unknown');

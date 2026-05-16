@@ -63,6 +63,7 @@ import { captureRenderScroll, restoreRenderScroll } from './render-scroll';
 import { observeRenderedLinks, resetObservedLinks, type HvyLinkObserver } from './link-observer';
 import { recordHistory } from './history';
 import { resetTransientUiState } from './navigation';
+import { refreshReaderSurfaces } from './reader/refresh-surfaces';
 import {
   buildImportPlanForDocument,
   importTextIntoDocument,
@@ -410,13 +411,15 @@ function mountThemeEditor(root: HTMLElement, options: { advanced?: boolean; incl
 
 function refreshReaderPanels(): void {
   if (!currentRoot) return;
-  const reader = currentRoot.querySelector<HTMLDivElement>('#readerDocument') ?? currentRoot.querySelector<HTMLDivElement>('#aiReaderDocument');
-  if (!reader) return;
-  capturePluginFocus();
-  reader.innerHTML = readerRenderer.renderReaderSections(state.document.sections);
-  reconcilePluginMounts(reader);
+  refreshReaderSurfaces({
+    root: currentRoot,
+    readerRenderer,
+    sections: state.document.sections,
+    capturePluginFocus,
+    reconcilePluginMounts,
+    runButtonVisibilityScripts,
+  });
   observeRenderedLinks(currentRoot, currentLinkObserver);
-  void runButtonVisibilityScripts(reader);
   void runPluginDocumentHooks('unknown');
 }
 

@@ -112,6 +112,7 @@ type ImportTemplateListStructure = {
   title: string;
   listBlockId: string;
   itemComponent: string;
+  baseVariables: ReusableTemplateVariable[];
   variables: ReusableTemplateVariable[];
   itemTemplate: VisualBlock;
   flavors: ImportTemplateListFlavor[];
@@ -501,7 +502,7 @@ function normalizeImportPlanStep(rawStep: ImportPlanStepInput | unknown, candida
     const fallback = selectBestImportCandidate(candidates, text);
     const sectionTitle = fallback?.title ?? inferImportSectionTitleFromStep(text);
     const target = fallback ? candidateToImportPlanTarget(fallback) : { kind: 'blank' as const, title: sectionTitle };
-    const templateStructure = buildImportTemplateStructureDescriptor(candidates, target);
+    const templateStructure = safeBuildImportTemplateStructureDescriptor(candidates, target);
     return {
       sectionTitle,
       instruction: looksLikeImportInstruction(text) ? text : buildDefaultImportPlanInstruction(sectionTitle),
@@ -547,7 +548,7 @@ function normalizeImportPlanStep(rawStep: ImportPlanStepInput | unknown, candida
   if (!sectionTitle) {
     return null;
   }
-  const templateStructure = buildImportTemplateStructureDescriptor(candidates, target);
+  const templateStructure = safeBuildImportTemplateStructureDescriptor(candidates, target);
   const templateStructureId = typeof value.templateStructureId === 'string' && value.templateStructureId.trim()
     ? value.templateStructureId.trim()
     : undefined;
@@ -564,6 +565,15 @@ function normalizeImportPlanStep(rawStep: ImportPlanStepInput | unknown, candida
     ...(templateStructureId ? { templateStructureId } : {}),
     ...(templateStructure ? { templateStructure: toPublicImportTemplateStructure(templateStructure) } : {}),
   };
+}
+
+function safeBuildImportTemplateStructureDescriptor(candidates: ImportTemplateSectionCandidate[], target: ImportPlanTarget): ImportTemplateStructureInternal | null {
+  try {
+    return buildImportTemplateStructureDescriptor(candidates, target);
+  } catch (error) {
+    console.debug('[hvy:import-plan] template structure unavailable', error);
+    return null;
+  }
 }
 
 function buildImportPlanTargetFromStepShorthand(value: {
@@ -679,14 +689,24 @@ function buildImportTemplateStructureDescriptor(candidates: ImportTemplateSectio
 function buildImportTemplateStructureForCandidate(candidate: ImportTemplateSectionCandidate): ImportTemplateStructureInternal | null {
   const lists = collectImportTemplateListStructures(candidate.section, candidate.componentDefs);
   const listVariableNames = new Set(lists.flatMap((list) => list.variables.map((variable) => variable.name)));
-  const sectionFlavors = getImportTemplateSectionFlavors(candidate.sectionDefinition);
+  const sectionFlavors = getImportTemplateSectionFlavors(candidate.sectionDefinition).map((flavor) => {
+    const flavorListVariableNames = new Set(
+      collectImportTemplateListStructures(flavor.template, candidate.componentDefs)
+        .flatMap((list) => list.variables.map((variable) => variable.name))
+    );
+    return {
+      ...flavor,
+      variables: flavor.variables.filter((variable) => !flavorListVariableNames.has(variable.name)),
+    };
+  });
   const sectionVariables = (candidate.sectionDefinition
-    ? mergeImportTemplateVariables([
-      extractReusableTemplateVariablesFromSectionDefinition(candidate.sectionDefinition),
-      ...sectionFlavors.map((flavor) => flavor.variables),
-    ])
+    ? extractReusableTemplateVariablesFromSectionDefinition(candidate.sectionDefinition)
     : extractReusableTemplateVariables(candidate.section))
     .filter((variable) => !listVariableNames.has(variable.name));
+  const allSectionVariables = mergeImportTemplateVariables([
+    sectionVariables,
+    ...sectionFlavors.map((flavor) => flavor.variables),
+  ]);
   const properties: Record<string, ImportTemplateJsonSchemaProperty> = {};
   const required: string[] = [];
   if (sectionFlavors.length > 0) {
@@ -697,9 +717,13 @@ function buildImportTemplateStructureForCandidate(candidate: ImportTemplateSecti
     };
     required.push(IMPORT_TEMPLATE_SECTION_FLAVOR_FIELD);
   }
-  for (const variable of sectionVariables) {
+  for (const variable of allSectionVariables) {
     properties[variable.name] = templateVariableToJsonSchemaProperty(variable);
-    required.push(variable.name);
+  }
+  if (sectionFlavors.length === 0) {
+    for (const variable of sectionVariables) {
+      required.push(variable.name);
+    }
   }
   for (const list of lists) {
     properties[list.key] = {
@@ -795,8 +819,11 @@ function buildImportTemplateListStructure(block: VisualBlock, usedKeys: Set<stri
   }
   const def = componentDefs.find((item) => item.name === itemComponent);
   const flavors = getImportTemplateListFlavors(def, itemComponent);
+  const baseVariables = block.schema.componentListBlocks.length > 0
+    ? extractReusableTemplateVariables(itemTemplate)
+    : getImportTemplateListItemVariables(itemTemplate, itemComponent, componentDefs);
   const variables = mergeImportTemplateVariables([
-    getImportTemplateListItemVariables(itemTemplate, itemComponent, componentDefs),
+    baseVariables,
     ...flavors.map((flavor) => flavor.variables),
   ]);
   if (variables.length === 0) {
@@ -814,7 +841,11 @@ function buildImportTemplateListStructure(block: VisualBlock, usedKeys: Set<stri
   }
   for (const variable of variables) {
     properties[variable.name] = templateVariableToJsonSchemaProperty(variable);
-    required.push(variable.name);
+  }
+  if (flavors.length === 0) {
+    for (const variable of baseVariables) {
+      required.push(variable.name);
+    }
   }
   const baseKey = block.schema.id.trim() || itemComponent || 'items';
   const key = uniqueImportTemplateListKey(toImportJsonPropertyName(baseKey), usedKeys);
@@ -823,6 +854,7 @@ function buildImportTemplateListStructure(block: VisualBlock, usedKeys: Set<stri
     title: block.schema.componentListItemLabel.trim() || itemComponent || key,
     listBlockId: block.schema.id.trim() || block.id,
     itemComponent,
+    baseVariables,
     variables,
     itemTemplate,
     flavors,
@@ -1138,6 +1170,11 @@ function buildImportTemplateFlavorFrame(templateStructure: ImportTemplateStructu
     lines.push(`Section template "${templateStructure.label}" has flavor options:`);
     for (const flavor of templateStructure.sectionFlavors) {
       lines.push(`- ${flavor.name}: ${flavor.description || 'No description provided.'}`);
+      lines.push(`  Variables for ${flavor.name}: ${formatImportTemplateVariableNames(flavor.variables)}`);
+      const flavorLists = getImportTemplateListsForSectionFlavor(templateStructure, flavor);
+      for (const list of flavorLists) {
+        lines.push(`  List "${list.key}" variables for ${flavor.name}: ${formatImportTemplateVariableNames(list.baseVariables)}`);
+      }
     }
     lines.push('');
   }
@@ -1148,6 +1185,7 @@ function buildImportTemplateFlavorFrame(templateStructure: ImportTemplateStructu
     lines.push(`List "${list.key}" uses component template "${list.itemComponent}" and has flavor options:`);
     for (const flavor of list.flavors) {
       lines.push(`- ${flavor.name}: ${flavor.description || 'No description provided.'}`);
+      lines.push(`  Variables for ${flavor.name}: ${formatImportTemplateVariableNames(flavor.variables)}`);
     }
   }
   return [
@@ -1155,10 +1193,15 @@ function buildImportTemplateFlavorFrame(templateStructure: ImportTemplateStructu
     [
       'If `_sectionFlavor` is required, pick the best section template flavor before filling the remaining fields.',
       'For each item in a listed array, pick the best `_flavor` from these options before filling the remaining fields.',
+      'After choosing a flavor, fill the variables for that chosen template. Do not include variables from a different unchosen template.',
       ...lines,
     ].join('\n'),
     '=== END TEMPLATE FLAVORS ===',
   ].join('\n');
+}
+
+function formatImportTemplateVariableNames(variables: ReusableTemplateVariable[]): string {
+  return variables.length > 0 ? variables.map((variable) => variable.name).join(', ') : '(none)';
 }
 
 function buildImportGuidanceFrame(document: VisualDocument): string {
@@ -1717,10 +1760,8 @@ function instantiateImportTemplateSection(template: VisualSection, templateStruc
   const sectionFlavorName = typeof values[IMPORT_TEMPLATE_SECTION_FLAVOR_FIELD] === 'string' ? values[IMPORT_TEMPLATE_SECTION_FLAVOR_FIELD].trim() : '';
   const sectionFlavor = templateStructure.sectionFlavors.find((flavor) => flavor.name === sectionFlavorName);
   const section = cloneReusableSection(sectionFlavor?.template ?? template);
-  const sectionVariables = sectionFlavor?.variables.length ? sectionFlavor.variables : templateStructure.sectionVariables;
-  const lists = sectionFlavor
-    ? mergeImportTemplateListStructures(templateStructure.lists, collectImportTemplateListStructures(section, templateStructure.componentDefs))
-    : templateStructure.lists;
+  const sectionVariables = sectionFlavor?.variables ?? templateStructure.sectionVariables;
+  const lists = getImportTemplateListsForSectionFlavor(templateStructure, sectionFlavor);
   const scalarValues: Record<string, string> = {};
   for (const variable of sectionVariables) {
     const value = values[variable.name];
@@ -1737,6 +1778,19 @@ function mergeImportTemplateListStructures(baseLists: ImportTemplateListStructur
   return baseLists.map((baseList) => selectedLists.find((selectedList) => selectedList.key === baseList.key || selectedList.itemComponent === baseList.itemComponent) ?? baseList);
 }
 
+function getImportTemplateListsForSectionFlavor(
+  templateStructure: ImportTemplateStructureInternal,
+  sectionFlavor?: ImportTemplateSectionFlavor
+): ImportTemplateListStructure[] {
+  if (!sectionFlavor) {
+    return templateStructure.lists;
+  }
+  return mergeImportTemplateListStructures(
+    templateStructure.lists,
+    collectImportTemplateListStructures(sectionFlavor.template, templateStructure.componentDefs)
+  );
+}
+
 function replaceImportTemplateListItems(section: VisualSection, list: ImportTemplateListStructure, items: Array<Record<string, string>>): void {
   const block = findImportTemplateListBlock(section.blocks, list.listBlockId, list.itemComponent);
   if (!block) {
@@ -1750,7 +1804,8 @@ function replaceImportTemplateListItems(section: VisualSection, list: ImportTemp
       item.schema.component = list.itemComponent;
     }
     const { [IMPORT_TEMPLATE_FLAVOR_FIELD]: _flavor, ...templateValues } = itemValues;
-    applyReusableTemplateValues(item, templateValues, flavor?.variables.length ? flavor.variables : list.variables);
+    const variables = flavor?.variables ?? list.baseVariables;
+    applyReusableTemplateValues(item, templateValues, variables);
     return item;
   });
 }
@@ -2048,7 +2103,8 @@ function buildImportTemplateValuesResponseInstructions(templateStructure: Import
     'Shape:',
     '{"values":{...}}',
     '',
-    '`values` must match this JSON schema exactly:',
+    '`values` must use only keys listed in this JSON schema. Required keys are listed in the schema.',
+    'When `_sectionFlavor` or `_flavor` is present, choose the flavor first and include only the variables for that chosen flavor plus shared variables.',
     JSON.stringify(templateStructure.jsonSchema, null, 2),
     'Do not include HVY, markdown fences, explanations, or keys not listed in the schema.',
   ].join('\n');
@@ -2068,52 +2124,107 @@ function parseImportTemplateValuesResponse(
   if (!values || typeof values !== 'object' || Array.isArray(values)) {
     return { ok: false, message: 'Top-level `values` must be an object.' };
   }
-  const validated = validateImportTemplateValues(values as Record<string, unknown>, templateStructure.jsonSchema);
-  if (validated.ok === false) {
-    return validated;
-  }
-  const flavorValidation = validateImportTemplateFlavorSelections(validated.value, templateStructure);
-  return flavorValidation ?? validated;
+  return validateImportTemplateValuesForStructure(values as Record<string, unknown>, templateStructure);
 }
 
-function validateImportTemplateFlavorSelections(
-  values: ImportTemplateValues,
+function validateImportTemplateValuesForStructure(
+  raw: Record<string, unknown>,
   templateStructure: ImportTemplateStructureInternal
-): { ok: false; message: string } | null {
+): { ok: true; value: ImportTemplateValues } | { ok: false; message: string } {
+  const normalized: ImportTemplateValues = {};
   if (templateStructure.sectionFlavors.length > 0) {
-    const flavor = values[IMPORT_TEMPLATE_SECTION_FLAVOR_FIELD];
-    const allowed = new Set(templateStructure.sectionFlavors.map((candidate) => candidate.name));
-    if (typeof flavor !== 'string' || !allowed.has(flavor)) {
+    const flavorName = raw[IMPORT_TEMPLATE_SECTION_FLAVOR_FIELD];
+    const allowed = templateStructure.sectionFlavors.map((candidate) => candidate.name);
+    if (typeof flavorName !== 'string' || !allowed.includes(flavorName)) {
       return {
         ok: false,
-        message: `Template values must choose a valid _sectionFlavor: ${[...allowed].join(', ')}.`,
+        message: `Template values must choose a valid _sectionFlavor: ${allowed.join(', ')}.`,
       };
     }
+    normalized[IMPORT_TEMPLATE_SECTION_FLAVOR_FIELD] = flavorName;
   }
-  for (const list of templateStructure.lists) {
-    if (list.flavors.length === 0) {
-      continue;
+  const sectionFlavor = typeof normalized[IMPORT_TEMPLATE_SECTION_FLAVOR_FIELD] === 'string'
+    ? templateStructure.sectionFlavors.find((candidate) => candidate.name === normalized[IMPORT_TEMPLATE_SECTION_FLAVOR_FIELD])
+    : undefined;
+  const sectionVariables = sectionFlavor?.variables ?? templateStructure.sectionVariables;
+  const lists = getImportTemplateListsForSectionFlavor(templateStructure, sectionFlavor);
+  const expected = [
+    ...(templateStructure.sectionFlavors.length > 0 ? [IMPORT_TEMPLATE_SECTION_FLAVOR_FIELD] : []),
+    ...sectionVariables.map((variable) => variable.name),
+    ...lists.map((list) => list.key),
+  ];
+  const keyCheck = validateImportTemplateObjectKeys(raw, expected, 'Template values');
+  if (keyCheck) {
+    return keyCheck;
+  }
+  for (const variable of sectionVariables) {
+    const value = raw[variable.name];
+    if (typeof value !== 'string') {
+      return { ok: false, message: `Template value "${variable.name}" must be a string.` };
     }
-    const items = values[list.key];
+    normalized[variable.name] = value;
+  }
+  for (const list of lists) {
+    const items = raw[list.key];
     if (!Array.isArray(items)) {
-      continue;
+      return { ok: false, message: `Template value "${list.key}" must be an array.` };
     }
-    const allowed = new Set(list.flavors.map((flavor) => flavor.name));
+    const normalizedItems: Array<Record<string, string>> = [];
     for (const [index, item] of items.entries()) {
-      const flavor = item[IMPORT_TEMPLATE_FLAVOR_FIELD];
-      if (!flavor || !allowed.has(flavor)) {
-        return {
-          ok: false,
-          message: `Template value "${list.key}" item ${index + 1} must choose a valid _flavor: ${[...allowed].join(', ')}.`,
-        };
+      if (!item || typeof item !== 'object' || Array.isArray(item)) {
+        return { ok: false, message: `Template value "${list.key}" item ${index + 1} must be an object.` };
       }
+      const itemResult = validateImportTemplateListItemValues(item as Record<string, unknown>, list, `${list.key}" item ${index + 1}`);
+      if (itemResult.ok === false) {
+        return itemResult;
+      }
+      normalizedItems.push(itemResult.value);
     }
+    normalized[list.key] = normalizedItems;
   }
-  return null;
+  return { ok: true, value: normalized };
 }
 
-function validateImportTemplateValues(raw: Record<string, unknown>, schema: ImportTemplateJsonSchema): { ok: true; value: ImportTemplateValues } | { ok: false; message: string } {
-  const expected = Object.keys(schema.properties);
+function validateImportTemplateListItemValues(
+  raw: Record<string, unknown>,
+  list: ImportTemplateListStructure,
+  label: string
+): { ok: true; value: Record<string, string> } | { ok: false; message: string } {
+  const normalized: Record<string, string> = {};
+  if (list.flavors.length > 0) {
+    const flavorName = raw[IMPORT_TEMPLATE_FLAVOR_FIELD];
+    const allowed = list.flavors.map((flavor) => flavor.name);
+    if (typeof flavorName !== 'string' || !allowed.includes(flavorName)) {
+      return {
+        ok: false,
+        message: `Template value "${label}" must choose a valid _flavor: ${allowed.join(', ')}.`,
+      };
+    }
+    normalized[IMPORT_TEMPLATE_FLAVOR_FIELD] = flavorName;
+  }
+  const flavor = typeof normalized[IMPORT_TEMPLATE_FLAVOR_FIELD] === 'string'
+    ? list.flavors.find((candidate) => candidate.name === normalized[IMPORT_TEMPLATE_FLAVOR_FIELD])
+    : undefined;
+  const variables = flavor?.variables ?? list.baseVariables;
+  const expected = [
+    ...(list.flavors.length > 0 ? [IMPORT_TEMPLATE_FLAVOR_FIELD] : []),
+    ...variables.map((variable) => variable.name),
+  ];
+  const keyCheck = validateImportTemplateObjectKeys(raw, expected, `Template value "${label}"`);
+  if (keyCheck) {
+    return keyCheck;
+  }
+  for (const variable of variables) {
+    const value = raw[variable.name];
+    if (typeof value !== 'string') {
+      return { ok: false, message: `Template value "${label}" field "${variable.name}" must be a string.` };
+    }
+    normalized[variable.name] = value;
+  }
+  return { ok: true, value: normalized };
+}
+
+function validateImportTemplateObjectKeys(raw: Record<string, unknown>, expected: string[], label: string): { ok: false; message: string } | null {
   const expectedSet = new Set(expected);
   const actual = Object.keys(raw);
   const missing = expected.filter((key) => !Object.prototype.hasOwnProperty.call(raw, key));
@@ -2122,41 +2233,14 @@ function validateImportTemplateValues(raw: Record<string, unknown>, schema: Impo
     return {
       ok: false,
       message: [
-        'Template values must exactly match expected keys.',
+        `${label} must exactly match expected keys.`,
         `Expected keys: ${expected.length > 0 ? expected.join(', ') : '(none)'}.`,
         missing.length > 0 ? `Missing keys: ${missing.join(', ')}.` : '',
         extra.length > 0 ? `Extra keys: ${extra.join(', ')}.` : '',
       ].filter(Boolean).join(' '),
     };
   }
-  const normalized: ImportTemplateValues = {};
-  for (const key of expected) {
-    const property = schema.properties[key]!;
-    const value = raw[key];
-    if (property.type === 'string') {
-      if (typeof value !== 'string') {
-        return { ok: false, message: `Template value "${key}" must be a string.` };
-      }
-      normalized[key] = value;
-      continue;
-    }
-    if (!Array.isArray(value)) {
-      return { ok: false, message: `Template value "${key}" must be an array.` };
-    }
-    const items: Array<Record<string, string>> = [];
-    for (const [index, item] of value.entries()) {
-      if (!item || typeof item !== 'object' || Array.isArray(item)) {
-        return { ok: false, message: `Template value "${key}" item ${index + 1} must be an object.` };
-      }
-      const itemResult = validateImportTemplateValues(item as Record<string, unknown>, property.items);
-      if (itemResult.ok === false) {
-        return { ok: false, message: `Template value "${key}" item ${index + 1}: ${itemResult.message}` };
-      }
-      items.push(Object.fromEntries(Object.entries(itemResult.value).map(([itemKey, itemValue]) => [itemKey, String(itemValue)])));
-    }
-    normalized[key] = items;
-  }
-  return { ok: true, value: normalized };
+  return null;
 }
 
 function parseImportXrefTargetResponse(response: string): PlannedImportXrefTarget[] | null {

@@ -4,6 +4,7 @@
 .rich-editor[data-placeholder]:has(> p:only-child > br:only-child)::before {
   content: attr(data-placeholder);
   color: var(--hvy-text-muted);
+  opacity: 0.72;
   pointer-events: none;
   display: block;
 }

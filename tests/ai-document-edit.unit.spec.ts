@@ -598,6 +598,48 @@ component_defs:
   expect(result.steps?.[1]?.templateStructure).toBeUndefined();
 });
 
+test('buildImportPlanForDocument keeps plan rows when optional template structure cannot be derived', async () => {
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"steps":[{"section":"Languages","sectionId":"languages"}]}'
+  );
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+component_defs:
+  - name: language-record
+    baseType: expandable
+    schema:
+      component: language-record
+      xrefDetail: "{% proficiency %}"
+      expandableContentBlocks:
+        children:
+          - text: "{% proficiency | block %}"
+            schema:
+              component: text
+---
+
+<!--hvy: {"id":"languages","location":"sidebar"}-->
+#! Languages
+
+<!--hvy:component-list {"componentListComponent":"language-record","componentListItemLabel":"language"}-->
+`, '.hvy');
+
+  const debug = vi.spyOn(console, 'debug').mockImplementation(() => {});
+  const result = await buildImportPlanForDocument(document, {
+    sourceName: 'resume.txt',
+    sourceText: 'Languages\nEnglish - native proficiency',
+    llm: {
+      settings: { provider: 'openai', model: 'gpt-5-mini' },
+      client: { complete: vi.fn() },
+    },
+  });
+  debug.mockRestore();
+
+  expect(result.status).toBe('ready');
+  expect(result.steps?.[0]?.sectionTitle).toBe('Languages');
+  expect(result.steps?.[0]?.target).toEqual({ kind: 'body', id: 'languages', title: 'Languages' });
+  expect(result.steps?.[0]?.templateStructure).toBeUndefined();
+});
+
 test('importTextIntoDocument executes approved steps with mocked LLM calls', async () => {
   requestProxyCompletionMock.mockResolvedValueOnce(
     '{"targets":[{"id":"summary","title":"Summary","kind":"section","description":"Summary is the imported summary section."}]}'
@@ -800,7 +842,7 @@ component_defs:
 test('importTextIntoDocument forced template mode lets JSON pick component template flavors', async () => {
   requestProxyCompletionMock.mockResolvedValueOnce('{"targets":[]}');
   requestProxyCompletionMock.mockResolvedValueOnce(
-    '{"values":{"section_title":"Awards","awards_list":[{"_flavor":"detailed","award":"Best Tool","issuer":"Engineering Guild","details":"Won for developer tooling."}]}}'
+    '{"values":{"section_title":"Awards","awards_list":[{"_flavor":"compact","award":"Quick Thanks","issuer":"QA Team"},{"_flavor":"detailed","award":"Best Tool","issuer":"Engineering Guild","details":"Won for developer tooling."}]}}'
   );
   const document = deserializeDocument(`---
 hvy_version: 0.1
@@ -899,13 +941,14 @@ component_defs:
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('=== BEGIN TEMPLATE FLAVORS ===');
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('detailed: Use when the source has narrative award details.');
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.responseInstructions).toContain('_flavor');
+  expect(serialized).toContain('Quick Thanks');
   expect(serialized).toContain('Won for developer tooling.');
 });
 
 test('importTextIntoDocument forced template mode uses selected section flavor list structure', async () => {
   requestProxyCompletionMock.mockResolvedValueOnce('{"targets":[]}');
   requestProxyCompletionMock.mockResolvedValueOnce(
-    '{"values":{"_sectionFlavor":"linear","history_list":[{"role":"Engineer","organization":"Example Co","years":"2020-2024","details":"Built useful systems."}]}}'
+    '{"values":{"_sectionFlavor":"linear","history_list":[{"role":"Engineer","organization":"Example Co","details":"Built useful systems."}]}}'
   );
   const document = deserializeDocument(`---
 hvy_version: 0.1

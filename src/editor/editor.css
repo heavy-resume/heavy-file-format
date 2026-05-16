@@ -1453,6 +1453,7 @@
 
 .editor-passive-empty-text.has-placeholder {
   color: var(--hvy-text-muted);
+  opacity: 0.72;
   font-style: normal;
   font-size: 0.88rem;
   letter-spacing: 0.01em;

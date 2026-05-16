@@ -1921,10 +1921,8 @@ hvy_version: 0.1
 
 <!--hvy:container {"id":"skill-software-engineering","sortKeys":{"Strength":98}}-->
 
- <!--hvy:container:0 {}-->
-
-  <!--hvy:text {}-->
-   ### Software Engineering
+ <!--hvy:text {}-->
+  ### Software Engineering
 `);
   await page.getByRole('button', { name: 'Apply' }).click();
   await page.getByRole('button', { name: 'Advanced' }).click();

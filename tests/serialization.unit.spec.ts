@@ -98,10 +98,8 @@ hvy_version: 0.1
 
    <!--hvy:container {}-->
 
-    <!--hvy:container:0 {}-->
-
-     <!--hvy:text {}-->
-      Detail body
+    <!--hvy:text {}-->
+     Detail body
 `;
 
   const document = deserializeDocument(input, '.hvy');
@@ -133,10 +131,8 @@ hvy_version: 0.1
 
 <!--hvy:container {"containerTitle":"Details","containerExpanded":false,"containerCollapsedPreviewRem":2.5}-->
 
- <!--hvy:container:0 {}>
-
-  <!--hvy:text {}-->
-   Detail
+ <!--hvy:text {}-->
+  Detail
 `;
 
   const document = deserializeDocument(input, '.hvy');

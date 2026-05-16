@@ -59,9 +59,8 @@ hvy_version: 0.1
 #! Alpha
 
 <!--hvy:container {"id":"outer"}-->
-  <!--hvy:container:0 {}-->
-   <!--hvy:text {"id":"inner-text"}-->
-    nested needle
+ <!--hvy:text {"id":"inner-text"}-->
+  nested needle
 `, '.hvy');
 
   const expectedResult = await builtInSearchProvider({
@@ -290,9 +289,8 @@ hvy_version: 0.1
 #! Alpha
 
 <!--hvy:container {"id":"outer"}-->
-  <!--hvy:container:0 {}-->
-   <!--hvy:text {"id":"inner-text"}-->
-    nested needle
+ <!--hvy:text {"id":"inner-text"}-->
+  nested needle
 
 <!--hvy: {"id":"beta"}-->
 #! Beta
@@ -495,10 +493,8 @@ hvy_version: 0.1
 <!--hvy:grid {"id":"skill-grid"}-->
   <!--hvy:grid:0 {"id":"tools-cell"}-->
    <!--hvy:container {"id":"tools-container"}-->
-    <!--hvy:container:0 {}-->
      <!--hvy:text {"id":"tools-heading"}-->
       Tools & Technologies
-    <!--hvy:container:1 {}-->
      <!--hvy:component-list {"id":"tools-list"}-->
       <!--hvy:component-list:0 {}-->
        <!--hvy:xref-card {"id":"typescript","xrefTitle":"TypeScript","xrefDetail":"Primary language","xrefTarget":"typescript"}-->

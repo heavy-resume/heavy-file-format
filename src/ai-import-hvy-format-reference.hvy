@@ -80,16 +80,15 @@ theme:
     ## container
 
    <!--hvy:text {}-->
-    Use `container` to group nested blocks. Add child blocks under indexed container slots such as `<!--hvy:container:0 {}-->`. Preserve useful template containers instead of flattening structured content into plain text.
+    Use `container` to group nested blocks. Add child blocks directly under the container directive. Preserve useful template containers instead of flattening structured content into plain text.
 
    <!--hvy:text {}-->
     Example:
     
     ```hvy
     <!--hvy:container {"id":"important-stuff","containerTitle":"Visible on border"}-->
-     <!--hvy:container:0 {}-->
-      <!--hvy:text {}-->
-       I'm text inside a container
+     <!--hvy:text {}-->
+      I'm text inside a container
     ```
 
  <!--hvy:expandable {"id":"component-grid","tags":"component, core, grid, layout"}-->

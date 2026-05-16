@@ -130,7 +130,7 @@ test('cli keeps anonymous component paths stable within a session after inserts'
   await executeHvyCliCommand(document, session, `hvy insert 1 text ${parent}`);
 
   expect((await executeHvyCliCommand(document, session, `cat ${parent}/text-0/text.txt`)).output).toContain('Primary application language');
-  expect((await executeHvyCliCommand(document, session, `cat ${parent}/children-order.json`)).output).toContain('"text-3"');
+  expect(JSON.parse((await executeHvyCliCommand(document, session, `cat ${parent}/children-order.json`)).output)).toEqual(['text-1', 'text-2', 'text-0']);
 });
 
 test('cli exposes id aliases for sections and components', async () => {

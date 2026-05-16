@@ -311,7 +311,7 @@ Grid blocks can be emitted with specialized directives so grid item content rema
   <!--hvy:component-list {"componentListComponent":"text"}-->
 ```
 
-When a `component-list` (or `container`) grid item has plain Markdown content before its first `hvy:component-list:N` (or `hvy:container:N`) directive, that content is implicitly treated as the first block in the list. This allows a text header to appear above list items without a wrapping directive:
+When a `component-list` grid item has plain Markdown content before its first `hvy:component-list:N` directive, that content is implicitly treated as the first block in the list. This allows a text header to appear above list items without a wrapping directive:
 
 ```markdown
 <!--hvy:grid:0 {"id":"skills"}-->
@@ -324,6 +324,18 @@ When a `component-list` (or `container`) grid item has plain Markdown content be
 Here `## Skills` becomes `componentListBlocks[0]` (an implicit text block) and the `component-list:0` item becomes `componentListBlocks[1]`.
 
 For numbered component-list slots, the numeric suffix controls display order. Readers and editors MUST sort `hvy:component-list:N` children by `N` ascending, using file order only to break ties when multiple items use the same `N`.
+
+Container children are emitted directly under the container directive:
+
+```markdown
+<!--hvy:container {"containerTitle":"Important Stuff"}-->
+
+ <!--hvy:text {}-->
+  I'm text inside a container.
+
+ <!--hvy:text {}-->
+  I'm another child of the same container.
+```
 
 Component-list display defaults are optional reader defaults over the same source child list:
 
@@ -380,11 +392,12 @@ Rules:
 - Multiple `hvy:expandable:stub` or `hvy:expandable:content` directives can be used for a single expandable block.
 - Each `expandable` block MUST include at least one content child. The stub slot MAY be empty when the expandable is intended to use its content as the collapsed preview. Missing content is malformed.
 - `hvy:grid` starts a grid block. Its payload is the grid block schema, with `component:"grid"` implied.
-- `hvy:grid:N`, `hvy:component-list:N`, and `hvy:container:N` are slot markers. Their payload contains slot metadata only; the actual child block is declared one indentation level deeper as its own directive.
+- `hvy:grid:N` and `hvy:component-list:N` are slot markers. Their payload contains slot metadata only; the actual child block is declared one indentation level deeper as its own directive.
 - For `hvy:grid:N`, `N` determines the item's placement order. Readers and editors SHOULD tile items across `gridColumns` in slot order, wrapping to the next row as needed.
 - For `hvy:component-list:N`, `N` is an ordering key rather than just an identifier. Lower numbers render first; file order breaks ties.
+- `hvy:container` starts a container block. Its child blocks are declared directly under the container; there is no `hvy:container:N` slot directive.
 - Slot markers MUST NOT carry `component` or `type`. Documents that use the old slot-carried child-component form are malformed.
-- Plain Markdown content that appears after a `hvy:grid:N` (or standalone `hvy:component-list` / `hvy:container`) directive and before the first indexed sub-directive (`hvy:component-list:N`, `hvy:container:N`) is implicitly treated as the first block in that list or container.
+- Plain Markdown content that appears after a `hvy:grid:N`, standalone `hvy:component-list`, or `hvy:container` directive and before the first child directive is implicitly treated as the first block in that grid item, list, or container.
 - If both `meta.blocks[n]` and a block directive describe the same logical block, `meta.blocks[n]` wins.
 - Tables are non-interactive. If authors want reveal/hide behavior or supporting narrative detail, they SHOULD wrap the table in an `expandable` rather than attaching row-level interaction metadata.
 

@@ -18,43 +18,31 @@ plugins:
 
   <!--hvy:container {"css":"margin: 0;"}-->
 
-   <!--hvy:container:0 {}-->
+   <!--hvy:text {"css":"margin: 0;"}-->
+    ## Applied
 
-    <!--hvy:text {"css":"margin: 0;"}-->
-     ## Applied
-
-   <!--hvy:container:1 {}-->
-
-    <!--hvy:text {"css":"margin: 0;"}-->
-     18 active applications
+   <!--hvy:text {"css":"margin: 0;"}-->
+    18 active applications
 
  <!--hvy:grid:1 {"id":"interviews"}-->
 
   <!--hvy:container {"css":"margin: 0;"}-->
 
-   <!--hvy:container:0 {}-->
+   <!--hvy:text {"css":"margin: 0;"}-->
+    ## Interviews
 
-    <!--hvy:text {"css":"margin: 0;"}-->
-     ## Interviews
-
-   <!--hvy:container:1 {}-->
-
-    <!--hvy:text {"css":"margin: 0;"}-->
-     5 in progress
+   <!--hvy:text {"css":"margin: 0;"}-->
+    5 in progress
 
  <!--hvy:grid:2 {"id":"offers"}-->
 
   <!--hvy:container {"css":"margin: 0;"}-->
 
-   <!--hvy:container:0 {}-->
+   <!--hvy:text {"css":"margin: 0;"}-->
+    ## Offers
 
-    <!--hvy:text {"css":"margin: 0;"}-->
-     ## Offers
-
-   <!--hvy:container:1 {}-->
-
-    <!--hvy:text {"css":"margin: 0;"}-->
-     1 pending decision
+   <!--hvy:text {"css":"margin: 0;"}-->
+    1 pending decision
 
 <!--hvy:subsection {"id":"applications","highlight":true}-->
 #! Applications

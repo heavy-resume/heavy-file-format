@@ -146,8 +146,8 @@ export function getHvyDiagnosticUsageHint(diagnostic: HvyDiagnostic): string {
       return 'Put grid slots under `<!--hvy:grid {"gridColumns":2}-->`, then add `<!--hvy:grid:0 {}-->`.';
     case 'component_list_slot_without_parent':
       return 'Put list slots under `<!--hvy:component-list {"componentListComponent":"text"}-->`.';
-    case 'container_slot_without_parent':
-      return 'Put container slots under `<!--hvy:container {}-->`, then add `<!--hvy:container:0 {}-->`.';
+    case 'container_slots_not_supported':
+      return 'Put child blocks directly under `<!--hvy:container {}-->`; container slot directives are not used.';
     case 'table_detail_slots_not_supported':
       return 'Tables are non-interactive in HVY. Wrap the table in `<!--hvy:expandable {}-->` for reveal/hide behavior.';
     case 'expandable_missing_stub':
@@ -213,8 +213,7 @@ function parseBlocks(
     | { kind: 'component'; block: VisualBlock; attach: BlockAttach; indent: number }
     | { kind: 'slot-expandable'; parent: VisualBlock; part: 0 | 1; indent: number }
     | { kind: 'slot-grid'; parent: VisualBlock; meta: JsonObject; indent: number }
-    | { kind: 'slot-component-list'; parent: VisualBlock; slotIndex: number; indent: number }
-    | { kind: 'slot-container'; parent: VisualBlock; indent: number };
+    | { kind: 'slot-component-list'; parent: VisualBlock; slotIndex: number; indent: number };
 
   const blocks: VisualBlock[] = [];
   const frames: StructuredFrame[] = [];
@@ -319,9 +318,6 @@ function parseBlocks(
     }
     if (frame.kind === 'slot-component-list') {
       return { kind: 'component-list', parent: frame.parent, slotIndex: frame.slotIndex };
-    }
-    if (frame.kind === 'slot-container') {
-      return { kind: 'container', parent: frame.parent };
     }
     const base = resolveParsedBase(frame.block.schema.component);
     if (base === 'component-list') {
@@ -543,20 +539,11 @@ function parseBlocks(
           slotIndex: indexes[0],
           indent: currentIndent,
         });
-      } else if (name === 'container' && indexes.length === 1) {
-        if (typeof parsed.component === 'string' || typeof parsed.type === 'string') {
-          return;
-        }
-        const parent = findOrCreateParentFrame(
-          'container',
-          lineIndex + 1,
-          'container_slot_without_parent',
-          'Container slot was provided without an enclosing container block.'
-        );
-        frames.push({
-          kind: 'slot-container',
-          parent,
-          indent: currentIndent,
+      } else if (name === 'container' && indexes.length > 0) {
+        diagnostics.push({
+          severity: 'error',
+          code: 'container_slots_not_supported',
+          message: formatSectionDiagnostic(sectionLabel, lineIndex + 1, 'Container slot directives are not supported. Put child blocks directly under the container directive.'),
         });
       } else if (name === 'table' && indexes.length === 2) {
         diagnostics.push({
@@ -760,7 +747,6 @@ function shouldCloseFrameForIndent(
     | { kind: 'slot-expandable'; indent: number }
     | { kind: 'slot-grid'; indent: number }
     | { kind: 'slot-component-list'; indent: number }
-    | { kind: 'slot-container'; indent: number }
     | { kind: 'slot-table-details'; indent: number },
   indent: number
 ): boolean {
@@ -1440,10 +1426,6 @@ function serializeComponentListItemBlock(block: VisualBlock, index: number, inde
   return serializeSlotWithChild(`component-list:${index}`, {}, block, indent, documentMeta);
 }
 
-function serializeContainerItemBlock(block: VisualBlock, index: number, indent: number, documentMeta: JsonObject | null): string {
-  return serializeSlotWithChild(`container:${index}`, {}, block, indent, documentMeta);
-}
-
 function serializeNestedBlocks(block: VisualBlock, indent: number, documentMeta: JsonObject | null): string {
   const component = resolveBaseComponentFromMeta(block.schema.component, documentMeta);
   if (component === 'expandable') {
@@ -1462,7 +1444,7 @@ function serializeNestedBlocks(block: VisualBlock, indent: number, documentMeta:
       .join('\n\n');
   }
   if (component === 'container') {
-    return block.schema.containerBlocks.map((innerBlock, index) => serializeContainerItemBlock(innerBlock, index, indent, documentMeta)).join('\n\n');
+    return block.schema.containerBlocks.map((innerBlock) => serializeBlock(innerBlock, indent, documentMeta)).join('\n\n');
   }
   return '';
 }

@@ -2,6 +2,7 @@ import { resolveBaseComponentFromMeta } from '../component-defs';
 import type { JsonObject } from '../hvy/types';
 import { renderAltAnnotationsAsFullText } from '../markdown';
 import { extractReusableTemplateVariablesFromSectionDefinition, formatTemplateKeys } from '../reusable-template-values';
+import { formatStyleDefaultsSummary } from '../style-defaults-summary';
 import type { SectionDefinition, VisualDocument } from '../types';
 import type { HvyVirtualEntry, HvyVirtualFileSystem } from './virtual-file-system';
 
@@ -53,6 +54,9 @@ export function formatHvyRequestStructure(document: VisualDocument, fs: HvyVirtu
   const entries = collectComponentStructureEntries(document, fs).map((entry, index) => withStableId(entry, index));
   const scopedEntries = scopeEntries(entries, options.componentId, options.componentPath);
   return [
+    'Effective style defaults:',
+    ...formatStyleDefaultsSummary(document),
+    '',
     'Custom component types:',
     ...formatCustomComponentDefinitions(document),
     '',

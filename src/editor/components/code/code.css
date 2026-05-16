@@ -32,6 +32,9 @@
   font-size: 0.86rem;
   line-height: 1.45;
   color: var(--hvy-code-text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: normal;
 }
 
 .reader-block pre code.hljs {

@@ -10,6 +10,7 @@ import { REUSABLE_SECTION_DEF_PREFIX } from './state';
 
 export const DEFAULT_READER_MAX_WIDTH = '60rem';
 export const DEFAULT_SECTION_CSS = 'margin: 0 0 0.5rem;';
+export const DEFAULT_BLOCK_CSS = 'margin: 0.5rem 0;';
 
 export function defaultBlockSchema(component = 'text'): BlockSchema {
   return {
@@ -19,7 +20,7 @@ export function defaultBlockSchema(component = 'text'): BlockSchema {
     lock: false,
     align: 'left',
     slot: 'center',
-    css: 'margin: 0.5rem 0;',
+    css: DEFAULT_BLOCK_CSS,
     codeLanguage: 'ts',
     containerBlocks: [],
     containerTitle: '',

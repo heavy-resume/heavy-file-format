@@ -1450,6 +1450,34 @@ def greet(name):
   );
 });
 
+test('text component fenced code wraps long directive lines instead of overflowing', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"code-sample"}-->
+#! Code Sample
+
+<!--hvy:text {"id":"long-code-example"}-->
+\`\`\`hvy
+<!--hvy:component-list {"id":"items","componentListComponent":"widget-record","componentListDefaultSortKey":"Name","componentListDefaultSortDirection":"asc","componentListDefaultGroupKey":"Category"}-->
+ <!--hvy:component-list:0 {}-->
+\`\`\`
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Viewer' }).click();
+
+  await page.setViewportSize({ width: 390, height: 760 });
+  const pre = page.locator('.reader-code-block pre').first();
+  const code = page.locator('.reader-code-block code').first();
+  await expect(code).toBeVisible();
+  await expect.poll(async () => pre.evaluate((node) => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
+  await expect.poll(async () => code.evaluate((node) => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
+});
+
 test('trailing spaces after bold labels remain editable outside bold text', async ({ page }) => {
   await page.goto('/');
 

@@ -24,7 +24,7 @@ text_line_styles:
   This is being given in a HVY doc.
 
  <!--hvy:text {}-->
-  # Syntax Rules
+  ## Syntax Rules
 
  <!--hvy:text {}-->
   - HVY directives are HTML comments: `<!--hvy:component-name {...attributes as json...}-->`.
@@ -34,7 +34,7 @@ text_line_styles:
   - Helper text, internal examples, generated reciprocal cards, and decorative blocks should usually omit `id`.
 
  <!--hvy:text {}-->
-  Section shape:
+  ## Section shape:
   
   - Start with a section directive like `<!--hvy: {"id":"section-id"}-->`.
   - Follow it with a section heading like `#! Section Title`.
@@ -134,7 +134,7 @@ text_line_styles:
    <!--hvy:text {}-->
     # component-list
     
-    `<!--hvy:component-list {"id":"items","componentListComponent":"text"}-->`
+    `<!--hvy:component-list {"id":"items","componentListComponent":"text","componentListDefaultSortKey":"Name","componentListDefaultGroupKey":"Category"}-->`
 
   <!--hvy:expandable:content {"description":"Component-list component description and example"}-->
 
@@ -143,13 +143,15 @@ text_line_styles:
 
    <!--hvy:text {}-->
     Use `component-list` for repeated records. Add each item under `<!--hvy:component-list:0 {}-->`, `<!--hvy:component-list:1 {}-->`, and so on. Preserve `componentListComponent`, `sortKeys`, `groupKeys`, default sort/group fields, and custom record components from the matched template when they fit the imported data.
+    
+    Default display fields belong on the list itself. Item values belong on each repeated record: use `componentListDefaultSortKey` to name a key from item `sortKeys`, `componentListDefaultSortDirection` as `asc` or `desc`, and `componentListDefaultGroupKey` to name a key from item `groupKeys`.
 
    <!--hvy:text {}-->
     Example:
     ```hvy
-    <!--hvy:component-list {"id":"blip-list","componentListComponent":"blip-record"}-->
+    <!--hvy:component-list {"id":"blip-list","componentListComponent":"blip-record","componentListDefaultSortKey":"Name","componentListDefaultSortDirection":"asc","componentListDefaultGroupKey":"Category"}-->
      <!--hvy:component-list:0 {}-->
-      <!--hvy:blip-record {"id":"blip-alpha"}-->
+      <!--hvy:blip-record {"id":"blip-alpha","sortKeys":{"Name":"Blip Alpha"},"groupKeys":{"Category":"Example Group"}}-->
        <!--hvy:expandable:stub {}-->
         <!--hvy:text {}-->
          Blip Alpha
@@ -354,9 +356,9 @@ text_line_styles:
 
  <!--hvy:text {}-->
   ## `id`
-
+  
   `id` is for navigation and exact cross-reference targets. Use it on sections or source-backed reusable records that someone may link to. Do not repeat ids. Do not add ids to helper text, decorative blocks, xref-card components, or local layout blocks just to name them.
-
+  
   ```hvy
   <!--hvy:blip-record {"id":"blip-alpha","xrefTitle":"Blip Alpha"}-->
    <!--hvy:expandable:stub {}-->
@@ -369,9 +371,9 @@ text_line_styles:
 
  <!--hvy:text {}-->
   ## `css`
-
+  
   `css` is declaration-only inline CSS for the rendered wrapper. Use it for small presentation adjustments from the template, such as spacing or text alignment. Do not put selectors, `@media`, or `@container` rules inside `css`.
-
+  
   ```hvy
   <!--hvy:text {"css":"margin: 0.25rem 0; font-weight: 700;"}-->
    Important line
@@ -379,9 +381,9 @@ text_line_styles:
 
  <!--hvy:text {}-->
   ## `tags` and `description`
-
+  
   `tags` make records discoverable and filterable. `description` explains the component or record for editor/AI context. Preserve them when the matched template uses them for a meaningful category. Do not invent tags that are unsupported by the source or template.
-
+  
   ```hvy
   <!--hvy:widget-record {"id":"widget-alpha","tags":"widget","description":"Source-backed widget record."}-->
    <!--hvy:expandable:stub {}-->
@@ -394,9 +396,9 @@ text_line_styles:
 
  <!--hvy:text {}-->
   ## `placeholder` and `fillIn`
-
+  
   `placeholder` is hint text for an empty block. `fillIn` marks editable value regions in template text. When importing into a matched template, leave fill-ins alone if the source has no value rather than replacing them with blank content.
-
+  
   ```hvy
   <!--hvy:text {"id":"display-name","placeholder":"Display name","fillIn":true}-->
    # <!-- value {"placeholder":"Display name"} -->
@@ -404,26 +406,28 @@ text_line_styles:
 
  <!--hvy:text {}-->
   ## `lock` and `editorOnly`
-
+  
   `lock` prevents structural edits inside a section or component. `editorOnly` keeps authoring controls out of viewer output. Preserve these when they come from the template. Do not add viewer-facing imported facts inside `editorOnly` blocks.
-
+  
   ```hvy
   <!--hvy:button {"editorOnly":true,"buttonLabel":"Generate"}-->
   ```
 
  <!--hvy:text {}-->
-  ## `sortKeys` and `groupKeys`
-
-  `sortKeys` and `groupKeys` belong on repeated records inside `component-list` structures. They are reader/editor metadata, not visible prose. Preserve matched keys when the template already sorts or groups a list.
-
+  ## List default sort/group and item `sortKeys` / `groupKeys`
+  
+  `componentListDefaultSortKey`, `componentListDefaultSortDirection`, and `componentListDefaultGroupKey` belong on the `component-list`. `sortKeys` and `groupKeys` belong on repeated records inside that list. They are reader/editor metadata, not visible prose. Preserve matched keys when the template already sorts or groups a list.
+  
   ```hvy
-  <!--hvy:widget-record {"id":"widget-alpha","sortKeys":{"Name":"Alpha"},"groupKeys":{"Category":"Example"}}-->
-   <!--hvy:expandable:stub {}-->
-    <!--hvy:text {}-->
-     Widget Alpha
-   <!--hvy:expandable:content {}-->
-    <!--hvy:text {}-->
-     Source-backed widget details.
+  <!--hvy:component-list {"id":"items","componentListComponent":"widget-record","componentListDefaultSortKey":"Name","componentListDefaultSortDirection":"asc","componentListDefaultGroupKey":"Category"}-->
+   <!--hvy:component-list:0 {}-->
+    <!--hvy:widget-record {"id":"widget-alpha","sortKeys":{"Name":"Alpha"},"groupKeys":{"Category":"Example"}}-->
+     <!--hvy:expandable:stub {}-->
+      <!--hvy:text {}-->
+       Widget Alpha
+     <!--hvy:expandable:content {}-->
+      <!--hvy:text {}-->
+       Source-backed widget details.
   ```
 <!--hvy: {"id":"hvy-paragraph-styles","lock":false,"expanded":true,"highlight":false}-->
 #! Paragraph Styles
@@ -438,7 +442,7 @@ text_line_styles:
 
  <!--hvy:text {}-->
   Define styles in front matter with a stable name, a user-facing label, and declaration-only CSS:
-
+  
   ```yaml
   text_line_styles:
     blip-heading:
@@ -451,16 +455,16 @@ text_line_styles:
 
  <!--hvy:text {}-->
   Use the style by placing `^style-name^` at the start of a Markdown line inside a `text` block. The marker is source-only and should not be visible in the rendered document.
-
+  
   ```hvy
   <!--hvy:text {}-->
-   ^blip-heading^ #### Blip Alpha
-   ^blip-detail^ Source-backed detail about Blip Alpha.
+   ^fancy-heading^ #### Blip Alpha
+   ^left-padded-detail^ Source-backed detail about Blip Alpha.
   ```
 
  <!--hvy:text {}-->
   Rules:
-
+  
   - Style names use ASCII letters, digits, `_`, or `-`.
   - Markers only apply at the start of a line.
   - Unknown style names render as ordinary text in viewers that do not know the style.

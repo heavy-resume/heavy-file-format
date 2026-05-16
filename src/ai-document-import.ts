@@ -840,6 +840,7 @@ function formatImportReusableDefinitionExample(def: ComponentDefinition, documen
 }
 
 function createImportReusableDefinitionExample(def: ComponentDefinition): VisualBlock {
+  const baseType = def.baseType ? resolveBaseComponentFromMeta(def.baseType, null) : '';
   const template = def.template
     ? cloneReusableBlock(def.template)
     : {
@@ -849,6 +850,12 @@ function createImportReusableDefinitionExample(def: ComponentDefinition): Visual
         schemaMode: false,
       };
   template.schema.component = def.name;
+  if (baseType === 'xref-card' && !def.template) {
+    template.schema.xrefTitle = template.schema.xrefTitle || 'EXAMPLE_TARGET_TITLE';
+    template.schema.xrefDetail = template.schema.xrefDetail || 'Short source-backed detail';
+    template.schema.xrefTarget = template.schema.xrefTarget || 'example-target-id';
+    template.schema.id = '';
+  }
   replaceImportTemplateVariablesInBlock(template, def.templateVariables ?? {});
   return template;
 }

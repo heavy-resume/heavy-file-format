@@ -115,6 +115,9 @@ hvy_version: 0.1
 
   const summary = summarizeDocumentStructure(document);
 
+  expect(summary.summary).toContain('Effective style defaults:');
+  expect(summary.summary).toContain('- section default css: "margin: 0 0 0.5rem;"');
+  expect(summary.summary).toContain('- implicit block default css: "margin: 0.5rem 0;"');
   expect(summary.summary).toContain('<!-- section id="skills" title="Skills" location="main" -->');
   expect(summary.summary).toContain('# Skills');
   expect(summary.summary).toContain('Python - Automation <!-- xref-card id="skill-python-card" -->');
@@ -694,6 +697,56 @@ component_defs:
   expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.context).toContain('Component: tool-note');
   expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.context).not.toContain('Component: unused-row');
   expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.context).not.toContain('component_defs:');
+});
+
+test('importTextIntoDocument shows xref-card reusable examples with target fields', async () => {
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"targets":[]}'
+  );
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"information":"Imported tools"}'
+  );
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"hvy":"<!--hvy: {\\"id\\":\\"tools\\"}-->\\n#! Tools\\n\\n <!--hvy:text {}-->\\n  Imported tools"}'
+  );
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+component_defs:
+  - name: skill-xref-card
+    baseType: xref-card
+    description: Skill reference
+  - name: tool-tech-xref-card
+    baseType: xref-card
+    description: Tool / technology reference
+---
+
+<!--hvy: {"id":"tools"}-->
+#! Tools
+
+<!--hvy:component-list {"id":"skills","componentListComponent":"skill-xref-card"}-->
+
+<!--hvy:component-list {"id":"tools-tech","componentListComponent":"tool-tech-xref-card"}-->
+`, '.hvy');
+
+  const result = await importTextIntoDocument(document, {
+    sourceName: 'notes.txt',
+    sourceText: 'Imported tools',
+    steps: [{ section: 'Tools', sectionId: 'tools' }],
+    llm: {
+      settings: { provider: 'openai', model: 'gpt-5-mini' },
+      client: { complete: vi.fn() },
+    },
+  });
+
+  expect(result.status).toBe('complete');
+  const context = requestProxyCompletionMock.mock.calls[2]?.[0]?.context ?? '';
+  expect(context).toContain('Component: skill-xref-card');
+  expect(context).toContain('<!--hvy:skill-xref-card {"xrefTitle":"EXAMPLE_TARGET_TITLE","xrefDetail":"Short source-backed detail","xrefTarget":"example-target-id"}-->');
+  expect(context).toContain('Component: tool-tech-xref-card');
+  expect(context).toContain('<!--hvy:tool-tech-xref-card {"xrefTitle":"EXAMPLE_TARGET_TITLE","xrefDetail":"Short source-backed detail","xrefTarget":"example-target-id"}-->');
+  expect(context).not.toContain('<!--hvy:skill-xref-card {}-->');
+  expect(context).not.toContain('<!--hvy:skill-xref-card {"id"');
+  expect(context).not.toContain('<!--hvy:tool-tech-xref-card {"id"');
 });
 
 test('importTextIntoDocument appends generated section when approved step matches only a template section', async () => {

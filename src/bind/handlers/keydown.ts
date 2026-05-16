@@ -1,5 +1,6 @@
 import { state, getRenderApp, handleTagEditorKeydown, applyRichAction, handleRichEditorKeydown, refreshRichToolbarState, openLinkInlineModal, closeAiEditPopover, submitAiEditRequest, handleInlineCheckboxBackspace, tagStateHelpers, findSectionByKey, createEmptyBlock, setActiveEditorBlock, recordHistory } from './_imports';
 import { completeCliInput } from '../../cli-ui/completion';
+import { applyCodeIndentation } from '../../code-indentation';
 import { selectAdjacentSearchResult } from '../../search/actions';
 import { handleEscapeKey } from './escape';
 
@@ -50,6 +51,19 @@ export function bindKeydown(app: HTMLElement): void {
     ) {
       event.preventDefault();
       void submitAiEditRequest();
+      return;
+    }
+    if (target instanceof HTMLTextAreaElement && target.dataset.field === 'block-code' && event.key === 'Tab') {
+      event.preventDefault();
+      const next = applyCodeIndentation(
+        target.value,
+        target.selectionStart ?? target.value.length,
+        target.selectionEnd ?? target.value.length,
+        event.shiftKey ? 'dedent' : 'indent'
+      );
+      target.value = next.value;
+      target.setSelectionRange(next.selectionStart, next.selectionEnd);
+      target.dispatchEvent(new InputEvent('input', { bubbles: true }));
       return;
     }
     if (target instanceof HTMLInputElement && target.id === 'cliInput' && event.key === 'Tab') {

@@ -5,6 +5,7 @@ import type { JsonObject } from './hvy/types';
 import { getThemeColorLabel, THEME_COLOR_NAMES } from './theme';
 import { getSectionId, visitBlocks } from './section-ops';
 import { renderAltAnnotationsAsFullText } from './markdown';
+import { formatStyleDefaultsSummary } from './style-defaults-summary';
 import {
   MAX_TEXT_PREVIEW_LENGTH,
   type ComponentRefEntry,
@@ -34,6 +35,9 @@ export function summarizeHeaderStructure(document: VisualDocument): HeaderStruct
   lines.push(`text_line_styles: ${describeHeaderObjectKeys(meta.text_line_styles as JsonObject | undefined)}`);
   lines.push(`plugins: ${Array.isArray(meta.plugins) ? meta.plugins.length : 0}`);
   lines.push(`schema: ${meta.schema && typeof meta.schema === 'object' ? 'present' : '(none)'}`);
+  lines.push('');
+  lines.push('effective style defaults:');
+  lines.push(...formatStyleDefaultsSummary(document));
   lines.push('');
   lines.push('known theme color variables:');
   lines.push(...describeKnownThemeColors(meta));
@@ -291,6 +295,10 @@ export function summarizeDocumentStructure(document: VisualDocument): DocumentSt
       walkSections(section.children, depth + 1, nesting + 1);
     }
   };
+
+  lines.push('Effective style defaults:');
+  lines.push(...formatStyleDefaultsSummary(document));
+  lines.push('');
 
   indexAllSectionBlocks(document.sections.filter((section) => !section.isGhost));
   walkSections(document.sections.filter((section) => !section.isGhost), 0, 1);

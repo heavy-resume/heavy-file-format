@@ -200,6 +200,45 @@ test('enter inside a code block inserts code newlines and shift enter exits belo
   await expect(page.getByRole('button', { name: 'Code block' }).first()).toHaveClass(/secondary/);
 });
 
+test('tab and shift tab indent fenced code inside the text editor by two spaces', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('.rich-editor').first();
+
+  await editor.evaluate((node) => {
+    node.innerHTML = '<pre data-code-language="js"><code class="language-js" contenteditable="true">alpha\n  beta</code></pre>';
+    const code = node.querySelector('code')!;
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(code);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+  });
+  await page.keyboard.press('Tab');
+
+  await expect(editor.locator('pre code')).toHaveText('  alpha\n    beta');
+
+  await page.keyboard.press('Shift+Tab');
+
+  await expect(editor.locator('pre code')).toHaveText('alpha\n  beta');
+
+  await editor.evaluate((node) => {
+    const textNode = node.querySelector('code')?.firstChild;
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.setStart(textNode!, 5);
+    range.collapse(true);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+  });
+  await page.keyboard.press('Tab');
+
+  await expect(editor.locator('pre code')).toHaveText('alpha  \n  beta');
+});
+
 test('select all and backspace clears mixed rich editor content', async ({ page }) => {
   await page.goto('/');
 

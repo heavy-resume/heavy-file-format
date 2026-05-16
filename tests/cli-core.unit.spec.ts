@@ -2130,6 +2130,9 @@ component_defs:
   const result = await executeHvyCliCommand(document, session, 'hvy request_structure');
 
   expect(result.mutated).toBe(false);
+  expect(result.output).toContain('Effective style defaults:');
+  expect(result.output).toContain('- section default css: "margin: 0 0 0.5rem;"');
+  expect(result.output).toContain('- implicit block default css: "margin: 0.5rem 0;"');
   expect(result.output).toContain('- skill-card baseType=xref-card - Skill card');
   expect(result.output).toContain('Components:');
   expect(result.output).toContain('/body\n  /summary tags=[overview, canonical]');

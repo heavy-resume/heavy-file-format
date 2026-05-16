@@ -12,6 +12,7 @@ import { normalizeXrefTarget, getXrefTargetOptions, isXrefTargetValid, applyXref
 import { getTableColumns, setTableColumns } from './table-ops';
 import { coerceGridColumns } from './grid-ops';
 import { applyMobileAltAdjustment, normalizeEditorMarkdownWhitespace, normalizeMarkdownLists, markdownToEditorHtml as renderMarkdownToEditorHtml, turndown } from './markdown';
+import { applyCodeIndentation } from './code-indentation';
 import { renderAddComponentPicker } from './editor/component-picker';
 import { escapeAttr, escapeHtml, getInlineEditableText, renderOption } from './utils';
 import { recordHistory } from './history';
@@ -1749,6 +1750,13 @@ export function handleRichEditorKeydown(event: KeyboardEvent, editable: HTMLElem
     return true;
   }
 
+  if (event.key === 'Tab' && applyCodeBlockIndentation(editable, event.shiftKey ? 'dedent' : 'indent')) {
+    event.preventDefault();
+    editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    updateRichToolbarState(editable);
+    return true;
+  }
+
   if ((event.key === 'Backspace' || event.key === 'Delete') && removeEmptyCodeBlockAtSelection(editable)) {
     event.preventDefault();
     editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
@@ -2317,6 +2325,34 @@ function insertTextInSelectionCodeBlock(editable: HTMLElement, text: string): vo
   range.collapse(true);
   selection.removeAllRanges();
   selection.addRange(range);
+}
+
+function applyCodeBlockIndentation(editable: HTMLElement, direction: 'indent' | 'dedent'): boolean {
+  const selection = window.getSelection();
+  if (!selection?.rangeCount) {
+    return false;
+  }
+  const code = getSelectionCodeBlock(editable)?.querySelector('code');
+  if (!(code instanceof HTMLElement)) {
+    return false;
+  }
+  const range = selection.getRangeAt(0);
+  const startOffset = getTextOffset(code, range.startContainer, range.startOffset);
+  const endOffset = getTextOffset(code, range.endContainer, range.endOffset);
+  if (startOffset === null || endOffset === null) {
+    return false;
+  }
+  const value = code.textContent ?? '';
+  const normalizedStartOffset = startOffset - countCodeCaretAnchors(value.slice(0, startOffset));
+  const normalizedEndOffset = endOffset - countCodeCaretAnchors(value.slice(0, endOffset));
+  const next = applyCodeIndentation(value.replace(/\u200b/g, ''), normalizedStartOffset, normalizedEndOffset, direction);
+  code.textContent = next.value;
+  const textNode = code.firstChild instanceof Text ? code.firstChild : code.appendChild(document.createTextNode(''));
+  range.setStart(textNode, next.selectionStart);
+  range.setEnd(textNode, next.selectionEnd);
+  selection.removeAllRanges();
+  selection.addRange(range);
+  return true;
 }
 
 function countCodeCaretAnchors(value: string): number {

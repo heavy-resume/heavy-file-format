@@ -811,6 +811,8 @@
   color: inherit;
   font: 13px/1.5 "JetBrains Mono", "Fira Code", monospace;
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: normal;
 }
 
 .rich-editor pre code:focus {

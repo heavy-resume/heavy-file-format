@@ -37,7 +37,7 @@ import { autoUpdatePlanAndWorkNote, createInitialWorkNote, findAutoCompletedPlan
 import { getDocumentEditPhaseTools } from '../src/ai-document-edit-phases';
 import { parseDocumentEditToolRequest } from '../src/ai-document-tool-parsing';
 import { executePatchHeaderTool } from '../src/ai-header-edit-tools';
-import { deserializeDocument, serializeDocument } from '../src/serialization';
+import { deserializeDocument, serializeDocument, serializeSectionFragment } from '../src/serialization';
 import { initCallbacks, initState } from '../src/state';
 import type { ChatMessage, ChatSettings } from '../src/types';
 import { dbTablePluginRegistration } from '../src/plugins/db-table-plugin';
@@ -311,14 +311,14 @@ test('buildDocumentEditFormatInstructions documents the tool protocol', () => {
   const headerInstructions = buildHeaderEditFormatInstructions();
   expect(headerInstructions).toContain('Valid header tools are: `answer`, `plan`, `mark_step_done`, `grep_header`, `view_header`, `patch_header`, `request_header`, `done`.');
   expect(headerInstructions).toContain('Use `answer` for informational questions, explanations, or requests that do not require changing the HVY header.');
-  expect(headerInstructions).toContain('{"tool":"plan","steps":["Find the reusable definition","Patch the YAML","Verify the header"],"reason":"optional"}');
+  expect(headerInstructions).toContain('{"tool":"plan","steps":["Find the component template definition","Patch the YAML","Verify the header"],"reason":"optional"}');
   expect(headerInstructions).toContain('The header is YAML front matter only.');
   expect(headerInstructions).toContain('component_defs');
   expect(headerInstructions).toContain('Do not invent metadata fields.');
   expect(headerInstructions).toContain('For `section_defaults`, the only supported field is `css`');
   expect(headerInstructions).toContain('Do not use `section_defaults` to satisfy requests about visible spacing between existing sections');
   expect(headerInstructions).toContain('including table colors: `--hvy-table-header`, `--hvy-table-row-bg-1`, and `--hvy-table-row-bg-2`');
-  expect(headerInstructions).toContain('Use `grep_header` to search the YAML header with a regex pattern before viewing or patching a specific reusable definition.');
+  expect(headerInstructions).toContain('Use `grep_header` to search the YAML header with a regex pattern before viewing or patching a specific component template or section template definition.');
   expect(headerInstructions).toContain('{"tool":"grep_header","query":"component_defs|skill-card","flags":"i","before":2,"after":8,"max_count":3,"reason":"optional"}');
   expect(headerInstructions).toContain('{"tool":"answer","answer":"Direct answer to the user."}');
   expect(headerInstructions).toContain('section_defaults:\\n  css:');
@@ -900,6 +900,114 @@ component_defs:
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('detailed: Use when the source has narrative award details.');
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.responseInstructions).toContain('_flavor');
   expect(serialized).toContain('Won for developer tooling.');
+});
+
+test('importTextIntoDocument forced template mode uses selected section flavor list structure', async () => {
+  requestProxyCompletionMock.mockResolvedValueOnce('{"targets":[]}');
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"values":{"_sectionFlavor":"linear","history_list":[{"role":"Engineer","organization":"Example Co","years":"2020-2024","details":"Built useful systems."}]}}'
+  );
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+section_defs:
+  - name: History
+    key: resume-history
+    template:
+      id: history
+      title: History
+      blocks:
+        - text: ""
+          schema:
+            component: table
+            description: History table header
+        - text: ""
+          schema:
+            id: history-list
+            component: component-list
+            componentListComponent: history-record
+            componentListItemLabel: job
+    flavors:
+      - name: tableform
+        description: Use for longer histories with many items.
+        template:
+          id: history
+          title: History
+          blocks:
+            - text: ""
+              schema:
+                component: table
+                description: History table header
+            - text: ""
+              schema:
+                id: history-list
+                component: component-list
+                componentListComponent: history-record
+                componentListItemLabel: job
+      - name: linear
+        description: Use for shorter histories.
+        template:
+          id: history
+          title: History
+          blocks:
+            - text: ""
+              schema:
+                id: history-list
+                component: component-list
+                componentListComponent: history-record
+                componentListItemLabel: job
+                componentListBlocks:
+                  - text: ""
+                    schema:
+                      component: history-record
+                      expandableStubBlocks:
+                        children: []
+                      expandableContentBlocks:
+                        children:
+                          - text: "{% organization %}\\n{% role %}\\n{% details | block %}"
+                            schema:
+                              component: text
+component_defs:
+  - name: history-record
+    baseType: expandable
+    schema:
+      component: history-record
+      expandableStubBlocks:
+        children:
+          - text: "{% role %} / {% organization %} / {% years %}"
+            schema:
+              component: text
+      expandableContentBlocks:
+        children:
+          - text: "{% details | block %}"
+            schema:
+              component: text
+---
+
+<!--hvy: {"id":"history","templateKey":"resume-history"}-->
+#! History
+
+<!--hvy:component-list {"id":"history-list","componentListComponent":"history-record","componentListItemLabel":"job"}-->
+`, '.hvy');
+
+  const result = await importTextIntoDocument(document, {
+    sourceName: 'resume.txt',
+    sourceText: 'Example Co, Engineer, 2020-2024. Built useful systems.',
+    steps: [{ section: 'History', target: { kind: 'body', id: 'history', title: 'History' }, importMode: 'template' }],
+    llm: {
+      settings: { provider: 'openai', model: 'gpt-5-mini' },
+      client: { complete: vi.fn() },
+    },
+  });
+  const historySection = document.sections[0];
+
+  expect(result.status).toBe('complete');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('linear: Use for shorter histories.');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.responseInstructions).toContain('_sectionFlavor');
+  expect(historySection).toBeTruthy();
+  const generatedHistory = serializeSectionFragment(historySection!, document.meta);
+  expect(generatedHistory).toContain('Built useful systems.');
+  expect(generatedHistory).not.toContain('History table header');
+  expect(generatedHistory).not.toContain('Engineer / Example Co / 2020-2024');
 });
 
 test('importTextIntoDocument rejects invalid forced template JSON without raw HVY fallback', async () => {

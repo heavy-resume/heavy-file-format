@@ -1,25 +1,27 @@
 ---
 hvy_version: 0.1
 template: true
-title: Resume Template
+title: Resume
 reader_max_width: 60rem
 ai-context: >-
-  This is a resume template. Use the top-skills-tools-technologies section for featured
+  This is a resume document. Use the top-skills-tools-technologies section for featured
   reference cards only; the skills, tools-technologies, and languages sidebar sections
   are the main reusable libraries for detailed reference records. History and education
   have body sections with structured component-lists for expandable record rows.
-  Projects, publications, awards, and certifications are reusable section templates
+  Projects, publications, awards, and certifications are section templates
   that should be added only when source-backed content exists. Keep dated main-section
   records in reverse chronological order with newest entries first. History should use
   one expandable record per organization when roles are contiguous; put promotions,
   title changes, or adjacent date ranges at the same organization inside that single
-  expanded record instead of creating duplicate organization rows. One project,
+  expanded record instead of creating duplicate organization rows. Use the tableform
+  History section flavor for longer histories with more items, and the linear History
+  section flavor for shorter histories. One project,
   publication, certification, degree, skill, or tool should usually be represented as
   one expandable reusable record. Local skills/tools lists inside history, project,
   publication, certification, award, and education records are supporting references
   and should not be treated as the main libraries.
 ai-import-guidance: >-
-  During resume import, map source-backed awards into the Awards reusable section
+  During resume import, map source-backed awards into the Awards section
   template even when the source mentions awards inside work history, projects,
   education, summaries, or other prose instead of providing an explicit Awards heading.
   Treat those mentions as award-record items when they identify a distinct award,
@@ -305,6 +307,162 @@ section_defs:
                           editorOnly: true
                           css: "margin: 0.35rem 0 0; color: var(--hvy-text-muted); font-style: italic;"
       children: []
+  - name: History
+    key: resume-history
+    repeatable: false
+    template:
+      id: history
+      title: Professional History
+      level: 1
+      lock: true
+      description: Work history
+      hideIfUnmodified: true
+      tags: reciprocal-xref-source
+      blocks:
+        - text: "# Professional History"
+          schema:
+            component: text
+            css: "margin: 0.5rem 0;"
+        - text: ""
+          schema:
+            component: table
+            css: "margin: 0.5rem 0 0;"
+            tags: table-header
+            tableColumns: ["TITLE", "<!--hvy:alt {\"compact\":\"ORG\"}-->ORGANIZATION<!--/hvy:alt-->", "YEAR(S)"]
+            tableShowHeader: true
+            tableRows: []
+            lock: true
+            description: History table header
+        - text: ""
+          schema:
+            id: history-list
+            component: component-list
+            css: "margin: 0;"
+            componentListComponent: history-record
+            componentListItemLabel: job
+            tags: history
+            componentListBlocks: []
+      children: []
+    flavors:
+      - name: tableform
+        description: Preferred for longer histories (4 or more)
+        template:
+          id: history
+          title: Professional History
+          level: 1
+          lock: true
+          description: Work history
+          hideIfUnmodified: true
+          tags: reciprocal-xref-source
+          blocks:
+            - text: "# Professional History"
+              schema:
+                component: text
+                css: "margin: 0.5rem 0;"
+            - text: ""
+              schema:
+                component: table
+                css: "margin: 0.5rem 0 0;"
+                tags: table-header
+                tableColumns: ["TITLE", "<!--hvy:alt {\"compact\":\"ORG\"}-->ORGANIZATION<!--/hvy:alt-->", "YEAR(S)"]
+                tableShowHeader: true
+                tableRows: []
+                lock: true
+                description: History table header
+            - text: ""
+              schema:
+                id: history-list
+                component: component-list
+                css: "margin: 0;"
+                componentListComponent: history-record
+                componentListItemLabel: job
+                tags: history
+                componentListBlocks: []
+          children: []
+      - name: linear
+        description: Preferred for shorter histories (3 or less)
+        template:
+          id: history
+          title: Professional History
+          level: 1
+          lock: true
+          description: Work history
+          hideIfUnmodified: true
+          tags: reciprocal-xref-source
+          blocks:
+            - text: "# Professional History"
+              schema:
+                component: text
+                css: "margin: 0.5rem 0;"
+            - text: ""
+              schema:
+                id: history-list
+                component: component-list
+                css: "margin: 0;"
+                componentListComponent: history-record
+                componentListItemLabel: job
+                tags: history
+                componentListBlocks:
+                  - text: ""
+                    schema:
+                      component: history-record
+                      tags: history
+                      xrefTitle: "{% role %}"
+                      xrefDetail: "{% organization %}"
+                      css: "margin: 0.35rem 0;"
+                      expandableAlwaysShowStub: true
+                      expandableExpanded: false
+                      expandableStubBlocks:
+                        children: []
+                      expandableContentBlocks:
+                        css: "padding: 0.5rem;"
+                        children:
+                          - text: "{% organization %}"
+                            schema:
+                              component: text
+                              placeholder: Organization
+                              css: "margin: 0 0 0.35rem;"
+                          - text: ""
+                            schema:
+                              component: grid
+                              css: "margin: 0.35rem 0;"
+                              gridColumns: 2
+                              gridItems:
+                                - id: history-location
+                                  block:
+                                    text: "{% location %}"
+                                    schema:
+                                      component: text
+                                      placeholder: location
+                                      css: "margin: 0;"
+                                - id: history-date-range
+                                  block:
+                                    text: "{% date_range %}"
+                                    schema:
+                                      component: text
+                                      placeholder: date range
+                                      css: "margin: 0; text-align: right;"
+                          - text: "{% role %}"
+                            schema:
+                              component: text
+                              placeholder: job title
+                              css: "margin: 0.35rem 0; font-weight: 700;"
+                          - text: "{% description | block %}"
+                            schema:
+                              component: text
+                              placeholder: description
+                              css: "margin: 0.35rem 0;"
+                          - text: "^section-heading^ #### Accomplishments"
+                            schema:
+                              component: text
+                              css: "margin: 0;"
+                          - text: ""
+                            schema:
+                              component: text
+                              placeholder: accomplishments
+                              css: "margin: 0;"
+                          - component: skills-and-tools-tech-list
+          children: []
 component_defs:
   - name: resume-section-row
     baseType: expandable
@@ -1129,7 +1287,7 @@ component_defs:
 
  <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"language-record","componentListItemLabel":"language","tags":"language"}-->
 
-<!--hvy: {"id":"history","lock":true,"description":"Work history","hideIfUnmodified":true,"tags":"reciprocal-xref-source"}-->
+<!--hvy: {"id":"history","templateKey":"resume-history","lock":true,"description":"Work history","hideIfUnmodified":true,"tags":"reciprocal-xref-source"}-->
 #! Professional History
 
  <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
@@ -1137,7 +1295,7 @@ component_defs:
 
  <!--hvy:table {"css":"margin: 0.5rem 0 0;","tags":"table-header","tableColumns":["TITLE","<!--hvy:alt {\"compact\":\"ORG\"}-->ORGANIZATION<!--/hvy:alt-->","YEAR(S)"],"tableShowHeader":true,"tableRows":[],"lock":true,"description":"History table header"}-->
 
- <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"history-record","componentListItemLabel":"job","tags":"history"}-->
+ <!--hvy:component-list {"id":"history-list","css":"margin: 0;","componentListComponent":"history-record","componentListItemLabel":"job","tags":"history"}-->
 
 <!--hvy: {"id":"education","lock":true,"description":"Education","hideIfUnmodified":true,"tags":"reciprocal-xref-source"}-->
 #! Education

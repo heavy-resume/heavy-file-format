@@ -97,6 +97,7 @@ type ImportTemplateStructureInternal = ImportTemplateStructureDescriptor & {
   sectionVariables: ReusableTemplateVariable[];
   sectionFlavors: ImportTemplateSectionFlavor[];
   lists: ImportTemplateListStructure[];
+  componentDefs: ComponentDefinition[];
 };
 
 type ImportTemplateSectionFlavor = {
@@ -723,6 +724,7 @@ function buildImportTemplateStructureForCandidate(candidate: ImportTemplateSecti
     sectionVariables,
     sectionFlavors,
     lists,
+    componentDefs: candidate.componentDefs,
   };
 }
 
@@ -1209,8 +1211,10 @@ type ImportStepApplication =
 function getImportTemplateSectionCandidates(document: VisualDocument): ImportTemplateSectionCandidate[] {
   const candidates: ImportTemplateSectionCandidate[] = [];
   const componentDefs = Array.isArray(document.meta.component_defs) ? document.meta.component_defs : [];
+  const sectionDefinitions = getImportSectionDefinitions(document);
   const appendSections = (sections: VisualSection[]): void => {
     for (const section of sections) {
+      const sectionDefinition = findImportSectionDefinitionForBodySection(sectionDefinitions, section);
       candidates.push({
         title: trimImportString(section.title) || trimImportString(section.customId) || 'Untitled section',
         id: trimImportString(section.customId),
@@ -1218,13 +1222,13 @@ function getImportTemplateSectionCandidates(document: VisualDocument): ImportTem
         section,
         source: 'body',
         componentDefs,
-        sectionDefinition: undefined,
+        sectionDefinition,
       });
       appendSections(section.children);
     }
   };
   appendSections(document.sections);
-  for (const definition of getImportSectionDefinitions(document)) {
+  for (const definition of sectionDefinitions) {
     candidates.push({
       title: trimImportString(definition.name) || trimImportString(definition.template.title) || trimImportString(definition.template.customId) || 'Untitled section',
       id: trimImportString(definition.template.customId),
@@ -1236,6 +1240,24 @@ function getImportTemplateSectionCandidates(document: VisualDocument): ImportTem
     });
   }
   return candidates;
+}
+
+function findImportSectionDefinitionForBodySection(definitions: SectionDefinition[], section: VisualSection): SectionDefinition | undefined {
+  const templateKey = trimImportString(section.templateKey);
+  if (templateKey) {
+    const byTemplateKey = definitions.find((definition) => getImportSectionDefinitionKey(definition) === templateKey);
+    if (byTemplateKey) {
+      return byTemplateKey;
+    }
+  }
+  const sectionId = trimImportString(section.customId);
+  return sectionId
+    ? definitions.find((definition) => trimImportString(definition.template.customId) === sectionId)
+    : undefined;
+}
+
+function getImportSectionDefinitionKey(definition: SectionDefinition): string {
+  return trimImportString(definition.key) || trimImportString(definition.name);
 }
 
 function resolveImportStepApplication(document: VisualDocument, step: ImportPlanStep): ImportStepApplication {
@@ -1696,16 +1718,23 @@ function instantiateImportTemplateSection(template: VisualSection, templateStruc
   const sectionFlavor = templateStructure.sectionFlavors.find((flavor) => flavor.name === sectionFlavorName);
   const section = cloneReusableSection(sectionFlavor?.template ?? template);
   const sectionVariables = sectionFlavor?.variables.length ? sectionFlavor.variables : templateStructure.sectionVariables;
+  const lists = sectionFlavor
+    ? mergeImportTemplateListStructures(templateStructure.lists, collectImportTemplateListStructures(section, templateStructure.componentDefs))
+    : templateStructure.lists;
   const scalarValues: Record<string, string> = {};
   for (const variable of sectionVariables) {
     const value = values[variable.name];
     scalarValues[variable.name] = typeof value === 'string' ? value : '';
   }
   applyReusableSectionTemplateValues(section, scalarValues, sectionVariables);
-  for (const list of templateStructure.lists) {
+  for (const list of lists) {
     replaceImportTemplateListItems(section, list, Array.isArray(values[list.key]) ? values[list.key] as Array<Record<string, string>> : []);
   }
   return section;
+}
+
+function mergeImportTemplateListStructures(baseLists: ImportTemplateListStructure[], selectedLists: ImportTemplateListStructure[]): ImportTemplateListStructure[] {
+  return baseLists.map((baseList) => selectedLists.find((selectedList) => selectedList.key === baseList.key || selectedList.itemComponent === baseList.itemComponent) ?? baseList);
 }
 
 function replaceImportTemplateListItems(section: VisualSection, list: ImportTemplateListStructure, items: Array<Record<string, string>>): void {

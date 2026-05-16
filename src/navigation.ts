@@ -471,6 +471,7 @@ export function closeModal(): void {
   state.dbTableQueryModal = null;
   state.reusableSaveModal = null;
   state.reusableTemplateModal = null;
+  state.sectionTemplateFlavorModal = null;
   state.themeModalOpen = false;
 }
 
@@ -517,6 +518,7 @@ export function resetTransientUiState(): void {
   state.modalSectionKey = null;
   state.reusableSaveModal = null;
   state.reusableTemplateModal = null;
+  state.sectionTemplateFlavorModal = null;
   state.componentMetaModal = null;
   state.sqliteRowComponentModal = null;
   state.dbTableQueryModal = null;

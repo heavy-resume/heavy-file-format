@@ -18,7 +18,7 @@ import { renderTagEditor } from '../editor/tag-editor';
 import { colorValueToAlpha, colorValueToPickerHex, getResolvedThemeColor, getThemeColorLabel, getThemeResetColor, THEME_COLOR_NAMES } from '../theme';
 import type { ThemeConfig } from '../theme';
 import { getMatchedPaletteId, HVY_PALETTES } from '../palettes/palette-registry';
-import type { ComponentDefinition, DbTableQueryModalState, ReaderViewFilter, ReusableSaveModalState, SqliteRowComponentModalState, VisualDocument } from '../types';
+import type { ComponentDefinition, DbTableQueryModalState, ReaderViewFilter, ReusableSaveModalState, SectionTemplateFlavorModalState, SqliteRowComponentModalState, VisualDocument } from '../types';
 import type { SearchState } from '../search/types';
 import { createSearchFilterContext, isBlockSearchDeprioritized, isBlockSearchMatch, isBlockSearchVisible, isSectionSearchDeprioritized, isSectionSearchMatch, isSectionSearchVisible, orderSearchFilteredSections, type SearchFilterContext } from '../search/filter';
 import { highlightSearchHtml } from '../search/highlight';
@@ -28,7 +28,7 @@ import { areTablesEnabled } from '../reference-config';
 import { defaultBlockSchema } from '../document-factory';
 import { parseAttachedComponentBlocks } from '../plugins/db-table';
 import { getOutputGenerator, SCRIPTING_PLUGIN_ID } from '../plugins/registry';
-import { getComponentDefsFromMeta } from '../component-defs';
+import { getComponentDefsFromMeta, getSectionDefsFromMeta } from '../component-defs';
 import { extractReusableTemplateVariablesFromDefinition } from '../reusable-template-values';
 import { filterTemplateVisibleSections, isSectionHiddenByTemplateMarker } from '../template-hide';
 import { closeIcon, plusIcon } from '../icons';
@@ -59,6 +59,7 @@ interface ReaderRenderState {
   dbTableQueryModal: DbTableQueryModalState | null;
   reusableSaveModal: ReusableSaveModalState | null;
   reusableTemplateModal: import('../types').ReusableTemplateModalState | null;
+  sectionTemplateFlavorModal: SectionTemplateFlavorModalState | null;
   componentMetaModal: { sectionKey: string; blockId: string } | null;
   themeModalOpen: boolean;
   themeModalMode: 'full' | 'advanced';
@@ -1333,6 +1334,41 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
             <div class="link-inline-actions reusable-save-actions">
               <button type="button" class="ghost" data-modal-action="close">Cancel</button>
               <button type="button" class="secondary" data-modal-action="insert-reusable-template" ${hasUnavailablePicker ? 'disabled' : ''}>Add</button>
+            </div>
+          </section>
+        </div>
+      `;
+    }
+
+    if (state.sectionTemplateFlavorModal) {
+      const definition = getSectionDefsFromMeta(state.documentMeta).find((item) => item.name === state.sectionTemplateFlavorModal?.templateName);
+      const flavors = (definition?.flavors ?? []).filter((flavor) => flavor.name.trim().length > 0 && !!flavor.template);
+      if (!definition || flavors.length === 0) {
+        return '';
+      }
+      const modalTitle = `Choose ${definition.name} Flavor`;
+      return `
+        <div id="modalRoot" class="modal-root">
+          <div class="modal-overlay" data-modal-action="close-overlay"></div>
+          <section class="modal-panel component-meta-modal section-template-flavor-modal">
+            <div class="modal-head">
+              <h3>${deps.escapeHtml(modalTitle)}</h3>
+              <button type="button" class="ghost remove-x" data-modal-action="close" aria-label="Close ${deps.escapeAttr(modalTitle)}" title="Close">${closeIcon()}</button>
+            </div>
+            <p class="muted">Pick the section structure to insert.</p>
+            <div class="section-template-flavor-list">
+              ${flavors.map((flavor) => `
+                <button type="button" class="section-template-flavor-option" data-modal-action="choose-section-template-flavor" data-section-template-name="${deps.escapeAttr(definition.name)}" data-section-template-flavor="${deps.escapeAttr(flavor.name)}">
+                  <span class="section-template-flavor-name">${deps.escapeHtml(flavor.name)}</span>
+                  ${flavor.description?.trim()
+                    ? `<span class="section-template-flavor-description">${deps.escapeHtml(flavor.description.trim())}</span>`
+                    : '<span class="section-template-flavor-description muted">No description.</span>'
+                  }
+                </button>
+              `).join('')}
+            </div>
+            <div class="link-inline-actions reusable-save-actions">
+              <button type="button" class="ghost" data-modal-action="close">Cancel</button>
             </div>
           </section>
         </div>

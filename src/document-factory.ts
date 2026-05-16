@@ -4,7 +4,7 @@ import type { ComponentDefinition, VisualDocument } from './types';
 import { makeId, sanitizeOptionalId } from './utils';
 import { getComponentDefs, getComponentDefsFromMeta, getSectionDefs, getSectionTemplateKey, resolveBaseComponent, resolveBaseComponentFromMeta } from './component-defs';
 import { coerceGridColumns, parseGridItems as _parseGridItems } from './grid-ops';
-import { applyReusableSectionTemplateValues, extractReusableTemplateVariablesFromSectionDefinition } from './reusable-template-values';
+import { applyReusableSectionTemplateValues, extractReusableTemplateVariablesFromSectionDefinition, extractReusableTemplateVariablesFromSectionFlavor } from './reusable-template-values';
 import { getTableColumns } from './table-ops';
 import { REUSABLE_SECTION_DEF_PREFIX } from './state';
 
@@ -573,14 +573,19 @@ function instantiateReusableBlockFromMeta(componentName: string, documentMeta: J
   return instance;
 }
 
-export function instantiateReusableSection(name: string, level: number): VisualSection | null {
+export function instantiateReusableSection(name: string, level: number, flavorName?: string): VisualSection | null {
   const normalizedName = name.startsWith(REUSABLE_SECTION_DEF_PREFIX) ? name.slice(REUSABLE_SECTION_DEF_PREFIX.length) : name;
   const def = getSectionDefs().find((item) => item.name === normalizedName || getSectionTemplateKey(item) === normalizedName);
   if (!def) {
     return null;
   }
-  const section = cloneReusableSection(def.template, level);
-  const variables = extractReusableTemplateVariablesFromSectionDefinition(def);
+  const flavor = flavorName
+    ? (def.flavors ?? []).find((item) => item.name.trim() === flavorName.trim() && !!item.template)
+    : null;
+  const section = cloneReusableSection(flavor?.template ?? def.template, level);
+  const variables = flavor
+    ? extractReusableTemplateVariablesFromSectionFlavor(flavor)
+    : extractReusableTemplateVariablesFromSectionDefinition(def);
   if (variables.length > 0) {
     applyReusableSectionTemplateValues(section, Object.fromEntries(variables.map((variable) => [variable.name, ''])), variables);
   }

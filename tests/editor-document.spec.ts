@@ -964,6 +964,59 @@ test('resume section templates hide already used non-repeatable sections', async
   expect(options).toEqual(['Blank', 'Awards', 'Resume Section']);
 });
 
+test('adding a section template with multiple flavors asks which flavor to use', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+section_defs:
+  - name: Feature
+    repeatable: true
+    template:
+      title: Feature
+      blocks:
+        - text: "# Feature Base"
+          schema:
+            component: text
+      children: []
+    flavors:
+      - name: Cards
+        description: Use when the section has several independent cards.
+        template:
+          title: Feature
+          blocks:
+            - text: "# Feature Cards"
+              schema:
+                component: text
+          children: []
+      - name: Linear
+        description: Use when the section is short and sequential.
+        template:
+          title: Feature
+          blocks:
+            - text: "# Feature Linear"
+              schema:
+                component: text
+          children: []
+---
+
+#! Existing
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('[data-field="reusable-section-type"][data-section-key="__top_level__"]').selectOption('section-def:Feature');
+  await page.locator('[data-action="add-top-level-section"][data-section-key="__top_level__"]').click();
+
+  await expect(page.getByRole('heading', { name: 'Choose Feature Flavor' })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Cards/ })).toContainText('Use when the section has several independent cards.');
+  await page.getByRole('button', { name: /Linear/ }).click();
+
+  await expect(page.locator('.editor-section-card', { hasText: 'Feature Linear' })).toBeVisible();
+  await expect(page.locator('.editor-section-card', { hasText: 'Feature Cards' })).toHaveCount(0);
+});
+
 test('resume editor script does not scan changed reciprocal xrefs on load', async ({ page }) => {
   await page.goto('/');
 

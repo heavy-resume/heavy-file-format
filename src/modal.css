@@ -46,6 +46,11 @@
   width: min(20rem, calc(100% - 2rem));
 }
 
+.section-template-flavor-modal,
+.hvy-document .section-template-flavor-modal {
+  width: min(34rem, calc(100% - 2rem));
+}
+
 .remove-confirmation-modal-root {
   display: grid;
   place-items: center;
@@ -154,6 +159,46 @@
 
 .template-target-picker {
   max-width: 20rem;
+}
+
+.section-template-flavor-list {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0.75rem 0;
+}
+
+.section-template-flavor-option,
+.hvy-document .section-template-flavor-option {
+  display: grid;
+  gap: 0.25rem;
+  width: 100%;
+  min-height: 4rem;
+  border: 1px solid var(--hvy-border-input);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--hvy-surface-alt) 78%, transparent);
+  color: var(--hvy-text);
+  padding: 0.7rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.section-template-flavor-option:hover,
+.hvy-document .section-template-flavor-option:hover,
+.section-template-flavor-option:focus-visible,
+.hvy-document .section-template-flavor-option:focus-visible {
+  border-color: var(--hvy-focus-ring);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--hvy-focus-ring) 24%, transparent);
+  outline: none;
+}
+
+.section-template-flavor-name {
+  font-weight: 700;
+}
+
+.section-template-flavor-description {
+  color: var(--hvy-text-alt);
+  font-size: 0.9rem;
+  line-height: 1.35;
 }
 
 .template-field-label-row {

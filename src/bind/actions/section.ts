@@ -1,15 +1,24 @@
-import { state, getRenderApp } from '../../state';
+import { state, getRenderApp, REUSABLE_SECTION_DEF_PREFIX } from '../../state';
 import { isDefaultUntitledSectionTitle, getSectionId, moveSectionByOffset, removeSectionByKey, makeBlockSubsection, removeSubsection } from '../../section-ops';
 import { setActiveEditorBlock } from '../../block-ops';
 import { createEmptySection, instantiateReusableSection } from '../../document-factory';
 import { recordHistory } from '../../history';
 import { closeModalIfTarget, navigateToSection } from '../../navigation';
+import { getSectionDefs, getSectionTemplateKey } from '../../component-defs';
 import type { ActionHandler } from './types';
 
 const addTopLevelSection: ActionHandler = () => {
-  recordHistory();
   const starter = state.addComponentBySection.__top_level__ ?? 'blank';
-  const section = starter === 'blank' ? createEmptySection(1, '', false) : instantiateReusableSection(starter, 1);
+  if (openSectionFlavorChooserIfNeeded(starter)) {
+    getRenderApp()();
+    return;
+  }
+  insertTopLevelSection(starter);
+};
+
+export function insertTopLevelSection(starter: string, flavorName?: string): void {
+  recordHistory();
+  const section = starter === 'blank' ? createEmptySection(1, '', false) : instantiateReusableSection(starter, 1, flavorName);
   if (!section) {
     return;
   }
@@ -21,7 +30,29 @@ const addTopLevelSection: ActionHandler = () => {
     state.clearSectionTitleOnFocusKey = isDefaultUntitledSectionTitle(section.title) ? section.key : null;
   }
   getRenderApp()();
-};
+}
+
+function openSectionFlavorChooserIfNeeded(starter: string): boolean {
+  if (starter === 'blank') {
+    return false;
+  }
+  const definition = getSelectedSectionDefinition(starter);
+  const flavors = getSelectableSectionFlavors(definition);
+  if (!definition || flavors.length < 2) {
+    return false;
+  }
+  state.sectionTemplateFlavorModal = { templateName: definition.name };
+  return true;
+}
+
+function getSelectedSectionDefinition(starter: string) {
+  const normalizedName = starter.startsWith(REUSABLE_SECTION_DEF_PREFIX) ? starter.slice(REUSABLE_SECTION_DEF_PREFIX.length) : starter;
+  return getSectionDefs().find((item) => item.name === normalizedName || getSectionTemplateKey(item) === normalizedName) ?? null;
+}
+
+function getSelectableSectionFlavors(definition: ReturnType<typeof getSelectedSectionDefinition>) {
+  return (definition?.flavors ?? []).filter((flavor) => flavor.name.trim().length > 0 && !!flavor.template);
+}
 
 const spawnGhostChild: ActionHandler = ({ section }) => {
   if (!section || section.lock) {

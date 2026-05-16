@@ -16,7 +16,11 @@ export function getComponentDefsFromMeta(meta: Record<string, unknown> | null | 
 }
 
 export function getSectionDefs(): SectionDefinition[] {
-  const defs = getDocumentMetaOrNull()?.section_defs;
+  return getSectionDefsFromMeta(getDocumentMetaOrNull());
+}
+
+export function getSectionDefsFromMeta(meta: Record<string, unknown> | null | undefined): SectionDefinition[] {
+  const defs = meta?.section_defs;
   if (!Array.isArray(defs)) {
     return [];
   }

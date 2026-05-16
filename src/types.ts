@@ -124,6 +124,10 @@ export interface ReusableTemplateModalState {
     | { kind: 'expandable'; sectionKey: string; blockId: string; part: 'stub' | 'content' };
 }
 
+export interface SectionTemplateFlavorModalState {
+  templateName: string;
+}
+
 export interface SqliteRowComponentModalState {
   sectionKey: string;
   blockId: string;
@@ -273,6 +277,7 @@ export interface AppState {
   modalSectionKey: string | null;
   reusableSaveModal: ReusableSaveModalState | null;
   reusableTemplateModal: ReusableTemplateModalState | null;
+  sectionTemplateFlavorModal: SectionTemplateFlavorModalState | null;
   tempHighlights: Set<string>;
   addComponentBySection: Record<string, string>;
   metaPanelOpen: boolean;

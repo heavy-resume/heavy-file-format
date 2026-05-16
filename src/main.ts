@@ -117,6 +117,7 @@ function createInitialState(document: ReturnType<typeof deserializeDocumentBytes
     modalSectionKey: null,
     reusableSaveModal: null,
     reusableTemplateModal: null,
+    sectionTemplateFlavorModal: null,
     tempHighlights: new Set<string>(),
     addComponentBySection: {},
     metaPanelOpen: false,
@@ -449,6 +450,9 @@ readerRenderer = createReaderRenderer(
     },
     get reusableTemplateModal() {
       return state.reusableTemplateModal;
+    },
+    get sectionTemplateFlavorModal() {
+      return state.sectionTemplateFlavorModal;
     },
     get componentMetaModal() {
       return state.componentMetaModal;

@@ -11,6 +11,7 @@ import { ensureComponentListBlocks, ensureContainerBlocks, ensureExpandableBlock
 import { createGridItem } from './grid-ops';
 import { syncReusableTemplateForBlock } from './reusable';
 import { createBlockFromReusableTemplateValues } from './bind/actions/reusable-template';
+import { insertTopLevelSection } from './bind/actions/section';
 import { assignAutoBlockId } from './auto-block-id';
 import { applyXrefTargetDefaults } from './xref-ops';
 import { getOutputGenerator } from './plugins/registry';
@@ -86,6 +87,15 @@ export function bindModal(app: HTMLElement): void {
     const templateGeneratorBtn = target.closest<HTMLButtonElement>('[data-modal-action="run-template-generator"]');
     if (templateGeneratorBtn && state.reusableTemplateModal) {
       void runReusableTemplateGenerator(modalRoot, templateGeneratorBtn);
+      return;
+    }
+
+    const chooseSectionFlavorBtn = target.closest<HTMLElement>('[data-modal-action="choose-section-template-flavor"]');
+    if (chooseSectionFlavorBtn && state.sectionTemplateFlavorModal) {
+      const templateName = chooseSectionFlavorBtn.dataset.sectionTemplateName ?? state.sectionTemplateFlavorModal.templateName;
+      const flavorName = chooseSectionFlavorBtn.dataset.sectionTemplateFlavor ?? '';
+      closeModal();
+      insertTopLevelSection(templateName, flavorName);
       return;
     }
 

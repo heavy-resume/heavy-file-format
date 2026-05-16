@@ -62,6 +62,7 @@ function createHistoryTestState(): AppState {
     modalSectionKey: null,
     reusableSaveModal: null,
     reusableTemplateModal: null,
+    sectionTemplateFlavorModal: null,
     tempHighlights: new Set<string>(),
     addComponentBySection: {},
     metaPanelOpen: false,

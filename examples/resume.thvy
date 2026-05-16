@@ -126,6 +126,67 @@ section_defs:
             tags: project
             componentListBlocks: []
       children: []
+    flavors:
+      - name: tableform
+        description: Preferred for longer project lists
+        template:
+          id: projects
+          title: Projects
+          level: 1
+          lock: true
+          description: Project portfolio
+          hideIfUnmodified: true
+          tags: reciprocal-xref-source
+          blocks:
+            - text: "# Projects"
+              schema:
+                component: text
+                css: "margin: 0.5rem 0;"
+            - text: ""
+              schema:
+                component: table
+                css: "margin: 0.5rem 0 0;"
+                tags: table-header
+                tableColumns:
+                  - PROJECT
+                  - DATES
+                tableShowHeader: true
+                tableRows: []
+                lock: true
+                description: Project table header
+            - text: ""
+              schema:
+                component: component-list
+                css: "margin: 0;"
+                componentListComponent: project-record
+                componentListItemLabel: project
+                tags: project
+                componentListBlocks: []
+          children: []
+      - name: linear
+        description: Preferred for shorter project lists
+        template:
+          id: projects
+          title: Projects
+          level: 1
+          lock: true
+          description: Project portfolio
+          hideIfUnmodified: true
+          tags: reciprocal-xref-source
+          blocks:
+            - text: "# Projects"
+              schema:
+                component: text
+                css: "margin: 0.5rem 0;"
+            - text: ""
+              schema:
+                component: component-list
+                css: "margin: 0;"
+                componentListComponent: project-linear-record
+                componentListItemLabel: project
+                tags: project
+                componentListBlocks: []
+          children: []
   - name: Publications
     key: resume-publications
     template:
@@ -1000,6 +1061,59 @@ component_defs:
               tableShowHeader: false
               tableRows:
                 - cells: ["{% project %}", "{% date_range %}"]
+      expandableContentBlocks:
+        css: "padding: 0.5rem;"
+        children:
+          - text: ""
+            schema:
+              component: grid
+              css: "margin: 0 0 0.35rem;"
+              gridColumns: 2
+              gridItems:
+                - id: project-title
+                  block:
+                    text: "{% project %}"
+                    schema:
+                      component: text
+                      css: "margin: 0;"
+                      placeholder: "Project name"
+                - id: project-date-range
+                  block:
+                    text: "{% date_range %}"
+                    schema:
+                      component: text
+                      css: "margin: 0; text-align: right;"
+                      placeholder: "Date range"
+          - text: "{% description | block %}"
+            schema:
+              component: text
+              css: "margin: 0.5rem 0;"
+              placeholder: "Project description"
+          - text: "{% link %}"
+            schema:
+              component: text
+              css: "margin: 0.35rem 0;"
+              placeholder: "Project link"
+          - component: skills-and-tools-tech-list
+  - name: project-linear-record
+    baseType: expandable
+    description: Project entry with an empty collapsed stub for linear project sections
+    templateVariables:
+      project:
+        label: Project name
+      date_range:
+        label: Date range
+      link:
+        label: Project link
+    schema:
+      tags: project
+      xrefTitle: "{% project %}"
+      xrefDetail: "{% date_range %}"
+      css: "margin: 0.35rem 0;"
+      expandableAlwaysShowStub: true
+      expandableExpanded: false
+      expandableStubBlocks:
+        children: []
       expandableContentBlocks:
         css: "padding: 0.5rem;"
         children:

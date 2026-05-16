@@ -55,6 +55,7 @@ test('passive editor fallback renders plain reader content without re-entering A
     currentView: 'ai',
     responsivePreview: 'full',
     mobileAdjustmentMode: false,
+    openTextLineStyleName: null,
   }, {
     escapeAttr: escapeHtml,
     escapeHtml,

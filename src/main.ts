@@ -120,6 +120,7 @@ function createInitialState(document: ReturnType<typeof deserializeDocumentBytes
     tempHighlights: new Set<string>(),
     addComponentBySection: {},
     metaPanelOpen: false,
+    openTextLineStyleName: null,
     descriptionPopulate: { isRunning: false, status: null, completed: 0, total: 0, current: '', skippedLeaves: 0, lastGenerated: '' },
     selectedReusableComponentName: null,
     templateValues: {},
@@ -374,6 +375,9 @@ editorRenderer = createEditorRenderer(
     },
     get descriptionPopulate() {
       return state.descriptionPopulate;
+    },
+    get openTextLineStyleName() {
+      return state.openTextLineStyleName;
     },
   },
   {

@@ -276,6 +276,7 @@ export interface AppState {
   tempHighlights: Set<string>;
   addComponentBySection: Record<string, string>;
   metaPanelOpen: boolean;
+  openTextLineStyleName: string | null;
   descriptionPopulate?: {
     isRunning: boolean;
     status: string | null;

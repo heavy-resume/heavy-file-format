@@ -60,6 +60,7 @@ export function createTestState(document: VisualDocument): AppState {
     tempHighlights: new Set<string>(),
     addComponentBySection: {},
     metaPanelOpen: false,
+    openTextLineStyleName: null,
     selectedReusableComponentName: null,
     templateValues: {},
     history: [],

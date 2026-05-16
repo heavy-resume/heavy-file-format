@@ -134,6 +134,7 @@ export function bindInputBlock(app: HTMLElement): void {
       visitBlocks(state.document.sections, (block) => {
         block.text = replaceTextLineStyleMarkerName(block.text, oldName, newName);
       });
+      state.openTextLineStyleName = newName;
       target.dataset.styleName = newName;
       getRefreshReaderPanels()();
       getRenderApp()();

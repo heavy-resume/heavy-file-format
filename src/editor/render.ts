@@ -116,6 +116,7 @@ interface EditorRenderState {
   currentView: 'editor' | 'viewer' | 'ai';
   responsivePreview: 'full' | 'phone' | 'tablet' | 'desktop';
   mobileAdjustmentMode: boolean;
+  openTextLineStyleName: string | null;
   descriptionPopulate?: {
     isRunning: boolean;
     status: string | null;
@@ -1106,18 +1107,26 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         .map(
           (def, index) => {
             const flavors = Array.isArray(def.flavors) ? def.flavors : [];
-            return `<article class="component-def">
-                <label>
-                  <span>Name</span>
-                  <input data-field="def-name" data-def-index="${index}" value="${deps.escapeAttr(def.name)}" />
-                </label>
-                <div class="template-meta-display">
-                  <span>Base Type</span>
-                  <strong>${deps.escapeHtml(def.baseType)}</strong>
-                </div>
-                <label>
-                  <span>Default Tags</span>
-                  ${renderTagEditor(
+            return `<details class="component-def template-def-details">
+                <summary class="template-def-summary">
+                  <span class="template-def-summary-text">
+                    <strong>${deps.escapeHtml(def.name || 'Untitled Template')}</strong>
+                    <span>${deps.escapeHtml(def.baseType)}${flavors.length > 0 ? ` · ${flavors.length} flavor${flavors.length === 1 ? '' : 's'}` : ''}</span>
+                  </span>
+                  <span class="template-def-summary-icon" aria-hidden="true">⌄</span>
+                </summary>
+                <div class="template-def-body">
+                  <label>
+                    <span>Name</span>
+                    <input data-field="def-name" data-def-index="${index}" value="${deps.escapeAttr(def.name)}" />
+                  </label>
+                  <div class="template-meta-display">
+                    <span>Base Type</span>
+                    <strong>${deps.escapeHtml(def.baseType)}</strong>
+                  </div>
+                  <label>
+                    <span>Default Tags</span>
+                    ${renderTagEditor(
             'def-tags',
             def.tags ?? '',
             {
@@ -1126,30 +1135,31 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
             },
             { escapeAttr: deps.escapeAttr, escapeHtml: deps.escapeHtml }
           )}
-                </label>
-                <label>
-                  <span>Description</span>
-                  <textarea rows="3" data-field="def-description" data-def-index="${index}">${deps.escapeHtml(def.description ?? '')}</textarea>
-                </label>
-                <div class="meta-panel-head">
-                  <strong>Flavors</strong>
+                  </label>
+                  <label>
+                    <span>Description</span>
+                    <textarea rows="3" data-field="def-description" data-def-index="${index}">${deps.escapeHtml(def.description ?? '')}</textarea>
+                  </label>
+                  <div class="meta-panel-head">
+                    <strong>Flavors</strong>
+                  </div>
+                  ${flavors.length === 0
+                    ? '<div class="muted">No flavors. Import uses the main component template.</div>'
+                    : `${flavors.length === 1 ? '<div class="muted">One saved flavor. Import uses flavor choices after there are at least two options.</div>' : ''}
+                    ${flavors.map((flavor, flavorIndex) => `<div class="component-def-flavor">
+                      <label>
+                        <span>Flavor Name</span>
+                        <input data-field="def-flavor-name" data-def-index="${index}" data-flavor-index="${flavorIndex}" value="${deps.escapeAttr(flavor.name)}" />
+                      </label>
+                      <label>
+                        <span>Flavor Description</span>
+                        <textarea rows="2" data-field="def-flavor-description" data-def-index="${index}" data-flavor-index="${flavorIndex}">${deps.escapeHtml(flavor.description ?? '')}</textarea>
+                      </label>
+                      <button type="button" class="danger" data-action="remove-component-def-flavor" data-def-index="${index}" data-flavor-index="${flavorIndex}">Remove Flavor</button>
+                    </div>`).join('')}`}
+                  <button type="button" class="danger" data-action="remove-component-def" data-def-index="${index}">Remove</button>
                 </div>
-                ${flavors.length === 0
-                  ? '<div class="muted">No flavors. Import uses the main component template.</div>'
-                  : `${flavors.length === 1 ? '<div class="muted">One saved flavor. Import uses flavor choices after there are at least two options.</div>' : ''}
-                  ${flavors.map((flavor, flavorIndex) => `<div class="component-def-flavor">
-                    <label>
-                      <span>Flavor Name</span>
-                      <input data-field="def-flavor-name" data-def-index="${index}" data-flavor-index="${flavorIndex}" value="${deps.escapeAttr(flavor.name)}" />
-                    </label>
-                    <label>
-                      <span>Flavor Description</span>
-                      <textarea rows="2" data-field="def-flavor-description" data-def-index="${index}" data-flavor-index="${flavorIndex}">${deps.escapeHtml(flavor.description ?? '')}</textarea>
-                    </label>
-                    <button type="button" class="danger" data-action="remove-component-def-flavor" data-def-index="${index}" data-flavor-index="${flavorIndex}">Remove Flavor</button>
-                  </div>`).join('')}`}
-                <button type="button" class="danger" data-action="remove-component-def" data-def-index="${index}">Remove</button>
-              </article>`;
+              </details>`;
           }
         )
         .join('')}
@@ -1164,30 +1174,39 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           .map(
             (def, index) => {
               const flavors = Array.isArray(def.flavors) ? def.flavors : [];
-              return `<article class="component-def">
-                      <label>
-                        <span>Name</span>
-                        <input data-field="section-def-name" data-section-def-index="${index}" value="${deps.escapeAttr(def.name)}" />
-                      </label>
-                      <div class="meta-panel-head">
-                        <strong>Flavors</strong>
+              return `<details class="component-def template-def-details">
+                      <summary class="template-def-summary">
+                        <span class="template-def-summary-text">
+                          <strong>${deps.escapeHtml(def.name || 'Untitled Template')}</strong>
+                          <span>Section template${flavors.length > 0 ? ` · ${flavors.length} flavor${flavors.length === 1 ? '' : 's'}` : ''}</span>
+                        </span>
+                        <span class="template-def-summary-icon" aria-hidden="true">⌄</span>
+                      </summary>
+                      <div class="template-def-body">
+                        <label>
+                          <span>Name</span>
+                          <input data-field="section-def-name" data-section-def-index="${index}" value="${deps.escapeAttr(def.name)}" />
+                        </label>
+                        <div class="meta-panel-head">
+                          <strong>Flavors</strong>
+                        </div>
+                        ${flavors.length === 0
+                    ? '<div class="muted">No flavors. Import uses the main section template.</div>'
+                    : `${flavors.length === 1 ? '<div class="muted">One saved flavor. Import uses flavor choices after there are at least two options.</div>' : ''}
+                        ${flavors.map((flavor, flavorIndex) => `<div class="component-def-flavor">
+                            <label>
+                              <span>Flavor Name</span>
+                              <input data-field="section-def-flavor-name" data-section-def-index="${index}" data-flavor-index="${flavorIndex}" value="${deps.escapeAttr(flavor.name)}" />
+                            </label>
+                            <label>
+                              <span>Flavor Description</span>
+                              <textarea rows="2" data-field="section-def-flavor-description" data-section-def-index="${index}" data-flavor-index="${flavorIndex}">${deps.escapeHtml(flavor.description ?? '')}</textarea>
+                            </label>
+                            <button type="button" class="danger" data-action="remove-section-def-flavor" data-section-def-index="${index}" data-flavor-index="${flavorIndex}">Remove Flavor</button>
+                          </div>`).join('')}`}
+                        <button type="button" class="danger" data-action="remove-section-def" data-section-def-index="${index}">Remove</button>
                       </div>
-                      ${flavors.length === 0
-                  ? '<div class="muted">No flavors. Import uses the main section template.</div>'
-                  : `${flavors.length === 1 ? '<div class="muted">One saved flavor. Import uses flavor choices after there are at least two options.</div>' : ''}
-                      ${flavors.map((flavor, flavorIndex) => `<div class="component-def-flavor">
-                          <label>
-                            <span>Flavor Name</span>
-                            <input data-field="section-def-flavor-name" data-section-def-index="${index}" data-flavor-index="${flavorIndex}" value="${deps.escapeAttr(flavor.name)}" />
-                          </label>
-                          <label>
-                            <span>Flavor Description</span>
-                            <textarea rows="2" data-field="section-def-flavor-description" data-section-def-index="${index}" data-flavor-index="${flavorIndex}">${deps.escapeHtml(flavor.description ?? '')}</textarea>
-                          </label>
-                          <button type="button" class="danger" data-action="remove-section-def-flavor" data-section-def-index="${index}" data-flavor-index="${flavorIndex}">Remove Flavor</button>
-                        </div>`).join('')}`}
-                      <button type="button" class="danger" data-action="remove-section-def" data-section-def-index="${index}">Remove</button>
-                    </article>`;
+                    </details>`;
             }
           )
           .join('')
@@ -1212,49 +1231,58 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         <span>${shortLabel}</span>
         <input data-field="text-line-style-spacing" data-style-name="${deps.escapeAttr(name)}" data-css-property="${deps.escapeAttr(property)}" value="${deps.escapeAttr(spacing[property] ?? '')}" placeholder="0" />
       </label>`;
-      return `<article class="text-line-style-row" data-text-line-style-name="${deps.escapeAttr(name)}">
-        <div class="text-line-style-row-head">
+      return `<details class="text-line-style-row template-def-details" data-text-line-style-name="${deps.escapeAttr(name)}"${state.openTextLineStyleName === name ? ' open' : ''}>
+        <summary class="template-def-summary">
+          <span class="template-def-summary-text">
+            <strong data-text-line-style-sample-label>${deps.escapeHtml(label)}</strong>
+            <span>${deps.escapeHtml(name)}</span>
+          </span>
+          <span class="template-def-summary-icon" aria-hidden="true">⌄</span>
+        </summary>
+        <div class="template-def-body">
+          <div class="text-line-style-row-head">
+            <label>
+              <span>Name</span>
+              <input data-field="text-line-style-name" data-style-name="${deps.escapeAttr(name)}" value="${deps.escapeAttr(name)}" spellcheck="false" />
+            </label>
+            <button type="button" class="danger remove-x" data-action="remove-text-line-style" data-style-name="${deps.escapeAttr(name)}" aria-label="Remove ${deps.escapeAttr(name)}">${closeIcon()}</button>
+          </div>
           <label>
-            <span>Name</span>
-            <input data-field="text-line-style-name" data-style-name="${deps.escapeAttr(name)}" value="${deps.escapeAttr(name)}" spellcheck="false" />
+            <span>Label</span>
+            <input data-field="text-line-style-label" data-style-name="${deps.escapeAttr(name)}" value="${deps.escapeAttr(style.label)}" placeholder="${deps.escapeAttr(name)}" />
           </label>
-          <button type="button" class="danger remove-x" data-action="remove-text-line-style" data-style-name="${deps.escapeAttr(name)}" aria-label="Remove ${deps.escapeAttr(name)}">${closeIcon()}</button>
-        </div>
-        <label>
-          <span>Label</span>
-          <input data-field="text-line-style-label" data-style-name="${deps.escapeAttr(name)}" value="${deps.escapeAttr(style.label)}" placeholder="${deps.escapeAttr(name)}" />
-        </label>
-        <div class="paragraph-style-spacing-grid">
-          <div class="paragraph-style-spacing-group">
-            <strong>Margin</strong>
-            <div class="paragraph-style-box-controls paragraph-style-four-way-controls">
-              ${renderSpacingInput('margin-top', 'Top')}
-              ${renderSpacingInput('margin-right', 'Right')}
-              ${renderSpacingInput('margin-bottom', 'Bottom')}
-              ${renderSpacingInput('margin-left', 'Left')}
+          <div class="paragraph-style-spacing-grid">
+            <div class="paragraph-style-spacing-group">
+              <strong>Margin</strong>
+              <div class="paragraph-style-box-controls paragraph-style-four-way-controls">
+                ${renderSpacingInput('margin-top', 'Top')}
+                ${renderSpacingInput('margin-right', 'Right')}
+                ${renderSpacingInput('margin-bottom', 'Bottom')}
+                ${renderSpacingInput('margin-left', 'Left')}
+              </div>
+            </div>
+            <div class="paragraph-style-spacing-group">
+              <strong>Padding</strong>
+              <div class="paragraph-style-box-controls paragraph-style-four-way-controls">
+                ${renderSpacingInput('padding-top', 'Top')}
+                ${renderSpacingInput('padding-right', 'Right')}
+                ${renderSpacingInput('padding-bottom', 'Bottom')}
+                ${renderSpacingInput('padding-left', 'Left')}
+              </div>
             </div>
           </div>
-          <div class="paragraph-style-spacing-group">
-            <strong>Padding</strong>
-            <div class="paragraph-style-box-controls paragraph-style-four-way-controls">
-              ${renderSpacingInput('padding-top', 'Top')}
-              ${renderSpacingInput('padding-right', 'Right')}
-              ${renderSpacingInput('padding-bottom', 'Bottom')}
-              ${renderSpacingInput('padding-left', 'Left')}
+          <label class="paragraph-style-css-lines">
+            <span>CSS declarations</span>
+            <textarea rows="5" data-field="text-line-style-css" data-style-name="${deps.escapeAttr(name)}" spellcheck="false" placeholder="font-weight: 700;">${deps.escapeHtml(rawCss)}</textarea>
+          </label>
+          <div class="text-line-style-preview">
+            <span>Preview</span>
+            <div class="text-line-style-sample" style="${deps.escapeAttr(css)}">
+              <span data-text-line-style-sample-label>${deps.escapeHtml(label)}</span>
             </div>
           </div>
         </div>
-        <label class="paragraph-style-css-lines">
-          <span>CSS declarations</span>
-          <textarea rows="5" data-field="text-line-style-css" data-style-name="${deps.escapeAttr(name)}" spellcheck="false" placeholder="font-weight: 700;">${deps.escapeHtml(rawCss)}</textarea>
-        </label>
-        <div class="text-line-style-preview">
-          <span>Preview</span>
-          <div class="text-line-style-sample" style="${deps.escapeAttr(css)}">
-            <span data-text-line-style-sample-label>${deps.escapeHtml(label)}</span>
-          </div>
-        </div>
-      </article>`;
+      </details>`;
     }).join('');
   }
 

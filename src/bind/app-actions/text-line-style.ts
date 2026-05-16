@@ -17,6 +17,7 @@ const textLineStyleAdd: AppActionHandler = () => {
     css: 'margin: 0.25rem 0; padding-left: 1rem;',
   };
   writeTextLineStylesToMeta(state.document.meta, styles);
+  state.openTextLineStyleName = name;
   getRenderApp()();
 };
 

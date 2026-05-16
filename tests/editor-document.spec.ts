@@ -922,7 +922,7 @@ test('resume template hides untouched scaffold sections only in viewer', async (
   await expect(page.locator('#editorTree')).toContainText('Summary');
   await expect(page.locator('#editorTree')).toContainText('History');
   await expect(page.locator('.section-title-passive', { hasText: 'Projects' })).toHaveCount(0);
-  await expect(page.locator('#editorTree')).toContainText('Awards');
+  await expect(page.locator('.section-title-passive', { hasText: 'Awards' })).toHaveCount(0);
   await expect(page.locator('#editorTree')).toContainText('Education');
 });
 
@@ -932,10 +932,10 @@ test('first styled heading in resume grid cell aligns to the top', async ({ page
   await page.getByRole('button', { name: 'Resume Example' }).click();
   await page.getByRole('button', { name: 'Viewer' }).click();
 
-  const award = page.locator('#awards .reader-block-expandable').first();
-  await award.click();
+  const certification = page.locator('#certifications .reader-block-expandable').first();
+  await certification.click();
 
-  const heading = page.locator('#awards h3', { hasText: 'Autonomous Agent Hackathon Finalist' });
+  const heading = page.locator('#certifications h3', { hasText: 'AWS Certified Developer - Associate' });
   await expect(heading).toBeVisible();
 
   const margins = await heading.evaluate((node) => {
@@ -955,13 +955,13 @@ test('resume section templates hide already used non-repeatable sections', async
   let options = await page.locator('[data-field="reusable-section-type"][data-section-key="__top_level__"] option').evaluateAll((items) =>
     items.map((item) => item.textContent?.trim())
   );
-  expect(options).toEqual(['Blank', 'Projects', 'Publications', 'Certifications', 'Resume Section']);
+  expect(options).toEqual(['Blank', 'Projects', 'Publications', 'Awards', 'Certifications', 'Resume Section']);
 
   await page.getByRole('button', { name: 'Resume Example' }).click();
   options = await page.locator('[data-field="reusable-section-type"][data-section-key="__top_level__"] option').evaluateAll((items) =>
     items.map((item) => item.textContent?.trim())
   );
-  expect(options).toEqual(['Blank', 'Resume Section']);
+  expect(options).toEqual(['Blank', 'Awards', 'Resume Section']);
 });
 
 test('resume editor script does not scan changed reciprocal xrefs on load', async ({ page }) => {
@@ -1174,6 +1174,23 @@ test('document ai context is editable metadata and keeps focus while typing', as
 
   await page.getByRole('button', { name: 'Raw' }).click();
   await expect(page.locator('#rawEditor')).toContainText('ai-context: Use top skills as featured skills.');
+});
+
+test('document ai import guidance is editable metadata and keeps focus while typing', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Advanced' }).click();
+  await page.getByRole('button', { name: 'Document Meta' }).click();
+
+  const importGuidance = page.locator('[data-field="meta-ai-import-guidance"]');
+  await importGuidance.fill('');
+  await importGuidance.type('Route scattered awards into the Awards template.');
+
+  await expect(importGuidance).toBeFocused();
+  await expect(importGuidance).toHaveValue('Route scattered awards into the Awards template.');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await expect(page.locator('#rawEditor')).toContainText('ai-import-guidance: Route scattered awards into the Awards template.');
 });
 
 test('description generate button appears only for empty component descriptions', async ({ page }) => {

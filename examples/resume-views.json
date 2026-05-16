@@ -15,7 +15,6 @@
     "project-autonomous-agent-hackathon": ["dimmed", "collapse"],
     "/id/publications": ["collapse"],
     "/id/certifications": ["collapse"],
-    "/id/awards": ["collapse"],
     "/id/education": ["collapse"],
     "/id/locations": ["priority"]
   },
@@ -39,7 +38,6 @@
     "/id/top-tools-technologies-list/xref-card-2": ["hidden"],
     "/id/publications": ["collapse"],
     "/id/certifications": ["collapse"],
-    "/id/awards": ["collapse"],
     "/id/education": ["collapse"],
     "/id/locations": ["priority"]
   }

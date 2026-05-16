@@ -8,6 +8,7 @@ import { isAbortError, throwIfAborted } from './ai-document-loop-state';
 import { resolveBaseComponentFromMeta } from './component-defs';
 import importHvyFormatReference from './ai-import-hvy-format-reference.hvy?raw';
 import { getTextLineStyleLabel, getTextLineStylesFromMeta } from './text-line-styles';
+import { getDocumentAiContext, getDocumentAiImportGuidance } from './document-ai-context';
 import {
   applyReusableSectionTemplateValues,
   applyReusableTemplateValues,
@@ -348,6 +349,8 @@ function buildImportPlanPrompt(sourceName: string, instructions?: string): strin
 
 function buildImportPlanContext(document: VisualDocument, sourceName: string, sourceText: string): string {
   return [
+    buildImportGuidanceFrame(document),
+    '',
     '=== BEGIN TEMPLATE SECTIONS ===',
     'Template section inventory for resolving section targets; this is not an ordering requirement:',
     buildImportTemplateSectionOutline(document),
@@ -835,6 +838,8 @@ function buildImportXrefTargetPrompt(sourceName: string, instructions?: string):
 
 function buildImportXrefTargetContext(document: VisualDocument, sourceName: string, sourceText: string, steps: ImportPlanStep[]): string {
   return [
+    buildImportGuidanceFrame(document),
+    '',
     '=== BEGIN TEMPLATE SECTIONS ===',
     'Template section inventory for resolving section targets; this is not an ordering requirement:',
     buildImportTemplateSectionOutline(document),
@@ -878,6 +883,8 @@ function buildImportSectionInformationContext(
   plannedXrefTargets: PlannedImportXrefTarget[]
 ): string {
   return [
+    buildImportGuidanceFrame(document),
+    '',
     buildImportSectionApplicationFrame(document, application),
     '',
     buildImportRelationshipFrame(document),
@@ -927,6 +934,8 @@ function buildImportSectionHvyPrompt(sourceName: string, instructions: string | 
 
 function buildImportSectionHvyContext(document: VisualDocument, information: string, application: ImportStepApplication, plannedXrefTargets: PlannedImportXrefTarget[]): string {
   return [
+    buildImportGuidanceFrame(document),
+    '',
     buildImportSectionApplicationFrame(document, application),
     '',
     buildImportRelationshipFrame(document),
@@ -975,6 +984,8 @@ function buildImportTemplateValuesContext(
   templateStructure: ImportTemplateStructureInternal
 ): string {
   return [
+    buildImportGuidanceFrame(document),
+    '',
     buildImportSectionApplicationFrame(document, application),
     '',
     buildImportRelationshipFrame(document),
@@ -996,6 +1007,24 @@ function buildImportTemplateValuesContext(
     ...steps.map((planStep, index) => `${index + 1}. ${index < activeIndex ? '[created]' : index === activeIndex ? '[current]' : '[pending]'} ${formatImportPlanStep(planStep)} (${formatImportPlanTarget(planStep.target)})`),
     ...(createdSections.length > 0 ? ['', 'Previously created section results:', ...createdSections] : []),
   ].join('\n');
+}
+
+function buildImportGuidanceFrame(document: VisualDocument): string {
+  const aiContext = getDocumentAiContext(document);
+  const importGuidance = getDocumentAiImportGuidance(document);
+  if (!aiContext && !importGuidance) {
+    return [
+      '=== BEGIN DOCUMENT AI IMPORT GUIDANCE ===',
+      'No document-level AI import guidance is defined.',
+      '=== END DOCUMENT AI IMPORT GUIDANCE ===',
+    ].join('\n');
+  }
+  return [
+    '=== BEGIN DOCUMENT AI IMPORT GUIDANCE ===',
+    aiContext ? ['General AI context:', aiContext].join('\n') : '',
+    importGuidance ? ['Import guidance:', importGuidance].join('\n') : '',
+    '=== END DOCUMENT AI IMPORT GUIDANCE ===',
+  ].filter(Boolean).join('\n');
 }
 
 function buildImportParagraphStyleFrame(document: VisualDocument): string {

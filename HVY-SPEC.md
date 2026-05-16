@@ -122,6 +122,10 @@ Presentation keys in document metadata include:
 - `sidebar_label`: optional string. Use it as the label for the sidebar toggle control. Defaults to a client-defined fallback (e.g. `☰`) if absent.
 - `reader_max_width`: optional CSS width value applied to the main reader document column, for example `60rem` or `72ch`.
 
+AI-facing document metadata includes:
+- `ai-context`: optional string with general document organization and preservation guidance for AI-assisted authoring tools.
+- `ai-import-guidance`: optional string with import-specific guidance for mapping source facts to existing body sections, reusable section templates, reusable component records, and cross references. Importers MAY include this guidance in planning and execution prompts; readers that do not use AI SHOULD preserve and ignore it.
+
 Responsive rendering SHOULD be based on the rendered document container's inline size, not only the browser viewport. Renderers that support responsive behavior SHOULD establish a named CSS query container around the document surface, for example:
 
 ```css

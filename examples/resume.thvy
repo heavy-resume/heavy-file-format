@@ -6,17 +6,29 @@ reader_max_width: 60rem
 ai-context: >-
   This is a resume template. Use the top-skills-tools-technologies section for featured
   reference cards only; the skills, tools-technologies, and languages sidebar sections
-  are the main reusable libraries for detailed reference records. History, projects,
-  awards, and education each have a structured component-list for expandable record
-  rows; keep dated main-section records in reverse chronological order with newest
-  entries first. History should use one
-  expandable record per organization when roles are contiguous; put promotions, title
-  changes, or adjacent date ranges at the same organization inside that single expanded
-  record instead of creating duplicate organization rows. One project, publication,
-  certification, degree, skill, or tool should usually be represented as one expandable
-  reusable record. Local skills/tools lists inside history, project, publication,
-  certification, award, and education records are supporting references and should not
-  be treated as the main libraries.
+  are the main reusable libraries for detailed reference records. History and education
+  have body sections with structured component-lists for expandable record rows.
+  Projects, publications, awards, and certifications are reusable section templates
+  that should be added only when source-backed content exists. Keep dated main-section
+  records in reverse chronological order with newest entries first. History should use
+  one expandable record per organization when roles are contiguous; put promotions,
+  title changes, or adjacent date ranges at the same organization inside that single
+  expanded record instead of creating duplicate organization rows. One project,
+  publication, certification, degree, skill, or tool should usually be represented as
+  one expandable reusable record. Local skills/tools lists inside history, project,
+  publication, certification, award, and education records are supporting references
+  and should not be treated as the main libraries.
+ai-import-guidance: >-
+  During resume import, map source-backed awards into the Awards reusable section
+  template even when the source mentions awards inside work history, projects,
+  education, summaries, or other prose instead of providing an explicit Awards heading.
+  Treat those mentions as award-record items when they identify a distinct award,
+  recognition, honor, finalist placement, prize, or equivalent accolade. Do not create
+  Awards when the source has no distinct source-backed award-like item.
+  Any sort of job goes under professional history.
+  A skill is something you do. For example, programming.
+  A tool / technology is something you use and would have experience with. Such as
+  a programming language, machinery, etc.
 section_defaults:
   css: "margin: 0.5rem 0;"
 text_line_styles:
@@ -147,6 +159,43 @@ section_defs:
             componentListComponent: publication-record
             componentListItemLabel: publication
             tags: publication
+            componentListBlocks: []
+      children: []
+  - name: Awards
+    key: resume-awards
+    template:
+      id: awards
+      title: Awards
+      level: 1
+      lock: true
+      description: Awards
+      hideIfUnmodified: true
+      tags: reciprocal-xref-source
+      blocks:
+        - text: "# Awards"
+          schema:
+            component: text
+            css: "margin: 0.5rem 0;"
+        - text: ""
+          schema:
+            component: table
+            css: "margin: 0.5rem 0 0;"
+            tags: table-header
+            tableColumns:
+              - AWARD
+              - ISSUER
+              - DATE
+            tableShowHeader: true
+            tableRows: []
+            lock: true
+            description: Award table header
+        - text: ""
+          schema:
+            component: component-list
+            css: "margin: 0;"
+            componentListComponent: award-record
+            componentListItemLabel: award
+            tags: award
             componentListBlocks: []
       children: []
   - name: Certifications
@@ -1089,16 +1138,6 @@ component_defs:
  <!--hvy:table {"css":"margin: 0.5rem 0 0;","tags":"table-header","tableColumns":["TITLE","<!--hvy:alt {\"compact\":\"ORG\"}-->ORGANIZATION<!--/hvy:alt-->","YEAR(S)"],"tableShowHeader":true,"tableRows":[],"lock":true,"description":"History table header"}-->
 
  <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"history-record","componentListItemLabel":"job","tags":"history"}-->
-
-<!--hvy: {"id":"awards","lock":true,"description":"Awards","hideIfUnmodified":true,"tags":"reciprocal-xref-source"}-->
-#! Awards
-
- <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
-  # Awards
-
- <!--hvy:table {"css":"margin: 0.5rem 0 0;","tags":"table-header","tableColumns":["AWARD","GIVEN BY","DATE"],"tableShowHeader":true,"tableRows":[],"lock":true,"description":"Award table header"}-->
-
- <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"award-record","componentListItemLabel":"award","tags":"award"}-->
 
 <!--hvy: {"id":"education","lock":true,"description":"Education","hideIfUnmodified":true,"tags":"reciprocal-xref-source"}-->
 #! Education

@@ -111,6 +111,16 @@ export function bindInputBlock(app: HTMLElement): void {
       return;
     }
 
+    if (field === 'meta-ai-import-guidance' && target instanceof HTMLTextAreaElement) {
+      recordHistory('meta:ai-import-guidance');
+      if (target.value.trim().length > 0) {
+        state.document.meta['ai-import-guidance'] = target.value;
+      } else {
+        delete state.document.meta['ai-import-guidance'];
+      }
+      return;
+    }
+
     if (field === 'text-line-style-name' && target instanceof HTMLInputElement) {
       const oldName = target.dataset.styleName ?? '';
       const newName = target.value.trim();

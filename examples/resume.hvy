@@ -5,17 +5,25 @@ reader_max_width: 60rem
 ai-context: >-
   This is a resume document. Use the top-skills-tools-technologies section for featured
   reference cards only; the skills, tools-technologies, and languages sidebar sections
-  are the main reusable libraries for detailed reference records. History, projects,
-  awards, and education each have a structured component-list for expandable record
-  rows; keep dated main-section records in reverse chronological order with newest
-  entries first. History should use one
-  expandable record per organization when roles are contiguous; put promotions, title
-  changes, or adjacent date ranges at the same organization inside that single expanded
-  record instead of creating duplicate organization rows. One project, publication,
-  certification, degree, skill, or tool should usually be represented as one expandable
-  reusable record. Local skills/tools lists inside history, project, publication,
-  certification, award, and education records are supporting references and should not
-  be treated as the main libraries.
+  are the main reusable libraries for detailed reference records. History and education
+  have body sections with structured component-lists for expandable record rows.
+  Projects, publications, awards, and certifications are reusable section templates
+  that should be added only when source-backed content exists. Keep dated main-section
+  records in reverse chronological order with newest entries first. History should use
+  one expandable record per organization when roles are contiguous; put promotions,
+  title changes, or adjacent date ranges at the same organization inside that single
+  expanded record instead of creating duplicate organization rows. One project,
+  publication, certification, degree, skill, or tool should usually be represented as
+  one expandable reusable record. Local skills/tools lists inside history, project,
+  publication, certification, award, and education records are supporting references
+  and should not be treated as the main libraries.
+ai-import-guidance: >-
+  During resume import, map source-backed awards into the Awards reusable section
+  template even when the source mentions awards inside work history, projects,
+  education, summaries, or other prose instead of providing an explicit Awards heading.
+  Treat those mentions as award-record items when they identify a distinct award,
+  recognition, honor, finalist placement, prize, or equivalent accolade. Do not create
+  Awards when the source has no distinct source-backed award-like item.
 section_defaults:
   css: "margin: 0.5rem 0;"
 text_line_styles:
@@ -146,6 +154,43 @@ section_defs:
             componentListComponent: publication-record
             componentListItemLabel: publication
             tags: publication
+            componentListBlocks: []
+      children: []
+  - name: Awards
+    key: resume-awards
+    template:
+      id: awards
+      title: Awards
+      level: 1
+      lock: true
+      description: Awards
+      hideIfUnmodified: true
+      tags: reciprocal-xref-source
+      blocks:
+        - text: "# Awards"
+          schema:
+            component: text
+            css: "margin: 0.5rem 0;"
+        - text: ""
+          schema:
+            component: table
+            css: "margin: 0.5rem 0 0;"
+            tags: table-header
+            tableColumns:
+              - AWARD
+              - ISSUER
+              - DATE
+            tableShowHeader: true
+            tableRows: []
+            lock: true
+            description: Award table header
+        - text: ""
+          schema:
+            component: component-list
+            css: "margin: 0;"
+            componentListComponent: award-record
+            componentListItemLabel: award
+            tags: award
             componentListBlocks: []
       children: []
   - name: Certifications
@@ -1620,74 +1665,6 @@ component_defs:
          <!--hvy:component-list:0 {}-->
 
           <!--hvy:tool-tech-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Python","xrefTarget":"tool-python"}-->
-
-<!--hvy: {"id":"awards","lock":true,"description":"Awards","tags":"reciprocal-xref-source"}-->
-#! Awards
-
- <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
-  # Awards
-
- <!--hvy:table {"css":"margin: 0.5rem 0 0;","tags":"table-header","tableColumns":["AWARD","ISSUER","DATE"],"tableShowHeader":true,"tableRows":[],"lock":true,"description":"Award table header"}-->
-
- <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"award-record","componentListItemLabel":"award","tags":"award"}-->
-
-  <!--hvy:component-list:0 {}-->
-
-   <!--hvy:award-record {"id":"award-agent-hackathon","xrefTitle":"Autonomous Agent Hackathon Finalist","xrefDetail":"Open-source AI tooling showcase","tags":"award","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
-
-    <!--hvy:expandable:stub {}-->
-
-     <!--hvy:table {"css":"margin: 0; margin-top: -1px;","tableColumns":["AWARD","ISSUER","DATE"],"tableShowHeader":false,"tableRows":[{"cells":["Autonomous Agent Hackathon Finalist","Open-source AI tooling showcase","2024"]}]}-->
-
-    <!--hvy:expandable:content {"css":"padding: 0.5rem;"}-->
-
-     <!--hvy:grid {"css":"margin: 0 0 0.35rem;","gridColumns":2}-->
-
-      <!--hvy:grid:0 {"id":"award-details-agent-hackathon"}-->
-
-       <!--hvy:container {"css":"margin: 0;"}-->
-
-        <!--hvy:text {"css":"margin: 0 0 0.25rem;","placeholder":"Award"}-->
-         ^section-heading^ ### Autonomous Agent Hackathon Finalist
-
-        <!--hvy:text {"css":"margin: 0;","placeholder":"Issuer"}-->
-         Open-source AI tooling showcase
-
-      <!--hvy:grid:1 {"id":"award-date-agent-hackathon"}-->
-
-       <!--hvy:text {"css":"margin: 0; text-align: right;","placeholder":"Date"}-->
-        2024
-
-     <!--hvy:text {"css":"margin: 0.5rem 0;","placeholder":"Description"}-->
-      Recognized for building an autonomous research workflow that combined agent orchestration, prompt design, and reproducible development environments.
-
-     <!--hvy:skills-and-tools-tech-list {"css":"margin: 0.5rem 0 0;","gridColumns":2}-->
-
-      <!--hvy:grid:0 {"id":"award-relevant-skills-agent-hackathon"}-->
-
-       <!--hvy:container {"css":"margin: 0;","align":"center"}-->
-
-        <!--hvy:text {"css":"margin: 0;"}-->
-         ^panel-heading^ #### Relevant Skills
-
-        <!--hvy:component-list {"id":"award-relevant-skills-agent-hackathon-list","componentListComponent":"skill-xref-card","css":"margin: 0;","align":"center"}-->
-
-         <!--hvy:component-list:0 {}-->
-
-          <!--hvy:skill-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"LLM Prompt Engineering","xrefTarget":"skill-llm-prompt-engineering"}-->
-
-      <!--hvy:grid:1 {"id":"award-tools-technologies-agent-hackathon"}-->
-
-       <!--hvy:container {"css":"margin: 0;","align":"center"}-->
-
-        <!--hvy:text {"css":"margin: 0;"}-->
-         ^panel-heading^ #### Tools and Technologies
-
-        <!--hvy:component-list {"id":"award-tools-technologies-agent-hackathon-list","componentListComponent":"tool-tech-xref-card","componentListItemLabel":"tool / tech reference","css":"margin: 0;","align":"center"}-->
-
-         <!--hvy:component-list:0 {}-->
-
-          <!--hvy:tool-tech-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"OpenAI API","xrefTarget":"tool-openai-api"}-->
 
 <!--hvy: {"id":"education","lock":true,"description":"Education","tags":"reciprocal-xref-source"}-->
 #! Education

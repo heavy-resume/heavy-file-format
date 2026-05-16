@@ -341,6 +341,8 @@ test('buildImportPlanForDocument stops after mocked plan without mutating the do
   );
   const document = deserializeDocument(`---
 hvy_version: 0.1
+ai-context: Use the target section inventory as the resume structure.
+ai-import-guidance: Awards mentioned inside work history should still target the Awards reusable section.
 section_defs:
   - name: Details
     template:
@@ -410,6 +412,9 @@ section_defs:
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages[0]?.content).toContain('Do not write conditional');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages[0]?.content).toContain('Use only facts present in the imported source text');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('=== BEGIN TEMPLATE SECTIONS ===');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('=== BEGIN DOCUMENT AI IMPORT GUIDANCE ===');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('General AI context:\nUse the target section inventory as the resume structure.');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Import guidance:\nAwards mentioned inside work history should still target the Awards reusable section.');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Template section inventory for resolving section targets; this is not an ordering requirement:');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('- body: Summary (id: summary)');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('- definition: Details (id: details-template, name: Details)');

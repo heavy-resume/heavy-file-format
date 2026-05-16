@@ -1047,6 +1047,14 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
             placeholder="Tell the AI how this document is organized and what intent to preserve."
           >${deps.escapeHtml(String(state.documentMeta['ai-context'] ?? ''))}</textarea>
         </label>
+        <label>
+          <span>AI Import Guidance</span>
+          <textarea
+            rows="5"
+            data-field="meta-ai-import-guidance"
+            placeholder="Tell import how source facts should map to sections, templates, and reusable records."
+          >${deps.escapeHtml(String(state.documentMeta['ai-import-guidance'] ?? ''))}</textarea>
+        </label>
         <div class="editor-grid">
           <label>
             <span>Empty Descriptions</span>

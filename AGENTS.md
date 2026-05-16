@@ -91,4 +91,4 @@ Playwright test timeouts:
 - single action - no more than 1s
 - full test - no more than 5s
 
-If you're writing AI instructions don't just throw a patchwork fix for a specific issue with a specific thing.
+If you're writing AI instructions don't just throw a patchwork fix for a specific issue with a specific thing. Don't write real world examples since it risks being misleading. Make example names obviously fake.

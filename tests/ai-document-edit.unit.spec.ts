@@ -417,8 +417,8 @@ section_defs:
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Imported summary');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('=== END SOURCE DOCUMENT ===');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.responseInstructions).toContain('Return exactly one JSON object and no prose.');
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.responseInstructions).toContain('"sectionId":"header"');
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.responseInstructions).toContain('"templateName":"Work History"');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.responseInstructions).toContain('"sectionId":"blip-overview"');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.responseInstructions).toContain('"templateName":"Widget Records"');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.responseInstructions).toContain('Every step must be unconditional and source-backed.');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.responseInstructions).toContain('Do not include `instruction` unless');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.responseInstructions).toContain('Do not copy specific source facts into the plan');
@@ -558,6 +558,60 @@ hvy_version: 0.1
     phase: 'thinking',
     message: 'Applying section 1.',
   });
+});
+
+test('importTextIntoDocument re-resolves later section targets after fresh loading applied sections', async () => {
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"targets":[]}'
+  );
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"information":"Imported summary"}'
+  );
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"hvy":"<!--hvy: {\\"id\\":\\"summary\\"}-->\\n#! Summary\\n\\n <!--hvy:text {\\"id\\":\\"summary-text\\"}-->\\n  Imported summary"}'
+  );
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"information":"Imported tools"}'
+  );
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"hvy":"<!--hvy: {\\"id\\":\\"tools\\"}-->\\n#! Tools & Technologies\\n\\n <!--hvy:text {\\"id\\":\\"tools-text\\"}-->\\n  Imported tools"}'
+  );
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {"id":"old-summary"}-->
+ Old summary
+
+<!--hvy: {"id":"tools"}-->
+#! Tools & Technologies
+
+<!--hvy:text {"id":"old-tools"}-->
+ Old tools
+`, '.hvy');
+
+  const result = await importTextIntoDocument(document, {
+    sourceName: 'notes.txt',
+    sourceText: 'Imported summary and tools',
+    steps: [
+      { section: 'Summary', sectionId: 'summary' },
+      { section: 'Tools & Technologies', sectionId: 'tools' },
+    ],
+    llm: {
+      settings: { provider: 'openai', model: 'gpt-5-mini' },
+      client: { complete: vi.fn() },
+    },
+  });
+
+  const serialized = serializeDocument(document);
+  expect(result.status).toBe('complete');
+  expect(serialized).toContain('Imported summary');
+  expect(serialized).toContain('Imported tools');
+  expect(serialized).not.toContain('Old summary');
+  expect(serialized).not.toContain('Old tools');
 });
 
 test('importTextIntoDocument includes recursively referenced reusable definitions for matched sections', async () => {
@@ -706,6 +760,118 @@ hvy_version: 0.1
   expect(serialized).toContain('"id":"imported-summary"');
   expect(serialized).toContain('<!--hvy:text {"id":"imported-summary-text"}-->');
   expect(serialized).not.toContain('&lt;!--');
+});
+
+test('importTextIntoDocument accepts LLM safety closures and preserves blanked template fill-ins', async () => {
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"targets":[]}'
+  );
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"information":"No source value for the display name."}'
+  );
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"hvy":"<!--hvy: {\\"id\\":\\"profile\\"}-->\\n#! Profile\\n\\n <!--hvy:container {\\"id\\":\\"profile-panel\\"}-->\\n <!--hvy:text {\\"id\\":\\"display-name\\"}-->\\n <!-- /container -->"}'
+  );
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"profile"}-->
+#! Profile
+
+<!--hvy:container {"id":"profile-panel"}-->
+ <!--hvy:text {"id":"display-name","placeholder":"Display name","fillIn":true}-->
+  # <!-- value {"placeholder":"Display name"} -->
+`, '.hvy');
+
+  const result = await importTextIntoDocument(document, {
+    sourceName: 'notes.txt',
+    sourceText: 'No display name was provided.',
+    steps: [{ section: 'Profile', sectionId: 'profile' }],
+    llm: {
+      settings: { provider: 'openai', model: 'gpt-5-mini' },
+      client: { complete: vi.fn() },
+    },
+  });
+
+  const serialized = serializeDocument(document);
+  expect(result.status).toBe('complete');
+  expect(serialized).toContain('<!--hvy:container {"id":"profile-panel"}-->');
+  expect(serialized).toContain('<!--hvy:text {"id":"display-name","placeholder":"Display name","fillIn":true}-->');
+  expect(serialized).toContain('# <!-- value {"placeholder":"Display name"} -->');
+  expect(serialized).not.toContain('<!-- /container -->');
+});
+
+test('importTextIntoDocument applies parent safety closures when a child closer is forgotten', async () => {
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"targets":[]}'
+  );
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"information":"Blip Alpha is a source-backed item."}'
+  );
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    JSON.stringify({
+      hvy: `<!--hvy: {"id":"blips"}-->
+#! Blips
+
+ <!--hvy:component-list {"id":"blip-list","componentListComponent":"blip-record"}-->
+
+  <!--hvy:component-list:0 {}-->
+
+   <!--hvy:blip-record {"id":"blip-alpha"}-->
+
+ <!--hvy:expandable:stub {}-->
+
+ <!--hvy:text {}-->
+  ### Blip Alpha
+ <!-- /expandable:stub -->
+
+ <!--hvy:expandable:content {}-->
+
+ <!--hvy:text {}-->
+  Blip Alpha is a source-backed item.
+ <!-- /expandable:content -->
+  <!-- /component-list:0 -->`,
+    })
+  );
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+component_defs:
+  - name: blip-record
+    baseType: expandable
+    schema:
+      expandableAlwaysShowStub: true
+      expandableStubBlocks:
+        children: []
+      expandableContentBlocks:
+        children: []
+---
+
+<!--hvy: {"id":"blips"}-->
+#! Blips
+
+<!--hvy:component-list {"id":"blip-list","componentListComponent":"blip-record"}-->
+`, '.hvy');
+
+  const result = await importTextIntoDocument(document, {
+    sourceName: 'notes.txt',
+    sourceText: 'Blip Alpha is a source-backed item.',
+    steps: [{ section: 'Blips', sectionId: 'blips' }],
+    llm: {
+      settings: { provider: 'openai', model: 'gpt-5-mini' },
+      client: { complete: vi.fn() },
+    },
+  });
+
+  const list = document.sections[0]?.blocks[0];
+  const record = list?.schema.componentListBlocks[0];
+  const serialized = serializeDocument(document);
+  expect(result.status).toBe('complete');
+  expect(record?.schema.component).toBe('blip-record');
+  expect(record?.schema.expandableStubBlocks.children[0]?.text).toBe('### Blip Alpha');
+  expect(record?.schema.expandableContentBlocks.children[0]?.text).toBe('Blip Alpha is a source-backed item.');
+  expect(serialized).not.toContain('<!-- /expandable:stub -->');
+  expect(serialized).not.toContain('<!-- /component-list:0 -->');
 });
 
 test('importTextIntoDocument treats explicit blank targets as binding even when text mentions an existing section', async () => {

@@ -1,7 +1,8 @@
 import { stringify as stringifyYaml } from 'yaml';
 import { requestProxyCompletion, type HostChatClient } from './chat/chat';
-import { deserializeDocumentWithDiagnostics, serializeComponentDefinition, serializeSectionFragment } from './serialization';
+import { deserializeDocumentWithDiagnostics, serializeComponentDefinition, serializeDocumentHeaderYaml, serializeSectionFragment } from './serialization';
 import type { VisualBlock, VisualSection } from './editor/types';
+import { cloneReusableBlock } from './document-factory';
 import { findSectionContainer, formatSectionTitle, getSectionId, visitBlocks } from './section-ops';
 import type { ChatSettings, ComponentDefinition, SectionDefinition, VisualDocument } from './types';
 import type { JsonObject } from './hvy/types';
@@ -153,7 +154,9 @@ export async function importTextIntoDocument(
     const llm = requireImportLlm(options.llm);
     const beforeLlmCall = createImportLlmStepper(options.beforeLlmCall, options.signal);
     throwIfAborted(options.signal);
-    const applications = steps.map((step) => resolveImportStepApplication(document, step));
+    for (const step of steps) {
+      resolveImportStepApplication(document, step);
+    }
     options.onProgress?.({ phase: 'thinking', message: 'Identifying planned xref targets.' });
     const xrefResponse = await requestProxyCompletion({
       settings: llm.settings,
@@ -179,7 +182,7 @@ export async function importTextIntoDocument(
     }
     const created: string[] = [];
     for (const [index, step] of steps.entries()) {
-      const application = applications[index]!;
+      const application = resolveImportStepApplication(document, step);
       throwIfAborted(options.signal);
       options.onProgress?.({ phase: 'thinking', message: `Extracting section data ${index + 1} of ${steps.length}.` });
       const informationResponse = await requestProxyCompletion({
@@ -253,7 +256,7 @@ function buildImportPlanPrompt(sourceName: string, instructions?: string): strin
     'Use one step per final document section. Do not make separate component-level steps and do not bundle multiple sections into one step.',
     'Each step must explicitly identify the matching existing body section by sectionId, the matching reusable template by templateName, or omit both when no listed section fits.',
     'Each step should name the final section. Keep the plan short.',
-    'Do not copy specific source facts into the plan. Names, dates, employers, schools, links, skills, bullets, metrics, and other exact facts will be extracted in a later step.',
+    'Do not copy specific source facts into the plan. Names, dates, entity names, labels, links, bullets, metrics, and other exact facts will be extracted in a later step.',
     'Decide from the imported source text whether each section exists. If the source contains a distinct section, create a concrete step for it. If it does not, omit that section entirely.',
     'Do not write conditional, optional, fallback, verification, or leave-unchanged steps.',
     'Use only facts present in the imported source text.',
@@ -330,7 +333,7 @@ function buildImportPlanResponseInstructions(): string {
   return [
     'Return exactly one JSON object and no prose.',
     'Shape:',
-    '{"steps":[{"section":"Info","sectionId":"header"},{"section":"Work History","templateName":"Work History"},{"section":"Awards"}]}',
+    '{"steps":[{"section":"Blip Overview","sectionId":"blip-overview"},{"section":"Widget Records","templateName":"Widget Records"},{"section":"Extra Notes"}]}',
     '',
     'Use `sectionId` only for an existing body section id from the template section outline.',
     'Use `templateName` only for a reusable/template section name from the template section outline.',
@@ -338,12 +341,12 @@ function buildImportPlanResponseInstructions(): string {
     'Each step should be a section to create from the source document. Try to fit data to the template and only add sections if needed. Things outside the intent of the source document can be discarded.',
     'Do not include `instruction` unless a section title alone would be ambiguous.',
     'If `instruction` is needed, keep it structural and very short. Do not list exact facts.',
-    'Do not copy specific source facts into the plan; do not include names, dates, employers, schools, links, skills, bullets, metrics, or other exact source details.',
+    'Do not copy specific source facts into the plan; do not include names, dates, entity names, labels, links, bullets, metrics, or other exact source details.',
     'Every step must be unconditional and source-backed. The planner must make the section decision now from the imported source document.',
     'Do not include steps containing conditional language such as "if", "only if", "otherwise", "as needed", "when needed", "if present", "if available", "if applicable", "unless", "may", "might", or "leave unmodified".',
     'Do not impose a step count limit. Use as many steps as needed so each final document section has its own step.',
-    'Do not write bundled steps such as "add Work, Education, Skills, and Projects sections"; split that into one step per section.',
-    'Do not include component-level steps such as "add each job card"; those details belong inside the later one-shot HVY section generation.',
+    'Do not write bundled steps such as "add Alpha, Beta, Gamma, and Delta sections"; split that into one step per section.',
+    'Do not include component-level steps such as "add each item card"; those details belong inside the later one-shot HVY section generation.',
   ].join('\n');
 }
 
@@ -531,7 +534,7 @@ function buildImportXrefTargetPrompt(sourceName: string, instructions?: string):
     '',
     'This is not a tool loop. Do not generate HVY and do not mutate anything.',
     'Read the approved section plan and source document, then list referenceable targets that later sections may create or reference.',
-    'A target can be a final section or a source-backed reusable record such as a skill, tool, work-history entry, education entry, project, certification, award, or publication.',
+    'A target can be a final section or any source-backed reusable record, item, entity, event, category, or other referenceable document object.',
     'Use stable HVY ids that section generation can later use as exact `xrefTarget` values, even if the target section or record has not been generated yet.',
     'Give each target a short title, optional kind/tag, and exactly one sentence describing what it is.',
     'Use only source-backed targets. Do not include placeholders, conditionals, or speculative references.',
@@ -567,8 +570,8 @@ function buildImportSectionInformationPrompt(sourceName: string, instructions: s
     'This is not a tool loop. Do not plan the next action and do not ask to inspect anything.',
     'Extract and organize only the source facts relevant to this one approved section.',
     'Do not generate HVY in this step.',
-    'Use only facts present in the imported source text. Do not invent dates, titles, employers, schools, credentials, metrics, skills, links, or other factual details.',
-    'Preserve exact source dates, names, titles, organization names, school names, skill names, and tool names unless the approved step or host instructions explicitly say to normalize them.',
+    'Use only facts present in the imported source text. Do not invent dates, titles, entity names, labels, categories, metrics, links, or other factual details.',
+    'Preserve exact source dates, names, titles, entity names, labels, category names, and terminology unless the approved step or host instructions explicitly say to normalize them.',
     instructions?.trim() ? ['Additional import instructions:', instructions.trim()].join('\n') : '',
   ].filter(Boolean).join('\n');
 }
@@ -614,6 +617,9 @@ function buildImportSectionHvyPrompt(sourceName: string, instructions: string | 
     'Build the section as raw HVY using the matched template as structural guidance.',
     'Reuse the template component shapes where they fit, including custom record components, component-list items, tables, containers, and xref-card components.',
     'For custom components whose base type is expandable, put `<!--hvy:expandable:stub {}-->` and `<!--hvy:expandable:content {}-->` directly under the custom component directive. Do not create a separate sibling `<!--hvy:expandable {}-->` block.',
+    'Use LLM-only closing comments for every nested container, reusable/custom component, component-list item slot, and expandable slot, for example `<!-- /container -->`, `<!-- /foo-record -->`, `<!-- /component-list:0 -->`, `<!-- /expandable:stub -->`. These closing comments are required.',
+    'Do not close only the slots; close the containing reusable/custom component too, for example `<!-- /foo-record -->` after its expandable slots.',
+    'Leave template fill-in placeholders alone when the source has no value for them. Do not replace a fill-in with an empty text block.',
     'When this section creates records that other sections may reference, give those records stable source-backed ids.',
     'When this section references imported records, use `xref-card` with an exact `xrefTarget` from the existing or planned relationship inventory. Do not invent xref targets.',
     'Do not manually create reciprocal/generated xrefs; document update scripts may create those after import mutations.',
@@ -1001,7 +1007,10 @@ function applyGeneratedImportSection(
   hvy: string,
   onMutation?: (group?: string) => void
 ): string {
-  const generated = parseGeneratedImportSection(hvy);
+  const generated = parseGeneratedImportSection(hvy, document.meta);
+  if (application.kind !== 'blank') {
+    preserveTemplateFillIns(generated, application.target.section);
+  }
   onMutation?.('ai-edit:section');
   if (application.kind === 'replace') {
     const target = application.target.section;
@@ -1020,8 +1029,15 @@ function applyGeneratedImportSection(
   return `Inserted section "${generated.title}" (${getSectionId(generated)}) at the bottom.`;
 }
 
-function parseGeneratedImportSection(hvy: string): VisualSection {
-  const parsed = deserializeDocumentWithDiagnostics(`${hvy.trim()}\n`, '.hvy');
+function parseGeneratedImportSection(hvy: string, documentMeta: VisualDocument['meta']): VisualSection {
+  const normalizedHvy = normalizeLlmHvySafetyClosures(hvy).trim();
+  const header = serializeDocumentHeaderYaml({
+    meta: documentMeta,
+    extension: '.hvy',
+    sections: [],
+    attachments: [],
+  });
+  const parsed = deserializeDocumentWithDiagnostics(`---\n${header.trim()}\n---\n\n${normalizedHvy}\n`, '.hvy');
   const errors = parsed.diagnostics.filter((diagnostic) => diagnostic.severity === 'error');
   if (errors.length > 0) {
     throw new Error(`Generated HVY section is invalid. ${errors.map((diagnostic) => diagnostic.message).join(' ')}`);
@@ -1030,6 +1046,131 @@ function parseGeneratedImportSection(hvy: string): VisualSection {
     throw new Error('Generated HVY must contain exactly one top-level section.');
   }
   return parsed.document.sections[0]!;
+}
+
+function normalizeLlmHvySafetyClosures(hvy: string): string {
+  const lines = hvy.split(/\r?\n/);
+  const closeNames = new Set<string>();
+  for (const line of lines) {
+    const close = line.match(/^\s*<!--\s*\/([a-z][a-z0-9-]*(?::[a-z0-9-]+)*)\s*-->\s*$/i);
+    if (close?.[1]) {
+      closeNames.add(close[1].toLowerCase());
+    }
+  }
+  if (closeNames.size === 0) {
+    return hvy;
+  }
+
+  const stack: Array<{ name: string; indent: number }> = [];
+  const normalized: string[] = [];
+  for (const line of lines) {
+    const close = line.match(/^\s*<!--\s*\/([a-z][a-z0-9-]*(?::[a-z0-9-]+)*)\s*-->\s*$/i);
+    if (close?.[1]) {
+      const name = close[1].toLowerCase();
+      const index = stack.map((entry) => entry.name).lastIndexOf(name);
+      if (index >= 0) {
+        stack.splice(index);
+      }
+      continue;
+    }
+
+    let nextLine = line;
+    const top = stack[stack.length - 1];
+    if (top && nextLine.trim().length > 0) {
+      const indent = countImportLineIndent(nextLine);
+      const floor = top.indent + 1;
+      if (indent < floor) {
+        nextLine = `${' '.repeat(floor - indent)}${nextLine}`;
+      }
+    }
+
+    normalized.push(nextLine);
+    const open = nextLine.match(/^(\s*)<!--hvy:([a-z][a-z0-9-]*(?::[a-z0-9-]+)*)\s*\{.*\}\s*-->\s*$/i);
+    if (open?.[2] && shouldTrackImportSafetyOpen(open[2], closeNames)) {
+      stack.push({
+        name: open[2].toLowerCase(),
+        indent: open[1]?.length ?? 0,
+      });
+    }
+  }
+  return normalized.join('\n');
+}
+
+function shouldTrackImportSafetyOpen(name: string, closeNames: Set<string>): boolean {
+  const normalized = name.toLowerCase();
+  if (closeNames.has(normalized)) {
+    return true;
+  }
+  return !IMPORT_SAFETY_LEAF_DIRECTIVES.has(normalized);
+}
+
+const IMPORT_SAFETY_LEAF_DIRECTIVES = new Set([
+  'button',
+  'chart',
+  'db-table',
+  'fill-in',
+  'form-field',
+  'image',
+  'link',
+  'script',
+  'table',
+  'text',
+  'xref-card',
+]);
+
+function countImportLineIndent(line: string): number {
+  return line.match(/^ */)?.[0].length ?? 0;
+}
+
+function preserveTemplateFillIns(generated: VisualSection, template: VisualSection): void {
+  const templateFillIns = new Map<string, VisualBlock>();
+  visitBlocks([template], (block) => {
+    const id = block.schema.id.trim();
+    if (id && block.schema.fillIn === true) {
+      templateFillIns.set(id, block);
+    }
+  });
+  if (templateFillIns.size === 0) {
+    return;
+  }
+  preserveTemplateFillInsInList(generated.blocks, templateFillIns);
+  for (const child of generated.children) {
+    preserveTemplateFillIns(child, template);
+  }
+}
+
+function preserveTemplateFillInsInList(blocks: VisualBlock[], templateFillIns: Map<string, VisualBlock>): void {
+  for (let index = 0; index < blocks.length; index += 1) {
+    const block = blocks[index]!;
+    const template = templateFillIns.get(block.schema.id.trim());
+    if (template && isBlankGeneratedFillInReplacement(block)) {
+      blocks[index] = cloneReusableBlock(template);
+      continue;
+    }
+    preserveTemplateFillInsInList(block.schema.containerBlocks ?? [], templateFillIns);
+    preserveTemplateFillInsInList(block.schema.componentListBlocks ?? [], templateFillIns);
+    for (const item of block.schema.gridItems ?? []) {
+      const replacement = preserveTemplateFillInBlock(item.block, templateFillIns);
+      if (replacement) {
+        item.block = replacement;
+      } else {
+        preserveTemplateFillInsInList([item.block], templateFillIns);
+      }
+    }
+    preserveTemplateFillInsInList(block.schema.expandableStubBlocks?.children ?? [], templateFillIns);
+    preserveTemplateFillInsInList(block.schema.expandableContentBlocks?.children ?? [], templateFillIns);
+  }
+}
+
+function preserveTemplateFillInBlock(block: VisualBlock, templateFillIns: Map<string, VisualBlock>): VisualBlock | null {
+  const template = templateFillIns.get(block.schema.id.trim());
+  return template && isBlankGeneratedFillInReplacement(block) ? cloneReusableBlock(template) : null;
+}
+
+function isBlankGeneratedFillInReplacement(block: VisualBlock): boolean {
+  return block.schema.fillIn !== true
+    && block.text.trim().length === 0
+    && (block.schema.placeholder.trim().length === 0 || block.schema.placeholder.trim().toLowerCase() === 'blank');
 }
 
 function adjustImportSectionLevel(section: VisualSection, targetLevel: number): void {
@@ -1055,11 +1196,11 @@ function buildImportXrefTargetResponseInstructions(): string {
   return [
     'Return exactly one JSON object and no prose.',
     'Shape:',
-    '{"targets":[{"id":"skill-python","title":"Python","kind":"skill","description":"Python is a programming language listed in the source document."}]}',
+    '{"targets":[{"id":"foo-bar","title":"Foo Bar","kind":"bazz","description":"A nonsense word"}]}',
     '',
     '`id` must be a stable HVY id suitable for exact `xrefTarget` use.',
     '`title` is the short display label.',
-    '`kind` is optional and should be a compact tag such as skill, tool, history, education, project, award, certification, publication, or section.',
+    '`kind` is optional and should be a compact tag used for filtering like items.',
     '`description` must be exactly one sentence about what the target is.',
     'Return {"targets":[]} if no source-backed xref targets are useful.',
   ].join('\n');
@@ -1074,6 +1215,8 @@ function buildImportSectionHvyResponseInstructions(): string {
     '`hvy` must be one complete valid HVY section, not a whole document and not a standalone component.',
     'The HVY section must include exactly one section directive and one `#!` section heading.',
     'Use literal HVY directive comments. Do not HTML-escape `<`, `>`, or directive JSON quotes.',
+    'Use LLM-only closing comments for nested containers, reusable/custom components, component-list item slots, and expandable slots. Example: `<!--hvy:container {}--> ... <!-- /container -->`.',
+    'When returning a reusable/custom component with slots, close both the slots and the reusable/custom component itself.',
   ].join('\n');
 }
 

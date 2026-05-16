@@ -62,6 +62,7 @@ import { loadPaletteOverrideId } from './palettes/palette-preferences';
 import { captureRenderScroll, restoreRenderScroll } from './render-scroll';
 import { observeRenderedLinks, resetObservedLinks, type HvyLinkObserver } from './link-observer';
 import { recordHistory } from './history';
+import { resetTransientUiState } from './navigation';
 import {
   buildImportPlanForDocument,
   importTextIntoDocument,
@@ -457,20 +458,30 @@ async function importFromText(options: ImportFromTextOptions): Promise<ImportFro
     return result;
   }
   options.onProgress?.({ phase: 'linting', message: 'Checking imported HVY document.' });
+  freshLoadMountedDocumentInPlace();
   const serialized = serializeDocument(state.document);
   state.rawEditorText = serialized;
   const diagnostics = deserializeDocumentWithDiagnostics(serialized, state.document.extension).diagnostics;
   const errors = diagnostics.filter((diagnostic) => diagnostic.severity === 'error');
   if (errors.length > 0) {
+    resetTransientUiState();
     renderApp();
     return {
       status: 'error',
       message: errors.map((diagnostic) => diagnostic.message).join(' '),
     };
   }
+  resetTransientUiState();
   renderApp();
   options.onProgress?.({ phase: 'complete', message: result.message ?? 'Import complete.' });
   return result;
+}
+
+function freshLoadMountedDocumentInPlace(): void {
+  const parsed = deserializeDocumentWithDiagnostics(serializeDocument(state.document), state.document.extension);
+  state.document.meta = parsed.document.meta;
+  state.document.sections.splice(0, state.document.sections.length, ...parsed.document.sections);
+  state.document.attachments = parsed.document.attachments;
 }
 
 function refreshModalPreview(): void {}

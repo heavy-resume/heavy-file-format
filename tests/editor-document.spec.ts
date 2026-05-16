@@ -504,6 +504,7 @@ hvy_version: 0.1
       throw new Error('Mount root missing.');
     }
     const responses = [
+      '{"targets":[]}',
       '{"information":"Bad card"}',
       '{"hvy":"<!--hvy: {\\"id\\":\\"imported-after-diagnostic\\"}-->\\n#! Imported\\n\\n <!--hvy:text {\\"id\\":\\"imported-after-diagnostic-text\\"}-->\\n  Imported despite diagnostic"}',
     ];
@@ -543,7 +544,7 @@ hvy_version: 0.1
     };
   });
 
-  expect(result.calls).toBe(2);
+  expect(result.calls).toBe(3);
   expect(result.progress).toContain('linting');
   expect(result.result.status).toBe('error');
   expect(result.result.message).toContain('expandable block is missing');
@@ -575,6 +576,7 @@ hvy_version: 0.1
     const hookReasons: string[] = [];
     const progressSnapshots: string[] = [];
     const responses = [
+      '{"targets":[]}',
       '{"information":"Imported summary"}',
       '{"hvy":"<!--hvy: {\\"id\\":\\"imported-summary\\"}-->\\n#! Imported Summary\\n\\n <!--hvy:text {\\"id\\":\\"imported-summary-text\\"}-->\\n  Imported summary"}',
     ];

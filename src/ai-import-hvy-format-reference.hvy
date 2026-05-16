@@ -277,7 +277,7 @@ theme:
   - Remove filled template placeholder state such as `hideIfUnmodified` from generated sections that contain imported content.
   - Custom components from the matched template use the same directive form, for example `<!--hvy:blip-record {...}-->` or `<!--hvy:widget-record {...}-->`.
   - Custom expandable components are the expandable. Put expandable slots directly under the custom directive; do not emit a separate base `<!--hvy:expandable {}-->` block next to the custom component.
-  - Use only source-backed facts. Do not invent dates, titles, employers, schools, links, skills, tools, metrics, or bullets.
+  - Use only source-backed facts. Do not invent dates, titles, entity names, labels, categories, links, metrics, or bullets.
   - Generate one complete section for the approved step. Do not add unrelated sections or leave conditional placeholders.
 <!--hvy: {"id":"hvy-links-crossreferences","lock":false,"expanded":true,"highlight":false}-->
 #! Links And Crossreferences

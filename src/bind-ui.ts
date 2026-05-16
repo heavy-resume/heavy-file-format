@@ -496,6 +496,9 @@ export function bindUi(app: HTMLElement): void {
 
     const toggle = target.closest<HTMLElement>('[data-reader-action="toggle-expand"]');
     if (toggle) {
+      if (nearestReaderAction !== toggle) {
+        // Let nested reader controls, such as expandables inside a section preview, handle the click.
+      } else {
       event.stopPropagation();
       logClickTrace(event, 'reader-area:handled:section-toggle:start', {
         sectionKey: toggle.dataset.sectionKey ?? null,
@@ -517,6 +520,7 @@ export function bindUi(app: HTMLElement): void {
         getRefreshReaderPanels()();
       });
       return;
+      }
     }
 
     const expandable = target.closest<HTMLElement>('[data-reader-action="toggle-expandable"]');

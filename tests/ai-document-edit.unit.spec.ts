@@ -399,6 +399,7 @@ section_defs:
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages[0]?.content).not.toContain('Imported summary');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages[0]?.content).toContain('Do not use tools. Do not mutate anything.');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages[0]?.content).toContain('Plan section-sized work only.');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages[0]?.content).toContain('not an ordering requirement');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages[0]?.content).toContain('Use one step per final document section.');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages[0]?.content).toContain('matching existing body section by sectionId');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages[0]?.content).toContain('Do not copy specific source facts into the plan.');
@@ -406,7 +407,7 @@ section_defs:
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages[0]?.content).toContain('Do not write conditional');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages[0]?.content).toContain('Use only facts present in the imported source text');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('=== BEGIN TEMPLATE SECTIONS ===');
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Template section outline (section names only; no component content):');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Template section inventory for resolving section targets; this is not an ordering requirement:');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('- body: Summary (id: summary)');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('- definition: Details (id: details-template, name: Details)');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).not.toContain('Existing content');
@@ -463,7 +464,10 @@ hvy_version: 0.1
   });
 });
 
-test('importTextIntoDocument executes approved steps with mocked LLM tool calls', async () => {
+test('importTextIntoDocument executes approved steps with mocked LLM calls', async () => {
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"targets":[{"id":"summary","title":"Summary","kind":"section","description":"Summary is the imported summary section."}]}'
+  );
   requestProxyCompletionMock.mockResolvedValueOnce(
     '{"information":"Imported summary"}'
   );
@@ -507,41 +511,48 @@ hvy_version: 0.1
   expect(serializeDocument(document)).not.toContain('Existing content');
   expect(serializeDocument(document)).toContain('Other content');
   expect(onMutation).toHaveBeenCalledWith('ai-edit:section');
-  expect(requestProxyCompletionMock).toHaveBeenCalledTimes(2);
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.debugLabel).toBe('ai-import-section-data:1');
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages[0]?.content).toContain('Extract source information');
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages[0]?.content).toContain('This is not a tool loop.');
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).not.toContain('=== BEGIN TEMPLATE SECTION STRUCTURE ===');
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('=== BEGIN SECTION APPLICATION ===');
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('=== BEGIN DOCUMENT RELATIONSHIPS ===');
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('summary: Summary');
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Existing xref-card references already present');
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Application: replace existing body section.');
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Matched section title: Summary');
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('=== BEGIN MATCHED SECTION TEMPLATE ===');
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Existing content');
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).not.toContain('Other content');
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('=== BEGIN SOURCE DOCUMENT ===');
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('=== END SOURCE DOCUMENT ===');
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('1. [current] Summary: Create a Summary section from the imported summary (body section: Summary (summary))');
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.responseInstructions).toContain('`information` is a concise text document');
-  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.debugLabel).toBe('ai-import-section-hvy:1');
-  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages[0]?.content).toContain('Generate one complete HVY section');
+  expect(requestProxyCompletionMock).toHaveBeenCalledTimes(3);
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.debugLabel).toBe('ai-import-xref-targets');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages[0]?.content).toContain('Identify planned xref targets');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Template section inventory for resolving section targets; this is not an ordering requirement:');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.responseInstructions).toContain('"targets"');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.debugLabel).toBe('ai-import-section-data:1');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages[0]?.content).toContain('Extract source information');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages[0]?.content).toContain('This is not a tool loop.');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).not.toContain('=== BEGIN TEMPLATE SECTION STRUCTURE ===');
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('=== BEGIN SECTION APPLICATION ===');
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('=== BEGIN DOCUMENT RELATIONSHIPS ===');
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('summary: Summary');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('Existing xref-card references already present');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('=== BEGIN PLANNED XREF TARGETS ===');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('- summary: Summary [section] - Summary is the imported summary section.');
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('Application: replace existing body section.');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('Matched section title: Summary');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('=== BEGIN MATCHED SECTION TEMPLATE ===');
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('Existing content');
-  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('=== BEGIN SECTION INFORMATION ===');
-  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('Imported summary');
-  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('=== END SECTION INFORMATION ===');
-  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).not.toContain('=== BEGIN SOURCE DOCUMENT ===');
-  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('=== BEGIN HVY FORMAT REFERENCE ===');
-  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('=== END HVY FORMAT REFERENCE ===');
-  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).not.toContain('Return raw HVY for exactly one complete section.');
-  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages[0]?.content).toContain('Return exactly one top-level section.');
-  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages[0]?.content).toContain('Return raw HVY only; do not call or describe tools.');
-  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.responseInstructions).toContain('`hvy` must be one complete valid HVY section');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).not.toContain('Other content');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('=== BEGIN SOURCE DOCUMENT ===');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('=== END SOURCE DOCUMENT ===');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('1. [current] Summary: Create a Summary section from the imported summary (body section: Summary (summary))');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.responseInstructions).toContain('`information` is a concise text document');
+  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.debugLabel).toBe('ai-import-section-hvy:1');
+  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.messages[0]?.content).toContain('Generate one complete HVY section');
+  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.context).toContain('=== BEGIN SECTION APPLICATION ===');
+  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.context).toContain('=== BEGIN DOCUMENT RELATIONSHIPS ===');
+  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.context).toContain('summary: Summary');
+  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.context).toContain('=== BEGIN PLANNED XREF TARGETS ===');
+  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.context).toContain('Application: replace existing body section.');
+  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.context).toContain('Existing content');
+  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.context).toContain('=== BEGIN SECTION INFORMATION ===');
+  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.context).toContain('Imported summary');
+  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.context).toContain('=== END SECTION INFORMATION ===');
+  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.context).not.toContain('=== BEGIN SOURCE DOCUMENT ===');
+  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.context).toContain('=== BEGIN HVY FORMAT REFERENCE ===');
+  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.context).toContain('=== END HVY FORMAT REFERENCE ===');
+  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.context).not.toContain('Return raw HVY for exactly one complete section.');
+  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.messages[0]?.content).toContain('Return exactly one top-level section.');
+  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.messages[0]?.content).toContain('Return raw HVY only; do not call or describe tools.');
+  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.responseInstructions).toContain('`hvy` must be one complete valid HVY section');
   expect(progress.mock.calls.map((call) => call[0].phase)).not.toContain('tool_call');
   expect(progress.mock.calls.map((call) => call[0])).toContainEqual({
     phase: 'thinking',
@@ -550,6 +561,9 @@ hvy_version: 0.1
 });
 
 test('importTextIntoDocument includes recursively referenced reusable definitions for matched sections', async () => {
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"targets":[]}'
+  );
   requestProxyCompletionMock.mockResolvedValueOnce(
     '{"information":"Imported tools"}'
   );
@@ -598,17 +612,20 @@ component_defs:
   });
 
   expect(result.status).toBe('complete');
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('=== BEGIN MATCHED REUSABLE DEFINITIONS ===');
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('name: tool-row');
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('name: tool-note');
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).not.toContain('name: unused-row');
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('=== BEGIN MATCHED REUSABLE DEFINITIONS ===');
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('name: tool-row');
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('name: tool-note');
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).not.toContain('name: unused-row');
+  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.context).toContain('=== BEGIN MATCHED REUSABLE DEFINITIONS ===');
+  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.context).toContain('name: tool-row');
+  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.context).toContain('name: tool-note');
+  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.context).not.toContain('name: unused-row');
 });
 
 test('importTextIntoDocument appends generated section when approved step matches only a template section', async () => {
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"targets":[]}'
+  );
   requestProxyCompletionMock.mockResolvedValueOnce(
     '{"information":"Imported details"}'
   );
@@ -648,12 +665,15 @@ section_defs:
   expect(serialized).toContain('Existing content');
   expect(serialized).toContain('"id":"imported-details"');
   expect(serialized.indexOf('"id":"summary"')).toBeLessThan(serialized.indexOf('"id":"imported-details"'));
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).not.toContain('<!-- Template section: Details -->');
-  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('=== BEGIN SECTION INFORMATION ===');
-  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).not.toContain('=== BEGIN SOURCE DOCUMENT ===');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).not.toContain('<!-- Template section: Details -->');
+  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.context).toContain('=== BEGIN SECTION INFORMATION ===');
+  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.context).not.toContain('=== BEGIN SOURCE DOCUMENT ===');
 });
 
 test('importTextIntoDocument accepts model HVY responses with escaped directive brackets', async () => {
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"targets":[]}'
+  );
   requestProxyCompletionMock.mockResolvedValueOnce(
     '{"information":"Imported summary"}'
   );
@@ -689,6 +709,9 @@ hvy_version: 0.1
 });
 
 test('importTextIntoDocument treats explicit blank targets as binding even when text mentions an existing section', async () => {
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"targets":[]}'
+  );
   requestProxyCompletionMock.mockResolvedValueOnce(
     '{"information":"Imported summary"}'
   );
@@ -727,8 +750,8 @@ hvy_version: 0.1
   expect(serialized).toContain('"id":"summary"');
   expect(serialized).toContain('Existing content');
   expect(serialized).toContain('"id":"imported-blank-summary"');
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('Application: create an empty new section from scratch.');
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).not.toContain('Application: replace existing body section.');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('Application: create an empty new section from scratch.');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).not.toContain('Application: replace existing body section.');
 });
 
 test('importTextIntoDocument errors when an explicit body target is missing', async () => {

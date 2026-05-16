@@ -24,7 +24,7 @@ theme:
 
  <!--hvy:text {}-->
   - HVY directives are HTML comments: `<!--hvy:component-name {...attributes as json...}-->`.
-  - Whitespace indentation is structural and important like Python and Ruby. Child blocks are indented under the section or parent block.
+  - Whitespace indentation is structural and important. Child blocks are indented under the section or parent block.
   - Section titles use `#!`; ordinary Markdown headings such as `##` are text content, not sections. For example, HVY General Info above is NOT visible in the viewer, but is visible in the editor.
   - Xrefs only work on things with an explicit ID. Don't toss out IDs like candy, it should be something that someone would want to link to.
   - Helper text, internal examples, generated reciprocal cards, and decorative blocks should usually omit `id`.
@@ -57,8 +57,14 @@ theme:
 
    <!--hvy:text {}-->
     Example:
-    - `<!--hvy:text {"id":"summary-text"}-->`
-    - ` Experienced software engineer with Python and TypeScript background.`
+    
+    ```hvy
+    <!--hvy:text {"id":"blip-text"}-->
+     # Header 1
+     ## Header 2
+    
+     Etc, similar a form of flavored markdown
+    ```
 
  <!--hvy:expandable {"id":"component-container","tags":"component, core, container, layout"}-->
   <!--hvy:expandable:stub {"description":"Component name and quick example"}-->
@@ -78,9 +84,13 @@ theme:
 
    <!--hvy:text {}-->
     Example:
-    - `<!--hvy:container {"id":"contact-panel","containerTitle":"Contact"}-->`
-    - `<!--hvy:container:0 {}-->`
-    - `<!--hvy:text {"id":"contact-email"}-->`
+    
+    ```hvy
+    <!--hvy:container {"id":"important-stuff","containerTitle":"Visible on border"}-->
+     <!--hvy:container:0 {}-->
+      <!--hvy:text {}-->
+       I'm text inside a container
+    ```
 
  <!--hvy:expandable {"id":"component-grid","tags":"component, core, grid, layout"}-->
   <!--hvy:expandable:stub {"description":"Component name and quick example"}-->
@@ -100,9 +110,15 @@ theme:
 
    <!--hvy:text {}-->
     Example:
-    - `<!--hvy:grid {"id":"profile-grid","gridColumns":2}-->`
-    - `<!--hvy:grid:0 {"id":"profile-left"}-->`
-    - `<!--hvy:grid:1 {"id":"profile-right"}-->`
+    ```hvy
+    <!--hvy:grid {"id":"blip-grid","gridColumns":2}-->
+     <!--hvy:grid:0 {"id":"blip-left"}-->
+      <!--hvy:text {}-->
+       Left column content.
+     <!--hvy:grid:1 {"id":"blip-right"}-->
+      <!--hvy:text {}-->
+       Right column content.
+    ```
 
  <!--hvy:expandable {"id":"component-component-list","tags":"component, core, component-list, repeated-records"}-->
   <!--hvy:expandable:stub {"description":"Component name and quick example"}-->
@@ -122,9 +138,17 @@ theme:
 
    <!--hvy:text {}-->
     Example:
-    - `<!--hvy:component-list {"id":"history-list","componentListComponent":"history-record"}-->`
-    - `<!--hvy:component-list:0 {}-->`
-    - `<!--hvy:history-record {"id":"history-acme"}-->`
+    ```hvy
+    <!--hvy:component-list {"id":"blip-list","componentListComponent":"blip-record"}-->
+     <!--hvy:component-list:0 {}-->
+      <!--hvy:blip-record {"id":"blip-alpha"}-->
+       <!--hvy:expandable:stub {}-->
+        <!--hvy:text {}-->
+         Blip Alpha
+       <!--hvy:expandable:content {}-->
+        <!--hvy:text {}-->
+         Details about the fake blip record.
+    ```
 
  <!--hvy:expandable {"id":"component-expandable","tags":"component, core, expandable, record"}-->
   <!--hvy:expandable:stub {"description":"Component name and quick example"}-->
@@ -140,13 +164,19 @@ theme:
     ## expandable
 
    <!--hvy:text {}-->
-    Use `expandable` for records with a collapsed summary and expanded details. Put summary blocks under `<!--hvy:expandable:stub {}-->` and detail blocks under `<!--hvy:expandable:content {}-->`. History, projects, education, skills, tools, publications, and certifications commonly use expandable records.
+    Use `expandable` for records with a collapsed summary and expanded details. Put summary blocks under `<!--hvy:expandable:stub {}-->` and detail blocks under `<!--hvy:expandable:content {}-->`.
 
    <!--hvy:text {}-->
     Example:
-    - `<!--hvy:expandable {"id":"project-heavy","expandableAlwaysShowStub":true}-->`
-    - `<!--hvy:expandable:stub {}-->` for the collapsed project name.
-    - `<!--hvy:expandable:content {}-->` for the detailed project bullets.
+    ```hvy
+    <!--hvy:expandable {"id":"blip-card","expandableAlwaysShowStub":true}-->
+     <!--hvy:expandable:stub {}-->
+      <!--hvy:text {}-->
+       Blip Card
+     <!--hvy:expandable:content {}-->
+      <!--hvy:text {}-->
+       Fake expanded blip details.
+    ```
 
  <!--hvy:expandable {"id":"component-table","tags":"component, core, table, data"}-->
   <!--hvy:expandable:stub {"description":"Component name and quick example"}-->
@@ -154,7 +184,7 @@ theme:
    <!--hvy:text {}-->
     # table
     
-    `<!--hvy:table {"id":"summary-table","tableColumns":["A","B"],"tableRows":[{"cells":["a","b"]}]}-->`
+    `<!--hvy:table {"id":"widget-table","tableColumns":["A","B"],"tableRows":[{"cells":["a","b"]}]}-->`
 
   <!--hvy:expandable:content {"description":"Table component description and example"}-->
 
@@ -166,7 +196,9 @@ theme:
 
    <!--hvy:text {}-->
     Example:
-    - `<!--hvy:table {"id":"education-table","tableColumns":["School","Degree"],"tableRows":[{"cells":["Example University","BS Computer Science"]}]}-->`
+    ```hvy
+    <!--hvy:table {"id":"widget-table","tableColumns":["Widget","State"],"tableRows":[{"cells":["Blip","Ready"]}]}-->
+    ```
 
  <!--hvy:expandable {"id":"component-image","tags":"component, core, image, media"}-->
   <!--hvy:expandable:stub {"description":"Component name and quick example"}-->
@@ -186,7 +218,9 @@ theme:
 
    <!--hvy:text {}-->
     Example:
-    - `<!--hvy:image {"id":"headshot","imageFile":"headshot.png","imageAlt":"Headshot of the document owner"}-->`
+    ```hvy
+    <!--hvy:image {"id":"widget-image","imageFile":"widget.png","imageAlt":"Fake widget image"}-->
+    ```
 
  <!--hvy:expandable {"id":"component-plugin","tags":"component, core, plugin, dynamic"}-->
   <!--hvy:expandable:stub {"description":"Component name and quick example"}-->
@@ -206,7 +240,9 @@ theme:
 
    <!--hvy:text {}-->
     Example:
-    - `<!--hvy:plugin {"id":"application-table","plugin":"dev.hvy.db-table","pluginConfig":{"source":"with-file","table":"applications"}}-->`
+    ```hvy
+    <!--hvy:plugin {"id":"widget-plugin","plugin":"dev.hvy.db-table","pluginConfig":{"source":"with-file","table":"widgets"}}-->
+    ```
 
  <!--hvy:expandable {"id":"component-button","tags":"component, core, button, action"}-->
   <!--hvy:expandable:stub {"description":"Component name and quick example"}-->
@@ -226,7 +262,9 @@ theme:
 
    <!--hvy:text {}-->
     Example:
-    - `<!--hvy:button {"id":"generate-summary","buttonLabel":"Generate Summary","buttonAction":"ai-generate"}-->`
+    ```hvy
+    <!--hvy:button {"id":"generate-blip","buttonLabel":"Generate Blip","buttonAction":"ai-generate"}-->
+    ```
 <!--hvy: {"id":"hvy-import-template-instructions","lock":false,"expanded":true,"highlight":false}-->
 #! Import From Template Instructions
 
@@ -238,7 +276,8 @@ theme:
   - Preserve useful component names from the matched template instead of replacing structured records with plain text.
   - Preserve template fields like `sortKeys`, `groupKeys`, `tags`, `description`, reusable record component names, and xref metadata when they fit the imported data.
   - Remove filled template placeholder state such as `hideIfUnmodified` from generated sections that contain imported content.
-  - Custom components from the matched template use the same directive form, for example `<!--hvy:skill-record {...}-->` or `<!--hvy:history-record {...}-->`.
+  - Custom components from the matched template use the same directive form, for example `<!--hvy:blip-record {...}-->` or `<!--hvy:widget-record {...}-->`.
+  - Custom expandable components are the expandable. Put expandable slots directly under the custom directive; do not emit a separate base `<!--hvy:expandable {}-->` block next to the custom component.
   - Use only source-backed facts. Do not invent dates, titles, employers, schools, links, skills, tools, metrics, or bullets.
   - Generate one complete section for the approved step. Do not add unrelated sections or leave conditional placeholders.
 <!--hvy: {"id":"hvy-links-crossreferences","lock":false,"expanded":true,"highlight":false}-->
@@ -254,7 +293,7 @@ theme:
   <!--hvy:expandable:stub {"description":"Component name and quick example"}-->
 
    <!--hvy:text {}-->
-    `xref-card` - `<!--hvy:xref-card {"id":"skill-link","xrefTitle":"Python","xrefTarget":"skill-python"}-->`
+    `xref-card` - `<!--hvy:xref-card {"id":"blip-link","xrefTitle":"Blip","xrefTarget":"blip-target"}-->`
 
   <!--hvy:expandable:content {"description":"Xref-card component description and example"}-->
 
@@ -266,7 +305,9 @@ theme:
 
    <!--hvy:text {}-->
     Example:
-    - `<!--hvy:xref-card {"id":"python-from-history","xrefTitle":"Python","xrefDetail":"Used in backend automation","xrefTarget":"skill-python"}-->`
+    ```hvy
+    <!--hvy:xref-card {"id":"blip-crosslink","xrefTitle":"Blip","xrefDetail":"Fake reference detail","xrefTarget":"blip-target"}-->
+    ```
 
  <!--hvy:text {}-->
   - Use exact existing ids from the relationship inventory for `xrefTarget`.

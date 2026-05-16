@@ -224,6 +224,68 @@ section_defs:
             tags: publication
             componentListBlocks: []
       children: []
+    flavors:
+      - name: tableform
+        description: Preferred for longer publication lists
+        template:
+          id: publications
+          title: Publications
+          level: 1
+          lock: true
+          description: Publications
+          hideIfUnmodified: true
+          tags: reciprocal-xref-source
+          blocks:
+            - text: "# Publications"
+              schema:
+                component: text
+                css: "margin: 0.5rem 0;"
+            - text: ""
+              schema:
+                component: table
+                css: "margin: 0.5rem 0 0;"
+                tags: table-header
+                tableColumns:
+                  - PUBLICATION
+                  - PUBLISHER
+                  - DATE
+                tableShowHeader: true
+                tableRows: []
+                lock: true
+                description: Publication table header
+            - text: ""
+              schema:
+                component: component-list
+                css: "margin: 0;"
+                componentListComponent: publication-record
+                componentListItemLabel: publication
+                tags: publication
+                componentListBlocks: []
+          children: []
+      - name: linear
+        description: Preferred for shorter publication lists
+        template:
+          id: publications
+          title: Publications
+          level: 1
+          lock: true
+          description: Publications
+          hideIfUnmodified: true
+          tags: reciprocal-xref-source
+          blocks:
+            - text: "# Publications"
+              schema:
+                component: text
+                css: "margin: 0.5rem 0;"
+            - text: ""
+              schema:
+                component: component-list
+                css: "margin: 0;"
+                componentListComponent: publication-linear-record
+                componentListItemLabel: publication
+                tags: publication
+                componentListBlocks: []
+          children: []
   - name: Awards
     key: resume-awards
     template:
@@ -980,6 +1042,85 @@ component_defs:
               tableShowHeader: false
               tableRows:
                 - cells: ["{% name %}", "{% publisher %}", "{% date %}"]
+      expandableContentBlocks:
+        css: "padding: 0.5rem;"
+        children:
+          - text: ""
+            schema:
+              component: grid
+              css: "margin: 0 0 0.35rem;"
+              gridColumns: 2
+              gridItems:
+                - id: publication-details
+                  block:
+                    text: ""
+                    schema:
+                      component: container
+                      css: "margin: 0;"
+                      containerBlocks:
+                        - text: "^section-heading^ ### {% name %}"
+                          schema:
+                            component: text
+                            css: "margin: 0 0 0.25rem;"
+                            placeholder: "Publication name"
+                        - text: "{% authors %}"
+                          schema:
+                            component: text
+                            css: "margin: 0 0 0.25rem;"
+                            placeholder: "Authors"
+                        - text: "{% publisher %}"
+                          schema:
+                            component: text
+                            css: "margin: 0 0 0.25rem;"
+                            placeholder: "Publisher"
+                        - text: "{% employer_short_name %}"
+                          schema:
+                            component: text
+                            css: "margin: 0;"
+                            placeholder: "Employer short name"
+                - id: publication-date
+                  block:
+                    text: "{% date %}"
+                    schema:
+                      component: text
+                      css: "margin: 0; text-align: right;"
+                      placeholder: "Publication date"
+          - text: "{% description | block %}"
+            schema:
+              component: text
+              css: "margin: 0.5rem 0;"
+              placeholder: "Description"
+          - text: "{% url %}"
+            schema:
+              component: text
+              css: "margin: 0.35rem 0;"
+              placeholder: "Publication URL"
+          - component: skills-and-tools-tech-list
+  - name: publication-linear-record
+    baseType: expandable
+    description: Publication entry with an empty collapsed stub for linear publication sections
+    templateVariables:
+      name:
+        label: Publication name
+      authors:
+        label: Authors
+      publisher:
+        label: Publisher
+      date:
+        label: Publication date
+      employer_short_name:
+        label: Employer short name
+      url:
+        label: Publication URL
+    schema:
+      tags: publication
+      xrefTitle: "{% name %}"
+      xrefDetail: "{% publisher %}"
+      css: "margin: 0.35rem 0;"
+      expandableAlwaysShowStub: true
+      expandableExpanded: false
+      expandableStubBlocks:
+        children: []
       expandableContentBlocks:
         css: "padding: 0.5rem;"
         children:

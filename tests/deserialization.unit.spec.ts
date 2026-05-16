@@ -633,7 +633,7 @@ Stub only`);
   );
 });
 
-test('expandable missing stub or content reports errors with concise hints', () => {
+test('expandable missing content reports an error while allowing an empty stub', () => {
   const result = deserializeDocumentWithDiagnostics(`---
 hvy_version: 0.1
 ---
@@ -654,6 +654,13 @@ hvy_version: 0.1
       expect.objectContaining({
         severity: 'error',
         code: 'expandable_missing_content',
+      }),
+    ])
+  );
+  expect(result.diagnostics).not.toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        code: 'expandable_missing_stub',
       }),
     ])
   );

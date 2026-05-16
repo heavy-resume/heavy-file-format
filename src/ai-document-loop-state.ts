@@ -683,7 +683,7 @@ export function summarizeToolFailureMessage(message: string): string {
 }
 
 export function hasNestedSlotDiagnostics(message: string): boolean {
-  return /\b(expandable|component-list|grid|container) (stub\/content|slot|block)|without an enclosing|missing stub content|missing expanded content/i.test(message);
+  return /\b(expandable|component-list|grid|container) (stub\/content|slot|block)|without an enclosing|missing expanded content/i.test(message);
 }
 
 export function truncateMultiline(value: string, maxLength: number): string {

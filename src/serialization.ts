@@ -150,8 +150,6 @@ export function getHvyDiagnosticUsageHint(diagnostic: HvyDiagnostic): string {
       return 'Put child blocks directly under `<!--hvy:container {}-->`; container slot directives are not used.';
     case 'table_detail_slots_not_supported':
       return 'Tables are non-interactive in HVY. Wrap the table in `<!--hvy:expandable {}-->` for reveal/hide behavior.';
-    case 'expandable_missing_stub':
-      return 'An expandable needs a stub slot like `<!--hvy:expandable:stub {}-->`.';
     case 'expandable_missing_content':
       return 'An expandable needs a content slot like `<!--hvy:expandable:content {}-->`.';
     case 'xref_card_missing_title':
@@ -643,13 +641,6 @@ function validateBlockSemantics(block: VisualBlock, sectionLabel: string, docume
   const baseComponent = resolveBaseComponentFromMeta(block.schema.component, documentMeta);
 
   if (baseComponent === 'expandable') {
-    if ((block.schema.expandableStubBlocks.children ?? []).length === 0) {
-      diagnostics.push({
-        severity: 'error',
-        code: 'expandable_missing_stub',
-        message: `Section "${sectionLabel}": expandable block is missing stub content.`,
-      });
-    }
     if ((block.schema.expandableContentBlocks.children ?? []).length === 0) {
       diagnostics.push({
         severity: 'error',

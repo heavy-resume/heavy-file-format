@@ -47,8 +47,18 @@ function buildEditorDom(ctx: HvyPluginContext): { root: HTMLDivElement; handles:
     openScriptingHelpModal();
   });
 
+  const headActions = document.createElement('div');
+  headActions.className = 'hvy-scripting-head-actions';
+  if (ctx.block.schema.editorOnly) {
+    const editorScriptLabel = document.createElement('span');
+    editorScriptLabel.className = 'hvy-scripting-editor-script-label';
+    editorScriptLabel.textContent = 'editor script';
+    headActions.appendChild(editorScriptLabel);
+  }
+  headActions.appendChild(helpButton);
+
   head.appendChild(title);
-  head.appendChild(helpButton);
+  head.appendChild(headActions);
 
   const textarea = document.createElement('textarea');
   textarea.className = 'code-editor hvy-scripting-textarea';

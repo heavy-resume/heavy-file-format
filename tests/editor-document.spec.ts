@@ -217,7 +217,7 @@ hvy_version: 0.1
   await expect(page.locator('#editorTree .is-temp-highlighted')).toContainText('Hidden expandable editor needle', { timeout: 800 });
 });
 
-test('embedded runtime keeps host button and link styles outside the mounted document', async ({ page }) => {
+test('embedded runtime keeps host button, link, and list styles outside the mounted document', async ({ page }) => {
   await page.goto('/');
 
   const result = await page.evaluate(async () => {
@@ -232,6 +232,8 @@ hvy_version: 0.1
 #! Summary
 
  [Example link](https://example.com)
+
+ - Embedded bullet
 `;
     const documentBytes = new TextEncoder().encode(source);
     const root = document.querySelector<HTMLElement>('#mount');
@@ -244,21 +246,30 @@ hvy_version: 0.1
       body { background: rgb(255, 255, 255); }
       button { color: rgb(255, 0, 0); background: rgb(255, 255, 255); border-color: rgb(255, 0, 0); }
       a { color: rgb(255, 0, 0); }
+      ul, ol { list-style: none; padding-left: 0; }
+      li { display: block; }
     `;
     document.head.append(style);
     const button = root.querySelector<HTMLElement>('.viewer-sidebar-tab');
     const link = root.querySelector<HTMLElement>('.reader-block a');
-    if (!button || !link) {
+    const list = root.querySelector<HTMLElement>('.reader-block ul');
+    const listItem = root.querySelector<HTMLElement>('.reader-block li');
+    if (!button || !link || !list || !listItem) {
       throw new Error('Expected embedded controls missing.');
     }
     const buttonStyle = getComputedStyle(button);
     const linkStyle = getComputedStyle(link);
+    const listStyle = getComputedStyle(list);
+    const listItemStyle = getComputedStyle(listItem);
     return {
       hasBoundary: root.classList.contains('hvy-document'),
       hasLayout: Boolean(root.querySelector('.hvy-embed-layout')),
       buttonColor: buttonStyle.color,
       buttonBackground: buttonStyle.backgroundColor,
       linkColor: linkStyle.color,
+      listStyleType: listStyle.listStyleType,
+      listPaddingInlineStart: listStyle.paddingInlineStart,
+      listItemDisplay: listItemStyle.display,
     };
   });
 
@@ -267,6 +278,9 @@ hvy_version: 0.1
   expect(result.buttonColor).not.toBe('rgb(255, 0, 0)');
   expect(result.buttonBackground).not.toBe('rgb(255, 255, 255)');
   expect(result.linkColor).not.toBe('rgb(255, 0, 0)');
+  expect(result.listStyleType).toBe('disc');
+  expect(result.listPaddingInlineStart).not.toBe('0px');
+  expect(result.listItemDisplay).toBe('list-item');
 });
 
 test('embedded runtime lets hosts asynchronously rewrite rendered reader links', async ({ page }) => {

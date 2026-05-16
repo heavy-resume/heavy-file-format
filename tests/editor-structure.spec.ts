@@ -1232,6 +1232,10 @@ hvy_version: 0.1
   await page.getByRole('button', { name: 'Editor' }).click();
   await page.getByRole('button', { name: 'Advanced' }).click();
   await expect(page.locator('#editorTree')).toContainText('maintenance script');
+  await expect(page.locator('#editorTree .reader-code-head', { hasText: 'Python' })).toContainText('editor script');
+  await page.locator('#editorTree .editor-block-passive', { hasText: 'maintenance script' }).click();
+  await expect(page.locator('#editorTree .hvy-scripting-head')).toContainText('Python');
+  await expect(page.locator('#editorTree .hvy-scripting-editor-script-label')).toHaveText('editor script');
 
   await page.locator('[data-action="switch-view"][data-view="ai"]').click();
   await expect(page.locator('#aiReaderDocument')).not.toContainText('maintenance script');

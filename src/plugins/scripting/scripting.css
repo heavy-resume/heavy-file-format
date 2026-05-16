@@ -24,6 +24,26 @@
   text-transform: lowercase;
 }
 
+.hvy-scripting-head-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-left: auto;
+}
+
+.hvy-scripting-editor-script-label {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.55rem;
+  border: 1px solid var(--hvy-border-input, #d1d5db);
+  border-radius: 999px;
+  padding: 0.12rem 0.45rem;
+  background: var(--hvy-surface-alt, #f3f4f6);
+  color: var(--hvy-text-muted, #4b5563);
+  font: 600 0.72rem/1.2 "JetBrains Mono", "Fira Code", monospace;
+  white-space: nowrap;
+}
+
 .hvy-scripting-textarea {
   width: 100%;
   min-height: 12rem;

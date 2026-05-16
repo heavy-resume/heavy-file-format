@@ -794,7 +794,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       if (block.text.trim().length === 0) {
         return `<div class="editor-passive-empty-text">Empty script...</div>`;
       }
-      return renderSyntaxHighlightedCode(block.text, 'python');
+      return renderSyntaxHighlightedCode(block.text, 'python', block.schema.editorOnly ? { badge: 'editor script' } : undefined);
     }
 
     if (base === 'button') {
@@ -1609,12 +1609,16 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     return renderTextFragment(content);
   }
 
-  function renderSyntaxHighlightedCode(content: string, languageName: string): string {
+  function renderSyntaxHighlightedCode(content: string, languageName: string, options?: { badge?: string }): string {
     const language = languageName.trim() || 'text';
     const highlighted = highlightCode(content, language, deps.escapeHtml);
+    const badge = options?.badge
+      ? `<span class="reader-code-badge">${deps.escapeHtml(options.badge)}</span>`
+      : '';
     return `<div class="reader-code-block">
       <div class="reader-code-head">
         <span class="reader-code-language">${deps.escapeHtml(language)}</span>
+        ${badge}
       </div>
       <pre><code class="hljs language-${deps.escapeAttr(language)}">${highlighted}</code></pre>
     </div>`;

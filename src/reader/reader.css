@@ -250,6 +250,43 @@
   margin: 0 0 0.45rem;
 }
 
+.hvy-embed-layout .reader-block :where(ul:not(.contains-task-list)) {
+  list-style-position: outside;
+  list-style-type: disc;
+  padding-inline-start: 1.35rem;
+}
+
+.hvy-embed-layout .reader-block :where(ol:not(.contains-task-list)) {
+  list-style-position: outside;
+  list-style-type: decimal;
+  padding-inline-start: 1.35rem;
+}
+
+.hvy-embed-layout .reader-block :where(ul:not(.contains-task-list) ul:not(.contains-task-list)) {
+  list-style-type: circle;
+}
+
+.hvy-embed-layout .reader-block :where(ul:not(.contains-task-list) ul:not(.contains-task-list) ul:not(.contains-task-list)) {
+  list-style-type: square;
+}
+
+.hvy-embed-layout .reader-block :where(ol:not(.contains-task-list) ol:not(.contains-task-list)) {
+  list-style-type: lower-alpha;
+}
+
+.hvy-embed-layout .reader-block :where(ol:not(.contains-task-list) ol:not(.contains-task-list) ol:not(.contains-task-list)) {
+  list-style-type: lower-roman;
+}
+
+.hvy-embed-layout .reader-block :where(li:not(.task-list-item)) {
+  display: list-item;
+  padding-inline-start: 0.05rem;
+}
+
+.hvy-embed-layout .reader-block :where(li:not(.task-list-item) > ul, li:not(.task-list-item) > ol) {
+  margin-top: 0.25rem;
+}
+
 .reader-block h1,
 .reader-block h2,
 .reader-block h3,

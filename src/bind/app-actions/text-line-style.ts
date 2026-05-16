@@ -6,15 +6,15 @@ import type { AppActionHandler } from './types';
 const textLineStyleAdd: AppActionHandler = () => {
   recordHistory('meta:text-line-style:add');
   const styles = getTextLineStylesFromMeta(state.document.meta);
-  let index = 1;
-  let name = `style-${index}`;
+  let index = 0;
+  let name = 'indented';
   while (styles[name]) {
     index += 1;
-    name = `style-${index}`;
+    name = `indented-${index + 1}`;
   }
   styles[name] = {
-    label: `Style ${index}`,
-    css: 'margin: 0.25rem 0;',
+    label: index === 0 ? 'Indented' : `Indented ${index + 1}`,
+    css: 'margin: 0.25rem 0; padding-left: 1rem;',
   };
   writeTextLineStylesToMeta(state.document.meta, styles);
   getRenderApp()();
@@ -35,4 +35,3 @@ export const textLineStyleActions: Record<string, AppActionHandler> = {
   'add-text-line-style': textLineStyleAdd,
   'remove-text-line-style': textLineStyleRemove,
 };
-

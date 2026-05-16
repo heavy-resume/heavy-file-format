@@ -1525,6 +1525,17 @@
   align-items: end;
 }
 
+.text-line-style-preview {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.text-line-style-preview > span {
+  color: var(--hvy-text-muted);
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
 .text-line-style-sample {
   display: flex;
   align-items: baseline;

@@ -1,14 +1,13 @@
-import { stringify as stringifyYaml } from 'yaml';
 import { requestProxyCompletion, type HostChatClient } from './chat/chat';
-import { deserializeDocumentWithDiagnostics, serializeComponentDefinition, serializeDocumentHeaderYaml, serializeSectionFragment } from './serialization';
+import { deserializeDocumentWithDiagnostics, serializeBlockFragment, serializeDocumentHeaderYaml, serializeSectionFragment } from './serialization';
 import type { VisualBlock, VisualSection } from './editor/types';
-import { cloneReusableBlock } from './document-factory';
+import { cloneReusableBlock, cloneReusableSchema, defaultBlockSchema } from './document-factory';
 import { findSectionContainer, formatSectionTitle, getSectionId, visitBlocks } from './section-ops';
 import type { ChatSettings, ComponentDefinition, SectionDefinition, VisualDocument } from './types';
-import type { JsonObject } from './hvy/types';
 import { isAbortError, throwIfAborted } from './ai-document-loop-state';
 import { resolveBaseComponentFromMeta } from './component-defs';
 import importHvyFormatReference from './ai-import-hvy-format-reference.hvy?raw';
+import { getTextLineStyleLabel, getTextLineStylesFromMeta } from './text-line-styles';
 
 export type HvyImportProgressPhase = 'starting' | 'thinking' | 'linting' | 'complete';
 type HvyLlmCallPhase = HvyImportProgressPhase | 'tool_call';
@@ -616,6 +615,9 @@ function buildImportSectionHvyPrompt(sourceName: string, instructions: string | 
     'Use the extracted section information as the source of truth for facts.',
     'Build the section as raw HVY using the matched template as structural guidance.',
     'Reuse the template component shapes where they fit, including custom record components, component-list items, tables, containers, and xref-card components.',
+    'IDs are for navigation and exact xref targets. Do not repeat IDs and do not add IDs to local layout/prose components just to name them.',
+    'Do not put `id` on xref-card components; xref-card points at another component with `xrefTarget` and does not need its own navigation ID.',
+    'When reusing a matched grid, preserve the template grid shape, `gridColumns`, slot count, and slot order. Do not add extra grid cells for prose, notes, accomplishments, or repeated records.',
     'For custom components whose base type is expandable, put `<!--hvy:expandable:stub {}-->` and `<!--hvy:expandable:content {}-->` directly under the custom component directive. Do not create a separate sibling `<!--hvy:expandable {}-->` block.',
     'Use LLM-only closing comments for every nested container, reusable/custom component, component-list item slot, and expandable slot, for example `<!-- /container -->`, `<!-- /foo-record -->`, `<!-- /component-list:0 -->`, `<!-- /expandable:stub -->`. These closing comments are required.',
     'Do not close only the slots; close the containing reusable/custom component too, for example `<!-- /foo-record -->` after its expandable slots.',
@@ -639,6 +641,8 @@ function buildImportSectionHvyContext(document: VisualDocument, information: str
     '',
     buildImportPlannedXrefTargetFrame(plannedXrefTargets),
     '',
+    buildImportParagraphStyleFrame(document),
+    '',
     '=== BEGIN SECTION INFORMATION ===',
     information,
     '=== END SECTION INFORMATION ===',
@@ -649,6 +653,20 @@ function buildImportSectionHvyContext(document: VisualDocument, information: str
     '',
     importHvyFormatReference.trim(),
     '=== END HVY FORMAT REFERENCE ===',
+  ].join('\n');
+}
+
+function buildImportParagraphStyleFrame(document: VisualDocument): string {
+  const styles = Object.entries(getTextLineStylesFromMeta(document.meta))
+    .sort(([left], [right]) => left.localeCompare(right, undefined, { sensitivity: 'base' }));
+  return [
+    '=== BEGIN DOCUMENT PARAGRAPH STYLES ===',
+    'Existing paragraph styles available for text line markers:',
+    styles.length > 0
+      ? styles.map(([name, style]) => `- ${name}: label="${getTextLineStyleLabel(name, style)}"; css="${style.css}"; marker="^${name}^"`).join('\n')
+      : '- No paragraph styles are defined for this document.',
+    'Use these marker names exactly when styling individual lines inside `text` blocks. Do not invent paragraph style names.',
+    '=== END DOCUMENT PARAGRAPH STYLES ===',
   ].join('\n');
 }
 
@@ -799,12 +817,79 @@ function buildImportReusableDefinitionFrame(document: VisualDocument, section: V
   }
   return [
     '=== BEGIN MATCHED REUSABLE DEFINITIONS ===',
-    'Reusable component definitions referenced by the matched section/template, including nested reusable components:',
-    stringifyYaml({
-      component_defs: componentDefs.map((def) => serializeComponentDefinition(def as unknown as JsonObject)),
-    }).trim(),
+    'Reusable component examples referenced by the matched section/template, including nested reusable components:',
+    componentDefs.map((def) => formatImportReusableDefinitionExample(def, document.meta)).join('\n\n'),
     '=== END MATCHED REUSABLE DEFINITIONS ===',
   ].join('\n');
+}
+
+function formatImportReusableDefinitionExample(def: ComponentDefinition, documentMeta: VisualDocument['meta']): string {
+  const example = createImportReusableDefinitionExample(def);
+  const details = [
+    `Component: ${def.name}`,
+    def.baseType ? `Base type: ${def.baseType}` : '',
+    def.description ? `Description: ${def.description}` : '',
+  ].filter(Boolean);
+  return [
+    details.join('\n'),
+    'Example HVY:',
+    '```hvy',
+    serializeBlockFragment(example, documentMeta),
+    '```',
+  ].join('\n');
+}
+
+function createImportReusableDefinitionExample(def: ComponentDefinition): VisualBlock {
+  const template = def.template
+    ? cloneReusableBlock(def.template)
+    : {
+        id: '',
+        text: '',
+        schema: def.schema ? cloneReusableSchema(def.schema, def.name) : defaultBlockSchema(def.name),
+        schemaMode: false,
+      };
+  template.schema.component = def.name;
+  replaceImportTemplateVariablesInBlock(template, def.templateVariables ?? {});
+  return template;
+}
+
+function replaceImportTemplateVariablesInBlock(block: VisualBlock, variables: ComponentDefinition['templateVariables']): void {
+  block.text = replaceImportTemplateVariablesInText(block.text, variables);
+  block.schema = replaceImportTemplateVariablesInValue(block.schema, variables) as VisualBlock['schema'];
+}
+
+function replaceImportTemplateVariablesInValue(value: unknown, variables: ComponentDefinition['templateVariables']): unknown {
+  if (typeof value === 'string') {
+    return replaceImportTemplateVariablesInText(value, variables);
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => replaceImportTemplateVariablesInValue(item, variables));
+  }
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([key, entryValue]) => [
+        key,
+        replaceImportTemplateVariablesInValue(entryValue, variables),
+      ])
+    );
+  }
+  return value;
+}
+
+function replaceImportTemplateVariablesInText(text: string, variables: ComponentDefinition['templateVariables']): string {
+  return text.replace(/\{%\s*([a-zA-Z0-9_-]+)(?:\s*\|[^%]+)?\s*%\}/g, (_match, name: string) => {
+    const label = variables?.[name]?.label;
+    return toImportTemplateVariableExampleName(label || name);
+  });
+}
+
+function toImportTemplateVariableExampleName(value: string): string {
+  return value
+    .trim()
+    .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+    .replace(/[^a-zA-Z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .toUpperCase() || 'VARIABLE_NAME';
 }
 
 function collectImportReferencedComponentDefinitions(document: VisualDocument, section: VisualSection): ComponentDefinition[] {
@@ -1045,7 +1130,17 @@ function parseGeneratedImportSection(hvy: string, documentMeta: VisualDocument['
   if (parsed.document.sections.length !== 1) {
     throw new Error('Generated HVY must contain exactly one top-level section.');
   }
-  return parsed.document.sections[0]!;
+  const section = parsed.document.sections[0]!;
+  sanitizeGeneratedImportSection(section, documentMeta);
+  return section;
+}
+
+function sanitizeGeneratedImportSection(section: VisualSection, documentMeta: VisualDocument['meta']): void {
+  visitBlocks([section], (block) => {
+    if (resolveBaseComponentFromMeta(block.schema.component, documentMeta) === 'xref-card') {
+      block.schema.id = '';
+    }
+  });
 }
 
 function normalizeLlmHvySafetyClosures(hvy: string): string {

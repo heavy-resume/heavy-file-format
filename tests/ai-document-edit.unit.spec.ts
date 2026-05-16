@@ -91,7 +91,7 @@ function lastToolResultBeforeCall(callIndex: number): string {
 }
 
 test('summarizeDocumentStructure produces section and component refs with visible ids and text', () => {
-  const document = deserializeDocument(`---
+const document = deserializeDocument(`---
 hvy_version: 0.1
 ---
 
@@ -476,6 +476,10 @@ test('importTextIntoDocument executes approved steps with mocked LLM calls', asy
   );
   const document = deserializeDocument(`---
 hvy_version: 0.1
+text_line_styles:
+  role:
+    label: Role heading
+    css: "margin: 0.5rem 0; font-weight: 700;"
 ---
 
 <!--hvy: {"id":"summary"}-->
@@ -543,6 +547,10 @@ hvy_version: 0.1
   expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.context).toContain('=== BEGIN PLANNED XREF TARGETS ===');
   expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.context).toContain('Application: replace existing body section.');
   expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.context).toContain('Existing content');
+  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.context).toContain('=== BEGIN DOCUMENT PARAGRAPH STYLES ===');
+  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.context).toContain('- role: label="Role heading"; css="margin: 0.5rem 0; font-weight: 700;"; marker="^role^"');
+  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.context).toContain('Do not invent paragraph style names.');
+  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.context).toContain('=== END DOCUMENT PARAGRAPH STYLES ===');
   expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.context).toContain('=== BEGIN SECTION INFORMATION ===');
   expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.context).toContain('Imported summary');
   expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.context).toContain('=== END SECTION INFORMATION ===');
@@ -552,6 +560,9 @@ hvy_version: 0.1
   expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.context).not.toContain('Return raw HVY for exactly one complete section.');
   expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.messages[0]?.content).toContain('Return exactly one top-level section.');
   expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.messages[0]?.content).toContain('Return raw HVY only; do not call or describe tools.');
+  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.messages[0]?.content).toContain('IDs are for navigation and exact xref targets.');
+  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.messages[0]?.content).toContain('Do not put `id` on xref-card components');
+  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.messages[0]?.content).toContain('preserve the template grid shape');
   expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.responseInstructions).toContain('`hvy` must be one complete valid HVY section');
   expect(progress.mock.calls.map((call) => call[0].phase)).not.toContain('tool_call');
   expect(progress.mock.calls.map((call) => call[0])).toContainEqual({
@@ -614,7 +625,7 @@ hvy_version: 0.1
   expect(serialized).not.toContain('Old tools');
 });
 
-test('importTextIntoDocument includes recursively referenced reusable definitions for matched sections', async () => {
+test('importTextIntoDocument includes recursively referenced reusable definition examples for matched sections', async () => {
   requestProxyCompletionMock.mockResolvedValueOnce(
     '{"targets":[]}'
   );
@@ -630,10 +641,13 @@ component_defs:
   - name: tool-row
     baseType: expandable
     description: Tool row
+    templateVariables:
+      tool_name:
+        label: Tool Name
     schema:
       expandableContentBlocks:
         children:
-          - text: ""
+          - text: "{% tool_name %}"
             schema:
               component: tool-note
               placeholder: Tool note
@@ -667,13 +681,19 @@ component_defs:
 
   expect(result.status).toBe('complete');
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('=== BEGIN MATCHED REUSABLE DEFINITIONS ===');
-  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('name: tool-row');
-  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('name: tool-note');
-  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).not.toContain('name: unused-row');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('Reusable component examples referenced by the matched section/template');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('Component: tool-row');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('<!--hvy:tool-row {}-->');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('TOOL_NAME');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('Component: tool-note');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('<!--hvy:tool-note {}-->');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).not.toContain('Component: unused-row');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).not.toContain('component_defs:');
   expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.context).toContain('=== BEGIN MATCHED REUSABLE DEFINITIONS ===');
-  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.context).toContain('name: tool-row');
-  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.context).toContain('name: tool-note');
-  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.context).not.toContain('name: unused-row');
+  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.context).toContain('Component: tool-row');
+  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.context).toContain('Component: tool-note');
+  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.context).not.toContain('Component: unused-row');
+  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.context).not.toContain('component_defs:');
 });
 
 test('importTextIntoDocument appends generated section when approved step matches only a template section', async () => {
@@ -760,6 +780,43 @@ hvy_version: 0.1
   expect(serialized).toContain('"id":"imported-summary"');
   expect(serialized).toContain('<!--hvy:text {"id":"imported-summary-text"}-->');
   expect(serialized).not.toContain('&lt;!--');
+});
+
+test('importTextIntoDocument removes generated ids from xref-card components', async () => {
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"targets":[{"id":"tool-widget","title":"Widget","kind":"tool","description":"Widget is a source-backed tool."}]}'
+  );
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"information":"Widget is relevant."}'
+  );
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"hvy":"<!--hvy: {\\"id\\":\\"summary\\"}-->\\n#! Summary\\n\\n <!--hvy:xref-card {\\"id\\":\\"widget-card\\",\\"xrefTitle\\":\\"Widget\\",\\"xrefTarget\\":\\"tool-widget\\"}-->"}'
+  );
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {}-->
+ Existing content
+`, '.hvy');
+
+  const result = await importTextIntoDocument(document, {
+    sourceName: 'notes.txt',
+    sourceText: 'Widget is relevant.',
+    steps: [{ section: 'Summary', sectionId: 'summary' }],
+    llm: {
+      settings: { provider: 'openai', model: 'gpt-5-mini' },
+      client: { complete: vi.fn() },
+    },
+  });
+
+  const serialized = serializeDocument(document);
+  expect(result.status).toBe('complete');
+  expect(serialized).toContain('<!--hvy:xref-card {"xrefTitle":"Widget","xrefTarget":"tool-widget"}-->');
+  expect(serialized).not.toContain('widget-card');
 });
 
 test('importTextIntoDocument accepts LLM safety closures and preserves blanked template fill-ins', async () => {

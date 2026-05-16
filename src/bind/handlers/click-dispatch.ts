@@ -368,7 +368,9 @@ function openParagraphStyleEditor(toolbar: HTMLElement | null, styleName: string
 }
 
 function isPlacementModeAction(action: string): boolean {
-  return action === 'place-component' || action === 'cancel-component-placement';
+  return action === 'place-component'
+    || action === 'cancel-component-placement'
+    || action === 'toggle-editor-sidebar';
 }
 
 function executeActionButton(app: HTMLElement, actionButton: HTMLElement, event: Event | null = null, confirmedRemoveReady = false): boolean {

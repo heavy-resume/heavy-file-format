@@ -6,6 +6,7 @@ import {
   getTextLineStylePreviewCss,
   getTextLineStyleSpacing,
   getTextLineStylesFromMeta,
+  getTextLineStyleLabel,
   replaceTextLineStyleMarkerName,
   sanitizeTextLineStyleCss,
   updateTextLineStyleSpacingCss,
@@ -136,6 +137,7 @@ export function bindInputBlock(app: HTMLElement): void {
       const styles = getTextLineStylesFromMeta(state.document.meta);
       styles[name] = { ...(styles[name] ?? { label: '', css: '' }), label: target.value };
       writeTextLineStylesToMeta(state.document.meta, styles);
+      refreshTextLineStyleLabelUi(app, name, getTextLineStyleLabel(name, styles[name]));
       getRefreshReaderPanels()();
       return;
     }
@@ -448,6 +450,15 @@ function refreshTextLineStyleEditingUi(app: HTMLElement, name: string, css: stri
         input.value = value;
       }
     });
+  });
+}
+
+function refreshTextLineStyleLabelUi(app: HTMLElement, name: string, label: string): void {
+  app.querySelectorAll<HTMLElement>(`[data-text-line-style-name="${cssEscape(name)}"] [data-text-line-style-sample-label]`).forEach((sampleLabel) => {
+    sampleLabel.textContent = label;
+  });
+  app.querySelectorAll<HTMLElement>(`[data-text-line-style-name="${cssEscape(name)}"] .text-line-style-pill-sample`).forEach((sample) => {
+    sample.textContent = label;
   });
 }
 

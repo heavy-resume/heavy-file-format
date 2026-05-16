@@ -1075,7 +1075,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           </label>
         </div>
         <div class="meta-panel-head">
-          <strong>Text Line Styles</strong>
+          <strong>Paragraph Styles</strong>
           <button type="button" class="ghost" data-action="add-text-line-style">Add Style</button>
         </div>
         <div class="text-line-style-editor">
@@ -1164,7 +1164,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       const css = getTextLineStylePreviewCss(style.css);
       const rawCss = formatTextLineStyleCssLines(style.css);
       const spacing = getTextLineStyleSpacing(style.css);
-      const renderSpacingInput = (property: string, shortLabel: string): string => `<label>
+      const renderSpacingInput = (property: string, shortLabel: string): string => `<label class="paragraph-style-box-field paragraph-style-box-field-${deps.escapeAttr(property)}">
         <span>${shortLabel}</span>
         <input data-field="text-line-style-spacing" data-style-name="${deps.escapeAttr(name)}" data-css-property="${deps.escapeAttr(property)}" value="${deps.escapeAttr(spacing[property] ?? '')}" placeholder="0" />
       </label>`;
@@ -1183,7 +1183,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         <div class="paragraph-style-spacing-grid">
           <div class="paragraph-style-spacing-group">
             <strong>Margin</strong>
-            <div class="paragraph-style-box-controls">
+            <div class="paragraph-style-box-controls paragraph-style-four-way-controls">
               ${renderSpacingInput('margin-top', 'Top')}
               ${renderSpacingInput('margin-right', 'Right')}
               ${renderSpacingInput('margin-bottom', 'Bottom')}
@@ -1192,7 +1192,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           </div>
           <div class="paragraph-style-spacing-group">
             <strong>Padding</strong>
-            <div class="paragraph-style-box-controls">
+            <div class="paragraph-style-box-controls paragraph-style-four-way-controls">
               ${renderSpacingInput('padding-top', 'Top')}
               ${renderSpacingInput('padding-right', 'Right')}
               ${renderSpacingInput('padding-bottom', 'Bottom')}
@@ -1204,8 +1204,11 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           <span>CSS declarations</span>
           <textarea rows="5" data-field="text-line-style-css" data-style-name="${deps.escapeAttr(name)}" spellcheck="false" placeholder="font-weight: 700;">${deps.escapeHtml(rawCss)}</textarea>
         </label>
-        <div class="text-line-style-sample" style="${deps.escapeAttr(css)}">
-          <span>${deps.escapeHtml(label)}</span>
+        <div class="text-line-style-preview">
+          <span>Preview</span>
+          <div class="text-line-style-sample" style="${deps.escapeAttr(css)}">
+            <span data-text-line-style-sample-label>${deps.escapeHtml(label)}</span>
+          </div>
         </div>
       </article>`;
     }).join('');

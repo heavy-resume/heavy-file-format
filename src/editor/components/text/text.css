@@ -384,6 +384,35 @@
   gap: 0.4rem;
 }
 
+.paragraph-style-four-way-controls {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-areas:
+    ". top ."
+    "left . right"
+    ". bottom .";
+  align-items: end;
+}
+
+.paragraph-style-four-way-controls .paragraph-style-box-field-margin-top,
+.paragraph-style-four-way-controls .paragraph-style-box-field-padding-top {
+  grid-area: top;
+}
+
+.paragraph-style-four-way-controls .paragraph-style-box-field-margin-right,
+.paragraph-style-four-way-controls .paragraph-style-box-field-padding-right {
+  grid-area: right;
+}
+
+.paragraph-style-four-way-controls .paragraph-style-box-field-margin-bottom,
+.paragraph-style-four-way-controls .paragraph-style-box-field-padding-bottom {
+  grid-area: bottom;
+}
+
+.paragraph-style-four-way-controls .paragraph-style-box-field-margin-left,
+.paragraph-style-four-way-controls .paragraph-style-box-field-padding-left {
+  grid-area: left;
+}
+
 .paragraph-style-box-controls label {
   display: grid;
   gap: 0.2rem;
@@ -479,6 +508,10 @@
 
   .paragraph-style-spacing-grid {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .paragraph-style-four-way-controls {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 

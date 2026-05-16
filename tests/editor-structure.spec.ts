@@ -2868,6 +2868,52 @@ hvy_version: 0.1
   expect(raw.match(/Alpha/g)).toHaveLength(2);
 });
 
+test('component move and copy work between main and sidebar sections', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ <!--hvy:text {"id":"alpha"}-->
+  Alpha
+
+ <!--hvy:text {"id":"beta"}-->
+  Beta
+
+<!--hvy: {"id":"side","location":"sidebar"}-->
+#! Side
+
+ <!--hvy:text {"id":"side-note"}-->
+  Side note
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('#editorTree .editor-block-passive', { hasText: 'Alpha' }).click();
+  await page.locator('.editor-block[data-active-editor-block="true"] [data-action="start-component-copy"]').click();
+  await expect(page.locator('.editor-shell')).toHaveClass(/is-sidebar-closed/);
+  await page.locator('.editor-sidebar-tab').click();
+  await page.locator('.editor-sidebar [data-action="place-component"][data-placement="after"]').last().click();
+
+  await page.locator('.editor-sidebar .editor-block-passive', { hasText: 'Side note' }).click();
+  await page.locator('.editor-sidebar .editor-block[data-active-editor-block="true"] [data-action="start-component-move"]').click();
+  await page.locator('.editor-sidebar-tab').click();
+  await expect(page.locator('.component-placement-target')).not.toHaveCount(0);
+  await page.locator('#editorTree [data-action="place-component"][data-placement="before"]').first().click();
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  const raw = await page.locator('#rawEditor').inputValue();
+  expect(raw.indexOf('Side note')).toBeLessThan(raw.indexOf('Alpha'));
+  expect(raw.match(/Alpha/g)).toHaveLength(2);
+  expect(raw.indexOf('location":"sidebar"')).toBeGreaterThan(raw.indexOf('Beta'));
+  expect(raw.lastIndexOf('Alpha')).toBeGreaterThan(raw.indexOf('location":"sidebar"'));
+});
+
 test('component placement supports grid slots', async ({ page }) => {
   await page.goto('/');
 

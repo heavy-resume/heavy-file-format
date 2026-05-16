@@ -6,6 +6,10 @@ section_defaults:
   css: "margin: 0 0 0.5rem;"
 theme:
   colors: {}
+text_line_styles:
+  indented:
+    label: Indented
+    css: "margin: 0.25rem 0; padding-left: 1rem;"
 ---
 
 <!--hvy: {"id":"hvy-syntax-rules","lock":false,"expanded":true,"highlight":false}-->
@@ -105,18 +109,23 @@ theme:
     ## grid
 
    <!--hvy:text {}-->
-    Use `grid` for layout where separate child blocks belong in columns. Add items under indexed slots such as `<!--hvy:grid:0 {"id":"left"}-->` and `<!--hvy:grid:1 {"id":"right"}-->`. Do not use grid just to make a list.
+    Use `grid` for layout where separate child blocks belong in columns. Add items under indexed slots such as `<!--hvy:grid:0 {"id":"left"}-->` and `<!--hvy:grid:1 {"id":"right"}-->`. Do not use grid just to make a list. When filling a matched template, preserve the template grid slot count, order, and `gridColumns` unless the source truly needs a different layout.
+    
+    Grid's are good for having left aligned / right aligned text on the same line. Two left aligned grids generally isn't aesthetic.
+    
+    Do not nest grids or custom components that use grids.
 
    <!--hvy:text {}-->
     Example:
+    
     ```hvy
     <!--hvy:grid {"id":"blip-grid","gridColumns":2}-->
      <!--hvy:grid:0 {"id":"blip-left"}-->
       <!--hvy:text {}-->
        Left column content.
-     <!--hvy:grid:1 {"id":"blip-right"}-->
+     <!--hvy:grid:1 {"id":"blip-right","css":"text-align:right;"}-->
       <!--hvy:text {}-->
-       Right column content.
+       Right column content, also right justified.
     ```
 
  <!--hvy:expandable {"id":"component-component-list","tags":"component, core, component-list, repeated-records"}-->
@@ -264,6 +273,28 @@ theme:
     ```hvy
     <!--hvy:button {"id":"generate-blip","buttonLabel":"Generate Blip","buttonAction":"ai-generate"}-->
     ```
+
+ <!--hvy:expandable {"id":"component-xref-card","tags":"component, core, xref-card, links, crossreference"}-->
+  <!--hvy:expandable:stub {"description":"Component name and quick example"}-->
+
+   <!--hvy:text {}-->
+    # `xref-card` 
+    
+    `<!--hvy:xref-card {"xrefTitle":"Blip","xrefTarget":"blip-target"}-->`
+
+  <!--hvy:expandable:content {"description":"Xref-card component description and example"}-->
+
+   <!--hvy:text {}-->
+    ## xref-card
+
+   <!--hvy:text {}-->
+    Use `xref-card` for internal document references to existing sections or reusable records. `xrefTitle` is required. `xrefTarget` should be an exact id from the relationship inventory. `xrefDetail` is optional. Do not invent a target id just to make a link. Do not put `id` on xref-card; the navigation target belongs on the section or record being referenced.
+
+   <!--hvy:text {}-->
+    Example:
+    ```hvy
+    <!--hvy:xref-card {"xrefTitle":"Blip","xrefDetail":"Fake reference detail","xrefTarget":"blip-target"}-->
+    ```
 <!--hvy: {"id":"hvy-import-template-instructions","lock":false,"expanded":true,"highlight":false}-->
 #! Import From Template Instructions
 
@@ -274,11 +305,15 @@ theme:
   - Treat the matched section as structural guidance, not as content to copy blindly.
   - Preserve useful component names from the matched template instead of replacing structured records with plain text.
   - Preserve template fields like `sortKeys`, `groupKeys`, `tags`, `description`, reusable record component names, and xref metadata when they fit the imported data.
+  - IDs are for navigation and exact xref targets. Do not repeat IDs and do not add IDs to local layout/prose components just to label them.
   - Remove filled template placeholder state such as `hideIfUnmodified` from generated sections that contain imported content.
   - Custom components from the matched template use the same directive form, for example `<!--hvy:blip-record {...}-->` or `<!--hvy:widget-record {...}-->`.
   - Custom expandable components are the expandable. Put expandable slots directly under the custom directive; do not emit a separate base `<!--hvy:expandable {}-->` block next to the custom component.
   - Use only source-backed facts. Do not invent dates, titles, entity names, labels, categories, links, metrics, or bullets.
   - Generate one complete section for the approved step. Do not add unrelated sections or leave conditional placeholders.
+  - Trust the template and only deviate in minor ways
+  - If adding new material don't do it in a grid
+  - Don't put a grid component inside another grid component
 <!--hvy: {"id":"hvy-links-crossreferences","lock":false,"expanded":true,"highlight":false}-->
 #! Links And Crossreferences
 
@@ -288,31 +323,15 @@ theme:
  <!--hvy:text {}-->
   Markdown links belong in text content when they point to external URLs or ordinary prose references.
 
- <!--hvy:expandable {"id":"component-xref-card","tags":"component, core, xref-card, links, crossreference"}-->
-  <!--hvy:expandable:stub {"description":"Component name and quick example"}-->
-
-   <!--hvy:text {}-->
-    `xref-card` - `<!--hvy:xref-card {"id":"blip-link","xrefTitle":"Blip","xrefTarget":"blip-target"}-->`
-
-  <!--hvy:expandable:content {"description":"Xref-card component description and example"}-->
-
-   <!--hvy:text {}-->
-    ## xref-card
-
-   <!--hvy:text {}-->
-    Use `xref-card` for internal document references to existing sections or reusable records. `xrefTitle` is required. `xrefTarget` should be an exact id from the relationship inventory. `xrefDetail` is optional. Do not invent a target id just to make a link.
-
-   <!--hvy:text {}-->
-    Example:
-    ```hvy
-    <!--hvy:xref-card {"id":"blip-crosslink","xrefTitle":"Blip","xrefDetail":"Fake reference detail","xrefTarget":"blip-target"}-->
-    ```
-
  <!--hvy:text {}-->
   - Use exact existing ids from the relationship inventory for `xrefTarget`.
   - The relationship inventory is intentionally built from explicit ids only; add an `id` only to sections and records that should be referenceable.
   - When this section creates records that other sections may reference, give those records stable source-backed ids.
   - Do not manually create reciprocal/generated xref cards; document update scripts may generate those after the section is applied.
+  - Do not add IDs all willy nilly. They are for navigation and show up in a dropdown.
+  - You're better off omitting an xref than having it be wrong.
+
+ <!--hvy:xref-card {"xrefTitle":"xref card","xrefTarget":"component-xref-card"}-->
 
  <!--hvy:text {}-->
   ## Reference Map
@@ -324,3 +343,126 @@ theme:
  <!--hvy:xref-card {"xrefTitle":"Import From Template Instructions","xrefDetail":"Template reuse guidance","xrefTarget":"hvy-import-template-instructions"}-->
 
  <!--hvy:xref-card {"xrefTitle":"Links And Crossreferences","xrefDetail":"Internal and external reference rules","xrefTarget":"hvy-links-crossreferences"}-->
+<!--hvy: {"id":"hvy-common-attributes","lock":false,"expanded":true,"highlight":false}-->
+#! Common Attributes
+
+ <!--hvy:text {}-->
+  # Common Attributes
+
+ <!--hvy:text {}-->
+  These attributes can appear on many section or component directives. Preserve useful attributes from the matched template when they describe structure, behavior, or intended presentation.
+
+ <!--hvy:text {}-->
+  ## `id`
+
+  `id` is for navigation and exact cross-reference targets. Use it on sections or source-backed reusable records that someone may link to. Do not repeat ids. Do not add ids to helper text, decorative blocks, xref-card components, or local layout blocks just to name them.
+
+  ```hvy
+  <!--hvy:blip-record {"id":"blip-alpha","xrefTitle":"Blip Alpha"}-->
+   <!--hvy:expandable:stub {}-->
+    <!--hvy:text {}-->
+     Blip Alpha
+   <!--hvy:expandable:content {}-->
+    <!--hvy:text {}-->
+     Source-backed details about Blip Alpha.
+  ```
+
+ <!--hvy:text {}-->
+  ## `css`
+
+  `css` is declaration-only inline CSS for the rendered wrapper. Use it for small presentation adjustments from the template, such as spacing or text alignment. Do not put selectors, `@media`, or `@container` rules inside `css`.
+
+  ```hvy
+  <!--hvy:text {"css":"margin: 0.25rem 0; font-weight: 700;"}-->
+   Important line
+  ```
+
+ <!--hvy:text {}-->
+  ## `tags` and `description`
+
+  `tags` make records discoverable and filterable. `description` explains the component or record for editor/AI context. Preserve them when the matched template uses them for a meaningful category. Do not invent tags that are unsupported by the source or template.
+
+  ```hvy
+  <!--hvy:widget-record {"id":"widget-alpha","tags":"widget","description":"Source-backed widget record."}-->
+   <!--hvy:expandable:stub {}-->
+    <!--hvy:text {}-->
+     Widget Alpha
+   <!--hvy:expandable:content {}-->
+    <!--hvy:text {}-->
+     Source-backed widget details.
+  ```
+
+ <!--hvy:text {}-->
+  ## `placeholder` and `fillIn`
+
+  `placeholder` is hint text for an empty block. `fillIn` marks editable value regions in template text. When importing into a matched template, leave fill-ins alone if the source has no value rather than replacing them with blank content.
+
+  ```hvy
+  <!--hvy:text {"id":"display-name","placeholder":"Display name","fillIn":true}-->
+   # <!-- value {"placeholder":"Display name"} -->
+  ```
+
+ <!--hvy:text {}-->
+  ## `lock` and `editorOnly`
+
+  `lock` prevents structural edits inside a section or component. `editorOnly` keeps authoring controls out of viewer output. Preserve these when they come from the template. Do not add viewer-facing imported facts inside `editorOnly` blocks.
+
+  ```hvy
+  <!--hvy:button {"editorOnly":true,"buttonLabel":"Generate"}-->
+  ```
+
+ <!--hvy:text {}-->
+  ## `sortKeys` and `groupKeys`
+
+  `sortKeys` and `groupKeys` belong on repeated records inside `component-list` structures. They are reader/editor metadata, not visible prose. Preserve matched keys when the template already sorts or groups a list.
+
+  ```hvy
+  <!--hvy:widget-record {"id":"widget-alpha","sortKeys":{"Name":"Alpha"},"groupKeys":{"Category":"Example"}}-->
+   <!--hvy:expandable:stub {}-->
+    <!--hvy:text {}-->
+     Widget Alpha
+   <!--hvy:expandable:content {}-->
+    <!--hvy:text {}-->
+     Source-backed widget details.
+  ```
+<!--hvy: {"id":"hvy-paragraph-styles","lock":false,"expanded":true,"highlight":false}-->
+#! Paragraph Styles
+
+ <!--hvy:text {}-->
+  # Paragraph Styles
+
+ <!--hvy:text {}-->
+  Paragraph styles are document-level `text_line_styles` from the HVY front matter. They style individual Markdown lines inside `text` components without splitting the content into separate components.
+  
+  ^indented^ This line uses the reference document's `indented` paragraph style.
+
+ <!--hvy:text {}-->
+  Define styles in front matter with a stable name, a user-facing label, and declaration-only CSS:
+
+  ```yaml
+  text_line_styles:
+    blip-heading:
+      label: Blip heading
+      css: "margin: 0.5rem 0 0.1rem; font-weight: 700;"
+    blip-detail:
+      label: Blip detail
+      css: "margin: 0 0 0.35rem; padding-left: 1rem;"
+  ```
+
+ <!--hvy:text {}-->
+  Use the style by placing `^style-name^` at the start of a Markdown line inside a `text` block. The marker is source-only and should not be visible in the rendered document.
+
+  ```hvy
+  <!--hvy:text {}-->
+   ^blip-heading^ #### Blip Alpha
+   ^blip-detail^ Source-backed detail about Blip Alpha.
+  ```
+
+ <!--hvy:text {}-->
+  Rules:
+
+  - Style names use ASCII letters, digits, `_`, or `-`.
+  - Markers only apply at the start of a line.
+  - Unknown style names render as ordinary text in viewers that do not know the style.
+  - Escape a literal marker with a backslash: `\^blip-heading^`.
+  - Do not use paragraph styles as a replacement for sections, reusable records, or xref targets.

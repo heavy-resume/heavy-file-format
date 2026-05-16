@@ -4,18 +4,18 @@ title: Resume Example
 reader_max_width: 60rem
 ai-context: >-
   This is a resume document. Use the top-skills-tools-technologies section for featured
-  reference cards only; the skills and tools-technologies sidebar sections are the main
-  reusable libraries for detailed skill/tool records. History, projects, and education
-  each have a static table used only as the visible column header for the expandable
-  record rows in the following component-list; keep them in reverse chronological order
-  with newest entries first. History should use one
+  reference cards only; the skills, tools-technologies, and languages sidebar sections
+  are the main reusable libraries for detailed reference records. History, projects,
+  awards, and education each have a structured component-list for expandable record
+  rows; keep dated main-section records in reverse chronological order with newest
+  entries first. History should use one
   expandable record per organization when roles are contiguous; put promotions, title
   changes, or adjacent date ranges at the same organization inside that single expanded
   record instead of creating duplicate organization rows. One project, publication,
   certification, degree, skill, or tool should usually be represented as one expandable
   reusable record. Local skills/tools lists inside history, project, publication,
-  certification, and education records are supporting references and should not be treated as
-  the main libraries.
+  certification, award, and education records are supporting references and should not
+  be treated as the main libraries.
 section_defaults:
   css: "margin: 0.5rem 0;"
 text_line_styles:
@@ -310,6 +310,18 @@ component_defs:
     schema:
       xrefTargetTagFilter: education
       css: "margin: 0.25rem 0;"
+  - name: award-xref-card
+    baseType: xref-card
+    description: Award reference
+    schema:
+      xrefTargetTagFilter: award
+      css: "margin: 0.25rem 0;"
+  - name: language-xref-card
+    baseType: xref-card
+    description: Language reference
+    schema:
+      xrefTargetTagFilter: language
+      css: "margin: 0.25rem 0;"
   - name: certification-xref-card
     baseType: xref-card
     description: Certification reference
@@ -510,6 +522,65 @@ component_defs:
               component: text
               placeholder: classes
               css: "margin: 0;"
+  - name: award-record
+    baseType: expandable
+    description: Award entry
+    schema:
+      tags: award
+      xrefTitle: "{% award %}"
+      xrefDetail: "{% issuer %}"
+      css: "margin: 0;"
+      expandableAlwaysShowStub: true
+      expandableExpanded: false
+      expandableStubBlocks:
+        children:
+          - text: ""
+            schema:
+              component: table
+              css: "margin: 0; margin-top: -1px;"
+              tableColumns: ["AWARD", "ISSUER", "DATE"]
+              tableShowHeader: false
+              tableRows:
+                - cells: ["{% award %}", "{% issuer %}", "{% date %}"]
+      expandableContentBlocks:
+        css: "padding: 0.5rem;"
+        children:
+          - text: ""
+            schema:
+              component: grid
+              css: "margin: 0 0 0.35rem;"
+              gridColumns: 2
+              gridItems:
+                - id: award-details
+                  block:
+                    text: ""
+                    schema:
+                      component: container
+                      css: "margin: 0;"
+                      containerBlocks:
+                        - text: "^section-heading^ ### {% award %}"
+                          schema:
+                            component: text
+                            css: "margin: 0 0 0.25rem;"
+                            placeholder: "Award"
+                        - text: "{% issuer %}"
+                          schema:
+                            component: text
+                            css: "margin: 0;"
+                            placeholder: "Issuer"
+                - id: award-date
+                  block:
+                    text: "{% date %}"
+                    schema:
+                      component: text
+                      css: "margin: 0; text-align: right;"
+                      placeholder: "Date"
+          - text: "{% description | block %}"
+            schema:
+              component: text
+              css: "margin: 0.5rem 0;"
+              placeholder: "Description"
+          - component: skills-and-tools-tech-list
   - name: certification-record
     baseType: expandable
     description: Certification entry
@@ -792,6 +863,35 @@ component_defs:
               component: text
               css: "margin: 0;"
               placeholder: "Description and notes"
+  - name: language-record
+    baseType: expandable
+    description: Language details
+    schema:
+      tags: language
+      xrefTitle: "{% language %}"
+      xrefDetail: "{% proficiency %}"
+      css: "margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);"
+      expandableAlwaysShowStub: true
+      expandableExpanded: false
+      expandableStubBlocks:
+        children:
+          - text: "### {% language %}"
+            schema:
+              component: text
+              css: "margin: 0;"
+              placeholder: "### Language"
+      expandableContentBlocks:
+        css: "padding: 0.5rem;"
+        children:
+          - text: |-
+              ^detail-heading^ #### Proficiency
+              ^detail-body^ {% proficiency | block %}
+              ^detail-heading^ #### Notes
+              ^detail-body^ {% notes | block %}
+            schema:
+              component: text
+              css: "margin: 0;"
+              placeholder: "Proficiency and notes"
 ---
 
 <!--hvy: {"id":"header","lock":true,"contained":false,"description":"Resume identity header","priority":true}-->
@@ -1103,6 +1203,31 @@ component_defs:
       ^detail-body^ Open-source autonomous agent framework that orchestrates multi-step AI tasks using tools, memory, and goal-driven loops.
       ^detail-heading^ #### Notes
       ^detail-body^ Core technology used in the Autonomous Agent Hackathon. Designed the agent architecture and wrote all integration code connecting it to the research task pipeline.
+
+<!--hvy: {"id":"languages","lock":true,"expanded":false,"location":"sidebar","description":"Language reference list"}-->
+#! Languages
+
+ <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
+  # Languages
+
+ <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"language-record","componentListItemLabel":"language","tags":"language","componentListDefaultSortKey":"Proficiency","componentListDefaultSortDirection":"desc"}-->
+
+  <!--hvy:component-list:0 {}-->
+
+   <!--hvy:language-record {"id":"language-english","xrefTitle":"English","xrefDetail":"Native","tags":"language","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"English","Proficiency":100},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+
+    <!--hvy:expandable:stub {}-->
+
+     <!--hvy:text {"css":"margin: 0;"}-->
+      ### English
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:text {"css":"margin: 0;"}-->
+      ^detail-heading^ #### Proficiency
+      ^detail-body^ Native
+      ^detail-heading^ #### Notes
+      ^detail-body^ Primary professional communication language.
 
 <!--hvy: {"id":"history","lock":true,"description":"Work history","tags":"reciprocal-xref-source"}-->
 #! History
@@ -1495,6 +1620,74 @@ component_defs:
          <!--hvy:component-list:0 {}-->
 
           <!--hvy:tool-tech-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Python","xrefTarget":"tool-python"}-->
+
+<!--hvy: {"id":"awards","lock":true,"description":"Awards","tags":"reciprocal-xref-source"}-->
+#! Awards
+
+ <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
+  # Awards
+
+ <!--hvy:table {"css":"margin: 0.5rem 0 0;","tags":"table-header","tableColumns":["AWARD","ISSUER","DATE"],"tableShowHeader":true,"tableRows":[],"lock":true,"description":"Award table header"}-->
+
+ <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"award-record","componentListItemLabel":"award","tags":"award"}-->
+
+  <!--hvy:component-list:0 {}-->
+
+   <!--hvy:award-record {"id":"award-agent-hackathon","xrefTitle":"Autonomous Agent Hackathon Finalist","xrefDetail":"Open-source AI tooling showcase","tags":"award","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+
+    <!--hvy:expandable:stub {}-->
+
+     <!--hvy:table {"css":"margin: 0; margin-top: -1px;","tableColumns":["AWARD","ISSUER","DATE"],"tableShowHeader":false,"tableRows":[{"cells":["Autonomous Agent Hackathon Finalist","Open-source AI tooling showcase","2024"]}]}-->
+
+    <!--hvy:expandable:content {"css":"padding: 0.5rem;"}-->
+
+     <!--hvy:grid {"css":"margin: 0 0 0.35rem;","gridColumns":2}-->
+
+      <!--hvy:grid:0 {"id":"award-details-agent-hackathon"}-->
+
+       <!--hvy:container {"css":"margin: 0;"}-->
+
+        <!--hvy:text {"css":"margin: 0 0 0.25rem;","placeholder":"Award"}-->
+         ^section-heading^ ### Autonomous Agent Hackathon Finalist
+
+        <!--hvy:text {"css":"margin: 0;","placeholder":"Issuer"}-->
+         Open-source AI tooling showcase
+
+      <!--hvy:grid:1 {"id":"award-date-agent-hackathon"}-->
+
+       <!--hvy:text {"css":"margin: 0; text-align: right;","placeholder":"Date"}-->
+        2024
+
+     <!--hvy:text {"css":"margin: 0.5rem 0;","placeholder":"Description"}-->
+      Recognized for building an autonomous research workflow that combined agent orchestration, prompt design, and reproducible development environments.
+
+     <!--hvy:skills-and-tools-tech-list {"css":"margin: 0.5rem 0 0;","gridColumns":2}-->
+
+      <!--hvy:grid:0 {"id":"award-relevant-skills-agent-hackathon"}-->
+
+       <!--hvy:container {"css":"margin: 0;","align":"center"}-->
+
+        <!--hvy:text {"css":"margin: 0;"}-->
+         ^panel-heading^ #### Relevant Skills
+
+        <!--hvy:component-list {"id":"award-relevant-skills-agent-hackathon-list","componentListComponent":"skill-xref-card","css":"margin: 0;","align":"center"}-->
+
+         <!--hvy:component-list:0 {}-->
+
+          <!--hvy:skill-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"LLM Prompt Engineering","xrefTarget":"skill-llm-prompt-engineering"}-->
+
+      <!--hvy:grid:1 {"id":"award-tools-technologies-agent-hackathon"}-->
+
+       <!--hvy:container {"css":"margin: 0;","align":"center"}-->
+
+        <!--hvy:text {"css":"margin: 0;"}-->
+         ^panel-heading^ #### Tools and Technologies
+
+        <!--hvy:component-list {"id":"award-tools-technologies-agent-hackathon-list","componentListComponent":"tool-tech-xref-card","componentListItemLabel":"tool / tech reference","css":"margin: 0;","align":"center"}-->
+
+         <!--hvy:component-list:0 {}-->
+
+          <!--hvy:tool-tech-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"OpenAI API","xrefTarget":"tool-openai-api"}-->
 
 <!--hvy: {"id":"education","lock":true,"description":"Education","tags":"reciprocal-xref-source"}-->
 #! Education

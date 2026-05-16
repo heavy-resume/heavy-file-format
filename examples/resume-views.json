@@ -10,10 +10,12 @@
     "tool-openai-api": ["dimmed"],
     "tool-superagi": ["dimmed"],
     "skill-llm-prompt-engineering": ["dimmed"],
+    "/id/languages": ["priority"],
     "/id/top-skills-list/xref-card-2": ["hidden"],
     "project-autonomous-agent-hackathon": ["dimmed", "collapse"],
     "/id/publications": ["collapse"],
     "/id/certifications": ["collapse"],
+    "/id/awards": ["collapse"],
     "/id/education": ["collapse"],
     "/id/locations": ["priority"]
   },
@@ -30,12 +32,14 @@
     "project-heavy-stack": ["dimmed", "collapse"],
     "tool-typescript": ["dimmed"],
     "tool-c-cpp": ["dimmed"],
+    "/id/languages": ["priority"],
     "/id/top-skills-list/xref-card-0": ["hidden"],
     "/id/top-skills-list/xref-card-1": ["hidden"],
     "/id/top-tools-technologies-list/xref-card-0": ["hidden"],
     "/id/top-tools-technologies-list/xref-card-2": ["hidden"],
     "/id/publications": ["collapse"],
     "/id/certifications": ["collapse"],
+    "/id/awards": ["collapse"],
     "/id/education": ["collapse"],
     "/id/locations": ["priority"]
   }

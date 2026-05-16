@@ -5,18 +5,18 @@ title: Resume Template
 reader_max_width: 60rem
 ai-context: >-
   This is a resume template. Use the top-skills-tools-technologies section for featured
-  reference cards only; the skills and tools-technologies sidebar sections are the main
-  reusable libraries for detailed skill/tool records. History, projects, and education
-  each have a static table used only as the visible column header for the expandable
-  record rows in the following component-list; keep them in reverse chronological order
-  with newest entries first. History should use one
+  reference cards only; the skills, tools-technologies, and languages sidebar sections
+  are the main reusable libraries for detailed reference records. History, projects,
+  awards, and education each have a structured component-list for expandable record
+  rows; keep dated main-section records in reverse chronological order with newest
+  entries first. History should use one
   expandable record per organization when roles are contiguous; put promotions, title
   changes, or adjacent date ranges at the same organization inside that single expanded
   record instead of creating duplicate organization rows. One project, publication,
   certification, degree, skill, or tool should usually be represented as one expandable
   reusable record. Local skills/tools lists inside history, project, publication,
-  certification, and education records are supporting references and should not be treated as
-  the main libraries.
+  certification, award, and education records are supporting references and should not
+  be treated as the main libraries.
 section_defaults:
   css: "margin: 0.5rem 0;"
 text_line_styles:
@@ -171,7 +171,7 @@ section_defs:
             tags: table-header
             tableColumns:
               - "<!--hvy:alt {\"compact\":\"CERT\"}-->CERTIFICATION<!--/hvy:alt-->"
-              - ISSUER
+              - GIVEN BY
               - OBTAINED
             tableShowHeader: true
             tableRows: []
@@ -310,6 +310,18 @@ component_defs:
     description: Education reference
     schema:
       xrefTargetTagFilter: education
+      css: "margin: 0.25rem 0;"
+  - name: award-xref-card
+    baseType: xref-card
+    description: Award reference
+    schema:
+      xrefTargetTagFilter: award
+      css: "margin: 0.25rem 0;"
+  - name: language-xref-card
+    baseType: xref-card
+    description: Language reference
+    schema:
+      xrefTargetTagFilter: language
       css: "margin: 0.25rem 0;"
   - name: certification-xref-card
     baseType: xref-card
@@ -523,6 +535,72 @@ component_defs:
               component: text
               placeholder: classes
               css: "margin: 0;"
+  - name: award-record
+    baseType: expandable
+    description: Award entry
+    templateVariables:
+      award:
+        label: Award
+      issuer:
+        label: Given By
+      date:
+        label: Date
+    schema:
+      tags: award
+      xrefTitle: "{% award %}"
+      xrefDetail: "{% issuer %}"
+      css: "margin: 0;"
+      expandableAlwaysShowStub: true
+      expandableExpanded: false
+      expandableStubBlocks:
+        children:
+          - text: ""
+            schema:
+              component: table
+              css: "margin: 0; margin-top: -1px;"
+              tableColumns: ["AWARD", "ISSUER", "DATE"]
+              tableShowHeader: false
+              tableRows:
+                - cells: ["{% award %}", "{% issuer %}", "{% date %}"]
+      expandableContentBlocks:
+        css: "padding: 0.5rem;"
+        children:
+          - text: ""
+            schema:
+              component: grid
+              css: "margin: 0 0 0.35rem;"
+              gridColumns: 2
+              gridItems:
+                - id: award-details
+                  block:
+                    text: ""
+                    schema:
+                      component: container
+                      css: "margin: 0;"
+                      containerBlocks:
+                        - text: "^section-heading^ ### {% award %}"
+                          schema:
+                            component: text
+                            css: "margin: 0 0 0.25rem;"
+                            placeholder: "Award"
+                        - text: "{% issuer %}"
+                          schema:
+                            component: text
+                            css: "margin: 0;"
+                            placeholder: "Given by"
+                - id: award-date
+                  block:
+                    text: "{% date %}"
+                    schema:
+                      component: text
+                      css: "margin: 0; text-align: right;"
+                      placeholder: "Date"
+          - text: "{% description | block %}"
+            schema:
+              component: text
+              css: "margin: 0.5rem 0;"
+              placeholder: "Description"
+          - component: skills-and-tools-tech-list
   - name: certification-record
     baseType: expandable
     description: Certification entry
@@ -548,7 +626,7 @@ component_defs:
             schema:
               component: table
               css: "margin: 0; margin-top: -1px;"
-              tableColumns: ["<!--hvy:alt {\"compact\":\"CERT\"}-->CERTIFICATION<!--/hvy:alt-->", "ISSUER", "OBTAINED"]
+              tableColumns: ["<!--hvy:alt {\"compact\":\"CERT\"}-->CERTIFICATION<!--/hvy:alt-->", "GIVEN BY", "OBTAINED"]
               tableShowHeader: false
               tableRows:
                 - cells: ["{% name %}", "{% obtained_from %}", "{% obtained_month %}/{% obtained_year %}"]
@@ -877,6 +955,42 @@ component_defs:
               component: text
               css: "margin: 0;"
               placeholder: "Description and notes"
+  - name: language-record
+    baseType: expandable
+    description: Language details
+    templateVariables:
+      language:
+        label: Language
+      proficiency:
+        label: Proficiency
+      notes:
+        label: Notes
+    schema:
+      tags: language
+      xrefTitle: "{% language %}"
+      xrefDetail: "{% proficiency %}"
+      css: "margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);"
+      expandableAlwaysShowStub: true
+      expandableExpanded: false
+      expandableStubBlocks:
+        children:
+          - text: "### {% language %}"
+            schema:
+              component: text
+              css: "margin: 0;"
+              placeholder: "### Language"
+      expandableContentBlocks:
+        css: "padding: 0.5rem;"
+        children:
+          - text: |-
+              ^detail-heading^ #### Proficiency
+              ^detail-body^ {% proficiency | block %}
+              ^detail-heading^ #### Notes
+              ^detail-body^ {% notes | block %}
+            schema:
+              component: text
+              css: "margin: 0;"
+              placeholder: "Proficiency and notes"
 ---
 
 <!--hvy: {"id":"header","lock":true,"contained":false,"description":"Resume identity header","hideIfUnmodified":true,"priority":true}-->
@@ -958,6 +1072,14 @@ component_defs:
 
  <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"tool-tech-record","componentListItemLabel":"tool / technology","tags":"tool"}-->
 
+<!--hvy: {"id":"languages","lock":true,"expanded":false,"location":"sidebar","description":"Language reference list","hideIfUnmodified":true}-->
+#! Languages
+
+ <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
+  # Languages
+
+ <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"language-record","componentListItemLabel":"language","tags":"language"}-->
+
 <!--hvy: {"id":"history","lock":true,"description":"Work history","hideIfUnmodified":true,"tags":"reciprocal-xref-source"}-->
 #! Professional History
 
@@ -967,6 +1089,16 @@ component_defs:
  <!--hvy:table {"css":"margin: 0.5rem 0 0;","tags":"table-header","tableColumns":["TITLE","<!--hvy:alt {\"compact\":\"ORG\"}-->ORGANIZATION<!--/hvy:alt-->","YEAR(S)"],"tableShowHeader":true,"tableRows":[],"lock":true,"description":"History table header"}-->
 
  <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"history-record","componentListItemLabel":"job","tags":"history"}-->
+
+<!--hvy: {"id":"awards","lock":true,"description":"Awards","hideIfUnmodified":true,"tags":"reciprocal-xref-source"}-->
+#! Awards
+
+ <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
+  # Awards
+
+ <!--hvy:table {"css":"margin: 0.5rem 0 0;","tags":"table-header","tableColumns":["AWARD","GIVEN BY","DATE"],"tableShowHeader":true,"tableRows":[],"lock":true,"description":"Award table header"}-->
+
+ <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"award-record","componentListItemLabel":"award","tags":"award"}-->
 
 <!--hvy: {"id":"education","lock":true,"description":"Education","hideIfUnmodified":true,"tags":"reciprocal-xref-source"}-->
 #! Education

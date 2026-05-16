@@ -220,6 +220,14 @@
   margin-top: 0;
 }
 
+.reader-block > .hvy-text-line-style:first-child {
+  margin-top: 0 !important;
+}
+
+.reader-block > .hvy-text-line-style:first-child > :is(h1, h2, h3, h4, h5, h6):first-of-type {
+  margin-top: 0;
+}
+
 .reader-block > :last-child,
 .reader-section-content > :last-child,
 .reader-grid-cell > :last-child {

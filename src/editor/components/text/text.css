@@ -773,6 +773,16 @@
   margin-top: 0;
 }
 
+.rich-editor > .hvy-text-line-style:first-child,
+.editor-block-passive .reader-block > .hvy-text-line-style:first-child {
+  margin-top: 0 !important;
+}
+
+.rich-editor > .hvy-text-line-style:first-child > :is(h1, h2, h3, h4, h5, h6):first-of-type,
+.editor-block-passive .reader-block > .hvy-text-line-style:first-child > :is(h1, h2, h3, h4, h5, h6):first-of-type {
+  margin-top: 0;
+}
+
 .rich-editor > :last-child,
 .editor-block-passive .reader-block > :last-child {
   margin-bottom: 0;

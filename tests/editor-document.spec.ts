@@ -799,6 +799,7 @@ test('resume template hides untouched scaffold sections only in viewer', async (
   await expect(page.locator('#summary')).toHaveCount(0);
   await expect(page.locator('#history')).toHaveCount(0);
   await expect(page.locator('#projects')).toHaveCount(0);
+  await expect(page.locator('#awards')).toHaveCount(0);
   await expect(page.locator('#education')).toHaveCount(0);
 
   await page.getByRole('button', { name: 'Editor' }).click();
@@ -807,7 +808,30 @@ test('resume template hides untouched scaffold sections only in viewer', async (
   await expect(page.locator('#editorTree')).toContainText('Summary');
   await expect(page.locator('#editorTree')).toContainText('History');
   await expect(page.locator('.section-title-passive', { hasText: 'Projects' })).toHaveCount(0);
+  await expect(page.locator('#editorTree')).toContainText('Awards');
   await expect(page.locator('#editorTree')).toContainText('Education');
+});
+
+test('first styled heading in resume grid cell aligns to the top', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Resume Example' }).click();
+  await page.getByRole('button', { name: 'Viewer' }).click();
+
+  const award = page.locator('#awards .reader-block-expandable').first();
+  await award.click();
+
+  const heading = page.locator('#awards h3', { hasText: 'Autonomous Agent Hackathon Finalist' });
+  await expect(heading).toBeVisible();
+
+  const margins = await heading.evaluate((node) => {
+    const wrapper = node.closest<HTMLElement>('.hvy-text-line-style');
+    return {
+      headingMarginTop: getComputedStyle(node).marginTop,
+      wrapperMarginTop: wrapper ? getComputedStyle(wrapper).marginTop : '',
+    };
+  });
+  expect(margins).toEqual({ headingMarginTop: '0px', wrapperMarginTop: '0px' });
 });
 
 test('resume section templates hide already used non-repeatable sections', async ({ page }) => {

@@ -749,6 +749,82 @@ component_defs:
   expect(context).not.toContain('<!--hvy:tool-tech-xref-card {"id"');
 });
 
+test('importTextIntoDocument seeds fallback reusable examples by base type', async () => {
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"targets":[]}'
+  );
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"information":"Imported catalog"}'
+  );
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"hvy":"<!--hvy: {\\"id\\":\\"catalog\\"}-->\\n#! Catalog\\n\\n <!--hvy:text {}-->\\n  Imported catalog"}'
+  );
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+component_defs:
+  - name: example-record
+    baseType: expandable
+    description: Example expandable record
+  - name: example-list
+    baseType: component-list
+    description: Example repeated list
+  - name: example-grid
+    baseType: grid
+    description: Example two-column layout
+  - name: example-table
+    baseType: table
+    description: Example table
+  - name: example-text
+    baseType: text
+    description: Example text block
+---
+
+<!--hvy: {"id":"catalog"}-->
+#! Catalog
+
+<!--hvy:example-record {}-->
+
+<!--hvy:example-list {}-->
+
+<!--hvy:example-grid {}-->
+
+<!--hvy:example-table {}-->
+
+<!--hvy:example-text {}-->
+`, '.hvy');
+
+  const result = await importTextIntoDocument(document, {
+    sourceName: 'catalog.txt',
+    sourceText: 'Imported catalog',
+    steps: [{ section: 'Catalog', sectionId: 'catalog' }],
+    llm: {
+      settings: { provider: 'openai', model: 'gpt-5-mini' },
+      client: { complete: vi.fn() },
+    },
+  });
+
+  expect(result.status).toBe('complete');
+  const context = requestProxyCompletionMock.mock.calls[2]?.[0]?.context ?? '';
+  expect(context).toContain('Component: example-record');
+  expect(context).toContain('<!--hvy:example-record {}-->');
+  expect(context).toContain('<!--hvy:expandable:stub {}-->');
+  expect(context).toContain('Example summary');
+  expect(context).toContain('<!--hvy:expandable:content {}-->');
+  expect(context).toContain('Example expanded details.');
+  expect(context).toContain('Component: example-list');
+  expect(context).toContain('<!--hvy:example-list {}-->');
+  expect(context).toContain('<!--hvy:component-list:0 {}-->');
+  expect(context).toContain('Example list item.');
+  expect(context).toContain('Component: example-grid');
+  expect(context).toContain('<!--hvy:example-grid {}-->');
+  expect(context).toContain('<!--hvy:grid:0 {"id":"example-left"}-->');
+  expect(context).toContain('<!--hvy:grid:1 {"id":"example-right"}-->');
+  expect(context).toContain('Component: example-table');
+  expect(context).toContain('<!--hvy:example-table {"tableColumns":["Example","Detail"],"tableRows":[{"cells":["Example value","Detail value"]}]}-->');
+  expect(context).toContain('Component: example-text');
+  expect(context).toContain('Example source-backed text.');
+});
+
 test('importTextIntoDocument appends generated section when approved step matches only a template section', async () => {
   requestProxyCompletionMock.mockResolvedValueOnce(
     '{"targets":[]}'

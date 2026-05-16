@@ -850,14 +850,79 @@ function createImportReusableDefinitionExample(def: ComponentDefinition): Visual
         schemaMode: false,
       };
   template.schema.component = def.name;
-  if (baseType === 'xref-card' && !def.template) {
-    template.schema.xrefTitle = template.schema.xrefTitle || 'EXAMPLE_TARGET_TITLE';
-    template.schema.xrefDetail = template.schema.xrefDetail || 'Short source-backed detail';
-    template.schema.xrefTarget = template.schema.xrefTarget || 'example-target-id';
-    template.schema.id = '';
+  if (!def.template) {
+    seedImportReusableDefinitionFallbackExample(template, baseType);
   }
   replaceImportTemplateVariablesInBlock(template, def.templateVariables ?? {});
   return template;
+}
+
+function seedImportReusableDefinitionFallbackExample(block: VisualBlock, baseType: string): void {
+  if (baseType === 'text') {
+    block.text ||= 'Example source-backed text.';
+  } else if (baseType === 'code') {
+    block.text ||= 'const example = "source-backed value";';
+    block.schema.codeLanguage = block.schema.codeLanguage || 'ts';
+  } else if (baseType === 'container') {
+    if (block.schema.containerBlocks.length === 0) {
+      block.schema.containerBlocks.push(createImportExampleTextBlock('Example child content.'));
+    }
+    block.schema.containerTitle ||= 'Example group';
+  } else if (baseType === 'expandable') {
+    if (block.schema.expandableStubBlocks.children.length === 0) {
+      block.schema.expandableStubBlocks.children.push(createImportExampleTextBlock('Example summary'));
+    }
+    if (block.schema.expandableContentBlocks.children.length === 0) {
+      block.schema.expandableContentBlocks.children.push(createImportExampleTextBlock('Example expanded details.'));
+    }
+    block.schema.expandableAlwaysShowStub = true;
+  } else if (baseType === 'component-list') {
+    block.schema.componentListComponent ||= 'text';
+    if (block.schema.componentListBlocks.length === 0) {
+      block.schema.componentListBlocks.push(createImportExampleTextBlock('Example list item.'));
+    }
+  } else if (baseType === 'grid') {
+    block.schema.gridColumns = block.schema.gridColumns || 2;
+    if (block.schema.gridItems.length === 0) {
+      block.schema.gridItems.push(
+        { id: 'example-left', block: createImportExampleTextBlock('Left example content.') },
+        { id: 'example-right', block: createImportExampleTextBlock('Right example content.') }
+      );
+    }
+  } else if (baseType === 'table') {
+    if (block.schema.tableColumns.length === 0 || isDefaultImportExampleTableColumns(block.schema.tableColumns)) {
+      block.schema.tableColumns = ['Example', 'Detail'];
+    }
+    if (block.schema.tableRows.length === 0) {
+      block.schema.tableRows.push({ cells: block.schema.tableColumns.map((column) => `${column} value`) });
+    }
+  } else if (baseType === 'xref-card') {
+    block.schema.xrefTitle = block.schema.xrefTitle || 'EXAMPLE_TARGET_TITLE';
+    block.schema.xrefDetail = block.schema.xrefDetail || 'Short source-backed detail';
+    block.schema.xrefTarget = block.schema.xrefTarget || 'example-target-id';
+    block.schema.id = '';
+  } else if (baseType === 'image') {
+    block.schema.imageFile ||= 'example-image.png';
+    block.schema.imageAlt ||= 'Example image alt text';
+  } else if (baseType === 'button') {
+    block.schema.buttonLabel ||= 'Example action';
+    block.schema.buttonPrompt ||= 'Use the selected source-backed content to produce the requested output.';
+  } else if (baseType === 'plugin') {
+    block.schema.plugin ||= 'example.plugin.id';
+  }
+}
+
+function isDefaultImportExampleTableColumns(columns: string[]): boolean {
+  return columns.length === 2 && columns[0] === 'Column 1' && columns[1] === 'Column 2';
+}
+
+function createImportExampleTextBlock(text: string): VisualBlock {
+  return {
+    id: '',
+    text,
+    schema: defaultBlockSchema('text'),
+    schemaMode: false,
+  };
 }
 
 function replaceImportTemplateVariablesInBlock(block: VisualBlock, variables: ComponentDefinition['templateVariables']): void {

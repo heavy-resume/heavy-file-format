@@ -1481,6 +1481,10 @@
   gap: 0.65rem;
 }
 
+.meta-panel {
+  container: meta-panel / inline-size;
+}
+
 .document-meta-view {
   min-height: 100%;
   max-width: 58rem;
@@ -1517,6 +1521,10 @@
 .template-def-details {
   padding: 0;
   overflow: hidden;
+}
+
+.template-def-details[open] {
+  grid-column: 1 / -1;
 }
 
 .template-def-summary {
@@ -1632,12 +1640,40 @@
   padding: 0.45rem;
 }
 
-.text-line-style-row .paragraph-style-spacing-grid {
+.text-line-style-row .paragraph-style-box-model {
   margin-top: 0.1rem;
 }
 
 .text-line-style-empty {
   grid-column: 1 / -1;
+}
+
+@container meta-panel (inline-size <= 42rem) {
+  .text-line-style-row .paragraph-style-box-model {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-areas:
+      "label label"
+      "top left"
+      "center center"
+      "bottom right";
+  }
+
+  .text-line-style-row .paragraph-style-padding-box {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .text-line-style-row .paragraph-style-box-field-margin-left,
+  .text-line-style-row .paragraph-style-box-field-margin-right,
+  .text-line-style-row .paragraph-style-box-field-margin-top,
+  .text-line-style-row .paragraph-style-box-field-margin-bottom {
+    max-width: none;
+    justify-self: stretch;
+    align-self: stretch;
+  }
+
+  .text-line-style-row .paragraph-style-margin-mobile-label {
+    display: block;
+  }
 }
 
 .meta-panel-head {

@@ -969,35 +969,30 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const label = getTextLineStyleLabel(name, style);
     const spacing = getTextLineStyleSpacing(style.css);
     const rawCss = formatTextLineStyleCssLines(style.css);
-    const renderSpacingInput = (property: string, shortLabel: string): string => `<label>
-      <span>${shortLabel}</span>
-      <input data-field="text-line-style-spacing" data-style-name="${deps.escapeAttr(name)}" data-css-property="${deps.escapeAttr(property)}" value="${deps.escapeAttr(spacing[property] ?? '')}" placeholder="0" />
+    const renderSpacingInput = (property: string, shortLabel: string): string => `<label class="paragraph-style-box-field paragraph-style-box-field-${deps.escapeAttr(property)}">
+      <span class="${property.startsWith('margin-') ? 'paragraph-style-margin-mobile-label' : 'sr-only'}">${shortLabel}</span>
+      <input data-field="text-line-style-spacing" data-style-name="${deps.escapeAttr(name)}" data-css-property="${deps.escapeAttr(property)}" value="${deps.escapeAttr(spacing[property] ?? '')}" placeholder="0" aria-label="${deps.escapeAttr(`${shortLabel} ${property.startsWith('margin-') ? 'margin' : 'padding'}`)}" />
     </label>`;
+    const boxModel = `<div class="paragraph-style-box-model" aria-label="${deps.escapeAttr(`${label} box model spacing`)}">
+        <strong class="paragraph-style-box-model-label paragraph-style-box-model-label-margin">Margin</strong>
+        ${renderSpacingInput('margin-top', 'Top')}
+        ${renderSpacingInput('margin-right', 'Right')}
+        ${renderSpacingInput('margin-bottom', 'Bottom')}
+        ${renderSpacingInput('margin-left', 'Left')}
+        <div class="paragraph-style-padding-box">
+          <strong class="paragraph-style-box-model-label paragraph-style-box-model-label-padding">Padding</strong>
+          ${renderSpacingInput('padding-top', 'Top')}
+          ${renderSpacingInput('padding-right', 'Right')}
+          ${renderSpacingInput('padding-bottom', 'Bottom')}
+          ${renderSpacingInput('padding-left', 'Left')}
+        </div>
+      </div>`;
     return `<div class="paragraph-style-edit-panel" data-edit-style-name="${deps.escapeAttr(name)}" hidden>
       <div class="paragraph-style-edit-title">
         <span>${deps.escapeHtml(label)}</span>
         <code>${deps.escapeHtml(name)}</code>
       </div>
-      <div class="paragraph-style-spacing-grid" aria-label="${deps.escapeAttr(`${label} spacing`)}">
-        <div class="paragraph-style-spacing-group">
-          <strong>Margin</strong>
-          <div class="paragraph-style-box-controls">
-            ${renderSpacingInput('margin-top', 'Top')}
-            ${renderSpacingInput('margin-right', 'Right')}
-            ${renderSpacingInput('margin-bottom', 'Bottom')}
-            ${renderSpacingInput('margin-left', 'Left')}
-          </div>
-        </div>
-        <div class="paragraph-style-spacing-group">
-          <strong>Padding</strong>
-          <div class="paragraph-style-box-controls">
-            ${renderSpacingInput('padding-top', 'Top')}
-            ${renderSpacingInput('padding-right', 'Right')}
-            ${renderSpacingInput('padding-bottom', 'Bottom')}
-            ${renderSpacingInput('padding-left', 'Left')}
-          </div>
-        </div>
-      </div>
+      ${boxModel}
       <label class="paragraph-style-css-lines">
         <span>CSS declarations</span>
         <textarea rows="5" data-field="text-line-style-css" data-style-name="${deps.escapeAttr(name)}" spellcheck="false">${deps.escapeHtml(rawCss)}</textarea>
@@ -1228,9 +1223,23 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       const rawCss = formatTextLineStyleCssLines(style.css);
       const spacing = getTextLineStyleSpacing(style.css);
       const renderSpacingInput = (property: string, shortLabel: string): string => `<label class="paragraph-style-box-field paragraph-style-box-field-${deps.escapeAttr(property)}">
-        <span>${shortLabel}</span>
-        <input data-field="text-line-style-spacing" data-style-name="${deps.escapeAttr(name)}" data-css-property="${deps.escapeAttr(property)}" value="${deps.escapeAttr(spacing[property] ?? '')}" placeholder="0" />
+        <span class="${property.startsWith('margin-') ? 'paragraph-style-margin-mobile-label' : 'sr-only'}">${shortLabel}</span>
+        <input data-field="text-line-style-spacing" data-style-name="${deps.escapeAttr(name)}" data-css-property="${deps.escapeAttr(property)}" value="${deps.escapeAttr(spacing[property] ?? '')}" placeholder="0" aria-label="${deps.escapeAttr(`${shortLabel} ${property.startsWith('margin-') ? 'margin' : 'padding'}`)}" />
       </label>`;
+      const boxModel = `<div class="paragraph-style-box-model" aria-label="${deps.escapeAttr(`${label} box model spacing`)}">
+            <strong class="paragraph-style-box-model-label paragraph-style-box-model-label-margin">Margin</strong>
+            ${renderSpacingInput('margin-top', 'Top')}
+            ${renderSpacingInput('margin-right', 'Right')}
+            ${renderSpacingInput('margin-bottom', 'Bottom')}
+            ${renderSpacingInput('margin-left', 'Left')}
+            <div class="paragraph-style-padding-box">
+              <strong class="paragraph-style-box-model-label paragraph-style-box-model-label-padding">Padding</strong>
+              ${renderSpacingInput('padding-top', 'Top')}
+              ${renderSpacingInput('padding-right', 'Right')}
+              ${renderSpacingInput('padding-bottom', 'Bottom')}
+              ${renderSpacingInput('padding-left', 'Left')}
+            </div>
+          </div>`;
       return `<details class="text-line-style-row template-def-details" data-text-line-style-name="${deps.escapeAttr(name)}"${state.openTextLineStyleName === name ? ' open' : ''}>
         <summary class="template-def-summary">
           <span class="template-def-summary-text">
@@ -1251,26 +1260,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
             <span>Label</span>
             <input data-field="text-line-style-label" data-style-name="${deps.escapeAttr(name)}" value="${deps.escapeAttr(style.label)}" placeholder="${deps.escapeAttr(name)}" />
           </label>
-          <div class="paragraph-style-spacing-grid">
-            <div class="paragraph-style-spacing-group">
-              <strong>Margin</strong>
-              <div class="paragraph-style-box-controls paragraph-style-four-way-controls">
-                ${renderSpacingInput('margin-top', 'Top')}
-                ${renderSpacingInput('margin-right', 'Right')}
-                ${renderSpacingInput('margin-bottom', 'Bottom')}
-                ${renderSpacingInput('margin-left', 'Left')}
-              </div>
-            </div>
-            <div class="paragraph-style-spacing-group">
-              <strong>Padding</strong>
-              <div class="paragraph-style-box-controls paragraph-style-four-way-controls">
-                ${renderSpacingInput('padding-top', 'Top')}
-                ${renderSpacingInput('padding-right', 'Right')}
-                ${renderSpacingInput('padding-bottom', 'Bottom')}
-                ${renderSpacingInput('padding-left', 'Left')}
-              </div>
-            </div>
-          </div>
+          ${boxModel}
           <label class="paragraph-style-css-lines">
             <span>CSS declarations</span>
             <textarea rows="5" data-field="text-line-style-css" data-style-name="${deps.escapeAttr(name)}" spellcheck="false" placeholder="font-weight: 700;">${deps.escapeHtml(rawCss)}</textarea>

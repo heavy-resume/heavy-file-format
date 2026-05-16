@@ -399,69 +399,10 @@ section_defs:
                 id: history-list
                 component: component-list
                 css: "margin: 0;"
-                componentListComponent: history-record
+                componentListComponent: history-linear-record
                 componentListItemLabel: job
                 tags: history
-                componentListBlocks:
-                  - text: ""
-                    schema:
-                      component: history-record
-                      tags: history
-                      xrefTitle: "{% role %}"
-                      xrefDetail: "{% organization %}"
-                      css: "margin: 0.35rem 0;"
-                      expandableAlwaysShowStub: true
-                      expandableExpanded: false
-                      expandableStubBlocks:
-                        children: []
-                      expandableContentBlocks:
-                        css: "padding: 0.5rem;"
-                        children:
-                          - text: "{% organization %}"
-                            schema:
-                              component: text
-                              placeholder: Organization
-                              css: "margin: 0 0 0.35rem;"
-                          - text: ""
-                            schema:
-                              component: grid
-                              css: "margin: 0.35rem 0;"
-                              gridColumns: 2
-                              gridItems:
-                                - id: history-location
-                                  block:
-                                    text: "{% location %}"
-                                    schema:
-                                      component: text
-                                      placeholder: location
-                                      css: "margin: 0;"
-                                - id: history-date-range
-                                  block:
-                                    text: "{% date_range %}"
-                                    schema:
-                                      component: text
-                                      placeholder: date range
-                                      css: "margin: 0; text-align: right;"
-                          - text: "{% role %}"
-                            schema:
-                              component: text
-                              placeholder: job title
-                              css: "margin: 0.35rem 0; font-weight: 700;"
-                          - text: "{% description | block %}"
-                            schema:
-                              component: text
-                              placeholder: description
-                              css: "margin: 0.35rem 0;"
-                          - text: "^section-heading^ #### Accomplishments"
-                            schema:
-                              component: text
-                              css: "margin: 0;"
-                          - text: "{% accomplishments | block %}"
-                            schema:
-                              component: text
-                              placeholder: accomplishments
-                              css: "margin: 0;"
-                          - component: skills-and-tools-tech-list
+                componentListBlocks: []
           children: []
 component_defs:
   - name: resume-section-row
@@ -575,6 +516,73 @@ component_defs:
               tableShowHeader: false
               tableRows:
                 - cells: ["{% role %}", "{% organization %}", "{% years %}"]
+      expandableContentBlocks:
+        css: "padding: 0.5rem;"
+        children:
+          - text: "{% organization %}"
+            schema:
+              component: text
+              placeholder: Organization
+              css: "margin: 0 0 0.35rem;"
+          - text: ""
+            schema:
+              component: grid
+              css: "margin: 0.35rem 0;"
+              gridColumns: 2
+              gridItems:
+                - id: history-location
+                  block:
+                    text: "{% location %}"
+                    schema:
+                      component: text
+                      placeholder: location
+                      css: "margin: 0;"
+                - id: history-date-range
+                  block:
+                    text: "{% date_range %}"
+                    schema:
+                      component: text
+                      placeholder: date range
+                      css: "margin: 0; text-align: right;"
+          - text: "{% role %}"
+            schema:
+              component: text
+              placeholder: job title
+              css: "margin: 0.35rem 0; font-weight: 700;"
+          - text: "{% description | block %}"
+            schema:
+              component: text
+              placeholder: description
+              css: "margin: 0.35rem 0;"
+          - text: "^section-heading^ #### Accomplishments"
+            schema:
+              component: text
+              css: "margin: 0;"
+          - text: "{% accomplishments | block %}"
+            schema:
+              component: text
+              placeholder: accomplishments
+              css: "margin: 0;"
+          - component: skills-and-tools-tech-list
+  - name: history-linear-record
+    baseType: expandable
+    description: Work history organization entry with an empty collapsed stub for linear history sections
+    templateVariables:
+      role:
+        label: Role / Title
+      years:
+        label: Year(s)
+      accomplishments:
+        label: Accomplishments
+    schema:
+      tags: history
+      xrefTitle: "{% role %}"
+      xrefDetail: "{% organization %}"
+      css: "margin: 0.35rem 0;"
+      expandableAlwaysShowStub: true
+      expandableExpanded: false
+      expandableStubBlocks:
+        children: []
       expandableContentBlocks:
         css: "padding: 0.5rem;"
         children:

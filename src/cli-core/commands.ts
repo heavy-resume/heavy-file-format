@@ -3391,8 +3391,8 @@ function formatFileEntryDescription(fs: ReturnType<typeof buildHvyVirtualFileSys
   }
   if (filename.startsWith('about-') && filename.endsWith('.txt')) {
     const docsEntry = fs.entries.get(path);
-    if (docsEntry?.kind === 'file' && docsEntry.read().includes('reusable component:')) {
-      return 'documentation for reusable component type and schema';
+    if (docsEntry?.kind === 'file' && docsEntry.read().includes('component template:')) {
+      return 'documentation for component template type and schema';
     }
     return 'documentation for component or plugin type and schema';
   }

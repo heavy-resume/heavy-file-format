@@ -3,7 +3,7 @@ import { deserializeDocumentWithDiagnostics, serializeBlockFragment, serializeDo
 import type { VisualBlock, VisualSection } from './editor/types';
 import { cloneReusableBlock, cloneReusableSection, cloneReusableSchema, defaultBlockSchema } from './document-factory';
 import { findSectionContainer, formatSectionTitle, getSectionId, visitBlocks } from './section-ops';
-import type { ChatSettings, ComponentDefinition, SectionDefinition, VisualDocument } from './types';
+import type { ChatSettings, ComponentDefinition, ComponentTemplateFlavor, SectionDefinition, SectionTemplateFlavor, VisualDocument } from './types';
 import { isAbortError, throwIfAborted } from './ai-document-loop-state';
 import { resolveBaseComponentFromMeta } from './component-defs';
 import importHvyFormatReference from './ai-import-hvy-format-reference.hvy?raw';
@@ -14,7 +14,9 @@ import {
   applyReusableTemplateValues,
   extractReusableTemplateVariables,
   extractReusableTemplateVariablesFromDefinition,
+  extractReusableTemplateVariablesFromFlavor,
   extractReusableTemplateVariablesFromSectionDefinition,
+  extractReusableTemplateVariablesFromSectionFlavor,
   type ReusableTemplateVariable,
 } from './reusable-template-values';
 
@@ -93,7 +95,15 @@ type ImportTemplateScalarSchemaProperty = Extract<ImportTemplateJsonSchemaProper
 
 type ImportTemplateStructureInternal = ImportTemplateStructureDescriptor & {
   sectionVariables: ReusableTemplateVariable[];
+  sectionFlavors: ImportTemplateSectionFlavor[];
   lists: ImportTemplateListStructure[];
+};
+
+type ImportTemplateSectionFlavor = {
+  name: string;
+  description: string;
+  variables: ReusableTemplateVariable[];
+  template: VisualSection;
 };
 
 type ImportTemplateListStructure = {
@@ -103,8 +113,19 @@ type ImportTemplateListStructure = {
   itemComponent: string;
   variables: ReusableTemplateVariable[];
   itemTemplate: VisualBlock;
+  flavors: ImportTemplateListFlavor[];
   jsonSchema: ImportTemplateJsonSchema;
 };
+
+type ImportTemplateListFlavor = {
+  name: string;
+  description: string;
+  variables: ReusableTemplateVariable[];
+  itemTemplate: VisualBlock;
+};
+
+const IMPORT_TEMPLATE_FLAVOR_FIELD = '_flavor';
+const IMPORT_TEMPLATE_SECTION_FLAVOR_FIELD = '_sectionFlavor';
 
 export interface PlannedImportXrefTarget {
   id: string;
@@ -657,12 +678,24 @@ function buildImportTemplateStructureDescriptor(candidates: ImportTemplateSectio
 function buildImportTemplateStructureForCandidate(candidate: ImportTemplateSectionCandidate): ImportTemplateStructureInternal | null {
   const lists = collectImportTemplateListStructures(candidate.section, candidate.componentDefs);
   const listVariableNames = new Set(lists.flatMap((list) => list.variables.map((variable) => variable.name)));
+  const sectionFlavors = getImportTemplateSectionFlavors(candidate.sectionDefinition);
   const sectionVariables = (candidate.sectionDefinition
-    ? extractReusableTemplateVariablesFromSectionDefinition(candidate.sectionDefinition)
+    ? mergeImportTemplateVariables([
+      extractReusableTemplateVariablesFromSectionDefinition(candidate.sectionDefinition),
+      ...sectionFlavors.map((flavor) => flavor.variables),
+    ])
     : extractReusableTemplateVariables(candidate.section))
     .filter((variable) => !listVariableNames.has(variable.name));
   const properties: Record<string, ImportTemplateJsonSchemaProperty> = {};
   const required: string[] = [];
+  if (sectionFlavors.length > 0) {
+    properties[IMPORT_TEMPLATE_SECTION_FLAVOR_FIELD] = {
+      type: 'string',
+      title: 'Section flavor',
+      description: `Choose one section template flavor: ${sectionFlavors.map((flavor) => `${flavor.name} (${flavor.description || 'No description'})`).join('; ')}.`,
+    };
+    required.push(IMPORT_TEMPLATE_SECTION_FLAVOR_FIELD);
+  }
   for (const variable of sectionVariables) {
     properties[variable.name] = templateVariableToJsonSchemaProperty(variable);
     required.push(variable.name);
@@ -688,12 +721,28 @@ function buildImportTemplateStructureForCandidate(candidate: ImportTemplateSecti
       additionalProperties: false,
     },
     sectionVariables,
+    sectionFlavors,
     lists,
   };
 }
 
 function hasImportTemplateStructureFields(structure: ImportTemplateStructureInternal): boolean {
-  return structure.sectionVariables.length > 0 || structure.lists.length > 0;
+  return structure.sectionVariables.length > 0 || structure.sectionFlavors.length > 0 || structure.lists.length > 0;
+}
+
+function getImportTemplateSectionFlavors(definition: SectionDefinition | undefined): ImportTemplateSectionFlavor[] {
+  if (!definition || !Array.isArray(definition.flavors)) {
+    return [];
+  }
+  const flavors = definition.flavors
+    .filter((flavor): flavor is SectionTemplateFlavor & { name: string } => !!flavor && typeof flavor === 'object' && typeof flavor.name === 'string' && flavor.name.trim().length > 0 && !!flavor.template)
+    .map((flavor) => ({
+      name: flavor.name.trim(),
+      description: typeof flavor.description === 'string' ? flavor.description.trim() : '',
+      variables: extractReusableTemplateVariablesFromSectionFlavor(flavor),
+      template: cloneReusableSection(flavor.template),
+    }));
+  return flavors.length > 1 ? flavors : [];
 }
 
 function getImportTemplateStructureId(candidate: ImportTemplateSectionCandidate): string {
@@ -742,12 +791,25 @@ function buildImportTemplateListStructure(block: VisualBlock, usedKeys: Set<stri
   if (!itemTemplate) {
     return null;
   }
-  const variables = getImportTemplateListItemVariables(itemTemplate, itemComponent, componentDefs);
+  const def = componentDefs.find((item) => item.name === itemComponent);
+  const flavors = getImportTemplateListFlavors(def, itemComponent);
+  const variables = mergeImportTemplateVariables([
+    getImportTemplateListItemVariables(itemTemplate, itemComponent, componentDefs),
+    ...flavors.map((flavor) => flavor.variables),
+  ]);
   if (variables.length === 0) {
     return null;
   }
   const properties: Record<string, ImportTemplateJsonSchemaProperty> = {};
   const required: string[] = [];
+  if (flavors.length > 0) {
+    properties[IMPORT_TEMPLATE_FLAVOR_FIELD] = {
+      type: 'string',
+      title: 'Flavor',
+      description: `Choose one component template flavor for this item: ${flavors.map((flavor) => `${flavor.name} (${flavor.description || 'No description'})`).join('; ')}.`,
+    };
+    required.push(IMPORT_TEMPLATE_FLAVOR_FIELD);
+  }
   for (const variable of variables) {
     properties[variable.name] = templateVariableToJsonSchemaProperty(variable);
     required.push(variable.name);
@@ -761,6 +823,7 @@ function buildImportTemplateListStructure(block: VisualBlock, usedKeys: Set<stri
     itemComponent,
     variables,
     itemTemplate,
+    flavors,
     jsonSchema: {
       type: 'object',
       properties,
@@ -768,6 +831,59 @@ function buildImportTemplateListStructure(block: VisualBlock, usedKeys: Set<stri
       additionalProperties: false,
     },
   };
+}
+
+function getImportTemplateListFlavors(def: ComponentDefinition | undefined, itemComponent: string): ImportTemplateListFlavor[] {
+  if (!def || !Array.isArray(def.flavors)) {
+    return [];
+  }
+  const flavors = def.flavors
+    .filter((flavor): flavor is ComponentTemplateFlavor & { name: string } => !!flavor && typeof flavor === 'object' && typeof flavor.name === 'string' && flavor.name.trim().length > 0)
+    .map((flavor) => {
+      const itemTemplate = createImportTemplateFlavorBlock(flavor, itemComponent);
+      return {
+        name: flavor.name.trim(),
+        description: typeof flavor.description === 'string' ? flavor.description.trim() : '',
+        variables: extractReusableTemplateVariablesFromFlavor(flavor),
+        itemTemplate,
+      };
+    })
+    .filter((flavor) => flavor.variables.length > 0);
+  return flavors.length > 1 ? flavors : [];
+}
+
+function createImportTemplateFlavorBlock(flavor: ComponentTemplateFlavor, itemComponent: string): VisualBlock {
+  if (flavor.template) {
+    const item = cloneReusableBlock(flavor.template);
+    item.schema.component = itemComponent;
+    return item;
+  }
+  if (flavor.schema) {
+    return {
+      id: '',
+      text: '',
+      schema: cloneReusableSchema(flavor.schema, itemComponent),
+      schemaMode: false,
+    };
+  }
+  return {
+    id: '',
+    text: '',
+    schema: defaultBlockSchema(itemComponent),
+    schemaMode: false,
+  };
+}
+
+function mergeImportTemplateVariables(groups: ReusableTemplateVariable[][]): ReusableTemplateVariable[] {
+  const byName = new Map<string, ReusableTemplateVariable>();
+  for (const group of groups) {
+    for (const variable of group) {
+      if (!byName.has(variable.name)) {
+        byName.set(variable.name, variable);
+      }
+    }
+  }
+  return [...byName.values()];
 }
 
 function findImportTemplateListItemTemplate(block: VisualBlock, itemComponent: string, componentDefs: ComponentDefinition[]): VisualBlock | null {
@@ -918,8 +1034,8 @@ function buildImportSectionHvyPrompt(sourceName: string, instructions: string | 
     'Do not put `id` on xref-card components; xref-card points at another component with `xrefTarget` and does not need its own navigation ID.',
     'When reusing a matched grid, preserve the template grid shape, `gridColumns`, slot count, and slot order. Do not add extra grid cells for prose, notes, accomplishments, or repeated records.',
     'For custom components whose base type is expandable, put `<!--hvy:expandable:stub {}-->` and `<!--hvy:expandable:content {}-->` directly under the custom component directive. Do not create a separate sibling `<!--hvy:expandable {}-->` block.',
-    'Use LLM-only closing comments for every nested container, reusable/custom component, component-list item slot, and expandable slot, for example `<!-- /container -->`, `<!-- /foo-record -->`, `<!-- /component-list:0 -->`, `<!-- /expandable:stub -->`. These closing comments are required.',
-    'Do not close only the slots; close the containing reusable/custom component too, for example `<!-- /foo-record -->` after its expandable slots.',
+    'Use LLM-only closing comments for every nested container, component-template/custom component, component-list item slot, and expandable slot, for example `<!-- /container -->`, `<!-- /foo-record -->`, `<!-- /component-list:0 -->`, `<!-- /expandable:stub -->`. These closing comments are required.',
+    'Do not close only the slots; close the containing component-template/custom component too, for example `<!-- /foo-record -->` after its expandable slots.',
     'Leave template fill-in placeholders alone when the source has no value for them. Do not replace a fill-in with an empty text block.',
     'When this section creates records that other sections may reference, give those records stable source-backed ids.',
     'When this section references imported records, use `xref-card` with an exact `xrefTarget` from the existing or planned relationship inventory. Do not invent xref targets.',
@@ -991,6 +1107,7 @@ function buildImportTemplateValuesContext(
     buildImportRelationshipFrame(document),
     '',
     buildImportPlannedXrefTargetFrame(plannedXrefTargets),
+    ...(hasImportTemplateFlavorOptions(templateStructure) ? ['', buildImportTemplateFlavorFrame(templateStructure)] : []),
     '',
     '=== BEGIN TEMPLATE JSON SCHEMA ===',
     JSON.stringify(templateStructure.jsonSchema, null, 2),
@@ -1006,6 +1123,39 @@ function buildImportTemplateValuesContext(
     'Approved import section plan:',
     ...steps.map((planStep, index) => `${index + 1}. ${index < activeIndex ? '[created]' : index === activeIndex ? '[current]' : '[pending]'} ${formatImportPlanStep(planStep)} (${formatImportPlanTarget(planStep.target)})`),
     ...(createdSections.length > 0 ? ['', 'Previously created section results:', ...createdSections] : []),
+  ].join('\n');
+}
+
+function hasImportTemplateFlavorOptions(templateStructure: ImportTemplateStructureInternal): boolean {
+  return templateStructure.sectionFlavors.length > 0 || templateStructure.lists.some((list) => list.flavors.length > 0);
+}
+
+function buildImportTemplateFlavorFrame(templateStructure: ImportTemplateStructureInternal): string {
+  const lines: string[] = [];
+  if (templateStructure.sectionFlavors.length > 0) {
+    lines.push(`Section template "${templateStructure.label}" has flavor options:`);
+    for (const flavor of templateStructure.sectionFlavors) {
+      lines.push(`- ${flavor.name}: ${flavor.description || 'No description provided.'}`);
+    }
+    lines.push('');
+  }
+  for (const list of templateStructure.lists) {
+    if (list.flavors.length === 0) {
+      continue;
+    }
+    lines.push(`List "${list.key}" uses component template "${list.itemComponent}" and has flavor options:`);
+    for (const flavor of list.flavors) {
+      lines.push(`- ${flavor.name}: ${flavor.description || 'No description provided.'}`);
+    }
+  }
+  return [
+    '=== BEGIN TEMPLATE FLAVORS ===',
+    [
+      'If `_sectionFlavor` is required, pick the best section template flavor before filling the remaining fields.',
+      'For each item in a listed array, pick the best `_flavor` from these options before filling the remaining fields.',
+      ...lines,
+    ].join('\n'),
+    '=== END TEMPLATE FLAVORS ===',
   ].join('\n');
 }
 
@@ -1195,7 +1345,7 @@ function buildImportReusableDefinitionFrame(document: VisualDocument, section: V
   }
   return [
     '=== BEGIN MATCHED REUSABLE DEFINITIONS ===',
-    'Reusable component examples referenced by the matched section/template, including nested reusable components:',
+    'Component template examples referenced by the matched section/template, including nested component templates:',
     componentDefs.map((def) => formatImportReusableDefinitionExample(def, document.meta)).join('\n\n'),
     '=== END MATCHED REUSABLE DEFINITIONS ===',
   ].join('\n');
@@ -1542,13 +1692,16 @@ function applyGeneratedImportTemplateSection(
 }
 
 function instantiateImportTemplateSection(template: VisualSection, templateStructure: ImportTemplateStructureInternal, values: ImportTemplateValues): VisualSection {
-  const section = cloneReusableSection(template);
+  const sectionFlavorName = typeof values[IMPORT_TEMPLATE_SECTION_FLAVOR_FIELD] === 'string' ? values[IMPORT_TEMPLATE_SECTION_FLAVOR_FIELD].trim() : '';
+  const sectionFlavor = templateStructure.sectionFlavors.find((flavor) => flavor.name === sectionFlavorName);
+  const section = cloneReusableSection(sectionFlavor?.template ?? template);
+  const sectionVariables = sectionFlavor?.variables.length ? sectionFlavor.variables : templateStructure.sectionVariables;
   const scalarValues: Record<string, string> = {};
-  for (const variable of templateStructure.sectionVariables) {
+  for (const variable of sectionVariables) {
     const value = values[variable.name];
     scalarValues[variable.name] = typeof value === 'string' ? value : '';
   }
-  applyReusableSectionTemplateValues(section, scalarValues, templateStructure.sectionVariables);
+  applyReusableSectionTemplateValues(section, scalarValues, sectionVariables);
   for (const list of templateStructure.lists) {
     replaceImportTemplateListItems(section, list, Array.isArray(values[list.key]) ? values[list.key] as Array<Record<string, string>> : []);
   }
@@ -1561,11 +1714,14 @@ function replaceImportTemplateListItems(section: VisualSection, list: ImportTemp
     return;
   }
   block.schema.componentListBlocks = items.map((itemValues) => {
-    const item = cloneReusableBlock(list.itemTemplate);
+    const flavorName = itemValues[IMPORT_TEMPLATE_FLAVOR_FIELD]?.trim() ?? '';
+    const flavor = list.flavors.find((candidate) => candidate.name === flavorName);
+    const item = cloneReusableBlock(flavor?.itemTemplate ?? list.itemTemplate);
     if (list.itemComponent) {
       item.schema.component = list.itemComponent;
     }
-    applyReusableTemplateValues(item, itemValues, list.variables);
+    const { [IMPORT_TEMPLATE_FLAVOR_FIELD]: _flavor, ...templateValues } = itemValues;
+    applyReusableTemplateValues(item, templateValues, flavor?.variables.length ? flavor.variables : list.variables);
     return item;
   });
 }
@@ -1852,8 +2008,8 @@ function buildImportSectionHvyResponseInstructions(): string {
     '`hvy` must be one complete valid HVY section, not a whole document and not a standalone component.',
     'The HVY section must include exactly one section directive and one `#!` section heading.',
     'Use literal HVY directive comments. Do not HTML-escape `<`, `>`, or directive JSON quotes.',
-    'Use LLM-only closing comments for nested containers, reusable/custom components, component-list item slots, and expandable slots. Example: `<!--hvy:container {}--> ... <!-- /container -->`.',
-    'When returning a reusable/custom component with slots, close both the slots and the reusable/custom component itself.',
+    'Use LLM-only closing comments for nested containers, component-template/custom components, component-list item slots, and expandable slots. Example: `<!--hvy:container {}--> ... <!-- /container -->`.',
+    'When returning a component-template/custom component with slots, close both the slots and the component itself.',
   ].join('\n');
 }
 
@@ -1883,7 +2039,48 @@ function parseImportTemplateValuesResponse(
   if (!values || typeof values !== 'object' || Array.isArray(values)) {
     return { ok: false, message: 'Top-level `values` must be an object.' };
   }
-  return validateImportTemplateValues(values as Record<string, unknown>, templateStructure.jsonSchema);
+  const validated = validateImportTemplateValues(values as Record<string, unknown>, templateStructure.jsonSchema);
+  if (validated.ok === false) {
+    return validated;
+  }
+  const flavorValidation = validateImportTemplateFlavorSelections(validated.value, templateStructure);
+  return flavorValidation ?? validated;
+}
+
+function validateImportTemplateFlavorSelections(
+  values: ImportTemplateValues,
+  templateStructure: ImportTemplateStructureInternal
+): { ok: false; message: string } | null {
+  if (templateStructure.sectionFlavors.length > 0) {
+    const flavor = values[IMPORT_TEMPLATE_SECTION_FLAVOR_FIELD];
+    const allowed = new Set(templateStructure.sectionFlavors.map((candidate) => candidate.name));
+    if (typeof flavor !== 'string' || !allowed.has(flavor)) {
+      return {
+        ok: false,
+        message: `Template values must choose a valid _sectionFlavor: ${[...allowed].join(', ')}.`,
+      };
+    }
+  }
+  for (const list of templateStructure.lists) {
+    if (list.flavors.length === 0) {
+      continue;
+    }
+    const items = values[list.key];
+    if (!Array.isArray(items)) {
+      continue;
+    }
+    const allowed = new Set(list.flavors.map((flavor) => flavor.name));
+    for (const [index, item] of items.entries()) {
+      const flavor = item[IMPORT_TEMPLATE_FLAVOR_FIELD];
+      if (!flavor || !allowed.has(flavor)) {
+        return {
+          ok: false,
+          message: `Template value "${list.key}" item ${index + 1} must choose a valid _flavor: ${[...allowed].join(', ')}.`,
+        };
+      }
+    }
+  }
+  return null;
 }
 
 function validateImportTemplateValues(raw: Record<string, unknown>, schema: ImportTemplateJsonSchema): { ok: true; value: ImportTemplateValues } | { ok: false; message: string } {

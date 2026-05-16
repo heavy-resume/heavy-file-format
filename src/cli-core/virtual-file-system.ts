@@ -745,10 +745,10 @@ function formatComponentAbout(meta: JsonObject, component: string): string {
   }
   const lines = [
     `About ${component}`,
-    `reusable component: ${definition.name}`,
+    `component template: ${definition.name}`,
     definition.baseType ? `base component: ${definition.baseType}` : '',
-    'Edit this reusable component definition in /header.yaml under component_defs.',
-    'Reusable definition YAML:',
+    'Edit this component template definition in /header.yaml under component_defs.',
+    'Component template YAML:',
     '```yaml',
     formatReusableDefinitionYaml(definition),
     '```',

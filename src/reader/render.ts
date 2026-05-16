@@ -1206,15 +1206,17 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       return renderThemeModal();
     }
     if (state.reusableSaveModal) {
-      const existingName = state.reusableSaveModal.kind === 'component' ? state.reusableSaveModal.existingName : undefined;
+      const existingName = state.reusableSaveModal.existingName;
       const title = existingName
-        ? 'Update Reusable Component'
+        ? state.reusableSaveModal.kind === 'component' ? 'Update Component Template' : 'Update Section Template'
         : state.reusableSaveModal.kind === 'section'
-          ? 'Save As Reusable Section'
-          : 'Save As Reusable Component';
+          ? 'Save As Section Template'
+          : 'Save As Component Template';
       const help =
         existingName
-          ? `This component already uses "${deps.escapeHtml(existingName)}". Update that reusable definition or save this component as a new reusable definition.`
+          ? state.reusableSaveModal.kind === 'component'
+            ? `This component already uses "${deps.escapeHtml(existingName)}". Update that component template, save this component as a new template, or add it as a flavor.`
+            : `This section already uses "${deps.escapeHtml(existingName)}". Update that section template, save this section as a new template, or add it as a flavor.`
           : state.reusableSaveModal.kind === 'section'
             ? 'This saves a cloned section template, including its current blocks and nested subsections.'
             : 'This saves a cloned component template, including pre-filled values and nested children.';
@@ -1231,7 +1233,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
               ? `<div class="reusable-existing-option">
                   <div>
                     <strong>${deps.escapeHtml(existingName)}</strong>
-                    <span>Update the existing reusable component definition.</span>
+                    <span>Update the existing ${state.reusableSaveModal.kind === 'component' ? 'component' : 'section'} template definition.</span>
                   </div>
                   <button type="button" class="secondary" data-modal-action="update-reusable">Update Existing</button>
                 </div>`
@@ -1240,9 +1242,16 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
               <span>${existingName ? 'New Name' : 'Name'}</span>
               <input id="reusableNameInput" value="${deps.escapeAttr(state.reusableSaveModal.draftName)}" placeholder="Callout, Pricing Table, FAQ Section..." autofocus />
             </label>
+            ${existingName
+              ? `<label>
+                  <span>Flavor Description</span>
+                  <textarea id="reusableFlavorDescriptionInput" rows="3" placeholder="Describe when this flavor should be used."></textarea>
+                </label>`
+              : ''}
             <div class="link-inline-actions reusable-save-actions">
               <button type="button" class="ghost" data-modal-action="close">Cancel</button>
-              <button type="button" class="${existingName ? 'ghost' : 'secondary'}" data-modal-action="save-reusable">${existingName ? 'Save As New' : 'Save Reusable'}</button>
+              ${existingName ? '<button type="button" class="ghost" data-modal-action="add-reusable-flavor">Add Flavor</button>' : ''}
+              <button type="button" class="${existingName ? 'ghost' : 'secondary'}" data-modal-action="save-reusable">${existingName ? 'Save As New' : 'Save Template'}</button>
             </div>
           </section>
         </div>

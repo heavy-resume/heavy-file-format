@@ -682,7 +682,7 @@ async function buildChatCliInitialTurnRequest(params: {
     'hvy --help'
   );
   const initialStructure = await runInitialCommand(
-    'I am getting the component structure so I can identify sections, reusable component types, and likely edit surfaces.',
+    'I am getting the component structure so I can identify sections, component template types, and likely edit surfaces.',
     'hvy request_structure --collapse'
   );
   const diagnostics = await collectHvyCliDiagnostics(params.document);

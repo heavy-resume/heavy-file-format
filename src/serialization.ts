@@ -762,6 +762,23 @@ export function serializeComponentDefinition(raw: JsonObject): JsonObject {
       if (value && typeof value === 'object') {
         result.schema = cleanComponentDefSchema(value as JsonObject, true);
       }
+    } else if (key === 'flavors' && Array.isArray(value)) {
+      result.flavors = value.map((flavor) => cleanComponentDefFlavor(flavor as JsonObject));
+    } else {
+      result[key] = value;
+    }
+  }
+  return result;
+}
+
+function cleanComponentDefFlavor(flavor: JsonObject): JsonObject {
+  const result: JsonObject = {};
+  for (const [key, value] of Object.entries(flavor)) {
+    if (key === 'template') continue;
+    if (key === 'schema') {
+      if (value && typeof value === 'object') {
+        result.schema = cleanComponentDefSchema(value as JsonObject, true);
+      }
     } else {
       result[key] = value;
     }
@@ -902,6 +919,30 @@ function serializeSectionDef(raw: JsonObject): JsonObject {
   }
   if (raw.template && typeof raw.template === 'object') {
     result.template = cleanSectionTemplate(raw.template as Partial<VisualSection> & JsonObject);
+  }
+  if (Array.isArray(raw.flavors)) {
+    const flavors = raw.flavors
+      .filter((flavor): flavor is JsonObject => !!flavor && typeof flavor === 'object')
+      .map((flavor) => {
+        const cleaned: JsonObject = {};
+        if (typeof flavor.name === 'string') {
+          cleaned.name = flavor.name;
+        }
+        if (typeof flavor.description === 'string' && flavor.description.trim().length > 0) {
+          cleaned.description = flavor.description;
+        }
+        if (flavor.templateVariables && typeof flavor.templateVariables === 'object') {
+          cleaned.templateVariables = flavor.templateVariables;
+        }
+        if (flavor.template && typeof flavor.template === 'object') {
+          cleaned.template = cleanSectionTemplate(flavor.template as Partial<VisualSection> & JsonObject);
+        }
+        return cleaned;
+      })
+      .filter((flavor) => typeof flavor.name === 'string' && flavor.name.trim().length > 0 && !!flavor.template);
+    if (flavors.length > 0) {
+      result.flavors = flavors;
+    }
   }
   return result;
 }

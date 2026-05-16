@@ -1936,7 +1936,7 @@ hvy_version: 0.1
   expect(await page.locator('.editor-block-context-actions [data-action="open-component-meta"]').count()).toBeGreaterThan(1);
 });
 
-test('reusable component modal offers update existing or save as new', async ({ page }) => {
+test('component template modal offers update existing, save as new, or add flavor', async ({ page }) => {
   await page.goto('/');
 
   await page.getByRole('button', { name: 'Raw' }).click();
@@ -1952,20 +1952,21 @@ component_defs:
 <!--hvy: {"id":"skills"}-->
 #! Skills
 
-<!--hvy:skill-card {"id":"skill-card-1"}-->
+<!--hvy:skill-card {"id":"skill-card-1","css":"font-style: italic;"}-->
  Software Engineering
 `);
   await page.getByRole('button', { name: 'Apply' }).click();
   await page.getByRole('button', { name: 'Advanced' }).click();
 
   await page.locator('.editor-block-passive', { hasText: 'Software Engineering' }).click();
-  await page.getByLabel('Component options').getByRole('button', { name: 'Reusable' }).click();
+  await page.getByLabel('Component options').getByRole('button', { name: 'Make Template' }).click();
 
-  const modal = page.locator('.component-meta-modal', { hasText: 'Update Reusable Component' });
+  const modal = page.locator('.component-meta-modal', { hasText: 'Update Component Template' });
   await expect(modal).toBeVisible();
   await expect(modal.locator('.reusable-existing-option strong')).toHaveText('skill-card');
   await expect(modal.getByRole('button', { name: 'Update Existing' })).toBeVisible();
   await expect(modal.getByRole('button', { name: 'Save As New' })).toBeVisible();
+  await expect(modal.getByRole('button', { name: 'Add Flavor' })).toBeVisible();
   await expect(modal.locator('#reusableNameInput')).toHaveValue('skill-card-copy');
 
   await modal.locator('#reusableNameInput').fill('skill-card-alt');
@@ -1974,7 +1975,44 @@ component_defs:
   await page.getByRole('button', { name: 'Raw' }).click();
   await expect(page.locator('#rawEditor')).toHaveValue(/name: skill-card/);
   await expect(page.locator('#rawEditor')).not.toHaveValue(/skill-card-alt/);
-  await expect(page.locator('#rawEditor')).toHaveValue(/<!--hvy:skill-card \{"id":"skill-card-1"\}-->/);
+  await expect(page.locator('#rawEditor')).toHaveValue(/<!--hvy:skill-card \{\}-->/);
+});
+
+test('component template modal can save an edited instance as a flavor', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+component_defs:
+  - name: skill-card
+    baseType: text
+    schema:
+      placeholder: Skill
+---
+
+<!--hvy: {"id":"skills"}-->
+#! Skills
+
+<!--hvy:skill-card {"id":"skill-card-1","css":"font-weight: 700;"}-->
+ Software Engineering
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Advanced' }).click();
+
+  await page.locator('.editor-block-passive', { hasText: 'Software Engineering' }).click();
+  await page.getByLabel('Component options').getByRole('button', { name: 'Make Template' }).click();
+
+  const modal = page.locator('.component-meta-modal', { hasText: 'Update Component Template' });
+  await modal.locator('#reusableNameInput').fill('emphasis');
+  await modal.locator('#reusableFlavorDescriptionInput').fill('Use for emphasized skill cards.');
+  await modal.getByRole('button', { name: 'Add Flavor' }).click();
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await expect(page.locator('#rawEditor')).toHaveValue(/flavors:/);
+  await expect(page.locator('#rawEditor')).toHaveValue(/name: emphasis/);
+  await expect(page.locator('#rawEditor')).toHaveValue(/description: Use for emphasized skill cards\./);
+  await expect(page.locator('#rawEditor')).toHaveValue(/css: "font-weight: 700;"/);
 });
 
 test('advanced placeholder input keeps focus while typing', async ({ page }) => {

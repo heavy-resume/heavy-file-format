@@ -1,8 +1,8 @@
-# Reusable Component Cheatsheet
+# Component Template Cheatsheet
 
-Reusable component definitions live in `/header.yaml` under `component_defs`. They define reusable authoring templates; component instances live in `/body`.
+Component template definitions live in `/header.yaml` under `component_defs`. They define reusable authoring templates; component instances live in `/body`.
 
-Find available reusable components:
+Find available component templates:
 
 ```shell
 grep -n "component_defs" /header.yaml
@@ -11,7 +11,7 @@ find /docs -maxdepth 1 -type f
 cat /docs/about-widget-record.txt
 ```
 
-Inspect a reusable component list before adding an item:
+Inspect a component template list before adding an item:
 
 ```shell
 hvy search "example widget"
@@ -20,7 +20,7 @@ cat /body/demo-area/widget-list/component-list.json
 ls /body/demo-area/widget-list
 ```
 
-Create an instance of a reusable component:
+Create an instance of a component template:
 
 ```shell
 hvy insert -1 widget-record /demo-area/widget-list widget-orbital
@@ -41,7 +41,7 @@ cat /body/demo-area/widget-list/widget-orbital/component.txt
 hvy preview /body/demo-area/widget-list/widget-orbital
 ```
 
-When a reusable component contains nested slots, use the generated nested paths rather than flattening content into the parent:
+When a component template contains nested slots, use the generated nested paths rather than flattening content into the parent:
 
 ```shell
 hvy request_structure widget-orbital --describe

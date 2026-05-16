@@ -156,7 +156,7 @@ function buildSectionTemplateRecords(document: VisualDocument): SemanticRecord[]
       tags,
       body: '',
       roleHints: [
-        'reusable section template',
+        'section template',
         'section_defs authoring template',
         `insert with hvy insert -1 section /body --from-template ${key}${variables.length > 0 ? ` --using-template keys ${formatTemplateKeys(variables)}` : ''}`,
         status,

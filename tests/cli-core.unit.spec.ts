@@ -309,14 +309,14 @@ test('ls keeps custom component directories to file listings without schema prev
   const result = await executeHvyCliCommand(document, session, 'ls /body/skills/component-list-1/skill-software-engineering');
 
   expect(result.output).toContain('dir  expandable-content');
-  expect(result.output).toContain('file about-skill-record.txt [ro] | documentation for reusable component type and schema');
+  expect(result.output).toContain('file about-skill-record.txt [ro] | documentation for component template type and schema');
   expect(result.output).toContain('file skill-record.json');
   expect(result.output).not.toContain('skill-record-info.txt');
   expect(result.output).not.toContain('Custom component definition:');
   expect(result.output).not.toContain('expandableContentBlocks:');
 });
 
-test('cli exposes reusable component documentation in about files', async () => {
+test('cli exposes component template documentation in about files', async () => {
   const document = createResumeCliTestDocument();
   const session = createHvyCliSession();
 
@@ -327,10 +327,10 @@ test('cli exposes reusable component documentation in about files', async () => 
   );
 
   expect(about.output).toContain('About skill-record');
-  expect(about.output).toContain('reusable component: skill-record');
+  expect(about.output).toContain('component template: skill-record');
   expect(about.output).toContain('base component: expandable');
-  expect(about.output).toContain('Edit this reusable component definition in /header.yaml under component_defs.');
-  expect(about.output).toContain('Reusable definition YAML:');
+  expect(about.output).toContain('Edit this component template definition in /header.yaml under component_defs.');
+  expect(about.output).toContain('Component template YAML:');
   expect(about.output).toContain('```yaml');
   expect(about.output).toContain('- name: skill-record');
   expect(about.output).toContain('description: Skill or tool details');
@@ -439,7 +439,7 @@ component_defs:
   expect(componentListHint).toContain('component-list.txt is a preview of existing leaf item text');
   expect(componentListHint).not.toContain('optional list-item creation');
   expect(reusableItemHint).not.toContain('optional blank sibling creation');
-  expect(reusableItemHint).not.toContain('after creating a reusable component');
+  expect(reusableItemHint).not.toContain('after creating a component template');
   expect(componentListHint).not.toContain('"Title"');
   expect(reusableItemHint).not.toContain('"Title"');
 });
@@ -512,7 +512,7 @@ test('hvy insert -1 can create custom components and xref components', async () 
   expect(skill.output).not.toContain('### ABOUT CUSTOM COMPONENT ###');
   expect(skill.output).not.toContain('### ABOUT COMPONENT FILE ###');
   expect(skill.output).not.toContain('CMD: cat');
-  expect(skill.output).not.toContain('Reusable definition YAML:');
+  expect(skill.output).not.toContain('Component template YAML:');
   expect((await executeHvyCliCommand(document, session, 'cat /body/skills/component-list-1/skill-baking/skill-record.json')).output)
     .toContain('"css": "margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);"');
   expect(xref.output).toContain('/id/top-skills-list/top-skill-baking: created');
@@ -524,7 +524,7 @@ test('hvy insert -1 can create custom components and xref components', async () 
     .toContain('"xrefTarget": ""');
 });
 
-test('hvy insert can fill reusable component template values from exact JSON keys', async () => {
+test('hvy insert can fill component template values from exact JSON keys', async () => {
   const document = createTemplatedCliTestDocument();
   const session = createHvyCliSession();
 
@@ -615,11 +615,11 @@ test('hvy insert can opt in to returning custom component about text on creation
 
   expect(skill.output).toContain('### CREATED CUSTOM COMPONENT ###');
   expect(skill.output).toContain('Successfully created custom component skill-record.');
-  expect(skill.output).toContain('Use about-skill-record.txt to inspect this reusable component guidance again.');
+  expect(skill.output).toContain('Use about-skill-record.txt to inspect this component template guidance again.');
   expect(skill.output).toContain('### END CREATED CUSTOM COMPONENT ###');
   expect(skill.output).toContain('### ABOUT CUSTOM COMPONENT ###');
   expect(skill.output).toContain('About skill-record');
-  expect(skill.output).toContain('Reusable definition YAML:');
+  expect(skill.output).toContain('Component template YAML:');
   expect(skill.output).toContain('### END ABOUT CUSTOM COMPONENT ###');
   expect(skill.output).not.toContain('### ABOUT COMPONENT FILE ###');
   expect(skill.output).not.toContain('CMD: cat');
@@ -668,7 +668,7 @@ test('hvy insert -1 changes cwd to the newly created component', async () => {
   expect((await executeHvyCliCommand(document, session, 'ls')).output).toContain('file raw.hvy [w]');
 });
 
-test('aggregate body write errors explain how to fill nested reusable components', async () => {
+test('aggregate body write errors explain how to fill nested component templates', async () => {
   const document = createResumeCliTestDocument();
   const session = createHvyCliSession();
   await executeHvyCliCommand(

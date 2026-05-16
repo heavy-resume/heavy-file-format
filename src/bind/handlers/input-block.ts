@@ -269,17 +269,6 @@ export function bindInputBlock(app: HTMLElement): void {
       return;
     }
 
-    if (field === 'def-base' && target instanceof HTMLSelectElement) {
-      const idx = Number.parseInt(target.dataset.defIndex ?? '', 10);
-      const defs = getComponentDefs();
-      if (!Number.isNaN(idx) && defs[idx]) {
-        recordHistory(`def:${idx}:base`);
-        defs[idx].baseType = target.value;
-        state.document.meta.component_defs = defs;
-      }
-      return;
-    }
-
     if (field === 'def-tags' && target instanceof HTMLInputElement) {
       const idx = Number.parseInt(target.dataset.defIndex ?? '', 10);
       const defs = getComponentDefs();
@@ -302,12 +291,64 @@ export function bindInputBlock(app: HTMLElement): void {
       return;
     }
 
+    if (field === 'def-flavor-name' && target instanceof HTMLInputElement) {
+      const idx = Number.parseInt(target.dataset.defIndex ?? '', 10);
+      const flavorIndex = Number.parseInt(target.dataset.flavorIndex ?? '', 10);
+      const defs = getComponentDefs();
+      const flavor = Number.isNaN(idx) || Number.isNaN(flavorIndex) ? null : defs[idx]?.flavors?.[flavorIndex];
+      if (flavor) {
+        recordHistory(`def:${idx}:flavor:${flavorIndex}:name`);
+        flavor.name = target.value;
+        state.document.meta.component_defs = defs;
+      }
+      return;
+    }
+
+    if (field === 'def-flavor-description' && (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) {
+      const idx = Number.parseInt(target.dataset.defIndex ?? '', 10);
+      const flavorIndex = Number.parseInt(target.dataset.flavorIndex ?? '', 10);
+      const defs = getComponentDefs();
+      const flavor = Number.isNaN(idx) || Number.isNaN(flavorIndex) ? null : defs[idx]?.flavors?.[flavorIndex];
+      if (flavor) {
+        recordHistory(`def:${idx}:flavor:${flavorIndex}:description`);
+        flavor.description = target.value;
+        state.document.meta.component_defs = defs;
+      }
+      return;
+    }
+
     if (field === 'section-def-name' && target instanceof HTMLInputElement) {
       const idx = Number.parseInt(target.dataset.sectionDefIndex ?? '', 10);
       const defs = getSectionDefs();
       if (!Number.isNaN(idx) && defs[idx]) {
         recordHistory(`section-def:${idx}:name`);
         defs[idx].name = target.value;
+        state.document.meta.section_defs = defs;
+      }
+      return;
+    }
+
+    if (field === 'section-def-flavor-name' && target instanceof HTMLInputElement) {
+      const idx = Number.parseInt(target.dataset.sectionDefIndex ?? '', 10);
+      const flavorIndex = Number.parseInt(target.dataset.flavorIndex ?? '', 10);
+      const defs = getSectionDefs();
+      const flavor = Number.isNaN(idx) || Number.isNaN(flavorIndex) ? null : defs[idx]?.flavors?.[flavorIndex];
+      if (flavor) {
+        recordHistory(`section-def:${idx}:flavor:${flavorIndex}:name`);
+        flavor.name = target.value;
+        state.document.meta.section_defs = defs;
+      }
+      return;
+    }
+
+    if (field === 'section-def-flavor-description' && target instanceof HTMLTextAreaElement) {
+      const idx = Number.parseInt(target.dataset.sectionDefIndex ?? '', 10);
+      const flavorIndex = Number.parseInt(target.dataset.flavorIndex ?? '', 10);
+      const defs = getSectionDefs();
+      const flavor = Number.isNaN(idx) || Number.isNaN(flavorIndex) ? null : defs[idx]?.flavors?.[flavorIndex];
+      if (flavor) {
+        recordHistory(`section-def:${idx}:flavor:${flavorIndex}:description`);
+        flavor.description = target.value;
         state.document.meta.section_defs = defs;
       }
       return;

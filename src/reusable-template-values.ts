@@ -1,6 +1,6 @@
 import type { VisualBlock, VisualSection } from './editor/types';
 import { createTextFillInMarker } from './text-fill-in';
-import type { ComponentDefinition, SectionDefinition } from './types';
+import type { ComponentDefinition, ComponentTemplateFlavor, SectionDefinition, SectionTemplateFlavor } from './types';
 
 export type ReusableTemplateVariableType = 'text' | 'block';
 
@@ -22,11 +22,26 @@ export function extractReusableTemplateVariablesFromDefinition(definition: Compo
   return extractReusableTemplateVariables(source, getReusableTemplateVariableConfig(definition));
 }
 
+export function extractReusableTemplateVariablesFromFlavor(flavor: ComponentTemplateFlavor | null | undefined): ReusableTemplateVariable[] {
+  const source = flavor?.template ?? flavor?.schema;
+  if (!source) {
+    return [];
+  }
+  return extractReusableTemplateVariables(source, getReusableTemplateVariableConfig(flavor));
+}
+
 export function extractReusableTemplateVariablesFromSectionDefinition(definition: SectionDefinition | null | undefined): ReusableTemplateVariable[] {
   if (!definition?.template) {
     return [];
   }
   return extractReusableTemplateVariables(definition.template, getReusableTemplateVariableConfig(definition));
+}
+
+export function extractReusableTemplateVariablesFromSectionFlavor(flavor: SectionTemplateFlavor | null | undefined): ReusableTemplateVariable[] {
+  if (!flavor?.template) {
+    return [];
+  }
+  return extractReusableTemplateVariables(flavor.template, getReusableTemplateVariableConfig(flavor));
 }
 
 export function extractReusableTemplateVariables(value: unknown, config: Record<string, { label?: string; generator?: string; generatorLabel?: string }> = {}): ReusableTemplateVariable[] {
@@ -131,7 +146,7 @@ export function humanizeTemplateVariableName(name: string): string {
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-function getReusableTemplateVariableConfig(definition: ComponentDefinition | SectionDefinition | null | undefined): Record<string, { label?: string; generator?: string; generatorLabel?: string }> {
+function getReusableTemplateVariableConfig(definition: ComponentDefinition | ComponentTemplateFlavor | SectionDefinition | SectionTemplateFlavor | null | undefined): Record<string, { label?: string; generator?: string; generatorLabel?: string }> {
   const config = definition?.templateVariables;
   if (!config || typeof config !== 'object' || Array.isArray(config)) {
     return {};

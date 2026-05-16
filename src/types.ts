@@ -195,12 +195,29 @@ export interface ComponentDefinition {
   templateVariables?: Record<string, { label?: string; generator?: string; generatorLabel?: string }>;
   schema?: BlockSchema;
   template?: VisualBlock;
+  flavors?: ComponentTemplateFlavor[];
+}
+
+export interface ComponentTemplateFlavor {
+  name: string;
+  description?: string;
+  templateVariables?: Record<string, { label?: string; generator?: string; generatorLabel?: string }>;
+  schema?: BlockSchema;
+  template?: VisualBlock;
 }
 
 export interface SectionDefinition {
   name: string;
   key?: string;
   repeatable?: boolean;
+  templateVariables?: Record<string, { label?: string; generator?: string; generatorLabel?: string }>;
+  template: VisualSection;
+  flavors?: SectionTemplateFlavor[];
+}
+
+export interface SectionTemplateFlavor {
+  name: string;
+  description?: string;
   templateVariables?: Record<string, { label?: string; generator?: string; generatorLabel?: string }>;
   template: VisualSection;
 }

@@ -101,9 +101,9 @@ export function hvyDocumentCommandHelp(topic = ''): string {
 
   const help: Record<string, string> = {
     '': [
-      formatCommandHelp('hvy insert INDEX COMPONENT PARENT_PATH [ID|--id ID] [--using-template JSON] [--return-order-on-creation] [--return-structure-on-creation] [--return-about-txt-on-creation]', 'Insert a blank builtin or custom component. Reusable components with template variables require exact JSON values with --using-template. Component ids are optional; use --id only when you need a stable id. INDEX is zero-based and supports Python-style negative indexes; 0 is the front, -1 is the back.'),
+      formatCommandHelp('hvy insert INDEX COMPONENT PARENT_PATH [ID|--id ID] [--using-template JSON] [--return-order-on-creation] [--return-structure-on-creation] [--return-about-txt-on-creation]', 'Insert a blank builtin or custom component. Component templates with template variables require exact JSON values with --using-template. Component ids are optional; use --id only when you need a stable id. INDEX is zero-based and supports Python-style negative indexes; 0 is the front, -1 is the back.'),
       formatCommandHelp('hvy insert INDEX section PARENT_PATH ID TITLE', 'Create a blank section.'),
-      formatCommandHelp('hvy insert INDEX section PARENT_PATH --from-template TEMPLATE_KEY [--using-template JSON]', 'Clone a reusable section template from section_defs, such as resume-certifications. Section templates with variables require exact JSON values with --using-template.'),
+      formatCommandHelp('hvy insert INDEX section PARENT_PATH --from-template TEMPLATE_KEY [--using-template JSON]', 'Clone a section template from section_defs, such as resume-certifications. Section templates with variables require exact JSON values with --using-template.'),
       formatCommandHelp('hvy insert INDEX text PARENT_PATH [ID|--id ID]', 'Create a blank text component. Edit text.txt after creation.'),
       formatCommandHelp('hvy insert INDEX table PARENT_PATH [ID|--id ID]', 'Create a blank static table component. Edit tableColumns.json and tableRows.json after creation.'),
       formatCommandHelp('hvy remove PATH [--prune-xref]', 'Remove a section or component directory. Alias: hvy delete PATH.'),
@@ -120,9 +120,9 @@ export function hvyDocumentCommandHelp(topic = ''): string {
       formatCommandHelp('Edit existing components', 'Use find to discover virtual files, cat to inspect them, and sed to update writable body/config files.'),
     ].join('\n'),
     insert: [
-      formatCommandHelp('hvy insert INDEX COMPONENT PARENT_PATH [ID|--id ID] [--using-template JSON] [--return-order-on-creation] [--return-structure-on-creation] [--return-about-txt-on-creation]', 'Insert a blank builtin or custom component to a section, component-list, grid, container, or expandable content path. Reusable components with template variables require --using-template with exact JSON keys. Edit generated body/config files after creation. Component ids are optional; use --id only when you need a stable id. INDEX is zero-based and supports Python-style negative indexes; 0 is the front, -1 is the back.'),
+      formatCommandHelp('hvy insert INDEX COMPONENT PARENT_PATH [ID|--id ID] [--using-template JSON] [--return-order-on-creation] [--return-structure-on-creation] [--return-about-txt-on-creation]', 'Insert a blank builtin or custom component to a section, component-list, grid, container, or expandable content path. Component templates with template variables require --using-template with exact JSON keys. Edit generated body/config files after creation. Component ids are optional; use --id only when you need a stable id. INDEX is zero-based and supports Python-style negative indexes; 0 is the front, -1 is the back.'),
       formatCommandHelp('hvy insert INDEX section PARENT_PATH ID TITLE', 'Add a blank section under /body or under another section.'),
-      formatCommandHelp('hvy insert INDEX section PARENT_PATH --from-template TEMPLATE_KEY [--using-template JSON]', 'Clone a reusable section template from section_defs. Templates with variables require --using-template with exact JSON keys. Non-repeatable templates can be inserted once.'),
+      formatCommandHelp('hvy insert INDEX section PARENT_PATH --from-template TEMPLATE_KEY [--using-template JSON]', 'Clone a section template from section_defs. Templates with variables require --using-template with exact JSON keys. Non-repeatable templates can be inserted once.'),
       formatCommandHelp('hvy insert INDEX text PARENT_PATH [ID|--id ID]', 'Insert a blank text block.'),
       formatCommandHelp('hvy insert INDEX table PARENT_PATH [ID|--id ID]', 'Insert a blank static table block.'),
       formatCommandHelp('hvy insert INDEX plugin SECTION_PATH ID PLUGIN_ID', 'Insert a blank raw plugin block by canonical plugin id, such as dev.hvy.form or dev.hvy.db-table.'),
@@ -140,11 +140,11 @@ export function hvyDocumentCommandHelp(topic = ''): string {
       '  hvy insert -2 table . a-table',
     ].join('\n'),
     component: [
-      formatCommandHelp('hvy insert INDEX COMPONENT PARENT_PATH [ID|--id ID] [--using-template JSON] [--return-order-on-creation] [--return-structure-on-creation] [--return-about-txt-on-creation]', 'Insert a blank builtin or custom component to a section, component-list, grid, container, or expandable content path. Reusable components with template variables require --using-template with exact JSON keys. Edit generated body/config files after creation. Component ids are optional; use --id only when you need a stable id. INDEX is zero-based and supports Python-style negative indexes; 0 is the front, -1 is the back.'),
+      formatCommandHelp('hvy insert INDEX COMPONENT PARENT_PATH [ID|--id ID] [--using-template JSON] [--return-order-on-creation] [--return-structure-on-creation] [--return-about-txt-on-creation]', 'Insert a blank builtin or custom component to a section, component-list, grid, container, or expandable content path. Component templates with template variables require --using-template with exact JSON keys. Edit generated body/config files after creation. Component ids are optional; use --id only when you need a stable id. INDEX is zero-based and supports Python-style negative indexes; 0 is the front, -1 is the back.'),
     ].join('\n'),
     section: [
       formatCommandHelp('hvy insert INDEX section PARENT_PATH ID TITLE', 'Add a blank section under /body or under another section. INDEX is zero-based and supports Python-style negative indexes; 0 is the front, -1 is the back.'),
-      formatCommandHelp('hvy insert INDEX section PARENT_PATH --from-template TEMPLATE_KEY [--using-template JSON]', 'Clone a reusable section template from section_defs. Lookup prefers exact key, then exact name. Templates with variables require exact JSON values. Non-repeatable templates can be inserted once.'),
+      formatCommandHelp('hvy insert INDEX section PARENT_PATH --from-template TEMPLATE_KEY [--using-template JSON]', 'Clone a section template from section_defs. Lookup prefers exact key, then exact name. Templates with variables require exact JSON values. Non-repeatable templates can be inserted once.'),
     ].join('\n'),
     text: formatCommandHelp('hvy insert INDEX text PARENT_PATH [ID|--id ID]', 'Insert a blank text block. Edit text.txt after creation. INDEX is zero-based and supports Python-style negative indexes; 0 is the front, -1 is the back.'),
     table: formatCommandHelp('hvy insert INDEX table PARENT_PATH [ID|--id ID]', 'Insert a blank static table block. Edit tableColumns.json and tableRows.json after creation. INDEX is zero-based and supports Python-style negative indexes; 0 is the front, -1 is the back.'),
@@ -681,7 +681,7 @@ function formatCreatedCustomComponentAboutDisplay(
   return [
     '### CREATED CUSTOM COMPONENT ###',
     `Successfully created custom component ${componentName}.`,
-    `Use about-${componentName}.txt to inspect this reusable component guidance again.`,
+    `Use about-${componentName}.txt to inspect this component template guidance again.`,
     '### END CREATED CUSTOM COMPONENT ###',
     '### ABOUT CUSTOM COMPONENT ###',
     aboutFile.read().trimEnd(),

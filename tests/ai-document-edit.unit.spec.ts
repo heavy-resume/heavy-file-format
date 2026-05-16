@@ -797,6 +797,111 @@ component_defs:
   expect(onMutation).toHaveBeenCalledWith('ai-edit:section');
 });
 
+test('importTextIntoDocument forced template mode lets JSON pick component template flavors', async () => {
+  requestProxyCompletionMock.mockResolvedValueOnce('{"targets":[]}');
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"values":{"section_title":"Awards","awards_list":[{"_flavor":"detailed","award":"Best Tool","issuer":"Engineering Guild","details":"Won for developer tooling."}]}}'
+  );
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+section_defs:
+  - name: Award Section
+    templateVariables:
+      section_title:
+        label: Section title
+    template:
+      title: "{% section_title %}"
+      blocks:
+        - text: "# {% section_title %}"
+          schema:
+            component: text
+        - text: ""
+          schema:
+            id: awards-list
+            component: component-list
+            componentListComponent: award-record
+            componentListItemLabel: award
+component_defs:
+  - name: award-record
+    baseType: expandable
+    templateVariables:
+      award:
+        label: Award
+      issuer:
+        label: Issuer
+      details:
+        label: Details
+    schema:
+      component: award-record
+      tags: award
+      expandableStubBlocks:
+        children:
+          - text: "### {% award %}"
+            schema:
+              component: text
+      expandableContentBlocks:
+        children:
+          - text: "{% issuer %}"
+            schema:
+              component: text
+    flavors:
+      - name: compact
+        description: Use for awards with only a title and issuer.
+        schema:
+          component: award-record
+          tags: award
+          expandableStubBlocks:
+            children:
+              - text: "### {% award %}"
+                schema:
+                  component: text
+          expandableContentBlocks:
+            children:
+              - text: "{% issuer %}"
+                schema:
+                  component: text
+      - name: detailed
+        description: Use when the source has narrative award details.
+        schema:
+          component: award-record
+          tags: award
+          expandableStubBlocks:
+            children:
+              - text: "### {% award %}"
+                schema:
+                  component: text
+          expandableContentBlocks:
+            children:
+              - text: "{% issuer %}"
+                schema:
+                  component: text
+              - text: "{% details | block %}"
+                schema:
+                  component: text
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+`, '.hvy');
+
+  const result = await importTextIntoDocument(document, {
+    sourceName: 'resume.txt',
+    sourceText: 'Best Tool - Engineering Guild. Won for developer tooling.',
+    steps: [{ section: 'Awards', templateName: 'Award Section', importMode: 'template' }],
+    llm: {
+      settings: { provider: 'openai', model: 'gpt-5-mini' },
+      client: { complete: vi.fn() },
+    },
+  });
+  const serialized = serializeDocument(document);
+
+  expect(result.status).toBe('complete');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('=== BEGIN TEMPLATE FLAVORS ===');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('detailed: Use when the source has narrative award details.');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.responseInstructions).toContain('_flavor');
+  expect(serialized).toContain('Won for developer tooling.');
+});
+
 test('importTextIntoDocument rejects invalid forced template JSON without raw HVY fallback', async () => {
   requestProxyCompletionMock.mockResolvedValueOnce('{"targets":[]}');
   requestProxyCompletionMock.mockResolvedValueOnce('{"values":{"section_title":"Awards","extra":"bad"}}');
@@ -1049,7 +1154,7 @@ component_defs:
 
   expect(result.status).toBe('complete');
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('=== BEGIN MATCHED REUSABLE DEFINITIONS ===');
-  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('Reusable component examples referenced by the matched section/template');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('Component template examples referenced by the matched section/template');
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('Component: tool-row');
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('<!--hvy:tool-row {}-->');
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('TOOL_NAME');

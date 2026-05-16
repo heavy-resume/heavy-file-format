@@ -87,7 +87,7 @@ Everything is contained as either a section or component, and a section is essen
 
 A section is considered an atomic thought if it has a defined ID. So for example, a section may exist for "Projects" and then each individual project can be a subsection or even a component within a subsection with its own ID.
 
-Reusable components are defined as yaml in the document metadata.
+Component templates are defined as yaml in the document metadata.
 
 ### 4.1 Atomic Section
 
@@ -124,7 +124,7 @@ Presentation keys in document metadata include:
 
 AI-facing document metadata includes:
 - `ai-context`: optional string with general document organization and preservation guidance for AI-assisted authoring tools.
-- `ai-import-guidance`: optional string with import-specific guidance for mapping source facts to existing body sections, reusable section templates, reusable component records, and cross references. Importers MAY include this guidance in planning and execution prompts; readers that do not use AI SHOULD preserve and ignore it.
+- `ai-import-guidance`: optional string with import-specific guidance for mapping source facts to existing body sections, section templates, component template records, and cross references. Importers MAY include this guidance in planning and execution prompts; readers that do not use AI SHOULD preserve and ignore it.
 
 Responsive rendering SHOULD be based on the rendered document container's inline size, not only the browser viewport. Renderers that support responsive behavior SHOULD establish a named CSS query container around the document surface, for example:
 
@@ -255,7 +255,7 @@ Inline section `css` follows the same declaration-only rule as block `css`. Use 
 `contained` is an optional boolean. When `true` (default), render the section as the normal bordered card/container and allow collapse/expand UI. When `false`, render the section edge-to-edge without the section border/background wrapper and without the section expander/collapser.
 `hideIfUnmodified` is an optional boolean for template-authored scaffold sections. When `true`, viewer-oriented renderers MUST hide the entire section subtree, including sidebar/navigation entries, search results, and reader-view targets. Editor surfaces and document AI editing mode MUST still render the section so users and agents can change it. Authoring tools SHOULD remove this flag from the section and any flagged ancestor section when structured editing changes that section subtree.
 `location` is an optional string. Use it to route a section to a named layout zone in the viewer. Defined values are `"main"` (default) and `"sidebar"`. Unknown values SHOULD be treated as `"main"`.
-`templateKey` is optional authoring metadata identifying the reusable section definition that created the section. Authoring tools SHOULD use it to decide whether non-repeatable reusable section definitions have already been used.
+`templateKey` is optional authoring metadata identifying the section template definition that created the section. Authoring tools SHOULD use it to decide whether non-repeatable section template definitions have already been used.
 
 ### 5.7 Block directives
 
@@ -516,9 +516,9 @@ Serialized block objects SHOULD contain document data only. Editor-only UI state
 
 Preserve and round-trip these fields. When emitting new documents, prefer `hvy:expandable:stub` and `hvy:expandable:content` inline directives over `expandableStubBlocks`/`expandableContentBlocks`; the container object form is used in `component_defs` schemas where inline directives are not applicable.
 
-### 5.9 Reusable component definitions
+### 5.9 Component template definitions
 
-Document metadata optionally includes `component_defs`, an array of reusable component definitions for authoring tools.
+Document metadata optionally includes `component_defs`, an array of component template definitions for authoring tools.
 
 Example:
 
@@ -536,13 +536,13 @@ component_defs:
 
 Notes:
 - `schema` is optional.
-- When present, use it as the default schema/template when creating a block with that reusable component.
+- When present, use it as the default schema/template when creating a block with that component template.
 - The `component` field MUST NOT appear inside `schema`; the component type is already captured by `baseType`.
 - A component definition name can be used anywhere a block `component` value is accepted, including block directives, nested block schemas, and `componentListComponent`.
 - When a nested block array (e.g. `containerBlocks`, `expandableContentBlocks`) places a custom component, the shorthand form `{ component: name }` SHOULD be used instead of the full `{ schema: { component: name, ... } }` form. The component's template provides all other properties at instantiation time.
 - Implementations SHOULD render custom components according to `baseType` and preserve the custom component name for editing and round-tripping.
 
-Reusable component templates MAY include value tokens in any string field. Tokens use Markdown-safe text and are replaced only when an authoring tool creates a component instance from the reusable definition:
+Component templates MAY include value tokens in any string field. Tokens use Markdown-safe text and are replaced only when an authoring tool creates a component instance from the component template definition:
 
 ```text
 {% organization %}
@@ -558,13 +558,21 @@ Template value notes:
 - Repeated variables use the same value; conflicting types for the same variable are invalid.
 - Blank values are allowed. Replacing a token with a blank value does not remove or change separate schema fields such as `placeholder`.
 - Authoring tools that accept explicit template values SHOULD require the provided keys to exactly match the expected variable names.
-- Reusable component definitions and reusable section definitions MAY include `templateVariables`, keyed by variable name. Each variable config MAY include `label`, a human-readable field label for authoring UIs. When `label` is omitted, authoring tools SHOULD derive one by converting snake_case or kebab-case separators to spaces and title-casing the result.
+- Component template definitions and section template definitions MAY include `templateVariables`, keyed by variable name. Each variable config MAY include `label`, a human-readable field label for authoring UIs. When `label` is omitted, authoring tools SHOULD derive one by converting snake_case or kebab-case separators to spaces and title-casing the result.
 - A template variable config MAY include `generator`, a plugin-qualified output generator key such as `dev.hvy.resume.skill-description`. Authoring tools MAY expose this as a field-level generation action. Generator requests MUST include only template variables that the author has provided with non-empty values; missing or empty variables MUST be omitted. If the installed generator declares required variables, authoring tools SHOULD disable the action until all required variables are non-empty.
 - A template variable config MAY include `generatorLabel`, overriding the visible action label for that variable. If omitted, authoring tools SHOULD use the installed generator's label or a generic label such as `Generate`.
 
-### 5.10 Reusable section definitions
+Component template definitions MAY include `flavors`, an array of alternate schemas for the same component template name. Each flavor has:
+- `name`: stable flavor identifier.
+- `description`: optional authoring and AI guidance describing when to use the flavor.
+- `schema`: optional schema with the same shape and rules as the component template's main `schema`.
+- `templateVariables`: optional variable labels/generators for tokens in that flavor. If omitted, authoring tools MAY reuse the parent component template's variable config.
 
-Document metadata optionally includes `section_defs`, an array of reusable section definitions for authoring tools.
+When a component-list uses a component template with flavors, AI import tools SHOULD choose the best flavor before filling template values for each generated list item. If no flavors are defined, authoring tools use the main component template as usual.
+
+### 5.10 Section template definitions
+
+Document metadata optionally includes `section_defs`, an array of section template definitions for authoring tools.
 
 Example:
 
@@ -595,12 +603,13 @@ section_defs:
 Notes:
 - `key` is an optional stable template identity. When omitted, `name` is the template identity.
 - `repeatable` is optional and defaults to `false`. Authoring tools SHOULD hide a non-repeatable section template when the document already contains a section whose `templateKey` matches the definition's `key` or `name`.
-- Sections created from reusable section definitions SHOULD set `templateKey` to the definition's `key` or `name`. Manually created blank sections SHOULD omit `templateKey`.
+- Sections created from section template definitions SHOULD set `templateKey` to the definition's `key` or `name`. Manually created blank sections SHOULD omit `templateKey`.
 - `template` stores a full section subtree, including blocks and nested child sections.
 - `templateVariables` follows the rules in section 5.9 and applies to tokens anywhere in the section template subtree, including section fields, block text, and nested block schema fields.
 - Clone a `section_defs[*].template` when inserting a new section or subsection.
-- Reusable section templates preserve section-level presentation fields such as `contained`, `expanded`, `highlight`, `priority`, `css`, `location`, and `hideIfUnmodified`.
-- Implementations SHOULD assign fresh section keys, block IDs, and custom IDs when instantiating a reusable section.
+- Section templates preserve section-level presentation fields such as `contained`, `expanded`, `highlight`, `priority`, `css`, `location`, and `hideIfUnmodified`.
+- Section template definitions MAY include `flavors`, an array of alternate section templates. Each flavor has `name`, optional `description`, optional `templateVariables`, and `template`. AI import tools SHOULD choose the best section flavor before filling template values. If no flavors are defined, authoring tools use the main section template as usual.
+- Implementations SHOULD assign fresh section keys, block IDs, and custom IDs when instantiating a section template.
 
 ### 5.11 Indentation
 

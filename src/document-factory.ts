@@ -200,6 +200,20 @@ export function normalizeReusableSectionDefinitions(meta: JsonObject): void {
         key: typeof raw.key === 'string' ? raw.key : undefined,
         repeatable: raw.repeatable === true,
         template: parseVisualSection(raw.template, 1, new WeakSet<object>(), meta),
+        flavors: Array.isArray(raw.flavors)
+          ? raw.flavors
+            .filter((flavor) => flavor && typeof flavor === 'object')
+            .map((flavor) => {
+              const rawFlavor = flavor as JsonObject;
+              return {
+                ...rawFlavor,
+                name: typeof rawFlavor.name === 'string' ? rawFlavor.name : '',
+                description: typeof rawFlavor.description === 'string' ? rawFlavor.description : undefined,
+                template: parseVisualSection(rawFlavor.template, 1, new WeakSet<object>(), meta),
+              };
+            })
+            .filter((flavor) => flavor.name.trim().length > 0)
+          : undefined,
       };
     })
     .filter((item) => item.name.trim().length > 0);

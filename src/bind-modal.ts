@@ -63,6 +63,20 @@ export function bindModal(app: HTMLElement): void {
       return;
     }
 
+    const addReusableFlavorBtn = target.closest<HTMLElement>('[data-modal-action="add-reusable-flavor"]');
+    if (addReusableFlavorBtn) {
+      saveReusableFromModal(
+        app,
+        {
+          findBlockByIds,
+          recordHistory,
+          closeModal,
+        },
+        { mode: 'add-flavor' }
+      );
+      return;
+    }
+
     const insertReusableTemplateBtn = target.closest<HTMLElement>('[data-modal-action="insert-reusable-template"]');
     if (insertReusableTemplateBtn && state.reusableTemplateModal) {
       insertReusableTemplateFromModal(modalRoot);
@@ -457,7 +471,7 @@ function insertReusableTemplateFromModal(modalRoot: HTMLDivElement): void {
     newBlock = createBlockFromReusableTemplateValues(modal.component, values);
     applyXrefTargetDefaults(newBlock);
   } catch (error) {
-    console.error('[hvy:template] failed to insert reusable component from template modal', error);
+    console.error('[hvy:template] failed to insert component template from template modal', error);
     return;
   }
 

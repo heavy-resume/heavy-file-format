@@ -15,7 +15,7 @@ beforeEach(() => {
   });
 });
 
-test('editing one reusable component instance does not rewrite sibling instances', () => {
+test('editing one component template instance does not rewrite sibling instances', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
 component_defs:

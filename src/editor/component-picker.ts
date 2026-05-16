@@ -157,14 +157,14 @@ function getPickerGroups(componentDefs: ComponentDefinition[]): PickerGroup[] {
     {
       id: 'custom',
       label: 'Custom',
-      description: 'reusable components',
+      description: 'component templates',
       position: 'bottom',
       direct: false,
       items: [
         ...componentDefs
           .map((def) => def.name.trim())
           .filter((name) => name.length > 0)
-          .map((name) => ({ value: name, label: name, description: 'reusable components' })),
+          .map((name) => ({ value: name, label: name, description: 'component templates' })),
       ],
     },
     {

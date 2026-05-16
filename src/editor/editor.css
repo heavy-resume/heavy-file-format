@@ -1514,6 +1514,30 @@
   gap: 0.4rem;
 }
 
+.template-meta-display {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.template-meta-display > span {
+  color: var(--hvy-muted);
+  font-size: 0.86rem;
+}
+
+.template-meta-display > strong {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  border: 1px solid var(--hvy-border);
+  border-radius: 999px;
+  padding: 0.22rem 0.55rem;
+  background: color-mix(in srgb, var(--hvy-surface) 88%, var(--hvy-accent) 12%);
+  color: var(--hvy-text);
+  font-size: 0.9rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
 .text-line-style-row {
   background: color-mix(in srgb, var(--hvy-surface) 82%, transparent);
 }

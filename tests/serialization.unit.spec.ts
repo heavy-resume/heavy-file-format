@@ -647,7 +647,7 @@ hvy_version: 0.1
   expect(output).toContain('<!--hvy:component-list {"componentListComponent":"skill-record","componentListItemLabel":"skill"}-->');
 });
 
-test('reusable component definitions preserve nested builtin component types', () => {
+test('component template definitions preserve nested builtin component types', () => {
   const input = `---
 hvy_version: 0.1
 component_defs:
@@ -684,7 +684,7 @@ component_defs:
   expect(output).toContain('tableColumns:\n                - YEAR\n                - ORGANIZATION\n                - TITLE');
 });
 
-test('reusable component definitions preserve template value tokens in schema strings', () => {
+test('component template definitions preserve template value tokens in schema strings', () => {
   const input = `---
 hvy_version: 0.1
 component_defs:
@@ -714,6 +714,45 @@ component_defs:
   expect(output).toContain('- "{% years %}"');
   expect(output).toContain('- "{% organization | text %}"');
   expect(output).toContain('- "{% role %}"');
+});
+
+test('component template definitions preserve flavor schemas and descriptions', () => {
+  const input = `---
+hvy_version: 0.1
+component_defs:
+  - name: award-record
+    baseType: expandable
+    schema:
+      component: award-record
+      expandableStubBlocks:
+        children:
+          - text: "{% award %}"
+            schema:
+              component: text
+    flavors:
+      - name: detailed
+        description: Use when the source has award details.
+        schema:
+          component: award-record
+          expandableContentBlocks:
+            children:
+              - text: "{% details | block %}"
+                schema:
+                  component: text
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+`;
+
+  const document = deserializeDocument(input, '.hvy');
+  const output = serializeWithState(document);
+
+  expect(output).toContain('flavors:');
+  expect(output).toContain('name: detailed');
+  expect(output).toContain('description: Use when the source has award details.');
+  expect(output).not.toContain('component: award-record');
+  expect(output).toContain('text: "{% details | block %}"');
 });
 
 test('serializes uncontained section metadata without changing section shape on round-trip', () => {

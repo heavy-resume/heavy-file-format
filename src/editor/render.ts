@@ -73,10 +73,19 @@ interface ComponentDef {
   tags?: string;
   description?: string;
   schema?: BlockSchema;
+  flavors?: Array<{
+    name: string;
+    description?: string;
+    schema?: BlockSchema;
+  }>;
 }
 
 interface SectionDef {
   name: string;
+  flavors?: Array<{
+    name: string;
+    description?: string;
+  }>;
 }
 
 interface ComponentListDisplayContext {
@@ -294,7 +303,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           </div>
           <div class="editor-actions">
             ${state.showAdvancedEditor
-        ? `<button type="button" class="ghost" data-action="open-save-section-def" data-section-key="${deps.escapeAttr(section.key)}">Reusable</button>
+        ? `<button type="button" class="ghost" data-action="open-save-section-def" data-section-key="${deps.escapeAttr(section.key)}">Make Template</button>
                    <button type="button" class="ghost" data-action="focus-modal" data-section-key="${deps.escapeAttr(section.key)}">Meta</button>`
         : ''
       }
@@ -455,7 +464,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       ? `<div class="editor-block-context-actions" aria-label="Component options">
           <button type="button" class="ghost" data-action="open-save-component-def" data-section-key="${deps.escapeAttr(
         sectionKey
-      )}" data-block-id="${deps.escapeAttr(block.id)}">Reusable</button>
+      )}" data-block-id="${deps.escapeAttr(block.id)}">Make Template</button>
           <button type="button" class="ghost" data-action="open-component-meta" data-section-key="${deps.escapeAttr(
         sectionKey
       )}" data-block-id="${deps.escapeAttr(block.id)}">Meta</button>
@@ -1020,7 +1029,6 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const theme = deps.getThemeConfig();
     const colorCount = Object.keys(theme.colors).length;
     const textLineStyles = getTextLineStylesFromMeta(state.documentMeta);
-    const tableBaseTypeOption = areTablesEnabled() || defs.some((def) => def.baseType === 'table');
     const descriptionPopulate = state.descriptionPopulate ?? { isRunning: false, status: null, completed: 0, total: 0, current: '', skippedLeaves: 0, lastGenerated: '' };
     return `
       <section class="meta-panel">
@@ -1052,7 +1060,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           <textarea
             rows="5"
             data-field="meta-ai-import-guidance"
-            placeholder="Tell import how source facts should map to sections, templates, and reusable records."
+            placeholder="Tell import how source facts should map to sections, templates, and template records."
           >${deps.escapeHtml(String(state.documentMeta['ai-import-guidance'] ?? ''))}</textarea>
         </label>
         <div class="editor-grid">
@@ -1090,33 +1098,23 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           ${renderTextLineStyleEditorRows(textLineStyles)}
         </div>
         <div class="meta-panel-head">
-          <strong>Component Definitions</strong>
-          <button type="button" class="ghost" data-action="add-component-def">Add Component</button>
+          <strong>Component Templates</strong>
+          <button type="button" class="ghost" data-action="add-component-def">Add Template</button>
         </div>
         <div class="component-defs">
           ${defs
         .map(
-          (def, index) => `<article class="component-def">
+          (def, index) => {
+            const flavors = Array.isArray(def.flavors) ? def.flavors : [];
+            return `<article class="component-def">
                 <label>
                   <span>Name</span>
                   <input data-field="def-name" data-def-index="${index}" value="${deps.escapeAttr(def.name)}" />
                 </label>
-                <label>
+                <div class="template-meta-display">
                   <span>Base Type</span>
-                  <select data-field="def-base" data-def-index="${index}">
-                    ${deps.renderOption('text', def.baseType)}
-                    ${deps.renderOption('button', def.baseType)}
-                    ${deps.renderOption('quote', def.baseType)}
-                    ${deps.renderOption('code', def.baseType)}
-                    ${deps.renderOption('expandable', def.baseType)}
-                    ${tableBaseTypeOption ? deps.renderOption('table', def.baseType) : ''}
-                    ${deps.renderOption('container', def.baseType)}
-                    ${deps.renderOption('component-list', def.baseType)}
-                    ${deps.renderOption('grid', def.baseType)}
-                    ${deps.renderOption('plugin', def.baseType)}
-                    ${deps.renderOption('xref-card', def.baseType)}
-                  </select>
-                </label>
+                  <strong>${deps.escapeHtml(def.baseType)}</strong>
+                </div>
                 <label>
                   <span>Default Tags</span>
                   ${renderTagEditor(
@@ -1133,26 +1131,64 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
                   <span>Description</span>
                   <textarea rows="3" data-field="def-description" data-def-index="${index}">${deps.escapeHtml(def.description ?? '')}</textarea>
                 </label>
+                <div class="meta-panel-head">
+                  <strong>Flavors</strong>
+                </div>
+                ${flavors.length === 0
+                  ? '<div class="muted">No flavors. Import uses the main component template.</div>'
+                  : `${flavors.length === 1 ? '<div class="muted">One saved flavor. Import uses flavor choices after there are at least two options.</div>' : ''}
+                  ${flavors.map((flavor, flavorIndex) => `<div class="component-def-flavor">
+                    <label>
+                      <span>Flavor Name</span>
+                      <input data-field="def-flavor-name" data-def-index="${index}" data-flavor-index="${flavorIndex}" value="${deps.escapeAttr(flavor.name)}" />
+                    </label>
+                    <label>
+                      <span>Flavor Description</span>
+                      <textarea rows="2" data-field="def-flavor-description" data-def-index="${index}" data-flavor-index="${flavorIndex}">${deps.escapeHtml(flavor.description ?? '')}</textarea>
+                    </label>
+                    <button type="button" class="danger" data-action="remove-component-def-flavor" data-def-index="${index}" data-flavor-index="${flavorIndex}">Remove Flavor</button>
+                  </div>`).join('')}`}
                 <button type="button" class="danger" data-action="remove-component-def" data-def-index="${index}">Remove</button>
-              </article>`
+              </article>`;
+          }
         )
         .join('')}
         </div>
         <div class="meta-panel-head">
-          <strong>Reusable Sections</strong>
+          <strong>Section Templates</strong>
         </div>
         <div class="component-defs">
           ${sectionDefs.length === 0
-        ? '<div class="muted">Save a section as reusable from its header to make it available here and in the add-section controls.</div>'
+        ? '<div class="muted">Save a section as a template from its header to make it available here and in the add-section controls.</div>'
         : sectionDefs
           .map(
-            (def, index) => `<article class="component-def">
+            (def, index) => {
+              const flavors = Array.isArray(def.flavors) ? def.flavors : [];
+              return `<article class="component-def">
                       <label>
                         <span>Name</span>
                         <input data-field="section-def-name" data-section-def-index="${index}" value="${deps.escapeAttr(def.name)}" />
                       </label>
+                      <div class="meta-panel-head">
+                        <strong>Flavors</strong>
+                      </div>
+                      ${flavors.length === 0
+                  ? '<div class="muted">No flavors. Import uses the main section template.</div>'
+                  : `${flavors.length === 1 ? '<div class="muted">One saved flavor. Import uses flavor choices after there are at least two options.</div>' : ''}
+                      ${flavors.map((flavor, flavorIndex) => `<div class="component-def-flavor">
+                          <label>
+                            <span>Flavor Name</span>
+                            <input data-field="section-def-flavor-name" data-section-def-index="${index}" data-flavor-index="${flavorIndex}" value="${deps.escapeAttr(flavor.name)}" />
+                          </label>
+                          <label>
+                            <span>Flavor Description</span>
+                            <textarea rows="2" data-field="section-def-flavor-description" data-section-def-index="${index}" data-flavor-index="${flavorIndex}">${deps.escapeHtml(flavor.description ?? '')}</textarea>
+                          </label>
+                          <button type="button" class="danger" data-action="remove-section-def-flavor" data-section-def-index="${index}" data-flavor-index="${flavorIndex}">Remove Flavor</button>
+                        </div>`).join('')}`}
                       <button type="button" class="danger" data-action="remove-section-def" data-section-def-index="${index}">Remove</button>
-                    </article>`
+                    </article>`;
+            }
           )
           .join('')
       }

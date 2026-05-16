@@ -654,6 +654,120 @@ hvy_version: 0.1
   expect(result.serialized).toContain('#! Hook Updated Import');
 });
 
+test('embedded importFromText can force template JSON mode with mocked client', async ({ page }) => {
+  await page.goto('/');
+
+  const result = await page.evaluate(async () => {
+    document.body.innerHTML = '<div id="mount"></div>';
+    const modulePath = '/src/embed.ts';
+    const { deserializeDocumentBytes, mountHvy, serializeDocument } = await import(/* @vite-ignore */ modulePath);
+    const source = `---
+hvy_version: 0.1
+section_defs:
+  - name: Award Section
+    templateVariables:
+      section_title:
+        label: Section title
+    template:
+      title: "{% section_title %}"
+      blocks:
+        - text: "# {% section_title %}"
+          schema:
+            component: text
+        - text: ""
+          schema:
+            id: awards-list
+            component: component-list
+            componentListComponent: award-record
+            componentListItemLabel: award
+component_defs:
+  - name: award-record
+    baseType: expandable
+    templateVariables:
+      award:
+        label: Award
+      details:
+        label: Details
+    schema:
+      component: award-record
+      expandableStubBlocks:
+        children:
+          - text: "### {% award %}"
+            schema:
+              component: text
+      expandableContentBlocks:
+        children:
+          - text: "{% details | block %}"
+            schema:
+              component: text
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {}-->
+ Existing summary
+`;
+    const root = document.querySelector<HTMLElement>('#mount');
+    if (!root) {
+      throw new Error('Mount root missing.');
+    }
+    const responses = [
+      '{"steps":[{"section":"Awards","templateName":"Award Section"}]}',
+      '{"targets":[]}',
+      '{"values":{"section_title":"Awards","awards_list":[{"award":"Best Tool","details":"Won for developer tooling."}]}}',
+    ];
+    const calls: unknown[] = [];
+    const mount = mountHvy({
+      root,
+      document: deserializeDocumentBytes(new TextEncoder().encode(source), '.hvy'),
+      mode: 'editor',
+    });
+    const llm = {
+      settings: { provider: 'openai' as const, model: 'mock-import-model' },
+      client: {
+        async complete(request: unknown) {
+          calls.push(request);
+          const output = responses.shift();
+          if (!output) {
+            throw new Error('Unexpected import LLM call.');
+          }
+          return { output };
+        },
+      },
+    };
+    const plan = await mount.buildImportPlan({
+      sourceName: 'resume.txt',
+      sourceText: 'Awards\\nBest Tool',
+      llm,
+    });
+    if (plan.status !== 'ready' || !plan.steps?.[0]?.templateStructure) {
+      throw new Error('Expected forced-template descriptor.');
+    }
+    const importResult = await mount.importFromText({
+      sourceName: 'resume.txt',
+      sourceText: 'Awards\\nBest Tool',
+      steps: [{ ...plan.steps[0], importMode: 'template', templateStructureId: plan.steps[0].templateStructure.id }],
+      llm,
+    });
+    return {
+      plan,
+      importResult,
+      calls: calls.length,
+      serialized: serializeDocument(mount.getDocument()),
+      text: root.textContent,
+    };
+  });
+
+  expect(result.plan.steps?.[0]?.templateStructure?.id).toBe('definition:award-section');
+  expect(result.importResult.status).toBe('complete');
+  expect(result.calls).toBe(3);
+  expect(result.serialized).toContain('# Awards');
+  expect(result.serialized).toContain('Best Tool');
+  expect(result.serialized).toContain('Won for developer tooling.');
+  expect(result.text).toContain('Best Tool');
+});
+
 test('new section component picker opens on the first click', async ({ page }) => {
   await page.goto('/');
 

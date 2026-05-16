@@ -1,3 +1,8 @@
+Effective style defaults:
+- section default css: "margin: 0.5rem 0;"
+- implicit block default css: "margin: 0.5rem 0;" (applied to component instances when unchanged; omitted from serialized HVY)
+- component default css: (none)
+
 <!-- section id="header" title="Info" location="main" -->
 # Info
   # Avery Hart <!-- text id="C1" -->

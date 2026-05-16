@@ -467,6 +467,132 @@ hvy_version: 0.1
   });
 });
 
+test('buildImportPlanForDocument exposes forced template structure metadata for usable templates', async () => {
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"steps":[{"section":"Awards","templateName":"Award Section"},{"section":"Notes","templateName":"Notes"}]}'
+  );
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+section_defs:
+  - name: Award Section
+    templateVariables:
+      section_title:
+        label: Section title
+    template:
+      title: "{% section_title %}"
+      blocks:
+        - text: "# {% section_title %}"
+          schema:
+            component: text
+        - text: ""
+          schema:
+            id: awards-list
+            component: component-list
+            componentListComponent: award-record
+            componentListItemLabel: award
+  - name: Notes
+    template:
+      title: Notes
+      blocks:
+        - text: "# Notes"
+          schema:
+            component: text
+component_defs:
+  - name: award-record
+    baseType: expandable
+    templateVariables:
+      award:
+        label: Award
+      issuer:
+        label: Issuer
+      details:
+        label: Details
+    schema:
+      component: award-record
+      tags: award
+      xrefTitle: "{% award %}"
+      xrefDetail: "{% issuer %}"
+      expandableStubBlocks:
+        children:
+          - text: "### {% award %}"
+            schema:
+              component: text
+      expandableContentBlocks:
+        children:
+          - text: "{% issuer %}"
+            schema:
+              component: text
+          - text: "{% details | block %}"
+            schema:
+              component: text
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+`, '.hvy');
+
+  const result = await buildImportPlanForDocument(document, {
+    sourceName: 'resume.txt',
+    sourceText: 'Awards\nBest Internal Tool',
+    llm: {
+      settings: { provider: 'openai', model: 'gpt-5-mini' },
+      client: { complete: vi.fn() },
+    },
+  });
+
+  expect(result.status).toBe('ready');
+  expect(result.steps?.[0]?.templateStructure).toEqual({
+    id: 'definition:award-section',
+    label: 'Award Section template',
+    target: {
+      kind: 'definition',
+      id: undefined,
+      title: 'Award Section',
+      name: 'Award Section',
+    },
+    jsonSchema: {
+      type: 'object',
+      properties: {
+        section_title: {
+          type: 'string',
+          title: 'Section title',
+          description: 'Single-line value.',
+        },
+        awards_list: {
+          type: 'array',
+          title: 'award',
+          description: 'Repeatable award items.',
+          items: {
+            type: 'object',
+            properties: {
+              award: {
+                type: 'string',
+                title: 'Award',
+                description: 'Single-line value.',
+              },
+              issuer: {
+                type: 'string',
+                title: 'Issuer',
+                description: 'Single-line value.',
+              },
+              details: {
+                type: 'string',
+                title: 'Details',
+                description: 'May contain multiple lines.',
+              },
+            },
+            required: ['award', 'issuer', 'details'],
+            additionalProperties: false,
+          },
+        },
+      },
+      required: ['section_title', 'awards_list'],
+      additionalProperties: false,
+    },
+  });
+  expect(result.steps?.[1]?.templateStructure).toBeUndefined();
+});
+
 test('importTextIntoDocument executes approved steps with mocked LLM calls', async () => {
   requestProxyCompletionMock.mockResolvedValueOnce(
     '{"targets":[{"id":"summary","title":"Summary","kind":"section","description":"Summary is the imported summary section."}]}'
@@ -572,6 +698,240 @@ text_line_styles:
     phase: 'thinking',
     message: 'Applying section 1.',
   });
+});
+
+test('importTextIntoDocument forced template mode fills JSON and instantiates nested list records', async () => {
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"targets":[{"id":"award-best-tool","title":"Best Tool","kind":"award","description":"Best Tool is an imported award."}]}'
+  );
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"values":{"section_title":"Awards","awards_list":[{"award":"Best Tool","issuer":"Engineering Guild","details":"Won for developer tooling."},{"award":"Quality Prize","issuer":"QA Team","details":"Recognized for reliable releases."}]}}'
+  );
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+section_defs:
+  - name: Award Section
+    templateVariables:
+      section_title:
+        label: Section title
+    template:
+      title: "{% section_title %}"
+      blocks:
+        - text: "# {% section_title %}"
+          schema:
+            component: text
+        - text: ""
+          schema:
+            id: awards-list
+            component: component-list
+            componentListComponent: award-record
+            componentListItemLabel: award
+component_defs:
+  - name: award-record
+    baseType: expandable
+    templateVariables:
+      award:
+        label: Award
+      issuer:
+        label: Issuer
+      details:
+        label: Details
+    schema:
+      component: award-record
+      tags: award
+      xrefTitle: "{% award %}"
+      xrefDetail: "{% issuer %}"
+      expandableAlwaysShowStub: true
+      expandableStubBlocks:
+        children:
+          - text: "### {% award %}"
+            schema:
+              component: text
+      expandableContentBlocks:
+        children:
+          - text: "{% issuer %}"
+            schema:
+              component: text
+          - text: "{% details | block %}"
+            schema:
+              component: text
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {}-->
+ Existing summary
+`, '.hvy');
+  const onMutation = vi.fn();
+
+  const result = await importTextIntoDocument(document, {
+    sourceName: 'resume.txt',
+    sourceText: 'Awards\nBest Tool - Engineering Guild\nQuality Prize - QA Team',
+    steps: [{ section: 'Awards', templateName: 'Award Section', importMode: 'template', templateStructureId: 'definition:award-section' }],
+    llm: {
+      settings: { provider: 'openai', model: 'gpt-5-mini' },
+      client: { complete: vi.fn() },
+    },
+    onMutation,
+  });
+  const serialized = serializeDocument(document);
+
+  expect(result.status).toBe('complete');
+  expect(requestProxyCompletionMock).toHaveBeenCalledTimes(2);
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.debugLabel).toBe('ai-import-template-values:1');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages[0]?.content).toContain('Do not generate HVY');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('=== BEGIN TEMPLATE JSON SCHEMA ===');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.responseInstructions).toContain('"values"');
+  expect(serialized).toContain('# Awards');
+  expect(serialized).toContain('<!--hvy:award-record');
+  expect(serialized).toContain('Best Tool');
+  expect(serialized).toContain('Engineering Guild');
+  expect(serialized).toContain('Quality Prize');
+  expect(serialized).toContain('Recognized for reliable releases.');
+  expect(onMutation).toHaveBeenCalledWith('ai-edit:section');
+});
+
+test('importTextIntoDocument rejects invalid forced template JSON without raw HVY fallback', async () => {
+  requestProxyCompletionMock.mockResolvedValueOnce('{"targets":[]}');
+  requestProxyCompletionMock.mockResolvedValueOnce('{"values":{"section_title":"Awards","extra":"bad"}}');
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+section_defs:
+  - name: Award Section
+    templateVariables:
+      section_title:
+        label: Section title
+    template:
+      title: "{% section_title %}"
+      blocks:
+        - text: "# {% section_title %}"
+          schema:
+            component: text
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+`, '.hvy');
+
+  const result = await importTextIntoDocument(document, {
+    sourceName: 'resume.txt',
+    sourceText: 'Awards',
+    steps: [{ section: 'Awards', templateName: 'Award Section', importMode: 'template' }],
+    llm: {
+      settings: { provider: 'openai', model: 'gpt-5-mini' },
+      client: { complete: vi.fn() },
+    },
+  });
+
+  expect(result.status).toBe('error');
+  expect(result.message).toContain('invalid template values');
+  expect(result.message).toContain('Extra keys: extra');
+  expect(requestProxyCompletionMock).toHaveBeenCalledTimes(2);
+  expect(serializeDocument(document)).not.toContain('Awards');
+});
+
+test('importTextIntoDocument returns aborted during forced template JSON fill', async () => {
+  requestProxyCompletionMock.mockResolvedValueOnce('{"targets":[]}');
+  requestProxyCompletionMock.mockImplementationOnce(async (request: { beforeRequest?: (debugLabel: string) => Promise<void> | void; debugLabel: string }) => {
+    await request.beforeRequest?.(request.debugLabel);
+    return '{"values":{"section_title":"Awards"}}';
+  });
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+section_defs:
+  - name: Award Section
+    templateVariables:
+      section_title:
+        label: Section title
+    template:
+      title: "{% section_title %}"
+      blocks:
+        - text: "# {% section_title %}"
+          schema:
+            component: text
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+`, '.hvy');
+  const controller = new AbortController();
+
+  const result = await importTextIntoDocument(document, {
+    sourceName: 'resume.txt',
+    sourceText: 'Awards',
+    steps: [{ section: 'Awards', templateName: 'Award Section', importMode: 'template' }],
+    llm: {
+      settings: { provider: 'openai', model: 'gpt-5-mini' },
+      client: { complete: vi.fn() },
+    },
+    signal: controller.signal,
+    beforeLlmCall(event) {
+      if (event.debugLabel === 'ai-import-template-values:1') {
+        controller.abort();
+      }
+    },
+  });
+
+  expect(result).toEqual({
+    status: 'aborted',
+    message: 'Import was aborted.',
+  });
+  expect(requestProxyCompletionMock).toHaveBeenCalledTimes(2);
+  expect(serializeDocument(document)).not.toContain('# Awards');
+});
+
+test('importTextIntoDocument can mix forced template and raw HVY steps', async () => {
+  requestProxyCompletionMock.mockResolvedValueOnce('{"targets":[]}');
+  requestProxyCompletionMock.mockResolvedValueOnce('{"values":{"section_title":"Awards"}}');
+  requestProxyCompletionMock.mockResolvedValueOnce('{"information":"Imported summary"}');
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"hvy":"<!--hvy: {\\"id\\":\\"summary\\"}-->\\n#! Summary\\n\\n <!--hvy:text {}-->\\n  Imported summary"}'
+  );
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+section_defs:
+  - name: Award Section
+    templateVariables:
+      section_title:
+        label: Section title
+    template:
+      title: "{% section_title %}"
+      blocks:
+        - text: "# {% section_title %}"
+          schema:
+            component: text
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {}-->
+ Existing summary
+`, '.hvy');
+
+  const result = await importTextIntoDocument(document, {
+    sourceName: 'resume.txt',
+    sourceText: 'Summary and awards',
+    steps: [
+      { section: 'Awards', templateName: 'Award Section', importMode: 'template' },
+      { section: 'Summary', sectionId: 'summary' },
+    ],
+    llm: {
+      settings: { provider: 'openai', model: 'gpt-5-mini' },
+      client: { complete: vi.fn() },
+    },
+  });
+
+  expect(result.status).toBe('complete');
+  expect(requestProxyCompletionMock.mock.calls.map((call) => call[0]?.debugLabel)).toEqual([
+    'ai-import-xref-targets',
+    'ai-import-template-values:1',
+    'ai-import-section-data:2',
+    'ai-import-section-hvy:2',
+  ]);
+  expect(serializeDocument(document)).toContain('# Awards');
+  expect(serializeDocument(document)).toContain('Imported summary');
 });
 
 test('importTextIntoDocument re-resolves later section targets after fresh loading applied sections', async () => {

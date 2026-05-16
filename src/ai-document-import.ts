@@ -1,13 +1,21 @@
 import { requestProxyCompletion, type HostChatClient } from './chat/chat';
 import { deserializeDocumentWithDiagnostics, serializeBlockFragment, serializeDocumentHeaderYaml, serializeSectionFragment } from './serialization';
 import type { VisualBlock, VisualSection } from './editor/types';
-import { cloneReusableBlock, cloneReusableSchema, defaultBlockSchema } from './document-factory';
+import { cloneReusableBlock, cloneReusableSection, cloneReusableSchema, defaultBlockSchema } from './document-factory';
 import { findSectionContainer, formatSectionTitle, getSectionId, visitBlocks } from './section-ops';
 import type { ChatSettings, ComponentDefinition, SectionDefinition, VisualDocument } from './types';
 import { isAbortError, throwIfAborted } from './ai-document-loop-state';
 import { resolveBaseComponentFromMeta } from './component-defs';
 import importHvyFormatReference from './ai-import-hvy-format-reference.hvy?raw';
 import { getTextLineStyleLabel, getTextLineStylesFromMeta } from './text-line-styles';
+import {
+  applyReusableSectionTemplateValues,
+  applyReusableTemplateValues,
+  extractReusableTemplateVariables,
+  extractReusableTemplateVariablesFromDefinition,
+  extractReusableTemplateVariablesFromSectionDefinition,
+  type ReusableTemplateVariable,
+} from './reusable-template-values';
 
 export type HvyImportProgressPhase = 'starting' | 'thinking' | 'linting' | 'complete';
 type HvyLlmCallPhase = HvyImportProgressPhase | 'tool_call';
@@ -57,7 +65,45 @@ export interface ImportPlanStep {
   sectionTitle: string;
   instruction: string;
   target: ImportPlanTarget;
+  importMode?: 'template' | 'hvy';
+  templateStructureId?: string;
+  templateStructure?: ImportTemplateStructureDescriptor;
 }
+
+export interface ImportTemplateStructureDescriptor {
+  id: string;
+  label: string;
+  target: ImportPlanTarget;
+  jsonSchema: ImportTemplateJsonSchema;
+}
+
+export interface ImportTemplateJsonSchema {
+  type: 'object';
+  properties: Record<string, ImportTemplateJsonSchemaProperty>;
+  required: string[];
+  additionalProperties: false;
+}
+
+export type ImportTemplateJsonSchemaProperty =
+  | { type: 'string'; title: string; description?: string }
+  | { type: 'array'; title: string; items: ImportTemplateJsonSchema; description?: string };
+
+type ImportTemplateScalarSchemaProperty = Extract<ImportTemplateJsonSchemaProperty, { type: 'string' }>;
+
+type ImportTemplateStructureInternal = ImportTemplateStructureDescriptor & {
+  sectionVariables: ReusableTemplateVariable[];
+  lists: ImportTemplateListStructure[];
+};
+
+type ImportTemplateListStructure = {
+  key: string;
+  title: string;
+  listBlockId: string;
+  itemComponent: string;
+  variables: ReusableTemplateVariable[];
+  itemTemplate: VisualBlock;
+  jsonSchema: ImportTemplateJsonSchema;
+};
 
 export interface PlannedImportXrefTarget {
   id: string;
@@ -76,6 +122,8 @@ export type ImportPlanStepInput = string | ImportPlanStep | {
   bodyId?: string;
   templateName?: string;
   definitionName?: string;
+  importMode?: string;
+  templateStructureId?: string;
   target?: ImportPlanTarget;
 };
 
@@ -183,6 +231,40 @@ export async function importTextIntoDocument(
     for (const [index, step] of steps.entries()) {
       const application = resolveImportStepApplication(document, step);
       throwIfAborted(options.signal);
+      if (step.importMode === 'template') {
+        const templateStructure = resolveImportTemplateStructureForStep(document, step);
+        if (!templateStructure) {
+          return { status: 'error', message: `Import section ${index + 1} does not have a usable template structure.` };
+        }
+        options.onProgress?.({ phase: 'thinking', message: `Filling template section ${index + 1} of ${steps.length}.` });
+        const valuesResponse = await requestProxyCompletion({
+          settings: llm.settings,
+          client: llm.client,
+          messages: [
+            {
+              id: crypto.randomUUID(),
+              role: 'user',
+              content: buildImportTemplateValuesPrompt(options.sourceName, options.instructions, step, index, steps.length),
+            },
+          ],
+          context: buildImportTemplateValuesContext(document, options.sourceName, options.sourceText, steps, index, created, application, plannedXrefTargets, templateStructure),
+          responseInstructions: buildImportTemplateValuesResponseInstructions(templateStructure),
+          mode: 'document-edit',
+          debugLabel: `ai-import-template-values:${index + 1}`,
+          beforeRequest: beforeLlmCall?.('thinking'),
+          signal: options.signal,
+        });
+        throwIfAborted(options.signal);
+        const values = parseImportTemplateValuesResponse(valuesResponse, templateStructure);
+        if (values.ok === false) {
+          return { status: 'error', message: `Import section ${index + 1} returned invalid template values. ${values.message}` };
+        }
+        options.onProgress?.({ phase: 'thinking', message: `Applying section ${index + 1}.` });
+        const result = applyGeneratedImportTemplateSection(document, application, templateStructure, values.value, options.onMutation);
+        created.push(result);
+        await options.onSectionApplied?.(result);
+        continue;
+      }
       options.onProgress?.({ phase: 'thinking', message: `Extracting section data ${index + 1} of ${steps.length}.` });
       const informationResponse = await requestProxyCompletion({
         settings: llm.settings,
@@ -300,7 +382,7 @@ function buildImportTemplateSectionOutline(document: VisualDocument): string {
     const template = definition.template;
     const templateId = trimImportString(template.customId);
     const definitionName = trimImportString(definition.name);
-    const title = trimImportString(template.title) || definitionName || templateId || 'Untitled section';
+    const title = definitionName || trimImportString(template.title) || templateId || 'Untitled section';
     const details = [
       templateId ? `id: ${templateId}` : '',
       definitionName ? `name: ${definitionName}` : '',
@@ -393,10 +475,13 @@ function normalizeImportPlanStep(rawStep: ImportPlanStepInput | unknown, candida
     }
     const fallback = selectBestImportCandidate(candidates, text);
     const sectionTitle = fallback?.title ?? inferImportSectionTitleFromStep(text);
+    const target = fallback ? candidateToImportPlanTarget(fallback) : { kind: 'blank' as const, title: sectionTitle };
+    const templateStructure = buildImportTemplateStructureDescriptor(candidates, target);
     return {
       sectionTitle,
       instruction: looksLikeImportInstruction(text) ? text : buildDefaultImportPlanInstruction(sectionTitle),
-      target: fallback ? candidateToImportPlanTarget(fallback) : { kind: 'blank', title: sectionTitle },
+      target,
+      ...(templateStructure ? { templateStructure: toPublicImportTemplateStructure(templateStructure) } : {}),
     };
   }
   if (!rawStep || typeof rawStep !== 'object') {
@@ -413,6 +498,8 @@ function normalizeImportPlanStep(rawStep: ImportPlanStepInput | unknown, candida
     bodyId?: unknown;
     templateName?: unknown;
     definitionName?: unknown;
+    importMode?: unknown;
+    templateStructureId?: unknown;
   };
   const explicitSectionTitle = typeof value.sectionTitle === 'string' && value.sectionTitle.trim()
     ? value.sectionTitle.trim()
@@ -435,7 +522,23 @@ function normalizeImportPlanStep(rawStep: ImportPlanStepInput | unknown, candida
   if (!sectionTitle) {
     return null;
   }
-  return { sectionTitle, instruction: instruction || buildDefaultImportPlanInstruction(sectionTitle), target };
+  const templateStructure = buildImportTemplateStructureDescriptor(candidates, target);
+  const templateStructureId = typeof value.templateStructureId === 'string' && value.templateStructureId.trim()
+    ? value.templateStructureId.trim()
+    : undefined;
+  const importMode = value.importMode === 'template'
+    ? 'template'
+    : value.importMode === 'hvy'
+      ? 'hvy'
+      : undefined;
+  return {
+    sectionTitle,
+    instruction: instruction || buildDefaultImportPlanInstruction(sectionTitle),
+    target,
+    ...(importMode ? { importMode } : {}),
+    ...(templateStructureId ? { templateStructureId } : {}),
+    ...(templateStructure ? { templateStructure: toPublicImportTemplateStructure(templateStructure) } : {}),
+  };
 }
 
 function buildImportPlanTargetFromStepShorthand(value: {
@@ -525,6 +628,195 @@ function buildDefaultImportPlanInstruction(sectionTitle: string): string {
 
 function formatImportPlanStep(step: ImportPlanStep): string {
   return `${step.sectionTitle}: ${step.instruction}`;
+}
+
+function toPublicImportTemplateStructure(structure: ImportTemplateStructureInternal): ImportTemplateStructureDescriptor {
+  return {
+    id: structure.id,
+    label: structure.label,
+    target: structure.target,
+    jsonSchema: structure.jsonSchema,
+  };
+}
+
+function buildImportTemplateStructureDescriptor(candidates: ImportTemplateSectionCandidate[], target: ImportPlanTarget): ImportTemplateStructureInternal | null {
+  if (target.kind === 'blank') {
+    return null;
+  }
+  const candidate = findImportCandidateForTarget(candidates, target);
+  if (!candidate) {
+    return null;
+  }
+  const structure = buildImportTemplateStructureForCandidate(candidate);
+  return structure && hasImportTemplateStructureFields(structure) ? structure : null;
+}
+
+function buildImportTemplateStructureForCandidate(candidate: ImportTemplateSectionCandidate): ImportTemplateStructureInternal | null {
+  const lists = collectImportTemplateListStructures(candidate.section, candidate.componentDefs);
+  const listVariableNames = new Set(lists.flatMap((list) => list.variables.map((variable) => variable.name)));
+  const sectionVariables = (candidate.sectionDefinition
+    ? extractReusableTemplateVariablesFromSectionDefinition(candidate.sectionDefinition)
+    : extractReusableTemplateVariables(candidate.section))
+    .filter((variable) => !listVariableNames.has(variable.name));
+  const properties: Record<string, ImportTemplateJsonSchemaProperty> = {};
+  const required: string[] = [];
+  for (const variable of sectionVariables) {
+    properties[variable.name] = templateVariableToJsonSchemaProperty(variable);
+    required.push(variable.name);
+  }
+  for (const list of lists) {
+    properties[list.key] = {
+      type: 'array',
+      title: list.title,
+      description: `Repeatable ${list.title} items.`,
+      items: list.jsonSchema,
+    };
+    required.push(list.key);
+  }
+  const target = candidateToImportPlanTarget(candidate);
+  return {
+    id: getImportTemplateStructureId(candidate),
+    label: `${candidate.title} template`,
+    target,
+    jsonSchema: {
+      type: 'object',
+      properties,
+      required,
+      additionalProperties: false,
+    },
+    sectionVariables,
+    lists,
+  };
+}
+
+function hasImportTemplateStructureFields(structure: ImportTemplateStructureInternal): boolean {
+  return structure.sectionVariables.length > 0 || structure.lists.length > 0;
+}
+
+function getImportTemplateStructureId(candidate: ImportTemplateSectionCandidate): string {
+  const raw = candidate.source === 'definition'
+    ? `definition:${candidate.name || candidate.id || candidate.title}`
+    : `body:${candidate.id || candidate.title}`;
+  return raw.toLowerCase().replace(/[^a-z0-9:_-]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+}
+
+function templateVariableToJsonSchemaProperty(variable: ReusableTemplateVariable): ImportTemplateScalarSchemaProperty {
+  return {
+    type: 'string',
+    title: variable.label,
+    description: variable.type === 'block' ? 'May contain multiple lines.' : 'Single-line value.',
+  };
+}
+
+function collectImportTemplateListStructures(section: VisualSection, componentDefs: ComponentDefinition[]): ImportTemplateListStructure[] {
+  const lists: ImportTemplateListStructure[] = [];
+  const usedKeys = new Set<string>();
+  const collectFromBlocks = (blocks: VisualBlock[]): void => {
+    for (const block of blocks) {
+      if (block.schema.component === 'component-list') {
+        const list = buildImportTemplateListStructure(block, usedKeys, componentDefs);
+        if (list) {
+          lists.push(list);
+        }
+      }
+      collectFromBlocks(block.schema.containerBlocks ?? []);
+      collectFromBlocks(block.schema.componentListBlocks ?? []);
+      collectFromBlocks(block.schema.gridItems?.map((item) => item.block) ?? []);
+      collectFromBlocks(block.schema.expandableStubBlocks?.children ?? []);
+      collectFromBlocks(block.schema.expandableContentBlocks?.children ?? []);
+    }
+  };
+  collectFromBlocks(section.blocks);
+  for (const child of section.children) {
+    lists.push(...collectImportTemplateListStructures(child, componentDefs));
+  }
+  return lists;
+}
+
+function buildImportTemplateListStructure(block: VisualBlock, usedKeys: Set<string>, componentDefs: ComponentDefinition[]): ImportTemplateListStructure | null {
+  const itemComponent = block.schema.componentListComponent.trim();
+  const itemTemplate = findImportTemplateListItemTemplate(block, itemComponent, componentDefs);
+  if (!itemTemplate) {
+    return null;
+  }
+  const variables = getImportTemplateListItemVariables(itemTemplate, itemComponent, componentDefs);
+  if (variables.length === 0) {
+    return null;
+  }
+  const properties: Record<string, ImportTemplateJsonSchemaProperty> = {};
+  const required: string[] = [];
+  for (const variable of variables) {
+    properties[variable.name] = templateVariableToJsonSchemaProperty(variable);
+    required.push(variable.name);
+  }
+  const baseKey = block.schema.id.trim() || itemComponent || 'items';
+  const key = uniqueImportTemplateListKey(toImportJsonPropertyName(baseKey), usedKeys);
+  return {
+    key,
+    title: block.schema.componentListItemLabel.trim() || itemComponent || key,
+    listBlockId: block.schema.id.trim() || block.id,
+    itemComponent,
+    variables,
+    itemTemplate,
+    jsonSchema: {
+      type: 'object',
+      properties,
+      required,
+      additionalProperties: false,
+    },
+  };
+}
+
+function findImportTemplateListItemTemplate(block: VisualBlock, itemComponent: string, componentDefs: ComponentDefinition[]): VisualBlock | null {
+  if (block.schema.componentListBlocks.length > 0) {
+    return cloneReusableBlock(block.schema.componentListBlocks[0]!);
+  }
+  if (!itemComponent) {
+    return null;
+  }
+  const def = componentDefs.find((item) => item.name === itemComponent);
+  if (!def) {
+    return null;
+  }
+  if (def.template) {
+    const item = cloneReusableBlock(def.template);
+    item.schema.component = itemComponent;
+    return item;
+  }
+  if (def.schema) {
+    return {
+      id: '',
+      text: '',
+      schema: cloneReusableSchema(def.schema, itemComponent),
+      schemaMode: false,
+    };
+  }
+  return null;
+}
+
+function getImportTemplateListItemVariables(itemTemplate: VisualBlock, itemComponent: string, componentDefs: ComponentDefinition[]): ReusableTemplateVariable[] {
+  const def = componentDefs.find((item) => item.name === itemComponent);
+  const variables = def
+    ? extractReusableTemplateVariablesFromDefinition(def)
+    : [];
+  return variables.length > 0
+    ? variables
+    : extractReusableTemplateVariables(itemTemplate);
+}
+
+function uniqueImportTemplateListKey(baseKey: string, usedKeys: Set<string>): string {
+  let key = baseKey || 'items';
+  let index = 2;
+  while (usedKeys.has(key)) {
+    key = `${baseKey || 'items'}_${index}`;
+    index += 1;
+  }
+  usedKeys.add(key);
+  return key;
+}
+
+function toImportJsonPropertyName(value: string): string {
+  return value.trim().replace(/[^a-zA-Z0-9_]+/g, '_').replace(/^_+|_+$/g, '').replace(/_+/g, '_') || 'items';
 }
 
 function buildImportXrefTargetPrompt(sourceName: string, instructions?: string): string {
@@ -656,6 +948,56 @@ function buildImportSectionHvyContext(document: VisualDocument, information: str
   ].join('\n');
 }
 
+function buildImportTemplateValuesPrompt(sourceName: string, instructions: string | undefined, step: ImportPlanStep, index: number, total: number): string {
+  return [
+    `Fill one HVY template JSON object for import source "${sourceName}".`,
+    '',
+    `Approved section step ${index + 1} of ${total}: ${formatImportPlanStep(step)}`,
+    '',
+    'This is not a tool loop. Do not generate HVY and do not mutate anything.',
+    'Return only source-backed JSON values that fit the provided schema.',
+    'Use empty strings for scalar fields that have no source-backed value.',
+    'Use empty arrays for repeatable lists that have no source-backed items.',
+    'Preserve exact source dates, names, titles, entity names, labels, category names, and terminology unless host instructions explicitly say to normalize them.',
+    instructions?.trim() ? ['Additional import instructions:', instructions.trim()].join('\n') : '',
+  ].filter(Boolean).join('\n');
+}
+
+function buildImportTemplateValuesContext(
+  document: VisualDocument,
+  sourceName: string,
+  sourceText: string,
+  steps: ImportPlanStep[],
+  activeIndex: number,
+  createdSections: string[],
+  application: ImportStepApplication,
+  plannedXrefTargets: PlannedImportXrefTarget[],
+  templateStructure: ImportTemplateStructureInternal
+): string {
+  return [
+    buildImportSectionApplicationFrame(document, application),
+    '',
+    buildImportRelationshipFrame(document),
+    '',
+    buildImportPlannedXrefTargetFrame(plannedXrefTargets),
+    '',
+    '=== BEGIN TEMPLATE JSON SCHEMA ===',
+    JSON.stringify(templateStructure.jsonSchema, null, 2),
+    '=== END TEMPLATE JSON SCHEMA ===',
+    '',
+    '=== BEGIN SOURCE DOCUMENT ===',
+    `Source name: ${sourceName}`,
+    '```text',
+    sourceText,
+    '```',
+    '=== END SOURCE DOCUMENT ===',
+    '',
+    'Approved import section plan:',
+    ...steps.map((planStep, index) => `${index + 1}. ${index < activeIndex ? '[created]' : index === activeIndex ? '[current]' : '[pending]'} ${formatImportPlanStep(planStep)} (${formatImportPlanTarget(planStep.target)})`),
+    ...(createdSections.length > 0 ? ['', 'Previously created section results:', ...createdSections] : []),
+  ].join('\n');
+}
+
 function buildImportParagraphStyleFrame(document: VisualDocument): string {
   const styles = Object.entries(getTextLineStylesFromMeta(document.meta))
     .sort(([left], [right]) => left.localeCompare(right, undefined, { sensitivity: 'base' }));
@@ -676,6 +1018,8 @@ type ImportTemplateSectionCandidate = {
   name: string;
   section: VisualSection;
   source: 'body' | 'definition';
+  componentDefs: ComponentDefinition[];
+  sectionDefinition?: SectionDefinition;
 };
 
 type ImportStepApplication =
@@ -685,6 +1029,7 @@ type ImportStepApplication =
 
 function getImportTemplateSectionCandidates(document: VisualDocument): ImportTemplateSectionCandidate[] {
   const candidates: ImportTemplateSectionCandidate[] = [];
+  const componentDefs = Array.isArray(document.meta.component_defs) ? document.meta.component_defs : [];
   const appendSections = (sections: VisualSection[]): void => {
     for (const section of sections) {
       candidates.push({
@@ -693,6 +1038,8 @@ function getImportTemplateSectionCandidates(document: VisualDocument): ImportTem
         name: '',
         section,
         source: 'body',
+        componentDefs,
+        sectionDefinition: undefined,
       });
       appendSections(section.children);
     }
@@ -700,11 +1047,13 @@ function getImportTemplateSectionCandidates(document: VisualDocument): ImportTem
   appendSections(document.sections);
   for (const definition of getImportSectionDefinitions(document)) {
     candidates.push({
-      title: trimImportString(definition.template.title) || trimImportString(definition.name) || trimImportString(definition.template.customId) || 'Untitled section',
+      title: trimImportString(definition.name) || trimImportString(definition.template.title) || trimImportString(definition.template.customId) || 'Untitled section',
       id: trimImportString(definition.template.customId),
       name: trimImportString(definition.name),
       section: definition.template,
       source: 'definition',
+      componentDefs,
+      sectionDefinition: definition,
     });
   }
   return candidates;
@@ -1123,6 +1472,98 @@ function collectImportXrefs(document: VisualDocument): Array<{ id: string; title
   return xrefs;
 }
 
+function resolveImportTemplateStructureForStep(document: VisualDocument, step: ImportPlanStep): ImportTemplateStructureInternal | null {
+  const candidates = getImportTemplateSectionCandidates(document);
+  const structure = buildImportTemplateStructureDescriptor(candidates, step.target);
+  if (!structure) {
+    return null;
+  }
+  if (step.templateStructureId && step.templateStructureId !== structure.id) {
+    return null;
+  }
+  return structure;
+}
+
+function applyGeneratedImportTemplateSection(
+  document: VisualDocument,
+  application: ImportStepApplication,
+  templateStructure: ImportTemplateStructureInternal,
+  values: ImportTemplateValues,
+  onMutation?: (group?: string) => void
+): string {
+  if (application.kind === 'blank') {
+    throw new Error('Forced template import requires a matched template section.');
+  }
+  const generated = instantiateImportTemplateSection(application.target.section, templateStructure, values);
+  onMutation?.('ai-edit:section');
+  if (application.kind === 'replace') {
+    const target = application.target.section;
+    const location = findSectionContainer(document.sections, target.key);
+    if (!location) {
+      throw new Error(`Matched section "${target.title}" could not be found.`);
+    }
+    adjustImportSectionLevel(generated, target.level);
+    generated.key = target.key;
+    location.container.splice(location.index, 1, generated);
+    return `Replaced section "${target.title}" with "${generated.title}" (${getSectionId(generated)}).`;
+  }
+  adjustImportSectionLevel(generated, 1);
+  document.sections.push(generated);
+  return `Inserted section "${generated.title}" (${getSectionId(generated)}) at the bottom.`;
+}
+
+function instantiateImportTemplateSection(template: VisualSection, templateStructure: ImportTemplateStructureInternal, values: ImportTemplateValues): VisualSection {
+  const section = cloneReusableSection(template);
+  const scalarValues: Record<string, string> = {};
+  for (const variable of templateStructure.sectionVariables) {
+    const value = values[variable.name];
+    scalarValues[variable.name] = typeof value === 'string' ? value : '';
+  }
+  applyReusableSectionTemplateValues(section, scalarValues, templateStructure.sectionVariables);
+  for (const list of templateStructure.lists) {
+    replaceImportTemplateListItems(section, list, Array.isArray(values[list.key]) ? values[list.key] as Array<Record<string, string>> : []);
+  }
+  return section;
+}
+
+function replaceImportTemplateListItems(section: VisualSection, list: ImportTemplateListStructure, items: Array<Record<string, string>>): void {
+  const block = findImportTemplateListBlock(section.blocks, list.listBlockId, list.itemComponent);
+  if (!block) {
+    return;
+  }
+  block.schema.componentListBlocks = items.map((itemValues) => {
+    const item = cloneReusableBlock(list.itemTemplate);
+    if (list.itemComponent) {
+      item.schema.component = list.itemComponent;
+    }
+    applyReusableTemplateValues(item, itemValues, list.variables);
+    return item;
+  });
+}
+
+function findImportTemplateListBlock(blocks: VisualBlock[], listBlockId: string, itemComponent?: string): VisualBlock | null {
+  for (const block of blocks) {
+    if (
+      block.id === listBlockId
+      || block.schema.id.trim() === listBlockId
+      || (block.schema.component === 'component-list' && itemComponent && block.schema.componentListComponent === itemComponent)
+    ) {
+      return block;
+    }
+    const nested = findImportTemplateListBlock([
+      ...(block.schema.containerBlocks ?? []),
+      ...(block.schema.componentListBlocks ?? []),
+      ...(block.schema.gridItems?.map((item) => item.block) ?? []),
+      ...(block.schema.expandableStubBlocks?.children ?? []),
+      ...(block.schema.expandableContentBlocks?.children ?? []),
+    ], listBlockId, itemComponent);
+    if (nested) {
+      return nested;
+    }
+  }
+  return null;
+}
+
 function describeImportXrefTargetBlock(block: VisualBlock): string {
   const title = block.schema.xrefTitle.trim()
     || block.schema.containerTitle.trim()
@@ -1385,6 +1826,82 @@ function buildImportSectionHvyResponseInstructions(): string {
     'Use LLM-only closing comments for nested containers, reusable/custom components, component-list item slots, and expandable slots. Example: `<!--hvy:container {}--> ... <!-- /container -->`.',
     'When returning a reusable/custom component with slots, close both the slots and the reusable/custom component itself.',
   ].join('\n');
+}
+
+function buildImportTemplateValuesResponseInstructions(templateStructure: ImportTemplateStructureInternal): string {
+  return [
+    'Return exactly one JSON object and no prose.',
+    'Shape:',
+    '{"values":{...}}',
+    '',
+    '`values` must match this JSON schema exactly:',
+    JSON.stringify(templateStructure.jsonSchema, null, 2),
+    'Do not include HVY, markdown fences, explanations, or keys not listed in the schema.',
+  ].join('\n');
+}
+
+type ImportTemplateValues = Record<string, string | Array<Record<string, string>>>;
+
+function parseImportTemplateValuesResponse(
+  response: string,
+  templateStructure: ImportTemplateStructureInternal
+): { ok: true; value: ImportTemplateValues } | { ok: false; message: string } {
+  const parsed = parseImportJsonObject(response);
+  if (!parsed) {
+    return { ok: false, message: 'Return valid JSON with a top-level `values` object.' };
+  }
+  const values = parsed.values;
+  if (!values || typeof values !== 'object' || Array.isArray(values)) {
+    return { ok: false, message: 'Top-level `values` must be an object.' };
+  }
+  return validateImportTemplateValues(values as Record<string, unknown>, templateStructure.jsonSchema);
+}
+
+function validateImportTemplateValues(raw: Record<string, unknown>, schema: ImportTemplateJsonSchema): { ok: true; value: ImportTemplateValues } | { ok: false; message: string } {
+  const expected = Object.keys(schema.properties);
+  const expectedSet = new Set(expected);
+  const actual = Object.keys(raw);
+  const missing = expected.filter((key) => !Object.prototype.hasOwnProperty.call(raw, key));
+  const extra = actual.filter((key) => !expectedSet.has(key));
+  if (missing.length > 0 || extra.length > 0) {
+    return {
+      ok: false,
+      message: [
+        'Template values must exactly match expected keys.',
+        `Expected keys: ${expected.length > 0 ? expected.join(', ') : '(none)'}.`,
+        missing.length > 0 ? `Missing keys: ${missing.join(', ')}.` : '',
+        extra.length > 0 ? `Extra keys: ${extra.join(', ')}.` : '',
+      ].filter(Boolean).join(' '),
+    };
+  }
+  const normalized: ImportTemplateValues = {};
+  for (const key of expected) {
+    const property = schema.properties[key]!;
+    const value = raw[key];
+    if (property.type === 'string') {
+      if (typeof value !== 'string') {
+        return { ok: false, message: `Template value "${key}" must be a string.` };
+      }
+      normalized[key] = value;
+      continue;
+    }
+    if (!Array.isArray(value)) {
+      return { ok: false, message: `Template value "${key}" must be an array.` };
+    }
+    const items: Array<Record<string, string>> = [];
+    for (const [index, item] of value.entries()) {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) {
+        return { ok: false, message: `Template value "${key}" item ${index + 1} must be an object.` };
+      }
+      const itemResult = validateImportTemplateValues(item as Record<string, unknown>, property.items);
+      if (itemResult.ok === false) {
+        return { ok: false, message: `Template value "${key}" item ${index + 1}: ${itemResult.message}` };
+      }
+      items.push(Object.fromEntries(Object.entries(itemResult.value).map(([itemKey, itemValue]) => [itemKey, String(itemValue)])));
+    }
+    normalized[key] = items;
+  }
+  return { ok: true, value: normalized };
 }
 
 function parseImportXrefTargetResponse(response: string): PlannedImportXrefTarget[] | null {

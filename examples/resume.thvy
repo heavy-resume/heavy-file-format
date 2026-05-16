@@ -911,7 +911,7 @@ component_defs:
 
    <!--hvy:text {"css":"margin: 0;","placeholder":"Add expanded summary details such as accomplishments"}-->
 
-<!--hvy: {"id":"locations","lock":true,"contained":true,"location":"sidebar","description":"Location preferences","hideIfUnmodified":true}-->
+<!--hvy: {"id":"locations","lock":true,"contained":true,"location":"sidebar","description":"Current location and target location","hideIfUnmodified":true}-->
 #! Locations
 
  <!--hvy:text {"css":"margin: 0.5rem 0; line-height: 1.5;","fillIn":true,"lock":true}-->

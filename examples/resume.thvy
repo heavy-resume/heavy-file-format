@@ -36,7 +36,7 @@ ai-import-guidance: >-
   Languages section entries.
 importPreplan:
   - [header, summary, locations]
-  - [skills, tools-technologies, top-skills-tools-technologies]
+  - [skills, tools-technologies, languages, top-skills-tools-technologies]
   - [history, resume-awards]
   - [resume-projects, resume-publications]
   - [resume-certifications, education]

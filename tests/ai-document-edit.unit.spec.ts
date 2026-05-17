@@ -474,10 +474,10 @@ hvy_version: 0.1
 
 test('buildImportPlanForDocument uses importPreplan groups to extract approved section information', async () => {
   requestProxyCompletionMock.mockResolvedValueOnce(
-    '{"sections":{"summary":{"include":true,"information":"Summary facts."},"resume-awards":{"include":true,"information":"Award facts."},"missing-body":""}}'
+    '{"sections":{"summary":{"has_info":true,"information":"Summary facts."},"resume-awards":{"has_info":true,"information":"Award facts."},"missing-body":{"has_info":false,"information":"Source-backed generic resume section content is not present in the source text."}}}'
   );
   requestProxyCompletionMock.mockResolvedValueOnce(
-    '{"sections":{"resume-projects":{"include":true,"information":"Project facts."}}}'
+    '{"sections":{"resume-projects":{"has_info":true,"information":"Project facts."}}}'
   );
   requestProxyCompletionMock.mockResolvedValueOnce('{"sections":{}}');
   const document = deserializeDocument(`---
@@ -548,27 +548,33 @@ section_defs:
     'ai-import-preplan-data:2',
     'ai-import-missing-sections',
   ]);
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.responseInstructions).toContain('"resume-awards"');
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.responseInstructions).toContain('"include"');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toBe('');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages).toHaveLength(2);
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages[0]?.content).toContain('=== BEGIN SOURCE DOCUMENT ===');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages[0]?.content).toContain('Approved import section plan:');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages[1]?.content).toContain('Target key: resume-awards');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages[1]?.content).toContain('=== BEGIN DOCUMENT AI IMPORT GUIDANCE ===');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.responseInstructions).not.toContain('"resume-awards"');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.responseInstructions).toContain('"has_info"');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.responseInstructions).toContain('An omitted key, an empty string value');
   expect(requestProxyCompletionMock.mock.calls.map((call) => call[0]?.debugLabel)).not.toContain('ai-import-plan');
 });
 
 test('resume template importPreplan resolves expected grouped targets', async () => {
   requestProxyCompletionMock.mockResolvedValueOnce(
-    '{"sections":{"header":{"include":true,"information":"Header facts."},"summary":{"include":true,"information":"Summary facts."},"locations":{"include":true,"information":"Location facts."}}}'
+    '{"sections":{"header":{"has_info":true,"information":"Header facts."},"summary":{"has_info":true,"information":"Summary facts."},"locations":{"has_info":true,"information":"Location facts."}}}'
   );
   requestProxyCompletionMock.mockResolvedValueOnce(
-    '{"sections":{"skills":{"include":true,"information":"Skill facts."},"tools-technologies":{"include":true,"information":"Tool facts."},"languages":{"include":true,"information":"Language facts."},"top-skills-tools-technologies":{"include":true,"information":"Featured facts."}}}'
+    '{"sections":{"skills":{"has_info":true,"information":"Skill facts."},"tools-technologies":{"has_info":true,"information":"Tool facts."},"languages":{"has_info":true,"information":"Language facts."},"top-skills-tools-technologies":{"has_info":true,"information":"Featured facts."}}}'
   );
   requestProxyCompletionMock.mockResolvedValueOnce(
-    '{"sections":{"history":{"include":true,"information":"History facts."},"resume-awards":{"include":true,"information":"Award facts."}}}'
+    '{"sections":{"history":{"has_info":true,"information":"History facts."},"resume-awards":{"has_info":true,"information":"Award facts."}}}'
   );
   requestProxyCompletionMock.mockResolvedValueOnce(
-    '{"sections":{"resume-projects":{"include":true,"information":"Project facts."},"resume-publications":{"include":true,"information":"Publication facts."}}}'
+    '{"sections":{"resume-projects":{"has_info":true,"information":"Project facts."},"resume-publications":{"has_info":true,"information":"Publication facts."}}}'
   );
   requestProxyCompletionMock.mockResolvedValueOnce(
-    '{"sections":{"resume-certifications":{"include":true,"information":"Certification facts."},"education":{"include":true,"information":"Education facts."}}}'
+    '{"sections":{"resume-certifications":{"has_info":true,"information":"Certification facts."},"education":{"has_info":true,"information":"Education facts."}}}'
   );
   requestProxyCompletionMock.mockResolvedValueOnce('{"sections":{}}');
   requestProxyCompletionMock.mockResolvedValueOnce('{"sections":{}}');
@@ -986,6 +992,8 @@ component_defs:
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.responseInstructions).toContain('"values"');
   expect(serialized).toContain('# Awards');
   expect(serialized).toContain('<!--hvy:award-record');
+  expect(serialized).toContain('"id":"best-tool"');
+  expect(serialized).toContain('"id":"quality-prize"');
   expect(serialized).toContain('Best Tool');
   expect(serialized).toContain('Engineering Guild');
   expect(serialized).toContain('Quality Prize');
@@ -993,9 +1001,100 @@ component_defs:
   expect(onMutation).toHaveBeenCalledWith('ai-edit:section');
 });
 
+test('importTextIntoDocument repairs imported xrefs from created target inventory', async () => {
+  requestProxyCompletionMock.mockResolvedValueOnce('{"targets":[]}');
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"values":{"section_title":"Tools","tools_list":[{"tool":"Widget","detail":"Reliable builds","notes":"Used for reliable builds."}]}}'
+  );
+  requestProxyCompletionMock.mockResolvedValueOnce('{"information":"Project used Widget for reliable builds."}');
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"hvy":"<!--hvy: {\\"id\\":\\"projects\\"}-->\\n#! Projects\\n\\n <!--hvy:xref-card {\\"xrefTitle\\":\\"Widget\\",\\"xrefTarget\\":\\"wrong-widget\\"}-->"}'
+  );
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"hvy":"<!--hvy: {\\"id\\":\\"projects\\"}-->\\n#! Projects\\n\\n <!--hvy:xref-card {\\"xrefTitle\\":\\"Widget\\",\\"xrefDetail\\":\\"Used for reliable builds.\\",\\"xrefTarget\\":\\"widget\\"}-->"}'
+  );
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+section_defs:
+  - name: Tool Section
+    templateVariables:
+      section_title:
+        label: Section title
+    template:
+      title: "{% section_title %}"
+      blocks:
+        - text: "# {% section_title %}"
+          schema:
+            component: text
+        - text: ""
+          schema:
+            id: tools-list
+            component: component-list
+            componentListComponent: tool-record
+            componentListItemLabel: tool
+component_defs:
+  - name: tool-record
+    baseType: expandable
+    templateVariables:
+      tool:
+        label: Tool
+      detail:
+        label: Detail
+      notes:
+        label: Notes
+    schema:
+      component: tool-record
+      tags: tool
+      xrefTitle: "{% tool %}"
+      xrefDetail: "{% detail %}"
+      expandableStubBlocks:
+        children:
+          - text: "### {% tool %}"
+            schema:
+              component: text
+      expandableContentBlocks:
+        children:
+          - text: "{% notes | block %}"
+            schema:
+              component: text
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+`, '.hvy');
+
+  const result = await importTextIntoDocument(document, {
+    sourceName: 'resume.txt',
+    sourceText: 'Widget. Project used Widget for reliable builds.',
+    steps: [
+      { section: 'Tools', templateName: 'Tool Section', importMode: 'template' },
+      { section: 'Projects' },
+    ],
+    llm: {
+      settings: { provider: 'openai', model: 'gpt-5-mini' },
+      client: { complete: vi.fn() },
+    },
+  });
+
+  const serialized = serializeDocument(document);
+  expect(result.status).toBe('complete');
+  expect(requestProxyCompletionMock.mock.calls.map((call) => call[0]?.debugLabel)).toEqual([
+    'ai-import-xref-targets',
+    'ai-import-template-values:1',
+    'ai-import-section-data:2',
+    'ai-import-section-hvy:2',
+    'ai-import-xref-repair:1',
+  ]);
+  expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.context).toContain('=== BEGIN CREATED IMPORT TARGETS ===');
+  expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.context).toContain('- widget: Widget [expandable]');
+  expect(serialized).toContain('"id":"widget"');
+  expect(serialized).toContain('"xrefTarget":"widget"');
+  expect(serialized).not.toContain('wrong-widget');
+});
+
 test('importTextIntoDocument uses grouped importPreplan extraction and missing sections pass', async () => {
   requestProxyCompletionMock.mockResolvedValueOnce(
-    '{"sections":{"summary":{"include":true,"information":"Imported summary facts."},"resume-awards":{"include":true,"information":"Award facts."}}}'
+    '{"sections":{"summary":{"has_info":true,"information":"Imported summary facts."},"resume-awards":{"has_info":true,"information":"Award facts."}}}'
   );
   requestProxyCompletionMock.mockResolvedValueOnce(
     '{"sections":{"Conference Talks":{"target":{"kind":"definition","name":"Resume Section"},"information":"Talk facts."},"Volunteer Work":{"target":{"kind":"blank","title":"Volunteer Work"},"information":"Volunteer facts."}}}'
@@ -1113,8 +1212,12 @@ component_defs:
     'ai-import-section-hvy:4',
   ]);
   expect(requestProxyCompletionMock.mock.calls.map((call) => call[0]?.debugLabel)).not.toContain('ai-import-section-data:1');
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.responseInstructions).toContain('"summary"');
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.responseInstructions).toContain('"resume-awards"');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toBe('');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages).toHaveLength(2);
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages[1]?.content).toContain('Target key: summary');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages[1]?.content).toContain('Target key: resume-awards');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.responseInstructions).not.toContain('"summary"');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.responseInstructions).not.toContain('"resume-awards"');
   expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.context).toContain('=== BEGIN SECTION INFORMATION ===');
   expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.context).toContain('Award facts.');
   const serialized = serializeDocument(document);
@@ -1866,6 +1969,7 @@ test('importTextIntoDocument accepts LLM safety closures and preserves blanked t
   requestProxyCompletionMock.mockResolvedValueOnce(
     '{"hvy":"<!--hvy: {\\"id\\":\\"profile\\"}-->\\n#! Profile\\n\\n <!--hvy:container {\\"id\\":\\"profile-panel\\"}-->\\n <!--hvy:text {\\"id\\":\\"display-name\\"}-->\\n <!-- /container -->"}'
   );
+  requestProxyCompletionMock.mockResolvedValueOnce('{"fills":{"display-name":""}}');
   const document = deserializeDocument(`---
 hvy_version: 0.1
 ---
@@ -1894,6 +1998,47 @@ hvy_version: 0.1
   expect(serialized).toContain('<!--hvy:text {"id":"display-name","placeholder":"Display name","fillIn":true}-->');
   expect(serialized).toContain('# <!-- value {"placeholder":"Display name"} -->');
   expect(serialized).not.toContain('<!-- /container -->');
+});
+
+test('importTextIntoDocument fills preserved template fill-ins from source document', async () => {
+  requestProxyCompletionMock.mockResolvedValueOnce('{"targets":[]}');
+  requestProxyCompletionMock.mockResolvedValueOnce('{"information":"Profile details exist."}');
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"hvy":"<!--hvy: {\\"id\\":\\"profile\\"}-->\\n#! Profile\\n\\n <!--hvy:text {\\"id\\":\\"display-name\\"}-->"}'
+  );
+  requestProxyCompletionMock.mockResolvedValueOnce('{"fills":{"display-name":"# Ada Lovelace"}}');
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"profile"}-->
+#! Profile
+
+<!--hvy:text {"id":"display-name","placeholder":"Display name","fillIn":true}-->
+ # <!-- value {"placeholder":"Display name"} -->
+`, '.hvy');
+
+  const result = await importTextIntoDocument(document, {
+    sourceName: 'profile.txt',
+    sourceText: 'Name: Ada Lovelace',
+    steps: [{ section: 'Profile', sectionId: 'profile' }],
+    llm: {
+      settings: { provider: 'openai', model: 'gpt-5-mini' },
+      client: { complete: vi.fn() },
+    },
+  });
+
+  const serialized = serializeDocument(document);
+  expect(result.status).toBe('complete');
+  expect(requestProxyCompletionMock.mock.calls.map((call) => call[0]?.debugLabel)).toEqual([
+    'ai-import-xref-targets',
+    'ai-import-section-data:1',
+    'ai-import-section-hvy:1',
+    'ai-import-fill-ins:1',
+  ]);
+  expect(requestProxyCompletionMock.mock.calls[3]?.[0]?.context).toContain('=== BEGIN SOURCE DOCUMENT ===');
+  expect(serialized).toContain('# Ada Lovelace');
+  expect(serialized).not.toContain('"fillIn":true');
 });
 
 test('importTextIntoDocument applies parent safety closures when a child closer is forgotten', async () => {

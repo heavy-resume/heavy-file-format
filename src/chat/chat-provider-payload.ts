@@ -26,6 +26,7 @@ export function buildProviderProxyRequest(body: ProviderProxyChatRequest): Recor
 
 export function buildOpenAiProxyRequest(body: ProviderProxyChatRequest): Record<string, unknown> {
   const { systemMessages, conversationMessages } = splitProxyMessages(body.messages);
+  const contextMessages = buildProviderContextMessages(body.context, 'openai');
   return {
     model: body.model,
     reasoning: {
@@ -42,15 +43,7 @@ export function buildOpenAiProxyRequest(body: ProviderProxyChatRequest): Record<
           },
         ],
       },
-      {
-        role: 'user',
-        content: [
-          {
-            type: 'input_text',
-            text: `Request context:\n\n${body.context}`,
-          },
-        ],
-      },
+      ...contextMessages,
       ...conversationMessages.map((message) => ({
         role: message.role,
         content: [
@@ -76,10 +69,7 @@ export function buildAnthropicProxyRequest(body: ProviderProxyChatRequest): Reco
     max_tokens: 4096,
     system: buildSystemInstructions(body.mode, systemMessages),
     messages: [
-      {
-        role: 'user',
-        content: `Request context:\n\n${body.context}`,
-      },
+      ...buildProviderContextMessages(body.context, 'text'),
       ...conversationMessages.map((message) => ({
         role: message.role,
         content: message.content,
@@ -97,16 +87,35 @@ export function buildQwenProxyRequest(body: ProviderProxyChatRequest): Record<st
         role: 'system',
         content: buildSystemInstructions(body.mode, systemMessages),
       },
-      {
-        role: 'user',
-        content: `Request context:\n\n${body.context}`,
-      },
+      ...buildProviderContextMessages(body.context, 'text'),
       ...conversationMessages.map((message) => ({
         role: message.role,
         content: message.content,
       })),
     ],
   };
+}
+
+function buildProviderContextMessages(context: string, format: 'openai' | 'text'): Array<Record<string, unknown>> {
+  const trimmed = context.trim();
+  if (!trimmed) {
+    return [];
+  }
+  if (format === 'openai') {
+    return [{
+      role: 'user',
+      content: [
+        {
+          type: 'input_text',
+          text: `Request context:\n\n${trimmed}`,
+        },
+      ],
+    }];
+  }
+  return [{
+    role: 'user',
+    content: `Request context:\n\n${trimmed}`,
+  }];
 }
 
 function splitProxyMessages(messages: ProviderProxyChatRequest['messages']): {

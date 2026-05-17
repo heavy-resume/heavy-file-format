@@ -2,7 +2,7 @@ import { requestProxyCompletion, type HostChatClient } from './chat/chat';
 import { deserializeDocumentWithDiagnostics, serializeBlockFragment, serializeDocumentHeaderYaml, serializeSectionFragment } from './serialization';
 import type { VisualBlock, VisualSection } from './editor/types';
 import { cloneReusableBlock, cloneReusableSection, cloneReusableSchema, defaultBlockSchema } from './document-factory';
-import { findSectionContainer, formatSectionTitle, getSectionId, visitBlocks } from './section-ops';
+import { findSectionByKey, findSectionContainer, formatSectionTitle, getSectionId, visitBlocks } from './section-ops';
 import type { ChatSettings, ComponentDefinition, ComponentTemplateFlavor, SectionDefinition, SectionTemplateFlavor, VisualDocument } from './types';
 import { isAbortError, throwIfAborted } from './ai-document-loop-state';
 import { resolveBaseComponentFromMeta } from './component-defs';
@@ -19,6 +19,7 @@ import {
   extractReusableTemplateVariablesFromSectionFlavor,
   type ReusableTemplateVariable,
 } from './reusable-template-values';
+import { applyTextFillInValueAtIndex, findTextFillInMarkers } from './text-fill-in';
 
 export type HvyImportProgressPhase = 'starting' | 'thinking' | 'linting' | 'complete';
 type HvyLlmCallPhase = HvyImportProgressPhase | 'tool_call';
@@ -137,6 +138,31 @@ export interface PlannedImportXrefTarget {
   title: string;
   kind?: string;
   description: string;
+}
+
+interface AppliedImportSectionResult {
+  message: string;
+  sectionKey: string;
+}
+
+interface CreatedImportXrefTarget {
+  id: string;
+  title: string;
+  kind: string;
+  sectionTitle: string;
+  sectionId: string;
+  sectionKey: string;
+  component: string;
+  text: string;
+}
+
+interface ImportFillInTarget {
+  key: string;
+  label: string;
+  sectionKey: string;
+  sectionTitle: string;
+  blockId: string;
+  markerIndex?: number;
 }
 
 export type ImportPlanStepInput = string | ImportPlanStep | {
@@ -276,6 +302,7 @@ export async function importTextIntoDocument(
       return { status: 'error', message: 'Import did not return a usable planned xref target inventory.' };
     }
     const created: string[] = [];
+    const appliedSections: AppliedImportSectionResult[] = [];
     for (const [index, step] of executableSteps.entries()) {
       const application = resolveImportStepApplication(document, step);
       throwIfAborted(options.signal);
@@ -309,8 +336,9 @@ export async function importTextIntoDocument(
         }
         options.onProgress?.({ phase: 'thinking', message: `Applying section ${index + 1}.` });
         const result = applyGeneratedImportTemplateSection(document, application, templateStructure, values.value, options.onMutation);
-        created.push(result);
-        await options.onSectionApplied?.(result);
+        created.push(result.message);
+        appliedSections.push(result);
+        await options.onSectionApplied?.(result.message);
         continue;
       }
       const information = step.extractedInformation;
@@ -364,8 +392,20 @@ export async function importTextIntoDocument(
       }
       options.onProgress?.({ phase: 'thinking', message: `Applying section ${index + 1}.` });
       const result = applyGeneratedImportSection(document, application, hvy, options.onMutation);
-      created.push(result);
-      await options.onSectionApplied?.(result);
+      created.push(result.message);
+      appliedSections.push(result);
+      await options.onSectionApplied?.(result.message);
+    }
+    const importedSectionKeys = appliedSections.map((result) => result.sectionKey).filter(Boolean);
+    const createdTargets = collectCreatedImportXrefTargets(document, importedSectionKeys);
+    if (createdTargets.some((target) => target.kind !== 'section')) {
+      options.onProgress?.({ phase: 'thinking', message: 'Repairing imported xrefs.' });
+      await repairImportedSectionXrefs(document, options, llm, beforeLlmCall, importedSectionKeys, createdTargets);
+    }
+    const fillInTargets = collectImportFillInTargets(document, importedSectionKeys);
+    if (fillInTargets.length > 0) {
+      options.onProgress?.({ phase: 'thinking', message: 'Filling remaining imported placeholders.' });
+      await fillImportedSectionPlaceholders(document, options, llm, beforeLlmCall, importedSectionKeys, createdTargets, fillInTargets);
     }
     options.onProgress?.({ phase: 'complete', message: `Imported ${created.length} section${created.length === 1 ? '' : 's'}.` });
     return { status: 'complete', message: `Imported ${created.length} section${created.length === 1 ? '' : 's'}.` };
@@ -577,11 +617,16 @@ async function preparePreplannedImportSteps(
         {
           id: crypto.randomUUID(),
           role: 'user',
-          content: buildImportPreplanDataPrompt(options.sourceName, options.instructions, groupSteps, groupIndex, groups.length),
+          content: buildImportPreplanDataSourceMessage(options.sourceName, options.sourceText, steps),
+        },
+        {
+          id: crypto.randomUUID(),
+          role: 'user',
+          content: buildImportPreplanDataTaskMessage(document, options.sourceName, options.instructions, groupSteps, groupIndex, groups.length),
         },
       ],
-      context: buildImportPreplanDataContext(document, options.sourceName, options.sourceText, steps, groupSteps),
-      responseInstructions: buildImportPreplanDataResponseInstructions(groupSteps),
+      context: '',
+      responseInstructions: buildImportPreplanDataResponseInstructions(),
       mode: 'document-edit',
       debugLabel: `ai-import-preplan-data:${groupIndex + 1}`,
       beforeRequest: beforeLlmCall?.('thinking'),
@@ -637,46 +682,12 @@ function getImportPlanStepTargetId(step: ImportPlanStep): string {
   return step.preplanTargetId || step.target.id || step.target.name || step.sectionTitle;
 }
 
-function buildImportPreplanDataPrompt(sourceName: string, instructions: string | undefined, groupSteps: ImportPlanStep[], index: number, total: number): string {
-  return [
-    `Extract source information for import group ${index + 1} of ${total} from "${sourceName}".`,
-    '',
-    'This is not a tool loop. Do not generate HVY and do not mutate anything.',
-    'Extract and organize only source facts relevant to the listed target sections.',
-    'Return one object keyed by the exact section ids listed in the response instructions.',
-    'For included section ids, return an object with `include` and `information`.',
-    'Set `include` to true only when the source contains information that should create or fill that section.',
-    'If a section has no source-backed information, omit the key or return an empty string for that key. This is the same as `include: false`.',
-    'Use this grouped pass to distinguish confusable categories before assigning facts, such as skills versus tools or technologies.',
-    'Use only facts present in the imported source text. Do not invent dates, titles, entity names, labels, categories, metrics, links, or other factual details.',
-    'Preserve exact source dates, names, titles, entity names, labels, category names, and terminology unless the approved step or host instructions explicitly say to normalize them.',
-    '',
-    'Target sections:',
-    ...groupSteps.map((step) => `- ${getImportPlanStepTargetId(step)}: ${formatImportPlanStep(step)} (${formatImportPlanTarget(step.target)})`),
-    instructions?.trim() ? ['Additional import instructions:', instructions.trim()].join('\n') : '',
-  ].filter(Boolean).join('\n');
-}
-
-function buildImportPreplanDataContext(
-  document: VisualDocument,
+function buildImportPreplanDataSourceMessage(
   sourceName: string,
   sourceText: string,
-  steps: ImportPlanStep[],
-  groupSteps: ImportPlanStep[]
+  steps: ImportPlanStep[]
 ): string {
   return [
-    buildImportGuidanceFrame(document),
-    '',
-    '=== BEGIN TARGET SECTION APPLICATIONS ===',
-    groupSteps.map((step) => {
-      const application = resolveImportStepApplication(document, step);
-      return [
-        `Target key: ${getImportPlanStepTargetId(step)}`,
-        buildImportSectionApplicationFrame(document, application),
-      ].join('\n');
-    }).join('\n\n'),
-    '=== END TARGET SECTION APPLICATIONS ===',
-    '',
     '=== BEGIN SOURCE DOCUMENT ===',
     `Source name: ${sourceName}`,
     '```text',
@@ -689,22 +700,79 @@ function buildImportPreplanDataContext(
   ].join('\n');
 }
 
-function buildImportPreplanDataResponseInstructions(groupSteps: ImportPlanStep[]): string {
-  const shape = Object.fromEntries(groupSteps.map((step) => [
-    getImportPlanStepTargetId(step),
-    { include: true, information: 'Source facts assigned to this section, in plain text.' },
-  ]));
+function buildImportPreplanDataTaskMessage(
+  document: VisualDocument,
+  sourceName: string,
+  instructions: string | undefined,
+  groupSteps: ImportPlanStep[],
+  index: number,
+  total: number
+): string {
+  return [
+    `Extract source information for import group ${index + 1} of ${total} from "${sourceName}".`,
+    '',
+    '=== BEGIN TARGET SECTION APPLICATIONS ===',
+    groupSteps.map((step) => {
+      const application = resolveImportStepApplication(document, step);
+      return [
+        `Target key: ${getImportPlanStepTargetId(step)}`,
+        buildImportSectionApplicationFrame(document, application),
+      ].join('\n');
+    }).join('\n\n'),
+    '=== END TARGET SECTION APPLICATIONS ===',
+    '',
+    '=== BEGIN CURRENT TASK ===',
+    'This is not a tool loop. Do not generate HVY and do not mutate anything.',
+    'Extract and organize only source facts relevant to the listed target sections.',
+    'Return one object keyed by the exact section ids listed in the response instructions.',
+    'For section ids with actual source facts, return an object with `has_info` and `information`.',
+    'Set `has_info` to true only when `information` contains concrete source-backed facts for that section.',
+    'If a section has no source-backed facts, omit the key or return an empty string for that key. This is the same as `has_info: false`.',
+    'Use this grouped pass to distinguish confusable categories before assigning facts, such as skills versus tools or technologies.',
+    'Use only facts present in the imported source text. Do not invent dates, titles, entity names, labels, categories, metrics, links, or other factual details.',
+    'Do not treat template availability, matched section names, placeholders, descriptions, or schema labels as source facts.',
+    'Preserve exact source dates, names, titles, entity names, labels, category names, and terminology unless the approved step or host instructions explicitly say to normalize them.',
+    '',
+    'Target section ids for this group:',
+    ...groupSteps.map((step) => `- ${getImportPlanStepTargetId(step)}`),
+    '',
+    buildImportGuidanceFrame(document),
+    instructions?.trim() ? ['Additional import instructions:', instructions.trim()].join('\n') : '',
+    '=== END CURRENT TASK ===',
+  ].filter(Boolean).join('\n');
+}
+
+function buildImportPreplanDataResponseInstructions(): string {
+  const schema = {
+    type: 'object',
+    additionalProperties: false,
+    required: ['sections'],
+    properties: {
+      sections: {
+        type: 'object',
+        additionalProperties: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['has_info', 'information'],
+          properties: {
+            has_info: { type: 'boolean' },
+            information: { type: 'string' },
+          },
+        },
+      },
+    },
+  };
   return [
     'Return exactly one JSON object and no prose.',
-    'Shape:',
-    JSON.stringify({ sections: shape }),
+    'Use this JSON schema:',
+    JSON.stringify(schema),
     '',
-    '`sections` must be an object keyed only by these exact section ids:',
-    groupSteps.map((step) => `- ${getImportPlanStepTargetId(step)}`).join('\n'),
-    'Each included value must be an object with `include` and `information`.',
-    '`include` must be true only when this section should be included in the import plan.',
+    '`sections` must be an object keyed only by exact section ids listed in the latest user task.',
+    'Each value with source facts must be an object with `has_info` and `information`.',
+    '`has_info` must be true only when `information` contains concrete source facts for this section.',
     '`information` must be a concise text document of only the imported facts used for that section.',
-    'An omitted key, an empty string value, or an object with `include: false` means the section is excluded.',
+    'Do not set `has_info` true for statements that merely say information is missing, absent, generic, unavailable, or not source-backed.',
+    'An omitted key, an empty string value, or an object with `has_info: false` means the section is excluded.',
   ].join('\n');
 }
 
@@ -725,14 +793,11 @@ function parseImportPreplanDataResponse(response: string): Map<string, string> {
 }
 
 function parseImportPreplanSectionInformation(value: unknown): string {
-  if (typeof value === 'string') {
-    return value.trim();
-  }
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return '';
   }
-  const section = value as { include?: unknown; information?: unknown };
-  if (section.include !== true) {
+  const section = value as { has_info?: unknown; information?: unknown };
+  if (section.has_info !== true) {
     return '';
   }
   return typeof section.information === 'string' ? section.information.trim() : '';
@@ -2128,11 +2193,11 @@ function applyGeneratedImportTemplateSection(
   templateStructure: ImportTemplateStructureInternal,
   values: ImportTemplateValues,
   onMutation?: (group?: string) => void
-): string {
+): AppliedImportSectionResult {
   if (application.kind === 'blank') {
     throw new Error('Forced template import requires a matched template section.');
   }
-  const generated = instantiateImportTemplateSection(application.target.section, templateStructure, values);
+  const generated = instantiateImportTemplateSection(document, application.target.section, templateStructure, values);
   onMutation?.('ai-edit:section');
   if (application.kind === 'replace') {
     const target = application.target.section;
@@ -2143,14 +2208,20 @@ function applyGeneratedImportTemplateSection(
     adjustImportSectionLevel(generated, target.level);
     generated.key = target.key;
     location.container.splice(location.index, 1, generated);
-    return `Replaced section "${target.title}" with "${generated.title}" (${getSectionId(generated)}).`;
+    return {
+      message: `Replaced section "${target.title}" with "${generated.title}" (${getSectionId(generated)}).`,
+      sectionKey: generated.key,
+    };
   }
   adjustImportSectionLevel(generated, 1);
   document.sections.push(generated);
-  return `Inserted section "${generated.title}" (${getSectionId(generated)}) at the bottom.`;
+  return {
+    message: `Inserted section "${generated.title}" (${getSectionId(generated)}) at the bottom.`,
+    sectionKey: generated.key,
+  };
 }
 
-function instantiateImportTemplateSection(template: VisualSection, templateStructure: ImportTemplateStructureInternal, values: ImportTemplateValues): VisualSection {
+function instantiateImportTemplateSection(document: VisualDocument, template: VisualSection, templateStructure: ImportTemplateStructureInternal, values: ImportTemplateValues): VisualSection {
   const sectionFlavorName = typeof values[IMPORT_TEMPLATE_SECTION_FLAVOR_FIELD] === 'string' ? values[IMPORT_TEMPLATE_SECTION_FLAVOR_FIELD].trim() : '';
   const sectionFlavor = templateStructure.sectionFlavors.find((flavor) => flavor.name === sectionFlavorName);
   const section = cloneReusableSection(sectionFlavor?.template ?? template);
@@ -2162,8 +2233,12 @@ function instantiateImportTemplateSection(template: VisualSection, templateStruc
     scalarValues[variable.name] = typeof value === 'string' ? value : '';
   }
   applyReusableSectionTemplateValues(section, scalarValues, sectionVariables);
+  const usedIds = collectImportUsedIds(document);
+  if (section.customId.trim()) {
+    usedIds.add(section.customId.trim());
+  }
   for (const list of lists) {
-    replaceImportTemplateListItems(section, list, Array.isArray(values[list.key]) ? values[list.key] as Array<Record<string, string>> : []);
+    replaceImportTemplateListItems(document, section, list, Array.isArray(values[list.key]) ? values[list.key] as Array<Record<string, string>> : [], usedIds);
   }
   return section;
 }
@@ -2185,7 +2260,7 @@ function getImportTemplateListsForSectionFlavor(
   );
 }
 
-function replaceImportTemplateListItems(section: VisualSection, list: ImportTemplateListStructure, items: Array<Record<string, string>>): void {
+function replaceImportTemplateListItems(document: VisualDocument, section: VisualSection, list: ImportTemplateListStructure, items: Array<Record<string, string>>, usedIds: Set<string>): void {
   const block = findImportTemplateListBlock(section.blocks, list.listBlockId, list.itemComponent);
   if (!block) {
     return;
@@ -2200,8 +2275,80 @@ function replaceImportTemplateListItems(section: VisualSection, list: ImportTemp
     const { [IMPORT_TEMPLATE_FLAVOR_FIELD]: _flavor, ...templateValues } = itemValues;
     const variables = flavor?.variables ?? list.baseVariables;
     applyReusableTemplateValues(item, templateValues, variables);
+    autoPopulateImportTemplateItemId(document, item, itemValues, variables, usedIds);
     return item;
   });
+}
+
+function autoPopulateImportTemplateItemId(
+  document: VisualDocument,
+  item: VisualBlock,
+  values: Record<string, string>,
+  variables: ReusableTemplateVariable[],
+  usedIds: Set<string>
+): void {
+  if (item.schema.id.trim() || !isImportTemplateItemLikelyXrefTarget(document, item)) {
+    return;
+  }
+  const source = item.schema.xrefTitle.trim()
+    || firstImportVisibleText(item)
+    || variables.map((variable) => values[variable.name]?.trim()).find(Boolean)
+    || '';
+  const id = uniqueImportGeneratedId(toImportStableId(source), usedIds);
+  if (id) {
+    item.schema.id = id;
+  }
+}
+
+function isImportTemplateItemLikelyXrefTarget(document: VisualDocument, item: VisualBlock): boolean {
+  const base = resolveBaseComponentFromMeta(item.schema.component, document.meta);
+  return item.schema.tags.trim().length > 0
+    || item.schema.xrefTitle.trim().length > 0
+    || item.schema.xrefDetail.trim().length > 0
+    || (item.schema.component.trim().length > 0 && item.schema.component !== base);
+}
+
+function collectImportUsedIds(document: VisualDocument): Set<string> {
+  const ids = new Set<string>();
+  const visitSection = (section: VisualSection): void => {
+    const sectionId = getSectionId(section).trim();
+    if (sectionId) {
+      ids.add(sectionId);
+    }
+    visitBlocks([section], (block) => {
+      const id = block.schema.id.trim();
+      if (id) {
+        ids.add(id);
+      }
+    });
+    section.children.forEach(visitSection);
+  };
+  document.sections.forEach(visitSection);
+  return ids;
+}
+
+function uniqueImportGeneratedId(base: string, usedIds: Set<string>): string {
+  if (!base) {
+    return '';
+  }
+  let id = base;
+  let index = 2;
+  while (usedIds.has(id)) {
+    id = `${base}-${index}`;
+    index += 1;
+  }
+  usedIds.add(id);
+  return id;
+}
+
+function toImportStableId(value: string): string {
+  return value.trim().toLowerCase()
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .replace(/-+/g, '-')
+    .slice(0, 80);
 }
 
 function findImportTemplateListBlock(blocks: VisualBlock[], listBlockId: string, itemComponent?: string): VisualBlock | null {
@@ -2267,7 +2414,7 @@ function applyGeneratedImportSection(
   application: ImportStepApplication,
   hvy: string,
   onMutation?: (group?: string) => void
-): string {
+): AppliedImportSectionResult {
   const generated = parseGeneratedImportSection(hvy, document.meta);
   if (application.kind !== 'blank') {
     preserveTemplateFillIns(generated, application.target.section);
@@ -2283,11 +2430,375 @@ function applyGeneratedImportSection(
     const previousKey = target.key;
     generated.key = previousKey;
     location.container.splice(location.index, 1, generated);
-    return `Replaced section "${target.title}" with "${generated.title}" (${getSectionId(generated)}).`;
+    return {
+      message: `Replaced section "${target.title}" with "${generated.title}" (${getSectionId(generated)}).`,
+      sectionKey: generated.key,
+    };
   }
   adjustImportSectionLevel(generated, 1);
   document.sections.push(generated);
-  return `Inserted section "${generated.title}" (${getSectionId(generated)}) at the bottom.`;
+  return {
+    message: `Inserted section "${generated.title}" (${getSectionId(generated)}) at the bottom.`,
+    sectionKey: generated.key,
+  };
+}
+
+function collectCreatedImportXrefTargets(document: VisualDocument, sectionKeys: string[]): CreatedImportXrefTarget[] {
+  const targets: CreatedImportXrefTarget[] = [];
+  const seen = new Set<string>();
+  for (const sectionKey of sectionKeys) {
+    const section = findSectionByKey(document.sections, sectionKey);
+    if (!section) {
+      continue;
+    }
+    const sectionId = getSectionId(section);
+    if (sectionId && !seen.has(sectionId)) {
+      seen.add(sectionId);
+      targets.push({
+        id: sectionId,
+        title: formatSectionTitle(section.title),
+        kind: 'section',
+        sectionTitle: formatSectionTitle(section.title),
+        sectionId,
+        sectionKey,
+        component: 'section',
+        text: section.description.trim(),
+      });
+    }
+    visitBlocks([section], (block) => {
+      const id = block.schema.id.trim();
+      if (!id || seen.has(id)) {
+        return;
+      }
+      seen.add(id);
+      targets.push({
+        id,
+        title: describeImportXrefTargetBlock(block),
+        kind: resolveBaseComponentFromMeta(block.schema.component, document.meta),
+        sectionTitle: formatSectionTitle(section.title),
+        sectionId,
+        sectionKey,
+        component: block.schema.component,
+        text: firstImportVisibleText(block) || describeImportXrefTargetDetail(block),
+      });
+    });
+  }
+  return targets;
+}
+
+async function repairImportedSectionXrefs(
+  document: VisualDocument,
+  options: ImportFromTextOptions,
+  llm: HvyImportLlmOptions,
+  beforeLlmCall: ReturnType<typeof createImportLlmStepper>,
+  sectionKeys: string[],
+  createdTargets: CreatedImportXrefTarget[]
+): Promise<void> {
+  const repairSections = sectionKeys
+    .map((key) => findSectionByKey(document.sections, key))
+    .filter((section): section is VisualSection => !!section && sectionHasImportXrefs(document, section));
+  for (const [index, section] of repairSections.entries()) {
+    throwIfAborted(options.signal);
+    const response = await requestProxyCompletion({
+      settings: llm.settings,
+      client: llm.client,
+      messages: [
+        {
+          id: crypto.randomUUID(),
+          role: 'user',
+          content: buildImportXrefRepairPrompt(options.sourceName, options.instructions, section, index, repairSections.length),
+        },
+      ],
+      context: buildImportXrefRepairContext(document, options.sourceName, options.sourceText, section, createdTargets),
+      responseInstructions: buildImportXrefRepairResponseInstructions(section),
+      mode: 'document-edit',
+      debugLabel: `ai-import-xref-repair:${index + 1}`,
+      beforeRequest: beforeLlmCall?.('thinking'),
+      signal: options.signal,
+    });
+    throwIfAborted(options.signal);
+    const hvy = parseImportSectionHvyResponse(response);
+    if (!hvy) {
+      continue;
+    }
+    replaceImportedSectionFromHvy(document, section, hvy);
+  }
+}
+
+function sectionHasImportXrefs(document: VisualDocument, section: VisualSection): boolean {
+  let hasXref = false;
+  visitBlocks([section], (block) => {
+    if (resolveBaseComponentFromMeta(block.schema.component, document.meta) === 'xref-card') {
+      hasXref = true;
+    }
+  });
+  return hasXref;
+}
+
+function replaceImportedSectionFromHvy(document: VisualDocument, target: VisualSection, hvy: string): void {
+  const generated = parseGeneratedImportSection(hvy, document.meta);
+  const location = findSectionContainer(document.sections, target.key);
+  if (!location) {
+    return;
+  }
+  adjustImportSectionLevel(generated, target.level);
+  generated.key = target.key;
+  location.container.splice(location.index, 1, generated);
+}
+
+function buildImportXrefRepairPrompt(sourceName: string, instructions: string | undefined, section: VisualSection, index: number, total: number): string {
+  return [
+    `Repair xrefs for imported section ${index + 1} of ${total} from "${sourceName}".`,
+    '',
+    `Section: ${formatSectionTitle(section.title)} (${getSectionId(section) || section.key})`,
+    '',
+    'This is not a tool loop. Return the same section, improved only where useful.',
+    'Assign xref-card `xrefTarget` values only from the created target inventory.',
+    'Improve xref-card component lists when the source document clearly supports more precise or more complete references.',
+    'Do not invent targets, facts, or records. Leave uncertain xrefs unchanged or omit them from generated lists.',
+    'Preserve the section title, section id, component shapes, and non-xref content unless an xref repair requires a local adjustment.',
+    instructions?.trim() ? ['Additional import instructions:', instructions.trim()].join('\n') : '',
+  ].filter(Boolean).join('\n');
+}
+
+function buildImportXrefRepairContext(document: VisualDocument, sourceName: string, sourceText: string, section: VisualSection, createdTargets: CreatedImportXrefTarget[]): string {
+  return [
+    buildImportGuidanceFrame(document),
+    '',
+    buildCreatedImportXrefTargetFrame(createdTargets),
+    '',
+    '=== BEGIN SOURCE DOCUMENT ===',
+    `Source name: ${sourceName}`,
+    '```text',
+    sourceText,
+    '```',
+    '=== END SOURCE DOCUMENT ===',
+    '',
+    '=== BEGIN CURRENT IMPORTED SECTION ===',
+    serializeSectionFragment(section, document.meta),
+    '=== END CURRENT IMPORTED SECTION ===',
+  ].join('\n');
+}
+
+function buildImportXrefRepairResponseInstructions(section: VisualSection): string {
+  return [
+    'Return exactly one JSON object and no prose.',
+    'Shape:',
+    '{"hvy":"<!--hvy: {\\"id\\":\\"section-id\\"}-->\\n#! Section Title\\n\\n <!--hvy:text {}-->\\n  Section content"}',
+    '',
+    '`hvy` must be the complete repaired HVY section.',
+    'Return {"hvy":""} if no xref repair is needed.',
+    `The returned section must still be "${formatSectionTitle(section.title)}".`,
+  ].join('\n');
+}
+
+function buildCreatedImportXrefTargetFrame(createdTargets: CreatedImportXrefTarget[]): string {
+  return [
+    '=== BEGIN CREATED IMPORT TARGETS ===',
+    createdTargets.length > 0
+      ? createdTargets.map((target) => [
+        `- ${target.id}: ${target.title} [${target.kind}]`,
+        `  section: ${target.sectionTitle}${target.sectionId ? ` (${target.sectionId})` : ''}`,
+        target.component ? `  component: ${target.component}` : '',
+        target.text ? `  peek: ${target.text}` : '',
+      ].filter(Boolean).join('\n')).join('\n')
+      : '- No created import targets.',
+    '=== END CREATED IMPORT TARGETS ===',
+  ].join('\n');
+}
+
+function collectImportFillInTargets(document: VisualDocument, sectionKeys: string[]): ImportFillInTarget[] {
+  const targets: ImportFillInTarget[] = [];
+  for (const sectionKey of sectionKeys) {
+    const section = findSectionByKey(document.sections, sectionKey);
+    if (!section) {
+      continue;
+    }
+    visitBlocks([section], (block) => {
+      const blockId = block.schema.id.trim();
+      const fillInKeys = findTextFillInMarkers(block.text);
+      const isBlankPlaceholder = block.schema.placeholder.trim().length > 0
+        && block.text.trim().length === 0
+        && resolveBaseComponentFromMeta(block.schema.component, document.meta) === 'text';
+      if (!blockId && block.schema.fillIn !== true && fillInKeys.length === 0 && !isBlankPlaceholder) {
+        return;
+      }
+      const key = blockId || uniqueImportGeneratedId(toImportStableId(`${formatSectionTitle(section.title)} ${block.schema.placeholder || 'placeholder'}`), new Set(targets.map((target) => target.key)));
+      if (!blockId && key) {
+        block.schema.id = key;
+      }
+      if (block.schema.fillIn === true) {
+        targets.push({
+          key,
+          label: block.schema.placeholder.trim() || firstImportVisibleText(block) || blockId,
+          sectionKey,
+          sectionTitle: formatSectionTitle(section.title),
+          blockId: key,
+        });
+      }
+      fillInKeys.forEach((marker, markerIndex) => {
+        targets.push({
+          key: `${key}:value:${markerIndex + 1}`,
+          label: marker.placeholder || block.schema.placeholder.trim() || blockId,
+          sectionKey,
+          sectionTitle: formatSectionTitle(section.title),
+          blockId: key,
+          markerIndex,
+        });
+      });
+      if (isBlankPlaceholder && block.schema.fillIn !== true && fillInKeys.length === 0) {
+        targets.push({
+          key,
+          label: block.schema.placeholder.trim(),
+          sectionKey,
+          sectionTitle: formatSectionTitle(section.title),
+          blockId: key,
+        });
+      }
+    });
+  }
+  return targets;
+}
+
+async function fillImportedSectionPlaceholders(
+  document: VisualDocument,
+  options: ImportFromTextOptions,
+  llm: HvyImportLlmOptions,
+  beforeLlmCall: ReturnType<typeof createImportLlmStepper>,
+  sectionKeys: string[],
+  createdTargets: CreatedImportXrefTarget[],
+  fillInTargets: ImportFillInTarget[]
+): Promise<void> {
+  const targetsBySection = new Map<string, ImportFillInTarget[]>();
+  for (const target of fillInTargets) {
+    const list = targetsBySection.get(target.sectionKey) ?? [];
+    list.push(target);
+    targetsBySection.set(target.sectionKey, list);
+  }
+  const sections = sectionKeys
+    .map((key) => findSectionByKey(document.sections, key))
+    .filter((section): section is VisualSection => !!section && (targetsBySection.get(section.key)?.length ?? 0) > 0);
+  for (const [index, section] of sections.entries()) {
+    const targets = targetsBySection.get(section.key) ?? [];
+    throwIfAborted(options.signal);
+    const response = await requestProxyCompletion({
+      settings: llm.settings,
+      client: llm.client,
+      messages: [
+        {
+          id: crypto.randomUUID(),
+          role: 'user',
+          content: buildImportFillInPrompt(options.sourceName, options.instructions, section, targets, index, sections.length),
+        },
+      ],
+      context: buildImportFillInContext(document, options.sourceName, options.sourceText, section, createdTargets, targets),
+      responseInstructions: buildImportFillInResponseInstructions(targets),
+      mode: 'document-edit',
+      debugLabel: `ai-import-fill-ins:${index + 1}`,
+      beforeRequest: beforeLlmCall?.('thinking'),
+      signal: options.signal,
+    });
+    throwIfAborted(options.signal);
+    applyImportFillInResponses(section, targets, parseImportFillInResponse(response));
+  }
+}
+
+function buildImportFillInPrompt(sourceName: string, instructions: string | undefined, section: VisualSection, targets: ImportFillInTarget[], index: number, total: number): string {
+  return [
+    `Fill remaining placeholders for imported section ${index + 1} of ${total} from "${sourceName}".`,
+    '',
+    `Section: ${formatSectionTitle(section.title)} (${getSectionId(section) || section.key})`,
+    '',
+    'This is not a tool loop. Fill only the listed placeholders.',
+    'Use the original source document, not the earlier extracted notes, so low-level details can still be recovered.',
+    'Return an empty string for a key when the source does not contain a source-backed value.',
+    'Do not invent facts, dates, names, metrics, links, or xref targets.',
+    'Placeholder keys:',
+    ...targets.map((target) => `- ${target.key}: ${target.label}`),
+    instructions?.trim() ? ['Additional import instructions:', instructions.trim()].join('\n') : '',
+  ].filter(Boolean).join('\n');
+}
+
+function buildImportFillInContext(document: VisualDocument, sourceName: string, sourceText: string, section: VisualSection, createdTargets: CreatedImportXrefTarget[], targets: ImportFillInTarget[]): string {
+  return [
+    buildImportGuidanceFrame(document),
+    '',
+    buildCreatedImportXrefTargetFrame(createdTargets),
+    '',
+    '=== BEGIN FILL-IN TARGETS ===',
+    targets.map((target) => `- ${target.key}: section="${target.sectionTitle}" block="${target.blockId}" label="${target.label}"`).join('\n'),
+    '=== END FILL-IN TARGETS ===',
+    '',
+    '=== BEGIN SOURCE DOCUMENT ===',
+    `Source name: ${sourceName}`,
+    '```text',
+    sourceText,
+    '```',
+    '=== END SOURCE DOCUMENT ===',
+    '',
+    '=== BEGIN CURRENT IMPORTED SECTION ===',
+    serializeSectionFragment(section, document.meta),
+    '=== END CURRENT IMPORTED SECTION ===',
+  ].join('\n');
+}
+
+function buildImportFillInResponseInstructions(targets: ImportFillInTarget[]): string {
+  const fills = Object.fromEntries(targets.map((target) => [target.key, 'Source-backed HVY/text for this fill-in, or empty string.']));
+  return [
+    'Return exactly one JSON object and no prose.',
+    'Shape:',
+    JSON.stringify({ fills }),
+    '',
+    '`fills` must be an object keyed only by the listed fill-in keys.',
+    'Each value may be plain text or a small HVY block fragment appropriate for the placeholder.',
+    'Use an empty string when there is no source-backed value.',
+  ].join('\n');
+}
+
+function parseImportFillInResponse(response: string): Map<string, string> {
+  const parsed = parseImportJsonObject(response);
+  const fills = parsed?.fills;
+  const result = new Map<string, string>();
+  if (!fills || typeof fills !== 'object' || Array.isArray(fills)) {
+    return result;
+  }
+  for (const [key, value] of Object.entries(fills as Record<string, unknown>)) {
+    if (typeof value === 'string' && value.trim()) {
+      result.set(key, value.trim());
+    }
+  }
+  return result;
+}
+
+function applyImportFillInResponses(section: VisualSection, targets: ImportFillInTarget[], fills: Map<string, string>): void {
+  if (fills.size === 0) {
+    return;
+  }
+  const targetsByBlock = new Map<string, ImportFillInTarget[]>();
+  for (const target of targets) {
+    const list = targetsByBlock.get(target.blockId) ?? [];
+    list.push(target);
+    targetsByBlock.set(target.blockId, list);
+  }
+  visitBlocks([section], (block) => {
+    const blockId = block.schema.id.trim();
+    const blockTargets = targetsByBlock.get(blockId);
+    if (!blockTargets) {
+      return;
+    }
+    for (const target of blockTargets) {
+      const value = fills.get(target.key);
+      if (!value) {
+        continue;
+      }
+      if (typeof target.markerIndex === 'number') {
+        block.text = applyTextFillInValueAtIndex(block.text, target.markerIndex, value);
+      } else if (block.schema.fillIn === true) {
+        block.text = value;
+        block.schema.fillIn = false;
+      }
+    }
+  });
 }
 
 function parseGeneratedImportSection(hvy: string, documentMeta: VisualDocument['meta']): VisualSection {

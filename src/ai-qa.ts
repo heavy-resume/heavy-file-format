@@ -1,8 +1,8 @@
 import { HVY_AI_RESPONSE_FORMAT_INSTRUCTIONS, buildChatDocumentContext, requestProxyCompletion } from './chat/chat';
-import { executeDbTableQueryTool, getDocumentDbTableObjectNames } from './plugins/db-table';
 import type { ChatMessage, ChatSettings, VisualDocument } from './types';
 
 export const QA_TOOL_LOOP_MAX_STEPS = 4;
+const loadDbTableRuntime = () => import('./plugins/db-table');
 
 type QaToolRequest =
   | { tool: 'answer'; answer: string }
@@ -100,7 +100,8 @@ export async function runQaToolLoop(params: {
   question: string;
   signal?: AbortSignal;
 }): Promise<string> {
-  const dbTableNames = await getDocumentDbTableObjectNames(params.document);
+  const dbTableNames = await loadDbTableRuntime()
+    .then(({ getDocumentDbTableObjectNames }) => getDocumentDbTableObjectNames(params.document));
   if (dbTableNames.length === 0) {
     throw new Error('runQaToolLoop requires at least one SQLite table or view. Use requestChatCompletion for non-DB documents.');
   }
@@ -144,6 +145,7 @@ export async function runQaToolLoop(params: {
     let toolResult: string;
     try {
       assertReadOnlyQuery(parsed.value.query);
+      const { executeDbTableQueryTool } = await loadDbTableRuntime();
       toolResult = await executeDbTableQueryTool(params.document, {
         tableName: parsed.value.table_name,
         query: parsed.value.query,

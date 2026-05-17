@@ -7,7 +7,7 @@ import type {
   HvyPluginInstance,
 } from './types';
 import { FORM_PLUGIN_ID } from './registry';
-import { runUserScript, type ScriptingRunResult } from './scripting/wrapper';
+import type { ScriptingRunResult } from './scripting/wrapper';
 import type { ScriptingFormApi, ScriptingFormOption } from './scripting/runtime';
 import { sanitizeInlineCss } from '../css-sanitizer';
 import type { JsonObject } from '../hvy/types';
@@ -420,15 +420,16 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       },
     };
     runQueue = runQueue
-      .then(() =>
-        runUserScript({
+      .then(async () => {
+        const { runUserScript } = await import('./scripting/wrapper');
+        return runUserScript({
           document: ctx.rawDocument,
           source,
           componentId: `${ctx.block.schema.id || ctx.block.id}:${name}:${reason}`,
           pluginVersion: String(ctx.block.schema.pluginConfig.version ?? FORM_PLUGIN_VERSION),
           form: formApi,
-        })
-      )
+        });
+      })
       .then((result) => {
         statusText = resultText(result);
         statusError = !result.ok;

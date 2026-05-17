@@ -1,7 +1,7 @@
 import { buildProxyChatRequest, requestChatCompletion, type ProxyToolTurn } from './chat';
 import { buildProviderProxyRequest, type ProviderProxyChatRequest } from './chat-provider-payload';
 import { buildProviderToolProxyRequest, type ProviderToolProxyChatRequest } from './provider-tools';
-import { hasDocumentDbTables } from '../plugins/db-table';
+import { hasDocumentDbTables } from '../plugins/db-table-model';
 import { runQaToolLoop } from '../ai-qa';
 import type { ChatMessage, ChatSettings, ChatTokenUsage, ChatWorkState, VisualDocument } from '../types';
 import type { VisualSection } from '../editor/types';

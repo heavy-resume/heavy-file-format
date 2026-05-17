@@ -1,10 +1,5 @@
 import { requestProxyCompletion, type HostChatClient } from './chat/chat';
-import {
-  DbTableAiSummary,
-  executeDbTableQueryTool,
-  executeDbTableWriteSql,
-  getDbTableAiSummary,
-} from './plugins/db-table';
+import type { DbTableAiSummary } from './plugins/db-table';
 import { DB_TABLE_PLUGIN_ID } from './plugins/registry';
 import { serializeBlockFragment } from './serialization';
 import type { ChatMessage, ChatSettings, VisualDocument } from './types';
@@ -12,6 +7,7 @@ import type { VisualBlock } from './editor/types';
 import { parseAiBlockEditResponse, type AiEditRequestResult } from './ai-component-edit-common';
 
 export const AI_DB_TABLE_EDIT_MAX_STEPS = 6;
+const loadDbTableRuntime = () => import('./plugins/db-table');
 
 type DbTableEditTool =
   | { tool: 'query_db_table'; query?: string; limit?: number; reason?: string }
@@ -148,7 +144,8 @@ export async function requestAiDbTableEdit(params: {
   }
 
   const storedQuery = params.block.text.trim();
-  const summary = await getDbTableAiSummary(params.document, tableName, { activeQuery: storedQuery || undefined });
+  const summary = await loadDbTableRuntime()
+    .then(({ getDbTableAiSummary }) => getDbTableAiSummary(params.document, tableName, { activeQuery: storedQuery || undefined }));
   const originalFragment = serializeBlockFragment(params.block);
   const context = buildDbTableEditContext({
     document: params.document,
@@ -235,12 +232,14 @@ export async function requestAiDbTableEdit(params: {
     let toolResult: string;
     try {
       if (parsed.value.tool === 'query_db_table') {
+        const { executeDbTableQueryTool } = await loadDbTableRuntime();
         toolResult = await executeDbTableQueryTool(params.document, {
           tableName,
           query: parsed.value.query,
           limit: parsed.value.limit,
         });
       } else {
+        const { executeDbTableWriteSql } = await loadDbTableRuntime();
         recordMutationOnce();
         toolResult = await executeDbTableWriteSql(parsed.value.sql);
       }

@@ -26,7 +26,7 @@ import { getDocumentSectionDefaultCss, mergeDocumentCss } from '../document-sect
 import { sanitizeInlineCss } from '../css-sanitizer';
 import { areTablesEnabled } from '../reference-config';
 import { defaultBlockSchema } from '../document-factory';
-import { parseAttachedComponentBlocks } from '../plugins/db-table';
+import { parseAttachedComponentBlocks } from '../plugins/db-table-fragment';
 import { getOutputGenerator, SCRIPTING_PLUGIN_ID } from '../plugins/registry';
 import { getComponentDefsFromMeta, getSectionDefsFromMeta } from '../component-defs';
 import { extractReusableTemplateVariablesFromDefinition } from '../reusable-template-values';

@@ -1,8 +1,9 @@
-import { state, getRenderApp, getRefreshReaderPanels, recordHistory, materializeDbTableDraftRow, renameDbTableColumn, syncSqliteColumnNameInDom, updateDbTableCell, handleImageUpload, resolveBlockContext, syncReusableTemplateForBlock } from './_imports';
+import { state, getRenderApp, getRefreshReaderPanels, recordHistory, handleImageUpload, resolveBlockContext, syncReusableTemplateForBlock } from './_imports';
 import { encodeComponentListRuntimeView, parseComponentListRuntimeView } from '../../editor/components/component-list/component-list-view';
-import { dropDbTableColumn } from '../../plugins/db-table';
 import { setSearchCategory, setSearchFilterEnabled } from '../../search/actions';
 import type { SearchCategory } from '../../search/types';
+
+const loadDbTableRuntime = () => import('../../plugins/db-table');
 
 export function bindChangeControls(app: HTMLElement): void {
   app.addEventListener('change', (event) => {
@@ -43,7 +44,8 @@ export function bindChangeControls(app: HTMLElement): void {
           return;
         }
         recordHistory(`sqlite-draft-row:${tableName}:${columnName}`);
-        void materializeDbTableDraftRow(tableName, columnName, target.value)
+        void loadDbTableRuntime()
+          .then(({ materializeDbTableDraftRow }) => materializeDbTableDraftRow(tableName, columnName, target.value))
           .then(() => {
             getRenderApp()();
           })
@@ -56,7 +58,8 @@ export function bindChangeControls(app: HTMLElement): void {
         return;
       }
       recordHistory(`sqlite-cell:${tableName}:${rowId}:${columnName}`);
-      void updateDbTableCell(tableName, rowId, columnName, target.value)
+      void loadDbTableRuntime()
+        .then(({ updateDbTableCell }) => updateDbTableCell(tableName, rowId, columnName, target.value))
         .catch((error) => {
           console.error('[hvy:sqlite-plugin] cell update failed', error);
         });
@@ -151,7 +154,8 @@ export function bindChangeControls(app: HTMLElement): void {
           return;
         }
         recordHistory(`sqlite-column-drop:${tableName}:${oldColumnName}`);
-        void dropDbTableColumn(tableName, oldColumnName)
+        void loadDbTableRuntime()
+          .then(({ dropDbTableColumn }) => dropDbTableColumn(tableName, oldColumnName))
           .then(() => {
             getRenderApp()();
           })
@@ -164,14 +168,17 @@ export function bindChangeControls(app: HTMLElement): void {
         return;
       }
       recordHistory(`sqlite-column:${tableName}:${oldColumnName}`);
-      void renameDbTableColumn(tableName, oldColumnName, target.value)
+      void loadDbTableRuntime()
+        .then(({ renameDbTableColumn }) => renameDbTableColumn(tableName, oldColumnName, target.value))
         .then(() => {
           const nextColumnName = target.value.trim();
           if (nextColumnName.length === 0) {
             return;
           }
           target.dataset.oldColumnName = nextColumnName;
-          syncSqliteColumnNameInDom(tableName, oldColumnName, nextColumnName, app);
+          void loadDbTableRuntime().then(({ syncSqliteColumnNameInDom }) => {
+            syncSqliteColumnNameInDom(tableName, oldColumnName, nextColumnName, app);
+          });
         })
         .catch((error) => {
           console.error('[hvy:sqlite-plugin] column rename failed', error);

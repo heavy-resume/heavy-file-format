@@ -1,10 +1,14 @@
 import { state, incrementInputEventCount, getRenderApp, getRefreshReaderPanels, handleTagEditorInput, findSectionByKey, getReusableNameFromSectionKey, resolveBlockContext, handleBlockFieldInput, refreshRichToolbarState, recordHistory, syncReusableTemplateForBlock, sanitizeOptionalId, tagStateHelpers } from './_imports';
 import { SCRIPTING_PLUGIN_ID } from '../../plugins/registry';
 import { SCRIPTING_PLUGIN_VERSION } from '../../plugins/scripting/version';
-import { runButtonVisibilityScripts } from '../../editor/components/button/button-actions';
 import { addDefaultContainerBorderCss, removeDefaultContainerBorderCss } from '../../editor/components/container/container-css';
 import { submitSearch } from '../../search/actions';
 import { clearHideIfUnmodifiedForSectionPath } from '../../template-hide';
+
+const runButtonVisibilityScripts = async (root: ParentNode): Promise<void> => {
+  const actions = await import('../../editor/components/button/button-actions');
+  await actions.runButtonVisibilityScripts(root);
+};
 
 export function bindInputMisc(app: HTMLElement): void {
   app.addEventListener('focusout', (event) => {

@@ -5,7 +5,8 @@ import { closeModal } from './navigation';
 import { saveReusableFromModal } from './reusable';
 import { findBlockByIds, markActiveEditorBlockAsNew, setActiveEditorBlock } from './block-ops';
 import { recordHistory } from './history';
-import { parseAttachedComponentBlocks, resetDbTableViewState, setSqliteRowComponent } from './plugins/db-table';
+import { resetDbTableViewState } from './plugins/db-table-model';
+import { parseAttachedComponentBlocks } from './plugins/db-table-fragment';
 import { serializeBlockFragment } from './serialization';
 import { ensureComponentListBlocks, ensureContainerBlocks, ensureExpandableBlocks } from './document-factory';
 import { createGridItem } from './grid-ops';
@@ -18,6 +19,8 @@ import { getOutputGenerator } from './plugins/registry';
 import { getComponentDefsFromMeta } from './component-defs';
 import { extractReusableTemplateVariablesFromDefinition } from './reusable-template-values';
 import { resolveOutputGeneratorResponse } from './template-output-generators';
+
+const loadDbTableRuntime = () => import('./plugins/db-table');
 
 export function bindModal(app: HTMLElement): void {
   const modalRoot = app.querySelector<HTMLDivElement>('#modalRoot');
@@ -140,7 +143,8 @@ export function bindModal(app: HTMLElement): void {
         return;
       }
       recordHistory(`sqlite-row-component:${modal.tableName}:${modal.rowId}`);
-      void setSqliteRowComponent(modal.tableName, modal.rowId, nextSerialized)
+      void loadDbTableRuntime()
+        .then(({ setSqliteRowComponent }) => setSqliteRowComponent(modal.tableName, modal.rowId, nextSerialized))
         .then(() => {
           closeModal();
           getRenderApp()();
@@ -205,7 +209,8 @@ export function bindModal(app: HTMLElement): void {
     if (clearSqliteRowComponentBtn && state.sqliteRowComponentModal) {
       const modal = state.sqliteRowComponentModal;
       recordHistory(`sqlite-row-component-clear:${modal.tableName}:${modal.rowId}`);
-      void setSqliteRowComponent(modal.tableName, modal.rowId, '')
+      void loadDbTableRuntime()
+        .then(({ setSqliteRowComponent }) => setSqliteRowComponent(modal.tableName, modal.rowId, ''))
         .then(() => {
           closeModal();
           getRenderApp()();

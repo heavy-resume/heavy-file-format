@@ -2,8 +2,11 @@ import { state, getRenderApp } from '../../state';
 import { findBlockByIds, markActiveEditorBlockAsNew, setActiveEditorBlock } from '../../block-ops';
 import { createEmptyBlock } from '../../document-factory';
 import { recordHistory } from '../../history';
-import { addDbTableColumn, addDbTableRow, createDbTable, dropDbTableColumn, getSqliteRowComponent, parseAttachedComponentBlocks, toggleDbTableSort } from '../../plugins/db-table';
+import { toggleDbTableSort } from '../../plugins/db-table-model';
+import { parseAttachedComponentBlocks } from '../../plugins/db-table-fragment';
 import type { ActionHandler } from './types';
+
+const loadDbTableRuntime = () => import('../../plugins/db-table');
 
 const sqliteAddRow: ActionHandler = ({ actionButton }) => {
   const tableName = actionButton.dataset.tableName ?? '';
@@ -11,7 +14,8 @@ const sqliteAddRow: ActionHandler = ({ actionButton }) => {
     return;
   }
   recordHistory(`sqlite-add-row:${tableName}`);
-  void addDbTableRow(tableName)
+  void loadDbTableRuntime()
+    .then(({ addDbTableRow }) => addDbTableRow(tableName))
     .then(() => {
       getRenderApp()();
     })
@@ -26,7 +30,8 @@ const sqliteAddColumn: ActionHandler = ({ actionButton }) => {
     return;
   }
   recordHistory(`sqlite-add-column:${tableName}`);
-  void addDbTableColumn(tableName)
+  void loadDbTableRuntime()
+    .then(({ addDbTableColumn }) => addDbTableColumn(tableName))
     .then(() => {
       getRenderApp()();
     })
@@ -41,7 +46,8 @@ const dbTableCreateTable: ActionHandler = ({ actionButton }) => {
     return;
   }
   recordHistory(`db-table-create-table:${tableName}`);
-  void createDbTable(tableName)
+  void loadDbTableRuntime()
+    .then(({ createDbTable }) => createDbTable(tableName))
     .then(() => {
       getRenderApp()();
     })
@@ -59,7 +65,8 @@ const sqliteDropColumn: ActionHandler = ({ actionButton }) => {
     return;
   }
   recordHistory(`sqlite-column-drop:${tableName}:${columnName}`);
-  void dropDbTableColumn(tableName, columnName)
+  void loadDbTableRuntime()
+    .then(({ dropDbTableColumn }) => dropDbTableColumn(tableName, columnName))
     .then(() => {
       getRenderApp()();
     })
@@ -119,7 +126,8 @@ const sqliteOpenRowComponent = (action: 'sqlite-open-row-component-editor' | 'sq
     return;
   }
 
-  void getSqliteRowComponent(tableName, rowId)
+  void loadDbTableRuntime()
+    .then(({ getSqliteRowComponent }) => getSqliteRowComponent(tableName, rowId))
     .then((fragment) => {
       const modalBlocks = fragment ? parseAttachedComponentBlocks(fragment) : [];
       const rawDraft = fragment ?? '';

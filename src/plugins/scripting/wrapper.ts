@@ -1,9 +1,9 @@
 import { loadBrython, getBrython } from './brython-loader';
-import { createScriptingRuntime, type ScriptingFormApi, type ScriptingRuntime } from './runtime';
+import { createScriptingRuntime, type ScriptingDbApi, type ScriptingFormApi, type ScriptingRuntime } from './runtime';
 import type { VisualDocument } from '../../types';
 import type { HvyPluginHookChangeReason } from '../types';
 import { getScriptingPluginVersion, SCRIPTING_PLUGIN_VERSION } from './version';
-import { createScriptingDbRuntime } from '../db-table';
+import { hasDocumentDbTables } from '../db-table-model';
 
 // Counter for unique runtime ids — each script run gets its own slot on the
 // shared __HVY_SCRIPTING__ global so concurrent runs don't collide.
@@ -16,6 +16,11 @@ interface HvyScriptingGlobal {
   errors: Record<string, string | null>;
   results: Record<string, unknown>;
   callbacks: Record<string, () => void>;
+}
+
+interface LoadedScriptingDbRuntime {
+  api: ScriptingDbApi;
+  dispose(): void;
 }
 
 declare global {
@@ -76,6 +81,13 @@ function withSuppressedBrythonConsoleNoise(run: () => void): void {
     console.warn = originalWarn;
     console.error = originalError;
   }
+}
+
+function shouldInitializeScriptingDb(document: VisualDocument, source: string): boolean {
+  if (hasDocumentDbTables(document)) {
+    return true;
+  }
+  return /\bdoc\s*\.\s*db\b|\bdb\b/u.test(source);
 }
 
 function isEscaped(line: string, index: number): boolean {
@@ -631,27 +643,30 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
 
   let dbMutated = false;
   let runtime: ScriptingRuntime | null = null;
-  let scriptingDb: Awaited<ReturnType<typeof createScriptingDbRuntime>>;
-  try {
-    scriptingDb = await createScriptingDbRuntime(options.document, () => {
-      dbMutated = true;
-      runtime?.markMutated();
-    });
-  } catch (error) {
-    return {
-      ok: false,
-      error: error instanceof Error ? error.message : 'Failed to initialize document database.',
-      errorDetail: error instanceof Error ? error.stack ?? error.message : 'Failed to initialize document database.',
-      linesExecuted: 0,
-      toolCalls: 0,
-    };
+  let scriptingDb: LoadedScriptingDbRuntime | null = null;
+  if (shouldInitializeScriptingDb(options.document, options.source)) {
+    try {
+      const { createScriptingDbRuntime } = await import('../db-table');
+      scriptingDb = await createScriptingDbRuntime(options.document, () => {
+        dbMutated = true;
+        runtime?.markMutated();
+      });
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : 'Failed to initialize document database.',
+        errorDetail: error instanceof Error ? error.stack ?? error.message : 'Failed to initialize document database.',
+        linesExecuted: 0,
+        toolCalls: 0,
+      };
+    }
   }
   runtime = createScriptingRuntime({
     document: options.document,
     maxLines: options.maxLines,
     changeReason: options.changeReason,
     form: options.form,
-    db: scriptingDb.api,
+    db: scriptingDb?.api,
   });
   const runtimeId = `r${++runtimeCounter}`;
   const scripting = getScriptingGlobal();
@@ -695,7 +710,7 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
       delete scripting.errors[runtimeId];
       delete scripting.results[runtimeId];
       delete scripting.callbacks[runtimeId];
-      scriptingDb.dispose();
+      scriptingDb?.dispose();
       if (dbMutated) {
         runtime.doc.rerender();
       }

@@ -4,16 +4,7 @@ import { recordHistory } from '../../../history';
 import { runUserScript } from '../../../plugins/scripting/wrapper';
 import { state, getRefreshReaderPanels, getRenderApp } from '../../../state';
 import type { ChatMessage } from '../../../types';
-
-const runningButtons = new Set<string>();
-
-function buttonKey(sectionKey: string, blockId: string): string {
-  return `${sectionKey}:${blockId}`;
-}
-
-export function isButtonAiGenerateRunning(sectionKey: string, blockId: string): boolean {
-  return runningButtons.has(buttonKey(sectionKey, blockId));
-}
+import { clearButtonAiGenerateRunning, isButtonAiGenerateRunning, markButtonAiGenerateRunning } from './button-state';
 
 function coerceReturnedText(value: unknown): string {
   if (value === null || typeof value === 'undefined') {
@@ -100,8 +91,7 @@ export async function runButtonVisibilityScripts(root: ParentNode): Promise<void
 }
 
 export async function runButtonAiGenerate(app: HTMLElement, actionButton: HTMLElement, sectionKey: string, blockId: string): Promise<void> {
-  const key = buttonKey(sectionKey, blockId);
-  if (runningButtons.has(key)) {
+  if (isButtonAiGenerateRunning(sectionKey, blockId)) {
     return;
   }
   const block = findBlockByIds(sectionKey, blockId);
@@ -118,7 +108,7 @@ export async function runButtonAiGenerate(app: HTMLElement, actionButton: HTMLEl
     }
   };
 
-  runningButtons.add(key);
+  markButtonAiGenerateRunning(sectionKey, blockId);
   if (root) {
     root.dataset.busyState = 'busy';
     root.setAttribute('aria-busy', 'true');
@@ -187,7 +177,7 @@ export async function runButtonAiGenerate(app: HTMLElement, actionButton: HTMLEl
   } catch (error) {
     setStatus(error instanceof Error ? error.message : 'Generation failed.', true);
   } finally {
-    runningButtons.delete(key);
+    clearButtonAiGenerateRunning(sectionKey, blockId);
     if (root) {
       root.dataset.busyState = 'idle';
       root.removeAttribute('aria-busy');

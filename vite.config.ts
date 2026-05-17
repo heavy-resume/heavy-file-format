@@ -33,6 +33,7 @@ interface HvyBuiltInPluginDefinition {
   key: string;
   exportName: string;
   modulePath: string;
+  displayName: string;
 }
 
 const HVY_BUILT_IN_PLUGIN_DEFINITIONS: HvyBuiltInPluginDefinition[] = [
@@ -41,24 +42,28 @@ const HVY_BUILT_IN_PLUGIN_DEFINITIONS: HvyBuiltInPluginDefinition[] = [
     key: 'dbTable',
     exportName: 'dbTablePlugin',
     modulePath: 'src/plugins/db-table-plugin.ts',
+    displayName: 'DB Table',
   },
   {
     id: 'dev.hvy.form',
     key: 'form',
     exportName: 'formPlugin',
     modulePath: 'src/plugins/form.ts',
+    displayName: 'Form',
   },
   {
     id: 'dev.hvy.progress-bar',
     key: 'progressBar',
     exportName: 'progressBarPlugin',
     modulePath: 'src/plugins/progress-bar.ts',
+    displayName: 'Progress Bar',
   },
   {
     id: 'dev.hvy.scripting',
     key: 'scripting',
     exportName: 'scriptingPlugin',
     modulePath: 'src/plugins/scripting/scripting.ts',
+    displayName: 'Scripting',
   },
 ];
 
@@ -115,6 +120,16 @@ export function resolveBuiltInPluginIds(config: unknown, envPluginList?: string)
   return selected;
 }
 
+function normalizeRuntimeEnv(env: Record<string, string>): Record<string, string> {
+  const runtimeEnv: Record<string, string> = {};
+  for (const [key, value] of Object.entries(process.env)) {
+    if (typeof value === 'string') {
+      runtimeEnv[key] = value;
+    }
+  }
+  return { ...runtimeEnv, ...env };
+}
+
 function readHvyBuildConfig(env: Record<string, string>): unknown {
   const configPath = resolve(process.cwd(), env.HVY_BUILD_CONFIG || 'hvy.build.json');
   if (!existsSync(configPath)) {
@@ -161,8 +176,11 @@ export function createBrythonMinimalVfsPlugin(): Plugin {
 }
 
 export function createHvyBuiltInPluginsPlugin(env: Record<string, string>): Plugin {
-  const selectedIds = resolveBuiltInPluginIds(readHvyBuildConfig(env), env.HVY_BUILD_PLUGINS);
-  const source = createHvyBuiltInPluginsModuleSource(selectedIds);
+  const resolvedEnv = normalizeRuntimeEnv(env);
+  const selectedIds = resolveBuiltInPluginIds(readHvyBuildConfig(resolvedEnv), resolvedEnv.HVY_BUILD_PLUGINS);
+  const source = resolvedEnv.HVY_LAZY_BUILT_INS === 'true'
+    ? createLazyHvyBuiltInPluginsModuleSource(selectedIds)
+    : createHvyBuiltInPluginsModuleSource(selectedIds);
   return {
     name: 'hvy-built-in-plugins',
     resolveId(id) {
@@ -247,6 +265,127 @@ export function createHvyBuiltInPluginsModuleSource(selectedIds: readonly HvyBui
     `export const builtInPluginById = Object.freeze({`,
     ...selected.map((definition, index) => `  ${JSON.stringify(definition.id)}: plugin${index},`),
     `});`,
+  ].join('\n');
+}
+
+export function createLazyHvyBuiltInPluginsModuleSource(selectedIds: readonly HvyBuiltInPluginId[]): string {
+  const selected = HVY_BUILT_IN_PLUGIN_DEFINITIONS.filter((definition) => selectedIds.includes(definition.id));
+  const definitions = selected.map((definition) => ({
+    id: definition.id,
+    key: definition.key,
+    displayName: definition.displayName,
+    exportName: definition.exportName,
+    importPath: toViteRootImportPath(definition.modulePath),
+  }));
+  const loaderEntries = definitions.map((definition, index) => {
+    const importPath = JSON.stringify(definition.importPath);
+    const exportName = JSON.stringify(definition.exportName);
+    return `  ${JSON.stringify(definition.id)}: () => import(${importPath}).then((module) => module[${exportName}]),`;
+  });
+  return [
+    `const definitions = ${JSON.stringify(definitions.map(({ importPath: _importPath, exportName: _exportName, ...definition }) => definition))};`,
+    `const loaders = {`,
+    ...loaderEntries,
+    `};`,
+    `const loadedPlugins = new Map();`,
+    `const loadingPlugins = new Map();`,
+    `function loadPlugin(definition) {`,
+    `  const existing = loadedPlugins.get(definition.id);`,
+    `  if (existing) return Promise.resolve(existing);`,
+    `  const loading = loadingPlugins.get(definition.id);`,
+    `  if (loading) return loading;`,
+    `  const loader = loaders[definition.id];`,
+    `  const promise = loader().then((plugin) => {`,
+    `    if (!plugin) throw new Error(\`Unable to load built-in HVY plugin "\${definition.id}".\`);`,
+    `    loadedPlugins.set(definition.id, plugin);`,
+    `    loadingPlugins.delete(definition.id);`,
+    `    return plugin;`,
+    `  }).catch((error) => {`,
+    `    loadingPlugins.delete(definition.id);`,
+    `    throw error;`,
+    `  });`,
+    `  loadingPlugins.set(definition.id, promise);`,
+    `  return promise;`,
+    `}`,
+    `async function runHook(plugin, hookName, ctx) {`,
+    `  const hook = plugin.hooks?.[hookName];`,
+    `  const handlers = Array.isArray(hook) ? hook : hook ? [hook] : [];`,
+    `  for (const handler of handlers) {`,
+    `    await handler.run(ctx);`,
+    `  }`,
+    `}`,
+    `function documentUsesPlugin(document, pluginId) {`,
+    `  const visitBlocks = (blocks) => {`,
+    `    for (const block of blocks ?? []) {`,
+    `      if (block?.schema?.component === 'plugin' && block.schema.plugin === pluginId) return true;`,
+    `      if (visitBlocks(block?.schema?.children?.children)) return true;`,
+    `      if (visitBlocks(block?.schema?.items)) return true;`,
+    `      if (visitBlocks(block?.schema?.expandableStubBlocks?.children)) return true;`,
+    `      if (visitBlocks(block?.schema?.expandableContentBlocks?.children)) return true;`,
+    `    }`,
+    `    return false;`,
+    `  };`,
+    `  const visitSections = (sections) => {`,
+    `    for (const section of sections ?? []) {`,
+    `      if (visitBlocks(section?.blocks)) return true;`,
+    `      if (visitSections(section?.children)) return true;`,
+    `    }`,
+    `    return false;`,
+    `  };`,
+    `  return visitSections(document?.sections);`,
+    `}`,
+    `function createLazyPlugin(definition) {`,
+    `  return {`,
+    `    id: definition.id,`,
+    `    displayName: definition.displayName,`,
+    `    create(ctx) {`,
+    `      const root = document.createElement('div');`,
+    `      root.className = 'hvy-plugin-loading';`,
+    `      root.textContent = \`Loading \${definition.displayName}...\`;`,
+    `      let instance = null;`,
+    `      let mounted = true;`,
+    `      loadPlugin(definition).then((plugin) => {`,
+    `        if (!mounted) return;`,
+    `        const factory = plugin.create ?? plugin.components?.[0]?.create;`,
+    `        if (!factory) {`,
+    `          root.textContent = \`\${definition.displayName} is unavailable.\`;`,
+    `          return;`,
+    `        }`,
+    `        instance = factory(ctx);`,
+    `        root.replaceChildren(instance.element);`,
+    `        ctx.requestRerender();`,
+    `      }).catch((error) => {`,
+    `        root.textContent = error instanceof Error ? error.message : \`Failed to load \${definition.displayName}.\`;`,
+    `      });`,
+    `      return {`,
+    `        element: root,`,
+    `        refresh() { instance?.refresh?.(); },`,
+    `        unmount() {`,
+    `          mounted = false;`,
+    `          instance?.unmount?.();`,
+    `        },`,
+    `      };`,
+    `    },`,
+    `    hooks: {`,
+    `      documentLoad: { async run(ctx) { if (documentUsesPlugin(ctx.document, definition.id)) await runHook(await loadPlugin(definition), 'documentLoad', ctx); } },`,
+    `      documentChange: { async run(ctx) { if (documentUsesPlugin(ctx.document, definition.id)) await runHook(await loadPlugin(definition), 'documentChange', ctx); } },`,
+    `    },`,
+    `    aiHint(block) {`,
+    `      const loaded = loadedPlugins.get(definition.id);`,
+    `      const hint = loaded?.aiHint;`,
+    `      return typeof hint === 'function' ? hint(block) : hint ?? definition.displayName;`,
+    `    },`,
+    `    aiHelp(block) {`,
+    `      const loaded = loadedPlugins.get(definition.id);`,
+    `      const help = loaded?.aiHelp;`,
+    `      return typeof help === 'function' ? help(block) : help ?? definition.displayName;`,
+    `    },`,
+    `  };`,
+    `}`,
+    `export const builtInPluginIds = ${JSON.stringify(selectedIds)};`,
+    `export const builtInPlugins = definitions.map(createLazyPlugin);`,
+    `export const builtInPluginMap = Object.freeze(Object.fromEntries(builtInPlugins.map((plugin, index) => [definitions[index].key, plugin])));`,
+    `export const builtInPluginById = Object.freeze(Object.fromEntries(builtInPlugins.map((plugin) => [plugin.id, plugin])));`,
   ].join('\n');
 }
 

@@ -11,7 +11,7 @@ import { detectExtension, normalizeFilename, normalizeMarkdownImportFilename, do
 import { bindModal } from './bind-modal';
 import { bindLinkInlineModal } from './bind-link-modal';
 import { clearChatConversation } from './chat/chat';
-import { restoreDbTableFrameScroll } from './plugins/db-table';
+import { restoreDbTableFrameScroll } from './plugins/db-table-model';
 import { bindChatThreadUi } from './chat/chat-thread-ui';
 import { bindImageDragAndDrop } from './editor/components/image/image';
 import { bindAppEvents } from './bind/app-events';

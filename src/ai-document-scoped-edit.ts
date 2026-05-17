@@ -1,11 +1,6 @@
 import { requestProxyCompletion, traceAgentLoopEvent, type HostChatClient } from './chat/chat';
 import { getRegisteredPluginAiHints } from './ai-plugin-hints';
-import {
-  executeDbTableQueryTool,
-  executeDbTableWriteSql,
-  getDocumentDbTableObjectNames,
-  getDocumentDbTableNames,
-} from './plugins/db-table';
+import { getDocumentDbTableNames } from './plugins/db-table-model';
 import type { ChatMessage, ChatSettings, ToolLoopCompactionOptions, VisualDocument } from './types';
 import {
   buildDocumentEditFormatInstructions,
@@ -48,6 +43,8 @@ import {
   type WorkNoteState,
 } from './ai-document-edit-types';
 import { selectDocumentEditPhase } from './ai-document-edit-phases';
+
+const loadDbTableRuntime = () => import('./plugins/db-table');
 
 function buildDocumentEditContextSummary(
   summary: string,
@@ -221,11 +218,15 @@ async function runDocumentEditToolLoop(params: {
 }): Promise<{ summary: string }> {
   let snapshot = summarizeDocumentStructure(params.document);
   let configuredDbTableNames = getDocumentDbTableNames(params.document);
-  let dbObjectNames = await getDocumentDbTableObjectNames(params.document);
+  let dbObjectNames = configuredDbTableNames.length > 0
+    ? await loadDbTableRuntime().then(({ getDocumentDbTableObjectNames }) => getDocumentDbTableObjectNames(params.document))
+    : [];
   const pluginHints = getRegisteredPluginAiHints();
   const refreshDbContext = async (summary: string): Promise<string> => {
     configuredDbTableNames = getDocumentDbTableNames(params.document);
-    dbObjectNames = await getDocumentDbTableObjectNames(params.document);
+    dbObjectNames = configuredDbTableNames.length > 0
+      ? await loadDbTableRuntime().then(({ getDocumentDbTableObjectNames }) => getDocumentDbTableObjectNames(params.document))
+      : [];
     return buildDocumentEditContextSummary(summary, dbObjectNames, configuredDbTableNames);
   };
   console.debug('[hvy:ai-document-edit] preparing document chunks for note-taking');
@@ -423,6 +424,7 @@ async function runDocumentEditToolLoop(params: {
             contextSummary = await refreshDbContext(SENT_STRUCTURE_CONTEXT);
           } else if (call.tool === 'query_db_table') {
             try {
+              const { executeDbTableQueryTool } = await loadDbTableRuntime();
               callResult = await executeDbTableQueryTool(params.document, {
                 tableName: call.table_name,
                 query: call.query,
@@ -438,6 +440,7 @@ async function runDocumentEditToolLoop(params: {
             }
             contextSummary = await refreshDbContext(SENT_STRUCTURE_CONTEXT);
           } else if (call.tool === 'execute_sql') {
+            const { executeDbTableWriteSql } = await loadDbTableRuntime();
             try {
               params.onMutation?.('execute-sql');
               callResult = await executeDbTableWriteSql(call.sql);
@@ -624,6 +627,7 @@ async function runDocumentEditToolLoop(params: {
       params.onProgress?.(describeDocumentToolProgress(parsed.value));
       let queryResult: string;
       try {
+        const { executeDbTableQueryTool } = await loadDbTableRuntime();
         queryResult = await executeDbTableQueryTool(params.document, {
           tableName: parsed.value.table_name,
           query: parsed.value.query,
@@ -643,6 +647,7 @@ async function runDocumentEditToolLoop(params: {
       params.onProgress?.(describeDocumentToolProgress(parsed.value));
       let sqlResult: string;
       try {
+        const { executeDbTableWriteSql } = await loadDbTableRuntime();
         params.onMutation?.('execute-sql');
         sqlResult = await executeDbTableWriteSql(parsed.value.sql);
       } catch (error) {

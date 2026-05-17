@@ -1,7 +1,7 @@
 import type { ChatMessage, ToolLoopCompactionOptions, VisualDocument } from './types';
 import { summarizeDocumentStructure, summarizeHeaderStructure, truncatePreview } from './ai-document-structure';
 import { visitBlocks } from './section-ops';
-import { getDocumentDbTableNames } from './plugins/db-table';
+import { getDocumentDbTableNames } from './plugins/db-table-model';
 import {
   HvyRepairToolError,
   MAX_TOOL_FAILURES_IN_WINDOW,

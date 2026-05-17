@@ -4,11 +4,7 @@ import type {
   HvyPluginFactory,
   HvyPluginInstance,
 } from './types';
-import {
-  renderDbTablePluginEditor,
-  renderDbTablePluginReader,
-  resetDbTableViewState,
-} from './db-table';
+import { resetDbTableViewState } from './db-table-model';
 import { findSectionByKey } from '../section-ops';
 import { findBlockByIds } from '../block-ops';
 import { getCachedComponentRenderHelpers } from '../state';
@@ -28,6 +24,11 @@ interface DbTableFocusKey {
   selectionStart: number | null;
   selectionEnd: number | null;
   selectionDirection: 'forward' | 'backward' | 'none' | null;
+}
+
+interface DbTableRenderer {
+  renderDbTablePluginEditor(sectionKey: string, block: HvyPluginContext['block'], helpers: ReturnType<typeof getCachedComponentRenderHelpers>): string;
+  renderDbTablePluginReader(section: HvyPluginContext['rawDocument']['sections'][number], block: HvyPluginContext['block'], helpers: ReturnType<typeof getCachedComponentRenderHelpers>): string;
 }
 
 function captureDbTableFocus(root: HTMLElement): DbTableFocusKey | null {
@@ -109,8 +110,20 @@ function restoreDbTableFocus(root: HTMLElement, key: DbTableFocusKey | null): vo
 function build(ctx: HvyPluginContext): HvyPluginInstance {
   const root = document.createElement('div');
   root.className = `hvy-db-table-plugin hvy-db-table-plugin-${ctx.mode}`;
+  let renderer: DbTableRenderer | null = null;
+  let loadingRenderer: Promise<DbTableRenderer> | null = null;
+  let refreshVersion = 0;
 
-  const refresh = () => {
+  const loadRenderer = async (): Promise<DbTableRenderer> => {
+    if (renderer) {
+      return renderer;
+    }
+    loadingRenderer ??= import('./db-table');
+    renderer = await loadingRenderer;
+    return renderer;
+  };
+
+  const renderWithRenderer = (activeRenderer: DbTableRenderer) => {
     const helpers = getCachedComponentRenderHelpers();
     const focusKey = captureDbTableFocus(root);
 
@@ -121,7 +134,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
         root.innerHTML = '';
         return;
       }
-      root.innerHTML = renderDbTablePluginReader(section, block, helpers);
+      root.innerHTML = activeRenderer.renderDbTablePluginReader(section, block, helpers);
       return;
     }
 
@@ -130,8 +143,27 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       root.innerHTML = '';
       return;
     }
-    root.innerHTML = renderDbTablePluginEditor(ctx.sectionKey, block, helpers);
+    root.innerHTML = activeRenderer.renderDbTablePluginEditor(ctx.sectionKey, block, helpers);
     restoreDbTableFocus(root, focusKey);
+  };
+
+  const refresh = () => {
+    const version = ++refreshVersion;
+    if (renderer) {
+      renderWithRenderer(renderer);
+      return;
+    }
+    root.innerHTML = '<div class="db-table-loading">Loading table...</div>';
+    void loadRenderer()
+      .then((activeRenderer) => {
+        if (version !== refreshVersion) return;
+        renderWithRenderer(activeRenderer);
+      })
+      .catch((error) => {
+        if (version !== refreshVersion) return;
+        const message = error instanceof Error ? error.message : 'Unable to load table renderer.';
+        root.innerHTML = `<div class="db-table-error">${message}</div>`;
+      });
   };
 
   refresh();

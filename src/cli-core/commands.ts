@@ -11,7 +11,7 @@ import {
   type HvyVirtualPathNamingState,
 } from './virtual-file-system';
 import { executeHvyDocumentCommand, hvyDocumentCommandHelp } from './hvy-document-commands';
-import { createScriptingDbRuntime, formatQueryResultTable, getDocumentDbTableObjectNames } from '../plugins/db-table';
+import { formatQueryResultTable } from '../plugins/db-table-format';
 import type { VisualBlock, VisualSection } from '../editor/types';
 import { getSectionId } from '../section-ops';
 import { getHvyCliPluginCommandRegistration } from './plugin-command-registry';
@@ -24,6 +24,8 @@ import { deserializeDocumentWithDiagnostics, serializeDocument, serializeSection
 import { parseAiBlockEditResponse } from '../ai-component-edit-common';
 import { resolveBaseComponentFromMeta } from '../component-defs';
 import { removeTextFillInMarkers } from '../text-fill-in';
+
+const loadDbTableRuntime = () => import('../plugins/db-table');
 
 const SCRATCHPAD_SOFT_MAX_CHARS = 600;
 const SCRATCHPAD_HARD_MAX_CHARS = 800;
@@ -534,7 +536,8 @@ function isDbTableSqlAction(action: string): boolean {
 async function commandDbTable(document: VisualDocument, args: string[]): Promise<{ output: string; mutated: boolean }> {
   const [action = '', ...rest] = args;
   if (action === 'tables') {
-    const names = await getDocumentDbTableObjectNames(document);
+    const names = await loadDbTableRuntime()
+      .then(({ getDocumentDbTableObjectNames }) => getDocumentDbTableObjectNames(document));
     return { output: names.length > 0 ? names.join('\n') : '(no SQLite tables or views)', mutated: false };
   }
   if (action === 'query') {
@@ -542,7 +545,8 @@ async function commandDbTable(document: VisualDocument, args: string[]): Promise
     if (!sql) {
       throw new Error('db-table query: expected SQL');
     }
-    const runtime = await createScriptingDbRuntime(document);
+    const runtime = await loadDbTableRuntime()
+      .then(({ createScriptingDbRuntime }) => createScriptingDbRuntime(document));
     try {
       const rows = runtime.api.query(sql);
       const columns = collectQueryColumns(rows);
@@ -565,9 +569,10 @@ async function commandDbTable(document: VisualDocument, args: string[]): Promise
       throw new Error('db-table exec: expected SQL');
     }
     let mutated = false;
-    const runtime = await createScriptingDbRuntime(document, () => {
-      mutated = true;
-    });
+    const runtime = await loadDbTableRuntime()
+      .then(({ createScriptingDbRuntime }) => createScriptingDbRuntime(document, () => {
+        mutated = true;
+      }));
     try {
       return { output: runtime.api.execute(sql), mutated };
     } finally {
@@ -576,7 +581,8 @@ async function commandDbTable(document: VisualDocument, args: string[]): Promise
   }
   if (action === 'schema') {
     const name = rest.join(' ').trim();
-    const runtime = await createScriptingDbRuntime(document);
+    const runtime = await loadDbTableRuntime()
+      .then(({ createScriptingDbRuntime }) => createScriptingDbRuntime(document));
     try {
       if (!name) {
         const rows = runtime.api.query(

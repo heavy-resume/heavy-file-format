@@ -1,49 +1,31 @@
 import './default-theme.css';
 import './host-overrides.css';
 import './style.css';
-import 'highlight.js/styles/github.css';
 
-import { createEditorRenderer, type EditorRenderer } from './editor/render';
 import { createReaderRenderer, type ReaderRenderer } from './reader/render';
-import { state, initState, initCallbacks } from './state';
-import type { AppState, VisualDocument } from './types';
+import { initCallbacks, initState, state } from './state';
+import type { AppState, ChatProvider, VisualDocument } from './types';
 import { deserializeDocumentBytes, serializeDocument } from './serialization';
-import { deserializeDocumentWithDiagnostics } from './serialization';
-import { escapeAttr, escapeHtml, renderOption } from './utils';
-import { applyTheme, getThemeConfig, initColorModeSync, setThemeRoot } from './theme';
+import { escapeAttr, escapeHtml } from './utils';
+import { applyTheme, getThemeConfig, initColorModeSync as syncColorMode, setThemeRoot } from './theme';
 import { getPaletteById } from './palettes/palette-registry';
 import {
-  buildSectionRenderSequence,
   findDuplicateSectionIds,
   findSectionByKey,
   flattenSections,
   formatSectionTitle,
   getSectionId,
-  isDefaultUntitledSectionTitle,
 } from './section-ops';
-import {
-  getComponentDefs,
-  getSectionDefs,
-  isBuiltinComponent,
-  renderComponentOptions,
-  renderReusableSectionOptions,
-  resolveBaseComponent,
-} from './component-defs';
 import {
   findBlockByIds,
   getComponentRenderHelpers,
-  isActiveEditorBlock,
-  isActiveEditorSectionTitle,
 } from './block-ops';
 import {
-  ensureComponentListBlocks,
-  ensureContainerBlocks,
   ensureExpandableBlocks,
   ensureGridItems,
 } from './document-factory';
-import { bindUi } from './bind-ui';
-import { bindClickActions } from './bind/handlers/click-actions';
-import { bindInputBlock } from './bind/handlers/input-block';
+import { resolveBaseComponent } from './component-defs';
+import { bindReaderUi } from './bind-reader-ui';
 import { capturePluginFocus, reconcilePluginMounts } from './plugins/mount';
 import { setHostPlugins } from './plugins/registry';
 import { resetPluginDocumentHookState, runPluginDocumentHooks } from './plugins/hooks';
@@ -51,27 +33,20 @@ import {
   builtInPluginMap,
   builtInPlugins,
 } from 'virtual:hvy-built-in-plugins';
-import type { HvyPlugin } from './plugins/types';
-import { runButtonVisibilityScripts } from './editor/components/button/button-actions';
-import { createDefaultChatState } from './chat/chat';
-import { renderChatPanel, setHostChatClient, type HostChatClient } from './chat/chat';
-import { renderAiEditPopover, renderAiModeHint } from './ai-mode-ui';
-import { createDefaultSearchState } from './search/state';
-import { renderSearchLauncher, renderSearchPalette } from './search/render';
 import { loadPaletteOverrideId } from './palettes/palette-preferences';
 import { captureRenderScroll, restoreRenderScroll } from './render-scroll';
 import { observeRenderedLinks, resetObservedLinks, type HvyLinkObserver } from './link-observer';
 import { recordHistory } from './history';
-import { resetTransientUiState } from './navigation';
-import { refreshReaderSurfaces } from './reader/refresh-surfaces';
-import {
-  buildImportPlanForDocument,
-  importTextIntoDocument,
-  type BuildImportPlanOptions,
-  type BuildImportPlanResult,
-  type ImportFromTextOptions,
-  type ImportFromTextResult,
+import type { HvyPlugin } from './plugins/types';
+import type { HostChatClient } from './chat/chat';
+import type {
+  BuildImportPlanOptions,
+  BuildImportPlanResult,
+  ImportFromTextOptions,
+  ImportFromTextResult,
 } from './ai-document-edit';
+import { markdownToReaderHtml, normalizeMarkdownIndentation, normalizeMarkdownLists } from './markdown';
+import { removeTextFillInMarkers } from './text-fill-in';
 
 export type HvyEmbedMode = 'viewer' | 'editor' | 'ai';
 
@@ -98,17 +73,63 @@ export interface HvyMount {
   mountThemeEditor(root: HTMLElement, options?: { advanced?: boolean; includePalettePicker?: boolean }): void;
 }
 
-let editorRenderer: EditorRenderer;
-let readerRenderer: ReaderRenderer;
+type FullEmbedModule = typeof import('./embed-full');
+
+let readerRenderer: ReaderRenderer | null = null;
 let currentRoot: HTMLElement | null = null;
 let currentLinkObserver: HvyLinkObserver | null = null;
 
-function createEmbedState(document: VisualDocument, mode: HvyEmbedMode, showAdvancedEditor = false): AppState {
+function createDefaultChatState(): AppState['chat'] {
+  return {
+    settings: {
+      provider: 'openai' as ChatProvider,
+      model: 'gpt-5.4-mini',
+    },
+    draft: '',
+    messages: [],
+    isSending: false,
+    error: null,
+    panelOpen: false,
+    requestNonce: 0,
+    abortController: null,
+    cliSimEnabled: false,
+    cliSim: null,
+  };
+}
+
+function createDefaultSearchState(): AppState['search'] {
+  return {
+    open: false,
+    queryDraft: '',
+    submittedQuery: '',
+    caseSensitive: false,
+    categories: {
+      tags: true,
+      contents: true,
+      description: true,
+    },
+    activeTab: 'search',
+    filterEnabled: false,
+    filterMode: 'deprioritize',
+    resultsCollapsed: false,
+    activeResultId: null,
+    isLoading: false,
+    error: null,
+    results: [],
+    navigationResultIds: [],
+    clearedSectionKeys: [],
+    clearedBlockIds: [],
+    requestNonce: 0,
+    abortController: null,
+  };
+}
+
+function createEmbedState(document: VisualDocument, showAdvancedEditor = false): AppState {
   return {
     document,
     filename: document.extension === '.thvy' ? 'resume.thvy' : 'resume.hvy',
     selectedExample: 'default',
-    currentView: mode,
+    currentView: 'viewer',
     editorMode: 'basic',
     responsivePreview: 'full',
     chat: createDefaultChatState(),
@@ -184,77 +205,58 @@ function createEmbedState(document: VisualDocument, mode: HvyEmbedMode, showAdva
 }
 
 function localGetComponentRenderHelpers() {
-  return getComponentRenderHelpers(editorRenderer, readerRenderer);
+  if (!readerRenderer) {
+    throw new Error('HVY reader renderer is not initialized.');
+  }
+  return getComponentRenderHelpers(
+    {
+      renderRichToolbar: () => '',
+      renderEditorBlock: () => '',
+      renderPassiveEditorBlock: () => '',
+      renderComponentFragment,
+      renderComponentPlacementTarget: () => '',
+    },
+    readerRenderer
+  );
 }
 
-function ensureRenderers(): void {
-  if (editorRenderer && readerRenderer) return;
-  editorRenderer = createEditorRenderer(
-    {
-      get documentMeta() { return state.document.meta as Record<string, unknown>; },
-      get documentSections() { return state.document.sections; },
-      get showAdvancedEditor() { return state.showAdvancedEditor; },
-      get addComponentBySection() { return state.addComponentBySection; },
-      get activeEditorBlock() { return state.activeEditorBlock; },
-      get componentPlacement() { return state.componentPlacement; },
-      get pendingEditorActivation() { return state.pendingEditorActivation; },
-      get expandableEditorPanels() { return state.expandableEditorPanels; },
-      get readerExpandableState() { return state.readerExpandableState; },
-      get editorSidebarHelpDismissed() { return state.editorSidebarHelpDismissed; },
-      get currentView() { return state.currentView; },
-      get responsivePreview() { return state.responsivePreview; },
-      get mobileAdjustmentMode() { return state.editorMode === 'mobile-adjustment'; },
-      get descriptionPopulate() { return state.descriptionPopulate; },
-      get openTextLineStyleName() { return state.openTextLineStyleName; },
-    },
-    {
-      escapeAttr,
-      escapeHtml,
-      flattenSections,
-      renderReaderBlock: (section, block, options) => readerRenderer.renderReaderBlock(section, block, options),
-      renderReusableSectionOptions,
-      renderOption,
-      resolveBaseComponent,
-      ensureContainerBlocks,
-      ensureComponentListBlocks,
-      ensureExpandableBlocks,
-      ensureGridItems,
-      isActiveEditorSectionTitle,
-      isActiveEditorBlock,
-      isDefaultUntitledSectionTitle,
-      formatSectionTitle,
-      findSectionByKey,
-      buildSectionRenderSequence,
-      getComponentDefs,
-      getSectionDefs,
-      getThemeConfig,
-      getComponentRenderHelpers: localGetComponentRenderHelpers,
-      isBuiltinComponent,
-    }
-  );
+function renderComponentFragment(componentName: string, content: string, block: { schema: { codeLanguage?: string; fillIn?: boolean } }): string {
+  if (componentName === 'code') {
+    const language = block.schema.codeLanguage?.trim() || 'text';
+    return `<pre class="code-reader"><code data-language="${escapeAttr(language)}">${escapeHtml(content)}</code></pre>`;
+  }
+  const source = componentName === 'text' && block.schema.fillIn ? removeTextFillInMarkers(content) : content;
+  const normalized = normalizeMarkdownIndentation(normalizeMarkdownLists(source));
+  return markdownToReaderHtml(normalized);
+}
+
+function ensureReaderRenderer(): ReaderRenderer {
+  if (readerRenderer) {
+    return readerRenderer;
+  }
   readerRenderer = createReaderRenderer(
     {
       get documentMeta() { return state.document.meta; },
       get documentSections() { return state.document.sections; },
       get addComponentBySection() { return state.addComponentBySection; },
       get tempHighlights() { return state.tempHighlights; },
-      get aiEditTarget() { return { sectionKey: state.aiEdit.sectionKey, blockId: state.aiEdit.blockId }; },
-      get contextMenu() { return state.contextMenu ?? null; },
-      get activeEditorBlock() { return state.activeEditorBlock; },
-      get aiEditorHostBlock() { return state.aiEditorHostBlock; },
-      get modalSectionKey() { return state.modalSectionKey; },
+      get aiEditTarget() { return { sectionKey: null, blockId: null }; },
+      get contextMenu() { return null; },
+      get activeEditorBlock() { return null; },
+      get aiEditorHostBlock() { return null; },
+      get modalSectionKey() { return null; },
       get sqliteRowComponentModal() { return state.sqliteRowComponentModal; },
       get dbTableQueryModal() { return state.dbTableQueryModal; },
-      get reusableSaveModal() { return state.reusableSaveModal; },
-      get reusableTemplateModal() { return state.reusableTemplateModal; },
-      get sectionTemplateFlavorModal() { return state.sectionTemplateFlavorModal; },
-      get componentMetaModal() { return state.componentMetaModal; },
-      get themeModalOpen() { return state.themeModalOpen; },
-      get themeModalMode() { return state.themeModalMode; },
+      get reusableSaveModal() { return null; },
+      get reusableTemplateModal() { return null; },
+      get sectionTemplateFlavorModal() { return null; },
+      get componentMetaModal() { return null; },
+      get themeModalOpen() { return false; },
+      get themeModalMode() { return 'full' as const; },
       get paletteOverrideId() { return state.paletteOverrideId; },
       get theme() { return getThemeConfig(); },
-      get currentView() { return state.currentView; },
-      get showAdvancedEditor() { return state.showAdvancedEditor; },
+      get currentView() { return 'viewer' as const; },
+      get showAdvancedEditor() { return false; },
       get responsivePreview() { return state.responsivePreview; },
       get readerExpandableState() { return state.readerExpandableState; },
       get readerContainerState() { return state.readerContainerState; },
@@ -277,80 +279,13 @@ function ensureRenderers(): void {
       ensureExpandableBlocks,
       ensureGridItems,
       getComponentRenderHelpers: localGetComponentRenderHelpers,
-      renderEditorBlock: (sectionKey, block) => editorRenderer.renderEditorBlock(sectionKey, block, state.document.sections),
-      renderBlockContentEditor: (sectionKey, block) => editorRenderer.renderBlockContentEditor(sectionKey, block),
-      renderComponentOptions,
-      renderBlockMetaFields: (sectionKey, block) => editorRenderer.renderBlockMetaFields(sectionKey, block),
+      renderEditorBlock: () => '',
+      renderBlockContentEditor: () => '',
+      renderComponentOptions: () => '',
+      renderBlockMetaFields: () => '',
     }
   );
-}
-
-function renderApp(): void {
-  if (!currentRoot) return;
-  const capturedScroll = captureRenderScroll(currentRoot, state.paneScroll);
-  state.paneScroll = capturedScroll.paneScroll;
-  applyTheme();
-  const isEditor = state.currentView === 'editor';
-  const isAi = state.currentView === 'ai';
-  capturePluginFocus();
-  currentRoot.innerHTML = `
-    <main class="layout hvy-embed-layout">
-      <div hidden>
-        <button id="newBtn" type="button">New</button>
-        <input id="fileInput" type="file" />
-        <input id="downloadName" type="text" value="${escapeAttr(state.filename)}" />
-        <button id="downloadBtn" type="button">Download</button>
-      </div>
-      <section class="workspace-shell">
-        <div class="${isEditor ? 'editor-pane' : 'reader-pane'} pane full-pane">
-          ${
-            isEditor
-              ? `<div class="editor-shell ${state.editorSidebarOpen ? 'is-sidebar-open' : 'is-sidebar-closed'}">
-                  <div class="editor-sidebar-backdrop" data-action="toggle-editor-sidebar"></div>
-                  <aside class="editor-sidebar">
-                    <button type="button" class="editor-sidebar-tab" data-action="toggle-editor-sidebar" aria-expanded="${state.editorSidebarOpen ? 'true' : 'false'}" aria-label="Toggle sidebar"><span class="sidebar-tab-hamburger" aria-hidden="true"></span></button>
-                    ${editorRenderer.renderSidebarHelpBalloon(state.document.sections)}
-                    <div class="editor-sidebar-panel">
-                      ${editorRenderer.renderSidebarEditorSections(state.document.sections)}
-                    </div>
-                  </aside>
-                  <div id="editorTree" class="editor-tree">${editorRenderer.renderSectionEditorTree(state.document.sections)}</div>
-                </div>`
-              : `<div class="viewer-shell ${isAi ? 'ai-view-shell ' : ''}${state.viewerSidebarOpen ? 'is-sidebar-open' : 'is-sidebar-closed'}">
-                  <div class="viewer-sidebar-backdrop" data-action="toggle-viewer-sidebar"></div>
-                  <aside class="viewer-sidebar">
-                    <button type="button" class="viewer-sidebar-tab" data-action="toggle-viewer-sidebar" aria-expanded="${state.viewerSidebarOpen ? 'true' : 'false'}" aria-label="Toggle navigation">${renderSidebarTabLabel()}</button>
-                    ${readerRenderer.renderSidebarHelpBalloon(state.document.sections)}
-                    <div class="viewer-sidebar-panel">
-                      <div id="readerWarnings" class="reader-warnings">${readerRenderer.renderWarnings()}</div>
-                      <div id="${isAi ? 'aiSidebarSections' : 'readerSidebarSections'}" class="reader-sidebar-sections hvy-reader-surface${isAi ? ' hvy-ai-reader-surface' : ''}">${readerRenderer.renderSidebarSections(state.document.sections)}</div>
-                    </div>
-                  </aside>
-                  <div id="${isAi ? 'aiReaderDocument' : 'readerDocument'}" class="reader-document hvy-reader-surface${isAi ? ' hvy-ai-reader-surface' : ''}">${readerRenderer.renderReaderSections(state.document.sections)}</div>
-                  ${isAi ? `${renderAiModeHint(state, { escapeAttr, escapeHtml })}${renderAiEditPopover(state, { escapeAttr, escapeHtml, surface: 'embedded' })}` : ''}
-                </div>`
-          }
-          ${renderChatPanel(
-            state.chat,
-            state.document,
-            { escapeAttr, escapeHtml },
-            state.currentView === 'viewer' ? 'qa' : 'document-edit',
-            state.currentView === 'editor' || state.currentView === 'ai',
-            'embedded'
-          )}
-          ${renderSearchLauncher(state.search)}
-          ${renderSearchPalette(state.search, state.document, { escapeAttr, escapeHtml, readerRenderer })}
-        </div>
-      </section>
-      ${readerRenderer.renderModal()}
-      ${readerRenderer.renderLinkInlineModal()}
-    </main>`;
-  bindUi(currentRoot);
-  reconcilePluginMounts(currentRoot);
-  restoreRenderScroll(currentRoot, capturedScroll);
-  observeRenderedLinks(currentRoot, currentLinkObserver);
-  void runButtonVisibilityScripts(currentRoot);
-  void runPluginDocumentHooks('unknown');
+  return readerRenderer;
 }
 
 function renderSidebarTabLabel(): string {
@@ -360,71 +295,75 @@ function renderSidebarTabLabel(): string {
     : `<span class="sidebar-tab-label">${escapeHtml(label)}</span>`;
 }
 
-function setPaletteOverrideId(id: string | null): void {
-  const normalizedId = typeof id === 'string' && getPaletteById(id) ? id : null;
-  state.paletteOverrideId = normalizedId;
+function renderApp(): void {
+  if (!currentRoot) return;
+  const renderer = ensureReaderRenderer();
+  const capturedScroll = captureRenderScroll(currentRoot, state.paneScroll);
+  state.paneScroll = capturedScroll.paneScroll;
   applyTheme();
-  renderApp();
-}
-
-function openThemeEditor(options: { advanced?: boolean } = {}): void {
-  state.themeModalOpen = true;
-  state.themeModalMode = options.advanced ? 'advanced' : 'full';
-  renderApp();
-}
-
-function mountThemeEditor(root: HTMLElement, options: { advanced?: boolean; includePalettePicker?: boolean } = {}): void {
-  root.classList.add('hvy-document', 'hvy-theme-editor-host');
-  setThemeRoot(currentRoot ?? root);
-  const syncThemeStyles = () => {
-    const source = currentRoot ?? root;
-    const computed = window.getComputedStyle(source);
-    for (const name of Object.keys(getThemeConfig().colors)) {
-      root.style.setProperty(name, computed.getPropertyValue(name));
-    }
-    const palette = state.paletteOverrideId ? getPaletteById(state.paletteOverrideId) : null;
-    if (palette) {
-      for (const name of Object.keys(palette.colors)) {
-        root.style.setProperty(name, computed.getPropertyValue(name));
-      }
-    }
-  };
-  const renderThemeEditor = () => {
-    root.innerHTML = readerRenderer.renderThemeEditor({
-      advanced: options.advanced ?? true,
-      includePalettePicker: options.includePalettePicker ?? false,
-      includeModalActions: false,
-    });
-    syncThemeStyles();
-  };
-  renderThemeEditor();
-  bindClickActions(root);
-  bindInputBlock(root);
-  root.addEventListener('input', () => {
-    window.setTimeout(syncThemeStyles, 0);
-  });
-  root.addEventListener('click', (event) => {
-    const actionButton = (event.target as HTMLElement).closest<HTMLElement>('[data-action]');
-    if (!actionButton) return;
-    const action = actionButton.dataset.action ?? '';
-    if (['theme-add-color', 'theme-remove-color', 'theme-reset-color', 'theme-apply-palette', 'theme-clear-palette-override'].includes(action)) {
-      window.setTimeout(renderThemeEditor, 0);
-    }
-  });
+  capturePluginFocus();
+  currentRoot.innerHTML = `
+    <main class="layout hvy-embed-layout">
+      <section class="workspace-shell">
+        <div class="reader-pane pane full-pane">
+          <div class="viewer-shell ${state.viewerSidebarOpen ? 'is-sidebar-open' : 'is-sidebar-closed'}">
+            <div class="viewer-sidebar-backdrop" data-action="toggle-viewer-sidebar"></div>
+            <aside class="viewer-sidebar">
+              <button type="button" class="viewer-sidebar-tab" data-action="toggle-viewer-sidebar" aria-expanded="${state.viewerSidebarOpen ? 'true' : 'false'}" aria-label="Toggle navigation">${renderSidebarTabLabel()}</button>
+              ${renderer.renderSidebarHelpBalloon(state.document.sections)}
+              <div class="viewer-sidebar-panel">
+                <div id="readerWarnings" class="reader-warnings">${renderer.renderWarnings()}</div>
+                <div id="readerSidebarSections" class="reader-sidebar-sections hvy-reader-surface">${renderer.renderSidebarSections(state.document.sections)}</div>
+              </div>
+            </aside>
+            <div id="readerDocument" class="reader-document hvy-reader-surface">${renderer.renderReaderSections(state.document.sections)}</div>
+          </div>
+        </div>
+      </section>
+    </main>`;
+  bindReaderUi(currentRoot);
+  reconcilePluginMounts(currentRoot);
+  restoreRenderScroll(currentRoot, capturedScroll);
+  observeRenderedLinks(currentRoot, currentLinkObserver);
+  void runButtonVisibilityScriptsIfNeeded(currentRoot);
+  void runPluginDocumentHooks('unknown');
 }
 
 function refreshReaderPanels(): void {
   if (!currentRoot) return;
-  refreshReaderSurfaces({
-    root: currentRoot,
-    readerRenderer,
-    sections: state.document.sections,
-    capturePluginFocus,
-    reconcilePluginMounts,
-    runButtonVisibilityScripts,
-  });
+  const renderer = ensureReaderRenderer();
+  const reader = currentRoot.querySelector<HTMLDivElement>('#readerDocument');
+  if (!reader) return;
+  capturePluginFocus();
+  reader.innerHTML = renderer.renderReaderSections(state.document.sections);
+  reconcilePluginMounts(reader);
   observeRenderedLinks(currentRoot, currentLinkObserver);
+  void runButtonVisibilityScriptsIfNeeded(reader);
   void runPluginDocumentHooks('unknown');
+}
+
+function refreshModalPreview(): void {}
+
+async function runButtonVisibilityScriptsIfNeeded(root: ParentNode): Promise<void> {
+  if (!root.querySelector('[data-hvy-dynamic-visibility="true"], [data-hvy-button="true"]')) {
+    return;
+  }
+  const { runButtonVisibilityScripts } = await import('./editor/components/button/button-actions');
+  await runButtonVisibilityScripts(root);
+}
+
+function ensureEmbedRuntime(plugins: HvyPlugin[]): void {
+  const renderer = ensureReaderRenderer();
+  initCallbacks({
+    renderApp,
+    refreshReaderPanels,
+    refreshModalPreview,
+    componentRenderHelpers: localGetComponentRenderHelpers(),
+    readerRenderer: renderer,
+  });
+  setHostPlugins([...builtInPlugins, ...plugins]);
+  resetPluginDocumentHookState();
+  syncColorMode();
 }
 
 function setLinkObserver(observer: HvyLinkObserver | null): void {
@@ -435,7 +374,83 @@ function setLinkObserver(observer: HvyLinkObserver | null): void {
   }
 }
 
+function setPaletteOverrideId(id: string | null): void {
+  const normalizedId = typeof id === 'string' && getPaletteById(id) ? id : null;
+  state.paletteOverrideId = normalizedId;
+  applyTheme();
+  renderApp();
+}
+
+async function loadFullEmbed(): Promise<FullEmbedModule> {
+  return import('./embed-full');
+}
+
+function mountFullHvyProxy(options: HvyMountOptions): HvyMount {
+  let mounted: HvyMount | null = null;
+  const pending: Array<(mount: HvyMount) => void> = [];
+  options.root.classList.add('hvy-document');
+  options.root.innerHTML = '<main class="layout hvy-embed-layout"><section class="pane full-pane"><p>Loading HVY...</p></section></main>';
+  const ready = loadFullEmbed().then((module) => {
+    mounted = module.mountHvy(options);
+    for (const action of pending.splice(0)) {
+      action(mounted);
+    }
+    return mounted;
+  });
+  const withMount = (action: (mount: HvyMount) => void): void => {
+    if (mounted) {
+      action(mounted);
+    } else {
+      pending.push(action);
+    }
+  };
+  const renderQueuedThemeModal = (): void => {
+    if (mounted || options.root.querySelector('.modal-root')) {
+      return;
+    }
+    options.root.insertAdjacentHTML('beforeend', `
+      <div class="modal-root" style="isolation: isolate; z-index: var(--hvy-modal-root-z, 1200);">
+        <div class="modal-overlay" style="z-index: var(--hvy-modal-overlay-z, 1);"></div>
+        <div class="modal-panel" style="z-index: var(--hvy-modal-panel-z, 2);"></div>
+      </div>
+    `);
+  };
+  return {
+    destroy() {
+      if (mounted) {
+        mounted.destroy();
+      } else {
+        pending.length = 0;
+        options.root.innerHTML = '';
+      }
+    },
+    getDocument() {
+      return mounted?.getDocument() ?? options.document;
+    },
+    buildImportPlan(importOptions) {
+      return ready.then((mount) => mount.buildImportPlan(importOptions));
+    },
+    importFromText(importOptions) {
+      return ready.then((mount) => mount.importFromText(importOptions));
+    },
+    setLinkObserver(observer) {
+      withMount((mount) => mount.setLinkObserver(observer));
+    },
+    setPaletteOverrideId(id) {
+      withMount((mount) => mount.setPaletteOverrideId(id));
+    },
+    openThemeEditor(themeOptions) {
+      renderQueuedThemeModal();
+      withMount((mount) => mount.openThemeEditor(themeOptions));
+    },
+    mountThemeEditor(root, themeOptions) {
+      withMount((mount) => mount.mountThemeEditor(root, themeOptions));
+    },
+  };
+}
+
 async function buildImportPlan(options: BuildImportPlanOptions): Promise<BuildImportPlanResult> {
+  const { buildImportPlanForDocument } = await import('./ai-document-edit');
   return buildImportPlanForDocument(state.document, {
     ...options,
     llm: options.llm ?? { settings: state.chat.settings },
@@ -443,13 +458,8 @@ async function buildImportPlan(options: BuildImportPlanOptions): Promise<BuildIm
 }
 
 async function importFromText(options: ImportFromTextOptions): Promise<ImportFromTextResult> {
-  const refreshAfterImportMutation = async (): Promise<void> => {
-    await runPluginDocumentHooks('ai-edit');
-    state.rawEditorText = serializeDocument(state.document);
-    state.rawEditorError = null;
-    state.rawEditorDiagnostics = [];
-    renderApp();
-  };
+  const { deserializeDocumentWithDiagnostics } = await import('./serialization');
+  const { importTextIntoDocument } = await import('./ai-document-edit');
   const result = await importTextIntoDocument(state.document, {
     ...options,
     llm: options.llm ?? { settings: state.chat.settings },
@@ -459,70 +469,44 @@ async function importFromText(options: ImportFromTextOptions): Promise<ImportFro
       }
     },
     onMutation: (group) => recordHistory(group ?? 'import:text'),
-    onSectionApplied: refreshAfterImportMutation,
   });
   if (result.status !== 'complete') {
     return result;
   }
   options.onProgress?.({ phase: 'linting', message: 'Checking imported HVY document.' });
-  freshLoadMountedDocumentInPlace();
   const serialized = serializeDocument(state.document);
   state.rawEditorText = serialized;
   const diagnostics = deserializeDocumentWithDiagnostics(serialized, state.document.extension).diagnostics;
   const errors = diagnostics.filter((diagnostic) => diagnostic.severity === 'error');
   if (errors.length > 0) {
-    resetTransientUiState();
     renderApp();
     return {
       status: 'error',
       message: errors.map((diagnostic) => diagnostic.message).join(' '),
     };
   }
-  resetTransientUiState();
   renderApp();
   options.onProgress?.({ phase: 'complete', message: result.message ?? 'Import complete.' });
   return result;
 }
 
-function freshLoadMountedDocumentInPlace(): void {
-  const parsed = deserializeDocumentWithDiagnostics(serializeDocument(state.document), state.document.extension);
-  state.document.meta = parsed.document.meta;
-  state.document.sections.splice(0, state.document.sections.length, ...parsed.document.sections);
-  state.document.attachments = parsed.document.attachments;
-}
-
-function refreshModalPreview(): void {}
-
-function ensureEmbedRuntime(plugins: HvyPlugin[]): void {
-  ensureRenderers();
-  initCallbacks({
-    renderApp,
-    refreshReaderPanels,
-    refreshModalPreview,
-    componentRenderHelpers: localGetComponentRenderHelpers(),
-    readerRenderer,
-  });
-  setHostPlugins(plugins);
-  resetPluginDocumentHookState();
-  initColorModeSync();
-}
-
 export function mountHvy(options: HvyMountOptions): HvyMount {
+  if ((options.mode ?? 'viewer') !== 'viewer') {
+    return mountFullHvyProxy(options);
+  }
   currentRoot = options.root;
   options.root.classList.add('hvy-document');
   setThemeRoot(options.root);
-  initState(createEmbedState(options.document, options.mode ?? 'viewer', options.showAdvancedEditor ?? false));
+  initState(createEmbedState(options.document, options.showAdvancedEditor ?? false));
   currentLinkObserver = options.linkObserver ?? null;
   if (options.paletteId && getPaletteById(options.paletteId)) {
     state.paletteOverrideId = options.paletteId;
   }
-  setHostChatClient(options.chatClient ?? window.HVY_CHAT_CLIENT ?? null);
   ensureEmbedRuntime(options.plugins ?? []);
   renderApp();
   return {
     destroy() {
       options.root.innerHTML = '';
-      setHostChatClient(null);
       setHostPlugins([]);
       resetPluginDocumentHookState();
       if (currentRoot === options.root) {
@@ -538,8 +522,18 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
     importFromText,
     setLinkObserver,
     setPaletteOverrideId,
-    openThemeEditor,
-    mountThemeEditor,
+    openThemeEditor(options = {}) {
+      void loadFullEmbed().then((module) => {
+        const fullMount = module.mountHvy({ root: currentRoot ?? document.createElement('div'), document: state.document, mode: 'editor' });
+        fullMount.openThemeEditor(options);
+      });
+    },
+    mountThemeEditor(root, options = {}) {
+      void loadFullEmbed().then((module) => {
+        const fullMount = module.mountHvy({ root: currentRoot ?? root, document: state.document, mode: 'editor' });
+        fullMount.mountThemeEditor(root, options);
+      });
+    },
   };
 }
 
@@ -575,7 +569,6 @@ declare global {
       plugins: typeof builtInPluginMap;
       builtInPlugins: typeof builtInPlugins;
     };
-    HVY_CHAT_CLIENT?: HostChatClient;
   }
 }
 

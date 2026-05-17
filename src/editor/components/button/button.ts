@@ -2,7 +2,7 @@ import './button.css';
 import type { ComponentEditorRenderer, ComponentReaderRenderer, ComponentRenderHelpers } from '../../component-helpers';
 import type { VisualBlock } from '../../types';
 import { sanitizeInlineCss } from '../../../css-sanitizer';
-import { isButtonAiGenerateRunning } from './button-actions';
+import { isButtonAiGenerateRunning } from './button-state';
 
 function renderButton(sectionKey: string, block: VisualBlock, helpers: ComponentRenderHelpers): string {
   const label = block.schema.buttonLabel.trim() || 'Generate';

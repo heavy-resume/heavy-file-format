@@ -1,11 +1,12 @@
 import { buildDocumentEditToolHelp } from '../ai-document-edit-instructions';
 import type { JsonObject } from '../hvy/types';
-import { getDbTableAiSummary, getDocumentDbTableObjectNames, validateDocumentDbSql } from '../plugins/db-table';
 import { validateDbTableObjectName } from '../plugins/db-table-identifiers';
 import { findFormFieldTypeIssues, parseFormSpec } from '../plugins/form';
 import { DB_TABLE_PLUGIN_ID, FORM_PLUGIN_ID, SCRIPTING_PLUGIN_ID } from '../plugins/registry';
 import type { VisualDocument } from '../types';
 import { parse as parseYaml } from 'yaml';
+
+const loadDbTableRuntime = () => import('../plugins/db-table');
 
 export interface HvyCliHelpCommand {
   command: string;
@@ -329,6 +330,7 @@ async function lintFormScriptSql(context: HvyCliPluginLintContext): Promise<HvyC
   const issues: HvyCliPluginLintIssue[] = [];
   for (const call of extractDocDbSqlCalls(context.body)) {
     try {
+      const { validateDocumentDbSql } = await loadDbTableRuntime();
       await validateDocumentDbSql(context.document, call.sql, call.method);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown SQL error.';
@@ -492,7 +494,8 @@ registerHvyCliPluginCommands({
       if (tableNameError) {
         return [{ message: tableNameError }];
       }
-      const names = await getDocumentDbTableObjectNames(context.document);
+      const names = await loadDbTableRuntime()
+        .then(({ getDocumentDbTableObjectNames }) => getDocumentDbTableObjectNames(context.document));
       if (!names.includes(table)) {
         const existingObjects = names.length > 0 ? names.join(', ') : '(none)';
         return [{
@@ -504,7 +507,8 @@ registerHvyCliPluginCommands({
         return [];
       }
       try {
-        await getDbTableAiSummary(context.document, table, { activeQuery: query, sampleLimit: 1 });
+        await loadDbTableRuntime()
+          .then(({ getDbTableAiSummary }) => getDbTableAiSummary(context.document, table, { activeQuery: query, sampleLimit: 1 }));
         return [];
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown database query error.';

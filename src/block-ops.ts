@@ -17,7 +17,7 @@ import { renderAddComponentPicker } from './editor/component-picker';
 import { escapeAttr, escapeHtml, getInlineEditableText, renderOption } from './utils';
 import { recordHistory } from './history';
 import { getDocumentComponentDefaultCss } from './document-component-defaults';
-import { resetDbTableViewState } from './plugins/db-table';
+import { resetDbTableViewState } from './plugins/db-table-model';
 import { handleInlineCheckboxBackspace } from './editor/inline-checkbox';
 import { createTextFillInMarker, hasTextFillInMarker } from './text-fill-in';
 import { getTextLineStylesFromMeta, sanitizeTextLineStyleCss } from './text-line-styles';

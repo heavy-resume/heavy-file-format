@@ -1,26 +1,56 @@
-import initSqlJs from 'sql.js';
-import sqlWasmUrl from 'sql.js/dist/sql-wasm.wasm?url';
-
 import type { ComponentRenderHelpers } from '../editor/component-helpers';
 import type { VisualBlock, VisualSection } from '../editor/types';
-import { deserializeDocumentWithDiagnostics, wrapHvyFragmentAsDocument } from '../serialization';
-import { visitBlocks } from '../section-ops';
 import { getRenderApp, state } from '../state';
 import type { DocumentAttachment, VisualDocument } from '../types';
 import { DB_ATTACHMENT_ID, getAttachment, setAttachment } from '../attachments';
 import { DB_TABLE_PLUGIN_ID } from './registry';
 import { validateDbTableObjectName } from './db-table-identifiers';
+import { validateAttachedComponentHvy } from './db-table-fragment';
+import { formatQueryResultTable } from './db-table-format';
 import type { ScriptingDbApi } from './scripting/runtime';
 import { closeIcon, plusIcon } from '../icons';
+import {
+  clampDbTableOffset,
+  clearDbTableViewState,
+  DB_TABLE_ESTIMATED_ROW_HEIGHT,
+  DB_TABLE_MAX_QUERY_ROWS,
+  DB_TABLE_WINDOW_SIZE,
+  getDbTableQueryDynamicWindow,
+  getDbTableQueryLimit,
+  getDbTableViewState,
+  getDocumentDbTableNames,
+  getPluginConfigValue,
+} from './db-table-model';
 
 import './db-table.css';
 
 const SQLITE_ROW_COMPONENTS_TABLE = '__hvy_row_components';
 
-type SqlJsStatic = Awaited<ReturnType<typeof initSqlJs>>;
-type SqlJsDatabase = InstanceType<SqlJsStatic['Database']>;
 type SqliteBindValue = number | string | Uint8Array | null;
 type SqliteBindParams = SqliteBindValue[] | Record<string, SqliteBindValue> | null;
+interface SqlJsQueryResult {
+  columns: string[];
+  values: unknown[][];
+}
+interface SqlJsStatement {
+  bind(params?: SqliteBindParams): boolean;
+  getColumnNames(): string[];
+  step(): boolean;
+  getAsObject(): Record<string, unknown>;
+  free(): void;
+}
+interface SqlJsDatabase {
+  close(): void;
+  export(): Uint8Array;
+  exec(sql: string, params?: SqliteBindParams): SqlJsQueryResult[];
+  prepare(sql: string, params?: SqliteBindParams): SqlJsStatement;
+  run(sql: string, params?: SqliteBindParams): void;
+  getRowsModified(): number;
+}
+interface SqlJsStatic {
+  Database: new (bytes?: Uint8Array) => SqlJsDatabase;
+}
+type InitSqlJs = (config: { locateFile: () => string }) => Promise<SqlJsStatic>;
 
 interface SqliteTableSnapshot {
   objectType: 'table' | 'view';
@@ -56,63 +86,14 @@ const runtime: SqliteRuntime = {
 };
 
 let sqlJsPromise: Promise<SqlJsStatic> | null = null;
-const DB_TABLE_WINDOW_SIZE = 50;
-const DB_TABLE_MAX_QUERY_ROWS = 99;
-const DB_TABLE_DEFAULT_STATIC_QUERY_LIMIT = 50;
-const DB_TABLE_FORWARD_SCROLL_TRIGGER = 75;
-const DB_TABLE_BACKWARD_SCROLL_TRIGGER = 25;
-const DB_TABLE_ESTIMATED_ROW_HEIGHT = 40;
-
-interface DbTableViewState {
-  offset: number;
-  scrollTop: number;
-  sortColumn: string | null;
-  sortDirection: 'asc' | 'desc' | null;
-}
-
-const dbTableViewState = new Map<string, DbTableViewState>();
-
-function getDbTableViewKey(sectionKey: string, blockId: string): string {
-  return `${sectionKey}:${blockId}`;
-}
-
-function getDbTableViewState(sectionKey: string, blockId: string): DbTableViewState {
-  const key = getDbTableViewKey(sectionKey, blockId);
-  const existing = dbTableViewState.get(key);
-  if (existing) {
-    return existing;
-  }
-  const created: DbTableViewState = {
-    offset: 0,
-    scrollTop: 0,
-    sortColumn: null,
-    sortDirection: null,
-  };
-  dbTableViewState.set(key, created);
-  return created;
-}
-
-function getPluginConfigValue(config: Record<string, unknown>, key: string): string {
-  const value = config[key];
-  return typeof value === 'string' ? value : '';
-}
-
-export function getDbTableQueryDynamicWindow(config: Record<string, unknown>): boolean {
-  return typeof config.queryDynamicWindow === 'boolean' ? config.queryDynamicWindow : true;
-}
-
-export function getDbTableQueryLimit(config: Record<string, unknown>): number {
-  const rawValue = config.queryLimit;
-  const parsed = typeof rawValue === 'number'
-    ? rawValue
-    : typeof rawValue === 'string'
-      ? Number.parseInt(rawValue, 10)
-      : NaN;
-  if (!Number.isFinite(parsed)) {
-    return DB_TABLE_DEFAULT_STATIC_QUERY_LIMIT;
-  }
-  return clampDbTableQueryLimit(parsed);
-}
+export {
+  getDbTableQueryDynamicWindow,
+  getDbTableQueryLimit,
+  getDocumentDbTableNames,
+  resetDbTableViewState,
+  restoreDbTableFrameScroll,
+  toggleDbTableSort,
+} from './db-table-model';
 
 export function renderDbTablePluginEditor(sectionKey: string, block: VisualBlock, helpers: ComponentRenderHelpers): string {
   const tableName = getPluginConfigValue(block.schema.pluginConfig, 'table');
@@ -575,17 +556,6 @@ export async function setSqliteRowComponent(tableName: string, rowId: number, hv
   await persistRuntimeDatabase();
 }
 
-export function parseAttachedComponentBlocks(hvy: string): VisualBlock[] {
-  const trimmed = hvy.trim();
-  if (trimmed.length === 0) {
-    return [];
-  }
-
-  validateAttachedComponentHvy(trimmed);
-  const parsed = deserializeDocumentWithDiagnostics(wrapHvyFragmentAsDocument(trimmed), '.hvy');
-  return parsed.document.sections[0]?.blocks ?? [];
-}
-
 function ensureSqliteRuntime(): void {
   if (runtime.documentRef === state.document && (runtime.db || runtime.loading || runtime.loadError)) {
     return;
@@ -630,14 +600,18 @@ async function loadRuntimeDatabase(): Promise<void> {
 
 async function getSqlJs(): Promise<SqlJsStatic> {
   if (!sqlJsPromise) {
+    const [{ default: initSqlJs }, { default: sqlWasmUrl }] = await Promise.all([
+      import('sql.js') as Promise<{ default: InitSqlJs }>,
+      import('sql.js/dist/sql-wasm.wasm?url') as Promise<{ default: string }>,
+    ]);
     sqlJsPromise = initSqlJs({
-      locateFile: () => locateSqlWasmFile(),
+      locateFile: () => locateSqlWasmFile(sqlWasmUrl),
     });
   }
   return sqlJsPromise;
 }
 
-function locateSqlWasmFile(): string {
+function locateSqlWasmFile(sqlWasmUrl: string): string {
   if (typeof process !== 'undefined' && process.versions?.node) {
     return new URL('../../node_modules/sql.js/dist/sql-wasm.wasm', import.meta.url).pathname;
   }
@@ -719,7 +693,7 @@ function resetRuntime(): void {
   runtime.loadError = null;
   runtime.loadPromise = null;
   runtime.persistPromise = null;
-  dbTableViewState.clear();
+  clearDbTableViewState();
 }
 
 function readTableSnapshot(
@@ -743,7 +717,7 @@ function readTableSnapshot(
   }
   const readOnlySource = queryActive || objectType === 'view';
   const dynamicWindow = queryActive ? options.dynamicWindow : true;
-  const queryLimit = clampDbTableQueryLimit(options.queryLimit);
+  const queryLimit = getDbTableQueryLimit({ queryLimit: options.queryLimit });
   const columns = queryActive ? getQueryColumns(db, normalizedQuery) : getTableColumns(db, tableName);
   const totalRows = queryActive
     ? getQueryRowCount(db, normalizedQuery, dynamicWindow ? DB_TABLE_MAX_QUERY_ROWS : queryLimit)
@@ -927,15 +901,6 @@ function buildSortClause(sortColumn: string | null, sortDirection: 'asc' | 'desc
   return ` ORDER BY ${quoteIdentifier(sortColumn)} ${sortDirection.toUpperCase()}`;
 }
 
-function clampDbTableOffset(offset: number, totalRows: number): number {
-  const maxOffset = Math.max(totalRows - DB_TABLE_WINDOW_SIZE, 0);
-  return Math.max(0, Math.min(offset, maxOffset));
-}
-
-function clampDbTableQueryLimit(value: number): number {
-  return Math.max(1, Math.min(Math.floor(value), DB_TABLE_MAX_QUERY_ROWS));
-}
-
 function quoteIdentifier(identifier: string): string {
   return `"${identifier.replaceAll('"', '""')}"`;
 }
@@ -948,99 +913,6 @@ function stringifySqliteValue(value: unknown): string {
     return '[blob]';
   }
   return String(value);
-}
-
-export function resetDbTableViewState(sectionKey: string, blockId: string): void {
-  dbTableViewState.set(getDbTableViewKey(sectionKey, blockId), {
-    offset: 0,
-    scrollTop: 0,
-    sortColumn: null,
-    sortDirection: null,
-  });
-}
-
-export function toggleDbTableSort(sectionKey: string, blockId: string, columnName: string): void {
-  const viewState = getDbTableViewState(sectionKey, blockId);
-  if (viewState.sortColumn !== columnName) {
-    viewState.sortColumn = columnName;
-    viewState.sortDirection = 'asc';
-  } else if (viewState.sortDirection === 'asc') {
-    viewState.sortDirection = 'desc';
-  } else {
-    viewState.sortColumn = null;
-    viewState.sortDirection = null;
-  }
-  viewState.offset = 0;
-  viewState.scrollTop = 0;
-}
-
-export function handleDbTableFrameScroll(frame: HTMLElement): boolean {
-  if (frame.dataset.dbTableDynamicWindow === 'false') {
-    return false;
-  }
-  const sectionKey = frame.dataset.sectionKey ?? '';
-  const blockId = frame.dataset.blockId ?? '';
-  if (sectionKey.length === 0 || blockId.length === 0) {
-    return false;
-  }
-  const viewState = getDbTableViewState(sectionKey, blockId);
-  viewState.scrollTop = frame.scrollTop;
-  const firstVisibleRow = Math.floor(frame.scrollTop / DB_TABLE_ESTIMATED_ROW_HEIGHT);
-  let nextOffset = viewState.offset;
-  if (firstVisibleRow > viewState.offset + DB_TABLE_FORWARD_SCROLL_TRIGGER) {
-    nextOffset += DB_TABLE_WINDOW_SIZE;
-  } else if (viewState.offset > 0 && firstVisibleRow < viewState.offset + DB_TABLE_BACKWARD_SCROLL_TRIGGER) {
-    nextOffset -= DB_TABLE_WINDOW_SIZE;
-  }
-  nextOffset = Math.max(0, nextOffset);
-  if (nextOffset === viewState.offset) {
-    return false;
-  }
-  viewState.offset = nextOffset;
-  return true;
-}
-
-export function restoreDbTableFrameScroll(root: ParentNode): void {
-  root.querySelectorAll<HTMLElement>('[data-db-table-frame="true"]').forEach((frame) => {
-    const sectionKey = frame.dataset.sectionKey ?? '';
-    const blockId = frame.dataset.blockId ?? '';
-    if (sectionKey.length === 0 || blockId.length === 0) {
-      return;
-    }
-    const viewState = getDbTableViewState(sectionKey, blockId);
-    frame.scrollTop = viewState.scrollTop;
-  });
-}
-
-function validateAttachedComponentHvy(hvy: string): void {
-  const parsed = deserializeDocumentWithDiagnostics(wrapHvyFragmentAsDocument(hvy), '.hvy');
-  const errors = parsed.diagnostics.filter((diagnostic) => diagnostic.severity === 'error');
-  if (errors.length > 0) {
-    throw new Error(errors.map((diagnostic) => diagnostic.message).join(' '));
-  }
-
-  if (parsed.document.sections.length !== 1) {
-    throw new Error('Attached row HVY must contain exactly one section wrapper after parsing.');
-  }
-
-  const section = parsed.document.sections[0];
-  if (!section || section.children.length > 0 || section.blocks.length === 0) {
-    throw new Error('Attached row HVY must contain one or more HVY component fragments.');
-  }
-}
-
-export function getDocumentDbTableNames(document: VisualDocument): string[] {
-  const tableNames = new Set<string>();
-  visitBlocks(document.sections, (block) => {
-    if (block.schema.component !== 'plugin' || block.schema.plugin !== DB_TABLE_PLUGIN_ID) {
-      return;
-    }
-    const tableName = getPluginConfigValue(block.schema.pluginConfig, 'table').trim();
-    if (tableName.length > 0) {
-      tableNames.add(tableName);
-    }
-  });
-  return [...tableNames];
 }
 
 export async function getDocumentDbTableObjectNames(document: VisualDocument): Promise<string[]> {
@@ -1064,10 +936,6 @@ export async function getDocumentDbTableObjectNames(document: VisualDocument): P
       // Ignore close failures for ephemeral AI schema inspection databases.
     }
   }
-}
-
-export function hasDocumentDbTables(document: VisualDocument): boolean {
-  return getDocumentDbTableNames(document).length > 0;
 }
 
 export async function materializeDocumentDbTables(document: VisualDocument): Promise<string[]> {
@@ -1097,13 +965,7 @@ export async function materializeDocumentDbTables(document: VisualDocument): Pro
   }
 }
 
-export function formatQueryResultTable(columns: string[], rows: string[][]): string {
-  return [
-    columns.join(' | '),
-    columns.map(() => '---').join(' | '),
-    ...rows.map((row) => row.map((cell) => cell.replaceAll('\n', '\\n').replaceAll('|', '\\|')).join(' | ')),
-  ].join('\n');
-}
+export { formatQueryResultTable } from './db-table-format';
 
 export async function executeDbTableQueryTool(
   document: VisualDocument,

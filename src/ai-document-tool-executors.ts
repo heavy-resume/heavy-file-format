@@ -5,7 +5,7 @@ import { getHvyComponentHelp } from './component-help';
 import { createEmptySection } from './document-factory';
 import { deserializeDocumentWithDiagnostics, serializeBlockFragment, serializeSectionFragment } from './serialization';
 import { findBlockContainerById, findSectionByKey, findSectionContainer, getSectionId, moveSectionRelative, moveSectionToSiblingIndex } from './section-ops';
-import { formatQueryResultTable, getDbTableRenderedText } from './plugins/db-table';
+import { formatQueryResultTable } from './plugins/db-table-format';
 import { renderAltAnnotationsAsFullText } from './markdown';
 import type { VisualBlock, VisualSection } from './editor/types';
 import type { HostChatClient } from './chat/chat';
@@ -260,6 +260,7 @@ function scoreSearchMatch(queryTokens: string[], searchable: string): number {
 
 async function renderComponentText(document: VisualDocument, block: VisualBlock, options: { maxDepth: number }): Promise<string> {
   if (block.schema.component === 'plugin' && block.schema.plugin === DB_TABLE_PLUGIN_ID) {
+    const { getDbTableRenderedText } = await import('./plugins/db-table');
     return getDbTableRenderedText(document, block);
   }
 

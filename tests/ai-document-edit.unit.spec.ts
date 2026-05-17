@@ -472,6 +472,157 @@ hvy_version: 0.1
   });
 });
 
+test('buildImportPlanForDocument uses importPreplan groups to extract approved section information', async () => {
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"sections":{"summary":"Summary facts.","awards":"Award facts."}}'
+  );
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"sections":{"projects":"Project facts."}}'
+  );
+  requestProxyCompletionMock.mockResolvedValueOnce('{"sections":{}}');
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+importPreplan:
+  - [summary, missing-body, resume-awards]
+  - resume-projects
+section_defs:
+  - name: Awards
+    key: resume-awards
+    template:
+      id: awards
+      title: Awards
+      blocks: []
+  - name: Projects
+    key: resume-projects
+    template:
+      id: projects
+      title: Projects
+      blocks: []
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+`, '.hvy');
+
+  const result = await buildImportPlanForDocument(document, {
+    sourceName: 'resume.txt',
+    sourceText: 'Summary and projects',
+    llm: {
+      settings: { provider: 'openai', model: 'gpt-5-mini' },
+      client: { complete: vi.fn() },
+    },
+  });
+
+  expect(result.status).toBe('ready');
+  expect(result.steps?.map((step) => ({
+    title: step.sectionTitle,
+    target: step.target,
+    group: step.preplanGroupIndex,
+    information: step.extractedInformation,
+  }))).toEqual([
+    {
+      title: 'Summary',
+      target: { kind: 'body', id: 'summary', title: 'Summary', name: undefined },
+      group: 0,
+      information: 'Summary facts.',
+    },
+    {
+      title: 'Awards',
+      target: { kind: 'definition', id: 'awards', title: 'Awards', name: 'Awards' },
+      group: 0,
+      information: 'Award facts.',
+    },
+    {
+      title: 'Projects',
+      target: { kind: 'definition', id: 'projects', title: 'Projects', name: 'Projects' },
+      group: 1,
+      information: 'Project facts.',
+    },
+  ]);
+  expect(requestProxyCompletionMock.mock.calls.map((call) => call[0]?.debugLabel)).toEqual([
+    'ai-import-preplan-data:1',
+    'ai-import-preplan-data:2',
+    'ai-import-missing-sections',
+  ]);
+  expect(requestProxyCompletionMock.mock.calls.map((call) => call[0]?.debugLabel)).not.toContain('ai-import-plan');
+});
+
+test('resume template importPreplan resolves expected grouped targets', async () => {
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"sections":{"header":"Header facts.","summary":"Summary facts.","locations":"Location facts."}}'
+  );
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"sections":{"skills":"Skill facts.","tools-technologies":"Tool facts.","languages":"Language facts.","top-skills-tools-technologies":"Featured facts."}}'
+  );
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"sections":{"history":"History facts.","awards":"Award facts."}}'
+  );
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"sections":{"projects":"Project facts.","publications":"Publication facts."}}'
+  );
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"sections":{"certifications":"Certification facts.","education":"Education facts."}}'
+  );
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"sections":{"Resume Section":"Other facts."}}'
+  );
+  requestProxyCompletionMock.mockResolvedValueOnce('{"sections":{}}');
+  const source = readFileSync(new URL('../examples/resume.thvy', import.meta.url), 'utf8');
+  const document = deserializeDocument(source, '.thvy');
+
+  const result = await buildImportPlanForDocument(document, {
+    sourceName: 'resume.txt',
+    sourceText: 'Resume source',
+    llm: {
+      settings: { provider: 'openai', model: 'gpt-5-mini' },
+      client: { complete: vi.fn() },
+    },
+  });
+
+  expect(result.status).toBe('ready');
+  expect(result.steps?.map((step) => [step.preplanGroupIndex, step.target.kind, step.target.id, step.target.name])).toEqual([
+    [0, 'body', 'header', undefined],
+    [0, 'body', 'summary', undefined],
+    [0, 'body', 'locations', undefined],
+    [1, 'body', 'skills', undefined],
+    [1, 'body', 'tools-technologies', undefined],
+    [1, 'body', 'languages', undefined],
+    [1, 'body', 'top-skills-tools-technologies', undefined],
+    [2, 'body', 'history', undefined],
+    [2, 'definition', 'awards', 'Awards'],
+    [3, 'definition', 'projects', 'Projects'],
+    [3, 'definition', 'publications', 'Publications'],
+    [4, 'definition', 'certifications', 'Certifications'],
+    [4, 'body', 'education', undefined],
+    [5, 'definition', undefined, 'Resume Section'],
+  ]);
+  expect(result.steps?.map((step) => step.extractedInformation)).toEqual([
+    'Header facts.',
+    'Summary facts.',
+    'Location facts.',
+    'Skill facts.',
+    'Tool facts.',
+    'Language facts.',
+    'Featured facts.',
+    'History facts.',
+    'Award facts.',
+    'Project facts.',
+    'Publication facts.',
+    'Certification facts.',
+    'Education facts.',
+    'Other facts.',
+  ]);
+  expect(requestProxyCompletionMock.mock.calls.map((call) => call[0]?.debugLabel)).toEqual([
+    'ai-import-preplan-data:1',
+    'ai-import-preplan-data:2',
+    'ai-import-preplan-data:3',
+    'ai-import-preplan-data:4',
+    'ai-import-preplan-data:5',
+    'ai-import-preplan-data:6',
+    'ai-import-missing-sections',
+  ]);
+});
+
 test('buildImportPlanForDocument exposes forced template structure metadata for usable templates', async () => {
   requestProxyCompletionMock.mockResolvedValueOnce(
     '{"steps":[{"section":"Awards","templateName":"Award Section"},{"section":"Notes","templateName":"Notes"}]}'
@@ -837,6 +988,139 @@ component_defs:
   expect(serialized).toContain('Quality Prize');
   expect(serialized).toContain('Recognized for reliable releases.');
   expect(onMutation).toHaveBeenCalledWith('ai-edit:section');
+});
+
+test('importTextIntoDocument uses grouped importPreplan extraction and missing sections pass', async () => {
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"sections":{"summary":"Imported summary facts.","awards":"Award facts."}}'
+  );
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"sections":{"Conference Talks":{"target":{"kind":"definition","name":"Resume Section"},"information":"Talk facts."},"Volunteer Work":{"target":{"kind":"blank","title":"Volunteer Work"},"information":"Volunteer facts."}}}'
+  );
+  requestProxyCompletionMock.mockResolvedValueOnce('{"targets":[]}');
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"hvy":"<!--hvy: {\\"id\\":\\"summary\\"}-->\\n#! Summary\\n\\n <!--hvy:text {}-->\\n  Imported summary"}'
+  );
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"values":{"section_title":"Awards","awards_list":[{"award":"Best Tool","details":"Award facts."}]}}'
+  );
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"values":{"section_title":"Conference Talks","details":"Talk facts."}}'
+  );
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"hvy":"<!--hvy: {\\"id\\":\\"volunteer-work\\"}-->\\n#! Volunteer Work\\n\\n <!--hvy:text {}-->\\n  Volunteer facts"}'
+  );
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+importPreplan:
+  - [summary, resume-awards]
+section_defs:
+  - name: Awards
+    key: resume-awards
+    templateVariables:
+      section_title:
+        label: Section title
+    template:
+      id: awards
+      title: "{% section_title %}"
+      blocks:
+        - text: "# {% section_title %}"
+          schema:
+            component: text
+        - text: ""
+          schema:
+            id: awards-list
+            component: component-list
+            componentListComponent: award-record
+            componentListItemLabel: award
+  - name: Resume Section
+    key: resume-section
+    repeatable: true
+    templateVariables:
+      section_title:
+        label: Section title
+      details:
+        label: Details
+    template:
+      title: "{% section_title %}"
+      blocks:
+        - text: "# {% section_title %}"
+          schema:
+            component: text
+        - text: "{% details | block %}"
+          schema:
+            component: text
+component_defs:
+  - name: award-record
+    baseType: expandable
+    templateVariables:
+      award:
+        label: Award
+      details:
+        label: Details
+    schema:
+      component: award-record
+      expandableStubBlocks:
+        children:
+          - text: "### {% award %}"
+            schema:
+              component: text
+      expandableContentBlocks:
+        children:
+          - text: "{% details | block %}"
+            schema:
+              component: text
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {}-->
+ Old summary
+`, '.hvy');
+
+  const plan = await buildImportPlanForDocument(document, {
+    sourceName: 'resume.txt',
+    sourceText: 'Summary, awards, talks, and volunteer work',
+    llm: {
+      settings: { provider: 'openai', model: 'gpt-5-mini' },
+      client: { complete: vi.fn() },
+    },
+  });
+  expect(plan.status).toBe('ready');
+
+  const result = await importTextIntoDocument(document, {
+    sourceName: 'resume.txt',
+    sourceText: 'Summary, awards, talks, and volunteer work',
+    steps: plan.steps ?? [],
+    llm: {
+      settings: { provider: 'openai', model: 'gpt-5-mini' },
+      client: { complete: vi.fn() },
+    },
+  });
+
+  expect(result.status).toBe('complete');
+  expect(requestProxyCompletionMock.mock.calls.map((call) => call[0]?.debugLabel)).toEqual([
+    'ai-import-preplan-data:1',
+    'ai-import-missing-sections',
+    'ai-import-xref-targets',
+    'ai-import-section-hvy:1',
+    'ai-import-template-values:2',
+    'ai-import-template-values:3',
+    'ai-import-section-hvy:4',
+  ]);
+  expect(requestProxyCompletionMock.mock.calls.map((call) => call[0]?.debugLabel)).not.toContain('ai-import-section-data:1');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.responseInstructions).toContain('"summary"');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.responseInstructions).toContain('"awards"');
+  expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.context).toContain('=== BEGIN SECTION INFORMATION ===');
+  expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.context).toContain('Award facts.');
+  const serialized = serializeDocument(document);
+  expect(serialized).toContain('Imported summary');
+  expect(serialized).toContain('# Awards');
+  expect(serialized).toContain('Best Tool');
+  expect(serialized).toContain('# Conference Talks');
+  expect(serialized).toContain('Talk facts.');
+  expect(serialized).toContain('Volunteer facts');
 });
 
 test('importTextIntoDocument forced template mode lets JSON pick component template flavors', async () => {

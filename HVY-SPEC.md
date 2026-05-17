@@ -125,6 +125,7 @@ Presentation keys in document metadata include:
 AI-facing document metadata includes:
 - `ai-context`: optional string with general document organization and preservation guidance for AI-assisted authoring tools.
 - `ai-import-guidance`: optional string with import-specific guidance for mapping source facts to existing body sections, section templates, component template records, and cross references. Importers MAY include this guidance in planning and execution prompts; readers that do not use AI SHOULD preserve and ignore it.
+- `importPreplan`: optional ordered list for AI import batching. Each entry is either a section target id string or a list of section target id strings. When present, importers SHOULD use it as the authoritative initial section import order instead of asking AI to discover the initial section list. A target id resolves first to an existing body section `id`, then to `section_defs[*].key`, then to `section_defs[*].template.id`. Importers MAY group targets from one list into a single source-information extraction call and SHOULD preserve and ignore invalid targets they cannot resolve. Readers that do not use AI SHOULD preserve and ignore it.
 
 Responsive rendering SHOULD be based on the rendered document container's inline size, not only the browser viewport. Renderers that support responsive behavior SHOULD establish a named CSS query container around the document surface, for example:
 

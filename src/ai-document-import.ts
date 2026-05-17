@@ -71,6 +71,8 @@ export interface ImportPlanStep {
   importMode?: 'template' | 'hvy';
   templateStructureId?: string;
   templateStructure?: ImportTemplateStructureDescriptor;
+  preplanGroupIndex?: number;
+  extractedInformation?: string;
 }
 
 export interface ImportTemplateStructureDescriptor {
@@ -148,6 +150,8 @@ export type ImportPlanStepInput = string | ImportPlanStep | {
   definitionName?: string;
   importMode?: string;
   templateStructureId?: string;
+  preplanGroupIndex?: number;
+  extractedInformation?: string;
   target?: ImportPlanTarget;
 };
 
@@ -173,6 +177,19 @@ export async function buildImportPlanForDocument(
 ): Promise<BuildImportPlanResult> {
   options.onProgress?.({ phase: 'starting', message: `Preparing import plan for ${options.sourceName}.` });
   try {
+    const preplanSteps = buildImportPlanStepsFromPreplan(document);
+    if (preplanSteps.length > 0) {
+      const llm = requireImportLlm(options.llm);
+      throwIfAborted(options.signal);
+      const beforeLlmCall = createImportLlmStepper(options.beforeLlmCall, options.signal);
+      options.onProgress?.({ phase: 'thinking', message: 'Extracting preplanned section information.' });
+      const extractedSteps = await preparePreplannedImportSteps(document, options, preplanSteps, llm, beforeLlmCall);
+      if (extractedSteps.length === 0) {
+        return { status: 'error', message: 'The import preplan did not return usable source-backed sections.' };
+      }
+      options.onProgress?.({ phase: 'complete', message: 'Import plan is ready.' });
+      return { status: 'ready', steps: extractedSteps };
+    }
     const llm = requireImportLlm(options.llm);
     throwIfAborted(options.signal);
     options.onProgress?.({ phase: 'thinking', message: 'Reviewing the template and imported document.' });
@@ -228,6 +245,11 @@ export async function importTextIntoDocument(
     for (const step of steps) {
       resolveImportStepApplication(document, step);
     }
+    const executableSteps = steps;
+    if (executableSteps.length === 0) {
+      options.onProgress?.({ phase: 'complete', message: 'Imported 0 sections.' });
+      return { status: 'complete', message: 'Imported 0 sections.' };
+    }
     options.onProgress?.({ phase: 'thinking', message: 'Identifying planned xref targets.' });
     const xrefResponse = await requestProxyCompletion({
       settings: llm.settings,
@@ -239,7 +261,7 @@ export async function importTextIntoDocument(
           content: buildImportXrefTargetPrompt(options.sourceName, options.instructions),
         },
       ],
-      context: buildImportXrefTargetContext(document, options.sourceName, options.sourceText, steps),
+      context: buildImportXrefTargetContext(document, options.sourceName, options.sourceText, executableSteps),
       responseInstructions: buildImportXrefTargetResponseInstructions(),
       mode: 'document-edit',
       debugLabel: 'ai-import-xref-targets',
@@ -252,7 +274,7 @@ export async function importTextIntoDocument(
       return { status: 'error', message: 'Import did not return a usable planned xref target inventory.' };
     }
     const created: string[] = [];
-    for (const [index, step] of steps.entries()) {
+    for (const [index, step] of executableSteps.entries()) {
       const application = resolveImportStepApplication(document, step);
       throwIfAborted(options.signal);
       if (step.importMode === 'template') {
@@ -268,10 +290,10 @@ export async function importTextIntoDocument(
             {
               id: crypto.randomUUID(),
               role: 'user',
-              content: buildImportTemplateValuesPrompt(options.sourceName, options.instructions, step, index, steps.length),
+              content: buildImportTemplateValuesPrompt(options.sourceName, options.instructions, step, index, executableSteps.length),
             },
           ],
-          context: buildImportTemplateValuesContext(document, options.sourceName, options.sourceText, steps, index, created, application, plannedXrefTargets, templateStructure),
+          context: buildImportTemplateValuesContext(document, options.sourceName, options.sourceText, executableSteps, index, created, application, plannedXrefTargets, templateStructure, step.extractedInformation),
           responseInstructions: buildImportTemplateValuesResponseInstructions(templateStructure),
           mode: 'document-edit',
           debugLabel: `ai-import-template-values:${index + 1}`,
@@ -289,30 +311,33 @@ export async function importTextIntoDocument(
         await options.onSectionApplied?.(result);
         continue;
       }
-      options.onProgress?.({ phase: 'thinking', message: `Extracting section data ${index + 1} of ${steps.length}.` });
-      const informationResponse = await requestProxyCompletion({
-        settings: llm.settings,
-        client: llm.client,
-        messages: [
-          {
-            id: crypto.randomUUID(),
-            role: 'user',
-            content: buildImportSectionInformationPrompt(options.sourceName, options.instructions, step, index, steps.length),
-          },
-        ],
-        context: buildImportSectionInformationContext(document, options.sourceName, options.sourceText, steps, index, created, application, plannedXrefTargets),
-        responseInstructions: buildImportSectionInformationResponseInstructions(),
-        mode: 'document-edit',
-        debugLabel: `ai-import-section-data:${index + 1}`,
-        beforeRequest: beforeLlmCall?.('thinking'),
-        signal: options.signal,
-      });
-      throwIfAborted(options.signal);
-      const information = parseImportSectionInformationResponse(informationResponse);
+      const information = step.extractedInformation;
       if (!information) {
-        return { status: 'error', message: `Import section ${index + 1} did not return usable section information.` };
+        options.onProgress?.({ phase: 'thinking', message: `Extracting section data ${index + 1} of ${executableSteps.length}.` });
+        const informationResponse = await requestProxyCompletion({
+          settings: llm.settings,
+          client: llm.client,
+          messages: [
+            {
+              id: crypto.randomUUID(),
+              role: 'user',
+              content: buildImportSectionInformationPrompt(options.sourceName, options.instructions, step, index, executableSteps.length),
+            },
+          ],
+          context: buildImportSectionInformationContext(document, options.sourceName, options.sourceText, executableSteps, index, created, application, plannedXrefTargets),
+          responseInstructions: buildImportSectionInformationResponseInstructions(),
+          mode: 'document-edit',
+          debugLabel: `ai-import-section-data:${index + 1}`,
+          beforeRequest: beforeLlmCall?.('thinking'),
+          signal: options.signal,
+        });
+        throwIfAborted(options.signal);
+        step.extractedInformation = parseImportSectionInformationResponse(informationResponse) ?? undefined;
+        if (!step.extractedInformation) {
+          return { status: 'error', message: `Import section ${index + 1} did not return usable section information.` };
+        }
       }
-      options.onProgress?.({ phase: 'thinking', message: `Generating HVY section ${index + 1} of ${steps.length}.` });
+      options.onProgress?.({ phase: 'thinking', message: `Generating HVY section ${index + 1} of ${executableSteps.length}.` });
       const hvyResponse = await requestProxyCompletion({
         settings: llm.settings,
         client: llm.client,
@@ -320,10 +345,10 @@ export async function importTextIntoDocument(
           {
             id: crypto.randomUUID(),
             role: 'user',
-            content: buildImportSectionHvyPrompt(options.sourceName, options.instructions, step, index, steps.length),
+            content: buildImportSectionHvyPrompt(options.sourceName, options.instructions, step, index, executableSteps.length),
           },
         ],
-        context: buildImportSectionHvyContext(document, information, application, plannedXrefTargets),
+        context: buildImportSectionHvyContext(document, step.extractedInformation!, application, plannedXrefTargets),
         responseInstructions: buildImportSectionHvyResponseInstructions(),
         mode: 'document-edit',
         debugLabel: `ai-import-section-hvy:${index + 1}`,
@@ -476,6 +501,323 @@ function parseImportPlanSteps(response: string, document: VisualDocument): Impor
   }
 }
 
+type ImportPreplanGroup = {
+  steps: ImportPlanStep[];
+};
+
+function buildImportPlanStepsFromPreplan(document: VisualDocument): ImportPlanStep[] {
+  return getImportPreplanGroups(document).flatMap((group) => group.steps);
+}
+
+function getImportPreplanGroups(document: VisualDocument): ImportPreplanGroup[] {
+  const raw = document.meta.importPreplan;
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  const candidates = getImportTemplateSectionCandidates(document);
+  const groups: ImportPreplanGroup[] = [];
+  raw.forEach((entry) => {
+    const ids = (Array.isArray(entry) ? entry : [entry])
+      .filter((value): value is string => typeof value === 'string')
+      .map((value) => value.trim())
+      .filter(Boolean);
+    const steps = ids
+      .map((id) => resolveImportPreplanTarget(id, candidates))
+      .filter((candidate): candidate is ImportTemplateSectionCandidate => !!candidate)
+      .map((candidate) => {
+        const target = candidateToImportPlanTarget(candidate);
+        const templateStructure = safeBuildImportTemplateStructureDescriptor(candidates, target);
+        return {
+          sectionTitle: candidate.title,
+          instruction: buildDefaultImportPlanInstruction(candidate.title),
+          target,
+          preplanGroupIndex: groups.length,
+          ...(templateStructure ? { importMode: 'template' as const } : {}),
+          ...(templateStructure ? { templateStructure: toPublicImportTemplateStructure(templateStructure) } : {}),
+        };
+      });
+    if (steps.length > 0) {
+      groups.push({ steps });
+    }
+  });
+  return groups;
+}
+
+function resolveImportPreplanTarget(id: string, candidates: ImportTemplateSectionCandidate[]): ImportTemplateSectionCandidate | null {
+  const body = candidates.find((candidate) => candidate.source === 'body' && candidate.id === id);
+  if (body) {
+    return body;
+  }
+  const definitionByKey = candidates.find((candidate) => candidate.source === 'definition' && candidate.definitionKey === id);
+  if (definitionByKey) {
+    return definitionByKey;
+  }
+  return candidates.find((candidate) => candidate.source === 'definition' && candidate.id === id) ?? null;
+}
+
+async function preparePreplannedImportSteps(
+  document: VisualDocument,
+  options: Pick<BuildImportPlanOptions, 'sourceName' | 'sourceText' | 'instructions' | 'onProgress' | 'signal'>,
+  steps: ImportPlanStep[],
+  llm: HvyImportLlmOptions,
+  beforeLlmCall: ReturnType<typeof createImportLlmStepper>
+): Promise<ImportPlanStep[]> {
+  const extracted: ImportPlanStep[] = [];
+  const groups = groupImportPreplanSteps(steps);
+  for (const [groupIndex, groupSteps] of groups.entries()) {
+    options.onProgress?.({ phase: 'thinking', message: `Extracting import group ${groupIndex + 1} of ${groups.length}.` });
+    const response = await requestProxyCompletion({
+      settings: llm.settings,
+      client: llm.client,
+      messages: [
+        {
+          id: crypto.randomUUID(),
+          role: 'user',
+          content: buildImportPreplanDataPrompt(options.sourceName, options.instructions, groupSteps, groupIndex, groups.length),
+        },
+      ],
+      context: buildImportPreplanDataContext(document, options.sourceName, options.sourceText, steps, groupSteps),
+      responseInstructions: buildImportPreplanDataResponseInstructions(groupSteps),
+      mode: 'document-edit',
+      debugLabel: `ai-import-preplan-data:${groupIndex + 1}`,
+      beforeRequest: beforeLlmCall?.('thinking'),
+      signal: options.signal,
+    });
+    throwIfAborted(options.signal);
+    const informationById = parseImportPreplanDataResponse(response);
+    for (const step of groupSteps) {
+      const id = getImportPlanStepTargetId(step);
+      const information = id ? informationById.get(id) : '';
+      if (information) {
+        extracted.push({ ...step, extractedInformation: information });
+      }
+    }
+  }
+  options.onProgress?.({ phase: 'thinking', message: 'Checking for missing import sections.' });
+  const missingResponse = await requestProxyCompletion({
+    settings: llm.settings,
+    client: llm.client,
+    messages: [
+      {
+        id: crypto.randomUUID(),
+        role: 'user',
+        content: buildImportMissingSectionsPrompt(options.sourceName, options.instructions),
+      },
+    ],
+    context: buildImportMissingSectionsContext(document, options.sourceName, options.sourceText, steps, extracted),
+    responseInstructions: buildImportMissingSectionsResponseInstructions(),
+    mode: 'document-edit',
+    debugLabel: 'ai-import-missing-sections',
+    beforeRequest: beforeLlmCall?.('thinking'),
+    signal: options.signal,
+  });
+  throwIfAborted(options.signal);
+  return [
+    ...extracted,
+    ...parseImportMissingSectionsResponse(missingResponse, document, steps, extracted),
+  ];
+}
+
+function groupImportPreplanSteps(steps: ImportPlanStep[]): ImportPlanStep[][] {
+  const groups = new Map<number, ImportPlanStep[]>();
+  for (const step of steps) {
+    const index = typeof step.preplanGroupIndex === 'number' ? step.preplanGroupIndex : groups.size;
+    const group = groups.get(index) ?? [];
+    group.push(step);
+    groups.set(index, group);
+  }
+  return [...groups.entries()].sort(([left], [right]) => left - right).map(([, group]) => group);
+}
+
+function getImportPlanStepTargetId(step: ImportPlanStep): string {
+  return step.target.id || step.target.name || step.sectionTitle;
+}
+
+function buildImportPreplanDataPrompt(sourceName: string, instructions: string | undefined, groupSteps: ImportPlanStep[], index: number, total: number): string {
+  return [
+    `Extract source information for import group ${index + 1} of ${total} from "${sourceName}".`,
+    '',
+    'This is not a tool loop. Do not generate HVY and do not mutate anything.',
+    'Extract and organize only source facts relevant to the listed target sections.',
+    'Return one object keyed by the exact section ids listed in the response instructions.',
+    'If a section has no source-backed information, omit the key or return an empty string for that key.',
+    'Use this grouped pass to distinguish confusable categories before assigning facts, such as skills versus tools or technologies.',
+    'Use only facts present in the imported source text. Do not invent dates, titles, entity names, labels, categories, metrics, links, or other factual details.',
+    'Preserve exact source dates, names, titles, entity names, labels, category names, and terminology unless the approved step or host instructions explicitly say to normalize them.',
+    '',
+    'Target sections:',
+    ...groupSteps.map((step) => `- ${getImportPlanStepTargetId(step)}: ${formatImportPlanStep(step)} (${formatImportPlanTarget(step.target)})`),
+    instructions?.trim() ? ['Additional import instructions:', instructions.trim()].join('\n') : '',
+  ].filter(Boolean).join('\n');
+}
+
+function buildImportPreplanDataContext(
+  document: VisualDocument,
+  sourceName: string,
+  sourceText: string,
+  steps: ImportPlanStep[],
+  groupSteps: ImportPlanStep[]
+): string {
+  return [
+    buildImportGuidanceFrame(document),
+    '',
+    '=== BEGIN TARGET SECTION APPLICATIONS ===',
+    groupSteps.map((step) => {
+      const application = resolveImportStepApplication(document, step);
+      return [
+        `Target key: ${getImportPlanStepTargetId(step)}`,
+        buildImportSectionApplicationFrame(document, application),
+      ].join('\n');
+    }).join('\n\n'),
+    '=== END TARGET SECTION APPLICATIONS ===',
+    '',
+    '=== BEGIN SOURCE DOCUMENT ===',
+    `Source name: ${sourceName}`,
+    '```text',
+    sourceText,
+    '```',
+    '=== END SOURCE DOCUMENT ===',
+    '',
+    'Approved import section plan:',
+    ...steps.map((step, stepIndex) => `${stepIndex + 1}. ${formatImportPlanStep(step)} (${formatImportPlanTarget(step.target)})`),
+  ].join('\n');
+}
+
+function buildImportPreplanDataResponseInstructions(groupSteps: ImportPlanStep[]): string {
+  const shape = Object.fromEntries(groupSteps.map((step) => [getImportPlanStepTargetId(step), 'Source facts assigned to this section, in plain text.']));
+  return [
+    'Return exactly one JSON object and no prose.',
+    'Shape:',
+    JSON.stringify({ sections: shape }),
+    '',
+    '`sections` must be an object keyed only by these exact section ids:',
+    groupSteps.map((step) => `- ${getImportPlanStepTargetId(step)}`).join('\n'),
+    'Each value is a concise text document of only the imported facts used for that section.',
+    'Omit a key or return an empty string when the section has no source-backed information.',
+  ].join('\n');
+}
+
+function parseImportPreplanDataResponse(response: string): Map<string, string> {
+  const parsed = parseImportJsonObject(response);
+  const sections = parsed?.sections;
+  const result = new Map<string, string>();
+  if (!sections || typeof sections !== 'object' || Array.isArray(sections)) {
+    return result;
+  }
+  for (const [key, value] of Object.entries(sections as Record<string, unknown>)) {
+    const information = typeof value === 'string' ? value.trim() : '';
+    if (information) {
+      result.set(key, information);
+    }
+  }
+  return result;
+}
+
+function buildImportMissingSectionsPrompt(sourceName: string, instructions?: string): string {
+  return [
+    `Identify missing import sections for "${sourceName}".`,
+    '',
+    'This is not a tool loop. Do not generate HVY and do not mutate anything.',
+    'Review what the preplanned import has already seen, then add only source-backed sections that are still missing.',
+    'You may choose a remaining body section, a reusable section template, or a blank section as the starting point for each missing section.',
+    'Do not duplicate any section or fact already assigned to a preplanned section.',
+    'Use only facts present in the imported source text.',
+    instructions?.trim() ? ['Additional import instructions:', instructions.trim()].join('\n') : '',
+  ].filter(Boolean).join('\n');
+}
+
+function buildImportMissingSectionsContext(
+  document: VisualDocument,
+  sourceName: string,
+  sourceText: string,
+  allPreplanSteps: ImportPlanStep[],
+  extractedSteps: ImportPlanStep[]
+): string {
+  const seenTargets = new Set(allPreplanSteps.map((step) => formatImportPlanTarget(step.target)));
+  const remaining = getImportTemplateSectionCandidates(document)
+    .filter((candidate) => candidate.sectionDefinition?.repeatable === true || !seenTargets.has(formatImportPlanTarget(candidateToImportPlanTarget(candidate))));
+  return [
+    buildImportGuidanceFrame(document),
+    '',
+    '=== BEGIN ALREADY SEEN SECTIONS ===',
+    extractedSteps.length > 0
+      ? extractedSteps.map((step) => `- ${getImportPlanStepTargetId(step)}: ${step.extractedInformation}`).join('\n')
+      : '- No preplanned sections returned source-backed information.',
+    '=== END ALREADY SEEN SECTIONS ===',
+    '',
+    '=== BEGIN REMAINING STARTING POINTS ===',
+    remaining.length > 0
+      ? remaining.map((candidate) => {
+        const target = candidateToImportPlanTarget(candidate);
+        return `- ${formatImportPlanTarget(target)}`;
+      }).join('\n')
+      : '- No unused body sections or reusable section templates remain.',
+    '- blank section: use when no remaining starting point fits a source-backed missing section.',
+    '=== END REMAINING STARTING POINTS ===',
+    '',
+    '=== BEGIN SOURCE DOCUMENT ===',
+    `Source name: ${sourceName}`,
+    '```text',
+    sourceText,
+    '```',
+    '=== END SOURCE DOCUMENT ===',
+  ].join('\n');
+}
+
+function buildImportMissingSectionsResponseInstructions(): string {
+  return [
+    'Return exactly one JSON object and no prose.',
+    'Shape:',
+    '{"sections":{"Conference Talks":{"target":{"kind":"definition","name":"Resume Section"},"information":"Source-backed facts."},"Volunteer Work":{"target":{"kind":"blank","title":"Volunteer Work"},"information":"Source-backed facts."}}}',
+    '',
+    '`sections` is an object whose keys are new section names.',
+    '`target` may be a body section, definition section, or blank section using the same target shape as import plan steps.',
+    '`information` is a concise text document of only the source facts for that missing section.',
+    'Return {"sections":{}} when no source-backed sections are missing.',
+  ].join('\n');
+}
+
+function parseImportMissingSectionsResponse(
+  response: string,
+  document: VisualDocument,
+  allPreplanSteps: ImportPlanStep[],
+  extractedSteps: ImportPlanStep[]
+): ImportPlanStep[] {
+  const parsed = parseImportJsonObject(response);
+  const sections = parsed?.sections;
+  if (!sections || typeof sections !== 'object' || Array.isArray(sections)) {
+    return [];
+  }
+  const seenTargets = new Set([...allPreplanSteps, ...extractedSteps].map((step) => formatImportPlanTarget(step.target)));
+  const candidates = getImportTemplateSectionCandidates(document);
+  const result: ImportPlanStep[] = [];
+  for (const [sectionName, raw] of Object.entries(sections as Record<string, unknown>)) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+      continue;
+    }
+    const value = raw as { target?: unknown; information?: unknown };
+    const information = typeof value.information === 'string' ? value.information.trim() : '';
+    if (!information) {
+      continue;
+    }
+    const title = sectionName.trim() || 'Imported Section';
+    const target = normalizeImportPlanTarget(value.target, candidates, title);
+    const candidate = findImportCandidateForTarget(candidates, target);
+    if (seenTargets.has(formatImportPlanTarget(target)) && candidate?.sectionDefinition?.repeatable !== true) {
+      continue;
+    }
+    const templateStructure = safeBuildImportTemplateStructureDescriptor(candidates, target);
+    result.push({
+      sectionTitle: title,
+      instruction: buildDefaultImportPlanInstruction(title),
+      target,
+      extractedInformation: information,
+      ...(templateStructure ? { importMode: 'template' as const, templateStructure: toPublicImportTemplateStructure(templateStructure) } : {}),
+    });
+  }
+  return result;
+}
+
 function isConditionalImportPlanStep(step: string): boolean {
   return /\b(?:if|otherwise|unless|may|might)\b|\bonly\s+if\b|\bas\s+needed\b|\bwhen\s+needed\b|\bif\s+(?:present|available|applicable|needed)\b|\bleave\s+(?:the\s+)?(?:template'?s\s+)?[\s\S]{0,80}\bunmodified\b/i.test(step);
 }
@@ -526,6 +868,8 @@ function normalizeImportPlanStep(rawStep: ImportPlanStepInput | unknown, candida
     definitionName?: unknown;
     importMode?: unknown;
     templateStructureId?: unknown;
+    preplanGroupIndex?: unknown;
+    extractedInformation?: unknown;
   };
   const explicitSectionTitle = typeof value.sectionTitle === 'string' && value.sectionTitle.trim()
     ? value.sectionTitle.trim()
@@ -552,6 +896,12 @@ function normalizeImportPlanStep(rawStep: ImportPlanStepInput | unknown, candida
   const templateStructureId = typeof value.templateStructureId === 'string' && value.templateStructureId.trim()
     ? value.templateStructureId.trim()
     : undefined;
+  const preplanGroupIndex = typeof value.preplanGroupIndex === 'number' && Number.isInteger(value.preplanGroupIndex)
+    ? value.preplanGroupIndex
+    : undefined;
+  const extractedInformation = typeof value.extractedInformation === 'string' && value.extractedInformation.trim()
+    ? value.extractedInformation.trim()
+    : undefined;
   const importMode = value.importMode === 'template'
     ? 'template'
     : value.importMode === 'hvy'
@@ -564,6 +914,8 @@ function normalizeImportPlanStep(rawStep: ImportPlanStepInput | unknown, candida
     ...(importMode ? { importMode } : {}),
     ...(templateStructureId ? { templateStructureId } : {}),
     ...(templateStructure ? { templateStructure: toPublicImportTemplateStructure(templateStructure) } : {}),
+    ...(preplanGroupIndex !== undefined ? { preplanGroupIndex } : {}),
+    ...(extractedInformation ? { extractedInformation } : {}),
   };
 }
 
@@ -1131,7 +1483,8 @@ function buildImportTemplateValuesContext(
   createdSections: string[],
   application: ImportStepApplication,
   plannedXrefTargets: PlannedImportXrefTarget[],
-  templateStructure: ImportTemplateStructureInternal
+  templateStructure: ImportTemplateStructureInternal,
+  extractedInformation?: string
 ): string {
   return [
     buildImportGuidanceFrame(document),
@@ -1147,12 +1500,20 @@ function buildImportTemplateValuesContext(
     JSON.stringify(templateStructure.jsonSchema, null, 2),
     '=== END TEMPLATE JSON SCHEMA ===',
     '',
-    '=== BEGIN SOURCE DOCUMENT ===',
-    `Source name: ${sourceName}`,
-    '```text',
-    sourceText,
-    '```',
-    '=== END SOURCE DOCUMENT ===',
+    extractedInformation?.trim()
+      ? [
+        '=== BEGIN SECTION INFORMATION ===',
+        extractedInformation.trim(),
+        '=== END SECTION INFORMATION ===',
+      ].join('\n')
+      : [
+        '=== BEGIN SOURCE DOCUMENT ===',
+        `Source name: ${sourceName}`,
+        '```text',
+        sourceText,
+        '```',
+        '=== END SOURCE DOCUMENT ===',
+      ].join('\n'),
     '',
     'Approved import section plan:',
     ...steps.map((planStep, index) => `${index + 1}. ${index < activeIndex ? '[created]' : index === activeIndex ? '[current]' : '[pending]'} ${formatImportPlanStep(planStep)} (${formatImportPlanTarget(planStep.target)})`),
@@ -1239,6 +1600,7 @@ function buildImportParagraphStyleFrame(document: VisualDocument): string {
 type ImportTemplateSectionCandidate = {
   title: string;
   id: string;
+  definitionKey: string;
   name: string;
   section: VisualSection;
   source: 'body' | 'definition';
@@ -1261,6 +1623,7 @@ function getImportTemplateSectionCandidates(document: VisualDocument): ImportTem
       candidates.push({
         title: trimImportString(section.title) || trimImportString(section.customId) || 'Untitled section',
         id: trimImportString(section.customId),
+        definitionKey: '',
         name: '',
         section,
         source: 'body',
@@ -1275,6 +1638,7 @@ function getImportTemplateSectionCandidates(document: VisualDocument): ImportTem
     candidates.push({
       title: trimImportString(definition.name) || trimImportString(definition.template.title) || trimImportString(definition.template.customId) || 'Untitled section',
       id: trimImportString(definition.template.customId),
+      definitionKey: getImportSectionDefinitionKey(definition),
       name: trimImportString(definition.name),
       section: definition.template,
       source: 'definition',

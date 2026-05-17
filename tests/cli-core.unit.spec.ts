@@ -810,6 +810,50 @@ NOTE`);
   expect((await executeHvyCliCommand(document, session, 'cat /scratchpad.txt')).output).toBe('Updated intro and notes.\n');
 });
 
+test('cli preserves invalid header YAML drafts without changing the document', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+title: Header Safety
+ai-import-guidance: During import, keep source-backed fields in their sections.
+importPreplan:
+  - - summary
+section_defaults:
+  css: "margin: 0.5rem 0;"
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {"id":"intro"}-->
+Hello
+`, '.hvy');
+  const session = createHvyCliSession();
+
+  expect((await executeHvyCliCommand(document, session, 'cat /header.yaml')).output).toContain('importPreplan:');
+
+  await expect(executeHvyCliCommand(document, session, "sed -i '/^importPreplan:/,/^section_defaults:/d' /header.yaml"))
+    .rejects.toThrow('/header.yaml could not be applied; file was not changed.');
+
+  expect((await executeHvyCliCommand(document, session, 'cat /header.yaml')).output).toContain('importPreplan:');
+  expect((await executeHvyCliCommand(document, session, 'cat /header.yaml')).output).toContain('section_defaults:');
+  expect((await executeHvyCliCommand(document, session, 'ls /')).output).toContain('file header.modified.yaml [w] | failed structured-file draft preserved after a parse or validation error');
+  expect((await executeHvyCliCommand(document, session, 'cat /header.modified.yaml')).output).not.toContain('importPreplan:');
+});
+
+test('cli preserves invalid JSON drafts with matching structured sidecar extensions', async () => {
+  const document = createCliTestDocument();
+  const session = createHvyCliSession();
+
+  expect((await executeHvyCliCommand(document, session, 'cat /body/summary/section.json')).output).toContain('"title": "Summary"');
+
+  await expect(executeHvyCliCommand(document, session, "echo '{bad json' > /body/summary/section.json"))
+    .rejects.toThrow('/body/summary/section.json could not be applied; file was not changed.');
+
+  expect((await executeHvyCliCommand(document, session, 'cat /body/summary/section.json')).output).toContain('"title": "Summary"');
+  expect((await executeHvyCliCommand(document, session, 'ls /body/summary')).output).toContain('file section.modified.json [w] | failed structured-file draft preserved after a parse or validation error');
+  expect((await executeHvyCliCommand(document, session, 'cat /body/summary/section.modified.json')).output).toBe('{bad json\n');
+});
+
 test('cli sed updates writable virtual files', async () => {
   const document = createCliTestDocument();
   const session = createHvyCliSession();
@@ -2468,6 +2512,17 @@ Hello
 
   expect(result.output).toContain('Lint issues: 1');
   expect(result.output).toContain('[header] /header.yaml - header.yaml metadata key "workflow_state" is not used by HVY 0.1 or this editor. Remove it if it was accidental.');
+});
+
+test('hvy lint accepts spec-defined importPreplan metadata', async () => {
+  const document = createResumeTemplateCliTestDocument();
+  const session = createHvyCliSession();
+
+  expect((await executeHvyCliCommand(document, session, 'cat /header.yaml')).output).toContain('importPreplan:');
+
+  const result = await executeHvyCliCommand(document, session, 'hvy lint');
+
+  expect(result.output).not.toContain('importPreplan');
 });
 
 test('hvy lint warns on newer HVY versions before assuming unused metadata', async () => {

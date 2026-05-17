@@ -17,6 +17,7 @@ const KNOWN_HEADER_METADATA_KEYS = new Set([
   'tags',
   'ai-context',
   'ai-import-guidance',
+  'importPreplan',
   'sidebar_label',
   'reader_max_width',
   'theme',

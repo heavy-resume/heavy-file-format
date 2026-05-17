@@ -44,6 +44,7 @@ export interface HvyCliSession {
   rawWipContent?: string;
   rawWipContentByPath?: Record<string, string>;
   rawSectionWipContentByPath?: Record<string, string>;
+  modifiedContentByPath?: Record<string, string>;
   virtualPathNaming?: HvyVirtualPathNamingState;
   now?: Date;
 }
@@ -58,6 +59,7 @@ type HvyCliCommandContext = {
   document: VisualDocument;
   fs: ReturnType<typeof buildHvyVirtualFileSystem>;
   cwd: string;
+  session?: HvyCliSession;
   pathNaming?: HvyVirtualPathNamingState;
 };
 
@@ -107,7 +109,7 @@ export async function executeHvyCliCommand(document: VisualDocument, session: Hv
     for (const heredoc of heredocs) {
       const fs = buildSessionVirtualFileSystem(document, session);
       addSessionFiles(fs, document, session);
-      const result = writeVirtualFile({ fs, cwd: session.cwd }, heredoc.path, heredoc.content, false, 'cat');
+      const result = writeVirtualFile({ fs, cwd: session.cwd, session }, heredoc.path, heredoc.content, false, 'cat');
       enforceScratchpadHardCap(session);
       if (result.output) {
         outputs.push(result.output);
@@ -144,7 +146,7 @@ export async function executeHvyCliCommand(document: VisualDocument, session: Hv
     const fs = buildSessionVirtualFileSystem(document, session);
     addSessionFiles(fs, document, session);
     enforceScratchpadHardCap(session);
-    lastProcess = await executeMiniShellPipeline({ document, fs, cwd: session.cwd, pathNaming: session.virtualPathNaming }, pipeline.commands);
+    lastProcess = await executeMiniShellPipeline({ document, fs, cwd: session.cwd, session, pathNaming: session.virtualPathNaming }, pipeline.commands);
     enforceScratchpadHardCap(session);
     session.cwd = lastProcess.cwd;
     mutated = mutated || lastProcess.mutated;
@@ -186,7 +188,7 @@ export function executeHvyCliCommandSync(document: VisualDocument, input: string
   session.cwd = cwd;
   const fs = buildSessionVirtualFileSystem(document, session);
   addSessionFiles(fs, document, session);
-  const ctx: HvyCliCommandContext = { document, fs, cwd };
+  const ctx: HvyCliCommandContext = { document, fs, cwd, session };
   if (command === 'help' || command === 'man') {
     return { cwd, output: helpFor(rest.join(' ')), mutated: false };
   }
@@ -283,7 +285,7 @@ export function writeHvyVirtualFileSync(document: VisualDocument, path: string, 
   session.cwd = cwd;
   const fs = buildSessionVirtualFileSystem(document, session);
   addSessionFiles(fs, document, session);
-  const result = writeVirtualFile({ fs, cwd }, path, content, false, 'doc.cli.write');
+  const result = writeVirtualFile({ fs, cwd, session }, path, content, false, 'doc.cli.write');
   return { cwd, output: result.output, mutated: result.mutated };
 }
 
@@ -718,6 +720,7 @@ function inferComponentNameForDirectory(fs: ReturnType<typeof buildHvyVirtualFil
 function addSessionFiles(fs: ReturnType<typeof buildHvyVirtualFileSystem>, document: VisualDocument, session: HvyCliSession): void {
   addSessionScratchpadFile(fs, session);
   addSessionRawHvyFiles(fs, document, session);
+  addSessionModifiedFiles(fs, session);
 }
 
 function addSessionScratchpadFile(fs: ReturnType<typeof buildHvyVirtualFileSystem>, session: HvyCliSession): void {
@@ -739,6 +742,21 @@ function addSessionRawHvyFiles(fs: ReturnType<typeof buildHvyVirtualFileSystem>,
   addSessionRawDocumentFiles(fs, document, session);
   addSessionRawSectionFiles(fs, document, session);
   addSessionRawComponentFiles(fs, document, session);
+}
+
+function addSessionModifiedFiles(fs: ReturnType<typeof buildHvyVirtualFileSystem>, session: HvyCliSession): void {
+  session.modifiedContentByPath ??= {};
+  for (const path of Object.keys(session.modifiedContentByPath)) {
+    fs.entries.set(path, {
+      kind: 'file',
+      path,
+      read: () => session.modifiedContentByPath?.[path] ?? '',
+      write: (nextContent) => {
+        session.modifiedContentByPath ??= {};
+        session.modifiedContentByPath[path] = nextContent;
+      },
+    });
+  }
 }
 
 function addSessionRawDocumentFiles(fs: ReturnType<typeof buildHvyVirtualFileSystem>, document: VisualDocument, session: HvyCliSession): void {
@@ -1944,7 +1962,7 @@ function decodePrintfEscapes(value: string): string {
 }
 
 function writeVirtualFile(
-  ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd: string },
+  ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd: string; session?: HvyCliSession },
   path: string,
   content: string,
   append: boolean,
@@ -1954,11 +1972,63 @@ function writeVirtualFile(
   if (!file.write) {
     throw new Error(`${command}: file is read-only: ${file.path}`);
   }
-  file.write(append ? `${file.read()}${content}` : content);
+  writeVirtualFileContent(ctx, file, append ? `${file.read()}${content}` : content);
   return { output: `${file.path}: ${append ? 'appended' : 'written'}`, mutated: true };
 }
 
-function commandSed(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd: string }, args: string[]): { output: string; mutated: boolean } {
+function writeVirtualFileContent(
+  ctx: { session?: HvyCliSession },
+  file: HvyVirtualFile,
+  content: string
+): void {
+  try {
+    file.write?.(content);
+    clearModifiedSidecarForPath(ctx.session, file.path);
+  } catch (error) {
+    preserveFailedStructuredWrite(ctx.session, file.path, content, error);
+  }
+}
+
+function preserveFailedStructuredWrite(
+  session: HvyCliSession | undefined,
+  path: string,
+  content: string,
+  error: unknown
+): never {
+  if (!session || !isStructuredVirtualFilePath(path) || isModifiedSidecarPath(path)) {
+    throw error;
+  }
+  const sidecarPath = modifiedSidecarPath(path);
+  session.modifiedContentByPath ??= {};
+  session.modifiedContentByPath[sidecarPath] = content;
+  throw new Error([
+    `${path} could not be applied; file was not changed.`,
+    `${sidecarPath} now contains the failed draft so you can inspect or repair it.`,
+    '',
+    error instanceof Error ? error.message : String(error),
+  ].join('\n'));
+}
+
+function clearModifiedSidecarForPath(session: HvyCliSession | undefined, path: string): void {
+  const sidecarPath = modifiedSidecarPath(path);
+  if (session?.modifiedContentByPath?.[sidecarPath] !== undefined) {
+    delete session.modifiedContentByPath[sidecarPath];
+  }
+}
+
+function isStructuredVirtualFilePath(path: string): boolean {
+  return /\.(?:json|ya?ml)$/i.test(path);
+}
+
+function isModifiedSidecarPath(path: string): boolean {
+  return /\.modified\.(?:json|ya?ml)$/i.test(path);
+}
+
+function modifiedSidecarPath(path: string): string {
+  return path.replace(/(\.(?:json|ya?ml))$/i, '.modified$1');
+}
+
+function commandSed(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd: string; session?: HvyCliSession }, args: string[]): { output: string; mutated: boolean } {
   const parsed = parseCliFlags(args, {
     command: 'sed',
     booleanShort: ['E', 'r', 'n'],
@@ -1984,7 +2054,7 @@ function commandSed(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd
       }
       const before = file.read();
       const after = applySedEditExpression(before, expression);
-      file.write(after);
+      writeVirtualFileContent(ctx, file, after);
       const changed = before === after ? 0 : 1;
       return `${file.path}: ${changed ? 'updated' : 'no matches'}`;
     })
@@ -2918,7 +2988,7 @@ async function runMiniShellApplication(ctx: HvyCliCommandContext, commandArgs: s
       return { cwd: result.cwd, stdout: result.output, stderr: '', status: 0, mutated: result.mutated };
     }
     const writeResult = writeVirtualFile(
-      { fs: ctx.fs, cwd: result.cwd },
+      { fs: ctx.fs, cwd: result.cwd, session: ctx.session },
       redirect.targetPath,
       command === 'echo' ? `${decodeEchoEscapes(result.output)}\n` : result.output,
       redirect.append,
@@ -3370,6 +3440,9 @@ function formatFileEntryDescription(fs: ReturnType<typeof buildHvyVirtualFileSys
   }
   if (filename === 'raw.wip.hvy') {
     return 'failed raw.hvy draft preserved after a parse error';
+  }
+  if (isModifiedSidecarPath(path)) {
+    return 'failed structured-file draft preserved after a parse or validation error';
   }
   if (filename === 'section.json') {
     return 'section metadata and display settings';

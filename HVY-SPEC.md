@@ -1198,7 +1198,7 @@ plugins:
 Block example:
 
 ```markdown
-<!--hvy:plugin {"plugin":"hvy.graph","pluginConfig":{"type":"bar","title":"Example","xAxisLabel":"Label","yAxisLabel":"Value","legend":true}}-->
+<!--hvy:plugin {"plugin":"hvy.graph","pluginConfig":{"type":"bar","title":"Example","xAxisLabel":"Label","yAxisLabel":"Value","legend":true,"colorScheme":"auto"}}-->
 Label,Value
 Example A,10
 Example B,20
@@ -1211,8 +1211,15 @@ Plugin-specific rules:
 - `pluginConfig.title`, `pluginConfig.xAxisLabel`, and
   `pluginConfig.yAxisLabel` are optional strings.
 - `pluginConfig.legend` is optional and defaults to `true`.
+- `pluginConfig.colorScheme` is optional and defaults to `"auto"`. Supported
+  values are `"auto"`, `"light"`, and `"dark"`. `"auto"` uses active HVY theme
+  graph colors; `"light"` and `"dark"` force built-in graph schemes.
 - The plugin text body MUST be interpreted as CSV with the first row as column
   headers.
+- Theme colors for graph rendering are configurable under `theme.colors` with
+  `--hvy-graph-text`, `--hvy-graph-grid`, `--hvy-graph-axis`,
+  `--hvy-graph-outline`, and `--hvy-graph-series-1` through
+  `--hvy-graph-series-8`.
 - For `"bar"`, `"line"`, and `"radar"` charts, the first CSV column is labels
   and all following columns are numeric datasets.
 - For `"pie"`, `"doughnut"`, and `"polarArea"` charts, the first CSV column is

@@ -5,10 +5,11 @@ title: Resume
 reader_max_width: 60rem
 ai-context: >-
   This is a resume document. Use the top-skills-tools-technologies section for featured
-  reference cards only; the skills, tools-technologies, and languages sidebar sections
-  are the main reusable libraries for detailed reference records. History and education
+  reference cards only; the skills and tools-technologies sidebar sections
+  are the main reusable libraries for detailed reference records. Add the Languages
+  section template only when human language content exists. History and education
   have body sections with structured component-lists for expandable record rows.
-  Projects, publications, awards, and certifications are section templates
+  Projects, publications, awards, certifications, and languages are section templates
   that should be added only when source-backed content exists. Keep dated main-section
   records in reverse chronological order with newest entries first. History should use
   one expandable record per organization when roles are contiguous; put promotions,
@@ -38,11 +39,11 @@ ai-import-guidance: >-
   that's usually bullet points of highlights.
 importPreplan:
   - [header, summary, locations]
-  - [skills, tools-technologies, languages, top-skills-tools-technologies]
+  - [skills, tools-technologies, resume-languages, top-skills-tools-technologies]
   - [history, resume-awards]
   - [resume-projects, resume-publications]
   - [resume-certifications, education]
-  - [languages, resume-section]
+  - [resume-languages, resume-section]
 section_defaults:
   css: "margin: 0.5rem 0;"
 text_line_styles:
@@ -370,6 +371,32 @@ section_defs:
             componentListComponent: certification-record
             componentListItemLabel: certification
             tags: certification
+            componentListBlocks: []
+      children: []
+  - name: Languages
+    key: resume-languages
+    template:
+      id: languages
+      title: Languages
+      level: 1
+      lock: true
+      expanded: false
+      location: sidebar
+      description: Spoken and written languages information
+      hideIfUnmodified: true
+      tags: languages
+      blocks:
+        - text: "# Languages"
+          schema:
+            component: text
+            css: "margin: 0.5rem 0;"
+        - text: ""
+          schema:
+            component: component-list
+            css: "margin: 0;"
+            componentListComponent: language-record
+            componentListItemLabel: language
+            tags: language
             componentListBlocks: []
       children: []
   - name: Resume Section
@@ -1555,14 +1582,6 @@ component_defs:
   # Tools & <!--hvy:alt {"compact":"Tech"}-->Technologies<!--/hvy:alt-->
 
  <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"tool-tech-record","componentListItemLabel":"tool / technology","tags":"tool"}-->
-
-<!--hvy: {"id":"languages","lock":true,"expanded":false,"location":"sidebar","description":"Spoken and written languages information","hideIfUnmodified":true}-->
-#! Languages
-
- <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
-  # Languages
-
- <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"language-record","componentListItemLabel":"language","tags":"language"}-->
 
 <!--hvy: {"id":"history","templateKey":"resume-history","lock":true,"description":"Work history","hideIfUnmodified":true,"tags":"reciprocal-xref-source"}-->
 #! Professional History

@@ -6,6 +6,8 @@ import graphDocumentation from './graph.about.txt?raw';
 
 export const GRAPH_TYPES = ['bar', 'line', 'pie', 'doughnut', 'scatter', 'bubble', 'radar', 'polarArea'] as const;
 export type GraphType = (typeof GRAPH_TYPES)[number];
+export const GRAPH_COLOR_SCHEMES = ['auto', 'light', 'dark'] as const;
+export type GraphColorScheme = (typeof GRAPH_COLOR_SCHEMES)[number];
 
 interface GraphConfig {
   type: GraphType;
@@ -13,6 +15,15 @@ interface GraphConfig {
   xAxisLabel: string;
   yAxisLabel: string;
   legend: boolean;
+  colorScheme: GraphColorScheme;
+}
+
+interface GraphTheme {
+  text: string;
+  grid: string;
+  axis: string;
+  outline: string;
+  series: string[];
 }
 
 export interface CsvParseResult {
@@ -35,6 +46,23 @@ const DEFAULT_CONFIG: GraphConfig = {
   xAxisLabel: '',
   yAxisLabel: '',
   legend: true,
+  colorScheme: 'auto',
+};
+
+const GRAPH_LIGHT_THEME: GraphTheme = {
+  text: '#1a2530',
+  grid: 'rgba(26, 37, 48, 0.14)',
+  axis: 'rgba(26, 37, 48, 0.52)',
+  outline: '#ffffff',
+  series: ['#2563eb', '#dc2626', '#16a34a', '#9333ea', '#f59e0b', '#0891b2', '#db2777', '#64748b'],
+};
+
+const GRAPH_DARK_THEME: GraphTheme = {
+  text: '#e7eef5',
+  grid: 'rgba(231, 238, 245, 0.16)',
+  axis: 'rgba(231, 238, 245, 0.55)',
+  outline: '#0f1720',
+  series: ['#60a5fa', '#fb7185', '#4ade80', '#c084fc', '#fbbf24', '#22d3ee', '#f472b6', '#94a3b8'],
 };
 
 let chartModulePromise: Promise<ChartModule> | null = null;
@@ -52,6 +80,7 @@ function readConfig(raw: Record<string, unknown>): GraphConfig {
     xAxisLabel: typeof raw.xAxisLabel === 'string' ? raw.xAxisLabel : DEFAULT_CONFIG.xAxisLabel,
     yAxisLabel: typeof raw.yAxisLabel === 'string' ? raw.yAxisLabel : DEFAULT_CONFIG.yAxisLabel,
     legend: typeof raw.legend === 'boolean' ? raw.legend : DEFAULT_CONFIG.legend,
+    colorScheme: GRAPH_COLOR_SCHEMES.includes(raw.colorScheme as GraphColorScheme) ? raw.colorScheme as GraphColorScheme : DEFAULT_CONFIG.colorScheme,
   };
 }
 
@@ -193,22 +222,99 @@ export function buildGraphChartData(csv: string, type: GraphType): GraphBuildRes
   return { data: { labels, datasets }, error: null };
 }
 
-function renderChartOptions(config: GraphConfig): Record<string, unknown> {
+function renderChartOptions(config: GraphConfig, theme: GraphTheme): Record<string, unknown> {
   const axisScales = config.type === 'pie' || config.type === 'doughnut' || config.type === 'polarArea' || config.type === 'radar'
     ? {}
     : {
-        x: { title: { display: Boolean(config.xAxisLabel.trim()), text: config.xAxisLabel } },
-        y: { title: { display: Boolean(config.yAxisLabel.trim()), text: config.yAxisLabel } },
+        x: {
+          border: { color: theme.axis },
+          grid: { color: theme.grid },
+          ticks: { color: theme.text },
+          title: { color: theme.text, display: Boolean(config.xAxisLabel.trim()), text: config.xAxisLabel },
+        },
+        y: {
+          border: { color: theme.axis },
+          grid: { color: theme.grid },
+          ticks: { color: theme.text },
+          title: { color: theme.text, display: Boolean(config.yAxisLabel.trim()), text: config.yAxisLabel },
+        },
       };
   return {
     responsive: true,
     maintainAspectRatio: false,
+    color: theme.text,
     plugins: {
-      legend: { display: config.legend },
-      title: { display: Boolean(config.title.trim()), text: config.title },
+      legend: { display: config.legend, labels: { color: theme.text } },
+      title: { color: theme.text, display: Boolean(config.title.trim()), text: config.title },
     },
     scales: axisScales,
   };
+}
+
+function readGraphTheme(root: HTMLElement, config: GraphConfig): GraphTheme {
+  if (config.colorScheme === 'light') return GRAPH_LIGHT_THEME;
+  if (config.colorScheme === 'dark') return GRAPH_DARK_THEME;
+  const computed = getComputedStyle(root);
+  const fallback = computed.colorScheme.includes('dark') ? GRAPH_DARK_THEME : GRAPH_LIGHT_THEME;
+  const read = (name: string, fallbackValue: string) => computed.getPropertyValue(name).trim() || fallbackValue;
+  return {
+    text: read('--hvy-graph-text', fallback.text),
+    grid: read('--hvy-graph-grid', fallback.grid),
+    axis: read('--hvy-graph-axis', fallback.axis),
+    outline: read('--hvy-graph-outline', fallback.outline),
+    series: fallback.series.map((color, index) => read(`--hvy-graph-series-${index + 1}`, color)),
+  };
+}
+
+function styleGraphChartData(data: Record<string, unknown>, type: GraphType, theme: GraphTheme): Record<string, unknown> {
+  const datasets = Array.isArray(data.datasets) ? data.datasets : [];
+  const styledDatasets = datasets.map((dataset, index) => styleGraphDataset(dataset, index, type, theme));
+  return { ...data, datasets: styledDatasets };
+}
+
+function styleGraphDataset(dataset: unknown, index: number, type: GraphType, theme: GraphTheme): Record<string, unknown> {
+  const source = dataset && typeof dataset === 'object' && !Array.isArray(dataset) ? dataset as Record<string, unknown> : {};
+  const color = theme.series[index % theme.series.length] ?? theme.series[0] ?? '#2563eb';
+  if (type === 'pie' || type === 'doughnut' || type === 'polarArea') {
+    const count = Array.isArray(source.data) ? source.data.length : theme.series.length;
+    return {
+      ...source,
+      backgroundColor: Array.from({ length: count }, (_value, itemIndex) => colorWithAlpha(theme.series[itemIndex % theme.series.length] ?? color, 0.78)),
+      borderColor: theme.outline,
+      borderWidth: 2,
+      hoverBorderColor: theme.outline,
+      hoverBorderWidth: 3,
+    };
+  }
+  return {
+    ...source,
+    backgroundColor: colorWithAlpha(color, type === 'line' ? 0.16 : 0.72),
+    borderColor: type === 'bar' ? theme.outline : color,
+    borderWidth: type === 'bar' ? 2 : 2.5,
+    pointBackgroundColor: color,
+    pointBorderColor: theme.outline,
+    pointBorderWidth: 2,
+  };
+}
+
+function colorWithAlpha(color: string, alpha: number): string {
+  const trimmed = color.trim();
+  const hex = trimmed.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+  if (hex) {
+    const raw = hex[1]!.length === 3
+      ? hex[1]!.split('').map((char) => `${char}${char}`).join('')
+      : hex[1]!;
+    const numeric = Number.parseInt(raw, 16);
+    return `rgba(${(numeric >> 16) & 255}, ${(numeric >> 8) & 255}, ${numeric & 255}, ${alpha})`;
+  }
+  const rgb = trimmed.match(/^rgba?\(([^)]+)\)$/i);
+  if (rgb) {
+    const parts = rgb[1]!.split(',').map((part) => part.trim()).slice(0, 3);
+    if (parts.length === 3) {
+      return `rgba(${parts.join(', ')}, ${alpha})`;
+    }
+  }
+  return trimmed;
 }
 
 function renderChartFrame(): string {
@@ -245,11 +351,12 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
     }
     const module = await loadChartModule();
     if (version !== renderVersion || !canvas.isConnected) return;
+    const theme = readGraphTheme(root, config);
     destroyChart();
     chart = new module.Chart(canvas, {
       type: config.type,
-      data: built.data as never,
-      options: renderChartOptions(config),
+      data: styleGraphChartData(built.data, config.type, theme) as never,
+      options: renderChartOptions(config, theme),
     });
   };
 
@@ -366,6 +473,7 @@ function syncEditorShell(ctx: HvyPluginContext, root: HTMLElement, config: Graph
     const field = input.dataset.graphField ?? '';
     if (field === activeField && input.dataset.rowIndex === activeRow && input.dataset.columnIndex === activeColumn) return;
     if (field === 'type' && input instanceof HTMLSelectElement) input.value = config.type;
+    if (field === 'colorScheme' && input instanceof HTMLSelectElement) input.value = config.colorScheme;
     if (field === 'title' && input instanceof HTMLInputElement) input.value = config.title;
     if (field === 'xAxisLabel' && input instanceof HTMLInputElement) input.value = config.xAxisLabel;
     if (field === 'yAxisLabel' && input instanceof HTMLInputElement) input.value = config.yAxisLabel;
@@ -380,6 +488,9 @@ function renderEditorShell(_ctx: HvyPluginContext, config: GraphConfig, csv: str
     <div class="hvy-graph-controls">
       <label><span>Type</span><select data-graph-field="type">
         ${GRAPH_TYPES.map((type) => `<option value="${type}"${config.type === type ? ' selected' : ''}>${type}</option>`).join('')}
+      </select></label>
+      <label><span>Colors</span><select data-graph-field="colorScheme">
+        ${GRAPH_COLOR_SCHEMES.map((scheme) => `<option value="${scheme}"${config.colorScheme === scheme ? ' selected' : ''}>${scheme}</option>`).join('')}
       </select></label>
       <label><span>Title</span><input type="text" data-graph-field="title" value="${escapeAttr(config.title)}"></label>
       <label><span>X axis</span><input type="text" data-graph-field="xAxisLabel" value="${escapeAttr(config.xAxisLabel)}"></label>

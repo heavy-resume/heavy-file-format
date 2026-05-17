@@ -13,7 +13,7 @@ export function configurePluginBlock(block: VisualBlock, pluginId: string): void
     : nextId === SCRIPTING_PLUGIN_ID
       ? { version: SCRIPTING_PLUGIN_VERSION }
     : nextId === GRAPH_PLUGIN_ID
-      ? { type: 'bar', title: '', xAxisLabel: '', yAxisLabel: '', legend: true }
+      ? { type: 'bar', title: '', xAxisLabel: '', yAxisLabel: '', legend: true, colorScheme: 'auto' }
       : {};
   block.text = nextId === GRAPH_PLUGIN_ID ? 'Label,Value\nExample A,10\nExample B,20\nExample C,15' : '';
 }

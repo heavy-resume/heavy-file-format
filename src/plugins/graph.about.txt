@@ -6,6 +6,7 @@ Chart attributes live in pluginConfig:
 - xAxisLabel: optional horizontal axis label.
 - yAxisLabel: optional vertical axis label.
 - legend: boolean, default true.
+- colorScheme: auto, light, or dark.
 
 The plugin text body is CSV. The first row is treated as headers. For bar, line,
 radar, and polarArea charts, the first column is labels and remaining columns are

@@ -2219,6 +2219,7 @@ function instantiateImportTemplateSection(document: VisualDocument, template: Vi
   const sectionFlavorName = typeof values[IMPORT_TEMPLATE_SECTION_FLAVOR_FIELD] === 'string' ? values[IMPORT_TEMPLATE_SECTION_FLAVOR_FIELD].trim() : '';
   const sectionFlavor = templateStructure.sectionFlavors.find((flavor) => flavor.name === sectionFlavorName);
   const section = cloneReusableSection(sectionFlavor?.template ?? template);
+  markImportedSectionVisible(section);
   const sectionVariables = sectionFlavor?.variables ?? templateStructure.sectionVariables;
   const lists = getImportTemplateListsForSectionFlavor(templateStructure, sectionFlavor);
   const scalarValues: Record<string, string> = {};
@@ -2815,11 +2816,17 @@ function parseGeneratedImportSection(hvy: string, documentMeta: VisualDocument['
 }
 
 function sanitizeGeneratedImportSection(section: VisualSection, documentMeta: VisualDocument['meta']): void {
+  markImportedSectionVisible(section);
   visitBlocks([section], (block) => {
     if (resolveBaseComponentFromMeta(block.schema.component, documentMeta) === 'xref-card') {
       block.schema.id = '';
     }
   });
+}
+
+function markImportedSectionVisible(section: VisualSection): void {
+  section.hideIfUnmodified = false;
+  section.children.forEach(markImportedSectionVisible);
 }
 
 function normalizeLlmHvySafetyClosures(hvy: string): string {

@@ -858,7 +858,7 @@ text_line_styles:
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.responseInstructions).toContain('"targets"');
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.debugLabel).toBe('ai-import-section-data:1');
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages[0]?.content).toContain('Extract source information');
-  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages[0]?.content).toContain('This is not a tool loop.');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages[0]?.content).toContain('Do not generate HVY in this step.');
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).not.toContain('=== BEGIN TEMPLATE SECTION STRUCTURE ===');
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('=== BEGIN SECTION APPLICATION ===');
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('=== BEGIN DOCUMENT RELATIONSHIPS ===');
@@ -987,7 +987,7 @@ component_defs:
   expect(result.status).toBe('complete');
   expect(requestProxyCompletionMock).toHaveBeenCalledTimes(2);
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.debugLabel).toBe('ai-import-template-values:1');
-  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages[0]?.content).toContain('Do not generate HVY');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages[0]?.content).toContain('Return only source-backed JSON values');
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('=== BEGIN TEMPLATE JSON SCHEMA ===');
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.responseInstructions).toContain('"values"');
   expect(serialized).toContain('# Awards');
@@ -1110,7 +1110,7 @@ test('importTextIntoDocument uses grouped importPreplan extraction and missing s
     '{"values":{"section_title":"Conference Talks","details":"Talk facts."}}'
   );
   requestProxyCompletionMock.mockResolvedValueOnce(
-    '{"hvy":"<!--hvy: {\\"id\\":\\"volunteer-work\\"}-->\\n#! Volunteer Work\\n\\n <!--hvy:text {}-->\\n  Volunteer facts"}'
+    '{"hvy":"<!--hvy: {\\"id\\":\\"volunteer-work\\",\\"hideIfUnmodified\\":true}-->\\n#! Volunteer Work\\n\\n <!--hvy:text {}-->\\n  Volunteer facts"}'
   );
   const document = deserializeDocument(`---
 hvy_version: 0.1
@@ -1125,6 +1125,7 @@ section_defs:
     template:
       id: awards
       title: "{% section_title %}"
+      hideIfUnmodified: true
       blocks:
         - text: "# {% section_title %}"
           schema:
@@ -1145,6 +1146,7 @@ section_defs:
         label: Details
     template:
       title: "{% section_title %}"
+      hideIfUnmodified: true
       blocks:
         - text: "# {% section_title %}"
           schema:
@@ -1174,7 +1176,7 @@ component_defs:
               component: text
 ---
 
-<!--hvy: {"id":"summary"}-->
+<!--hvy: {"id":"summary","hideIfUnmodified":true}-->
 #! Summary
 
 <!--hvy:text {}-->
@@ -1227,6 +1229,10 @@ component_defs:
   expect(serialized).toContain('# Conference Talks');
   expect(serialized).toContain('Talk facts.');
   expect(serialized).toContain('Volunteer facts');
+  expect(document.sections.find((section) => section.customId === 'summary')?.hideIfUnmodified).toBe(false);
+  expect(document.sections.find((section) => section.title === 'Awards')?.hideIfUnmodified).toBe(false);
+  expect(document.sections.find((section) => section.title === 'Conference Talks')?.hideIfUnmodified).toBe(false);
+  expect(document.sections.find((section) => section.customId === 'volunteer-work')?.hideIfUnmodified).toBe(false);
 });
 
 test('importTextIntoDocument forced template mode lets JSON pick component template flavors', async () => {

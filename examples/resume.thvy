@@ -34,6 +34,8 @@ ai-import-guidance: >-
   The Languages section is only for human languages someone can speak, read, write,
   or otherwise communicate in. Programming languages are tools / technologies, not
   Languages section entries.
+  Always write both sections of the summary - the short version and a longer version
+  that's usually bullet points of highlights.
 importPreplan:
   - [header, summary, locations]
   - [skills, tools-technologies, languages, top-skills-tools-technologies]

@@ -6,14 +6,16 @@ export interface DocumentPluginDefinition {
   source: string;
 }
 
-export const DB_TABLE_PLUGIN_ID = 'dev.hvy.db-table';
-export const FORM_PLUGIN_ID = 'dev.hvy.form';
-export const PROGRESS_BAR_PLUGIN_ID = 'dev.hvy.progress-bar';
-export const SCRIPTING_PLUGIN_ID = 'dev.hvy.scripting';
+export const DB_TABLE_PLUGIN_ID = 'hvy.db-table';
+export const FORM_PLUGIN_ID = 'hvy.form';
+export const PROGRESS_BAR_PLUGIN_ID = 'hvy.progress-bar';
+export const SCRIPTING_PLUGIN_ID = 'hvy.scripting';
+export const GRAPH_PLUGIN_ID = 'hvy.graph';
 export const BUILTIN_DB_TABLE_PLUGIN_SOURCE = 'builtin://db-table';
 export const BUILTIN_FORM_PLUGIN_SOURCE = 'builtin://form';
 export const BUILTIN_PROGRESS_BAR_PLUGIN_SOURCE = 'builtin://progress-bar';
 export const BUILTIN_SCRIPTING_PLUGIN_SOURCE = 'builtin://scripting';
+export const BUILTIN_GRAPH_PLUGIN_SOURCE = 'builtin://graph';
 
 export function isDbTablePluginId(pluginId: string): boolean {
   return pluginId === DB_TABLE_PLUGIN_ID;
@@ -97,7 +99,9 @@ export function getAvailableDocumentPlugins(): DocumentPluginDefinition[] {
             ? BUILTIN_PROGRESS_BAR_PLUGIN_SOURCE
             : entry.id === SCRIPTING_PLUGIN_ID
               ? BUILTIN_SCRIPTING_PLUGIN_SOURCE
-              : `host://${entry.id}`,
+              : entry.id === GRAPH_PLUGIN_ID
+                ? BUILTIN_GRAPH_PLUGIN_SOURCE
+                : `host://${entry.id}`,
     }));
   }
 
@@ -114,6 +118,9 @@ export function getPluginDisplayName(pluginId: string): string {
   }
   if (pluginId === FORM_PLUGIN_ID) {
     return 'Form';
+  }
+  if (pluginId === GRAPH_PLUGIN_ID) {
+    return 'Graph';
   }
   return pluginId;
 }

@@ -14,10 +14,11 @@ const IMPORT_REFERENCE_API_PATH = '/api/import-reference-document';
 const IMPORT_REFERENCE_FILE_PATH = resolve(process.cwd(), 'src/ai-import-hvy-format-reference.hvy');
 
 export const HVY_BUILT_IN_PLUGIN_IDS = [
-  'dev.hvy.db-table',
-  'dev.hvy.form',
-  'dev.hvy.progress-bar',
-  'dev.hvy.scripting',
+  'hvy.db-table',
+  'hvy.form',
+  'hvy.progress-bar',
+  'hvy.scripting',
+  'hvy.graph',
 ] as const;
 
 type HvyBuiltInPluginId = (typeof HVY_BUILT_IN_PLUGIN_IDS)[number];
@@ -38,32 +39,39 @@ interface HvyBuiltInPluginDefinition {
 
 const HVY_BUILT_IN_PLUGIN_DEFINITIONS: HvyBuiltInPluginDefinition[] = [
   {
-    id: 'dev.hvy.db-table',
+    id: 'hvy.db-table',
     key: 'dbTable',
     exportName: 'dbTablePlugin',
     modulePath: 'src/plugins/db-table-plugin.ts',
     displayName: 'DB Table',
   },
   {
-    id: 'dev.hvy.form',
+    id: 'hvy.form',
     key: 'form',
     exportName: 'formPlugin',
     modulePath: 'src/plugins/form.ts',
     displayName: 'Form',
   },
   {
-    id: 'dev.hvy.progress-bar',
+    id: 'hvy.progress-bar',
     key: 'progressBar',
     exportName: 'progressBarPlugin',
     modulePath: 'src/plugins/progress-bar.ts',
     displayName: 'Progress Bar',
   },
   {
-    id: 'dev.hvy.scripting',
+    id: 'hvy.scripting',
     key: 'scripting',
     exportName: 'scriptingPlugin',
     modulePath: 'src/plugins/scripting/scripting.ts',
     displayName: 'Scripting',
+  },
+  {
+    id: 'hvy.graph',
+    key: 'graph',
+    exportName: 'graphPlugin',
+    modulePath: 'src/plugins/graph.ts',
+    displayName: 'Graph',
   },
 ];
 

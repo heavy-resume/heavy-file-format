@@ -422,7 +422,7 @@ registerHvyCliPluginCommands({
   ],
   addCommands: [
     {
-      command: 'hvy insert INDEX plugin SECTION_PATH ID dev.hvy.scripting',
+      command: 'hvy insert INDEX plugin SECTION_PATH ID hvy.scripting',
       description: 'Create a blank scripting plugin block. Edit plugin.txt or script.py after creation.',
     },
   ],

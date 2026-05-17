@@ -387,6 +387,25 @@ Image block fields:
 
 Common web image media types SHOULD be supported, including `image/png`, `image/jpeg`, `image/gif`, `image/webp`, `image/svg+xml`, `image/avif`, and `image/bmp`. Clients MUST treat tail bytes as untrusted (see §8) and SHOULD render the image inline when the attachment is present, or surface a warning when it is missing.
 
+Carousel blocks are an image component variant that display multiple attached
+images in an auto-scrolling sequence:
+
+```markdown
+<!--hvy:carousel {"carouselDurationMs":3000,"carouselPauseOnHover":true,"carouselShowControls":true,"carouselShowIndicators":true,"carouselImages":[{"imageFile":"slide-a.png","imageAlt":"Slide A","caption":"First slide"},{"imageFile":"slide-b.png","caption":"Second slide"}]}-->
+```
+
+Carousel block fields:
+- `carouselImages`: ordered array. Each entry MUST include `imageFile`, a
+  filename whose bytes are stored in the tail attachment `image:<imageFile>`.
+- Each carousel image entry MAY include `imageAlt` and `caption` strings.
+- `carouselDurationMs` is optional and defaults to `3000`. Clients SHOULD clamp
+  very small or very large values to preserve usability.
+- `carouselPauseOnHover`, `carouselShowControls`, and
+  `carouselShowIndicators` are optional booleans and default to `true`.
+- Clients SHOULD only start automatic movement once the carousel is visible.
+- Missing image attachments SHOULD be rendered as an inline missing-asset
+  warning while preserving the carousel configuration on save.
+
 Rules:
 - The directive MUST be on a single line.
 - The payload MUST be valid JSON object.
@@ -440,6 +459,11 @@ Block metadata optionally includes component-specific fields. Common examples in
 - `tableRows`
 - `imageFile`
 - `imageAlt`
+- `carouselImages`
+- `carouselDurationMs`
+- `carouselPauseOnHover`
+- `carouselShowControls`
+- `carouselShowIndicators`
 
 Nested block arrays such as `containerBlocks` use a recursive block object shape:
 
@@ -479,7 +503,7 @@ The `children` array uses the same recursive block object shape as other nested 
 
 An expandable with empty `expandableStubBlocks.children` and populated `expandableContentBlocks.children` uses the content pane as its collapsed preview. Readers SHOULD omit the empty stub pane entirely, render a non-editing clipped preview of the first visible content while collapsed, and expand/collapse when the expandable is activated. This differs from a collapsed container preview: activating an expandable toggles it open and closed, while container preview activation opens the container.
 
-The built-in `table` component is static document data stored in `tableColumns` and `tableRows`. Use a dynamic data-backed plugin such as `dev.hvy.db-table` when rows should come from a backend query.
+The built-in `table` component is static document data stored in `tableColumns` and `tableRows`. Use a dynamic data-backed plugin such as `hvy.db-table` when rows should come from a backend query.
 
 For static tables, `tableColumns` is a JSON/YAML array of strings:
 
@@ -560,7 +584,7 @@ Template value notes:
 - Blank values are allowed. Replacing a token with a blank value does not remove or change separate schema fields such as `placeholder`.
 - Authoring tools that accept explicit template values SHOULD require the provided keys to exactly match the expected variable names.
 - Component template definitions and section template definitions MAY include `templateVariables`, keyed by variable name. Each variable config MAY include `label`, a human-readable field label for authoring UIs. When `label` is omitted, authoring tools SHOULD derive one by converting snake_case or kebab-case separators to spaces and title-casing the result.
-- A template variable config MAY include `generator`, a plugin-qualified output generator key such as `dev.hvy.resume.skill-description`. Authoring tools MAY expose this as a field-level generation action. Generator requests MUST include only template variables that the author has provided with non-empty values; missing or empty variables MUST be omitted. If the installed generator declares required variables, authoring tools SHOULD disable the action until all required variables are non-empty.
+- A template variable config MAY include `generator`, a plugin-qualified output generator key such as `hvy.resume.skill-description`. Authoring tools MAY expose this as a field-level generation action. Generator requests MUST include only template variables that the author has provided with non-empty values; missing or empty variables MUST be omitted. If the installed generator declares required variables, authoring tools SHOULD disable the action until all required variables are non-empty.
 - A template variable config MAY include `generatorLabel`, overriding the visible action label for that variable. If omitted, authoring tools SHOULD use the installed generator's label or a generic label such as `Generate`.
 
 Component template definitions MAY include `flavors`, an array of alternate schemas for the same component template name. Each flavor has:
@@ -897,7 +921,8 @@ plugins:
 ```
 
 Required fields:
-- `id`: globally unique plugin identifier (reverse-DNS RECOMMENDED)
+- `id`: globally unique plugin identifier. Built-in HVY plugins use the `hvy.*`
+  namespace; third-party plugins SHOULD use a namespace they control.
 - `source`: plugin package location or a client-known plugin locator such as `builtin://...`
 
 Recommended fields:
@@ -919,7 +944,7 @@ Sections can request plugin behavior with metadata:
 Use the `plugin` block when a document embeds a client-resolved plugin instance in normal content flow:
 
 ```markdown
-<!--hvy:plugin {"plugin":"dev.hvy.db-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->
+<!--hvy:plugin {"plugin":"hvy.db-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->
 ```
 
 Plugin block fields:
@@ -939,7 +964,7 @@ string in the text body).
 
 ### 7.4 Plugin installation and selection
 
-A plugin is identified by a stable id (reverse-DNS RECOMMENDED) and is
+A plugin is identified by a stable namespace-qualified id and is
 resolved by the host that embeds an HVY reader/editor, not by the document
 itself. Hosts install zero or more plugin implementations at startup; the
 reference reader/editor exposes this as a host-supplied list of plugin objects.
@@ -1013,7 +1038,7 @@ Tail format:
 1. The textual document body ends with one or more consecutive single-line tail directives, each describing one attachment:
 
 ```markdown
-<!--hvy:tail {"id":"db","plugin":"dev.hvy.db-table","mediaType":"application/vnd.sqlite3","encoding":"gzip","length":1234}-->
+<!--hvy:tail {"id":"db","plugin":"hvy.db-table","mediaType":"application/vnd.sqlite3","encoding":"gzip","length":1234}-->
 <!--hvy:tail {"id":"image:hero.png","mediaType":"image/png","length":5678}-->
 ```
 
@@ -1040,20 +1065,20 @@ Rules:
 
 ### 7.6 DB table plugin contract
 
-The first standardized plugin contract is `dev.hvy.db-table`.
+The first standardized plugin contract is `hvy.db-table`.
 
 Declaration example:
 
 ```yaml
 plugins:
-  - id: dev.hvy.db-table
+  - id: hvy.db-table
     source: builtin://db-table
 ```
 
 Block example:
 
 ```markdown
-<!--hvy:plugin {"plugin":"dev.hvy.db-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->
+<!--hvy:plugin {"plugin":"hvy.db-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->
  SELECT company, url, status
  FROM work_items
  WHERE status != 'Rejected'
@@ -1082,7 +1107,7 @@ Recommended client behavior:
 
 ### 7.7 Form plugin contract
 
-The built-in form plugin is `dev.hvy.form`. A form is a plugin component, not
+The built-in form plugin is `hvy.form`. A form is a plugin component, not
 a native HVY container. HVY stores the plugin block and a plugin-owned YAML text
 body; individual inputs are not separate HVY components.
 
@@ -1090,14 +1115,14 @@ Declaration example:
 
 ```yaml
 plugins:
-  - id: dev.hvy.form
+  - id: hvy.form
     source: builtin://form
 ```
 
 Block example:
 
 ```markdown
-<!--hvy:plugin {"plugin":"dev.hvy.form","pluginConfig":{"version":"0.1","initialScript":"populate_food","submitScript":"submit_order","submitLabel":"Save order"}}-->
+<!--hvy:plugin {"plugin":"hvy.form","pluginConfig":{"version":"0.1","initialScript":"populate_food","submitScript":"submit_order","submitLabel":"Save order"}}-->
 fields:
   - label: Food
     type: select
@@ -1156,6 +1181,46 @@ Plugin-specific rules:
 - Dynamic dropdown/radio options SHOULD be set by scripts using
   `doc.form.set_options(...)` rather than by schema-level database source
   declarations.
+
+### 7.8 Graph plugin contract
+
+The built-in graph plugin is `hvy.graph`. Graph attributes live in
+`pluginConfig`; chart data lives in the plugin text body as CSV.
+
+Declaration example:
+
+```yaml
+plugins:
+  - id: hvy.graph
+    source: builtin://graph
+```
+
+Block example:
+
+```markdown
+<!--hvy:plugin {"plugin":"hvy.graph","pluginConfig":{"type":"bar","title":"Example","xAxisLabel":"Label","yAxisLabel":"Value","legend":true}}-->
+Label,Value
+Example A,10
+Example B,20
+```
+
+Plugin-specific rules:
+- `pluginConfig.type` is optional and defaults to `"bar"`. Supported values are
+  `"bar"`, `"line"`, `"pie"`, `"doughnut"`, `"scatter"`, `"bubble"`,
+  `"radar"`, and `"polarArea"`.
+- `pluginConfig.title`, `pluginConfig.xAxisLabel`, and
+  `pluginConfig.yAxisLabel` are optional strings.
+- `pluginConfig.legend` is optional and defaults to `true`.
+- The plugin text body MUST be interpreted as CSV with the first row as column
+  headers.
+- For `"bar"`, `"line"`, and `"radar"` charts, the first CSV column is labels
+  and all following columns are numeric datasets.
+- For `"pie"`, `"doughnut"`, and `"polarArea"` charts, the first CSV column is
+  labels and the first numeric data column is used.
+- `"scatter"` charts use numeric `x` and `y` columns. `"bubble"` charts use
+  numeric `x`, `y`, and `r` columns.
+- Invalid CSV or non-numeric chart values SHOULD render an inline plugin error
+  while preserving the original plugin text body.
 
 ## 8. Security & Runtime Constraints
 

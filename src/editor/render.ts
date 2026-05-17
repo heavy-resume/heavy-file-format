@@ -10,6 +10,7 @@ import { renderContainerEditor } from './components/container/container';
 import { renderExpandableEditor } from './components/expandable/expandable';
 import { renderGridEditor } from './components/grid/grid';
 import { renderImageEditor } from './components/image/image';
+import { renderCarouselEditor } from './components/carousel/carousel';
 import { renderPluginEditor, getPluginBlockHeaderLabel } from './components/plugin/plugin';
 import { renderTableEditor } from './components/table/table';
 import { renderTextEditor } from './components/text/text';
@@ -428,7 +429,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       return '';
     }
     const component = block.schema.component || 'text';
-    const componentLabel = component === 'plugin' ? getPluginBlockHeaderLabel(block) : component;
+    const componentLabel = component === 'plugin' ? getPluginBlockHeaderLabel(block) : component === 'carousel' ? 'Carousel' : component;
     const isActiveFrame = deps.isActiveEditorBlock(sectionKey, block.id);
     const isActiveDescendant = state.activeEditorBlock?.sectionKey === sectionKey && isDescendantActive(block, state.activeEditorBlock.blockId);
     const isActive = isActiveFrame || isActiveDescendant;
@@ -1314,6 +1315,9 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     }
     if (component === 'image') {
       return renderImageEditor(sectionKey, block, helpers);
+    }
+    if (component === 'carousel') {
+      return renderCarouselEditor(sectionKey, block, helpers);
     }
     return renderTextEditor(sectionKey, block, helpers);
   }

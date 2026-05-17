@@ -1381,7 +1381,7 @@ component_defs:
         label: Skill
       description:
         label: Description
-        generator: dev.hvy.resume.skill-description
+        generator: hvy.resume.skill-description
         generatorLabel: Generate
     schema:
       xrefTitle: "{% skill %}"
@@ -1414,7 +1414,7 @@ component_defs:
         label: Tool / Technology
       description:
         label: Description
-        generator: dev.hvy.resume.tool-description
+        generator: hvy.resume.tool-description
         generatorLabel: Generate
     schema:
       xrefTitle: "{% tool_technology %}"
@@ -1585,7 +1585,7 @@ component_defs:
 <!--hvy: {"id":"template-maintenance","editorOnly":true,"lock":true,"contained":true,"description":"Template maintenance scripts"}-->
 #! Template Maintenance
 
- <!--hvy:plugin {"id":"remove-featured-xref-helper","editorOnly":true,"plugin":"dev.hvy.scripting","pluginConfig":{"version":"0.1"}}-->
+ <!--hvy:plugin {"id":"remove-featured-xref-helper","editorOnly":true,"plugin":"hvy.scripting","pluginConfig":{"version":"0.1"}}-->
   def has_xref(list_id):
       try:
           raw = doc.tool.view_component(component_ref=list_id)
@@ -1603,7 +1603,7 @@ component_defs:
       except Exception:
           pass
 
- <!--hvy:plugin {"id":"sync-reciprocal-xrefs","editorOnly":true,"plugin":"dev.hvy.scripting","pluginConfig":{"version":"0.1","maxLines":200000}}-->
+ <!--hvy:plugin {"id":"sync-reciprocal-xrefs","editorOnly":true,"plugin":"hvy.scripting","pluginConfig":{"version":"0.1","maxLines":200000}}-->
   SOURCE_TAG = "reciprocal-xref-source"
   GENERATED_TAG = "reciprocal-xref-generated"
   TARGET_TAGS = ["skill", "tool"]

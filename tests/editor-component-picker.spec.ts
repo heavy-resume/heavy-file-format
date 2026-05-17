@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 
 test('section add component affordance is a compact single row', async ({ page }) => {
   await page.goto('/');
+  await page.waitForTimeout(300);
 
   const addComponent = page.locator('.compact-add-component-ghost').first();
   const box = await addComponent.boundingBox();
@@ -11,8 +12,24 @@ test('section add component affordance is a compact single row', async ({ page }
   expect(box?.height ?? 0).toBeLessThanOrEqual(46);
 });
 
+test('default example button loads carousel component and graph plugin', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForTimeout(300);
+
+  await page.getByRole('button', { name: 'Resume Example' }).click();
+  await page.getByRole('button', { name: 'Default Example' }).click();
+  await page.getByRole('button', { name: 'Viewer' }).click();
+
+  await expect(page.getByLabel('Download file name')).toHaveValue('example.hvy');
+  await expect(page.locator('#readerDocument')).toContainText('Attached SVG image rendered from the HVY tail');
+  await expect(page.locator('#readerDocument')).toContainText('The graph plugin stores chart attributes');
+  await expect(page.locator('#readerDocument .hvy-carousel-reader img').first()).toBeVisible();
+  await expect(page.locator('#readerDocument .hvy-graph-reader canvas').first()).toBeVisible();
+});
+
 test('component picker opens categories and adds selected component', async ({ page }) => {
   await page.goto('/');
+  await page.waitForTimeout(300);
 
   const addComponent = page.locator('.compact-add-component-ghost').first();
   await addComponent.getByRole('button', { name: 'Section component type' }).click();
@@ -20,7 +37,7 @@ test('component picker opens categories and adds selected component', async ({ p
   const picker = addComponent.locator('.component-picker-popover');
   const rootPane = picker.locator('.component-picker-pane-root');
   await expect(rootPane.locator('.component-picker-row-title', { hasText: 'Text' })).toBeVisible();
-  await expect(rootPane.locator('.component-picker-row-title', { hasText: 'Image' })).toBeVisible();
+  await expect(rootPane.locator('.component-picker-row-title', { hasText: 'Images' })).toBeVisible();
   await expect(rootPane.locator('.component-picker-row-title', { hasText: 'Advanced' })).toBeVisible();
   await expect(rootPane.locator('.component-picker-row-title', { hasText: 'Containers' })).toBeVisible();
   await expect(rootPane.locator('.component-picker-row-title', { hasText: 'Custom' })).toBeVisible();
@@ -44,8 +61,14 @@ test('component picker opens categories and adds selected component', async ({ p
   await expect(picker).toBeHidden();
   await addComponent.getByRole('button', { name: 'Section component type' }).click();
 
+  await picker.locator('.component-picker-row-category', { hasText: 'Images' }).click();
+  await expect(picker.locator('[data-picker-pane="images"] .component-picker-row-title', { hasText: 'Image' })).toBeVisible();
+  await expect(picker.locator('[data-picker-pane="images"] .component-picker-row-title', { hasText: 'Carousel' })).toBeVisible();
+  await addComponent.getByRole('button', { name: 'Section component type' }).click();
+
   await picker.locator('.component-picker-row-category', { hasText: 'Plugin' }).click();
   await expect(picker.locator('[data-picker-pane="plugins"] .component-picker-row-title', { hasText: 'DB Table' })).toBeVisible();
+  await expect(picker.locator('[data-picker-pane="plugins"] .component-picker-row-title', { hasText: 'Graph' })).toBeVisible();
   await addComponent.getByRole('button', { name: 'Section component type' }).click();
 
   await picker.locator('.component-picker-row-direct[data-component="text"]').click();
@@ -55,6 +78,7 @@ test('component picker opens categories and adds selected component', async ({ p
 
 test('component picker adds a selected plugin directly', async ({ page }) => {
   await page.goto('/');
+  await page.waitForTimeout(300);
 
   const addComponent = page.locator('.compact-add-component-ghost').first();
   await addComponent.getByRole('button', { name: 'Section component type' }).click();
@@ -69,8 +93,43 @@ test('component picker adds a selected plugin directly', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Use Plugin' })).toHaveCount(0);
 });
 
+test('component picker adds carousel from images category', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForTimeout(300);
+
+  const addComponent = page.locator('.compact-add-component-ghost').first();
+  await addComponent.getByRole('button', { name: 'Section component type' }).click();
+
+  const picker = addComponent.locator('.component-picker-popover');
+  await picker.locator('.component-picker-row-category', { hasText: 'Images' }).click();
+  await picker.locator('[data-picker-pane="images"] .component-picker-row-leaf', { hasText: 'Carousel' }).evaluate((button) => {
+    if (button instanceof HTMLElement) button.click();
+  });
+
+  await expect(page.locator('.editor-block-title', { hasText: 'Carousel' }).first()).toBeVisible();
+  await expect(page.locator('.hvy-carousel-editor').first()).toBeVisible();
+});
+
+test('component picker adds graph plugin and renders a chart canvas', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForTimeout(300);
+
+  const addComponent = page.locator('.compact-add-component-ghost').first();
+  await addComponent.getByRole('button', { name: 'Section component type' }).click();
+
+  const picker = addComponent.locator('.component-picker-popover');
+  await picker.locator('.component-picker-row-category', { hasText: 'Plugin' }).click();
+  await picker.locator('[data-picker-pane="plugins"] .component-picker-row-leaf', { hasText: 'Graph' }).evaluate((button) => {
+    if (button instanceof HTMLElement) button.click();
+  });
+
+  await expect(page.locator('.editor-block-title', { hasText: 'Graph' }).first()).toBeVisible();
+  await expect(page.locator('.hvy-graph-editor canvas').first()).toBeVisible();
+});
+
 test('selected component shows insert above and below component affordances', async ({ page }) => {
   await page.goto('/');
+  await page.waitForTimeout(300);
 
   await page.locator('.editor-block-passive').first().click();
 
@@ -84,6 +143,7 @@ test('selected component shows insert above and below component affordances', as
 
 test('selected component insert below adds picked components', async ({ page }) => {
   await page.goto('/');
+  await page.waitForTimeout(300);
 
   await page.locator('.editor-block-passive').first().click();
   await page.locator('.active-component-insert-label', { hasText: 'Insert Below' }).click();
@@ -105,6 +165,7 @@ test('selected component insert below adds picked components', async ({ page }) 
 
 test('selected component insert picker remains clickable after trigger loses focus', async ({ page }) => {
   await page.goto('/');
+  await page.waitForTimeout(300);
 
   await page.locator('.editor-block-passive').first().click();
   await page.locator('.active-component-insert-ghost-after').getByRole('button', { name: 'Insert component below' }).click();
@@ -124,6 +185,7 @@ test('selected component insert picker remains clickable after trigger loses foc
 
 test('locked sections do not show selected component insert affordances', async ({ page }) => {
   await page.goto('/');
+  await page.waitForTimeout(300);
 
   await page.getByRole('button', { name: 'Resume Template' }).click();
   await page.locator('.editor-block-passive:visible').first().click();

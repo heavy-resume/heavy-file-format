@@ -121,12 +121,15 @@ function getPickerGroups(componentDefs: ComponentDefinition[]): PickerGroup[] {
       items: [{ value: 'text', label: 'Text', description: 'multipurpose' }],
     },
     {
-      id: 'image',
-      label: 'Image',
-      description: 'add an image',
+      id: 'images',
+      label: 'Images',
+      description: 'single images and carousels',
       position: 'top-left',
-      direct: true,
-      items: [{ value: 'image', label: 'Image', description: 'add an image' }],
+      direct: false,
+      items: [
+        { value: 'image', label: 'Image', description: 'add a single image' },
+        { value: 'carousel', label: 'Carousel', description: 'auto-scrolling attached images' },
+      ],
     },
     {
       id: 'advanced',

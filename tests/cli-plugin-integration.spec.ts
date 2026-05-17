@@ -55,13 +55,13 @@ doc.db.execute('UPDATE chores SET active = 0 WHERE description = \\'' + chore + 
 
   await runCliCommand(page, 'hvy insert 0 section /body chore-chart "Chore Chart"');
   await runCliCommand(page, 'hvy insert 0 plugin db-table /chore-chart active-chore-chart');
-  await runCliCommand(page, writeFileCommand('/chore-chart/active-chore-chart/plugin.json', '{"id":"active-chore-chart","plugin":"dev.hvy.db-table","pluginConfig":{"source":"with-file","table":"active_chore_chart","queryLimit":10}}'));
+  await runCliCommand(page, writeFileCommand('/chore-chart/active-chore-chart/plugin.json', '{"id":"active-chore-chart","plugin":"hvy.db-table","pluginConfig":{"source":"with-file","table":"active_chore_chart","queryLimit":10}}'));
   await runCliCommand(page, writeFileCommand('/chore-chart/active-chore-chart/plugin.txt', 'SELECT Chore, Dad, Mom, Child FROM active_chore_chart'));
   await runCliCommand(page, 'hvy insert -1 plugin db-table /chore-chart weekly-leaders');
-  await runCliCommand(page, writeFileCommand('/chore-chart/weekly-leaders/plugin.json', '{"id":"weekly-leaders","plugin":"dev.hvy.db-table","pluginConfig":{"source":"with-file","table":"weekly_chore_leaders","queryLimit":10}}'));
+  await runCliCommand(page, writeFileCommand('/chore-chart/weekly-leaders/plugin.json', '{"id":"weekly-leaders","plugin":"hvy.db-table","pluginConfig":{"source":"with-file","table":"weekly_chore_leaders","queryLimit":10}}'));
   await runCliCommand(page, writeFileCommand('/chore-chart/weekly-leaders/plugin.txt', 'SELECT Person, Completed FROM weekly_chore_leaders'));
   await runCliCommand(page, 'hvy insert 0 plugin form /chore-chart add-chore-form');
-  await runCliCommand(page, writeFileCommand('/chore-chart/add-chore-form/plugin.json', '{"id":"add-chore-form","plugin":"dev.hvy.form","pluginConfig":{"version":"0.1","submitLabel":"Add chore","showSubmit":true,"submitScript":"submit"}}'));
+  await runCliCommand(page, writeFileCommand('/chore-chart/add-chore-form/plugin.json', '{"id":"add-chore-form","plugin":"hvy.form","pluginConfig":{"version":"0.1","submitLabel":"Add chore","showSubmit":true,"submitScript":"submit"}}'));
   await runCliCommand(page, writeFileCommand('/chore-chart/add-chore-form/plugin.txt', `fields:
   - label: Description
     type: textarea
@@ -70,7 +70,7 @@ scripts:
   submit: |
     ${setupChoreDb}`));
   await runCliCommand(page, 'hvy insert -1 plugin form /chore-chart assign-chore-form');
-  await runCliCommand(page, writeFileCommand('/chore-chart/assign-chore-form/plugin.json', '{"id":"assign-chore-form","plugin":"dev.hvy.form","pluginConfig":{"version":"0.1","submitLabel":"Assign chore","showSubmit":true,"submitScript":"submit"}}'));
+  await runCliCommand(page, writeFileCommand('/chore-chart/assign-chore-form/plugin.json', '{"id":"assign-chore-form","plugin":"hvy.form","pluginConfig":{"version":"0.1","submitLabel":"Assign chore","showSubmit":true,"submitScript":"submit"}}'));
   await runCliCommand(page, writeFileCommand('/chore-chart/assign-chore-form/plugin.txt', `fields:
   - label: Chore
     type: text
@@ -86,7 +86,7 @@ scripts:
   submit: |
     ${assignChore}`));
   await runCliCommand(page, 'hvy insert -1 plugin form /chore-chart complete-chore-form');
-  await runCliCommand(page, writeFileCommand('/chore-chart/complete-chore-form/plugin.json', '{"id":"complete-chore-form","plugin":"dev.hvy.form","pluginConfig":{"version":"0.1","submitLabel":"Complete chore","showSubmit":true,"submitScript":"submit"}}'));
+  await runCliCommand(page, writeFileCommand('/chore-chart/complete-chore-form/plugin.json', '{"id":"complete-chore-form","plugin":"hvy.form","pluginConfig":{"version":"0.1","submitLabel":"Complete chore","showSubmit":true,"submitScript":"submit"}}'));
   await runCliCommand(page, writeFileCommand('/chore-chart/complete-chore-form/plugin.txt', `fields:
   - label: Chore
     type: text
@@ -139,7 +139,7 @@ hvy_version: 0.1
 <!--hvy: {"id":"sandbox"}-->
 #! Sandbox
 
-<!--hvy:plugin {"id":"globals-check","plugin":"dev.hvy.scripting","pluginConfig":{"version":"0.1"}}-->
+<!--hvy:plugin {"id":"globals-check","plugin":"hvy.scripting","pluginConfig":{"version":"0.1"}}-->
 forbidden = [
     "window",
     "document",
@@ -186,7 +186,7 @@ hvy_version: 0.1
 <!--hvy: {"id":"sandbox"}-->
 #! Sandbox
 
-<!--hvy:plugin {"id":"dynamic-check","plugin":"dev.hvy.scripting","pluginConfig":{"version":"0.1"}}-->
+<!--hvy:plugin {"id":"dynamic-check","plugin":"hvy.scripting","pluginConfig":{"version":"0.1"}}-->
 results = []
 
 def record(label, action):
@@ -260,12 +260,12 @@ hvy_version: 0.1
 <!--hvy: {"id":"return-check"}-->
 #! Return Check
 
-<!--hvy:plugin {"id":"startup-script","plugin":"dev.hvy.scripting","pluginConfig":{"version":"0.1"}}-->
+<!--hvy:plugin {"id":"startup-script","plugin":"hvy.scripting","pluginConfig":{"version":"0.1"}}-->
 doc.header.set("script_return", "before")
 return
 doc.header.set("script_return", "after")
 
-<!--hvy:plugin {"id":"return-form","plugin":"dev.hvy.form","pluginConfig":{"version":"0.1","submitLabel":"Submit","submitScript":"submit"}}-->
+<!--hvy:plugin {"id":"return-form","plugin":"hvy.form","pluginConfig":{"version":"0.1","submitLabel":"Submit","submitScript":"submit"}}-->
 fields:
   - label: Value
     type: text
@@ -301,7 +301,7 @@ hvy_version: 0.1
 <!--hvy: {"id":"tuple-options"}-->
 #! Tuple Options
 
-<!--hvy:plugin {"id":"tuple-form","plugin":"dev.hvy.form","pluginConfig":{"version":"0.1","submitLabel":"Submit","initialScript":"load"}}-->
+<!--hvy:plugin {"id":"tuple-form","plugin":"hvy.form","pluginConfig":{"version":"0.1","submitLabel":"Submit","initialScript":"load"}}-->
 fields:
   - label: Choice
     type: select

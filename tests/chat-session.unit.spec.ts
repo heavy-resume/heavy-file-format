@@ -75,7 +75,7 @@ hvy_version: 0.1
 <!--hvy: {"id":"data"}-->
 #! Data
 
- <!--hvy:plugin {"plugin":"dev.hvy.db-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->
+ <!--hvy:plugin {"plugin":"hvy.db-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->
 `;
 
 test('appendUserChatMessage appends a new user message', () => {
@@ -1705,7 +1705,7 @@ hvy_version: 0.1
 <!--hvy: {"id":"contact"}-->
 #! Contact
 
-<!--hvy:plugin {"id":"contact-form","plugin":"dev.hvy.form","pluginConfig":{"version":"0.1","submitLabel":"Send"}}-->
+<!--hvy:plugin {"id":"contact-form","plugin":"hvy.form","pluginConfig":{"version":"0.1","submitLabel":"Send"}}-->
 fields:
   - label: Message
     type: textarea
@@ -1721,7 +1721,7 @@ fields:
   expect(result.error).toBeNull();
   const nextPrompt = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content ?? '';
   expect(nextPrompt).toContain('component plugin: /body/contact/contact-form');
-  expect(nextPrompt).toContain('Plugin id: dev.hvy.form (form).');
+  expect(nextPrompt).toContain('Plugin id: hvy.form (form).');
   expect(nextPrompt).toContain('This plugin is a form.');
   expect(nextPrompt).toContain('Fields and named script bodies live in plugin.txt');
   expect(nextPrompt).toContain('Form scripts are Python/Brython snippets under scripts.NAME, wrapped in a generated function');
@@ -1739,7 +1739,7 @@ hvy_version: 0.1
 <!--hvy: {"id":"automation"}-->
 #! Automation
 
-<!--hvy:plugin {"id":"startup-script","plugin":"dev.hvy.scripting","pluginConfig":{"version":"0.1"}}-->
+<!--hvy:plugin {"id":"startup-script","plugin":"hvy.scripting","pluginConfig":{"version":"0.1"}}-->
 doc.header.set("ran_script", True)
 `, '.hvy');
 
@@ -1752,7 +1752,7 @@ doc.header.set("ran_script", True)
 
   expect(result.error).toBeNull();
   const nextPrompt = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content ?? '';
-  expect(nextPrompt).toContain('Plugin id: dev.hvy.scripting (scripting).');
+  expect(nextPrompt).toContain('Plugin id: hvy.scripting (scripting).');
   expect(nextPrompt).toContain('The component body is exposed as script.py. It is Python/Brython source wrapped in a generated function with one injected global: doc.');
   expect(nextPrompt).toContain('Document tools: request_structure, grep, view_component');
   expect(nextPrompt).toContain('doc.form exists only while running form plugin scripts.');

@@ -1,0 +1,296 @@
+import './carousel.css';
+
+import type { ComponentEditorRenderer, ComponentReaderRenderer, ComponentRenderHelpers } from '../../component-helpers';
+import type { CarouselImage, VisualBlock } from '../../types';
+import { getImageAttachmentId, inferImageMediaType, setAttachment } from '../../../attachments';
+import { findBlockByIds, resolveBlockContext } from '../../../block-ops';
+import { recordHistory } from '../../../history';
+import { syncReusableTemplateForBlock } from '../../../reusable';
+import { getRefreshReaderPanels, getRenderApp, state } from '../../../state';
+import { arrowDownIcon, arrowUpIcon, closeIcon } from '../../../icons';
+import { getImageBlobUrl } from '../image/image';
+
+interface CarouselRuntimeState {
+  index: number;
+  pausedUntil: number;
+  timer: number | null;
+  observer: IntersectionObserver | null;
+}
+
+const runtimeState = new WeakMap<HTMLElement, CarouselRuntimeState>();
+
+function normalizeDuration(value: number): number {
+  return Math.max(800, Math.min(60000, Math.floor(value)));
+}
+
+function renderSlideImage(image: CarouselImage, helpers: ComponentRenderHelpers): string {
+  const url = getImageBlobUrl(image.imageFile);
+  if (!url) {
+    return `<div class="hvy-carousel-missing">Missing attachment: ${helpers.escapeHtml(image.imageFile)}</div>`;
+  }
+  const alt = image.imageAlt || image.caption || image.imageFile;
+  return `<img src="${helpers.escapeAttr(url)}" alt="${helpers.escapeAttr(alt)}">`;
+}
+
+function renderReaderFrame(block: VisualBlock, helpers: ComponentRenderHelpers): string {
+  if (block.schema.carouselImages.length === 0) {
+    return '<div class="hvy-carousel-empty">No carousel images.</div>';
+  }
+  const slides = block.schema.carouselImages
+    .map((image, index) => {
+      const caption = image.caption
+        ? `<div class="hvy-carousel-caption">${helpers.escapeHtml(image.caption)}</div>`
+        : '';
+      return `<figure class="hvy-carousel-slide" data-carousel-slide="${index}">${renderSlideImage(image, helpers)}${caption}</figure>`;
+    })
+    .join('');
+  const controls = block.schema.carouselShowControls
+    ? `<button type="button" class="hvy-carousel-arrow hvy-carousel-arrow-left" data-carousel-action="prev" aria-label="Previous image">‹</button>
+       <button type="button" class="hvy-carousel-arrow hvy-carousel-arrow-right" data-carousel-action="next" aria-label="Next image">›</button>`
+    : '';
+  const indicators = block.schema.carouselShowIndicators
+    ? `<div class="hvy-carousel-indicators">${block.schema.carouselImages
+        .map((_image, index) => `<button type="button" class="hvy-carousel-indicator" data-carousel-index="${index}" aria-label="Show image ${index + 1}" aria-pressed="false"></button>`)
+        .join('')}</div>`
+    : '';
+  return `<div class="hvy-carousel-reader-frame" data-carousel-reader="true" data-carousel-duration-ms="${helpers.escapeAttr(String(block.schema.carouselDurationMs))}" data-carousel-pause-on-hover="${block.schema.carouselPauseOnHover ? 'true' : 'false'}">
+    <div class="hvy-carousel-track">${slides}</div>${controls}
+  </div>${indicators}`;
+}
+
+export const renderCarouselReader: ComponentReaderRenderer = (_section, block, helpers) => {
+  return `<div class="hvy-carousel hvy-carousel-reader">${renderReaderFrame(block, helpers)}</div>`;
+};
+
+export const renderCarouselEditor: ComponentEditorRenderer = (sectionKey, block, helpers) => {
+  return `<div class="hvy-carousel hvy-carousel-editor" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}">
+    ${renderReaderFrame(block, helpers)}
+    <div class="hvy-carousel-editor-controls">
+      <label><span>Duration</span><input type="number" min="800" max="60000" step="100" data-field="carousel-duration-ms" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}" value="${helpers.escapeAttr(String(block.schema.carouselDurationMs))}"></label>
+      <label class="hvy-carousel-toggle"><input type="checkbox" data-field="carousel-pause-on-hover" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}"${block.schema.carouselPauseOnHover ? ' checked' : ''}><span>Pause on hover</span></label>
+      <label class="hvy-carousel-toggle"><input type="checkbox" data-field="carousel-show-controls" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}"${block.schema.carouselShowControls ? ' checked' : ''}><span>Controls</span></label>
+      <label class="hvy-carousel-toggle"><input type="checkbox" data-field="carousel-show-indicators" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}"${block.schema.carouselShowIndicators ? ' checked' : ''}><span>Indicators</span></label>
+    </div>
+    <div class="hvy-carousel-upload-panel">
+      <label class="hvy-carousel-pick-label">
+        <input type="file" accept="image/*" multiple data-field="carousel-upload" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}">
+        <span class="hvy-carousel-pick-button">Add Images</span>
+      </label>
+    </div>
+    <div class="hvy-carousel-image-list">
+      ${block.schema.carouselImages.length === 0 ? '<div class="hvy-carousel-empty">Add images to build a carousel.</div>' : ''}
+      ${block.schema.carouselImages.map((image, index) => renderEditorImageRow(image, index, block.schema.carouselImages.length, helpers, sectionKey, block.id)).join('')}
+    </div>
+  </div>`;
+};
+
+function renderEditorImageRow(
+  image: CarouselImage,
+  index: number,
+  count: number,
+  helpers: ComponentRenderHelpers,
+  sectionKey: string,
+  blockId: string
+): string {
+  const url = getImageBlobUrl(image.imageFile);
+  const thumb = url
+    ? `<img src="${helpers.escapeAttr(url)}" alt="${helpers.escapeAttr(image.imageAlt || image.imageFile)}">`
+    : `<span>Missing</span>`;
+  return `<div class="hvy-carousel-image-row">
+    <div class="hvy-carousel-thumb">${thumb}</div>
+    <div class="hvy-carousel-row-fields">
+      <label><span>Caption</span><input type="text" data-field="carousel-caption" data-carousel-index="${index}" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(blockId)}" value="${helpers.escapeAttr(image.caption)}"></label>
+      <label><span>Alt text</span><input type="text" data-field="carousel-alt" data-carousel-index="${index}" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(blockId)}" value="${helpers.escapeAttr(image.imageAlt)}"></label>
+      <span class="muted">${helpers.escapeHtml(image.imageFile)}</span>
+    </div>
+    <div class="hvy-carousel-row-actions">
+      <button type="button" data-action="carousel-move-up" data-carousel-index="${index}" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(blockId)}"${index === 0 ? ' disabled' : ''} title="Move up">${arrowUpIcon()}</button>
+      <button type="button" data-action="carousel-move-down" data-carousel-index="${index}" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(blockId)}"${index === count - 1 ? ' disabled' : ''} title="Move down">${arrowDownIcon()}</button>
+      <button type="button" data-action="carousel-remove" data-carousel-index="${index}" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(blockId)}" title="Remove">${closeIcon()}</button>
+    </div>
+  </div>`;
+}
+
+export function bindCarouselInteractions(app: HTMLElement): void {
+  if (app.dataset.carouselBound !== 'true') {
+    app.dataset.carouselBound = 'true';
+    app.addEventListener('input', handleCarouselInput);
+    app.addEventListener('change', handleCarouselChange);
+    app.addEventListener('click', handleCarouselClick);
+    app.addEventListener('focusin', handleCarouselFocusPause);
+    app.addEventListener('mouseenter', handleCarouselHoverPause, true);
+    app.addEventListener('mouseleave', handleCarouselHoverResume, true);
+  }
+  initializeCarouselReaders(app);
+}
+
+export function initializeCarouselReaders(root: ParentNode): void {
+  root.querySelectorAll<HTMLElement>('[data-carousel-reader="true"]').forEach((frame) => {
+    if (runtimeState.has(frame)) {
+      return;
+    }
+    const stateForFrame: CarouselRuntimeState = { index: 0, pausedUntil: 0, timer: null, observer: null };
+    runtimeState.set(frame, stateForFrame);
+    updateActiveIndicator(frame, 0);
+    const start = () => {
+      if (stateForFrame.timer !== null) {
+        return;
+      }
+      stateForFrame.timer = window.setInterval(() => {
+        if (!frame.isConnected) {
+          if (stateForFrame.timer !== null) window.clearInterval(stateForFrame.timer);
+          stateForFrame.timer = null;
+          stateForFrame.observer?.disconnect();
+          stateForFrame.observer = null;
+          return;
+        }
+        if (Date.now() < stateForFrame.pausedUntil) {
+          return;
+        }
+        scrollToCarouselIndex(frame, stateForFrame.index + 1, false);
+      }, Number(frame.dataset.carouselDurationMs || 3000));
+    };
+    if ('IntersectionObserver' in window) {
+      stateForFrame.observer = new IntersectionObserver((entries) => {
+        if (entries.some((entry) => entry.intersectionRatio > 0.5)) {
+          start();
+          stateForFrame.observer?.disconnect();
+          stateForFrame.observer = null;
+        }
+      }, { threshold: 0.5 });
+      stateForFrame.observer.observe(frame);
+    } else {
+      start();
+    }
+  });
+}
+
+function handleCarouselInput(event: Event): void {
+  const target = event.target as HTMLInputElement | null;
+  if (!(target instanceof HTMLInputElement)) {
+    return;
+  }
+  const field = target.dataset.field ?? '';
+  if (field !== 'carousel-caption' && field !== 'carousel-alt' && field !== 'carousel-duration-ms') {
+    return;
+  }
+  const block = resolveBlockContext(target)?.block ?? null;
+  if (!block) return;
+  recordHistory(`carousel:${block.id}:${field}`);
+  if (field === 'carousel-duration-ms') {
+    block.schema.carouselDurationMs = normalizeDuration(Number(target.value));
+  } else {
+    const index = Number(target.dataset.carouselIndex);
+    const image = block.schema.carouselImages[index];
+    if (!image) return;
+    if (field === 'carousel-caption') image.caption = target.value;
+    if (field === 'carousel-alt') image.imageAlt = target.value;
+  }
+  syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
+  getRefreshReaderPanels()();
+}
+
+function handleCarouselChange(event: Event): void {
+  const target = event.target as HTMLInputElement | null;
+  if (!(target instanceof HTMLInputElement)) {
+    return;
+  }
+  const field = target.dataset.field ?? '';
+  const block = resolveBlockContext(target)?.block ?? null;
+  if (!block) return;
+  if (field === 'carousel-upload') {
+    const files = Array.from(target.files ?? []).filter((file) => /^image\//.test(file.type) || inferImageMediaType(file.name).startsWith('image/'));
+    if (files.length === 0) return;
+    recordHistory(`carousel-upload:${block.id}`);
+    void Promise.all(files.map(async (file) => {
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      setAttachment(state.document, getImageAttachmentId(file.name), { mediaType: file.type || inferImageMediaType(file.name) }, bytes);
+      return { imageFile: file.name, imageAlt: file.name, caption: '' };
+    })).then((images) => {
+      block.schema.carouselImages.push(...images);
+      syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
+      getRenderApp()();
+    });
+    return;
+  }
+  if (field === 'carousel-pause-on-hover') block.schema.carouselPauseOnHover = target.checked;
+  else if (field === 'carousel-show-controls') block.schema.carouselShowControls = target.checked;
+  else if (field === 'carousel-show-indicators') block.schema.carouselShowIndicators = target.checked;
+  else return;
+  recordHistory(`carousel:${block.id}:${field}`);
+  syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
+  getRefreshReaderPanels()();
+  getRenderApp()();
+}
+
+function handleCarouselClick(event: Event): void {
+  const target = event.target as HTMLElement | null;
+  const readerButton = target?.closest<HTMLElement>('.hvy-carousel [data-carousel-action], .hvy-carousel [data-carousel-index]');
+  if (readerButton) {
+    const frame = readerButton.closest('.hvy-carousel')?.querySelector<HTMLElement>('[data-carousel-reader="true"]');
+    if (frame) {
+      const stateForFrame = runtimeState.get(frame);
+      if (stateForFrame) stateForFrame.pausedUntil = Date.now() + Number(frame.dataset.carouselDurationMs || 3000);
+      if (readerButton.dataset.carouselIndex) scrollToCarouselIndex(frame, Number(readerButton.dataset.carouselIndex), true);
+      if (readerButton.dataset.carouselAction) scrollToCarouselIndex(frame, (stateForFrame?.index ?? 0) + (readerButton.dataset.carouselAction === 'prev' ? -1 : 1), true);
+      return;
+    }
+  }
+  const button = target?.closest<HTMLButtonElement>('[data-action^="carousel-"]');
+  if (!button) return;
+  const block = resolveBlockContext(button)?.block ?? findBlockByIds(button.dataset.sectionKey ?? '', button.dataset.blockId ?? '');
+  if (!block) return;
+  const index = Number(button.dataset.carouselIndex);
+  const nextImages = [...block.schema.carouselImages];
+  if (button.dataset.action === 'carousel-remove') nextImages.splice(index, 1);
+  if (button.dataset.action === 'carousel-move-up' && index > 0) [nextImages[index - 1], nextImages[index]] = [nextImages[index]!, nextImages[index - 1]!];
+  if (button.dataset.action === 'carousel-move-down' && index < nextImages.length - 1) [nextImages[index], nextImages[index + 1]] = [nextImages[index + 1]!, nextImages[index]!];
+  recordHistory(`carousel:${block.id}:${button.dataset.action}`);
+  block.schema.carouselImages = nextImages;
+  syncReusableTemplateForBlock(button.dataset.sectionKey ?? '', block.id);
+  getRenderApp()();
+}
+
+function handleCarouselFocusPause(event: Event): void {
+  const frame = (event.target as HTMLElement | null)?.closest('.hvy-carousel')?.querySelector<HTMLElement>('[data-carousel-reader="true"]');
+  if (!frame) return;
+  const stateForFrame = runtimeState.get(frame);
+  if (stateForFrame) stateForFrame.pausedUntil = Date.now() + Number(frame.dataset.carouselDurationMs || 3000);
+}
+
+function handleCarouselHoverPause(event: Event): void {
+  const frame = (event.target as HTMLElement | null)?.closest<HTMLElement>('[data-carousel-reader="true"]');
+  if (!frame || frame.dataset.carouselPauseOnHover !== 'true') return;
+  const stateForFrame = runtimeState.get(frame);
+  if (stateForFrame) stateForFrame.pausedUntil = Number.MAX_SAFE_INTEGER;
+}
+
+function handleCarouselHoverResume(event: Event): void {
+  const frame = (event.target as HTMLElement | null)?.closest<HTMLElement>('[data-carousel-reader="true"]');
+  if (!frame) return;
+  const stateForFrame = runtimeState.get(frame);
+  if (stateForFrame?.pausedUntil === Number.MAX_SAFE_INTEGER) {
+    stateForFrame.pausedUntil = 0;
+  }
+}
+
+function scrollToCarouselIndex(frame: HTMLElement, rawIndex: number, smooth: boolean): void {
+  const track = frame.querySelector<HTMLElement>('.hvy-carousel-track');
+  if (!track) return;
+  const count = track.querySelectorAll('.hvy-carousel-slide').length;
+  if (count === 0) return;
+  const index = ((rawIndex % count) + count) % count;
+  const stateForFrame = runtimeState.get(frame);
+  if (stateForFrame) stateForFrame.index = index;
+  track.scrollTo({ left: index * track.clientWidth, behavior: smooth ? 'smooth' : 'auto' });
+  updateActiveIndicator(frame, index);
+}
+
+function updateActiveIndicator(frame: HTMLElement, index: number): void {
+  const carousel = frame.closest('.hvy-carousel');
+  carousel?.querySelectorAll<HTMLElement>('.hvy-carousel-indicator').forEach((indicator) => {
+    const active = indicator.dataset.carouselIndex === String(index);
+    indicator.classList.toggle('is-active', active);
+    indicator.setAttribute('aria-pressed', active ? 'true' : 'false');
+  });
+}

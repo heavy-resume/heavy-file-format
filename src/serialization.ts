@@ -1328,6 +1328,13 @@ function serializeBlockSchema(
     addIfChanged(payload, 'imageFile', schema.imageFile, defaults.imageFile);
     addIfChanged(payload, 'imageAlt', schema.imageAlt, defaults.imageAlt);
   }
+  if (component === 'carousel') {
+    addArrayIfChanged(payload, 'carouselImages', schema.carouselImages, defaults.carouselImages);
+    addIfChanged(payload, 'carouselDurationMs', schema.carouselDurationMs, defaults.carouselDurationMs);
+    addIfChanged(payload, 'carouselPauseOnHover', schema.carouselPauseOnHover, defaults.carouselPauseOnHover);
+    addIfChanged(payload, 'carouselShowControls', schema.carouselShowControls, defaults.carouselShowControls);
+    addIfChanged(payload, 'carouselShowIndicators', schema.carouselShowIndicators, defaults.carouselShowIndicators);
+  }
   if (component === 'button') {
     addIfChanged(payload, 'buttonLabel', schema.buttonLabel, defaults.buttonLabel);
     addIfChanged(payload, 'buttonAction', schema.buttonAction, defaults.buttonAction);

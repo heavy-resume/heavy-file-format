@@ -238,7 +238,7 @@ text_line_styles:
    <!--hvy:text {}-->
     # plugin
     
-    `<!--hvy:plugin {"id":"table-view","plugin":"dev.hvy.db-table","pluginConfig":{}}-->`
+    `<!--hvy:plugin {"id":"table-view","plugin":"hvy.db-table","pluginConfig":{}}-->`
 
   <!--hvy:expandable:content {"description":"Plugin component description and example"}-->
 
@@ -251,7 +251,7 @@ text_line_styles:
    <!--hvy:text {}-->
     Example:
     ```hvy
-    <!--hvy:plugin {"id":"widget-plugin","plugin":"dev.hvy.db-table","pluginConfig":{"source":"with-file","table":"widgets"}}-->
+    <!--hvy:plugin {"id":"widget-plugin","plugin":"hvy.db-table","pluginConfig":{"source":"with-file","table":"widgets"}}-->
     ```
 
  <!--hvy:expandable {"id":"component-button","tags":"component, core, button, action"}-->

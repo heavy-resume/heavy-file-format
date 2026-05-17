@@ -265,20 +265,20 @@ test('deserializes plugin blocks with plugin identity and config', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
 plugins:
-  - id: dev.hvy.db-table
+  - id: hvy.db-table
     source: builtin://db-table
 ---
 
 <!--hvy: {"id":"data"}-->
 #! Data
 
-<!--hvy:plugin {"plugin":"dev.hvy.db-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->
+<!--hvy:plugin {"plugin":"hvy.db-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->
 `, '.hvy');
 
   const block = document.sections[0]?.blocks[0];
 
   expect(block?.schema.component).toBe('plugin');
-  expect(block?.schema.plugin).toBe('dev.hvy.db-table');
+  expect(block?.schema.plugin).toBe('hvy.db-table');
   expect(block?.schema.pluginConfig).toEqual({
     source: 'with-file',
     table: 'work_items',
@@ -289,15 +289,15 @@ test('deserializes a binary SQLite attachment tail from HVY bytes', () => {
   const prefix = `---
 hvy_version: 0.1
 plugins:
-  - id: dev.hvy.db-table
+  - id: hvy.db-table
     source: builtin://db-table
 ---
 
 <!--hvy: {"id":"data"}-->
 #! Data
 
-<!--hvy:plugin {"plugin":"dev.hvy.db-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->
-<!--hvy:tail {"id":"db","plugin":"dev.hvy.db-table","mediaType":"application/vnd.sqlite3","encoding":"gzip","length":7}-->
+<!--hvy:plugin {"plugin":"hvy.db-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->
+<!--hvy:tail {"id":"db","plugin":"hvy.db-table","mediaType":"application/vnd.sqlite3","encoding":"gzip","length":7}-->
 --HVY-TAIL--
 `;
   const prefixBytes = new TextEncoder().encode(prefix);
@@ -311,7 +311,7 @@ plugins:
   expect(document.attachments).toHaveLength(1);
   expect(document.attachments[0]?.id).toBe('db');
   expect(document.attachments[0]?.meta).toEqual({
-    plugin: 'dev.hvy.db-table',
+    plugin: 'hvy.db-table',
     mediaType: 'application/vnd.sqlite3',
     encoding: 'gzip',
   });
@@ -542,14 +542,14 @@ test('deserializes db-table query text from the plugin block body', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
 plugins:
-  - id: dev.hvy.db-table
+  - id: hvy.db-table
     source: builtin://db-table
 ---
 
 <!--hvy: {"id":"data"}-->
 #! Data
 
-<!--hvy:plugin {"plugin":"dev.hvy.db-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->
+<!--hvy:plugin {"plugin":"hvy.db-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->
  SELECT company, status
  FROM work_items
  WHERE status != 'Rejected'
@@ -557,7 +557,7 @@ plugins:
 
   const block = document.sections[0]?.blocks[0];
 
-  expect(block?.schema.plugin).toBe('dev.hvy.db-table');
+  expect(block?.schema.plugin).toBe('hvy.db-table');
   expect(block?.schema.pluginConfig).toEqual({
     source: 'with-file',
     table: 'work_items',
@@ -569,14 +569,14 @@ test('deserializes db-table query window settings from plugin config', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
 plugins:
-  - id: dev.hvy.db-table
+  - id: hvy.db-table
     source: builtin://db-table
 ---
 
 <!--hvy: {"id":"data"}-->
 #! Data
 
-<!--hvy:plugin {"plugin":"dev.hvy.db-table","pluginConfig":{"source":"with-file","table":"work_items","queryDynamicWindow":false,"queryLimit":25}}-->
+<!--hvy:plugin {"plugin":"hvy.db-table","pluginConfig":{"source":"with-file","table":"work_items","queryDynamicWindow":false,"queryLimit":25}}-->
  SELECT company FROM work_items
 `, '.hvy');
 

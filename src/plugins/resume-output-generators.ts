@@ -1,10 +1,10 @@
 import type { HvyPlugin } from './types';
 
-const SKILL_DESCRIPTION_GENERATOR_KEY = 'dev.hvy.resume.skill-description';
-const TOOL_DESCRIPTION_GENERATOR_KEY = 'dev.hvy.resume.tool-description';
+const SKILL_DESCRIPTION_GENERATOR_KEY = 'hvy.resume.skill-description';
+const TOOL_DESCRIPTION_GENERATOR_KEY = 'hvy.resume.tool-description';
 
 export const resumeOutputGeneratorsPlugin: HvyPlugin = {
-  id: 'dev.hvy.resume-generators',
+  id: 'hvy.resume-generators',
   displayName: 'Resume Generators',
   outputGenerators: [
     {

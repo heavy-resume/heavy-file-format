@@ -1,8 +1,9 @@
 {
   "plugins": [
-    "dev.hvy.db-table",
-    "dev.hvy.form",
-    "dev.hvy.progress-bar",
-    "dev.hvy.scripting"
+    "hvy.db-table",
+    "hvy.form",
+    "hvy.progress-bar",
+    "hvy.scripting",
+    "hvy.graph"
   ]
 }

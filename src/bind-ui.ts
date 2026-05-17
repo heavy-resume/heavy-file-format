@@ -1,6 +1,7 @@
 import bundledResumeThvy from '../examples/resume.thvy?raw';
 import bundledResumeHvy from '../examples/resume.hvy?raw';
 import bundledCrmHvy from '../examples/crm.hvy?raw';
+import bundledExampleHvyUrl from '../examples/example.hvy?url';
 import bundledResumeViews from '../examples/resume-views.json';
 import { state, getRenderApp, getRefreshReaderPanels } from './state';
 import { findSectionByKey } from './section-ops';
@@ -14,6 +15,7 @@ import { clearChatConversation } from './chat/chat';
 import { restoreDbTableFrameScroll } from './plugins/db-table-model';
 import { bindChatThreadUi } from './chat/chat-thread-ui';
 import { bindImageDragAndDrop } from './editor/components/image/image';
+import { bindCarouselInteractions } from './editor/components/carousel/carousel';
 import { bindAppEvents } from './bind/app-events';
 import { scheduleSidebarHelpAutoClose } from './bind/handlers/click-misc';
 import { saveResumeState } from './state-persistence';
@@ -97,6 +99,15 @@ async function loadImportReferenceDocumentFromServer(): Promise<void> {
   replaceLoadedDocument(await response.text(), 'ai-import-hvy-format-reference.hvy', 'import-reference');
 }
 
+async function loadDefaultExampleDocument(): Promise<void> {
+  const response = await fetch(bundledExampleHvyUrl, { cache: 'no-store' });
+  if (!response.ok) {
+    throw new Error(`Could not load default example: ${response.status} ${response.statusText}`);
+  }
+  currentFileHandle = null;
+  replaceLoadedDocument(new Uint8Array(await response.arrayBuffer()), 'example.hvy', 'default');
+}
+
 async function saveCurrentDocumentInPlace(downloadName: HTMLInputElement): Promise<void> {
   const normalized = normalizeFilename(state.filename || 'document.hvy');
   state.filename = normalized;
@@ -174,11 +185,20 @@ export function bindUi(app: HTMLElement): void {
 
   bindChatThreadUi(chatThread, chatScrollContainer, chatScrollBottomButton);
   bindImageDragAndDrop(app);
+  bindCarouselInteractions(app);
   scheduleSidebarHelpAutoClose(app);
 
   newBtn.addEventListener('click', () => {
     currentFileHandle = null;
     resetToBlankDocument();
+  });
+
+  const defaultExampleBtn = app.querySelector<HTMLButtonElement>('#defaultExampleBtn');
+  defaultExampleBtn?.addEventListener('click', () => {
+    void loadDefaultExampleDocument().catch((error: unknown) => {
+      state.rawEditorError = error instanceof Error ? error.message : 'Could not load the default example.';
+      getRenderApp()();
+    });
   });
 
   const crmExampleBtn = app.querySelector<HTMLButtonElement>('#crmExampleBtn');

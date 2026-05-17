@@ -319,7 +319,7 @@ hvy_version: 0.1
 <!--hvy: {"id":"maintenance"}-->
 #! Maintenance
 
-<!--hvy:plugin {"id":"cleanup","editorOnly":true,"plugin":"dev.hvy.scripting","pluginConfig":{"version":"0.1"}}-->
+<!--hvy:plugin {"id":"cleanup","editorOnly":true,"plugin":"hvy.scripting","pluginConfig":{"version":"0.1"}}-->
 print("maintenance script")
 `, '.hvy');
   const state = {

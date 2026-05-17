@@ -7,6 +7,12 @@ export interface TableRow {
   cells: string[];
 }
 
+export interface CarouselImage {
+  imageFile: string;
+  imageAlt: string;
+  caption: string;
+}
+
 export type SortKeyValue = number | string;
 
 export interface GridItem {
@@ -71,6 +77,11 @@ export interface BlockSchema {
   tableRows: TableRow[];
   imageFile: string;
   imageAlt: string;
+  carouselImages: CarouselImage[];
+  carouselDurationMs: number;
+  carouselPauseOnHover: boolean;
+  carouselShowControls: boolean;
+  carouselShowIndicators: boolean;
   buttonLabel: string;
   buttonAction: 'ai-generate';
   buttonVisibleScript: string;

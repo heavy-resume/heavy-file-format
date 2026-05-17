@@ -1,0 +1,14 @@
+Graph renders a chart from CSV data stored in the plugin text body.
+
+Chart attributes live in pluginConfig:
+- type: bar, line, pie, doughnut, scatter, bubble, radar, or polarArea.
+- title: optional chart title.
+- xAxisLabel: optional horizontal axis label.
+- yAxisLabel: optional vertical axis label.
+- legend: boolean, default true.
+
+The plugin text body is CSV. The first row is treated as headers. For bar, line,
+radar, and polarArea charts, the first column is labels and remaining columns are
+numeric datasets. For pie and doughnut charts, the first column is labels and the
+first numeric data column is used. Scatter expects x and y columns; bubble expects
+x, y, and r columns.

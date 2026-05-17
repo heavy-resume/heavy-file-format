@@ -5,7 +5,7 @@ reader_max_width: 70rem
 section_defaults:
   css: "margin: 0.5rem 0;"
 plugins:
-  - id: dev.hvy.db-table
+  - id: hvy.db-table
     source: builtin://db-table
 ---
 
@@ -50,7 +50,7 @@ plugins:
 <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
 The SQLite plugin instance is the working CRM for the full pipeline. Company, URL, and status should all come from the attached SQLite table.
 
-<!--hvy:plugin {"css":"margin: 0.5rem 0;","plugin":"dev.hvy.db-table","pluginConfig":{"source":"with-file","table":"job_applications"}}-->
+<!--hvy:plugin {"css":"margin: 0.5rem 0;","plugin":"hvy.db-table","pluginConfig":{"source":"with-file","table":"job_applications"}}-->
 
 <!--hvy:subsection {"id":"contacts"}-->
 #! Contacts
@@ -58,7 +58,7 @@ The SQLite plugin instance is the working CRM for the full pipeline. Company, UR
 <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
 This second plugin instance points at a different table in the same attached SQLite file.
 
-<!--hvy:plugin {"css":"margin: 0.5rem 0;","plugin":"dev.hvy.db-table","pluginConfig":{"source":"with-file","table":"company_contacts"}}-->
+<!--hvy:plugin {"css":"margin: 0.5rem 0;","plugin":"hvy.db-table","pluginConfig":{"source":"with-file","table":"company_contacts"}}-->
 
 <!--hvy:subsection {"id":"workflow"}-->
 #! Workflow

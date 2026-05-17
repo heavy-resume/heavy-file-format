@@ -44,7 +44,7 @@ hvy_version: 0.1
 <!--hvy: {"id":"data"}-->
 #! Data
 
- <!--hvy:plugin {"plugin":"dev.hvy.db-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->
+ <!--hvy:plugin {"plugin":"hvy.db-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->
 `;
 
 const DOC_WITHOUT_DB_TABLE = `---

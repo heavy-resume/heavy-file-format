@@ -125,7 +125,7 @@ export function hvyDocumentCommandHelp(topic = ''): string {
       formatCommandHelp('hvy insert INDEX section PARENT_PATH --from-template TEMPLATE_KEY [--using-template JSON]', 'Clone a section template from section_defs. Templates with variables require --using-template with exact JSON keys. Non-repeatable templates can be inserted once.'),
       formatCommandHelp('hvy insert INDEX text PARENT_PATH [ID|--id ID]', 'Insert a blank text block.'),
       formatCommandHelp('hvy insert INDEX table PARENT_PATH [ID|--id ID]', 'Insert a blank static table block.'),
-      formatCommandHelp('hvy insert INDEX plugin SECTION_PATH ID PLUGIN_ID', 'Insert a blank raw plugin block by canonical plugin id, such as dev.hvy.form or dev.hvy.db-table.'),
+      formatCommandHelp('hvy insert INDEX plugin SECTION_PATH ID PLUGIN_ID', 'Insert a blank raw plugin block by canonical plugin id, such as hvy.form or hvy.db-table.'),
       '',
       'Examples:',
       '  hvy insert 0 section /body a-section "A Section"',
@@ -164,7 +164,7 @@ export function hvyDocumentCommandHelp(topic = ''): string {
     plugin: [
       ...formatPluginQuickReference(),
       ...getHvyCliPluginCommandRegistrations().map((plugin) => formatCommandHelp(plugin.helpTopic, `Show ${plugin.name} plugin commands.`)),
-      formatCommandHelp('hvy insert INDEX plugin SECTION_PATH ID PLUGIN_ID', 'Create a blank raw plugin block by canonical plugin id, such as dev.hvy.form or dev.hvy.db-table. INDEX is zero-based and supports Python-style negative indexes; 0 is the front, -1 is the back.'),
+      formatCommandHelp('hvy insert INDEX plugin SECTION_PATH ID PLUGIN_ID', 'Create a blank raw plugin block by canonical plugin id, such as hvy.form or hvy.db-table. INDEX is zero-based and supports Python-style negative indexes; 0 is the front, -1 is the back.'),
     ].join('\n'),
     form: hvyDocumentCommandHelp('plugin form'),
     'db-table': hvyDocumentCommandHelp('plugin db-table'),
@@ -717,13 +717,13 @@ function addPluginBlock(ctx: HvyDocumentCommandContext, args: string[], index: H
 
 function formatRawPluginAliasError(plugin: string): string {
   if (plugin === 'form') {
-    return 'hvy plugin add: "form" is a CLI command alias, not a stored plugin id. Use "hvy insert INDEX plugin form SECTION_PATH ID" or plugin id "dev.hvy.form".';
+    return 'hvy plugin add: "form" is a CLI command alias, not a stored plugin id. Use "hvy insert INDEX plugin form SECTION_PATH ID" or plugin id "hvy.form".';
   }
   if (plugin === 'db-table') {
-    return 'hvy plugin add: "db-table" is a CLI command alias, not a stored plugin id. Use "hvy insert INDEX plugin db-table SECTION_PATH ID" or plugin id "dev.hvy.db-table".';
+    return 'hvy plugin add: "db-table" is a CLI command alias, not a stored plugin id. Use "hvy insert INDEX plugin db-table SECTION_PATH ID" or plugin id "hvy.db-table".';
   }
   if (plugin === 'scripting') {
-    return 'hvy plugin add: "scripting" is a CLI command alias, not a stored plugin id. Use plugin id "dev.hvy.scripting".';
+    return 'hvy plugin add: "scripting" is a CLI command alias, not a stored plugin id. Use plugin id "hvy.scripting".';
   }
   return '';
 }

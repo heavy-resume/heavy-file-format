@@ -1,0 +1,245 @@
+.hvy-carousel {
+  width: 100%;
+  color: var(--hvy-text);
+}
+
+.hvy-carousel-reader-frame {
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+  border: 1px solid color-mix(in srgb, var(--hvy-border) 78%, transparent);
+  background: color-mix(in srgb, var(--hvy-surface) 94%, var(--hvy-bg-alt) 6%);
+}
+
+.hvy-carousel-track {
+  display: flex;
+  width: 100%;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  scrollbar-width: none;
+}
+
+.hvy-carousel-track::-webkit-scrollbar {
+  display: none;
+}
+
+.hvy-carousel-slide {
+  flex: 0 0 100%;
+  min-width: 0;
+  display: grid;
+  gap: 0.75rem;
+  justify-items: center;
+  align-content: center;
+  scroll-snap-align: start;
+  padding: 0.85rem;
+}
+
+.hvy-carousel-slide img {
+  display: block;
+  max-width: 100%;
+  max-height: min(34rem, 70vh);
+  object-fit: contain;
+}
+
+.hvy-carousel-caption {
+  max-width: min(100%, 48rem);
+  text-align: center;
+  color: var(--hvy-text);
+  font-weight: 700;
+  font-size: 1rem;
+}
+
+.hvy-carousel-arrow {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 3rem;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0.72;
+  transition: background 160ms ease, opacity 160ms ease;
+}
+
+.hvy-carousel-arrow:hover,
+.hvy-carousel-arrow:focus-visible {
+  background: rgba(0, 0, 0, 0.28);
+  opacity: 1;
+}
+
+.hvy-carousel-arrow-left {
+  left: 0;
+}
+
+.hvy-carousel-arrow-right {
+  right: 0;
+}
+
+.hvy-carousel-indicators {
+  display: flex;
+  justify-content: center;
+  gap: 0.55rem;
+  margin: 0.7rem 0 0;
+}
+
+.hvy-carousel-indicator {
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 999px;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--hvy-text) 62%, var(--hvy-border));
+  background: color-mix(in srgb, var(--hvy-text-alt) 60%, var(--hvy-surface));
+  cursor: pointer;
+  transition: transform 150ms ease, background 150ms ease, box-shadow 150ms ease;
+}
+
+.hvy-carousel-indicator.is-active {
+  background: var(--hvy-accent-1);
+  transform: scale(1.32);
+  box-shadow: 0 0 0 0.18rem color-mix(in srgb, var(--hvy-accent-1) 24%, transparent);
+}
+
+.hvy-carousel-empty,
+.hvy-carousel-missing {
+  padding: 1rem;
+  border: 1px dashed var(--hvy-border);
+  background: color-mix(in srgb, var(--hvy-surface-alt) 75%, transparent);
+  color: var(--hvy-text-alt);
+  text-align: center;
+}
+
+.hvy-carousel-editor {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.hvy-carousel-editor-controls,
+.hvy-carousel-upload-panel,
+.hvy-carousel-image-row {
+  border: 1px solid var(--hvy-border);
+  background: color-mix(in srgb, var(--hvy-surface) 94%, var(--hvy-bg-alt) 6%);
+}
+
+.hvy-carousel-editor-controls {
+  display: grid;
+  grid-template-columns: minmax(8rem, 1fr) repeat(3, max-content);
+  gap: 0.75rem;
+  align-items: end;
+  padding: 0.75rem;
+}
+
+.hvy-carousel-editor label {
+  display: grid;
+  gap: 0.25rem;
+  font-size: 0.82rem;
+  color: var(--hvy-text-alt);
+}
+
+.hvy-carousel-editor input[type="number"],
+.hvy-carousel-editor input[type="text"] {
+  min-width: 0;
+  border: 1px solid var(--hvy-border-input);
+  border-radius: 6px;
+  padding: 0.42rem 0.5rem;
+  background: var(--hvy-surface);
+  color: var(--hvy-text);
+  font: inherit;
+}
+
+.hvy-carousel-toggle {
+  grid-template-columns: auto auto;
+  align-items: center;
+  color: var(--hvy-text);
+}
+
+.hvy-carousel-toggle input {
+  accent-color: var(--hvy-accent-1);
+}
+
+.hvy-carousel-upload-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem;
+}
+
+.hvy-carousel-pick-label input {
+  display: none;
+}
+
+.hvy-carousel-pick-button,
+.hvy-carousel-row-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2rem;
+  border: 1px solid var(--hvy-border-input);
+  border-radius: 6px;
+  padding: 0.35rem 0.65rem;
+  background: color-mix(in srgb, var(--hvy-accent-1) 12%, var(--hvy-surface));
+  color: var(--hvy-text);
+  cursor: pointer;
+}
+
+.hvy-carousel-image-list {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.hvy-carousel-image-row {
+  display: grid;
+  grid-template-columns: 6.5rem minmax(0, 1fr) auto;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.65rem;
+}
+
+.hvy-carousel-thumb {
+  width: 6.5rem;
+  aspect-ratio: 4 / 3;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--hvy-bg-alt) 75%, var(--hvy-surface));
+  border: 1px solid var(--hvy-border);
+}
+
+.hvy-carousel-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.hvy-carousel-row-fields {
+  display: grid;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.hvy-carousel-row-actions {
+  display: flex;
+  gap: 0.3rem;
+}
+
+.hvy-carousel-row-actions button[disabled] {
+  opacity: 0.42;
+  cursor: default;
+}
+
+@container (max-width: 34rem) {
+  .hvy-carousel-editor-controls,
+  .hvy-carousel-image-row {
+    grid-template-columns: 1fr;
+  }
+
+  .hvy-carousel-row-actions {
+    justify-content: end;
+  }
+}

@@ -728,6 +728,17 @@ function blockSchemaToCliJson(schema: BlockSchema, meta: JsonObject): JsonObject
   if (baseComponent === 'table') {
     value.tableShowHeader = schema.tableShowHeader;
   }
+  if (baseComponent === 'image') {
+    value.imageFile = schema.imageFile;
+    value.imageAlt = schema.imageAlt;
+  }
+  if (baseComponent === 'carousel') {
+    value.carouselImages = schema.carouselImages;
+    value.carouselDurationMs = schema.carouselDurationMs;
+    value.carouselPauseOnHover = schema.carouselPauseOnHover;
+    value.carouselShowControls = schema.carouselShowControls;
+    value.carouselShowIndicators = schema.carouselShowIndicators;
+  }
   if (baseComponent === 'plugin') {
     value.plugin = schema.plugin;
     value.pluginConfig = schema.pluginConfig;
@@ -843,6 +854,27 @@ function applyBlockSchemaJson(schema: BlockSchema, component: string, value: Jso
   if (Array.isArray(value.tableColumns)) schema.tableColumns = parseStringList(value.tableColumns);
   if (typeof value.tableShowHeader === 'boolean') schema.tableShowHeader = value.tableShowHeader;
   if (Array.isArray(value.tableRows)) schema.tableRows = value.tableRows as unknown as BlockSchema['tableRows'];
+  if (typeof value.imageFile === 'string') schema.imageFile = value.imageFile;
+  if (typeof value.imageAlt === 'string') schema.imageAlt = value.imageAlt;
+  if (Array.isArray(value.carouselImages)) schema.carouselImages = value.carouselImages
+    .map((item) => {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) return null;
+      const candidate = item as JsonObject;
+      const imageFile = typeof candidate.imageFile === 'string' ? candidate.imageFile.trim() : '';
+      if (!imageFile) return null;
+      return {
+        imageFile,
+        imageAlt: typeof candidate.imageAlt === 'string' ? candidate.imageAlt : '',
+        caption: typeof candidate.caption === 'string' ? candidate.caption : '',
+      };
+    })
+    .filter((item): item is BlockSchema['carouselImages'][number] => item !== null);
+  if (typeof value.carouselDurationMs === 'number' && Number.isFinite(value.carouselDurationMs) && value.carouselDurationMs > 0) {
+    schema.carouselDurationMs = value.carouselDurationMs;
+  }
+  if (typeof value.carouselPauseOnHover === 'boolean') schema.carouselPauseOnHover = value.carouselPauseOnHover;
+  if (typeof value.carouselShowControls === 'boolean') schema.carouselShowControls = value.carouselShowControls;
+  if (typeof value.carouselShowIndicators === 'boolean') schema.carouselShowIndicators = value.carouselShowIndicators;
   if (typeof value.plugin === 'string') schema.plugin = value.plugin;
   if (value.pluginConfig && typeof value.pluginConfig === 'object' && !Array.isArray(value.pluginConfig)) {
     schema.pluginConfig = value.pluginConfig as JsonObject;

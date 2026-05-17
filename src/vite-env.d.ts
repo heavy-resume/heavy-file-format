@@ -15,6 +15,7 @@ declare module 'virtual:hvy-built-in-plugins' {
     form?: HvyPlugin;
     progressBar?: HvyPlugin;
     scripting?: HvyPlugin;
+    graph?: HvyPlugin;
   }>;
   export const builtInPluginById: Readonly<Record<string, HvyPlugin | undefined>>;
 }

@@ -1,0 +1,4 @@
+# Carousel Components #
+
+Displays multiple binary image attachments from carouselImages.
+Each carouselImages entry names a tail attachment with id image:<filename>.

@@ -8,6 +8,7 @@ import { renderContainerReader } from '../editor/components/container/container'
 import { renderExpandableReader } from '../editor/components/expandable/expandable';
 import { renderGridReader } from '../editor/components/grid/grid';
 import { renderImageReader } from '../editor/components/image/image';
+import { renderCarouselReader } from '../editor/components/carousel/carousel';
 import { renderPluginReader } from '../editor/components/plugin/plugin';
 import { renderTableReader, resetReaderTableStripeSequence } from '../editor/components/table/table';
 import { renderTextReader } from '../editor/components/text/text';
@@ -473,6 +474,9 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     }
     if (base === 'image') {
       return renderMaybeCollapsedBlockShell(renderImageReader(section, block, helpers));
+    }
+    if (base === 'carousel') {
+      return renderMaybeCollapsedBlockShell(renderCarouselReader(section, block, helpers));
     }
     return renderMaybeCollapsedBlockShell(renderTextReader(section, block, helpers));
   }

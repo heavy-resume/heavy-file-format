@@ -1,4 +1,4 @@
-import type { Align, BlockSchema, ExpandablePart, Slot, SortKeyValue, TableRow, VisualBlock, VisualSection } from './editor/types';
+import type { Align, BlockSchema, CarouselImage, ExpandablePart, Slot, SortKeyValue, TableRow, VisualBlock, VisualSection } from './editor/types';
 import type { JsonObject } from './hvy/types';
 import type { ComponentDefinition, VisualDocument } from './types';
 import { makeId, sanitizeOptionalId } from './utils';
@@ -65,6 +65,11 @@ export function defaultBlockSchema(component = 'text'): BlockSchema {
     tableRows: [],
     imageFile: '',
     imageAlt: '',
+    carouselImages: [],
+    carouselDurationMs: 3000,
+    carouselPauseOnHover: true,
+    carouselShowControls: true,
+    carouselShowIndicators: true,
     buttonLabel: 'Generate',
     buttonAction: 'ai-generate',
     buttonVisibleScript: '',
@@ -315,6 +320,11 @@ export function schemaFromUnknown(value: unknown, seen = new WeakSet<object>(), 
     }),
     imageFile: typeof candidate.imageFile === 'string' ? candidate.imageFile : defaults.imageFile,
     imageAlt: typeof candidate.imageAlt === 'string' ? candidate.imageAlt : defaults.imageAlt,
+    carouselImages: parseCarouselImages(candidate.carouselImages),
+    carouselDurationMs: parsePositiveNumber(candidate.carouselDurationMs, defaults.carouselDurationMs),
+    carouselPauseOnHover: candidate.carouselPauseOnHover !== false,
+    carouselShowControls: candidate.carouselShowControls !== false,
+    carouselShowIndicators: candidate.carouselShowIndicators !== false,
     buttonLabel: typeof candidate.buttonLabel === 'string' ? candidate.buttonLabel : defaults.buttonLabel,
     buttonAction: 'ai-generate',
     buttonVisibleScript: typeof candidate.buttonVisibleScript === 'string' ? candidate.buttonVisibleScript : defaults.buttonVisibleScript,
@@ -326,6 +336,29 @@ export function schemaFromUnknown(value: unknown, seen = new WeakSet<object>(), 
     buttonPositionTargetId: typeof candidate.buttonPositionTargetId === 'string' ? candidate.buttonPositionTargetId : defaults.buttonPositionTargetId,
     buttonCss: typeof candidate.buttonCss === 'string' ? candidate.buttonCss : defaults.buttonCss,
   };
+}
+
+function parseCarouselImages(raw: unknown): CarouselImage[] {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  return raw
+    .map((item): CarouselImage | null => {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) {
+        return null;
+      }
+      const candidate = item as JsonObject;
+      const imageFile = typeof candidate.imageFile === 'string' ? candidate.imageFile.trim() : '';
+      if (!imageFile) {
+        return null;
+      }
+      return {
+        imageFile,
+        imageAlt: typeof candidate.imageAlt === 'string' ? candidate.imageAlt : '',
+        caption: typeof candidate.caption === 'string' ? candidate.caption : '',
+      };
+    })
+    .filter((item): item is CarouselImage => item !== null);
 }
 
 function parseSortKeys(raw: unknown): Record<string, SortKeyValue> {

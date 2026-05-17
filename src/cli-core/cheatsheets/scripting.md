@@ -3,7 +3,7 @@
 Create a scripting plugin:
 
 ```shell
-hvy insert 0 plugin /demo-area widget-script dev.hvy.scripting
+hvy insert 0 plugin /demo-area widget-script hvy.scripting
 echo "doc.header.set('fake_widget_status', 'ready')" > /body/demo-area/widget-script/script.py
 ```
 

@@ -27,7 +27,7 @@ Create a form with submit logic:
 
 ```shell
 hvy insert 0 plugin form /demo-area widget-submit-form
-echo '{"id":"widget-submit-form","plugin":"dev.hvy.form","pluginConfig":{"version":"0.1","submitLabel":"Store widget","showSubmit":true,"submitScript":"submit"}}' > /body/demo-area/widget-submit-form/plugin.json
+echo '{"id":"widget-submit-form","plugin":"hvy.form","pluginConfig":{"version":"0.1","submitLabel":"Store widget","showSubmit":true,"submitScript":"submit"}}' > /body/demo-area/widget-submit-form/plugin.json
 ```
 
 Store fields and named scripts in `plugin.txt`. Use `pluginConfig.submitScript` in `plugin.json` to run a named script when the submit button is pressed.
@@ -36,7 +36,7 @@ Populate a select from the current SQL backend when the form renders:
 
 ```shell
 hvy insert 0 plugin form /demo-area widget-choice-form
-echo '{"id":"widget-choice-form","plugin":"dev.hvy.form","pluginConfig":{"version":"0.1","submitLabel":"Choose widget","showSubmit":true,"initialScript":"load","submitScript":"submit"}}' > /body/demo-area/widget-choice-form/plugin.json
+echo '{"id":"widget-choice-form","plugin":"hvy.form","pluginConfig":{"version":"0.1","submitLabel":"Choose widget","showSubmit":true,"initialScript":"load","submitScript":"submit"}}' > /body/demo-area/widget-choice-form/plugin.json
 ```
 
 There is no `optionsQuery` YAML key. Dynamic select/radio options are set from scripts with `doc.form.set_options(label, options)`.
@@ -58,7 +58,7 @@ Example `plugin.json`:
 
 ```json
 {
-  "plugin": "dev.hvy.form",
+  "plugin": "hvy.form",
   "pluginConfig": {
     "version": "0.1",
     "submitLabel": "Choose widget",

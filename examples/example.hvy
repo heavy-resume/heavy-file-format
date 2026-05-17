@@ -5,14 +5,16 @@ reader_max_width: 64rem
 section_defaults:
   css: "margin: 0.5rem 0;"
 plugins:
-  - id: dev.heavy.db-table
+  - id: hvy.db-table
     source: builtin://db-table
-  - id: dev.heavy.form
+  - id: hvy.form
     source: builtin://form
-  - id: dev.heavy.progress-bar
+  - id: hvy.progress-bar
     source: builtin://progress-bar
-  - id: dev.heavy.scripting
+  - id: hvy.scripting
     source: builtin://scripting
+  - id: hvy.graph
+    source: builtin://graph
 ---
 
 <!--hvy: {"id":"overview"}-->
@@ -62,7 +64,7 @@ Keep the visible document focused on the next decision, and let the attached dat
 <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
 Use the plugin block below as the working application table. The rendered rows should come from the attached SQLite file rather than from inline HVY table data.
 
-<!--hvy:plugin {"css":"margin: 0.5rem 0;","plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"job_applications"}}-->
+<!--hvy:plugin {"css":"margin: 0.5rem 0;","plugin":"hvy.db-table","pluginConfig":{"source":"with-file","table":"job_applications"}}-->
 
 <!--hvy:subsection {"id":"notes"}-->
 #! Notes
@@ -103,7 +105,7 @@ Use the plugin block below as the working application table. The rendered rows s
   <!--hvy:text {}-->
    Split opportunities into "must pursue" and "nice to pursue" before adding more applications.
 
-<!--hvy:plugin {"css":"margin: 0.5rem 0;","plugin":"dev.heavy.db-table"}-->
+<!--hvy:plugin {"css":"margin: 0.5rem 0;","plugin":"hvy.db-table"}-->
 
 <!--hvy:subsection {"id":"progress-bar-example"}-->
 #! Progress Bar Example
@@ -111,7 +113,7 @@ Use the plugin block below as the working application table. The rendered rows s
 <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
 The block below is a simple themed progress bar example that should pick up the active accent color by default.
 
-<!--hvy:plugin {"css":"margin: 0.5rem 0;","plugin":"dev.heavy.progress-bar","pluginConfig":{"min":0,"max":100,"value":68}}-->
+<!--hvy:plugin {"css":"margin: 0.5rem 0;","plugin":"hvy.progress-bar","pluginConfig":{"min":0,"max":100,"value":68}}-->
 ${value}%
 
 <!--hvy:subsection {"id":"scripting-example"}-->
@@ -120,7 +122,7 @@ ${value}%
 <!--hvy:text {"id":"script-value","css":"margin: 0.5rem 0;"}-->
 Script test value: 0
 
-<!--hvy:plugin {"css":"margin: 0.5rem 0;","plugin":"dev.heavy.scripting","pluginConfig":{"version":"0.1"}}-->
+<!--hvy:plugin {"css":"margin: 0.5rem 0;","plugin":"hvy.scripting","pluginConfig":{"version":"0.1"}}-->
 doc.header.set("last_viewed", "from python!")
 
 output = doc.tool("view_component", {"component_ref": "script-value"})
@@ -146,9 +148,9 @@ for line in output.split('\n'):
 #! Form Examples
 
 <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
-These form plugin blocks keep their input definitions in YAML text owned by `dev.heavy.form`. They exercise static options, script-populated fields, field triggers, submit handling, and the core HTML input types without introducing standalone HVY input components.
+These form plugin blocks keep their input definitions in YAML text owned by `hvy.form`. They exercise static options, script-populated fields, field triggers, submit handling, and the core HTML input types without introducing standalone HVY input components.
 
-<!--hvy:plugin {"css":"margin: 0.5rem 0;","plugin":"dev.heavy.form","pluginConfig":{"version":"0.1","initialScript":"populate_lunch","submitScript":"submit_lunch","submitLabel":"Save lunch order"}}-->
+<!--hvy:plugin {"css":"margin: 0.5rem 0;","plugin":"hvy.form","pluginConfig":{"version":"0.1","initialScript":"populate_lunch","submitScript":"submit_lunch","submitLabel":"Save lunch order"}}-->
 fields:
   - label: Lunch choice
     type: select
@@ -191,7 +193,7 @@ scripts:
         doc.form.clear_error("Delivery date")
         doc.header.set("last_lunch_order", values)
 
-<!--hvy:plugin {"css":"margin: 0.5rem 0;","plugin":"dev.heavy.form","pluginConfig":{"version":"0.1","initialScript":"update_summary","submitScript":"submit_contact","showSubmit":false}}-->
+<!--hvy:plugin {"css":"margin: 0.5rem 0;","plugin":"hvy.form","pluginConfig":{"version":"0.1","initialScript":"update_summary","submitScript":"submit_contact","showSubmit":false}}-->
 fields:
   - label: Full name
     type: text
@@ -254,7 +256,7 @@ The script below intentionally attempts to import `browser.window` so you can in
 <!--hvy:text {"id":"import-example-result","css":"margin: 0.5rem 0;"}-->
 Import example result: pending
 
-<!--hvy:plugin {"css":"margin: 0.5rem 0;","plugin":"dev.heavy.scripting","pluginConfig":{"version":"0.1"}}-->
+<!--hvy:plugin {"css":"margin: 0.5rem 0;","plugin":"hvy.scripting","pluginConfig":{"version":"0.1"}}-->
 from browser import window
 
 output = doc.tool("view_component", {"component_ref": "import-example-result"})
@@ -273,8 +275,32 @@ for line in output.split('\n'):
                 }]
             })
         break
-<!--hvy:tail {"plugin":"dev.heavy.scripting","mediaType":"application/vnd.sqlite3","encoding":"gzip"}-->
+
+<!--hvy:subsection {"id":"carousel-example"}-->
+#! Carousel Example
+
+<!--hvy:text {"css":"margin: 0.5rem 0;"}-->
+The carousel component uses the same attached image storage as native image blocks, but renders multiple images with automatic movement, controls, and indicators.
+
+<!--hvy:carousel {"css":"margin: 0.5rem 0;","carouselDurationMs":2400,"carouselPauseOnHover":true,"carouselShowControls":true,"carouselShowIndicators":true,"carouselImages":[{"imageFile":"carousel-slide-a.svg","imageAlt":"Carousel demo slide","caption":"Attached SVG image rendered from the HVY tail"},{"imageFile":"carousel-slide-b.svg","imageAlt":"Graph demo slide","caption":"Multiple attached images in one plugin block"}]}-->
+
+<!--hvy:subsection {"id":"graph-example"}-->
+#! Graph Example
+
+<!--hvy:text {"css":"margin: 0.5rem 0;"}-->
+The graph plugin stores chart attributes in JSON config and keeps the editable data as CSV text in the plugin body.
+
+<!--hvy:plugin {"css":"margin: 0.5rem 0;","plugin":"hvy.graph","pluginConfig":{"type":"bar","title":"Pipeline by stage","xAxisLabel":"Stage","yAxisLabel":"Count","legend":true}}-->
+Stage,Applications,Interviews
+Applied,12,0
+Phone Screen,5,5
+Onsite,2,2
+Offer,1,1
+
+<!--hvy:tail {"id":"image:carousel-slide-a.svg","mediaType":"image/svg+xml","length":341}-->
+<!--hvy:tail {"id":"image:carousel-slide-b.svg","mediaType":"image/svg+xml","length":403}-->
+<!--hvy:tail {"plugin":"hvy.scripting","mediaType":"application/vnd.sqlite3","encoding":"gzip"}-->
 --HVY-TAIL--
-�      ��AK�@�ɺ�*hz(x��Rp�q)E
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540"><rect width="960" height="540" fill="#14213d"/><circle cx="240" cy="260" r="130" fill="#fca311"/><rect x="430" y="150" width="330" height="230" rx="34" fill="#e5e5e5"/><text x="480" y="275" font-family="Arial" font-size="54" font-weight="700" fill="#14213d">Carousel</text></svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540"><rect width="960" height="540" fill="#0f766e"/><path d="M120 390 C260 170 390 470 520 250 S780 210 850 110" fill="none" stroke="#f8fafc" stroke-width="34" stroke-linecap="round"/><circle cx="520" cy="250" r="52" fill="#facc15"/><text x="135" y="120" font-family="Arial" font-size="54" font-weight="700" fill="#f8fafc">Graph data</text></svg>�      ��AK�@�ɺ�*hz(x��Rp�q)E
 R�Z	"MW��P�f��Mfҙ�եj�'�O?�_�dE��B{(��;�yya�\&���t���ɹ����<���16����*C���l�-}�M�_��L��?f�����      ��ו���e�ۜ��L�q���Fǉ���rvTnl���Bj���BUA
 ��-jl���E�TV�m4Z�zؼ6���õ[͍���]z�^oy٤V[�7���1�:��~ʤ1�:=��z6*[��K��&f��;}4xڡnǼ(2�p'���q��J���������-��N3���v�u�EX�.7����G��Z       �Q��T>��s2�ݷN�6u��+�zv�^'</2Q?�m[�BIm��n����hS��>Ӻ�jm�IC�Kա��������vE�]yп�j%�&FU��=���g��<       ���&O׆�_�A��8q��� x5E[F���TWꈞ�t!9�3��:m�����RAF$�+�0��,[���ϙ~�s      ��a5������/c @  

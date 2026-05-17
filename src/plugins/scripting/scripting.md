@@ -82,6 +82,6 @@ metadata.
 ## Example
 
 ```hvy
-<!--hvy:plugin {"plugin":"dev.hvy.scripting","pluginConfig":{"version":"0.1"}}-->
+<!--hvy:plugin {"plugin":"hvy.scripting","pluginConfig":{"version":"0.1"}}-->
 doc.header.set("last_viewed", "from python!")
 ```

@@ -128,7 +128,7 @@ export interface HvyPluginHooks {
 
 export interface HvyPlugin {
   // Stable identifier serialized into the document as block.schema.plugin.
-  // Convention: reverse-DNS, e.g. 'dev.hvy.db-table'.
+  // Convention: namespace-qualified, e.g. 'hvy.db-table'.
   id: string;
   // Human-readable name shown in the plugin selector.
   displayName: string;

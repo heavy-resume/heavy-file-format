@@ -40,6 +40,7 @@ import { applySearchFilter, submitSearch } from './search/actions';
 import { loadPaletteOverrideId } from './palettes/palette-preferences';
 import { captureRenderScroll, restoreRenderScroll } from './render-scroll';
 import { refreshReaderSurfaces } from './reader/refresh-surfaces';
+import { initializeCarouselReaders } from './editor/components/carousel/carousel';
 
 const appRoot = document.querySelector<HTMLDivElement>('#app');
 if (!appRoot) {
@@ -569,6 +570,7 @@ function renderApp(): void {
         </div>
         <div class="toolbar">
           <button id="newBtn" type="button" class="toolbar-primary-button">New</button>
+          <button id="defaultExampleBtn" type="button">Default Example</button>
           <button id="crmExampleBtn" type="button">CRM Example</button>
           <button id="resumeTemplateBtn" type="button">Resume Template</button>
           <button id="resumeExampleBtn" type="button">Resume Example</button>
@@ -859,6 +861,7 @@ function refreshReaderPanels(): void {
   });
   if (surfaceRefresh.refreshedSidebar || surfaceRefresh.refreshedReader) {
     scheduleReaderHighlightGlow(app);
+    initializeCarouselReaders(app);
   }
 
   const modalStartedAt = performance.now();

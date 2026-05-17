@@ -308,6 +308,12 @@ function getLocalRenderedComponentLines(block: VisualBlock): string[] {
   if (component === 'image') {
     return [`Image: ${block.schema.imageFile || '(none)'}`, `Alt: ${block.schema.imageAlt || '(none)'}`];
   }
+  if (component === 'carousel') {
+    return [
+      `Carousel images: ${block.schema.carouselImages.length}`,
+      ...block.schema.carouselImages.map((image) => `${image.imageFile}${image.caption ? `: ${image.caption}` : ''}`),
+    ];
+  }
   if (component === 'plugin') {
     return [
       `Plugin: ${block.schema.plugin || '(none)'}`,

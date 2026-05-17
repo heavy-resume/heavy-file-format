@@ -7,9 +7,9 @@ Use this when a form should create rows and a table should show those rows.
 hvy insert 0 section / a-section "A Section"
 hvy plugin db-table exec "CREATE TABLE items (id INTEGER PRIMARY KEY, title TEXT NOT NULL, notes TEXT)"
 hvy insert 0 plugin form /a-section add-item
-echo '{"id":"add-item","plugin":"dev.hvy.form","pluginConfig":{"version":"0.1","submitLabel":"Add item","showSubmit":true,"submitScript":"submit"}}' > /body/a-section/add-item/plugin.json
+echo '{"id":"add-item","plugin":"hvy.form","pluginConfig":{"version":"0.1","submitLabel":"Add item","showSubmit":true,"submitScript":"submit"}}' > /body/a-section/add-item/plugin.json
 hvy insert -1 plugin db-table /a-section items-table
-echo '{"id":"items-table","plugin":"dev.hvy.db-table","pluginConfig":{"source":"with-file","table":"items","queryLimit":10}}' > /body/a-section/items-table/plugin.json
+echo '{"id":"items-table","plugin":"hvy.db-table","pluginConfig":{"source":"with-file","table":"items","queryLimit":10}}' > /body/a-section/items-table/plugin.json
 echo 'SELECT id, title, notes FROM items ORDER BY id DESC' > /body/a-section/items-table/plugin.txt
 hvy plugin db-table query "SELECT id, title FROM items"
 hvy lint

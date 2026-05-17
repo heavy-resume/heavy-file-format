@@ -223,7 +223,7 @@ theme:
   <!--hvy:expandable:content {}-->
 
    <!--hvy:text {}-->
-    Form plugin creation uses hvy append-child plugin form SECTION_PATH ID SUBMIT_BUTTON_LABEL FIELD_LABEL:TYPE... Adds a dev.hvy.form plugin with field specs like Label:type:required:Option A|Option B. The positional SUBMIT_BUTTON_LABEL sets pluginConfig.submitLabel; --on-submit-script sets pluginConfig.submitScript.
+    Form plugin creation uses hvy append-child plugin form SECTION_PATH ID SUBMIT_BUTTON_LABEL FIELD_LABEL:TYPE... Adds a hvy.form plugin with field specs like Label:type:required:Option A|Option B. The positional SUBMIT_BUTTON_LABEL sets pluginConfig.submitLabel; --on-submit-script sets pluginConfig.submitScript.
 
  <!--hvy:expandable {}-->
   <!--hvy:expandable:stub {}-->

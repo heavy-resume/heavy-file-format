@@ -140,15 +140,16 @@ not enabled automatically:
 ```json
 {
   "plugins": [
-    "dev.hvy.db-table",
-    "dev.hvy.form",
-    "dev.hvy.progress-bar",
-    "dev.hvy.scripting"
+    "hvy.db-table",
+    "hvy.form",
+    "hvy.progress-bar",
+    "hvy.scripting",
+    "hvy.graph"
   ]
 }
 ```
 
-Use `HVY_BUILD_PLUGINS=dev.hvy.form,dev.hvy.progress-bar npm run build` for
+Use `HVY_BUILD_PLUGINS=hvy.form,hvy.progress-bar npm run build` for
 a one-off override, or `HVY_BUILD_CONFIG=path/to/config.json` to point at another
 config file. Config files may also use `include` and `exclude` arrays with the
 same plugin ids.
@@ -237,7 +238,7 @@ the import mutates the document.
 
 # Plugin / Callback Support
 
-HVY has a documented plugin block envelope plus a first plugin contract for `dev.hvy.db-table`.
+HVY has a documented plugin block envelope plus a first plugin contract for `hvy.db-table`.
 
 - The plugin instance is authored as a `plugin` component with `plugin` and `pluginConfig`.
 - The current built-in DB table implementation uses a gzip-compressed SQLite tail payload appended after the textual HVY body.

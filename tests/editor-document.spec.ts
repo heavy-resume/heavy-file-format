@@ -811,6 +811,21 @@ test('new section component picker opens on the first click', async ({ page }) =
   await expect(newSection.locator('.component-picker')).toHaveAttribute('data-open', 'true');
 });
 
+test('AI mode shows add section ghost and opens the new section inline', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('[data-action="switch-view"][data-view="ai"]').click();
+  await expect(page.locator('#aiReaderDocument [data-action="add-top-level-section"][data-section-key="__top_level__"]')).toBeVisible();
+
+  await page.locator('#aiReaderDocument [data-action="add-top-level-section"][data-section-key="__top_level__"]').click();
+
+  const activeEditor = page.locator('#aiReaderDocument .editor-block[data-active-editor-block="true"]');
+  await expect(activeEditor).toBeVisible();
+  await expect(activeEditor.locator('.rich-editor')).toBeFocused();
+  await activeEditor.locator('.rich-editor').fill('AI-added section body');
+  await expect(page.locator('#aiReaderDocument')).toContainText('AI-added section body');
+});
+
 test('section remove requires confirmation', async ({ page }) => {
   await page.goto('/');
 

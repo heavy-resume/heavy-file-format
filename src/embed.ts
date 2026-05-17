@@ -282,6 +282,8 @@ function ensureReaderRenderer(): ReaderRenderer {
       renderEditorBlock: () => '',
       renderBlockContentEditor: () => '',
       renderComponentOptions: () => '',
+      renderReusableSectionOptions: () => '',
+      getSectionDefs: () => [],
       renderBlockMetaFields: () => '',
     }
   );

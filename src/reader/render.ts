@@ -94,6 +94,8 @@ interface ReaderRenderDeps {
   renderEditorBlock: (sectionKey: string, block: VisualBlock) => string;
   renderBlockContentEditor: (sectionKey: string, block: VisualBlock) => string;
   renderComponentOptions: (selected: string) => string;
+  renderReusableSectionOptions: (selected: string) => string;
+  getSectionDefs: () => unknown[];
   renderBlockMetaFields: (sectionKey: string, block: VisualBlock) => string;
 }
 
@@ -196,16 +198,35 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       const realSections = orderReaderSections(
         sections.filter((section) => !section.isGhost && section.location !== 'sidebar' && !isViewerHiddenSection(section) && isSectionSearchVisible(getActiveSearchFilterContext(), section))
       );
+      const topLevelAddGhost = renderAiTopLevelSectionAddGhost();
       if (realSections.length === 0) {
         return getActiveSearchFilterContext().filtering
           ? '<div class="reader-search-empty"><div>No matches in this filtered view.</div></div>'
+          : topLevelAddGhost
+          ? `<div${renderResponsiveSurfaceAttrs('')}><div class="reader-document-body">${topLevelAddGhost}</div></div>`
           : '<div class="reader-empty-state" role="status">No content to display yet.</div>';
       }
       const maxWidth = typeof state.documentMeta.reader_max_width === 'string' ? state.documentMeta.reader_max_width.trim() : '';
       const bodyStyle = maxWidth.length > 0 ? ` style="max-width: ${deps.escapeAttr(maxWidth)};"` : '';
       const surfaceAttrs = renderResponsiveSurfaceAttrs(maxWidth);
-      return `<div${surfaceAttrs}><div class="reader-document-body"${bodyStyle}>${realSections.map((section) => renderReaderSection(section)).join('')}</div></div>`;
+      return `<div${surfaceAttrs}><div class="reader-document-body"${bodyStyle}>${realSections.map((section) => renderReaderSection(section)).join('')}${topLevelAddGhost}</div></div>`;
     });
+  }
+
+  function renderAiTopLevelSectionAddGhost(): string {
+    if (state.currentView !== 'ai' || getActiveSearchFilterContext().filtering) {
+      return '';
+    }
+    const hasReusableSectionOptions = deps.getSectionDefs().length > 0;
+    return `<article class="ghost-section-card add-ghost reusable-section-ghost" data-action="add-top-level-section" data-section-key="__top_level__">
+      <div class="ghost-plus-big">${plusIcon()}</div>
+      <div class="ghost-label">Add Section</div>
+      ${hasReusableSectionOptions ? `<label class="ghost-component-picker">
+        <select data-field="reusable-section-type" data-section-key="__top_level__" aria-label="Section type">
+          ${deps.renderReusableSectionOptions(state.addComponentBySection.__top_level__ ?? 'blank')}
+        </select>
+      </label>` : ''}
+    </article>`;
   }
 
   function renderResponsiveSurfaceAttrs(_documentMaxWidth: string): string {

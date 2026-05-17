@@ -1,6 +1,6 @@
 import { state, getRenderApp, REUSABLE_SECTION_DEF_PREFIX } from '../../state';
 import { isDefaultUntitledSectionTitle, getSectionId, moveSectionByOffset, removeSectionByKey, makeBlockSubsection, removeSubsection } from '../../section-ops';
-import { setActiveEditorBlock } from '../../block-ops';
+import { setActiveEditorBlock, setAiEditorHostBlock } from '../../block-ops';
 import { createEmptySection, instantiateReusableSection } from '../../document-factory';
 import { recordHistory } from '../../history';
 import { closeModalIfTarget, navigateToSection } from '../../navigation';
@@ -18,13 +18,18 @@ const addTopLevelSection: ActionHandler = () => {
 
 export function insertTopLevelSection(starter: string, flavorName?: string): void {
   recordHistory();
-  const section = starter === 'blank' ? createEmptySection(1, '', false) : instantiateReusableSection(starter, 1, flavorName);
+  const section = starter === 'blank'
+    ? createEmptySection(1, state.currentView === 'ai' ? 'text' : '', false)
+    : instantiateReusableSection(starter, 1, flavorName);
   if (!section) {
     return;
   }
   state.document.sections.push(section);
   if (section.blocks[0]) {
     setActiveEditorBlock(section.key, section.blocks[0].id);
+    if (state.currentView === 'ai') {
+      setAiEditorHostBlock(section.key, section.blocks[0].id);
+    }
   } else {
     state.activeEditorSectionTitleKey = section.key;
     state.clearSectionTitleOnFocusKey = isDefaultUntitledSectionTitle(section.title) ? section.key : null;

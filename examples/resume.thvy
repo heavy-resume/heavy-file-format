@@ -399,8 +399,8 @@ section_defs:
             tags: language
             componentListBlocks: []
       children: []
-  - name: Resume Section
-    key: resume-section
+  - name: Tabular Resume Section
+    key: tabular-resume-section
     repeatable: true
     templateVariables:
       section_title:
@@ -412,10 +412,10 @@ section_defs:
       row_details:
         label: Row details
     template:
-      title: Resume Section
+      title: Tabular Resume Section
       level: 1
       lock: true
-      description: Additional resume section
+      description: An additional resume section with a table with expandable rows.
       hideIfUnmodified: true
       tags: reciprocal-xref-source
       blocks:

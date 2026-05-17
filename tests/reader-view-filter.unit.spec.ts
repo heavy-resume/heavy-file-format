@@ -266,6 +266,8 @@ test('reader view rendering applies hidden, dimmed, highlight, and generic colla
     renderEditorBlock: () => '',
     renderBlockContentEditor: () => '',
     renderComponentOptions: () => '',
+    renderReusableSectionOptions: () => '',
+    getSectionDefs: () => [],
     renderBlockMetaFields: () => '',
   });
   const helpers = {
@@ -366,6 +368,8 @@ print("maintenance script")
     renderEditorBlock: () => '',
     renderBlockContentEditor: () => '',
     renderComponentOptions: () => '',
+    renderReusableSectionOptions: () => '',
+    getSectionDefs: () => [],
     renderBlockMetaFields: () => '',
   });
   const helpers = {

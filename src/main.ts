@@ -517,6 +517,8 @@ readerRenderer = createReaderRenderer(
     renderEditorBlock: (sectionKey, block) => editorRenderer.renderEditorBlock(sectionKey, block, state.document.sections),
     renderBlockContentEditor: (sectionKey, block) => editorRenderer.renderBlockContentEditor(sectionKey, block),
     renderComponentOptions,
+    renderReusableSectionOptions,
+    getSectionDefs,
     renderBlockMetaFields: (sectionKey, block) => editorRenderer.renderBlockMetaFields(sectionKey, block),
   }
 );

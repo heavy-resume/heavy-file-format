@@ -197,6 +197,36 @@ HVY.mountHvyViewer({
 Return `{ html }` to replace the rendered link with sanitized HTML, or return
 `null` / `undefined` to keep the default rendering.
 
+Embedded hosts can run AI import as a reviewable two-stage flow. First build a
+plan, show the returned steps to the user, then pass the approved steps into the
+import call:
+
+```js
+const plan = await mount.buildImportPlan({
+  sourceName: file.name,
+  sourceText,
+  llm,
+});
+
+if (plan.status === 'ready') {
+  for (const step of plan.steps) {
+    console.log(step.sectionTitle, step.extractedInformation);
+  }
+
+  await mount.importFromText({
+    sourceName: file.name,
+    sourceText,
+    steps: plan.steps.filter((step) => userApproved(step)),
+    llm,
+  });
+}
+```
+
+For templates with `importPreplan`, `extractedInformation` is already populated
+during planning. That makes it suitable for a review popover or detail drawer,
+for example to catch a section whose source facts belong somewhere else before
+the import mutates the document.
+
 ## Notes
 
 - Markdown is treated as valid HVY.

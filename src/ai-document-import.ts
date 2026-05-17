@@ -72,6 +72,7 @@ export interface ImportPlanStep {
   templateStructureId?: string;
   templateStructure?: ImportTemplateStructureDescriptor;
   preplanGroupIndex?: number;
+  preplanTargetId?: string;
   extractedInformation?: string;
 }
 
@@ -151,6 +152,7 @@ export type ImportPlanStepInput = string | ImportPlanStep | {
   importMode?: string;
   templateStructureId?: string;
   preplanGroupIndex?: number;
+  preplanTargetId?: string;
   extractedInformation?: string;
   target?: ImportPlanTarget;
 };
@@ -521,20 +523,22 @@ function getImportPreplanGroups(document: VisualDocument): ImportPreplanGroup[] 
       .filter((value): value is string => typeof value === 'string')
       .map((value) => value.trim())
       .filter(Boolean);
-    const steps = ids
-      .map((id) => resolveImportPreplanTarget(id, candidates))
-      .filter((candidate): candidate is ImportTemplateSectionCandidate => !!candidate)
-      .map((candidate) => {
+    const steps = ids.flatMap((id) => {
+      const candidate = resolveImportPreplanTarget(id, candidates);
+      if (!candidate) {
+        return [];
+      }
         const target = candidateToImportPlanTarget(candidate);
         const templateStructure = safeBuildImportTemplateStructureDescriptor(candidates, target);
-        return {
+        return [{
           sectionTitle: candidate.title,
           instruction: buildDefaultImportPlanInstruction(candidate.title),
           target,
           preplanGroupIndex: groups.length,
+          preplanTargetId: id,
           ...(templateStructure ? { importMode: 'template' as const } : {}),
           ...(templateStructure ? { templateStructure: toPublicImportTemplateStructure(templateStructure) } : {}),
-        };
+        }];
       });
     if (steps.length > 0) {
       groups.push({ steps });
@@ -630,7 +634,7 @@ function groupImportPreplanSteps(steps: ImportPlanStep[]): ImportPlanStep[][] {
 }
 
 function getImportPlanStepTargetId(step: ImportPlanStep): string {
-  return step.target.id || step.target.name || step.sectionTitle;
+  return step.preplanTargetId || step.target.id || step.target.name || step.sectionTitle;
 }
 
 function buildImportPreplanDataPrompt(sourceName: string, instructions: string | undefined, groupSteps: ImportPlanStep[], index: number, total: number): string {
@@ -640,7 +644,9 @@ function buildImportPreplanDataPrompt(sourceName: string, instructions: string |
     'This is not a tool loop. Do not generate HVY and do not mutate anything.',
     'Extract and organize only source facts relevant to the listed target sections.',
     'Return one object keyed by the exact section ids listed in the response instructions.',
-    'If a section has no source-backed information, omit the key or return an empty string for that key.',
+    'For included section ids, return an object with `include` and `information`.',
+    'Set `include` to true only when the source contains information that should create or fill that section.',
+    'If a section has no source-backed information, omit the key or return an empty string for that key. This is the same as `include: false`.',
     'Use this grouped pass to distinguish confusable categories before assigning facts, such as skills versus tools or technologies.',
     'Use only facts present in the imported source text. Do not invent dates, titles, entity names, labels, categories, metrics, links, or other factual details.',
     'Preserve exact source dates, names, titles, entity names, labels, category names, and terminology unless the approved step or host instructions explicitly say to normalize them.',
@@ -684,7 +690,10 @@ function buildImportPreplanDataContext(
 }
 
 function buildImportPreplanDataResponseInstructions(groupSteps: ImportPlanStep[]): string {
-  const shape = Object.fromEntries(groupSteps.map((step) => [getImportPlanStepTargetId(step), 'Source facts assigned to this section, in plain text.']));
+  const shape = Object.fromEntries(groupSteps.map((step) => [
+    getImportPlanStepTargetId(step),
+    { include: true, information: 'Source facts assigned to this section, in plain text.' },
+  ]));
   return [
     'Return exactly one JSON object and no prose.',
     'Shape:',
@@ -692,8 +701,10 @@ function buildImportPreplanDataResponseInstructions(groupSteps: ImportPlanStep[]
     '',
     '`sections` must be an object keyed only by these exact section ids:',
     groupSteps.map((step) => `- ${getImportPlanStepTargetId(step)}`).join('\n'),
-    'Each value is a concise text document of only the imported facts used for that section.',
-    'Omit a key or return an empty string when the section has no source-backed information.',
+    'Each included value must be an object with `include` and `information`.',
+    '`include` must be true only when this section should be included in the import plan.',
+    '`information` must be a concise text document of only the imported facts used for that section.',
+    'An omitted key, an empty string value, or an object with `include: false` means the section is excluded.',
   ].join('\n');
 }
 
@@ -705,12 +716,26 @@ function parseImportPreplanDataResponse(response: string): Map<string, string> {
     return result;
   }
   for (const [key, value] of Object.entries(sections as Record<string, unknown>)) {
-    const information = typeof value === 'string' ? value.trim() : '';
+    const information = parseImportPreplanSectionInformation(value);
     if (information) {
       result.set(key, information);
     }
   }
   return result;
+}
+
+function parseImportPreplanSectionInformation(value: unknown): string {
+  if (typeof value === 'string') {
+    return value.trim();
+  }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return '';
+  }
+  const section = value as { include?: unknown; information?: unknown };
+  if (section.include !== true) {
+    return '';
+  }
+  return typeof section.information === 'string' ? section.information.trim() : '';
 }
 
 function buildImportMissingSectionsPrompt(sourceName: string, instructions?: string): string {
@@ -869,6 +894,7 @@ function normalizeImportPlanStep(rawStep: ImportPlanStepInput | unknown, candida
     importMode?: unknown;
     templateStructureId?: unknown;
     preplanGroupIndex?: unknown;
+    preplanTargetId?: unknown;
     extractedInformation?: unknown;
   };
   const explicitSectionTitle = typeof value.sectionTitle === 'string' && value.sectionTitle.trim()
@@ -899,6 +925,9 @@ function normalizeImportPlanStep(rawStep: ImportPlanStepInput | unknown, candida
   const preplanGroupIndex = typeof value.preplanGroupIndex === 'number' && Number.isInteger(value.preplanGroupIndex)
     ? value.preplanGroupIndex
     : undefined;
+  const preplanTargetId = typeof value.preplanTargetId === 'string' && value.preplanTargetId.trim()
+    ? value.preplanTargetId.trim()
+    : undefined;
   const extractedInformation = typeof value.extractedInformation === 'string' && value.extractedInformation.trim()
     ? value.extractedInformation.trim()
     : undefined;
@@ -915,6 +944,7 @@ function normalizeImportPlanStep(rawStep: ImportPlanStepInput | unknown, candida
     ...(templateStructureId ? { templateStructureId } : {}),
     ...(templateStructure ? { templateStructure: toPublicImportTemplateStructure(templateStructure) } : {}),
     ...(preplanGroupIndex !== undefined ? { preplanGroupIndex } : {}),
+    ...(preplanTargetId ? { preplanTargetId } : {}),
     ...(extractedInformation ? { extractedInformation } : {}),
   };
 }

@@ -2,21 +2,43 @@ import { describe, expect, test } from 'vitest';
 
 import { renderCarouselEditor } from '../src/editor/components/carousel/carousel';
 import { renderImageEditor } from '../src/editor/components/image/image';
+import type { ComponentRenderHelpers } from '../src/editor/component-helpers';
 import { createEmptyBlock, createEmptySection } from '../src/document-factory';
 import { initState } from '../src/state';
 import { escapeAttr, escapeHtml } from '../src/utils';
 import type { VisualBlock } from '../src/editor/types';
 import { createTestState } from './serialization-test-helpers';
 
-const helpers = {
+const helpers: ComponentRenderHelpers = {
   escapeAttr,
   escapeHtml,
+  markdownToEditorHtml: (markdown) => markdown,
+  renderRichToolbar: () => '',
   renderComponentFragment: () => '',
   renderEditorBlock: () => '',
   renderPassiveEditorBlock: () => '',
+  renderReaderBlock: () => '',
+  renderReaderBlocks: () => '',
+  renderReaderListBlocks: () => '',
+  orderReaderBlocks: (blocks) => blocks,
+  orderReaderListBlocks: (blocks) => blocks,
+  isReaderViewPrioritizedBlock: () => false,
   renderComponentOptions: () => '',
-  renderBlockMetaFields: () => '',
+  renderAddComponentPicker: () => '',
   renderComponentPlacementTarget: () => '',
+  renderOption: (value) => value,
+  getDocumentComponentCss: () => '',
+  getXrefTargetOptions: () => [],
+  isXrefTargetValid: () => true,
+  getTableColumns: () => [],
+  ensureContainerBlocks: () => {},
+  ensureComponentListBlocks: () => {},
+  getSelectedAddComponent: (_key, fallback) => fallback,
+  getComponentListReaderViewId: () => '',
+  getReaderContainerExpanded: (_key, fallback) => fallback,
+  isExpandableEditorPanelOpen: (_sectionKey, _blockId, _panel, fallback) => fallback,
+  isAdvancedEditorMode: () => false,
+  isMobileAdjustmentMode: () => false,
 };
 
 describe('image editor render controls', () => {

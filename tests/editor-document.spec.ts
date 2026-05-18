@@ -823,6 +823,17 @@ test('AI mode shows add section ghost and opens the new section inline', async (
   await expect(activeEditor).toBeVisible();
   await activeEditor.locator('.rich-editor').fill('AI-added section body');
   await expect(page.locator('#aiReaderDocument')).toContainText('AI-added section body');
+
+  const newSection = page.locator('#aiReaderDocument .reader-section', { hasText: 'AI-added section body' }).last();
+  await expect(newSection.locator('.compact-add-component-ghost .component-picker-trigger')).toBeVisible();
+  await newSection.locator('.compact-add-component-ghost .component-picker-trigger').click();
+  await expect(newSection.locator('.component-picker')).toHaveAttribute('data-open', 'true');
+  await newSection.locator('.component-picker-row-direct[data-component="text"]').click();
+
+  const secondEditor = newSection.locator('.editor-block[data-active-editor-block="true"]');
+  await expect(secondEditor).toBeVisible();
+  await secondEditor.locator('.rich-editor').fill('Second AI section component');
+  await expect(newSection).toContainText('Second AI section component');
 });
 
 test('AI mode opens added section templates with nested components editable', async ({ page }) => {

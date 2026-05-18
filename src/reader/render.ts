@@ -14,6 +14,7 @@ import { renderTableReader, resetReaderTableStripeSequence } from '../editor/com
 import { renderTextReader } from '../editor/components/text/text';
 import { renderXrefCardReader } from '../editor/components/xref-card/xref-card';
 import type { ComponentRenderHelpers } from '../editor/component-helpers';
+import { renderAddComponentPicker } from '../editor/component-picker';
 import type { BlockSchema, VisualBlock, VisualSection } from '../editor/types';
 import { renderTagEditor } from '../editor/tag-editor';
 import { colorValueToAlpha, colorValueToPickerHex, getResolvedThemeColor, getThemeColorLabel, getThemeResetColor, THEME_COLOR_NAMES } from '../theme';
@@ -315,7 +316,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     if (!blocksHtml.trim() && !childrenHtml.trim() && !isSectionSearchMatch(searchContext, section)) {
       return '';
     }
-    const content = `<div class="${contentClass}">${blocksHtml}${childrenHtml}</div>`;
+    const content = `<div class="${contentClass}">${blocksHtml}${childrenHtml}${renderAiActiveSectionAddAffordance(section)}</div>`;
 
     const viewCollapseAttrs = `data-reader-action="toggle-view-collapse" data-reader-view-target="${deps.escapeAttr(targetKey)}" data-reader-view-collapse-key="${deps.escapeAttr(viewCollapseKey)}" aria-expanded="${viewExpanded ? 'true' : 'false'}"`;
     const toggleAttrs = modifiers.has('collapse')
@@ -510,6 +511,24 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
 
   function isAiEditorHostSection(sectionKey: string): boolean {
     return state.aiEditorHostSectionKey === sectionKey;
+  }
+
+  function renderAiActiveSectionAddAffordance(section: VisualSection): string {
+    if (state.currentView !== 'ai' || section.lock || !isAiEditorHostSection(section.key)) {
+      return '';
+    }
+    return `<article class="ghost-section-card add-ghost compact-add-component-ghost">
+      ${renderAddComponentPicker({
+        id: `ai-section:${section.key}`,
+        action: 'add-block',
+        sectionKey: section.key,
+        label: 'Section component type',
+      }, {
+        escapeAttr: deps.escapeAttr,
+        escapeHtml: deps.escapeHtml,
+        getComponentDefs: () => getComponentDefsFromMeta(state.documentMeta),
+      })}
+    </article>`;
   }
 
   function renderAiActiveComponentListAddAffordance(section: VisualSection, block: VisualBlock): string {

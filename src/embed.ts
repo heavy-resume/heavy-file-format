@@ -37,6 +37,7 @@ import { loadPaletteOverrideId } from './palettes/palette-preferences';
 import { captureRenderScroll, restoreRenderScroll } from './render-scroll';
 import { observeRenderedLinks, resetObservedLinks, type HvyLinkObserver } from './link-observer';
 import { recordHistory } from './history';
+import { virtualizeRenderedSections } from './section-virtualizer';
 import type { HvyPlugin } from './plugins/types';
 import type { HostChatClient } from './chat/chat';
 import type {
@@ -328,6 +329,13 @@ function renderApp(): void {
   bindReaderUi(currentRoot);
   reconcilePluginMounts(currentRoot);
   restoreRenderScroll(currentRoot, capturedScroll);
+  virtualizeRenderedSections({
+    root: currentRoot,
+    afterRestore: (scope) => {
+      reconcilePluginMounts(scope);
+      void runButtonVisibilityScriptsIfNeeded(scope);
+    },
+  });
   observeRenderedLinks(currentRoot, currentLinkObserver);
   void runButtonVisibilityScriptsIfNeeded(currentRoot);
   void runPluginDocumentHooks('unknown');
@@ -341,6 +349,13 @@ function refreshReaderPanels(): void {
   capturePluginFocus();
   reader.innerHTML = renderer.renderReaderSections(state.document.sections);
   reconcilePluginMounts(reader);
+  virtualizeRenderedSections({
+    root: currentRoot,
+    afterRestore: (scope) => {
+      reconcilePluginMounts(scope);
+      void runButtonVisibilityScriptsIfNeeded(scope);
+    },
+  });
   observeRenderedLinks(currentRoot, currentLinkObserver);
   void runButtonVisibilityScriptsIfNeeded(reader);
   void runPluginDocumentHooks('unknown');

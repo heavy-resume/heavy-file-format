@@ -41,6 +41,7 @@ import { loadPaletteOverrideId } from './palettes/palette-preferences';
 import { captureRenderScroll, restoreRenderScroll } from './render-scroll';
 import { refreshReaderSurfaces } from './reader/refresh-surfaces';
 import { initializeCarouselReaders } from './editor/components/carousel/carousel';
+import { virtualizeRenderedSections } from './section-virtualizer';
 
 const appRoot = document.querySelector<HTMLDivElement>('#app');
 if (!appRoot) {
@@ -747,6 +748,14 @@ function renderApp(): void {
   restoreRenderScroll(app, capturedScroll);
   centerSearchResultLenses(app);
   scheduleReaderHighlightGlow(app);
+  virtualizeRenderedSections({
+    root: app,
+    afterRestore: (scope) => {
+      reconcilePluginMounts(scope);
+      void runButtonVisibilityScripts(scope);
+      initializeCarouselReaders(scope);
+    },
+  });
   restoreMs = performance.now() - stepStartedAt;
 
   stepStartedAt = performance.now();
@@ -874,6 +883,14 @@ function refreshReaderPanels(): void {
   if (surfaceRefresh.refreshedSidebar || surfaceRefresh.refreshedReader) {
     scheduleReaderHighlightGlow(app);
     initializeCarouselReaders(app);
+    virtualizeRenderedSections({
+      root: app,
+      afterRestore: (scope) => {
+        reconcilePluginMounts(scope);
+        void runButtonVisibilityScripts(scope);
+        initializeCarouselReaders(scope);
+      },
+    });
   }
 
   const modalStartedAt = performance.now();

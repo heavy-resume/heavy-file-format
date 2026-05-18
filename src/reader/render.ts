@@ -343,7 +343,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     const sectionStyle = mergeDocumentCss(getDocumentSectionDefaultCss(state.documentMeta), section.css);
 
     return `
-      <section id="${deps.escapeAttr(effectiveId)}" class="${classList}" data-section-key="${deps.escapeAttr(section.key)}" style="${deps.escapeAttr(sectionStyle)}"${renderReaderViewTargetAttrs(targetKey, dimmed)}${toggleAttrs}>
+      <section id="${deps.escapeAttr(effectiveId)}" class="${classList}" data-hvy-virtual-section="reader" data-section-key="${deps.escapeAttr(section.key)}" style="${deps.escapeAttr(sectionStyle)}"${renderReaderViewTargetAttrs(targetKey, dimmed)}${toggleAttrs}>
         ${header}
         ${content}
       </section>

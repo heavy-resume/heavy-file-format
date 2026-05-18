@@ -864,6 +864,36 @@ section_defs:
   await expect(newSection.locator('[data-field="table-column"]').first()).toHaveText('DATES');
 });
 
+test('section virtualization unloads and reloads offscreen editor sections', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+${Array.from({ length: 42 }, (_item, index) => `<!--hvy: {"id":"virtual-${index + 1}"}-->
+#! Virtual ${index + 1}
+
+ ${Array.from({ length: 8 }, (_line, lineIndex) => `Virtual ${index + 1}.${lineIndex + 1}`).join('\n ')}
+`).join('\n')}
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  const editorTree = page.locator('#editorTree');
+  await editorTree.evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+  });
+  await expect.poll(() => page.locator('#editorTree [data-hvy-virtual-placeholder="true"]').count()).toBeGreaterThan(0);
+  await expect(page.locator('#editorTree [data-hvy-virtual-placeholder="true"]').first()).not.toHaveAttribute('data-cached-section-html', /./);
+
+  await editorTree.evaluate((element) => {
+    element.scrollTop = 0;
+  });
+  await expect(page.locator('#editorTree .editor-section-card').filter({ has: page.getByRole('button', { name: 'Virtual 1', exact: true }) })).toBeVisible();
+});
+
 test('section remove requires confirmation', async ({ page }) => {
   await page.goto('/');
 

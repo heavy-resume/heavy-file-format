@@ -81,6 +81,14 @@
   position: relative;
 }
 
+.hvy-section-virtual-placeholder {
+  display: block;
+  width: 100%;
+  pointer-events: none;
+  visibility: hidden;
+  contain: layout size style;
+}
+
 .reader-section.is-uncontained {
   border: 0;
   border-radius: 0;

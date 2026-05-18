@@ -1,5 +1,7 @@
+import '../editor/components/table/table.css';
 import './graph.css';
 
+import { plusIcon, closeIcon } from '../icons';
 import { GRAPH_PLUGIN_ID } from './registry';
 import type { HvyPlugin, HvyPluginContext, HvyPluginFactory, HvyPluginInstance } from './types';
 import graphDocumentation from './graph.about.txt?raw';
@@ -333,31 +335,62 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
   const root = document.createElement('div');
   root.className = `hvy-graph hvy-graph-${ctx.mode}`;
   let chart: ChartInstance | null = null;
+  let chartType: GraphType | null = null;
   let renderVersion = 0;
 
   const destroyChart = () => {
     chart?.destroy();
     chart = null;
+    chartType = null;
   };
 
-  const drawChart = async (canvas: HTMLCanvasElement, config: GraphConfig, csv: string, version: number) => {
-    const built = buildGraphChartData(csv, config.type);
-    if (built.error) {
-      destroyChart();
-      root.innerHTML = ctx.mode === 'editor'
-        ? `${renderEditorShell(ctx, config, csv)}${renderError(built.error)}`
-        : renderError(built.error);
+  const ensureChartFrame = (): HTMLCanvasElement | null => {
+    const host = ctx.mode === 'reader' ? root : root.querySelector<HTMLElement>('[data-graph-preview="true"]');
+    if (!host) return null;
+    let canvas = host.querySelector<HTMLCanvasElement>('canvas');
+    if (!canvas || !host.querySelector('.hvy-graph-frame')) {
+      host.innerHTML = renderChartFrame();
+      canvas = host.querySelector<HTMLCanvasElement>('canvas');
+    }
+    return canvas;
+  };
+
+  const clearPreviewArea = (replacement: string) => {
+    if (ctx.mode === 'reader') {
+      root.innerHTML = replacement;
       return;
     }
+    const host = root.querySelector<HTMLElement>('[data-graph-preview="true"]');
+    if (host) host.innerHTML = replacement;
+  };
+
+  const drawChart = async (canvas: HTMLCanvasElement, config: GraphConfig, builtData: Record<string, unknown>, version: number) => {
     const module = await loadChartModule();
-    if (version !== renderVersion || !canvas.isConnected) return;
+    if (version !== renderVersion) return;
+    if (!canvas.isConnected) {
+      // Re-look up the live canvas in case the DOM was reattached / replaced.
+      const live = ctx.mode === 'reader'
+        ? root.querySelector<HTMLCanvasElement>('canvas')
+        : root.querySelector<HTMLCanvasElement>('[data-graph-preview="true"] canvas');
+      if (!live) return;
+      canvas = live;
+    }
     const theme = readGraphTheme(root, config);
+    const styledData = styleGraphChartData(builtData, config.type, theme);
+    const options = renderChartOptions(config, theme);
+    if (chart && chart.canvas === canvas && chartType === config.type) {
+      chart.data = styledData as never;
+      chart.options = options as never;
+      chart.update();
+      return;
+    }
     destroyChart();
     chart = new module.Chart(canvas, {
       type: config.type,
-      data: styleGraphChartData(built.data, config.type, theme) as never,
-      options: renderChartOptions(config, theme),
+      data: styledData as never,
+      options,
     });
+    chartType = config.type;
   };
 
   const renderPreview = () => {
@@ -365,43 +398,43 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
     const config = readConfig(ctx.block.schema.pluginConfig);
     const csv = ctx.block.text.trim().length > 0 ? ctx.block.text : DEFAULT_CSV;
     const parsed = parseGraphCsv(csv);
+    if (ctx.mode === 'editor') {
+      syncEditorShell(ctx, root, config, csv);
+    }
     if (parsed.rows.length === 0) {
       destroyChart();
-      root.innerHTML = ctx.mode === 'editor'
-        ? `${renderEditorShell(ctx, config, csv)}${renderEmpty()}`
-        : renderEmpty();
+      clearPreviewArea(renderEmpty());
       return;
     }
-    if (ctx.mode === 'reader') {
-      root.innerHTML = renderChartFrame();
-    } else {
-      syncEditorShell(ctx, root, config, csv);
-      const preview = root.querySelector<HTMLElement>('[data-graph-preview="true"]');
-      if (preview) preview.innerHTML = renderChartFrame();
+    const built = buildGraphChartData(csv, config.type);
+    if (built.error) {
+      destroyChart();
+      clearPreviewArea(renderError(built.error));
+      return;
     }
-    const canvas = root.querySelector<HTMLCanvasElement>('canvas');
+    const canvas = ensureChartFrame();
     if (!canvas) return;
-    void drawChart(canvas, config, csv, version).catch((error) => {
+    void drawChart(canvas, config, built.data, version).catch((error) => {
       if (version !== renderVersion) return;
-      root.innerHTML = renderError(error instanceof Error ? error.message : 'Unable to render graph.');
+      clearPreviewArea(renderError(error instanceof Error ? error.message : 'Unable to render graph.'));
     });
   };
 
+  const readCellText = (element: HTMLElement): string => {
+    return (element.textContent ?? '').replace(/[\r\n]+/g, ' ');
+  };
+
   const onInput = (event: Event) => {
-    const target = event.target as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement | null;
+    const target = event.target as HTMLElement | null;
     if (!target) return;
     const field = target.dataset.graphField;
     if (!field) return;
-    if (field === 'csv-text') {
-      ctx.setText((target as HTMLTextAreaElement).value);
-      return;
-    }
-    if (field === 'cell') {
-      const rowIndex = Number(target.dataset.rowIndex);
+    if (field === 'cell' || field === 'column') {
+      const rowIndex = field === 'column' ? 0 : Number(target.dataset.rowIndex);
       const columnIndex = Number(target.dataset.columnIndex);
       const rows = getEditableRows(ctx.block.text);
       if (!rows[rowIndex]) return;
-      rows[rowIndex]![columnIndex] = target.value;
+      rows[rowIndex]![columnIndex] = readCellText(target);
       ctx.setText(serializeGraphCsv(rows));
       return;
     }
@@ -409,7 +442,9 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       ctx.setConfig({ legend: target.checked });
       return;
     }
-    ctx.setConfig({ [field]: target.value });
+    if (target instanceof HTMLInputElement || target instanceof HTMLSelectElement || target instanceof HTMLTextAreaElement) {
+      ctx.setConfig({ [field]: target.value });
+    }
   };
 
   const onClick = (event: Event) => {
@@ -421,17 +456,112 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       const width = rows[0]?.length || 2;
       rows.push(Array.from({ length: width }, () => ''));
       ctx.setText(serializeGraphCsv(rows));
+      return;
     }
     if (action === 'add-column') {
       rows.forEach((row, index) => row.push(index === 0 ? `Series ${row.length}` : ''));
       ctx.setText(serializeGraphCsv(rows));
+      return;
     }
+    if (action === 'remove-row') {
+      const rowIndex = Number(button.dataset.rowIndex);
+      if (!Number.isFinite(rowIndex) || rowIndex < 1 || rowIndex >= rows.length) return;
+      rows.splice(rowIndex, 1);
+      ctx.setText(serializeGraphCsv(rows));
+      return;
+    }
+    if (action === 'remove-column') {
+      const columnIndex = Number(button.dataset.columnIndex);
+      const width = rows[0]?.length ?? 0;
+      if (!Number.isFinite(columnIndex) || columnIndex < 0 || columnIndex >= width || width <= 1) return;
+      rows.forEach((row) => row.splice(columnIndex, 1));
+      ctx.setText(serializeGraphCsv(rows));
+      return;
+    }
+  };
+
+  let dragKind: 'row' | 'column' | null = null;
+  let dragIndex: number | null = null;
+
+  const onDragStart = (event: DragEvent) => {
+    const handle = (event.target as HTMLElement | null)?.closest<HTMLElement>('[data-graph-drag]');
+    if (!handle || !event.dataTransfer) return;
+    const kind = handle.dataset.graphDrag === 'row' ? 'row' : handle.dataset.graphDrag === 'column' ? 'column' : null;
+    if (!kind) return;
+    const indexAttr = kind === 'row' ? handle.dataset.rowIndex : handle.dataset.columnIndex;
+    const index = Number(indexAttr);
+    if (!Number.isFinite(index)) return;
+    dragKind = kind;
+    dragIndex = index;
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', `graph:${kind}:${index}`);
+  };
+
+  const onDragOver = (event: DragEvent) => {
+    if (!dragKind || dragIndex === null) return;
+    const target = event.target as HTMLElement | null;
+    if (!target) return;
+    const dropAttr = dragKind === 'row' ? 'data-graph-row-drop' : 'data-graph-column-drop';
+    if (target.closest(`[${dropAttr}]`)) {
+      event.preventDefault();
+      if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+    }
+  };
+
+  const onDrop = (event: DragEvent) => {
+    if (!dragKind || dragIndex === null) return;
+    const target = event.target as HTMLElement | null;
+    if (!target) {
+      dragKind = null;
+      dragIndex = null;
+      return;
+    }
+    const rows = getEditableRows(ctx.block.text);
+    if (dragKind === 'row') {
+      const dropCell = target.closest<HTMLElement>('[data-graph-row-drop]');
+      if (!dropCell) {
+        dragKind = null;
+        dragIndex = null;
+        return;
+      }
+      event.preventDefault();
+      const targetIndex = Number(dropCell.dataset.rowIndex);
+      const from = dragIndex;
+      if (Number.isFinite(targetIndex) && from >= 1 && targetIndex >= 1 && from < rows.length && targetIndex < rows.length && from !== targetIndex) {
+        const moved = rows.splice(from, 1)[0];
+        if (moved) rows.splice(targetIndex, 0, moved);
+        ctx.setText(serializeGraphCsv(rows));
+      }
+    } else {
+      const dropCell = target.closest<HTMLElement>('[data-graph-column-drop]');
+      if (!dropCell) {
+        dragKind = null;
+        dragIndex = null;
+        return;
+      }
+      event.preventDefault();
+      const targetIndex = Number(dropCell.dataset.columnIndex);
+      const from = dragIndex;
+      const width = rows[0]?.length ?? 0;
+      if (Number.isFinite(targetIndex) && from >= 0 && targetIndex >= 0 && from < width && targetIndex < width && from !== targetIndex) {
+        rows.forEach((row) => {
+          const moved = row.splice(from, 1)[0] ?? '';
+          row.splice(targetIndex, 0, moved);
+        });
+        ctx.setText(serializeGraphCsv(rows));
+      }
+    }
+    dragKind = null;
+    dragIndex = null;
   };
 
   if (ctx.mode === 'editor') {
     root.addEventListener('input', onInput);
     root.addEventListener('change', onInput);
     root.addEventListener('click', onClick);
+    root.addEventListener('dragstart', onDragStart);
+    root.addEventListener('dragover', onDragOver);
+    root.addEventListener('drop', onDrop);
   }
 
   renderPreview();
@@ -444,6 +574,9 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
         root.removeEventListener('input', onInput);
         root.removeEventListener('change', onInput);
         root.removeEventListener('click', onClick);
+        root.removeEventListener('dragstart', onDragStart);
+        root.removeEventListener('dragover', onDragOver);
+        root.removeEventListener('drop', onDrop);
       }
     },
   };
@@ -459,26 +592,38 @@ function getEditableRows(csv: string): string[][] {
 
 function syncEditorShell(ctx: HvyPluginContext, root: HTMLElement, config: GraphConfig, csv: string): void {
   const active = document.activeElement;
-  const activeField = active instanceof HTMLElement && root.contains(active) ? active.dataset.graphField ?? '' : '';
-  const activeRow = active instanceof HTMLElement && root.contains(active) ? active.dataset.rowIndex ?? '' : '';
-  const activeColumn = active instanceof HTMLElement && root.contains(active) ? active.dataset.columnIndex ?? '' : '';
+  const inRoot = active instanceof HTMLElement && root.contains(active);
+  const activeField = inRoot ? active.dataset.graphField ?? '' : '';
+  const activeRow = inRoot ? active.dataset.rowIndex ?? '' : '';
+  const activeColumn = inRoot ? active.dataset.columnIndex ?? '' : '';
   const activeSelection = active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement
     ? { start: active.selectionStart, end: active.selectionEnd, direction: active.selectionDirection }
     : null;
-  const focusedInData = activeField === 'cell' || activeField === 'csv-text';
+  const focusedInTable = activeField === 'cell' || activeField === 'column';
+  const focusedInData = focusedInTable;
   if (!focusedInData || !root.querySelector('.hvy-graph-editor')) {
     root.innerHTML = renderEditorShell(ctx, config, csv);
+  } else if (!focusedInTable) {
+    const panel = root.querySelector<HTMLElement>('.hvy-graph-data-panel');
+    if (panel) {
+      const tableHtml = renderDataTable(csv, activeField, activeRow, activeColumn);
+      const existingTable = panel.querySelector<HTMLElement>('.table-editor');
+      if (existingTable) {
+        const wrapper = document.createElement('div');
+        wrapper.innerHTML = tableHtml;
+        const next = wrapper.firstElementChild;
+        if (next) existingTable.replaceWith(next);
+      }
+    }
   }
-  root.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>('[data-graph-field]').forEach((input) => {
+  root.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>('input[data-graph-field], select[data-graph-field], textarea[data-graph-field]').forEach((input) => {
     const field = input.dataset.graphField ?? '';
-    if (field === activeField && input.dataset.rowIndex === activeRow && input.dataset.columnIndex === activeColumn) return;
     if (field === 'type' && input instanceof HTMLSelectElement) input.value = config.type;
     if (field === 'colorScheme' && input instanceof HTMLSelectElement) input.value = config.colorScheme;
     if (field === 'title' && input instanceof HTMLInputElement) input.value = config.title;
     if (field === 'xAxisLabel' && input instanceof HTMLInputElement) input.value = config.xAxisLabel;
     if (field === 'yAxisLabel' && input instanceof HTMLInputElement) input.value = config.yAxisLabel;
     if (field === 'legend' && input instanceof HTMLInputElement) input.checked = config.legend;
-    if (field === 'csv-text' && input instanceof HTMLTextAreaElement) input.value = csv;
   });
   restoreGraphFocus(root, activeField, activeRow, activeColumn, activeSelection);
 }
@@ -498,31 +643,109 @@ function renderEditorShell(_ctx: HvyPluginContext, config: GraphConfig, csv: str
       <label class="hvy-graph-toggle"><input type="checkbox" data-graph-field="legend"${config.legend ? ' checked' : ''}><span>Legend</span></label>
     </div>
     <div class="hvy-graph-data-panel">
-      <div class="hvy-graph-data-frame">${renderDataTable(csv)}</div>
-      <div class="hvy-graph-row-actions">
-        <button type="button" class="ghost" data-graph-action="add-row">Add Row</button>
-        <button type="button" class="ghost" data-graph-action="add-column">Add Column</button>
-      </div>
-      <label><span>CSV</span><textarea class="hvy-graph-csv-textarea" data-graph-field="csv-text">${escapeHtml(csv)}</textarea></label>
+      ${renderDataTable(csv, '', '', '')}
     </div>
     <div data-graph-preview="true"></div>
   </div>`;
 }
 
-function renderDataTable(csv: string): string {
+function renderDataTable(csv: string, _activeField: string, _activeRow: string, _activeColumn: string): string {
   const parsed = parseGraphCsv(csv.trim().length > 0 ? csv : DEFAULT_CSV);
   if (parsed.error) {
-    return renderError(parsed.error);
+    return `<div class="table-editor"><div class="table-editor-frame">${renderError(parsed.error)}</div></div>`;
   }
   const rows = parsed.rows.length > 0 ? parsed.rows : getEditableRows(DEFAULT_CSV);
-  return `<table class="hvy-graph-data-table">
-    <tbody>
-      ${rows.map((row, rowIndex) => `<tr>${row.map((cell, columnIndex) => {
-        const tag = rowIndex === 0 ? 'th' : 'td';
-        return `<${tag}><input type="text" data-graph-field="cell" data-row-index="${rowIndex}" data-column-index="${columnIndex}" value="${escapeAttr(cell)}"></${tag}>`;
-      }).join('')}</tr>`).join('')}
-    </tbody>
-  </table>`;
+  const [headers = [], ...bodyRows] = rows;
+  const columnCount = Math.max(headers.length, 1);
+  const canRemoveColumn = headers.length > 1;
+
+  const renderHeaderCell = (cell: string, columnIndex: number) => {
+    return `<th data-graph-column-drop="true" data-column-index="${columnIndex}">
+      <div class="table-column-head">
+        <button
+          type="button"
+          class="table-drag-handle"
+          draggable="true"
+          data-graph-drag="column"
+          data-column-index="${columnIndex}"
+          title="Drag to reorder column"
+        >::</button>
+        <div class="table-inline-edit-shell">
+          <div
+            class="inline-editable table-inline-text table-column-name"
+            contenteditable="true"
+            spellcheck="false"
+            data-graph-field="column"
+            data-column-index="${columnIndex}"
+            data-placeholder="Column ${columnIndex + 1}"
+          >${escapeHtml(cell)}</div>
+        </div>
+        ${canRemoveColumn
+          ? `<button type="button" class="danger remove-x" data-graph-action="remove-column" data-column-index="${columnIndex}" title="Remove column">${closeIcon()}</button>`
+          : ''}
+      </div>
+    </th>`;
+  };
+
+  const renderBodyRow = (row: string[], rowOffset: number) => {
+    const rowIndex = rowOffset + 1;
+    return `<tr class="table-row-editor table-row-editor-main" data-graph-row-drop="true" data-row-index="${rowIndex}">
+      <td class="table-row-utility">
+        <button
+          type="button"
+          class="table-drag-handle"
+          draggable="true"
+          data-graph-drag="row"
+          data-row-index="${rowIndex}"
+          title="Drag to reorder row"
+        >::</button>
+      </td>
+      ${headers.map((_header, columnIndex) => {
+        const value = row[columnIndex] ?? '';
+        const placeholder = headers[columnIndex] || 'Cell value';
+        return `<td>
+          <div class="table-inline-edit-shell">
+            <div
+              class="inline-editable table-inline-text"
+              contenteditable="true"
+              spellcheck="false"
+              data-graph-field="cell"
+              data-row-index="${rowIndex}"
+              data-column-index="${columnIndex}"
+              data-placeholder="${escapeAttr(placeholder)}"
+            >${escapeHtml(value)}</div>
+          </div>
+        </td>`;
+      }).join('')}
+      <td class="table-row-utility table-row-remove-cell">
+        <button type="button" class="danger remove-x" data-graph-action="remove-row" data-row-index="${rowIndex}" title="Remove row">${closeIcon()}</button>
+      </td>
+    </tr>`;
+  };
+
+  return `<div class="table-editor">
+    <div class="table-editor-frame">
+      <table class="table-editor-grid" style="--hvy-table-editor-columns: ${columnCount};">
+        <thead>
+          <tr>
+            <th class="table-utility-cell"></th>
+            ${headers.map((cell, columnIndex) => renderHeaderCell(cell, columnIndex)).join('')}
+            <th class="table-add-column-cell">
+              <button type="button" class="ghost table-add-button" data-graph-action="add-column" title="Add column" aria-label="Add column">${plusIcon()}</button>
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          ${bodyRows.map((row, rowOffset) => renderBodyRow(row, rowOffset)).join('')}
+          <tr class="table-add-row-line">
+            <td colspan="${columnCount + 2}">
+              <button type="button" class="ghost" data-graph-action="add-row">${plusIcon()} Add Row</button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>`;
 }
 
 function restoreGraphFocus(
@@ -535,13 +758,15 @@ function restoreGraphFocus(
   if (!field) return;
   const selector = field === 'cell'
     ? `[data-graph-field="cell"][data-row-index="${cssEscape(row)}"][data-column-index="${cssEscape(column)}"]`
-    : `[data-graph-field="${cssEscape(field)}"]`;
-  const input = root.querySelector<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(selector);
-  if (!input) return;
+    : field === 'column'
+      ? `[data-graph-field="column"][data-column-index="${cssEscape(column)}"]`
+      : `[data-graph-field="${cssEscape(field)}"]`;
+  const target = root.querySelector<HTMLElement>(selector);
+  if (!target) return;
   try {
-    input.focus({ preventScroll: true });
-    if ((input instanceof HTMLInputElement || input instanceof HTMLTextAreaElement) && selection && selection.start !== null && selection.end !== null) {
-      input.setSelectionRange(selection.start, selection.end, selection.direction ?? undefined);
+    target.focus({ preventScroll: true });
+    if ((target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) && selection && selection.start !== null && selection.end !== null) {
+      target.setSelectionRange(selection.start, selection.end, selection.direction ?? undefined);
     }
   } catch {
     // Best effort.

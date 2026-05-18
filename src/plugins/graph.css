@@ -51,16 +51,15 @@
   align-items: end;
 }
 
-.hvy-graph-editor label {
+.hvy-graph-editor > .hvy-graph-controls label {
   display: grid;
   gap: 0.25rem;
   font-size: 0.82rem;
   color: var(--hvy-text-alt);
 }
 
-.hvy-graph-editor input,
-.hvy-graph-editor select,
-.hvy-graph-editor textarea {
+.hvy-graph-editor > .hvy-graph-controls input,
+.hvy-graph-editor > .hvy-graph-controls select {
   min-width: 0;
   border: 1px solid var(--hvy-border-input);
   border-radius: 6px;
@@ -83,68 +82,6 @@
 .hvy-graph-data-panel {
   display: grid;
   gap: 0.65rem;
-}
-
-.hvy-graph-data-frame {
-  width: 100%;
-  overflow: auto;
-  border: 1px solid var(--hvy-border);
-  border-radius: 12px;
-  background: var(--hvy-surface-alt);
-}
-
-.hvy-graph-data-table {
-  width: 100%;
-  border-collapse: collapse;
-  table-layout: fixed;
-  min-width: 26rem;
-}
-
-.hvy-graph-data-table th,
-.hvy-graph-data-table td {
-  position: relative;
-  border: 1px solid var(--hvy-border-input);
-  padding: 0;
-  vertical-align: top;
-  background: var(--hvy-table-row-bg-1);
-  overflow: visible;
-}
-
-.hvy-graph-data-table th:has(input:hover),
-.hvy-graph-data-table th:has(input:focus),
-.hvy-graph-data-table td:has(input:hover),
-.hvy-graph-data-table td:has(input:focus) {
-  z-index: 20;
-}
-
-.hvy-graph-data-table th {
-  background: var(--hvy-table-header);
-}
-
-.hvy-graph-data-table tbody tr:nth-child(even) td {
-  background: var(--hvy-table-row-bg-2);
-}
-
-.hvy-graph-data-table input {
-  width: 100%;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  padding: 0.36rem 0.42rem;
-  line-height: 1.25;
-}
-
-.hvy-graph-data-table input:focus {
-  background: var(--hvy-surface-alt);
-  box-shadow: inset 0 0 0 1px var(--hvy-focus);
-  outline: none;
-}
-
-.hvy-graph-csv-textarea {
-  width: 100%;
-  min-height: 7rem;
-  resize: vertical;
-  font-family: "JetBrains Mono", "Fira Code", monospace;
 }
 
 @container (max-width: 44rem) {

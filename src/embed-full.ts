@@ -64,6 +64,7 @@ import { observeRenderedLinks, resetObservedLinks, type HvyLinkObserver } from '
 import { recordHistory } from './history';
 import { resetTransientUiState } from './navigation';
 import { refreshReaderSurfaces } from './reader/refresh-surfaces';
+import { virtualizeRenderedSections } from './section-virtualizer';
 import {
   buildImportPlanForDocument,
   importTextIntoDocument,
@@ -354,6 +355,13 @@ function renderApp(): void {
   bindEmbedUi(currentRoot);
   reconcilePluginMounts(currentRoot);
   restoreRenderScroll(currentRoot, capturedScroll);
+  virtualizeRenderedSections({
+    root: currentRoot,
+    afterRestore: (scope) => {
+      reconcilePluginMounts(scope);
+      void runButtonVisibilityScripts(scope);
+    },
+  });
   observeRenderedLinks(currentRoot, currentLinkObserver);
   void runButtonVisibilityScripts(currentRoot);
   void runPluginDocumentHooks('unknown');
@@ -440,6 +448,13 @@ function refreshReaderPanels(): void {
     capturePluginFocus,
     reconcilePluginMounts,
     runButtonVisibilityScripts,
+  });
+  virtualizeRenderedSections({
+    root: currentRoot,
+    afterRestore: (scope) => {
+      reconcilePluginMounts(scope);
+      void runButtonVisibilityScripts(scope);
+    },
   });
   observeRenderedLinks(currentRoot, currentLinkObserver);
   void runPluginDocumentHooks('unknown');

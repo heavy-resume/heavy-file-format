@@ -292,7 +292,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
                   })}
               </article>`;
     return `
-      <article class="editor-section-card${isSubsection ? ' editor-subsection-card' : ''}" data-editor-section="${deps.escapeAttr(section.key)}">
+      <article class="editor-section-card${isSubsection ? ' editor-subsection-card' : ''}" data-hvy-virtual-section="editor" data-section-key="${deps.escapeAttr(section.key)}" data-editor-section="${deps.escapeAttr(section.key)}">
         ${subsectionToggle}
         <div class="editor-section-head">
           <div class="section-drag-title" title="Drag to reorder section">

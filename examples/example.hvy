@@ -284,6 +284,14 @@ The carousel component uses the same attached image storage as native image bloc
 
 <!--hvy:carousel {"css":"margin: 0.5rem 0;","carouselDurationMs":2400,"carouselPauseOnHover":true,"carouselShowControls":true,"carouselShowIndicators":true,"carouselImages":[{"imageFile":"carousel-slide-a.svg","imageAlt":"Carousel demo slide","caption":"Attached SVG image rendered from the HVY tail"},{"imageFile":"carousel-slide-b.svg","imageAlt":"Graph demo slide","caption":"Multiple attached images in one plugin block"}]}-->
 
+<!--hvy:subsection {"id":"static-table-example"}-->
+#! Static Table Example
+
+<!--hvy:text {"css":"margin: 0.5rem 0;"}-->
+This static HVY table stores columns and rows directly in the document, so it uses the built-in inline table editor rather than plugin-owned CSV text.
+
+<!--hvy:table {"id":"pipeline-static-table","css":"margin: 0.5rem 0;","tableColumns":["Stage","Applications","Interviews"],"tableShowHeader":true,"tableRows":[{"cells":["Applied","12","0"]},{"cells":["Phone Screen","5","5"]},{"cells":["Onsite","2","2"]},{"cells":["Offer","1","1"]}]}-->
+
 <!--hvy:subsection {"id":"graph-example"}-->
 #! Graph Example
 

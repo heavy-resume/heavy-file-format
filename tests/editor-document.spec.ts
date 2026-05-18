@@ -451,6 +451,67 @@ hvy_version: 0.1
   expect(result.editorText).toContain('Host download serialization test.');
 });
 
+test('embedded runtime only registers plugins supplied by the host', async ({ page }) => {
+  await page.goto('/');
+
+  const result = await page.evaluate(async () => {
+    document.body.innerHTML = '<div id="viewerMount"></div><div id="editorMount"></div>';
+    const modulePath = '/src/embed.ts';
+    const registryPath = '/src/plugins/registry.ts';
+    const { deserializeDocumentBytes, mountHvy, mountHvyViewer, plugins } = await import(/* @vite-ignore */ modulePath);
+    const { getHostPlugins } = await import(/* @vite-ignore */ registryPath);
+    const source = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ Embedded plugin registration test.
+`;
+    const encoder = new TextEncoder();
+    const viewerRoot = document.querySelector<HTMLElement>('#viewerMount');
+    const editorRoot = document.querySelector<HTMLElement>('#editorMount');
+    if (!viewerRoot || !editorRoot) {
+      throw new Error('Mount roots missing.');
+    }
+    const viewerMount = mountHvyViewer({
+      root: viewerRoot,
+      document: deserializeDocumentBytes(encoder.encode(source), '.hvy'),
+    });
+    const viewerPluginIds = getHostPlugins().map((plugin) => plugin.id);
+    viewerMount.destroy();
+    mountHvy({
+      root: editorRoot,
+      document: deserializeDocumentBytes(encoder.encode(source), '.hvy'),
+      mode: 'editor',
+      plugins: [plugins.graph],
+    });
+    await new Promise<void>((resolve, reject) => {
+      const startedAt = performance.now();
+      const waitForEditorMount = () => {
+        if (!editorRoot.textContent?.includes('Loading HVY')) {
+          resolve();
+          return;
+        }
+        if (performance.now() - startedAt > 1000) {
+          reject(new Error('Timed out waiting for full embed mount.'));
+          return;
+        }
+        window.requestAnimationFrame(waitForEditorMount);
+      };
+      waitForEditorMount();
+    });
+    return {
+      viewerPluginIds,
+      editorPluginIds: getHostPlugins().map((plugin) => plugin.id),
+    };
+  });
+
+  expect(result.viewerPluginIds).toEqual([]);
+  expect(result.editorPluginIds).toEqual(['hvy.graph']);
+});
+
 test('embedded component meta modal centers within the mounted app', async ({ page }) => {
   await page.goto('/');
 

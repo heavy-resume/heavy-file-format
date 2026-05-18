@@ -387,7 +387,7 @@ function ensureEmbedRuntime(plugins: HvyPlugin[]): void {
     componentRenderHelpers: localGetComponentRenderHelpers(),
     readerRenderer: renderer,
   });
-  setHostPlugins([...builtInPlugins, ...plugins]);
+  setHostPlugins(plugins);
   resetPluginDocumentHookState();
   syncColorMode();
 }
